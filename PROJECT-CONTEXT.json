@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "repository": "NeuroSurge",
+  "programme": "Brain2Body",
+  "canonical_terminology": {
+    "registry": "Brain2Body shared glossary",
+    "revision": 36,
+    "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406",
+    "terms": [
+      {
+        "id": "neurosurge",
+        "preferred_label": "NeuroSurge",
+        "status": "user_requested_in_development"
+      },
+      {
+        "id": "neurotranslate-model",
+        "preferred_label": "NeuroTranslate 0.0",
+        "status": "development_not_validated"
+      },
+      {
+        "id": "neurotranslation",
+        "preferred_label": "NeuroTranslation",
+        "status": "user_defined_project_term"
+      }
+    ]
+  },
+  "scope_note": "Names and definitions identify the programme and development scope. They do not establish a completed game, validated model, biological or clinical capability.",
+  "release_policy": "Selected reviewed production-grade drafts and items intended for production deployment; current selected files replace previous live versions. Git history and original local evidence remain.",
+  "license_note": "Project-owned contributions CC0-1.0; third-party materials retain their own rights and notices."
+}
