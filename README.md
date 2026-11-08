@@ -1,52 +1,64 @@
 # NeuroSurge
 
-NeuroSurge is a first-person motor-control game being developed alongside the **NeuroTranslate 0.0** model. It puts a visible anatomical left hand and arm beside a virtual motor-cortex display, so a player can explore the relationship between a control input, muscle activity, contraction and movement.
+Look at a motor area of a virtual brain and watch the corresponding muscles contract. NeuroSurge is a first-person browser game in development, built to make the connection between neural activity, muscle activity and movement visible.
 
-The body stays in place. The left arm has no skin: its bones and attached muscles are visible. Ahead is a large, glassy brain viewed from above, with the front toward the top of the screen. The motor-cortex parts relevant to the left hand and arm are enlarged, centred and clearly visible; the rest of the brain remains transparent context.
+**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. The game is still being built and checked: this repository does not yet offer a completed playable release or an accepted trained model.
 
-## What the player controls
+## Planned view
 
-The trackpad changes where you look. It does not move your body, and looking around does not drag the hand across your visual field. The hand stays halfway up the screen. Its horizontal position changes when you move the arm with A and D; W and S change reach depth. The entire hand, including every finger, must remain within the visible borders at every permitted pose and window size.
+In the intended scene, your body stays in one place. You can look around it with a trackpad or mouse. The body shows bones and muscles, without skin or genitalia: the left upper arm, forearm and hand, and the torso, legs, head and right arm when you turn toward them.
+
+The left hand stays three quarters up the view, leaving room below it to see the arm. Looking around coordinates the shoulder and arm while keeping that screen position. A and D move the hand horizontally; W and S change how far it reaches. Every finger must stay inside the visible borders.
+
+A large, translucent brain floats ahead, beyond the hand's reach. Its motor areas are easier to see than the surrounding brain. The view generally keeps the front of the brain toward the top and the back toward the bottom, with enough tilt and adjustable viewing angle to reach the relevant motor areas.
+
+## Controls being implemented
 
 | Control | Intended response |
 | --- | --- |
-| Trackpad movement | Look up, down, left or right from a fixed position. |
-| W / S | Extend or retract the left arm’s reach. |
-| A / D | Move the hand and arm horizontally within the visual field. |
-| Combined WASD keys | Reach diagonally, such as forward-right or backward-left. |
-| Hold Space | Close all five fingers, including the thumb, into a fist. |
-| Release Space | Open the hand promptly, with corresponding simulated motor activity. |
-| Look at a new relevant motor area | Activate that area for one second. |
-| Left or right trackpad click | Trigger another one-second activation at the valid region being viewed. |
-| Look into empty space | No new gaze-triggered activation. |
+| Trackpad or mouse movement | Look around from a fixed body position. |
+| W / S | Reach forward / draw the left arm back. |
+| A / D | Move the left arm left / right within the view. |
+| Combined WASD keys | Move in both directions together, including diagonal reaches. |
+| Hold Space | Close all five digits, including the thumb, into a fist. |
+| Release Space | Open the hand promptly. |
+| Hold Space while looking at the brain | Carry the distant brain to a new position; release leaves it there. The hand never has to touch it. |
+| Double-tap Space | Turn the forearm between palm down and palm up: pronation and supination. |
+| Look at a displayed brain area | Trigger one second of simulated activity; a mapped motor area also drives its supported body response. |
+| Left or right click on an area | Trigger another one-second pulse. |
+| Look into empty space | No new gaze-triggered activity. |
+| Click a curved arrow outside the brain | Shift the viewing angle a little around the brain's current centre. Hold to continue; release to stop. |
+| Esc | Show instructions and pause interaction; press again to resume. |
+| Reset Body, in the Esc overlay | Return the body's joints to their starting pose. |
 
-A stationary gaze stops activating after its one-second pulse. A new qualifying look movement or another click triggers a new pulse. WASD and Space also produce linked activity in the motor display; their held-input state is distinct from the gaze timer.
+All instructions appear for two seconds when the scene is ready. Orbit arrows act only when clicked or held; hovering does nothing, and the brain never spins on its own. Changing its viewing angle keeps its centre fixed. Carrying it with Space changes its position.
 
-## Specific movements, grounded in evidence
+Looking at any displayed brain area gives it a one-second visual pulse. Only areas with an evidence-supported movement map drive a body movement. A stationary gaze produces one pulse, then stops. A new qualifying look movement or click triggers another. WASD and Space also light the corresponding motor display. The brain and muscles share an activity colour scale, and previously activated brain areas retain a subtle change in shade and opacity, separate from the brief activity pulse.
 
-The intended actions include grasping, opening and spreading the fingers, wrist flexion and extension, and elbow flexion and extension. Finer actions belong in the game where functional evidence supports them. Contraction, opposing-muscle coordination and relaxation must agree with the joints and movement shown.
+## More than the left arm
 
-The left upper limb is predominantly controlled by contralateral motor pathways, so the right-hemisphere motor representation is central to this view. The display must still respect what a motor map can tell us: representations overlap, their arrangement varies between people, and a structural precentral-gyrus mesh is not a registered map of every movement. The game must not invent a universal exact point for one muscle merely to make a neat set of buttons.
+Left-arm motor areas must be clearly distinguishable from those associated with the right arm, legs, torso and head or face. These other body parts respond to the brain display through looking and clicking; the keyboard controls only the left arm. Move the brain overview so you can see it and the responding body part together.
 
-Colour shows **simulated activation**. Gaze and keys are virtual inputs; they do not deliver real neural stimulation or establish a validated brain decoder. Anatomical geometry, muscle electrical activity, mechanical contraction, tracked movement and learned predictions are different parts of the programme and retain their own evidence.
+A panel on the far right explains the selected area, the movement and muscles involved, and the limits of the mapping in plain language. Rendering, controls, simulation and these explanations run on the local computer. Hosting supplies the application files; gameplay does not depend on cloud rendering or a cloud request for each movement.
 
-## The larger purpose
+## Specific movements, with their limits attached
 
-NeuroSurge makes a difficult connection tangible: a selected neural-control representation, a muscular response, mechanical consequences and visible displacement. The wider NeuroTranslation programme is investigating how appropriately qualified neural, muscle, motion and mechanics datasets can support a movement model. The game is an interface for exploring these relationships, not proof that the full data-driven model has already been achieved.
+The intended left-arm actions include grasping, opening and spreading the fingers, wrist bending and straightening, and elbow bending and straightening. Finer movements belong where functional evidence supports them. Forearm turning needs coordinated motion of the radius and ulna (the two forearm bones), wrist and hand; rotating a picture of an arm cannot establish that anatomy.
 
-“Hand” in the game brief includes the left hand and arm. Anatomical labels remain specific when a particular finger, wrist, elbow or muscle is meant.
+The left upper limb is predominantly controlled through pathways from the right side of the brain. Motor representations overlap and vary between people. A structural brain mesh alone cannot supply an exact movement map, and a region is not a universal button for one muscle. Each functional assignment needs evidence appropriate to its precision; missing mappings remain explicit.
 
-## Current state
+Colour represents **simulated activity**. Looking and pressing keys are virtual inputs. They do not stimulate a real brain, record muscle electrical activity or establish a validated brain decoder. Neural recordings, muscle electrical activity, contraction, mechanical forces and tracked displacement are different observations with different tests.
 
-The game is under development. **This repository does not yet contain a completed playable build or an accepted trained model.** Anatomy assets, functional mapping, controls and model interfaces are being checked independently before integration. A selected release must carry an honest account of what works, what is simulated and what remains unvalidated.
+## The larger project
 
-## Related projects
+NeuroSurge makes a proposed connection tangible: a motor-control representation, a muscular response and visible movement. The separate [NeuroTranslation programme](https://github.com/eliminatenoise/NeuroTranslation) investigates how qualified neural, muscle, motion and mechanics datasets could support **NeuroTranslate 0.0**, the model name. The game's name is **NeuroSurge**. A running game will not by itself validate that broader model.
 
-- [NeuroTranslation](https://github.com/eliminatenoise/NeuroTranslation) is the research and model programme, including the NeuroTranslation and Brain2Body papers. **NeuroTranslate 0.0** is the model name; **NeuroSurge** is this game’s name.
-- [Interoceptomics](https://github.com/eliminatenoise/Interoceptomics) develops the presentation and explanatory work around internal-body sensing and neural connectivity.
+[Interoceptomics](https://github.com/eliminatenoise/Interoceptomics) contains the presentation and explanatory work on internal-body sensing and neural connectivity. Its current selected draft remains available while development is paused.
 
-## Reuse
+## Reuse and releases
 
-Project-owned contributions are dedicated under [CC0 1.0 Universal](LICENSE). Third-party anatomy and reference materials retain their own licences and credits. CC0 does not replace those terms or imply endorsement by an asset’s author.
+Each selected new release replaces the current files, with changes retained in Git history. Only reviewed drafts intended for production and qualified release materials belong here. Unreviewed working files, private account records and raw recordings are excluded.
+
+Project-owned contributions are dedicated under [CC0 1.0 Universal](LICENSE). Third-party anatomy and reference materials retain their own licences and credits. CC0 does not replace those terms or imply endorsement by an asset's author.
 
 [Terminology and project scope](PROJECT-CONTEXT.json).

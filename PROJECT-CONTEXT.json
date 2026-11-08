@@ -26,5 +26,7 @@
   },
   "scope_note": "Names and definitions identify the programme and development scope. They do not establish a completed game, validated model, biological or clinical capability.",
   "release_policy": "Selected reviewed production-grade drafts and items intended for production deployment; current selected files replace previous live versions. Git history and original local evidence remain.",
-  "license_note": "Project-owned contributions CC0-1.0; third-party materials retain their own rights and notices."
+  "license_note": "Project-owned contributions CC0-1.0; third-party materials retain their own rights and notices.",
+  "development_status": "active: NeuroSurge game only",
+  "programme_focus": "NeuroSurge is the sole active project. All other projects are paused following the current-version GitHub sync."
 }
