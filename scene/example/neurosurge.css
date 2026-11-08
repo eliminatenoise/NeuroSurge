@@ -1,0 +1,677 @@
+/* NeuroSurge visual-clarity source candidate. Root owns integration and native qualification.
+ * U2b-scene (round 2): scene overlay (orbit arrow buttons, region group labels, far-right information panel, face-layer
+ * label and inset frame), HUD cards on the left edge. INFO_PANEL / ORBIT_ARROWS in ns-scene-three mirror the sizes.
+ * A2-render R1: cards get a light translucent backdrop (text contrast over the bright strip and hand, VD02) that
+ * never hides what is under it; compact layouts use a narrower column so the larger framed strip stays clear; the
+ * hover label sits next to the crosshair; the region note explains tints/spot/shimmer under the legend; the legend
+ * fallback gradient matches the ns-brain ramp (createHud sets the exact generated gradient at runtime).
+ * All text uses the explicit system sans-serif stack. Existing pointer-event rules are retained.
+ * Cards keep their font and contents; the source seeks clear edge positions from approximate arm-avoid
+ * shapes rather than fading cards under the hand. Transparent backgrounds avoid opaque hand-covering
+ * panels. Limited placements, actual font/glyph bounds and every pose/aspect still require visual review.
+ * The giant centered motor focus, canvas, camera, ray, rig and input geometry are unchanged. */
+
+:root {
+  --ns-info-col-px: 300px;   /* INFO_PANEL.colPx */
+  --ns-info-col-vw: 25vw;    /* INFO_PANEL.colVw */
+  --ns-info-portrait-vh: 36vh; /* INFO_PANEL.portraitVh */
+  --ns-info-col-maxvh: 66vh;   /* INFO_PANEL.colMaxVh */
+  --ns-leftarm: #8cf2ff;     /* REGION_STYLE.leftArmOutline (sRGB of the linear [0.55, 0.95, 1.0]) */
+  /* Polish: one visual system for every overlay. */
+  --ns-other: #d2cdf0;       /* REGION_RENDER.groupLine (other body-part territories) */
+  --ns-activated: #ffc65c;   /* REGION_RENDER.activatedLine (activated-area edge) */
+  --ns-surface: rgba(9, 13, 20, 0.84);
+  --ns-surface-line: rgba(232, 238, 245, 0.12);
+  --ns-label: #9fb0c4;       /* small caps labels: 7.9:1 on the surface */
+  --ns-bg: #05070b;
+  --ns-fg: #e8eef5;
+  --ns-muted: #c7d2df;
+  --ns-panel: rgba(8, 12, 18, 0.7);
+  --ns-accent: #ffe066;
+  --ns-error-bg: rgba(120, 16, 16, 0.92);
+  --ns-banner-bg: rgba(150, 96, 0, 0.92);
+  --ns-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  /* HUD_LAYOUT mirror */
+  --ns-gap: 12px;
+  --ns-col-px: 300px;
+  --ns-col-vw: 26vw;
+  --ns-compact-col-px: 250px;
+  --ns-compact-col-vw: 30vw;
+  --ns-card-bg: rgba(5, 7, 11, 0.42);
+  --ns-portrait-notice-px: 320px;
+  --ns-portrait-notice-vw: 86vw;
+  --ns-essential-band: 3vh;
+}
+
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ns-bg);
+  color: var(--ns-fg);
+  font-family: var(--ns-font);
+  overflow: hidden;
+}
+
+.ns-app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.ns-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+  outline: none;
+}
+
+.ns-hud-root,
+.ns-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--ns-font);
+  font-size: 12px;
+  line-height: 1.3;
+  text-shadow: -1px -1px 1px #05070b, 1px -1px 1px #05070b, -1px 1px 1px #05070b, 1px 1px 1px #05070b, 0 2px 4px #05070b;
+}
+
+.ns-slot:empty,
+.ns-drive:empty { display: none; }
+
+/* Cards initially occupy the right edges; createHud may move each to a clear left/right edge slot. */
+.ns-hud-col {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ns-panel {
+  position: absolute;
+  width: min(var(--ns-col-px), var(--ns-col-vw));
+  background: var(--ns-card-bg);
+  border-radius: 6px;
+  padding: 7px 9px;
+  box-sizing: border-box;
+}
+
+/* U2b-scene: the far-right column belongs to the information overlay, so the cards start on the LEFT edge. */
+.ns-panel-info {
+  top: calc(var(--ns-essential-band) + 8px);
+  left: var(--ns-gap);
+}
+
+.ns-panel-legend {
+  left: var(--ns-gap);
+  bottom: var(--ns-gap);
+  font-size: 12px;
+  color: var(--ns-muted);
+}
+
+/* Integration (round 2): compact in-game HUD. The left arm fills the left of the screen and the far-right column is
+ * the information overlay, so during play the cards show the essentials only: title, gaze, pulse, forearm, reach and
+ * Space lines, and the shared activity legend with its short region note. The muscle-drive list, frame time, long
+ * notices and the controls hint stay in the DOM (and in the details mirror) but are not drawn; the full controls and
+ * honesty limits are on the intro and Esc pages, the caveats in the information overlay, and the essential limits
+ * line stays visible at the top. */
+.ns-hud .ns-drives,
+.ns-hud .ns-slot-drivesTitle,
+.ns-hud .ns-slot-frame,
+.ns-hud .ns-notices,
+.ns-hud .ns-slot-hint { display: none; }
+
+/* Polish: the in-game status card is a compact, quiet card (brand line, what you look at, the live pulse and the hand
+ * state); the long reach/elbow text is in the details mirror only. */
+.ns-hud .ns-slot-reach { display: none; }
+.ns-panel-info {
+  background: rgba(9, 13, 20, 0.62);
+  border: 1px solid var(--ns-surface-line);
+  border-radius: 10px;
+  padding: 8px 11px 9px;
+}
+.ns-panel-info .ns-slot-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ns-label);
+  text-shadow: none;
+}
+.ns-panel-info .ns-slot-gaze { font-size: 13px; font-weight: 700; margin-top: 4px; color: var(--ns-fg); }
+.ns-panel-info .ns-slot-pulse { margin-top: 2px; color: var(--ns-accent); font-variant-numeric: tabular-nums; }
+.ns-panel-info .ns-slot-trigger { font-size: 11.5px; }
+.ns-panel-info .ns-slot-space,
+.ns-panel-info .ns-slot-note { margin-top: 2px; color: var(--ns-muted); font-size: 11.5px; }
+
+/* Cards and labels are never blanket-faded to hide a collision. */
+.ns-slot-title { font-weight: 600; color: var(--ns-fg); }
+.ns-slot-gaze { font-weight: 600; margin-top: 3px; }
+.ns-slot-note,
+.ns-slot-frame { font-size: 12px; color: var(--ns-muted); }
+.ns-slot-trigger { color: var(--ns-accent); }
+.ns-slot-status { color: var(--ns-accent); }
+.ns-slot-drivesTitle { margin-top: 4px; font-weight: 600; }
+.ns-slot-legendLabel { font-weight: 600; color: var(--ns-fg); }
+
+.ns-drives {
+  margin: 1px 0 0;
+  padding-left: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ns-legend-bar {
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  background: linear-gradient(to right, #1d193c, #6f1d90, #d13c55, #ff951d, #fff350);
+}
+
+/* Polish: the legend is the colour key in the far-right column, under the information panel. */
+.ns-panel-legend {
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-surface-line);
+  border-radius: 10px;
+  padding: 9px 11px 9px;
+  color: var(--ns-fg);
+  text-shadow: none;
+  font-size: 11.5px;
+}
+@media (min-aspect-ratio: 1/1) {
+  .ns-hud .ns-panel-legend { width: min(var(--ns-info-col-px), var(--ns-info-col-vw)); }
+  .ns-hud .ns-panel-info { width: min(280px, 26vw); }
+}
+.ns-panel-legend .ns-slot-legendLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ns-label);
+}
+.ns-legend-key { list-style: none; margin: 7px 0 4px; padding: 0; display: grid; gap: 3px; }
+.ns-legend-item { display: flex; align-items: center; gap: 7px; line-height: 1.25; }
+.ns-legend-swatch { flex: none; width: 13px; height: 13px; border-radius: 3px; box-sizing: border-box; }
+.ns-legend-item-leftarm .ns-legend-swatch { background: rgba(26, 133, 158, 0.85); border: 2px solid var(--ns-leftarm); }
+.ns-legend-item-other .ns-legend-swatch { background: rgba(88, 88, 120, 0.85); border: 1px solid var(--ns-other); }
+.ns-legend-item-activated .ns-legend-swatch { background: rgba(120, 112, 120, 0.9); border: 2px solid var(--ns-activated); }
+.ns-legend-item-dot .ns-legend-swatch { width: 8px; height: 8px; margin: 0 2.5px; border-radius: 1px; transform: rotate(45deg); background: #a8eefc; }
+.ns-legend-item-leftarm .ns-legend-text,
+.ns-legend-item-leftarm .ns-legend-short { color: var(--ns-leftarm); font-weight: 600; }
+.ns-legend-short { display: none; }
+/* Polish: while the brain is out of view (looking at the body), the legend keeps only the ramp (the muscle colours);
+ * the brain-specific key returns when the brain is back in view. */
+.ns-app:has(> .ns-scene-overlay[data-ns-brain-in-view="false"]) .ns-legend-key,
+.ns-app:has(> .ns-scene-overlay[data-ns-brain-in-view="false"]) .ns-panel-legend .ns-slot-regionNote { display: none; }
+
+/* Region/legend note: always visible, same readable size, muted. */
+.ns-slot-regionNote { margin-top: 2px; color: var(--ns-muted); }
+.ns-panel-legend .ns-slot-regionNote { font-size: 11px; color: var(--ns-label); }
+
+/* Label of the control region under the crosshair (next to it, never over it). */
+.ns-hover {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(18px, 12px);
+  max-width: min(260px, 40vw);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ns-accent);
+  background: rgba(5, 7, 11, 0.55);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ns-legend-ends {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ns-muted);
+}
+.ns-legend-mid { font-size: 10.5px; color: var(--ns-label); text-align: center; }
+
+/* Wide: the limits read as one compact paragraph; the two control/representation limits stay bold. */
+.ns-notices { margin-top: 3px; }
+.ns-notices > .ns-slot { display: inline; }
+.ns-notices > .ns-slot:not(:last-child)::after { content: " \00b7  "; color: var(--ns-muted); font-weight: 400; }
+.ns-notices > .ns-slot-qualifier,
+.ns-notices > .ns-slot-control { color: var(--ns-fg); font-weight: 600; }
+
+/* Essential scope text wraps at a fixed readable size; its actual height informs card/label placement. */
+.ns-essential {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.3;
+  padding: 2px 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #d9e1ea;
+  background: rgba(5, 7, 11, 0.55);
+  border-radius: 0 0 8px 8px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Compatibility mirrors stay hidden; the primary full notices remain visible in every layout. */
+.ns-details-limits { display: none; }
+
+.ns-slot-hint { margin-top: 6px; color: var(--ns-fg); }
+
+.ns-rights {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--ns-surface-line);
+  font-size: 10.5px;
+  color: var(--ns-muted);
+}
+
+.ns-slot-rights { margin-right: 6px; }
+
+.ns-details {
+  display: inline;
+  pointer-events: auto;
+}
+
+.ns-details > summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--ns-accent);
+  text-decoration: underline;
+}
+
+.ns-details[open] {
+  display: block;
+}
+
+.ns-details-body {
+  margin-top: 4px;
+  max-height: 45vh;
+  overflow: auto;
+  color: var(--ns-muted);
+  overflow-wrap: anywhere; /* fix round 2 (SCI-6): the licence URIs wrap instead of scrolling sideways */
+}
+
+.ns-details-body > .ns-slot,
+.ns-details-limits > .ns-mirror { margin-top: 4px; }
+
+.ns-banner {
+  position: absolute;
+  top: var(--ns-essential-band);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ns-banner-bg);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  border-radius: 0 0 6px 6px;
+  z-index: 3;
+}
+
+.ns-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(640px, calc(100vw - 32px));
+  background: var(--ns-error-bg);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  z-index: 4;
+}
+
+.ns-fatal {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  background: var(--ns-error-bg);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-family: var(--ns-font);
+}
+
+.ns-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+}
+
+.ns-crosshair-h,
+.ns-crosshair-v {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.ns-crosshair-h { left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; }
+.ns-crosshair-v { top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; }
+.ns-crosshair-active .ns-crosshair-h,
+.ns-crosshair-active .ns-crosshair-v { background: var(--ns-accent); }
+
+/* Orientation labels: each extends AWAY from the band from its anchor (ns-scene-three ORIENTATION_ALIGN). */
+.ns-orient {
+  position: absolute;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #dbe3ee;
+  background: rgba(5, 7, 11, 0.5);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.ns-orient-right { transform: translate(0, -50%); }
+.ns-orient-left { transform: translate(-100%, -50%); }
+.ns-orient-anterior { transform: translate(-50%, -100%); }
+.ns-orient-posterior { transform: translate(-50%, 0); }
+
+/* Layout widths change without shrinking fonts or hiding required activity/limits/controls text.
+ * Tiny viewports may be space-limited: source placement records this, and actual review remains mandatory. */
+@media (max-aspect-ratio: 1449/1000) {
+  .ns-panel { width: min(var(--ns-compact-col-px), var(--ns-compact-col-vw)); }
+}
+
+@media (max-aspect-ratio: 999/1000) {
+  .ns-panel-info { width: calc(100% - 24px); }
+  .ns-panel-legend { width: min(var(--ns-portrait-notice-px), var(--ns-portrait-notice-vw)); }
+  .ns-hover { white-space: normal; }
+}
+
+/* ---------------------------------------------------------------- U2b-scene overlay */
+
+/* Above the canvas and HUD, below the game shell (z-index 10). Only the orbit buttons take pointer events. */
+.ns-scene-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  font-family: var(--ns-font);
+  color: var(--ns-fg);
+  overflow: hidden;
+}
+
+/* Orbit arrow buttons (R12): a few cm outside the brain's projected bounds, not attached to the brain. Hover (mouse) or
+ * data-hover (the captured crosshair) highlights; a click orbits the view about the locked brain centre. */
+.ns-orbit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;               /* ORBIT_ARROWS.sizePx */
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(232, 238, 245, 0.5);
+  background: rgba(9, 13, 20, 0.66);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  color: #e8eef5;
+  font: 700 18px/1 var(--ns-font);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out, color 120ms ease-out;
+}
+.ns-orbit-icon { display: block; width: 30px; height: 30px; pointer-events: none; }
+/* Polish (R16/R17): a plain caption appears beside the hovered arrow. */
+.ns-orbit::after {
+  content: attr(data-ns-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font: 600 11.5px/1.3 var(--ns-font);
+  color: #05070b;
+  background: #ffe066;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+.ns-orbit-back::after { top: auto; bottom: calc(100% + 6px); }
+.ns-orbit-left::after { left: 0; transform: none; }
+.ns-orbit-right::after { left: auto; right: 0; transform: none; }
+.ns-orbit:hover,
+.ns-orbit[data-hover="true"] {
+  background: rgba(255, 224, 102, 0.92);
+  border-color: #ffe066;
+  color: #05070b;
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px rgba(255, 224, 102, 0.28);
+}
+.ns-orbit:hover::after,
+.ns-orbit[data-hover="true"]::after { opacity: 1; }
+.ns-orbit:active { transform: scale(0.96); }
+.ns-orbit:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+
+/* Region group labels on the brain: the LEFT ARM group is distinct (cyan border and text); the others are muted. */
+.ns-region-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  max-width: 190px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+  color: #dcd8f2;
+  background: rgba(8, 10, 18, 0.62);
+  border: 1px solid rgba(210, 205, 240, 0.32);
+  text-shadow: 0 1px 2px #05070b;
+}
+/* Polish: the LEFT ARM territory label is the one strong label (cyan pill, matching the cyan territory outline). */
+.ns-region-label-leftarm {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 2px 10px;
+  color: #05161b;
+  border: 1.5px solid var(--ns-leftarm);
+  background: rgba(140, 242, 255, 0.92);
+  text-shadow: none;
+  box-shadow: 0 0 0 3px rgba(140, 242, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.ns-region-label-hemi { font-size: 0.86em; font-weight: 500; opacity: 0.78; }
+.ns-region-label[data-hover="true"] { color: #fff3a0; border-color: #fff3a0; }
+.ns-region-label-leftarm[data-hover="true"] { color: #05161b; background: #fff3a0; border-color: #fff3a0; }
+
+/* Far-right information overlay (R14). Never takes pointer events; long content is clipped, not scrolled. */
+.ns-infopanel {
+  position: absolute;
+  right: var(--ns-gap);
+  top: 30px;
+  max-height: min(calc(100% - 30px - var(--ns-gap)), var(--ns-info-col-maxvh));
+  width: min(var(--ns-info-col-px), var(--ns-info-col-vw));
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 10px 12px 10px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--ns-surface-line);
+  border-left: 4px solid var(--ns-other);
+  background: var(--ns-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: #e8eef5;
+  font-size: 12px;
+  line-height: 1.4;
+  text-shadow: none;
+  pointer-events: none;
+  /* Clipped content fades out in the bottom padding instead of being cut mid-line. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+}
+.ns-infopanel[data-left-arm="true"] { border-left-color: var(--ns-leftarm); }
+.ns-infopanel[data-mode="idle"],
+.ns-infopanel[data-mode="glass"] { border-left-color: #59606b; }
+.ns-infopanel-heading { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ns-label); }
+.ns-infopanel-title { margin: 3px 0 1px; font-size: 17px; font-weight: 700; line-height: 1.2; letter-spacing: 0.005em; }
+.ns-infopanel-tag { color: var(--ns-other); font-size: 12px; font-weight: 600; }
+.ns-infopanel[data-left-arm="true"] { border-left-color: var(--ns-leftarm); }
+.ns-infopanel[data-left-arm="true"] .ns-infopanel-tag { color: var(--ns-leftarm); }
+.ns-infopanel-viewed { margin-top: 3px; color: #ffe066; font-size: 11px; }
+.ns-infopanel-activity { display: flex; align-items: center; gap: 7px; margin: 8px 0 3px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ns-muted); }
+.ns-infopanel-swatch { flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(232, 238, 245, 0.5); }
+/* Polish: the activity value on the shared ramp (same gradient as the legend, the brain and the muscles). */
+.ns-infopanel-meter { position: relative; height: 6px; margin: 2px 0 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.ns-infopanel-meter-mark {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px #05070b;
+}
+.ns-infopanel-activations { color: var(--ns-activated); font-size: 11px; }
+/* Rows read as "Label value" lines over the full panel width (no narrow value column, no mid-word truncation). */
+.ns-infopanel-rows { display: block; margin: 5px 0 3px; padding-top: 5px; border-top: 1px solid var(--ns-surface-line); font-size: 11.5px; line-height: 1.35; }
+.ns-infopanel-rows dt { display: inline; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ns-label); }
+.ns-infopanel-rows dt::after { content: "  "; white-space: pre; }
+.ns-infopanel-rows dd { display: inline; margin: 0; overflow-wrap: break-word; }
+.ns-infopanel-rows dd::after { content: ""; display: block; margin-bottom: 3px; }
+/* Round-2 fixes V1 / SCI-4 / F6: plain lead, then short simulated / known / caveat lines, then the rows, then the long
+   explanation ("More detail", clamped last), so the required fields stay inside the column at 1280x720. */
+.ns-infopanel-plain,
+.ns-infopanel-explanation,
+.ns-infopanel-known,
+.ns-infopanel-simulated,
+.ns-infopanel-caveat {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ns-infopanel-plain { -webkit-line-clamp: 4; margin: 6px 0 4px; font-size: 12.5px; color: #eef3f8; }
+.ns-infopanel-simulated,
+.ns-infopanel-known,
+.ns-infopanel-caveat { -webkit-line-clamp: 3; margin: 2px 0 3px; font-size: 11.5px; line-height: 1.35; }
+.ns-infopanel-explanation { -webkit-line-clamp: 4; margin: 5px 0 4px; font-size: 11.5px; line-height: 1.35; color: var(--ns-muted); }
+.ns-infopanel[data-mode="idle"] .ns-infopanel-explanation,
+.ns-infopanel[data-mode="glass"] .ns-infopanel-explanation { -webkit-line-clamp: 6; font-size: 12.5px; color: #eef3f8; }
+.ns-infopanel-meter[hidden] { display: none; }
+.ns-infopanel-plain[hidden],
+.ns-infopanel-explanation[hidden],
+.ns-infopanel-known[hidden],
+.ns-infopanel-simulated[hidden],
+.ns-infopanel-caveat[hidden] { display: none; }
+.ns-infopanel-simulated { color: #ffe9a8; }
+.ns-infopanel-known { color: #c9d4e2; }
+.ns-infopanel-caveat { color: #f2cfa0; }
+.ns-infopanel-caveats { margin: 4px 0; padding-left: 16px; font-size: 11px; color: var(--ns-label); }
+.ns-infopanel-caveats li + li { margin-top: 2px; }
+.ns-infopanel-more { list-style: none; margin-left: -16px; font-style: italic; }
+.ns-details-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.ns-details-link { color: #ffe066; text-decoration: underline; pointer-events: auto; }
+.ns-infopanel-citations { margin-top: 4px; font-size: 11px; color: #aab5c4; }
+
+/* Face layer label (ghost) and inset frame. */
+.ns-face-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, 0);
+  max-width: min(360px, 44vw);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  color: #e8eef5;
+  background: rgba(8, 12, 18, 0.7);
+  border: 1px dashed rgba(232, 238, 245, 0.45);
+}
+.ns-face-inset {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid rgba(232, 238, 245, 0.6);
+  border-radius: 6px;
+}
+.ns-face-inset-caption {
+  position: absolute;
+  top: 100%;
+  left: -2px;
+  right: -2px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+  background: rgba(8, 12, 18, 0.78);
+}
+
+/* Narrow / portrait: the information overlay becomes a bottom band; less important text is dropped first. */
+@media (max-aspect-ratio: 999/1000) {
+  .ns-infopanel { top: auto; bottom: var(--ns-gap); left: var(--ns-gap); width: auto; max-height: var(--ns-info-portrait-vh); font-size: 11.5px; }
+  .ns-infopanel-plain { -webkit-line-clamp: 2; }
+  .ns-infopanel-explanation { display: none; }
+  .ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat { -webkit-line-clamp: 2; }
+  /* Portrait is cramped: the colour key collapses to one row of short words. */
+  .ns-legend-key { grid-template-columns: repeat(4, max-content); column-gap: 10px; margin: 5px 0 2px; }
+  .ns-legend-text { display: none; }
+  .ns-legend-short { display: inline; }
+  .ns-legend-item { gap: 4px; }
+  .ns-legend-mid { display: none; }
+  .ns-panel-legend .ns-slot-regionNote { display: none; }
+  .ns-infopanel-caveats, .ns-infopanel-citations { display: none; }
+  .ns-region-label { font-size: 10.5px; max-width: 140px; white-space: normal; }
+}
+/* Round-2 fix V1: landscape at heights <= 820 px: the taller information column leaves less room, so the legend's colour
+   key uses its short words in two columns (the long words return on taller screens). */
+@media (min-aspect-ratio: 1/1) and (max-height: 820px) {
+  .ns-legend-key { grid-template-columns: repeat(2, max-content); column-gap: 14px; row-gap: 3px; }
+  .ns-legend-text { display: none; }
+  .ns-legend-short { display: inline; }
+}
+@media (max-height: 520px) {
+  .ns-infopanel-caveats, .ns-infopanel-citations { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

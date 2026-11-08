@@ -1,0 +1,53 @@
+BodyParts3D full-body musculoskeletal subset (packet bodyparts3d-fullbody-r1)
+
+BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+Official source: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+Archive: https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip (ETag "8848a5a-4dd48ec9df000", Last-Modified Wed, 22 May 2013 06:46:24 GMT, 142903898 bytes)
+Current primary licence: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html (page text checked 2026-11-08T03:45:11.162592+00:00: "Last updated : 2025/02/27", CC BY 4.0 statement present: True)
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Changes: selection only. Each OBJ is a byte-exact decompressed member of the official archive (verified ZIP CRC32, byte count and
+SHA-256). No centring, mirroring, renaming, re-meshing, unit conversion or header editing. Posing for the game happens at run time
+as whole-mesh rigid transforms in the scene code; the files themselves are unchanged.
+Legacy OBJ comment headers (CC BY-SA 2.1 Japan) are retained as found; the current official archive licence is CC BY 4.0.
+The dataset authors (DBCLS) do not endorse NeuroSurge or NeuroTranslate 0.0. Do not attribute biological, clinical or functional
+validation to these meshes or to the game.
+
+Official modelling and version cautions (quoted; see ACQUISITION-RECORD.json "cautions"):
+  - BodyParts3D official notice (saved copy of https://lifesciencedb.jp/bp3d/info_en/index.html, not re-fetched because it is not on the single allowed host): "There are still many concepts not represented in the data. There could be many ERRORS to be used as ANATOMICAL EDUCATION. Some parts were made from scratch by artists or distorted to fit into the environment. Segmentation into finer pieces may cause confusion in assignment of concepts."
+  - Version naming (same page): the ones place of a data version (2, 3, 4, 5) states whether files share body coordinates; e.g. skull 4.3 and brain 5.0 differ. Every file here embeds "Compatibility version : 4.0" and was checked, so all share the BodyParts3D 4.0 frame.
+  - The archive is the official 99 percent polygon-reduced ISA-tree OBJ set (README_e.html, "Polygon reduction rate = 99%"). Geometry is a single reference body; it is not this player, any measured person, or a population average.
+  - Concept assignment uses the FMA-based ISA tree (Build-up logic: FMA 3.0 is_a). Names were checked against each file's embedded header. Root previously found a source laterality error (FJ1469 named left but at -x); the same check is applied to every file here.
+  - Legacy OBJ comment headers say CC BY-SA 2.1 Japan; the current official licence page (updated 2025-02-27) says CC BY 4.0. Headers are retained byte-exact; no header was stripped or edited.
+
+Requested parts the official BodyParts3D 4.0 lists do not contain (recorded, never substituted):
+  - right latissimus dorsi
+  - right rectus abdominis
+  - left latissimus dorsi
+  - left rectus abdominis
+  - coccyx
+  - right masseter
+  - right temporalis
+  - right orbicularis oculi
+  - right zygomaticus major
+  - frontal belly of right occipitofrontalis
+  - right buccinator
+  - left masseter
+  - left temporalis
+  - left orbicularis oculi
+  - left zygomaticus major
+  - frontal belly of left occipitofrontalis
+  - left buccinator
+  - orbicularis oris
+  - left paracentral lobule
+  - right paracentral lobule
+
+Official files examined but excluded from this packet (kept in acquisition/quarantine-r1, never loaded):
+  - FJ1469M "Right flexor pollicis brevis": EXCLUDED from the packet and manifest; no mirror, rename or repair applied; laterality check failed (right: centroid x < 0; at least 97% of vertices on the right side of the +/-15.0 mm midline band; header name does not name the other side); x_min=256.014 x_max=301.25 centroid_x=271.8882 {'fract
+  - FJ2772 "Hyoid bone": EXCLUDED as duplicate geometry of FJ3201; kept one copy to avoid coincident surfaces; vertex/face content identical to FJ3201 (comment headers differ only)
+
+Included files with recorded source anomalies (kept byte-exact, not repaired; see FULLBODY-MESH-MANIFEST.json source_anomalies):
+  - FJ3345 "Right seventh costal cartilage": 6 of 1538 vertices beyond the midline band at x [49.514, 49.565] mm, z [1149.28, 1149.3] mm
+  - FJ1595 "Right sternocleidomastoid": 56 of 6642 vertices beyond the midline band at x [51.179, 61.405] mm, z [1494.21, 1497.41] mm
+
+Files: 294 OBJ meshes, 77421719 bytes; hashes in SHA256SUMS.txt.

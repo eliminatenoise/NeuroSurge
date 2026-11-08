@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroSurge</title>
+<meta name="description" content="NeuroSurge: a simulated first-person motor-cortex game that runs locally in the browser (companion to NeuroTranslate 0.0, a research model name, not a validated decoder). All activity is simulated and unitless; gaze and keys are virtual inputs, not stimulation or decoding.">
+<link rel="stylesheet" href="./neurosurge.css">
+<style>
+/* Game shell (round-1 A4, round-2 U4-app): the 2 s start instructions and the Esc page (one overlay, data-mode
+ * intro | paused | loading | error), context-loss banner, capture / drag-to-look toast, screen-reader region and the
+ * FALLBACK far-right information panel (.ns-info, used only while ns-scene-three draws none).
+ * Kept here so neurosurge.css (HUD) stays independent. Contrast: text #e8eef5 / #c7d2df on rgba(8,12,18,0.95)
+ * (>= 11:1 and >= 9:1), button #05070b on #ffe066 (>= 15:1). */
+.ns-shell-root {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  font-family: var(--ns-font, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif);
+  color: var(--ns-fg, #e8eef5);
+}
+.ns-shell {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(3, 5, 9, 0.6);
+  z-index: 2;
+}
+.ns-shell[hidden] { display: none; }
+.ns-shell-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 660px;
+  max-height: 100%;
+  overflow: auto;
+  cursor: default;
+  padding: 22px 26px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(232, 238, 245, 0.14);
+  border-top: 3px solid #8cf2ff;
+  background: rgba(9, 13, 20, 0.96);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  font-size: 13.5px;
+  line-height: 1.42;
+  text-shadow: none;
+}
+/* Polish: brand title with a small colour-ramp rule (the one activity ramp used everywhere in the game). */
+.ns-shell-title { margin: 0; font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: 0.01em; }
+.ns-shell-title::after {
+  content: "";
+  display: block;
+  width: 132px;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #1d193c, #6f1d90, #d13c55, #ff951d, #fff350);
+}
+.ns-shell-subtitle { margin: 8px 0 14px; color: var(--ns-muted, #c7d2df); font-size: 13.5px; max-width: 62em; }
+.ns-shell-heading { margin: 0 0 4px; font-size: 18px; color: var(--ns-accent, #ffe066); }
+.ns-shell[data-mode="playing"] .ns-shell-heading:empty { display: none; }
+.ns-shell-status { margin: 0 0 4px; color: var(--ns-muted, #c7d2df); }
+.ns-shell-status:empty { display: none; }
+.ns-shell-notice {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--ns-accent, #ffe066);
+  background: rgba(150, 96, 0, 0.3);
+}
+.ns-shell[data-mode="error"] .ns-shell-notice { border-left-color: #ff9a9a; background: rgba(120, 16, 16, 0.6); }
+.ns-shell-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 14px; }
+.ns-shell-play {
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 10px 24px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--ns-accent, #ffe066);
+  color: #05070b;
+}
+.ns-shell-play:disabled { cursor: progress; background: #59606b; color: #e8eef5; }
+.ns-shell-secondary {
+  font: inherit;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #c7d2df;
+  background: transparent;
+  color: #e8eef5;
+}
+.ns-shell-root button:focus-visible,
+.ns-shell-root input:focus-visible,
+.ns-shell-root select:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+.ns-shell-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px 26px; margin-top: 4px; }
+.ns-shell-section { min-width: 0; }
+.ns-shell[data-mode="intro"] { background: rgba(3, 5, 9, 0.45); }
+.ns-shell-card { max-width: 860px; }
+/* Polish: on wide screens the card is a two-column grid, so settings and the honesty limits sit side by side and the
+ * whole page needs less scrolling; every block keeps its text. */
+@media (min-width: 900px) {
+  .ns-shell-card { max-width: 1020px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); column-gap: 26px; align-items: start; }
+  .ns-shell-card > * { grid-column: 1 / -1; }
+  .ns-shell-card > .ns-shell-settings { grid-column: 1; }
+  .ns-shell-card > .ns-shell-limits { grid-column: 2; }
+  .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 1 / -1; }
+}
+.ns-shell-modenote { margin: 2px 0 0; color: var(--ns-muted, #c7d2df); font-size: 13px; }
+.ns-shell-modenote[hidden], .ns-shell-settings[hidden], .ns-shell-actions button[hidden] { display: none; }
+.ns-shell-steps { margin: 0; padding-left: 0; list-style: none; counter-reset: ns-step; }
+.ns-shell-steps li { position: relative; padding-left: 28px; counter-increment: ns-step; }
+.ns-shell-steps li::before {
+  content: counter(ns-step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(140, 242, 255, 0.14);
+  border: 1px solid rgba(140, 242, 255, 0.55);
+  color: #8cf2ff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 19px;
+  text-align: center;
+}
+.ns-shell-steps li + li { margin-top: 6px; }
+.ns-shell-settings { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(232, 238, 245, 0.16); }
+.ns-shell-select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid #c7d2df; background: #0d141d; color: #e8eef5; }
+.ns-shell-reset { border-color: var(--ns-accent, #ffe066); }
+.ns-shell-section-title {
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9fb0c4;
+}
+/* Polish: controls read as key caps beside plain descriptions. */
+.ns-shell-keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; align-items: baseline; }
+.ns-shell-keys dt {
+  justify-self: start;
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(232, 238, 245, 0.32);
+  border-bottom-width: 2px;
+  background: rgba(232, 238, 245, 0.06);
+  color: #f2f6fa;
+}
+.ns-shell-keys dd { margin: 0; color: #d6dee8; }
+.ns-shell-settings { min-width: 0; margin: 14px 0 0; padding: 10px 0 0; border: 0; border-top: 1px solid rgba(232, 238, 245, 0.12); }
+.ns-shell-settings > legend { float: left; width: 100%; padding: 0; }
+.ns-shell-settings > legend + * { clear: left; }
+.ns-shell-setting { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
+.ns-shell-range { flex: 1; min-width: 80px; accent-color: var(--ns-accent, #ffe066); }
+.ns-shell-out { min-width: 3.4em; font-variant-numeric: tabular-nums; }
+.ns-shell-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ns-accent, #ffe066); }
+.ns-shell-limits { margin-top: 14px; padding: 10px 14px 12px; border: 1px solid rgba(255, 224, 102, 0.22); border-radius: 10px; background: rgba(255, 224, 102, 0.04); }
+.ns-shell-limits ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #d6dee8; }
+.ns-shell-limits li + li { margin-top: 2px; }
+.ns-shell-context {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  max-width: min(92vw, 600px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  pointer-events: auto;
+  background: rgba(120, 16, 16, 0.94);
+  color: #fff;
+  font-size: 14px;
+}
+.ns-shell-context[hidden], .ns-shell-toast[hidden] { display: none; }
+.ns-shell-toast {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  max-width: min(92vw, 640px);
+  padding: 6px 12px;
+  border-radius: 6px;
+  pointer-events: none;
+  background: rgba(8, 12, 18, 0.9);
+  color: #e8eef5;
+  font-size: 13px;
+  text-align: center;
+}
+/* Fallback far-right information overlay (R14): what is happening neurophysiologically for the viewed area. It sits
+ * just left of the HUD's right column (neurosurge.css .ns-panel: min(300px, 26vw) at the right edge), so it never
+ * covers the HUD's always-visible honesty lines; it never takes pointer events. ns-scene-three may replace it. */
+.ns-info {
+  position: absolute;
+  right: calc(2 * var(--ns-gap, 12px) + min(var(--ns-col-px, 300px), var(--ns-col-vw, 26vw)));
+  top: 56px;
+  box-sizing: border-box;
+  width: min(250px, 22vw);
+  max-height: calc(100% - 120px);
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 4px solid #7cc4ff;
+  pointer-events: none;
+  z-index: 1;
+  background: rgba(8, 12, 18, 0.82);
+  color: #e8eef5;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.ns-info[data-left-arm="true"] { border-left-color: var(--ns-accent, #ffe066); }
+.ns-info[data-mode="idle"], .ns-info[data-mode="glass"] { border-left-color: #59606b; }
+.ns-info [hidden] { display: none; }
+.ns-info-heading { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #c7d2df; }
+.ns-info-title { margin: 2px 0 1px; font-size: 15px; line-height: 1.2; }
+.ns-info-tag, .ns-info-viewed { margin: 0 0 3px; color: #c7d2df; font-size: 11.5px; }
+.ns-info-activity { margin: 2px 0 4px; font-variant-numeric: tabular-nums; color: #ffe9a8; }
+.ns-info-rows { margin: 4px 0; }
+.ns-info-rows dt { margin-top: 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #c7d2df; }
+.ns-info-rows dd { margin: 0; }
+.ns-info-explanation, .ns-info-simulated, .ns-info-known { margin: 4px 0; }
+.ns-info-caveats { margin: 4px 0; padding-left: 14px; font-size: 11px; color: #c7d2df; }
+.ns-info-citations { margin: 4px 0 0; font-size: 10.5px; color: #c7d2df; }
+@media (max-width: 760px), (max-height: 520px) {
+  .ns-info { top: auto; bottom: 48px; left: 8px; right: auto; width: min(260px, 44vw); max-height: 36vh; font-size: 11px; }
+  .ns-info-caveats, .ns-info-known, .ns-info-simulated, .ns-info-citations { display: none; }
+}
+.ns-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 600px), (max-height: 520px) {
+  .ns-shell { align-items: flex-start; padding: 8px; }
+  .ns-shell-card { padding: 14px 14px 12px; font-size: 13px; }
+  .ns-shell-title { font-size: 26px; }
+  .ns-shell-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ns-shell:not([hidden]) { animation: ns-shell-in 160ms ease-out; }
+}
+@keyframes ns-shell-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ns-shell-root *, .ns-shell-root *::before, .ns-shell-root *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<!--
+  Import map: three is pinned to 0.170.0 and vendored at /vendor/three.module.js (licence alongside). The page
+  therefore runs when served from the playable root (/scene, /vendor, /inputs, /packets) at /scene/example/.
+  No other dependency is loaded; the scene modules are plain relative ES modules.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<!--
+  Parameters (Root sets the data attributes for its hosting layout):
+    data-manifest-url       URL of the Root-accepted combined neurosurge-integration-r1/MESH-MANIFEST.json (142 entries)
+    data-packet-pov-demo-assets      base URL of the pov-demo-assets packet (entries' meshes/ paths resolve against it)
+    data-packet-pov-demo-assets-r2   base URL of the pov-demo-assets-r2 packet (FJ1466M abductor digiti minimi)
+    data-movement-map-url   URL of the Root-accepted neurosurge-integration-r1/MOVEMENT-MAP.json (R6 control overlay)
+  Query overrides (relative or same-origin paths only): ?manifest=<file>  ?map=<file>
+  ?placeholder=1 runs the UNQUALIFIED PLACEHOLDER mode (constructed capsules and strip, labelled, not anatomy).
+  The full-body packet (FULLBODY-MESH-MANIFEST.json, pinned sha256; every OBJ sha256-checked before parsing) loads by
+  default when ns-body.mjs exists, so looking down / up / right shows the torso and legs, the face layer and the right
+  arm; ?fullbody=0 turns it off (arm and brain only). A failure is shown and the arm game keeps running.
+  ?qa=1 adds the deterministic QA API to window.__nsQA (ns-app QA_METHODS: setLook, key, click, step, pause, resume,
+  snapshot, screenshotReady, play, showPause, shell, settings, esc, orbit, resetBody, resetBrainView, info; see
+  round2/U4-app-NOTES.md). Without it window.__nsQA is { ready, inspect }.
+  The pinned sha256 of the manifest and movement map, and every OBJ's bytes and sha256 from the manifest, are
+  verified before use; any failure is shown in the HUD and the shell (there is no silent fallback).
+-->
+<main id="ns-app" class="ns-app"
+      data-manifest-url="/inputs/MESH-MANIFEST.json"
+      data-packet-pov-demo-assets="/packets/pov-demo-assets/"
+      data-packet-pov-demo-assets-r2="/packets/pov-demo-assets-r2/"
+      data-movement-map-url="/inputs/MOVEMENT-MAP.json">
+  <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
+          aria-label="NeuroSurge first-person scene: virtual control of a simulated body and brain (no real stimulation or decoding)"></canvas>
+  <div id="ns-hud" class="ns-hud-root"></div>
+  <div id="ns-shell-root" class="ns-shell-root"></div>
+  <noscript><p class="ns-fatal">NeuroSurge needs JavaScript and WebGL.</p></noscript>
+</main>
+<script type="module">
+const app = document.getElementById('ns-app');
+const canvas = document.getElementById('ns-canvas');
+const hudRoot = document.getElementById('ns-hud');
+const shellRoot = document.getElementById('ns-shell-root');
+
+function showFatal(message) {
+  const p = document.createElement('p');
+  p.className = 'ns-fatal';
+  p.setAttribute('role', 'alert');
+  p.textContent = message;
+  hudRoot.appendChild(p);
+}
+
+// Only relative or same-origin paths may override the asset locations (no scheme, no protocol-relative URL).
+function relativeOr(value, fallback) {
+  if (typeof value !== 'string' || value === '') return fallback;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value) || value.startsWith('//') || value.includes('\\')) return fallback;
+  return value;
+}
+
+const params = new URLSearchParams(window.location.search);
+const placeholder = params.get('placeholder') === '1';
+const qa = params.get('qa') === '1';
+const fullBody = params.get('fullbody') !== '0' && !placeholder;
+const manifestUrl = relativeOr(params.get('manifest'), app.dataset.manifestUrl);
+const packetBases = {
+  'pov-demo-assets': app.dataset.packetPovDemoAssets,
+  'pov-demo-assets-r2': app.dataset.packetPovDemoAssetsR2
+};
+const movementMapUrl = relativeOr(params.get('map'), app.dataset.movementMapUrl);
+
+// Settings storage: reading window.localStorage itself throws in some sandboxed or privacy contexts.
+let storage = null;
+try { storage = window.localStorage; } catch { storage = null; }
+
+async function fetchText(url) {
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+  return response.text(); // UTF-8 decode; the hashes below are over the UTF-8 encoding of this text
+}
+
+async function sha256Hex(text) {
+  const subtle = window.crypto && window.crypto.subtle;
+  if (!subtle) throw new Error('crypto.subtle is unavailable: serve the page over HTTPS or from localhost');
+  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+let THREE = null, startScene = null, loadFullBodyInputs = null, scene = null, bootError = null;
+let markBooted;
+const booted = new Promise(resolve => { markBooted = resolve; });
+
+function boot() {
+  const loadBody = fullBody && loadFullBodyInputs
+    ? ({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) => loadFullBodyInputs({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) : null;
+  scene = startScene({
+    THREE, canvas, hudRoot, shellRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder, storage, qa, loadBody
+  });
+  return scene;
+}
+
+// A stable QA object: `ready` and `inspect` follow the current scene (a back/forward-cache restore may restart it).
+const api = {
+  get ready() { return booted.then(() => (scene ? scene.ready : { ok: false, error: bootError || 'not started' })); },
+  inspect: options => (scene ? scene.inspect(options) : null)
+};
+if (qa) {
+  const forward = name => (...args) => {
+    if (!scene || !scene.qa) throw new Error('ns:qa_state: the QA API is not available (the scene did not start)');
+    return scene.qa[name](...args);
+  };
+  // Must equal ns-app QA_METHODS (checked by tests/unit/U4-app-*.test.mjs).
+  for (const name of ['setLook', 'key', 'click', 'step', 'pause', 'resume', 'snapshot', 'screenshotReady', 'play', 'showPause', 'shell',
+    'settings', 'esc', 'orbit', 'resetBody', 'resetBrainView', 'info', 'mouseHold']) {
+    api[name] = forward(name);
+  }
+}
+window.__nsQA = Object.freeze(api);
+
+try {
+  THREE = await import('three');
+  ({ start: startScene, loadFullBodyInputs } = await import('../src/ns-app.mjs'));
+  boot();
+  canvas.focus({ preventScroll: true });
+} catch (err) {
+  bootError = err && err.message ? err.message : String(err);
+  showFatal(`NeuroSurge could not start: ${bootError}`);
+} finally {
+  markBooted();
+}
+
+// Page lifecycle: entering the back/forward cache suspends (keys and pointer lock released, pause overlay, loop held);
+// a real unload stops and disposes. A restore resumes, or restarts the scene when it had been stopped.
+window.addEventListener('pagehide', e => {
+  if (!scene) return;
+  if (e.persisted && typeof scene.suspend === 'function') scene.suspend();
+  else scene.stop();
+});
+window.addEventListener('pageshow', e => {
+  if (!e.persisted || !scene || !startScene) return;
+  const state = typeof scene.status === 'function' ? scene.status() : null;
+  if (state && state.stopped) {
+    try { boot(); } catch (err) { showFatal(`NeuroSurge could not restart: ${err && err.message ? err.message : String(err)}`); }
+  } else if (typeof scene.resume === 'function') {
+    scene.resume();
+  }
+});
+</script>
+</body>
+</html>

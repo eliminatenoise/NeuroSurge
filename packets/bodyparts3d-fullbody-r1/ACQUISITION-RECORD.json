@@ -1,0 +1,3190 @@
+{
+ "schema_version": 1,
+ "kind": "bodyparts3d_fullbody_acquisition_record",
+ "writer": "U0-acquire (Claude Code session 9381fa79, in-process workflow; round 2)",
+ "authority": "User explicitly authorised (2026-11-08) downloading the needed BodyParts3D parts, the same way Root acquired the left arm, with hashes, licence and attribution.",
+ "started_at_utc": "2026-11-08T03:51:24.038340+00:00",
+ "finished_at_utc": "2026-11-08T03:51:28.304963+00:00",
+ "script": {
+  "path": "<claude-dev-root>/acquisition/acquire_fullbody_r1.py",
+  "sha256": "8890ae81bb4318efdbb38a24e8cc19a56711fa6b87b623d9f5af7bf13f6db021"
+ },
+ "runtime": {
+  "python": "3.14.8",
+  "platform": "Linux-7.2.8-9-omarchy-x86_64-with-glibc2.44"
+ },
+ "network_policy": {
+  "host": "dbarchive.biosciencedbc.jp",
+  "scheme": "https",
+  "serial": true,
+  "delay_s_between_requests": 1.5,
+  "retries": 0,
+  "timeout_s": 60,
+  "user_agent": "NeuroSurge-fullbody-acquisition/1.0 (local client-side research game; CC BY 4.0 attribution recorded)",
+  "not_fetched": [
+   "https://lifesciencedb.jp/bp3d/info_en/index.html (different host; Root's saved copy cited instead)"
+  ]
+ },
+ "archive": {
+  "url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+  "etag": "\"8848a5a-4dd48ec9df000\"",
+  "size": 142903898,
+  "last_modified": "Wed, 22 May 2013 06:46:24 GMT",
+  "head_headers": {
+   "Date": "Sun, 08 Nov 2026 03:45:07 GMT",
+   "Content-Type": "application/zip",
+   "Content-Length": "142903898",
+   "Connection": "close",
+   "Last-Modified": "Wed, 22 May 2013 06:46:24 GMT",
+   "ETag": "\"8848a5a-4dd48ec9df000\"",
+   "Accept-Ranges": "bytes",
+   "X-Frame-Options": "DENY",
+   "X-Content-Type-Options": "nosniff",
+   "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  "root_recorded_identity": {
+   "etag": "\"8848a5a-4dd48ec9df000\"",
+   "size": 142903898,
+   "last_modified": "Wed, 22 May 2013 06:46:24 GMT"
+  }
+ },
+ "central_directory_check": {
+  "eocd_entries": 2234,
+  "cd_offset": 142733851,
+  "cd_size": 170025,
+  "cd_sha256": "edde15c7c5f34b2b9743935fb3c1873cce3a9789164427ddf8343c879bcde96b",
+  "tail_sha256": "ce533bbd3c235848bd323cefae8695100d241ca2ba54d5f2760de97468f175f9",
+  "parsed_entries": 2234,
+  "entries_differing_from_root_saved_index": [],
+  "differing_count": 0,
+  "selected_members_match": true,
+  "evidence_files": [
+   "acquisition/evidence-r1/eocd-tail.bin",
+   "acquisition/evidence-r1/central-directory.bin"
+  ]
+ },
+ "licence_check": {
+  "url": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html",
+  "checked_at_utc": "2026-11-08T03:45:11.162592+00:00",
+  "sha256": "3479adc6b96b70e3724c45154d45b00d65036b70575ba79217bc983179506ddb",
+  "bytes": 14694,
+  "saved_copy": "acquisition/evidence-r1/official-license-20261108.html",
+  "last_updated": "Last updated : 2025/02/27",
+  "cc_by_40_present": true,
+  "attribution_string_present": true,
+  "same_as_root_saved_copy": false,
+  "visible_text_same_as_root_saved_copy": true,
+  "raw_differences_only_csrf_token_or_nonce": true
+ },
+ "inputs_read_only": {
+  "isa_element_parts": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/isa_element_parts.txt",
+   "bytes": 1142159,
+   "sha256": "a3de74423f943b0d724ae8f59b3a817f87c423a544f8db98113b1980817cbeaf"
+  },
+  "partof_element_parts": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/partof_element_parts.txt",
+   "bytes": 651179,
+   "sha256": "3f5f6df1028eb122b30de77c711597b6bb8e5541658e5985859fd228adbf88ea"
+  },
+  "isa_parts_list_e": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/isa_parts_list_e.txt",
+   "bytes": 128086,
+   "sha256": "ab7796deedd49205e77f3609a1cb8c53e2bbee14ecb5c9a6ca05227469780513"
+  },
+  "partof_parts_list_e": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/partof_parts_list_e.txt",
+   "bytes": 59351,
+   "sha256": "9224080557053e6f1322f1e13ab27f0ecde0db19bb3b505f0631afad230eeebd"
+  },
+  "isa_archive_entries_saved_by_root": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/isa-archive-entries.json",
+   "bytes": 365045,
+   "sha256": "2cfc1c50226310a8d49f2eac4744d0df63c1133faf743a89abeb43e5b056b1a0"
+  },
+  "isa_archive_info_saved_by_root": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/isa-archive-info.json",
+   "bytes": 784,
+   "sha256": "fee7303d132c16fc029306524bd1b196403160cc34b334a9323c7d3aa893920e"
+  },
+  "official_license_saved_by_root": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/official-license.html",
+   "bytes": 14694,
+   "sha256": "5fcdb18281aef9f97c6df26d3fd7cd9ec541a88287f1342c845809d47e76822e"
+  },
+  "official_modelling_and_version_cautions_saved_by_root": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/metadata/official-modelling-and-version-cautions.html",
+   "bytes": 61130,
+   "sha256": "92ea82c87abf4d67998fe8dbfd8de27ea1800e8435b309b2ac23cb772e3b4ed1"
+  },
+  "root_retrievals": {
+   "path": "<neurosurge-project-root>/pov-demo-assets/retrievals.json",
+   "bytes": 3475,
+   "sha256": "d523b4f0d8454873e886aaeb224b2501aae1c4fa35e37867db1b63c4775bb8ca"
+  },
+  "stage_mesh_manifest": {
+   "path": "<claude-dev-root>/neurosurge-playable/inputs/MESH-MANIFEST.json",
+   "bytes": 235771,
+   "sha256": "b01fc738dbc3e3c7fb31faf46550a6e3c3bb3263da46f40bdbddb3239f89b529"
+  }
+ },
+ "selection_spec": [
+  {
+   "label": "right humerus",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right humerus"
+   ],
+   "rig": "r_upperarm",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right radius",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right radius"
+   ],
+   "rig": "r_forearm",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right ulna",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right ulna"
+   ],
+   "rig": "r_forearm",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right scaphoid",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right scaphoid"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right lunate",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right lunate"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right triquetral",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right triquetral"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right pisiform",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right pisiform"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right trapezium",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right trapezium"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right trapezoid",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right trapezoid"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right capitate",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right capitate"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right hamate",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right hamate"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right first metacarpal bone",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right first metacarpal bone"
+   ],
+   "rig": "r_thumb_mc",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right second metacarpal bone",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right second metacarpal bone"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right third metacarpal bone",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right third metacarpal bone"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right fourth metacarpal bone",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right fourth metacarpal bone"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right fifth metacarpal bone",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right fifth metacarpal bone"
+   ],
+   "rig": "r_hand",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "proximal phalanx of right thumb",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right thumb"
+   ],
+   "rig": "r_thumb_pp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "distal phalanx of right thumb",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "distal phalanx of right thumb"
+   ],
+   "rig": "r_thumb_dp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "proximal phalanx of right index finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right index finger"
+   ],
+   "rig": "r_index_pp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "middle phalanx of right index finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "middle phalanx of right index finger"
+   ],
+   "rig": "r_index_mp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "distal phalanx of right index finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "distal phalanx of right index finger"
+   ],
+   "rig": "r_index_dp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "proximal phalanx of right middle finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right middle finger"
+   ],
+   "rig": "r_middle_pp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "middle phalanx of right middle finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "middle phalanx of right middle finger"
+   ],
+   "rig": "r_middle_mp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "distal phalanx of right middle finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "distal phalanx of right middle finger"
+   ],
+   "rig": "r_middle_dp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "proximal phalanx of right ring finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right ring finger"
+   ],
+   "rig": "r_ring_pp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "middle phalanx of right ring finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "middle phalanx of right ring finger"
+   ],
+   "rig": "r_ring_mp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "distal phalanx of right ring finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "distal phalanx of right ring finger"
+   ],
+   "rig": "r_ring_dp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "proximal phalanx of right little finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right little finger"
+   ],
+   "rig": "r_little_pp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "middle phalanx of right little finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "middle phalanx of right little finger"
+   ],
+   "rig": "r_little_mp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "distal phalanx of right little finger",
+   "region": "right_arm",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "distal phalanx of right little finger"
+   ],
+   "rig": "r_little_dp",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right deltoid",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "acromial part of right deltoid",
+    "clavicular part of right deltoid",
+    "spinal part of right deltoid"
+   ],
+   "rig": [
+    "r_girdle",
+    "r_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right biceps brachii",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "long head of right biceps brachii",
+    "short head of right biceps brachii"
+   ],
+   "rig": [
+    "r_girdle",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right brachialis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right brachialis"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right triceps brachii long head",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "long head of right triceps brachii"
+   ],
+   "rig": [
+    "r_girdle",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right triceps brachii lateral and medial heads",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "lateral head of right triceps brachii",
+    "medial head of right triceps brachii"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right flexor carpi radialis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right flexor carpi radialis"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right flexor carpi ulnaris",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "humeral head of right flexor carpi ulnaris",
+    "ulnar head of right flexor carpi ulnaris"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right palmaris longus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right palmaris longus"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right flexor digitorum superficialis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right flexor digitorum superficialis"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_digits"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right flexor digitorum profundus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right flexor digitorum profundus"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_digits"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right flexor pollicis longus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right flexor pollicis longus"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_thumb_dp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right pronator teres",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "humeral head of right pronator teres",
+    "ulnar head of right pronator teres"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right pronator quadratus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right pronator quadratus"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right brachioradialis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right brachioradialis"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor carpi radialis longus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor carpi radialis longus"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor carpi radialis brevis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor carpi radialis brevis"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor carpi ulnaris",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor carpi ulnaris"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_hand"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor digitorum",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor digitorum"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_digits"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor digiti minimi",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor digiti minimi"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_little_pp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor indicis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor indicis"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_index_pp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right abductor pollicis longus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right abductor pollicis longus"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_thumb_mc"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor pollicis brevis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor pollicis brevis"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_thumb_pp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right extensor pollicis longus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right extensor pollicis longus"
+   ],
+   "rig": [
+    "r_forearm",
+    "r_thumb_dp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right supinator",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right supinator"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right anconeus",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right anconeus"
+   ],
+   "rig": [
+    "r_upperarm",
+    "r_forearm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right coracobrachialis",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right coracobrachialis"
+   ],
+   "rig": [
+    "r_girdle",
+    "r_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right rotator cuff and teres major",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right supraspinatus",
+    "right infraspinatus muscle",
+    "right teres minor",
+    "right subscapularis",
+    "right teres major"
+   ],
+   "rig": [
+    "r_girdle",
+    "r_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right thenar muscles",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right abductor pollicis brevis",
+    "right flexor pollicis brevis",
+    "superficial head of right flexor pollicis brevis",
+    "right opponens pollicis",
+    "oblique head of right adductor pollicis",
+    "transverse head of right adductor pollicis"
+   ],
+   "rig": [
+    "r_hand",
+    "r_thumb_pp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right hypothenar muscles",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "abductor digiti minimi of right hand",
+    "flexor digiti minimi brevis of right hand",
+    "opponens digiti minimi of right hand"
+   ],
+   "rig": [
+    "r_hand",
+    "r_little_pp"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right lumbricals and interossei",
+   "region": "right_arm",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "set of lumbricals of right hand",
+    "set of dorsal interossei of right hand",
+    "set of palmar interossei of right hand"
+   ],
+   "rig": [
+    "r_hand",
+    "r_digits"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right clavicle",
+   "region": "torso",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right clavicle"
+   ],
+   "rig": "r_girdle",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right scapula",
+   "region": "torso",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right scapula"
+   ],
+   "rig": "r_girdle",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left clavicle",
+   "region": "torso",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left clavicle"
+   ],
+   "rig": "l_girdle",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left scapula",
+   "region": "torso",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left scapula"
+   ],
+   "rig": "l_girdle",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "sternum",
+   "region": "torso",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "manubrium",
+    "body of sternum",
+    "xiphoid process"
+   ],
+   "rig": "thorax",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "ribs",
+   "region": "torso",
+   "kind": "bone",
+   "side": "both",
+   "priority": "requested",
+   "concepts": [
+    "rib"
+   ],
+   "rig": "thorax",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "thoracic vertebrae",
+   "region": "torso",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "thoracic vertebra"
+   ],
+   "rig": "thorax",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "lumbar vertebrae",
+   "region": "torso",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "lumbar vertebra"
+   ],
+   "rig": "lumbar",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "costal cartilages",
+   "region": "torso",
+   "kind": "bone",
+   "side": "both",
+   "priority": "supporting",
+   "concepts": [
+    "costal cartilage"
+   ],
+   "rig": "thorax",
+   "tissue": "hyaline cartilage",
+   "search_terms": []
+  },
+  {
+   "label": "right pectoralis major",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "clavicular part of right pectoralis major",
+    "sternocostal part of right pectoralis major",
+    "abdominal part of right pectoralis major"
+   ],
+   "rig": [
+    "thorax",
+    "r_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right trapezius descending part",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "descending part of right trapezius"
+   ],
+   "rig": [
+    "cervical",
+    "r_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right trapezius transverse and ascending parts",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "transverse part of right trapezius",
+    "ascending part of right trapezius"
+   ],
+   "rig": [
+    "thorax",
+    "r_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right latissimus dorsi",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right latissimus dorsi"
+   ],
+   "rig": [
+    "thorax",
+    "r_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "latissimus"
+   ]
+  },
+  {
+   "label": "right rectus abdominis",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right rectus abdominis"
+   ],
+   "rig": [
+    "thorax",
+    "pelvis"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "rectus abdominis"
+   ]
+  },
+  {
+   "label": "right external oblique",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right external oblique"
+   ],
+   "rig": [
+    "thorax",
+    "pelvis"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right serratus anterior",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right serratus anterior"
+   ],
+   "rig": [
+    "thorax",
+    "r_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left pectoralis major",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "clavicular part of left pectoralis major",
+    "sternocostal part of left pectoralis major",
+    "abdominal part of left pectoralis major"
+   ],
+   "rig": [
+    "thorax",
+    "l_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left trapezius descending part",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "descending part of left trapezius"
+   ],
+   "rig": [
+    "cervical",
+    "l_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left trapezius transverse and ascending parts",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "transverse part of left trapezius",
+    "ascending part of left trapezius"
+   ],
+   "rig": [
+    "thorax",
+    "l_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left latissimus dorsi",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left latissimus dorsi"
+   ],
+   "rig": [
+    "thorax",
+    "l_upperarm"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "latissimus"
+   ]
+  },
+  {
+   "label": "left rectus abdominis",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left rectus abdominis"
+   ],
+   "rig": [
+    "thorax",
+    "pelvis"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "rectus abdominis"
+   ]
+  },
+  {
+   "label": "left external oblique",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left external oblique"
+   ],
+   "rig": [
+    "thorax",
+    "pelvis"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left serratus anterior",
+   "region": "torso",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left serratus anterior"
+   ],
+   "rig": [
+    "thorax",
+    "l_girdle"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right hip bone",
+   "region": "pelvis",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right hip bone"
+   ],
+   "rig": "pelvis",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left hip bone",
+   "region": "pelvis",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left hip bone"
+   ],
+   "rig": "pelvis",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "sacrum",
+   "region": "pelvis",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "sacrum"
+   ],
+   "rig": "pelvis",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "coccyx",
+   "region": "pelvis",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "coccyx"
+   ],
+   "rig": "pelvis",
+   "tissue": "bone",
+   "search_terms": [
+    "coccyx"
+   ]
+  },
+  {
+   "label": "right femur",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right femur"
+   ],
+   "rig": "r_thigh",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right patella",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right patella"
+   ],
+   "rig": "r_patella",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right tibia",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right tibia"
+   ],
+   "rig": "r_shank",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right fibula",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right fibula"
+   ],
+   "rig": "r_shank",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right tarsal bones",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right talus",
+    "right calcaneus",
+    "navicular bone of right foot",
+    "right cuboid bone",
+    "right medial cuneiform bone",
+    "right intermediate cuneiform bone",
+    "right lateral cuneiform bone"
+   ],
+   "rig": "r_foot",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right metatarsal bones",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right first metatarsal bone",
+    "right second metatarsal bone",
+    "right third metatarsal bone",
+    "right fourth metatarsal bone",
+    "right fifth metatarsal bone"
+   ],
+   "rig": "r_foot",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right toe phalanges",
+   "region": "right_leg",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of right big toe",
+    "distal phalanx of right big toe",
+    "proximal phalanx of right second toe",
+    "middle phalanx of right second toe",
+    "distal phalanx of right second toe",
+    "proximal phalanx of right third toe",
+    "middle phalanx of right third toe",
+    "distal phalanx of right third toe",
+    "proximal phalanx of right fourth toe",
+    "middle phalanx of right fourth toe",
+    "distal phalanx of right fourth toe",
+    "proximal phalanx of right little toe",
+    "middle phalanx of right little toe",
+    "distal phalanx of right little toe"
+   ],
+   "rig": "r_toes",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right gluteus maximus",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right gluteus maximus"
+   ],
+   "rig": [
+    "pelvis",
+    "r_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right gluteus medius",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right gluteus medius"
+   ],
+   "rig": [
+    "pelvis",
+    "r_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right rectus femoris",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right rectus femoris"
+   ],
+   "rig": [
+    "pelvis",
+    "r_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right vasti",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right vastus lateralis",
+    "right vastus medialis",
+    "right vastus intermedius"
+   ],
+   "rig": [
+    "r_thigh",
+    "r_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right sartorius",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right sartorius"
+   ],
+   "rig": [
+    "pelvis",
+    "r_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right hamstrings (biarticular)",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "long head of right biceps femoris",
+    "right semitendinosus",
+    "right semimembranosus"
+   ],
+   "rig": [
+    "pelvis",
+    "r_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right biceps femoris short head",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "short head of right biceps femoris"
+   ],
+   "rig": [
+    "r_thigh",
+    "r_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right adductor magnus",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right adductor magnus"
+   ],
+   "rig": [
+    "pelvis",
+    "r_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right gastrocnemius",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "medial head of right gastrocnemius",
+    "lateral head of right gastrocnemius"
+   ],
+   "rig": [
+    "r_thigh",
+    "r_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right soleus",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right soleus"
+   ],
+   "rig": [
+    "r_shank",
+    "r_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right tibialis anterior",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right tibialis anterior"
+   ],
+   "rig": [
+    "r_shank",
+    "r_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right iliacus",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right iliacus"
+   ],
+   "rig": [
+    "pelvis",
+    "r_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right psoas major",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right psoas major"
+   ],
+   "rig": [
+    "lumbar",
+    "r_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right long toe extensors",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right extensor digitorum longus",
+    "right extensor hallucis longus"
+   ],
+   "rig": [
+    "r_shank",
+    "r_toes"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "right long toe flexors",
+   "region": "right_leg",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right flexor digitorum longus",
+    "right flexor hallucis longus"
+   ],
+   "rig": [
+    "r_shank",
+    "r_toes"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left femur",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left femur"
+   ],
+   "rig": "l_thigh",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left patella",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left patella"
+   ],
+   "rig": "l_patella",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left tibia",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left tibia"
+   ],
+   "rig": "l_shank",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left fibula",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left fibula"
+   ],
+   "rig": "l_shank",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left tarsal bones",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left talus",
+    "left calcaneus",
+    "navicular bone of left foot",
+    "left cuboid bone",
+    "left medial cuneiform bone",
+    "left intermediate cuneiform bone",
+    "left lateral cuneiform bone"
+   ],
+   "rig": "l_foot",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left metatarsal bones",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left first metatarsal bone",
+    "left second metatarsal bone",
+    "left third metatarsal bone",
+    "left fourth metatarsal bone",
+    "left fifth metatarsal bone"
+   ],
+   "rig": "l_foot",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left toe phalanges",
+   "region": "left_leg",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "proximal phalanx of left big toe",
+    "distal phalanx of left big toe",
+    "proximal phalanx of left second toe",
+    "middle phalanx of left second toe",
+    "distal phalanx of left second toe",
+    "proximal phalanx of left third toe",
+    "middle phalanx of left third toe",
+    "distal phalanx of left third toe",
+    "proximal phalanx of left fourth toe",
+    "middle phalanx of left fourth toe",
+    "distal phalanx of left fourth toe",
+    "proximal phalanx of left little toe",
+    "middle phalanx of left little toe",
+    "distal phalanx of left little toe"
+   ],
+   "rig": "l_toes",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left gluteus maximus",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left gluteus maximus"
+   ],
+   "rig": [
+    "pelvis",
+    "l_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left gluteus medius",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left gluteus medius"
+   ],
+   "rig": [
+    "pelvis",
+    "l_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left rectus femoris",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left rectus femoris"
+   ],
+   "rig": [
+    "pelvis",
+    "l_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left vasti",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left vastus lateralis",
+    "left vastus medialis",
+    "left vastus intermedius"
+   ],
+   "rig": [
+    "l_thigh",
+    "l_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left sartorius",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left sartorius"
+   ],
+   "rig": [
+    "pelvis",
+    "l_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left hamstrings (biarticular)",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "long head of left biceps femoris",
+    "left semitendinosus",
+    "left semimembranosus"
+   ],
+   "rig": [
+    "pelvis",
+    "l_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left biceps femoris short head",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "short head of left biceps femoris"
+   ],
+   "rig": [
+    "l_thigh",
+    "l_shank"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left adductor magnus",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left adductor magnus"
+   ],
+   "rig": [
+    "pelvis",
+    "l_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left gastrocnemius",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "medial head of left gastrocnemius",
+    "lateral head of left gastrocnemius"
+   ],
+   "rig": [
+    "l_thigh",
+    "l_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left soleus",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left soleus"
+   ],
+   "rig": [
+    "l_shank",
+    "l_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left tibialis anterior",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left tibialis anterior"
+   ],
+   "rig": [
+    "l_shank",
+    "l_foot"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left iliacus",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left iliacus"
+   ],
+   "rig": [
+    "pelvis",
+    "l_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left psoas major",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left psoas major"
+   ],
+   "rig": [
+    "lumbar",
+    "l_thigh"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left long toe extensors",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left extensor digitorum longus",
+    "left extensor hallucis longus"
+   ],
+   "rig": [
+    "l_shank",
+    "l_toes"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left long toe flexors",
+   "region": "left_leg",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left flexor digitorum longus",
+    "left flexor hallucis longus"
+   ],
+   "rig": [
+    "l_shank",
+    "l_toes"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "frontal bone",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "frontal bone"
+   ],
+   "rig": "skull",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right facial bones",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right nasal bone",
+    "right maxilla",
+    "right zygomatic bone",
+    "right lacrimal bone"
+   ],
+   "rig": "skull",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left facial bones",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left nasal bone",
+    "left maxilla",
+    "left zygomatic bone",
+    "left lacrimal bone"
+   ],
+   "rig": "skull",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "mandible",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "mandible"
+   ],
+   "rig": "mandible",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right temporal bone",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right temporal bone"
+   ],
+   "rig": "skull",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "left temporal bone",
+   "region": "head_face",
+   "kind": "bone",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left temporal bone"
+   ],
+   "rig": "skull",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right masseter",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right masseter"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "masseter"
+   ]
+  },
+  {
+   "label": "right temporalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right temporalis"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "temporalis"
+   ]
+  },
+  {
+   "label": "right orbicularis oculi",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right orbicularis oculi"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "orbicularis"
+   ]
+  },
+  {
+   "label": "right zygomaticus major",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right zygomaticus major"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "zygomaticus"
+   ]
+  },
+  {
+   "label": "frontal belly of right occipitofrontalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "frontal belly of right occipitofrontalis"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "occipitofrontalis",
+    "frontal belly",
+    "epicranius",
+    "frontalis"
+   ]
+  },
+  {
+   "label": "right buccinator",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right buccinator"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "buccinator"
+   ]
+  },
+  {
+   "label": "left masseter",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left masseter"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "masseter"
+   ]
+  },
+  {
+   "label": "left temporalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left temporalis"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "temporalis"
+   ]
+  },
+  {
+   "label": "left orbicularis oculi",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left orbicularis oculi"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "orbicularis"
+   ]
+  },
+  {
+   "label": "left zygomaticus major",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left zygomaticus major"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "zygomaticus"
+   ]
+  },
+  {
+   "label": "frontal belly of left occipitofrontalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "frontal belly of left occipitofrontalis"
+   ],
+   "rig": [
+    "skull",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "occipitofrontalis",
+    "frontal belly",
+    "epicranius",
+    "frontalis"
+   ]
+  },
+  {
+   "label": "left buccinator",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left buccinator"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "buccinator"
+   ]
+  },
+  {
+   "label": "orbicularis oris",
+   "region": "head_face",
+   "kind": "muscle",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "orbicularis oris"
+   ],
+   "rig": [
+    "skull",
+    "mandible"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": [
+    "orbicularis oris"
+   ]
+  },
+  {
+   "label": "right sternocleidomastoid",
+   "region": "neck",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right sternocleidomastoid"
+   ],
+   "rig": [
+    "thorax",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left sternocleidomastoid",
+   "region": "neck",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left sternocleidomastoid"
+   ],
+   "rig": [
+    "thorax",
+    "skull"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "cervical vertebrae",
+   "region": "neck",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "requested",
+   "concepts": [
+    "cervical vertebra"
+   ],
+   "rig": "cervical",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "hyoid bone",
+   "region": "neck",
+   "kind": "bone",
+   "side": "midline",
+   "priority": "supporting",
+   "concepts": [
+    "hyoid bone"
+   ],
+   "rig": "hyoid",
+   "tissue": "bone",
+   "search_terms": []
+  },
+  {
+   "label": "right suprahyoid jaw openers",
+   "region": "neck",
+   "kind": "muscle",
+   "side": "right",
+   "priority": "supporting",
+   "concepts": [
+    "right digastric",
+    "right mylohyoid",
+    "right geniohyoid"
+   ],
+   "rig": [
+    "mandible",
+    "hyoid"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left suprahyoid jaw openers",
+   "region": "neck",
+   "kind": "muscle",
+   "side": "left",
+   "priority": "supporting",
+   "concepts": [
+    "left digastric",
+    "left mylohyoid",
+    "left geniohyoid"
+   ],
+   "rig": [
+    "mandible",
+    "hyoid"
+   ],
+   "tissue": "skeletal muscle",
+   "search_terms": []
+  },
+  {
+   "label": "left precentral gyrus",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left precentral gyrus"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": []
+  },
+  {
+   "label": "left paracentral lobule",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left paracentral lobule"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": [
+    "paracentral lobule",
+    "paracentral"
+   ]
+  },
+  {
+   "label": "left postcentral gyrus",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "left",
+   "priority": "requested",
+   "concepts": [
+    "left postcentral gyrus"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": []
+  },
+  {
+   "label": "right precentral gyrus",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right precentral gyrus"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": []
+  },
+  {
+   "label": "right paracentral lobule",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right paracentral lobule"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": [
+    "paracentral lobule",
+    "paracentral"
+   ]
+  },
+  {
+   "label": "right postcentral gyrus",
+   "region": "brain_motor",
+   "kind": "brain",
+   "side": "right",
+   "priority": "requested",
+   "concepts": [
+    "right postcentral gyrus"
+   ],
+   "rig": "brain",
+   "tissue": "brain",
+   "search_terms": []
+  }
+ ],
+ "budget_bytes": [
+  25000000,
+  80000000
+ ],
+ "dropped_for_budget": [],
+ "run_id": "20261108T035123Z",
+ "mode": "reverify (no network)",
+ "network_evidence_run": "20261108T034451Z",
+ "requests_this_run": [],
+ "runs": [
+  {
+   "file": "acquisition/evidence-r1/run-20261108T034451Z-requests.json",
+   "sha256": "790b7d9482e56f59bf24bdd1a5457e4b6a00bd6106e87bdfae0423611830ba87",
+   "requests": 42,
+   "bytes": 25454196,
+   "first_at_utc": "2026-11-08T03:44:51.518870+00:00",
+   "last_at_utc": "2026-11-08T03:47:08.572417+00:00"
+  },
+  {
+   "file": "acquisition/evidence-r1/run-20261108T034936Z-requests.json",
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "requests": 0,
+   "bytes": 0,
+   "first_at_utc": null,
+   "last_at_utc": null
+  }
+ ],
+ "all_request_hosts": [
+  "dbarchive.biosciencedbc.jp"
+ ],
+ "totals": {
+  "requests_all_runs": 42,
+  "downloaded_bytes_all_runs": 25454196,
+  "member_requests_this_run": 0,
+  "member_range_bytes_this_run": 0
+ },
+ "member_retrievals": {
+  "path": "acquisition/evidence-r1/member-retrievals.json",
+  "sha256": "22d276156f4fc569bf5d02524f0ff9216609f452ef7b19e7ab76adac3229bb7a"
+ },
+ "counts": {
+  "assets": 294,
+  "unpacked_bytes": 77421719,
+  "reused_on_disk": 296,
+  "rejected": 2,
+  "missing": 20,
+  "skipped_existing": 6
+ },
+ "missing": [
+  {
+   "label": "right latissimus dorsi",
+   "concept_name": "right latissimus dorsi",
+   "region": "torso",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "latissimus"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right rectus abdominis",
+   "concept_name": "right rectus abdominis",
+   "region": "torso",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "rectus abdominis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left latissimus dorsi",
+   "concept_name": "left latissimus dorsi",
+   "region": "torso",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "latissimus"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left rectus abdominis",
+   "concept_name": "left rectus abdominis",
+   "region": "torso",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "rectus abdominis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "coccyx",
+   "concept_name": "coccyx",
+   "region": "pelvis",
+   "kind": "bone",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "coccyx"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right masseter",
+   "concept_name": "right masseter",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "masseter"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right temporalis",
+   "concept_name": "right temporalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "temporalis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right orbicularis oculi",
+   "concept_name": "right orbicularis oculi",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "orbicularis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right zygomaticus major",
+   "concept_name": "right zygomaticus major",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "zygomaticus"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "frontal belly of right occipitofrontalis",
+   "concept_name": "frontal belly of right occipitofrontalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "occipitofrontalis",
+    "frontal belly",
+    "epicranius",
+    "frontalis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right buccinator",
+   "concept_name": "right buccinator",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "buccinator"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left masseter",
+   "concept_name": "left masseter",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "masseter"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left temporalis",
+   "concept_name": "left temporalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "temporalis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left orbicularis oculi",
+   "concept_name": "left orbicularis oculi",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "orbicularis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left zygomaticus major",
+   "concept_name": "left zygomaticus major",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "zygomaticus"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "frontal belly of left occipitofrontalis",
+   "concept_name": "frontal belly of left occipitofrontalis",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "occipitofrontalis",
+    "frontal belly",
+    "epicranius",
+    "frontalis"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left buccinator",
+   "concept_name": "left buccinator",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "buccinator"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "orbicularis oris",
+   "concept_name": "orbicularis oris",
+   "region": "head_face",
+   "kind": "muscle",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "orbicularis oris"
+   ],
+   "concept_names_matching_search_terms": [],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "left paracentral lobule",
+   "concept_name": "left paracentral lobule",
+   "region": "brain_motor",
+   "kind": "brain",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "paracentral lobule",
+    "paracentral"
+   ],
+   "concept_names_matching_search_terms": [
+    "paracentral branch of callosomarginal artery",
+    "paracentral branch of left callosomarginal artery",
+    "paracentral branch of right callosomarginal artery"
+   ],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  },
+  {
+   "label": "right paracentral lobule",
+   "concept_name": "right paracentral lobule",
+   "region": "brain_motor",
+   "kind": "brain",
+   "priority": "requested",
+   "reason": "no BodyParts3D 4.0 element is listed for this concept name in isa_element_parts.txt or partof_element_parts.txt",
+   "search_terms": [
+    "paracentral lobule",
+    "paracentral"
+   ],
+   "concept_names_matching_search_terms": [
+    "paracentral branch of callosomarginal artery",
+    "paracentral branch of left callosomarginal artery",
+    "paracentral branch of right callosomarginal artery"
+   ],
+   "substitution": "none (task rule: record missing parts, never substitute)"
+  }
+ ],
+ "rejected": [
+  {
+   "element_id": "FJ1469M",
+   "label": "right thenar muscles",
+   "matched_concepts": [
+    "right flexor pollicis brevis"
+   ],
+   "embedded_source_name": "Right flexor pollicis brevis",
+   "sha256": "dbab9fdb424e8370bed0229f47af76209ab5f61613fc1c910d427a73e6ee8bd7",
+   "bytes": 63714,
+   "bounds_min": [
+    256.014,
+    -153.121,
+    766.555
+   ],
+   "bounds_max": [
+    301.25,
+    -125.253,
+    794.053
+   ],
+   "laterality_check": {
+    "side": "right",
+    "rule": "right: centroid x < 0; at least 97% of vertices on the right side of the +/-15.0 mm midline band; header name does not name the other side",
+    "x_min": 256.014,
+    "x_max": 301.25,
+    "centroid_x": 271.8882,
+    "fraction_on_named_side": 0.0,
+    "vertices_beyond_band": 735,
+    "pass": false
+   },
+   "problems": [
+    "laterality check failed (right: centroid x < 0; at least 97% of vertices on the right side of the +/-15.0 mm midline band; header name does not name the other side); x_min=256.014 x_max=301.25 centroid_x=271.8882 {'fraction_on_named_side': 0.0, 'vertices_beyond_band': 735}"
+   ],
+   "quarantined_at": "acquisition/quarantine-r1/FJ1469M.obj",
+   "decision": "EXCLUDED from the packet and manifest; no mirror, rename or repair applied"
+  },
+  {
+   "element_id": "FJ2772",
+   "label": "hyoid bone",
+   "matched_concepts": [
+    "hyoid bone"
+   ],
+   "embedded_source_name": "Hyoid bone",
+   "sha256": "c8c6cfdd66285cdda16fa441829f723d3943823d0ffebf5e394ff8dc49a598b1",
+   "bytes": 75562,
+   "bounds_min": [
+    -19.5242,
+    -129.0,
+    1422.37
+   ],
+   "bounds_max": [
+    18.2825,
+    -94.4187,
+    1440.86
+   ],
+   "laterality_check": {
+    "side": "midline",
+    "rule": "midline: spans x = 0, centroid near x = 0, header name unsided",
+    "x_min": -19.5242,
+    "x_max": 18.2825,
+    "centroid_x": -0.7171,
+    "pass": true
+   },
+   "problems": [
+    "vertex/face content identical to FJ3201 (comment headers differ only)"
+   ],
+   "quarantined_at": "acquisition/quarantine-r1/FJ2772.obj",
+   "decision": "EXCLUDED as duplicate geometry of FJ3201; kept one copy to avoid coincident surfaces"
+  }
+ ],
+ "skipped_existing": [
+  {
+   "element_id": "FJ3237",
+   "concept_name": "left clavicle",
+   "label": "left clavicle",
+   "region": "torso",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ3237.obj",
+   "existing_sha256": "2491009d53eaed99ccb2a802b29402eec715eb8d207fb819fad67b0720195cf2",
+   "existing_name": "Left clavicle"
+  },
+  {
+   "element_id": "FJ3279",
+   "concept_name": "left scapula",
+   "label": "left scapula",
+   "region": "torso",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ3279.obj",
+   "existing_sha256": "e63a5675c6cdbe942322305920241b4a63762d7a65879572400f444fa3d42739",
+   "existing_name": "Left scapula"
+  },
+  {
+   "element_id": "FJ1800",
+   "concept_name": "left precentral gyrus",
+   "label": "left precentral gyrus",
+   "region": "brain_motor",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ1800.obj",
+   "existing_sha256": "9f375219acb0aed075860e5afe3562be19bde6061a007d3096d52f96aa59e944",
+   "existing_name": "Left precentral gyrus"
+  },
+  {
+   "element_id": "FJ1797",
+   "concept_name": "left postcentral gyrus",
+   "label": "left postcentral gyrus",
+   "region": "brain_motor",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ1797.obj",
+   "existing_sha256": "e05f6ec80fa902f5334cc5e8c029359674d39c39a90f86476a6d1d190ca1f30a",
+   "existing_name": "Left postcentral gyrus"
+  },
+  {
+   "element_id": "FJ1801",
+   "concept_name": "right precentral gyrus",
+   "label": "right precentral gyrus",
+   "region": "brain_motor",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ1801.obj",
+   "existing_sha256": "89e9017a488f4854ef4daaa5488bbe0bada8aed4cd81352553305beda8caef85",
+   "existing_name": "Right precentral gyrus"
+  },
+  {
+   "element_id": "FJ1798",
+   "concept_name": "right postcentral gyrus",
+   "label": "right postcentral gyrus",
+   "region": "brain_motor",
+   "reason": "already present in inputs/MESH-MANIFEST.json (not re-acquired)",
+   "existing_source_packet": "pov-demo-assets",
+   "existing_path": "meshes/FJ1798.obj",
+   "existing_sha256": "ce476b98e79e988bbf2efa1b8593019d0cc64114cf455d00347ed6e95ee5f037",
+   "existing_name": "Right postcentral gyrus"
+  }
+ ],
+ "duplicate_matches": [],
+ "cautions": [
+  "BodyParts3D official notice (saved copy of https://lifesciencedb.jp/bp3d/info_en/index.html, not re-fetched because it is not on the single allowed host): \"There are still many concepts not represented in the data. There could be many ERRORS to be used as ANATOMICAL EDUCATION. Some parts were made from scratch by artists or distorted to fit into the environment. Segmentation into finer pieces may cause confusion in assignment of concepts.\"",
+  "Version naming (same page): the ones place of a data version (2, 3, 4, 5) states whether files share body coordinates; e.g. skull 4.3 and brain 5.0 differ. Every file here embeds \"Compatibility version : 4.0\" and was checked, so all share the BodyParts3D 4.0 frame.",
+  "The archive is the official 99 percent polygon-reduced ISA-tree OBJ set (README_e.html, \"Polygon reduction rate = 99%\"). Geometry is a single reference body; it is not this player, any measured person, or a population average.",
+  "Concept assignment uses the FMA-based ISA tree (Build-up logic: FMA 3.0 is_a). Names were checked against each file's embedded header. Root previously found a source laterality error (FJ1469 named left but at -x); the same check is applied to every file here.",
+  "Legacy OBJ comment headers say CC BY-SA 2.1 Japan; the current official licence page (updated 2025-02-27) says CC BY 4.0. Headers are retained byte-exact; no header was stripped or edited."
+ ],
+ "outputs": {
+  "manifest": {
+   "path": "<claude-dev-root>/neurosurge-playable/inputs/FULLBODY-MESH-MANIFEST.json",
+   "sha256": "5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406"
+  },
+  "attribution": {
+   "path": "<claude-dev-root>/neurosurge-playable/packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt",
+   "sha256": "0934295fa6420e7ccdb1d6b53d9da19548b81850b2b6279e3ad4c9dcfd24fab2"
+  },
+  "meshes_dir": "<claude-dev-root>/neurosurge-playable/packets/bodyparts3d-fullbody-r1/meshes"
+ },
+ "assets_with_anomalies": [
+  {
+   "element_id": "FJ3345",
+   "embedded_source_name": "Right seventh costal cartilage",
+   "source_anomalies": [
+    {
+     "kind": "vertices_across_midline_beyond_band",
+     "count": 6,
+     "of": 1538,
+     "x_range": [
+      49.514,
+      49.565
+     ],
+     "y_range": [
+      -209.912,
+      -209.877
+     ],
+     "z_range": [
+      1149.28,
+      1149.3
+     ],
+     "handling": "file kept byte-exact; not repaired"
+    }
+   ]
+  },
+  {
+   "element_id": "FJ1595",
+   "embedded_source_name": "Right sternocleidomastoid",
+   "source_anomalies": [
+    {
+     "kind": "vertices_across_midline_beyond_band",
+     "count": 56,
+     "of": 6642,
+     "x_range": [
+      51.179,
+      61.405
+     ],
+     "y_range": [
+      -65.516,
+      -37.595
+     ],
+     "z_range": [
+      1494.21,
+      1497.41
+     ],
+     "handling": "file kept byte-exact; not repaired"
+    }
+   ]
+  }
+ ]
+}

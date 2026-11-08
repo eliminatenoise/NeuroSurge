@@ -1,0 +1,3 @@
+# Keep every file byte-exact on checkout (no line-ending conversion, for example by core.autocrlf on Windows).
+# The game checks the sha256 of its data and mesh files and refuses to start if their bytes change.
+* -text

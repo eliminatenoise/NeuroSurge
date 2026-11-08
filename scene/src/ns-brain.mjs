@@ -1,0 +1,2573 @@
+/** NeuroSurge scene: brain display transform, representative left-arm motor strip, framing and
+ * gaze classification. Pure, dependency-free ES module (browser and Node); no DOM, no I/O.
+ *
+ * Frames:
+ * - Source anatomy: BodyParts3D millimetres, +x subject LEFT, +y POSTERIOR, +z SUPERIOR
+ *   (an inferred right-handed LPS frame).
+ * - Display / world: Three convention, +x screen right, +y screen up, +z toward the camera.
+ *   The camera sits at the world origin and looks along -z at yaw = pitch = 0.
+ *
+ * Round 2 (U2a-brain, appended at the end of this file): both hemispheres' precentral strips (and the medial wall /
+ * paracentral meshes when present) segmented into BODY_MOTOR_MAP control regions (segmentMotorStrips), the region gaze
+ * picker with hysteresis (classifyRegionGaze; classifyGaze dispatches to it for a segmentation), the brain view math
+ * (BRAIN_VIEW default tilt 25 deg, frameBrain, brainViewTransform with orbit about the locked brain centre and grab
+ * carry about the player), a coarse whole-brain hit grid, orbit-arrow placement and visibility diagnostics. The colour
+ * ramp now lives in ns-colors.mjs (shared with the muscles). Everything earlier in the file is kept for the legacy
+ * single-band path.
+ *
+ * Scientific limits: the strip, markers, fields and colours are a representative, schematic,
+ * simulated and unitless display. Marker positions are educational control targets placed by
+ * a documented geometric rule on the FJ1801 mesh; they are not registered functional
+ * coordinates. Regions overlap and vary between people. The visible precentral crown may be
+ * premotor (BA6); M1 (BA4) lies largely in the sulcal bank.
+ */
+import {
+  DEG, add, sub, scale, dot, cross, length, normalize,
+  basis, multiply, translation, uniformScale, rayTriangle
+} from './ns-math.mjs';
+import {
+  RAMP_STOPS_LINEAR, luminanceLinear, activityColor, activityColorSrgb, activityShade, smoothstep
+} from './ns-colors.mjs';
+
+// ---------------------------------------------------------------------------------------------
+// Validation helpers (errors: 'ns:<code>: message')
+
+function vec3(v, what) {
+  if (!v || v.length !== 3 || !Number.isFinite(v[0]) || !Number.isFinite(v[1]) || !Number.isFinite(v[2])) {
+    throw new Error(`ns:brain_input: ${what} must be a finite [x, y, z]`);
+  }
+  return [v[0], v[1], v[2]];
+}
+
+function checkScale(k) {
+  // A non-positive k would collapse or mirror the display (determinant <= 0).
+  if (!(Number.isFinite(k) && k > 0)) throw new Error(`ns:brain_scale: display scale k must be finite and > 0 (got ${k})`);
+}
+
+function checkPositions(positions, what) {
+  if (!positions || typeof positions.length !== 'number' || positions.length < 3 || positions.length % 3 !== 0) {
+    throw new Error(`ns:brain_input: ${what} must be a flat xyz array with a length that is a positive multiple of 3`);
+  }
+  for (let i = 0; i < positions.length; i++) {
+    if (!Number.isFinite(positions[i])) throw new Error(`ns:brain_input: ${what}[${i}] is not finite`);
+  }
+  return positions;
+}
+
+function checkU(u, n) {
+  if (!u || u.length !== n) throw new Error(`ns:brain_input: u must have one value per vertex (${n})`);
+}
+
+function checkBand(band) {
+  if (!band || !Number.isFinite(band.uMin) || !Number.isFinite(band.uMax) || !(band.uMin < band.uMax)) {
+    throw new Error('ns:brain_band: band must be { uMin, uMax } with finite uMin < uMax');
+  }
+  return band;
+}
+
+function checkPlacement(pl) {
+  if (!pl) throw new Error('ns:brain_placement: brainPlacement { k, distance, centre } is required');
+  checkScale(pl.k);
+  if (!(Number.isFinite(pl.distance) && pl.distance > 0)) throw new Error('ns:brain_placement: distance must be finite and > 0');
+  return { k: pl.k, distance: pl.distance, centre: vec3(pl.centre, 'brainPlacement.centre') };
+}
+
+const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
+const vtx = (pos, i) => [pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]];
+
+// ---------------------------------------------------------------------------------------------
+// Display transform: display = (-(px - cx), -(py - cy), pz - cz) * k
+
+/** Source mm point -> display units. Subject right (-x) goes to screen right (+x), anterior (-y)
+ * goes up (+y), superior (+z) comes toward the camera (+z). A proper rotation (det +1) times k > 0. */
+export function displayFromSource(p, centre, k) {
+  checkScale(k);
+  const a = vec3(p, 'p'), c = vec3(centre, 'centre');
+  return [(c[0] - a[0]) * k, (c[1] - a[1]) * k, (a[2] - c[2]) * k];
+}
+
+/** Inverse of displayFromSource: display units -> source mm. */
+export function sourceFromDisplay(q, centre, k) {
+  checkScale(k);
+  const d = vec3(q, 'q'), c = vec3(centre, 'centre');
+  return [c[0] - d[0] / k, c[1] - d[1] / k, c[2] + d[2] / k];
+}
+
+/** DESIGN.md's DISPLAY_FROM_SOURCE, exposed as a frozen descriptor plus the two functions. */
+export const DISPLAY_FROM_SOURCE = Object.freeze({
+  axisSigns: Object.freeze([-1, -1, 1]),
+  determinant: 1,
+  forward: displayFromSource,
+  inverse: sourceFromDisplay,
+  description: 'display = (-(px - cx), -(py - cy), pz - cz) * k: subject right -> screen right, anterior -> up, superior -> toward camera; a proper rotation, never a mirror'
+});
+
+/** The 3x3 rotation part of the display transform as a column-major 4x4 (det +1). */
+export function displayRotation() {
+  return basis([-1, 0, 0], [0, -1, 0], [0, 0, 1]);
+}
+
+/** Source mm -> world metres for the whole brain group: world = displayFromSource(p, centre, k) + (0, 0, -distance). */
+export function sourceToWorld(p, brainPlacement) {
+  const { k, distance, centre } = checkPlacement(brainPlacement);
+  const d = displayFromSource(p, centre, k);
+  return [d[0], d[1], d[2] - distance];
+}
+
+/** World metres -> source mm (inverse of sourceToWorld). */
+export function worldToSource(w, brainPlacement) {
+  const { k, distance, centre } = checkPlacement(brainPlacement);
+  const q = vec3(w, 'w');
+  return sourceFromDisplay([q[0], q[1], q[2] + distance], centre, k);
+}
+
+/** Column-major 4x4 for the whole brain group: T(0, 0, -distance) * S(k) * R * T(-centre). */
+export function brainWorldMatrix(brainPlacement) {
+  const { k, distance, centre } = checkPlacement(brainPlacement);
+  return multiply(translation([0, 0, -distance]),
+    multiply(uniformScale(k), multiply(displayRotation(), translation([-centre[0], -centre[1], -centre[2]]))));
+}
+
+/** Orientation labels in display axes (for the R/L and anterior/posterior HUD labels). */
+export const ORIENTATION = Object.freeze({
+  right: Object.freeze({ label: 'R', display: Object.freeze([1, 0, 0]) }),
+  left: Object.freeze({ label: 'L', display: Object.freeze([-1, 0, 0]) }),
+  anterior: Object.freeze({ label: 'Anterior', display: Object.freeze([0, 1, 0]) }),
+  posterior: Object.freeze({ label: 'Posterior', display: Object.freeze([0, -1, 0]) })
+});
+
+// ---------------------------------------------------------------------------------------------
+// Strip parameter, band and representative markers
+
+/** Medial-lateral strip coordinate per vertex: u = (|x| - |x|min) / (|x|max - |x|min), 0 medial .. 1 lateral.
+ * side 'right' requires every x <= 0 (subject right); 'left' requires x >= 0. Returns Float32Array(n). */
+export function stripParam(positions, side = 'right') {
+  if (side !== 'right' && side !== 'left') throw new Error("ns:brain_side: side must be 'right' or 'left'");
+  const pos = checkPositions(positions, 'positions');
+  const n = pos.length / 3;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = pos[3 * i];
+    if (side === 'right' ? x > 0 : x < 0) {
+      throw new Error(`ns:brain_laterality: vertex ${i} has x = ${x}; a ${side}-hemisphere mesh needs ${side === 'right' ? 'x <= 0 (subject right)' : 'x >= 0 (subject left)'}`);
+    }
+    const ax = Math.abs(x);
+    if (ax < lo) lo = ax;
+    if (ax > hi) hi = ax;
+  }
+  const span = hi - lo;
+  if (!(span > 0)) throw new Error('ns:brain_strip: the mesh has no medial-lateral extent');
+  const u = new Float32Array(n);
+  for (let i = 0; i < n; i++) u[i] = (Math.abs(pos[3 * i]) - lo) / span;
+  return u;
+}
+
+/** Representative left-arm/hand territory on the right precentral gyrus (leg medial and face lateral stay glassy). */
+export const ARM_BAND = Object.freeze({ uMin: 0.28, uMax: 0.78 });
+
+/** Half-width of the u window used to place a marker. */
+export const MARKER_WINDOW = 0.015;
+export const MARKER_KIND = 'representative';
+export const CROWN_NOTE = 'visible crown may be premotor (BA6); M1 (BA4) lies largely in the sulcal bank';
+
+/** Representative marker u per action, in movement-map action order. Educational control targets only. */
+export const MARKERS = Object.freeze([
+  ['grasp_close', 0.53],
+  ['relax_release', 0.56],
+  ['open_hand', 0.59],
+  ['spread_fingers', 0.62],
+  ['wrist_flexion', 0.44],
+  ['wrist_extension', 0.48],
+  ['elbow_flexion', 0.34],
+  ['elbow_extension', 0.38],
+  ['index_flexion', 0.65],
+  ['index_extension', 0.67],
+  ['thumb_mcp_flexion', 0.71],
+  ['thumb_mcp_extension', 0.73]
+].map(([actionId, u]) => Object.freeze({ actionId, u, kind: MARKER_KIND })));
+
+/** True when marker `mi` has the nearest target u to `ui` (exact ties go to the earlier marker). */
+function ownsU(mi, ui) {
+  const d = Math.abs(ui - MARKERS[mi].u);
+  for (let j = 0; j < MARKERS.length; j++) {
+    if (j === mi) continue;
+    const dj = Math.abs(ui - MARKERS[j].u);
+    if (dj < d || (dj === d && j < mi)) return false;
+  }
+  return true;
+}
+
+/** Representative marker DOT geometry in source mm: vertex radius radiusMm, lift liftMm along superior (+z), activeScale
+ * x when highlighted. With MARKER_OCTAHEDRON and markerSolid this is the ONE definition both the scene draws
+ * (ns-scene-three builds every marker mesh from MARKER_OCTAHEDRON and places/scales it with markerSolid) and the picker
+ * intersects (classifyGaze, repair R5: the same transformed triangles, not an inscribed sphere). */
+export const MARKER_GEOMETRY = Object.freeze({ radiusMm: 0.8, liftMm: 0.8, activeScale: 1.7 });
+/** The drawn marker mesh: a unit regular octahedron (vertex radius 1, vertices on the source axes), 8 outward
+ * counter-clockwise triangles, drawn FrontSide. ns-scene-three draws exactly these arrays (as Float32/Uint32 buffers);
+ * classifyGaze intersects exactly these triangles, front faces only, as three's Raycaster does for a FrontSide mesh. */
+export const MARKER_OCTAHEDRON = Object.freeze({
+  positions: Object.freeze([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]),
+  indices: Object.freeze([0, 2, 4, 2, 1, 4, 1, 3, 4, 3, 0, 4, 2, 0, 5, 1, 2, 5, 3, 1, 5, 0, 3, 5]),
+  side: 'front'
+});
+/** A vertex counts as visible from above when no strip triangle lies more than this above it on its vertical. */
+export const MARKER_VISIBILITY_TOL_MM = 0.25;
+/** R3 placement check: rays through a candidate's lifted dot centre from these virtual viewpoints must all land on band
+ * triangles of the marker's own nearest-u region, so the drawn dot sits on its own region (not a neighbour's, not empty
+ * space) as the default camera sees it. Viewpoints sit above the band's aim point, found as frameBand finds it (the
+ * band surface under the centre of the band's bounding box): heights in mm (the default framings put the camera
+ * 39-48 mm above it) and lateral offsets in mm (centring differences between aspects), plus straight down. */
+export const MARKER_VIEWPOINTS = Object.freeze({ heightsMm: Object.freeze([34, 42, 50, 60]), offsetsMm: 5 });
+
+/** The drawn solid of a placed marker, exactly as ns-scene-three places and scales its mesh: { centre (source mm:
+ * position + liftMm along superior), scale (vertex radius mm: radiusMm, x activeScale when active) }. The mesh is
+ * MARKER_OCTAHEDRON scaled uniformly by `scale` about `centre` (no rotation in source axes). */
+export function markerSolid(marker, active = false) {
+  const p = vec3(marker && marker.position, 'marker.position');
+  return { centre: [p[0], p[1], p[2] + MARKER_GEOMETRY.liftMm], scale: MARKER_GEOMETRY.radiusMm * (active ? MARKER_GEOMETRY.activeScale : 1) };
+}
+
+/** Nearest entry distance (>= 0) of a ray (dir unit) into a drawn marker solid, or null: the MARKER_OCTAHEDRON
+ * triangles scaled by solid.scale about solid.centre, front faces only, edges inclusive (the arithmetic of three's
+ * Ray.intersectTriangle with backface culling). From outside, the first front face hit is the surface entry; a ray
+ * starting inside meets only back faces, which a FrontSide mesh does not draw, so it does not hit. */
+export function rayMarkerSolid(rayOrigin, rayDir, solid) {
+  // A2-render R1: scalar form of the R5 arithmetic (identical operations and order, no per-face arrays).
+  const P = MARKER_OCTAHEDRON.positions, I = MARKER_OCTAHEDRON.indices;
+  const c0 = solid.centre[0], c1 = solid.centre[1], c2 = solid.centre[2], s = solid.scale;
+  const o0 = rayOrigin[0], o1 = rayOrigin[1], o2 = rayOrigin[2], d0 = rayDir[0], d1 = rayDir[1], d2 = rayDir[2];
+  let best = null;
+  for (let f = 0; f < I.length; f += 3) {
+    const ia = 3 * I[f], ib = 3 * I[f + 1], ic = 3 * I[f + 2];
+    const ax = c0 + s * P[ia], ay = c1 + s * P[ia + 1], az = c2 + s * P[ia + 2];
+    const e1x = (c0 + s * P[ib]) - ax, e1y = (c1 + s * P[ib + 1]) - ay, e1z = (c2 + s * P[ib + 2]) - az;
+    const e2x = (c0 + s * P[ic]) - ax, e2y = (c1 + s * P[ic + 1]) - ay, e2z = (c2 + s * P[ic + 2]) - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    let ddn = d0 * nx + d1 * ny + d2 * nz;
+    if (!(ddn < 0)) continue; // back-facing or edge-on: not drawn from this side
+    ddn = -ddn;
+    const fx = o0 - ax, fy = o1 - ay, fz = o2 - az; // diff
+    // b1 = -dot(dir, cross(diff, e2)); b2 = -dot(dir, cross(e1, diff))
+    const b1 = -(d0 * (fy * e2z - fz * e2y) + d1 * (fz * e2x - fx * e2z) + d2 * (fx * e2y - fy * e2x));
+    if (b1 < 0) continue;
+    const b2 = -(d0 * (e1y * fz - e1z * fy) + d1 * (e1z * fx - e1x * fz) + d2 * (e1x * fy - e1y * fx));
+    if (b2 < 0 || b1 + b2 > ddn) continue;
+    const qdn = fx * nx + fy * ny + fz * nz;
+    if (qdn < 0) continue; // behind the origin
+    const t = qdn / ddn;
+    if (best === null || t < best) best = t;
+  }
+  return best;
+}
+
+/** Inscribed sphere of a marker's drawn octahedron: { centre (source mm, lifted), radius (vertex radius / sqrt 3) }.
+ * Every point within it is inside the drawn solid, so it is a guaranteed-inside region for placement checks and test
+ * construction. It is NOT the pick target (repair R5: classifyGaze picks the drawn solid itself, markerSolid). */
+export function markerDot(marker, active = false) {
+  const p = vec3(marker && marker.position, 'marker.position');
+  const r = (MARKER_GEOMETRY.radiusMm * (active ? MARKER_GEOMETRY.activeScale : 1)) / Math.sqrt(3);
+  return { centre: [p[0], p[1], p[2] + MARKER_GEOMETRY.liftMm], radius: r };
+}
+
+/** The action whose representative u is nearest to u (exact ties go to the earlier MARKERS entry, as ownsU). With equal
+ * drives this is also the argmax of the overlapping simulated fields (equal-width Gaussians), so strip selection, the
+ * field highlight and the marker highlight agree. null for a non-finite u. */
+export function actionForU(u) {
+  if (!Number.isFinite(u)) return null;
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < MARKERS.length; i++) {
+    const d = Math.abs(u - MARKERS[i].u);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return MARKERS[best].actionId;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Selectable control regions (A2-render R1). These are EXACTLY the actionForU pick regions: each in-band u belongs to
+// the marker with the nearest representative u, so the region borders sit at the midpoints between neighbouring
+// marker u values. They are control regions of this display, not cortical borders: real representations overlap and
+// vary between people (MARKER_KIND 'representative'). The drawn region tints/borders/hover outline in ns-scene-three
+// use these helpers' arithmetic (nearest marker, then the midpoint with the second-nearest marker).
+
+/** MARKERS index of the action whose representative u is nearest to u (actionForU's rule and tie-break), or -1. */
+export function regionIndexForU(u) {
+  if (!Number.isFinite(u)) return -1;
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < MARKERS.length; i++) {
+    const d = Math.abs(u - MARKERS[i].u);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+/** Region identity at u: { index, actionId (= actionForU(u)), neighbour (MARKERS index of the second-nearest marker,
+ * whose shared border is the nearest pick boundary), borderU (that boundary's u: the midpoint of the two markers),
+ * borderDistU (|u - borderU| >= 0) }. null for a non-finite u. The shader in ns-scene-three computes the same values
+ * per fragment from the interpolated u (u is affine in source x, so interpolation is exact). */
+export function regionInfo(u) {
+  if (!Number.isFinite(u)) return null;
+  let i1 = -1, i2 = -1, d1 = Infinity, d2 = Infinity;
+  for (let i = 0; i < MARKERS.length; i++) {
+    const d = Math.abs(u - MARKERS[i].u);
+    if (d < d1) { d2 = d1; i2 = i1; d1 = d; i1 = i; } else if (d < d2) { d2 = d; i2 = i; }
+  }
+  const borderU = 0.5 * (MARKERS[i1].u + MARKERS[i2].u);
+  return { index: i1, actionId: MARKERS[i1].actionId, neighbour: i2, borderU, borderDistU: Math.abs(u - borderU) };
+}
+
+/** The control regions in medial -> lateral order: frozen [{ actionId, index (MARKERS index), u, uLo, uHi }], where
+ * [uLo, uHi] is the u interval actionForU assigns to the action inside `band` (outer edges clipped to the band). */
+export function controlRegions(band = ARM_BAND) {
+  const b = checkBand(band);
+  const sorted = MARKERS.map((m, index) => ({ m, index })).sort((a, c) => a.m.u - c.m.u || a.index - c.index);
+  return Object.freeze(sorted.map(({ m, index }, k) => Object.freeze({
+    actionId: m.actionId,
+    index,
+    u: m.u,
+    uLo: k === 0 ? b.uMin : Math.max(b.uMin, 0.5 * (sorted[k - 1].m.u + m.u)),
+    uHi: k === sorted.length - 1 ? b.uMax : Math.min(b.uMax, 0.5 * (m.u + sorted[k + 1].m.u))
+  })));
+}
+
+/** Pick boundaries (u) between neighbouring control regions, medial -> lateral (11 values for 12 markers). */
+export function regionBoundaries() {
+  const r = controlRegions();
+  return Object.freeze(r.slice(1).map(x => x.uLo));
+}
+
+/** Highest strip z on the vertical through (x, y), or null when the vertical misses every triangle. */
+function makeTopZ(pos, idx) {
+  const m = idx.length / 3, n = pos.length / 3;
+  const bb = new Float64Array(4 * m);
+  for (let t = 0; t < m; t++) {
+    const a = idx[3 * t], b = idx[3 * t + 1], c = idx[3 * t + 2];
+    if (!(isIndex(a, n) && isIndex(b, n) && isIndex(c, n))) throw new Error(`ns:brain_mesh: triangle ${t} has an out-of-range index`);
+    bb[4 * t] = Math.min(pos[3 * a], pos[3 * b], pos[3 * c]); bb[4 * t + 1] = Math.max(pos[3 * a], pos[3 * b], pos[3 * c]);
+    bb[4 * t + 2] = Math.min(pos[3 * a + 1], pos[3 * b + 1], pos[3 * c + 1]); bb[4 * t + 3] = Math.max(pos[3 * a + 1], pos[3 * b + 1], pos[3 * c + 1]);
+  }
+  let zMax = -Infinity;
+  for (let i = 2; i < pos.length; i += 3) if (pos[i] > zMax) zMax = pos[i];
+  const down = [0, 0, -1];
+  return (x, y) => {
+    const o = [x, y, zMax + 10];
+    let best = null;
+    for (let t = 0; t < m; t++) {
+      if (x < bb[4 * t] - 1e-9 || x > bb[4 * t + 1] + 1e-9 || y < bb[4 * t + 2] - 1e-9 || y > bb[4 * t + 3] + 1e-9) continue;
+      const h = rayTriangle(o, down, vtx(pos, idx[3 * t]), vtx(pos, idx[3 * t + 1]), vtx(pos, idx[3 * t + 2]));
+      if (h !== null && (best === null || h < best)) best = h;
+    }
+    return best === null ? null : o[2] - best;
+  };
+}
+
+/** Place each marker on a strip vertex. Candidates: in-band vertices with |u - target| < window whose nearest target is
+ * this marker's (some DESIGN windows overlap; markers never share a vertex).
+ *  - Without `indices` (R1/R2 rule): the most posterior candidate (max source y, toward the central sulcus); ties go to
+ *    max z, then to the nearest u, then to the lowest vertex index.
+ *  - With `indices` (the mesh triangles; R3 rule, framing/HUD repair R3; Root marker-aim review F1/F2): candidates
+ *    VISIBLE FROM ABOVE (no triangle more than MARKER_VISIBILITY_TOL_MM above them on their vertical; the dorsal view
+ *    looks down that vertical) are tried crown first (max z, then max y, nearest u, lowest index); the first whose dot
+ *    passes the view check wins: the vertical ray and the rays from the MARKER_VIEWPOINTS virtual cameras through its
+ *    lifted dot centre all first hit in-band triangles whose interpolated u selects this marker (actionForU). So, as
+ *    the default camera sees it, a drawn dot sits on its own selectable region, never over a neighbour's u-band (the
+ *    R2 posterior-bank dots under the crown did) or over empty space (an edge, hole or the sulcal lip). If no visible
+ *    candidate passes, the first visible one is used (viewChecked false); if none is visible, the R2 rule
+ *    (crownVisible false).
+ * If the window holds no vertex (sparse mesh), the in-band vertex with the nearest u is used (ties: max y, then max z)
+ * and `fallback` is true. Returns a frozen array, in MARKERS order, of { actionId, u, kind, vertexIndex, position
+ * (source mm), uVertex, fallback, crownVisible, viewChecked } (the last two null without indices). The dot is drawn and
+ * picked as markerSolid(marker). Positions are representative control targets, not registered functional coordinates;
+ * the crown/BA4 note (CROWN_NOTE) still applies. */
+export function placeMarkers(positions, u, { band = ARM_BAND, uWindow = MARKER_WINDOW, indices = null, visibilityTolMm = MARKER_VISIBILITY_TOL_MM, viewpoints = MARKER_VIEWPOINTS } = {}) {
+  const pos = checkPositions(positions, 'positions');
+  const n = pos.length / 3;
+  checkU(u, n);
+  const b = checkBand(band);
+  if (!(Number.isFinite(uWindow) && uWindow > 0)) throw new Error('ns:brain_markers: uWindow must be finite and > 0');
+  let visible = null, viewOk = null;
+  if (indices !== null && indices !== undefined) {
+    if (typeof indices.length !== 'number' || indices.length % 3 !== 0 || indices.length === 0) throw new Error('ns:brain_markers: indices must be triangle indices');
+    const topZ = makeTopZ(pos, indices);
+    const vis = new Map();
+    visible = i => {
+      if (!vis.has(i)) { const z = topZ(pos[3 * i], pos[3 * i + 1]); vis.set(i, z === null || pos[3 * i + 2] >= z - visibilityTolMm); }
+      return vis.get(i);
+    };
+    // In-band triangles (as splitBand focus) for the view-cone check.
+    const inBand = x => x >= b.uMin && x <= b.uMax;
+    const band3 = [];
+    for (let t = 0; t < indices.length; t += 3) if (inBand(u[indices[t]]) && inBand(u[indices[t + 1]]) && inBand(u[indices[t + 2]])) band3.push(t);
+    // Virtual viewpoints above the band aim point (bounding-box centre of the in-band vertices, on the band surface).
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (!inBand(u[i])) continue;
+      x0 = Math.min(x0, pos[3 * i]); x1 = Math.max(x1, pos[3 * i]); y0 = Math.min(y0, pos[3 * i + 1]); y1 = Math.max(y1, pos[3 * i + 1]); z1 = Math.max(z1, pos[3 * i + 2]);
+    }
+    const ax = (x0 + x1) / 2, ay = (y0 + y1) / 2, az = topZ(ax, ay) ?? z1;
+    const eyes = [];
+    for (const h of viewpoints.heightsMm) eyes.push([ax, ay, az + h]);
+    const off = viewpoints.offsetsMm, hMid = viewpoints.heightsMm[Math.floor(viewpoints.heightsMm.length / 2)];
+    for (const [dx, dy] of [[off, 0], [-off, 0], [0, off], [0, -off]]) eyes.push([ax + dx, ay + dy, az + hMid]);
+    const uAt = (o, d) => {
+      let bt = Infinity, bu = null;
+      for (const t of band3) {
+        const ia = indices[t], ib = indices[t + 1], ic = indices[t + 2];
+        const A = vtx(pos, ia), B = vtx(pos, ib), C = vtx(pos, ic);
+        const h = rayTriangle(o, d, A, B, C);
+        if (h === null || !(h < bt)) continue;
+        bt = h;
+        const P = add(o, scale(d, h)), v0 = sub(B, A), v1 = sub(C, A), v2 = sub(P, A);
+        const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1), den = d00 * d11 - d01 * d01;
+        const wb = den > 0 ? (d11 * d20 - d01 * d21) / den : 1 / 3, wc = den > 0 ? (d00 * d21 - d01 * d20) / den : 1 / 3;
+        bu = (1 - wb - wc) * u[ia] + wb * u[ib] + wc * u[ic];
+      }
+      return bu;
+    };
+    viewOk = (i, actionId) => {
+      const c = [pos[3 * i], pos[3 * i + 1], pos[3 * i + 2] + MARKER_GEOMETRY.liftMm];
+      if (actionForU(uAt([c[0], c[1], c[2] + 30], [0, 0, -1])) !== actionId) return false; // straight down
+      for (const e of eyes) {
+        const d = normalize(sub(c, e));
+        if (actionForU(uAt(e, d)) !== actionId) return false; // the virtual camera's ray through the dot
+      }
+      return true;
+    };
+  }
+  return Object.freeze(MARKERS.map((m, mi) => {
+    const candidates = [];
+    for (let i = 0; i < n; i++) {
+      const ui = u[i];
+      if (!(ui >= b.uMin && ui <= b.uMax)) continue;
+      const d = Math.abs(ui - m.u);
+      if (d < uWindow && ownsU(mi, ui)) candidates.push(i);
+    }
+    const posterior = (i, j) => (pos[3 * j + 1] - pos[3 * i + 1]) || (pos[3 * j + 2] - pos[3 * i + 2]) || (Math.abs(u[i] - m.u) - Math.abs(u[j] - m.u)) || (i - j);
+    const crown = (i, j) => (pos[3 * j + 2] - pos[3 * i + 2]) || (pos[3 * j + 1] - pos[3 * i + 1]) || (Math.abs(u[i] - m.u) - Math.abs(u[j] - m.u)) || (i - j);
+    let best = -1, fallback = false, crownVisible = null, viewChecked = null;
+    if (visible) {
+      const vis = candidates.filter(visible).sort(crown);
+      const ok = vis.find(i => viewOk(i, m.actionId));
+      if (ok !== undefined) { best = ok; viewChecked = true; crownVisible = true; }
+      else if (vis.length) { best = vis[0]; viewChecked = false; crownVisible = true; }
+      else { crownVisible = false; viewChecked = false; }
+    }
+    if (best < 0 && candidates.length) best = candidates.slice().sort(posterior)[0];
+    if (best < 0) {
+      fallback = true;
+      let by = 0, bz = 0, bd = 0;
+      for (let i = 0; i < n; i++) {
+        const ui = u[i];
+        if (!(ui >= b.uMin && ui <= b.uMax)) continue;
+        const d = Math.abs(ui - m.u);
+        const y = pos[3 * i + 1], z = pos[3 * i + 2];
+        if (best < 0 || d < bd || (d === bd && (y > by || (y === by && z > bz)))) {
+          best = i; by = y; bz = z; bd = d;
+        }
+      }
+      if (visible && best >= 0) { crownVisible = visible(best); viewChecked = false; }
+    }
+    if (best < 0) throw new Error(`ns:brain_markers: no strip vertex inside the band for ${m.actionId}`);
+    return Object.freeze({
+      actionId: m.actionId,
+      u: m.u,
+      kind: MARKER_KIND,
+      vertexIndex: best,
+      position: Object.freeze(vtx(pos, best)),
+      uVertex: u[best],
+      fallback,
+      crownVisible,
+      viewChecked
+    });
+  }));
+}
+
+/** HUD/marker label: always 'representative', with the binding's visible qualifier and the crown note.
+ * `binding` is ns-actions' bindMovementMap result ({ actions: Map(id -> { label }), qualifier }). */
+export function markerLabel(actionId, binding) {
+  if (!MARKERS.some(m => m.actionId === actionId)) throw new Error(`ns:brain_label: unknown action ${actionId}`);
+  if (!binding || typeof binding.qualifier !== 'string' || !binding.qualifier.trim()) {
+    throw new Error('ns:brain_label: binding.qualifier (the visible representative-map qualifier) is required');
+  }
+  const acts = binding.actions;
+  const entry = acts instanceof Map ? acts.get(actionId) : acts ? acts[actionId] : undefined;
+  if (!entry || typeof entry.label !== 'string' || !entry.label.trim()) {
+    throw new Error(`ns:brain_label: the binding has no label for ${actionId}`);
+  }
+  return Object.freeze({
+    actionId,
+    kind: MARKER_KIND,
+    text: `${entry.label} (representative)`,
+    qualifier: binding.qualifier,
+    note: CROWN_NOTE
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Band split
+
+function extractPart(pos, idx, u, mask, want) {
+  const n = u.length, m = idx.length / 3;
+  const remap = new Int32Array(n).fill(-1);
+  let vCount = 0, tCount = 0;
+  for (let t = 0; t < m; t++) {
+    if (mask[t] !== want) continue;
+    tCount++;
+    for (let j = 0; j < 3; j++) {
+      const v = idx[3 * t + j];
+      if (remap[v] < 0) remap[v] = vCount++;
+    }
+  }
+  const positions = new Float32Array(vCount * 3);
+  const uOut = new Float32Array(vCount);
+  const sourceIndex = new Uint32Array(vCount);
+  for (let v = 0; v < n; v++) {
+    const r = remap[v];
+    if (r < 0) continue;
+    positions[3 * r] = pos[3 * v];
+    positions[3 * r + 1] = pos[3 * v + 1];
+    positions[3 * r + 2] = pos[3 * v + 2];
+    uOut[r] = u[v];
+    sourceIndex[r] = v;
+  }
+  const indices = new Uint32Array(tCount * 3);
+  const triangles = new Uint32Array(tCount);
+  let j = 0;
+  for (let t = 0; t < m; t++) {
+    if (mask[t] !== want) continue;
+    indices[3 * j] = remap[idx[3 * t]];
+    indices[3 * j + 1] = remap[idx[3 * t + 1]];
+    indices[3 * j + 2] = remap[idx[3 * t + 2]];
+    triangles[j] = t;
+    j++;
+  }
+  return { positions, indices, u: uOut, sourceIndex, triangles, vertexCount: vCount, faceCount: tCount };
+}
+
+/** Split a mesh by triangle: focus if all three vertices have u inside the band (inclusive), else glass.
+ * Each part is compacted: { positions (source mm), indices, u, sourceIndex (original vertex per part
+ * vertex), triangles (original triangle per part triangle), vertexCount, faceCount }. */
+export function splitBand(mesh, u, band = ARM_BAND) {
+  if (!mesh) throw new Error('ns:brain_mesh: mesh { positions, indices } is required');
+  const pos = checkPositions(mesh.positions, 'mesh.positions');
+  const idx = mesh.indices;
+  if (!idx || typeof idx.length !== 'number' || idx.length % 3 !== 0) throw new Error('ns:brain_mesh: indices length must be a multiple of 3');
+  const n = pos.length / 3, m = idx.length / 3;
+  checkU(u, n);
+  const b = checkBand(band);
+  const inBand = new Uint8Array(n);
+  for (let i = 0; i < n; i++) inBand[i] = u[i] >= b.uMin && u[i] <= b.uMax ? 1 : 0;
+  const isFocus = new Uint8Array(m);
+  for (let t = 0; t < m; t++) {
+    const ia = idx[3 * t], ib = idx[3 * t + 1], ic = idx[3 * t + 2];
+    if (!(isIndex(ia, n) && isIndex(ib, n) && isIndex(ic, n))) throw new Error(`ns:brain_mesh: triangle ${t} has an out-of-range index`);
+    isFocus[t] = inBand[ia] & inBand[ib] & inBand[ic];
+  }
+  return { focus: extractPart(pos, idx, u, isFocus, 1), glass: extractPart(pos, idx, u, isFocus, 0) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Framing
+
+/** Axis-aligned bounds of a flat xyz array (or of a { positions } mesh). */
+export function boundsOf(positions) {
+  const pos = checkPositions(positions && positions.positions ? positions.positions : positions, 'positions');
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < pos.length; i += 3) {
+    for (let a = 0; a < 3; a++) {
+      const v = pos[i + a];
+      if (v < min[a]) min[a] = v;
+      if (v > max[a]) max[a] = v;
+    }
+  }
+  return { min, max };
+}
+
+/** Giant display scale for the focus box. `focusBoundsDisplayUnit` = { min, max } in display axes at k = 1 (mm).
+ * With the box centre on the view axis at depth `distance` (metres) and yaw = pitch = 0, the box's
+ * projection fills exactly `fill` of the limiting screen dimension (NDC half-extent = fill) and is
+ * centred. The near face (display +z) sets the projected size. Recompute on resize.
+ * Returns { k (metres per mm), distance, limiting: 'width' | 'height', boxCentreDisplayUnit,
+ * halfExtentsDisplayUnit, nearDepth }. */
+export function frameStrip(focusBoundsDisplayUnit, { fovYDeg = 70, aspect, fill = 0.8, distance = 6 } = {}) {
+  if (!focusBoundsDisplayUnit) throw new Error('ns:brain_frame: focus bounds { min, max } are required');
+  const lo = vec3(focusBoundsDisplayUnit.min, 'bounds.min'), hi = vec3(focusBoundsDisplayUnit.max, 'bounds.max');
+  if (!(hi[0] >= lo[0] && hi[1] >= lo[1] && hi[2] >= lo[2])) throw new Error('ns:brain_frame: bounds.max must be >= bounds.min');
+  if (!(Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180)) throw new Error('ns:brain_frame: fovYDeg must be in (0, 180)');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  if (!(Number.isFinite(fill) && fill > 0 && fill <= 1)) throw new Error('ns:brain_frame: fill must be in (0, 1]');
+  if (!(Number.isFinite(distance) && distance > 0)) throw new Error('ns:brain_frame: distance must be finite and > 0');
+  const hx = (hi[0] - lo[0]) / 2, hy = (hi[1] - lo[1]) / 2, hz = (hi[2] - lo[2]) / 2;
+  if (!(hx > 0) && !(hy > 0)) throw new Error('ns:brain_frame: focus bounds have no screen-plane extent');
+  // Near-face corner: ndc.x = k*hx / ((distance - k*hz) * tan * aspect) = fill  =>  k = f*t*a*D / (hx + f*t*a*hz).
+  const ft = fill * Math.tan((fovYDeg * DEG) / 2);
+  const kx = hx > 0 ? (ft * aspect * distance) / (hx + ft * aspect * hz) : Infinity;
+  const ky = hy > 0 ? (ft * distance) / (hy + ft * hz) : Infinity;
+  const k = Math.min(kx, ky);
+  return {
+    k,
+    distance,
+    limiting: kx <= ky ? 'width' : 'height',
+    boxCentreDisplayUnit: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
+    halfExtentsDisplayUnit: [hx, hy, hz],
+    nearDepth: distance - k * hz
+  };
+}
+
+/** Convenience: brainPlacement { k, distance, centre (source mm), limiting } that frames the focus
+ * vertices (flat xyz or { positions }) with frameStrip, using the focus box centre as `centre`. */
+export function placementForFocus(focusPositions, viewport = {}) {
+  const { min, max } = boundsOf(focusPositions);
+  const centre = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const a = displayFromSource(min, centre, 1), b = displayFromSource(max, centre, 1);
+  const f = frameStrip({
+    min: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])],
+    max: [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])]
+  }, viewport);
+  return { k: f.k, distance: f.distance, centre, limiting: f.limiting };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Band framing on the actual projected vertices (framing/HUD repair R2)
+//
+// frameStrip fits the near FACE of the focus bounding box. The real band is 31 x 58 x 65 mm (display x, y, z) and its
+// lateral part curves away from the camera, so the box face over-states the visible band: at 16:10 the real band
+// covered only 0.55 of the half-height and its projected centre sat 0.16 NDC below the crosshair. frameBand fits the
+// projected band vertices themselves, centres their projected bounding box on the crosshair and puts the crosshair on
+// the band's top surface, so the default gaze always hits the band. The display rotation is unchanged (never mirrored).
+
+/** Default band framing: fill = projected half-extent of the band in the limiting dimension (NDC). Viewports with
+ * aspect < compactAspect use compactFill, which leaves room for the compact top/bottom HUD (ns-scene-three HUD_LAYOUT).
+ * The 6 m distance keeps the nearest brain point >= 2 m from the camera at these fills (giant-brain near plane).
+ * A2-render R1: fill raised from 0.66 / 0.58 to 0.85 / 0.75 so the looked-at strip fills most of the screen (user
+ * requirement); the crosshair still lands on the band's top surface at yaw = pitch = 0 (frameBand aimOnBand). The
+ * R2 history values are kept in BAND_FRAME_R2 for A/B checks. */
+export const BAND_FRAME = Object.freeze({ fill: 0.85, compactFill: 0.75, compactAspect: 1.45, distance: 6 });
+/** The previous (framing/HUD repair R2) default, retained for comparison only. */
+export const BAND_FRAME_R2 = Object.freeze({ fill: 0.66, compactFill: 0.58, compactAspect: 1.45, distance: 6 });
+
+function focusMesh(focus) {
+  if (focus && focus.positions) {
+    const pos = checkPositions(focus.positions, 'focus.positions');
+    const idx = focus.indices && typeof focus.indices.length === 'number' && focus.indices.length % 3 === 0 && focus.indices.length > 0 ? focus.indices : null;
+    return { pos, idx };
+  }
+  return { pos: checkPositions(focus, 'focus positions'), idx: null };
+}
+
+/** Highest (max display z) point of the band on the display-vertical line through display (x, y) (k = 1 display mm
+ * about `c0`); the display vertical is the source vertical, i.e. the default camera ray. null when the line misses. */
+function topHit(pos, idx, c0, x, y, zAbove) {
+  if (!idx) return null;
+  const n = pos.length / 3;
+  const o = sourceFromDisplay([x, y, zAbove], c0, 1);
+  const down = [0, 0, -1];
+  let best = null;
+  for (let t = 0; t < idx.length; t += 3) {
+    const ia = idx[t], ib = idx[t + 1], ic = idx[t + 2];
+    if (!(isIndex(ia, n) && isIndex(ib, n) && isIndex(ic, n))) throw new Error(`ns:brain_mesh: focus triangle ${t / 3} has an out-of-range index`);
+    const h = rayTriangle(o, down, vtx(pos, ia), vtx(pos, ib), vtx(pos, ic));
+    if (h !== null && (best === null || h < best)) best = h;
+  }
+  return best === null ? null : displayFromSource([o[0], o[1], o[2] - best], c0, 1)[2];
+}
+
+/** Display (k = 1) xy of the centroid of the band triangle nearest to (x, y), and its top display z. */
+function nearestTriangleCentroid(pos, idx, c0, x, y) {
+  let best = null, bd = Infinity;
+  const tri = idx || null;
+  const count = tri ? tri.length / 3 : pos.length / 3;
+  for (let t = 0; t < count; t++) {
+    const ids = tri ? [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] : [t, t, t];
+    const c = [0, 0, 0];
+    for (const i of ids) { const d = displayFromSource(vtx(pos, i), c0, 1); c[0] += d[0] / 3; c[1] += d[1] / 3; c[2] += d[2] / 3; }
+    const dd = (c[0] - x) * (c[0] - x) + (c[1] - y) * (c[1] - y);
+    if (dd < bd || (dd === bd && best && c[2] > best[2])) { bd = dd; best = c; }
+  }
+  return best;
+}
+
+function projectedBounds(disp, o, k, D, ta, t) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < disp.length; i += 3) {
+    const depth = D - k * (disp[i + 2] - o[2]);
+    if (!(depth > 0)) return null;
+    const x = (k * (disp[i] - o[0])) / (depth * ta), y = (k * (disp[i + 1] - o[1])) / (depth * t);
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return { x0, x1, y0, y1 };
+}
+
+/**
+ * Frame the band on its projected vertices. focus: splitBand(...).focus ({ positions, indices }) or a flat xyz array
+ * (without indices the crosshair point falls back to the nearest vertex). At yaw = pitch = 0 the projected bounding
+ * box of every focus vertex is centred on the crosshair, its half-extent in the limiting dimension is `fill` (NDC) and
+ * the other dimension fits; the crosshair ray meets the band's top surface at exactly `distance`.
+ * Returns plain data { k, distance, centre (source mm; maps to world (0, 0, -distance)), limiting: 'width' | 'height',
+ * fill, ndcBounds: { x0, x1, y0, y1 }, aimOnBand: boolean }. Recompute on resize. Same display rotation (det +1).
+ */
+export function frameBand(focus, { fovYDeg = 70, aspect, fill = BAND_FRAME.fill, distance = BAND_FRAME.distance, iterations = 12 } = {}) {
+  if (!(Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180)) throw new Error('ns:brain_frame: fovYDeg must be in (0, 180)');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  if (!(Number.isFinite(fill) && fill > 0 && fill <= 1)) throw new Error('ns:brain_frame: fill must be in (0, 1]');
+  if (!(Number.isFinite(distance) && distance > 0)) throw new Error('ns:brain_frame: distance must be finite and > 0');
+  const { pos, idx } = focusMesh(focus);
+  const { min, max } = boundsOf(pos);
+  const c0 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const n = pos.length / 3;
+  const disp = new Float64Array(pos.length);
+  for (let i = 0; i < n; i++) {
+    const d = displayFromSource(vtx(pos, i), c0, 1);
+    disp[3 * i] = d[0]; disp[3 * i + 1] = d[1]; disp[3 * i + 2] = d[2];
+  }
+  if (!(max[0] > min[0]) && !(max[1] > min[1])) throw new Error('ns:brain_frame: focus has no screen-plane extent');
+  const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect, D = distance;
+  // The crosshair point: the band's top surface under (ox, oy); the triangle-centroid fallback keeps it on the band.
+  const zAbove = (max[2] - min[2]) + 10;
+  const aimAt = (x, y) => {
+    const z = topHit(pos, idx, c0, x, y, zAbove);
+    if (z !== null) return { o: [x, y, z], onBand: true };
+    const c = nearestTriangleCentroid(pos, idx, c0, x, y);
+    const zc = topHit(pos, idx, c0, c[0], c[1], zAbove);
+    return { o: [c[0], c[1], zc === null ? c[2] : zc], onBand: zc !== null };
+  };
+  const scaleFor = o => {
+    let zMax = -Infinity;
+    for (let i = 2; i < disp.length; i += 3) if (disp[i] - o[2] > zMax) zMax = disp[i] - o[2];
+    let lo = 0, hi = zMax > 0 ? (0.9 * D) / zMax : 1;
+    const half = k => { const b = projectedBounds(disp, o, k, D, ta, t); return b ? Math.max((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2) : Infinity; };
+    while (half(hi) < fill && hi < 1e6) { lo = hi; hi *= 2; if (zMax > 0 && hi >= D / zMax) { hi = (0.999 * D) / zMax; break; } }
+    for (let i = 0; i < 60; i++) { const mid = 0.5 * (lo + hi); if (half(mid) < fill) lo = mid; else hi = mid; }
+    return lo;
+  };
+  let aim = aimAt(0, 0);
+  let k = scaleFor(aim.o);
+  for (let it = 0; it < iterations; it++) {
+    const b = projectedBounds(disp, aim.o, k, D, ta, t);
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    if (Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) break;
+    aim = aimAt(aim.o[0] + (cx * D * ta) / k, aim.o[1] + (cy * D * t) / k);
+    k = scaleFor(aim.o);
+  }
+  const b = projectedBounds(disp, aim.o, k, D, ta, t);
+  const hx = (b.x1 - b.x0) / 2, hy = (b.y1 - b.y0) / 2;
+  return {
+    k,
+    distance: D,
+    centre: sourceFromDisplay(aim.o, c0, 1),
+    limiting: hx >= hy ? 'width' : 'height',
+    fill,
+    ndcBounds: { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 },
+    aimOnBand: aim.onBand
+  };
+}
+
+/** The fill BAND_FRAME-style `frame` uses at this aspect, and whether the compact HUD layout applies. */
+export function bandFillFor(aspect, frame = BAND_FRAME) {
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  const compact = Number.isFinite(frame.compactAspect) && aspect < frame.compactAspect;
+  return { fill: compact && Number.isFinite(frame.compactFill) ? frame.compactFill : frame.fill, compact };
+}
+
+/** brainPlacement for the default view: frameBand with the aspect-dependent fill of `frame` (BAND_FRAME shape).
+ * Returns frameBand's plain data plus `compact` (the HUD layout class for this aspect). */
+export function placementForBand(focus, { fovYDeg = 70, aspect, frame = BAND_FRAME } = {}) {
+  const { fill, compact } = bandFillFor(aspect, frame);
+  const distance = Number.isFinite(frame.distance) ? frame.distance : BAND_FRAME.distance;
+  return { ...frameBand(focus, { fovYDeg, aspect, fill, distance }), compact };
+}
+
+/** Orientation-label anchor rule (NDC, default view). Anterior sits above the band and posterior below it, on the
+ * vertical through the crosshair. R sits just right of the band at height rightY (between the right-column HUD
+ * panels); L sits just left of the band at height leftY, above the default hand (fingertips reach NDC y ~0.4 at
+ * x ~ -0.35) and clear of the forearm, which enters low left. `gap` separates each label from the band box. */
+export const ORIENTATION_ANCHOR_RULE = Object.freeze({
+  gap: 0.035, leftY: 0.6, rightY: -0.3,
+  /** R3: alternate positions the HUD may use when the arm (or a panel) covers the primary one (ns-scene-three
+   * placeOrientation). Side labels keep their side of the band and change height; axis labels shift sideways. */
+  alternates: Object.freeze({
+    right: Object.freeze([Object.freeze({ y: 0.6 }), Object.freeze({ y: 0.15 }), Object.freeze({ y: -0.62 })]),
+    left: Object.freeze([Object.freeze({ y: 0.45 }), Object.freeze({ y: 0.3 }), Object.freeze({ y: 0.85 }), Object.freeze({ y: -0.35 })]),
+    anterior: Object.freeze([Object.freeze({ x: 0.3 }), Object.freeze({ x: -0.3 })]),
+    posterior: Object.freeze([Object.freeze({ x: 0.3 }), Object.freeze({ x: -0.3 }), Object.freeze({ x: 0.55 })]) // R4: +0.55 clears a right-forward forearm
+  })
+});
+
+/** World anchors (metres) for the R/L and anterior/posterior labels of a band placement: points on the default-view
+ * screen rays through the ORIENTATION_ANCHOR_RULE positions, at the crosshair depth (`distance`), so they are fixed in
+ * the world and move with the brain when the view turns. Display axes as ORIENTATION (never mirrored). Alternates are
+ * returned as extra keys `right.1`, `right.2`, ... (each a world point), so a projectWorld of the whole object also
+ * projects them. */
+export function orientationAnchorsForBand(focus, placement, { fovYDeg = 70, aspect, rule = ORIENTATION_ANCHOR_RULE } = {}) {
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  const { k, distance, centre } = checkPlacement(placement);
+  const { pos } = focusMesh(focus);
+  const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const w = sourceToWorld([pos[i], pos[i + 1], pos[i + 2]], { k, distance, centre });
+    const depth = -w[2];
+    if (!(depth > 0)) continue;
+    const x = w[0] / (depth * ta), y = w[1] / (depth * t);
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  const g = rule.gap;
+  const at = (x, y) => [x * distance * ta, y * distance * t, -distance];
+  const primary = { right: [x1 + g, rule.rightY], left: [x0 - g, rule.leftY], anterior: [0, y1 + g], posterior: [0, y0 - g] };
+  const out = {};
+  for (const [key, [x, y]] of Object.entries(primary)) out[key] = at(x, y);
+  const alt = rule.alternates || {};
+  for (const [key, [x, y]] of Object.entries(primary)) {
+    (alt[key] || []).forEach((a, i) => {
+      out[`${key}.${i + 1}`] = at(Number.isFinite(a.x) ? a.x : x, Number.isFinite(a.y) ? a.y : y);
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Simulated activity field and colour ramp
+
+/** Width of each overlapping representative field in u. */
+export const FIELD_SIGMA = 0.08;
+export const LEGEND_LABEL = 'simulated activity (unitless)';
+
+function driveOf(drives, id) {
+  if (!drives) return 0;
+  const v = drives instanceof Map ? drives.get(id) : drives[id];
+  return Number.isFinite(v) ? (v < 0 ? 0 : v > 1 ? 1 : v) : 0;
+}
+
+/** Simulated unitless intensity 0..1 at a strip vertex: sum over actions of
+ * exp(-(u - u_a)^2 / (2 * 0.08^2)) * drive_a (each drive clamped to 0..1), clamped to 0..1.
+ * Broad and overlapping by design. `apVertex` is accepted for the DESIGN signature but the
+ * DESIGN formula depends on u only, so it does not change the result. */
+export function fieldIntensity(uVertex, apVertex, drives) {
+  if (!Number.isFinite(uVertex)) return 0;
+  const inv = 1 / (2 * FIELD_SIGMA * FIELD_SIGMA);
+  let s = 0;
+  for (const m of MARKERS) {
+    const d = driveOf(drives, m.actionId);
+    if (d <= 0) continue;
+    const du = uVertex - m.u;
+    s += Math.exp(-du * du * inv) * d;
+  }
+  return s > 1 ? 1 : s;
+}
+
+/** Batch fieldIntensity over per-vertex u values into `out` (Float32Array, created if absent). */
+export function fieldIntensities(uValues, drives, out) {
+  if (!uValues || typeof uValues.length !== 'number') throw new Error('ns:brain_input: uValues must be array-like');
+  const n = uValues.length;
+  const o = out || new Float32Array(n);
+  if (o.length < n) throw new Error('ns:brain_input: out is shorter than uValues');
+  const active = [];
+  for (const m of MARKERS) {
+    const d = driveOf(drives, m.actionId);
+    if (d > 0) active.push(m.u, d);
+  }
+  const inv = 1 / (2 * FIELD_SIGMA * FIELD_SIGMA);
+  for (let i = 0; i < n; i++) {
+    const uv = uValues[i];
+    let s = 0;
+    if (Number.isFinite(uv)) {
+      for (let j = 0; j < active.length; j += 2) {
+        const du = uv - active[j];
+        s += Math.exp(-du * du * inv) * active[j + 1];
+      }
+    }
+    o[i] = s > 1 ? 1 : s;
+  }
+  return o;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Two-scale simulated display field (A2-render R1)
+//
+// The drawn strip shows, per action a with display drive d_a (0..1):
+//   broad_a(u)    = exp(-(u - u_a)^2 / (2 * FIELD_SIGMA^2))   the DESIGN overlapping field (fieldIntensity), and
+//   focal_a(u, p) = [actionForU(u) === a] * smoothstep(0, focalEdgeU, borderDistU(u)) * exp(-|p - m_a|^2 / (2 r^2))
+// a narrow emphasis confined to the action's OWN selectable region (the pick region, so the focal highlight never
+// spills into a neighbour's region) and centred on its representative marker position m_a (source mm; r =
+// focalRadiusMm; without marker positions the radial factor is 1).
+//   activity(u, p) = clamp01(broadGain * sum_a d_a broad_a + focalGain * sum_a d_a focal_a)
+// With equal drives the argmax over actions of broadGain*broad_a + focalGain*focal_a is still actionForU(u): the focal
+// term is non-zero only for the region owner, and the broad term peaks at the nearest u. Every value is a simulated,
+// unitless display drive; the focal emphasis marks the selected control region near its representative point and is
+// NOT a measured focus or a unique cortical point.
+
+/** Two-scale display field constants (broadGain + focalGain = 1, so a full drive peaks at 1 on its marker). */
+export const ACTIVITY_FIELD = Object.freeze({ broadSigmaU: FIELD_SIGMA, broadGain: 0.6, focalGain: 0.4, focalRadiusMm: 2.8, focalEdgeU: 0.006 });
+
+/** GLSL-compatible smoothstep (re-exported from ns-colors). */
+export { smoothstep };
+
+function markerPositionFor(markers, index) {
+  if (!markers) return null;
+  const id = MARKERS[index].actionId;
+  const list = markers instanceof Map ? null : markers;
+  const mk = list ? list.find(m => m && m.actionId === id) : markers.get(id);
+  const p = mk && (isVecLike(mk) ? mk : mk.position);
+  return p && p.length === 3 && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2]) ? p : null;
+}
+
+/** Reference (CPU) value of the drawn two-scale field at strip u and source point p (mm; may be null).
+ * markers: placeMarkers() output (or Map(actionId -> position | marker)) for the focal centre; null = no radial factor.
+ * Returns { broad (unclamped sum of d_a * broad_a), focal (sum of d_a * focal_a), activity (clamped 0..1),
+ * regionActionId }. The ns-scene-three strip shader evaluates the same formula per fragment. */
+export function activityAt(u, p, drives, markers = null, field = ACTIVITY_FIELD) {
+  if (!Number.isFinite(u)) return { broad: 0, focal: 0, activity: 0, regionActionId: null };
+  const inv = 1 / (2 * field.broadSigmaU * field.broadSigmaU);
+  let broad = 0;
+  for (const m of MARKERS) {
+    const d = driveOf(drives, m.actionId);
+    if (d <= 0) continue;
+    const du = u - m.u;
+    broad += Math.exp(-du * du * inv) * d;
+  }
+  const info = regionInfo(u);
+  let focal = 0;
+  const dr = driveOf(drives, info.actionId);
+  if (dr > 0) {
+    let radial = 1;
+    const mp = p ? markerPositionFor(markers, info.index) : null;
+    if (mp) {
+      const dx = p[0] - mp[0], dy = p[1] - mp[1], dz = p[2] - mp[2];
+      radial = Math.exp(-(dx * dx + dy * dy + dz * dz) / (2 * field.focalRadiusMm * field.focalRadiusMm));
+    }
+    focal = dr * smoothstep(0, field.focalEdgeU, info.borderDistU) * radial;
+  }
+  const s = field.broadGain * broad + field.focalGain * focal;
+  return { broad, focal, activity: s > 1 ? 1 : s < 0 ? 0 : s, regionActionId: info.actionId };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Activity colour ramp. Round 2 (U2a-brain): the ramp now lives in ns-colors.mjs, the ONE ramp shared by the brain
+// regions and the muscles (same colour = same simulated activity). These names are kept for existing consumers and
+// delegate to ns-colors; the values are identical to the A2-render R1 ramp (dark indigo -> purple -> crimson ->
+// orange -> warm near-white, strictly rising luminance 0.0130 < 0.0628 < 0.1747 < 0.4281 < 0.8795).
+export { RAMP_STOPS_LINEAR, luminanceLinear };
+
+const clamp01 = x => (x > 1 ? 1 : x > 0 ? x : 0);
+
+/** Linear-RGB ramp value at t (clamped to 0..1; NaN -> 0) = ns-colors activityColor(t). Use for Three vertex-colour
+ * attributes, which Three r152+ treats as linear working-space colours. */
+export function colormapLinear(t) {
+  return activityColor(t);
+}
+
+/** Display (sRGB-encoded) [r, g, b] in 0..1 for t in 0..1 = ns-colors activityColorSrgb(t). Legend: LEGEND_LABEL. */
+export function colormap(t) {
+  return activityColorSrgb(t);
+}
+
+/** Legend colour stops generated from the shared ramp: n >= 2 CSS 'rgb(r, g, b)' strings at evenly spaced t in [0, 1].
+ * Use enough stops (default 9, two per ramp segment) that the CSS gradient's sRGB interpolation follows the
+ * linear-RGB ramp the shaders draw. (ns-colors rampLegendStops returns richer records.) */
+export function legendStops(n = 9) {
+  if (!(Number.isInteger(n) && n >= 2)) throw new Error('ns:brain_legend: n must be an integer >= 2');
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const [r, g, b] = colormap(i / (n - 1));
+    out.push(`rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`);
+  }
+  return Object.freeze(out);
+}
+
+/** CSS background for the legend bar: 'linear-gradient(to right, <legendStops(n)>)'. */
+export function legendGradientCss(n = 9) {
+  return `linear-gradient(to right, ${legendStops(n).join(', ')})`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Strip shading reference (A2-render R1): faint region-identity tints with soft borders at the pick boundaries, a
+// hover outline for the region under the crosshair, and the activity glow from the ramp. ns-scene-three's strip shader
+// is generated from these constants; stripShade is the CPU reference (and the no-shader fallback colour).
+
+/** Faint categorical identity tints per action (sRGB hex), grouped by body part: elbow teal, wrist steel blue, hand
+ * green, index khaki, thumb lavender; neighbours within a group alternate lightness. Identity only: activity is the
+ * separate glow channel, and region borders are control boundaries, not cortical borders. */
+export const REGION_TINTS = Object.freeze({
+  elbow_flexion: 0x4f9e97, elbow_extension: 0x3b7772,
+  wrist_flexion: 0x5f84c6, wrist_extension: 0x45639e,
+  grasp_close: 0x72a85c, relax_release: 0x557f44, open_hand: 0x86b56a, spread_fingers: 0x5f8c4b,
+  index_flexion: 0xb4a75c, index_extension: 0x8c8247,
+  thumb_mcp_flexion: 0xa08abd, thumb_mcp_extension: 0x7c6b9a
+});
+
+/** Strip surface constants (linear RGB / unitless display factors). */
+export const STRIP_SHADE = Object.freeze({
+  neutral: Object.freeze([0.30, 0.33, 0.37]), // slate albedo the tints are mixed into
+  tintStrength: 0.55,     // 0 = neutral slate, 1 = full tint
+  restAlbedo: 1.0,        // albedo scale at rest (lit by the scene's ambient + headlight)
+  ambientScale: 0.6,      // the strip's ambient (indirect diffuse) term x this: stronger relief from the headlight
+  activeDarken: 0.85,     // albedo x (1 - activeDarken * smoothstep(0, activeDarkenEnd, activity)): the emissive
+  activeDarkenEnd: 0.6,   //   glow, not the lit tint, carries the activity colour (so it reads like the legend)
+  softBorderU: 0.006,     // tint blend half-width at a pick boundary (u)
+  borderDarken: 0.35,     // faint region border line (darkens the albedo)
+  borderPx: 1.0,          // border line half-width (screen px, shader only)
+  hoverBoost: 0.55,       // hovered region albedo x (1 + hoverBoost)
+  hoverGlow: 0.18,        // hovered region tint added as emission
+  hoverLinePx: 2.2,       // hover outline half-width (screen px, shader only)
+  hoverLine: Object.freeze([0.95, 0.97, 1.0]), // hover outline emission (linear)
+  glowRest: 0.0,          // glow factor at activity 0 (no emission at rest)
+  glowRiseTo: 0.2,        // glow factor reaches 1 by this activity
+  shimmer: 0.16           // max relative shimmer of the glow (decorative, simulated)
+});
+
+const tintCache = new Map();
+/** Linear-RGB tint of an action's control region. */
+export function regionTintLinear(actionId) {
+  if (tintCache.has(actionId)) return tintCache.get(actionId);
+  const hex = REGION_TINTS[actionId];
+  if (!Number.isInteger(hex)) throw new Error(`ns:brain_region: no tint for ${actionId}`);
+  const dec = v => { const s = v / 255; return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  const c = Object.freeze([dec((hex >> 16) & 255), dec((hex >> 8) & 255), dec(hex & 255)]);
+  tintCache.set(actionId, c);
+  return c;
+}
+
+/** CPU reference of the strip surface at (u, p): { regionActionId, albedo (linear RGB, before lighting), glow (linear
+ * RGB emission), activity, hovered }. hoverActionId: the region under the crosshair (or null). Region borders here use
+ * the u-space soft blend only; the screen-space border/hover lines are drawn by the shader. */
+export function stripShade(u, p, drives, markers = null, { hoverActionId = null, field = ACTIVITY_FIELD, shade = STRIP_SHADE } = {}) {
+  const info = regionInfo(u);
+  if (!info) return { regionActionId: null, albedo: [0, 0, 0], glow: [0, 0, 0], activity: 0, hovered: false };
+  const a = activityAt(u, p, drives, markers, field).activity;
+  const t1 = regionTintLinear(info.actionId), t2 = regionTintLinear(MARKERS[info.neighbour].actionId);
+  const s = smoothstep(0, shade.softBorderU, info.borderDistU);
+  const hovered = hoverActionId !== null && hoverActionId === info.actionId;
+  const k = shade.restAlbedo * (1 - shade.activeDarken * smoothstep(0, shade.activeDarkenEnd, a)) * (hovered ? 1 + shade.hoverBoost : 1);
+  const albedo = [0, 1, 2].map(i => {
+    const tint = 0.5 * (t1[i] + t2[i]) + (t1[i] - 0.5 * (t1[i] + t2[i])) * s;
+    return (shade.neutral[i] + (tint - shade.neutral[i]) * shade.tintStrength) * k;
+  });
+  const g = shade.glowRest + (1 - shade.glowRest) * smoothstep(0, shade.glowRiseTo, a);
+  const ramp = colormapLinear(a);
+  const glow = [0, 1, 2].map(i => ramp[i] * g + (hovered ? t1[i] * shade.hoverGlow : 0));
+  return { regionActionId: info.actionId, albedo, glow, activity: a, hovered };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gaze
+
+/** Camera-centre gaze direction in world/display axes. yaw (rad) positive looks left (about +y),
+ * pitch (rad) positive looks up: (-sin(yaw) cos(pitch), sin(pitch), -cos(yaw) cos(pitch)). */
+export function gazeDirection(yaw, pitch) {
+  if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) throw new Error('ns:brain_input: yaw and pitch must be finite');
+  const cp = Math.cos(pitch);
+  return [0 - Math.sin(yaw) * cp, Math.sin(pitch), 0 - Math.cos(yaw) * cp];
+}
+
+/** Camera-centre ray (camera at the world origin) in SOURCE mm: { origin, dir (unit) }.
+ * brainPlacement = { k, distance, centre }; the brain group is unrotated in the world. */
+export function gazeRayInSource(yaw, pitch, brainPlacement) {
+  if (brainPlacement && brainPlacement.kind === 'ns-brain-view') return gazeRayForView(yaw, pitch, brainPlacement); // round 2
+  const { k, distance, centre } = checkPlacement(brainPlacement);
+  const w = gazeDirection(yaw, pitch);
+  const origin = sourceFromDisplay([0, 0, distance], centre, k);
+  // Inverse rotation of a direction: (wx, wy, wz) -> (-wx, -wy, wz); the scale does not change direction.
+  const dir = normalize([0 - w[0], 0 - w[1], w[2]]);
+  return { origin, dir };
+}
+
+const isVecLike = v => Array.isArray(v) || ArrayBuffer.isView(v);
+
+// A2-render R1 gaze caches. classifyGaze runs every frame while the view moves; the focus AABB, the in-band triangle
+// list (with per-triangle edge vectors) and the drawn marker solids are cached per input array object. Focus arrays
+// and placeMarkers() output are treated as immutable once classified (the app never mutates them); call
+// clearGazeCache(focus) after mutating one in place. Results are bit-identical to the uncached R5 arithmetic.
+const boundsCache = new WeakMap();   // positions -> { lo, hi } (padded as rayHitsBounds)
+const triCache = new WeakMap();      // positions -> WeakMap(indices -> { u, count, tri: Float64Array(9 * count) })
+const dotsCache = new WeakMap();     // frozen placeMarkers() output -> drawn dots
+const solidCache = new WeakMap();    // frozen marker -> [base solid, active solid]
+
+/** Drop the cached gaze data of a focus mesh (only needed after mutating its arrays in place). */
+export function clearGazeCache(focus) {
+  if (focus && focus.positions && typeof focus.positions === 'object') { boundsCache.delete(focus.positions); triCache.delete(focus.positions); }
+}
+
+function cachedBounds(pos) {
+  let b = boundsCache.get(pos);
+  if (b) return b;
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+    if (z < z0) z0 = z;
+    if (z > z1) z1 = z;
+  }
+  const lo = [x0, y0, z0], hi = [x1, y1, z1], mn = [0, 0, 0], mx = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    const pad = 1e-6 * (Math.abs(lo[a]) + Math.abs(hi[a]) + 1);
+    mn[a] = lo[a] - pad; mx[a] = hi[a] + pad;
+  }
+  b = { mn, mx };
+  if (typeof pos === 'object') boundsCache.set(pos, b);
+  return b;
+}
+
+/** rayHitsBounds against the cached padded AABB (same slab arithmetic). */
+function rayHitsCachedBounds(o, d, pos) {
+  const { mn, mx } = cachedBounds(pos);
+  let t0 = 0, t1 = Infinity;
+  for (let a = 0; a < 3; a++) {
+    if (d[a] === 0) {
+      if (o[a] < mn[a] || o[a] > mx[a]) return false;
+      continue;
+    }
+    let ta = (mn[a] - o[a]) / d[a], tb = (mx[a] - o[a]) / d[a];
+    if (ta > tb) { const s = ta; ta = tb; tb = s; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+/** Validated in-band triangle table: per kept triangle [ax, ay, az, e1x, e1y, e1z, e2x, e2y, e2z] and its index. */
+function cachedTriangles(pos, idx, uv) {
+  let byIdx = triCache.get(pos);
+  let e = byIdx && byIdx.get(idx);
+  if (e && e.u === uv) return e;
+  const n = pos.length / 3, m = idx.length / 3;
+  const inArm = x => x >= ARM_BAND.uMin && x <= ARM_BAND.uMax;
+  const tri = new Float64Array(9 * m), ids = new Int32Array(m);
+  let k = 0;
+  for (let t = 0; t < m; t++) {
+    const ia = idx[3 * t], ib = idx[3 * t + 1], ic = idx[3 * t + 2];
+    if (!(isIndex(ia, n) && isIndex(ib, n) && isIndex(ic, n))) throw new Error(`ns:brain_mesh: focus triangle ${t} has an out-of-range index`);
+    if (uv && !(inArm(uv[ia]) && inArm(uv[ib]) && inArm(uv[ic]))) continue;
+    const ax = pos[3 * ia], ay = pos[3 * ia + 1], az = pos[3 * ia + 2];
+    tri[9 * k] = ax; tri[9 * k + 1] = ay; tri[9 * k + 2] = az;
+    tri[9 * k + 3] = pos[3 * ib] - ax; tri[9 * k + 4] = pos[3 * ib + 1] - ay; tri[9 * k + 5] = pos[3 * ib + 2] - az;
+    tri[9 * k + 6] = pos[3 * ic] - ax; tri[9 * k + 7] = pos[3 * ic + 1] - ay; tri[9 * k + 8] = pos[3 * ic + 2] - az;
+    ids[k] = t;
+    k++;
+  }
+  e = { u: uv, count: k, tri, ids };
+  if (typeof pos === 'object' && typeof idx === 'object') {
+    if (!byIdx) { byIdx = new WeakMap(); triCache.set(pos, byIdx); }
+    byIdx.set(idx, e);
+  }
+  return e;
+}
+
+function cachedSolid(mk, active) {
+  if (!Object.isFrozen(mk)) return markerSolid(mk, active);
+  let s = solidCache.get(mk);
+  if (!s) { s = [markerSolid(mk, false), markerSolid(mk, true)]; solidCache.set(mk, s); }
+  return s[active ? 1 : 0];
+}
+
+/** Drawn dots of an actionsAt value: placeMarkers() output or Map(actionId -> position | marker); [] for a function. */
+function dotsOf(actionsAt) {
+  if (!actionsAt || typeof actionsAt === 'function') return [];
+  if (Array.isArray(actionsAt) && Object.isFrozen(actionsAt) && dotsCache.has(actionsAt)) return dotsCache.get(actionsAt);
+  const out = dotsOfUncached(actionsAt);
+  if (Array.isArray(actionsAt) && Object.isFrozen(actionsAt) && actionsAt.every(m => !m || Object.isFrozen(m))) dotsCache.set(actionsAt, out);
+  return out;
+}
+
+function dotsOfUncached(actionsAt) {
+  const entries = actionsAt instanceof Map
+    ? Array.from(actionsAt, ([id, v]) => (isVecLike(v) ? { actionId: id, position: v } : { ...v, actionId: id }))
+    : actionsAt;
+  if (typeof entries[Symbol.iterator] !== 'function') return [];
+  const out = [];
+  for (const mk of entries) {
+    if (!mk || typeof mk.actionId !== 'string' || !mk.position || mk.position.length !== 3) continue;
+    if (Number.isFinite(mk.u) && (mk.u < ARM_BAND.uMin || mk.u > ARM_BAND.uMax)) continue;
+    const p = mk.position;
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !Number.isFinite(p[2])) continue;
+    out.push(mk);
+  }
+  return out;
+}
+
+const EMPTY = () => ({ kind: 'empty', actionId: null, point: null, u: null });
+
+/** Classify a gaze ray given in SOURCE mm (repair R3 pick order; Root marker-aim review F1/F2; repair R5 drawn solid):
+ *  1. DOTS: the ray against every DRAWN marker octahedron (markerSolid + MARKER_OCTAHEDRON, front faces, exactly the
+ *     triangles ns-scene-three draws; repair R5 replaced R3/R4's inscribed sphere, which missed the drawn tips and
+ *     edges). The marker of `activeActionId` is tested at its drawn enlarged size (activeScale), all others at base
+ *     size. The NEAREST surface entry along the ray, over all markers, wins its own action (exact ties: the earlier
+ *     marker): wherever a drawn marker is hit it is selected, never a neighbour or nothing; where an enlarged active
+ *     marker overlaps or occludes a neighbour it wins only where its surface is the nearer one.
+ *     Phase: ns-app passes activeActionId = the previous frame's selection, which is the marker the scene drew
+ *     enlarged in the frame the user is looking at (highlightMarker before render), so the pick tests the geometry as
+ *     displayed. Fixed point: if this returns action X and is called again on the same ray with activeActionId = X,
+ *     it returns X (X's enlarged solid contains its base solid, so its entry is no farther; the previous active marker
+ *     only shrinks; no other solid changes; a strip selection X stays X whether or not X's enlarged solid is hit).
+ *     -> { kind: 'strip', via: 'dot', actionId, point (the surface entry), u (the marker's vertex u) }
+ *  2. STRIP: otherwise the nearest focus-triangle hit (t >= 0; with focus.u, triangles not fully inside ARM_BAND are
+ *     ignored and u is interpolated); its action is actionForU(u), the nearest representative u, which is also the
+ *     argmax of the overlapping simulated fields at that u. -> { kind: 'strip', via: 'strip', actionId, point, u }.
+ *     A function actionsAt(point, u) -> actionId | null overrides this step (custom pickers).
+ *  3. Otherwise { kind: 'empty', actionId: null, point: null, u: null }: empty space and non-strip brain (glass) never
+ *     select anything. The glass never occludes the strip or a dot; the camera-attached arm is not part of the test.
+ * actionsAt: placeMarkers() output, a Map(actionId -> position | marker), or a function. The R1/R2 rule (nearest
+ * UNLIFTED marker in 3-D from the strip hit) is gone: it ignored the drawn dots. */
+export function classifyGaze(rayOriginSrc, rayDirSrc, focus, actionsAt, opts = {}) {
+  // Round 2: a segmentMotorStrips result as the third argument selects the both-hemisphere REGION picker
+  // (classifyRegionGaze; result kind 'region' | 'glass' | 'empty'). Its options are the fourth argument, or the fifth
+  // when the fourth is placeMarkers output (the left-arm dots). The legacy single-band picker below is unchanged.
+  if (isSegmentation(focus)) {
+    const isOpts = actionsAt && !Array.isArray(actionsAt) && !(actionsAt instanceof Map) && typeof actionsAt === 'object';
+    const o2 = isOpts ? actionsAt : { ...(opts || {}), markers: actionsAt || (opts && opts.markers) || null };
+    return classifyRegionGaze(rayOriginSrc, rayDirSrc, focus, o2);
+  }
+  const { activeActionId = null } = opts || {};
+  const o = vec3(rayOriginSrc, 'rayOrigin'), d0 = vec3(rayDirSrc, 'rayDir');
+  if (!(length(d0) > 1e-12)) throw new Error('ns:brain_ray: zero-length gaze direction');
+  if (!focus || !focus.positions || !focus.indices || focus.positions.length % 3 !== 0 || focus.indices.length % 3 !== 0) {
+    throw new Error('ns:brain_mesh: focus must be { positions, indices[, u] }');
+  }
+  const d = normalize(d0);
+  // 1. drawn marker solids (nearest surface entry)
+  let dotT = Infinity, dotHit = null;
+  for (const mk of dotsOf(actionsAt)) {
+    const t = rayMarkerSolid(o, d, cachedSolid(mk, mk.actionId === activeActionId));
+    if (t !== null && t < dotT) { dotT = t; dotHit = mk; }
+  }
+  if (dotHit) {
+    const uDot = Number.isFinite(dotHit.uVertex) ? dotHit.uVertex : Number.isFinite(dotHit.u) ? dotHit.u : null;
+    return { kind: 'strip', actionId: dotHit.actionId, point: add(o, scale(d, dotT)), u: uDot, via: 'dot' };
+  }
+  // 2. strip (A2-render R1: cached AABB and in-band triangle table; scalar rayTriangle arithmetic, identical results)
+  const pos = focus.positions, idx = focus.indices;
+  const n = pos.length / 3, m = idx.length / 3;
+  if (n === 0 || m === 0) return EMPTY();
+  const uv = focus.u && focus.u.length === n ? focus.u : null;
+  if (!rayHitsCachedBounds(o, d, pos)) return EMPTY();
+  const table = cachedTriangles(pos, idx, uv);
+  const T = table.tri, o0 = o[0], o1 = o[1], o2 = o[2], q0 = d[0], q1 = d[1], q2 = d[2];
+  let bestT = Infinity, bestTri = -1;
+  for (let k = 0; k < table.count; k++) {
+    const j = 9 * k;
+    const ax = T[j], ay = T[j + 1], az = T[j + 2], e1x = T[j + 3], e1y = T[j + 4], e1z = T[j + 5], e2x = T[j + 6], e2y = T[j + 7], e2z = T[j + 8];
+    // ns-math rayTriangle, operation for operation: h = dir x e2, det = e1 . h, s = o - a, q = s x e1.
+    const hx = q1 * e2z - q2 * e2y, hy = q2 * e2x - q0 * e2z, hz = q0 * e2y - q1 * e2x;
+    const det = e1x * hx + e1y * hy + e1z * hz;
+    if (Math.abs(det) < 1e-12) continue;
+    const f = 1 / det;
+    const sx = o0 - ax, sy = o1 - ay, sz = o2 - az;
+    const bu = f * (sx * hx + sy * hy + sz * hz);
+    if (bu < 0 || bu > 1) continue;
+    const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+    const bv = f * (q0 * qx + q1 * qy + q2 * qz);
+    if (bv < 0 || bu + bv > 1) continue;
+    const hit = f * (e2x * qx + e2y * qy + e2z * qz);
+    if (hit >= 0 && hit < bestT) { bestT = hit; bestTri = table.ids[k]; }
+  }
+  if (bestTri < 0) return EMPTY();
+  const point = add(o, scale(d, bestT));
+  let u = null;
+  if (uv) {
+    const ia = idx[3 * bestTri], ib = idx[3 * bestTri + 1], ic = idx[3 * bestTri + 2];
+    const a = vtx(pos, ia), b = vtx(pos, ib), c = vtx(pos, ic);
+    const v0 = sub(b, a), v1 = sub(c, a), v2 = sub(point, a);
+    const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1);
+    const den = d00 * d11 - d01 * d01;
+    const ua = uv[ia], ub = uv[ib], uc = uv[ic];
+    if (den > 0) {
+      const wb = (d11 * d20 - d01 * d21) / den, wc = (d00 * d21 - d01 * d20) / den;
+      u = (1 - wb - wc) * ua + wb * ub + wc * uc;
+    } else {
+      u = (ua + ub + uc) / 3;
+    }
+    const uLo = Math.min(ua, ub, uc), uHi = Math.max(ua, ub, uc);
+    u = u < uLo ? uLo : u > uHi ? uHi : u;
+  }
+  let actionId = null;
+  if (typeof actionsAt === 'function') {
+    const r = actionsAt(point, u);
+    actionId = typeof r === 'string' && r ? r : null;
+  } else if (actionsAt) {
+    actionId = actionForU(u);
+  }
+  return { kind: 'strip', actionId, point, u, via: 'strip' };
+}
+
+// =============================================================================================
+// ROUND 2 (U2a-brain): BOTH-hemisphere motor-strip REGION segmentation from BODY_MOTOR_MAP, region gaze with
+// hysteresis, the brain view math (default tilt, Google-Earth-style orbit, grab carry, framing) and diagnostics.
+//
+// Frames are unchanged: source = BodyParts3D mm (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); display/world = Three
+// axes (+x screen right, +y up, +z toward the camera; camera at the world origin looking along -z at yaw = pitch = 0).
+//
+// Scientific limits: the regions are CONTROL regions of this display, assigned by a documented geometric rule from the
+// body map's representative extents along each hemisphere's precentral strip. They are not cortical borders, not
+// registered functional coordinates and not a unique cortical point per muscle; real representations overlap and vary
+// between people, and contemporary maps (Gordon et al. 2023, inter-effector regions) refine Penfield's homunculus. The
+// visible precentral crown may be premotor (BA6); M1 (BA4) lies largely in the sulcal bank (CROWN_NOTE). Every activity
+// value is simulated and unitless; gaze and clicks are virtual inputs, not stimulation or decoding.
+
+const freezeR2 = Object.freeze;
+
+/** Primary precentral strip meshes (= ns-assets BRAIN.rightPrecentral / BRAIN.leftPrecentral). The right one keeps the
+ * existing u parameterisation (stripParam over FJ1801's own |x| range), so the left-arm regions stay consistent with
+ * the current arm actions (MARKERS, ARM_BAND, actionForU). */
+export const STRIP_MESH_IDS = freezeR2({ right: 'FJ1801', left: 'FJ1800' });
+
+/** Strip mesh kinds: 'precentral' (a primary convexity strip; the first one per hemisphere defines that hemisphere's u
+ * range), 'strip' (any further convexity piece, parameterised with the primary's range), 'paracentral' (a medial-wall
+ * mesh, e.g. a paracentral lobule added by the acquisition agent; only its motor part is used, see MEDIAL_WALL). */
+export const STRIP_KINDS = freezeR2(['precentral', 'strip', 'paracentral']);
+
+/** Medial-wall rule. A strip triangle is MEDIAL WALL when its centroid lies within bandMm of the hemisphere's most
+ * medial |x| and its outward normal points toward the midline with cosine > minFacing (FJ1801/FJ1800 measured: the
+ * medial pial surface sits at |x| - min < 4 mm, z 1589..1624, i.e. the precentral part of the paracentral lobule).
+ * Medial-wall triangles are assigned to the map's medialSurface regions by medial depth (deeper = more medial in the
+ * strip order). Paracentral meshes keep only triangles whose centroid y lies within the primary strip's medial y range
+ * +- motorMarginMm (the precentral, motor part); the rest (posteriorly the postcentral, sensory part) stays glass.
+ * minMedialTriangles: fewer medial triangles than this in a hemisphere disables the medial rule there. */
+export const MEDIAL_WALL = freezeR2({ bandMm: 4.5, minFacing: 0.5, motorMarginMm: 4, minMedialTriangles: 8 });
+
+/** Segmentation and gaze defaults. gapTolU: a strip point outside every applicable extent joins the nearest region if
+ * it is within this distance in u, else it stays unassigned (drawn as glass, never activates). hysteresisU: an active
+ * region keeps the gaze until the gaze point is more than this far (in u / medial-depth s) inside a neighbour.
+ * hysteresisActionU: the same for the action inside a left-arm region (marker u). */
+export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.01, hysteresisActionU: 0.004 });
+
+/** Every left-arm action id the body map may reference via armActionId (the 12 MARKERS actions plus forearm rotation). */
+export const LEFT_ARM_ACTION_IDS = freezeR2([...MARKERS.map(m => m.actionId), 'pronation', 'supination']);
+const MARKER_U = new Map(MARKERS.map(m => [m.actionId, m.u]));
+
+const HEMIS = freezeR2(['right', 'left']);
+const isStr = s => typeof s === 'string' && s.trim().length > 0;
+
+/** Validate a BODY_MOTOR_MAP (ns-bodymap interface) and normalise its regions. Returns { ok, errors, warnings, version,
+ * caveats, citations, regions } where regions are frozen normalised copies in map order with `index` and `centre`
+ * (extent midpoint). Never throws; segmentMotorStrips throws on errors. */
+export function validateBodyMotorMap(map) {
+  const errors = [], warnings = [];
+  if (!map || typeof map !== 'object' || !Array.isArray(map.regions)) {
+    return { ok: false, errors: ['map must be an object with a regions array'], warnings, version: null, caveats: [], citations: [], regions: freezeR2([]) };
+  }
+  if (map.regions.length === 0) errors.push('regions is empty');
+  const seen = new Set(), out = [];
+  map.regions.forEach((r, index) => {
+    const at = `regions[${index}]`;
+    if (!r || typeof r !== 'object') { errors.push(`${at} is not an object`); return; }
+    const id = r.id;
+    if (!isStr(id)) { errors.push(`${at}.id must be a non-empty string`); return; }
+    if (seen.has(id)) errors.push(`${at}.id ${id} is duplicated`);
+    seen.add(id);
+    if (!['right', 'left', 'both'].includes(r.hemisphere)) errors.push(`${id}: hemisphere must be 'right' | 'left' | 'both'`);
+    if (r.bodySide !== undefined && !['left', 'right', 'midline'].includes(r.bodySide)) warnings.push(`${id}: bodySide ${r.bodySide} is not 'left' | 'right' | 'midline'`);
+    const ext = r.extent;
+    let u0 = NaN, u1 = NaN;
+    if (!Array.isArray(ext) || ext.length !== 2 || !Number.isFinite(ext[0]) || !Number.isFinite(ext[1])) errors.push(`${id}: extent must be [u0, u1]`);
+    else {
+      u0 = ext[0]; u1 = ext[1];
+      if (!(u0 < u1)) errors.push(`${id}: extent u0 must be < u1`);
+      if (u0 < -1e-9 || u1 > 1 + 1e-9) warnings.push(`${id}: extent [${u0}, ${u1}] leaves [0, 1]; it is clipped`);
+      u0 = Math.max(0, u0); u1 = Math.min(1, u1);
+    }
+    if (!Number.isFinite(r.order)) errors.push(`${id}: order must be a finite number`);
+    const isLeftArm = r.isLeftArm === true;
+    if (isLeftArm && r.hemisphere !== 'right') warnings.push(`${id}: a left-arm region on hemisphere '${r.hemisphere}'; the left upper limb is driven predominantly by the contralateral RIGHT hemisphere`);
+    const actions = [];
+    if (!Array.isArray(r.actions)) errors.push(`${id}: actions must be an array`);
+    else {
+      if (r.actions.length === 0) warnings.push(`${id}: no actions (gaze selects the region only)`);
+      r.actions.forEach((a, j) => {
+        if (!a || !isStr(a.id)) { errors.push(`${id}: actions[${j}].id must be a non-empty string`); return; }
+        const arm = a.armActionId === undefined ? null : a.armActionId;
+        if (isLeftArm && arm !== null && !LEFT_ARM_ACTION_IDS.includes(arm)) warnings.push(`${id}: action ${a.id} armActionId ${arm} is not an existing left-arm action id`);
+        if (!isLeftArm && arm !== null) warnings.push(`${id}: action ${a.id} has armActionId ${arm} but the region is not a left-arm region`);
+        actions.push(freezeR2({
+          id: a.id,
+          label: isStr(a.label) ? a.label : a.id,
+          armActionId: arm,
+          joints: a.joints && typeof a.joints === 'object' ? a.joints : {},
+          agonists: Array.isArray(a.agonists) ? a.agonists : [],
+          antagonists: Array.isArray(a.antagonists) ? a.antagonists : []
+        }));
+      });
+    }
+    out.push(freezeR2({
+      id,
+      label: isStr(r.label) ? r.label : id,
+      hemisphere: r.hemisphere,
+      bodySide: r.bodySide === undefined ? null : r.bodySide,
+      effector: isStr(r.effector) ? r.effector : null,
+      order: r.order,
+      extent: freezeR2([u0, u1]),
+      centre: (u0 + u1) / 2,
+      medialSurface: r.medialSurface === true,
+      isLeftArm,
+      actions: freezeR2(actions),
+      explanation: typeof r.explanation === 'string' ? r.explanation : '',
+      citationKeys: Array.isArray(r.citationKeys) ? freezeR2(r.citationKeys.slice()) : freezeR2([]),
+      index: out.length
+    }));
+  });
+  for (const h of HEMIS) {
+    const list = out.filter(r => r.hemisphere === h || r.hemisphere === 'both');
+    if (list.length === 0) warnings.push(`no region applies to the ${h} hemisphere`);
+  }
+  return {
+    ok: errors.length === 0, errors, warnings,
+    version: map.version === undefined ? null : map.version,
+    caveats: Array.isArray(map.caveats) ? map.caveats : [],
+    citations: Array.isArray(map.citations) ? map.citations : [],
+    regions: freezeR2(out)
+  };
+}
+
+function meanX(pos) {
+  let s = 0;
+  for (let i = 0; i < pos.length; i += 3) s += pos[i];
+  return s / (pos.length / 3);
+}
+
+/** Strip descriptor for one brain mesh { id, name, positions, indices[, hemisphere, kind] }, or null when it is not a
+ * motor-strip mesh. Explicit hemisphere/kind fields win; else FJ1801/FJ1800 are the primary precentral strips, a name
+ * containing 'paracentral' is a medial-wall mesh and any other name containing 'precentral' is an extra convexity
+ * strip; the hemisphere then comes from 'Right'/'Left' in the name or the sign of the mean x (x < 0 = subject right). */
+export function stripDescriptorFor(mesh) {
+  if (!mesh || !mesh.positions || !mesh.indices) return null;
+  const id = typeof mesh.id === 'string' ? mesh.id : null;
+  const name = typeof mesh.name === 'string' ? mesh.name : '';
+  let kind = STRIP_KINDS.includes(mesh.kind) ? mesh.kind : null;
+  let hemisphere = HEMIS.includes(mesh.hemisphere) ? mesh.hemisphere : null;
+  if (!kind) {
+    if (id === STRIP_MESH_IDS.right || id === STRIP_MESH_IDS.left) kind = 'precentral';
+    else if (/paracentral/i.test(name)) kind = 'paracentral';
+    else if (/precentral/i.test(name)) kind = 'strip';
+    else return null;
+  }
+  if (!hemisphere) {
+    if (id === STRIP_MESH_IDS.right) hemisphere = 'right';
+    else if (id === STRIP_MESH_IDS.left) hemisphere = 'left';
+    else if (/\bright\b/i.test(name)) hemisphere = 'right';
+    else if (/\bleft\b/i.test(name)) hemisphere = 'left';
+    else hemisphere = meanX(checkPositions(mesh.positions, `${id || name || 'mesh'}.positions`)) < 0 ? 'right' : 'left';
+  }
+  return { id: id || name || null, name, hemisphere, kind, positions: mesh.positions, indices: mesh.indices };
+}
+
+/** All motor-strip descriptors among `meshes` (stripDescriptorFor each; non-strip meshes are skipped). A non-primary
+ * 'precentral' (second precentral mesh in a hemisphere) is demoted to 'strip'; if a hemisphere has no 'precentral',
+ * its first 'strip' is promoted. */
+export function motorStripDescriptors(meshes) {
+  if (!meshes || typeof meshes[Symbol.iterator] !== 'function') throw new Error('ns:brain_strip: meshes must be iterable');
+  const out = [];
+  for (const m of meshes) { const d = stripDescriptorFor(m); if (d) out.push(d); }
+  for (const h of HEMIS) {
+    const list = out.filter(d => d.hemisphere === h);
+    const prim = list.filter(d => d.kind === 'precentral');
+    prim.slice(1).forEach(d => { d.kind = 'strip'; });
+    if (prim.length === 0) { const s = list.find(d => d.kind === 'strip'); if (s) s.kind = 'precentral'; }
+  }
+  return out;
+}
+
+function lateralityRange(pos, hemisphere, what, tolMm) {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i];
+    if (hemisphere === 'right' ? x > tolMm : x < -tolMm) {
+      throw new Error(`ns:brain_laterality: ${what} vertex ${i / 3} has x = ${x}; a ${hemisphere}-hemisphere strip needs ${hemisphere === 'right' ? 'x <= 0 (subject right)' : 'x >= 0 (subject left)'}`);
+    }
+    const a = Math.abs(x);
+    if (a < lo) lo = a;
+    if (a > hi) hi = a;
+  }
+  return { lo, hi };
+}
+
+/** Owner of strip coordinate s among `list` (normalised regions): the region whose extent contains s with the nearest
+ * extent centre (ties: lower order, then lower index); with no containing extent, the region with the nearest extent
+ * edge if within gapTolU; else null. Exported for tests and for renderers that shade per fragment. */
+export function regionOwnerAt(list, s, gapTolU = SEGMENT_DEFAULTS.gapTolU) {
+  if (!Number.isFinite(s) || !list || list.length === 0) return null;
+  let best = null, bd = Infinity;
+  for (const r of list) {
+    if (s < r.extent[0] - 1e-12 || s > r.extent[1] + 1e-12) continue;
+    const d = Math.abs(s - r.centre);
+    if (d < bd - 1e-15 || (Math.abs(d - bd) <= 1e-15 && best && (r.order < best.order || (r.order === best.order && r.index < best.index)))) { bd = d; best = r; }
+  }
+  if (best) return best;
+  let near = null, nd = Infinity;
+  for (const r of list) {
+    const d = s < r.extent[0] ? r.extent[0] - s : s - r.extent[1];
+    if (d < nd - 1e-15 || (Math.abs(d - nd) <= 1e-15 && near && r.order < near.order)) { nd = d; near = r; }
+  }
+  return nd <= gapTolU ? near : null;
+}
+
+function triArea2(pos, a, b, c, out) {
+  const ax = pos[3 * a], ay = pos[3 * a + 1], az = pos[3 * a + 2];
+  const e1x = pos[3 * b] - ax, e1y = pos[3 * b + 1] - ay, e1z = pos[3 * b + 2] - az;
+  const e2x = pos[3 * c] - ax, e2y = pos[3 * c + 1] - ay, e2z = pos[3 * c + 2] - az;
+  out[0] = e1y * e2z - e1z * e2y; out[1] = e1z * e2x - e1x * e2z; out[2] = e1x * e2y - e1y * e2x;
+  return out;
+}
+
+/** Signed orientation of a closed mesh: +1 when the triangle normals point outward on average (sum over triangles of
+ * (centroid - mean vertex) . areaNormal > 0), -1 otherwise. */
+function meshOrientation(pos, idx) {
+  const n = pos.length / 3;
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < n; i++) { cx += pos[3 * i]; cy += pos[3 * i + 1]; cz += pos[3 * i + 2]; }
+  cx /= n; cy /= n; cz /= n;
+  const N = [0, 0, 0];
+  let s = 0;
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+    triArea2(pos, a, b, c, N);
+    const gx = (pos[3 * a] + pos[3 * b] + pos[3 * c]) / 3 - cx, gy = (pos[3 * a + 1] + pos[3 * b + 1] + pos[3 * c + 1]) / 3 - cy, gz = (pos[3 * a + 2] + pos[3 * b + 2] + pos[3 * c + 2]) / 3 - cz;
+    s += gx * N[0] + gy * N[1] + gz * N[2];
+  }
+  return s < 0 ? -1 : 1;
+}
+
+function compactPart(pos, idx, vU, vS, tris) {
+  const remap = new Map();
+  const ids = [];
+  for (const t of tris) for (let j = 0; j < 3; j++) { const v = idx[3 * t + j]; if (!remap.has(v)) { remap.set(v, ids.length); ids.push(v); } }
+  const positions = new Float32Array(ids.length * 3), u = new Float32Array(ids.length), s = new Float32Array(ids.length), sourceIndex = new Uint32Array(ids.length);
+  ids.forEach((v, r) => {
+    positions[3 * r] = pos[3 * v]; positions[3 * r + 1] = pos[3 * v + 1]; positions[3 * r + 2] = pos[3 * v + 2];
+    u[r] = vU[v]; s[r] = vS ? vS(v) : vU[v]; sourceIndex[r] = v;
+  });
+  const indices = new Uint32Array(tris.length * 3), triangles = new Uint32Array(tris.length);
+  tris.forEach((t, j) => { indices[3 * j] = remap.get(idx[3 * t]); indices[3 * j + 1] = remap.get(idx[3 * t + 1]); indices[3 * j + 2] = remap.get(idx[3 * t + 2]); triangles[j] = t; });
+  return { positions, indices, u, s, sourceIndex, triangles, vertexCount: ids.length, faceCount: tris.length };
+}
+
+/**
+ * Segment both hemispheres' motor strips into BODY_MOTOR_MAP regions (pure geometry).
+ *
+ * strips: strip descriptors (motorStripDescriptors / stripDescriptorFor output; raw meshes are classified the same way)
+ * with { id, hemisphere: 'right' | 'left', kind, positions (source mm), indices }. Extra hemisphere strip meshes (for
+ * example from FULLBODY-MESH-MANIFEST region brain_motor) are accepted: further convexity pieces use the primary's u
+ * range and paracentral meshes join the medial-wall rule.
+ *
+ * Rule per triangle (centroid): u = (|x| - lo) / (hi - lo) with the hemisphere's PRIMARY precentral |x| range (for the
+ * right hemisphere this is exactly stripParam(FJ1801), the existing parameterisation). Convexity triangles take
+ * s = u and the owner among the regions applying to that hemisphere (hemisphere === h or 'both') by regionOwnerAt.
+ * Medial-wall triangles (MEDIAL_WALL) take s = mLo + (mHi - mLo) * (1 - w), with w = medial depth 0 (dorsal margin) ..
+ * 1 (deepest medial strip point) and [mLo, mHi] the union of that hemisphere's medialSurface extents, and the owner
+ * among the medialSurface regions (if the map has none, the convexity rule applies to them too).
+ *
+ * Returns { kind: 'ns-motor-segmentation', version: 1, mapVersion, caveats, citations, warnings, options, regions
+ * (normalised, each with triangleCount, areaMm2, byHemisphere: { right|left: { triangleCount, areaMm2, anchor, normal,
+ * meanS } }, partIndices), regionById (Map), hemispheres: { right|left: { primaryId, meshIds, lo, hi, medial: null |
+ * { zTop, zBottom, sLo, sHi, triangleCount }, regionIds } }, parts: [{ regionId, regionIndex, hemisphere, meshId,
+ * surface: 'convexity' | 'medial', positions, indices, u, s, sourceIndex, triangles, vertexCount, faceCount }],
+ * unassigned: [same shape without region; drawn as glass], strips: [per-mesh pick tables], coverage, glassGrid }.
+ * Typed arrays are not frozen; treat the result as immutable.
+ */
+export function segmentMotorStrips(strips, bodyMap, {
+  gapTolU = SEGMENT_DEFAULTS.gapTolU, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU,
+  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5
+} = {}) {
+  const v = validateBodyMotorMap(bodyMap);
+  if (!v.ok) throw new Error(`ns:brain_bodymap: ${v.errors.join('; ')}`);
+  if (!strips || typeof strips[Symbol.iterator] !== 'function') throw new Error('ns:brain_strip: strips must be an array of strip descriptors');
+  const descs = [];
+  for (const s of strips) {
+    const d = s && HEMIS.includes(s.hemisphere) && STRIP_KINDS.includes(s.kind) ? s : stripDescriptorFor(s);
+    if (!d) throw new Error(`ns:brain_strip: ${s && (s.id || s.name) || 'an entry'} is not a motor-strip mesh (give hemisphere and kind)`);
+    checkPositions(d.positions, `${d.id}.positions`);
+    if (!d.indices || d.indices.length % 3 !== 0 || d.indices.length === 0) throw new Error(`ns:brain_strip: ${d.id}.indices must be triangle indices`);
+    descs.push(d);
+  }
+  if (descs.length === 0) throw new Error('ns:brain_strip: no strip meshes');
+  const regions = v.regions;
+  const hemis = {};
+  for (const h of HEMIS) {
+    const list = descs.filter(d => d.hemisphere === h);
+    if (list.length === 0) { hemis[h] = null; continue; }
+    const primary = list.find(d => d.kind === 'precentral') || list.find(d => d.kind === 'strip') || list[0];
+    const { lo, hi } = lateralityRange(primary.positions, h, primary.id, 0);
+    if (!(hi - lo > 0)) throw new Error(`ns:brain_strip: ${primary.id} has no medial-lateral extent`);
+    const applicable = regions.filter(r => r.hemisphere === h || r.hemisphere === 'both');
+    const medialRegions = applicable.filter(r => r.medialSurface);
+    hemis[h] = { list, primary, lo, hi, applicable, medialRegions };
+  }
+  // Per-mesh vertex u, triangle centroid data and medial classification.
+  const meshes = descs.map(d => {
+    const H = hemis[d.hemisphere];
+    const pos = d.positions, idx = d.indices, n = pos.length / 3, m = idx.length / 3;
+    for (let t = 0; t < idx.length; t++) if (!isIndex(idx[t], n)) throw new Error(`ns:brain_mesh: ${d.id} triangle ${Math.floor(t / 3)} has an out-of-range index`);
+    let vu;
+    if (d === H.primary && d.hemisphere === 'right' && d.kind === 'precentral') vu = stripParam(pos, 'right'); // exact existing u
+    else {
+      lateralityRange(pos, d.hemisphere, d.id, d === H.primary ? 0 : lateralityTolMm);
+      vu = new Float32Array(n);
+      const span = H.hi - H.lo;
+      for (let i = 0; i < n; i++) { const x = (Math.abs(pos[3 * i]) - H.lo) / span; vu[i] = x < 0 ? 0 : x > 1 ? 1 : x; }
+    }
+    const orient = meshOrientation(pos, idx);
+    const toMid = d.hemisphere === 'right' ? 1 : -1; // +x is toward the midline for the right hemisphere
+    const triMedial = new Uint8Array(m), triU = new Float32Array(m), triArea = new Float32Array(m);
+    const triN = new Float32Array(3 * m), triC = new Float32Array(3 * m);
+    const N = [0, 0, 0];
+    for (let t = 0; t < m; t++) {
+      const a = idx[3 * t], b = idx[3 * t + 1], c = idx[3 * t + 2];
+      triArea2(pos, a, b, c, N);
+      const L = Math.hypot(N[0], N[1], N[2]);
+      triArea[t] = L / 2;
+      const nx = L > 0 ? (orient * N[0]) / L : 0, ny = L > 0 ? (orient * N[1]) / L : 0, nz = L > 0 ? (orient * N[2]) / L : 0;
+      triN[3 * t] = nx; triN[3 * t + 1] = ny; triN[3 * t + 2] = nz;
+      const cx = (pos[3 * a] + pos[3 * b] + pos[3 * c]) / 3, cy = (pos[3 * a + 1] + pos[3 * b + 1] + pos[3 * c + 1]) / 3, cz = (pos[3 * a + 2] + pos[3 * b + 2] + pos[3 * c + 2]) / 3;
+      triC[3 * t] = cx; triC[3 * t + 1] = cy; triC[3 * t + 2] = cz;
+      triU[t] = (vu[a] + vu[b] + vu[c]) / 3;
+      triMedial[t] = Math.abs(cx) - H.lo < medialWall.bandMm && toMid * nx > medialWall.minFacing ? 1 : 0;
+    }
+    return { d, H, pos, idx, n, m, vu, triMedial, triU, triArea, triN, triC };
+  });
+  // Per-hemisphere medial-wall depth range and the motor y range of the primary's medial wall.
+  for (const h of HEMIS) {
+    const H = hemis[h];
+    if (!H) continue;
+    let count = 0, zTop = -Infinity, zBottom = Infinity, yLo = Infinity, yHi = -Infinity;
+    for (const M of meshes) {
+      if (M.d.hemisphere !== h || M.d.kind === 'paracentral') continue;
+      for (let t = 0; t < M.m; t++) {
+        if (!M.triMedial[t]) continue;
+        count++;
+        for (let j = 0; j < 3; j++) { const vi = M.idx[3 * t + j], z = M.pos[3 * vi + 2]; if (z > zTop) zTop = z; if (z < zBottom) zBottom = z; }
+        if (M.d === H.primary) { const y = M.triC[3 * t + 1]; if (y < yLo) yLo = y; if (y > yHi) yHi = y; }
+      }
+    }
+    for (const M of meshes) { // paracentral meshes extend the medial depth range
+      if (M.d.hemisphere !== h || M.d.kind !== 'paracentral') continue;
+      for (let t = 0; t < M.m; t++) {
+        if (!M.triMedial[t]) continue;
+        const y = M.triC[3 * t + 1];
+        if (Number.isFinite(yLo) && (y < yLo - medialWall.motorMarginMm || y > yHi + medialWall.motorMarginMm)) continue;
+        count++;
+        for (let j = 0; j < 3; j++) { const vi = M.idx[3 * t + j], z = M.pos[3 * vi + 2]; if (z > zTop) zTop = z; if (z < zBottom) zBottom = z; }
+      }
+    }
+    const mr = H.medialRegions;
+    H.medial = count >= medialWall.minMedialTriangles && zTop > zBottom
+      ? { zTop, zBottom, yLo, yHi, triangleCount: count, sLo: mr.length ? Math.min(...mr.map(r => r.extent[0])) : null, sHi: mr.length ? Math.max(...mr.map(r => r.extent[1])) : null }
+      : null;
+  }
+  const medialS = (H, z) => {
+    const md = H.medial;
+    const w0 = (md.zTop - z) / (md.zTop - md.zBottom), w = w0 < 0 ? 0 : w0 > 1 ? 1 : w0;
+    return md.sLo + (md.sHi - md.sLo) * (1 - w);
+  };
+  // Assignment.
+  const partsMap = new Map(); // key regionIndex|meshIdx|surface -> triangle list
+  const unassignedLists = meshes.map(() => []);
+  const stripTables = [];
+  const regionStats = regions.map(() => ({ right: null, left: null }));
+  meshes.forEach((M, mi) => {
+    const { d, H } = M;
+    const useMedial = H.medial && H.medialRegions.length > 0;
+    const triRegion = new Int32Array(M.m).fill(-1), triS = new Float32Array(M.m), triSurface = new Uint8Array(M.m);
+    for (let t = 0; t < M.m; t++) {
+      const medial = M.triMedial[t] === 1 && useMedial;
+      let s, owner = null;
+      // A paracentral mesh contributes only its precentral (motor) part: centroid y within the primary strip's
+      // medial-wall y range +- motorMarginMm. The rest (posteriorly the postcentral, sensory part; anteriorly
+      // non-precentral medial cortex) stays unassigned glass.
+      const yc = M.triC[3 * t + 1], md = H.medial;
+      const motorY = d.kind !== 'paracentral' || !md || !Number.isFinite(md.yLo) || (yc >= md.yLo - medialWall.motorMarginMm && yc <= md.yHi + medialWall.motorMarginMm);
+      if (medial) {
+        s = medialS(H, M.triC[3 * t + 2]);
+        owner = motorY ? regionOwnerAt(H.medialRegions, s, gapTolU) : null;
+        triSurface[t] = 1;
+      } else {
+        s = M.triU[t]; // convexity rule (also a paracentral mesh's dorsal rim and inner faces)
+        owner = motorY && !(d.kind === 'paracentral' && M.triMedial[t] === 1) ? regionOwnerAt(H.applicable, s, gapTolU) : null;
+        if (M.triMedial[t] === 1) triSurface[t] = 1;
+      }
+      triS[t] = s;
+      if (!owner) { unassignedLists[mi].push(t); continue; }
+      triRegion[t] = owner.index;
+      const key = `${owner.index}|${mi}|${triSurface[t]}`;
+      let list = partsMap.get(key);
+      if (!list) { list = []; partsMap.set(key, list); }
+      list.push(t);
+      let st = regionStats[owner.index][d.hemisphere];
+      if (!st) st = regionStats[owner.index][d.hemisphere] = { triangleCount: 0, areaMm2: 0, c: [0, 0, 0], n: [0, 0, 0], sSum: 0, top: [0, 0, 0], topW: 0 };
+      const ar = M.triArea[t];
+      st.triangleCount++; st.areaMm2 += ar; st.sSum += s * ar;
+      for (let j = 0; j < 3; j++) { st.c[j] += M.triC[3 * t + j] * ar; st.n[j] += M.triN[3 * t + j] * ar; }
+      // label anchor: outward triangles facing superior (convexity) or the midline (medial wall)
+      const facing = triSurface[t] ? (d.hemisphere === 'right' ? 1 : -1) * M.triN[3 * t] : M.triN[3 * t + 2];
+      if (facing > 0.3) { const wgt = ar * facing; st.topW += wgt; for (let j = 0; j < 3; j++) st.top[j] += M.triC[3 * t + j] * wgt; }
+    }
+    // Pick table: [ax, ay, az, e1x, e1y, e1z, e2x, e2y, e2z] per triangle and a padded AABB.
+    const tri = new Float64Array(9 * M.m);
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    const P = M.pos, I = M.idx;
+    for (let i = 0; i < P.length; i += 3) {
+      if (P[i] < x0) x0 = P[i]; if (P[i] > x1) x1 = P[i];
+      if (P[i + 1] < y0) y0 = P[i + 1]; if (P[i + 1] > y1) y1 = P[i + 1];
+      if (P[i + 2] < z0) z0 = P[i + 2]; if (P[i + 2] > z1) z1 = P[i + 2];
+    }
+    for (let t = 0; t < M.m; t++) {
+      const a = I[3 * t], b = I[3 * t + 1], c = I[3 * t + 2];
+      const ax = P[3 * a], ay = P[3 * a + 1], az = P[3 * a + 2];
+      tri[9 * t] = ax; tri[9 * t + 1] = ay; tri[9 * t + 2] = az;
+      tri[9 * t + 3] = P[3 * b] - ax; tri[9 * t + 4] = P[3 * b + 1] - ay; tri[9 * t + 5] = P[3 * b + 2] - az;
+      tri[9 * t + 6] = P[3 * c] - ax; tri[9 * t + 7] = P[3 * c + 1] - ay; tri[9 * t + 8] = P[3 * c + 2] - az;
+    }
+    const pad = 1e-6 * (Math.abs(x0) + Math.abs(x1) + Math.abs(y0) + Math.abs(y1) + Math.abs(z0) + Math.abs(z1) + 1);
+    stripTables.push({
+      id: d.id, hemisphere: d.hemisphere, kind: d.kind, positions: P, indices: I, u: M.vu,
+      triRegion, triS, triSurface, triMedial: M.triMedial, triangleCount: M.m, tri,
+      boundsMin: [x0 - pad, y0 - pad, z0 - pad], boundsMax: [x1 + pad, y1 + pad, z1 + pad]
+    });
+  });
+  // Parts (compacted per region x mesh x surface) and unassigned glass parts.
+  const parts = [];
+  const partIndices = regions.map(() => []);
+  const keys = Array.from(partsMap.keys()).sort((a, b) => {
+    const [ra, ma, sa] = a.split('|').map(Number), [rb, mb, sb] = b.split('|').map(Number);
+    return (regions[ra].order - regions[rb].order) || (ra - rb) || (ma - mb) || (sa - sb);
+  });
+  for (const key of keys) {
+    const [ri, mi, surf] = key.split('|').map(Number);
+    const M = meshes[mi], H = M.H;
+    const vS = surf === 1 && H.medial && H.medial.sLo !== null ? vi => medialS(H, M.pos[3 * vi + 2]) : null;
+    const part = compactPart(M.pos, M.idx, M.vu, vS, partsMap.get(key));
+    partIndices[ri].push(parts.length);
+    parts.push({ regionId: regions[ri].id, regionIndex: ri, hemisphere: M.d.hemisphere, meshId: M.d.id, surface: surf === 1 ? 'medial' : 'convexity', ...part });
+  }
+  const unassigned = [];
+  meshes.forEach((M, mi) => {
+    if (unassignedLists[mi].length === 0) return;
+    unassigned.push({ regionId: null, regionIndex: -1, hemisphere: M.d.hemisphere, meshId: M.d.id, surface: 'mixed', ...compactPart(M.pos, M.idx, M.vu, null, unassignedLists[mi]) });
+  });
+  const outRegions = freezeR2(regions.map((r, i) => {
+    const byHemisphere = {};
+    let triangleCount = 0, areaMm2 = 0;
+    for (const h of HEMIS) {
+      const st = regionStats[i][h];
+      if (!st) continue;
+      triangleCount += st.triangleCount; areaMm2 += st.areaMm2;
+      const c = st.c.map(x => x / st.areaMm2);
+      const nl = Math.hypot(st.n[0], st.n[1], st.n[2]) || 1;
+      byHemisphere[h] = freezeR2({
+        triangleCount: st.triangleCount, areaMm2: st.areaMm2, centroid: freezeR2(c),
+        normal: freezeR2(st.n.map(x => x / nl)), meanS: st.sSum / st.areaMm2,
+        anchor: freezeR2(st.topW > 0 ? st.top.map(x => x / st.topW) : c)
+      });
+    }
+    return freezeR2({ ...r, triangleCount, areaMm2, byHemisphere: freezeR2(byHemisphere), partIndices: freezeR2(partIndices[i]) });
+  }));
+  const coverage = {};
+  for (const h of HEMIS) {
+    const tabs = stripTables.filter(s => s.hemisphere === h);
+    let triangles = 0, assigned = 0, medial = 0;
+    for (const s of tabs) for (let t = 0; t < s.triangleCount; t++) { triangles++; if (s.triRegion[t] >= 0) assigned++; if (s.triSurface[t]) medial++; }
+    coverage[h] = freezeR2({ triangles, assigned, unassigned: triangles - assigned, medial, fraction: triangles ? assigned / triangles : 0 });
+  }
+  const hemispheres = {};
+  for (const h of HEMIS) {
+    const H = hemis[h];
+    hemispheres[h] = H ? freezeR2({
+      primaryId: H.primary.id, meshIds: freezeR2(H.list.map(d => d.id)), lo: H.lo, hi: H.hi,
+      medial: H.medial ? freezeR2({ ...H.medial }) : null,
+      regionIds: freezeR2(H.applicable.map(r => r.id)), medialRegionIds: freezeR2(H.medialRegions.map(r => r.id))
+    }) : null;
+  }
+  const seg = {
+    kind: 'ns-motor-segmentation', version: 1, mapVersion: v.version, caveats: v.caveats, citations: v.citations, warnings: freezeR2(v.warnings),
+    options: freezeR2({ gapTolU, hysteresisU, hysteresisActionU }),
+    regions: outRegions, regionById: new Map(outRegions.map(r => [r.id, r])),
+    hemispheres: freezeR2(hemispheres), parts, unassigned, strips: stripTables, coverage: freezeR2(coverage),
+    glassGrid: glassMeshes ? buildBrainHitGrid(glassMeshes, { voxelMm: glassVoxelMm }) : null
+  };
+  // Private, per-hemisphere owner lists for gaze hysteresis.
+  seg._owners = {};
+  const own = list => list.map(r => outRegions[r.index]);
+  for (const h of HEMIS) seg._owners[h] = hemis[h] ? { all: own(hemis[h].applicable), medial: hemis[h].medial && hemis[h].medialRegions.length ? own(hemis[h].medialRegions) : null } : null;
+  return seg;
+}
+
+const isSegmentation = x => !!x && x.kind === 'ns-motor-segmentation' && Array.isArray(x.strips);
+
+/** Regions of a segmentation sorted by hemisphere then strip order (medial -> lateral): [{ hemisphere, regionId, order,
+ * meanS, triangleCount }]. */
+export function regionOrderTable(seg) {
+  if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
+  const out = [];
+  for (const r of seg.regions) for (const h of HEMIS) {
+    const b = r.byHemisphere[h];
+    if (b) out.push({ hemisphere: h, regionId: r.id, order: r.order, meanS: b.meanS, triangleCount: b.triangleCount });
+  }
+  return out.sort((a, b) => (a.hemisphere < b.hemisphere ? -1 : a.hemisphere > b.hemisphere ? 1 : 0) || a.order - b.order || a.meanS - b.meanS);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Coarse whole-brain hit grid (for gaze kind 'glass' and for "the gaze is on the brain" when grabbing)
+
+/** Occupancy grid of brain surfaces: every triangle of `meshes` ({ positions, indices } in source mm) is sampled at a
+ * spacing <= voxelMm / 2 and each sample marks its voxel, so the grid is a closed voxel shell of the surfaces (a ray
+ * that crosses a surface passes through a marked voxel). Returns { voxelMm, origin, dims, cells (Uint8Array),
+ * occupied, bounds: { min, max } (tight source-mm bounds of the meshes) }. Coarse by design: a hit means "on the
+ * glassy brain within about one voxel". Built with ALL brain meshes it also serves frameBrain (pivot = its bounds
+ * centre, conservative clearance basis). */
+export function buildBrainHitGrid(meshes, { voxelMm = 3 } = {}) {
+  if (!(Number.isFinite(voxelMm) && voxelMm > 0)) throw new Error('ns:brain_grid: voxelMm must be finite and > 0');
+  const list = Array.from(meshes || []).filter(m => m && m.positions && m.indices && m.positions.length >= 9);
+  if (list.length === 0) throw new Error('ns:brain_grid: no meshes');
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const m of list) for (let i = 0; i < m.positions.length; i += 3) for (let a = 0; a < 3; a++) {
+    const x = m.positions[i + a];
+    if (x < lo[a]) lo[a] = x;
+    if (x > hi[a]) hi[a] = x;
+  }
+  const origin = lo.map(x => x - voxelMm);
+  const dims = [0, 1, 2].map(a => Math.max(1, Math.ceil((hi[a] - origin[a]) / voxelMm) + 2));
+  const cells = new Uint8Array(dims[0] * dims[1] * dims[2]);
+  const mark = (x, y, z) => {
+    const i = Math.floor((x - origin[0]) / voxelMm), j = Math.floor((y - origin[1]) / voxelMm), k = Math.floor((z - origin[2]) / voxelMm);
+    if (i >= 0 && j >= 0 && k >= 0 && i < dims[0] && j < dims[1] && k < dims[2]) cells[(k * dims[1] + j) * dims[0] + i] = 1;
+  };
+  const step = voxelMm / 2;
+  for (const m of list) {
+    const P = m.positions, I = m.indices;
+    for (let t = 0; t < I.length; t += 3) {
+      const a = 3 * I[t], b = 3 * I[t + 1], c = 3 * I[t + 2];
+      const lab = Math.hypot(P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]);
+      const lac = Math.hypot(P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]);
+      const lbc = Math.hypot(P[c] - P[b], P[c + 1] - P[b + 1], P[c + 2] - P[b + 2]);
+      const n = Math.max(1, Math.ceil(Math.max(lab, lac, lbc) / step));
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+        const wb = i / n, wc = j / n, wa = 1 - wb - wc;
+        mark(wa * P[a] + wb * P[b] + wc * P[c], wa * P[a + 1] + wb * P[b + 1] + wc * P[c + 1], wa * P[a + 2] + wb * P[b + 2] + wc * P[c + 2]);
+      }
+    }
+  }
+  let occupied = 0;
+  for (let i = 0; i < cells.length; i++) occupied += cells[i];
+  return { kind: 'ns-brain-grid', voxelMm, origin, dims, cells, occupied, bounds: { min: lo, max: hi } };
+}
+
+/** Distance along a ray (source mm, dir unit) to the first occupied voxel of a buildBrainHitGrid grid, or null
+ * (3-D DDA, Amanatides & Woo). */
+export function rayBrainGrid(o, d, grid) {
+  if (!grid || grid.kind !== 'ns-brain-grid') return null;
+  const { voxelMm: s, origin, dims, cells } = grid;
+  const bmin = origin, bmax = [origin[0] + dims[0] * s, origin[1] + dims[1] * s, origin[2] + dims[2] * s];
+  let t0 = 0, t1 = Infinity;
+  for (let a = 0; a < 3; a++) {
+    if (d[a] === 0) { if (o[a] < bmin[a] || o[a] > bmax[a]) return null; continue; }
+    let ta = (bmin[a] - o[a]) / d[a], tb = (bmax[a] - o[a]) / d[a];
+    if (ta > tb) { const q = ta; ta = tb; tb = q; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return null;
+  }
+  const p = [o[0] + d[0] * t0, o[1] + d[1] * t0, o[2] + d[2] * t0];
+  const idx = [0, 1, 2].map(a => Math.min(dims[a] - 1, Math.max(0, Math.floor((p[a] - origin[a]) / s))));
+  const stepA = [0, 1, 2].map(a => (d[a] > 0 ? 1 : d[a] < 0 ? -1 : 0));
+  const tMax = [0, 1, 2].map(a => (d[a] === 0 ? Infinity : t0 + ((origin[a] + (idx[a] + (d[a] > 0 ? 1 : 0)) * s) - p[a]) / d[a]));
+  const tDelta = [0, 1, 2].map(a => (d[a] === 0 ? Infinity : s / Math.abs(d[a])));
+  let t = t0;
+  for (let guard = 0; guard < dims[0] + dims[1] + dims[2] + 3; guard++) {
+    if (cells[(idx[2] * dims[1] + idx[1]) * dims[0] + idx[0]]) return t;
+    const a = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2);
+    t = tMax[a];
+    if (t > t1) return null;
+    idx[a] += stepA[a];
+    if (idx[a] < 0 || idx[a] >= dims[a]) return null;
+    tMax[a] += tDelta[a];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Region gaze
+
+function leftArmRegionFor(seg, armActionId, u) {
+  const list = seg.regions.filter(r => r.isLeftArm && (r.hemisphere === 'right' || r.hemisphere === 'both') && r.actions.some(a => a.armActionId === armActionId));
+  if (list.length === 0) return null;
+  return list.find(r => Number.isFinite(u) && u >= r.extent[0] && u <= r.extent[1]) || list[0];
+}
+
+/** The action a gaze point selects inside `region`: left-arm regions pick the action whose armActionId has the nearest
+ * MARKERS u to the gaze u (the existing actionForU rule restricted to the region's actions; the active action keeps
+ * the gaze within hysteresisActionU); otherwise (and for left-arm actions without markers, e.g. pronation/supination)
+ * the region's extent is split into equal control sub-bands in the listed action order (display control rule, not a
+ * cortical location). Returns the action record or null. */
+export function regionActionAt(region, u, s, { activeActionId = null, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU } = {}) {
+  const acts = region && region.actions;
+  if (!acts || acts.length === 0) return null;
+  const matchesActive = a => activeActionId !== null && (a.id === activeActionId || a.armActionId === activeActionId);
+  if (region.isLeftArm && Number.isFinite(u)) {
+    let best = null, bd = Infinity;
+    for (const a of acts) {
+      const mu = a.armActionId === null ? undefined : MARKER_U.get(a.armActionId);
+      if (mu === undefined) continue;
+      const d = Math.abs(u - mu);
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (best) {
+      const act = acts.find(matchesActive);
+      const mu = act && act.armActionId !== null ? MARKER_U.get(act.armActionId) : undefined;
+      if (act && mu !== undefined && Math.abs(u - mu) <= bd + 2 * hysteresisActionU) return act;
+      return best;
+    }
+  }
+  const [u0, u1] = region.extent;
+  const x = Number.isFinite(s) ? s : u;
+  const n = acts.length, span = u1 - u0;
+  const f = Number.isFinite(x) && span > 0 ? Math.min(1, Math.max(0, (x - u0) / span)) : 0;
+  let i = Math.min(n - 1, Math.floor(f * n));
+  const j = acts.findIndex(matchesActive);
+  if (j >= 0 && j !== i) {
+    const h = span > 0 ? hysteresisU / span : 0;
+    if (f >= j / n - h && f <= (j + 1) / n + h) i = j;
+  }
+  return acts[i];
+}
+
+function rayStripTable(o, d, S) {
+  const mn = S.boundsMin, mx = S.boundsMax;
+  let t0 = 0, t1 = Infinity;
+  for (let a = 0; a < 3; a++) {
+    if (d[a] === 0) { if (o[a] < mn[a] || o[a] > mx[a]) return null; continue; }
+    let ta = (mn[a] - o[a]) / d[a], tb = (mx[a] - o[a]) / d[a];
+    if (ta > tb) { const q = ta; ta = tb; tb = q; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return null;
+  }
+  const T = S.tri, o0 = o[0], o1 = o[1], o2 = o[2], q0 = d[0], q1 = d[1], q2 = d[2];
+  let bestT = Infinity, bestTri = -1, bu = 0, bv = 0;
+  for (let k = 0; k < S.triangleCount; k++) {
+    const j = 9 * k;
+    const e1x = T[j + 3], e1y = T[j + 4], e1z = T[j + 5], e2x = T[j + 6], e2y = T[j + 7], e2z = T[j + 8];
+    const hx = q1 * e2z - q2 * e2y, hy = q2 * e2x - q0 * e2z, hz = q0 * e2y - q1 * e2x;
+    const det = e1x * hx + e1y * hy + e1z * hz;
+    if (Math.abs(det) < 1e-12) continue;
+    const f = 1 / det;
+    const sx = o0 - T[j], sy = o1 - T[j + 1], sz = o2 - T[j + 2];
+    const b1 = f * (sx * hx + sy * hy + sz * hz);
+    if (b1 < 0 || b1 > 1) continue;
+    const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+    const b2 = f * (q0 * qx + q1 * qy + q2 * qz);
+    if (b2 < 0 || b1 + b2 > 1) continue;
+    const hit = f * (e2x * qx + e2y * qy + e2z * qz);
+    if (hit >= 0 && hit < bestT) { bestT = hit; bestTri = k; bu = b1; bv = b2; }
+  }
+  return bestTri < 0 ? null : { t: bestT, tri: bestTri, b1: bu, b2: bv };
+}
+
+function regionResult(kind, extra) {
+  return {
+    kind, regionId: null, hemisphere: null, isLeftArm: false, actionId: null, mapActionId: null, armActionId: null,
+    u: null, s: null, surface: null, meshId: null, point: null, t: null, overlaps: [], via: null, label: null, bodySide: null, effector: null,
+    ...extra
+  };
+}
+
+/**
+ * Classify a gaze ray (SOURCE mm; gazeRayInSource) against a segmentMotorStrips result. Pick order:
+ *  1. optional left-arm marker DOTS (`markers`: placeMarkers output on the right strip), the drawn octahedra exactly as
+ *     the legacy picker tests them; the nearest dot entry wins if it is nearer than the strip hit, selecting that
+ *     action inside its left-arm region;
+ *  2. the nearest STRIP triangle over every strip mesh of both hemispheres (two-sided; the glass never occludes a
+ *     strip). Its region is the triangle's assigned region (what is drawn is what is picked). HYSTERESIS: when
+ *     `activeRegionId` applies to the hit hemisphere and the gaze point's strip coordinate s lies within hysteresisU of
+ *     the active region's owned interval (same surface rule), the active region is kept. Inside the region the action
+ *     is regionActionAt (with activeActionId hysteresis). An unassigned strip triangle (a map gap) is 'glass'.
+ *  3. otherwise the coarse brain grid (seg.glassGrid, when built) -> 'glass'; else 'empty'.
+ * Returns { kind: 'region' | 'glass' | 'empty', regionId, hemisphere, isLeftArm, actionId (the left-arm action id for
+ * left-arm regions, else the map action id), mapActionId, armActionId, u (hemisphere strip u at the hit), s (the
+ * assignment coordinate: u on the convexity, medial depth on the medial wall), surface ('convexity' | 'medial'), meshId,
+ * point (source mm), t (mm along the ray), overlaps (ids of other applicable regions whose extents also contain s:
+ * representations overlap), via ('dot' | 'strip' | 'grid'), label, bodySide, effector }.
+ */
+export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
+  activeRegionId = null, activeActionId = null, markers = null,
+  hysteresisU = seg && seg.options ? seg.options.hysteresisU : SEGMENT_DEFAULTS.hysteresisU,
+  hysteresisActionU = seg && seg.options ? seg.options.hysteresisActionU : SEGMENT_DEFAULTS.hysteresisActionU
+} = {}) {
+  if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
+  const o = vec3(rayOriginSrc, 'rayOrigin'), d0 = vec3(rayDirSrc, 'rayDir');
+  if (!(length(d0) > 1e-12)) throw new Error('ns:brain_ray: zero-length gaze direction');
+  const d = normalize(d0);
+  // 1. drawn left-arm dots
+  let dotT = Infinity, dotHit = null;
+  if (markers) {
+    for (const mk of dotsOf(markers)) {
+      const t = rayMarkerSolid(o, d, cachedSolid(mk, mk.actionId === activeActionId));
+      if (t !== null && t < dotT) { dotT = t; dotHit = mk; }
+    }
+  }
+  // 2. strips
+  let best = null, bestS = null;
+  for (const S of seg.strips) {
+    const h = rayStripTable(o, d, S);
+    if (h && (!best || h.t < best.t)) { best = h; bestS = S; }
+  }
+  if (dotHit && (!best || dotT <= best.t)) {
+    const uDot = Number.isFinite(dotHit.uVertex) ? dotHit.uVertex : Number.isFinite(dotHit.u) ? dotHit.u : null;
+    const region = leftArmRegionFor(seg, dotHit.actionId, uDot);
+    if (region) {
+      const act = region.actions.find(a => a.armActionId === dotHit.actionId);
+      return regionResult('region', {
+        regionId: region.id, hemisphere: 'right', isLeftArm: true, actionId: dotHit.actionId, mapActionId: act ? act.id : null, armActionId: dotHit.actionId,
+        u: uDot, s: uDot, surface: 'convexity', meshId: STRIP_MESH_IDS.right, point: add(o, scale(d, dotT)), t: dotT, via: 'dot',
+        label: region.label, bodySide: region.bodySide, effector: region.effector,
+        overlaps: seg.regions.filter(r => r !== region && (r.hemisphere === 'right' || r.hemisphere === 'both') && !r.medialSurface && uDot >= r.extent[0] && uDot <= r.extent[1]).map(r => r.id)
+      });
+    }
+  }
+  if (best) {
+    const S = bestS, I = S.indices, k = best.tri;
+    const ia = I[3 * k], ib = I[3 * k + 1], ic = I[3 * k + 2];
+    const wa = 1 - best.b1 - best.b2;
+    let u = wa * S.u[ia] + best.b1 * S.u[ib] + best.b2 * S.u[ic];
+    const uLo = Math.min(S.u[ia], S.u[ib], S.u[ic]), uHi = Math.max(S.u[ia], S.u[ib], S.u[ic]);
+    u = u < uLo ? uLo : u > uHi ? uHi : u;
+    const point = add(o, scale(d, best.t));
+    const surface = S.triSurface[k] ? 'medial' : 'convexity';
+    const owners = seg._owners[S.hemisphere];
+    const hemi = seg.hemispheres[S.hemisphere];
+    let s = u;
+    const medialRule = surface === 'medial' && owners && owners.medial && hemi.medial;
+    if (medialRule) {
+      const md = hemi.medial;
+      const w0 = (md.zTop - point[2]) / (md.zTop - md.zBottom), w = w0 < 0 ? 0 : w0 > 1 ? 1 : w0;
+      s = md.sLo + (md.sHi - md.sLo) * (1 - w);
+    }
+    let ri = S.triRegion[k];
+    if (activeRegionId !== null && owners) {
+      const active = seg.regionById.get(activeRegionId);
+      const list = medialRule ? owners.medial : owners.all;
+      if (active && list.includes(active) && (ri < 0 || seg.regions[ri] !== active)) {
+        const g = seg.options.gapTolU;
+        for (const delta of [0, hysteresisU, -hysteresisU, hysteresisU / 2, -hysteresisU / 2]) {
+          if (regionOwnerAt(list, s + delta, g) === active) { ri = active.index; break; }
+        }
+      }
+    }
+    if (ri < 0) {
+      return regionResult('glass', { hemisphere: S.hemisphere, u, s, surface, meshId: S.id, point, t: best.t, via: 'strip' });
+    }
+    const region = seg.regions[ri];
+    const act = regionActionAt(region, u, s, { activeActionId, hysteresisU, hysteresisActionU });
+    const list = medialRule ? owners.medial : owners ? owners.all : [];
+    return regionResult('region', {
+      regionId: region.id, hemisphere: S.hemisphere, isLeftArm: region.isLeftArm,
+      actionId: act ? (act.armActionId !== null && region.isLeftArm ? act.armActionId : act.id) : null,
+      mapActionId: act ? act.id : null, armActionId: act && region.isLeftArm ? act.armActionId : null,
+      u, s, surface, meshId: S.id, point, t: best.t, via: 'strip', label: region.label, bodySide: region.bodySide, effector: region.effector,
+      overlaps: list.filter(r => r !== region && s >= r.extent[0] && s <= r.extent[1]).map(r => r.id)
+    });
+  }
+  if (seg.glassGrid) {
+    const t = rayBrainGrid(o, d, seg.glassGrid);
+    if (t !== null) return regionResult('glass', { point: add(o, scale(d, t)), t, via: 'grid' });
+  }
+  return regionResult('empty', {});
+}
+
+// ---------------------------------------------------------------------------------------------
+// Brain view math: default tilt, orbit about the locked brain centre, grab carry about the player, framing.
+
+/** Brain view constants.
+ *  tiltDeg 25: the default view is overhead (looking down the superior axis, anterior toward the top of the screen)
+ *    tilted 25 deg about the screen's left-right axis so the anterior brain comes toward the camera (viewpoint above
+ *    and in front). Measured on FJ1801 + FJ1800 with an ID-buffer at 16:9 (regionVisibility; notes U2a-brain): the
+ *    picked area of the lateral face territory (u 0.8 .. 1) rises from about 180 px per hemisphere at 0 deg to about
+ *    815 px at 25 deg (x4.5), and the whole visible strip by about 30 %, because the lateral precentral gyrus runs
+ *    forward and down and its crown faces antero-laterally. Beyond about 30 deg the gain flattens while the view
+ *    stops reading as overhead. The anterior axis still projects straight up the screen (cos 25 = 0.91).
+ *  The medial-wall (paracentral) leg/foot territory faces the midline and is seen edge-on at the default; orbiting
+ *    one or two steps toward the opposite side shows it (orbit left shows the right hemisphere's medial wall).
+ *  orbitStepDeg / orbitYawLimitDeg / orbitPitchLimitDeg: Google-Earth-style orbit about the locked brain centre;
+ *    yaw > 0 moves the viewpoint toward screen right (subject right), pitch > 0 toward the front (anterior, screen top).
+ *  fill / compactFill / compactAspect: projected half-extent (NDC) of both strips in the limiting dimension.
+ *  aimDistance: metres from the camera to the strips' top plane at the default view.
+ *  reachM: camera-to-fingertip bound of the left arm (>= ns-arm REACH_STATE_MAX_DEPTH = 1.0 m); clearanceM: extra gap.
+ *    frameBrain scales the whole brain outward (projection unchanged) until every brain point stays at least
+ *    reachM + clearanceM from the camera for every orbit within the limits and every grab carry.
+ *  grabPitchLimitDeg: the carried brain's elevation is clamped to +- this. */
+export const BRAIN_VIEW = freezeR2({
+  tiltDeg: 25, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
+  fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6,
+  reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75
+});
+
+/** Orbit step per direction, in steps of orbitStepDeg: { yaw, pitch } signs. */
+export const ORBIT_DIRECTIONS = freezeR2({
+  left: freezeR2({ yaw: -1, pitch: 0 }), right: freezeR2({ yaw: 1, pitch: 0 }),
+  forward: freezeR2({ yaw: 0, pitch: 1 }), back: freezeR2({ yaw: 0, pitch: -1 })
+});
+
+const clampAbs = (x, lim) => (x > lim ? lim : x < -lim ? -lim : x);
+
+/** One orbit step from `orbit` ({ yaw, pitch } in DEGREES) in direction 'left' | 'right' | 'forward' | 'back', clamped
+ * to the limits. Pure; ns-actions owns the orbit state and may use this or its own equivalent. */
+export function orbitStepView(orbit, dir, { orbitStepDeg = BRAIN_VIEW.orbitStepDeg, orbitYawLimitDeg = BRAIN_VIEW.orbitYawLimitDeg, orbitPitchLimitDeg = BRAIN_VIEW.orbitPitchLimitDeg } = {}) {
+  const step = ORBIT_DIRECTIONS[dir];
+  if (!step) throw new Error(`ns:brain_orbit: direction must be left | right | forward | back (got ${dir})`);
+  const yaw = Number.isFinite(orbit && orbit.yaw) ? orbit.yaw : 0, pitch = Number.isFinite(orbit && orbit.pitch) ? orbit.pitch : 0;
+  return { yaw: clampAbs(yaw + step.yaw * orbitStepDeg, orbitYawLimitDeg), pitch: clampAbs(pitch + step.pitch * orbitStepDeg, orbitPitchLimitDeg) };
+}
+
+/** Grab carry angles (RADIANS, camera yaw/pitch convention: yaw left-positive, pitch up-positive): while Space is held
+ * with the gaze on the brain, the brain follows the change of look since the grab started, on top of the carry it had
+ * then: { grabYaw: baseYaw + (yaw - startYaw), grabPitch: clamp(basePitch + (pitch - startPitch)) }. On release keep
+ * the last values (the brain stays there). */
+export function carryFromGrab({ baseYaw = 0, basePitch = 0, startYaw, startPitch, yaw, pitch, grabPitchLimitDeg = BRAIN_VIEW.grabPitchLimitDeg }) {
+  for (const [k, x] of Object.entries({ baseYaw, basePitch, startYaw, startPitch, yaw, pitch })) if (!Number.isFinite(x)) throw new Error(`ns:brain_grab: ${k} must be finite`);
+  return { grabYaw: baseYaw + (yaw - startYaw), grabPitch: clampAbs(basePitch + (pitch - startPitch), grabPitchLimitDeg * DEG) };
+}
+
+// 3x3 helpers, column-major [m00, m10, m20, m01, m11, m21, m02, m12, m22].
+const m3 = (a) => Float64Array.from(a);
+const rotX3 = a => { const c = Math.cos(a), s = Math.sin(a); return m3([1, 0, 0, 0, c, s, 0, -s, c]); };
+const rotY3 = a => { const c = Math.cos(a), s = Math.sin(a); return m3([c, 0, -s, 0, 1, 0, s, 0, c]); };
+const DISPLAY3 = m3([-1, 0, 0, 0, -1, 0, 0, 0, 1]);
+function mul3(a, b) {
+  const c = new Float64Array(9);
+  for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++) c[3 * col + row] = a[row] * b[3 * col] + a[3 + row] * b[3 * col + 1] + a[6 + row] * b[3 * col + 2];
+  return c;
+}
+const ap3 = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+const apT3 = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+
+/** Brain-local rotation (source difference vector -> world direction, no scale) for an orbit/tilt: Ry(-orbitYaw) .
+ * Rx(tilt + orbitPitch) . DISPLAY (subject right -> screen right, anterior -> up, superior -> toward the camera). */
+function localRotation(tiltDeg, orbitYawDeg, orbitPitchDeg) {
+  return mul3(rotY3(-orbitYawDeg * DEG), mul3(rotX3((tiltDeg + orbitPitchDeg) * DEG), DISPLAY3));
+}
+
+function stripPositionsList(input) {
+  if (isSegmentation(input)) return input.strips.map(s => ({ positions: s.positions, indices: s.indices }));
+  const arr = Array.isArray(input) ? input : [input];
+  return arr.map(x => (x && x.positions ? { positions: x.positions, indices: x.indices || null } : { positions: x, indices: null }));
+}
+
+/**
+ * Frame both hemispheres' strips for the default brain view.
+ * strips: a segmentMotorStrips result, or [{ positions[, indices] }] / flat xyz arrays (source mm).
+ * Options: aspect (required), fovYDeg (70), fill (default by aspect from BRAIN_VIEW: compactFill below compactAspect),
+ *   tiltDeg (BRAIN_VIEW.tiltDeg), aimDistance (m), pivot (source mm; the LOCKED ORBIT CENTRE; default the centre of
+ *   brainBounds, else of the brain grid's bounds, else of the strips; use the WHOLE brain: a shallow strip-level
+ *   pivot swings the deep brain toward the camera when orbiting and forces a large scale-up), brainBounds ({ min, max } source mm of the whole brain, for the pivot),
+ *   brainGrid (buildBrainHitGrid of ALL brain meshes: the conservative clearance basis; default the segmentation's
+ *   glassGrid when present), reachM, clearanceM, orbit limits (BRAIN_VIEW names).
+ * At yaw = pitch = orbit = grab = 0 the projected bounding box of every strip vertex is centred on the crosshair (or on
+ * centreNdc [x, y]: e.g. [0, -0.1] lowers the strips away from the hand at NDC y +0.5) with half-extent `fill` in the
+ * limiting dimension, and the strips' top plane is at aimDistance (so every strip point is at
+ * least that far). Clearance: brain sample points (clearanceBasis 'grid' > 'box' > 'strips', see the code) are checked
+ * over the orbit range every <= 5 deg with a conservative sampling margin; if the brain could come nearer than reachM +
+ * clearanceM, the whole brain is scaled outward about the camera (k, aimDistance and the pivot position by one
+ * factor), which leaves the projection unchanged. Grab carry rotates about
+ * the camera and preserves distances, so the bound holds for every carry too.
+ * Returns frozen { kind: 'ns-brain-frame', k (m per mm), aimDistance, pivot (source mm), pivotWorld (m, default view),
+ *   tiltDeg, fill, limiting, ndcBounds, aimOnStrip, minBrainDistanceM (lower bound over the orbit limits),
+ *   clearanceBasis ('grid' | 'box' | 'strips'), scaleUp, reachM, clearanceM, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg, fovYDeg, aspect, compact }.
+ * Recompute on resize (aspect / FOV change); the pivot and tilt stay.
+ */
+export function frameBrain(strips, {
+  aspect, fovYDeg = 70, fill = null, tiltDeg = BRAIN_VIEW.tiltDeg, aimDistance = BRAIN_VIEW.aimDistance,
+  pivot = null, brainBounds = null, brainGrid = null, reachM = BRAIN_VIEW.reachM, clearanceM = BRAIN_VIEW.clearanceM,
+  orbitYawLimitDeg = BRAIN_VIEW.orbitYawLimitDeg, orbitPitchLimitDeg = BRAIN_VIEW.orbitPitchLimitDeg,
+  grabPitchLimitDeg = BRAIN_VIEW.grabPitchLimitDeg, centreNdc = [0, 0], iterations = 14
+} = {}) {
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  if (!(Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180)) throw new Error('ns:brain_frame: fovYDeg must be in (0, 180)');
+  if (!(Number.isFinite(tiltDeg) && Math.abs(tiltDeg) < 90)) throw new Error('ns:brain_frame: tiltDeg must be finite with |tilt| < 90');
+  if (!(Number.isFinite(aimDistance) && aimDistance > 0)) throw new Error('ns:brain_frame: aimDistance must be finite and > 0');
+  if (!(Number.isFinite(reachM) && reachM >= 0 && Number.isFinite(clearanceM) && clearanceM >= 0)) throw new Error('ns:brain_frame: reachM and clearanceM must be finite and >= 0');
+  if (!Array.isArray(centreNdc) || centreNdc.length !== 2 || !centreNdc.every(Number.isFinite) || Math.abs(centreNdc[0]) >= 1 || Math.abs(centreNdc[1]) >= 1) {
+    throw new Error('ns:brain_frame: centreNdc must be [x, y] inside (-1, 1)');
+  }
+  const [cxT, cyT] = centreNdc;
+  const compact = aspect < BRAIN_VIEW.compactAspect;
+  const f = fill === null ? (compact ? BRAIN_VIEW.compactFill : BRAIN_VIEW.fill) : fill;
+  if (!(Number.isFinite(f) && f > 0 && f <= 1)) throw new Error('ns:brain_frame: fill must be in (0, 1]');
+  const list = stripPositionsList(strips);
+  if (list.length === 0) throw new Error('ns:brain_frame: no strip positions');
+  let count = 0;
+  const smin = [Infinity, Infinity, Infinity], smax = [-Infinity, -Infinity, -Infinity];
+  for (const s of list) {
+    const p = checkPositions(s.positions, 'strip positions');
+    count += p.length / 3;
+    for (let i = 0; i < p.length; i += 3) for (let a = 0; a < 3; a++) { const x = p[i + a]; if (x < smin[a]) smin[a] = x; if (x > smax[a]) smax[a] = x; }
+  }
+  const grid = brainGrid || (isSegmentation(strips) && strips.glassGrid ? strips.glassGrid : null);
+  const gridBounds = grid && grid.kind === 'ns-brain-grid' && grid.bounds ? grid.bounds : null;
+  const box = brainBounds ? { min: vec3(brainBounds.min, 'brainBounds.min'), max: vec3(brainBounds.max, 'brainBounds.max') }
+    : gridBounds ? { min: [...gridBounds.min], max: [...gridBounds.max] } : { min: smin, max: smax };
+  const pv = pivot ? vec3(pivot, 'pivot') : [0, 1, 2].map(a => (box.min[a] + box.max[a]) / 2);
+  const Q0 = localRotation(tiltDeg, 0, 0);
+  const V = new Float64Array(3 * count);
+  let w = 0, zTop = -Infinity;
+  for (const s of list) {
+    const p = s.positions;
+    for (let i = 0; i < p.length; i += 3) {
+      const q = ap3(Q0, [p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]);
+      V[w++] = q[0]; V[w++] = q[1]; V[w++] = q[2];
+      if (q[2] > zTop) zTop = q[2];
+    }
+  }
+  const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect, D = aimDistance;
+  const bounds = (k, ox, oy) => {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < V.length; i += 3) {
+      const depth = D + k * (zTop - V[i + 2]);
+      const x = (k * (V[i] - ox)) / (depth * ta), y = (k * (V[i + 1] - oy)) / (depth * t);
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return { x0, x1, y0, y1 };
+  };
+  const half = (k, ox, oy) => { const b = bounds(k, ox, oy); return Math.max((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2); };
+  const scaleFor = (ox, oy) => {
+    let lo = 0, hi = 1e-3;
+    while (half(hi, ox, oy) < f && hi < 1e6) { lo = hi; hi *= 2; }
+    if (half(hi, ox, oy) < f) throw new Error('ns:brain_frame: the strips cannot reach this fill at this aimDistance');
+    for (let i = 0; i < 64; i++) { const mid = 0.5 * (lo + hi); if (half(mid, ox, oy) < f) lo = mid; else hi = mid; }
+    return 0.5 * (lo + hi);
+  };
+  let ox = 0, oy = 0;
+  { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (let i = 0; i < V.length; i += 3) { x0 = Math.min(x0, V[i]); x1 = Math.max(x1, V[i]); y0 = Math.min(y0, V[i + 1]); y1 = Math.max(y1, V[i + 1]); } ox = (x0 + x1) / 2; oy = (y0 + y1) / 2; }
+  let k = scaleFor(ox, oy);
+  for (let it = 0; it < iterations; it++) {
+    const b = bounds(k, ox, oy);
+    const cx = (b.x0 + b.x1) / 2 - cxT, cy = (b.y0 + b.y1) / 2 - cyT;
+    if (Math.abs(cx) < 1e-9 && Math.abs(cy) < 1e-9) break;
+    ox += (cx * D * ta) / k; oy += (cy * D * t) / k;
+    k = scaleFor(ox, oy);
+  }
+  const b = bounds(k, ox, oy);
+  // Does the crosshair ray hit a strip at the default view? (L-space vertical through (ox, oy).)
+  let aimOnStrip = false;
+  {
+    const oL = [ox, oy, zTop + 10];
+    const down = [0, 0, -1];
+    outer: for (const s of list) {
+      if (!s.indices) continue;
+      const p = s.positions, I = s.indices;
+      const L = i => ap3(Q0, [p[3 * i] - pv[0], p[3 * i + 1] - pv[1], p[3 * i + 2] - pv[2]]);
+      for (let q = 0; q < I.length; q += 3) {
+        const A = L(I[q]), B = L(I[q + 1]), C = L(I[q + 2]);
+        if (Math.max(A[0], B[0], C[0]) < ox || Math.min(A[0], B[0], C[0]) > ox || Math.max(A[1], B[1], C[1]) < oy || Math.min(A[1], B[1], C[1]) > oy) continue;
+        if (rayTriangle(oL, down, A, B, C) !== null) { aimOnStrip = true; break outer; }
+      }
+    }
+  }
+  let pivotWorld = [-k * ox, -k * oy, -D - k * zTop];
+  // Clearance over the orbit range. Sample points P_i with a radius e_i such that every brain point lies within e_i of
+  // some P_i (the surface is what is nearest to an outside camera):
+  //  'grid'   occupied voxel centres of a buildBrainHitGrid shell of ALL brain meshes (e = voxel half-diagonal;
+  //           conservative), from `brainGrid` or the segmentation's glassGrid;
+  //  'box'    a grid on the brainBounds box surface (conservative when the camera stays outside the box);
+  //  'strips' the strip vertices only (exact for the strips, says nothing about the rest of the brain).
+  // The orbit range is sampled every <= 5 deg; a point at radius r moves at most r * 2 sin(step / 4) between samples.
+  const samples = [];
+  let basis, eMm;
+  if (grid && grid.kind === 'ns-brain-grid') {
+    basis = 'grid';
+    const { voxelMm, origin: go, dims, cells } = grid;
+    const cf = Math.max(1, Math.ceil(5 / voxelMm)), vs = cf * voxelMm; // coarsen fine grids to >= 5 mm blocks (speed)
+    const cd = dims.map(x => Math.ceil(x / cf));
+    const coarse = new Uint8Array(cd[0] * cd[1] * cd[2]);
+    for (let kk = 0; kk < dims[2]; kk++) for (let j = 0; j < dims[1]; j++) for (let i = 0; i < dims[0]; i++) {
+      if (cells[(kk * dims[1] + j) * dims[0] + i]) coarse[(Math.floor(kk / cf) * cd[1] + Math.floor(j / cf)) * cd[0] + Math.floor(i / cf)] = 1;
+    }
+    for (let kk = 0; kk < cd[2]; kk++) for (let j = 0; j < cd[1]; j++) for (let i = 0; i < cd[0]; i++) {
+      if (!coarse[(kk * cd[1] + j) * cd[0] + i]) continue;
+      samples.push([go[0] + (i + 0.5) * vs - pv[0], go[1] + (j + 0.5) * vs - pv[1], go[2] + (kk + 0.5) * vs - pv[2]]);
+    }
+    eMm = (Math.sqrt(3) / 2) * vs;
+  } else if (brainBounds) {
+    basis = 'box';
+    const G = 8;
+    for (let a = 0; a < 3; a++) for (const side of [0, 1]) for (let i = 0; i <= G; i++) for (let j = 0; j <= G; j++) {
+      const p = [0, 0, 0], b1 = (a + 1) % 3, b2 = (a + 2) % 3;
+      p[a] = side ? box.max[a] : box.min[a];
+      p[b1] = box.min[b1] + (box.max[b1] - box.min[b1]) * (i / G);
+      p[b2] = box.min[b2] + (box.max[b2] - box.min[b2]) * (j / G);
+      samples.push([p[0] - pv[0], p[1] - pv[1], p[2] - pv[2]]);
+    }
+    eMm = Math.hypot((box.max[0] - box.min[0]) / G, (box.max[1] - box.min[1]) / G, (box.max[2] - box.min[2]) / G) / 2;
+  } else {
+    basis = 'strips';
+    const stride = Math.max(1, Math.floor(count / 20000));
+    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
+    eMm = 2;
+  }
+  if (basis !== 'strips') { // the strips themselves always count (a glass grid may have been built without them)
+    const stride = Math.max(1, Math.floor(count / 6000));
+    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
+  }
+  const rMax = samples.reduce((m, q) => Math.max(m, Math.hypot(q[0], q[1], q[2])), 0);
+  const NY = Math.max(2, Math.ceil((2 * orbitYawLimitDeg) / 5) + 1), NP = Math.max(2, Math.ceil((2 * orbitPitchLimitDeg) / 5) + 1);
+  const dYaw = (2 * orbitYawLimitDeg) / (NY - 1), dPitch = (2 * orbitPitchLimitDeg) / (NP - 1);
+  let minDist = Infinity, cameraInside = false;
+  const S3 = new Float64Array(3 * samples.length);
+  samples.forEach((q, i) => { S3[3 * i] = q[0]; S3[3 * i + 1] = q[1]; S3[3 * i + 2] = q[2]; });
+  for (let iy = 0; iy < NY; iy++) for (let ip = 0; ip < NP; ip++) {
+    const Q = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch);
+    // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
+    const c = apT3(Q, [-pivotWorld[0] / k, -pivotWorld[1] / k, -pivotWorld[2] / k]);
+    if (basis === 'box' && c.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
+    for (let i = 0; i < S3.length; i += 3) {
+      const dx = S3[i] - c[0], dy = S3[i + 1] - c[1], dz = S3[i + 2] - c[2];
+      const dd = dx * dx + dy * dy + dz * dz;
+      if (dd < minDist) minDist = dd;
+    }
+  }
+  minDist = k * Math.sqrt(minDist);
+  if (cameraInside) throw new Error('ns:brain_frame: with the box clearance basis the camera falls inside the brain bounds for some orbit (scale-invariant); pass brainGrid (buildBrainHitGrid of the brain meshes), reduce fill or the orbit limits');
+  const margin = k * (eMm + rMax * 2 * Math.sin((Math.max(dYaw, dPitch) * DEG) / 4));
+  const need = reachM + clearanceM;
+  let bound = minDist - margin, scaleUp = 1;
+  if (!(bound > 0)) throw new Error('ns:brain_frame: the brain can reach the camera within the orbit limits (scale-invariant); reduce fill or the orbit limits');
+  if (bound < need) {
+    scaleUp = need / bound;
+    k *= scaleUp; pivotWorld = pivotWorld.map(x => x * scaleUp); bound = need;
+  }
+  return freezeR2({
+    kind: 'ns-brain-frame', k, aimDistance: D * scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg, fill: f,
+    limiting: (b.x1 - b.x0) >= (b.y1 - b.y0) ? 'width' : 'height', ndcBounds: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
+    aimOnStrip, minBrainDistanceM: bound, clearanceBasis: basis, scaleUp, reachM, clearanceM, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg,
+    fovYDeg, aspect, compact
+  });
+}
+
+/**
+ * The brain group's world transform for a frame and the current orbit / grab state.
+ *   world(p) = Ry(grabYaw) Rx(grabPitch) [ pivotWorld + k Ry(-orbitYaw) Rx(tilt + orbitPitch) DISPLAY (p - pivot) ]
+ * orbitYaw / orbitPitch: DEGREES (orbit about the LOCKED brain centre = frame.pivot; yaw > 0 viewpoint toward screen
+ *   right, pitch > 0 toward the front), clamped to the frame's limits. grabYaw / grabPitch: RADIANS in the camera
+ *   convention (carry about the player: the brain centre moves to gazeDirection(grabYaw, grabPitch) at the same
+ *   distance and keeps its appearance toward the camera), grabPitch clamped to +- grabPitchLimitDeg. tiltDeg defaults
+ *   to the frame's tilt. Every transform is a proper rotation times k > 0 (det > 0, never mirrored), and distances to the
+ *   camera are preserved by the carry, so the brain stays beyond reach (frame.minBrainDistanceM) and in front of the hand.
+ * Returns { kind: 'ns-brain-view', matrix (Float64Array(16) column-major world-from-source; Matrix4.fromArray),
+ *   inverse (source-from-world), rotation (Float64Array(9) column-major, world from source directions), k, pivot,
+ *   pivotWorld (carried), tiltDeg, orbitYaw, orbitPitch, grabYaw, grabPitch, clamped, axes: { anterior, superior,
+ *   subjectRight } (world unit vectors) }.
+ */
+export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYaw = 0, grabPitch = 0, tiltDeg = null } = {}) {
+  if (!frame || frame.kind !== 'ns-brain-frame') throw new Error('ns:brain_view: frame (a frameBrain result) is required');
+  for (const [key, x] of Object.entries({ orbitYaw, orbitPitch, grabYaw, grabPitch })) if (!Number.isFinite(x)) throw new Error(`ns:brain_view: ${key} must be finite`);
+  const tilt = tiltDeg === null ? frame.tiltDeg : tiltDeg;
+  if (!Number.isFinite(tilt)) throw new Error('ns:brain_view: tiltDeg must be finite');
+  const oy = clampAbs(orbitYaw, frame.orbitYawLimitDeg), op = clampAbs(orbitPitch, frame.orbitPitchLimitDeg);
+  const gp = clampAbs(grabPitch, frame.grabPitchLimitDeg * DEG);
+  const clamped = oy !== orbitYaw || op !== orbitPitch || gp !== grabPitch;
+  const carry = mul3(rotY3(grabYaw), rotX3(gp));
+  const Q = mul3(carry, localRotation(tilt, oy, op));
+  const C = ap3(carry, frame.pivotWorld);
+  const k = frame.k, pv = frame.pivot;
+  const kq = Q.map(x => x * k);
+  const tq = ap3(kq, pv);
+  const matrix = new Float64Array(16);
+  matrix[0] = kq[0]; matrix[1] = kq[1]; matrix[2] = kq[2];
+  matrix[4] = kq[3]; matrix[5] = kq[4]; matrix[6] = kq[5];
+  matrix[8] = kq[6]; matrix[9] = kq[7]; matrix[10] = kq[8];
+  matrix[12] = C[0] - tq[0]; matrix[13] = C[1] - tq[1]; matrix[14] = C[2] - tq[2]; matrix[15] = 1;
+  const qtC = apT3(Q, C);
+  const inverse = new Float64Array(16);
+  inverse[0] = Q[0] / k; inverse[1] = Q[3] / k; inverse[2] = Q[6] / k;
+  inverse[4] = Q[1] / k; inverse[5] = Q[4] / k; inverse[6] = Q[7] / k;
+  inverse[8] = Q[2] / k; inverse[9] = Q[5] / k; inverse[10] = Q[8] / k;
+  inverse[12] = pv[0] - qtC[0] / k; inverse[13] = pv[1] - qtC[1] / k; inverse[14] = pv[2] - qtC[2] / k; inverse[15] = 1;
+  const axes = freezeR2({ anterior: freezeR2(ap3(Q, [0, -1, 0])), superior: freezeR2(ap3(Q, [0, 0, 1])), subjectRight: freezeR2(ap3(Q, [-1, 0, 0])) });
+  return {
+    kind: 'ns-brain-view', matrix, inverse, rotation: Q, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt,
+    orbitYaw: oy, orbitPitch: op, grabYaw, grabPitch: gp, clamped, axes
+  };
+}
+
+/** Source mm -> world metres under a brainViewTransform view. */
+export function viewSourceToWorld(p, view) {
+  if (!view || view.kind !== 'ns-brain-view') throw new Error('ns:brain_view: a brainViewTransform result is required');
+  const q = vec3(p, 'p'), m = view.matrix;
+  return [m[0] * q[0] + m[4] * q[1] + m[8] * q[2] + m[12], m[1] * q[0] + m[5] * q[1] + m[9] * q[2] + m[13], m[2] * q[0] + m[6] * q[1] + m[10] * q[2] + m[14]];
+}
+
+/** World metres -> source mm under a brainViewTransform view. */
+export function viewWorldToSource(w, view) {
+  if (!view || view.kind !== 'ns-brain-view') throw new Error('ns:brain_view: a brainViewTransform result is required');
+  const q = vec3(w, 'w'), m = view.inverse;
+  return [m[0] * q[0] + m[4] * q[1] + m[8] * q[2] + m[12], m[1] * q[0] + m[5] * q[1] + m[9] * q[2] + m[13], m[2] * q[0] + m[6] * q[1] + m[10] * q[2] + m[14]];
+}
+
+/** Camera-centre gaze ray in SOURCE mm under a brainViewTransform view: { origin, dir (unit) }. Equivalent to
+ * gazeRayInSource(yaw, pitch, view). */
+export function gazeRayForView(yaw, pitch, view) {
+  const w = gazeDirection(yaw, pitch);
+  const origin = viewWorldToSource([0, 0, 0], view);
+  return { origin, dir: normalize(apT3(view.rotation, w)) };
+}
+
+/** Gaze ray in SOURCE mm through screen point (xNdc, yNdc) for a camera at yaw/pitch (radians) under `view`: the
+ * pointer-picking counterpart of gazeRayForView (which is the crosshair ray, xNdc = yNdc = 0). { origin, dir (unit) }. */
+export function pixelRayForView(xNdc, yNdc, view, { yaw = 0, pitch = 0, fovYDeg = 70, aspect }) {
+  if (!(Number.isFinite(xNdc) && Number.isFinite(yNdc))) throw new Error('ns:brain_ray: xNdc and yNdc must be finite');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_ray: aspect must be finite and > 0');
+  const t = Math.tan((fovYDeg * DEG) / 2);
+  const cam = mul3(rotY3(yaw), rotX3(pitch));
+  const w = ap3(cam, normalize([xNdc * t * aspect, yNdc * t, -1]));
+  return { origin: viewWorldToSource([0, 0, 0], view), dir: normalize(apT3(view.rotation, w)) };
+}
+
+/** Camera-space NDC of a world point for camera yaw/pitch (Three YXZ: R = Ry(yaw) Rx(pitch)), fovYDeg, aspect:
+ * { x, y, depth } (depth along the view axis). */
+export function projectWorldNdc(w, { yaw = 0, pitch = 0, fovYDeg = 70, aspect }) {
+  const inv = mul3(rotX3(-pitch), rotY3(-yaw));
+  const c = ap3(inv, w);
+  const t = Math.tan((fovYDeg * DEG) / 2);
+  const depth = -c[2];
+  return { x: c[0] / (depth * t * aspect), y: c[1] / (depth * t), depth };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Orbit arrow placement (the arrows are DOM buttons drawn by ns-scene-three; this is the pure placement rule)
+
+/** NDC bounding box of the strips' vertices under `view` for a camera at yaw/pitch: { x0, x1, y0, y1, onScreen
+ * (fraction of vertices inside the view), behind (vertices behind the near plane are skipped) }. */
+export function projectedStripBounds(seg, view, { aspect, fovYDeg = 70, yaw = 0, pitch = 0, near = 0.02, stride = 3 } = {}) {
+  if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
+  if (!view || view.kind !== 'ns-brain-view') throw new Error('ns:brain_view: a brainViewTransform result is required');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, n = 0, inside = 0, behind = 0;
+  for (const S of seg.strips) {
+    const P = S.positions;
+    for (let i = 0; i < P.length; i += 3 * stride) {
+      const p = projectWorldNdc(viewSourceToWorld([P[i], P[i + 1], P[i + 2]], view), { yaw, pitch, fovYDeg, aspect });
+      if (!(p.depth > near)) { behind++; continue; }
+      n++;
+      if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+      if (Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1) inside++;
+    }
+  }
+  return { x0, x1, y0, y1, onScreen: n ? inside / n : 0, behind };
+}
+
+/** Orbit arrow anchors (NDC) a small gap OUTSIDE the strips' projected bounds, NOT attached to the brain: 'forward'
+ * above (the anterior is toward the top), 'back' below, 'left' / 'right' at the sides, each at the middle of its side
+ * and clamped into [-limit, limit] so the buttons stay clickable when the brain is large or partly off-screen.
+ * gapNdc ~0.05 is "a centimetre or a few centimetres" off the brain on a laptop screen. Returns { forward, back, left,
+ * right: { x, y, clamped } } or null when the strips are not in front of the camera. */
+export function orbitArrowAnchors(bounds, { gapNdc = 0.05, limit = 0.93 } = {}) {
+  if (!bounds || !Number.isFinite(bounds.x0) || !Number.isFinite(bounds.x1) || !Number.isFinite(bounds.y0) || !Number.isFinite(bounds.y1)) return null;
+  const cx = clampAbs((Math.max(bounds.x0, -1) + Math.min(bounds.x1, 1)) / 2, limit);
+  const cy = clampAbs((Math.max(bounds.y0, -1) + Math.min(bounds.y1, 1)) / 2, limit);
+  const at = (x, y) => { const X = clampAbs(x, limit), Y = clampAbs(y, limit); return { x: X, y: Y, clamped: X !== x || Y !== y }; };
+  return {
+    forward: at(cx, bounds.y1 + gapNdc), back: at(cx, bounds.y0 - gapNdc),
+    left: at(bounds.x0 - gapNdc, cy), right: at(bounds.x1 + gapNdc, cy)
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Diagnostics: which regions are actually pickable on screen
+
+/** Software ID-buffer of every strip triangle under `view` for a camera at yaw/pitch: counts the pixels whose NEAREST
+ * strip triangle belongs to each region (exactly what classifyRegionGaze would pick through that pixel, glass ignored).
+ * Returns { width, height, total, regions: { regionId: { right, left, total } }, unassigned, byHemisphere: { right,
+ * left }, medial: { right, left }[, buffer: { strip, triangle, depth } with returnBuffer] }. Pixel (x, y) covers NDC
+ * ((x + 0.5) / W * 2 - 1, 1 - (y + 0.5) / H * 2). Pure; for tests and QA evidence (the default tilt and the orbit needs). */
+export function regionVisibility(seg, view, { width = 320, height = 180, fovYDeg = 70, aspect = null, yaw = 0, pitch = 0, near = 0.02, returnBuffer = false } = {}) {
+  if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
+  if (!view || view.kind !== 'ns-brain-view') throw new Error('ns:brain_view: a brainViewTransform result is required');
+  const W = width, H = height, asp = aspect || W / H, t = Math.tan((fovYDeg * DEG) / 2);
+  const inv = mul3(rotX3(-pitch), rotY3(-yaw));
+  const zb = new Float32Array(W * H).fill(Infinity);
+  const idS = new Int32Array(W * H).fill(-1), idT = new Int32Array(W * H).fill(-1);
+  const m = view.matrix;
+  const proj = (x, y, z) => {
+    const w = [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]];
+    const c = ap3(inv, w);
+    const depth = -c[2];
+    return [((c[0] / (depth * t * asp)) * 0.5 + 0.5) * W, (0.5 - (c[1] / (depth * t)) * 0.5) * H, depth];
+  };
+  seg.strips.forEach((S, si) => {
+    const P = S.positions, I = S.indices;
+    for (let k = 0; k < S.triangleCount; k++) {
+      const a = proj(P[3 * I[3 * k]], P[3 * I[3 * k] + 1], P[3 * I[3 * k] + 2]);
+      const b = proj(P[3 * I[3 * k + 1]], P[3 * I[3 * k + 1] + 1], P[3 * I[3 * k + 1] + 2]);
+      const c = proj(P[3 * I[3 * k + 2]], P[3 * I[3 * k + 2] + 1], P[3 * I[3 * k + 2] + 2]);
+      if (a[2] <= near || b[2] <= near || c[2] <= near) continue;
+      const area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+      if (area === 0) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]))), x1 = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
+      const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1]))), y1 = Math.min(H - 1, Math.ceil(Math.max(a[1], b[1], c[1])));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const px = x + 0.5, py = y + 0.5;
+        const w0 = ((b[0] - px) * (c[1] - py) - (b[1] - py) * (c[0] - px)) / area;
+        const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / area;
+        const w2 = 1 - w0 - w1;
+        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+        const dz = 1 / (w0 / a[2] + w1 / b[2] + w2 / c[2]); // perspective-correct depth
+        const q = y * W + x;
+        if (dz < zb[q]) { zb[q] = dz; idS[q] = si; idT[q] = k; }
+      }
+    }
+  });
+  const regions = {};
+  for (const r of seg.regions) regions[r.id] = { right: 0, left: 0, total: 0 };
+  const byHemisphere = { right: 0, left: 0 }, medial = { right: 0, left: 0 };
+  let total = 0, unassigned = 0;
+  for (let q = 0; q < W * H; q++) {
+    if (idS[q] < 0) continue;
+    const S = seg.strips[idS[q]], k = idT[q];
+    total++; byHemisphere[S.hemisphere]++;
+    if (S.triSurface[k]) medial[S.hemisphere]++;
+    const ri = S.triRegion[k];
+    if (ri < 0) { unassigned++; continue; }
+    const rr = regions[seg.regions[ri].id];
+    rr[S.hemisphere]++; rr.total++;
+  }
+  const out = { width: W, height: H, total, regions, unassigned, byHemisphere, medial };
+  if (returnBuffer) out.buffer = { strip: idS, triangle: idT, depth: zb }; // per pixel: seg.strips index, triangle, depth (m)
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Region style reference (recommended; the renderer, ns-scene-three, owns the final look)
+
+/** Region display style constants (linear RGB / unitless). Activated regions (activatedRegions count >= 1, persistent
+ * until Reset body) become slightly more opaque and shift shade toward `activatedShade`; left-arm regions carry a
+ * distinct cyan identity tint and an outline, all other body-part regions a neutral slate-violet tint (alternating
+ * lightness by order so neighbours read apart). Activity itself is the shared ns-colors emissive glow. */
+export const REGION_STYLE = freezeR2({
+  restOpacity: 0.3, activatedOpacity: 0.44, activatedOpacityMax: 0.52, activatedOpacityPerExtra: 0.025,
+  activatedShadeMix: 0.24,
+  activatedShade: freezeR2([0.88, 0.80, 0.62]),
+  leftArmTint: freezeR2([0.10, 0.52, 0.62]),
+  otherTint: freezeR2([0.33, 0.33, 0.45]), otherTintAlt: freezeR2([0.27, 0.27, 0.37]),
+  leftArmOutline: freezeR2([0.55, 0.95, 1.0]),
+  hoverOpacityBoost: 0.08,
+  leftArmLabel: 'LEFT ARM (right hemisphere)'
+});
+
+/** Recommended style of a region: { opacity, tint (identity, linear), albedo, emission (ns-colors activityShade of the
+ * shaded tint), outline (bool), outlineColor, activated (bool) }. activatedCount: activatedRegions[regionId] (0 when
+ * never activated); activity: regionActivity[regionId] (0..1, simulated). */
+export function regionStyle(region, { activity = 0, activatedCount = 0, hovered = false } = {}, style = REGION_STYLE) {
+  if (!region) throw new Error('ns:brain_style: region is required');
+  const base = region.isLeftArm ? style.leftArmTint : (Math.round(region.order) % 2 === 0 ? style.otherTint : style.otherTintAlt);
+  const activated = Number.isFinite(activatedCount) && activatedCount >= 1;
+  const mix = activated ? style.activatedShadeMix : 0;
+  const tint = [0, 1, 2].map(i => base[i] + (style.activatedShade[i] - base[i]) * mix);
+  let opacity = style.restOpacity;
+  if (activated) opacity = Math.min(style.activatedOpacityMax, style.activatedOpacity + style.activatedOpacityPerExtra * Math.max(0, activatedCount - 1));
+  if (hovered) opacity = Math.min(1, opacity + style.hoverOpacityBoost);
+  const shaded = activityShade(tint, activity);
+  return { opacity, tint: base.slice(), albedo: shaded.albedo, emission: shaded.emission, outline: region.isLeftArm, outlineColor: style.leftArmOutline.slice(), activated };
+}

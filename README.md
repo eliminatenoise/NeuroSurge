@@ -2,7 +2,25 @@
 
 Look at a motor area of a virtual brain and watch the corresponding muscles contract. NeuroSurge is a first-person browser game in development, built to make the connection between neural activity, muscle activity and movement visible.
 
-**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. The game is still being built and checked: this repository does not yet offer a completed playable release or an accepted trained model.
+**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. This repository now holds the first playable build of the game (see **Play it** below). The game is still being developed, and the repository does not offer an accepted trained model.
+
+## Play it
+
+You need [Node.js](https://nodejs.org/) 18 or newer and a desktop browser with WebGL 2.
+
+```sh
+git clone https://github.com/eliminatenoise/NeuroSurge
+cd NeuroSurge
+node serve-local.mjs
+```
+
+Open the `http://127.0.0.1:<port>/` address it prints. Opening `index.html` straight from disk does not work, because browsers block the game's files on `file://` pages. Controls, Windows commands, known issues and troubleshooting are in the [player guide](PLAYER-GUIDE.md).
+
+**This version:** round-2 build, built 2026-11-08 08:07:31 UTC; distribution `content_sha256` `07ae959801e4d8230d35ff7d6700f0d929b22367fea336676ffc440aff26d213` (see `release-manifest.json`). Tests: unit 319/319 passed; the end-to-end requirement checks on this exact build gave 27 passed, 1 failed and 1 undecided in test mode (29 checks; the failure is that the orbit arrows overlap the very large brain's edge), and 26 passed, 2 failed and 1 undecided with real mouse and keyboard input. Details are in the player guide's "Known issues" section.
+
+**Licences:** project code CC0 1.0 ([LICENSE](LICENSE)); BodyParts3D anatomy meshes CC BY 4.0, © The Database Center for Life Science (DBCLS); three.js MIT. See [CREDITS-AND-LICENCES.md](CREDITS-AND-LICENCES.md).
+
+**What it is not:** everything shown is simulated and unitless. Looking, clicking and keys are virtual game inputs, not real brain stimulation or decoding. NeuroTranslate 0.0 is a research model name, not a validated decoder, and nothing in this game is validated. NeuroSurge is not a medical device.
 
 ## Planned view
 

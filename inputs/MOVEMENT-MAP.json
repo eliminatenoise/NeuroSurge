@@ -1,0 +1,951 @@
+{
+  "schema_version": 1,
+  "map_version": "neurosurge-functional-map-r2-current-control-overlay",
+  "created_at_utc": "2026-11-05T20:56:23.750356+00:00",
+  "task_id": "neurosurge_functional_map_r1",
+  "origin_session": "01a1acf6-8ab5-7cb2-afeb-89a9cdbae839",
+  "game_name": "NeuroSurge",
+  "model_name": "NeuroTranslate 0.0",
+  "limb": "human_left",
+  "claim": "Source-informed educational simulation candidate; no measured/learned neural-to-muscle decoder, stimulation interface or biological validation supplied.",
+  "source_contract": {
+    "path": "<neurosurge-project-root>/NEUROSURGE-DEMO-CONTRACT-R6.json",
+    "bytes": 13333,
+    "sha256": "a0b1e193451fd195d6c316c6273e825cfba549d973ae4357c2a650af52fd567b"
+  },
+  "scientific_conventions": {
+    "joint_signs": "Positive flexion means anatomical flexion, negative change means extension. These are semantic signs, not assumed renderer Euler axes.",
+    "quantity": "Simulated muscle drive and overlay intensity are unitless engineering values; never label them measured EMG, current, spikes, force or BOLD.",
+    "muscle_state": "Activation does not guarantee shortening: muscles can shorten, lengthen or hold length depending on load and movement. Contractile bulging is illustrative unless mechanics/measurements qualify it.",
+    "coactivation": "Allow task-dependent stabilization/braking; never set all antagonists maximally on. Joint torque and imposed animation must agree; no universal recruitment percentages asserted.",
+    "relaxation": "Net grasp drive and stiffness can fall while cortical release control is active. Release, active extension and spreading are separate states.",
+    "chain": "Gaze/WASD → virtual action selector → schematic simulated motor drive → muscle-role display → joint/pose model → displacement; this is not a measured neural chain."
+  },
+  "cortical_display_contract": {
+    "primary_target": "RIGHT precentral upper-limb motor territory near hand knob, especially M1 on the anterior/precentral bank of central sulcus.",
+    "precentral_not_equal_M1": "FJ1801 is an anatomical right precentral mesh according to parent assignment, pending asset-owner verification. Whole precentral gyrus is not cytoarchitectonic BA4; crown may include BA6/premotor cortex (DEO2026).",
+    "exclude": [
+      "Do not relabel postcentral S1 as M1.",
+      "Do not label every precentral vertex as motor output cortex.",
+      "Do not use face/leg/SCAN regions as invented isolated hand hotspots."
+    ],
+    "orientation": {
+      "view": "dorsal/superior",
+      "anterior": "screen_top",
+      "posterior": "screen_bottom",
+      "anatomical_right": "screen_right_in_explicit_nonmirrored_superior_view",
+      "anatomical_left": "screen_left_in_explicit_nonmirrored_superior_view",
+      "coordinate_definition": "An optional internal RAS frame means +X subject right, +Y anterior, +Z superior. Asset coordinates require a verified transform; none is supplied here.",
+      "mandatory": "Label anatomical R/L and anterior/posterior; verify with mesh metadata/landmarks. Never infer laterality only from screen side or mirror a literature coordinate blindly."
+    },
+    "field_design": "Show overlapping broad response fields with relative action preference. Multiple representative grasp/retraction and digit preferences may recur within hand territory. Wrist/arm fields overlap and can bracket hand emphasis; do not impose a single continuous homunculus strip.",
+    "mode": "EXPLICIT_REPRESENTATIVE_SCHEMATIC",
+    "specificity": "Specific action selection is justified; exact field coordinates are not. A selectable labelled representative action marker can choose an action while its activity overlay remains overlapping and nonexclusive.",
+    "marker_rule": "A marker is an educational control target, not a measured hotspot. Avoid 12 sharply bounded, mutually exclusive one-action cortical islands.",
+    "minimum_qualifier_visible": "Representative motor map · regions overlap and vary between people",
+    "release_marker": "Representative release control within the overlapping hand field; no unique inhibitory/relaxation centre claimed. Colour may denote release-control state while flexor net-drive display falls.",
+    "confidence_display": "Separate action/anatomy support from spatial registration. Expose sources per action and identify compound spread as anatomical inference. No invented percentage certainty.",
+    "FJ1801_exact_subpatch_registration": "HOLD",
+    "mesh_coordinates": null,
+    "resolution": "Do not transplant published voxel sizes, measured patch sizes, group coordinates or TMS scalp-map distances as this mesh’s functional accuracy.",
+    "release_hold_condition": "Root/source reviewer verifies anatomical laterality and central-sulcus landmarks and accepts clearly labelled representative placement. A claim of measured functional registration requires an independent registered individual map and task-specific validation; not provided."
+  },
+  "muscle_catalog": {
+    "FDS": {
+      "name": "flexor digitorum superficialis",
+      "side": "left",
+      "action_constraint": "finger MCP/PIP flexion",
+      "anatomy_sources": [
+        "UW_FDS",
+        "UAMS"
+      ]
+    },
+    "FDP": {
+      "name": "flexor digitorum profundus",
+      "side": "left",
+      "action_constraint": "finger flexion including DIP",
+      "anatomy_sources": [
+        "UW_FDP",
+        "UAMS"
+      ]
+    },
+    "ED": {
+      "name": "extensor digitorum",
+      "side": "left",
+      "action_constraint": "finger extension through extensor apparatus",
+      "anatomy_sources": [
+        "UW_ED",
+        "UAMS"
+      ]
+    },
+    "EI": {
+      "name": "extensor indicis",
+      "side": "left",
+      "action_constraint": "index extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "EDM": {
+      "name": "extensor digiti minimi",
+      "side": "left",
+      "action_constraint": "little-finger extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "LUM": {
+      "name": "lumbricals",
+      "side": "left",
+      "action_constraint": "MCP flexion; IP extension",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "DI": {
+      "name": "dorsal interossei",
+      "side": "left",
+      "action_constraint": "digit abduction; MCP flexion/IP extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "PI": {
+      "name": "palmar interossei",
+      "side": "left",
+      "action_constraint": "digit adduction; MCP flexion/IP extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "ADM": {
+      "name": "abductor digiti minimi",
+      "side": "left",
+      "action_constraint": "little-finger abduction",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "FPB": {
+      "name": "flexor pollicis brevis",
+      "side": "left",
+      "action_constraint": "thumb MCP flexion",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "FPL": {
+      "name": "flexor pollicis longus",
+      "side": "left",
+      "action_constraint": "thumb IP flexion",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "EPB": {
+      "name": "extensor pollicis brevis",
+      "side": "left",
+      "action_constraint": "thumb MCP extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "EPL": {
+      "name": "extensor pollicis longus",
+      "side": "left",
+      "action_constraint": "thumb IP extension",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "OP": {
+      "name": "opponens pollicis",
+      "side": "left",
+      "action_constraint": "thumb opposition",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "ADP": {
+      "name": "adductor pollicis",
+      "side": "left",
+      "action_constraint": "thumb adduction",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "FCR": {
+      "name": "flexor carpi radialis",
+      "side": "left",
+      "action_constraint": "wrist flexion/radial deviation",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "FCU": {
+      "name": "flexor carpi ulnaris",
+      "side": "left",
+      "action_constraint": "wrist flexion/ulnar deviation",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "ECRL": {
+      "name": "extensor carpi radialis longus",
+      "side": "left",
+      "action_constraint": "wrist extension/radial deviation",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "ECRB": {
+      "name": "extensor carpi radialis brevis",
+      "side": "left",
+      "action_constraint": "wrist extension/radial deviation",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "ECU": {
+      "name": "extensor carpi ulnaris",
+      "side": "left",
+      "action_constraint": "wrist extension/ulnar deviation",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "BRA": {
+      "name": "brachialis",
+      "side": "left",
+      "action_constraint": "elbow flexion",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "BIC": {
+      "name": "biceps brachii",
+      "side": "left",
+      "action_constraint": "elbow flexion; forearm supination",
+      "anatomy_sources": [
+        "UAMS"
+      ]
+    },
+    "BRD": {
+      "name": "brachioradialis",
+      "side": "left",
+      "action_constraint": "elbow flexion",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "TRI": {
+      "name": "triceps brachii",
+      "side": "left",
+      "action_constraint": "elbow extension",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    },
+    "ANC": {
+      "name": "anconeus",
+      "side": "left",
+      "action_constraint": "assists elbow extension",
+      "anatomy_sources": [
+        "LOYOLA"
+      ]
+    }
+  },
+  "actions": [
+    {
+      "id": "grasp_close",
+      "label": "Grasp / close hand",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "digits_2_5_MCP_PIP_DIP",
+          "sign": "increase_flexion"
+        },
+        {
+          "joint": "thumb_CMC",
+          "sign": "opposition_as_compound_grasp"
+        },
+        {
+          "joint": "thumb_MCP_IP",
+          "sign": "increase_flexion"
+        },
+        {
+          "joint": "wrist",
+          "sign": "stabilize_near_neutral_or_slight_extension"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "FDS",
+          "FDP",
+          "FPB",
+          "FPL",
+          "OP",
+          "ADP"
+        ],
+        "relative_drive_reduction": [
+          "ED",
+          "EI",
+          "EDM",
+          "EPB",
+          "EPL"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "ECRL",
+          "ECRB",
+          "ECU",
+          "LUM",
+          "DI",
+          "PI"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "HUBER2020",
+            "evidence": "Fig.1D,2B,3A; left-hand grasp preference"
+          },
+          {
+            "id": "MASSE2017",
+            "evidence": "Fig.3–5; grip-specific ECRB response fields"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Unloaded virtual grasp is a coordinated posture. Wrist extensors may oppose digital-flexor wrist torque; do not force wrist flexion with every grasp. Extensors may coactivate for stability, but must not be fixed at maximal drive. No object/contact force is validated.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "relax_release",
+      "label": "Relax / release grasp",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "hand_joints",
+          "sign": "no_required_direction; approach_declared_passive_rest_if_simulated"
+        },
+        {
+          "joint": "wrist_elbow",
+          "sign": "maintain_supported_pose_without_new_forced_motion"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [],
+        "relative_drive_reduction": [
+          "FDS",
+          "FDP",
+          "FPB",
+          "FPL",
+          "ED",
+          "EI",
+          "EDM",
+          "EPB",
+          "EPL"
+        ],
+        "limited_stabilization_or_posture_dependent": []
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Shared hand motor-control circuitry, not a separate proven relaxation centre; release control must be labelled representative.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_release_process_supported_no_localized_relaxation_hotspot",
+        "sources": [
+          {
+            "id": "MOTAWAR2012",
+            "evidence": "Fig.4–6; inhibitory control and both FDS/EDC reduction"
+          },
+          {
+            "id": "ARBUCKLE2020",
+            "evidence": "Fig.1B and first Results paragraph; release without antagonist command"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Decrease grasp drive and stiffness. Passive mechanics can soften a grasp but do not guarantee a fully straight or spread hand. If the displayed hand actively opens/spreads, transition to open_hand and spread_fingers with active extensor/abductor roles. Neural release control can remain active while net flexor drive falls.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "open_hand",
+      "label": "Open hand / extend fingers",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "digits_2_5_MCP_PIP_DIP",
+          "sign": "decrease_flexion_toward_extension"
+        },
+        {
+          "joint": "thumb_MCP_IP",
+          "sign": "release_flexion_optional_extension"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "ED",
+          "EI",
+          "EDM",
+          "EPB",
+          "EPL"
+        ],
+        "relative_drive_reduction": [
+          "FDS",
+          "FDP",
+          "FPB",
+          "FPL"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "LUM",
+          "DI",
+          "PI"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "HUBER2020",
+            "evidence": "Fig.1D,2B,3A; retraction/extension preference"
+          },
+          {
+            "id": "ARBUCKLE2020",
+            "evidence": "Fig.2–3; same-digit opposite-direction overlap"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "This is active opening, distinct from release. Intrinsics contribute IP extension while also flexing MCP; keep roles joint-specific. Stop before hyperextension; no claim that every extensor shortens in every phase.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "spread_fingers",
+      "label": "Spread fingers",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "index_MCP",
+          "sign": "abduct_radially_away_from_digit3"
+        },
+        {
+          "joint": "ring_little_MCP",
+          "sign": "abduct_ulnarly_away_from_digit3"
+        },
+        {
+          "joint": "middle_MCP",
+          "sign": "retain_reference_axis_for_this_illustrative_fan"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "DI",
+          "ADM"
+        ],
+        "relative_drive_reduction": [
+          "PI"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "ED",
+          "LUM"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Shared right hand region. Index-abduction human evidence plus anatomical multi-digit coordination; no measured unique all-finger-spread cortical patch.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "index_abduction_human_supported_multidigit_spread_anatomical_inference",
+        "sources": [
+          {
+            "id": "VANDUINEN2008",
+            "evidence": "Fig.1,4–6; human index abduction, both hands"
+          },
+          {
+            "id": "HUBER2020",
+            "evidence": "Fig.2–3; overlapping hand/digit territories, not a whole-hand spread map"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Digit abduction is defined relative to the third digit, not screen left/right. The four dorsal interossei act on digits2–4; ADM abducts digit5. This fan is an anatomical compound simulation, not an empirically registered all-digit neural synergy. Opening can accompany it but is a separate command.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "wrist_flexion",
+      "label": "Flex wrist",
+      "limb": "human_left",
+      "family": "M1_overlapping_hand_wrist_response_field",
+      "joint_changes": [
+        {
+          "joint": "wrist_flexion_extension",
+          "sign": "increase_flexion_palm_toward_forearm"
+        },
+        {
+          "joint": "wrist_deviation",
+          "sign": "approximately_cancel_radial_ulnar_bias"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "FCR",
+          "FCU"
+        ],
+        "relative_drive_reduction": [
+          "ECRL",
+          "ECRB",
+          "ECU"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "FDS",
+          "FDP"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_overlapping_hand_wrist_response_field",
+        "spatial_resolution_justified": "Broad overlapping wrist/hand response field with possible task-specific biases; no universal wrist-flexion versus wrist-extension point.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "GORDON2023",
+            "evidence": "Movement task battery run2; Fig.3"
+          },
+          {
+            "id": "MASSE2017",
+            "evidence": "Fig.2; FCR response representation"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Balance radial/ulnar flexors qualitatively for a flexion command. Digital flexors may assist but must not impose a grasp; fingers can remain independently posed. Anatomical torque signs are not measured recruitment weights.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "wrist_extension",
+      "label": "Extend wrist",
+      "limb": "human_left",
+      "family": "M1_overlapping_hand_wrist_response_field",
+      "joint_changes": [
+        {
+          "joint": "wrist_flexion_extension",
+          "sign": "decrease_flexion_dorsum_toward_forearm"
+        },
+        {
+          "joint": "wrist_deviation",
+          "sign": "approximately_cancel_radial_ulnar_bias"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "ECRL",
+          "ECRB",
+          "ECU"
+        ],
+        "relative_drive_reduction": [
+          "FCR",
+          "FCU"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "ED"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_overlapping_hand_wrist_response_field",
+        "spatial_resolution_justified": "Broad overlapping wrist/hand response field with possible task-specific biases; no universal wrist-flexion versus wrist-extension point.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "MASSE2017",
+            "evidence": "Fig.3–5; wrist extension task"
+          },
+          {
+            "id": "MEIER2008",
+            "evidence": "Fig.2,4–6; overlapping wrist/forearm map"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Balance radial/ulnar extensor tendencies. ED can assist but fingers need not all extend maximally. Any passive finger motion from tenodesis requires actual tendon mechanics; do not invent a neural association from it.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "elbow_flexion",
+      "label": "Flex elbow",
+      "limb": "human_left",
+      "family": "M1_overlapping_arm_elbow_response_field",
+      "joint_changes": [
+        {
+          "joint": "elbow_flexion_extension",
+          "sign": "increase_flexion_reduce_inner_joint_angle"
+        },
+        {
+          "joint": "forearm_rotation",
+          "sign": "hold_declared_pose"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "BRA",
+          "BIC",
+          "BRD"
+        ],
+        "relative_drive_reduction": [
+          "TRI",
+          "ANC"
+        ],
+        "limited_stabilization_or_posture_dependent": []
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_overlapping_arm_elbow_response_field",
+        "spatial_resolution_justified": "Overlapping proximal-arm preferences around the hand territory; no separately validated elbow-flexion versus elbow-extension centre on this mesh.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "GORDON2023",
+            "evidence": "Movement task battery run2; Fig.3"
+          },
+          {
+            "id": "MEIER2008",
+            "evidence": "Methods elbow task; Fig.2,4–6"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Biceps also supinates; brachialis flexes across forearm rotation. In a pure elbow command, hold pronation/supination separately. Use limited antagonist stabilization and reduce it relative to flexor torque.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "elbow_extension",
+      "label": "Extend elbow",
+      "limb": "human_left",
+      "family": "M1_overlapping_arm_elbow_response_field",
+      "joint_changes": [
+        {
+          "joint": "elbow_flexion_extension",
+          "sign": "decrease_flexion_increase_inner_joint_angle"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "TRI",
+          "ANC"
+        ],
+        "relative_drive_reduction": [
+          "BRA",
+          "BIC",
+          "BRD"
+        ],
+        "limited_stabilization_or_posture_dependent": []
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_overlapping_arm_elbow_response_field",
+        "spatial_resolution_justified": "Overlapping proximal-arm preferences around the hand territory; no separately validated elbow-flexion versus elbow-extension centre on this mesh.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "MEIER2008",
+            "evidence": "Methods elbow extension/flexion task; Fig.2,4–6"
+          },
+          {
+            "id": "GORDON2023",
+            "evidence": "Fig.3; proximal-arm organization only, not extension-specific locus"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Extension is elbow rotation, not simply screen-forward translation. Flexors may brake eccentrically; do not require zero flexor activity or call all active muscle shortening. Stop before hyperextension.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "index_flexion",
+      "label": "Flex index finger",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "index_MCP_PIP_DIP",
+          "sign": "increase_flexion"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "FDS",
+          "FDP"
+        ],
+        "relative_drive_reduction": [
+          "EI",
+          "ED"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "LUM",
+          "DI"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "ARBUCKLE2020",
+            "evidence": "Fig.1–3; individual index flexion"
+          },
+          {
+            "id": "HUBER2020",
+            "evidence": "Fig.2–3; repeated digit preferences"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "Recruit the index-relevant FDS/FDP portions. Shared muscle/tendon anatomy means perfect digit isolation is not assured. Freeze other simulated digits only as a control simplification, not a demonstrated biological capability.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "index_extension",
+      "label": "Extend index finger",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "index_MCP_PIP_DIP",
+          "sign": "decrease_flexion_toward_extension"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "EI",
+          "ED"
+        ],
+        "relative_drive_reduction": [
+          "FDS",
+          "FDP"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "LUM",
+          "DI"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "ARBUCKLE2020",
+            "evidence": "Fig.1–3; individual index extension"
+          },
+          {
+            "id": "HUBER2020",
+            "evidence": "Fig.2–3; repeated digit/action preferences"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "EI/ED plus the extensor apparatus support extension; intrinsic assistance is joint-dependent. Its cortical field overlaps index flexion rather than occupying a falsely isolated universal point.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "thumb_mcp_flexion",
+      "label": "Flex thumb at MCP",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "thumb_MCP",
+          "sign": "increase_flexion"
+        },
+        {
+          "joint": "thumb_IP_CMC",
+          "sign": "hold_for_this_isolated_demo_action"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "FPB"
+        ],
+        "relative_drive_reduction": [
+          "EPB"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "FPL"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "ZGRAGGEN2009",
+            "evidence": "Fig.1–3; direction-biased thumb fields with free MCP"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "MCP flexion is distinct from opposition or IP flexion. FPL crosses the MCP but principally governs IP flexion; do not display maximal FPL drive while claiming isolated MCP motion without compensation.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    },
+    {
+      "id": "thumb_mcp_extension",
+      "label": "Extend thumb at MCP",
+      "limb": "human_left",
+      "family": "M1_hand_action_response_field",
+      "joint_changes": [
+        {
+          "joint": "thumb_MCP",
+          "sign": "decrease_flexion_toward_extension"
+        },
+        {
+          "joint": "thumb_IP_CMC",
+          "sign": "hold_for_this_isolated_demo_action"
+        }
+      ],
+      "muscle_roles": {
+        "primary_drive_increase": [
+          "EPB"
+        ],
+        "relative_drive_reduction": [
+          "FPB"
+        ],
+        "limited_stabilization_or_posture_dependent": [
+          "EPL"
+        ]
+      },
+      "cortical": {
+        "hemisphere": "right_predominant",
+        "field": "M1_hand_action_response_field",
+        "spatial_resolution_justified": "Overlapping, repeated action/digit preference fields within the right precentral hand region. Fine research measurements do not transfer coordinates to FJ1801.",
+        "mesh_coordinates": null,
+        "mesh_triangle_ids": null,
+        "exact_functional_registration": "HOLD_no_registered_individual_functional_map",
+        "confidence": "human_action_supported_schematic_location",
+        "sources": [
+          {
+            "id": "ZGRAGGEN2009",
+            "evidence": "Fig.1–3; direction-biased thumb fields with free MCP"
+          }
+        ],
+        "common_orientation_and_individual_variation": "inherit cortical_display_contract"
+      },
+      "mechanical_and_relaxation_note": "EPB extends MCP. EPL can contribute through its path but chiefly extends IP; avoid conflating thumb retraction, radial abduction, opposition and MCP extension.",
+      "quantitative_EMG_force_or_neural_validation": false,
+      "deployment": "candidate_for_explicitly_schematic_educational_mode_after_Root_independent_review"
+    }
+  ],
+  "composition_and_conflict_rules": [
+    "Grasp and open are competing finger targets. Space held selects fist; release immediately selects active opening and clears any stale grasp pulse. A distinct relax_release action may reduce drive without extension, but never replaces the mandatory Space-release opening. Gaze/click actions after release may choose a new target.",
+    "Open plus spread is allowed as a coordinated compound. Increased aperture comes from joint rotation; no literal tissue growth or unexplained muscle expansion.",
+    "Wrist and digit commands can coexist with tendon/mechanical coupling stated. Elbow commands remain separately composable within rig reach/collision limits.",
+    "WASD moves the virtual reach target; screen direction is not a cortical coordinate or a single-muscle label. A shoulder/arm inverse-kinematic controller is outside this finite hand/elbow map and must retain separate mechanics/source qualification.",
+    "Gaze hover selects a virtual action; any dwell, gain, animation timing or smoothing is a UI choice, not a physiological latency or stimulation dose.",
+    "Current hand screen-height and whole-hand FOV constraints remain mandatory across all poses, depth, camera motion and resize. This source integration does not verify rendered behavior."
+  ],
+  "acceptance_before_live_adoption": [
+    "Root independently collects and checks this exact version and citation snapshots.",
+    "Asset owner confirms human LEFT anatomy, rights, actual muscles/bones and anatomical RIGHT precentral identity. No monkey-to-human relabelling.",
+    "Renderer verifies subject laterality, anterior-top/posterior-bottom and actual precentral-versus-postcentral selection; FJ1801 is not advertised as a measured BA4 subpatch atlas.",
+    "Each action visibly changes its named joints with correct signs and muscle roles, including release versus active opening/spreading; joint-dependent intrinsic roles are preserved.",
+    "No maximal-antagonist lock, invalid rig axes, mesh detachment, tissue growth, extreme joint deformation or unqualified quantitative physiology.",
+    "Actual browser/WebGL/control combinations/full-hand FOV/font/latency/output/export/reference-series/held-out and independent acceptance remain separate; this artifact does not pass them."
+  ],
+  "holds": [
+    "Exact individual cortical registration is unsupported/HOLD.",
+    "No calibrated neural→EMG→force→displacement physiology supplied.",
+    "Live anatomical rig, rendering and clinical/real-stimulation claims are unadmitted.",
+    "All inherited genuine input/auth/safety/funds/budget/quota/unknown-ACK and scientific/rights/held-out gates remain."
+  ],
+  "citation_manifest": {
+    "path": "<neurosurge-project-root>/neurosurge-functional-map-r1/citation-manifest.json",
+    "sha256": "2e4bd3c0e2947310065cd56aadf62d14734d9ead67e4ba44c5e69a614f6d62b1",
+    "bytes": 26971
+  },
+  "integration_owner": "01a1acf6-8ab5-7cb2-afeb-89a9cdbae839",
+  "previous_immutable_map": {
+    "path": "<neurosurge-project-root>/neurosurge-functional-map-r1/movement-map.json",
+    "bytes": 37392,
+    "sha256": "99de36d02c19c022667da63540d4bc04678b75022fd03401a4c23a8e8e74c43a"
+  },
+  "independent_scientific_review": {
+    "path": "<neurosurge-project-root>/neurosurge-scientific-asset-review-r1/REVIEW.json",
+    "bytes": 35544,
+    "sha256": "40ff721e78a282ce2bc3a21e2b3c886b1bc0397f2ca9330e649a324c1978dc17"
+  },
+  "actions_unchanged_from_reviewed_r1": true,
+  "current_control_overlay": {
+    "authority": "Current genuine originals supersede only conflicting earlier optional UI choices; all reviewed action anatomy and uncertainty remain.",
+    "space_keydown_and_held": "Select grasp_close for all five digits including thumb opposition. Finger target remains a fist for the entire hold. Wrist/elbow commands may compose within anatomical limits.",
+    "space_keyup": "Immediately replace the finger target with open_hand for all five digits and display corresponding simulated opening drive. Begin opening in the next animation update; finite visible joint motion is permitted. Active opening is mandatory, not merely passive relaxation or optional extension.",
+    "release_precedence": "Clear any earlier grasp-directed gaze/click finger pulse on Space release so stale state cannot reclose the hand on the next frame. New deliberate valid gaze movement or click after release may select a new action.",
+    "input_clocks": "Held WASD/Space drive and one-second gaze/click pulses have separate state. Gaze timeout must not end a held key action; held keys must not refresh a stationary gaze pulse.",
+    "gaze_event": "Entering a new valid representative motor target, or a qualifying view movement on it, starts a one-second pulse. Stationary gaze expires after one second. Do not refresh it from the render loop.",
+    "click_event": "Each left or right trackpad click on the current valid motor target retriggers one second from the event. Holding a button is not an indefinite pulse. Suppress the context menu within the game surface.",
+    "empty_space": "A ray miss starts no gaze/click activation. Movement and Space still cause their own linked activation.",
+    "wasd": "W/S control reach depth, A/D the horizontal screen relation; simultaneous keys compose, opposite keys cancel on the corresponding axis. Show linked representative arm/hand activation without inventing a one-muscle or unique cortical-point encoding.",
+    "screen_constraint": "Hand anchor height stays at the screen mid-height. Only A/D changes its horizontal screen relation; view yaw/pitch and finger/wrist/elbow pose changes must not introduce independent horizontal anchor drift. Pose deformation changes the silhouette around that anchor. Clamp the entire current posed hand including fingertips/thumb within the viewport, using the feasible A/D range or camera-relative fit at every supported depth/aspect/resize while preserving the anchor constraints.",
+    "selective_visibility": "Only representative RIGHT upper-limb motor territory relevant to LEFT hand/arm is clear and color-coded. Remaining brain stays glassy. FJ1801 is an anatomical anchor, not an all-M1 mesh; no whole-precentral activation or false functional registration.",
+    "arm_hand_language": "User game requests use hand/arm inclusively; anatomical joint and muscle labels remain specific.",
+    "visual_quantities": "Color is unitless simulated drive. Never label it measured electrical current, EMG, neural firing, force or a validated NeuroTranslate prediction."
+  },
+  "publication_status": "LOCAL_ONLY_CANDIDATE_PENDING_CURRENT_OVERLAY_REVIEW_AND_ACTUAL_GAME_ACCEPTANCE"
+}
