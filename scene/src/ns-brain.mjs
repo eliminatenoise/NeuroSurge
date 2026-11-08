@@ -1567,12 +1567,14 @@ function compactPart(pos, idx, vU, vS, tris) {
  * meanS } }, partIndices), regionById (Map), hemispheres: { right|left: { primaryId, meshIds, lo, hi, medial: null |
  * { zTop, zBottom, sLo, sHi, triangleCount }, regionIds } }, parts: [{ regionId, regionIndex, hemisphere, meshId,
  * surface: 'convexity' | 'medial', positions, indices, u, s, sourceIndex, triangles, vertexCount, faceCount }],
- * unassigned: [same shape without region; drawn as glass], strips: [per-mesh pick tables], coverage, glassGrid }.
+ * unassigned: [same shape without region; drawn as glass], strips: [per-mesh pick tables], coverage, glassGrid,
+ * outline (round 3: brainOutlinePoints of glassMeshes + strips, when glassMeshes are given; option outline: false skips
+ * it), beltOutline (brainOutlinePoints of the strips) }.
  * Typed arrays are not frozen; treat the result as immutable.
  */
 export function segmentMotorStrips(strips, bodyMap, {
   gapTolU = SEGMENT_DEFAULTS.gapTolU, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU,
-  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5
+  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true
 } = {}) {
   const v = validateBodyMotorMap(bodyMap);
   if (!v.ok) throw new Error(`ns:brain_bodymap: ${v.errors.join('; ')}`);
@@ -1787,7 +1789,11 @@ export function segmentMotorStrips(strips, bodyMap, {
     options: freezeR2({ gapTolU, hysteresisU, hysteresisActionU }),
     regions: outRegions, regionById: new Map(outRegions.map(r => [r.id, r])),
     hemispheres: freezeR2(hemispheres), parts, unassigned, strips: stripTables, coverage: freezeR2(coverage),
-    glassGrid: glassMeshes ? buildBrainHitGrid(glassMeshes, { voxelMm: glassVoxelMm }) : null
+    glassGrid: glassMeshes ? buildBrainHitGrid(glassMeshes, { voxelMm: glassVoxelMm }) : null,
+    // Round 3 (R3-brain): outline support points of the whole brain (glass meshes + strips; brainOutlinePoints) for the
+    // silhouette, the framing and the orbit-arrow anchors, and of the two strips alone (the motor belt).
+    outline: glassMeshes && outline !== false ? brainOutlinePoints([...Array.from(glassMeshes), ...descs]) : null,
+    beltOutline: outline !== false ? brainOutlinePoints(descs, { directions: OUTLINE.beltDirections }) : null
   };
   // Private, per-hemisphere owner lists for gaze hysteresis.
   seg._owners = {};
@@ -2098,12 +2104,55 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *  reachM: camera-to-fingertip bound of the left arm (>= ns-arm REACH_STATE_MAX_DEPTH = 1.0 m); clearanceM: extra gap.
  *    frameBrain scales the whole brain outward (projection unchanged) until every brain point stays at least
  *    reachM + clearanceM from the camera for every orbit within the limits and every grab carry.
- *  grabPitchLimitDeg: the carried brain's elevation is clamped to +- this. */
+ *  grabPitchLimitDeg: the carried brain's elevation is clamped to +- this.
+ *
+ * Round 3 (R3-brain, design decision D1 "optimal overview"; evidence in round3/R3-brain-NOTES.md):
+ *  framing 'brain' (new default): frameBrain fits the WHOLE brain's silhouette (all brain meshes, both hemispheres),
+ *    not just the two strips, into the usable screen area (free of the far-right info column / portrait bottom band
+ *    and the top limits line), so the brain reads as a whole brain seen from above (front at the top, the midline gap,
+ *    front and back ends visible) while the motor belt stays as wide as that allows. The round-2 rule (both strips
+ *    fill 0.85 of the view, which overflowed the brain's glass far beyond the screen) is kept as framing 'strips'.
+ *  tiltDeg 35 (was 25): see the notes' tilt sweep (the lateral-most face regions of BOTH hemispheres become reachable
+ *    at the default orbit, the motor belt faces the player more, the view still reads as overhead with the front up).
+ *  facing true: the brain's default orientation is defined relative to the line of sight from the player to the
+ *    brain centre (yaw/pitch toward it), not to the straight-ahead axis. The brain sits left of the screen centre (it
+ *    avoids the far-right panel); without facing the player saw it from its right side, which hid the left
+ *    hemisphere's lateral-most areas. With facing it looks exactly like the centred overhead view, front still up.
+ *  heightFill: the brain silhouette spans at most this fraction of the usable height (0.96: front and back ends
+ *    inside the view with a small margin).
+ *  comfortDeg: every brain point and every orbit arrow can be put under the crosshair with |yaw| and |pitch| at or
+ *    below this (D1 c/d: comfortable looks). On a 16:9 screen with the 70 deg vertical FOV a 40 deg yaw reaches only
+ *    NDC |x| <= 0.674 (the horizontal FOV is about 102 deg), so this limits the usable width.
+ *  arrowGapFrac / arrowSizePx / refHeightPx: room kept beside the silhouette for the orbit arrows: a gap of this
+ *    fraction of the view width ("a centimetre or a few", D1 d: 2-6 %) plus the button (arrowSizePx CSS px; the view
+ *    height in CSS px is refHeightPx when the caller does not pass viewportPx).
+ *  topReservePx: the always-visible limits line at the top of the view.
+ *  centreShare: when frameBrain gets no usableNdc it infers the usable area from centreNdc with the ns-app
+ *    brainCentreForPanel convention (centre = share x the free area's centre offset). Pass usableNdc to avoid it.
+ *  arrowsOnScreen false: the forward / back arrows may sit just beyond the top / bottom screen edge (a look of at most
+ *    comfortDeg reaches them), so the brain can be about 25 % larger on a 16:9 screen; true keeps all four arrows inside
+ *    the view at the default look (smaller brain). Evidence for both in the notes.
+ *  R3-fix (review F1 / B1, decision recorded in round3/FIX-REPORT.md): fit 'belt' (default) sizes the brain by the
+ *    MOTOR BELT, not the whole outline: the belt (both precentral strips) spans beltFrac (0.62: D1(b) asks >= 0.6) of the usable width,
+ *    its centre sits beltCentreShare (0.4) of the way from the screen centre (the crosshair) toward the usable area's
+ *    centre, and vertically as close to the crosshair as the brain allows: the back of the brain stays inside the usable
+ *    area and at most frontCropMax (0.12) of the brain's on-screen height may pass the top edge (the front end is cut by
+ *    at most that much; D1(a) "most of the front end"). When that limit binds (wide screens: the usable height is what
+ *    limits a front-up brain), the belt is as wide as the limit allows. fit 'brain' is the round-3 whole-outline fit.
+ *    tiltDeg stays 35: it is the smallest tilt at which all 44 regions stay reachable within 40 deg at the default orbit
+ *    with this fit on all nine tested screens (25 and 30 deg lose lh_scan_inferior on 5 of 9). */
 export const BRAIN_VIEW = freezeR2({
-  tiltDeg: 25, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
+  tiltDeg: 35, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
   fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6,
-  reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75
+  reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75,
+  framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
+  arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
+  fit: 'belt', beltFrac: 0.62, frontCropMax: 0.12, beltCentreShare: 0.4
 });
+
+/** The round-2 strips framing defaults (frameBrain framing 'strips'): tilt 25 deg, both strips fill 0.85 (0.78 below
+ * aspect 1.45) of the view, strips' top plane at 6 m. Kept for comparison and for callers that ask for it. */
+export const BRAIN_VIEW_R2 = freezeR2({ tiltDeg: 25, fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6 });
 
 /** Orbit step per direction, in steps of orbitStepDeg: { yaw, pitch } signs. */
 export const ORBIT_DIRECTIONS = freezeR2({
@@ -2156,11 +2205,87 @@ function stripPositionsList(input) {
   return arr.map(x => (x && x.positions ? { positions: x.positions, indices: x.indices || null } : { positions: x, indices: null }));
 }
 
+/** Clearance over the orbit range (shared by both framings). Sample points P_i with a radius e_i such that every brain
+ * point lies within e_i of some P_i (the surface is what is nearest to an outside camera):
+ *  'grid'   occupied voxel centres of a buildBrainHitGrid shell of ALL brain meshes (e = voxel half-diagonal;
+ *           conservative), from `brainGrid` or the segmentation's glassGrid;
+ *  'box'    a grid on the brainBounds box surface (conservative when the camera stays outside the box);
+ *  'strips' the strip vertices only (exact for the strips, says nothing about the rest of the brain).
+ * The orbit range is sampled every <= 5 deg; a point at radius r moves at most r * 2 sin(step / 4) between samples.
+ * facing: the frame's facing rotation (null = none). Returns { bound (m, lower bound of the camera-to-brain distance
+ * over the orbit limits after scaling), scaleUp (>= 1: multiply k and pivotWorld by it), basis }. Grab carry rotates
+ * about the camera and preserves distances, so the bound holds for every carry too. */
+function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM }) {
+  const samples = [];
+  let basis, eMm;
+  if (grid && grid.kind === 'ns-brain-grid') {
+    basis = 'grid';
+    const { voxelMm, origin: go, dims, cells } = grid;
+    const cf = Math.max(1, Math.ceil(5 / voxelMm)), vs = cf * voxelMm; // coarsen fine grids to >= 5 mm blocks (speed)
+    const cd = dims.map(x => Math.ceil(x / cf));
+    const coarse = new Uint8Array(cd[0] * cd[1] * cd[2]);
+    for (let kk = 0; kk < dims[2]; kk++) for (let j = 0; j < dims[1]; j++) for (let i = 0; i < dims[0]; i++) {
+      if (cells[(kk * dims[1] + j) * dims[0] + i]) coarse[(Math.floor(kk / cf) * cd[1] + Math.floor(j / cf)) * cd[0] + Math.floor(i / cf)] = 1;
+    }
+    for (let kk = 0; kk < cd[2]; kk++) for (let j = 0; j < cd[1]; j++) for (let i = 0; i < cd[0]; i++) {
+      if (!coarse[(kk * cd[1] + j) * cd[0] + i]) continue;
+      samples.push([go[0] + (i + 0.5) * vs - pv[0], go[1] + (j + 0.5) * vs - pv[1], go[2] + (kk + 0.5) * vs - pv[2]]);
+    }
+    eMm = (Math.sqrt(3) / 2) * vs;
+  } else if (brainBounds) {
+    basis = 'box';
+    const G = 8;
+    for (let a = 0; a < 3; a++) for (const side of [0, 1]) for (let i = 0; i <= G; i++) for (let j = 0; j <= G; j++) {
+      const p = [0, 0, 0], b1 = (a + 1) % 3, b2 = (a + 2) % 3;
+      p[a] = side ? box.max[a] : box.min[a];
+      p[b1] = box.min[b1] + (box.max[b1] - box.min[b1]) * (i / G);
+      p[b2] = box.min[b2] + (box.max[b2] - box.min[b2]) * (j / G);
+      samples.push([p[0] - pv[0], p[1] - pv[1], p[2] - pv[2]]);
+    }
+    eMm = Math.hypot((box.max[0] - box.min[0]) / G, (box.max[1] - box.min[1]) / G, (box.max[2] - box.min[2]) / G) / 2;
+  } else {
+    basis = 'strips';
+    const stride = Math.max(1, Math.floor(count / 20000));
+    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
+    eMm = 2;
+  }
+  if (basis !== 'strips') { // the strips themselves always count (a glass grid may have been built without them)
+    const stride = Math.max(1, Math.floor(count / 6000));
+    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
+  }
+  const rMax = samples.reduce((m, q) => Math.max(m, Math.hypot(q[0], q[1], q[2])), 0);
+  const NY = Math.max(2, Math.ceil((2 * orbitYawLimitDeg) / 5) + 1), NP = Math.max(2, Math.ceil((2 * orbitPitchLimitDeg) / 5) + 1);
+  const dYaw = (2 * orbitYawLimitDeg) / (NY - 1), dPitch = (2 * orbitPitchLimitDeg) / (NP - 1);
+  let minDist = Infinity, cameraInside = false;
+  const S3 = new Float64Array(3 * samples.length);
+  samples.forEach((q, i) => { S3[3 * i] = q[0]; S3[3 * i + 1] = q[1]; S3[3 * i + 2] = q[2]; });
+  for (let iy = 0; iy < NY; iy++) for (let ip = 0; ip < NP; ip++) {
+    const L = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch);
+    const Q = facing ? mul3(facing, L) : L;
+    // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
+    const c = apT3(Q, [-pivotWorld[0] / k, -pivotWorld[1] / k, -pivotWorld[2] / k]);
+    if (basis === 'box' && c.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
+    for (let i = 0; i < S3.length; i += 3) {
+      const dx = S3[i] - c[0], dy = S3[i + 1] - c[1], dz = S3[i + 2] - c[2];
+      const dd = dx * dx + dy * dy + dz * dz;
+      if (dd < minDist) minDist = dd;
+    }
+  }
+  minDist = k * Math.sqrt(minDist);
+  if (cameraInside) throw new Error('ns:brain_frame: with the box clearance basis the camera falls inside the brain bounds for some orbit (scale-invariant); pass brainGrid (buildBrainHitGrid of the brain meshes), reduce fill or the orbit limits');
+  const margin = k * (eMm + rMax * 2 * Math.sin((Math.max(dYaw, dPitch) * DEG) / 4));
+  const need = reachM + clearanceM;
+  let bound = minDist - margin, scaleUp = 1;
+  if (!(bound > 0)) throw new Error('ns:brain_frame: the brain can reach the camera within the orbit limits (scale-invariant); reduce fill or the orbit limits');
+  if (bound < need) { scaleUp = need / bound; bound = need; }
+  return { bound, scaleUp, basis };
+}
+
 /**
- * Frame both hemispheres' strips for the default brain view.
+ * ROUND-2 STRIPS FRAMING (frameBrain framing 'strips'; defaults BRAIN_VIEW_R2). Frame both hemispheres' strips for the default brain view.
  * strips: a segmentMotorStrips result, or [{ positions[, indices] }] / flat xyz arrays (source mm).
- * Options: aspect (required), fovYDeg (70), fill (default by aspect from BRAIN_VIEW: compactFill below compactAspect),
- *   tiltDeg (BRAIN_VIEW.tiltDeg), aimDistance (m), pivot (source mm; the LOCKED ORBIT CENTRE; default the centre of
+ * Options: aspect (required), fovYDeg (70), fill (default by aspect from BRAIN_VIEW_R2: compactFill below compactAspect),
+ *   tiltDeg (BRAIN_VIEW_R2.tiltDeg 25), aimDistance (m), pivot (source mm; the LOCKED ORBIT CENTRE; default the centre of
  *   brainBounds, else of the brain grid's bounds, else of the strips; use the WHOLE brain: a shallow strip-level
  *   pivot swings the deep brain toward the camera when orbiting and forces a large scale-up), brainBounds ({ min, max } source mm of the whole brain, for the pivot),
  *   brainGrid (buildBrainHitGrid of ALL brain meshes: the conservative clearance basis; default the segmentation's
@@ -2178,8 +2303,8 @@ function stripPositionsList(input) {
  *   clearanceBasis ('grid' | 'box' | 'strips'), scaleUp, reachM, clearanceM, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg, fovYDeg, aspect, compact }.
  * Recompute on resize (aspect / FOV change); the pivot and tilt stay.
  */
-export function frameBrain(strips, {
-  aspect, fovYDeg = 70, fill = null, tiltDeg = BRAIN_VIEW.tiltDeg, aimDistance = BRAIN_VIEW.aimDistance,
+function frameStripsR2(strips, {
+  aspect, fovYDeg = 70, fill = null, tiltDeg = BRAIN_VIEW_R2.tiltDeg, aimDistance = BRAIN_VIEW_R2.aimDistance,
   pivot = null, brainBounds = null, brainGrid = null, reachM = BRAIN_VIEW.reachM, clearanceM = BRAIN_VIEW.clearanceM,
   orbitYawLimitDeg = BRAIN_VIEW.orbitYawLimitDeg, orbitPitchLimitDeg = BRAIN_VIEW.orbitPitchLimitDeg,
   grabPitchLimitDeg = BRAIN_VIEW.grabPitchLimitDeg, centreNdc = [0, 0], iterations = 14
@@ -2193,8 +2318,8 @@ export function frameBrain(strips, {
     throw new Error('ns:brain_frame: centreNdc must be [x, y] inside (-1, 1)');
   }
   const [cxT, cyT] = centreNdc;
-  const compact = aspect < BRAIN_VIEW.compactAspect;
-  const f = fill === null ? (compact ? BRAIN_VIEW.compactFill : BRAIN_VIEW.fill) : fill;
+  const compact = aspect < BRAIN_VIEW_R2.compactAspect;
+  const f = fill === null ? (compact ? BRAIN_VIEW_R2.compactFill : BRAIN_VIEW_R2.fill) : fill;
   if (!(Number.isFinite(f) && f > 0 && f <= 1)) throw new Error('ns:brain_frame: fill must be in (0, 1]');
   const list = stripPositionsList(strips);
   if (list.length === 0) throw new Error('ns:brain_frame: no strip positions');
@@ -2267,88 +2392,406 @@ export function frameBrain(strips, {
     }
   }
   let pivotWorld = [-k * ox, -k * oy, -D - k * zTop];
-  // Clearance over the orbit range. Sample points P_i with a radius e_i such that every brain point lies within e_i of
-  // some P_i (the surface is what is nearest to an outside camera):
-  //  'grid'   occupied voxel centres of a buildBrainHitGrid shell of ALL brain meshes (e = voxel half-diagonal;
-  //           conservative), from `brainGrid` or the segmentation's glassGrid;
-  //  'box'    a grid on the brainBounds box surface (conservative when the camera stays outside the box);
-  //  'strips' the strip vertices only (exact for the strips, says nothing about the rest of the brain).
-  // The orbit range is sampled every <= 5 deg; a point at radius r moves at most r * 2 sin(step / 4) between samples.
-  const samples = [];
-  let basis, eMm;
-  if (grid && grid.kind === 'ns-brain-grid') {
-    basis = 'grid';
-    const { voxelMm, origin: go, dims, cells } = grid;
-    const cf = Math.max(1, Math.ceil(5 / voxelMm)), vs = cf * voxelMm; // coarsen fine grids to >= 5 mm blocks (speed)
-    const cd = dims.map(x => Math.ceil(x / cf));
-    const coarse = new Uint8Array(cd[0] * cd[1] * cd[2]);
-    for (let kk = 0; kk < dims[2]; kk++) for (let j = 0; j < dims[1]; j++) for (let i = 0; i < dims[0]; i++) {
-      if (cells[(kk * dims[1] + j) * dims[0] + i]) coarse[(Math.floor(kk / cf) * cd[1] + Math.floor(j / cf)) * cd[0] + Math.floor(i / cf)] = 1;
-    }
-    for (let kk = 0; kk < cd[2]; kk++) for (let j = 0; j < cd[1]; j++) for (let i = 0; i < cd[0]; i++) {
-      if (!coarse[(kk * cd[1] + j) * cd[0] + i]) continue;
-      samples.push([go[0] + (i + 0.5) * vs - pv[0], go[1] + (j + 0.5) * vs - pv[1], go[2] + (kk + 0.5) * vs - pv[2]]);
-    }
-    eMm = (Math.sqrt(3) / 2) * vs;
-  } else if (brainBounds) {
-    basis = 'box';
-    const G = 8;
-    for (let a = 0; a < 3; a++) for (const side of [0, 1]) for (let i = 0; i <= G; i++) for (let j = 0; j <= G; j++) {
-      const p = [0, 0, 0], b1 = (a + 1) % 3, b2 = (a + 2) % 3;
-      p[a] = side ? box.max[a] : box.min[a];
-      p[b1] = box.min[b1] + (box.max[b1] - box.min[b1]) * (i / G);
-      p[b2] = box.min[b2] + (box.max[b2] - box.min[b2]) * (j / G);
-      samples.push([p[0] - pv[0], p[1] - pv[1], p[2] - pv[2]]);
-    }
-    eMm = Math.hypot((box.max[0] - box.min[0]) / G, (box.max[1] - box.min[1]) / G, (box.max[2] - box.min[2]) / G) / 2;
-  } else {
-    basis = 'strips';
-    const stride = Math.max(1, Math.floor(count / 20000));
-    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
-    eMm = 2;
-  }
-  if (basis !== 'strips') { // the strips themselves always count (a glass grid may have been built without them)
-    const stride = Math.max(1, Math.floor(count / 6000));
-    for (const s of list) { const p = s.positions; for (let i = 0; i < p.length; i += 3 * stride) samples.push([p[i] - pv[0], p[i + 1] - pv[1], p[i + 2] - pv[2]]); }
-  }
-  const rMax = samples.reduce((m, q) => Math.max(m, Math.hypot(q[0], q[1], q[2])), 0);
-  const NY = Math.max(2, Math.ceil((2 * orbitYawLimitDeg) / 5) + 1), NP = Math.max(2, Math.ceil((2 * orbitPitchLimitDeg) / 5) + 1);
-  const dYaw = (2 * orbitYawLimitDeg) / (NY - 1), dPitch = (2 * orbitPitchLimitDeg) / (NP - 1);
-  let minDist = Infinity, cameraInside = false;
-  const S3 = new Float64Array(3 * samples.length);
-  samples.forEach((q, i) => { S3[3 * i] = q[0]; S3[3 * i + 1] = q[1]; S3[3 * i + 2] = q[2]; });
-  for (let iy = 0; iy < NY; iy++) for (let ip = 0; ip < NP; ip++) {
-    const Q = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch);
-    // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
-    const c = apT3(Q, [-pivotWorld[0] / k, -pivotWorld[1] / k, -pivotWorld[2] / k]);
-    if (basis === 'box' && c.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
-    for (let i = 0; i < S3.length; i += 3) {
-      const dx = S3[i] - c[0], dy = S3[i + 1] - c[1], dz = S3[i + 2] - c[2];
-      const dd = dx * dx + dy * dy + dz * dz;
-      if (dd < minDist) minDist = dd;
-    }
-  }
-  minDist = k * Math.sqrt(minDist);
-  if (cameraInside) throw new Error('ns:brain_frame: with the box clearance basis the camera falls inside the brain bounds for some orbit (scale-invariant); pass brainGrid (buildBrainHitGrid of the brain meshes), reduce fill or the orbit limits');
-  const margin = k * (eMm + rMax * 2 * Math.sin((Math.max(dYaw, dPitch) * DEG) / 4));
-  const need = reachM + clearanceM;
-  let bound = minDist - margin, scaleUp = 1;
-  if (!(bound > 0)) throw new Error('ns:brain_frame: the brain can reach the camera within the orbit limits (scale-invariant); reduce fill or the orbit limits');
-  if (bound < need) {
-    scaleUp = need / bound;
-    k *= scaleUp; pivotWorld = pivotWorld.map(x => x * scaleUp); bound = need;
-  }
+  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
+  const { basis, scaleUp, bound } = cl;
+  k *= scaleUp; pivotWorld = pivotWorld.map(x => x * scaleUp);
   return freezeR2({
     kind: 'ns-brain-frame', k, aimDistance: D * scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg, fill: f,
     limiting: (b.x1 - b.x0) >= (b.y1 - b.y0) ? 'width' : 'height', ndcBounds: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
     aimOnStrip, minBrainDistanceM: bound, clearanceBasis: basis, scaleUp, reachM, clearanceM, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg,
-    fovYDeg, aspect, compact
+    fovYDeg, aspect, compact, framing: 'strips', facing: null
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Round 3 (R3-brain): whole-brain framing (D1), camera-facing orientation, outline points
+
+/** Unit vectors spread evenly over the sphere (Fibonacci lattice), flat xyz. */
+function sphereDirections(n) {
+  const out = new Float64Array(3 * n), g = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const z = 1 - (2 * i + 1) / n, r = Math.sqrt(Math.max(0, 1 - z * z)), a = g * i;
+    out[3 * i] = r * Math.cos(a); out[3 * i + 1] = r * Math.sin(a); out[3 * i + 2] = z;
+  }
+  return out;
+}
+
+/** brainOutlinePoints defaults: support directions (all vertices are used; see the notes for the accuracy sweep). */
+export const OUTLINE = freezeR2({ directions: 1024, beltDirections: 256, blockSize: 64 });
+
+/**
+ * Outline (support) points of brain meshes, for silhouettes. For each of `directions` unit vectors spread evenly over
+ * the sphere, the vertex furthest along it, over EVERY vertex. These are vertices of the meshes' 3-D convex hull, so the
+ * convex hull of their projection is the convex hull of the projected meshes from any camera outside the brain, up to
+ * a small shortfall from the finite direction set (measured against the exact hull of all 178,743 brain vertices: at
+ * most about 0.6 mm of brain at 1024 directions; brainSilhouette adds a 1 mm safety margin). Exact and fast: runs of
+ * blockSize consecutive vertices carry a bounding sphere, and a run is scanned for a direction only when its sphere can
+ * beat the best value found so far (about 15-25 ms for the 59 brain meshes in Node; segmentMotorStrips does it once
+ * when it gets glassMeshes).
+ * meshes: [{ positions }] or flat xyz arrays (source mm).
+ * Returns frozen { kind: 'ns-brain-outline', points (Float64Array xyz, source mm), count, directions, vertices,
+ *   centre (bounding-box centre, source mm) }.
+ */
+export function brainOutlinePoints(meshes, { directions = OUTLINE.directions, blockSize = OUTLINE.blockSize } = {}) {
+  if (!(Number.isInteger(directions) && directions >= 8)) throw new Error('ns:brain_outline: directions must be an integer >= 8');
+  if (!(Number.isInteger(blockSize) && blockSize >= 1)) throw new Error('ns:brain_outline: blockSize must be an integer >= 1');
+  const list = [];
+  for (const m of Array.from(meshes || [])) {
+    const p = m && m.positions ? m.positions : m;
+    if (p && typeof p.length === 'number' && p.length >= 3) list.push(checkPositions(p, 'outline positions'));
+  }
+  if (list.length === 0) throw new Error('ns:brain_outline: no mesh positions');
+  let vertices = 0, nb = 0;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const p of list) {
+    vertices += p.length / 3; nb += Math.ceil(p.length / 3 / blockSize);
+    for (let i = 0; i < p.length; i += 3) for (let a = 0; a < 3; a++) { const x = p[i + a]; if (x < lo[a]) lo[a] = x; if (x > hi[a]) hi[a] = x; }
+  }
+  const c = [0, 1, 2].map(a => (lo[a] + hi[a]) / 2);
+  // runs of consecutive vertices with a bounding sphere (centre relative to c)
+  const bc = new Float64Array(3 * nb), br = new Float64Array(nb), bm = new Int32Array(nb), b0 = new Int32Array(nb), b1 = new Int32Array(nb);
+  let nbk = 0;
+  for (let mi = 0; mi < list.length; mi++) {
+    const p = list[mi], n = p.length / 3;
+    for (let s0 = 0; s0 < n; s0 += blockSize, nbk++) {
+      const e = Math.min(n, s0 + blockSize);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let v = s0; v < e; v++) { const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
+      let r2 = 0;
+      for (let v = s0; v < e; v++) { const dx = p[3 * v] - cx, dy = p[3 * v + 1] - cy, dz = p[3 * v + 2] - cz; const q = dx * dx + dy * dy + dz * dz; if (q > r2) r2 = q; }
+      bc[3 * nbk] = cx - c[0]; bc[3 * nbk + 1] = cy - c[1]; bc[3 * nbk + 2] = cz - c[2]; br[nbk] = Math.sqrt(r2); bm[nbk] = mi; b0[nbk] = s0; b1[nbk] = e;
+    }
+  }
+  const D = sphereDirections(directions);
+  const seen = new Set(), out = [];
+  for (let d = 0; d < directions; d++) {
+    const ux = D[3 * d], uy = D[3 * d + 1], uz = D[3 * d + 2];
+    let L = -Infinity; // a lower bound of the support value: some vertex of each run lies at least centre.u - r along u
+    for (let k = 0; k < nb; k++) { const v = bc[3 * k] * ux + bc[3 * k + 1] * uy + bc[3 * k + 2] * uz - br[k]; if (v > L) L = v; }
+    let best = -Infinity, bestMesh = -1, bestAt = -1;
+    for (let k = 0; k < nb; k++) {
+      if (bc[3 * k] * ux + bc[3 * k + 1] * uy + bc[3 * k + 2] * uz + br[k] < Math.max(L, best)) continue;
+      const p = list[bm[k]];
+      for (let v = b0[k]; v < b1[k]; v++) {
+        const val = (p[3 * v] - c[0]) * ux + (p[3 * v + 1] - c[1]) * uy + (p[3 * v + 2] - c[2]) * uz;
+        if (val > best) { best = val; bestMesh = bm[k]; bestAt = 3 * v; }
+      }
+    }
+    const key = `${bestMesh}:${bestAt}`;
+    if (bestMesh < 0 || seen.has(key)) continue;
+    seen.add(key);
+    const p = list[bestMesh];
+    out.push(p[bestAt], p[bestAt + 1], p[bestAt + 2]);
+  }
+  return freezeR2({ kind: 'ns-brain-outline', points: Float64Array.from(out), count: out.length / 3, directions, vertices, centre: freezeR2(c) });
+}
+
+const tr3 = m => m3([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+/** Look angles (radians, camera convention: yaw left-positive, pitch up-positive) toward a world point from the camera
+ * at the origin: the look that puts the point under the crosshair. */
+export function lookAnglesToward(w) {
+  const q = vec3(w, 'w');
+  if (!(Math.hypot(q[0], q[1], q[2]) > 0)) throw new Error('ns:brain_input: the point must differ from the camera position');
+  return { yaw: Math.atan2(-q[0], -q[2]), pitch: Math.atan2(q[1], Math.hypot(q[0], q[2])) };
+}
+/** Facing rotation toward a world direction: Ry(yaw) Rx(pitch) of lookAnglesToward (maps the camera's -z axis onto it,
+ * no roll, so a vertical screen line stays vertical). */
+function facingToward(w) {
+  const a = lookAnglesToward(w);
+  return { yaw: a.yaw, pitch: a.pitch, rotation: mul3(rotY3(a.yaw), rotX3(a.pitch)) };
+}
+
+/** Usable screen rect (NDC) from layout reserves in CSS px (pure; for the integrator): the view minus a reserved right
+ * column (reserveRightPx measured from the right edge, e.g. width - infoPanelRect(...).x0 in the column layout), a
+ * reserved bottom band (reserveBottomPx, e.g. height - infoPanelRect(...).y0 in the portrait layout), an extra gapPx
+ * beside a reserved area, and the top limits line (topPx). Returns frozen { x0, x1, y0, y1 } (y up). */
+export function usableNdcFromLayout({ width, height } = {}, { reserveRightPx = 0, reserveBottomPx = 0, topPx = BRAIN_VIEW.topReservePx, gapPx = 0 } = {}) {
+  if (!(width > 0 && height > 0)) throw new Error('ns:brain_layout: width and height must be > 0');
+  for (const [k, v] of Object.entries({ reserveRightPx, reserveBottomPx, topPx, gapPx })) if (!(Number.isFinite(v) && v >= 0)) throw new Error(`ns:brain_layout: ${k} must be finite and >= 0`);
+  const r = reserveRightPx > 0 ? reserveRightPx + gapPx : 0, b = reserveBottomPx > 0 ? reserveBottomPx + gapPx : 0;
+  const out = { x0: -1, x1: 1 - (2 * r) / width, y0: -1 + (2 * b) / height, y1: 1 - (2 * topPx) / height };
+  if (!(out.x1 - out.x0 > 0.1 && out.y1 - out.y0 > 0.1)) throw new Error('ns:brain_layout: the reserves leave no usable area');
+  return freezeR2(out);
+}
+
+/** The usable rect for frameBrain: usableNdc when given, else inferred from centreNdc (ns-app brainCentreForPanel:
+ * centre = share x the free area's centre offset; the free area spans to the far edge), minus the top line. */
+function usableFor({ usableNdc, centreNdc, centreShare, topNdc }) {
+  if (usableNdc) {
+    const u = usableNdc;
+    if (![u.x0, u.x1, u.y0, u.y1].every(Number.isFinite) || !(u.x1 > u.x0 && u.y1 > u.y0)) throw new Error('ns:brain_frame: usableNdc must be { x0 < x1, y0 < y1 } finite');
+    return { x0: Math.max(-1, u.x0), x1: Math.min(1, u.x1), y0: Math.max(-1, u.y0), y1: Math.min(1, u.y1), source: 'usableNdc' };
+  }
+  const [cx, cy] = centreNdc;
+  const U = { x0: -1, x1: 1, y0: -1, y1: 1 - topNdc, source: cx === 0 && cy === 0 ? 'view' : 'centreNdc' };
+  if (cx < 0) U.x1 = Math.max(-0.5, 1 + (2 * cx) / centreShare); else if (cx > 0) U.x0 = Math.min(0.5, -1 + (2 * cx) / centreShare);
+  if (cy > 0) U.y0 = Math.min(0.5, -1 + (2 * cy) / centreShare); else if (cy < 0) U.y1 = Math.min(U.y1, Math.max(-0.5, 1 + (2 * cy) / centreShare));
+  return U;
+}
+
+/** Outline points for a segmentation or frame input (cached per object): the segmentation's outline (all brain meshes),
+ * else the glass grid's occupied voxel centres, else the brainBounds box corners, else the strips. */
+const OUTLINE_CACHE = new WeakMap();
+function outlineBasisFor(input, { brainOutline = null, brainGrid = null, brainBounds = null } = {}) {
+  if (brainOutline) {
+    const pts = brainOutline.kind === 'ns-brain-outline' ? brainOutline.points : checkPositions(brainOutline, 'brainOutline');
+    return { points: pts, basis: 'outline' };
+  }
+  const seg = isSegmentation(input) ? input : null;
+  if (seg && seg.outline && seg.outline.points) return { points: seg.outline.points, basis: 'outline' };
+  const grid = brainGrid || (seg && seg.glassGrid) || null;
+  const keyObj = grid || (seg || null);
+  if (keyObj && OUTLINE_CACHE.has(keyObj) && !brainBounds) return OUTLINE_CACHE.get(keyObj);
+  let res;
+  if (grid && grid.kind === 'ns-brain-grid') {
+    const { voxelMm: s, origin: go, dims, cells } = grid, pts = [];
+    for (let k = 0; k < dims[2]; k++) for (let j = 0; j < dims[1]; j++) for (let i = 0; i < dims[0]; i++) {
+      if (cells[(k * dims[1] + j) * dims[0] + i]) pts.push(go[0] + (i + 0.5) * s, go[1] + (j + 0.5) * s, go[2] + (k + 0.5) * s);
+    }
+    const strips = stripPositionsList(input).map(x => x.positions);
+    res = { points: brainOutlinePoints([Float64Array.from(pts), ...strips]).points, basis: 'grid' };
+  } else if (brainBounds) {
+    const a = vec3(brainBounds.min, 'brainBounds.min'), b = vec3(brainBounds.max, 'brainBounds.max'), pts = [];
+    for (const x of [a[0], b[0]]) for (const y of [a[1], b[1]]) for (const z of [a[2], b[2]]) pts.push(x, y, z);
+    return { points: Float64Array.from(pts), basis: 'box' };
+  } else {
+    res = { points: brainOutlinePoints(stripPositionsList(input).map(x => x.positions)).points, basis: 'strips' };
+  }
+  if (keyObj) OUTLINE_CACHE.set(keyObj, res);
+  return res;
+}
+function beltPointsFor(input) {
+  if (isSegmentation(input) && input.beltOutline && input.beltOutline.points) return input.beltOutline.points;
+  const key = isSegmentation(input) ? input : null;
+  if (key && OUTLINE_CACHE.has(key.strips)) return OUTLINE_CACHE.get(key.strips);
+  const pts = brainOutlinePoints(stripPositionsList(input).map(x => x.positions), { directions: OUTLINE.beltDirections }).points;
+  if (key) OUTLINE_CACHE.set(key.strips, pts);
+  return pts;
+}
+
+/**
+ * Frame the brain for the default view. framing 'brain' (default, round 3) fits the WHOLE brain's silhouette; framing
+ * 'strips' is the round-2 rule (frameStripsR2 above, BRAIN_VIEW_R2 defaults: the two strips fill 0.85 of the view).
+ *
+ * framing 'brain' (D1 "optimal overview"):
+ *  - usable area U (NDC): usableNdc when given (recommended: usableNdcFromLayout with the far-right info column or the
+ *    portrait bottom band reserved), else inferred from centreNdc (the ns-app brainCentreForPanel convention, share
+ *    BRAIN_VIEW.centreShare), else the whole view; minus the top limits line (topReservePx).
+ *  - comfort window C: the points a look of at most comfortDeg (40) puts under the crosshair (|x| <= tan(40) / (t
+ *    aspect), |y| <= tan(40) / t at the default look).
+ *  - arrow room: a gap of arrowGapFrac of the view width plus the arrow button (arrowSizePx on a viewportPx.height or
+ *    refHeightPx tall view) on every side of the silhouette.
+ *  - the silhouette's bounding box must fit: x within U and C minus the side-arrow room (the left/right arrows stay on
+ *    screen, beside the panel, within the comfortable looks); y within U, and within C minus the room for the
+ *    forward/back arrows (they may sit beyond the top/bottom of the view but within a comfortable look); and the
+ *    silhouette spans at most heightFill of U's height. The scale is the largest that fits; the box is centred in the
+ *    allowed area.
+ *  - facing (default true): the brain's tilt and orbit are defined about the line of sight to its centre (no roll), so
+ *    the brain looks like the centred overhead view wherever it sits on the screen, anterior still straight up.
+ *  - the nearest brain point at the default view is aimDistance (6 m) away; then the same clearance rule as before
+ *    scales the whole brain outward (projection unchanged) until it stays at least reachM + clearanceM away for every
+ *    orbit within the limits and every grab carry (beyond reach, in front of the hand).
+ * Options (besides the 'strips' ones): framing, usableNdc, viewportPx ({ width, height } CSS px), heightFill,
+ *   comfortDeg, arrowGapFrac, arrowSizePx, facing, centreShare, arrowsOnScreen, brainOutline (brainOutlinePoints result or flat xyz;
+ *   default the segmentation's outline, else its glass grid, else the brainBounds box, else the strips).
+ * Returns frozen { kind: 'ns-brain-frame', framing: 'brain', k (m per mm), aimDistance, pivot, pivotWorld, tiltDeg,
+ *   facing: { yawDeg, pitchDeg, rotation } | null, fill (the strips' half-extent, NDC, informational), limiting
+ *   ('width' | 'height': which side of the allowed box the silhouette touches), ndcBounds (the strips' NDC box at the
+ *   default view), silhouetteNdc (the brain's NDC box), usableNdc (+ source), allowedNdc, comfortNdc { x, y },
+ *   arrowRoomNdc { x, y }, arrowOvershootNdc { left, right, forward, back } (<= 0: each arrow button inside its limit;
+ *   checked on the real arrowAnchors), arrowsOnScreen, heightFill, comfortDeg, outlineBasis, aimOnStrip, minBrainDistanceM, clearanceBasis,
+ *   scaleUp, reachM, clearanceM, orbit limits, grabPitchLimitDeg, fovYDeg, aspect, compact }.
+ * Recompute on resize (aspect / FOV / usable area change); the pivot and tilt stay.
+ */
+export function frameBrain(strips, options = {}) {
+  const framing = options && options.framing !== undefined ? options.framing : BRAIN_VIEW.framing;
+  if (framing === 'strips') return frameStripsR2(strips, options);
+  if (framing !== 'brain') throw new Error(`ns:brain_frame: framing must be 'brain' or 'strips' (got ${framing})`);
+  return frameWholeBrain(strips, options);
+}
+
+function frameWholeBrain(strips, {
+  aspect, fovYDeg = 70, tiltDeg = BRAIN_VIEW.tiltDeg, aimDistance = BRAIN_VIEW.aimDistance,
+  pivot = null, brainBounds = null, brainGrid = null, brainOutline = null, reachM = BRAIN_VIEW.reachM, clearanceM = BRAIN_VIEW.clearanceM,
+  orbitYawLimitDeg = BRAIN_VIEW.orbitYawLimitDeg, orbitPitchLimitDeg = BRAIN_VIEW.orbitPitchLimitDeg,
+  grabPitchLimitDeg = BRAIN_VIEW.grabPitchLimitDeg, centreNdc = [0, 0], usableNdc = null, viewportPx = null,
+  heightFill = BRAIN_VIEW.heightFill, comfortDeg = BRAIN_VIEW.comfortDeg, arrowGapFrac = BRAIN_VIEW.arrowGapFrac,
+  arrowSizePx = BRAIN_VIEW.arrowSizePx, facing = BRAIN_VIEW.facing, centreShare = BRAIN_VIEW.centreShare,
+  arrowsOnScreen = BRAIN_VIEW.arrowsOnScreen, iterations = 60, fit = BRAIN_VIEW.fit, beltFrac = BRAIN_VIEW.beltFrac,
+  frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare
+} = {}) {
+  if (fit !== 'belt' && fit !== 'brain') throw new Error(`ns:brain_frame: fit must be 'belt' or 'brain' (got ${fit})`);
+  if (!(Number.isFinite(beltFrac) && beltFrac > 0 && beltFrac <= 1)) throw new Error('ns:brain_frame: beltFrac must be in (0, 1]');
+  if (!(Number.isFinite(frontCropMax) && frontCropMax >= 0 && frontCropMax < 0.5)) throw new Error('ns:brain_frame: frontCropMax must be in [0, 0.5)');
+  if (!(Number.isFinite(beltCentreShare) && beltCentreShare >= 0 && beltCentreShare <= 1)) throw new Error('ns:brain_frame: beltCentreShare must be in [0, 1]');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_frame: aspect must be finite and > 0');
+  if (!(Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180)) throw new Error('ns:brain_frame: fovYDeg must be in (0, 180)');
+  if (!(Number.isFinite(tiltDeg) && Math.abs(tiltDeg) < 90)) throw new Error('ns:brain_frame: tiltDeg must be finite with |tilt| < 90');
+  if (!(Number.isFinite(aimDistance) && aimDistance > 0)) throw new Error('ns:brain_frame: aimDistance must be finite and > 0');
+  if (!(Number.isFinite(reachM) && reachM >= 0 && Number.isFinite(clearanceM) && clearanceM >= 0)) throw new Error('ns:brain_frame: reachM and clearanceM must be finite and >= 0');
+  if (!Array.isArray(centreNdc) || centreNdc.length !== 2 || !centreNdc.every(Number.isFinite) || Math.abs(centreNdc[0]) >= 1 || Math.abs(centreNdc[1]) >= 1) {
+    throw new Error('ns:brain_frame: centreNdc must be [x, y] inside (-1, 1)');
+  }
+  if (!(Number.isFinite(heightFill) && heightFill > 0 && heightFill <= 1.5)) throw new Error('ns:brain_frame: heightFill must be in (0, 1.5]');
+  if (!(Number.isFinite(comfortDeg) && comfortDeg > 5 && comfortDeg < 89)) throw new Error('ns:brain_frame: comfortDeg must be in (5, 89)');
+  if (!(Number.isFinite(arrowGapFrac) && arrowGapFrac >= 0 && arrowGapFrac < 0.2 && Number.isFinite(arrowSizePx) && arrowSizePx >= 0)) throw new Error('ns:brain_frame: arrowGapFrac must be in [0, 0.2) and arrowSizePx >= 0');
+  if (viewportPx !== null && !(viewportPx && viewportPx.width > 0 && viewportPx.height > 0)) throw new Error('ns:brain_frame: viewportPx must be { width, height } > 0');
+  const list = stripPositionsList(strips);
+  if (list.length === 0) throw new Error('ns:brain_frame: no strip positions');
+  let count = 0;
+  const smin = [Infinity, Infinity, Infinity], smax = [-Infinity, -Infinity, -Infinity];
+  for (const s of list) {
+    const p = checkPositions(s.positions, 'strip positions');
+    count += p.length / 3;
+    for (let i = 0; i < p.length; i += 3) for (let a = 0; a < 3; a++) { const x = p[i + a]; if (x < smin[a]) smin[a] = x; if (x > smax[a]) smax[a] = x; }
+  }
+  const grid = brainGrid || (isSegmentation(strips) && strips.glassGrid ? strips.glassGrid : null);
+  const gridBounds = grid && grid.kind === 'ns-brain-grid' && grid.bounds ? grid.bounds : null;
+  const box = brainBounds ? { min: vec3(brainBounds.min, 'brainBounds.min'), max: vec3(brainBounds.max, 'brainBounds.max') }
+    : gridBounds ? { min: [...gridBounds.min], max: [...gridBounds.max] } : { min: smin, max: smax };
+  const pv = pivot ? vec3(pivot, 'pivot') : [0, 1, 2].map(a => (box.min[a] + box.max[a]) / 2);
+  const outline = outlineBasisFor(strips, { brainOutline, brainGrid, brainBounds: grid ? null : brainBounds });
+  const beltPts = beltPointsFor(strips);
+  // Layout (NDC at the default look, yaw = pitch = 0).
+  const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
+  const hPx = viewportPx ? viewportPx.height : BRAIN_VIEW.refHeightPx;
+  const U = usableFor({ usableNdc, centreNdc, centreShare, topNdc: (2 * BRAIN_VIEW.topReservePx) / hPx });
+  const btnY = (2 * arrowSizePx) / hPx, btnX = btnY / aspect, gapX = 2 * arrowGapFrac, gapY = gapX * aspect;
+  const roomX = gapX + btnX, roomY = gapY + btnY;
+  const tc = Math.tan(comfortDeg * DEG), cX = tc / ta, cY = tc / t;
+  let ax0 = Math.max(U.x0, -cX) + roomX, ax1 = Math.min(U.x1, cX) - roomX;
+  let ay0 = Math.max(U.y0, -cY + roomY), ay1 = Math.min(U.y1, cY - roomY);
+  // A reserved band (e.g. the portrait info band below the brain) must not get an arrow on it: the forward / back
+  // arrows may only leave the usable area across a real screen edge (or the thin top line), never into a band.
+  if (U.y0 > -1 + roomY) ay0 = Math.max(ay0, U.y0 + roomY);
+  if (U.y1 < 1 - roomY) ay1 = Math.min(ay1, U.y1 - roomY);
+  if (arrowsOnScreen) { ay0 = Math.max(ay0, U.y0 + roomY); ay1 = Math.min(ay1, U.y1 - roomY); }
+  const hCap = heightFill * (U.y1 - U.y0);
+  if (ay1 - ay0 > hCap) { const m = (ay0 + ay1) / 2; ay0 = m - hCap / 2; ay1 = m + hCap / 2; }
+  let degenerate = false;
+  if (!(ax1 - ax0 > 0.05 && ay1 - ay0 > 0.05)) { // tiny or odd viewports: fit inside 80 % of U instead
+    degenerate = true;
+    ax0 = U.x0 + 0.1 * (U.x1 - U.x0); ax1 = U.x1 - 0.1 * (U.x1 - U.x0); ay0 = U.y0 + 0.1 * (U.y1 - U.y0); ay1 = U.y1 - 0.1 * (U.y1 - U.y0);
+  }
+  // Brain-local (pivot-centred, tilted) outline and belt points.
+  const L0 = localRotation(tiltDeg, 0, 0);
+  const toL = pts => { const out = new Float64Array(pts.length); for (let i = 0; i < pts.length; i += 3) { const q = ap3(L0, [pts[i] - pv[0], pts[i + 1] - pv[1], pts[i + 2] - pv[2]]); out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2]; } return out; };
+  const P = toL(outline.points), Bt = toL(beltPts);
+  let rMax = 0;
+  for (let i = 0; i < P.length; i += 3) rMax = Math.max(rMax, Math.hypot(P[i], P[i + 1], P[i + 2]));
+  if (!(rMax > 0)) throw new Error('ns:brain_frame: the brain outline has no extent');
+  const dirFor = (px, py) => normalize([px * ta, py * t, -1]);
+  const rotFor = dir => (facing ? facingToward(dir).rotation : null);
+  const projBox = (pts, s, dir, F) => {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, near = Infinity;
+    for (let i = 0; i < pts.length; i += 3) {
+      const q = F ? ap3(F, [pts[i], pts[i + 1], pts[i + 2]]) : [pts[i], pts[i + 1], pts[i + 2]];
+      const wx = dir[0] + s * q[0], wy = dir[1] + s * q[1], wz = dir[2] + s * q[2];
+      const depth = -wz, x = wx / (depth * ta), y = wy / (depth * t);
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      const d = Math.hypot(wx, wy, wz); if (d < near) near = d;
+    }
+    return { x0, x1, y0, y1, near };
+  };
+  const sMax = 0.6 / rMax; // keeps every point well in front of the camera (the centre direction is within the comfort window)
+  let s = 0.25 / rMax, px = 0, py = 0, b = null, limiting = 'height';
+  const solve = () => { // the largest scale whose silhouette box fits [ax0, ax1] x [ay0, ay1], centred in it
+    px = (ax0 + ax1) / 2; py = (ay0 + ay1) / 2;
+    for (let it = 0; it < iterations; it++) {
+      const dir = dirFor(px, py);
+      b = projBox(P, s, dir, rotFor(dir));
+      const rx = (ax1 - ax0) / (b.x1 - b.x0), ry = (ay1 - ay0) / (b.y1 - b.y0);
+      limiting = rx < ry ? 'width' : 'height';
+      const r = Math.min(rx, ry), dx = (ax0 + ax1) / 2 - (b.x0 + b.x1) / 2, dy = (ay0 + ay1) / 2 - (b.y0 + b.y1) / 2;
+      if (Math.abs(r - 1) < 1e-10 && Math.abs(dx) < 1e-10 && Math.abs(dy) < 1e-10) break;
+      s = Math.min(sMax, s * r); px += dx; py += dy;
+    }
+  };
+  // Close the loop on the REAL arrow anchors (brainSilhouette + arrowAnchors on this outline, as the scene places them):
+  // they sit on the brain's own axes at the gap from the margin-padded hull, which can need a little more room than the
+  // box estimate. Any overshoot past its limit shrinks the allowed box on that side, then the fit is solved again.
+  const limX0 = Math.max(U.x0, -cX), limX1 = Math.min(U.x1, cX);
+  const limY1 = Math.min(cY, U.y1 < 1 - roomY || arrowsOnScreen ? U.y1 : Infinity);
+  const limY0 = Math.max(-cY, U.y0 > -1 + roomY || arrowsOnScreen ? U.y0 : -Infinity);
+  let arrowOvershoot = null, beltFit = null;
+  // R3-fix: belt-first fit (see BRAIN_VIEW). The orbit arrows are placed by the scene around the drawn silhouette
+  // (ns-scene-three placeOrbitArrows: side, corner or just past a screen edge within a comfortable look), so this fit
+  // does not run the arrowAnchors loop below.
+  const solveBelt = () => {
+    const Uw = U.x1 - U.x0, Uh = U.y1 - U.y0, cxT = beltCentreShare * (U.x0 + U.x1) / 2;
+    const sMaxBelt = 0.9 / rMax; // every brain point stays at least 0.1 of the centre distance in front of the eye
+    s = 0.25 / rMax; px = cxT; py = 0;
+    let converged = false;
+    for (let it = 0; it < 12 * iterations; it++) {
+      const dir = dirFor(px, py), F = rotFor(dir);
+      const o = projBox(P, s, dir, F), bb = projBox(Bt, s, dir, F);
+      const oh = o.y1 - o.y0, ow = o.x1 - o.x0;
+      const rB = (beltFrac * Uw) / (bb.x1 - bb.x0), rH = Uh / ((1 - frontCropMax) * oh), rW = Uw / ow;
+      const r = Math.min(rB, rH, rW);
+      limiting = r === rB ? 'belt' : r === rH ? 'height' : 'width';
+      let dy = -(bb.y0 + bb.y1) / 2; // belt centre toward the crosshair (y = 0) ...
+      const topOver = o.y1 + dy - U.y1, lim = frontCropMax * oh;
+      if (topOver > lim) dy -= topOver - lim; // ... but the front may pass the top edge by at most frontCropMax
+      const botOver = U.y0 - (o.y0 + dy);
+      if (botOver > 0) dy += botOver;        // ... and the back stays inside
+      let dx = cxT - (bb.x0 + bb.x1) / 2;
+      if (o.x1 + dx > U.x1) dx -= o.x1 + dx - U.x1;
+      if (o.x0 + dx < U.x0) dx += U.x0 - (o.x0 + dx);
+      if (Math.abs(r - 1) < 1e-7 && Math.abs(dx) < 1e-7 && Math.abs(dy) < 1e-7) { converged = true; break; }
+      s = Math.min(sMaxBelt, s * Math.pow(r, 0.8)); px += 0.8 * dx; py += 0.8 * dy;
+    }
+    return converged;
+  };
+  if (fit === 'belt' && !degenerate && solveBelt()) beltFit = { beltFrac, frontCropMax, beltCentreShare };
+  for (let round = 0; !beltFit && round < 6; round++) {
+    solve();
+    const dirR = dirFor(px, py), FR = rotFor(dirR);
+    const probe = { kind: 'ns-brain-frame', k: s, pivot: pv, pivotWorld: dirR, tiltDeg, facing: FR ? { rotation: Array.from(FR) } : null, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg };
+    const sil = brainSilhouette(null, brainViewTransform({ frame: probe }), { aspect, fovYDeg, points: outline.points });
+    const an = arrowAnchors(sil, { gapFrac: arrowGapFrac, sizePx: arrowSizePx, viewportPx: { width: hPx * aspect, height: hPx } });
+    const hx = an.radiusNdc / aspect, hy = an.radiusNdc;
+    arrowOvershoot = { left: limX0 - (an.left.xNdc - hx), right: an.right.xNdc + hx - limX1, forward: an.forward.yNdc + hy - limY1, back: limY0 - (an.back.yNdc - hy) };
+    if (Math.max(...Object.values(arrowOvershoot)) <= 1e-6 || degenerate) break;
+    const pad = 1e-4;
+    if (arrowOvershoot.left > 0) ax0 += arrowOvershoot.left + pad;
+    if (arrowOvershoot.right > 0) ax1 -= arrowOvershoot.right + pad;
+    if (arrowOvershoot.forward > 0) ay1 -= arrowOvershoot.forward + pad;
+    if (arrowOvershoot.back > 0) ay0 += arrowOvershoot.back + pad;
+    if (!(ax1 - ax0 > 0.05 && ay1 - ay0 > 0.05)) break;
+  }
+  const dir = dirFor(px, py), F = rotFor(dir);
+  b = projBox(P, s, dir, F);
+  const bb = projBox(Bt, s, dir, F);
+  const dist = aimDistance / b.near; // the nearest brain point at the default view is aimDistance away
+  let k = s * dist, pivotWorld = dir.map(x => x * dist);
+  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: F, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
+  k *= cl.scaleUp; pivotWorld = pivotWorld.map(x => x * cl.scaleUp);
+  const fa = F ? facingToward(dir) : null;
+  const frame = {
+    kind: 'ns-brain-frame', framing: 'brain', k, aimDistance: aimDistance * cl.scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg,
+    facing: fa ? freezeR2({ yawDeg: fa.yaw / DEG, pitchDeg: fa.pitch / DEG, rotation: freezeR2(Array.from(fa.rotation)) }) : null,
+    fill: Math.max((bb.x1 - bb.x0) / 2, (bb.y1 - bb.y0) / 2), limiting,
+    ndcBounds: freezeR2({ x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 }), silhouetteNdc: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
+    usableNdc: freezeR2({ ...U }), allowedNdc: freezeR2({ x0: ax0, x1: ax1, y0: ay0, y1: ay1, degenerate }), comfortNdc: freezeR2({ x: cX, y: cY }),
+    arrowRoomNdc: freezeR2({ x: roomX, y: roomY }), arrowOvershootNdc: arrowOvershoot ? freezeR2({ ...arrowOvershoot }) : null, arrowsOnScreen, heightFill, comfortDeg, outlineBasis: outline.basis,
+    fit: beltFit ? 'belt' : 'brain', beltFit: beltFit ? freezeR2({ ...beltFit, beltWidthFrac: (bb.x1 - bb.x0) / (U.x1 - U.x0), frontCropFrac: Math.max(0, (b.y1 - U.y1) / (b.y1 - b.y0)) }) : null,
+    aimOnStrip: null, minBrainDistanceM: cl.bound, clearanceBasis: cl.basis, scaleUp: cl.scaleUp, reachM, clearanceM,
+    orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg, fovYDeg, aspect, compact: aspect < BRAIN_VIEW.compactAspect
+  };
+  if (isSegmentation(strips)) { // does the crosshair (yaw = pitch = 0) rest on a motor strip at the default view?
+    const v = brainViewTransform({ frame });
+    const ray = gazeRayForView(0, 0, v);
+    frame.aimOnStrip = strips.strips.some(S => rayStripTable(ray.origin, ray.dir, S) !== null);
+  }
+  return freezeR2(frame);
 }
 
 /**
  * The brain group's world transform for a frame and the current orbit / grab state.
- *   world(p) = Ry(grabYaw) Rx(grabPitch) [ pivotWorld + k Ry(-orbitYaw) Rx(tilt + orbitPitch) DISPLAY (p - pivot) ]
+ *   world(p) = Ry(grabYaw) Rx(grabPitch) [ pivotWorld + k F Ry(-orbitYaw) Rx(tilt + orbitPitch) DISPLAY (p - pivot) ]
+ * F is the frame's facing rotation (frame.facing.rotation; identity for the round-2 'strips' framing): the tilt and the
+ * orbit are about the line of sight to the brain centre, so the default view is the centred overhead view, anterior up.
  * orbitYaw / orbitPitch: DEGREES (orbit about the LOCKED brain centre = frame.pivot; yaw > 0 viewpoint toward screen
  *   right, pitch > 0 toward the front), clamped to the frame's limits. grabYaw / grabPitch: RADIANS in the camera
  *   convention (carry about the player: the brain centre moves to gazeDirection(grabYaw, grabPitch) at the same
@@ -2369,7 +2812,9 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   const gp = clampAbs(grabPitch, frame.grabPitchLimitDeg * DEG);
   const clamped = oy !== orbitYaw || op !== orbitPitch || gp !== grabPitch;
   const carry = mul3(rotY3(grabYaw), rotX3(gp));
-  const Q = mul3(carry, localRotation(tilt, oy, op));
+  const L = localRotation(tilt, oy, op);
+  const F = frame.facing && frame.facing.rotation ? frame.facing.rotation : null;
+  const Q = mul3(carry, F ? mul3(F, L) : L);
   const C = ap3(carry, frame.pivotWorld);
   const k = frame.k, pv = frame.pivot;
   const kq = Q.map(x => x * k);
@@ -2472,6 +2917,227 @@ export function orbitArrowAnchors(bounds, { gapNdc = 0.05, limit = 0.93 } = {}) 
     forward: at(cx, bounds.y1 + gapNdc), back: at(cx, bounds.y0 - gapNdc),
     left: at(bounds.x0 - gapNdc, cy), right: at(bounds.x1 + gapNdc, cy)
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Round 3 (R3-brain, D2): brain silhouette and orbit-arrow anchors from the real brain outline
+
+/** Convex hull (CCW, y up) of 2-D points given as parallel arrays; returns the indices (Andrew's monotone chain). */
+function hullIndices(xs, ys) {
+  const n = xs.length;
+  const idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => xs[a] - xs[b] || ys[a] - ys[b]);
+  const cr = (o, a, b) => (xs[a] - xs[o]) * (ys[b] - ys[o]) - (ys[a] - ys[o]) * (xs[b] - xs[o]);
+  const lower = [], upper = [];
+  for (const i of idx) { while (lower.length >= 2 && cr(lower[lower.length - 2], lower[lower.length - 1], i) <= 0) lower.pop(); lower.push(i); }
+  for (let q = n - 1; q >= 0; q--) { const i = idx[q]; while (upper.length >= 2 && cr(upper[upper.length - 2], upper[upper.length - 1], i) <= 0) upper.pop(); upper.push(i); }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+const insideConvex = (h, x, y) => {
+  for (let i = 0; i < h.length; i++) { const p = h[i], q = h[(i + 1) % h.length]; if ((q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]) < 0) return false; }
+  return true;
+};
+/** Distance (same units) from (x, y) to a convex CCW polygon; 0 inside. */
+function distToConvex(h, x, y) {
+  if (insideConvex(h, x, y)) return 0;
+  let best = Infinity;
+  for (let i = 0; i < h.length; i++) {
+    const a = h[i], b = h[(i + 1) % h.length], ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey;
+    const u = L2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * ex + (y - a[1]) * ey) / L2)) : 0;
+    best = Math.min(best, Math.hypot(x - a[0] - u * ex, y - a[1] - u * ey));
+  }
+  return best;
+}
+
+/** Silhouette references (look-invariant): per outline-points array, keyed by the UNCARRIED view (frame + orbit),
+ * aspect and FOV. A grab carry is a rotation about the camera, applied per call. */
+const SIL_CACHE = new WeakMap();
+const SIL_CACHE_MAX = 24;
+/** marginMm: the silhouette hull is pushed outward by this much brain (source mm, at the brain centre's distance) so the
+ * true silhouette stays inside it (the outline points fall short of the exact hull by at most about 0.6 mm). */
+export const SILHOUETTE = freezeR2({ cacheSize: SIL_CACHE_MAX, near: 0.02, marginMm: 1 });
+
+function silhouetteReference(view, outlinePts, beltPts, aspect, fovYDeg, marginMm) {
+  const carry = mul3(rotY3(view.grabYaw), rotX3(view.grabPitch));
+  const cT = tr3(carry);
+  const Q0 = mul3(cT, view.rotation), P0 = ap3(cT, view.pivotWorld), k = view.k, pv = view.pivot;
+  const r10 = x => (Math.abs(x) < 1e-12 ? '0' : x.toPrecision(10)); // un-carrying leaves last-bit noise; 10 digits is plenty
+  const key = `${aspect}|${fovYDeg}|${marginMm}|${r10(k)}|${pv.map(r10).join(',')}|${Array.prototype.map.call(Q0, r10).join(',')}|${P0.map(r10).join(',')}`;
+  let byPts = SIL_CACHE.get(outlinePts);
+  if (!byPts) { byPts = new Map(); SIL_CACHE.set(outlinePts, byPts); }
+  const hit = byPts.get(key);
+  if (hit && hit.beltPts === beltPts) return hit;
+  const R = facingToward(P0).rotation; // reference camera: looks at the brain centre, no roll
+  const RT = tr3(R), t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
+  const world0 = (x, y, z) => { const q = ap3(Q0, [x - pv[0], y - pv[1], z - pv[2]]); return [P0[0] + k * q[0], P0[1] + k * q[1], P0[2] + k * q[2]]; };
+  const toIso = w => { const c = ap3(RT, w); const depth = -c[2]; return depth > 0 ? [(c[0] / (depth * ta)) * aspect, c[1] / (depth * t)] : null; };
+  const dirOfIso = (X, Y) => ap3(R, [(X / aspect) * ta, Y * t, -1]); // a world direction through an iso point
+  const hullOf = (pts, delta) => {
+    const xs = [], ys = [];
+    for (let i = 0; i < pts.length; i += 3) {
+      const p = toIso(world0(pts[i], pts[i + 1], pts[i + 2]));
+      if (!p) throw new Error('ns:brain_silhouette: the brain is not in front of the reference camera');
+      xs.push(p[0]); ys.push(p[1]);
+    }
+    const h = hullIndices(xs, ys);
+    if (h.length < 3) throw new Error('ns:brain_silhouette: degenerate outline');
+    let iso = h.map(i => [xs[i], ys[i]]);
+    if (delta > 0) { // offset the convex CCW polygon outward by delta (mitred corners, capped)
+      const n = iso.length, nrm = [];
+      for (let i = 0; i < n; i++) { const a = iso[i], b = iso[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1; nrm.push([ey / l, -ex / l]); }
+      iso = iso.map((v, i) => {
+        const n0 = nrm[(i + n - 1) % n], n1 = nrm[i], d = 1 + n0[0] * n1[0] + n0[1] * n1[1], f = d > 0.25 ? delta / d : delta * 4;
+        return [v[0] + (n0[0] + n1[0]) * f, v[1] + (n0[1] + n1[1]) * f];
+      });
+    }
+    return { world: iso.map(([X, Y]) => dirOfIso(X, Y)), iso };
+  };
+  const deltaIso = (marginMm * k) / (Math.hypot(P0[0], P0[1], P0[2]) * t);
+  const outlineHull = hullOf(outlinePts, deltaIso), beltHull = beltPts ? hullOf(beltPts, 0) : null;
+  const pIso = toIso(P0);
+  const axisIso = v => { const e = 0.02 * Math.hypot(P0[0], P0[1], P0[2]); const q = toIso([P0[0] + e * v[0], P0[1] + e * v[1], P0[2] + e * v[2]]); return q ? [q[0] - pIso[0], q[1] - pIso[1]] : [0, 0]; };
+  const unit = (v, fb) => { const n = Math.hypot(v[0], v[1]); return n > 1e-9 ? [v[0] / n, v[1] / n] : fb; };
+  const ref = {
+    key, R, t, ta, aspect, fovYDeg, P0, pIso, outline: outlineHull, belt: beltHull, beltPts, anchors: new Map(),
+    axesIso: { anterior: unit(axisIso(ap3(Q0, [0, -1, 0])), [0, 1]), right: unit(axisIso(ap3(Q0, [-1, 0, 0])), [1, 0]) }
+  };
+  byPts.set(key, ref);
+  while (byPts.size > SIL_CACHE_MAX) byPts.delete(byPts.keys().next().value);
+  return ref;
+}
+
+/** Camera-space projector (camera at the origin, YXZ yaw/pitch like Three) for carried world0 points. */
+function cameraProjector(carry, { yaw, pitch, fovYDeg, aspect }) {
+  const M = mul3(mul3(rotX3(-pitch), rotY3(-yaw)), carry);
+  const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
+  return w => { const c = ap3(M, w); const depth = -c[2]; return { x: c[0] / (depth * ta), y: c[1] / (depth * t), depth }; };
+}
+
+/**
+ * The brain's projected silhouette (convex hull of the WHOLE brain: every brain mesh, both hemispheres) for a camera.
+ * seg: a segmentMotorStrips result (its `outline`; without it the glass grid, else the strips; or pass `points`, a
+ *   brainOutlinePoints result or flat xyz). view: a brainViewTransform result (orbit + grab carry included).
+ * camera: { aspect (required), fovYDeg (70), yaw, pitch (radians, camera convention), near (0.02) }; marginMm (1): the hull is
+ *   pushed outward by this much brain so the true silhouette stays inside it.
+ * Look-invariant core: the hull is found once per uncarried view (frame + orbit), aspect and FOV in a reference camera
+ * looking at the brain centre, and cached (a central projection from the same point maps a convex hull onto the convex
+ * hull, so re-projecting the hull vertices for another look or a grab carry is exact while the brain is in front of the
+ * camera). Per call: about 30-60 hull vertices are projected, so it is cheap enough per frame.
+ * Returns { kind: 'ns-brain-silhouette', inFront (false when part of the brain is behind the camera: hull not valid),
+ *   hull: [[xNdc, yNdc], ...] (CCW), bounds: { minX, maxX, minY, maxY, cx, cy } ((cx, cy) = the projected brain
+ *   centre, the locked orbit pivot), motorBelt: { minX, maxX, minY, maxY, widthNdc, hull } (both precentral strips),
+ *   camera, basis ('outline' | 'grid' | 'box' | 'strips' | 'points'), ref (cache handle for arrowAnchors) }.
+ */
+export function brainSilhouette(seg, view, { aspect, fovYDeg = 70, yaw = 0, pitch = 0, near = SILHOUETTE.near, points = null, marginMm = SILHOUETTE.marginMm } = {}) {
+  if (!view || view.kind !== 'ns-brain-view') throw new Error('ns:brain_view: a brainViewTransform result is required');
+  if (!(Number.isFinite(aspect) && aspect > 0)) throw new Error('ns:brain_silhouette: aspect must be finite and > 0');
+  if (!(Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180)) throw new Error('ns:brain_silhouette: fovYDeg must be in (0, 180)');
+  if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) throw new Error('ns:brain_silhouette: yaw and pitch must be finite');
+  let basis, outlinePts;
+  if (points) { outlinePts = points.kind === 'ns-brain-outline' ? points.points : checkPositions(points, 'points'); basis = 'points'; }
+  else {
+    if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result (or points) is required');
+    const o = outlineBasisFor(seg); outlinePts = o.points; basis = o.basis;
+  }
+  const beltPts = isSegmentation(seg) ? beltPointsFor(seg) : null;
+  if (!(Number.isFinite(marginMm) && marginMm >= 0)) throw new Error('ns:brain_silhouette: marginMm must be finite and >= 0');
+  const ref = silhouetteReference(view, outlinePts, beltPts, aspect, fovYDeg, marginMm);
+  const carry = mul3(rotY3(view.grabYaw), rotX3(view.grabPitch));
+  const proj = cameraProjector(carry, { yaw, pitch, fovYDeg, aspect });
+  let inFront = true;
+  const project = list => list.map(w => { const p = proj(w); if (!(p.depth > near)) inFront = false; return [p.x, p.y]; });
+  const hull = project(ref.outline.world);
+  const box = h => { let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity; for (const [x, y] of h) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; } return { minX, maxX, minY, maxY }; };
+  const c = proj(ref.P0);
+  const bounds = { ...box(hull), cx: c.x, cy: c.y };
+  let motorBelt = null;
+  if (ref.belt) { const bh = project(ref.belt.world); const bb = box(bh); motorBelt = { ...bb, widthNdc: bb.maxX - bb.minX, hull: bh }; }
+  if (!(c.depth > near)) inFront = false;
+  return { kind: 'ns-brain-silhouette', inFront, hull, bounds, motorBelt, camera: { aspect, fovYDeg, yaw, pitch }, basis, ref, _carry: carry };
+}
+
+/** Orbit-arrow placement defaults (D2): gap off the silhouette as a fraction of the view width and the button size. */
+export const ARROW_ANCHORS = freezeR2({ gapFrac: BRAIN_VIEW.arrowGapFrac, sizePx: BRAIN_VIEW.arrowSizePx, refHeightPx: BRAIN_VIEW.refHeightPx });
+
+/**
+ * Orbit-arrow anchors just OUTSIDE the brain silhouette (D2): one per side, anchored to the brain's frame (they follow
+ * orbit and drag, and stay put relative to the brain when the player looks around).
+ * sil: a brainSilhouette result. opts: a number (gapNdc) or { gapNdc (NDC-x units, i.e. fraction of the half-width) |
+ *   gapFrac (fraction of the view width; default ARROW_ANCHORS.gapFrac 0.035), radiusNdc (the button's half-size in
+ *   NDC-y units) | sizePx + viewportPx ({ width, height } CSS px; default 44 px on a 720 px tall view) }.
+ * Rule (computed once per silhouette reference, in the reference camera looking at the brain centre, in isotropic
+ *   screen units): from the brain centre along the brain's own projected axes (forward = toward the anterior, back,
+ *   right = toward the subject's right, left), the arrow centre is placed where its distance to the convex silhouette
+ *   is exactly gap + radius, so the button's nearest edge is `gap` off the glass. At the default view these are above,
+ *   below, right and left of the brain.
+ * Returns { forward, back, left, right: { xNdc, yNdc (centre, current camera), tangentAngle (radians, screen space with
+ *   y up: direction of the silhouette edge where the axis leaves it, counter-clockwise; rotate a curved icon by it so
+ *   it hugs the brain), normalAngle (outward normal = tangentAngle - pi/2), exitNdc [x, y] (where the axis leaves the
+ *   silhouette), dir (world unit vector, current carry), look { yaw, pitch } (radians, camera convention: the look
+ *   that puts the arrow under the crosshair), onScreen, inFront }, gapNdc, radiusNdc }.
+ */
+export function arrowAnchors(sil, opts = {}) {
+  if (!sil || sil.kind !== 'ns-brain-silhouette' || !sil.ref) throw new Error('ns:brain_arrows: a brainSilhouette result is required');
+  const o = typeof opts === 'number' ? { gapNdc: opts } : (opts || {});
+  const ref = sil.ref, aspect = ref.aspect;
+  const gapNdc = o.gapNdc !== undefined && o.gapNdc !== null ? o.gapNdc : 2 * (o.gapFrac !== undefined ? o.gapFrac : ARROW_ANCHORS.gapFrac);
+  const hPx = o.viewportPx && o.viewportPx.height > 0 ? o.viewportPx.height : ARROW_ANCHORS.refHeightPx;
+  const radiusNdc = o.radiusNdc !== undefined && o.radiusNdc !== null ? o.radiusNdc : (o.sizePx !== undefined ? o.sizePx : ARROW_ANCHORS.sizePx) / hPx;
+  if (!(Number.isFinite(gapNdc) && gapNdc >= 0 && Number.isFinite(radiusNdc) && radiusNdc >= 0)) throw new Error('ns:brain_arrows: gap and radius must be finite and >= 0');
+  const gIso = gapNdc * aspect, rIso = radiusNdc, key = `${gIso}|${rIso}`;
+  let A = ref.anchors.get(key);
+  if (!A) {
+    const H = ref.outline.iso;
+    const C = insideConvex(H, ref.pIso[0], ref.pIso[1]) ? ref.pIso : H.reduce((s, p) => [s[0] + p[0] / H.length, s[1] + p[1] / H.length], [0, 0]);
+    const toWorld = (X, Y) => normalize(ap3(ref.R, [(X / aspect) * ref.ta, Y * ref.t, -1]));
+    const fwd = ref.axesIso.anterior, rgt = ref.axesIso.right;
+    const dirs = { forward: fwd, back: [-fwd[0], -fwd[1]], right: rgt, left: [-rgt[0], -rgt[1]] };
+    A = {};
+    for (const [name, u] of Object.entries(dirs)) {
+      // exit point: bisection on inside-ness along the ray (C is inside the convex hull)
+      let lo = 0, hi = 1;
+      while (insideConvex(H, C[0] + u[0] * hi, C[1] + u[1] * hi) && hi < 1e3) hi *= 2;
+      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (insideConvex(H, C[0] + u[0] * m, C[1] + u[1] * m)) lo = m; else hi = m; }
+      const e = hi, E = [C[0] + u[0] * e, C[1] + u[1] * e];
+      // anchor: distance to the hull = gap + radius (monotone along the ray outside a convex set)
+      const want = gIso + rIso;
+      let a0 = e, a1 = e + want + 1e-9;
+      while (distToConvex(H, C[0] + u[0] * a1, C[1] + u[1] * a1) < want && a1 < 1e3) a1 = e + 2 * (a1 - e);
+      for (let i = 0; i < 60; i++) { const m = (a0 + a1) / 2; if (distToConvex(H, C[0] + u[0] * m, C[1] + u[1] * m) < want) a0 = m; else a1 = m; }
+      const P = [C[0] + u[0] * a1, C[1] + u[1] * a1];
+      // the hull edge the axis crosses (nearest edge to E) gives the tangent (CCW direction)
+      let bi = 0, bd = Infinity;
+      for (let i = 0; i < H.length; i++) {
+        const p = H[i], q = H[(i + 1) % H.length], ex = q[0] - p[0], ey = q[1] - p[1], L2 = ex * ex + ey * ey;
+        const s = L2 > 0 ? Math.max(0, Math.min(1, ((E[0] - p[0]) * ex + (E[1] - p[1]) * ey) / L2)) : 0;
+        const d = Math.hypot(E[0] - p[0] - s * ex, E[1] - p[1] - s * ey);
+        if (d < bd) { bd = d; bi = i; }
+      }
+      const p = H[bi], q = H[(bi + 1) % H.length], tl = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      const tg = [(q[0] - p[0]) / tl, (q[1] - p[1]) / tl], dl = 0.05 * (want + 0.01);
+      A[name] = {
+        anchor: toWorld(P[0], P[1]), exit: toWorld(E[0], E[1]),
+        t0: toWorld(E[0] - tg[0] * dl, E[1] - tg[1] * dl), t1: toWorld(E[0] + tg[0] * dl, E[1] + tg[1] * dl)
+      };
+    }
+    ref.anchors.set(key, A);
+  }
+  const carry = sil._carry || mul3(rotY3(0), rotX3(0));
+  const cam = sil.camera, proj = cameraProjector(carry, cam);
+  const out = { gapNdc, radiusNdc };
+  for (const name of ['forward', 'back', 'left', 'right']) {
+    const a = A[name];
+    const p = proj(a.anchor), e = proj(a.exit), t0 = proj(a.t0), t1 = proj(a.t1);
+    const tx = (t1.x - t0.x) * cam.aspect, ty = t1.y - t0.y;
+    const tangentAngle = Math.atan2(ty, tx);
+    const w = ap3(carry, a.anchor);
+    const look = lookAnglesToward(w);
+    out[name] = {
+      xNdc: p.x, yNdc: p.y, tangentAngle, normalAngle: tangentAngle - Math.PI / 2, exitNdc: [e.x, e.y], dir: w,
+      look, inFront: p.depth > 0 && e.depth > 0, onScreen: p.depth > 0 && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1
+    };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

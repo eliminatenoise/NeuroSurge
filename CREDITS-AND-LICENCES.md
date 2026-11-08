@@ -10,9 +10,9 @@ does **not** extend to the third-party material. In particular, the BodyParts3D 
 | three.js r170 (3D engine) | `vendor/three.module.js`, `vendor/LICENSE` | MIT | three.js authors |
 | BodyParts3D 4.0 anatomy meshes | `packets/**/meshes/*.obj` | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
 
-This is the first public playable release of NeuroSurge (round-2 build). Exact hashes for every file are in
-`SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at the top of the
-NeuroSurge repository (https://github.com/eliminatenoise/NeuroSurge).
+This is the round-3 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
+every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
+the top of the NeuroSurge repository on GitHub.
 
 ## 1. BodyParts3D (anatomy)
 
@@ -32,8 +32,12 @@ NeuroSurge repository (https://github.com/eliminatenoise/NeuroSurge).
 - The OBJ files themselves are unmodified. Each one is a byte-exact member of the official archive, verified by its
   ZIP CRC32, byte count and SHA-256. Nothing was centred, mirrored, renamed, re-meshed, unit-converted or
   header-edited.
-- While the game runs, it poses whole meshes as rigid pieces and tints them with simulated activity colours. This
-  happens only in the browser's memory; the files are not changed.
+- At run time the bones are moved rigidly, the muscles are bent to follow them (a geometry-only skinning of each
+  muscle's vertices to the nearby bones, with no muscle volume or contraction model), and colours showing the
+  simulated activity are added. This happens only in the browser's memory; the OBJ files are not changed.
+- The shipped packet file `packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt` still describes the run-time
+  changes as "whole-mesh rigid transforms". That wording is out of date; the statement above replaces it. The packet
+  file is covered by the packet's `SHA256SUMS.txt` and was left byte-identical in this build.
 - For publication, the absolute local file paths recorded in the project's own provenance fields
   (`inputs/MESH-MANIFEST.json`, `inputs/FULLBODY-MESH-MANIFEST.json`, `inputs/MOVEMENT-MAP.json` and
   `packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json`) were replaced by the placeholders `<claude-dev-root>/`

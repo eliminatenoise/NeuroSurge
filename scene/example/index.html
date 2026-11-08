@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroSurge</title>
-<meta name="description" content="NeuroSurge: a simulated first-person motor-cortex game that runs locally in the browser (companion to NeuroTranslate 0.0, a research model name, not a validated decoder). All activity is simulated and unitless; gaze and keys are virtual inputs, not stimulation or decoding.">
+<meta name="description" content="NeuroSurge: a first-person game about how your brain moves your body. It runs in your browser on your own computer. Everything in it is simulated, with no real units (unitless). Looks, clicks and keys are game controls, not real stimulation or decoding. NeuroTranslate 0.0 is just a name for a model; it is not a validated decoder.">
 <link rel="stylesheet" href="./neurosurge.css">
 <style>
 /* Game shell (round-1 A4, round-2 U4-app): the 2 s start instructions and the Esc page (one overlay, data-mode
@@ -113,6 +113,17 @@
   .ns-shell-card > .ns-shell-limits { grid-column: 2; }
   .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 1 / -1; }
 }
+/* R3-polish (ultrawide, e.g. 2560x1080): a wider card in three columns (how to play | controls | settings and "what this
+   game is, and is not"), so the whole page fits the short, wide screen without scrolling and the text is not a narrow
+   strip in the middle. */
+@media (min-width: 1700px) and (min-aspect-ratio: 2/1) {
+  .ns-shell-card { max-width: 1640px; grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr); grid-auto-flow: row dense; font-size: 14px; }
+  .ns-shell-card > .ns-shell-grid { grid-column: 1; grid-row: span 2; }
+  .ns-shell-card > .ns-shell-settings { grid-column: 2; margin-top: 4px; }
+  .ns-shell-card > .ns-shell-limits { grid-column: 2; }
+  .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 2; }
+  .ns-shell-limits ul { font-size: 13px; }
+}
 .ns-shell-modenote { margin: 2px 0 0; color: var(--ns-muted, #c7d2df); font-size: 13px; }
 .ns-shell-modenote[hidden], .ns-shell-settings[hidden], .ns-shell-actions button[hidden] { display: none; }
 .ns-shell-steps { margin: 0; padding-left: 0; list-style: none; counter-reset: ns-step; }
@@ -136,7 +147,30 @@
 .ns-shell-steps li + li { margin-top: 6px; }
 .ns-shell-settings { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(232, 238, 245, 0.16); }
 .ns-shell-select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid #c7d2df; background: #0d141d; color: #e8eef5; }
-.ns-shell-reset { border-color: var(--ns-accent, #ffe066); }
+/* R3-polish (Esc page): Reset body is the one obvious second action: gold edge and fill (the gold of the "switched on"
+   marks it clears) and a reset symbol; Reset brain view stays a quiet outline button. One plain line under the buttons
+   says what both do. */
+.ns-shell-reset {
+  font-weight: 700;
+  padding: 8px 16px 8px 14px;
+  border: 2px solid var(--ns-activated, #ffc65c);
+  background: rgba(255, 198, 92, 0.16);
+  color: #fff1cc;
+}
+.ns-shell-reset::before { content: ""; display: inline-block; width: 1.05em; height: 1.05em; margin-right: 7px; vertical-align: -0.17em; background: var(--ns-activated, #ffc65c); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12a7.5 7.5 0 1 0 2.4-5.5'/%3E%3Cpath d='M4.2 3.6v4.6h4.6'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12a7.5 7.5 0 1 0 2.4-5.5'/%3E%3Cpath d='M4.2 3.6v4.6h4.6'/%3E%3C/svg%3E") center / contain no-repeat; }
+.ns-shell-reset:hover { background: rgba(255, 198, 92, 0.28); }
+.ns-shell-secondary:not(.ns-shell-reset):hover { background: rgba(232, 238, 245, 0.08); }
+.ns-shell-resethelp { margin: -6px 0 12px; font-size: 12.5px; color: var(--ns-muted, #c7d2df); }
+.ns-shell-resethelp[hidden] { display: none; }
+/* R3-polish: each step opens with a short bold lead-in, so the page can be scanned. */
+.ns-shell-step-head { color: #f2f6fa; font-weight: 700; }
+/* R3-polish (2 s intro): a thin bar along the top of the card runs down over the intro (shown only in intro mode). */
+.ns-shell-card { position: relative; }
+.ns-shell-timer { display: none; }
+.ns-shell[data-mode="intro"] .ns-shell-timer { display: block; position: absolute; top: 0; left: 0; right: 0; height: 4px; grid-column: auto; grid-row: auto; background: rgba(140, 242, 255, 0.18); }
+.ns-shell-timer-bar { display: block; height: 100%; background: #ffe066; transform-origin: left center; }
+.ns-shell[data-mode="intro"] .ns-shell-timer-bar { animation: ns-intro-timer var(--ns-intro-ms, 2000ms) linear forwards; }
+@keyframes ns-intro-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .ns-shell-section-title {
   margin: 0 0 8px;
   padding: 0;
@@ -203,6 +237,12 @@
   color: #e8eef5;
   font-size: 13px;
   text-align: center;
+}
+/* R3-integrator (R3-player items 9/10): in portrait the toast sits at the top left of the bottom information band (the
+   legend takes its top right), not on the panel text. */
+@media (max-aspect-ratio: 999/1000) {
+  .ns-shell-toast { bottom: auto; top: calc(100% - var(--ns-info-portrait-vh, 36vh) - 12px); left: 12px; transform: none;
+    max-width: calc(100% - min(var(--ns-portrait-notice-px, 320px), var(--ns-portrait-notice-vw, 86vw)) - 36px); text-align: left; }
 }
 /* Fallback far-right information overlay (R14): what is happening neurophysiologically for the viewed area. It sits
  * just left of the HUD's right column (neurosurge.css .ns-panel: min(300px, 26vw) at the right edge), so it never
@@ -305,12 +345,17 @@
       data-packet-pov-demo-assets-r2="/packets/pov-demo-assets-r2/"
       data-movement-map-url="/inputs/MOVEMENT-MAP.json">
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
-          aria-label="NeuroSurge first-person scene: virtual control of a simulated body and brain (no real stimulation or decoding)"></canvas>
+          aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."></canvas>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
-  <noscript><p class="ns-fatal">NeuroSurge needs JavaScript and WebGL.</p></noscript>
+  <noscript><p class="ns-fatal">NeuroSurge needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
 </main>
 <script type="module">
+// Round 3 (R17/D3): the page's visible strings come from ns-text PAGE (the static texts above equal them; a unit test
+// checks that). ns-text is pure, so it loads before three and ns-app; the fallbacks cover a failed import.
+let PAGE = { fatalPrefix: 'NeuroSurge could not start: ', restartPrefix: 'NeuroSurge could not restart: ',
+  secureContext: 'Your browser blocked a safety check (crypto.subtle). Open the game over HTTPS or from localhost.' };
+try { ({ PAGE } = await import('../src/ns-text.mjs')); } catch { /* keep the fallbacks */ }
 const app = document.getElementById('ns-app');
 const canvas = document.getElementById('ns-canvas');
 const hudRoot = document.getElementById('ns-hud');
@@ -354,7 +399,7 @@ async function fetchText(url) {
 
 async function sha256Hex(text) {
   const subtle = window.crypto && window.crypto.subtle;
-  if (!subtle) throw new Error('crypto.subtle is unavailable: serve the page over HTTPS or from localhost');
+  if (!subtle) throw new Error(PAGE.secureContext);
   const digest = await subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -397,7 +442,7 @@ try {
   canvas.focus({ preventScroll: true });
 } catch (err) {
   bootError = err && err.message ? err.message : String(err);
-  showFatal(`NeuroSurge could not start: ${bootError}`);
+  showFatal(`${PAGE.fatalPrefix}${bootError}`);
 } finally {
   markBooted();
 }
@@ -413,7 +458,7 @@ window.addEventListener('pageshow', e => {
   if (!e.persisted || !scene || !startScene) return;
   const state = typeof scene.status === 'function' ? scene.status() : null;
   if (state && state.stopped) {
-    try { boot(); } catch (err) { showFatal(`NeuroSurge could not restart: ${err && err.message ? err.message : String(err)}`); }
+    try { boot(); } catch (err) { showFatal(`${PAGE.restartPrefix}${err && err.message ? err.message : String(err)}`); }
   } else if (typeof scene.resume === 'function') {
     scene.resume();
   }

@@ -736,6 +736,26 @@ export const FIST_POSE_DEG = Object.freeze({
   little_mcp_flex: 90, little_pip_flex: 105, little_dip_flex: 65
 });
 
+/**
+ * R3-arm: the relaxed hand at rest (degrees, POSE_JOINTS semantics; rest-compensated, so 0 = straight joint). A relaxed
+ * hand is not straight: each finger is a little more bent than the one beside it, from the index to the little finger
+ * (the normal resting "cascade" of the fingers, a standard clinical observation), and the thumb rests slightly turned
+ * toward the index finger. The wrist is not part of this pose (0), so the accepted arm fit, the elbow solution and the
+ * WASD wrist convention are unchanged; abduction joints are absent (0).
+ * PROVENANCE: display choices inside commonly described relaxed-hand ranges (MCP about 20-45 deg and PIP about 25-50 deg,
+ * increasing from index to little; CITED FROM MEMORY, NOT ACQUIRED OR RE-VERIFIED HERE; Root reference qualification
+ * pending; not measured kinematics). Round 2 used 15/20/10 on every finger, which on this rig is almost the
+ * BodyParts3D mesh rest (rig.restAngles index 12.5/19.4/8.1): the fingers looked straight and splayed and palm up read
+ * as a stiff "stop" sign (harness/run-R3-arm-shots-base-2/04-rest-supinated-hand.png). ns-actions REST_POSE uses it.
+ */
+export const REST_HAND_POSE_DEG = Object.freeze({
+  thumb_cmc_opp: 12, thumb_mcp_flex: 15, thumb_ip_flex: 15,
+  index_mcp_flex: 22, index_pip_flex: 28, index_dip_flex: 12,
+  middle_mcp_flex: 28, middle_pip_flex: 35, middle_dip_flex: 14,
+  ring_mcp_flex: 34, ring_pip_flex: 40, ring_dip_flex: 16,
+  little_mcp_flex: 40, little_pip_flex: 44, little_dip_flex: 18
+});
+
 /* ------------------------------------------------------------------ boxes */
 
 /** The {d, a, p} frame of a segment's box: frame(segment direction, its joint axis). */

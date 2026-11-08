@@ -47,7 +47,7 @@ import {
 } from './ns-math.mjs';
 import {
   forwardKinematics, handLocalMatrices, wristMatrix, forearmHandMatrix, normalizeJoints, jointMatrix, HAND_SEGMENTS,
-  FIST_POSE_DEG, DIGITS, PRONATION_RANGE_DEG, PRONATION_STATES
+  FIST_POSE_DEG, REST_HAND_POSE_DEG, DIGITS, PRONATION_RANGE_DEG, PRONATION_STATES
 } from './ns-rig.mjs';
 import { activityColor, activityShade, hexToLinear } from './ns-colors.mjs';
 
@@ -103,7 +103,9 @@ export const ARM_DEFAULTS = Object.freeze({
   depthSpeedMPerS: 0.3,
   minDepth: 0.22,
   maxHandHeightNdc: 2,
-  minReachSpanM: 0.03
+  minReachSpanM: 0.03,
+  // R3-arm: reach input ramp time (s), see REACH_RAMP_S (literal here because ARM_DEFAULTS is built first).
+  reachRampS: 0.06
 });
 
 /**
@@ -210,7 +212,7 @@ function tanHalfFov(aspect, fovYDeg) {
 }
 
 const NUMERIC_OPTIONS = Object.freeze(['yNdc', 'fovYDeg', 'near', 'marginNdc', 'nearMargin', 'xNdcStart', 'depthStart',
-  'xSpeedNdcPerS', 'depthSpeedMPerS', 'minDepth', 'maxHandHeightNdc', 'minReachSpanM']);
+  'xSpeedNdcPerS', 'depthSpeedMPerS', 'minDepth', 'maxHandHeightNdc', 'minReachSpanM', 'reachRampS']);
 
 function mergeOptions(options) {
   const opt = options || {};
@@ -230,6 +232,7 @@ function mergeOptions(options) {
   if (!(o.minDepth > 0)) fail('arm_input', 'minDepth must be positive');
   if (!(o.maxHandHeightNdc > 0)) fail('arm_input', 'maxHandHeightNdc must be positive (2 = the full view height, i.e. no cap)');
   if (!(o.minReachSpanM >= 0)) fail('arm_input', 'minReachSpanM must be >= 0');
+  if (!(o.reachRampS >= 0 && o.reachRampS <= 1)) fail('arm_input', 'reachRampS must be in [0, 1] seconds (0 = no ramp)');
   return o;
 }
 
@@ -711,6 +714,7 @@ export const SIZE_REFERENCE_POSES = Object.freeze((() => {
  */
 export const GAME_POSES = Object.freeze([
   Object.freeze({}),
+  REST_HAND_POSE_DEG, // R3-arm: the relaxed rest hand (ns-actions REST_POSE) is the pose shown most of the time
   Object.freeze({ ...Object.fromEntries(DIGIT_NAMES.flatMap(d => [[`${d}_mcp_flex`, -5], [`${d}_pip_flex`, 0], [`${d}_dip_flex`, 0]])), thumb_mcp_flex: -5, thumb_ip_flex: 0 }),
   Object.freeze({ index_mcp_abd: 15, ring_mcp_abd: 10, little_mcp_abd: 20 }),
   FIST_POSE_DEG,
@@ -1300,11 +1304,82 @@ function guardedStep(v, rate, lo, hi) {
 }
 
 /**
+ * R3-arm reach input ramp (seconds): the A/D and W/S axis LEVELS move toward the keys' value at a limited rate (a
+ * full 0 -> 1 change takes REACH_RAMP_S), and the hand moves by the exact integral of the level. Why: with real key
+ * input two keys pressed "together" often arrive one frame apart. Without a ramp that one frame moved the hand a full
+ * frame of travel (0.9 NDC/s x 16.7 ms = 0.015 NDC, e2e S07 "A+D cancel" FAIL at -0.01494 in
+ * harness/run-R3-arm-base-cdp-2). With the ramp a one-frame skew moves it 0.9 * (1/60)^2 / (2 * 0.06) = 0.002 NDC.
+ * Only the START is eased: releasing a key (or pressing the opposite one) stops the hand at once, so there is no
+ * glide after release (a glide made the hand drift for 60 ms after the keys were up: e2e S04/S07 QA FAIL in
+ * harness/run-R3-arm-e2e-wired-1-qa). Response: the hand moves in the first frame that sees the key (about 1.4 px at
+ * 1280 px wide) and by about 5 px after two frames (33 ms), so it is visible well inside 100 ms (measured in the
+ * browser: harness/run-R3-arm-latency-*). A display/control choice (not a measured movement time course). Only used
+ * when the reach state carries the levels (see stepReach).
+ */
+export const REACH_RAMP_S = ARM_DEFAULTS.reachRampS;
+
+/**
+ * One axis level l0 moved toward the key value k for h seconds (rampS <= 0: no ramp). The level rises toward k at rate
+ * 1 / rampS; it never lags a release or a reversal: a level pointing against k, or larger than k, drops to k's side of
+ * zero at once (a stop is instant, a start is eased). Exact; returns the new level and the time integral of the level
+ * over the step (multiply by the axis speed for the travel). Pure.
+ */
+export function rampAxis(l0, k, h, rampS = REACH_RAMP_S) {
+  if (!(h > 0)) return { level: l0, integral: 0 };
+  if (!(rampS > 0)) return { level: k, integral: k * h };
+  let l = l0;
+  if (l !== 0 && (k === 0 || Math.sign(l) !== Math.sign(k))) l = 0;
+  else if (Math.abs(l) > Math.abs(k)) l = k;
+  const r = 1 / rampS, gap = k - l, tr = Math.abs(gap) / r;
+  if (tr <= h) return { level: k, integral: 0.5 * (l + k) * tr + k * (h - tr) };
+  const l1 = l + Math.sign(gap) * r * h;
+  return { level: l1, integral: 0.5 * (l + l1) * h };
+}
+
+/**
+ * R3-arm WASD wrist convention (moved here from ns-app WASD_WRIST so the arm owner keeps the coordination in one
+ * place; a DISPLAY GAME CONVENTION, not a measured synergy, not EMG, not a decoder). The keys move the hand; the IK moves
+ * the shoulder and elbow; this adds a small wrist angle tied to the same reach state so the wrist moves with them:
+ *  - depth: reaching deeper (W) extends the wrist, pulling back (S) flexes it (degPerM, unchanged from round 2);
+ *  - sideways: moving the hand right (D) or left (A) tilts the hand on screen. Its sign is chosen so the wrist works
+ *    WITH the elbow instead of against it: with the palm down, wrist flexion lies almost in the elbow's bending plane
+ *    (about 0.15 deg of elbow per deg of wrist on this rig), and round 2's sign (+12 deg/NDC, D flexes) cancelled part of
+ *    the elbow change of a sideways sweep. Measured on the real rig and app (harness/run-R3-arm-probe-1/probe.mjs, 30
+ *    timing variants of the e2e S21 protocol at the e2e look yaw 1.2 / pitch 0.1), minimum NET elbow change A / D:
+ *    round 2 0.92 / 3.74 deg; R3 rest pose with the +12 sign 2.33 / 4.77; this convention with the input ramp
+ *    3.84 / 7.13 (round3/R3-arm-NOTES.md). The sideways term follows the forearm turn (times sin(forearm_pronation),
+ *    +1 palm down, -1 palm up, 0 at mid-turn), so the hand tilts the same way on screen and the wrist keeps working with
+ *    the elbow in both forearm states.
+ * Capped at maxDeg; the whole-hand fit may still limit it (fitHand clamped.wrist).
+ */
+export const WASD_WRIST_SYNERGY = Object.freeze({ depthRefM: 0.35, degPerM: -60, xRefNdc: -0.3, degPerNdcPalmDown: -12, maxDeg: 15 });
+
+/**
+ * Wrist degrees (+ flexion) of the WASD wrist convention for a reach state { xNdc, depth } and the forearm rotation
+ * (`rotation` as in fitHand requests: degrees from neutral, { value } 0 pronated .. 1 supinated, or a rotation state;
+ * default palm down). Pure; 0 for an incomplete reach state.
+ */
+export function wasdWristDeg(reach, rotation = PRONATION_STATES.pronated, o = WASD_WRIST_SYNERGY) {
+  if (!o || !reach || !Number.isFinite(reach.depth) || !Number.isFinite(reach.xNdc)) return 0;
+  const pron = jointsWithRotation({}, rotation).forearm_pronation;
+  const s = Number.isFinite(pron) ? Math.sin(clamp(pron, -90, 90) * DEG) : 1;
+  const v = o.degPerM * (reach.depth - o.depthRefM) + o.degPerNdcPalmDown * s * (reach.xNdc - o.xRefNdc);
+  return clamp(v, -o.maxDeg, o.maxDeg) + 0; // + 0: never -0
+}
+
+/** True when a guarded step moved less than requested in the request's direction (a limit stopped it). */
+const stoppedByLimit = (from, to, rate) => (rate > 0 ? to - from < rate - 1e-12 : rate < 0 ? to - from > rate + 1e-12 : false);
+
+/**
  * Apply A/D (axes.x: -1 left, +1 right) to xNdc and W/S (axes.z: +1 = W = forward = larger depth) to depth.
  * Returns the un-fitted request {xNdc, depth}; fitHand applies the rig, viewport and look limits. Feed fitHand's
  * reachState back as the next state, with options.xRange = fit.xLimits and options.depthRange = fit.depthLimits (the
  * wind-up guard: holding a key beyond a limit does not move the intent further, and the opposite key responds at once).
  * Non-finite or negative dt counts as 0.
+ * R3-arm input ramp: when the state carries the axis levels `ax` / `az` (reachStart does; carry them to the next frame
+ * with carryReachRamp), the levels ramp toward the keys over options.reachRampS (default REACH_RAMP_S) and the result
+ * also returns { ax, az }. A level whose movement a limit stopped is reset to 0, so the opposite key still responds at
+ * once. A state without the levels (legacy callers) moves exactly as before (no ramp, no extra fields).
  */
 export function stepReach(state, axes, dt, options = {}) {
   const o = mergeOptions(options);
@@ -1314,15 +1389,50 @@ export function stepReach(state, axes, dt, options = {}) {
   const ax = axisValue(axes && axes.x), az = axisValue(axes && axes.z);
   const h = typeof dt === 'number' && Number.isFinite(dt) && dt > 0 ? dt : 0;
   const xr = options && options.xRange, dr = options && options.depthRange;
-  const x = guardedStep(state.xNdc, ax * o.xSpeedNdcPerS * h, xr ? xr.xMin : NaN, xr ? xr.xMax : NaN);
-  const d = guardedStep(state.depth, az * o.depthSpeedMPerS * h, dr ? dr.minDepth : NaN, dr ? dr.maxDepth : NaN);
-  return { xNdc: clamp(x, -1, 1), depth: clamp(d, o.minDepth, REACH_STATE_MAX_DEPTH) };
+  const ramped = Number.isFinite(state.ax) || Number.isFinite(state.az);
+  const rampS = ramped ? o.reachRampS : 0;
+  const lx = rampAxis(Number.isFinite(state.ax) ? clamp(state.ax, -1, 1) : 0, ax, h, rampS);
+  const lz = rampAxis(Number.isFinite(state.az) ? clamp(state.az, -1, 1) : 0, az, h, rampS);
+  const rx = lx.integral * o.xSpeedNdcPerS, rz = lz.integral * o.depthSpeedMPerS;
+  const x = clamp(guardedStep(state.xNdc, rx, xr ? xr.xMin : NaN, xr ? xr.xMax : NaN), -1, 1);
+  const d = clamp(guardedStep(state.depth, rz, dr ? dr.minDepth : NaN, dr ? dr.maxDepth : NaN), o.minDepth, REACH_STATE_MAX_DEPTH);
+  if (!ramped) return { xNdc: x, depth: d };
+  return {
+    xNdc: x, depth: d,
+    ax: stoppedByLimit(state.xNdc, x, rx) ? 0 : lx.level,
+    az: stoppedByLimit(state.depth, d, rz) ? 0 : lz.level
+  };
 }
 
-/** The starting reach state from the defaults. */
+/** The starting reach state from the defaults (with the R3-arm ramp levels at rest). */
 export function reachStart(options = {}) {
   const o = mergeOptions(options);
-  return { xNdc: o.xNdcStart, depth: o.depthStart };
+  return { xNdc: o.xNdcStart, depth: o.depthStart, ax: 0, az: 0 };
+}
+
+/**
+ * R3-arm wiring helper: the next frame's reach state `next` ({ xNdc, depth }, e.g. ns-app nextReach) with the ramp
+ * levels of this frame's stepReach result `stepped` carried over (unchanged `next` when `stepped` has none). Pure.
+ */
+export function carryReachRamp(next, stepped) {
+  if (!next || !stepped || !(Number.isFinite(stepped.ax) || Number.isFinite(stepped.az))) return next;
+  return { ...next, ax: Number.isFinite(stepped.ax) ? stepped.ax : 0, az: Number.isFinite(stepped.az) ? stepped.az : 0 };
+}
+
+/**
+ * R3-arm diagnostic: the screen x (NDC) at which a sideways A/D sweep at constant depth passes straight in front of the
+ * shoulder (the point of the hand's ray line closest to the shoulder). Elbow flexion depends only on the
+ * shoulder-to-hand distance (and a little on the wrist, about 0.15 deg of elbow per deg of wrist on this rig), so the
+ * elbow is most bent here and straightens on BOTH sides: a sideways hold that ends about as far beyond this x as it
+ * started before it shows almost no NET elbow change although the elbow bent and straightened during the hold.
+ * options as fitHand (attachment or shoulderCam). Pure.
+ */
+export function lateralElbowPeakXNdc({ depth, aspect, fovYDeg, yNdc } = {}, options = {}) {
+  const o = mergeOptions(withRequestY(options, yNdc));
+  finite(depth, 'depth');
+  if (!(depth > 0)) fail('arm_input', 'depth must be positive');
+  const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
+  return o.shoulderCam[0] / (depth * tanHalf * aspect);
 }
 
 /* ------------------------------------------------------------------ pronation / supination (double-tap Space) */

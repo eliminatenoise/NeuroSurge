@@ -15,6 +15,7 @@
   --ns-info-col-px: 300px;   /* INFO_PANEL.colPx */
   --ns-info-col-vw: 25vw;    /* INFO_PANEL.colVw */
   --ns-info-portrait-vh: 36vh; /* INFO_PANEL.portraitVh */
+  --ns-portrait-legend-reserve: 172px; /* INFO_PANEL_PORTRAIT_LEGEND_PX: legend + toast row at the top of the band */
   --ns-info-col-maxvh: 66vh;   /* INFO_PANEL.colMaxVh */
   --ns-leftarm: #8cf2ff;     /* REGION_STYLE.leftArmOutline (sRGB of the linear [0.55, 0.95, 1.0]) */
   /* Polish: one visual system for every overlay. */
@@ -198,8 +199,10 @@ html, body {
 .ns-legend-key { list-style: none; margin: 7px 0 4px; padding: 0; display: grid; gap: 3px; }
 .ns-legend-item { display: flex; align-items: center; gap: 7px; line-height: 1.25; }
 .ns-legend-swatch { flex: none; width: 13px; height: 13px; border-radius: 3px; box-sizing: border-box; }
-.ns-legend-item-leftarm .ns-legend-swatch { background: rgba(26, 133, 158, 0.85); border: 2px solid var(--ns-leftarm); }
-.ns-legend-item-other .ns-legend-swatch { background: rgba(88, 88, 120, 0.85); border: 1px solid var(--ns-other); }
+/* R3-polish: the swatches match the areas as they look on the glass (sampled from the default view: left-arm areas a
+   grey teal, the other areas a near-neutral grey), so "Other parts" no longer looks like the ramp's dark purple end. */
+.ns-legend-item-leftarm .ns-legend-swatch { background: rgba(64, 108, 118, 0.95); border: 2px solid var(--ns-leftarm); }
+.ns-legend-item-other .ns-legend-swatch { background: rgba(104, 106, 116, 0.95); border: 1px solid var(--ns-other); }
 .ns-legend-item-activated .ns-legend-swatch { background: rgba(120, 112, 120, 0.9); border: 2px solid var(--ns-activated); }
 .ns-legend-item-dot .ns-legend-swatch { width: 8px; height: 8px; margin: 0 2.5px; border-radius: 1px; transform: rotate(45deg); background: #a8eefc; }
 .ns-legend-item-leftarm .ns-legend-text,
@@ -245,6 +248,15 @@ html, body {
   color: var(--ns-muted);
 }
 .ns-legend-mid { font-size: 10.5px; color: var(--ns-label); text-align: center; }
+/* R3-polish: the ramp ends read "0 resting" and "strongest 1"; the shared-colours note gets its own centred line under
+   them, and the legend's spacing is a little tighter so the card keeps its fixed slot under the panel at 1280x720. */
+.ns-legend-ends { flex-wrap: wrap; row-gap: 0; }
+.ns-legend-lo { order: 1; }
+.ns-legend-hi { order: 2; }
+.ns-legend-mid { order: 3; flex: 1 0 100%; line-height: 1.25; }
+.ns-hud .ns-panel-legend { padding-top: 7px; padding-bottom: 7px; }
+.ns-hud .ns-legend-key { margin: 5px 0 3px; }
+.ns-hud .ns-rights { margin-top: 4px; padding-top: 4px; }
 
 /* Wide: the limits read as one compact paragraph; the two control/representation limits stay bold. */
 .ns-notices { margin-top: 3px; }
@@ -440,9 +452,11 @@ html, body {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1.5px solid rgba(232, 238, 245, 0.5);
-  background: rgba(9, 13, 20, 0.66);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  /* R3-polish: a brighter ring and a darker disc, so the four arrows read as buttons at a glance (still not attached to
+     the brain; hover turns them yellow with a caption). */
+  border: 2px solid rgba(232, 238, 245, 0.74);
+  background: rgba(12, 18, 28, 0.8);
+  box-shadow: 0 0 0 3px rgba(5, 7, 11, 0.35), 0 2px 10px rgba(0, 0, 0, 0.5);
   color: #e8eef5;
   font: 700 18px/1 var(--ns-font);
   cursor: pointer;
@@ -450,7 +464,7 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out, color 120ms ease-out;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out, color 120ms ease-out, opacity 160ms ease-out;
 }
 .ns-orbit-icon { display: block; width: 30px; height: 30px; pointer-events: none; }
 /* Polish (R16/R17): a plain caption appears beside the hovered arrow. */
@@ -483,6 +497,9 @@ html, body {
 }
 .ns-orbit:hover::after,
 .ns-orbit[data-hover="true"]::after { opacity: 1; }
+/* R3-polish: an arrow with the player's hand under it (A/D moved the hand there) fades so the hand stays in view; it
+   stays clickable and comes back to full strength on hover. */
+.ns-orbit[data-ns-under-hand="true"]:not(:hover):not([data-hover="true"]) { opacity: 0.32; }
 .ns-orbit:active { transform: scale(0.96); }
 .ns-orbit:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
 
@@ -554,7 +571,7 @@ html, body {
 .ns-infopanel[data-left-arm="true"] { border-left-color: var(--ns-leftarm); }
 .ns-infopanel[data-left-arm="true"] .ns-infopanel-tag { color: var(--ns-leftarm); }
 .ns-infopanel-viewed { margin-top: 3px; color: #ffe066; font-size: 11px; }
-.ns-infopanel-activity { display: flex; align-items: center; gap: 7px; margin: 8px 0 3px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ns-muted); }
+.ns-infopanel-activity { display: flex; align-items: center; gap: 7px; margin: 5px 0 2px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ns-muted); }
 .ns-infopanel-swatch { flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(232, 238, 245, 0.5); }
 /* Polish: the activity value on the shared ramp (same gradient as the legend, the brain and the muscles). */
 .ns-infopanel-meter { position: relative; height: 6px; margin: 2px 0 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
@@ -570,11 +587,11 @@ html, body {
 }
 .ns-infopanel-activations { color: var(--ns-activated); font-size: 11px; }
 /* Rows read as "Label value" lines over the full panel width (no narrow value column, no mid-word truncation). */
-.ns-infopanel-rows { display: block; margin: 5px 0 3px; padding-top: 5px; border-top: 1px solid var(--ns-surface-line); font-size: 11.5px; line-height: 1.35; }
+.ns-infopanel-rows { display: block; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid var(--ns-surface-line); font-size: 11.5px; line-height: 1.3; }
 .ns-infopanel-rows dt { display: inline; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ns-label); }
 .ns-infopanel-rows dt::after { content: "  "; white-space: pre; }
 .ns-infopanel-rows dd { display: inline; margin: 0; overflow-wrap: break-word; }
-.ns-infopanel-rows dd::after { content: ""; display: block; margin-bottom: 3px; }
+.ns-infopanel-rows dd::after { content: ""; display: block; margin-bottom: 2px; }
 /* Round-2 fixes V1 / SCI-4 / F6: plain lead, then short simulated / known / caveat lines, then the rows, then the long
    explanation ("More detail", clamped last), so the required fields stay inside the column at 1280x720. */
 .ns-infopanel-plain,
@@ -586,10 +603,12 @@ html, body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.ns-infopanel-plain { -webkit-line-clamp: 4; margin: 6px 0 4px; font-size: 12.5px; color: #eef3f8; }
+/* Round 3 (D3): slightly tighter spacing so the lead, 4 rows, the honesty lines and the More detail summary fit the
+   66vh column at 1280x720 on the longest card. */
+.ns-infopanel-plain { -webkit-line-clamp: 4; margin: 4px 0 3px; font-size: 12.5px; line-height: 1.35; color: #eef3f8; }
 .ns-infopanel-simulated,
 .ns-infopanel-known,
-.ns-infopanel-caveat { -webkit-line-clamp: 3; margin: 2px 0 3px; font-size: 11.5px; line-height: 1.35; }
+.ns-infopanel-caveat { -webkit-line-clamp: 3; margin: 1px 0 2px; font-size: 11px; line-height: 1.3; }
 .ns-infopanel-explanation { -webkit-line-clamp: 4; margin: 5px 0 4px; font-size: 11.5px; line-height: 1.35; color: var(--ns-muted); }
 .ns-infopanel[data-mode="idle"] .ns-infopanel-explanation,
 .ns-infopanel[data-mode="glass"] .ns-infopanel-explanation { -webkit-line-clamp: 6; font-size: 12.5px; color: #eef3f8; }
@@ -608,6 +627,33 @@ html, body {
 .ns-details-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
 .ns-details-link { color: #ffe066; text-decoration: underline; pointer-events: auto; }
 .ns-infopanel-citations { margin-top: 4px; font-size: 11px; color: #aab5c4; }
+/* Round 3 (D3): everything technical sits in a collapsed "More detail". Its summary is the panel's one pointer target
+   (drag-to-look mode); while it is open the panel scrolls instead of clipping. */
+.ns-infopanel-detail { margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--ns-surface-line); }
+.ns-infopanel-detail[hidden] { display: none; }
+.ns-infopanel-detail-summary { pointer-events: auto; cursor: pointer; font-size: 11.5px; font-weight: 700; color: var(--ns-label); }
+.ns-infopanel-detail-body { margin-top: 4px; font-size: 11px; line-height: 1.35; color: var(--ns-muted); }
+.ns-infopanel-detail-body p { margin: 0 0 4px; overflow-wrap: break-word; }
+.ns-infopanel-detail-key { font-weight: 700; color: var(--ns-label); }
+.ns-infopanel-detail-key::after { content: ":"; }
+.ns-infopanel-detail-caveats { margin: 2px 0 4px; padding-left: 16px; }
+.ns-infopanel-detail-sources { color: #aab5c4; }
+.ns-infopanel:has(.ns-infopanel-detail[open]) {
+  pointer-events: auto;
+  overflow-y: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* R3-polish (body views, R3-player items 3/10, INTEGRATION 7.4): while the brain is out of view (looking down at the
+   torso and legs, far right at the right arm, up at the face) the panel shrinks to a short card: title, part, signal
+   meter, the one plain sentence and the short "Simulated" line. The rows, the "Known" / "Keep in mind" lines and More
+   detail come back as soon as the brain is in view again (an open More detail keeps the full card). The always-on
+   limits line at the top still says that everything is simulated. */
+.ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-rows, .ns-infopanel-known, .ns-infopanel-caveat, .ns-infopanel-detail, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-activations) { display: none; }
+/* R3-fix (review F8 / m5): the short card shows its sentences in full (no clamp), so no sentence is ever cut mid-word. */
+.ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { -webkit-line-clamp: unset; display: block; overflow: visible; }
+.ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-explanation { -webkit-line-clamp: unset; display: block; overflow: visible; }
+.ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel { background: rgba(9, 13, 20, 0.72); }
 
 /* Face layer label (ghost) and inset frame. */
 .ns-face-label {
@@ -647,17 +693,22 @@ html, body {
 
 /* Narrow / portrait: the information overlay becomes a bottom band; less important text is dropped first. */
 @media (max-aspect-ratio: 999/1000) {
-  .ns-infopanel { top: auto; bottom: var(--ns-gap); left: var(--ns-gap); width: auto; max-height: var(--ns-info-portrait-vh); font-size: 11.5px; }
+  /* R3-integrator: the panel fills the band below its top row (legend right, drag-to-look toast left). */
+  /* R3-polish: the panel hangs from the top of its slot (directly under the legend row), so a short card no longer
+     leaves an empty black gap between the legend and the panel; it still never runs past the bottom of the band. */
+  .ns-infopanel { top: calc(100% - var(--ns-gap) - var(--ns-info-portrait-vh) + var(--ns-portrait-legend-reserve)); bottom: auto; left: var(--ns-gap); width: auto; max-height: calc(var(--ns-info-portrait-vh) - var(--ns-portrait-legend-reserve)); font-size: 11.5px; }
   .ns-infopanel-plain { -webkit-line-clamp: 2; }
-  .ns-infopanel-explanation { display: none; }
+  /* Round 3 (D3): the explanation paragraph is only the idle / glass body now (region text is in More detail). */
+  .ns-infopanel-explanation { -webkit-line-clamp: 3; }
   .ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat { -webkit-line-clamp: 2; }
   /* Portrait is cramped: the colour key collapses to one row of short words. */
-  .ns-legend-key { grid-template-columns: repeat(4, max-content); column-gap: 10px; margin: 5px 0 2px; }
+  .ns-legend-key { grid-template-columns: repeat(4, max-content); column-gap: 6px; margin: 5px 0 2px; }
   .ns-legend-text { display: none; }
   .ns-legend-short { display: inline; }
   .ns-legend-item { gap: 4px; }
   .ns-legend-mid { display: none; }
-  .ns-panel-legend .ns-slot-regionNote { display: none; }
+  /* R3-fix (review SL-3): the map qualifier (verbatim pinned string) stays visible in portrait too. */
+  .ns-panel-legend .ns-slot-regionNote { display: block; font-size: 10.5px; }
   .ns-infopanel-caveats, .ns-infopanel-citations { display: none; }
   .ns-region-label { font-size: 10.5px; max-width: 140px; white-space: normal; }
 }
@@ -670,6 +721,30 @@ html, body {
 }
 @media (max-height: 520px) {
   .ns-infopanel-caveats, .ns-infopanel-citations { display: none; }
+}
+
+/* R3-polish (R3-player item 14, INTEGRATION 7.6): on big screens (e.g. 2560x1080) the panel, status card and legend text
+   is one step larger. The column widths stay the same (INFO_PANEL / HUD_LAYOUT mirrors), so the brain framing and the
+   arrow / label keep-out areas do not change; the taller panel still has 66vh to grow into. */
+@media (min-width: 1900px) and (min-height: 1000px) {
+  .ns-infopanel { font-size: 13px; }
+  .ns-infopanel-heading { font-size: 11.5px; }
+  .ns-infopanel-title { font-size: 20px; }
+  .ns-infopanel-tag { font-size: 13px; }
+  .ns-infopanel-plain { font-size: 14px; }
+  .ns-infopanel-rows { font-size: 12.5px; }
+  .ns-infopanel-rows dt { font-size: 11px; }
+  .ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat, .ns-infopanel-viewed, .ns-infopanel-activations,
+  .ns-infopanel-activity, .ns-infopanel-caveats, .ns-infopanel-detail-summary { font-size: 12px; }
+  .ns-infopanel[data-mode="idle"] .ns-infopanel-explanation,
+  .ns-infopanel[data-mode="glass"] .ns-infopanel-explanation { font-size: 13.5px; }
+  .ns-panel-info .ns-slot-title { font-size: 11.5px; }
+  .ns-panel-info .ns-slot-gaze { font-size: 14.5px; }
+  .ns-panel-info, .ns-panel-info .ns-slot-space, .ns-panel-info .ns-slot-note, .ns-panel-info .ns-slot-trigger { font-size: 12.5px; }
+  .ns-hud .ns-panel-legend { font-size: 12.5px; }
+  .ns-panel-legend .ns-slot-legendLabel, .ns-legend-mid { font-size: 11.5px; }
+  .ns-legend-ends, .ns-panel-legend .ns-slot-regionNote { font-size: 12px; }
+  .ns-orient { font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

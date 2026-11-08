@@ -23,6 +23,15 @@
 // plain-language hedge restating the explanation's own qualifier, shown by the info overlay), and per action:
 // uCentre (representative control position used to pick an action inside a region; left-arm values equal the existing
 // ns-brain MARKERS u), stabilizers, catalogRoles (existing MOVEMENT-MAP catalog keys, left arm only), lateralBias, note.
+//
+// Plain-language fields (round 3, R3-text; user R17 "simple so that anyone can understand", lead decision D3). Additive:
+// the technical label/effector/explanation/caveat/citations stay unchanged and are the "More detail" layer.
+//   region: plainLabel ("Left knee", "Belly and back", "In-between area (upper)"), plainLead (ONE sentence: what the area
+//   does, which half of the brain it is in), plainMoves (what it moves in THIS game, or "Nothing"), plainCaveat (one short
+//   plain hedge restating the explanation's own qualifier).
+//   action: plainLabel ("Bend left knee") and plainMuscles { pull, relax } (everyday muscle-group words, technical group
+//   names only in brackets; derived only from that action's own agonists/antagonists, never adding a muscle).
+// Plain fields never use the jargon deny-list of tests/unit/R3-text-jargon.test.mjs outside brackets.
 
 /** Recursively freeze plain objects and arrays. */
 function deepFreeze(v) {
@@ -433,7 +442,7 @@ const CONTENT = {
     actions: [
       leftArm('pronation', 'Turn left palm down (pronation)', [], ['BIC'], [],
         ['left pronator teres', 'left pronator quadratus'], ['left supinator', 'left biceps brachii'],
-        'Pronator teres, pronator quadratus and supinator meshes exist but had no catalog key in MOVEMENT-MAP r2 (ns-assets maps them to null); the names above are the BodyParts3D concepts to tint.'),
+        'Pronator teres, pronator quadratus and supinator have no catalog key in MOVEMENT-MAP r2 (ns-assets maps them to null). The game tints these three meshes by name while the forearm turns (simulated display level, same colours); they are not movement-map muscles.'),
       leftArm('supination', 'Turn left palm up (supination)', ['BIC'], [], [],
         ['left supinator', 'left biceps brachii'], ['left pronator teres', 'left pronator quadratus'],
         'Biceps brachii is a powerful supinator mainly when the elbow is flexed (UAMS).')
@@ -566,7 +575,7 @@ const CONTENT = {
           agonists: ['left sternocleidomastoid', 'right splenius capitis'], antagonists: ['right sternocleidomastoid', 'left splenius capitis'],
           note: 'Game choice: each hemisphere turns the head toward the opposite side. Which hemisphere drives head turning is unresolved.' }
     ],
-    explanation: `Neck area of the ${c.H} hemisphere, placed after the thumb as in Penfield's motor sequence. Neck muscles receive input from both hemispheres, and the sternocleidomastoid gets both crossed and uncrossed projections (Thompson 1997). The game simulates bending the head forward or turning it to the ${c.So} (one sternocleidomastoid with the opposite splenius capitis), which is a game choice because the hemisphere that drives head turning is unresolved. Thompson 1997 found the sternocleidomastoid representation high on the convexity near the trunk area, so the neck's place on this strip is debated.`,
+    explanation: `Neck area of the ${c.H} hemisphere, placed after the thumb as in Penfield's motor sequence. Neck muscles receive input from both hemispheres, and the sternocleidomastoid gets both crossed and uncrossed projections (Thompson 1997). The game simulates bending the head forward or turning it to the ${c.S} (one sternocleidomastoid with the opposite splenius capitis), which is a game choice because the hemisphere that drives head turning is unresolved. Thompson 1997 found the sternocleidomastoid representation high on the convexity near the trunk area, so the neck's place on this strip is debated.`,
     citationKeys: ['PENFIELD1937', 'THOMPSON1997', 'UAMS_HEADNECK', 'UAMS_BACK']
   }),
   scan_middle: c => ({
@@ -723,6 +732,247 @@ const REGION_CAVEATS = {
 };
 
 // ---------------------------------------------------------------------------------------------
+// Plain-language fields (round 3, R3-text: user R17, lead decision D3)
+//
+// Written for a curious 12-year-old: short sentences, everyday words, technical names only in brackets. Each plain field
+// restates what the region's technical explanation, actions and notes already say; none adds a claim. c = ctxFor(h):
+// c.H = the brain half, c.S = the body side it mainly moves (opposite), c.Sc = capitalised c.S.
+
+const half = c => `your brain’s ${c.H} half`;
+const NO_FACE_MESH_PLAIN = 'The 3D body has no face muscles for this, so nothing moves or changes colour.';
+const FACE_MOVES_PLAIN = 'Nothing you can see: the game only keeps a number.';
+const SCAN_MOVES_PLAIN = 'Nothing: it only lights up and gets marked.';
+const SCAN_CAVEAT_PLAIN = 'Any real job here, such as planning or posture, is not simulated.';
+const LOOK_RIGHT = ' (look far right to see it)';
+
+/** Region plain fields, keyed like CONTENT. Every plainLead is one sentence; every plainCaveat is <= 110 characters. */
+const PLAIN_REGION = {
+  toes: c => ({
+    plainLabel: `${c.Sc} toes`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} toes to curl or lift.`,
+    plainMoves: `Curls or lifts your ${c.S} toes.`,
+    plainCaveat: 'A rough spot. The real toe area is on the inner wall, where the two brain halves meet.'
+  }),
+  ankle: c => ({
+    plainLabel: `${c.Sc} ankle`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} foot to point up or down.`,
+    plainMoves: `Pulls your ${c.S} foot up or points it down.`,
+    plainCaveat: 'The leg areas form rings that overlap around the toe area, not a neat line.'
+  }),
+  knee: c => ({
+    plainLabel: `${c.Sc} knee`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} knee to bend or straighten.`,
+    plainMoves: `Bends or straightens your ${c.S} knee.`,
+    plainCaveat: 'The knee spot overlaps the spots for the ankle and the hip.'
+  }),
+  hip: c => ({
+    plainLabel: `${c.Sc} hip`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} thigh to lift or push back.`,
+    plainMoves: `Lifts your ${c.S} thigh or pushes it back.`,
+    plainCaveat: 'Hip muscles also help with balance and posture, which the game does not show.'
+  }),
+  scan_superior: () => ({
+    plainLabel: 'In-between area (upper)',
+    plainLead: 'This in-between spot on the motor strip is linked to planning whole-body moves.',
+    plainMoves: SCAN_MOVES_PLAIN,
+    plainCaveat: SCAN_CAVEAT_PLAIN
+  }),
+  trunk: c => ({
+    plainLabel: 'Belly and back',
+    plainLead: `This spot in ${half(c)} signals the belly and back muscles on both sides.`,
+    plainMoves: 'Bends your body forward or leans it back.',
+    plainCaveat: 'Few studies measured the trunk area, and breathing and posture are not shown.'
+  }),
+  shoulder: c => (c.H === 'right' ? {
+    plainLabel: 'Left shoulder',
+    plainLead: `This spot in ${half(c)} helps move your left shoulder.`,
+    plainMoves: 'Nothing extra: your look and the W/A/S/D keys already move the left shoulder.',
+    plainCaveat: 'Your look and W/A/S/D already move the left shoulder. Looking here adds no extra movement.'
+  } : {
+    plainLabel: 'Right shoulder',
+    plainLead: `This spot in ${half(c)} tells your right arm to lift.`,
+    plainMoves: `Raises your right arm forward or out to the side${LOOK_RIGHT}.`,
+    plainCaveat: 'Arm spots overlap. In studies, this spot rarely moves the shoulder on its own.'
+  }),
+  elbow: c => ({
+    plainLabel: `${c.Sc} elbow`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} elbow to bend or straighten.`,
+    plainMoves: `Bends or straightens your ${c.S} elbow${c.H === 'left' ? LOOK_RIGHT : ''}.`,
+    plainCaveat: 'The bend and straighten spots are rough places, not centres that were measured one by one.'
+  }),
+  forearm: c => (c.H === 'right' ? {
+    plainLabel: 'Left forearm turn',
+    plainLead: `This spot in ${half(c)} tells your left palm to turn down or up.`,
+    plainMoves: 'Turns your left palm down or up, like a double-tap of Space.',
+    plainCaveat: 'No study shows a separate spot for turning the palm. So this place is a game choice.'
+  } : {
+    plainLabel: 'Right forearm turn',
+    plainLead: `This spot in ${half(c)} tells your right palm to turn back or forward.`,
+    plainMoves: `Turns your right palm back or forward${LOOK_RIGHT}.`,
+    plainCaveat: 'Turning the palm shares spots with the wrist and elbow. So this place is a game choice.'
+  }),
+  wrist: c => ({
+    plainLabel: `${c.Sc} wrist`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} wrist to bend either way.`,
+    plainMoves: `Bends your ${c.S} wrist toward the palm or back${c.H === 'left' ? LOOK_RIGHT : ''}.`,
+    plainCaveat: 'The wrist spot overlaps the finger spots. Here it is drawn as one simple area.'
+  }),
+  hand: c => ({
+    plainLabel: 'Left hand',
+    plainLead: `This spot in ${half(c)} tells your left hand to close or open.`,
+    plainMoves: 'Closes, relaxes, opens or spreads your left hand. Holding Space makes a fist too.',
+    plainCaveat: 'Grip areas overlap and differ between people. Opening the hand when you let go is a game rule.'
+  }),
+  index: c => ({
+    plainLabel: 'Left index finger',
+    plainLead: `This spot in ${half(c)} tells your left index finger to bend or straighten.`,
+    plainMoves: 'Bends or straightens your left index finger.',
+    plainCaveat: 'To bend or straighten one finger, the brain uses signals that overlap. The colour shows on all fingers.'
+  }),
+  thumb: c => ({
+    plainLabel: 'Left thumb',
+    plainLead: `This spot in ${half(c)} tells your left thumb to bend or straighten.`,
+    plainMoves: 'Bends or straightens your left thumb at the knuckle.',
+    plainCaveat: 'Placed by mirroring studies of the right thumb, so the spot is only a rough guide.'
+  }),
+  r_hand: c => ({
+    plainLabel: 'Right hand',
+    plainLead: `This spot in ${half(c)} tells your right hand to close or open.`,
+    plainMoves: `Closes or opens your right hand${LOOK_RIGHT}.`,
+    plainCaveat: 'Finger spots overlap. Even the hand spot carries signals for other body parts.'
+  }),
+  r_fingers: c => ({
+    plainLabel: 'Right fingers',
+    plainLead: `This spot in ${half(c)} tells your right fingers to curl or straighten.`,
+    plainMoves: 'Partly closes or opens the whole right hand. The 3D hand moves all fingers together.',
+    plainCaveat: 'The 3D right hand moves all its fingers at once. Signals for single fingers overlap.'
+  }),
+  r_thumb: c => ({
+    plainLabel: 'Right thumb',
+    plainLead: `This spot in ${half(c)} tells your right thumb to close.`,
+    plainMoves: 'Closes the right hand a little. The 3D hand has no separate thumb joint.',
+    plainCaveat: 'The 3D right hand has no separate thumb joint, so a small hand squeeze stands in.'
+  }),
+  neck: c => ({
+    plainLabel: 'Neck',
+    plainLead: `This spot in ${half(c)} tells your head to nod or turn ${c.S}.`,
+    plainMoves: `Bends your head forward or turns it to the ${c.S}.`,
+    plainCaveat: 'Where the neck sits here, and which half turns the head, is still debated (a game choice).'
+  }),
+  scan_middle: () => ({
+    plainLabel: 'In-between area (middle)',
+    plainLead: 'This in-between spot on the motor strip, by the hand and face, is linked to planning.',
+    plainMoves: SCAN_MOVES_PLAIN,
+    plainCaveat: 'A study found that stimulating this spot never moved any body part.'
+  }),
+  brow: c => ({
+    plainLabel: 'Eyebrows',
+    plainLead: `This spot in ${half(c)} tells both eyebrows to rise.`,
+    plainMoves: FACE_MOVES_PLAIN,
+    plainCaveat: NO_FACE_MESH_PLAIN
+  }),
+  eyelid: c => ({
+    plainLabel: 'Eyelids',
+    plainLead: `This spot in ${half(c)} tells both eyes to close.`,
+    plainMoves: FACE_MOVES_PLAIN,
+    plainCaveat: NO_FACE_MESH_PLAIN
+  }),
+  lower_face: c => ({
+    plainLabel: `Smile, ${c.S} side`,
+    plainLead: `This spot in ${half(c)} tells your mouth to smile, mostly on the ${c.S}.`,
+    plainMoves: FACE_MOVES_PLAIN,
+    plainCaveat: NO_FACE_MESH_PLAIN
+  }),
+  lips: c => ({
+    plainLabel: 'Lips',
+    plainLead: `This spot in ${half(c)} tells your lips to purse.`,
+    plainMoves: FACE_MOVES_PLAIN,
+    plainCaveat: NO_FACE_MESH_PLAIN
+  }),
+  jaw: c => ({
+    plainLabel: 'Jaw',
+    plainLead: `This spot in ${half(c)} tells your jaw to open or clench.`,
+    plainMoves: 'Opens your jaw. Clenching shows nothing.',
+    plainCaveat: 'The 3D body has no chewing muscles, so clenching shows no movement or colour.'
+  }),
+  tongue: c => ({
+    plainLabel: 'Tongue',
+    plainLead: `This spot in ${half(c)} tells your tongue to push out.`,
+    plainMoves: 'Opens your jaw a little, because the 3D body has no tongue.',
+    plainCaveat: 'The 3D body has no tongue. So the jaw opens a little instead, and nothing gets coloured.'
+  }),
+  scan_inferior: () => ({
+    plainLabel: 'In-between area (lower)',
+    plainLead: 'This in-between spot on the motor strip, past the jaw and tongue, is linked to planning.',
+    plainMoves: SCAN_MOVES_PLAIN,
+    plainCaveat: SCAN_CAVEAT_PLAIN
+  })
+};
+
+/** Everyday names of the muscle groups an action's lists name (the Latin names stay in agonists/antagonists). */
+const FINGER_BENDERS = 'finger and thumb muscles that close the hand';
+const FINGER_STRAIGHTENERS = 'finger and thumb muscles that straighten';
+const PALM_DOWN_MUSCLES = 'forearm muscles that turn the palm down';
+const PALM_UP_MUSCLES = 'muscles that turn the palm up (including the biceps)';
+
+/** Action plain fields, keyed by the action id without its rh_/lh_ prefix. plainMuscles name ONLY groups that appear in
+ * that action's own agonists (pull) and antagonists (relax). */
+const PLAIN_ACTION = {
+  toes_curl: c => ({ plainLabel: `Curl ${c.S} toes`, pull: 'toe-curling muscles in the calf and sole', relax: 'toe-lifting muscles on the shin' }),
+  toes_lift: c => ({ plainLabel: `Lift ${c.S} toes`, pull: 'toe-lifting muscles on the shin and top of the foot', relax: 'toe-curling muscles in the calf' }),
+  ankle_dorsiflex: c => ({ plainLabel: `Pull ${c.S} foot up`, pull: 'muscles at the front of the shin', relax: 'calf muscles' }),
+  ankle_plantarflex: c => ({ plainLabel: `Point ${c.S} foot down`, pull: 'calf muscles', relax: 'the muscle at the front of the shin' }),
+  knee_flex: c => ({ plainLabel: `Bend ${c.S} knee`, pull: 'muscles at the back of the thigh (hamstrings)', relax: 'muscles at the front of the thigh (quadriceps)' }),
+  knee_extend: c => ({ plainLabel: `Straighten ${c.S} knee`, pull: 'muscles at the front of the thigh (quadriceps)', relax: 'muscles at the back of the thigh (hamstrings)' }),
+  hip_flex: c => ({ plainLabel: `Lift ${c.S} thigh`, pull: 'deep hip muscles and a front thigh muscle', relax: 'buttock muscle and back-of-thigh muscles' }),
+  hip_extend: c => ({ plainLabel: `Push ${c.S} thigh back`, pull: 'buttock muscle and back-of-thigh muscles', relax: 'deep hip muscles' }),
+  trunk_flex: () => ({ plainLabel: 'Bend forward', pull: 'belly muscles on both sides', relax: 'back muscles along the spine' }),
+  trunk_extend: () => ({ plainLabel: 'Lean back', pull: 'back muscles along the spine', relax: 'belly muscles on both sides' }),
+  r_shoulder_flex: () => ({ plainLabel: 'Raise right arm forward', pull: 'front shoulder, chest and upper-arm muscles', relax: 'back shoulder, back and upper-arm muscles' }),
+  r_shoulder_abd: () => ({ plainLabel: 'Raise right arm out to the side', pull: 'top shoulder muscles', relax: 'chest and back muscles that pull the arm in' }),
+  elbow_flexion: () => ({ plainLabel: 'Bend left elbow', pull: 'muscles at the front of the arm (biceps and others)', relax: 'muscles at the back of the arm (triceps)' }),
+  elbow_extension: () => ({ plainLabel: 'Straighten left elbow', pull: 'muscles at the back of the arm (triceps)', relax: 'muscles at the front of the arm (biceps and others)' }),
+  r_elbow_flex: () => ({ plainLabel: 'Bend right elbow', pull: 'muscles at the front of the arm (biceps and others)', relax: 'muscles at the back of the arm (triceps)' }),
+  r_elbow_extend: () => ({ plainLabel: 'Straighten right elbow', pull: 'muscles at the back of the arm (triceps)', relax: 'muscles at the front of the arm (biceps and others)' }),
+  pronation: () => ({ plainLabel: 'Turn left palm down', pull: PALM_DOWN_MUSCLES, relax: PALM_UP_MUSCLES }),
+  supination: () => ({ plainLabel: 'Turn left palm up', pull: PALM_UP_MUSCLES, relax: PALM_DOWN_MUSCLES }),
+  // R3-fix (review SL-7): the seated right arm turns its palm back / forward, so its muscle words say so too.
+  r_pronate: () => ({ plainLabel: 'Turn right palm back', pull: 'forearm muscles that turn the palm back', relax: 'muscles that turn the palm forward (including the biceps)' }),
+  r_supinate: () => ({ plainLabel: 'Turn right palm forward', pull: 'muscles that turn the palm forward (including the biceps)', relax: 'forearm muscles that turn the palm back' }),
+  wrist_flexion: () => ({ plainLabel: 'Bend left wrist toward the palm', pull: 'wrist muscles on the palm side of the forearm', relax: 'wrist muscles on the back of the forearm' }),
+  wrist_extension: () => ({ plainLabel: 'Bend left wrist back', pull: 'wrist muscles on the back of the forearm', relax: 'wrist muscles on the palm side of the forearm' }),
+  r_wrist_flex: () => ({ plainLabel: 'Bend right wrist toward the palm', pull: 'wrist muscles on the palm side of the forearm', relax: 'wrist muscles on the back of the forearm' }),
+  r_wrist_ext: () => ({ plainLabel: 'Bend right wrist back', pull: 'wrist muscles on the back of the forearm', relax: 'wrist muscles on the palm side of the forearm' }),
+  grasp_close: () => ({ plainLabel: 'Close left hand', pull: FINGER_BENDERS, relax: FINGER_STRAIGHTENERS }),
+  relax_release: () => ({ plainLabel: 'Relax left grip', pull: 'none: the grip just lets go', relax: 'finger and thumb muscles that bend and that straighten' }),
+  open_hand: () => ({ plainLabel: 'Open left hand', pull: FINGER_STRAIGHTENERS, relax: FINGER_BENDERS }),
+  spread_fingers: () => ({ plainLabel: 'Spread left fingers', pull: 'small muscles between the finger bones, plus one for the little finger', relax: 'small palm muscles that pull the fingers together' }),
+  index_flexion: () => ({ plainLabel: 'Bend left index finger', pull: 'finger-bending muscles in the forearm', relax: 'finger-straightening muscles' }),
+  index_extension: () => ({ plainLabel: 'Straighten left index finger', pull: 'finger-straightening muscles', relax: 'finger-bending muscles in the forearm' }),
+  thumb_mcp_flexion: () => ({ plainLabel: 'Bend left thumb at the knuckle', pull: 'a short thumb muscle in the palm that bends it', relax: 'a thumb muscle that straightens it' }),
+  thumb_mcp_extension: () => ({ plainLabel: 'Straighten left thumb at the knuckle', pull: 'a thumb muscle that straightens it', relax: 'a short thumb muscle in the palm that bends it' }),
+  r_grasp: () => ({ plainLabel: 'Close right hand', pull: FINGER_BENDERS, relax: FINGER_STRAIGHTENERS }),
+  r_open: () => ({ plainLabel: 'Open right hand', pull: FINGER_STRAIGHTENERS, relax: FINGER_BENDERS }),
+  r_fingers_curl: () => ({ plainLabel: 'Curl right fingers', pull: 'finger-bending muscles', relax: 'finger-straightening muscles' }),
+  r_fingers_straighten: () => ({ plainLabel: 'Straighten right fingers', pull: 'finger-straightening muscles', relax: 'finger-bending muscles' }),
+  r_thumb_close: () => ({ plainLabel: 'Close right thumb', pull: 'thumb muscles that bend it across the palm', relax: 'thumb muscles that straighten it' }),
+  neck_flex: () => ({ plainLabel: 'Bend head forward', pull: 'muscles at the front of the neck', relax: 'muscles at the back of the neck' }),
+  neck_turn_left: () => ({ plainLabel: 'Turn head to the left', pull: 'the right side-neck muscle and a left back-of-neck muscle', relax: 'the left side-neck muscle and a right back-of-neck muscle' }),
+  neck_turn_right: () => ({ plainLabel: 'Turn head to the right', pull: 'the left side-neck muscle and a right back-of-neck muscle', relax: 'the right side-neck muscle and a left back-of-neck muscle' }),
+  brow_raise: () => ({ plainLabel: 'Raise both eyebrows', pull: 'the forehead muscle', relax: 'frown muscles between the eyebrows' }),
+  eye_close: () => ({ plainLabel: 'Close both eyes', pull: 'ring muscles around the eyes', relax: 'eyelid-lifting muscles' }),
+  smile: c => ({ plainLabel: `Smile (mostly the ${c.S} side)`, pull: `smile muscles in the ${c.S} cheek`, relax: `the muscle that pulls the ${c.S} mouth corner down` }),
+  lip_purse: () => ({ plainLabel: 'Purse the lips', pull: 'the ring muscle around the mouth', relax: 'smile muscles in both cheeks' }),
+  // R3-fix (review SL-8): the lateral pterygoid is itself a chewing muscle; the closers are the jaw-closing chewing muscles.
+  jaw_open: () => ({ plainLabel: 'Open the jaw', pull: 'muscles under the chin and one deep chewing muscle', relax: 'jaw-closing (chewing) muscles' }),
+  jaw_clench: () => ({ plainLabel: 'Clench the jaw', pull: 'jaw-closing (chewing) muscles', relax: 'muscles under the chin and one deep chewing muscle' }),
+  tongue_out: () => ({ plainLabel: 'Stick the tongue out', pull: 'the main tongue muscle', relax: 'muscles that pull the tongue back' })
+};
+
+/** Key of PLAIN_ACTION for an action id ('rh_knee_flex' -> 'knee_flex', 'lh_r_grasp' -> 'r_grasp', 'grasp_close'). */
+export function plainActionKey(actionId) { return String(actionId).replace(/^(rh|lh)_/, ''); }
+
+// ---------------------------------------------------------------------------------------------
 // Build
 
 function buildRegions() {
@@ -744,6 +994,11 @@ function buildRegions() {
         if (a.catalogRoles) full.catalogRoles = a.catalogRoles;
         if (a.lateralBias) full.lateralBias = a.lateralBias;
         if (a.note) full.note = a.note;
+        const plainA = PLAIN_ACTION[plainActionKey(a.id)];
+        if (!plainA) throw new Error(`ns:bodymap_plain: no plain text for action ${a.id}`);
+        const pa = plainA(c);
+        full.plainLabel = pa.plainLabel;
+        full.plainMuscles = { pull: pa.pull, relax: pa.relax };
         return full;
       });
       const region = {
@@ -769,6 +1024,12 @@ function buildRegions() {
       };
       if (body.noActionReason) region.noActionReason = body.noActionReason;
       if (REGION_CAVEATS[key]) region.caveat = REGION_CAVEATS[key](c);
+      if (!PLAIN_REGION[key]) throw new Error(`ns:bodymap_plain: no plain text for region ${key}`);
+      const pr = PLAIN_REGION[key](c);
+      region.plainLabel = pr.plainLabel;
+      region.plainLead = pr.plainLead;
+      region.plainMoves = pr.plainMoves;
+      region.plainCaveat = pr.plainCaveat;
       out.push(region);
     });
   }

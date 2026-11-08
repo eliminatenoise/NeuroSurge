@@ -36,7 +36,7 @@
  * Pure (browser and Node; no DOM). Errors: Error('ns:<code>: message').
  */
 import { DEG, clamp } from './ns-math.mjs';
-import { FIST_POSE_DEG } from './ns-rig.mjs';
+import { FIST_POSE_DEG, REST_HAND_POSE_DEG } from './ns-rig.mjs';
 import { DOUBLE_TAP_MS } from './ns-controls.mjs';
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -108,18 +108,22 @@ export const JOINT_LIMITS = Object.freeze(limits);
 /** The 20 pose joint names, in a fixed order. */
 export const JOINT_NAMES = Object.freeze(Object.keys(JOINT_LIMITS));
 
-const rest = { wrist_flex: 0, thumb_cmc_opp: 5, thumb_mcp_flex: 10, thumb_ip_flex: 10 };
+// R3-arm: the relaxed-hand "cascade" (ns-rig REST_HAND_POSE_DEG: each finger a little more bent than the one beside
+// it, index to little; thumb slightly turned toward the index; wrist 0). Round 2 used 15/20/10 on every finger, almost
+// the mesh's own straight rest on this rig.
+const rest = { wrist_flex: 0 };
+for (const j of ['thumb_cmc_opp', 'thumb_mcp_flex', 'thumb_ip_flex']) rest[j] = REST_HAND_POSE_DEG[j];
 for (const d of DIGITS) {
-  rest[`${d}_mcp_flex`] = 15;
-  rest[`${d}_pip_flex`] = 20;
-  rest[`${d}_dip_flex`] = 10;
+  rest[`${d}_mcp_flex`] = REST_HAND_POSE_DEG[`${d}_mcp_flex`];
+  rest[`${d}_pip_flex`] = REST_HAND_POSE_DEG[`${d}_pip_flex`];
+  rest[`${d}_dip_flex`] = REST_HAND_POSE_DEG[`${d}_dip_flex`];
   rest[`${d}_mcp_abd`] = 0;
 }
 // Non-enumerable self alias so both `REST_POSE.wrist_flex` and `REST_POSE.joints.wrist_flex` work;
 // Object.keys / JSON / spreading see only the 20 joint angles.
 Object.defineProperty(rest, 'joints', { value: rest, enumerable: false });
 
-/** Slightly flexed natural rest pose: a flat, frozen map of joint name -> degrees. */
+/** Natural relaxed rest pose (ns-rig REST_HAND_POSE_DEG): a flat, frozen map of joint name -> degrees. */
 export const REST_POSE = Object.freeze(rest);
 
 function digitFlex(digits, mcp, pip, dip) {
@@ -424,6 +428,14 @@ const SNAP = 1e-9;                   // timers / drives within this of their goa
  * (the user: activation stops "unless we move again"). A UI choice, not a physiological threshold.
  */
 export const GAZE_RESTART_DEADBAND_DEG = 0.2;
+/** R3-fix (review M3 / M5, display choices, seconds of continuous gaze on one area):
+ *  replaceClickS  a CLICK-started pulse is not replaced by areas the crosshair only passes over while the player turns
+ *                 to watch the body; a new area must hold the gaze this long first (a new click always replaces).
+ *  markS          the persistent "switched on" mark (R11c) is added at once for a click (the user: "when you press a
+ *                 part ... it slightly changes shade"), but for a look only after the gaze has stayed on the area this
+ *                 long, so ordinary looking around does not mark every area gold. The 1 s look activation itself is
+ *                 unchanged (it still starts the moment the crosshair reaches a new area). */
+export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5 });
 
 /**
  * Display (cortex colour) envelope defaults, seconds. UI timing choices, not physiological latencies:
@@ -627,7 +639,7 @@ export function mergeDisplayDrives(a, b) {
 
 const isLastSuppressed = v => v === null
   || (isPlainObject(v) && ACTION_IDS.includes(v.actionId) && typeof v.source === 'string' && nonNegative(v.t));
-const TRIGGER_SOURCES = Object.freeze(['gaze', 'moved', 'click']);
+const TRIGGER_SOURCES = Object.freeze(['gaze', 'moved', 'click', 'dwell']);
 
 // ---------------------------------------------------------------------------------------------
 // U1-controls round 2: whole-body motor map, forearm rotation, brain grab/orbit, instructions
@@ -669,10 +681,37 @@ export const DOUBLE_TAP_SECONDS = DOUBLE_TAP_MS / 1000;
  * Forearm rotation defaults. defaultState 'pronated' (palm and hand dorsum oriented for the first-person view; the
  * BodyParts3D rest pose is the anatomical, supinated position). A double-tap commands the other posture: the display
  * envelope of the commanded channel lasts commandSeconds (UI timing), the pose value eases with poseTau.
+ * R3-arm: poseTau is the time constant (1/omega) of a CRITICALLY DAMPED ease (stepRotationEase) instead of a
+ * first-order lag. The first-order lag (round 2, tau 0.1 s) started at full speed and covered 55 % of the flip in the
+ * first 80 ms (a snap, then a slow settle); the critically damped ease starts from rest and accelerates smoothly, still
+ * moves the forearm by about 16 deg within 33 ms (visible within two frames) and reaches 95 % at about 4.74 * poseTau
+ * = 0.30 s, the same settle time as before. A double-tap mid-flip reverses without a jump (the speed carries over).
  * pronationRangeDeg is a SUGGESTED rig mapping: value 0 (pronated) = this many degrees of pronation away from the
  * anatomical (supinated) rest, value 1 (supinated) = 0. The rig owner (ns-arm/ns-rig) clamps and may choose its own.
  */
-export const ROTATION = Object.freeze({ defaultState: 'pronated', commandSeconds: 0.5, poseTau: 0.1, pronationRangeDeg: 150 });
+export const ROTATION = Object.freeze({ defaultState: 'pronated', commandSeconds: 0.5, poseTau: 1 / 16, pronationRangeDeg: 150 });
+
+/**
+ * One exact step of the critically damped forearm-rotation ease (R3-arm): value x (0 pronated .. 1 supinated) and its
+ * speed v (per second) toward goal g over h seconds with time constant tau (omega = 1 / tau):
+ *   e(t) = (e0 + (v0 + omega e0) t) exp(-omega t),  v(t) = (v0 - omega (v0 + omega e0) t) exp(-omega t),  e = x - g.
+ * Exact for any step length, so the ease is frame-rate independent. The value is kept in [0, 1] (a clamp stops it).
+ * Pure; returns { value, speed }.
+ */
+export function stepRotationEase(value, speed, goal, h, tau = ROTATION.poseTau) {
+  const v0 = isFiniteNumber(speed) ? speed : 0;
+  if (!(h > 0) || !(tau > 0)) return { value, speed: v0 };
+  const w = 1 / tau;
+  const e0 = value - goal;
+  const k = Math.exp(-w * h);
+  const c = v0 + w * e0;
+  let e = (e0 + c * h) * k;
+  let v = (v0 - w * c * h) * k;
+  if (Math.abs(e) < SNAP && Math.abs(v) < 1e-6) { e = 0; v = 0; }
+  let x = goal + e;
+  if (x < 0 || x > 1) { x = clamp(x, 0, 1); v = 0; }
+  return { value: x, speed: v };
+}
 /** Representative forearm rotators by mesh-name fragment (standard anatomy; display roles only, not EMG or force). */
 export const ROTATION_MUSCLES = deepFreeze({
   pronation: { agonists: ['pronator teres', 'pronator quadratus'], antagonists: ['supinator', 'biceps brachii'] },
@@ -1087,8 +1126,10 @@ export function createActivity({
   doubleTapSeconds = DOUBLE_TAP_SECONDS, rotationSeconds = ROTATION.commandSeconds, rotationTau = ROTATION.poseTau,
   defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
-  resumeOnLock = INSTRUCTIONS.resumeOnLock
+  resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL
 } = {}) {
+  const replaceClickS = gazeDwell && isFiniteNumber(gazeDwell.replaceClickS) && gazeDwell.replaceClickS >= 0 ? gazeDwell.replaceClickS : GAZE_DWELL.replaceClickS;
+  const markS = gazeDwell && isFiniteNumber(gazeDwell.markS) && gazeDwell.markS >= 0 ? gazeDwell.markS : GAZE_DWELL.markS;
   const timing = {
     pulseSeconds, riseTau, decayTau, spaceOpenSeconds, displayRiseTau, displayFadeSeconds, displayDecayTau,
     doubleTapSeconds, rotationSeconds, rotationTau
@@ -1167,12 +1208,15 @@ export function createActivity({
       keyDisplay: zeroMap(KEY_DISPLAY_IDS),   // Space-only display envelope (lights every left-arm region listing it)
       regionDisplay: zeroMap(REGION_IDS),     // own pulse envelope per region
       regionActivity: zeroMap(REGION_IDS),    // DISPLAY per region: own pulse + left-arm key channels (derived)
-      activatedRegions: {},                   // regionId -> count of new-area gaze + click activations (until reset)
+      activatedRegions: {},                   // regionId -> count of clicks + looks held >= markS (until reset)
+      pulseClick: false,                      // R3-fix M3: the running pulse was started (or last re-started) by a click
+      pendingGaze: null,                      // R3-fix M3: { area, since } a new area waiting to replace a click pulse
+      markPending: null,                      // R3-fix M5: { area, regionId, since } a look that marks after markS
       bodyDrive: zeroMap(BODY_KEYS),          // body POSE drive (smoothed, eases)
       bodyDisplay: zeroMap(BODY_KEYS),        // body DISPLAY envelope (crisp; for muscle colour)
       bodyJointTargets: zeroMap(JOINT_IDS),   // jointId -> degrees (derived from bodyDrive)
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
-      rotation: { value: rotValue(defaultRotation), remaining: 0, channel: null }, // pose value 0 pronated..1 supinated
+      rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease
       rotationDisplay: zeroMap(ROTATION_ACTION_IDS),    // rotation channel display (double-tap command or pulse)
       rotationKeyDisplay: zeroMap(ROTATION_ACTION_IDS), // double-tap command part only
       rotationSeq: 0,          // count of double-tap toggles
@@ -1237,10 +1281,14 @@ export function createActivity({
       && unitMap(s.keyDisplay, KEY_DISPLAY_IDS)
       && unitMap(s.regionDisplay, REGION_IDS) && unitMap(s.regionActivity, REGION_IDS)
       && isCounts(s.activatedRegions)
+      && (s.pulseClick === undefined || typeof s.pulseClick === 'boolean')
+      && (s.pendingGaze === undefined || s.pendingGaze === null || (isPlainObject(s.pendingGaze) && typeof s.pendingGaze.area === 'string' && nonNegative(s.pendingGaze.since)))
+      && (s.markPending === undefined || s.markPending === null || (isPlainObject(s.markPending) && typeof s.markPending.area === 'string' && regionOrNull(s.markPending.regionId) && nonNegative(s.markPending.since)))
       && unitMap(s.bodyDrive, BODY_KEYS) && unitMap(s.bodyDisplay, BODY_KEYS)
       && finiteMap(s.bodyJointTargets, JOINT_IDS)
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
+      && (s.rotation.speed === undefined || isFiniteNumber(s.rotation.speed))
       && unitMap(s.rotationDisplay, ROTATION_ACTION_IDS) && unitMap(s.rotationKeyDisplay, ROTATION_ACTION_IDS)
       && safeCount(s.rotationSeq)
       && (s.spaceTapAt === null || nonNegative(s.spaceTapAt))
@@ -1288,11 +1336,14 @@ export function createActivity({
       regionDisplay: pick(s.regionDisplay, REGION_IDS),
       regionActivity: pick(s.regionActivity, REGION_IDS),
       activatedRegions: { ...s.activatedRegions },
+      pulseClick: s.pulseClick === true,
+      pendingGaze: s.pendingGaze ? { ...s.pendingGaze } : null,
+      markPending: s.markPending ? { ...s.markPending } : null,
       bodyDrive: pick(s.bodyDrive, BODY_KEYS),
       bodyDisplay: pick(s.bodyDisplay, BODY_KEYS),
       bodyJointTargets: pick(s.bodyJointTargets, JOINT_IDS),
       rotationState: s.rotationState,
-      rotation: { value: s.rotation.value, remaining: s.rotation.remaining, channel: s.rotation.channel },
+      rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel },
       rotationDisplay: pick(s.rotationDisplay, ROTATION_ACTION_IDS),
       rotationKeyDisplay: pick(s.rotationKeyDisplay, ROTATION_ACTION_IDS),
       rotationSeq: s.rotationSeq,
@@ -1368,6 +1419,7 @@ export function createActivity({
   }
 
   function cancelPulse(s) {
+    s.pulseClick = false;
     s.pulseAction = null;
     s.pulseRegion = null;
     s.pulseBody = null;
@@ -1390,9 +1442,11 @@ export function createActivity({
     s.pulseSeq += 1;          // each start is a distinct pulse (no latch)
     s.lastTriggerAt = s.t;
     s.lastTriggerSource = source;
-    // Persistent marks count deliberate activations (a look onto a new area, a click), not the look-movement
-    // restarts that keep a pulse alive while the gaze moves within the area.
-    if (hit.regionId !== null && source !== 'moved') s.activatedRegions[hit.regionId] = (s.activatedRegions[hit.regionId] || 0) + 1;
+    // A look-movement restart of a clicked area stays a click pulse (it is the same deliberate choice).
+    s.pulseClick = source === 'click' || (source === 'moved' && s.pulseClick === true);
+    // Persistent marks count deliberate activations: a click at once, a look only once the gaze has stayed on the area
+    // for markS (R3-fix M5; applyGaze adds it), never the look-movement restarts within an area.
+    if (hit.regionId !== null && source === 'click') { s.activatedRegions[hit.regionId] = (s.activatedRegions[hit.regionId] || 0) + 1; s.markPending = null; }
     if (collect) {
       collect({
         actionId: hit.armAction !== null ? hit.armAction : hit.actionId, regionId: hit.regionId,
@@ -1462,12 +1516,26 @@ export function createActivity({
     // and while dragging the brain (the gaze moves with the brain, so nothing new was looked at).
     const silent = ev.seed === true || s.seedNextGaze || s.paused || s.brainGrab.active;
     s.seedNextGaze = false;
+    const clickRunning = s.pulseClick === true && s.pulseRemaining > 0;
+    // A look onto a new area starts its 1 s pulse at once, except that it does not replace a running CLICK pulse until
+    // the gaze has stayed on it for replaceClickS (R3-fix M3); the look's persistent mark waits for markS (M5).
+    const startLook = source => {
+      if (startPulse(s, g.hit, source, at, collect) && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
+      s.pendingGaze = null;
+    };
     if (silent || g.area === null) {
       // Empty space / glass / arrow: nothing new starts and an unexpired pulse is NOT erased.
+      s.pendingGaze = null;
+      if (g.area !== s.gazeArea) s.markPending = null;
       setAnchor(s);
     } else if (g.area !== s.gazeArea) {
-      startPulse(s, g.hit, 'gaze', at, collect);   // a new area (re)starts one pulse
+      s.markPending = null;
+      if (clickRunning && replaceClickS > 0) s.pendingGaze = { area: g.area, since: s.t };
+      else startLook('gaze');   // a new area (re)starts one pulse
       setAnchor(s);
+    } else if (s.pendingGaze && s.pendingGaze.area === g.area) {
+      // Waiting to replace a click pulse: start once the dwell is reached or the click pulse has ended.
+      if (!clickRunning || s.t - s.pendingGaze.since >= replaceClickS - SNAP) { startLook('dwell'); setAnchor(s); }
     } else {
       let moved;
       if (hasDir && s.anchorYaw !== null && s.anchorPitch !== null) {
@@ -1494,7 +1562,7 @@ export function createActivity({
 
   function toggleRotation(s) {
     s.rotationState = s.rotationState === 'pronated' ? 'supinated' : 'pronated';
-    s.rotation = { value: s.rotation.value, remaining: rotationSeconds, channel: channelFor(s.rotationState) };
+    s.rotation = { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: rotationSeconds, channel: channelFor(s.rotationState) };
     s.rotationSeq += 1;
     if (s.pulseRotation !== null) cancelPulse(s); // the explicit key command wins over a transient rotation pulse
   }
@@ -1579,6 +1647,8 @@ export function createActivity({
 
   function resetBodyInPlace(s) {
     s.activatedRegions = {};
+    s.pendingGaze = null;
+    s.markPending = null;
     cancelPulse(s);
     for (const k of BODY_KEYS) { s.bodyDrive[k] = 0; s.bodyDisplay[k] = 0; }
     for (const r of REGION_IDS) s.regionDisplay[r] = 0;
@@ -1591,7 +1661,7 @@ export function createActivity({
     s.openRemaining = 0;
     s.relaxRemaining = 0;
     s.rotationState = defaultRotation;
-    s.rotation = { value: rotValue(defaultRotation), remaining: 0, channel: null };
+    s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null };
     s.rotationDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.rotationKeyDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.spaceTapAt = null;
@@ -1704,10 +1774,20 @@ export function createActivity({
         s.rotationDisplay[c] = envelope(s.rotationDisplay[c], key || pul ? 1 : 0, seg, ceil);
       }
       const goal = pulseOn && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0) : rotValue(s.rotationState);
-      s.rotation.value = approach(s.rotation.value, goal, seg, rotationTau, rotationTau);
+      // R3-arm: critically damped ease (smooth start, ~0.30 s settle with the default poseTau); see stepRotationEase.
+      const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
+      s.rotation.value = eased.value;
+      s.rotation.speed = eased.speed;
     }
     s.pulseRemaining = countdown(s.pulseRemaining, h);
     if (s.pulseRemaining === 0) cancelPulse(s);
+    // R3-fix (M5): a look's persistent mark once the gaze has stayed on that area for markS (time-based, so it holds
+    // between gaze events; the gaze area lives in the state until the next gaze event changes it).
+    if (s.markPending && s.gazeArea === s.markPending.area && s.t + h - s.markPending.since >= markS - SNAP) {
+      const rid = s.markPending.regionId;
+      s.activatedRegions[rid] = (s.activatedRegions[rid] || 0) + 1;
+      s.markPending = null;
+    }
     s.openRemaining = countdown(s.openRemaining, h);
     s.relaxRemaining = countdown(s.relaxRemaining, h);
     s.rotation.remaining = countdown(s.rotation.remaining, h);

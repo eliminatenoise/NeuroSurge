@@ -7,14 +7,197 @@
  * +x subject LEFT, +y POSTERIOR, +z SUPERIOR; an inferred right-handed LPS frame).
  * Nothing here centres, mirrors, rotates or rescales an individual component.
  * See ASSET-IO-CONTRACT.md for the full contract.
+ *
+ * Round 3 (R3-perf): parseObjFast, an exact drop-in for ns-obj parseObj (one pass over the text into typed arrays, no
+ * regex/split per line; anything outside its fast grammar is handed to parseObj itself, so results AND refusals are
+ * identical). loadAssets and loadFullbodyAssets use it by default; utf8ByteLength skips its per-character loop for
+ * pure-ASCII text. Every byte, sha256, vertex-count and laterality check is unchanged and still runs in the same order.
  */
-import { parseObj } from './ns-obj.mjs';
+import { parseObj, OBJ_LIMITS, MAX_COMMENTS } from './ns-obj.mjs';
 import { sub, dot, length, scale, reject } from './ns-math.mjs';
 import { CAP_FRACTION, SHOULDER_CAP_MM, ELBOW_CAP_MM } from './ns-rig.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const isVec3 = v => Array.isArray(v) && v.length === 3 && v.every(x => Number.isFinite(x));
+
+// ---------------------------------------------------------------------------------------
+// R3-perf: fast exact OBJ parsing
+// ---------------------------------------------------------------------------------------
+
+/** The statements ns-obj parseObj recognises and ignores (its IGNORED set; tests/unit/R3-perf-obj-fast.test.mjs checks
+ * that parseObj accepts every one of them, so the fast path never skips a line parseObj would refuse). */
+const OBJ_FAST_IGNORED = new Set([
+  'vn', 'vt', 'g', 'o', 's', 'usemtl', 'mtllib',
+  'vp', 'l', 'p', 'cstype', 'deg', 'bmat', 'step', 'curv', 'curv2', 'surf', 'parm', 'trim',
+  'hole', 'scrv', 'sp', 'end', 'con', 'mg', 'bevel', 'c_interp', 'd_interp', 'lod',
+  'shadow_obj', 'trace_obj', 'ctech', 'stech', 'maplib', 'usemap', 'call', 'csh'
+]);
+export const OBJ_FAST_IGNORED_STATEMENTS = Object.freeze([...OBJ_FAST_IGNORED]);
+/** Exact powers of ten (every 10^k with k <= 22 is exactly representable as a double). */
+const POW10 = Object.freeze(Array.from({ length: 23 }, (_, k) => Number(`1e${k}`)));
+const NON_ASCII_RE = /[^\x00-\x7f]/;
+const isPositiveInt = v => Number.isSafeInteger(v) && v > 0;
+
+function growF32(a, need) { const b = new Float32Array(Math.max(need, a.length * 2)); b.set(a); return b; }
+function growU32(a, need) { const b = new Uint32Array(Math.max(need, a.length * 2)); b.set(a); return b; }
+
+/**
+ * The fast path of parseObjFast. Returns the parsed mesh, or null whenever the text is outside the fast grammar or
+ * would be refused, so the caller can hand it to ns-obj parseObj (which then returns the same mesh or throws its own
+ * error). The fast grammar is parseObj's grammar restricted to ASCII separators: lines end at LF, CR or CRLF; fields are
+ * separated by spaces and tabs only; `#` comment lines; the ignored statements; `v x y z [extra...]` with plain decimal
+ * numbers; `f` with `a`, `a/b`, `a//c`, `a/b/c` references (negative = relative). Any other character outside a comment
+ * or an ignored line, an inline `#` on a v/f line, a limit overflow or an invalid index returns null.
+ * Numbers: a plain decimal with at most 15 digits (leading zeros included) and no exponent is m / 10^k with m and 10^k exact
+ * doubles; IEEE division is correctly rounded, so it equals Number(token), the value parseObj stores before the same
+ * Float32 rounding. Every other number (an exponent, more digits) uses Number(token) itself.
+ * `knownUtf8Bytes`: the caller-verified UTF-8 byte length (loadAssets passes the count it checked against the manifest),
+ * used only for the maxBytes limit.
+ */
+export function tryParseObjFast(text, { maxBytes = OBJ_LIMITS.maxBytes, maxVertices = OBJ_LIMITS.maxVertices, maxFaces = OBJ_LIMITS.maxFaces, knownUtf8Bytes } = {}) {
+  if (typeof text !== 'string' || !isPositiveInt(maxBytes) || !isPositiveInt(maxVertices) || !isPositiveInt(maxFaces)) return null;
+  const L = text.length;
+  if (L > maxBytes) return null;
+  // parseObj's maxBytes test (UTF-8 bytes). A text of at most maxBytes/3 UTF-16 units cannot exceed it.
+  if (L * 3 > maxBytes) {
+    const bytes = Number.isSafeInteger(knownUtf8Bytes) ? knownUtf8Bytes : utf8ByteLength(text);
+    if (bytes > maxBytes) return null;
+  }
+  const hasCR = text.indexOf('\r') >= 0;
+  const lineEnd = from => {
+    if (!hasCR) { const e = text.indexOf('\n', from); return e < 0 ? L : e; }
+    let e = from;
+    while (e < L) { const d = text.charCodeAt(e); if (d === 10 || d === 13) break; e++; }
+    return e;
+  };
+  // Initial capacities from the text length (BodyParts3D OBJ99: about 40 characters per stored coordinate and 24 per
+  // stored index, vn lines included); the arrays double when a file needs more, and are trimmed to size at the end.
+  let pos = new Float32Array(Math.max(96, Math.ceil(L / 40)));
+  let idx = new Uint32Array(Math.max(96, Math.ceil(L / 24)));
+  let np = 0, ni = 0, vertexCount = 0, faceCount = 0, polygonCount = 0, maxPositive = 0;
+  const comments = [];
+  let i = 0, c = 0;
+  while (i < L) {
+    c = text.charCodeAt(i);
+    if (c === 32 || c === 9) {
+      do { i++; c = i < L ? text.charCodeAt(i) : 10; } while (c === 32 || c === 9);
+    }
+    if (c === 10 || c === 13) { i++; continue; }
+    if (c === 35) { // '#': a comment line (parseObj keeps line.slice(1).trim() of the trimmed line)
+      const e = lineEnd(i);
+      if (comments.length < MAX_COMMENTS) comments.push(text.slice(i + 1, e).trim());
+      i = e;
+      continue;
+    }
+    const d = i + 1 < L ? text.charCodeAt(i + 1) : 10;
+    if (c === 118 && (d === 32 || d === 9)) { // 'v ': three coordinates, extra components ignored
+      if (vertexCount >= maxVertices) return null;
+      i += 2;
+      if (np + 3 > pos.length) pos = growF32(pos, np + 3);
+      for (let k = 0; k < 3; k++) {
+        c = i < L ? text.charCodeAt(i) : 10;
+        while (c === 32 || c === 9) { i++; c = i < L ? text.charCodeAt(i) : 10; }
+        const start = i;
+        let neg = false;
+        if (c === 45 || c === 43) { neg = c === 45; i++; c = i < L ? text.charCodeAt(i) : 10; }
+        let m = 0, nd = 0, nf = 0;
+        while (c >= 48 && c <= 57) { m = m * 10 + (c - 48); nd++; i++; c = i < L ? text.charCodeAt(i) : 10; }
+        if (c === 46) {
+          i++; c = i < L ? text.charCodeAt(i) : 10;
+          while (c >= 48 && c <= 57) { m = m * 10 + (c - 48); nd++; nf++; i++; c = i < L ? text.charCodeAt(i) : 10; }
+        }
+        if (nd === 0) return null;
+        let value;
+        if (c === 101 || c === 69) {
+          i++; c = i < L ? text.charCodeAt(i) : 10;
+          if (c === 43 || c === 45) { i++; c = i < L ? text.charCodeAt(i) : 10; }
+          let ne = 0;
+          while (c >= 48 && c <= 57) { ne++; i++; c = i < L ? text.charCodeAt(i) : 10; }
+          if (ne === 0) return null;
+          value = Number(text.slice(start, i));
+        } else if (nd <= 15) {
+          value = m / POW10[nf];
+          if (neg) value = -value;
+        } else {
+          value = Number(text.slice(start, i));
+        }
+        if (!(c === 32 || c === 9 || c === 10 || c === 13)) return null;
+        if (!Number.isFinite(value) || !Number.isFinite(Math.fround(value))) return null;
+        pos[np++] = value;
+      }
+      // Extra components are ignored, but an inline '#' would be kept as a comment by parseObj: hand that to it.
+      while (c !== 10 && c !== 13 && c !== 35) { i++; c = i < L ? text.charCodeAt(i) : 10; }
+      if (c === 35) return null;
+      vertexCount++;
+      continue;
+    }
+    if (c === 102 && (d === 32 || d === 9)) { // 'f ': fan-triangulated polygon
+      i += 2;
+      let n = 0, first = 0, prev = 0;
+      for (;;) {
+        c = i < L ? text.charCodeAt(i) : 10;
+        while (c === 32 || c === 9) { i++; c = i < L ? text.charCodeAt(i) : 10; }
+        if (c === 10 || c === 13) break;
+        let neg = false;
+        if (c === 45) { neg = true; i++; c = i < L ? text.charCodeAt(i) : 10; }
+        let r = 0, nd = 0;
+        while (c >= 48 && c <= 57) { r = r * 10 + (c - 48); nd++; i++; c = i < L ? text.charCodeAt(i) : 10; }
+        if (nd === 0 || nd > 15 || r === 0) return null;
+        for (let g = 0; g < 2 && c === 47; g++) { // '/' [ ['-'] digits ]
+          i++; c = i < L ? text.charCodeAt(i) : 10;
+          if (c === 45) { i++; c = i < L ? text.charCodeAt(i) : 10; if (!(c >= 48 && c <= 57)) return null; }
+          while (c >= 48 && c <= 57) { i++; c = i < L ? text.charCodeAt(i) : 10; }
+        }
+        if (!(c === 32 || c === 9 || c === 10 || c === 13)) return null;
+        let ref;
+        if (!neg) { if (r > maxPositive) maxPositive = r; ref = r - 1; } else { ref = vertexCount - r; if (ref < 0) return null; }
+        if (n === 0) first = ref;
+        else if (n >= 2) {
+          if (faceCount + 1 > maxFaces) return null;
+          if (ni + 3 > idx.length) idx = growU32(idx, ni + 3);
+          idx[ni++] = first; idx[ni++] = prev; idx[ni++] = ref;
+          faceCount++;
+        }
+        prev = ref;
+        n++;
+      }
+      if (n < 3) return null;
+      polygonCount++;
+      continue;
+    }
+    // Any other statement: only parseObj's ignored keywords are skipped here.
+    let e = i;
+    while (e < L) { const k = text.charCodeAt(e); if (k === 32 || k === 9 || k === 10 || k === 13) break; e++; }
+    if (!OBJ_FAST_IGNORED.has(text.slice(i, e))) return null;
+    i = lineEnd(e);
+  }
+  if (maxPositive > vertexCount || vertexCount === 0 || faceCount === 0) return null;
+  const positions = pos.slice(0, np);
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let j = 0; j < positions.length; j += 3) {
+    for (let k = 0; k < 3; k++) {
+      const value = positions[j + k];
+      if (value < min[k]) min[k] = value;
+      if (value > max[k]) max[k] = value;
+    }
+  }
+  return { positions, indices: idx.slice(0, ni), vertexCount, faceCount, polygonCount, bounds: { min, max }, comments };
+}
+
+/**
+ * Drop-in replacement for ns-obj parseObj(text, limits): the same return shape and values (positions bit-for-bit,
+ * indices, counts, bounds, comments) and, for text outside the fast grammar, parseObj's own result or refusal.
+ * About 4.7x faster than parseObj on the 436 pinned BodyParts3D files in Node (perf/r3/NODE-PARSE-BENCH.json: about 1030 ms
+ * -> 220 ms); in the browser the load's OBJ parsing drops from about 940 ms to about 280 ms (round3/R3-perf-NOTES.md).
+ */
+export function parseObjFast(text, options = {}) {
+  const fast = tryParseObjFast(text, options || {});
+  if (fast) return fast;
+  const { maxBytes = OBJ_LIMITS.maxBytes, maxVertices = OBJ_LIMITS.maxVertices, maxFaces = OBJ_LIMITS.maxFaces } = options || {};
+  return parseObj(text, { maxBytes, maxVertices, maxFaces });
+}
 
 /** Frozen null-prototype record map (so ids such as 'constructor' never hit Object.prototype). */
 function frozenMap(pairs) {
@@ -194,7 +377,7 @@ export const LICENCE_LINKS = Object.freeze({
   source: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html'
 });
 /** What this game changes (CC BY 4.0 section 3(a)(1)(B): indicate modifications). */
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected, and the meshes are posed rigidly and tinted at run time; the OBJ files themselves are unmodified.';
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 
@@ -333,8 +516,11 @@ export function validateManifest(manifest) {
 // Loading
 // ---------------------------------------------------------------------------------------
 
-/** UTF-8 byte length of a JS string (lone surrogates count as U+FFFD, 3 bytes, as encoders emit). */
+/** UTF-8 byte length of a JS string (lone surrogates count as U+FFFD, 3 bytes, as encoders emit).
+ * R3-perf: pure-ASCII text (every pinned OBJ) is 1 byte per code unit; a native regex scan finds that about 4x faster
+ * than the per-character loop, which still runs for any text with a non-ASCII character. */
 export function utf8ByteLength(text) {
+  if (!NON_ASCII_RE.test(text)) return text.length;
   let n = 0;
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
@@ -371,7 +557,7 @@ function checkParsed(set, entry, mesh) {
  * -> sha256Hex(text) must equal entry.sha256 (ns:asset_hash) -> only then parse(text).
  * readText and sha256Hex may be sync or async. Excluded (girdle) entries are never read.
  * Returns { arm: Map(id -> {entry, mesh}), brain: Map(id -> {entry, mesh}), excluded }. */
-export async function loadAssets({ manifest, readText, sha256Hex, parse = parseObj } = {}) {
+export async function loadAssets({ manifest, readText, sha256Hex, parse = parseObjFast } = {}) {
   if (typeof readText !== 'function') fail('asset_args', 'readText(path) must be injected');
   if (typeof sha256Hex !== 'function') fail('asset_args', 'sha256Hex(text) must be injected');
   if (typeof parse !== 'function') fail('asset_args', 'parse(text) must be a function');
@@ -390,7 +576,8 @@ export async function loadAssets({ manifest, readText, sha256Hex, parse = parseO
     if (bytes !== entry.bytes) fail('asset_bytes', `${id}: ${bytes} UTF-8 bytes, manifest says ${entry.bytes}`);
     const hex = await sha256Hex(text);
     if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
-    const mesh = await parse(text);
+    // R3-perf: the fast parser reuses the byte count verified above for its maxBytes limit (no second UTF-8 scan).
+    const mesh = await (parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text));
     checkParsed(set, entry, mesh);
     (set === 'arm' ? arm : brain).set(id, Object.freeze({ entry, mesh }));
   }
@@ -656,7 +843,7 @@ const ABSENT = () => Object.freeze({ status: 'absent', meshes: new Map(), failed
  *   failed: [{ id, code, message }], counts, error }>
  */
 export async function loadFullbodyAssets({
-  manifest, readText, sha256Hex, parse = parseObj, concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [],
+  manifest, readText, sha256Hex, parse = parseObjFast, concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [],
   allOrNothing = false, onProgress = null
 } = {}) {
   if (manifest === null || manifest === undefined) return ABSENT();
@@ -676,7 +863,7 @@ export async function loadFullbodyAssets({
       if (bytes !== entry.bytes) fail('asset_bytes', `${id}: ${bytes} UTF-8 bytes, manifest says ${entry.bytes}`);
       const hex = await sha256Hex(text);
       if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
-      const mesh = await parse(text);
+      const mesh = await (parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text));
       const p = mesh && mesh.positions;
       if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
       if (typeof entry.vertices === 'number' && p.length / 3 !== entry.vertices) fail('asset_vertices', `${id}: parsed ${p.length / 3} vertices, manifest says ${entry.vertices}`);

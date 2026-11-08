@@ -12,6 +12,14 @@
 //   BODY_JOINT_LIMITS                            -> { jointId: [minDeg, maxDeg] }
 //   bodySkinWeights / skinBodyPositions          -> optional two-influence CPU skinning of one muscle mesh
 //
+// Round 3 (R3-body, D4): the fixed first-person body SITS (BODY_POSTURES.seated = DEFAULT_BODY_POSTURE).
+//   bakeBodyPosture(rig, meshesById, { posture, keep = 'skull' }) -> { meshesById (seated geometry for the scene), ... }
+//   bodyPostureTargets(activeBodyActions, { posture })            -> absolute joint targets on top of the rest posture
+//   poseBody(rig, targets, { baked })                             -> matrices relative to the baked geometry
+//   bodyPostureAngles(posture), BODY_POSTURE_TEXT (plain words)
+//   GENITAL_DENY_TERMS, genitalTermsIn, genitalAnatomyTerms, excludeGenitalAnatomy -> R15: never rig, pose, bake
+//   or draw genital anatomy (buildBodyRig refuses such entries; none exist in the packets).
+//
 // Frame: the unchanged BodyParts3D 4.0 whole-body frame in millimetres (+x subject LEFT, +y POSTERIOR, +z SUPERIOR),
 // the same frame as the left arm and the brain. Every matrix maps REST (source) coordinates to POSED coordinates in that
 // frame. At zero targets every matrix is the identity: the source pose is the standard anatomical position.
@@ -483,7 +491,9 @@ function normalizeEntry(e) {
     bmax: vec(e.bounds_max),
     vertices: Number.isFinite(e.vertices) ? e.vertices : 0,
     sourcePacket: e.source_packet || null,
-    sha256: e.sha256 || null
+    sha256: e.sha256 || null,
+    // R15 deny-list terms over every name field of the raw entry (empty for every packet entry).
+    denyTerms: genitalAnatomyTerms(e)
   };
 }
 
@@ -749,11 +759,17 @@ function boxJoint(childBox, parentBox) {
  * @returns frozen rig { kind: 'ns-body-rig', version, segments, pivots, meshSegment, muscles, warnings, limits }
  */
 export function buildBodyRig(entries, meshesById = null, options = {}) {
-  const list = entryList(entries);
   const getMesh = meshGetter(meshesById);
   const maxSamples = Number.isInteger(options.muscleSamples) && options.muscleSamples > 0 ? options.muscleSamples : 400;
   const warnings = [];
   const warn = m => warnings.push(m);
+  // R15: genital anatomy is never rigged, posed or baked (none is in the packets; this is defence in depth).
+  const list = [], excludedGenital = [];
+  for (const e of entryList(entries)) {
+    const terms = e.denyTerms;
+    if (terms.length) { excludedGenital.push(e.id); warn(`entry ${e.id} (${e.name}) is genital anatomy (${terms.join(', ')}); it is excluded (R15)`); }
+    else list.push(e);
+  }
 
   const byName = new Map();
   for (const e of list) for (const n of e.names) if (!byName.has(n)) byName.set(n, e);
@@ -980,6 +996,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     meshSegment,
     muscles,
     limits: BODY_JOINT_LIMITS,
+    excludedGenital,
     warnings,
     caveats: [
       'One reference body from an educational dataset (BodyParts3D warns of errors and artist-made parts); not the player or a population average.',
@@ -1186,38 +1203,41 @@ function rigidFit(P, Q) {
   return m4FromQuat(q, sub(cq, m4Point(R, cp)));
 }
 
-/** One rigid matrix for a muscle: skin its fit samples with the two-influence weights, then fit. Exact when every
- * influencing segment has the same matrix (for example the zero pose). */
-function fittedMatrix(f, mats) {
-  const used = new Set();
-  for (let k = 0; k < f.i0.length; k++) { used.add(f.i0[k]); if (f.w0[k] < 1) used.add(f.i1[k]); }
-  const list = [...used], m0 = mats[list[0]];
-  if (list.every(i => { const m = mats[i]; for (let k = 0; k < 16; k++) if (Math.abs(m[k] - m0[k]) > 1e-12) return false; return true; })) return m0;
+/** Segment indices a muscle's fit samples actually use (cached per fit record). */
+const fitUsedCache = new WeakMap();
+function fitUsed(f) {
+  let list = fitUsedCache.get(f);
+  if (!list) {
+    const used = new Set();
+    for (let k = 0; k < f.i0.length; k++) { used.add(f.i0[k]); if (f.w0[k] < 1) used.add(f.i1[k]); }
+    fitUsedCache.set(f, (list = [...used]));
+  }
+  return list;
+}
+const sameMatrix = (a, b) => { for (let k = 0; k < 16; k++) if (Math.abs(a[k] - b[k]) > 1e-12) return false; return true; };
+
+/** Two-influence linear-blend skinning of a muscle's fit samples with segment matrices `mats` (BODY_SEGMENTS order). */
+function skinFitSamples(f, mats) {
   const Q = new Float64Array(f.p.length);
   for (let k = 0, i = 0; k < f.i0.length; k++, i += 3) {
     const a = mats[f.i0[k]], b = mats[f.i1[k]], wa = f.w0[k], wb = 1 - wa;
     const x = f.p[i], y = f.p[i + 1], z = f.p[i + 2];
     for (let r = 0; r < 3; r++) Q[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
   }
-  return rigidFit(f.p, Q);
+  return Q;
 }
 
-/**
- * Pose the rig. Targets use the agreed ids and degrees (ns-bodymap JOINT_SEMANTICS); they are clamped to
- * BODY_JOINT_LIMITS first.
- * @param options.anchor 'pelvis' (default: the body stands on its pelvis) or any segment id (for example 'skull', so
- *   the head, and an eye camera attached to it, stays still while the rest of the body moves relative to it).
- * @param options.external { l_girdle?, l_upperarm? }: shared-frame rest->posed matrices from the left-arm rig, used as
- *   those virtual segments' world matrices (so the left pectoralis/trapezius/serratus follow the left arm).
- * @param options.muscleMode 'fit' (default: least-squares rigid fit to the skinned sample vertices) or 'blend'
- *   (weighted quaternion average of the attaching segments; cheaper, drifts more on multi-joint muscles).
- * @returns { matrices: Map(meshId -> Float32Array(16)), segments: Map(segmentId -> Float32Array(16)), applied,
- *   clamped, ignored, nonFinite, face, anchor }
- */
-export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
-  checkRig(rig);
-  const t = clampBodyJointTargets(jointTargetsDeg);
-  const local = localMatrices(rig, t.applied);
+/** One rigid matrix for a muscle: skin its fit samples with the two-influence weights, then fit. Exact when every
+ * influencing segment has the same matrix (for example the zero pose). */
+function fittedMatrix(f, mats) {
+  const list = fitUsed(f), m0 = mats[list[0]];
+  if (list.every(i => sameMatrix(mats[i], m0))) return m0;
+  return rigidFit(f.p, skinFitSamples(f, mats));
+}
+
+/** World (rest -> posed, Float64) matrix of every segment for clamped targets, anchor and external matrices. */
+function worldSegments(rig, applied, options) {
+  const local = localMatrices(rig, applied);
   const anchor = options.anchor === undefined ? 'pelvis' : options.anchor;
   if (!SEG_INDEX.has(anchor)) throw new Error(`ns:body_pose: unknown anchor segment ${JSON.stringify(anchor)}`);
   const ext = options.external || {};
@@ -1231,19 +1251,46 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
     const inv = m4RigidInv(world[anchor]);
     for (const s of BODY_SEGMENTS) world[s] = m4Mul(inv, world[s]);
   }
+  return { world, anchor };
+}
+
+/**
+ * Pose the rig. Targets use the agreed ids and degrees (ns-bodymap JOINT_SEMANTICS); they are clamped to
+ * BODY_JOINT_LIMITS first.
+ * @param options.anchor 'pelvis' (default: the body stands on its pelvis) or any segment id (for example 'skull', so
+ *   the head, and an eye camera attached to it, stays still while the rest of the body moves relative to it).
+ * @param options.external { l_girdle?, l_upperarm? }: shared-frame rest->posed matrices from the left-arm rig, used as
+ *   those virtual segments' world matrices (so the left pectoralis/trapezius/serratus follow the left arm).
+ * @param options.muscleMode 'fit' (default: least-squares rigid fit to the skinned sample vertices) or 'blend'
+ *   (weighted quaternion average of the attaching segments; cheaper, drifts more on multi-joint muscles).
+ * @param options.baked a bakeBodyPosture() result (round 3). The returned mesh matrices then map the BAKED geometry
+ *   (baked.meshesById, the body already in its rest posture) to the posed geometry, so they are the identity whenever
+ *   the targets equal the baked posture's angles. Pass absolute targets (bodyPostureTargets), not offsets.
+ *   `segments` maps the source-pose geometry to the drawn pose (including the baked posture's keep correction).
+ * @returns { matrices: Map(meshId -> Float32Array(16)), segments: Map(segmentId -> Float32Array(16)), applied,
+ *   clamped, ignored, nonFinite, face, anchor, relativeTo: 'source' | 'baked' }
+ */
+export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
+  checkRig(rig);
+  const t = clampBodyJointTargets(jointTargetsDeg);
+  const { world, anchor } = worldSegments(rig, t.applied, options);
+  const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
+  // A baked posture's constant keep correction applies to every pose, so the deltas are relative to the drawn geometry.
+  if (baked) for (const s of BODY_SEGMENTS) world[s] = m4Mul(baked._internal.keepM, world[s]);
   const matrices = new Map();
   const fits = rig._fit || {};
   const mode = options.muscleMode === 'blend' ? 'blend' : 'fit';
   const mats = BODY_SEGMENTS.map(s => world[s]);
   for (const [id, info] of Object.entries(rig.meshSegment)) {
     let m;
-    if (info.kind === 'bone' || info.blend.length === 1) m = world[info.segment];
+    if (baked) m = bakedDelta(rig, baked, id, info, world, mats, mode);
+    else if (info.kind === 'bone' || info.blend.length === 1) m = world[info.segment];
     else if (mode === 'fit' && fits[id]) m = fittedMatrix(fits[id], mats);
     else m = blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
     matrices.set(id, Float32Array.from(m));
   }
   const segments = new Map(BODY_SEGMENTS.map(s => [s, Float32Array.from(world[s])]));
-  return { matrices, segments, applied: t.applied, clamped: t.clamped, ignored: t.ignored, nonFinite: t.nonFinite, face: faceDisplayLevels(t.applied), anchor };
+  return { matrices, segments, applied: t.applied, clamped: t.clamped, ignored: t.ignored, nonFinite: t.nonFinite, face: faceDisplayLevels(t.applied), anchor, relativeTo: baked ? 'baked' : 'source' };
 }
 
 /** Shared interface 3: Map(meshId -> 4x4 column-major Float32Array) in the shared BodyParts3D frame (mm). */
@@ -1395,6 +1442,388 @@ export function bodyMuscleDriveReport(activeActions, options = {}) {
  * { rig } to match against that rig's muscles instead of the default full-body catalog. */
 export function bodyMuscleDrives(activeActions, options = {}) {
   return bodyMuscleDriveReport(activeActions, options).drives;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Rest posture (round 3, R3-body): the fixed first-person body SITS
+//
+// Why seated: from the first-person eye of the upright BodyParts3D body the chest (anterior surface about y = -214 mm)
+// lies in front of the line of sight to the thighs and feet, so a standing body shows only the chest when you look down
+// (round 2 needed an eye shift and a dithered see-through window). Seated, the thighs run forward from the hips, so
+// looking down shows the chest and belly near you, then the lap, the knees and, past the knees, the feet: nothing has
+// to be see-through. A seated player is also the ordinary way to play a desktop game. The upper body is NOT moved
+// (no trunk, neck or jaw angle), so the head, the first-person eye, the face layer and the left-arm shoulder stay
+// exactly where they were. No chair or floor is drawn; the posture is a display choice, not a measured pose.
+
+/**
+ * Rest postures in degrees from the BodyParts3D source pose (same ids and signs as BODY_JOINT_LIMITS / ns-bodymap
+ * JOINT_SEMANTICS; missing ids are 0). Display choices inside ordinary adult ranges of motion, not measured on anyone.
+ *  - 'seated' (DEFAULT_BODY_POSTURE): sitting upright on an ordinary seat, thighs level to slightly rising toward the
+ *    knees (hips flexed 95 deg), lower legs reaching a little forward (knees flexed 45 deg) with relaxed ankles (15 deg
+ *    toes-down); the right arm relaxed at the side as
+ *    if on an armrest (shoulder 5 deg forward and 12 deg out, elbow bent 40 deg, forearm half-turned so the thumb is up,
+ *    wrist bent 10 deg, fingers loosely curled 20 deg), so the right hand rests beside the right knee. Chosen from
+ *    rendered candidates and a body-only ID-buffer scan (round3/R3-body-NOTES.md): with the knees bent 55-70 deg the
+ *    knees hide most of the feet from the eye; hips at 95 instead of 85 deg show the kneecaps on 0.105 % instead of
+ *    0.066 % of the far-down view; with the elbow bent 20 deg the hand hides behind the shoulder, at 55 deg it reads as
+ *    reaching forward.
+ *  - 'anatomical': the source pose itself (standing, arms at the sides, palms forward): every angle 0.
+ */
+export const BODY_POSTURES = deepFreezeRig({
+  anatomical: {},
+  seated: {
+    hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
+    r_shoulder_flex: 5, r_shoulder_abd: 12, r_elbow_flex: 40, r_pronation: 85, r_wrist_flex: 10, r_grasp: 20
+  }
+});
+/** The posture the game uses (decision D4, round 3). */
+export const DEFAULT_BODY_POSTURE = 'seated';
+/** Plain-language posture lines for the HUD / Esc page (R17). */
+export const BODY_POSTURE_TEXT = Object.freeze({
+  seated: 'Your body sits still (no chair is drawn). Look down to see your chest, lap, knees and feet. Look down and to the right to see your right arm.',
+  anatomical: 'Your simulated body stands still with its arms at its sides.'
+});
+
+/**
+ * Full rest angles of a posture: a BODY_POSTURES name, an object of { jointId: deg }, or a bakeBodyPosture() result.
+ * Throws for an unknown name or id, a non-finite value or an angle outside BODY_JOINT_LIMITS (postures are constants).
+ * @returns { every BODY_JOINT_ID: deg }
+ */
+export function bodyPostureAngles(posture = DEFAULT_BODY_POSTURE) {
+  let src;
+  if (typeof posture === 'string') {
+    src = Object.prototype.hasOwnProperty.call(BODY_POSTURES, posture) ? BODY_POSTURES[posture] : null;
+    if (!src) throw new Error(`ns:body_posture: unknown posture ${JSON.stringify(posture)} (known: ${Object.keys(BODY_POSTURES).join(', ')})`);
+  } else if (posture && posture.kind === 'ns-body-baked-posture') src = posture.angles;
+  else if (posture instanceof Map) src = Object.fromEntries(posture);
+  else if (posture && typeof posture === 'object') src = posture;
+  else throw new Error('ns:body_posture: posture must be a BODY_POSTURES name, an object of joint angles or a baked posture');
+  const t = clampBodyJointTargets(src);
+  if (t.ignored.length || t.nonFinite.length || t.clamped.length) {
+    throw new Error(`ns:body_posture: invalid posture (unknown ${JSON.stringify(t.ignored)}, non-finite ${JSON.stringify(t.nonFinite)}, outside limits ${JSON.stringify(t.clamped.map(c => c.id))})`);
+  }
+  return t.applied;
+}
+
+/** Normalise active actions for posing: like actionRows, but the POSE drive (`drive`) comes first, then `level`. */
+function poseRows(activeActions) {
+  if (!activeActions) return [];
+  let rows;
+  if (activeActions instanceof Map) rows = [...activeActions].map(([actionId, drive]) => ({ actionId, drive }));
+  else if (Array.isArray(activeActions)) rows = activeActions.map(r => (typeof r === 'string' ? { actionId: r, drive: 1 } : r));
+  else if (typeof activeActions === 'object') rows = Object.entries(activeActions).map(([actionId, drive]) => ({ actionId, drive }));
+  else return [];
+  const out = [];
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue;
+    const actionId = r.actionId || r.id || null;
+    const a = actionId ? ACTION_INDEX.get(actionId) : null;
+    const raw = r.drive !== undefined ? r.drive : r.level !== undefined ? r.level : 1;
+    const drive = clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
+    const joints = r.joints && typeof r.joints === 'object' ? r.joints : a && a.joints ? a.joints : {};
+    if (drive > 0 && Object.keys(joints).length) out.push({ actionId, drive, joints });
+  }
+  return out;
+}
+
+/**
+ * Absolute joint targets (degrees from the source pose, for poseBody) for the active body actions on top of a rest
+ * posture. This replaces ns-actions bodyJointTargets for posing when the body has a rest posture:
+ *  - An action whose map target for a joint is NOT 0 moves that joint by its target FROM THE REST POSTURE (hip flexion
+ *    +35 lifts the seated thigh 35 deg further, knee flexion -45 bends the seated knee 45 deg further).
+ *  - An action whose map target is exactly 0 is a "back to the source pose" action (knee or elbow straightening,
+ *    forearm supination, jaw clench): it moves the joint from the rest angle toward 0 (a seated knee straightens).
+ * Competing actions blend as in ns-actions composeBodyJoints (each joint: drive / max(1, sum of drives)); the result is
+ * clamped to `limits`. With the 'anatomical' posture the result equals composeBodyJoints exactly.
+ * @param activeActions ns-actions activeBodyActions() rows ({ actionId, drive, level, ... }; the pose `drive` is
+ *   used, else `level`), [{ actionId, drive }], action-id strings (drive 1), or { actionId: drive } / a Map.
+ *   Rows may carry their own `joints`; otherwise BODY_MOTOR_MAP supplies them. Rows without joints are ignored.
+ * @param options { posture = DEFAULT_BODY_POSTURE (name, angles or baked posture), limits = BODY_JOINT_LIMITS }
+ * @returns { every BODY_JOINT_ID: deg }
+ */
+export function bodyPostureTargets(activeActions, { posture = DEFAULT_BODY_POSTURE, limits = BODY_JOINT_LIMITS } = {}) {
+  const rest = bodyPostureAngles(posture);
+  const rows = poseRows(activeActions);
+  const total = {};
+  for (const r of rows) for (const j of Object.keys(r.joints)) total[j] = (total[j] || 0) + r.drive;
+  const out = { ...rest };
+  for (const r of rows) {
+    for (const [j, deg] of Object.entries(r.joints)) {
+      if (!Object.prototype.hasOwnProperty.call(out, j) || typeof deg !== 'number' || !Number.isFinite(deg)) continue;
+      out[j] += (r.drive / Math.max(1, total[j])) * (deg === 0 ? -rest[j] : deg);
+    }
+  }
+  for (const j of BODY_JOINT_IDS) {
+    const L = limits && limits[j] ? limits[j] : BODY_JOINT_LIMITS[j];
+    out[j] = clamp(out[j], L[0], L[1]) + 0;
+  }
+  return out;
+}
+
+// Static k-d tree over a point cloud (exact nearest neighbour; same distances as nearestDistance, much faster).
+function kdTree(cloud) {
+  const n = cloud.length / 3;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  const build = (lo, hi, axis) => {
+    if (hi - lo <= 1) return;
+    const part = idx.slice(lo, hi).sort((a, b) => cloud[3 * a + axis] - cloud[3 * b + axis] || a - b);
+    for (let i = 0; i < part.length; i++) idx[lo + i] = part[i];
+    const midI = (lo + hi) >> 1, next = axis === 2 ? 0 : axis + 1;
+    build(lo, midI, next);
+    build(midI + 1, hi, next);
+  };
+  build(0, n, 0);
+  const pts = new Float64Array(3 * n);
+  for (let i = 0; i < n; i++) { pts[3 * i] = cloud[3 * idx[i]]; pts[3 * i + 1] = cloud[3 * idx[i] + 1]; pts[3 * i + 2] = cloud[3 * idx[i] + 2]; }
+  const box = bboxOf(pts);
+  return { pts, n, lo: box.min, hi: box.max };
+}
+let kdBest = Infinity;
+function kdVisit(P, lo, hi, axis, x, y, z) {
+  if (lo >= hi) return;
+  const m = (lo + hi) >> 1, j = 3 * m;
+  const dx = P[j] - x, dy = P[j + 1] - y, dz = P[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
+  if (e < kdBest) kdBest = e;
+  const diff = (axis === 0 ? x : axis === 1 ? y : z) - P[j + axis];
+  const next = axis === 2 ? 0 : axis + 1;
+  if (diff < 0) { kdVisit(P, lo, m, next, x, y, z); if (diff * diff < kdBest) kdVisit(P, m + 1, hi, next, x, y, z); }
+  else { kdVisit(P, m + 1, hi, next, x, y, z); if (diff * diff < kdBest) kdVisit(P, lo, m, next, x, y, z); }
+}
+function kdNearest(t, x, y, z) {
+  kdBest = Infinity;
+  kdVisit(t.pts, 0, t.n, 0, x, y, z);
+  return Math.sqrt(kdBest);
+}
+/** Lower bound of the distance from a point to any point of a tree (its bounding box). */
+function kdBoxDistance(t, x, y, z) {
+  const ex = x < t.lo[0] ? t.lo[0] - x : x > t.hi[0] ? x - t.hi[0] : 0;
+  const ey = y < t.lo[1] ? t.lo[1] - y : y > t.hi[1] ? y - t.hi[1] : 0;
+  const ez = z < t.lo[2] ? t.lo[2] - z : z > t.hi[2] ? z - t.hi[2] : 0;
+  return Math.sqrt(ex * ex + ey * ey + ez * ez);
+}
+const kdCache = new WeakMap();
+function rigTrees(rig) {
+  let trees = kdCache.get(rig);
+  if (!trees) {
+    trees = {};
+    for (const [s, c] of Object.entries(rig._clouds || {})) trees[s] = kdTree(c);
+    kdCache.set(rig, trees);
+  }
+  return trees;
+}
+const KD_LB = new Float64Array(64), KD_D = new Float64Array(64);
+/** twoNearest with k-d trees and exact bounding-box pruning: the same result as twoNearest (same order, same strict
+ * comparisons, same distances). A candidate is skipped only when its box is farther than a known second-nearest
+ * distance, so it could not have been chosen. */
+function twoNearestKd(segs, trees, x, y, z) {
+  const n = segs.length;
+  if (n > 64) return twoNearest(segs, Object.fromEntries(segs.map(s => [s, trees[s].pts])), x, y, z);
+  let i1 = -1, i2 = -1;
+  for (let i = 0; i < n; i++) {
+    KD_LB[i] = kdBoxDistance(trees[segs[i]], x, y, z);
+    KD_D[i] = -1;
+    if (i1 < 0 || KD_LB[i] < KD_LB[i1]) { i2 = i1; i1 = i; } else if (i2 < 0 || KD_LB[i] < KD_LB[i2]) i2 = i;
+  }
+  let bound = Infinity;
+  if (i2 >= 0) {
+    KD_D[i1] = kdNearest(trees[segs[i1]], x, y, z);
+    KD_D[i2] = kdNearest(trees[segs[i2]], x, y, z);
+    bound = Math.max(KD_D[i1], KD_D[i2]);
+  }
+  let a = null, da = Infinity, b = null, db = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (KD_D[i] < 0 && KD_LB[i] > bound) continue;
+    const d = KD_D[i] >= 0 ? KD_D[i] : kdNearest(trees[segs[i]], x, y, z);
+    const s = segs[i];
+    if (d < da) { b = a; db = da; a = s; da = d; } else if (d < db) { b = s; db = d; }
+  }
+  if (!b) return { a, wa: 1, b: null, wb: 0 };
+  const qa = da * da, qb = db * db, t = qa + qb;
+  const wa = t > 1e-12 ? qb / t : 0.5;
+  return { a, wa, b, wb: 1 - wa };
+}
+
+function transformPositions(m, p) {
+  const o = new Float32Array(p.length);
+  for (let i = 0; i < p.length; i += 3) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    o[i] = m[0] * x + m[4] * y + m[8] * z + m[12];
+    o[i + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+    o[i + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  }
+  return o;
+}
+function boundsOf(p) {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { const v = p[i + k]; if (v < min[k]) min[k] = v; if (v > max[k]) max[k] = v; }
+  return { min, max };
+}
+
+/**
+ * Bake a rest posture into the body geometry, once after loading (round 3). Bones are moved rigidly. A muscle whose
+ * candidate segments move differently in the posture (for example the thigh muscles across the flexed hip and knee) is
+ * deformed per vertex with the same two-influence weights as bodySkinWeights (two nearest candidate bones, inverse
+ * square distance), so it bends with the joint instead of sliding off as one rigid piece would. Other muscles move
+ * rigidly. Hand `meshesById` of the result to the scene (setBody) instead of the source meshes, and pose with
+ * poseBody(rig, targets, { baked }) so the matrices are relative to this geometry.
+ * Genital anatomy is never baked (R15): only meshes the rig knows are returned, and buildBodyRig excludes genital
+ * entries.
+ * @param meshesById Map | object id -> { positions, indices, ... } (the source meshes; they are not modified)
+ * @param options { posture = DEFAULT_BODY_POSTURE, keep = 'skull' }: `keep` is the segment that stays at its source
+ *   place (a constant rigid correction of the whole posture), so a posture with a trunk angle does not move the head,
+ *   the first-person eye or the face layer; null keeps the pelvis (the plain poseBody frame).
+ * @returns frozen { kind: 'ns-body-baked-posture', posture, angles, meshesById: Map(id -> { positions (posed,
+ *   Float32Array), indices (shared), vertexCount, faceCount, bounds, comments }), segments: Map(segment -> posture
+ *   matrix), skinned: [muscle ids deformed per vertex], rigid: [ids moved rigidly], missing: [rig ids with no mesh],
+ *   ms }
+ */
+export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTURE, keep = 'skull' } = {}) {
+  checkRig(rig);
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const angles = bodyPostureAngles(posture);
+  const getMesh = meshGetter(meshesById);
+  const { world } = worldSegments(rig, angles, {});
+  // Keep one segment (default the skull, so the first-person eye, the face layer and the camera-attached left arm stay
+  // where they were) at its source place: a constant rigid correction applied to the whole posture and to every pose.
+  if (keep !== null && keep !== undefined && !SEG_INDEX.has(keep)) throw new Error(`ns:body_posture: unknown keep segment ${JSON.stringify(keep)}`);
+  const keepM = keep ? m4RigidInv(world[keep]) : m4I();
+  for (const s of BODY_SEGMENTS) world[s] = m4Mul(keepM, world[s]);
+  const mats = BODY_SEGMENTS.map(s => world[s]);
+  const inv = Object.fromEntries(BODY_SEGMENTS.map(s => [s, m4RigidInv(world[s])]));
+  const fits = rig._fit || {}, clouds = rig._clouds || {};
+  const out = new Map(), fitBaked = {}, rigidRest = {};
+  const skinned = [], rigid = [], missing = [];
+  let trees = null;
+  for (const [id, info] of Object.entries(rig.meshSegment)) {
+    const mesh = getMesh(id), p = positionsOf(mesh);
+    let rest = null, positions = null;
+    if (info.kind === 'bone' || info.blend.length === 1) rest = world[info.segment];
+    else {
+      const f = fits[id];
+      rest = f ? fittedMatrix(f, mats) : blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
+      rigidRest[id] = rest;
+      const avail = (info.candidates || []).filter(s => clouds[s]);
+      const moving = avail.length >= 2 && !avail.every(s => sameMatrix(world[s], world[avail[0]]));
+      if (f && moving) {
+        fitBaked[id] = skinFitSamples(f, mats);
+        if (p) {
+          if (!trees) trees = rigTrees(rig);
+          positions = new Float32Array(p.length);
+          for (let i = 0; i < p.length; i += 3) {
+            const x = p[i], y = p[i + 1], z = p[i + 2];
+            const w = twoNearestKd(avail, trees, x, y, z);
+            const a = world[w.a], b = w.b ? world[w.b] : a, wa = w.wa, wb = w.wb;
+            for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
+          }
+          skinned.push(id);
+        }
+      }
+    }
+    if (!p) { missing.push(id); continue; }
+    if (!positions) { positions = transformPositions(rest, p); rigid.push(id); }
+    const baked = { positions, indices: mesh.indices || null };
+    for (const k of ['vertexCount', 'faceCount', 'polygonCount', 'comments']) if (mesh[k] !== undefined) baked[k] = mesh[k];
+    baked.bounds = boundsOf(positions);
+    out.set(id, Object.freeze(baked));
+  }
+  const t1 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const result = {
+    kind: 'ns-body-baked-posture',
+    posture: typeof posture === 'string' ? posture : posture && posture.kind === 'ns-body-baked-posture' ? posture.posture : 'custom',
+    angles: Object.freeze({ ...angles }),
+    keep: keep || null,
+    meshesById: out,
+    segments: new Map(BODY_SEGMENTS.map(s => [s, Float32Array.from(world[s])])),
+    skinned: Object.freeze(skinned), rigid: Object.freeze(rigid), missing: Object.freeze(missing),
+    ms: Math.round((t1 - t0) * 10) / 10
+  };
+  Object.defineProperty(result, '_internal', { value: Object.freeze({ rig, world, mats, inv, fitBaked, rigidRest, keepM }), enumerable: false });
+  return Object.freeze(result);
+}
+
+function checkBaked(rig, baked) {
+  if (!baked || baked.kind !== 'ns-body-baked-posture' || !baked._internal) throw new Error('ns:body_pose: options.baked must come from bakeBodyPosture');
+  if (baked._internal.rig !== rig) throw new Error('ns:body_pose: options.baked was baked from a different rig');
+  return baked;
+}
+
+/** Matrix mapping a mesh's BAKED geometry to its posed geometry (see poseBodyDetailed options.baked). */
+function bakedDelta(rig, baked, id, info, world, mats, mode) {
+  const B = baked._internal;
+  if (info.kind === 'bone' || info.blend.length === 1) return m4Mul(world[info.segment], B.inv[info.segment]);
+  const f = (rig._fit || {})[id], fb = B.fitBaked[id];
+  if (mode === 'fit' && f && fb) {
+    if (fitUsed(f).every(i => sameMatrix(mats[i], B.mats[i]))) return m4I();
+    return rigidFit(fb, skinFitSamples(f, mats));
+  }
+  const cur = mode === 'fit' && f ? fittedMatrix(f, mats) : blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
+  const rest = mode === 'fit' || !f ? B.rigidRest[id] : blendMatrix(info.blend, B.world, info.restCentroid || [0, 0, 0]);
+  return rest ? m4Mul(cur, m4RigidInv(rest)) : cur;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// No genital anatomy (R15: "no genitalia. Obviously.")
+//
+// The packets hold no genital meshes (checked by tests/unit/R3-body-genital.test.mjs over both manifests and every OBJ
+// header). This deny-list is defence in depth: buildBodyRig refuses such entries (so bakeBodyPosture never returns
+// them) and excludeGenitalAnatomy lets a loader drop them before anything is parsed or drawn. Terms are matched as whole
+// words, case-insensitively, against every name field of an entry; ordinary pelvic names (hip bone, pubis, pubic
+// symphysis, sacrum, cervical vertebrae, levator labii superioris, ...) do not match.
+
+/** Whole-word, case-insensitive genital-anatomy terms (English, FMA-style names). */
+export const GENITAL_DENY_TERMS = Object.freeze([
+  'genital', 'genitals', 'genitalia', 'urogenital', 'pudendum', 'pudendal',
+  'penis', 'penile', 'glans', 'prepuce', 'foreskin', 'corpus cavernosum', 'corpora cavernosa', 'corpus spongiosum', 'spongy urethra',
+  'scrotum', 'scrotal', 'testis', 'testes', 'testicle', 'testicular', 'epididymis', 'spermatic cord', 'ductus deferens',
+  'vas deferens', 'seminal vesicle', 'ejaculatory duct', 'prostate', 'prostatic', 'bulbourethral', 'dartos', 'cremaster',
+  'tunica vaginalis',
+  'vulva', 'vulvar', 'vagina', 'vaginal', 'clitoris', 'clitoral', 'labium majus', 'labium minus', 'labia majora',
+  'labia minora', 'mons pubis', 'hymen', 'vestibular bulb', 'bulb of vestibule', 'greater vestibular gland', 'bartholin',
+  'uterus', 'uterine', 'ovary', 'ovarian', 'fallopian', 'oviduct', 'cervix uteri', 'cervix of uterus',
+  'bulbospongiosus', 'ischiocavernosus', 'perineum', 'perineal'
+]);
+const GENITAL_RE = new RegExp(`\\b(?:${GENITAL_DENY_TERMS.map(t => t.replace(/ /g, '\\s+')).join('|')})\\b`, 'gi');
+
+/** Phrases that contain a deny-list word but are not genital anatomy (removed before matching): the "vaginal process"
+ * is a part of the sphenoid and temporal bones. */
+export const GENITAL_ALLOW_PHRASES = Object.freeze(['vaginal process']);
+const GENITAL_ALLOW_RE = new RegExp(`\\b(?:${GENITAL_ALLOW_PHRASES.map(t => t.replace(/ /g, '\\s+')).join('|')})\\b`, 'g');
+
+/** The deny-list terms found in one name (lower case, unique). Underscores, hyphens, dots and slashes count as spaces
+ * (so group names such as "genital_muscle" match). */
+export function genitalTermsIn(name) {
+  if (typeof name !== 'string' || !name) return [];
+  const text = name.toLowerCase().replace(/[_\-./]+/g, ' ').replace(GENITAL_ALLOW_RE, ' ');
+  const found = text.match(GENITAL_RE) || [];
+  return [...new Set(found.map(s => s.replace(/\s+/g, ' ')))];
+}
+
+/** Every name-like string of a manifest entry (or a plain name). */
+function entryNames(e) {
+  if (typeof e === 'string') return [e];
+  if (!e || typeof e !== 'object') return [];
+  const out = [];
+  for (const k of ['embedded_source_name', 'requested_structure', 'label', 'name', 'concept_name', 'element_id', 'id', 'path']) if (typeof e[k] === 'string') out.push(e[k]);
+  for (const c of Array.isArray(e.concepts) ? e.concepts : []) if (c && typeof c.en === 'string') out.push(c.en);
+  for (const k of ['matched_concept_names', 'names', 'groups']) for (const n of Array.isArray(e[k]) ? e[k] : []) if (typeof n === 'string') out.push(n);
+  return out;
+}
+
+/** Deny-list terms found in any name field of an entry (or in a name string). */
+export function genitalAnatomyTerms(entryOrName) {
+  return [...new Set(entryNames(entryOrName).flatMap(genitalTermsIn))];
+}
+
+/** Split manifest entries into the ones to keep and the genital ones to drop (R15). Accepts an array or a manifest. */
+export function excludeGenitalAnatomy(entries) {
+  const raw = Array.isArray(entries) ? entries : entries && Array.isArray(entries.assets) ? entries.assets : [];
+  const kept = [], excluded = [];
+  for (const e of raw) {
+    const terms = genitalAnatomyTerms(e);
+    if (terms.length) excluded.push({ id: e && (e.element_id || e.id) || null, name: entryNames(e)[0] || null, terms });
+    else kept.push(e);
+  }
+  return { kept, excluded };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

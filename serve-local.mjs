@@ -151,7 +151,12 @@ export function createHandler({ root, allowedHosts = null, log = () => {} }) {
   };
 }
 
-/** Check every file listed in <root>/SHA256SUMS (and that nothing unlisted is present). */
+/** Files a git copy of the distribution carries at its top level that are not part of the game. --verify lists them
+ * separately (not checked, not a problem) instead of reporting them as unlisted. `.git` is never walked. */
+export const REPO_OWN_TOP_LEVEL = Object.freeze(['README.md', 'LICENSE', 'PROJECT-CONTEXT.json', '.gitignore', '.gitattributes', '.git']);
+
+/** Check every file listed in <root>/SHA256SUMS (and that nothing unlisted is present, apart from the top-level
+ * repository files in REPO_OWN_TOP_LEVEL, which are returned in `repo_files`). */
 export async function verifyAgainstSums(root) {
   const text = await fsp.readFile(path.join(root, 'SHA256SUMS'), 'utf8');
   const listed = new Map();
@@ -161,7 +166,7 @@ export async function verifyAgainstSums(root) {
     if (!m) throw new Error(`SHA256SUMS: bad line ${line.slice(0, 80)}`);
     listed.set(m[2], m[1]);
   }
-  const problems = [];
+  const problems = [], repoFiles = [];
   for (const [rel, want] of listed) {
     const abs = path.join(root, ...rel.split('/'));
     if (!isInside(abs, root)) { problems.push(`${rel}: outside the folder`); continue; }
@@ -173,13 +178,14 @@ export async function verifyAgainstSums(root) {
   const walk = async (dir, rel) => {
     for (const e of await fsp.readdir(dir, { withFileTypes: true })) {
       const r = rel ? `${rel}/${e.name}` : e.name;
+      if (!rel && !listed.has(r) && REPO_OWN_TOP_LEVEL.includes(e.name) && (e.isFile() || (e.name === '.git' && e.isDirectory()))) { repoFiles.push(r); continue; }
       if (e.isSymbolicLink()) problems.push(`${r}: symlink`);
       else if (e.isDirectory()) await walk(path.join(dir, e.name), r);
       else if (r !== 'SHA256SUMS' && !listed.has(r)) problems.push(`${r}: not listed in SHA256SUMS`);
     }
   };
   await walk(root, '');
-  return { files: listed.size, problems };
+  return { files: listed.size, problems, repo_files: repoFiles.sort() };
 }
 
 function parseCli(argv) {
@@ -213,7 +219,8 @@ async function main() {
     try {
       const r = await verifyAgainstSums(fs.realpathSync(opts.root));
       if (r.problems.length) { console.error(`serve-local: ${r.problems.length} problem(s):\n  ${r.problems.slice(0, 40).join('\n  ')}`); process.exitCode = 1; }
-      else console.log(`OK: all ${r.files} files listed in SHA256SUMS match and nothing else is present.`);
+      else console.log(`OK: all ${r.files} files listed in SHA256SUMS match and nothing else is present` +
+        (r.repo_files.length ? ` (apart from the repository's own files, which are not part of the game: ${r.repo_files.join(', ')}).` : '.'));
     } catch (e) { console.error(`serve-local: verify failed: ${e.message}`); process.exitCode = 1; }
     return;
   }

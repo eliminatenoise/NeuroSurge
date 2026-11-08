@@ -62,25 +62,26 @@ import { DEG, clamp } from './ns-math.mjs';
 import { createControls, bindDom, CONTROL_CODES } from './ns-controls.mjs';
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
-  MUSCLE_COVERAGE_GAPS, eyePosition
+  MUSCLE_COVERAGE_GAPS, eyePosition, parseObjFast
 } from './ns-assets.mjs';
 import { deriveRig, segmentBoxes, skinWeights, SEGMENTS, HAND_SEGMENTS } from './ns-rig.mjs';
 import {
   ARM_DEFAULTS, REACH_STATE_MAX_DEPTH, ELBOW_MAX_DEG, FOREARM_SUPPORT_KEY, fitHand, stepReach, reachStart, depthForElbow,
-  armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation
+  armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
 import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS } from './ns-actions.mjs';
 import {
-  ARM_BAND, LEGEND_LABEL, CROWN_NOTE, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
-  gazeRayInSource, classifyGaze, markerLabel, colormap
+  ARM_BAND, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
+  gazeRayInSource, classifyGaze, colormap
 } from './ns-brain.mjs';
 import { createScene, createHud, armAvoidShapes, CAMERA, infoPanelRect, ORBIT_HOLD } from './ns-scene-three.mjs';
-import { parseObj } from './ns-obj.mjs';
 // Namespace imports for exports the parallel round-2 owners are adding (a missing name is undefined, never a link
 // error): ns-actions resetBody / orbitStep, ns-brain brainViewTransform / BRAIN_VIEW_TILT_DEG.
 import * as NsActions from './ns-actions.mjs';
 import * as NsBrain from './ns-brain.mjs';
+// Round 3 (R3-integrator): every visible string comes from ns-text (R3-text, the single source of plain UI text; R17/D3).
+import * as NT from './ns-text.mjs';
 
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
@@ -159,8 +160,12 @@ export const TRUNK_FREE_DEG = Object.freeze({ right: 60, left: 100 });
  * startPitchDeg are unaffected (the body stays fixed for ordinary looking). Round-2 fix F3: forwardMm 170 -> 70, so the
  * chest and abdomen stay in the lower part of the view (with 170 mm the eye passed in front of the chest and the torso
  * left the frame); the torso's see-through window (ns-scene-three BODY_SEE_THROUGH, fill 0.4) shows the legs through it.
+ * Round 3 (R3-body, D4): the body now SITS (ns-body seated posture), so the thighs, knees and feet lie in front of the
+ * chest and no see-through window is drawn; forwardMm 70 -> 120 and downMm 60 -> 80 bring the belly into the far-down
+ * view (body-only ID buffer: belly 0.17 % -> 1.14 %, chest 15.25 % -> 6.19 %, thighs 6.44 % -> 8.24 %). Display choice,
+ * implies a slight forward lean; only looks below startPitchDeg are affected.
  */
-export const NECK_FLEX = Object.freeze({ startPitchDeg: -35, fullPitchDeg: -75, forwardMm: 70, downMm: 60 });
+export const NECK_FLEX = Object.freeze({ startPitchDeg: -35, fullPitchDeg: -75, forwardMm: 120, downMm: 80 });
 /** Eye shift (BodyParts3D mm) for a look pitch (radians) under NECK_FLEX (pure). */
 export function neckFlexEyeShiftMm(pitch, o = NECK_FLEX) {
   if (!o || !Number.isFinite(pitch)) return [0, 0, 0];
@@ -187,8 +192,24 @@ export function brainCentreForPanel(size, { share = 0.8, maxShift = 0.3 } = {}) 
   const q = v => Math.round(clamp(v, -maxShift, maxShift) * 1000) / 1000;
   return [q(cx), q(cy)];
 }
+/** Round 3 (D1, R3-brain wiring 5.1): the usable brain area (NDC) for a CSS viewport size: the view minus the far-right
+ * info column (portrait: the bottom band, so the brain stays above it) with a 12 px gap, minus the top limits line
+ * (ns-brain usableNdcFromLayout). null without a size or without the ns-brain helper (frameBrain then infers it from
+ * centreNdc, the round-2 convention). Pure. */
+export function brainUsableNdc(size, brainModule = NsBrain) {
+  if (!size || !(size.width > 0 && size.height > 0) || typeof brainModule.usableNdcFromLayout !== 'function') return null;
+  const r = infoPanelRect(size);
+  if (!r) return null;
+  try {
+    return r.layout === 'portrait'
+      ? brainModule.usableNdcFromLayout(size, { reserveBottomPx: size.height - r.y0, gapPx: 12 })
+      : brainModule.usableNdcFromLayout(size, { reserveRightPx: size.width - r.x0, gapPx: 12 });
+  } catch {
+    return null;
+  }
+}
 /** Legend note in region mode (both hemispheres' body-map regions). */
-export const REGION_MODE_NOTE = 'Coloured areas are representative, not exact borders: real motor maps overlap and vary between people.';
+export const REGION_MODE_NOTE = NT.LEGEND.regionNote;
 /** R6: the instructions overlay shows for this long on first start, then hides by itself (ms, app clock). */
 export const INTRO_MS = 2000;
 /** An Esc keydown this soon after Esc released the pointer lock (which already paused) is the same press (ms). */
@@ -205,11 +226,7 @@ export const ORBIT_FALLBACK = Object.freeze({ stepDeg: 15, maxYawDeg: 60, maxPit
 /** Face-view settings (R7 / body view): the ghosted facial musculoskeletal layer seen from the eyes at high pitch
  * (default), a labelled inset as the alternative, or off. ns-scene-three setFaceView(mode) renders them. */
 export const FACE_VIEW_MODES = Object.freeze(['ghost', 'inset', 'off']);
-export const FACE_VIEW_LABELS = Object.freeze({
-  ghost: 'Ghosted face layer (look up)',
-  inset: 'Labelled face inset',
-  off: 'Off'
-});
+export const FACE_VIEW_LABELS = NT.FACE_VIEW_LABELS;
 /** Optional sibling modules (round-2 shared interfaces 1-3), loaded with loadOptionalModules(). */
 export const OPTIONAL_MODULES = Object.freeze({ colors: './ns-colors.mjs', bodyMap: './ns-bodymap.mjs', body: './ns-body.mjs' });
 
@@ -226,64 +243,16 @@ export const PINNED_SHA256 = Object.freeze({
 export { SPACE_COMPETING, DIGIT_FLEXING as DIGIT_FLEX_PULSES } from './ns-actions.mjs';
 import { SPACE_COMPETING, DIGIT_FLEXING as DIGIT_FLEX_PULSES } from './ns-actions.mjs';
 
-export const HUD_TEXT = Object.freeze({
-  title: 'NeuroSurge \u00b7 simulated motor-cortex game',
-  /** Appended to the HUD title (hudStatic): the model name never appears without its not-validated qualifier. */
-  brand: 'companion to NeuroTranslate 0.0 \u2014 not a validated decoder',
-  qualifier: 'Representative motor map \u00b7 regions overlap and vary between people',
-  control: 'Virtual gaze/WASD control \u2014 not real stimulation or decoding',
-  simulated: 'Every value shown is a simulated, unitless display drive (0\u20131)',
-  view: 'Dorsal view, not mirrored: anterior up, subject right on screen right',
-  rights: 'Anatomy: BodyParts3D \u00a9 DBCLS, CC BY 4.0',
-  placeholderRights: 'Placeholder: no BodyParts3D anatomy shown',
-  limitsShort: 'Simulated, unitless \u00b7 representative map \u00b7 virtual inputs, not real stimulation or decoding',
-  hint: 'Move to look. W/S reach forward/back; A/D move left/right. Hold Space to close; release to open. ' +
-    'On a valid target, new gaze or either click gives a 1 s simulated pulse. ' +
-    'Click the scene to capture the pointer; Esc releases it.',
-  /** The hint when the game shell owns pointer capture (the capture click never activates anything). */
-  hintShell: 'Look to aim. A/D move the hand left/right, W/S forward/back. Hold Space: fist; double-tap: flip the forearm. ' +
-    'Looking at a motor area gives 1 s of simulated activity; any click repeats it. Space while looking at the brain drags it. ' +
-    'Esc: instructions, reset and settings.',
-  markers: 'Dots are representative control targets, not exact cortical points; the coloured fields overlap',
-  drivesTitle: 'Top simulated muscle drive (unitless 0\u20131)',
-  gazeEmpty: 'Gaze: empty space \u2014 no new activation',
-  gazeBrain: 'Gaze: brain (no left-arm motor field) \u2014 no new activation',
-  gazeGlass: 'Gaze: brain glass (no motor area) \u2014 no new activation',
-  /** Prefix for a non-left-arm motor area (other body parts are driven only through the brain, never by keys). */
-  gazeOtherPrefix: 'Gaze: other-body motor area \u2014 ',
-  /** A left-arm region without a strip action (shoulder, forearm rotation): still a LEFT-ARM area (fix round 2). */
-  gazeLeftArmPrefix: 'Gaze: left-arm motor area \u2014 ',
-  /** Polish: no line while nothing is pulsing (the idle text was constant HUD noise). */
-  pulseNone: '',
-  /** A1 note: the pulse display now ends at exactly 1 s while the pose eases back. */
-  pulseResidual: 'Arm easing back to rest (activity display ended)',
-  suppressedPrefix: 'Suppressed while the fist is held: ',
-  grabbing: 'Brain grabbed: look around to drag it; release Space to leave it there',
-  rotationPrefix: 'Forearm: ',
-  rotationHint: ' \u00b7 double-tap Space to flip',
-  wholeGroupTint: 'Whole-muscle tint: FDS, FDP and ED serve all four fingers, so this is not digit-local recruitment',
-  spaceHeld: 'Space held: grasp / close hand (simulated fist)',
-  spaceReleased: 'Space released: opening hand (simulated)',
-  reachLimited: 'Reach limited so the whole hand stays on screen',
-  contextLost: 'WebGL context lost \u2014 rendering paused until the browser restores it',
-  placeholderAttribution: 'Placeholder mode shows no BodyParts3D anatomy. Real-scene anatomy: ',
-  placeholderMuscles: 'Placeholder mode: no muscle meshes; simulated muscle drives are listed but not shown on anatomy',
-  unmappedPrefix: 'No functional-map role (baseline tint): '
-});
+export const HUD_TEXT = NT.HUD;
 
 /** Plain words for the forearm rotation state (the technical term stays in brackets). */
-export const ROTATION_PLAIN = Object.freeze({ pronated: 'palm down (pronated)', supinated: 'palm up (supinated)' });
+export const ROTATION_PLAIN = NT.ROTATION;
 
 /** R/L and anterior/posterior brain labels (display axes from ns-brain ORIENTATION). Polish: plain words; the brain is
  * the player's own, seen from above and not mirrored, so its right half is on the player's right. */
-export const ORIENTATION_TEXT = Object.freeze({
-  right: 'Your right \u2192',
-  left: '\u2190 Your left',
-  anterior: '\u2191 Front (anterior)',
-  posterior: 'Back (posterior) \u2193'
-});
+export const ORIENTATION_TEXT = NT.ORIENTATION;
 /** Short R/L labels for narrow (portrait) viewports; anterior/posterior keep their full text. */
-export const ORIENTATION_TEXT_SHORT = Object.freeze({ right: 'Right \u2192', left: '\u2190 Left' });
+export const ORIENTATION_TEXT_SHORT = NT.ORIENTATION_SHORT;
 
 /** Legend gradient stops (display sRGB) for the simulated activity colour ramp. */
 export const LEGEND_STOPS = Object.freeze([0, 0.25, 0.5, 0.75, 1].map(t => {
@@ -953,48 +922,13 @@ export function countActivations(prev, marks = [], restarts = 0, gazeActionId = 
 
 /** Text of the far-right information overlay (R14). Pathway and mechanism statements are textbook-level and hedged;
  * the body map's own explanation and citations (ns-bodymap, owner S1) take precedence when present. */
-export const INFO_TEXT = Object.freeze({
-  heading: 'What is happening (simulated)',
-  idleTitle: 'Look at a motor area',
-  idleBody: 'Aim the crosshair at a coloured area on the brain. This panel then explains it in plain words: which body part ' +
-    'it moves, which muscles work, how the signal travels, and what is simulated versus known.',
-  glassTitle: 'Brain glass — no motor area here',
-  glassBody: 'This part of the glassy brain is not one of the simulated motor areas, so looking at it activates nothing. ' +
-    'Hold Space while looking at the brain to grab and drag it.',
-  leftArmTag: 'Left-arm motor area (right hemisphere)',
-  otherTag: 'Other body part (brain only, no keys)',
-  integrationTag: 'In-between region (SCAN): moves nothing',
-  // Round-2 fix SCI-3 / F6: plain words first, technical names in brackets; the coloured crown is NOT labelled M1.
-  leftArmPathway: 'Brain → spinal cord in the neck, crossing to the left side → arm nerves → muscles [corticospinal tract, ' +
-    'brachial plexus]',
-  otherPathway: 'Brain → spinal cord or brainstem → nerves → muscles [corticospinal or corticobulbar pathway]',
-  simulated: 'Simulated: a unitless level, a game pose and muscle colours; nothing is recorded, stimulated or decoded.',
-  known: 'Known: each half of the brain mainly moves the opposite side of the body; real maps overlap and vary.',
-  crownNote: 'The coloured band is a representative strip of the precentral gyrus. Its visible top is thought to be largely ' +
-    'premotor cortex (BA6); most primary motor cortex (BA4) lies in the front wall of the groove just behind it (the central ' +
-    'sulcus), which is not shown separately.',
-  caveats: Object.freeze([
-    'Motor representations overlap and vary between people; contemporary maps (for example Gordon et al., 2023, Nature: ' +
-      'inter-effector regions) refine Penfield’s homunculus.',
-    'The areas shown are representative, not an exact cortical point per muscle.',
-    'Muscle colours are simulated drives, not EMG; EMG itself is not nerve activity or force.',
-    'NeuroTranslate 0.0 is a companion model name; no validated decoder runs in this game.'
-  ]),
-  lastViewed: 'Last viewed'
-});
+export const INFO_TEXT = NT.INFO;
 
 const muscleNames = (binding, keys) => (Array.isArray(keys) ? keys : []).map(k => {
   const e = binding && binding.muscles ? binding.muscles[k] : null;
   return e && typeof e.name === 'string' ? `${e.name} (${k})` : String(k);
 });
 const uniq = list => [...new Set(list.filter(x => typeof x === 'string' && x !== ''))];
-const halfOf = h => (h === 'right' || h === 'left' ? h : null);
-const otherHalf = h => (h === 'right' ? 'left' : h === 'left' ? 'right' : null);
-const limbOf = group => (/_leg$/.test(String(group || '')) ? 'leg' : /_arm$/.test(String(group || '')) ? 'arm' : null);
-const partOf = region => {
-  const l = typeof region.label === 'string' ? region.label : region.id;
-  return l.charAt(0).toLowerCase() + l.slice(1);
-};
 
 /**
  * The ONE action of a body-map region the info overlay explains (round-2 fix SCI-1 / F5): the action the activity is
@@ -1020,59 +954,17 @@ export function infoRegionAction(region, { actionId = null, u = null, pulse = nu
 /** Plain-language pathway line for a body-map region (round-2 fixes SCI-3, SCI-5, F6): built from the region's own
  * pathway and laterality fields; technical names only in brackets. */
 export function infoPathway(region, leftArm = false) {
-  if (leftArm) return INFO_TEXT.leftArmPathway;
-  if (!region) return INFO_TEXT.otherPathway;
-  const h = halfOf(region.hemisphere), o = otherHalf(region.hemisphere);
-  const lat = String(region.laterality || ''), path = String(region.pathway || '');
-  if (region.kind === 'integration' || path === 'integration') {
-    return 'No muscle output is simulated: this region is linked to the other inter-effector regions and to a network that ' +
-      'plans and controls actions [somato-cognitive action network; cingulo-opercular network]';
-  }
-  if (path.includes('corticospinal') && path.includes('corticobulbar')) {
-    return 'Brain → brainstem and upper spinal cord, from both halves of the brain (how much from each is debated) → nerves → ' +
-      'neck muscles [corticobulbar and corticospinal pathways]';
-  }
-  if (path === 'corticospinal') {
-    if (lat === 'bilateral') return 'Brain → spinal cord → nerves → trunk muscles, from both halves of the brain [corticospinal pathway]';
-    if (h) return `Brain → spinal cord, crossing to the ${o} side → nerves → muscles [corticospinal tract]`;
-  }
-  if (path === 'corticobulbar') {
-    if (lat === 'bilateral') return 'Brain → brainstem → face nerve → muscles, from both halves of the brain [corticobulbar pathway]';
-    if (lat === 'contralateral_predominant' && h) return `Brain → brainstem, mostly crossing to the ${o} side → face nerve → muscles [corticobulbar pathway]`;
-    if (lat === 'bilateral_contralateral_bias' && h) return `Brain → brainstem, both sides (more to the ${o}) → cranial nerve → muscles [corticobulbar pathway]`;
-  }
-  return INFO_TEXT.otherPathway;
+  return NT.plainPathway(region, leftArm);
 }
 
 /** One plain sentence that leads the info card (round-2 fix F6, R17). */
 export function infoPlainLead(region, leftArm = false) {
-  if (!region) return '';
-  if (region.kind === 'integration') {
-    return 'This in-between area links movement planning across the body instead of moving one body part, so looking here moves nothing.';
-  }
-  const h = halfOf(region.hemisphere) || 'right';
-  const lat = String(region.laterality || ''), path = String(region.pathway || ''), part = partOf(region);
-  if (leftArm) return `This part of the brain’s right half sends the movement signals for your ${part}.`;
-  if (path.includes('corticospinal') && path.includes('corticobulbar')) return `This part of the brain’s ${h} half sends movement signals for your neck.`;
-  if (path === 'corticospinal' && lat === 'bilateral') return `This part of the brain’s ${h} half sends movement signals for your ${part} muscles.`;
-  if (path === 'corticospinal') return `This part of the brain’s ${h} half sends the movement signals for your ${part}.`;
-  if (path === 'corticobulbar') return `This part of the brain’s ${h} half sends movement signals for your ${part}.`;
-  return `This part of the brain’s ${h} half sends movement signals for your ${part}.`;
+  return NT.plainLead(region, leftArm);
 }
 
 /** Short "Known:" line for a body-map region: the laterality it rests on, in plain words. */
 export function infoKnown(region, leftArm = false) {
-  if (!region) return INFO_TEXT.known;
-  if (region.kind === 'integration') return 'Known: these in-between regions link movement planning across the body rather than moving one body part (Gordon et al., 2023).';
-  const h = halfOf(region.hemisphere), o = otherHalf(region.hemisphere), lat = String(region.laterality || '');
-  if (leftArm) return 'Known: the right half of the brain mainly moves the left arm; real maps overlap and vary.';
-  const limb = limbOf(region.displayGroup);
-  if (/^contralateral/.test(lat) && limb && h) return `Known: the ${h} half of the brain mainly moves the ${o} ${limb}; real maps overlap and vary.`;
-  if (lat === 'contralateral_predominant') return 'Known: the lower face gets most of its signals from the opposite half of the brain; real maps overlap and vary.';
-  if (lat === 'bilateral_debated') return 'Known: neck muscles get signals from both halves of the brain; how much from each is debated.';
-  if (lat === 'bilateral_contralateral_bias') return 'Known: both halves of the brain drive these muscles, the opposite half more strongly.';
-  if (lat === 'bilateral') return 'Known: these muscles get signals from both halves of the brain; real maps overlap and vary.';
-  return INFO_TEXT.known;
+  return NT.plainKnown(region, leftArm);
 }
 
 /**
@@ -1086,7 +978,7 @@ export function infoKnown(region, leftArm = false) {
  * Pure: plain JSON out. `key` changes only when the subject changes (the renderer re-draws text only then).
  */
 export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, regionActivity = null, activatedRegions = null,
-  activatedActions = null, displayDrives = null, last = null, pulse = null } = {}) {
+  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null } = {}) {
   const g = gaze && typeof gaze.target === 'string' ? gaze : normalizeGaze(gaze, bodyMap);
   const common = { heading: INFO_TEXT.heading, simulated: INFO_TEXT.simulated, known: INFO_TEXT.known, crownNote: INFO_TEXT.crownNote };
   const blank = { plain: '', regionCaveat: '', action: null };
@@ -1109,7 +1001,8 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
   let picked = null;
   if (region) {
     source = 'bodymap';
-    title = typeof region.label === 'string' ? region.label : region.id;
+    // Round 3 (R17/D3): the plain name leads (ns-bodymap plainLabel); the technical label stays for More detail.
+    title = NT.plainTitle(region);
     bodyPart = typeof region.effector === 'string' ? region.effector : null;
     picked = infoRegionAction(region, { actionId: g.actionId, u: g.u, pulse });
     if (picked) {
@@ -1143,19 +1036,28 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
   const activations = g.regionId && activatedRegions && Number.isFinite(activatedRegions[g.regionId]) ? activatedRegions[g.regionId]
     : g.actionId && activatedActions && Number.isFinite(activatedActions[g.actionId]) ? activatedActions[g.actionId] : 0;
   const noAction = region && !picked && typeof region.noActionReason === 'string' ? region.noActionReason : '';
+  // Round 3 (D3): the plain card (lead + at most 4 rows + short honesty lines; the technical layer in a collapsed
+  // "More detail"), built by ns-text from the same region, action and numbers.
+  const card = region ? NT.plainInfoCard({ region, action: picked, leftArm, activity, activations, citations, caveats: [...INFO_TEXT.caveats], rotationState }) : null;
+  // R3-fix (SL-2): a forearm-turn card changes when the palm flips (its "already ... nothing moves" note).
+  const rotKey = picked && (picked.armActionId === 'pronation' || picked.armActionId === 'supination') && typeof rotationState === 'string' ? `|${rotationState}` : '';
   return {
-    ...common, key: `region|${regionKey}|${picked ? picked.id : g.actionId || ''}`, mode: 'region', viewed: 'now', source, title,
+    ...common, key: `region|${regionKey}|${picked ? picked.id : g.actionId || ''}${rotKey}`, mode: 'region', viewed: 'now', source, title,
+    technicalTitle: region && typeof region.label === 'string' ? region.label : title,
     tag: leftArm ? INFO_TEXT.leftArmTag : integration ? INFO_TEXT.integrationTag : INFO_TEXT.otherTag,
     region: region ? { id: region.id, label: title, bodySide: region.bodySide || null, medialSurface: region.medialSurface === true, kind: region.kind || 'effector' } : null,
     regionId: g.regionId, actionId: g.actionId, hemisphere: g.hemisphere, bodyPart,
-    action: picked ? { id: picked.id, label: typeof picked.label === 'string' ? picked.label : picked.id, note: typeof picked.note === 'string' ? picked.note : '' }
-      : noAction ? { id: null, label: '', note: noAction } : null,
+    action: picked ? {
+      id: picked.id, label: typeof picked.label === 'string' ? picked.label : picked.id, note: typeof picked.note === 'string' ? picked.note : '',
+      plainLabel: typeof picked.plainLabel === 'string' ? picked.plainLabel : '',
+      plainMuscles: picked.plainMuscles && typeof picked.plainMuscles === 'object' ? { pull: picked.plainMuscles.pull || '', relax: picked.plainMuscles.relax || '' } : null
+    } : noAction ? { id: null, label: '', note: noAction } : null,
     agonists: ag, antagonists: an,
     plain: region ? infoPlainLead(region, leftArm) : '',
     pathway: region ? infoPathway(region, leftArm) : leftArm ? INFO_TEXT.leftArmPathway : INFO_TEXT.otherPathway,
     known: region ? infoKnown(region, leftArm) : leftArm ? infoKnown({ kind: 'effector' }, true) : INFO_TEXT.known,
-    regionCaveat: region && typeof region.caveat === 'string' ? region.caveat : '',
-    explanation, caveats, citations, activity, activations
+    regionCaveat: region ? String(region.plainCaveat || region.caveat || '') : '',
+    explanation, caveats, citations, activity, activations, card
   };
 }
 
@@ -1169,10 +1071,14 @@ function frameFocus(strip, aspect, fovYDeg, frame) {
 /** Next W/S/A/D base (anti wind-up) under the accepted R6 overlay. The depth base is clamped only to the anchor's
  * pose-independent reach interval: neither a pose-driven depth push (silhouette fit) nor a transient elbow action ever
  * shifts it. The horizontal anchor is fed back only for the A/D range or a viewport clamp, never for a pose. */
-function nextReach(base, fit, armOptions) {
+function nextReach(base, fit, armOptions, depthKey = true) {
   const minDepth = armOptions && Number.isFinite(armOptions.minDepth) ? armOptions.minDepth : ARM_DEFAULTS.minDepth;
   const ev = fit.envelopeReach;
-  const depth = ev && !ev.empty ? clamp(base.depth, ev.minDepth, ev.maxDepth) : base.depth;
+  // R3-fix (review M2): the W/S depth INTENT is kept like the A/D intent: an A/D sweep to a screen edge, where the hand
+  // only fits at nearly full reach, no longer leaves the arm straight for good, so W reaches forward again once the
+  // hand is back. While a depth key is held the intent follows the shown depth (W/S answer at once; the wind-up guard
+  // is depthRangeFor).
+  const depth = depthKey && ev && !ev.empty ? clamp(base.depth, ev.minDepth, ev.maxDepth) : base.depth;
   // Integration (U3a reachState): the A/D INTENT is kept when a look or pose narrows the range (the hand is clamped on
   // screen for that frame and returns when the range allows), so looking around never moves the anchor for good; the
   // wind-up guard is stepReach's xRange (the previous fit's xLimits).
@@ -1304,7 +1210,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
 
   function stepFrame(state, inputs, dt) {
     if (!state || typeof state !== 'object' || !state.reach || !state.activity) fail('app_state', 'state must come from initialState/stepFrame');
-    const { yaw, pitch, axes = { x: 0, z: 0 }, events = [], aspect, gazeAt = 0, orbit = [], brainCentreNdc = null } = inputs || {};
+    const { yaw, pitch, axes = { x: 0, z: 0 }, events = [], aspect, gazeAt = 0, orbit = [], brainCentreNdc = null, viewportPx = null } = inputs || {};
     if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) fail('app_input', 'yaw and pitch must be finite radians');
     if (!(Number.isFinite(aspect) && aspect > 0)) fail('app_input', 'aspect must be a positive finite number');
     if (!Array.isArray(events)) fail('app_input', 'events must be an array');
@@ -1326,6 +1232,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const armOpts = att ? { ...armOptions, attachment: att } : armOptions;
     const centre = Array.isArray(brainCentreNdc) && brainCentreNdc.length === 2 && brainCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)
       ? brainCentreNdc : [0, 0];
+    // Round 3 (D1): the CSS viewport size gives frameBrain the exact usable area and the arrow room in pixels.
+    const px = viewportPx && viewportPx.width > 0 && viewportPx.height > 0 ? { width: viewportPx.width, height: viewportPx.height } : null;
+    const pxKey = px ? `${px.width}x${px.height}` : '';
 
     // Framing, recomputed whenever the viewport changes.
     let placement = state.placement;
@@ -1333,11 +1242,17 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     let reframed = false;
     const sameCentre = state.viewport && Array.isArray(state.viewport.brainCentreNdc)
       && state.viewport.brainCentreNdc[0] === centre[0] && state.viewport.brainCentreNdc[1] === centre[1];
-    if (!state.viewport || state.viewport.aspect !== aspect || state.viewport.fovYDeg !== fov || !placement || (regionMode && (!brainFrame || !sameCentre))) {
+    const samePx = Boolean(state.viewport) && (state.viewport.pxKey || '') === pxKey;
+    if (!state.viewport || state.viewport.aspect !== aspect || state.viewport.fovYDeg !== fov || !placement || (regionMode && (!brainFrame || !sameCentre || !samePx))) {
       placement = frameFocus(strip, aspect, fov, frame);
       if (regionMode) {
         const fo = { aspect, fovYDeg: fov, centreNdc: centre };
         if (brainBounds) fo.brainBounds = brainBounds;
+        if (px) {
+          fo.viewportPx = px;
+          const usable = brainUsableNdc(px);
+          if (usable) fo.usableNdc = usable;
+        }
         brainFrame = NsBrain.frameBrain(segmentation, fo);
       }
       reframed = true;
@@ -1419,6 +1334,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const display = activity.displayDrives(a);
     const muscle = muscleDrives(binding, typeof activity.muscleDisplayDrives === 'function' ? activity.muscleDisplayDrives(a) : display);
     const armReach = typeof activity.reachOutputs === 'function' ? activity.reachOutputs(a) : null;
+    // R3-fix (review SL-2): the forearm-turn display level of the pronator / supinator meshes (no catalog key in the
+    // movement map, so they are tinted by mesh name; the same colour ramp; display only, never a pose input).
+    const rotationMuscles = typeof activity.rotationOutputs === 'function' ? activity.rotationOutputs(a).muscles : null;
 
     // Forearm rotation: the activity's rotationState (shared interface 4) or the double-tap fallback.
     const rotation = typeof a.rotationState === 'string' ? state.rotation : stepRotationFallback(state.rotation, evs, state.t);
@@ -1439,8 +1357,10 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const viewport = { aspect, fovYDeg: fov };
     const lim = state.fit && state.fit.limits ? state.fit.limits : null;
     const base = stepReach(state.reach, axes, h, lim ? { ...armOptions, ...lim } : armOptions);
-    // WASD wrist coordination (WASD_WRIST): the wrist moves with the reach state together with shoulder and elbow.
-    const wristDeg = wristReach ? wristReachDeg(base, wristReach) : 0;
+    // WASD wrist coordination: the wrist moves with the reach state together with shoulder and elbow. Round 3 (R3-arm):
+    // ns-arm wasdWristDeg (WASD_WRIST_SYNERGY; the sideways term follows the forearm turn); `wristReach` is the on/off
+    // switch (WASD_WRIST / wristReachDeg stay exported for the round-2 tests).
+    const wristDeg = wristReach ? wasdWristDeg(base, rotationReq) : 0;
     const pose = wristDeg !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex)
       ? { ...pose0, joints: { ...pose0.joints, wrist_flex: pose0.joints.wrist_flex + wristDeg } } : pose0;
     const request = d => ({ xNdc: base.xNdc, yNdc: handYNdc, depth: d, joints: pose.joints, rotation: rotationReq });
@@ -1464,7 +1384,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         limited: Math.abs(actualRad - wanted) / DEG > ELBOW_LIMIT_TOL_DEG
       };
     }
-    const reach = nextReach(base, fit, armOptions);
+    // R3-arm: the 0.06 s key-level ramp is carried across frames (carryReachRamp); without it the ramp is inert.
+    const reach = carryReachRamp(nextReach(base, fit, armOptions, Boolean(axes && Number(axes.z))), base);
     const reachRates = h > 0 ? { depth: (reach.depth - state.reach.depth) / h, x: (reach.xNdc - state.reach.xNdc) / h } : { depth: 0, x: 0 };
     const elbowRad = fit.solution.elbowFlexRad;
     const elbowRate = wall > 0 && state.elbowRad !== null ? (elbowRad - state.elbowRad) / wall / DEG : 0;
@@ -1491,7 +1412,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       elbowRad,
       elbowRate,
       reachRates,
-      viewport: { ...viewport, brainCentreNdc: centre },
+      viewport: { ...viewport, brainCentreNdc: centre, pxKey },
       placement,
       gaze: {
         yaw, pitch, relYaw, relPitch, viewKey, kind: gaze.kind, target: gaze.target, regionId: gaze.regionId, hemisphere: gaze.hemisphere,
@@ -1511,7 +1432,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return {
       state: nextState,
       out: {
-        fit, pose, base, gaze, drives, displayDrives: display, muscle, armReach, placement, reframed, silentGaze, elbowRate, elbow, pulse,
+        fit, pose, base, gaze, drives, displayDrives: display, muscle, rotationMuscles, armReach, placement, reframed, silentGaze, elbowRate, elbow, pulse,
         marks: act.marks, restarts: act.restarts, dt: h, clock: { wallDt: wall, poseDt: h }, fovYDeg: fov,
         brainView: viewOut, brainParams: brainOut.params, brainTransform: brainOut.transform, pickParams: brain.params, brainFrame,
         brainMode: regionMode ? 'region' : 'legacy', arrow, rotationState,
@@ -1581,6 +1502,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
    * (gazeAnglesToward) and kept only when classifyRegionGaze through the same view returns that region. Regions not
    * reachable from this orbit/drag are omitted (orbit and look again). Cached per brain view. */
   let targetsKey = null, targetsCache = null;
+  const TARGET_MARGIN_RAD = 0.006;
   function regionTargets(state) {
     if (!regionMode || !state || !state.view || !state.brainFrame) return null;
     const { transform } = brainTransformFor(state.view, state.brainFrame);
@@ -1597,19 +1519,32 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       }
       for (const part of segmentation.parts || []) {
         if (part.regionId !== r.id || !part.indices || !part.positions) continue;
-        const nTri = part.indices.length / 3, stepT = Math.max(1, Math.floor(nTri / 12));
+        // R3-integrator: 48 samples per part (was 12), so a small region seen mostly behind its neighbours (rh_tongue at
+        // 16:9) still gets a verified look; computed once per view for the QA snapshot only.
+        const nTri = part.indices.length / 3, stepT = Math.max(1, Math.floor(nTri / 48));
         for (let t = 0; t < nTri; t += stepT) {
           const P = part.positions, I = part.indices, c = [0, 0, 0];
           for (let k = 0; k < 3; k++) for (let a = 0; a < 3; a++) c[a] += P[3 * I[3 * t + k] + a] / 3;
           cands.push(c);
         }
       }
+      // R3-fix: prefer a candidate whose whole neighbourhood (+-TARGET_MARGIN_RAD) is the region, so a look at it from
+      // another area is not held by the classifier's boundary hysteresis; else the first verified candidate.
+      const isRegion = (yy, pp) => { const ray = NsBrain.gazeRayForView(yy, pp, transform); const q = NsBrain.classifyRegionGaze(ray.origin, ray.dir, segmentation, { markers: strip.markers }); return q && q.kind === 'region' && q.regionId === r.id ? q : null; };
+      let pickC = null;
       for (const c of cands) {
         let yaw, pitch;
         try { ({ yaw, pitch } = gazeAnglesToward(NsBrain.viewSourceToWorld(c, transform))); } catch { continue; }
-        const ray = NsBrain.gazeRayForView(yaw, pitch, transform);
-        const g = NsBrain.classifyRegionGaze(ray.origin, ray.dir, segmentation, { markers: strip.markers });
-        if (g && g.kind === 'region' && g.regionId === r.id) {
+        const g = isRegion(yaw, pitch);
+        if (!g) continue;
+        const m = TARGET_MARGIN_RAD;
+        const inner = isRegion(yaw + m, pitch) && isRegion(yaw - m, pitch) && isRegion(yaw, pitch + m) && isRegion(yaw, pitch - m);
+        if (!pickC) pickC = { yaw, pitch, g };
+        if (inner) { pickC = { yaw, pitch, g }; break; }
+      }
+      if (pickC) {
+        const { yaw, pitch, g } = pickC;
+        {
           // Ordering score: the region's area facing the camera (largest, most clearly visible first).
           let score = 0;
           for (const hh of ['right', 'left']) {
@@ -1621,7 +1556,6 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
             score += b.areaMm2 * Math.max(0, -(n[0] * w[0] + n[1] * w[1] + n[2] * w[2]) / l);
           }
           out.push({ id: r.id, yaw, pitch, isLeftArm: r.isLeftArm === true, hemisphere: g.hemisphere || null, score: Math.round(score) });
-          break;
         }
       }
     }
@@ -1644,15 +1578,35 @@ const actionLabel = (binding, id) => {
 /** HUD label of a pulse trigger: the movement-map action, else the body-map region action, else the region (a region
  * without actions, e.g. an inter-effector region), never the raw id or 'null' (fix round 2). */
 function triggerLabel(binding, bodyMap, tr) {
-  if (tr && typeof tr.actionId === 'string' && binding && binding.actions instanceof Map && binding.actions.has(tr.actionId)) return actionLabel(binding, tr.actionId);
   const map = bodyMapOf(bodyMap);
   const region = tr && typeof tr.regionId === 'string' ? regionById(map, tr.regionId) : null;
-  const act = region && Array.isArray(region.actions) && tr.actionId ? region.actions.find(x => x && (x.id === tr.actionId || x.armActionId === tr.actionId)) : null;
-  if (act && typeof act.label === 'string') return act.label;
-  if (region && typeof region.label === 'string') return region.label;
+  // Round 3 (R17): the plain action name first (ns-bodymap plainLabel), then the plain region name.
+  if (tr && typeof tr.actionId === 'string') {
+    const plain = plainActionLabel(binding, map, tr.actionId, region ? region.id : null);
+    if (plain && plain !== tr.actionId) return plain;
+  }
+  if (region) return NT.plainTitle(region);
   return tr && typeof tr.actionId === 'string' ? tr.actionId : 'motor area';
 }
 
+/** Plain name of an action id for the HUD (round 3, R17): the body-map action whose id or armActionId matches (its
+ * plainLabel, ns-bodymap round 3; else its label), searching the given region first; else the movement-map label. */
+export function plainActionLabel(binding, bodyMap, id, regionId = null) {
+  const map = bodyMapOf(bodyMap);
+  if (map && typeof id === 'string') {
+    const first = typeof regionId === 'string' ? map.regions.filter(r => r && r.id === regionId) : [];
+    for (const r of [...first, ...map.regions]) {
+      const a = r && Array.isArray(r.actions) ? r.actions.find(x => x && (x.id === id || x.armActionId === id)) : null;
+      if (a) return (typeof a.plainLabel === 'string' && a.plainLabel) || (typeof a.label === 'string' && a.label) || id;
+    }
+  }
+  return actionLabel(binding, id);
+}
+
+/** R3-fix (M6): looks further right than yawRad and higher than -pitchRad get the "right arm is lower" hint (rad). */
+export const RIGHT_ARM_HINT = Object.freeze({ yawRad: 1.0, pitchRad: 0.35 });
+/** Plain lead-in for the pinned movement-map qualifier (which then follows in brackets, verbatim). */
+export const QUALIFIER_LEAD = 'The brain map is a rough guide';
 /** Text that changes only with the loaded inputs. `shell: true` when the game shell owns pointer capture (hint text). */
 export function hudStatic({ binding = null, data = null, placeholder = false, shell = false, legendStops = null, bodyNote = '' } = {}) {
   const q = binding && typeof binding.qualifier === 'string' && binding.qualifier.trim() ? binding.qualifier : HUD_TEXT.qualifier;
@@ -1663,16 +1617,18 @@ export function hudStatic({ binding = null, data = null, placeholder = false, sh
   if (typeof bodyNote === 'string' && bodyNote) gapList.push(bodyNote);
   const gaps = gapList.join(' ');
   return {
-    banner: placeholder ? PLACEHOLDER_LABEL : '',
+    banner: placeholder ? HUD_TEXT.placeholderBanner : '',
     title: `${HUD_TEXT.title} \u00b7 ${HUD_TEXT.brand}`,
-    qualifier: q === HUD_TEXT.qualifier ? q : `${q} \u00b7 ${HUD_TEXT.qualifier}`,
+    // Round 3 (R17): the pinned movement-map qualifier (cortical_display_contract.minimum_qualifier_visible) stays
+    // visible VERBATIM, in brackets after a plain lead-in (no second copy of the same meaning).
+    qualifier: q === HUD_TEXT.qualifier ? q : `${QUALIFIER_LEAD} (${q})`,
     control: HUD_TEXT.control,
     simulated: HUD_TEXT.simulated,
     orientation: HUD_TEXT.view,
     hint: shell === true ? HUD_TEXT.hintShell : HUD_TEXT.hint,
-    legendLabel: LEGEND_LABEL,
-    legendLo: '0',
-    legendHi: '1',
+    legendLabel: NT.LEGEND.label,
+    legendLo: NT.LEGEND.lo,
+    legendHi: NT.LEGEND.hi,
     legendStops: Array.isArray(legendStops) && legendStops.length >= 2 ? legendStops : LEGEND_STOPS,
     markerNote: HUD_TEXT.markers,
     drivesTitle: HUD_TEXT.drivesTitle,
@@ -1709,6 +1665,9 @@ export function elbowText(elbow) {
 /** Text that changes per frame. frameMs smooths elapsed update work through render-call return, not CPU time or frame cadence. */
 /** How long the HUD flags a pulse that was suppressed by the held fist (s). */
 export const SUPPRESSED_FLASH_SECONDS = 0.6;
+/** Round 3 (R3-player item 8): the "lost the brain" hint shows when the grab offset exceeds `dragged` and the look is
+ * more than `fromLook` from the dragged brain (radians; display choice). */
+export const BRAIN_AWAY_RAD = Object.freeze({ dragged: 0.5, fromLook: 0.7 });
 
 export function hudFrame({ binding, state, out, brainHit = false, frameMs = null, bodyMap = null }) {
   const g = out.gaze;
@@ -1722,30 +1681,44 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
   const sup = a.lastSuppressed && Number.isFinite(a.lastSuppressed.t) && state.t - a.lastSuppressed.t <= SUPPRESSED_FLASH_SECONDS ? a.lastSuppressed : null;
   const grabbing = Boolean(out.brainView && out.brainView.grab && out.brainView.grab.active);
   const reachLevel = out.armReach && Number.isFinite(out.armReach.armReach) ? out.armReach.armReach : 0;
-  let gazeText;
-  if (onStrip) gazeText = `Gaze: ${markerLabel(g.actionId, binding).text}`;
-  else if (onOther) gazeText = `${onLeftArmRegion ? HUD_TEXT.gazeLeftArmPrefix : HUD_TEXT.gazeOtherPrefix}${other && typeof other.label === 'string' ? other.label : g.regionId}`;
-  else if (g.target === 'glass') gazeText = HUD_TEXT.gazeGlass;
-  else gazeText = brainHit ? HUD_TEXT.gazeBrain : HUD_TEXT.gazeEmpty;
-  const rotation = typeof out.rotationState === 'string' ? `${HUD_TEXT.rotationPrefix}${ROTATION_PLAIN[out.rotationState] || out.rotationState}${HUD_TEXT.rotationHint}` : '';
+  // Round 3 (R17/D3): plain lines from ns-text; the crosshair label is the plain action / area name only.
+  let gazeText, hover = '';
+  if (onStrip) {
+    hover = plainActionLabel(binding, bodyMap, g.actionId, g.regionId);
+    gazeText = NT.gazeLine('strip', hover);
+  } else if (onOther) {
+    hover = other ? NT.plainTitle(other) : g.regionId;
+    gazeText = NT.gazeLine(onLeftArmRegion ? 'leftArm' : other && other.kind === 'integration' ? 'between' : 'other', hover);
+  } else if (g.target === 'glass') gazeText = HUD_TEXT.gazeGlass;
+  else gazeText = brainHit ? HUD_TEXT.gazeBrain
+    // R3-fix (review M6 / F5): far right at about eye level the seated right arm is below the view; say where it is.
+    : Number.isFinite(g.yaw) && Number.isFinite(g.pitch) && g.yaw < -RIGHT_ARM_HINT.yawRad && g.pitch > -RIGHT_ARM_HINT.pitchRad ? `${HUD_TEXT.gazeEmpty} · ${NT.HUD.rightArmHint}` : HUD_TEXT.gazeEmpty;
+  const rotation = NT.rotationLine(typeof out.rotationState === 'string' ? out.rotationState : '');
+  const pulseRegion = out.pulse && typeof out.pulse.regionId === 'string' ? out.pulse.regionId : null;
+  // R3-player item 8: after a far drag, a one-line way back while the brain is far from the crosshair (not while held).
+  const off = out.brainView && out.brainView.offset ? out.brainView.offset : null;
+  const brainAway = Boolean(off) && !grabbing && Number.isFinite(off.yaw) && Number.isFinite(off.pitch) && Number.isFinite(g.yaw) && Number.isFinite(g.pitch)
+    && Math.hypot(off.yaw, off.pitch) > BRAIN_AWAY_RAD.dragged && Math.hypot(g.yaw - off.yaw, g.pitch - off.pitch) > BRAIN_AWAY_RAD.fromLook;
   return {
     gaze: gazeText,
+    hover: NT.hoverLabel(hover),
     // Polish: the crown/sulcus caveat (CROWN_NOTE) is on the Esc limits list (INFO_TEXT.crownNote, fix SCI-3); the HUD keeps short lines.
     note: [WHOLE_GROUP_TINT_ACTIONS.some(id => out.displayDrives && out.displayDrives[id] > 0.2) ? HUD_TEXT.wholeGroupTint : '',
-      sup ? `${HUD_TEXT.suppressedPrefix}${actionLabel(binding, sup.actionId)}` : '']
+      sup ? NT.suppressedLine(plainActionLabel(binding, bodyMap, sup.actionId)) : '',
+      brainAway ? HUD_TEXT.brainAwayHint : '']
       .filter(Boolean).join(' \u00b7 '),
     pulse: a.pulseAction !== null
-      ? `Pulse (simulation clock): ${actionLabel(binding, a.pulseAction)} (${a.pulseRemaining.toFixed(1)} s left)`
+      ? NT.pulseLine(plainActionLabel(binding, bodyMap, out.pulse && out.pulse.regionActionId ? out.pulse.regionActionId : a.pulseAction, pulseRegion), a.pulseRemaining)
       : out.pulse && out.pulse.residualDisplay > RESIDUAL_DISPLAY_MIN ? HUD_TEXT.pulseResidual : HUD_TEXT.pulseNone,
-    trigger: marked ? `Pulse #${tr.seq} (${tr.source === 'click' ? 'click re-trigger' : 'new region'}): ${triggerLabel(binding, bodyMap, tr)}` : '',
+    trigger: marked ? NT.triggerLine(tr.seq, tr.source, triggerLabel(binding, bodyMap, tr)) : '',
     crosshairActive: onStrip || onOther || marked,
     space: [grabbing ? HUD_TEXT.grabbing : a.spaceHeld ? HUD_TEXT.spaceHeld : a.openRemaining > 0 ? HUD_TEXT.spaceReleased : '', rotation]
       .filter(Boolean).join(' \u00b7 '),
-    reach: [elbowText(out.elbow), out.fit.clamped.x || out.fit.clamped.depth || out.fit.fallback !== null ? HUD_TEXT.reachLimited : '',
-      reachLevel > RESIDUAL_DISPLAY_MIN && out.armReach && typeof out.armReach.label === 'string' ? `${out.armReach.label}: ${reachLevel.toFixed(2)}` : '']
+    reach: [out.elbow ? NT.elbowLine(out.elbow) : '', out.fit.clamped.x || out.fit.clamped.depth || out.fit.fallback !== null ? HUD_TEXT.reachLimited : '',
+      reachLevel > RESIDUAL_DISPLAY_MIN && out.armReach ? `${HUD_TEXT.armReachLabel}: ${reachLevel.toFixed(2)}` : '']
       .filter(Boolean).join(' \u00b7 '),
     drives: topMuscleLines(binding, out.muscle, 5),
-    frame: Number.isFinite(frameMs) ? `Update time: ${frameMs.toFixed(1)} ms (smoothed)` : ''
+    frame: NT.frameLine(frameMs)
   };
 }
 
@@ -1753,71 +1726,7 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
 
 /** Game-shell text (2 s start instructions, Esc page). The limits repeat the HUD honesty lines so they stay readable
  * on every overlay; the HUD keeps its own always-visible lines underneath. */
-export const SHELL_TEXT = Object.freeze({
-  title: 'NeuroSurge',
-  subtitle: 'A simulated first-person motor-cortex game · companion to NeuroTranslate 0.0 (a research model name, ' +
-    'not a validated decoder)',
-  headings: Object.freeze({ loading: 'Loading…', intro: 'How to play', playing: '', paused: 'Paused — instructions and controls', error: 'NeuroSurge stopped' }),
-  introNote: 'These instructions close by themselves after 2 seconds. Click to start now (and capture the mouse); Esc shows them again.',
-  pausedNote: 'Press Esc or Resume to return to the game. Resume also captures the mouse again.',
-  play: 'Start now',
-  resume: 'Resume (Esc)',
-  resetBody: 'Reset body',
-  resetBrain: 'Reset brain view',
-  playUnlocked: 'Resume without mouse capture',
-  reload: 'Reload page',
-  bodyReset: 'Body reset: pose, forearm rotation and the activated-area marks are cleared. The brain stays where you left it.',
-  brainReset: 'Brain view reset: the orbit and the drag offset are cleared.',
-  instructionsTitle: 'Instructions',
-  instructions: Object.freeze([
-    'You look out through the eyes of a fixed, skinless body: bones with their muscles attached. Move the mouse or trackpad to look around.',
-    'Your whole left arm is visible. The hand stays three quarters up the screen; looking around carries the arm with the shoulder.',
-    'A giant glassy brain floats in front of you, out of reach. Its motor areas light up with simulated activity, from dark (rest) ' +
-      'to yellow (strongest), in the same colours as the muscles. The left-arm areas (cyan, right hemisphere) are marked apart ' +
-      'from the areas for the legs, trunk, right arm and face.',
-    'Look at a motor area to activate it for 1 second; any click (left or right) activates it again; empty space activates nothing. ' +
-      'Activated areas stay slightly more opaque, with a gold edge, until Reset body.',
-    'Other body parts move only through the brain, never by keys. Hold Space while looking at the brain and look around to drag it; ' +
-      'release to leave it there (for example, drag it down to watch the legs). Click a curved arrow beside the brain to swing the ' +
-      'view a little around it; hold the arrow to keep swinging.',
-    'Look far down for the torso and legs, far right for the right arm, and high up for the face layer.',
-    'The panel on the far right explains each area you look at or click.'
-  ]),
-  controlsTitle: 'Controls',
-  controls: Object.freeze([
-    Object.freeze(['Mouse / trackpad', 'look around (the body stays fixed; the left shoulder follows the view)']),
-    Object.freeze(['A / D', 'move the left hand left / right on the screen']),
-    Object.freeze(['W / S', 'move the hand forward / back (combine with A / D for diagonals)']),
-    Object.freeze(['Hold Space', 'close all five fingers into a fist; release to open the hand']),
-    Object.freeze(['Double-tap Space', 'flip the forearm: palm down \u2194 palm up (pronation \u2194 supination)']),
-    Object.freeze(['Look / Click', 'activate the motor area under the crosshair for 1 s (either mouse button)']),
-    Object.freeze(['Space on the brain', 'grab and drag the brain; release to leave it there']),
-    Object.freeze(['Orbit arrows', 'hover, then click a curved arrow to swing the view a little around the brain; hold it to keep swinging gently (the brain stays put)']),
-    Object.freeze(['Esc', 'show / hide these instructions (pause), Reset body and settings'])
-  ]),
-  settingsTitle: 'Settings',
-  sensitivity: 'Look sensitivity',
-  invertY: 'Invert Y (look)',
-  faceView: 'Face view',
-  limitsTitle: 'What this is — and is not',
-  limits: Object.freeze([
-    'All activity shown is simulated and unitless (0–1 display values).',
-    'Gaze, clicks and keys are virtual inputs — not real stimulation or neural decoding.',
-    'Muscle colours are simulated drives, not EMG, nerve recordings or force (and EMG itself is not nerve activity or force).',
-    'Motor representations overlap and vary between people; contemporary maps (for example Gordon et al., 2023, Nature: ' +
-      'inter-effector regions) refine Penfield’s homunculus. The areas are representative, not an exact cortical point per muscle.',
-    'The left upper limb is driven predominantly by the contralateral (right) hemisphere.',
-    INFO_TEXT.crownNote,
-    'In first person you cannot normally see your own face, so it is shown as a labelled ghosted layer (or an inset, in Settings).',
-    'NeuroTranslate 0.0 is the companion model name only: no trained or validated translation model runs in this game.'
-  ]),
-  captureHint: 'Click the scene to capture the mouse · or hold a mouse button and drag to look · Esc: instructions',
-  lockRefused: 'The browser did not capture the mouse (after Esc it waits about a second). Click the scene to try again, or hold a ' +
-    'button and drag to look; clicks then activate · Esc: instructions',
-  lookOff: 'Mouse capture is unavailable here: W/A/S/D, Space and clicks still work · Esc: instructions',
-  contextLost: 'WebGL context lost — rendering and the simulation are paused until the browser restores it.',
-  contextLostLong: 'The graphics context has not come back. Reloading the page usually restores it.'
-});
+export const SHELL_TEXT = NT.SHELL;
 
 /** The compact fallback info panel lists this many caveats (the Esc page and the HUD keep the full honesty lines). */
 export const INFO_PANEL_CAVEATS = 3;
@@ -1841,7 +1750,7 @@ export function createShellState({ autoPlay = false } = {}) {
 
 /**
  * Pure shell reducer. Events: { type: 'ready', atMs } | { type: 'tick', atMs } (hides the intro at introHideAtMs) |
- * { type: 'esc', atMs } (intro -> playing, playing -> paused, paused -> playing; an Esc within ESC_UNLOCK_GUARD_MS of
+ * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; an Esc within ESC_UNLOCK_GUARD_MS of
  * the lock loss that already paused is the same press) | { type: 'fatal', message } | { type: 'play' } (overlay click
  * or QA) | { type: 'locked' } | { type: 'unlocked', atMs } | { type: 'lockError' } | { type: 'lockUnavailable' } |
  * { type: 'playUnlocked' } | { type: 'pause' } | { type: 'notice', text } | { type: 'contextLost', atMs } |
@@ -1861,7 +1770,9 @@ export function shellReduce(s, ev) {
       return s.mode === 'intro' && s.introHideAtMs !== null && at !== null && at >= s.introHideAtMs ? toPlaying({}) : s;
     case 'esc':
       if (s.autoPlay) return s;
-      if (s.mode === 'intro') return toPlaying({});
+      // Round 3 (R3-player item 12, R6 "whenever you press Esc ... it shows the instructions"): Esc during the 2 s intro
+      // keeps the instructions up as the Esc page (paused) instead of closing them; Esc again resumes.
+      if (s.mode === 'intro') return { ...s, mode: 'paused', introHideAtMs: null, unlockPausedAtMs: null };
       if (s.mode === 'playing') return { ...s, mode: 'paused', unlockPausedAtMs: null };
       if (s.mode === 'paused') {
         if (s.unlockPausedAtMs !== null && at !== null && at - s.unlockPausedAtMs < ESC_UNLOCK_GUARD_MS) return s;
@@ -2082,7 +1993,7 @@ export const QA_SNAPSHOT_SCHEMA = 'neurosurge-qa-snapshot/2';
  */
 export function qaSnapshot({ phase = null, frames = 0, clock = null, shell = null, settings = null, pointerLocked = false,
   viewport = null, state = null, out = null, controls = null, axes = null, bodyVisibility = null, info = null, scene = null,
-  activityView = null, regionTargets = null } = {}) {
+  activityView = null, regionTargets = null, sceneState = null, bodyPosedTargets = null, brainFrame = null } = {}) {
   const a = state && state.activity ? state.activity : null;
   const fit = out && out.fit ? out.fit : null;
   const pulse = out && out.pulse ? out.pulse : null;
@@ -2122,7 +2033,10 @@ export function qaSnapshot({ phase = null, frames = 0, clock = null, shell = nul
     },
     orbit: view ? view.orbit : null,
     regionTargets: Array.isArray(regionTargets) ? regionTargets : null,
-    body: { jointTargets: out ? out.bodyJointTargets : null, visibility: bodyVisibility },
+    body: { jointTargets: out ? out.bodyJointTargets : null, posedTargets: bodyPosedTargets, visibility: bodyVisibility },
+    // Round 3 (QA): the brain framing (D1 numbers) and the scene's own state (arrow plan, labels, glass read).
+    brainFrame,
+    sceneState,
     reach: state ? state.reach : null,
     fit: fit ? { xNdc: fit.xNdc, yNdc: Number.isFinite(fit.yNdc) ? fit.yNdc : null, depth: fit.depth, anchor: fit.anchor, fallback: fit.fallback, clamped: fit.clamped, range: fit.range } : null,
     hand: fit ? {
@@ -2256,7 +2170,7 @@ export const FULLBODY_DEFAULTS = Object.freeze({
 /**
  * Opt-in full-body loader for start({ loadBody }) (round 2). Fetches the FULLBODY-MESH-MANIFEST.json (its sha256 is
  * checked when expectedManifestSha256 is given), then every listed asset at `${packetBase}${entry.path}` with at most
- * `concurrency` requests in flight, verifies each OBJ's sha256 against the manifest BEFORE parsing (ns-obj parseObj),
+ * `concurrency` requests in flight, verifies each OBJ's sha256 against the manifest BEFORE parsing (ns-assets parseObjFast, identical to ns-obj parseObj),
  * and returns { manifest, entries, meshesById: Map(element_id -> { positions, indices }) } for ns-body buildBodyRig.
  * Any fetch, hash or parse failure rejects (start() then shows it and keeps the arm game running).
  */
@@ -2282,7 +2196,9 @@ export async function loadFullBodyInputs({ manifestUrl = FULLBODY_DEFAULTS.manif
     while (next < entries.length) {
       const e = entries[next++];
       const obj = await fetchChecked(fetchText, sha256Hex, base + e.path, e.sha256, e.element_id);
-      const g = parseObj(obj);
+      const g = parseObjFast(obj);
+      // R3-perf W2: the vertex count the manifest records (the arm path already checks it).
+      if (Number.isSafeInteger(e.vertices) && g.vertexCount !== e.vertices) fail('app_body', `${e.element_id}: parsed ${g.vertexCount} vertices, manifest says ${e.vertices}`);
       meshesById.set(e.element_id, { positions: g.positions, indices: g.indices });
       done++;
       if (typeof onProgress === 'function') onProgress(done, entries.length);
@@ -2339,6 +2255,12 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-modal', 'true');
   card.setAttribute('data-ns-card', '');
+  // R3-polish: a thin bar along the top of the card that runs down over the 2 s intro (CSS shows it only in intro mode),
+  // so "this page closes by itself after 2 seconds" can be seen as well as read.
+  const timer = el('div', 'ns-shell-timer', card);
+  timer.setAttribute('aria-hidden', 'true');
+  if (timer.style && typeof timer.style.setProperty === 'function') timer.style.setProperty('--ns-intro-ms', `${INTRO_MS}ms`);
+  el('span', 'ns-shell-timer-bar', timer);
   const title = el('h1', 'ns-shell-title', card, text.title);
   title.id = `${uid}-title`;
   const subtitle = el('p', 'ns-shell-subtitle', card, text.subtitle);
@@ -2365,12 +2287,21 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   unlocked.hidden = true;
   const reload = button('ns-shell-secondary', actions, text.reload, 'reload');
   reload.hidden = true;
+  // R3-polish: what the two reset buttons do, in one plain line under them (Esc page only).
+  const resetHelp = el('p', 'ns-shell-resethelp', card, typeof text.resetHelp === 'string' ? text.resetHelp : '');
+  resetHelp.hidden = true;
 
   const grid = el('div', 'ns-shell-grid', card);
   const steps = el('section', 'ns-shell-section ns-shell-instructions', grid);
   el('h3', 'ns-shell-section-title', steps, text.instructionsTitle);
   const stepList = el('ol', 'ns-shell-steps', steps);
-  for (const line of text.instructions) el('li', '', stepList, line);
+  // R3-polish: each step starts with a short bold lead-in (text.instructionHeads), so the page can be scanned.
+  const heads = Array.isArray(text.instructionHeads) ? text.instructionHeads : [];
+  text.instructions.forEach((line, i) => {
+    const li = el('li', '', stepList);
+    if (typeof heads[i] === 'string' && heads[i]) { el('strong', 'ns-shell-step-head', li, heads[i]); el('span', '', li, ` ${line}`); }
+    else li.textContent = line;
+  });
   const help = el('section', 'ns-shell-section ns-shell-help', grid);
   el('h3', 'ns-shell-section-title', help, text.controlsTitle);
   const keys = el('dl', 'ns-shell-keys', help);
@@ -2530,6 +2461,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     play.disabled = !(mode === 'intro' || mode === 'paused');
     show(resetBody, mode === 'paused');
     show(resetBrain, mode === 'paused');
+    show(resetHelp, mode === 'paused' && resetHelp.textContent !== '');
     show(form, mode === 'paused');
     show(unlocked, Boolean(s.lockFailed) && mode === 'paused');
     show(reload, mode === 'error');
@@ -2554,7 +2486,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     if (!info) info = buildInfo();
     const act = Number.isFinite(model.activity) ? Math.round(model.activity * 20) / 20 : null;
     const actText = act !== null || model.activations
-      ? `Simulated activity: ${act !== null ? act.toFixed(2) : '–'} (unitless 0–1)${model.activations ? ` · activated ${model.activations}× (until Reset body)` : ''}`
+      ? [act !== null ? NT.activityLine(act) : '', NT.activationsLine(model.activations)].filter(Boolean).join(' · ')
       : '';
     if (actText !== infoActivity) { setText(info.activity, actText); infoActivity = actText; }
     if (model.key === infoKey) return;
@@ -2566,22 +2498,24 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     setText(info.viewed, model.viewed === 'last' ? INFO_TEXT.lastViewed : '');
     info.rows.textContent = '';
     const row = (k, v) => { if (v) { el('dt', '', info.rows, k); el('dd', '', info.rows, v); } };
-    row('Body part', [model.bodyPart || '', model.hemisphere ? `${model.hemisphere} hemisphere` : ''].filter(Boolean).join(' · '));
-    row('Movement', model.action && model.action.label ? model.action.label : '');
-    row('Muscles that work', firstOf(model.agonists, 4));
-    row('Muscles that ease off', firstOf(model.antagonists, 3));
-    row('Pathway', model.pathway || '');
+    // Round 3 (D3): the plain card's rows (at most 4) when the model has one; else the round-2 rows in plain words.
+    if (model.card && Array.isArray(model.card.rows)) for (const [k, v] of model.card.rows) row(k, v);
+    else {
+      row(INFO_TEXT.rows.movement, model.action && (model.action.plainLabel || model.action.label) ? model.action.plainLabel || model.action.label : '');
+      row(INFO_TEXT.rows.agonists, firstOf(model.agonists, 4));
+      row(INFO_TEXT.rows.antagonists, firstOf(model.antagonists, 3));
+      row(INFO_TEXT.rows.pathway, model.pathway || '');
+    }
     show(info.rows, info.rows.childNodes.length > 0);
     // Round-2 fixes V1 / SCI-4 / F6 (fallback panel): plain lead, simulated, known and the region caveat first.
-    setText(info.explanation, clip([model.plain || '', model.explanation || ''].filter(Boolean).join(' '), 260));
+    setText(info.explanation, clip(model.card ? model.card.lead : [model.plain || '', model.explanation || ''].filter(Boolean).join(' '), 260));
     setText(info.simulated, model.mode === 'region' ? model.simulated : '');
     setText(info.known, model.mode === 'region' ? model.known : '');
     info.caveats.textContent = '';
     const caveats = [model.regionCaveat || '', ...(model.caveats || [])].filter(Boolean).slice(0, INFO_PANEL_CAVEATS);
     for (const c of caveats) el('li', '', info.caveats, c);
     show(info.caveats, caveats.length > 0);
-    setText(info.citations, (model.citations || []).length
-      ? `Sources: ${model.citations.map(c => `${c.key}${c.verified ? '' : ' (unverified)'}`).join('; ')}` : '');
+    setText(info.citations, NT.sourcesLine(model.citations || []));
   }
   function dispose() {
     for (const [obj, type, fn] of added.splice(0)) obj.removeEventListener(type, fn);
@@ -2697,7 +2631,7 @@ export function start(params = {}) {
   let lastMs = null, frames = 0, renderRequested = false, appliedSize = null, seedNext = false;
   const orbitQueue = [];
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
-  let bodyRig = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
+  let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
   let infoModel = null, infoLastRegion = null, infoSig = null, infoRenderer = null;
   const holds = new Set();          // reasons the real-time loop is held: 'qa' (QA pause/step), 'lifecycle' (pagehide)
   const frameWaiters = [];
@@ -2923,7 +2857,8 @@ export function start(params = {}) {
     const model = infoOverlayModel({
       gaze: out.gaze, binding, bodyMap: sim.bodyMap, regionActivity: out.regionActivity, activatedRegions: out.activatedRegions,
       activatedActions: out.activatedActions, displayDrives: out.displayDrives, last: infoLastRegion,
-      pulse: out.pulse && out.pulse.regionId ? { regionId: out.pulse.regionId, actionId: out.pulse.regionActionId } : null
+      pulse: out.pulse && out.pulse.regionId ? { regionId: out.pulse.regionId, actionId: out.pulse.regionActionId } : null,
+      rotationState: typeof out.rotationState === 'string' ? out.rotationState : null
     });
     if (model.mode === 'region' && model.viewed === 'now') infoLastRegion = model;
     infoModel = model;
@@ -2945,13 +2880,13 @@ export function start(params = {}) {
       const [inputs, loaded] = await Promise.all([
         loadInputs({
           manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder: isPlaceholder, expectedSha256,
-          onProgress: (n, total) => { if (!stopped) setStatus(`Loading hash-verified anatomy ${n}/${total}…`); }
+          onProgress: (n, total) => { if (!stopped) setStatus(`Loading the 3D anatomy files ${n}/${total}…`); }
         }),
         Promise.resolve(optional).catch(err => ({ colors: null, bodyMap: null, body: null, errors: { all: errorText(err) } }))
       ]);
       mods = { colors: null, bodyMap: null, body: null, errors: {}, ...(loaded || {}) };
       if (stopped) return { ok: false, error: 'stopped' };
-      setStatus('Deriving the display rig and skin weights…');
+      setStatus('Getting the arm and brain ready…');
       await yieldToPaint();
       if (stopped) return { ok: false, error: 'stopped' };
 
@@ -2974,16 +2909,25 @@ export function start(params = {}) {
           const b = await loadBody({
             fetchText, sha256Hex, bodyMap,
             expectedManifestSha256: expectedSha256 && typeof expectedSha256.fullbodyManifest === 'string' ? expectedSha256.fullbodyManifest : null,
-            onProgress: (n, total) => { if (!stopped) setStatus(`Loading the hash-verified full-body anatomy ${n}/${total}…`); }
+            onProgress: (n, total) => { if (!stopped) setStatus(`Loading the 3D body files ${n}/${total}…`); }
           });
           if (b && b.entries && b.meshesById) {
-            setStatus('Deriving the full-body rig…');
+            setStatus('Getting the body ready…');
             await yieldToPaint();
             bodyRig = mods.body.buildBodyRig(b.entries, b.meshesById);
+            // R3-body (D4): the fixed body SITS. The seated rest posture is baked into the body geometry once (about 0.3 s,
+            // ns-body bakeBodyPosture); poseBody(..., { baked }) then poses relative to it. The skull stays in place, so
+            // the eye below is still computed from the source meshes.
+            if (typeof mods.body.bakeBodyPosture === 'function') {
+              setStatus('Seating the body…');
+              await yieldToPaint();
+              bodyBaked = mods.body.bakeBodyPosture(bodyRig, b.meshesById, { posture: mods.body.DEFAULT_BODY_POSTURE });
+            }
             body = b;
           }
         } catch (err) {
           bodyRig = null;
+          bodyBaked = null;
           bodyNote = `Full body not shown: ${errorText(err)}`;
           hud.render(staticHud());
         }
@@ -3006,7 +2950,9 @@ export function start(params = {}) {
       if (body && bodyRig) {
         try {
           const bodyToWorld = anatomy ? armAttachment(anatomy, { yaw: 0, pitch: 0 }).bodyToWorld : null;
-          callScene('setBody', bodyToWorld ? { entries: body.entries, meshesById: body.meshesById, bodyToWorld } : { entries: body.entries, meshesById: body.meshesById });
+          // R3-body: draw the baked (seated) geometry; poseBody(..., { baked }) matrices are relative to it.
+          const drawMeshes = bodyBaked ? bodyBaked.meshesById : body.meshesById;
+          callScene('setBody', bodyToWorld ? { entries: body.entries, meshesById: drawMeshes, bodyToWorld } : { entries: body.entries, meshesById: drawMeshes });
         } catch (err) {
           bodyRig = null;
           bodyNote = `Full body not shown: ${errorText(err)}`;
@@ -3120,7 +3066,7 @@ export function start(params = {}) {
         const step = sim.stepFrame(simState, {
           yaw: look.yaw, pitch: look.pitch, axes: live ? controlsApi.axes(cs) : { x: 0, z: 0 }, events: timing.events, aspect,
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: arrowDir, glassHit: brainHit === true, silentGaze: seedNext === true,
-          brainCentreNdc: brainCentreForPanel(size)
+          brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height }
         }, timing.dt);
         seedNext = false;
         simState = step.state;
@@ -3140,11 +3086,14 @@ export function start(params = {}) {
         // Polish-round fix: legacy / placeholder mode has no region frame, so brainTransformFor returns no transform
         // (the brain stays where frameFocus placed it); never hand the scene a null transform (it threw at start).
         if (sceneFn('setBrainTransform') && out.brainTransform) {
-          const key = JSON.stringify(out.brainParams);
+          // Round 3 (S37 fix): key on the transform MATRIX too, so a reframe (resize / FOV change) re-applies the drawn
+          // brain; keyed on the params alone the drawn brain kept the start framing while gaze picking re-framed.
+          const m = out.brainTransform && out.brainTransform.matrix;
+          const key = `${JSON.stringify(out.brainParams)}|${m ? Array.prototype.join.call(m, ',') : ''}`;
           if (key !== brainKey) { brainKey = key; callScene('setBrainTransform', out.brainTransform, out.brainParams); }
         }
         scene.updatePose(out.fit.solution.matrices);
-        scene.updateMuscles(out.muscle);
+        scene.updateMuscles(out.muscle, out.rotationMuscles || null);
         scene.updateStrip(out.displayDrives);
         scene.highlightMarker(out.gaze.actionId);
         if (sceneFn('updateRegions')) {
@@ -3157,16 +3106,20 @@ export function start(params = {}) {
         if (bodyRig && mods.body && typeof mods.body.poseBody === 'function' && sceneFn('updateBody')) {
           // Pose only when the joint targets change; recolour whenever the muscle drives change (quantised), so a
           // drive change with unchanged targets is still shown (U2b wiring item 3).
-          const targets = out.bodyJointTargets || {};
-          const key = JSON.stringify(targets);
           // ns-body bodyMuscleDrives(activeActions): the activity's active non-arm region actions (ns-actions).
           const active = typeof sim.activity.activeBodyActions === 'function' ? sim.activity.activeBodyActions(simState.activity) : [];
+          // R3-body: absolute joint targets on top of the seated rest (ns-body bodyPostureTargets; with the anatomical
+          // posture it equals out.bodyJointTargets exactly).
+          const targets = bodyBaked && typeof mods.body.bodyPostureTargets === 'function'
+            ? mods.body.bodyPostureTargets(active, { posture: bodyBaked }) : (out.bodyJointTargets || {});
+          const key = JSON.stringify(targets);
           const drives = typeof mods.body.bodyMuscleDrives === 'function' ? mods.body.bodyMuscleDrives(active) : null;
           const dkey = drives ? Object.keys(drives).sort().map(k => `${k}:${Math.round(drives[k] * 256)}`).join(',') : '';
           if (key !== bodyKey) {
             bodyKey = key;
             bodyDriveKey = dkey;
-            callScene('updateBody', mods.body.poseBody(bodyRig, targets, { anchor: bodyAnchor }), drives);
+            callScene('updateBody', mods.body.poseBody(bodyRig, targets, bodyBaked ? { anchor: bodyAnchor, baked: bodyBaked } : { anchor: bodyAnchor }), drives);
+            bodyPosed = targets;
           } else if (dkey !== bodyDriveKey) {
             bodyDriveKey = dkey;
             callScene('updateBody', null, drives);
@@ -3199,9 +3152,13 @@ export function start(params = {}) {
         const obstacles = sceneFn('overlayObstacles') ? callScene('overlayObstacles') : null;
         const orientAvoid = obstacles && obstacles.arrows.length ? { rects: [...avoid.rects, ...obstacles.arrows], ellipses: avoid.ellipses } : avoid;
         const ra = sim.regionMode && sceneFn('brainOrientationAnchors') ? callScene('brainOrientationAnchors') : null;
-        if (ra && obstacles && !obstacles.brainInView && frames > 0) hud.placeOrientation({}, size, avoid);
-        else if (ra) hud.placeOrientation(scene.projectWorld(orientationCandidates(ra)), size, orientAvoid);
-        else if (anchors) hud.placeOrientation(scene.projectWorld(anchors), size, orientAvoid);
+        let orientBoxes = null;
+        const handRects = avoid.rects; // the hand only (orientAvoid adds the orbit-arrow boxes)
+        if (ra && obstacles && !obstacles.brainInView && frames > 0) orientBoxes = hud.placeOrientation({}, size, avoid, Number.isFinite(obstacles.infoBottom) ? { legendTopPx: obstacles.infoBottom + 12, handRects } : { handRects });
+        else if (ra) orientBoxes = hud.placeOrientation(scene.projectWorld(orientationCandidates(ra)), size, orientAvoid, { arrows: obstacles ? obstacles.arrows : [], handRects });
+        else if (anchors) orientBoxes = hud.placeOrientation(scene.projectWorld(anchors), size, orientAvoid, { handRects });
+        // R3-polish: region labels avoid the orientation labels placed in this same frame (labels never overlap).
+        if (sceneFn('setOrientationRects')) callScene('setOrientationRects', Array.isArray(orientBoxes) ? orientBoxes : null);
         scene.render();
         frames++;
         current = { sim, data, state: simState, controls: cs, out };
@@ -3336,7 +3293,16 @@ export function start(params = {}) {
       regionTargets: (() => { try { return sim && typeof sim.regionTargets === 'function' ? sim.regionTargets(current.state) : null; } catch { return null; } })(),
       info: infoModel ? { key: infoModel.key, mode: infoModel.mode, viewed: infoModel.viewed, title: infoModel.title, tag: infoModel.tag,
         regionId: infoModel.regionId, actionId: infoModel.actionId, source: infoModel.source, renderer: infoRenderer } : null,
-      scene: features()
+      scene: features(),
+      sceneState: (() => { try { return sceneFn('sceneState') ? callScene('sceneState') : null; } catch { return null; } })(),
+      bodyPosedTargets: bodyPosed,
+      brainFrame: (() => {
+        const f = out && out.brainFrame;
+        if (!f) return null;
+        // R3-fix (review code F5): arrowOvershootNdc is not reported (the drawn arrows come from the scene's own plan, sceneState.arrowPlan).
+        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
+        return Object.fromEntries(pick.filter(k => f[k] !== undefined).map(k => [k, f[k]]));
+      })()
     });
   }
 
