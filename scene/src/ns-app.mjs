@@ -62,12 +62,13 @@ import { DEG, clamp } from './ns-math.mjs';
 import { createControls, bindDom, CONTROL_CODES } from './ns-controls.mjs';
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
-  MUSCLE_COVERAGE_GAPS, eyePosition, parseObjFast
+  MUSCLE_COVERAGE_GAPS, eyePosition, parseObjFast, streamFullbodyAssets, fullbodyAppInputs
 } from './ns-assets.mjs';
 import { deriveRig, segmentBoxes, skinWeights, SEGMENTS, HAND_SEGMENTS } from './ns-rig.mjs';
 import {
   ARM_DEFAULTS, REACH_STATE_MAX_DEPTH, ELBOW_MAX_DEG, FOREARM_SUPPORT_KEY, fitHand, stepReach, reachStart, depthForElbow,
-  armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg
+  armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg,
+  handViewLimitsNdc
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
 import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS } from './ns-actions.mjs';
@@ -75,13 +76,14 @@ import {
   ARM_BAND, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
   gazeRayInSource, classifyGaze, colormap
 } from './ns-brain.mjs';
-import { createScene, createHud, armAvoidShapes, CAMERA, infoPanelRect, ORBIT_HOLD } from './ns-scene-three.mjs';
+import { createScene, createHud, armAvoidShapes, CAMERA, infoPanelRect, ORBIT_HOLD, QUALITY_LEVELS, statusCardPlanPx, STATUS_CARD_PLAN, guideFloatSpot } from './ns-scene-three.mjs';
 // Namespace imports for exports the parallel round-2 owners are adding (a missing name is undefined, never a link
 // error): ns-actions resetBody / orbitStep, ns-brain brainViewTransform / BRAIN_VIEW_TILT_DEG.
 import * as NsActions from './ns-actions.mjs';
 import * as NsBrain from './ns-brain.mjs';
 // Round 3 (R3-integrator): every visible string comes from ns-text (R3-text, the single source of plain UI text; R17/D3).
 import * as NT from './ns-text.mjs';
+import * as NG from './ns-guide.mjs';
 
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
@@ -196,13 +198,27 @@ export function brainCentreForPanel(size, { share = 0.8, maxShift = 0.3 } = {}) 
  * info column (portrait: the bottom band, so the brain stays above it) with a 12 px gap, minus the top limits line
  * (ns-brain usableNdcFromLayout). null without a size or without the ns-brain helper (frameBrain then infers it from
  * centreNdc, the round-2 convention). Pure. */
+/** R4-integrator (D5 priority 2 before 3, and 5): in portrait the status card is a full-width strip at the top, so the
+ * brain also stays below the card's PLANNED box (top line + 12 px + statusCardPlanPx + 8 px), as it stays above the
+ * bottom band. Without it the card (with the guide line) hid the brain's front end at 390x844 (e2e S29 front end seen
+ * 0.0005 of its top-down share, run-R4-integrator-4-qa) and the forward arrow. Cost at 390x844: belt 0.62 -> 0.44 (e2e
+ * S29; R4-fix RP2: 0.505 with the shorter phone card plan)
+ * (round4/INTEGRATION.md). The planned box depends on the view size only, so the framing never moves with the text. */
+// narrowToastPx: on narrow portrait screens (<= STATUS_CARD_PLAN.narrowMaxPx, the CSS breakpoint of R4-access BLOCK 1)
+// the look-around toast is a full-width row just above the bottom band (two lines, 42 px at 390x844, + 6 px); it stays
+// up in drag-to-look mode, so the brain stays above it too (else it covered the back end and left the back arrow no
+// clear spot: plan class 4, drawn under the legend, run-R4-integrator-7-plan).
+export const PORTRAIT_CARD_RESERVE = Object.freeze({ gapAbovePx: 12, gapBelowPx: 8, narrowToastPx: 48 });
 export function brainUsableNdc(size, brainModule = NsBrain) {
   if (!size || !(size.width > 0 && size.height > 0) || typeof brainModule.usableNdcFromLayout !== 'function') return null;
   const r = infoPanelRect(size);
   if (!r) return null;
   try {
+    const top = brainModule.BRAIN_VIEW && Number.isFinite(brainModule.BRAIN_VIEW.topReservePx) ? brainModule.BRAIN_VIEW.topReservePx : 26;
+    const cardPx = top + PORTRAIT_CARD_RESERVE.gapAbovePx + statusCardPlanPx(size.width, size.height, true) + PORTRAIT_CARD_RESERVE.gapBelowPx;
+    const narrow = size.width <= STATUS_CARD_PLAN.narrowMaxPx;
     return r.layout === 'portrait'
-      ? brainModule.usableNdcFromLayout(size, { reserveBottomPx: size.height - r.y0, gapPx: 12 })
+      ? brainModule.usableNdcFromLayout(size, { reserveBottomPx: size.height - r.y0 + (narrow ? PORTRAIT_CARD_RESERVE.narrowToastPx : 0), gapPx: 12, topPx: cardPx })
       : brainModule.usableNdcFromLayout(size, { reserveRightPx: size.width - r.x0, gapPx: 12 });
   } catch {
     return null;
@@ -558,14 +574,28 @@ export function orientationAnchors(strip, placement, aspect, fovYDeg = FOV_Y_DEG
 /** Orientation label candidates for the giant brain (pure): each anchor ('right', 'left', 'anterior', 'posterior',
  * world points just outside the motor strips) plus versions pulled toward their common centre ('anterior.1' ...), so
  * the HUD can use the first one that is on screen and clear when the strips overflow the view. */
-export function orientationCandidates(anchors, factors = [1, 0.86, 0.74, 0.62]) {
+export function orientationCandidates(anchors, factors = [1, 0.86, 0.74, 0.62], sideSlides = ORIENTATION_SIDE_SLIDES) {
   const keys = Object.keys(anchors || {}).filter(k => Array.isArray(anchors[k]) || ArrayBuffer.isView(anchors[k]));
   if (!keys.length) return {};
   const c = [0, 1, 2].map(i => keys.reduce((s, k) => s + anchors[k][i], 0) / keys.length);
   const out = {};
-  for (const k of keys) factors.forEach((f, i) => { out[i ? `${k}.${i}` : k] = c.map((v, j) => v + (anchors[k][j] - v) * f); });
+  // R4-polish (labels never inside the brain): a side label ("Your left" / "Your right") whose first place is taken
+  // (the arm, an arrow) first slides along the brain's side toward the front or the back, at the same sideways
+  // distance. The outline narrows toward both ends, so these places stay OUTSIDE the glass; only then does the label
+  // move inward (the old fallback put "← Your left" in the middle of the left half, next to "Right arm").
+  const ant = anchors.anterior, axis = ant ? [0, 1, 2].map(j => ant[j] - c[j]) : null;
+  for (const k of keys) {
+    const list = [];
+    list.push(c.map((v, j) => v + (anchors[k][j] - v) * factors[0]));
+    if (axis && (k === 'right' || k === 'left')) for (const s of sideSlides) list.push(anchors[k].map((v, j) => v + axis[j] * s));
+    factors.slice(1).forEach(f => list.push(c.map((v, j) => v + (anchors[k][j] - v) * f)));
+    list.forEach((p, i) => { out[i ? `${k}.${i}` : k] = p; });
+  }
   return out;
 }
+/** R4-polish: where a side orientation label may slide along the brain's side (fractions of the centre-to-front
+ * distance; + toward the front, - toward the back), tried in this order before the inward fallbacks. Display choice. */
+export const ORIENTATION_SIDE_SLIDES = Object.freeze([0.45, -0.45, 0.65, -0.65]);
 
 export function gazeAnglesToward(point) {
   const l = Math.hypot(point[0], point[1], point[2]);
@@ -1071,6 +1101,19 @@ function frameFocus(strip, aspect, fovYDeg, frame) {
 /** Next W/S/A/D base (anti wind-up) under the accepted R6 overlay. The depth base is clamped only to the anchor's
  * pose-independent reach interval: neither a pose-driven depth push (silhouette fit) nor a transient elbow action ever
  * shifts it. The horizontal anchor is fed back only for the A/D range or a viewport clamp, never for a pose. */
+/** R4-fix (review RP3): the start x (NDC) of the hand on PORTRAIT screens (aspect < 1). The landscape start x -0.3 lies
+ * left of the portrait A/D range (390x844: -0.156 .. +0.371, 720x1280: -0.203 .. +0.401; round4/R4-arm-NOTES.md), where
+ * the hand only fits at full reach, so W, S and A moved nothing from the start pose. -0.13 is just inside both ranges
+ * (S then moves the hand 6.6-7 cm, A and D move it; W is at its far limit at 390x844 and moves 1.4 cm at 720x1280;
+ * harness/run-R4-fix-2-reach), and the arm still covers little of the brain (-0.05 put the forearm across the left
+ * half at 720x1280, viewed run-R4-fix-6-shots). Display choice. Until the first W/A/S/D press the hand keeps the start
+ * x of the current aspect. */
+export const PORTRAIT_REACH_START_X = -0.13;
+/** R4-fix (review RP3): a held W/A/S/D whose hand has not moved by at least xNdc (A/D) or depthM (W/S) in the key's
+ * direction within `seconds` shows the plain "cannot go further" note; the guide's move goal counts the same net
+ * movement (a hand held at its limit can jitter by about 0.7 mm per frame, which is not a move). Display choices. */
+export const REACH_BLOCKED = Object.freeze({ seconds: 0.3, xNdc: 0.01, depthM: 0.002 });
+
 function nextReach(base, fit, armOptions, depthKey = true) {
   const minDepth = armOptions && Number.isFinite(armOptions.minDepth) ? armOptions.minDepth : ARM_DEFAULTS.minDepth;
   const ev = fit.envelopeReach;
@@ -1165,6 +1208,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       t: 0,           // actual elapsed wall seconds (event / expiry clock)
       poseT: 0,       // accumulated capped pose-integration seconds (motion clock)
       reach: reachStart(armOptions),
+      reachTouched: false, // R4-fix (RP3): no W/A/S/D yet, so the hand keeps the start x of the current aspect
+      reachBlockedS: 0,    // R4-fix (RP3): how long a held W/A/S/D has moved nothing (s)
+      reachHold: null,     // R4-fix (RP3): { sig, x0, d0 } of the current W/A/S/D hold (net-movement reference)
       activity: copyJson(initialActivity),
       elbowRad: null,
       elbowRate: 0,   // last displayed elbow rate (deg per wall second); HUD/diagnostic (legacy linkage input only)
@@ -1229,12 +1275,15 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const anat = anatomy && eyeShift[1] !== 0
       ? armAnatomy(rig, { eyeBp: anatomy.eyeBp.map((v, i) => v + eyeShift[i]), source: anatomy.eyeSource }) : anatomy;
     const att = anat ? armAttachment(anat, { yaw, pitch, bodyYaw: bodyYawForLook(yaw, trunkFreeDeg || undefined) }) : null;
-    const armOpts = att ? { ...armOptions, attachment: att } : armOptions;
     const centre = Array.isArray(brainCentreNdc) && brainCentreNdc.length === 2 && brainCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)
       ? brainCentreNdc : [0, 0];
     // Round 3 (D1): the CSS viewport size gives frameBrain the exact usable area and the arrow room in pixels.
     const px = viewportPx && viewportPx.width > 0 && viewportPx.height > 0 ? { width: viewportPx.width, height: viewportPx.height } : null;
     const pxKey = px ? `${px.width}x${px.height}` : '';
+    // R4-arm: the whole hand stays out from under the far-right information column (portrait: the bottom band).
+    const handLimits = px ? handViewLimitsNdc(px, infoPanelRect(px)) : null;
+    const armOpts0 = att ? { ...armOptions, attachment: att } : armOptions;
+    const armOpts = handLimits ? { ...armOpts0, viewLimitsNdc: handLimits } : armOpts0;
 
     // Framing, recomputed whenever the viewport changes.
     let placement = state.placement;
@@ -1356,7 +1405,11 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const pose0 = composePose(drives);
     const viewport = { aspect, fovYDeg: fov };
     const lim = state.fit && state.fit.limits ? state.fit.limits : null;
-    const base = stepReach(state.reach, axes, h, lim ? { ...armOptions, ...lim } : armOptions);
+    // R4-fix (review RP3): until the first W/A/S/D press the hand sits at the start x of THIS aspect (portrait screens
+    // start inside their A/D range, so every key moves the hand from the start pose).
+    const keyed = Boolean(axes) && (Number(axes.x) !== 0 || Number(axes.z) !== 0);
+    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: aspect < 1 ? PORTRAIT_REACH_START_X : reachStart(armOptions).xNdc };
+    const base = stepReach(reachIn, axes, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     // WASD wrist coordination: the wrist moves with the reach state together with shoulder and elbow. Round 3 (R3-arm):
     // ns-arm wasdWristDeg (WASD_WRIST_SYNERGY; the sideways term follows the forearm turn); `wristReach` is the on/off
     // switch (WASD_WRIST / wristReachDeg stay exported for the round-2 tests).
@@ -1386,7 +1439,18 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     }
     // R3-arm: the 0.06 s key-level ramp is carried across frames (carryReachRamp); without it the ramp is inert.
     const reach = carryReachRamp(nextReach(base, fit, armOptions, Boolean(axes && Number(axes.z))), base);
-    const reachRates = h > 0 ? { depth: (reach.depth - state.reach.depth) / h, x: (reach.xNdc - state.reach.xNdc) / h } : { depth: 0, x: 0 };
+    const reachRates = h > 0 ? { depth: (reach.depth - reachIn.depth) / h, x: (reach.xNdc - reachIn.xNdc) / h } : { depth: 0, x: 0 };
+    // R4-fix (review RP3): a held key that moves the hand nothing (it is at the edge of what keeps the whole hand on
+    // screen) is said in plain words after REACH_BLOCKED.seconds, instead of only lighting the muscles.
+    // Net movement since the hold (or the last counted move) began, in the key's direction.
+    const ax = keyed ? Math.sign(Number(axes.x) || 0) : 0, az = keyed ? Math.sign(Number(axes.z) || 0) : 0;
+    const sig = `${ax},${az}`;
+    let hold = keyed ? (state.reachHold && state.reachHold.sig === sig ? state.reachHold : { sig, x0: fit.xNdc, d0: fit.depth }) : null;
+    const movedX = Boolean(hold) && ax !== 0 && ax * (fit.xNdc - hold.x0) >= REACH_BLOCKED.xNdc;
+    const movedZ = Boolean(hold) && az !== 0 && az * (fit.depth - hold.d0) >= REACH_BLOCKED.depthM;
+    if (hold && (movedX || movedZ)) hold = { sig, x0: fit.xNdc, d0: fit.depth };
+    const prevHold = state.reachHold && state.reachHold.sig === sig ? state.reachBlockedS || 0 : 0;
+    const reachBlockedS = !keyed || movedX || movedZ ? 0 : prevHold + wall;
     const elbowRad = fit.solution.elbowFlexRad;
     const elbowRate = wall > 0 && state.elbowRad !== null ? (elbowRad - state.elbowRad) / wall / DEG : 0;
 
@@ -1408,6 +1472,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       t: state.t + wall,
       poseT: (Number.isFinite(state.poseT) ? state.poseT : 0) + h,
       reach,
+      reachTouched: state.reachTouched === true || keyed,
+      reachBlockedS,
+      reachHold: hold,
       activity: a,
       elbowRad,
       elbowRate,
@@ -1433,6 +1500,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       state: nextState,
       out: {
         fit, pose, base, gaze, drives, displayDrives: display, muscle, rotationMuscles, armReach, placement, reframed, silentGaze, elbowRate, elbow, pulse,
+        reachBlocked: reachBlockedS >= REACH_BLOCKED.seconds,
+        reachMoved: { x: movedX, z: movedZ }, // R4-fix (RP3): the hand really moved this frame (net, key direction)
         marks: act.marks, restarts: act.restarts, dt: h, clock: { wallDt: wall, poseDt: h }, fovYDeg: fov,
         brainView: viewOut, brainParams: brainOut.params, brainTransform: brainOut.transform, pickParams: brain.params, brainFrame,
         brainMode: regionMode ? 'region' : 'legacy', arrow, rotationState,
@@ -1468,7 +1537,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       } else if (g) a = seedActivityGaze(activity, a, g.actionId);
     }
     return {
-      ...state, activity: a, reach: reachStart(armOptions), reachRates: { depth: 0, x: 0 }, elbowRad: null, elbowRate: 0,
+      ...state, activity: a, reach: reachStart(armOptions), reachTouched: false, reachBlockedS: 0, reachHold: null, reachRates: { depth: 0, x: 0 }, elbowRad: null, elbowRate: 0,
       rotation: initialRotation(), pron: pronationStart('pronated'), activated: {}, trigger: { ...state.trigger, at: null }
     };
   }
@@ -1565,8 +1634,38 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return out;
   }
 
+  /** R4-scene wiring: armAvoidShapes of the player's arm at xSamples x depthSamples poses across its A/D x W/S range,
+   * at the default look (yaw 0, pitch 0), rest pose, palm down, with the WASD wrist synergy. For scene.setArmEnvelope. */
+  function armEnvelope(aspect, { xSamples = 9, depthSamples = 3 } = {}) {
+    const fov = fovFor(aspect);
+    const att = anatomy ? armAttachment(anatomy, { yaw: 0, pitch: 0, bodyYaw: bodyYawForLook(0, trunkFreeDeg || undefined) }) : null;
+    const opts = att ? { ...armOptions, attachment: att } : armOptions;
+    const viewport = { aspect, fovYDeg: fov };
+    const pose = composePose(activity.drives(copyJson(initialActivity)));
+    const rotation = pronationStart('pronated').deg;
+    const fitAt = (xNdc, depth) => {
+      const wd = wristReach ? wasdWristDeg({ xNdc, depth }, rotation) : 0;
+      const joints = wd !== 0 && pose.joints && Number.isFinite(pose.joints.wrist_flex) ? { ...pose.joints, wrist_flex: pose.joints.wrist_flex + wd } : pose.joints;
+      return fitHand(rig, boxes, { xNdc, yNdc: handYNdc, depth, joints, rotation }, viewport, opts);
+    };
+    const start = { ...reachStart(armOptions), ...(aspect < 1 ? { xNdc: PORTRAIT_REACH_START_X } : {}) };
+    const f0 = fitAt(start.xNdc, start.depth);
+    const d0 = f0.depthLimits.minDepth, d1 = f0.depthLimits.maxDepth;
+    const out = [];
+    for (let j = 0; j < depthSamples; j++) {
+      const depth = depthSamples > 1 ? d0 + ((d1 - d0) * j) / (depthSamples - 1) : start.depth;
+      const fr = fitAt(start.xNdc, depth);
+      const x0 = fr.xLimits ? fr.xLimits.xMin : f0.xLimits.xMin, x1 = fr.xLimits ? fr.xLimits.xMax : f0.xLimits.xMax;
+      for (let i = 0; i < xSamples; i++) {
+        const f = fitAt(xSamples > 1 ? x0 + ((x1 - x0) * i) / (xSamples - 1) : start.xNdc, depth);
+        out.push(armAvoidShapes(f, { aspect, fovYDeg: fov, ...(f.solution && Array.isArray(f.solution.shoulderCam) ? { shoulderCam: f.solution.shoulderCam } : {}) }));
+      }
+    }
+    return out;
+  }
+
   return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, fovYDeg, fovFor, frame, handYNdc,
-    bodyMap: map, regionMode, anatomy });
+    bodyMap: map, regionMode, anatomy, armEnvelope });
 }
 
 /* ------------------------------------------------------------------ HUD text (pure) */
@@ -1604,7 +1703,10 @@ export function plainActionLabel(binding, bodyMap, id, regionId = null) {
 }
 
 /** R3-fix (M6): looks further right than yawRad and higher than -pitchRad get the "right arm is lower" hint (rad). */
-export const RIGHT_ARM_HINT = Object.freeze({ yawRad: 1.0, pitchRad: 0.35 });
+// R4-integrator (R4-body): the new seated right-arm rest (forearm forward at elbow height) shows half the right hand
+// from about 10 deg down at 16:9 and 21:9 (2.5 deg in portrait), so the "look down a little" hint stops at -0.15 rad
+// (about 8.6 deg) instead of -0.35 (round4/R4-body-NOTES.md, arm-view table).
+export const RIGHT_ARM_HINT = Object.freeze({ yawRad: 1.0, pitchRad: 0.15 });
 /** Plain lead-in for the pinned movement-map qualifier (which then follows in brackets, verbatim). */
 export const QUALIFIER_LEAD = 'The brain map is a rough guide';
 /** Text that changes only with the loaded inputs. `shell: true` when the game shell owns pointer capture (hint text). */
@@ -1612,7 +1714,13 @@ export function hudStatic({ binding = null, data = null, placeholder = false, sh
   const q = binding && typeof binding.qualifier === 'string' && binding.qualifier.trim() ? binding.qualifier : HUD_TEXT.qualifier;
   let unmapped = '';
   if (placeholder) unmapped = HUD_TEXT.placeholderMuscles;
-  else if (data && data.unmapped.length) unmapped = HUD_TEXT.unmappedPrefix + data.unmapped.map(m => m.name).join(', ');
+  else if (data && data.unmapped.length) {
+    // R4-fix (review SL4-5): the forearm-turning muscles (pronator teres, both heads; pronator quadratus; supinator) are
+    // coloured by name while a forearm turns (round-3 SL-2), so they are listed apart from the always-plain ones.
+    const turn = data.unmapped.filter(m => /pronator|supinator/i.test(m.name)), plain = data.unmapped.filter(m => !/pronator|supinator/i.test(m.name));
+    unmapped = [turn.length ? HUD_TEXT.unmappedTurnPrefix + turn.map(m => m.name).join(', ') : '',
+      plain.length ? HUD_TEXT.unmappedPlainPrefix + plain.map(m => m.name).join(', ') : ''].filter(Boolean).join('. ');
+  }
   const gapList = !placeholder && data ? MUSCLE_COVERAGE_GAPS.map(g => `${g.muscle} (${g.status}): ${g.note}`) : [];
   if (typeof bodyNote === 'string' && bodyNote) gapList.push(bodyNote);
   const gaps = gapList.join(' ');
@@ -1668,8 +1776,34 @@ export const SUPPRESSED_FLASH_SECONDS = 0.6;
 /** Round 3 (R3-player item 8): the "lost the brain" hint shows when the grab offset exceeds `dragged` and the look is
  * more than `fromLook` from the dragged brain (radians; display choice). */
 export const BRAIN_AWAY_RAD = Object.freeze({ dragged: 0.5, fromLook: 0.7 });
+/** R4-polish: the orbit (deg) from which the status card offers the way back (limits: yaw 60, pitch 30). Display choice. */
+export const TURNED_FAR_DEG = Object.freeze({ yaw: 45, pitch: 30 });
 
-export function hudFrame({ binding, state, out, brainHit = false, frameMs = null, bodyMap = null }) {
+/** R4-integrator (D7): the guide line's box is re-read every rectEveryFrames frames; after the brain covered it, the line
+ * shows again after clearFrames frames clear of the brain (no flicker at the edge). R4-fix (code review M3): after the
+ * chip had no clear spot (line not drawn), it is drawn again only reshowFrames frames later. */
+export const GUIDE_COVER = Object.freeze({ rectEveryFrames: 6, clearFrames: 8, reshowFrames: 12 });
+/** R4-polish: below this look pitch (rad, about 17 deg down) the guide chip tries the top of the view first, because the
+ * body you look down at fills the bottom. Display choice. */
+export const GUIDE_PREFER_TOP_PITCH = -0.3;
+/** R4-fix (review RP10): an opened More detail keeps this much of the card above it in view (CSS px). Display choice. */
+export const INFO_DETAIL_CONTEXT_PX = 24;
+/** R4-integrator (R4-player 1.8): the slow-computer note. Live frame intervals (ms) feed a smoothed value; the note
+ * turns on after `onS` seconds above `slowMs` (under about 15 fps) and off after `offS` seconds below `okMs`. Gaps
+ * longer than `gapMs` (pause, tab switch, QA step) are not frame times. Pure. (R4-fix M5: this note now sits above
+ * SLOW_NOTICE, not above GUIDE_COVER.) */
+export const SLOW_NOTICE = Object.freeze({ slowMs: 1000 / 15, okMs: 1000 / 22, onS: 3, offS: 2, gapMs: 1000, smooth: 0.15 });
+export function stepSlowNotice(prev, frameMs, o = SLOW_NOTICE) {
+  const s = prev && typeof prev === 'object' ? prev : { emaMs: null, slowFor: 0, okFor: 0, on: false };
+  if (!(Number.isFinite(frameMs) && frameMs > 0 && frameMs <= o.gapMs)) return s;
+  const ema = s.emaMs === null ? frameMs : s.emaMs + o.smooth * (frameMs - s.emaMs);
+  const slowFor = ema > o.slowMs ? s.slowFor + frameMs / 1000 : 0;
+  const okFor = ema < o.okMs ? s.okFor + frameMs / 1000 : 0;
+  const on = s.on ? !(okFor >= o.offS) : slowFor >= o.onS;
+  return { emaMs: ema, slowFor, okFor, on };
+}
+
+export function hudFrame({ binding, state, out, brainHit = false, frameMs = null, bodyMap = null, slowNote = '' }) {
   const g = out.gaze;
   const onStrip = (g.kind === 'strip' || g.target === 'region') && g.actionId !== null;
   const onOther = g.target === 'region' && g.actionId === null && typeof g.regionId === 'string';
@@ -1682,13 +1816,20 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
   const grabbing = Boolean(out.brainView && out.brainView.grab && out.brainView.grab.active);
   const reachLevel = out.armReach && Number.isFinite(out.armReach.armReach) ? out.armReach.armReach : 0;
   // Round 3 (R17/D3): plain lines from ns-text; the crosshair label is the plain action / area name only.
-  let gazeText, hover = '';
+  let gazeText, hover = '', caption = '';
   if (onStrip) {
     hover = plainActionLabel(binding, bodyMap, g.actionId, g.regionId);
     gazeText = NT.gazeLine('strip', hover);
+    // R4-integrator (R4-player 1.1): "Relax left grip" on an open hand shows nothing; the caption says so.
+    if (g.actionId === 'relax_release' && !a.spaceHeld) caption = HUD_TEXT.relaxNothing;
   } else if (onOther) {
     hover = other ? NT.plainTitle(other) : g.regionId;
     gazeText = NT.gazeLine(onLeftArmRegion ? 'leftArm' : other && other.kind === 'integration' ? 'between' : 'other', hover);
+    // R4-integrator (R4-player 1.4): in-between areas and the face areas the 3D body has no muscles for move nothing you
+    // can see (their panel says so too: plainMoves "Nothing ..."); the caption says it at the crosshair.
+    if (other && !onLeftArmRegion && typeof other.plainMoves === 'string' && /^Nothing\b/.test(other.plainMoves)) caption = HUD_TEXT.nothingMoves;
+    // R4-fix (review RP6): the left shoulder area (light blue, no action of its own) says why nothing new moves.
+    else if (onLeftArmRegion && other && !(Array.isArray(other.actions) && other.actions.length) && HUD_TEXT.shoulderMoves) caption = HUD_TEXT.shoulderMoves;
   } else if (g.target === 'glass') gazeText = HUD_TEXT.gazeGlass;
   else gazeText = brainHit ? HUD_TEXT.gazeBrain
     // R3-fix (review M6 / F5): far right at about eye level the seated right arm is below the view; say where it is.
@@ -1697,15 +1838,21 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
   const pulseRegion = out.pulse && typeof out.pulse.regionId === 'string' ? out.pulse.regionId : null;
   // R3-player item 8: after a far drag, a one-line way back while the brain is far from the crosshair (not while held).
   const off = out.brainView && out.brainView.offset ? out.brainView.offset : null;
-  const brainAway = Boolean(off) && !grabbing && Number.isFinite(off.yaw) && Number.isFinite(off.pitch) && Number.isFinite(g.yaw) && Number.isFinite(g.pitch)
+  // R4-fix (review RP4): not while an orbit arrow is under the crosshair (the player is doing what the guide asked).
+  const onArrow = typeof out.arrow === 'string' && out.arrow !== '';
+  const brainAway = Boolean(off) && !grabbing && !onArrow && Number.isFinite(off.yaw) && Number.isFinite(off.pitch) && Number.isFinite(g.yaw) && Number.isFinite(g.pitch)
     && Math.hypot(off.yaw, off.pitch) > BRAIN_AWAY_RAD.dragged && Math.hypot(g.yaw - off.yaw, g.pitch - off.pitch) > BRAIN_AWAY_RAD.fromLook;
+  // R4-polish (R4-player 1.11): after a long arrow hold the view can be turned far round the brain; say how to go back.
+  const orb = out.brainView && out.brainView.orbit ? out.brainView.orbit : null;
+  const turnedFar = !brainAway && Boolean(orb) && (Math.abs(orb.yaw) >= TURNED_FAR_DEG.yaw || Math.abs(orb.pitch) >= TURNED_FAR_DEG.pitch);
   return {
     gaze: gazeText,
-    hover: NT.hoverLabel(hover),
+    hover: caption ? `${NT.hoverLabel(hover)} · ${caption}` : NT.hoverLabel(hover),
     // Polish: the crown/sulcus caveat (CROWN_NOTE) is on the Esc limits list (INFO_TEXT.crownNote, fix SCI-3); the HUD keeps short lines.
     note: [WHOLE_GROUP_TINT_ACTIONS.some(id => out.displayDrives && out.displayDrives[id] > 0.2) ? HUD_TEXT.wholeGroupTint : '',
       sup ? NT.suppressedLine(plainActionLabel(binding, bodyMap, sup.actionId)) : '',
-      brainAway ? HUD_TEXT.brainAwayHint : '']
+      out.reachBlocked === true ? HUD_TEXT.reachBlocked : '',
+      brainAway ? HUD_TEXT.brainAwayHint : '', turnedFar ? HUD_TEXT.turnedFarHint : '', typeof slowNote === 'string' ? slowNote : '']
       .filter(Boolean).join(' \u00b7 '),
     pulse: a.pulseAction !== null
       ? NT.pulseLine(plainActionLabel(binding, bodyMap, out.pulse && out.pulse.regionActionId ? out.pulse.regionActionId : a.pulseAction, pulseRegion), a.pulseRemaining)
@@ -1765,7 +1912,11 @@ export function shellReduce(s, ev) {
     case 'ready':
       if (s.mode !== 'loading') return s;
       if (s.autoPlay) return toPlaying({});
-      return { ...s, mode: 'intro', introShown: true, introHideAtMs: at !== null ? at + INTRO_MS : null };
+      // R4-load: holdIntro (the body is still streaming): the instructions show, Start now works, and the 2 s timer starts
+      // with 'introTimer' once the body is in.
+      return { ...s, mode: 'intro', introShown: true, introHideAtMs: at !== null && ev.holdIntro !== true ? at + INTRO_MS : null };
+    case 'introTimer':
+      return s.mode === 'intro' && s.introHideAtMs === null && at !== null ? { ...s, introHideAtMs: at + INTRO_MS } : s;
     case 'tick':
       return s.mode === 'intro' && s.introHideAtMs !== null && at !== null && at >= s.introHideAtMs ? toPlaying({}) : s;
     case 'esc':
@@ -1828,7 +1979,10 @@ export function shellToastText(s, { dragLook = true } = {}) {
 /** Persisted player settings (localStorage key, limits, defaults). faceView: FACE_VIEW_MODES. */
 export const SETTINGS_KEY = 'neurosurge.settings.v1';
 export const SETTINGS_LIMITS = Object.freeze({ lookSensitivity: Object.freeze({ min: 0.25, max: 3, step: 0.05 }) });
-export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'ghost' });
+/** R4-integrator (D8): the Esc-page picture-quality setting; equals ns-scene-three QUALITY_MODES (unit-tested). */
+export const QUALITY_SETTING_MODES = Object.freeze(['auto', 'high', 'low']);
+export const QUALITY_SETTING_LABELS = NT.QUALITY_LABELS;
+export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'ghost', quality: 'auto' });
 
 /** Clamp and normalise settings from any input (unknown fields dropped; invalid values take the defaults). */
 export function sanitizeSettings(raw) {
@@ -1838,7 +1992,8 @@ export function sanitizeSettings(raw) {
   let sens = Number.isFinite(v) ? clamp(v, L.min, L.max) : SETTINGS_DEFAULTS.lookSensitivity;
   sens = Math.round(Math.round(sens / L.step) * L.step * 100) / 100;
   const faceView = FACE_VIEW_MODES.includes(src.faceView) ? src.faceView : SETTINGS_DEFAULTS.faceView;
-  return { lookSensitivity: clamp(sens, L.min, L.max), invertY: src.invertY === true, faceView };
+  const quality = QUALITY_SETTING_MODES.includes(src.quality) ? src.quality : SETTINGS_DEFAULTS.quality;
+  return { lookSensitivity: clamp(sens, L.min, L.max), invertY: src.invertY === true, faceView, quality };
 }
 
 /** Read settings from a Storage-like object; any failure (no storage, SecurityError, bad JSON) gives the defaults. */
@@ -1993,7 +2148,8 @@ export const QA_SNAPSHOT_SCHEMA = 'neurosurge-qa-snapshot/2';
  */
 export function qaSnapshot({ phase = null, frames = 0, clock = null, shell = null, settings = null, pointerLocked = false,
   viewport = null, state = null, out = null, controls = null, axes = null, bodyVisibility = null, info = null, scene = null,
-  activityView = null, regionTargets = null, sceneState = null, bodyPosedTargets = null, brainFrame = null } = {}) {
+  activityView = null, regionTargets = null, sceneState = null, bodyPosedTargets = null, brainFrame = null, guide = null,
+  reducedMotion = null, quality = undefined } = {}) {
   const a = state && state.activity ? state.activity : null;
   const fit = out && out.fit ? out.fit : null;
   const pulse = out && out.pulse ? out.pulse : null;
@@ -2037,6 +2193,12 @@ export function qaSnapshot({ phase = null, frames = 0, clock = null, shell = nul
     // Round 3 (QA): the brain framing (D1 numbers) and the scene's own state (arrow plan, labels, glass read).
     brainFrame,
     sceneState,
+    // R4-integrator: the "Try this" guide (D7, ns-guide guideView + progress) and prefers-reduced-motion (D9).
+    guide,
+    reducedMotion,
+    // R4-integrator (D8): the scene's picture-quality state at the top level (mode, level, name, scale, pixelRatio, lite,
+    // lod, antialias, ...), so it is never confused with the Picture quality SETTING (settings.quality).
+    quality: quality !== undefined ? quality : sceneState && sceneState.quality ? sceneState.quality : null,
     reach: state ? state.reach : null,
     fit: fit ? { xNdc: fit.xNdc, yNdc: Number.isFinite(fit.yNdc) ? fit.yNdc : null, depth: fit.depth, anchor: fit.anchor, fallback: fit.fallback, clamped: fit.clamped, range: fit.range } : null,
     hand: fit ? {
@@ -2117,7 +2279,8 @@ function parseJson(text, what) {
  * (in parallel) and checked by loadAssets (bytes + sha256 before parsing). Placeholder mode fetches no anatomy.
  * @returns {Promise<{ binding, assets: null | { arm, brain, excluded }, placeholder }>}
  */
-export async function loadInputs({ manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder = false, expectedSha256 = PINNED_SHA256, onProgress = null } = {}) {
+export async function loadInputs({ manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder = false, expectedSha256 = PINNED_SHA256, onProgress = null,
+  fetchBytes = null, sha256HexBytes = null } = {}) {
   if (typeof fetchText !== 'function') fail('app_args', 'fetchText(url) -> Promise<string> must be injected');
   if (typeof sha256Hex !== 'function') fail('app_args', 'sha256Hex(text) -> hex must be injected');
   if (typeof movementMapUrl !== 'string' || movementMapUrl === '') fail('app_args', 'movementMapUrl (URL of movement-map.json) is required');
@@ -2142,9 +2305,11 @@ export async function loadInputs({ manifestUrl, packetBases, movementMapUrl, fet
   const wanted = [...valid.arm, ...valid.brain];
   const pending = new Map();
   const keyOf = e => `${e.source_packet}/${e.path}`;
+  // R4-load: with fetchBytes + sha256HexBytes the served bytes are hashed (no TextEncoder pass) and decoded once.
+  const bytePath = typeof fetchBytes === 'function' && typeof sha256HexBytes === 'function';
   for (const e of wanted) {
     const url = baseOf(e.source_packet) + e.path;
-    const p = Promise.resolve().then(() => fetchText(url));
+    const p = Promise.resolve().then(() => (bytePath ? fetchBytes(url) : fetchText(url)));
     p.catch(() => {}); // handled when loadAssets reads it; avoids unhandled-rejection noise after an early failure
     pending.set(keyOf(e), p);
   }
@@ -2157,14 +2322,14 @@ export async function loadInputs({ manifestUrl, packetBases, movementMapUrl, fet
     if (typeof onProgress === 'function') onProgress(done, wanted.length);
     return text;
   };
-  const assets = await loadAssets({ manifest, readText, sha256Hex });
+  const assets = await loadAssets(bytePath ? { manifest, readBytes: readText, sha256HexBytes } : { manifest, readText, sha256Hex });
   return { binding, assets, placeholder: false };
 }
 
 /** Default locations of the round-2 full-body packet (acquisition agent U0; status pending Root review). */
 export const FULLBODY_DEFAULTS = Object.freeze({
-  manifestUrl: '/inputs/FULLBODY-MESH-MANIFEST.json',
-  packetBase: '/packets/bodyparts3d-fullbody-r1/'
+  manifestUrl: '../../inputs/FULLBODY-MESH-MANIFEST.json',
+  packetBase: '../../packets/bodyparts3d-fullbody-r1/'
 });
 
 /**
@@ -2208,6 +2373,43 @@ export async function loadFullBodyInputs({ manifestUrl = FULLBODY_DEFAULTS.manif
   return { manifest, entries, meshesById };
 }
 
+/**
+ * R4-load: PROGRESSIVE full-body loader for start({ streamBody }). Fetches FULLBODY-MESH-MANIFEST.json (sha256 checked when
+ * expectedManifestSha256 is given) and streams the listed OBJs through ns-assets streamFullbodyAssets: every file is
+ * checked (byte count, sha256, then parse, vertex count, laterality) exactly as before, and any failure rejects `done`
+ * (allOrNothing, as loadFullBodyInputs did). Returns at once:
+ *   priority: Promise<Map(id -> { entry, mesh }) | null>  the files eyePosition reads (two lacrimal bones), so the eye of
+ *             the first frame is the eye of the whole body; null when they failed (the eye then falls back to the brain);
+ *   start():  starts the bulk (call it after the first frame is drawn);
+ *   done:     Promise<{ manifest, entries, meshesById }> (the loadFullBodyInputs shape) or rejects;
+ *   cancel(): stop starting new files (stop()).
+ * fetchBytes + sha256HexBytes (optional) select the byte path; yieldFn + sliceMs time-slice the parsing.
+ */
+export function startFullBodyStream({ manifestUrl = FULLBODY_DEFAULTS.manifestUrl, packetBase = FULLBODY_DEFAULTS.packetBase, fetchText, sha256Hex,
+  fetchBytes = null, sha256HexBytes = null, expectedManifestSha256 = null, concurrency = 8, onProgress = null, sliceMs = 8, yieldFn = null } = {}) {
+  if (typeof fetchText !== 'function' || typeof sha256Hex !== 'function') fail('app_args', 'fetchText and sha256Hex must be injected');
+  const base = packetBase.endsWith('/') ? packetBase : `${packetBase}/`;
+  const manifestP = (async () => {
+    const text = expectedManifestSha256 ? await fetchChecked(fetchText, sha256Hex, manifestUrl, expectedManifestSha256, 'FULLBODY-MESH-MANIFEST.json')
+      : await fetchText(manifestUrl);
+    return parseJson(text, 'FULLBODY-MESH-MANIFEST.json');
+  })();
+  const bytePath = typeof fetchBytes === 'function' && typeof sha256HexBytes === 'function';
+  const streamP = manifestP.then(manifest => streamFullbodyAssets({
+    manifest, allOrNothing: true, concurrency, sliceMs, yieldFn,
+    ...(bytePath ? { readBytes: p => fetchBytes(base + p), sha256HexBytes } : { readText: p => fetchText(base + p), sha256Hex }),
+    onProgress: typeof onProgress === 'function' ? p => onProgress(p.done, p.total) : null
+  }));
+  const done = Promise.all([manifestP, streamP.then(s => s.done)]).then(([manifest, r]) => fullbodyAppInputs(manifest, r));
+  done.catch(() => {}); // handled by the caller once it awaits done
+  return {
+    priority: streamP.then(s => s.priority).then(r => (r.status === 'complete' && r.meshes.size ? r.meshes : null), () => null),
+    start: () => { streamP.then(s => s.start(), () => {}); return done; },
+    done,
+    cancel: () => { streamP.then(s => s.cancel(), () => {}); }
+  };
+}
+
 /** The simulated baseline drive every catalog muscle has at rest (used for muscles without a map role). */
 export function restMuscleDrive(binding) {
   const rest = muscleDrives(binding, {});
@@ -2229,7 +2431,7 @@ export function restMuscleDrive(binding) {
  *   setSettings(settings), setInfo(model), focusPrimary(), dispose(), element, infoElement }}
  */
 export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_DEFAULTS, onPlay = null, onPlayUnlocked = null, onReload = null,
-  onSettings = null, onResetBody = null, onResetBrain = null } = {}) {
+  onSettings = null, onResetBody = null, onResetBrain = null, guideText = NT.GUIDE, onGuide = null } = {}) {
   if (!doc || typeof doc.createElement !== 'function') fail('app_shell', 'createShell needs a document');
   if (!root || typeof root.appendChild !== 'function') fail('app_shell', 'createShell needs a root element');
   const added = [];
@@ -2291,6 +2493,56 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const resetHelp = el('p', 'ns-shell-resethelp', card, typeof text.resetHelp === 'string' ? text.resetHelp : '');
   resetHelp.hidden = true;
 
+  const form = el('fieldset', 'ns-shell-section ns-shell-settings', card);
+  form.setAttribute('data-ns-noplay', '');
+  el('legend', 'ns-shell-section-title', form, text.settingsTitle);
+  // R4-polish (Esc page tidy): Settings sit right under the buttons in small groups (each control with its one-line
+  // help), so Picture quality and the guide are seen without scrolling; How to play and Controls follow.
+  const grpLook = el('div', 'ns-shell-setgroup', form);
+  const sensRow = el('label', 'ns-shell-setting', grpLook);
+  el('span', 'ns-shell-setting-label', sensRow, text.sensitivity);
+  const L = SETTINGS_LIMITS.lookSensitivity;
+  const sens = el('input', 'ns-shell-range', sensRow);
+  sens.type = 'range';
+  sens.min = String(L.min);
+  sens.max = String(L.max);
+  sens.step = String(L.step);
+  const sensOut = el('output', 'ns-shell-out', sensRow);
+  sensOut.setAttribute('aria-hidden', 'true');
+  const invRow = el('label', 'ns-shell-setting ns-shell-check', grpLook);
+  const inv = el('input', '', invRow);
+  inv.type = 'checkbox';
+  el('span', 'ns-shell-setting-label', invRow, text.invertY);
+  const grpView = el('div', 'ns-shell-setgroup', form);
+  const faceRow = el('label', 'ns-shell-setting', grpView);
+  el('span', 'ns-shell-setting-label', faceRow, text.faceView);
+  const face = el('select', 'ns-shell-select', faceRow);
+  for (const m of FACE_VIEW_MODES) {
+    const o = el('option', '', face, FACE_VIEW_LABELS[m]);
+    o.value = m;
+  }
+  // R4-integrator (D8): Picture quality: Auto / High / Low (ns-scene-three setQuality). Meaning never changes with it.
+  const qualityRow = el('label', 'ns-shell-setting', grpView);
+  el('span', 'ns-shell-setting-label', qualityRow, typeof text.quality === 'string' ? text.quality : 'Picture quality');
+  const qualitySel = el('select', 'ns-shell-select ns-shell-quality', qualityRow);
+  qualitySel.name = 'quality';
+  for (const m of QUALITY_SETTING_MODES) {
+    const o = el('option', '', qualitySel, QUALITY_SETTING_LABELS[m]);
+    o.value = m;
+  }
+  if (typeof text.qualityHelp === 'string' && text.qualityHelp) el('p', 'ns-shell-guidehelp ns-shell-qualityhelp', grpView, text.qualityHelp);
+  // R4-fix (code review M1): edge smoothing (MSAA) is fixed when the page loads; after a Low start, this line says that
+  // High (or Auto on a fast computer) is fully sharp only after a reload.
+  const qualityNote = el('p', 'ns-shell-guidehelp ns-shell-qualityreload', grpView, '');
+  qualityNote.hidden = true;
+  // R4-text (D7): the optional "Try this" guide: Hide / Show and Restart (a click here never resumes the game).
+  const grpGuide = el('div', 'ns-shell-setgroup', form);
+  const guideRow = el('div', 'ns-shell-setting ns-shell-guide', grpGuide);
+  el('span', 'ns-shell-setting-label', guideRow, guideText.escTitle);
+  const guideToggle = button('ns-shell-secondary ns-shell-guide-toggle', guideRow, guideText.hide, 'guide-toggle');
+  button('ns-shell-secondary ns-shell-guide-restart', guideRow, guideText.restart, 'guide-restart');
+  el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
+
   const grid = el('div', 'ns-shell-grid', card);
   const steps = el('section', 'ns-shell-section ns-shell-instructions', grid);
   el('h3', 'ns-shell-section-title', steps, text.instructionsTitle);
@@ -2306,31 +2558,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   el('h3', 'ns-shell-section-title', help, text.controlsTitle);
   const keys = el('dl', 'ns-shell-keys', help);
   for (const [k, v] of text.controls) { el('dt', '', keys, k); el('dd', '', keys, v); }
-
-  const form = el('fieldset', 'ns-shell-section ns-shell-settings', card);
-  form.setAttribute('data-ns-noplay', '');
-  el('legend', 'ns-shell-section-title', form, text.settingsTitle);
-  const sensRow = el('label', 'ns-shell-setting', form);
-  el('span', 'ns-shell-setting-label', sensRow, text.sensitivity);
-  const L = SETTINGS_LIMITS.lookSensitivity;
-  const sens = el('input', 'ns-shell-range', sensRow);
-  sens.type = 'range';
-  sens.min = String(L.min);
-  sens.max = String(L.max);
-  sens.step = String(L.step);
-  const sensOut = el('output', 'ns-shell-out', sensRow);
-  sensOut.setAttribute('aria-hidden', 'true');
-  const invRow = el('label', 'ns-shell-setting ns-shell-check', form);
-  const inv = el('input', '', invRow);
-  inv.type = 'checkbox';
-  el('span', 'ns-shell-setting-label', invRow, text.invertY);
-  const faceRow = el('label', 'ns-shell-setting', form);
-  el('span', 'ns-shell-setting-label', faceRow, text.faceView);
-  const face = el('select', 'ns-shell-select', faceRow);
-  for (const m of FACE_VIEW_MODES) {
-    const o = el('option', '', face, FACE_VIEW_LABELS[m]);
-    o.value = m;
-  }
 
   const limits = el('section', 'ns-shell-section ns-shell-limits', card);
   el('h3', 'ns-shell-section-title', limits, text.limitsTitle);
@@ -2395,6 +2622,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     sensOut.textContent = `${current.lookSensitivity.toFixed(2)}×`;
     inv.checked = current.invertY;
     face.value = current.faceView;
+    qualitySel.value = current.quality;
   };
   showSettings();
   const call = (fn, ...args) => { if (typeof fn === 'function') fn(...args); };
@@ -2406,6 +2634,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     if (kind === 'play-unlocked') { if (!unlocked.hidden) call(onPlayUnlocked); return; }
     if (kind === 'reset-body') { if (!resetBody.hidden) call(onResetBody); return; }
     if (kind === 'reset-brain') { if (!resetBrain.hidden) call(onResetBrain); return; }
+    if (kind === 'guide-toggle') { call(onGuide, 'toggle'); return; }
+    if (kind === 'guide-restart') { call(onGuide, 'restart'); return; }
     if (closest(e.target, '[data-ns-noplay]')) return;
     if (play.disabled) return;
     if (mode === 'intro' || kind === 'play') { call(onPlay); return; }
@@ -2419,6 +2649,19 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     call(onSettings, current, false);
   });
   on(sens, 'change', () => call(onSettings, current, true));
+  // R4-access (D9): while the page is open, Tab and Shift+Tab stay inside the card (aria-modal dialog): they wrap from
+  // the last control to the first and back, so focus never lands on the game view or the panel links behind it.
+  on(overlay, 'keydown', e => {
+    if (!e || e.key !== 'Tab' || overlay.hidden) return;
+    const list = [...card.querySelectorAll('button, input, select, textarea, summary, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter(x => !x.hidden && !x.disabled && typeof x.getClientRects === 'function' && x.getClientRects().length > 0);
+    if (!list.length) return;
+    const first = list[0], last = list[list.length - 1], at = doc.activeElement;
+    const wrap = e.shiftKey ? (at === first || !card.contains(at)) : (at === last || !card.contains(at));
+    if (!wrap) return;
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  });
   on(inv, 'change', () => {
     current = sanitizeSettings({ ...current, invertY: inv.checked === true });
     showSettings();
@@ -2426,6 +2669,11 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   });
   on(face, 'change', () => {
     current = sanitizeSettings({ ...current, faceView: face.value });
+    showSettings();
+    call(onSettings, current, true);
+  });
+  on(qualitySel, 'change', () => {
+    current = sanitizeSettings({ ...current, quality: qualitySel.value });
     showSettings();
     call(onSettings, current, true);
   });
@@ -2465,12 +2713,19 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     show(form, mode === 'paused');
     show(unlocked, Boolean(s.lockFailed) && mode === 'paused');
     show(reload, mode === 'error');
-    setText(modeNote, mode === 'intro' ? text.introNote : mode === 'paused' ? text.pausedNote : '');
+    // R4-integrator (R4-load W8): while the body still streams in (introHideAtMs null) the 2 s timer has not started:
+    // the note says so and the timer bar waits (CSS animates it only with data-intro-timer="running").
+    const introWaiting = mode === 'intro' && !Number.isFinite(s.introHideAtMs);
+    overlay.setAttribute('data-intro-timer', mode === 'intro' ? (introWaiting ? 'waiting' : 'running') : 'off');
+    setText(modeNote, mode === 'intro' ? (introWaiting && typeof text.introNoteLoading === 'string' ? text.introNoteLoading : text.introNote) : mode === 'paused' ? text.pausedNote : '');
     setText(notice, mode === 'error' ? `NeuroSurge stopped: ${s.error}` : s.notice);
     if (mode === 'error') setText(status, '');
     renderToast(s);
     show(context, Boolean(s.contextLost));
     if (!s.contextLost) { contextText.textContent = text.contextLost; contextReload.hidden = true; }
+    // R4-integrator: the page always opens at its top (Resume, Reset body, Reset brain view first); the card scrolls,
+    // and a scroll left from the last visit (e.g. down to Settings) hid those buttons the next time Esc was pressed.
+    if (changed && visible) { try { card.scrollTop = 0; } catch { /* not scrollable */ } }
     if (changed && visible) focusPrimary();
   }
   function renderContext(s, nowMs) {
@@ -2532,6 +2787,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     setDragLook: v => { dragLook = v === true; if (lastShell) renderToast(lastShell); },
     announce: t => { if (typeof t === 'string' && live.textContent !== t) live.textContent = t; },
     setSettings: s => { current = sanitizeSettings(s); showSettings(); },
+    /** R4-fix (M1): the Picture quality reload note ('' hides it). */
+    setQualityNote: t => { const v = typeof t === 'string' ? t : ''; if (qualityNote.textContent !== v) qualityNote.textContent = v; qualityNote.hidden = v === ''; },
+    setGuideHidden: h => { guideToggle.textContent = h === true ? guideText.show : guideText.hide; },
     get element() { return overlay; },
     get infoElement() { return info ? info.aside : null; }
   });
@@ -2601,13 +2859,15 @@ export function start(params = {}) {
   const {
     THREE, canvas, hudRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder = false,
     expectedSha256 = PINNED_SHA256, activityOptions = {}, controlsOptions = {}, armOptions = {},
-    shellRoot = null, storage = null, qa = false, resizeDebounce = RESIZE_DEBOUNCE, optionalModules = null, loadBody = null
+    shellRoot = null, storage = null, qa = false, resizeDebounce = RESIZE_DEBOUNCE, optionalModules = null, loadBody = null, streamBody = null,
+    fetchBytes = null, sha256HexBytes = null
   } = params || {};
   if (!THREE || (typeof THREE !== 'object' && typeof THREE !== 'function')) fail('app_args', 'THREE must be injected: start({ THREE, ... })');
   if (!canvas || typeof canvas.addEventListener !== 'function' || !canvas.ownerDocument || !canvas.ownerDocument.defaultView) {
     fail('app_args', 'canvas must be a canvas element attached to a document with a window');
   }
   if (loadBody !== null && typeof loadBody !== 'function') fail('app_args', 'loadBody must be a function');
+  if (streamBody !== null && typeof streamBody !== 'function') fail('app_args', 'streamBody must be a function');
   const doc = canvas.ownerDocument;
   const view = doc.defaultView;
   if (typeof view.requestAnimationFrame !== 'function') fail('app_args', 'the canvas window must provide requestAnimationFrame');
@@ -2625,6 +2885,9 @@ export function start(params = {}) {
 
   // Game shell and loop state. `tick` is installed by run() once the scene data exist.
   let settings = loadSettings(storage);
+  // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
+  let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0);
+  const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
@@ -2633,12 +2896,24 @@ export function start(params = {}) {
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
   let infoModel = null, infoLastRegion = null, infoSig = null, infoRenderer = null;
+  let slowState = null, slowLastMs = null; // R4-integrator: slow-computer note (stepSlowNotice) over live frames only
+  let guideBox = null, guideBoxAt = -Infinity, guideCovered = false, guideClear = 0; // R4-integrator: guide vs brain
+  let guideHandPx = null; // R4-polish: last frame's hand boxes (CSS px) for the guide chip
+  let guideOrientPx = null; // R4-fix (RP8): last frame's orientation-label boxes (CSS px) for the guide chip
+  let guideChipLast = null, guideChipGoal = null; // R4-fix (RP9): the chip's spot for the current goal
+  let guideBlankUntil = -Infinity; // R4-fix (M3): no re-show before this frame after a blank
   const holds = new Set();          // reasons the real-time loop is held: 'qa' (QA pause/step), 'lifecycle' (pagehide)
   const frameWaiters = [];
   let qaClockMs = null, qaLookPending = false;
   let settleReady = null;
   const firstFrame = new Promise(resolve => { settleReady = resolve; });
   const settle = value => { if (settleReady) { const r = settleReady; settleReady = null; r(value); } };
+  // R4-load: the first frame with the arm and brain (the body may still be streaming); `ready` keeps meaning "everything
+  // is loaded and drawn". performance marks 'ns:first-frame' and 'ns:body-complete' time both.
+  let settleFirstView = null;
+  const firstView = new Promise(resolve => { settleFirstView = resolve; });
+  const markPerf = name => { try { if (perf && typeof perf.mark === 'function') perf.mark(name); } catch { /* marks are advisory */ } };
+  let bodyStream = null, bodyStreaming = false, bodyFinished = false;
   const flushWaiters = () => { for (const w of frameWaiters.splice(0)) w(); };
   const lockedNow = () => doc.pointerLockElement === canvas;
   const exitLock = () => {
@@ -2675,6 +2950,15 @@ export function start(params = {}) {
     } catch {
       lookNative = false; // an incompatible reducer: fall back to scaling the deltas here
     }
+  }
+  /** R4-integrator (D8): Picture-quality setting -> ns-scene-three setQuality (when it exists). */
+  function applyQuality() {
+    try { callScene('setQuality', settings.quality); } catch { /* a renderer refusal must not stop the game */ }
+    renderRequested = true;
+    // R4-fix (code review M1): a canvas made without edge smoothing (a saved Low) stays so until a reload.
+    let q = null; try { q = sceneFn('qualityState') ? callScene('qualityState') : null; } catch { q = null; }
+    const reload = Boolean(q) && q.antialias === false && q.softwareRenderer !== true && settings.quality !== 'low';
+    if (shell && typeof shell.setQualityNote === 'function') shell.setQualityNote(reload ? SHELL_TEXT.qualityReload || '' : '');
   }
   /** Face-view setting -> ns-scene-three setFaceView (when it exists). */
   function applyFaceView() {
@@ -2728,6 +3012,27 @@ export function start(params = {}) {
     dispatch({ type: 'esc', atMs });
   }
 
+  /** R4-arm: show or hide the information panel's More detail section (the visible region card's <details>). */
+  function toggleInfoDetail() {
+    if (sceneFn('toggleInfoDetail')) { try { return callScene('toggleInfoDetail'); } catch { /* fall back to the DOM */ } }
+    const d = doc && typeof doc.querySelector === 'function' ? doc.querySelector('details.ns-infopanel-detail:not([hidden])') : null;
+    if (!d) return false;
+    d.open = !d.open;
+    if (d.open) revealInfoDetail(d);
+    return d.open;
+  }
+  /** R4-fix (review RP10): an opened More detail is scrolled into the panel's view (in portrait it opened below the
+   * screen edge; at 16:9 only about two lines showed). The panel scrolls while More detail is open (CSS). */
+  function revealInfoDetail(d) {
+    const go = () => {
+      const panel = d && typeof d.closest === 'function' ? d.closest('.ns-infopanel') : null;
+      if (!panel || !d.open || typeof d.getBoundingClientRect !== 'function') return;
+      const top = d.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+      panel.scrollTop = Math.max(0, top - INFO_DETAIL_CONTEXT_PX);
+    };
+    if (view && typeof view.requestAnimationFrame === 'function') view.requestAnimationFrame(go); else go();
+  }
+
   function resetBody() {
     if (!sim || !simState) return false;
     simState = sim.resetBody(simState);
@@ -2770,24 +3075,36 @@ export function start(params = {}) {
       onReload: () => { try { view.location.reload(); } catch { /* nothing else to do */ } },
       onResetBody: resetBody,
       onResetBrain: resetBrainView,
+      onGuide: what => {
+        const t = simState && Number.isFinite(simState.t) ? simState.t : 0;
+        guide = what === 'restart' ? NG.restartGuide(guide, t) : guide.hidden ? NG.showGuide(guide, t) : NG.hideGuide(guide);
+        saveGuide();
+        if (shell) shell.setGuideHidden(guide.hidden);
+      },
       onSettings: (next, persist) => {
         const faceChanged = next && next.faceView !== settings.faceView;
+        const qualityChanged = next && next.quality !== settings.quality;
         settings = sanitizeSettings(next);
         applyLookSettings();
         if (faceChanged) applyFaceView();
+        if (qualityChanged) applyQuality();
         if (persist) saveSettings(storage, settings);
       }
     });
     shell.render(shellState);
+    shell.setGuideHidden(guide.hidden);
   }
   setStatus('Starting…');
 
   const pageListeners = [];
-  const listen = (obj, type, fn) => {
+  const listen = (obj, type, fn, opts) => {
     if (!obj || typeof obj.addEventListener !== 'function') return;
-    obj.addEventListener(type, fn);
-    pageListeners.push([obj, type, fn]);
+    obj.addEventListener(type, fn, opts);
+    pageListeners.push([obj, type, fn, opts]);
   };
+  // R4-fix (review RP10): More detail opened with the mouse (free-mouse play) also scrolls into the panel's view
+  // (`toggle` does not bubble, so the listener captures).
+  listen(doc, 'toggle', e => { const t = e && e.target; if (t && t.open && typeof t.matches === 'function' && t.matches('details.ns-infopanel-detail')) revealInfoDetail(t); }, true);
   listen(doc, 'pointerlockchange', () => {
     const locked = lockedNow();
     if (!locked) { releaseInputs(); mouseHeld = false; crossHold = null; }
@@ -2873,13 +3190,28 @@ export function start(params = {}) {
 
   async function run() {
     try {
-      scene = createScene({ THREE, canvas, onOrbit: orbitHandler });
+      // R4-integrator (D8): the saved Picture quality is known before the WebGL context exists (MSAA is decided then).
+      // Under ?qa=1 the scene picks its own deterministic default (High on a real GPU), unless QA settings() set one.
+      scene = createScene({ THREE, canvas, onOrbit: orbitHandler, ...(qaEnabled ? {} : { quality: settings.quality }) });
+      if (qaEnabled && sceneFn('qualityState')) {
+        // QA: the Esc page shows the mode the scene really started in (not persisted).
+        try { const q = callScene('qualityState'); if (q && QUALITY_SETTING_MODES.includes(q.mode)) { settings = { ...settings, quality: q.mode }; if (shell) shell.setSettings(settings); } } catch { /* keep the saved value */ }
+      }
       if (sceneFn('setOrbitHandler')) callScene('setOrbitHandler', orbitHandler);
       setStatus('Loading the movement map…');
+      // R4-load: start the full-body stream now; before the first frame it reads only its priority part (the two
+      // lacrimal bones that place the eye). The bulk starts after the first frame (finishBody).
+      if (!isPlaceholder && streamBody) {
+        bodyStream = streamBody({
+          fetchText, sha256Hex,
+          expectedManifestSha256: expectedSha256 && typeof expectedSha256.fullbodyManifest === 'string' ? expectedSha256.fullbodyManifest : null,
+          onProgress: (n, total) => { if (!stopped && bodyStreaming) setStatus(`Loading the rest of your body ${n}/${total}…`); }
+        });
+      }
       const optional = typeof optionalModules === 'function' ? optionalModules() : optionalModules || loadOptionalModules();
       const [inputs, loaded] = await Promise.all([
         loadInputs({
-          manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder: isPlaceholder, expectedSha256,
+          manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder: isPlaceholder, expectedSha256, fetchBytes, sha256HexBytes,
           onProgress: (n, total) => { if (!stopped) setStatus(`Loading the 3D anatomy files ${n}/${total}…`); }
         }),
         Promise.resolve(optional).catch(err => ({ colors: null, bodyMap: null, body: null, errors: { all: errorText(err) } }))
@@ -2904,7 +3236,12 @@ export function start(params = {}) {
 
       // Full body (optional): only with an injected loader and ns-body. A failure is shown, never silent, never fatal.
       let body = null;
-      if (loadBody && mods.body && typeof mods.body.buildBodyRig === 'function') {
+      const bodyModule = Boolean(mods.body && typeof mods.body.buildBodyRig === 'function');
+      if (bodyStream && !bodyModule) { bodyStream.cancel(); bodyStream = null; }
+      let eyeMeshes = null;
+      if (bodyStream) eyeMeshes = await bodyStream.priority;
+      if (stopped) return { ok: false, error: 'stopped' };
+      if (!bodyStream && loadBody && bodyModule) {
         try {
           const b = await loadBody({
             fetchText, sha256Hex, bodyMap,
@@ -2939,6 +3276,7 @@ export function start(params = {}) {
         try {
           const fullbody = new Map();
           if (body) for (const e of body.entries) { const m = body.meshesById.get(e.element_id); if (m) fullbody.set(e.element_id, { entry: e, positions: m.positions }); }
+          else if (eyeMeshes) for (const [id, v] of eyeMeshes) fullbody.set(id, v); // R4-load: same eye as the whole body
           const eye = eyePosition({ fullbody, brain: inputs.assets && inputs.assets.brain, shoulderBp: data.rig.pivots.shoulder });
           anatomy = armAnatomy(data.rig, eye);
           eyeNote = `${eye.source} (±${eye.uncertaintyMm} mm display estimate)`;
@@ -2975,6 +3313,8 @@ export function start(params = {}) {
         ...base,
         keyDown: (s, code, t) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t) : s),
         click: (s, t) => (shellIsPlaying(shellState) ? base.click(s, t) : s),
+        // R4-arm: the More detail key (ns-controls DETAIL_CODE, I) only while playing.
+        toggleDetail: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleDetail === 'function' ? base.toggleDetail(s, t) : s),
         pointerMove: (s, dx, dy, t) => {
           if (!shellIsPlaying(shellState)) return s;
           if (lookNative) return base.pointerMove(s, dx, dy, t);
@@ -2984,7 +3324,7 @@ export function start(params = {}) {
       });
       applyLookSettings();
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }) };
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail() };
       if (lookNative) { bindOptions.sensitivity = settings.lookSensitivity; bindOptions.invertY = settings.invertY; }
       unbind = bindDom(canvas, gated, () => cs, s => { cs = s; }, bindOptions);
       // A binding with a status() (drag-to-look fallback) keeps the drag hint in the toast.
@@ -2999,8 +3339,55 @@ export function start(params = {}) {
       let brainKey = null, bodyKey = null, bodyDriveKey = null, hoverDir = null;
       current = { sim, data, state: simState, controls: cs, out: null };
 
+      // R4-load: after the first frame, stream the rest of the body, build its rig and seat it, then hand it to the scene.
+      // The frame loop picks up bodyRig / bodyBaked on the next frame; `ready` settles on the first frame drawn with it.
+      const finishBody = async () => {
+        bodyStreaming = true;
+        try {
+          const b = await bodyStream.start();
+          if (stopped) return;
+          setStatus('Getting the body ready…');
+          await yieldToPaint();
+          const rig = mods.body.buildBodyRig(b.entries, b.meshesById);
+          let baked = null;
+          if (typeof mods.body.bakeBodyPosture === 'function') {
+            setStatus('Seating the body…');
+            await yieldToPaint();
+            baked = mods.body.bakeBodyPosture(rig, b.meshesById, { posture: mods.body.DEFAULT_BODY_POSTURE });
+          }
+          if (stopped) return;
+          const bodyToWorld = anatomy ? armAttachment(anatomy, { yaw: 0, pitch: 0 }).bodyToWorld : null;
+          const drawMeshes = baked ? baked.meshesById : b.meshesById;
+          callScene('setBody', bodyToWorld ? { entries: b.entries, meshesById: drawMeshes, bodyToWorld } : { entries: b.entries, meshesById: drawMeshes });
+          bodyBaked = baked;
+          bodyRig = rig;
+          bodyKey = null;
+        } catch (err) {
+          bodyRig = null;
+          bodyBaked = null;
+          bodyNote = `Full body not shown: ${errorText(err)}`;
+          hud.render(staticHud());
+        } finally {
+          bodyStreaming = false;
+          bodyStream = null; // release the stream (it holds every source mesh); the scene and the rig keep what they use
+          if (!stopped) {
+            if (shell) shell.setStatus('');
+            hud.render({ status: '' });
+            bodyFinished = true;
+            renderRequested = true; // the intro / Esc overlay freezes the loop: draw one frame with the body behind it
+            // A held loop (QA pause, pagehide) draws no frame: settle at once.
+            // R4-integrator: qaTime() (not clockMs()) keeps the intro timer on the QA clock while QA holds the loop.
+            if (holds.size) { bodyFinished = false; markPerf('ns:body-complete'); dispatch({ type: 'introTimer', atMs: qaTime() }); settle({ ok: true, frames }); }
+          }
+        }
+      };
+
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
+        // R4-integrator: the controls' UI queue (lock / Esc / More-detail-key events) is drained every frame. The shell
+        // handles those through its own listeners, so the events are only discarded; undrained, the queue filled up after
+        // enough pointer-lock changes and then refused the More detail key (UI_QUEUE_LIMIT; e2e S41 with real input).
+        if (controlsApi && cs && typeof controlsApi.drainUiEvents === 'function') controlsApi.drainUiEvents(cs);
         if (shellState.mode === 'intro') dispatch({ type: 'tick', atMs: now }); // the 2 s instructions hide by themselves
         const lost = scene.contextLost === true;
         if (lost !== shellState.contextLost) dispatch(lost ? { type: 'contextLost', atMs: now } : { type: 'contextRestored' });
@@ -3018,6 +3405,10 @@ export function start(params = {}) {
           // The camera uses the same effective (narrow-layout) FOV as the simulation's fit and framing.
           scene.resize({ ...rs.apply, fovYDeg: sim.fovFor(rs.apply.width / rs.apply.height) });
           appliedSize = rs.apply;
+          // R4-scene: the orbit arrows keep clear of the arm over its whole A/D x W/S range at the default look.
+          if (sceneFn('setArmEnvelope') && typeof sim.armEnvelope === 'function') {
+            try { callScene('setArmEnvelope', sim.armEnvelope(rs.apply.width / rs.apply.height), { width: rs.apply.width, height: rs.apply.height }); } catch { /* no envelope: the arrows keep the start-pose rule */ }
+          }
         }
         const size = appliedSize;
         const live = fixed === true || shellIsPlaying(shellState);
@@ -3063,14 +3454,19 @@ export function start(params = {}) {
           crossHold = null;
         }
         const look = live || !simState.gaze ? cs : simState.gaze;
-        const step = sim.stepFrame(simState, {
+        const stepInputs = {
           yaw: look.yaw, pitch: look.pitch, axes: live ? controlsApi.axes(cs) : { x: 0, z: 0 }, events: timing.events, aspect,
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: arrowDir, glassHit: brainHit === true, silentGaze: seedNext === true,
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height }
-        }, timing.dt);
+        };
+        const prevSim = simState;
+        const step = sim.stepFrame(simState, stepInputs, timing.dt);
         seedNext = false;
         simState = step.state;
         const out = step.out;
+        // R4-text (D7): the "Try this" guide follows real events of this frame (one pure call; never blocks play).
+        const nextGuide = NG.guideStep(guide, NG.guideEventsFromFrame({ prev: prevSim, next: simState, out, inputs: stepInputs, bodyMap }), simState.t);
+        if (nextGuide !== guide) { const saveNow = NG.goalsDone(nextGuide) !== NG.goalsDone(guide); guide = nextGuide; if (saveNow) saveGuide(); }
         scene.setView(look.yaw, look.pitch);
         // The body (and the face layer) on the same eye and trunk yaw as the arm attachment.
         if (out.attachment && sceneFn('setBodyFrame')) {
@@ -3134,8 +3530,57 @@ export function start(params = {}) {
             raycastAt = simState.t;
           }
         }
-        const model = hudFrame({ binding: inputs.binding, state: simState, out, brainHit, frameMs, bodyMap });
-        hud.render({ status: '', ...model });
+        // R4-integrator (R4-player 1.8): a plain note while the picture rate stays very low (live frames only; QA steps
+        // are not frame times). It suggests Low only when Low would draw a cheaper picture than now.
+        if (live && fixed !== true) { slowState = stepSlowNotice(slowState, slowLastMs === null ? NaN : now - slowLastMs); slowLastMs = now; }
+        else slowLastMs = null;
+        let slowNote = '';
+        if (slowState && slowState.on) {
+          let q = null; try { q = sceneFn('qualityState') ? callScene('qualityState') : null; } catch { q = null; }
+          const atLowest = q && Number.isFinite(q.level) && q.level >= QUALITY_LEVELS.length - 1;
+          slowNote = atLowest ? HUD_TEXT.slowComputer : `${HUD_TEXT.slowComputer} ${HUD_TEXT.slowComputerTry}`;
+        }
+        const model = hudFrame({ binding: inputs.binding, state: simState, out, brainHit, frameMs, bodyMap, slowNote });
+        // R4-integrator (D7 "never covers the brain, arrows or panel"): the brain is world-anchored and slides under the
+        // top-left status card when you look right or down. While its outline, as drawn now, overlaps the guide line's
+        // place in the card, the line moves to a small chip in a clear spot of the usable view (ns-scene-three
+        // guideFloatSpot: off the brain and the drawn arrows; the usable view already excludes the information column /
+        // band); with no clear spot it is not drawn. It goes back into the card GUIDE_COVER.clearFrames frames after
+        // the brain has left its place (no flicker at the edge).
+        const guideNow = shellIsPlaying(shellState) ? NG.guideView(guide, simState.t) : null;
+        let guideText = guideNow ? guideNow.line : '';
+        // R4-polish: the current goal reaches the scene, so the arrows can draw attention while the goal is "orbit".
+        if (sceneFn('setGuideGoal')) callScene('setGuideGoal', guideNow && guideNow.visible ? guideNow.goalId : null);
+        let guideFloat = null;
+        if (guideText && sceneFn('brainCoversRect') && typeof hud.guideRect === 'function') {
+          if (!guideBox || frames - guideBoxAt >= GUIDE_COVER.rectEveryFrames) { const r = hud.guideRect(); if (r) guideBox = r; guideBoxAt = frames; }
+          const covers = r => { try { return callScene('brainCoversRect', r) === true; } catch { return false; } };
+          if (guideBox && covers(guideBox)) { guideCovered = true; guideClear = 0; } else if (guideCovered && ++guideClear >= GUIDE_COVER.clearFrames) guideCovered = false;
+          if (guideCovered) {
+            const u = brainUsableNdc({ width: size.width, height: size.height });
+            const usablePx = u ? { x0: ((u.x0 + 1) / 2) * size.width, x1: ((u.x1 + 1) / 2) * size.width, y0: ((1 - u.y1) / 2) * size.height, y1: ((1 - u.y0) / 2) * size.height } : null;
+            let obs = null; try { obs = sceneFn('overlayObstacles') ? callScene('overlayObstacles') : null; } catch { obs = null; }
+            const arrowsPx = (obs && Array.isArray(obs.arrows) ? obs.arrows : []).map(a => ({ x0: a.x0 * size.width, y0: a.y0 * size.height, x1: a.x1 * size.width, y1: a.y1 * size.height }));
+            const hitsBox = (r, b) => r.x0 < b.x1 && r.x1 > b.x0 && r.y0 < b.y1 && r.y1 > b.y0;
+            const chipH = Number.isFinite(hud.guideFloatH) ? hud.guideFloatH : 40;
+            // R4-polish: the chip also keeps off the player's hand (last frame's hand box) and, looking down at the body,
+            // tries the top of the view first.
+            const handPx = guideHandPx || [];
+            // R4-fix (review RP8): also off the region labels and the orientation labels; (RP9) the last spot of this
+            // goal first.
+            const labelsPx = [...(obs && Array.isArray(obs.labelsPx) ? obs.labelsPx : []), ...(guideOrientPx || [])];
+            if (guideChipGoal !== guideNow.goalId) { guideChipGoal = guideNow.goalId; guideChipLast = null; }
+            guideFloat = guideFloatSpot({ usable: usablePx, chipH, preferTop: look.pitch < GUIDE_PREFER_TOP_PITCH, prefer: guideChipLast,
+              clear: r => !covers(r) && !arrowsPx.some(b => hitsBox(r, b)) && !handPx.some(b => hitsBox(r, b)) && !labelsPx.some(b => hitsBox(r, b)) });
+            if (guideFloat) guideChipLast = { x: guideFloat.x, y: guideFloat.y };
+            // With no clear spot the line is not drawn (D7: it never covers the brain, the arrows or the panel).
+            // R4-fix (code review M3): after a gap it comes back only GUIDE_COVER.reshowFrames frames later, so a look
+            // sweep across the edge does not make it blink (the screen-reader copy is separate and does not repeat).
+            if (!guideFloat) { guideText = ''; guideBlankUntil = frames + GUIDE_COVER.reshowFrames; }
+            else if (frames < guideBlankUntil) { guideText = ''; guideFloat = null; }
+          }
+        } else guideCovered = false;
+        hud.render({ status: '', ...model, guide: guideText, guideFloat, guideSpoken: guideNow && guideNow.visible ? guideNow.line : '' });
         updateInfo(inputs.binding, out);
         if (shell) {
           const say = announcer.update(model.gaze, now);
@@ -3151,15 +3596,28 @@ export function start(params = {}) {
         if (sceneFn('setLabelAvoid')) callScene('setLabelAvoid', avoid);
         const obstacles = sceneFn('overlayObstacles') ? callScene('overlayObstacles') : null;
         const orientAvoid = obstacles && obstacles.arrows.length ? { rects: [...avoid.rects, ...obstacles.arrows], ellipses: avoid.ellipses } : avoid;
+        // R4-polish: the shown toast is an obstacle for the orientation labels only (not for the card placement).
+        const labelRects = obstacles && Array.isArray(obstacles.toasts) ? obstacles.toasts : [];
         const ra = sim.regionMode && sceneFn('brainOrientationAnchors') ? callScene('brainOrientationAnchors') : null;
         let orientBoxes = null;
         const handRects = avoid.rects; // the hand only (orientAvoid adds the orbit-arrow boxes)
+        guideHandPx = handRects.map(r => ({ x0: r.x0 * size.width, y0: r.y0 * size.height, x1: r.x1 * size.width, y1: r.y1 * size.height }));
         if (ra && obstacles && !obstacles.brainInView && frames > 0) orientBoxes = hud.placeOrientation({}, size, avoid, Number.isFinite(obstacles.infoBottom) ? { legendTopPx: obstacles.infoBottom + 12, handRects } : { handRects });
-        else if (ra) orientBoxes = hud.placeOrientation(scene.projectWorld(orientationCandidates(ra)), size, orientAvoid, { arrows: obstacles ? obstacles.arrows : [], handRects });
+        else if (ra) {
+          // R4-fix (reviews SL4-2, RP11): side labels never sit on the brain's drawn outline (viewport-fraction box).
+          const brainCovers = sceneFn('brainCoversRect') ? r => { try { return callScene('brainCoversRect', { x0: r.x0 * size.width, y0: r.y0 * size.height, x1: r.x1 * size.width, y1: r.y1 * size.height }) === true; } catch { return false; } } : null;
+          orientBoxes = hud.placeOrientation(scene.projectWorld(orientationCandidates(ra)), size, orientAvoid, { arrows: obstacles ? obstacles.arrows : [], handRects, labelRects, brainCovers });
+        }
         else if (anchors) orientBoxes = hud.placeOrientation(scene.projectWorld(anchors), size, orientAvoid, { handRects });
         // R3-polish: region labels avoid the orientation labels placed in this same frame (labels never overlap).
         if (sceneFn('setOrientationRects')) callScene('setOrientationRects', Array.isArray(orientBoxes) ? orientBoxes : null);
-        scene.render();
+        guideOrientPx = Array.isArray(orientBoxes) ? orientBoxes.filter(b => b && b.key !== 'hover') : null; // R4-fix (RP8)
+        // R4-scene: the brain shows a soft glow while Space-drag holds it.
+        if (sceneFn('setBrainHeld')) callScene('setBrainHeld', Boolean(out.brainView && out.brainView.grab && out.brainView.grab.active));
+        // R4-scene (D8): QA step frames (fixed clock) are not frame-time samples for the quality controller.
+        // R4-fix (code review F1): neither are frozen frames (intro / Esc page: a settings change, a resize or a reset
+        // asks for one redraw); their 250-300 ms gaps had stepped a 60 fps GPU down to half size or the simplest meshes.
+        scene.render(live && fixed !== true ? undefined : { live: false });
         frames++;
         current = { sim, data, state: simState, controls: cs, out };
         if (t0 !== null) {
@@ -3169,8 +3627,20 @@ export function start(params = {}) {
         flushWaiters();
         if (frames === 1) {
           if (shell) shell.setStatus('');
-          settle({ ok: true, frames: 1 });
-          dispatch({ type: 'ready', atMs: now });
+          markPerf('ns:first-frame');
+          if (settleFirstView) { settleFirstView({ ok: true, frames: 1 }); settleFirstView = null; }
+          if (bodyStream) {
+            dispatch({ type: 'ready', atMs: now, holdIntro: true });
+            finishBody();
+          } else {
+            settle({ ok: true, frames: 1 });
+            dispatch({ type: 'ready', atMs: now });
+          }
+        } else if (bodyFinished) {
+          bodyFinished = false;
+          markPerf('ns:body-complete');
+          dispatch({ type: 'introTimer', atMs: now });
+          settle({ ok: true, frames });
         }
         return true;
       };
@@ -3188,11 +3658,12 @@ export function start(params = {}) {
   function stop() {
     if (stopped) return;
     stopped = true;
+    if (bodyStream) bodyStream.cancel();
     phase = failed ? 'error' : 'stopped';
     if (raf && typeof view.cancelAnimationFrame === 'function') view.cancelAnimationFrame(raf);
     raf = 0;
     if (unbind) { unbind(); unbind = null; }
-    for (const [obj, type, fn] of pageListeners.splice(0)) obj.removeEventListener(type, fn);
+    for (const [obj, type, fn, opts] of pageListeners.splice(0)) obj.removeEventListener(type, fn, opts);
     exitLock();
     if (scene) scene.dispose();
     hud.dispose();
@@ -3296,11 +3767,14 @@ export function start(params = {}) {
       scene: features(),
       sceneState: (() => { try { return sceneFn('sceneState') ? callScene('sceneState') : null; } catch { return null; } })(),
       bodyPosedTargets: bodyPosed,
+      guide: (() => { try { const t = simState && Number.isFinite(simState.t) ? simState.t : 0; return { ...NG.guideView(guide, t), done: NG.goalsDone(guide), hidden: guide.hidden === true, current: NG.currentGoal(guide) }; } catch { return null; } })(),
+      reducedMotion: (() => { try { return typeof view.matchMedia === 'function' ? view.matchMedia('(prefers-reduced-motion: reduce)').matches : null; } catch { return null; } })(),
       brainFrame: (() => {
         const f = out && out.brainFrame;
         if (!f) return null;
         // R3-fix (review code F5): arrowOvershootNdc is not reported (the drawn arrows come from the scene's own plan, sceneState.arrowPlan).
-        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
+        // R4-integrator (D5): perspectiveK and the far-eye numbers (perspective) are reported too.
+        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'perspectiveK', 'perspective', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
         return Object.fromEntries(pick.filter(k => f[k] !== undefined).map(k => [k, f[k]]));
       })()
     });
@@ -3315,7 +3789,7 @@ export function start(params = {}) {
       const loopRunning = holds.size === 0 && Boolean(tick);
       if (frames === 0 || (loopRunning && shellIsPlaying(shellState) && !(scene && scene.contextLost))) { frameWaiters.push(after); return; }
       if (loopRunning && !(scene && scene.contextLost)) { renderRequested = true; frameWaiters.push(after); return; }
-      if (scene && !scene.contextLost) scene.render();
+      if (scene && !scene.contextLost) scene.render({ live: false }); // a held-loop redraw is not a frame-time sample
       after();
     });
   }
@@ -3406,13 +3880,15 @@ export function start(params = {}) {
     shell() { return plainCopy(shellState); },
     /** The current far-right info-overlay model (plain JSON) or null before the first frame. */
     info() { return infoModel ? plainCopy(infoModel) : null; },
-    /** settings() reads; settings({ lookSensitivity, invertY, faceView }) sets (not persisted). */
+    /** settings() reads; settings({ lookSensitivity, invertY, faceView, quality }) sets (not persisted). */
     settings(next) {
       if (next !== undefined) {
         const faceChanged = next && next.faceView !== undefined && next.faceView !== settings.faceView;
+        const qualityChanged = next && next.quality !== undefined && next.quality !== settings.quality;
         settings = sanitizeSettings({ ...settings, ...next });
         applyLookSettings();
         if (faceChanged) applyFaceView();
+        if (qualityChanged) applyQuality();
         if (shell) shell.setSettings(settings);
       }
       return plainCopy({ ...settings, appliedBy: lookNative ? 'controls.setLookOptions' : 'shell-delta-scale' });
@@ -3421,5 +3897,5 @@ export function start(params = {}) {
 
   const ready = run();
 
-  return Object.freeze({ stop, suspend, resume, status, ready, inspect, qa: qaApi });
+  return Object.freeze({ stop, suspend, resume, status, ready, firstView, inspect, qa: qaApi });
 }

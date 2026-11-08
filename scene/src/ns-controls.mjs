@@ -19,6 +19,10 @@
  *           { type: 'resume' }, { type: 'pause' } (from uiCommand / `data-ns-ui` buttons). Each carries timeMs when known.
  *           ns-actions createActivity().step accepts every one of these events directly (instructions, pause,
  *           orbit and Reset body live in the activity state).
+ *           R4-arm: { type: 'detail' } (the More detail key, DETAIL_CODE = I) asks the information panel to show or hide
+ *           its More detail section. It is a page (panel) command, NOT an activity event: do not pass it to
+ *           ns-actions step (which refuses unknown types); ns-app opens or closes the panel section instead (bindDom
+ *           options.onDetail). Like every control it is a virtual game input: it reads nothing from the body or brain.
  * The double-tap (DOUBLE_TAP_MS) is detected by ns-actions on the activity clock, not here: every Space press is
  * delivered immediately (hold-to-fist is never delayed waiting for a second tap).
  *
@@ -58,9 +62,20 @@ export const UI_QUEUE_LIMIT = 32;
 /** Non-game keys bound by bindDom (KeyboardEvent.code). Escape toggles the instructions/controls overlay. */
 export const UI_CODES = Object.freeze(['Escape']);
 
+/** R4-arm: the More detail key (KeyboardEvent.code, layout independent): I for "information". With the mouse captured
+ * there is no cursor to click the panel's collapsed More detail section (round-3 review m6), so this key shows or hides
+ * it. Chosen because no other control uses it (W/A/S/D, Space, Esc and the mouse) and the browser gives a plain I no
+ * meaning (Ctrl/Meta chords such as Ctrl+Shift+I are left to the browser by the chord rule). A UI key, not one of
+ * CONTROL_CODES: it never moves the arm or any body part. */
+export const DETAIL_CODE = 'KeyI';
+/** The More detail key's label for the Esc page controls list and the key cap ("I"). */
+export const DETAIL_KEY_LABEL = 'I';
+
 /** Double-tap window (ms, press to press): a second Space press within this of the previous press flips the forearm
- * between pronation and supination (ns-actions). A UI timing choice, not a physiological constant. */
-export const DOUBLE_TAP_MS = 350;
+ * between pronation and supination (ns-actions). A UI timing choice, not a physiological constant.
+ * R4-polish (R4-player 2.4): 350 -> 450 ms. A relaxed double tap (370-390 ms press to press, measured with real input)
+ * did nothing and gave no feedback; desktop double-clicks usually allow about 500 ms. */
+export const DOUBLE_TAP_MS = 450;
 
 /** Overlay commands accepted by uiCommand() and by `data-ns-ui` buttons under bindDom's options.uiRoot. */
 export const UI_COMMANDS = Object.freeze(['orbit-left', 'orbit-right', 'orbit-forward', 'orbit-back', 'reset-body', 'resume', 'pause']);
@@ -101,8 +116,8 @@ function checkSensitivity(v) {
  * Options: sensitivityRadPerPx (base, default 0.0025), pitchLimitDeg (default 80), sensitivity (multiplier, default 1)
  * and invertY (default false); the last two are the initial `state.look` and can be changed with setLookOptions.
  * @returns {{ state, initialState, keyDown, keyUp, blur, releaseAll, pointerMove, click, axes, drainEvents,
- *   escape, lockChange, uiCommand, drainUiEvents, setLookOptions, lookOptions, sensitivityRadPerPx: number,
- *   pitchLimitRad: number, sensitivity: number, invertY: boolean }}
+ *   escape, lockChange, uiCommand, toggleDetail, drainUiEvents, setLookOptions, lookOptions,
+ *   sensitivityRadPerPx: number, pitchLimitRad: number, sensitivity: number, invertY: boolean }}
  *   `state` is a fresh initial state (as createActivity exposes its initial state); initialState()
  *   makes another.
  */
@@ -205,6 +220,12 @@ export function createControls({
     return pushUi(state, { ...UI_COMMAND_EVENTS[command] }, timeMs);
   }
 
+  /** R4-arm: the More detail key (DETAIL_CODE): queue { type: 'detail' } on the UI queue. Never touches the keys,
+   * the game queue or the reach axes. */
+  function toggleDetail(state, timeMs) {
+    return pushUi(state, { type: 'detail' }, timeMs);
+  }
+
   /** Return queued UI events in order and empty that queue in place (each event is delivered once). */
   function drainUiEvents(state) {
     const queue = state.ui;
@@ -261,6 +282,7 @@ export function createControls({
     escape,
     lockChange,
     uiCommand,
+    toggleDetail,
     drainUiEvents,
     setLookOptions,
     lookOptions,
@@ -269,6 +291,18 @@ export function createControls({
     sensitivity,
     invertY
   };
+}
+
+/** True for an element that takes typed text (input other than buttons/checkboxes/ranges, textarea, select,
+ * contenteditable): keys typed there are not game keys. */
+function isTextEntry(el) {
+  if (!el || typeof el !== 'object') return false;
+  if (el.isContentEditable === true) return true;
+  const tag = typeof el.tagName === 'string' ? el.tagName.toUpperCase() : '';
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag !== 'INPUT') return false;
+  const type = typeof el.type === 'string' ? el.type.toLowerCase() : 'text';
+  return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'color', 'file', 'image'].includes(type);
 }
 
 /** The UI_COMMANDS entry named by the nearest data-ns-ui attribute from `el` up to (and including) `root`, else null. */
@@ -303,7 +337,12 @@ function uiCommandOf(el, root) {
  *     With options.uiRoot, a click on an element (or ancestor, up to uiRoot) carrying data-ns-ui="<UI_COMMANDS entry>"
  *     queues that command (e.g. orbit arrow buttons, the Reset body and Resume buttons). Use EITHER this delegation
  *     OR your own button handlers for a given button, never both (one click would then act twice).
- * options: { onLockChange(locked: boolean), onLockError(), sensitivity, invertY, dragToLook = true, uiRoot }
+ *   - R4-arm: the More detail key (DETAIL_CODE, I) without Ctrl/Meta/Alt and not auto-repeat calls
+ *     controls.toggleDetail (when present) and, when that reducer accepted it (returned a new state: a gating reducer
+ *     can refuse it outside play), options.onDetail({ timeMs }). It is prevented (no page find-as-you-type) and ignored
+ *     while a text field has focus. It releases nothing and is not an activation click.
+ * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), sensitivity, invertY, dragToLook = true,
+ *   uiRoot }
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
  * @returns {() => void} unbind, which removes every listener this call added. unbind.status() returns
  *   { locked, lockFallback, dragging } for HUD feedback.
@@ -319,13 +358,14 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  const { onLockChange = null, onLockError = null, onDetail = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
   if (onLockChange !== null && typeof onLockChange !== 'function') fail('controls_dom', 'onLockChange must be a function');
   if (uiRoot !== null && (typeof uiRoot !== 'object' || typeof uiRoot.addEventListener !== 'function')) {
     fail('controls_dom', 'uiRoot must be an EventTarget (the overlay root element)');
   }
   if (uiRoot !== null && typeof controls.uiCommand !== 'function') fail('controls_dom', 'controls.uiCommand is needed for uiRoot');
   if (onLockError !== null && typeof onLockError !== 'function') fail('controls_dom', 'onLockError must be a function');
+  if (onDetail !== null && typeof onDetail !== 'function') fail('controls_dom', 'onDetail must be a function');
   if (typeof dragToLook !== 'boolean') fail('controls_dom', 'dragToLook must be a boolean');
   const doc = target.ownerDocument;
   const view = doc ? doc.defaultView : null;
@@ -391,6 +431,13 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     return true;
   };
 
+  // R4-access (D9): a key pressed on a control of the start / Esc page (button, checkbox, slider, menu, link) belongs to
+  // that control: the game neither handles nor prevents it, so Space and Enter press the focused button and Space ticks
+  // the checkbox. Play is paused while that page is open; the orbit arrows (outside the page) are not affected.
+  const onPageControl = e => {
+    const t = e && e.target;
+    return !!(t && typeof t.closest === 'function' && t.closest('.ns-shell') && t.closest('button, input, select, textarea, summary, a[href]'));
+  };
   on(view, 'keydown', e => {
     const code = e.code;
     if (e.ctrlKey || e.metaKey || isChordModifier(code)) {
@@ -406,7 +453,19 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (typeof controls.escape === 'function') apply(s => controls.escape(s, at));
       return;
     }
+    if (code === DETAIL_CODE) {
+      // R4-arm: the More detail key. Not inside a text field (a typed "i" stays a letter there).
+      if (e.altKey || isTextEntry(e.target)) return;
+      e.preventDefault();
+      if (e.repeat === true || typeof controls.toggleDetail !== 'function') return;
+      const at = eventTime(e);
+      const before = getState();
+      const after = controls.toggleDetail(before, at);
+      if (after !== before) { setState(after); call(onDetail, { timeMs: at }); }
+      return;
+    }
     if (!isControlCode(code)) return;
+    if (onPageControl(e)) return;
     e.preventDefault();
     if (e.repeat === true) return;
     const at = eventTime(e);
@@ -416,6 +475,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const code = e.code;
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (!isControlCode(code)) return;
+    if (onPageControl(e)) return;
     e.preventDefault();
     const at = eventTime(e);
     apply(s => controls.keyUp(s, code, at));

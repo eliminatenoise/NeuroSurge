@@ -10,7 +10,7 @@ does **not** extend to the third-party material. In particular, the BodyParts3D 
 | three.js r170 (3D engine) | `vendor/three.module.js`, `vendor/LICENSE` | MIT | three.js authors |
 | BodyParts3D 4.0 anatomy meshes | `packets/**/meshes/*.obj` | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
 
-This is the round-3 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
+This is the round-4 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
 every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
 the top of the NeuroSurge repository on GitHub.
 
@@ -35,6 +35,10 @@ the top of the NeuroSurge repository on GitHub.
 - At run time the bones are moved rigidly, the muscles are bent to follow them (a geometry-only skinning of each
   muscle's vertices to the nearby bones, with no muscle volume or contraction model), and colours showing the
   simulated activity are added. This happens only in the browser's memory; the OBJ files are not changed.
+- On Picture quality Low, simplified copies of the meshes are drawn (the game's own words). The Auto setting also
+  switches to these copies when a computer draws very slowly. The copies are made in the browser's memory by merging
+  nearby points of the brain-glass and body meshes (vertex clustering); the OBJ files are not changed. On High, and
+  on Auto at full quality, the meshes are drawn as they are.
 - The shipped packet file `packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt` still describes the run-time
   changes as "whole-mesh rigid transforms". That wording is out of date; the statement above replaces it. The packet
   file is covered by the packet's `SHA256SUMS.txt` and was left byte-identical in this build.

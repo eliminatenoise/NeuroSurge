@@ -87,6 +87,22 @@
  *  - LABELS: fewer (cap LABEL_LAYOUT), larger (R3_SCENE_CSS), plainer (regionLabelDisplay from ns-text) and placed by
  *    declutterLabels clear of the arm, the arrows, the panels and each other. Visible wording comes from ns-text when it
  *    has the entry (orbit captions, colour key, face captions, on-brain labels).
+ * R4-scene (round 4; decisions D5 / D8; round4/R4-scene-NOTES.md):
+ *  - CAMERA RANGE independent of the brain distance: the far plane follows the brain's farthest support point
+ *    (farPlaneFor), the near plane stays at the hand; every brain-relative effect is in source mm or projected pixels, so
+ *    a brain k times farther and k times larger draws the same picture (proved at k = 1, 3, 6; QA hook ?qa=1&nsBrainK=k,
+ *    createScene({ brainDistanceScale }) / setBrainDistanceScale, scaleBrainDistance).
+ *  - ARROWS clear of the controlled arm: setArmEnvelope(armSweepEnvelope of the arm over its A/D x W/S range at the
+ *    default look) is a placement obstacle; when a side has no spot off every pose the consistent fallback is the clear,
+ *    comfortable spot the fewest poses cover (it fades while the arm is over it). HUD rectangles are re-read when a
+ *    Mutation/ResizeObserver says they changed (same frame), not every 12 frames.
+ *  - HELD BRAIN: setBrainHeld(true) while Space-drag holds the brain: a soft glow on the glass rim (HELD_CUE).
+ *  - LEFT-ARM RIM: a cyan band along the inside of the left-arm territory border at every activity level (LEFT_ARM_RIM);
+ *    the fill keeps the shared activity ramp.
+ *  - ADAPTIVE QUALITY (D8): QUALITY_LEVELS (render scale, then the decorative x-ray pass, then vertex-clustered LOD
+ *    copies of the glass, body and arm), an automatic controller with hysteresis (stepQuality), setQuality('auto' |
+ *    'high' | 'low') for the Esc page and qualityState() in the QA snapshot. Colours, activity, labels and text never
+ *    change with quality.
  * Scientific limits (unchanged): every colour, opacity and label is a simulated, unitless DISPLAY of virtual inputs;
  * regions are control regions of a representative map, not cortical borders, and the face layer is a displaced view,
  * not something a person can see from their own eyes.
@@ -100,7 +116,7 @@ import {
 import * as NsBrain from './ns-brain.mjs';
 import * as NsMath from './ns-math.mjs';
 import {
-  activityColor, activityColorCss, ACTIVITY_GLOW, RAMP_STOPS_LINEAR as SHARED_RAMP, hexToLinear, RAMP_LABEL
+  activityColor, activityColorCss, ACTIVITY_GLOW, RAMP_STOPS_LINEAR as SHARED_RAMP, hexToLinear, RAMP_LABEL, KEY_COLORS
 } from './ns-colors.mjs';
 
 import * as NsText from './ns-text.mjs';
@@ -156,6 +172,17 @@ export const LIGHT = Object.freeze({
 export function glassAlpha(facing, body, rim, power) {
   const f = facing < 0 ? 0 : facing > 1 ? 1 : facing;
   return body + (rim - body) * Math.pow(1 - f, power);
+}
+
+/** R4-scene: the HELD-brain cue. While Space-drag holds the brain, the nearest glass shell's fresnel rim is stronger and
+ * wider (a soft glow along the brain's outline and gyri in the glass's own pale colour: not cyan, gold or the activity
+ * ramp, so it never reads as activity or the left arm). It eases in (inS) and out (outS) and ends on release; under
+ * prefers-reduced-motion it switches without easing. Display only. */
+export const HELD_CUE = Object.freeze({ rimOpacity: 0.9, rimPower: 2.4, inS: 0.1, outS: 0.12 });
+/** Shell rim uniforms for a held-cue amount 0..1 (pure): linear from the resting MATERIAL rim to HELD_CUE. */
+export function heldCueRim(amount, o = HELD_CUE) {
+  const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
+  return { rimOpacity: MATERIAL.glassRimOpacity + (o.rimOpacity - MATERIAL.glassRimOpacity) * a, rimPower: MATERIAL.glassRimPower + (o.rimPower - MATERIAL.glassRimPower) * a };
 }
 
 /**
@@ -231,6 +258,269 @@ export function adaptPixelRatio(state, frameMs, opts = ADAPTIVE_PIXEL_RATIO) {
   if (slowFor >= o.holdMs && level > lo) { level = Math.max(lo, level - o.step); slowFor = 0; fastFor = 0; }
   else if (fastFor >= o.holdMs && level < cap) { level = Math.min(cap, level + o.step); slowFor = 0; fastFor = 0; }
   return { level, cap, smoothMs, slowFor, fastFor };
+}
+
+/* ------------------------------------------------------------------ R4-scene (D8): adaptive quality */
+
+/** Quality settings the Esc page offers (D8): 'auto' adapts, 'high' is always full quality, 'low' always the cheapest
+ * level. Quality changes only how sharply and with which decorative passes the SAME picture is drawn: colours, the
+ * activity ramp, the left-arm distinction, labels and every honesty text are identical at every level. */
+export const QUALITY_MODES = Object.freeze(['auto', 'high', 'low']);
+
+/* R4-integrator (D8, R4-load measurement): multisample anti-aliasing (MSAA) is the largest single cost on a software
+ * renderer: SwiftShader 1280x720 default view 253-296 ms -> 76-85 ms per frame with antialias: false, 4.1 -> 12.6 fps
+ * (round4/R4-load-NOTES.md section 6.2; screenshots: only the edges are slightly less smooth). MSAA is fixed when the
+ * WebGL context is created, so it is decided before the renderer exists: off on a software renderer or when the saved
+ * Quality is Low, on everywhere else (the real GPU keeps MSAA and 60 fps). It changes edge smoothing only: colours,
+ * activity, the left-arm distinction and every text stay the same. */
+export const SOFTWARE_RENDERER_RE = /swiftshader|llvmpipe|softpipe|software|microsoft basic render/i;
+/** True when a WebGL renderer string names a software rasteriser. Pure. */
+export function isSoftwareRenderer(name) { return typeof name === 'string' && SOFTWARE_RENDERER_RE.test(name); }
+/** The WebGL renderer string from a throw-away context (unmasked when the browser allows it), or null. The probe
+ * context is released at once. */
+export function probeRendererName(doc) {
+  try {
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    const c = doc.createElement('canvas');
+    if (!c || typeof c.getContext !== 'function') return null;
+    const gl = c.getContext('webgl2') || c.getContext('webgl');
+    if (!gl) return null;
+    let name = null;
+    try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); if (ext) name = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL); } catch { name = null; }
+    if (typeof name !== 'string' || !name) { try { name = gl.getParameter(gl.RENDERER); } catch { name = null; } }
+    try { const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch { /* released with the canvas */ }
+    return typeof name === 'string' && name ? name : null;
+  } catch { return null; }
+}
+/** MSAA on or off: antialias true / false is kept; 'auto' = off for a software renderer or Quality Low. Pure. */
+export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererName = null } = {}) {
+  if (antialias === true || antialias === false) return antialias;
+  return !(quality === 'low' || isSoftwareRenderer(rendererName));
+}
+/** Quality levels, best first (D8 order: render scale first, then cheaper passes, then fewer triangles).
+ *  - scale: multiplies the pixel ratio (the device ratio capped at maxPixelRatio) of the drawing buffer; the browser
+ *    scales the canvas up to its CSS size and the HTML text (HUD, panel, labels, arrows) stays sharp. This is what helps
+ *    a fill-limited GPU.
+ *  - lite: the faint additive glass x-ray pass (deep brain parts seen through the cortex, alpha 0.0015 / rim 0.035) is
+ *    not drawn. It is decorative (no colour, activity or label depends on it).
+ *  - lod: the glass and the full-body meshes are drawn from vertex-clustered copies (clusterDecimate, cells of
+ *    lodGlassMm / lodBodyMm; the brain then has about 30 % of its glass triangles). A software renderer is limited by
+ *    triangles, not pixels (SwiftShader: 975 k triangles per frame at the default view, 3-4 fps at any render scale;
+ *    round4/R4-scene-NOTES.md). The motor regions, outlines, marks, the player's arm and every colour are unchanged.
+ */
+export const QUALITY_LEVELS = Object.freeze([
+  Object.freeze({ name: 'full', scale: 1, lite: false, lod: null }),
+  Object.freeze({ name: 'scale-0.75', scale: 0.75, lite: false, lod: null }),
+  Object.freeze({ name: 'scale-0.5', scale: 0.5, lite: false, lod: null }),
+  Object.freeze({ name: 'lite-0.5', scale: 0.5, lite: true, lod: null }),
+  Object.freeze({ name: 'lod-0.5', scale: 0.5, lite: true, lod: Object.freeze({ glassMm: 2.5, bodyMm: 4 }) }),
+  Object.freeze({ name: 'lod-0.4', scale: 0.4, lite: true, lod: Object.freeze({ glassMm: 4, bodyMm: 7, armMm: 2.5 }) })
+]);
+/* LOD cells (source mm): 2.5 mm glass = 314 k -> 93 k triangles, about 5 px at the 0.5 render scale; 4 mm glass = 52 k.
+ * The body is 0.4-1.5 m from the eye, where 4-7 mm is 1-3 px. Measured in round4/R4-scene-NOTES.md. */
+/** Automatic controller (hysteresis; display choices, measured on SwiftShader and the real GPU, round4/R4-scene-NOTES.md).
+ *  - A frame interval is a sample only when it is in (0, gapMs]: a longer gap is a pause, a tab switch or a QA step, not
+ *    a frame time, and it is ignored. The decision uses the MEDIAN of the last `window` samples (one hitch, a screenshot
+ *    or a first upload, does not move it).
+ *  - Down: the median stays above slowMs for downHoldMs AND downMinFrames samples -> one level cheaper (two levels when
+ *    the median is above jumpMs, three above twice jumpMs: a very slow renderer converges in a few seconds).
+ *  - Up: the median stays below fastMs for upHoldMs AND upMinFrames samples -> one level better, unless that level was
+ *    left for being slow less than rememberMs ago (no down-up-down oscillation).
+ *  - Between fastMs and slowMs nothing changes. After a change the next settleFrames samples are skipped (the buffer is
+ *    re-allocated in that frame).
+ *  - R4-fix (code review M2): a down-step that swaps the meshes (into a level with a different `lod`) also needs the
+ *    MEAN of the window above lodDownMeanMs, so a median sitting right at slowMs does not swap meshes back and forth;
+ *    and each time a level is left for being slow again, its block lasts one rememberMs longer (30 s, 60 s, 90 s ...). */
+export const QUALITY_AUTO = Object.freeze({
+  slowMs: 1000 / 40, fastMs: 1000 / 55, jumpMs: 1000 / 12, window: 7, gapMs: 1000,
+  downHoldMs: 700, downMinFrames: 4, upHoldMs: 6000, upMinFrames: 90, rememberMs: 30000, settleFrames: 2,
+  lodDownMeanMs: 1000 / 36
+});
+
+/** A fresh controller state for `mode` (QUALITY_MODES). `level` is the QUALITY_LEVELS index. */
+export function qualityStart(mode = 'auto', levels = QUALITY_LEVELS) {
+  const m = QUALITY_MODES.includes(mode) ? mode : 'auto';
+  return { mode: m, level: m === 'low' ? levels.length - 1 : 0, samples: [], slowFor: 0, slowN: 0, fastFor: 0, fastN: 0, settle: 0, clockMs: 0, blockedUntil: {}, slowLeft: {}, changes: 0, lastChange: null };
+}
+
+const medianOf = a => { const s = a.slice().sort((x, y) => x - y); const n = s.length; return n ? (n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
+
+/** Pure controller step: state (qualityStart) + one frame interval (ms) -> the next state (a new object). 'high' and
+ * 'low' never change level. See QUALITY_AUTO for the rules. `lastChange` records { from, to, medianMs, atMs, why }. */
+export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALITY_LEVELS) {
+  const o = { ...QUALITY_AUTO, ...opts };
+  const s = state && typeof state === 'object' ? state : qualityStart('auto', levels);
+  const next = { ...s, samples: s.samples.slice(), blockedUntil: { ...s.blockedUntil }, slowLeft: { ...(s.slowLeft || {}) } };
+  const last = levels.length - 1;
+  if (next.mode === 'high') { next.level = 0; return next; }
+  if (next.mode === 'low') { next.level = last; return next; }
+  if (!(Number.isFinite(frameMs) && frameMs > 0 && frameMs <= o.gapMs)) return next; // a gap is not a frame time
+  next.clockMs += frameMs;
+  if (next.settle > 0) { next.settle -= 1; return next; }
+  next.samples.push(frameMs);
+  if (next.samples.length > o.window) next.samples.shift();
+  if (next.samples.length < Math.min(3, o.window)) return next;
+  const med = medianOf(next.samples);
+  if (med > o.slowMs) { next.slowFor += frameMs; next.slowN += 1; next.fastFor = 0; next.fastN = 0; }
+  else if (med < o.fastMs) { next.fastFor += frameMs; next.fastN += 1; next.slowFor = 0; next.slowN = 0; }
+  else { next.slowFor = 0; next.slowN = 0; next.fastFor = 0; next.fastN = 0; }
+  let to = next.level, why = '';
+  if (next.slowFor >= o.downHoldMs && next.slowN >= o.downMinFrames && next.level < last) {
+    const cand = Math.min(last, next.level + (med > 2 * o.jumpMs ? 3 : med > o.jumpMs ? 2 : 1));
+    const lodKey = l => (levels[l] && levels[l].lod ? JSON.stringify(levels[l].lod) : '');
+    const mean = next.samples.reduce((a, b) => a + b, 0) / next.samples.length;
+    if (lodKey(cand) === lodKey(next.level) || mean > o.lodDownMeanMs) {
+      to = cand; why = 'slow';
+      for (let l = next.level; l < to; l++) {
+        next.slowLeft[l] = (next.slowLeft[l] || 0) + 1;
+        next.blockedUntil[l] = next.clockMs + o.rememberMs * next.slowLeft[l];
+      }
+    }
+  } else if (next.fastFor >= o.upHoldMs && next.fastN >= o.upMinFrames && next.level > 0 && !(next.blockedUntil[next.level - 1] > next.clockMs)) {
+    to = next.level - 1; why = 'fast';
+  }
+  if (to !== next.level) {
+    next.lastChange = { from: next.level, to, medianMs: Math.round(med * 10) / 10, atMs: Math.round(next.clockMs), why };
+    next.level = to; next.changes += 1;
+    next.samples = []; next.slowFor = 0; next.slowN = 0; next.fastFor = 0; next.fastN = 0; next.settle = o.settleFrames;
+  }
+  return next;
+}
+
+/**
+ * Vertex-clustering decimation (pure; the D8 'lod' quality levels). Vertices are merged per cubic cell of edge `cell`
+ * (source units: mm for the brain and body), each cluster sits at its members' mean; a triangle whose three corners
+ * fall into fewer than three clusters is dropped. Corner order (winding) is kept. `attrs` ({ name: Float32Array, one
+ * value per vertex }) are averaged per cluster. Used only for the lowest quality levels: the shape stays the same at
+ * screen scale (the cell is a few pixels or less), colours and meaning are untouched (motor regions are never decimated).
+ * Returns { positions: Float32Array, indices: Uint32Array, attrs, vertices, triangles }.
+ */
+export function clusterDecimate(positions, indices, cell, attrs = null) {
+  const n = positions.length / 3;
+  if (!(cell > 0) || n < 3) return { positions: Float32Array.from(positions), indices: Uint32Array.from(indices), attrs, vertices: n, triangles: indices.length / 3 };
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[3 * i], y = positions[3 * i + 1], z = positions[3 * i + 2];
+    if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y;
+  }
+  const nx = Math.floor((x1 - x0) / cell) + 2, ny = Math.floor((y1 - y0) / cell) + 2;
+  const map = new Int32Array(n), ids = new Map();
+  const sum = [];
+  const names = attrs ? Object.keys(attrs) : [];
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    const ix = Math.floor((positions[3 * i] - x0) / cell), iy = Math.floor((positions[3 * i + 1] - y0) / cell), iz = Math.floor((positions[3 * i + 2] - z0) / cell);
+    const key = ix + nx * (iy + ny * iz);
+    let c = ids.get(key);
+    if (c === undefined) { c = k++; ids.set(key, c); sum.push(0, 0, 0, 0); }
+    map[i] = c;
+    sum[4 * c] += positions[3 * i]; sum[4 * c + 1] += positions[3 * i + 1]; sum[4 * c + 2] += positions[3 * i + 2]; sum[4 * c + 3] += 1;
+  }
+  const out = new Float32Array(3 * k);
+  for (let c = 0; c < k; c++) { const w = sum[4 * c + 3]; out[3 * c] = sum[4 * c] / w; out[3 * c + 1] = sum[4 * c + 1] / w; out[3 * c + 2] = sum[4 * c + 2] / w; }
+  let outAttrs = null;
+  if (names.length) {
+    outAttrs = {};
+    for (const name of names) {
+      const src = attrs[name], acc = new Float32Array(k);
+      for (let i = 0; i < n; i++) acc[map[i]] += src[i];
+      for (let c = 0; c < k; c++) acc[c] /= sum[4 * c + 3];
+      outAttrs[name] = acc;
+    }
+  }
+  const tri = new Uint32Array(indices.length);
+  let m = 0;
+  for (let t = 0; t < indices.length; t += 3) {
+    const a = map[indices[t]], b = map[indices[t + 1]], c = map[indices[t + 2]];
+    if (a === b || b === c || a === c) continue;
+    tri[m++] = a; tri[m++] = b; tri[m++] = c;
+  }
+  return { positions: out, indices: tri.slice(0, m), attrs: outAttrs, vertices: k, triangles: m / 3 };
+}
+
+/**
+ * Index-only clustering LOD (pure; the arm in the cheapest quality level): the same cells as clusterDecimate, but every
+ * cluster is represented by its ORIGINAL member vertex nearest the cluster mean, so the LOD is a new index buffer over
+ * the unchanged vertex arrays. That suits CPU-skinned meshes (the arm muscles): skinning still writes the full position
+ * and normal buffers, and the LOD draws a subset of them, so no extra per-frame work is needed. Returns
+ * { indices: Uint32Array, triangles, clusters }.
+ */
+export function clusterIndexLod(positions, indices, cell) {
+  const n = positions.length / 3;
+  if (!(cell > 0) || n < 3) return { indices: Uint32Array.from(indices), triangles: indices.length / 3, clusters: n };
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[3 * i], y = positions[3 * i + 1], z = positions[3 * i + 2];
+    if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y;
+  }
+  const nx = Math.floor((x1 - x0) / cell) + 2, ny = Math.floor((y1 - y0) / cell) + 2;
+  const map = new Int32Array(n), ids = new Map(), sum = [];
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    const key = Math.floor((positions[3 * i] - x0) / cell) + nx * (Math.floor((positions[3 * i + 1] - y0) / cell) + ny * Math.floor((positions[3 * i + 2] - z0) / cell));
+    let c = ids.get(key);
+    if (c === undefined) { c = k++; ids.set(key, c); sum.push(0, 0, 0, 0); }
+    map[i] = c;
+    sum[4 * c] += positions[3 * i]; sum[4 * c + 1] += positions[3 * i + 1]; sum[4 * c + 2] += positions[3 * i + 2]; sum[4 * c + 3] += 1;
+  }
+  const rep = new Int32Array(k).fill(-1), best = new Float64Array(k).fill(Infinity);
+  for (let i = 0; i < n; i++) {
+    const c = map[i], w = sum[4 * c + 3];
+    const d = (positions[3 * i] - sum[4 * c] / w) ** 2 + (positions[3 * i + 1] - sum[4 * c + 1] / w) ** 2 + (positions[3 * i + 2] - sum[4 * c + 2] / w) ** 2;
+    if (d < best[c]) { best[c] = d; rep[c] = i; }
+  }
+  const tri = new Uint32Array(indices.length);
+  let m = 0;
+  for (let t = 0; t < indices.length; t += 3) {
+    const a = map[indices[t]], b = map[indices[t + 1]], c = map[indices[t + 2]];
+    if (a === b || b === c || a === c) continue;
+    tri[m++] = rep[a]; tri[m++] = rep[b]; tri[m++] = rep[c];
+  }
+  return { indices: tri.slice(0, m), triangles: m / 3, clusters: k };
+}
+
+/** The pixel ratio a quality level draws at: the device ratio capped at maxPixelRatio, times the level's scale (never
+ * below minRatio). */
+export function qualityPixelRatio(level, deviceRatio = 1, maxPixelRatio = 2, levels = QUALITY_LEVELS, minRatio = 0.25) {
+  const cap = Math.min(maxPixelRatio, Number.isFinite(deviceRatio) && deviceRatio > 0 ? deviceRatio : 1);
+  const L = levels[Math.max(0, Math.min(levels.length - 1, level | 0))];
+  return Math.max(minRatio, Math.round(cap * L.scale * 1000) / 1000);
+}
+
+/* ------------------------------------------------------------------ R4-scene: camera range independent of the brain distance */
+
+/** Camera far plane for a brain whose farthest drawn point is `brainFarM` metres from the eye (pure): at least the base
+ * far plane, else farMargin times the brain's far extent, so a brain moved k times farther (and scaled k times, R4-view
+ * D5) is never clipped. The near plane stays CAMERA.near: the player's own hand is 0.2-0.6 m from the eye. */
+export const CAMERA_RANGE = Object.freeze({ farMargin: 1.5, depthBits: 24 });
+export function farPlaneFor(brainFarM, baseFar = CAMERA.far, o = CAMERA_RANGE) {
+  return Number.isFinite(brainFarM) && brainFarM > 0 ? Math.max(baseFar, Math.ceil(brainFarM * o.farMargin)) : baseFar;
+}
+/** Smallest depth step (m) a `bits`-bit depth buffer resolves at distance d for a perspective camera (near, far): about
+ * d^2 (far - near) / (near far 2^bits). With near 0.02 m, far 500 m and a 24-bit buffer, the round-3 brain (6-23 m from
+ * the eye, about 0.1 m of world per source mm) resolves 0.001-0.016 brain-mm; drawn k = 6 times farther (36-138 m, 0.6 m
+ * per mm) 0.006-0.095 brain-mm. Both stay far below the outline lift (REGION_OUTLINE.liftMm 0.8 mm), and the depth
+ * pre-passes draw the SAME triangles, so the brain's own layers keep their order (renders at k = 1 / 3 / 6:
+ * round4/R4-scene-NOTES.md). The near plane cannot grow: the player's hand is 0.2-0.6 m from the eye. */
+export function depthStepAt(d, near = CAMERA.near, far = CAMERA.far, bits = CAMERA_RANGE.depthBits) {
+  return (d * d * (far - near)) / (near * far * 2 ** bits);
+}
+/** A brainViewTransform-like result moved k times farther from the eye and scaled k times (same on-screen size): the
+ * world matrix pre-multiplied by a uniform scale about the camera origin. The R4-scene QA test hook (?qa=1&nsBrainK=k)
+ * and the unit tests use it to prove the scene is independent of the brain distance. Pure; k = 1 returns `t`. */
+export function scaleBrainDistance(t, k) {
+  if (!t || !(Number.isFinite(k) && k > 0) || k === 1) return t;
+  const m = Float64Array.from(t.matrix);
+  for (let i = 0; i < 15; i++) if (i !== 3 && i !== 7 && i !== 11) m[i] *= k;
+  const out = { ...t, matrix: m, distanceScale: k };
+  if (t.inverse && t.inverse.length === 16) { // inverse(S M) = M^-1 S^-1: the first three columns divided by k
+    const v = Float64Array.from(t.inverse);
+    for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) v[i] /= k;
+    out.inverse = v;
+  }
+  if (Array.isArray(t.pivotWorld) || (t.pivotWorld && t.pivotWorld.length === 3)) out.pivotWorld = Object.freeze([t.pivotWorld[0] * k, t.pivotWorld[1] * k, t.pivotWorld[2] * k]);
+  if (Number.isFinite(t.k)) out.k = t.k * k;
+  return out;
 }
 
 /* ------------------------------------------------------------------ strip shader patch (A2-render R1) */
@@ -378,9 +668,13 @@ const ARM_EMISSIVE_HOOK = '#include <emissivemap_fragment>';
  * view-space normal and view vector, the fragment shader sets the alpha before Three's final colour write (r154+
  * `opaque_fragment`, older `output_fragment`). Hooks: vertex `#include <project_vertex>` (mvPosition in scope; the
  * `normal` attribute and `normalMatrix` are declared by Three for every built-in material). */
-const GLASS_VARYINGS = 'varying vec3 vNsNormal;\nvarying vec3 vNsView;\n';
+// R4-integrator (R4-view D5 glass fix, prototype harness/run-R4-view-6/scene-glass-prototype.diff, viewed): with the
+// perspective squash (nsFarEye.w = K > 1) the glass rim uses the brain's RIGID normal (nsRigidN = view x rigid rotation)
+// and the view vector from the far eye to the real, unsquashed point, so the fresnel rim looks as it would on the real
+// brain seen from K times farther. K <= 1 keeps the round-3 lines exactly.
+const GLASS_VARYINGS = 'varying vec3 vNsNormal;\nvarying vec3 vNsView;\nuniform mat3 nsRigidN;\nuniform vec4 nsFarEye;\n';
 const GLASS_VERTEX_HOOK = '#include <project_vertex>';
-const GLASS_VERTEX_GLSL = 'vNsNormal = normalize( normalMatrix * normal );\nvNsView = - mvPosition.xyz;';
+const GLASS_VERTEX_GLSL = 'if (nsFarEye.w > 1.0) {\n  vNsNormal = normalize( nsRigidN * normal );\n  vec3 nsC = nsFarEye.xyz; vec3 nsU = normalize(nsC); vec3 nsD = mvPosition.xyz - nsC;\n  vNsView = - nsFarEye.w * nsC - (nsD + (nsFarEye.w - 1.0) * dot(nsD, nsU) * nsU);\n} else {\n  vNsNormal = normalize( normalMatrix * normal );\n  vNsView = - mvPosition.xyz;\n}';
 const GLASS_RIM_GLSL = [
   'float nsFacing = abs( dot( normalize( vNsNormal ), normalize( vNsView ) ) );',
   'diffuseColor.a = mix( diffuseColor.a, nsRimOpacity, pow( 1.0 - nsFacing, nsRimPower ) );'
@@ -654,9 +948,9 @@ export function activityShadeInto(baseLinear, v, out, glow = ACTIVITY_GLOW) {
 
 /** Region style constants: ns-brain REGION_STYLE when present (U2a owns the values), else this identical mirror. */
 const REGION_STYLE_FALLBACK = Object.freeze({
-  restOpacity: 0.3, activatedOpacity: 0.44, activatedOpacityMax: 0.52, activatedOpacityPerExtra: 0.025,
-  activatedShadeMix: 0.24, activatedShade: Object.freeze([0.88, 0.80, 0.62]),
-  leftArmTint: Object.freeze([0.10, 0.52, 0.62]), otherTint: Object.freeze([0.33, 0.33, 0.45]), otherTintAlt: Object.freeze([0.27, 0.27, 0.37]),
+  restOpacity: 0.3, activatedOpacity: 0.54, activatedOpacityMax: 0.64, activatedOpacityPerExtra: 0.025,
+  activatedShadeMix: 0.34, activatedShade: Object.freeze([0.88, 0.80, 0.62]),
+  leftArmTint: KEY_COLORS.leftArmTint, otherTint: KEY_COLORS.otherTint, otherTintAlt: KEY_COLORS.otherTintAlt,
   leftArmOutline: Object.freeze([0.55, 0.95, 1.0]), hoverOpacityBoost: 0.08, leftArmLabel: 'LEFT ARM (right hemisphere)'
 });
 export function regionStyleConstants() {
@@ -677,13 +971,14 @@ export const REGION_RENDER = Object.freeze({
   hoverLine: 0xfff3a0, lineOpacity: 1, leftArmLineOpacity: 0.22,
   /** Non-left-arm regions: faint outlines so every motor area reads as a region (not glass), and a small rest opacity
    * lift; the left-arm regions keep the stronger cyan identity. */
-  otherLine: 0xb9b4d6, otherLineOpacity: 0.16, otherOpacityLift: 0.06,
+  otherLine: KEY_COLORS.otherLine, otherLineOpacity: 0.16, otherOpacityLift: 0.06,
   /** Activated regions (persistent until Reset body) also get a warm gold outline, so the marks stay findable on the
    * busy strip; the fill change itself stays slight (shade + opacity, REGION_STYLE). */
   activatedLine: 0xffc65c, activatedLineOpacity: 0.95,
   /** Group (territory) outlines: the LEFT-ARM territory (right hemisphere) in bright cyan, every other body-part group
-   * in a soft lavender, so the left-arm / other-body distinction reads at a glance. */
-  territoryLine: 0x8cf2ff, territoryLineOpacity: 1, groupLine: 0xd2cdf0, groupLineOpacity: 0.32
+   * in a soft warm grey (R4-access: ns-colors KEY_COLORS; the lavender read like the cyan for red-green colour-blind
+   * players), so the left-arm / other-body distinction reads at a glance. */
+  territoryLine: KEY_COLORS.leftArmLine, territoryLineOpacity: 1, groupLine: KEY_COLORS.otherGroupLine, groupLineOpacity: 0.32
 });
 /** R3-scene outline smoothing (smoothTerritoryOutline options, source mm): Chaikin rounds, lift off the surface, specks
  * shorter than minChainMm dropped. Display choices. */
@@ -732,6 +1027,69 @@ export function weldedBoundarySegments(parts, quantum = 1e-3) {
     out.push(pos[3 * u], pos[3 * u + 1], pos[3 * u + 2], pos[3 * w], pos[3 * w + 1], pos[3 * w + 2]);
   }
   return Float32Array.from(out);
+}
+
+/** R4-scene (left-arm identity at every activity level, round-3 m10): a cyan RIM along the inside of the left-arm
+ * territory's outer border. The fill keeps the ONE shared activity ramp (same colours on brain and muscles); only a band
+ * widthMm wide at the territory edge mixes toward the territory cyan (REGION_RENDER.territoryLine), so the left-arm
+ * strip is still told apart from every other area when its activity is low (dark ramp colours) or high. Display only. */
+export const LEFT_ARM_RIM = Object.freeze({ widthMm: 2.5, mix: 0.85, alpha: 0.9, glow: 0.45 });
+
+/** Per-vertex closeness (pure) to a set of boundary segments (Float32Array, 6 floats per segment, e.g.
+ * weldedBoundarySegments): 1 on the boundary, falling smoothly to 0 at widthMm (smoothstep). Uses a uniform grid of
+ * cell widthMm, so the cost is about linear in vertices + segments. */
+export function boundaryCloseness(positions, segments, widthMm = LEFT_ARM_RIM.widthMm) {
+  const n = positions.length / 3, out = new Float32Array(n);
+  const m = segments ? segments.length / 6 : 0;
+  if (!m || !(widthMm > 0)) return out;
+  const cell = widthMm, grid = new Map();
+  const key = (i, j, k) => `${i},${j},${k}`;
+  for (let s = 0; s < m; s++) {
+    const o = 6 * s;
+    const lo = [Math.min(segments[o], segments[o + 3]), Math.min(segments[o + 1], segments[o + 4]), Math.min(segments[o + 2], segments[o + 5])];
+    const hi = [Math.max(segments[o], segments[o + 3]), Math.max(segments[o + 1], segments[o + 4]), Math.max(segments[o + 2], segments[o + 5])];
+    for (let i = Math.floor(lo[0] / cell); i <= Math.floor(hi[0] / cell); i++) for (let j = Math.floor(lo[1] / cell); j <= Math.floor(hi[1] / cell); j++) for (let k = Math.floor(lo[2] / cell); k <= Math.floor(hi[2] / cell); k++) {
+      const kk = key(i, j, k); let l = grid.get(kk); if (!l) { l = []; grid.set(kk, l); } l.push(s);
+    }
+  }
+  const w2 = widthMm * widthMm;
+  for (let v = 0; v < n; v++) {
+    const px = positions[3 * v], py = positions[3 * v + 1], pz = positions[3 * v + 2];
+    const ci = Math.floor(px / cell), cj = Math.floor(py / cell), ck = Math.floor(pz / cell);
+    let best = w2;
+    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (let k = ck - 1; k <= ck + 1; k++) {
+      const l = grid.get(key(i, j, k)); if (!l) continue;
+      for (const s of l) {
+        const o = 6 * s, ax = segments[o], ay = segments[o + 1], az = segments[o + 2];
+        const dx = segments[o + 3] - ax, dy = segments[o + 4] - ay, dz = segments[o + 5] - az;
+        const L = dx * dx + dy * dy + dz * dz;
+        const t = L > 0 ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / L)) : 0;
+        const ex = ax + t * dx - px, ey = ay + t * dy - py, ez = az + t * dz - pz;
+        const d2 = ex * ex + ey * ey + ez * ez;
+        if (d2 < best) best = d2;
+      }
+    }
+    if (best < w2) { const x = 1 - Math.sqrt(best) / widthMm; out[v] = x * x * (3 - 2 * x); }
+  }
+  return out;
+}
+
+const EDGE_VERTEX_HOOK = '#include <begin_vertex>';
+const EDGE_COLOR_HOOK = '#include <color_fragment>';
+const EDGE_EMISSIVE_HOOK = '#include <emissivemap_fragment>';
+/** Shader patch (pure) for the left-arm rim: a float vertex attribute nsEdge (boundaryCloseness) mixes the fragment's
+ * colour AND its emission (the ramp glow) toward the uniform nsEdgeColor by nsEdgeParams.x (the emission toward
+ * nsEdgeColor x nsEdgeParams.z), and raises its alpha to at least nsEdgeParams.y, all scaled by nsEdge (so the rim stays
+ * cyan instead of adding up to white over a bright ramp colour). null when a hook is missing (the region is then drawn without a rim). */
+export function patchEdgeShaders(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  if (!vertexShader.includes(EDGE_VERTEX_HOOK) || !fragmentShader.includes(EDGE_COLOR_HOOK) || !fragmentShader.includes(EDGE_EMISSIVE_HOOK)) return null;
+  return {
+    vertexShader: 'attribute float nsEdge;\nvarying float vNsEdge;\n' + vertexShader.replace(EDGE_VERTEX_HOOK, `${EDGE_VERTEX_HOOK}\nvNsEdge = nsEdge;`),
+    fragmentShader: 'varying float vNsEdge;\nuniform vec3 nsEdgeColor;\nuniform vec3 nsEdgeParams;\n' + fragmentShader
+      .replace(EDGE_COLOR_HOOK, `${EDGE_COLOR_HOOK}\ndiffuseColor.rgb = mix( diffuseColor.rgb, nsEdgeColor, vNsEdge * nsEdgeParams.x );\ndiffuseColor.a = max( diffuseColor.a, vNsEdge * nsEdgeParams.y );`)
+      .replace(EDGE_EMISSIVE_HOOK, `${EDGE_EMISSIVE_HOOK}\ntotalEmissiveRadiance = mix( totalEmissiveRadiance, nsEdgeColor * nsEdgeParams.z, vNsEdge * nsEdgeParams.x );`)
+  };
 }
 
 /** Display style of one region for its simulated state (pure; `out` reused when given): { tint (identity, linear),
@@ -1021,13 +1379,66 @@ export function hullSignedDistance(hull, x, y) {
   return inside ? -dmin : dmin;
 }
 
+/** R4-integrator (D7 "the guide never covers the brain"): does an axis-aligned rect { x0, y0, x1, y1 } overlap a
+ * convexHull2d polygon (same units)? Separating-axis test over the rect's two axes and the hull's edge normals; touching
+ * edges count as no overlap. Pure. */
+export function rectHitsConvexHull(hull, rect) {
+  const n = hull ? hull.length >> 1 : 0;
+  if (n === 0 || !rect || ![rect.x0, rect.y0, rect.x1, rect.y1].every(Number.isFinite)) return false;
+  let hx0 = Infinity, hx1 = -Infinity, hy0 = Infinity, hy1 = -Infinity;
+  for (let i = 0; i < n; i++) { const x = hull[2 * i], y = hull[2 * i + 1]; if (x < hx0) hx0 = x; if (x > hx1) hx1 = x; if (y < hy0) hy0 = y; if (y > hy1) hy1 = y; }
+  if (hx1 <= rect.x0 || hx0 >= rect.x1 || hy1 <= rect.y0 || hy0 >= rect.y1) return false;
+  if (n < 3) return true;
+  const cs = [[rect.x0, rect.y0], [rect.x1, rect.y0], [rect.x1, rect.y1], [rect.x0, rect.y1]];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, nx = hull[2 * j + 1] - hull[2 * i + 1], ny = -(hull[2 * j] - hull[2 * i]);
+    let p0 = Infinity, p1 = -Infinity, q0 = Infinity, q1 = -Infinity;
+    for (let k = 0; k < n; k++) { const d = nx * hull[2 * k] + ny * hull[2 * k + 1]; if (d < p0) p0 = d; if (d > p1) p1 = d; }
+    for (const [x, y] of cs) { const d = nx * x + ny * y; if (d < q0) q0 = d; if (d > q1) q1 = d; }
+    if (p1 <= q0 || q1 <= p0) return false;
+  }
+  return true;
+}
+
+/** R4-integrator (D7): where the "Try this" line goes while the brain covers its place in the status card: a small chip
+ * of chipMaxW x chipH CSS px (about the card line's width) inside the usable view (`usable`, CSS px { x0, y0, x1, y1 }:
+ * left of the information column, above the portrait band). Candidates, in order: bottom right, bottom centre, top right,
+ * top centre, bottom left (the bottom row stays above a bottomReservePx row kept for the look-around toast; the top left
+ * is the status card itself). `clear(rect)` says whether a box is free (of the brain, the arrows ...).
+ * Returns { x, y, w, h } or null when no spot is clear (the line then is not drawn). Pure. */
+export const GUIDE_FLOAT = Object.freeze({ chipMaxW: 280, gapPx: 12, bottomReservePx: 48 });
+export function guideFloatSpot({ usable, chipH = 40, clear = () => true, o = GUIDE_FLOAT, preferTop = false, prefer = null } = {}) {
+  if (!usable || ![usable.x0, usable.y0, usable.x1, usable.y1].every(Number.isFinite)) return null;
+  const g = o.gapPx, w = Math.min(o.chipMaxW, usable.x1 - usable.x0 - 2 * g), h = Math.max(1, chipH);
+  if (!(w > 80) || !(usable.y1 - usable.y0 > h + 2 * g)) return null;
+  const cx = (usable.x0 + usable.x1) / 2 - w / 2, xl = usable.x0 + g, xr = usable.x1 - g - w;
+  const yb = usable.y1 - o.bottomReservePx - h, yt = usable.y0 + g;
+  // R4-polish: looking down (preferTop), the legs you are watching fill the bottom of the view, so the top spots come
+  // first (run-R4-polish-0-baseline 09b: the chip sat on the moving right knee).
+  const order = preferTop ? [[xr, yt], [cx, yt], [xr, yb], [cx, yb], [xl, yb]] : [[xr, yb], [cx, yb], [xr, yt], [cx, yt], [xl, yb]];
+  // R4-fix (review RP9): the spot the chip already has comes first while it stays clear, so the line does not jump
+  // between screen places during one goal (prefer = { x, y } of the last chip).
+  if (prefer && Number.isFinite(prefer.x) && Number.isFinite(prefer.y)) order.unshift([prefer.x, prefer.y]);
+  for (const [x, y] of order) {
+    const r = { x0: x, y0: y, x1: x + w, y1: y + h };
+    if (y >= usable.y0 && clear(r)) return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+  }
+  return null;
+}
+
 /** R3-scene arrow rules (display choices). gap: "a centimetre or a few centimetres" off the brain, read as gapCm on screen
  * (CSS 96 px/in) and kept within gapMinFrac..gapMaxFrac of the view WIDTH (round-3 decision D1(d): roughly 2-6 %).
  * maxLookDeg: an arrow should be reachable by the crosshair with |yaw| and |pitch| <= maxLookDeg (D1(c)/(d)).
  * slideStepPx: candidate spacing when an arrow slides along its side of the brain to clear an obstacle. */
 /** Fallback distance (m) of the arrows' world anchors when the transform has no pivot (they are directions). */
 export const BRAIN_ANCHOR_DIST_FALLBACK_M = 6;
-export const ARROW_PLACEMENT = Object.freeze({ gapCm: 1.2, gapMinFrac: 0.03, gapMaxFrac: 0.055, slideStepPx: 6, maxLookDeg: 40, padPx: 4, separationPx: 8, cornerStepDeg: 5, cornerMaxDeg: 60, cornerCostPerDeg: 8 });
+// R4-integrator (R4-player 1.6): separationPx 8 -> 24 (half an arrow between two arrows): at 2560x1080 the forward and
+// left arrows sat 11 px apart at the top-left corner and read as one control (run-R4-integrator-2-shots).
+// R4-fix (reviews F8 / RP7, "one arrow per side"): when the forward or back arrow has no clear spot on its own side
+// (the brain fills the view's height) it goes beside a corner of the brain; a turn toward the LEFT costs
+// cornerLeftCostFactor times more, so it takes a right-hand corner where it can. The left side holds the player's arm,
+// the status card and the left arrow, and the forward and left arrows stacked at the top left (720x1280, 2560x1080).
+export const ARROW_PLACEMENT = Object.freeze({ gapCm: 1.2, gapMinFrac: 0.03, gapMaxFrac: 0.055, slideStepPx: 6, maxLookDeg: 40, padPx: 4, separationPx: 24, cornerStepDeg: 5, cornerMaxDeg: 60, cornerCostPerDeg: 8, cornerLeftCostFactor: 1.6 });
 
 /** The arrow gap in CSS px for a view width (pure): clamp(gapCm on screen, gapMinFrac x width, gapMaxFrac x width). */
 export function arrowGapPx(width, o = ARROW_PLACEMENT) {
@@ -1039,6 +1450,31 @@ export function arrowGapPx(width, o = ARROW_PLACEMENT) {
 export function lookForPoint(x, y, { width, height, tanHalfFovY = Math.tan(35 * DEG) }) {
   const a = ((2 * x) / width - 1) * tanHalfFovY * (width / height), b = (1 - (2 * y) / height) * tanHalfFovY;
   return { yawDeg: -Math.atan(a) / DEG, pitchDeg: Math.atan2(b, Math.hypot(a, 1)) / DEG };
+}
+
+/** R4-scene: the A/D x W/S sample grid of the player's arm for the arrow plan (ns-app armEnvelope: hand x at xSamples
+ * points across the A/D range and depthSamples points across the W/S range, at the default look). */
+export const ARM_ENVELOPE_GRID = Object.freeze({ xSamples: 9, depthSamples: 3 });
+
+/** R4-scene: the arm's sweep envelope from a list of armAvoidShapes results (one per sampled pose; viewport fractions,
+ * y down). Pure. Returns { poses: [{ rects, ellipses }], count } or null when no pose has a shape. */
+export function armSweepEnvelope(shapeList) {
+  const poses = [];
+  for (const sh of Array.isArray(shapeList) ? shapeList : []) {
+    if (!sh) continue;
+    const rects = (sh.rects || []).filter(r => r && [r.x0, r.y0, r.x1, r.y1].every(Number.isFinite)).map(r => ({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }));
+    const ellipses = (sh.ellipses || []).filter(e => e && [e.cx, e.cy, e.rx, e.ry].every(Number.isFinite)).map(e => ({ cx: e.cx, cy: e.cy, rx: e.rx, ry: e.ry }));
+    if (rects.length || ellipses.length) poses.push({ rects, ellipses });
+  }
+  return poses.length ? { poses, count: poses.length } : null;
+}
+
+/** How many sampled arm poses of an envelope cover box b (viewport fractions). Pure. */
+export function armEnvelopeHits(b, envelope) {
+  if (!envelope || !Array.isArray(envelope.poses)) return 0;
+  let n = 0;
+  for (const p of envelope.poses) if (hitsAvoid(b, p)) n++;
+  return n;
 }
 
 /**
@@ -1059,7 +1495,7 @@ export function lookForPoint(x, y, { width, height, tanHalfFovY = Math.tan(35 * 
 export function placeOrbitArrows(hull, {
   width, height, centre = null, sizePx = ORBIT_ARROWS.sizePx, gapPx = null, marginPx = ORBIT_ARROWS.marginPx, topPx = 0,
   obstacles = [], tanHalfFovY = Math.tan(35 * DEG), rules = ARROW_PLACEMENT, order = ['forward', 'back', 'left', 'right'],
-  soft = null
+  soft = null, armEnvelope = null
 } = {}) {
   const n = hull ? hull.length >> 1 : 0;
   if (n < 3 || !(width > 0 && height > 0)) return null;
@@ -1091,10 +1527,17 @@ export function placeOrbitArrows(hull, {
     // R3-polish (R3-player item 14): `soft` shapes (the player's arm at the default pose, viewport fractions as
     // hitsAvoid takes them) are avoided when a clear, comfortable spot exists off them (class 0); a spot on the arm is
     // class 0.5, still preferred to anything that is not clear or comfortable.
-    const onArm = Boolean(soft) && clear && hitsAvoid({ x0: (x - r) / width, y0: (y - r) / height, x1: (x + r) / width, y1: (y + r) / height }, soft);
-    const cls = clear && comfortable ? (onArm ? 0.5 : 0) : clear ? 1 : offScreen && apart && comfortable ? 2 : offScreen && apart ? 3 : 4;
-    return { x, y, clear, onScreen, offScreen, comfortable, look, slidePx: Math.abs(slide), cls, onArm };
+    const fb = { x0: (x - r) / width, y0: (y - r) / height, x1: (x + r) / width, y1: (y + r) / height };
+    const onArm = Boolean(soft) && clear && hitsAvoid(fb, soft);
+    // R4-scene: `armEnvelope` (armSweepEnvelope: the arm over its whole A/D x W/S range at the default look) is a
+    // placement obstacle too. A clear, comfortable spot off EVERY sampled pose is class 0; when a side has none, the
+    // consistent fallback is the clear, comfortable spot off the start pose that the FEWEST sampled poses cover (class
+    // 0.25, ranked by armHits; the arrow then fades while the hand is actually over it and stays clickable).
+    const armHits = armEnvelope && clear && comfortable ? armEnvelopeHits(fb, armEnvelope) : 0;
+    const cls = clear && comfortable ? (onArm ? 0.5 : armHits > 0 ? 0.25 : 0) : clear ? 1 : offScreen && apart && comfortable ? 2 : offScreen && apart ? 3 : 4;
+    return { x, y, clear, onScreen, offScreen, comfortable, look, slidePx: Math.abs(slide), cls, onArm, armHits };
   };
+  const better = (c, b) => !b || c.cls < b.cls || (c.cls === b.cls && (c.armHits < b.armHits || (c.armHits === b.armHits && c.slidePx < b.slidePx)));
   for (const dir of order) {
     const [ux, uy] = U[dir], vx = uy === 0 ? 0 : 1, vy = uy === 0 ? 1 : 0;
     let best = null;
@@ -1109,10 +1552,15 @@ export function placeOrbitArrows(hull, {
         // Distance to the hull is non-decreasing along the ray once it has left the convex hull: bracket, then bisect.
         let lo = 0, hi = diam;
         while (hi - lo > 0.5) { const m = (lo + hi) / 2; if (hullSignedDistance(hull, bx + m * ux, by + m * uy) < target) lo = m; else hi = m; }
-        const c = evaluate(bx + hi * ux, by + hi * uy, t);
-        if (!best || c.cls < best.cls || (c.cls === best.cls && c.slidePx < best.slidePx)) best = c;
+        // R4-fix (F8 / RP7): along the top or bottom side, a slide to the LEFT costs cornerLeftCostFactor times more
+        // (the left holds the arm, the status card and the left arrow), so the forward / back arrow takes the right of
+        // the brain's front / back when there is a clear spot there.
+        const lf = (dir === 'forward' || dir === 'back') && t < 0 && Number.isFinite(rules.cornerLeftCostFactor) ? rules.cornerLeftCostFactor : 1;
+        const c = evaluate(bx + hi * ux, by + hi * uy, t * lf);
+        if (better(c, best)) best = c;
       }
-      if (best && best.cls === 0) break; // candidates are visited nearest first
+      // candidates are visited nearest first; stop once nothing further out can cost less than the best clear one
+      if (best && best.cls === 0 && k * rules.slideStepPx >= best.slidePx) break;
     }
     // Corner family: when the side itself has no clear spot (the brain fills the view in that direction), try rays from
     // the centre turned up to cornerMaxDeg toward either neighbouring side (e.g. the back arrow beside the brain's lower
@@ -1124,11 +1572,14 @@ export function placeOrbitArrows(hull, {
           const rx = ux * c0 - uy * s0, ry = ux * s0 + uy * c0;
           let lo = 0, hi = diam;
           while (hi - lo > 0.5) { const m = (lo + hi) / 2; if (hullSignedDistance(hull, cx + m * rx, cy + m * ry) < target) lo = m; else hi = m; }
-          const c = evaluate(cx + hi * rx, cy + hi * ry, a * rules.cornerCostPerDeg);
+          const leftTurn = (dir === 'forward' || dir === 'back') && rx < 0 ? (Number.isFinite(rules.cornerLeftCostFactor) ? rules.cornerLeftCostFactor : 1) : 1;
+          const c = evaluate(cx + hi * rx, cy + hi * ry, a * rules.cornerCostPerDeg * leftTurn);
           c.turnDeg = sg * a;
-          if (!best || c.cls < best.cls || (c.cls === best.cls && c.slidePx < best.slidePx)) best = c;
+          if (better(c, best)) best = c;
         }
-        if (best && best.cls === 0) break;
+        // Stop once nothing further round can cost less than the best clear, comfortable spot (R4-fix: a right-hand
+        // corner a little further round can still beat a left-hand one).
+        if (best && best.cls === 0 && a * rules.cornerCostPerDeg >= best.slidePx) break;
       }
     }
     if (!best) {
@@ -1144,14 +1595,21 @@ export function placeOrbitArrows(hull, {
 
 /** R3-scene label layout rules (display choices): at most maxShown labels (maxShownCompact on narrow / portrait views),
  * gapPx between boxes, ring offsets tried around each anchor (ringSteps rings; requiredRingSteps for required labels). */
-export const LABEL_LAYOUT = Object.freeze({ maxShown: 5, maxShownCompact: 4, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5 });
+export const LABEL_LAYOUT = Object.freeze({ maxShown: 5, maxShownCompact: 4, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15 });
 
 /**
  * Label declutter (pure). items: [{ id, x, y (anchor, CSS px), w, h, priority (higher first), required }]; a label whose
  * anchor is off screen is hidden. Each label tries its anchor, then rings of offsets around it, and takes the first box
  * that is inside the view (margins, below topPx) and clear of every obstacle rect { x0, y0, x1, y1 } and of the labels
  * already placed (gapPx apart). A non-required label with no clear box, or beyond maxShown, is hidden; a required label
- * with no clear box keeps its least-overlapping candidate. Returns [{ id, x, y, shown, moved }] in the items' order.
+ * with no clear box keeps its least-overlapping candidate. Returns [{ id, x, y, shown, moved, faded }] in the items' order.
+ * R4-fix (review RP1, blocker): an item may carry `side` { x0, y0, dxdy, sign }: the screen line x = x0 + (y - y0) dxdy
+ * (the brain's projected midline) that its box must stay on (sign +1: right of it, -1: left of it; at most
+ * rules.sideCrossFrac of its width may cross it, so on a phone, where one half of the brain is narrower than the tag,
+ * it can still sit over its area), and
+ * `maxRings` (default rules.requiredMaxRings for required labels): it never moves more than that many rings from its
+ * anchor. A required label with no clear candidate inside those limits keeps its least-overlapping ALLOWED candidate
+ * and is marked faded (drawn see-through) instead of jumping far away or onto the other half of the brain.
  */
 export function declutterLabels(items, { width, height, topPx = 0, obstacles = [], maxShown = LABEL_LAYOUT.maxShown, rules = LABEL_LAYOUT } = {}) {
   const res = new Array(items.length);
@@ -1167,32 +1625,52 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
     const it = items[i];
     const onScreen = Number.isFinite(it.x) && Number.isFinite(it.y) && it.x >= 0 && it.x <= width && it.y >= topPx && it.y <= height;
     const dupText = !it.required && typeof it.text === 'string' && it.text !== '' && shownText.has(it.text);
-    if (!onScreen || dupText || (!it.required && shown >= maxShown)) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false }; continue; }
-    const rings = it.required ? rules.requiredRingSteps : rules.ringSteps;
+    if (!onScreen || dupText || (!it.required && shown >= maxShown)) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false, faded: false }; continue; }
+    const maxRings = Number.isFinite(it.maxRings) ? it.maxRings : it.required ? (Number.isFinite(rules.requiredMaxRings) ? rules.requiredMaxRings : rules.requiredRingSteps) : rules.ringSteps;
+    const rings = Math.min(it.required ? rules.requiredRingSteps : rules.ringSteps, maxRings);
     const dy = it.h + g, dx = it.w / 2 + g;
     const cands = [[0, 0]];
     for (let k = 1; k <= rings; k++) cands.push([0, -k * dy], [0, k * dy], [-k * dx, 0], [k * dx, 0], [-k * dx, -k * dy], [k * dx, -k * dy], [-k * dx, k * dy], [k * dx, k * dy]);
+    const sd = it.side && [it.side.x0, it.side.y0, it.side.dxdy].every(Number.isFinite) && (it.side.sign === 1 || it.side.sign === -1) ? it.side : null;
     let pick = null, bestBad = null;
     for (const [ox, oy] of cands) {
       const x = clampTo(it.x + ox, it.w / 2 + m, Math.max(it.w / 2 + m, width - it.w / 2 - m));
       const y = clampTo(it.y + oy, topPx + 2 + it.h / 2, Math.max(topPx + 2 + it.h / 2, height - m - it.h / 2));
       const b = { x0: x - it.w / 2 - g / 2, y0: y - it.h / 2 - g / 2, x1: x + it.w / 2 + g / 2, y1: y + it.h / 2 + g / 2 };
+      // R4-fix (RP1): the clamped box must still be near its anchor and on its own side of the midline.
+      if (Math.abs(x - it.x) > rings * dx + 0.5 || Math.abs(y - it.y) > rings * dy + 0.5) continue;
+      if (sd) {
+        const mx0 = sd.x0 + (b.y0 - sd.y0) * sd.dxdy, mx1 = sd.x0 + (b.y1 - sd.y0) * sd.dxdy;
+        const cross = (Number.isFinite(rules.sideCrossFrac) ? rules.sideCrossFrac : 0) * it.w;
+        if (sd.sign > 0 ? b.x0 + cross < Math.max(mx0, mx1) : b.x1 - cross > Math.min(mx0, mx1)) continue;
+      }
       let bad = 0;
       for (const o of obstacles) if (o) bad += overlap(b, o);
       for (const p of placed) bad += overlap(b, p);
       if (bad === 0) { pick = { x, y, b }; break; }
       if (!bestBad || bad < bestBad.bad) bestBad = { x, y, b, bad };
     }
-    if (!pick && it.required) pick = bestBad;
-    if (!pick) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false }; continue; }
+    let faded = false;
+    if (!pick && it.required && bestBad) { pick = bestBad; faded = true; }
+    if (!pick) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false, faded: false }; continue; }
     placed.push(pick.b);
     shown++;
     if (typeof it.text === 'string' && it.text !== '') shownText.add(it.text);
-    res[i] = { id: it.id, x: pick.x, y: pick.y, shown: true, moved: pick.x !== it.x || pick.y !== it.y };
+    res[i] = { id: it.id, x: pick.x, y: pick.y, shown: true, moved: pick.x !== it.x || pick.y !== it.y, faded };
   }
   return res;
 }
 
+/** R4-fix (review F2, R11c "so you can see which parts of the brain you've activated"): a switched-on area whose
+ * outline covers less than areaPx CSS px² on screen (the medial toes, tongue, jaw and lower in-between slivers at the
+ * default view: 0-41 changed pixels when marked, harness/run-R4-review-spec-4-marks) also gets a small gold ring at its
+ * centre, drawn over the brain, so its mark does not depend on its drawn size. "Small" = the convex hull of
+ * samplePoints of the region's vertices, projected with the live camera, covers less than areaFrac of the view
+ * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
+ * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
+export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
+/** R4-fix (RP1): opacity of a required label drawn where it overlaps something (display choice). */
+export const LABEL_FADED_OPACITY = 0.4;
 /** R3-scene label font sizes (CSS px; mirrored by R3_SCENE_CSS) used for the label box estimates. */
 export const R3_LABEL_FONT = Object.freeze({ otherPx: 13, leftArmPx: 14.5, subPx: 10.5, padXPx: 10, padYPx: 3 });
 /** R3-scene injected stylesheet (larger, plainer labels). Selectors are one class stronger than neurosurge.css so they
@@ -1200,7 +1678,11 @@ export const R3_LABEL_FONT = Object.freeze({ otherPx: 13, leftArmPx: 14.5, subPx
 export const R3_SCENE_CSS = [
   `.ns-region-label.ns-r3 { font-size: ${R3_LABEL_FONT.otherPx}px; padding: ${R3_LABEL_FONT.padYPx - 1}px ${R3_LABEL_FONT.padXPx - 1}px; max-width: none; white-space: nowrap; line-height: 1.3; }`,
   `.ns-region-label.ns-r3 .ns-region-label-hemi { display: block; font-size: ${R3_LABEL_FONT.subPx}px; font-weight: 600; opacity: 0.9; }`,
-  `.ns-region-label.ns-r3.ns-region-label-leftarm { font-size: ${R3_LABEL_FONT.leftArmPx}px; padding: ${R3_LABEL_FONT.padYPx}px ${R3_LABEL_FONT.padXPx}px; border-radius: 12px; line-height: 1.25; }`
+  `.ns-region-label.ns-r3.ns-region-label-leftarm { font-size: ${R3_LABEL_FONT.leftArmPx}px; padding: ${R3_LABEL_FONT.padYPx}px ${R3_LABEL_FONT.padXPx}px; border-radius: 12px; line-height: 1.25; }`,
+  // R4-fix (RP1): a required label with no clear place near its area, on its own half, is drawn see-through there.
+  `.ns-region-label.ns-r3[data-ns-faded="true"] { opacity: ${LABEL_FADED_OPACITY}; }`,
+  // R4-fix (F2): the small-area switched-on marker: a gold ring (the mark colour) with a dark edge, never clickable.
+  `.ns-mark-dot { position: absolute; width: ${SMALL_MARK.sizePx}px; height: ${SMALL_MARK.sizePx}px; margin: -${SMALL_MARK.sizePx / 2}px 0 0 -${SMALL_MARK.sizePx / 2}px; box-sizing: border-box; border-radius: 50%; border: 3px solid #ffc65c; box-shadow: 0 0 0 1.5px rgba(5, 7, 11, 0.9), inset 0 0 0 1px rgba(5, 7, 11, 0.6); pointer-events: none; z-index: 2; }`
 ].join('\n');
 /** Label priority by group (higher shows first; the left-arm label is always shown). */
 export const REGION_LABEL_PRIORITY = Object.freeze({ leftArm: 100, arm: 60, leg: 50, face: 40, trunk: 10, other: 0 });
@@ -1605,6 +2087,7 @@ export function infoPanelContent(model) {
     const items = [];
     const tech = [s(cm.technicalName), s(cm.hemisphere), s(cm.effector)].filter(Boolean).join(' · ');
     if (tech) items.push([T.technicalName, tech]);
+    if (s(cm.pathwayName) && T.rows.pathwayName) items.push([T.rows.pathwayName, s(cm.pathwayName)]); // R4-fix (RP12)
     const pull = list(mus.pull).length ? list(mus.pull) : ag, relax = list(mus.relax).length ? list(mus.relax) : an;
     if (pull.length) items.push([T.rows.agonists, pull.join(', ')]);
     if (relax.length) items.push([T.rows.antagonists, relax.join(', ')]);
@@ -1655,10 +2138,15 @@ export function infoPanelContent(model) {
  * Create the renderer, camera-attached arm group and world brain group.
  * Options (A2-render R1, all optional and backwards compatible):
  *  - glassXray: GLASS_XRAY_MODES entry, which glass meshes get the faint additive x-ray pass (default GLASS_XRAY);
- *  - adaptivePixelRatio: true (default) | false | ADAPTIVE_PIXEL_RATIO-style options; measure() then returns the
- *    adapted ratio (never above maxPixelRatio or the device ratio, never below min(min, cap));
+ *  - adaptivePixelRatio: true (default) | false | QUALITY_AUTO-style options (an object overrides QUALITY_AUTO fields,
+ *    R4-fix M5: the round-3 ADAPTIVE_PIXEL_RATIO / adaptPixelRatio controller is kept exported but no longer used at run
+ *    time); measure() then returns the quality level's ratio;
  *  - shimmer: 'auto' (default: on unless prefers-reduced-motion) | true | false, the decorative glow shimmer;
  *  - armGhost: 'auto' (default: ghost while the gaze is on the strip) | true | false | 0..1 (see setArmGhost).
+ * R4-scene options:
+ *  - quality: 'auto' (default) | 'high' | 'low' (QUALITY_MODES; setQuality changes it); adaptivePixelRatio: false = 'high'
+ *    (an object overrides QUALITY_AUTO fields). Under ?qa=1 the default is 'high' unless ?nsQuality= says otherwise;
+ *  - brainDistanceScale: k (default 1; the QA hook ?qa=1&nsBrainK=k wins): the brain drawn k times farther and larger.
  * U2b-scene options:
  *  - onOrbit(dir): called when an orbit arrow button is clicked (setOrbitHandler replaces it; without either a
  *    'ns-orbit' CustomEvent { detail: { dir } } is dispatched on the document instead, never both);
@@ -1668,12 +2156,13 @@ export function infoPanelContent(model) {
  * @returns {{ objects, measure, resize, setView, setArm, setBrain, setPlacement, updatePose, updateMuscles,
  *   updateStrip, highlightMarker, setArmGhost, setShimmer, raycastBrain, projectWorld, render, contextLost: boolean,
  *   dispose, setBrainTransform, updateRegions, setInfo, setBody, setBodyFrame, updateBody, bodyVisibility, setFaceView,
- *   orbitArrowAt, hoverOrbitArrow, setOrbitHandler, brainOrientationAnchors, regionMode: boolean }}
+ *   orbitArrowAt, hoverOrbitArrow, setOrbitHandler, brainOrientationAnchors, regionMode: boolean,
+ *   setArmEnvelope, setBrainHeld, setQuality, qualityState, setBrainDistanceScale (R4-scene) }}
  */
 export function createScene({
   THREE, canvas, fovYDeg = CAMERA.fovYDeg, near = CAMERA.near, far = CAMERA.far, maxPixelRatio = 2,
   glassXray: glassXrayMode = GLASS_XRAY, adaptivePixelRatio = true, shimmer = 'auto', armGhost = 'auto',
-  onOrbit = null, overlayRoot = null, faceView = 'ghost'
+  onOrbit = null, overlayRoot = null, faceView = 'ghost', quality = 'auto', brainDistanceScale = 1, antialias = 'auto'
 } = {}) {
   requireThree(THREE);
   if (!canvas || typeof canvas.addEventListener !== 'function' || !canvas.ownerDocument) {
@@ -1689,11 +2178,34 @@ export function createScene({
   const keep = x => { disposables.push(x); return x; };
   let reducedMotion = false;
   try { reducedMotion = Boolean(view && typeof view.matchMedia === 'function' && view.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch { reducedMotion = false; }
-  const adaptiveOpts = adaptivePixelRatio === false ? null : { ...ADAPTIVE_PIXEL_RATIO, ...(typeof adaptivePixelRatio === 'object' && adaptivePixelRatio ? adaptivePixelRatio : {}) };
-  let dprState = { level: NaN, cap: NaN, smoothMs: null, slowFor: 0, fastFor: 0 };
+  // R4-scene (D8): the adaptive-quality controller replaces the A2 adaptive pixel ratio (which never went below the
+  // device ratio, so it could not help a software renderer). adaptivePixelRatio: false keeps full quality ('high').
+  // QA / test hooks (only with ?qa=1 in the page URL): nsQuality=auto|high|low|L0..L5 forces a mode or a level, and
+  // nsBrainK=k draws the brain k times farther and k times larger (same on-screen size; scaleBrainDistance). Under ?qa=1
+  // without nsQuality the mode is 'high', so deterministic QA screenshots never depend on the machine's speed.
+  let urlParams = null;
+  try { urlParams = view && view.location && typeof view.location.search === 'string' ? new URLSearchParams(view.location.search) : null; } catch { urlParams = null; }
+  const qaPage = Boolean(urlParams && urlParams.get('qa') === '1');
+  const qaQuality = qaPage ? urlParams.get('nsQuality') : null;
+  const forcedLevel = qaQuality && /^L\d$/.test(qaQuality) ? Math.min(QUALITY_LEVELS.length - 1, Number(qaQuality.slice(1))) : null;
+  // R4-integrator: the renderer is probed first (MSAA decision below). Under ?qa=1 without nsQuality a SOFTWARE renderer
+  // starts in 'auto' (QA on a software renderer is there to measure the adaptive steps, e2e S43); a hardware GPU starts
+  // in 'high', so deterministic QA screenshots on the real GPU never depend on the machine's load.
+  const rendererName = antialias === true || antialias === false ? null : probeRendererName(canvas.ownerDocument);
+  const softwareRenderer = isSoftwareRenderer(rendererName);
+  const startMode = adaptivePixelRatio === false ? 'high' : qaQuality && QUALITY_MODES.includes(qaQuality) ? qaQuality : forcedLevel !== null ? 'high' : qaPage ? (softwareRenderer ? 'auto' : 'high') : QUALITY_MODES.includes(quality) ? quality : 'auto';
+  let qState = qualityStart(startMode);
+  if (forcedLevel !== null) qState = { ...qState, mode: 'forced', level: forcedLevel };
+  const qualityOpts = { ...QUALITY_AUTO, ...(typeof adaptivePixelRatio === 'object' && adaptivePixelRatio ? adaptivePixelRatio : {}) };
+  const qaBrainK = qaPage ? Number(urlParams.get('nsBrainK')) : NaN;
+  let brainDistK = Number.isFinite(qaBrainK) && qaBrainK > 0 ? qaBrainK : Number.isFinite(brainDistanceScale) && brainDistanceScale > 0 ? brainDistanceScale : 1;
+  let lastBrainTransform = null;
   let lastRenderAt = null;
+  let lastSampleAt = null; // R4-fix (code review F1): the quality controller's own interval clock (live frames only)
+  let lastRenderCpuMs = NaN;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
   // Front-to-back glass depth pre-pass (guarded: setTransparentSort is a core WebGLRenderer method since r142).
   const transparentSortApplied = typeof renderer.setTransparentSort === 'function';
   if (transparentSortApplied) renderer.setTransparentSort(transparentSortNs);
@@ -1785,6 +2297,15 @@ export function createScene({
   // R3-scene: the shell pass reads gyri and sulci (patchGlassReadShaders: crown light + groove cue from the nsSulc attribute).
   const glassReadUniform = { value: new Float32Array([GLASS_READ.crownOpacity, GLASS_READ.crownBright, GLASS_READ.grooveLight, GLASS_READ.grooveAlpha]) };
   const glassRead = { applied: null, sulcMs: null, supportPoints: 0 };
+  // R4-integrator (D5 glass fix): shared uniforms of every glass rim material; set in render() from the brain transform.
+  const farEyeRigidN = { value: new THREE.Matrix3() }, farEyeVec = { value: new THREE.Vector4(0, 0, 0, 0) };
+  const farEyeView = { rot: null, pw: null, K: 1 };
+  // R4-scene: the shell's rim uniforms are kept, so the held-brain cue (HELD_CUE) can change them per frame.
+  const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower } };
+  const heldCue = { target: 0, amount: 0 };
+  // R4-scene: the left-arm rim (LEFT_ARM_RIM) uniforms and state ({ applied: null until a left-arm region compiles }).
+  const leftArmRimUniforms = { color: { value: new THREE.Color(REGION_RENDER.territoryLine) }, params: { value: new THREE.Vector3(LEFT_ARM_RIM.mix, LEFT_ARM_RIM.alpha, LEFT_ARM_RIM.glow) } };
+  const leftArmRim = { applied: null, ms: null, borderSegments: 0 };
   const rimMaterial = (key, params, rim, power, cacheKey, read = false) => {
     const m = keep(new THREE.MeshBasicMaterial(params));
     m.forceSinglePass = true; // r150+: DoubleSide transparent in one pass
@@ -1796,8 +2317,9 @@ export function createScene({
       if (patched === null) return;
       shader.vertexShader = patched.vertexShader;
       shader.fragmentShader = patched.fragmentShader;
-      shader.uniforms.nsRimOpacity = { value: rim };
-      shader.uniforms.nsRimPower = { value: power };
+      if (key === 'shell') { shader.uniforms.nsRimOpacity = shellRimUniforms.nsRimOpacity; shader.uniforms.nsRimPower = shellRimUniforms.nsRimPower; }
+      else { shader.uniforms.nsRimOpacity = { value: rim }; shader.uniforms.nsRimPower = { value: power }; }
+      shader.uniforms.nsRigidN = farEyeRigidN; shader.uniforms.nsFarEye = farEyeVec;
     };
     m.customProgramCacheKey = () => cacheKey;
     return m;
@@ -2307,6 +2829,12 @@ export function createScene({
       outlineCentre = [0, 0, 0];
       for (let i = 0; i < P.length; i += 3) { outlineCentre[0] += P[i] / k; outlineCentre[1] += P[i + 1] / k; outlineCentre[2] += P[i + 2] / k; }
     }
+    // R4-scene: the left-arm territory's outer border (welded union of every left-arm part) and, per part, each vertex's
+    // closeness to it (the cyan rim, LEFT_ARM_RIM).
+    const leftParts = [];
+    for (const r of seg.regions) if (r.isLeftArm) for (const pi of r.partIndices || []) { const part = seg.parts[pi]; if (part && part.faceCount > 0 && !leftParts.includes(part)) leftParts.push(part); }
+    const t0Rim = nowMs();
+    const leftBorder = leftParts.length ? weldedBoundarySegments(leftParts) : null;
     for (const r of seg.regions) {
       const material = keep(new THREE.MeshStandardMaterial({
         color: 0xffffff, roughness: REGION_RENDER.roughness, metalness: REGION_RENDER.metalness, transparent: true,
@@ -2314,6 +2842,18 @@ export function createScene({
         polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
       }));
       material.forceSinglePass = true;
+      if (r.isLeftArm && leftBorder && leftBorder.length) {
+        material.onBeforeCompile = shader => {
+          const patched = patchEdgeShaders(shader.vertexShader, shader.fragmentShader);
+          leftArmRim.applied = patched !== null && leftArmRim.applied !== false;
+          if (!patched) return;
+          shader.vertexShader = patched.vertexShader;
+          shader.fragmentShader = patched.fragmentShader;
+          shader.uniforms.nsEdgeColor = leftArmRimUniforms.color;
+          shader.uniforms.nsEdgeParams = leftArmRimUniforms.params;
+        };
+        material.customProgramCacheKey = () => 'ns-region-leftarm-rim-r4';
+      }
       const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity };
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
@@ -2321,6 +2861,7 @@ export function createScene({
         if (!part || !(part.faceCount > 0)) continue;
         const geo = indexedGeometry(part.positions, part.indices);
         geo.computeVertexNormals();
+        if (r.isLeftArm && leftBorder && leftBorder.length) geo.setAttribute('nsEdge', new THREE.BufferAttribute(boundaryCloseness(part.positions, leftBorder, LEFT_ARM_RIM.widthMm), 1));
         const mesh = still(new THREE.Mesh(geo, material));
         const hemiText = part.hemisphere === 'right' ? 'right hemisphere' : 'left hemisphere';
         mesh.name = `motor region: ${r.id} (${r.label}; ${hemiText}${r.isLeftArm ? '; LEFT ARM' : ''}; simulated activity)`;
@@ -2352,9 +2893,28 @@ export function createScene({
         }
       }
       applyRegionStyle(rec, 0, 0, false, true);
+      // R4-fix (review F2): up to SMALL_MARK.samplePoints of the region's own vertices (brain-local mm) and their mean,
+      // for the switched-on marker of areas that are only a sliver on screen.
+      {
+        let total = 0;
+        for (const pi of r.partIndices || []) { const part = seg.parts[pi]; if (part && part.faceCount > 0) total += part.positions.length / 3; }
+        const stride = Math.max(1, Math.ceil(total / SMALL_MARK.samplePoints)), pts = [];
+        let k = 0;
+        for (const pi of r.partIndices || []) {
+          const part = seg.parts[pi];
+          if (!part || !(part.faceCount > 0)) continue;
+          for (let i = 0; i < part.positions.length; i += 3, k++) if (k % stride === 0) pts.push(part.positions[i], part.positions[i + 1], part.positions[i + 2]);
+        }
+        const n = pts.length / 3, c = [0, 0, 0];
+        for (let i = 0; i < pts.length; i += 3) { c[0] += pts[i] / n; c[1] += pts[i + 1] / n; c[2] += pts[i + 2] / n; }
+        rec.markPts = n >= 3 ? Float32Array.from(pts) : null;
+        rec.markCentre = n >= 1 ? c : null;
+      }
       regions.push(rec);
       regionById.set(r.id, rec);
     }
+    leftArmRim.ms = Math.round(nowMs() - t0Rim);
+    leftArmRim.borderSegments = leftBorder ? leftBorder.length / 6 : 0;
     labelGroups = regionLabelGroups(seg.regions);
     if (hasLines) {
       for (const g of labelGroups) {
@@ -2389,7 +2949,7 @@ export function createScene({
         e.setAttribute('aria-label', g.text);
         e.title = g.text;
         e.hidden = true;
-        labelEls.push({ el: e, group: g, display: disp, shownNow: false, last: { left: '', top: '', shown: false, hover: false } });
+        labelEls.push({ el: e, group: g, display: disp, shownNow: false, last: { left: '', top: '', shown: false, hover: false, faded: false } });
         // Estimated label box (no layout reads): R3_LABEL_FONT sizes, bold sans-serif ~0.6 em per character + padding.
         const F = R3_LABEL_FONT;
         const w = g.isLeftArm ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.55) + 2 * F.padXPx : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
@@ -2531,13 +3091,20 @@ export function createScene({
 
   /** U2b-scene: place the brain group with an ns-brain brainViewTransform result (its column-major `matrix`, world from
    * source mm; orbit about the locked brain centre and the grab carry). `params` is informational. */
-  function setBrainTransform(transform) {
-    const m = transform && transform.matrix;
-    if (!m || m.length !== 16 || !Array.prototype.every.call(m, Number.isFinite)) fail('scene_input', 'setBrainTransform needs a brainViewTransform result with a finite 4x4 matrix');
+  function setBrainTransform(transformIn) {
+    const m0 = transformIn && transformIn.matrix;
+    if (!m0 || m0.length !== 16 || !Array.prototype.every.call(m0, Number.isFinite)) fail('scene_input', 'setBrainTransform needs a brainViewTransform result with a finite 4x4 matrix');
+    lastBrainTransform = transformIn;
+    // R4-scene: the QA / test distance factor (1 in play): k times farther and k times larger, same on-screen size.
+    const transform = brainDistK !== 1 ? scaleBrainDistance(transformIn, brainDistK) : transformIn;
+    const m = transform.matrix;
     brainGroup.matrix.fromArray(m);
     brainGroup.matrixWorldNeedsUpdate = true;
     brainGroup.updateMatrixWorld(true);
     brainTransformSet = true;
+    farEyeView.rot = transform.rotation ? Array.from(transform.rotation) : null;
+    farEyeView.pw = transform.pivotWorld ? Array.from(transform.pivotWorld) : null;
+    farEyeView.K = Number.isFinite(transform.perspectiveK) ? transform.perspectiveK : 1;
     // R3-scene: the arrows' reference view is the default look carried with the grab (brainViewTransform grabYaw /
     // grabPitch, radians), and their anchors sit at the brain pivot's distance.
     arrowRef.yaw = Number.isFinite(transform.grabYaw) ? transform.grabYaw : 0;
@@ -2545,8 +3112,52 @@ export function createScene({
     const pw = transform.pivotWorld;
     const dist = pw && pw.length === 3 ? Math.hypot(pw[0], pw[1], pw[2]) : NaN;
     arrowRef.dist = Number.isFinite(dist) && dist > 0 ? dist : Math.hypot(m[12], m[13], m[14]) || BRAIN_ANCHOR_DIST_FALLBACK_M;
+    updateCameraRange();
     overlayDirty = true;
     return true;
+  }
+
+  /** R4-scene: the far plane follows the brain's farthest support point (farPlaneFor), so a brain moved farther away is
+   * never clipped; the near plane stays CAMERA.near for the hand. Called whenever the brain transform changes. */
+  const cameraRange = { far: far, brainFarM: null, brainNearM: null };
+  function updateCameraRange() {
+    const P = brainSupport && brainSupport.points;
+    if (!P || P.length < 3) return;
+    const e = brainGroup.matrixWorld.elements;
+    let dMax = 0, dMin = Infinity;
+    for (let i = 0; i < P.length; i += 3) {
+      const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14];
+      const d = Math.hypot(x, y, z);
+      if (d > dMax) dMax = d; if (d < dMin) dMin = d;
+    }
+    cameraRange.brainFarM = dMax; cameraRange.brainNearM = dMin;
+    const f = farPlaneFor(dMax, far);
+    if (f !== camera.far) { camera.far = f; camera.updateProjectionMatrix(); cameraRange.far = f; }
+  }
+
+  /** R4-scene: true while Space-drag holds the brain (ns-app: out.brainView.grab.active), false on release. The glass
+   * then shows the HELD_CUE glow, easing out after release. Returns the target (true / false). */
+  function setBrainHeld(on) {
+    heldCue.target = on === true ? 1 : 0;
+    return heldCue.target === 1;
+  }
+  /** R4-polish (D7 + "arrows obviously clickable"): the "Try this" goal now shown (ns-guide goal id or null). While it is
+   * 'orbit', the overlay carries data-ns-guide-goal="orbit" and CSS gives the four arrows a soft attention ring (a
+   * steady ring under prefers-reduced-motion). Display only. */
+  let guideGoalAttr = '';
+  function setGuideGoal(id) {
+    const v = typeof id === 'string' ? id : '';
+    if (v !== guideGoalAttr && overlay) { guideGoalAttr = v; if (v) overlay.setAttribute('data-ns-guide-goal', v); else overlay.removeAttribute('data-ns-guide-goal'); }
+    return guideGoalAttr;
+  }
+
+  /** R4-scene test hook: draw the brain k times farther and k times larger (scaleBrainDistance; same on-screen size).
+   * Gaze picking is unaffected (a ray from the eye meets the scaled brain at the same source point). Returns k. */
+  function setBrainDistanceScale(k) {
+    if (!(Number.isFinite(k) && k > 0)) fail('scene_args', 'setBrainDistanceScale needs k > 0');
+    brainDistK = k;
+    if (lastBrainTransform) setBrainTransform(lastBrainTransform);
+    return brainDistK;
   }
 
   /** Camera orientation: Euler YXZ (yaw about +y, then pitch), so the view direction is ns-brain gazeDirection. */
@@ -2701,6 +3312,48 @@ export function createScene({
     return changed;
   }
 
+  // R4-fix (review F2): the small-area switched-on markers (DOM rings over the brain, one per marked small area).
+  const markDots = new Map(); // region id -> { el, x, y, shown, small, at }
+  let markFrame = 0;
+  function updateMarkDots(reserveRight = 0, reserveBottom = 0) {
+    markFrame++;
+    const mw = brainGroup.matrixWorld, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
+    const proj = (x, y, z) => { pv.set(x, y, z).applyMatrix4(mw).applyMatrix4(vi); if (pv.z > -near) return null; pv.applyMatrix4(pm); return [(pv.x + 1) * 0.5 * cssW, (1 - pv.y) * 0.5 * cssH]; };
+    const inView = brainTransformSet && cssW > 0 && cssH > 0;
+    for (const rec of regions) {
+      let d = markDots.get(rec.id);
+      const want = inView && rec.activated > 0 && rec.markPts && rec.markCentre;
+      if (!want) { if (d && d.shown) { d.shown = false; d.el.hidden = true; } continue; }
+      if (!d) {
+        const e = el('div', 'ns-mark-dot', overlay);
+        e.setAttribute('data-ns-mark-dot', rec.id);
+        e.setAttribute('aria-hidden', 'true');
+        e.hidden = true;
+        d = { el: e, x: '', y: '', shown: false, small: null, at: -1e9 };
+        markDots.set(rec.id, d);
+      }
+      // Re-measure the drawn size every SMALL_MARK.everyFrames frames (the view, an orbit or a drag change it).
+      if (d.small === null || markFrame - d.at >= SMALL_MARK.everyFrames) {
+        const P = rec.markPts, xy = [];
+        for (let i = 0; i < P.length; i += 3) { const q = proj(P[i], P[i + 1], P[i + 2]); if (q) xy.push(q[0], q[1]); }
+        let area = 0;
+        if (xy.length >= 6) { const h = convexHull2d(xy), n = h.length >> 1; for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += h[2 * i] * h[2 * j + 1] - h[2 * j] * h[2 * i + 1]; } area = Math.abs(area) / 2; }
+        d.small = xy.length >= 2 && area < SMALL_MARK.areaFrac * cssW * cssH;
+        d.area = Math.round(area);
+        d.at = markFrame;
+      }
+      const c = rec.markCentre, q = d.small ? proj(c[0], c[1], c[2]) : null;
+      const ok = Boolean(q) && q[0] >= 0 && q[0] <= cssW && q[1] >= 0 && q[1] <= cssH
+        && !(reserveRight > 0 && q[0] > cssW - reserveRight) && !(reserveBottom > 0 && q[1] > cssH - reserveBottom);
+      if (!ok) { if (d.shown) { d.shown = false; d.el.hidden = true; } continue; }
+      const l = px(q[0]), t = px(q[1]);
+      d.px = q[0]; d.py = q[1];
+      if (d.x !== l) { d.el.style.left = l; d.x = l; }
+      if (d.y !== t) { d.el.style.top = t; d.y = t; }
+      if (!d.shown) { d.shown = true; d.el.hidden = false; }
+    }
+  }
+
   /** World points of the brain's orientation labels in region mode ({ right, left, anterior, posterior } just outside
    * the strips' bounds along the transform's axes), for hud.placeOrientation; null in legacy mode or before a transform. */
   function brainOrientationAnchors() {
@@ -2757,11 +3410,12 @@ export function createScene({
   function setInfo(model) {
     if (!info) return false;
     const c = infoPanelContent(model);
-    if (!c) { if (!info.panel.hidden) { info.panel.hidden = true; hudReadIn = 0; } info.last = null; overlayDirty = true; return true; }
+    if (!c) { if (!info.panel.hidden) { info.panel.hidden = true; hudReadIn = 0; hudDirty = true; } info.last = null; overlayDirty = true; return true; }
     const sig = JSON.stringify(c);
     if (sig === info.last) return false;
     info.last = sig;
     overlayDirty = true;
+    hudDirty = true; // R4-scene: the panel's size may change with its text: re-read the obstacles in this same frame
     const put = (e, t) => { if (e.textContent !== t) e.textContent = t; const h = t === ''; if (e.hidden !== h) e.hidden = h; };
     info.panel.setAttribute('data-mode', c.mode);
     info.panel.setAttribute('data-left-arm', c.leftArm ? 'true' : 'false');
@@ -2816,7 +3470,7 @@ export function createScene({
       info.more.open = false;
       info.moreKey = null;
     }
-    if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; } // R3-scene: re-measure the obstacles now
+    if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; hudDirty = true; } // R3-scene: re-measure the obstacles now
     return true;
   }
 
@@ -2883,6 +3537,7 @@ export function createScene({
     }
     faceStateKey = '';
     bodyGroup.updateMatrixWorld(true);
+    if (lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied); // R4-scene: a body set while a LOD level is on
     const face = body.filter(b => b.face).length;
     return { meshes: body.length, inPlace: body.length - face, face, skipped };
   }
@@ -3022,6 +3677,18 @@ export function createScene({
     }
     return hoverDir;
   }
+  /** R4-scene (arrows clear of the controlled arm): the arm's envelope over its whole A/D x W/S range at the default look
+   * (armSweepEnvelope of ns-app armEnvelope; viewport fractions), for the view size `size` ({ width, height } CSS px; it
+   * only applies at that size, so a stale envelope never steers the arrows after a resize). null clears it. The arrow
+   * plan then prefers spots no sampled pose covers (placeOrbitArrows armEnvelope). */
+  let armEnv = null, armEnvSerial = 0;
+  function setArmEnvelope(envelope, size = null) {
+    const env = envelope && Array.isArray(envelope.poses) ? envelope : armSweepEnvelope(envelope);
+    const w = size && size.width > 0 ? Math.round(size.width) : cssW, h = size && size.height > 0 ? Math.round(size.height) : cssH;
+    armEnv = env ? { envelope: env, forKey: `${w}x${h}`, serial: ++armEnvSerial } : null;
+    overlayDirty = true;
+    return armEnv ? { poses: env.poses.length, forKey: armEnv.forKey } : null;
+  }
   /** Round-2 fix V2: the player's arm shapes (ns-app armAvoidShapes: { rects, ellipses } in viewport fractions, y
    * down) that region labels keep clear of; null clears them. The overlay re-lays out when they change noticeably. */
   let labelAvoid = null, labelAvoidKey = '';
@@ -3070,7 +3737,42 @@ export function createScene({
     // R3-fix (M6): the information panel's bottom edge (CSS px) while it is showing, so the HUD can dock the legend under it.
     let infoBottom = null;
     for (const r of hudRectCache || []) if (r.info) infoBottom = r.y1;
-    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom };
+    // R4-polish (labels never overlap): the shown capture / drag-to-look toast (viewport fractions), so the HUD's
+    // orientation labels keep clear of it too (at 390x844 "Back (posterior)" sat under the full-width toast).
+    const toasts = [];
+    if (cssW > 0 && cssH > 0) for (const r of hudRectCache || []) if (r.toast) toasts.push({ x0: r.x0 / cssW, y0: r.y0 / cssH, x1: r.x1 / cssW, y1: r.y1 / cssH });
+    // R4-fix (review RP8): the region labels drawn this frame (CSS px), so the guide chip keeps clear of them.
+    const labelsPx = [];
+    for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) labelsPx.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
+    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx };
+  }
+  /** R4-integrator (D7): does the brain's outline as drawn NOW (convex hull of its outline support points projected
+   * with the live camera, CSS px) overlap rect { x0, y0, x1, y1 } (CSS px)? false before the brain is placed or when it
+   * is behind the camera. Cached per camera / brain matrix and rect. */
+  // R4-fix (code review M5): the cache key is the numbers themselves (no per-call string building; this test now also
+  // runs for every side-label candidate).
+  const coverKey = new Float64Array(35);
+  let coverCache = { valid: false, hull: null };
+  function brainCoversRect(rect) {
+    const P = brainHullPoints || (brainSupport && brainSupport.points);
+    if (!P || !rect || !(cssW > 0 && cssH > 0)) return false;
+    camera.updateMatrixWorld(true);
+    const me = brainGroup.matrixWorld.elements, ve = camera.matrixWorldInverse.elements;
+    let same = coverCache.valid && coverKey[32] === cssW && coverKey[33] === cssH && coverKey[34] === camera.fov;
+    for (let i = 0; i < 16 && same; i++) same = coverKey[i] === me[i] && coverKey[16 + i] === ve[i];
+    if (!same) {
+      for (let i = 0; i < 16; i++) { coverKey[i] = me[i]; coverKey[16 + i] = ve[i]; }
+      coverKey[32] = cssW; coverKey[33] = cssH; coverKey[34] = camera.fov;
+      const pm = camera.projectionMatrix, xy = [];
+      for (let i = 0; i < P.length; i += 3) {
+        pv.set(P[i], P[i + 1], P[i + 2]).applyMatrix4(brainGroup.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+        if (pv.z > -near) continue;
+        pv.applyMatrix4(pm);
+        xy.push((pv.x + 1) * 0.5 * cssW, (1 - pv.y) * 0.5 * cssH);
+      }
+      coverCache = { valid: true, hull: xy.length >= 6 ? convexHull2d(xy) : null };
+    }
+    return coverCache.hull ? rectHitsConvexHull(coverCache.hull, rect) : false;
   }
   /** Orbit click handler (replaces createScene onOrbit); null restores the 'ns-orbit' document event. */
   function setOrbitHandler(fn) {
@@ -3108,12 +3810,49 @@ export function createScene({
   }
 
   const px = v => `${Math.round(v)}px`;
-  /** HUD card rectangles (CSS px, overlay coordinates), read from the DOM at most every HUD_READ_EVERY frames (a layout
-   * read; cached between reads, refreshed on resize). Orbit arrows and labels keep clear of them. */
-  // R3-scene: 30 -> 12 frames, so the world-anchored arrows learn soon when the HUD card grows or moves (a few reads per
-  // second of 3-6 element boxes).
+  /** HUD card rectangles (CSS px, overlay coordinates). Orbit arrows and labels keep clear of them.
+   * R4-scene: EVENT-DRIVEN instead of a 12-frame poll. A MutationObserver on the app root (text, children, `hidden`,
+   * `style`, `class`, `data-ns-home` / `data-ns-alt`) and a ResizeObserver on every measured card mark the rectangles
+   * dirty; layoutOverlay drains the observer's pending records synchronously (takeRecords) before it lays out, so a card
+   * that grew earlier in the SAME frame (ns-app writes the HUD and the panel before scene.render) is re-read in that frame
+   * and an arrow is never drawn over it, not even for one frame. The scene's own overlay writes (arrows, labels) are
+   * ignored, except the information panel's; the orientation labels are ignored while ns-app hands their boxes over
+   * (setOrientationRects). Without MutationObserver (Node tests) the old HUD_READ_EVERY poll is kept. */
   const HUD_READ_EVERY = 12;
   let hudRectCache = [], hudReadIn = 0, hudReadFor = '';
+  let hudDirty = true, hudReads = 0, hudMo = null, hudRo = null;
+  const hudRoSeen = new WeakSet();
+  const inside = (root, t) => Boolean(root && t && (root === t || (typeof root.contains === 'function' && root.contains(t))));
+  // HUD parts neurosurge.css never draws in play (display: none): their per-frame text (e.g. the update-time line) does
+  // not move any card, so it does not trigger a layout read. A closed <details> (except its summary) likewise.
+  const HUD_UNDRAWN = '.ns-slot-frame, .ns-drives, .ns-slot-drivesTitle, .ns-notices, .ns-slot-hint, .ns-slot-reach';
+  function relevantHudRecord(rec) {
+    let t = rec && rec.target;
+    if (t && t.nodeType === 3) t = t.parentNode;
+    if (!t || t === canvas) return false;
+    if (inside(overlay, t)) return Boolean(info && inside(info.panel, t));
+    if (typeof t.closest === 'function') {
+      if (orientLive && t.closest('.ns-orient')) return false;
+      if (t.closest(HUD_UNDRAWN)) return false;
+      const d = t.closest('details');
+      if (d && !d.open && !t.closest('summary') && !(rec.type === 'attributes' && rec.attributeName === 'open' && t === d)) return false;
+    }
+    return true;
+  }
+  if (overlay && view && typeof view.MutationObserver === 'function' && overlay.parentNode) {
+    try {
+      hudMo = new view.MutationObserver(recs => { for (const r of recs) if (relevantHudRecord(r)) { hudDirty = true; return; } });
+      hudMo.observe(overlay.parentNode, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'style', 'class', 'open', 'data-ns-home', 'data-ns-alt'] });
+      if (typeof view.ResizeObserver === 'function') { hudRo = new view.ResizeObserver(() => { hudDirty = true; }); hudRo.observe(overlay.parentNode); }
+    } catch { hudMo = null; hudRo = null; }
+  }
+  /** Pending HUD mutations of this frame (synchronous): marks the rectangles dirty when one matters. */
+  function drainHudRecords() {
+    if (!hudMo || typeof hudMo.takeRecords !== 'function') return;
+    const recs = hudMo.takeRecords();
+    for (const r of recs) if (relevantHudRecord(r)) { hudDirty = true; break; }
+  }
+  const roWatch = e => { if (hudRo && e && !hudRoSeen.has(e)) { hudRoSeen.add(e); try { hudRo.observe(e); } catch { /* not observable */ } } };
   /** R3-scene: where the capture / drag-to-look toast shows (last measured at this size; before that an estimate of its
    * bottom-centre CSS box). The arrow PLAN always keeps clear of it, so the arrows do not move when the pointer is
    * captured or released (the toast comes and goes) and are never under it. */
@@ -3122,8 +3861,14 @@ export function createScene({
     : { x0: cssW / 2 - Math.min(310, 0.46 * cssW), y0: cssH - 50, x1: cssW / 2 + Math.min(310, 0.46 * cssW), y1: cssH - 8 });
   function readHudRects() {
     const key = `${cssW}x${cssH}`;
-    if (key === hudReadFor && hudReadIn-- > 0) return hudRectCache;
-    hudReadFor = key; hudReadIn = HUD_READ_EVERY;
+    if (hudMo) { if (key === hudReadFor && !hudDirty) return hudRectCache; }
+    else if (key === hudReadFor && hudReadIn-- > 0) return hudRectCache;
+    hudReadFor = key; hudReadIn = HUD_READ_EVERY; hudDirty = false; hudReads++;
+    const tRead = nowMs();
+    try { return readHudRectsNow(key); } finally { hudReadMs += nowMs() - tRead; }
+  }
+  let hudReadMs = 0;
+  function readHudRectsNow(key) {
     hudRectCache = [];
     const parent = overlay && overlay.parentNode;
     if (!parent || typeof parent.querySelectorAll !== 'function' || typeof parent.getBoundingClientRect !== 'function') return hudRectCache;
@@ -3131,6 +3876,7 @@ export function createScene({
       const o = parent.getBoundingClientRect();
       for (const e of parent.querySelectorAll('.ns-hud .ns-panel')) {
         if (e.hidden) continue;
+        roWatch(e);
         const r = e.getBoundingClientRect();
         if (!(r.width > 0 && r.height > 0)) continue;
         const rect = { x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top };
@@ -3143,6 +3889,13 @@ export function createScene({
         }
         hudRectCache.push(rect);
       }
+      // R4-fix (review RP8): the floating guide chip is an obstacle for the region labels only (flagged `chip`; it keeps
+      // clear of the arrows itself).
+      for (const e of parent.querySelectorAll('.ns-hud .ns-guide-float')) {
+        if (e.hidden) continue;
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, chip: true });
+      }
       // R3-scene: the HUD's orientation labels ("Front", "Your right", ...) are obstacles for the region labels only
       // (flagged `orient`; they already keep clear of the arrows themselves).
       for (const e of parent.querySelectorAll('.ns-hud .ns-orient')) {
@@ -3153,12 +3906,14 @@ export function createScene({
       // R3-scene: the far-right information panel (when showing; flagged `info`, the arrow plan reserves its whole
       // column instead) and the capture / drag-to-look toast are obstacles for the arrows and labels too.
       if (info && !info.panel.hidden && typeof info.panel.getBoundingClientRect === 'function') {
+        roWatch(info.panel);
         const r = info.panel.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, info: true });
       }
       const root = parent.ownerDocument || doc;
       if (root && typeof root.querySelectorAll === 'function') {
         for (const e of root.querySelectorAll('.ns-shell-toast')) {
+          roWatch(e);
           if (e.hidden) continue;
           const r = e.getBoundingClientRect();
           if (r.width > 0 && r.height > 0) {
@@ -3201,7 +3956,7 @@ export function createScene({
     const nearRef = Math.abs(lookYaw - arrowRef.yaw) < 0.12 && Math.abs(lookPitch - arrowRef.pitch) < 0.12;
     // R3-polish: the status card counts at BOTH its homes (data-ns-home / data-ns-alt), so the arrows are never under it
     // and do not move when the hand pushes it from one home to the other.
-    if (nearRef || !arrowHudRects) arrowHudRects = (hudRects || []).filter(r => !r.info && !r.toast && !r.orient)
+    if (nearRef || !arrowHudRects) arrowHudRects = (hudRects || []).filter(r => !r.info && !r.toast && !r.orient && !r.chip)
       .flatMap(r => (r.home ? [{ ...r.home }, ...(r.alt ? [{ ...r.alt }] : [])] : [{ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }]));
     const obstacles = arrowObstacles(reserve, arrowHudRects);
     obstacles.push(toastZone());
@@ -3211,8 +3966,9 @@ export function createScene({
       arrowArmFor = sizeKey;
     }
     const soft = arrowArmFor === sizeKey ? arrowArm : null;
+    const env = armEnv && armEnv.forKey === sizeKey ? armEnv.envelope : null;
     const e = brainGroup.matrixWorld.elements;
-    let key = `${cssW}x${cssH}|${camera.fov}|${arrowRef.yaw.toFixed(4)},${arrowRef.pitch.toFixed(4)}|${topPx}|${rectKey(obstacles)}|arm${soft ? arrowArmFor : '-'}|`;
+    let key = `${cssW}x${cssH}|${camera.fov}|${arrowRef.yaw.toFixed(4)},${arrowRef.pitch.toFixed(4)}|${topPx}|${rectKey(obstacles)}|arm${soft ? arrowArmFor : '-'}|env${env ? armEnv.serial : '-'}|`;
     for (let i = 0; i < 16; i++) key += `${e[i].toFixed(5)},`;
     if (key === arrowPlanKey) return arrowPlan;
     arrowPlanKey = key;
@@ -3230,7 +3986,7 @@ export function createScene({
     }
     if (behind > 0 || xy.length < 6) { arrowPlan = null; return null; }
     const hull = convexHull2d(xy);
-    const placement = placeOrbitArrows(hull, { width: cssW, height: cssH, topPx, obstacles, tanHalfFovY: tanH, soft });
+    const placement = placeOrbitArrows(hull, { width: cssW, height: cssH, topPx, obstacles, tanHalfFovY: tanH, soft, armEnvelope: env });
     if (!placement) { arrowPlan = null; return null; }
     const anchors = {};
     for (const d of ORBIT_ARROWS.dirs) {
@@ -3249,7 +4005,7 @@ export function createScene({
   function projectArrowAnchors(plan, reserve, hudRects, topPx = 0) {
     const vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
     const r = ORBIT_ARROWS.sizePx / 2 + ARROW_PLACEMENT.padPx;
-    const occ = (hudRects || []).filter(r => !r.orient);
+    const occ = (hudRects || []).filter(r => !r.orient && !r.chip);
     const layout = { sizePx: ORBIT_ARROWS.sizePx };
     for (const d of ORBIT_ARROWS.dirs) {
       const a = plan.anchors[d], now = arrowNow[d];
@@ -3269,7 +4025,8 @@ export function createScene({
   /** Per-frame DOM overlay: orbit arrows, region group labels, face label / inset frame. Style writes only on change. */
   function layoutOverlay() {
     if (!overlay || !(cssW > 0 && cssH > 0)) return;
-    if (!overlayDirty && hudReadIn > 0) { hudReadIn--; return; }
+    drainHudRecords();
+    if (hudMo ? !overlayDirty && !hudDirty : !overlayDirty && hudReadIn > 0) { if (!hudMo) hudReadIn--; return; }
     overlayDirty = false;
     const reserve = infoPanelRect({ width: cssW, height: cssH });
     const reserveRight = info && !info.panel.hidden && reserve && reserve.layout === 'column' ? cssW - reserve.x0 : 0;
@@ -3329,6 +4086,9 @@ export function createScene({
       const uh = under ? 'true' : 'false';
       if (last.underHand !== uh) { last.underHand = uh; b.setAttribute('data-ns-under-hand', uh); }
     }
+    // R4-fix (review F2): small switched-on areas get a gold ring at their centre (SMALL_MARK); placed before the labels,
+    // which keep clear of the rings.
+    if (overlay && regionMode && regions.length) updateMarkDots(reserveRight, reserveBottom);
     // R3-scene labels: fewer, larger, plainer (regionLabelDisplay), placed by declutterLabels at their projected anchors:
     // never under the info panel / legend / HUD card / toast, the orbit arrows, the crosshair zone, the limits line, the
     // player's arm (setLabelAvoid) or each other; the left-arm label is required, the rest show by priority up to the cap.
@@ -3336,6 +4096,7 @@ export function createScene({
       const mw = brainGroup.matrixWorld, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
       const hovered = hoveredRegionId;
       const items = labelItems;
+      const projPx = (x, y, z) => { pv.set(x, y, z).applyMatrix4(mw).applyMatrix4(vi); if (!(brainTransformSet && pv.z < -near)) return null; pv.applyMatrix4(pm); return [(pv.x + 1) * 0.5 * cssW, (1 - pv.y) * 0.5 * cssH]; };
       for (let i = 0; i < labelEls.length; i++) {
         const L = labelEls[i], a = L.group.anchor, it = items[i];
         pv.set(a[0], a[1], a[2]).applyMatrix4(mw).applyMatrix4(vi);
@@ -3344,6 +4105,17 @@ export function createScene({
         // An anchor under the info column / bottom band is not a place for its label.
         if (reserveRight > 0 && it.x > cssW - reserveRight) it.x = NaN;
         if (reserveBottom > 0 && it.y > cssH - reserveBottom) it.y = NaN;
+        // R4-fix (review RP1, blocker): the required "Left arm / brain's right half" tag stays on ITS half of the brain:
+        // the brain's midline (source x = 0, through the anchor's front-back position and height) projected as a
+        // screen line; the tag's whole box keeps to the anchor's side of it (declutterLabels `side`).
+        it.side = null;
+        if (it.required && Number.isFinite(it.x) && Number.isFinite(it.y)) {
+          const m0 = projPx(0, a[1] - 30, a[2]), m1 = projPx(0, a[1] + 30, a[2]);
+          if (m0 && m1 && Math.abs(m1[1] - m0[1]) > 1e-3) {
+            const dxdy = (m1[0] - m0[0]) / (m1[1] - m0[1]), mx = m0[0] + (it.y - m0[1]) * dxdy;
+            if (Math.abs(it.x - mx) > 1) it.side = { x0: m0[0], y0: m0[1], dxdy, sign: it.x > mx ? 1 : -1 };
+          }
+        }
       }
       const obst = labelObstacles;
       obst.length = 0;
@@ -3357,6 +4129,8 @@ export function createScene({
         if (p) obst.push({ x0: p.x - arrowLayout.sizePx / 2 - 4, y0: p.y - arrowLayout.sizePx / 2 - 4, x1: p.x + arrowLayout.sizePx / 2 + 4, y1: p.y + arrowLayout.sizePx / 2 + 4 });
       }
       for (const r of labelAvoidPx().boxes) obst.push(r);
+      // R4-fix (F2): the small-area switched-on rings stay visible (labels keep clear of them).
+      for (const d of markDots.values()) if (d.shown && Number.isFinite(d.px) && Number.isFinite(d.py)) { const R = SMALL_MARK.sizePx / 2 + 3; obst.push({ x0: d.px - R, y0: d.py - R, x1: d.px + R, y1: d.py + R }); }
       const compact = cssW / cssH < 1 || cssW < 900;
       const pos = declutterLabels(items, { width: cssW, height: cssH, topPx, obstacles: obst, maxShown: compact ? LABEL_LAYOUT.maxShownCompact : LABEL_LAYOUT.maxShown });
       for (let i = 0; i < labelEls.length; i++) {
@@ -3366,6 +4140,8 @@ export function createScene({
         b.x = q.x; b.y = q.y; b.skip = !shown;
         if (L.last.shown !== shown) { L.last.shown = shown; L.el.hidden = !shown; }
         if (!shown) continue;
+        const fd = q.faded === true;
+        if (L.last.faded !== fd) { L.last.faded = fd; if (fd) L.el.setAttribute('data-ns-faded', 'true'); else L.el.removeAttribute('data-ns-faded'); }
         const hov = hovered !== null && L.group.regionIds.includes(hovered);
         if (L.last.hover !== hov) { L.last.hover = hov; if (hov) L.el.setAttribute('data-hover', 'true'); else L.el.removeAttribute('data-hover'); }
         const l = px(q.x), t = px(q.y);
@@ -3437,17 +4213,27 @@ export function createScene({
     return { x: Math.round((cssW - size) / 2), y: 30, size };
   }
 
-  /** Current CSS size of the canvas and the pixel ratio: the device ratio capped at maxPixelRatio and, with
-   * adaptivePixelRatio, the adaptive level (adaptPixelRatio, fed by render()). ns-app resizes when it changes. */
+  const deviceRatio = () => (view && Number.isFinite(view.devicePixelRatio) && view.devicePixelRatio > 0 ? view.devicePixelRatio : 1);
+  /** Current CSS size of the canvas and the pixel ratio of the current quality level (qualityPixelRatio: the device
+   * ratio capped at maxPixelRatio times the level's scale). ns-app's resizer applies it; render() also applies a level
+   * change at once, so the two agree. */
   function measure() {
-    const dpr = view && Number.isFinite(view.devicePixelRatio) && view.devicePixelRatio > 0 ? view.devicePixelRatio : 1;
-    const cap = Math.min(maxPixelRatio, dpr);
-    let pixelRatio = cap;
-    if (adaptiveOpts) {
-      if (dprState.cap !== cap) dprState = { level: cap, cap, smoothMs: null, slowFor: 0, fastFor: 0 };
-      pixelRatio = Math.min(cap, dprState.level);
+    return { width: Math.floor(canvas.clientWidth || 0), height: Math.floor(canvas.clientHeight || 0), pixelRatio: qualityPixelRatio(qState.level, deviceRatio(), maxPixelRatio) };
+  }
+
+  /** Drawing buffer at CSS size w x h and pixel ratio pr (one allocation; skipped when nothing changed) and the arm
+   * see-through window in drawing-buffer pixels. */
+  let bufferKey = '';
+  function applyBuffer(width, height, pr) {
+    const key = `${width}x${height}@${pr}`;
+    if (key !== bufferKey) {
+      bufferKey = key;
+      if (typeof renderer.setDrawingBufferSize === 'function') renderer.setDrawingBufferSize(width, height, pr);
+      else { renderer.setPixelRatio(pr); renderer.setSize(width, height, false); }
     }
-    return { width: Math.floor(canvas.clientWidth || 0), height: Math.floor(canvas.clientHeight || 0), pixelRatio };
+    const w = armWinUniform.value;
+    w[0] = (width * pr) / 2; w[1] = (height * pr) / 2; w[2] = ARM_SEE.radiusFrac * Math.min(width, height) * pr; w[3] = ARM_SEE.edge;
+    cssPr = pr;
   }
 
   /** Renderer size (CSS size kept by the stylesheet), camera aspect and projection. One drawing-buffer allocation
@@ -3455,26 +4241,156 @@ export function createScene({
   function resize({ width, height, pixelRatio = 1, fovYDeg: fov } = {}) {
     if (!(width > 0 && height > 0)) return false;
     const pr = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-    if (typeof renderer.setDrawingBufferSize === 'function') renderer.setDrawingBufferSize(width, height, pr);
-    else { renderer.setPixelRatio(pr); renderer.setSize(width, height, false); }
+    applyBuffer(width, height, pr);
     // Optional narrow-layout FOV from ns-app (effectiveFovYDeg); absent or invalid keeps the current FOV.
     if (Number.isFinite(fov) && fov > 0 && fov < 179) camera.fov = fov;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    // Arm see-through window: centred on the crosshair, in drawing-buffer pixels.
-    const w = armWinUniform.value;
-    w[0] = (width * pr) / 2; w[1] = (height * pr) / 2; w[2] = ARM_SEE.radiusFrac * Math.min(width, height) * pr; w[3] = ARM_SEE.edge;
-    cssW = width; cssH = height; cssPr = pr;
+    cssW = width; cssH = height;
     overlayDirty = true;
     return true;
   }
 
-  function render() {
+  /* ---- R4-scene (D8): quality ---------------------------------------------------------------------------------------- */
+  let liteApplied = null;
+  /** Apply the current quality level: the drawing-buffer pixel ratio (at once; ns-app's next measure() agrees) and the
+   * lite passes (QUALITY_LEVELS). Nothing here touches a colour, an activity value, a label or a text. */
+  function applyQuality() {
+    const L = QUALITY_LEVELS[qState.level];
+    const pr = qualityPixelRatio(qState.level, deviceRatio(), maxPixelRatio);
+    if (cssW > 0 && cssH > 0 && pr !== cssPr) applyBuffer(cssW, cssH, pr);
+    if (liteApplied !== L.lite) {
+      liteApplied = L.lite;
+      for (const m of glassXray) m.visible = !L.lite;
+    }
+    const lodKey = L.lod ? `${L.lod.glassMm}/${L.lod.bodyMm}/${L.lod.armMm || 0}` : '';
+    if (lodApplied !== lodKey) setLod(L.lod, lodKey);
+  }
+  /** The 'lod' copies: built once on first use (clusterDecimate; about 10 ms for the glass in Node) and swapped in or out
+   * on every mesh that shares a geometry (the glass shell, its depth pre-pass and x-ray copies; a body mesh and its depth
+   * twins). The full geometries are kept, so leaving the level restores them exactly. */
+  let lodApplied = '';
+  const lodOf = new Map(); // full geometry -> Map(cell -> lod geometry)
+  const lodStats = {};
+  function lodGeometry(geo, cell, stat) {
+    let byCell = lodOf.get(geo);
+    if (!byCell) { byCell = new Map(); lodOf.set(geo, byCell); }
+    let lod = byCell.get(cell);
+    if (lod) return lod;
+    const pos = geo.attributes && geo.attributes.position, idx = geo.index;
+    if (!pos || !idx) { byCell.set(cell, geo); return geo; }
+    const sulc = geo.attributes.nsSulc ? geo.attributes.nsSulc.array : null;
+    const d = clusterDecimate(pos.array, idx.array, cell, sulc ? { nsSulc: sulc } : null);
+    lod = keep(indexedGeometry(d.positions, d.indices));
+    lod.computeVertexNormals();
+    if (d.attrs && d.attrs.nsSulc) lod.setAttribute('nsSulc', new THREE.BufferAttribute(d.attrs.nsSulc, 1));
+    if (typeof lod.computeBoundingSphere === 'function') lod.computeBoundingSphere();
+    stat[0] += idx.count / 3; stat[1] += d.triangles;
+    byCell.set(cell, lod);
+    return lod;
+  }
+  function setLod(lod, key) {
+    const t0 = nowMs();
+    const st = lod ? (lodStats[key] ||= { builtMs: null, glass: [0, 0], body: [0, 0] }) : null;
+    const fresh = st && st.builtMs === null;
+    const swap = (mesh, cell, stat) => {
+      if (!mesh) return;
+      const full = mesh.userData.nsFullGeometry || mesh.geometry;
+      if (!mesh.userData.nsFullGeometry) mesh.userData.nsFullGeometry = full;
+      const g = lod ? lodGeometry(full, cell, stat) : full;
+      mesh.geometry = g;
+      for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
+    };
+    for (const list of [glass, glassDepth, glassXray]) for (const m of list) swap(m, lod ? lod.glassMm : 0, st ? st.glass : null);
+    for (const b of body) swap(b.mesh, lod ? lod.bodyMm : 0, st ? st.body : null);
+    // The arm (bones and CPU-skinned muscles): an index-only LOD over the unchanged (skinned) vertex buffers, only at
+    // levels with armMm.
+    const armCell = lod && lod.armMm > 0 ? lod.armMm : 0;
+    const armMeshes = [...bones.map(b => ({ mesh: b.mesh, rest: null })), ...muscles.map(m => ({ mesh: m.mesh, rest: m.rest }))];
+    for (const { mesh, rest } of armMeshes) {
+      const full = mesh.userData.nsFullGeometry || mesh.geometry;
+      if (!mesh.userData.nsFullGeometry) mesh.userData.nsFullGeometry = full;
+      let g = full;
+      if (armCell) {
+        let byCell = lodOf.get(full);
+        if (!byCell) { byCell = new Map(); lodOf.set(full, byCell); }
+        g = byCell.get(armCell);
+        if (!g) {
+          const restPos = rest || (full.attributes.position && full.attributes.position.array);
+          const r = clusterIndexLod(restPos, full.index.array, armCell);
+          g = keep(new THREE.BufferGeometry());
+          for (const name of Object.keys(full.attributes)) g.setAttribute(name, full.attributes[name]);
+          g.setIndex(new THREE.BufferAttribute(r.indices, 1));
+          if (full.boundingSphere) g.boundingSphere = full.boundingSphere;
+          if (st) { st.arm = st.arm || [0, 0]; st.arm[0] += full.index.count / 3; st.arm[1] += r.triangles; }
+          byCell.set(armCell, g);
+        }
+      }
+      mesh.geometry = g;
+      for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
+    }
+    lodApplied = key;
+    if (fresh) st.builtMs = Math.round(nowMs() - t0);
+  }
+  /** Esc-page setting (D8): 'auto' | 'high' | 'low'. Returns qualityState(). */
+  function setQuality(mode) {
+    if (!QUALITY_MODES.includes(mode)) fail('scene_args', `setQuality needs one of ${QUALITY_MODES.join(', ')}`);
+    if (mode !== qState.mode) {
+      qState = qualityStart(mode);
+      // R4-integrator: Auto starts again from full quality, as at start-up, and steps down within about a second if the
+      // frames are slow (down-steps need 0.7 s, up-steps 6 s per level). Keeping the old level (R4-scene) left a player
+      // who went Low -> Auto at the lowest level for 30 s or more on a fast GPU, and for ever under QA step frames.
+      if (mode === 'auto') qState.level = 0;
+      applyQuality();
+    }
+    return qualityState();
+  }
+  /** Plain-JSON quality state (QA snapshot via sceneState().quality). */
+  function qualityState() {
+    const L = QUALITY_LEVELS[qState.level];
+    const med = qState.samples.length ? medianOf(qState.samples) : null;
+    return {
+      mode: qState.mode, level: qState.level, name: L.name, scale: L.scale, lite: L.lite,
+      // R4-integrator: MSAA chosen at context creation (off on a software renderer or a saved Low) and the probe's result.
+      antialias: msaa, softwareRenderer, rendererName,
+      pixelRatio: qualityPixelRatio(qState.level, deviceRatio(), maxPixelRatio), deviceRatio: deviceRatio(),
+      medianFrameMs: med === null ? null : Math.round(med * 10) / 10, changes: qState.changes, lastChange: qState.lastChange,
+      buffer: cssW > 0 ? [Math.round(cssW * cssPr), Math.round(cssH * cssPr)] : null,
+      lod: lodApplied ? { cellsMm: lodApplied, builtMs: lodStats[lodApplied].builtMs, glassTriangles: lodStats[lodApplied].glass.slice(), bodyTriangles: lodStats[lodApplied].body.slice(), armTriangles: lodStats[lodApplied].arm ? lodStats[lodApplied].arm.slice() : null } : null,
+      // Last frame's draw calls and triangles (Three renderer.info; main pass only) and the main-thread ms of render().
+      drawCalls: renderer.info && renderer.info.render ? renderer.info.render.calls : null,
+      triangles: renderer.info && renderer.info.render ? renderer.info.render.triangles : null,
+      renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null
+    };
+  }
+
+  /** Draw one frame. opts.live === false (ns-app QA step frames, frozen intro / Esc-page redraws, held-loop
+   * screenshots) keeps the frame out of the quality controller's samples AND restarts the interval clock, so the gap
+   * after it is not a sample either (R4-fix, code review F1); every other call is a sample (the interval since the
+   * previous live render). */
+  function render(opts) {
     if (lost || disposed) return;
     const now = nowMs();
-    const dtMs = lastRenderAt === null ? 0 : now - lastRenderAt;
+    const notLive = Boolean(opts && opts.live === false);
+    const dtMs = lastRenderAt === null ? 0 : now - lastRenderAt; // eases (held cue, ghosts): every drawn frame
     lastRenderAt = now;
-    if (adaptiveOpts && dtMs > 0) dprState = adaptPixelRatio(dprState, dtMs, adaptiveOpts);
+    const sampleMs = lastSampleAt === null ? 0 : now - lastSampleAt; // quality samples: live frame to live frame only
+    lastSampleAt = notLive ? null : now;
+    if (!notLive && sampleMs > 0 && (qState.mode === 'auto')) {
+      const before = qState.level;
+      qState = stepQuality(qState, sampleMs, qualityOpts);
+      if (qState.level !== before) applyQuality();
+    }
+    if (liteApplied === null) applyQuality();
+    // R4-scene held-brain cue: ease toward the target (instant under prefers-reduced-motion).
+    if (heldCue.amount !== heldCue.target) {
+      const tau = heldCue.target > heldCue.amount ? HELD_CUE.inS : HELD_CUE.outS;
+      let h = reducedMotion || !(dtMs > 0) ? heldCue.target : heldCue.amount + (heldCue.target - heldCue.amount) * (1 - Math.exp(-dtMs / 1000 / tau));
+      if (Math.abs(heldCue.target - h) < 0.03) h = heldCue.target;
+      heldCue.amount = h;
+      const rim = heldCueRim(h);
+      shellRimUniforms.nsRimOpacity.value = rim.rimOpacity; shellRimUniforms.nsRimPower.value = rim.rimPower;
+    }
     if (strip) strip.uniforms.nsTime.value = (now / 1000) % 1000;
     // Arm ghost window (auto): while the crosshair is on a control region (legacy marker or region mode).
     const target = armGhostState.mode === 'auto' ? (typeof highlighted === 'string' || gazeOnRegion ? 1 : 0) : armGhostState.mode;
@@ -3515,8 +4431,17 @@ export function createScene({
         w[0] = ((b.x0 + b.x1) / 2) * pr; w[1] = (cssH - (b.y0 + b.y1) / 2) * pr; w[2] = rx * (1 + pad) * pr; w[3] = ry * (1 + pad) * pr;
       }
     }
+    // R4-integrator (D5 glass fix): view-space rigid normal matrix and far-eye centre for the glass rim (K > 1 only).
+    if (farEyeView.rot && farEyeView.pw && farEyeView.K > 1) {
+      camera.updateMatrixWorld(true);
+      const v = camera.matrixWorldInverse.elements, R = farEyeView.rot, nm = farEyeRigidN.value.elements, pw = farEyeView.pw;
+      for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) nm[3 * c + r] = v[r] * R[3 * c] + v[4 + r] * R[3 * c + 1] + v[8 + r] * R[3 * c + 2];
+      farEyeVec.value.set(v[0] * pw[0] + v[4] * pw[1] + v[8] * pw[2] + v[12], v[1] * pw[0] + v[5] * pw[1] + v[9] * pw[2] + v[13],
+        v[2] * pw[0] + v[6] * pw[1] + v[10] * pw[2] + v[14], farEyeView.K);
+    } else farEyeVec.value.w = 0;
     renderer.render(scene, camera);
     renderFaceLayer();
+    lastRenderCpuMs = nowMs() - now;
   }
 
   /** Second pass for the face layer: 'ghost' with the main camera, depth-tested against the main frame (the arm in
@@ -3558,6 +4483,8 @@ export function createScene({
     for (const [t, type, fn] of arrowListeners.splice(0)) t.removeEventListener(type, fn);
     stopArrowHold();
     if (view && typeof view.removeEventListener === 'function') view.removeEventListener('blur', stopArrowHold);
+    if (hudMo) { try { hudMo.disconnect(); } catch { /* gone */ } }
+    if (hudRo) { try { hudRo.disconnect(); } catch { /* gone */ } }
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     for (const d of disposables.splice(0)) d.dispose();
     renderer.dispose();
@@ -3579,7 +4506,8 @@ export function createScene({
        * pixel-ratio state ({ level, cap, smoothMs, ... } or null when disabled). */
       glassXrayMode,
       transparentSortApplied,
-      get pixelRatioState() { return adaptiveOpts ? { ...dprState } : null; },
+      /** R4-scene: the quality state (qualityState(); replaces the A2 adaptive pixel-ratio state). */
+      get pixelRatioState() { return qualityState(); },
       /** U2b-scene: region records { id, region, material, meshes, depthMeshes, outline, activity, activated, hovered,
        * opacity }, the full-body records { id, mesh, part, kind, material, face }, the body and face groups, the
        * overlay element and the face scene. */
@@ -3622,6 +4550,14 @@ export function createScene({
     setLabelAvoid,
     setOrientationRects,
     overlayObstacles,
+    // R4-scene
+    setArmEnvelope,
+    setBrainHeld,
+    setGuideGoal,
+    setQuality,
+    brainCoversRect,
+    qualityState,
+    setBrainDistanceScale,
     get regionMode() { return regionMode; },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
     sceneState() {
@@ -3633,14 +4569,24 @@ export function createScene({
         // the brain silhouette (px), whether it is on screen and clear of the panel / legend / HUD / toast, and the look
         // (deg) that puts it under the crosshair; plus the gap and the hull size.
         arrowPlan: arrowPlan ? {
+          armEnvelope: armEnv ? { poses: armEnv.envelope.poses.length, forKey: armEnv.forKey, used: armEnv.forKey === `${cssW}x${cssH}` } : null,
           ref: arrowPlan.ref, gapPx: Math.round(arrowPlan.placement.gapPx * 10) / 10, hullVertices: arrowPlan.hull.length / 2,
           obstacles: arrowPlan.obstacles.map(o => [Math.round(o.x0), Math.round(o.y0), Math.round(o.x1), Math.round(o.y1)]),
           hullBox: (() => { const h = arrowPlan.hull; let a = Infinity, b = Infinity, c = -Infinity, e = -Infinity; for (let i = 0; i < h.length; i += 2) { a = Math.min(a, h[i]); c = Math.max(c, h[i]); b = Math.min(b, h[i + 1]); e = Math.max(e, h[i + 1]); } return [Math.round(a), Math.round(b), Math.round(c), Math.round(e)]; })(),
-          arrows: Object.fromEntries(ORBIT_ARROWS.dirs.map(d => { const q = arrowPlan.placement[d]; return [d, { x: Math.round(q.x), y: Math.round(q.y), clearancePx: Math.round(q.clearancePx * 10) / 10, onScreen: q.onScreen, clear: q.clear, comfortable: q.comfortable, yawDeg: Math.round(q.look.yawDeg * 10) / 10, pitchDeg: Math.round(q.look.pitchDeg * 10) / 10, slidePx: q.slidePx }]; }))
+          arrows: Object.fromEntries(ORBIT_ARROWS.dirs.map(d => { const q = arrowPlan.placement[d]; return [d, { x: Math.round(q.x), y: Math.round(q.y), clearancePx: Math.round(q.clearancePx * 10) / 10, onScreen: q.onScreen, clear: q.clear, comfortable: q.comfortable, cls: q.cls, armHits: q.armHits, onArm: q.onArm, yawDeg: Math.round(q.look.yawDeg * 10) / 10, pitchDeg: Math.round(q.look.pitchDeg * 10) / 10, slidePx: q.slidePx }]; }))
         } : null,
         glassRead: { ...glassRead },
+        // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
+        // last received them (viewport fractions).
+        quality: qualityState(),
+        held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
+        hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
+        leftArmRim: { ...leftArmRim },
+        cameraRange: { near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, brainDistanceScale: brainDistK },
+        armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
         arrowHover: hoverDir, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
-        labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null })),
+        markDots: [...markDots].map(([id, d]) => ({ id, shown: d.shown, small: d.small, areaPx: d.area, left: d.x, top: d.y })),
+        labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null })),
         info: info ? { shown: !info.panel.hidden } : null,
         body: { meshes: body.length, face: body.filter(b => b.face).length, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
         face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
@@ -3658,7 +4604,9 @@ export const HUD_SLOTS = Object.freeze([
   'qualifier', 'control', 'simulated', 'orientation', 'limitsShort', 'rights', 'detailsSummary', 'hint', 'unmapped', 'gaps',
   'attribution',
   // A2-render R1 (appended): the label next to the crosshair and the region/legend note under the legend bar.
-  'hover', 'regionNote'
+  'hover', 'regionNote',
+  // R4-text (D7): the "Try this" guide line in the status card.
+  'guide'
 ]);
 /** Always-visible note under the legend bar (A2-render R1): what the region tints, the bright spot and the shimmer
  * mean. render({ regionNote }) may replace it; empty text restores this default (it is never hidden). */
@@ -3712,9 +4660,17 @@ export const STATUS_CARD_HOME = true;
 /** R3-fix: the status card's planned height (CSS px) for a view size: columnVh of the height in the landscape layouts
  * (the idle card is about 20 %, a card with every transient line about 33 % at 1280x720), portraitVh (at least
  * portraitMinPx) for the full-width portrait strip (idle about 7 %, with every line about 9 % at 720x1280). Pure. */
-export const STATUS_CARD_PLAN = Object.freeze({ columnVh: 0.37, portraitVh: 0.11, portraitMinPx: 140 });
+/* R4-integrator: on NARROW portrait screens (width <= narrowMaxPx) the strip's lines wrap more and the "Try this" guide
+ * line adds two more; at 390x844 the card with the guide measured 164 px (run-R4-integrator-2-shots), over the 140 px
+ * plan, so the plan there is at least narrowMinPx (R4-text's proposed 185). ns-app keeps the portrait brain below this
+ * planned box (brainUsableNdc), as it keeps it above the bottom band. */
+// R4-fix (review RP2): on narrow portrait screens the card no longer shows the "Looking at" line (the bottom panel
+// names what you look at) or the brand words (the model-name line stays), so it ends above the left hand at three
+// quarters up (390x844: hand top about y 180). The plan keeps room for one or two transient lines: 185 -> 150 px.
+export const STATUS_CARD_PLAN = Object.freeze({ columnVh: 0.37, portraitVh: 0.11, portraitMinPx: 140, narrowMaxPx: 600, narrowMinPx: 150 });
 export function statusCardPlanPx(width, height, portrait = width / height < 1, o = STATUS_CARD_PLAN) {
-  return portrait ? Math.max(o.portraitMinPx, Math.round(o.portraitVh * height)) : Math.round(o.columnVh * height);
+  const minPx = Number.isFinite(o.narrowMaxPx) && width <= o.narrowMaxPx ? o.narrowMinPx : o.portraitMinPx;
+  return portrait ? Math.max(minPx, Math.round(o.portraitVh * height)) : Math.round(o.columnVh * height);
 }
 const clampFraction = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -3731,7 +4687,7 @@ export const HUD_LAYOUT = Object.freeze({
   shortHeight: Object.freeze({ maxPx: 600, infoPx: 300 }),
   compact: Object.freeze({ colPx: 250, colVw: 30, infoPx: 340, noticePx: 460 }), // A2-render R1: narrower (CSS mirror)
   portrait: Object.freeze({ infoPx: 320, noticePx: 400, noticeWPx: 320, noticeWVw: 86 }),
-  label: Object.freeze({ sideW: 150, sideShortW: 48, axisW: 104, h: 24, shortBelowAspect: 1 }),
+  label: Object.freeze({ sideW: 150, sideShortW: 48, axisW: 104, h: 24, shortBelowAspect: 1, pxPerChar: 7.4, padPx: 4 }),
   essential: Object.freeze({ fontPx: 12, lineHeight: 1.3, padY: 2, padX: 6, charEm: 0.55, colGapPx: 8 })
 });
 
@@ -3749,6 +4705,8 @@ export function essentialNoticeRect({ width, height } = {}, text = HUD_LIMITS_SH
  * extends away from the band: R to the right, L to the left, anterior upward, posterior downward. */
 /** Polish: orientation-label edge clearances (px): below the top limits line, above the bottom hint toast, and the
  * centre-ward nudge used when no projected anchor is clear. */
+/** R4-polish: an orientation label moves to a better clear place after this many placeOrientation calls in a row. */
+export const ORIENT_UPGRADE_FRAMES = 12;
 export const ORIENTATION_EDGE = Object.freeze({ topGapPx: 6, bottomPx: 46, nudgePx: 24, nudgeSteps: 20, axisNudgeSteps: 4 });
 export const ORIENTATION_ALIGN = Object.freeze({
   right: Object.freeze([0, 0.5]), left: Object.freeze([1, 0.5]), anterior: Object.freeze([0.5, 1]), posterior: Object.freeze([0.5, 0])
@@ -3893,10 +4851,18 @@ export function createHud(hudRoot) {
   // Two independently placed cards; their initial edge positions are supplied by CSS.
   const col = make('div', 'ns-hud-col', root);
   const info = make('section', 'ns-panel ns-panel-info', col);
-  for (const k of ['title', 'status', 'gaze', 'note', 'pulse', 'trigger', 'space', 'reach', 'drivesTitle']) {
+  for (const k of ['title', 'guide', 'status', 'gaze', 'note', 'pulse', 'trigger', 'space', 'reach', 'drivesTitle']) {
     slots[k] = make('div', `ns-slot ns-slot-${k}`, info);
   }
   slots.status.setAttribute('aria-live', 'polite');
+  // R4-integrator (D7): the "Try this" guide line is found by data-ns-guide (e2e S39).
+  slots.guide.setAttribute('data-ns-guide', '');
+  // R4-fix (code review M3): the visible line can move (card <-> chip) or step aside for a frame; a screen reader hears
+  // the goal from this hidden copy, which changes only when the goal's words change (not on "Nice!", a move or a hide).
+  // (Its class avoids the word "guide": it is not the visible line.)
+  const guideLive = make('div', 'ns-sr-only ns-tip-live', info);
+  guideLive.setAttribute('aria-live', 'polite');
+  let guideSpoken = '';
   const drivesList = make('ol', 'ns-drives', info);
   const driveItems = [];
   for (let i = 0; i < DRIVE_LINES; i++) driveItems.push(make('li', 'ns-drive', drivesList));
@@ -3964,6 +4930,7 @@ export function createHud(hudRoot) {
   const orientSize = {};
   const orientText = {};
   const orientPick = {};
+  const orientUpgrade = {}; // R4-polish: calls in a row that a better place for each label was clear
   for (const k of ORIENTATION_KEYS) {
     orient[k] = make('div', `ns-orient ns-orient-${k}`, root);
     orient[k].hidden = true;
@@ -4010,6 +4977,35 @@ export function createHud(hudRoot) {
         const t = v === null || v === undefined || String(v).trim() === '' ? HUD_REGION_NOTE : String(v);
         if (regionNote.textContent !== t) regionNote.textContent = t; // never hidden: empty restores the default
         if (regionNote.hidden) regionNote.hidden = false;
+      } else if (key === 'guideFloat') {
+        // R4-integrator (D7): the guide line as a floating chip ({ x, y, w } CSS px) while the brain covers its place in
+        // the status card; null / undefined puts it back in the card.
+        const g = slots.guide;
+        const on = Boolean(v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.w));
+        if (g && g.style) {
+          setClass(g, on ? 'ns-slot ns-slot-guide ns-guide-float' : 'ns-slot ns-slot-guide');
+          const L = on ? `${v.x}px` : '', T = on ? `${v.y}px` : '', Wd = on ? `${v.w}px` : '';
+          if (g.style.left !== L) g.style.left = L;
+          if (g.style.top !== T) g.style.top = T;
+          if (g.style.width !== Wd) g.style.width = Wd;
+        }
+      } else if (key === 'guide') {
+        setText(slots.guide, v);
+      } else if (key === 'guideSpoken') {
+        // R4-fix (M3): the goal line while the guide is shown (also while the chip has no clear spot), '' when the guide is
+        // hidden, paused or finished; "Nice!" is not repeated.
+        const said = typeof v === 'string' ? v.replace(/^\S+!\s+/, '').trim() : '';
+        if (said !== guideSpoken) { guideSpoken = said; guideLive.textContent = said; }
+      } else if (key === 'title' && typeof v === 'string' && v.includes(NsText.HUD.brand) && v !== NsText.HUD.brand) {
+        // R4-fix (review RP2): the brand words and the model-name line are two spans, so on phones the card can drop
+        // the brand words (CSS) and stay above the left hand; the model-name line (honesty) always shows.
+        if (slots.title.textContent !== v) {
+          const i = v.indexOf(NsText.HUD.brand);
+          slots.title.textContent = '';
+          make('span', 'ns-title-brand', slots.title).textContent = v.slice(0, i);
+          make('span', 'ns-title-model', slots.title).textContent = v.slice(i);
+        }
+        if (slots.title.hidden) slots.title.hidden = false;
       } else if (key === 'hover') {
         hoverExplicit = true;
         setText(hover, v);
@@ -4028,6 +5024,7 @@ export function createHud(hudRoot) {
   const panelEls = [info, legend];
   let panelRects = null, panelSizes = null, panelPick = [null, null];
   let measureCountdown = 0, sizedFor = '', essentialHeight = 0, placementStatus = '', lastBandRect = null;
+  let lastGuideH = 40, lastFloatH = 40; // R4-integrator: last measured heights of the guide line in the card / as a chip
   // U2b-scene: reserve the information overlay's area (default on; hud.reserveInfo(false) releases it).
   let reserveInfo = true, reservedRect = null;
   const RO = doc.defaultView && typeof doc.defaultView.ResizeObserver === 'function' ? doc.defaultView.ResizeObserver : null;
@@ -4203,15 +5200,31 @@ export function createHud(hudRoot) {
       const arrowsF = opts && Array.isArray(opts.arrows) ? opts.arrows : [];
       const corners = [[18, 12], [-18 - hs[0], 12], [18, -12 - hs[1]], [-18 - hs[0], -12 - hs[1]]];
       let pick = corners[0];
-      if (shownHover && arrowsF.length) {
+      if (shownHover) {
+        // R4-fix (review RP13): nor under the information panel / legend (the caption ran into the panel and was cut).
         const boxOf = ([dx, dy]) => ({ x0: 0.5 + dx / W, y0: 0.5 + dy / H, x1: 0.5 + (dx + hs[0]) / W, y1: 0.5 + (dy + hs[1]) / H });
-        pick = corners.find(c => !arrowsF.some(a => boxesOverlap(boxOf(c), a))) || corners[0];
+        const ok = c => { const b = boxOf(c); return !arrowsF.some(a => boxesOverlap(b, a)) && !(panelRects || []).some(r => boxesOverlap(b, r)) && b.x0 >= 0 && b.x1 <= 1; };
+        pick = corners.find(ok) || corners.find(c => !arrowsF.some(a => boxesOverlap(boxOf(c), a))) || corners[0];
       }
       const tf = `translate(${Math.round(pick[0])}px, ${Math.round(pick[1])}px)`;
       if (hover.style && hoverTransform !== tf) { hoverTransform = tf; hover.style.transform = tf; }
       const cx0 = Math.min(-16, pick[0]), cy0 = Math.min(-16, pick[1]), cx1 = Math.max(16, shownHover ? pick[0] + hs[0] : 16), cy1 = Math.max(16, shownHover ? pick[1] + hs[1] : 16);
       hoverBox = { x0: 0.5 + cx0 / W, y0: 0.5 + cy0 / H, x1: 0.5 + cx1 / W, y1: 0.5 + cy1 / H };
       if (shownHover) placedOrient.push({ key: 'hover', x0: hoverBox.x0 * W, y0: hoverBox.y0 * H, x1: hoverBox.x1 * W, y1: hoverBox.y1 * H });
+    }
+    // R4-fix (SL4-2): the brain's projected midline (viewport fractions) from the front and back anchors; which side is
+    // "left" on screen comes from the left anchor itself, so it stays right after any orbit.
+    const brainCovers = opts && typeof opts.brainCovers === 'function' ? opts.brainCovers : null;
+    let midline = null;
+    {
+      const a = projected && projected.anterior, b = projected && projected.posterior, l = projected && projected.left, r = projected && projected.right;
+      if (a && b && a.visible !== false && b.visible !== false && [a.x, a.y, b.x, b.y].every(Number.isFinite) && Math.abs(b.y - a.y) > 1e-4) {
+        const dxdy = (b.x - a.x) / (b.y - a.y);
+        const xAt = (p) => a.x + (p.y - a.y) * dxdy;
+        const lx = l && Number.isFinite(l.x) && Number.isFinite(l.y) ? l.x - xAt(l) : null, rx = r && Number.isFinite(r.x) && Number.isFinite(r.y) ? r.x - xAt(r) : null;
+        const leftKey = lx !== null ? (lx < 0 ? 'left' : 'right') : rx !== null ? (rx > 0 ? 'left' : 'right') : 'left';
+        midline = { x0: a.x, y0: a.y, dxdy, leftKey };
+      }
     }
     for (const k of ORIENTATION_KEYS) {
       const el = orient[k];
@@ -4231,7 +5244,11 @@ export function createHud(hudRoot) {
         if (ro) { const sz = sizeOf(el); if (sz) orientSize[k] = sz; }
         else if (orientSize[k] === null && el.offsetWidth > 0 && el.offsetHeight > 0) orientSize[k] = [el.offsetWidth, el.offsetHeight];
         const side = k === 'right' || k === 'left';
-        [w, h] = orientSize[k] || [side ? (shortWanted ? HUD_LAYOUT.label.sideShortW : HUD_LAYOUT.label.sideW) : HUD_LAYOUT.label.axisW, HUD_LAYOUT.label.h];
+        // R4-fix (SL4-2 / RP11): a label that was never drawn (so never measured) is estimated from its text, not from
+        // the widest box: side labels may no longer fall back inside the glass, and the old 150 px guess for an 88 px
+        // "Your right →" ran into the panel at every outside place, so it was never drawn and never measured.
+        const est = Math.ceil(el.textContent.length * HUD_LAYOUT.label.pxPerChar + HUD_LAYOUT.label.padPx);
+        [w, h] = orientSize[k] || [Math.min(est, side ? (shortWanted ? HUD_LAYOUT.label.sideShortW + 30 : HUD_LAYOUT.label.sideW) : HUD_LAYOUT.label.axisW + 40), HUD_LAYOUT.label.h];
       }
       const a = ORIENTATION_ALIGN[k];
       const placeOf = p => {
@@ -4244,11 +5261,34 @@ export function createHud(hudRoot) {
         return { x, y, box: { x0: x - a[0] * fw, y0: y - a[1] * fh, x1: x + (1 - a[0]) * fw, y1: y + (1 - a[1]) * fh } };
       };
       const band = { x0: 0, y0: 0, x1: 1, y1: H > 0 ? Math.max(ESSENTIAL_BAND, essentialHeight / H) : ESSENTIAL_BAND }; // measured HUD text only
+      const labelRects = opts && Array.isArray(opts.labelRects) ? opts.labelRects : []; // R4-polish: e.g. the shown toast
+      // R4-fix (reviews SL4-2, RP11): a side label ("← Your left" / "Your right →", short "← Left" / "Right →") is a
+      // claim about a side: its whole box stays on its own side of the brain's projected midline (the anterior ->
+      // posterior anchor line), and it never sits on the brain's drawn outline (opts.brainCovers, viewport-fraction
+      // box -> true when the brain's projected hull overlaps it). With no such place it is not drawn this frame rather
+      // than drawn across the midline or inside the glass.
+      const side = k === 'right' || k === 'left';
+      const sideOk = pl => {
+        if (!side || !pl.box) return true;
+        if (midline) {
+          const xm = y => midline.x0 + (y - midline.y0) * midline.dxdy;
+          const m0 = xm(pl.box.y0), m1 = xm(pl.box.y1);
+          if (k === midline.leftKey ? pl.box.x1 > Math.min(m0, m1) : pl.box.x0 < Math.max(m0, m1)) return false;
+        }
+        return !(typeof brainCovers === 'function' && brainCovers(pl.box));
+      };
       const free = pl => !pl.box || (!hitsAvoid(pl.box, avoid) && !boxesOverlap(pl.box, band) && !(panelRects || []).some(r => boxesOverlap(pl.box, r)) &&
-        !(hoverBox && boxesOverlap(pl.box, hoverBox)));
+        !(hoverBox && boxesOverlap(pl.box, hoverBox)) && !labelRects.some(r => boxesOverlap(pl.box, r)) && sideOk(pl));
       const placed = cands.map(c => ({ key: c.key, ...placeOf(c.p) }));
       const current = placed.find(c => c.key === orientPick[k]);
-      let chosen = (current && free(current) ? current : placed.find(free)) || null;
+      const best = placed.find(free) || null;
+      // R4-polish: a label stays where it is while that place is clear (no flicker), but moves to a better (earlier,
+      // e.g. outside the brain) place once that one has been clear for ORIENT_UPGRADE_FRAMES calls in a row; before,
+      // a label that started on an inner fallback stayed there for good.
+      if (best && current && best.key !== current.key && placed.indexOf(best) < placed.indexOf(current)) orientUpgrade[k] = (orientUpgrade[k] || 0) + 1;
+      else orientUpgrade[k] = 0;
+      let chosen = (current && free(current) && orientUpgrade[k] < ORIENT_UPGRADE_FRAMES ? current : best) || null;
+      if (chosen !== current) orientUpgrade[k] = 0;
       // Polish: no free anchor -> slide the first anchor toward the screen centre (side labels along x, front/back
       // along y) until it is clear, instead of drawing it over a panel or the limits line.
       if (!chosen && placed[0] && placed[0].box && W > 0 && H > 0) {
@@ -4289,6 +5329,31 @@ export function createHud(hudRoot) {
 
   return {
     root, slots, details, essential, render, placeOrientation, dispose, reserveInfo: setReserveInfo,
-    get bandRect() { return lastBandRect; }, get reservedRect() { return reservedRect; }
+    get bandRect() { return lastBandRect; }, get reservedRect() { return reservedRect; },
+    /** R4-integrator (D7): the "Try this" guide line's box (CSS px). While the line is hidden: the place it would take,
+     * with its last height (one rect read per call). R4-polish: the line is now the FIRST line of the card (the title is
+     * its footer), so that place is the top of the card's content box, not "under the title". */
+    guideRect() {
+      const g = slots.guide, t = slots.title;
+      if (!g || !t || typeof t.getBoundingClientRect !== 'function') return null;
+      const floating = typeof g.className === 'string' && g.className.includes('ns-guide-float');
+      if (!g.hidden && g.textContent && !floating) {
+        const r = g.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) { lastGuideH = r.height; return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom }; }
+      }
+      if (!g.hidden && g.textContent && floating) { const r = g.getBoundingClientRect(); if (r.height > 0) lastFloatH = r.height; }
+      const r = t.getBoundingClientRect();
+      if (!(r.width > 0)) return null;
+      const card = g.parentNode && typeof g.parentNode.getBoundingClientRect === 'function' ? g.parentNode : null;
+      if (card) {
+        const c = card.getBoundingClientRect();
+        let pad = 8;
+        try { const v = parseFloat(getComputedStyle(card).paddingTop); if (Number.isFinite(v)) pad = v; } catch { /* no computed style (DOM double) */ }
+        return { x0: r.left, y0: c.top + pad, x1: r.right, y1: c.top + pad + lastGuideH };
+      }
+      return { x0: r.left, y0: r.bottom + 5, x1: r.right, y1: r.bottom + 5 + lastGuideH };
+    },
+    /** R4-integrator (D7): the floating chip's last measured height (CSS px; 40 before the first measure). */
+    get guideFloatH() { return lastFloatH; }
   };
 }

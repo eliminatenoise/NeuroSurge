@@ -152,8 +152,9 @@ export function createHandler({ root, allowedHosts = null, log = () => {} }) {
 }
 
 /** Files a git copy of the distribution carries at its top level that are not part of the game. --verify lists them
- * separately (not checked, not a problem) instead of reporting them as unlisted. `.git` is never walked. */
-export const REPO_OWN_TOP_LEVEL = Object.freeze(['README.md', 'LICENSE', 'PROJECT-CONTEXT.json', '.gitignore', '.gitattributes', '.git']);
+ * separately (not checked, not a problem) instead of reporting them as unlisted. `.git` is never walked. `.nojekyll`
+ * (empty) tells GitHub Pages to serve the files as they are, if the repository owner ever switches Pages on. */
+export const REPO_OWN_TOP_LEVEL = Object.freeze(['README.md', 'LICENSE', 'PROJECT-CONTEXT.json', '.gitignore', '.gitattributes', '.nojekyll', '.git']);
 
 /** Check every file listed in <root>/SHA256SUMS (and that nothing unlisted is present, apart from the top-level
  * repository files in REPO_OWN_TOP_LEVEL, which are returned in `repo_files`). */

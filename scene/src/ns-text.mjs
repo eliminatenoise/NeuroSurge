@@ -27,7 +27,7 @@ function deepFreeze(v) {
   return v;
 }
 
-export const TEXT_VERSION = 'ns-text-r3 (R3-text, 2026-11-08)';
+export const TEXT_VERSION = 'ns-text-r4 (R4-text, 2026-11-09)';
 
 /* ------------------------------------------------------------------ honesty lines (structured) */
 
@@ -35,8 +35,10 @@ export const TEXT_VERSION = 'ns-text-r3 (R3-text, 2026-11-08)';
  * HONESTY ids where one exists. These are the building blocks of SHELL.limits, INFO.caveats and HUD.limitsShort. */
 export const HONESTY = deepFreeze({
   simulated: {
-    id: 'H1-simulated', plain: 'The brain signals and muscle activity are made up by the computer (simulated). The bones ' +
-      'and muscles come from a 3D anatomy model.',
+    // R4-text: one short sentence added, saying plainly what is NOT made up (Flesch 64.9 -> 72.4). Both pinned phrases
+    // ("brain signals and muscle activity are made up", "3D anatomy model") are unchanged.
+    id: 'H1-simulated', plain: 'The brain signals and muscle activity are made up by the computer (simulated). The body ' +
+      'shapes are not. The bones and muscles come from a 3D anatomy model.',
     more: 'All activity in NeuroSurge is simulated.'
   },
   unitless: {
@@ -51,14 +53,18 @@ export const HONESTY = deepFreeze({
   },
   emg: {
     id: 'H7-EMG',
-    plain: 'Muscle colours show the game’s made-up signal, not real muscle readings (EMG). And EMG itself is not ' +
-      'nerve activity or force.',
+    // R4-text: split into three short sentences (Flesch 69.8 -> 76.3); the pinned "EMG itself is not nerve activity
+    // or force" is unchanged.
+    plain: 'Muscle colours show the game’s made-up signal. They are not real muscle readings (EMG). And EMG itself is ' +
+      'not nerve activity or force.',
     more: 'Muscle colour shows the simulated drive, not EMG; EMG is not nerve activity or force.'
   },
   overlapVary: {
     id: 'H5-overlap-and-vary',
-    plain: 'In real brains, the body-part areas overlap and vary between people. Newer maps (Gordon et al., 2023) add ' +
-      'detail to the old “little man” map (Penfield’s homunculus).',
+    // R4-text: "the body-part areas" -> "the areas for each body part" (Flesch 63.2 -> 71.3); the pinned phrase
+    // "overlap and vary between people" is unchanged.
+    plain: 'In real brains, the areas for each body part overlap and vary between people. Newer maps (Gordon et al., ' +
+      '2023) add detail to the old “little man” map (Penfield’s homunculus).',
     more: 'Motor representations overlap and vary between people; contemporary maps (Gordon et al., 2023, Nature: ' +
       'inter-effector regions) refine Penfield’s homunculus.'
   },
@@ -74,8 +80,10 @@ export const HONESTY = deepFreeze({
   },
   notDecoder: {
     id: 'model-name',
-    plain: 'NeuroTranslate 0.0 is only the name of a research model. No trained or validated translation model runs ' +
-      'in this game.',
+    // R4-text: "only" -> "just" and one short closing sentence (Flesch 61.3 -> 73.2); the pinned "No trained or
+    // validated translation model" is unchanged.
+    plain: 'NeuroTranslate 0.0 is just the name of a research model. No trained or validated translation model runs ' +
+      'in this game. Nothing here reads real brains.',
     more: 'NeuroTranslate 0.0 is the companion model name only; it is not a validated decoder.'
   },
   crown: {
@@ -102,7 +110,10 @@ export const CORE_HONESTY_IDS = Object.freeze(['H1-simulated', 'H2-unitless', 'H
 export const BRAND = deepFreeze({
   name: 'NeuroSurge',
   /** What the game is, in one plain line. */
-  tagline: 'A first-person game about how your brain moves your body. Everything in it is simulated.',
+  // R4-fix (review SL4-3): "everything in it is made up" also called the CC BY anatomy (real 3D bone and muscle shapes)
+  // invented; the made-up parts are the brain signals and the muscle activity.
+  tagline: 'A first-person game about how your brain moves your body. The brain signals and muscle activity in it are ' +
+    'made up by the computer (simulated).',
   /** The model-name rule, always with its not-validated qualifier. */
   modelName: 'NeuroTranslate 0.0 is just the name of a model. It does not read real brains (not a validated decoder).'
 });
@@ -116,7 +127,12 @@ export const SHELL = deepFreeze({
   subtitle: `${BRAND.tagline} ${BRAND.modelName}`,
   headings: { loading: 'Loading…', intro: 'How to play', playing: '', paused: 'Paused: how to play', error: 'NeuroSurge stopped' },
   introNote: 'This page closes by itself after 2 seconds. Click to start now. Press Esc to see it again.',
-  pausedNote: 'Press Esc or Resume to go back to the game. Resume also locks the mouse again.',
+  // R4-integrator (R4-load W8): while the rest of the body still streams in, the 2 s timer has not started yet.
+  introNoteLoading: 'This page closes by itself 2 seconds after your body has loaded. Click to start now. Press Esc to ' +
+    'see it again.',
+  // R4-polish (R4-player 2.5): Esc goes back too, but the browser then needs one click before the mouse is locked.
+  pausedNote: 'Resume takes you back to the game and locks the mouse again. Esc also takes you back: then click once ' +
+    'to look around.',
   play: 'Start now',
   resume: 'Resume (Esc)',
   resetBody: 'Reset body',
@@ -126,19 +142,19 @@ export const SHELL = deepFreeze({
   bodyReset: 'Body reset: your pose, the palm turn and the gold marks are cleared. The brain stays where you left it.',
   /** R3-polish: one plain line under the Esc page buttons saying what the two reset buttons do. */
   resetHelp: 'Reset body puts your arm and palm back the way they started and clears the gold marks. ' +
-    'Reset brain view puts the brain back where it started. To read More detail in the panel, press Esc to go back ' +
-    'with a free mouse, then click More detail.',
+    'Reset brain view puts the brain back where it started. To read More detail in the panel, press I while you play ' +
+    '(or press Esc to go back with a free mouse, then click More detail).',
   brainReset: 'Brain view reset: the brain is back in its first place and angle.',
   instructionsTitle: 'How to play',
   instructions: [
     'You see through the eyes of a body that stays in one place. It has no skin, just bones and muscles. Move the ' +
       'mouse or trackpad to look around.',
     'Your whole left arm is in view. The hand stays three quarters up the screen. When you look around, the arm comes ' +
-      'along. It is your LEFT arm, so the hand reaches only a little past the middle of the screen to the right.',
+      'along. It is your LEFT arm: the hand reaches past the middle of the screen, but not to the right edge.',
     'A giant glass brain floats in front of you, out of reach. Its motor areas are the parts that send movement ' +
       'signals to muscles. They glow from dark (resting) to yellow (strongest), and the muscles use the same colours.',
-    'Light-blue areas, in the brain’s right half, are for your left arm. Grey areas are for every other ' +
-      'body part.',
+    'Light-blue areas, in the brain’s right half, are for your left arm. Grey areas are for your other body parts, ' +
+      'plus a few in-between areas that move nothing.',
     'Look at a motor area to switch it on for 1 second. Click to switch it on again. Looking at empty space does ' +
       'nothing. Areas you have used stay a bit more solid, with a gold edge, until you press Reset body.',
     'Other body parts move only through the brain, never by keys. Hold Space while looking at the brain, then look ' +
@@ -158,15 +174,25 @@ export const SHELL = deepFreeze({
     ['W / S', 'move the hand forward or back (use with A / D for diagonals)'],
     ['Hold Space', 'make a fist with all five fingers; let go to open the hand'],
     ['Double-tap Space', 'flip the forearm: palm down ↔ palm up (pronation ↔ supination)'],
-    ['Look / Click', 'switch on the motor area under the crosshair for 1 second (either mouse button)'],
+    ['Look / Click', 'switch on the motor area you aim at (the crosshair) for 1 second, with either mouse button'],
     ['Space on the brain', 'grab and drag the brain; let go to leave it there'],
     ['Orbit arrows', 'click a curved arrow to turn your view around the brain. Hold it to keep turning.'],
+    // R4-arm More detail key (R4-integrator: 'panel' instead of 'information panel', Flesch 66.1 -> 93.0).
+    ['I', 'show or hide More detail in the panel (press I)'],
     ['Esc', 'pause and show this page: how to play, Reset body and settings']
   ],
   settingsTitle: 'Settings',
   sensitivity: 'Look speed',
   invertY: 'Flip up and down when looking (invert Y)',
   faceView: 'Face view',
+  // R4-integrator (D8): the Esc-page picture-quality setting (option names in QUALITY_LABELS).
+  quality: 'Picture quality',
+  // R4-polish: "softer" was not what a player sees on a software renderer (a half-size, blockier picture); say it plainly.
+  qualityHelp: 'Auto keeps the game smooth. Low draws a simpler, less sharp picture for slow computers. The colours and ' +
+    'what they mean stay the same.',
+  // R4-fix (code review M1): edge smoothing is chosen when the page loads; after a Low start, High is fully sharp only
+  // after a reload.
+  qualityReload: 'Reload the page for the sharpest edges.',
   limitsTitle: 'What this game is, and is not',
   limits: [
     `${HONESTY.simulated.plain} ${HONESTY.unitless.plain}`,
@@ -179,12 +205,20 @@ export const SHELL = deepFreeze({
     HONESTY.face.plain,
     HONESTY.notDecoder.plain
   ],
-  captureHint: 'Click the scene to look around · Click More detail to read more · Esc: how to play',
+  // R4-integrator: the R4-arm More detail key (I) works in captured play, so the toast names it.
+  captureHint: 'Click the scene to look around · Press I for More detail · Esc: how to play',
   lockRefused: 'The browser did not lock the mouse. After Esc it waits about a second. Click the scene to try again, or ' +
     'hold a button and drag to look. Clicks still switch areas on · Esc: how to play',
   lookOff: 'Mouse lock does not work here. W/A/S/D, Space and clicks still work · Esc: how to play',
   contextLost: 'The graphics stopped (WebGL context lost). The game waits until the browser brings them back.',
   contextLostLong: 'The graphics have not come back. Reloading the page usually fixes this.'
+});
+
+/** Picture-quality setting names (D8; ns-app QUALITY_SETTING_MODES, ns-scene-three QUALITY_MODES). */
+export const QUALITY_LABELS = deepFreeze({
+  auto: 'Auto',
+  high: 'High',
+  low: 'Low (for slow computers)'
 });
 
 /** Face-view setting names (ns-app FACE_VIEW_LABELS). */
@@ -201,13 +235,16 @@ export const FACE_VIEW_LABELS = deepFreeze({
 export const HUD = deepFreeze({
   title: 'NeuroSurge · a simulated brain-and-body game',
   brand: BRAND.modelName,
-  qualifier: 'A rough map (representative). In real brains, areas overlap and vary between people.',
-  control: 'Your looks and keys are game controls (virtual inputs), not real stimulation or decoding',
-  simulated: 'Every number shown is simulated, from 0 to 1, with no real units (unitless)',
+  qualifier: 'A rough map (representative). In real brains, the areas overlap and vary from person to person.',
+  // R4-text: two short sentences (Flesch 67.8 -> 80.8); the pinned "not real stimulation or decoding" is unchanged.
+  control: 'Your looks and keys are just game controls (virtual inputs). They are not real stimulation or decoding',
+  simulated: 'All numbers are made up by the game (simulated). They go from 0 to 1 and have no real units (unitless)',
   view: 'Seen from above, not mirrored: front at the top, your right on the right',
   rights: 'Anatomy: BodyParts3D © DBCLS, CC BY 4.0',
   placeholderRights: 'Stand-in shapes: no BodyParts3D anatomy shown',
-  limitsShort: 'Signals made up (simulated, unitless) · rough map · game controls (virtual inputs), not real stimulation or decoding',
+  // R4-text: "a rough map" (Flesch 68.8 -> 72.3, 118 characters); the pinned opening and the four core honesty items
+  // are unchanged.
+  limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
   hint: 'Move to look. W/S reach forward or back; A/D move left or right. Hold Space to close the hand; let go to open ' +
     'it. Looking at a new area, or a click, gives 1 second of simulated signal. Click the scene to capture the mouse; ' +
     'Esc frees it.',
@@ -234,18 +271,33 @@ export const HUD = deepFreeze({
   spaceHeld: 'Space held: making a fist (simulated)',
   spaceReleased: 'Space let go: opening the hand (simulated)',
   reachLimited: 'Reach limited so the whole hand stays on screen',
+  // R4-fix (review RP3): shown in the status card while a held W/A/S/D cannot move the hand any further.
+  reachBlocked: 'Your hand cannot go further that way, so it stays on screen',
   contextLost: SHELL.contextLost,
-  placeholderAttribution: 'Stand-in shapes only, no real anatomy. The full game uses: ',
+  placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
   unmappedPrefix: 'Not in the movement map (plain colour): ',
+  // R4-fix (review SL4-5): the three forearm-turning muscles are coloured by name while a forearm turns (round-3 SL-2).
+  unmappedTurnPrefix: 'Not in the movement map, coloured only while the forearm turns: ',
+  unmappedPlainPrefix: 'Not in the movement map, always plain colour: ',
   /** ns-placeholder PLACEHOLDER_LABEL (the ?placeholder=1 banner). */
   placeholderBanner: 'STAND-IN SHAPES (unqualified placeholder): not real anatomy',
   /** ns-actions ARM_REACH_LABEL (the reach line in the details mirror). */
   armReachLabel: 'Simulated arm reach signal (unitless; the shoulder area is not mapped)',
   /** Round 3 (R3-integrator, R3-player item 8): shown when the dragged brain is far from where you look. */
   brainAwayHint: 'Lost the brain? Press Esc, then Reset brain view to bring it back.',
+  /** R4-polish (R4-player 1.11): shown while the arrows have turned the view far round the brain. */
+  turnedFarHint: 'Turned far round the brain? Press Esc, then Reset brain view to go back.',
   /** R3-fix (M6): shown when looking far right at about eye level. */
-  rightArmHint: 'Your right arm rests lower down: look down a little to see it'
+  rightArmHint: 'Your right arm rests lower down: look down a little to see it',
+  /** R4-integrator (R4-player 1.8, D8): shown while the frame rate stays very low (a slow or software renderer). */
+  slowComputer: 'Your computer draws only a few pictures a second, so the game moves slowly.',
+  slowComputerTry: 'Try Picture quality: Low on the Esc page.',
+  /** R4-integrator (R4-player 1.1 / 1.4): added to the crosshair caption when the aimed area moves nothing you can see. */
+  nothingMoves: 'nothing moves on the body',
+  relaxNothing: 'nothing to see: your hand is not gripping',
+  /** R4-fix (review RP6): the left shoulder area has no action of its own; the look and W/A/S/D move the shoulder. */
+  shoulderMoves: 'your look and W, A, S, D already move it'
 });
 
 /** Forearm state words (ns-app ROTATION_PLAIN): the plain words with the technical term in brackets. */
@@ -270,8 +322,9 @@ export function gazeLine(kind, label = '') {
 /** HUD line while a pulse runs (was "Pulse (simulation clock): X (0.6 s left)"). */
 export function pulseLine(label, secondsLeft) { return `Simulated signal: ${str(label)} (${fix1(secondsLeft)} s left)`; }
 /** HUD line right after a pulse starts (was "Pulse #3 (click re-trigger): X"). source: 'click' | 'gaze'. */
+// R4-polish (R4-player T5): the running signal number meant nothing to a player; the line now says what started it.
 export function triggerLine(seq, source, label) {
-  return `Signal #${seq} (${source === 'click' ? 'click' : 'new area'}): ${str(label)}`;
+  return `${source === 'click' ? 'Clicked' : 'New area'}: ${str(label)}`;
 }
 /** HUD line for a pulse the held fist blocked. */
 export function suppressedLine(label) { return `${HUD.suppressedPrefix}${str(label)}`; }
@@ -308,7 +361,8 @@ export const INFO = deepFreeze({
     'coloured area to switch it on. Hold Space while looking at the brain to grab and drag it.',
   leftArmTag: 'Left-arm motor area (brain’s right half)',
   otherTag: 'Other body part’s motor area (no keys)',
-  integrationTag: 'In-between spot (SCAN): moves nothing',
+  // R4-fix (review RP12): the technical names (SCAN, pathway names) are in More detail.
+  integrationTag: 'In-between spot: moves nothing',
   leftArmPathway: 'Brain → crosses to the left at the base of the brain → spinal cord in the neck → arm ' +
     'nerves → muscles (corticospinal tract, brachial plexus)',
   otherPathway: 'Brain → spinal cord or base of the brain → nerves → muscles (corticospinal or corticobulbar pathway)',
@@ -316,12 +370,15 @@ export const INFO = deepFreeze({
   known: 'Known: each half of the brain mainly moves the other side of the body. Real maps overlap and vary.',
   crownNote: HONESTY.crown.plain,
   caveats: [HONESTY.overlapVary.plain, HONESTY.notExact.plain, HONESTY.emg.plain,
-    'NeuroTranslate 0.0 is just a name for a model. No validated decoder runs in this game.'],
+    HONESTY.notDecoder.plain],
   lastViewed: 'Last area you looked at',
-  viewedLast: 'Last area you looked at (the crosshair is on empty space)',
+  // R4-polish (R4-player 1.9): one line, so the card's More detail stays inside the panel.
+  viewedLast: 'Last area you looked at (now on empty space)',
   rows: {
     bodyPart: 'Body part', movement: 'Movement', agonists: 'Muscles that pull', antagonists: 'Muscles that work the other way',
-    pathway: 'Signal path'
+    pathway: 'Signal path',
+    // R4-fix (review SL4-7): an action that pulls nothing (letting go) eases BOTH finger muscle groups off.
+    easeOff: 'Muscles that ease off', pathwayName: 'Name of the signal path'
   },
   noMovement: 'none: this area moves nothing in the game',
   caveatPrefix: 'Keep in mind: ',
@@ -392,7 +449,8 @@ const KNOWN_TAIL = ' Real maps overlap and vary.';
 export function plainKnown(region, leftArm = false) {
   if (!region) return INFO.known;
   const known = t => `Known: ${t}${KNOWN_TAIL}`;
-  if (region.kind === 'integration') return known('these in-between spots link up plans for the whole body (Gordon et al., 2023).');
+  // R4-fix (review SL4-9): what the 2023 paper measured, not its proposal stated as known.
+  if (region.kind === 'integration') return known('in brain scans these in-between spots switch on when people plan actions (Gordon et al., 2023).');
   const h = halfOf(region.hemisphere), o = otherHalf(region.hemisphere), lat = str(region.laterality);
   if (leftArm) return known('the right half of the brain mainly moves the left arm (right hemisphere).');
   const limb = limbOf(region.displayGroup);
@@ -428,8 +486,8 @@ export function plainTitle(region) {
  *  - leftArm: the region is a left-arm area;
  *  - activity (0..1 or null), activations (count), citations ([{ key, verified }]), caveats (general caveats for More).
  * Returns { title, tag, lead, activity, activations, rows: [[label, value]] (<= 4), simulated, known, caveat,
- *   more: { title, technicalName, hemisphere, effector, explanation, muscles: { pull, relax, steady }, note, caveats,
- *   sources } }.
+ *   more: { title, technicalName, hemisphere, effector, explanation (plain detail), muscles: { pull, relax, steady },
+ *   note (plain), caveats, sources, technical: { explanation, note } (the unchanged technical wording) } }.
  */
 export function plainInfoCard({ region = null, action = null, leftArm = false, activity = null, activations = 0,
   citations = [], caveats = [], rotationState = null } = {}) {
@@ -442,9 +500,13 @@ export function plainInfoCard({ region = null, action = null, leftArm = false, a
   else rows.push([INFO.rows.movement, str(region.plainMoves) || INFO.noMovement]);
   const pm = action && action.plainMuscles ? action.plainMuscles : null;
   if (pm && pm.pull) rows.push([INFO.rows.agonists, pm.pull]);
-  if (pm && pm.relax) rows.push([INFO.rows.antagonists, pm.relax]);
-  rows.push([INFO.rows.pathway, plainPathway(region, leftArm)]);
   const list = a => (Array.isArray(a) ? a.filter(x => typeof x === 'string' && x) : []);
+  if (pm && pm.relax) rows.push([action && list(action.agonists).length === 0 ? INFO.rows.easeOff : INFO.rows.antagonists, pm.relax]);
+  // R4-fix (review RP12): for an in-between area the bracketed network names (not a pathway) go to More detail
+  // (more.pathwayName); the effector cards keep their pathway name in brackets after the plain route, which the
+  // information-panel requirement (U3: "pathway") reads.
+  const pw = plainPathway(region, leftArm), pwm = integration ? /^(.*?)\s*\(([^()]+)\)\s*$/.exec(pw) : null;
+  rows.push([INFO.rows.pathway, pwm ? pwm[1] : pw]);
   const pull = action ? list(action.agonists) : [];
   const relax = action ? list(action.antagonists).filter(m => !pull.includes(m)) : [];
   return {
@@ -460,13 +522,18 @@ export function plainInfoCard({ region = null, action = null, leftArm = false, a
     more: {
       title: INFO.moreDetail,
       technicalName: str(region.label),
+      pathwayName: pwm ? pwm[2] : '',
       hemisphere: halfOf(region.hemisphere) ? `${region.hemisphere} hemisphere` : '',
       effector: str(region.effector),
-      explanation: str(region.explanation),
+      // R4-text: the More detail prose is the plain restatement (ns-bodymap plainDetail / plainNote / plainNoAction:
+      // short sentences, every technical term and citation kept in brackets); the technical wording is still here, in
+      // `technical`, for audits and science review (the panel does not need to show it).
+      explanation: str(region.plainDetail) || str(region.explanation),
       muscles: { pull, relax, steady: action ? list(action.stabilizers) : [] },
-      note: action ? str(action.note) : str(region.noActionReason),
+      note: action ? str(action.plainNote) || str(action.note) : str(region.plainNoAction) || str(region.noActionReason),
       caveats: list(caveats),
-      sources: sourcesLine(citations)
+      sources: sourcesLine(citations),
+      technical: { explanation: str(region.explanation), note: action ? str(action.note) : str(region.noActionReason) }
     }
   };
 }
@@ -520,7 +587,7 @@ export const LEGEND = deepFreeze({
   shared: 'same colours on brain and muscles',
   key: [
     ['leftarm', 'Left-arm areas (brain’s right half)', 'Left arm'],
-    ['other', 'Areas for every other body part', 'Other parts'],
+    ['other', 'Other body parts, and spots that move nothing', 'Other parts'],
     ['activated', 'Gold edge: switched on (until Reset body)', 'Switched on'],
     ['dot', 'Dots: left-arm control spots', 'Arm spots']
   ],
@@ -542,13 +609,60 @@ export const FACE = deepFreeze({
     'chewing or tongue muscles.'
 });
 
+/* ------------------------------------------------------------------ "Try this" guide (round 4, D7) */
+
+/** Wording of the optional first-time "Try this" guide (ns-guide.mjs is the state machine; this is only text).
+ * One short plain line at a time. Every line names a game control and what you will see; none says the game reads,
+ * records or sends brain signals (looks, clicks and keys stay game controls). Goal ids match ns-guide GUIDE_GOAL_IDS,
+ * in teaching order. `partial` lines replace a goal's line when half of it is done. */
+export const GUIDE = deepFreeze({
+  label: 'Try this',
+  // Short on purpose: the line sits in the status card (about 40 characters per line there), so each goal is one or
+  // two short sentences.
+  goals: {
+    // R4-fix (reviews SL4-4 / RP6): name areas that visibly move the arm (the shoulder area and "Relax left grip" on
+    // an open hand move nothing you can see, and do not complete this goal).
+    leftArmArea: 'Look at a light-blue area, like the elbow. Watch your left arm move.',
+    moveHand: 'Press W, A, S or D to move your left hand.',
+    // R4-fix (review RP14): Space while looking at the brain also grabs it (the user's rule), so look away first.
+    fist: 'Look away from the brain. Hold Space to make a fist, then let go.',
+    flipPalm: 'Tap Space twice, fast, to flip your palm over.',
+    // R4-fix (reviews F3 / SL4-4): 14 grey areas move nothing; this goal completes only on one that moves a joint.
+    otherPart: 'Look at a grey area, like a leg or the right arm. Watch that part move.',
+    dragBrain: 'Hold Space on the brain and look down to drag it. See your legs?',
+    // R4-fix (review RP4): with the mouse captured the crosshair must look far from the brain to reach an arrow; a free
+    // mouse (Esc twice) lets you click the arrows while you watch the brain.
+    orbit: 'Press Esc twice for a free mouse. Then click or hold a curved arrow to turn your view.'
+  },
+  partial: {
+    moveHandNeedX: 'Good! Now try A or D to move it left or right.',
+    moveHandNeedZ: 'Good! Now try W or S to move it forward or back.'
+  },
+  nice: 'Nice!',
+  finished: 'All done! Press Esc any time to see all the controls.',
+  // Esc page: a small "Try this guide" row in Settings (ns-guide wiring, round4/R4-text-NOTES.md).
+  escTitle: 'Try this guide',
+  escHelp: 'The “Try this” guide gives you one small task at a time. It never stops the game.',
+  hide: 'Hide the guide',
+  show: 'Show the guide',
+  restart: 'Restart the guide'
+});
+
+/** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";
+ * nice = true puts "Nice! " in front (a goal was just done). */
+export function guideLine(step, total, text, nice = false) {
+  const n = Number.isFinite(step) ? step : 1, m = Number.isFinite(total) ? total : n;
+  return `${nice ? `${GUIDE.nice} ` : ''}${GUIDE.label} (${n} of ${m}): ${str(text)}`;
+}
+
 /* ------------------------------------------------------------------ page (scene/example/index.html) */
 
 export const PAGE = deepFreeze({
   title: BRAND.name,
   canvasLabel: 'NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or ' +
     'decoding).',
-  noscript: 'NeuroSurge needs JavaScript and 3D graphics (WebGL) to run.',
+  // R4-integrator: R4-text's proposed plainer line (Flesch 61.2 -> 84.9); index.html's static copy changes with it.
+  noscript: 'This game needs JavaScript and 3D graphics (WebGL) to run.',
   fatalPrefix: 'NeuroSurge could not start: ',
   restartPrefix: 'NeuroSurge could not restart: ',
   secureContext: 'Your browser blocked a safety check (crypto.subtle). Open the game over HTTPS or from localhost.'
@@ -563,15 +677,15 @@ export const MAP_CAVEATS = deepFreeze([
     'Nothing here is a real brain reading, muscle reading (EMG), nerve signal or force.',
   'The coloured strip is a simplified map, not a scan of any real brain. Real body-part areas overlap and vary ' +
     'between people, and between the two halves of the brain.',
-  'The old “little person” map (Penfield’s homunculus) sums up early brain tests whose maps overlapped a lot. ' +
-    'Newer maps (Gordon et al., 2023) show areas in rings, with three in-between areas.',
+  'The old “little person” map (Penfield’s homunculus) sums up early brain tests, and their maps overlapped a lot. ' +
+    'Newer maps (Gordon et al., 2023) show the areas in rings, with three in-between areas.',
   'Recordings from single brain cells found signals for the whole body at every spot tested, all mixed together. So ' +
     'no area here is the one exact spot for a muscle. The borders are only game borders.',
   HONESTY.crown.plain,
   'Arm and leg muscles get their signals mainly from the other half of the brain. Your left arm is moved mainly by ' +
     'the right half (right hemisphere). Trunk, neck, upper face, jaw and tongue get strong signals from both halves.',
-  'Muscle lists are rough roles from anatomy tables, not measurements. A muscle that is switched on does not always ' +
-    'get shorter. Muscle colour shows the made-up signal, not muscle readings (EMG) or force.',
+  'The muscle lists are rough jobs taken from anatomy tables. They are not measured. A muscle that is switched on ' +
+    'does not always get shorter. Muscle colour shows the made-up signal, not muscle readings (EMG) or force.',
   HONESTY.notDecoder.plain
 ]);
 
@@ -590,6 +704,7 @@ export function plainStrings() {
   walk(BRAND, 'BRAND');
   walk(SHELL, 'SHELL');
   walk(FACE_VIEW_LABELS, 'FACE_VIEW_LABELS');
+  walk(QUALITY_LABELS, 'QUALITY_LABELS');
   walk(HUD, 'HUD');
   walk(ROTATION, 'ROTATION');
   walk(INFO, 'INFO');
@@ -598,6 +713,7 @@ export function plainStrings() {
   walk(ORBIT, 'ORBIT');
   walk(LEGEND, 'LEGEND');
   walk(FACE, 'FACE');
+  walk(GUIDE, 'GUIDE');
   walk(PAGE, 'PAGE');
   walk(MAP_CAVEATS, 'MAP_CAVEATS');
   const samples = [
@@ -606,7 +722,8 @@ export function plainStrings() {
     ['triggerLine(gaze)', triggerLine(4, 'gaze', 'Close left hand')], ['suppressedLine', suppressedLine('Open left hand')],
     ['rotationLine', rotationLine('supinated')], ['elbowLine', elbowLine({ commandDeg: 40, achievedDeg: 31, limited: true })],
     ['activityLine', activityLine(0.8)], ['activationsLine', activationsLine(2)], ['moreCaveatsLine', moreCaveatsLine(2)],
-    ['LEFT_ARM_LABEL', LEFT_ARM_LABEL]
+    ['LEFT_ARM_LABEL', LEFT_ARM_LABEL], ['guideLine', guideLine(2, 7, GUIDE.goals.moveHand)],
+    ['guideLine(nice)', guideLine(3, 7, GUIDE.goals.fist, true)]
   ];
   for (const k of ['arm', 'leg', 'trunk', 'face']) for (const h of ['right', 'left']) samples.push([`regionGroupLabel(${k},${h})`, regionGroupLabel(k, h)]);
   for (const [p, t] of samples) out.push([p, t]);

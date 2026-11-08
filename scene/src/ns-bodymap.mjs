@@ -351,9 +351,9 @@ const CONTENT = {
       { id: `${c.code}_knee_extend`, label: `Straighten ${c.S} knee`, joints: { [`knee_ext_${c.J}`]: 0 },
         agonists: sided(c.S, 'rectus femoris', 'vastus lateralis', 'vastus medialis', 'vastus intermedius'),
         antagonists: sided(c.S, 'biceps femoris', 'semitendinosus', 'semimembranosus'),
-        note: 'At the straight source pose this shows mainly as quadriceps colour; isometric force is not modelled.' }
+        note: 'At the seated rest pose the knee is bent (about 45 deg), so this straightens the knee (quadriceps); isometric force is not modelled.' }
     ],
-    explanation: `Knee area for the ${c.S} leg, near the dorsal margin of the ${c.H} hemisphere between the foot and hip areas. ${LEG_PATHWAY(c)} The game simulates bending the ${c.S} knee (hamstrings) or straightening it (quadriceps); when the knee is already straight, straightening shows only as muscle colour. The knee lies in a ring of the concentric foot zone and overlaps the ankle and hip areas.`,
+    explanation: `Knee area for the ${c.S} leg, near the dorsal margin of the ${c.H} hemisphere between the foot and hip areas. ${LEG_PATHWAY(c)} The game simulates bending the ${c.S} knee (hamstrings) or straightening it (quadriceps). The knee lies in a ring of the concentric foot zone and overlaps the ankle and hip areas.`,
     citationKeys: ['PENFIELD1937', 'GORDON2023', 'UAMS_LOWER']
   }),
   hip: c => ({
@@ -431,7 +431,7 @@ const CONTENT = {
         agonists: ['right brachialis', 'right biceps brachii', 'right brachioradialis'], antagonists: ['right triceps brachii', 'right anconeus'] },
       { id: 'lh_r_elbow_extend', label: 'Straighten right elbow', joints: { r_elbow_flex: 0 },
         agonists: ['right triceps brachii', 'right anconeus'], antagonists: ['right brachialis', 'right biceps brachii', 'right brachioradialis'],
-        note: 'At the straight source pose this shows mainly as triceps colour.' }
+        note: 'At the seated rest pose the right elbow is bent (about 85 deg) on the armrest, so this straightens it (triceps).' }
     ],
     explanation: 'Elbow area for the RIGHT arm in the left hemisphere, dorsal (medial) to the wrist and hand areas. Crossed corticospinal fibres reach cervical motor neurons for the arm. The game simulates bending (brachialis, biceps, brachioradialis) or straightening (triceps, anconeus) the right elbow. Meier 2008 measured right-arm elbow movement in the left hemisphere dorsal to the hand, without separate flexion and extension centres.',
     citationKeys: ['MEIER2008', 'GORDON2023', 'UAMS_UPPER']
@@ -453,13 +453,13 @@ const CONTENT = {
     label: 'Right forearm rotation', shortLabel: 'R forearm', effector: 'forearm rotation (right arm)', bodySide: 'right', medialSurface: false,
     displayGroup: 'right_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
     actions: [
-      { id: 'lh_r_pronate', label: 'Turn right palm back (pronation)', joints: { r_pronation: 120 },
+      { id: 'lh_r_pronate', label: 'Turn right palm down (pronation)', joints: { r_pronation: 120 },
         agonists: ['right pronator teres', 'right pronator quadratus'], antagonists: ['right supinator', 'right biceps brachii'] },
-      { id: 'lh_r_supinate', label: 'Turn right palm forward (supination)', joints: { r_pronation: 0 },
+      { id: 'lh_r_supinate', label: 'Turn right palm up (supination)', joints: { r_pronation: 0 },
         agonists: ['right supinator', 'right biceps brachii'], antagonists: ['right pronator teres', 'right pronator quadratus'],
-        note: 'The source pose is already supinated, so from rest this shows mainly as muscle colour.' }
+        note: 'At the seated rest pose the right forearm rests forward with the palm mostly down (mostly pronated), so this turns the palm up.' }
     ],
-    explanation: 'Forearm-rotation area for the RIGHT arm, between the elbow and wrist areas of the left hemisphere. Crossed corticospinal fibres reach the cervical motor neurons of the forearm rotators. The game simulates turning the right palm back (pronator teres and quadratus) or forward (supinator and biceps brachii). Forearm rotation shares overlapping fields with the wrist and elbow (Meier 2008), so this spot is a game placement, not a measured point.',
+    explanation: 'Forearm-rotation area for the RIGHT arm, between the elbow and wrist areas of the left hemisphere. Crossed corticospinal fibres reach the cervical motor neurons of the forearm rotators. The game simulates turning the right palm down (pronator teres and quadratus) or up (supinator and biceps brachii). Forearm rotation shares overlapping fields with the wrist and elbow (Meier 2008), so this spot is a game placement, not a measured point.',
     citationKeys: ['MEIER2008', 'UAMS_UPPER']
   }),
   wrist: c => (c.H === 'right' ? {
@@ -757,7 +757,7 @@ const PLAIN_REGION = {
     plainLabel: `${c.Sc} ankle`,
     plainLead: `This spot in ${half(c)} tells your ${c.S} foot to point up or down.`,
     plainMoves: `Pulls your ${c.S} foot up or points it down.`,
-    plainCaveat: 'The leg areas form rings that overlap around the toe area, not a neat line.'
+    plainCaveat: 'The leg areas form rings around the toe area. They overlap and do not sit in a neat line.'
   }),
   knee: c => ({
     plainLabel: `${c.Sc} knee`,
@@ -773,7 +773,7 @@ const PLAIN_REGION = {
   }),
   scan_superior: () => ({
     plainLabel: 'In-between area (upper)',
-    plainLead: 'This in-between spot on the motor strip is linked to planning whole-body moves.',
+    plainLead: 'This in-between spot on the motor strip is linked to planning moves of the whole body.',
     plainMoves: SCAN_MOVES_PLAIN,
     plainCaveat: SCAN_CAVEAT_PLAIN
   }),
@@ -781,7 +781,7 @@ const PLAIN_REGION = {
     plainLabel: 'Belly and back',
     plainLead: `This spot in ${half(c)} signals the belly and back muscles on both sides.`,
     plainMoves: 'Bends your body forward or leans it back.',
-    plainCaveat: 'Few studies measured the trunk area, and breathing and posture are not shown.'
+    plainCaveat: 'Few studies measured the trunk area. Breathing and posture are not shown.'
   }),
   shoulder: c => (c.H === 'right' ? {
     plainLabel: 'Left shoulder',
@@ -807,8 +807,8 @@ const PLAIN_REGION = {
     plainCaveat: 'No study shows a separate spot for turning the palm. So this place is a game choice.'
   } : {
     plainLabel: 'Right forearm turn',
-    plainLead: `This spot in ${half(c)} tells your right palm to turn back or forward.`,
-    plainMoves: `Turns your right palm back or forward${LOOK_RIGHT}.`,
+    plainLead: `This spot in ${half(c)} tells your right palm to turn down or up.`,
+    plainMoves: `Turns your right palm down or up${LOOK_RIGHT}.`,
     plainCaveat: 'Turning the palm shares spots with the wrist and elbow. So this place is a game choice.'
   }),
   wrist: c => ({
@@ -839,7 +839,7 @@ const PLAIN_REGION = {
     plainLabel: 'Right hand',
     plainLead: `This spot in ${half(c)} tells your right hand to close or open.`,
     plainMoves: `Closes or opens your right hand${LOOK_RIGHT}.`,
-    plainCaveat: 'Finger spots overlap. Even the hand spot carries signals for other body parts.'
+    plainCaveat: 'The finger spots overlap. Even the hand spot reacts when other parts of the body move.'
   }),
   r_fingers: c => ({
     plainLabel: 'Right fingers',
@@ -863,7 +863,7 @@ const PLAIN_REGION = {
     plainLabel: 'In-between area (middle)',
     plainLead: 'This in-between spot on the motor strip, by the hand and face, is linked to planning.',
     plainMoves: SCAN_MOVES_PLAIN,
-    plainCaveat: 'A study found that stimulating this spot never moved any body part.'
+    plainCaveat: 'In brain tests, a small electric pulse here never moved any body part.'
   }),
   brow: c => ({
     plainLabel: 'Eyebrows',
@@ -936,9 +936,10 @@ const PLAIN_ACTION = {
   r_elbow_extend: () => ({ plainLabel: 'Straighten right elbow', pull: 'muscles at the back of the arm (triceps)', relax: 'muscles at the front of the arm (biceps and others)' }),
   pronation: () => ({ plainLabel: 'Turn left palm down', pull: PALM_DOWN_MUSCLES, relax: PALM_UP_MUSCLES }),
   supination: () => ({ plainLabel: 'Turn left palm up', pull: PALM_UP_MUSCLES, relax: PALM_DOWN_MUSCLES }),
-  // R3-fix (review SL-7): the seated right arm turns its palm back / forward, so its muscle words say so too.
-  r_pronate: () => ({ plainLabel: 'Turn right palm back', pull: 'forearm muscles that turn the palm back', relax: 'muscles that turn the palm forward (including the biceps)' }),
-  r_supinate: () => ({ plainLabel: 'Turn right palm forward', pull: 'muscles that turn the palm forward (including the biceps)', relax: 'forearm muscles that turn the palm back' }),
+  // R4-fix (review SL4-1): since round 4 the seated right forearm rests FORWARD on the armrest, so turning it moves the
+  // palm down / up (as on the left arm); round 3's hanging arm turned it back / forward.
+  r_pronate: () => ({ plainLabel: 'Turn right palm down', pull: 'forearm muscles that turn the palm down', relax: 'muscles that turn the palm up (including the biceps)' }),
+  r_supinate: () => ({ plainLabel: 'Turn right palm up', pull: 'muscles that turn the palm up (including the biceps)', relax: 'forearm muscles that turn the palm down' }),
   wrist_flexion: () => ({ plainLabel: 'Bend left wrist toward the palm', pull: 'wrist muscles on the palm side of the forearm', relax: 'wrist muscles on the back of the forearm' }),
   wrist_extension: () => ({ plainLabel: 'Bend left wrist back', pull: 'wrist muscles on the back of the forearm', relax: 'wrist muscles on the palm side of the forearm' }),
   r_wrist_flex: () => ({ plainLabel: 'Bend right wrist toward the palm', pull: 'wrist muscles on the palm side of the forearm', relax: 'wrist muscles on the back of the forearm' }),
@@ -957,8 +958,8 @@ const PLAIN_ACTION = {
   r_fingers_straighten: () => ({ plainLabel: 'Straighten right fingers', pull: 'finger-straightening muscles', relax: 'finger-bending muscles' }),
   r_thumb_close: () => ({ plainLabel: 'Close right thumb', pull: 'thumb muscles that bend it across the palm', relax: 'thumb muscles that straighten it' }),
   neck_flex: () => ({ plainLabel: 'Bend head forward', pull: 'muscles at the front of the neck', relax: 'muscles at the back of the neck' }),
-  neck_turn_left: () => ({ plainLabel: 'Turn head to the left', pull: 'the right side-neck muscle and a left back-of-neck muscle', relax: 'the left side-neck muscle and a right back-of-neck muscle' }),
-  neck_turn_right: () => ({ plainLabel: 'Turn head to the right', pull: 'the left side-neck muscle and a right back-of-neck muscle', relax: 'the right side-neck muscle and a left back-of-neck muscle' }),
+  neck_turn_left: () => ({ plainLabel: 'Turn head to the left', pull: 'a right side-neck muscle and a left back-of-neck one', relax: 'a left side-neck muscle and a right back-of-neck one' }),
+  neck_turn_right: () => ({ plainLabel: 'Turn head to the right', pull: 'a left side-neck muscle and a right back-of-neck one', relax: 'a right side-neck muscle and a left back-of-neck one' }),
   brow_raise: () => ({ plainLabel: 'Raise both eyebrows', pull: 'the forehead muscle', relax: 'frown muscles between the eyebrows' }),
   eye_close: () => ({ plainLabel: 'Close both eyes', pull: 'ring muscles around the eyes', relax: 'eyelid-lifting muscles' }),
   smile: c => ({ plainLabel: `Smile (mostly the ${c.S} side)`, pull: `smile muscles in the ${c.S} cheek`, relax: `the muscle that pulls the ${c.S} mouth corner down` }),
@@ -971,6 +972,331 @@ const PLAIN_ACTION = {
 
 /** Key of PLAIN_ACTION for an action id ('rh_knee_flex' -> 'knee_flex', 'lh_r_grasp' -> 'r_grasp', 'grasp_close'). */
 export function plainActionKey(actionId) { return String(actionId).replace(/^(rh|lh)_/, ''); }
+
+// ---------------------------------------------------------------------------------------------
+// Plain "More detail" layer (round 4, R4-text; lead: More detail readable for a curious 12-year-old, Flesch >= 50,
+// technical terms and citations kept, in brackets after a plain phrase).
+//
+// plainDetail restates the region's technical `explanation` sentence by sentence in shorter, everyday words. Every
+// technical term, muscle name and citation of the explanation is kept, in brackets after its plain phrase (checked by
+// tests/unit/R4-text-detail.test.mjs); nothing is added, dropped or changed in meaning. plainNoAction restates
+// `noActionReason`, and an action's plainNote restates its `note`. The technical fields stay unchanged as the science
+// record (the technical-layer sha256 pin in R3-text-bodymap.test.mjs strips only plain* fields, so it still holds).
+
+const BRAIN_HALF = (c, cite = '') => `the brain’s ${c.H} half (${c.H} hemisphere${cite ? `; ${cite}` : ''})`;
+const LEG_PATH_PLAIN = c => `The long fibres from here cross to the other side at the base of the brain (corticospinal fibres, ` +
+  `medulla). They reach the nerve cells for the ${c.S} leg in the lower spinal cord (lumbosacral motor neurons).`;
+const ARM_PATH_PLAIN = (what, terms = '') => `Its fibres cross over and reach the nerve cells for ${what} in the neck part ` +
+  `of the spinal cord (crossed corticospinal fibres, cervical motor neurons${terms}).`;
+const SIM_SIGNAL = 'a made-up signal (simulated)';
+const NO_FACE_LEVEL = 'So the game only keeps a made-up level here (a simulated display level): nothing on the face layer ' +
+  'moves or changes colour.';
+const SCAN_NETWORK = 'It belongs to a newly found network for planning actions (somato-cognitive action network, SCAN).';
+const SCAN_WEAK = 'In-between areas are only loosely tied to one movement (inter-effector regions show weak movement ' +
+  'specificity).';
+
+/** Region plain detail (and plainNoAction where the region has a noActionReason), keyed like CONTENT. */
+const PLAIN_DETAIL = {
+  toes: c => ({
+    detail: `This is the toe area for your ${c.S} foot. It sits in the middle of the foot zone, on the inner wall where ` +
+      `the two halves of the brain meet (medial wall, paracentral lobule, ${c.H} hemisphere). ${LEG_PATH_PLAIN(c)} The ` +
+      `game sends a made-up signal with no units (a simulated, unitless drive). It curls or lifts the ${c.S} toes and ` +
+      'colours the muscles that bend or straighten them (flexors or extensors) with the brain’s colours (colour ramp). ' +
+      'In brain scans (fMRI) and stimulation studies, moving the toes switches on this inner zone. But the spot here is ' +
+      'simplified (schematic): the inner end of the strip stands in for the inner wall (medial edge, medial wall).'
+  }),
+  ankle: c => ({
+    detail: `This is the ankle and foot area for your ${c.S} leg, in ${BRAIN_HALF(c)}. It sits beside the toe area, on the inner wall ` +
+      `(medial wall and paracentral lobule). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} pulls the ${c.S} foot up ` +
+      'at the ankle (tibialis anterior) or points it down (gastrocnemius and soleus). The foot zone is made of rings ' +
+      '(concentric). The toes are in the middle, and the ankle, knee and hip form rings around them (Gordon 2023). So ' +
+      'these leg areas overlap. They do not sit in a neat line (strict line).'
+  }),
+  knee: c => ({
+    detail: `This is the knee area for your ${c.S} leg. It sits near the top edge of ${BRAIN_HALF(c)}, between the ` +
+      `foot and hip areas (dorsal margin). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} bends the ${c.S} knee ` +
+      '(hamstrings) or straightens it (quadriceps). You are sitting, so your knee starts bent. The knee sits in one of the rings of the foot zone (concentric), and it overlaps the ankle and ' +
+      'hip areas.'
+  }),
+  hip: c => ({
+    detail: `This is the hip area for your ${c.S} leg, in ${BRAIN_HALF(c)}. It sits in the outer ring of the foot zone, where it meets the ` +
+      `area for the trunk (trunk territory). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} lifts the ${c.S} thigh ` +
+      '(iliopsoas and rectus femoris) or pushes it back (gluteus maximus and hamstrings). Muscles near the top of the leg ' +
+      '(proximal leg muscles) also help with posture and balance. The game does not model that.'
+  }),
+  scan_superior: c => ({
+    detail: `This is the upper in-between area (superior inter-effector region). ${SCAN_NETWORK} It sits between the ` +
+      `foot and hand zones of ${BRAIN_HALF(c)}, mixed in with them (interleaved; Gordon 2023). It is strongly linked to ` +
+      'the other in-between areas and to a network that helps control actions (cingulo-opercular action-control ' +
+      'network). It was most active when people tightened their belly (abdominal contraction) and while they planned an ' +
+      'action, not when they moved one body part. In the game, looking here lights up and marks the area, but on ' +
+      'purpose it moves nothing. Any real job here would be getting the whole body ready or holding a posture (whole-body ' +
+      'postural or preparatory control), and that is not simulated.',
+    noAction: `${SCAN_WEAK} They are linked to planning actions, posture and holding the trunk steady (axial control). ` +
+      'The game moves nothing here.'
+  }),
+  trunk: () => ({
+    detail: 'This is the area for the belly and back muscles (trunk area; abdominal and back muscles). It sits between ' +
+      'the hip and shoulder areas, and it overlaps the upper in-between area (superior inter-effector region). Muscles ' +
+      'along the middle of the body (axial muscles) get signals from both halves of the brain (corticospinal input from ' +
+      'both hemispheres; erector spinae: Ferbert 1992). So in the game, the trunk area in either half moves the whole ' +
+      'trunk. A made-up signal (simulated) bends the body forward (rectus abdominis and obliques) ' +
+      'or leans it back (erector spinae columns). Tightening the belly also switches on the in-between areas (abdominal ' +
+      'contraction co-activates the inter-effector regions; Gordon 2023). Penfield’s maps had too few trunk tests to ' +
+      'measure this area (stimulations; Catani 2017). Breathing and posture are not modelled.'
+  }),
+  shoulder: c => (c.H === 'right' ? {
+    detail: 'This is the shoulder area for your LEFT arm. It sits at the inner edge of the arm and hand zone in the ' +
+      'brain’s right half (medial edge, right hemisphere). Most of its signals cross to the other side (crossed ' +
+      'corticospinal fibres dominate). Muscles near the body, such as the shoulder cap muscle, also get weaker signals ' +
+      'from the same side (same-side input to proximal muscles such as the deltoid; Bawa 2004). In NeuroSurge, your look ' +
+      'and the W/A/S/D keys already move the left shoulder. So looking here lights up and marks the area, but it adds no ' +
+      'separate movement. Brain stimulation rarely moves the shoulder on its own (isolated shoulder movement; Gordon ' +
+      '2023). The 3D model also has no chest, wide back or upper back muscles (no pectoralis, latissimus or trapezius ' +
+      'meshes). So the game does not show the shoulder muscles joining in as if it were measured (shoulder recruitment, ' +
+      'measured activation).',
+    noAction: 'Your look and the W/A/S/D keys move the left shoulder (the reach lane). It has no separate look action ' +
+      '(gaze action), so looking here only lights up and marks the area.'
+  } : {
+    detail: 'This is the shoulder area for your RIGHT arm. It sits at the inner edge of the arm and hand zone in the ' +
+      'brain’s left half (medial edge, left hemisphere). Most of its signals cross to the other side (crossed ' +
+      'corticospinal fibres dominate). Muscles near the body also get weaker signals from the same side (same-side ' +
+      `input to proximal muscles; Bawa 2004). In the game, ${SIM_SIGNAL} raises the right arm forward (front deltoid, ` +
+      'pectoralis major, coracobrachialis) or out to the side (middle deltoid, supraspinatus). Look far right to see ' +
+      'it. The areas for the upper and lower arm overlap (proximal and distal arm representations; Devanne 2006). Brain ' +
+      'stimulation rarely moves the shoulder on its own (in isolation; Gordon 2023).'
+  }),
+  elbow: c => (c.H === 'right' ? {
+    detail: 'This is the elbow area for your LEFT arm, in the brain’s right half (right hemisphere). It sits above and ' +
+      `inward from the wrist and hand areas (dorsal, medial). ${ARM_PATH_PLAIN('the arm')} In the game, looking here gives ` +
+      'a short burst (pulse) of the same elbow bend (flexion: brachialis, biceps, brachioradialis) or straightening ' +
+      '(extension: triceps, anconeus) that your left arm already uses. One study placed the elbow mostly above the hand ' +
+      'area (Meier 2008; elbow emphasis dorsal to the hand). But its task switched back and forth (alternating task), so ' +
+      'it did not find a separate centre for bending and for straightening (flexion centre, extension centre). So the two ' +
+      'control spots here are only rough guides (representative).'
+  } : {
+    detail: 'This is the elbow area for your RIGHT arm, in the brain’s left half (left hemisphere). It sits above and ' +
+      `inward from the wrist and hand areas (dorsal, medial). ${ARM_PATH_PLAIN('the arm')} In the game, ${SIM_SIGNAL} ` +
+      'bends the right elbow (brachialis, biceps, brachioradialis) or straightens it (triceps, anconeus). One study ' +
+      'measured right elbow movement in the brain’s left half, above the hand area (Meier 2008; dorsal to the hand). It ' +
+      'found no separate centres for bending and straightening (flexion and extension centres).'
+  }),
+  forearm: c => (c.H === 'right' ? {
+    detail: 'This is the area for turning your LEFT forearm (forearm rotation). The game places it between the elbow ' +
+      `and wrist areas of the brain’s right half (right hemisphere). ${ARM_PATH_PLAIN('the forearm-turning muscles', ', forearm rotators')} ` +
+      'In the game, looking here turns the left palm down (pronator teres and quadratus) or up (supinator and biceps ' +
+      'brachii). That is the same flip a double-tap of Space makes. In the brain, turning the forearm shares overlapping ' +
+      'areas with the wrist and elbow (overlapping fields; Meier 2008 tested the wrist and forearm together). No study has ' +
+      'published a separate spot for turning the palm down (pronation point). So this spot is a game placement.'
+  } : {
+    detail: 'This is the area for turning your RIGHT forearm (forearm rotation). It sits between the elbow and wrist ' +
+      `areas of the brain’s left half (left hemisphere). ${ARM_PATH_PLAIN('the forearm-turning muscles', ', forearm rotators')} ` +
+      `In the game, ${SIM_SIGNAL} turns the right palm down (pronator teres and quadratus) or up (supinator and ` +
+      'biceps brachii). Turning the forearm shares overlapping areas with the wrist and elbow (overlapping fields; Meier ' +
+      '2008). So this spot is a game placement, not a measured point.'
+  }),
+  wrist: c => (c.H === 'right' ? {
+    detail: 'This is the wrist area for your LEFT hand, in the brain’s right half (right hemisphere). It sits between ' +
+      `the forearm-turning area and the hand area. ${ARM_PATH_PLAIN('the wrist muscles', ', wrist flexors and extensors')} ` +
+      'In the game, looking here gives a short burst (pulse) of the left wrist bending toward the palm (flexion: flexor ' +
+      'carpi radialis and ulnaris) or bending back (extension: the three wrist extensors). In the brain, the wrist area ' +
+      'overlaps the fingers and shows up on both sides of the hand zone (wrist representation; Meier 2008; Gordon 2023). ' +
+      'But this strip runs in only one direction (one-dimensional), so it shows only the upper part (dorsal part). Maps of ' +
+      'the forearm muscles also peak in different places for different tasks (task-specific peaks; Masse-Alarie 2017).'
+  } : {
+    detail: 'This is the wrist area for your RIGHT hand, in the brain’s left half (left hemisphere). It sits between ' +
+      `the forearm-turning area and the hand area. ${ARM_PATH_PLAIN('the wrist muscles')} In the game, ${SIM_SIGNAL} ` +
+      'bends the right wrist toward the palm (flexing: flexor carpi radialis and ulnaris) or bends it back (extending: ' +
+      'the three wrist extensors). In studies of the right hand, the wrist area sits on both sides of the finger area ' +
+      '(the wrist emphasis brackets the fingers; Meier 2008). This strip runs in only one direction (one-dimensional), so ' +
+      'it shows the wrist as one area (region).'
+  }),
+  hand: () => ({
+    detail: 'This is the hand area for your LEFT hand (the hand knob), in the brain’s right half (right hemisphere). It ' +
+      'covers whole-hand moves: grasp, release, open and spread. Its fibres cross over and reach the nerve cells for the ' +
+      'hand (crossed corticospinal fibres, hand motor neurons). Some of them link straight to those nerve cells, which ' +
+      'helps fine finger control (direct cortico-motoneuronal connections; Lemon 2008). In the game, looking here, or ' +
+      'holding Space for a fist, drives the left-hand actions. The muscles that bend or straighten the fingers (finger ' +
+      'flexors or extensors) take the same colours as the brain (colour ramp). One study measured left-hand grasp and ' +
+      'pulling back in the brain’s right half (Huber 2020; grasp and retraction in the right motor cortex). It found ' +
+      'overlapping patches that repeat and differ between people (repeated action patches). A real hand can also let go ' +
+      'of a grip without any effort (grip release can be passive; Motawar 2012). So opening the hand when you let go of ' +
+      'Space is a game rule (game convention).'
+  }),
+  index: () => ({
+    detail: 'This is the index-finger area for your LEFT hand. It sits inside the hand zone of the brain’s right half ' +
+      '(right hemisphere). Its fibres cross over and reach the nerve cells for the long muscles that bend and straighten ' +
+      'the fingers (crossed corticospinal fibres, motor neurons, long finger flexors and extensors). In the game, looking ' +
+      'here gives a short burst (pulse) of the left index finger bending or straightening (flexion or extension). Bending ' +
+      'and straightening one finger use strongly overlapping brain patterns (activity patterns; Arbuckle 2020). That study ' +
+      'was of the right hand, so it is mirrored here (by inference). The 3D finger muscles are whole muscles (finger flexor ' +
+      'and extensor meshes), so their colour covers every finger.'
+  }),
+  thumb: () => ({
+    detail: 'This is the thumb area for your LEFT hand. It is the outermost part of the hand zone in the brain’s right ' +
+      'half (most lateral, right hemisphere). Its fibres cross over and reach the thumb muscles (crossed corticospinal ' +
+      'fibres). In the game, looking here gives a short burst (pulse) of the left thumb bending (flexion: flexor pollicis ' +
+      'brevis) or straightening (extension: extensor pollicis brevis) at the knuckle. One study mapped thumb directions for ' +
+      'the RIGHT thumb in the brain’s left half, using magnetic pulses (TMS; Z’Graggen 2009). The directions changed ' +
+      'with the situation and between people (contextual and individual biases). So this mirrored spot is only a rough ' +
+      'guide (representative).'
+  }),
+  r_hand: () => ({
+    detail: 'This is the hand area for your RIGHT hand (the hand knob), in the brain’s left half (left hemisphere). Its ' +
+      'fibres cross over and reach the nerve cells for the hand (crossed corticospinal fibres, hand motor neurons). Some ' +
+      `link straight to those nerve cells (direct cortico-motoneuronal connections; Lemon 2008). In the game, ${SIM_SIGNAL} ` +
+      'closes or opens the right hand. Look far right to see it. Studies of the right hand in the brain’s left half find ' +
+      'overlapping finger patterns (Arbuckle 2020). Even the top of the hand knob responds to the whole body (the hand ' +
+      'knob crown carries whole-body tuning; Willett 2020).'
+  }),
+  r_fingers: () => ({
+    detail: 'This is the finger area for your RIGHT hand. It sits inside the hand zone of the brain’s left half (left ' +
+      'hemisphere). Its fibres cross over and reach the nerve cells for the long muscles that bend and straighten the ' +
+      'fingers (crossed corticospinal fibres, motor neurons, long finger flexors and extensors). The 3D right hand has no ' +
+      'separate finger joints (right-hand rig). So the game shows the whole hand curling or straightening a little ' +
+      '(partial whole-hand curl). It colours the muscles that bend or straighten the fingers (finger flexors or ' +
+      'extensors). In the brain’s left half, bending and straightening one finger use strongly overlapping patterns ' +
+      '(single-finger flexion and extension; Arbuckle 2020).'
+  }),
+  r_thumb: () => ({
+    detail: 'This is the thumb area for your RIGHT hand. It is the outermost part of the hand zone in the brain’s left ' +
+      'half (most lateral, left hemisphere). Its fibres cross over and reach the thumb muscles (crossed corticospinal ' +
+      'fibres). The 3D right hand has no separate thumb joint (right-hand rig). So the game shows the whole hand closing ' +
+      'a little (small whole-hand closure), and it colours the muscles that bend the thumb (thumb flexors). One study ' +
+      'mapped the right thumb’s movement directions in this half of the brain, using magnetic pulses (TMS; Z’Graggen ' +
+      '2009). The directions changed with the situation and between people (contextual and individual biases).'
+  }),
+  neck: c => ({
+    detail: `This is the neck area of ${BRAIN_HALF(c)}. The game places it after the thumb, as in Penfield’s order ` +
+      '(Penfield’s motor sequence). Neck muscles get signals from both halves of the brain (both hemispheres). The big ' +
+      'side-neck muscle gets fibres that cross over and fibres that do not (sternocleidomastoid: crossed and uncrossed ' +
+      `projections; Thompson 1997). In the game, ${SIM_SIGNAL} bends the head forward or turns it to the ${c.S} (one ` +
+      'sternocleidomastoid with the opposite splenius capitis). That is a game choice, because no one knows yet which ' +
+      'half of the brain drives head turning (unresolved). The same study found the side-neck muscle’s area high on the ' +
+      'outer surface, near the trunk area (sternocleidomastoid representation high on the convexity; Thompson 1997). So ' +
+      'the neck’s place on this strip is debated.'
+  }),
+  scan_middle: c => ({
+    detail: `This is the middle in-between area (middle inter-effector region). ${SCAN_NETWORK} It sits between the ` +
+      `hand and mouth zones of ${BRAIN_HALF(c, 'Gordon 2023')}. It is linked to the other in-between areas and to a ` +
+      'network that helps control actions (cingulo-opercular network). It is also linked a bit more to the part of the ' +
+      'brain for seeing (visual cortex). That may help the hands and eyes work together (hand-eye coordination). In the game, ' +
+      'looking here lights up and marks the area, but it moves nothing. Gordon’s new look at old brain stimulation data ' +
+      'found that this area never caused a movement in anyone (re-analysis of cortical stimulation). Raising the eyebrows ' +
+      'also switched on the in-between areas (eyebrow raising co-activated the inter-effector regions).',
+    noAction: 'A new look at old brain stimulation data found that this middle in-between area never caused a movement ' +
+      'in anyone (stimulation re-analysis; middle inter-effector region; Gordon 2023). The game moves nothing here.'
+  }),
+  brow: c => ({
+    detail: `This is the eyebrow area of ${BRAIN_HALF(c)}. Here the forehead muscle raises the eyebrows (frontal ` +
+      'belly of occipitofrontalis). Its fibres reach the face-nerve centre at the base of the brain (corticobulbar ' +
+      'fibres, facial nucleus). The upper face gets signals from both halves of the brain (both hemispheres). That is ' +
+      'why a stroke on the brain’s surface usually spares the forehead (cortical stroke; monkey tract tracing: Morecraft ' +
+      '2001). The 3D body has no face muscles for expressions (BodyParts3D 4.0 has no facial-expression muscles). ' +
+      `${NO_FACE_LEVEL} In brain scans, raising the eyebrows also switched on the in-between areas (fMRI; co-activated ` +
+      'the inter-effector regions; Gordon 2023). So this small area is a simplified placement (schematic).'
+  }),
+  eyelid: c => ({
+    detail: `This is the eyelid area of ${BRAIN_HALF(c)}. Here the ring muscle around the eye closes the eyes ` +
+      '(orbicularis oculi). Signals to the upper face come from both halves of the brain (corticobulbar input from both ' +
+      'hemispheres; Morecraft 2001, in monkeys). The 3D body has no ring muscle around the eye and no other face muscles ' +
+      `for expressions (BodyParts3D 4.0 has no orbicularis oculi or other facial-expression muscle). ${NO_FACE_LEVEL} ` +
+      'Opening the eyes (levator palpebrae superioris, oculomotor nerve) and blinking (blink reflexes) use separate ' +
+      'circuits that are not simulated. Gordon 2023 lists eyelid movement among the moves an in-between area likes best ' +
+      '(most preferred at an inter-effector centre).'
+  }),
+  lower_face: c => ({
+    detail: `This is the lower-face area of ${BRAIN_HALF(c)}. Here two cheek muscles lift the corner of the mouth ` +
+      '(zygomaticus major and levator anguli oris). Most fibres to the lower face cross to the other side (corticobulbar ' +
+      `fibres are mainly crossed; Morecraft 2001, in monkeys). So the ${c.S} mouth corner gets most of the signal from ` +
+      'this half (this hemisphere’s drive). The 3D body has none of these face muscles (BodyParts3D 4.0 has none of these ' +
+      `facial-expression muscles). ${NO_FACE_LEVEL} This only covers smiling on purpose (voluntary smiling). A smile from ` +
+      'feelings also uses other pathways (emotional smiling, separate pathways).'
+  }),
+  lips: c => ({
+    detail: `This is the lip area of ${BRAIN_HALF(c)}. Here the ring muscle around the mouth purses the lips ` +
+      '(orbicularis oris). Its fibres reach the face-nerve centre at the base of the brain (corticobulbar fibres, facial ' +
+      'nucleus). For the lower face, most of them cross over (crossed predominance; Morecraft 2001). The 3D body has no ' +
+      `shape for the ring muscle around the mouth (BodyParts3D 4.0 has no orbicularis oris mesh). ${NO_FACE_LEVEL} ` +
+      'Moving the lips is a classic landmark in brain-scan body maps (fMRI motor somatotopy; Lotze 2000). Speech uses ' +
+      'this area together with the jaw, the tongue and the voice box (larynx).'
+  }),
+  jaw: c => ({
+    detail: `This is the jaw area of ${BRAIN_HALF(c)}. It opens the mouth (lateral pterygoid, digastric) or clenches ` +
+      'it (masseter, temporalis). Fibres from both halves of the brain reach the chewing-nerve centre at the base of the ' +
+      'brain (corticobulbar fibres, trigeminal motor nucleus, both hemispheres). But the half on the other side sends the ' +
+      'stronger signal to the main chewing muscle (the crossed hemisphere has the stronger drive to the masseter; ' +
+      'Nordstrom 2007). In the game, opening swings the jaw on the see-through face layer (ghosted face layer) and colours ' +
+      'two muscles under the chin (digastric and mylohyoid). The 3D body has no shape for the clenching muscles ' +
+      '(the jaw-closing muscles masseter, temporalis and medial pterygoid, and the lateral pterygoid, have no BodyParts3D 4.0 mesh). So clenching shows no movement and no ' +
+      'colour. The chewing rhythm comes from the base of the brain (generated in the brainstem), and it is not modelled.'
+  }),
+  tongue: c => ({
+    detail: `This is the tongue area of ${BRAIN_HALF(c)}. It sits in the middle of the mouth zone (Gordon 2023). Here ` +
+      'the main tongue muscle pushes the tongue out (genioglossus). Fibres from both halves of the brain reach the ' +
+      'tongue-nerve centre at the base of the brain (corticobulbar fibres, hypoglossal nucleus, both hemispheres). The ' +
+      'tongue muscle on the other side responds to weaker magnetic pulses in brain tests (lower thresholds from the crossed side; Muellbacher 2001). The 3D body has ' +
+      'no tongue, and the tongue muscle has no shape (the rig has no tongue; genioglossus has no mesh). So, by a game rule, ' +
+      'the jaw opens a little and nothing is coloured (game convention). Swallowing and the voice box (larynx) are not ' +
+      'modelled.'
+  }),
+  scan_inferior: c => ({
+    detail: `This is the lower in-between area (inferior inter-effector region). ${SCAN_NETWORK} It is the lowest of ` +
+      `the three (most ventral), past the mouth zone of ${BRAIN_HALF(c, 'Gordon 2023, seed 6 of the dorsal-to-ventral line')}. ` +
+      'Gordon lists swallowing among the moves the in-between areas like best (most preferred at inter-effector ' +
+      'centres). But a vowel-sound task for the voice box stayed inside the mouth zone (laryngeal vowel task). In the ' +
+      'game, looking here lights up and marks the area, but it moves nothing. Swallowing, breathing and the voice box ' +
+      '(larynx) are not simulated.',
+    noAction: `${SCAN_WEAK} The 3D body has no parts for swallowing and no voice box (swallowing and larynx are not in ` +
+      'the rig), so the game moves nothing here.'
+  })
+};
+
+const NECK_CHOICE_PLAIN = 'This is a game choice: each half of the brain turns the head toward the other side (each ' +
+  'hemisphere, opposite side). Which half really drives head turning is not known (unresolved).';
+/** Action plain notes (restating `note`), keyed like PLAIN_ACTION. */
+// R4-fix (review SL4-1): the body sits (round 4): knees bent about 45 deg, the right elbow bent about 85 deg on the
+// armrest, the right palm mostly down. These notes said the round-3 standing pose "starts out straight".
+const PLAIN_NOTE = {
+  knee_extend: () => 'Your knee starts bent (you are sitting), so this straightens your lower leg with the front thigh ' +
+    'muscles (quadriceps). Muscle force without movement is not modelled (isometric force).',
+  r_elbow_extend: () => 'Your right elbow starts bent on the armrest, so this straightens it with the muscle at the back ' +
+    'of the arm (triceps).',
+  pronation: () => 'The three forearm-turning muscles (pronator teres, pronator quadratus and supinator) are not in the ' +
+    'game’s movement map (no catalog key in MOVEMENT-MAP r2; ns-assets maps them to null). While the forearm turns, the ' +
+    'game colours these three 3D muscles by name, in the same colours (simulated display level; meshes). They are not ' +
+    'movement-map muscles.',
+  supination: () => 'The biceps turns the palm up strongly, mainly when the elbow is bent (biceps brachii is a powerful ' +
+    'supinator mainly when the elbow is flexed; UAMS).',
+  r_supinate: () => 'Your right palm starts facing mostly down (mostly pronated), so this turns it up.',
+  grasp_close: () => 'The muscles that straighten the fingers are listed as working less, as in the movement map ' +
+    '(extensors listed as relatively reduced, as in MOVEMENT-MAP r2). But a strong grip can switch them on too (strong ' +
+    'power grip can co-activate extensor digitorum; Motawar 2012; map-delta D07). So the game shows them as not raised, ' +
+    'rather than switched off (not elevated rather than suppressed).',
+  relax_release: () => 'Letting go lowers the signal to the muscles that bend and straighten the fingers (flexor and ' +
+    'extensor drive). It is not an active straightening, and the brain does not go quiet (not active extension and not ' +
+    'cortical silence; Motawar 2012).',
+  open_hand: () => 'Opening the hand when you let go of Space is a game rule (game convention). A real hand can let go ' +
+    'without any effort (natural release can be passive).',
+  r_fingers_curl: () => 'The 3D right hand moves all its fingers and the thumb together (the right-hand rig moves all ' +
+    'digits together). So this is the whole hand closing a little (partial whole-hand closure).',
+  r_fingers_straighten: () => 'The 3D right hand moves all its fingers and the thumb together (the right-hand rig moves ' +
+    'all digits together).',
+  r_thumb_close: () => 'The 3D right hand has no separate thumb joint (right-hand rig). So this shows as the whole hand ' +
+    'closing a little (small whole-hand closure).',
+  neck_turn_left: () => NECK_CHOICE_PLAIN,
+  neck_turn_right: () => NECK_CHOICE_PLAIN,
+  eye_close: () => 'The muscle that lifts the eyelid (levator palpebrae superioris) gets its signals through a different ' +
+    'nerve (the oculomotor nerve, a separate pathway).',
+  smile: c => 'The 3D body has no shape for these muscles (BodyParts3D 4.0 has no mesh for them). The smile is only a ' +
+    `made-up level (a simulated display level), and nothing moves or is coloured. The ${c.S} side would get most of the ` +
+    'signal from this half (this hemisphere’s drive).',
+  jaw_clench: () => 'The clenching muscles have no 3D shape (masseter, temporalis and the medial pterygoid have no ' +
+    'BodyParts3D 4.0 mesh). The jaw is also already closed at rest. So clenching shows no movement and no colour. Bite ' +
+    'force is not modelled.',
+  tongue_out: () => 'The 3D body has no tongue, and the main tongue muscle has no shape (the body rig has no tongue; ' +
+    'genioglossus has no BodyParts3D 4.0 mesh). So the jaw opens a little (game convention) and nothing is coloured.'
+};
 
 // ---------------------------------------------------------------------------------------------
 // Build
@@ -999,6 +1325,11 @@ function buildRegions() {
         const pa = plainA(c);
         full.plainLabel = pa.plainLabel;
         full.plainMuscles = { pull: pa.pull, relax: pa.relax };
+        if (a.note) {
+          const pn = PLAIN_NOTE[plainActionKey(a.id)];
+          if (!pn) throw new Error(`ns:bodymap_plain: no plain note for action ${a.id}`);
+          full.plainNote = pn(c);
+        }
         return full;
       });
       const region = {
@@ -1030,6 +1361,13 @@ function buildRegions() {
       region.plainLead = pr.plainLead;
       region.plainMoves = pr.plainMoves;
       region.plainCaveat = pr.plainCaveat;
+      if (!PLAIN_DETAIL[key]) throw new Error(`ns:bodymap_plain: no plain detail for region ${key}`);
+      const pd = PLAIN_DETAIL[key](c);
+      region.plainDetail = pd.detail;
+      if (body.noActionReason) {
+        if (!pd.noAction) throw new Error(`ns:bodymap_plain: no plain noAction text for region ${key}`);
+        region.plainNoAction = pd.noAction;
+      }
       out.push(region);
     });
   }

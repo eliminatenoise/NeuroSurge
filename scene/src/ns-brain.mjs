@@ -26,7 +26,7 @@ import {
   basis, multiply, translation, uniformScale, rayTriangle
 } from './ns-math.mjs';
 import {
-  RAMP_STOPS_LINEAR, luminanceLinear, activityColor, activityColorSrgb, activityShade, smoothstep
+  RAMP_STOPS_LINEAR, luminanceLinear, activityColor, activityColorSrgb, activityShade, smoothstep, KEY_COLORS
 } from './ns-colors.mjs';
 
 // ---------------------------------------------------------------------------------------------
@@ -2139,16 +2139,36 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *    area and at most frontCropMax (0.12) of the brain's on-screen height may pass the top edge (the front end is cut by
  *    at most that much; D1(a) "most of the front end"). When that limit binds (wide screens: the usable height is what
  *    limits a front-up brain), the belt is as wide as the limit allows. fit 'brain' is the round-3 whole-outline fit.
- *    tiltDeg stays 35: it is the smallest tilt at which all 44 regions stay reachable within 40 deg at the default orbit
- *    with this fit on all nine tested screens (25 and 30 deg lose lh_scan_inferior on 5 of 9). */
+ *    (Round 3 kept tilt 35 with frontCropMax 0.12: the smallest tilt at which all 44 regions stayed reachable within
+ *    40 deg on nine screens with the eye about 0.8 brain lengths from the brain centre; superseded by R4-view below.)
+ * R4-view (round-4 decision D5 "framing with less perspective"; evidence in round4/R4-view-NOTES.md):
+ *  perspectiveK 6: the brain is drawn as an eye perspectiveK times farther away would see it through a perspectiveK
+ *    times zoom (about 4.4 brain lengths instead of 0.8 at 16:9), so its on-screen size is unchanged and the near-eye
+ *    perspective that hid the back of the brain and the lateral slivers is gone. It is done by squashing the brain
+ *    along the line of sight about its centre (brainViewTransform); every ray from the eye then meets the squashed
+ *    brain exactly where the matching ray from the far eye meets the real brain, so the picture, the gaze picking and
+ *    the silhouette are those of the real brain seen from afar. (Moving the brain k times farther AND scaling it by k
+ *    is a similarity about the eye and changes nothing on screen; that is what aimDistance and the clearance scale-up
+ *    already do.) Lighting: the scene's normals become those of the squashed shape (flatter shading) unless it uses
+ *    view.rotation for normals (wiring in the notes).
+ *  tiltDeg 0 (was 35): straight overhead, front up. With the far eye this keeps all 44 regions within 40 deg at the
+ *    default orbit on all nine screens (worst 31.7 deg at 1280x720) and shows BOTH the front and the back end and the
+ *    lobes behind the motor strip; any forward tilt hides the back end again (0.52 of its top-down share at 5 deg).
+ *  frontCropMax 0.03 (was 0.12): at most 3 % of the brain's height may pass the top edge, so the front end stays
+ *    visible. On height-bound screens (16:9, 21:9) the belt is then 0.54 / 0.35 of the usable width (round 3: 0.62 /
+ *    0.40): the lead's D5 order puts "both ends visible" above "belt >= 0.60" and no framing found meets both there. */
 export const BRAIN_VIEW = freezeR2({
-  tiltDeg: 35, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
+  tiltDeg: 0, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
   fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6,
   reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75,
   framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
-  fit: 'belt', beltFrac: 0.62, frontCropMax: 0.12, beltCentreShare: 0.4
+  fit: 'belt', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
+  perspectiveK: 6
 });
+/** R4-view: the round-3 framing defaults (tilt 35, no perspective change, 12 % front crop), for comparison and tests:
+ * frameBrain(seg, { ...BRAIN_VIEW_R3 }). */
+export const BRAIN_VIEW_R3 = freezeR2({ tiltDeg: 35, perspectiveK: 1, frontCropMax: 0.12 });
 
 /** The round-2 strips framing defaults (frameBrain framing 'strips'): tilt 25 deg, both strips fill 0.85 (0.78 below
  * aspect 1.45) of the view, strips' top plane at 6 m. Kept for comparison and for callers that ask for it. */
@@ -2199,6 +2219,34 @@ function localRotation(tiltDeg, orbitYawDeg, orbitPitchDeg) {
   return mul3(rotY3(-orbitYawDeg * DEG), mul3(rotX3((tiltDeg + orbitPitchDeg) * DEG), DISPLAY3));
 }
 
+/** R4-view (D5): largest accepted perspectiveK (frameBrain option / BRAIN_VIEW.perspectiveK). */
+export const PERSPECTIVE_K_MAX = 20;
+/** R4-view (D5) squash along a line of sight: S = I + (1 / K - 1) u u^T (u = unit `dir`): lengths along u shrink by
+ * 1 / K, lengths across it are unchanged. Applied about the brain centre, it makes the eye at the origin see exactly
+ * what an eye K times farther away would see through a K times zoom: for any affine map the first surface hit along
+ * a ray is the map of the first hit along the mapped ray, and the picture of a point at depth D + w is
+ * x / (D + w / K) = K x / (K D + w). */
+function squashAlong(dir, K) {
+  const n = Math.hypot(dir[0], dir[1], dir[2]), u = [dir[0] / n, dir[1] / n, dir[2] / n], f = 1 / K - 1;
+  const S = new Float64Array(9);
+  for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++) S[3 * col + row] = (row === col ? 1 : 0) + f * u[row] * u[col];
+  return S;
+}
+function inv3(m) {
+  const [a, b, c, d, e, f, g, h, i] = m; // column-major: a = m00, b = m10, c = m20, d = m01, ...
+  const A = e * i - f * h, B = -(b * i - c * h), C = b * f - c * e;
+  const det = a * A + d * B + g * C;
+  if (!(Math.abs(det) > 0)) throw new Error('ns:brain_view: singular brain transform');
+  return m3([A / det, B / det, C / det, -(d * i - g * f) / det, (a * i - g * c) / det, -(a * f - d * c) / det, (d * h - g * e) / det, -(a * h - g * b) / det, (a * e - d * b) / det]);
+}
+const invSquash = inv3;
+/** R4-view (D5): what perspectiveK means for a frame, in plain numbers (informational). */
+function perspectiveInfo(K, pivotWorld, k, box) {
+  const d = Math.hypot(pivotWorld[0], pivotWorld[1], pivotWorld[2]), lenM = k * (box.max[1] - box.min[1]);
+  return { k: K, method: K === 1 ? 'none' : 'squash along the line of sight', centreDistanceM: d, eyeEquivalentDistanceM: K * d, zoom: K,
+    brainLengthM: lenM, eyeBrainLengths: lenM > 0 ? (K * d) / lenM : null };
+}
+
 function stripPositionsList(input) {
   if (isSegmentation(input)) return input.strips.map(s => ({ positions: s.positions, indices: s.indices }));
   const arr = Array.isArray(input) ? input : [input];
@@ -2215,7 +2263,7 @@ function stripPositionsList(input) {
  * facing: the frame's facing rotation (null = none). Returns { bound (m, lower bound of the camera-to-brain distance
  * over the orbit limits after scaling), scaleUp (>= 1: multiply k and pivotWorld by it), basis }. Grab carry rotates
  * about the camera and preserves distances, so the bound holds for every carry too. */
-function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM }) {
+function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, squash = null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM }) {
   const samples = [];
   let basis, eMm;
   if (grid && grid.kind === 'ns-brain-grid') {
@@ -2262,12 +2310,29 @@ function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld
   for (let iy = 0; iy < NY; iy++) for (let ip = 0; ip < NP; ip++) {
     const L = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch);
     const Q = facing ? mul3(facing, L) : L;
-    // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
-    const c = apT3(Q, [-pivotWorld[0] / k, -pivotWorld[1] / k, -pivotWorld[2] / k]);
-    if (basis === 'box' && c.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
+    if (!squash) {
+      // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
+      const c = apT3(Q, [-pivotWorld[0] / k, -pivotWorld[1] / k, -pivotWorld[2] / k]);
+      if (basis === 'box' && c.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
+      for (let i = 0; i < S3.length; i += 3) {
+        const dx = S3[i] - c[0], dy = S3[i + 1] - c[1], dz = S3[i + 2] - c[2];
+        const dd = dx * dx + dy * dy + dz * dz;
+        if (dd < minDist) minDist = dd;
+      }
+      continue;
+    }
+    // R4-view (D5): with the squash along the line of sight the map is not a similarity: measure each sample's world
+    // distance directly, in mm units (w / k = pivotWorld / k + S Q q). S only shortens vectors, so the sampling margin
+    // below (radius e_i and the orbit step) still bounds every brain point.
+    const M = mul3(squash, Q), c0 = [pivotWorld[0] / k, pivotWorld[1] / k, pivotWorld[2] / k];
+    if (basis === 'box') { // the eye in brain mm (the squash's inverse stretches the line of sight by K)
+      const Mi = mul3(tr3(Q), invSquash(squash)), e = ap3(Mi, [-c0[0], -c0[1], -c0[2]]);
+      if (e.every((x, a) => x + pv[a] > box.min[a] && x + pv[a] < box.max[a])) cameraInside = true;
+    }
     for (let i = 0; i < S3.length; i += 3) {
-      const dx = S3[i] - c[0], dy = S3[i + 1] - c[1], dz = S3[i + 2] - c[2];
-      const dd = dx * dx + dy * dy + dz * dz;
+      const q0 = S3[i], q1 = S3[i + 1], q2 = S3[i + 2];
+      const wx = c0[0] + M[0] * q0 + M[3] * q1 + M[6] * q2, wy = c0[1] + M[1] * q0 + M[4] * q1 + M[7] * q2, wz = c0[2] + M[2] * q0 + M[5] * q1 + M[8] * q2;
+      const dd = wx * wx + wy * wy + wz * wz;
       if (dd < minDist) minDist = dd;
     }
   }
@@ -2594,14 +2659,19 @@ function beltPointsFor(input) {
  *    orbit within the limits and every grab carry (beyond reach, in front of the hand).
  * Options (besides the 'strips' ones): framing, usableNdc, viewportPx ({ width, height } CSS px), heightFill,
  *   comfortDeg, arrowGapFrac, arrowSizePx, facing, centreShare, arrowsOnScreen, brainOutline (brainOutlinePoints result or flat xyz;
- *   default the segmentation's outline, else its glass grid, else the brainBounds box, else the strips).
+ *   default the segmentation's outline, else its glass grid, else the brainBounds box, else the strips), fit, beltFrac,
+ *   frontCropMax, beltCentreShare, perspectiveK (R4-view, 1..PERSPECTIVE_K_MAX: the brain is seen as from perspectiveK
+ *   times farther through a perspectiveK times zoom; the fit, the clearance and every derived view include it).
  * Returns frozen { kind: 'ns-brain-frame', framing: 'brain', k (m per mm), aimDistance, pivot, pivotWorld, tiltDeg,
  *   facing: { yawDeg, pitchDeg, rotation } | null, fill (the strips' half-extent, NDC, informational), limiting
  *   ('width' | 'height': which side of the allowed box the silhouette touches), ndcBounds (the strips' NDC box at the
  *   default view), silhouetteNdc (the brain's NDC box), usableNdc (+ source), allowedNdc, comfortNdc { x, y },
  *   arrowRoomNdc { x, y }, arrowOvershootNdc { left, right, forward, back } (<= 0: each arrow button inside its limit;
  *   checked on the real arrowAnchors), arrowsOnScreen, heightFill, comfortDeg, outlineBasis, aimOnStrip, minBrainDistanceM, clearanceBasis,
- *   scaleUp, reachM, clearanceM, orbit limits, grabPitchLimitDeg, fovYDeg, aspect, compact }.
+ *   scaleUp, reachM, clearanceM, orbit limits, grabPitchLimitDeg, fovYDeg, aspect, compact, fit, beltFit (belt fit:
+ *   { beltFrac, frontCropMax, beltCentreShare, beltWidthFrac, frontCropFrac, perspectiveK, tiltDeg }), perspectiveK,
+ *   distanceM (camera to brain centre at the default view), perspective { k, method, centreDistanceM,
+ *   eyeEquivalentDistanceM, zoom, brainLengthM, eyeBrainLengths } (informational) }.
  * Recompute on resize (aspect / FOV / usable area change); the pivot and tilt stay.
  */
 export function frameBrain(strips, options = {}) {
@@ -2619,8 +2689,11 @@ function frameWholeBrain(strips, {
   heightFill = BRAIN_VIEW.heightFill, comfortDeg = BRAIN_VIEW.comfortDeg, arrowGapFrac = BRAIN_VIEW.arrowGapFrac,
   arrowSizePx = BRAIN_VIEW.arrowSizePx, facing = BRAIN_VIEW.facing, centreShare = BRAIN_VIEW.centreShare,
   arrowsOnScreen = BRAIN_VIEW.arrowsOnScreen, iterations = 60, fit = BRAIN_VIEW.fit, beltFrac = BRAIN_VIEW.beltFrac,
-  frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare
+  frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
+  backCropMax = BRAIN_VIEW.backCropMax || 0
 } = {}) {
+  if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
+  if (!(Number.isFinite(perspectiveK) && perspectiveK >= 1 && perspectiveK <= PERSPECTIVE_K_MAX)) throw new Error(`ns:brain_frame: perspectiveK must be in [1, ${PERSPECTIVE_K_MAX}]`);
   if (fit !== 'belt' && fit !== 'brain') throw new Error(`ns:brain_frame: fit must be 'belt' or 'brain' (got ${fit})`);
   if (!(Number.isFinite(beltFrac) && beltFrac > 0 && beltFrac <= 1)) throw new Error('ns:brain_frame: beltFrac must be in (0, 1]');
   if (!(Number.isFinite(frontCropMax) && frontCropMax >= 0 && frontCropMax < 0.5)) throw new Error('ns:brain_frame: frontCropMax must be in [0, 0.5)');
@@ -2682,7 +2755,15 @@ function frameWholeBrain(strips, {
   for (let i = 0; i < P.length; i += 3) rMax = Math.max(rMax, Math.hypot(P[i], P[i + 1], P[i + 2]));
   if (!(rMax > 0)) throw new Error('ns:brain_frame: the brain outline has no extent');
   const dirFor = (px, py) => normalize([px * ta, py * t, -1]);
-  const rotFor = dir => (facing ? facingToward(dir).rotation : null);
+  // R4-view (D5): the brain-local linear map for a line of sight `dir` (unit): the facing rotation, then the squash
+  // along the line of sight by 1 / perspectiveK (squashAlong; identity for K = 1). null = identity.
+  const facRot = dir => (facing ? facingToward(dir).rotation : null);
+  const rotFor = dir => {
+    const F = facRot(dir);
+    if (perspectiveK === 1) return F;
+    const S = squashAlong(dir, perspectiveK);
+    return F ? mul3(S, F) : S;
+  };
   const projBox = (pts, s, dir, F) => {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, near = Infinity;
     for (let i = 0; i < pts.length; i += 3) {
@@ -2727,14 +2808,14 @@ function frameWholeBrain(strips, {
       const dir = dirFor(px, py), F = rotFor(dir);
       const o = projBox(P, s, dir, F), bb = projBox(Bt, s, dir, F);
       const oh = o.y1 - o.y0, ow = o.x1 - o.x0;
-      const rB = (beltFrac * Uw) / (bb.x1 - bb.x0), rH = Uh / ((1 - frontCropMax) * oh), rW = Uw / ow;
+      const rB = (beltFrac * Uw) / (bb.x1 - bb.x0), rH = Uh / ((1 - frontCropMax - backCropMax) * oh), rW = Uw / ow;
       const r = Math.min(rB, rH, rW);
       limiting = r === rB ? 'belt' : r === rH ? 'height' : 'width';
       let dy = -(bb.y0 + bb.y1) / 2; // belt centre toward the crosshair (y = 0) ...
       const topOver = o.y1 + dy - U.y1, lim = frontCropMax * oh;
       if (topOver > lim) dy -= topOver - lim; // ... but the front may pass the top edge by at most frontCropMax
-      const botOver = U.y0 - (o.y0 + dy);
-      if (botOver > 0) dy += botOver;        // ... and the back stays inside
+      const botOver = U.y0 - (o.y0 + dy), botLim = backCropMax * oh;
+      if (botOver > botLim) dy += botOver - botLim; // ... and the back passes the bottom edge by at most backCropMax
       let dx = cxT - (bb.x0 + bb.x1) / 2;
       if (o.x1 + dx > U.x1) dx -= o.x1 + dx - U.x1;
       if (o.x0 + dx < U.x0) dx += U.x0 - (o.x0 + dx);
@@ -2746,8 +2827,8 @@ function frameWholeBrain(strips, {
   if (fit === 'belt' && !degenerate && solveBelt()) beltFit = { beltFrac, frontCropMax, beltCentreShare };
   for (let round = 0; !beltFit && round < 6; round++) {
     solve();
-    const dirR = dirFor(px, py), FR = rotFor(dirR);
-    const probe = { kind: 'ns-brain-frame', k: s, pivot: pv, pivotWorld: dirR, tiltDeg, facing: FR ? { rotation: Array.from(FR) } : null, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg };
+    const dirR = dirFor(px, py), FR = facRot(dirR);
+    const probe = { kind: 'ns-brain-frame', k: s, pivot: pv, pivotWorld: dirR, tiltDeg, facing: FR ? { rotation: Array.from(FR) } : null, perspectiveK, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg };
     const sil = brainSilhouette(null, brainViewTransform({ frame: probe }), { aspect, fovYDeg, points: outline.points });
     const an = arrowAnchors(sil, { gapFrac: arrowGapFrac, sizePx: arrowSizePx, viewportPx: { width: hPx * aspect, height: hPx } });
     const hx = an.radiusNdc / aspect, hy = an.radiusNdc;
@@ -2765,9 +2846,9 @@ function frameWholeBrain(strips, {
   const bb = projBox(Bt, s, dir, F);
   const dist = aimDistance / b.near; // the nearest brain point at the default view is aimDistance away
   let k = s * dist, pivotWorld = dir.map(x => x * dist);
-  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: F, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
+  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: facRot(dir), squash: perspectiveK === 1 ? null : squashAlong(dir, perspectiveK), tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
   k *= cl.scaleUp; pivotWorld = pivotWorld.map(x => x * cl.scaleUp);
-  const fa = F ? facingToward(dir) : null;
+  const fa = facing ? facingToward(dir) : null;
   const frame = {
     kind: 'ns-brain-frame', framing: 'brain', k, aimDistance: aimDistance * cl.scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg,
     facing: fa ? freezeR2({ yawDeg: fa.yaw / DEG, pitchDeg: fa.pitch / DEG, rotation: freezeR2(Array.from(fa.rotation)) }) : null,
@@ -2775,7 +2856,9 @@ function frameWholeBrain(strips, {
     ndcBounds: freezeR2({ x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 }), silhouetteNdc: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
     usableNdc: freezeR2({ ...U }), allowedNdc: freezeR2({ x0: ax0, x1: ax1, y0: ay0, y1: ay1, degenerate }), comfortNdc: freezeR2({ x: cX, y: cY }),
     arrowRoomNdc: freezeR2({ x: roomX, y: roomY }), arrowOvershootNdc: arrowOvershoot ? freezeR2({ ...arrowOvershoot }) : null, arrowsOnScreen, heightFill, comfortDeg, outlineBasis: outline.basis,
-    fit: beltFit ? 'belt' : 'brain', beltFit: beltFit ? freezeR2({ ...beltFit, beltWidthFrac: (bb.x1 - bb.x0) / (U.x1 - U.x0), frontCropFrac: Math.max(0, (b.y1 - U.y1) / (b.y1 - b.y0)) }) : null,
+    fit: beltFit ? 'belt' : 'brain', beltFit: beltFit ? freezeR2({ ...beltFit, beltWidthFrac: (bb.x1 - bb.x0) / (U.x1 - U.x0), frontCropFrac: Math.max(0, (b.y1 - U.y1) / (b.y1 - b.y0)), perspectiveK, tiltDeg }) : null,
+    perspectiveK, distanceM: Math.hypot(pivotWorld[0], pivotWorld[1], pivotWorld[2]),
+    perspective: freezeR2(perspectiveInfo(perspectiveK, pivotWorld, k, box)),
     aimOnStrip: null, minBrainDistanceM: cl.bound, clearanceBasis: cl.basis, scaleUp: cl.scaleUp, reachM, clearanceM,
     orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg, fovYDeg, aspect, compact: aspect < BRAIN_VIEW.compactAspect
   };
@@ -2798,10 +2881,19 @@ function frameWholeBrain(strips, {
  *   distance and keeps its appearance toward the camera), grabPitch clamped to +- grabPitchLimitDeg. tiltDeg defaults
  *   to the frame's tilt. Every transform is a proper rotation times k > 0 (det > 0, never mirrored), and distances to the
  *   camera are preserved by the carry, so the brain stays beyond reach (frame.minBrainDistanceM) and in front of the hand.
+ * R4-view (D5): with frame.perspectiveK = K > 1 the brain is also squashed by 1 / K along the default line of sight
+ *   u = frame.pivotWorld / |frame.pivotWorld| (before the carry), about its centre:
+ *     world(p) = Ry(grabYaw) Rx(grabPitch) [ pivotWorld + k S_u F Ry(-orbitYaw) Rx(tilt + orbitPitch) DISPLAY (p - pivot) ],
+ *     S_u = I + (1 / K - 1) u u^T.
+ *   The eye then sees exactly the real brain as seen from K times farther through a K times zoom (any orbit, any carry).
+ *   The matrix is affine with det > 0 (never mirrored) but no longer a similarity: use `linear` / `linearInverse` (or
+ *   `matrix` / `inverse`) for points and rays; `rotation` stays the RIGID rotation (for normals: the real brain's
+ *   surface normal directions). K = 1 (or a frame without perspectiveK) gives the round-3 transform bit for bit.
  * Returns { kind: 'ns-brain-view', matrix (Float64Array(16) column-major world-from-source; Matrix4.fromArray),
- *   inverse (source-from-world), rotation (Float64Array(9) column-major, world from source directions), k, pivot,
- *   pivotWorld (carried), tiltDeg, orbitYaw, orbitPitch, grabYaw, grabPitch, clamped, axes: { anterior, superior,
- *   subjectRight } (world unit vectors) }.
+ *   inverse (source-from-world), rotation (Float64Array(9) column-major, world from source directions, rigid), linear
+ *   (Float64Array(9): the matrix's linear part, m per mm, squash included), linearInverse, k, pivot, pivotWorld
+ *   (carried), tiltDeg, perspectiveK, squashAxis (carried unit u), orbitYaw, orbitPitch, grabYaw, grabPitch, clamped,
+ *   axes: { anterior, superior, subjectRight } (world unit vectors of the DRAWN anatomical axes) }.
  */
 export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYaw = 0, grabPitch = 0, tiltDeg = null } = {}) {
   if (!frame || frame.kind !== 'ns-brain-frame') throw new Error('ns:brain_view: frame (a frameBrain result) is required');
@@ -2817,22 +2909,30 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   const Q = mul3(carry, F ? mul3(F, L) : L);
   const C = ap3(carry, frame.pivotWorld);
   const k = frame.k, pv = frame.pivot;
-  const kq = Q.map(x => x * k);
-  const tq = ap3(kq, pv);
+  // R4-view (D5): perspectiveK > 1 squashes the brain along the default line of sight (frame.pivotWorld, before the
+  // carry) about its centre, so the eye sees it as an eye K times farther away would through a K times zoom.
+  const K = Number.isFinite(frame.perspectiveK) && frame.perspectiveK > 0 ? frame.perspectiveK : 1;
+  const S0 = K === 1 ? null : squashAlong(frame.pivotWorld, K);
+  const Lin = (S0 ? mul3(carry, mul3(S0, mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L))) : Q).map(x => x * k); // world from source (m per mm)
+  const LinInv = S0 ? inv3(Lin) : m3([Q[0] / k, Q[3] / k, Q[6] / k, Q[1] / k, Q[4] / k, Q[7] / k, Q[2] / k, Q[5] / k, Q[8] / k]);
+  const tq = ap3(Lin, pv);
   const matrix = new Float64Array(16);
-  matrix[0] = kq[0]; matrix[1] = kq[1]; matrix[2] = kq[2];
-  matrix[4] = kq[3]; matrix[5] = kq[4]; matrix[6] = kq[5];
-  matrix[8] = kq[6]; matrix[9] = kq[7]; matrix[10] = kq[8];
+  matrix[0] = Lin[0]; matrix[1] = Lin[1]; matrix[2] = Lin[2];
+  matrix[4] = Lin[3]; matrix[5] = Lin[4]; matrix[6] = Lin[5];
+  matrix[8] = Lin[6]; matrix[9] = Lin[7]; matrix[10] = Lin[8];
   matrix[12] = C[0] - tq[0]; matrix[13] = C[1] - tq[1]; matrix[14] = C[2] - tq[2]; matrix[15] = 1;
-  const qtC = apT3(Q, C);
+  const iC = ap3(LinInv, C);
   const inverse = new Float64Array(16);
-  inverse[0] = Q[0] / k; inverse[1] = Q[3] / k; inverse[2] = Q[6] / k;
-  inverse[4] = Q[1] / k; inverse[5] = Q[4] / k; inverse[6] = Q[7] / k;
-  inverse[8] = Q[2] / k; inverse[9] = Q[5] / k; inverse[10] = Q[8] / k;
-  inverse[12] = pv[0] - qtC[0] / k; inverse[13] = pv[1] - qtC[1] / k; inverse[14] = pv[2] - qtC[2] / k; inverse[15] = 1;
-  const axes = freezeR2({ anterior: freezeR2(ap3(Q, [0, -1, 0])), superior: freezeR2(ap3(Q, [0, 0, 1])), subjectRight: freezeR2(ap3(Q, [-1, 0, 0])) });
+  inverse[0] = LinInv[0]; inverse[1] = LinInv[1]; inverse[2] = LinInv[2];
+  inverse[4] = LinInv[3]; inverse[5] = LinInv[4]; inverse[6] = LinInv[5];
+  inverse[8] = LinInv[6]; inverse[9] = LinInv[7]; inverse[10] = LinInv[8];
+  inverse[12] = pv[0] - iC[0]; inverse[13] = pv[1] - iC[1]; inverse[14] = pv[2] - iC[2]; inverse[15] = 1;
+  const drawnDir = a => (S0 ? normalize(ap3(Lin, a)) : ap3(Q, a)); // the drawn (squashed) direction of an anatomical axis
+  const axes = freezeR2({ anterior: freezeR2(drawnDir([0, -1, 0])), superior: freezeR2(drawnDir([0, 0, 1])), subjectRight: freezeR2(drawnDir([-1, 0, 0])) });
+  const n0 = Math.hypot(C[0], C[1], C[2]) || 1;
   return {
-    kind: 'ns-brain-view', matrix, inverse, rotation: Q, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt,
+    kind: 'ns-brain-view', matrix, inverse, rotation: Q, linear: Lin, linearInverse: LinInv, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt,
+    perspectiveK: K, squashAxis: freezeR2([C[0] / n0, C[1] / n0, C[2] / n0]),
     orbitYaw: oy, orbitPitch: op, grabYaw, grabPitch: gp, clamped, axes
   };
 }
@@ -2851,12 +2951,18 @@ export function viewWorldToSource(w, view) {
   return [m[0] * q[0] + m[4] * q[1] + m[8] * q[2] + m[12], m[1] * q[0] + m[5] * q[1] + m[9] * q[2] + m[13], m[2] * q[0] + m[6] * q[1] + m[10] * q[2] + m[14]];
 }
 
+/** A world direction as a source-mm direction under a view (not normalised; the rotation's transpose for a
+ * similarity, the linear part's inverse with the R4-view squash). */
+function viewDirToSource(w, view) {
+  return view.linearInverse ? ap3(view.linearInverse, w) : apT3(view.rotation, w);
+}
+
 /** Camera-centre gaze ray in SOURCE mm under a brainViewTransform view: { origin, dir (unit) }. Equivalent to
  * gazeRayInSource(yaw, pitch, view). */
 export function gazeRayForView(yaw, pitch, view) {
   const w = gazeDirection(yaw, pitch);
   const origin = viewWorldToSource([0, 0, 0], view);
-  return { origin, dir: normalize(apT3(view.rotation, w)) };
+  return { origin, dir: normalize(viewDirToSource(w, view)) };
 }
 
 /** Gaze ray in SOURCE mm through screen point (xNdc, yNdc) for a camera at yaw/pitch (radians) under `view`: the
@@ -2867,7 +2973,7 @@ export function pixelRayForView(xNdc, yNdc, view, { yaw = 0, pitch = 0, fovYDeg 
   const t = Math.tan((fovYDeg * DEG) / 2);
   const cam = mul3(rotY3(yaw), rotX3(pitch));
   const w = ap3(cam, normalize([xNdc * t * aspect, yNdc * t, -1]));
-  return { origin: viewWorldToSource([0, 0, 0], view), dir: normalize(apT3(view.rotation, w)) };
+  return { origin: viewWorldToSource([0, 0, 0], view), dir: normalize(viewDirToSource(w, view)) };
 }
 
 /** Camera-space NDC of a world point for camera yaw/pitch (Three YXZ: R = Ry(yaw) Rx(pitch)), fovYDeg, aspect:
@@ -2960,16 +3066,17 @@ export const SILHOUETTE = freezeR2({ cacheSize: SIL_CACHE_MAX, near: 0.02, margi
 function silhouetteReference(view, outlinePts, beltPts, aspect, fovYDeg, marginMm) {
   const carry = mul3(rotY3(view.grabYaw), rotX3(view.grabPitch));
   const cT = tr3(carry);
-  const Q0 = mul3(cT, view.rotation), P0 = ap3(cT, view.pivotWorld), k = view.k, pv = view.pivot;
+  // R4-view: the uncarried linear part (k, rotation and the D5 squash); k Q for views without `linear`.
+  const Lin0 = mul3(cT, view.linear || view.rotation.map(x => x * view.k)), P0 = ap3(cT, view.pivotWorld), k = view.k, pv = view.pivot;
   const r10 = x => (Math.abs(x) < 1e-12 ? '0' : x.toPrecision(10)); // un-carrying leaves last-bit noise; 10 digits is plenty
-  const key = `${aspect}|${fovYDeg}|${marginMm}|${r10(k)}|${pv.map(r10).join(',')}|${Array.prototype.map.call(Q0, r10).join(',')}|${P0.map(r10).join(',')}`;
+  const key = `${aspect}|${fovYDeg}|${marginMm}|${r10(k)}|${pv.map(r10).join(',')}|${Array.prototype.map.call(Lin0, r10).join(',')}|${P0.map(r10).join(',')}`;
   let byPts = SIL_CACHE.get(outlinePts);
   if (!byPts) { byPts = new Map(); SIL_CACHE.set(outlinePts, byPts); }
   const hit = byPts.get(key);
   if (hit && hit.beltPts === beltPts) return hit;
   const R = facingToward(P0).rotation; // reference camera: looks at the brain centre, no roll
   const RT = tr3(R), t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
-  const world0 = (x, y, z) => { const q = ap3(Q0, [x - pv[0], y - pv[1], z - pv[2]]); return [P0[0] + k * q[0], P0[1] + k * q[1], P0[2] + k * q[2]]; };
+  const world0 = (x, y, z) => { const q = ap3(Lin0, [x - pv[0], y - pv[1], z - pv[2]]); return [P0[0] + q[0], P0[1] + q[1], P0[2] + q[2]]; };
   const toIso = w => { const c = ap3(RT, w); const depth = -c[2]; return depth > 0 ? [(c[0] / (depth * ta)) * aspect, c[1] / (depth * t)] : null; };
   const dirOfIso = (X, Y) => ap3(R, [(X / aspect) * ta, Y * t, -1]); // a world direction through an iso point
   const hullOf = (pts, delta) => {
@@ -2999,7 +3106,7 @@ function silhouetteReference(view, outlinePts, beltPts, aspect, fovYDeg, marginM
   const unit = (v, fb) => { const n = Math.hypot(v[0], v[1]); return n > 1e-9 ? [v[0] / n, v[1] / n] : fb; };
   const ref = {
     key, R, t, ta, aspect, fovYDeg, P0, pIso, outline: outlineHull, belt: beltHull, beltPts, anchors: new Map(),
-    axesIso: { anterior: unit(axisIso(ap3(Q0, [0, -1, 0])), [0, 1]), right: unit(axisIso(ap3(Q0, [-1, 0, 0])), [1, 0]) }
+    axesIso: { anterior: unit(axisIso(normalize(ap3(Lin0, [0, -1, 0]))), [0, 1]), right: unit(axisIso(normalize(ap3(Lin0, [-1, 0, 0]))), [1, 0]) }
   };
   byPts.set(key, ref);
   while (byPts.size > SIL_CACHE_MAX) byPts.delete(byPts.keys().next().value);
@@ -3209,14 +3316,19 @@ export function regionVisibility(seg, view, { width = 320, height = 180, fovYDeg
 
 /** Region display style constants (linear RGB / unitless). Activated regions (activatedRegions count >= 1, persistent
  * until Reset body) become slightly more opaque and shift shade toward `activatedShade`; left-arm regions carry a
- * distinct cyan identity tint and an outline, all other body-part regions a neutral slate-violet tint (alternating
+ * distinct cyan identity tint and an outline, all other body-part regions a neutral warm-grey tint (alternating
  * lightness by order so neighbours read apart). Activity itself is the shared ns-colors emissive glow. */
+// R4-polish (R11c, R4-player 2.1): the switched-on fill change was too faint to "see which parts of the brain you've
+// activated" (0.7 % of pixels changed after 55 marks). It is now clearly visible and still slight (the unit tests keep
+// the "slightly" bound: under +0.25 opacity per first switch-on): opacity 0.30 -> 0.54 (was 0.44; cap 0.64, was 0.52)
+// and a shade shift of 0.34 toward the warm switched-on shade (was 0.24). The gold edge is unchanged. Evidence: round4/POLISH.md (14-marks before/after), e2e S15 / S44.
 export const REGION_STYLE = freezeR2({
-  restOpacity: 0.3, activatedOpacity: 0.44, activatedOpacityMax: 0.52, activatedOpacityPerExtra: 0.025,
-  activatedShadeMix: 0.24,
+  restOpacity: 0.3, activatedOpacity: 0.54, activatedOpacityMax: 0.64, activatedOpacityPerExtra: 0.025,
+  activatedShadeMix: 0.34,
   activatedShade: freezeR2([0.88, 0.80, 0.62]),
-  leftArmTint: freezeR2([0.10, 0.52, 0.62]),
-  otherTint: freezeR2([0.33, 0.33, 0.45]), otherTintAlt: freezeR2([0.27, 0.27, 0.37]),
+  // R4-access (D9): identity tints from ns-colors KEY_COLORS, chosen to stay apart under colour-vision deficiency.
+  leftArmTint: freezeR2([...KEY_COLORS.leftArmTint]),
+  otherTint: freezeR2([...KEY_COLORS.otherTint]), otherTintAlt: freezeR2([...KEY_COLORS.otherTintAlt]),
   leftArmOutline: freezeR2([0.55, 0.95, 1.0]),
   hoverOpacityBoost: 0.08,
   leftArmLabel: 'LEFT ARM (right hemisphere)'

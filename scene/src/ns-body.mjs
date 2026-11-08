@@ -20,6 +20,15 @@
 //   GENITAL_DENY_TERMS, genitalTermsIn, genitalAnatomyTerms, excludeGenitalAnatomy -> R15: never rig, pose, bake
 //   or draw genital anatomy (buildBodyRig refuses such entries; none exist in the packets).
 //
+// Round 4 (R4-body):
+//   - load time: the rig build and the bake share one exact nearest-neighbour index per bone cloud (bucket k-d tree,
+//     warm start, repeated vertices answered once); the rig, and the baked bytes of any given posture, are exactly what
+//     the round-3 search gave (unit test R4-body-bake); in Node the rig build takes about a quarter and the bake about a
+//     fifth of their round-3 time.
+//   - the seated right forearm rests forward as if on an armrest, so a far-right look shows the right hand after a
+//     small downward look; BODY_POSTURE_LIMITS / bodyPostureLimits(posture) cap a seated thigh lift at 110 deg (so the
+//     thigh does not pass into the belly) and the seated elbow bend at 120 deg (so the hand does not fill the view).
+//
 // Frame: the unchanged BodyParts3D 4.0 whole-body frame in millimetres (+x subject LEFT, +y POSTERIOR, +z SUPERIOR),
 // the same frame as the left arm and the brain. Every matrix maps REST (source) coordinates to POSED coordinates in that
 // frame. At zero targets every matrix is the identity: the source pose is the standard anatomical position.
@@ -316,17 +325,10 @@ function contactPatch(A, B, margin, cull = 25) {
   const ba = expand(bboxOf(A), cull), bb = expand(bboxOf(B), cull);
   const a = select(A, (x, y, z) => inBox(bb, x, y, z)), b = select(B, (x, y, z) => inBox(ba, x, y, z));
   if (!a.length || !b.length) return null;
+  // Nearest distance of each point of P to the points of Q: the exact index (round 4; the same doubles as scanning Q).
   const nearest = (P, Q) => {
-    const d = new Float64Array(P.length / 3);
-    for (let i = 0, k = 0; i < P.length; i += 3, k++) {
-      let best = Infinity;
-      const x = P[i], y = P[i + 1], z = P[i + 2];
-      for (let j = 0; j < Q.length; j += 3) {
-        const dx = Q[j] - x, dy = Q[j + 1] - y, dz = Q[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
-        if (e < best) best = e;
-      }
-      d[k] = Math.sqrt(best);
-    }
+    const d = new Float64Array(P.length / 3), t = nnIndex(Q);
+    for (let i = 0, k = 0; i < P.length; i += 3, k++) d[k] = Math.sqrt(nnNearestD2(t, P[i], P[i + 1], P[i + 2]));
     return d;
   };
   const da = nearest(a, b), db = nearest(b, a);
@@ -430,11 +432,16 @@ function vertexNormals(p, idx) {
   return nv;
 }
 
-/** Voxel-grid downsample: the centroid of the points in each `cell`-mm voxel. */
+/** Voxel-grid downsample: the centroid of the points in each `cell`-mm voxel (voxels in first-seen order). Round 4:
+ * the voxel key is one integer (exact for voxel indices within +-65535, i.e. +-131 m at the smallest 2 mm cell; a
+ * string key is used beyond that), so the output is the same as with the round-3 string key, only faster. */
+const VOX_OFF = 65536, VOX_BASE = 131072;
 function downsample(p, cell) {
   const acc = new Map();
   for (let i = 0; i < p.length; i += 3) {
-    const key = `${Math.floor(p[i] / cell)},${Math.floor(p[i + 1] / cell)},${Math.floor(p[i + 2] / cell)}`;
+    const ix = Math.floor(p[i] / cell), iy = Math.floor(p[i + 1] / cell), iz = Math.floor(p[i + 2] / cell);
+    const key = ix > -VOX_OFF && ix < VOX_OFF && iy > -VOX_OFF && iy < VOX_OFF && iz > -VOX_OFF && iz < VOX_OFF
+      ? ((ix + VOX_OFF) * VOX_BASE + (iy + VOX_OFF)) * VOX_BASE + (iz + VOX_OFF) : `${ix},${iy},${iz}`;
     let a = acc.get(key);
     if (!a) acc.set(key, (a = [0, 0, 0, 0]));
     a[0] += p[i]; a[1] += p[i + 1]; a[2] += p[i + 2]; a[3]++;
@@ -922,6 +929,9 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   const muscles = [];
   const fit = {};
   const fitCount = Number.isInteger(options.fitSamples) && options.fitSamples >= 4 ? options.fitSamples : 96;
+  // Round 4 (R4-body): the exact nearest-neighbour index (same results as scanning every cloud point, much faster);
+  // options.nearest = 'scan' uses the scan (reference for the exactness unit test).
+  const near = nearestSearch(clouds, options.nearest);
   for (const { entry: e, cand } of muscleList) {
     const avail = cand.segments.filter(s => clouds[s]);
     const p = positionsOf(getMesh(e.id));
@@ -952,7 +962,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
         const keep = p ? Math.max(1, Math.floor(ns / fitCount)) : 0;
         const fp = [], fi0 = [], fi1 = [], fw0 = [];
         for (let i = 0, k = 0; i < samples.length; i += 3, k++) {
-          const w = twoNearest(avail, clouds, samples[i], samples[i + 1], samples[i + 2]);
+          const w = near(avail, samples[i], samples[i + 1], samples[i + 2]);
           acc[w.a] += w.wa / ns;
           if (w.b) acc[w.b] += w.wb / ns;
           if (keep && k % keep === 0) {
@@ -1018,6 +1028,10 @@ function twoNearest(segs, clouds, x, y, z) {
     const d = nearestDistance(clouds[s], x, y, z);
     if (d < da) { b = a; db = da; a = s; da = d; } else if (d < db) { b = s; db = d; }
   }
+  return twoNearestResult(a, da, b, db);
+}
+/** Inverse-square two-influence weights from the two nearest distances (shared by every search path). */
+function twoNearestResult(a, da, b, db) {
   if (!b) return { a, wa: 1, b: null, wb: 0 };
   const qa = da * da, qb = db * db, t = qa + qb;
   const wa = t > 1e-12 ? qb / t : 0.5;
@@ -1305,8 +1319,9 @@ export function poseBody(rig, jointTargetsDeg = {}, options = {}) {
  * Per-vertex two-influence weights for a muscle mesh: the two nearest candidate segments by the same distance rule
  * that produced its rigid blend. Returns { segments: BODY_SEGMENTS, i0, i1 (Uint8Array), w0, w1 (Float32Array) } or
  * null when the muscle is unknown or has fewer than two candidate segments with geometry.
+ * options.nearest: 'index' (default, round 4) or 'scan' (every cloud point; same result, for the exactness test).
  */
-export function bodySkinWeights(rig, meshId, restPositions) {
+export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   checkRig(rig);
   const info = rig.meshSegment[meshId];
   const p = positionsOf(restPositions);
@@ -1316,8 +1331,9 @@ export function bodySkinWeights(rig, meshId, restPositions) {
   if (avail.length < 2) return null;
   const n = p.length / 3;
   const i0 = new Uint8Array(n), i1 = new Uint8Array(n), w0 = new Float32Array(n), w1 = new Float32Array(n);
+  const near = nearestSearch(clouds, options && options.nearest);
   for (let v = 0; v < n; v++) {
-    const w = twoNearest(avail, clouds, p[3 * v], p[3 * v + 1], p[3 * v + 2]);
+    const w = near(avail, p[3 * v], p[3 * v + 1], p[3 * v + 2]);
     i0[v] = SEG_INDEX.get(w.a); w0[v] = w.wa;
     i1[v] = SEG_INDEX.get(w.b || w.a); w1[v] = w.wb;
   }
@@ -1460,27 +1476,50 @@ export function bodyMuscleDrives(activeActions, options = {}) {
  * JOINT_SEMANTICS; missing ids are 0). Display choices inside ordinary adult ranges of motion, not measured on anyone.
  *  - 'seated' (DEFAULT_BODY_POSTURE): sitting upright on an ordinary seat, thighs level to slightly rising toward the
  *    knees (hips flexed 95 deg), lower legs reaching a little forward (knees flexed 45 deg) with relaxed ankles (15 deg
- *    toes-down); the right arm relaxed at the side as
- *    if on an armrest (shoulder 5 deg forward and 12 deg out, elbow bent 40 deg, forearm half-turned so the thumb is up,
- *    wrist bent 10 deg, fingers loosely curled 20 deg), so the right hand rests beside the right knee. Chosen from
- *    rendered candidates and a body-only ID-buffer scan (round3/R3-body-NOTES.md): with the knees bent 55-70 deg the
- *    knees hide most of the feet from the eye; hips at 95 instead of 85 deg show the kneecaps on 0.105 % instead of
- *    0.066 % of the far-down view; with the elbow bent 20 deg the hand hides behind the shoulder, at 55 deg it reads as
- *    reaching forward.
+ *    toes-down). Chosen from rendered candidates and a body-only ID-buffer scan (round3/R3-body-NOTES.md): with the
+ *    knees bent 55-70 deg the knees hide most of the feet from the eye; hips at 95 instead of 85 deg show the kneecaps
+ *    on 0.105 % instead of 0.066 % of the far-down view.
+ *    Right arm (round 4, R4-body): the forearm rests forward at the side of the body, as if on an armrest (none is
+ *    drawn): upper arm 15 deg forward and 15 deg out, elbow bent 85 deg (forearm about 10 deg above level), forearm
+ *    turned past thumb-up so the palm faces mostly down and in (115 of 160 deg), wrist bent 10 deg, fingers loosely
+ *    curled 20 deg. Why: the round-3 arm (shoulder 5 / 12, elbow 40, turn 85) let the hand hang beside the right knee,
+ *    about 59 deg below eye level, so at a far-right look the hand only came into view at a 25 deg downward look
+ *    (half the hand; 27.5 deg for 90 %). Resting forward at elbow height it is about 44 deg below eye level and comes
+ *    into view at 10 deg (half) / 12.5 deg (90 %), measured in the game with its own camera, trunk turn and HUD
+ *    (round4/R4-body-NOTES.md). A forearm resting ON the thigh was measured too: this rig has no shoulder rotation or
+ *    adduction below 0, so the forearm stays in the shoulder's plane, beside the thigh about 90 mm above it, and the hand
+ *    stays about 52 deg below eye level (in view only at an 18 deg downward look); it would look like floating.
  *  - 'anatomical': the source pose itself (standing, arms at the sides, palms forward): every angle 0.
  */
 export const BODY_POSTURES = deepFreezeRig({
   anatomical: {},
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
-    r_shoulder_flex: 5, r_shoulder_abd: 12, r_elbow_flex: 40, r_pronation: 85, r_wrist_flex: 10, r_grasp: 20
+    r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
   }
+});
+/**
+ * Display caps for posture-relative targets (bodyPostureTargets), tighter than BODY_JOINT_LIMITS where the rigid 3D
+ * meshes would pass into each other (round 4, R4-body). 'seated': lifting a thigh stops at 110 deg hip flexion (15 deg
+ * above the seated 95; the body map asks +35, which BODY_JOINT_LIMITS would clamp at 120). Beyond that the thigh
+ * muscles pass into the belly wall. Torso vertices inside a leg mesh (every 3rd vertex; a vertical ray up and down must
+ * both cross the mesh an odd number of times), both thighs lifted as posed in the game: 114 at rest (the psoas tendons
+ * at their femur attachments), 379 at 110 deg, 3504 at 120 deg, most of them the external oblique inside the adductor
+ * magnus (one leg baked at each angle: 58 at 95 deg, 91 at 100, 233 at 110, 840 at 115, 1892 at 120). Real soft tissue
+ * would squash; these meshes cannot. The legs never pass into each other in any leg action (unit test R4-body-pose).
+ * The seated right elbow bends at most to 120 deg (the body map's +80 would reach the 145 deg limit from the 85 deg
+ * armrest rest): "bend right elbow" then ends where it ended in round 3 (40 + 80), with the hand about 265 mm from the
+ * eye, instead of about 164 mm at 145 deg, where the hand fills the lower corner of the view.
+ */
+export const BODY_POSTURE_LIMITS = deepFreezeRig({
+  anatomical: {},
+  seated: { hip_flex_L: [-20, 110], hip_flex_R: [-20, 110], r_elbow_flex: [0, 120] }
 });
 /** The posture the game uses (decision D4, round 3). */
 export const DEFAULT_BODY_POSTURE = 'seated';
 /** Plain-language posture lines for the HUD / Esc page (R17). */
 export const BODY_POSTURE_TEXT = Object.freeze({
-  seated: 'Your body sits still (no chair is drawn). Look down to see your chest, lap, knees and feet. Look down and to the right to see your right arm.',
+  seated: 'Your body sits still (no chair is drawn). Your right forearm rests forward, as if on an armrest. Look down to see your chest, lap, knees and feet. Look right and a little down to see your right arm.',
   anatomical: 'Your simulated body stands still with its arms at its sides.'
 });
 
@@ -1503,6 +1542,22 @@ export function bodyPostureAngles(posture = DEFAULT_BODY_POSTURE) {
     throw new Error(`ns:body_posture: invalid posture (unknown ${JSON.stringify(t.ignored)}, non-finite ${JSON.stringify(t.nonFinite)}, outside limits ${JSON.stringify(t.clamped.map(c => c.id))})`);
   }
   return t.applied;
+}
+
+/**
+ * Joint limits for posing on top of a posture: BODY_JOINT_LIMITS with the posture's BODY_POSTURE_LIMITS display caps
+ * (a BODY_POSTURES name or a bakeBodyPosture() result of a named posture; an angles object gets no caps).
+ * @returns { every BODY_JOINT_ID: [minDeg, maxDeg] }
+ */
+export function bodyPostureLimits(posture = DEFAULT_BODY_POSTURE) {
+  const name = typeof posture === 'string' ? posture : posture && posture.kind === 'ns-body-baked-posture' ? posture.posture : null;
+  const caps = name && Object.prototype.hasOwnProperty.call(BODY_POSTURE_LIMITS, name) ? BODY_POSTURE_LIMITS[name] : {};
+  const out = {};
+  for (const id of BODY_JOINT_IDS) {
+    const L = BODY_JOINT_LIMITS[id], c = caps[id];
+    out[id] = c ? Object.freeze([Math.max(L[0], c[0]), Math.min(L[1], c[1])]) : L;
+  }
+  return Object.freeze(out);
 }
 
 /** Normalise active actions for posing: like actionRows, but the POSE drive (`drive`) comes first, then `level`. */
@@ -1534,14 +1589,16 @@ function poseRows(activeActions) {
  *  - An action whose map target is exactly 0 is a "back to the source pose" action (knee or elbow straightening,
  *    forearm supination, jaw clench): it moves the joint from the rest angle toward 0 (a seated knee straightens).
  * Competing actions blend as in ns-actions composeBodyJoints (each joint: drive / max(1, sum of drives)); the result is
- * clamped to `limits`. With the 'anatomical' posture the result equals composeBodyJoints exactly.
+ * clamped to `limits` (default: BODY_JOINT_LIMITS with the posture's BODY_POSTURE_LIMITS display caps, so a seated thigh
+ * lifts at most to 110 deg and the seated right elbow bends at most to 120 deg). With the 'anatomical' posture the
+ * result equals composeBodyJoints exactly.
  * @param activeActions ns-actions activeBodyActions() rows ({ actionId, drive, level, ... }; the pose `drive` is
  *   used, else `level`), [{ actionId, drive }], action-id strings (drive 1), or { actionId: drive } / a Map.
  *   Rows may carry their own `joints`; otherwise BODY_MOTOR_MAP supplies them. Rows without joints are ignored.
- * @param options { posture = DEFAULT_BODY_POSTURE (name, angles or baked posture), limits = BODY_JOINT_LIMITS }
+ * @param options { posture = DEFAULT_BODY_POSTURE (name, angles or baked posture), limits = bodyPostureLimits(posture) }
  * @returns { every BODY_JOINT_ID: deg }
  */
-export function bodyPostureTargets(activeActions, { posture = DEFAULT_BODY_POSTURE, limits = BODY_JOINT_LIMITS } = {}) {
+export function bodyPostureTargets(activeActions, { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) } = {}) {
   const rest = bodyPostureAngles(posture);
   const rows = poseRows(activeActions);
   const total = {};
@@ -1560,87 +1617,214 @@ export function bodyPostureTargets(activeActions, { posture = DEFAULT_BODY_POSTU
   return out;
 }
 
-// Static k-d tree over a point cloud (exact nearest neighbour; same distances as nearestDistance, much faster).
-function kdTree(cloud) {
-  const n = cloud.length / 3;
-  const idx = Array.from({ length: n }, (_, i) => i);
-  const build = (lo, hi, axis) => {
-    if (hi - lo <= 1) return;
-    const part = idx.slice(lo, hi).sort((a, b) => cloud[3 * a + axis] - cloud[3 * b + axis] || a - b);
-    for (let i = 0; i < part.length; i++) idx[lo + i] = part[i];
-    const midI = (lo + hi) >> 1, next = axis === 2 ? 0 : axis + 1;
-    build(lo, midI, next);
-    build(midI + 1, hi, next);
-  };
-  build(0, n, 0);
-  const pts = new Float64Array(3 * n);
-  for (let i = 0; i < n; i++) { pts[3 * i] = cloud[3 * idx[i]]; pts[3 * i + 1] = cloud[3 * idx[i] + 1]; pts[3 * i + 2] = cloud[3 * idx[i] + 2]; }
-  const box = bboxOf(pts);
-  return { pts, n, lo: box.min, hi: box.max };
-}
-let kdBest = Infinity;
-function kdVisit(P, lo, hi, axis, x, y, z) {
-  if (lo >= hi) return;
-  const m = (lo + hi) >> 1, j = 3 * m;
-  const dx = P[j] - x, dy = P[j + 1] - y, dz = P[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
-  if (e < kdBest) kdBest = e;
-  const diff = (axis === 0 ? x : axis === 1 ? y : z) - P[j + axis];
-  const next = axis === 2 ? 0 : axis + 1;
-  if (diff < 0) { kdVisit(P, lo, m, next, x, y, z); if (diff * diff < kdBest) kdVisit(P, m + 1, hi, next, x, y, z); }
-  else { kdVisit(P, m + 1, hi, next, x, y, z); if (diff * diff < kdBest) kdVisit(P, lo, m, next, x, y, z); }
-}
-function kdNearest(t, x, y, z) {
-  kdBest = Infinity;
-  kdVisit(t.pts, 0, t.n, 0, x, y, z);
-  return Math.sqrt(kdBest);
-}
-/** Lower bound of the distance from a point to any point of a tree (its bounding box). */
-function kdBoxDistance(t, x, y, z) {
-  const ex = x < t.lo[0] ? t.lo[0] - x : x > t.hi[0] ? x - t.hi[0] : 0;
-  const ey = y < t.lo[1] ? t.lo[1] - y : y > t.hi[1] ? y - t.hi[1] : 0;
-  const ez = z < t.lo[2] ? t.lo[2] - z : z > t.hi[2] ? z - t.hi[2] : 0;
-  return Math.sqrt(ex * ex + ey * ey + ez * ez);
-}
-const kdCache = new WeakMap();
-function rigTrees(rig) {
-  let trees = kdCache.get(rig);
-  if (!trees) {
-    trees = {};
-    for (const [s, c] of Object.entries(rig._clouds || {})) trees[s] = kdTree(c);
-    kdCache.set(rig, trees);
+// ---------------------------------------------------------------------------------------------------------------------
+// Exact nearest-neighbour index (round 4, R4-body, load time)
+//
+// The rig's muscle blends (buildBodyRig), bodySkinWeights and the posture bake all ask the same question per muscle
+// vertex: how far is it from each candidate bone's voxel-downsampled point cloud, and which two bones are nearest? In
+// round 3 the rig answered it by scanning every cloud point (about 250 ms at load in Node) and the bake with a plain
+// k-d tree (about 270 ms, code F3). This index answers it exactly and much faster:
+//  - a bucket k-d tree (at most NN_LEAF points per leaf, split at the median of the widest axis) with a bounding box
+//    per node and an iterative search that visits the nearer child first;
+//  - a warm start: the search begins with the previous query's nearest point of the same cloud (consecutive mesh
+//    vertices are close), so most subtrees are skipped at once.
+// Why it is exact (the same double as nearestDistance, so the same rig, weights and baked bytes; unit test
+// R4-body-bake): every point's squared distance is computed with the same expression (dx * dx + dy * dy + dz * dz with
+// dx = point - query), and a subtree is skipped only when the squared distance to its box (computed per axis in the
+// same order, and never larger than any of its points' squared distances, because rounding is monotonic) is not
+// smaller than the best value found so far, so it cannot hold a strictly smaller value. The warm-start point is one of
+// the cloud's points. The minimum of the same set of doubles does not depend on the visiting order.
+
+const NN_LEAF = 8;
+/** Partially order `order[lo, hi)` by coordinate `axis` so that order[k] has no larger key before it and no smaller key
+ * after it (Hoare quickselect). The index's correctness never depends on the split: every node's box is computed from
+ * the points it actually holds. */
+function nnSelect(order, cloud, axis, lo, hi, k) {
+  let l = lo, r = hi - 1;
+  while (r > l) {
+    const pivot = cloud[3 * order[(l + r) >> 1] + axis];
+    let i = l, j = r;
+    while (i <= j) {
+      while (cloud[3 * order[i] + axis] < pivot) i++;
+      while (cloud[3 * order[j] + axis] > pivot) j--;
+      if (i <= j) { const t = order[i]; order[i] = order[j]; order[j] = t; i++; j--; }
+    }
+    if (k <= j) r = j; else if (k >= i) l = i; else break;
   }
-  return trees;
 }
-const KD_LB = new Float64Array(64), KD_D = new Float64Array(64);
-/** twoNearest with k-d trees and exact bounding-box pruning: the same result as twoNearest (same order, same strict
- * comparisons, same distances). A candidate is skipped only when its box is farther than a known second-nearest
- * distance, so it could not have been chosen. */
-function twoNearestKd(segs, trees, x, y, z) {
+/** Build the index of one cloud (Float64Array or Float32Array of xyz). */
+function nnIndex(cloud) {
+  const n = cloud.length / 3;
+  const order = new Int32Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  const cap = Math.max(1, 2 * Math.ceil(n / NN_LEAF) + 1) * 2;
+  const lo = new Int32Array(cap), hi = new Int32Array(cap), left = new Int32Array(cap), right = new Int32Array(cap), parent = new Int32Array(cap);
+  const box = new Float64Array(cap * 6);
+  let count = 0;
+  const make = (a, b) => {
+    const k = count++;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = a; i < b; i++) {
+      const j = 3 * order[i], x = cloud[j], y = cloud[j + 1], z = cloud[j + 2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    box[6 * k] = x0; box[6 * k + 1] = y0; box[6 * k + 2] = z0; box[6 * k + 3] = x1; box[6 * k + 4] = y1; box[6 * k + 5] = z1;
+    lo[k] = a; hi[k] = b; left[k] = -1; right[k] = -1;
+    if (b - a > NN_LEAF) {
+      const ex = x1 - x0, ey = y1 - y0, ez = z1 - z0;
+      const axis = ex >= ey && ex >= ez ? 0 : ey >= ez ? 1 : 2;
+      const m = (a + b) >> 1;
+      nnSelect(order, cloud, axis, a, b, m);
+      left[k] = make(a, m);
+      right[k] = make(m, b);
+      parent[left[k]] = k; parent[right[k]] = k;
+    }
+    return k;
+  };
+  if (n > 0) { make(0, n); parent[0] = -1; }
+  const pts = new Float64Array(3 * n), leafOf = new Int32Array(n);
+  for (let i = 0; i < n; i++) { const j = 3 * order[i]; pts[3 * i] = cloud[j]; pts[3 * i + 1] = cloud[j + 1]; pts[3 * i + 2] = cloud[j + 2]; }
+  for (let k = 0; k < count; k++) if (left[k] < 0) for (let i = lo[k]; i < hi[k]; i++) leafOf[i] = k;
+  return { n, pts, lo, hi, left, right, parent, leafOf, box, nodes: count, last: 0, stack: new Int32Array(128), stackD: new Float64Array(128) };
+}
+/** Squared distance from (x, y, z) to node k's box: per axis in the order x, y, z (see the exactness note above).
+ * nnNearestD2 inlines the same expression in its hot loops. */
+function nnBoxD2(B, k, x, y, z) {
+  const o = 6 * k;
+  const gx = x < B[o] ? B[o] - x : x > B[o + 3] ? x - B[o + 3] : 0;
+  const gy = y < B[o + 1] ? B[o + 1] - y : y > B[o + 4] ? y - B[o + 4] : 0;
+  const gz = z < B[o + 2] ? B[o + 2] - z : z > B[o + 5] ? z - B[o + 5] : 0;
+  return gx * gx + gy * gy + gz * gz;
+}
+/** Exact smallest squared distance from (x, y, z) to the indexed cloud (Infinity for an empty cloud). The search
+ * starts in the leaf of the previous query's nearest point (the warm start), then walks up to the root and searches
+ * each sibling subtree on the way whose box is nearer than the best point so far. The start leaf and those siblings
+ * together are the whole tree, so every point is either measured or provably not nearer. */
+function nnNearestD2(t, x, y, z) {
+  if (!t.n) return Infinity;
+  const P = t.pts, B = t.box, L = t.left, R = t.right, LO = t.lo, HI = t.hi, PA = t.parent;
+  let bi = t.last, best = Infinity;
+  const k0 = t.leafOf[bi];
+  for (let i = LO[k0], e2 = HI[k0]; i < e2; i++) {
+    const j = 3 * i, dx = P[j] - x, dy = P[j + 1] - y, dz = P[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
+    if (e < best) { best = e; bi = i; }
+  }
+  for (let node = k0, up = PA[k0]; up >= 0; node = up, up = PA[up]) {
+    const sib = L[up] === node ? R[up] : L[up];
+    let d;
+    { const o = 6 * sib;
+      const gx = x < B[o] ? B[o] - x : x > B[o + 3] ? x - B[o + 3] : 0;
+      const gy = y < B[o + 1] ? B[o + 1] - y : y > B[o + 4] ? y - B[o + 4] : 0;
+      const gz = z < B[o + 2] ? B[o + 2] - z : z > B[o + 5] ? z - B[o + 5] : 0;
+      d = gx * gx + gy * gy + gz * gz; }
+    if (d >= best) continue;
+    // Search the sibling subtree (nearer child first; skip boxes not nearer than the best so far).
+    const S = t.stack, SD = t.stackD;
+    let sp = 0;
+    S[sp] = sib; SD[sp] = d; sp++;
+    while (sp > 0) {
+      sp--;
+      if (SD[sp] >= best) continue;
+      let k = S[sp];
+      while (L[k] >= 0) {
+        const a = L[k], b = R[k];
+        let da, db;
+        { const o = 6 * a;
+          const gx = x < B[o] ? B[o] - x : x > B[o + 3] ? x - B[o + 3] : 0;
+          const gy = y < B[o + 1] ? B[o + 1] - y : y > B[o + 4] ? y - B[o + 4] : 0;
+          const gz = z < B[o + 2] ? B[o + 2] - z : z > B[o + 5] ? z - B[o + 5] : 0;
+          da = gx * gx + gy * gy + gz * gz; }
+        { const o = 6 * b;
+          const gx = x < B[o] ? B[o] - x : x > B[o + 3] ? x - B[o + 3] : 0;
+          const gy = y < B[o + 1] ? B[o + 1] - y : y > B[o + 4] ? y - B[o + 4] : 0;
+          const gz = z < B[o + 2] ? B[o + 2] - z : z > B[o + 5] ? z - B[o + 5] : 0;
+          db = gx * gx + gy * gy + gz * gz; }
+        let near, far, dfar, dnear;
+        if (da <= db) { near = a; dnear = da; far = b; dfar = db; } else { near = b; dnear = db; far = a; dfar = da; }
+        if (dfar < best) { S[sp] = far; SD[sp] = dfar; sp++; }
+        if (dnear >= best) { k = -1; break; }
+        k = near;
+      }
+      if (k < 0) continue;
+      for (let i = LO[k], e2 = HI[k]; i < e2; i++) {
+        const j = 3 * i, dx = P[j] - x, dy = P[j + 1] - y, dz = P[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
+        if (e < best) { best = e; bi = i; }
+      }
+    }
+  }
+  t.last = bi;
+  return best;
+}
+/** Lower bound of the distance from a point to any point of an index (its root box). */
+function nnRootDistance(t, x, y, z) {
+  return t.n ? Math.sqrt(nnBoxD2(t.box, 0, x, y, z)) : Infinity;
+}
+/** One index per cloud, built once per clouds object and reused by every mesh (rig build, skin weights, bake). */
+const nnCache = new WeakMap();
+function cloudIndexes(clouds) {
+  let idx = nnCache.get(clouds);
+  if (!idx) {
+    idx = {};
+    for (const [s, c] of Object.entries(clouds || {})) idx[s] = nnIndex(c);
+    nnCache.set(clouds, idx);
+  }
+  return idx;
+}
+const NN_LB = new Float64Array(64), NN_D = new Float64Array(64);
+// The index path returns this one object (overwritten by the next call; every caller reads it at once), so the
+// several hundred thousand queries at load allocate nothing.
+const NN_OUT = { a: null, wa: 1, b: null, wb: 0 };
+function twoNearestInto(o, a, da, b, db) {
+  o.a = a; o.b = b;
+  if (!b) { o.wa = 1; o.wb = 0; return o; }
+  const qa = da * da, qb = db * db, t = qa + qb;
+  const wa = t > 1e-12 ? qb / t : 0.5;
+  o.wa = wa; o.wb = 1 - wa;
+  return o;
+}
+/** twoNearest with the exact index and root-box pruning: the same result as twoNearest (same order, same strict
+ * comparisons, same distances). A candidate is skipped only when its box is farther than the larger of two known
+ * distances (so farther than the final second-nearest), so it could not have been chosen. */
+function twoNearestIdx(segs, idx, x, y, z) {
   const n = segs.length;
-  if (n > 64) return twoNearest(segs, Object.fromEntries(segs.map(s => [s, trees[s].pts])), x, y, z);
+  if (n > 64) {
+    let a = null, da = Infinity, b = null, db = Infinity;
+    for (const s of segs) {
+      const d = Math.sqrt(nnNearestD2(idx[s], x, y, z));
+      if (d < da) { b = a; db = da; a = s; da = d; } else if (d < db) { b = s; db = d; }
+    }
+    return twoNearestInto(NN_OUT, a, da, b, db);
+  }
   let i1 = -1, i2 = -1;
   for (let i = 0; i < n; i++) {
-    KD_LB[i] = kdBoxDistance(trees[segs[i]], x, y, z);
-    KD_D[i] = -1;
-    if (i1 < 0 || KD_LB[i] < KD_LB[i1]) { i2 = i1; i1 = i; } else if (i2 < 0 || KD_LB[i] < KD_LB[i2]) i2 = i;
+    NN_LB[i] = nnRootDistance(idx[segs[i]], x, y, z);
+    NN_D[i] = -1;
+    if (i1 < 0 || NN_LB[i] < NN_LB[i1]) { i2 = i1; i1 = i; } else if (i2 < 0 || NN_LB[i] < NN_LB[i2]) i2 = i;
   }
   let bound = Infinity;
   if (i2 >= 0) {
-    KD_D[i1] = kdNearest(trees[segs[i1]], x, y, z);
-    KD_D[i2] = kdNearest(trees[segs[i2]], x, y, z);
-    bound = Math.max(KD_D[i1], KD_D[i2]);
+    NN_D[i1] = Math.sqrt(nnNearestD2(idx[segs[i1]], x, y, z));
+    NN_D[i2] = Math.sqrt(nnNearestD2(idx[segs[i2]], x, y, z));
+    bound = Math.max(NN_D[i1], NN_D[i2]);
   }
   let a = null, da = Infinity, b = null, db = Infinity;
   for (let i = 0; i < n; i++) {
-    if (KD_D[i] < 0 && KD_LB[i] > bound) continue;
-    const d = KD_D[i] >= 0 ? KD_D[i] : kdNearest(trees[segs[i]], x, y, z);
+    if (NN_D[i] < 0 && NN_LB[i] > bound) continue;
+    const d = NN_D[i] >= 0 ? NN_D[i] : Math.sqrt(nnNearestD2(idx[segs[i]], x, y, z));
     const s = segs[i];
     if (d < da) { b = a; db = da; a = s; da = d; } else if (d < db) { b = s; db = d; }
   }
-  if (!b) return { a, wa: 1, b: null, wb: 0 };
-  const qa = da * da, qb = db * db, t = qa + qb;
-  const wa = t > 1e-12 ? qb / t : 0.5;
-  return { a, wa, b, wb: 1 - wa };
+  return twoNearestInto(NN_OUT, a, da, b, db);
+}
+/** The search used for muscle weighting: 'index' (default, exact and fast) or 'scan' (every cloud point; the
+ * round-2/3 reference, kept for the exactness unit test). */
+function nearestSearch(clouds, mode) {
+  if (mode === 'scan') return (segs, x, y, z) => twoNearest(segs, clouds, x, y, z);
+  if (mode !== undefined && mode !== null && mode !== 'index') throw new Error(`ns:body_nearest: unknown nearest search ${JSON.stringify(mode)} (index | scan)`);
+  const idx = cloudIndexes(clouds);
+  return (segs, x, y, z) => twoNearestIdx(segs, idx, x, y, z);
 }
 
 function transformPositions(m, p) {
@@ -1660,6 +1844,45 @@ function boundsOf(p) {
 }
 
 /**
+ * Per-vertex skin weights of one muscle mesh for the bake: the two nearest candidate segments (indexes into
+ * BODY_SEGMENTS; the second equals the first when only one is found) and the first weight (the second is 1 - it, as in
+ * twoNearestResult). They do not depend on the posture, so with the index search they are cached per rig and source
+ * positions array and reused by a later bake of the same rig (another posture, Reset or a test). The 'scan' reference
+ * never reads or fills the cache.
+ */
+const bakeWeightCache = new WeakMap();
+function bakeSkinWeights(rig, id, p, avail, near, useCache) {
+  let byId = useCache ? bakeWeightCache.get(rig) : null;
+  if (useCache && !byId) bakeWeightCache.set(rig, (byId = new Map()));
+  const hit = byId ? byId.get(id) : null;
+  if (hit && hit.p === p && hit.avail === avail.join(',')) return hit;
+  const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n);
+  // About a third of the muscle vertices repeat an earlier vertex of the same mesh exactly (seams). The weights are a
+  // pure function of the position, so a repeated position copies the first one's result (open-addressing hash on the
+  // exact coordinates) instead of searching again.
+  let size = 16; while (size < 2 * n) size <<= 1;
+  const slot = new Int32Array(size).fill(-1), mask = size - 1;
+  const f32 = new Float32Array(3), u32 = new Uint32Array(f32.buffer);
+  for (let i = 0, v = 0; i < p.length; i += 3, v++) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    f32[0] = x; f32[1] = y; f32[2] = z;
+    let h = (Math.imul(u32[0], 73856093) ^ Math.imul(u32[1], 19349663) ^ Math.imul(u32[2], 83492791)) & mask, src = -1;
+    for (;;) {
+      const q = slot[h];
+      if (q < 0) { slot[h] = v; break; }
+      if (p[3 * q] === x && p[3 * q + 1] === y && p[3 * q + 2] === z) { src = q; break; }
+      h = (h + 1) & mask;
+    }
+    if (src >= 0) { ia[v] = ia[src]; ib[v] = ib[src]; wa[v] = wa[src]; continue; }
+    const w = near(avail, x, y, z);
+    ia[v] = SEG_INDEX.get(w.a); ib[v] = SEG_INDEX.get(w.b || w.a); wa[v] = w.wa;
+  }
+  const out = { p, avail: avail.join(','), ia, ib, wa };
+  if (byId) byId.set(id, out);
+  return out;
+}
+
+/**
  * Bake a rest posture into the body geometry, once after loading (round 3). Bones are moved rigidly. A muscle whose
  * candidate segments move differently in the posture (for example the thigh muscles across the flexed hip and knee) is
  * deformed per vertex with the same two-influence weights as bodySkinWeights (two nearest candidate bones, inverse
@@ -1669,15 +1892,17 @@ function boundsOf(p) {
  * Genital anatomy is never baked (R15): only meshes the rig knows are returned, and buildBodyRig excludes genital
  * entries.
  * @param meshesById Map | object id -> { positions, indices, ... } (the source meshes; they are not modified)
- * @param options { posture = DEFAULT_BODY_POSTURE, keep = 'skull' }: `keep` is the segment that stays at its source
- *   place (a constant rigid correction of the whole posture), so a posture with a trunk angle does not move the head,
- *   the first-person eye or the face layer; null keeps the pelvis (the plain poseBody frame).
+ * @param options { posture = DEFAULT_BODY_POSTURE, keep = 'skull', nearest = 'index' }: `keep` is the segment that
+ *   stays at its source place (a constant rigid correction of the whole posture), so a posture with a trunk angle does
+ *   not move the head, the first-person eye or the face layer; null keeps the pelvis (the plain poseBody frame).
+ *   `nearest`: 'index' (default; the exact nearest-neighbour index, round 4) or 'scan' (every cloud point; the
+ *   reference the exactness unit test compares against, byte for byte).
  * @returns frozen { kind: 'ns-body-baked-posture', posture, angles, meshesById: Map(id -> { positions (posed,
  *   Float32Array), indices (shared), vertexCount, faceCount, bounds, comments }), segments: Map(segment -> posture
  *   matrix), skinned: [muscle ids deformed per vertex], rigid: [ids moved rigidly], missing: [rig ids with no mesh],
  *   ms }
  */
-export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTURE, keep = 'skull' } = {}) {
+export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTURE, keep = 'skull', nearest } = {}) {
   checkRig(rig);
   const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
   const angles = bodyPostureAngles(posture);
@@ -1693,7 +1918,9 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
   const fits = rig._fit || {}, clouds = rig._clouds || {};
   const out = new Map(), fitBaked = {}, rigidRest = {};
   const skinned = [], rigid = [], missing = [];
-  let trees = null;
+  let near = null;
+  const mode = nearest === undefined || nearest === null ? 'index' : nearest;
+  if (mode !== 'index' && mode !== 'scan') throw new Error(`ns:body_nearest: unknown nearest search ${JSON.stringify(nearest)} (index | scan)`);
   for (const [id, info] of Object.entries(rig.meshSegment)) {
     const mesh = getMesh(id), p = positionsOf(mesh);
     let rest = null, positions = null;
@@ -1707,12 +1934,12 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
       if (f && moving) {
         fitBaked[id] = skinFitSamples(f, mats);
         if (p) {
-          if (!trees) trees = rigTrees(rig);
+          if (!near) near = nearestSearch(clouds, mode);
+          const w = bakeSkinWeights(rig, id, p, avail, near, mode === 'index');
           positions = new Float32Array(p.length);
-          for (let i = 0; i < p.length; i += 3) {
+          for (let i = 0, v = 0; i < p.length; i += 3, v++) {
             const x = p[i], y = p[i + 1], z = p[i + 2];
-            const w = twoNearestKd(avail, trees, x, y, z);
-            const a = world[w.a], b = w.b ? world[w.b] : a, wa = w.wa, wb = w.wb;
+            const a = mats[w.ia[v]], b = mats[w.ib[v]], wa = w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
           }
           skinned.push(id);

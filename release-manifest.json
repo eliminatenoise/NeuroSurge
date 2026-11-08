@@ -2,12 +2,12 @@
  "schema_version": 1,
  "kind": "neurosurge_local_distribution",
  "name": "NeuroSurge",
- "status": "PUBLIC_RELEASE_ROUND3",
+ "status": "PUBLIC_RELEASE_ROUND4",
  "claim": "Client-side browser game build for local play. All activity is simulated and unitless; gaze, clicks and keys are virtual inputs, not stimulation or neural decoding. NeuroTranslate 0.0 is a companion model name only; no trained or validated translation model runs in the game.",
- "build_time_utc": "2026-11-08T14:51:51.000Z",
+ "build_time_utc": "2026-11-08T21:46:54.000Z",
  "builder": {
   "script": "release/build-dist.mjs",
-  "script_sha256": "3538de77a57baf2859c92ed903170959997ded438efbb21e7d35af38b98cc0fa",
+  "script_sha256": "8216fe4cb1ba690667c6181c17944a98eec82138ea5f0cfa53e0a5fed0ebe108",
   "lib_sha256": "48a7c9381d627713a55d2d0c683969c1d98e01edca66aedaa801dbeeb2852343",
   "node": "v26.8.2"
  },
@@ -22,7 +22,9 @@
  "entry": {
   "page": "scene/example/index.html",
   "root_redirect": "index.html",
-  "must_be_served_from_distribution_root": true,
+  "must_be_served_from_distribution_root": false,
+  "urls": "page-relative",
+  "note": "Every URL the game loads is relative to its page, so this folder runs from the top of a site or from any web sub-path (for example /NeuroSurge/). It must be opened over http(s), not as a file:// page.",
   "server": "serve-local.mjs (127.0.0.1 only)"
  },
  "allowlist": {
@@ -134,39 +136,45 @@
    }
   },
   "module_graph": {
-   "edges": 41,
+   "edges": 43,
    "errors": 0,
-   "warnings": []
+   "warnings": [],
+   "url_strings_checked": 2,
+   "inline_data_refs": 1
+  },
+  "portable_urls": {
+   "ok": true,
+   "root_absolute": []
   }
  },
  "totals": {
-  "files": 466,
-  "bytes": 114267897
+  "files": 467,
+  "bytes": 114539558
  },
- "content_sha256": "0bb640a32bdfd0adb194705b8ee032a8dc0f1515dcecec29739841ad9c17ab42",
+ "content_sha256": "e2778fb11ddc5aa77b842ff8424a3eb9bd12912eeb583a0844f3cc7461e3b6aa",
  "files": [
   {
    "path": "ASSET-ATTRIBUTION-INDEX.md",
-   "bytes": 36069,
-   "sha256": "4dfb266109ad611402dae415de96e1a63cd868e4fd593972bd1fb77cb1682cff",
+   "bytes": 36190,
+   "sha256": "a3dae4b777864370ee9602e6bf77a9882bb17809f317467b3fd0cfdcada4e1bc",
    "origin": "generated"
   },
   {
    "path": "CREDITS-AND-LICENCES.md",
-   "bytes": 11509,
-   "sha256": "a0a441d2218fef06db5a3fc81d4e67442bf1d735eb7f87381b97412c71ade15f",
+   "bytes": 11917,
+   "sha256": "10fb5172e7d5a394da98a2a5d631caa5a436d20ddde89f1fc2534aaa338078d0",
    "origin": "kit"
   },
   {
    "path": "PLAYER-GUIDE.md",
-   "bytes": 21295,
-   "sha256": "18a87627647dbf9c23c6dffe69f1e18114f50c074ff9f30fa885a010ea91e8f1",
+   "bytes": 24958,
+   "sha256": "79f781594f231478f6ec142e632e20e19740ec877282ef03e1035fc9a2c2c304",
    "origin": "kit"
   },
   {
    "path": "index.html",
-   "bytes": 1309,
-   "sha256": "c9e25b3772912f136619af98a81e5e373307bcddc5c47d3696248e6a593c5f95",
+   "bytes": 1341,
+   "sha256": "96fd4ebafc73106001b38f8595758ce902663c1ee2410d559ea165fb112e8302",
    "origin": "generated"
   },
   {
@@ -2823,68 +2831,74 @@
   },
   {
    "path": "scene/example/index.html",
-   "bytes": 22680,
-   "sha256": "3e149bce82e1193e03c36a2d44dbb264e8d9d6e9dbdeccaabd1e4dbaaed18b74",
+   "bytes": 28956,
+   "sha256": "ac8ce5f7a1c525dfda707a12cfcb061257a3a4bb895e39ac9d31fd8c84068fdc",
    "origin": "game"
   },
   {
    "path": "scene/example/neurosurge.css",
-   "bytes": 31343,
-   "sha256": "4051fa300f5f13f7754404952273d396867c498a35b5f979dffc6628d1c23dec",
+   "bytes": 39765,
+   "sha256": "e141aa9855f2e26fa143d7a5898b60810400aba0f122105ee5fdd0ab0cd3b949",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-actions.mjs",
-   "bytes": 116058,
-   "sha256": "b943cf7f32b975d6778e6e8ba4942956259a0f446e1db96235354d5a128efbf1",
+   "bytes": 120868,
+   "sha256": "76821fc12799c44da5e20cf9c0fccf3e8d9db79d9586db7b5d7cabd66619f394",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-app.mjs",
-   "bytes": 205778,
-   "sha256": "7bb25c870f2e917e917bd4cc7815dc40cd0ff9ebb42cf951a9636219c7ed7d88",
+   "bytes": 245868,
+   "sha256": "e3dfdc09e2729e93ae65eaa7effc4c389bede17b66816bbd8ff6991463a91e66",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-arm.mjs",
-   "bytes": 86028,
-   "sha256": "e7ae2745bddd86ecd60ac8b2e900921abcea7ca4f2255f95ce945a9dba453128",
+   "bytes": 105887,
+   "sha256": "16e0e7f039719850b288b459109bd99c3082e877d3e25cca9f2f7cb80cb5a33f",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-assets.mjs",
-   "bytes": 57662,
-   "sha256": "892d34736058c481ec670197c3741aac5391f79a2c19b077003881bff9ea80c0",
+   "bytes": 73323,
+   "sha256": "2d885d59031d151a9701f503a196d713a389e9123f0981f2aeb6e1c4a1f0b828",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-body.mjs",
-   "bytes": 125750,
-   "sha256": "f634b99680aaca905a5087755aba0bbac3f3f11a234d6169ba2d5b47c4a969dd",
+   "bytes": 140803,
+   "sha256": "3271993cffc2c1f6c2c6b4c89c57a28f387bd8d83b16242f43c4c22d25c81342",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-bodymap.mjs",
-   "bytes": 108750,
-   "sha256": "8719303e4d530e03841d9407b14746fc7d14046ef3c9d5f51d98688cd7dab6a3",
+   "bytes": 139398,
+   "sha256": "caf6199d54d672341f4fc67311a9455b1f31cab0ec3311256d4fe90b58fc0250",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-brain.mjs",
-   "bytes": 203559,
-   "sha256": "776b48441eab2269ffb80d91addc4b2ad023bd83c8cd9fb559e0b3df2afa0ac3",
+   "bytes": 213556,
+   "sha256": "a6e5575ac1ed187c6689b147111443ec1cfb4e65d6567aa552013a7bad92ae30",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-colors.mjs",
-   "bytes": 9081,
-   "sha256": "c56999107ba876b5255b11862c98a8bf3a463b1b76566d41e18eb111c23c0fcd",
+   "bytes": 12988,
+   "sha256": "5ed63db26ec7945897985a44c8a2e2d0f2cf179c707a2826a9fe6bce77789e15",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-controls.mjs",
-   "bytes": 26204,
-   "sha256": "8457935aa82c881ab7c715d3636d917e853ac907cc039727e18678f2fc9fa98b",
+   "bytes": 30261,
+   "sha256": "ad9db0c8f4cd2d2d523a70f0187397bd8591efaf7c4b0ec9c6e185d9e53907b9",
+   "origin": "game"
+  },
+  {
+   "path": "scene/src/ns-guide.mjs",
+   "bytes": 20222,
+   "sha256": "f092c2e8ab77e6f7eb40f45fd19df0d0f5bdbe032714029f0fcd2b7f03889ccb",
    "origin": "game"
   },
   {
@@ -2913,20 +2927,20 @@
   },
   {
    "path": "scene/src/ns-scene-three.mjs",
-   "bytes": 273939,
-   "sha256": "e88b0bbfad62d96d4b5fdd13b8f85ec08a5db7d7fa7844b505381b98c123ee18",
+   "bytes": 353096,
+   "sha256": "a6a1601a450ae603f65b72413e4e3798946c190e11460f59a3d7bc8957811b2e",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-text.mjs",
-   "bytes": 38775,
-   "sha256": "827f56d9c4dfa80cf452072bd0d389114a6ee5ce8aba7ad6dedb608d0f70ff9c",
+   "bytes": 47918,
+   "sha256": "c8e4e909e07ce263394fb897e90bd7fdbfc1bb4cc5797deb01c948e4a7d7439b",
    "origin": "game"
   },
   {
    "path": "serve-local.mjs",
-   "bytes": 13231,
-   "sha256": "647107641622582140295c667aaa037a92ad570c805363d40ab50a3801f0cbf7",
+   "bytes": 13366,
+   "sha256": "961f50c5be4c8993db667a38516feeb6bd0092861a513e0f36eaaec9b2435df1",
    "origin": "kit"
   },
   {

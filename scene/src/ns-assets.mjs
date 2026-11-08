@@ -12,6 +12,16 @@
  * regex/split per line; anything outside its fast grammar is handed to parseObj itself, so results AND refusals are
  * identical). loadAssets and loadFullbodyAssets use it by default; utf8ByteLength skips its per-character loop for
  * pure-ASCII text. Every byte, sha256, vertex-count and laterality check is unchanged and still runs in the same order.
+ *
+ * Round 4 (R4-load): progressive loading. streamFullbodyAssets loads the full body in two parts: a small PRIORITY part
+ * first (by default the two lacrimal bones that eyePosition reads, so the first-person eye and therefore the first view
+ * are exactly the same as with the whole body), then the BULK, started by the caller once the first frame is up
+ * (start()), largest files first, with bounded concurrency and optional time slicing. loadFullbodyAssets is the same
+ * stream in one go. An optional byte path (readBytes + sha256HexBytes) checks the served bytes themselves and decodes
+ * each file once, so the page no longer re-encodes every text for hashing. Every check (byte count, then sha256, then
+ * parse, then vertex count, finiteness and laterality) and the parsed geometry are unchanged
+ * (tests/unit/R4-load-progressive.test.mjs proves equality on all 428 meshes the game loads: 134 arm and brain + 294 body).
+ * No URL is built here: callers inject the readers, and manifest paths stay relative ('meshes/<id>.obj').
  */
 import { parseObj, OBJ_LIMITS, MAX_COMMENTS } from './ns-obj.mjs';
 import { sub, dot, length, scale, reject } from './ns-math.mjs';
@@ -377,7 +387,9 @@ export const LICENCE_LINKS = Object.freeze({
   source: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html'
 });
 /** What this game changes (CC BY 4.0 section 3(a)(1)(B): indicate modifications). */
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. The OBJ files themselves are unmodified.';
+// R4-fix (review SL4-6): Picture quality Low (and Auto at its cheapest levels) draws vertex-clustered, simplified copies
+// of the glass-brain and full-body meshes at run time; say so, like the muscle bending.
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 
@@ -534,6 +546,69 @@ export function utf8ByteLength(text) {
   return n;
 }
 
+// ---------------------------------------------------------------------------------------
+// R4-load: byte path (the served bytes are checked; each file is decoded once)
+// ---------------------------------------------------------------------------------------
+
+let utf8Decoder = null;
+/** Lossless UTF-8 decode of verified bytes: fatal (invalid UTF-8 is refused, never replaced) and BOM kept (as U+FEFF),
+ * so the text's UTF-8 encoding is exactly these bytes. Throws ns:asset_parse for invalid UTF-8. */
+export function decodeUtf8Exact(bytes, id = 'text') {
+  if (!utf8Decoder) utf8Decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  try { return utf8Decoder.decode(bytes); } catch { return fail('asset_parse', `${id}: the file is not valid UTF-8 text`); }
+}
+
+/** Uint8Array view of what a readBytes reader returned (ArrayBuffer, any typed array or DataView), else null. */
+function asBytes(raw) {
+  if (raw instanceof Uint8Array) return raw;
+  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+  if (ArrayBuffer.isView(raw)) return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  return null;
+}
+
+/**
+ * Read one manifest entry and check it before anything parses it. Text path (readText, sha256Hex): the text's UTF-8
+ * byte count must equal entry.bytes (ns:asset_bytes), then sha256Hex(text) must equal entry.sha256 (ns:asset_hash). Byte
+ * path (readBytes, sha256HexBytes; used when readBytes is given): the served byte count, then the sha256 of the served
+ * bytes themselves, then a lossless UTF-8 decode. Returns { text, bytes } (bytes = the verified UTF-8 length).
+ * For every file that passes both paths the text is the same string. The byte path is the stricter one: it refuses a
+ * served file that differs from the pinned bytes in any way (for example an added byte-order mark, which a browser's
+ * response.text() would silently strip before the text path sees it).
+ */
+async function readVerified(entry, io) {
+  const id = entry.element_id;
+  if (typeof io.readBytes === 'function') {
+    let raw;
+    try { raw = await io.readBytes(entry.path, entry); } catch (err) { fail('asset_read', `${id}: ${err && err.message ? err.message : String(err)}`); }
+    const u8 = asBytes(raw);
+    if (!u8) fail('asset_read', `${id}: readBytes must return an ArrayBuffer or a typed array`);
+    if (u8.byteLength !== entry.bytes) fail('asset_bytes', `${id}: ${u8.byteLength} bytes, manifest says ${entry.bytes}`);
+    const hex = await io.sha256HexBytes(u8);
+    if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
+    return { text: decodeUtf8Exact(u8, id), bytes: u8.byteLength };
+  }
+  let text;
+  try { text = await io.readText(entry.path, entry); } catch (err) { fail('asset_read', `${id}: ${err && err.message ? err.message : String(err)}`); }
+  if (typeof text !== 'string') fail('asset_read', `${id}: readText must return a string`);
+  const bytes = utf8ByteLength(text);
+  if (bytes !== entry.bytes) fail('asset_bytes', `${id}: ${bytes} UTF-8 bytes, manifest says ${entry.bytes}`);
+  const hex = await io.sha256Hex(text);
+  if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
+  return { text, bytes };
+}
+
+/** Parse verified text with the injected parser (parseObjFast reuses the verified byte count for its maxBytes limit). */
+function parseVerified(parse, text, bytes) {
+  return parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text);
+}
+
+/** The reader pair a loader uses: { readBytes, sha256HexBytes } when readBytes is a function, else { readText, sha256Hex };
+ * returns null when neither pair is complete. */
+function readerPair({ readText, sha256Hex, readBytes, sha256HexBytes }) {
+  if (typeof readBytes === 'function') return typeof sha256HexBytes === 'function' ? { readBytes, sha256HexBytes } : null;
+  return typeof readText === 'function' && typeof sha256Hex === 'function' ? { readText, sha256Hex } : null;
+}
+
 /** Post-parse checks against the actual geometry, not only the manifest's claims. */
 function checkParsed(set, entry, mesh) {
   const id = entry.element_id;
@@ -556,30 +631,26 @@ function checkParsed(set, entry, mesh) {
  * For each entry: readText(entry.path, entry) (entry.source_packet names the packet) -> UTF-8 byte length must equal entry.bytes (ns:asset_bytes)
  * -> sha256Hex(text) must equal entry.sha256 (ns:asset_hash) -> only then parse(text).
  * readText and sha256Hex may be sync or async. Excluded (girdle) entries are never read.
+ * R4-load byte path: pass readBytes(path, entry) -> ArrayBuffer | Uint8Array and sha256HexBytes(bytes) instead; the served
+ * byte count and the sha256 of the served bytes are checked, then the bytes are decoded once (losslessly) and parsed.
  * Returns { arm: Map(id -> {entry, mesh}), brain: Map(id -> {entry, mesh}), excluded }. */
-export async function loadAssets({ manifest, readText, sha256Hex, parse = parseObjFast } = {}) {
-  if (typeof readText !== 'function') fail('asset_args', 'readText(path) must be injected');
-  if (typeof sha256Hex !== 'function') fail('asset_args', 'sha256Hex(text) must be injected');
+export async function loadAssets({ manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast } = {}) {
+  if (typeof readBytes === 'function') {
+    if (typeof sha256HexBytes !== 'function') fail('asset_args', 'sha256HexBytes(bytes) must be injected with readBytes');
+  } else {
+    if (typeof readText !== 'function') fail('asset_args', 'readText(path) must be injected');
+    if (typeof sha256Hex !== 'function') fail('asset_args', 'sha256Hex(text) must be injected');
+  }
   if (typeof parse !== 'function') fail('asset_args', 'parse(text) must be a function');
   const v = validateInternal(manifest);
+  const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
   const arm = new Map(), brain = new Map();
   for (const { set, entry } of v.order) {
-    const id = entry.element_id;
-    let text;
-    try {
-      text = await readText(entry.path, entry);
-    } catch (err) {
-      fail('asset_read', `${id}: ${err && err.message ? err.message : String(err)}`);
-    }
-    if (typeof text !== 'string') fail('asset_read', `${id}: readText must return a string`);
-    const bytes = utf8ByteLength(text);
-    if (bytes !== entry.bytes) fail('asset_bytes', `${id}: ${bytes} UTF-8 bytes, manifest says ${entry.bytes}`);
-    const hex = await sha256Hex(text);
-    if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
-    // R3-perf: the fast parser reuses the byte count verified above for its maxBytes limit (no second UTF-8 scan).
-    const mesh = await (parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text));
+    // Byte count, then sha256, then (only then) parse: readVerified. R3-perf: the fast parser reuses the verified byte count.
+    const { text, bytes } = await readVerified(entry, io);
+    const mesh = await parseVerified(parse, text, bytes);
     checkParsed(set, entry, mesh);
-    (set === 'arm' ? arm : brain).set(id, Object.freeze({ entry, mesh }));
+    (set === 'arm' ? arm : brain).set(entry.element_id, Object.freeze({ entry, mesh }));
   }
   return { arm, brain, excluded: v.excluded };
 }
@@ -832,6 +903,182 @@ async function mapBounded(items, limit, fn) {
 }
 
 const ABSENT = () => Object.freeze({ status: 'absent', meshes: new Map(), failed: Object.freeze([]), counts: null, error: null });
+const INVALID = err => Object.freeze({ status: 'invalid', meshes: new Map(), failed: Object.freeze([]), counts: null, error: String(err && err.message ? err.message : err) });
+
+/** R4-load: the bulk orders streamFullbodyAssets accepts. 'bytes': largest file first (on a bounded pool the long files
+ * start early instead of ending the load); 'manifest': manifest order. The ORDER never changes what is loaded or the
+ * result: results are always keyed and ordered by the manifest. */
+export const FULLBODY_BULK_ORDERS = Object.freeze(['bytes', 'manifest']);
+
+/**
+ * R4-load: the ids of the full-body entries eyePosition's 'skull_orbits' source reads (every entry named a left or right
+ * lacrimal bone, found by the same name test eyePosition uses), in manifest order. Loading only these first gives the same
+ * eye, so the first view does not change when the rest of the body arrives (tests/unit/R4-load-progressive.test.mjs).
+ * entries: raw manifest entries or validated snapshots.
+ */
+export function fullbodyEyeIds(entries) {
+  if (!Array.isArray(entries)) fail('asset_args', 'entries must be an array');
+  return Object.freeze(entries
+    .filter(e => e && typeof e.element_id === 'string' && entryNames(e).some(s => EYE_SOURCE_NAME_RE.left.test(s) || EYE_SOURCE_NAME_RE.right.test(s)))
+    .map(e => e.element_id));
+}
+
+/**
+ * R4-load: split full-body entries into the PRIORITY part (priorityIds, default fullbodyEyeIds(entries); manifest order)
+ * and the BULK (everything else, in `bulkOrder`). Unknown priority ids are reported in missingPriorityIds and ignored.
+ * @returns frozen { priorityIds, missingPriorityIds, priority: [entry...], bulk: [entry...], bulkOrder }
+ */
+export function fullbodyLoadPlan(entries, { priorityIds, bulkOrder = 'bytes' } = {}) {
+  if (!Array.isArray(entries)) fail('asset_args', 'entries must be an array');
+  if (!FULLBODY_BULK_ORDERS.includes(bulkOrder)) fail('asset_args', `bulkOrder must be one of ${FULLBODY_BULK_ORDERS.join(', ')}`);
+  const wanted = priorityIds === undefined || priorityIds === null ? fullbodyEyeIds(entries) : priorityIds;
+  if (!Array.isArray(wanted) || !wanted.every(id => typeof id === 'string')) fail('asset_args', 'priorityIds must be an array of element ids');
+  const want = new Set(wanted);
+  const known = new Set(entries.map(e => e.element_id));
+  const priority = entries.filter(e => want.has(e.element_id));
+  const rest = entries.filter(e => !want.has(e.element_id));
+  // Stable sort: equal sizes keep manifest order.
+  const bulk = bulkOrder === 'bytes' ? rest.map((e, i) => [e, i]).sort((a, b) => (b[0].bytes - a[0].bytes) || (a[1] - b[1])).map(x => x[0]) : rest;
+  return Object.freeze({
+    priorityIds: Object.freeze(priority.map(e => e.element_id)),
+    missingPriorityIds: Object.freeze([...want].filter(id => !known.has(id))),
+    priority: Object.freeze(priority),
+    bulk: Object.freeze(bulk),
+    bulkOrder
+  });
+}
+
+/** Read, check and parse one full-body entry (byte count, sha256, parse, vertex count, finite vertices, laterality from the
+ * parsed centroid). `beforeParse` (optional, async) runs between the checks and the parse: the time-slicing point. */
+async function verifyFullbody(entry, io, parse, beforeParse) {
+  const id = entry.element_id;
+  const { text, bytes } = await readVerified(entry, io);
+  if (beforeParse) await beforeParse();
+  const mesh = await parseVerified(parse, text, bytes);
+  const p = mesh && mesh.positions;
+  if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
+  if (typeof entry.vertices === 'number' && p.length / 3 !== entry.vertices) fail('asset_vertices', `${id}: parsed ${p.length / 3} vertices, manifest says ${entry.vertices}`);
+  let sx = 0;
+  for (let i = 0; i < p.length; i += 3) { if (!Number.isFinite(p[i]) || !Number.isFinite(p[i + 1]) || !Number.isFinite(p[i + 2])) fail('asset_parse', `${id}: non-finite vertex`); sx += p[i]; }
+  checkSide(id, entry.laterality, sx / (p.length / 3), 'parsed centroid');
+  return Object.freeze({ entry, mesh });
+}
+
+const failureOf = (id, err) => {
+  const message = String(err && err.message ? err.message : err);
+  const m = /^ns:([a-z_]+):/.exec(message);
+  return Object.freeze({ id, code: m ? m[1] : 'asset_read', message: message.slice(0, 300) });
+};
+const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const defaultNow = () => (typeof performance !== 'undefined' && performance && typeof performance.now === 'function' ? performance.now() : Date.now());
+
+/**
+ * R4-load: PROGRESSIVE full-body loading. Never throws. Every file is checked exactly as loadFullbodyAssets does (byte
+ * count, then sha256, then parse, then vertex count, finite vertices and laterality); the parsed geometry is identical.
+ *
+ * The load runs in two parts:
+ *   1. PRIORITY (default: fullbodyEyeIds, the two lacrimal bones, about 84 kB): starts at once. `priority` resolves when
+ *      each priority file is verified or has failed: { status, meshes: Map(id -> {entry, mesh}) in manifest order,
+ *      failed, counts, error }. eyePosition({ fullbody: (await s.priority).meshes, ... }) gives exactly the eye the whole
+ *      body gives, so the camera and the arm attachment of the first frame never change later.
+ *   2. BULK (all other files, largest first by default): starts when the caller calls start() (call it once the first
+ *      frame is on screen, so the bulk's parsing does not delay that frame) or at once with autoStart: true. It begins
+ *      after the priority part has finished.
+ * `done` resolves once with the loadFullbodyAssets result for ALL files: { status: 'complete' | 'partial' | 'rejected' |
+ * 'cancelled' | 'absent' | 'invalid', meshes: Map in manifest order, failed (sorted by id), counts, error }.
+ * Options:
+ *   readText + sha256Hex (text path) or readBytes + sha256HexBytes (byte path: the served bytes are checked and decoded
+ *   once; see readVerified); parse (default parseObjFast); concurrency (files in flight, 1-16); excludeIds;
+ *   allOrNothing (any failure -> status 'rejected' with no meshes); priorityIds (array of ids; [] = no priority part);
+ *   bulkOrder ('bytes' | 'manifest'); autoStart;
+ *   sliceMs + yieldFn: time slicing. Before each parse, when more than sliceMs (ms, by now()) have passed since the
+ *   last yield, `await yieldFn()` first (in a page: a macrotask yield such as a MessageChannel message or setTimeout 0,
+ *   so frames are drawn between files). The slice clock restarts after each yield. Without yieldFn nothing yields;
+ *   onMesh({ id, record, priority, done, total }) after each verified file (advisory; errors in it are ignored);
+ *   onProgress({ done, total }) after each file, verified or failed (as loadFullbodyAssets).
+ * Returns { plan, counts, priority: Promise, done: Promise, start(): Promise (= done), cancel(), progress() }.
+ * cancel(): files not yet started are skipped; `done` then resolves with status 'cancelled' and what was verified.
+ */
+export function streamFullbodyAssets({
+  manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast,
+  concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [], allOrNothing = false,
+  priorityIds, bulkOrder = 'bytes', autoStart = false,
+  sliceMs = 0, yieldFn = null, now = defaultNow,
+  onMesh = null, onProgress = null
+} = {}) {
+  const settled = r => {
+    const p = Promise.resolve(r);
+    return Object.freeze({ plan: null, counts: r.counts, priority: p, done: p, start: () => p, cancel: () => {}, progress: () => Object.freeze({ done: 0, total: 0, priorityTotal: 0, started: false, cancelled: false }) });
+  };
+  if (manifest === null || manifest === undefined) return settled(ABSENT());
+  const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
+  if (!io || typeof parse !== 'function') {
+    return settled(INVALID(typeof readBytes === 'function' ? 'readBytes, sha256HexBytes and parse must be functions' : 'readText, sha256Hex and parse must be functions'));
+  }
+  let v, plan;
+  try {
+    v = validateFullbodyManifest(manifest, { excludeIds });
+    plan = fullbodyLoadPlan(v.entries, { priorityIds, bulkOrder });
+  } catch (err) { return settled(INVALID(err)); }
+  const limit = Number.isInteger(concurrency) && concurrency > 0 ? Math.min(concurrency, 16) : FULLBODY_DEFAULT_CONCURRENCY;
+  const slicing = Number.isFinite(sliceMs) && sliceMs > 0 && typeof yieldFn === 'function' && typeof now === 'function';
+  const total = v.entries.length;
+  const priorityIdSet = new Set(plan.priorityIds);
+  const records = new Map();
+  const failed = [];
+  let done = 0, cancelled = false, started = false, sliceStart = slicing ? now() : 0;
+  const beforeParse = slicing ? async () => { if (now() - sliceStart >= sliceMs) { await yieldFn(); sliceStart = now(); } } : null;
+
+  const runOne = async entry => {
+    if (cancelled) return;
+    const id = entry.element_id;
+    try {
+      const rec = await verifyFullbody(entry, io, parse, beforeParse);
+      records.set(id, rec);
+      if (typeof onMesh === 'function') { try { onMesh({ id, record: rec, priority: priorityIdSet.has(id), done: done + 1, total }); } catch { /* advisory */ } }
+    } catch (err) {
+      failed.push(failureOf(id, err));
+    } finally {
+      done++;
+      if (typeof onProgress === 'function') { try { onProgress({ done, total }); } catch { /* progress is advisory */ } }
+    }
+  };
+  /** Result over `list` (manifest-ordered meshes; failures of that list sorted by id). */
+  const resultOver = (list, final) => {
+    const ids = new Set(list.map(e => e.element_id));
+    const fails = failed.filter(f => ids.has(f.id)).sort(byId);
+    if (allOrNothing && fails.length) {
+      return Object.freeze({ status: 'rejected', meshes: new Map(), failed: Object.freeze(fails), counts: v.counts, error: `${fails.length} full-body file(s) failed verification` });
+    }
+    const meshes = new Map();
+    for (const e of v.entries) if (ids.has(e.element_id) && records.has(e.element_id)) meshes.set(e.element_id, records.get(e.element_id));
+    const status = final && cancelled ? 'cancelled' : fails.length ? 'partial' : 'complete';
+    return Object.freeze({ status, meshes, failed: Object.freeze(fails), counts: v.counts, error: null });
+  };
+
+  const priority = mapBounded(plan.priority, limit, runOne).then(() => resultOver(plan.priority, false));
+  let resolveDone;
+  const donePromise = new Promise(r => { resolveDone = r; });
+  const start = () => {
+    if (!started) {
+      started = true;
+      priority
+        .then(() => (cancelled ? null : mapBounded(plan.bulk, limit, runOne)))
+        .then(() => resolveDone(resultOver(v.entries, true)), err => resolveDone(INVALID(err)));
+    }
+    return donePromise;
+  };
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    if (!started) priority.then(() => resolveDone(resultOver(v.entries, true)));
+  };
+  if (autoStart) start();
+  return Object.freeze({
+    plan, counts: v.counts, priority, done: donePromise, start, cancel,
+    progress: () => Object.freeze({ done, total, priorityTotal: plan.priority.length, started, cancelled })
+  });
+}
 
 /**
  * Load the OPTIONAL full-body group. It never throws and never blocks the arm game: call it after the arm scene is up
@@ -839,55 +1086,38 @@ const ABSENT = () => Object.freeze({ status: 'absent', meshes: new Map(), failed
  * { status: 'absent' } at once. Every file is checked exactly like the arm (UTF-8 byte count, then sha256, then parse,
  * then vertex count and laterality from the parsed geometry); a file that fails is never used and is listed in
  * `failed`. allOrNothing: true drops the whole group when any file fails ('rejected').
+ * R4-load: this is streamFullbodyAssets in one go (no priority part, manifest order unless bulkOrder says otherwise); the
+ * byte path (readBytes + sha256HexBytes) is accepted too.
  * @returns Promise<{ status: 'absent' | 'invalid' | 'complete' | 'partial' | 'rejected', meshes: Map(id -> {entry, mesh}),
  *   failed: [{ id, code, message }], counts, error }>
  */
 export async function loadFullbodyAssets({
-  manifest, readText, sha256Hex, parse = parseObjFast, concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [],
-  allOrNothing = false, onProgress = null
+  manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast,
+  concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [], allOrNothing = false, onProgress = null,
+  bulkOrder = 'manifest', sliceMs = 0, yieldFn = null
 } = {}) {
-  if (manifest === null || manifest === undefined) return ABSENT();
-  const invalid = err => Object.freeze({ status: 'invalid', meshes: new Map(), failed: Object.freeze([]), counts: null, error: String(err && err.message ? err.message : err) });
-  if (typeof readText !== 'function' || typeof sha256Hex !== 'function' || typeof parse !== 'function') return invalid('readText, sha256Hex and parse must be functions');
-  let v;
-  try { v = validateFullbodyManifest(manifest, { excludeIds }); } catch (err) { return invalid(err); }
-  const limit = Number.isInteger(concurrency) && concurrency > 0 ? Math.min(concurrency, 16) : FULLBODY_DEFAULT_CONCURRENCY;
-  const failed = [];
-  let done = 0;
-  const results = await mapBounded(v.entries, limit, async entry => {
-    const id = entry.element_id;
-    try {
-      const text = await readText(entry.path, entry);
-      if (typeof text !== 'string') fail('asset_read', `${id}: readText must return a string`);
-      const bytes = utf8ByteLength(text);
-      if (bytes !== entry.bytes) fail('asset_bytes', `${id}: ${bytes} UTF-8 bytes, manifest says ${entry.bytes}`);
-      const hex = await sha256Hex(text);
-      if (typeof hex !== 'string' || hex.toLowerCase() !== entry.sha256) fail('asset_hash', `${id}: sha256 does not match the manifest`);
-      const mesh = await (parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text));
-      const p = mesh && mesh.positions;
-      if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
-      if (typeof entry.vertices === 'number' && p.length / 3 !== entry.vertices) fail('asset_vertices', `${id}: parsed ${p.length / 3} vertices, manifest says ${entry.vertices}`);
-      let sx = 0;
-      for (let i = 0; i < p.length; i += 3) { if (!Number.isFinite(p[i]) || !Number.isFinite(p[i + 1]) || !Number.isFinite(p[i + 2])) fail('asset_parse', `${id}: non-finite vertex`); sx += p[i]; }
-      checkSide(id, entry.laterality, sx / (p.length / 3), 'parsed centroid');
-      return Object.freeze({ entry, mesh });
-    } catch (err) {
-      const message = String(err && err.message ? err.message : err);
-      const m = /^ns:([a-z_]+):/.exec(message);
-      failed.push(Object.freeze({ id, code: m ? m[1] : 'asset_read', message: message.slice(0, 300) }));
-      return null;
-    } finally {
-      done++;
-      if (typeof onProgress === 'function') { try { onProgress({ done, total: v.entries.length }); } catch { /* progress is advisory */ } }
-    }
-  });
-  const meshes = new Map();
-  for (const r of results) if (r) meshes.set(r.entry.element_id, r);
-  failed.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  if (allOrNothing && failed.length) {
-    return Object.freeze({ status: 'rejected', meshes: new Map(), failed: Object.freeze(failed), counts: v.counts, error: `${failed.length} full-body file(s) failed verification` });
+  return streamFullbodyAssets({
+    manifest, readText, sha256Hex, readBytes, sha256HexBytes, parse, concurrency, excludeIds, allOrNothing, onProgress,
+    bulkOrder, sliceMs, yieldFn, priorityIds: [], autoStart: true
+  }).done;
+}
+
+/**
+ * R4-load: the { manifest, entries, meshesById } shape ns-app's loadFullBodyInputs returns (for ns-body buildBodyRig and
+ * scene.setBody), from a COMPLETE full-body result. entries are the manifest's own raw entry objects in manifest order
+ * (exactly what ns-app passed before); meshesById maps each id to { positions, indices } of the verified mesh.
+ * Throws ns:app_body unless result.status is 'complete' (ns-app's loader rejected on any failure; keep that meaning).
+ */
+export function fullbodyAppInputs(manifest, result) {
+  if (!result || result.status !== 'complete') {
+    const why = result ? (result.error || (result.failed && result.failed.length ? `${result.failed[0].id}: ${result.failed[0].message}` : result.status)) : 'no result';
+    fail('app_body', `full body not loaded (${result ? result.status : 'none'}): ${why}`);
   }
-  return Object.freeze({ status: failed.length ? 'partial' : 'complete', meshes, failed: Object.freeze(failed), counts: v.counts, error: null });
+  const entries = manifest.assets.filter(e => e && result.meshes.has(e.element_id));
+  if (entries.length !== manifest.assets.length) fail('app_body', 'the result does not cover every manifest entry');
+  const meshesById = new Map();
+  for (const e of entries) { const m = result.meshes.get(e.element_id).mesh; meshesById.set(e.element_id, { positions: m.positions, indices: m.indices }); }
+  return { manifest, entries, meshesById };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -917,13 +1147,21 @@ function meshStats(p) {
   return { n, centroid: [sx / n, sy / n, sz / n], lo, hi };
 }
 
+/** The names an entry is known by (validated snapshot or raw manifest entry): name, concept, embedded_source_name and
+ * every concepts[].en. Used by eyePosition and fullbodyEyeIds, so both select exactly the same files. */
+function entryNames(e) {
+  if (!e || typeof e !== 'object') return [];
+  return [e.name, e.concept, e.embedded_source_name, ...(Array.isArray(e.concepts) ? e.concepts.map(c => c && c.en) : [])].filter(s => typeof s === 'string');
+}
+
+/** Name tests of the 'skull_orbits' eye source (eyePosition) and of fullbodyEyeIds. */
+export const EYE_SOURCE_NAME_RE = Object.freeze({ left: /\bleft lacrimal bone\b/i, right: /\bright lacrimal bone\b/i });
+
 function findByName(map, re) {
   if (!(map instanceof Map)) return [];
   const out = [];
   for (const [id, v] of map) {
-    const e = v && v.entry ? v.entry : {};
-    const names = [e.name, e.concept, e.embedded_source_name, ...(Array.isArray(e.concepts) ? e.concepts.map(c => c && c.en) : [])].filter(s => typeof s === 'string');
-    if (names.some(s => re.test(s))) out.push({ id, positions: positionsOf(map, id) });
+    if (entryNames(v && v.entry ? v.entry : {}).some(s => re.test(s))) out.push({ id, positions: positionsOf(map, id) });
   }
   return out.filter(x => x.positions);
 }
@@ -943,7 +1181,7 @@ function findByName(map, re) {
 export function eyePosition({ fullbody = null, brain = null, shoulderBp = null } = {}) {
   const alternatives = {};
   let chosen = null;
-  const lacrimal = { left: findByName(fullbody, /\bleft lacrimal bone\b/i), right: findByName(fullbody, /\bright lacrimal bone\b/i) };
+  const lacrimal = { left: findByName(fullbody, EYE_SOURCE_NAME_RE.left), right: findByName(fullbody, EYE_SOURCE_NAME_RE.right) };
   if (lacrimal.left.length && lacrimal.right.length) {
     const st = [...lacrimal.left, ...lacrimal.right].map(x => meshStats(x.positions));
     const L = meshStats(lacrimal.left[0].positions), R = meshStats(lacrimal.right[0].positions);

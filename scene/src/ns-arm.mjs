@@ -88,6 +88,20 @@ const FALLBACK_SHOULDER_CAM = Object.freeze([-0.164, -0.214, 0.09]);
  *    no cap: at the three-quarter ray the arm's reach (~0.35-0.5 m) already keeps the hand moderate, the whole-hand fit
  *    pushes a too-large pose deeper, and a cap collapsed the W/S window to zero at many looks.
  *  minReachSpanM: the A/D range keeps at least this much W/S depth window.
+ *  minFitSpanM (R4-arm): at every anchor of the A/D range the REST hand palm down (REST_HAND_POSE_DEG, the start state)
+ *    fits whole over at least this much of the far end of the W/S window, so W and S visibly move the hand everywhere in
+ *    the range (round 3 M2: at the extreme left anchor the rest hand fitted only over 9 mm, so W/S looked dead there).
+ *    0 = off (round-3 behaviour). Palm up is not required (see handEnvelope restLevels).
+ *  reachGirdle (R4-arm): the shoulder-girdle reach shift (REACH_GIRDLE; false = off, round-3 behaviour).
+ *  reachComfort (R4-arm): the A/D range keeps the palm-down rest hand's arm inside SHOULDER_LIMITS and at least
+ *    ARM_EYE_CLEARANCE_M from the eye (false = off, round-3 behaviour).
+ *  widerTier (R4-arm): the A/D range uses the 'game' tier at every look (TIER_NOTE; false = round 3: 'full' whenever any
+ *    anchor admits it).
+ *  viewLimitsNdc (R4-arm): null (the whole view) or { left, right, bottom, top } in NDC (each in (0, 1]): the part of
+ *    the view the whole hand must stay in, e.g. right = the left edge of the far-right information column, so the hand
+ *    never slides under the panel (ns-app passes it from infoPanelRect; portrait: bottom = the top of the bottom band).
+ *    Each side is also limited by marginNdc. Asymmetric limits only shrink the A/D range and the fit; the hand centre
+ *    stays on its ray.
  */
 export const ARM_DEFAULTS = Object.freeze({
   shoulderCam: FALLBACK_SHOULDER_CAM,
@@ -105,7 +119,17 @@ export const ARM_DEFAULTS = Object.freeze({
   maxHandHeightNdc: 2,
   minReachSpanM: 0.03,
   // R3-arm: reach input ramp time (s), see REACH_RAMP_S (literal here because ARM_DEFAULTS is built first).
-  reachRampS: 0.06
+  reachRampS: 0.06,
+  // R4-arm: usable W/S travel of the rest hand at every A/D anchor (m), see the list above.
+  minFitSpanM: 0.05,
+  // R4-arm: shoulder-girdle protraction when the hand reaches across the body (REACH_GIRDLE, defined below).
+  reachGirdle: true,
+  // R4-arm: the A/D range keeps the rest hand's arm inside SHOULDER_LIMITS and ARM_EYE_CLEARANCE_M (see anchorRange).
+  reachComfort: true,
+  // R4-arm: the game tier at every look (TIER_NOTE) instead of 'full' whenever any anchor admits it.
+  widerTier: true,
+  // R4-arm: the part of the view the whole hand stays in (null = all of it), see the list above.
+  viewLimitsNdc: null
 });
 
 /**
@@ -162,6 +186,148 @@ export const GIRDLE_ELEVATION = Object.freeze({
   elevationStartDeg: 70, elevationFullDeg: 170, shiftAtFullM: Object.freeze([0.012, 0.04, -0.012]), nominalDepthM: 0.3, nominalXNdc: -0.3
 });
 
+/**
+ * R4-arm: shoulder-girdle REACH shift (scapular protraction, display approximation). A seated person reaching with the
+ * left hand across the body toward the right does not only adduct the arm at the shoulder joint: the shoulder blade
+ * glides forward around the rib cage (protraction) and the shoulder comes a little toward the midline, so the hand
+ * can cross the midline well past the right shoulder line. Round 3 kept the glenohumeral centre fixed for every A/D
+ * anchor, so the reach ran out a little right of the screen centre (A/D range x -0.609 .. +0.219 at the start look,
+ * round3/FIX-REPORT.md F6).
+ *
+ * How it works. The A/D anchor x drives it: w = smoothstep((x - startXNdc) / (fullXNdc - startXNdc)) moves the
+ * glenohumeral centre (and the elbow pole with it) by w * shiftAtFullM (BODY frame metres: +x toward the body's right =
+ * toward the midline for the left shoulder, +y up, -z forward). It is zero at and left of the start anchor (x -0.3), so
+ * the start pose and every look with the hand there are exactly as in round 3, and it depends only on the anchor x:
+ * never on the look (the look still moves the shoulder through the attachment, user R8: the shoulder follows the
+ * camera), the W/S depth or the hand pose. So W/S stay pure depth moves, a look never moves the hand (S04), and D gives
+ * the coordinated shoulder + elbow + wrist movement of R8 (the shoulder blade slides forward as the hand goes right).
+ * The hand centre stays on its ray at y = +0.5; only the arm solution behind it changes. A body-angle drive (how far the
+ * hand line crosses the body) was tried first: it also shifted the shoulder when only the look changed, which breaks
+ * the round-3 contract that a look moves the shoulder only through the attachment (U3a placement test).
+ *
+ * Values (display choices, cited from memory, Root reference qualification pending): scapular protraction moves the
+ * shoulder forward by a few centimetres (the shoulder blade glides roughly 10-15 cm around the chest wall between full
+ * retraction and full protraction) and the clavicle rises a little with a forward-and-up reach; 3.5 cm forward, 2 cm
+ * toward the midline and 0.5 cm up at full weight (4.1 cm in all) stay inside that. A 6.4 cm shift reached only a
+ * little further (D edge at look 0/0, 1280x720: 0.468 vs 0.404 NDC on the whole view, 0.262 vs 0.253 with the
+ * information column kept clear) and opened the arm's deltoid edge more visibly when looking down at the shoulder,
+ * because the body's own shoulder blade and collarbone do not follow the shift (harness/run-R4-arm-probe-1/
+ * girdle-size-1.txt, harness/run-R4-arm-shoulder-ov3g-1/crop-x0.21-base-4cm-6cm.png). The body renderer may move the
+ * left clavicle and shoulder blade by fitHand(...).girdle.shiftBodyM (not wired in round 4).
+ */
+export const REACH_GIRDLE = Object.freeze({
+  startXNdc: -0.3, fullXNdc: 0.45, shiftAtFullM: Object.freeze([0.02, 0.005, -0.035])
+});
+
+/** A `reachGirdle` option: true / undefined = REACH_GIRDLE, false / null = off, or an object with REACH_GIRDLE's keys. */
+function girdleOption(v) {
+  if (v === true || v === undefined) return REACH_GIRDLE;
+  if (v === false || v === null) return null;
+  if (typeof v !== 'object') fail('arm_input', 'reachGirdle must be true, false or a REACH_GIRDLE-like object');
+  const g = { ...REACH_GIRDLE, ...v };
+  for (const k of ['startXNdc', 'fullXNdc']) finite(g[k], `reachGirdle.${k}`);
+  if (!(g.fullXNdc > g.startXNdc)) fail('arm_input', 'reachGirdle.fullXNdc must be larger than startXNdc');
+  g.shiftAtFullM = Object.freeze(vec3(g.shiftAtFullM, 'reachGirdle.shiftAtFullM'));
+  if (length(g.shiftAtFullM) > 0.1) fail('arm_input', 'reachGirdle.shiftAtFullM must stay within 10 cm');
+  return Object.freeze(g);
+}
+
+/** A viewLimitsNdc option: null / undefined = the whole view, or { left?, right?, bottom?, top? } (missing sides = 1). */
+function viewLimitsOption(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== 'object' || Array.isArray(v)) fail('arm_input', 'viewLimitsNdc must be null or { left, right, bottom, top }');
+  const out = {};
+  for (const k of ['left', 'right', 'bottom', 'top']) {
+    const x = v[k] === undefined ? 1 : v[k];
+    if (!(typeof x === 'number' && Number.isFinite(x) && x > 0 && x <= 1)) fail('arm_input', `viewLimitsNdc.${k} must be in (0, 1]`);
+    out[k] = x;
+  }
+  return Object.freeze(out);
+}
+
+/** The NDC box every hand corner must stay in: { l, r, b, t } = min(1 - marginNdc, viewLimitsNdc side) - slack (the
+ * left and bottom as positive distances from the centre: x >= -l, y >= -b). */
+function viewBox(o, slack = 0) {
+  const m = 1 - o.marginNdc, v = o.viewLimitsNdc;
+  const side = k => (v ? Math.min(m, v[k]) : m) - slack;
+  return Object.freeze({ l: side('left'), r: side('right'), b: side('bottom'), t: side('top') });
+}
+
+const NO_GIRDLE = Object.freeze({ weight: 0, shiftBodyM: Object.freeze([0, 0, 0]), shiftCam: Object.freeze([0, 0, 0]) });
+const GIRDLE_MEMO_MAX = 512;
+const girdleMemo = new WeakMap();
+
+/** The reach girdle of anchor x for merged options o (pure; the shift is added to o.shoulderCam). */
+function girdleState(o, x) {
+  const g = o.reachGirdle;
+  if (!g) return NO_GIRDLE;
+  const weight = smoothstep((x - g.startXNdc) / (g.fullXNdc - g.startXNdc));
+  if (!(weight > 0)) return NO_GIRDLE;
+  const shiftBodyM = scale(g.shiftAtFullM, weight);
+  const shiftCam = o.bodyToCamera ? transformDirection(o.bodyToCamera, shiftBodyM) : shiftBodyM;
+  return { weight, shiftBodyM, shiftCam };
+}
+
+/** Options of anchor x: o with the shoulder (and pole) moved by the reach girdle; o itself when there is no shift.
+ * Memoised per merged options object (one per public call; numbers as Map keys, since this runs in the A/D-range
+ * bisection loops). `ox.girdle` is the girdle state. tanHalf / aspect are accepted for call-site symmetry. */
+function atAnchor(o, x, tanHalf, aspect) { // eslint-disable-line no-unused-vars
+  if (o.girdleBase) o = o.girdleBase; // never shift an already shifted options object twice
+  if (!o.reachGirdle) return o;
+  let memo = girdleMemo.get(o);
+  if (!memo) { memo = new Map(); girdleMemo.set(o, memo); }
+  const hit = memo.get(x);
+  if (hit) return hit;
+  const gs = girdleState(o, x);
+  const ox = gs.weight > 0
+    ? { ...o, shoulderCam: add(o.shoulderCam, gs.shiftCam), pole: add(o.pole, gs.shiftCam), girdle: gs, girdleBase: o }
+    : { ...o, girdle: gs, girdleBase: o };
+  if (memo.size >= GIRDLE_MEMO_MAX) memo.clear();
+  memo.set(x, ox);
+  return ox;
+}
+
+/**
+ * R4-arm (QA / HUD / body renderer): the reach girdle for an A/D anchor and look: { weight (0..1), shiftBodyM (body-frame
+ * metres), shiftCam (camera metres), shoulderCam (the shifted glenohumeral centre) }.
+ * viewport { aspect, fovYDeg? }; options as fitHand (attachment or shoulderCam/pole; reachGirdle false = off).
+ */
+export function reachGirdle(xNdc, { aspect, fovYDeg } = {}, options = {}) {
+  const o = mergeOptions(options);
+  finite(xNdc, 'xNdc');
+  const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
+  const ox = atAnchor(o, xNdc, tanHalf, aspect);
+  const gs = ox.girdle || NO_GIRDLE;
+  return { weight: gs.weight, shiftBodyM: gs.shiftBodyM.slice(), shiftCam: gs.shiftCam.slice(), shoulderCam: ox.shoulderCam.slice() };
+}
+
+/** fitHand's `girdle` field: { weight, shiftBodyM, shiftCam } of the placed anchor (plain copies). */
+function girdleReport(ox) {
+  const gs = (ox && ox.girdle) || NO_GIRDLE;
+  return { weight: gs.weight, shiftBodyM: gs.shiftBodyM.slice(), shiftCam: gs.shiftCam.slice() };
+}
+
+/**
+ * R4-arm (integration helper): viewLimitsNdc for fitHand / anchorRange from a CSS-pixel panel rectangle, so the whole
+ * hand stays out from under the far-right information column (landscape: the hand's right limit is the column's left
+ * edge minus gapPx) or above the portrait bottom band (its top edge minus gapPx). rect: ns-scene-three infoPanelRect(size)
+ * ({ x0, y0, x1, y1, layout: 'column' | 'portrait' }); size: { width, height } CSS px. Returns null (the whole view) when
+ * there is no rect, the rect is not one of those layouts, or the limit would leave less than minNdc of the view on that
+ * side of the centre. Pure.
+ */
+export function handViewLimitsNdc(size, rect, { gapPx = 6, minNdc = 0.15 } = {}) {
+  if (!size || !(size.width > 0 && size.height > 0) || !rect) return null;
+  if (rect.layout === 'column' && Number.isFinite(rect.x0)) {
+    const right = (2 * (rect.x0 - gapPx)) / size.width - 1;
+    return right >= minNdc ? Object.freeze({ left: 1, right: Math.min(1, right), bottom: 1, top: 1 }) : null;
+  }
+  if (rect.layout === 'portrait' && Number.isFinite(rect.y0)) {
+    const bottom = (2 * (rect.y0 - gapPx)) / size.height - 1;
+    return bottom >= minNdc ? Object.freeze({ left: 1, right: 1, bottom: Math.min(1, bottom), top: 1 }) : null;
+  }
+  return null;
+}
+
 /** The arm should not come closer than this to the eye (camera origin); reported as clearance.nearEye. */
 export const ARM_EYE_CLEARANCE_M = 0.08;
 
@@ -212,7 +378,7 @@ function tanHalfFov(aspect, fovYDeg) {
 }
 
 const NUMERIC_OPTIONS = Object.freeze(['yNdc', 'fovYDeg', 'near', 'marginNdc', 'nearMargin', 'xNdcStart', 'depthStart',
-  'xSpeedNdcPerS', 'depthSpeedMPerS', 'minDepth', 'maxHandHeightNdc', 'minReachSpanM', 'reachRampS']);
+  'xSpeedNdcPerS', 'depthSpeedMPerS', 'minDepth', 'maxHandHeightNdc', 'minReachSpanM', 'reachRampS', 'minFitSpanM']);
 
 function mergeOptions(options) {
   const opt = options || {};
@@ -233,6 +399,12 @@ function mergeOptions(options) {
   if (!(o.maxHandHeightNdc > 0)) fail('arm_input', 'maxHandHeightNdc must be positive (2 = the full view height, i.e. no cap)');
   if (!(o.minReachSpanM >= 0)) fail('arm_input', 'minReachSpanM must be >= 0');
   if (!(o.reachRampS >= 0 && o.reachRampS <= 1)) fail('arm_input', 'reachRampS must be in [0, 1] seconds (0 = no ramp)');
+  if (!(o.minFitSpanM >= 0 && o.minFitSpanM <= 0.3)) fail('arm_input', 'minFitSpanM must be in [0, 0.3] m (0 = off)');
+  o.reachGirdle = girdleOption(o.reachGirdle);
+  if (typeof o.reachComfort !== 'boolean') fail('arm_input', 'reachComfort must be a boolean');
+  if (typeof o.widerTier !== 'boolean') fail('arm_input', 'widerTier must be a boolean');
+  o.viewLimitsNdc = viewLimitsOption(o.viewLimitsNdc);
+  if (!o.bodyToCamera) o.bodyToCamera = null;
   return o;
 }
 
@@ -443,7 +615,7 @@ function rayIntervalM(dMinM, dMaxM, xNdc, yNdc, tanHalf, aspect, shoulderCam, mi
  * within the elbow range and the wrist reach limit. */
 function rayInterval(ctx, xNdc, o, tanHalf, aspect) {
   if (ctx.empty) return { lo: o.minDepth, hi: o.minDepth, empty: true };
-  return rayIntervalM(ctx.dMinM, ctx.dMaxM, xNdc, o.yNdc, tanHalf, aspect, o.shoulderCam, o.minDepth);
+  return rayIntervalM(ctx.dMinM, ctx.dMaxM, xNdc, o.yNdc, tanHalf, aspect, atAnchor(o, xNdc, tanHalf, aspect).shoulderCam, o.minDepth);
 }
 
 /** Closed-form arm solution for a camera-space hand-centre target. `reachable` also honours the wrist reach limit. */
@@ -538,9 +710,12 @@ function handSilhouette(rig, J) {
   return out;
 }
 
-function scoreCorners(m, corners, tanHalf, aspect, lim, nearMin) {
+/** R4-arm: `box` is a viewBox ({ l, r, b, t }); `excess` is how far the farthest corner lies outside it (NDC, negative
+ * when every corner is inside). With a symmetric box (round 3: every side = lim) this is max(|x|, |y|) - lim, the
+ * round-3 test. */
+function scoreCorners(m, corners, tanHalf, aspect, box, nearMin) {
   const sx = 1 / (tanHalf * aspect), sy = 1 / tanHalf;
-  let ext = 0, minDepth = Infinity;
+  let excess = -Infinity, minDepth = Infinity;
   for (let k = 0; k < corners.length; k += 3) {
     const x = corners[k], y = corners[k + 1], z = corners[k + 2];
     const px = m[0] * x + m[4] * y + m[8] * z + m[12];
@@ -548,13 +723,13 @@ function scoreCorners(m, corners, tanHalf, aspect, lim, nearMin) {
     const depth = -(m[2] * x + m[6] * y + m[10] * z + m[14]);
     if (depth < minDepth) minDepth = depth;
     if (depth > 1e-9) {
-      const ax = Math.abs((px * sx) / depth), ay = Math.abs((py * sy) / depth);
-      if (ax > ext) ext = ax;
-      if (ay > ext) ext = ay;
-    } else ext = Infinity;
+      const nx = (px * sx) / depth, ny = (py * sy) / depth;
+      const e = Math.max(-nx - box.l, nx - box.r, -ny - box.b, ny - box.t);
+      if (e > excess) excess = e;
+    } else excess = Infinity;
   }
-  const ok = minDepth >= nearMin + EPS_DEPTH && ext <= lim - EPS_NDC;
-  return { ok, score: ext + 1000 * Math.max(0, nearMin - minDepth) };
+  const ok = minDepth >= nearMin + EPS_DEPTH && excess <= -EPS_NDC;
+  return { ok, score: excess + 1000 * Math.max(0, nearMin - minDepth) };
 }
 
 /** NDC extents {xLo, xHi, yLo, yHi} of hand-rest corners under hand matrix m (corners behind the eye give Infinity). */
@@ -587,7 +762,8 @@ function ndcExtents(m, corners, tanHalf, aspect) {
 export function solveArm(rig, params = {}) {
   const p = params || {};
   const o = mergeOptions({ ...(p.attachment ? { attachment: p.attachment } : {}), ...(p.shoulderCam ? { shoulderCam: p.shoulderCam } : {}),
-    ...(p.pole ? { pole: p.pole } : {}), ...(p.yNdc !== undefined ? { yNdc: p.yNdc } : {}) });
+    ...(p.pole ? { pole: p.pole } : {}), ...(p.yNdc !== undefined ? { yNdc: p.yNdc } : {}),
+    ...(p.reachGirdle !== undefined ? { reachGirdle: p.reachGirdle } : {}) });
   const { xNdc, depth, joints = {}, aspect, fovYDeg = ARM_DEFAULTS.fovYDeg } = p;
   finite(xNdc, 'xNdc');
   finite(depth, 'depth');
@@ -595,7 +771,8 @@ export function solveArm(rig, params = {}) {
   const tanHalf = tanHalfFov(aspect, fovYDeg);
   const ctx = poseContext(rig, joints);
   const targetCam = pointOnNdcRay(xNdc, o.yNdc, depth, tanHalf, aspect);
-  const core = solveCore(ctx, targetCam, o.shoulderCam, o.pole);
+  const ox = atAnchor(o, xNdc, tanHalf, aspect);
+  const core = solveCore(ctx, targetCam, ox.shoulderCam, ox.pole);
   const matrices = forwardKinematics(rig, { shoulderMatrix: core.SM, elbowFlexRad: core.phi, joints: ctx.J });
   return {
     shoulderMatrix: core.SM,
@@ -604,7 +781,7 @@ export function solveArm(rig, params = {}) {
     handCentreCam: transformPoint(matrices.get('hand'), rig.handCentre),
     wristCam: transformPoint(matrices.get('forearm'), rig.pivots.wrist),
     elbowCam: transformPoint(matrices.get('upperarm'), rig.pivots.elbow),
-    shoulderCam: o.shoulderCam.slice(),
+    shoulderCam: ox.shoulderCam.slice(),
     reachable: core.reachable,
     iterations: 1,
     targetCam
@@ -809,19 +986,27 @@ export function handEnvelope(rig, boxes) {
     const ctx = poseContext(rig, { ...shape, forearm_pronation: pro });
     gameLevels.push({ w: ctx.J.wrist_flex, pro, ctx, corners: handCorners(rig, boxes, ctx.J) });
   }
+  // R4-arm: the rest hand palm down (the start state) for the usable W/S travel check (ARM_DEFAULTS.minFitSpanM). Palm
+  // up is not required: its taller silhouette has only about 2-5 cm of travel even mid-screen (round3 geometry), and
+  // requiring it would cut the A/D range far more than it gains (harness/run-R4-arm-probe-1).
+  const restLevels = [PRONATION_STATES.pronated].map(pro => {
+    const ctx = poseContext(rig, { ...REST_HAND_POSE_DEG, forearm_pronation: pro });
+    return { w: ctx.J.wrist_flex, pro, ctx, corners: handCorners(rig, boxes, ctx.J) };
+  });
   const sizePoses = SIZE_REFERENCE_POSES.map(J => {
     const ctx = poseContext(rig, J);
     return { ctx, corners: handSilhouette(rig, ctx.J) };
   });
-  const env = { wrists, anchorLevels, gameLevels, sizePoses, digitPointCount: digitPts.length / 3, dMinM: dMinM + 0.002, dMaxM: dMaxM - 0.002, ranges: new Map(), poses: wrists };
+  const env = { wrists, anchorLevels, gameLevels, restLevels, sizePoses, digitPointCount: digitPts.length / 3, dMinM: dMinM + 0.002, dMaxM: dMaxM - 0.002, ranges: new Map(), poses: wrists };
   byRig.set(boxes, env);
   return env;
 }
 
-function fitsAt(ctx, corners, x, d, tanHalf, aspect, o, lim, nearMin) {
-  const core = solveCore(ctx, pointOnNdcRay(x, o.yNdc, d, tanHalf, aspect), o.shoulderCam, o.pole);
+function fitsAt(ctx, corners, x, d, tanHalf, aspect, o, box, nearMin) {
+  const ox = atAnchor(o, x, tanHalf, aspect);
+  const core = solveCore(ctx, pointOnNdcRay(x, o.yNdc, d, tanHalf, aspect), ox.shoulderCam, ox.pole);
   if (!core.reachable) return false;
-  return scoreCorners(handMatrixOf(ctx, core), corners, tanHalf, aspect, lim, nearMin).ok;
+  return scoreCorners(handMatrixOf(ctx, core), corners, tanHalf, aspect, box, nearMin).ok;
 }
 
 /** Deepest depth at anchor x reachable at EVERY level of the set (default the anchor envelope; the far end of the W/S
@@ -846,7 +1031,8 @@ function sizeAt(sp, x, d, tanHalf, aspect, o) {
   const iv = rayInterval(sp.ctx, x, o, tanHalf, aspect);
   if (iv.empty) return Infinity;
   const dd = clamp(d, iv.lo, iv.hi);
-  const core = solveCore(sp.ctx, pointOnNdcRay(x, o.yNdc, dd, tanHalf, aspect), o.shoulderCam, o.pole);
+  const ox = atAnchor(o, x, tanHalf, aspect);
+  const core = solveCore(sp.ctx, pointOnNdcRay(x, o.yNdc, dd, tanHalf, aspect), ox.shoulderCam, ox.pole);
   if (!core.reachable) return Infinity;
   const e = ndcExtents(handMatrixOf(sp.ctx, core), sp.corners, tanHalf, aspect);
   return e.yHi - e.yLo + 2 * tissuePadNdc(dd, tanHalf);
@@ -890,10 +1076,42 @@ function depthWindow(env, x, tanHalf, aspect, o, levels = env.anchorLevels) {
   return { near: nearDepth(env, x, far, tanHalf, aspect, o), far, empty: false };
 }
 
+/** R4-arm: the rest hand's arm at anchor x and depth d is anatomically comfortable: the shoulder inside SHOULDER_LIMITS
+ * (horizontal adduction across the body ends at planeMaxDeg) and the arm no closer than ARM_EYE_CLEARANCE_M to the eye. */
+function restArmComfortable(lvl, x, d, tanHalf, aspect, o) {
+  const ox = atAnchor(o, x, tanHalf, aspect);
+  const core = solveCore(lvl.ctx, pointOnNdcRay(x, o.yNdc, d, tanHalf, aspect), ox.shoulderCam, ox.pole);
+  const base = lvl.ctx.base;
+  const elbowCam = transformPoint(core.SM, base.E0);
+  const wristCam = transformPoint(multiply(core.SM, rotationAboutPivot(base.a, core.phi, base.E0)), base.W0);
+  const sol = { shoulderCam: ox.shoulderCam, elbowCam, wristCam };
+  return shoulderReport(sol, o.bodyToCamera || null).within && !eyeClearance(sol).nearEye;
+}
+
 /** Every anchor-envelope level (ANCHOR_WRIST_RANGE_DEG x every pronation level x the full digit grid) fits at anchor
  * x at its own deepest reachable depth (deeper only shrinks the projection), and the W/S window keeps at least
- * minReachSpanM. */
-function anchorFeasible(env, x, tanHalf, aspect, o, lim, nearMin, levels = env.anchorLevels) {
+ * minReachSpanM. R4-arm `relax` levels: 0 (strict) the palm-down rest hand also fits over the last minFitSpanM of the
+ * window, and its arm stays comfortable (restArmComfortable) at the far end, at that span's near end and at the
+ * window's near end; 1 only the comfort check; 2 the round-3 rules. */
+function anchorFeasible(env, x, tanHalf, aspect, o, box, nearMin, levels = env.anchorLevels, relax = 0) {
+  // R4-arm: the window and the rest-hand checks first (one fit and three closed-form solves), then the per-level fits
+  // (up to 40 fits): an anchor that only the new checks reject now exits early (same result, every check is ANDed).
+  const span = relax === 0 && o.minFitSpanM > 0, comfort = relax <= 1 && o.reachComfort;
+  if (o.minReachSpanM > 0 || span || comfort) {
+    const win = depthWindow(env, x, tanHalf, aspect, o, levels);
+    if (win.empty || win.far - win.near < o.minReachSpanM) return false;
+    // The rest hand fits whole over the last minFitSpanM of the window (W and S visibly move it here), and its arm stays
+    // comfortable wherever W/S can put it.
+    for (const lvl of (span || comfort) ? env.restLevels : []) {
+      const iv = rayInterval(lvl.ctx, x, o, tanHalf, aspect);
+      if (iv.empty) return false;
+      const dFar = Math.min(win.far, iv.hi), d = dFar - o.minFitSpanM, dNear = Math.min(dFar, Math.max(win.near, iv.lo));
+      if (span && (d < win.near - 1e-9 || d < iv.lo - 1e-9 || !fitsAt(lvl.ctx, lvl.corners, x, d, tanHalf, aspect, o, box, nearMin))) return false;
+      if (comfort) {
+        for (const dd of [dFar, Math.max(d, dNear), dNear]) if (!restArmComfortable(lvl, x, dd, tanHalf, aspect, o)) return false;
+      }
+    }
+  }
   // Move-to-front: the level that failed last is tried first (most infeasible probes then exit after one level).
   const n = levels.length;
   const first = Number.isInteger(levels.failHint) ? levels.failHint : 0;
@@ -901,11 +1119,7 @@ function anchorFeasible(env, x, tanHalf, aspect, o, lim, nearMin, levels = env.a
     const i = (first + k) % n;
     const { ctx, corners } = levels[i];
     const iv = rayInterval(ctx, x, o, tanHalf, aspect);
-    if (iv.empty || !fitsAt(ctx, corners, x, iv.hi, tanHalf, aspect, o, lim, nearMin)) { levels.failHint = i; return false; }
-  }
-  if (o.minReachSpanM > 0) {
-    const win = depthWindow(env, x, tanHalf, aspect, o, levels);
-    if (win.empty || win.far - win.near < o.minReachSpanM) return false;
+    if (iv.empty || !fitsAt(ctx, corners, x, iv.hi, tanHalf, aspect, o, box, nearMin)) { levels.failHint = i; return false; }
   }
   return true;
 }
@@ -914,7 +1128,10 @@ const q = (v, step) => Math.round(v / step);
 
 /** Cache key of the viewport and margins (look independent). */
 function viewKey(aspect, fov, o) {
-  return [q(aspect, 1e-4), q(fov, 1e-3), o.marginNdc, o.near, o.nearMargin, o.minDepth, o.yNdc, o.maxHandHeightNdc, o.minReachSpanM].join(',');
+  const g = o.reachGirdle;
+  const gk = g ? [g.startXNdc, g.fullXNdc, ...g.shiftAtFullM].join(':') : 'off';
+  return [q(aspect, 1e-4), q(fov, 1e-3), o.marginNdc, o.near, o.nearMargin, o.minDepth, o.yNdc, o.maxHandHeightNdc, o.minReachSpanM, o.minFitSpanM, gk, o.reachComfort, o.widerTier,
+    o.viewLimitsNdc ? ['left', 'right', 'bottom', 'top'].map(k => q(o.viewLimitsNdc[k], 1e-4)).join(':') : 'view'].join(',');
 }
 
 /** Range-cache quantisation of the attachment (m, unit pole direction): looks whose shoulder differs by less than this
@@ -929,9 +1146,65 @@ function rangeKey(aspect, fov, o) {
   return [viewKey(aspect, fov, o), ...o.shoulderCam.map(v => q(v, RANGE_KEY_SHOULDER_M)), ...pd.map(v => q(v, RANGE_KEY_POLE))].join(',');
 }
 
+/** R4-arm tier note (ARM_DEFAULTS.widerTier): the 'full' tier (every pose of the per-joint grid fits at the range
+ * edges) is a stronger guarantee but can be far narrower than the 'game' tier. Round 3 used 'full' whenever ANY anchor
+ * admitted it, which made the A/D range jump between neighbouring looks (1280x720 look 0/-0.6: full -0.443..-0.130 next
+ * to game ranges about 0.95 wide; harness/run-R4-arm-probe-1/grid-base-9.txt). With widerTier the A/D range uses the
+ * game tier at every look (as round 3 already did at the start look); poses outside GAME_POSES are fitted per frame
+ * (depth push, wrist clamp), exactly as before. */
+export const TIER_NOTE = 'game tier at every look (widerTier)';
+/** R4-arm: a strict range (rest-hand W/S travel and arm comfort, see anchorFeasible) narrower than this (NDC) falls back
+ * to the relaxed round-3 rules when those give a wider range (extreme overhead looks). */
+export const MIN_STRICT_WIDTH_NDC = 0.2;
+const rangeWidth = r => (r ? r.xMax - r.xMin : -Infinity);
+
 /** Warm-start step (NDC) and bisection steps of the incremental range-edge search. */
 const WARM_STEP_NDC = 0.04;
 const WARM_BISECT_STEPS = 7;
+
+/** One tier's A/D range search (see anchorRange): seeds, then each edge by bisection or the warm start. */
+function solveRangeTier(env, levels, tier, tanHalf, aspect, o, box, nearMin, last, relax = 0) {
+  const ok = x => anchorFeasible(env, x, tanHalf, aspect, o, box, nearMin, levels, relax);
+  const xLo = -box.l, xHi = box.r; // the anchor itself lies inside the hand's box
+  const warm = last && last.tier === tier && (last.relax || 0) === relax ? last : null;
+  let seed = null;
+  const seeds = warm ? [0.5 * (warm.xMin + warm.xMax), warm.xMin, warm.xMax] : [];
+  for (const x of [...seeds, -0.2, -0.1, -0.3, 0, -0.4, 0.1, -0.5, 0.2, -0.6, 0.3, -0.7, 0.4, 0.5]) if (x >= xLo && x <= xHi && ok(x)) { seed = x; break; }
+  if (seed === null) return null;
+  const bisect = (inner, outer, steps) => {
+    for (let i = 0; i < steps; i++) { const mid = 0.5 * (inner + outer); if (ok(mid)) inner = mid; else outer = mid; }
+    return inner;
+  };
+  const side = sign => {
+    const edge = sign < 0 ? xLo : xHi;
+    if (warm) {
+      // Incremental search from the previous edge of this viewport: probe outward or inward in WARM_STEP_NDC steps.
+      const prev = clamp(sign < 0 ? warm.xMin : warm.xMax, xLo, xHi);
+      if (sign * (prev - seed) >= 0) {
+        if (ok(prev)) {
+          let inner = prev;
+          for (let k = 0; k < 6; k++) {
+            const nxt = sign * Math.min(sign * edge, sign * inner + WARM_STEP_NDC);
+            if (nxt === inner) return inner;
+            if (!ok(nxt)) return bisect(inner, nxt, WARM_BISECT_STEPS);
+            inner = nxt;
+          }
+        } else {
+          let outer = prev;
+          for (let k = 0; k < 8; k++) {
+            const nxt = sign * Math.max(sign * seed, sign * outer - WARM_STEP_NDC);
+            if (ok(nxt)) return bisect(nxt, outer, WARM_BISECT_STEPS);
+            if (nxt === seed) return seed;
+            outer = nxt;
+          }
+        }
+      }
+    }
+    if (ok(edge)) return edge;
+    return bisect(seed, edge, RANGE_BISECT_STEPS);
+  };
+  return Object.freeze(relax > 0 ? { xMin: side(-1), xMax: side(1), tier, relax } : { xMin: side(-1), xMax: side(1), tier });
+}
 
 /**
  * The A/D range for a viewport and look, independent of the current pose: [xMin, xMax] such that every envelope level
@@ -952,56 +1225,48 @@ export function anchorRange(rig, boxes, { aspect, fovYDeg } = {}, options = {}) 
     env.ranges.set(key, v);
     return v;
   }
-  const lim = 1 - o.marginNdc - RANGE_SLACK_NDC, nearMin = o.near + o.nearMargin;
+  const box = viewBox(o, RANGE_SLACK_NDC), nearMin = o.near + o.nearMargin;
   const vk = viewKey(aspect, fov, o);
   if (!env.lastByView) env.lastByView = new Map();
   const last = env.lastByView.get(vk) || null;
-  const solve = (levels, tier) => {
-    const ok = x => anchorFeasible(env, x, tanHalf, aspect, o, lim, nearMin, levels);
-    const warm = last && last.tier === tier ? last : null;
-    let seed = null;
-    const seeds = warm ? [0.5 * (warm.xMin + warm.xMax), warm.xMin, warm.xMax] : [];
-    for (const x of [...seeds, -0.2, -0.1, -0.3, 0, -0.4, 0.1, -0.5, 0.2, -0.6, 0.3, -0.7, 0.4, 0.5]) if (Math.abs(x) <= lim && ok(x)) { seed = x; break; }
-    if (seed === null) return null;
-    const bisect = (inner, outer, steps) => {
-      for (let i = 0; i < steps; i++) { const mid = 0.5 * (inner + outer); if (ok(mid)) inner = mid; else outer = mid; }
-      return inner;
-    };
-    const side = sign => {
-      const edge = sign * lim;
-      if (warm) {
-        // Incremental search from the previous edge of this viewport: probe outward or inward in WARM_STEP_NDC steps.
-        const prev = clamp(sign < 0 ? warm.xMin : warm.xMax, -lim, lim);
-        if (sign * (prev - seed) >= 0) {
-          if (ok(prev)) {
-            let inner = prev;
-            for (let k = 0; k < 6; k++) {
-              const nxt = sign * Math.min(lim, sign * inner + WARM_STEP_NDC);
-              if (nxt === inner) return inner;
-              if (!ok(nxt)) return bisect(inner, nxt, WARM_BISECT_STEPS);
-              inner = nxt;
-            }
-          } else {
-            let outer = prev;
-            for (let k = 0; k < 8; k++) {
-              const nxt = sign * Math.max(sign * seed, sign * outer - WARM_STEP_NDC);
-              if (ok(nxt)) return bisect(nxt, outer, WARM_BISECT_STEPS);
-              if (nxt === seed) return seed;
-              outer = nxt;
-            }
-          }
-        }
-      }
-      if (ok(edge)) return edge;
-      return bisect(seed, edge, RANGE_BISECT_STEPS);
-    };
-    return Object.freeze({ xMin: side(-1), xMax: side(1), tier });
-  };
-  const result = solve(env.anchorLevels, 'full') || solve(env.gameLevels, 'game');
+  const solve = (levels, tier, relax) => solveRangeTier(env, levels, tier, tanHalf, aspect, o, box, nearMin, last, relax);
+  // R4-arm (widerTier): the 'game' tier only. The 'full' tier's constraints contain the game tier's (the full digit grid
+  // and wrist band contain every game pose, and its far depth is the smaller one), so its range lies inside the game
+  // range and was the narrower choice (see TIER_NOTE).
+  const pick = relax => (o.widerTier ? solve(env.gameLevels, 'game', relax) : solve(env.anchorLevels, 'full', relax) || solve(env.gameLevels, 'game', relax));
+  // R4-arm relax levels (anchorFeasible): strict, then without the W/S travel check, then the round-3 rules, each only
+  // while the range so far is narrower than MIN_STRICT_WIDTH_NDC (extreme looks) and only when it widens the range.
+  let result = pick(0);
+  for (const relax of [1, 2]) {
+    if (relax === 1 && !(o.minFitSpanM > 0)) continue;
+    if (relax === 2 && !(o.minFitSpanM > 0 || o.reachComfort)) continue;
+    if (rangeWidth(result) >= MIN_STRICT_WIDTH_NDC) break;
+    const loose = pick(relax);
+    if (loose && rangeWidth(loose) > rangeWidth(result)) result = loose;
+  }
   if (result) env.lastByView.set(vk, result);
   env.ranges.set(key, result);
   if (env.ranges.size > RANGE_CACHE_MAX) env.ranges.delete(env.ranges.keys().next().value);
   return result;
+}
+
+/**
+ * R4-arm diagnostics (QA/tests): both tiers' A/D ranges for a viewport and look, uncached and without the warm start:
+ * { full: {xMin, xMax} | null, game: {xMin, xMax} | null, chosen: anchorRange's result }.
+ */
+export function anchorRangeTiers(rig, boxes, { aspect, fovYDeg } = {}, options = {}) {
+  const o = mergeOptions(options);
+  const fov = fovYDeg === undefined ? o.fovYDeg : fovYDeg;
+  const tanHalf = tanHalfFov(aspect, fov);
+  const env = handEnvelope(rig, boxes);
+  const box = viewBox(o, RANGE_SLACK_NDC), nearMin = o.near + o.nearMargin;
+  return {
+    full: solveRangeTier(env, env.anchorLevels, 'full', tanHalf, aspect, o, box, nearMin, null),
+    game: solveRangeTier(env, env.gameLevels, 'game', tanHalf, aspect, o, box, nearMin, null),
+    gameNoSpan: solveRangeTier(env, env.gameLevels, 'game', tanHalf, aspect, o, box, nearMin, null, 1),
+    gameRound3Rules: solveRangeTier(env, env.gameLevels, 'game', tanHalf, aspect, o, box, nearMin, null, 2),
+    chosen: anchorRange(rig, boxes, { aspect, fovYDeg }, options)
+  };
 }
 
 /**
@@ -1013,16 +1278,17 @@ export function envelopeDiagnostics(rig, boxes, { xNdc, aspect, fovYDeg } = {}, 
   finite(xNdc, 'xNdc');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
   const env = handEnvelope(rig, boxes);
-  const lim = 1 - o.marginNdc - RANGE_SLACK_NDC, nearMin = o.near + o.nearMargin;
+  const box = viewBox(o, RANGE_SLACK_NDC), nearMin = o.near + o.nearMargin;
   const levels = env.anchorLevels.map(({ w, pro, ctx, corners }) => {
     const iv = rayInterval(ctx, xNdc, o, tanHalf, aspect);
     if (iv.empty) return { wristDeg: w, pronationDeg: pro, farDepth: null, fits: false };
-    const core = solveCore(ctx, pointOnNdcRay(xNdc, o.yNdc, iv.hi, tanHalf, aspect), o.shoulderCam, o.pole);
+    const ox = atAnchor(o, xNdc, tanHalf, aspect);
+    const core = solveCore(ctx, pointOnNdcRay(xNdc, o.yNdc, iv.hi, tanHalf, aspect), ox.shoulderCam, ox.pole);
     const M = handMatrixOf(ctx, core);
     const e = ndcExtents(M, corners, tanHalf, aspect);
-    return { wristDeg: w, pronationDeg: pro, farDepth: iv.hi, reachable: core.reachable, fits: core.reachable && scoreCorners(M, corners, tanHalf, aspect, lim, nearMin).ok, ...e };
+    return { wristDeg: w, pronationDeg: pro, farDepth: iv.hi, reachable: core.reachable, fits: core.reachable && scoreCorners(M, corners, tanHalf, aspect, box, nearMin).ok, ...e };
   });
-  return { levels, window: depthWindow(env, xNdc, tanHalf, aspect, o), limit: lim };
+  return { levels, window: depthWindow(env, xNdc, tanHalf, aspect, o), limit: box.r, box };
 }
 
 /**
@@ -1033,7 +1299,10 @@ export function reachWindow(rig, boxes, { xNdc, aspect, fovYDeg } = {}, options 
   const o = mergeOptions(options);
   finite(xNdc, 'xNdc');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
-  const w = depthWindow(handEnvelope(rig, boxes), xNdc, tanHalf, aspect, o);
+  const env = handEnvelope(rig, boxes);
+  // R4-arm: the window of the tier the A/D range uses (as fitHand does); round 3 always used the full tier here.
+  const range = anchorRange(rig, boxes, { aspect, fovYDeg }, options);
+  const w = depthWindow(env, xNdc, tanHalf, aspect, o, range && range.tier === 'game' ? env.gameLevels : env.anchorLevels);
   return { near: w.near, far: w.far, empty: w.empty };
 }
 
@@ -1122,11 +1391,11 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   const tanHalf = tanHalfFov(aspect, fovYDeg);
   const J0 = normalizeJoints(jointsWithRotation(joints, rotation));
   const env = handEnvelope(rig, boxes);
-  const lim = 1 - o.marginNdc, nearMin = o.near + o.nearMargin;
+  const vbox = viewBox(o), nearMin = o.near + o.nearMargin;
   const range = anchorRange(rig, boxes, { aspect, fovYDeg }, opts);
   const poseFor = J => { const ctx = poseContext(rig, J); return { ctx, corners: handCorners(rig, boxes, ctx.J) }; };
   let P = poseFor(J0);
-  const fits = (Q, x, d) => fitsAt(Q.ctx, Q.corners, x, d, tanHalf, aspect, o, lim, nearMin);
+  const fits = (Q, x, d) => fitsAt(Q.ctx, Q.corners, x, d, tanHalf, aspect, o, vbox, nearMin);
   const smallestFitting = (Q, x, lo, hi) => {
     if (fits(Q, x, lo)) return lo;
     if (!fits(Q, x, hi)) return null;
@@ -1187,7 +1456,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
       // conservative envelope for every pose. When the CURRENT pose still fits whole at the requested x at some
       // reachable depth (with the graceful wrist clamp), keep the player's x ('held_outside_range'); clamp to the
       // range only when it fits nowhere there.
-      const xr = clamp(xNdc, -lim, lim);
+      const xr = clamp(xNdc, -vbox.l, vbox.r);
       const re = fitWithWrist(xr);
       if (re.d !== null) { x = xr; anchor = 'held_outside_range'; r = re; }
     }
@@ -1206,10 +1475,10 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
     // No anchor fits the anchor envelope for this viewport and look: keep the request if the pose fits there (with the
     // wrist clamp), else move to the nearest anchor (toward the screen centre first, then the other side) where it does.
     anchor = 'look_unsatisfiable';
-    x = clamp(xNdc, -lim, lim);
+    x = clamp(xNdc, -vbox.l, vbox.r);
     let r = fitWithWrist(x);
     if (r.d === null) {
-      const found = searchX(x, [0, x <= 0 ? lim : -lim]);
+      const found = searchX(x, [0, x <= 0 ? vbox.r : -vbox.l]);
       if (found) { x = found.x; r = found.r; }
     }
     win = r.win;
@@ -1219,7 +1488,8 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   }
 
   const J = P.ctx.J;
-  const solution = solveArm(rig, { xNdc: x, depth: d, joints: J, aspect, fovYDeg, shoulderCam: o.shoulderCam, pole: o.pole, yNdc: o.yNdc });
+  const ox = atAnchor(o, x, tanHalf, aspect);
+  const solution = solveArm(rig, { xNdc: x, depth: d, joints: J, aspect, fovYDeg, shoulderCam: ox.shoulderCam, pole: ox.pole, yNdc: o.yNdc, reachGirdle: false });
   const cornersNdc = [];
   let within = solution.reachable;
   for (const { seg, carrier, box } of checkedBoxes(boxes)) {
@@ -1227,7 +1497,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
     for (const c of box) {
       const n = projectToNdc(transformPoint(M, c), tanHalf, aspect);
       cornersNdc.push({ segment: seg, x: n.x, y: n.y, depth: n.depth });
-      if (!(n.depth >= nearMin && Math.abs(n.x) <= lim && Math.abs(n.y) <= lim)) within = false;
+      if (!(n.depth >= nearMin && n.x >= -vbox.l && n.x <= vbox.r && n.y >= -vbox.b && n.y <= vbox.t)) within = false;
     }
   }
   const handNdc = handScreenBounds(rig, solution, J, { aspect, fovYDeg });
@@ -1237,7 +1507,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   // held x instead of jumping to the range edge (stepReach's wind-up guard restarts from the limit).
   const xLimits = range
     ? (anchor === 'held_outside_range' ? { xMin: Math.min(range.xMin, x), xMax: Math.max(range.xMax, x) } : range)
-    : { xMin: xReq < x ? x : -lim, xMax: xReq > x ? x : lim };
+    : { xMin: xReq < x ? x : -vbox.l, xMax: xReq > x ? x : vbox.r };
   const depthLimits = { minDepth: Math.min(win.empty ? iv.lo : Math.max(win.near, iv.lo), d), maxDepth: Math.max(iv.hi, d) };
   return {
     xNdc: x,
@@ -1257,6 +1527,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
     envelopeReach: { minDepth: win.near, maxDepth: win.far, empty: win.empty },
     window: { near: win.near, far: win.far },
     handNdc,
+    girdle: girdleReport(ox),
     shoulder: shoulderReport(solution, o.bodyToCamera || null),
     clearance: eyeClearance(solution),
     reachState: { xNdc: xReq, depth: clamp(depth, o.minDepth, REACH_STATE_MAX_DEPTH) }
@@ -1283,7 +1554,7 @@ export function depthForElbow(rig, { xNdc, elbowFlexRad, joints = {}, aspect, fo
   const phi = clamp(elbowFlexRad, phiLo, phiHi);
   const Dm = chainDist(ctx.cG, phi) * MM;
   const r = rayDir(xNdc, o.yNdc, tanHalf, aspect);
-  const S = o.shoulderCam;
+  const S = atAnchor(o, xNdc, tanHalf, aspect).shoulderCam;
   const rr = dot(r, r), rs = dot(r, S), ss = dot(S, S);
   const disc = rs * rs - rr * (ss - Dm * Dm);
   if (disc < 0) return { depth: Math.max(o.minDepth, rs / rr), elbowFlexRad: phi, clamped: phi !== elbowFlexRad, reachable: false };
@@ -1425,14 +1696,28 @@ export function carryReachRamp(next, stepped) {
  * shoulder-to-hand distance (and a little on the wrist, about 0.15 deg of elbow per deg of wrist on this rig), so the
  * elbow is most bent here and straightens on BOTH sides: a sideways hold that ends about as far beyond this x as it
  * started before it shows almost no NET elbow change although the elbow bent and straightened during the hold.
- * options as fitHand (attachment or shoulderCam). Pure.
+ * options as fitHand (attachment or shoulderCam). Pure. R4-arm: with the reach girdle the shoulder moves with x, so the
+ * closest approach is searched numerically (it can lie outside the A/D range, even outside [-1, 1]).
  */
 export function lateralElbowPeakXNdc({ depth, aspect, fovYDeg, yNdc } = {}, options = {}) {
   const o = mergeOptions(withRequestY(options, yNdc));
   finite(depth, 'depth');
   if (!(depth > 0)) fail('arm_input', 'depth must be positive');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
-  return o.shoulderCam[0] / (depth * tanHalf * aspect);
+  const x0 = o.shoulderCam[0] / (depth * tanHalf * aspect);
+  if (!o.reachGirdle) return x0;
+  // R4-arm: the reach girdle moves the shoulder with x (REACH_GIRDLE), so the closest approach is found numerically: the
+  // x in [-2, 2] that minimises the shoulder-to-hand distance (coarse scan, then golden-section refinement).
+  const dist = x => length(sub(pointOnNdcRay(x, o.yNdc, depth, tanHalf, aspect), atAnchor(o, x, tanHalf, aspect).shoulderCam));
+  let best = x0, bestD = dist(x0);
+  for (let x = -2; x <= 2 + 1e-9; x += 0.05) { const d = dist(x); if (d < bestD) { bestD = d; best = x; } }
+  let a = best - 0.05, b = best + 0.05;
+  const g = (Math.sqrt(5) - 1) / 2;
+  for (let i = 0; i < 40; i++) {
+    const c = b - g * (b - a), d = a + g * (b - a);
+    if (dist(c) < dist(d)) b = d; else a = c;
+  }
+  return 0.5 * (a + b);
 }
 
 /* ------------------------------------------------------------------ pronation / supination (double-tap Space) */

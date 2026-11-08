@@ -1,4 +1,6 @@
-/** NeuroSurge shared simulated-activity colour ramp (round 2, owner U2a-brain).
+/** NeuroSurge shared simulated-activity colour ramp (round 2, owner U2a-brain) and, since round 4 (R4-access, D9), the
+ * identity KEY_COLORS (left-arm light blue / cyan, other-areas grey, outlines, gold marks) chosen to stay
+ * distinguishable under colour-vision deficiency. The ramp itself is unchanged in round 4.
  *
  * ONE ramp, ONE meaning: the brain's motor-region activity AND the muscles' activation/contraction colours both come from
  * this module, so the same colour means the same simulated, unitless activity level everywhere (user requirement R2:
@@ -115,6 +117,56 @@ export function rampLegendStops(n = 9) {
 export function rampLegendGradientCss(n = 9, direction = 'to right') {
   const stops = rampLegendStops(n).map(s => `${s.css} ${(s.t * 100).toFixed(1)}%`);
   return `linear-gradient(${direction}, ${stops.join(', ')})`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// R4-access (round 4, D9): the identity KEY colours, checked for colour-vision deficiency.
+
+/** Identity (key) colours of the motor-area display, kept in ONE place so the brain regions, their outlines and the
+ * legend agree and stay distinguishable for colour-blind players. The activity ramp above is NOT changed by this.
+ *
+ * Why (round4/access/ACCESS-REPORT.md): the "other body part" areas were a cool slate-violet grey. People with
+ * protanopia or deuteranopia (no working red or green cones; red-green colour blindness of any degree affects about
+ * 8 % of men, the full forms simulated here about 2 %) see that as the same blue-grey as the teal left-arm areas:
+ * CIEDE2000 between the rendered rest colours fell from 12.9 (normal vision) to 1.5-1.7 under simulation (Machado 2009
+ * and Brettel 1997 models; Chromium's own emulation 1.2 / 1.5), i.e. the left-arm / other-areas distinction
+ * disappeared. The other
+ * areas are now a neutral-warm grey (it reads yellowish-grey to those players) and the left-arm fill a light sky blue
+ * (it reads clearly blue to them); the cyan outline, label and spots of the left arm are unchanged. Rendered result
+ * (same views, same render, 1280x720): worst case over the six simulations 10.7 at rest and 10.5 once switched on
+ * (was 1.5 and 2.3); normal vision 13.1 (was 12.9); Chromium's own emulation 10.3 / 12.1 / 17.2 (protanopia /
+ * deuteranopia / tritanopia; was 1.2 / 1.5 / 12.6). The outlines and the legend
+ * swatches move with them (the lavender outline was 3.0 from the cyan one under deuteranopia).
+ *
+ * Units: tints are LINEAR RGB 0..1 (they multiply the lighting like REGION_STYLE tints); lines are sRGB 0xRRGGBB
+ * (Three.js Color.setHex); legend swatches are CSS colours. Display choices only: no tissue or signal meaning.
+ * Wiring (the integrator; exact steps in round4/R4-access-NOTES.md): ns-brain REGION_STYLE.leftArmTint / otherTint /
+ * otherTintAlt, ns-scene-three REGION_RENDER.groupLine / otherLine and REGION_STYLE_FALLBACK, CSS --ns-other and the
+ * two legend swatch backgrounds take these values. */
+export const KEY_COLORS = freeze({
+  /** Light-blue left-arm areas (right hemisphere; sRGB #59c4f9 before lighting). Round 3: [0.10, 0.52, 0.62] (teal). */
+  leftArmTint: freeze([0.10, 0.55, 0.95]),
+  /** Warm grey areas of every other body part (even strip order). Round 3: [0.33, 0.33, 0.45] (slate-violet). */
+  otherTint: freeze([0.345, 0.300, 0.232]),
+  /** The darker alternate grey (odd strip order), same ratio as before. Round 3: [0.27, 0.27, 0.37]. */
+  otherTintAlt: freeze([0.283, 0.246, 0.190]),
+  /** Left-arm territory outline, CSS --ns-leftarm (unchanged). */
+  leftArmLine: 0x8cf2ff,
+  /** Other body-part territory outline, CSS --ns-other. Round 3: 0xd2cdf0 (lavender). */
+  otherGroupLine: 0xd4ccbc,
+  /** Faint per-region borders of the other areas. Round 3: 0xb9b4d6. */
+  otherLine: 0xc4bcae,
+  /** Gold edge of a switched-on ("activated") area until Reset body, CSS --ns-activated (unchanged). */
+  markLine: 0xffc65c,
+  /** Legend swatch fills (CSS), matched to the rendered areas. Round 3: rgba(64, 108, 118, 0.95) / rgba(104, 106, 116, 0.95). */
+  legendSwatchLeftArm: 'rgba(64, 109, 133, 0.95)',
+  legendSwatchOther: 'rgba(105, 103, 97, 0.95)'
+});
+
+/** CSS '#rrggbb' of an sRGB 0xRRGGBB integer key colour (e.g. keyColorCss(KEY_COLORS.otherGroupLine) === '#d4ccbc'). */
+export function keyColorCss(hex) {
+  if (!Number.isInteger(hex) || hex < 0 || hex > 0xffffff) throw new Error(`ns:colors_hex: ${hex} is not a 0xRRGGBB integer`);
+  return cssOfHex(hex);
 }
 
 // ---------------------------------------------------------------------------------------------

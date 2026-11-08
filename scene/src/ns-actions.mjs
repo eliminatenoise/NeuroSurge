@@ -983,6 +983,69 @@ export function grabPlacement(grab, yaw, pitch, pitchLimitRad = BRAIN_GRAB.pitch
   };
 }
 
+/** R4-arm: event types activityEdges emits (the "Try this" guide's vocabulary, ns-guide.mjs). */
+export const ACTIVITY_EDGE_TYPES = Object.freeze(['activate', 'fist', 'flip', 'grab', 'orbit', 'pause', 'resume', 'resetBody']);
+
+const seqOf = (st, k) => (st && Number.isSafeInteger(st[k]) && st[k] >= 0 ? st[k] : null);
+
+/**
+ * R4-arm: the plain game events between two consecutive activity states (createActivity state before and after one
+ * step), for the optional "Try this" guide (D7) and any HUD that wants edges instead of levels. Pure; reads only
+ * documented state fields, all present since round 2 (counters only grow, except that a new state starts again at 0):
+ *   spaceHeld         -> { type: 'fist', on }               Space pressed / let go (the fist closes / opens; also during
+ *                                                            a brain grab, where the hand closes too)
+ *   rotationSeq       -> { type: 'flip', to }                once per double-tap toggle; to = the new rotationState
+ *   grabSeq           -> { type: 'grab', on: true }          once per brain grab (Space while looking at the brain)
+ *   brainGrab.active  -> { type: 'grab', on: false, dragRad } the grab ended; dragRad = the angle the brain was moved
+ *                                                            (brainPlacement vs the grab's origin, radians)
+ *   orbitSeq          -> { type: 'orbit', steps, dir }       orbit steps (an arrow click or hold); dir from the orbit change
+ *                                                            ('left' | 'right' | 'forward' | 'back' | null when mixed)
+ *   paused            -> { type: 'pause' } / { type: 'resume' }
+ *   resetSeq          -> { type: 'resetBody' }
+ *   pulseSeq + lastTriggerSource 'gaze' | 'click' -> { type: 'activate', regionId, source, isLeftArm }
+ *                        a NEW area switched on by a look or a click (look-movement restarts on the same area are not
+ *                        new activations). Only the latest start of the step is visible here; ns-app's per-step `marks`
+ *                        (stepGated) list every start with its time. isLeftArm needs `binding` (activity.binding,
+ *                        bindBodyMap), else null.
+ * Keys (W/A/S/D) are not activity edges: the reach intent lives in ns-app (inputs.axes, state.reach).
+ * Every event is a virtual game control edge (no signal is read from, or sent to, a body or a brain).
+ */
+export function activityEdges(prev, next, binding = null) {
+  const out = [];
+  if (!isPlainObject(prev) || !isPlainObject(next)) return out;
+  if (typeof prev.spaceHeld === 'boolean' && typeof next.spaceHeld === 'boolean' && prev.spaceHeld !== next.spaceHeld) {
+    out.push({ type: 'fist', on: next.spaceHeld });
+  }
+  const grow = k => { const a = seqOf(prev, k), b = seqOf(next, k); return a !== null && b !== null && b > a ? b - a : 0; };
+  for (let i = grow('rotationSeq'); i > 0; i--) out.push({ type: 'flip', to: typeof next.rotationState === 'string' ? next.rotationState : null });
+  for (let i = grow('grabSeq'); i > 0; i--) out.push({ type: 'grab', on: true });
+  const g0 = prev.brainGrab, g1 = next.brainGrab;
+  if (isPlainObject(g0) && g0.active === true && isPlainObject(g1) && g1.active !== true) {
+    const p = next.brainPlacement;
+    const ok = isPlainObject(p) && isFiniteNumber(p.yaw) && isFiniteNumber(p.pitch) && isFiniteNumber(g0.originYaw) && isFiniteNumber(g0.originPitch);
+    out.push({ type: 'grab', on: false, dragRad: ok ? Math.hypot(p.yaw - g0.originYaw, p.pitch - g0.originPitch) : 0 });
+  }
+  const steps = grow('orbitSeq');
+  if (steps > 0) {
+    const o0 = isPlainObject(prev.orbit) ? prev.orbit : null, o1 = isPlainObject(next.orbit) ? next.orbit : null;
+    let dir = null;
+    if (o0 && o1 && isFiniteNumber(o0.yaw) && isFiniteNumber(o1.yaw) && isFiniteNumber(o0.pitch) && isFiniteNumber(o1.pitch)) {
+      const dy = o1.yaw - o0.yaw, dp = o1.pitch - o0.pitch;
+      if (dy !== 0 && dp === 0) dir = dy > 0 ? 'right' : 'left';
+      else if (dp !== 0 && dy === 0) dir = dp > 0 ? 'forward' : 'back';
+    }
+    out.push({ type: 'orbit', steps, dir });
+  }
+  if (typeof prev.paused === 'boolean' && typeof next.paused === 'boolean' && prev.paused !== next.paused) out.push({ type: next.paused ? 'pause' : 'resume' });
+  for (let i = grow('resetSeq'); i > 0; i--) out.push({ type: 'resetBody' });
+  if (grow('pulseSeq') > 0 && (next.lastTriggerSource === 'gaze' || next.lastTriggerSource === 'click')) {
+    const id = typeof next.pulseRegion === 'string' ? next.pulseRegion : null;
+    const r = id !== null && binding && binding.regions instanceof Map ? binding.regions.get(id) : null;
+    out.push({ type: 'activate', regionId: id, source: next.lastTriggerSource, isLeftArm: r ? r.isLeftArm === true : null });
+  }
+  return out;
+}
+
 /** PURE double-tap test: a press at `nowS` is a double-tap when the previous press was at most `windowS` earlier. */
 export function isDoubleTap(prevDownS, nowS, windowS = DOUBLE_TAP_SECONDS) {
   return isFiniteNumber(prevDownS) && isFiniteNumber(nowS) && nowS >= prevDownS && nowS - prevDownS <= windowS + SNAP;

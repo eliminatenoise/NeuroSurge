@@ -2,7 +2,7 @@
 
 Look at a motor area of a virtual brain and watch the corresponding muscles contract. NeuroSurge is a first-person browser game in development, built to make the connection between neural activity, muscle activity and movement visible.
 
-**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. This repository now holds the current playable build of the game, round 3 (see **Play it** below). The game is still being developed, and the repository does not offer an accepted trained model.
+**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. This repository now holds the current playable build of the game, round 4 (see **Play it** below). The game is still being developed, and the repository does not offer an accepted trained model.
 
 ## Play it
 
@@ -16,7 +16,7 @@ node serve-local.mjs
 
 Open the `http://127.0.0.1:<port>/` address it prints. Opening `index.html` straight from disk does not work, because browsers block the game's files on `file://` pages. Controls, Windows commands, known issues and troubleshooting are in the [player guide](PLAYER-GUIDE.md).
 
-**This version:** round-3 build from development commit `39dda20`, built 2026-11-08 14:51:51 UTC; distribution `content_sha256` `0bb640a32bdfd0adb194705b8ee032a8dc0f1515dcecec29739841ad9c17ab42` (see `release-manifest.json`). Tests: all 481 unit tests passed. The 38 end-to-end requirement checks on this exact build gave 36 passed, 1 failed and 1 undecided in test mode, and 35 passed, 1 failed and 2 undecided with real mouse and keyboard input. The failed check: in the starting view the back end of the brain is hidden behind its top, and on ultra-wide screens the movement strip is narrower than wanted. The undecided checks need either real mouse movement or more precise aiming than the real-input run has. Details are in the player guide's "Known issues" section.
+**This version:** round-4 build from development commit `c6b83f5`, built 2026-11-08 21:46:54 UTC; distribution `content_sha256` `e2778fb11ddc5aa77b842ff8424a3eb9bd12912eeb583a0844f3cc7461e3b6aa` (see `release-manifest.json`). New in this build: the starting view shows the whole brain from straight above, with both its front and back ends; a "Try this" guide gives you one small task at a time; the I key shows or hides More detail while you play; a Picture quality setting (Auto, High, Low) on the Esc page keeps the game smooth on slower computers; the brain and arm appear first while the rest of the body loads; and every address in the game is relative to its own page, so the folder also works from a web sub-folder such as `/NeuroSurge/`. Tests: all 632 unit tests passed. The 45 end-to-end requirement checks on this exact build gave 42 passed, 2 failed and 1 undecided in test mode, and 41 passed, 2 failed and 2 undecided with real mouse and keyboard input. The trade-off: to fit the whole brain, the movement strip and its areas are now about half their earlier size on screen, and both failed checks are about this narrower strip. The undecided checks need real mouse movement or more precise aiming than the real-input run has. Details are in the player guide's "Known issues" section.
 
 **Licences:** project code CC0 1.0 ([LICENSE](LICENSE)); BodyParts3D anatomy meshes CC BY 4.0, © The Database Center for Life Science (DBCLS); three.js MIT. See [CREDITS-AND-LICENCES.md](CREDITS-AND-LICENCES.md).
 

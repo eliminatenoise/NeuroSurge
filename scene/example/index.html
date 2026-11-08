@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroSurge</title>
-<meta name="description" content="NeuroSurge: a first-person game about how your brain moves your body. It runs in your browser on your own computer. Everything in it is simulated, with no real units (unitless). Looks, clicks and keys are game controls, not real stimulation or decoding. NeuroTranslate 0.0 is just a name for a model; it is not a validated decoder.">
+<meta name="description" content="NeuroSurge: a first-person game about how your brain moves your body. It runs in your browser on your own computer. The brain signals and muscle activity in it are simulated, with no real units (unitless). Looks, clicks and keys are game controls, not real stimulation or decoding. NeuroTranslate 0.0 is just a name for a model; it is not a validated decoder.">
 <link rel="stylesheet" href="./neurosurge.css">
+<!-- R4-integrator (D6): no favicon file; this stops the browser asking the origin root for /favicon.ico. -->
+<link rel="icon" href="data:,">
 <style>
 /* Game shell (round-1 A4, round-2 U4-app): the 2 s start instructions and the Esc page (one overlay, data-mode
  * intro | paused | loading | error), context-loss banner, capture / drag-to-look toast, screen-reader region and the
@@ -109,9 +111,9 @@
 @media (min-width: 900px) {
   .ns-shell-card { max-width: 1020px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); column-gap: 26px; align-items: start; }
   .ns-shell-card > * { grid-column: 1 / -1; }
-  .ns-shell-card > .ns-shell-settings { grid-column: 1; }
-  .ns-shell-card > .ns-shell-limits { grid-column: 2; }
-  .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 1 / -1; }
+  /* R4-polish: Settings now sit under the buttons (full width, in groups); the limits box spans the card below. */
+  .ns-shell-card > .ns-shell-settings { grid-column: 1 / -1; }
+  .ns-shell-card > .ns-shell-limits { grid-column: 1 / -1; }
 }
 /* R3-polish (ultrawide, e.g. 2560x1080): a wider card in three columns (how to play | controls | settings and "what this
    game is, and is not"), so the whole page fits the short, wide screen without scrolling and the text is not a narrow
@@ -119,12 +121,50 @@
 @media (min-width: 1700px) and (min-aspect-ratio: 2/1) {
   .ns-shell-card { max-width: 1640px; grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr); grid-auto-flow: row dense; font-size: 14px; }
   .ns-shell-card > .ns-shell-grid { grid-column: 1; grid-row: span 2; }
-  .ns-shell-card > .ns-shell-settings { grid-column: 2; margin-top: 4px; }
+  .ns-shell-card > .ns-shell-settings { grid-column: 2; margin-top: 4px; grid-template-columns: 1fr; }
   .ns-shell-card > .ns-shell-limits { grid-column: 2; }
   .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 2; }
   .ns-shell-limits ul { font-size: 13px; }
 }
 .ns-shell-modenote { margin: 2px 0 0; color: var(--ns-muted, #c7d2df); font-size: 13px; }
+/* R4-polish (2 s intro): on short landscape screens (1280x720, 1366x768) the intro is a little more compact, so all eight
+   steps and every control are on screen during the 2 s, not only the first six: a smaller title, tighter gaps and a
+   wider steps column. Same words; the Esc page keeps its normal spacing. */
+@media (min-width: 900px) and (max-height: 820px) {
+  .ns-shell[data-mode="intro"] .ns-shell-card { padding-top: 16px; padding-bottom: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title { font-size: 26px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title::after { margin-top: 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-subtitle { margin: 6px 0 8px; }
+  .ns-shell[data-mode="intro"] .ns-shell-heading { font-size: 16px; }
+  .ns-shell[data-mode="intro"] .ns-shell-actions { margin: 6px 0 8px; }
+  .ns-shell[data-mode="intro"] .ns-shell-play { padding: 7px 20px; font-size: 16px; }
+  .ns-shell[data-mode="intro"] .ns-shell-grid { grid-template-columns: 1.45fr 1fr; gap: 8px 22px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li + li { margin-top: 3px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys { gap: 3px 10px; }
+  .ns-shell[data-mode="intro"] .ns-shell-section-title { margin-bottom: 4px; }
+}
+/* R4-fix (review F4): on phones (<= 600 px wide) the 2 s intro is compact, so all eight steps and all ten controls are on
+   screen during the 2 s (390x844 showed 5 of 8 steps and none of the controls): smaller title and gaps, each step shows
+   its bold lead-in and the start of its text (two lines), each control one line. The Esc page keeps the full text. */
+@media (max-width: 600px) {
+  .ns-shell[data-mode="intro"] .ns-shell-card { padding-top: 12px; padding-bottom: 10px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title { font-size: 22px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title::after { margin-top: 4px; }
+  .ns-shell[data-mode="intro"] .ns-shell-subtitle { margin: 4px 0 4px; font-size: 12px; line-height: 1.35; }
+  .ns-shell[data-mode="intro"] .ns-shell-heading { font-size: 15px; margin-top: 4px; margin-bottom: 2px; }
+  .ns-shell[data-mode="intro"] .ns-shell-modenote { font-size: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-actions { margin: 4px 0 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-play { padding: 5px 16px; font-size: 15px; }
+  .ns-shell[data-mode="intro"] .ns-shell-grid { gap: 4px; margin-top: 0; }
+  .ns-shell[data-mode="intro"] .ns-shell-section-title { margin-bottom: 3px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li + li { margin-top: 2px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li::before { width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li { padding-left: 23px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys { gap: 2px 8px; font-size: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys dt { font-size: 12px; padding: 0 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+}
 .ns-shell-modenote[hidden], .ns-shell-settings[hidden], .ns-shell-actions button[hidden] { display: none; }
 .ns-shell-steps { margin: 0; padding-left: 0; list-style: none; counter-reset: ns-step; }
 .ns-shell-steps li { position: relative; padding-left: 28px; counter-increment: ns-step; }
@@ -169,7 +209,9 @@
 .ns-shell-timer { display: none; }
 .ns-shell[data-mode="intro"] .ns-shell-timer { display: block; position: absolute; top: 0; left: 0; right: 0; height: 4px; grid-column: auto; grid-row: auto; background: rgba(140, 242, 255, 0.18); }
 .ns-shell-timer-bar { display: block; height: 100%; background: #ffe066; transform-origin: left center; }
-.ns-shell[data-mode="intro"] .ns-shell-timer-bar { animation: ns-intro-timer var(--ns-intro-ms, 2000ms) linear forwards; }
+/* R4-integrator: the bar runs only once the 2 s timer has started (the body may still be streaming in before that). */
+.ns-shell[data-mode="intro"] .ns-shell-timer-bar { transform: scaleX(1); }
+.ns-shell[data-mode="intro"][data-intro-timer="running"] .ns-shell-timer-bar { animation: ns-intro-timer var(--ns-intro-ms, 2000ms) linear forwards; }
 @keyframes ns-intro-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .ns-shell-section-title {
   margin: 0 0 8px;
@@ -198,10 +240,21 @@
 .ns-shell-settings { min-width: 0; margin: 14px 0 0; padding: 10px 0 0; border: 0; border-top: 1px solid rgba(232, 238, 245, 0.12); }
 .ns-shell-settings > legend { float: left; width: 100%; padding: 0; }
 .ns-shell-settings > legend + * { clear: left; }
+/* R4-polish (Esc page tidy): Settings come right after Resume / Reset, as two or three small groups side by side
+   (look, picture, guide), each control with its one-line help; one column on narrow screens. */
+.ns-shell-settings:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); column-gap: 24px; align-items: start; margin: 0 0 6px; padding: 6px 0 8px; border-bottom: 1px solid rgba(232, 238, 245, 0.12); }
+.ns-shell-settings > legend { grid-column: 1 / -1; }
+.ns-shell-setgroup { min-width: 0; }
+.ns-shell-setgroup .ns-shell-setting:first-child { margin-top: 2px; }
+.ns-shell-setgroup .ns-shell-select { flex: 1 1 auto; max-width: 100%; min-width: 0; }
+.ns-shell-setgroup .ns-shell-setting:not(.ns-shell-check):not(.ns-shell-guide) > .ns-shell-setting-label { white-space: nowrap; }
 .ns-shell-setting { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
 .ns-shell-range { flex: 1; min-width: 80px; accent-color: var(--ns-accent, #ffe066); }
 .ns-shell-out { min-width: 3.4em; font-variant-numeric: tabular-nums; }
 .ns-shell-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ns-accent, #ffe066); }
+.ns-shell-guide { flex-wrap: wrap; cursor: default; }
+.ns-shell-guide .ns-shell-secondary { padding: 5px 10px; }
+.ns-shell-guidehelp { margin: 0 0 4px; font-size: 12.5px; color: var(--ns-muted, #c7d2df); }
 .ns-shell-limits { margin-top: 14px; padding: 10px 14px 12px; border: 1px solid rgba(255, 224, 102, 0.22); border-radius: 10px; background: rgba(255, 224, 102, 0.04); }
 .ns-shell-limits ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #d6dee8; }
 .ns-shell-limits li + li { margin-top: 2px; }
@@ -306,17 +359,20 @@
 @keyframes ns-shell-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .ns-shell-root *, .ns-shell-root *::before, .ns-shell-root *::after { animation: none !important; transition: none !important; }
+  /* R4-access step 5 (R4-integrator): the intro bar is motion only (the note says the page closes by itself). */
+  .ns-shell-timer { display: none !important; }
 }
 </style>
 <!--
-  Import map: three is pinned to 0.170.0 and vendored at /vendor/three.module.js (licence alongside). The page
-  therefore runs when served from the playable root (/scene, /vendor, /inputs, /packets) at /scene/example/.
+  Import map: three is pinned to 0.170.0 and vendored at vendor/three.module.js of the playable root (licence alongside).
+  R4-integrator (D6): every runtime URL is relative to this page (../../vendor, ../../inputs, ../../packets), so the
+  game runs unchanged from any sub-path (GitHub Pages /NeuroSurge/), from the harness root and from serve-local.
   No other dependency is loaded; the scene modules are plain relative ES modules.
 -->
 <script type="importmap">
 {
   "imports": {
-    "three": "/vendor/three.module.js"
+    "three": "../../vendor/three.module.js"
   }
 }
 </script>
@@ -340,15 +396,15 @@
   verified before use; any failure is shown in the HUD and the shell (there is no silent fallback).
 -->
 <main id="ns-app" class="ns-app"
-      data-manifest-url="/inputs/MESH-MANIFEST.json"
-      data-packet-pov-demo-assets="/packets/pov-demo-assets/"
-      data-packet-pov-demo-assets-r2="/packets/pov-demo-assets-r2/"
-      data-movement-map-url="/inputs/MOVEMENT-MAP.json">
+      data-manifest-url="../../inputs/MESH-MANIFEST.json"
+      data-packet-pov-demo-assets="../../packets/pov-demo-assets/"
+      data-packet-pov-demo-assets-r2="../../packets/pov-demo-assets-r2/"
+      data-movement-map-url="../../inputs/MOVEMENT-MAP.json">
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."></canvas>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
-  <noscript><p class="ns-fatal">NeuroSurge needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
+  <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
 </main>
 <script type="module">
 // Round 3 (R17/D3): the page's visible strings come from ns-text PAGE (the static texts above equal them; a unit test
@@ -397,6 +453,22 @@ async function fetchText(url) {
   return response.text(); // UTF-8 decode; the hashes below are over the UTF-8 encoding of this text
 }
 
+// R4-load: the byte path (the served bytes are hashed; no TextEncoder pass over every file).
+async function fetchBytes(url) {
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+async function sha256HexBytes(bytes) {
+  const subtle = window.crypto && window.crypto.subtle;
+  if (!subtle) throw new Error(PAGE.secureContext);
+  const digest = await subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+// R4-load: a macrotask yield between full-body files, so frames are drawn while the body streams.
+const yieldToFrame = () => (window.scheduler && typeof window.scheduler.yield === 'function') ? window.scheduler.yield()
+  : new Promise(resolve => { const c = new MessageChannel(); c.port1.onmessage = () => resolve(); c.port2.postMessage(0); });
+
 async function sha256Hex(text) {
   const subtle = window.crypto && window.crypto.subtle;
   if (!subtle) throw new Error(PAGE.secureContext);
@@ -404,15 +476,15 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-let THREE = null, startScene = null, loadFullBodyInputs = null, scene = null, bootError = null;
+let THREE = null, startScene = null, startFullBodyStream = null, scene = null, bootError = null;
 let markBooted;
 const booted = new Promise(resolve => { markBooted = resolve; });
 
 function boot() {
-  const loadBody = fullBody && loadFullBodyInputs
-    ? ({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) => loadFullBodyInputs({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) : null;
+  const streamBody = fullBody && startFullBodyStream
+    ? ({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) => startFullBodyStream({ fetchText: ft, sha256Hex: sh, fetchBytes, sha256HexBytes, onProgress, expectedManifestSha256, yieldFn: yieldToFrame, sliceMs: 8 }) : null;
   scene = startScene({
-    THREE, canvas, hudRoot, shellRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder, storage, qa, loadBody
+    THREE, canvas, hudRoot, shellRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes, placeholder, storage, qa, streamBody
   });
   return scene;
 }
@@ -420,6 +492,7 @@ function boot() {
 // A stable QA object: `ready` and `inspect` follow the current scene (a back/forward-cache restore may restart it).
 const api = {
   get ready() { return booted.then(() => (scene ? scene.ready : { ok: false, error: bootError || 'not started' })); },
+  get firstView() { return booted.then(() => (scene && scene.firstView ? scene.firstView : { ok: false, error: bootError || 'not started' })); },
   inspect: options => (scene ? scene.inspect(options) : null)
 };
 if (qa) {
@@ -437,7 +510,7 @@ window.__nsQA = Object.freeze(api);
 
 try {
   THREE = await import('three');
-  ({ start: startScene, loadFullBodyInputs } = await import('../src/ns-app.mjs'));
+  ({ start: startScene, startFullBodyStream } = await import('../src/ns-app.mjs'));
   boot();
   canvas.focus({ preventScroll: true });
 } catch (err) {
