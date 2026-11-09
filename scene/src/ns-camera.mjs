@@ -421,7 +421,7 @@ export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitch
  *   headInPlace, faceGhost, overBrainSeeThrough (0..1 multipliers, see the header), farExtraM, nearM,
  *   orbitCentre, boom { distance, pushed, blocked } (third-person side, or null in pure first person) }
  */
-export function cameraPose(state, { look = null, bodyLook = null, thirdLook = null, bodyToWorld = null, eyeBp = null, avoid = null, rig = THIRD_PERSON } = {}) {
+export function cameraPose(state, { look = null, bodyLook = null, thirdLook = null, bodyToWorld = null, eyeBp = null, avoid = null, rig = THIRD_PERSON, firstPersonFrame = null } = {}) {
   const s = checkState(state);
   const driveA = isLook(bodyLook) && isLook(thirdLook);
   if (!driveA && !isLook(look)) fail('camera_input', 'cameraPose needs { bodyLook, thirdLook } (controls own the view) or { look }');
@@ -440,12 +440,16 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     fp = s.view === 'third' && isLook(s.fpLook) ? { yaw: s.fpLook.yaw, pitch: s.fpLook.pitch } : live;
     tpLook = s.view === 'third' ? clampThirdLook(live, r) : isLook(s.tpLook) ? clampThirdLook(s.tpLook, r) : null;
   }
+  const reference = typeof firstPersonFrame === 'function' ? firstPersonFrame(fp) : null;
+  if (firstPersonFrame !== null && typeof firstPersonFrame !== 'function') fail('camera_input', 'firstPersonFrame must be a pure source-frame function');
+  const firstOrigin = reference ? vec3(reference.position, 'first-person position world m') : [0, 0, 0];
+  if (reference) { if (!isMat4(reference.bodyToWorld) || !isVec3(reference.eyeBp)) fail('camera_input', 'canonical body and original eye required'); bodyToWorld = reference.bodyToWorld; eyeBp = reference.eyeBp; }
   if (s.progress === 0 || tpLook === null) {
     const dir = gazeDirection(fp.yaw, fp.pitch);
     return Object.freeze({
       view: s.view, progress: s.progress, blend: 0, firstPerson: s.view === 'first', thirdPerson: false, moving: s.progress !== target,
-      position: [0, 0, 0], yaw: fp.yaw, pitch: fp.pitch, direction: dir,
-      bodyLook: fp, gazeLook: fp, gazeRay: { origin: [0, 0, 0], dir },
+      position: reference ? firstOrigin.slice() : [0, 0, 0], yaw: fp.yaw, pitch: fp.pitch, direction: dir,
+      bodyLook: fp, gazeLook: fp, gazeRay: { origin: reference ? firstOrigin.slice() : [0, 0, 0], dir },
       silentGaze, headInPlace: 0, faceGhost: 1, overBrainSeeThrough: 1, farExtraM: 0, nearM: FIRST_PERSON.nearM,
       orbitCentre: null, boom: null
     });
@@ -456,9 +460,9 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   let yaw, pitch;
   if (blend >= 1) { yaw = tp.yaw; pitch = tp.pitch; }
   else { yaw = fp.yaw + blend * wrapAngle(tp.yaw - fp.yaw); pitch = fp.pitch + blend * (tp.pitch - fp.pitch); }
-  const position = [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
+  const position = reference ? firstOrigin.map((v, i) => (1 - blend) * v + blend * tp.position[i]) : [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
   const dir = gazeDirection(yaw, pitch);
-  const fromEye = len(position);
+  const fromEye = len(reference ? sub(position, firstOrigin) : position);
   const head = bodyProxyWorld(bodyToWorld, eyeBp, [DEFAULT_BODY_PROXY[0]])[0];
   const outsideHead = len(sub(position, head.centre)) - head.radius;
   const headInPlace = smooth(r.headClear.startM, r.headClear.fullM, outsideHead);

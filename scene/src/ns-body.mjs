@@ -31,9 +31,9 @@
 //
 // Round 5 (R5-body):
 //   - D15 Body Worlds layers: bodyWorldsLayers(rig, baked) -> poseBody(rig, targets, { baked, layers, layerAmount })
-//     moves each superficial muscle slightly outward (and peels it a little) as one rigid matrix on the right of its
-//     pose matrix; the classification (BODY_LAYER_TABLE / BODY_LAYER_UNITS, generated) and the rule are documented at
-//     the "Body Worlds layers" section. detachedRestPositions() does the same for CPU-skinned meshes (the left arm).
+//     display-separates eligible regionally qualified outer candidates using the existing rigid display matrix.
+//     Exact-ID anatomy/scope/caveats come from ns-regional-layers; generated TABLE/UNITS retain geometric diagnostics
+//     and display parameters only. detachedRestPositions() uses the same eligibility for CPU-skinned arm meshes.
 //   - D19 mirror body: mirrorBodyMatrix (a reflecting group matrix: it faces you, your left stays on your left),
 //     createBodyInstance / createMirrorBodyInstance / poseBodyInstance / syncBodyInstance (shared rig, geometry,
 //     layers and pose), reflectWinding, bodyBoundsBp.
@@ -60,9 +60,12 @@
 // not EMG, not force and not nerve activity.
 
 import { BODY_MOTOR_MAP, muscleNameMatches } from './ns-bodymap.mjs';
+import { BODY_ARM_SOURCE_DOMAIN, BODY_KEEP_FRAME_KIND } from './ns-body-arm-bridge.mjs';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Constants of the agreed interface
+
+import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification } from './ns-regional-layers.mjs';
 
 /** Agreed non-left-arm joint ids (shared interface 2). */
 export const BODY_JOINT_IDS = Object.freeze([
@@ -586,7 +589,7 @@ function muscleCandidates(entry) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Reference joints (precomputed by this module's geometric estimators from packet bodyparts3d-fullbody-r1, manifest
-// sha256 e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82). They are used ONLY for a joint whose
+// sha256 5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406). They are used ONLY for a joint whose
 // bones are listed in the entries with that source packet but whose meshes are not loaded yet (deferred per-region
 // loading). Tests re-derive every value from the meshes on disk and require agreement within 0.01 mm / 0.01 degrees.
 
@@ -1496,9 +1499,6 @@ function idsForName(catalog, muscleName) {
 
 /** Normalise active actions: ns-actions activeBodyActions() rows, [{ actionId, level }], action-id strings, or an
  * object/Map { actionId: level }. Rows may carry their own agonists/antagonists; otherwise BODY_MOTOR_MAP supplies them. */
-/** R5-fix (review SL5-6): display level of the less-driven side for actions with a lateralBias (= ns-bodymap
- * LATERAL_DISPLAY.otherSideGain; simulated, unitless). */
-export const BODY_LATERAL_OTHER_SIDE_GAIN = 0.6;
 function actionRows(activeActions) {
   if (!activeActions) return [];
   let rows;
@@ -1516,10 +1516,7 @@ function actionRows(activeActions) {
     const agonists = Array.isArray(r.agonists) ? r.agonists : a ? a.agonists : [];
     const antagonists = Array.isArray(r.antagonists) ? r.antagonists : a ? a.antagonists : [];
     const stabilizers = Array.isArray(r.stabilizers) ? r.stabilizers : a && a.stabilizers ? a.stabilizers : [];
-    // R5-fix (review SL5-6): the action's lateralBias side (the body side its hemisphere mainly drives)
-    const lb = r.lateralBias !== undefined ? r.lateralBias : a ? a.lateralBias : null;
-    const lateralBias = lb === 'left' || lb === 'right' ? lb : null;
-    if (level > 0) out.push({ actionId, level, agonists, antagonists, stabilizers, lateralBias });
+    if (level > 0) out.push({ actionId, level, agonists, antagonists, stabilizers });
   }
   return out;
 }
@@ -1535,18 +1532,14 @@ function actionRows(activeActions) {
  * floor, not inhibition data); per mesh the maximum wins. Unitless display values, not EMG, force or nerve activity.
  */
 export function bodyMuscleDriveReport(activeActions, options = {}) {
-  const { antagonistGain = 0.08, stabilizerGain = 0.3, otherSideGain = BODY_LATERAL_OTHER_SIDE_GAIN } = options;
+  const { antagonistGain = 0.08, stabilizerGain = 0.3 } = options;
   const catalog = catalogOf(options);
   const byName = {}, unmatchedByAction = {};
   const put = (n, v) => { if (v > 0 && !(byName[n] >= v)) byName[n] = v; };
-  // R5-fix (review SL5-6): an action with a lateralBias side shows the named muscles of the OTHER side at otherSideGain
-  // of its level (the crossed side gets the stronger signal; a display choice; unsided names are unchanged). Same rule as
-  // ns-bodymap namedMuscleDrives / LATERAL_DISPLAY.
-  const sideK = (r, n) => { if (!r.lateralBias) return 1; const w = String(n).toLowerCase().split(/\s+/); const sd = w.includes('left') ? 'left' : w.includes('right') ? 'right' : null; return sd && sd !== r.lateralBias ? otherSideGain : 1; };
   for (const r of actionRows(activeActions)) {
-    for (const n of r.agonists) put(n, r.level * sideK(r, n));
-    for (const n of r.stabilizers) put(n, r.level * stabilizerGain * sideK(r, n));
-    for (const n of r.antagonists) put(n, r.level * antagonistGain * sideK(r, n));
+    for (const n of r.agonists) put(n, r.level);
+    for (const n of r.stabilizers) put(n, r.level * stabilizerGain);
+    for (const n of r.antagonists) put(n, r.level * antagonistGain);
     const miss = [...new Set([...r.agonists, ...r.stabilizers, ...r.antagonists])].filter(n => !idsForName(catalog, n).length);
     if (miss.length && r.actionId) unmatchedByAction[r.actionId] = miss;
   }
@@ -2102,6 +2095,41 @@ function checkBaked(rig, baked) {
   return baked;
 }
 
+/**
+ * R173: public read-only frame used by the fitted-arm/body bridge.
+ * Public baked.segments are Float32 copies; poseBodyDetailed applies the original Float64 keepM.
+ * Validate ownership here, inside the body producer, and copy that exact K without exposing any setter/private object.
+ * Current pelvis-anchor raw external E is corrected by K once in poseBodyDetailed. Other anchor contracts are not admitted.
+ */
+export function bodyPostureKeepFrame(rig, baked) {
+  checkRig(rig);
+  const b = checkBaked(rig, baked);
+  const K = b._internal.keepM;
+  if (!K || K.length !== 16) throw new Error('ns:body_pose: baked keep frame must have16 elements');
+  const matrix = new Array(16);
+  for (let i = 0; i < 16; i++) {
+    if (!Number.isFinite(K[i])) throw new Error('ns:body_pose: baked keep frame must be finite');
+    matrix[i] = K[i];
+  }
+  return Object.freeze({
+    kind: BODY_KEEP_FRAME_KIND, sourceDomain: BODY_ARM_SOURCE_DOMAIN, anchor: 'pelvis',
+    from: 'pre-keep-posed-body-mm', to: 'corrected-posed-body-mm',
+    rigGeneration: rig, bakeGeneration: b, matrix: Object.freeze(matrix)
+  });
+}
+
+/** Rig-derived pelvis anchor in the actual baked source frame; read-only, geometry provenance required. */
+export function bodyRootAnchor(rig, baked = null) {
+  checkRig(rig);
+  const joint = rig.pivots && rig.pivots.lumbosacral;
+  if (!joint || joint.source !== 'geometry' || !joint.point || joint.point.length !== 3 || !joint.point.every(Number.isFinite)) throw new Error('ns:body_pose: actual lumbosacral anchor unavailable');
+  const b = baked ? checkBaked(rig, baked) : null;
+  const point = b ? m4Point(bodyPostureKeepFrame(rig, b).matrix, joint.point) : joint.point.slice();
+  return Object.freeze({ kind: 'ns-body-root-anchor-r266', anchor: 'pelvis', pointBp: Object.freeze(point),
+    rigGeneration: rig, bakeGeneration: b, meaning: 'Rig-derived lumbosacral/pelvis reference after exact baked keep frame; not measured or normal-biomechanics qualification' });
+}
+
+
 /** Matrix mapping a mesh's BAKED geometry to its posed geometry (see poseBodyDetailed options.baked). */
 function bakedDelta(rig, baked, id, info, world, mats, mode) {
   const B = baked._internal;
@@ -2122,30 +2150,20 @@ function bakedDelta(rig, baked, id, info, world, mats, mode) {
 // The user (2026-11-08T21:54Z): "make the superficial muscles slightly detached. Gunther von Hagens style body worlds, so
 // that we can see into the deep muscles."
 //
-// WHICH muscles are superficial (offline, reproducible: harness/run-R5-body-tools/classify.mjs and layers-gen.mjs; the
-// full per-muscle list is round5/body/BODY-WORLDS-LAYERS.json and round5/R5-body-NOTES.md):
-//  1. Geometry. Every muscle the game draws (this packet and the left upper limb of MESH-MANIFEST.json), in the source
-//     (anatomical) pose, with every bone and muscle as an occluder. 128 view directions on a Fibonacci sphere; per
-//     direction an orthographic depth buffer at 1 mm per pixel; per muscle the share of its own silhouette where it is
-//     the front-most surface. Its score (topExposure, 0..1) is the mean of that share over its best quarter of
-//     directions: about 0.9 for a muscle lying on the outside (deltoid 0.99), under 0.1 for one buried under others
-//     (vastus intermedius 0.01, supinator 0.003). Stable to 0.04 against 64 directions at 0.75 mm per pixel.
-//  2. Textbook layer: S superficial, I intermediate, D deep (BODY_LAYER_TEXTBOOK; anatomy as commonly taught, not
-//     checked page by page). It decides the cases this one dataset distorts: BodyParts3D 4.0 lacks many muscles (no
-//     latissimus dorsi, rectus abdominis, gracilis, peronei, tibialis posterior, ...), so some deep muscles lie open.
-//  3. Rule (BODY_LAYER_RULE): superficial when the score is at least 0.3 for S, 0.6 for I and 0.9 for D; else deep.
-//     Pieces of one muscle (for example the three parts of pectoralis major) form one unit with an area-weighted score
-//     and move together, so a muscle never splits apart.
-// HOW they detach: each superficial unit moves outward along its mean outer normal (the area-weighted normal of its
-// surface that is seen from outside, oriented toward where it is seen from) by offsetMm = clamp(0.15 x cube root of the
-// unit's volume in mm^3, 3, 15) mm (3 to about 12 mm here), and peels slightly, as in Body Worlds plastinates: it turns about an axis through the
-// end nearest its first attachment, so the far end lifts by half an offset more (peel 0.5, the default; 1 = one more
-// offset). This is one rigid matrix D
-// (det +1) on the RIGHT of the muscle's pose matrix (posed = M . D), so the offset rides on the bone-driven pose and the
-// scene needs no new geometry. Deep muscles, bones and every unknown mesh keep their matrices exactly (unit test
-// R5-body-layers). The layers are a display choice of this educational model, not dissection data.
+// R183: anatomical qualification comes from exact-ID bounded regional source records
+// (ns-regional-layers.mjs; R175/R130/R135 pins), with scope/head/part caveats intact.
+// Historical generated topExposure and textbook letters below describe the producer's
+// display selection only. They do not qualify anatomical depth or promote unknown/I/D
+// records to an outer relation.72 qualified outer records remain display candidates;
+//59 scoped intermediate/deeper and95 current unknown records keep zero display offsets.
+// Existing numeric display directions/distances/peel are retained ONLY for eligible
+// candidates. They remain an illustrative choice requiring separate source/reference/
+// native review; they are not physiological detachment measurements. Physical rest,
+// rig, weights, pose, force/controller state and the display-transform formula are unchanged.
+// R174 handles bounds/order/applied first-vertex bookkeeping, not anatomical masks,
+// directions or real-reference/native acceptance.
 
-/** Textbook layer of each muscle base name (side words removed): S superficial, I intermediate, D deep. */
+/** Historical producer textbook letters, retained for generation provenance; not anatomical qualification. */
 export const BODY_LAYER_TEXTBOOK = Object.freeze({
   // shoulder and arm
   'deltoid': 'S', 'biceps brachii': 'S', 'triceps brachii': 'S', 'brachialis': 'D', 'coracobrachialis': 'D',
@@ -2180,7 +2198,7 @@ export const BODY_LAYER_TEXTBOOK = Object.freeze({
 export const BODY_LAYER_PIECE_TEXTBOOK = Object.freeze({
   'medial head of triceps brachii': 'D', 'ulnar head of pronator teres': 'D', 'short head of biceps femoris': 'D'
 });
-/** Classification rule and detachment size (see the section comment). */
+/** Historical producer exposure thresholds and unchanged display sizes; not anatomical qualification. */
 export const BODY_LAYER_RULE = Object.freeze({
   metric: 'topExposure: mean share of the muscle\'s own silhouette that is front-most, over its best quarter of 128 directions (source pose, 1 mm pixels)',
   superficialAtLeast: Object.freeze({ S: 0.3, I: 0.6, D: 0.9 }),
@@ -2208,10 +2226,10 @@ export function muscleLayerKey(name) {
   return { side, piece, base, unit, textbook };
 }
 
-/** 'superficial' | 'deep' for a textbook layer (S/I/D) and a unit score (topExposure); deep when either is unknown. */
-export function bodyLayerClass(textbook, score) {
-  const at = BODY_LAYER_RULE.superficialAtLeast[textbook];
-  return at !== undefined && Number.isFinite(score) && score >= at ? 'superficial' : 'deep';
+/** Exact-ID regional classification. Legacy calls with only S/I/D + a score now return unclassified.
+ * Exposure is diagnostic display data, never a substitute for selected-part anatomical evidence. */
+export function bodyLayerClass(id) {
+  return regionalLayerQualification(id).layer;
 }
 
 /** Detachment distance (mm) for a unit volume in cm^3 (see BODY_LAYER_RULE.offset). */
@@ -2221,17 +2239,25 @@ export function bodyLayerOffsetMm(volumeCm3) {
   return Math.round(clamp(o.perCubeRootMm * Math.cbrt(volumeCm3 * 1000), o.minMm, o.maxMm) * 10) / 10;
 }
 
-/** Layer record of one mesh id from the generated table, or null: { id, unit, layer, textbook, score (piece),
- * unitScore, offsetMm, dir, hinge, axis, peelDeg } (unit geometry in the source frame, mm; dir/axis unit vectors). */
+/** Regional anatomy and display parameters are separate. Missing IDs return an explicit
+ * unclassified zero-offset record. Numeric parameters remain the unchanged producer values
+ * only for qualified outer candidates with a generated selected display record. */
 export function bodyLayerRecord(id) {
-  const row = BODY_LAYER_TABLE[id];
-  if (!row) return null;
-  const [unit, score] = row;
-  const u = BODY_LAYER_UNITS[unit];
-  if (!u) return null;
-  const [layer, textbook, unitScore, volumeCm3, offsetMm, dir, hinge, axis, peelDeg] = u;
-  // The table rounds to 4 decimals; renormalise so every detachment matrix is exactly rigid.
-  return Object.freeze({ id, unit, layer: layer === 's' ? 'superficial' : 'deep', textbook, score, unitScore, volumeCm3, offsetMm, dir: dir ? norm(dir) : null, hinge, axis: axis ? norm(axis) : null, peelDeg });
+  const q = regionalLayerQualification(id);
+  const row = typeof id === 'string' && Object.prototype.hasOwnProperty.call(BODY_LAYER_TABLE, id) ? BODY_LAYER_TABLE[id] : null;
+  const unit = row ? row[0] : null, score = row ? row[1] : null;
+  const u = unit && Object.prototype.hasOwnProperty.call(BODY_LAYER_UNITS, unit) ? BODY_LAYER_UNITS[unit] : null;
+  const [producerLayer, textbook, unitScore, volumeCm3, offsetMm, dir, hinge, axis, peelDeg] = u || [];
+  const displayEligible = q.candidate && producerLayer === 's';
+  return Object.freeze({ id: typeof id === 'string' ? id : null, unit, layer: q.layer,
+    regionalClass: q.regionalClass, qualification: q.qualification, ruleId: q.ruleId, referenceScope: q.referenceScope,
+    relativeDepth: q.relativeDepth, sourceIds: q.sourceIds, anatomicalCaveat: q.caveat,
+    catalogueSha256: q.catalogueSha256, displayEligible,
+    // Historical producer values are exposure diagnostics, not the anatomy class above.
+    producerLayer: producerLayer || null, textbook: textbook || null, score, unitScore: unitScore ?? null,
+    volumeCm3: volumeCm3 ?? null, offsetMm: displayEligible ? offsetMm : 0,
+    dir: displayEligible && dir ? norm(dir) : null, hinge: displayEligible ? hinge : null,
+    axis: displayEligible && axis ? norm(axis) : null, peelDeg: displayEligible ? peelDeg : 0 });
 }
 
 /** D (Float64Array(16), column-major) for a layer record whose dir/hinge/axis are in the frame wanted: rotate by
@@ -2246,7 +2272,7 @@ function layerMatrix(rec, amount, peel) {
 /** Source-frame detachment matrix of one mesh id (null when it is not a superficial muscle of the table). */
 export function bodyLayerMatrixSource(id, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
   const rec = bodyLayerRecord(id);
-  if (!rec || rec.layer !== 'superficial') return null;
+  if (!rec.displayEligible) return null;
   return layerMatrix(rec, amount, peel);
 }
 
@@ -2271,41 +2297,44 @@ function bakedRestMatrix(rig, baked, id) {
   return B.rigidRest[id] || null;
 }
 
-/**
- * Body Worlds layers for a rig (and its baked posture). Pass the result to poseBody(rig, targets, { baked, layers }).
- * @param options.amount 0..1 default amount (1 = fully detached; poseBody options.layerAmount overrides it per frame,
- *   for example to ease the Esc-page "Body Worlds layers: on / off" switch); options.peel 0..1 (default
- *   BODY_LAYER_RULE.peelDefault 0.5).
- * @returns frozen { kind: 'ns-body-layers', relativeTo: 'baked' | 'source', amount, peel, superficial: [ids],
- *   deep: [ids], unclassified: [muscle ids not in the table, left in place], units: { unit: { layer, ids, offsetMm,
- *   dir (drawn frame) } } }
- */
+/** Body Worlds display candidates under unchanged physical pose. The legacy deep list
+ * means scoped INTERMEDIATE_DEEP source relations, never a global whole-mesh layer.
+ * Anatomical lists remain separate from displaySelected/unavailable display geometry. */
 export function bodyWorldsLayers(rig, baked = null, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
   checkRig(rig);
   if (baked) checkBaked(rig, baked);
   if (!Number.isFinite(amount) || amount < 0 || amount > 1) throw new Error('ns:body_layers: amount must be in 0..1');
   if (!Number.isFinite(peel) || peel < 0 || peel > 1) throw new Error('ns:body_layers: peel must be in 0..1');
-  const recs = new Map(), superficial = [], deep = [], unclassified = [], units = {};
+  const recs = new Map(), superficial = [], deep = [], unclassified = [], displaySelected = [], unavailable = [];
+  const units = Object.create(null), byId = Object.create(null);
   for (const [id, info] of Object.entries(rig.meshSegment)) {
     if (info.kind !== 'muscle') continue;
     const rec = bodyLayerRecord(id);
-    if (!rec) { unclassified.push(id); continue; }
-    if (rec.layer !== 'superficial') { deep.push(id); continue; }
+    if (rec.layer === 'superficial') superficial.push(id);
+    else if (rec.layer === 'intermediate_deep') deep.push(id);
+    else unclassified.push(id);
+    const meta = { layer: rec.layer, regionalClass: rec.regionalClass, ruleId: rec.ruleId,
+      displaySelected: false, displayStatus: 'not-selected' };
+    byId[id] = meta;
+    if (!rec.displayEligible) { Object.freeze(meta); continue; }
     let r = rec;
     if (baked) {
       const M = bakedRestMatrix(rig, baked, id);
-      if (!M) { unclassified.push(id); continue; }
+      if (!M) { unavailable.push(id); meta.displayStatus = 'unavailable-geometry'; Object.freeze(meta); continue; }
       r = Object.freeze({ ...rec, dir: norm(m4Dir(M, rec.dir)), hinge: m4Point(M, rec.hinge), axis: rec.axis ? norm(m4Dir(M, rec.axis)) : null });
     }
     recs.set(id, r);
-    superficial.push(id);
+    displaySelected.push(id);
+    meta.displaySelected = true; meta.displayStatus = 'selected-target'; Object.freeze(meta);
     const u = units[rec.unit] || (units[rec.unit] = { layer: 'superficial', ids: [], offsetMm: rec.offsetMm, dir: round3(r.dir) });
     u.ids.push(id);
   }
   const out = {
     kind: 'ns-body-layers', relativeTo: baked ? 'baked' : 'source', amount, peel,
+    regionalCatalogueSha256: REGIONAL_LAYER_PROVENANCE.classificationDataSha256,
     superficial: Object.freeze(superficial), deep: Object.freeze(deep), unclassified: Object.freeze(unclassified),
-    units: deepFreezeRig(units)
+    displaySelected: Object.freeze(displaySelected), unavailable: Object.freeze(unavailable),
+    byId: Object.freeze(byId), units: deepFreezeRig(units)
   };
   Object.defineProperty(out, '_internal', { value: Object.freeze({ rig, baked, recs }), enumerable: false });
   return Object.freeze(out);
@@ -2487,7 +2516,7 @@ export const FACE_MUSCLE_PACKET = Object.freeze({
   id: 'face-muscles-r1',
   manifestUrl: 'packets/face-muscles-r1/FACE-MESH-MANIFEST.json',
   packetBase: 'packets/face-muscles-r1/',
-  expectedManifestSha256: '80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113' // R5-integrate-core: R5-face's accepted manifest (W2)
+  expectedManifestSha256: '19bf7bc6f52859584c35bd1b3ee5c144240020d8a9217e5bd2a34847d9ee6a05' // Curated face metadata; mesh bytes unchanged; production gates remain separate.
 });
 /** rig_hint values an extra face/jaw packet entry may use (segments of this rig's head). */
 export const EXTRA_PACKET_HINTS = Object.freeze(['skull', 'mandible', 'hyoid', 'cervical', 'thorax', 'r_girdle', 'l_girdle']);
@@ -2678,11 +2707,11 @@ export function excludeGenitalAnatomy(entries) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // BEGIN GENERATED DATA (U3b-body generator over packet bodyparts3d-fullbody-r1; regenerate, do not hand-edit)
-// Source: inputs/FULLBODY-MESH-MANIFEST.json sha256 e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82 and its 294 meshes,
+// Source: inputs/FULLBODY-MESH-MANIFEST.json sha256 5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406 and its 294 meshes,
 // parsed with ns-obj parseObj and passed through buildBodyRig (geometry path). REFERENCE_JOINTS holds the geometric
 // estimates (axes are re-derived at build time); REFERENCE_MUSCLE_BLENDS the aggregate distance-rule blends;
 // FULLBODY_MUSCLE_CATALOG [id, lower-case source name, laterality, centroid y mm] for every muscle mesh.
-export const REFERENCE_MANIFEST_SHA256 = 'e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82';
+export const REFERENCE_MANIFEST_SHA256 = '5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406';
 export const REFERENCE_JOINTS = deepFreezeRig({
   lumbosacral: {"point":[-0.386,-50.605,926.766],"method":"midpoint L5 centroid / sacral-top centroid","bones":["fifth lumbar vertebra","sacrum"]},
   thoracolumbar: {"point":[-1.053,-59.051,1062.428],"method":"midpoint T12 / L1 centroids","bones":["twelfth thoracic vertebra","first lumbar vertebra"]},
@@ -2969,10 +2998,10 @@ export const FULLBODY_MUSCLE_CATALOG = deepFreezeRig([
 
 // ---------------------------------------------------------------------------------------------------------------------
 // BEGIN GENERATED LAYER DATA (R5-body layers-gen.mjs; regenerate, do not hand-edit)
-// Source: classify.mjs over inputs/FULLBODY-MESH-MANIFEST.json sha256 e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82 and inputs/MESH-MANIFEST.json
-// sha256 0275d915148e8af4da678cd828cb577aa5e7293ffa5ef48e3786247e4ba11448; face muscles (R5-fix): the same run with packets/face-muscles-r1/FACE-MESH-MANIFEST.json sha256 80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113 added;
-// 128 directions, 1 mm pixels, source pose. Rule and sizes: BODY_LAYER_RULE.
-// BODY_LAYER_TABLE: id -> [unit, piece topExposure]. BODY_LAYER_UNITS: unit -> [layer s|d, textbook, unit score, volume cm3,
+// Source: classify.mjs over inputs/FULLBODY-MESH-MANIFEST.json sha256 5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406 and inputs/MESH-MANIFEST.json
+// sha256 b01fc738dbc3e3c7fb31faf46550a6e3c3bb3263da46f40bdbddb3239f89b529; 128 directions, 1 mm pixels, source pose. Rule and sizes: BODY_LAYER_RULE.
+// Historical producer display data, NOT anatomical qualification. BODY_LAYER_TABLE: id -> [unit, piece topExposure].
+// BODY_LAYER_UNITS: unit -> [producer display code s|d, textbook, unit score, volume cm3,
 //   offset mm, outer normal (source frame), peel hinge (mm), peel axis, peel deg at peel 1] (geometry null for deep units).
 export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1466M: ["left abductor digiti minimi of hand",0.9976],
@@ -2988,15 +3017,10 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1444M: ["left biceps femoris (short head)",0.224],
   FJ1486M: ["left brachialis",0.385],
   FJ1487M: ["left brachioradialis",0.9694],
-  "zf-buccinator-l": ["left buccinator",0.1324],
   FJ1488M: ["left coracobrachialis",0.1132],
-  "zf-corrugator-supercilii-l": ["left corrugator supercilii",0],
   FJ1467M: ["left deltoid",0.988],
   FJ1468M: ["left deltoid",0.9775],
   FJ1513M: ["left deltoid",0.8985],
-  "zf-depressor-anguli-oris-l": ["left depressor anguli oris",0.5086],
-  "zf-depressor-labii-inferioris-l": ["left depressor labii inferioris",0.2696],
-  "zf-depressor-septi-nasi-l": ["left depressor septi nasi",0.1467],
   FJ1555: ["left digastric",0.6046],
   FJ1560: ["left digastric",0.5827],
   FJ1578: ["left digastric",0.5096],
@@ -3031,39 +3055,21 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1419M: ["left gluteus medius",0.6611],
   FJ1422M: ["left iliacus",0.2626],
   FJ1500M: ["left infraspinatus",0.3785],
-  "zf-lateral-pterygoid-superior-l": ["left lateral pterygoid",0.3585],
-  "zf-lateral-pterygoid-inferior-l": ["left lateral pterygoid",0.1651],
-  "zf-levator-anguli-oris-l": ["left levator anguli oris",0.1829],
-  "zf-levator-labii-superioris-l": ["left levator labii superioris",0.3924],
-  "zf-levator-labii-superioris-alaeque-nasi-l": ["left levator labii superioris alaeque nasi",0.541],
   FJ1532M: ["left levator scapulae",0.1815],
   FJ1510M: ["left lumbricals of hand",0.3478],
-  "zf-masseter-superficial-l": ["left masseter",0.6018],
-  "zf-masseter-deep-l": ["left masseter",0.3068],
-  "zf-medial-pterygoid-l": ["left medial pterygoid",0.2907],
-  "zf-mentalis-l": ["left mentalis",0.1749],
   FJ1562: ["left mylohyoid",0.3949],
-  "zf-nasalis-l": ["left nasalis",0.8019],
-  "zf-frontalis-l": ["left occipitofrontalis",0.936],
-  "zf-occipitalis-l": ["left occipitofrontalis",1],
   FJ1482M: ["left opponens digiti minimi of hand",0.446],
   FJ1501M: ["left opponens pollicis",0.5398],
-  "zf-orbicularis-oculi-orbital-l": ["left orbicularis oculi",0.7986],
-  "zf-orbicularis-oculi-palpebral-l": ["left orbicularis oculi",0.945],
-  "zf-orbicularis-oris-l": ["left orbicularis oris",0.9436],
   FJ1511M: ["left palmar interossei of hand",0.1477],
   FJ1502M: ["left palmaris longus",0.9709],
   FJ1447M: ["left pectoralis major",0.7524],
   FJ1464M: ["left pectoralis major",0.8835],
   FJ1446M: ["left pectoralis major",0.2737],
-  "zf-platysma-l": ["left platysma",0.8568],
-  "zf-procerus-l": ["left procerus",0.1312],
   FJ1503M: ["left pronator quadratus",0.3368],
   FJ1474M: ["left pronator teres",0.5187],
   FJ1516M: ["left pronator teres (ulnar head)",0.0187],
   FJ1431M: ["left psoas major",0.2773],
   FJ1433M: ["left rectus femoris",0.8439],
-  "zf-risorius-l": ["left risorius",0.8644],
   FJ1434M: ["left sartorius",0.9639],
   FJ1435M: ["left semimembranosus",0.4858],
   FJ1436M: ["left semitendinosus",0.8971],
@@ -3073,8 +3079,6 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1504M: ["left subscapularis",0.0239],
   FJ1505M: ["left supinator",0.0024],
   FJ1506M: ["left supraspinatus",0.0105],
-  "zf-temporalis-l": ["left temporalis",0.3648],
-  "zf-temporoparietalis-l": ["left temporoparietalis",0.9839],
   FJ1507M: ["left teres major",0.6646],
   FJ1508M: ["left teres minor",0.246],
   FJ1439M: ["left tibialis anterior",0.9454],
@@ -3087,8 +3091,6 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1441M: ["left vastus intermedius",0.0142],
   FJ1442M: ["left vastus lateralis",0.9318],
   FJ1443M: ["left vastus medialis",0.6789],
-  "zf-zygomaticus-major-l": ["left zygomaticus major",0.3654],
-  "zf-zygomaticus-minor-l": ["left zygomaticus minor",0.7379],
   FJ1466: ["right abductor digiti minimi of hand",0.996],
   FJ1483: ["right abductor pollicis brevis",0.9768],
   FJ1484: ["right abductor pollicis longus",0.3379],
@@ -3102,15 +3104,10 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1444: ["right biceps femoris (short head)",0.2242],
   FJ1486: ["right brachialis",0.386],
   FJ1487: ["right brachioradialis",0.9688],
-  "zf-buccinator-r": ["right buccinator",0.1275],
   FJ1488: ["right coracobrachialis",0.1243],
-  "zf-corrugator-supercilii-r": ["right corrugator supercilii",0],
   FJ1467: ["right deltoid",0.9889],
   FJ1468: ["right deltoid",0.9789],
   FJ1513: ["right deltoid",0.8983],
-  "zf-depressor-anguli-oris-r": ["right depressor anguli oris",0.5033],
-  "zf-depressor-labii-inferioris-r": ["right depressor labii inferioris",0.2656],
-  "zf-depressor-septi-nasi-r": ["right depressor septi nasi",0.1358],
   FJ1556: ["right digastric",0.5763],
   FJ1579: ["right digastric",0.5337],
   FJ1509: ["right dorsal interossei of hand",0.8389],
@@ -3144,38 +3141,20 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1419: ["right gluteus medius",0.6608],
   FJ1422: ["right iliacus",0.2629],
   FJ1500: ["right infraspinatus",0.3779],
-  "zf-lateral-pterygoid-superior-r": ["right lateral pterygoid",0.3101],
-  "zf-lateral-pterygoid-inferior-r": ["right lateral pterygoid",0.1551],
-  "zf-levator-anguli-oris-r": ["right levator anguli oris",0.2708],
-  "zf-levator-labii-superioris-r": ["right levator labii superioris",0.3635],
-  "zf-levator-labii-superioris-alaeque-nasi-r": ["right levator labii superioris alaeque nasi",0.5068],
   FJ1510: ["right lumbricals of hand",0.3459],
-  "zf-masseter-superficial-r": ["right masseter",0.5979],
-  "zf-masseter-deep-r": ["right masseter",0.3076],
-  "zf-medial-pterygoid-r": ["right medial pterygoid",0.2905],
-  "zf-mentalis-r": ["right mentalis",0.1638],
   FJ1583: ["right mylohyoid",0.3917],
-  "zf-nasalis-r": ["right nasalis",0.7642],
-  "zf-frontalis-r": ["right occipitofrontalis",0.9473],
-  "zf-occipitalis-r": ["right occipitofrontalis",1],
   FJ1482: ["right opponens digiti minimi of hand",0.4298],
   FJ1501: ["right opponens pollicis",0.5468],
-  "zf-orbicularis-oculi-orbital-r": ["right orbicularis oculi",0.7832],
-  "zf-orbicularis-oculi-palpebral-r": ["right orbicularis oculi",0.945],
-  "zf-orbicularis-oris-r": ["right orbicularis oris",0.9433],
   FJ1511: ["right palmar interossei of hand",0.146],
   FJ1502: ["right palmaris longus",0.9715],
   FJ1447: ["right pectoralis major",0.7485],
   FJ1464: ["right pectoralis major",0.8832],
   FJ1446: ["right pectoralis major",0.2759],
-  "zf-platysma-r": ["right platysma",0.8887],
-  "zf-procerus-r": ["right procerus",0.1409],
   FJ1503: ["right pronator quadratus",0.3352],
   FJ1474: ["right pronator teres",0.5182],
   FJ1516: ["right pronator teres (ulnar head)",0.0191],
   FJ1431: ["right psoas major",0.2715],
   FJ1433: ["right rectus femoris",0.844],
-  "zf-risorius-r": ["right risorius",0.8666],
   FJ1434: ["right sartorius",0.9654],
   FJ1435: ["right semimembranosus",0.4822],
   FJ1436: ["right semitendinosus",0.8929],
@@ -3185,8 +3164,6 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1504: ["right subscapularis",0.0296],
   FJ1505: ["right supinator",0.0029],
   FJ1506: ["right supraspinatus",0.0098],
-  "zf-temporalis-r": ["right temporalis",0.3811],
-  "zf-temporoparietalis-r": ["right temporoparietalis",0.9816],
   FJ1507: ["right teres major",0.672],
   FJ1508: ["right teres minor",0.2463],
   FJ1439: ["right tibialis anterior",0.9453],
@@ -3198,9 +3175,7 @@ export const BODY_LAYER_TABLE = deepFreezeRig({
   FJ1480: ["right triceps brachii (medial head)",0.216],
   FJ1441: ["right vastus intermedius",0.0144],
   FJ1442: ["right vastus lateralis",0.9333],
-  FJ1443: ["right vastus medialis",0.6794],
-  "zf-zygomaticus-major-r": ["right zygomaticus major",0.3593],
-  "zf-zygomaticus-minor-r": ["right zygomaticus minor",0.7224]
+  FJ1443: ["right vastus medialis",0.6794]
 });
 export const BODY_LAYER_UNITS = deepFreezeRig({
   "left abductor digiti minimi of hand": ["s","S",0.9976,1.78,3,[-0.646,-0.7377,0.1959],[233.8,-133.8,794.4],[-0.753,0.658,-0.0053],2.59],
@@ -3214,13 +3189,8 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "left biceps femoris (short head)": ["d","D",0.224,67.82,0,null,null,null,0],
   "left brachialis": ["d","D",0.385,76.72,0,null,null,null,0],
   "left brachioradialis": ["s","S",0.9694,79.09,6.4,[0.7491,-0.6073,0.2646],[221.9,-60.6,1150.4],[-0.6351,-0.772,0.026],1.05],
-  "left buccinator": ["d","D",0.1324,1.37,0,null,null,null,0],
   "left coracobrachialis": ["d","D",0.1132,21.05,0,null,null,null,0],
-  "left corrugator supercilii": ["d","D",0,0.2,0,null,null,null,0],
   "left deltoid": ["s","S",0.9461,318.42,10.2,[0.8979,0.0355,0.4388],[108.9,-65.6,1355.4],[0.0131,-0.9985,0.0541],3.08],
-  "left depressor anguli oris": ["s","S",0.5086,0.9,3,[0.8073,-0.5312,-0.2571],[35.9,-150,1463.8],[-0.407,-0.8166,0.4092],3.93],
-  "left depressor labii inferioris": ["d","I",0.2696,0.95,0,null,null,null,0],
-  "left depressor septi nasi": ["d","I",0.1467,0.19,0,null,null,null,0],
   "left digastric": ["s","S",0.5357,3.09,3,[0.3703,0.0781,-0.9256],[0.4,-146.7,1419.3],[-0.7053,0.6721,-0.2255],1.4],
   "left dorsal interossei of hand": ["d","D",0.8347,4.07,0,null,null,null,0],
   "left extensor carpi radialis brevis": ["s","S",0.4168,19.77,4.1,[0.6241,0.7768,-0.0843],[234,-48.4,1077.5],[0.7714,-0.5954,0.2245],0.76],
@@ -3249,33 +3219,19 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "left gluteus medius": ["s","I",0.6611,210.18,8.9,[0.9362,-0.3509,0.0183],[94.4,-56.7,950.7],[-0.3465,-0.9306,-0.1176],3.01],
   "left iliacus": ["d","D",0.2626,121.25,0,null,null,null,0],
   "left infraspinatus": ["d","D",0.3785,106.32,0,null,null,null,0],
-  "left lateral pterygoid": ["d","D",0.262,1.29,0,null,null,null,0],
-  "left levator anguli oris": ["d","I",0.1829,0.2,0,null,null,null,0],
-  "left levator labii superioris": ["s","S",0.3924,0.38,3,[0.6477,-0.7612,0.0345],[31.5,-158.8,1507.8],[-0.5315,-0.4189,0.7362],4.78],
-  "left levator labii superioris alaeque nasi": ["s","S",0.541,0.1,3,[0.7451,-0.5987,0.294],[12.1,-166.8,1516.7],[-0.6466,-0.7564,0.0985],5.95],
   "left levator scapulae": ["d","D",0.1815,12.97,0,null,null,null,0],
   "left lumbricals of hand": ["d","I",0.3478,2.31,0,null,null,null,0],
-  "left masseter": ["s","S",0.4799,9.06,3.1,[0.9767,-0.1116,-0.1832],[60.4,-117.1,1510.1],[-0.0831,-0.9841,0.1568],2.43],
-  "left medial pterygoid": ["d","D",0.2907,2.68,0,null,null,null,0],
-  "left mentalis": ["d","I",0.1749,0.13,0,null,null,null,0],
   "left mylohyoid": ["d","I",0.3949,1.85,0,null,null,null,0],
-  "left nasalis": ["s","S",0.8019,0.44,3,[0.8539,-0.459,0.2454],[1.8,-178.9,1532.3],[-0.4243,-0.8869,-0.1826],4.23],
-  "left occipitofrontalis": ["s","S",0.9553,11.33,3.4,[0.8434,-0.5256,0.1111],[26.8,-179,1571.9],[-0.009,-0.2207,-0.9753],1.01],
   "left opponens digiti minimi of hand": ["d","D",0.446,0.98,0,null,null,null,0],
   "left opponens pollicis": ["d","D",0.5398,2.02,0,null,null,null,0],
-  "left orbicularis oculi": ["s","S",0.8358,4.93,3,[0.512,-0.8439,-0.16],[8.2,-171.2,1530],[-0.2909,0.0049,-0.9567],3.28],
-  "left orbicularis oris": ["s","S",0.9436,3.04,3,[0.6186,-0.7851,0.0305],[19,-170.3,1480.6],[-0.7591,-0.5872,0.281],3.85],
   "left palmar interossei of hand": ["d","D",0.1477,0.85,0,null,null,null,0],
   "left palmaris longus": ["s","S",0.9709,15.74,3.8,[-0.2669,-0.9539,0.1375],[181.9,-81.9,1055.7],[-0.9344,0.2212,-0.2794],0.64],
   "left pectoralis major": ["s","S",0.7713,467.1,11.6,[0.4331,-0.8171,0.3805],[13.6,-227.7,1180.3],[0.6503,-0.009,-0.7596],2.8],
-  "left platysma": ["s","S",0.8568,33.16,4.8,[0.6587,-0.5939,0.4619],[108.7,-57.7,1321.4],[0.1236,0.691,0.7122],1.43],
-  "left procerus": ["d","S",0.1312,0.4,0,null,null,null,0],
   "left pronator quadratus": ["d","D",0.3368,6.55,0,null,null,null,0],
   "left pronator teres": ["s","S",0.5187,12.14,3.4,[0.0039,-0.9886,0.1506],[191,-82.1,1066.7],[-0.894,-0.0709,-0.4425],1.19],
   "left pronator teres (ulnar head)": ["d","D",0.0187,4.94,0,null,null,null,0],
   "left psoas major": ["d","D",0.2773,172.93,0,null,null,null,0],
   "left rectus femoris": ["s","S",0.8439,345.6,10.5,[0.3178,-0.9477,0.0285],[127.1,-110.8,870.3],[-0.9456,-0.3146,0.0833],1.08],
-  "left risorius": ["s","S",0.8644,0.68,3,[0.7623,-0.5733,-0.3003],[28.1,-160.2,1465.2],[-0.3759,-0.0145,-0.9265],5.28],
   "left sartorius": ["s","S",0.9639,69.01,6.2,[-0.1914,-0.9806,-0.0418],[113.8,-131.9,903.3],[-0.9739,0.1844,0.1324],0.56],
   "left semimembranosus": ["d","I",0.4858,320.13,0,null,null,null,0],
   "left semitendinosus": ["s","S",0.8971,131.48,7.6,[-0.4776,0.8778,-0.0362],[45.4,-32,762.8],[0.8785,0.4765,-0.0345],0.9],
@@ -3285,8 +3241,6 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "left subscapularis": ["d","D",0.0239,46.49,0,null,null,null,0],
   "left supinator": ["d","D",0.0024,11.29,0,null,null,null,0],
   "left supraspinatus": ["d","D",0.0105,33.64,0,null,null,null,0],
-  "left temporalis": ["s","S",0.3648,19.48,4,[-0.994,0.0548,-0.0947],[40.2,-154.6,1497.6],[-0.1076,-0.6481,0.7539],1.68],
-  "left temporoparietalis": ["s","S",0.9839,21.14,4.1,[1,-0.0009,0.0041],[63,-109.9,1607],[0.0019,-0.7687,-0.6396],2.04],
   "left teres major": ["s","I",0.6646,37.44,5,[0.6316,0.6503,-0.4221],[169.1,-77.4,1274],[0.1473,-0.6352,-0.7582],2.08],
   "left teres minor": ["d","D",0.246,32.78,0,null,null,null,0],
   "left tibialis anterior": ["s","S",0.9454,110.91,7.2,[0.7447,-0.6652,-0.0536],[107.9,-78.2,353.2],[-0.6517,-0.7422,0.1567],1.04],
@@ -3296,8 +3250,6 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "left vastus intermedius": ["d","D",0.0142,251.33,0,null,null,null,0],
   "left vastus lateralis": ["s","S",0.9318,500.32,11.9,[0.975,0.1864,-0.121],[143,-85.3,784.8],[0.1928,-0.9803,0.0435],1.45],
   "left vastus medialis": ["s","S",0.6789,277.27,9.8,[-0.8409,-0.5397,0.0388],[94,-110.3,739.7],[-0.5393,0.8418,0.0212],1.41],
-  "left zygomaticus major": ["s","S",0.3654,0.69,3,[0.7887,-0.5612,-0.251],[54.1,-142.2,1505.9],[-0.368,-0.758,0.5385],2.97],
-  "left zygomaticus minor": ["s","S",0.7379,0.3,3,[0.4658,-0.8831,0.0554],[49.6,-151.2,1506.9],[-0.4712,-0.1946,0.8603],3.37],
   "right abductor digiti minimi of hand": ["s","S",0.996,1.78,3,[0.5859,-0.7867,0.1947],[-233.8,-133.8,794.4],[-0.8005,-0.5992,-0.0124],2.59],
   "right abductor pollicis brevis": ["s","S",0.9768,1.82,3,[-0.0779,-0.7701,0.6332],[-262.5,-129,809.1],[-0.7632,0.4547,0.4592],2.84],
   "right abductor pollicis longus": ["d","D",0.3379,15.94,0,null,null,null,0],
@@ -3309,13 +3261,8 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "right biceps femoris (short head)": ["d","D",0.2242,68.6,0,null,null,null,0],
   "right brachialis": ["d","D",0.386,76.71,0,null,null,null,0],
   "right brachioradialis": ["s","S",0.9688,79.1,6.4,[-0.7495,-0.6069,0.2645],[-221.9,-60.6,1150.4],[-0.6346,0.7724,-0.0262],1.05],
-  "right buccinator": ["d","D",0.1275,1.37,0,null,null,null,0],
   "right coracobrachialis": ["d","D",0.1243,21.05,0,null,null,null,0],
-  "right corrugator supercilii": ["d","D",0,0.2,0,null,null,null,0],
   "right deltoid": ["s","S",0.9466,318.43,10.2,[-0.8851,0.0567,0.462],[-108.8,-65.5,1355.4],[0.0281,0.9972,-0.0687],3.08],
-  "right depressor anguli oris": ["s","S",0.5033,0.9,3,[-0.8087,-0.5317,-0.2516],[-37.1,-150.1,1463.9],[-0.4096,0.816,-0.4079],3.93],
-  "right depressor labii inferioris": ["d","I",0.2656,0.95,0,null,null,null,0],
-  "right depressor septi nasi": ["d","I",0.1358,0.19,0,null,null,null,0],
   "right digastric": ["s","S",0.5441,3.06,3,[-0.5378,-0.1151,-0.8352],[-2.8,-150,1421.4],[-0.5388,-0.715,0.4454],1.39],
   "right dorsal interossei of hand": ["d","D",0.8389,4.07,0,null,null,null,0],
   "right extensor carpi radialis brevis": ["s","S",0.4131,19.77,4.1,[-0.6436,0.7612,-0.0802],[-234,-48.4,1077.5],[0.7554,0.6148,-0.2267],0.76],
@@ -3344,32 +3291,18 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "right gluteus medius": ["s","I",0.6608,211.23,8.9,[-0.9332,-0.3592,-0.0088],[-94.4,-56.8,950.7],[-0.3576,0.9261,0.1205],3.01],
   "right iliacus": ["d","D",0.2629,122.59,0,null,null,null,0],
   "right infraspinatus": ["d","D",0.3779,106.28,0,null,null,null,0],
-  "right lateral pterygoid": ["d","D",0.2327,1.29,0,null,null,null,0],
-  "right levator anguli oris": ["d","I",0.2708,0.2,0,null,null,null,0],
-  "right levator labii superioris": ["s","S",0.3635,0.38,3,[-0.6466,-0.7615,0.0454],[-32.5,-158.9,1507.9],[-0.5379,0.413,-0.7349],4.78],
-  "right levator labii superioris alaeque nasi": ["s","S",0.5068,0.1,3,[-0.7125,-0.6272,0.3146],[-13.1,-166.8,1516.8],[-0.68,0.7277,-0.0892],5.95],
   "right lumbricals of hand": ["d","I",0.3459,2.31,0,null,null,null,0],
-  "right masseter": ["s","S",0.4779,9.06,3.1,[-0.9911,-0.0898,-0.0986],[-61.6,-117.2,1510.3],[-0.0741,0.9855,-0.1525],2.43],
-  "right medial pterygoid": ["d","D",0.2905,2.68,0,null,null,null,0],
-  "right mentalis": ["d","I",0.1638,0.13,0,null,null,null,0],
   "right mylohyoid": ["d","I",0.3917,1.86,0,null,null,null,0],
-  "right nasalis": ["s","S",0.7642,0.44,3,[-0.8548,-0.4498,0.2588],[-2.8,-178.9,1532.3],[-0.4145,0.8919,0.1809],4.23],
-  "right occipitofrontalis": ["s","S",0.9632,11.33,3.4,[-0.8428,-0.5252,0.1177],[-27.7,-179.1,1572],[-0.0016,0.2211,0.9753],1.01],
   "right opponens digiti minimi of hand": ["d","D",0.4298,0.98,0,null,null,null,0],
   "right opponens pollicis": ["d","D",0.5468,2.02,0,null,null,null,0],
-  "right orbicularis oculi": ["s","S",0.8243,4.93,3,[-0.4987,-0.8479,-0.1801],[-9.2,-171.2,1530],[-0.2972,-0.0279,0.9544],3.28],
-  "right orbicularis oris": ["s","S",0.9433,3.04,3,[-0.6099,-0.7911,0.0463],[-20.1,-170.4,1480.6],[-0.7681,0.5757,-0.2803],3.85],
   "right palmar interossei of hand": ["d","D",0.146,0.85,0,null,null,null,0],
   "right palmaris longus": ["s","S",0.9715,15.74,3.8,[0.2658,-0.9546,0.1347],[-182,-81.8,1055.7],[-0.9345,-0.2208,0.2793],0.64],
   "right pectoralis major": ["s","S",0.7708,469.44,11.7,[-0.4322,-0.8418,0.3232],[-13.5,-227.6,1180.6],[0.6298,-0.0253,0.7763],2.82],
-  "right platysma": ["s","S",0.8887,33.16,4.8,[-0.6641,-0.594,0.454],[-110.5,-57.9,1321.7],[0.1271,-0.6881,-0.7144],1.43],
-  "right procerus": ["d","S",0.1409,0.4,0,null,null,null,0],
   "right pronator quadratus": ["d","D",0.3352,6.55,0,null,null,null,0],
   "right pronator teres": ["s","S",0.5182,12.14,3.4,[0.0383,-0.9923,0.1181],[-191,-82.1,1066.7],[-0.8944,0.0187,0.4469],1.19],
   "right pronator teres (ulnar head)": ["d","D",0.0191,4.94,0,null,null,null,0],
   "right psoas major": ["d","D",0.2715,173.68,0,null,null,null,0],
   "right rectus femoris": ["s","S",0.844,347.63,10.5,[-0.3234,-0.9456,0.035],[-127.1,-110.8,870.3],[-0.9438,0.3197,-0.0833],1.08],
-  "right risorius": ["s","S",0.8666,0.68,3,[-0.7659,-0.5713,-0.2949],[-29.3,-160.2,1465.3],[-0.3698,0.0162,0.929],5.28],
   "right sartorius": ["s","S",0.9654,70.23,6.2,[0.2164,-0.9754,-0.0426],[-113.7,-131.9,903.3],[-0.9688,-0.2091,-0.1328],0.56],
   "right semimembranosus": ["d","I",0.4822,321.34,0,null,null,null,0],
   "right semitendinosus": ["s","S",0.8929,132.76,7.7,[0.478,0.8773,-0.0435],[-45.4,-31.9,762.8],[0.8783,-0.4768,0.0344],0.91],
@@ -3379,8 +3312,6 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "right subscapularis": ["d","D",0.0296,46.49,0,null,null,null,0],
   "right supinator": ["d","D",0.0029,11.3,0,null,null,null,0],
   "right supraspinatus": ["d","D",0.0098,33.65,0,null,null,null,0],
-  "right temporalis": ["s","S",0.3811,19.48,4,[0.9965,0.0333,-0.0762],[-41.3,-154.7,1497.7],[-0.0793,0.6568,-0.7499],1.68],
-  "right temporoparietalis": ["s","S",0.9816,21.14,4.1,[-0.9999,-0.0082,0.0147],[-63.9,-110.1,1607.2],[0.0031,0.7687,0.6396],2.04],
   "right teres major": ["s","I",0.672,37.44,5,[-0.6096,0.6295,-0.4819],[-169.1,-77.4,1274.1],[0.1003,0.6642,0.7408],2.08],
   "right teres minor": ["d","D",0.2463,32.78,0,null,null,null,0],
   "right tibialis anterior": ["s","S",0.9453,112.3,7.2,[-0.7427,-0.6672,-0.0572],[-107.9,-78.2,353.2],[-0.6533,0.7407,-0.1566],1.04],
@@ -3389,8 +3320,6 @@ export const BODY_LAYER_UNITS = deepFreezeRig({
   "right triceps brachii (medial head)": ["d","D",0.216,64.15,0,null,null,null,0],
   "right vastus intermedius": ["d","D",0.0144,252.22,0,null,null,null,0],
   "right vastus lateralis": ["s","S",0.9333,502.85,11.9,[-0.9755,0.1833,-0.122],[-143,-85.3,784.8],[0.1898,0.9809,-0.0437],1.45],
-  "right vastus medialis": ["s","S",0.6794,279.08,9.8,[0.8335,-0.5506,0.0456],[-94.1,-110.3,739.7],[-0.5502,-0.8347,-0.0224],1.41],
-  "right zygomaticus major": ["s","S",0.3593,0.69,3,[-0.7971,-0.5514,-0.2459],[-55.2,-142.3,1506],[-0.3629,0.7631,-0.5347],2.97],
-  "right zygomaticus minor": ["s","S",0.7224,0.3,3,[-0.4639,-0.8838,0.0601],[-50.6,-151.4,1507.1],[-0.4754,0.1911,-0.8588],3.37]
+  "right vastus medialis": ["s","S",0.6794,279.08,9.8,[0.8335,-0.5506,0.0456],[-94.1,-110.3,739.7],[-0.5502,-0.8347,-0.0224],1.41]
 });
 // END GENERATED LAYER DATA

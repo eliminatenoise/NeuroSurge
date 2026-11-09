@@ -241,7 +241,7 @@ const CITATIONS = [
   cite('MUELLBACHER2001', '10.1097/00004691-200111000-00005', true, 'Muellbacher W, Boroojerdi B, Ziemann U, Hallett M', 2001,
     'Analogous corticocortical inhibition and facilitation in ipsilateral and contralateral human motor cortex representations of the tongue', 'J Clin Neurophysiol (2001)',
     'DOI resolved (doi.org -> ovid.com) and abstract summary from a search index, 2026-11-08: focal TMS evoked ipsilateral and contralateral tongue responses, with lower thresholds contralaterally.',
-    'Tongue: bilateral corticobulbar control with a contralateral advantage.'),
+    'Tongue: bilateral evoked muscle electrical responses and lower contralateral thresholds in a magnetic brain-stimulation study (abstract-level evidence only).'),
   cite('UAMS_UPPER', 'https://medicine.uams.edu/neuroscience/education/medical-school-courses/human-structure-module/anatomy-tables/muscle-tables/muscles-of-the-upper-limb/', true,
     'University of Arkansas for Medical Sciences, Department of Neuroscience', null, 'Muscles of the Upper Limb', 'official university anatomy table',
     'Accepted citation manifest with pinned snapshot; rows for pronator teres, pronator quadratus, supinator, biceps brachii (supinates, powerful only with the elbow flexed), pectoralis major, latissimus dorsi and coracobrachialis re-read 2026-11-08.',
@@ -361,8 +361,8 @@ function ctxFor(hemisphere) {
 }
 const both = n => [`left ${n}`, `right ${n}`];
 /** R5-text: how the technical text names the face packet, and the face regions' citations (ZANATOMY when loaded). */
-const FACE_PACKET_NAME = 'an extra face atlas (Z-Anatomy)';
-const FACE_PACKET_NAME_CAP = 'An extra face atlas (Z-Anatomy)';
+const FACE_PACKET_NAME = 'the face-muscle packet (face-muscles-r1)';
+const FACE_PACKET_NAME_CAP = 'The face-muscle packet (face-muscles-r1)';
 const faceCites = (c, keys) => (c.face ? [...keys, 'ZANATOMY'] : keys);
 const sided = (side, ...names) => names.map(n => `${side} ${n}`);
 
@@ -454,7 +454,7 @@ const CONTENT = {
     displayGroup: 'left_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
     actions: [],
     noActionReason: 'The left shoulder follows the camera look and W/A/S/D (the reach lane); it has no separate gaze action, so looking here only lights and marks the region.',
-    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is carried by your look and by W/A/S/D, so looking here lights and marks the region without adding a separate movement. Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the model has no latissimus dorsi mesh; when the palm turns (double-tap Space), the shoulder rotators (deltoid parts, subscapularis, teres major and minor, infraspinatus, pectoralis major) are coloured as a picture of normal joint movement, not as measured activation.',
+    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is carried by your look and by W/A/S/D, so looking here lights and marks the region without adding a separate movement. Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the anatomical mesh collection does not establish muscle recruitment. Shoulder activity here is simulated, not measured.',
     citationKeys: ['GORDON2023', 'BAWA2004', 'DEVANNE2006', 'UAMS_UPPER']
   } : {
     label: 'Right shoulder', shortLabel: 'R shoulder', effector: 'shoulder (right arm)', bodySide: 'right', medialSurface: false,
@@ -499,7 +499,7 @@ const CONTENT = {
     actions: [
       leftArm('pronation', 'Turn left palm down (pronation)', [], ['BIC'], [],
         ['left pronator teres', 'left pronator quadratus'], ['left supinator', 'left biceps brachii'],
-        'Pronator teres, pronator quadratus and supinator are not in the movement map\'s muscle list. The game tints these three meshes by name while the forearm turns (simulated display level, same colours); they are not movement-map muscles.'),
+        'Pronator teres, pronator quadratus and supinator have no catalog key in MOVEMENT-MAP r2 (ns-assets maps them to null). The game tints these three meshes by name while the forearm turns (simulated display level, same colours); they are not movement-map muscles.'),
       leftArm('supination', 'Turn left palm up (supination)', ['BIC'], [], [],
         ['left supinator', 'left biceps brachii'], ['left pronator teres', 'left pronator quadratus'],
         'Biceps brachii is a powerful supinator mainly when the elbow is flexed (UAMS).')
@@ -547,7 +547,11 @@ const CONTENT = {
     displayGroup: 'left_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
     actions: [
       leftArm('grasp_close', 'Grasp / close left hand', ['FDS', 'FDP', 'FPB', 'FPL', 'OP', 'ADP'], ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['ECRL', 'ECRB', 'ECU', 'LUM', 'DI', 'PI'],
-        null, null, 'Extensors are listed as relatively reduced in the movement map; strong power grip can co-activate extensor digitorum (Motawar 2012), so show them as not elevated rather than suppressed.'),
+        null, null, 'Extensors are listed as relatively reduced, as in MOVEMENT-MAP r2. The display multiplies their simulated ' +
+          'level by (1 - 0.9 * a), a = the grasp display level, so a full fist alone takes them from the 0.08 rest level to ' +
+          '0.008 (unitless). The factor is a display convention, not a measured grip law, EMG or force. Real power grip can ' +
+          'co-activate the extensors: Motawar 2012 recorded extensor digitorum activity during maximal isometric power grip (right ' +
+          'hand, right-handed adults; map-delta D07). This virtual left-hand display is an illustrative extrapolation.'),
       leftArm('relax_release', 'Relax / release left grasp', [], ['FDS', 'FDP', 'FPB', 'FPL', 'ED', 'EI', 'EDM', 'EPB', 'EPL'], [],
         null, null, 'Release lowers flexor and extensor drive; it is not active extension and not cortical silence (Motawar 2012).'),
       leftArm('open_hand', 'Open left hand', ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['FDS', 'FDP', 'FPB', 'FPL'], ['LUM', 'DI', 'PI'],
@@ -690,8 +694,7 @@ const CONTENT = {
     displayGroup: 'face', pathway: 'corticobulbar', laterality: 'contralateral_predominant',
     actions: [
       { id: `${c.code}_lip_purse`, label: 'Purse the lips', joints: { lip_purse: 15 },
-        // R5-fix (review SL5-6): the two halves by side, so the crossed side can show the stronger level (lateralBias).
-        agonists: both('half of orbicularis oris'), antagonists: [...both('zygomaticus major'), ...both('risorius')], lateralBias: c.S }
+        agonists: ['orbicularis oris'], antagonists: [...both('zygomaticus major'), ...both('risorius')], lateralBias: c.S }
     ],
     explanation: `Lip area of the ${c.H} hemisphere, where orbicularis oris purses the lips. Corticobulbar fibres reach the facial nucleus, with a crossed predominance for the lower face (Morecraft 2001). ${c.face
       ? `BodyParts3D 4.0 has no orbicularis oris mesh; ${FACE_PACKET_NAME} adds it, so the game colours it with the simulated display level, and the lips do not move.`
@@ -702,14 +705,12 @@ const CONTENT = {
     label: 'Jaw', shortLabel: 'Jaw', effector: 'jaw opening and closing', bodySide: 'midline', medialSurface: false,
     displayGroup: 'face', pathway: 'corticobulbar', laterality: 'bilateral_contralateral_bias',
     actions: [
-      // R5-fix (review SL5-6): opening is the INFERIOR head of the lateral pterygoid (the superior head steadies the jaw
-      // joint and works mainly while closing), and the crossed side shows the stronger level (lateralBias, as the card says).
       { id: `${c.code}_jaw_open`, label: 'Open the jaw', joints: { jaw_open: 18 },
-        agonists: [...both('lateral pterygoid').map(n => `inferior head of ${n}`), 'anterior belly of left digastric', 'anterior belly of right digastric', ...both('mylohyoid')],
-        antagonists: [...both('masseter'), ...both('temporalis'), ...both('medial pterygoid')], lateralBias: c.S },
+        agonists: [...both('lateral pterygoid'), 'anterior belly of left digastric', 'anterior belly of right digastric', ...both('mylohyoid')],
+        antagonists: [...both('masseter'), ...both('temporalis'), ...both('medial pterygoid')] },
       { id: `${c.code}_jaw_clench`, label: 'Clench the jaw', joints: { jaw_open: 0 },
         agonists: [...both('masseter'), ...both('temporalis'), ...both('medial pterygoid')],
-        antagonists: [...both('lateral pterygoid').map(n => `inferior head of ${n}`), 'anterior belly of left digastric', 'anterior belly of right digastric'], lateralBias: c.S,
+        antagonists: [...both('lateral pterygoid'), 'anterior belly of left digastric', 'anterior belly of right digastric'], lateralBias: c.S,
         note: c.face
           ? `Masseter, temporalis and the medial pterygoid come from ${FACE_PACKET_NAME} and are coloured with the simulated display level; the jaw is already closed at rest, so clenching shows no movement, and bite force is not modelled.`
           : 'Masseter, temporalis and the medial pterygoid have no BodyParts3D 4.0 mesh and the jaw is already closed at rest, so clenching shows no movement and no colour; bite force is not modelled.' }
@@ -722,12 +723,9 @@ const CONTENT = {
   tongue: c => ({
     label: 'Tongue', shortLabel: 'Tongue', effector: 'tongue protrusion', bodySide: 'midline', medialSurface: false,
     displayGroup: 'face', pathway: 'corticobulbar', laterality: 'bilateral_contralateral_bias',
-    actions: [
-      { id: `${c.code}_tongue_out`, label: 'Push the tongue out', joints: { jaw_open: 6 },
-        agonists: ['genioglossus'], antagonists: ['styloglossus', 'hyoglossus'], lateralBias: c.S,
-        note: 'The body rig has no tongue and genioglossus has no BodyParts3D 4.0 mesh: the jaw opens slightly (game convention) and nothing is coloured.' }
-    ],
-    explanation: `Tongue area of the ${c.H} hemisphere, at the centre of the mouth zone (Gordon 2023), where genioglossus pushes the tongue out. Corticobulbar fibres reach the hypoglossal nucleus from both hemispheres, with lower thresholds from the crossed side (Muellbacher 2001). The rig has no tongue and genioglossus has no mesh${c.face ? ` (${FACE_PACKET_NAME} has only face and chewing muscles)` : ''}, so by game convention the jaw opens slightly and nothing is coloured. Swallowing and the larynx are not modelled.`,
+    actions: [],
+    noActionReason: 'Tongue movement is not ready in this loaded rig. Selecting this region can light and mark the brain area. A suitable tongue model and checked motion are still needed.',
+    explanation: `Representative tongue area of the ${c.H} hemisphere within the mouth zone (Gordon 2023). A human magnetic brain-stimulation study reported evoked tongue-muscle electrical responses on both sides, with lower thresholds on the opposite side (Muellbacher 2001; abstract-level evidence). These responses do not specify normal tongue motion or a precise movement command here. This loaded rig has no qualified tongue movement or tongue-muscle display. Selecting the region can light and mark the brain area; tongue function remains unfinished. Swallowing and the larynx are not modelled.`,
     citationKeys: ['GORDON2023', 'MUELLBACHER2001', 'PENFIELD1937', 'UAMS_HEADNECK']
   }),
   scan_inferior: c => ({
@@ -803,7 +801,7 @@ const REGION_CAVEATS = {
   lower_face: c => (c.face ? FACE_COLOUR_ONLY : NO_FACE_MUSCLES),
   lips: c => (c.face ? FACE_COLOUR_ONLY : NO_FACE_MUSCLES),
   jaw: c => (c.face ? 'The jaw is already closed at rest, so clenching shows colour but no movement.' : 'The clenching muscles have no mesh, so clenching shows no movement and no colour.'),
-  tongue: () => 'The rig has no tongue: by game convention the jaw opens slightly and nothing is coloured.',
+  tongue: () => 'Tongue movement and tongue-muscle colour changes are not ready in this loaded rig.',
   scan_inferior: () => SCAN_CAVEAT
 };
 
@@ -975,9 +973,9 @@ const PLAIN_REGION = {
   }),
   tongue: c => ({
     plainLabel: 'Tongue',
-    plainLead: `This spot in ${half(c)} tells your tongue to push out.`,
-    plainMoves: 'Opens your jaw a little, because the 3D body has no tongue.',
-    plainCaveat: 'The 3D body has no tongue. So the jaw opens a little instead, and nothing gets coloured.'
+    plainLead: `This marked area in ${half(c)} represents tongue movement.`,
+    plainMoves: 'No tongue movement or muscle colour change. This area can still light up and keep an activation mark.',
+    plainCaveat: 'Tongue movement still needs to be built and checked in this 3D body.'
   }),
   scan_inferior: () => ({
     plainLabel: 'In-between area (lower)',
@@ -1047,7 +1045,6 @@ const PLAIN_ACTION = {
   // R3-fix (review SL-8): the lateral pterygoid is itself a chewing muscle; the closers are the jaw-closing chewing muscles.
   jaw_open: c => ({ plainLabel: 'Open the jaw', pull: c.face ? 'muscles under the chin and one deep chewing muscle (digastric, pterygoid)' : 'muscles under the chin and one deep chewing muscle', relax: c.face ? 'jaw-closing (chewing) muscles (masseter, temporalis)' : 'jaw-closing (chewing) muscles' }),
   jaw_clench: c => ({ plainLabel: 'Clench the jaw', pull: c.face ? 'jaw-closing (chewing) muscles (masseter, temporalis)' : 'jaw-closing (chewing) muscles', relax: c.face ? 'muscles under the chin and one deep chewing muscle (digastric, pterygoid)' : 'muscles under the chin and one deep chewing muscle' }),
-  tongue_out: () => ({ plainLabel: 'Stick the tongue out', pull: 'the main tongue muscle', relax: 'muscles that pull the tongue back' })
 };
 
 /** Key of PLAIN_ACTION for an action id ('rh_knee_flex' -> 'knee_flex', 'lh_r_grasp' -> 'r_grasp', 'grasp_close'). */
@@ -1069,14 +1066,10 @@ const LEG_PATH_PLAIN = c => `The long fibres from here cross to the other side a
 const ARM_PATH_PLAIN = (what, terms = '') => `Its fibres cross over and reach the nerve cells for ${what} in the neck part ` +
   `of the spinal cord (crossed corticospinal fibres, cervical motor neurons${terms}).`;
 const SIM_SIGNAL = 'a made-up signal (simulated)';
-/** R5-fix (review SL5-4, R27): the same words as ns-actions ROTATION_FOLLOW_TEXT / ns-text ROTATION_FOLLOW.full. */
-const ROTATION_FOLLOW_PLAIN = 'When your palm turns, your upper arm turns at the shoulder too, more when the elbow is straight. ' +
-  'Your shoulder blade and upper body follow a little. This shows normal joint movement in this game; it is not a measurement.';
 const NO_FACE_LEVEL = 'So the game only keeps a made-up level here (a simulated display level): nothing on the face layer ' +
   'moves or changes colour.';
 // R5-text: with the face-muscle packet loaded (FACE_PACKET).
-// R5-fix (review SL5-7): no file or module ids, and no contradiction with "the main 3D body model has none".
-const FACE_SET_PLAIN = 'These face muscles come from a second free 3D anatomy atlas (an extra face atlas, Z-Anatomy).';
+const FACE_SET_PLAIN = 'The game now gets them from an extra set of 3D face muscles (the face-muscle packet, face-muscles-r1).';
 const SCAN_NETWORK = 'It belongs to a newly found network for planning actions (somato-cognitive action network, SCAN).';
 const SCAN_WEAK = 'In-between areas are only loosely tied to one movement (inter-effector regions show weak movement ' +
   'specificity).';
@@ -1138,10 +1131,7 @@ const PLAIN_DETAIL = {
       'from the same side (same-side input to proximal muscles such as the deltoid; Bawa 2004). In NeuroSurge, your look ' +
       'and the W/A/S/D keys already move the left shoulder. So looking here lights up and marks the area, but it adds no ' +
       'separate movement. Brain stimulation rarely moves the shoulder on its own (isolated shoulder movement; Gordon ' +
-      '2023). The 3D model has no wide back muscle (no latissimus dorsi mesh). When your palm turns (double-tap Space), ' +
-      'the muscles that turn the upper arm at the shoulder are coloured too. They include deltoid parts and the chest ' +
-      'muscle (subscapularis, teres major and minor, infraspinatus, pectoralis major). That is a picture of normal joint ' +
-      'movement in this game, not a measurement (not measured activation).',
+      '2023). Anatomical meshes do not establish which muscles join a movement (muscle recruitment). The activity shown here is simulated, not measured.',
     noAction: 'Your look and the W/A/S/D keys move the left shoulder (the reach lane). It has no separate look action ' +
       '(gaze action), so looking here only lights up and marks the area.'
   } : {
@@ -1279,7 +1269,7 @@ const PLAIN_DETAIL = {
       'belly of occipitofrontalis). Its fibres reach the face-nerve centre at the base of the brain (corticobulbar ' +
       'fibres, facial nucleus). The upper face gets signals from both halves of the brain (both hemispheres). That is ' +
       'why a stroke on the brain’s surface usually spares the forehead (cortical stroke; monkey tract tracing: Morecraft ' +
-      '2001). The main 3D body model has no face muscles for expressions (BodyParts3D 4.0 has no facial-expression muscles). ' +
+      '2001). The 3D body has no face muscles for expressions (BodyParts3D 4.0 has no facial-expression muscles). ' +
       `${c.face ? `${FACE_SET_PLAIN} So the game colours the forehead muscle on both sides with the made-up level ` +
         '(frontal belly of occipitofrontalis; simulated display level). The face shape does not change.' : NO_FACE_LEVEL} ` +
       'In brain scans, raising the eyebrows also switched on the in-between areas (fMRI; co-activated ' +
@@ -1289,10 +1279,10 @@ const PLAIN_DETAIL = {
     detail: `This is the eyelid area of ${BRAIN_HALF(c)}. Here the ring muscle around the eye closes the eyes ` +
       '(orbicularis oculi). Signals to the upper face come from both halves of the brain (corticobulbar input from both ' +
       'hemispheres; Morecraft 2001, in monkeys). ' + (c.face
-      ? `The main 3D body model has no ring muscle around the eye (BodyParts3D 4.0 has no orbicularis oculi). ${FACE_SET_PLAIN} So the ` +
+      ? `The 3D body has no ring muscle around the eye (BodyParts3D 4.0 has no orbicularis oculi). ${FACE_SET_PLAIN} So the ` +
         'game colours the ring muscles around both eyes with the made-up level (simulated display level). The eyelids do ' +
         'not move. '
-      : 'The main 3D body model has no ring muscle around the eye and no other face muscles ' +
+      : 'The 3D body has no ring muscle around the eye and no other face muscles ' +
         `for expressions (BodyParts3D 4.0 has no orbicularis oculi or other facial-expression muscle). ${NO_FACE_LEVEL} `) +
       'Opening the eyes (levator palpebrae superioris, oculomotor nerve) and blinking (blink reflexes) use separate ' +
       'circuits that are not simulated. Gordon 2023 lists eyelid movement among the moves an in-between area likes best ' +
@@ -1302,7 +1292,7 @@ const PLAIN_DETAIL = {
     detail: `This is the lower-face area of ${BRAIN_HALF(c)}. Here two cheek muscles lift the corner of the mouth ` +
       '(zygomaticus major and levator anguli oris). Most fibres to the lower face cross to the other side (corticobulbar ' +
       `fibres are mainly crossed; Morecraft 2001, in monkeys). So the ${c.S} mouth corner gets most of the signal from ` +
-      'this half (this hemisphere’s drive). The main 3D body model has none of these face muscles (BodyParts3D 4.0 has none of these ' +
+      'this half (this hemisphere’s drive). The 3D body has none of these face muscles (BodyParts3D 4.0 has none of these ' +
       `facial-expression muscles). ${c.face ? `${FACE_SET_PLAIN} So the game colours them on the ${c.S} side with the made-up ` +
         'level (simulated display level). The face shape does not change.' : NO_FACE_LEVEL} This only covers smiling on purpose (voluntary smiling). A smile from ` +
       'feelings also uses other pathways (emotional smiling, separate pathways).'
@@ -1310,7 +1300,7 @@ const PLAIN_DETAIL = {
   lips: c => ({
     detail: `This is the lip area of ${BRAIN_HALF(c)}. Here the ring muscle around the mouth purses the lips ` +
       '(orbicularis oris). Its fibres reach the face-nerve centre at the base of the brain (corticobulbar fibres, facial ' +
-      'nucleus). For the lower face, most of them cross over (crossed predominance; Morecraft 2001). The main 3D body model has no ' +
+      'nucleus). For the lower face, most of them cross over (crossed predominance; Morecraft 2001). The 3D body has no ' +
       `shape for the ring muscle around the mouth (BodyParts3D 4.0 has no orbicularis oris mesh). ${c.face ? `${FACE_SET_PLAIN} ` +
         'So the game colours the ring muscle around the mouth with the made-up level (simulated display level). The lips ' +
         'do not move.' : NO_FACE_LEVEL} ` +
@@ -1326,20 +1316,22 @@ const PLAIN_DETAIL = {
       ? 'In the game, opening swings the jaw on the see-through face layer (ghosted face layer). It colours two muscles ' +
         'under the chin and one deep chewing muscle (digastric, mylohyoid and lateral pterygoid). Clenching colours the ' +
         'jaw-closing muscles (masseter, temporalis and medial pterygoid). They come from an extra set of 3D face muscles ' +
-        '(an extra face atlas, Z-Anatomy). But clenching shows no movement, because the jaw is already closed at rest. '
+        '(the face-muscle packet, face-muscles-r1). But clenching shows no movement, because the jaw is already closed at rest. '
       : 'In the game, opening swings the jaw on the see-through face layer (ghosted face layer) and colours ' +
-        'two muscles under the chin (digastric and mylohyoid). The main 3D body model has no shape for the clenching muscles ' +
+        'two muscles under the chin (digastric and mylohyoid). The 3D body has no shape for the clenching muscles ' +
         '(the jaw-closing muscles masseter, temporalis and medial pterygoid, and the lateral pterygoid, have no BodyParts3D 4.0 mesh). So clenching shows no movement and no ' +
         'colour. ') + 'The chewing rhythm comes from the base of the brain (generated in the brainstem), and it is not modelled.'
   }),
   tongue: c => ({
-    detail: `This is the tongue area of ${BRAIN_HALF(c)}. It sits in the middle of the mouth zone (Gordon 2023). Here ` +
-      'the main tongue muscle pushes the tongue out (genioglossus). Fibres from both halves of the brain reach the ' +
-      'tongue-nerve centre at the base of the brain (corticobulbar fibres, hypoglossal nucleus, both hemispheres). The ' +
-      'tongue muscle on the other side responds to weaker magnetic pulses in brain tests (lower thresholds from the crossed side; Muellbacher 2001). The 3D body has ' +
-      `no tongue, and the tongue muscle has no shape (the rig has no tongue; genioglossus has no mesh${c.face ? '; an extra face atlas, Z-Anatomy, has only face and chewing muscles' : ''}). So, by a game rule, ` +
-      'the jaw opens a little and nothing is coloured (game convention). Swallowing and the voice box (larynx) are not ' +
-      'modelled.'
+    detail: `This marked area is a simplified tongue area in ${BRAIN_HALF(c)}, within the mouth zone (Gordon 2023). ` +
+      'A human study used magnetic brain stimulation and recorded electrical responses from tongue muscles on both ' +
+      'sides. Less stimulation was needed for a response on the opposite side (Muellbacher 2001; abstract only). ' +
+      'These are evoked electrical responses, not a measurement of normal tongue motion or a command for this game. ' +
+      'Tongue movement and tongue-muscle colour changes are not ready in this loaded 3D body. Selecting this region ' +
+      'can light the brain area and leave an activation mark. Tongue function remains unfinished. Swallowing and the ' +
+      'voice box (larynx) are not modelled.',
+    noAction: 'A suitable tongue model and checked motion are still needed in this 3D body. Selecting this region can ' +
+      'light and mark the brain area, without a tongue movement or tongue-muscle colour change.'
   }),
   scan_inferior: c => ({
     detail: `This is the lower in-between area (inferior inter-effector region). ${SCAN_NETWORK} It is the lowest of ` +
@@ -1348,7 +1340,7 @@ const PLAIN_DETAIL = {
       'centres). But a vowel-sound task for the voice box stayed inside the mouth zone (laryngeal vowel task). In the ' +
       'game, looking here lights up and marks the area, but it moves nothing. Swallowing, breathing and the voice box ' +
       '(larynx) are not simulated.',
-    noAction: `${SCAN_WEAK} The main 3D body model has no parts for swallowing and no voice box (swallowing and larynx are not in ` +
+    noAction: `${SCAN_WEAK} The 3D body has no parts for swallowing and no voice box (swallowing and larynx are not in ` +
       'the rig), so the game moves nothing here.'
   })
 };
@@ -1363,18 +1355,15 @@ const PLAIN_NOTE = {
     'muscles (quadriceps). Muscle force without movement is not modelled (isometric force).',
   r_elbow_extend: () => 'Your right elbow starts bent on the armrest, so this straightens it with the muscle at the back ' +
     'of the arm (triceps).',
-  // R5-fix (review SL5-4, R27): the palm turn also turns the upper arm at the shoulder (ns-actions ROTATION_FOLLOW_TEXT).
-  pronation: () => `${ROTATION_FOLLOW_PLAIN} ` + 'The three forearm-turning muscles (pronator teres, pronator quadratus and supinator) are not in the ' +
-    'game’s movement map (they are not in its muscle list). While the forearm turns, the ' +
+  pronation: () => 'The three forearm-turning muscles (pronator teres, pronator quadratus and supinator) are not in the ' +
+    'game’s movement map (no catalog key in MOVEMENT-MAP r2; ns-assets maps them to null). While the forearm turns, the ' +
     'game colours these three 3D muscles by name, in the same colours (simulated display level; meshes). They are not ' +
     'movement-map muscles.',
-  supination: () => `${ROTATION_FOLLOW_PLAIN} ` + 'The biceps turns the palm up strongly, mainly when the elbow is bent (biceps brachii is a powerful ' +
+  supination: () => 'The biceps turns the palm up strongly, mainly when the elbow is bent (biceps brachii is a powerful ' +
     'supinator mainly when the elbow is flexed; UAMS).',
   r_supinate: () => 'Your right palm starts facing mostly down (mostly pronated), so this turns it up.',
-  grasp_close: () => 'The muscles that straighten the fingers are listed as working less, as in the movement map ' +
-    '(extensors listed as relatively reduced in the movement map). But a strong grip can switch them on too (strong ' +
-    'power grip can co-activate extensor digitorum; Motawar 2012). So the game shows them as not raised, ' +
-    'rather than switched off (not elevated rather than suppressed).',
+  grasp_close: () => 'When the hand makes a fist, the game lowers the displayed activity of the muscles that straighten the fingers. ' +
+    'Real hard grips can activate these muscles too (Motawar 2012).',
   relax_release: () => 'Letting go lowers the signal to the muscles that bend and straighten the fingers (flexor and ' +
     'extensor drive). It is not an active straightening, and the brain does not go quiet (not active extension and not ' +
     'cortical silence; Motawar 2012).',
@@ -1391,21 +1380,19 @@ const PLAIN_NOTE = {
   eye_close: () => 'The muscle that lifts the eyelid (levator palpebrae superioris) gets its signals through a different ' +
     'nerve (the oculomotor nerve, a separate pathway).',
   smile: c => (c.face
-    ? 'These muscles come from a second free 3D anatomy atlas (an extra face atlas, Z-Anatomy). The smile is ' +
+    ? 'These muscles come from an extra set of 3D face muscles (the face-muscle packet, face-muscles-r1). The smile is ' +
       `only a made-up level (a simulated display level), shown as colour on the ${c.S} cheek muscles. The face shape does ` +
       `not move. The ${c.S} side gets most of the signal from this half (this hemisphere’s drive).`
     : 'The 3D body has no shape for these muscles (BodyParts3D 4.0 has no mesh for them). The smile is only a ' +
       `made-up level (a simulated display level), and nothing moves or is coloured. The ${c.S} side would get most of the ` +
       'signal from this half (this hemisphere’s drive).'),
   jaw_clench: c => (c.face
-    ? 'The jaw-closing muscles come from a second free 3D anatomy atlas (masseter, temporalis and the medial pterygoid; ' +
-      'an extra face atlas, Z-Anatomy). They are coloured with the made-up level (simulated display level). The ' +
+    ? 'The jaw-closing muscles come from an extra set of 3D face muscles (masseter, temporalis and the medial pterygoid; ' +
+      'the face-muscle packet, face-muscles-r1). They are coloured with the made-up level (simulated display level). The ' +
       'jaw is already closed at rest, so clenching shows no movement. Bite force is not modelled.'
     : 'The clenching muscles have no 3D shape (masseter, temporalis and the medial pterygoid have no ' +
       'BodyParts3D 4.0 mesh). The jaw is also already closed at rest. So clenching shows no movement and no colour. Bite ' +
       'force is not modelled.'),
-  tongue_out: () => 'The 3D body has no tongue, and the main tongue muscle has no shape (the body rig has no tongue; ' +
-    'genioglossus has no BodyParts3D 4.0 mesh). So the jaw opens a little (game convention) and nothing is coloured.'
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1487,8 +1474,9 @@ function buildRegions({ faceLoaded = false } = {}) {
 
 /**
  * Build the whole-body motor map (deep-frozen). faceLoaded (R5-text): true = the face-muscle packet is in the build, so
- * the face regions say their muscles light up and cite ZANATOMY; false = the round-4 map, byte-identical. BODY_MOTOR_MAP
- * is buildBodyMotorMap({ faceLoaded: FACE_MUSCLES_LOADED }); the helpers below (regionById, ...) index that one.
+ * the face regions say their muscles light up and cite ZANATOMY; false = the face-unloaded text variant. Both variants
+ * keep the unfinished tongue regions without motor actions. BODY_MOTOR_MAP is built with FACE_MUSCLES_LOADED; the
+ * helpers below (regionById, ...) index that default map.
  */
 export function buildBodyMotorMap({ faceLoaded = false } = {}) {
   return deepFreeze({
@@ -1554,7 +1542,7 @@ export function regionAtU(hemisphere, u) {
 }
 
 /** The action of `region` whose uCentre is nearest u (ties go to the earlier action), or null when the region has no
- * actions (inter-effector regions and the left shoulder). */
+ * actions (inter-effector regions, the left shoulder and the unfinished tongue regions). */
 export function actionAtU(region, u) {
   if (!region || !region.actions.length || !Number.isFinite(u)) return null;
   let best = region.actions[0], bd = Math.abs(u - best.uCentre);
@@ -1605,27 +1593,19 @@ export function composeBodyJointTargets(entries = []) {
  * antagonistGain (a low display floor, not inhibition data). Per name the maximum wins. ns-body maps names to mesh ids
  * with muscleNameMatches. Unitless display values, not EMG or force.
  */
-export function namedMuscleDrives(entries = [], { antagonistGain = 0.08, stabilizerGain = 0.3, otherSideGain = LATERAL_DISPLAY.otherSideGain } = {}) {
+export function namedMuscleDrives(entries = [], { antagonistGain = 0.08, stabilizerGain = 0.3 } = {}) {
   const out = {};
   const put = (n, v) => { if (v > 0 && (!(n in out) || v > out[n])) out[n] = v; };
   for (const e of entries) {
     const hit = e && ACTION_INDEX.get(e.actionId);
     if (!hit) continue;
     const level = Math.min(1, Math.max(0, Number(e.level) || 0));
-    // R5-fix (review SL5-6): an action with a lateralBias side ('left' | 'right': the body side this hemisphere mainly
-    // drives, e.g. the crossed side for the jaw, lips and lower face) shows the named muscles of the OTHER side at
-    // otherSideGain of the level (a display choice; unsided names are unchanged).
-    const bias = hit.action.lateralBias === 'left' || hit.action.lateralBias === 'right' ? hit.action.lateralBias : null;
-    const k = n => { if (!bias) return 1; const w = String(n).toLowerCase().split(/\s+/); const sd = w.includes('left') ? 'left' : w.includes('right') ? 'right' : null; return sd && sd !== bias ? otherSideGain : 1; };
-    for (const n of hit.action.agonists) put(n, level * k(n));
-    for (const n of hit.action.stabilizers || []) put(n, level * stabilizerGain * k(n));
-    for (const n of hit.action.antagonists) put(n, level * antagonistGain * k(n));
+    for (const n of hit.action.agonists) put(n, level);
+    for (const n of hit.action.stabilizers || []) put(n, level * stabilizerGain);
+    for (const n of hit.action.antagonists) put(n, level * antagonistGain);
   }
   return out;
 }
-/** R5-fix (review SL5-6): the display level of the less-driven side for actions with a lateralBias (simulated, unitless;
- * a display choice: both sides get signals, the crossed side the stronger one). */
-export const LATERAL_DISPLAY = Object.freeze({ otherSideGain: 0.6 });
 
 // Muscle-name matching against BodyParts3D concept names ("long head of left biceps brachii", "set of dorsal
 // interossei of left hand", "left infraspinatus muscle").

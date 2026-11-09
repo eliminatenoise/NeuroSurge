@@ -1235,7 +1235,7 @@ export function createActivity({
   displayDecayTau = DISPLAY_ENVELOPE.decayTau, gazeDeadbandDeg = GAZE_RESTART_DEADBAND_DEG, reach: reachOverrides,
   bodyMap = DEFAULT_BODY_MAP, bodyJointLimits = null, reachJoint: reachJointOverrides,
   doubleTapSeconds = DOUBLE_TAP_SECONDS, rotationSeconds = ROTATION.commandSeconds, rotationTau = ROTATION.poseTau,
-  defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg,
+  defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg, initialBrainPlacement = null,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
   resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL
 } = {}) {
@@ -1268,6 +1268,9 @@ export function createActivity({
   const jointOpts = reachJointOptions(reachJointOverrides);
   const orbitOpts = orbitLimits(orbitOverrides);
   const grabLimitRad = grabPitchLimitDeg * DEG;
+  const initialPlacement = initialBrainPlacement === null ? { yaw: 0, pitch: 0 } : initialBrainPlacement;
+  if (!initialPlacement || typeof initialPlacement !== 'object' || Object.keys(initialPlacement).some(k => k !== 'yaw' && k !== 'pitch') || !Number.isFinite(initialPlacement.yaw) || !Number.isFinite(initialPlacement.pitch) || Math.abs(initialPlacement.pitch) > grabLimitRad) fail('activity_option', 'initialBrainPlacement needs finite radians within the existing grab pitch limit');
+  const ownedInitialPlacement = Object.freeze({ yaw: initialPlacement.yaw, pitch: initialPlacement.pitch });
   const options = Object.freeze({
     ...timing, gazeDeadbandDeg, reach: reachOpts, reachJoint: jointOpts, defaultRotation, orbit: orbitOpts,
     grabPitchLimitDeg, introSeconds, escLockDedupeSeconds, resumeOnLock, bodyJointLimits: limitsBody,
@@ -1333,7 +1336,7 @@ export function createActivity({
       rotationSeq: 0,          // count of double-tap toggles
       spaceTapAt: null,        // activity time of the previous Space press in an open double-tap chain
       wasdJoint: { shoulder: 0, elbow: 0, wrist: 0, hand: 0 }, // WASD coordinated joint display channels
-      brainPlacement: { yaw: 0, pitch: 0 },   // radians: dragged offset from the default brain placement
+      brainPlacement: { ...ownedInitialPlacement }, // constructor-owned radians; zero when absent
       brainGrab: noGrab(),     // { active, startYaw, startPitch (camera at grab), originYaw, originPitch (placement) }
       grabSeq: 0,
       orbit: { yaw: 0, pitch: 0 },            // degrees around the default view (see ORBIT)
@@ -1622,10 +1625,7 @@ export function createActivity({
     }
     const g = resolveGaze(ev);
     if (hasDir) { s.gazeYaw = ev.yaw; s.gazePitch = ev.pitch; }
-    // R5-fix (review code F2): ev.holdGrab (the camera is easing between first and third person, so its look moves by
-    // itself) re-bases a held grab on this look instead of carrying the brain: the brain never moves by itself.
-    if (s.brainGrab.active && hasDir && ev.holdGrab === true) s.brainGrab = { ...s.brainGrab, startYaw: ev.yaw, startPitch: ev.pitch, originYaw: s.brainPlacement.yaw, originPitch: s.brainPlacement.pitch };
-    else if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
+    if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
     // Silent: explicit seed (first frame, re-frame), the frame after an orbit/grab release/resume/reset, while paused,
     // and while dragging the brain (the gaze moves with the brain, so nothing new was looked at).
     const silent = ev.seed === true || s.seedNextGaze || s.paused || s.brainGrab.active;

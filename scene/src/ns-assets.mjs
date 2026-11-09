@@ -401,9 +401,7 @@ export const LICENCE_LINKS = Object.freeze({
 /** What this game changes (CC BY 4.0 section 3(a)(1)(B): indicate modifications). */
 // R4-fix (review SL4-6): Picture quality Low (and Auto at its cheapest levels) draws vertex-clustered, simplified copies
 // of the glass-brain and full-body meshes at run time; say so, like the muscle bending.
-// R5-fix (review SL5-2): round 5 adds two display-only changes, stated in plain words: the Body Worlds layers (the outer
-// muscles moved out a few millimetres and tilted slightly) and the mirror-image copy of the body behind the brain.
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The outer muscles are moved out a few millimetres and tilted slightly (display only), and a mirror-image copy of the body is drawn behind the brain. The OBJ files themselves are unmodified.';
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 
@@ -490,7 +488,7 @@ function validateInternal(manifest) {
   }
   if (!Array.isArray(manifest)) fail('asset_manifest', 'manifest must be an object with assets[] or an array of entries');
   const seenIds = new Set(), seenPaths = new Set();
-  const arm = [], brain = [], excluded = [], order = [];
+  const arm = [], brain = [], excluded = [], girdle = [], order = [];
   manifest.forEach((raw, index) => {
     const e = snapshotEntry(raw, index);
     const id = e.element_id;
@@ -518,6 +516,7 @@ function validateInternal(manifest) {
     if (role.kind !== kind) fail('asset_group', `${id}: manifest group says ${kind}, the contract records ${role.kind}`);
     if (has(SHOULDER_GIRDLE_INFO, id)) {
       excluded.push(Object.freeze({ id, reason: SHOULDER_GIRDLE_INFO[id].reason }));
+      girdle.push(e); // Deferred fixed-body domain only; not arm fit / initial load order.
       return;
     }
     arm.push(e);
@@ -527,7 +526,7 @@ function validateInternal(manifest) {
   for (const [id] of BONES) if (!armIds.has(id)) fail('asset_missing_bone', `${id} (${SEGMENT_OF[id].name}) is required by SEGMENT_OF`);
   const brainIds = new Set(brain.map(e => e.element_id));
   for (const [role, id] of Object.entries(BRAIN)) if (!brainIds.has(id)) fail('asset_missing_brain', `${id} (${role}) is required in the brain group`);
-  return { arm: Object.freeze(arm), brain: Object.freeze(brain), excluded: Object.freeze(excluded), order };
+  return { arm: Object.freeze(arm), brain: Object.freeze(brain), excluded: Object.freeze(excluded), girdle: Object.freeze(girdle), order };
 }
 
 /** Validate a parsed MESH-MANIFEST.json array.
@@ -536,6 +535,91 @@ function validateInternal(manifest) {
 export function validateManifest(manifest) {
   const { arm, brain, excluded } = validateInternal(manifest);
   return { arm, brain, excluded };
+}
+
+// R244: a separate body input domain from the unchanged75-record arm view-model.
+// Five muscle hints are ipsilateral counterparts of current right-side full-body metadata.
+// Levator's cervical/girdle hint is a proposed anatomical inference requiring source/reference qualification.
+const GIRDLE_BODY_HINTS = Object.freeze({
+  FJ3279: Object.freeze({ region: 'torso', hint: 'l_girdle', basis: 'existing-body-bone-name-classification' }),
+  FJ3237: Object.freeze({ region: 'torso', hint: 'l_girdle', basis: 'existing-body-bone-name-classification' }),
+  FJ1532M: Object.freeze({ region: 'torso', hint: Object.freeze(['cervical', 'l_girdle']), basis: 'proposed-anatomical-inference;source-reference-qualification-pending' }),
+  FJ1506M: Object.freeze({ region: 'left_arm', hint: Object.freeze(['l_girdle', 'l_upperarm']), basis: 'left-counterpart-of-FJ1506-rig_hint;attachment-unvalidated' }),
+  FJ1500M: Object.freeze({ region: 'left_arm', hint: Object.freeze(['l_girdle', 'l_upperarm']), basis: 'left-counterpart-of-FJ1500-rig_hint;attachment-unvalidated' }),
+  FJ1504M: Object.freeze({ region: 'left_arm', hint: Object.freeze(['l_girdle', 'l_upperarm']), basis: 'left-counterpart-of-FJ1504-rig_hint;attachment-unvalidated' }),
+  FJ1507M: Object.freeze({ region: 'left_arm', hint: Object.freeze(['l_girdle', 'l_upperarm']), basis: 'left-counterpart-of-FJ1507-rig_hint;attachment-unvalidated' }),
+  FJ1508M: Object.freeze({ region: 'left_arm', hint: Object.freeze(['l_girdle', 'l_upperarm']), basis: 'left-counterpart-of-FJ1508-rig_hint;attachment-unvalidated' })
+});
+
+/** Select exactly8 original-packet records for the fixed body, never for hand fitting.
+ * The caller must bind this parsed source to the normal already-verified MESH-MANIFEST bytes.
+ * This is selection/classification metadata, not new assets, measured attachments or normal mechanics. */
+export function validateShoulderGirdleManifest(manifest, { excludeIds = [], deny = null } = {}) {
+  if (deny !== null && typeof deny !== 'function') fail('asset_args', 'deny must be a function or null');
+  const v = validateInternal(manifest);
+  const rawList = Array.isArray(manifest) ? manifest : manifest.assets;
+  const rawById = new Map(rawList.map(e => [e.element_id, e]));
+  const excluded = new Set(excludeIds), entries = [];
+  let bytes = 0;
+  for (const e of v.girdle) {
+    const id = e.element_id, role = SHOULDER_GIRDLE_INFO[id], meta = GIRDLE_BODY_HINTS[id];
+    if (!role || !meta || e.source_packet !== 'pov-demo-assets') fail('asset_girdle', `${id}: unexpected girdle source domain`);
+    if (excluded.has(id)) fail('asset_duplicate', `${id} is already loaded in another body/arm/brain input`);
+    denyCheck(deny, rawById.get(id), id, 'raw girdle names');
+    denyCheck(deny, e, id, 'girdle names');
+    if (e.name.toLowerCase() !== role.name.toLowerCase()) fail('asset_girdle', `${id}: source anatomical name differs from the exact girdle role`);
+    if (!isPositiveInt(e.vertices)) fail('asset_girdle', `${id}: source vertex count is required`);
+    const selected = Object.freeze({ ...e, kind: role.kind, region: meta.region, rig_hint: meta.hint,
+      girdle_body_role: 'left-shoulder-girdle', girdle_hint_basis: meta.basis,
+      normal_mechanics: 'UNVERIFIED' });
+    entries.push(selected); bytes += e.bytes;
+  }
+  if (entries.length !== SHOULDER_GIRDLE_EXCLUDED.length ||
+      SHOULDER_GIRDLE_EXCLUDED.some(id => !entries.some(e => e.element_id === id))) {
+    fail('asset_girdle', 'all8 exact shoulder-girdle records are required');
+  }
+  return { entries: Object.freeze(entries), counts: Object.freeze({ total: entries.length, bytes,
+    byKind: Object.freeze({ bone: 2, muscle: 6 }) }) };
+}
+
+/** The existing cancelable verification engine over the original source packet only.
+ * No priority work; no OBJ request before start(). Cancel prevents new starts, not completion of in-flight reads.
+ * All8 must verify; incomplete/cancelled/rejected output never becomes complete body input. */
+export function streamShoulderGirdleAssets({ manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null,
+  parse = parseObjFast, excludeIds = [], deny = null, concurrency = FULLBODY_DEFAULT_CONCURRENCY,
+  sliceMs = 0, yieldFn = null, now = defaultNow, onProgress = null } = {}) {
+  const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
+  if (!io || typeof parse !== 'function') return settledStream(INVALID('Girdle reader/hash/parser pair is required'));
+  let v, plan;
+  try {
+    v = validateShoulderGirdleManifest(manifest, { excludeIds, deny });
+    plan = fullbodyLoadPlan(v.entries, { priorityIds: [], bulkOrder: 'manifest' });
+  } catch (err) { return settledStream(INVALID(err)); }
+  const verify = async (entry, pair, parser, beforeParse) => {
+    const record = await verifyFullbody(entry, pair, parser, beforeParse);
+    checkParsed('arm', entry, record.mesh); // Preserve strict initial-source all-vertices-left check.
+    if (Array.isArray(record.mesh.comments)) for (const text of record.mesh.comments) denyCheck(deny, text, entry.element_id, 'OBJ header');
+    return record;
+  };
+  return streamCore({ v, plan, io, parse, verify, concurrency, allOrNothing: true, autoStart: false,
+    sliceMs, yieldFn, now, onProgress, onMesh: null, what: 'shoulder-girdle' });
+}
+
+/** Convert only a complete exact8 result to the existing body input interface. */
+export function shoulderGirdleAppInputs(manifest, result) {
+  if (!result || result.status !== 'complete' || !(result.meshes instanceof Map)) fail('app_body', 'Shoulder girdle was not completely verified');
+  const v = validateShoulderGirdleManifest(manifest);
+  if (result.meshes.size !== v.entries.length) fail('app_body', 'Shoulder girdle result must cover exactly8 records');
+  const meshesById = new Map();
+  for (const e of v.entries) {
+    const r = result.meshes.get(e.element_id);
+    if (!r || !r.entry || !r.mesh || r.entry.element_id !== e.element_id || r.entry.path !== e.path ||
+        r.entry.source_packet !== e.source_packet || r.entry.sha256 !== e.sha256 || r.entry.bytes !== e.bytes) {
+      fail('app_body', `${e.element_id}: shoulder-girdle result identity differs from validated source`);
+    }
+    meshesById.set(e.element_id, { positions: r.mesh.positions, indices: r.mesh.indices });
+  }
+  return { manifest, entries: v.entries, meshesById };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1215,7 +1299,7 @@ export const PACKET_SPECS = Object.freeze({
     frameRegions: Object.freeze(['head_face', 'neck']),
     frameMarginMm: 100,
     manifestPath: 'FACE-MESH-MANIFEST.json', // the name R5-face's packet and test use (packets/face-muscles-r1/)
-    manifestSha256: '80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113', // R5-integrate-core: R5-face's accepted manifest (W1)
+    manifestSha256: '19bf7bc6f52859584c35bd1b3ee5c144240020d8a9217e5bd2a34847d9ee6a05', // Curated face metadata; mesh bytes unchanged; production gates remain separate.
     frame: 'BodyParts3D 4.0 whole-body millimetres (+x subject left, +y posterior, +z superior), registered to the skull',
     licence: 'CC BY-SA 4.0 (share-alike meshes; the game code stays CC0)'
   })
@@ -1375,6 +1459,8 @@ export function validatePacketManifest(manifest, spec, { excludeIds = [], frameB
   let bytes = 0;
   manifest.assets.forEach((raw, i) => {
     const e = snapshotPacketEntry(raw, i, sp, frameBox);
+    // Keep raw aliases in scope when the snapshot replaces a name during normalization.
+    denyCheck(deny, raw, e.element_id, 'raw manifest names');
     denyCheck(deny, e, e.element_id, 'manifest names');
     if (seen.has(e.element_id)) fail('asset_duplicate', `duplicate ${sp.packet} element_id ${e.element_id}`);
     if (paths.has(e.path)) fail('asset_duplicate', `duplicate ${sp.packet} path ${e.path}`);

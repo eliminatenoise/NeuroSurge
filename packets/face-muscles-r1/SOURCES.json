@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "packet": "face-muscles-r1",
+  "source": {
+    "atlas": "Z-Anatomy, the open source (libre) 3D atlas of anatomy, built on BodyParts3D",
+    "file": "Resources/Models/FBX/MuscularSystem100.fbx",
+    "repository": "https://github.com/LluisV/Z-Anatomy",
+    "commit": "6c7f9016bd5899ac8edafd31b9900c151df42ed6",
+    "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx",
+    "git_blob_sha1": "2477e1b6caf97d7174762b5eec6cf1c80db64eed",
+    "sha256": "4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279",
+    "bytes": 37343180,
+    "fbx_version": 7400
+  },
+  "upstream_model_notice": {
+    "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/License.txt",
+    "local_copy": "LICENSES/Z-Anatomy-Model-Notice.txt",
+    "sha256": "af62c06f620b9da20138e4c22a3f56565482dd058266540994ace97a4e24b693"
+  },
+  "upstream_full_licence": {
+    "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/LICENSE",
+    "local_copy": "LICENSES/Z-Anatomy-License.txt",
+    "sha256": "5e7dd512c01cfb822e3253f8f8df923103a64e269deb9bb5303f23b2376cad46"
+  },
+  "upstream_authors_and_notices": {
+    "url": "https://raw.githubusercontent.com/Z-Anatomy/Models-of-human-anatomy/ca4ad71d24d05a6e81f8aeaadb96165c20dffc75/License.txt",
+    "local_copy": "LICENSES/Z-Anatomy-Authors-and-Notice.txt",
+    "sha256": "196b66b56551a862e59872f7cdb70e6d9a6ad84e9105962fca8ec28c14e97520",
+    "scope": "Author roles and project notice. This newer repository notice does not assert that its Blender model was used."
+  },
+  "upstream_export_caution": {
+    "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/Readme.txt",
+    "local_copy": "LICENSES/Z-Anatomy-Export-Readme.txt",
+    "sha256": "43eab2cd13ad8be51d20227cad78d427e6078cd91e66a24ae7f947811524c810",
+    "scope": "The pinned export may be out of date; no latest-version claim."
+  },
+  "software_and_asset_terms": {
+    "meshes": "CC BY-SA 4.0",
+    "project_owned_game_code": "Separate CC0 terms in the game bundle",
+    "three_js": "Separate MIT terms; complete notice at ../../vendor/LICENSE in the game bundle",
+    "bodyparts3d_current_notice": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html",
+    "bodyparts3d_historical_credit": "BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
+  },
+  "technical_source_references": [
+    {
+      "url": "https://help.autodesk.com/cloudhelp/2020/ENU/FBX-API-Reference/cpp_ref/class_fbx_system_unit.html",
+      "scope": "FBX unit-scale definition; source metadata alone does not validate anatomical units."
+    },
+    {
+      "url": "https://help.autodesk.com/cloudhelp/2020/ENU/FBX-API-Reference/cpp_ref/class_fbx_axis_system.html",
+      "scope": "FBX scene-axis semantics; not anatomical calibration."
+    }
+  ],
+  "original_metadata_hashes": {
+    "manifest": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+    "acquisition_record": "5e0be5d1d744f436f7578a2b7f0103783d626ced13db637cde3a3b1668342700",
+    "attribution": "c1519d0fc7605f640e79e7122d0f91a56992fd5d8d6e60d009c2eda083653627"
+  },
+  "source_version_and_access": "Pinned upstream version and existing source records are identified here. No new download or current upstream availability check forms part of this metadata revision.",
+  "licence_scope": "The selected facial derivatives follow the applicable source notice and retained exceptions. This is not a licence for every atlas object or a warranty of title/anatomical correctness.",
+  "recorded_source_retrieval_utc": {
+    "started": "2026-11-08T22:06:17.755Z",
+    "finished": "2026-11-08T22:06:21.638Z",
+    "scope": "Times recorded in the original download record; source identity is established by the pinned bytes/blob, not by a new availability check."
+  }
+}

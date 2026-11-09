@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'">
+<title>NeuroSurge</title>
+<link rel="stylesheet" href="./neurosurge.css">
+<link rel="stylesheet" href="./loading-r302.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<main id="ns-app" class="ns-app"
+      data-manifest-url="../../inputs/MESH-MANIFEST.json"
+      data-packet-pov-demo-assets="../../packets/pov-demo-assets/"
+      data-packet-pov-demo-assets-r2="../../packets/pov-demo-assets-r2/"
+      data-movement-map-url="../../inputs/MOVEMENT-MAP.json">
+  <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
+          aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."></canvas>
+  <div id="ns-hud" class="ns-hud-root"></div>
+  <div id="ns-shell-root" class="ns-shell-root"></div>
+  <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
+</main>
+<script type="module" src="./framing-b-r356.mjs"></script>
+</body>
+</html>

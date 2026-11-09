@@ -1,82 +1,15 @@
 # NeuroSurge
 
-Look at a motor area of a virtual brain and watch the corresponding muscles contract. NeuroSurge is a first-person browser game in development, built to make the connection between neural activity, muscle activity and movement visible.
+[Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/).
 
-**NeuroSurge is the sole active project.** Work on the separate NeuroTranslate model, papers and Interoceptomics is paused. This repository now holds the current playable build of the game, round 5 (see **Play it** below). The game is still being developed, and the repository does not offer an accepted trained model.
+Move an arm. Watch its muscles and movement-related brain regions light up together. NeuroSurge is a 3D browser game for exploring that connection: a skinless body, a movable brain overview, linked activation colours and keyboard, mouse and trackpad controls. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
-## Play it
+This is **experimental preview C410**, published 10 November 2026. The displayed signals and movement relationships are simulated and unitless. This build does not decode a person's neural activity, stimulate a brain, estimate validated muscle force or establish a precise functional motor map.
 
-You need [Node.js](https://nodejs.org/) 18 or newer and a desktop browser with WebGL 2.
+The current third-person view places the hand too low. Joint mechanics, whole-body coupling, motor-region registration, control coverage and timing remain incompletely validated. [Preview notes and controls](https://eliminatenoise.github.io/NeuroSurge/PREVIEW-NOTES.html) describe the current limits. Experimental publication is separate from passing the complete game's acceptance criteria.
 
-```sh
-git clone https://github.com/eliminatenoise/NeuroSurge
-cd NeuroSurge
-node serve-local.mjs
-```
+To run locally, use Node.js and `node serve-local.mjs`, then open the printed HTTP address. Opening the HTML from disk does not load the modules correctly. WebGL and JavaScript are required.
 
-Open the `http://127.0.0.1:<port>/` address it prints. Opening `index.html` straight from disk does not work, because browsers block the game's files on `file://` pages. Controls, Windows commands, known issues and troubleshooting are in the [player guide](PLAYER-GUIDE.md).
+Project code is CC0. BodyParts3D assets remain CC BY 4.0; Z-Anatomy facial derivatives remain CC BY-SA 4.0; Three.js remains MIT. [Credits and licences](CREDITS-AND-LICENCES.md) retain source notices and changes. No dataset author endorses the game.
 
-**This version:** round-5 build from development commit `5350637`, built 2026-11-09 10:57:15 UTC; distribution `content_sha256` `aca6785027fcb965aeb42b6113f8e04bf13b818e1f57deeff016697877a41699` (see `release-manifest.json`). New in this build: the brain is much bigger, so its motor areas fill most of the screen, and the glass around them is much more see-through; four 3D arrows sit around the brain like a compass (top, bottom, left, right) and bend toward you: click one to turn your view a step, or hold it to keep turning; press E to see your own back, and E again to go back to your own eyes; a mirror image of your body stands behind the brain and copies everything you do: drag the brain away with Space, then turn the mirror body with its own arrows; a soft glow joins a switched-on brain area to the muscles it moves (a picture of the game's link, not a nerve); the outer muscles are lifted a little, Body Worlds style, so the deeper ones show (this can be switched off on the Esc page); the face now has its face and chewing muscles (54 meshes from the Z-Anatomy atlas); and double-tapping Space to turn the palm now also turns the upper arm at the shoulder, with the body following. Tests: all 891 unit tests passed. The 52 end-to-end requirement checks on this exact build gave 47 passed, 4 failed and 1 undecided in test mode, and 45 passed, 5 failed and 2 undecided with real mouse and keyboard input. The trade-offs: the motor strip fills about three quarters of the usable screen width rather than the planned 80 % and is not exactly centred (two failed checks); on some portrait and phone-sized screens the compass arrows are not centred on their sides (two failed checks); with real input, lifting the outer muscles uncovered 1.19 times as much deep muscle in the look-down view where the check wants 1.2 (the fifth failed check; 1.29 in test mode); and the skull has no back part yet and the back has few deep muscles, both planned for the next round. Looking around runs at about 51 to 54 frames per second on a fast graphics card (60 when you stand still), and the game is slow without a graphics card. The undecided checks need real mouse movement or more precise aiming than the real-input run has. Details are in the player guide's "Known issues" section.
-
-**Licences:** project code CC0 1.0 ([LICENSE](LICENSE)); BodyParts3D anatomy meshes CC BY 4.0, © The Database Center for Life Science (DBCLS); the face and chewing muscle meshes in `packets/face-muscles-r1/` CC BY-SA 4.0 (share-alike), from Z-Anatomy ("Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"), which stay under that licence and are not covered by CC0; three.js MIT. See [CREDITS-AND-LICENCES.md](CREDITS-AND-LICENCES.md).
-
-**What it is not:** everything shown is simulated and unitless. Looking, clicking and keys are virtual game inputs, not real brain stimulation or decoding. NeuroTranslate 0.0 is a research model name, not a validated decoder, and nothing in this game is validated. NeuroSurge is not a medical device.
-
-## Planned view
-
-In the intended scene, your body stays in one place. You can look around it with a trackpad or mouse. The body shows bones and muscles, without skin or genitalia: the left upper arm, forearm and hand, and the torso, legs, head and right arm when you turn toward them.
-
-The left hand stays three quarters up the view, leaving room below it to see the arm. Looking around coordinates the shoulder and arm while keeping that screen position. A and D move the hand horizontally; W and S change how far it reaches. Every finger must stay inside the visible borders.
-
-A large, translucent brain floats ahead, beyond the hand's reach. Its motor areas are easier to see than the surrounding brain. The view generally keeps the front of the brain toward the top and the back toward the bottom, with enough tilt and adjustable viewing angle to reach the relevant motor areas.
-
-## Controls being implemented
-
-| Control | Intended response |
-| --- | --- |
-| Trackpad or mouse movement | Look around from a fixed body position. |
-| W / S | Reach forward / draw the left arm back. |
-| A / D | Move the left arm left / right within the view. |
-| Combined WASD keys | Move in both directions together, including diagonal reaches. |
-| Hold Space | Close all five digits, including the thumb, into a fist. |
-| Release Space | Open the hand promptly. |
-| Hold Space while looking at the brain | Carry the distant brain to a new position; release leaves it there. The hand never has to touch it. |
-| Double-tap Space | Turn the forearm between palm down and palm up: pronation and supination. |
-| Look at a displayed brain area | Trigger one second of simulated activity; a mapped motor area also drives its supported body response. |
-| Left or right click on an area | Trigger another one-second pulse. |
-| Look into empty space | No new gaze-triggered activity. |
-| Click a curved arrow outside the brain | Shift the viewing angle a little around the brain's current centre. Hold to continue; release to stop. |
-| Esc | Show instructions and pause interaction; press again to resume. |
-| Reset Body, in the Esc overlay | Return the body's joints to their starting pose. |
-
-All instructions appear for two seconds when the scene is ready. Orbit arrows act only when clicked or held; hovering does nothing, and the brain never spins on its own. Changing its viewing angle keeps its centre fixed. Carrying it with Space changes its position.
-
-Looking at any displayed brain area gives it a one-second visual pulse. Only areas with an evidence-supported movement map drive a body movement. A stationary gaze produces one pulse, then stops. A new qualifying look movement or click triggers another. WASD and Space also light the corresponding motor display. The brain and muscles share an activity colour scale, and previously activated brain areas retain a subtle change in shade and opacity, separate from the brief activity pulse.
-
-## More than the left arm
-
-Left-arm motor areas must be clearly distinguishable from those associated with the right arm, legs, torso and head or face. These other body parts respond to the brain display through looking and clicking; the keyboard controls only the left arm. Move the brain overview so you can see it and the responding body part together.
-
-A panel on the far right explains the selected area, the movement and muscles involved, and the limits of the mapping in plain language. Rendering, controls, simulation and these explanations run on the local computer. Hosting supplies the application files; gameplay does not depend on cloud rendering or a cloud request for each movement.
-
-## Specific movements, with their limits attached
-
-The intended left-arm actions include grasping, opening and spreading the fingers, wrist bending and straightening, and elbow bending and straightening. Finer movements belong where functional evidence supports them. Forearm turning needs coordinated motion of the radius and ulna (the two forearm bones), wrist and hand; rotating a picture of an arm cannot establish that anatomy.
-
-The left upper limb is predominantly controlled through pathways from the right side of the brain. Motor representations overlap and vary between people. A structural brain mesh alone cannot supply an exact movement map, and a region is not a universal button for one muscle. Each functional assignment needs evidence appropriate to its precision; missing mappings remain explicit.
-
-Colour represents **simulated activity**. Looking and pressing keys are virtual inputs. They do not stimulate a real brain, record muscle electrical activity or establish a validated brain decoder. Neural recordings, muscle electrical activity, contraction, mechanical forces and tracked displacement are different observations with different tests.
-
-## The larger project
-
-NeuroSurge makes a proposed connection tangible: a motor-control representation, a muscular response and visible movement. The separate [NeuroTranslation programme](https://github.com/eliminatenoise/NeuroTranslation) investigates how qualified neural, muscle, motion and mechanics datasets could support **NeuroTranslate 0.0**, the model name. The game's name is **NeuroSurge**. A running game will not by itself validate that broader model.
-
-[Interoceptomics](https://github.com/eliminatenoise/Interoceptomics) contains the presentation and explanatory work on internal-body sensing and neural connectivity. Its current selected draft remains available while development is paused.
-
-## Reuse and releases
-
-Each selected new release replaces the current files, with changes retained in Git history. Only reviewed drafts intended for production and qualified release materials belong here. Unreviewed working files, private account records and raw recordings are excluded.
-
-Project-owned contributions are dedicated under [CC0 1.0 Universal](LICENSE). Third-party anatomy and reference materials retain their own licences and credits. CC0 does not replace those terms or imply endorsement by an asset's author.
-
-[Terminology and project scope](PROJECT-CONTEXT.json).
+The broader NeuroTranslation programme aims to connect qualified neural, muscle and movement observations with explicit units, clocks, provenance and uncertainty. That research goal is distinct from the simulated game shown here. Separate NeuroTranslation development remains paused.

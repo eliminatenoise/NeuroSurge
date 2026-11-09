@@ -136,7 +136,7 @@
  * regions are control regions of a representative map, not cortical borders, and the face layer is a displaced view,
  * not something a person can see from their own eyes.
  */
-import { SEGMENTS, skinApply } from './ns-rig.mjs';
+import { SEGMENTS, HAND_SEGMENTS, skinApply } from './ns-rig.mjs';
 import { ARM_DEFAULTS } from './ns-arm.mjs';
 import {
   brainWorldMatrix, colormapLinear, gazeDirection, MARKER_GEOMETRY, MARKER_OCTAHEDRON, markerSolid, MARKERS,
@@ -154,6 +154,10 @@ import * as NsColors from './ns-colors.mjs';
 // R5-scene: the 3D compass arrows (R5-arrows) and the mirror body's placement, transform and orbit (R5-mirror).
 import * as NsArrows from './ns-arrows3d.mjs';
 import * as NsMirror from './ns-mirror.mjs';
+import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
+import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
+
+import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 /** User-visible wording comes ONLY from ns-text (the single source of plain UI text; a static import). R3-fix (review
@@ -237,14 +241,6 @@ export function heldCueRim(amount, o = HELD_CUE) {
  * compatibility. The x-ray pass covers only the GLASS_XRAY subset; the glass DEPTH pass sorts front-to-back
  * (transparentSortNs) so occluded deep layers fail the depth test early.
  */
-/** R5-fix (review F3): stencil value your left arm writes, and the motor areas' see-through copy drawn over it (display
- * choices; opacity viewed in harness/run-R5-fix-9-xray). */
-export const ARM_STENCIL = 1;
-/** R5-fix (reviews P3 / SL5-3): the colour of the head meshes' inner faces seen from behind (a display choice). */
-export const SKULL_INSIDE = Object.freeze({ color: 0x2a231e, backFacingY: 0.3 });
-/** R5-fix (review P6): the small face box shown while a face or jaw area colours the face muscles (display choices). */
-export const FACE_BOX = Object.freeze({ minDrive: 0.05, holdMs: 700, sizePx: 170, sizeVmin: 24 });
-export const MOTOR_XRAY = Object.freeze({ opacity: 0.42, orderAfterArm: 0.6 });
 export const RENDER_ORDER = Object.freeze({
   strip: 2, marker: 3, stripDepth: 4, glassXray: 1, glassDepth: 5, glass: 6,
   // U2b-scene region mode: nearest-layer depth pre-pass, translucent region colour, outlines (all before the glass).
@@ -323,19 +319,20 @@ export const QUALITY_MODES = Object.freeze(['auto', 'high', 'low']);
 export const SOFTWARE_RENDERER_RE = /swiftshader|llvmpipe|softpipe|software|microsoft basic render/i;
 /** True when a WebGL renderer string names a software rasteriser. Pure. */
 export function isSoftwareRenderer(name) { return typeof name === 'string' && SOFTWARE_RENDERER_RE.test(name); }
-/** The WebGL renderer string from a throw-away context (unmasked when the browser allows it), or null. The probe
- * context is released at once. */
+/** The WebGL renderer string from a detached 1x1 metadata-only context (unmasked when allowed), or null.
+ * No rendering or intentional context loss. Local canvas/context references fall out of scope on return;
+ * the browser owns eventual cleanup, not deterministic disposal. */
 export function probeRendererName(doc) {
   try {
     if (!doc || typeof doc.createElement !== 'function') return null;
     const c = doc.createElement('canvas');
     if (!c || typeof c.getContext !== 'function') return null;
+    c.width = 1; c.height = 1;
     const gl = c.getContext('webgl2') || c.getContext('webgl');
     if (!gl) return null;
     let name = null;
     try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); if (ext) name = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL); } catch { name = null; }
     if (typeof name !== 'string' || !name) { try { name = gl.getParameter(gl.RENDERER); } catch { name = null; } }
-    try { const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch { /* released with the canvas */ }
     return typeof name === 'string' && name ? name : null;
   } catch { return null; }
 }
@@ -1704,24 +1701,6 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
 export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
-/** R5-polish (D18): cell size and dilation of your body's screen footprint in third person (labels keep off it). */
-export const BODY_FOOTPRINT = Object.freeze({ cellPx: 12, dilate: 1 });
-/** Row-run rects (CSS px) of an ns-arrows3d occupancyGrid (pure): each maximal run of occupied cells in a row is one
- * rect { x0, y0, x1, y1 }. Uses only grid.hits on one-cell boxes, so any grid with { cellPx, gw, gh, hits } works. */
-export function footprintRects(grid) {
-  const out = [];
-  if (!grid || !(grid.gw > 0) || !(grid.gh > 0) || !(grid.count > 0)) return out;
-  const c = grid.cellPx;
-  for (let j = 0; j < grid.gh; j++) {
-    let run = -1;
-    for (let i = 0; i <= grid.gw; i++) {
-      const on = i < grid.gw && grid.hits({ x0: i * c + 0.5, y0: j * c + 0.5, x1: i * c + c - 0.5, y1: j * c + c - 0.5 }) > 0;
-      if (on && run < 0) run = i;
-      else if (!on && run >= 0) { out.push({ x0: run * c, y0: j * c, x1: i * c, y1: (j + 1) * c }); run = -1; }
-    }
-  }
-  return out;
-}
 /** R4-fix (RP1): opacity of a required label drawn where it overlaps something (display choice). */
 export const LABEL_FADED_OPACITY = 0.4;
 /** R3-scene label font sizes (CSS px; mirrored by R3_SCENE_CSS) used for the label box estimates. */
@@ -1738,9 +1717,7 @@ export const R3_SCENE_CSS = [
   `.ns-mark-dot { position: absolute; width: ${SMALL_MARK.sizePx}px; height: ${SMALL_MARK.sizePx}px; margin: -${SMALL_MARK.sizePx / 2}px 0 0 -${SMALL_MARK.sizePx / 2}px; box-sizing: border-box; border-radius: 50%; border: 3px solid #ffc65c; box-shadow: 0 0 0 1.5px rgba(5, 7, 11, 0.9), inset 0 0 0 1px rgba(5, 7, 11, 0.6); pointer-events: none; z-index: 2; }`,
   // R5-scene (D16): the plain caption of a hovered 3D orbit arrow (the round-4 button caption look: dark text on gold).
   '.ns-arrow-tip { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 6px; white-space: nowrap; font: 600 11.5px/1.3 var(--ns-font, system-ui, sans-serif); color: #05070b; background: #ffe066; pointer-events: none; z-index: 3; }',
-  '.ns-arrow-tip.ns-arrow-tip-mirror { background: #e8eef5; }',
-  // R5-polish: the covered mirror arrow's caption (how to move the brain away) wraps to two lines
-  '.ns-arrow-tip[data-ns-blocked="true"] { white-space: normal; width: 214px; background: #c9d3de; }'
+  '.ns-arrow-tip.ns-arrow-tip-mirror { background: #e8eef5; }'
 ].join('\n');
 /** Label priority by group (higher shows first; the left-arm label is always shown). */
 export const REGION_LABEL_PRIORITY = Object.freeze({ leftArm: 100, arm: 60, leg: 50, face: 40, trunk: 10, other: 0 });
@@ -1958,6 +1935,13 @@ export function bodyPartOf(entry) {
   if (/\bright\b/.test(s) && /humer|radius|ulna|carp|phalan|hand|forearm|arm/.test(s)) return 'rightArm';
   return 'other';
 }
+/** Only the exact validated original-packet girdle role can bypass facial-display displacement.
+ * This is a rendering-domain classification, not anatomical/function/normal-mechanics acceptance. */
+export function isBodyGirdleEntry(entry) {
+  const id = entry && entry.element_id;
+  const role = typeof id === 'string' ? SHOULDER_GIRDLE_INFO[id] : null;
+  return Boolean(role && entry.source_packet === 'pov-demo-assets' && entry.girdle_body_role === 'left-shoulder-girdle' && entry.kind === role.kind);
+}
 /** 'bone' | 'muscle' for a manifest entry (kind, else tissue, else 'bone'). */
 export function bodyKindOf(entry) {
   const k = entry && (entry.kind || entry.tissue);
@@ -2121,8 +2105,6 @@ export function infoPanelContent(model) {
   const hemi = model.hemisphere === 'right' ? 'right' : model.hemisphere === 'left' ? 'left' : '';
   const region = model.mode === 'region';
   const card = region && model.card && typeof model.card === 'object' ? model.card : null;
-  // R5-integrate-mirror-glow (D19): a look at the mirror body: ns-text mirrorInfoCard (lead, three rows, honesty lines).
-  const mirrorCard = model.mode === 'mirror' && model.card && typeof model.card === 'object' ? model.card : null;
   const act = model.action && typeof model.action === 'object' ? model.action : null;
   const ag = list(model.agonists), an = list(model.antagonists).filter(m => !ag.includes(m));
   const v = Number.isFinite(model.activity) ? fin01(model.activity) : null;
@@ -2156,10 +2138,6 @@ export function infoPanelContent(model) {
       summary: s(cm.title) || T.moreDetail, items, explanation: s(cm.explanation) || expl, note: s(cm.note),
       caveats: list(cm.caveats).length ? list(cm.caveats) : caveats, sources: s(cm.sources) || (citations ? `${T.sourcesPrefix}${citations}` : '')
     };
-  } else if (mirrorCard) {
-    rows = (Array.isArray(mirrorCard.rows) ? mirrorCard.rows : []).filter(r => Array.isArray(r) && s(r[0]) && s(r[1])).map(r => [s(r[0]), s(r[1])]);
-    plain = s(mirrorCard.lead) || s(mirrorCard.plain) || plain;
-    simulated = s(mirrorCard.simulated);
   } else {
     // Without a card (legacy / movement-map models): the round-2 rows in plain words, capped at maxRows. In region
     // mode the technical name, body part and hemisphere, the long explanation, caveats and sources go to More detail.
@@ -2181,7 +2159,7 @@ export function infoPanelContent(model) {
   return {
     key: s(model.key), mode: s(model.mode) || 'idle', leftArm,
     heading: s(model.heading) || T.heading,
-    title: s(card && card.title) || s(mirrorCard && mirrorCard.title) || s(model.title), tag: s(card && card.tag) || s(mirrorCard && mirrorCard.tag) || s(model.tag),
+    title: s(card && card.title) || s(model.title), tag: s(card && card.tag) || s(model.tag),
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
     rows: rows.slice(0, INFO_PANEL.maxRows),
@@ -2190,9 +2168,6 @@ export function infoPanelContent(model) {
     // Idle / glass: the explanation is the visible body text. Region mode: it is inside More detail.
     explanation: region ? '' : expl,
     simulated, known, regionCaveat,
-    // R5-integrate-mirror-glow (D17): while the area is switched on, what its glow means (a picture, not a nerve) and the
-    // real route (ns-app glowPanelLine); region mode only.
-    glow: region ? s(model.glowLine) : '',
     more,
     // Outside region mode only (region mode lists caveats and sources inside More detail).
     caveats: region ? [] : caveats.slice(0, INFO_PANEL.maxCaveats), citations: region ? '' : citations
@@ -2242,12 +2217,7 @@ export function infoPanelContent(model) {
  * simplified on a slow renderer. headInPlaceFrom: the ns-camera pose's headInPlace from which the head and
  * face are drawn in place (third person). mirrorPointsPerMesh: vertices sampled per body mesh to measure the posed body
  * for ns-mirror bodyBoundsFromPoints. arrowCaptionPx: caption offset from an arrow's outer end. */
-export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 2.5, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 4, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8,
-  // R5-integrate-mirror-glow (D19, R5-load W-M4 "size culling"): from the first 'lite' quality level the mirror body's
-  // smallest pieces are not drawn: body twins whose bounding sphere is under mirrorCullPx (diameter, CSS px; at the
-  // lowest level mirrorCullPxLowest) at the mirror's distance. On a software renderer the draw calls, not the triangles,
-  // cost the frame (SwiftShader 1280x720, lowest level: 19-27 fps with the mirror, 28-43 fps without it). Display choices.
-  mirrorCullFrom: 3, mirrorCullPx: 4, mirrorCullPxLowest: 6 });
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 2.5, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 4, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -2276,21 +2246,11 @@ export function arrowComfortRect({ width, height, fovYDeg = CAMERA.fovYDeg, comf
  * prefers-reduced-motion); maxLinks / segments: buffer sizes; mirrorAlpha: links to the mirror body are fainter (they
  * run behind the glass). */
 export const GLOW_LINK = Object.freeze({
-  // R5-polish: core 1.6 -> 2.1 px and halo 7 -> 10 px (a soft fluorescent tube that reads at 1280x720 and 2560x1080; the
-  // halo is still dropped where it would reach a motor area), a clearer travelling pulse (0.35 -> 0.45, a little narrower).
-  corePx: 2.1, haloPx: 10, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.45, pulseWidth: 0.1,
+  corePx: 1.6, haloPx: 7, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.35, pulseWidth: 0.12,
   maxLinks: 24, minLevel: 0.02, mirrorAlpha: 0.7, nearClipM: 0.06,
   // cross-section samples (fraction of the halo half width) for the additive ribbon
   across: Object.freeze([-1, -0.62, -0.32, -0.16, 0, 0.16, 0.32, 0.62, 1])
 });
-
-/** R5-polish: the glow link's on-screen width factor for a CSS view (pure): min(width, height) / 720, clamped to
- * 0.75..1.5 (1 at 1280x720 and 720x1280; 1.5 at 2560x1080; 0.75 on a 390 px wide phone). */
-export function glowWidthScale(width, height) {
-  const m = Math.min(Number(width) || 0, Number(height) || 0);
-  if (!(m > 0)) return 1;
-  return Math.min(1.5, Math.max(0.75, m / 720));
-}
 
 /** Points of a quadratic Bezier link from a to b bowed by `lift` x |ab| along `up` (made perpendicular to ab), n + 1
  * points as a flat Float64Array [x, y, z, ...]. Pure. */
@@ -2444,13 +2404,6 @@ export const ARROW_TIP_FALLBACK = Object.freeze({
   forward: 'Turn the mirror body: top toward you', back: 'Turn the mirror body: bottom toward you',
   left: 'Turn the mirror body: left side toward you', right: 'Turn the mirror body: right side toward you'
 });
-/** R5-polish: the caption of a covered mirror arrow (ns-text ARROWS.mirrorBlockedTip, else ARROWS.mirrorBlocked). */
-export const MIRROR_BLOCKED_TIP_FALLBACK = 'The brain is in front. Hold Space on the brain and look away to move it.';
-export function mirrorBlockedTipText(text = NsText) {
-  const A = text && text.ARROWS;
-  if (A && typeof A.mirrorBlockedTip === 'string' && A.mirrorBlockedTip) return A.mirrorBlockedTip;
-  return MIRROR_BLOCKED_TIP_FALLBACK;
-}
 export function arrowTipText(target, dir, text = NsText) {
   const A = text && text.ARROWS;
   const pick = o => (o && typeof o[dir] === 'string' && o[dir] ? o[dir] : null);
@@ -2540,8 +2493,7 @@ export function createScene({
   let lastRenderCpuMs = NaN;
 
   const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
-  // R5-fix (review F3): a stencil buffer, so the motor areas' see-through copy is drawn only where YOUR LEFT ARM covers them.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance', stencil: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
   // Front-to-back glass depth pre-pass (guarded: setTransparentSort is a core WebGLRenderer method since r142).
   const transparentSortApplied = typeof renderer.setTransparentSort === 'function';
   if (transparentSortApplied) renderer.setTransparentSort(transparentSortNs);
@@ -2631,10 +2583,7 @@ export function createScene({
     list.push(t);
     return t;
   };
-  // R5-fix (review F3): the left arm marks its pixels in the stencil buffer (ref ARM_STENCIL); the motor areas' see-through
-  // copy (MOTOR_XRAY) is drawn only there, where the arm is in front of them.
-  const markArmStencil = m => { if (THREE.ReplaceStencilOp === undefined) return m; m.stencilWrite = true; m.stencilRef = ARM_STENCIL; m.stencilFunc = THREE.AlwaysStencilFunc; m.stencilZPass = THREE.ReplaceStencilOp; m.stencilFail = THREE.KeepStencilOp; m.stencilZFail = THREE.KeepStencilOp; return m; };
-  const boneMaterial = markArmStencil(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 }))));
+  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
   // Strip shader state: applied is null until the strip program compiles, then whether every hook was found.
   const stripShader = { applied: null, shimmer: shimmer === 'auto' ? !reducedMotion : Boolean(shimmer), reducedMotion };
   // Glass (RENDER_ORDER 4..6). Unlit MeshBasicMaterial passes with the glassAlpha rim patch; `glassRim.applied` is
@@ -2705,6 +2654,7 @@ export function createScene({
   let armSet = false, brainSet = false;
   let baselineDrive = 0;
   let lastMatrices = null;
+  let armAppliedReady = false; // R173: distinct from a layer-triggered pending reskin.
   let lastStripDrives = null;
   let highlighted;
   let lost = false;
@@ -2729,6 +2679,7 @@ export function createScene({
   let brainSamples = null; // Float32Array of source-mm sample points (projected bounds for the orbit arrows)
   let brainSupport = null; // R3-scene: supportPoints of every brain vertex (the silhouette hull basis)
   let brainHullPoints = null; // R3-fix: the segmentation outline points (denser hull basis for the arrow plan)
+  let compassBrainSourceRevision = 0; // R345 source replacement identity; no geometry/hash work in the cached getter
   let brainSampleCentre = null; // fix F2: their centroid (cached per sample array)
   let labelGroups = [];
   // Region depth pre-pass: nearest strip layer only (colour-less), pushed back like the glass pre-pass so the colour pass
@@ -2840,9 +2791,6 @@ export function createScene({
   const insetCamera = new THREE.PerspectiveCamera(FACE_LAYER.inset.fovDeg, 1, 0.01, 50);
   const insetPrevColor = new THREE.Color();
   let faceMode = faceView;
-  // R5-fix (review P6): faceShow = the mode drawn now ('box' = the small face box shown while a face or jaw area is on and
-  // the face is not otherwise in view); faceDriveNow / faceActiveAtMs from updateBody.
-  let faceShow = faceView, faceDriveNow = 0, faceActiveAtMs = -Infinity;
   let faceAmount = 0;
   let faceHeadCentre = null, facePacketMeshes = 0;
   let faceRadiusMm = 0;
@@ -2887,19 +2835,7 @@ export function createScene({
   };
   const arrowSets = {};
   for (const target of ['brain', 'mirror']) arrowSets[target] = { target, rig: makeArrowRig(target), plan: null, frames: null, key: '', shown: false, boxes: {}, clicks: {}, boxKey: '' };
-  let arrowHover = null, arrowHoverPointer = false; // { target, dir, blocked } (setArrowHover); pointer: a free mouse is on it
-  // R5-polish (D19 "obvious how to move the brain away"): a covered mirror arrow under the pick point gets a plain two-line
-  // caption saying how to move the brain away (ARROWS.mirrorBlockedTip), next to the grey arrow. Not at the very start:
-  // at the default 720x1280 view the crosshair rests on the mirror's bottom arrow (R5-integrate-mirror-glow decision 3.3),
-  // so the caption waits until the player has looked around since the last "rest" (the start, or a switch between first
-  // and third person: after E the crosshair can also land on that arrow by chance; viewed at 2560x1080), or until the
-  // covered arrow was reached more than BLOCKED_TIP_REST_MS after the rest (a free pointer moved onto it).
-  const BLOCKED_TIP_REST_MS = 800;
-  let lookRest = null, lookMoved = false, restAtMs = null, blockedHoverAtMs = null, lookEasing = false;
-  const noteLook = (mode, yaw, pitch) => {
-    if (!lookRest || lookRest.mode !== mode) { lookRest = { mode, yaw, pitch }; lookMoved = false; restAtMs = nowMs(); return; }
-    if (!lookMoved && Math.hypot(yaw - lookRest.yaw, pitch - lookRest.pitch) > 0.02) lookMoved = true;
-  };
+  let arrowHover = null; // { target, dir, blocked } (setArrowHover)
   let arrowsShown = false, arrowLayout = null, hoverDir = null;
   // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
   // while the "Try this" goal is 'orbit'.
@@ -2911,7 +2847,7 @@ export function createScene({
       e.setAttribute('aria-hidden', 'true');
       e.hidden = true;
       e.textContent = arrowTipText(target, d);
-      arrowTips[`${target}:${d}`] = { el: e, left: '', top: '', shown: false, text: e.textContent, blocked: false };
+      arrowTips[`${target}:${d}`] = { el: e, left: '', top: '', shown: false };
     }
   }
   const labelEls = [];
@@ -2959,9 +2895,6 @@ export function createScene({
     info.plain = el('p', 'ns-infopanel-plain', p);
     info.rows = el('dl', 'ns-infopanel-rows', p);
     info.simulated = el('p', 'ns-infopanel-simulated', p);
-    // R5-integrate-mirror-glow (D17): the glow line (hidden when empty).
-    info.glow = el('p', 'ns-infopanel-glow', p);
-    info.glow.hidden = true;
     info.known = el('p', 'ns-infopanel-known', p);
     info.regionCaveat = el('p', 'ns-infopanel-caveat', p);
     info.explanation = el('p', 'ns-infopanel-explanation', p);
@@ -2973,16 +2906,6 @@ export function createScene({
     info.moreBody = el('div', 'ns-infopanel-detail-body', info.more);
     info.moreKey = null;
     info.actRow = act;
-  }
-  // R5-integrate-mirror-glow (D19): the mirror body's plain label ("Mirror body" / "a mirror image of you"), placed beside
-  // its drawn box each time the camera, the mirror or the arrows change (layoutMirrorLabel).
-  let mirrorLabel = null;
-  if (overlay) {
-    mirrorLabel = el('div', 'ns-mirror-label', overlay);
-    mirrorLabel.setAttribute('data-ns-mirror-label', '');
-    el('span', 'ns-mirror-label-main', mirrorLabel).textContent = (NsText.MIRROR && NsText.MIRROR.name) || 'Mirror body';
-    el('span', 'ns-mirror-label-sub', mirrorLabel).textContent = (NsText.MIRROR && NsText.MIRROR.labelSub) || 'a mirror image of you';
-    mirrorLabel.hidden = true;
   }
   let faceLabel = null, insetFrame = null, faceLabelW = 0, xlShift = 0, faceCaption = null;
   // R5-integrate-core (D20): the face layer's captions: the round-4 FACE ("no face, chewing or tongue muscles") until the
@@ -3069,41 +2992,6 @@ export function createScene({
     shader.uniforms.nsBg = bgUniform; shader.uniforms.nsBgWin = bgWinUniform;
   });
   const mirrorBoneMaterial = behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
-  // R5-fix (reviews P3 / SL5-3): the 3D atlases have no back of the skull (no parietal, occipital or sphenoid bone), so from
-  // behind (third person, the turned mirror body) you looked INTO the face bones: their inner surfaces, the eye sockets,
-  // the nose opening and the teeth read as a face looking back. The head's in-place and mirror meshes now draw every
-  // surface that faces the INSIDE of the head (per vertex: the normal points toward the head centre; attribute nsInside,
-  // headInsidePass) in a plain dark colour (SKULL_INSIDE), so from behind the head reads as the dark inside of a shell.
-  // Nothing is invented (no new bone shape); from the front nothing changes; the plain text says the skull has no back part.
-  const insideCol = new THREE.Color(SKULL_INSIDE.color);
-  const headInside = { applied: null, meshes: 0 };
-  const insidePatch = m => composePatch(m, 'ns-head-inside-r5fix', shader => {
-    const vOk = shader.vertexShader.includes('#include <begin_vertex>'), fOk = shader.fragmentShader.includes('#include <dithering_fragment>');
-    headInside.applied = vOk && fOk && headInside.applied !== false;
-    if (!(vOk && fOk)) return;
-    shader.vertexShader = 'attribute float nsInside;\nvarying float vNsInside;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vNsInside = nsInside;');
-    shader.fragmentShader = 'varying float vNsInside;\nuniform vec3 nsInsideCol;\n' + shader.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (vNsInside > 0.5) gl_FragColor.rgb = nsInsideCol;');
-    shader.uniforms.nsInsideCol = { value: insideCol };
-  });
-  const headBoneInPlaceMaterial = insidePatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
-  const headBoneMirrorMaterial = insidePatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 }))));
-  /** Per-vertex nsInside (1 = the surface faces the inside of the head) for a head mesh's geometry, from the head centre
-   * (source mm; the mean of the head bones' box centres). Once per geometry. */
-  // Bones also darken the surfaces that face BACKWARD (BodyParts3D +y = posterior; SKULL_INSIDE.backFacingY): with no
-  // skull behind them they are seen only through the missing back of the head (viewed: bright orbit floors and cheekbone
-  // backs still read as a face, harness/run-R5-fix-12-skull/crop-head.png). Muscles keep their outer surfaces coloured.
-  const headInsidePass = (geo, centre, bone) => {
-    if (!geo || geo.getAttribute('nsInside') || !centre) return;
-    const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal');
-    if (!pos || !nor) return;
-    const a = new Float32Array(pos.count);
-    for (let i = 0; i < pos.count; i++) {
-      const dx = pos.getX(i) - centre[0], dy = pos.getY(i) - centre[1], dz = pos.getZ(i) - centre[2];
-      a[i] = nor.getX(i) * dx + nor.getY(i) * dy + nor.getZ(i) * dz < 0 || (bone && nor.getY(i) > SKULL_INSIDE.backFacingY) ? 1 : 0;
-    }
-    geo.setAttribute('nsInside', new THREE.BufferAttribute(a, 1));
-    headInside.meshes++;
-  };
   const mirrorMuscleMaterial = () => behindGlassPatch(glowRimPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))));
   // ns-mirror (R5-mirror) owns the math: bodyBoundsFromPoints (the posed body), brainFarDistance, mirrorPlacement,
   // createMirrorState / placeMirror (orbit kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when
@@ -3114,7 +3002,10 @@ export function createScene({
     external: null, transform: null, outlineNdc: null, frameKey: '', serial: 0, lod: false, twins: 0, brainRadiusMm: null, error: null
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
-  let camPose = null;
+  let camPose = null, firstPose = null;
+  let referenceOrigin = [0, 0, 0], referenceOriginSet = false, referenceCarry = null, referenceAngles = { yaw: 0, pitch: 0 };
+  const activePosition = () => camPose ? camPose.position.slice() : firstPose ? firstPose.position.slice() : [0, 0, 0];
+  const brainReferenceOrigin = () => lastBrainTransform && lastBrainTransform.referenceTranslation ? lastBrainTransform.referenceTranslation.slice() : [0, 0, 0];
   const camState = { mode: 'first', headInPlace: false, eyeDistM: 0 };
   let bodyPoseSerial = 0, armPoseSerial = 0; // R5-scene: pose change counters (bodyKeepOut cache)
   // ---- R5-scene (D17): glow links -----------------------------------------------------------------------------------
@@ -3165,6 +3056,7 @@ export function createScene({
   const onRestored = () => {
     lost = false;
     lastMatrices = null; // re-skin and recolour on the next frame
+    armAppliedReady = false; // R173: a replacement arm has no retained applied pose yet.
     lastStripDrives = null;
     for (const m of muscles) m.lastT = NaN;
     if (strip) strip.cpuDrives = null;
@@ -3207,7 +3099,9 @@ export function createScene({
       tw.matrixAutoUpdate = false;
       mirrorArmGroup.add(tw);
       mesh.userData.nsMirrorTwin = tw;
-      bones.push({ mesh, segment: b.segment, mirror: tw });
+      bones.push({ mesh, segment: b.segment, mirror: tw,
+        // Retain the normal loader's validated source id for copied diagnostics; placeholders may have no id.
+        sourceElementId: typeof b.id === 'string' && b.id ? b.id : null });
       depthTwin(mesh, armDepthMaterial, BODY_ORDER.arm - 0.5, armTwins);
     }
     for (const m of muscleList) {
@@ -3222,7 +3116,7 @@ export function createScene({
       geo.setAttribute('position', posAttr);
       geo.setAttribute('normal', norAttr);
       geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
-      const mat = markArmStencil(glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 })))));
+      const mat = glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))));
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = String(m.name || 'muscle');
       mesh.frustumCulled = false; // CPU-skinned: the rest bounding sphere would be stale
@@ -3258,11 +3152,15 @@ export function createScene({
     const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
     let n = 0, changed = false;
     for (const m of muscles) {
-      const L = liftedById && m.id && liftedById[m.id] && liftedById[m.id].length === m.restBase.length && liftedById[m.id] !== m.restBase ? liftedById[m.id] : null;
+      const q = regionalLayerQualification(m.id);
+      const L = q.candidate && liftedById && m.id && Object.prototype.hasOwnProperty.call(liftedById, m.id) && liftedById[m.id] && liftedById[m.id].length === m.restBase.length && liftedById[m.id] !== m.restBase ? liftedById[m.id] : null;
       if (L !== m.lifted) { m.lifted = L; changed = true; }
       if (!m.lifted) {
         if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices); changed = true; }
-        m.mesh.userData.bodyWorlds = Object.freeze({ layer: liftedById ? 'deep' : 'unclassified', offsetMm: 0 });
+        const bw = Object.freeze({ ...regionalLayerMetadata(m.id, false), displayStatus: 'not-selected',
+          offsetMm: 0, targetOffsetMm: 0, amount: a, offsetVertex: 0, offsetFrame: 'source-rest-mm' });
+        m.mesh.userData.bodyWorlds = bw;
+        if (m.mirror) m.mirror.userData.bodyWorlds = bw;
         continue;
       }
       n++;
@@ -3271,8 +3169,22 @@ export function createScene({
       else if (a <= 0) r = m.restBase;
       else { r = new Float32Array(m.restBase.length); for (let i = 0; i < r.length; i++) r[i] = m.restBase[i] + a * (m.lifted[i] - m.restBase[i]); }
       if (r !== m.rest) { m.rest = r; m.restNormals = computeNormals(r, m.indices); changed = true; }
-      let d = 0; for (let i = 0; i < 3; i++) d += (m.lifted[i] - m.restBase[i]) ** 2;
-      m.mesh.userData.bodyWorlds = Object.freeze({ layer: 'superficial', offsetMm: Math.round(Math.sqrt(d) * 10) / 10 });
+      // First-vertex SOURCE-REST displacement, not world motion or a maximum
+      // over the muscle. Keep the full target separate from the applied blend.
+      let targetD = 0, appliedD = 0;
+      for (let i = 0; i < 3; i++) {
+        targetD += (m.lifted[i] - m.restBase[i]) ** 2;
+        appliedD += (m.rest[i] - m.restBase[i]) ** 2;
+      }
+      const bw = Object.freeze({
+        ...regionalLayerMetadata(m.id, true),
+        displayStatus: a > 0 ? 'applied' : 'off',
+        offsetMm: Math.round(Math.sqrt(appliedD) * 10) / 10,
+        targetOffsetMm: Math.round(Math.sqrt(targetD) * 10) / 10,
+        amount: a, offsetVertex: 0, offsetFrame: 'source-rest-mm'
+      });
+      m.mesh.userData.bodyWorlds = bw;
+      if (m.mirror) m.mirror.userData.bodyWorlds = bw;
     }
     if (changed || a !== armLayerAmount) { armLayerAmount = a; lastMatrices = null; } // re-skin on the next updatePose
     return { lifted: n, amount: armLayerAmount };
@@ -3312,6 +3224,7 @@ export function createScene({
     // R3-fix (S31 at 21:9): the orbit-arrow plan's silhouette hull uses the denser outline (1024 directions) when there
     // is one, so the planned gap matches the drawn outline on big, close-up brains.
     brainHullPoints = outlineBasis ? Float32Array.from(outlineBasis) : null;
+    compassBrainSourceRevision++;
     glassRead.supportPoints = brainSupport.points.length / 3;
     glassList.forEach((g, gi) => {
       checkMesh(g, `glass ${g && g.name}`);
@@ -3397,14 +3310,6 @@ export function createScene({
       // R5-scene: the lit area keeps its gyral relief under the perspective squash (rigid normals, P2) and can glow (D17).
       glowRimPatch(rigidPatch(material));
       const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity };
-      // R5-fix (review F3, R12 "access to all the relevant motor areas", R25): where your near left arm covers a motor area
-      // its see-through copy is drawn over the arm (the area's own colour, MOTOR_XRAY.opacity), like the arrows' (D16).
-      rec.xrayMat = THREE.GreaterDepth !== undefined && THREE.EqualStencilFunc !== undefined ? keep(new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: MOTOR_XRAY.opacity, depthWrite: false, depthFunc: THREE.GreaterDepth,
-        stencilWrite: true, stencilRef: ARM_STENCIL, stencilFunc: THREE.EqualStencilFunc, stencilWriteMask: 0,
-        stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
-      })) : null;
-      rec.xrayMeshes = [];
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
         const part = seg.parts[pi];
@@ -3425,13 +3330,6 @@ export function createScene({
         depthMesh.renderOrder = RENDER_ORDER.regionDepth;
         brainGroup.add(depthMesh);
         rec.depthMeshes.push(depthMesh);
-        if (rec.xrayMat) {
-          const xm = still(new THREE.Mesh(geo, rec.xrayMat));
-          xm.name = `motor region ${r.id} (see-through where your arm covers it)`;
-          xm.renderOrder = BODY_ORDER.arm + MOTOR_XRAY.orderAfterArm;
-          brainGroup.add(xm);
-          rec.xrayMeshes.push(xm);
-        }
         if (hasLines) edgeLists.push(part);
       }
       // R3-scene: a SMOOTH region outline (Chaikin-smoothed, lifted off the surface) instead of the raw triangle-edge
@@ -3531,8 +3429,6 @@ export function createScene({
     rec.material.emissive.setRGB(s.emission[0], s.emission[1], s.emission[2]);
     rec.material.opacity = s.opacity;
     rec.opacity = s.opacity;
-    // R5-fix (review F3): the see-through copy takes the area's colour now (its albedo plus its activity glow).
-    if (rec.xrayMat) rec.xrayMat.color.setRGB(Math.min(1, s.albedo[0] + s.emission[0]), Math.min(1, s.albedo[1] + s.emission[1]), Math.min(1, s.albedo[2] + s.emission[2]));
     if (rec.outline) {
       const leftArm = rec.region.isLeftArm === true;
       rec.outline.material = hovered ? hoverLineMaterial : n >= 1 && activatedLineMaterial ? activatedLineMaterial : (leftArm ? leftArmLineMaterial : otherLineMaterial);
@@ -3670,7 +3566,8 @@ export function createScene({
     arrowRef.yaw = Number.isFinite(transform.grabYaw) ? transform.grabYaw : 0;
     arrowRef.pitch = Number.isFinite(transform.grabPitch) ? transform.grabPitch : 0;
     const pw = transform.pivotWorld;
-    const dist = pw && pw.length === 3 ? Math.hypot(pw[0], pw[1], pw[2]) : NaN;
+    const rp = transform.referenceTranslation || [0, 0, 0];
+    const dist = pw && pw.length === 3 ? Math.hypot(pw[0] - rp[0], pw[1] - rp[1], pw[2] - rp[2]) : NaN;
     arrowRef.dist = Number.isFinite(dist) && dist > 0 ? dist : Math.hypot(m[12], m[13], m[14]) || BRAIN_ANCHOR_DIST_FALLBACK_M;
     arrowRef.k = Number.isFinite(transform.k) && transform.k > 0 ? transform.k : null;
     arrowRef.pivot = transform.pivot && transform.pivot.length === 3 ? Array.from(transform.pivot) : null;
@@ -3728,6 +3625,7 @@ export function createScene({
    * Gaze picking is unaffected (a ray from the eye meets the scaled brain at the same source point). Returns k. */
   function setBrainDistanceScale(k) {
     if (!(Number.isFinite(k) && k > 0)) fail('scene_args', 'setBrainDistanceScale needs k > 0');
+    if (referenceOriginSet && k !== 1) fail('scene_args', 'configured reference graph requires the shared unscaled brain transform');
     brainDistK = k;
     if (lastBrainTransform) setBrainTransform(lastBrainTransform);
     return brainDistK;
@@ -3736,6 +3634,21 @@ export function createScene({
   /** Camera orientation: Euler YXZ (yaw about +y, then pitch), so the view direction is ns-brain gazeDirection. */
   // R5-scene (D18): setView sets the EYE look (the arm hangs on it, the mirror's arm copies it); in first person the camera
   // takes the same look. In third person (setCameraPose) the camera keeps its own pose.
+  function setEyePosition(position) {
+    if (!position || position.length !== 3 || !Array.from(position).every(Number.isFinite)) fail('scene_input', 'eye world position needs finite metres');
+    eyeRig.position.set(position[0], position[1], position[2]); eyeRig.updateMatrixWorld(true);
+    mirrorArmGroup.matrix.copy(eyeRig.matrix); mirrorArmGroup.matrixWorldNeedsUpdate = true;
+    overlayDirty = true;
+  }
+  function setReferenceOrigin(position, initialPlacement = { yaw: 0, pitch: 0 }) {
+    if (brainDistK !== 1) fail('scene_input', 'configured reference graph cannot use the legacy origin-zero distance-scale hook');
+    if (!position || position.length !== 3 || !Array.from(position).every(Number.isFinite)) fail('scene_input', 'reference origin needs finite world metres');
+    if (referenceOriginSet && referenceOrigin.some((v, i) => v !== position[i])) fail('scene_input', 'reference origin is constructor-owned');
+    if (!initialPlacement || !Number.isFinite(initialPlacement.yaw) || !Number.isFinite(initialPlacement.pitch)) fail('scene_input', 'initial brain carry needs finite radians');
+    const K = NsMath.lookRotation(initialPlacement.yaw, initialPlacement.pitch);
+    if (referenceCarry && Array.from(K).some((v, i) => v !== referenceCarry[i])) fail('scene_input', 'initial brain carry is constructor-owned');
+    referenceOrigin = Array.from(position); referenceCarry = Array.from(K); referenceAngles = { yaw: initialPlacement.yaw, pitch: initialPlacement.pitch }; referenceOriginSet = true; mirror.frameKey = ''; mirror.outlineNdc = null;
+  }
   function setView(yaw, pitch) {
     eyeRig.rotation.set(pitch, yaw, 0, 'YXZ');
     eyeRig.updateMatrixWorld(true);
@@ -3743,8 +3656,7 @@ export function createScene({
     mirrorArmGroup.matrixWorldNeedsUpdate = true;
     if (yaw !== lookYaw || pitch !== lookPitch) overlayDirty = true;
     lookYaw = yaw; lookPitch = pitch;
-    if (!camPose) noteLook('first', yaw, pitch);
-    if (!camPose) { camera.rotation.set(pitch, yaw, 0, 'YXZ'); camera.updateMatrixWorld(true); }
+    if (!camPose) { if (firstPose) { firstPose.yaw = yaw; firstPose.pitch = pitch; } camera.rotation.set(pitch, yaw, 0, 'YXZ'); camera.updateMatrixWorld(true); }
   }
 
   /** R5-scene (D18, R22): the render camera from an ns-camera cameraPose (R5-camera) result, or null for first person.
@@ -3758,19 +3670,25 @@ export function createScene({
   const camMul = { headInPlace: 0, faceGhost: 1, overBrain: 1, nearM: null };
   function setCameraPose(pose = null) {
     const first = pose === null || pose === undefined || pose.mode === 'first' || pose.firstPerson === true || (Number.isFinite(pose.blend) && pose.blend <= 0 && pose.thirdPerson !== true);
-    if (first) { camPose = null; camMul.headInPlace = 0; camMul.faceGhost = 1; camMul.overBrain = 1; camMul.nearM = null; }
+    if (first) {
+      if (pose !== null && pose !== undefined && Object.prototype.hasOwnProperty.call(pose, 'position')) {
+        if (!pose.position || pose.position.length !== 3 || !Array.from(pose.position).every(Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) fail('scene_input', 'first-person pose needs finite world position/radians');
+        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch };
+        const eyeLook = pose.bodyLook && Number.isFinite(pose.bodyLook.yaw) && Number.isFinite(pose.bodyLook.pitch) ? pose.bodyLook : firstPose;
+        if (lookYaw !== eyeLook.yaw || lookPitch !== eyeLook.pitch) setView(eyeLook.yaw, eyeLook.pitch);
+        // R378 opt-in: physical arm-parent frame is separate from the engineering rendering camera.
+        const parentPosition = pose.armParentPosition === undefined ? firstPose.position : pose.armParentPosition;
+        if (!parentPosition || parentPosition.length !== 3 || !Array.from(parentPosition).every(Number.isFinite)) fail('scene_input', 'arm parent position needs finite world metres');
+        if (eyeRig.position.x !== parentPosition[0] || eyeRig.position.y !== parentPosition[1] || eyeRig.position.z !== parentPosition[2]) setEyePosition(parentPosition);
+      } else { if (firstPose) setEyePosition([0, 0, 0]); firstPose = null; }
+      camPose = null; camMul.headInPlace = 0; camMul.faceGhost = 1; camMul.overBrain = 1; camMul.nearM = null;
+    }
     else {
       const p = pose.position;
       if (!p || p.length !== 3 || !Array.prototype.every.call(p, Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) {
         fail('scene_input', 'setCameraPose needs an ns-camera pose { position: [x, y, z], yaw, pitch } (finite) or null');
       }
       camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1 };
-      // R5-polish: the blocked-arrow caption's rest rule in third person: the rest is the look at the END of the E ease
-      // (while the camera eases, the rest follows it), then a look change counts as looking around.
-      const easing = camPose.blend < 0.999;
-      if (easing || lookEasing) { lookRest = { mode: 'third', yaw: pose.yaw, pitch: pose.pitch }; lookMoved = false; restAtMs = nowMs(); }
-      else noteLook('third', pose.yaw, pose.pitch);
-      lookEasing = easing;
       const far0 = Math.hypot(p[0], p[1], p[2]) >= 0.35 ? 1 : 0;
       camMul.headInPlace = Number.isFinite(pose.headInPlace) ? fin01(pose.headInPlace) : far0;
       camMul.faceGhost = Number.isFinite(pose.faceGhost) ? fin01(pose.faceGhost) : 1 - far0;
@@ -3787,8 +3705,9 @@ export function createScene({
       camera.position.set(camPose.position[0], camPose.position[1], camPose.position[2]);
       camera.rotation.set(camPose.pitch, camPose.yaw, 0, 'YXZ');
     } else {
-      camera.position.set(0, 0, 0);
-      camera.rotation.set(lookPitch, lookYaw, 0, 'YXZ');
+      const p = firstPose ? firstPose.position : [0, 0, 0];
+      camera.position.set(p[0], p[1], p[2]);
+      camera.rotation.set(firstPose ? firstPose.pitch : lookPitch, firstPose ? firstPose.yaw : lookYaw, 0, 'YXZ');
     }
     camera.updateMatrixWorld(true);
     const headIn = camPose !== null && camMul.headInPlace >= R5_SCENE.headInPlaceFrom;
@@ -3799,19 +3718,20 @@ export function createScene({
       faceStateKey = '';
       for (const b of body) if (b.inPlace) b.inPlace.visible = headIn;
     }
-    camState.eyeDistM = camPose ? Math.hypot(camPose.position[0], camPose.position[1], camPose.position[2]) : 0;
+    camState.eyeDistM = camPose ? referenceOriginSet ? Math.hypot(camPose.position[0] - eyeRig.position.x, camPose.position[1] - eyeRig.position.y, camPose.position[2] - eyeRig.position.z) : Math.hypot(camPose.position[0], camPose.position[1], camPose.position[2]) : 0;
     camState.mode = camPose ? 'third' : 'first';
   }
   /** Plain-JSON camera state (QA). */
   function cameraState() {
     return { mode: camState.mode, headInPlace: camState.headInPlace, faceGhost: camMul.faceGhost, overBrainSeeThrough: camMul.overBrain, eyeDistM: Math.round(camState.eyeDistM * 1000) / 1000, near: camera.near, far: camera.far,
-      position: camPose ? camPose.position.map(v => Math.round(v * 1000) / 1000) : [0, 0, 0], yaw: camPose ? camPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : lookPitch, blend: camPose ? camPose.blend : 0 };
+      position: activePosition().map(v => Math.round(v * 1000) / 1000), yaw: camPose ? camPose.yaw : firstPose ? firstPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : firstPose ? firstPose.pitch : lookPitch, blend: camPose ? camPose.blend : 0 };
   }
 
   /** Apply pose matrices (Map(segment -> rest mm -> camera m)). Returns false and does nothing when unchanged. */
   function updatePose(matrices) {
     if (!(matrices instanceof Map)) fail('scene_input', 'matrices must be a Map(segment -> matrix)');
     if (lastMatrices !== null && matricesEqual(lastMatrices, matrices, RESKIN_TOLERANCE)) return false;
+    armAppliedReady = false; // R173: a partial/throwing application is not a complete retained pose.
     for (const b of bones) {
       const m = matrices.get(b.segment);
       if (!m) fail('scene_input', `missing matrix for ${b.segment}`);
@@ -3827,7 +3747,641 @@ export function createScene({
     }
     lastMatrices = matrices;
     armPoseSerial++;
+    armAppliedReady = true;
     return true;
+  }
+
+  /** R173 public CPU scene-state readback. updatePose keeps its boolean API. On a tolerance skip, the bones still
+   * contain the previous APPLIED matrices; never return the new requested Map as if it had been drawn.
+   * null before an applied root / after a replacement or failed application / after disposal. A layer-only pending
+   * reskin keeps the actual retained bone pose available and is reported explicitly. No native GL readback. */
+  function appliedArmPose() {
+    if (disposed || !armAppliedReady) return null;
+    return readAppliedArmPose(bones, { revision: armPoseSerial, reskinPending: lastMatrices === null });
+  }
+
+  /** Copied ACTUAL retained hand-bone matrices in the same arm-eye frame as appliedArmPose.
+   * A pending reskin keeps the previous applied pose; no requested matrix or GPU state is substituted. */
+  function appliedHandPose() {
+    if (disposed || !armAppliedReady) return null;
+    const root = readAppliedArmPose(bones, { revision: armPoseSerial, reskinPending: lastMatrices === null });
+    if (root === null) return null;
+    const matrices = Object.create(null);
+    for (const b of bones) {
+      if (!HAND_SEGMENTS.includes(b.segment)) continue;
+      const m = b.mesh && b.mesh.matrix && b.mesh.matrix.elements;
+      if (!m || m.length !== 16) fail('scene_state', `retained ${b.segment} needs16 matrix elements`);
+      const values = new Array(16);
+      for (let i = 0; i < 16; i++) {
+        if (typeof m[i] !== 'number' || !Number.isFinite(m[i])) fail('scene_state', `retained ${b.segment}[${i}] is not finite`);
+        values[i] = m[i];
+      }
+      const previous = matrices[b.segment];
+      if (previous) {
+        for (let i = 0; i < 16; i++) if (previous[i] !== values[i]) fail('scene_state', `retained bones disagree for ${b.segment}`);
+      } else matrices[b.segment] = Object.freeze(values);
+    }
+    for (const segment of HAND_SEGMENTS) {
+      if (!Object.prototype.hasOwnProperty.call(matrices, segment)) fail('scene_state', `retained hand segment missing: ${segment}`);
+    }
+    return Object.freeze({
+      kind: 'ns-applied-hand-pose-r210',
+      sourceDomain: root.sourceDomain, from: root.from, to: root.to,
+      revision: root.revision, reskinPending: root.reskinPending,
+      matrices: Object.freeze(matrices)
+    });
+  }
+
+  /** Copied retained CPU render inputs. This getter never updates transforms, bounds, clocks or rendering.
+   * World matrices may still be dirty; rendererFrame includes every Three render pass, including the face pass.
+   * No requested matrix, inferred source id or GPU/pixel result is substituted for missing retained state. */
+  function appliedHandRenderState() {
+    const kind = 'ns-applied-hand-render-state-r233';
+    const frame = () => {
+      const v = renderer.info && renderer.info.render && renderer.info.render.frame;
+      return Number.isSafeInteger(v) && v >= 0 ? v : null;
+    };
+    const revision = armPoseSerial, rendererFrame = frame();
+    const stamp = {
+      kind, revision, rendererFrame,
+      rendererFrameStatus: rendererFrame === null ? 'unavailable' : 'retained',
+      counterDomain: 'Three renderer.info.render.frame; includes face passes; not a main-pass or native acknowledgement',
+      reskinPending: lastMatrices === null, contextLost: lost
+    };
+    if (disposed) return Object.freeze({ ...stamp, status: 'disposed', reason: 'scene-disposed' });
+    if (!armSet) return Object.freeze({ ...stamp, status: 'absent', reason: 'arm-not-installed' });
+    if (!armAppliedReady || lost) return Object.freeze({ ...stamp, status: 'pending', reason: lost ? 'context-lost' : 'no-complete-retained-pose' });
+    try {
+      const finite = (v, label) => {
+        if (typeof v !== 'number' || !Number.isFinite(v)) fail('scene_readback', `${label} is not finite`);
+        return v;
+      };
+      const integer = (v, label) => {
+        if (!Number.isSafeInteger(v) || v < 0) fail('scene_readback', `${label} is not a nonnegative safe integer`);
+        return v;
+      };
+      const bool = (v, label) => {
+        if (typeof v !== 'boolean') fail('scene_readback', `${label} is not boolean`);
+        return v;
+      };
+      const matrix = (m, label) => {
+        const e = m && m.elements;
+        if (!e || e.length !== 16) fail('scene_readback', `${label} needs16 retained elements`);
+        const out = new Array(16);
+        for (let i = 0; i < 16; i++) out[i] = finite(e[i], `${label}[${i}]`);
+        return Object.freeze(out);
+      };
+      const vector = (v, label) => {
+        if (!v) fail('scene_readback', `${label} is missing`);
+        return Object.freeze([finite(v.x, `${label}.x`), finite(v.y, `${label}.y`), finite(v.z, `${label}.z`)]);
+      };
+      const layerMask = n => n && n.layers && Number.isInteger(n.layers.mask) ? n.layers.mask : null;
+      const node = (n, label) => {
+        if (!n) fail('scene_readback', `${label} is missing`);
+        return Object.freeze({
+          id: integer(n.id, `${label}.id`), uuid: typeof n.uuid === 'string' ? n.uuid : null,
+          name: typeof n.name === 'string' ? n.name : null,
+          parentId: n.parent ? integer(n.parent.id, `${label}.parentId`) : null,
+          visible: bool(n.visible, `${label}.visible`), layersMask: layerMask(n),
+          matrixAutoUpdate: bool(n.matrixAutoUpdate, `${label}.matrixAutoUpdate`),
+          matrixWorldAutoUpdate: bool(n.matrixWorldAutoUpdate, `${label}.matrixWorldAutoUpdate`),
+          matrixWorldNeedsUpdate: bool(n.matrixWorldNeedsUpdate, `${label}.matrixWorldNeedsUpdate`),
+          matrix: matrix(n.matrix, `${label}.matrix`), matrixWorld: matrix(n.matrixWorld, `${label}.matrixWorld`)
+        });
+      };
+      const attribute = (a, label) => {
+        if (!a) return Object.freeze({ status: 'absent' });
+        return Object.freeze({ status: 'retained', count: integer(a.count, `${label}.count`),
+          itemSize: integer(a.itemSize, `${label}.itemSize`), version: integer(a.version, `${label}.version`),
+          arrayLength: a.array ? integer(a.array.length, `${label}.arrayLength`) : null });
+      };
+      const geometry = (g, full) => {
+        if (!g) fail('scene_readback', 'bone geometry is missing');
+        const p = g.attributes && g.attributes.position;
+        if (!p) fail('scene_readback', 'bone position attribute is missing');
+        const fp = full && full.attributes && full.attributes.position;
+        const box = g.boundingBox, sphere = g.boundingSphere, dr = g.drawRange;
+        if (!dr) fail('scene_readback', 'geometry drawRange is missing');
+        const drawCount = dr.count === Infinity ? null : integer(dr.count, 'drawRange.count');
+        return Object.freeze({
+          id: integer(g.id, 'geometry.id'), uuid: typeof g.uuid === 'string' ? g.uuid : null,
+          fullStatus: full ? 'retained' : 'not-retained',
+          fullId: full ? integer(full.id, 'fullGeometry.id') : null,
+          fullUuid: full && typeof full.uuid === 'string' ? full.uuid : null,
+          isFullGeometry: full ? g === full : null,
+          positionIsFullAttribute: fp ? p === fp : null,
+          positionIsFullArray: fp && p.array && fp.array ? p.array === fp.array : null,
+          position: attribute(p, 'position'), index: attribute(g.index, 'index'),
+          drawRange: Object.freeze({ start: integer(dr.start, 'drawRange.start'), count: drawCount,
+            countKind: dr.count === Infinity ? 'unbounded' : 'finite' }),
+          boundingBox: box ? Object.freeze({ status: 'retained', min: vector(box.min, 'box.min'), max: vector(box.max, 'box.max') }) : Object.freeze({ status: 'not-retained' }),
+          boundingSphere: sphere ? Object.freeze({ status: 'retained', center: vector(sphere.center, 'sphere.center'), radius: finite(sphere.radius, 'sphere.radius') }) : Object.freeze({ status: 'not-retained' })
+        });
+      };
+      integer(revision, 'applied revision');
+      if (revision === 0) fail('scene_readback', 'applied revision must be positive');
+      const cameraMask = layerMask(camera);
+      const entries = bones.map((b, index) => {
+        if (!b || !SEGMENTS.includes(b.segment)) fail('scene_readback', `bone[${index}] has no known segment`);
+        const mesh = b.mesh, retained = node(mesh, `bone[${index}]`);
+        let ancestorVisible = true, attachedToScene = false, n = mesh.parent, depth = 0;
+        const seen = new Set();
+        while (n && depth < 64) {
+          if (seen.has(n)) fail('scene_readback', `bone[${index}] has a parent cycle`);
+          seen.add(n); depth++;
+          ancestorVisible = bool(n.visible, `bone[${index}] ancestor.visible`) && ancestorVisible;
+          if (n === scene) { attachedToScene = true; break; }
+          n = n.parent;
+        }
+        if (n && !attachedToScene && depth === 64) fail('scene_readback', `bone[${index}] parent depth exceeds64`);
+        const mask = layerMask(mesh);
+        return Object.freeze({
+          index, sourceElementId: typeof b.sourceElementId === 'string' ? b.sourceElementId : null,
+          sourceElementIdStatus: typeof b.sourceElementId === 'string' ? 'retained-input' : 'unavailable',
+          segment: b.segment, ...retained,
+          parentIsArmGroup: mesh.parent === armGroup, ancestorVisible, attachedToScene,
+          cameraLayersMatch: mask === null || cameraMask === null ? null : (mask & cameraMask) !== 0,
+          frustumCulled: bool(mesh.frustumCulled, `bone[${index}].frustumCulled`),
+          renderOrder: finite(mesh.renderOrder, `bone[${index}].renderOrder`),
+          geometry: geometry(mesh.geometry, mesh.userData && mesh.userData.nsFullGeometry || null)
+        });
+      });
+      const viewportState = Object.freeze({ width: finite(cssW, 'cssW'), height: finite(cssH, 'cssH'), pixelRatio: finite(cssPr, 'cssPr') });
+      const eyeState = node(eyeRig, 'eyeRig'), armState = node(armGroup, 'armGroup');
+      const cameraStateRetained = Object.freeze({ ...node(camera, 'camera'), matrixWorldInverse: matrix(camera.matrixWorldInverse, 'camera.view'),
+        projectionMatrix: matrix(camera.projectionMatrix, 'camera.projection'), mode: camState.mode });
+      const endFrame = frame();
+      return Object.freeze({
+        ...stamp, status: 'present', revisionAfter: armPoseSerial, rendererFrameAfter: endFrame,
+        countersUnchanged: armPoseSerial === revision && endFrame === rendererFrame,
+        boneCount: entries.length, expectedBoneCount: 30, countMatches: entries.length === 30,
+        matrixLayout: 'column-major16',
+        domains: Object.freeze({ boneLocal: 'source-rest-mm -> arm-eye-m', boneWorld: 'source-rest-mm -> world-m',
+          rigWorld: 'arm-eye-m -> world-m', cameraWorld: 'camera-m -> world-m', view: 'world-m -> camera-m', projection: 'camera-m -> clip', bounds: 'source-rest-mm' }),
+        cssViewport: viewportState, eyeRig: eyeState, armGroup: armState,
+        armParentIsEyeRig: armGroup.parent === eyeRig, eyeParentIsScene: eyeRig.parent === scene,
+        camera: cameraStateRetained,
+        bones: Object.freeze(entries),
+        limit: 'Retained CPU inputs only; dirty flags, visibility and geometry identity do not prove draw submission, occlusion, GPU state, anatomy or atomic pixels'
+      });
+    } catch (err) {
+      return Object.freeze({ ...stamp, status: 'error', error: err && err.message ? String(err.message) : String(err) });
+    }
+  }
+
+  /** R311 opt-in retained CPU surface query; NEVER called by render/update or default inspect.
+   * Only local math/report objects are written. No raycaster, bounds computation, world update or GL call.
+   * This is retained geometric candidate evidence, never a fragment/pixel/occlusion or anatomy verdict. */
+  function foregroundSurfaceTrace(request) {
+    const kind = 'ns-foreground-surface-trace-r311';
+    const bounds = { cssPoints: 2, nodes: 2048, meshes: 1024, groupsPerMesh: 128,
+      triangleVisits: 8000000, reportedSurfaces: 64, noArmClosestCandidates: 8, diagnosticUtf8Bytes: 32768 };
+    const counts = { nodesVisited: 0, hiddenSubtrees: 0, layerExcludedMeshes: 0, cachedFrustumExcludedMeshes: 0,
+      meshesPrepared: 0, ownArmPrimaryMeshes: 0, ownArmDepthMeshes: 0, nonArmMeshes: 0,
+      triangleVisits: 0, clippedIntersections: 0, excludedLinesPointsSprites: 0, registeredOwnArmPrimaries: bones.length + muscles.length };
+    const observed = new Map(), attributes = new Map(), entries = [], identities = new Map();
+    const stage = { name: 'request', preparedComplete: false, countedComplete: false };
+    const numberTag = v => typeof v === 'number' ? (Number.isNaN(v) ? 'NaN' : v === Infinity ? '+Infinity' : v === -Infinity ? '-Infinity' : v) : typeof v;
+    const refuse = (code, detail) => { throw { r311Refusal: true, code, detail }; };
+    const finite = (v, field) => { if (!Number.isFinite(v)) refuse('nonfinite', { field, actual: numberTag(v) }); return v; };
+    const integer = (v, field) => { if (!Number.isSafeInteger(v) || v < 0) refuse('invalid_integer', { field, actual: numberTag(v) }); return v; };
+    const boolean = (v, field) => { if (typeof v !== 'boolean') refuse('invalid_boolean', { field, actualType: typeof v }); return v; };
+    const array16 = (m, field) => {
+      if (!m || !m.elements || m.elements.length !== 16) refuse('missing_matrix', { field });
+      return Array.from(m.elements, (v, i) => finite(v, `${field}[${i}]`));
+    };
+    const vector = (v, field) => { if (!v) refuse('missing_vector', { field }); return [finite(v.x, `${field}.x`), finite(v.y, `${field}.y`), finite(v.z, `${field}.z`)]; };
+    const layers = object => {
+      const mask = object.layers && object.layers.mask;
+      if (!Number.isInteger(mask) || mask < -2147483648 || mask > 4294967295) refuse('invalid_layers', { objectId: object.id, actual: numberTag(mask) });
+      return mask >>> 0;
+    };
+    const frame = () => { const v = renderer.info && renderer.info.render && renderer.info.render.frame; return Number.isSafeInteger(v) && v >= 0 ? v : null; };
+    const start = { rendererFrame: frame(), rendererFrameRaw: numberTag(renderer.info && renderer.info.render ? renderer.info.render.frame : undefined), rendererFrameStatus: frame() === null ? 'unavailable' : 'retained', armPoseSerial: numberTag(armPoseSerial), reskinPending: lastMatrices === null, contextLost: lost, disposed };
+    const matricesRef = lastMatrices;
+    const readNode = object => {
+      if (observed.has(object)) return observed.get(object);
+      const id = integer(object.id, 'object.id');
+      const value = { objectId: id, name: typeof object.name === 'string' ? object.name : null,
+        type: typeof object.type === 'string' ? object.type : null, parentId: object.parent ? integer(object.parent.id, 'parent.id') : null,
+        visible: boolean(object.visible, `object[${id}].visible`), layersMask: layers(object),
+        matrixAutoUpdate: boolean(object.matrixAutoUpdate, `object[${id}].matrixAutoUpdate`),
+        matrixWorldAutoUpdate: boolean(object.matrixWorldAutoUpdate, `object[${id}].matrixWorldAutoUpdate`),
+        matrixWorldNeedsUpdate: boolean(object.matrixWorldNeedsUpdate, `object[${id}].matrixWorldNeedsUpdate`),
+        local: array16(object.matrix, `object[${id}].local`), world: array16(object.matrixWorld, `object[${id}].world`),
+        renderOrder: finite(object.renderOrder, `object[${id}].renderOrder`) };
+      observed.set(object, value);
+      return value;
+    };
+    const stampAfter = () => {
+      let unchanged = frame() === start.rendererFrame && armPoseSerial === start.armPoseSerial && lastMatrices === matricesRef && lost === start.contextLost && disposed === start.disposed;
+      for (const [object, before] of observed) {
+        if (object.parent && object.parent.id !== before.parentId || !object.parent && before.parentId !== null ||
+            object.visible !== before.visible || (object.layers.mask >>> 0) !== before.layersMask ||
+            object.matrixWorldNeedsUpdate !== before.matrixWorldNeedsUpdate || object.matrixAutoUpdate !== before.matrixAutoUpdate ||
+            object.matrixWorldAutoUpdate !== before.matrixWorldAutoUpdate || object.renderOrder !== before.renderOrder) unchanged = false;
+        for (let i = 0; i < 16; i++) if (object.matrix.elements[i] !== before.local[i] || object.matrixWorld.elements[i] !== before.world[i]) unchanged = false;
+      }
+      for (const [attribute, before] of attributes) if (attribute.array !== before.array || attribute.version !== before.version || attribute.count !== before.count) unchanged = false;
+      if (cameraSnapshot) for (let i = 0; i < 16; i++) if (camera.projectionMatrix.elements[i] !== cameraSnapshot.projection[i] || camera.matrixWorldInverse.elements[i] !== cameraSnapshot.view[i]) unchanged = false;
+      if (viewport && (cssW !== viewport.css[0] || cssH !== viewport.css[1] || cssPr !== viewport.cachedPixelRatio || canvas.width !== viewport.canvasBuffer[0] || canvas.height !== viewport.canvasBuffer[1])) unchanged = false;
+      return { rendererFrame: frame(), rendererFrameRaw: numberTag(renderer.info && renderer.info.render ? renderer.info.render.frame : undefined), armPoseSerial: numberTag(armPoseSerial), contextLost: lost, disposed, observedFieldsUnchanged: unchanged,
+        observedNodeCount: observed.size, observedAttributeCount: attributes.size,
+        scope: 'Selected cached flags/matrices, attribute identities/versions/counts and counters only; no full-buffer hash, GPU synchronization or atomic pixel proof' };
+    };
+    const limits = [
+      'CPU retained geometric surfaces only; no GPU fragment/pixel identity, visibility verdict or anatomy/mechanics acceptance',
+      'Shader vertex displacement, fragment discard/alpha/maps, stencil/depth functions, polygon offset, blending/sorting, MSAA and raster coverage are not simulated',
+      'Current main-camera main scene and active ghost-face pass only; inset-face pass, DOM/HUD, lines/points/sprites and scene background are outside triangle scope',
+      'Cached matrices/bounds/versions can differ from submitted GPU buffers; dirty flags and unchanged counters are observations, not coherent-frame certification',
+      'Hits use current position/index/drawRange/groups, not nsFullGeometry indices; transparent DoubleSide may issue two GPU passes but one geometric surface is reported',
+      'No-arm fallback is closest geometric candidates only, never established foreground occlusion; equal-distance non-arm surfaces are separately counted',
+      'First refusal stops this invocation; unexamined data is explicit, so refusal records are complete records, not an exhaustive scene fault inventory',
+      'Local byte bound does not certify the unchanged 65536-byte enclosing callback cap; Root must check exact serialized return separately'
+    ];
+    let cameraSnapshot = null, viewport = null;
+    try {
+      if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(k => k !== 'pointsCSS')) refuse('request_shape', { expected: '{pointsCSS:[[x,y],...]}; no defaults or other controls' });
+      if (!Array.isArray(request.pointsCSS) || request.pointsCSS.length < 1 || request.pointsCSS.length > bounds.cssPoints) refuse('point_count', { requiredMin: 1, requiredMax: bounds.cssPoints });
+      const points = Array.from(request.pointsCSS, (p, i) => {
+        if (!Array.isArray(p) || p.length !== 2) refuse('point_shape', { pointIndex: i });
+        return [finite(p[0], `pointsCSS[${i}][0]`), finite(p[1], `pointsCSS[${i}][1]`)];
+      });
+      if (lost || disposed) refuse('scene_unavailable', { contextLost: lost, disposed });
+      if (!camera.isPerspectiveCamera || camera.coordinateSystem !== THREE.WebGLCoordinateSystem) refuse('camera_unsupported', { type: camera.type, coordinateSystem: numberTag(camera.coordinateSystem) });
+      const size = renderer.getSize(new THREE.Vector2()), buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const pr = finite(renderer.getPixelRatio(), 'renderer.pixelRatio');
+      const vp = renderer.getViewport(new THREE.Vector4()), pixelVP = renderer.getCurrentViewport(new THREE.Vector4()), scissorTest = renderer.getScissorTest();
+      viewport = { css: [finite(cssW, 'cssW'), finite(cssH, 'cssH')], cachedPixelRatio: finite(cssPr, 'cssPr'),
+        rendererCSS: [finite(size.x, 'renderer.width'), finite(size.y, 'renderer.height')],
+        drawingBuffer: [integer(buffer.x, 'buffer.width'), integer(buffer.y, 'buffer.height')],
+        canvasBuffer: [integer(canvas.width, 'canvas.width'), integer(canvas.height, 'canvas.height')],
+        rendererPixelRatio: pr, devicePixelRatio: view ? numberTag(view.devicePixelRatio) : 'unavailable-no-window',
+        rendererViewportCSS: [finite(vp.x, 'viewport.x'), finite(vp.y, 'viewport.y'), finite(vp.z, 'viewport.width'), finite(vp.w, 'viewport.height')],
+        currentViewportPixels: [integer(pixelVP.x, 'pixelViewport.x'), integer(pixelVP.y, 'pixelViewport.y'), integer(pixelVP.z, 'pixelViewport.width'), integer(pixelVP.w, 'pixelViewport.height')],
+        scissorTest: boolean(scissorTest, 'renderer.scissorTest'), qualityMode: qState.mode, qualityLevel: integer(qState.level, 'quality.level') };
+      if (!(cssW > 0 && cssH > 0 && buffer.x > 0 && buffer.y > 0 && pr > 0) || size.x !== cssW || size.y !== cssH || buffer.x !== canvas.width || buffer.y !== canvas.height ||
+          vp.x !== 0 || vp.y !== 0 || vp.z !== cssW || vp.w !== cssH || pixelVP.x !== 0 || pixelVP.y !== 0 || pixelVP.z !== Math.round(cssW * pr) || pixelVP.w !== Math.round(cssH * pr) || !(pixelVP.z > 0 && pixelVP.w > 0) || scissorTest) refuse('viewport_not_full_main', { viewport });
+      const c = readNode(camera), projection = array16(camera.projectionMatrix, 'camera.projection'), viewMatrix = array16(camera.matrixWorldInverse, 'camera.view');
+      cameraSnapshot = { ...c, projection, view: viewMatrix, mode: camState.mode,
+        near: finite(camera.near, 'camera.near'), far: finite(camera.far, 'camera.far'), fovYDeg: finite(camera.fov, 'camera.fov') };
+      const pv = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().fromArray(projection), new THREE.Matrix4().fromArray(viewMatrix));
+      if (!Number.isFinite(pv.determinant()) || pv.determinant() === 0) refuse('singular_projection_view', {});
+      const invPV = pv.clone().invert(); array16(invPV, 'inverseProjectionView');
+      const frustum = new THREE.Frustum().setFromProjectionMatrix(pv, THREE.WebGLCoordinateSystem);
+      for (const [i, plane] of frustum.planes.entries()) { vector(plane.normal, `frustum[${i}].normal`); finite(plane.constant, `frustum[${i}].constant`); }
+      const tag = (mesh, role, sourceElementId = null, ownArm = false, segment = null, regionId = null) => {
+        if (mesh) identities.set(mesh, { role, sourceElementId: typeof sourceElementId === 'string' ? sourceElementId : null,
+          sourceIdStatus: typeof sourceElementId === 'string' ? 'retained-loader-id' : 'unavailable-no-inferred-id', ownArm, segment, regionId });
+      };
+      for (const b of bones) { tag(b.mesh, 'own-arm-bone', b.sourceElementId, true, b.segment); tag(b.mirror, 'mirror-arm-bone', b.sourceElementId, false, b.segment); }
+      for (const m of muscles) { tag(m.mesh, 'own-arm-muscle', m.id, true); tag(m.mirror, 'mirror-arm-muscle', m.id); }
+      for (const b of body) { tag(b.mesh, b.face ? 'face-layer' : 'own-body', b.id); tag(b.mirror, 'mirror-body', b.id); tag(b.inPlace, 'in-place-face', b.id); }
+      for (const mesh of glass) tag(mesh, 'brain-glass');
+      for (const mesh of glassDepth) tag(mesh, 'brain-glass-depth');
+      for (const mesh of glassXray) tag(mesh, 'brain-glass-xray');
+      for (const region of regions) {
+        for (const mesh of region.meshes) tag(mesh, 'brain-region', null, false, null, region.id);
+        for (const mesh of region.depthMeshes) tag(mesh, 'brain-region-depth', null, false, null, region.id);
+      }
+      tag(glowOwn.mesh, 'own-glow-link'); tag(glowMirror.mesh, 'mirror-glow-link');
+      for (const target of ['brain', 'mirror']) {
+        const rig = arrowSets[target] && arrowSets[target].rig;
+        if (rig && rig.arrows) for (const dir of ARROW_DIRS) if (rig.arrows[dir]) tag(rig.arrows[dir].mesh, `${target}-orbit-arrow-${dir}`);
+      }
+      const materialState = (m, objectId, slot) => {
+        if (!m) refuse('missing_material', { objectId, slot });
+        const side = integer(m.side, 'material.side');
+        if (![THREE.FrontSide, THREE.BackSide, THREE.DoubleSide].includes(side)) refuse('unsupported_side', { objectId, slot, side });
+        if (m.wireframe === true) refuse('wireframe_not_triangles', { objectId, slot });
+        const out = { materialId: integer(m.id, 'material.id'), type: typeof m.type === 'string' ? m.type : null,
+          side, visible: boolean(m.visible, 'material.visible'), depthTest: boolean(m.depthTest, 'material.depthTest'),
+          depthWrite: boolean(m.depthWrite, 'material.depthWrite'), colorWrite: boolean(m.colorWrite, 'material.colorWrite'),
+          transparent: boolean(m.transparent, 'material.transparent'), opacity: finite(m.opacity, 'material.opacity'),
+          alphaTest: finite(m.alphaTest, 'material.alphaTest'), depthFunc: finite(m.depthFunc, 'material.depthFunc'), blending: finite(m.blending, 'material.blending'),
+          polygonOffset: boolean(m.polygonOffset, 'material.polygonOffset'), polygonOffsetFactor: finite(m.polygonOffsetFactor, 'material.polygonOffsetFactor'),
+          polygonOffsetUnits: finite(m.polygonOffsetUnits, 'material.polygonOffsetUnits'), stencilWrite: boolean(m.stencilWrite, 'material.stencilWrite'),
+          alphaHash: m.alphaHash === true, alphaToCoverage: m.alphaToCoverage === true, forceSinglePass: m.forceSinglePass === true,
+          customShaderMaterial: m.isShaderMaterial === true || m.isRawShaderMaterial === true,
+          customOnBeforeCompile: m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile,
+          mapPresent: Boolean(m.map), alphaMapPresent: Boolean(m.alphaMap), displacementMapPresent: Boolean(m.displacementMap),
+          clippingPlaneCount: Array.isArray(m.clippingPlanes) ? m.clippingPlanes.length : 0,
+          uniformShaderState: 'not evaluated or invoked; CPU retained positions only' };
+        return out;
+      };
+      const attributeState = (a, field, itemSize, indexed) => {
+        if (!a || !a.isBufferAttribute || a.isInterleavedBufferAttribute || a.isGLBufferAttribute || a.normalized !== false || a.itemSize !== itemSize ||
+            !ArrayBuffer.isView(a.array) || a.array instanceof DataView || (typeof SharedArrayBuffer === 'function' && a.array.buffer instanceof SharedArrayBuffer)) refuse('unsupported_attribute', { field, required: 'ordinary unnormalized nonshared CPU BufferAttribute', itemSize });
+        const count = integer(a.count, `${field}.count`), length = integer(a.array.length, `${field}.array.length`);
+        if (length !== count * itemSize || indexed && !['Uint8Array', 'Uint16Array', 'Uint32Array'].includes(a.array.constructor.name) || !indexed && !['Float32Array', 'Float64Array'].includes(a.array.constructor.name)) refuse('attribute_layout', { field, count, length, itemSize, type: a.array.constructor.name });
+        const out = { count, itemSize, length, arrayType: a.array.constructor.name, byteLength: integer(a.array.byteLength, `${field}.bytes`),
+          version: integer(a.version, `${field}.version`), normalized: false, usage: finite(a.usage, `${field}.usage`) };
+        attributes.set(a, { array: a.array, version: a.version, count: a.count });
+        return out;
+      };
+      stage.name = 'prepare';
+      const activeGhostFace = faceAmount > 0 && faceGroup.visible && faceMode === 'ghost';
+      const stack = [{ object: scene, path: [], pass: 'main', groupOrder: 0 }];
+      if (activeGhostFace) stack.push({ object: faceScene, path: [], pass: 'ghost-face-second-pass', groupOrder: 0 });
+      while (stack.length) {
+        const { object, path, pass, groupOrder } = stack.pop();
+        if (++counts.nodesVisited > bounds.nodes) refuse('node_work_bound', { maximum: bounds.nodes });
+        if (!object || !Array.isArray(object.children)) refuse('invalid_node', { pass });
+        if (object.visible === false) { counts.hiddenSubtrees++; continue; }
+        const state = readNode(object), chain = [...path, object];
+        const order = object.isGroup && (state.layersMask & c.layersMask) ? state.renderOrder : groupOrder;
+        if (object.isLOD && object.autoUpdate && (state.layersMask & c.layersMask)) refuse('lod_auto_update_unobserved', { objectId: state.objectId });
+        if (object.isLine || object.isPoints || object.isSprite) counts.excludedLinesPointsSprites++;
+        if (object.isMesh && !(state.layersMask & c.layersMask)) counts.layerExcludedMeshes++;
+        if (object.isMesh && (state.layersMask & c.layersMask)) {
+          if (entries.length >= bounds.meshes) refuse('mesh_work_bound', { maximum: bounds.meshes });
+          const geometry = object.geometry;
+          if (object.isSkinnedMesh || object.isInstancedMesh || object.isBatchedMesh || !geometry || !geometry.isBufferGeometry || geometry.isInstancedBufferGeometry ||
+              geometry.morphAttributes && Object.values(geometry.morphAttributes).some(a => a && a.length)) refuse('unsupported_mesh', { objectId: state.objectId, type: state.type, required: 'ordinary Mesh, no morph/GPU skin/instance/batch' });
+          const world = new THREE.Matrix4().fromArray(state.world), det = world.determinant();
+          if (!Number.isFinite(det) || det === 0) refuse('singular_world', { objectId: state.objectId, determinant: numberTag(det) });
+          const inverse = world.clone().invert(); array16(inverse, `object[${state.objectId}].inverseWorld`);
+          let cull = { enabled: boolean(object.frustumCulled, 'mesh.frustumCulled'), retainedSphereTest: null, source: 'not-required' };
+          if (object.frustumCulled) {
+            const cached = object.boundingSphere !== undefined ? object.boundingSphere : geometry.boundingSphere;
+            if (!cached || !cached.center) refuse('cached_bounds_missing', { objectId: state.objectId, computedBounds: false });
+            const center = vector(cached.center, 'cachedSphere.center'), radius = finite(cached.radius, 'cachedSphere.radius');
+            if (radius < 0) refuse('invalid_cached_sphere', { objectId: state.objectId, radius });
+            const sphere = new THREE.Sphere(new THREE.Vector3().fromArray(center), radius).applyMatrix4(world);
+            vector(sphere.center, 'worldSphere.center'); finite(sphere.radius, 'worldSphere.radius');
+            cull = { enabled: true, retainedSphereTest: frustum.intersectsSphere(sphere), source: object.boundingSphere !== undefined ? 'object.boundingSphere' : 'geometry.boundingSphere', localSphere: { center, radius } };
+          }
+          if (cull.retainedSphereTest === false) counts.cachedFrustumExcludedMeshes++;
+          else {
+            const position = geometry.attributes.position, index = geometry.index;
+            const posState = attributeState(position, `geometry[${geometry.id}].position`, 3, false);
+            const idxState = index === null ? null : attributeState(index, `geometry[${geometry.id}].index`, 1, true);
+            const size = idxState ? idxState.count : posState.count;
+            const range = geometry.drawRange;
+            if (!range) refuse('missing_draw_range', { objectId: state.objectId });
+            const rangeStart = integer(range.start, 'drawRange.start'), rangeCount = range.count === Infinity ? Infinity : integer(range.count, 'drawRange.count');
+            const groups = geometry.groups;
+            if (!Array.isArray(groups) || groups.length > bounds.groupsPerMesh) refuse('groups_bound_or_invalid', { objectId: state.objectId, maximum: bounds.groupsPerMesh });
+            const groupStates = groups.map((g, i) => ({ index: i, start: integer(g.start, 'group.start'), count: integer(g.count, 'group.count'), materialIndex: integer(g.materialIndex, 'group.materialIndex') }));
+            const materialArray = Array.isArray(object.material), drawCalls = [];
+            if (!materialArray && !object.material) refuse('missing_scalar_material', { objectId: state.objectId });
+            const slots = materialArray ? groupStates.map(g => ({ group: g, slot: g.materialIndex, material: object.material[g.materialIndex] })) : [{ group: null, slot: null, material: object.material }];
+            for (const slot of slots) {
+              // Renderer skips absent/invisible array slots; this is reported in geometry metadata, not guessed visible.
+              if (!slot.material || slot.material.visible === false) continue;
+              const material = materialState(slot.material, state.objectId, slot.slot);
+              const begin = Math.max(0, rangeStart, slot.group ? slot.group.start : 0);
+              const end = Math.min(size, rangeStart + rangeCount, slot.group ? slot.group.start + slot.group.count : Infinity);
+              const count = Math.max(0, end - begin);
+              if (!Number.isSafeInteger(begin) || !Number.isSafeInteger(end) || begin % 3 !== 0 || count % 3 !== 0) refuse('partial_triangle_draw_range', { objectId: state.objectId, begin, end });
+              if (count > 0) drawCalls.push({ begin, end, group: slot.group ? slot.group.index : null, slot: slot.slot, material });
+            }
+            let identity = identities.get(object);
+            if (!identity && object.userData && object.userData.depthTwin === true && identities.has(object.parent)) identity = { ...identities.get(object.parent), role: `${identities.get(object.parent).role}-depth-prepass` };
+            if (!identity) identity = { role: 'unclassified-main-mesh', sourceElementId: null, sourceIdStatus: 'unavailable-no-inferred-id', ownArm: false, segment: null, regionId: null };
+            const full = object.userData && object.userData.nsFullGeometry;
+            const entry = { object, state, chain, pass, groupOrder: order, identity, geometry, position, index, world, inverse, cull, drawCalls,
+              geometryState: { geometryId: integer(geometry.id, 'geometry.id'), uuid: typeof geometry.uuid === 'string' ? geometry.uuid : null,
+                position: posState, index: idxState, drawRange: { start: rangeStart, count: rangeCount === Infinity ? 'Infinity' : rangeCount }, groups: groupStates,
+                materialArray, skippedMaterialSlots: slots.filter(s => !s.material || s.material.visible === false).map(s => ({ group: s.group ? s.group.index : null, slot: s.slot, status: s.material ? 'invisible' : 'absent-renderer-skips' })),
+                currentIsRetainedFullGeometry: full ? geometry === full : null, retainedFullGeometryPresent: Boolean(full),
+                positionBufferDomain: identity.ownArm && identity.role.includes('muscle') ? 'actual current CPU-skinned/layered positions' : 'actual current geometry position attribute',
+                fingerprintScope: 'runtime ids, versions and layout only; no invented source hash or GPU buffer attestation' } };
+            entries.push(entry); counts.meshesPrepared++;
+            if (identity.ownArm) { if (identity.role.endsWith('-depth-prepass')) counts.ownArmDepthMeshes++; else counts.ownArmPrimaryMeshes++; }
+            else counts.nonArmMeshes++;
+          }
+        }
+        // Visibility is inherited; layers are per object and do NOT exclude children, matching projectObject.
+        for (let i = object.children.length - 1; i >= 0; i--) stack.push({ object: object.children[i], path: chain, pass, groupOrder: order });
+      }
+      stage.preparedComplete = true;
+      const samples = points.map(([x, y], i) => {
+        if (x < 0 || y < 0 || x >= cssW || y >= cssH) refuse('point_outside_canvas', { pointIndex: i, requestedCSS: [x, y], css: [cssW, cssH] });
+        const bx = Math.floor(x * buffer.x / cssW), byTop = Math.floor(y * buffer.y / cssH);
+        const byBottom = buffer.y - 1 - byTop;
+        if (bx < pixelVP.x || bx >= pixelVP.x + pixelVP.z || byBottom < pixelVP.y || byBottom >= pixelVP.y + pixelVP.w) refuse('pixel_outside_current_viewport', { pointIndex: i, bufferPixel: [bx, byBottom] });
+        // Current cached GL viewport uses rounded CSS*ratio; drawing-buffer dimensions may be floored.
+        const ndc = [2 * (bx + 0.5 - pixelVP.x) / pixelVP.z - 1, 2 * (byBottom + 0.5 - pixelVP.y) / pixelVP.w - 1];
+        const near = new THREE.Vector3(ndc[0], ndc[1], -1).applyMatrix4(invPV), far = new THREE.Vector3(ndc[0], ndc[1], 1).applyMatrix4(invPV);
+        vector(near, 'ray.near'); vector(far, 'ray.far');
+        const direction = far.clone().sub(near); if (!(finite(direction.lengthSq(), 'ray.lengthSq') > 0)) refuse('degenerate_ray', { pointIndex: i });
+        direction.normalize();
+        return { index: i, requestedCSS: [x, y], alignedCSS: [(bx + 0.5) * cssW / buffer.x, (byTop + 0.5) * cssH / buffer.y],
+          bufferPixelTopLeft: [bx, byTop], bufferPixelBottomLeft: [bx, byBottom], ndc,
+          ray: new THREE.Ray(near, direction), rayState: { originWorld: vector(near, 'ray.origin'), directionWorld: vector(direction, 'ray.direction'),
+            originDomain: 'near clip plane unprojected with inverse(actual P*V), world m', cameraWorldOrigin: [c.world[12], c.world[13], c.world[14]] } };
+      });
+      const a = new THREE.Vector3(), b = new THREE.Vector3(), ctri = new THREE.Vector3(), localPoint = new THREE.Vector3();
+      const worldPoint = new THREE.Vector3(), clip = new THREE.Vector4(), bary = new THREE.Vector3();
+      const scan = (entry, sample, visit) => {
+        const localRay = sample.ray.clone().applyMatrix4(entry.inverse);
+        vector(localRay.origin, 'localRay.origin'); vector(localRay.direction, 'localRay.direction');
+        const pos = entry.position.array, index = entry.index && entry.index.array;
+        const load = (v, id) => {
+          const k = 3 * id, x = pos[k], y = pos[k + 1], z = pos[k + 2];
+          if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) refuse('nonfinite_position', { objectId: entry.state.objectId, vertexIndex: id, components: [numberTag(x), numberTag(y), numberTag(z)] });
+          v.set(x, y, z);
+        };
+        for (const draw of entry.drawCalls) for (let offset = draw.begin; offset < draw.end; offset += 3) {
+          if (++counts.triangleVisits > bounds.triangleVisits) refuse('triangle_work_bound', { maximum: bounds.triangleVisits });
+          const ia = index ? index[offset] : offset, ib = index ? index[offset + 1] : offset + 1, ic = index ? index[offset + 2] : offset + 2;
+          if (!Number.isSafeInteger(ia) || !Number.isSafeInteger(ib) || !Number.isSafeInteger(ic) || ia < 0 || ib < 0 || ic < 0 || ia >= entry.position.count || ib >= entry.position.count || ic >= entry.position.count) refuse('index_out_of_range', { objectId: entry.state.objectId, offset, indices: [ia, ib, ic], positionCount: entry.position.count });
+          load(a, ia); load(b, ib); load(ctri, ic);
+          const side = draw.material.side;
+          const hit = side === THREE.BackSide ? localRay.intersectTriangle(ctri, b, a, true, localPoint) : localRay.intersectTriangle(a, b, ctri, side === THREE.FrontSide, localPoint);
+          if (!hit) continue;
+          worldPoint.copy(localPoint).applyMatrix4(entry.world); vector(worldPoint, 'hit.world');
+          clip.set(worldPoint.x, worldPoint.y, worldPoint.z, 1).applyMatrix4(pv);
+          for (const [k, v] of [['x', clip.x], ['y', clip.y], ['z', clip.z], ['w', clip.w]]) finite(v, `hit.clip.${k}`);
+          if (!(clip.w > 0) || clip.z < -clip.w || clip.z > clip.w) { counts.clippedIntersections++; continue; }
+          if (THREE.Triangle.getBarycoord(localPoint, a, b, ctri, bary) === null) refuse('barycentric_degenerate_after_hit', { objectId: entry.state.objectId, offset, indices: [ia, ib, ic] });
+          vector(bary, 'hit.barycentric');
+          visit({ entry, offset, draw, indices: [ia, ib, ic], distance: finite(sample.ray.origin.distanceTo(worldPoint), 'hit.distance'),
+            worldPoint: vector(worldPoint, 'hit.worldPoint'), localPoint: vector(localPoint, 'hit.localPoint'),
+            barycentric: vector(bary, 'hit.barycentric'), clip: [clip.x, clip.y, clip.z, clip.w], ndcDepth: clip.z / clip.w,
+            triangleLocal: [vector(a, 'triangle.a'), vector(b, 'triangle.b'), vector(ctri, 'triangle.c')] });
+        }
+      };
+      const counted = [];
+      stage.name = 'count-nearest-arm-and-foreground';
+      let totalSurfaces = 0;
+      for (const sample of samples) {
+        const own = [], ownMisses = [];
+        for (const entry of entries) if (entry.identity.ownArm) {
+          let nearest = null, ties = 0;
+          scan(entry, sample, hit => { if (!nearest || hit.distance < nearest.distance) { nearest = hit; ties = 0; } else if (hit.distance === nearest.distance) ties++; });
+          if (nearest) own.push({ ...nearest, equalDistanceAlternatives: ties });
+          else ownMisses.push({ objectId: entry.state.objectId, sourceElementId: entry.identity.sourceElementId, role: entry.identity.role, status: 'no-side-eligible-near-far-clipped-triangle-hit' });
+        }
+        const armDistance = own.length ? Math.min(...own.map(h => h.distance)) : null;
+        let nonArmCount = 0, equalArmDistance = 0, allNonArmHits = 0;
+        const fallback = [], closer = [];
+        for (const entry of entries) if (!entry.identity.ownArm) scan(entry, sample, hit => {
+          allNonArmHits++;
+          if (armDistance !== null) {
+            if (hit.distance < armDistance) {
+              nonArmCount++;
+              // R332: retain sufficient payloads during the ORIGINAL count traversal, in its exact order.
+              // Continue every count/validation after64; a required total>64 still refuses before publication.
+              // Any permitted total<=64 implies every required nearer hit is retained (not a partial report).
+              if (closer.length < bounds.reportedSurfaces) closer.push(hit);
+            } else if (hit.distance === armDistance) equalArmDistance++;
+          }
+          else { fallback.push(hit); fallback.sort((x, y) => x.distance - y.distance || x.entry.state.objectId - y.entry.state.objectId || x.offset - y.offset); if (fallback.length > bounds.noArmClosestCandidates) fallback.pop(); }
+        });
+        totalSurfaces += own.length + (armDistance === null ? fallback.length : nonArmCount);
+        counted.push({ sample, own, ownMisses, armDistance, nonArmCount, equalArmDistance, allNonArmHits, fallback, closer });
+      }
+      stage.countedComplete = true;
+      if (totalSurfaces > bounds.reportedSurfaces) refuse('surface_report_bound', { requiredSurfaceRecords: totalSurfaces, maximum: bounds.reportedSurfaces,
+        samples: counted.map(q => ({ pointIndex: q.sample.index, nearestPerOwnArmMesh: q.own.length, nearestArmDistance: q.armDistance, closerNonArmSurfaces: q.nonArmCount, allNonArmTriangleHits: q.allNonArmHits, equalArmDistance: q.equalArmDistance })), publishedPartialSurfaceRecords: false });
+      stage.name = 'materialize-bounded-report';
+      const meshReports = new Map(), nodeReports = new Map();
+      const hitReport = hit => {
+        const e = hit.entry;
+        if (!meshReports.has(e.state.objectId)) {
+          for (const object of e.chain) { const s = observed.get(object); nodeReports.set(s.objectId, s); }
+          meshReports.set(e.state.objectId, { objectId: e.state.objectId, ...e.identity, pass: e.pass, ancestorIds: e.chain.map(o => o.id),
+            parentWorld: e.object.parent ? observed.get(e.object.parent).world : null, customOnBeforeRender: e.object.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender, worldDeterminant: e.world.determinant(), groupOrder: e.groupOrder,
+            frustum: e.cull, geometry: e.geometryState, drawCalls: e.drawCalls.map(d => ({ begin: d.begin, end: d.end, group: d.group, slot: d.slot, material: d.material })) });
+        }
+        return { objectId: e.state.objectId, indexOffset: hit.offset, triangleIndices: hit.indices, groupIndex: hit.draw.group, materialSlot: hit.draw.slot,
+          distanceFromNearPlaneM: hit.distance, localPoint: hit.localPoint, worldPointM: hit.worldPoint, barycentricABC: hit.barycentric,
+          triangleLocal: hit.triangleLocal, clip: hit.clip, ndcDepth: hit.ndcDepth,
+          ...(hit.equalDistanceAlternatives === undefined ? {} : { equalDistanceAlternatives: hit.equalDistanceAlternatives }) };
+      };
+      const resultSamples = counted.map(q => {
+        // R332: complete retained payloads only; NEVER re-intersect geometry to materialize a report.
+        const nonArm = q.closer.map(hitReport);
+        if (q.armDistance !== null && nonArm.length !== q.nonArmCount) refuse('count_materialization_drift', { pointIndex: q.sample.index, counted: q.nonArmCount, materialized: nonArm.length });
+        return { pointIndex: q.sample.index, requestedCSS: q.sample.requestedCSS, alignedCSS: q.sample.alignedCSS,
+          bufferPixelTopLeft: q.sample.bufferPixelTopLeft, bufferPixelBottomLeft: q.sample.bufferPixelBottomLeft, ndc: q.sample.ndc, ray: q.sample.rayState,
+          status: q.armDistance === null ? 'no-arm-hit-unverified' : 'retained-geometric-candidates', nearestArmDistanceFromNearPlaneM: q.armDistance,
+          nearestPerOwnArmMesh: q.own.map(hitReport), eligibleOwnArmMisses: q.ownMisses, closerNonArmSurfaces: nonArm, equalArmDistanceNonArmSurfaces: q.equalArmDistance,
+          noArmClosestCandidates: q.armDistance === null ? q.fallback.map(hitReport) : [], allNonArmTriangleHitCount: q.allNonArmHits,
+          fallbackScope: q.armDistance === null ? `First ${bounds.noArmClosestCandidates} by geometric distance then runtime object id/index offset; ties beyond K are not all included; not completion/render order` : 'not-used' };
+      });
+      const after = stampAfter();
+      if (!after.observedFieldsUnchanged) refuse('observed_state_drift', { after, publishedPartialSurfaceRecords: false });
+      const out = { kind, status: 'retained-geometric-candidates', start, after, bounds, counts, camera: cameraSnapshot, viewport,
+        counterDomain: 'Three renderer.info.render.frame includes face passes; not a main-pass/native acknowledgement',
+        frameDomain: 'retained cached CPU transforms; column-major matrices; source-local units vary by geometry, world and camera in m',
+        surfaceRule: 'One nearest per eligible own-arm registry mesh (including its visible depth twin), ALL non-arm triangle intersections strictly closer than nearest arm hit; no all-behind dump',
+        referenceScope: 'Eligible traversed own-arm registry meshes only; visibility/layer/cached-frustum exclusions are counted, not certified as drawn. No full75 visibility or framing acceptance.',
+        facePass: { mode: faceMode, amount: finite(faceAmount, 'faceAmount'), ghostIncluded: activeGhostFace, insetOutsideScope: faceMode === 'inset' && faceAmount > 0 },
+        samples: resultSamples, meshes: [...meshReports.values()], nodes: [...nodeReports.values()], limits };
+      const logicalJSON = JSON.stringify(out);
+      const bytes = new TextEncoder().encode(logicalJSON).length;
+      if (bytes <= bounds.diagnosticUtf8Bytes) return out; // R341: original successful raw object/JSON stays unchanged.
+
+      // R341: oversized reports ONLY. No filtering, rounding, lost fields or changed geometry/output bounds.
+      // A distinct envelope prevents old consumers treating packed miss triples as old object records.
+      stage.name = 'encode-bounded-report';
+      const encoding = 'eligible-own-arm-misses-table-v1';
+      const envelopeKind = 'ns-foreground-surface-report-envelope-r341';
+      const envelopeStatus = 'encoded-retained-geometric-candidates';
+      const missStatus = 'no-side-eligible-near-far-clipped-triangle-hit';
+      const columns = ['objectId', 'sourceElementId', 'role'];
+      const missKeys = [...columns, 'status'];
+      const reportKeys = ['kind', 'status', 'start', 'after', 'bounds', 'counts', 'camera', 'viewport', 'counterDomain',
+        'frameDomain', 'surfaceRule', 'referenceScope', 'facePass', 'samples', 'meshes', 'nodes', 'limits'];
+      const sampleKeys = ['pointIndex', 'requestedCSS', 'alignedCSS', 'bufferPixelTopLeft', 'bufferPixelBottomLeft', 'ndc', 'ray',
+        'status', 'nearestArmDistanceFromNearPlaneM', 'nearestPerOwnArmMesh', 'eligibleOwnArmMisses', 'closerNonArmSurfaces',
+        'equalArmDistanceNonArmSurfaces', 'noArmClosestCandidates', 'allNonArmTriangleHitCount', 'fallbackScope'];
+      const maxLogicalBytes = 1048576; // Existing full-Scene cap; never a larger local32768-byte output allowance.
+      const rejectEncoding = (reason, detail = {}) => refuse('diagnostic_encoding_refused', {
+        reason, ...detail, requiredUtf8Bytes: bytes, maximum: bounds.diagnosticUtf8Bytes,
+        requiredSurfaceRecords: totalSurfaces, publishedPartialSurfaceRecords: false });
+      const exactRecord = (value, keys, field) => {
+        if (!value || Object.getPrototypeOf(value) !== Object.prototype) rejectEncoding('record_type', { field });
+        const actual = Reflect.ownKeys(value);
+        if (actual.length !== keys.length || actual.some((k, i) => k !== keys[i])) rejectEncoding('record_keys_or_order', {
+          field, actualKeys: actual.map(k => typeof k === 'symbol' ? String(k) : k), expectedKeys: keys });
+        for (const k of keys) {
+          const d = Object.getOwnPropertyDescriptor(value, k);
+          if (!d || !d.enumerable || !Object.prototype.hasOwnProperty.call(d, 'value')) rejectEncoding('non_data_property', { field, key: k });
+        }
+        return value;
+      };
+      const denseArray = (value, maximum, field) => {
+        if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || value.length > maximum) rejectEncoding('array_type_or_bound', { field, maximum });
+        const keys = Reflect.ownKeys(value);
+        if (keys.length !== value.length + 1 || keys[value.length] !== 'length') rejectEncoding('array_extra_or_sparse', { field });
+        for (let i = 0; i < value.length; i++) {
+          const d = Object.getOwnPropertyDescriptor(value, String(i));
+          if (keys[i] !== String(i) || !d || !d.enumerable || !Object.prototype.hasOwnProperty.call(d, 'value')) rejectEncoding('array_extra_sparse_or_accessor', { field, index: i });
+        }
+        return value;
+      };
+      const validateTriple = (id, sourceId, role, field) => {
+        if (!Number.isSafeInteger(id) || id < 0 || (sourceId !== null && typeof sourceId !== 'string') || typeof role !== 'string') {
+          rejectEncoding('miss_value_type', { field, objectId: numberTag(id), sourceElementIdType: sourceId === null ? 'null' : typeof sourceId, roleType: typeof role });
+        }
+      };
+      exactRecord(out, reportKeys, 'logical');
+      if (out.kind !== kind || out.status !== 'retained-geometric-candidates') rejectEncoding('logical_kind_or_status');
+      if (bytes > maxLogicalBytes) refuse('diagnostic_byte_bound', { requiredUtf8Bytes: bytes, maximum: bounds.diagnosticUtf8Bytes,
+        requiredSurfaceRecords: totalSurfaces, logicalSceneMaximum: maxLogicalBytes, attemptedEncoding: encoding, publishedPartialSurfaceRecords: false });
+      const logicalSamples = denseArray(out.samples, bounds.cssPoints, 'logical.samples');
+      if (logicalSamples.length < 1) rejectEncoding('sample_count');
+      const packedSamples = logicalSamples.map((sample, si) => {
+        exactRecord(sample, sampleKeys, `logical.samples[${si}]`);
+        const misses = denseArray(sample.eligibleOwnArmMisses, bounds.meshes, `logical.samples[${si}].eligibleOwnArmMisses`);
+        const rows = misses.map((row, ri) => {
+          const field = `logical.samples[${si}].eligibleOwnArmMisses[${ri}]`;
+          exactRecord(row, missKeys, field);
+          validateTriple(row.objectId, row.sourceElementId, row.role, field);
+          if (row.status !== missStatus) rejectEncoding('miss_status', { field, actualStatus: typeof row.status === 'string' ? row.status : typeof row.status });
+          return [row.objectId, row.sourceElementId, row.role];
+        });
+        return { ...sample, eligibleOwnArmMisses: rows }; // overwrite preserves original sample key position/order.
+      });
+      const envelope = { kind: envelopeKind, status: envelopeStatus, schemaVersion: 1, encoding, logicalKind: kind,
+        logicalUtf8Bytes: bytes, missTable: { columns: columns.slice(), sharedStatus: missStatus },
+        payload: { ...out, samples: packedSamples } };
+      const encodedJSON = JSON.stringify(envelope);
+      const encodedBytes = new TextEncoder().encode(encodedJSON).length;
+      if (encodedBytes > bounds.diagnosticUtf8Bytes) refuse('diagnostic_byte_bound', { requiredUtf8Bytes: bytes,
+        maximum: bounds.diagnosticUtf8Bytes, requiredSurfaceRecords: totalSurfaces, attemptedEncoding: encoding,
+        encodedRequiredUtf8Bytes: encodedBytes, publishedPartialSurfaceRecords: false });
+
+      // Reconstruct from the ACTUAL serialized packed form, not the original object or a claimed roundtrip label.
+      const packed = JSON.parse(encodedJSON);
+      exactRecord(packed, ['kind', 'status', 'schemaVersion', 'encoding', 'logicalKind', 'logicalUtf8Bytes', 'missTable', 'payload'], 'packed');
+      if (packed.kind !== envelopeKind || packed.status !== envelopeStatus || packed.schemaVersion !== 1 || packed.encoding !== encoding ||
+          packed.logicalKind !== kind || !Number.isSafeInteger(packed.logicalUtf8Bytes) || packed.logicalUtf8Bytes <= bounds.diagnosticUtf8Bytes || packed.logicalUtf8Bytes > maxLogicalBytes) rejectEncoding('envelope_metadata');
+      exactRecord(packed.missTable, ['columns', 'sharedStatus'], 'packed.missTable');
+      const packedColumns = denseArray(packed.missTable.columns, columns.length, 'packed.missTable.columns');
+      if (packedColumns.length !== columns.length || packedColumns.some((v, i) => v !== columns[i]) || packed.missTable.sharedStatus !== missStatus) rejectEncoding('table_metadata');
+      exactRecord(packed.payload, reportKeys, 'packed.payload');
+      if (packed.payload.kind !== kind || packed.payload.status !== 'retained-geometric-candidates') rejectEncoding('payload_kind_or_status');
+      const encodedSamples = denseArray(packed.payload.samples, bounds.cssPoints, 'packed.payload.samples');
+      if (encodedSamples.length < 1) rejectEncoding('encoded_sample_count');
+      const reconstructedSamples = encodedSamples.map((sample, si) => {
+        exactRecord(sample, sampleKeys, `packed.payload.samples[${si}]`);
+        const rows = denseArray(sample.eligibleOwnArmMisses, bounds.meshes, `packed.payload.samples[${si}].eligibleOwnArmMisses`);
+        const misses = rows.map((row, ri) => {
+          const field = `packed.payload.samples[${si}].eligibleOwnArmMisses[${ri}]`;
+          denseArray(row, columns.length, field);
+          if (row.length !== columns.length) rejectEncoding('row_arity', { field });
+          validateTriple(row[0], row[1], row[2], field);
+          return { objectId: row[0], sourceElementId: row[1], role: row[2], status: packed.missTable.sharedStatus };
+        });
+        return { ...sample, eligibleOwnArmMisses: misses };
+      });
+      const reconstructed = { ...packed.payload, samples: reconstructedSamples };
+      const reconstructedJSON = JSON.stringify(reconstructed);
+      const reconstructedBytes = new TextEncoder().encode(reconstructedJSON).length;
+      if (reconstructedBytes !== packed.logicalUtf8Bytes || reconstructedBytes > maxLogicalBytes || reconstructedJSON !== logicalJSON) {
+        rejectEncoding('full_json_roundtrip_mismatch', { reconstructedUtf8Bytes: reconstructedBytes });
+      }
+      return envelope; // Explicit encoded shape only; every original logical field/value/order is reconstructable.
+    } catch (err) {
+      return { kind, status: 'refused', start, after: stampAfter(), bounds, counts, stage: { ...stage }, camera: cameraSnapshot, viewport,
+        refusal: err && err.r311Refusal ? { code: err.code, detail: err.detail } : { code: 'unexpected_error', detail: { message: err && typeof err.message === 'string' ? err.message : 'non-Error thrown' } },
+        coverage: 'No surface report accepted/published. First refusal only; remaining unexamined objects/triangles are not silently treated as valid or absent.', limits };
+    }
   }
 
   /** Tint muscles from simulated drive by catalog key ({ key: 0..1 }); muscles with no key keep the baseline tint.
@@ -4086,7 +4640,6 @@ export function createScene({
     put(info.plain, c.plain);
     put(info.explanation, c.explanation);
     put(info.simulated, c.simulated);
-    if (info.glow) put(info.glow, c.glow || '');
     put(info.known, c.known);
     put(info.regionCaveat, c.regionCaveat);
     while (info.caveats.firstChild) info.caveats.removeChild(info.caveats.firstChild);
@@ -4146,7 +4699,7 @@ export function createScene({
       const part = bodyPartOf(entry);
       const kind = bodyKindOf(entry);
       const near = nearestDistance(m.positions, eyeBp, m.positions.length > 30000 ? 2 : 1) < nearMm;
-      const face = part === 'face' || near;
+      const face = part === 'face' || (near && !isBodyGirdleEntry(entry));
       const geo = indexedGeometry(m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions), m.indices instanceof Uint32Array ? m.indices : Uint32Array.from(m.indices));
       geo.computeVertexNormals();
       if (typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
@@ -4182,7 +4735,7 @@ export function createScene({
       }
       // R5-scene (D19): the mirror twin (same geometry and pose matrix, opaque, head and face in place).
       {
-        const tm = kind === 'muscle' ? (face ? insidePatch(mirrorMuscleMaterial()) : mirrorMuscleMaterial()) : face ? headBoneMirrorMaterial : mirrorBoneMaterial;
+        const tm = kind === 'muscle' ? mirrorMuscleMaterial() : mirrorBoneMaterial;
         if (kind === 'muscle') shadeMuscle(tm, MUSCLE_REST_DRIVE);
         const tw = new THREE.Mesh(geo, tm);
         tw.name = `mirror image: ${bodyMeshName(entry, id)}`;
@@ -4195,8 +4748,8 @@ export function createScene({
       }
       // R5-scene (D18): head and face meshes also get an IN-PLACE twin on your own body, shown only in third person.
       if (face) {
-        let im = headBoneInPlaceMaterial;
-        if (kind === 'muscle') { im = insidePatch(glowRimPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))))); shadeMuscle(im, MUSCLE_REST_DRIVE); }
+        let im = bodyBoneMaterial;
+        if (kind === 'muscle') { im = glowRimPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 })))); shadeMuscle(im, MUSCLE_REST_DRIVE); }
         const ip = new THREE.Mesh(geo, im);
         ip.name = `${bodyMeshName(entry, id)} [in place: third person]`;
         ip.matrixAutoUpdate = false;
@@ -4209,16 +4762,6 @@ export function createScene({
       }
       body.push(rec);
       bodyById.set(id, rec);
-    }
-    // R5-fix (reviews P3 / SL5-3): the inside-of-the-head attribute of every head mesh (centre: the head bones' boxes).
-    {
-      const hb = body.filter(b => b.face && b.kind === 'bone' && b.mesh.geometry);
-      if (hb.length) {
-        const c = [0, 0, 0];
-        for (const b of hb) { const g = b.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox(); const m = g.boundingBox; c[0] += (m.min.x + m.max.x) / 2 / hb.length; c[1] += (m.min.y + m.max.y) / 2 / hb.length; c[2] += (m.min.z + m.max.z) / 2 / hb.length; }
-        headInside.centre = c;
-        for (const b of body) if (b.face) headInsidePass(b.mesh.geometry, c, b.kind === 'bone');
-      }
     }
     // R5-integrate-core (D20): face-muscle packet meshes (R5-face ids zf-..., source_packet face-muscles-r1) are in the body.
     const facePacket = list.filter(e => e && (e.source_packet === 'face-muscles-r1' || e.packet === 'face-muscles-r1' || /^zf-/.test(String(e.element_id || e.id || '')))).length;
@@ -4243,45 +4786,56 @@ export function createScene({
     return { meshes: body.length, inPlace: body.length - face, face, skipped };
   }
 
-  /** R5-integrate-core (D15): label the body's muscle meshes (and their mirror twins) with their Body Worlds layer:
-   * summary = ns-app bodyLayersSummary(ns-body bodyWorldsLayers(...)) { superficial, deep, unclassified, offsetMm }. Sets
-   * userData.bodyWorlds = { layer: 'superficial' | 'deep' | 'unclassified', offsetMm } (the lift itself is in the pose
-   * matrices updateBody writes). Display labels only. Returns { superficial, deep, unclassified } counts. */
+  /** R183: exact-ID regional anatomy is independent from target display selection.
+   * Full scope/caveats come from the same pinned local catalogue as ns-body. Body
+   * offset values here remain TARGET metadata; applied arm offsets are R174 fields. */
   let bodyLayerInfo = null;
   function setBodyLayers(summary) {
-    const sup = new Set(summary && Array.isArray(summary.superficial) ? summary.superficial : []);
-    const dp = new Set(summary && Array.isArray(summary.deep) ? summary.deep : []);
+    if (summary && summary.regionalCatalogueSha256 !== REGIONAL_LAYER_PROVENANCE.classificationDataSha256) {
+      fail('scene_input', 'body layer summary catalogue identity does not match the scene');
+    }
+    const selected = new Set(summary && Array.isArray(summary.displaySelected) ? summary.displaySelected : []);
     const off = summary && summary.offsetMm && typeof summary.offsetMm === 'object' ? summary.offsetMm : {};
-    const n = { superficial: 0, deep: 0, unclassified: 0 };
+    const n = { superficial: 0, intermediate_deep: 0, unclassified: 0, displaySelected: 0 };
     for (const b of body) {
       if (b.kind !== 'muscle') continue;
-      const layer = sup.has(b.id) ? 'superficial' : dp.has(b.id) ? 'deep' : 'unclassified';
-      const bw = Object.freeze({ layer, offsetMm: layer === 'superficial' && Number.isFinite(off[b.id]) ? off[b.id] : 0 });
+      const q = regionalLayerQualification(b.id);
+      const isSelected = q.candidate && selected.has(b.id);
+      const targetOffsetMm = isSelected && Number.isFinite(off[b.id]) ? off[b.id] : 0;
+      const bw = Object.freeze({ ...regionalLayerMetadata(b.id, isSelected),
+        displayStatus: isSelected ? 'selected-target' : 'not-selected',
+        offsetMm: targetOffsetMm, targetOffsetMm, offsetMeaning: 'target-not-applied',
+        targetAmount: summary && Number.isFinite(summary.targetAmount) ? summary.targetAmount : null });
       b.mesh.userData.bodyWorlds = bw;
       if (b.mirror) b.mirror.userData.bodyWorlds = bw;
       if (b.inPlace) b.inPlace.userData.bodyWorlds = bw;
-      n[layer]++;
+      n[q.layer]++;
+      if (isSelected) n.displaySelected++;
     }
-    bodyLayerInfo = n;
-    return { ...n };
+    // Compatibility count only: scoped intermediate/deeper relations, not all unlifted meshes.
+    bodyLayerInfo = { ...n, deep: n.intermediate_deep };
+    return { ...bodyLayerInfo };
   }
 
   /** Body frame: a 4x4 BodyParts3D mm -> world m matrix (ns-arm armAttachment().bodyToWorld or ns-math
    * bodyToWorldMatrix), or { eyeBp, bodyYaw }. Changing it moves the whole body (and the face layer's anchor). */
-  function setBodyFrame(frame) {
+  function setBodyFrame(frame, sourceEyeBp = null) {
     let m = null, yaw = bodyYaw;
     if (frame && frame.length === 16) m = Float64Array.from(frame);
     else if (frame && frame.eyeBp) { yaw = Number.isFinite(frame.bodyYaw) ? frame.bodyYaw : 0; m = bodyFrameMatrix(frame.eyeBp, yaw); }
     if (!m || !Array.prototype.every.call(m, Number.isFinite)) fail('scene_input', 'setBodyFrame needs a finite 4x4 matrix or { eyeBp, bodyYaw }');
-    const eye = eyeFromBodyFrame(m);
+    const inferredEye = eyeFromBodyFrame(m);
+    if (!inferredEye) fail('scene_input', 'setBodyFrame matrix is singular');
+    const eye = sourceEyeBp === null ? inferredEye : (sourceEyeBp.length === 3 && Array.from(sourceEyeBp).every(Number.isFinite) ? Array.from(sourceEyeBp) : null);
     if (!eye) fail('scene_input', 'setBodyFrame matrix is singular');
     // Body yaw: the world direction of the body's anterior (-y source) projected on the horizontal plane.
     const ax = -m[4], az = -m[6]; // A (0, -1, 0): world = -(column 1)
     if (Math.hypot(ax, az) > 1e-12) yaw = Math.atan2(-ax, -az);
     let same = true;
     for (let i = 0; i < 16; i++) if (bodyFrame[i] !== m[i]) { same = false; break; }
+    if (same && sourceEyeBp !== null && (bodyFrameSource !== 'canonical-matrix-original-source-eye' || eyeBp.some((v, i) => v !== eye[i]))) same = false;
     if (same) return false;
-    bodyFrame = m; eyeBp = eye; bodyYaw = yaw; bodyFrameSource = frame && frame.length === 16 ? 'matrix' : 'eye';
+    bodyFrame = m; eyeBp = eye; bodyYaw = yaw; bodyFrameSource = sourceEyeBp !== null ? 'canonical-matrix-original-source-eye' : frame && frame.length === 16 ? 'matrix' : 'eye';
     bodyGroup.matrix.fromArray(m);
     bodyGroup.matrixWorldNeedsUpdate = true;
     mirrorBodyGroup.matrix.fromArray(m);
@@ -4327,11 +4881,6 @@ export function createScene({
       if (b.inPlace && b.kind === 'muscle') shadeMuscle(b.inPlace.material, q);
       b.mesh.userData.activity = q;
     }
-    // R5-fix (review P6): the strongest face-muscle drive now (the face box shows while a face or jaw area colours them).
-    let fd = 0;
-    for (const b of body) if (b.face && b.kind === 'muscle' && Number.isFinite(b.lastDrive) && b.lastDrive > fd) fd = b.lastDrive;
-    faceDriveNow = fd;
-    if (fd > MUSCLE_REST_DRIVE + FACE_BOX.minDrive) faceActiveAtMs = nowMs();
     return n;
   }
 
@@ -4349,20 +4898,16 @@ export function createScene({
     const hasFace = faceHeadCentre !== null && faceGroup.children.length > 0;
     // R5-scene (D18): with the camera away from the head (third person) the head and face are drawn in place instead.
     faceAmount = hasFace && faceMode !== 'off' && !camState.headInPlace ? faceLayerAmount(lookPitch) * (camPose ? camMul.faceGhost : 1) : 0;
-    // R5-fix (review P6): the face muscles only change colour (they do not move), and the 1 s pulse was over before a
-    // player could look up to the face. While a face or jaw area colours them (and FACE_BOX.holdMs after), and the face is
-    // not in view already, the same front view shows in a small labelled box; it never moves the face or the camera.
-    const boxOn = hasFace && faceMode !== 'off' && !camState.headInPlace && faceAmount <= 0.05 && nowMs() - faceActiveAtMs <= FACE_BOX.holdMs;
-    faceShow = boxOn ? 'box' : faceMode;
-    if (boxOn) faceAmount = 1;
     const q = Math.round(faceAmount * 64);
-    if (faceStateKey === 'ok' && faceShow === lastFaceMode && q === lastFaceQ && bodyYaw === lastFaceYaw) return;
-    faceStateKey = 'ok'; lastFaceMode = faceShow; lastFaceQ = q; lastFaceYaw = bodyYaw;
+    const faceFrameKey = referenceOriginSet ? `ok|${eyeRig.position.x},${eyeRig.position.y},${eyeRig.position.z}` : 'ok';
+    if (faceStateKey === faceFrameKey && faceMode === lastFaceMode && q === lastFaceQ && bodyYaw === lastFaceYaw) return;
+    faceStateKey = faceFrameKey; lastFaceMode = faceMode; lastFaceQ = q; lastFaceYaw = bodyYaw;
     overlayDirty = true;
     faceGroup.visible = q > 0;
     if (q === 0) return;
-    if (faceShow === 'ghost') {
+    if (faceMode === 'ghost') {
       faceGroup.matrix.fromArray(faceGhostMatrix({ headCentreBp: faceHeadCentre, bodyYaw }));
+      if (referenceOriginSet) { faceGroup.matrix.elements[12] += eyeRig.position.x; faceGroup.matrix.elements[13] += eyeRig.position.y; faceGroup.matrix.elements[14] += eyeRig.position.z; }
       // Light from the eye's side: along the direction from the ghost to the eye, Ry(bodyYaw) (0, -sin e, cos e).
       const e = FACE_LAYER.elevationDeg * DEG;
       faceKey.position.set(Math.cos(e) * Math.sin(bodyYaw), -Math.sin(e), Math.cos(e) * Math.cos(bodyYaw));
@@ -4376,8 +4921,8 @@ export function createScene({
     faceGroup.matrixWorldNeedsUpdate = true;
     faceGroup.updateMatrixWorld(true);
     const k = q / 64;
-    faceBoneMaterial.opacity = FACE_LAYER.boneOpacity * (faceShow === 'ghost' ? k : 1);
-    for (const b of body) if (b.face && b.kind === 'muscle') b.material.opacity = FACE_LAYER.muscleOpacity * (faceShow === 'ghost' ? k : 1);
+    faceBoneMaterial.opacity = FACE_LAYER.boneOpacity * (faceMode === 'ghost' ? k : 1);
+    for (const b of body) if (b.face && b.kind === 'muscle') b.material.opacity = FACE_LAYER.muscleOpacity * (faceMode === 'ghost' ? k : 1);
   }
 
   /** Which body parts are in view now: { torso, legs, rightArm, leftArm, neck, face, faceMode, faceAmount, counts,
@@ -4396,9 +4941,9 @@ export function createScene({
       if (!b.mesh.visible || !b.mesh.geometry.boundingSphere) continue;
       if (frustum.intersectsObject(b.mesh)) { out[b.part] = true; out.counts[b.part] = (out.counts[b.part] || 0) + 1; }
     }
-    if (faceShow === 'ghost' && faceGroup.visible && faceAmount > 0) {
+    if (faceMode === 'ghost' && faceGroup.visible && faceAmount > 0) {
       for (const b of body) if (b.face && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.mesh)) { out.face = true; out.counts.face = (out.counts.face || 0) + 1; }
-    } else if ((faceShow === 'inset' || faceShow === 'box') && faceGroup.visible && faceAmount > 0) out.face = true;
+    } else if (faceMode === 'inset' && faceGroup.visible && faceAmount > 0) out.face = true;
     // R5-scene (D18): in third person the head and face are drawn in place.
     if (camState.headInPlace) for (const b of body) if (b.inPlace && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.inPlace)) { out.face = true; out.counts.face = (out.counts.face || 0) + 1; }
     out.camera = camState.mode;
@@ -4481,43 +5026,7 @@ export function createScene({
     // R4-fix (review RP8): the region labels drawn this frame (CSS px), so the guide chip keeps clear of them.
     const labelsPx = [];
     for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) labelsPx.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
-    // R5-polish (D18): your own body's footprint in third person (viewport fractions, [] in first person), so the HUD's
-    // orientation labels and the guide chip keep off your back too.
-    const body = cssW > 0 && cssH > 0 ? thirdPersonBodyRectsPx().map(r => ({ x0: r.x0 / cssW, y0: r.y0 / cssH, x1: r.x1 / cssW, y1: r.y1 / cssH })) : [];
-    // R5-fix (review P7): the mirror body's box and its arrows' boxes (viewport fractions), so the orientation labels and
-    // the guide chip keep off them too.
-    const mirrorRects = [];
-    if (cssW > 0 && cssH > 0) {
-      const mbx = mirrorBodyBoxNow();
-      if (mbx) mirrorRects.push({ x0: mbx.x0 / cssW, y0: mbx.y0 / cssH, x1: mbx.x1 / cssW, y1: mbx.y1 / cssH });
-      if (arrowSets.mirror.shown) for (const d of ARROW_DIRS) { const b = arrowSets.mirror.boxes[d]; if (b) mirrorRects.push({ x0: (b.x0 - 4) / cssW, y0: (b.y0 - 4) / cssH, x1: (b.x1 + 4) / cssW, y1: (b.y1 + 4) / cssH }); }
-    }
-    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx, body, mirror: mirrorRects };
-  }
-  /** R5-fix (review P7): the mirror body's on-screen box now (CSS px, padded 4 px; null when not shown or off screen),
-   * cached per camera / mirror state. */
-  let mirrorBoxNowKey = '', mirrorBoxNowVal = null;
-  function mirrorBodyBoxNow() {
-    if (!(mirrorRoot.visible && mirror.transform && cssW > 0 && cssH > 0)) return null;
-    camera.updateMatrixWorld(true);
-    const ce = camera.matrixWorld.elements;
-    let key = `${mirror.serial}|${cssW}x${cssH}|${camera.fov}|`;
-    for (let i = 0; i < 16; i++) key += `${Math.round(ce[i] * 1e5)},`;
-    if (key === mirrorBoxNowKey) return mirrorBoxNowVal;
-    mirrorBoxNowKey = key;
-    const W = mirrorSamplesWorld();
-    mirrorBoxNowVal = null;
-    if (!W) return null;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
-    for (let i = 0; i < W.length; i += 3) {
-      pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
-      if (pv.z > -camera.near) continue;
-      pv.applyMatrix4(camera.projectionMatrix);
-      const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH; n++;
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-    }
-    if (n && x1 > 0 && y1 > 0 && x0 < cssW && y0 < cssH) mirrorBoxNowVal = { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 };
-    return mirrorBoxNowVal;
+    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx };
   }
   /** R4-integrator (D7): does the brain's outline as drawn NOW (convex hull of its outline support points projected
    * with the live camera, CSS px) overlap rect { x0, y0, x1, y1 } (CSS px)? false before the brain is placed or when it
@@ -4560,14 +5069,11 @@ export function createScene({
     const me = brainGroup.matrixWorld.elements, ce = camera.matrixWorld.elements;
     let key = `${cssW}x${cssH}|${camera.fov}|`;
     for (let i = 0; i < 16; i++) key += `${me[i]},${ce[i]},`;
-    // R5-fix (review code F1): one grid per camera / brain pose (shared by the guide line, the mirror label and the glow
-    // thinning in the same frame); occupancyGrid is allocation-free now (about 2.4 ms instead of 13 ms per rebuild).
     if (key !== motorCoverKey) {
       motorCoverKey = key;
       try {
         const xy = NsArrows.projectPointsPx(P, Array.from(me), arrowCam()).xy;
         motorCoverGrid = NsArrows.occupancyGrid(xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 1, indices: motorIndices });
-        arrowStats.motorGrids = (arrowStats.motorGrids || 0) + 1;
       } catch { motorCoverGrid = null; }
     }
     return motorCoverGrid ? motorCoverGrid.hits(rect) > 0 : brainCoversRect(rect);
@@ -4723,13 +5229,35 @@ export function createScene({
     return hudRectCache;
   }
   /* ---- R5-scene (D16): 3D compass arrows: plan (ns-arrows3d), screen boxes, picks ---------------------------------- */
-  // Reference view of the brain's arrows: the default look carried with any grab (brainViewTransform grabYaw / grabPitch);
-  // the brain pivot's distance; k (m per mm), the pivot (source mm) and perspectiveK for the mirror's placement.
+  // Saved brain carry/reference data still owns mirror BODY placement and range; compass planning uses the ACTIVE view.
   const arrowRef = { yaw: 0, pitch: 0, dist: BRAIN_ANCHOR_DIST_FALLBACK_M, k: null, pivot: null };
   const arrowStats = { plans: 0, boxes: 0, picks: 0 };
-  let arrowSerial = 0;
-  /** The current render camera in ns-arrows3d's terms. */
-  const arrowCam = () => ({ width: cssW, height: cssH, fovYDeg: camera.fov, yaw: camPose ? camPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : lookPitch, position: camPose ? camPose.position.slice() : [0, 0, 0] });
+  let arrowSerial = 0, arrowHeadLocal = null;
+  /** Same current Euler YXZ/position camera used by applyCamera(), arrow boxes and pixel picking. */
+  const arrowCam = () => ({ width: cssW, height: cssH, fovYDeg: camera.fov, yaw: camPose ? camPose.yaw : firstPose ? firstPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : firstPose ? firstPose.pitch : lookPitch, position: activePosition() });
+  const arrowCameraKey = cam => `${camPose ? 'third' : firstPose ? 'configured-first' : 'first'}|${cam.width}x${cam.height}|${cam.fovYDeg}|${cam.yaw},${cam.pitch}|${cam.position.join(',')}|${camera.near},${camera.far}`;
+  const arrowCameraRecord = cam => ({ mode: camPose ? 'third' : firstPose ? 'configured-first' : 'first',
+    width: cam.width, height: cam.height, fovYDeg: cam.fovYDeg, yaw: cam.yaw, pitch: cam.pitch,
+    position: cam.position.slice(), nearM: camera.near, farM: camera.far });
+  // Cached target identities only: read matrices/centres, never recompute bounds or alter a body/brain transform.
+  const arrowTargetKey = target => {
+    if (target === 'brain') {
+      const e = brainGroup.matrixWorld.elements, c = farEyeView.pw || [e[12], e[13], e[14]];
+      return `${regionMode},${brainTransformSet},${Boolean(brainSupport)},${brainGroup.visible}|${c.join(',')}|${Array.from(e).join(',')}`;
+    }
+    return mirror.transform ? `${mirror.serial},${mirrorRoot.visible}|${mirror.transform.centre.join(',')}|${mirror.transform.matrix.join(',')}` : 'no-mirror-transform';
+  };
+  // Nominal unhovered head landmarks from the SAME default design as makeArrowRig. Built during normal planning only.
+  function nominalArrowHeads(frames) {
+    if (!arrowHeadLocal) {
+      const head = NsArrows.arrowPath(NsArrows.ARROW_DESIGN).head;
+      arrowHeadLocal = { base: [head.base[0], head.base[1], 0], tip: [head.tip[0], head.tip[1], 0] };
+    }
+    return Object.fromEntries(ARROW_DIRS.map(d => {
+      const f = frames && frames[d];
+      return [d, f ? { baseWorldM: NsArrows.frameToWorld(f, arrowHeadLocal.base), tipWorldM: NsArrows.frameToWorld(f, arrowHeadLocal.tip) } : null];
+    }));
+  }
   /** Where arrows may go (CSS px): the view minus a margin, the top limits line and the info column (landscape) or the
    * bottom band (portrait), reserved whether or not the panel shows, so the arrows never jump when it appears. */
   function arrowUsable() {
@@ -4747,10 +5275,11 @@ export function createScene({
   /** Things the arrows keep clear of (CSS px), stable while playing: the status card at BOTH its homes (data-ns-home /
    * data-ns-alt, so an arrow does not jump when the hand pushes the card away), the other HUD cards, and the capture /
    * drag-to-look toast (measured, else its estimated bottom-centre box), so no arrow sits under them. */
-  let arrowObsKey = '';
+  let arrowObsKey = '', arrowPanelObsKey = '', arrowScreenMaskKey = '', arrowMaskCameraKey = '';
   function arrowObstacles() {
-    const out = [];
-    for (const r of readHudRects() || []) {
+    const out = [], rects = readHudRects() || [];
+    arrowPanelObsKey = rects.filter(r => r.info).map(r => `${r.x0},${r.y0},${r.x1},${r.y1}`).join(';');
+    for (const r of rects) {
       if (r.info || r.orient || r.chip) continue;
       if (r.toast) continue;
       if (r.home) { out.push({ ...r.home }); if (r.alt) out.push({ ...r.alt }); } else out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 });
@@ -4769,7 +5298,7 @@ export function createScene({
     if (!mirrorRoot.visible || !mirror.transform) return null;
     const W = mirrorSamplesWorld();
     if (!W) return null;
-    const { xy } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: [0, 0, 0] });
+    const { xy } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() });
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; x0 = Math.min(x0, xy[i]); x1 = Math.max(x1, xy[i]); y0 = Math.min(y0, xy[i + 1]); y1 = Math.max(y1, xy[i + 1]); }
     return x1 > x0 && y1 > y0 ? { x0: x0 - 6, y0: y0 - 6, x1: x1 + 6, y1: y1 + 6, mirror: true } : null;
@@ -4786,8 +5315,54 @@ export function createScene({
     out.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch, crosshair: true });
     return out;
   }
+  // These metadata readers use retained scalar state only; no projection, bounds, matrix update, clock or GL work.
+  const arrowEligibility = target => target === 'brain'
+    ? { rigPresent: Boolean(arrowSets.brain.rig), regionMode: Boolean(regionMode), brainTransformSet: Boolean(brainTransformSet),
+      brainSupportPresent: Boolean(brainSupport), targetVisible: brainGroup.visible,
+      eligible: Boolean(arrowSets.brain.rig) && Boolean(regionMode) && brainTransformSet && Boolean(brainSupport) && brainGroup.visible }
+    : { rigPresent: Boolean(arrowSets.mirror.rig), targetVisible: mirrorRoot.visible, transformPresent: mirror.transform !== null,
+      samplesPresent: mirror.samples !== null,
+      eligible: Boolean(arrowSets.mirror.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null };
+  const arrowSourceRecord = target => target === 'brain'
+    ? { key: `${compassBrainSourceRevision}|${Boolean(brainHullPoints)}|${brainHullPoints ? brainHullPoints.length : brainSupport ? brainSupport.points.length : 0}`,
+      revision: compassBrainSourceRevision, basis: brainHullPoints ? 'segmentation-outline' : brainSupport ? 'supportPoints' : 'absent',
+      units: 'source-mm', storage: brainHullPoints ? 'Float32Array' : 'supportPoints.points',
+      rows: brainHullPoints ? brainHullPoints.length / 3 : brainSupport ? brainSupport.points.length / 3 : null }
+    : { key: `${mirror.serial}|${mirror.samples !== null}|${mirror.transform !== null}`, revision: mirror.serial,
+      basis: 'mirrorSamplesWorld', units: 'world-m', storage: 'ordinary-plan world samples', rows: mirror.samples ? mirror.samples.length / 3 : null };
+  // Only the fixed authored report/identity tree is copied. Nonfinite values stay explicit through JSON serialization.
+  const copyCompassEvidence = value => typeof value === 'number' ? (Number.isFinite(value) ? value : { nonfinite: String(value) })
+    : Array.isArray(value) ? value.map(copyCompassEvidence)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, copyCompassEvidence(v)])) : value;
   function planSet(set, args) {
-    try { const p = NsArrows.planCompassArrows(args); arrowStats.plans++; return p; } catch (err) { arrowRigError = String((err && err.message) || err); return null; }
+    // These private inputs are Euler-only, with the active cam and ref equal. Record the exact selected ref, not a label.
+    const ref = args.ref || { yaw: 0, pitch: 0 };
+    const selected = { ...args.cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: ref.position || [0, 0, 0] };
+    set.planningCamera = arrowCameraRecord(selected); set.planningCameraKey = arrowCameraKey(selected);
+    set.planningTarget = { centreWorldM: Array.from(args.centre), supportRows: args.points.length / 3 };
+    set.planningTargetKey = arrowTargetKey(set.target);
+    const matrix = args.matrix ? Array.from(args.matrix) : null;
+    set.planningEvidence = { kind: 'ns-retained-plan-evidence-r345',
+      sourceBinding: 'External exact paired module/packet manifest required; these runtime labels are not file-hash proof.',
+      eligibility: arrowEligibility(set.target), source: arrowSourceRecord(set.target),
+      planMatrix: { status: matrix ? matrix.length === 16 && matrix.every(Number.isFinite) ? 'FINITE_16' : 'NONFINITE_OR_UNSUPPORTED' : 'IDENTITY', elements: matrix },
+      ref: { yaw: ref.yaw, pitch: ref.pitch, position: ref.position ? Array.from(ref.position) : null },
+      camera: arrowCameraRecord(selected), cameraAuthority: args.cam.matrixWorld ? 'matrixWorld' : 'Euler-YXZ-position',
+      cameraMatrixWorld: args.cam.matrixWorld ? Array.from(args.cam.matrixWorld) : null,
+      targetKey: set.planningTargetKey, cameraKey: set.planningCameraKey, revision: (set.serial || 0) + 1,
+      brainGroupVisible: brainGroup.visible, arrowRigVisibleAtPlan: set.rig ? set.rig.group.visible : null,
+      report: {} };
+    set.nominalHeads = null; set.planningError = null;
+    try {
+      if (typeof NsArrows.planCompassArrowsWithReport !== 'function') {
+        set.planningEvidence.report = { outcome: 'unsupported_reporting_api', stage: 'NOT_REACHED' };
+        throw new Error('Retained compass report API unavailable; paired source modules required');
+      }
+      const { plan: p } = NsArrows.planCompassArrowsWithReport(args, set.planningEvidence.report); arrowStats.plans++;
+      set.planningOutcome = p ? 'planned' : 'no-visible-outline';
+      if (p) set.nominalHeads = nominalArrowHeads(p.frames);
+      return p;
+    } catch (err) { set.planningOutcome = 'error'; set.planningError = arrowRigError = String((err && err.message) || err); return null; }
   }
   /** R5-bigbrain (R25): sample points of every motor area (source mm, the region meshes' vertices, at most
    * R5_BIGBRAIN.motorSamples), built once: an arrow at the screen edge never covers a motor area, and the mirror body's
@@ -4814,59 +5389,29 @@ export function createScene({
   function motorGridFor(look, dilate = R5_BIGBRAIN.mirrorAvoidDilate) {
     const P = motorSamplePoints();
     if (!P || !(cssW > 0 && cssH > 0)) return null;
-    const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: [0, 0, 0] };
+    const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() };
     return NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam).xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate, indices: motorIndices });
   }
-  /** R5-fix (review code F1): the rotation R (rows) with Mnew = [R 0; 0 1] * Mold when the brain only moved by a carry about
-   * the eye (orthonormal R, no translation part), else null. Matrices column-major (brainGroup.matrixWorld.elements). */
-  function pureCarry(Mold, Mnew) {
-    const inv = new THREE.Matrix4().fromArray(Mold).invert(), D = new THREE.Matrix4().fromArray(Mnew).multiply(inv).elements;
-    if (Math.hypot(D[12], D[13], D[14]) > 1e-6) return null;
-    const R = [[D[0], D[4], D[8]], [D[1], D[5], D[9]], [D[2], D[6], D[10]]];
-    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const dot = R[0][i] * R[0][j] + R[1][i] * R[1][j] + R[2][i] * R[2][j]; if (Math.abs(dot - (i === j ? 1 : 0)) > 1e-6) return null; }
-    return R;
-  }
-  /** Keep both rigs planned (cheap when nothing changed: a key per set). */
+  /** Keep both rigs in the SAME active view; a camera/look/origin change replans controls, never rotates a target. */
   function updateArrows() {
     if (!(cssW > 0 && cssH > 0)) return;
-    const B = arrowSets.brain, M = arrowSets.mirror;
+    const B = arrowSets.brain, M = arrowSets.mirror, cam = arrowCam();
+    const ref = { yaw: cam.yaw, pitch: cam.pitch, position: cam.position.slice() };
     const obstacles = arrowObstacles();
-    const sz = `${cssW}x${cssH}|${camera.fov}|${arrowObsKey}`;
-    const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport);
+    const sz = `${arrowCameraKey(cam)}|${arrowObsKey}`;
+    const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (showB) {
-      const e = brainGroup.matrixWorld.elements;
-      // R5-bigbrain: the brain's arrows also keep off the mirror body behind the glass (its box in the reference view);
-      // the two fallback tiers (HUD cards' actual boxes, no slide cap) may cover it: over the mirror body, which is
-      // behind the glass, is better than over a motor area (portrait after an orbit step: the bottom edge is all belt)
-      // R5-integrate-core (D16 "they follow the brain (drag / orbit)"): only while the brain is NOT carried away (the mirror
-      // body then stands behind it); after a Space-drag the mirror no longer sits behind the brain, and keeping off its box
-      // in the carried reference view would move the arrows relative to the brain (e2e S32 "arrows follow a brain drag").
-      const carried = Math.abs(arrowRef.yaw) > 1e-6 || Math.abs(arrowRef.pitch) > 1e-6;
-      const mb = carried ? null : mirrorBoxPx({ yaw: arrowRef.yaw, pitch: arrowRef.pitch });
-      // R5-fix (review code F1): the key holds the mirror body's BOX (8 px steps), not its serial, so turning the mirror
-      // body (its arrows held) re-plans the brain's arrows only when that box really moves.
-      let key = `${sz}|${arrowRef.yaw},${arrowRef.pitch}|${mb ? `${Math.round(mb.x0 / 8)},${Math.round(mb.y0 / 8)},${Math.round(mb.x1 / 8)},${Math.round(mb.y1 / 8)}` : '-'}|`;
+      const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]];
+      let key = `${sz}|${mirror.serial}|${centre.join(',')}|`;
       for (let i = 0; i < 16; i++) key += `${e[i]},`;
-      // R5-fix (review code F1): while Space carries the brain (a pure rotation about the eye; the arrows' reference view
-      // turns with it, so the plan in that view does not change), the last frames are turned with the brain instead of
-      // being re-planned every frame (two occupancy grids and the layout search per frame cost about 20 ms).
-      const R = key !== B.key && B.frames && B.planSz === `${sz}|${mb ? 'm' : '-'}` && B.planMatrix ? pureCarry(B.planMatrix, e) : null;
-      if (R) {
+      if (key !== B.key) {
         B.key = key;
-        B.frames = NsArrows.rotateFrames(B.planFrames, R);
-        if (B.plan) B.plan = { ...B.plan, frames: B.frames };
-        B.serial = (B.serial || 0) + 1;
-        B.rig.setFrames(B.frames);
-        arrowSerial++;
-        arrowStats.carried = (arrowStats.carried || 0) + 1;
-      } else if (key !== B.key) {
-        B.key = key;
-        const obsB = mb ? [...obstacles, mb] : obstacles, tightB = arrowObstaclesTight();
-        B.plan = planSet(B, { points: brainHullPoints || brainSupport.points, matrix: Array.from(e), centre: farEyeView.pw || [e[12], e[13], e[14]],
-          ref: { yaw: arrowRef.yaw, pitch: arrowRef.pitch }, cam: { width: cssW, height: cssH, fovYDeg: camera.fov }, kind: 'brain', usable: arrowUsable(), obstacles: obsB, prefer: comfortRectPx(), fallbackObstacles: tightB,
+        // Mirror obstacle, motor samples, HUD and compass anchors are all projected in this SAME active camera.
+        const mb = mirrorBoxPx(ref), obsB = mb ? [...obstacles, mb] : obstacles, tightB = arrowObstaclesTight();
+        B.plan = planSet(B, { points: brainHullPoints || brainSupport.points, matrix: Array.from(e), centre,
+          ref, cam, kind: 'brain', usable: arrowUsable(), obstacles: obsB, prefer: comfortRectPx(), fallbackObstacles: tightB,
           avoidPoints: motorSamplePoints(), avoidIndices: motorIndices, avoidCellPx: R5_BIGBRAIN.avoidCellPx, avoidDilate: R5_BIGBRAIN.avoidDilate });
         B.frames = B.plan ? B.plan.frames : null;
-        B.planFrames = B.frames; B.planMatrix = Array.from(e); B.planSz = `${sz}|${mb ? 'm' : '-'}`;
         B.serial = (B.serial || 0) + 1;
         B.rig.setFrames(B.frames);
         arrowSerial++;
@@ -4876,27 +5421,34 @@ export function createScene({
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
     const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null;
     if (showM) {
-      // The mirror body's arrows also keep clear of the brain's own arrows when both are laid out in the same view (the
-      // brain not carried away): at 16:9 the brain's top / bottom arrows slide over the outline toward the mirror's.
-      const sameRef = Math.abs(arrowRef.yaw) < 1e-6 && Math.abs(arrowRef.pitch) < 1e-6 && B.shown && B.plan && B.plan.layout;
+      // Keep the existing same-view guards/tolerance; the inputs now come from the actual active planned camera.
+      const pc = B.planningCamera;
+      const sameOrigin = pc && cam.position.every((v, i) => Math.abs(v - pc.position[i]) < 1e-6);
+      const sameRef = pc && Math.abs(cam.yaw - pc.yaw) < 1e-6 && Math.abs(cam.pitch - pc.pitch) < 1e-6 && sameOrigin && B.shown && B.plan && B.plan.layout;
       const key = `${sz}|${mirror.serial}|${sameRef ? B.serial : '-'}`;
       if (key !== M.key) {
         M.key = key;
-        // (the crosshair keep-out box is for the brain's own arrows only: the mirror's sit behind the glass)
+        // Mirror arrows retain the same HUD/brain-arrow obstacle and no-extra-motor-avoid policy; picking still blocks
+        // them behind the brain. No mirror BODY placement or target transform is changed by this planner.
         const obsM0 = obstacles.filter(o => !o.crosshair);
         const obsM = sameRef ? [...obsM0, ...ARROW_DIRS.map(d => B.plan.layout.arrows[d] && B.plan.layout.arrows[d].box).filter(Boolean).map(b => ({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }))] : obsM0;
-        M.plan = planSet(M, { points: mirrorSamplesWorld(), matrix: null, centre: Array.from(mirror.transform.centre), ref: { yaw: 0, pitch: 0 },
-          cam: { width: cssW, height: cssH, fovYDeg: camera.fov }, kind: 'mirror', usable: arrowUsable(), obstacles: obsM });
-        // R5-bigbrain: no motor-area avoidance here: the mirror body's default place (mirrorFitNow) already keeps its
-        // four arrows' rooms clear of the motor areas; when the brain is orbited or dragged its areas may pass in front
-        // of them (they are behind the glass then, and the brain catches the look), and the arrows stay close to the body
+        M.plan = planSet(M, { points: mirrorSamplesWorld(), matrix: null, centre: Array.from(mirror.transform.centre), ref,
+          cam, kind: 'mirror', usable: arrowUsable(), obstacles: obsM });
         M.frames = M.plan ? M.plan.frames : null;
+        M.serial = (M.serial || 0) + 1;
         M.rig.setFrames(M.frames);
         arrowSerial++;
       }
     }
     M.shown = showM && Boolean(M.frames);
     if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
+    // A normal pick can replan before the render/overlay pass. Refresh the SAME boxes/panel mask before it uses them.
+    // No recursion: arrowScreenLayout -> arrowBoxes, and neither calls updateArrows. Unchanged cache inputs do no work.
+    const maskKey = `${arrowCameraKey(cam)}|${arrowSerial}|${B.shown},${M.shown}|${arrowPanelObsKey}`;
+    if (maskKey !== arrowScreenMaskKey) {
+      arrowScreenMaskKey = maskKey; arrowMaskCameraKey = arrowCameraKey(cam);
+      if (B.shown) arrowScreenLayout(); else { underPanel.brain.clear(); arrowBoxes(); }
+    }
   }
   /** Screen boxes (ns-arrows3d arrowScreenBox) and a click point (the middle of the stalk) of every shown arrow, for the
    * overlay, captions and QA; recomputed when the plan or the camera changed. */
@@ -4911,6 +5463,7 @@ export function createScene({
     for (const set of [arrowSets.brain, arrowSets.mirror]) {
       if (set.boxKey === ck) continue;
       set.boxKey = ck;
+      set.boxCamera = arrowCameraRecord(cam); set.boxCameraKey = arrowCameraKey(cam); set.boxPlanSerial = arrowSerial;
       for (const d of ARROW_DIRS) {
         const f = set.shown && set.frames ? set.frames[d] : null;
         let box = null, click = null;
@@ -4925,27 +5478,6 @@ export function createScene({
         set.clicks[d] = set.boxes[d] ? click : null;
       }
       arrowStats.boxes++;
-    }
-    updateArrowXray();
-  }
-  /** R5-fix (review P11): the brain arrows' see-through copy is for the near LEFT ARM only (D16 "where the near arm hides
-   * an arrow"): it is drawn while the arrow's box meets the arm's screen shapes (ns-app setLabelAvoid) in first person,
-   * and hidden otherwise (viewed: a pale arrow shape on your right shoulder when looking far right). */
-  let xrayKey = '';
-  function updateArrowXray() {
-    const set = arrowSets.brain;
-    if (!set.rig || !set.rig.arrows) return;
-    const arm = camPose ? [] : labelAvoidPx().boxes;
-    let key = `${set.boxKey}|${camPose ? 't' : 'f'}|`;
-    for (const r of arm) key += `${Math.round(r.x0)},${Math.round(r.y0)},${Math.round(r.x1)},${Math.round(r.y1)};`;
-    if (key === xrayKey) return;
-    xrayKey = key;
-    for (const d of ARROW_DIRS) {
-      const a = set.rig.arrows[d], b = set.boxes[d];
-      if (!a || !a.xray) continue;
-      const m = 48; // the arm shapes are estimates: a generous margin keeps a covered arrow findable
-      const on = Boolean(b) && arm.some(r => r.x0 - m < b.x1 && r.x1 + m > b.x0 && r.y0 - m < b.y1 && r.y1 + m > b.y0);
-      if (a.xray.visible !== on) a.xray.visible = on;
     }
   }
   /** R5-scene (D16 / D19): what a ray through CSS point (x, y) hits, nearest first: [{ kind: 'arrow', target: 'brain' |
@@ -4982,11 +5514,9 @@ export function createScene({
   function setArrowHover(hit) {
     const ok = hit && typeof hit === 'object' && (hit.target === 'brain' || hit.target === 'mirror') && ARROW_DIRS.includes(hit.dir);
     const next = ok ? { target: hit.target, dir: hit.dir, blocked: typeof hit.blocked === 'string' && hit.blocked ? hit.blocked : null } : null;
-    arrowHoverPointer = Boolean(ok && hit.pointer === true); // R5-fix (review F5): a free pointer is on it
     const same = (next === null && arrowHover === null) || (next && arrowHover && next.target === arrowHover.target && next.dir === arrowHover.dir && next.blocked === arrowHover.blocked);
     if (same) return arrowHover;
     arrowHover = next;
-    blockedHoverAtMs = next && next.blocked ? nowMs() : null;
     hoverDir = next && next.target === 'brain' && !next.blocked ? next.dir : null;
     for (const set of [arrowSets.brain, arrowSets.mirror]) {
       if (!set.rig) continue;
@@ -5006,10 +5536,9 @@ export function createScene({
     if (!B.shown) { underPanel.brain.clear(); return null; }
     arrowBoxes();
     // R5-integrate-core (D16 + round-3 D2 "under the info column an arrow is not drawn"): a brain arrow whose screen box
-    // runs under the far-right information panel or a HUD card (looking aside moves the world-anchored arrows) is not
-    // drawn and not pickable until it comes out again; no panel or card is covered and no arrow is clicked through one.
-    // (and under the HUD cards: the status card and the legend card, as drawn now)
-    const infoRects = (readHudRects() || []).filter(r => r.info || (!r.orient && !r.chip && !r.toast));
+    // runs under the far-right information panel (looking aside moves the world-anchored arrows) is not drawn and not
+    // pickable until it comes out again; the panel is never covered and no arrow is clicked through it.
+    const infoRects = (readHudRects() || []).filter(r => r.info);
     const out = {};
     let any = false;
     for (const d of ARROW_DIRS) {
@@ -5024,58 +5553,16 @@ export function createScene({
     return any ? out : null;
   }
   const underPanel = { brain: new Set() }; // R5-integrate-core: brain arrows hidden under the information panel this frame
-  /** R5-polish (D18): your own body's screen footprint in third person as row-run rects (CSS px; an occupancy grid of the
-   * posed body points of the mirror measurement, BODY_FOOTPRINT.cellPx cells), so the brain's labels and the HUD's
-   * orientation labels keep off your back. [] in first person (or before the body is measured). Cached per camera. */
-  let bodyRectsKey = '', bodyRectsCache = [];
-  function thirdPersonBodyRectsPx() {
-    if (!camPose || !(camPose.blend > 0.5) || !mirror.samples || !(cssW > 0 && cssH > 0)) return [];
-    const key = `${cssW}x${cssH}|${camera.fov}|${camPose.position.join(',')}|${camPose.yaw},${camPose.pitch}|${mirror.samples.length}`;
-    if (key === bodyRectsKey) return bodyRectsCache;
-    bodyRectsKey = key;
-    try {
-      const xy = NsArrows.projectPointsPx(mirror.samples, null, arrowCam()).xy;
-      const grid = NsArrows.occupancyGrid(xy, { width: cssW, height: cssH, cellPx: BODY_FOOTPRINT.cellPx, dilate: BODY_FOOTPRINT.dilate });
-      bodyRectsCache = footprintRects(grid);
-    } catch { bodyRectsCache = []; }
-    return bodyRectsCache;
-  }
   /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
-  const arrowTipRects = []; // R5-polish: the captions shown this frame (CSS px); the region labels keep clear of them
-  /** R5-polish (D19 "you have to move the brain that's in front of it away"): the mirror body's arrows that the glass
-   * brain's drawn outline covers now are drawn half greyed (ns-arrows3d setDimmed), so they read as "not yet"; they take
-   * their full green as soon as the brain is dragged off them. The input rule is unchanged (ns-controls resolveArrowHit:
-   * the brain catches the look and the click). */
-  const mirrorDim = { forward: false, back: false, left: false, right: false };
-  function updateMirrorArrowDim() {
-    const set = arrowSets.mirror;
-    if (!set || !set.rig || typeof set.rig.setDimmed !== 'function') return;
-    for (const d of ARROW_DIRS) {
-      const b = set.shown && regionMode && brainTransformSet ? set.boxes[d] : null;
-      const cx = b ? (b.x0 + b.x1) / 2 : NaN, cy = b ? (b.y0 + b.y1) / 2 : NaN;
-      mirrorDim[d] = Boolean(b) && brainCoversRect({ x0: cx - 1, y0: cy - 1, x1: cx + 1, y1: cy + 1 }) === true;
-    }
-    set.rig.setDimmed(mirrorDim);
-  }
   function layoutArrowTips(reserveRight, reserveBottom, topPx) {
     arrowBoxes();
-    arrowTipRects.length = 0;
     for (const [k, T] of Object.entries(arrowTips)) {
       const [target, d] = k.split(':');
       const set = arrowSets[target], box = set.shown ? set.boxes[d] : null;
-      const onThis = Boolean(arrowHover && arrowHover.target === target && arrowHover.dir === d);
-      // R5-fix (review F5): on the crosshair the caption needs a real look change since the rest (the start or E): the
-      // arrows appear after the load, so "reached more than 0.8 s after the rest" was true at the start with no input
-      // (portrait). A free pointer on the arrow (moved there by the player) shows it at once.
-      const blockedTip = onThis && Boolean(arrowHover.blocked) && target === 'mirror' && (lookMoved || arrowHoverPointer);
-      const want = Boolean(box) && ((onThis && !arrowHover.blocked) || blockedTip || (target === 'brain' && guideGoalAttr === 'orbit'));
+      const want = Boolean(box) && ((arrowHover && arrowHover.target === target && arrowHover.dir === d && !arrowHover.blocked) || (target === 'brain' && guideGoalAttr === 'orbit'));
       if (!want) { if (T.shown) { T.shown = false; T.el.hidden = true; } continue; }
-      const text = blockedTip ? mirrorBlockedTipText() : arrowTipText(target, d);
-      if (T.text !== text) { T.el.textContent = text; T.text = text; }
-      if (T.blocked !== blockedTip) { T.blocked = blockedTip; if (blockedTip) T.el.setAttribute('data-ns-blocked', 'true'); else T.el.removeAttribute('data-ns-blocked'); }
       const e = NsArrows.COMPASS_SCREEN[d], gap = R5_SCENE.arrowCaptionPx;
-      // a blocked caption wraps to two lines (CSS max-width 230 px)
-      const w = blockedTip ? 230 : Math.min(260, 7.2 * T.el.textContent.length + 18), h = blockedTip ? 38 : 22;
+      const w = Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
       // just past the arrow's outer end, along its compass direction
       const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
       const hitsBox = (x, y) => x < box.x1 + 2 && x + w > box.x0 - 2 && y < box.y1 + 2 && y + h > box.y0 - 2;
@@ -5088,25 +5575,10 @@ export function createScene({
         y = e[1] > 0 ? clampTo(box.y0 - gap - h, topPx, yMax) : clampTo(box.y1 + gap, topPx, yMax);
         if (hitsBox(x, y)) y = clampTo(box.y0 - gap - h, topPx, yMax);
       }
-      // R5-polish: a caption also keeps off the OTHER arrows shown now (viewed at 720x1280: the covered mirror arrow's
-      // caption touched the brain's left arrow): the other side, then under / over the arrow; else the place above.
-      const others = [];
-      for (const t2 of ['brain', 'mirror']) { const S2 = arrowSets[t2]; if (S2 && S2.shown) for (const d2 of ARROW_DIRS) { const b2 = S2.boxes[d2]; if (b2 && b2 !== box) others.push(b2); } }
-      const hitsOther = (cx, cy) => others.some(b2 => cx < b2.x1 + 2 && cx + w > b2.x0 - 2 && cy < b2.y1 + 2 && cy + h > b2.y0 - 2);
-      if (hitsOther(x, y)) {
-        const midX = (box.x0 + box.x1) / 2 - w / 2, midY = (box.y0 + box.y1) / 2 - h / 2;
-        const cands = [
-          [e[0] > 0 ? box.x0 - gap - w : e[0] < 0 ? box.x1 + gap : midX, e[1] !== 0 ? (e[1] > 0 ? box.y0 - gap - h : box.y1 + gap) : midY],
-          [midX, box.y1 + gap], [midX, box.y0 - gap - h]
-        ].map(([cx, cy]) => [clampTo(cx, 4, xMax), clampTo(cy, topPx, yMax)]);
-        const ok = cands.find(([cx, cy]) => !hitsBox(cx, cy) && !hitsOther(cx, cy));
-        if (ok) { x = ok[0]; y = ok[1]; }
-      }
       const l = px(x), t = px(y);
       if (T.left !== l) { T.el.style.left = l; T.left = l; }
       if (T.top !== t) { T.el.style.top = t; T.top = t; }
       if (!T.shown) { T.shown = true; T.el.hidden = false; }
-      arrowTipRects.push({ x0: x - 2, y0: y - 2, x1: x + w + 2, y1: y + h + 2 });
     }
   }
   /** QA / tests: { source, error, silhouette, hover, brain / mirror: { shown, sizes, frontDepthM, dirs: { dir: { x, y
@@ -5120,7 +5592,6 @@ export function createScene({
       return {
         shown: set.shown, sizes: set.plan ? set.plan.sizes : null, frontDepthM: set.plan && Number.isFinite(set.plan.frontDepthM) ? Math.round(set.plan.frontDepthM * 1000) / 1000 : null,
         hovered: set.rig ? set.rig.hovered : null,
-        dimmed: set.rig && Array.isArray(set.rig.dimmed) ? set.rig.dimmed : [], // R5-polish: covered, drawn half greyed
         dirs: Object.fromEntries(ARROW_DIRS.map(d => {
           const a = L && L.arrows[d], f = set.frames && set.frames[d], b = set.boxes[d], c = set.clicks[d];
           return [d, { x: c ? r1(c[0]) : null, y: c ? r1(c[1]) : null, box: b ? [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1)] : null,
@@ -5132,6 +5603,54 @@ export function createScene({
     };
     return { source: 'ns-arrows3d', error: arrowRigError, silhouette: Boolean(arrowSets.brain.rig && arrowSets.brain.rig.arrows.forward.xray), hover: arrowHover ? { ...arrowHover } : null,
       brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats } };
+  }
+
+  /** READ-ONLY cached compass evidence. Never plans, projects, updates matrices/bounds, renders or reads GPU buffers.
+   * Existing arrowsState() behavior is unchanged. Root may bind this separate getter into normal App inspect opt-in.
+   * A pose changed since the normal plan/box pass is exposed as STALE, never silently refreshed by this query. */
+  function cachedArrowsState() {
+    const active = arrowCam(), activeKey = arrowCameraKey(active), vec = v => v ? Array.from(v) : null;
+    const cameraCopy = c => c ? { ...c, position: c.position.slice() } : null;
+    const one = set => ({
+      shown: set.shown, groupVisible: set.rig ? set.rig.group.visible : null,
+      targetVisible: set.target === 'brain' ? brainGroup.visible : mirrorRoot.visible,
+      planEvidence: {
+        state: !arrowEligibility(set.target).eligible ? 'not_eligible' : !set.planningEvidence ? 'NOT_PLANNED'
+          : set.planningCameraKey !== activeKey || set.planningTargetKey !== arrowTargetKey(set.target)
+            || set.planningEvidence.source.key !== arrowSourceRecord(set.target).key ? 'STALE' : 'RETAINED_CURRENT_KEYS',
+        currentEligibility: arrowEligibility(set.target), currentSource: arrowSourceRecord(set.target),
+        currentTargetKey: arrowTargetKey(set.target), currentCameraKey: activeKey,
+        retained: set.planningEvidence ? copyCompassEvidence(set.planningEvidence) : null,
+        scope: 'Same ordinary invocation; no getter refresh. Current keys are not an atomic render/pixel or source-file identity.' },
+      planningOutcome: set.planningOutcome || 'not-planned', planningError: set.planningError || null,
+      planRevision: set.serial || 0, planningCamera: cameraCopy(set.planningCamera), boxCamera: cameraCopy(set.boxCamera),
+      planMatchesActiveCamera: Boolean(set.planningCameraKey && set.planningCameraKey === activeKey),
+      planMatchesCurrentTarget: Boolean(set.planningTargetKey && set.planningTargetKey === arrowTargetKey(set.target)),
+      boxesMatchActiveCamera: Boolean(set.boxCameraKey && set.boxCameraKey === activeKey),
+      boxesMatchPlanRevision: set.boxPlanSerial === arrowSerial,
+      target: set.planningTarget ? { centreWorldM: set.planningTarget.centreWorldM.slice(), supportRows: set.planningTarget.supportRows } : null,
+      sizes: set.plan ? { ...set.plan.sizes } : null, frontDepthM: set.plan ? set.plan.frontDepthM : null,
+      hovered: set.rig ? set.rig.hovered : null, hoverBlocked: set.rig ? set.rig.hoverBlocked : null,
+      dirs: Object.fromEntries(ARROW_DIRS.map(d => {
+        const f = set.frames && set.frames[d], h = set.nominalHeads && set.nominalHeads[d], a = set.plan && set.plan.layout.arrows[d];
+        const draw = set.rig && set.rig.arrows[d], box = set.boxes[d], click = set.clicks[d];
+        return [d, { target: set.target, dir: d,
+          nominal: f ? { originWorldM: vec(f.origin), d: vec(f.d), w: vec(f.w), b: vec(f.b), scale: f.scale,
+            matrix: vec(f.matrix), depthMode: f.depthMode, distanceM: f.distance,
+            headBaseWorldM: h ? vec(h.baseWorldM) : null, headTipWorldM: h ? vec(h.tipWorldM) : null } : null,
+          retainedDraw: draw ? { rootVisible: draw.root.visible, meshVisible: draw.mesh.visible, hiddenUnderPanel: set.target === 'brain' ? underPanel.brain.has(d) : false,
+            meshScale: [draw.mesh.scale.x, draw.mesh.scale.y, draw.mesh.scale.z] } : null,
+          boxPx: box ? { ...box } : null, clickPx: vec(click),
+          layout: a ? { onScreen: a.onScreen, blocked: a.blocked, overOutline: a.overOutline, slidPx: a.slidPx, edge: a.edge === true } : null }];
+      }))
+    });
+    return { kind: 'ns-cached-compass-r310', source: 'ns-arrows3d', activeCamera: arrowCameraRecord(active),
+      panelMaskMatchesActiveCamera: Boolean(arrowMaskCameraKey && arrowMaskCameraKey === activeKey),
+      retainedRenderCamera: { position: [camera.position.x, camera.position.y, camera.position.z],
+        eulerXYZRadians: [camera.rotation.x, camera.rotation.y, camera.rotation.z], eulerOrder: camera.rotation.order,
+        matrixWorld: Array.from(camera.matrixWorld.elements), matrixWorldNeedsUpdate: camera.matrixWorldNeedsUpdate },
+      brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
+      scope: 'Cached nominal unhovered plan/head landmarks and retained CPU hover/visibility flags. Missing/nonfinite/stale is not valid current-view proof. No GPU buffer, pixel, actual draw or atomic-frame identity claimed.' };
   }
 
   /* ---- R5-scene (D19): mirror body (ns-mirror placement, transform and orbit; the scene draws the twins) ------------ */
@@ -5148,9 +5667,13 @@ export function createScene({
       for (let i = 0; i < n; i += step) { pv.fromBufferAttribute(a, i).applyMatrix4(m); if (out) pv.applyMatrix4(out); pts.push(pv.x, pv.y, pv.z); }
     };
     for (const b of body) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, bw);
-    // the arm in its eye frame at the start look (yaw = pitch = 0: the eye frame is the world frame)
-    for (const b of bones) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, null);
-    for (const m of muscles) { const p = m.pos; const n = p.length / 3, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh)); for (let i = 0; i < n; i += step) pts.push(p[3 * i], p[3 * i + 1], p[3 * i + 2]); }
+    // Configured arm samples use the SAME eye parent as the drawn arm; legacy start-look sampling stays unchanged.
+    if (referenceOriginSet) eyeRig.updateMatrixWorld(true);
+    for (const b of bones) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, referenceOriginSet ? eyeRig.matrixWorld : null);
+    for (const m of muscles) { const p = m.pos; const n = p.length / 3, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh)); for (let i = 0; i < n; i += step) {
+      if (referenceOriginSet) { pv.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyMatrix4(eyeRig.matrixWorld); pts.push(pv.x, pv.y, pv.z); }
+      else pts.push(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
+    } }
     if (pts.length < 3) return false;
     try {
       const fwd = [-Math.sin(bodyYaw), 0, -Math.cos(bodyYaw)];
@@ -5177,7 +5700,8 @@ export function createScene({
    * view size changes, never by a drag or an orbit. */
   function updateMirrorPlacement() {
     if (!mirror.ready || !farEyeView.pw || !arrowRef.k || !(cssW > 0 && cssH > 0)) return false;
-    const C = farEyeView.pw;
+    const tr = brainReferenceOrigin();
+    const C = farEyeView.pw.map((v, i) => v - tr[i]);
     const cy = Math.cos(-arrowRef.yaw), sy = Math.sin(-arrowRef.yaw), cp = Math.cos(-arrowRef.pitch), sp = Math.sin(-arrowRef.pitch);
     const x1 = cy * C[0] + sy * C[2], z1 = -sy * C[0] + cy * C[2];
     const P0 = [x1, cp * C[1] - sp * z1, sp * C[1] + cp * z1];
@@ -5189,7 +5713,7 @@ export function createScene({
     if (notOrbited && (!mirror.outlineNdc || mirror.outlineNdc.key !== sizeKey || mirror.outlineNdc.k !== arrowRef.k)) {
       const P = brainHullPoints || (brainSupport && brainSupport.points);
       try {
-        const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: [0, 0, 0] };
+        const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: brainReferenceOrigin() };
         const { xy } = NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam);
         let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
         for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; a = Math.min(a, xy[i]); c = Math.max(c, xy[i]); b = Math.min(b, xy[i + 1]); d = Math.max(d, xy[i + 1]); }
@@ -5211,7 +5735,6 @@ export function createScene({
       mirror.state = mirror.state ? NsMirror.placeMirror(mirror.state, mirror.placement) : NsMirror.createMirrorState(mirror.placement);
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     applyMirror();
-    applyMirrorCull();
     return true;
   }
   /** R5-bigbrain (R25): the inputs of the mirror body's free-box fit at the default view (CSS px): the brain's drawn
@@ -5219,7 +5742,7 @@ export function createScene({
    * this view) and the HUD cards, the mirror arrows' room and the brain's midline. Returns { boxFor(trialPlacement) }:
    * the ns-mirror mirrorFitBox result for the body's on-screen aspect, or null. */
   function mirrorFitNow(xy, cam, P0) {
-    const grid = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch }), gridA = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch }, R5_BIGBRAIN.avoidDilate);
+    const grid = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch, position: cam.position }), gridA = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch, position: cam.position }, R5_BIGBRAIN.avoidDilate);
     if (!grid) return null;
     const usable = arrowUsable(), obstacles = arrowObstacles();
     const sizesB = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'brain');
@@ -5230,7 +5753,8 @@ export function createScene({
     const sizesM = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'mirror');
     const room = NsArrows.arrowRoomPx(sizesM), fp = NsArrows.arrowPath().footprint;
     const band = 2 * fp.half * sizesM.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
-    const c = NsArrows.projectWorldPx(P0, cam), hull = NsArrows.convexHullPx(xy);
+    const mirrorReferenceFrame = referenceOriginSet ? NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry) : null;
+    const c = NsArrows.projectWorldPx(mirrorReferenceFrame ? NsMath.transformPoint(mirrorReferenceFrame, P0) : P0, referenceOriginSet ? { ...cam, yaw: referenceAngles.yaw, pitch: referenceAngles.pitch, position: referenceOrigin.slice() } : cam), hull = NsArrows.convexHullPx(xy);
     return {
       boxFor(trial) {
         if (!trial || !(trial.expectedHeightNdc > 0 && trial.expectedWidthNdc > 0)) return null;
@@ -5246,12 +5770,13 @@ export function createScene({
     try {
       if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
       else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(mirror.external);
-      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch }) }));
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch }) }));
     } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
     if (!T || !T.matrix || T.matrix.length !== 16) return false;
-    mirrorRoot.matrix.fromArray(T.matrix);
+    const matrix = Array.from(T.matrix), centre = Array.from(T.centre);
+    mirrorRoot.matrix.fromArray(matrix);
     mirrorRoot.matrixWorldNeedsUpdate = true;
-    mirror.transform = { matrix: Array.from(T.matrix), centre: Array.from(T.centre), scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch } : null };
+    mirror.transform = { matrix, centre, scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch } : null };
     mirror.serial++;
     overlayDirty = true;
     updateCameraRange();
@@ -5293,7 +5818,10 @@ export function createScene({
   }
   /** The scene's current default ns-mirror placement (or null), so an integrator can keep its own state in step:
    * NsMirror.placeMirror(state, scene.mirrorPlacementNow()). */
-  function mirrorPlacementNow() { return mirror.placement; }
+  function mirrorPlacementNow() {
+    if (!mirror.placement || !referenceOriginSet) return mirror.placement;
+    return Object.freeze({ ...mirror.placement, referenceFrame: Object.freeze(Array.from(NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry))), referenceMeaning: 'constructor canonical world reference; apply exactly once in ns-mirror' });
+  }
   /** QA: the mirror body's state, its measured on-screen box (CSS px; the projected body sample) and the share of those
    * points inside the brain's drawn outline (coveredByBrain). */
   function mirrorState() {
@@ -5304,9 +5832,8 @@ export function createScene({
       placement: Pl ? { distanceM: Math.round(Pl.distanceM * 1000) / 1000, nearM: Math.round(Pl.nearM * 1000) / 1000, brainFarM: Math.round(Pl.brainFarM * 1000) / 1000, limiting: Pl.limiting, expectedHeightNdc: Math.round(Pl.expectedHeightNdc * 1000) / 1000, rule: Pl.rule || null } : null,
       fit: mirror.fit ? { boxPx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.boxPx[k])), freePx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.freePx[k])), tried: mirror.fit.tried } : null,
       body: mirror.body ? { heightM: Math.round(mirror.body.height * 1000) / 1000, radiusM: Math.round(mirror.body.radius * 1000) / 1000, points: mirror.body.count } : null,
-      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, culled: mirror.culled || 0, cullPx: mirror.cullPx || 0, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount }, onScreen: null,
-      // R5-integrate-mirror-glow (D19): the label beside it (CSS px box, one-line or two-line), or null when it has no clear place
-      label: mirrorLabelBox ? { box: [mirrorLabelBox.x0, mirrorLabelBox.y0, mirrorLabelBox.x1, mirrorLabelBox.y1].map(v => Math.round(v)), compact: mirrorLabelBox.compact === true, tried: mirrorLabelTried } : null };
+      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount }, onScreen: null };
+    if (referenceOriginSet) out.reference = { originWorldM: referenceOrigin.slice(), initialCarryRadians: { ...referenceAngles }, constructorOwned: true };
     const W = mirrorSamplesWorld();
     if (W && cssW > 0 && cssH > 0) {
       camera.updateMatrixWorld(true);
@@ -5315,7 +5842,7 @@ export function createScene({
       // R5-bigbrain (R25 / R26): share of the body's sample points behind a motor area (first person: the motor
       // areas' occupancy grid at the current look; a motor area's backing darkens what is behind it)
       let grid = null;
-      try { grid = camPose ? null : motorGridFor({ yaw: lookYaw, pitch: lookPitch }); } catch { grid = null; }
+      try { grid = camPose ? null : motorGridFor({ yaw: firstPose ? firstPose.yaw : lookYaw, pitch: firstPose ? firstPose.pitch : lookPitch }); } catch { grid = null; }
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, inBrain = 0, behindMotor = 0;
       for (let i = 0; i < W.length; i += 3) {
         pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
@@ -5384,13 +5911,8 @@ export function createScene({
     if (!hits.length) return null;
     const o = hits[0].object, u = o.userData || {}, arm = mirrorArmGroup.children.includes(o);
     const covered = regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 });
-    // R5-integrate-mirror-glow (D19): the simulated activity of the mirrored muscle (the same value that colours it and
-    // its primary), or null for a bone.
-    let activity = null;
-    if (u.kind === 'muscle' && u.elementId && bodyById.has(u.elementId)) { const a = bodyById.get(u.elementId).mesh.userData.activity; activity = Number.isFinite(a) ? a : null; }
-    else if (arm) { const m = muscles.find(q => q.mirror === o); const a = m ? m.mesh.userData.activity : null; activity = Number.isFinite(a) ? a : null; }
-    return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || (arm ? (muscles.some(q => q.mirror === o) ? 'muscle' : 'bone') : null), side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
-      name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered, activity };
+    return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || null, side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
+      name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered };
   }
 
   /* ---- R5-scene (D17): glow links ------------------------------------------------------------------------------------ */
@@ -5426,18 +5948,7 @@ export function createScene({
     const core = GLOW_LINK.corePx / GLOW_LINK.haloPx;
     // R5-access A3: over the brain's drawn outline (the hull refreshed once per frame in updateGlow) only overBrainCore of
     // the core and overBrainHalo of the halo are drawn, so a link never hides the brain areas it crosses.
-    // R5-polish (D17 "beautiful, fluorescent, readable, never in the way"): with the R25 brain filling the view almost every
-    // link lies over the outline, so A3 left only a thin, half-bright olive thread (viewed). The thinning now applies where
-    // the link would cover a MOTOR AREA as drawn now (glowMotor: the motor areas' occupancy grid of the live camera, the
-    // grid the guide line uses): the core is thinned where its own width touches an area and the halo is dropped where the
-    // halo's width would reach one; over the see-through non-motor glass and off the brain the full fluorescent link shows.
-    // Without a region grid the A3 outline rule stays.
-    const hull = glowMotor ? null : glowHull, motor = glowMotor;
-    const oc = Number.isFinite(K.overBrainCore) ? K.overBrainCore : 0.5, oh = Number.isFinite(K.overBrainHalo) ? K.overBrainHalo : 0;
-    // R5-polish: the widths scale with the view (min side / 720 px, 0.75..1.5): at 2560x1080 the 1280x720 widths read as a
-    // hairline (viewed), on a 390 px phone they would be heavy.
-    const widthK = glowWidthScale(cssW, cssH), haloPx = GLOW_LINK.haloPx * widthK;
-    const coreBoxPx = GLOW_LINK.corePx * widthK + 1, haloBoxPx = haloPx + 1;
+    const hull = glowHull, oc = Number.isFinite(K.overBrainCore) ? K.overBrainCore : 0.5, oh = Number.isFinite(K.overBrainHalo) ? K.overBrainHalo : 0;
     const vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
     for (let i = 0; i <= nS; i++) {
       const px0 = curve[3 * i], py0 = curve[3 * i + 1], pz0 = curve[3 * i + 2];
@@ -5446,26 +5957,19 @@ export function createScene({
       const vx = px0 - cx, vy = py0 - cy, vz = pz0 - cz, d = Math.hypot(vx, vy, vz);
       let sx = ty * vz - tz * vy, sy = tz * vx - tx * vz, sz = tx * vy - ty * vx;
       const sL = Math.hypot(sx, sy, sz) || 1; sx /= sL; sy /= sL; sz /= sL;
-      const halfM = haloPx * d * tanPx;
+      const halfM = GLOW_LINK.haloPx * d * tanPx;
       const s = i / nS;
       const along = (d < GLOW_LINK.nearClipM ? 0 : glowAlongAlpha(s, phase)) * alphaMul * st.intensity;
-      let over = false, overCore = false;
-      if (hull || motor) {
+      let over = false;
+      if (hull) {
         pv.set(px0, py0, pz0).applyMatrix4(vi);
-        if (pv.z < -camera.near) {
-          pv.applyMatrix4(pm);
-          const X = (pv.x + 1) * 0.5 * cssW, Y = (1 - pv.y) * 0.5 * cssH;
-          if (motor) {
-            over = motor.hits({ x0: X - haloBoxPx, y0: Y - haloBoxPx, x1: X + haloBoxPx, y1: Y + haloBoxPx }) > 0;
-            overCore = over && motor.hits({ x0: X - coreBoxPx, y0: Y - coreBoxPx, x1: X + coreBoxPx, y1: Y + coreBoxPx }) > 0;
-          } else overCore = over = hullSignedDistance(hull, X, Y) <= 0;
-        }
+        if (pv.z < -camera.near) { pv.applyMatrix4(pm); over = hullSignedDistance(hull, (pv.x + 1) * 0.5 * cssW, (1 - pv.y) * 0.5 * cssH) <= 0; }
       }
       for (let j = 0; j < nA; j++) {
         const r = A[j], v = o + i * nA + j;
         buf.pos[3 * v] = px0 + sx * r * halfM; buf.pos[3 * v + 1] = py0 + sy * r * halfM; buf.pos[3 * v + 2] = pz0 + sz * r * halfM;
         const inCore = Math.abs(r) <= core + 1e-6;
-        const c = inCore ? st.core : st.halo, al = (inCore ? K.linkAlpha * (overCore ? oc : 1) : K.haloAlpha * glowHalo(r) * (over ? oh : 1)) * along;
+        const c = inCore ? st.core : st.halo, al = (inCore ? K.linkAlpha * (over ? oc : 1) : K.haloAlpha * glowHalo(r) * (over ? oh : 1)) * along;
         buf.col[4 * v] = c[0]; buf.col[4 * v + 1] = c[1]; buf.col[4 * v + 2] = c[2]; buf.col[4 * v + 3] = Math.max(0, Math.min(1, al));
       }
       if (over) glowState.overSamples++;
@@ -5492,23 +5996,13 @@ export function createScene({
     return true;
   };
   /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
-  let glowHull = null, glowMotor = null, glowFlag = '';
+  let glowHull = null, glowFlag = '';
   function updateGlow(dtMs) {
     const t0 = nowMs();
     glowState.overSamples = 0;
-    glowHull = null; glowMotor = null;
-    // R5-fix (review code F5): with no link to draw and nothing drawn last frame there is nothing to do (no per-frame
-    // Set / Map / array allocations at rest).
-    if (!glowState.links.length && !glowState.eased.size && !glowState.touched.size && !glowOwn.n && !glowMirror.n && glowFlag === 'off') {
-      if (glowState.drawn && glowState.drawn.length) glowState.drawn = [];
-      glowState.cpuMs = nowMs() - t0;
-      return;
-    }
+    glowHull = null;
     if (glowState.links.length || glowState.eased.size) {
       if (regionMode && brainTransformSet && brainCoversRect({ x0: 0, y0: 0, x1: 1, y1: 1 }) !== undefined && coverCache.valid) glowHull = coverCache.hull;
-      // R5-polish: the motor areas' occupancy grid for the live camera (refreshed by motorCoversRect only when the camera
-      // or the brain moved), so a link is thinned only where it would cover a motor area (emitRibbon).
-      if (regionMode && brainTransformSet && motorSamplePoints()) { try { motorCoversRect({ x0: -2, y0: -2, x1: -1, y1: -1 }); glowMotor = motorCoverGrid; } catch { glowMotor = null; } }
     }
     const prevTouched = glowState.touched;
     glowState.touched = new Set();
@@ -5519,11 +6013,6 @@ export function createScene({
     glowOwn.n = 0; glowMirror.n = 0;
     let rimMuscles = 0, rimAreas = 0, topLevel = 0, topRegion = null;
     const regionIds = [], targets = [];
-    // R5-integrate-mirror-glow (D17): the links drawn this frame, per area: { regionId, level, onScreen (a muscle end of
-    // it is inside the view, in front of the camera), groups, mirror } (glowLinksDrawn; the guide's glow goal).
-    const drawn = new Map();
-    if (glowState.links.length) camera.updateMatrixWorld(true);
-    const inView = p => { pv.set(p[0], p[1], p[2]).applyMatrix4(camera.matrixWorldInverse); if (pv.z > -camera.near) return false; pv.applyMatrix4(camera.projectionMatrix); return Math.abs(pv.x) <= 1 && Math.abs(pv.y) <= 1; };
     const phase = reducedMotion ? NaN : ((nowMs() / 1000) / GLOW_LINK.pulseS) % 1; // no travelling pulse under reduced motion
     const mirrorOn = mirrorRoot.visible && mirror.transform !== null;
     const M = mirrorOn ? mirror.transform.matrix : null;
@@ -5572,21 +6061,13 @@ export function createScene({
           addT('leftArm:-1', w, [pv.x, pv.y, pv.z]);
         }
       }
-      let dr = drawn.get(link.regionId);
       for (const g of groups.values()) {
         if (!(g.w > 0)) continue;
         const b = [g.x / g.w, g.y / g.w, g.z / g.w];
-        const own = emitRibbon(glowOwn, a, b, lv, phase, 1);
-        const mb = mirrorOn ? toMirror(b, glowScratch.b) : null;
-        const mir = mirrorOn ? emitRibbon(glowMirror, a, mb, lv, phase, GLOW_LINK.mirrorAlpha) : false;
-        if (!own && !mir) continue;
-        if (!dr) { dr = { regionId: link.regionId, level: 0, onScreen: false, groups: 0, mirror: 0 }; drawn.set(link.regionId, dr); }
-        dr.level = Math.max(dr.level, lv); dr.groups++;
-        if (mir) dr.mirror++;
-        if (!dr.onScreen && ((own && inView(b)) || (mir && inView(mb)))) dr.onScreen = true;
+        emitRibbon(glowOwn, a, b, lv, phase, 1);
+        if (mirrorOn) emitRibbon(glowMirror, a, toMirror(b, glowScratch.b), lv, phase, GLOW_LINK.mirrorAlpha);
       }
     }
-    glowState.drawn = [...drawn.values()].map(d => ({ ...d, level: Math.round(d.level * 1000) / 1000 }));
     for (const mat of prevTouched) if (!glowState.touched.has(mat)) { const u = mat.userData.nsGlowRim; if (u) u.value.set(0, 0, 0, GLOW_K.rimPower); }
     finishRibbons(glowOwn);
     finishRibbons(glowMirror);
@@ -5597,92 +6078,6 @@ export function createScene({
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
     glowState.cpuMs = nowMs() - t0;
   }
-  /** R5-integrate-mirror-glow (D19): place the mirror body's label beside its drawn box: first beside the upper half of
-   * the body (right, then left; the compass arrows sit at the middle of each side), then beside the lower half, then
-   * under its bottom arrow or over its top arrow. A place must be inside the view (below the limits line, left of the
-   * information column), clear of every drawn arrow, the HUD cards and panel, the region labels, the crosshair box and,
-   * while the brain stands in front, of the motor areas. No clear place: no label (the panel and the crosshair line still
-   * name the mirror body). Recomputed only when the camera, the mirror, the arrows or the HUD change. */
-  let mirrorLabelKey = '', mirrorLabelSize = null, mirrorLabelBox = null, mirrorLabelTried = 0;
-  function layoutMirrorLabel() {
-    if (!mirrorLabel) return;
-    const hide = () => { if (!mirrorLabel.hidden) mirrorLabel.hidden = true; mirrorLabelBox = null; };
-    if (!(mirrorRoot.visible && mirror.transform && mirror.samples && cssW > 0 && cssH > 0)) { mirrorLabelKey = ''; hide(); return; }
-    camera.updateMatrixWorld(true);
-    const ce = camera.matrixWorld.elements;
-    let key = `${mirror.serial}|${arrowSerial}|${cssW}x${cssH}|${camera.fov}|${hudReads}|${labelEls.length}|${insetFrame && !insetFrame.hidden ? 'I' : ''}|`;
-    for (let i = 0; i < 16; i++) key += `${Math.round(ce[i] * 1e5)},`;
-    if (key === mirrorLabelKey) return;
-    mirrorLabelKey = key;
-    const W = mirrorSamplesWorld();
-    if (!W) { hide(); return; }
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, on = 0;
-    for (let i = 0; i < W.length; i += 3) {
-      pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
-      if (pv.z > -camera.near) continue;
-      pv.applyMatrix4(camera.projectionMatrix);
-      const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH;
-      n++;
-      if (x >= 0 && x <= cssW && y >= 0 && y <= cssH) on++;
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-    }
-    if (!n || on < 0.5 * (W.length / 3)) { hide(); return; }
-    // two sizes: the two-line label, and (where it does not fit) the one-line "Mirror body"
-    const measure = compact => {
-      const was = mirrorLabel.hidden;
-      mirrorLabel.setAttribute('data-compact', compact ? 'true' : 'false');
-      mirrorLabel.hidden = false;
-      const r = { w: Math.ceil(mirrorLabel.offsetWidth || 0) || (compact ? 96 : 132), h: Math.ceil(mirrorLabel.offsetHeight || 0) || (compact ? 20 : 32) };
-      mirrorLabel.hidden = was;
-      return r;
-    };
-    if (!mirrorLabelSize || !(mirrorLabelSize.full.w > 0)) mirrorLabelSize = { full: measure(false), compact: measure(true) };
-    const gap = 6, top = 26;
-    arrowBoxes();
-    const obstacles = [];
-    for (const set of [arrowSets.brain, arrowSets.mirror]) if (set.shown) for (const d of ARROW_DIRS) { const b = set.boxes[d]; if (b) obstacles.push({ x0: b.x0 - 3, y0: b.y0 - 3, x1: b.x1 + 3, y1: b.y1 + 3 }); }
-    for (const r of readHudRects() || []) obstacles.push(r);
-    for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) obstacles.push({ x0: b.x - b.w / 2 - 3, y0: b.y - b.h / 2 - 3, x1: b.x + b.w / 2 + 3, y1: b.y + b.h / 2 + 3 }); }
-    const ch = R5_BIGBRAIN.crosshairKeepPx * 0.5;
-    obstacles.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch });
-    // R5-fix: and off the face box / inset with its caption (viewed: the label sat on the face box caption)
-    if (insetFrame && !insetFrame.hidden) { const ir = insetRect(); obstacles.push({ x0: ir.x - 4, y0: ir.y - 4, x1: ir.x + ir.size + 4, y1: ir.y + ir.size + 64 }); }
-    const reserve = infoPanelRect({ width: cssW, height: cssH });
-    const xMax = reserve && reserve.layout === 'column' ? reserve.x0 - 4 : cssW - 4, yMax = reserve && reserve.layout === 'portrait' ? reserve.y0 - 4 : cssH - 4;
-    const covered = regionMode && brainTransformSet && brainCoversRect({ x0, y0, x1, y1 });
-    const mb = arrowSets.mirror.shown ? arrowSets.mirror.boxes : {};
-    const cx = (x0 + x1) / 2, yTop = Math.min(y0, mb.forward ? mb.forward.y0 : y0), yBot = Math.max(y1, mb.back ? mb.back.y1 : y1);
-    const clear = r => r.x0 >= 4 && r.x1 <= xMax && r.y0 >= top && r.y1 <= yMax && !obstacles.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0)
-      && !(covered && motorCoversRect(r));
-    mirrorLabelTried = 0;
-    let pick = null, compact = false;
-    for (const c of [false, true]) {
-      const { w, h } = c ? mirrorLabelSize.compact : mirrorLabelSize.full;
-      const cand = [
-        [x1 + gap, y0], [x0 - gap - w, y0], [x1 + gap, y1 - h], [x0 - gap - w, y1 - h],
-        [cx - w / 2, yBot + gap], [cx - w / 2, yTop - gap - h]
-      ];
-      // R5-fix (review F12 / SL5-9 / P12): on a phone the small mirror body leaves none of those free; the compact label
-      // also tries the corners of the box round its arrows, a little further out ("labelled as a mirror image").
-      if (c) {
-        const ax0 = Math.min(x0, mb.left ? mb.left.x0 : x0), ax1 = Math.max(x1, mb.right ? mb.right.x1 : x1);
-        for (const o of [0, 18, 36]) cand.push([ax1 + gap + o, yTop - h - o], [ax0 - gap - w - o, yTop - h - o], [ax1 + gap + o, yBot + o], [ax0 - gap - w - o, yBot + o],
-          [ax1 + gap + o, (y0 + y1) / 2 - h / 2], [ax0 - gap - w - o, (y0 + y1) / 2 - h / 2]);
-      }
-      for (const [x, y] of cand) { mirrorLabelTried++; const r = { x0: x, y0: y, x1: x + w, y1: y + h }; if (clear(r)) { pick = r; break; } }
-      if (pick) { compact = c; break; }
-    }
-    if (!pick) { hide(); return; }
-    mirrorLabel.setAttribute('data-compact', compact ? 'true' : 'false');
-    mirrorLabelBox = { ...pick, compact };
-    const l = px(pick.x0), t = px(pick.y0);
-    if (mirrorLabel.style.left !== l) mirrorLabel.style.left = l;
-    if (mirrorLabel.style.top !== t) mirrorLabel.style.top = t;
-    if (mirrorLabel.hidden) mirrorLabel.hidden = false;
-  }
-  /** R5-integrate-mirror-glow (D17): the links drawn in the last frame, one per brain area: [{ regionId, level (0..1),
-   * onScreen, groups (muscle groups reached on your body), mirror (ribbons to the mirror body) }]. */
-  function glowLinksDrawn() { return Array.isArray(glowState.drawn) ? glowState.drawn.map(d => ({ ...d })) : []; }
   /** QA: the glow state. */
   function glowLinkState() {
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
@@ -5712,7 +6107,6 @@ export function createScene({
     const inView = inViewNow ? 'true' : 'false';
     if (brainInViewAttr !== inView) { overlay.setAttribute('data-ns-brain-in-view', inView); brainInViewAttr = inView; }
     layoutArrowTips(reserveRight, reserveBottom, topPx);
-    updateMirrorArrowDim();
     // R4-fix (review F2): small switched-on areas get a gold ring at their centre (SMALL_MARK); placed before the labels,
     // which keep clear of the rings.
     if (overlay && regionMode && regions.length) updateMarkDots(reserveRight, reserveBottom);
@@ -5755,17 +6149,7 @@ export function createScene({
         const p = arrowLayout[d];
         if (p && p.box) obst.push({ x0: p.box.x0 - 4, y0: p.box.y0 - 4, x1: p.box.x1 + 4, y1: p.box.y1 + 4 });
       }
-      // R5-integrate-mirror-glow (D19): and of the mirror body's arrows (after a drag or an orbit the brain's labels can
-      // reach them; viewed: "Face and neck" over the mirror's left arrow).
-      if (arrowSets.mirror.shown) for (const d of ARROW_DIRS) { const b = arrowSets.mirror.boxes[d]; if (b) obst.push({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }); }
-      // R5-fix (review P7): and of the mirror body itself (viewed after a 40 deg drag: "Your left" on the mirror's legs).
-      { const mbx = mirrorBodyBoxNow(); if (mbx) obst.push(mbx); }
       for (const r of labelAvoidPx().boxes) obst.push(r);
-      // R5-polish (D18): in third person the brain's labels keep off your own body (viewed: "Left leg" sat on the back of
-      // your head and "Back (posterior)" on your lower back).
-      for (const r of thirdPersonBodyRectsPx()) obst.push(r);
-      // R5-polish: and off the arrow captions shown now (viewed: the covered-arrow caption sat on "Face and neck").
-      for (const r of arrowTipRects) obst.push(r);
       // R4-fix (F2): the small-area switched-on rings stay visible (labels keep clear of them).
       for (const d of markDots.values()) if (d.shown && Number.isFinite(d.px) && Number.isFinite(d.py)) { const R = SMALL_MARK.sizePx / 2 + 3; obst.push({ x0: d.px - R, y0: d.py - R, x1: d.px + R, y1: d.py + R }); }
       const compact = cssW / cssH < 1 || cssW < 900;
@@ -5789,7 +6173,7 @@ export function createScene({
     // Face layer label (ghost: near the projected ghost centre; inset: a fixed top-centre frame).
     if (faceLabel) {
       let showLabel = false;
-      if (faceShow === 'ghost' && faceAmount > 0.05 && faceGroup.visible) {
+      if (faceMode === 'ghost' && faceAmount > 0.05 && faceGroup.visible) {
         pv.set(faceHeadCentre[0], faceHeadCentre[1], faceHeadCentre[2]).applyMatrix4(faceGroup.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
         if (pv.z < -near) {
           pv.applyMatrix4(camera.projectionMatrix);
@@ -5831,12 +6215,8 @@ export function createScene({
         }
       }
       if (faceLabel.hidden === showLabel) faceLabel.hidden = !showLabel;
-      const showInset = (faceShow === 'inset' || faceShow === 'box') && faceAmount > 0.05 && faceGroup.visible;
+      const showInset = faceMode === 'inset' && faceAmount > 0.05 && faceGroup.visible;
       if (insetFrame.hidden === showInset) insetFrame.hidden = !showInset;
-      if (insetFrame.getAttribute && insetFrame.getAttribute('data-ns-face-box') !== (faceShow === 'box' ? 'true' : 'false')) {
-        insetFrame.setAttribute('data-ns-face-box', faceShow === 'box' ? 'true' : 'false');
-        if (faceCaption) faceCaption.textContent = faceShow === 'box' && NS_TEXT.FACE_R5 && NS_TEXT.FACE_R5.boxLabel ? NS_TEXT.FACE_R5.boxLabel : faceText.insetLabel;
-      }
       if (showInset) {
         const r = insetRect();
         const l = px(r.x), t = px(r.y), sz = px(r.size);
@@ -5850,22 +6230,6 @@ export function createScene({
   /** Inset box (CSS px, origin top left): top centre below the essential line, inside the free width. */
   function insetRect() {
     const I = FACE_LAYER.inset;
-    if (faceShow === 'box') {
-      // R5-fix (review P6): the activity face box: smaller, at the top, just right of the brain's forward arrow (off the
-      // crosshair and the information column).
-      const size = Math.round(Math.max(80, Math.min(FACE_BOX.sizePx, (FACE_BOX.sizeVmin / 100) * Math.min(cssW, cssH))));
-      const fb = arrowSets.brain.shown && arrowSets.brain.boxes.forward ? arrowSets.brain.boxes.forward : null;
-      const reserve = infoPanelRect({ width: cssW, height: cssH });
-      const xMax = (reserve && reserve.layout === 'column' ? reserve.x0 - 8 : cssW - 8) - size;
-      const x = Math.max(8, Math.min(xMax, fb ? fb.x1 + 12 : cssW / 2 + 40));
-      // below any HUD card it would meet (the phone's full-width status card; viewed in harness/run-R5-fix-17-final-shots)
-      let y = 34;
-      for (let pass = 0; pass < 3; pass++) for (const r of hudRectCache || []) {
-        if (r.info || r.orient || r.chip || r.toast) continue;
-        if (r.x0 < x + size && r.x1 > x && r.y0 < y + size + 30 && r.y1 > y) y = r.y1 + 8;
-      }
-      return { x: Math.round(x), y: Math.round(Math.min(y, Math.max(34, cssH - size - 60))), size };
-    }
     const size = Math.max(80, Math.min(I.sizePx, (I.sizeVmin / 100) * Math.min(cssW, cssH)));
     return { x: Math.round((cssW - size) / 2), y: 30, size };
   }
@@ -5923,27 +6287,6 @@ export function createScene({
     const lodKey = L.lod ? `${L.lod.glassMm}/${L.lod.bodyMm}/${L.lod.armMm || 0}` : '';
     if (lodApplied !== lodKey) setLod(L.lod, lodKey);
     else if ((mirror.lod || 0) !== mirrorLodCell()) applyMirrorLod();
-    applyMirrorCull();
-  }
-  /** R5-integrate-mirror-glow (D19): size culling of the mirror body's twins at the lite quality levels (R5_SCENE
-   * mirrorCull*): a body twin is hidden while its bounding sphere is under the pixel threshold at the mirror's distance
-   * (the mirror never comes closer: it only turns). Level 0-2 draw every twin. Recomputed on a quality step, a re-placement
-   * or a resize. */
-  function applyMirrorCull() {
-    const lvl = qState.level, T = mirror.transform, Pl = mirror.placement;
-    const px = lvl >= R5_SCENE.mirrorCullFrom && T && Pl && cssH > 0 ? (lvl >= QUALITY_LEVELS.length - 1 ? R5_SCENE.mirrorCullPxLowest : R5_SCENE.mirrorCullPx) : 0;
-    const k = px > 0 ? ((0.001 * T.scale) / Math.max(1e-6, Pl.distanceM)) * (cssH / 2) / Math.tan((camera.fov * DEG) / 2) : 0;
-    let culled = 0;
-    for (const b of body) {
-      const tw = b.mirror;
-      if (!tw) continue;
-      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, r = g && g.boundingSphere ? g.boundingSphere.radius : Infinity;
-      const show = !(px > 0 && 2 * r * k < px);
-      if (tw.visible !== show) tw.visible = show;
-      if (!show) culled++;
-    }
-    mirror.culled = culled; mirror.cullPx = px;
-    return culled;
   }
   /** The 'lod' copies: built once on first use (clusterDecimate; about 10 ms for the glass in Node) and swapped in or out
    * on every mesh that shares a geometry (the glass shell, its depth pre-pass and x-ray copies; a body mesh and its depth
@@ -6172,7 +6515,6 @@ export function createScene({
     updateArrows();
     updateFaceLayer();
     layoutOverlay();
-    layoutMirrorLabel(); // R5-integrate-mirror-glow (D19)
     // R3-fix (M4): the body is see-through where it covers the brain's on-screen outline (the ellipse in the brain's
     // projected bounds, from the overlay layout of this frame), only while the brain is in front of the camera.
     // R5-scene (D18): NOT in third person (you are there to look at your body): the body stays solid, and only a small
@@ -6222,13 +6564,13 @@ export function createScene({
   /** Second pass for the face layer: 'ghost' with the main camera, depth-tested against the main frame (the arm in
    * front still hides it); 'inset' with the inset camera in a scissored, cleared box. */
   function renderFaceLayer() {
-    if (!(faceAmount > 0) || !faceGroup.visible || faceShow === 'off') return;
+    if (!(faceAmount > 0) || !faceGroup.visible || faceMode === 'off') return;
     const auto = renderer.autoClear;
     renderer.autoClear = false;
     try {
-      if (faceShow === 'ghost') {
+      if (faceMode === 'ghost') {
         renderer.render(faceScene, camera);
-      } else if ((faceShow === 'inset' || faceShow === 'box') && cssW > 0 && cssH > 0 && typeof renderer.setScissor === 'function') {
+      } else if (faceMode === 'inset' && cssW > 0 && cssH > 0 && typeof renderer.setScissor === 'function') {
         const r = insetRect();
         const y = cssH - r.y - r.size; // WebGL viewport origin: bottom left
         insetCamera.aspect = 1;
@@ -6300,11 +6642,15 @@ export function createScene({
     },
     measure,
     resize,
-    setView,
+    setView, setEyePosition, setReferenceOrigin,
     setArm,
     setBrain,
     setPlacement,
     updatePose,
+    appliedArmPose,
+    appliedHandPose,
+    appliedHandRenderState,
+    foregroundSurfaceTrace,
     updateMuscles,
     updateStrip,
     highlightMarker,
@@ -6344,9 +6690,9 @@ export function createScene({
     pickArrows,
     setArrowHover,
     arrowsState,
+    cachedArrowsState,
     setGlowLinks,
     glowLinkState,
-    glowLinksDrawn,
     setCameraPose,
     cameraState,
     setMirrorView,
@@ -6388,8 +6734,7 @@ export function createScene({
         labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null })),
         info: info ? { shown: !info.panel.hidden } : null,
         body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
-        face: { mode: faceMode, shown: faceShow, amount: faceAmount, visible: faceGroup.visible, drive: Math.round(faceDriveNow * 1000) / 1000 },
-        headInside: { applied: headInside.applied, meshes: headInside.meshes, centre: headInside.centre ? headInside.centre.map(v => Math.round(v * 10) / 10) : null }
+        face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
       };
     }
   };
@@ -6437,12 +6782,6 @@ export const HUD_LICENCE_LINKS = Object.freeze([
   Object.freeze(['Licence: CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']),
   Object.freeze(['BodyParts3D licence page (DBCLS)', 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html']),
   Object.freeze(['BodyParts3D source', 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html'])
-]);
-/** R5-fix (review SL5-1, CC BY-SA 4.0 s3(a)(1)(C)): the face-mesh licence and source links, shown in 'Sources and rights'
- * once the face and chewing muscles are drawn (HUD model key faceLinks: true). Same URIs as ns-text FACE_CREDIT. */
-export const HUD_FACE_LICENCE_LINKS = Object.freeze([
-  Object.freeze([NS_TEXT.FACE_CREDIT.linkLicence, NS_TEXT.FACE_CREDIT.url]),
-  Object.freeze([NS_TEXT.FACE_CREDIT.linkSource, NS_TEXT.FACE_CREDIT.sourceUrl])
 ]);
 /** Historical textContent mirrors remain in the details DOM for slot compatibility. Primary notices and the
  * crown/tint note now remain visible in every layout; no required text relies on these hidden mirrors. */
@@ -6715,14 +7054,6 @@ export function createHud(hudRoot) {
     a.textContent = text;
     if (typeof a.setAttribute === 'function') { a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
   }
-  const faceLinks = [];
-  for (const [text, href] of HUD_FACE_LICENCE_LINKS) {
-    const a = make('a', 'ns-details-link ns-details-link-face', links);
-    a.textContent = text;
-    a.hidden = true;
-    if (typeof a.setAttribute === 'function') { a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
-    faceLinks.push(a);
-  }
 
   // Essential limits remain outside movable cards, never faded or hidden; fixed-size text may wrap.
   // Its measured height informs HUD placement, without changing camera or hand-fit geometry.
@@ -6781,8 +7112,6 @@ export function createHud(hudRoot) {
           if (key === 'orientationLabels') orientText[k].long = v[k]; else orientText[k].short = v[k];
           showOrientText(k, orientText[k].shortWanted);
         }
-      } else if (key === 'faceLinks') {
-        for (const a of faceLinks) if (a.hidden === (v === true)) a.hidden = v !== true;
       } else if (key === 'crosshairActive') {
         setClass(cross, v ? 'ns-crosshair ns-crosshair-active' : 'ns-crosshair');
       } else if (key === 'limitsShort') {
@@ -7051,17 +7380,6 @@ export function createHud(hudRoot) {
         const p = projected && projected[key];
         if (!p) { if (i > 0) break; continue; }
         if (p.visible) cands.push({ key, p });
-      }
-      // R5-fix (review F13, R12 "front toward the top"): with R25 the brain's front (or back) end can be off screen at the
-      // default view; its label is then pinned at that screen edge on the brain's midline ("↑ Front (anterior)" at the
-      // top), slid sideways off the arrows and cards like any other label.
-      if (!cands.length && (k === 'anterior' || k === 'posterior')) {
-        const p = projected && projected[k];
-        const off = p && p.front !== false && Number.isFinite(p.x) && Number.isFinite(p.y) && (k === 'anterior' ? p.y < 0.02 : p.y > 0.98);
-        if (off) {
-          const x0 = clampFraction(p.x, 0.12, 0.88), ye = k === 'anterior' ? 0 : 1;
-          [0, -0.09, 0.09, -0.18, 0.18, -0.27, 0.27].forEach((dx, i) => cands.push({ key: `${k}.pin${i}`, p: { x: clampFraction(x0 + dx, 0.08, 0.92), y: ye, visible: true, pinned: true } }));
-        }
       }
       const show = cands.length > 0 && el.textContent !== '';
       if (el.hidden !== !show) el.hidden = !show;

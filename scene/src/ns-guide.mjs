@@ -55,9 +55,7 @@ import { GUIDE, guideLine } from './ns-text.mjs';
 export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'fist', 'flipPalm', 'otherPart', 'dragBrain', 'orbit']);
 
 /** Every goal id in teaching order, round 5 included (R5-text). */
-// R5-fix (review P9): 'orbit' before 'dragBrain': the drag goal leaves the brain pulled down, and an orbit goal right
-// after it found only the forward arrow on screen (half behind the forearm). The round-4 list above is unchanged.
-export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'fist', 'flipPalm', 'otherPart', 'glow', 'orbit', 'dragBrain', 'thirdPerson', 'mirror']);
+export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'fist', 'flipPalm', 'otherPart', 'glow', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
 
 /** The round-5 goals and the build feature each one needs (ns-text ROUND5_FEATURES names). */
 export const GUIDE_FEATURE_GOALS = Object.freeze({ glow: 'glow', thirdPerson: 'thirdPerson', mirror: 'mirror' });
@@ -73,14 +71,10 @@ export const GUIDE_ALL_FEATURES = Object.freeze({ glow: true, thirdPerson: true,
 export function guideGoalIds(features = null, goals = null) {
   if (Array.isArray(goals) && goals.length) {
     const want = new Set(goals.filter(g => typeof g === 'string'));
-    // (an explicit list that is exactly the round-4 one keeps the round-4 order)
-    const r4 = GUIDE_GOAL_IDS.length === want.size && GUIDE_GOAL_IDS.every(id => want.has(id));
-    const list = (r4 ? GUIDE_GOAL_IDS : GUIDE_ALL_GOAL_IDS).filter(id => want.has(id));
+    const list = GUIDE_ALL_GOAL_IDS.filter(id => want.has(id));
     if (list.length) return Object.freeze(list);
   }
   const f = features && typeof features === 'object' ? features : {};
-  // R5-fix (review P9): a build without any round-5 feature keeps exactly the round-4 list and order.
-  if (!Object.values(GUIDE_FEATURE_GOALS).some(k => f[k] === true)) return GUIDE_GOAL_IDS;
   return Object.freeze(GUIDE_ALL_GOAL_IDS.filter(id => !GUIDE_FEATURE_GOALS[id] || f[GUIDE_FEATURE_GOALS[id]] === true));
 }
 

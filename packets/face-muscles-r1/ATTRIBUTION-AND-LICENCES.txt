@@ -1,198 +1,44 @@
-Face and chewing muscles (packet face-muscles-r1) - attribution and licences
-=============================================================================
+Facial atlas assets — attribution and licences
 
-WHAT THIS IS
-  54 mesh files (OBJ) of the facial-expression and chewing muscles, left and right, taken from Z-Anatomy and moved into
-  the BodyParts3D 4.0 body frame used by NeuroSurge. Acquired by R5-face (Claude Code session 9381fa79) on
-  2026-11-08 (UTC) / 2026-11-09 (Melbourne) after the user chose "Download open models" for the missing face muscles.
-  Shown in NeuroSurge as simulated anatomy for learning: one reference model, not a measured person, not validated.
+54 OBJ asset records represent 27 paired structures or parts. These are selected Z-Anatomy derivatives, built on BodyParts3D, for anatomical illustration. This metadata revision leaves every mesh byte unchanged.
 
-LICENCE OF THESE MESH FILES
-  Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
-  https://creativecommons.org/licenses/by-sa/4.0/   (legal code: https://creativecommons.org/licenses/by-sa/4.0/legalcode)
-  You may copy, share and adapt them, also commercially, if you give the credit below, link the licence, say what was
-  changed, and share your adapted meshes under the same licence. No extra restrictions may be added.
-  The NeuroSurge game code is CC0. That does NOT change the licence of these meshes: the meshes stay CC BY-SA 4.0
-  (share-alike) wherever they go, and the CC0 code is not relicensed by sitting next to them.
+Required supplied credits:
+"BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
+"Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"
 
-REQUIRED CREDIT (as the source asks, quoted)
-  "Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"
-  "BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
-  Z-Anatomy authors named by the source: Gauthier Kervyn (design, 3D, anatomy), Lluis Vinent (Unity app and the FBX
-  export), Marcin Zielinski (Blender add-on), Kousaku Okubo (original BodyParts3D model).
-  BodyParts3D today: "BodyParts3D, (c) The Database Center for Life Science licensed under CC Attribution 4.0
-  International" (https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html, page updated 2025-02-27, checked by U0
-  on 2026-11-08 for packet bodyparts3d-fullbody-r1). The Z-Anatomy text still names the older CC BY-SA 2.1 Japan
-  licence; both notices are kept.
-  Neither Z-Anatomy, its authors, nor DBCLS endorse NeuroSurge or NeuroTranslate 0.0.
+Source contributors and roles:
+Kousaku Okubo / the Database Center for Life Science: original BodyParts3D model.
+Gauthier Kervyn: design, 3D and anatomy.
+Marcin Zielinski: Blender add-on.
+Lluís Vinent Juanico: Unity application and the distributed FBX export.
 
-SOURCE
-  Atlas: Z-Anatomy, the open source 3D atlas of anatomy (built on BodyParts3D).
-  File: Resources/Models/FBX/MuscularSystem100.fbx in https://github.com/LluisV/Z-Anatomy (branch PC-Version)
-  Commit: 6c7f9016bd5899ac8edafd31b9900c151df42ed6
-  URL used: https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx
-  Bytes: 37343180   SHA-256: 4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279
-  Git blob SHA-1: 2477e1b6caf97d7174762b5eec6cf1c80db64eed (equals the repository tree entry)
-  Retrieved: 2026-11-08T22:06:17Z to 22:06:21Z (UTC)
-  Why this file: it is the source's own FBX export, linked from the repository README ("You can download the models
-  (FBX) here"), it is the smallest official file that holds the face and chewing muscles (37 MB; the current Blender
-  template Z-Anatomy.zip in https://github.com/Z-Anatomy/Models-of-human-anatomy is 87 MB and needs a .blend reader),
-  and it uses the same licence.
+Source:
+LluisV/Z-Anatomy
+Commit: 6c7f9016bd5899ac8edafd31b9900c151df42ed6
+File: Resources/Models/FBX/MuscularSystem100.fbx
+https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx
+SHA-256: 4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279
+Git blob: 2477e1b6caf97d7174762b5eec6cf1c80db64eed
 
-STATEMENT OF CHANGES (made by NeuroSurge R5-face, 2026-11-09)
-  1. Selection: only 27 facial-expression and chewing muscles x 2 sides were taken (list in FACE-MESH-MANIFEST.json);
-     everything else in the FBX was left out.
-  2. Format conversion: FBX (binary 7.4) to Wavefront OBJ, positions and triangles only (normals, materials and
-     hierarchy dropped; polygons fan-triangulated: all are triangles except one five-sided polygon in the
-     superficial masseter; coordinates rounded to 0.0001 mm).
-  3. Registration: every vertex was moved by ONE similarity transform for the whole source (uniform scale
-     9.860279, a rotation, and a translation; this includes the change from centimetres to millimetres)
-     into the BodyParts3D 4.0 frame. The transform was fitted to neck muscles present in both sources and to
-     the places where the face muscles lie on the BodyParts3D skull and jaw bone.
-  4. Left side: Z-Anatomy draws each left muscle as a mirror copy of the right one; the left files are those mirror
-     copies, with the face order reversed so the surfaces still face outward.
-  5. Names: each file got a NeuroSurge id (zf-...), a plain name and a technical name; the source object name is kept
-     in the file header and in the manifest (embedded_source_name).
+Mesh licence:
+Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+https://creativecommons.org/licenses/by-sa/4.0/legalcode.en
 
-PARTS OF THE SOURCE WITH OTHER LICENCES (not in this packet)
-  The Z-Anatomy licence text lists models "included and adapted" from other authors, two of them non-commercial:
-  inner ear (CC BY-NC-SA 4.0) and kidney (CC BY-NC 4.0); also Brainder, white matter and cranial nerves. None of those
-  is a face or chewing muscle and none is in this packet. BodyParts3D 4.0 has no facial-expression or chewing muscles
-  except the platysma, so these face meshes are Z-Anatomy work (derived from the BodyParts3D body) under CC BY-SA 4.0.
+Retain the supplied creator, copyright, source, licence and disclaimer information; indicate modifications and earlier changes; and share adapted mesh material under CC BY-SA 4.0 without extra downstream restrictions. Exact upstream notices and the full supplied licence are copied without alteration in LICENSES/. Those files retain the source's wording, attribution history and disclaimers.
 
-VERBATIM SOURCE TEXTS
-  (a) Resources/Models/License.txt next to the FBX file, commit 6c7f9016bd5899ac8edafd31b9900c151df42ed6
-      https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/License.txt
-      1514 bytes, SHA-256 af62c06f620b9da20138e4c22a3f56565482dd058266540994ace97a4e24b693, retrieved 2026-11-08T22:05:42Z
-    |
-    | LICENSE(S)
-    |
-    |
-    | The content of this file is a derivative of the model from 'BodyParts3D' made by 'Z-Anatomy' in a modified version of 'Blender'
-    |
-    | Please be sure attribute any content copied or derived from the content of this file as follows:
-    |
-    | -"BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
-    |
-    | -"Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"
-    |
-    |
-    | With regard to this content, you are licensed to:
-    |
-    |     freely access part or whole of this database, and acquire data;
-    |     freely redistribute part or whole of the data from this database; and
-    |     freely create and distribute database and other derivative works based on part or whole of the data from this database,
-    |
-    | under the license, as long as you comply with the following conditions:
-    |
-    |     You must attribute this database in the manner specified by the author or licensor when distributing part or whole of this database or any derivative work.
-    |     You must distribute any derivative work based on part or whole of the data from this database under the same license.
-    |
-    | A good practice is to inform the authors when derivated works are produced.
-    |
-    |
-    | Other models have been included and adapted:
-    |
-    | "Brainder" and "White matter" from the University of Washington
-    | "Cranial Nerves and Foramina - by University of Dundee, CAHID - CC-BY 4.0"
-    | "Anatomy of the Inner Ear - by University of Dundee School of Medicine - CC-BY-NC-SA 4.0"
-    | "Kidney - by lissiecowley - CC-BY-NC 4.0"
-    |
-    |
-    | The license of 'Blender' is included inside 'Anatomy Blender'
+The official BodyParts3D notice now states CC BY 4.0:
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+The supplied historical CC BY-SA 2.1 Japan credit above is retained. This upstream update does not remove Z-Anatomy's separate BY-SA contributions.
 
-  (b) Resources/Models/Readme.txt, same commit (151 bytes, SHA-256 43eab2cd13ad8be51d20227cad78d427e6078cd91e66a24ae7f947811524c810)
-    | These models may not be up to date. For the latest version of the Z-Anatomy models, please visit the official website:
-    | https://www.z-anatomy.com/atlas
+Recorded mesh changes, 9 November 2026:
+Selection of the listed structures/parts; FBX-to-OBJ conversion; fan triangulation; one shared similarity transform; source reflected-instance winding adjustment; coordinate rounding to 0.0001 mm; and retained source names with export IDs. No new mesh conversion or geometric change was made by this metadata revision.
 
-  (c) README.md of https://github.com/LluisV/Z-Anatomy, same commit (1045 bytes, SHA-256 b8a64f65dce34b6d464bae7c7775fa88c496204ccad25f0d286957014f282d02)
-    | # Z-Anatomy
-    | This repository includes the Unity project for the Z-Anatomy PC application.
-    | It was made by Lluís Vinent Juanico, featuring models from the Z-Anatomy project.
-    |
-    | [![Z-Anatomy video](https://img.youtube.com/vi/h6NNGB-_cSY/0.jpg)](https://www.youtube.com/watch?v=h6NNGB-_cSY)
-    | ## Models
-    | You can download the models (.blend) [here](https://drive.google.com/drive/folders/18M7IuH2ai2fl21Ud0YH1mSlNEPPmcZzq?usp=drive_link).<br>
-    | You can download the models (FBX) [here](https://github.com/LluisV/Z-Anatomy/tree/PC-Version/Resources/Models/FBX).
-    |
-    | ## License
-    | [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
-    |
-    | This work is licensed under a
-    | [Creative Commons Attribution-ShareAlike 4.0 International License][cc-by-sa].
-    |
-    | [![CC BY-SA 4.0][cc-by-sa-image]][cc-by-sa]
-    |
-    | [cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
-    | [cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
-    | [cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
-    | You can find more information about the license in the LICENSE file.
+Public metadata changes:
+Revised the explanatory metadata, corrected the file/structure count explanation, and made the conversion and validation limits explicit. The original records and their hashes remain preserved; no mesh bytes or recorded transform parameters changed.
 
-  (d) LICENSE of https://github.com/LluisV/Z-Anatomy, same commit (20559 bytes, SHA-256 5e7dd512c01cfb822e3253f8f8df923103a64e269deb9bb5303f23b2376cad46); its first
-      lines, followed by the full CC BY-SA 4.0 legal code (saved in acquisition/face-r1/evidence/lluisv-LICENSE):
-    | Lluís Vinent Juanico developed this app, incorporating models from the Z-Anatomy project [CC-BY-SA].
-    | For more information about the license of Z-Anatomy's models, please visit the following link:
-    | https://docs.google.com/document/d/1peWW_7IiVgTTAwcI_auv38YSJ6qGWRuTMxzzhkRpXIk/edit#heading=h.dxist1y53h8t
-    |
-    | Other contributors:
+The upstream atlas notices also identify separately licensed inner-ear, kidney, brain/white-matter and cranial-nerve material. The declared facial-only selection does not include those objects. This notice is specific to this packet and does not license a different atlas subset. No upstream author or institution endorses NeuroSurge.
 
-  (e) License.txt of the Z-Anatomy project repository https://github.com/Z-Anatomy/Models-of-human-anatomy,
-      commit ca4ad71d24d05a6e81f8aeaadb96165c20dffc75 (2754 bytes, SHA-256 196b66b56551a862e59872f7cdb70e6d9a6ad84e9105962fca8ec28c14e97520, retrieved 2026-11-08T22:04:49Z)
-    | ## LICENSE
-    |
-    | All the code and content shared by ‘Z-Anatomy’ is under [Creative Commons Attribution-ShareAlike 4.0 International License][cc-by-sa].
-    |
-    | With regard to this content, **you are licensed to**:
-    | -freely access part or whole of this database, and acquire data;
-    | -freely redistribute part or whole of the data from this database;
-    | -MMand freely create and distribute database and other derivative works based on part or whole of the data from this database, under the license,
-    | **as long as** you comply with the following conditions:
-    | -You must attribute this database in the manner specified by the author or licensor when distributing part or whole of this database or any derivative work.
-    | -You must distribute any derivative work based on part or whole of the data from this database under the same license.
-    | (Watch this video to learn more about the CC licenses).
-    |
-    | [![CC BY-SA 4.0][cc-by-sa-image]][cc-by-sa]
-    |
-    | [cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
-    | [cc-by-sa-image]: https://licensebuttons.net/l/by-sa/4.0/88x31.png
-    | [cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
-    |
-    |
-    |
-    | ## ATTRIBUTIONS
-    |
-    | Please be sure attribute any content copied or derived from the content of this file as follows:
-    |
-    | ### MODELS
-    |    -**"BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"**
-    |    The original model can be downloaded [here](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html).
-    |       -**"Z-Anatomy - The libre 3D atlas of anatomy - CC-BY-SA 4.0"**
-    |
-    | The following models have been used as reference/included and adapted:
-    |    -"Brainder" and "White matter" from the University of Washington
-    |    -"Cranial Nerves and Foramina - by University of Dundee, CAHID - CC-BY 4.0"
-    |    -"Anatomy of the Inner Ear - by University of Dundee School of Medicine - CC-BY-NC-SA 4.0"
-    |    -"Kidney - by Lissie Cowley - CC-BY-NC 4.0"
-    |
-    | ### DEFINITIONS
-    |    -**"Wikipedia - CC-BY-SA 3.0"**
-    |    The link of the original web page is set at the end of the definition.
-    |    Beware the errors created by the automatic translation of the english version.
-    |
-    | ### CODE OF THE APP
-    |    -**"Lluis Vinent"**
-    |
-    | ## AUTHORS:
-    |
-    |     Kousaku OKUBO (Original model ‘BodyParts3D’)
-    |     Gauthier KERVYN (Design, 3D, anatomy)
-    |     Marcin ZIELINSKI (Blender add-on)
-    |     Lluis VINENT (Unity development)
-    |     Ana Teresa BIGIO (Portuguese translation of the anatomical structures)
-    |     Carlos TORRES VILLAR (Spanish translation of the anatomical structures)
-    |     Paola Perin, Daniele Cossellu, Elisa Vivado (Italian translation of the anatomical structures)
-    |     Jadwiga Palosz (Polish translation of the anatomical structures)
-    |     Shariar Ahmadpour (Parsi translation of the anatomical structures)
+The project-owned game code has separate CC0 terms. Three.js is separately MIT-licensed; its complete notice remains in the game bundle's vendor/LICENSE. Those software terms do not relicense the meshes, and the mesh licence does not automatically relicense unrelated code.
 
-All evidence (API listings, headers, saved texts) is in acquisition/face-r1/evidence/ and is listed with hashes in
-ACQUISITION-RECORD.json.
+Registration accuracy, outward normals, anatomical attachments, deformation, physiological function and production readiness are not established by these credits or the fixed-conversion match.

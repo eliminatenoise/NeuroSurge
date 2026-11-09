@@ -6,7 +6,7 @@
  "started_at_utc": "2026-11-08T03:51:24.038340+00:00",
  "finished_at_utc": "2026-11-08T03:51:28.304963+00:00",
  "script": {
-  "path": "<claude-dev-root>/acquisition/acquire_fullbody_r1.py",
+  "path": "<claude-workspace-root>/acquisition/acquire_fullbody_r1.py",
   "sha256": "8890ae81bb4318efdbb38a24e8cc19a56711fa6b87b623d9f5af7bf13f6db021"
  },
  "runtime": {
@@ -123,7 +123,7 @@
    "sha256": "d523b4f0d8454873e886aaeb224b2501aae1c4fa35e37867db1b63c4775bb8ca"
   },
   "stage_mesh_manifest": {
-   "path": "<claude-dev-root>/neurosurge-playable/inputs/MESH-MANIFEST.json",
+   "path": "<claude-dev-root>/inputs/MESH-MANIFEST.json",
    "bytes": 235771,
    "sha256": "b01fc738dbc3e3c7fb31faf46550a6e3c3bb3263da46f40bdbddb3239f89b529"
   }
@@ -3128,14 +3128,14 @@
  ],
  "outputs": {
   "manifest": {
-   "path": "<claude-dev-root>/neurosurge-playable/inputs/FULLBODY-MESH-MANIFEST.json",
+   "path": "<claude-dev-root>/inputs/FULLBODY-MESH-MANIFEST.json",
    "sha256": "5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406"
   },
   "attribution": {
-   "path": "<claude-dev-root>/neurosurge-playable/packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt",
+   "path": "<claude-dev-root>/packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt",
    "sha256": "0934295fa6420e7ccdb1d6b53d9da19548b81850b2b6279e3ad4c9dcfd24fab2"
   },
-  "meshes_dir": "<claude-dev-root>/neurosurge-playable/packets/bodyparts3d-fullbody-r1/meshes"
+  "meshes_dir": "<claude-dev-root>/packets/bodyparts3d-fullbody-r1/meshes"
  },
  "assets_with_anomalies": [
   {

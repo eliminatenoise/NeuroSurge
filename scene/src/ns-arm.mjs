@@ -456,6 +456,8 @@ function mergeOptions(options) {
   }
   o.shoulderCam = vec3(o.shoulderCam, 'shoulderCam');
   o.pole = vec3(o.pole, 'pole');
+  // R378: optional rendering-camera origin in the SAME physical body coordinates. Absent path stays literal.
+  o.cameraOriginBodyM = opt.cameraOriginBodyM === undefined ? null : vec3(opt.cameraOriginBodyM, 'cameraOriginBodyM');
   for (const k of NUMERIC_OPTIONS) finite(o[k], k);
   if (!(o.marginNdc >= 0 && o.marginNdc < 1)) fail('arm_input', 'marginNdc must be in [0, 1)');
   if (!(Math.abs(o.yNdc) < 1 - o.marginNdc)) fail('arm_input', 'yNdc must lie inside the screen margins');
@@ -795,7 +797,8 @@ const COUPLED_FOREARM_STEP_DEG = 0.01;
 function coupledShoulder(o, ox, u) {
   const c = o.rotationCoupling;
   const B = o.bodyToCamera;
-  const sBody = B ? transformDirection(rotationTranspose(B), ox.shoulderCam) : ox.shoulderCam;
+  const frameShoulder = B ? transformDirection(rotationTranspose(B), ox.shoulderCam) : ox.shoulderCam;
+  const sBody = o.cameraOriginBodyM ? add(frameShoulder, o.cameraOriginBodyM) : frameShoulder;
   const shiftBody = couplingShoulderShiftBody(c, u, sBody, trunkAxisFor(c, sBody));
   const shiftCam = B ? transformDirection(B, shiftBody) : shiftBody;
   return { shoulderCam: add(ox.shoulderCam, shiftCam), pole: add(ox.pole, shiftCam), shiftBody, shoulderBody: sBody };
@@ -1000,7 +1003,8 @@ export function solveArm(rig, params = {}) {
     ...(p.pole ? { pole: p.pole } : {}), ...(p.yNdc !== undefined ? { yNdc: p.yNdc } : {}),
     ...(p.reachGirdle !== undefined ? { reachGirdle: p.reachGirdle } : {}),
     ...(p.bodyToCamera ? { bodyToCamera: p.bodyToCamera } : {}),
-    ...(p.rotationCoupling !== undefined ? { rotationCoupling: p.rotationCoupling } : {}) });
+    ...(p.rotationCoupling !== undefined ? { rotationCoupling: p.rotationCoupling } : {}),
+    ...(p.cameraOriginBodyM !== undefined ? { cameraOriginBodyM: p.cameraOriginBodyM } : {}) });
   const { xNdc, depth, joints = {}, aspect, fovYDeg = ARM_DEFAULTS.fovYDeg } = p;
   finite(xNdc, 'xNdc');
   finite(depth, 'depth');
@@ -1771,7 +1775,8 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   const J = P.ctx.J;
   const ox = atAnchor(o, x, tanHalf, aspect);
   const solution = solveArm(rig, { xNdc: x, depth: d, joints: J, aspect, fovYDeg, shoulderCam: ox.shoulderCam, pole: ox.pole, yNdc: o.yNdc, reachGirdle: false,
-    bodyToCamera: o.bodyToCamera || undefined, rotationCoupling: o.rotationCoupling || false });
+    bodyToCamera: o.bodyToCamera || undefined, rotationCoupling: o.rotationCoupling || false,
+    ...(o.cameraOriginBodyM ? { cameraOriginBodyM: o.cameraOriginBodyM } : {}) });
   const cornersNdc = [];
   let within = solution.reachable;
   for (const { seg, carrier, box } of checkedBoxes(boxes)) {

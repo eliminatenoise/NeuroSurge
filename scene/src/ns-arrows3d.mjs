@@ -17,17 +17,21 @@
  *      view, so the top / bottom arrows slide over its front / back ends there): it never moves sideways and never
  *      leaves its side (flags `gapUsedPx`, `scale`, `slidPx`, `overOutline`). compassLayout().
  *  (b) 3D FRAMES (pure): each arrow is a small bent tube: it starts at its anchor, goes straight OUTWARD in the screen
- *      plane (the stalk, exactly on its compass line), then bends TOWARD THE VIEWER and back INWARD (an arc of
- *      bendDeg = 150), and ends in a broad head that points toward the viewer and inward, the way that side of the
- *      target turns when the arrow is used (top arrow: the front of the brain turns toward you = "orbit to the front").
- *      Seen exactly from the eye a bend toward the eye is edge-on and folds onto itself (a "pin"); so the bend plane is
- *      turned viewTiltDeg = 25 deg about the stalk, the same way for all four (as if seen a little from the upper left:
- *      top / bottom hooks show to the right, left / right hooks show downward). The 3D bend is then read from the
- *      overlap (the near head crosses in front of the far stalk, with a dark outline), the light and shade, a shaft
- *      that thickens toward the viewer and a brightness ramp from the far base to the near head. arrowFrames() returns
- *      a world matrix per arrow. The anchor plane is the target's centre plane (a sphere around the target, at its
- *      middle depth); an arrow that had to slide over the outline is put in FRONT of the target's nearest point
- *      instead (frontDepthM), so it never touches it in 3D.
+ *      plane (the stalk, exactly on its compass line), then bends AWAY FROM THE VIEWER, into the scene, and back
+ *      INWARD (an arc of bendDeg = 150), and ends in a broad head that points away from the viewer and inward, so the
+ *      arrow curls round behind its side of the target (arrow-depth note R20, NEUROSURGE-ARROW-DEPTH-GENUINE-SOURCE-R20:
+ *      "They shouldn't bend around to the individual. They should bend around away from the individual."; it replaces
+ *      the earlier bend toward the viewer). Read as the path your view takes over that side (top arrow: up over the
+ *      top); each arrow still asks for the same orbit as before. Seen exactly from the eye a bend away from the eye is
+ *      edge-on and folds onto itself (a "pin"); so the bend plane is turned viewTiltDeg = 25 deg about the stalk, the
+ *      same way for all four (top / bottom hooks show to the right, left / right hooks show downward, the same screen
+ *      sides as before R20). The 3D bend is then read from the overlap (the near stalk crosses in front of the far
+ *      head, with a dark outline), the light and shade, a shaft that thins away from the viewer and a brightness ramp
+ *      from the bright near base to the dimmer far head. arrowFrames() returns a world matrix per arrow (right-handed,
+ *      d x w = b, so the mesh winding and normals carry over). The anchor plane is the target's centre plane (a sphere
+ *      around the target, at its middle depth); an arrow that had to slide over the outline is moved toward the eye
+ *      along its own sight lines (the same picture on screen) until its DEEPEST point, the far head, lies in FRONT of
+ *      the target's nearest point (frontDepthM), so it never touches the target in 3D.
  *  (c) GEOMETRY (pure typed arrays): buildArrowGeometry() (round tube with a smooth bend, rounded base cap, broad
  *      elliptical-cone head; 466 vertices / 770 triangles per arrow at the defaults), plus the THREE wrapper
  *      createArrowRig() with a lit shader (fixed view-space key light from the upper left, fill, specular and a fresnel
@@ -51,10 +55,6 @@
 const DEG = Math.PI / 180;
 const freeze = o => Object.freeze(o);
 
-/** R5-polish (D19): how far a covered (not usable) arrow is greyed when it is NOT under the look (uBlocked; 1 = the
- * covered-hover look). Display choice. */
-export const COVERED_DIM = 0.55;
-
 /** The four arrows (same names and order as ns-scene-three ORBIT_ARROWS.dirs and ns-app orbit requests). */
 export const COMPASS_DIRS = freeze(['forward', 'back', 'left', 'right']);
 /** Screen direction of each arrow from the target's middle (CSS px, y down): forward = top, back = bottom. */
@@ -62,17 +62,20 @@ export const COMPASS_SCREEN = freeze({ forward: freeze([0, -1]), back: freeze([0
 
 /**
  * Arrow shape in DESIGN UNITS (1 unit = sizePx on screen at the anchor). Local axes: x = u (outward, the compass
- * direction), y = w (toward the viewer), z = across. Stalk: straight from u = 0 to u = stalk. Bend: circle of radius
- * bendRadius whose centre is at (stalk, bendRadius), swept bendDeg from the outward direction toward the viewer and
- * beyond (150 deg: the head then points 60 deg inward of "toward the viewer"). Shaft radius grows from shaftR0 (far
- * base) to shaftR1 (near end of the bend), the cue a near object gives. section: 'round' | 'flat' (a ribbon, flatRatio
+ * direction), y = w (AWAY from the viewer, into the scene, as arrowFrames places it since the arrow-depth note R20),
+ * z = across. Stalk: straight from u = 0 to u = stalk. Bend: circle of radius bendRadius whose centre is at (stalk,
+ * bendRadius), swept bendDeg from the outward direction away from the viewer and beyond (150 deg: the head then points
+ * 60 deg inward of "away from the viewer"). Shaft radius goes from shaftR0 (near base) to shaftR1 (far end of the bend):
+ * thinner far away, the cue perspective gives (R20 swapped the two values of the old toward-the-viewer bend, 0.085 ->
+ * 0.14; the swap follows that design's own rule and has not yet been chosen by viewing). section: 'round' | 'flat' (a
+ * ribbon, flatRatio
  * thick). Head on the end tangent, starting headInset before the bend's end: 'flat' = a broad elliptical cone
  * (headRadius across, headRadius x headFlat in the bend plane), 'cone' = a round cone. Segments set the polygon count.
  * viewTiltDeg / viewTiltScreen: the bend plane's turn about the stalk (arrowFrames). Display choices, chosen by viewing
  * variants (round5/R5-arrows-NOTES.md, harness/run-R5-arrows-lab-1).
  */
 export const ARROW_DESIGN = freeze({
-  stalk: 0.5, bendRadius: 0.38, bendDeg: 150, shaftR0: 0.085, shaftR1: 0.14, headLength: 0.5, headRadius: 0.29, headInset: 0.03,
+  stalk: 0.5, bendRadius: 0.38, bendDeg: 150, shaftR0: 0.14, shaftR1: 0.085, headLength: 0.5, headRadius: 0.29, headInset: 0.03,
   section: 'round', flatRatio: 0.45, head: 'flat', headFlat: 0.5,
   radialSegments: 14, stalkSegments: 4, bendSegments: 20, capRings: 3,
   viewTiltDeg: 25, viewTiltScreen: freeze([1, 1])
@@ -90,22 +93,23 @@ export const ARROW_SIZES = freeze({
 });
 export const PX_PER_CM = 96 / 2.54;
 
-/** Layout rules: screen margin, slide step, the perspective allowance on the footprint (the near head is drawn up to
- * about 10 % larger than the anchor scale), the outline-clearance search step and the hover / pick padding. Before an
+/** Layout rules: screen margin, slide step, the perspective allowance on the footprint (written for the old bend toward
+ * the viewer, whose near head was drawn up to about 10 % larger than the anchor scale; since the arrow-depth note R20
+ * the far head is drawn a little smaller, so it is now spare room), the outline-clearance search step and the hover /
+ * pick padding. Before an
  * arrow slides over the outline it first tries a smaller gap (down to gapMinFrac x gapPx, at least gapMinPx), then a
  * slightly smaller arrow (shrink factors, with the small gap). R5-bigbrain (R25): an arrow at the screen edge prefers a
  * sideways shift along the edge to sliding inward (edgeSlideCost: 1 px inward costs as much as this many px sideways)
  * and keeps at least separationFrac x the smaller extent of the visible outline from the arrows placed before it (the
  * compass order forward, back, left, right), so the four stay far apart; it slides inward at most edgeMaxSlideFrac of the
  * visible extent (further in it would leave its side), else it counts as blocked and the next tier is tried. */
-// R5-fix (review F2 / P2): edgeMaxShiftFrac caps the sideways shift of an edge arrow (0.15: it stays in the middle third
-// of its side, the e2e S45 rule; the old cap, 0.45, is the `deep` tier's); the centred line (inward slide, then a
-// smaller arrow) is always tried first.
-export const ARROW_LAYOUT = freeze({ marginPx: 8, slideStepPx: 2, perspectiveAllowance: 1.1, clearStepPx: 1, maxClearPx: 400, pickPadPx: 6, frontMarginFrac: 0.03, gapMinFrac: 0.4, gapMinPx: 8, shrink: freeze([0.85, 0.75]), edgeSlideCost: 2, separationFrac: 0.4, edgeMaxSlideFrac: 0.15, edgeMaxShiftFrac: 0.15 });
+export const ARROW_LAYOUT = freeze({ marginPx: 8, slideStepPx: 2, perspectiveAllowance: 1.1, clearStepPx: 1, maxClearPx: 400, pickPadPx: 6, frontMarginFrac: 0.03, gapMinFrac: 0.4, gapMinPx: 8, shrink: freeze([0.85, 0.75]), edgeSlideCost: 2, separationFrac: 0.4, edgeMaxSlideFrac: 0.15 });
 
 /**
- * Look (display choices; sRGB hex). The base end is a dim cool grey, the head a bright near-white (far = dimmer, near =
- * brighter). Hover: warm white, 12 % larger, stronger rim (not colour alone). Neither is the activity ramp, the
+ * Look (display choices; sRGB hex). `base` is the dim cool grey of the FAR end, `tip` the bright near-white of the NEAR
+ * end (far = dimmer, near = brighter). Since the arrow-depth note R20 the head is the far end, so FRAG draws `tip` at
+ * the base and `base` at the head (the names stay for ns-colors arrowLook overrides). Hover: warm white, 12 % larger,
+ * stronger rim (not colour alone). Neither is the activity ramp, the
  * left-arm light blue or the gold "switched on" mark. lightDir / fillDir are VIEW-space directions (x right, y up,
  * z toward the viewer). xrayOpacity: the see-through copy where the arm covers the arrow.
  */
@@ -145,8 +149,8 @@ export function arrowSizePx({ width, height } = {}, kind = 'brain') {
  * { base: [u, w], tip: [u, w], axis: [tu, tw], radius, length, thickness, shape }, footprint: { uMin, uMax, half,
  * wMax } }. r is the across (screen-tangent) half width, rN the half thickness in the bend plane (r x flatRatio for
  * the 'flat' ribbon section, r for 'round'). footprint: the on-screen extent seen from the eye (u range and half width
- * across) and the largest toward-the-viewer offset. The centre line is planar (u, w), so seen exactly from the eye it
- * projects onto the u axis.
+ * across) and the largest offset along w (away from the viewer since the arrow-depth note R20). The centre line is
+ * planar (u, w), so seen exactly from the eye it projects onto the u axis.
  */
 export function arrowPath(design = ARROW_DESIGN) {
   const d = { ...ARROW_DESIGN, ...design };
@@ -188,7 +192,7 @@ export function arrowPath(design = ARROW_DESIGN) {
   uMax = Math.max(uMax, base[0] + baseU, tip[0] + (shape === 'flat' ? thickness * Math.abs(axis[1]) : 0));
   wMax = Math.max(wMax, base[1] + (shape === 'flat' ? thickness : d.headRadius) * Math.abs(axis[0]), tip[1]);
   half = Math.max(half, d.headRadius);
-  // A view tilt turns the bend plane about the stalk by viewTiltDeg: the toward-the-viewer part then shows sideways by
+  // A view tilt turns the bend plane about the stalk by viewTiltDeg: the part bent along w then shows sideways by
   // up to sin(tilt) x wMax on screen (conservative: added to both sides of the across extent).
   const side = isNum(d.viewTiltDeg) && d.viewTiltDeg > 0 ? Math.sin(d.viewTiltDeg * DEG) * wMax : 0;
   half += side;
@@ -208,9 +212,10 @@ export function arrowRoomPx({ sizePx, gapPx }, design = ARROW_DESIGN, layoutRule
 }
 
 /**
- * Tube + cap + head geometry in design units (pure typed arrays, local axes x = outward, y = toward the viewer,
- * z = across): { positions: Float32Array, normals: Float32Array, along: Float32Array (0 at the base .. 1 at the head
- * tip, for the far-to-near brightness ramp), indices: Uint16Array, vertexCount, triangleCount }. Every triangle is
+ * Tube + cap + head geometry in design units (pure typed arrays, local axes x = outward, y = away from the viewer once
+ * placed by arrowFrames (arrow-depth note R20), z = across): { positions: Float32Array, normals: Float32Array, along:
+ * Float32Array (0 at the base .. 1 at the head tip, for the near-to-far brightness ramp), indices: Uint16Array,
+ * vertexCount, triangleCount }. Every triangle is
  * wound counter-clockwise seen from outside (its geometric normal agrees with its vertex normals).
  */
 export function buildArrowGeometry(design = ARROW_DESIGN) {
@@ -376,26 +381,23 @@ export function occupancyGrid(xy, { width, height, cellPx = 4, dilate = 1, indic
   }
   // with triangle indices every covered cell is marked too (a surface seen at a grazing angle projects to long, thin
   // triangles whose vertices alone leave gaps)
-  // R5-fix (review code F1): allocation-free (no per-triangle or per-cell arrays): the finite checks and the five
-  // point-in-triangle tests are inlined; same cells as before (bench: harness/run-R5-fix-tools/bench-occ.mjs).
-  const inTri = (px, py, ax, ay, bx, by, cx, cy, den) => {
-    const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den, l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den;
-    return l1 >= 0 && l2 >= 0 && l1 + l2 <= 1;
-  };
   if (indices && indices.length >= 3) for (let t = 0; t + 2 < indices.length; t += 3) {
     const a = indices[t], b = indices[t + 1], c = indices[t + 2];
     const ax = xy[2 * a] / cellPx, ay = xy[2 * a + 1] / cellPx, bx = xy[2 * b] / cellPx, by = xy[2 * b + 1] / cellPx, cx = xy[2 * c] / cellPx, cy = xy[2 * c + 1] / cellPx;
-    if (!(Number.isFinite(ax) && Number.isFinite(ay) && Number.isFinite(bx) && Number.isFinite(by) && Number.isFinite(cx) && Number.isFinite(cy))) continue;
+    if (![ax, ay, bx, by, cx, cy].every(isNum)) continue;
     const i0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), i1 = Math.min(gw - 1, Math.floor(Math.max(ax, bx, cx)));
     const j0 = Math.max(0, Math.floor(Math.min(ay, by, cy))), j1 = Math.min(gh - 1, Math.floor(Math.max(ay, by, cy)));
     if (i0 > i1 || j0 > j1 || (i1 - i0) * (j1 - j0) > 40000) continue;
     const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
-    const flat = Math.abs(den) < 1e-12;
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      if (flat) { mark(i, j); continue; }
+      if (Math.abs(den) < 1e-12) { mark(i, j); continue; }
       // the cell counts when any of its centre or corners lies in the triangle (conservative for thin triangles)
-      if (inTri(i + 0.5, j + 0.5, ax, ay, bx, by, cx, cy, den) || inTri(i, j, ax, ay, bx, by, cx, cy, den) || inTri(i + 1, j, ax, ay, bx, by, cx, cy, den)
-        || inTri(i, j + 1, ax, ay, bx, by, cx, cy, den) || inTri(i + 1, j + 1, ax, ay, bx, by, cx, cy, den)) mark(i, j);
+      let hit = false;
+      for (const [px, py] of [[i + 0.5, j + 0.5], [i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) {
+        const l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den, l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den;
+        if (l1 >= 0 && l2 >= 0 && l1 + l2 <= 1) { hit = true; break; }
+      }
+      if (hit) mark(i, j);
     }
   }
   const W1 = gw + 1, S = new Uint32Array(W1 * (gh + 1));
@@ -442,6 +444,11 @@ export function occupancyGrid(xy, { width, height, cellPx = 4, dilate = 1, indic
  *   gapUsedPx, edge (at the usable edge), edgeShiftPx (sideways along the edge, 0 = centred), overAvoid (cells) } } }.
  */
 export function compassLayout(outline, opts = {}) {
+  return compassLayoutImpl(outline, opts);
+}
+
+// Optional caller-owned report; public compassLayout return/default/error behavior is unchanged.
+function compassLayoutImpl(outline, opts = {}, report = null) {
   // R5-bigbrain (R25 + D1(d)): `prefer` (a rect, e.g. the comfortable look range) is tried first; an arrow that finds no
   // clear place inside it takes its place in the full usable rect instead (flag outsidePreferred), because "never over
   // a motor area, the panel or HUD" is a hard rule and the look range a preference.
@@ -453,23 +460,15 @@ export function compassLayout(outline, opts = {}) {
   const tiers = [];
   if (prefer && [prefer.x0, prefer.y0, prefer.x1, prefer.y1].every(isNum)) {
     const UP = { x0: Math.max(U0.x0, prefer.x0), y0: Math.max(U0.y0, prefer.y0), x1: Math.min(U0.x1, prefer.x1), y1: Math.min(U0.y1, prefer.y1) };
-    if (UP.x1 - UP.x0 > 40 && UP.y1 - UP.y0 > 40) {
-      tiers.push({ usable: UP, tier: 'preferred' });
-      // R5-fix (review F6, D2 comfortable reach): still inside the comfortable look range, with the HUD cards' ACTUAL
-      // boxes instead of their reserved homes (at 1280x720 the status card's home left the left arrow no place within
-      // 40 deg; its actual box does), before leaving the range.
-      if (Array.isArray(fallbackObstacles)) tiers.push({ usable: UP, obstacles: fallbackObstacles, tier: 'preferred' });
-    }
+    if (UP.x1 - UP.x0 > 40 && UP.y1 - UP.y0 > 40) tiers.push({ usable: UP, tier: 'preferred' });
   }
   tiers.push({ usable: U0, tier: 'usable' });
   if (Array.isArray(fallbackObstacles)) tiers.push({ usable: U0, obstacles: fallbackObstacles, tier: 'fallback' });
   // last: no cap on the inward slide (deeper over the glass rather than over a motor area)
-  tiers.push({ usable: U0, obstacles: Array.isArray(fallbackObstacles) ? fallbackObstacles : null, rules: { ...(rest.rules || ARROW_LAYOUT), edgeMaxSlideFrac: null, edgeMaxShiftFrac: 0.45 }, tier: 'deep' });
+  tiers.push({ usable: U0, obstacles: Array.isArray(fallbackObstacles) ? fallbackObstacles : null, rules: { ...(rest.rules || ARROW_LAYOUT), edgeMaxSlideFrac: null }, tier: 'deep' });
   let out = null;
   for (const t of tiers) {
-    // R5-fix (review F2): every tier keeps the FIRST tier's compass lines (an arrow taken from a later tier stays centred on
-    // the same lines as the others; its own tier's usable rect only bounds where it may sit).
-    const L = compassLayoutCore(outline, { ...rest, usable: t.usable, obstacles: t.obstacles || rest.obstacles, rules: t.rules || rest.rules || ARROW_LAYOUT, centre: out ? out.centre : null });
+    const L = compassLayoutCore(outline, { ...rest, usable: t.usable, obstacles: t.obstacles || rest.obstacles, rules: t.rules || rest.rules || ARROW_LAYOUT }, report);
     if (!L) continue;
     if (!out) { out = L; for (const d of COMPASS_DIRS) { L.arrows[d].tier = t.tier; L.arrows[d].outsidePreferred = t.tier !== 'preferred' && tiers[0].tier === 'preferred'; } }
     else for (const d of COMPASS_DIRS) if (out.arrows[d].blocked && !L.arrows[d].blocked) out.arrows[d] = { ...L.arrows[d], tier: t.tier, outsidePreferred: tiers[0].tier === 'preferred' };
@@ -480,11 +479,12 @@ export function compassLayout(outline, opts = {}) {
 
 function compassLayoutCore(outline, {
   width, height, sizePx, gapPx, design = ARROW_DESIGN, usable = null, obstacles = [], fit = 'slide', rules = ARROW_LAYOUT,
-  avoid = null, avoidCellPx = 4, avoidDilate = 1, centre = null
-} = {}) {
+  avoid = null, avoidCellPx = 4, avoidDilate = 1
+} = {}, report = null) {
   if (!(width > 0 && height > 0)) fail('compassLayout needs width and height > 0');
   if (!(sizePx > 0) || !(gapPx >= 0)) fail('compassLayout needs sizePx > 0 and gapPx >= 0');
   const hull = Array.isArray(outline) && Array.isArray(outline[0]) ? convexHullPx(outline.flat()) : convexHullPx(outline);
+  if (report) { report.hull.status = 'REACHED'; report.hull.count = hull.length; report.hull.calls++; }
   if (hull.length < 3) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of hull) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
@@ -492,8 +492,7 @@ function compassLayoutCore(outline, {
   const leaves = { forward: y0 < U.y0, back: y1 > U.y1, left: x0 < U.x0, right: x1 > U.x1 };
   const vis = { x0: Math.max(x0, U.x0), y0: Math.max(y0, U.y0), x1: Math.min(x1, U.x1), y1: Math.min(y1, U.y1) };
   const anyLeaves = COMPASS_DIRS.some(d => leaves[d]) && vis.x1 > vis.x0 && vis.y1 > vis.y0;
-  const cx = centre && isNum(centre[0]) ? centre[0] : anyLeaves ? (vis.x0 + vis.x1) / 2 : (x0 + x1) / 2;
-  const cy = centre && isNum(centre[1]) ? centre[1] : anyLeaves ? (vis.y0 + vis.y1) / 2 : (y0 + y1) / 2;
+  const cx = anyLeaves ? (vis.x0 + vis.x1) / 2 : (x0 + x1) / 2, cy = anyLeaves ? (vis.y0 + vis.y1) / 2 : (y0 + y1) / 2;
   const grid = avoid && typeof avoid.hits === 'function' ? avoid
     : avoid && avoid.length >= 2 ? occupancyGrid(avoid, { width, height, cellPx: avoidCellPx, dilate: avoidDilate }) : null;
   const fp = arrowPath(design).footprint, pa = rules.perspectiveAllowance;
@@ -571,28 +570,17 @@ function compassLayoutCore(outline, {
         while (s0 <= reach) { const [qx, qy] = at(edgeBase - sgn * s0, lineAt), bq = boxAt(e, qx, qy, 1); if (boxInside(bq, U) && !obstacles.some(o => o && boxOverlap(bq, o))) break; s0 += st0; }
         const maxSlide = Math.min(reach, isNum(rules.edgeMaxSlideFrac) && ext > 0 ? s0 + rules.edgeMaxSlideFrac * ext : reach);
         let found = null;
-        // R5-fix (review F2 / P2, R20 "consistent, basically towards the top, bottom, left and right ... far apart"): first
-        // on the centred compass line itself (sliding inward, then a slightly smaller arrow), and only then sideways along
-        // the edge, at most edgeMaxShiftFrac of the visible extent (was 0.45: arrows ended in corners on 4:3 and portrait).
-        const search = (k1, maxSh) => {
-          // the inward slide is measured from the edge of the SCALED footprint (a smaller arrow can sit nearer the edge)
-          const base1 = along === 0 ? (e[0] > 0 ? U.x1 - outer * k1 : U.x0 + outer * k1) : (e[1] > 0 ? U.y1 - outer * k1 : U.y0 + outer * k1);
-          for (let cost = 0; cost <= wS * maxSlide + maxSh; cost += st) {
-            for (let sl = 0; wS * sl <= cost && sl <= maxSlide; sl += st) {
-              const k = cost - wS * sl;
-              if (k > maxSh || (k % st) > 1e-9) continue;
-              for (const sg of k === 0 ? [1] : [1, -1]) {
-                const [px, py] = at(base1 - sgn * sl, lineAt + sg * k);
-                if (okAt(boxAt(e, px, py, k1)) && apart(px, py)) { shift = sg * k; return { px, py, s: sl, k: k1 }; }
-              }
+        for (let cost = 0; cost <= wS * maxSlide + maxShift && !found; cost += st) {
+          for (let sl = 0; wS * sl <= cost && sl <= maxSlide && !found; sl += st) {
+            const k = cost - wS * sl;
+            if (k > maxShift || (k % st) > 1e-9) continue;
+            for (const sg of k === 0 ? [1] : [1, -1]) {
+              const [px, py] = at(edgeBase - sgn * sl, lineAt + sg * k);
+              if (okAt(boxAt(e, px, py, 1)) && apart(px, py)) { found = { px, py, s: sl }; shift = sg * k; break; }
             }
           }
-          return null;
-        };
-        const shiftCap = isNum(rules.edgeMaxShiftFrac) ? rules.edgeMaxShiftFrac * Math.max(0, span[1] - span[0]) : maxShift;
-        for (const k1 of [1, ...(rules.shrink || [])]) { found = search(k1, 0); if (found) break; }
-        if (!found) for (const k1 of [1, ...(rules.shrink || [])]) { found = search(k1, shiftCap); if (found) break; }
-        if (found) { bx = found.px; by = found.py; slid = found.s; scale = found.k; }
+        }
+        if (found) { bx = found.px; by = found.py; slid = found.s; }
         else {
           // nothing clear: the outermost place on the centred line (inside the usable rect by construction), blocked
           blocked = true; shift = 0; slid = 0;
@@ -651,28 +639,58 @@ export function pixelRay(x, y, cam) {
 /** Project flat source points through a column-major world matrix (or none) to CSS px: { xy: Float64Array (NaN for
  * points behind the near distance), behind } (pure). */
 export function projectPointsPx(points, matrix, cam, near = 0.02) {
+  return projectPointsPxImpl(points, matrix, cam, near);
+}
+
+// R345: collect finite counts/ranges inside the existing projection loop, never by projecting a second time.
+function extendDiagnosticRange(range, value) {
+  if (!range) return [value, value];
+  if (value < range[0]) range[0] = value;
+  if (value > range[1]) range[1] = value;
+  return range;
+}
+function projectPointsPxImpl(points, matrix, cam, near = 0.02, report = null) {
   const c = camOf(cam), n = (points.length / 3) | 0, xy = new Float64Array(2 * n), m = matrix;
+  const D = report ? (report.projection = { status: 'RUNNING', nearM: near, inputScalars: points.length, inputRows: n,
+    ignoredTrailingScalars: points.length - 3 * n, visitedRows: 0, finiteSourceRows: 0, nonfiniteSourceRows: 0,
+    finiteDepthRows: 0, nonfiniteDepthRows: 0, finiteFrontRows: 0, nonfiniteFrontDepthRows: 0,
+    behind: 0, finiteXYRows: 0, nonfiniteXYRows: 0, depthRangeM: null, finiteFrontDepthRangeM: null,
+    finiteXYRangePx: { x: null, y: null } }) : null;
   let behind = 0;
   for (let i = 0; i < n; i++) {
     let x = points[3 * i], y = points[3 * i + 1], z = points[3 * i + 2];
+    if (D) { D.visitedRows++; if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) D.finiteSourceRows++; else D.nonfiniteSourceRows++; }
     if (m) { const X = m[0] * x + m[4] * y + m[8] * z + m[12], Y = m[1] * x + m[5] * y + m[9] * z + m[13], Z = m[2] * x + m[6] * y + m[10] * z + m[14]; x = X; y = Y; z = Z; }
     const q = applyT(c.R, [x - c.pos[0], y - c.pos[1], z - c.pos[2]]), depth = -q[2];
-    if (!(depth > near)) { xy[2 * i] = NaN; xy[2 * i + 1] = NaN; behind++; continue; }
+    if (D) {
+      if (Number.isFinite(depth)) { D.finiteDepthRows++; D.depthRangeM = extendDiagnosticRange(D.depthRangeM, depth);
+        if (depth > near) { D.finiteFrontRows++; D.finiteFrontDepthRangeM = extendDiagnosticRange(D.finiteFrontDepthRangeM, depth); }
+      } else { D.nonfiniteDepthRows++; if (depth > near) D.nonfiniteFrontDepthRows++; }
+    }
+    if (!(depth > near)) { xy[2 * i] = NaN; xy[2 * i + 1] = NaN; behind++; if (D) { D.behind++; D.nonfiniteXYRows++; } continue; }
     xy[2 * i] = (q[0] / (depth * c.tanH * c.aspect) + 1) * 0.5 * c.W;
     xy[2 * i + 1] = (1 - q[1] / (depth * c.tanH)) * 0.5 * c.H;
+    if (D) {
+      if (Number.isFinite(xy[2 * i]) && Number.isFinite(xy[2 * i + 1])) {
+        D.finiteXYRows++; D.finiteXYRangePx.x = extendDiagnosticRange(D.finiteXYRangePx.x, xy[2 * i]);
+        D.finiteXYRangePx.y = extendDiagnosticRange(D.finiteXYRangePx.y, xy[2 * i + 1]);
+      } else D.nonfiniteXYRows++;
+    }
   }
+  if (D) D.status = D.nonfiniteSourceRows || D.nonfiniteDepthRows || D.nonfiniteXYRows > D.behind ? 'COMPLETE_WITH_NONFINITE' : 'COMPLETE';
   return { xy, behind };
 }
 
 /** Distance (m) along the line of sight from the eye (camera at the origin) through `centre` to the target's nearest
  * point: min over points of (p . n), n = centre / |centre|. points: flat source points + optional world matrix. */
-export function nearestDepthAlong(points, matrix, centre) {
-  const n = norm3(centre), m = matrix;
+export function nearestDepthAlong(points, matrix, centre, origin = null) {
+  const shifted = origin && origin.some(v => v !== 0);
+  const n = norm3(shifted ? sub3(centre, origin) : centre), m = matrix;
   let best = Infinity;
   for (let i = 0; i + 2 < points.length; i += 3) {
     let x = points[i], y = points[i + 1], z = points[i + 2];
     if (m) { const X = m[0] * x + m[4] * y + m[8] * z + m[12], Y = m[1] * x + m[5] * y + m[9] * z + m[13], Z = m[2] * x + m[6] * y + m[10] * z + m[14]; x = X; y = Y; z = Z; }
-    const d = x * n[0] + y * n[1] + z * n[2];
+    const d = shifted ? (x - origin[0]) * n[0] + (y - origin[1]) * n[1] + (z - origin[2]) * n[2] : x * n[0] + y * n[1] + z * n[2];
     if (d < best) best = d;
   }
   return best;
@@ -681,27 +699,35 @@ export function nearestDepthAlong(points, matrix, centre) {
 /* ------------------------------------------------------------------------------------------------ 3D frames */
 
 /**
- * World frames of the four arrows (pure). The layout is made in the REFERENCE view: the camera at the origin turned to
- * `ref` ({ yaw, pitch }: the default look carried with any brain grab, so the brain looks there exactly as at the
- * default look). Each anchor's base pixel is cast onto the plane through the target's centre perpendicular to the
+ * World frames of the four arrows (pure). The layout and frames use ONE selected reference camera: Euler `ref`
+ * ({ yaw, pitch, position }, default zero origin) or cam.matrixWorld, whose rotation AND translation are authoritative.
+ * Inputs must be finite and the camera proper rigid (scale/shear unsupported, not normalized here). Each anchor is cast
+ * onto the plane through the target's centre perpendicular to the
  * line of sight (or, for an arrow over the outline, onto the plane frontMarginFrac x distance in front of the target's
- * nearest point, frontDepthM), then:
- *   d = the screen compass direction on that plane (outward), w = toward the eye, b = d x w (right-handed);
+ * nearest point, frontDepthM; see below), then:
+ *   d = the screen compass direction on that plane (outward), w = AWAY from the eye along the sight line through the
+ *   anchor (arrow-depth note R20; it was toward the eye), b = d x w (right-handed: det > 0, so the mesh's
+ *   counter-clockwise winding and its normals carry over unchanged);
  *   scale = sizePx x the metres one CSS px covers there (across the line of sight).
  * design.viewTiltDeg > 0 turns the bend plane (w, b) about the stalk axis d by that angle, the same way for all four
- * (the toward-the-viewer part then shows toward screen direction design.viewTiltScreen, as if the eye saw the arrows a
- * little from the opposite side): the stalk stays exactly on its compass line, the bend stays a bend toward the viewer,
- * and the eye sees it a little from the side instead of exactly edge-on.
- * The result is anchored in the world: looking around moves it with the target; a grab or an orbit needs a new call.
+ * (the bend then shows toward screen direction design.viewTiltScreen, the same screen side as before R20): the stalk
+ * stays exactly on its compass line, the bend stays a bend away from the viewer (w . sight line = cos(tilt) > 0), and
+ * the eye sees it a little from the side instead of exactly edge-on.
+ * A 'front' arrow is then moved along the sight lines from the eye (origin, scale and mpp shrink together, so its
+ * picture on screen does not change) until its DEEPEST point (the far head, grown by hoverScale and the dark outline)
+ * lies on that front plane: no part of it reaches into the target or behind the target's near surface.
+ * The result is a world frame for that selected view. Callers using an active viewer must replan on camera pose/origin
+ * changes as well as target changes; this never turns the target itself.
  * Returns { forward | back | left | right: { dir, origin, d, w, b, scale, mpp, matrix (Float64Array(16), local design
  * units -> world), depthMode: 'centre' | 'front', distance } }.
  */
-export function arrowFrames(layout, { cam, ref = { yaw: 0, pitch: 0 }, centre, frontDepthM = null, rules = ARROW_LAYOUT, design = ARROW_DESIGN } = {}) {
+export function arrowFrames(layout, { cam, ref = { yaw: 0, pitch: 0 }, centre, frontDepthM = null, rules = ARROW_LAYOUT, design = ARROW_DESIGN, hoverScale = ARROW_LOOK.hoverScale, outline = ARROW_LOOK.outline } = {}) {
   if (!layout || !layout.arrows) fail('arrowFrames needs a compassLayout result');
   if (!Array.isArray(centre) && !(centre && centre.length === 3)) fail('arrowFrames needs the target centre (world)');
-  const c = camOf({ ...cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: [0, 0, 0] });
+  const c = camOf({ ...cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: ref.position || [0, 0, 0] });
   const Cw = [centre[0], centre[1], centre[2]];
-  const Cc = applyT(c.R, Cw), dist = len3(Cc);
+  const shifted = c.pos.some(v => v !== 0); // matrixWorld origin wins even when ref.position is absent or different
+  const Cc = applyT(c.R, shifted ? sub3(Cw, c.pos) : Cw), dist = len3(Cc);
   if (!(dist > 0) || Cc[2] >= 0) fail('the target centre must be in front of the reference camera');
   const n = mul3(Cc, 1 / dist); // line of sight to the centre (camera space)
   const front = isNum(frontDepthM) && frontDepthM > 0 ? Math.max(1e-3, frontDepthM - rules.frontMarginFrac * dist) : null;
@@ -711,29 +737,46 @@ export function arrowFrames(layout, { cam, ref = { yaw: 0, pitch: 0 }, centre, f
   const tilt = isNum(dz.viewTiltDeg) && dz.viewTiltDeg > 0 ? Math.min(60, dz.viewTiltDeg) * DEG : 0;
   const ts = dz.viewTiltScreen || [1, 1];
   const tiltS = norm3([ts[0], -ts[1], 0]); // screen (x right, y down) -> camera space (y up)
+  // R20, for 'front' arrows: spheres [u, w, radius] (design units) that hold every vertex of the drawn arrow: the tube
+  // rings and base cap, the head's base ring and its tip, each grown by the dark outline (the hover scale is applied
+  // about the anchor below). Their deepest point along the line of sight sets how far a front arrow comes forward.
+  const path = arrowPath(dz), Hd = path.head, pad = isNum(outline) && outline > 0 ? outline : 0;
+  const grow = isNum(hoverScale) && hoverScale > 1 ? hoverScale : 1;
+  const keys = path.samples.map(p => [p.u, p.w, p.r + pad]).concat([[Hd.base[0], Hd.base[1], Math.max(Hd.radius, Hd.thickness) + pad], [Hd.tip[0], Hd.tip[1], pad]]);
   const out = {};
   for (const dir of COMPASS_DIRS) {
     const a = layout.arrows[dir];
     if (!a) { out[dir] = null; continue; }
     const depthMode = a.overOutline && front !== null ? 'front' : 'centre';
     const D = depthMode === 'front' ? Math.min(front, dist) : dist;
-    const X = onPlane(a.x, a.y, D);
+    let X = onPlane(a.x, a.y, D);
     const step = 8;
     const X2 = onPlane(a.x + a.screen[0] * step, a.y + a.screen[1] * step, D);
-    const w0 = norm3(mul3(X, -1));
+    const w0 = norm3(X); // arrow-depth note R20: AWAY from the eye along the sight line through the anchor (was -X)
     let d0 = sub3(X2, X);
     d0 = sub3(d0, mul3(w0, dot3(d0, w0)));
-    const mpp = len3(d0) / step;
+    let mpp = len3(d0) / step;
     const d = norm3(d0);
     let w = w0, b = cross3(d, w0);
     if (tilt > 0) {
-      // turn (w, b) about d so the toward-the-viewer part shows toward the screen direction tiltS (camera space)
+      // turn (w, b) about d so the bent part shows toward the screen direction tiltS (camera space). b = d x w0 flipped
+      // with w0, so sg flips too: the bend shows on the same screen side as before R20; only its depth is reversed.
       const sg = dot3(b, tiltS) >= 0 ? 1 : -1, ct = Math.cos(tilt), st = Math.sin(tilt);
       w = add3(mul3(w0, ct), mul3(b, sg * st));
       b = cross3(d, w);
     }
-    const s = layout.sizePx * (isNum(a.scale) && a.scale > 0 ? a.scale : 1) * mpp;
-    const dW = apply(c.R, d), wW = apply(c.R, w), bW = apply(c.R, b), oW = apply(c.R, X);
+    let s = layout.sizePx * (isNum(a.scale) && a.scale > 0 ? a.scale : 1) * mpp;
+    if (depthMode === 'front') {
+      // R20: the far head lies BEYOND the anchor plane. X, mpp and s are all in proportion to D, so scaling them by one
+      // factor slides the arrow along the sight lines from the eye without changing its picture. Choose the factor that
+      // puts its deepest point (along n; grown by the hover scale about the anchor and by the outline) at `front`.
+      const dn = dot3(n, d), wn = dot3(n, w);
+      let reach = 0;
+      for (const [u, v, r] of keys) reach = Math.max(reach, u * dn + v * wn + r);
+      const deepest = D + grow * reach * s;
+      if (deepest > front) { const k = front / deepest; X = mul3(X, k); mpp *= k; s *= k; }
+    }
+    const dW = apply(c.R, d), wW = apply(c.R, w), bW = apply(c.R, b), oW = shifted ? add3(c.pos, apply(c.R, X)) : apply(c.R, X);
     const matrix = new Float64Array(16);
     matrix.set([dW[0] * s, dW[1] * s, dW[2] * s, 0, wW[0] * s, wW[1] * s, wW[2] * s, 0, bW[0] * s, bW[1] * s, bW[2] * s, 0, oW[0], oW[1], oW[2], 1]);
     out[dir] = { dir, origin: oW, d: dW, w: wW, b: bW, scale: s, mpp, matrix, depthMode, distance: len3(X) };
@@ -742,25 +785,6 @@ export function arrowFrames(layout, { cam, ref = { yaw: 0, pitch: 0 }, centre, f
 }
 
 /** A local design point (u, w, z) -> world under a frame (pure). */
-/**
- * R5-fix (review code F1): the frames moved by a ROTATION about the eye R (rows, 3x3; the brain's carry while Space drags
- * it): every point, direction and the placement matrix turned by R (the plan in the carried reference view is unchanged,
- * so this equals a re-plan without its cost). Pure.
- */
-export function rotateFrames(frames, R) {
-  if (!frames) return frames;
-  const ap = v => [R[0][0] * v[0] + R[0][1] * v[1] + R[0][2] * v[2], R[1][0] * v[0] + R[1][1] * v[1] + R[1][2] * v[2], R[2][0] * v[0] + R[2][1] * v[1] + R[2][2] * v[2]];
-  const out = {};
-  for (const [dir, f] of Object.entries(frames)) {
-    if (!f) { out[dir] = f; continue; }
-    const origin = ap(f.origin), d = ap(f.d), w = ap(f.w), b = ap(f.b), s = f.scale;
-    const matrix = new Float64Array(16);
-    matrix.set([d[0] * s, d[1] * s, d[2] * s, 0, w[0] * s, w[1] * s, w[2] * s, 0, b[0] * s, b[1] * s, b[2] * s, 0, origin[0], origin[1], origin[2], 1]);
-    out[dir] = { ...f, origin, d, w, b, matrix };
-  }
-  return out;
-}
-
 export function frameToWorld(frame, p) {
   const m = frame.matrix;
   return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
@@ -868,18 +892,57 @@ export function arrowScreenBox(frame, cam, design = ARROW_DESIGN) {
  *  a ready occupancyGrid in this view (e.g. the brain's motor areas in front of the mirror body's arrows).
  * Returns { layout, frames, sizes, behind } or null (no outline in front of the reference camera).
  */
-export function planCompassArrows({ points, matrix = null, centre, ref = { yaw: 0, pitch: 0 }, cam, kind = 'brain', design = ARROW_DESIGN, usable = null, obstacles = [], fit = 'slide', front = true, avoidPoints = null, avoidIndices = null, avoidCellPx = 4, avoidDilate = 1, avoid: avoidGrid = null, prefer = null, fallbackObstacles = null } = {}) {
-  const refCam = { ...cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: [0, 0, 0] };
-  const { xy, behind } = projectPointsPx(points, matrix, refCam);
-  if (behind > 0) return null;
+export function planCompassArrows(args = {}) {
+  return planCompassArrowsImpl(args);
+}
+
+/** R345 separate reporting API. Same plan/short-circuits/math as the legacy public API. The caller may retain `report`
+ * even when the SAME original error is rethrown. No points, geometry, hull vertices or live layout references escape.
+ * This API records a null reason; it does not repair the outline or certify any rendered/current-view behavior. */
+export function planCompassArrowsWithReport(args = {}, report = {}) {
+  Object.assign(report, { kind: 'ns-compass-plan-report-r345', outcome: 'NOT_REACHED', stage: 'camera',
+    projection: { status: 'NOT_REACHED', nearM: 0.02 }, hull: { status: 'NOT_REACHED', count: null, calls: 0 }, layout: null, error: null });
+  try {
+    const plan = planCompassArrowsImpl(args, report);
+    return { plan, report };
+  } catch (err) {
+    report.outcome = 'error';
+    const name = String((err && err.name) || 'Error'), message = String((err && err.message) || err);
+    report.error = { name: name.slice(0, 128), message: message.slice(0, 512), truncated: name.length > 128 || message.length > 512 };
+    throw err;
+  }
+}
+
+function compassLayoutReport(layout) {
+  const rect = r => r ? { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 } : null;
+  return { centre: layout.centre.slice(), box: rect(layout.box), visibleBox: rect(layout.visibleBox), leaves: { ...layout.leaves },
+    arrows: Object.fromEntries(COMPASS_DIRS.map(dir => {
+      const a = layout.arrows[dir];
+      return [dir, { dir: a.dir, x: a.x, y: a.y, box: rect(a.box), outline: a.outline.slice(),
+        blocked: a.blocked, onScreen: a.onScreen, overOutline: a.overOutline, overAvoid: a.overAvoid,
+        slidPx: a.slidPx, scale: a.scale, gapUsedPx: a.gapUsedPx, clearancePx: a.clearancePx,
+        edge: a.edge, edgeShiftPx: a.edgeShiftPx, tier: a.tier, outsidePreferred: a.outsidePreferred }];
+    })) };
+}
+
+function planCompassArrowsImpl({ points, matrix = null, centre, ref = { yaw: 0, pitch: 0 }, cam, kind = 'brain', design = ARROW_DESIGN, usable = null, obstacles = [], fit = 'slide', front = true, avoidPoints = null, avoidIndices = null, avoidCellPx = 4, avoidDilate = 1, avoid: avoidGrid = null, prefer = null, fallbackObstacles = null } = {}, report = null) {
+  const refCam = { ...cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: ref.position || [0, 0, 0] };
+  const cameraOrigin = camOf(refCam).pos; // identical origin authority to projection and arrowFrames
+  if (report) report.stage = 'projection';
+  const { xy, behind } = projectPointsPxImpl(points, matrix, refCam, 0.02, report);
+  if (behind > 0) { if (report) { report.outcome = 'depth_veto'; report.stage = 'returned'; } return null; }
+  if (report) report.stage = 'sizes_and_avoid';
   const sizes = kind && typeof kind === 'object' && isNum(kind.sizePx) ? { sizePx: kind.sizePx, gapPx: kind.gapPx } : arrowSizePx(cam, kind);
   // R5-bigbrain (R25): the motor areas' sample points (same matrix and reference view) an edge arrow must not cover.
   const avoid = avoidGrid && typeof avoidGrid.hits === 'function' ? avoidGrid : avoidPoints && avoidPoints.length >= 3 ? occupancyGrid(projectPointsPx(avoidPoints, matrix, refCam).xy, { width: cam.width, height: cam.height, cellPx: avoidCellPx, dilate: avoidDilate, indices: avoidIndices }) : null;
-  const layout = compassLayout(xy, { width: cam.width, height: cam.height, ...sizes, design, usable, obstacles, fit, avoid, prefer, fallbackObstacles });
-  if (!layout) return null;
+  if (report) report.stage = 'layout';
+  const layout = compassLayoutImpl(xy, { width: cam.width, height: cam.height, ...sizes, design, usable, obstacles, fit, avoid, prefer, fallbackObstacles }, report);
+  if (!layout) { if (report) { report.outcome = 'projected_hull_under3'; report.stage = 'returned'; } return null; }
+  if (report) { report.layout = compassLayoutReport(layout); report.stage = 'front_depth_and_frames'; }
   const needFront = front && COMPASS_DIRS.some(d => layout.arrows[d].overOutline);
-  const frontDepthM = needFront ? nearestDepthAlong(points, matrix, centre) : null;
+  const frontDepthM = needFront ? nearestDepthAlong(points, matrix, centre, cameraOrigin) : null;
   const frames = arrowFrames(layout, { cam, ref, centre, frontDepthM, design });
+  if (report) { report.outcome = 'planned'; report.stage = 'returned'; }
   return { layout, frames, sizes, behind, frontDepthM };
 }
 
@@ -920,7 +983,7 @@ void main() {
   float fill = max(dot(N, normalize(uFill)), 0.0);
   float spec = pow(max(dot(N, normalize(L + V)), 0.0), uS.x);
   float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
-  vec3 albedo = mix(uBase, uTip, smoothstep(0.0, 1.0, vAlong));
+  vec3 albedo = mix(uTip, uBase, smoothstep(0.0, 1.0, vAlong)); // R20: bright near base -> dimmer far head
   albedo = mix(albedo, uHoverCol, 0.55 * uHover);
   albedo = mix(albedo, vec3(dot(albedo, vec3(0.3333))) * 0.55, uBlocked); // covered: grey and dim
   float lit = uK.x + uK.y * diff + uK.z * fill + 0.25 * uAttn;
@@ -1001,8 +1064,8 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
     mesh.frustumCulled = false;
     mesh.userData.nsOrbit = dir;
     root.add(mesh);
-    // A thin dark outline (inflated back faces): where the near head crosses the far stalk, its edge shows which is in
-    // front (the occlusion cue for the bend toward the viewer).
+    // A thin dark outline (inflated back faces): where the near stalk crosses the far head, its edge shows which is in
+    // front (the occlusion cue for the bend away from the viewer, arrow-depth note R20).
     if (look.outline > 0 && THREE.BackSide !== undefined) {
       const omat = new THREE.ShaderMaterial({ vertexShader: OUTLINE_VERT, fragmentShader: OUTLINE_FRAG, side: THREE.BackSide, uniforms: { uW: { value: look.outline }, uCol: { value: col(look.outlineColor) } } });
       materials.push(omat);
@@ -1030,7 +1093,6 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
     arrows[dir] = { root, mesh, xray: xm, material };
   }
   let hovered = null, hoverBlocked = false, visible = true;
-  const dimmed = { forward: false, back: false, left: false, right: false }; // R5-polish: setDimmed
   const rig = {
     group, arrows, geometry, kind,
     get hovered() { return hovered; },
@@ -1053,26 +1115,13 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
       for (const d of COMPASS_DIRS) {
         const on = d === hovered, u = arrows[d].material.uniforms;
         u.uHover.value = on && !hoverBlocked ? 1 : 0;
-        u.uBlocked.value = on && hoverBlocked ? 1 : dimmed[d] ? COVERED_DIM : 0;
+        u.uBlocked.value = on && hoverBlocked ? 1 : 0;
         if (arrows[d].xray) arrows[d].xray.material.uniforms.uHover.value = on && !hoverBlocked ? 1 : 0;
         arrows[d].mesh.scale.setScalar(on && !hoverBlocked ? look.hoverScale : 1);
       }
       return hovered;
     },
     get hoverBlocked() { return hoverBlocked; },
-    /** R5-polish (D19): arrows that cannot be used now (a mirror-body arrow the glass brain covers) are drawn half greyed
-     * (COVERED_DIM of the covered-hover look) even when not under the look, so they read as "not yet" and turn their full
-     * colour once the brain is dragged away. map: { dir: true } (others false). Returns the dimmed dirs. */
-    setDimmed(map = {}) {
-      let changed = false;
-      for (const d of COMPASS_DIRS) { const v = Boolean(map && map[d]); if (dimmed[d] !== v) { dimmed[d] = v; changed = true; } }
-      if (changed) for (const d of COMPASS_DIRS) {
-        const on = d === hovered, u = arrows[d].material.uniforms;
-        u.uBlocked.value = on && hoverBlocked ? 1 : dimmed[d] ? COVERED_DIM : 0;
-      }
-      return COMPASS_DIRS.filter(d => dimmed[d]);
-    },
-    get dimmed() { return COMPASS_DIRS.filter(d => dimmed[d]); },
     /** A soft extra glow on all four (0..1), e.g. while the "Try this" goal asks for an orbit. */
     setAttention(x) { const v = clamp(Number(x) || 0, 0, 1); for (const d of COMPASS_DIRS) arrows[d].material.uniforms.uAttn.value = v; return v; },
     setVisible(on) { visible = on !== false; for (const d of COMPASS_DIRS) if (!visible) arrows[d].root.visible = false; return visible; },

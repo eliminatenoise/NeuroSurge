@@ -2181,9 +2181,7 @@ export const BRAIN_VIEW = freezeR2({
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
   motorFrac: 0.82, motorEdgeDeg: 40, motorMarginPx: 4, motorCentreNdc: freezeR2([0, 0]),
-  // R5-fix (review F2 / P2): room kept under the belt for the back compass arrow, in arrow size units (0 = none).
-  motorBottomRoom: 1.35,
-  perspectiveK: 8
+  perspectiveK: 1
 });
 /** R5-bigbrain: the round-4 framing (belt-first fit, both brain ends visible), for comparison and tests:
  * frameBrain(seg, { ...BRAIN_VIEW_R4 }). */
@@ -2713,7 +2711,7 @@ function frameWholeBrain(strips, {
   arrowsOnScreen = BRAIN_VIEW.arrowsOnScreen, iterations = 60, fit = BRAIN_VIEW.fit, beltFrac = BRAIN_VIEW.beltFrac,
   frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
   backCropMax = BRAIN_VIEW.backCropMax || 0, motorFrac = BRAIN_VIEW.motorFrac, motorEdgeDeg = BRAIN_VIEW.motorEdgeDeg,
-  motorMarginPx = BRAIN_VIEW.motorMarginPx, motorCentreNdc = BRAIN_VIEW.motorCentreNdc, motorBottomRoom = BRAIN_VIEW.motorBottomRoom || 0
+  motorMarginPx = BRAIN_VIEW.motorMarginPx, motorCentreNdc = BRAIN_VIEW.motorCentreNdc
 } = {}) {
   if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
   if (!(Number.isFinite(perspectiveK) && perspectiveK >= 1 && perspectiveK <= PERSPECTIVE_K_MAX)) throw new Error(`ns:brain_frame: perspectiveK must be in [1, ${PERSPECTIVE_K_MAX}]`);
@@ -2864,15 +2862,7 @@ function frameWholeBrain(strips, {
     // The belt stays inside the usable width (never under the info column / band: the left-arm hand areas sit near the
     // right hemisphere's lateral end) and within the lateral look limit; its centre is as near motorCentreNdc as that
     // allows (measured: centring it on the crosshair at 16:9 put 10-12 right-hemisphere regions under the column).
-    // R5-fix (review F2 / P2, R20 + R25 "that side's arrow sits at the screen edge centred on that side, over see-through
-    // non-motor glass"): the belt's bottom keeps one back arrow's room above the usable bottom, so the back (bottom)
-    // compass arrow has glass to sit on, centred, below the leg areas. It binds only where the belt reaches the usable
-    // bottom (portrait: the bottom band); there the belt rises by that room instead of the arrow moving to a corner.
-    const wPx = hPx * aspect, arrowUnit = Math.min(72, Math.max(34, 0.085 * Math.min(wPx, hPx))); // = ns-arrows3d arrowSizePx('brain')
-    // Not on phones (the shorter side < 480 px): there the rise put the mirror body's fitted box where the forward arrow
-    // needs to be (viewed, harness/run-R5-fix-7-portrait/default-390x844.png), so phones keep the round-5 framing.
-    const roomB = motorBottomRoom && Math.min(wPx, hPx) >= 480 ? (2 * (motorBottomRoom * arrowUnit + motorMarginPx)) / hPx : 0;
-    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly0 = U.y0 + myN + roomB, ly1 = U.y1 - myN;
+    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly0 = U.y0 + myN, ly1 = U.y1 - myN;
     if (!(lx1 - lx0 > 0.1 && ly1 - ly0 > 0.05)) return false;
     // R5-bigbrain: with the squash (perspectiveK) the brain is thin along the line of sight, so it may span a wider
     // angle than the round-4 cap (0.9 / rMax) while every point stays well in front of the eye (checked: minDepth).

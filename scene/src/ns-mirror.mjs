@@ -501,11 +501,18 @@ export function mirrorTransform(state) {
   const O = mirrorOrbitLocal(state.orbit.yaw, state.orbit.pitch);
   const F = rotY(p.facingYawDeg * DEG);
   const lin = multiply(B, multiply(O, multiply(transpose3(B), multiply(F, multiply(uniformScale(p.scale), reflectionMatrix(p.reflectAxis))))));
-  const matrix = multiply(translation(p.centre), multiply(lin, translation(scale(p.bodyCentre, -1))));
+  const localMatrix = multiply(translation(p.centre), multiply(lin, translation(scale(p.bodyCentre, -1))));
+  const parent = p.referenceFrame || null;
+  if (parent && (parent.length !== 16 || !Array.from(parent).every(Number.isFinite) || parent[3] !== 0 || parent[7] !== 0 || parent[11] !== 0 || parent[15] !== 1 || !(Number.isFinite(det3(parent)) && det3(parent) > 0))) fail('input', 'constructor reference frame must be finite right-handed affine');
+  const matrix = parent ? multiply(parent, localMatrix) : localMatrix;
   const inverse = invertAffine(matrix);
+  const direction = v => parent ? transformDirection(parent, v) : v;
+  const worldCentre = parent ? transformPoint(parent, p.centre) : p.centre;
+  const worldLinear = parent ? multiply(parent, lin) : lin;
+  if (parent) { worldLinear[12] = 0; worldLinear[13] = 0; worldLinear[14] = 0; }
   return freeze({
-    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre: p.centre, scale: p.scale,
-    frame: freeze({ right: p.right, up: p.up, toward: p.toward }), orbit: state.orbit, placement: p
+    kind: 'ns-mirror-transform', matrix, inverse, linear: worldLinear, det: det3(matrix), centre: worldCentre, scale: p.scale,
+    frame: freeze({ right: direction(p.right), up: direction(p.up), toward: direction(p.toward) }), orbit: state.orbit, placement: p
   });
 }
 

@@ -760,29 +760,6 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 /* A light 3D compass arrow can sit behind an orientation label such as "Back (posterior)": 0.66 keeps 4.5:1 (R5-access). */
 .ns-orient { background: rgba(5, 7, 11, 0.66); }
 
-/* ==== R5-integrate-mirror-glow (D17 / D19).
-   The panel's glow line (while the looked-at area is switched on: what the glow shows, "a picture, not a nerve", the real
-   route), a 3 px warm border like the glow. A look at the mirror body: the panel gets the mirror accent (R5-access C4,
-   ns-colors MIRROR_VIEW.accent #53b27f), text stays the panel colour. The mirror body's label beside it (scene overlay). */
-.ns-infopanel-glow {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  margin: 2px 0 3px; padding-left: 7px; border-left: 3px solid #ffd27a; font-size: 11px; line-height: 1.3; color: #ffe2b0;
-}
-.ns-infopanel-glow[hidden] { display: none; }
-.ns-infopanel[data-mode="mirror"] { border-left: 3px solid #53b27f; }
-.ns-infopanel[data-mode="mirror"] .ns-infopanel-tag { color: #9fe0bd; }
-.ns-mirror-label {
-  position: absolute; z-index: 2; pointer-events: none; white-space: nowrap;
-  padding: 2px 7px; border-radius: 9px; border: 1px solid #53b27f;
-  background: rgba(5, 7, 11, 0.72); color: #eef3f8; font: 600 12px/1.25 system-ui, sans-serif; text-align: center;
-}
-.ns-mirror-label[hidden] { display: none; }
-.ns-mirror-label .ns-mirror-label-sub { display: block; font-size: 10.5px; font-weight: 500; color: #9fe0bd; }
-.ns-mirror-label[data-compact="true"] .ns-mirror-label-sub { display: none; }
-@media (max-width: 600px) {
-  .ns-infopanel-glow, .ns-mirror-label .ns-mirror-label-sub { font-size: 12px; }
-}
-
 /* ==== R4-access (D9) round4/access/proposed-narrow-text.css, BLOCK 1 only (R4-integrator: recommended and tested at
    390x844). BLOCK 2 (wider portrait screens) is not applied: on long cards it pushes More detail into the panel's
    bottom fade at 720x1280. It must stay at the END of this file (it overrides the portrait rules above). */

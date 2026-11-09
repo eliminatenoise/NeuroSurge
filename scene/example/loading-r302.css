@@ -1,0 +1,357 @@
+/* Exact normal page shell CSS, extracted for external-script CSP compatibility. */
+
+/* Game shell (round-1 A4, round-2 U4-app): the 2 s start instructions and the Esc page (one overlay, data-mode
+ * intro | paused | loading | error), context-loss banner, capture / drag-to-look toast, screen-reader region and the
+ * FALLBACK far-right information panel (.ns-info, used only while ns-scene-three draws none).
+ * Kept here so neurosurge.css (HUD) stays independent. Contrast: text #e8eef5 / #c7d2df on rgba(8,12,18,0.95)
+ * (>= 11:1 and >= 9:1), button #05070b on #ffe066 (>= 15:1). */
+.ns-shell-root {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  font-family: var(--ns-font, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif);
+  color: var(--ns-fg, #e8eef5);
+}
+.ns-shell {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(3, 5, 9, 0.6);
+  z-index: 2;
+}
+.ns-shell[hidden] { display: none; }
+.ns-shell-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 660px;
+  max-height: 100%;
+  overflow: auto;
+  cursor: default;
+  padding: 22px 26px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(232, 238, 245, 0.14);
+  border-top: 3px solid #8cf2ff;
+  background: rgba(9, 13, 20, 0.96);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  font-size: 13.5px;
+  line-height: 1.42;
+  text-shadow: none;
+}
+/* Polish: brand title with a small colour-ramp rule (the one activity ramp used everywhere in the game). */
+.ns-shell-title { margin: 0; font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: 0.01em; }
+.ns-shell-title::after {
+  content: "";
+  display: block;
+  width: 132px;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #1d193c, #6f1d90, #d13c55, #ff951d, #fff350);
+}
+.ns-shell-subtitle { margin: 8px 0 14px; color: var(--ns-muted, #c7d2df); font-size: 13.5px; max-width: 62em; }
+.ns-shell-heading { margin: 0 0 4px; font-size: 18px; color: var(--ns-accent, #ffe066); }
+.ns-shell[data-mode="playing"] .ns-shell-heading:empty { display: none; }
+.ns-shell-status { margin: 0 0 4px; color: var(--ns-muted, #c7d2df); }
+.ns-shell-status:empty { display: none; }
+.ns-shell-notice {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--ns-accent, #ffe066);
+  background: rgba(150, 96, 0, 0.3);
+}
+.ns-shell[data-mode="error"] .ns-shell-notice { border-left-color: #ff9a9a; background: rgba(120, 16, 16, 0.6); }
+.ns-shell-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 14px; }
+.ns-shell-play {
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 10px 24px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--ns-accent, #ffe066);
+  color: #05070b;
+}
+.ns-shell-play:disabled { cursor: progress; background: #59606b; color: #e8eef5; }
+.ns-shell-secondary {
+  font: inherit;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #c7d2df;
+  background: transparent;
+  color: #e8eef5;
+}
+.ns-shell-root button:focus-visible,
+.ns-shell-root input:focus-visible,
+.ns-shell-root select:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+.ns-shell-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px 26px; margin-top: 4px; }
+.ns-shell-section { min-width: 0; }
+.ns-shell[data-mode="intro"] { background: rgba(3, 5, 9, 0.45); }
+.ns-shell-card { max-width: 860px; }
+/* Polish: on wide screens the card is a two-column grid, so settings and the honesty limits sit side by side and the
+ * whole page needs less scrolling; every block keeps its text. */
+@media (min-width: 900px) {
+  .ns-shell-card { max-width: 1020px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); column-gap: 26px; align-items: start; }
+  .ns-shell-card > * { grid-column: 1 / -1; }
+  /* R4-polish: Settings now sit under the buttons (full width, in groups); the limits box spans the card below. */
+  .ns-shell-card > .ns-shell-settings { grid-column: 1 / -1; }
+  .ns-shell-card > .ns-shell-limits { grid-column: 1 / -1; }
+}
+/* R3-polish (ultrawide, e.g. 2560x1080): a wider card in three columns (how to play | controls | settings and "what this
+   game is, and is not"), so the whole page fits the short, wide screen without scrolling and the text is not a narrow
+   strip in the middle. */
+@media (min-width: 1700px) and (min-aspect-ratio: 2/1) {
+  .ns-shell-card { max-width: 1640px; grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr); grid-auto-flow: row dense; font-size: 14px; }
+  .ns-shell-card > .ns-shell-grid { grid-column: 1; grid-row: span 2; }
+  .ns-shell-card > .ns-shell-settings { grid-column: 2; margin-top: 4px; grid-template-columns: 1fr; }
+  .ns-shell-card > .ns-shell-limits { grid-column: 2; }
+  .ns-shell-card:has(> .ns-shell-settings[hidden]) > .ns-shell-limits { grid-column: 2; }
+  .ns-shell-limits ul { font-size: 13px; }
+}
+.ns-shell-modenote { margin: 2px 0 0; color: var(--ns-muted, #c7d2df); font-size: 13px; }
+/* R4-polish (2 s intro): on short landscape screens (1280x720, 1366x768) the intro is a little more compact, so all eight
+   steps and every control are on screen during the 2 s, not only the first six: a smaller title, tighter gaps and a
+   wider steps column. Same words; the Esc page keeps its normal spacing. */
+@media (min-width: 900px) and (max-height: 820px) {
+  .ns-shell[data-mode="intro"] .ns-shell-card { padding-top: 16px; padding-bottom: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title { font-size: 26px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title::after { margin-top: 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-subtitle { margin: 6px 0 8px; }
+  .ns-shell[data-mode="intro"] .ns-shell-heading { font-size: 16px; }
+  .ns-shell[data-mode="intro"] .ns-shell-actions { margin: 6px 0 8px; }
+  .ns-shell[data-mode="intro"] .ns-shell-play { padding: 7px 20px; font-size: 16px; }
+  .ns-shell[data-mode="intro"] .ns-shell-grid { grid-template-columns: 1.45fr 1fr; gap: 8px 22px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li + li { margin-top: 3px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys { gap: 3px 10px; }
+  .ns-shell[data-mode="intro"] .ns-shell-section-title { margin-bottom: 4px; }
+}
+/* R4-fix (review F4): on phones (<= 600 px wide) the 2 s intro is compact, so all eight steps and all ten controls are on
+   screen during the 2 s (390x844 showed 5 of 8 steps and none of the controls): smaller title and gaps, each step shows
+   its bold lead-in and the start of its text (two lines), each control one line. The Esc page keeps the full text. */
+@media (max-width: 600px) {
+  .ns-shell[data-mode="intro"] .ns-shell-card { padding-top: 12px; padding-bottom: 10px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title { font-size: 22px; }
+  .ns-shell[data-mode="intro"] .ns-shell-title::after { margin-top: 4px; }
+  .ns-shell[data-mode="intro"] .ns-shell-subtitle { margin: 4px 0 4px; font-size: 12px; line-height: 1.35; }
+  .ns-shell[data-mode="intro"] .ns-shell-heading { font-size: 15px; margin-top: 4px; margin-bottom: 2px; }
+  .ns-shell[data-mode="intro"] .ns-shell-modenote { font-size: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-actions { margin: 4px 0 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-play { padding: 5px 16px; font-size: 15px; }
+  .ns-shell[data-mode="intro"] .ns-shell-grid { gap: 4px; margin-top: 0; }
+  .ns-shell[data-mode="intro"] .ns-shell-section-title { margin-bottom: 3px; }
+  /* R5-integrate-core (R5-text W3): one line per step on the phone start page, so all 10 steps and 12 controls fit (the
+     Esc page keeps the full text). */
+  .ns-shell[data-mode="intro"] .ns-shell-steps li { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li + li { margin-top: 2px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li::before { width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; }
+  .ns-shell[data-mode="intro"] .ns-shell-steps li { padding-left: 23px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys { gap: 2px 8px; font-size: 12px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys dt { font-size: 12px; padding: 0 6px; }
+  .ns-shell[data-mode="intro"] .ns-shell-keys dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+}
+.ns-shell-modenote[hidden], .ns-shell-settings[hidden], .ns-shell-actions button[hidden] { display: none; }
+.ns-shell-steps { margin: 0; padding-left: 0; list-style: none; counter-reset: ns-step; }
+.ns-shell-steps li { position: relative; padding-left: 28px; counter-increment: ns-step; }
+.ns-shell-steps li::before {
+  content: counter(ns-step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(140, 242, 255, 0.14);
+  border: 1px solid rgba(140, 242, 255, 0.55);
+  color: #8cf2ff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 19px;
+  text-align: center;
+}
+.ns-shell-steps li + li { margin-top: 6px; }
+.ns-shell-settings { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(232, 238, 245, 0.16); }
+.ns-shell-select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid #c7d2df; background: #0d141d; color: #e8eef5; }
+/* R3-polish (Esc page): Reset body is the one obvious second action: gold edge and fill (the gold of the "switched on"
+   marks it clears) and a reset symbol; Reset brain view stays a quiet outline button. One plain line under the buttons
+   says what both do. */
+.ns-shell-reset {
+  font-weight: 700;
+  padding: 8px 16px 8px 14px;
+  border: 2px solid var(--ns-activated, #ffc65c);
+  background: rgba(255, 198, 92, 0.16);
+  color: #fff1cc;
+}
+.ns-shell-reset::before { content: ""; display: inline-block; width: 1.05em; height: 1.05em; margin-right: 7px; vertical-align: -0.17em; background: var(--ns-activated, #ffc65c); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12a7.5 7.5 0 1 0 2.4-5.5'/%3E%3Cpath d='M4.2 3.6v4.6h4.6'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12a7.5 7.5 0 1 0 2.4-5.5'/%3E%3Cpath d='M4.2 3.6v4.6h4.6'/%3E%3C/svg%3E") center / contain no-repeat; }
+.ns-shell-reset:hover { background: rgba(255, 198, 92, 0.28); }
+.ns-shell-secondary:not(.ns-shell-reset):hover { background: rgba(232, 238, 245, 0.08); }
+.ns-shell-resethelp { margin: -6px 0 12px; font-size: 12.5px; color: var(--ns-muted, #c7d2df); }
+.ns-shell-resethelp[hidden] { display: none; }
+/* R3-polish: each step opens with a short bold lead-in, so the page can be scanned. */
+.ns-shell-step-head { color: #f2f6fa; font-weight: 700; }
+/* R3-polish (2 s intro): a thin bar along the top of the card runs down over the intro (shown only in intro mode). */
+.ns-shell-card { position: relative; }
+.ns-shell-timer { display: none; }
+.ns-shell[data-mode="intro"] .ns-shell-timer { display: block; position: absolute; top: 0; left: 0; right: 0; height: 4px; grid-column: auto; grid-row: auto; background: rgba(140, 242, 255, 0.18); }
+.ns-shell-timer-bar { display: block; height: 100%; background: #ffe066; transform-origin: left center; }
+/* R4-integrator: the bar runs only once the 2 s timer has started (the body may still be streaming in before that). */
+.ns-shell[data-mode="intro"] .ns-shell-timer-bar { transform: scaleX(1); }
+.ns-shell[data-mode="intro"][data-intro-timer="running"] .ns-shell-timer-bar { animation: ns-intro-timer var(--ns-intro-ms, 2000ms) linear forwards; }
+@keyframes ns-intro-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.ns-shell-section-title {
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9fb0c4;
+}
+/* Polish: controls read as key caps beside plain descriptions. */
+.ns-shell-keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; align-items: baseline; }
+.ns-shell-keys dt {
+  justify-self: start;
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(232, 238, 245, 0.32);
+  border-bottom-width: 2px;
+  background: rgba(232, 238, 245, 0.06);
+  color: #f2f6fa;
+}
+.ns-shell-keys dd { margin: 0; color: #d6dee8; }
+.ns-shell-settings { min-width: 0; margin: 14px 0 0; padding: 10px 0 0; border: 0; border-top: 1px solid rgba(232, 238, 245, 0.12); }
+.ns-shell-settings > legend { float: left; width: 100%; padding: 0; }
+.ns-shell-settings > legend + * { clear: left; }
+/* R4-polish (Esc page tidy): Settings come right after Resume / Reset, as two or three small groups side by side
+   (look, picture, guide), each control with its one-line help; one column on narrow screens. */
+.ns-shell-settings:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); column-gap: 24px; align-items: start; margin: 0 0 6px; padding: 6px 0 8px; border-bottom: 1px solid rgba(232, 238, 245, 0.12); }
+.ns-shell-settings > legend { grid-column: 1 / -1; }
+.ns-shell-setgroup { min-width: 0; }
+.ns-shell-setgroup .ns-shell-setting:first-child { margin-top: 2px; }
+.ns-shell-setgroup .ns-shell-select { flex: 1 1 auto; max-width: 100%; min-width: 0; }
+.ns-shell-setgroup .ns-shell-setting:not(.ns-shell-check):not(.ns-shell-guide) > .ns-shell-setting-label { white-space: nowrap; }
+.ns-shell-setting { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
+.ns-shell-range { flex: 1; min-width: 80px; accent-color: var(--ns-accent, #ffe066); }
+.ns-shell-out { min-width: 3.4em; font-variant-numeric: tabular-nums; }
+.ns-shell-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ns-accent, #ffe066); }
+.ns-shell-guide { flex-wrap: wrap; cursor: default; }
+.ns-shell-guide .ns-shell-secondary { padding: 5px 10px; }
+.ns-shell-guidehelp { margin: 0 0 4px; font-size: 12.5px; color: var(--ns-muted, #c7d2df); }
+.ns-shell-limits { margin-top: 14px; padding: 10px 14px 12px; border: 1px solid rgba(255, 224, 102, 0.22); border-radius: 10px; background: rgba(255, 224, 102, 0.04); }
+.ns-shell-limits ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #d6dee8; }
+.ns-shell-limits li + li { margin-top: 2px; }
+.ns-shell-context {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  max-width: min(92vw, 600px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  pointer-events: auto;
+  background: rgba(120, 16, 16, 0.94);
+  color: #fff;
+  font-size: 14px;
+}
+.ns-shell-context[hidden], .ns-shell-toast[hidden] { display: none; }
+.ns-shell-toast {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  max-width: min(92vw, 640px);
+  padding: 6px 12px;
+  border-radius: 6px;
+  pointer-events: none;
+  background: rgba(8, 12, 18, 0.9);
+  color: #e8eef5;
+  font-size: 13px;
+  text-align: center;
+}
+/* R3-integrator (R3-player items 9/10): in portrait the toast sits at the top left of the bottom information band (the
+   legend takes its top right), not on the panel text. */
+@media (max-aspect-ratio: 999/1000) {
+  .ns-shell-toast { bottom: auto; top: calc(100% - var(--ns-info-portrait-vh, 36vh) - 12px); left: 12px; transform: none;
+    max-width: calc(100% - min(var(--ns-portrait-notice-px, 320px), var(--ns-portrait-notice-vw, 86vw)) - 36px); text-align: left; }
+}
+/* Fallback far-right information overlay (R14): what is happening neurophysiologically for the viewed area. It sits
+ * just left of the HUD's right column (neurosurge.css .ns-panel: min(300px, 26vw) at the right edge), so it never
+ * covers the HUD's always-visible honesty lines; it never takes pointer events. ns-scene-three may replace it. */
+.ns-info {
+  position: absolute;
+  right: calc(2 * var(--ns-gap, 12px) + min(var(--ns-col-px, 300px), var(--ns-col-vw, 26vw)));
+  top: 56px;
+  box-sizing: border-box;
+  width: min(250px, 22vw);
+  max-height: calc(100% - 120px);
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 4px solid #7cc4ff;
+  pointer-events: none;
+  z-index: 1;
+  background: rgba(8, 12, 18, 0.82);
+  color: #e8eef5;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.ns-info[data-left-arm="true"] { border-left-color: var(--ns-accent, #ffe066); }
+.ns-info[data-mode="idle"], .ns-info[data-mode="glass"] { border-left-color: #59606b; }
+.ns-info [hidden] { display: none; }
+.ns-info-heading { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #c7d2df; }
+.ns-info-title { margin: 2px 0 1px; font-size: 15px; line-height: 1.2; }
+.ns-info-tag, .ns-info-viewed { margin: 0 0 3px; color: #c7d2df; font-size: 11.5px; }
+.ns-info-activity { margin: 2px 0 4px; font-variant-numeric: tabular-nums; color: #ffe9a8; }
+.ns-info-rows { margin: 4px 0; }
+.ns-info-rows dt { margin-top: 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #c7d2df; }
+.ns-info-rows dd { margin: 0; }
+.ns-info-explanation, .ns-info-simulated, .ns-info-known { margin: 4px 0; }
+.ns-info-caveats { margin: 4px 0; padding-left: 14px; font-size: 11px; color: #c7d2df; }
+.ns-info-citations { margin: 4px 0 0; font-size: 10.5px; color: #c7d2df; }
+@media (max-width: 760px), (max-height: 520px) {
+  .ns-info { top: auto; bottom: 48px; left: 8px; right: auto; width: min(260px, 44vw); max-height: 36vh; font-size: 11px; }
+  .ns-info-caveats, .ns-info-known, .ns-info-simulated, .ns-info-citations { display: none; }
+}
+.ns-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 600px), (max-height: 520px) {
+  .ns-shell { align-items: flex-start; padding: 8px; }
+  .ns-shell-card { padding: 14px 14px 12px; font-size: 13px; }
+  .ns-shell-title { font-size: 26px; }
+  .ns-shell-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ns-shell:not([hidden]) { animation: ns-shell-in 160ms ease-out; }
+}
+@keyframes ns-shell-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ns-shell-root *, .ns-shell-root *::before, .ns-shell-root *::after { animation: none !important; transition: none !important; }
+  /* R4-access step 5 (R4-integrator): the intro bar is motion only (the note says the page closes by itself). */
+  .ns-shell-timer { display: none !important; }
+}

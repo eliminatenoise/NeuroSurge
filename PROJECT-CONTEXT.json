@@ -1,32 +1,15 @@
 {
-  "schema_version": 1,
-  "repository": "NeuroSurge",
-  "programme": "Brain2Body",
-  "canonical_terminology": {
-    "registry": "Brain2Body shared glossary",
-    "revision": 36,
-    "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406",
-    "terms": [
-      {
-        "id": "neurosurge",
-        "preferred_label": "NeuroSurge",
-        "status": "user_requested_in_development"
-      },
-      {
-        "id": "neurotranslate-model",
-        "preferred_label": "NeuroTranslate 0.0",
-        "status": "development_not_validated"
-      },
-      {
-        "id": "neurotranslation",
-        "preferred_label": "NeuroTranslation",
-        "status": "user_defined_project_term"
-      }
-    ]
-  },
-  "scope_note": "Names and definitions identify the programme and development scope. They do not establish a completed game, validated model, biological or clinical capability.",
-  "release_policy": "Selected reviewed production-grade drafts and items intended for production deployment; current selected files replace previous live versions. Git history and original local evidence remain.",
-  "license_note": "Project-owned contributions CC0-1.0; third-party materials retain their own rights and notices.",
-  "development_status": "active: NeuroSurge game only",
-  "programme_focus": "NeuroSurge is the sole active project. All other projects are paused following the current-version GitHub sync."
+  "name": "NeuroSurge",
+  "version": "experimental-C410-2026-11-10",
+  "status": "experimental preview",
+  "client_side": true,
+  "signal_origin": "simulated, unitless",
+  "known_limits": "PREVIEW-NOTES.html",
+  "neural_decoder_validated": false,
+  "normal_mechanics_validated": false,
+  "complete_game_acceptance": false,
+  "source_lineage": "C410, with public provenance-path redaction, three matching manifest digest updates, corrected shoulder explanation and preview presentation files",
+  "anatomy_assets": "490 OBJ files unchanged; BodyParts3D CC BY4.0 and Z-Anatomy facial derivatives CC BY-SA4.0",
+  "public_preview_authorized": "10 November 2026 user instruction: experimental previews for all projects",
+  "other_project_development": "paused"
 }
