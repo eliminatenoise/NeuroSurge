@@ -466,93 +466,23 @@ html, body {
   overflow: hidden;
 }
 
-/* Orbit arrow buttons (R12): a few cm outside the brain's projected bounds, not attached to the brain. Hover (mouse) or
- * data-hover (the captured crosshair) highlights; a click orbits the view about the locked brain centre. */
-.ns-orbit {
+/* R5-integrate-core (D16, R20): the round-2..4 DOM orbit buttons (.ns-orbit*) are retired; the orbit arrows are 3D objects
+ * in the scene (ns-arrows3d), lit, at the compass points, bent toward the viewer and inward. Their plain hover caption is
+ * the scene's .ns-arrow-tip (styled here; ns-scene-three injects the same rule as a fallback). */
+.ns-arrow-tip {
   position: absolute;
   left: 0;
   top: 0;
-  width: 44px;               /* ORBIT_ARROWS.sizePx */
-  height: 44px;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  /* R3-polish: a brighter ring and a darker disc, so the four arrows read as buttons at a glance (still not attached to
-     the brain; hover turns them yellow with a caption). */
-  border: 2px solid rgba(232, 238, 245, 0.74);
-  background: rgba(12, 18, 28, 0.8);
-  box-shadow: 0 0 0 3px rgba(5, 7, 11, 0.35), 0 2px 10px rgba(0, 0, 0, 0.5);
-  color: #e8eef5;
-  font: 700 18px/1 var(--ns-font);
-  cursor: pointer;
-  pointer-events: auto;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out, color 120ms ease-out, opacity 160ms ease-out;
-}
-.ns-orbit-icon { display: block; width: 30px; height: 30px; pointer-events: none; }
-/* Polish (R16/R17): a plain caption appears beside the hovered arrow. */
-.ns-orbit::after {
-  content: attr(data-ns-tip);
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 6px;
   white-space: nowrap;
   font: 600 11.5px/1.3 var(--ns-font);
   color: #05070b;
   background: #ffe066;
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease-out;
+  z-index: 3;
 }
-.ns-orbit-back::after { top: auto; bottom: calc(100% + 6px); }
-/* R4-polish: the forward arrow sits at the top, usually beside the status card, so its caption goes to its right. */
-.ns-orbit-forward::after { top: 50%; left: calc(100% + 8px); transform: translateY(-50%); }
-.ns-orbit-left::after { left: 0; transform: none; }
-.ns-orbit-right::after { left: auto; right: 0; transform: none; }
-.ns-orbit:hover,
-.ns-orbit[data-hover="true"] {
-  background: rgba(255, 224, 102, 0.92);
-  border-color: #ffe066;
-  color: #05070b;
-  transform: scale(1.12);
-  box-shadow: 0 0 0 4px rgba(255, 224, 102, 0.28);
-}
-.ns-orbit:hover::after,
-.ns-orbit[data-hover="true"]::after { opacity: 1; }
-/* R3-polish: an arrow with the player's hand under it (A/D moved the hand there) fades so the hand stays in view; it
-   stays clickable and comes back to full strength on hover. */
-.ns-orbit[data-ns-under-hand="true"]:not(:hover):not([data-hover="true"]) { opacity: 0.32; }
-/* R4-polish ("arrows obviously clickable", D7): while the "Try this" goal is "click or hold a curved arrow", all four
-   arrows get a gold ring, full strength and their plain captions ("Orbit to the front" ...), plus a soft pulse unless
-   the player prefers reduced motion. Nothing moves the view by itself. */
-.ns-scene-overlay[data-ns-guide-goal="orbit"] .ns-orbit { border-color: #ffe066; opacity: 1; }
-.ns-scene-overlay[data-ns-guide-goal="orbit"] .ns-orbit[data-ns-under-hand="true"]:not(:hover):not([data-hover="true"]) { opacity: 1; }
-.ns-scene-overlay[data-ns-guide-goal="orbit"] .ns-orbit::after { opacity: 0.92; }
-@media (prefers-reduced-motion: no-preference) {
-  .ns-scene-overlay[data-ns-guide-goal="orbit"] .ns-orbit:not(:hover):not([data-hover="true"]) { animation: ns-orbit-call 1.6s ease-in-out infinite; }
-}
-/* On phones the four arrows sit close together beside the small brain, so the captions would cover each other and the
-   labels (viewed: run-R4-polish-17-final-shots/16-guide-orbit-390x844.png): there the ring and pulse stay, and each
-   caption shows on hover only, below its arrow as before. */
-@media (max-width: 600px) {
-  .ns-scene-overlay[data-ns-guide-goal="orbit"] .ns-orbit:not(:hover):not([data-hover="true"])::after { opacity: 0; }
-  .ns-orbit-forward::after { top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
-}
-@keyframes ns-orbit-call {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(5, 7, 11, 0.35), 0 0 0 0 rgba(255, 224, 102, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(5, 7, 11, 0.35), 0 0 0 8px rgba(255, 224, 102, 0.5); }
-}
-.ns-orbit:active { transform: scale(0.96); }
-.ns-orbit:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
+.ns-arrow-tip.ns-arrow-tip-mirror { background: #e8eef5; }
 
 /* Region group labels on the brain: the LEFT ARM group is distinct (cyan border and text); the others are muted. */
 .ns-region-label {
@@ -812,6 +742,47 @@ html, body {
 .ns-hud summary:focus-visible, .ns-hud a:focus-visible,
 .ns-infopanel summary:focus-visible, .ns-infopanel a:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 2px; }
 
+/* ==== R5-integrate-core: R5-access colour and text-contrast rules (round5/access/proposed-glow-text.css, accepted).
+   While a glow link is shown the scene sets data-ns-glow="on" on <html>: the translucent HUD boxes a link can pass behind
+   get a darker backdrop (ns-colors GLOW.textBackdropMinAlpha 0.78), so their text keeps 4.5:1 over a link core. With no
+   link shown nothing changes. */
+html[data-ns-glow="on"] .ns-panel,
+html[data-ns-glow="on"] .ns-panel-info,
+html[data-ns-glow="on"] .ns-hover,
+html[data-ns-glow="on"] .ns-essential,
+html[data-ns-glow="on"] .ns-orient,
+html[data-ns-glow="on"] .ns-region-label:not(.ns-region-label-leftarm),
+html[data-ns-glow="on"] .ns-face-label,
+html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel { background-color: rgba(5, 7, 11, 0.78); }
+@media (prefers-reduced-motion: no-preference) {
+  .ns-panel, .ns-panel-info, .ns-hover, .ns-essential, .ns-orient, .ns-face-label { transition: background-color 120ms ease-out; }
+}
+/* A light 3D compass arrow can sit behind an orientation label such as "Back (posterior)": 0.66 keeps 4.5:1 (R5-access). */
+.ns-orient { background: rgba(5, 7, 11, 0.66); }
+
+/* ==== R5-integrate-mirror-glow (D17 / D19).
+   The panel's glow line (while the looked-at area is switched on: what the glow shows, "a picture, not a nerve", the real
+   route), a 3 px warm border like the glow. A look at the mirror body: the panel gets the mirror accent (R5-access C4,
+   ns-colors MIRROR_VIEW.accent #53b27f), text stays the panel colour. The mirror body's label beside it (scene overlay). */
+.ns-infopanel-glow {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  margin: 2px 0 3px; padding-left: 7px; border-left: 3px solid #ffd27a; font-size: 11px; line-height: 1.3; color: #ffe2b0;
+}
+.ns-infopanel-glow[hidden] { display: none; }
+.ns-infopanel[data-mode="mirror"] { border-left: 3px solid #53b27f; }
+.ns-infopanel[data-mode="mirror"] .ns-infopanel-tag { color: #9fe0bd; }
+.ns-mirror-label {
+  position: absolute; z-index: 2; pointer-events: none; white-space: nowrap;
+  padding: 2px 7px; border-radius: 9px; border: 1px solid #53b27f;
+  background: rgba(5, 7, 11, 0.72); color: #eef3f8; font: 600 12px/1.25 system-ui, sans-serif; text-align: center;
+}
+.ns-mirror-label[hidden] { display: none; }
+.ns-mirror-label .ns-mirror-label-sub { display: block; font-size: 10.5px; font-weight: 500; color: #9fe0bd; }
+.ns-mirror-label[data-compact="true"] .ns-mirror-label-sub { display: none; }
+@media (max-width: 600px) {
+  .ns-infopanel-glow, .ns-mirror-label .ns-mirror-label-sub { font-size: 12px; }
+}
+
 /* ==== R4-access (D9) round4/access/proposed-narrow-text.css, BLOCK 1 only (R4-integrator: recommended and tested at
    390x844). BLOCK 2 (wider portrait screens) is not applied: on long cards it pushes More detail into the panel's
    bottom fade at 720x1280. It must stay at the END of this file (it overrides the portrait rules above). */
@@ -830,7 +801,7 @@ html, body {
   .ns-rights,
   .ns-region-label,
   .ns-scene-overlay .ns-region-label.ns-r3 .ns-region-label-hemi,
-  .ns-orbit::after,
+  .ns-arrow-tip,
   .ns-face-inset-caption,
   .ns-infopanel,
   .ns-infopanel-heading,
@@ -865,4 +836,5 @@ html, body {
   .ns-shell-root .ns-shell-toast { left: 12px; right: 12px; max-width: none; top: auto; transform: none;
     bottom: calc(var(--ns-gap, 12px) + var(--ns-info-portrait-vh, 36vh) + 6px); text-align: center; }
 }
+
 

@@ -2,12 +2,12 @@
  "schema_version": 1,
  "kind": "neurosurge_local_distribution",
  "name": "NeuroSurge",
- "status": "PUBLIC_RELEASE_ROUND4",
+ "status": "PUBLIC_RELEASE_ROUND5",
  "claim": "Client-side browser game build for local play. All activity is simulated and unitless; gaze, clicks and keys are virtual inputs, not stimulation or neural decoding. NeuroTranslate 0.0 is a companion model name only; no trained or validated translation model runs in the game.",
- "build_time_utc": "2026-11-08T21:46:54.000Z",
+ "build_time_utc": "2026-11-09T10:57:15.000Z",
  "builder": {
   "script": "release/build-dist.mjs",
-  "script_sha256": "8216fe4cb1ba690667c6181c17944a98eec82138ea5f0cfa53e0a5fed0ebe108",
+  "script_sha256": "0a2de684204fc080c32f9a0ce947da4737142b9a65d0afa656a7a3d5fcdc0c50",
   "lib_sha256": "48a7c9381d627713a55d2d0c683969c1d98e01edca66aedaa801dbeeb2852343",
   "node": "v26.8.2"
  },
@@ -40,7 +40,8 @@
   "packets": [
    "pov-demo-assets",
    "pov-demo-assets-r2",
-   "bodyparts3d-fullbody-r1"
+   "bodyparts3d-fullbody-r1",
+   "face-muscles-r1"
   ],
   "rules": [
    {
@@ -66,12 +67,25 @@
    {
     "dir": "packets/<packet>",
     "pattern": "^[A-Z0-9][A-Z0-9-]*\\.(json|txt)$",
-    "note": "packet acquisition records, attribution, SHA256SUMS"
+    "note": "packet manifests, acquisition records, attribution, SHA256SUMS"
    },
    {
     "dir": "packets/<packet>/meshes",
+    "packets": [
+     "pov-demo-assets",
+     "pov-demo-assets-r2",
+     "bodyparts3d-fullbody-r1"
+    ],
     "pattern": "^FJ[0-9]+M?\\.obj$",
-    "note": "BodyParts3D 4.0 OBJ meshes (byte-exact)"
+    "note": "BodyParts3D 4.0 OBJ meshes (byte-exact, CC BY 4.0)"
+   },
+   {
+    "dir": "packets/<packet>/meshes",
+    "packets": [
+     "face-muscles-r1"
+    ],
+    "pattern": "^zf-[a-z0-9-]+\\.obj$",
+    "note": "Z-Anatomy face and chewing muscle OBJ meshes (converted and registered, CC BY-SA 4.0)"
    }
   ],
   "kit_files": [
@@ -105,12 +119,18 @@
    "inputs/MOVEMENT-MAP.json": {
     "assets": 0,
     "note": "no assets[] (not a mesh manifest)"
+   },
+   "packets/face-muscles-r1/FACE-MESH-MANIFEST.json": {
+    "assets": 54,
+    "verified": 54,
+    "sha256": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113"
    }
   },
   "packet_sha256sums_verified": {
-   "packets/bodyparts3d-fullbody-r1/SHA256SUMS.txt": 296
+   "packets/bodyparts3d-fullbody-r1/SHA256SUMS.txt": 296,
+   "packets/face-muscles-r1/SHA256SUMS.txt": 57
   },
-  "obj_files_shipped": 436,
+  "obj_files_shipped": 490,
   "obj_files_unattributed": 0,
   "pinned_inputs": {
    "status": "ok",
@@ -132,14 +152,32 @@
      "pinned": "e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82",
      "actual": "e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82",
      "match": true
+    },
+    "faceManifest": {
+     "file": "packets/face-muscles-r1/FACE-MESH-MANIFEST.json",
+     "pinned": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+     "actual": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+     "match": true,
+     "copies": [
+      {
+       "file": "scene/src/ns-assets.mjs",
+       "value": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+       "match": true
+      },
+      {
+       "file": "scene/src/ns-body.mjs",
+       "value": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+       "match": true
+      }
+     ]
     }
    }
   },
   "module_graph": {
-   "edges": 43,
+   "edges": 48,
    "errors": 0,
    "warnings": [],
-   "url_strings_checked": 2,
+   "url_strings_checked": 4,
    "inline_data_refs": 1
   },
   "portable_urls": {
@@ -148,27 +186,27 @@
   }
  },
  "totals": {
-  "files": 467,
-  "bytes": 114539558
+  "files": 528,
+  "bytes": 118779878
  },
- "content_sha256": "e2778fb11ddc5aa77b842ff8424a3eb9bd12912eeb583a0844f3cc7461e3b6aa",
+ "content_sha256": "aca6785027fcb965aeb42b6113f8e04bf13b818e1f57deeff016697877a41699",
  "files": [
   {
    "path": "ASSET-ATTRIBUTION-INDEX.md",
-   "bytes": 36190,
-   "sha256": "a3dae4b777864370ee9602e6bf77a9882bb17809f317467b3fd0cfdcada4e1bc",
+   "bytes": 45151,
+   "sha256": "76f6cb3879665e1b9d21f063d020560a23ac5ac9d7ade8023d42045c2350689b",
    "origin": "generated"
   },
   {
    "path": "CREDITS-AND-LICENCES.md",
-   "bytes": 11917,
-   "sha256": "10fb5172e7d5a394da98a2a5d631caa5a436d20ddde89f1fc2534aaa338078d0",
+   "bytes": 18527,
+   "sha256": "2470d68e1d838862ddb7dea9d3cbecdb8b44ac766e9a30c5b4abceb432aaa2b8",
    "origin": "kit"
   },
   {
    "path": "PLAYER-GUIDE.md",
-   "bytes": 24958,
-   "sha256": "79f781594f231478f6ec142e632e20e19740ec877282ef03e1035fc9a2c2c304",
+   "bytes": 33246,
+   "sha256": "36c7e94dd05edb9c8e6325efc225ffdd18d438563000142073f390a01b70a29b",
    "origin": "kit"
   },
   {
@@ -1978,6 +2016,354 @@
    "origin": "game"
   },
   {
+   "path": "packets/face-muscles-r1/ACQUISITION-RECORD.json",
+   "bytes": 93833,
+   "sha256": "5e0be5d1d744f436f7578a2b7f0103783d626ced13db637cde3a3b1668342700",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/ATTRIBUTION-AND-LICENCES.txt",
+   "bytes": 12773,
+   "sha256": "c1519d0fc7605f640e79e7122d0f91a56992fd5d8d6e60d009c2eda083653627",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/FACE-MESH-MANIFEST.json",
+   "bytes": 199103,
+   "sha256": "80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/SHA256SUMS.txt",
+   "bytes": 5691,
+   "sha256": "f8a2532657b3f1a3bd4403d8e1ea93abf3d82df1c21b83f7238e9a1869f6f655",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-buccinator-l.obj",
+   "bytes": 26626,
+   "sha256": "cec3f46a9fc0b8f1048de5436a4b91db79a12cca8ab8493e7e4365e75a39d575",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-buccinator-r.obj",
+   "bytes": 26955,
+   "sha256": "3bbd4e71ef42247fafd5756cb368c83eda17eecb53f143835f76d8e3ab220c83",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-corrugator-supercilii-l.obj",
+   "bytes": 9125,
+   "sha256": "102b2574244023863ceade05deaa7578678d77478ffeaced7770be63e1896d3c",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-corrugator-supercilii-r.obj",
+   "bytes": 9161,
+   "sha256": "ce4748a475f90ef7cf17c343d9d261ea5ced467a652b893f6fd0ec97af771028",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-anguli-oris-l.obj",
+   "bytes": 18272,
+   "sha256": "e629023f55651a6ea57440bcf195b0a537ca4f89a72b8ba04dc1c2be32476b7d",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-anguli-oris-r.obj",
+   "bytes": 18456,
+   "sha256": "5c1152e7fa68a8163ce9c76b5ceb918d9547d09dc06773acb48ab688f6ddaddd",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-labii-inferioris-l.obj",
+   "bytes": 25125,
+   "sha256": "d31fed2fcaa1c84fd1d70071509a134d3fca069cba0ddf6622c663e24042556a",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-labii-inferioris-r.obj",
+   "bytes": 25443,
+   "sha256": "ba849fa4435ff1ebc70157c3e96fea4b54d67343eba8b49b5e092fd177172196",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-septi-nasi-l.obj",
+   "bytes": 8959,
+   "sha256": "905a8083617ad608dce9450ad5dc3c9bb43884736b338df5da6542ba7c86c4b3",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-depressor-septi-nasi-r.obj",
+   "bytes": 8981,
+   "sha256": "c8dfeed795164c20c52e6bccd4547fbc8a4a2450da0869c112e139cd40c87fe8",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-frontalis-l.obj",
+   "bytes": 182393,
+   "sha256": "ca9aff77f625518ea60674d81ce76d8dabfaade216e2487708664ea140481d7e",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-frontalis-r.obj",
+   "bytes": 185227,
+   "sha256": "cfc3fced53931223bf6300b9b263cf2d0f897838513c17ba41385fbc2a554e69",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-lateral-pterygoid-inferior-l.obj",
+   "bytes": 10470,
+   "sha256": "28f318b2b3c6c287cb22450588cadb34dad66c99b62170d7a0fe1b8248c268dd",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-lateral-pterygoid-inferior-r.obj",
+   "bytes": 10521,
+   "sha256": "6df85343e55ff60afff4ac91cb470a40ba05b1a221028568254ed1e22928295a",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-lateral-pterygoid-superior-l.obj",
+   "bytes": 7628,
+   "sha256": "603cc39aac3be0d44b40c0add4f15e0089bb4bcb86aadf46c14c19820f82d650",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-lateral-pterygoid-superior-r.obj",
+   "bytes": 7629,
+   "sha256": "23b773ba95767dba2ec367e1dc456ba2835cd5359d10e572ea2e037d619413af",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-anguli-oris-l.obj",
+   "bytes": 10560,
+   "sha256": "d0b6cc8241460f7102710a740f58aff7e156296e0cff33547d514543ad69c16b",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-anguli-oris-r.obj",
+   "bytes": 10610,
+   "sha256": "c15a94d719c46dc011a6e95eafd7c23f3dcc949510290f474faa7c938e6e94af",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-labii-superioris-alaeque-nasi-l.obj",
+   "bytes": 6176,
+   "sha256": "398254901eacc8b0b142912c9d11a734b91d4a53df7bc00c6827f96de9394bf1",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-labii-superioris-alaeque-nasi-r.obj",
+   "bytes": 6150,
+   "sha256": "d9ad9ccb418a7f1eb02a0eb1d2fcbe2442ebcfd9dd7726cfa4dd1ee972afcfce",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-labii-superioris-l.obj",
+   "bytes": 16730,
+   "sha256": "2f99c48108eb74fd2fb1596290dab3f55b03bdb5654ec49ea53e60d95effb934",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-levator-labii-superioris-r.obj",
+   "bytes": 16887,
+   "sha256": "d723464ce79cf105edf6f604868e46f3be88b710a7bb2cd9664a1361f3127f26",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-masseter-deep-l.obj",
+   "bytes": 29791,
+   "sha256": "dfeb411cecf2b2070ce6f08dadbe9c80d71b5b8516b1252926cd44fa6f71ad3d",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-masseter-deep-r.obj",
+   "bytes": 30175,
+   "sha256": "06b33c5f49ba29f6a317169e3e65d86e8c62562eff7cf6a0498a9dc89bd3ee40",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-masseter-superficial-l.obj",
+   "bytes": 41689,
+   "sha256": "0ab607b67fdc0c12d0f8c34013ee87cfc83f226ede0143d661f19df65787e502",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-masseter-superficial-r.obj",
+   "bytes": 42276,
+   "sha256": "29700ab7ca437b6c5fbe182456ade5db8713eda535aa9204ba57f3b60da069c1",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-medial-pterygoid-l.obj",
+   "bytes": 15367,
+   "sha256": "bb588ca1811d17d022ccce1f746d43813746c6b80455ae4aefa7326298d2d9f3",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-medial-pterygoid-r.obj",
+   "bytes": 15501,
+   "sha256": "39bcbc1ebbfec6d78734b852d18d43ea8494c5ddc04cfab2cba279c7fe215cd1",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-mentalis-l.obj",
+   "bytes": 5851,
+   "sha256": "8ba9fc3d4b43734b6d77806a9a523c68c4846880aff984911af803359d90be66",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-mentalis-r.obj",
+   "bytes": 5826,
+   "sha256": "dcbe96537d87ad620872eb58e42eec91b16669f719a79ff46bafe2050001de45",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-nasalis-l.obj",
+   "bytes": 21099,
+   "sha256": "93be296bc7c235020db5020e0354cef56721e91ac103c58109390ed1c4154da3",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-nasalis-r.obj",
+   "bytes": 21370,
+   "sha256": "7edbb9bdb93978adb82b2c47e10ece21fd3357a05abfbecc27e1568bca945e18",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-occipitalis-l.obj",
+   "bytes": 75620,
+   "sha256": "33093989dfb49e0e6383c5d33b57a3a130d953f5c7f26239f50a0aa3380096ae",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-occipitalis-r.obj",
+   "bytes": 76808,
+   "sha256": "3b45bd32e5ab7f962204ec712fbd086ee18f9626b82bf7f5ac6c1dfbd8092d59",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oculi-orbital-l.obj",
+   "bytes": 71473,
+   "sha256": "b991340de08251b66d3dc902b5e6da31d323f2a957ba2d419f107397d28af689",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oculi-orbital-r.obj",
+   "bytes": 72576,
+   "sha256": "5f90f07476ddbb1013986419d05d358b69786dcf44dc36cdd770cd50a370268d",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oculi-palpebral-l.obj",
+   "bytes": 25125,
+   "sha256": "3c271f96f880695abdf877f80e8b8742dd94115c064d3e43454eedce0e8cf756",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oculi-palpebral-r.obj",
+   "bytes": 25425,
+   "sha256": "54d8340472dce4f80572889a0ce628565611c477445dca4cefe6c69976db3ce6",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oris-l.obj",
+   "bytes": 55180,
+   "sha256": "badd86cde2261f436a4404f33bf00cbb4342399f7eb7bf138666ab027373fb14",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-orbicularis-oris-r.obj",
+   "bytes": 55936,
+   "sha256": "27624cb08a76b3781b78b885b5a8d4fe58e5a49c5aa0bb2a726fe7d269ae6f52",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-platysma-l.obj",
+   "bytes": 203485,
+   "sha256": "45f39e3229f121565b590edfe69ae1dea2285bf93a62b27bf19e5a305ec8403f",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-platysma-r.obj",
+   "bytes": 206498,
+   "sha256": "5b06448e060ad04cd2b91bc18ea2fa6af620222204fcdae0a343566dbc4a00ea",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-procerus-l.obj",
+   "bytes": 16637,
+   "sha256": "bd314c56cb1cf499b947d32ddcc2463521961a8b302c36439ce445d9281a720c",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-procerus-r.obj",
+   "bytes": 16787,
+   "sha256": "3d78fd675a959d01027cbb0110ac1f74582e668fe6c2e70c617841ef2f3f86cc",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-risorius-l.obj",
+   "bytes": 18116,
+   "sha256": "11e6bf89d3a7c8c6f636454f652fe8766f759df6579759cab5b6973b09fe1671",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-risorius-r.obj",
+   "bytes": 18297,
+   "sha256": "c0691228880bdee0963397e53e1019c9eaf8ac03b844c3e208ab0b05b7049137",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-temporalis-l.obj",
+   "bytes": 321090,
+   "sha256": "c140b834d839250268b57ee3d8dc62d91d1292030948e6054d865fb101ec8f5c",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-temporalis-r.obj",
+   "bytes": 326111,
+   "sha256": "f938bdbaf5061c6d3bcedbc76e2c7e82cafaccb607af40703ab1d782759eec6e",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-temporoparietalis-l.obj",
+   "bytes": 372882,
+   "sha256": "a6bfd7f9afff8044cf893cd4436780341d6b5713974eef52ac2471dd33fa01fd",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-temporoparietalis-r.obj",
+   "bytes": 378751,
+   "sha256": "8f39cbed9c0a3c0879e7e10d37cb773874cf6e8d0412ad8447aae6bd7bee112d",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-zygomaticus-major-l.obj",
+   "bytes": 24019,
+   "sha256": "8bb0580bc9f683cb4feb4cb836956c2a6b53fb92670f293215dc9cbcc7f65829",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-zygomaticus-major-r.obj",
+   "bytes": 24301,
+   "sha256": "abd99ca2e21ace9e0a3a77e42dc8df5be25adb86e9cf51e723b3877803c7dafc",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-zygomaticus-minor-l.obj",
+   "bytes": 13580,
+   "sha256": "874e9ece3be7a4bd648dcda6779798683155b8110987a57e5d70a9c4fe41b83f",
+   "origin": "game"
+  },
+  {
+   "path": "packets/face-muscles-r1/meshes/zf-zygomaticus-minor-r.obj",
+   "bytes": 13683,
+   "sha256": "17a9886821357c79f46c1e4367c3546c90edc815fe70f2ce70990da60b00c248",
+   "origin": "game"
+  },
+  {
    "path": "packets/pov-demo-assets-r2/meshes/FJ1466M.obj",
    "bytes": 51150,
    "sha256": "c863e99b725f694e708b560b9bf848ce4249bc512dd4d0284a79de20402f0c5f",
@@ -2831,80 +3217,98 @@
   },
   {
    "path": "scene/example/index.html",
-   "bytes": 28956,
-   "sha256": "ac8ce5f7a1c525dfda707a12cfcb061257a3a4bb895e39ac9d31fd8c84068fdc",
+   "bytes": 29915,
+   "sha256": "5dc9ef643d82b4912a97ac7034ee127d2934b1c71c667885e8c66f058b482b79",
    "origin": "game"
   },
   {
    "path": "scene/example/neurosurge.css",
-   "bytes": 39765,
-   "sha256": "e141aa9855f2e26fa143d7a5898b60810400aba0f122105ee5fdd0ab0cd3b949",
+   "bytes": 38721,
+   "sha256": "4f79b2f545046960a7322a5cf8b9e09b9e5b0e10bc33b7d87236f567dd1656c8",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-actions.mjs",
-   "bytes": 120868,
-   "sha256": "76821fc12799c44da5e20cf9c0fccf3e8d9db79d9586db7b5d7cabd66619f394",
+   "bytes": 133313,
+   "sha256": "07e168e73dff3aaaf43ca39f5f8d5d489c44f3e178448870035fd3085fe0c20c",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-app.mjs",
-   "bytes": 245868,
-   "sha256": "e3dfdc09e2729e93ae65eaa7effc4c389bede17b66816bbd8ff6991463a91e66",
+   "bytes": 297316,
+   "sha256": "b90c31e8c511fa41c64cac9f84e3b8cad4dc4fbe11fdcdb1e0cd5f637472e1e5",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-arm.mjs",
-   "bytes": 105887,
-   "sha256": "16e0e7f039719850b288b459109bd99c3082e877d3e25cca9f2f7cb80cb5a33f",
+   "bytes": 128353,
+   "sha256": "8037e50b9d8fbea7a6ee745edfd8ffc7531aac1663b29200cba62344add43052",
+   "origin": "game"
+  },
+  {
+   "path": "scene/src/ns-arrows3d.mjs",
+   "bytes": 71610,
+   "sha256": "f2a4c33383025cd395c50f2e2bbff00e990c2a7c5f17c39866df62a2579a4712",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-assets.mjs",
-   "bytes": 73323,
-   "sha256": "2d885d59031d151a9701f503a196d713a389e9123f0981f2aeb6e1c4a1f0b828",
+   "bytes": 111669,
+   "sha256": "8bdf6fccd86ef7715aeb2a056aed54b3bd5e8c600635d7b4afec21903ddfed59",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-body.mjs",
-   "bytes": 140803,
-   "sha256": "3271993cffc2c1f6c2c6b4c89c57a28f387bd8d83b16242f43c4c22d25c81342",
+   "bytes": 217267,
+   "sha256": "f40495d27953b241f85e3fd75c9cbc134dc1dee65fd23b9e5711c83a642c2f21",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-bodymap.mjs",
-   "bytes": 139398,
-   "sha256": "caf6199d54d672341f4fc67311a9455b1f31cab0ec3311256d4fe90b58fc0250",
+   "bytes": 154129,
+   "sha256": "168d2cc1db7b48c7da6224fe5d896278e27faf4f2cf13dc3cd4a25b1e768f24b",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-brain.mjs",
-   "bytes": 213556,
-   "sha256": "a6e5575ac1ed187c6689b147111443ec1cfb4e65d6567aa552013a7bad92ae30",
+   "bytes": 221407,
+   "sha256": "1091209d7fcb9279e9053270092511f6a9286ea402710ac880b604d67146b40c",
+   "origin": "game"
+  },
+  {
+   "path": "scene/src/ns-camera.mjs",
+   "bytes": 37099,
+   "sha256": "6adea754ae527019dbf15e290fed61f61915d8f1f0f95cc06c1f2e4dea39fc69",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-colors.mjs",
-   "bytes": 12988,
-   "sha256": "5ed63db26ec7945897985a44c8a2e2d0f2cf179c707a2826a9fe6bce77789e15",
+   "bytes": 30812,
+   "sha256": "76f804a76c0ce79ea99c4a7be94bda5030f5f3ebd0c005b70e1e927209db5d78",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-controls.mjs",
-   "bytes": 30261,
-   "sha256": "ad9db0c8f4cd2d2d523a70f0187397bd8591efaf7c4b0ec9c6e185d9e53907b9",
+   "bytes": 59132,
+   "sha256": "384aa3343be98501bc782d458ef0320065c58d8b249b2a481a0f1e116de33af7",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-guide.mjs",
-   "bytes": 20222,
-   "sha256": "f092c2e8ab77e6f7eb40f45fd19df0d0f5bdbe032714029f0fcd2b7f03889ccb",
+   "bytes": 32105,
+   "sha256": "1e4883ed4306b0a8f30765e8b49248c322703696adedfdc157ec6a4eb00c15a3",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-math.mjs",
    "bytes": 13749,
    "sha256": "96141c21e88c0d3f7bbf5c8ffffc7c8e121562ecfd9dd1bc4db957a664d3db69",
+   "origin": "game"
+  },
+  {
+   "path": "scene/src/ns-mirror.mjs",
+   "bytes": 50937,
+   "sha256": "b5df8a8e0511bbc1f89bff9f315ededf98f8347838929bfed065f4faff9d89e4",
    "origin": "game"
   },
   {
@@ -2921,20 +3325,20 @@
   },
   {
    "path": "scene/src/ns-rig.mjs",
-   "bytes": 67902,
-   "sha256": "cb5ec94226ba05f98230aa9f319e1cefaf82df360f979c7c5a51f4ee037674b6",
+   "bytes": 68304,
+   "sha256": "856358ee7910aff28e90e9b0583f5e8b6f6a91057bb7dda68461f499b9aa1731",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-scene-three.mjs",
-   "bytes": 353096,
-   "sha256": "a6a1601a450ae603f65b72413e4e3798946c190e11460f59a3d7bc8957811b2e",
+   "bytes": 486462,
+   "sha256": "b765fd884cffa35f2963d04d7c0d07a346d53483571403cf282fe9d725276d34",
    "origin": "game"
   },
   {
    "path": "scene/src/ns-text.mjs",
-   "bytes": 47918,
-   "sha256": "c8e4e909e07ce263394fb897e90bd7fdbfc1bb4cc5797deb01c948e4a7d7439b",
+   "bytes": 87912,
+   "sha256": "19eaaea0a1715f3f2a65ef7868f6ed2342df387ee3a0edc251162e96636fe2e6",
    "origin": "game"
   },
   {

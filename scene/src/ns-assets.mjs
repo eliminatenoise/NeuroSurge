@@ -22,6 +22,18 @@
  * parse, then vertex count, finiteness and laterality) and the parsed geometry are unchanged
  * (tests/unit/R4-load-progressive.test.mjs proves equality on all 428 meshes the game loads: 134 arm and brain + 294 body).
  * No URL is built here: callers inject the readers, and manifest paths stay relative ('meshes/<id>.obj').
+ *
+ * Round 5 (R5-load): EXTRA PACKETS with their own manifest and pins (first user: the D20 face packet face-muscles-r1,
+ * CC BY-SA 4.0 face and chewing muscles). packetSpec / PACKET_SPECS say what a packet may hold; validatePacketManifest
+ * checks every entry before anything is read (relative meshes/<file>.obj paths, byte count, sha256, vertex count, kind,
+ * laterality, bounds inside a registration box from the full body's head and neck, no id listed twice, an optional
+ * deny check such as ns-body genitalAnatomyTerms); streamPacketAssets runs the SAME engine as the full body (streamCore:
+ * byte count, then sha256, then parse, then vertex count, finiteness, laterality, plus parsed bounds equal to the
+ * manifest's and inside the box); readPinnedManifest checks a manifest's pinned sha256 before parsing it;
+ * startPacketStream does both and returns at once (the files wait for start()); packetAppInputs / mergeAppInputs give the
+ * { entries, meshesById } shape ns-body and the scene take. PROGRESSIVE_STAGES / progressiveLoadPlan: the round-5 order
+ * brain, arm, own body, mirror body (no files: it reuses the own body's geometry), face; loadAssets order 'brain-first'.
+ * Tests: tests/unit/R5-load-packets.test.mjs (exact geometry on real OBJ files, every refusal).
  */
 import { parseObj, OBJ_LIMITS, MAX_COMMENTS } from './ns-obj.mjs';
 import { sub, dot, length, scale, reject } from './ns-math.mjs';
@@ -389,7 +401,9 @@ export const LICENCE_LINKS = Object.freeze({
 /** What this game changes (CC BY 4.0 section 3(a)(1)(B): indicate modifications). */
 // R4-fix (review SL4-6): Picture quality Low (and Auto at its cheapest levels) draws vertex-clustered, simplified copies
 // of the glass-brain and full-body meshes at run time; say so, like the muscle bending.
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The OBJ files themselves are unmodified.';
+// R5-fix (review SL5-2): round 5 adds two display-only changes, stated in plain words: the Body Worlds layers (the outer
+// muscles moved out a few millimetres and tilted slightly) and the mirror-image copy of the body behind the brain.
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The outer muscles are moved out a few millimetres and tilted slightly (display only), and a mirror-image copy of the body is drawn behind the brain. The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 
@@ -627,14 +641,19 @@ function checkParsed(set, entry, mesh) {
   if (set === 'brain') checkBrainRoleSide(id, lo, hi, 'parsed geometry');
 }
 
-/** Load every allowlisted entry, in manifest order.
+/** R5-load: the orders loadAssets accepts ('manifest' = round 4; 'brain-first' = the round-5 progressive order). */
+export const LOAD_ORDERS = Object.freeze(['manifest', 'brain-first']);
+
+/** Load every allowlisted entry, in manifest order (or brain first: `order`).
  * For each entry: readText(entry.path, entry) (entry.source_packet names the packet) -> UTF-8 byte length must equal entry.bytes (ns:asset_bytes)
  * -> sha256Hex(text) must equal entry.sha256 (ns:asset_hash) -> only then parse(text).
  * readText and sha256Hex may be sync or async. Excluded (girdle) entries are never read.
  * R4-load byte path: pass readBytes(path, entry) -> ArrayBuffer | Uint8Array and sha256HexBytes(bytes) instead; the served
  * byte count and the sha256 of the served bytes are checked, then the bytes are decoded once (losslessly) and parsed.
+ * R5-load: order 'brain-first' reads the brain group before the arm (each set in manifest order; the result is the same);
+ * onSet(set, map) is called once per set ('brain' | 'arm') as soon as every file of that set has passed (advisory).
  * Returns { arm: Map(id -> {entry, mesh}), brain: Map(id -> {entry, mesh}), excluded }. */
-export async function loadAssets({ manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast } = {}) {
+export async function loadAssets({ manifest, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast, order = 'manifest', onSet = null } = {}) {
   if (typeof readBytes === 'function') {
     if (typeof sha256HexBytes !== 'function') fail('asset_args', 'sha256HexBytes(bytes) must be injected with readBytes');
   } else {
@@ -642,15 +661,24 @@ export async function loadAssets({ manifest, readText, sha256Hex, readBytes = nu
     if (typeof sha256Hex !== 'function') fail('asset_args', 'sha256Hex(text) must be injected');
   }
   if (typeof parse !== 'function') fail('asset_args', 'parse(text) must be a function');
+  if (!LOAD_ORDERS.includes(order)) fail('asset_args', `order must be one of ${LOAD_ORDERS.join(', ')}`);
   const v = validateInternal(manifest);
   const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
   const arm = new Map(), brain = new Map();
-  for (const { set, entry } of v.order) {
+  // R5-load: 'brain-first' checks and parses every brain file before the first arm file (PROGRESSIVE_STAGES); within each
+  // set the manifest order is kept, so the two Maps are identical to the 'manifest' order's.
+  const list = order === 'brain-first' ? [...v.order.filter(x => x.set === 'brain'), ...v.order.filter(x => x.set === 'arm')] : v.order;
+  const left = { arm: v.arm.length, brain: v.brain.length };
+  const setDone = set => { if (typeof onSet === 'function') { try { onSet(set, set === 'arm' ? arm : brain); } catch { /* advisory */ } } };
+  if (!left.brain) setDone('brain');
+  if (!left.arm) setDone('arm');
+  for (const { set, entry } of list) {
     // Byte count, then sha256, then (only then) parse: readVerified. R3-perf: the fast parser reuses the verified byte count.
     const { text, bytes } = await readVerified(entry, io);
     const mesh = await parseVerified(parse, text, bytes);
     checkParsed(set, entry, mesh);
     (set === 'arm' ? arm : brain).set(entry.element_id, Object.freeze({ entry, mesh }));
+    if (--left[set] === 0) setDone(set);
   }
   return { arm, brain, excluded: v.excluded };
 }
@@ -972,6 +1000,79 @@ const failureOf = (id, err) => {
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const defaultNow = () => (typeof performance !== 'undefined' && performance && typeof performance.now === 'function' ? performance.now() : Date.now());
 
+/** A stream object that has already settled with result r (absent or invalid input). */
+function settledStream(r) {
+  const p = Promise.resolve(r);
+  return Object.freeze({ plan: null, counts: r.counts, priority: p, done: p, start: () => p, cancel: () => {}, progress: () => Object.freeze({ done: 0, total: 0, priorityTotal: 0, started: false, cancelled: false }) });
+}
+
+/**
+ * R5-load: the stream engine shared by streamFullbodyAssets and streamPacketAssets (moved here unchanged from round 4's
+ * streamFullbodyAssets; `verify(entry, io, parse, beforeParse)` is the per-file check: verifyFullbody or a packet check).
+ * v = { entries, counts } (validated, manifest order); plan = fullbodyLoadPlan(v.entries, ...). Returns the frozen stream
+ * object { plan, counts, priority, done, start, cancel, progress } documented on streamFullbodyAssets.
+ */
+function streamCore({ v, plan, io, parse, verify, concurrency, allOrNothing, autoStart, sliceMs, yieldFn, now, onMesh, onProgress, what = 'full-body' }) {
+  const limit = Number.isInteger(concurrency) && concurrency > 0 ? Math.min(concurrency, 16) : FULLBODY_DEFAULT_CONCURRENCY;
+  const slicing = Number.isFinite(sliceMs) && sliceMs > 0 && typeof yieldFn === 'function' && typeof now === 'function';
+  const total = v.entries.length;
+  const priorityIdSet = new Set(plan.priorityIds);
+  const records = new Map();
+  const failed = [];
+  let done = 0, cancelled = false, started = false, sliceStart = slicing ? now() : 0;
+  const beforeParse = slicing ? async () => { if (now() - sliceStart >= sliceMs) { await yieldFn(); sliceStart = now(); } } : null;
+
+  const runOne = async entry => {
+    if (cancelled) return;
+    const id = entry.element_id;
+    try {
+      const rec = await verify(entry, io, parse, beforeParse);
+      records.set(id, rec);
+      if (typeof onMesh === 'function') { try { onMesh({ id, record: rec, priority: priorityIdSet.has(id), done: done + 1, total }); } catch { /* advisory */ } }
+    } catch (err) {
+      failed.push(failureOf(id, err));
+    } finally {
+      done++;
+      if (typeof onProgress === 'function') { try { onProgress({ done, total }); } catch { /* progress is advisory */ } }
+    }
+  };
+  /** Result over `list` (manifest-ordered meshes; failures of that list sorted by id). */
+  const resultOver = (list, final) => {
+    const ids = new Set(list.map(e => e.element_id));
+    const fails = failed.filter(f => ids.has(f.id)).sort(byId);
+    if (allOrNothing && fails.length) {
+      return Object.freeze({ status: 'rejected', meshes: new Map(), failed: Object.freeze(fails), counts: v.counts, error: `${fails.length} ${what} file(s) failed verification` });
+    }
+    const meshes = new Map();
+    for (const e of v.entries) if (ids.has(e.element_id) && records.has(e.element_id)) meshes.set(e.element_id, records.get(e.element_id));
+    const status = final && cancelled ? 'cancelled' : fails.length ? 'partial' : 'complete';
+    return Object.freeze({ status, meshes, failed: Object.freeze(fails), counts: v.counts, error: null });
+  };
+
+  const priority = mapBounded(plan.priority, limit, runOne).then(() => resultOver(plan.priority, false));
+  let resolveDone;
+  const donePromise = new Promise(r => { resolveDone = r; });
+  const start = () => {
+    if (!started) {
+      started = true;
+      priority
+        .then(() => (cancelled ? null : mapBounded(plan.bulk, limit, runOne)))
+        .then(() => resolveDone(resultOver(v.entries, true)), err => resolveDone(INVALID(err)));
+    }
+    return donePromise;
+  };
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    if (!started) priority.then(() => resolveDone(resultOver(v.entries, true)));
+  };
+  if (autoStart) start();
+  return Object.freeze({
+    plan, counts: v.counts, priority, done: donePromise, start, cancel,
+    progress: () => Object.freeze({ done, total, priorityTotal: plan.priority.length, started, cancelled })
+  });
+}
+
 /**
  * R4-load: PROGRESSIVE full-body loading. Never throws. Every file is checked exactly as loadFullbodyAssets does (byte
  * count, then sha256, then parse, then vertex count, finite vertices and laterality); the parsed geometry is identical.
@@ -1006,10 +1107,7 @@ export function streamFullbodyAssets({
   sliceMs = 0, yieldFn = null, now = defaultNow,
   onMesh = null, onProgress = null
 } = {}) {
-  const settled = r => {
-    const p = Promise.resolve(r);
-    return Object.freeze({ plan: null, counts: r.counts, priority: p, done: p, start: () => p, cancel: () => {}, progress: () => Object.freeze({ done: 0, total: 0, priorityTotal: 0, started: false, cancelled: false }) });
-  };
+  const settled = settledStream;
   if (manifest === null || manifest === undefined) return settled(ABSENT());
   const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
   if (!io || typeof parse !== 'function') {
@@ -1020,64 +1118,7 @@ export function streamFullbodyAssets({
     v = validateFullbodyManifest(manifest, { excludeIds });
     plan = fullbodyLoadPlan(v.entries, { priorityIds, bulkOrder });
   } catch (err) { return settled(INVALID(err)); }
-  const limit = Number.isInteger(concurrency) && concurrency > 0 ? Math.min(concurrency, 16) : FULLBODY_DEFAULT_CONCURRENCY;
-  const slicing = Number.isFinite(sliceMs) && sliceMs > 0 && typeof yieldFn === 'function' && typeof now === 'function';
-  const total = v.entries.length;
-  const priorityIdSet = new Set(plan.priorityIds);
-  const records = new Map();
-  const failed = [];
-  let done = 0, cancelled = false, started = false, sliceStart = slicing ? now() : 0;
-  const beforeParse = slicing ? async () => { if (now() - sliceStart >= sliceMs) { await yieldFn(); sliceStart = now(); } } : null;
-
-  const runOne = async entry => {
-    if (cancelled) return;
-    const id = entry.element_id;
-    try {
-      const rec = await verifyFullbody(entry, io, parse, beforeParse);
-      records.set(id, rec);
-      if (typeof onMesh === 'function') { try { onMesh({ id, record: rec, priority: priorityIdSet.has(id), done: done + 1, total }); } catch { /* advisory */ } }
-    } catch (err) {
-      failed.push(failureOf(id, err));
-    } finally {
-      done++;
-      if (typeof onProgress === 'function') { try { onProgress({ done, total }); } catch { /* progress is advisory */ } }
-    }
-  };
-  /** Result over `list` (manifest-ordered meshes; failures of that list sorted by id). */
-  const resultOver = (list, final) => {
-    const ids = new Set(list.map(e => e.element_id));
-    const fails = failed.filter(f => ids.has(f.id)).sort(byId);
-    if (allOrNothing && fails.length) {
-      return Object.freeze({ status: 'rejected', meshes: new Map(), failed: Object.freeze(fails), counts: v.counts, error: `${fails.length} full-body file(s) failed verification` });
-    }
-    const meshes = new Map();
-    for (const e of v.entries) if (ids.has(e.element_id) && records.has(e.element_id)) meshes.set(e.element_id, records.get(e.element_id));
-    const status = final && cancelled ? 'cancelled' : fails.length ? 'partial' : 'complete';
-    return Object.freeze({ status, meshes, failed: Object.freeze(fails), counts: v.counts, error: null });
-  };
-
-  const priority = mapBounded(plan.priority, limit, runOne).then(() => resultOver(plan.priority, false));
-  let resolveDone;
-  const donePromise = new Promise(r => { resolveDone = r; });
-  const start = () => {
-    if (!started) {
-      started = true;
-      priority
-        .then(() => (cancelled ? null : mapBounded(plan.bulk, limit, runOne)))
-        .then(() => resolveDone(resultOver(v.entries, true)), err => resolveDone(INVALID(err)));
-    }
-    return donePromise;
-  };
-  const cancel = () => {
-    if (cancelled) return;
-    cancelled = true;
-    if (!started) priority.then(() => resolveDone(resultOver(v.entries, true)));
-  };
-  if (autoStart) start();
-  return Object.freeze({
-    plan, counts: v.counts, priority, done: donePromise, start, cancel,
-    progress: () => Object.freeze({ done, total, priorityTotal: plan.priority.length, started, cancelled })
-  });
+  return streamCore({ v, plan, io, parse, verify: verifyFullbody, concurrency, allOrNothing, autoStart, sliceMs, yieldFn, now, onMesh, onProgress });
 }
 
 /**
@@ -1118,6 +1159,478 @@ export function fullbodyAppInputs(manifest, result) {
   const meshesById = new Map();
   for (const e of entries) { const m = result.meshes.get(e.element_id).mesh; meshesById.set(e.element_id, { positions: m.positions, indices: m.indices }); }
   return { manifest, entries, meshesById };
+}
+
+// ---------------------------------------------------------------------------------------
+// R5-load: extra packets with their own manifest and pins (generic; first user: the D20 face packet)
+// ---------------------------------------------------------------------------------------
+
+/** The D20 face packet's name (facial-expression and chewing muscles, CC BY-SA 4.0 meshes acquired by R5-face). Note:
+ * ns-bodymap also exports a FACE_PACKET (its packet record OBJECT, id 'face-muscles-r1'); a module that imports both by
+ * name can use the alias FACE_PACKET_ID from here. */
+export const FACE_PACKET = 'face-muscles-r1';
+export const FACE_PACKET_ID = FACE_PACKET;
+
+/** R5-load: the progressive load order of round 5. 'brain' and 'arm' are MESH-MANIFEST.json (both are needed for the
+ * first frame), 'body' is the full-body packet, 'mirror' is the D19 mirror body (no files: it is drawn from the own body's
+ * verified geometry), 'face' is the extra face packet (drawn on both bodies once it is in). */
+export const PROGRESSIVE_STAGES = Object.freeze(['brain', 'arm', 'body', 'mirror', 'face']);
+
+const MIB_BYTES = 1024 * 1024;
+const PACKET_NAME_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
+/** Packet element ids: not only BodyParts3D FJ ids (an atlas such as Z-Anatomy names its meshes); no slashes. */
+const PACKET_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/;
+/** Packet file paths: one level under meshes/, a plain file name ending in .obj (no traversal is possible). */
+const PACKET_PATH_RE = /^meshes\/[A-Za-z0-9][A-Za-z0-9_.-]{0,159}\.obj$/;
+const PACKET_KINDS = Object.freeze(['bone', 'muscle']);
+/** Parsed bounds may differ from the manifest's bounds by at most this (mm), so a manifest cannot claim one place while
+ * the file lies in another (BodyParts3D header bounds agree within 1.0 mm; a packet's own bounds are exact). */
+const PACKET_BOUNDS_TOLERANCE_MM = 1.0;
+
+/**
+ * Built-in extra-packet specifications. A spec says what a packet may contain and how strictly it is checked:
+ *   packet (its name; the manifest's `packet` must equal it), stage (PROGRESSIVE_STAGES), kinds (allowed entry kinds),
+ *   defaultKind (used when an entry has no `kind`; null = kind required), defaultRegion, maxEntries, maxBytesPerFile,
+ *   maxTotalBytes, requireVertices (every entry must state its vertex count; the parsed count must equal it),
+ *   midlineToleranceMm (laterality rule as for the full body), frameRegions + frameMarginMm (the registration check:
+ *   manifest AND parsed bounds must lie inside the box of these full-body regions, widened by the margin),
+ *   manifestPath (the manifest's file name inside the packet, or null), manifestSha256 (the pinned sha256 of
+ *   that manifest, or null until the packet is accepted), licence (shown, never fetched).
+ * The face spec's frame box: FULLBODY head_face + neck regions (x -74..73, y -191..-21, z 1302..1630 mm) widened by
+ * 100 mm, so the scalp (occipital belly) and the platysma fit while a mesh in another frame or unit (metres, a Blender
+ * scene origin) is refused.
+ */
+export const PACKET_SPECS = Object.freeze({
+  [FACE_PACKET]: Object.freeze({
+    packet: FACE_PACKET,
+    stage: 'face',
+    kinds: Object.freeze(['muscle']),
+    defaultKind: 'muscle',
+    defaultRegion: 'head_face',
+    maxEntries: 400,
+    maxBytesPerFile: OBJ_LIMITS.maxBytes,
+    maxTotalBytes: 64 * MIB_BYTES,
+    requireVertices: true,
+    midlineToleranceMm: 45,
+    frameRegions: Object.freeze(['head_face', 'neck']),
+    frameMarginMm: 100,
+    manifestPath: 'FACE-MESH-MANIFEST.json', // the name R5-face's packet and test use (packets/face-muscles-r1/)
+    manifestSha256: '80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113', // R5-integrate-core: R5-face's accepted manifest (W1)
+    frame: 'BodyParts3D 4.0 whole-body millimetres (+x subject left, +y posterior, +z superior), registered to the skull',
+    licence: 'CC BY-SA 4.0 (share-alike meshes; the game code stays CC0)'
+  })
+});
+
+/**
+ * Normalise an extra-packet spec: a built-in packet name (PACKET_SPECS) or a spec object (missing fields take the
+ * built-in defaults below). Throws ns:packet_spec on anything malformed. Returns a frozen spec.
+ */
+export function packetSpec(spec) {
+  const raw = typeof spec === 'string' ? (has(PACKET_SPECS, spec) ? PACKET_SPECS[spec] : null) : spec;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('packet_spec', `unknown packet ${JSON.stringify(String(spec)).slice(0, 60)}`);
+  const s = {
+    stage: 'face', kinds: ['muscle'], defaultKind: null, defaultRegion: 'other', maxEntries: 400, maxBytesPerFile: OBJ_LIMITS.maxBytes,
+    maxTotalBytes: 64 * MIB_BYTES, requireVertices: true, midlineToleranceMm: MIDLINE_TOLERANCE_MM, frameRegions: [], frameMarginMm: 0,
+    manifestPath: null, manifestSha256: null, frame: '', licence: '', ...raw
+  };
+  if (typeof s.packet !== 'string' || !PACKET_NAME_RE.test(s.packet)) fail('packet_spec', 'packet must be a lower-case name like face-muscles-r1');
+  if (s.packet === FULLBODY_PACKET || SOURCE_PACKETS.includes(s.packet)) fail('packet_spec', `${s.packet} has its own loader`);
+  if (!PROGRESSIVE_STAGES.includes(s.stage) || s.stage === 'mirror') fail('packet_spec', `stage must be one of ${PROGRESSIVE_STAGES.filter(x => x !== 'mirror').join(', ')}`);
+  if (!Array.isArray(s.kinds) || !s.kinds.length || !s.kinds.every(k => PACKET_KINDS.includes(k))) fail('packet_spec', `kinds must be a non-empty subset of ${PACKET_KINDS.join(', ')}`);
+  if (s.defaultKind !== null && !s.kinds.includes(s.defaultKind)) fail('packet_spec', 'defaultKind must be one of kinds (or null)');
+  if (typeof s.defaultRegion !== 'string' || !s.defaultRegion) fail('packet_spec', 'defaultRegion must be a string');
+  for (const k of ['maxEntries', 'maxBytesPerFile', 'maxTotalBytes']) if (!isPositiveInt(s[k])) fail('packet_spec', `${k} must be a positive integer`);
+  if (s.maxEntries > FULLBODY_MAX_ENTRIES) fail('packet_spec', `maxEntries must be at most ${FULLBODY_MAX_ENTRIES}`);
+  if (s.maxBytesPerFile > OBJ_LIMITS.maxBytes) fail('packet_spec', `maxBytesPerFile must be at most ${OBJ_LIMITS.maxBytes} (the OBJ parser's limit)`);
+  if (typeof s.requireVertices !== 'boolean') fail('packet_spec', 'requireVertices must be true or false');
+  if (!(Number.isFinite(s.midlineToleranceMm) && s.midlineToleranceMm >= 0)) fail('packet_spec', 'midlineToleranceMm must be a finite number >= 0');
+  if (!Array.isArray(s.frameRegions) || !s.frameRegions.every(r => typeof r === 'string' && r)) fail('packet_spec', 'frameRegions must be an array of region names');
+  if (!(Number.isFinite(s.frameMarginMm) && s.frameMarginMm >= 0)) fail('packet_spec', 'frameMarginMm must be a finite number >= 0');
+  if (s.manifestPath !== null && (typeof s.manifestPath !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\.json$/.test(s.manifestPath))) {
+    fail('packet_spec', 'manifestPath must be a plain .json file name inside the packet (or null)');
+  }
+  if (s.manifestSha256 !== null && !(typeof s.manifestSha256 === 'string' && HEX64_RE.test(s.manifestSha256))) fail('packet_spec', 'manifestSha256 must be 64 hex characters (or null)');
+  return Object.freeze({ ...s, kinds: Object.freeze(s.kinds.slice()), frameRegions: Object.freeze(s.frameRegions.slice()), manifestSha256: s.manifestSha256 ? s.manifestSha256.toLowerCase() : null });
+}
+
+/**
+ * The registration box of a packet: the union of the manifest bounds of the full-body entries whose region is one of
+ * `regions` (default: the spec's frameRegions), widened by `marginMm` (default: the spec's frameMarginMm). entries: the
+ * full-body manifest's assets (raw) or validated snapshots. Returns frozen { min, max, regions, marginMm, entries } or
+ * null when no entry matches (then no box check is possible: the caller decides whether that is acceptable).
+ */
+export function packetFrameBox(fullbodyEntries, { spec = null, regions = null, marginMm = null } = {}) {
+  if (!Array.isArray(fullbodyEntries)) fail('asset_args', 'fullbodyEntries must be an array');
+  const sp = spec ? packetSpec(spec) : null;
+  const regs = regions || (sp ? sp.frameRegions : []);
+  const margin = marginMm !== null && marginMm !== undefined ? marginMm : sp ? sp.frameMarginMm : 0;
+  if (!(Number.isFinite(margin) && margin >= 0)) fail('asset_args', 'marginMm must be a finite number >= 0');
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  let n = 0;
+  for (const e of fullbodyEntries) {
+    if (!e || !regs.includes(e.region) || !isVec3(e.bounds_min) || !isVec3(e.bounds_max)) continue;
+    n++;
+    for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], e.bounds_min[k]); hi[k] = Math.max(hi[k], e.bounds_max[k]); }
+  }
+  if (!n) return null;
+  return Object.freeze({ min: Object.freeze(lo.map(x => x - margin)), max: Object.freeze(hi.map(x => x + margin)), regions: Object.freeze(regs.slice()), marginMm: margin, entries: n });
+}
+
+function checkFrameBox(id, lo, hi, box, what) {
+  if (!box) return;
+  for (let k = 0; k < 3; k++) {
+    if (!(lo[k] >= box.min[k] && hi[k] <= box.max[k])) {
+      fail('packet_frame', `${id}: ${what} [${lo.map(x => +x.toFixed(1)).join(', ')}]..[${hi.map(x => +x.toFixed(1)).join(', ')}] mm is outside the registration box ` +
+        `[${box.min.map(x => +x.toFixed(1)).join(', ')}]..[${box.max.map(x => +x.toFixed(1)).join(', ')}] (not registered to the BodyParts3D frame?)`);
+    }
+  }
+}
+
+function checkPacketSide(id, side, cx, tol, what) {
+  if (side === 'right' && !(cx < 0)) fail('packet_laterality', `${id}: right-sided entry has ${what} x ${cx} >= 0 (subject right is -x)`);
+  if (side === 'left' && !(cx > 0)) fail('packet_laterality', `${id}: left-sided entry has ${what} x ${cx} <= 0 (subject left is +x)`);
+  if (side === 'midline' && !(Math.abs(cx) <= tol)) fail('packet_laterality', `${id}: midline entry has ${what} x ${cx} beyond ${tol} mm`);
+}
+
+/** Validate one raw packet entry and return a frozen snapshot shaped like a full-body entry (element_id, path, bytes,
+ * sha256, vertices, kind, region, laterality, bounds, groups, rig_hint, name, concept, source_packet), so ns-body and the
+ * scene can treat it as one more body entry. */
+function snapshotPacketEntry(raw, index, sp, box) {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) fail('packet_entry', `entry ${index} is not an object`);
+  const id = raw.element_id !== undefined ? raw.element_id : raw.id;
+  if (typeof id !== 'string' || !PACKET_ID_RE.test(id)) fail('packet_entry', `entry ${index}: element_id must be 1-96 letters, digits, '.', '_' or '-'`);
+  const path = raw.path;
+  if (typeof path !== 'string' || path.includes('..') || path.includes('\\') || path.startsWith('/') || !PACKET_PATH_RE.test(path)) {
+    fail('packet_path', `${id}: path must be meshes/<file>.obj inside the packet, got ${JSON.stringify(String(path)).slice(0, 80)}`);
+  }
+  if (raw.source_packet !== undefined && raw.source_packet !== sp.packet) fail('packet_path', `${id}: source_packet must be ${sp.packet}`);
+  if (!isPositiveInt(raw.bytes)) fail('packet_entry', `${id}: bytes must be a positive integer`);
+  if (raw.bytes > sp.maxBytesPerFile) fail('packet_entry', `${id}: ${raw.bytes} bytes is over the ${sp.maxBytesPerFile}-byte limit`);
+  if (typeof raw.sha256 !== 'string' || !HEX64_RE.test(raw.sha256)) fail('packet_entry', `${id}: sha256 must be 64 hex characters`);
+  if (raw.vertices !== undefined && !isPositiveInt(raw.vertices)) fail('packet_entry', `${id}: vertices, when present, must be a positive integer`);
+  if (sp.requireVertices && raw.vertices === undefined) fail('packet_entry', `${id}: vertices (the vertex count) is required in this packet`);
+  const kind = raw.kind !== undefined ? raw.kind : sp.defaultKind;
+  if (!sp.kinds.includes(kind)) fail('packet_entry', `${id}: kind must be one of ${sp.kinds.join(', ')}`);
+  if (raw.region !== undefined && (typeof raw.region !== 'string' || !raw.region)) fail('packet_entry', `${id}: region must be a non-empty string`);
+  if (!FULLBODY_SIDES.includes(raw.laterality)) fail('packet_laterality', `${id}: laterality must be one of ${FULLBODY_SIDES.join(', ')}`);
+  if (!isVec3(raw.bounds_min) || !isVec3(raw.bounds_max)) fail('packet_entry', `${id}: bounds_min and bounds_max must be 3 finite numbers`);
+  if (![0, 1, 2].every(k => raw.bounds_min[k] <= raw.bounds_max[k])) fail('packet_entry', `${id}: bounds_min must not exceed bounds_max`);
+  if (raw.groups !== undefined && !(Array.isArray(raw.groups) && raw.groups.length && raw.groups.every(g => typeof g === 'string' && g))) {
+    fail('packet_entry', `${id}: groups, when present, must be a non-empty array of strings`);
+  }
+  const hint = raw.rig_hint;
+  if (hint !== undefined && !(typeof hint === 'string' || (Array.isArray(hint) && hint.length === 2 && hint.every(h => typeof h === 'string')))) {
+    fail('packet_entry', `${id}: rig_hint must be a segment name or [proximal, distal]`);
+  }
+  const cx = isVec3(raw.centroid) ? raw.centroid[0] : 0.5 * (raw.bounds_min[0] + raw.bounds_max[0]);
+  checkPacketSide(id, raw.laterality, cx, sp.midlineToleranceMm, 'manifest centroid');
+  checkFrameBox(id, raw.bounds_min, raw.bounds_max, box, 'manifest bounds');
+  const concept = Array.isArray(raw.concepts) && raw.concepts[0] && typeof raw.concepts[0].en === 'string' ? raw.concepts[0].en : '';
+  const name = typeof raw.embedded_source_name === 'string' ? raw.embedded_source_name : typeof raw.name === 'string' ? raw.name : concept;
+  return Object.freeze({
+    ...raw,
+    element_id: id,
+    sha256: raw.sha256.toLowerCase(),
+    source_packet: sp.packet,
+    kind,
+    region: raw.region !== undefined ? raw.region : sp.defaultRegion,
+    groups: Object.freeze(raw.groups !== undefined ? raw.groups.slice() : [sp.packet]),
+    name,
+    concept,
+    rig_hint: Array.isArray(hint) ? Object.freeze(hint.slice()) : hint,
+    bounds_min: Object.freeze(raw.bounds_min.slice()),
+    bounds_max: Object.freeze(raw.bounds_max.slice())
+  });
+}
+
+/**
+ * Validate an extra packet's own manifest: an object { packet, asset_count?, assets: [...] } whose `packet` equals the
+ * spec's (or, without a top-level `packet`, whose every entry has source_packet equal to it). Every entry is checked before anything is read (id, a meshes/<file>.obj path with no traversal, byte count
+ * within the spec's limits, sha256, vertex count, kind, laterality against the manifest centroid, bounds inside the
+ * registration box when `frameBox` is given); ids and paths are unique; an id already loaded elsewhere (excludeIds: the
+ * arm, brain and full-body ids) is refused, so nothing is listed twice; with `deny` (R15: e.g. ns-body
+ * genitalAnatomyTerms) an entry whose names match is refused (ns:packet_denied). Throws ns:packet_* / ns:asset_duplicate.
+ * Returns { packet, entries (frozen snapshots, manifest order), counts }.
+ */
+export function validatePacketManifest(manifest, spec, { excludeIds = [], frameBox = null, deny = null } = {}) {
+  const sp = packetSpec(spec);
+  if (deny !== null && typeof deny !== 'function') fail('asset_args', 'deny must be a function (entry -> array of matched terms) or null');
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest) || !Array.isArray(manifest.assets)) {
+    fail('packet_manifest', `the ${sp.packet} manifest must be an object with an assets array`);
+  }
+  // The manifest names its packet: `packet` at the top, or (when that key is absent) source_packet on EVERY entry.
+  const named = manifest.packet !== undefined ? manifest.packet === sp.packet
+    : manifest.assets.length > 0 && manifest.assets.every(e => e && typeof e === 'object' && e.source_packet === sp.packet);
+  if (!named) fail('packet_manifest', `the manifest must name its packet ${sp.packet} (top-level packet, or source_packet on every entry), got ${JSON.stringify(String(manifest.packet)).slice(0, 60)}`);
+  if (manifest.asset_count !== undefined && manifest.asset_count !== manifest.assets.length) {
+    fail('packet_manifest', `asset_count ${manifest.asset_count} does not match ${manifest.assets.length} entries`);
+  }
+  if (!manifest.assets.length) fail('packet_manifest', `the ${sp.packet} manifest lists no assets`);
+  if (manifest.assets.length > sp.maxEntries) fail('packet_manifest', `more than ${sp.maxEntries} entries`);
+  if (frameBox !== null && !(frameBox && isVec3(Array.from(frameBox.min || [])) && isVec3(Array.from(frameBox.max || [])))) fail('asset_args', 'frameBox must be { min: [x, y, z], max: [x, y, z] } or null');
+  const exclude = new Set(excludeIds);
+  const seen = new Set(), paths = new Set();
+  const entries = [];
+  const byRegion = Object.create(null), byKind = Object.create(null), bySide = Object.create(null);
+  let bytes = 0;
+  manifest.assets.forEach((raw, i) => {
+    const e = snapshotPacketEntry(raw, i, sp, frameBox);
+    denyCheck(deny, e, e.element_id, 'manifest names');
+    if (seen.has(e.element_id)) fail('asset_duplicate', `duplicate ${sp.packet} element_id ${e.element_id}`);
+    if (paths.has(e.path)) fail('asset_duplicate', `duplicate ${sp.packet} path ${e.path}`);
+    if (exclude.has(e.element_id)) fail('asset_duplicate', `${e.element_id} is already loaded from another manifest`);
+    seen.add(e.element_id); paths.add(e.path);
+    bytes += e.bytes;
+    entries.push(e);
+    byRegion[e.region] = (byRegion[e.region] || 0) + 1;
+    byKind[e.kind] = (byKind[e.kind] || 0) + 1;
+    bySide[e.laterality] = (bySide[e.laterality] || 0) + 1;
+  });
+  if (bytes > sp.maxTotalBytes) fail('packet_manifest', `${bytes} bytes in total is over the ${sp.maxTotalBytes}-byte limit`);
+  return {
+    packet: sp.packet,
+    entries: Object.freeze(entries),
+    counts: Object.freeze({ total: entries.length, bytes, byRegion: Object.freeze(byRegion), byKind: Object.freeze(byKind), bySide: Object.freeze(bySide) })
+  };
+}
+
+/** R15 defence in depth: `deny(x)` (for example ns-body genitalAnatomyTerms) returns the deny-list terms found in an entry
+ * or a name; any term refuses the entry (ns:packet_denied). The loader holds no list of its own, so there is one list. */
+function denyCheck(deny, what, id, where) {
+  if (typeof deny !== 'function') return;
+  let terms;
+  try { terms = deny(what); } catch (err) { fail('packet_denied', `${id}: the deny check failed (${err && err.message ? err.message : String(err)})`); }
+  if (Array.isArray(terms) && terms.length) fail('packet_denied', `${id}: ${where} name refused anatomy (${terms.slice(0, 3).join(', ')})`);
+}
+
+/** Read, check and parse one packet entry: byte count, then sha256 (readVerified), then parse, then vertex count, finite
+ * vertices, laterality from the parsed centroid, parsed bounds against the manifest bounds (PACKET_BOUNDS_TOLERANCE_MM)
+ * and the registration box. */
+function packetVerifier(sp, box, deny = null) {
+  return async (entry, io, parse, beforeParse) => {
+    const id = entry.element_id;
+    const { text, bytes } = await readVerified(entry, io);
+    if (beforeParse) await beforeParse();
+    const mesh = await parseVerified(parse, text, bytes);
+    const p = mesh && mesh.positions;
+    if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
+    const n = p.length / 3;
+    if (typeof entry.vertices === 'number' && n !== entry.vertices) fail('asset_vertices', `${id}: parsed ${n} vertices, manifest says ${entry.vertices}`);
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    let sx = 0;
+    for (let i = 0; i < p.length; i += 3) {
+      for (let k = 0; k < 3; k++) {
+        const x = p[i + k];
+        if (!Number.isFinite(x)) fail('asset_parse', `${id}: non-finite vertex`);
+        if (x < lo[k]) lo[k] = x;
+        if (x > hi[k]) hi[k] = x;
+      }
+      sx += p[i];
+    }
+    checkPacketSide(id, entry.laterality, sx / n, sp.midlineToleranceMm, 'parsed centroid');
+    for (let k = 0; k < 3; k++) {
+      if (Math.abs(lo[k] - entry.bounds_min[k]) > PACKET_BOUNDS_TOLERANCE_MM || Math.abs(hi[k] - entry.bounds_max[k]) > PACKET_BOUNDS_TOLERANCE_MM) {
+        fail('packet_bounds', `${id}: parsed bounds differ from the manifest bounds by more than ${PACKET_BOUNDS_TOLERANCE_MM} mm on axis ${'xyz'[k]}`);
+      }
+    }
+    checkFrameBox(id, lo, hi, box, 'parsed bounds');
+    // The OBJ's own comment lines (its header names) go through the same deny check as the manifest names.
+    if (typeof deny === 'function' && Array.isArray(mesh.comments)) for (const c of mesh.comments) denyCheck(deny, c, id, 'OBJ header');
+    return Object.freeze({ entry, mesh });
+  };
+}
+
+/**
+ * R5-load: load an EXTRA packet (its own manifest; first user: FACE_PACKET) with the same engine as the full body.
+ * Never throws. Every file goes through the same checks as a full-body file (byte count, then sha256, then and only then
+ * parse, then vertex count and finite vertices) plus the packet's own (laterality from the parsed centroid, parsed bounds
+ * equal to the manifest bounds within 1 mm, and inside the registration box `frameBox` when given). The parsed geometry
+ * is exactly what ns-obj parseObj returns for the same file.
+ * Options: manifest (the parsed packet manifest; null/undefined -> status 'absent'), spec (a PACKET_SPECS name or a spec
+ * object), frameBox (packetFrameBox(...) or null), deny (R15: a function such as ns-body genitalAnatomyTerms; applied to
+ * every manifest entry before anything is read and to every OBJ's comment header after its checks), excludeIds, readText + sha256Hex or readBytes + sha256HexBytes (paths
+ * are the manifest's relative meshes/<file>.obj; the caller resolves them against the packet's base URL), parse,
+ * concurrency, allOrNothing, priorityIds (default [] = no priority part), bulkOrder (default 'bytes'), autoStart (default
+ * false: call start() when the earlier stages are in), sliceMs + yieldFn + now, onMesh, onProgress: as streamFullbodyAssets.
+ * Returns the same stream object as streamFullbodyAssets ({ plan, counts, priority, done, start, cancel, progress });
+ * results carry { status, meshes: Map(id -> { entry, mesh }), failed, counts, error }.
+ */
+export function streamPacketAssets({
+  manifest, spec = FACE_PACKET, frameBox = null, deny = null, readText, sha256Hex, readBytes = null, sha256HexBytes = null, parse = parseObjFast,
+  concurrency = FULLBODY_DEFAULT_CONCURRENCY, excludeIds = [], allOrNothing = false,
+  priorityIds = [], bulkOrder = 'bytes', autoStart = false,
+  sliceMs = 0, yieldFn = null, now = defaultNow, onMesh = null, onProgress = null
+} = {}) {
+  if (manifest === null || manifest === undefined) return settledStream(ABSENT());
+  const io = readerPair({ readText, sha256Hex, readBytes, sha256HexBytes });
+  if (!io || typeof parse !== 'function') {
+    return settledStream(INVALID(typeof readBytes === 'function' ? 'readBytes, sha256HexBytes and parse must be functions' : 'readText, sha256Hex and parse must be functions'));
+  }
+  let sp, v, plan;
+  try {
+    sp = packetSpec(spec);
+    v = validatePacketManifest(manifest, sp, { excludeIds, frameBox, deny });
+    plan = fullbodyLoadPlan(v.entries, { priorityIds, bulkOrder });
+  } catch (err) { return settledStream(INVALID(err)); }
+  return streamCore({ v, plan, io, parse, verify: packetVerifier(sp, frameBox, deny), concurrency, allOrNothing, autoStart, sliceMs, yieldFn, now, onMesh, onProgress, what: sp.packet });
+}
+
+/** loadPacketAssets(opts): streamPacketAssets in one go (autoStart, manifest order unless bulkOrder says otherwise);
+ * resolves with the result. */
+export async function loadPacketAssets(opts = {}) {
+  return streamPacketAssets({ bulkOrder: 'manifest', ...opts, autoStart: true }).done;
+}
+
+/**
+ * R5-load: read and check a PINNED manifest (any packet). read() returns the manifest's text (with sha256Hex) or its bytes
+ * (Uint8Array / ArrayBuffer, with sha256HexBytes; the served bytes are hashed). With expectedSha256 (64 hex) the hash
+ * must match (ns:asset_hash) BEFORE the JSON is parsed; with expectedSha256 === null the manifest is read unpinned (only
+ * for development: a published build pins every manifest). Throws ns:asset_read / ns:asset_hash / ns:packet_manifest.
+ * Returns { manifest (parsed JSON), sha256 (the computed hash), bytes }.
+ */
+export async function readPinnedManifest({ read, sha256Hex = null, sha256HexBytes = null, expectedSha256, name = 'manifest' } = {}) {
+  if (typeof read !== 'function') fail('asset_args', 'read() must be injected');
+  if (expectedSha256 === undefined) fail('asset_args', 'expectedSha256 must be given (64 hex characters, or null for an unpinned development read)');
+  if (expectedSha256 !== null && !(typeof expectedSha256 === 'string' && HEX64_RE.test(expectedSha256))) fail('asset_args', 'expectedSha256 must be 64 hex characters or null');
+  let raw;
+  try { raw = await read(); } catch (err) { fail('asset_read', `${name}: ${err && err.message ? err.message : String(err)}`); }
+  let text, hex, bytes;
+  const u8 = typeof raw === 'string' ? null : asBytes(raw);
+  if (u8) {
+    if (typeof sha256HexBytes !== 'function') fail('asset_args', 'sha256HexBytes(bytes) must be injected when read() returns bytes');
+    hex = await sha256HexBytes(u8);
+    bytes = u8.byteLength;
+    if (expectedSha256 !== null && (typeof hex !== 'string' || hex.toLowerCase() !== expectedSha256.toLowerCase())) fail('asset_hash', `${name}: sha256 does not match the pinned value`);
+    text = decodeUtf8Exact(u8, name);
+  } else if (typeof raw === 'string') {
+    if (typeof sha256Hex !== 'function') fail('asset_args', 'sha256Hex(text) must be injected when read() returns text');
+    hex = await sha256Hex(raw);
+    bytes = utf8ByteLength(raw);
+    if (expectedSha256 !== null && (typeof hex !== 'string' || hex.toLowerCase() !== expectedSha256.toLowerCase())) fail('asset_hash', `${name}: sha256 does not match the pinned value`);
+    text = raw;
+  } else fail('asset_read', `${name}: read() must return text or bytes`);
+  let manifest;
+  try { manifest = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text); } catch (err) { fail('packet_manifest', `${name} is not valid JSON: ${err && err.message ? err.message : String(err)}`); }
+  return { manifest, sha256: typeof hex === 'string' ? hex.toLowerCase() : hex, bytes };
+}
+
+/**
+ * R5-load: the whole extra-packet load in one call that returns AT ONCE: read the packet's manifest (readManifest(), the
+ * pin checked by readPinnedManifest: expectedManifestSha256, default the spec's manifestSha256; with neither, the load is
+ * refused (status 'invalid', ns:packet_pin) unless allowUnpinned: true, which only development builds pass), then stream its files
+ * (streamPacketAssets; the readers get the manifest's relative meshes/<file>.obj paths). Returns
+ *   { manifest: Promise<parsed manifest>, priority, start(): Promise (= done), done: Promise<result>, cancel(), progress() }.
+ * `done` never rejects: a manifest that cannot be read or does not match its pin resolves with status 'invalid' (error
+ * says why), like every other failure. autoStart (default false): call start() when the stage before it is in.
+ */
+export function startPacketStream({ spec = FACE_PACKET, readManifest, expectedManifestSha256, allowUnpinned = false, autoStart = false, ...streamOpts } = {}) {
+  const refused = err => { const r = INVALID(err); const p = Promise.resolve(r); return Object.freeze({ manifest: Promise.resolve(null), priority: p, done: p, start: () => p, cancel: () => {}, progress: () => Object.freeze({ done: 0, total: 0, priorityTotal: 0, started: false, cancelled: false }) }); };
+  let sp;
+  try { sp = packetSpec(spec); } catch (err) { return refused(err); }
+  const pin = expectedManifestSha256 !== undefined && expectedManifestSha256 !== null ? expectedManifestSha256 : sp.manifestSha256;
+  // A packet is only loaded against a PINNED manifest; an unpinned read needs allowUnpinned: true (development only).
+  if (pin === null && allowUnpinned !== true) {
+    return refused(new Error(`ns:packet_pin: ${sp.packet} has no pinned manifest sha256 (pass expectedManifestSha256, or set the spec's manifestSha256)`));
+  }
+  const manifestP = readPinnedManifest({ read: readManifest, sha256Hex: streamOpts.sha256Hex || null, sha256HexBytes: streamOpts.sha256HexBytes || null, expectedSha256: pin, name: `${sp.packet} manifest` })
+    .then(r => r.manifest);
+  let stream = null, wantStart = autoStart, cancelled = false;
+  const streamP = manifestP.then(manifest => {
+    stream = streamPacketAssets({ ...streamOpts, manifest, spec: sp, autoStart: false });
+    if (cancelled) stream.cancel();
+    else if (wantStart) stream.start();
+    return stream;
+  }, err => settledStream(INVALID(err)));
+  const done = streamP.then(s => s.done);
+  return Object.freeze({
+    manifest: manifestP.catch(() => null),
+    priority: streamP.then(s => s.priority),
+    done,
+    start: () => { wantStart = true; if (stream) stream.start(); return done; },
+    cancel: () => { cancelled = true; if (stream) stream.cancel(); },
+    progress: () => (stream ? stream.progress() : Object.freeze({ done: 0, total: 0, priorityTotal: 0, started: wantStart, cancelled }))
+  });
+}
+
+/**
+ * R5-load: the { manifest, entries, meshesById } shape (as fullbodyAppInputs) from a COMPLETE packet result. entries are
+ * the validated snapshots (full-body-shaped: element_id, kind, region, laterality, rig_hint, name, source_packet, ...);
+ * meshesById maps each id to { positions, indices }. Throws ns:app_body unless result.status is 'complete'.
+ */
+export function packetAppInputs(manifest, result) {
+  if (!result || result.status !== 'complete') {
+    const why = result ? (result.error || (result.failed && result.failed.length ? `${result.failed[0].id}: ${result.failed[0].message}` : result.status)) : 'no result';
+    fail('app_body', `packet not loaded (${result ? result.status : 'none'}): ${why}`);
+  }
+  const entries = [...result.meshes.values()].map(r => r.entry);
+  if (!manifest || !Array.isArray(manifest.assets) || entries.length !== manifest.assets.length) fail('app_body', 'the result does not cover every manifest entry');
+  const meshesById = new Map();
+  for (const e of entries) { const m = result.meshes.get(e.element_id).mesh; meshesById.set(e.element_id, { positions: m.positions, indices: m.indices }); }
+  return { manifest, entries, meshesById };
+}
+
+/**
+ * R5-load: join app inputs ({ manifest, entries, meshesById }: fullbodyAppInputs, packetAppInputs) into one, in argument
+ * order (the full body first, then the face), for ns-body buildBodyRig / bakeBodyPosture and scene setBody when the
+ * caller builds them together. Refuses a duplicate id (ns:app_body). Returns { manifest (the first), manifests, entries,
+ * meshesById }. No geometry is copied.
+ */
+export function mergeAppInputs(...inputs) {
+  const list = inputs.filter(Boolean);
+  if (!list.length) fail('app_body', 'nothing to merge');
+  const entries = [], meshesById = new Map();
+  for (const x of list) {
+    if (!x || !Array.isArray(x.entries) || !(x.meshesById instanceof Map)) fail('app_body', 'each input needs entries and a meshesById Map');
+    for (const e of x.entries) {
+      const id = e && e.element_id;
+      if (typeof id !== 'string') fail('app_body', 'every entry needs an element_id');
+      if (meshesById.has(id)) fail('app_body', `${id} is listed twice`);
+      const m = x.meshesById.get(id);
+      if (!m) fail('app_body', `${id} has no mesh`);
+      entries.push(e);
+      meshesById.set(id, m);
+    }
+  }
+  return { manifest: list[0].manifest, manifests: list.map(x => x.manifest), entries, meshesById };
+}
+
+/**
+ * R5-load: the progressive load plan of round 5 (PROGRESSIVE_STAGES order: brain, arm, body, mirror, face): per stage the
+ * files and bytes it reads, what it needs before it can be shown, and its priority files. meshManifest: MESH-MANIFEST.json
+ * (arm + brain); fullbodyManifest (optional); packets: [{ spec, manifest }] (optional; each lands in its spec's stage).
+ * Validation is the loaders' own (validateManifest, validateFullbodyManifest, validatePacketManifest), so a plan exists
+ * only for manifests that would load. Returns a frozen array of { stage, files, bytes, needs, priorityIds, note }.
+ */
+export function progressiveLoadPlan({ meshManifest, fullbodyManifest = null, packets = [], deny = null } = {}) {
+  const v = validateInternal(meshManifest);
+  const sum = list => list.reduce((a, e) => a + e.bytes, 0);
+  const stages = new Map(PROGRESSIVE_STAGES.map(s => [s, { stage: s, files: 0, bytes: 0, needs: [], priorityIds: [], note: '' }]));
+  const brain = stages.get('brain'), arm = stages.get('arm'), body = stages.get('body'), mirror = stages.get('mirror'), face = stages.get('face');
+  Object.assign(brain, { files: v.brain.length, bytes: sum(v.brain), needs: [], note: 'MESH-MANIFEST.json brain group; read with the arm (both are in the first frame)' });
+  Object.assign(arm, { files: v.arm.length, bytes: sum(v.arm), needs: [], note: 'MESH-MANIFEST.json left arm (shoulder girdle excluded); first frame = brain + arm + the eye files' });
+  const loadedIds = [...v.arm, ...v.brain].map(e => e.element_id);
+  let fbIds = [];
+  if (fullbodyManifest) {
+    const fb = validateFullbodyManifest(fullbodyManifest, { excludeIds: loadedIds });
+    const plan = fullbodyLoadPlan(fb.entries);
+    fbIds = fb.entries.map(e => e.element_id);
+    Object.assign(body, { files: fb.entries.length, bytes: sum(fb.entries), needs: ['brain', 'arm'], priorityIds: plan.priorityIds.slice(),
+      note: 'priority part (the eye files) before the first frame; the bulk after it, largest first' });
+  } else body.note = 'no full-body manifest';
+  Object.assign(mirror, { files: 0, bytes: 0, needs: ['body'], note: 'no files: drawn from the own body\'s verified geometry (shared buffers)' });
+  const exclude = [...loadedIds, ...fbIds];
+  for (const p of packets || []) {
+    const sp = packetSpec(p.spec);
+    const pv = validatePacketManifest(p.manifest, sp, { excludeIds: exclude, deny, frameBox: p.frameBox || null });
+    exclude.push(...pv.entries.map(e => e.element_id));
+    const st = stages.get(sp.stage);
+    st.files += pv.entries.length;
+    st.bytes += pv.counts.bytes;
+    st.note = st.note ? `${st.note}; ${sp.packet}` : `${sp.packet} (own manifest, pinned)`;
+  }
+  face.needs = ['body', 'mirror'];
+  if (!face.note) face.note = 'no face packet listed';
+  return Object.freeze(PROGRESSIVE_STAGES.map(s => { const x = stages.get(s); return Object.freeze({ ...x, needs: Object.freeze(x.needs.slice()), priorityIds: Object.freeze(x.priorityIds.slice()) }); }));
 }
 
 // ---------------------------------------------------------------------------------------

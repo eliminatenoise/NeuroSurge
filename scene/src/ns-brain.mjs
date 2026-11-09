@@ -2156,16 +2156,38 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *    lobes behind the motor strip; any forward tilt hides the back end again (0.52 of its top-down share at 5 deg).
  *  frontCropMax 0.03 (was 0.12): at most 3 % of the brain's height may pass the top edge, so the front end stays
  *    visible. On height-bound screens (16:9, 21:9) the belt is then 0.54 / 0.35 of the usable width (round 3: 0.62 /
- *    0.40): the lead's D5 order puts "both ends visible" above "belt >= 0.60" and no framing found meets both there. */
+ *    0.40): the lead's D5 order puts "both ends visible" above "belt >= 0.60" and no framing found meets both there.
+ *    (Round-4 values kept as BRAIN_VIEW_R4 for comparison: frameBrain(seg, { ...BRAIN_VIEW_R4 }).)
+ * R5-bigbrain (round 5; the user's note of 2026-11-08T23:40Z, requirement R25: "make the brain much larger so that the
+ * motor areas take up more of the focus of the screen. In fact, the motor areas should fill most of the screen. But of
+ * course you'll be able to move around and see the rest of the brain and drag it around."; lead thresholds and the
+ * measurements in round5/R5-bigbrain-NOTES.md):
+ *  fit 'motor' (new default): the MOTOR AREAS (the motor belt: every motor region of both hemispheres) are framed, not
+ *    the whole brain. The belt's box is centred on motorCentreNdc (the crosshair, [0, 0]) and sized so that its part
+ *    inside the usable area spans motorFrac of the usable width, capped so that (a) the belt's two lateral ends stay
+ *    within a look of motorEdgeDeg from straight ahead (each end region keeps a part within the comfortDeg look range)
+ *    and on the screen (motorMarginPx), and (b) the belt's whole height stays inside the usable height (motorMarginPx
+ *    off its top and bottom; in portrait the belt is moved up or down only as far as that needs). The brain's front and
+ *    back ends (and on narrow screens its sides) MAY leave the screen at the default view: this supersedes the round-4
+ *    rule "both ends visible" (D5 priority 2); looking around, the orbit arrows and Space-drag show the rest.
+ *    beltFit then reports { fit: 'motor', motorFrac, beltWidthFrac (inside the usable width), beltCentreNdc, limiting,
+ *    endsOffNdc { front, back, left, right } (how far the outline passes each usable edge, NDC, <= 0 = inside) }.
+ *  fit 'belt' (round 3 / 4) and fit 'brain' (round 3) stay available with their options. */
 export const BRAIN_VIEW = freezeR2({
-  tiltDeg: 0, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
+  tiltDeg: 10, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
   fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6,
   reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75,
   framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
-  fit: 'belt', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
-  perspectiveK: 6
+  fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
+  motorFrac: 0.82, motorEdgeDeg: 40, motorMarginPx: 4, motorCentreNdc: freezeR2([0, 0]),
+  // R5-fix (review F2 / P2): room kept under the belt for the back compass arrow, in arrow size units (0 = none).
+  motorBottomRoom: 1.35,
+  perspectiveK: 8
 });
+/** R5-bigbrain: the round-4 framing (belt-first fit, both brain ends visible), for comparison and tests:
+ * frameBrain(seg, { ...BRAIN_VIEW_R4 }). */
+export const BRAIN_VIEW_R4 = freezeR2({ fit: 'belt', tiltDeg: 0, perspectiveK: 6, frontCropMax: 0.03, beltFrac: 0.62, beltCentreShare: 0.4 });
 /** R4-view: the round-3 framing defaults (tilt 35, no perspective change, 12 % front crop), for comparison and tests:
  * frameBrain(seg, { ...BRAIN_VIEW_R3 }). */
 export const BRAIN_VIEW_R3 = freezeR2({ tiltDeg: 35, perspectiveK: 1, frontCropMax: 0.12 });
@@ -2690,11 +2712,16 @@ function frameWholeBrain(strips, {
   arrowSizePx = BRAIN_VIEW.arrowSizePx, facing = BRAIN_VIEW.facing, centreShare = BRAIN_VIEW.centreShare,
   arrowsOnScreen = BRAIN_VIEW.arrowsOnScreen, iterations = 60, fit = BRAIN_VIEW.fit, beltFrac = BRAIN_VIEW.beltFrac,
   frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
-  backCropMax = BRAIN_VIEW.backCropMax || 0
+  backCropMax = BRAIN_VIEW.backCropMax || 0, motorFrac = BRAIN_VIEW.motorFrac, motorEdgeDeg = BRAIN_VIEW.motorEdgeDeg,
+  motorMarginPx = BRAIN_VIEW.motorMarginPx, motorCentreNdc = BRAIN_VIEW.motorCentreNdc, motorBottomRoom = BRAIN_VIEW.motorBottomRoom || 0
 } = {}) {
   if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
   if (!(Number.isFinite(perspectiveK) && perspectiveK >= 1 && perspectiveK <= PERSPECTIVE_K_MAX)) throw new Error(`ns:brain_frame: perspectiveK must be in [1, ${PERSPECTIVE_K_MAX}]`);
-  if (fit !== 'belt' && fit !== 'brain') throw new Error(`ns:brain_frame: fit must be 'belt' or 'brain' (got ${fit})`);
+  if (fit !== 'belt' && fit !== 'brain' && fit !== 'motor') throw new Error(`ns:brain_frame: fit must be 'motor', 'belt' or 'brain' (got ${fit})`);
+  if (!(Number.isFinite(motorFrac) && motorFrac > 0 && motorFrac <= 1.5)) throw new Error('ns:brain_frame: motorFrac must be in (0, 1.5]');
+  if (!(Number.isFinite(motorEdgeDeg) && motorEdgeDeg > 5 && motorEdgeDeg < 89)) throw new Error('ns:brain_frame: motorEdgeDeg must be in (5, 89)');
+  if (!(Number.isFinite(motorMarginPx) && motorMarginPx >= 0)) throw new Error('ns:brain_frame: motorMarginPx must be finite and >= 0');
+  if (!Array.isArray(motorCentreNdc) || motorCentreNdc.length !== 2 || !motorCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)) throw new Error('ns:brain_frame: motorCentreNdc must be [x, y] inside (-0.9, 0.9)');
   if (!(Number.isFinite(beltFrac) && beltFrac > 0 && beltFrac <= 1)) throw new Error('ns:brain_frame: beltFrac must be in (0, 1]');
   if (!(Number.isFinite(frontCropMax) && frontCropMax >= 0 && frontCropMax < 0.5)) throw new Error('ns:brain_frame: frontCropMax must be in [0, 0.5)');
   if (!(Number.isFinite(beltCentreShare) && beltCentreShare >= 0 && beltCentreShare <= 1)) throw new Error('ns:brain_frame: beltCentreShare must be in [0, 1]');
@@ -2765,15 +2792,16 @@ function frameWholeBrain(strips, {
     return F ? mul3(S, F) : S;
   };
   const projBox = (pts, s, dir, F) => {
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, near = Infinity;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, near = Infinity, minDepth = Infinity;
     for (let i = 0; i < pts.length; i += 3) {
       const q = F ? ap3(F, [pts[i], pts[i + 1], pts[i + 2]]) : [pts[i], pts[i + 1], pts[i + 2]];
       const wx = dir[0] + s * q[0], wy = dir[1] + s * q[1], wz = dir[2] + s * q[2];
       const depth = -wz, x = wx / (depth * ta), y = wy / (depth * t);
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
       const d = Math.hypot(wx, wy, wz); if (d < near) near = d;
+      if (depth < minDepth) minDepth = depth;
     }
-    return { x0, x1, y0, y1, near };
+    return { x0, x1, y0, y1, near, minDepth };
   };
   const sMax = 0.6 / rMax; // keeps every point well in front of the camera (the centre direction is within the comfort window)
   let s = 0.25 / rMax, px = 0, py = 0, b = null, limiting = 'height';
@@ -2824,7 +2852,62 @@ function frameWholeBrain(strips, {
     }
     return converged;
   };
+  // R5-bigbrain (R25): motor-first fit (see BRAIN_VIEW fit 'motor'). The belt box is centred on motorCentreNdc and its
+  // part inside the usable area spans motorFrac of the usable width, capped by the lateral look limit (motorEdgeDeg), the
+  // screen (motorMarginPx) and the usable height; the outline may leave the screen (the ends are shown by looking, the
+  // orbit arrows and Space-drag).
+  let motorInfo = null;
+  const solveMotor = () => {
+    const Uw = U.x1 - U.x0, [cxT, cyT] = motorCentreNdc, target = motorFrac * Uw;
+    const myN = (2 * motorMarginPx) / hPx, mxN = myN / aspect;
+    const edgeX = Math.min(1 - mxN, Math.tan(motorEdgeDeg * DEG) / ta);
+    // The belt stays inside the usable width (never under the info column / band: the left-arm hand areas sit near the
+    // right hemisphere's lateral end) and within the lateral look limit; its centre is as near motorCentreNdc as that
+    // allows (measured: centring it on the crosshair at 16:9 put 10-12 right-hemisphere regions under the column).
+    // R5-fix (review F2 / P2, R20 + R25 "that side's arrow sits at the screen edge centred on that side, over see-through
+    // non-motor glass"): the belt's bottom keeps one back arrow's room above the usable bottom, so the back (bottom)
+    // compass arrow has glass to sit on, centred, below the leg areas. It binds only where the belt reaches the usable
+    // bottom (portrait: the bottom band); there the belt rises by that room instead of the arrow moving to a corner.
+    const wPx = hPx * aspect, arrowUnit = Math.min(72, Math.max(34, 0.085 * Math.min(wPx, hPx))); // = ns-arrows3d arrowSizePx('brain')
+    // Not on phones (the shorter side < 480 px): there the rise put the mirror body's fitted box where the forward arrow
+    // needs to be (viewed, harness/run-R5-fix-7-portrait/default-390x844.png), so phones keep the round-5 framing.
+    const roomB = motorBottomRoom && Math.min(wPx, hPx) >= 480 ? (2 * (motorBottomRoom * arrowUnit + motorMarginPx)) / hPx : 0;
+    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly0 = U.y0 + myN + roomB, ly1 = U.y1 - myN;
+    if (!(lx1 - lx0 > 0.1 && ly1 - ly0 > 0.05)) return false;
+    // R5-bigbrain: with the squash (perspectiveK) the brain is thin along the line of sight, so it may span a wider
+    // angle than the round-4 cap (0.9 / rMax) while every point stays well in front of the eye (checked: minDepth).
+    const sMaxM = (0.9 * perspectiveK) / rMax;
+    s = 0.25 / rMax; px = cxT; py = cyT;
+    let converged = false, inW = 0, why = 'belt';
+    for (let it = 0; it < 16 * iterations; it++) {
+      const dir = dirFor(px, py), F = rotFor(dir);
+      const bb = projBox(Bt, s, dir, F);
+      inW = Math.max(1e-9, Math.min(U.x1, bb.x1) - Math.max(U.x0, bb.x0));
+      const wid = bb.x1 - bb.x0, hgt = bb.y1 - bb.y0;
+      const rB = target / inW, rX = (lx1 - lx0) / wid, rY = (ly1 - ly0) / hgt;
+      const r = Math.min(rB, rX, rY);
+      why = r === rB ? 'belt' : r === rX ? (lx1 < edgeX - 1e-9 || lx0 > -edgeX + 1e-9 ? 'usable' : 'edge') : 'height';
+      let dx = cxT - (bb.x0 + bb.x1) / 2, dy = cyT - (bb.y0 + bb.y1) / 2;
+      if (bb.x1 + dx > lx1) dx -= bb.x1 + dx - lx1; // the whole belt inside the usable width and the look limit
+      if (bb.x0 + dx < lx0) dx += lx0 - (bb.x0 + dx);
+      if (bb.y1 + dy > ly1) dy -= bb.y1 + dy - ly1; // the belt's whole height stays inside the usable height
+      if (bb.y0 + dy < ly0) dy += ly0 - (bb.y0 + dy);
+      if (Math.abs(r - 1) < 1e-7 && Math.abs(dx) < 1e-7 && Math.abs(dy) < 1e-7) { converged = true; break; }
+      s = Math.min(sMaxM, s * Math.pow(r, 0.8)); px += 0.8 * dx; py += 0.8 * dy;
+    }
+    if (!converged) return false;
+    const dir = dirFor(px, py), F = rotFor(dir), o = projBox(P, s, dir, F), bb = projBox(Bt, s, dir, F);
+    if (!(o.minDepth > 0.1)) return false; // every brain point well in front of the eye (else the whole-brain fit)
+    motorInfo = {
+      fit: 'motor', motorFrac, motorEdgeDeg, motorMarginPx, motorCentreNdc: [cxT, cyT], limiting: why,
+      beltInUsableNdc: Math.min(U.x1, bb.x1) - Math.max(U.x0, bb.x0), beltCentreNdc: [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2],
+      beltBoxNdc: { x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 },
+      endsOffNdc: { front: o.y1 - U.y1, back: U.y0 - o.y0, left: U.x0 - o.x0, right: o.x1 - U.x1 }
+    };
+    return true;
+  };
   if (fit === 'belt' && !degenerate && solveBelt()) beltFit = { beltFrac, frontCropMax, beltCentreShare };
+  else if (fit === 'motor' && !degenerate && solveMotor()) { beltFit = { ...motorInfo }; limiting = motorInfo.limiting; }
   for (let round = 0; !beltFit && round < 6; round++) {
     solve();
     const dirR = dirFor(px, py), FR = facRot(dirR);
@@ -2856,7 +2939,8 @@ function frameWholeBrain(strips, {
     ndcBounds: freezeR2({ x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 }), silhouetteNdc: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
     usableNdc: freezeR2({ ...U }), allowedNdc: freezeR2({ x0: ax0, x1: ax1, y0: ay0, y1: ay1, degenerate }), comfortNdc: freezeR2({ x: cX, y: cY }),
     arrowRoomNdc: freezeR2({ x: roomX, y: roomY }), arrowOvershootNdc: arrowOvershoot ? freezeR2({ ...arrowOvershoot }) : null, arrowsOnScreen, heightFill, comfortDeg, outlineBasis: outline.basis,
-    fit: beltFit ? 'belt' : 'brain', beltFit: beltFit ? freezeR2({ ...beltFit, beltWidthFrac: (bb.x1 - bb.x0) / (U.x1 - U.x0), frontCropFrac: Math.max(0, (b.y1 - U.y1) / (b.y1 - b.y0)), perspectiveK, tiltDeg }) : null,
+    fit: beltFit ? beltFit.fit || 'belt' : 'brain',
+    beltFit: beltFit ? freezeR2({ ...beltFit, beltWidthFrac: beltFit.fit === 'motor' ? beltFit.beltInUsableNdc / (U.x1 - U.x0) : (bb.x1 - bb.x0) / (U.x1 - U.x0), frontCropFrac: Math.max(0, (b.y1 - U.y1) / (b.y1 - b.y0)), perspectiveK, tiltDeg }) : null,
     perspectiveK, distanceM: Math.hypot(pivotWorld[0], pivotWorld[1], pivotWorld[2]),
     perspective: freezeR2(perspectiveInfo(perspectiveK, pivotWorld, k, box)),
     aimOnStrip: null, minBrainDistanceM: cl.bound, clearanceBasis: cl.basis, scaleUp: cl.scaleUp, reachM, clearanceM,

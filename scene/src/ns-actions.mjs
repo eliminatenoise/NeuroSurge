@@ -673,6 +673,16 @@ export const ORBIT_DIRS = Object.freeze(['left', 'right', 'forward', 'back']);
  * WITHIN ITS limits, so keep these at or inside BRAIN_VIEW's (createActivity({ orbit }) can pass them explicitly).
  */
 export const ORBIT = Object.freeze({ stepDeg: 15, yawLimitDeg: 60, pitchMinDeg: -30, pitchMaxDeg: 30 });
+/** R5-input (R23, D19): orbit event targets the ACTIVITY applies: only 'brain' (the round-2 orbit above). The mirror
+ * body's orbit belongs to ns-mirror (R5-mirror: createMirrorState / mirrorOrbitStep / resetMirror); an orbit event or
+ * orbitStep for target 'mirror' is refused here so that one state never has two owners (ns-controls stepArrowInput
+ * requests carry their target; ns-app routes 'mirror' ones to ns-mirror). */
+export const ORBIT_TARGETS = Object.freeze(['brain']);
+/** R5-input (R21, D17): glow links are listed for levels above minLevel (a fading envelope below it draws nothing). */
+export const GLOW_LINKS = Object.freeze({ minLevel: 0.02 });
+/** R5-input (D17): the plain honesty label of the glow links (the text owner may shorten it; keep its meaning). */
+export const GLOW_LINK_LABEL = 'The glow shows which brain area drives which muscles in this game. It is a picture, not a nerve: ' +
+  'real signals go from the brain down the spinal cord and along nerves to the muscles. All activity here is simulated.';
 /** Brain drag limit: |pitch offset| of the dragged brain placement (degrees). Yaw wraps freely. */
 export const BRAIN_GRAB = Object.freeze({ pitchLimitDeg: 75 });
 /** Double-tap window in seconds (press to press), from ns-controls DOUBLE_TAP_MS. */
@@ -689,7 +699,11 @@ export const DOUBLE_TAP_SECONDS = DOUBLE_TAP_MS / 1000;
  * pronationRangeDeg is a SUGGESTED rig mapping: value 0 (pronated) = this many degrees of pronation away from the
  * anatomical (supinated) rest, value 1 (supinated) = 0. The rig owner (ns-arm/ns-rig) clamps and may choose its own.
  */
-export const ROTATION = Object.freeze({ defaultState: 'pronated', commandSeconds: 0.5, poseTau: 1 / 16, pronationRangeDeg: 150 });
+export const ROTATION = Object.freeze({ defaultState: 'pronated', commandSeconds: 0.5, poseTau: 1 / 16, pronationRangeDeg: 150,
+  // R5-pronation (R27): the pose ease under prefers-reduced-motion (pass createActivity({ rotationTau:
+  // ROTATION.reducedMotionPoseTau })): 95 % at about 0.15 s instead of 0.30 s; shorter, still eased (no snap). The whole
+  // coupled motion (ns-arm ROTATION_COUPLING: upper arm, shoulder blade, trunk) follows the same eased value.
+  reducedMotionPoseTau: 1 / 32 });
 
 /**
  * One exact step of the critically damped forearm-rotation ease (R3-arm): value x (0 pronated .. 1 supinated) and its
@@ -712,10 +726,44 @@ export function stepRotationEase(value, speed, goal, h, tau = ROTATION.poseTau) 
   if (x < 0 || x > 1) { x = clamp(x, 0, 1); v = 0; }
   return { value: x, speed: v };
 }
-/** Representative forearm rotators by mesh-name fragment (standard anatomy; display roles only, not EMG or force). */
+/**
+ * Representative forearm rotators by mesh-name fragment (standard anatomy; display roles only, not EMG or force).
+ * R5-pronation (R27): `shoulder` lists the shoulder rotators that turn the upper arm with the forearm (ns-arm
+ * ROTATION_COUPLING), by standard muscle roles: toward palm down (pronation) the upper arm turns INWARD (internal
+ * rotation: subscapularis, teres major, pectoralis major, the front (clavicular) part of the deltoid); toward palm up
+ * (supination) OUTWARD (external rotation: infraspinatus, teres minor, the back (spinal) part of the deltoid). The
+ * fragments match mesh names case-insensitively: the left-arm view-model draws the two deltoid parts; the left pectoralis
+ * major is a full-body mesh (ns-body rotationBodyDrives lights it, left side only); subscapularis, teres major,
+ * infraspinatus and teres minor are in the left-arm packet but not drawn in first person (ns-assets
+ * SHOULDER_GIRDLE_EXCLUDED), so they light only where an integrator draws them. Their display level is
+ * ROTATION_SHOULDER_LEVEL of the forearm turn's (the forearm does most of the turn).
+ */
 export const ROTATION_MUSCLES = deepFreeze({
-  pronation: { agonists: ['pronator teres', 'pronator quadratus'], antagonists: ['supinator', 'biceps brachii'] },
-  supination: { agonists: ['supinator', 'biceps brachii'], antagonists: ['pronator teres', 'pronator quadratus'] }
+  pronation: { agonists: ['pronator teres', 'pronator quadratus'], antagonists: ['supinator', 'biceps brachii'],
+    shoulder: ['subscapularis', 'teres major', 'pectoralis major', 'clavicular part of left deltoid'] },
+  supination: { agonists: ['supinator', 'biceps brachii'], antagonists: ['pronator teres', 'pronator quadratus'],
+    shoulder: ['infraspinatus', 'teres minor', 'spinal part of left deltoid'] }
+});
+/** R5-pronation: display level of the shoulder rotators relative to the forearm turn's display (a display choice: they
+ * help, the forearm muscles do most of the turn). Simulated, unitless. */
+export const ROTATION_SHOULDER_LEVEL = 0.6;
+/** R5-pronation (R27, R17): one plain sentence for the panel / Esc page (text owner's choice where), saying what the
+ * coupled palm turn shows and that it is a picture of normal joint movement in this game, not a measurement. */
+export const ROTATION_FOLLOW_TEXT = 'When your palm turns, your upper arm turns at the shoulder too, more when the elbow is straight. ' +
+  'Your shoulder blade and upper body follow a little. This shows normal joint movement in this game; it is not a measurement.';
+/** R5-pronation (R17 plain language): plain names, technical name in brackets, for every ROTATION_MUSCLES fragment. */
+export const ROTATION_MUSCLE_PLAIN = deepFreeze({
+  'pronator teres': 'forearm turner near the elbow (pronator teres)',
+  'pronator quadratus': 'forearm turner near the wrist (pronator quadratus)',
+  supinator: 'forearm turner on the outer side (supinator)',
+  'biceps brachii': 'front upper-arm muscle (biceps brachii)',
+  subscapularis: 'muscle under the shoulder blade (subscapularis)',
+  'teres major': 'round muscle below the shoulder blade (teres major)',
+  'pectoralis major': 'chest muscle (pectoralis major)',
+  'clavicular part of left deltoid': 'front of the shoulder muscle (front deltoid)',
+  infraspinatus: 'muscle on the back of the shoulder blade (infraspinatus)',
+  'teres minor': 'small round muscle on the shoulder blade (teres minor)',
+  'spinal part of left deltoid': 'back of the shoulder muscle (back deltoid)'
 });
 /** Instructions overlay defaults: intro shown for introSeconds at start (not paused); an Esc arriving within
  * escLockDedupeSeconds of a lock-loss overlay is the same gesture; resumeOnLock: re-acquiring pointer lock resumes. */
@@ -1574,7 +1622,10 @@ export function createActivity({
     }
     const g = resolveGaze(ev);
     if (hasDir) { s.gazeYaw = ev.yaw; s.gazePitch = ev.pitch; }
-    if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
+    // R5-fix (review code F2): ev.holdGrab (the camera is easing between first and third person, so its look moves by
+    // itself) re-bases a held grab on this look instead of carrying the brain: the brain never moves by itself.
+    if (s.brainGrab.active && hasDir && ev.holdGrab === true) s.brainGrab = { ...s.brainGrab, startYaw: ev.yaw, startPitch: ev.pitch, originYaw: s.brainPlacement.yaw, originPitch: s.brainPlacement.pitch };
+    else if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
     // Silent: explicit seed (first frame, re-frame), the frame after an orbit/grab release/resume/reset, while paused,
     // and while dragging the brain (the gaze moves with the brain, so nothing new was looked at).
     const silent = ev.seed === true || s.seedNextGaze || s.paused || s.brainGrab.active;
@@ -1752,9 +1803,15 @@ export function createActivity({
       case 'space':
         applySpace(s, ev);
         return;
-      case 'orbit':
+      case 'orbit': {
+        // R5-input: { type: 'orbit', dir, stepDeg?, target? }: target 'brain' (or none). The mirror body's orbit is
+        // ns-mirror's (ORBIT_TARGETS), so a 'mirror' request here is a wiring error and is refused loudly.
+        if (ev.target !== undefined && ev.target !== null && !ORBIT_TARGETS.includes(ev.target)) {
+          fail('activity_event', `orbit target ${JSON.stringify(ev.target)} is not the activity's (only ${ORBIT_TARGETS.join(', ')}; the mirror body's orbit is ns-mirror's)`);
+        }
         doOrbit(s, ev.dir, ev.stepDeg === undefined ? null : ev.stepDeg);
         return;
+      }
       case 'reset':
         resetBodyInPlace(s);
         return;
@@ -1982,11 +2039,15 @@ export function createActivity({
   }
 
   /** One orbit arrow step with this model's limits; the same state when already at that limit. opts.stepDeg (> 0): a
-   * smaller step for a held arrow (round-2 fix F4: click = one stepDeg step, click-and-hold = gentle repeated steps). */
+   * smaller step for a held arrow (round-2 fix F4: click = one stepDeg step, click-and-hold = gentle repeated steps).
+   * R5-input: opts.target, when given, must be 'brain' (ns-controls stepArrowInput requests carry a target; 'mirror'
+   * ones go to ns-mirror, see ORBIT_TARGETS). */
   function orbitStepModel(state, dir, opts = null) {
     if (!ORBIT_DIRS.includes(dir)) fail('orbit_dir', `orbit direction must be one of ${ORBIT_DIRS.join(', ')}, got ${JSON.stringify(dir)}`);
-    const stepDeg = opts && opts.stepDeg !== undefined ? opts.stepDeg : null;
+    const stepDeg = opts && opts.stepDeg !== undefined && opts.stepDeg !== null ? opts.stepDeg : null;
     if (stepDeg !== null && !(isFiniteNumber(stepDeg) && stepDeg > 0)) fail('orbit_option', 'stepDeg must be a finite number of degrees > 0');
+    const target = opts && opts.target !== undefined && opts.target !== null ? opts.target : 'brain';
+    if (!ORBIT_TARGETS.includes(target)) fail('orbit_option', `target ${JSON.stringify(target)} is not the activity's (only ${ORBIT_TARGETS.join(', ')}; the mirror body's orbit is ns-mirror's)`);
     checkState(state);
     const next = stepOrbit(state.orbit, dir, stepDeg !== null ? { ...orbitOpts, stepDeg } : orbitOpts);
     if (next.yaw === state.orbit.yaw && next.pitch === state.orbit.pitch) return state;
@@ -2072,10 +2133,95 @@ export function createActivity({
     return out;
   }
 
+  /**
+   * R5-input (R21, D17): the glow-link data. For every brain area lit right now (regionActivity > minLevel), which
+   * muscle groups it drives right now and how strongly, read from the SAME values that colour the muscles (no new
+   * science; the body map and the movement map as they are):
+   *   - a body (not left-arm) area: each of its actions with a display level (bodyDisplay, the value bodyMuscleDisplay
+   *     gives its agonists) -> that action's agonists;
+   *   - a left-arm area: each of its arm actions with a muscle level: a movement-map action's muscleDisplayDrives value
+   *     (look / click pulse, the Space fist / open / relax, and the W/S reach share; A/D never tints muscles) -> the
+   *     body-map agonists of that action, plus the movement-map catalog keys that muscleDrives raises
+   *     (primary_drive_increase; with opts.movement = bindMovementMap(...)); a forearm turn -> its rotationOutputs
+   *     muscles (ROTATION_MUSCLES agonists, matched by mesh name).
+   * One link = one muscle group = one area action. Returns { label, links, areas }:
+   *   links [{ key: '<regionId>><actionId>', regionId, hemisphere, isLeftArm, bodySide, actionId, actionLabel,
+   *            source: 'look' | 'click' | 'keys' | 'space' | 'turn', areaLevel (regionActivity), groupLevel (the
+   *            muscles' activity), level = min(areaLevel, groupLevel) (the glow strength), muscles (plain mesh names
+   *            from the body map), catalog (movement-map keys or []), meshNames (forearm-turn name fragments or []) }]
+   *          in map order; every level 0..1 on the shared activity ramp (ns-colors activityColor), fading exactly as
+   *          the 1 s activation does (the display envelopes).
+   *   areas  [{ regionId, level, links (count), why: null | 'no-muscles' (the map lists no muscles for it: the
+   *            shoulder area, the in-between areas) | 'not-now' (its muscles are not driven now, e.g. the wrist area lit
+   *            by the W/A/S/D reach display) }] for every lit area.
+   * The mirror body shows the same activity, so the same links apply to it (the same muscle names on the mirrored
+   * copy). A picture of which area drives which muscles in this simulation, NOT a nerve path (label).
+   * opts: { movement (bindMovementMap result) = null, minLevel = GLOW_LINKS.minLevel }.
+   */
+  function glowLinks(state, { movement = null, minLevel = GLOW_LINKS.minLevel } = {}) {
+    checkState(state);
+    if (!(isFiniteNumber(minLevel) && minLevel >= 0 && minLevel < 1)) fail('glow_option', 'minLevel must be a number in [0, 1)');
+    if (movement !== null && !(movement && movement.actions instanceof Map)) fail('glow_option', 'movement must come from bindMovementMap');
+    const muscleLevels = withReach(state, reachDisplayOutputs(state.wasd, reachOpts).muscle);
+    const wasdMuscle = reachDisplayOutputs(state.wasd, reachOpts).muscle;
+    const pulseSource = rid => (state.pulseRegion === rid && state.lastTriggerSource === 'click' ? 'click' : 'look');
+    const links = [], areas = [];
+    for (const rid of REGION_IDS) {
+      const areaLevel = state.regionActivity[rid];
+      if (!(areaLevel > minLevel)) continue;
+      const r = binding.regions.get(rid);
+      let count = 0, mapped = false;
+      for (const a of r.actions) {
+        let groupLevel = 0, source = 'look', catalog = [], meshNames = [];
+        if (!r.isLeftArm) {
+          const key = bodyActionKey(rid, a.id);
+          groupLevel = state.bodyDisplay[key];
+          source = pulseSource(rid);
+        } else if (a.armActionId !== null && ROTATION_ACTION_IDS.includes(a.armActionId)) {
+          const c = a.armActionId;
+          groupLevel = state.rotationDisplay[c];
+          source = state.rotationKeyDisplay[c] > 0 && state.rotationKeyDisplay[c] >= state.regionDisplay[rid] ? 'turn' : pulseSource(rid);
+          meshNames = [...ROTATION_MUSCLES[c].agonists];
+        } else if (a.armActionId !== null) {
+          const x = a.armActionId;
+          groupLevel = muscleLevels[x];
+          const keyPart = REACH_IDS.includes(x) ? Math.max(wasdMuscle[x], state.reachDisplay[x]) : 0;
+          source = keyPart > 0 && keyPart >= state.display[x] ? 'keys'
+            : KEY_DISPLAY_IDS.includes(x) && state.keyDisplay[x] > 0 && state.keyDisplay[x] >= state.regionDisplay[rid] ? 'space' : pulseSource(rid);
+          if (movement && movement.actions.has(x)) catalog = [...movement.actions.get(x).roles.primary_drive_increase];
+        }
+        const muscles = [...a.agonists];
+        if (muscles.length || catalog.length || meshNames.length) mapped = true;
+        if (!(groupLevel > minLevel) || !(muscles.length || catalog.length || meshNames.length)) continue;
+        count += 1;
+        links.push({
+          key: `${rid}>${a.id}`, regionId: rid, hemisphere: r.hemisphere, isLeftArm: r.isLeftArm, bodySide: r.bodySide,
+          actionId: a.id, actionLabel: a.label, source, areaLevel, groupLevel, level: Math.min(areaLevel, groupLevel),
+          muscles, catalog, meshNames
+        });
+        // R5-pronation (R27): a forearm turn also turns the upper arm at the shoulder, so the same area links to the
+        // shoulder rotators of that direction (ROTATION_MUSCLES.shoulder, at ROTATION_SHOULDER_LEVEL), as a second link.
+        if (r.isLeftArm && a.armActionId !== null && ROTATION_ACTION_IDS.includes(a.armActionId)) {
+          const sl = groupLevel * ROTATION_SHOULDER_LEVEL;
+          if (sl > minLevel) {
+            links.push({
+              key: `${rid}>${a.id}>shoulder`, regionId: rid, hemisphere: r.hemisphere, isLeftArm: r.isLeftArm, bodySide: r.bodySide,
+              actionId: a.id, actionLabel: a.label, source, areaLevel, groupLevel: sl, level: Math.min(areaLevel, sl),
+              muscles: [], catalog: [], meshNames: [...ROTATION_MUSCLES[a.armActionId].shoulder]
+            });
+          }
+        }
+      }
+      areas.push({ regionId: rid, level: areaLevel, links: count, why: count > 0 ? null : mapped ? 'not-now' : 'no-muscles' });
+    }
+    return { label: GLOW_LINK_LABEL, links, areas };
+  }
+
   /** Forearm rotation: { state, value (pose 0 pronated..1 supinated), target, pronationDeg (suggested rig angle),
    * moving, channel (running double-tap command), display/keyDisplay { pronation, supination }, muscles (name
-   * fragment -> 0..1 agonist display), catalog { BIC } (supination share of biceps, to max-merge into muscleDrives),
-   * seq, label }. */
+   * fragment -> 0..1 agonist display; R5-pronation: plus the shoulder rotators at ROTATION_SHOULDER_LEVEL, see
+   * ROTATION_MUSCLES.shoulder; pass it to the scene's updateMuscles AND to ns-body rotationBodyDrives), catalog { BIC }
+   * (supination share of biceps, to max-merge into muscleDrives), seq, label }. */
   function rotationOutputs(state) {
     checkState(state);
     const d = pick(state.rotationDisplay, ROTATION_ACTION_IDS);
@@ -2083,6 +2229,10 @@ export function createActivity({
       ? (state.pulseRotation === 'supination' ? 1 : 0) : rotValue(state.rotationState);
     const muscles = {};
     for (const c of ROTATION_ACTION_IDS) for (const m of ROTATION_MUSCLES[c].agonists) muscles[m] = Math.max(muscles[m] || 0, d[c]);
+    // R5-pronation (R27): the shoulder rotators that turn the upper arm with the forearm, at ROTATION_SHOULDER_LEVEL.
+    const shoulder = {};
+    for (const c of ROTATION_ACTION_IDS) for (const m of ROTATION_MUSCLES[c].shoulder) shoulder[m] = Math.max(shoulder[m] || 0, d[c] * ROTATION_SHOULDER_LEVEL);
+    for (const [m, v] of Object.entries(shoulder)) muscles[m] = Math.max(muscles[m] || 0, v);
     return {
       state: state.rotationState,
       value: state.rotation.value,
@@ -2137,7 +2287,8 @@ export function createActivity({
       brainView: brainView(state),
       wasdChannels: wasdChannels(state),
       instructionsView: instructionsView(state),
-      activeBodyActions: activeBodyActions(state)
+      activeBodyActions: activeBodyActions(state),
+      glowLinks: glowLinks(state)
     });
   }
 
@@ -2145,6 +2296,8 @@ export function createActivity({
     options, binding, state: initialState(), step, stepGated, seed, seedGaze,
     drives, poseDrives: drives, displayActivity, displayDrives, muscleDisplayDrives, reachOutputs,
     resetBody, orbitStep: orbitStepModel, regionActivity, activatedRegions, bodyJointTargets, activeBodyActions,
-    bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView, snapshot
+    bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView, snapshot,
+    // R5-input
+    glowLinks
   });
 }

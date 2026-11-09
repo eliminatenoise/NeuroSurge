@@ -157,7 +157,9 @@
   .ns-shell[data-mode="intro"] .ns-shell-play { padding: 5px 16px; font-size: 15px; }
   .ns-shell[data-mode="intro"] .ns-shell-grid { gap: 4px; margin-top: 0; }
   .ns-shell[data-mode="intro"] .ns-shell-section-title { margin-bottom: 3px; }
-  .ns-shell[data-mode="intro"] .ns-shell-steps li { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  /* R5-integrate-core (R5-text W3): one line per step on the phone start page, so all 10 steps and 12 controls fit (the
+     Esc page keeps the full text). */
+  .ns-shell[data-mode="intro"] .ns-shell-steps li { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
   .ns-shell[data-mode="intro"] .ns-shell-steps li + li { margin-top: 2px; }
   .ns-shell[data-mode="intro"] .ns-shell-steps li::before { width: 16px; height: 16px; line-height: 16px; font-size: 10.5px; }
   .ns-shell[data-mode="intro"] .ns-shell-steps li { padding-left: 23px; }
@@ -389,6 +391,8 @@
   The full-body packet (FULLBODY-MESH-MANIFEST.json, pinned sha256; every OBJ sha256-checked before parsing) loads by
   default when ns-body.mjs exists, so looking down / up / right shows the torso and legs, the face layer and the right
   arm; ?fullbody=0 turns it off (arm and brain only). A failure is shown and the arm game keeps running.
+  Round 5: the face and chewing muscle packet (packets/face-muscles-r1, Z-Anatomy, CC BY-SA 4.0; pinned manifest, every
+  OBJ sha256-checked before parsing) joins the body; ?face=0 turns it off.
   ?qa=1 adds the deterministic QA API to window.__nsQA (ns-app QA_METHODS: setLook, key, click, step, pause, resume,
   snapshot, screenshotReady, play, showPause, shell, settings, esc, orbit, resetBody, resetBrainView, info; see
   round2/U4-app-NOTES.md). Without it window.__nsQA is { ready, inspect }.
@@ -436,6 +440,10 @@ const params = new URLSearchParams(window.location.search);
 const placeholder = params.get('placeholder') === '1';
 const qa = params.get('qa') === '1';
 const fullBody = params.get('fullbody') !== '0' && !placeholder;
+// R5-integrate-core (D20): the face and chewing muscle packet (pinned manifest) loads with the body; ?face=0 turns it off.
+const faceMuscles = fullBody && params.get('face') !== '0';
+// R5-integrate-mirror-glow (D19): ?mirror=0 hides the mirror body (and its arrows and glow ends), e.g. to measure its cost.
+const mirrorBody = params.get('mirror') !== '0';
 const manifestUrl = relativeOr(params.get('manifest'), app.dataset.manifestUrl);
 const packetBases = {
   'pov-demo-assets': app.dataset.packetPovDemoAssets,
@@ -476,15 +484,17 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-let THREE = null, startScene = null, startFullBodyStream = null, scene = null, bootError = null;
+let THREE = null, startScene = null, startFullBodyStream = null, startFaceStream = null, scene = null, bootError = null;
 let markBooted;
 const booted = new Promise(resolve => { markBooted = resolve; });
 
 function boot() {
   const streamBody = fullBody && startFullBodyStream
     ? ({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) => startFullBodyStream({ fetchText: ft, sha256Hex: sh, fetchBytes, sha256HexBytes, onProgress, expectedManifestSha256, yieldFn: yieldToFrame, sliceMs: 8 }) : null;
+  const streamFace = faceMuscles && startFaceStream
+    ? opts => startFaceStream({ ...opts, fetchBytes, sha256HexBytes, yieldFn: yieldToFrame, sliceMs: 8 }) : null;
   scene = startScene({
-    THREE, canvas, hudRoot, shellRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes, placeholder, storage, qa, streamBody
+    THREE, canvas, hudRoot, shellRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes, placeholder, storage, qa, streamBody, streamFace, mirrorBody
   });
   return scene;
 }
@@ -502,7 +512,7 @@ if (qa) {
   };
   // Must equal ns-app QA_METHODS (checked by tests/unit/U4-app-*.test.mjs).
   for (const name of ['setLook', 'key', 'click', 'step', 'pause', 'resume', 'snapshot', 'screenshotReady', 'play', 'showPause', 'shell',
-    'settings', 'esc', 'orbit', 'resetBody', 'resetBrainView', 'info', 'mouseHold']) {
+    'settings', 'esc', 'orbit', 'resetBody', 'resetBrainView', 'info', 'mouseHold', 'mirrorOrbit']) {
     api[name] = forward(name);
   }
 }
@@ -510,7 +520,7 @@ window.__nsQA = Object.freeze(api);
 
 try {
   THREE = await import('three');
-  ({ start: startScene, startFullBodyStream } = await import('../src/ns-app.mjs'));
+  ({ start: startScene, startFullBodyStream, startFaceStream } = await import('../src/ns-app.mjs'));
   boot();
   canvas.focus({ preventScroll: true });
 } catch (err) {

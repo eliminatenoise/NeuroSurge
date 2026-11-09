@@ -103,6 +103,35 @@
  *    copies of the glass, body and arm), an automatic controller with hysteresis (stepQuality), setQuality('auto' |
  *    'high' | 'low') for the Esc page and qualityState() in the QA snapshot. Colours, activity, labels and text never
  *    change with quality.
+ * R5-scene (round 5; decisions D16-D19 and the P2 strip relief; round5/R5-scene-NOTES.md). The math of each feature has
+ * one owner and is imported: ns-arrows3d (R5-arrows), ns-mirror (R5-mirror), the ns-camera pose (R5-camera), ns-actions
+ * glowLinks (R5-input) and the ns-colors glow / arrow / backing colours (R5-access). This file draws them:
+ *  - D16 3D COMPASS ARROWS replace the DOM orbit buttons: two ns-arrows3d rigs (brain; mirror, green), planned with
+ *    planCompassArrows round each target's drawn outline in its reference view (the brain's carried with any grab), clear
+ *    of the info column, the HUD cards (both homes) and the toast; a see-through copy where the arm hides a brain arrow;
+ *    pickArrows(x, y) returns the ray hit list for ns-controls resolveArrowHit (a mirror arrow behind the brain is
+ *    blocked); setArrowHover highlights (or shows the blocked look) with a plain caption; orbitArrowAt / hoverOrbitArrow
+ *    keep the round-4 crosshair API. The scene never orbits anything: presses and holds are R5-input's.
+ *  - D17 GLOW LINKS (setGlowLinks, glowLinksForScene): a soft additive camera-facing ribbon on a gentle curve from the
+ *    active area to each driven muscle group, on your body and on the mirror body, in the ns-colors glow colour; it fades
+ *    in from the area, keeps only a thin core over the brain's drawn outline (never hiding an area), pulses gently (not
+ *    under reduced motion); the area and the muscles get a fresnel glow rim (nsGlowRim). A picture of the link in this
+ *    simulation, not a nerve.
+ *  - D18 THIRD PERSON (setCameraPose(ns-camera pose | null)): the arm hangs on the EYE (eyeRig), the camera can leave the
+ *    head; the head and face are drawn in place (copies) from headInPlace, the face ghost fades, the body is solid over the
+ *    brain except a small window at the crosshair while it is on a motor area; distances and the far plane are measured
+ *    from the camera; bodyKeepOut() gives the boom its keep-out spheres.
+ *  - D19 MIRROR BODY: a twin of every body mesh and arm mesh (shared geometry and pose matrices, own opaque materials
+ *    shaded by the same rule), under one ns-mirror reflection matrix (det < 0), placed by ns-mirror behind the brain at the
+ *    default view (setMirrorView / setMirror for the orbit or a whole ns-mirror state); tinted where the glass brain covers
+ *    it (BEHIND_GLASS) and dimmed behind the motor areas (ns-colors region backing); index-only LOD copies (2.5 mm at full
+ *    quality, coarser first on slow renderers), built a few per frame; mirrorPartAt(x, y) names the part under a point.
+ *  - P2 STRIP RELIEF: the lit motor areas (and the legacy strip) take the brain's rigid normal and the far-eye view vector
+ *    under the perspective squash (patchRigidNormalShaders), as the glass did in round 4.
+ *  - Retired with the DOM buttons: orbitIconSvg, the arrow plan (arrowPlanFor, projectArrowAnchors) and the pointer pins /
+ *    DOM hold timers. Kept as unused pure exports for the round-3/4 tests until the integrator retires them:
+ *    placeOrbitArrows, orbitArrowLayout, orbitArrowHit, arrowGapPx, ARROW_PLACEMENT, armEnvelopeHits; setArmEnvelope is
+ *    a recording no-op.
  * Scientific limits (unchanged): every colour, opacity and label is a simulated, unitless DISPLAY of virtual inputs;
  * regions are control regions of a representative map, not cortical borders, and the face layer is a displaced view,
  * not something a person can see from their own eyes.
@@ -120,6 +149,11 @@ import {
 } from './ns-colors.mjs';
 
 import * as NsText from './ns-text.mjs';
+// R5-scene: the fluorescent glow variant of the shared ramp (R5-access; feature-detected: glowColor / glowIntensity / GLOW).
+import * as NsColors from './ns-colors.mjs';
+// R5-scene: the 3D compass arrows (R5-arrows) and the mirror body's placement, transform and orbit (R5-mirror).
+import * as NsArrows from './ns-arrows3d.mjs';
+import * as NsMirror from './ns-mirror.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 /** User-visible wording comes ONLY from ns-text (the single source of plain UI text; a static import). R3-fix (review
@@ -139,10 +173,15 @@ export const MATERIAL = Object.freeze({
   muscleEmissiveMax: 0.35,
   // Visual-clarity candidate: the nearest shell carries the outline; deeper layers stay faint.
   // Alpha values are display choices, not tissue optics or measured electrical activity.
+  // R5-bigbrain (R26, user note 2026-11-08T23:40Z: the glass with no motor activity "should be considerably more
+  // transparent and see-through. But it should be still obvious that it's a brain"): face-on alpha 0.025 -> 0.01, rim
+  // 0.46 -> 0.34 at power 4 -> 5 (a narrower rim: the outline and the gyral walls stay, the broad veil goes), with
+  // GLASS_READ crown 0.11 -> 0.035 / 0.75 -> 0.45. Measured at the default 1280x720 view (round5/R5-bigbrain-NOTES.md):
+  // the glass adds 9.1 instead of 21.3 per colour channel over the non-motor glass (-57 %); motor areas unchanged.
   glass: 0xd6ebff,
-  glassOpacity: 0.025,
-  glassRimOpacity: 0.46,
-  glassRimPower: 4,
+  glassOpacity: 0.01,
+  glassRimOpacity: 0.34,
+  glassRimPower: 5,
   glassXray: 0xd8ecff,
   glassXrayOpacity: 0.0015,
   glassXrayRimOpacity: 0.035,
@@ -198,6 +237,14 @@ export function heldCueRim(amount, o = HELD_CUE) {
  * compatibility. The x-ray pass covers only the GLASS_XRAY subset; the glass DEPTH pass sorts front-to-back
  * (transparentSortNs) so occluded deep layers fail the depth test early.
  */
+/** R5-fix (review F3): stencil value your left arm writes, and the motor areas' see-through copy drawn over it (display
+ * choices; opacity viewed in harness/run-R5-fix-9-xray). */
+export const ARM_STENCIL = 1;
+/** R5-fix (reviews P3 / SL5-3): the colour of the head meshes' inner faces seen from behind (a display choice). */
+export const SKULL_INSIDE = Object.freeze({ color: 0x2a231e, backFacingY: 0.3 });
+/** R5-fix (review P6): the small face box shown while a face or jaw area colours the face muscles (display choices). */
+export const FACE_BOX = Object.freeze({ minDrive: 0.05, holdMs: 700, sizePx: 170, sizeVmin: 24 });
+export const MOTOR_XRAY = Object.freeze({ opacity: 0.42, orderAfterArm: 0.6 });
 export const RENDER_ORDER = Object.freeze({
   strip: 2, marker: 3, stripDepth: 4, glassXray: 1, glassDepth: 5, glass: 6,
   // U2b-scene region mode: nearest-layer depth pre-pass, translucent region colour, outlines (all before the glass).
@@ -702,7 +749,7 @@ export function patchGlassShaders(vertexShader, fragmentShader) {
  * darker, more see-through GROOVE cue from the per-vertex sulcal depth (sulcalDepth; 0 crown .. 1 deep groove): the
  * groove keeps grooveLight of the light and grooveAlpha of the alpha, and sulcal walls lose most of their rim. So the
  * gyri and sulci read at a glance; nothing about tissue optics is implied. */
-export const GLASS_READ = Object.freeze({ crownOpacity: 0.11, crownBright: 0.75, grooveLight: 0.38, grooveAlpha: 0.3, rimGroove: 0.65, lightDir: Object.freeze([-0.35, 0.55, 0.75]), sulcLoMm: 1.5, sulcHiMm: 9, directions: 320 });
+export const GLASS_READ = Object.freeze({ crownOpacity: 0.035, crownBright: 0.45, grooveLight: 0.38, grooveAlpha: 0.3, rimGroove: 0.65, lightDir: Object.freeze([-0.35, 0.55, 0.75]), sulcLoMm: 1.5, sulcHiMm: 9, directions: 320 });
 const GLASS_SULC_VERTEX = 'vNsSulc = nsSulc;';
 const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.lightDir) => [
   'vec3 nsN = normalize( vNsNormal ); vec3 nsV = normalize( vNsView );',
@@ -1189,23 +1236,11 @@ export const ORBIT_ARROWS = Object.freeze({
   gapCm: 1.5, pxPerCm: 96 / 2.54, sizePx: 44, marginPx: 10, hitPadPx: 4, minVisibleFrac: 0.2, minOnScreenFrac: 0.06,
   dirs: Object.freeze(['forward', 'back', 'left', 'right']),
   glyph: Object.freeze({ forward: '▲', back: '▼', left: '◀', right: '▶' }),
-  /** Polish (R16/R17): short plain hover captions shown beside each arrow. R3-scene: ns-text ORBIT when present. */
-  tip: dirText(NS_TEXT.ORBIT.tip),
-  label: dirText(NS_TEXT.ORBIT.label)
+  /** Polish (R16/R17): short plain hover captions shown beside each arrow. R5-integrate-core (R5-text W5): the 3D arrows'
+   * words, ns-text ARROWS.brain ("Turn your view toward the front" ...; no "curved"), else the round-4 ORBIT words. */
+  tip: dirText((NS_TEXT.ARROWS && NS_TEXT.ARROWS.brain && NS_TEXT.ARROWS.brain.tip) || NS_TEXT.ORBIT.tip),
+  label: dirText((NS_TEXT.ARROWS && NS_TEXT.ARROWS.brain && NS_TEXT.ARROWS.brain.label) || NS_TEXT.ORBIT.label)
 });
-
-/** Curved orbit-arrow icon (inline SVG markup, 32 x 32, currentColor) for an orbit direction (pure). R16: the arrow
- * curves around a small sphere, so it reads as "swing the view around the brain", not "move the brain". The base
- * drawing points right; the other directions are the same drawing mirrored or rotated. */
-export function orbitIconSvg(dir) {
-  const t = dir === 'left' ? 'matrix(-1 0 0 1 32 0)' : dir === 'forward' ? 'rotate(-90 16 16)' : dir === 'back' ? 'rotate(90 16 16)' : '';
-  return '<svg class="ns-orbit-icon" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true" focusable="false">' +
-    `<g${t ? ` transform="${t}"` : ''} fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">` +
-    '<circle cx="16" cy="12.5" r="5.2" fill="currentColor" fill-opacity="0.22" stroke-width="1.6" opacity="0.75"/>' +
-    '<path d="M3 12.5 Q16 32.5 29 12.5" stroke-width="3"/>' +
-    '<path d="M22.8 15.7 L29 12.5 L28.6 19.5" stroke-width="3"/>' +
-    '</g></svg>';
-}
 
 /** True when the projected brain bounds { x0, y0, x1, y1 } (CSS px) overlap at least minVisibleFrac of the free
  * width (0..freeW) AND of the free height (topPx..freeH) (pure). */
@@ -1669,6 +1704,24 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
 export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
+/** R5-polish (D18): cell size and dilation of your body's screen footprint in third person (labels keep off it). */
+export const BODY_FOOTPRINT = Object.freeze({ cellPx: 12, dilate: 1 });
+/** Row-run rects (CSS px) of an ns-arrows3d occupancyGrid (pure): each maximal run of occupied cells in a row is one
+ * rect { x0, y0, x1, y1 }. Uses only grid.hits on one-cell boxes, so any grid with { cellPx, gw, gh, hits } works. */
+export function footprintRects(grid) {
+  const out = [];
+  if (!grid || !(grid.gw > 0) || !(grid.gh > 0) || !(grid.count > 0)) return out;
+  const c = grid.cellPx;
+  for (let j = 0; j < grid.gh; j++) {
+    let run = -1;
+    for (let i = 0; i <= grid.gw; i++) {
+      const on = i < grid.gw && grid.hits({ x0: i * c + 0.5, y0: j * c + 0.5, x1: i * c + c - 0.5, y1: j * c + c - 0.5 }) > 0;
+      if (on && run < 0) run = i;
+      else if (!on && run >= 0) { out.push({ x0: run * c, y0: j * c, x1: i * c, y1: (j + 1) * c }); run = -1; }
+    }
+  }
+  return out;
+}
 /** R4-fix (RP1): opacity of a required label drawn where it overlaps something (display choice). */
 export const LABEL_FADED_OPACITY = 0.4;
 /** R3-scene label font sizes (CSS px; mirrored by R3_SCENE_CSS) used for the label box estimates. */
@@ -1682,7 +1735,12 @@ export const R3_SCENE_CSS = [
   // R4-fix (RP1): a required label with no clear place near its area, on its own half, is drawn see-through there.
   `.ns-region-label.ns-r3[data-ns-faded="true"] { opacity: ${LABEL_FADED_OPACITY}; }`,
   // R4-fix (F2): the small-area switched-on marker: a gold ring (the mark colour) with a dark edge, never clickable.
-  `.ns-mark-dot { position: absolute; width: ${SMALL_MARK.sizePx}px; height: ${SMALL_MARK.sizePx}px; margin: -${SMALL_MARK.sizePx / 2}px 0 0 -${SMALL_MARK.sizePx / 2}px; box-sizing: border-box; border-radius: 50%; border: 3px solid #ffc65c; box-shadow: 0 0 0 1.5px rgba(5, 7, 11, 0.9), inset 0 0 0 1px rgba(5, 7, 11, 0.6); pointer-events: none; z-index: 2; }`
+  `.ns-mark-dot { position: absolute; width: ${SMALL_MARK.sizePx}px; height: ${SMALL_MARK.sizePx}px; margin: -${SMALL_MARK.sizePx / 2}px 0 0 -${SMALL_MARK.sizePx / 2}px; box-sizing: border-box; border-radius: 50%; border: 3px solid #ffc65c; box-shadow: 0 0 0 1.5px rgba(5, 7, 11, 0.9), inset 0 0 0 1px rgba(5, 7, 11, 0.6); pointer-events: none; z-index: 2; }`,
+  // R5-scene (D16): the plain caption of a hovered 3D orbit arrow (the round-4 button caption look: dark text on gold).
+  '.ns-arrow-tip { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 6px; white-space: nowrap; font: 600 11.5px/1.3 var(--ns-font, system-ui, sans-serif); color: #05070b; background: #ffe066; pointer-events: none; z-index: 3; }',
+  '.ns-arrow-tip.ns-arrow-tip-mirror { background: #e8eef5; }',
+  // R5-polish: the covered mirror arrow's caption (how to move the brain away) wraps to two lines
+  '.ns-arrow-tip[data-ns-blocked="true"] { white-space: normal; width: 214px; background: #c9d3de; }'
 ].join('\n');
 /** Label priority by group (higher shows first; the left-arm label is always shown). */
 export const REGION_LABEL_PRIORITY = Object.freeze({ leftArm: 100, arm: 60, leg: 50, face: 40, trunk: 10, other: 0 });
@@ -2063,6 +2121,8 @@ export function infoPanelContent(model) {
   const hemi = model.hemisphere === 'right' ? 'right' : model.hemisphere === 'left' ? 'left' : '';
   const region = model.mode === 'region';
   const card = region && model.card && typeof model.card === 'object' ? model.card : null;
+  // R5-integrate-mirror-glow (D19): a look at the mirror body: ns-text mirrorInfoCard (lead, three rows, honesty lines).
+  const mirrorCard = model.mode === 'mirror' && model.card && typeof model.card === 'object' ? model.card : null;
   const act = model.action && typeof model.action === 'object' ? model.action : null;
   const ag = list(model.agonists), an = list(model.antagonists).filter(m => !ag.includes(m));
   const v = Number.isFinite(model.activity) ? fin01(model.activity) : null;
@@ -2096,6 +2156,10 @@ export function infoPanelContent(model) {
       summary: s(cm.title) || T.moreDetail, items, explanation: s(cm.explanation) || expl, note: s(cm.note),
       caveats: list(cm.caveats).length ? list(cm.caveats) : caveats, sources: s(cm.sources) || (citations ? `${T.sourcesPrefix}${citations}` : '')
     };
+  } else if (mirrorCard) {
+    rows = (Array.isArray(mirrorCard.rows) ? mirrorCard.rows : []).filter(r => Array.isArray(r) && s(r[0]) && s(r[1])).map(r => [s(r[0]), s(r[1])]);
+    plain = s(mirrorCard.lead) || s(mirrorCard.plain) || plain;
+    simulated = s(mirrorCard.simulated);
   } else {
     // Without a card (legacy / movement-map models): the round-2 rows in plain words, capped at maxRows. In region
     // mode the technical name, body part and hemisphere, the long explanation, caveats and sources go to More detail.
@@ -2117,7 +2181,7 @@ export function infoPanelContent(model) {
   return {
     key: s(model.key), mode: s(model.mode) || 'idle', leftArm,
     heading: s(model.heading) || T.heading,
-    title: s(card && card.title) || s(model.title), tag: s(card && card.tag) || s(model.tag),
+    title: s(card && card.title) || s(mirrorCard && mirrorCard.title) || s(model.title), tag: s(card && card.tag) || s(mirrorCard && mirrorCard.tag) || s(model.tag),
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
     rows: rows.slice(0, INFO_PANEL.maxRows),
@@ -2126,6 +2190,9 @@ export function infoPanelContent(model) {
     // Idle / glass: the explanation is the visible body text. Region mode: it is inside More detail.
     explanation: region ? '' : expl,
     simulated, known, regionCaveat,
+    // R5-integrate-mirror-glow (D17): while the area is switched on, what its glow means (a picture, not a nerve) and the
+    // real route (ns-app glowPanelLine); region mode only.
+    glow: region ? s(model.glowLine) : '',
     more,
     // Outside region mode only (region mode lists caveats and sources inside More detail).
     caveats: region ? [] : caveats.slice(0, INFO_PANEL.maxCaveats), citations: region ? '' : citations
@@ -2159,6 +2226,274 @@ export function infoPanelContent(model) {
  *   orbitArrowAt, hoverOrbitArrow, setOrbitHandler, brainOrientationAnchors, regionMode: boolean,
  *   setArmEnvelope, setBrainHeld, setQuality, qualityState, setBrainDistanceScale (R4-scene) }}
  */
+/* ------------------------------------------------------------------ R5-scene (round 5: D16-D19 rendering, strip relief) */
+// Pure helpers (Node-testable, no THREE). Display choices; nothing here is measured physiology. round5/R5-scene-NOTES.md.
+// The scene RENDERS the round-5 features; their math has one owner each and is imported, not copied:
+//  - 3D compass arrows: ns-arrows3d (R5-arrows: layout, frames, geometry, lit rig, ray picks);
+//  - mirror body: ns-mirror (R5-mirror: placement, mirror transform, orbit state, chirality, sync contract);
+//  - third-person camera: ns-camera (R5-camera: cameraPose with headInPlace / faceGhost / overBrainSeeThrough);
+//  - glow-link data: ns-actions glowLinks (R5-input) and the glow colours: ns-colors glowColor... (R5-access).
+
+/** R5-scene display constants (display choices). mirrorLodFullMm: even at full quality the mirror body (about 15 m away
+ * at about 9x: one source mm is about 0.3-0.5 px) is drawn from index-only cluster copies with 2.5 mm cells (about 1-1.5
+ * px; viewed 1:1 at 2560x1080 against the full meshes: no visible change), about half the body triangles, built a few
+ * meshes per frame (mirrorLodSliceMs). mirrorQualityLodFrom / mirrorLodBodyMm: from
+ * this QUALITY_LEVELS index on it uses the coarser cell (or the level's own coarser one), so it is the first thing
+ * simplified on a slow renderer. headInPlaceFrom: the ns-camera pose's headInPlace from which the head and
+ * face are drawn in place (third person). mirrorPointsPerMesh: vertices sampled per body mesh to measure the posed body
+ * for ns-mirror bodyBoundsFromPoints. arrowCaptionPx: caption offset from an arrow's outer end. */
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 2.5, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 4, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8,
+  // R5-integrate-mirror-glow (D19, R5-load W-M4 "size culling"): from the first 'lite' quality level the mirror body's
+  // smallest pieces are not drawn: body twins whose bounding sphere is under mirrorCullPx (diameter, CSS px; at the
+  // lowest level mirrorCullPxLowest) at the mirror's distance. On a software renderer the draw calls, not the triangles,
+  // cost the frame (SwiftShader 1280x720, lowest level: 19-27 fps with the mirror, 28-43 fps without it). Display choices.
+  mirrorCullFrom: 3, mirrorCullPx: 4, mirrorCullPxLowest: 6 });
+/** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
+export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
+/** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
+ * (region-mesh vertices) for "never over a motor area" (the brain's edge arrows, the mirror body's place and arrows);
+ * avoidCellPx / avoidDilate: their occupancy grid (CSS px cell, cells marked round each point and triangle; 2 = an 8 px
+ * margin for the arrows, whose drawn hook is a little larger than their planned box); mirrorAvoidDilate: the same for the
+ * mirror body's place (its arrows' rooms already keep it apart; 1 lets it fit on a phone); crosshairKeepPx: half
+ * size of the box round the crosshair that no orbit arrow may cover (an arrow obstacle). */
+export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, avoidDilate: 2, mirrorAvoidDilate: 1, crosshairKeepPx: 40 });
+/** R5-bigbrain (R25 + D1(d)): the rect (CSS px) whose points a look of at most comfortDeg puts under the crosshair:
+ * |x_ndc| <= tan(c) / (tan(fovY / 2) aspect), |y_ndc| <= tan(c) / tan(fovY / 2) (yaw and pitch separately; inside it
+ * max(|yaw|, |pitch|) <= c). Pure. */
+export function arrowComfortRect({ width, height, fovYDeg = CAMERA.fovYDeg, comfortDeg = (NsBrain.BRAIN_VIEW && NsBrain.BRAIN_VIEW.comfortDeg) || 40 } = {}) {
+  const t = Math.tan((fovYDeg * Math.PI) / 360), tc = Math.tan((comfortDeg * Math.PI) / 180), aspect = width / height;
+  const X = Math.min(1, tc / (t * aspect)), Y = Math.min(1, tc / t);
+  return { x0: ((1 - X) / 2) * width, x1: ((1 + X) / 2) * width, y0: ((1 - Y) / 2) * height, y1: ((1 + Y) / 2) * height };
+}
+
+/* ---- R5-scene: glow links (D17, R21) --------------------------------------------------------------------------------- */
+
+/** Glow-link drawing (display choices; the colours and strengths come from ns-colors glowColor / glowIntensity, owned by
+ * R5-access). A link is a soft additive ribbon on a gentle curve from an active brain area to one driven muscle group;
+ * corePx / haloPx: half widths on screen; lift: how far the curve bows (fraction of the link length, toward world up);
+ * brainFade: the first part of the link (curve parameter) fades in, so it never covers the brain area it starts on;
+ * pulse: a soft brighter band travelling from the brain to the muscle (period pulseS, strength pulseAmp; none under
+ * prefers-reduced-motion); maxLinks / segments: buffer sizes; mirrorAlpha: links to the mirror body are fainter (they
+ * run behind the glass). */
+export const GLOW_LINK = Object.freeze({
+  // R5-polish: core 1.6 -> 2.1 px and halo 7 -> 10 px (a soft fluorescent tube that reads at 1280x720 and 2560x1080; the
+  // halo is still dropped where it would reach a motor area), a clearer travelling pulse (0.35 -> 0.45, a little narrower).
+  corePx: 2.1, haloPx: 10, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.45, pulseWidth: 0.1,
+  maxLinks: 24, minLevel: 0.02, mirrorAlpha: 0.7, nearClipM: 0.06,
+  // cross-section samples (fraction of the halo half width) for the additive ribbon
+  across: Object.freeze([-1, -0.62, -0.32, -0.16, 0, 0.16, 0.32, 0.62, 1])
+});
+
+/** R5-polish: the glow link's on-screen width factor for a CSS view (pure): min(width, height) / 720, clamped to
+ * 0.75..1.5 (1 at 1280x720 and 720x1280; 1.5 at 2560x1080; 0.75 on a 390 px wide phone). */
+export function glowWidthScale(width, height) {
+  const m = Math.min(Number(width) || 0, Number(height) || 0);
+  if (!(m > 0)) return 1;
+  return Math.min(1.5, Math.max(0.75, m / 720));
+}
+
+/** Points of a quadratic Bezier link from a to b bowed by `lift` x |ab| along `up` (made perpendicular to ab), n + 1
+ * points as a flat Float64Array [x, y, z, ...]. Pure. */
+export function glowCurve(a, b, { lift = GLOW_LINK.lift, up = [0, 1, 0], n = GLOW_LINK.segments } = {}) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz);
+  let ux = up[0], uy = up[1], uz = up[2];
+  if (L > 0) { const k = (ux * dx + uy * dy + uz * dz) / (L * L); ux -= k * dx; uy -= k * dy; uz -= k * dz; }
+  const U = Math.hypot(ux, uy, uz);
+  if (U > 1e-9) { ux /= U; uy /= U; uz /= U; } else { ux = 0; uy = 0; uz = 0; }
+  const cx = (a[0] + b[0]) / 2 + ux * lift * L, cy = (a[1] + b[1]) / 2 + uy * lift * L, cz = (a[2] + b[2]) / 2 + uz * lift * L;
+  const out = new Float64Array(3 * (n + 1));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, s = 1 - t;
+    out[3 * i] = s * s * a[0] + 2 * s * t * cx + t * t * b[0];
+    out[3 * i + 1] = s * s * a[1] + 2 * s * t * cy + t * t * b[1];
+    out[3 * i + 2] = s * s * a[2] + 2 * s * t * cz + t * t * b[2];
+  }
+  return out;
+}
+
+/** Alpha along a link at curve parameter s (0 at the brain area, 1 at the muscle): fades in over brainFade (never
+ * covering the area it starts on), out over muscleFade, times a travelling pulse when phase is finite (0..1). Pure. */
+export function glowAlongAlpha(s, phase = NaN, o = GLOW_LINK) {
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  let a = smooth(0, o.brainFade, s) * (1 - smooth(1 - o.muscleFade, 1, s) * 0.5);
+  if (Number.isFinite(phase)) {
+    let d = Math.abs(s - phase); d = Math.min(d, 1 - d);
+    a *= 1 - o.pulseAmp + 2 * o.pulseAmp * Math.exp(-(d * d) / (2 * o.pulseWidth * o.pulseWidth));
+  }
+  return a;
+}
+
+/** Normalised glow links (pure): links [{ key?, regionId, level 0..1, bodyMeshIds?: [ids] | { id: 0..1 }, armMuscleKeys?:
+ * [keys] | { key: 0..1 }, armMuscleNames?: [lower-case name parts] }] -> [{ key, regionId, level, body: { id: w }, armKeys:
+ * { key: w }, armNames: [..] }] (levels clamped; links below GLOW_LINK.minLevel or without a region id dropped). */
+export function normaliseGlowLinks(links) {
+  const out = [];
+  const asMap = x => {
+    const m = {};
+    if (Array.isArray(x)) for (const id of x) { if (typeof id === 'string' || typeof id === 'number') m[id] = 1; }
+    else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) if (Number.isFinite(v) && v > 0) m[k] = Math.min(1, v);
+    return m;
+  };
+  for (const l of Array.isArray(links) ? links : []) {
+    if (!l || typeof l.regionId !== 'string') continue;
+    const level = Number.isFinite(l.level) ? Math.min(1, Math.max(0, l.level)) : 0;
+    if (!(level >= GLOW_LINK.minLevel)) continue;
+    out.push({ key: typeof l.key === 'string' && l.key ? l.key : l.regionId, regionId: l.regionId, level, body: asMap(l.bodyMeshIds), armKeys: asMap(l.armMuscleKeys),
+      armNames: Array.isArray(l.armMuscleNames) ? l.armMuscleNames.filter(s => typeof s === 'string' && s).map(s => s.toLowerCase()) : [] });
+  }
+  return out;
+}
+
+/** R5-input's glow links -> setGlowLinks input (pure; the integrator's adapter). links: ns-actions glowLinks(state).links
+ * ([{ key, regionId, isLeftArm, actionId, level, muscles (plain names), catalog (movement-map keys), meshNames }]);
+ * bodyDrives(link): the body muscle mesh ids of a NON-left-arm link with their drives, normally
+ * link => ns-body bodyMuscleDrives([{ actionId: link.actionId, level: 1 }]) (agonists 1, stabilisers / antagonists
+ * lower; targets below half the link's largest drive are dropped, so a ribbon goes to the muscles that do the work).
+ * A left-arm link targets the arm muscles by catalog key and by name (its meshNames and muscle names). */
+export function glowLinksForScene(links, { bodyDrives = null } = {}) {
+  const out = [];
+  for (const l of Array.isArray(links) ? links : []) {
+    if (!l || typeof l.regionId !== 'string') continue;
+    const level = Number.isFinite(l.level) ? l.level : 0;
+    if (l.isLeftArm) {
+      const names = [...(Array.isArray(l.meshNames) ? l.meshNames : []), ...(Array.isArray(l.muscles) ? l.muscles : [])];
+      out.push({ key: l.key || l.regionId, regionId: l.regionId, level, armMuscleKeys: Array.isArray(l.catalog) ? l.catalog : [], armMuscleNames: names });
+      continue;
+    }
+    let ids = {};
+    try { ids = typeof bodyDrives === 'function' ? bodyDrives(l) || {} : {}; } catch { ids = {}; }
+    const vals = Object.values(ids).filter(Number.isFinite), top = vals.length ? Math.max(...vals) : 0;
+    const keep = {};
+    for (const [id, v] of Object.entries(ids)) if (Number.isFinite(v) && v >= 0.5 * top && v > 0) keep[id] = v / (top || 1);
+    out.push({ key: l.key || l.regionId, regionId: l.regionId, level, bodyMeshIds: keep });
+  }
+  return out;
+}
+
+/* ---- R5-scene: lit strip relief (round4/INTEGRATION.md P2) ----------------------------------------------------------- */
+
+/** Rigid-normal patch for LIT brain materials (MeshStandardMaterial: the motor regions and the legacy strip). With the
+ * perspective squash (uniform nsFarEye.w = K > 1) the squashed matrix flattens every normal toward the viewer (normalMatrix
+ * of a 1 / K squash multiplies the line-of-sight component by K), so the strips lost their gyral relief. Like the glass
+ * (R4-integrator D5 fix), the vertex normal becomes the brain's RIGID normal (nsRigidN = view rotation x brain rotation)
+ * and the view vector the one from the far eye to the real, unsquashed point. K <= 1 keeps Three's own lines exactly.
+ * Hooks: vertex '#include <defaultnormal_vertex>' (normal) and the line 'vViewPosition = - mvPosition.xyz;' (view vector,
+ * optional). Returns { vertexShader, fragmentShader, view: boolean } or null when the normal hook is missing. Pure. */
+export const RIGID_NORMAL_HOOK = '#include <defaultnormal_vertex>';
+export const RIGID_VIEW_LINE = 'vViewPosition = - mvPosition.xyz;';
+export function patchRigidNormalShaders(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const n = vertexShader.indexOf(RIGID_NORMAL_HOOK);
+  if (n < 0) return null;
+  const ne = n + RIGID_NORMAL_HOOK.length;
+  let vs = 'uniform mat3 nsRigidN;\nuniform vec4 nsFarEye;\n' + vertexShader.slice(0, ne) +
+    '\n\tif ( nsFarEye.w > 1.0 ) transformedNormal = nsRigidN * objectNormal;' + vertexShader.slice(ne);
+  const v = vs.indexOf(RIGID_VIEW_LINE);
+  const view = v >= 0;
+  if (view) {
+    vs = vs.slice(0, v) + 'if ( nsFarEye.w > 1.0 ) { vec3 nsC = nsFarEye.xyz; vec3 nsU = normalize( nsC ); vec3 nsD = mvPosition.xyz - nsC; ' +
+      'vViewPosition = - ( nsFarEye.w * nsC + ( nsD + ( nsFarEye.w - 1.0 ) * dot( nsD, nsU ) * nsU ) ); } else { vViewPosition = - mvPosition.xyz; }' +
+      vs.slice(v + RIGID_VIEW_LINE.length);
+  }
+  return { vertexShader: vs, fragmentShader, view };
+}
+
+/** Fresnel glow rim (D17) for lit MeshStandardMaterial muscles and brain areas: uniform nsGlowRim (rgb = glowColor x
+ * glowIntensity x gain, a = GLOW.rimPower) ADDED to the emission as rgb x (1 - |N.V|)^a, i.e. ns-colors glowRim per
+ * fragment (R5-access A5); rgb = 0 draws exactly as before.
+ * Hook: '#include <lights_fragment_begin>' (normal and vViewPosition in scope). null when missing. Pure. */
+export const GLOW_RIM_HOOK = '#include <lights_fragment_begin>';
+export function patchGlowRimShaders(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const f = fragmentShader.indexOf(GLOW_RIM_HOOK);
+  if (f < 0 || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('totalEmissiveRadiance')) return null;
+  const body = '\tif ( nsGlowRim.r + nsGlowRim.g + nsGlowRim.b > 0.0 ) { float nsGf = 1.0 - abs( dot( normalize( normal ), normalize( vViewPosition ) ) ); ' +
+    'totalEmissiveRadiance += nsGlowRim.rgb * pow( nsGf, max( nsGlowRim.a, 0.5 ) ); }\n';
+  return { vertexShader, fragmentShader: 'uniform vec4 nsGlowRim;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
+}
+
+/** R5-scene (D19): "behind the glass". Where the brain's drawn outline covers the mirror body (the ellipse of the
+ * brain's projected bounds, like BODY_OVER_BRAIN), the mirror body is drawn dimmer and a little glass-blue (dim, tint),
+ * so it reads as standing BEHIND the glass brain and the brain areas in front of it stay readable; dragged clear of the
+ * brain it is drawn at full strength. Display choices. */
+// R5-bigbrain (R26): dim 0.6 -> 0.75 with the more see-through glass (the mirror body reads more clearly through it:
+// its pixel signal at 1280x720 62.8 -> 72.1, round5/R5-bigbrain-NOTES.md); still dimmer and bluer than in the open.
+export const BEHIND_GLASS = Object.freeze({ dim: 0.75, tint: Object.freeze([0.86, 0.93, 1.0]), edge: 0.1 });
+/** Fragment patch (pure): outgoingLight *= mix(1, tint x dim, amount x inside(ellipse nsBgWin)). Hook: before
+ * '#include <opaque_fragment>' (r154+) or '#include <output_fragment>'. null when missing. */
+export function patchBehindGlassShaders(vertexShader, fragmentShader, o = BEHIND_GLASS) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const hook = GLASS_FRAGMENT_HOOKS.find(h => fragmentShader.includes(h));
+  if (!hook || !fragmentShader.includes('outgoingLight')) return null;
+  const f = fragmentShader.indexOf(hook);
+  const t = o.tint;
+  const body = `
+	if ( nsBg.x > 0.0 ) {
+		vec2 nsBd = ( gl_FragCoord.xy - nsBgWin.xy ) / max( nsBgWin.zw, vec2( 1.0 ) );
+		float nsBin = 1.0 - smoothstep( ${glslFloat(1 - o.edge)}, 1.0, length( nsBd ) );
+		outgoingLight *= mix( vec3( 1.0 ), vec3( ${glslFloat(t[0])}, ${glslFloat(t[1])}, ${glslFloat(t[2])} ) * nsBg.y, nsBg.x * nsBin );
+	}
+`;
+  return { vertexShader, fragmentShader: 'uniform vec4 nsBg;\nuniform vec4 nsBgWin;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
+}
+
+/** Plain hover caption of a 3D arrow (pure): ns-text ARROWS when R5-text provides it ({ brain: { tip }, mirror: { tip } }
+ * or { tip, mirrorTip }), else the round-4 ORBIT captions for the brain and ARROW_TIP_FALLBACK for the mirror body.
+ * (The fallback wording should move to ns-text; listed in round5/R5-scene-NOTES.md.) */
+export const ARROW_TIP_FALLBACK = Object.freeze({
+  forward: 'Turn the mirror body: top toward you', back: 'Turn the mirror body: bottom toward you',
+  left: 'Turn the mirror body: left side toward you', right: 'Turn the mirror body: right side toward you'
+});
+/** R5-polish: the caption of a covered mirror arrow (ns-text ARROWS.mirrorBlockedTip, else ARROWS.mirrorBlocked). */
+export const MIRROR_BLOCKED_TIP_FALLBACK = 'The brain is in front. Hold Space on the brain and look away to move it.';
+export function mirrorBlockedTipText(text = NsText) {
+  const A = text && text.ARROWS;
+  if (A && typeof A.mirrorBlockedTip === 'string' && A.mirrorBlockedTip) return A.mirrorBlockedTip;
+  return MIRROR_BLOCKED_TIP_FALLBACK;
+}
+export function arrowTipText(target, dir, text = NsText) {
+  const A = text && text.ARROWS;
+  const pick = o => (o && typeof o[dir] === 'string' && o[dir] ? o[dir] : null);
+  if (A) {
+    const t = target === 'mirror'
+      ? pick(A.mirror && (A.mirror.tip || A.mirror.tips)) || pick(A.mirrorTip) || pick(A.mirrorTips)
+      : pick(A.brain && (A.brain.tip || A.brain.tips)) || pick(A.tip) || pick(A.brainTip);
+    if (t) return t;
+  }
+  if (target === 'mirror') return ARROW_TIP_FALLBACK[dir] || '';
+  const o = text && text.ORBIT && text.ORBIT.tip;
+  return (o && o[dir]) || ORBIT_ARROWS.tip[dir] || '';
+}
+
+/** Glow style (pure) at activity v from ns-colors (R5-access: glowColor, glowCoreColor, glowIntensity, glowHaloProfile,
+ * GLOW), with local fallbacks of the same rule when an older ns-colors is loaded. Returns { halo: [r, g, b] linear, core:
+ * [r, g, b] linear, intensity 0..1, K (the GLOW constants) }. */
+const GLOW_K_FALLBACK = Object.freeze({ onset: 0.1, onsetFull: 0.2, floor: 0.3, coreWhite: 0.18, linkAlpha: 0.85, haloAlpha: 0.42, areaRimGain: 0.9, muscleRimGain: 0.8, rimPower: 2, riseTau: 0.05, decayTau: 0.15 });
+export const GLOW_K = NsColors.GLOW && typeof NsColors.GLOW === 'object' ? NsColors.GLOW : GLOW_K_FALLBACK;
+const smooth01 = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+function rampLinearAt(v) {
+  const S = SHARED_RAMP, n = S.length - 1, x = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0)) * n, i = Math.min(n - 1, Math.floor(x)), f = x - i;
+  return [S[i][0] + (S[i + 1][0] - S[i][0]) * f, S[i][1] + (S[i + 1][1] - S[i][1]) * f, S[i][2] + (S[i + 1][2] - S[i][2]) * f];
+}
+export const GLOW_SOURCE = typeof NsColors.glowColor === 'function' ? 'ns-colors' : 'fallback';
+export function glowStyle(v) {
+  const K = GLOW_K;
+  const halo = typeof NsColors.glowColor === 'function' ? NsColors.glowColor(v) : rampLinearAt(v);
+  const intensity = typeof NsColors.glowIntensity === 'function' ? NsColors.glowIntensity(v) : smooth01(K.onset, K.onsetFull, v) * (K.floor + (1 - K.floor) * Math.min(1, Math.max(0, v)));
+  const core = typeof NsColors.glowCoreColor === 'function' ? NsColors.glowCoreColor(v)
+    : halo.map(c => c + (1 - c) * K.coreWhite * intensity);
+  return { halo, core, intensity, K };
+}
+/** Halo profile across a link (pure): ns-colors glowHaloProfile, else a gaussian with the same ends. */
+export function glowHalo(r) {
+  if (typeof NsColors.glowHaloProfile === 'function') return NsColors.glowHaloProfile(r);
+  const x = Math.abs(r);
+  if (x >= 1) return 0;
+  if (x <= 0.16) return 1;
+  const u = (x - 0.16) / 0.84;
+  return Math.exp(-4.5 * u * u) * (1 - smooth01(0.8, 1, x));
+}
+
 export function createScene({
   THREE, canvas, fovYDeg = CAMERA.fovYDeg, near = CAMERA.near, far = CAMERA.far, maxPixelRatio = 2,
   glassXray: glassXrayMode = GLASS_XRAY, adaptivePixelRatio = true, shimmer = 'auto', armGhost = 'auto',
@@ -2205,7 +2540,8 @@ export function createScene({
   let lastRenderCpuMs = NaN;
 
   const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
+  // R5-fix (review F3): a stencil buffer, so the motor areas' see-through copy is drawn only where YOUR LEFT ARM covers them.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance', stencil: true });
   // Front-to-back glass depth pre-pass (guarded: setTransparentSort is a core WebGLRenderer method since r142).
   const transparentSortApplied = typeof renderer.setTransparentSort === 'function';
   if (transparentSortApplied) renderer.setTransparentSort(transparentSortNs);
@@ -2215,9 +2551,16 @@ export function createScene({
   camera.rotation.set(0, 0, 0, 'YXZ');
   scene.add(camera); // the camera must be in the scene graph for its children (the arm) to render
 
+  // R5-scene (D18): the arm hangs on the EYE (the first-person look), not on the render camera, so a third-person camera
+  // can move away from the head while the arm stays at the shoulder. In first person the eye and the camera coincide
+  // (both at the origin with the same look), so every first-person picture is unchanged.
+  const eyeRig = new THREE.Group();
+  eyeRig.name = 'ns-eye (first-person look; the arm is attached here)';
+  eyeRig.rotation.set(0, 0, 0, 'YXZ');
+  scene.add(eyeRig);
   const armGroup = new THREE.Group();
-  armGroup.name = 'ns-arm (camera-attached, camera metres)';
-  camera.add(armGroup);
+  armGroup.name = 'ns-arm (eye-attached, camera metres)';
+  eyeRig.add(armGroup);
   const brainGroup = new THREE.Group();
   brainGroup.name = 'ns-brain (world, display transform)';
   brainGroup.matrixAutoUpdate = false;
@@ -2288,7 +2631,10 @@ export function createScene({
     list.push(t);
     return t;
   };
-  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
+  // R5-fix (review F3): the left arm marks its pixels in the stencil buffer (ref ARM_STENCIL); the motor areas' see-through
+  // copy (MOTOR_XRAY) is drawn only there, where the arm is in front of them.
+  const markArmStencil = m => { if (THREE.ReplaceStencilOp === undefined) return m; m.stencilWrite = true; m.stencilRef = ARM_STENCIL; m.stencilFunc = THREE.AlwaysStencilFunc; m.stencilZPass = THREE.ReplaceStencilOp; m.stencilFail = THREE.KeepStencilOp; m.stencilZFail = THREE.KeepStencilOp; return m; };
+  const boneMaterial = markArmStencil(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 }))));
   // Strip shader state: applied is null until the strip program compiles, then whether every hook was found.
   const stripShader = { applied: null, shimmer: shimmer === 'auto' ? !reducedMotion : Boolean(shimmer), reducedMotion };
   // Glass (RENDER_ORDER 4..6). Unlit MeshBasicMaterial passes with the glassAlpha rim patch; `glassRim.applied` is
@@ -2387,7 +2733,14 @@ export function createScene({
   let labelGroups = [];
   // Region depth pre-pass: nearest strip layer only (colour-less), pushed back like the glass pre-pass so the colour pass
   // and the outlines on the same surface pass LessEqual.
-  const regionDepthMaterial = keep(new THREE.MeshBasicMaterial({
+  // R5-access C1 (D19): the region depth pre-pass also dims what is BEHIND a translucent motor area (the mirror body,
+  // drawn before it), so the area keeps its own colour; with nothing behind the brain it looks the same (ns-colors
+  // MIRROR_VIEW.regionBacking; round5/access/ACCESS-REPORT.md). Without it (older ns-colors) the pre-pass stays colour-less.
+  const backing = NsColors.MIRROR_VIEW && NsColors.MIRROR_VIEW.regionBacking;
+  const regionDepthMaterial = keep(new THREE.MeshBasicMaterial(backing ? {
+    color: backing.color, opacity: backing.alpha, colorWrite: true, depthWrite: true, transparent: true, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
+  } : {
     colorWrite: false, depthWrite: true, transparent: true, side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
@@ -2487,8 +2840,11 @@ export function createScene({
   const insetCamera = new THREE.PerspectiveCamera(FACE_LAYER.inset.fovDeg, 1, 0.01, 50);
   const insetPrevColor = new THREE.Color();
   let faceMode = faceView;
+  // R5-fix (review P6): faceShow = the mode drawn now ('box' = the small face box shown while a face or jaw area is on and
+  // the face is not otherwise in view); faceDriveNow / faceActiveAtMs from updateBody.
+  let faceShow = faceView, faceDriveNow = 0, faceActiveAtMs = -Infinity;
   let faceAmount = 0;
-  let faceHeadCentre = null;
+  let faceHeadCentre = null, facePacketMeshes = 0;
   let faceRadiusMm = 0;
   let faceStateKey = '';
   let lookPitch = 0, lookYaw = 0;
@@ -2509,89 +2865,54 @@ export function createScene({
     overlayParent.appendChild(overlay);
   }
   const el = (tag, cls, parent) => { const e = doc.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
-  const arrows = {};
-  const arrowListeners = [];
-  let arrowLayout = null, arrowsShown = false, hoverDir = null;
-  const arrowLast = {};
-  const emitOrbit = (dir, stepDeg = null) => {
-    if (!ORBIT_ARROWS.dirs.includes(dir)) return;
-    const small = Number.isFinite(stepDeg) && stepDeg > 0;
-    if (typeof orbitHandler === 'function') { if (small) orbitHandler(dir, { stepDeg }); else orbitHandler(dir); return; }
-    if (view && typeof view.CustomEvent === 'function') doc.dispatchEvent(new view.CustomEvent('ns-orbit', { detail: small ? { dir, stepDeg } : { dir } }));
+  // ---- R5-scene (D16, R20): 3D compass arrows round the brain and round the mirror body (ns-arrows3d, R5-arrows) ----
+  // The round-2..4 DOM orbit buttons (SVG icons, the placement planner, pointer pins and DOM hold timers) are gone. Two
+  // ns-arrows3d rigs (four lit 3D arrows each, a see-through copy where the near arm hides a brain arrow) are placed by
+  // planCompassArrows at fixed compass positions round the brain (top = forward, bottom = back, left, right; a small gap
+  // outside the drawn outline) and round the mirror body (smaller). The scene draws them, highlights the hovered one
+  // (setArrowHover), answers ray picks (pickArrows: the hit list R5-input's resolveArrowHit takes) and gives their screen
+  // boxes to the overlay. Presses and holds are R5-input's (ns-controls stepArrowInput); nothing ever orbits by itself.
+  let arrowRigError = null;
+  const makeArrowRig = kind => {
+    try {
+      // R5-access B1: the colours at the call site (brain grey-white, mirror green, so the two sets read apart).
+      const look = typeof NsColors.arrowLook === 'function' ? { ...NsArrows.ARROW_LOOK, ...NsColors.arrowLook(kind) } : NsArrows.ARROW_LOOK;
+      const rig = NsArrows.createArrowRig(THREE, { kind, look });
+      rig.group.visible = false;
+      scene.add(rig.group);
+      // e2e detection contract (round5/R5-e2e-NOTES.md): userData.nsOrbitArrow { dir, target, hover } on each arrow root.
+      for (const d of ARROW_DIRS) { rig.arrows[d].mesh.userData.nsArrow = { target: kind, dir: d }; rig.arrows[d].root.userData.nsOrbitArrow = { dir: d, target: kind, hover: false }; }
+      return rig;
+    } catch (err) { arrowRigError = String((err && err.message) || err); return null; }
   };
-  // Round-2 fix F4: press-and-hold on a DOM arrow button. The button keeps the pointer (pointer capture), because the
-  // arrow moves as the view orbits; the hold ends on pointerup / pointercancel / lost capture / blur / hide.
-  let arrowHold = null; // { dir, timer, repeated }
-  // R3-fix (review F7): the arrow just clicked or held stays where it is under the pointer / crosshair (instead of jumping
-  // with its world anchor after the orbit step), so a second click lands on it again. A DOM pin ends when the pointer
-  // leaves the button; a crosshair pin when the crosshair leaves the arrow; any pin when the player turns (look changes).
-  let arrowPin = null; // { dir, x, y, by: 'dom' | 'crosshair', yaw, pitch }
-  const pinArrow = (dir, by) => {
-    const p = arrowNow[dir];
-    if (!p || !p.front || !p.usable) { arrowPin = null; return; }
-    arrowPin = { dir, x: p.x, y: p.y, by, yaw: lookYaw, pitch: lookPitch };
+  const arrowSets = {};
+  for (const target of ['brain', 'mirror']) arrowSets[target] = { target, rig: makeArrowRig(target), plan: null, frames: null, key: '', shown: false, boxes: {}, clicks: {}, boxKey: '' };
+  let arrowHover = null, arrowHoverPointer = false; // { target, dir, blocked } (setArrowHover); pointer: a free mouse is on it
+  // R5-polish (D19 "obvious how to move the brain away"): a covered mirror arrow under the pick point gets a plain two-line
+  // caption saying how to move the brain away (ARROWS.mirrorBlockedTip), next to the grey arrow. Not at the very start:
+  // at the default 720x1280 view the crosshair rests on the mirror's bottom arrow (R5-integrate-mirror-glow decision 3.3),
+  // so the caption waits until the player has looked around since the last "rest" (the start, or a switch between first
+  // and third person: after E the crosshair can also land on that arrow by chance; viewed at 2560x1080), or until the
+  // covered arrow was reached more than BLOCKED_TIP_REST_MS after the rest (a free pointer moved onto it).
+  const BLOCKED_TIP_REST_MS = 800;
+  let lookRest = null, lookMoved = false, restAtMs = null, blockedHoverAtMs = null, lookEasing = false;
+  const noteLook = (mode, yaw, pitch) => {
+    if (!lookRest || lookRest.mode !== mode) { lookRest = { mode, yaw, pitch }; lookMoved = false; restAtMs = nowMs(); return; }
+    if (!lookMoved && Math.hypot(yaw - lookRest.yaw, pitch - lookRest.pitch) > 0.02) lookMoved = true;
   };
-  const stopArrowHold = () => {
-    if (!arrowHold) return;
-    if (arrowHold.timer !== null && view) { view.clearTimeout(arrowHold.timer); view.clearInterval(arrowHold.timer); }
-    arrowHold.timer = null;
-    arrowHold.active = false;
-  };
-  const startArrowHold = (dir, e, b) => {
-    stopArrowHold();
-    if (!view || typeof view.setTimeout !== 'function') return;
-    arrowHold = { dir, timer: null, repeated: false, active: true };
-    try { if (e && Number.isFinite(e.pointerId) && typeof b.setPointerCapture === 'function') b.setPointerCapture(e.pointerId); } catch { /* optional */ }
-    const h = arrowHold;
-    h.timer = view.setTimeout(() => {
-      if (!h.active) return;
-      const tickHold = () => { if (!h.active || !arrowsShown) { stopArrowHold(); return; } h.repeated = true; emitOrbit(dir, ORBIT_HOLD.stepDeg); };
-      tickHold();
-      h.timer = view.setInterval(tickHold, ORBIT_HOLD.everyMs);
-    }, ORBIT_HOLD.delayMs);
-  };
+  let arrowsShown = false, arrowLayout = null, hoverDir = null;
+  // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
+  // while the "Try this" goal is 'orbit'.
+  const arrowTips = {};
   if (overlay) {
-    for (const dir of ORBIT_ARROWS.dirs) {
-      const b = el('button', `ns-orbit ns-orbit-${dir}`, overlay);
-      b.type = 'button';
-      b.tabIndex = -1; // Space is the grasp key: a focused button must never turn it into an orbit click
-      b.textContent = ORBIT_ARROWS.glyph[dir];
-      // Polish (R16): a curved orbit arrow replaces the flat triangle glyph where the DOM can parse markup.
-      if (typeof b.insertAdjacentHTML === 'function') { b.textContent = ''; b.insertAdjacentHTML('beforeend', orbitIconSvg(dir)); }
-      b.setAttribute('data-ns-tip', ORBIT_ARROWS.tip[dir]);
-      b.title = ORBIT_ARROWS.label[dir];
-      b.setAttribute('aria-label', ORBIT_ARROWS.label[dir]);
-      b.setAttribute('data-ns-orbit', dir);
-      b.hidden = true;
-      const down = e => { if (e && typeof e.preventDefault === 'function') e.preventDefault(); if (e && typeof e.stopPropagation === 'function') e.stopPropagation(); };
-      const pdown = e => {
-        down(e);
-        if (e && Number.isFinite(e.button) && e.button > 2) return;
-        pinArrow(dir, 'dom');
-        startArrowHold(dir, e, b);
-      };
-      const leave = () => { if (arrowPin && arrowPin.dir === dir && arrowPin.by === 'dom' && !(arrowHold && arrowHold.active)) { arrowPin = null; overlayDirty = true; } };
-      const up = () => stopArrowHold();
-      const click = e => {
-        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-        // A press that already repeated (held) is not also a click step; a plain click is one full step.
-        const held = arrowHold && arrowHold.dir === dir && arrowHold.repeated;
-        stopArrowHold();
-        arrowHold = null;
-        if (!held) emitOrbit(dir);
-        try { canvas.focus({ preventScroll: true }); } catch { /* focus is a convenience */ }
-      };
-      b.addEventListener('pointerdown', pdown);
-      b.addEventListener('mousedown', down);
-      b.addEventListener('click', click);
-      b.addEventListener('pointerleave', leave);
-      arrowListeners.push([b, 'pointerleave', leave]);
-      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) { b.addEventListener(type, up); arrowListeners.push([b, type, up]); }
-      arrowListeners.push([b, 'pointerdown', pdown], [b, 'mousedown', down], [b, 'click', click]);
-      arrows[dir] = b;
-      arrowLast[dir] = { left: '', top: '', hover: false, clamped: null };
+    for (const target of ['brain', 'mirror']) for (const d of ARROW_DIRS) {
+      const e = el('div', `ns-arrow-tip ns-arrow-tip-${target}`, overlay);
+      e.setAttribute('data-ns-arrow-tip', `${target}:${d}`);
+      e.setAttribute('aria-hidden', 'true');
+      e.hidden = true;
+      e.textContent = arrowTipText(target, d);
+      arrowTips[`${target}:${d}`] = { el: e, left: '', top: '', shown: false, text: e.textContent, blocked: false };
     }
-    if (view && typeof view.addEventListener === 'function') view.addEventListener('blur', stopArrowHold);
   }
   const labelEls = [];
   const labelBoxes = [];
@@ -2638,6 +2959,9 @@ export function createScene({
     info.plain = el('p', 'ns-infopanel-plain', p);
     info.rows = el('dl', 'ns-infopanel-rows', p);
     info.simulated = el('p', 'ns-infopanel-simulated', p);
+    // R5-integrate-mirror-glow (D17): the glow line (hidden when empty).
+    info.glow = el('p', 'ns-infopanel-glow', p);
+    info.glow.hidden = true;
     info.known = el('p', 'ns-infopanel-known', p);
     info.regionCaveat = el('p', 'ns-infopanel-caveat', p);
     info.explanation = el('p', 'ns-infopanel-explanation', p);
@@ -2650,14 +2974,27 @@ export function createScene({
     info.moreKey = null;
     info.actRow = act;
   }
-  let faceLabel = null, insetFrame = null, faceLabelW = 0, xlShift = 0;
+  // R5-integrate-mirror-glow (D19): the mirror body's plain label ("Mirror body" / "a mirror image of you"), placed beside
+  // its drawn box each time the camera, the mirror or the arrows change (layoutMirrorLabel).
+  let mirrorLabel = null;
+  if (overlay) {
+    mirrorLabel = el('div', 'ns-mirror-label', overlay);
+    mirrorLabel.setAttribute('data-ns-mirror-label', '');
+    el('span', 'ns-mirror-label-main', mirrorLabel).textContent = (NsText.MIRROR && NsText.MIRROR.name) || 'Mirror body';
+    el('span', 'ns-mirror-label-sub', mirrorLabel).textContent = (NsText.MIRROR && NsText.MIRROR.labelSub) || 'a mirror image of you';
+    mirrorLabel.hidden = true;
+  }
+  let faceLabel = null, insetFrame = null, faceLabelW = 0, xlShift = 0, faceCaption = null;
+  // R5-integrate-core (D20): the face layer's captions: the round-4 FACE ("no face, chewing or tongue muscles") until the
+  // face-muscle packet's meshes are in the body, then ns-text FACE_R5 (face, chewing and neck muscles; still no tongue).
+  let faceText = FACE_LAYER;
   if (overlay) {
     faceLabel = el('div', 'ns-face-label', overlay);
     faceLabel.hidden = true;
     insetFrame = el('div', 'ns-face-inset', overlay);
     insetFrame.hidden = true;
-    const cap = el('div', 'ns-face-inset-caption', insetFrame);
-    cap.textContent = FACE_LAYER.insetLabel;
+    faceCaption = el('div', 'ns-face-inset-caption', insetFrame);
+    faceCaption.textContent = faceText.insetLabel;
   }
   const faceLabelLast = { left: '', top: '', text: '' };
   let faceLabelH = 0; // R3-integrator: the caption's measured height (read once it is shown)
@@ -2668,6 +3005,161 @@ export function createScene({
   let brainOverlayOk = false; // R3-fix (M4): brainBoundsPx is this layout's projection of a brain in front of the camera
   const frustum = typeof THREE.Frustum === 'function' ? new THREE.Frustum() : null;
   const projView = typeof THREE.Matrix4 === 'function' ? new THREE.Matrix4() : null;
+
+  // ---- R5-scene: shared shader-patch composition (each patch keeps the previous onBeforeCompile and cache key) --------
+  const composePatch = (m, tag, fn) => {
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    m.onBeforeCompile = (shader, r) => { if (typeof prev === 'function') prev.call(m, shader, r); fn(shader); };
+    m.customProgramCacheKey = () => `${typeof prevKey === 'function' ? prevKey.call(m) : ''}|${tag}`;
+    return m;
+  };
+  // ---- R5-scene (P2 strip relief): the lit region / strip materials take the brain's RIGID normal under the squash ----
+  const stripRelief = { applied: null, view: null, materials: 0 };
+  const rigidPatch = m => {
+    stripRelief.materials++;
+    return composePatch(m, 'ns-rigid-normal-r5', shader => {
+      const p = patchRigidNormalShaders(shader.vertexShader, shader.fragmentShader);
+      stripRelief.applied = p !== null && stripRelief.applied !== false;
+      if (!p) return;
+      stripRelief.view = p.view && stripRelief.view !== false;
+      shader.vertexShader = p.vertexShader;
+      shader.uniforms.nsRigidN = farEyeRigidN; shader.uniforms.nsFarEye = farEyeVec;
+    });
+  };
+  // ---- R5-scene (D17): the fluorescent glow rim of driven muscles and active areas (one uniform per material) ---------
+  const glowRim = { applied: null, materials: 0 };
+  const glowRimPatch = m => {
+    const u = { value: new THREE.Vector4(0, 0, 0, GLOW_K.rimPower) };
+    m.userData.nsGlowRim = u;
+    glowRim.materials++;
+    return composePatch(m, 'ns-glow-rim-r5', shader => {
+      const p = patchGlowRimShaders(shader.vertexShader, shader.fragmentShader);
+      glowRim.applied = p !== null && glowRim.applied !== false;
+      if (!p) return;
+      shader.fragmentShader = p.fragmentShader;
+      shader.uniforms.nsGlowRim = u;
+    });
+  };
+  // ---- R5-scene (D19, R23): the mirror body (a reflected copy of your body and arm, behind the brain, facing you) -----
+  // mirrorRoot.matrix = mirrorMatrix (player world -> mirror world, det < 0); mirrorBodyGroup carries the body frame and
+  // mirrorArmGroup the eye, so every twin takes exactly the player's pose matrices (the arm muscles even share the CPU-
+  // skinned buffers). Own opaque materials (no first-person see-through rules), shaded with the same ns-colors rule.
+  const mirrorRoot = new THREE.Group();
+  mirrorRoot.name = 'ns-mirror (a mirror image of your body, behind the brain)';
+  mirrorRoot.matrixAutoUpdate = false;
+  mirrorRoot.visible = false;
+  mirrorRoot.userData.nsMirror = true; // e2e detection contract
+  scene.add(mirrorRoot);
+  const mirrorBodyGroup = new THREE.Group();
+  mirrorBodyGroup.name = 'ns-mirror body (BodyParts3D frame)';
+  mirrorBodyGroup.matrixAutoUpdate = false;
+  mirrorRoot.add(mirrorBodyGroup);
+  const mirrorArmGroup = new THREE.Group();
+  mirrorArmGroup.name = 'ns-mirror arm (eye frame)';
+  mirrorArmGroup.matrixAutoUpdate = false;
+  mirrorRoot.add(mirrorArmGroup);
+  // Behind the glass (BEHIND_GLASS): one shared window uniform (the brain's projected ellipse, set in render()).
+  const behindGlass = { applied: null, amount: 0 };
+  const bgUniform = { value: new THREE.Vector4(0, BEHIND_GLASS.dim, 0, 0) }, bgWinUniform = { value: new THREE.Vector4(0, 0, 1, 1) };
+  const behindGlassPatch = m => composePatch(m, 'ns-behind-glass-r5', shader => {
+    const p = patchBehindGlassShaders(shader.vertexShader, shader.fragmentShader);
+    behindGlass.applied = p !== null && behindGlass.applied !== false;
+    if (!p) return;
+    shader.fragmentShader = p.fragmentShader;
+    shader.uniforms.nsBg = bgUniform; shader.uniforms.nsBgWin = bgWinUniform;
+  });
+  const mirrorBoneMaterial = behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
+  // R5-fix (reviews P3 / SL5-3): the 3D atlases have no back of the skull (no parietal, occipital or sphenoid bone), so from
+  // behind (third person, the turned mirror body) you looked INTO the face bones: their inner surfaces, the eye sockets,
+  // the nose opening and the teeth read as a face looking back. The head's in-place and mirror meshes now draw every
+  // surface that faces the INSIDE of the head (per vertex: the normal points toward the head centre; attribute nsInside,
+  // headInsidePass) in a plain dark colour (SKULL_INSIDE), so from behind the head reads as the dark inside of a shell.
+  // Nothing is invented (no new bone shape); from the front nothing changes; the plain text says the skull has no back part.
+  const insideCol = new THREE.Color(SKULL_INSIDE.color);
+  const headInside = { applied: null, meshes: 0 };
+  const insidePatch = m => composePatch(m, 'ns-head-inside-r5fix', shader => {
+    const vOk = shader.vertexShader.includes('#include <begin_vertex>'), fOk = shader.fragmentShader.includes('#include <dithering_fragment>');
+    headInside.applied = vOk && fOk && headInside.applied !== false;
+    if (!(vOk && fOk)) return;
+    shader.vertexShader = 'attribute float nsInside;\nvarying float vNsInside;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vNsInside = nsInside;');
+    shader.fragmentShader = 'varying float vNsInside;\nuniform vec3 nsInsideCol;\n' + shader.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (vNsInside > 0.5) gl_FragColor.rgb = nsInsideCol;');
+    shader.uniforms.nsInsideCol = { value: insideCol };
+  });
+  const headBoneInPlaceMaterial = insidePatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
+  const headBoneMirrorMaterial = insidePatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 }))));
+  /** Per-vertex nsInside (1 = the surface faces the inside of the head) for a head mesh's geometry, from the head centre
+   * (source mm; the mean of the head bones' box centres). Once per geometry. */
+  // Bones also darken the surfaces that face BACKWARD (BodyParts3D +y = posterior; SKULL_INSIDE.backFacingY): with no
+  // skull behind them they are seen only through the missing back of the head (viewed: bright orbit floors and cheekbone
+  // backs still read as a face, harness/run-R5-fix-12-skull/crop-head.png). Muscles keep their outer surfaces coloured.
+  const headInsidePass = (geo, centre, bone) => {
+    if (!geo || geo.getAttribute('nsInside') || !centre) return;
+    const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal');
+    if (!pos || !nor) return;
+    const a = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      const dx = pos.getX(i) - centre[0], dy = pos.getY(i) - centre[1], dz = pos.getZ(i) - centre[2];
+      a[i] = nor.getX(i) * dx + nor.getY(i) * dy + nor.getZ(i) * dz < 0 || (bone && nor.getY(i) > SKULL_INSIDE.backFacingY) ? 1 : 0;
+    }
+    geo.setAttribute('nsInside', new THREE.BufferAttribute(a, 1));
+    headInside.meshes++;
+  };
+  const mirrorMuscleMaterial = () => behindGlassPatch(glowRimPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))));
+  // ns-mirror (R5-mirror) owns the math: bodyBoundsFromPoints (the posed body), brainFarDistance, mirrorPlacement,
+  // createMirrorState / placeMirror (orbit kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when
+  // the body is posed and the brain framed; orbit from setMirrorView), unless the integrator hands a whole ns-mirror state
+  // or transform (setMirrorView), which then wins.
+  const mirror = {
+    enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0 },
+    external: null, transform: null, outlineNdc: null, frameKey: '', serial: 0, lod: false, twins: 0, brainRadiusMm: null, error: null
+  };
+  // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
+  let camPose = null;
+  const camState = { mode: 'first', headInPlace: false, eyeDistM: 0 };
+  let bodyPoseSerial = 0, armPoseSerial = 0; // R5-scene: pose change counters (bodyKeepOut cache)
+  // ---- R5-scene (D17): glow links -----------------------------------------------------------------------------------
+  const glowState = { links: [], eased: new Map(), touched: new Set(), lastAt: null, ribbons: 0, mirrorRibbons: 0, cpuMs: 0, rimMuscles: 0, rimAreas: 0, set: 0 };
+  const glowVerts = (GLOW_LINK.segments + 1) * GLOW_LINK.across.length;
+  const glowIdxPer = GLOW_LINK.segments * (GLOW_LINK.across.length - 1) * 6;
+  function makeRibbonMesh(name, order) {
+    const cap = GLOW_LINK.maxLinks * glowVerts;
+    const pos = new Float32Array(3 * cap), col = new Float32Array(4 * cap);
+    const idx = new Uint32Array(GLOW_LINK.maxLinks * glowIdxPer);
+    const A = GLOW_LINK.across.length;
+    let k = 0;
+    for (let r = 0; r < GLOW_LINK.maxLinks; r++) {
+      const o = r * glowVerts;
+      for (let i = 0; i < GLOW_LINK.segments; i++) for (let j = 0; j + 1 < A; j++) {
+        const a = o + i * A + j, b = a + 1, c = a + A, d = c + 1;
+        idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+      }
+    }
+    const g = keep(new THREE.BufferGeometry());
+    const pa = new THREE.BufferAttribute(pos, 3), ca = new THREE.BufferAttribute(col, 4);
+    if (THREE.DynamicDrawUsage !== undefined && typeof pa.setUsage === 'function') { pa.setUsage(THREE.DynamicDrawUsage); ca.setUsage(THREE.DynamicDrawUsage); }
+    g.setAttribute('position', pa);
+    g.setAttribute('color', ca);
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.setDrawRange(0, 0);
+    const params = { vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false };
+    if (THREE.AdditiveBlending !== undefined) params.blending = THREE.AdditiveBlending;
+    const m = keep(new THREE.MeshBasicMaterial(params));
+    const mesh = new THREE.Mesh(g, m);
+    mesh.name = name;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = order;
+    mesh.matrixAutoUpdate = false;
+    mesh.visible = false;
+    // e2e detection contract: userData.nsGlow { target, regionId (strongest), regionIds, muscles (element ids / arm mesh
+    // names), intensity } (updated every frame by updateGlow).
+    mesh.userData.nsGlow = { target: order > RENDER_ORDER.glass ? 'player' : 'mirror', regionId: null, regionIds: [], muscles: [], intensity: 0 };
+    scene.add(mesh);
+    return { mesh, pos, col, pa, ca, n: 0 };
+  }
+  // Your body's links: after the arm (BODY_ORDER.arm), depth-tested, so a link runs INTO the muscle it reaches. The mirror
+  // body's links: before the brain areas and the glass (they lie behind them), so the areas and the glass draw over them.
+  const glowOwn = makeRibbonMesh('ns-glow links (brain area -> your muscles; a picture of the simulation, not a nerve)', BODY_ORDER.arm + 2);
+  const glowMirror = makeRibbonMesh('ns-glow links (brain area -> the mirror body)', RENDER_ORDER.glassXray - 0.5);
 
   const onLost = e => { if (e && typeof e.preventDefault === 'function') e.preventDefault(); lost = true; };
   const onRestored = () => {
@@ -2709,7 +3201,13 @@ export function createScene({
       mesh.matrixAutoUpdate = false;
       mesh.renderOrder = BODY_ORDER.arm;
       armGroup.add(mesh);
-      bones.push({ mesh, segment: b.segment });
+      // R5-scene (D19): the mirror twin shares the geometry and takes the same segment matrix.
+      const tw = new THREE.Mesh(geo, mirrorBoneMaterial);
+      tw.name = `mirror image: ${mesh.name}`;
+      tw.matrixAutoUpdate = false;
+      mirrorArmGroup.add(tw);
+      mesh.userData.nsMirrorTwin = tw;
+      bones.push({ mesh, segment: b.segment, mirror: tw });
       depthTwin(mesh, armDepthMaterial, BODY_ORDER.arm - 0.5, armTwins);
     }
     for (const m of muscleList) {
@@ -2724,18 +3222,60 @@ export function createScene({
       geo.setAttribute('position', posAttr);
       geo.setAttribute('normal', norAttr);
       geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
-      const mat = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 })));
+      const mat = markArmStencil(glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 })))));
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = String(m.name || 'muscle');
       mesh.frustumCulled = false; // CPU-skinned: the rest bounding sphere would be stale
       mesh.renderOrder = BODY_ORDER.arm;
       armGroup.add(mesh);
       depthTwin(mesh, armDepthMaterial, BODY_ORDER.arm - 0.5, armTwins);
+      // R5-scene (D19): the mirror twin shares the CPU-skinned buffers (skinned once for both bodies).
+      const tw = new THREE.Mesh(geo, mirrorMuscleMaterial());
+      tw.name = `mirror image: ${mesh.name}`;
+      tw.frustumCulled = false;
+      tw.matrixAutoUpdate = false;
+      mirrorArmGroup.add(tw);
+      mesh.userData.nsMirrorTwin = tw;
       muscles.push({
         mesh, mat, key: m.muscleKey === undefined ? null : m.muscleKey, rest: m.positions,
-        restNormals: computeNormals(m.positions, m.indices), weights: m.weights, pos, nor, posAttr, norAttr, lastT: NaN
+        restNormals: computeNormals(m.positions, m.indices), weights: m.weights, pos, nor, posAttr, norAttr, lastT: NaN,
+        mirror: tw, centre: null, centreFor: null,
+        // R5-integrate-core (D15): the element id (Body Worlds layers) and the original rest geometry (the skin weights
+        // were computed from it; setArmLayers skins a lifted copy with the same weights).
+        id: typeof m.id === 'string' ? m.id : null, restBase: m.positions, indices: m.indices, lifted: null
       });
+      mesh.userData.elementId = typeof m.id === 'string' ? m.id : null;
     }
+  }
+
+  /** R5-integrate-core (D15, R5-body "Left arm"): Body Worlds layers on the CPU-skinned left arm. liftedById: { elementId:
+   * Float32Array } = ns-body detachedRestPositions(id, restPositions) for each superficial left-arm muscle (rest frame;
+   * one rigid move per muscle); amount 0..1 blends the original and the lifted rest positions. The SAME skin weights
+   * (from the original rest positions) skin the result, so the lift rides on every arm pose, and the mirror twins share
+   * the skinned buffers. Muscles not listed stay as they are. Returns { lifted, amount }. */
+  let armLayerAmount = 0;
+  function setArmLayers(liftedById = null, amount = 1) {
+    const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
+    let n = 0, changed = false;
+    for (const m of muscles) {
+      const L = liftedById && m.id && liftedById[m.id] && liftedById[m.id].length === m.restBase.length && liftedById[m.id] !== m.restBase ? liftedById[m.id] : null;
+      if (L !== m.lifted) { m.lifted = L; changed = true; }
+      if (!m.lifted) {
+        if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices); changed = true; }
+        m.mesh.userData.bodyWorlds = Object.freeze({ layer: liftedById ? 'deep' : 'unclassified', offsetMm: 0 });
+        continue;
+      }
+      n++;
+      let r;
+      if (a >= 1) r = m.lifted;
+      else if (a <= 0) r = m.restBase;
+      else { r = new Float32Array(m.restBase.length); for (let i = 0; i < r.length; i++) r[i] = m.restBase[i] + a * (m.lifted[i] - m.restBase[i]); }
+      if (r !== m.rest) { m.rest = r; m.restNormals = computeNormals(r, m.indices); changed = true; }
+      let d = 0; for (let i = 0; i < 3; i++) d += (m.lifted[i] - m.restBase[i]) ** 2;
+      m.mesh.userData.bodyWorlds = Object.freeze({ layer: 'superficial', offsetMm: Math.round(Math.sqrt(d) * 10) / 10 });
+    }
+    if (changed || a !== armLayerAmount) { armLayerAmount = a; lastMatrices = null; } // re-skin on the next updatePose
+    return { lifted: n, amount: armLayerAmount };
   }
 
   /** Brain meshes in source mm: glass context [{ id?, positions, indices, name }], the focus strip { positions,
@@ -2854,7 +3394,17 @@ export function createScene({
         };
         material.customProgramCacheKey = () => 'ns-region-leftarm-rim-r4';
       }
+      // R5-scene: the lit area keeps its gyral relief under the perspective squash (rigid normals, P2) and can glow (D17).
+      glowRimPatch(rigidPatch(material));
       const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity };
+      // R5-fix (review F3, R12 "access to all the relevant motor areas", R25): where your near left arm covers a motor area
+      // its see-through copy is drawn over the arm (the area's own colour, MOTOR_XRAY.opacity), like the arrows' (D16).
+      rec.xrayMat = THREE.GreaterDepth !== undefined && THREE.EqualStencilFunc !== undefined ? keep(new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: MOTOR_XRAY.opacity, depthWrite: false, depthFunc: THREE.GreaterDepth,
+        stencilWrite: true, stencilRef: ARM_STENCIL, stencilFunc: THREE.EqualStencilFunc, stencilWriteMask: 0,
+        stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp
+      })) : null;
+      rec.xrayMeshes = [];
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
         const part = seg.parts[pi];
@@ -2875,6 +3425,13 @@ export function createScene({
         depthMesh.renderOrder = RENDER_ORDER.regionDepth;
         brainGroup.add(depthMesh);
         rec.depthMeshes.push(depthMesh);
+        if (rec.xrayMat) {
+          const xm = still(new THREE.Mesh(geo, rec.xrayMat));
+          xm.name = `motor region ${r.id} (see-through where your arm covers it)`;
+          xm.renderOrder = BODY_ORDER.arm + MOTOR_XRAY.orderAfterArm;
+          brainGroup.add(xm);
+          rec.xrayMeshes.push(xm);
+        }
         if (hasLines) edgeLists.push(part);
       }
       // R3-scene: a SMOOTH region outline (Chaikin-smoothed, lifted off the surface) instead of the raw triangle-edge
@@ -2974,6 +3531,8 @@ export function createScene({
     rec.material.emissive.setRGB(s.emission[0], s.emission[1], s.emission[2]);
     rec.material.opacity = s.opacity;
     rec.opacity = s.opacity;
+    // R5-fix (review F3): the see-through copy takes the area's colour now (its albedo plus its activity glow).
+    if (rec.xrayMat) rec.xrayMat.color.setRGB(Math.min(1, s.albedo[0] + s.emission[0]), Math.min(1, s.albedo[1] + s.emission[1]), Math.min(1, s.albedo[2] + s.emission[2]));
     if (rec.outline) {
       const leftArm = rec.region.isLeftArm === true;
       rec.outline.material = hovered ? hoverLineMaterial : n >= 1 && activatedLineMaterial ? activatedLineMaterial : (leftArm ? leftArmLineMaterial : otherLineMaterial);
@@ -3029,6 +3588,7 @@ export function createScene({
       Object.assign(shader.uniforms, uniforms);
     };
     mat.customProgramCacheKey = () => 'ns-strip-a2r1';
+    rigidPatch(mat); // R5-scene (P2): rigid normals under the perspective squash
     const mesh = still(new THREE.Mesh(geo, mat));
     mesh.name = 'representative left-arm/hand band of the right precentral strip (simulated activity)';
     mesh.renderOrder = RENDER_ORDER.strip;
@@ -3112,6 +3672,9 @@ export function createScene({
     const pw = transform.pivotWorld;
     const dist = pw && pw.length === 3 ? Math.hypot(pw[0], pw[1], pw[2]) : NaN;
     arrowRef.dist = Number.isFinite(dist) && dist > 0 ? dist : Math.hypot(m[12], m[13], m[14]) || BRAIN_ANCHOR_DIST_FALLBACK_M;
+    arrowRef.k = Number.isFinite(transform.k) && transform.k > 0 ? transform.k : null;
+    arrowRef.pivot = transform.pivot && transform.pivot.length === 3 ? Array.from(transform.pivot) : null;
+    updateMirrorPlacement();
     updateCameraRange();
     overlayDirty = true;
     return true;
@@ -3119,19 +3682,27 @@ export function createScene({
 
   /** R4-scene: the far plane follows the brain's farthest support point (farPlaneFor), so a brain moved farther away is
    * never clipped; the near plane stays CAMERA.near for the hand. Called whenever the brain transform changes. */
-  const cameraRange = { far: far, brainFarM: null, brainNearM: null };
+  const cameraRange = { far: far, brainFarM: null, brainNearM: null, mirrorFarM: null };
   function updateCameraRange() {
     const P = brainSupport && brainSupport.points;
     if (!P || P.length < 3) return;
     const e = brainGroup.matrixWorld.elements;
+    // R5-scene (D18 / D19): distances from the RENDER camera (the eye in first person) to the brain and the mirror body.
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     let dMax = 0, dMin = Infinity;
     for (let i = 0; i < P.length; i += 3) {
       const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14];
-      const d = Math.hypot(x, y, z);
+      const d = Math.hypot(x - cx, y - cy, z - cz);
       if (d > dMax) dMax = d; if (d < dMin) dMin = d;
     }
     cameraRange.brainFarM = dMax; cameraRange.brainNearM = dMin;
-    const f = farPlaneFor(dMax, far);
+    let fFar = dMax;
+    if (mirror.transform && mirror.body) {
+      const a = mirror.transform.centre, dm = Math.hypot(a[0] - cx, a[1] - cy, a[2] - cz) + mirror.transform.scale * mirror.body.radius;
+      cameraRange.mirrorFarM = dm;
+      if (dm > fFar) fFar = dm;
+    }
+    const f = farPlaneFor(fFar, far);
     if (f !== camera.far) { camera.far = f; camera.updateProjectionMatrix(); cameraRange.far = f; }
   }
 
@@ -3147,7 +3718,9 @@ export function createScene({
   let guideGoalAttr = '';
   function setGuideGoal(id) {
     const v = typeof id === 'string' ? id : '';
-    if (v !== guideGoalAttr && overlay) { guideGoalAttr = v; if (v) overlay.setAttribute('data-ns-guide-goal', v); else overlay.removeAttribute('data-ns-guide-goal'); }
+    if (v !== guideGoalAttr && overlay) { guideGoalAttr = v; if (v) overlay.setAttribute('data-ns-guide-goal', v); else overlay.removeAttribute('data-ns-guide-goal'); overlayDirty = true; }
+    // R5-scene: while the goal is 'orbit' the brain's 3D arrows get ns-arrows3d's soft attention glow (and their captions).
+    if (arrowSets.brain.rig) arrowSets.brain.rig.setAttention(v === 'orbit' ? 1 : 0);
     return guideGoalAttr;
   }
 
@@ -3161,11 +3734,78 @@ export function createScene({
   }
 
   /** Camera orientation: Euler YXZ (yaw about +y, then pitch), so the view direction is ns-brain gazeDirection. */
+  // R5-scene (D18): setView sets the EYE look (the arm hangs on it, the mirror's arm copies it); in first person the camera
+  // takes the same look. In third person (setCameraPose) the camera keeps its own pose.
   function setView(yaw, pitch) {
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
-    camera.updateMatrixWorld(true);
+    eyeRig.rotation.set(pitch, yaw, 0, 'YXZ');
+    eyeRig.updateMatrixWorld(true);
+    mirrorArmGroup.matrix.copy(eyeRig.matrix);
+    mirrorArmGroup.matrixWorldNeedsUpdate = true;
     if (yaw !== lookYaw || pitch !== lookPitch) overlayDirty = true;
     lookYaw = yaw; lookPitch = pitch;
+    if (!camPose) noteLook('first', yaw, pitch);
+    if (!camPose) { camera.rotation.set(pitch, yaw, 0, 'YXZ'); camera.updateMatrixWorld(true); }
+  }
+
+  /** R5-scene (D18, R22): the render camera from an ns-camera cameraPose (R5-camera) result, or null for first person.
+   * pose: { position: [x, y, z] (world m), yaw, pitch (rad; rotation.set(pitch, yaw, 0, 'YXZ')), headInPlace 0..1,
+   * faceGhost 0..1, overBrainSeeThrough 0..1, nearM } (the multipliers are optional: without them a camera at least 0.35 m
+   * from the eye counts as third person). pose.firstPerson === true, blend 0 or mode 'first' = first person: the camera
+   * is the eye (setView), every round-4 rule applies bit for bit. In third person the head and face are drawn in place
+   * from headInPlace >= R5_SCENE.headInPlaceFrom (the displaced face layer then hides), the face layer fades with
+   * faceGhost, and the body is no longer see-through over the brain's outline (overBrainSeeThrough); instead a small
+   * soft window opens at the crosshair while it is on a motor area. Returns cameraState(). */
+  const camMul = { headInPlace: 0, faceGhost: 1, overBrain: 1, nearM: null };
+  function setCameraPose(pose = null) {
+    const first = pose === null || pose === undefined || pose.mode === 'first' || pose.firstPerson === true || (Number.isFinite(pose.blend) && pose.blend <= 0 && pose.thirdPerson !== true);
+    if (first) { camPose = null; camMul.headInPlace = 0; camMul.faceGhost = 1; camMul.overBrain = 1; camMul.nearM = null; }
+    else {
+      const p = pose.position;
+      if (!p || p.length !== 3 || !Array.prototype.every.call(p, Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) {
+        fail('scene_input', 'setCameraPose needs an ns-camera pose { position: [x, y, z], yaw, pitch } (finite) or null');
+      }
+      camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1 };
+      // R5-polish: the blocked-arrow caption's rest rule in third person: the rest is the look at the END of the E ease
+      // (while the camera eases, the rest follows it), then a look change counts as looking around.
+      const easing = camPose.blend < 0.999;
+      if (easing || lookEasing) { lookRest = { mode: 'third', yaw: pose.yaw, pitch: pose.pitch }; lookMoved = false; restAtMs = nowMs(); }
+      else noteLook('third', pose.yaw, pose.pitch);
+      lookEasing = easing;
+      const far0 = Math.hypot(p[0], p[1], p[2]) >= 0.35 ? 1 : 0;
+      camMul.headInPlace = Number.isFinite(pose.headInPlace) ? fin01(pose.headInPlace) : far0;
+      camMul.faceGhost = Number.isFinite(pose.faceGhost) ? fin01(pose.faceGhost) : 1 - far0;
+      camMul.overBrain = Number.isFinite(pose.overBrainSeeThrough) ? fin01(pose.overBrainSeeThrough) : 1 - far0;
+      camMul.nearM = Number.isFinite(pose.nearM) && pose.nearM > 0 ? pose.nearM : null;
+    }
+    applyCamera();
+    updateCameraRange();
+    overlayDirty = true;
+    return cameraState();
+  }
+  function applyCamera() {
+    if (camPose) {
+      camera.position.set(camPose.position[0], camPose.position[1], camPose.position[2]);
+      camera.rotation.set(camPose.pitch, camPose.yaw, 0, 'YXZ');
+    } else {
+      camera.position.set(0, 0, 0);
+      camera.rotation.set(lookPitch, lookYaw, 0, 'YXZ');
+    }
+    camera.updateMatrixWorld(true);
+    const headIn = camPose !== null && camMul.headInPlace >= R5_SCENE.headInPlaceFrom;
+    const nearNow = camMul.nearM !== null ? camMul.nearM : near;
+    if (camera.near !== nearNow) { camera.near = nearNow; camera.updateProjectionMatrix(); }
+    if (headIn !== camState.headInPlace) {
+      camState.headInPlace = headIn;
+      faceStateKey = '';
+      for (const b of body) if (b.inPlace) b.inPlace.visible = headIn;
+    }
+    camState.eyeDistM = camPose ? Math.hypot(camPose.position[0], camPose.position[1], camPose.position[2]) : 0;
+    camState.mode = camPose ? 'third' : 'first';
+  }
+  /** Plain-JSON camera state (QA). */
+  function cameraState() {
+    return { mode: camState.mode, headInPlace: camState.headInPlace, faceGhost: camMul.faceGhost, overBrainSeeThrough: camMul.overBrain, eyeDistM: Math.round(camState.eyeDistM * 1000) / 1000, near: camera.near, far: camera.far,
+      position: camPose ? camPose.position.map(v => Math.round(v * 1000) / 1000) : [0, 0, 0], yaw: camPose ? camPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : lookPitch, blend: camPose ? camPose.blend : 0 };
   }
 
   /** Apply pose matrices (Map(segment -> rest mm -> camera m)). Returns false and does nothing when unchanged. */
@@ -3177,6 +3817,7 @@ export function createScene({
       if (!m) fail('scene_input', `missing matrix for ${b.segment}`);
       b.mesh.matrix.fromArray(m);
       b.mesh.matrixWorldNeedsUpdate = true;
+      if (b.mirror) { b.mirror.matrix.fromArray(m); b.mirror.matrixWorldNeedsUpdate = true; }
     }
     for (const m of muscles) {
       skinApply(matrices, m.weights, m.rest, m.pos);
@@ -3185,6 +3826,7 @@ export function createScene({
       m.norAttr.needsUpdate = true;
     }
     lastMatrices = matrices;
+    armPoseSerial++;
     return true;
   }
 
@@ -3203,6 +3845,7 @@ export function createScene({
       const t = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : baselineDrive;
       if (t === m.lastT) continue;
       shadeMuscle(m.mat, t);
+      if (m.mirror) shadeMuscle(m.mirror.material, t);
       m.mesh.userData.activity = t;
       m.lastT = t;
     }
@@ -3275,6 +3918,8 @@ export function createScene({
   function raycastBrain(yaw, pitch) {
     const d = gazeDirection(yaw, pitch);
     rayDir.set(d[0], d[1], d[2]);
+    // R5-scene (D18): from the render camera (the eye in first person, the third-person camera otherwise).
+    rayOrigin.copy(camera.position);
     raycaster.set(rayOrigin, rayDir);
     return raycaster.intersectObjects(rayTargets || glass, false).length > 0;
   }
@@ -3441,6 +4086,7 @@ export function createScene({
     put(info.plain, c.plain);
     put(info.explanation, c.explanation);
     put(info.simulated, c.simulated);
+    if (info.glow) put(info.glow, c.glow || '');
     put(info.known, c.known);
     put(info.regionCaveat, c.regionCaveat);
     while (info.caveats.firstChild) info.caveats.removeChild(info.caveats.firstChild);
@@ -3511,6 +4157,7 @@ export function createScene({
         if (face) { material.transparent = true; material.opacity = FACE_LAYER.muscleOpacity; material.depthWrite = false; }
         else if (trunk) torsoPatch(material);
         if (!face) overBrainPatch(material);
+        glowRimPatch(material); // R5-scene (D17)
         shadeMuscle(material, MUSCLE_REST_DRIVE);
       } else material = face ? faceBoneMaterial : trunk ? torsoBoneMaterial : bodyBoneMaterial;
       const mesh = new THREE.Mesh(geo, material);
@@ -3528,18 +4175,95 @@ export function createScene({
         for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { if (p[i + k] < faceLo[k]) faceLo[k] = p[i + k]; if (p[i + k] > faceHi[k]) faceHi[k] = p[i + k]; }
       }
       const rec = { id, mesh, part: face ? 'face' : part, anatomicalPart: part, kind, material, face, lastDrive: kind === 'muscle' ? MUSCLE_REST_DRIVE : null };
+      // R5-scene (D17): body side from the rest centre (source +x = subject LEFT): -1 left, +1 right, 0 midline.
+      {
+        const c = geo.boundingSphere ? geo.boundingSphere.center : null;
+        rec.side = c ? (c.x > 15 ? -1 : c.x < -15 ? 1 : 0) : 0;
+      }
+      // R5-scene (D19): the mirror twin (same geometry and pose matrix, opaque, head and face in place).
+      {
+        const tm = kind === 'muscle' ? (face ? insidePatch(mirrorMuscleMaterial()) : mirrorMuscleMaterial()) : face ? headBoneMirrorMaterial : mirrorBoneMaterial;
+        if (kind === 'muscle') shadeMuscle(tm, MUSCLE_REST_DRIVE);
+        const tw = new THREE.Mesh(geo, tm);
+        tw.name = `mirror image: ${bodyMeshName(entry, id)}`;
+        tw.matrixAutoUpdate = false;
+        tw.userData = { mirrorOf: id, elementId: id, bodyPart: part, kind, side: rec.side };
+        mirrorBodyGroup.add(tw);
+        rec.mirror = tw;
+        mesh.userData.nsMirrorTwin = tw;
+        mirror.twins++;
+      }
+      // R5-scene (D18): head and face meshes also get an IN-PLACE twin on your own body, shown only in third person.
+      if (face) {
+        let im = headBoneInPlaceMaterial;
+        if (kind === 'muscle') { im = insidePatch(glowRimPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))))); shadeMuscle(im, MUSCLE_REST_DRIVE); }
+        const ip = new THREE.Mesh(geo, im);
+        ip.name = `${bodyMeshName(entry, id)} [in place: third person]`;
+        ip.matrixAutoUpdate = false;
+        ip.visible = camState.headInPlace;
+        ip.renderOrder = BODY_ORDER.torso;
+        ip.userData = { elementId: id, bodyPart: 'face', anatomicalPart: part, kind, inPlace: true };
+        bodyGroup.add(ip);
+        rec.inPlace = ip;
+        mesh.userData.nsInPlaceTwin = ip;
+      }
       body.push(rec);
       bodyById.set(id, rec);
     }
+    // R5-fix (reviews P3 / SL5-3): the inside-of-the-head attribute of every head mesh (centre: the head bones' boxes).
+    {
+      const hb = body.filter(b => b.face && b.kind === 'bone' && b.mesh.geometry);
+      if (hb.length) {
+        const c = [0, 0, 0];
+        for (const b of hb) { const g = b.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox(); const m = g.boundingBox; c[0] += (m.min.x + m.max.x) / 2 / hb.length; c[1] += (m.min.y + m.max.y) / 2 / hb.length; c[2] += (m.min.z + m.max.z) / 2 / hb.length; }
+        headInside.centre = c;
+        for (const b of body) if (b.face) headInsidePass(b.mesh.geometry, c, b.kind === 'bone');
+      }
+    }
+    // R5-integrate-core (D20): face-muscle packet meshes (R5-face ids zf-..., source_packet face-muscles-r1) are in the body.
+    const facePacket = list.filter(e => e && (e.source_packet === 'face-muscles-r1' || e.packet === 'face-muscles-r1' || /^zf-/.test(String(e.element_id || e.id || '')))).length;
+    if (facePacket > 0 && NS_TEXT.FACE_R5) {
+      faceText = Object.freeze({ ...FACE_LAYER, ghostLabel: NS_TEXT.FACE_R5.ghostLabel, insetLabel: NS_TEXT.FACE_R5.insetLabel });
+      if (faceCaption) faceCaption.textContent = faceText.insetLabel;
+      faceLabelLast.text = '';
+    }
+    facePacketMeshes = facePacket;
     if (faceLo.every(Number.isFinite)) {
       faceHeadCentre = [0, 1, 2].map(k => (faceLo[k] + faceHi[k]) / 2);
       faceRadiusMm = Math.hypot(faceHi[0] - faceLo[0], faceHi[1] - faceLo[1], faceHi[2] - faceLo[2]) / 2;
     }
     faceStateKey = '';
     bodyGroup.updateMatrixWorld(true);
+    mirrorBodyGroup.matrix.fromArray(bodyFrame);
+    mirrorBodyGroup.matrixWorldNeedsUpdate = true;
+    mirror.ready = false; // R5-scene (D19): measured at the next render (computeMirrorBody)
     if (lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied); // R4-scene: a body set while a LOD level is on
+    applyMirrorLod();
     const face = body.filter(b => b.face).length;
     return { meshes: body.length, inPlace: body.length - face, face, skipped };
+  }
+
+  /** R5-integrate-core (D15): label the body's muscle meshes (and their mirror twins) with their Body Worlds layer:
+   * summary = ns-app bodyLayersSummary(ns-body bodyWorldsLayers(...)) { superficial, deep, unclassified, offsetMm }. Sets
+   * userData.bodyWorlds = { layer: 'superficial' | 'deep' | 'unclassified', offsetMm } (the lift itself is in the pose
+   * matrices updateBody writes). Display labels only. Returns { superficial, deep, unclassified } counts. */
+  let bodyLayerInfo = null;
+  function setBodyLayers(summary) {
+    const sup = new Set(summary && Array.isArray(summary.superficial) ? summary.superficial : []);
+    const dp = new Set(summary && Array.isArray(summary.deep) ? summary.deep : []);
+    const off = summary && summary.offsetMm && typeof summary.offsetMm === 'object' ? summary.offsetMm : {};
+    const n = { superficial: 0, deep: 0, unclassified: 0 };
+    for (const b of body) {
+      if (b.kind !== 'muscle') continue;
+      const layer = sup.has(b.id) ? 'superficial' : dp.has(b.id) ? 'deep' : 'unclassified';
+      const bw = Object.freeze({ layer, offsetMm: layer === 'superficial' && Number.isFinite(off[b.id]) ? off[b.id] : 0 });
+      b.mesh.userData.bodyWorlds = bw;
+      if (b.mirror) b.mirror.userData.bodyWorlds = bw;
+      if (b.inPlace) b.inPlace.userData.bodyWorlds = bw;
+      n[layer]++;
+    }
+    bodyLayerInfo = n;
+    return { ...n };
   }
 
   /** Body frame: a 4x4 BodyParts3D mm -> world m matrix (ns-arm armAttachment().bodyToWorld or ns-math
@@ -3560,6 +4284,8 @@ export function createScene({
     bodyFrame = m; eyeBp = eye; bodyYaw = yaw; bodyFrameSource = frame && frame.length === 16 ? 'matrix' : 'eye';
     bodyGroup.matrix.fromArray(m);
     bodyGroup.matrixWorldNeedsUpdate = true;
+    mirrorBodyGroup.matrix.fromArray(m);
+    mirrorBodyGroup.matrixWorldNeedsUpdate = true;
     faceStateKey = '';
     return true;
   }
@@ -3581,8 +4307,13 @@ export function createScene({
         if (same) continue;
         b.mesh.matrix.fromArray(m);
         b.mesh.matrixWorldNeedsUpdate = true;
+        if (b.mirror) { b.mirror.matrix.fromArray(m); b.mirror.matrixWorldNeedsUpdate = true; }
+        if (b.inPlace) { b.inPlace.matrix.fromArray(m); b.inPlace.matrixWorldNeedsUpdate = true; }
         n++;
       }
+      // R5-scene (D19): the mirror body's centre and size are measured once from the first posed body.
+      if (!mirror.posed) { mirror.posed = true; mirror.ready = false; }
+      if (n > 0) bodyPoseSerial++;
     }
     for (const b of body) {
       if (b.kind !== 'muscle') continue;
@@ -3592,8 +4323,15 @@ export function createScene({
       if (q === b.lastDrive) continue;
       b.lastDrive = q;
       shadeMuscle(b.material, q);
+      if (b.mirror) shadeMuscle(b.mirror.material, q);
+      if (b.inPlace && b.kind === 'muscle') shadeMuscle(b.inPlace.material, q);
       b.mesh.userData.activity = q;
     }
+    // R5-fix (review P6): the strongest face-muscle drive now (the face box shows while a face or jaw area colours them).
+    let fd = 0;
+    for (const b of body) if (b.face && b.kind === 'muscle' && Number.isFinite(b.lastDrive) && b.lastDrive > fd) fd = b.lastDrive;
+    faceDriveNow = fd;
+    if (fd > MUSCLE_REST_DRIVE + FACE_BOX.minDrive) faceActiveAtMs = nowMs();
     return n;
   }
 
@@ -3609,14 +4347,21 @@ export function createScene({
   /** Update the face layer for the current pitch / mode (transform, opacity, label); cheap when unchanged. */
   function updateFaceLayer() {
     const hasFace = faceHeadCentre !== null && faceGroup.children.length > 0;
-    faceAmount = hasFace && faceMode !== 'off' ? faceLayerAmount(lookPitch) : 0;
+    // R5-scene (D18): with the camera away from the head (third person) the head and face are drawn in place instead.
+    faceAmount = hasFace && faceMode !== 'off' && !camState.headInPlace ? faceLayerAmount(lookPitch) * (camPose ? camMul.faceGhost : 1) : 0;
+    // R5-fix (review P6): the face muscles only change colour (they do not move), and the 1 s pulse was over before a
+    // player could look up to the face. While a face or jaw area colours them (and FACE_BOX.holdMs after), and the face is
+    // not in view already, the same front view shows in a small labelled box; it never moves the face or the camera.
+    const boxOn = hasFace && faceMode !== 'off' && !camState.headInPlace && faceAmount <= 0.05 && nowMs() - faceActiveAtMs <= FACE_BOX.holdMs;
+    faceShow = boxOn ? 'box' : faceMode;
+    if (boxOn) faceAmount = 1;
     const q = Math.round(faceAmount * 64);
-    if (faceStateKey === 'ok' && faceMode === lastFaceMode && q === lastFaceQ && bodyYaw === lastFaceYaw) return;
-    faceStateKey = 'ok'; lastFaceMode = faceMode; lastFaceQ = q; lastFaceYaw = bodyYaw;
+    if (faceStateKey === 'ok' && faceShow === lastFaceMode && q === lastFaceQ && bodyYaw === lastFaceYaw) return;
+    faceStateKey = 'ok'; lastFaceMode = faceShow; lastFaceQ = q; lastFaceYaw = bodyYaw;
     overlayDirty = true;
     faceGroup.visible = q > 0;
     if (q === 0) return;
-    if (faceMode === 'ghost') {
+    if (faceShow === 'ghost') {
       faceGroup.matrix.fromArray(faceGhostMatrix({ headCentreBp: faceHeadCentre, bodyYaw }));
       // Light from the eye's side: along the direction from the ghost to the eye, Ry(bodyYaw) (0, -sin e, cos e).
       const e = FACE_LAYER.elevationDeg * DEG;
@@ -3631,8 +4376,8 @@ export function createScene({
     faceGroup.matrixWorldNeedsUpdate = true;
     faceGroup.updateMatrixWorld(true);
     const k = q / 64;
-    faceBoneMaterial.opacity = FACE_LAYER.boneOpacity * (faceMode === 'ghost' ? k : 1);
-    for (const b of body) if (b.face && b.kind === 'muscle') b.material.opacity = FACE_LAYER.muscleOpacity * (faceMode === 'ghost' ? k : 1);
+    faceBoneMaterial.opacity = FACE_LAYER.boneOpacity * (faceShow === 'ghost' ? k : 1);
+    for (const b of body) if (b.face && b.kind === 'muscle') b.material.opacity = FACE_LAYER.muscleOpacity * (faceShow === 'ghost' ? k : 1);
   }
 
   /** Which body parts are in view now: { torso, legs, rightArm, leftArm, neck, face, faceMode, faceAmount, counts,
@@ -3651,43 +4396,37 @@ export function createScene({
       if (!b.mesh.visible || !b.mesh.geometry.boundingSphere) continue;
       if (frustum.intersectsObject(b.mesh)) { out[b.part] = true; out.counts[b.part] = (out.counts[b.part] || 0) + 1; }
     }
-    if (faceMode === 'ghost' && faceGroup.visible && faceAmount > 0) {
+    if (faceShow === 'ghost' && faceGroup.visible && faceAmount > 0) {
       for (const b of body) if (b.face && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.mesh)) { out.face = true; out.counts.face = (out.counts.face || 0) + 1; }
-    } else if (faceMode === 'inset' && faceGroup.visible && faceAmount > 0) out.face = true;
+    } else if ((faceShow === 'inset' || faceShow === 'box') && faceGroup.visible && faceAmount > 0) out.face = true;
+    // R5-scene (D18): in third person the head and face are drawn in place.
+    if (camState.headInPlace) for (const b of body) if (b.inPlace && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.inPlace)) { out.face = true; out.counts.face = (out.counts.face || 0) + 1; }
+    out.camera = camState.mode;
     for (const b of bones) if (b.mesh.geometry && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.mesh)) { out.leftArm = true; out.counts.leftArm = (out.counts.leftArm || 0) + 1; }
     return out;
   }
 
   /* ---------------------------------------------------------------- U2b-scene: orbit arrows and overlay layout */
 
-  /** The orbit arrow under CSS point (x, y) (e.g. the crosshair while the pointer is captured), or null. */
+  /** The BRAIN's orbit arrow under CSS point (x, y) (e.g. the crosshair while the pointer is captured), or null. Round-4
+   * compatible wrapper of pickArrows (R5-scene: 3D arrows; mirror arrows come only from pickArrows). */
   function orbitArrowAt(x, y) {
-    return arrowsShown ? orbitArrowHit(arrowLayout, x, y) : null;
+    for (const h of pickArrows(x, y)) if (h.kind === 'arrow' && h.target === 'brain') return h.dir;
+    return null;
   }
-  /** Highlight one arrow (the one under the crosshair) or none. */
+  /** Round-4 compatible: highlight one BRAIN arrow (dir) or none (null). R5-scene: setArrowHover({ target, dir, blocked }). */
   function hoverOrbitArrow(dir) {
-    hoverDir = ORBIT_ARROWS.dirs.includes(dir) ? dir : null;
-    // R3-fix (F7): the arrow under the crosshair is pinned while the look stays put (an orbit step or hold does not
-    // move it away from the crosshair); turning, or the crosshair leaving it, ends the pin.
-    if (hoverDir === null) { if (arrowPin && arrowPin.by === 'crosshair') { arrowPin = null; overlayDirty = true; } }
-    else if (!arrowPin || arrowPin.dir !== hoverDir) pinArrow(hoverDir, 'crosshair');
-    for (const d of Object.keys(arrows)) {
-      const on = d === hoverDir;
-      if (arrowLast[d].hover !== on) { arrowLast[d].hover = on; if (on) arrows[d].setAttribute('data-hover', 'true'); else arrows[d].removeAttribute('data-hover'); }
-    }
+    setArrowHover(ARROW_DIRS.includes(dir) ? { target: 'brain', dir } : null);
     return hoverDir;
   }
-  /** R4-scene (arrows clear of the controlled arm): the arm's envelope over its whole A/D x W/S range at the default look
-   * (armSweepEnvelope of ns-app armEnvelope; viewport fractions), for the view size `size` ({ width, height } CSS px; it
-   * only applies at that size, so a stale envelope never steers the arrows after a resize). null clears it. The arrow
-   * plan then prefers spots no sampled pose covers (placeOrbitArrows armEnvelope). */
+  /** R4-scene arm envelope: RETIRED in round 5 (the 3D arrows sit at fixed compass positions and an arm in front of one
+   * shows it as a see-through silhouette). Kept so ns-app's call stays harmless; it only records the envelope. */
   let armEnv = null, armEnvSerial = 0;
   function setArmEnvelope(envelope, size = null) {
     const env = envelope && Array.isArray(envelope.poses) ? envelope : armSweepEnvelope(envelope);
     const w = size && size.width > 0 ? Math.round(size.width) : cssW, h = size && size.height > 0 ? Math.round(size.height) : cssH;
     armEnv = env ? { envelope: env, forKey: `${w}x${h}`, serial: ++armEnvSerial } : null;
-    overlayDirty = true;
-    return armEnv ? { poses: env.poses.length, forKey: armEnv.forKey } : null;
+    return armEnv ? { poses: env.poses.length, forKey: armEnv.forKey, used: false } : null;
   }
   /** Round-2 fix V2: the player's arm shapes (ns-app armAvoidShapes: { rects, ellipses } in viewport fractions, y
    * down) that region labels keep clear of; null clears them. The overlay re-lays out when they change noticeably. */
@@ -3726,12 +4465,10 @@ export function createScene({
   function overlayObstacles() {
     const arrowsOut = [];
     if (arrowsShown && arrowLayout && cssW > 0 && cssH > 0) {
-      const h = arrowLayout.sizePx / 2 + 4;
-      for (const d of ORBIT_ARROWS.dirs) {
+      for (const d of ARROW_DIRS) {
         const p = arrowLayout[d];
-        // R3-scene: world-anchored arrows can be off screen (the player looked away from the brain): only on-screen
-        // arrows are obstacles for the HUD's orientation labels.
-        if (p && p.x + h > 0 && p.x - h < cssW && p.y + h > 0 && p.y - h < cssH) arrowsOut.push({ dir: d, x0: Math.max(0, (p.x - h) / cssW), y0: Math.max(0, (p.y - h) / cssH), x1: Math.min(1, (p.x + h) / cssW), y1: Math.min(1, (p.y + h) / cssH) });
+        // R5-scene: the 3D arrows' projected boxes (+4 px); only on-screen brain arrows are obstacles for the HUD labels.
+        if (p && p.box) arrowsOut.push({ dir: d, x0: Math.max(0, (p.box.x0 - 4) / cssW), y0: Math.max(0, (p.box.y0 - 4) / cssH), x1: Math.min(1, (p.box.x1 + 4) / cssW), y1: Math.min(1, (p.box.y1 + 4) / cssH) });
       }
     }
     // R3-fix (M6): the information panel's bottom edge (CSS px) while it is showing, so the HUD can dock the legend under it.
@@ -3744,7 +4481,43 @@ export function createScene({
     // R4-fix (review RP8): the region labels drawn this frame (CSS px), so the guide chip keeps clear of them.
     const labelsPx = [];
     for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) labelsPx.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
-    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx };
+    // R5-polish (D18): your own body's footprint in third person (viewport fractions, [] in first person), so the HUD's
+    // orientation labels and the guide chip keep off your back too.
+    const body = cssW > 0 && cssH > 0 ? thirdPersonBodyRectsPx().map(r => ({ x0: r.x0 / cssW, y0: r.y0 / cssH, x1: r.x1 / cssW, y1: r.y1 / cssH })) : [];
+    // R5-fix (review P7): the mirror body's box and its arrows' boxes (viewport fractions), so the orientation labels and
+    // the guide chip keep off them too.
+    const mirrorRects = [];
+    if (cssW > 0 && cssH > 0) {
+      const mbx = mirrorBodyBoxNow();
+      if (mbx) mirrorRects.push({ x0: mbx.x0 / cssW, y0: mbx.y0 / cssH, x1: mbx.x1 / cssW, y1: mbx.y1 / cssH });
+      if (arrowSets.mirror.shown) for (const d of ARROW_DIRS) { const b = arrowSets.mirror.boxes[d]; if (b) mirrorRects.push({ x0: (b.x0 - 4) / cssW, y0: (b.y0 - 4) / cssH, x1: (b.x1 + 4) / cssW, y1: (b.y1 + 4) / cssH }); }
+    }
+    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx, body, mirror: mirrorRects };
+  }
+  /** R5-fix (review P7): the mirror body's on-screen box now (CSS px, padded 4 px; null when not shown or off screen),
+   * cached per camera / mirror state. */
+  let mirrorBoxNowKey = '', mirrorBoxNowVal = null;
+  function mirrorBodyBoxNow() {
+    if (!(mirrorRoot.visible && mirror.transform && cssW > 0 && cssH > 0)) return null;
+    camera.updateMatrixWorld(true);
+    const ce = camera.matrixWorld.elements;
+    let key = `${mirror.serial}|${cssW}x${cssH}|${camera.fov}|`;
+    for (let i = 0; i < 16; i++) key += `${Math.round(ce[i] * 1e5)},`;
+    if (key === mirrorBoxNowKey) return mirrorBoxNowVal;
+    mirrorBoxNowKey = key;
+    const W = mirrorSamplesWorld();
+    mirrorBoxNowVal = null;
+    if (!W) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
+    for (let i = 0; i < W.length; i += 3) {
+      pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
+      if (pv.z > -camera.near) continue;
+      pv.applyMatrix4(camera.projectionMatrix);
+      const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH; n++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (n && x1 > 0 && y1 > 0 && x0 < cssW && y0 < cssH) mirrorBoxNowVal = { x0: x0 - 4, y0: y0 - 4, x1: x1 + 4, y1: y1 + 4 };
+    return mirrorBoxNowVal;
   }
   /** R4-integrator (D7): does the brain's outline as drawn NOW (convex hull of its outline support points projected
    * with the live camera, CSS px) overlap rect { x0, y0, x1, y1 } (CSS px)? false before the brain is placed or when it
@@ -3773,6 +4546,31 @@ export function createScene({
       coverCache = { valid: true, hull: xy.length >= 6 ? convexHull2d(xy) : null };
     }
     return coverCache.hull ? rectHitsConvexHull(coverCache.hull, rect) : false;
+  }
+  /** R5-integrate-core (R25 / R26): does a CSS px rect cover a MOTOR AREA as drawn now (the region meshes' projected
+   * triangles, ns-arrows3d occupancyGrid, 4 px cells, 1 cell margin; first or third person camera)? With the round-5 brain
+   * filling the view, the see-through glass lies under almost every HUD place; a HUD line (the "Try this" guide) may sit
+   * over glass but never over a motor area. Falls back to brainCoversRect without a region segmentation. */
+  let motorCoverKey = '', motorCoverGrid = null;
+  function motorCoversRect(rect) {
+    if (!rect || !(cssW > 0 && cssH > 0)) return false;
+    const P = motorSamplePoints();
+    if (!P) return brainCoversRect(rect);
+    camera.updateMatrixWorld(true);
+    const me = brainGroup.matrixWorld.elements, ce = camera.matrixWorld.elements;
+    let key = `${cssW}x${cssH}|${camera.fov}|`;
+    for (let i = 0; i < 16; i++) key += `${me[i]},${ce[i]},`;
+    // R5-fix (review code F1): one grid per camera / brain pose (shared by the guide line, the mirror label and the glow
+    // thinning in the same frame); occupancyGrid is allocation-free now (about 2.4 ms instead of 13 ms per rebuild).
+    if (key !== motorCoverKey) {
+      motorCoverKey = key;
+      try {
+        const xy = NsArrows.projectPointsPx(P, Array.from(me), arrowCam()).xy;
+        motorCoverGrid = NsArrows.occupancyGrid(xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 1, indices: motorIndices });
+        arrowStats.motorGrids = (arrowStats.motorGrids || 0) + 1;
+      } catch { motorCoverGrid = null; }
+    }
+    return motorCoverGrid ? motorCoverGrid.hits(rect) > 0 : brainCoversRect(rect);
   }
   /** Orbit click handler (replaces createScene onOrbit); null restores the 'ns-orbit' document event. */
   function setOrbitHandler(fn) {
@@ -3857,8 +4655,6 @@ export function createScene({
    * bottom-centre CSS box). The arrow PLAN always keeps clear of it, so the arrows do not move when the pointer is
    * captured or released (the toast comes and goes) and are never under it. */
   let toastSeen = null;
-  const toastZone = () => (toastSeen && toastSeen.key === `${cssW}x${cssH}` ? toastSeen.rect
-    : { x0: cssW / 2 - Math.min(310, 0.46 * cssW), y0: cssH - 50, x1: cssW / 2 + Math.min(310, 0.46 * cssW), y1: cssH - 8 });
   function readHudRects() {
     const key = `${cssW}x${cssH}`;
     if (hudMo) { if (key === hudReadFor && !hudDirty) return hudRectCache; }
@@ -3926,100 +4722,972 @@ export function createScene({
     } catch { hudRectCache = []; }
     return hudRectCache;
   }
-  /* ---- R3-scene: orbit-arrow plan (reference view -> world anchors -> this frame's screen) ---------------------------- */
-  const arrowRef = { yaw: 0, pitch: 0, dist: BRAIN_ANCHOR_DIST_FALLBACK_M };
-  const arrowNow = {};
-  for (const d of ORBIT_ARROWS.dirs) arrowNow[d] = { x: -1e4, y: -1e4, front: false, usable: false, clear: false };
-  let arrowPlan = null, arrowPlanKey = '', arrowHudRects = null;
-  // R3-polish (R3-player item 14, INTEGRATION 7.3): the player's arm as the arrow plan sees it, captured ONCE per view
-  // size the first time the look is at the reference look (normally the very first frames, in the start pose), then
-  // frozen, so moving the hand with A/D never makes the world-anchored arrows jump. Arrows avoid it when they can
-  // (placeOrbitArrows `soft`); when nothing clear is off the arm they keep the round-3 spot.
-  let arrowArm = null, arrowArmFor = '';
-  const rectKey = rects => rects.map(r => `${Math.round(r.x0 / 4)},${Math.round(r.y0 / 4)},${Math.round(r.x1 / 4)},${Math.round(r.y1 / 4)}`).join(';');
-  /** Obstacles for the plan (CSS px): the whole info column (landscape) or bottom band (portrait), reserved whether or not
-   * the panel is showing (the arrows must not jump when it appears), plus the measured HUD card, legend and toast. */
-  function arrowObstacles(reserve, hudRects) {
+  /* ---- R5-scene (D16): 3D compass arrows: plan (ns-arrows3d), screen boxes, picks ---------------------------------- */
+  // Reference view of the brain's arrows: the default look carried with any grab (brainViewTransform grabYaw / grabPitch);
+  // the brain pivot's distance; k (m per mm), the pivot (source mm) and perspectiveK for the mirror's placement.
+  const arrowRef = { yaw: 0, pitch: 0, dist: BRAIN_ANCHOR_DIST_FALLBACK_M, k: null, pivot: null };
+  const arrowStats = { plans: 0, boxes: 0, picks: 0 };
+  let arrowSerial = 0;
+  /** The current render camera in ns-arrows3d's terms. */
+  const arrowCam = () => ({ width: cssW, height: cssH, fovYDeg: camera.fov, yaw: camPose ? camPose.yaw : lookYaw, pitch: camPose ? camPose.pitch : lookPitch, position: camPose ? camPose.position.slice() : [0, 0, 0] });
+  /** Where arrows may go (CSS px): the view minus a margin, the top limits line and the info column (landscape) or the
+   * bottom band (portrait), reserved whether or not the panel shows, so the arrows never jump when it appears. */
+  function arrowUsable() {
+    const m = NsArrows.ARROW_LAYOUT.marginPx, top = 26 + 2;
+    const reserve = infoPanelRect({ width: cssW, height: cssH }), g = INFO_PANEL.gapPx;
+    const U = { x0: m, y0: top, x1: cssW - m, y1: cssH - m };
+    if (reserve && reserve.layout === 'column') U.x1 = Math.max(U.x0 + 40, reserve.x0 - g);
+    else if (reserve && reserve.layout === 'portrait') U.y1 = Math.max(U.y0 + 40, reserve.y0 - g);
+    return U;
+  }
+  /** R5-bigbrain (R25 + D1(d)): the CSS px rect a look of at most BRAIN_VIEW.comfortDeg (40) puts under the crosshair. The
+   * brain now passes the comfortable look range, so the brain's arrows PREFER it (ns-arrows3d compassLayout prefer); an
+   * arrow with no clear place inside it (never over a motor area, the panel or a HUD card) takes its place outside. */
+  function comfortRectPx() { return arrowComfortRect({ width: cssW, height: cssH, fovYDeg: camera.fov }); }
+  /** Things the arrows keep clear of (CSS px), stable while playing: the status card at BOTH its homes (data-ns-home /
+   * data-ns-alt, so an arrow does not jump when the hand pushes the card away), the other HUD cards, and the capture /
+   * drag-to-look toast (measured, else its estimated bottom-centre box), so no arrow sits under them. */
+  let arrowObsKey = '';
+  function arrowObstacles() {
     const out = [];
-    const g = INFO_PANEL.gapPx;
-    if (reserve && reserve.layout === 'column') out.push({ x0: reserve.x0 - g, y0: 0, x1: cssW, y1: cssH });
-    else if (reserve && reserve.layout === 'portrait') out.push({ x0: 0, y0: reserve.y0 - g, x1: cssW, y1: cssH });
-    for (const r of hudRects || []) out.push(r);
+    for (const r of readHudRects() || []) {
+      if (r.info || r.orient || r.chip) continue;
+      if (r.toast) continue;
+      if (r.home) { out.push({ ...r.home }); if (r.alt) out.push({ ...r.alt }); } else out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 });
+    }
+    const key = `${cssW}x${cssH}`;
+    out.push(toastSeen && toastSeen.key === key ? { ...toastSeen.rect } : { x0: cssW / 2 - Math.min(310, 0.46 * cssW), y0: cssH - 50, x1: cssW / 2 + Math.min(310, 0.46 * cssW), y1: cssH - 8 });
+    // R5-bigbrain (R25): no arrow at the crosshair at the default look (the brain now fills the view, so an arrow pushed
+    // off a motor area could otherwise land where the player aims)
+    const ch = R5_BIGBRAIN.crosshairKeepPx;
+    out.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch, crosshair: true });
+    arrowObsKey = out.map(r => `${Math.round(r.x0 / 8)},${Math.round(r.y0 / 8)},${Math.round(r.x1 / 8)},${Math.round(r.y1 / 8)}`).join(';');
     return out;
   }
-  /** The arrow plan for the current brain transform, size, FOV and reference look (cached by key): the reference-view hull
-   * of the projected support points, placeOrbitArrows on it, and one world anchor per arrow. null without a usable hull. */
-  function arrowPlanFor(reserve, hudRects, topPx) {
-    if (!brainSupport || brainSupport.points.length < 9 || !(cssW > 0 && cssH > 0)) return null;
-    // The HUD card dodges the arm as the player looks around; its rectangle only counts near the reference look, so the
-    // world-anchored arrows do not jump when the card moves at other looks.
-    const nearRef = Math.abs(lookYaw - arrowRef.yaw) < 0.12 && Math.abs(lookPitch - arrowRef.pitch) < 0.12;
-    // R3-polish: the status card counts at BOTH its homes (data-ns-home / data-ns-alt), so the arrows are never under it
-    // and do not move when the hand pushes it from one home to the other.
-    if (nearRef || !arrowHudRects) arrowHudRects = (hudRects || []).filter(r => !r.info && !r.toast && !r.orient && !r.chip)
-      .flatMap(r => (r.home ? [{ ...r.home }, ...(r.alt ? [{ ...r.alt }] : [])] : [{ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }]));
-    const obstacles = arrowObstacles(reserve, arrowHudRects);
-    obstacles.push(toastZone());
-    const sizeKey = `${cssW}x${cssH}`;
-    if (arrowArmFor !== sizeKey && nearRef && labelAvoid && ((labelAvoid.rects || []).length || (labelAvoid.ellipses || []).length)) {
-      arrowArm = { rects: labelAvoid.rects.map(r => ({ ...r })), ellipses: labelAvoid.ellipses.map(q => ({ ...q })) };
-      arrowArmFor = sizeKey;
-    }
-    const soft = arrowArmFor === sizeKey ? arrowArm : null;
-    const env = armEnv && armEnv.forKey === sizeKey ? armEnv.envelope : null;
-    const e = brainGroup.matrixWorld.elements;
-    let key = `${cssW}x${cssH}|${camera.fov}|${arrowRef.yaw.toFixed(4)},${arrowRef.pitch.toFixed(4)}|${topPx}|${rectKey(obstacles)}|arm${soft ? arrowArmFor : '-'}|env${env ? armEnv.serial : '-'}|`;
-    for (let i = 0; i < 16; i++) key += `${e[i].toFixed(5)},`;
-    if (key === arrowPlanKey) return arrowPlan;
-    arrowPlanKey = key;
-    const tanH = Math.tan((camera.fov * DEG) / 2), aspect = cssW / cssH;
-    const cy = Math.cos(arrowRef.yaw), sy = Math.sin(arrowRef.yaw), cp = Math.cos(arrowRef.pitch), sp = Math.sin(arrowRef.pitch);
-    const P = brainHullPoints || brainSupport.points, xy = [];
-    let behind = 0;
-    for (let i = 0; i < P.length; i += 3) {
-      pv.set(P[i], P[i + 1], P[i + 2]).applyMatrix4(brainGroup.matrixWorld);
-      // Reference camera space: Rx(-pitch) Ry(-yaw) w (the camera is Ry(yaw) Rx(pitch), Three's 'YXZ').
-      const x1 = cy * pv.x - sy * pv.z, z1 = sy * pv.x + cy * pv.z;
-      const y2 = cp * pv.y + sp * z1, z2 = -sp * pv.y + cp * z1;
-      if (z2 > -near) { behind++; continue; }
-      xy.push((x1 / (-z2 * tanH * aspect) + 1) * 0.5 * cssW, (1 - y2 / (-z2 * tanH)) * 0.5 * cssH);
-    }
-    if (behind > 0 || xy.length < 6) { arrowPlan = null; return null; }
-    const hull = convexHull2d(xy);
-    const placement = placeOrbitArrows(hull, { width: cssW, height: cssH, topPx, obstacles, tanHalfFovY: tanH, soft, armEnvelope: env });
-    if (!placement) { arrowPlan = null; return null; }
-    const anchors = {};
-    for (const d of ORBIT_ARROWS.dirs) {
-      const q = placement[d];
-      const vx = ((2 * q.x) / cssW - 1) * tanH * aspect, vy = (1 - (2 * q.y) / cssH) * tanH, vz = -1;
-      const y1 = cp * vy - sp * vz, z1 = sp * vy + cp * vz; // Rx(pitch)
-      const wx = cy * vx + sy * z1, wz = -sy * vx + cy * z1; // Ry(yaw)
-      const L = Math.hypot(wx, y1, wz) || 1, k = arrowRef.dist / L;
-      anchors[d] = [wx * k, y1 * k, wz * k];
-    }
-    arrowPlan = { hull, placement, anchors, obstacles, ref: { yaw: arrowRef.yaw, pitch: arrowRef.pitch }, width: cssW, height: cssH };
-    return arrowPlan;
+  /** R5-bigbrain: the mirror body's on-screen box (CSS px, padded 6 px) for a camera look, or null when it is not shown. */
+  function mirrorBoxPx(look) {
+    if (!mirrorRoot.visible || !mirror.transform) return null;
+    const W = mirrorSamplesWorld();
+    if (!W) return null;
+    const { xy } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: [0, 0, 0] });
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; x0 = Math.min(x0, xy[i]); x1 = Math.max(x1, xy[i]); y0 = Math.min(y0, xy[i + 1]); y1 = Math.max(y1, xy[i + 1]); }
+    return x1 > x0 && y1 > y0 ? { x0: x0 - 6, y0: y0 - 6, x1: x1 + 6, y1: y1 + 6, mirror: true } : null;
   }
-  /** This frame's arrow positions from the plan's world anchors (arrowNow) and the hit-test layout: an arrow behind the
-   * camera, or (at this look) under the info panel, the legend, the HUD card or the toast, is not usable (null). */
-  function projectArrowAnchors(plan, reserve, hudRects, topPx = 0) {
-    const vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
-    const r = ORBIT_ARROWS.sizePx / 2 + ARROW_PLACEMENT.padPx;
-    const occ = (hudRects || []).filter(r => !r.orient && !r.chip);
-    const layout = { sizePx: ORBIT_ARROWS.sizePx };
-    for (const d of ORBIT_ARROWS.dirs) {
-      const a = plan.anchors[d], now = arrowNow[d];
-      pv.set(a[0], a[1], a[2]).applyMatrix4(vi);
-      if (pv.z > -near) { now.x = -1e4; now.y = -1e4; now.front = false; now.usable = false; layout[d] = null; continue; }
-      pv.applyMatrix4(pm);
-      now.x = (pv.x + 1) * 0.5 * cssW; now.y = (1 - pv.y) * 0.5 * cssH; now.front = true;
-      now.clear = plan.placement[d].clear;
-      // R3-polish: an arrow carried (by a drag or orbit) up under the always-on limits line is not drawn there either.
-      now.usable = !occ.some(o => now.x + r > o.x0 && now.x - r < o.x1 && now.y + r > o.y0 && now.y - r < o.y1) &&
-        !(now.y - ORBIT_ARROWS.sizePx / 2 < topPx - 2);
-      layout[d] = now.usable ? { x: now.x, y: now.y, clamped: !now.clear } : null;
+  /** R5-bigbrain (R25): the last placement tier for a brain arrow with no clear place: the HUD cards' ACTUAL boxes (not
+   * their reserved homes), the toast and the crosshair box. With the larger brain the belt's lateral end can fill the
+   * gap between the status card's two reserved homes (1280x720 after an orbit step). */
+  function arrowObstaclesTight() {
+    const out = [];
+    for (const r of readHudRects() || []) { if (r.info || r.orient || r.chip || r.toast) continue; out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
+    const key = `${cssW}x${cssH}`;
+    out.push(toastSeen && toastSeen.key === key ? { ...toastSeen.rect } : { x0: cssW / 2 - Math.min(310, 0.46 * cssW), y0: cssH - 50, x1: cssW / 2 + Math.min(310, 0.46 * cssW), y1: cssH - 8 });
+    const ch = R5_BIGBRAIN.crosshairKeepPx;
+    out.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch, crosshair: true });
+    return out;
+  }
+  function planSet(set, args) {
+    try { const p = NsArrows.planCompassArrows(args); arrowStats.plans++; return p; } catch (err) { arrowRigError = String((err && err.message) || err); return null; }
+  }
+  /** R5-bigbrain (R25): sample points of every motor area (source mm, the region meshes' vertices, at most
+   * R5_BIGBRAIN.motorSamples), built once: an arrow at the screen edge never covers a motor area, and the mirror body's
+   * default place keeps clear of them (ns-arrows3d occupancyGrid / compassLayout avoid). */
+  let motorSamples = null, motorIndices = null;
+  function motorSamplePoints() {
+    if (motorSamples || !regionMode || !regionMeshes.length) return motorSamples;
+    let n = 0;
+    for (const m of regionMeshes) n += m.geometry.attributes.position.count;
+    const stride = Math.max(1, Math.ceil(n / R5_BIGBRAIN.motorSamples)), out = [], idx = [];
+    for (const m of regionMeshes) {
+      const a = m.geometry.attributes.position, base = out.length / 3;
+      for (let i = 0; i < a.count; i += stride) out.push(a.getX(i), a.getY(i), a.getZ(i));
+      // every vertex kept (the usual case: about 8,000 region vertices): the triangles too, so their whole area counts
+      const ix = m.geometry.index;
+      if (stride === 1 && ix) for (let k = 0; k < ix.count; k++) idx.push(base + ix.getX(k));
     }
-    return layout;
+    motorSamples = Float32Array.from(out);
+    motorIndices = idx.length ? Uint32Array.from(idx) : null;
+    return motorSamples;
+  }
+  /** The motor areas' occupancy grid (CSS px) for a camera look at the brain's CURRENT matrix (the mirror body's place,
+   * mirrorState's behindMotor share). */
+  function motorGridFor(look, dilate = R5_BIGBRAIN.mirrorAvoidDilate) {
+    const P = motorSamplePoints();
+    if (!P || !(cssW > 0 && cssH > 0)) return null;
+    const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: [0, 0, 0] };
+    return NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam).xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate, indices: motorIndices });
+  }
+  /** R5-fix (review code F1): the rotation R (rows) with Mnew = [R 0; 0 1] * Mold when the brain only moved by a carry about
+   * the eye (orthonormal R, no translation part), else null. Matrices column-major (brainGroup.matrixWorld.elements). */
+  function pureCarry(Mold, Mnew) {
+    const inv = new THREE.Matrix4().fromArray(Mold).invert(), D = new THREE.Matrix4().fromArray(Mnew).multiply(inv).elements;
+    if (Math.hypot(D[12], D[13], D[14]) > 1e-6) return null;
+    const R = [[D[0], D[4], D[8]], [D[1], D[5], D[9]], [D[2], D[6], D[10]]];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const dot = R[0][i] * R[0][j] + R[1][i] * R[1][j] + R[2][i] * R[2][j]; if (Math.abs(dot - (i === j ? 1 : 0)) > 1e-6) return null; }
+    return R;
+  }
+  /** Keep both rigs planned (cheap when nothing changed: a key per set). */
+  function updateArrows() {
+    if (!(cssW > 0 && cssH > 0)) return;
+    const B = arrowSets.brain, M = arrowSets.mirror;
+    const obstacles = arrowObstacles();
+    const sz = `${cssW}x${cssH}|${camera.fov}|${arrowObsKey}`;
+    const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport);
+    if (showB) {
+      const e = brainGroup.matrixWorld.elements;
+      // R5-bigbrain: the brain's arrows also keep off the mirror body behind the glass (its box in the reference view);
+      // the two fallback tiers (HUD cards' actual boxes, no slide cap) may cover it: over the mirror body, which is
+      // behind the glass, is better than over a motor area (portrait after an orbit step: the bottom edge is all belt)
+      // R5-integrate-core (D16 "they follow the brain (drag / orbit)"): only while the brain is NOT carried away (the mirror
+      // body then stands behind it); after a Space-drag the mirror no longer sits behind the brain, and keeping off its box
+      // in the carried reference view would move the arrows relative to the brain (e2e S32 "arrows follow a brain drag").
+      const carried = Math.abs(arrowRef.yaw) > 1e-6 || Math.abs(arrowRef.pitch) > 1e-6;
+      const mb = carried ? null : mirrorBoxPx({ yaw: arrowRef.yaw, pitch: arrowRef.pitch });
+      // R5-fix (review code F1): the key holds the mirror body's BOX (8 px steps), not its serial, so turning the mirror
+      // body (its arrows held) re-plans the brain's arrows only when that box really moves.
+      let key = `${sz}|${arrowRef.yaw},${arrowRef.pitch}|${mb ? `${Math.round(mb.x0 / 8)},${Math.round(mb.y0 / 8)},${Math.round(mb.x1 / 8)},${Math.round(mb.y1 / 8)}` : '-'}|`;
+      for (let i = 0; i < 16; i++) key += `${e[i]},`;
+      // R5-fix (review code F1): while Space carries the brain (a pure rotation about the eye; the arrows' reference view
+      // turns with it, so the plan in that view does not change), the last frames are turned with the brain instead of
+      // being re-planned every frame (two occupancy grids and the layout search per frame cost about 20 ms).
+      const R = key !== B.key && B.frames && B.planSz === `${sz}|${mb ? 'm' : '-'}` && B.planMatrix ? pureCarry(B.planMatrix, e) : null;
+      if (R) {
+        B.key = key;
+        B.frames = NsArrows.rotateFrames(B.planFrames, R);
+        if (B.plan) B.plan = { ...B.plan, frames: B.frames };
+        B.serial = (B.serial || 0) + 1;
+        B.rig.setFrames(B.frames);
+        arrowSerial++;
+        arrowStats.carried = (arrowStats.carried || 0) + 1;
+      } else if (key !== B.key) {
+        B.key = key;
+        const obsB = mb ? [...obstacles, mb] : obstacles, tightB = arrowObstaclesTight();
+        B.plan = planSet(B, { points: brainHullPoints || brainSupport.points, matrix: Array.from(e), centre: farEyeView.pw || [e[12], e[13], e[14]],
+          ref: { yaw: arrowRef.yaw, pitch: arrowRef.pitch }, cam: { width: cssW, height: cssH, fovYDeg: camera.fov }, kind: 'brain', usable: arrowUsable(), obstacles: obsB, prefer: comfortRectPx(), fallbackObstacles: tightB,
+          avoidPoints: motorSamplePoints(), avoidIndices: motorIndices, avoidCellPx: R5_BIGBRAIN.avoidCellPx, avoidDilate: R5_BIGBRAIN.avoidDilate });
+        B.frames = B.plan ? B.plan.frames : null;
+        B.planFrames = B.frames; B.planMatrix = Array.from(e); B.planSz = `${sz}|${mb ? 'm' : '-'}`;
+        B.serial = (B.serial || 0) + 1;
+        B.rig.setFrames(B.frames);
+        arrowSerial++;
+      }
+    }
+    B.shown = showB && Boolean(B.frames);
+    if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
+    const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null;
+    if (showM) {
+      // The mirror body's arrows also keep clear of the brain's own arrows when both are laid out in the same view (the
+      // brain not carried away): at 16:9 the brain's top / bottom arrows slide over the outline toward the mirror's.
+      const sameRef = Math.abs(arrowRef.yaw) < 1e-6 && Math.abs(arrowRef.pitch) < 1e-6 && B.shown && B.plan && B.plan.layout;
+      const key = `${sz}|${mirror.serial}|${sameRef ? B.serial : '-'}`;
+      if (key !== M.key) {
+        M.key = key;
+        // (the crosshair keep-out box is for the brain's own arrows only: the mirror's sit behind the glass)
+        const obsM0 = obstacles.filter(o => !o.crosshair);
+        const obsM = sameRef ? [...obsM0, ...ARROW_DIRS.map(d => B.plan.layout.arrows[d] && B.plan.layout.arrows[d].box).filter(Boolean).map(b => ({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }))] : obsM0;
+        M.plan = planSet(M, { points: mirrorSamplesWorld(), matrix: null, centre: Array.from(mirror.transform.centre), ref: { yaw: 0, pitch: 0 },
+          cam: { width: cssW, height: cssH, fovYDeg: camera.fov }, kind: 'mirror', usable: arrowUsable(), obstacles: obsM });
+        // R5-bigbrain: no motor-area avoidance here: the mirror body's default place (mirrorFitNow) already keeps its
+        // four arrows' rooms clear of the motor areas; when the brain is orbited or dragged its areas may pass in front
+        // of them (they are behind the glass then, and the brain catches the look), and the arrows stay close to the body
+        M.frames = M.plan ? M.plan.frames : null;
+        M.rig.setFrames(M.frames);
+        arrowSerial++;
+      }
+    }
+    M.shown = showM && Boolean(M.frames);
+    if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
+  }
+  /** Screen boxes (ns-arrows3d arrowScreenBox) and a click point (the middle of the stalk) of every shown arrow, for the
+   * overlay, captions and QA; recomputed when the plan or the camera changed. */
+  function arrowBoxes() {
+    if (!(cssW > 0 && cssH > 0)) return;
+    camera.updateMatrixWorld(true);
+    const ce = camera.matrixWorld.elements;
+    let ck = `${arrowSerial}|${cssW}x${cssH}|${camera.fov}|`;
+    for (let i = 0; i < 16; i++) ck += `${ce[i]},`;
+    const cam = arrowCam();
+    const mid = [NsArrows.ARROW_DESIGN.stalk * 0.5, 0, 0];
+    for (const set of [arrowSets.brain, arrowSets.mirror]) {
+      if (set.boxKey === ck) continue;
+      set.boxKey = ck;
+      for (const d of ARROW_DIRS) {
+        const f = set.shown && set.frames ? set.frames[d] : null;
+        let box = null, click = null;
+        if (f) {
+          try {
+            box = NsArrows.arrowScreenBox(f, cam);
+            const q = NsArrows.projectWorldPx(NsArrows.frameToWorld(f, mid), cam);
+            click = q.depth > 0 ? [q.x, q.y] : null;
+          } catch { box = null; click = null; }
+        }
+        set.boxes[d] = box && box.x1 > 0 && box.x0 < cssW && box.y1 > 0 && box.y0 < cssH ? box : null;
+        set.clicks[d] = set.boxes[d] ? click : null;
+      }
+      arrowStats.boxes++;
+    }
+    updateArrowXray();
+  }
+  /** R5-fix (review P11): the brain arrows' see-through copy is for the near LEFT ARM only (D16 "where the near arm hides
+   * an arrow"): it is drawn while the arrow's box meets the arm's screen shapes (ns-app setLabelAvoid) in first person,
+   * and hidden otherwise (viewed: a pale arrow shape on your right shoulder when looking far right). */
+  let xrayKey = '';
+  function updateArrowXray() {
+    const set = arrowSets.brain;
+    if (!set.rig || !set.rig.arrows) return;
+    const arm = camPose ? [] : labelAvoidPx().boxes;
+    let key = `${set.boxKey}|${camPose ? 't' : 'f'}|`;
+    for (const r of arm) key += `${Math.round(r.x0)},${Math.round(r.y0)},${Math.round(r.x1)},${Math.round(r.y1)};`;
+    if (key === xrayKey) return;
+    xrayKey = key;
+    for (const d of ARROW_DIRS) {
+      const a = set.rig.arrows[d], b = set.boxes[d];
+      if (!a || !a.xray) continue;
+      const m = 48; // the arm shapes are estimates: a generous margin keeps a covered arrow findable
+      const on = Boolean(b) && arm.some(r => r.x0 - m < b.x1 && r.x1 + m > b.x0 && r.y0 - m < b.y1 && r.y1 + m > b.y0);
+      if (a.xray.visible !== on) a.xray.visible = on;
+    }
+  }
+  /** R5-scene (D16 / D19): what a ray through CSS point (x, y) hits, nearest first: [{ kind: 'arrow', target: 'brain' |
+   * 'mirror', dir, distance (m along the ray) }, { kind: 'brain', distance } (the point is inside the brain's drawn
+   * outline; distance = its nearest point from the camera)] (ns-arrows3d pickArrows per rig, with its pick padding).
+   * Feed it to ns-controls resolveArrowHit: a mirror arrow behind the brain is then 'blocked'. */
+  function pickArrows(x, y) {
+    const hits = [];
+    if (!(Number.isFinite(x) && Number.isFinite(y)) || !(cssW > 0 && cssH > 0)) return hits;
+    updateArrows();
+    arrowStats.picks++;
+    let ray = null;
+    try { ray = NsArrows.pixelRay(x, y, arrowCam()); } catch { ray = null; }
+    if (ray) {
+      for (const set of [arrowSets.brain, arrowSets.mirror]) {
+        if (!set.shown || !set.frames) continue;
+        let h = null;
+        const hidden = set.target === 'brain' ? underPanel.brain : null;
+        const only = hidden && hidden.size ? ARROW_DIRS.filter(d => !hidden.has(d)) : null;
+        try { h = only && !only.length ? null : NsArrows.pickArrows(ray, set.frames, only ? { only } : {}); } catch { h = null; }
+        if (h && Number.isFinite(h.t)) hits.push({ kind: 'arrow', target: set.target, dir: h.dir, distance: h.t });
+      }
+    }
+    if (regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 })) {
+      hits.push({ kind: 'brain', distance: Number.isFinite(cameraRange.brainNearM) ? cameraRange.brainNearM : arrowRef.dist });
+    }
+    hits.sort((p, q) => p.distance - q.distance);
+    return hits;
+  }
+  /** R5-scene: highlight the arrow under the pick point. hit: { target, dir, blocked? } (ns-controls arrowHitOf /
+   * stepArrowInput's hover) or null. An unblocked arrow gets ns-arrows3d's hover look (brighter, warm white, 12 % larger)
+   * and its plain caption; a mirror arrow the brain covers ('blocked') gets the rig's blocked look (grey, not enlarged, no
+   * caption: it cannot be used through the brain; R5-input shows the plain hint). Returns the hover or null. */
+  function setArrowHover(hit) {
+    const ok = hit && typeof hit === 'object' && (hit.target === 'brain' || hit.target === 'mirror') && ARROW_DIRS.includes(hit.dir);
+    const next = ok ? { target: hit.target, dir: hit.dir, blocked: typeof hit.blocked === 'string' && hit.blocked ? hit.blocked : null } : null;
+    arrowHoverPointer = Boolean(ok && hit.pointer === true); // R5-fix (review F5): a free pointer is on it
+    const same = (next === null && arrowHover === null) || (next && arrowHover && next.target === arrowHover.target && next.dir === arrowHover.dir && next.blocked === arrowHover.blocked);
+    if (same) return arrowHover;
+    arrowHover = next;
+    blockedHoverAtMs = next && next.blocked ? nowMs() : null;
+    hoverDir = next && next.target === 'brain' && !next.blocked ? next.dir : null;
+    for (const set of [arrowSets.brain, arrowSets.mirror]) {
+      if (!set.rig) continue;
+      const hd = next && !next.blocked && next.target === set.target ? next.dir : null;
+      // R5-arrows: a covered mirror arrow under the pick point shows ns-arrows3d's blocked look (grey, not enlarged).
+      const bd = next && next.blocked && next.target === set.target ? next.dir : null;
+      set.rig.setHover(hd || bd, { blocked: Boolean(bd && !hd) });
+      for (const d of ARROW_DIRS) { const u = set.rig.arrows[d].root.userData.nsOrbitArrow; if (u) u.hover = d === hd; }
+    }
+    overlayDirty = true;
+    return arrowHover;
+  }
+  /** Brain arrows' screen layout for the overlay (labels, the face caption and the HUD keep clear of the shown ones):
+   * { dir: { x, y, box } | null } or null when none is on screen. */
+  function arrowScreenLayout() {
+    const B = arrowSets.brain;
+    if (!B.shown) { underPanel.brain.clear(); return null; }
+    arrowBoxes();
+    // R5-integrate-core (D16 + round-3 D2 "under the info column an arrow is not drawn"): a brain arrow whose screen box
+    // runs under the far-right information panel or a HUD card (looking aside moves the world-anchored arrows) is not
+    // drawn and not pickable until it comes out again; no panel or card is covered and no arrow is clicked through one.
+    // (and under the HUD cards: the status card and the legend card, as drawn now)
+    const infoRects = (readHudRects() || []).filter(r => r.info || (!r.orient && !r.chip && !r.toast));
+    const out = {};
+    let any = false;
+    for (const d of ARROW_DIRS) {
+      const b = B.boxes[d], c = B.clicks[d];
+      const under = Boolean(b) && infoRects.some(r => b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0);
+      if (under) underPanel.brain.add(d); else underPanel.brain.delete(d);
+      const root = B.rig && B.rig.arrows[d] ? B.rig.arrows[d].root : null;
+      if (root && root.visible === under) root.visible = !under;
+      out[d] = b && !under ? { x: c ? c[0] : (b.x0 + b.x1) / 2, y: c ? c[1] : (b.y0 + b.y1) / 2, box: b } : null;
+      if (out[d]) any = true;
+    }
+    return any ? out : null;
+  }
+  const underPanel = { brain: new Set() }; // R5-integrate-core: brain arrows hidden under the information panel this frame
+  /** R5-polish (D18): your own body's screen footprint in third person as row-run rects (CSS px; an occupancy grid of the
+   * posed body points of the mirror measurement, BODY_FOOTPRINT.cellPx cells), so the brain's labels and the HUD's
+   * orientation labels keep off your back. [] in first person (or before the body is measured). Cached per camera. */
+  let bodyRectsKey = '', bodyRectsCache = [];
+  function thirdPersonBodyRectsPx() {
+    if (!camPose || !(camPose.blend > 0.5) || !mirror.samples || !(cssW > 0 && cssH > 0)) return [];
+    const key = `${cssW}x${cssH}|${camera.fov}|${camPose.position.join(',')}|${camPose.yaw},${camPose.pitch}|${mirror.samples.length}`;
+    if (key === bodyRectsKey) return bodyRectsCache;
+    bodyRectsKey = key;
+    try {
+      const xy = NsArrows.projectPointsPx(mirror.samples, null, arrowCam()).xy;
+      const grid = NsArrows.occupancyGrid(xy, { width: cssW, height: cssH, cellPx: BODY_FOOTPRINT.cellPx, dilate: BODY_FOOTPRINT.dilate });
+      bodyRectsCache = footprintRects(grid);
+    } catch { bodyRectsCache = []; }
+    return bodyRectsCache;
+  }
+  /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
+  const arrowTipRects = []; // R5-polish: the captions shown this frame (CSS px); the region labels keep clear of them
+  /** R5-polish (D19 "you have to move the brain that's in front of it away"): the mirror body's arrows that the glass
+   * brain's drawn outline covers now are drawn half greyed (ns-arrows3d setDimmed), so they read as "not yet"; they take
+   * their full green as soon as the brain is dragged off them. The input rule is unchanged (ns-controls resolveArrowHit:
+   * the brain catches the look and the click). */
+  const mirrorDim = { forward: false, back: false, left: false, right: false };
+  function updateMirrorArrowDim() {
+    const set = arrowSets.mirror;
+    if (!set || !set.rig || typeof set.rig.setDimmed !== 'function') return;
+    for (const d of ARROW_DIRS) {
+      const b = set.shown && regionMode && brainTransformSet ? set.boxes[d] : null;
+      const cx = b ? (b.x0 + b.x1) / 2 : NaN, cy = b ? (b.y0 + b.y1) / 2 : NaN;
+      mirrorDim[d] = Boolean(b) && brainCoversRect({ x0: cx - 1, y0: cy - 1, x1: cx + 1, y1: cy + 1 }) === true;
+    }
+    set.rig.setDimmed(mirrorDim);
+  }
+  function layoutArrowTips(reserveRight, reserveBottom, topPx) {
+    arrowBoxes();
+    arrowTipRects.length = 0;
+    for (const [k, T] of Object.entries(arrowTips)) {
+      const [target, d] = k.split(':');
+      const set = arrowSets[target], box = set.shown ? set.boxes[d] : null;
+      const onThis = Boolean(arrowHover && arrowHover.target === target && arrowHover.dir === d);
+      // R5-fix (review F5): on the crosshair the caption needs a real look change since the rest (the start or E): the
+      // arrows appear after the load, so "reached more than 0.8 s after the rest" was true at the start with no input
+      // (portrait). A free pointer on the arrow (moved there by the player) shows it at once.
+      const blockedTip = onThis && Boolean(arrowHover.blocked) && target === 'mirror' && (lookMoved || arrowHoverPointer);
+      const want = Boolean(box) && ((onThis && !arrowHover.blocked) || blockedTip || (target === 'brain' && guideGoalAttr === 'orbit'));
+      if (!want) { if (T.shown) { T.shown = false; T.el.hidden = true; } continue; }
+      const text = blockedTip ? mirrorBlockedTipText() : arrowTipText(target, d);
+      if (T.text !== text) { T.el.textContent = text; T.text = text; }
+      if (T.blocked !== blockedTip) { T.blocked = blockedTip; if (blockedTip) T.el.setAttribute('data-ns-blocked', 'true'); else T.el.removeAttribute('data-ns-blocked'); }
+      const e = NsArrows.COMPASS_SCREEN[d], gap = R5_SCENE.arrowCaptionPx;
+      // a blocked caption wraps to two lines (CSS max-width 230 px)
+      const w = blockedTip ? 230 : Math.min(260, 7.2 * T.el.textContent.length + 18), h = blockedTip ? 38 : 22;
+      // just past the arrow's outer end, along its compass direction
+      const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
+      const hitsBox = (x, y) => x < box.x1 + 2 && x + w > box.x0 - 2 && y < box.y1 + 2 && y + h > box.y0 - 2;
+      // just past the arrow's outer end along its compass direction; where the screen edge or the panel leaves no room
+      // there, under the arrow (above it for the bottom arrow), never on top of the arrow itself
+      let x = clampTo(e[0] > 0 ? box.x1 + gap : e[0] < 0 ? box.x0 - gap - w : (box.x0 + box.x1) / 2 - w / 2, 4, xMax);
+      let y = clampTo(e[1] > 0 ? box.y1 + gap : e[1] < 0 ? box.y0 - gap - h : (box.y0 + box.y1) / 2 - h / 2, topPx, yMax);
+      if (hitsBox(x, y)) {
+        x = clampTo((box.x0 + box.x1) / 2 - w / 2, 4, xMax);
+        y = e[1] > 0 ? clampTo(box.y0 - gap - h, topPx, yMax) : clampTo(box.y1 + gap, topPx, yMax);
+        if (hitsBox(x, y)) y = clampTo(box.y0 - gap - h, topPx, yMax);
+      }
+      // R5-polish: a caption also keeps off the OTHER arrows shown now (viewed at 720x1280: the covered mirror arrow's
+      // caption touched the brain's left arrow): the other side, then under / over the arrow; else the place above.
+      const others = [];
+      for (const t2 of ['brain', 'mirror']) { const S2 = arrowSets[t2]; if (S2 && S2.shown) for (const d2 of ARROW_DIRS) { const b2 = S2.boxes[d2]; if (b2 && b2 !== box) others.push(b2); } }
+      const hitsOther = (cx, cy) => others.some(b2 => cx < b2.x1 + 2 && cx + w > b2.x0 - 2 && cy < b2.y1 + 2 && cy + h > b2.y0 - 2);
+      if (hitsOther(x, y)) {
+        const midX = (box.x0 + box.x1) / 2 - w / 2, midY = (box.y0 + box.y1) / 2 - h / 2;
+        const cands = [
+          [e[0] > 0 ? box.x0 - gap - w : e[0] < 0 ? box.x1 + gap : midX, e[1] !== 0 ? (e[1] > 0 ? box.y0 - gap - h : box.y1 + gap) : midY],
+          [midX, box.y1 + gap], [midX, box.y0 - gap - h]
+        ].map(([cx, cy]) => [clampTo(cx, 4, xMax), clampTo(cy, topPx, yMax)]);
+        const ok = cands.find(([cx, cy]) => !hitsBox(cx, cy) && !hitsOther(cx, cy));
+        if (ok) { x = ok[0]; y = ok[1]; }
+      }
+      const l = px(x), t = px(y);
+      if (T.left !== l) { T.el.style.left = l; T.left = l; }
+      if (T.top !== t) { T.el.style.top = t; T.top = t; }
+      if (!T.shown) { T.shown = true; T.el.hidden = false; }
+      arrowTipRects.push({ x0: x - 2, y0: y - 2, x1: x + w + 2, y1: y + h + 2 });
+    }
+  }
+  /** QA / tests: { source, error, silhouette, hover, brain / mirror: { shown, sizes, frontDepthM, dirs: { dir: { x, y
+   * (click point), box, slidPx, overOutline, onScreen, blocked, depthMode, distanceM } } }, stats }. */
+  function arrowsState() {
+    updateArrows();
+    arrowBoxes();
+    const r1 = v => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+    const one = set => {
+      const L = set.plan && set.plan.layout;
+      return {
+        shown: set.shown, sizes: set.plan ? set.plan.sizes : null, frontDepthM: set.plan && Number.isFinite(set.plan.frontDepthM) ? Math.round(set.plan.frontDepthM * 1000) / 1000 : null,
+        hovered: set.rig ? set.rig.hovered : null,
+        dimmed: set.rig && Array.isArray(set.rig.dimmed) ? set.rig.dimmed : [], // R5-polish: covered, drawn half greyed
+        dirs: Object.fromEntries(ARROW_DIRS.map(d => {
+          const a = L && L.arrows[d], f = set.frames && set.frames[d], b = set.boxes[d], c = set.clicks[d];
+          return [d, { x: c ? r1(c[0]) : null, y: c ? r1(c[1]) : null, box: b ? [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1)] : null,
+            slidPx: a ? r1(a.slidPx) : null, overOutline: a ? a.overOutline : null, onScreen: a ? a.onScreen : null, blocked: a ? a.blocked : null,
+            edge: a ? a.edge === true : null, edgeShiftPx: a && Number.isFinite(a.edgeShiftPx) ? r1(a.edgeShiftPx) : null, overMotor: a && Number.isFinite(a.overAvoid) ? a.overAvoid : null, outsideComfort: a ? a.outsidePreferred === true : null, tier: a ? a.tier || null : null,
+            clearancePx: a ? r1(a.clearancePx) : null, depthMode: f ? f.depthMode : null, distanceM: f && Number.isFinite(f.distance) ? Math.round(f.distance * 1000) / 1000 : null }];
+        }))
+      };
+    };
+    return { source: 'ns-arrows3d', error: arrowRigError, silhouette: Boolean(arrowSets.brain.rig && arrowSets.brain.rig.arrows.forward.xray), hover: arrowHover ? { ...arrowHover } : null,
+      brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats } };
+  }
+
+  /* ---- R5-scene (D19): mirror body (ns-mirror placement, transform and orbit; the scene draws the twins) ------------ */
+  /** The player's posed body as world points (R5_SCENE.mirrorPointsPerMesh vertices of every body mesh, head included, and
+   * of the arm at the start look) -> ns-mirror bodyBoundsFromPoints; measured once from the first posed body. */
+  function computeMirrorBody() {
+    if (!body.length) return false;
+    bodyGroup.updateMatrixWorld(true);
+    const bw = bodyGroup.matrixWorld, pts = [];
+    const take = (geo, m, out) => {
+      const a = geo && geo.attributes && geo.attributes.position;
+      if (!a) return;
+      const n = a.count, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh));
+      for (let i = 0; i < n; i += step) { pv.fromBufferAttribute(a, i).applyMatrix4(m); if (out) pv.applyMatrix4(out); pts.push(pv.x, pv.y, pv.z); }
+    };
+    for (const b of body) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, bw);
+    // the arm in its eye frame at the start look (yaw = pitch = 0: the eye frame is the world frame)
+    for (const b of bones) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, null);
+    for (const m of muscles) { const p = m.pos; const n = p.length / 3, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh)); for (let i = 0; i < n; i += step) pts.push(p[3 * i], p[3 * i + 1], p[3 * i + 2]); }
+    if (pts.length < 3) return false;
+    try {
+      const fwd = [-Math.sin(bodyYaw), 0, -Math.cos(bodyYaw)];
+      mirror.body = NsMirror.bodyBoundsFromPoints(Float64Array.from(pts), { forward: fwd });
+    } catch (err) { mirror.error = String((err && err.message) || err); return false; }
+    mirror.samples = mirror.body.sample;
+    mirror.ready = true;
+    mirror.frameKey = '';
+    updateMirrorPlacement();
+    return true;
+  }
+  /** Brain radius about its pivot (source mm, the outline support points; an orbit / squash-proof bound). */
+  function brainRadiusMm() {
+    if (mirror.brainRadiusMm !== null) return mirror.brainRadiusMm;
+    const P = (brainHullPoints && brainHullPoints.length >= 9 ? brainHullPoints : null) || (brainSupport && brainSupport.points), pv0 = arrowRef.pivot;
+    if (!P || !pv0) return null;
+    let r = 0;
+    for (let i = 0; i < P.length; i += 3) r = Math.max(r, Math.hypot(P[i] - pv0[0], P[i + 1] - pv0[1], P[i + 2] - pv0[2]));
+    mirror.brainRadiusMm = r;
+    return r;
+  }
+  /** Default placement (ns-mirror mirrorPlacement) from the brain frame of the DEFAULT view (the grab carry undone; the
+   * brain outline at no orbit), the measured body and the camera; re-placed (orbit kept) only when the brain frame or the
+   * view size changes, never by a drag or an orbit. */
+  function updateMirrorPlacement() {
+    if (!mirror.ready || !farEyeView.pw || !arrowRef.k || !(cssW > 0 && cssH > 0)) return false;
+    const C = farEyeView.pw;
+    const cy = Math.cos(-arrowRef.yaw), sy = Math.sin(-arrowRef.yaw), cp = Math.cos(-arrowRef.pitch), sp = Math.sin(-arrowRef.pitch);
+    const x1 = cy * C[0] + sy * C[2], z1 = -sy * C[0] + cy * C[2];
+    const P0 = [x1, cp * C[1] - sp * z1, sp * C[1] + cp * z1];
+    const rMm = brainRadiusMm();
+    if (!(rMm > 0)) return false;
+    // The brain outline box at the default view (NDC), taken while the brain is not orbited (else the last one is kept).
+    const t = lastBrainTransform, notOrbited = !t || ((!Number.isFinite(t.orbitYaw) || t.orbitYaw === 0) && (!Number.isFinite(t.orbitPitch) || t.orbitPitch === 0));
+    const sizeKey = `${cssW}x${cssH}|${camera.fov}`;
+    if (notOrbited && (!mirror.outlineNdc || mirror.outlineNdc.key !== sizeKey || mirror.outlineNdc.k !== arrowRef.k)) {
+      const P = brainHullPoints || (brainSupport && brainSupport.points);
+      try {
+        const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: [0, 0, 0] };
+        const { xy } = NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam);
+        let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+        for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; a = Math.min(a, xy[i]); c = Math.max(c, xy[i]); b = Math.min(b, xy[i + 1]); d = Math.max(d, xy[i + 1]); }
+        if (c > a && d > b) mirror.outlineNdc = { key: sizeKey, k: arrowRef.k, x0: (2 * a) / cssW - 1, x1: (2 * c) / cssW - 1, y0: 1 - (2 * d) / cssH, y1: 1 - (2 * b) / cssH, hullPx: NsArrows.convexHullPx(xy), fit: mirrorFitNow(xy, cam, P0) };
+      } catch { /* keep the last outline */ }
+    }
+    if (!mirror.outlineNdc) return false;
+    const key = `${P0.map(v => v.toFixed(4)).join(',')}|${arrowRef.k}|${farEyeView.K}|${sizeKey}|${mirror.outlineNdc.x0.toFixed(4)},${mirror.outlineNdc.y0.toFixed(4)}`;
+    if (key === mirror.frameKey) return false;
+    mirror.frameKey = key;
+    try {
+      const farM = NsMirror.brainFarDistance({ frame: { k: arrowRef.k, perspectiveK: farEyeView.K, pivotWorld: P0 }, brainRadiusMm: rMm });
+      const brainIn = { centre: P0, farM, outlineNdc: mirror.outlineNdc }, camIn = { aspect: cssW / cssH, fovYDeg: camera.fov };
+      // R5-bigbrain (R25): the brain fills the view, so the body goes into the largest clear place on the brain's
+      // midline (ns-mirror mirrorFitBox: no motor area, no brain arrow and no HUD card in front of it or its arrows).
+      const fitBox = mirror.outlineNdc.fit && mirror.outlineNdc.fit.boxFor ? mirror.outlineNdc.fit.boxFor(NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn })) : null;
+      mirror.fit = fitBox ? { boxPx: fitBox.box, freePx: fitBox.free, tried: fitBox.tried } : null;
+      mirror.placement = NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn, options: fitBox ? { targetBoxNdc: { x0: (2 * fitBox.box.x0) / cssW - 1, x1: (2 * fitBox.box.x1) / cssW - 1, y0: 1 - (2 * fitBox.box.y1) / cssH, y1: 1 - (2 * fitBox.box.y0) / cssH } } : {} });
+      mirror.state = mirror.state ? NsMirror.placeMirror(mirror.state, mirror.placement) : NsMirror.createMirrorState(mirror.placement);
+    } catch (err) { mirror.error = String((err && err.message) || err); return false; }
+    applyMirror();
+    applyMirrorCull();
+    return true;
+  }
+  /** R5-bigbrain (R25): the inputs of the mirror body's free-box fit at the default view (CSS px): the brain's drawn
+   * hull, its motor areas (occupancy grid), the brain's own four arrows (laid out exactly as the rig lays them out at
+   * this view) and the HUD cards, the mirror arrows' room and the brain's midline. Returns { boxFor(trialPlacement) }:
+   * the ns-mirror mirrorFitBox result for the body's on-screen aspect, or null. */
+  function mirrorFitNow(xy, cam, P0) {
+    const grid = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch }), gridA = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch }, R5_BIGBRAIN.avoidDilate);
+    if (!grid) return null;
+    const usable = arrowUsable(), obstacles = arrowObstacles();
+    const sizesB = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'brain');
+    const lay = NsArrows.compassLayout(xy, { width: cssW, height: cssH, ...sizesB, usable, obstacles, avoid: gridA, prefer: comfortRectPx(), fallbackObstacles: arrowObstaclesTight() });
+    // the body may stand behind the crosshair (only the brain's arrows keep off it); HUD cards and the brain's arrows block
+    const pad = 4, boxes = [...obstacles.filter(o => !o.crosshair), ...(lay ? ARROW_DIRS.map(d => lay.arrows[d].box).filter(Boolean).map(b => ({ x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad })) : [])];
+    const blocked = b => grid.hits(b) + boxes.reduce((n, o) => n + (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0 ? 1 : 0), 0);
+    const sizesM = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'mirror');
+    const room = NsArrows.arrowRoomPx(sizesM), fp = NsArrows.arrowPath().footprint;
+    const band = 2 * fp.half * sizesM.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
+    const c = NsArrows.projectWorldPx(P0, cam), hull = NsArrows.convexHullPx(xy);
+    return {
+      boxFor(trial) {
+        if (!trial || !(trial.expectedHeightNdc > 0 && trial.expectedWidthNdc > 0)) return null;
+        const aspect = (trial.expectedWidthNdc * cssW) / (trial.expectedHeightNdc * cssH);
+        try { return NsMirror.mirrorFitBox({ width: cssW, height: cssH, usable, blocked, aspect, room: { top: room, bottom: room, side: room }, sideBand: band, hull, centreX: c.x }); } catch { return null; }
+      }
+    };
+  }
+  /** The transform in use: an integrator's ns-mirror transform or state (setMirrorView), else the scene's default state
+   * with its orbit. */
+  function applyMirror() {
+    let T = null;
+    try {
+      if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
+      else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(mirror.external);
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch }) }));
+    } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
+    if (!T || !T.matrix || T.matrix.length !== 16) return false;
+    mirrorRoot.matrix.fromArray(T.matrix);
+    mirrorRoot.matrixWorldNeedsUpdate = true;
+    mirror.transform = { matrix: Array.from(T.matrix), centre: Array.from(T.centre), scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch } : null };
+    mirror.serial++;
+    overlayDirty = true;
+    updateCameraRange();
+    return true;
+  }
+  /** Mirror sample points in the world (the body sample through the mirror matrix). */
+  function mirrorSamplesWorld() {
+    const S = mirror.samples, M = mirror.transform && mirror.transform.matrix;
+    if (!S || !M) return null;
+    const out = new Float64Array(S.length);
+    for (let i = 0; i < S.length; i += 3) {
+      out[i] = M[0] * S[i] + M[4] * S[i + 1] + M[8] * S[i + 2] + M[12];
+      out[i + 1] = M[1] * S[i] + M[5] * S[i + 1] + M[9] * S[i + 2] + M[13];
+      out[i + 2] = M[2] * S[i] + M[6] * S[i + 1] + M[10] * S[i + 2] + M[14];
+    }
+    return out;
+  }
+  /** R5-scene (D19): the mirror body's view. v:
+   *  - an ns-mirror STATE (createMirrorState / applyMirrorOrbit / resetMirror; its placement may be null: the scene's
+   *    own placement is then used with the state's orbit) or an ns-mirror TRANSFORM (mirrorTransform): used as given;
+   *  - { orbit: { yaw, pitch } } or { yawDeg, pitchDeg } (degrees, ns-mirror convention: yaw > 0 = viewpoint to the
+   *    right, pitch > 0 = viewpoint up) for the scene's own state;
+   *  - { visible: false | true } shows or hides it (an Esc option, if any); null resets the orbit and drops a handed state.
+   * It never turns by itself. Returns mirrorState(). */
+  function setMirrorView(v = null) {
+    if (v === null) { mirror.external = null; mirror.orbit = { yaw: 0, pitch: 0 }; }
+    else if (v && (v.kind === 'ns-mirror-transform' || v.kind === 'ns-mirror-state')) {
+      if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = { yaw: v.orbit ? v.orbit.yaw : 0, pitch: v.orbit ? v.orbit.pitch : 0 }; }
+      else mirror.external = v;
+    } else if (v && typeof v === 'object') {
+      const o = v.orbit && typeof v.orbit === 'object' ? v.orbit : v;
+      const yaw = Number.isFinite(o.yaw) ? o.yaw : Number.isFinite(o.yawDeg) ? o.yawDeg : null;
+      const pitch = Number.isFinite(o.pitch) ? o.pitch : Number.isFinite(o.pitchDeg) ? o.pitchDeg : null;
+      if (yaw !== null || pitch !== null) { mirror.external = null; mirror.orbit = { yaw: yaw !== null ? yaw : mirror.orbit.yaw, pitch: pitch !== null ? pitch : mirror.orbit.pitch }; }
+      if (typeof v.visible === 'boolean') mirror.enabled = v.visible;
+    } else fail('scene_input', 'setMirrorView needs an ns-mirror state / transform, an orbit object or null');
+    applyMirror();
+    return mirrorState();
+  }
+  /** The scene's current default ns-mirror placement (or null), so an integrator can keep its own state in step:
+   * NsMirror.placeMirror(state, scene.mirrorPlacementNow()). */
+  function mirrorPlacementNow() { return mirror.placement; }
+  /** QA: the mirror body's state, its measured on-screen box (CSS px; the projected body sample) and the share of those
+   * points inside the brain's drawn outline (coveredByBrain). */
+  function mirrorState() {
+    const T = mirror.transform, Pl = mirror.placement;
+    const out = { source: 'ns-mirror', enabled: mirror.enabled, ready: mirror.ready, visible: mirrorRoot.visible, error: mirror.error, twins: mirror.twins, armTwins: bones.length + muscles.length,
+      external: mirror.external ? mirror.external.kind : null, orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch } : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch },
+      scale: T ? Math.round(T.scale * 1000) / 1000 : null, centre: T ? T.centre.map(v => Math.round(v * 1000) / 1000) : null, determinant: T ? T.det : null,
+      placement: Pl ? { distanceM: Math.round(Pl.distanceM * 1000) / 1000, nearM: Math.round(Pl.nearM * 1000) / 1000, brainFarM: Math.round(Pl.brainFarM * 1000) / 1000, limiting: Pl.limiting, expectedHeightNdc: Math.round(Pl.expectedHeightNdc * 1000) / 1000, rule: Pl.rule || null } : null,
+      fit: mirror.fit ? { boxPx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.boxPx[k])), freePx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.freePx[k])), tried: mirror.fit.tried } : null,
+      body: mirror.body ? { heightM: Math.round(mirror.body.height * 1000) / 1000, radiusM: Math.round(mirror.body.radius * 1000) / 1000, points: mirror.body.count } : null,
+      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, culled: mirror.culled || 0, cullPx: mirror.cullPx || 0, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount }, onScreen: null,
+      // R5-integrate-mirror-glow (D19): the label beside it (CSS px box, one-line or two-line), or null when it has no clear place
+      label: mirrorLabelBox ? { box: [mirrorLabelBox.x0, mirrorLabelBox.y0, mirrorLabelBox.x1, mirrorLabelBox.y1].map(v => Math.round(v)), compact: mirrorLabelBox.compact === true, tried: mirrorLabelTried } : null };
+    const W = mirrorSamplesWorld();
+    if (W && cssW > 0 && cssH > 0) {
+      camera.updateMatrixWorld(true);
+      brainCoversRect({ x0: 0, y0: 0, x1: 1, y1: 1 }); // refreshes the outline hull cache for this camera
+      const hull = coverCache.valid ? coverCache.hull : null;
+      // R5-bigbrain (R25 / R26): share of the body's sample points behind a motor area (first person: the motor
+      // areas' occupancy grid at the current look; a motor area's backing darkens what is behind it)
+      let grid = null;
+      try { grid = camPose ? null : motorGridFor({ yaw: lookYaw, pitch: lookPitch }); } catch { grid = null; }
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, inBrain = 0, behindMotor = 0;
+      for (let i = 0; i < W.length; i += 3) {
+        pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
+        if (pv.z > -camera.near) continue;
+        pv.applyMatrix4(camera.projectionMatrix);
+        const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH;
+        n++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (hull && hullSignedDistance(hull, x, y) <= 0) inBrain++;
+        if (grid && grid.hits({ x0: x, y0: y, x1: x + 0.01, y1: y + 0.01 }) > 0) behindMotor++;
+      }
+      if (n) out.onScreen = { box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], heightPx: Math.round(y1 - y0), heightFrac: Math.round(((y1 - y0) / cssH) * 1000) / 1000, coveredByBrain: Math.round((inBrain / n) * 1000) / 1000, behindMotor: grid ? Math.round((behindMotor / n) * 1000) / 1000 : null, samples: n };
+    }
+    return out;
+  }
+  /** R5-camera (round5/R5-camera-NOTES.md 4.3): keep-out spheres [{ centre: [x, y, z], radius }] (world m) of your body
+   * for the third-person boom (ns-camera cameraPose opts.avoid): one per body mesh (head and face IN PLACE: body frame x
+   * mesh matrix), one per arm bone and one per arm muscle (from its CPU-skinned points). Cached until the body pose, the
+   * arm pose, the body frame or the look changes. */
+  let keepOutCache = null, keepOutKey = '';
+  function bodyKeepOut() {
+    const key = `${bodyPoseSerial}|${lastMatrices ? armPoseSerial : 0}|${lookYaw},${lookPitch}|${bodyFrame.join(',')}`;
+    if (keepOutCache && key === keepOutKey) return keepOutCache;
+    bodyGroup.updateMatrixWorld(true);
+    eyeRig.updateMatrixWorld(true);
+    const out = [], bw = bodyGroup.matrixWorld, col = Math.hypot(bw.elements[0], bw.elements[1], bw.elements[2]) || 0.001;
+    for (const b of body) {
+      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, gs = g.boundingSphere;
+      if (!gs) continue;
+      pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bw);
+      out.push({ centre: [pv.x, pv.y, pv.z], radius: gs.radius * col });
+    }
+    for (const b of bones) {
+      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
+      if (!g.boundingSphere) continue;
+      b.mesh.updateMatrixWorld(true);
+      const e = b.mesh.matrixWorld.elements;
+      pv.copy(g.boundingSphere.center).applyMatrix4(b.mesh.matrixWorld);
+      out.push({ centre: [pv.x, pv.y, pv.z], radius: g.boundingSphere.radius * (Math.hypot(e[0], e[1], e[2]) || 1) });
+    }
+    armGroup.updateMatrixWorld(true);
+    for (const m of muscles) {
+      const c = armMuscleCentre(m), p = m.pos, n = p.length / 3, step = Math.max(1, Math.floor(n / 400));
+      let r = 0;
+      for (let i = 0; i < n; i += step) r = Math.max(r, Math.hypot(p[3 * i] - c[0], p[3 * i + 1] - c[1], p[3 * i + 2] - c[2]));
+      pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
+      out.push({ centre: [pv.x, pv.y, pv.z], radius: r * 1.02 });
+    }
+    keepOutCache = out; keepOutKey = key;
+    return out;
+  }
+  /** R5-scene (D19): the mirror-body part under CSS point (x, y): { elementId, bodyPart, kind, side (YOUR side: -1 left,
+   * +1 right, 0 midline; ns-mirror MIRROR_TEXT names it "your ... (mirror image)"), name, distance, behindBrain } or null.
+   * A ray against the mirror twins (a few ms: call it throttled, like raycastBrain). behindBrain: the brain's drawn
+   * outline covers the point, so the brain catches the look (ns-mirror mirrorInputTarget). */
+  function mirrorPartAt(x, y) {
+    if (!mirrorRoot.visible || !(cssW > 0 && cssH > 0)) return null;
+    camera.updateMatrixWorld(true);
+    mirrorRoot.updateMatrixWorld(true);
+    pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
+    rayDir.copy(pv).sub(camera.position).normalize();
+    rayOrigin.copy(camera.position);
+    raycaster.set(rayOrigin, rayDir);
+    const hits = raycaster.intersectObjects([...mirrorBodyGroup.children, ...mirrorArmGroup.children], false);
+    if (!hits.length) return null;
+    const o = hits[0].object, u = o.userData || {}, arm = mirrorArmGroup.children.includes(o);
+    const covered = regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 });
+    // R5-integrate-mirror-glow (D19): the simulated activity of the mirrored muscle (the same value that colours it and
+    // its primary), or null for a bone.
+    let activity = null;
+    if (u.kind === 'muscle' && u.elementId && bodyById.has(u.elementId)) { const a = bodyById.get(u.elementId).mesh.userData.activity; activity = Number.isFinite(a) ? a : null; }
+    else if (arm) { const m = muscles.find(q => q.mirror === o); const a = m ? m.mesh.userData.activity : null; activity = Number.isFinite(a) ? a : null; }
+    return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || (arm ? (muscles.some(q => q.mirror === o) ? 'muscle' : 'bone') : null), side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
+      name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered, activity };
+  }
+
+  /* ---- R5-scene (D17): glow links ------------------------------------------------------------------------------------ */
+  /** R5-scene (D17, R21): the links to draw now, from the simulation (glowLinksFromActions builds them from ns-actions /
+   * ns-body): [{ regionId, level 0..1 (the area's activity, which fades with the 1 s activation), bodyMeshIds,
+   * armMuscleKeys, armMuscleNames }]. Call every frame (or whenever they change); [] or null clears. The area and its
+   * muscles get the same fluorescent glow colour (ns-colors glowColor) and a soft additive ribbon joins them, on your
+   * body and on the mirror body. Returns the number of links kept. */
+  function setGlowLinks(links) {
+    glowState.links = normaliseGlowLinks(links);
+    glowState.set++;
+    return glowState.links.length;
+  }
+  /** Arm muscle centre in arm (eye) coordinates from its CPU-skinned positions (cached per pose). */
+  function armMuscleCentre(m) {
+    if (m.centre && m.centreFor === lastMatrices) return m.centre;
+    const p = m.pos, n = p.length / 3, step = Math.max(1, Math.floor(n / 400));
+    let x = 0, y = 0, z = 0, k = 0;
+    for (let i = 0; i < n; i += step) { x += p[3 * i]; y += p[3 * i + 1]; z += p[3 * i + 2]; k++; }
+    m.centre = k ? [x / k, y / k, z / k] : [0, 0, 0];
+    m.centreFor = lastMatrices;
+    return m.centre;
+  }
+  const glowScratch = { a: [0, 0, 0], b: [0, 0, 0] };
+  /** Fill one ribbon (curve a -> b, camera-facing, constant on-screen width) into buf at its next slot. */
+  function emitRibbon(buf, a, b, level, phase, alphaMul) {
+    if (buf.n >= GLOW_LINK.maxLinks) return false;
+    const st = glowStyle(level), K = st.K;
+    const curve = glowCurve(a, b, { lift: GLOW_LINK.lift, n: GLOW_LINK.segments });
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    const tanPx = (2 * Math.tan((camera.fov * DEG) / 2)) / Math.max(1, cssH);
+    const A = GLOW_LINK.across, nA = A.length, o = buf.n * glowVerts, nS = GLOW_LINK.segments;
+    const core = GLOW_LINK.corePx / GLOW_LINK.haloPx;
+    // R5-access A3: over the brain's drawn outline (the hull refreshed once per frame in updateGlow) only overBrainCore of
+    // the core and overBrainHalo of the halo are drawn, so a link never hides the brain areas it crosses.
+    // R5-polish (D17 "beautiful, fluorescent, readable, never in the way"): with the R25 brain filling the view almost every
+    // link lies over the outline, so A3 left only a thin, half-bright olive thread (viewed). The thinning now applies where
+    // the link would cover a MOTOR AREA as drawn now (glowMotor: the motor areas' occupancy grid of the live camera, the
+    // grid the guide line uses): the core is thinned where its own width touches an area and the halo is dropped where the
+    // halo's width would reach one; over the see-through non-motor glass and off the brain the full fluorescent link shows.
+    // Without a region grid the A3 outline rule stays.
+    const hull = glowMotor ? null : glowHull, motor = glowMotor;
+    const oc = Number.isFinite(K.overBrainCore) ? K.overBrainCore : 0.5, oh = Number.isFinite(K.overBrainHalo) ? K.overBrainHalo : 0;
+    // R5-polish: the widths scale with the view (min side / 720 px, 0.75..1.5): at 2560x1080 the 1280x720 widths read as a
+    // hairline (viewed), on a 390 px phone they would be heavy.
+    const widthK = glowWidthScale(cssW, cssH), haloPx = GLOW_LINK.haloPx * widthK;
+    const coreBoxPx = GLOW_LINK.corePx * widthK + 1, haloBoxPx = haloPx + 1;
+    const vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
+    for (let i = 0; i <= nS; i++) {
+      const px0 = curve[3 * i], py0 = curve[3 * i + 1], pz0 = curve[3 * i + 2];
+      const j0 = Math.max(0, i - 1), j1 = Math.min(nS, i + 1);
+      let tx = curve[3 * j1] - curve[3 * j0], ty = curve[3 * j1 + 1] - curve[3 * j0 + 1], tz = curve[3 * j1 + 2] - curve[3 * j0 + 2];
+      const vx = px0 - cx, vy = py0 - cy, vz = pz0 - cz, d = Math.hypot(vx, vy, vz);
+      let sx = ty * vz - tz * vy, sy = tz * vx - tx * vz, sz = tx * vy - ty * vx;
+      const sL = Math.hypot(sx, sy, sz) || 1; sx /= sL; sy /= sL; sz /= sL;
+      const halfM = haloPx * d * tanPx;
+      const s = i / nS;
+      const along = (d < GLOW_LINK.nearClipM ? 0 : glowAlongAlpha(s, phase)) * alphaMul * st.intensity;
+      let over = false, overCore = false;
+      if (hull || motor) {
+        pv.set(px0, py0, pz0).applyMatrix4(vi);
+        if (pv.z < -camera.near) {
+          pv.applyMatrix4(pm);
+          const X = (pv.x + 1) * 0.5 * cssW, Y = (1 - pv.y) * 0.5 * cssH;
+          if (motor) {
+            over = motor.hits({ x0: X - haloBoxPx, y0: Y - haloBoxPx, x1: X + haloBoxPx, y1: Y + haloBoxPx }) > 0;
+            overCore = over && motor.hits({ x0: X - coreBoxPx, y0: Y - coreBoxPx, x1: X + coreBoxPx, y1: Y + coreBoxPx }) > 0;
+          } else overCore = over = hullSignedDistance(hull, X, Y) <= 0;
+        }
+      }
+      for (let j = 0; j < nA; j++) {
+        const r = A[j], v = o + i * nA + j;
+        buf.pos[3 * v] = px0 + sx * r * halfM; buf.pos[3 * v + 1] = py0 + sy * r * halfM; buf.pos[3 * v + 2] = pz0 + sz * r * halfM;
+        const inCore = Math.abs(r) <= core + 1e-6;
+        const c = inCore ? st.core : st.halo, al = (inCore ? K.linkAlpha * (overCore ? oc : 1) : K.haloAlpha * glowHalo(r) * (over ? oh : 1)) * along;
+        buf.col[4 * v] = c[0]; buf.col[4 * v + 1] = c[1]; buf.col[4 * v + 2] = c[2]; buf.col[4 * v + 3] = Math.max(0, Math.min(1, al));
+      }
+      if (over) glowState.overSamples++;
+    }
+    buf.n++;
+    return true;
+  }
+  function finishRibbons(buf) {
+    buf.mesh.visible = buf.n > 0;
+    buf.mesh.geometry.setDrawRange(0, buf.n * glowIdxPer);
+    if (buf.n > 0) {
+      const nv = buf.n * glowVerts;
+      for (const [attr, size] of [[buf.pa, 3], [buf.ca, 4]]) {
+        if (typeof attr.clearUpdateRanges === 'function' && typeof attr.addUpdateRange === 'function') { attr.clearUpdateRanges(); attr.addUpdateRange(0, nv * size); }
+        attr.needsUpdate = true;
+      }
+    }
+  }
+  const setRim = (mat, rgb, gain) => {
+    const u = mat && mat.userData && mat.userData.nsGlowRim;
+    if (!u) return false;
+    u.value.set(rgb[0] * gain, rgb[1] * gain, rgb[2] * gain, GLOW_K.rimPower);
+    glowState.touched.add(mat);
+    return true;
+  };
+  /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
+  let glowHull = null, glowMotor = null, glowFlag = '';
+  function updateGlow(dtMs) {
+    const t0 = nowMs();
+    glowState.overSamples = 0;
+    glowHull = null; glowMotor = null;
+    // R5-fix (review code F5): with no link to draw and nothing drawn last frame there is nothing to do (no per-frame
+    // Set / Map / array allocations at rest).
+    if (!glowState.links.length && !glowState.eased.size && !glowState.touched.size && !glowOwn.n && !glowMirror.n && glowFlag === 'off') {
+      if (glowState.drawn && glowState.drawn.length) glowState.drawn = [];
+      glowState.cpuMs = nowMs() - t0;
+      return;
+    }
+    if (glowState.links.length || glowState.eased.size) {
+      if (regionMode && brainTransformSet && brainCoversRect({ x0: 0, y0: 0, x1: 1, y1: 1 }) !== undefined && coverCache.valid) glowHull = coverCache.hull;
+      // R5-polish: the motor areas' occupancy grid for the live camera (refreshed by motorCoversRect only when the camera
+      // or the brain moved), so a link is thinned only where it would cover a motor area (emitRibbon).
+      if (regionMode && brainTransformSet && motorSamplePoints()) { try { motorCoversRect({ x0: -2, y0: -2, x1: -1, y1: -1 }); glowMotor = motorCoverGrid; } catch { glowMotor = null; } }
+    }
+    const prevTouched = glowState.touched;
+    glowState.touched = new Set();
+    // The levels are used AS GIVEN: R5-input's link levels already follow the 1 s activation envelope (ns-actions
+    // glowLinks), so a second, wall-clock smoothing here would make the glow lag behind the area (and differ between
+    // live play and QA step frames). A link that leaves the list is gone at once (it is below GLOW_LINK.minLevel then).
+    glowState.eased.clear();
+    glowOwn.n = 0; glowMirror.n = 0;
+    let rimMuscles = 0, rimAreas = 0, topLevel = 0, topRegion = null;
+    const regionIds = [], targets = [];
+    // R5-integrate-mirror-glow (D17): the links drawn this frame, per area: { regionId, level, onScreen (a muscle end of
+    // it is inside the view, in front of the camera), groups, mirror } (glowLinksDrawn; the guide's glow goal).
+    const drawn = new Map();
+    if (glowState.links.length) camera.updateMatrixWorld(true);
+    const inView = p => { pv.set(p[0], p[1], p[2]).applyMatrix4(camera.matrixWorldInverse); if (pv.z > -camera.near) return false; pv.applyMatrix4(camera.projectionMatrix); return Math.abs(pv.x) <= 1 && Math.abs(pv.y) <= 1; };
+    const phase = reducedMotion ? NaN : ((nowMs() / 1000) / GLOW_LINK.pulseS) % 1; // no travelling pulse under reduced motion
+    const mirrorOn = mirrorRoot.visible && mirror.transform !== null;
+    const M = mirrorOn ? mirror.transform.matrix : null;
+    const toMirror = (p, out) => { out[0] = M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12]; out[1] = M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13]; out[2] = M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]; return out; };
+    for (const link of glowState.links) {
+      const lv = link.level;
+      if (!(lv >= GLOW_LINK.minLevel)) continue;
+      glowState.eased.set(link.key, { level: lv, link });
+      const rec = regionById.get(link.regionId);
+      if (!rec || !rec.markCentre) continue;
+      if (!regionIds.includes(link.regionId)) regionIds.push(link.regionId);
+      if (lv > topLevel) { topLevel = lv; topRegion = link.regionId; }
+      for (const id of Object.keys(link.body)) targets.push(id);
+      for (const n of link.armNames) targets.push(n);
+      for (const k of Object.keys(link.armKeys)) targets.push(k);
+      const st = glowStyle(lv);
+      const em = st.halo.map(c => c * st.intensity);
+      if (setRim(rec.material, em, GLOW_K.areaRimGain)) rimAreas++;
+      pv.set(rec.markCentre[0], rec.markCentre[1], rec.markCentre[2]).applyMatrix4(brainGroup.matrixWorld);
+      const a = [pv.x, pv.y, pv.z];
+      // targets -> groups (part + side), weighted centres in the player's world
+      const groups = new Map();
+      const addT = (key, w, p) => { let g = groups.get(key); if (!g) { g = { w: 0, x: 0, y: 0, z: 0 }; groups.set(key, g); } g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2]; };
+      for (const [bid, w] of Object.entries(link.body)) {
+        const b = bodyById.get(bid);
+        if (!b || b.kind !== 'muscle') continue;
+        const gs = b.mesh.geometry.boundingSphere;
+        if (!gs) continue;
+        if (setRim(b.material, em, GLOW_K.muscleRimGain)) rimMuscles++;
+        if (b.mirror) setRim(b.mirror.material, em, GLOW_K.muscleRimGain);
+        if (b.inPlace) setRim(b.inPlace.material, em, GLOW_K.muscleRimGain);
+        pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
+        addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z]);
+      }
+      const armKeys = Object.keys(link.armKeys);
+      if (armKeys.length || link.armNames.length) {
+        armGroup.updateMatrixWorld(true);
+        for (const m of muscles) {
+          const nm = String(m.mesh.name || '').toLowerCase();
+          const w = m.key !== null && link.armKeys[m.key] !== undefined ? link.armKeys[m.key] : link.armNames.some(s => nm.includes(s)) ? 1 : 0;
+          if (!(w > 0)) continue;
+          if (setRim(m.mat, em, GLOW_K.muscleRimGain)) rimMuscles++;
+          if (m.mirror) setRim(m.mirror.material, em, GLOW_K.muscleRimGain);
+          const c = armMuscleCentre(m);
+          pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
+          addT('leftArm:-1', w, [pv.x, pv.y, pv.z]);
+        }
+      }
+      let dr = drawn.get(link.regionId);
+      for (const g of groups.values()) {
+        if (!(g.w > 0)) continue;
+        const b = [g.x / g.w, g.y / g.w, g.z / g.w];
+        const own = emitRibbon(glowOwn, a, b, lv, phase, 1);
+        const mb = mirrorOn ? toMirror(b, glowScratch.b) : null;
+        const mir = mirrorOn ? emitRibbon(glowMirror, a, mb, lv, phase, GLOW_LINK.mirrorAlpha) : false;
+        if (!own && !mir) continue;
+        if (!dr) { dr = { regionId: link.regionId, level: 0, onScreen: false, groups: 0, mirror: 0 }; drawn.set(link.regionId, dr); }
+        dr.level = Math.max(dr.level, lv); dr.groups++;
+        if (mir) dr.mirror++;
+        if (!dr.onScreen && ((own && inView(b)) || (mir && inView(mb)))) dr.onScreen = true;
+      }
+    }
+    glowState.drawn = [...drawn.values()].map(d => ({ ...d, level: Math.round(d.level * 1000) / 1000 }));
+    for (const mat of prevTouched) if (!glowState.touched.has(mat)) { const u = mat.userData.nsGlowRim; if (u) u.value.set(0, 0, 0, GLOW_K.rimPower); }
+    finishRibbons(glowOwn);
+    finishRibbons(glowMirror);
+    for (const b of [glowOwn, glowMirror]) { const g = b.mesh.userData.nsGlow; g.regionId = b.n ? topRegion : null; g.regionIds = b.n ? regionIds.slice() : []; g.muscles = b.n ? [...new Set(targets)] : []; g.intensity = b.n ? Math.round(glowStyle(topLevel).intensity * 1000) / 1000 : 0; }
+    glowState.ribbons = glowOwn.n; glowState.mirrorRibbons = glowMirror.n; glowState.rimMuscles = rimMuscles; glowState.rimAreas = rimAreas;
+    // R5-access A7: a page flag while any link shows (the HUD text gets its darker backdrop, proposed-glow-text.css).
+    const flag = glowOwn.n + glowMirror.n > 0 ? 'on' : 'off';
+    if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
+    glowState.cpuMs = nowMs() - t0;
+  }
+  /** R5-integrate-mirror-glow (D19): place the mirror body's label beside its drawn box: first beside the upper half of
+   * the body (right, then left; the compass arrows sit at the middle of each side), then beside the lower half, then
+   * under its bottom arrow or over its top arrow. A place must be inside the view (below the limits line, left of the
+   * information column), clear of every drawn arrow, the HUD cards and panel, the region labels, the crosshair box and,
+   * while the brain stands in front, of the motor areas. No clear place: no label (the panel and the crosshair line still
+   * name the mirror body). Recomputed only when the camera, the mirror, the arrows or the HUD change. */
+  let mirrorLabelKey = '', mirrorLabelSize = null, mirrorLabelBox = null, mirrorLabelTried = 0;
+  function layoutMirrorLabel() {
+    if (!mirrorLabel) return;
+    const hide = () => { if (!mirrorLabel.hidden) mirrorLabel.hidden = true; mirrorLabelBox = null; };
+    if (!(mirrorRoot.visible && mirror.transform && mirror.samples && cssW > 0 && cssH > 0)) { mirrorLabelKey = ''; hide(); return; }
+    camera.updateMatrixWorld(true);
+    const ce = camera.matrixWorld.elements;
+    let key = `${mirror.serial}|${arrowSerial}|${cssW}x${cssH}|${camera.fov}|${hudReads}|${labelEls.length}|${insetFrame && !insetFrame.hidden ? 'I' : ''}|`;
+    for (let i = 0; i < 16; i++) key += `${Math.round(ce[i] * 1e5)},`;
+    if (key === mirrorLabelKey) return;
+    mirrorLabelKey = key;
+    const W = mirrorSamplesWorld();
+    if (!W) { hide(); return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, on = 0;
+    for (let i = 0; i < W.length; i += 3) {
+      pv.set(W[i], W[i + 1], W[i + 2]).applyMatrix4(camera.matrixWorldInverse);
+      if (pv.z > -camera.near) continue;
+      pv.applyMatrix4(camera.projectionMatrix);
+      const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH;
+      n++;
+      if (x >= 0 && x <= cssW && y >= 0 && y <= cssH) on++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (!n || on < 0.5 * (W.length / 3)) { hide(); return; }
+    // two sizes: the two-line label, and (where it does not fit) the one-line "Mirror body"
+    const measure = compact => {
+      const was = mirrorLabel.hidden;
+      mirrorLabel.setAttribute('data-compact', compact ? 'true' : 'false');
+      mirrorLabel.hidden = false;
+      const r = { w: Math.ceil(mirrorLabel.offsetWidth || 0) || (compact ? 96 : 132), h: Math.ceil(mirrorLabel.offsetHeight || 0) || (compact ? 20 : 32) };
+      mirrorLabel.hidden = was;
+      return r;
+    };
+    if (!mirrorLabelSize || !(mirrorLabelSize.full.w > 0)) mirrorLabelSize = { full: measure(false), compact: measure(true) };
+    const gap = 6, top = 26;
+    arrowBoxes();
+    const obstacles = [];
+    for (const set of [arrowSets.brain, arrowSets.mirror]) if (set.shown) for (const d of ARROW_DIRS) { const b = set.boxes[d]; if (b) obstacles.push({ x0: b.x0 - 3, y0: b.y0 - 3, x1: b.x1 + 3, y1: b.y1 + 3 }); }
+    for (const r of readHudRects() || []) obstacles.push(r);
+    for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) obstacles.push({ x0: b.x - b.w / 2 - 3, y0: b.y - b.h / 2 - 3, x1: b.x + b.w / 2 + 3, y1: b.y + b.h / 2 + 3 }); }
+    const ch = R5_BIGBRAIN.crosshairKeepPx * 0.5;
+    obstacles.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch });
+    // R5-fix: and off the face box / inset with its caption (viewed: the label sat on the face box caption)
+    if (insetFrame && !insetFrame.hidden) { const ir = insetRect(); obstacles.push({ x0: ir.x - 4, y0: ir.y - 4, x1: ir.x + ir.size + 4, y1: ir.y + ir.size + 64 }); }
+    const reserve = infoPanelRect({ width: cssW, height: cssH });
+    const xMax = reserve && reserve.layout === 'column' ? reserve.x0 - 4 : cssW - 4, yMax = reserve && reserve.layout === 'portrait' ? reserve.y0 - 4 : cssH - 4;
+    const covered = regionMode && brainTransformSet && brainCoversRect({ x0, y0, x1, y1 });
+    const mb = arrowSets.mirror.shown ? arrowSets.mirror.boxes : {};
+    const cx = (x0 + x1) / 2, yTop = Math.min(y0, mb.forward ? mb.forward.y0 : y0), yBot = Math.max(y1, mb.back ? mb.back.y1 : y1);
+    const clear = r => r.x0 >= 4 && r.x1 <= xMax && r.y0 >= top && r.y1 <= yMax && !obstacles.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0)
+      && !(covered && motorCoversRect(r));
+    mirrorLabelTried = 0;
+    let pick = null, compact = false;
+    for (const c of [false, true]) {
+      const { w, h } = c ? mirrorLabelSize.compact : mirrorLabelSize.full;
+      const cand = [
+        [x1 + gap, y0], [x0 - gap - w, y0], [x1 + gap, y1 - h], [x0 - gap - w, y1 - h],
+        [cx - w / 2, yBot + gap], [cx - w / 2, yTop - gap - h]
+      ];
+      // R5-fix (review F12 / SL5-9 / P12): on a phone the small mirror body leaves none of those free; the compact label
+      // also tries the corners of the box round its arrows, a little further out ("labelled as a mirror image").
+      if (c) {
+        const ax0 = Math.min(x0, mb.left ? mb.left.x0 : x0), ax1 = Math.max(x1, mb.right ? mb.right.x1 : x1);
+        for (const o of [0, 18, 36]) cand.push([ax1 + gap + o, yTop - h - o], [ax0 - gap - w - o, yTop - h - o], [ax1 + gap + o, yBot + o], [ax0 - gap - w - o, yBot + o],
+          [ax1 + gap + o, (y0 + y1) / 2 - h / 2], [ax0 - gap - w - o, (y0 + y1) / 2 - h / 2]);
+      }
+      for (const [x, y] of cand) { mirrorLabelTried++; const r = { x0: x, y0: y, x1: x + w, y1: y + h }; if (clear(r)) { pick = r; break; } }
+      if (pick) { compact = c; break; }
+    }
+    if (!pick) { hide(); return; }
+    mirrorLabel.setAttribute('data-compact', compact ? 'true' : 'false');
+    mirrorLabelBox = { ...pick, compact };
+    const l = px(pick.x0), t = px(pick.y0);
+    if (mirrorLabel.style.left !== l) mirrorLabel.style.left = l;
+    if (mirrorLabel.style.top !== t) mirrorLabel.style.top = t;
+    if (mirrorLabel.hidden) mirrorLabel.hidden = false;
+  }
+  /** R5-integrate-mirror-glow (D17): the links drawn in the last frame, one per brain area: [{ regionId, level (0..1),
+   * onScreen, groups (muscle groups reached on your body), mirror (ribbons to the mirror body) }]. */
+  function glowLinksDrawn() { return Array.isArray(glowState.drawn) ? glowState.drawn.map(d => ({ ...d })) : []; }
+  /** QA: the glow state. */
+  function glowLinkState() {
+    return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
+      ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
+      cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials };
   }
 
   /** Per-frame DOM overlay: orbit arrows, region group labels, face label / inset frame. Style writes only on change. */
@@ -4033,59 +5701,18 @@ export function createScene({
     const reserveBottom = info && !info.panel.hidden && reserve && reserve.layout === 'portrait' ? cssH - reserve.y0 : 0;
     const topPx = 26; // the essential limits line
     const hudRects = readHudRects();
-    // R3-scene orbit arrows (D2): placed from the brain's SILHOUETTE (the convex hull of the projected support points) in
-    // the REFERENCE view (the default look carried with any grab), a small gap outside it and clear of the info column,
-    // the legend, the HUD card and the toast; then anchored to the world as directions, so they stay put relative to the
-    // brain while the player looks around and follow every orbit / drag (a new plan when the brain transform changes).
     brainOverlayOk = regionMode && brainTransformSet && projectBrainBounds();
     const inViewNow = brainOverlayOk && brainBoundsVisible(brainBoundsPx, cssW - reserveRight, cssH - reserveBottom, topPx);
-    const plan = regionMode && brainTransformSet ? arrowPlanFor(reserve, hudRects, topPx) : null;
-    arrowLayout = plan ? projectArrowAnchors(plan, reserve, hudRects, topPx) : null;
-    // R3-fix (review m3): with the brain's outline (nearly) off screen the arrows are not drawn (they never float alone).
-    // Looser than inViewNow (the 20 % rule of the info panel): a brain partly behind the bottom band or a panel still
-    // counts, so looking toward an arrow beside it never hides it.
-    const brainOnScreen = brainOverlayOk && brainBoundsVisible(brainBoundsPx, cssW, cssH, 0, ORBIT_ARROWS.minOnScreenFrac);
-    if (arrowLayout && !brainOnScreen) {
-      for (const d of ORBIT_ARROWS.dirs) { arrowNow[d].usable = false; arrowLayout[d] = null; }
-    }
-    // R3-fix (F7): a pinned arrow keeps its screen spot (and stays usable) until the pin ends.
-    if (arrowPin && arrowLayout) {
-      const lookMoved = Math.abs(lookYaw - arrowPin.yaw) > 1e-4 || Math.abs(lookPitch - arrowPin.pitch) > 1e-4;
-      if (lookMoved || !brainOnScreen) arrowPin = null; // turning always ends a pin (the arrow is world-anchored again)
-      else {
-        const n = arrowNow[arrowPin.dir];
-        n.x = arrowPin.x; n.y = arrowPin.y; n.front = true; n.usable = true;
-        arrowLayout[arrowPin.dir] = { x: n.x, y: n.y, clamped: !n.clear };
-      }
-    } else if (!arrowLayout) arrowPin = null;
+    // R5-scene (D16): the 3D arrows' boxes this frame (labels, the face caption and the HUD keep clear of the shown ones).
+    updateArrows();
+    arrowLayout = arrowScreenLayout();
     arrowsShown = Boolean(arrowLayout);
     // Polish: expose whether the brain is in view, so the HUD colour key can shrink while the player looks at the body
     // (far right / down / up) and the legend stops covering the right arm or the legs.
     const inView = inViewNow ? 'true' : 'false';
     if (brainInViewAttr !== inView) { overlay.setAttribute('data-ns-brain-in-view', inView); brainInViewAttr = inView; }
-    for (const d of Object.keys(arrows)) {
-      const b = arrows[d], last = arrowLast[d];
-      if (b.hidden === arrowsShown) b.hidden = !arrowsShown;
-      if (!arrowsShown) continue;
-      const p = arrowNow[d];
-      const l = px(p.x - ORBIT_ARROWS.sizePx / 2), t = px(p.y - ORBIT_ARROWS.sizePx / 2);
-      if (last.left !== l) { b.style.left = l; last.left = l; }
-      if (last.top !== t) { b.style.top = t; last.top = t; }
-      // Under the info column / legend / HUD card at THIS look (or behind the camera): not drawn and not clickable; it
-      // stays in the DOM (not `hidden`), so looking toward it brings it back.
-      const vis = p.usable ? '' : 'hidden';
-      if (last.vis !== vis) { last.vis = vis; b.style.visibility = vis; }
-      const cl = p.clear ? 'false' : 'true';
-      if (last.clamped !== cl) { last.clamped = cl; b.setAttribute('data-ns-clamped', cl); }
-      // R3-polish: while the player's HAND (A/D moved it there) is under an arrow, the arrow fades (CSS) so the hand
-      // stays visible; it stays put and clickable, and hovering it brings it back to full strength.
-      const hr = ORBIT_ARROWS.sizePx / 2;
-      // R3-fix (review m3): over ANY part of the player's arm (hand rects and the forearm / upper-arm ellipses), not
-      // only the hand.
-      const under = Boolean(labelAvoid) && hitsAvoid({ x0: (p.x - hr) / cssW, y0: (p.y - hr) / cssH, x1: (p.x + hr) / cssW, y1: (p.y + hr) / cssH }, labelAvoid);
-      const uh = under ? 'true' : 'false';
-      if (last.underHand !== uh) { last.underHand = uh; b.setAttribute('data-ns-under-hand', uh); }
-    }
+    layoutArrowTips(reserveRight, reserveBottom, topPx);
+    updateMirrorArrowDim();
     // R4-fix (review F2): small switched-on areas get a gold ring at their centre (SMALL_MARK); placed before the labels,
     // which keep clear of the rings.
     if (overlay && regionMode && regions.length) updateMarkDots(reserveRight, reserveBottom);
@@ -4124,11 +5751,21 @@ export function createScene({
       if (reserveBottom > 0) obst.push({ x0: 0, y0: cssH - reserveBottom, x1: cssW, y1: cssH });
       for (const r of hudRects) if (!(orientLive && r.orient)) obst.push(r);
       if (orientLive) for (const r of orientLive) obst.push(r);
-      if (arrowsShown && arrowLayout) for (const d of ORBIT_ARROWS.dirs) {
+      if (arrowsShown && arrowLayout) for (const d of ARROW_DIRS) {
         const p = arrowLayout[d];
-        if (p) obst.push({ x0: p.x - arrowLayout.sizePx / 2 - 4, y0: p.y - arrowLayout.sizePx / 2 - 4, x1: p.x + arrowLayout.sizePx / 2 + 4, y1: p.y + arrowLayout.sizePx / 2 + 4 });
+        if (p && p.box) obst.push({ x0: p.box.x0 - 4, y0: p.box.y0 - 4, x1: p.box.x1 + 4, y1: p.box.y1 + 4 });
       }
+      // R5-integrate-mirror-glow (D19): and of the mirror body's arrows (after a drag or an orbit the brain's labels can
+      // reach them; viewed: "Face and neck" over the mirror's left arrow).
+      if (arrowSets.mirror.shown) for (const d of ARROW_DIRS) { const b = arrowSets.mirror.boxes[d]; if (b) obst.push({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }); }
+      // R5-fix (review P7): and of the mirror body itself (viewed after a 40 deg drag: "Your left" on the mirror's legs).
+      { const mbx = mirrorBodyBoxNow(); if (mbx) obst.push(mbx); }
       for (const r of labelAvoidPx().boxes) obst.push(r);
+      // R5-polish (D18): in third person the brain's labels keep off your own body (viewed: "Left leg" sat on the back of
+      // your head and "Back (posterior)" on your lower back).
+      for (const r of thirdPersonBodyRectsPx()) obst.push(r);
+      // R5-polish: and off the arrow captions shown now (viewed: the covered-arrow caption sat on "Face and neck").
+      for (const r of arrowTipRects) obst.push(r);
       // R4-fix (F2): the small-area switched-on rings stay visible (labels keep clear of them).
       for (const d of markDots.values()) if (d.shown && Number.isFinite(d.px) && Number.isFinite(d.py)) { const R = SMALL_MARK.sizePx / 2 + 3; obst.push({ x0: d.px - R, y0: d.py - R, x1: d.px + R, y1: d.py + R }); }
       const compact = cssW / cssH < 1 || cssW < 900;
@@ -4152,7 +5789,7 @@ export function createScene({
     // Face layer label (ghost: near the projected ghost centre; inset: a fixed top-centre frame).
     if (faceLabel) {
       let showLabel = false;
-      if (faceMode === 'ghost' && faceAmount > 0.05 && faceGroup.visible) {
+      if (faceShow === 'ghost' && faceAmount > 0.05 && faceGroup.visible) {
         pv.set(faceHeadCentre[0], faceHeadCentre[1], faceHeadCentre[2]).applyMatrix4(faceGroup.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
         if (pv.z < -near) {
           pv.applyMatrix4(camera.projectionMatrix);
@@ -4173,7 +5810,7 @@ export function createScene({
           if (!(faceLabelW > 0) && faceLabel.offsetWidth > 0) faceLabelW = faceLabel.offsetWidth;
           const lw = faceLabelW > 0 ? faceLabelW : Math.min(360, 0.44 * cssW);
           const arrowBoxes = [];
-          if (arrowLayout) for (const d of ORBIT_ARROWS.dirs) { const q = arrowLayout[d]; if (q) arrowBoxes.push({ x0: q.x - 26, y0: q.y - 26, x1: q.x + 26, y1: q.y + 26 }); }
+          if (arrowLayout) for (const d of ARROW_DIRS) { const q = arrowLayout[d]; if (q && q.box) arrowBoxes.push({ x0: q.box.x0 - 4, y0: q.box.y0 - 4, x1: q.box.x1 + 4, y1: q.box.y1 + 4 }); }
           const hits = (cx, ty) => arrowBoxes.some(a => cx + lw / 2 > a.x0 && cx - lw / 2 < a.x1 && ty + lh > a.y0 && ty < a.y1);
           if (hits(xl, yl)) {
             const ys = [yl, clampTo(y - headPx - 8 - lh, topPx, Math.max(topPx, bottom - lh)), clampTo(y + headPx + 8, topPx, Math.max(topPx, bottom - lh))];
@@ -4190,12 +5827,16 @@ export function createScene({
           xlShift = 0;
           if (faceLabelLast.left !== l) { faceLabel.style.left = l; faceLabelLast.left = l; }
           if (faceLabelLast.top !== t) { faceLabel.style.top = t; faceLabelLast.top = t; }
-          if (faceLabelLast.text !== FACE_LAYER.ghostLabel) { faceLabel.textContent = FACE_LAYER.ghostLabel; faceLabelLast.text = FACE_LAYER.ghostLabel; }
+          if (faceLabelLast.text !== faceText.ghostLabel) { faceLabel.textContent = faceText.ghostLabel; faceLabelLast.text = faceText.ghostLabel; }
         }
       }
       if (faceLabel.hidden === showLabel) faceLabel.hidden = !showLabel;
-      const showInset = faceMode === 'inset' && faceAmount > 0.05 && faceGroup.visible;
+      const showInset = (faceShow === 'inset' || faceShow === 'box') && faceAmount > 0.05 && faceGroup.visible;
       if (insetFrame.hidden === showInset) insetFrame.hidden = !showInset;
+      if (insetFrame.getAttribute && insetFrame.getAttribute('data-ns-face-box') !== (faceShow === 'box' ? 'true' : 'false')) {
+        insetFrame.setAttribute('data-ns-face-box', faceShow === 'box' ? 'true' : 'false');
+        if (faceCaption) faceCaption.textContent = faceShow === 'box' && NS_TEXT.FACE_R5 && NS_TEXT.FACE_R5.boxLabel ? NS_TEXT.FACE_R5.boxLabel : faceText.insetLabel;
+      }
       if (showInset) {
         const r = insetRect();
         const l = px(r.x), t = px(r.y), sz = px(r.size);
@@ -4209,6 +5850,22 @@ export function createScene({
   /** Inset box (CSS px, origin top left): top centre below the essential line, inside the free width. */
   function insetRect() {
     const I = FACE_LAYER.inset;
+    if (faceShow === 'box') {
+      // R5-fix (review P6): the activity face box: smaller, at the top, just right of the brain's forward arrow (off the
+      // crosshair and the information column).
+      const size = Math.round(Math.max(80, Math.min(FACE_BOX.sizePx, (FACE_BOX.sizeVmin / 100) * Math.min(cssW, cssH))));
+      const fb = arrowSets.brain.shown && arrowSets.brain.boxes.forward ? arrowSets.brain.boxes.forward : null;
+      const reserve = infoPanelRect({ width: cssW, height: cssH });
+      const xMax = (reserve && reserve.layout === 'column' ? reserve.x0 - 8 : cssW - 8) - size;
+      const x = Math.max(8, Math.min(xMax, fb ? fb.x1 + 12 : cssW / 2 + 40));
+      // below any HUD card it would meet (the phone's full-width status card; viewed in harness/run-R5-fix-17-final-shots)
+      let y = 34;
+      for (let pass = 0; pass < 3; pass++) for (const r of hudRectCache || []) {
+        if (r.info || r.orient || r.chip || r.toast) continue;
+        if (r.x0 < x + size && r.x1 > x && r.y0 < y + size + 30 && r.y1 > y) y = r.y1 + 8;
+      }
+      return { x: Math.round(x), y: Math.round(Math.min(y, Math.max(34, cssH - size - 60))), size };
+    }
     const size = Math.max(80, Math.min(I.sizePx, (I.sizeVmin / 100) * Math.min(cssW, cssH)));
     return { x: Math.round((cssW - size) / 2), y: 30, size };
   }
@@ -4265,6 +5922,28 @@ export function createScene({
     }
     const lodKey = L.lod ? `${L.lod.glassMm}/${L.lod.bodyMm}/${L.lod.armMm || 0}` : '';
     if (lodApplied !== lodKey) setLod(L.lod, lodKey);
+    else if ((mirror.lod || 0) !== mirrorLodCell()) applyMirrorLod();
+    applyMirrorCull();
+  }
+  /** R5-integrate-mirror-glow (D19): size culling of the mirror body's twins at the lite quality levels (R5_SCENE
+   * mirrorCull*): a body twin is hidden while its bounding sphere is under the pixel threshold at the mirror's distance
+   * (the mirror never comes closer: it only turns). Level 0-2 draw every twin. Recomputed on a quality step, a re-placement
+   * or a resize. */
+  function applyMirrorCull() {
+    const lvl = qState.level, T = mirror.transform, Pl = mirror.placement;
+    const px = lvl >= R5_SCENE.mirrorCullFrom && T && Pl && cssH > 0 ? (lvl >= QUALITY_LEVELS.length - 1 ? R5_SCENE.mirrorCullPxLowest : R5_SCENE.mirrorCullPx) : 0;
+    const k = px > 0 ? ((0.001 * T.scale) / Math.max(1e-6, Pl.distanceM)) * (cssH / 2) / Math.tan((camera.fov * DEG) / 2) : 0;
+    let culled = 0;
+    for (const b of body) {
+      const tw = b.mirror;
+      if (!tw) continue;
+      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, r = g && g.boundingSphere ? g.boundingSphere.radius : Infinity;
+      const show = !(px > 0 && 2 * r * k < px);
+      if (tw.visible !== show) tw.visible = show;
+      if (!show) culled++;
+    }
+    mirror.culled = culled; mirror.cullPx = px;
+    return culled;
   }
   /** The 'lod' copies: built once on first use (clusterDecimate; about 10 ms for the glass in Node) and swapped in or out
    * on every mesh that shares a geometry (the glass shell, its depth pre-pass and x-ray copies; a body mesh and its depth
@@ -4300,6 +5979,7 @@ export function createScene({
       const g = lod ? lodGeometry(full, cell, stat) : full;
       mesh.geometry = g;
       for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
+      if (mesh.userData.nsInPlaceTwin) mesh.userData.nsInPlaceTwin.geometry = g;
     };
     for (const list of [glass, glassDepth, glassXray]) for (const m of list) swap(m, lod ? lod.glassMm : 0, st ? st.glass : null);
     for (const b of body) swap(b.mesh, lod ? lod.bodyMm : 0, st ? st.body : null);
@@ -4328,9 +6008,74 @@ export function createScene({
       }
       mesh.geometry = g;
       for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
+      if (mesh.userData.nsMirrorTwin) mesh.userData.nsMirrorTwin.geometry = g;
     }
     lodApplied = key;
     if (fresh) st.builtMs = Math.round(nowMs() - t0);
+    applyMirrorLod();
+  }
+  /** R5-scene (D19): the mirror body is drawn from LOD copies: R5_SCENE.mirrorLodFullMm at full quality (about a pixel at
+   * its distance), and from QUALITY_LEVELS index R5_SCENE.mirrorQualityLodFrom on the coarser R5_SCENE.mirrorLodBodyMm (or
+   * the level's own body cell when that is coarser), so it is the first thing simplified on a slow renderer. R5-load W-M3:
+   * INDEX-ONLY copies (clusterIndexLod: the twin shares its body mesh's position and normal buffers and adds only an index
+   * buffer), built lazily and time-sliced (stepMirrorLod: about R5_SCENE.mirrorLodSliceMs per frame); until a mesh's copy is
+   * ready its twin draws the full mesh. */
+  const mirrorLodOf = new Map(); // full geometry -> Map(cell -> index-only geometry)
+  let mirrorLodWant = 0, mirrorLodPending = 0;
+  function mirrorLodCell() {
+    const L = QUALITY_LEVELS[qState.level];
+    return qState.level >= R5_SCENE.mirrorQualityLodFrom ? Math.max(R5_SCENE.mirrorLodBodyMm, L.lod ? L.lod.bodyMm : 0) : Math.max(R5_SCENE.mirrorLodFullMm || 0, L.lod ? L.lod.bodyMm : 0);
+  }
+  function mirrorIndexLod(full, cell, build) {
+    let byCell = mirrorLodOf.get(full);
+    if (!byCell) { byCell = new Map(); mirrorLodOf.set(full, byCell); }
+    let g = byCell.get(cell);
+    if (g || !build) return g || null;
+    const pos = full.attributes && full.attributes.position, idx = full.index;
+    if (!pos || !idx) { byCell.set(cell, full); return full; }
+    const r = clusterIndexLod(pos.array, idx.array, cell);
+    g = keep(new THREE.BufferGeometry());
+    for (const name of Object.keys(full.attributes)) g.setAttribute(name, full.attributes[name]);
+    g.setIndex(new THREE.BufferAttribute(r.indices, 1));
+    if (full.boundingSphere) g.boundingSphere = full.boundingSphere;
+    g.userData = { nsMirrorLod: cell, triangles: r.triangles };
+    byCell.set(cell, g);
+    return g;
+  }
+  /** Point every twin at its copy for the wanted cell (those built), and count the ones still to build. */
+  function applyMirrorLod() {
+    const cell = mirrorLodCell();
+    mirrorLodWant = cell;
+    let pending = 0, n = 0;
+    for (const b of body) {
+      const tw = b.mirror;
+      if (!tw) continue;
+      const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      const g = cell > 0 ? mirrorIndexLod(full, cell, false) : b.mesh.geometry;
+      const use = g || b.mesh.geometry;
+      if (!g) pending++;
+      if (tw.geometry !== use) { tw.geometry = use; n++; }
+    }
+    mirrorLodPending = pending;
+    mirror.lod = cell > 0 ? cell : false;
+    return n;
+  }
+  /** Build some missing copies within budgetMs (called once per drawn frame). */
+  function stepMirrorLod(budgetMs = R5_SCENE.mirrorLodSliceMs) {
+    if (!(mirrorLodPending > 0) || !(mirrorLodWant > 0)) return 0;
+    const t0 = nowMs();
+    let built = 0;
+    for (const b of body) {
+      if (!b.mirror) continue;
+      const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      if (mirrorIndexLod(full, mirrorLodWant, false)) continue;
+      mirrorIndexLod(full, mirrorLodWant, true);
+      built++;
+      if (nowMs() - t0 > budgetMs) break;
+    }
+    mirror.lodBuildMs = (mirror.lodBuildMs || 0) + (nowMs() - t0);
+    applyMirrorLod();
+    return built;
   }
   /** Esc-page setting (D8): 'auto' | 'high' | 'low'. Returns qualityState(). */
   function setQuality(mode) {
@@ -4416,21 +6161,51 @@ export function createScene({
       for (const t of torsoTwins) t.visible = see;
       for (const m of torsoMaterials) m.depthWrite = !see;
     }
+    // R5-scene (D19): the mirror body is measured from the first posed body, then shown behind the brain; its LOD copies
+    // are built a few at a time.
+    if (body.length && !mirror.ready) computeMirrorBody();
+    if (mirrorRoot.visible) stepMirrorLod();
+    {
+      const showMirror = mirror.enabled && mirror.ready && mirror.transform !== null;
+      if (mirrorRoot.visible !== showMirror) { mirrorRoot.visible = showMirror; overlayDirty = true; }
+    }
+    updateArrows();
     updateFaceLayer();
     layoutOverlay();
+    layoutMirrorLabel(); // R5-integrate-mirror-glow (D19)
     // R3-fix (M4): the body is see-through where it covers the brain's on-screen outline (the ellipse in the brain's
     // projected bounds, from the overlay layout of this frame), only while the brain is in front of the camera.
+    // R5-scene (D18): NOT in third person (you are there to look at your body): the body stays solid, and only a small
+    // soft window at the crosshair opens while the crosshair is on a motor area, so the area you look at is never hidden.
     {
-      const on = body.length > 0 && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0;
-      overBrain.amount = on ? 1 : 0;
+      const third = camState.headInPlace;
+      const on = !third && body.length > 0 && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0 && (camPose ? camMul.overBrain : 1) > 0;
+      const win = third && body.length > 0 && cssW > 0 && cssH > 0 && (gazeOnRegion || typeof highlighted === 'string');
+      overBrain.amount = on ? (camPose ? camMul.overBrain : 1) : win ? 1 : 0;
+      overBrain.mode = on ? 'brain-outline' : win ? 'crosshair' : 'off';
       overBrainUniform.value[0] = overBrain.amount;
       if (on) {
         const b = brainBoundsPx, pr = cssPr || 1, pad = BODY_OVER_BRAIN.padFrac;
         const rx = (b.x1 - b.x0) / 2, ry = (b.y1 - b.y0) / 2;
         const w = overBrainWinUniform.value;
         w[0] = ((b.x0 + b.x1) / 2) * pr; w[1] = (cssH - (b.y0 + b.y1) / 2) * pr; w[2] = rx * (1 + pad) * pr; w[3] = ry * (1 + pad) * pr;
+      } else if (win) {
+        const pr = cssPr || 1, r = ARM_SEE.radiusFrac * Math.min(cssW, cssH) * pr, w = overBrainWinUniform.value;
+        w[0] = (cssW / 2) * pr; w[1] = (cssH / 2) * pr; w[2] = r; w[3] = r;
       }
     }
+    // R5-scene (D19): the mirror body is tinted where the brain's drawn outline covers it (behind the glass).
+    {
+      const on = mirrorRoot.visible && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0;
+      behindGlass.amount = on ? 1 : 0;
+      bgUniform.value.x = behindGlass.amount;
+      if (on) {
+        const b = brainBoundsPx, pr = cssPr || 1;
+        bgWinUniform.value.set(((b.x0 + b.x1) / 2) * pr, (cssH - (b.y0 + b.y1) / 2) * pr, ((b.x1 - b.x0) / 2) * pr, ((b.y1 - b.y0) / 2) * pr);
+      }
+    }
+    // R5-scene (D17): glow links and rims for this frame (cheap; glowLinkState().cpuMs).
+    updateGlow(dtMs);
     // R4-integrator (D5 glass fix): view-space rigid normal matrix and far-eye centre for the glass rim (K > 1 only).
     if (farEyeView.rot && farEyeView.pw && farEyeView.K > 1) {
       camera.updateMatrixWorld(true);
@@ -4447,13 +6222,13 @@ export function createScene({
   /** Second pass for the face layer: 'ghost' with the main camera, depth-tested against the main frame (the arm in
    * front still hides it); 'inset' with the inset camera in a scissored, cleared box. */
   function renderFaceLayer() {
-    if (!(faceAmount > 0) || !faceGroup.visible || faceMode === 'off') return;
+    if (!(faceAmount > 0) || !faceGroup.visible || faceShow === 'off') return;
     const auto = renderer.autoClear;
     renderer.autoClear = false;
     try {
-      if (faceMode === 'ghost') {
+      if (faceShow === 'ghost') {
         renderer.render(faceScene, camera);
-      } else if (faceMode === 'inset' && cssW > 0 && cssH > 0 && typeof renderer.setScissor === 'function') {
+      } else if ((faceShow === 'inset' || faceShow === 'box') && cssW > 0 && cssH > 0 && typeof renderer.setScissor === 'function') {
         const r = insetRect();
         const y = cssH - r.y - r.size; // WebGL viewport origin: bottom left
         insetCamera.aspect = 1;
@@ -4480,12 +6255,10 @@ export function createScene({
     disposed = true;
     canvas.removeEventListener('webglcontextlost', onLost);
     canvas.removeEventListener('webglcontextrestored', onRestored);
-    for (const [t, type, fn] of arrowListeners.splice(0)) t.removeEventListener(type, fn);
-    stopArrowHold();
-    if (view && typeof view.removeEventListener === 'function') view.removeEventListener('blur', stopArrowHold);
     if (hudMo) { try { hudMo.disconnect(); } catch { /* gone */ } }
     if (hudRo) { try { hudRo.disconnect(); } catch { /* gone */ } }
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    for (const set of Object.values(arrowSets)) if (set.rig) { try { set.rig.dispose(); } catch { /* gone */ } }
     for (const d of disposables.splice(0)) d.dispose();
     renderer.dispose();
   }
@@ -4493,6 +6266,9 @@ export function createScene({
   return {
     objects: {
       renderer, scene, camera, armGroup, brainGroup, bones, muscles, glass, glassDepth, markers, get strip() { return strip; },
+      /** R5-scene: the eye (the arm hangs on it), the mirror body groups, the 3D arrow sets and the two glow-link meshes. */
+      eyeRig, mirrorRoot, mirrorBodyGroup, mirrorArmGroup, arrowSets, glowMeshes: { own: glowOwn.mesh, mirror: glowMirror.mesh },
+      get mirror() { return mirror; },
       glassXray,
       materials: { bone: boneMaterial, glass: glassMaterial, glassDepth: glassDepthMaterial, glassXray: glassXrayMaterial },
       /** applied: null until the first glass compile, then whether the fresnel hook was found (Root's browser check). */
@@ -4506,6 +6282,11 @@ export function createScene({
        * pixel-ratio state ({ level, cap, smoothMs, ... } or null when disabled). */
       glassXrayMode,
       transparentSortApplied,
+      /** R5-scene: { applied (null until a lit region / strip compiles, then whether the rigid-normal hook was found), view
+       * (whether the far-eye view-vector line was found), materials }. */
+      stripRelief,
+      /** R5-scene (D17): { applied (null until a glowing material compiles, then whether the rim hook was found), materials }. */
+      glowRim,
       /** R4-scene: the quality state (qualityState(); replaces the A2 adaptive pixel-ratio state). */
       get pixelRatioState() { return qualityState(); },
       /** U2b-scene: region records { id, region, material, meshes, depthMeshes, outline, activity, activated, hovered,
@@ -4556,25 +6337,43 @@ export function createScene({
     setGuideGoal,
     setQuality,
     brainCoversRect,
+    motorCoversRect,
     qualityState,
     setBrainDistanceScale,
+    // R5-scene (round 5: D16 arrows, D17 glow, D18 third person, D19 mirror body; round5/R5-scene-NOTES.md)
+    pickArrows,
+    setArrowHover,
+    arrowsState,
+    setGlowLinks,
+    glowLinkState,
+    glowLinksDrawn,
+    setCameraPose,
+    cameraState,
+    setMirrorView,
+    /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
+    setMirror: setMirrorView,
+    mirrorState,
+    mirrorPartAt,
+    mirrorPlacementNow,
+    bodyKeepOut,
+    // R5-integrate-core (D15): the Body Worlds layer labels of the body's muscle meshes, and the lifted left arm.
+    setBodyLayers,
+    setArmLayers,
     get regionMode() { return regionMode; },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
     sceneState() {
       return {
         regionMode, brainTransformSet, regions: regions.length, hoveredRegionId, gazeOnRegion,
         activatedRegionIds: regions.filter(r => r.activated >= 1).map(r => r.id),
-        arrows: arrowsShown && arrowLayout ? Object.fromEntries(ORBIT_ARROWS.dirs.map(d => [d, { x: Math.round(arrowNow[d].x), y: Math.round(arrowNow[d].y), clamped: !arrowNow[d].clear, usable: arrowNow[d].usable }])) : null,
-        // R3-scene: the arrow plan in the reference view (default look carried with the grab): per arrow the clearance from
-        // the brain silhouette (px), whether it is on screen and clear of the panel / legend / HUD / toast, and the look
-        // (deg) that puts it under the crosshair; plus the gap and the hull size.
-        arrowPlan: arrowPlan ? {
-          armEnvelope: armEnv ? { poses: armEnv.envelope.poses.length, forKey: armEnv.forKey, used: armEnv.forKey === `${cssW}x${cssH}` } : null,
-          ref: arrowPlan.ref, gapPx: Math.round(arrowPlan.placement.gapPx * 10) / 10, hullVertices: arrowPlan.hull.length / 2,
-          obstacles: arrowPlan.obstacles.map(o => [Math.round(o.x0), Math.round(o.y0), Math.round(o.x1), Math.round(o.y1)]),
-          hullBox: (() => { const h = arrowPlan.hull; let a = Infinity, b = Infinity, c = -Infinity, e = -Infinity; for (let i = 0; i < h.length; i += 2) { a = Math.min(a, h[i]); c = Math.max(c, h[i]); b = Math.min(b, h[i + 1]); e = Math.max(e, h[i + 1]); } return [Math.round(a), Math.round(b), Math.round(c), Math.round(e)]; })(),
-          arrows: Object.fromEntries(ORBIT_ARROWS.dirs.map(d => { const q = arrowPlan.placement[d]; return [d, { x: Math.round(q.x), y: Math.round(q.y), clearancePx: Math.round(q.clearancePx * 10) / 10, onScreen: q.onScreen, clear: q.clear, comfortable: q.comfortable, cls: q.cls, armHits: q.armHits, onArm: q.onArm, yawDeg: Math.round(q.look.yawDeg * 10) / 10, pitchDeg: Math.round(q.look.pitchDeg * 10) / 10, slidePx: q.slidePx }]; }))
-        } : null,
+        // R5-scene (D16): the brain's 3D arrows on screen (x, y: a good point to click, on the outer bend), as in round 4;
+        // arrows3d has both sets (brain, mirror) with boxes, distances and materials.
+        arrows: arrowsShown && arrowLayout ? Object.fromEntries(ARROW_DIRS.map(d => { const c = arrowSets.brain.clicks[d]; return [d, { x: c ? Math.round(c[0]) : null, y: c ? Math.round(c[1]) : null, clamped: false, usable: Boolean(arrowLayout[d]) }]; })) : null,
+        arrows3d: arrowsState(),
+        mirror: mirrorState(),
+        glow: glowLinkState(),
+        camera: cameraState(),
+        stripRelief: { ...stripRelief },
+        overBrain: { amount: overBrain.amount, mode: overBrain.mode || 'off' },
         glassRead: { ...glassRead },
         // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
         // last received them (viewport fractions).
@@ -4582,14 +6381,15 @@ export function createScene({
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
         hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
         leftArmRim: { ...leftArmRim },
-        cameraRange: { near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, brainDistanceScale: brainDistK },
+        cameraRange: { near: camera.near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, mirrorFarM: cameraRange.mirrorFarM, brainDistanceScale: brainDistK },
         armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
-        arrowHover: hoverDir, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
+        arrowHover: hoverDir, mirrorArrowHover: arrowHover && arrowHover.target === 'mirror' && !arrowHover.blocked ? arrowHover.dir : null, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
         markDots: [...markDots].map(([id, d]) => ({ id, shown: d.shown, small: d.small, areaPx: d.area, left: d.x, top: d.y })),
         labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null })),
         info: info ? { shown: !info.panel.hidden } : null,
-        body: { meshes: body.length, face: body.filter(b => b.face).length, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
-        face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
+        body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
+        face: { mode: faceMode, shown: faceShow, amount: faceAmount, visible: faceGroup.visible, drive: Math.round(faceDriveNow * 1000) / 1000 },
+        headInside: { applied: headInside.applied, meshes: headInside.meshes, centre: headInside.centre ? headInside.centre.map(v => Math.round(v * 10) / 10) : null }
       };
     }
   };
@@ -4637,6 +6437,12 @@ export const HUD_LICENCE_LINKS = Object.freeze([
   Object.freeze(['Licence: CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']),
   Object.freeze(['BodyParts3D licence page (DBCLS)', 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html']),
   Object.freeze(['BodyParts3D source', 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html'])
+]);
+/** R5-fix (review SL5-1, CC BY-SA 4.0 s3(a)(1)(C)): the face-mesh licence and source links, shown in 'Sources and rights'
+ * once the face and chewing muscles are drawn (HUD model key faceLinks: true). Same URIs as ns-text FACE_CREDIT. */
+export const HUD_FACE_LICENCE_LINKS = Object.freeze([
+  Object.freeze([NS_TEXT.FACE_CREDIT.linkLicence, NS_TEXT.FACE_CREDIT.url]),
+  Object.freeze([NS_TEXT.FACE_CREDIT.linkSource, NS_TEXT.FACE_CREDIT.sourceUrl])
 ]);
 /** Historical textContent mirrors remain in the details DOM for slot compatibility. Primary notices and the
  * crown/tint note now remain visible in every layout; no required text relies on these hidden mirrors. */
@@ -4909,6 +6715,14 @@ export function createHud(hudRoot) {
     a.textContent = text;
     if (typeof a.setAttribute === 'function') { a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
   }
+  const faceLinks = [];
+  for (const [text, href] of HUD_FACE_LICENCE_LINKS) {
+    const a = make('a', 'ns-details-link ns-details-link-face', links);
+    a.textContent = text;
+    a.hidden = true;
+    if (typeof a.setAttribute === 'function') { a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
+    faceLinks.push(a);
+  }
 
   // Essential limits remain outside movable cards, never faded or hidden; fixed-size text may wrap.
   // Its measured height informs HUD placement, without changing camera or hand-fit geometry.
@@ -4967,6 +6781,8 @@ export function createHud(hudRoot) {
           if (key === 'orientationLabels') orientText[k].long = v[k]; else orientText[k].short = v[k];
           showOrientText(k, orientText[k].shortWanted);
         }
+      } else if (key === 'faceLinks') {
+        for (const a of faceLinks) if (a.hidden === (v === true)) a.hidden = v !== true;
       } else if (key === 'crosshairActive') {
         setClass(cross, v ? 'ns-crosshair ns-crosshair-active' : 'ns-crosshair');
       } else if (key === 'limitsShort') {
@@ -5236,6 +7052,17 @@ export function createHud(hudRoot) {
         if (!p) { if (i > 0) break; continue; }
         if (p.visible) cands.push({ key, p });
       }
+      // R5-fix (review F13, R12 "front toward the top"): with R25 the brain's front (or back) end can be off screen at the
+      // default view; its label is then pinned at that screen edge on the brain's midline ("↑ Front (anterior)" at the
+      // top), slid sideways off the arrows and cards like any other label.
+      if (!cands.length && (k === 'anterior' || k === 'posterior')) {
+        const p = projected && projected[k];
+        const off = p && p.front !== false && Number.isFinite(p.x) && Number.isFinite(p.y) && (k === 'anterior' ? p.y < 0.02 : p.y > 0.98);
+        if (off) {
+          const x0 = clampFraction(p.x, 0.12, 0.88), ye = k === 'anterior' ? 0 : 1;
+          [0, -0.09, 0.09, -0.18, 0.18, -0.27, 0.27].forEach((dx, i) => cands.push({ key: `${k}.pin${i}`, p: { x: clampFraction(x0 + dx, 0.08, 0.92), y: ye, visible: true, pinned: true } }));
+        }
+      }
       const show = cands.length > 0 && el.textContent !== '';
       if (el.hidden !== !show) el.hidden = !show;
       if (!show || !el.style) continue;
@@ -5330,6 +7157,17 @@ export function createHud(hudRoot) {
   return {
     root, slots, details, essential, render, placeOrientation, dispose, reserveInfo: setReserveInfo,
     get bandRect() { return lastBandRect; }, get reservedRect() { return reservedRect; },
+    /** R5-integrate-core: the HUD cards' boxes (CSS px: the status card and the legend card, as drawn now), so the
+     * floating guide chip never covers them (with the larger round-5 brain the chip's free spots are fewer). */
+    cardRectsPx() {
+      const out = [];
+      for (const e of [info, legend]) {
+        if (!e || e.hidden || typeof e.getBoundingClientRect !== 'function') continue;
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom });
+      }
+      return out;
+    },
     /** R4-integrator (D7): the "Try this" guide line's box (CSS px). While the line is hidden: the place it would take,
      * with its last height (one rect read per call). R4-polish: the line is now the FIRST line of the card (the title is
      * its footer), so that place is the top of the card's content box, not "under the title". */

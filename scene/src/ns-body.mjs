@@ -29,6 +29,17 @@
 //     small downward look; BODY_POSTURE_LIMITS / bodyPostureLimits(posture) cap a seated thigh lift at 110 deg (so the
 //     thigh does not pass into the belly) and the seated elbow bend at 120 deg (so the hand does not fill the view).
 //
+// Round 5 (R5-body):
+//   - D15 Body Worlds layers: bodyWorldsLayers(rig, baked) -> poseBody(rig, targets, { baked, layers, layerAmount })
+//     moves each superficial muscle slightly outward (and peels it a little) as one rigid matrix on the right of its
+//     pose matrix; the classification (BODY_LAYER_TABLE / BODY_LAYER_UNITS, generated) and the rule are documented at
+//     the "Body Worlds layers" section. detachedRestPositions() does the same for CPU-skinned meshes (the left arm).
+//   - D19 mirror body: mirrorBodyMatrix (a reflecting group matrix: it faces you, your left stays on your left),
+//     createBodyInstance / createMirrorBodyInstance / poseBodyInstance / syncBodyInstance (shared rig, geometry,
+//     layers and pose), reflectWinding, bodyBoundsBp.
+//   - D20 extra packets (the face and chewing muscles): validateExtraBodyManifest, loadExtraBodyPacket,
+//     mergeBodyPackets, FACE_MUSCLE_PACKET; their muscles ride the skull and the jaw muscles follow the mandible.
+//
 // Frame: the unchanged BodyParts3D 4.0 whole-body frame in millimetres (+x subject LEFT, +y POSTERIOR, +z SUPERIOR),
 // the same frame as the left arm and the brain. Every matrix maps REST (source) coordinates to POSED coordinates in that
 // frame. At zero targets every matrix is the identity: the source pose is the standard anatomical position.
@@ -479,6 +490,11 @@ function normalizeEntry(e) {
   const id = e.element_id || e.id;
   if (typeof id !== 'string' || !id) return null;
   const names = [];
+  // Round 5 (D20): an extra packet (any source_packet other than the BodyParts3D full-body packet, for example the
+  // Z-Anatomy face packet) leads with its plain anatomical `name` ("left zygomaticus major"); its embedded source name
+  // ("Zygomaticus major muscle.l") follows. Base-packet entries keep the round-4 order exactly.
+  const extra = typeof e.source_packet === 'string' && e.source_packet !== REFERENCE_PACKET;
+  if (extra && e.name) names.push(lowerName(e.name));
   if (e.embedded_source_name) names.push(lowerName(e.embedded_source_name));
   for (const c of e.concepts || []) if (c && c.en) names.push(lowerName(c.en));
   for (const n of e.matched_concept_names || []) names.push(lowerName(n));
@@ -498,6 +514,7 @@ function normalizeEntry(e) {
     bmax: vec(e.bounds_max),
     vertices: Number.isFinite(e.vertices) ? e.vertices : 0,
     sourcePacket: e.source_packet || null,
+    extraPacket: extra,
     sha256: e.sha256 || null,
     // R15 deny-list terms over every name field of the raw entry (empty for every packet entry).
     denyTerms: genitalAnatomyTerms(e)
@@ -993,7 +1010,10 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       pose: fit[e.id] ? `least-squares rigid fit (Horn) to ${fit[e.id].i0.length} two-influence skinned sample vertices` : 'blended rigid matrix (weighted quaternion average)'
     };
     segments[blend[0][0]].muscleIds.push(e.id);
-    muscles.push({ id: e.id, name: e.name, aliases: muscleAliases(e.name, e.centroid), side: e.laterality });
+    // Round 5 (D20): an extra packet's muscle answers to every name of its entry (name, concepts[].en, embedded name),
+    // so the BODY_MOTOR_MAP action lists ("left masseter", "orbicularis oris", ...) light every piece.
+    const aliases = e.extraPacket ? [...new Set([...e.names, ...muscleAliases(e.name, e.centroid)])] : muscleAliases(e.name, e.centroid);
+    muscles.push({ id: e.id, name: e.name, aliases, side: e.laterality });
   }
 
   const rig = {
@@ -1014,7 +1034,11 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       'Bones move rigidly. Muscles get one blended rigid matrix (or optional two-influence skin weights) and slide rather than deform.',
       'The left girdle and humerus are not in this packet: the left pectoralis major, trapezius and serratus anterior use mirrored right-side pivots and ride the thorax unless the left-arm rig matrices are supplied.',
       'No facial-expression or masticatory muscle exists in BodyParts3D 4.0; brow_raise, eye_close, lip_purse and smile move nothing and are reported as display levels only.',
-      'Muscle drives are simulated, unitless display values: not EMG, not force and not nerve activity.'
+      'Muscle drives are simulated, unitless display values: not EMG, not force and not nerve activity.',
+      // Round 5 (D20): only when an extra packet (for example the face muscles) is rigged, so the base rig is unchanged.
+      ...(list.some(e => e.extraPacket && e.kind === 'muscle')
+        ? [`Some muscles come from an extra packet (${[...new Set(list.filter(e => e.extraPacket).map(e => e.sourcePacket))].join(', ')}), placed on this body by one fitted transform: they ride the skull, and jaw muscles partly follow the jawbone; face expressions are shown as activity colours, not as moving skin.`]
+        : [])
     ]
   };
   Object.defineProperty(rig, '_clouds', { value: clouds, enumerable: false });
@@ -1249,9 +1273,64 @@ function fittedMatrix(f, mats) {
   return rigidFit(f.p, skinFitSamples(f, mats));
 }
 
+/**
+ * R5-pronation (user note 2026-11-08T23:43Z, R27: "the rest of the body will follow correspondingly"): the slight
+ * follow of the upper trunk and the left shoulder girdle when the left forearm turns (ns-arm ROTATION_COUPLING; ns-arm
+ * bodyFollowFromCoupling turns fitHand(...).coupling into this option). Display mechanics, not measured motion.
+ *  - trunkTwistDeg: the thorax turns by this many degrees about the vertical (source +z) axis through trunkAxisBp (mm;
+ *    default the thoracolumbar joint); + = toward the subject's left (left shoulder back). The neck turns back by the
+ *    same angle about the vertical axis through the cervicothoracic joint, so the head keeps its direction (it shifts by
+ *    (R - I)(C - A), under 2 mm for the coupling's 1.5 deg), and the resting right arm turns back about the vertical
+ *    through its shoulder joint, so it keeps its direction and only moves with the right shoulder (about 4 mm forward).
+ *    Lumbar spine, pelvis and legs do not move.
+ *  - leftGirdleShiftMm: the left shoulder girdle (virtual segment l_girdle, and l_upperarm with it) slides by this
+ *    vector (source frame mm) relative to the thorax: the shoulder-blade retraction that goes with the outward turn of
+ *    the upper arm. The left pectoralis major, trapezius and serratus anterior follow it through their l_girdle weights.
+ * Limits (refused beyond): |trunkTwistDeg| <= 10, |leftGirdleShiftMm| <= 50.
+ */
+export const ARM_FOLLOW_LIMITS = Object.freeze({ trunkTwistDeg: 10, leftGirdleShiftMm: 50 });
+
+function checkArmFollow(af) {
+  if (af === undefined || af === null || af === false) return null;
+  if (typeof af !== 'object') throw new Error('ns:body_pose: options.armFollow must be an object or null');
+  const twist = af.trunkTwistDeg === undefined || af.trunkTwistDeg === null ? 0 : af.trunkTwistDeg;
+  if (!Number.isFinite(twist) || Math.abs(twist) > ARM_FOLLOW_LIMITS.trunkTwistDeg) throw new Error(`ns:body_pose: options.armFollow.trunkTwistDeg must be finite and within ${ARM_FOLLOW_LIMITS.trunkTwistDeg} deg`);
+  const vec = (v, what) => {
+    if (v === undefined || v === null) return null;
+    if (!v || v.length !== 3 || ![0, 1, 2].every(k => Number.isFinite(v[k]))) throw new Error(`ns:body_pose: options.armFollow.${what} must be a finite [x, y, z]`);
+    return [v[0], v[1], v[2]];
+  };
+  const axis = vec(af.trunkAxisBp, 'trunkAxisBp');
+  const shift = vec(af.leftGirdleShiftMm, 'leftGirdleShiftMm');
+  if (shift && Math.hypot(...shift) > ARM_FOLLOW_LIMITS.leftGirdleShiftMm) throw new Error(`ns:body_pose: options.armFollow.leftGirdleShiftMm must stay within ${ARM_FOLLOW_LIMITS.leftGirdleShiftMm} mm`);
+  return { trunkTwistDeg: twist, trunkAxisBp: axis, leftGirdleShiftMm: shift };
+}
+
+const SOURCE_UP = Object.freeze([0, 0, 1]);
+
+/** Apply checkArmFollow's result to the local matrices (in place). */
+function applyArmFollow(rig, local, af) {
+  const J = rig.pivots;
+  if (af.trunkTwistDeg) {
+    const A = af.trunkAxisBp || (J.thoracolumbar && J.thoracolumbar.point);
+    const C = J.cervicothoracic && J.cervicothoracic.point;
+    if (A) {
+      local.thorax = m4Mul(local.thorax, m4RotAbout(SOURCE_UP, af.trunkTwistDeg, A));
+      if (C) local.cervical = m4Mul(m4RotAbout(SOURCE_UP, -af.trunkTwistDeg, C), local.cervical);
+      // the resting right arm keeps its direction (it rests as if on an armrest): it turns back about the vertical through
+      // its shoulder joint, so it only moves with that shoulder (a few mm) instead of swinging its hand ~1 cm
+      const G = J.r_glenohumeral && J.r_glenohumeral.point;
+      if (G) local.r_girdle = m4Mul(m4RotAbout(SOURCE_UP, -af.trunkTwistDeg, G), local.r_girdle);
+    }
+  }
+  if (af.leftGirdleShiftMm) local.l_girdle = m4Mul(m4Trans(af.leftGirdleShiftMm), local.l_girdle);
+}
+
 /** World (rest -> posed, Float64) matrix of every segment for clamped targets, anchor and external matrices. */
 function worldSegments(rig, applied, options) {
   const local = localMatrices(rig, applied);
+  const af = checkArmFollow(options.armFollow);
+  if (af) applyArmFollow(rig, local, af);
   const anchor = options.anchor === undefined ? 'pelvis' : options.anchor;
   if (!SEG_INDEX.has(anchor)) throw new Error(`ns:body_pose: unknown anchor segment ${JSON.stringify(anchor)}`);
   const ext = options.external || {};
@@ -1275,12 +1354,19 @@ function worldSegments(rig, applied, options) {
  *   the head, and an eye camera attached to it, stays still while the rest of the body moves relative to it).
  * @param options.external { l_girdle?, l_upperarm? }: shared-frame rest->posed matrices from the left-arm rig, used as
  *   those virtual segments' world matrices (so the left pectoralis/trapezius/serratus follow the left arm).
+ * @param options.armFollow R5-pronation: { trunkTwistDeg, trunkAxisBp?, leftGirdleShiftMm? } (ARM_FOLLOW_LIMITS): the
+ *   slight trunk turn and left shoulder-blade slide that follow the left forearm turn (see checkArmFollow's note).
+ *   Absent / null = no follow (every matrix exactly as without the option).
  * @param options.muscleMode 'fit' (default: least-squares rigid fit to the skinned sample vertices) or 'blend'
  *   (weighted quaternion average of the attaching segments; cheaper, drifts more on multi-joint muscles).
  * @param options.baked a bakeBodyPosture() result (round 3). The returned mesh matrices then map the BAKED geometry
  *   (baked.meshesById, the body already in its rest posture) to the posed geometry, so they are the identity whenever
  *   the targets equal the baked posture's angles. Pass absolute targets (bodyPostureTargets), not offsets.
  *   `segments` maps the source-pose geometry to the drawn pose (including the baked posture's keep correction).
+ * @param options.layers a bodyWorldsLayers(rig, baked) result (round 5, D15): each superficial muscle's matrix becomes
+ *   M . D (detached outward and slightly peeled; the offset rides on the pose). Bones, deep muscles and unknown meshes
+ *   are byte-identical to the call without layers. options.layerAmount 0..1 (default layers.amount; 0 = no change).
+ *   The detailed result then also has layers: { amount, peel, detached (count) }.
  * @returns { matrices: Map(meshId -> Float32Array(16)), segments: Map(segmentId -> Float32Array(16)), applied,
  *   clamped, ignored, nonFinite, face, anchor, relativeTo: 'source' | 'baked' }
  */
@@ -1291,6 +1377,12 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
   const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
   // A baked posture's constant keep correction applies to every pose, so the deltas are relative to the drawn geometry.
   if (baked) for (const s of BODY_SEGMENTS) world[s] = m4Mul(baked._internal.keepM, world[s]);
+  // Round 5 (D15): Body Worlds layers, D on the right of each superficial muscle's matrix; everything else unchanged.
+  const layers = options.layers === undefined || options.layers === null || options.layers === false ? null : checkLayers(rig, baked, options.layers);
+  const layerAmount = layers ? (options.layerAmount === undefined || options.layerAmount === null ? layers.amount : options.layerAmount) : 0;
+  if (layers && !(Number.isFinite(layerAmount) && layerAmount >= 0 && layerAmount <= 1)) throw new Error('ns:body_pose: options.layerAmount must be in 0..1');
+  const recs = layers && layerAmount > 0 ? layerMatsFor(layers, layerAmount) : null;
+  let detached = 0;
   const matrices = new Map();
   const fits = rig._fit || {};
   const mode = options.muscleMode === 'blend' ? 'blend' : 'fit';
@@ -1301,10 +1393,13 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
     else if (info.kind === 'bone' || info.blend.length === 1) m = world[info.segment];
     else if (mode === 'fit' && fits[id]) m = fittedMatrix(fits[id], mats);
     else m = blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
+    if (recs) { const D = recs.get(id); if (D) { m = m4Mul(m, D); detached++; } }
     matrices.set(id, Float32Array.from(m));
   }
   const segments = new Map(BODY_SEGMENTS.map(s => [s, Float32Array.from(world[s])]));
-  return { matrices, segments, applied: t.applied, clamped: t.clamped, ignored: t.ignored, nonFinite: t.nonFinite, face: faceDisplayLevels(t.applied), anchor, relativeTo: baked ? 'baked' : 'source' };
+  const result = { matrices, segments, applied: t.applied, clamped: t.clamped, ignored: t.ignored, nonFinite: t.nonFinite, face: faceDisplayLevels(t.applied), anchor, relativeTo: baked ? 'baked' : 'source' };
+  if (layers) result.layers = { amount: layerAmount, peel: layers.peel, detached };
+  return result;
 }
 
 /** Shared interface 3: Map(meshId -> 4x4 column-major Float32Array) in the shared BodyParts3D frame (mm). */
@@ -1401,6 +1496,9 @@ function idsForName(catalog, muscleName) {
 
 /** Normalise active actions: ns-actions activeBodyActions() rows, [{ actionId, level }], action-id strings, or an
  * object/Map { actionId: level }. Rows may carry their own agonists/antagonists; otherwise BODY_MOTOR_MAP supplies them. */
+/** R5-fix (review SL5-6): display level of the less-driven side for actions with a lateralBias (= ns-bodymap
+ * LATERAL_DISPLAY.otherSideGain; simulated, unitless). */
+export const BODY_LATERAL_OTHER_SIDE_GAIN = 0.6;
 function actionRows(activeActions) {
   if (!activeActions) return [];
   let rows;
@@ -1418,7 +1516,10 @@ function actionRows(activeActions) {
     const agonists = Array.isArray(r.agonists) ? r.agonists : a ? a.agonists : [];
     const antagonists = Array.isArray(r.antagonists) ? r.antagonists : a ? a.antagonists : [];
     const stabilizers = Array.isArray(r.stabilizers) ? r.stabilizers : a && a.stabilizers ? a.stabilizers : [];
-    if (level > 0) out.push({ actionId, level, agonists, antagonists, stabilizers });
+    // R5-fix (review SL5-6): the action's lateralBias side (the body side its hemisphere mainly drives)
+    const lb = r.lateralBias !== undefined ? r.lateralBias : a ? a.lateralBias : null;
+    const lateralBias = lb === 'left' || lb === 'right' ? lb : null;
+    if (level > 0) out.push({ actionId, level, agonists, antagonists, stabilizers, lateralBias });
   }
   return out;
 }
@@ -1434,14 +1535,18 @@ function actionRows(activeActions) {
  * floor, not inhibition data); per mesh the maximum wins. Unitless display values, not EMG, force or nerve activity.
  */
 export function bodyMuscleDriveReport(activeActions, options = {}) {
-  const { antagonistGain = 0.08, stabilizerGain = 0.3 } = options;
+  const { antagonistGain = 0.08, stabilizerGain = 0.3, otherSideGain = BODY_LATERAL_OTHER_SIDE_GAIN } = options;
   const catalog = catalogOf(options);
   const byName = {}, unmatchedByAction = {};
   const put = (n, v) => { if (v > 0 && !(byName[n] >= v)) byName[n] = v; };
+  // R5-fix (review SL5-6): an action with a lateralBias side shows the named muscles of the OTHER side at otherSideGain
+  // of its level (the crossed side gets the stronger signal; a display choice; unsided names are unchanged). Same rule as
+  // ns-bodymap namedMuscleDrives / LATERAL_DISPLAY.
+  const sideK = (r, n) => { if (!r.lateralBias) return 1; const w = String(n).toLowerCase().split(/\s+/); const sd = w.includes('left') ? 'left' : w.includes('right') ? 'right' : null; return sd && sd !== r.lateralBias ? otherSideGain : 1; };
   for (const r of actionRows(activeActions)) {
-    for (const n of r.agonists) put(n, r.level);
-    for (const n of r.stabilizers) put(n, r.level * stabilizerGain);
-    for (const n of r.antagonists) put(n, r.level * antagonistGain);
+    for (const n of r.agonists) put(n, r.level * sideK(r, n));
+    for (const n of r.stabilizers) put(n, r.level * stabilizerGain * sideK(r, n));
+    for (const n of r.antagonists) put(n, r.level * antagonistGain * sideK(r, n));
     const miss = [...new Set([...r.agonists, ...r.stabilizers, ...r.antagonists])].filter(n => !idsForName(catalog, n).length);
     if (miss.length && r.actionId) unmatchedByAction[r.actionId] = miss;
   }
@@ -1458,6 +1563,29 @@ export function bodyMuscleDriveReport(activeActions, options = {}) {
  * { rig } to match against that rig's muscles instead of the default full-body catalog. */
 export function bodyMuscleDrives(activeActions, options = {}) {
   return bodyMuscleDriveReport(activeActions, options).drives;
+}
+
+/**
+ * R5-pronation (R27): the LEFT body muscles lit by the left forearm turn. byName is ns-actions rotationOutputs(state)
+ * .muscles ({ 'pectoralis major': 0.6, ... }: name fragment -> 0..1 simulated display level; the left-arm view-model
+ * meshes are lit from the same object by the scene's updateMuscles). Returns { meshId: level } for every left-side body
+ * muscle whose name contains a fragment (case-insensitive), e.g. the three parts of the left pectoralis major for the
+ * internal-rotator fragment. Right-side muscles never light (the turn is the left arm's). Max-merge the result into the
+ * bodyMuscleDrives drives before updateBody. options.rig: match that rig's muscles (default: the full-body catalog).
+ * Simulated, unitless display levels of standard muscle roles; not EMG or force.
+ */
+export function rotationBodyDrives(byName, options = {}) {
+  const out = {};
+  if (!byName || typeof byName !== 'object') return out;
+  const frags = Object.entries(byName).filter(([k, v]) => typeof k === 'string' && k.trim() && Number.isFinite(v) && v > 0)
+    .map(([k, v]) => [k.trim().toLowerCase(), clamp(v, 0, 1)]);
+  if (!frags.length) return out;
+  for (const m of catalogOf(options)) {
+    if (m.side !== 'left') continue;
+    const nm = String(m.name || '').toLowerCase();
+    for (const [k, v] of frags) if (nm.includes(k) && !(out[m.id] >= v)) out[m.id] = v;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1989,6 +2117,501 @@ function bakedDelta(rig, baked, id, info, world, mats, mode) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Round 5 (R5-body, D15): Body Worlds layers
+//
+// The user (2026-11-08T21:54Z): "make the superficial muscles slightly detached. Gunther von Hagens style body worlds, so
+// that we can see into the deep muscles."
+//
+// WHICH muscles are superficial (offline, reproducible: harness/run-R5-body-tools/classify.mjs and layers-gen.mjs; the
+// full per-muscle list is round5/body/BODY-WORLDS-LAYERS.json and round5/R5-body-NOTES.md):
+//  1. Geometry. Every muscle the game draws (this packet and the left upper limb of MESH-MANIFEST.json), in the source
+//     (anatomical) pose, with every bone and muscle as an occluder. 128 view directions on a Fibonacci sphere; per
+//     direction an orthographic depth buffer at 1 mm per pixel; per muscle the share of its own silhouette where it is
+//     the front-most surface. Its score (topExposure, 0..1) is the mean of that share over its best quarter of
+//     directions: about 0.9 for a muscle lying on the outside (deltoid 0.99), under 0.1 for one buried under others
+//     (vastus intermedius 0.01, supinator 0.003). Stable to 0.04 against 64 directions at 0.75 mm per pixel.
+//  2. Textbook layer: S superficial, I intermediate, D deep (BODY_LAYER_TEXTBOOK; anatomy as commonly taught, not
+//     checked page by page). It decides the cases this one dataset distorts: BodyParts3D 4.0 lacks many muscles (no
+//     latissimus dorsi, rectus abdominis, gracilis, peronei, tibialis posterior, ...), so some deep muscles lie open.
+//  3. Rule (BODY_LAYER_RULE): superficial when the score is at least 0.3 for S, 0.6 for I and 0.9 for D; else deep.
+//     Pieces of one muscle (for example the three parts of pectoralis major) form one unit with an area-weighted score
+//     and move together, so a muscle never splits apart.
+// HOW they detach: each superficial unit moves outward along its mean outer normal (the area-weighted normal of its
+// surface that is seen from outside, oriented toward where it is seen from) by offsetMm = clamp(0.15 x cube root of the
+// unit's volume in mm^3, 3, 15) mm (3 to about 12 mm here), and peels slightly, as in Body Worlds plastinates: it turns about an axis through the
+// end nearest its first attachment, so the far end lifts by half an offset more (peel 0.5, the default; 1 = one more
+// offset). This is one rigid matrix D
+// (det +1) on the RIGHT of the muscle's pose matrix (posed = M . D), so the offset rides on the bone-driven pose and the
+// scene needs no new geometry. Deep muscles, bones and every unknown mesh keep their matrices exactly (unit test
+// R5-body-layers). The layers are a display choice of this educational model, not dissection data.
+
+/** Textbook layer of each muscle base name (side words removed): S superficial, I intermediate, D deep. */
+export const BODY_LAYER_TEXTBOOK = Object.freeze({
+  // shoulder and arm
+  'deltoid': 'S', 'biceps brachii': 'S', 'triceps brachii': 'S', 'brachialis': 'D', 'coracobrachialis': 'D',
+  'supraspinatus': 'D', 'infraspinatus': 'D', 'teres minor': 'D', 'subscapularis': 'D', 'teres major': 'I',
+  // forearm, front
+  'flexor carpi radialis': 'S', 'flexor carpi ulnaris': 'S', 'palmaris longus': 'S', 'pronator teres': 'S',
+  'flexor digitorum superficialis': 'I', 'flexor digitorum profundus': 'D', 'flexor pollicis longus': 'D', 'pronator quadratus': 'D',
+  // forearm, back
+  'brachioradialis': 'S', 'extensor carpi radialis longus': 'S', 'extensor carpi radialis brevis': 'S', 'extensor digitorum': 'S',
+  'extensor digiti minimi': 'S', 'extensor carpi ulnaris': 'S', 'anconeus': 'S', 'supinator': 'D', 'abductor pollicis longus': 'D',
+  'extensor pollicis brevis': 'D', 'extensor pollicis longus': 'D', 'extensor indicis': 'D',
+  // hand
+  'abductor pollicis brevis': 'S', 'flexor pollicis brevis': 'S', 'opponens pollicis': 'D', 'adductor pollicis': 'D',
+  'abductor digiti minimi of hand': 'S', 'flexor digiti minimi brevis of hand': 'S', 'opponens digiti minimi of hand': 'D',
+  'lumbricals of hand': 'I', 'dorsal interossei of hand': 'D', 'palmar interossei of hand': 'D',
+  // trunk and neck
+  'pectoralis major': 'S', 'trapezius': 'S', 'external oblique': 'S', 'serratus anterior': 'I', 'levator scapulae': 'D',
+  'sternocleidomastoid': 'S', 'digastric': 'S', 'mylohyoid': 'I', 'geniohyoid': 'D',
+  // hip and leg
+  'gluteus maximus': 'S', 'gluteus medius': 'I', 'rectus femoris': 'S', 'vastus lateralis': 'S', 'vastus medialis': 'S',
+  'vastus intermedius': 'D', 'sartorius': 'S', 'biceps femoris': 'S', 'semitendinosus': 'S', 'semimembranosus': 'I',
+  'adductor magnus': 'D', 'gastrocnemius': 'S', 'soleus': 'I', 'tibialis anterior': 'S', 'extensor digitorum longus': 'S',
+  'extensor hallucis longus': 'D', 'flexor digitorum longus': 'D', 'flexor hallucis longus': 'D', 'iliacus': 'D', 'psoas major': 'D',
+  // face and jaw (D20 packet; no visibility score yet, so the rule leaves them in place until they are scored)
+  'occipitofrontalis': 'S', 'orbicularis oculi': 'S', 'orbicularis oris': 'S', 'zygomaticus major': 'S', 'zygomaticus minor': 'S',
+  'levator labii superioris': 'S', 'levator labii superioris alaeque nasi': 'S', 'risorius': 'S', 'depressor anguli oris': 'S',
+  'depressor labii inferioris': 'I', 'mentalis': 'I', 'levator anguli oris': 'I', 'buccinator': 'D', 'corrugator supercilii': 'D',
+  'procerus': 'S', 'nasalis': 'S', 'platysma': 'S', 'temporoparietalis': 'S', 'depressor septi nasi': 'I', 'masseter': 'S',
+  'temporalis': 'S', 'medial pterygoid': 'D', 'lateral pterygoid': 'D'
+});
+/** Pieces whose textbook layer differs from the rest of their muscle (they form their own unit). */
+export const BODY_LAYER_PIECE_TEXTBOOK = Object.freeze({
+  'medial head of triceps brachii': 'D', 'ulnar head of pronator teres': 'D', 'short head of biceps femoris': 'D'
+});
+/** Classification rule and detachment size (see the section comment). */
+export const BODY_LAYER_RULE = Object.freeze({
+  metric: 'topExposure: mean share of the muscle\'s own silhouette that is front-most, over its best quarter of 128 directions (source pose, 1 mm pixels)',
+  superficialAtLeast: Object.freeze({ S: 0.3, I: 0.6, D: 0.9 }),
+  // 0.15 (3 to about 12 mm in this body), not 0.2: viewed and measured (round5/R5-body-NOTES.md), 0.2 pushed the external
+  // obliques far enough over the lap that the first-person look-down lost belly contrast (e2e S35); 0.15 keeps it.
+  offset: Object.freeze({ perCubeRootMm: 0.15, minMm: 3, maxMm: 15 }),
+  peel: 'about the end nearest the first attachment; at peel 1 the far end lifts by one more offset',
+  // Viewed (round5/R5-body-NOTES.md): peel 1 fans the knee and ankle tendons out; 0.5 keeps the lift readable and tidy.
+  peelDefault: 0.5
+});
+
+/** Split a source muscle name into { side, piece, base, unit, textbook } (side words removed from base). */
+export function muscleLayerKey(name) {
+  let n = lowerName(name).replace(/ muscle$/, '');
+  const side = /\bright\b/.test(n) ? 'right' : /\bleft\b/.test(n) ? 'left' : null;
+  n = n.replace(/\b(right|left) /g, '').replace(/ of (right|left) hand$/, ' of hand').replace(/^set of /, '');
+  let piece = null, base = n;
+  let m = /^(acromial|clavicular|spinal|sternocostal|abdominal|descending|transverse|ascending|superficial|deep|orbital|palpebral) part of (.+)$/.exec(n);
+  if (!m) m = /^(long|short|lateral|medial|humeral|ulnar|oblique|transverse|superficial|deep|frontal|occipital|superior|inferior) (?:head|belly) of (.+)$/.exec(n);
+  if (!m) m = /^(half) of (.+)$/.exec(n);
+  if (m) { piece = n; base = m[2]; }
+  const pieceLayer = piece ? BODY_LAYER_PIECE_TEXTBOOK[piece] : undefined;
+  const textbook = pieceLayer || BODY_LAYER_TEXTBOOK[base] || null;
+  const unit = `${side ? side + ' ' : ''}${base}${pieceLayer ? ` (${piece.replace(` of ${base}`, '')})` : ''}`;
+  return { side, piece, base, unit, textbook };
+}
+
+/** 'superficial' | 'deep' for a textbook layer (S/I/D) and a unit score (topExposure); deep when either is unknown. */
+export function bodyLayerClass(textbook, score) {
+  const at = BODY_LAYER_RULE.superficialAtLeast[textbook];
+  return at !== undefined && Number.isFinite(score) && score >= at ? 'superficial' : 'deep';
+}
+
+/** Detachment distance (mm) for a unit volume in cm^3 (see BODY_LAYER_RULE.offset). */
+export function bodyLayerOffsetMm(volumeCm3) {
+  const o = BODY_LAYER_RULE.offset;
+  if (!Number.isFinite(volumeCm3) || volumeCm3 <= 0) return o.minMm;
+  return Math.round(clamp(o.perCubeRootMm * Math.cbrt(volumeCm3 * 1000), o.minMm, o.maxMm) * 10) / 10;
+}
+
+/** Layer record of one mesh id from the generated table, or null: { id, unit, layer, textbook, score (piece),
+ * unitScore, offsetMm, dir, hinge, axis, peelDeg } (unit geometry in the source frame, mm; dir/axis unit vectors). */
+export function bodyLayerRecord(id) {
+  const row = BODY_LAYER_TABLE[id];
+  if (!row) return null;
+  const [unit, score] = row;
+  const u = BODY_LAYER_UNITS[unit];
+  if (!u) return null;
+  const [layer, textbook, unitScore, volumeCm3, offsetMm, dir, hinge, axis, peelDeg] = u;
+  // The table rounds to 4 decimals; renormalise so every detachment matrix is exactly rigid.
+  return Object.freeze({ id, unit, layer: layer === 's' ? 'superficial' : 'deep', textbook, score, unitScore, volumeCm3, offsetMm, dir: dir ? norm(dir) : null, hinge, axis: axis ? norm(axis) : null, peelDeg });
+}
+
+/** D (Float64Array(16), column-major) for a layer record whose dir/hinge/axis are in the frame wanted: rotate by
+ * amount x peel x peelDeg about axis through hinge, then move amount x offsetMm along dir. Identity for amount 0. */
+function layerMatrix(rec, amount, peel) {
+  if (!(amount > 0)) return m4I();
+  const a = Math.min(1, amount);
+  const R = rec.axis && rec.peelDeg && peel > 0 ? m4RotAbout(rec.axis, a * peel * rec.peelDeg, rec.hinge) : m4I();
+  return m4Mul(m4Trans(scl(rec.dir, a * rec.offsetMm)), R);
+}
+
+/** Source-frame detachment matrix of one mesh id (null when it is not a superficial muscle of the table). */
+export function bodyLayerMatrixSource(id, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
+  const rec = bodyLayerRecord(id);
+  if (!rec || rec.layer !== 'superficial') return null;
+  return layerMatrix(rec, amount, peel);
+}
+
+/**
+ * Detached REST positions of one mesh (source frame), for CPU-skinned meshes such as the left arm (ns-arm / ns-rig
+ * skinApply): skin these positions with the weights computed from the ORIGINAL rest positions, so the offset rides on the
+ * bone-driven pose (sum_k w_k M_k (D p) = skinned point moved with its bones). Returns the input array itself when the
+ * mesh is not a superficial muscle or amount is 0 (nothing to change); otherwise a new Float32Array.
+ */
+export function detachedRestPositions(id, positions, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
+  const D = amount > 0 ? bodyLayerMatrixSource(id, { amount, peel }) : null;
+  if (!D) return positions;
+  return transformPositions(D, positions);
+}
+
+/** Rest matrix (source -> drawn) of a mesh in a baked posture: the segment matrix or the muscle's rigid fit. */
+function bakedRestMatrix(rig, baked, id) {
+  const info = rig.meshSegment[id];
+  if (!info) return null;
+  const B = baked._internal;
+  if (info.kind === 'bone' || info.blend.length === 1) return B.world[info.segment];
+  return B.rigidRest[id] || null;
+}
+
+/**
+ * Body Worlds layers for a rig (and its baked posture). Pass the result to poseBody(rig, targets, { baked, layers }).
+ * @param options.amount 0..1 default amount (1 = fully detached; poseBody options.layerAmount overrides it per frame,
+ *   for example to ease the Esc-page "Body Worlds layers: on / off" switch); options.peel 0..1 (default
+ *   BODY_LAYER_RULE.peelDefault 0.5).
+ * @returns frozen { kind: 'ns-body-layers', relativeTo: 'baked' | 'source', amount, peel, superficial: [ids],
+ *   deep: [ids], unclassified: [muscle ids not in the table, left in place], units: { unit: { layer, ids, offsetMm,
+ *   dir (drawn frame) } } }
+ */
+export function bodyWorldsLayers(rig, baked = null, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
+  checkRig(rig);
+  if (baked) checkBaked(rig, baked);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1) throw new Error('ns:body_layers: amount must be in 0..1');
+  if (!Number.isFinite(peel) || peel < 0 || peel > 1) throw new Error('ns:body_layers: peel must be in 0..1');
+  const recs = new Map(), superficial = [], deep = [], unclassified = [], units = {};
+  for (const [id, info] of Object.entries(rig.meshSegment)) {
+    if (info.kind !== 'muscle') continue;
+    const rec = bodyLayerRecord(id);
+    if (!rec) { unclassified.push(id); continue; }
+    if (rec.layer !== 'superficial') { deep.push(id); continue; }
+    let r = rec;
+    if (baked) {
+      const M = bakedRestMatrix(rig, baked, id);
+      if (!M) { unclassified.push(id); continue; }
+      r = Object.freeze({ ...rec, dir: norm(m4Dir(M, rec.dir)), hinge: m4Point(M, rec.hinge), axis: rec.axis ? norm(m4Dir(M, rec.axis)) : null });
+    }
+    recs.set(id, r);
+    superficial.push(id);
+    const u = units[rec.unit] || (units[rec.unit] = { layer: 'superficial', ids: [], offsetMm: rec.offsetMm, dir: round3(r.dir) });
+    u.ids.push(id);
+  }
+  const out = {
+    kind: 'ns-body-layers', relativeTo: baked ? 'baked' : 'source', amount, peel,
+    superficial: Object.freeze(superficial), deep: Object.freeze(deep), unclassified: Object.freeze(unclassified),
+    units: deepFreezeRig(units)
+  };
+  Object.defineProperty(out, '_internal', { value: Object.freeze({ rig, baked, recs }), enumerable: false });
+  return Object.freeze(out);
+}
+
+/** The detachment matrices of a layers object at one amount, cached (the amount changes only while the switch eases). */
+const layerMatCache = new WeakMap();
+function layerMatsFor(layers, amount) {
+  let c = layerMatCache.get(layers);
+  if (!c || c.amount !== amount) {
+    c = { amount, mats: new Map() };
+    for (const [id, r] of layers._internal.recs) c.mats.set(id, layerMatrix(r, amount, layers.peel));
+    layerMatCache.set(layers, c);
+  }
+  return c.mats;
+}
+
+function checkLayers(rig, baked, layers) {
+  if (!layers || layers.kind !== 'ns-body-layers' || !layers._internal) throw new Error('ns:body_pose: options.layers must come from bodyWorldsLayers');
+  if (layers._internal.rig !== rig) throw new Error('ns:body_pose: options.layers was made for a different rig');
+  if ((layers._internal.baked || null) !== (baked || null)) throw new Error('ns:body_pose: options.layers was made for a different baked posture (pass the same baked to both)');
+  return layers;
+}
+
+/** Map(meshId -> Float64Array(16)) of the detachment matrices D (drawn frame) at an amount (default layers.amount). */
+export function bodyLayerMatrices(layers, { amount = layers && layers.amount, peel = layers && layers.peel } = {}) {
+  if (!layers || layers.kind !== 'ns-body-layers' || !layers._internal) throw new Error('ns:body_layers: expected a bodyWorldsLayers() result');
+  const out = new Map();
+  for (const [id, r] of layers._internal.recs) out.set(id, layerMatrix(r, amount, peel));
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Round 5 (R5-body, D19): a second, independent body instance (the mirror body)
+//
+// The mirror body is the same rig, the same baked geometry (shared positions/indices arrays: the scene can reuse its
+// BufferGeometry objects) and the same pose matrices, under its own group transform that REFLECTS the body front to back
+// (BodyParts3D y -> -y), so it faces you and your left arm moves on your left, as in a real mirror. Winding and normals
+// under a reflection: three.js (vendor r170) draws a mesh whose matrixWorld has a negative determinant with
+// frontFace CW (WebGLRenderer: frontFaceCW = object.matrixWorld.determinant() < 0), and its normalMatrix (inverse
+// transpose) reflects the normals correctly, so the scene shares geometry AND materials unchanged; only a renderer that
+// ignores the determinant needs reflectWinding(indices). Pose and activity sync: give the mirror meshes the SAME
+// per-mesh matrices (poseBody result, Body Worlds layers included) and the same drives every frame (syncBodyInstance).
+
+/** Reflection of the BodyParts3D frame front to back (y -> -y), the mirror's facing flip. */
+const MIRROR_FLIP = Object.freeze([1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const det3 = m => m[0] * (m[5] * m[10] - m[9] * m[6]) - m[4] * (m[1] * m[10] - m[9] * m[2]) + m[8] * (m[1] * m[6] - m[5] * m[2]);
+const finite16 = m => m && m.length === 16 && Array.prototype.every.call(m, Number.isFinite);
+const finite3 = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) || ArrayBuffer.isView(v) && v.length === 3 && Array.prototype.every.call(v, Number.isFinite);
+
+/** Bounds, centre and height (mm, source frame) of a set of meshes (baked.meshesById or source meshes). */
+export function bodyBoundsBp(meshesById, { ids = null } = {}) {
+  const get = meshGetter(meshesById);
+  const list = ids || (meshesById instanceof Map ? [...meshesById.keys()] : Object.keys(meshesById || {}));
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const id of list) {
+    const m = get(id), b = m && m.bounds && m.bounds.min ? m.bounds : (positionsOf(m) ? boundsOf(positionsOf(m)) : null);
+    if (!b) continue;
+    for (let k = 0; k < 3; k++) { if (b.min[k] < min[k]) min[k] = b.min[k]; if (b.max[k] > max[k]) max[k] = b.max[k]; }
+  }
+  if (!min.every(Number.isFinite)) return null;
+  return { min, max, centre: mid(min, max).map(x => Math.round(x * 10) / 10), heightMm: Math.round((max[2] - min[2]) * 10) / 10 };
+}
+
+/**
+ * The mirror body's group matrix (BodyParts3D mm -> world, column-major Float64Array(16), determinant < 0):
+ *   world = T(targetWorld) . Orbit . L . scale . F . T(-centreBp)
+ * where L is the linear part of bodyToWorld (body axes and mm -> m), F flips front and back (y -> -y), and Orbit turns
+ * it about its own centre (orbit: { yawDeg about upWorld, pitchDeg about rightWorld } or a 4x4 rotation matrix). At
+ * orbit 0 it faces the player (its front toward the player's front) and its left side is on the player's left.
+ * @param o { bodyToWorld (4x4, required), centreBp ([x,y,z] mm, the point it orbits about and that lands on
+ *   targetWorld; default the centre of the seated body bounds is the caller's choice), targetWorld ([x,y,z] world),
+ *   scale (default 1), orbit, upWorld (default [0,1,0]), rightWorld (default L applied to +x, normalised) }
+ * @returns { matrix, det, reflected: true, frontFaceCW: true, scale }
+ */
+export function mirrorBodyMatrix({ bodyToWorld, centreBp, targetWorld, scale = 1, orbit = null, upWorld = [0, 1, 0], rightWorld = null } = {}) {
+  if (!finite16(bodyToWorld)) throw new Error('ns:body_mirror: bodyToWorld must be a finite 4x4 matrix');
+  if (!finite3(centreBp) || !finite3(targetWorld)) throw new Error('ns:body_mirror: centreBp and targetWorld must be finite [x, y, z]');
+  if (!(Number.isFinite(scale) && scale > 0)) throw new Error('ns:body_mirror: scale must be a positive number');
+  const L = Float64Array.from(bodyToWorld);
+  L[12] = L[13] = L[14] = 0;
+  let O = m4I();
+  if (orbit && orbit.length === 16) {
+    if (!finite16(orbit)) throw new Error('ns:body_mirror: orbit matrix must be finite');
+    O = Float64Array.from(orbit); O[12] = O[13] = O[14] = 0;
+  } else if (orbit) {
+    const yaw = Number.isFinite(orbit.yawDeg) ? orbit.yawDeg : 0, pitch = Number.isFinite(orbit.pitchDeg) ? orbit.pitchDeg : 0;
+    const right = rightWorld && finite3(rightWorld) ? norm([...rightWorld]) : norm(m4Dir(L, [1, 0, 0]));
+    O = m4Mul(m4RotAbout(right, pitch, [0, 0, 0]), m4RotAbout(norm([...upWorld]), yaw, [0, 0, 0]));
+  }
+  const S = m4I(); S[0] = S[5] = S[10] = scale;
+  const M = m4Mul(m4Trans([...targetWorld]), m4Mul(O, m4Mul(L, m4Mul(S, m4Mul(Float64Array.from(MIRROR_FLIP), m4Trans(scl([...centreBp], -1)))))));
+  const det = det3(M);
+  return { matrix: M, det, reflected: det < 0, frontFaceCW: det < 0, scale };
+}
+
+/** Triangle indices with every triangle's winding reversed (a, b, c) -> (a, c, b), for a renderer that does not flip the
+ * front face under a reflecting matrix (three.js does; see the section comment). Returns a new Uint32Array. */
+export function reflectWinding(indices) {
+  const o = new Uint32Array(indices.length);
+  for (let i = 0; i + 2 < indices.length; i += 3) { o[i] = indices[i]; o[i + 1] = indices[i + 2]; o[i + 2] = indices[i + 1]; }
+  return o;
+}
+
+/**
+ * A body instance: what one drawn copy of the body needs. The primary body and the mirror body share rig, baked,
+ * layers and meshesById (the same arrays, so geometry is shared); each has its own toWorld (group matrix).
+ * @returns sealed { kind: 'ns-body-instance', role, rig, baked, layers, meshesById, toWorld, reflected, pose, drives,
+ *   layerAmount, frame }
+ */
+export function createBodyInstance({ rig, baked = null, layers = null, role = 'primary', toWorld = null } = {}) {
+  checkRig(rig);
+  if (baked) checkBaked(rig, baked);
+  if (layers) checkLayers(rig, baked, layers);
+  if (toWorld !== null && !finite16(toWorld)) throw new Error('ns:body_instance: toWorld must be a finite 4x4 matrix or null');
+  const tw = toWorld ? Float64Array.from(toWorld) : null;
+  return Object.seal({
+    kind: 'ns-body-instance', role: String(role), rig, baked, layers, meshesById: baked ? baked.meshesById : null,
+    toWorld: tw, reflected: tw ? det3(tw) < 0 : false, pose: null, drives: null, layerAmount: layers ? layers.amount : 0, frame: 0
+  });
+}
+
+/** A mirror instance of a primary instance (shared rig/baked/layers/meshes; toWorld from mirrorBodyMatrix(mirror)). */
+export function createMirrorBodyInstance(primary, mirror) {
+  if (!primary || primary.kind !== 'ns-body-instance') throw new Error('ns:body_instance: expected a primary body instance');
+  const inst = createBodyInstance({ rig: primary.rig, baked: primary.baked, layers: primary.layers, role: 'mirror', toWorld: mirrorBodyMatrix(mirror).matrix });
+  syncBodyInstance(inst, primary);
+  return inst;
+}
+
+/** Re-place a mirror instance (new orbit, target or scale): toWorld = mirrorBodyMatrix(mirror).matrix. */
+export function setMirrorBodyTransform(inst, mirror) {
+  if (!inst || inst.kind !== 'ns-body-instance') throw new Error('ns:body_instance: expected a body instance');
+  inst.toWorld = mirrorBodyMatrix(mirror).matrix;
+  inst.reflected = true;
+  return inst.toWorld;
+}
+
+/** Pose an instance: poseBodyDetailed with the instance's baked posture and layers; stores pose (matrices), drives and
+ * layerAmount on the instance. options: { anchor, external, layerAmount, drives } (drives: bodyMuscleDrives result). */
+export function poseBodyInstance(inst, jointTargetsDeg = {}, options = {}) {
+  if (!inst || inst.kind !== 'ns-body-instance') throw new Error('ns:body_instance: expected a body instance');
+  const { drives = null, ...rest } = options;
+  const opts = { ...rest };
+  if (inst.baked) opts.baked = inst.baked;
+  if (inst.layers) opts.layers = inst.layers;
+  const r = poseBodyDetailed(inst.rig, jointTargetsDeg, opts);
+  inst.pose = r.matrices;
+  inst.drives = drives;
+  inst.layerAmount = r.layers ? r.layers.amount : 0;
+  inst.frame++;
+  return r;
+}
+
+/** Copy the pose, drives and layer amount of `source` onto `target` (the SAME Map / object references: no per-mesh
+ * copy, so the mirror always shows exactly the primary's pose, activity colours and Body Worlds layers). Returns true
+ * when anything changed. */
+export function syncBodyInstance(target, source) {
+  if (!target || target.kind !== 'ns-body-instance' || !source || source.kind !== 'ns-body-instance') throw new Error('ns:body_instance: expected two body instances');
+  if (target.rig !== source.rig) throw new Error('ns:body_instance: instances of different rigs cannot be synced');
+  const changed = target.pose !== source.pose || target.drives !== source.drives || target.layerAmount !== source.layerAmount || target.frame !== source.frame;
+  target.pose = source.pose; target.drives = source.drives; target.layerAmount = source.layerAmount; target.frame = source.frame;
+  return changed;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Round 5 (R5-body, D20): optional extra body packets (the face and chewing muscles)
+//
+// BodyParts3D 4.0 has no facial-expression or chewing muscles. The user chose (2026-11-09) to download only those meshes
+// from an openly licensed atlas (R5-face: packet face-muscles-r1, share-alike meshes; the game code stays CC0). This
+// module loads such a packet generically (manifest URL, packet base, expected manifest sha256, a sha256 per file) and
+// adds its muscles to the rig. They are posed with the skull (rig_hint 'skull'), and the jaw muscles (rig_hint
+// ['skull', 'mandible']) follow the mandible during jaw actions through the same two-nearest-bone weights and rigid fit
+// as every other muscle. Nothing of the base packet changes: bones (and so every joint) come from the base packet.
+// The exact manifest entry format is in round5/R5-body-NOTES.md ("Face packet format").
+
+/** The face packet the game looks for (relative URLs; expectedManifestSha256 is pinned once R5-face delivers it). */
+export const FACE_MUSCLE_PACKET = Object.freeze({
+  id: 'face-muscles-r1',
+  manifestUrl: 'packets/face-muscles-r1/FACE-MESH-MANIFEST.json',
+  packetBase: 'packets/face-muscles-r1/',
+  expectedManifestSha256: '80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113' // R5-integrate-core: R5-face's accepted manifest (W2)
+});
+/** rig_hint values an extra face/jaw packet entry may use (segments of this rig's head). */
+export const EXTRA_PACKET_HINTS = Object.freeze(['skull', 'mandible', 'hyoid', 'cervical', 'thorax', 'r_girdle', 'l_girdle']);
+const EXTRA_ID_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+const EXTRA_MAX_ENTRIES = 400;
+const EXTRA_MAX_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Validate an extra packet manifest. Refuses (throws ns:body_packet) a manifest that is not an object with assets, a
+ * packet id mismatch, an id clash with baseIds, a path outside meshes/<id>.obj, a missing sha256/bytes, a kind other
+ * than muscle or bone, a rig_hint outside EXTRA_PACKET_HINTS, a laterality that disagrees with the centroid side, and
+ * any genital anatomy (R15). Returns { packet, entries: frozen snapshots in manifest order (source_packet set) }.
+ */
+export function validateExtraBodyManifest(manifest, { packet = null, baseIds = [] } = {}) {
+  const bad = msg => { throw new Error(`ns:body_packet: ${msg}`); };
+  if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.assets)) bad('the manifest must be an object with an assets array');
+  const pid = manifest.packet;
+  if (typeof pid !== 'string' || !EXTRA_ID_RE.test(pid)) bad('manifest.packet must be a packet id');
+  if (packet && pid !== packet) bad(`manifest.packet is ${JSON.stringify(pid)}, expected ${JSON.stringify(packet)}`);
+  if (manifest.asset_count !== undefined && manifest.asset_count !== manifest.assets.length) bad(`asset_count ${manifest.asset_count} does not match ${manifest.assets.length} assets`);
+  if (manifest.assets.length > EXTRA_MAX_ENTRIES) bad(`more than ${EXTRA_MAX_ENTRIES} assets`);
+  const taken = new Set(baseIds instanceof Set ? baseIds : baseIds || []);
+  const out = [];
+  manifest.assets.forEach((a, i) => {
+    if (!a || typeof a !== 'object') bad(`asset ${i} is not an object`);
+    const id = a.element_id;
+    if (typeof id !== 'string' || !EXTRA_ID_RE.test(id)) bad(`asset ${i}: element_id must match ${EXTRA_ID_RE}`);
+    if (taken.has(id)) bad(`${id} is already loaded (ids must be unique across packets)`);
+    taken.add(id);
+    if (a.path !== `meshes/${id}.obj`) bad(`${id}: path must be meshes/${id}.obj`);
+    if (!Number.isSafeInteger(a.bytes) || a.bytes <= 0 || a.bytes > EXTRA_MAX_BYTES) bad(`${id}: bytes must be a positive integer up to ${EXTRA_MAX_BYTES}`);
+    if (typeof a.sha256 !== 'string' || !HEX64.test(a.sha256.toLowerCase())) bad(`${id}: sha256 must be 64 hex characters`);
+    if (a.kind !== 'muscle' && a.kind !== 'bone') bad(`${id}: kind must be muscle or bone`);
+    const hint = a.rig_hint, hints = Array.isArray(hint) ? hint : [hint];
+    if (!(hints.length === 1 || hints.length === 2) || !hints.every(h => EXTRA_PACKET_HINTS.includes(h))) bad(`${id}: rig_hint must use ${EXTRA_PACKET_HINTS.join(', ')}`);
+    if (!['left', 'right', 'midline'].includes(a.laterality)) bad(`${id}: laterality must be left, right or midline`);
+    const vec = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+    if (!vec(a.bounds_min) || !vec(a.bounds_max)) bad(`${id}: bounds_min and bounds_max must be 3 finite numbers`);
+    const cx = vec(a.centroid) ? a.centroid[0] : (a.bounds_min[0] + a.bounds_max[0]) / 2;
+    if (a.laterality === 'left' && !(cx > 0)) bad(`${id}: a left-sided entry needs centroid x > 0 (subject left is +x)`);
+    if (a.laterality === 'right' && !(cx < 0)) bad(`${id}: a right-sided entry needs centroid x < 0 (subject right is -x)`);
+    if (genitalAnatomyTerms(a).length) bad(`${id}: genital anatomy is never loaded (R15)`);
+    const name = typeof a.name === 'string' && a.name ? a.name : typeof a.embedded_source_name === 'string' ? a.embedded_source_name : '';
+    if (!name) bad(`${id}: name (plain anatomical name with its side, e.g. "left zygomaticus major") is required`);
+    out.push(Object.freeze({ ...a, sha256: a.sha256.toLowerCase(), source_packet: pid, rig_hint: Array.isArray(hint) ? Object.freeze([...hint]) : hint, name }));
+  });
+  return { packet: pid, entries: Object.freeze(out) };
+}
+
+/**
+ * Load an extra packet with injected I/O (no DOM, no fetch of its own):
+ *   fetchText(url) -> Promise<string>, sha256Hex(text) -> Promise<hex> | hex, parse(text) -> { positions, indices, ... }
+ * The manifest text must hash to expectedManifestSha256 when given; every mesh text must hash to its entry's sha256.
+ * A packet that is not there (fetchText rejects for the manifest) is 'absent' (the game runs without it); a bad
+ * manifest is 'invalid'; files that fail are listed in errors and left out ('partial').
+ * @returns Promise<{ status: 'absent' | 'invalid' | 'complete' | 'partial', packet, manifest, entries, meshesById (Map),
+ *   errors: [{ id, error }], attribution }>
+ */
+export async function loadExtraBodyPacket({ manifestUrl, packetBase, expectedManifestSha256 = null, fetchText, sha256Hex, parse, baseIds = [], packet = null, concurrency = 4, onProgress = null } = {}) {
+  if (typeof fetchText !== 'function' || typeof sha256Hex !== 'function' || typeof parse !== 'function') throw new Error('ns:body_packet: fetchText, sha256Hex and parse must be functions');
+  if (typeof manifestUrl !== 'string' || typeof packetBase !== 'string') throw new Error('ns:body_packet: manifestUrl and packetBase must be strings');
+  const base = packetBase.endsWith('/') ? packetBase : `${packetBase}/`;
+  let text;
+  try { text = await fetchText(manifestUrl); } catch (err) { return { status: 'absent', packet, manifest: null, entries: [], meshesById: new Map(), errors: [{ id: null, error: String(err && err.message || err) }], attribution: null }; }
+  const fail = error => ({ status: 'invalid', packet, manifest: null, entries: [], meshesById: new Map(), errors: [{ id: null, error }], attribution: null });
+  if (expectedManifestSha256) {
+    const h = String(await sha256Hex(text)).toLowerCase();
+    if (h !== String(expectedManifestSha256).toLowerCase()) return fail(`manifest sha256 ${h} does not match the expected ${expectedManifestSha256}`);
+  }
+  let manifest, v;
+  try { manifest = JSON.parse(text); v = validateExtraBodyManifest(manifest, { packet, baseIds }); } catch (err) { return fail(String(err && err.message || err)); }
+  const meshesById = new Map(), errors = [];
+  let next = 0, done = 0;
+  const worker = async () => {
+    while (next < v.entries.length) {
+      const e = v.entries[next++];
+      try {
+        const t = await fetchText(base + e.path);
+        const h = String(await sha256Hex(t)).toLowerCase();
+        if (h !== e.sha256) throw new Error(`sha256 ${h} does not match the manifest`);
+        const m = parse(t);
+        if (!positionsOf(m) || !m.indices || m.indices.length < 3) throw new Error('no triangles');
+        meshesById.set(e.element_id, m);
+      } catch (err) { errors.push({ id: e.element_id, error: String(err && err.message || err) }); }
+      done++;
+      if (typeof onProgress === 'function') { try { onProgress(done, v.entries.length); } catch { /* advisory */ } }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(16, concurrency | 0 || 1)) }, worker));
+  const entries = v.entries.filter(e => meshesById.has(e.element_id));
+  return {
+    status: errors.length ? 'partial' : 'complete', packet: v.packet, manifest, entries, meshesById, errors,
+    attribution: typeof manifest.attribution === 'string' ? manifest.attribution : typeof manifest.rights === 'string' ? manifest.rights : null
+  };
+}
+
+/** Merge a base body ({ entries, meshesById }) with extra packets into one { entries, meshesById: Map } for
+ * buildBodyRig / bakeBodyPosture / setBody. Duplicate ids and genital entries are refused (throws ns:body_packet). The
+ * base entries keep their order and come first, so every base mesh rigs exactly as without the extras. */
+export function mergeBodyPackets(base, ...extras) {
+  const entries = [], meshesById = new Map(), seen = new Set();
+  const add = (pk, label) => {
+    if (!pk) return;
+    const list = Array.isArray(pk.entries) ? pk.entries : pk.entries && Array.isArray(pk.entries.assets) ? pk.entries.assets : null;
+    if (!list) throw new Error(`ns:body_packet: ${label} needs entries`);
+    const get = meshGetter(pk.meshesById);
+    for (const e of list) {
+      const id = e && (e.element_id || e.id);
+      if (!id) throw new Error(`ns:body_packet: ${label} has an entry without element_id`);
+      if (seen.has(id)) throw new Error(`ns:body_packet: ${id} appears twice`);
+      if (genitalAnatomyTerms(e).length) throw new Error(`ns:body_packet: ${id} is genital anatomy (R15)`);
+      seen.add(id);
+      entries.push(e);
+      const m = get(id);
+      if (m) meshesById.set(id, m);
+    }
+  };
+  add(base, 'the base body');
+  extras.forEach((x, i) => add(x, `extra packet ${i + 1}`));
+  return { entries, meshesById };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // No genital anatomy (R15: "no genitalia. Obviously.")
 //
 // The packets hold no genital meshes (checked by tests/unit/R3-body-genital.test.mjs over both manifests and every OBJ
@@ -2343,3 +2966,431 @@ export const FULLBODY_MUSCLE_CATALOG = deepFreezeRig([
   ["FJ1559","left geniohyoid","left",-136.6]
 ]);
 // END GENERATED DATA
+
+// ---------------------------------------------------------------------------------------------------------------------
+// BEGIN GENERATED LAYER DATA (R5-body layers-gen.mjs; regenerate, do not hand-edit)
+// Source: classify.mjs over inputs/FULLBODY-MESH-MANIFEST.json sha256 e66ba962e32bd7843c6b75c588e6545a6ca9ecdeb17d6ff71e9758aa05b1ea82 and inputs/MESH-MANIFEST.json
+// sha256 0275d915148e8af4da678cd828cb577aa5e7293ffa5ef48e3786247e4ba11448; face muscles (R5-fix): the same run with packets/face-muscles-r1/FACE-MESH-MANIFEST.json sha256 80c461de60165aebf836ea92490c27fe3a56c7db9a59757169732ae2aba61113 added;
+// 128 directions, 1 mm pixels, source pose. Rule and sizes: BODY_LAYER_RULE.
+// BODY_LAYER_TABLE: id -> [unit, piece topExposure]. BODY_LAYER_UNITS: unit -> [layer s|d, textbook, unit score, volume cm3,
+//   offset mm, outer normal (source frame), peel hinge (mm), peel axis, peel deg at peel 1] (geometry null for deep units).
+export const BODY_LAYER_TABLE = deepFreezeRig({
+  FJ1466M: ["left abductor digiti minimi of hand",0.9976],
+  FJ1483M: ["left abductor pollicis brevis",0.9763],
+  FJ1484M: ["left abductor pollicis longus",0.3387],
+  FJ1403M: ["left adductor magnus",0.4297],
+  FJ1481M: ["left adductor pollicis",0.4135],
+  FJ1515M: ["left adductor pollicis",0.3284],
+  FJ1485M: ["left anconeus",0.9848],
+  FJ1478M: ["left biceps brachii",0.7409],
+  FJ1512M: ["left biceps brachii",0.6787],
+  FJ1395M: ["left biceps femoris",0.9366],
+  FJ1444M: ["left biceps femoris (short head)",0.224],
+  FJ1486M: ["left brachialis",0.385],
+  FJ1487M: ["left brachioradialis",0.9694],
+  "zf-buccinator-l": ["left buccinator",0.1324],
+  FJ1488M: ["left coracobrachialis",0.1132],
+  "zf-corrugator-supercilii-l": ["left corrugator supercilii",0],
+  FJ1467M: ["left deltoid",0.988],
+  FJ1468M: ["left deltoid",0.9775],
+  FJ1513M: ["left deltoid",0.8985],
+  "zf-depressor-anguli-oris-l": ["left depressor anguli oris",0.5086],
+  "zf-depressor-labii-inferioris-l": ["left depressor labii inferioris",0.2696],
+  "zf-depressor-septi-nasi-l": ["left depressor septi nasi",0.1467],
+  FJ1555: ["left digastric",0.6046],
+  FJ1560: ["left digastric",0.5827],
+  FJ1578: ["left digastric",0.5096],
+  FJ1509M: ["left dorsal interossei of hand",0.8347],
+  FJ1489M: ["left extensor carpi radialis brevis",0.4168],
+  FJ1490M: ["left extensor carpi radialis longus",0.931],
+  FJ1472M: ["left extensor carpi ulnaris",0.7673],
+  FJ1517M: ["left extensor carpi ulnaris",0.0843],
+  FJ1491M: ["left extensor digiti minimi",0.472],
+  FJ1492M: ["left extensor digitorum",0.9948],
+  FJ1406M: ["left extensor digitorum longus",0.9053],
+  FJ1408M: ["left extensor hallucis longus",0.4867],
+  FJ1493M: ["left extensor indicis",0.3618],
+  FJ1494M: ["left extensor pollicis brevis",0.5209],
+  FJ1495M: ["left extensor pollicis longus",0.3572],
+  FJ1452M: ["left external oblique",0.9617],
+  FJ1496M: ["left flexor carpi radialis",0.8921],
+  FJ1473M: ["left flexor carpi ulnaris",0.8279],
+  FJ1518M: ["left flexor carpi ulnaris",0.8985],
+  FJ1470M: ["left flexor digiti minimi brevis of hand",0.6252],
+  FJ1414M: ["left flexor digitorum longus",0.6281],
+  FJ1497M: ["left flexor digitorum profundus",0.126],
+  FJ1475M: ["left flexor digitorum superficialis",0.2665],
+  FJ1499M: ["left flexor digitorum superficialis",0.5174],
+  FJ1415M: ["left flexor hallucis longus",0.4497],
+  FJ1514M: ["left flexor pollicis brevis",0.8522],
+  FJ1498M: ["left flexor pollicis longus",0.3598],
+  FJ1397M: ["left gastrocnemius",0.923],
+  FJ1394M: ["left gastrocnemius",0.9433],
+  FJ1559: ["left geniohyoid",0.3356],
+  FJ1418M: ["left gluteus maximus",0.975],
+  FJ1419M: ["left gluteus medius",0.6611],
+  FJ1422M: ["left iliacus",0.2626],
+  FJ1500M: ["left infraspinatus",0.3785],
+  "zf-lateral-pterygoid-superior-l": ["left lateral pterygoid",0.3585],
+  "zf-lateral-pterygoid-inferior-l": ["left lateral pterygoid",0.1651],
+  "zf-levator-anguli-oris-l": ["left levator anguli oris",0.1829],
+  "zf-levator-labii-superioris-l": ["left levator labii superioris",0.3924],
+  "zf-levator-labii-superioris-alaeque-nasi-l": ["left levator labii superioris alaeque nasi",0.541],
+  FJ1532M: ["left levator scapulae",0.1815],
+  FJ1510M: ["left lumbricals of hand",0.3478],
+  "zf-masseter-superficial-l": ["left masseter",0.6018],
+  "zf-masseter-deep-l": ["left masseter",0.3068],
+  "zf-medial-pterygoid-l": ["left medial pterygoid",0.2907],
+  "zf-mentalis-l": ["left mentalis",0.1749],
+  FJ1562: ["left mylohyoid",0.3949],
+  "zf-nasalis-l": ["left nasalis",0.8019],
+  "zf-frontalis-l": ["left occipitofrontalis",0.936],
+  "zf-occipitalis-l": ["left occipitofrontalis",1],
+  FJ1482M: ["left opponens digiti minimi of hand",0.446],
+  FJ1501M: ["left opponens pollicis",0.5398],
+  "zf-orbicularis-oculi-orbital-l": ["left orbicularis oculi",0.7986],
+  "zf-orbicularis-oculi-palpebral-l": ["left orbicularis oculi",0.945],
+  "zf-orbicularis-oris-l": ["left orbicularis oris",0.9436],
+  FJ1511M: ["left palmar interossei of hand",0.1477],
+  FJ1502M: ["left palmaris longus",0.9709],
+  FJ1447M: ["left pectoralis major",0.7524],
+  FJ1464M: ["left pectoralis major",0.8835],
+  FJ1446M: ["left pectoralis major",0.2737],
+  "zf-platysma-l": ["left platysma",0.8568],
+  "zf-procerus-l": ["left procerus",0.1312],
+  FJ1503M: ["left pronator quadratus",0.3368],
+  FJ1474M: ["left pronator teres",0.5187],
+  FJ1516M: ["left pronator teres (ulnar head)",0.0187],
+  FJ1431M: ["left psoas major",0.2773],
+  FJ1433M: ["left rectus femoris",0.8439],
+  "zf-risorius-l": ["left risorius",0.8644],
+  FJ1434M: ["left sartorius",0.9639],
+  FJ1435M: ["left semimembranosus",0.4858],
+  FJ1436M: ["left semitendinosus",0.8971],
+  FJ1459M: ["left serratus anterior",0.4425],
+  FJ1437M: ["left soleus",0.3842],
+  FJ1573: ["left sternocleidomastoid",0.9196],
+  FJ1504M: ["left subscapularis",0.0239],
+  FJ1505M: ["left supinator",0.0024],
+  FJ1506M: ["left supraspinatus",0.0105],
+  "zf-temporalis-l": ["left temporalis",0.3648],
+  "zf-temporoparietalis-l": ["left temporoparietalis",0.9839],
+  FJ1507M: ["left teres major",0.6646],
+  FJ1508M: ["left teres minor",0.246],
+  FJ1439M: ["left tibialis anterior",0.9454],
+  FJ1521M: ["left trapezius",0.8731],
+  FJ1554M: ["left trapezius",0.8074],
+  FJ1520M: ["left trapezius",0.9533],
+  FJ1477M: ["left triceps brachii",0.7754],
+  FJ1479M: ["left triceps brachii",0.831],
+  FJ1480M: ["left triceps brachii (medial head)",0.2038],
+  FJ1441M: ["left vastus intermedius",0.0142],
+  FJ1442M: ["left vastus lateralis",0.9318],
+  FJ1443M: ["left vastus medialis",0.6789],
+  "zf-zygomaticus-major-l": ["left zygomaticus major",0.3654],
+  "zf-zygomaticus-minor-l": ["left zygomaticus minor",0.7379],
+  FJ1466: ["right abductor digiti minimi of hand",0.996],
+  FJ1483: ["right abductor pollicis brevis",0.9768],
+  FJ1484: ["right abductor pollicis longus",0.3379],
+  FJ1403: ["right adductor magnus",0.427],
+  FJ1481: ["right adductor pollicis",0.4093],
+  FJ1515: ["right adductor pollicis",0.3343],
+  FJ1485: ["right anconeus",0.9854],
+  FJ1478: ["right biceps brachii",0.7401],
+  FJ1512: ["right biceps brachii",0.6833],
+  FJ1395: ["right biceps femoris",0.9354],
+  FJ1444: ["right biceps femoris (short head)",0.2242],
+  FJ1486: ["right brachialis",0.386],
+  FJ1487: ["right brachioradialis",0.9688],
+  "zf-buccinator-r": ["right buccinator",0.1275],
+  FJ1488: ["right coracobrachialis",0.1243],
+  "zf-corrugator-supercilii-r": ["right corrugator supercilii",0],
+  FJ1467: ["right deltoid",0.9889],
+  FJ1468: ["right deltoid",0.9789],
+  FJ1513: ["right deltoid",0.8983],
+  "zf-depressor-anguli-oris-r": ["right depressor anguli oris",0.5033],
+  "zf-depressor-labii-inferioris-r": ["right depressor labii inferioris",0.2656],
+  "zf-depressor-septi-nasi-r": ["right depressor septi nasi",0.1358],
+  FJ1556: ["right digastric",0.5763],
+  FJ1579: ["right digastric",0.5337],
+  FJ1509: ["right dorsal interossei of hand",0.8389],
+  FJ1489: ["right extensor carpi radialis brevis",0.4131],
+  FJ1490: ["right extensor carpi radialis longus",0.9319],
+  FJ1472: ["right extensor carpi ulnaris",0.769],
+  FJ1517: ["right extensor carpi ulnaris",0.0811],
+  FJ1491: ["right extensor digiti minimi",0.4712],
+  FJ1492: ["right extensor digitorum",0.9949],
+  FJ1406: ["right extensor digitorum longus",0.9035],
+  FJ1408: ["right extensor hallucis longus",0.4814],
+  FJ1493: ["right extensor indicis",0.3659],
+  FJ1494: ["right extensor pollicis brevis",0.5213],
+  FJ1495: ["right extensor pollicis longus",0.3547],
+  FJ1452: ["right external oblique",0.9634],
+  FJ1496: ["right flexor carpi radialis",0.8922],
+  FJ1473: ["right flexor carpi ulnaris",0.8263],
+  FJ1518: ["right flexor carpi ulnaris",0.8938],
+  FJ1470: ["right flexor digiti minimi brevis of hand",0.6272],
+  FJ1414: ["right flexor digitorum longus",0.6272],
+  FJ1497: ["right flexor digitorum profundus",0.1264],
+  FJ1475: ["right flexor digitorum superficialis",0.2639],
+  FJ1499: ["right flexor digitorum superficialis",0.5173],
+  FJ1415: ["right flexor hallucis longus",0.454],
+  FJ1514: ["right flexor pollicis brevis",0.8489],
+  FJ1498: ["right flexor pollicis longus",0.3578],
+  FJ1397: ["right gastrocnemius",0.9202],
+  FJ1394: ["right gastrocnemius",0.9444],
+  FJ1580: ["right geniohyoid",0.3618],
+  FJ1418: ["right gluteus maximus",0.9745],
+  FJ1419: ["right gluteus medius",0.6608],
+  FJ1422: ["right iliacus",0.2629],
+  FJ1500: ["right infraspinatus",0.3779],
+  "zf-lateral-pterygoid-superior-r": ["right lateral pterygoid",0.3101],
+  "zf-lateral-pterygoid-inferior-r": ["right lateral pterygoid",0.1551],
+  "zf-levator-anguli-oris-r": ["right levator anguli oris",0.2708],
+  "zf-levator-labii-superioris-r": ["right levator labii superioris",0.3635],
+  "zf-levator-labii-superioris-alaeque-nasi-r": ["right levator labii superioris alaeque nasi",0.5068],
+  FJ1510: ["right lumbricals of hand",0.3459],
+  "zf-masseter-superficial-r": ["right masseter",0.5979],
+  "zf-masseter-deep-r": ["right masseter",0.3076],
+  "zf-medial-pterygoid-r": ["right medial pterygoid",0.2905],
+  "zf-mentalis-r": ["right mentalis",0.1638],
+  FJ1583: ["right mylohyoid",0.3917],
+  "zf-nasalis-r": ["right nasalis",0.7642],
+  "zf-frontalis-r": ["right occipitofrontalis",0.9473],
+  "zf-occipitalis-r": ["right occipitofrontalis",1],
+  FJ1482: ["right opponens digiti minimi of hand",0.4298],
+  FJ1501: ["right opponens pollicis",0.5468],
+  "zf-orbicularis-oculi-orbital-r": ["right orbicularis oculi",0.7832],
+  "zf-orbicularis-oculi-palpebral-r": ["right orbicularis oculi",0.945],
+  "zf-orbicularis-oris-r": ["right orbicularis oris",0.9433],
+  FJ1511: ["right palmar interossei of hand",0.146],
+  FJ1502: ["right palmaris longus",0.9715],
+  FJ1447: ["right pectoralis major",0.7485],
+  FJ1464: ["right pectoralis major",0.8832],
+  FJ1446: ["right pectoralis major",0.2759],
+  "zf-platysma-r": ["right platysma",0.8887],
+  "zf-procerus-r": ["right procerus",0.1409],
+  FJ1503: ["right pronator quadratus",0.3352],
+  FJ1474: ["right pronator teres",0.5182],
+  FJ1516: ["right pronator teres (ulnar head)",0.0191],
+  FJ1431: ["right psoas major",0.2715],
+  FJ1433: ["right rectus femoris",0.844],
+  "zf-risorius-r": ["right risorius",0.8666],
+  FJ1434: ["right sartorius",0.9654],
+  FJ1435: ["right semimembranosus",0.4822],
+  FJ1436: ["right semitendinosus",0.8929],
+  FJ1459: ["right serratus anterior",0.45],
+  FJ1437: ["right soleus",0.3842],
+  FJ1595: ["right sternocleidomastoid",0.9179],
+  FJ1504: ["right subscapularis",0.0296],
+  FJ1505: ["right supinator",0.0029],
+  FJ1506: ["right supraspinatus",0.0098],
+  "zf-temporalis-r": ["right temporalis",0.3811],
+  "zf-temporoparietalis-r": ["right temporoparietalis",0.9816],
+  FJ1507: ["right teres major",0.672],
+  FJ1508: ["right teres minor",0.2463],
+  FJ1439: ["right tibialis anterior",0.9453],
+  FJ1521: ["right trapezius",0.8737],
+  FJ1554: ["right trapezius",0.8086],
+  FJ1520: ["right trapezius",0.9536],
+  FJ1479: ["right triceps brachii",0.8289],
+  FJ1477: ["right triceps brachii",0.7717],
+  FJ1480: ["right triceps brachii (medial head)",0.216],
+  FJ1441: ["right vastus intermedius",0.0144],
+  FJ1442: ["right vastus lateralis",0.9333],
+  FJ1443: ["right vastus medialis",0.6794],
+  "zf-zygomaticus-major-r": ["right zygomaticus major",0.3593],
+  "zf-zygomaticus-minor-r": ["right zygomaticus minor",0.7224]
+});
+export const BODY_LAYER_UNITS = deepFreezeRig({
+  "left abductor digiti minimi of hand": ["s","S",0.9976,1.78,3,[-0.646,-0.7377,0.1959],[233.8,-133.8,794.4],[-0.753,0.658,-0.0053],2.59],
+  "left abductor pollicis brevis": ["s","S",0.9763,1.82,3,[0.1035,-0.7662,0.6342],[262.5,-129,809.2],[-0.7615,-0.4712,-0.445],2.84],
+  "left abductor pollicis longus": ["d","D",0.3387,15.94,0,null,null,null,0],
+  "left adductor magnus": ["d","D",0.4297,481.26,0,null,null,null,0],
+  "left adductor pollicis": ["d","D",0.3549,4.23,0,null,null,null,0],
+  "left anconeus": ["s","S",0.9848,7.46,3,[-0.0985,0.9771,-0.1884],[222,-43.7,1059.8],[0.9925,0.0827,-0.0902],1.67],
+  "left biceps brachii": ["s","S",0.7117,169.47,8.3,[-0.0898,-0.9949,-0.0451],[150.9,-93.3,1337.9],[-0.9719,0.0974,-0.2145],1.35],
+  "left biceps femoris": ["s","S",0.9366,473.75,11.7,[0.451,0.8924,-0.0124],[71.1,-36.4,766.2],[0.8868,-0.4465,0.1195],1.52],
+  "left biceps femoris (short head)": ["d","D",0.224,67.82,0,null,null,null,0],
+  "left brachialis": ["d","D",0.385,76.72,0,null,null,null,0],
+  "left brachioradialis": ["s","S",0.9694,79.09,6.4,[0.7491,-0.6073,0.2646],[221.9,-60.6,1150.4],[-0.6351,-0.772,0.026],1.05],
+  "left buccinator": ["d","D",0.1324,1.37,0,null,null,null,0],
+  "left coracobrachialis": ["d","D",0.1132,21.05,0,null,null,null,0],
+  "left corrugator supercilii": ["d","D",0,0.2,0,null,null,null,0],
+  "left deltoid": ["s","S",0.9461,318.42,10.2,[0.8979,0.0355,0.4388],[108.9,-65.6,1355.4],[0.0131,-0.9985,0.0541],3.08],
+  "left depressor anguli oris": ["s","S",0.5086,0.9,3,[0.8073,-0.5312,-0.2571],[35.9,-150,1463.8],[-0.407,-0.8166,0.4092],3.93],
+  "left depressor labii inferioris": ["d","I",0.2696,0.95,0,null,null,null,0],
+  "left depressor septi nasi": ["d","I",0.1467,0.19,0,null,null,null,0],
+  "left digastric": ["s","S",0.5357,3.09,3,[0.3703,0.0781,-0.9256],[0.4,-146.7,1419.3],[-0.7053,0.6721,-0.2255],1.4],
+  "left dorsal interossei of hand": ["d","D",0.8347,4.07,0,null,null,null,0],
+  "left extensor carpi radialis brevis": ["s","S",0.4168,19.77,4.1,[0.6241,0.7768,-0.0843],[234,-48.4,1077.5],[0.7714,-0.5954,0.2245],0.76],
+  "left extensor carpi radialis longus": ["s","S",0.931,25.28,4.4,[0.8973,0.4348,0.0765],[234.8,-51.4,1102.7],[0.4076,-0.8824,0.2349],0.76],
+  "left extensor carpi ulnaris": ["s","S",0.5253,16.61,3.8,[-0.4991,0.8179,-0.2862],[218.9,-42.3,1055.9],[0.8638,0.4957,-0.09],0.73],
+  "left extensor digiti minimi": ["s","S",0.472,6.71,3,[-0.0509,0.9498,-0.3086],[233.8,-45.5,1047.1],[0.9986,0.0532,-0.001],0.51],
+  "left extensor digitorum": ["s","S",0.9948,29.12,4.6,[0.1406,0.9459,-0.2923],[231.1,-32.8,1053.5],[0.986,-0.107,0.1281],0.66],
+  "left extensor digitorum longus": ["s","S",0.9053,38.84,5.1,[0.9449,-0.0252,0.3264],[99.1,-54.9,349.5],[-0.114,-0.96,0.2558],0.66],
+  "left extensor hallucis longus": ["d","D",0.4867,7.25,0,null,null,null,0],
+  "left extensor indicis": ["d","D",0.3618,3.02,0,null,null,null,0],
+  "left extensor pollicis brevis": ["d","D",0.5209,3.67,0,null,null,null,0],
+  "left extensor pollicis longus": ["d","D",0.3572,4.99,0,null,null,null,0],
+  "left external oblique": ["s","S",0.9617,263.63,9.6,[0.4223,-0.8723,-0.2464],[86.1,-179.1,1213.8],[-0.8871,-0.4536,0.0854],1.29],
+  "left flexor carpi radialis": ["s","S",0.8921,21.96,4.2,[0.2162,-0.9421,0.2565],[186.7,-82.2,1059.8],[-0.9367,-0.2742,-0.2177],0.82],
+  "left flexor carpi ulnaris": ["s","S",0.8604,46.38,5.4,[-0.9063,0.3203,-0.2758],[179.7,-56.9,1046.3],[0.3728,0.9132,-0.1645],1.11],
+  "left flexor digiti minimi brevis of hand": ["s","S",0.6252,0.65,3,[-0.4231,-0.8183,0.3891],[242.1,-132.7,792.5],[-0.8645,0.4931,0.0971],2.68],
+  "left flexor digitorum longus": ["d","D",0.6281,43.53,0,null,null,null,0],
+  "left flexor digitorum profundus": ["d","D",0.126,53.97,0,null,null,null,0],
+  "left flexor digitorum superficialis": ["d","I",0.3356,64.44,0,null,null,null,0],
+  "left flexor hallucis longus": ["d","D",0.4497,53.85,0,null,null,null,0],
+  "left flexor pollicis brevis": ["s","S",0.8522,0.96,3,[-0.3085,-0.9509,0.0232],[258.8,-138.3,792.9],[-0.4716,0.1317,-0.8719],3.27],
+  "left flexor pollicis longus": ["d","D",0.3598,5.45,0,null,null,null,0],
+  "left gastrocnemius": ["s","S",0.9323,521.1,12.1,[-0.4445,0.8765,0.1849],[76.5,-62,433.4],[0.8922,0.4516,0.0042],2.22],
+  "left geniohyoid": ["d","D",0.3356,0.58,0,null,null,null,0],
+  "left gluteus maximus": ["s","S",0.975,355.15,10.6,[0.4408,0.8976,-0.0083],[30.2,-2.7,907.3],[0.7581,-0.3673,0.5389],2.35],
+  "left gluteus medius": ["s","I",0.6611,210.18,8.9,[0.9362,-0.3509,0.0183],[94.4,-56.7,950.7],[-0.3465,-0.9306,-0.1176],3.01],
+  "left iliacus": ["d","D",0.2626,121.25,0,null,null,null,0],
+  "left infraspinatus": ["d","D",0.3785,106.32,0,null,null,null,0],
+  "left lateral pterygoid": ["d","D",0.262,1.29,0,null,null,null,0],
+  "left levator anguli oris": ["d","I",0.1829,0.2,0,null,null,null,0],
+  "left levator labii superioris": ["s","S",0.3924,0.38,3,[0.6477,-0.7612,0.0345],[31.5,-158.8,1507.8],[-0.5315,-0.4189,0.7362],4.78],
+  "left levator labii superioris alaeque nasi": ["s","S",0.541,0.1,3,[0.7451,-0.5987,0.294],[12.1,-166.8,1516.7],[-0.6466,-0.7564,0.0985],5.95],
+  "left levator scapulae": ["d","D",0.1815,12.97,0,null,null,null,0],
+  "left lumbricals of hand": ["d","I",0.3478,2.31,0,null,null,null,0],
+  "left masseter": ["s","S",0.4799,9.06,3.1,[0.9767,-0.1116,-0.1832],[60.4,-117.1,1510.1],[-0.0831,-0.9841,0.1568],2.43],
+  "left medial pterygoid": ["d","D",0.2907,2.68,0,null,null,null,0],
+  "left mentalis": ["d","I",0.1749,0.13,0,null,null,null,0],
+  "left mylohyoid": ["d","I",0.3949,1.85,0,null,null,null,0],
+  "left nasalis": ["s","S",0.8019,0.44,3,[0.8539,-0.459,0.2454],[1.8,-178.9,1532.3],[-0.4243,-0.8869,-0.1826],4.23],
+  "left occipitofrontalis": ["s","S",0.9553,11.33,3.4,[0.8434,-0.5256,0.1111],[26.8,-179,1571.9],[-0.009,-0.2207,-0.9753],1.01],
+  "left opponens digiti minimi of hand": ["d","D",0.446,0.98,0,null,null,null,0],
+  "left opponens pollicis": ["d","D",0.5398,2.02,0,null,null,null,0],
+  "left orbicularis oculi": ["s","S",0.8358,4.93,3,[0.512,-0.8439,-0.16],[8.2,-171.2,1530],[-0.2909,0.0049,-0.9567],3.28],
+  "left orbicularis oris": ["s","S",0.9436,3.04,3,[0.6186,-0.7851,0.0305],[19,-170.3,1480.6],[-0.7591,-0.5872,0.281],3.85],
+  "left palmar interossei of hand": ["d","D",0.1477,0.85,0,null,null,null,0],
+  "left palmaris longus": ["s","S",0.9709,15.74,3.8,[-0.2669,-0.9539,0.1375],[181.9,-81.9,1055.7],[-0.9344,0.2212,-0.2794],0.64],
+  "left pectoralis major": ["s","S",0.7713,467.1,11.6,[0.4331,-0.8171,0.3805],[13.6,-227.7,1180.3],[0.6503,-0.009,-0.7596],2.8],
+  "left platysma": ["s","S",0.8568,33.16,4.8,[0.6587,-0.5939,0.4619],[108.7,-57.7,1321.4],[0.1236,0.691,0.7122],1.43],
+  "left procerus": ["d","S",0.1312,0.4,0,null,null,null,0],
+  "left pronator quadratus": ["d","D",0.3368,6.55,0,null,null,null,0],
+  "left pronator teres": ["s","S",0.5187,12.14,3.4,[0.0039,-0.9886,0.1506],[191,-82.1,1066.7],[-0.894,-0.0709,-0.4425],1.19],
+  "left pronator teres (ulnar head)": ["d","D",0.0187,4.94,0,null,null,null,0],
+  "left psoas major": ["d","D",0.2773,172.93,0,null,null,null,0],
+  "left rectus femoris": ["s","S",0.8439,345.6,10.5,[0.3178,-0.9477,0.0285],[127.1,-110.8,870.3],[-0.9456,-0.3146,0.0833],1.08],
+  "left risorius": ["s","S",0.8644,0.68,3,[0.7623,-0.5733,-0.3003],[28.1,-160.2,1465.2],[-0.3759,-0.0145,-0.9265],5.28],
+  "left sartorius": ["s","S",0.9639,69.01,6.2,[-0.1914,-0.9806,-0.0418],[113.8,-131.9,903.3],[-0.9739,0.1844,0.1324],0.56],
+  "left semimembranosus": ["d","I",0.4858,320.13,0,null,null,null,0],
+  "left semitendinosus": ["s","S",0.8971,131.48,7.6,[-0.4776,0.8778,-0.0362],[45.4,-32,762.8],[0.8785,0.4765,-0.0345],0.9],
+  "left serratus anterior": ["d","I",0.4425,141.97,0,null,null,null,0],
+  "left soleus": ["d","I",0.3842,317.83,0,null,null,null,0],
+  "left sternocleidomastoid": ["s","S",0.9196,47.06,5.4,[0.9241,-0.3679,0.1032],[18.3,-153.6,1300.3],[0.371,0.7993,-0.4728],1.32],
+  "left subscapularis": ["d","D",0.0239,46.49,0,null,null,null,0],
+  "left supinator": ["d","D",0.0024,11.29,0,null,null,null,0],
+  "left supraspinatus": ["d","D",0.0105,33.64,0,null,null,null,0],
+  "left temporalis": ["s","S",0.3648,19.48,4,[-0.994,0.0548,-0.0947],[40.2,-154.6,1497.6],[-0.1076,-0.6481,0.7539],1.68],
+  "left temporoparietalis": ["s","S",0.9839,21.14,4.1,[1,-0.0009,0.0041],[63,-109.9,1607],[0.0019,-0.7687,-0.6396],2.04],
+  "left teres major": ["s","I",0.6646,37.44,5,[0.6316,0.6503,-0.4221],[169.1,-77.4,1274],[0.1473,-0.6352,-0.7582],2.08],
+  "left teres minor": ["d","D",0.246,32.78,0,null,null,null,0],
+  "left tibialis anterior": ["s","S",0.9454,110.91,7.2,[0.7447,-0.6652,-0.0536],[107.9,-78.2,353.2],[-0.6517,-0.7422,0.1567],1.04],
+  "left trapezius": ["s","S",0.8994,259.76,9.6,[0.3602,0.744,0.5627],[59.5,-37.4,1500.6],[0.9275,-0.3501,-0.1309],1.22],
+  "left triceps brachii": ["s","S",0.8035,263.14,9.6,[0.0156,0.9993,-0.0352],[162.4,-49.7,1303.4],[0.9767,-0.0077,0.2144],2.03],
+  "left triceps brachii (medial head)": ["d","D",0.2038,64.15,0,null,null,null,0],
+  "left vastus intermedius": ["d","D",0.0142,251.33,0,null,null,null,0],
+  "left vastus lateralis": ["s","S",0.9318,500.32,11.9,[0.975,0.1864,-0.121],[143,-85.3,784.8],[0.1928,-0.9803,0.0435],1.45],
+  "left vastus medialis": ["s","S",0.6789,277.27,9.8,[-0.8409,-0.5397,0.0388],[94,-110.3,739.7],[-0.5393,0.8418,0.0212],1.41],
+  "left zygomaticus major": ["s","S",0.3654,0.69,3,[0.7887,-0.5612,-0.251],[54.1,-142.2,1505.9],[-0.368,-0.758,0.5385],2.97],
+  "left zygomaticus minor": ["s","S",0.7379,0.3,3,[0.4658,-0.8831,0.0554],[49.6,-151.2,1506.9],[-0.4712,-0.1946,0.8603],3.37],
+  "right abductor digiti minimi of hand": ["s","S",0.996,1.78,3,[0.5859,-0.7867,0.1947],[-233.8,-133.8,794.4],[-0.8005,-0.5992,-0.0124],2.59],
+  "right abductor pollicis brevis": ["s","S",0.9768,1.82,3,[-0.0779,-0.7701,0.6332],[-262.5,-129,809.1],[-0.7632,0.4547,0.4592],2.84],
+  "right abductor pollicis longus": ["d","D",0.3379,15.94,0,null,null,null,0],
+  "right adductor magnus": ["d","D",0.427,484.53,0,null,null,null,0],
+  "right adductor pollicis": ["d","D",0.3577,4.22,0,null,null,null,0],
+  "right anconeus": ["s","S",0.9854,7.46,3,[0.0939,0.9779,-0.1866],[-222,-43.7,1059.8],[0.9929,-0.0783,0.0895],1.67],
+  "right biceps brachii": ["s","S",0.7135,169.46,8.3,[0.1407,-0.9892,-0.0414],[-150.9,-93.4,1337.9],[-0.9663,-0.1463,0.2117],1.35],
+  "right biceps femoris": ["s","S",0.9354,475.54,11.7,[-0.452,0.892,-0.0078],[-71.1,-36.4,766.2],[0.886,0.4479,-0.1195],1.52],
+  "right biceps femoris (short head)": ["d","D",0.2242,68.6,0,null,null,null,0],
+  "right brachialis": ["d","D",0.386,76.71,0,null,null,null,0],
+  "right brachioradialis": ["s","S",0.9688,79.1,6.4,[-0.7495,-0.6069,0.2645],[-221.9,-60.6,1150.4],[-0.6346,0.7724,-0.0262],1.05],
+  "right buccinator": ["d","D",0.1275,1.37,0,null,null,null,0],
+  "right coracobrachialis": ["d","D",0.1243,21.05,0,null,null,null,0],
+  "right corrugator supercilii": ["d","D",0,0.2,0,null,null,null,0],
+  "right deltoid": ["s","S",0.9466,318.43,10.2,[-0.8851,0.0567,0.462],[-108.8,-65.5,1355.4],[0.0281,0.9972,-0.0687],3.08],
+  "right depressor anguli oris": ["s","S",0.5033,0.9,3,[-0.8087,-0.5317,-0.2516],[-37.1,-150.1,1463.9],[-0.4096,0.816,-0.4079],3.93],
+  "right depressor labii inferioris": ["d","I",0.2656,0.95,0,null,null,null,0],
+  "right depressor septi nasi": ["d","I",0.1358,0.19,0,null,null,null,0],
+  "right digastric": ["s","S",0.5441,3.06,3,[-0.5378,-0.1151,-0.8352],[-2.8,-150,1421.4],[-0.5388,-0.715,0.4454],1.39],
+  "right dorsal interossei of hand": ["d","D",0.8389,4.07,0,null,null,null,0],
+  "right extensor carpi radialis brevis": ["s","S",0.4131,19.77,4.1,[-0.6436,0.7612,-0.0802],[-234,-48.4,1077.5],[0.7554,0.6148,-0.2267],0.76],
+  "right extensor carpi radialis longus": ["s","S",0.9319,25.28,4.4,[-0.905,0.4168,0.0853],[-234.9,-51.4,1102.7],[0.3884,0.8913,-0.2339],0.76],
+  "right extensor carpi ulnaris": ["s","S",0.5253,16.61,3.8,[0.4819,0.8257,-0.2932],[-218.9,-42.3,1055.9],[0.8734,-0.4796,0.0851],0.73],
+  "right extensor digiti minimi": ["s","S",0.4712,6.71,3,[0.0445,0.9501,-0.3087],[-233.8,-45.4,1047.1],[0.9989,-0.0469,-0.0005],0.51],
+  "right extensor digitorum": ["s","S",0.9949,29.12,4.6,[-0.1448,0.9446,-0.2947],[-231.1,-32.8,1053.5],[0.9854,0.1107,-0.1292],0.66],
+  "right extensor digitorum longus": ["s","S",0.9035,39.31,5.1,[-0.9382,-0.0395,0.3439],[-99.1,-54.9,349.6],[-0.1333,0.9581,-0.2536],0.66],
+  "right extensor hallucis longus": ["d","D",0.4814,7.34,0,null,null,null,0],
+  "right extensor indicis": ["d","D",0.3659,3.02,0,null,null,null,0],
+  "right extensor pollicis brevis": ["d","D",0.5213,3.67,0,null,null,null,0],
+  "right extensor pollicis longus": ["d","D",0.3547,4.99,0,null,null,null,0],
+  "right external oblique": ["s","S",0.9634,263.57,9.6,[-0.4323,-0.8674,-0.2465],[-86.1,-179.1,1213.8],[-0.882,0.4636,-0.0845],1.29],
+  "right flexor carpi radialis": ["s","S",0.8922,21.96,4.2,[-0.1686,-0.9535,0.2499],[-186.7,-82.2,1059.8],[-0.9461,0.2276,0.2302],0.82],
+  "right flexor carpi ulnaris": ["s","S",0.8574,46.37,5.4,[0.9095,0.3126,-0.2742],[-179.6,-56.8,1046.3],[0.3651,-0.9159,0.1669],1.11],
+  "right flexor digiti minimi brevis of hand": ["s","S",0.6272,0.65,3,[0.401,-0.844,0.3561],[-242.1,-132.7,792.5],[-0.8795,-0.4635,-0.1081],2.68],
+  "right flexor digitorum longus": ["d","D",0.6272,44.11,0,null,null,null,0],
+  "right flexor digitorum profundus": ["d","D",0.1264,53.97,0,null,null,null,0],
+  "right flexor digitorum superficialis": ["d","I",0.3337,64.43,0,null,null,null,0],
+  "right flexor hallucis longus": ["d","D",0.454,54.7,0,null,null,null,0],
+  "right flexor pollicis brevis": ["s","S",0.8489,0.96,3,[0.259,-0.9604,0.1025],[-258.8,-138.3,792.9],[-0.4995,-0.0423,0.8653],3.27],
+  "right flexor pollicis longus": ["d","D",0.3578,5.45,0,null,null,null,0],
+  "right gastrocnemius": ["s","S",0.9313,524.54,12.1,[0.4647,0.8674,0.1781],[-76.6,-62,433.4],[0.882,-0.4711,-0.0068],2.22],
+  "right geniohyoid": ["d","D",0.3618,0.58,0,null,null,null,0],
+  "right gluteus maximus": ["s","S",0.9745,363.88,10.7,[-0.4546,0.8906,0.0125],[-30.2,-2.7,907.3],[0.7472,0.389,-0.5389],2.37],
+  "right gluteus medius": ["s","I",0.6608,211.23,8.9,[-0.9332,-0.3592,-0.0088],[-94.4,-56.8,950.7],[-0.3576,0.9261,0.1205],3.01],
+  "right iliacus": ["d","D",0.2629,122.59,0,null,null,null,0],
+  "right infraspinatus": ["d","D",0.3779,106.28,0,null,null,null,0],
+  "right lateral pterygoid": ["d","D",0.2327,1.29,0,null,null,null,0],
+  "right levator anguli oris": ["d","I",0.2708,0.2,0,null,null,null,0],
+  "right levator labii superioris": ["s","S",0.3635,0.38,3,[-0.6466,-0.7615,0.0454],[-32.5,-158.9,1507.9],[-0.5379,0.413,-0.7349],4.78],
+  "right levator labii superioris alaeque nasi": ["s","S",0.5068,0.1,3,[-0.7125,-0.6272,0.3146],[-13.1,-166.8,1516.8],[-0.68,0.7277,-0.0892],5.95],
+  "right lumbricals of hand": ["d","I",0.3459,2.31,0,null,null,null,0],
+  "right masseter": ["s","S",0.4779,9.06,3.1,[-0.9911,-0.0898,-0.0986],[-61.6,-117.2,1510.3],[-0.0741,0.9855,-0.1525],2.43],
+  "right medial pterygoid": ["d","D",0.2905,2.68,0,null,null,null,0],
+  "right mentalis": ["d","I",0.1638,0.13,0,null,null,null,0],
+  "right mylohyoid": ["d","I",0.3917,1.86,0,null,null,null,0],
+  "right nasalis": ["s","S",0.7642,0.44,3,[-0.8548,-0.4498,0.2588],[-2.8,-178.9,1532.3],[-0.4145,0.8919,0.1809],4.23],
+  "right occipitofrontalis": ["s","S",0.9632,11.33,3.4,[-0.8428,-0.5252,0.1177],[-27.7,-179.1,1572],[-0.0016,0.2211,0.9753],1.01],
+  "right opponens digiti minimi of hand": ["d","D",0.4298,0.98,0,null,null,null,0],
+  "right opponens pollicis": ["d","D",0.5468,2.02,0,null,null,null,0],
+  "right orbicularis oculi": ["s","S",0.8243,4.93,3,[-0.4987,-0.8479,-0.1801],[-9.2,-171.2,1530],[-0.2972,-0.0279,0.9544],3.28],
+  "right orbicularis oris": ["s","S",0.9433,3.04,3,[-0.6099,-0.7911,0.0463],[-20.1,-170.4,1480.6],[-0.7681,0.5757,-0.2803],3.85],
+  "right palmar interossei of hand": ["d","D",0.146,0.85,0,null,null,null,0],
+  "right palmaris longus": ["s","S",0.9715,15.74,3.8,[0.2658,-0.9546,0.1347],[-182,-81.8,1055.7],[-0.9345,-0.2208,0.2793],0.64],
+  "right pectoralis major": ["s","S",0.7708,469.44,11.7,[-0.4322,-0.8418,0.3232],[-13.5,-227.6,1180.6],[0.6298,-0.0253,0.7763],2.82],
+  "right platysma": ["s","S",0.8887,33.16,4.8,[-0.6641,-0.594,0.454],[-110.5,-57.9,1321.7],[0.1271,-0.6881,-0.7144],1.43],
+  "right procerus": ["d","S",0.1409,0.4,0,null,null,null,0],
+  "right pronator quadratus": ["d","D",0.3352,6.55,0,null,null,null,0],
+  "right pronator teres": ["s","S",0.5182,12.14,3.4,[0.0383,-0.9923,0.1181],[-191,-82.1,1066.7],[-0.8944,0.0187,0.4469],1.19],
+  "right pronator teres (ulnar head)": ["d","D",0.0191,4.94,0,null,null,null,0],
+  "right psoas major": ["d","D",0.2715,173.68,0,null,null,null,0],
+  "right rectus femoris": ["s","S",0.844,347.63,10.5,[-0.3234,-0.9456,0.035],[-127.1,-110.8,870.3],[-0.9438,0.3197,-0.0833],1.08],
+  "right risorius": ["s","S",0.8666,0.68,3,[-0.7659,-0.5713,-0.2949],[-29.3,-160.2,1465.3],[-0.3698,0.0162,0.929],5.28],
+  "right sartorius": ["s","S",0.9654,70.23,6.2,[0.2164,-0.9754,-0.0426],[-113.7,-131.9,903.3],[-0.9688,-0.2091,-0.1328],0.56],
+  "right semimembranosus": ["d","I",0.4822,321.34,0,null,null,null,0],
+  "right semitendinosus": ["s","S",0.8929,132.76,7.7,[0.478,0.8773,-0.0435],[-45.4,-31.9,762.8],[0.8783,-0.4768,0.0344],0.91],
+  "right serratus anterior": ["d","I",0.45,142.23,0,null,null,null,0],
+  "right soleus": ["d","I",0.3842,320.47,0,null,null,null,0],
+  "right sternocleidomastoid": ["s","S",0.9179,47.06,5.4,[-0.9189,-0.3938,0.0229],[-20.5,-154.2,1300.3],[0.3566,-0.8043,0.4753],1.32],
+  "right subscapularis": ["d","D",0.0296,46.49,0,null,null,null,0],
+  "right supinator": ["d","D",0.0029,11.3,0,null,null,null,0],
+  "right supraspinatus": ["d","D",0.0098,33.65,0,null,null,null,0],
+  "right temporalis": ["s","S",0.3811,19.48,4,[0.9965,0.0333,-0.0762],[-41.3,-154.7,1497.7],[-0.0793,0.6568,-0.7499],1.68],
+  "right temporoparietalis": ["s","S",0.9816,21.14,4.1,[-0.9999,-0.0082,0.0147],[-63.9,-110.1,1607.2],[0.0031,0.7687,0.6396],2.04],
+  "right teres major": ["s","I",0.672,37.44,5,[-0.6096,0.6295,-0.4819],[-169.1,-77.4,1274.1],[0.1003,0.6642,0.7408],2.08],
+  "right teres minor": ["d","D",0.2463,32.78,0,null,null,null,0],
+  "right tibialis anterior": ["s","S",0.9453,112.3,7.2,[-0.7427,-0.6672,-0.0572],[-107.9,-78.2,353.2],[-0.6533,0.7407,-0.1566],1.04],
+  "right trapezius": ["s","S",0.9,261.75,9.6,[-0.313,0.7275,0.6106],[-59.5,-37.3,1500.7],[0.9454,0.3004,0.1266],1.22],
+  "right triceps brachii": ["s","S",0.8006,263.14,9.6,[0.0119,0.999,-0.0436],[-162.4,-49.7,1303.4],[0.9762,-0.021,-0.2157],2.03],
+  "right triceps brachii (medial head)": ["d","D",0.216,64.15,0,null,null,null,0],
+  "right vastus intermedius": ["d","D",0.0144,252.22,0,null,null,null,0],
+  "right vastus lateralis": ["s","S",0.9333,502.85,11.9,[-0.9755,0.1833,-0.122],[-143,-85.3,784.8],[0.1898,0.9809,-0.0437],1.45],
+  "right vastus medialis": ["s","S",0.6794,279.08,9.8,[0.8335,-0.5506,0.0456],[-94.1,-110.3,739.7],[-0.5502,-0.8347,-0.0224],1.41],
+  "right zygomaticus major": ["s","S",0.3593,0.69,3,[-0.7971,-0.5514,-0.2459],[-55.2,-142.3,1506],[-0.3629,0.7631,-0.5347],2.97],
+  "right zygomaticus minor": ["s","S",0.7224,0.3,3,[-0.4639,-0.8838,0.0601],[-50.6,-151.4,1507.1],[-0.4754,0.1911,-0.8588],3.37]
+});
+// END GENERATED LAYER DATA
