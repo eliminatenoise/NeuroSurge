@@ -716,8 +716,8 @@ const CONTENT = {
           : 'Masseter, temporalis and the medial pterygoid have no BodyParts3D 4.0 mesh and the jaw is already closed at rest, so clenching shows no movement and no colour; bite force is not modelled.' }
     ],
     explanation: `Jaw area of the ${c.H} hemisphere, which opens the mouth (lateral pterygoid, digastric) or clenches it (masseter, temporalis). Corticobulbar fibres reach the trigeminal motor nucleus from both hemispheres, but the crossed hemisphere has the stronger drive to the masseter (Nordstrom 2007). ${c.face
-      ? `In the game, opening swings the jaw on the ghosted face layer and colours the digastric, mylohyoid and lateral pterygoid; clenching colours the masseter, temporalis and medial pterygoid (from ${FACE_PACKET_NAME}) but shows no movement, because the jaw is already closed at rest.`
-      : 'In the game, opening swings the jaw on the ghosted face layer and colours the digastric and mylohyoid; masseter, temporalis and the pterygoids have no BodyParts3D 4.0 mesh, so clenching shows no movement and no colour.'} Chewing rhythm is generated in the brainstem and is not modelled.`,
+      ? `In the game, opening swings the jaw on the face of the mirror body and colours the digastric, mylohyoid and lateral pterygoid; clenching colours the masseter, temporalis and medial pterygoid (from ${FACE_PACKET_NAME}) but shows no movement, because the jaw is already closed at rest.`
+      : 'In the game, opening swings the jaw on the face of the mirror body and colours the digastric and mylohyoid; masseter, temporalis and the pterygoids have no BodyParts3D 4.0 mesh, so clenching shows no movement and no colour.'} Chewing rhythm is generated in the brainstem and is not modelled.`,
     citationKeys: faceCites(c, ['NORDSTROM2007', 'PENFIELD1937', 'UAMS_HEADNECK'])
   }),
   tongue: c => ({
@@ -1313,11 +1313,11 @@ const PLAIN_DETAIL = {
       'brain (corticobulbar fibres, trigeminal motor nucleus, both hemispheres). But the half on the other side sends the ' +
       'stronger signal to the main chewing muscle (the crossed hemisphere has the stronger drive to the masseter; ' +
       'Nordstrom 2007). ' + (c.face
-      ? 'In the game, opening swings the jaw on the see-through face layer (ghosted face layer). It colours two muscles ' +
+      ? 'In the game, opening swings the jaw on the face of the mirror body (and on your own head, seen from behind). It colours two muscles ' +
         'under the chin and one deep chewing muscle (digastric, mylohyoid and lateral pterygoid). Clenching colours the ' +
         'jaw-closing muscles (masseter, temporalis and medial pterygoid). They come from an extra set of 3D face muscles ' +
         '(the face-muscle packet, face-muscles-r1). But clenching shows no movement, because the jaw is already closed at rest. '
-      : 'In the game, opening swings the jaw on the see-through face layer (ghosted face layer) and colours ' +
+      : 'In the game, opening swings the jaw on the face of the mirror body (and on your own head, seen from behind) and colours ' +
         'two muscles under the chin (digastric and mylohyoid). The 3D body has no shape for the clenching muscles ' +
         '(the jaw-closing muscles masseter, temporalis and medial pterygoid, and the lateral pterygoid, have no BodyParts3D 4.0 mesh). So clenching shows no movement and no ' +
         'colour. ') + 'The chewing rhythm comes from the base of the brain (generated in the brainstem), and it is not modelled.'

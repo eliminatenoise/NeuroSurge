@@ -1,9 +1,14 @@
 # Play NeuroSurge
 
-Open https://eliminatenoise.github.io/NeuroSurge/. The page runs locally in your browser after downloading its files. See [preview notes](PREVIEW-NOTES.html) for controls, current limitations and credits. For offline local hosting, run `node serve-local.mjs` and open the printed address.
+Open https://eliminatenoise.github.io/NeuroSurge/. The page runs locally in your browser after downloading its files. See [preview notes](PREVIEW-NOTES.html) for every control, the current limitations and credits. For offline local hosting, run `node serve-local.mjs` and open the printed address.
 
-This experimental preview widens the view and adds brain and mirror-body carry. Click the scene, then hold Space while looking at either object. Move it with the mouse or trackpad; W moves it away, S brings it closer, and A/D move it sideways. Release Space to leave it there. Move the brain aside to reach the mirror body behind it.
+Click the scene once so the mouse looks around. The start page shows a picture of the keys; Esc brings it back.
 
-Brain and muscle signals are simulated and unitless. Hand positioning has passed the tested camera switches and drags. Some sideways inputs lack matching muscle glow; movement limits, combined-key responses, physiological mappings and full movement mechanics still need checking.
+- **Look** at a coloured motor area of the brain: that body part moves for one second. Click to repeat.
+- **Click a muscle** on your own body or on the mirror body: the motor area that moves it switches on. The mirror body's muscles can be clicked through the clear glass.
+- **Press and drag** on the brain to turn it. The mirror body turns the same way once the brain is aside. The see-through ribbon arrows do the same in small steps.
+- **W/A/S/D** move your left hand. **Hold Space** to make a fist, or to carry the brain or the mirror body you are looking at (W farther, S closer, A/D sideways).
+- **Tap Space twice** to turn your palms: both forearms and both legs turn.
+- **E** shows your back. **I** opens More detail.
 
-Known stop bug: after sustained reaching near the arm’s limit, releasing Space can stop the game. Reload the page to restart.
+Brain and muscle signals are simulated and unitless. A clicked muscle lights a whole motor area, not a spot for that one muscle. If your look or your reach stops, the arm has reached the edge of what can be shown; the game keeps running. Movement limits, physiological mappings and full movement mechanics are simplified and still need checking.

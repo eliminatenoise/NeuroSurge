@@ -1800,6 +1800,22 @@ export function createActivity({
           setAnchor(s);
         }
         return;
+      case 'muscle': {
+        // R558 (genuine note R31): a tap on a body muscle. The caller (ns-app) names the motor-map region, and the
+        // region action that lists the tapped muscle as a mover when the map has one. This starts that area's ordinary
+        // one-second pulse, exactly as a click on the area does (same colours, joint movement, gold mark and glow), so
+        // nothing new is claimed about the brain: it is the same whole-area link, reached from the muscle's end.
+        // regionOnly: the map has no movement for this muscle; only its body part's area is switched on.
+        // The crosshair's own gaze record is left alone, so the next look or click behaves as before.
+        if (s.paused) return;
+        const r = binding.regions.get(ev.regionId);
+        if (!r) fail('activity_region', `muscle regionId ${JSON.stringify(ev.regionId)} is not a BODY_MOTOR_MAP region`);
+        const hit = ev.regionOnly === true || r.actions.length === 0
+          ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
+          : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
+        if (hit !== null) startPulse(s, hit, 'click', at, collect);
+        return;
+      }
       case 'space':
         applySpace(s, ev);
         return;

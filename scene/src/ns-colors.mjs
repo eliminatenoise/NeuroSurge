@@ -147,9 +147,13 @@ export const KEY_COLORS = freeze({
   /** Light-blue left-arm areas (right hemisphere; sRGB #59c4f9 before lighting). Round 3: [0.10, 0.52, 0.62] (teal). */
   leftArmTint: freeze([0.10, 0.55, 0.95]),
   /** Warm grey areas of every other body part (even strip order). Round 3: [0.33, 0.33, 0.45] (slate-violet). */
-  otherTint: freeze([0.345, 0.300, 0.232]),
+  // R558 (genuine note R32: the motor areas should be "clearer" and "at least look a little fleshy"): the other body
+  // parts' areas are now a soft tissue pink instead of warm grey (grey was the least tissue-like part of the brain).
+  // Still far from the left arm's light blue in hue and in lightness, also for red-green colour-blind players (the
+  // difference is on the blue / yellow axis). Was [0.345, 0.300, 0.232].
+  otherTint: freeze([0.560, 0.300, 0.290]),
   /** The darker alternate grey (odd strip order), same ratio as before. Round 3: [0.27, 0.27, 0.37]. */
-  otherTintAlt: freeze([0.283, 0.246, 0.190]),
+  otherTintAlt: freeze([0.470, 0.250, 0.245]),
   /** Left-arm territory outline, CSS --ns-leftarm (unchanged). */
   leftArmLine: 0x8cf2ff,
   /** Other body-part territory outline, CSS --ns-other. Round 3: 0xd2cdf0 (lavender). */
@@ -472,6 +476,7 @@ export function arrowLook(kind = 'brain') {
  *    clear glass (85 % of its pixels).
  *  - accent: the mirror's identity colour for its label / info-panel accent (= the mirror arrows' green). */
 export const MIRROR_VIEW = freeze({
-  regionBacking: freeze({ color: 0x05070b, alpha: 0.85 }),
+  // R558 (R32): a dark red-brown under the now more solid areas, like tissue seen in depth (was the near-black 0x05070b).
+  regionBacking: freeze({ color: 0x160a0b, alpha: 0.85 }),
   accent: 0x53b27f
 });

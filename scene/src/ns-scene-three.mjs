@@ -154,6 +154,7 @@ import * as NsColors from './ns-colors.mjs';
 // R5-scene: the 3D compass arrows (R5-arrows) and the mirror body's placement, transform and orbit (R5-mirror).
 import * as NsArrows from './ns-arrows3d.mjs';
 import * as NsMirror from './ns-mirror.mjs';
+import * as RayBvh from './ns-raybvh.mjs';
 import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
 import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 
@@ -241,6 +242,15 @@ export function heldCueRim(amount, o = HELD_CUE) {
  * compatibility. The x-ray pass covers only the GLASS_XRAY subset; the glass DEPTH pass sorts front-to-back
  * (transparentSortNs) so occluded deep layers fail the depth test early.
  */
+/** R558: where the translucent compass ribbons sit in the transparent draw order (see makeArrowRig). */
+export const ARROW_RENDER_ORDER = Object.freeze({ brain: 1.2, mirror: 1.25 });
+/** R558: the brain's top / bottom arrows sit this share of the side arrows' distance from the brain's centre (the motor
+ * areas form a wide, low band; a display choice checked on screen, with the per-frame motor-area test as the guard). */
+export const ARROW_VERTICAL_SHARE = 0.62;
+/** R558: room (CSS px at the view centre) between the motor areas' first-framed box and each brain arrow's tail. */
+export const ARROW_MOTOR_GAP_PX = 16;
+/** R558: the mirror body's arrows, as shares of its enclosing-sphere radius from its centre (display choices). */
+export const MIRROR_ARROW_SHARE = Object.freeze({ vertical: 0.37, side: 0.31 });
 export const RENDER_ORDER = Object.freeze({
   strip: 2, marker: 3, stripDepth: 4, glassXray: 1, glassDepth: 5, glass: 6,
   // U2b-scene region mode: nearest-layer depth pre-pass, translucent region colour, outlines (all before the glass).
@@ -860,6 +870,69 @@ function requireThree(THREE) {
 /* ------------------------------------------------------------------ pure helpers (Node-testable) */
 
 /** Area-weighted unit vertex normals of an indexed triangle mesh. Vertices without a face get [0, 0, 1]. */
+/**
+ * R558 (genuine note R33: the face, neck and torso muscles and some skull bones look "splotchy" with "lots of gaps").
+ * Diagnosis from the mesh files: almost every BodyParts3D OBJ repeats some vertices (about a fifth of all body vertices
+ * share a position with another one), the loader ignores the files' own `vn` normals, and normals were then computed
+ * per vertex INDEX. Two copies of one point on a smooth surface so got two different normals, and every such seam was
+ * lit as a hard crease: a patchwork of facets across a muscle. Welding by position leaves no open edge in any of these
+ * meshes, so the seams are an artefact of the files, not anatomy.
+ * This function makes vertices that share a position share a normal: the normalised sum of their normals. No vertex is
+ * added, moved or removed and no triangle changes (the arm's strict vertex counts are untouched); only the lighting
+ * across the seam becomes continuous. A copy whose own normal differs from the shared one by more than about 78 degrees
+ * (dot < minDot) keeps its own: two surfaces that merely touch back to back, or a real sharp edge, stay as they were.
+ * positions, normals: flat xyz arrays of equal length (normals is changed in place). groups (optional): a cached
+ * Int32Array from an earlier call for the same mesh (same vertex order and coincidences). Returns { shared (vertices
+ * that had a twin), changed (normals rewritten), groups }. Pure apart from writing `normals`.
+ */
+export function weldNormalsByPosition(positions, normals, { minDot = 0.2, groups = null } = {}) {
+  const n = (positions.length / 3) | 0;
+  if (!(n > 0) || normals.length < 3 * n) return { shared: 0, changed: 0, groups: null };
+  let g = groups && groups.length === n ? groups : null, count = 0, shared = 0;
+  if (!g) {
+    // Exact-position grouping with an open-addressing table (no strings): a slot holds the first vertex seen at a
+    // position, and a vertex joins a slot only when all three coordinates are equal.
+    g = new Int32Array(n);
+    let size = 16; while (size < 2 * n) size <<= 1;
+    const table = new Int32Array(size).fill(-1), mask = size - 1;
+    const f = new Float32Array(3), u = new Uint32Array(f.buffer);
+    for (let i = 0; i < n; i++) {
+      const x = positions[3 * i], y = positions[3 * i + 1], z = positions[3 * i + 2];
+      f[0] = x; f[1] = y; f[2] = z;
+      let h = (Math.imul(u[0], 73856093) ^ Math.imul(u[1], 19349663) ^ Math.imul(u[2], 83492791)) & mask;
+      for (;;) {
+        const j = table[h];
+        if (j < 0) { table[h] = i; g[i] = count++; break; }
+        if (positions[3 * j] === x && positions[3 * j + 1] === y && positions[3 * j + 2] === z) { g[i] = g[j]; shared++; break; }
+        h = (h + 1) & mask;
+      }
+    }
+    if (shared === 0) return { shared: 0, changed: 0, groups: g };
+  } else { for (let i = 0; i < n; i++) if (g[i] >= count) count = g[i] + 1; shared = n - count; if (shared === 0) return { shared: 0, changed: 0, groups: g }; }
+  const sum = new Float32Array(3 * count), members = new Int32Array(count);
+  for (let i = 0; i < n; i++) { const k = 3 * g[i]; sum[k] += normals[3 * i]; sum[k + 1] += normals[3 * i + 1]; sum[k + 2] += normals[3 * i + 2]; members[g[i]]++; }
+  let changed = 0;
+  for (let i = 0; i < n; i++) {
+    if (members[g[i]] < 2) continue;
+    const k = 3 * g[i], l = Math.hypot(sum[k], sum[k + 1], sum[k + 2]);
+    if (!(l > 1e-6)) continue;
+    const x = sum[k] / l, y = sum[k + 1] / l, z = sum[k + 2] / l;
+    if (x * normals[3 * i] + y * normals[3 * i + 1] + z * normals[3 * i + 2] < minDot) continue;
+    normals[3 * i] = x; normals[3 * i + 1] = y; normals[3 * i + 2] = z; changed++;
+  }
+  return { shared, changed, groups: g };
+}
+/** R558 (R33): weldNormalsByPosition on a THREE BufferGeometry's position / normal attributes (after its normals were
+ * computed). Returns the same report, or null when the geometry has no such attributes. */
+export function weldGeometryNormals(geometry) {
+  const p = geometry && geometry.attributes && geometry.attributes.position, nr = geometry && geometry.attributes && geometry.attributes.normal;
+  if (!p || !nr || !p.array || !nr.array || p.itemSize !== 3 || nr.itemSize !== 3) return null;
+  const r = weldNormalsByPosition(p.array, nr.array);
+  if (r.changed > 0) nr.needsUpdate = true;
+  return r;
+}
+const normalWeldGroups = new WeakMap(); // index array of a CPU-skinned arm muscle -> its coincident-vertex groups
+
 export function computeNormals(positions, indices, out) {
   if (!positions || positions.length % 3 !== 0) fail('scene_input', 'positions length must be a multiple of 3');
   if (!indices || indices.length % 3 !== 0) fail('scene_input', 'indices length must be a multiple of 3');
@@ -882,6 +955,11 @@ export function computeNormals(positions, indices, out) {
     const l = Math.hypot(o[k], o[k + 1], o[k + 2]);
     if (l > 0) { o[k] /= l; o[k + 1] /= l; o[k + 2] /= l; } else { o[k] = 0; o[k + 1] = 0; o[k + 2] = 1; }
   }
+  // R558 (R33): one normal per POSITION across the files' duplicated vertices (see weldNormalsByPosition). The groups
+  // are remembered per index array: a lifted or blended rest copy of the same muscle keeps the same coincidences.
+  const cached = typeof indices === 'object' ? normalWeldGroups.get(indices) : undefined;
+  const welded = weldNormalsByPosition(positions, o, { groups: cached || null });
+  if (!cached && welded.groups && typeof indices === 'object') normalWeldGroups.set(indices, welded.groups);
   return o;
 }
 
@@ -1007,7 +1085,13 @@ export function regionStyleConstants() {
  * reads clearly through the glass and fades back to its rest (or persistent activated) opacity. hoverEmission: the
  * hovered region's identity tint added as emission. quantize: updates below 1/quantize activity are skipped. */
 export const REGION_RENDER = Object.freeze({
-  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.48, metalness: 0,
+  // R558 (R32, "a little fleshy"): a moister surface (roughness 0.48 -> 0.36) and the tissue scatter below.
+  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.36, metalness: 0,
+  /** R558 (R32): tissue look of the motor areas, LIGHTING ONLY. Living tissue lets light in and scatters it, so it is
+   * never black in shade and glows a little warm toward its silhouette. tissueTint x tissueStrength x (tissueFloor +
+   * (1 - tissueFloor) x a view-angle term) of the area's own colour is added to its lit colour. The geometry, the
+   * folds, the area borders, the activity colours (emission) and the opacity rules are untouched. Display choice. */
+  tissueTint: Object.freeze([1.0, 0.62, 0.58]), tissueStrength: 0.42, tissueFloor: 0.4, tissuePower: 2.2,
   /** Polish: the per-region borders inside a body-part territory are faint (they were full-strength and made the strip
    * look like cracked shards); each body-part GROUP (the on-brain label groups) gets one welded outline instead. */
   // R3-scene: left-arm sub-area borders fainter still (0.36 -> 0.22), territory borders softer (groupLineOpacity 0.5 ->
@@ -1974,7 +2058,11 @@ export function nearestDistance(positions, p, stride = 1) {
  *  - 'inset': the same front view in a labelled inset box (inset.sizePx, top centre) while looking up.
  *  - 'off': not drawn.
  * Display choices, not anatomy measurements. */
-export const FACE_VIEW_MODES = Object.freeze(['ghost', 'inset', 'off']);
+// R558 (genuine note R26): the floating own face is retired. 'off' is the only mode; the two old names are still
+// accepted by setFaceView and createScene (an old caller or saved setting) and mean 'off'. The head and face meshes
+// are still loaded: the mirror body's face and the in-place head seen from behind are built from them.
+export const FACE_VIEW_MODES = Object.freeze(['off']);
+export const RETIRED_FACE_VIEW_MODES = Object.freeze(['ghost', 'inset']);
 export const FACE_LAYER = Object.freeze({
   // Round 3 (R3-integrator, R3-brain wiring 5.4): the ghost fades in from 42 deg (full at 55 deg), above the band of
   // comfortable looks (<= 40 deg) where the whole brain, its front edge (about 32 deg) and the forward orbit arrow sit;
@@ -2217,7 +2305,12 @@ export function infoPanelContent(model) {
  * simplified on a slow renderer. headInPlaceFrom: the ns-camera pose's headInPlace from which the head and
  * face are drawn in place (third person). mirrorPointsPerMesh: vertices sampled per body mesh to measure the posed body
  * for ns-mirror bodyBoundsFromPoints. arrowCaptionPx: caption offset from an arrow's outer end. */
-export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 2.5, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 4, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
+// R558 (genuine note R33, "that's also for the mirror body"): the 2.5 mm cluster copies were chosen when the mirror
+// body was small and far away (one source mm under half a pixel). Since R22 it is drawn much larger, and at that size
+// the cluster copies drop the thin triangles of sheet-like face and neck muscles, which shows as holes and blotches.
+// At full quality the mirror body is now drawn from the full meshes (mirrorLodFullMm 0 = no copy); the coarser copy
+// used from the first reduced quality level is 3 mm instead of 4 mm. Costs GPU triangles, not frame logic.
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 0, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -2450,7 +2543,7 @@ export function glowHalo(r) {
 export function createScene({
   THREE, canvas, fovYDeg = CAMERA.fovYDeg, near = CAMERA.near, far = CAMERA.far, maxPixelRatio = 2,
   glassXray: glassXrayMode = GLASS_XRAY, adaptivePixelRatio = true, shimmer = 'auto', armGhost = 'auto',
-  onOrbit = null, overlayRoot = null, faceView = 'ghost', quality = 'auto', brainDistanceScale = 1, antialias = 'auto'
+  onOrbit = null, overlayRoot = null, faceView = 'off', quality = 'auto', brainDistanceScale = 1, antialias = 'auto'
 } = {}) {
   requireThree(THREE);
   if (!canvas || typeof canvas.addEventListener !== 'function' || !canvas.ownerDocument) {
@@ -2458,7 +2551,7 @@ export function createScene({
   }
   if (!GLASS_XRAY_MODES.includes(glassXrayMode)) fail('scene_args', `glassXray must be one of ${GLASS_XRAY_MODES.join(', ')}`);
   if (onOrbit !== null && typeof onOrbit !== 'function') fail('scene_args', 'onOrbit must be a function');
-  if (!FACE_VIEW_MODES.includes(faceView)) fail('scene_args', `faceView must be one of ${FACE_VIEW_MODES.join(', ')}`);
+  if (!FACE_VIEW_MODES.includes(faceView) && !RETIRED_FACE_VIEW_MODES.includes(faceView)) fail('scene_args', `faceView must be one of ${FACE_VIEW_MODES.join(', ')}`);
   const view = canvas.ownerDocument.defaultView || null;
   const perf = view && view.performance && typeof view.performance.now === 'function' ? view.performance : null;
   const nowMs = () => (perf ? perf.now() : Date.now());
@@ -2639,6 +2732,62 @@ export function createScene({
   const muscleBaseLinear = hexToLinear(MATERIAL.muscleBase);
   const muscleHot = new THREE.Color(MATERIAL.muscleHot);
   const raycaster = new THREE.Raycaster();
+  // ---- R558 performance: tree-accelerated ray picks for RIGID meshes (ns-raybvh) -----------------------------------
+  // "What is under the crosshair" is asked every live frame (graspTargetAt). Three.js tests every triangle of every
+  // mesh the ray's line crosses; with the full meshes that was the largest single cost of an idle frame. A mesh given
+  // to fastPick answers from a box tree over its own triangles instead: the same nearest hit, the same front / back
+  // side rule, found without visiting the triangles that cannot be hit. Only rigid meshes use it (the brain, the body,
+  // the mirror body, the arm bones); the CPU-skinned arm muscles keep Three's test, because their vertices move.
+  // A tree is built once per geometry (rebuilt if its buffers are swapped), a few per frame ahead of need.
+  const pickTrees = new WeakMap(), pickMeshes = [], pickStats = { trees: 0, buildMs: 0, pending: 0 };
+  const pickInverse = new THREE.Matrix4(), pickRay = new THREE.Ray(), pickSphere = new THREE.Sphere(), pickPoint = new THREE.Vector3();
+  function pickTreeOf(geometry) {
+    const pos = geometry && geometry.attributes && geometry.attributes.position;
+    if (!pos || !pos.array || pos.itemSize !== 3 || pos.isInterleavedBufferAttribute) return null;
+    const index = geometry.index ? geometry.index.array : null;
+    let rec = pickTrees.get(geometry);
+    if (!rec || rec.positions !== pos.array || rec.index !== index) {
+      const t0 = nowMs();
+      rec = { positions: pos.array, index, bvh: RayBvh.buildTriangleBvh(pos.array, index) };
+      pickTrees.set(geometry, rec); pickStats.trees++; pickStats.buildMs += nowMs() - t0;
+    }
+    return rec;
+  }
+  function treeRaycast(raycasterIn, intersects) {
+    const geometry = this.geometry, material = this.material;
+    const rec = material && !Array.isArray(material) ? pickTreeOf(geometry) : null;
+    if (!rec) return THREE.Mesh.prototype.raycast.call(this, raycasterIn, intersects);
+    if (!rec.bvh) return undefined;
+    if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
+    pickSphere.copy(geometry.boundingSphere).applyMatrix4(this.matrixWorld);
+    if (raycasterIn.ray.intersectsSphere(pickSphere) === false) return undefined;
+    pickInverse.copy(this.matrixWorld).invert();
+    pickRay.copy(raycasterIn.ray).applyMatrix4(pickInverse);
+    const o = pickRay.origin, d = pickRay.direction;
+    const side = material.side === THREE.BackSide ? RayBvh.BVH_SIDE.back : material.side === THREE.DoubleSide ? RayBvh.BVH_SIDE.double : RayBvh.BVH_SIDE.front;
+    const hit = RayBvh.raycastTriangleBvh(rec.bvh, rec.positions, rec.index, o.x, o.y, o.z, d.x, d.y, d.z, side);
+    if (!hit) return undefined;
+    pickPoint.set(o.x + d.x * hit.t, o.y + d.y * hit.t, o.z + d.z * hit.t).applyMatrix4(this.matrixWorld);
+    const distance = raycasterIn.ray.origin.distanceTo(pickPoint);
+    if (distance < raycasterIn.near || distance > raycasterIn.far) return undefined;
+    intersects.push({ distance, point: pickPoint.clone(), object: this, faceIndex: hit.triangle, face: null });
+    return undefined;
+  }
+  const fastPick = mesh => { if (mesh && mesh.raycast !== treeRaycast) { mesh.raycast = treeRaycast; pickMeshes.push(mesh); } return mesh; };
+  /** Build a few missing pick trees per frame, largest work first in arrival order, within budgetMs (one tree at least). */
+  let pickCursor = 0;
+  function stepPickTrees(budgetMs = 3) {
+    if (pickCursor >= pickMeshes.length) { pickStats.pending = 0; return 0; }
+    const t0 = nowMs();
+    let built = 0;
+    while (pickCursor < pickMeshes.length) {
+      const m = pickMeshes[pickCursor++], g = m && m.geometry, before = pickStats.trees;
+      if (g) pickTreeOf(g);
+      if (pickStats.trees !== before) { built++; if (nowMs() - t0 >= budgetMs) break; }
+    }
+    pickStats.pending = pickMeshes.length - pickCursor;
+    return built;
+  }
   const rayOrigin = new THREE.Vector3(0, 0, 0);
   const rayDir = new THREE.Vector3(0, 0, -1);
   const scratch = new THREE.Vector3();
@@ -2791,7 +2940,7 @@ export function createScene({
   const faceTwins = [];
   const insetCamera = new THREE.PerspectiveCamera(FACE_LAYER.inset.fovDeg, 1, 0.01, 50);
   const insetPrevColor = new THREE.Color();
-  let faceMode = faceView;
+  let faceMode = 'off'; // R558 (R26): the floating own face is never drawn, whatever an old caller passes
   let faceAmount = 0;
   let faceHeadCentre = null, facePacketMeshes = 0;
   let faceRadiusMm = 0;
@@ -2825,7 +2974,12 @@ export function createScene({
   const makeArrowRig = kind => {
     try {
       // R5-access B1: the colours at the call site (brain grey-white, mirror green, so the two sets read apart).
-      const look = typeof NsColors.arrowLook === 'function' ? { ...NsArrows.ARROW_LOOK, ...NsColors.arrowLook(kind) } : NsArrows.ARROW_LOOK;
+      // R558: the ribbons are see-through, so they are drawn in the transparent list, BEFORE the brain-area depth pass
+      // (1.5). Every motor area is therefore drawn over any arrow behind or beside it: an arrow can never hide a motor
+      // area. The faint glass, the body and the arm are drawn after and cover the arrows where they are in front. Both
+      // sets sit at their target's own depth (no slide toward the eye), so they do not shift against the target when
+      // the camera moves.
+      const look = { ...(typeof NsColors.arrowLook === 'function' ? { ...NsArrows.ARROW_LOOK, ...NsColors.arrowLook(kind) } : NsArrows.ARROW_LOOK), renderOrder: ARROW_RENDER_ORDER[kind], xrayOpacity: NsArrows.ARROW_LOOK.xrayOpacity };
       const rig = NsArrows.createArrowRig(THREE, { kind, look });
       rig.group.visible = false;
       scene.add(rig.group);
@@ -2931,6 +3085,21 @@ export function createScene({
   const projView = typeof THREE.Matrix4 === 'function' ? new THREE.Matrix4() : null;
 
   // ---- R5-scene: shared shader-patch composition (each patch keeps the previous onBeforeCompile and cache key) --------
+  // ---- R558 (genuine note R32): the motor areas "should at least look a little fleshy" ------------------------------
+  // One small addition to the lit colour of the area materials (see REGION_RENDER.tissue*). It reads the material's own
+  // final albedo, so an area shown in the activity colours scatters in those colours and the brain-to-muscle colour
+  // match is kept; nothing is added to the emission, the depth or the alpha.
+  const tissue = { applied: null, uniforms: { nsTissue: { value: new THREE.Vector4(REGION_RENDER.tissueTint[0], REGION_RENDER.tissueTint[1], REGION_RENDER.tissueTint[2], REGION_RENDER.tissueStrength) }, nsTissueShape: { value: new THREE.Vector2(REGION_RENDER.tissueFloor, REGION_RENDER.tissuePower) } } };
+  const TISSUE_HOOK = '#include <opaque_fragment>';
+  const tissuePatch = m => composePatch(m, 'ns-tissue-r558', shader => {
+    if (typeof shader.fragmentShader !== 'string' || !shader.fragmentShader.includes(TISSUE_HOOK) || !shader.fragmentShader.includes('vViewPosition')) { tissue.applied = false; return; }
+    shader.uniforms.nsTissue = tissue.uniforms.nsTissue; shader.uniforms.nsTissueShape = tissue.uniforms.nsTissueShape;
+    shader.fragmentShader = 'uniform vec4 nsTissue;\nuniform vec2 nsTissueShape;\n' + shader.fragmentShader.replace(TISSUE_HOOK,
+      '{\n  float nsNV = clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 );\n' +
+      '  float nsScatter = nsTissueShape.x + ( 1.0 - nsTissueShape.x ) * pow( 1.0 - nsNV, nsTissueShape.y );\n' +
+      '  outgoingLight += diffuseColor.rgb * nsTissue.rgb * ( nsTissue.a * nsScatter );\n}\n' + TISSUE_HOOK);
+    tissue.applied = tissue.applied !== false;
+  });
   const composePatch = (m, tag, fn) => {
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
     m.onBeforeCompile = (shader, r) => { if (typeof prev === 'function') prev.call(m, shader, r); fn(shader); };
@@ -3089,6 +3258,7 @@ export function createScene({
       if (!SEGMENTS.includes(b.segment)) fail('scene_input', `bone ${b.name} has unknown segment ${b.segment}`);
       const geo = indexedGeometry(b.positions, b.indices);
       geo.computeVertexNormals();
+      weldGeometryNormals(geo); // R558 (R33): no lit seams across the files' duplicated vertices
       const mesh = new THREE.Mesh(geo, boneMaterial);
       mesh.name = String(b.name || b.segment);
       mesh.matrixAutoUpdate = false;
@@ -3101,6 +3271,7 @@ export function createScene({
       tw.matrixAutoUpdate = false;
       mirrorArmGroup.add(tw);
       mesh.userData.nsMirrorTwin = tw;
+      fastPick(mesh); fastPick(tw); // R558: arm bones are rigid (the skinned arm muscles are not, and keep Three's test)
       bones.push({ mesh, segment: b.segment, mirror: tw,
         // Retain the normal loader's validated source id for copied diagnostics; placeholders may have no id.
         sourceElementId: typeof b.id === 'string' && b.id ? b.id : null });
@@ -3268,6 +3439,7 @@ export function createScene({
     else buildFocusStrip(focus, markerList, still);
     buildMarkers(markerList, still);
     rayTargets = regionMode ? [...glass, ...regionMeshes] : [...glass, strip.mesh]; // HUD-only raycast targets, built once
+    for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
     brainSamples = sampleBrain(glassList, regionMode ? seg.strips : (focus ? [focus] : []));
     glassRead.sulcMs = Math.round(nowMs() - t0);
   }
@@ -3325,6 +3497,7 @@ export function createScene({
       }
       // R5-scene: the lit area keeps its gyral relief under the perspective squash (rigid normals, P2) and can glow (D17).
       glowRimPatch(rigidPatch(material));
+      tissuePatch(material); // R558 (R32): soft tissue scatter (lighting only)
       const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity };
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
@@ -3599,6 +3772,10 @@ export function createScene({
   let cameraProjectionPlan = null;
   const cameraRange = { far: far, brainFarM: null, brainNearM: null, mirrorFarM: null };
   function releaseCameraProjectionPlan() { checkCameraProjectionMatrices(); cameraProjectionPlan = null; }
+  /** R558: discard the pre-pick projection plan of a frame the app REFUSED (nothing was drawn with it). Unlike
+   * releaseCameraProjectionPlan this runs no check, because there is no drawn frame to certify; it reports whether a
+   * plan was pending. The next frame must plan again; a locked plan is never reused. */
+  function abandonCameraProjectionPlan() { const had = cameraProjectionPlan !== null; cameraProjectionPlan = null; return had; }
   function projectionRefuse(reason, detail = null) {
     const err = new Error(`ns:scene_input: ${reason}`); err.code = 'actual_camera_projection_refused';
     err.detail = { status: 'refused', reason, detail, projectionPlan: cameraProjectionPlan && cameraProjectionPlan.snapshot,
@@ -4763,6 +4940,7 @@ export function createScene({
       const face = part === 'face' || (near && !isBodyGirdleEntry(entry));
       const geo = indexedGeometry(m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions), m.indices instanceof Uint32Array ? m.indices : Uint32Array.from(m.indices));
       geo.computeVertexNormals();
+      weldGeometryNormals(geo); // R558 (R33): own body, its in-place head and the mirror twin all draw this geometry
       if (typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
       let material;
       const trunk = !face && (part === 'torso' || part === 'neck');
@@ -4823,6 +5001,7 @@ export function createScene({
       }
       body.push(rec);
       bodyById.set(id, rec);
+      fastPick(rec.mesh); if (rec.mirror) fastPick(rec.mirror); if (rec.inPlace) fastPick(rec.inPlace); // R558: rigid body meshes
     }
     // R5-integrate-core (D20): face-muscle packet meshes (R5-face ids zf-..., source_packet face-muscles-r1) are in the body.
     const facePacket = list.filter(e => e && (e.source_packet === 'face-muscles-r1' || e.packet === 'face-muscles-r1' || /^zf-/.test(String(e.element_id || e.id || '')))).length;
@@ -4947,8 +5126,8 @@ export function createScene({
 
   /** Face layer mode: 'ghost' (default) | 'inset' | 'off' (FACE_VIEW_MODES). */
   function setFaceView(mode) {
-    if (!FACE_VIEW_MODES.includes(mode)) fail('scene_args', `face view must be one of ${FACE_VIEW_MODES.join(', ')}`);
-    faceMode = mode;
+    if (!FACE_VIEW_MODES.includes(mode) && !RETIRED_FACE_VIEW_MODES.includes(mode)) fail('scene_args', `face view must be one of ${FACE_VIEW_MODES.join(', ')}`);
+    faceMode = 'off'; // R558 (R26): no control can turn the floating own face back on
     faceStateKey = '';
     overlayDirty = true;
     return faceMode;
@@ -5121,23 +5300,38 @@ export function createScene({
    * triangles, ns-arrows3d occupancyGrid, 4 px cells, 1 cell margin; first or third person camera)? With the round-5 brain
    * filling the view, the see-through glass lies under almost every HUD place; a HUD line (the "Try this" guide) may sit
    * over glass but never over a motor area. Falls back to brainCoversRect without a region segmentation. */
-  let motorCoverKey = '', motorCoverGrid = null;
+  // R558 performance: the old test rebuilt a filled 4 px occupancy grid of every motor triangle whenever the camera
+  // moved (about a fifth of the frame time while looking around). The same question is now answered from the motor
+  // areas' own vertices projected once per camera / brain change: a rect covers a motor area when a projected vertex
+  // lies inside it grown by motorCoverPadPx. The region meshes are dense (their vertices are a few px apart on screen),
+  // so this keeps the "never over a motor area" rule for HUD lines with a margin instead of a per-cell fill.
+  const motorCover = { key: new Float64Array(35), valid: false, xy: null, n: 0 };
+  const motorCoverPadPx = 8;
   function motorCoversRect(rect) {
     if (!rect || !(cssW > 0 && cssH > 0)) return false;
     const P = motorSamplePoints();
     if (!P) return brainCoversRect(rect);
     camera.updateMatrixWorld(true);
-    const me = brainGroup.matrixWorld.elements, ce = camera.matrixWorld.elements;
-    let key = `${cssW}x${cssH}|${camera.fov}|`;
-    for (let i = 0; i < 16; i++) key += `${me[i]},${ce[i]},`;
-    if (key !== motorCoverKey) {
-      motorCoverKey = key;
-      try {
-        const xy = NsArrows.projectPointsPx(P, Array.from(me), arrowCam()).xy;
-        motorCoverGrid = NsArrows.occupancyGrid(xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 1, indices: motorIndices });
-      } catch { motorCoverGrid = null; }
+    const me = brainGroup.matrixWorld.elements, ve = camera.matrixWorldInverse.elements, K = motorCover.key;
+    let same = motorCover.valid && K[32] === cssW && K[33] === cssH && K[34] === camera.fov;
+    for (let i = 0; i < 16 && same; i++) same = K[i] === me[i] && K[16 + i] === ve[i];
+    if (!same) {
+      for (let i = 0; i < 16; i++) { K[i] = me[i]; K[16 + i] = ve[i]; }
+      K[32] = cssW; K[33] = cssH; K[34] = camera.fov;
+      if (!motorCover.xy || motorCover.xy.length < (P.length / 3) * 2) motorCover.xy = new Float32Array((P.length / 3) * 2);
+      const pm = camera.projectionMatrix, xy = motorCover.xy;
+      let n = 0;
+      for (let i = 0; i < P.length; i += 3) {
+        pv.set(P[i], P[i + 1], P[i + 2]).applyMatrix4(brainGroup.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+        if (pv.z > -near) continue;
+        pv.applyMatrix4(pm);
+        xy[n++] = (pv.x + 1) * 0.5 * cssW; xy[n++] = (1 - pv.y) * 0.5 * cssH;
+      }
+      motorCover.n = n; motorCover.valid = true;
     }
-    return motorCoverGrid ? motorCoverGrid.hits(rect) > 0 : brainCoversRect(rect);
+    const xy = motorCover.xy, x0 = rect.x0 - motorCoverPadPx, x1 = rect.x1 + motorCoverPadPx, y0 = rect.y0 - motorCoverPadPx, y1 = rect.y1 + motorCoverPadPx;
+    for (let i = 0; i < motorCover.n; i += 2) if (xy[i] >= x0 && xy[i] <= x1 && xy[i + 1] >= y0 && xy[i + 1] <= y1) return true;
+    return false;
   }
   /** Orbit click handler (replaces createScene onOrbit); null restores the 'ns-orbit' document event. */
   function setOrbitHandler(fn) {
@@ -5453,25 +5647,106 @@ export function createScene({
     const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() };
     return NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam).xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate, indices: motorIndices });
   }
-  /** Keep both rigs in the SAME active view; a camera/look/origin change replans controls, never rotates a target. */
+  /** R558: the plan no longer follows the look or the target's orbit (ns-arrows3d planStableCompassArrows). */
+  function planStable(set, args) {
+    set.planningCamera = arrowCameraRecord(args.cam); set.planningCameraKey = arrowCameraKey(args.cam);
+    set.planningTarget = { centreWorldM: Array.from(args.centre), supportRows: null };
+    set.planningTargetKey = arrowTargetKey(set.target);
+    set.planningEvidence = { kind: 'ns-stable-compass-plan-r558',
+      sourceBinding: 'Runtime labels only; not file-hash proof.',
+      eligibility: arrowEligibility(set.target), source: arrowSourceRecord(set.target),
+      eyeWorldM: Array.from(args.eye), keepRadiusM: Number.isFinite(args.keepRadiusM) ? args.keepRadiusM : null,
+      radiiM: args.radiiM ? { ...args.radiiM } : null, frontM: Number.isFinite(args.frontM) ? args.frontM : null,
+      camera: arrowCameraRecord(args.cam), targetKey: set.planningTargetKey, cameraKey: set.planningCameraKey, revision: (set.serial || 0) + 1,
+      lookIndependent: true, report: { outcome: 'NOT_REACHED' } };
+    set.nominalHeads = null; set.planningError = null;
+    try {
+      const p = NsArrows.planStableCompassArrows(args); arrowStats.plans++;
+      set.planningOutcome = p ? 'planned' : 'no-visible-outline';
+      set.planningEvidence.report = { outcome: p ? 'planned' : 'centre_not_in_front_of_reference_eye' };
+      if (p) set.nominalHeads = nominalArrowHeads(p.frames);
+      return p;
+    } catch (err) { set.planningOutcome = 'error'; set.planningError = arrowRigError = String((err && err.message) || err); return null; }
+  }
+  /** R558: radii (world m) of spheres about the brain's orbit centre that hold (a) every motor area and (b) the whole
+   * brain. A sphere about the orbit centre is unchanged by an orbit, so these are computed once per brain size / source
+   * and the arrows planned from them never move when the brain is turned. */
+  const arrowKeep = { key: '', motorM: 0, brainM: 0 };
+  function brainKeepRadii(e, centre, k) {
+    const key = `${compassBrainSourceRevision}|${k}`;
+    if (key === arrowKeep.key) return arrowKeep;
+    const maxR = P => {
+      let m = 0;
+      if (P) for (let i = 0; i + 2 < P.length; i += 3) {
+        const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12] - centre[0], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13] - centre[1], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14] - centre[2];
+        const d = Math.hypot(x, y, z); if (d > m) m = d;
+      }
+      return m;
+    };
+    arrowKeep.key = key; arrowKeep.motorM = maxR(motorSamplePoints()); arrowKeep.brainM = Math.max(maxR(brainHullPoints), maxR(brainSupport && brainSupport.points));
+    if (!(arrowKeep.motorM > 0)) arrowKeep.motorM = 0.6 * arrowKeep.brainM; // no region meshes (legacy brain): a plain share
+    return arrowKeep;
+  }
+  /** R558: where the motor areas lie as FIRST framed (orbit 0, 0), seen from the reference eye: the box of their
+   * directions as tangents from the line eye -> brain centre (tx along world right, ty up), with the centre distance
+   * it was measured at. Recorded whenever the brain is at orbit (0, 0) (the start, a resize there, Reset brain view);
+   * kept while the brain is turned, so the arrows planned from it stay where they are. Null until first recorded. */
+  let motorRestBox = null, motorRestSerial = 0;
+  function recordMotorRestBox(e, centre, eye, k) {
+    const T = lastBrainTransform;
+    if (!T || T.orbitYaw !== 0 || T.orbitPitch !== 0) return;
+    const key = `${compassBrainSourceRevision}|${k}|${centre[0]},${centre[1]},${centre[2]}|${eye[0]},${eye[1]},${eye[2]}|${e[0]},${e[5]},${e[10]}`;
+    if (motorRestBox && motorRestBox.key === key) return;
+    const P = motorSamplePoints();
+    if (!P) return;
+    const nx = centre[0] - eye[0], ny = centre[1] - eye[1], nz = centre[2] - eye[2], dist = Math.hypot(nx, ny, nz);
+    if (!(dist > 0)) return;
+    const n = [nx / dist, ny / dist, nz / dist];
+    let r = [n[1] * 0 - n[2] * 1, n[2] * 0 - n[0] * 0, n[0] * 1 - n[1] * 0]; // n x (0, 1, 0)
+    const rl = Math.hypot(r[0], r[1], r[2]);
+    if (!(rl > 1e-6)) return;
+    r = [r[0] / rl, r[1] / rl, r[2] / rl];
+    const u = [r[1] * n[2] - r[2] * n[1], r[2] * n[0] - r[0] * n[2], r[0] * n[1] - r[1] * n[0]]; // right x n
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i + 2 < P.length; i += 3) {
+      const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12] - eye[0], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13] - eye[1], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14] - eye[2];
+      const d = x * n[0] + y * n[1] + z * n[2];
+      if (!(d > 1e-6)) continue;
+      const tx = (x * r[0] + y * r[1] + z * r[2]) / d, ty = (x * u[0] + y * u[1] + z * u[2]) / d;
+      if (tx < x0) x0 = tx; if (tx > x1) x1 = tx; if (ty < y0) y0 = ty; if (ty > y1) y1 = ty;
+    }
+    if (!(x1 > x0 && y1 > y0)) return;
+    motorRestBox = { key, x0, x1, y0, y1, dist }; motorRestSerial++;
+  }
+  /** Both rigs. R558: an arrow's place depends only on where its target IS (it moves when the player carries the target),
+   * on the fixed reference eye and on the view size. Looking around or turning the target does not move the arrows. */
   function updateArrows() {
     if (!(cssW > 0 && cssH > 0)) return;
     const B = arrowSets.brain, M = arrowSets.mirror, cam = arrowCam();
-    const ref = { yaw: cam.yaw, pitch: cam.pitch, position: cam.position.slice() };
-    const obstacles = arrowObstacles();
-    const sz = `${arrowCameraKey(cam)}|${arrowObsKey}`;
+    arrowObstacles(); // keeps the HUD-panel key current for the under-panel mask below
+    const eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
+    const view = `${cssW}x${cssH}|${camera.fov}|${eye[0]},${eye[1]},${eye[2]}`;
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (showB) {
       const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]];
-      let key = `${sz}|${mirror.serial}|${centre.join(',')}|`;
-      for (let i = 0; i < 16; i++) key += `${e[i]},`;
+      const k = Math.hypot(e[0], e[1], e[2]);
+      recordMotorRestBox(e, centre, eye, k);
+      const key = `${view}|${compassBrainSourceRevision}|${k}|${centre[0]},${centre[1]},${centre[2]}|${motorRestSerial}`;
       if (key !== B.key) {
         B.key = key;
-        // Mirror obstacle, motor samples, HUD and compass anchors are all projected in this SAME active camera.
-        const mb = mirrorBoxPx(ref), obsB = mb ? [...obstacles, mb] : obstacles, tightB = arrowObstaclesTight();
-        B.plan = planSet(B, { points: brainHullPoints || brainSupport.points, matrix: Array.from(e), centre,
-          ref, cam, kind: 'brain', usable: arrowUsable(), obstacles: obsB, prefer: comfortRectPx(), fallbackObstacles: tightB,
-          avoidPoints: motorSamplePoints(), avoidIndices: motorIndices, avoidCellPx: R5_BIGBRAIN.avoidCellPx, avoidDilate: R5_BIGBRAIN.avoidDilate });
+        const keep = brainKeepRadii(e, centre, k);
+        // The four anchors: beside the two ends of the motor band at its middle height, and above / below its middle,
+        // as the band lay when first framed (a nearer or farther carried brain scales the same box). Until that box
+        // exists (never at a normal start) the ring about the orbit centre is used.
+        let anchorsTan = null;
+        if (motorRestBox) {
+          const dist = Math.hypot(centre[0] - eye[0], centre[1] - eye[1], centre[2] - eye[2]), q = motorRestBox.dist / dist;
+          const tanH = Math.tan((camera.fov * DEG) / 2), gapT = ARROW_MOTOR_GAP_PX * (2 * tanH) / cssH;
+          const x0 = motorRestBox.x0 * q, x1 = motorRestBox.x1 * q, y0 = motorRestBox.y0 * q, y1 = motorRestBox.y1 * q, xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
+          // The top arrow starts a little higher, clear of the mirror body's head and its own small top arrow.
+          anchorsTan = { forward: [xc, y1 + 2.5 * gapT], back: [xc, y0 - gapT], left: [x0 - gapT, yc], right: [x1 + gapT, yc] };
+        }
+        B.plan = planStable(B, { centre: Array.from(centre), eye: Array.from(eye), keepRadiusM: keep.motorM, verticalShare: ARROW_VERTICAL_SHARE, anchorsTan, kind: 'brain', cam });
         B.frames = B.plan ? B.plan.frames : null;
         B.serial = (B.serial || 0) + 1;
         B.rig.setFrames(B.frames);
@@ -5480,21 +5755,17 @@ export function createScene({
     }
     B.shown = showB && Boolean(B.frames);
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
-    const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null;
+    const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
     if (showM) {
-      // Keep the existing same-view guards/tolerance; the inputs now come from the actual active planned camera.
-      const pc = B.planningCamera;
-      const sameOrigin = pc && cam.position.every((v, i) => Math.abs(v - pc.position[i]) < 1e-6);
-      const sameRef = pc && Math.abs(cam.yaw - pc.yaw) < 1e-6 && Math.abs(cam.pitch - pc.pitch) < 1e-6 && sameOrigin && B.shown && B.plan && B.plan.layout;
-      const key = `${sz}|${mirror.serial}|${sameRef ? B.serial : '-'}`;
+      const c = mirror.transform.centre, R = mirror.transform.scale * mirror.body.radius;
+      const key = `${view}|${c[0]},${c[1]},${c[2]}|${R}`;
       if (key !== M.key) {
         M.key = key;
-        // Mirror arrows retain the same HUD/brain-arrow obstacle and no-extra-motor-avoid policy; picking still blocks
-        // them behind the brain. No mirror BODY placement or target transform is changed by this planner.
-        const obsM0 = obstacles.filter(o => !o.crosshair);
-        const obsM = sameRef ? [...obsM0, ...ARROW_DIRS.map(d => B.plan.layout.arrows[d] && B.plan.layout.arrows[d].box).filter(Boolean).map(b => ({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }))] : obsM0;
-        M.plan = planSet(M, { points: mirrorSamplesWorld(), matrix: null, centre: Array.from(mirror.transform.centre), ref,
-          cam, kind: 'mirror', usable: arrowUsable(), obstacles: obsM });
+        // The mirror body turns about its own centre, so places measured from that centre do not move when it is
+        // turned. R is the radius of the sphere that holds the whole seated body with its raised arm, far larger
+        // than the trunk; the arrows sit "closer to the body" (R17): above the head and below the seat, and beside
+        // the shoulders. A limb can pass behind a see-through arrow at some angles; the arrow keeps its place.
+        M.plan = planStable(M, { centre: Array.from(c), eye: Array.from(eye), radiiM: { forward: MIRROR_ARROW_SHARE.vertical * R, back: MIRROR_ARROW_SHARE.vertical * R, left: MIRROR_ARROW_SHARE.side * R, right: MIRROR_ARROW_SHARE.side * R }, kind: 'mirror', cam });
         M.frames = M.plan ? M.plan.frames : null;
         M.serial = (M.serial || 0) + 1;
         M.rig.setFrames(M.frames);
@@ -5505,7 +5776,9 @@ export function createScene({
     if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
     // A normal pick can replan before the render/overlay pass. Refresh the SAME boxes/panel mask before it uses them.
     // No recursion: arrowScreenLayout -> arrowBoxes, and neither calls updateArrows. Unchanged cache inputs do no work.
-    const maskKey = `${arrowCameraKey(cam)}|${arrowSerial}|${B.shown},${M.shown}|${arrowPanelObsKey}`;
+    // R558: the brain's own matrix is part of the key, so a turned brain re-checks its arrows against the motor areas.
+    const be = brainGroup.matrixWorld.elements;
+    const maskKey = `${arrowCameraKey(cam)}|${arrowSerial}|${B.shown},${M.shown}|${arrowPanelObsKey}|${be[0]},${be[1]},${be[2]},${be[5]},${be[6]},${be[10]},${be[12]},${be[13]},${be[14]}`;
     if (maskKey !== arrowScreenMaskKey) {
       arrowScreenMaskKey = maskKey; arrowMaskCameraKey = arrowCameraKey(cam);
       if (B.shown) arrowScreenLayout(); else { underPanel.brain.clear(); arrowBoxes(); }
@@ -5552,9 +5825,14 @@ export function createScene({
     arrowStats.picks++;
     let ray = null;
     try { ray = NsArrows.pixelRay(x, y, arrowCam()); } catch { ray = null; }
+    // R558: a motor area under the pointer always wins over a brain arrow drawn beneath it (a 10 px box at the pointer:
+    // the motor area itself, not its wider surroundings, takes the click).
+    let motorUnderPointer = false;
+    if (regionMode && brainTransformSet) { try { motorUnderPointer = motorCoversRect({ x0: x + motorCoverPadPx - 5, y0: y + motorCoverPadPx - 5, x1: x - motorCoverPadPx + 5, y1: y - motorCoverPadPx + 5 }); } catch { motorUnderPointer = false; } }
     if (ray) {
       for (const set of [arrowSets.brain, arrowSets.mirror]) {
         if (!set.shown || !set.frames) continue;
+        if (set.target === 'brain' && motorUnderPointer) continue;
         let h = null;
         const hidden = set.target === 'brain' ? underPanel.brain : null;
         const only = hidden && hidden.size ? ARROW_DIRS.filter(d => !hidden.has(d)) : null;
@@ -5604,6 +5882,13 @@ export function createScene({
     let any = false;
     for (const d of ARROW_DIRS) {
       const b = B.boxes[d], c = B.clicks[d];
+      // R558 (genuine note R29: the arrows must "never overlap key areas and block the view"). The ribbons are drawn
+      // BEFORE the motor areas (ARROW_RENDER_ORDER), so a motor area is always drawn over an arrow that shares its
+      // pixels, and pickArrows gives a motor area under the pointer priority over a brain arrow. So an arrow keeps its
+      // place and stays drawn; here its overlap with the motor areas as drawn now is only recorded for the readback.
+      let overMotor = false;
+      if (b && regionMode) { try { overMotor = motorCoversRect({ x0: b.x0 + motorCoverPadPx, y0: b.y0 + motorCoverPadPx, x1: b.x1 - motorCoverPadPx, y1: b.y1 - motorCoverPadPx }); } catch { overMotor = false; } }
+      if (overMotor) overMotorNow.brain.add(d); else overMotorNow.brain.delete(d);
       const under = Boolean(b) && infoRects.some(r => b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0);
       if (under) underPanel.brain.add(d); else underPanel.brain.delete(d);
       const root = B.rig && B.rig.arrows[d] ? B.rig.arrows[d].root : null;
@@ -5614,6 +5899,7 @@ export function createScene({
     return any ? out : null;
   }
   const underPanel = { brain: new Set() }; // R5-integrate-core: brain arrows hidden under the information panel this frame
+  const overMotorNow = { brain: new Set() }; // R558: brain arrows whose box overlaps a motor area now (drawn under it)
   /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
   function layoutArrowTips(reserveRight, reserveBottom, topPx) {
     arrowBoxes();
@@ -5677,6 +5963,7 @@ export function createScene({
       targetVisible: set.target === 'brain' ? brainGroup.visible : mirrorRoot.visible,
       planEvidence: {
         state: !arrowEligibility(set.target).eligible ? 'not_eligible' : !set.planningEvidence ? 'NOT_PLANNED'
+          : set.plan && set.plan.stable ? 'RETAINED_LOOK_INDEPENDENT_PLAN_R558'
           : set.planningCameraKey !== activeKey || set.planningTargetKey !== arrowTargetKey(set.target)
             || set.planningEvidence.source.key !== arrowSourceRecord(set.target).key ? 'STALE' : 'RETAINED_CURRENT_KEYS',
         currentEligibility: arrowEligibility(set.target), currentSource: arrowSourceRecord(set.target),
@@ -5700,6 +5987,7 @@ export function createScene({
             matrix: vec(f.matrix), depthMode: f.depthMode, distanceM: f.distance,
             headBaseWorldM: h ? vec(h.baseWorldM) : null, headTipWorldM: h ? vec(h.tipWorldM) : null } : null,
           retainedDraw: draw ? { rootVisible: draw.root.visible, meshVisible: draw.mesh.visible, hiddenUnderPanel: set.target === 'brain' ? underPanel.brain.has(d) : false,
+            boxOverlapsMotorArea: set.target === 'brain' ? overMotorNow.brain.has(d) : false,
             meshScale: [draw.mesh.scale.x, draw.mesh.scale.y, draw.mesh.scale.z] } : null,
           boxPx: box ? { ...box } : null, clickPx: vec(click),
           layout: a ? { onScreen: a.onScreen, blocked: a.blocked, overOutline: a.overOutline, slidPx: a.slidPx, edge: a.edge === true } : null }];
@@ -5900,8 +6188,11 @@ export function createScene({
     const usable = arrowUsable(), boxes = arrowObstacles().filter(o => !o.crosshair);
     const blocked = b => boxes.reduce((n, o) => n + (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0 ? 1 : 0), 0);
     const sizesM = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'mirror');
-    const room = NsArrows.arrowRoomPx(sizesM), fp = NsArrows.arrowPath().footprint;
-    const band = 2 * fp.half * sizesM.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
+    // R558: the mirror body's default fit keeps the numbers of the earlier round arrows, so the new ribbon shape
+    // does not shrink or move the body; the ribbons are placed from the body's own radius (updateArrows).
+    const sizesM0 = { sizePx: clampTo(0.05 * Math.min(cssW, cssH), 22, 42), gapPx: sizesM.gapPx };
+    const room = NsArrows.arrowRoomPx(sizesM0, NsArrows.ARROW_DESIGN_ROUND_R20), fp = NsArrows.arrowPath(NsArrows.ARROW_DESIGN_ROUND_R20).footprint;
+    const band = 2 * fp.half * sizesM0.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
     const mirrorReferenceFrame = referenceOriginSet ? NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry) : null;
     const c = NsArrows.projectWorldPx(mirrorReferenceFrame ? NsMath.transformPoint(mirrorReferenceFrame, P0) : P0, referenceOriginSet ? { ...cam, yaw: referenceAngles.yaw, pitch: referenceAngles.pitch, position: referenceOrigin.slice() } : cam);
     return {
@@ -6070,6 +6361,59 @@ export function createScene({
     const covered = regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 });
     return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || null, side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
       name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered };
+  }
+
+  /** R558 (genuine note R31: "if we tap on the body, on any muscles, those muscles will activate"): the nearest body
+   * part a ray through CSS point (x, y) meets, on your own body (trunk, legs, right arm, the in-place head seen from
+   * behind, the left arm) or on the mirror body. Returns null when nothing is hit or a MOTOR AREA of the brain is nearer
+   * along the same ray (a click on a motor area always belongs to that area), else
+   * [design decision under the R34 authority: a tap passes through the brain's CLEAR GLASS to the mirror body behind
+   * it. The glass is see-through, the mirror body is plainly visible inside the brain's U at the start, a click on
+   * clear glass did nothing before, and the user's own example is tapping the mirror body's chest while watching the
+   * brain. Grasping and turning the mirror body still need the brain moved aside (graspTargetAt is unchanged).]
+   * { source: 'own' | 'mirror', part: 'body' | 'arm', kind: 'muscle' | 'bone', id (the atlas element id), name, side
+   * (-1 your left, +1 your right, 0 middle), bodyPart, armKey (movement-map muscle key of a left-arm muscle or null),
+   * distance (m) }. Only meshes that are drawn now are tested. Called on a click, not every frame. A mirror-body hit
+   * names the same anatomical muscle as on your own body: the mirror copies you, it does not swap left and right. */
+  let musclePickIndex = null, musclePickCount = -1;
+  function muscleAt(x, y) {
+    if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
+    if (!musclePickIndex || musclePickCount !== body.length + bones.length + muscles.length) {
+      musclePickIndex = new Map(); musclePickCount = body.length + bones.length + muscles.length;
+      const clean = n => String(n || '').replace(/^mirror image: /, '').replace(/ \[[^\]]*\]$/, '').replace(/ \([A-Za-z0-9-]+\)$/, '');
+      for (const b of body) {
+        const rec = { part: 'body', kind: b.kind, id: b.id, name: clean(b.mesh.name), side: b.side, bodyPart: b.anatomicalPart || b.part, armKey: null };
+        if (!b.face) musclePickIndex.set(b.mesh, { ...rec, source: 'own' });
+        if (b.inPlace) musclePickIndex.set(b.inPlace, { ...rec, source: 'own' });
+        if (b.mirror) musclePickIndex.set(b.mirror, { ...rec, source: 'mirror' });
+      }
+      for (const b of bones) {
+        const rec = { part: 'arm', kind: 'bone', id: b.sourceElementId, name: clean(b.mesh.name), side: -1, bodyPart: 'leftArm', armKey: null };
+        musclePickIndex.set(b.mesh, { ...rec, source: 'own' });
+        if (b.mirror) musclePickIndex.set(b.mirror, { ...rec, source: 'mirror' });
+      }
+      for (const m of muscles) {
+        const rec = { part: 'arm', kind: 'muscle', id: m.id, name: clean(m.mesh.name), side: -1, bodyPart: 'leftArm', armKey: m.key };
+        musclePickIndex.set(m.mesh, { ...rec, source: 'own' });
+        if (m.mirror) musclePickIndex.set(m.mirror, { ...rec, source: 'mirror' });
+      }
+    }
+    camera.updateMatrixWorld(true); scene.updateMatrixWorld(true);
+    pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
+    rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
+    // The left arm is skinned on the CPU: its bounding spheres are brought up to date first, so a moved muscle is found.
+    for (const m of muscles) { try { m.mesh.geometry.computeBoundingSphere(); } catch { /* keep the old sphere */ } }
+    const shown = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
+    const targets = [];
+    for (const o of musclePickIndex.keys()) if (shown(o)) targets.push(o);
+    const hits = raycaster.intersectObjects(targets, false);
+    if (!hits.length) return null;
+    const rec = musclePickIndex.get(hits[0].object);
+    if (!rec) return null;
+    const areaMeshes = regionMode ? regionMeshes : strip && strip.mesh ? [strip.mesh] : [];
+    const areaHits = brainGroup.visible && areaMeshes.length ? raycaster.intersectObjects(areaMeshes, false) : [];
+    if (areaHits.length && areaHits[0].distance < hits[0].distance) return null;
+    return { ...rec, distance: hits[0].distance };
   }
 
   /** R22 normal crosshair pick only. Own body and compass arrows are never graspable.
@@ -6711,6 +7055,7 @@ export function createScene({
     // are built a few at a time.
     if (body.length && !mirror.ready) computeMirrorBody();
     if (mirrorRoot.visible) stepMirrorLod();
+    stepPickTrees(); // R558: pick trees a few per frame, ahead of the first pick that needs them
     {
       const showMirror = mirror.enabled && mirror.ready && mirror.transform !== null;
       if (mirrorRoot.visible !== showMirror) { mirrorRoot.visible = showMirror; overlayDirty = true; }
@@ -6902,7 +7247,7 @@ export function createScene({
     cachedArrowsState,
     setGlowLinks,
     glowLinkState,
-    setCameraPose, releaseCameraProjectionPlan,
+    setCameraPose, releaseCameraProjectionPlan, abandonCameraProjectionPlan, muscleAt,
     cameraState,
     setMirrorView,
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */

@@ -3461,7 +3461,10 @@ export function regionVisibility(seg, view, { width = 320, height = 180, fovYDeg
 // the "slightly" bound: under +0.25 opacity per first switch-on): opacity 0.30 -> 0.54 (was 0.44; cap 0.64, was 0.52)
 // and a shade shift of 0.34 toward the warm switched-on shade (was 0.24). The gold edge is unchanged. Evidence: round4/POLISH.md (14-marks before/after), e2e S15 / S44.
 export const REGION_STYLE = freezeR2({
-  restOpacity: 0.3, activatedOpacity: 0.54, activatedOpacityMax: 0.64, activatedOpacityPerExtra: 0.025,
+  // R558 (genuine note R32, "clearer"): the motor areas are more solid at rest (0.3 -> 0.56), so their folds and
+  // borders read as tissue rather than as a tint on the glass. A switched-on area is still only a little more solid
+  // than a resting one (0.56 -> 0.68, at most 0.78), as R8 asked ("slightly ... more opaque").
+  restOpacity: 0.56, activatedOpacity: 0.68, activatedOpacityMax: 0.78, activatedOpacityPerExtra: 0.025,
   activatedShadeMix: 0.34,
   activatedShade: freezeR2([0.88, 0.80, 0.62]),
   // R4-access (D9): identity tints from ns-colors KEY_COLORS, chosen to stay apart under colour-vision deficiency.

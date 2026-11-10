@@ -75,6 +75,23 @@ export const COMPASS_SCREEN = freeze({ forward: freeze([0, -1]), back: freeze([0
  * variants (round5/R5-arrows-NOTES.md, harness/run-R5-arrows-lab-1).
  */
 export const ARROW_DESIGN = freeze({
+  // R558 (genuine notes R29 + R32; a game-design choice under the R34 authority): a PAPER / SILK RIBBON arrow instead
+  // of the round hook. Wide and thin, broad at the tail ("thicker towards the back"), tapering to a narrow neck, then a
+  // broad pointed arrowhead. It leaves the target outward and bends FORWARD, away from the player into the scene
+  // (the R20 direction), by bendDeg = 68 on a wide arc: it curls away without doubling back toward the target, which
+  // the 150 degree hook did, and the arrowhead still shows its broad face to the player (a head bent a full right
+  // angle away is seen edge-on and no longer reads as an arrow; tried at 100 degrees in the browser and rejected).
+  // Sizes are design units (1 unit = sizePx on screen at the anchor): shaftR0 / shaftR1 are now the ribbon's
+  // HALF WIDTH at the tail / at the neck, headRadius the arrowhead's half width; thickness0 / thickness1 the ribbon's
+  // full thickness at the tail / at the head (a little body, like raised lettering, not a round tube); tailNotch the
+  // depth of the swallow-tail cut in the tail edge. Display choices, viewed in the browser; no anatomy is implied.
+  stalk: 0.4, bendRadius: 0.62, bendDeg: 68, shaftR0: 0.36, shaftR1: 0.15, headLength: 0.7, headRadius: 0.47, headInset: 0,
+  section: 'ribbon', flatRatio: 0.45, head: 'flat', headFlat: 0.5, thickness0: 0.085, thickness1: 0.04, tailNotch: 0.15,
+  radialSegments: 14, stalkSegments: 4, bendSegments: 18, capRings: 3,
+  viewTiltDeg: 25, viewTiltScreen: freeze([1, 1])
+});
+/** The round bent tube used before R558 (kept so the old shape can still be built and compared). */
+export const ARROW_DESIGN_ROUND_R20 = freeze({
   stalk: 0.5, bendRadius: 0.38, bendDeg: 150, shaftR0: 0.14, shaftR1: 0.085, headLength: 0.5, headRadius: 0.29, headInset: 0.03,
   section: 'round', flatRatio: 0.45, head: 'flat', headFlat: 0.5,
   radialSegments: 14, stalkSegments: 4, bendSegments: 20, capRings: 3,
@@ -88,8 +105,9 @@ export const ARROW_DESIGN = freeze({
  * use the same design, smaller and closer (D19).
  */
 export const ARROW_SIZES = freeze({
-  brain: freeze({ sizeFrac: 0.085, minPx: 34, maxPx: 72, gapCm: 0.9, gapMinFrac: 0.025, gapMaxFrac: 0.05 }),
-  mirror: freeze({ sizeFrac: 0.05, minPx: 22, maxPx: 42, gapCm: 0.35, gapMinFrac: 0.01, gapMaxFrac: 0.02 })
+  // R558 (R29 "thicker / easier to click", R32 "much thicker"): larger units; the ribbon is also about 0.9 units wide.
+  brain: freeze({ sizeFrac: 0.09, minPx: 38, maxPx: 84, gapCm: 0.5, gapMinFrac: 0.012, gapMaxFrac: 0.03 }),
+  mirror: freeze({ sizeFrac: 0.046, minPx: 22, maxPx: 44, gapCm: 0.2, gapMinFrac: 0.006, gapMaxFrac: 0.014 })
 });
 export const PX_PER_CM = 96 / 2.54;
 
@@ -103,7 +121,7 @@ export const PX_PER_CM = 96 / 2.54;
  * and keeps at least separationFrac x the smaller extent of the visible outline from the arrows placed before it (the
  * compass order forward, back, left, right), so the four stay far apart; it slides inward at most edgeMaxSlideFrac of the
  * visible extent (further in it would leave its side), else it counts as blocked and the next tier is tried. */
-export const ARROW_LAYOUT = freeze({ marginPx: 8, slideStepPx: 2, perspectiveAllowance: 1.1, clearStepPx: 1, maxClearPx: 400, pickPadPx: 6, frontMarginFrac: 0.03, gapMinFrac: 0.4, gapMinPx: 8, shrink: freeze([0.85, 0.75]), edgeSlideCost: 2, separationFrac: 0.4, edgeMaxSlideFrac: 0.15 });
+export const ARROW_LAYOUT = freeze({ marginPx: 8, slideStepPx: 2, perspectiveAllowance: 1.1, clearStepPx: 1, maxClearPx: 400, pickPadPx: 12, frontMarginFrac: 0.03, gapMinFrac: 0.4, gapMinPx: 8, shrink: freeze([0.85, 0.75]), edgeSlideCost: 2, separationFrac: 0.4, edgeMaxSlideFrac: 0.15 });
 
 /**
  * Look (display choices; sRGB hex). `base` is the dim cool grey of the FAR end, `tip` the bright near-white of the NEAR
@@ -116,9 +134,15 @@ export const ARROW_LAYOUT = freeze({ marginPx: 8, slideStepPx: 2, perspectiveAll
 export const ARROW_LOOK = freeze({
   base: 0x6f7c8c, tip: 0xd5dde8, hover: 0xfff1cf, rim: 0xcfe0ff,
   lightDir: freeze([-0.45, 0.75, 0.55]), fillDir: freeze([0.6, -0.25, 0.45]),
-  ambient: 0.2, diffuse: 0.85, fill: 0.25, specular: 0.55, shininess: 40, rimStrength: 0.35,
-  hoverScale: 1.12, xrayOpacity: 0.5, xrayColor: 0xe9eff7, renderOrder: 30, xrayRenderOrder: 31,
-  outline: 0.035, outlineColor: 0x0a0e15
+  // R558: a soft paper / silk look (matte, a faint sheen) and, above all, TRANSLUCENT: opacity is how solid the ribbon
+  // is at rest ("much more translucent", R29; "less obvious", R32), hoverOpacity under the crosshair / pointer, so the
+  // arrow is easy to find the moment you aim at it and stays out of the way otherwise. No dark outline shell any more
+  // (an opaque outline behind a see-through ribbon reads as a dark blob); the ribbon's own edge is drawn a little
+  // brighter instead (edgeGlow). renderOrder is set per target by the scene (see its transparent draw order).
+  ambient: 0.46, diffuse: 0.5, fill: 0.22, specular: 0.16, shininess: 18, rimStrength: 0.35,
+  opacity: 0.3, hoverOpacity: 0.72, blockedOpacity: 0.16, edgeGlow: 0.5,
+  hoverScale: 1.06, xrayOpacity: 0.16, xrayColor: 0xe9eff7, renderOrder: 30, xrayRenderOrder: 31,
+  outline: 0, outlineColor: 0x0a0e15
 });
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
@@ -169,13 +193,16 @@ export function arrowPath(design = ARROW_DESIGN) {
     const phi = (beta * i) / nB;
     samples.push({ u: d.stalk + rb * Math.sin(phi), w: rb - rb * Math.cos(phi), tu: Math.cos(phi), tw: Math.sin(phi), s: (d.stalk + rb * phi) / total, kind: 'bend' });
   }
-  for (const p of samples) { p.r = d.shaftR0 + (d.shaftR1 - d.shaftR0) * smooth(clamp(p.s, 0, 1)); p.rN = p.r * flat; p.along = 0.82 * p.s; }
+  const ribbon = d.section === 'ribbon';
+  const th0 = ribbon && isNum(d.thickness0) && d.thickness0 > 0 ? d.thickness0 : 0.08, th1 = ribbon && isNum(d.thickness1) && d.thickness1 > 0 ? d.thickness1 : 0.04;
+  // Ribbon: r is the half WIDTH (across), rN the half THICKNESS (in the bend plane), thinning from the tail to the head.
+  for (const p of samples) { const k = smooth(clamp(p.s, 0, 1)); p.r = d.shaftR0 + (d.shaftR1 - d.shaftR0) * k; p.rN = ribbon ? 0.5 * (th0 + (th1 - th0) * k) : p.r * flat; p.along = 0.82 * p.s; }
   const end = samples[samples.length - 1];
   const axis = [end.tu, end.tw];
   const base = [end.u - d.headInset * axis[0], end.w - d.headInset * axis[1]];
   const tip = [base[0] + d.headLength * axis[0], base[1] + d.headLength * axis[1]];
   const shape = d.head === 'flat' ? 'flat' : 'cone';
-  const thickness = shape === 'flat' ? d.headRadius * clamp(isNum(d.headFlat) ? d.headFlat : 0.35, 0.05, 1) : d.headRadius;
+  const thickness = ribbon ? 0.5 * th1 : shape === 'flat' ? d.headRadius * clamp(isNum(d.headFlat) ? d.headFlat : 0.35, 0.05, 1) : d.headRadius;
   // Footprint seen from the eye (projection onto u): rings (+- rN |tw| along u), the head's base (a disc: radius x
   // |axis.w|; a flat head: thickness x |axis.u| ... its in-plane extent) and its tip.
   let uMin = Infinity, uMax = -Infinity, wMax = 0, half = 0;
@@ -197,7 +224,7 @@ export function arrowPath(design = ARROW_DESIGN) {
   const side = isNum(d.viewTiltDeg) && d.viewTiltDeg > 0 ? Math.sin(d.viewTiltDeg * DEG) * wMax : 0;
   half += side;
   return {
-    samples, design: d, flat, side,
+    samples, design: d, flat, side, ribbon,
     head: { base, tip, axis, radius: d.headRadius, length: d.headLength, thickness, shape },
     footprint: { uMin, uMax, half, wMax }
   };
@@ -220,6 +247,7 @@ export function arrowRoomPx({ sizePx, gapPx }, design = ARROW_DESIGN, layoutRule
  */
 export function buildArrowGeometry(design = ARROW_DESIGN) {
   const path = arrowPath(design), d = path.design, flat = path.flat;
+  if (path.ribbon) return buildRibbonGeometry(path);
   const R = Math.max(6, d.radialSegments | 0);
   const pos = [], nor = [], alo = [], idx = [];
   const vert = (p, n, a) => { pos.push(p[0], p[1], p[2]); nor.push(n[0], n[1], n[2]); alo.push(a); return pos.length / 3 - 1; };
@@ -302,6 +330,66 @@ export function buildArrowGeometry(design = ARROW_DESIGN) {
   const n = pos.length / 3;
   if (n > 65535) fail('too many vertices for 16-bit indices');
   return { positions: Float32Array.from(pos), normals: Float32Array.from(nor), along: Float32Array.from(alo), indices: Uint16Array.from(idx), vertexCount: n, triangleCount: idx.length / 3 };
+}
+
+/**
+ * R558 paper-ribbon arrow (pure typed arrays; same local axes and return shape as buildArrowGeometry, plus `across`:
+ * -1 at one edge of the ribbon, 0 on its middle line, +1 at the other edge, for the brighter paper edge). A thin closed
+ * solid: a near face (toward the viewer on the straight part), a far face, two side walls, a swallow-tail end and an
+ * arrowhead with square shoulders that is straight along the end tangent. Cross-sections follow arrowPath's samples
+ * (half width r, half thickness rN), so layout boxes and click capsules made from the same path match what is drawn.
+ */
+function buildRibbonGeometry(path) {
+  const d = path.design, S = path.samples, H = path.head;
+  const pos = [], nor = [], alo = [], acr = [], idx = [];
+  const vert = (p, n, a, c) => { const m = norm3(n); pos.push(p[0], p[1], p[2]); nor.push(m[0], m[1], m[2]); alo.push(a); acr.push(c); return pos.length / 3 - 1; };
+  const P = i => [pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]];
+  const tri = (a, b, c, want) => { const n = cross3(sub3(P(b), P(a)), sub3(P(c), P(a))); if (dot3(n, want) >= 0) idx.push(a, b, c); else idx.push(a, c, b); };
+  const quad = (a, b, c, e, want) => { tri(a, b, c, want); tri(a, c, e, want); };
+  // Cross-sections: centre c = (u, w), tangent t, half width r, half thickness h, colour ramp position `along`.
+  const xs = S.map(p => ({ c: [p.u, p.w], t: [p.tu, p.tw], r: p.r, h: p.rN, along: p.along }));
+  const neck = xs[xs.length - 1];
+  xs.push({ c: [H.base[0], H.base[1]], t: [H.axis[0], H.axis[1]], r: H.radius, h: neck.h, along: 0.86 }); // the head's shoulders
+  xs.push({ c: [H.tip[0], H.tip[1]], t: [H.axis[0], H.axis[1]], r: 0, h: neck.h * 0.6, along: 1 });       // its point
+  // Swallow-tail: the middle of the tail edge is cut `notch` into the ribbon (never past the straight part).
+  const notch = clamp(isNum(d.tailNotch) ? d.tailNotch : 0, 0, d.stalk * 0.9);
+  const rings = xs.map(x => {
+    const T = [x.t[0], x.t[1], 0], N = [-x.t[1], x.t[0], 0];
+    const mid = x.c[1] === 0 && x.t[1] === 0 && x.c[0] < notch ? [notch, 0] : x.c; // straight part only: u is the arc length
+    const at = (c, n, z) => [c[0] + n * N[0], c[1] + n * N[1], z];
+    const nearN = [-N[0], -N[1], 0], farN = [N[0], N[1], 0];
+    return { x, T, N,
+      nL: vert(at(x.c, -x.h, -x.r), nearN, x.along, -1), nM: vert(at(mid, -x.h, 0), nearN, x.along, 0), nR: vert(at(x.c, -x.h, x.r), nearN, x.along, 1),
+      fL: vert(at(x.c, x.h, -x.r), farN, x.along, -1), fM: vert(at(mid, x.h, 0), farN, x.along, 0), fR: vert(at(x.c, x.h, x.r), farN, x.along, 1) };
+  });
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const A = rings[i], B = rings[i + 1];
+    const nearW = mul3(add3(A.N, B.N), -1), farW = add3(A.N, B.N);
+    quad(A.nL, A.nM, B.nM, B.nL, nearW); quad(A.nM, A.nR, B.nR, B.nM, nearW);
+    quad(A.fL, A.fM, B.fM, B.fL, farW); quad(A.fM, A.fR, B.fR, B.fM, farW);
+    // Side walls with their own vertices (a crisp paper edge). Outward normal in the (T, across) plane: sideways for a
+    // parallel stretch, backward where the ribbon widens (the head's shoulders), forward where it narrows.
+    const dC = len3([B.x.c[0] - A.x.c[0], B.x.c[1] - A.x.c[1], 0]), dr = B.x.r - A.x.r;
+    const T = norm3(add3(A.T, B.T));
+    for (const side of [-1, 1]) {
+      const n = add3(mul3(T, -dr), [0, 0, side * dC]);
+      if (len3(n) < 1e-9) continue;
+      const a0 = vert(P(side < 0 ? A.nL : A.nR), n, A.x.along, side), a1 = vert(P(side < 0 ? A.fL : A.fR), n, A.x.along, side);
+      const b0 = vert(P(side < 0 ? B.nL : B.nR), n, B.x.along, side), b1 = vert(P(side < 0 ? B.fL : B.fR), n, B.x.along, side);
+      quad(a0, a1, b1, b0, n);
+    }
+  }
+  // Tail end: two small walls into the notch (one flat wall when there is no notch).
+  const A = rings[0], r0 = A.x.r;
+  for (const side of [-1, 1]) {
+    const n = [-r0, 0, -side * notch];
+    const e0 = vert(P(side < 0 ? A.nL : A.nR), n, 0, side), e1 = vert(P(side < 0 ? A.fL : A.fR), n, 0, side);
+    const m0 = vert(P(A.nM), n, 0, 0), m1 = vert(P(A.fM), n, 0, 0);
+    quad(e0, e1, m1, m0, n);
+  }
+  const n = pos.length / 3;
+  if (n > 65535) fail('too many vertices for 16-bit indices');
+  return { positions: Float32Array.from(pos), normals: Float32Array.from(nor), along: Float32Array.from(alo), across: Float32Array.from(acr), indices: Uint16Array.from(idx), vertexCount: n, triangleCount: idx.length / 3 };
 }
 
 /* ------------------------------------------------------------------------------------------------ 2D layout */
@@ -946,18 +1034,114 @@ function planCompassArrowsImpl({ points, matrix = null, centre, ref = { yaw: 0, 
   return { layout, frames, sizes, behind, frontDepthM };
 }
 
+/**
+ * R558 STABLE compass plan (pure). Genuine note R29: the arrows "should also stay in place after tapping on them" and
+ * must "never overlap key areas and block the view". The older plan followed the target's drawn outline, so every
+ * orbit step and every look movement moved all four arrows. This plan depends only on things that do NOT change when
+ * the target is orbited or the player looks around:
+ *   eye     a FIXED world reference point (the player's home eye position), not the moving render camera;
+ *   centre  the target's world centre (it moves only when the player carries the target);
+ *   keepRadiusM  the radius of a sphere about `centre` that holds everything the arrows must stay clear of, under EVERY
+ *           orbit (a sphere about the orbit pivot is unchanged by the orbit): for the brain, its motor areas;
+ *   frontM  (optional) a distance from `eye` along the line eye -> centre. No part of an arrow may lie deeper than
+ *           it; give the nearest the whole target can come under any orbit, so the arrows float just in front of it.
+ * Each arrow sits on its compass line (top / bottom / left / right of the line eye -> centre, with world `up`), just
+ * outside the silhouette of the keep-clear sphere as seen from `eye`, plus gapPx. Its stalk points outward, it bends
+ * away from `eye` into the scene (R20), turned viewTiltDeg about the stalk as before so the bend can be seen.
+ * radiiM (optional, e.g. the mirror body: { forward, back, left, right } in metres) places the anchors at those
+ * distances from the centre in the centre plane instead (a body is taller than wide).
+ * anchorsTan (optional, the brain: { forward, back, left, right: [tx, ty] }) gives each anchor directly as tangents of
+ * its direction from `eye`, measured from the line eye -> centre along world right (tx) and up (ty); the anchor lies
+ * in the centre plane. The scene derives them from the box of the motor areas as first framed, so the four arrows
+ * surround the motor areas rather than the whole brain's orbit centre.
+ * Returns { layout, frames, sizes, frontDepthM, stable: true } in the same shape as planCompassArrows, or null when the
+ * centre is not in front of the eye. layout.arrows[dir].x / .y / .box are filled only when `cam` can project them.
+ */
+export function planStableCompassArrows({ centre, eye = [0, 0, 0], up = [0, 1, 0], keepRadiusM = 0, verticalShare = 1, radiiM = null, anchorsTan = null, frontM = null, gapPx = null, kind = 'brain', cam, design = ARROW_DESIGN, hoverScale = ARROW_LOOK.hoverScale, rules = ARROW_LAYOUT } = {}) {
+  if (!centre || centre.length !== 3 || !eye || eye.length !== 3 || ![...centre, ...eye].every(isNum)) fail('planStableCompassArrows needs finite centre and eye');
+  if (!cam || !(cam.width > 0 && cam.height > 0) || !(cam.fovYDeg > 0 && cam.fovYDeg < 180)) fail('cam needs width, height and fovYDeg');
+  const sizes = kind && typeof kind === 'object' && isNum(kind.sizePx) ? { sizePx: kind.sizePx, gapPx: kind.gapPx } : arrowSizePx(cam, kind);
+  const gap = isNum(gapPx) && gapPx >= 0 ? gapPx : sizes.gapPx;
+  const toC = sub3(centre, eye), dist = len3(toC);
+  if (!(dist > 1e-6)) return null;
+  const n = mul3(toC, 1 / dist);
+  let right = cross3(n, norm3(up));
+  if (len3(right) < 1e-6) right = cross3(n, [1, 0, 0]);
+  right = norm3(right);
+  const upV = cross3(right, n);
+  const tanH = Math.tan((cam.fovYDeg * DEG) / 2), pxAngle = (2 * tanH) / cam.height; // tangent of one CSS px at the view centre
+  const dz = { ...ARROW_DESIGN, ...design };
+  const tilt = isNum(dz.viewTiltDeg) && dz.viewTiltDeg > 0 ? Math.min(60, dz.viewTiltDeg) * DEG : 0;
+  const ts = dz.viewTiltScreen || [1, 1], tiltW = norm3(add3(mul3(right, ts[0]), mul3(upV, -ts[1])));
+  const path = arrowPath(dz), Hd = path.head, grow = isNum(hoverScale) && hoverScale > 1 ? hoverScale : 1;
+  const keys = path.samples.map(q => [q.u, q.w, Math.max(q.r, q.rN)]).concat([[Hd.base[0], Hd.base[1], Math.max(Hd.radius, Hd.thickness)], [Hd.tip[0], Hd.tip[1], 0]]);
+  const front = isNum(frontM) && frontM > 0 ? Math.max(1e-3, frontM * (1 - rules.frontMarginFrac)) : null;
+  // Angular radius (as a tangent, seen from `eye`) just outside the keep-clear sphere's silhouette.
+  const keep = isNum(keepRadiusM) && keepRadiusM > 0 ? Math.min(keepRadiusM, dist * 0.985) : 0;
+  const tanKeep = keep > 0 ? keep / Math.sqrt(dist * dist - keep * keep) : 0;
+  const frames = {}, arrows = {};
+  let frontUsed = null;
+  for (const dir of COMPASS_DIRS) {
+    const e = COMPASS_SCREEN[dir], out0 = norm3(add3(mul3(right, e[0]), mul3(upV, -e[1])));
+    const rM = radiiM && isNum(radiiM[dir]) && radiiM[dir] > 0 ? radiiM[dir] : null;
+    // The anchor at centre depth; a front arrow is then slid toward the eye along its sight line (same picture).
+    // verticalShare < 1 (the brain): the top and bottom anchors sit on an ellipse, nearer the centre than the side
+    // anchors. The motor areas are a wide, low band, so the sphere bound is only needed sideways; the scene still
+    // checks every drawn arrow against the motor areas as drawn and does not draw one that would cover them.
+    const share = e[0] === 0 && isNum(verticalShare) && verticalShare > 0 && verticalShare <= 1 ? verticalShare : 1;
+    const lateral = rM !== null ? rM + gap * pxAngle * dist : dist * (tanKeep * share + gap * pxAngle);
+    const tan = anchorsTan && anchorsTan[dir] && isNum(anchorsTan[dir][0]) && isNum(anchorsTan[dir][1]) ? anchorsTan[dir] : null;
+    let A = tan ? add3(centre, add3(mul3(right, dist * tan[0]), mul3(upV, dist * tan[1]))) : add3(centre, mul3(out0, lateral));
+    const frame = at => {
+      const w0 = norm3(sub3(at, eye));
+      const dd = norm3(sub3(out0, mul3(w0, dot3(out0, w0))));
+      let w = w0, b = cross3(dd, w0);
+      if (tilt > 0) { const sg = dot3(b, tiltW) >= 0 ? 1 : -1, ct = Math.cos(tilt), st = Math.sin(tilt); w = add3(mul3(w0, ct), mul3(b, sg * st)); b = cross3(dd, w); }
+      const depth = len3(sub3(at, eye));
+      // A wide view stretches things near its edge (by 1 / cos^2 of the off-axis angle along the radius, 1 / cos
+      // across it). The arrow is made that much smaller in metres, so it has about the same size on screen as an
+      // arrow at the middle of the view when the player faces the target.
+      const off = clamp(dot3(w0, n), 0.2, 1);
+      return { d: dd, w, b, mpp: depth * pxAngle, s: sizes.sizePx * depth * pxAngle * Math.pow(off, 1.5) };
+    };
+    let f = frame(A), depthMode = 'centre';
+    if (front !== null) {
+      // Everything of the arrow (anchor, bend, head, grown by the hover scale) must stay nearer than `front` along n.
+      const dn = dot3(n, f.d), wn = dot3(n, f.w);
+      let reach = 0;
+      for (const [u, v, r] of keys) reach = Math.max(reach, u * dn + v * wn + r);
+      const anchorDepth = dot3(n, sub3(A, eye)), deepest = anchorDepth + grow * reach * f.s;
+      if (deepest > front) { const k = front / deepest; A = add3(eye, mul3(sub3(A, eye), k)); f = frame(A); depthMode = 'front'; frontUsed = front; }
+    }
+    const matrix = new Float64Array(16);
+    matrix.set([f.d[0] * f.s, f.d[1] * f.s, f.d[2] * f.s, 0, f.w[0] * f.s, f.w[1] * f.s, f.w[2] * f.s, 0, f.b[0] * f.s, f.b[1] * f.s, f.b[2] * f.s, 0, A[0], A[1], A[2], 1]);
+    frames[dir] = { dir, origin: A, d: f.d, w: f.w, b: f.b, scale: f.s, mpp: f.mpp, matrix, depthMode, distance: len3(sub3(A, eye)) };
+    let x = null, y = null, box = null, onScreen = false;
+    try {
+      const q = projectWorldPx(A, cam);
+      if (q.depth > 0) { x = q.x; y = q.y; box = arrowScreenBox(frames[dir], cam, dz); onScreen = Boolean(box) && box.x1 > 0 && box.x0 < cam.width && box.y1 > 0 && box.y0 < cam.height; }
+    } catch { /* a camera that cannot project leaves the screen fields empty */ }
+    arrows[dir] = { dir, x, y, box, screen: e, outline: [x, y], blocked: false, onScreen, overOutline: depthMode === 'front', overAvoid: 0,
+      slidPx: 0, scale: 1, gapUsedPx: gap, clearancePx: gap, edge: false, edgeShiftPx: 0, tier: 'stable-r558', outsidePreferred: false };
+  }
+  return { layout: { arrows, sizePx: sizes.sizePx, gapPx: gap, centre: null, stable: true }, frames, sizes: { ...sizes, gapPx: gap }, behind: 0, frontDepthM: frontUsed, stable: true };
+}
+
 /* ------------------------------------------------------------------------------------------------ THREE rig */
 
 const VERT = `
 attribute float nsAlong;
+attribute float nsAcross;
 varying vec3 vN;
 varying vec3 vV;
 varying float vAlong;
+varying float vAcross;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vV = -mv.xyz;
   vN = normalize(normalMatrix * normal);
   vAlong = nsAlong;
+  vAcross = nsAcross;
   gl_Position = projectionMatrix * mv;
 }`;
 const FRAG = `
@@ -972,23 +1156,29 @@ uniform vec2 uS; // shininess, rim strength
 uniform float uHover;
 uniform float uAttn;
 uniform float uBlocked;
+uniform vec4 uO; // R558: opacity at rest, under the pointer, when blocked; edge brightness
 varying vec3 vN;
 varying vec3 vV;
 varying float vAlong;
+varying float vAcross;
 void main() {
   vec3 N = normalize(vN);
   vec3 V = normalize(vV);
   vec3 L = normalize(uLight);
-  float diff = max(dot(N, L), 0.0);
+  // paper is lit from both sides: a sheet turned away from the light still shows, only dimmer
+  float nl = dot(N, L);
+  float diff = max(nl, 0.0) + 0.35 * max(-nl, 0.0);
   float fill = max(dot(N, normalize(uFill)), 0.0);
   float spec = pow(max(dot(N, normalize(L + V)), 0.0), uS.x);
-  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float edge = smoothstep(0.68, 1.0, abs(vAcross)); // the cut edge of the sheet catches a little light
   vec3 albedo = mix(uTip, uBase, smoothstep(0.0, 1.0, vAlong)); // R20: bright near base -> dimmer far head
   albedo = mix(albedo, uHoverCol, 0.55 * uHover);
   albedo = mix(albedo, vec3(dot(albedo, vec3(0.3333))) * 0.55, uBlocked); // covered: grey and dim
   float lit = uK.x + uK.y * diff + uK.z * fill + 0.25 * uAttn;
-  vec3 col = albedo * lit + vec3(spec) * uK.w * (1.0 + 0.5 * uHover) + uRim * rim * uS.y * (1.0 + 1.2 * uHover + uAttn);
-  gl_FragColor = vec4(col, 1.0);
+  vec3 col = albedo * lit + vec3(spec) * uK.w * (1.0 + 0.5 * uHover) + uRim * edge * uO.w * (1.0 + 0.6 * uHover + uAttn);
+  float alpha = mix(uO.x, uO.y, max(uHover, 0.6 * uAttn));
+  alpha = mix(alpha, uO.z, uBlocked) * (0.8 + 0.2 * edge);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -1011,6 +1201,7 @@ uniform float uHover;
 varying vec3 vN;
 varying vec3 vV;
 varying float vAlong;
+varying float vAcross;
 void main() {
   // light inside, dark edge: findable over the red muscles and over the pale bones alike
   float rim = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 1.5);
@@ -1036,6 +1227,7 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
   geometry.setAttribute('position', new THREE.BufferAttribute(g.positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(g.normals, 3));
   geometry.setAttribute('nsAlong', new THREE.BufferAttribute(g.along, 1));
+  geometry.setAttribute('nsAcross', new THREE.BufferAttribute(g.across || new Float32Array(g.vertexCount), 1));
   geometry.setIndex(new THREE.BufferAttribute(g.indices, 1));
   geometry.computeBoundingSphere();
   const col = hex => new THREE.Color(hex);
@@ -1044,9 +1236,13 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
   const arrows = {};
   const materials = [];
   for (const dir of COMPASS_DIRS) {
+    // R558: the ribbon is see-through: blended, never writes depth (it must not hide the brain areas, the body or the
+    // other arrows behind it) and still depth-tested, so the arm, the body and the brain areas in front of it cover it.
+    const opq = v => (isNum(v) ? clamp(v, 0, 1) : 1);
     const material = new THREE.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG,
+      vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false,
       uniforms: {
+        uO: { value: new THREE.Vector4(opq(look.opacity), opq(look.hoverOpacity), opq(look.blockedOpacity), isNum(look.edgeGlow) ? look.edgeGlow : 0) },
         uBase: { value: col(look.base) }, uTip: { value: col(look.tip) }, uHoverCol: { value: col(look.hover) }, uRim: { value: col(look.rim) },
         uLight: { value: new THREE.Vector3(...look.lightDir) }, uFill: { value: new THREE.Vector3(...look.fillDir) },
         uK: { value: new THREE.Vector4(look.ambient, look.diffuse, look.fill, look.specular) }, uS: { value: new THREE.Vector2(look.shininess, look.rimStrength) },

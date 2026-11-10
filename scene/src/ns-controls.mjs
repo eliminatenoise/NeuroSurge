@@ -135,6 +135,12 @@ export const ARROW_COVERED_HINT = 'The brain is in the way. Look at the brain an
  * R4-polish (R4-player 2.4): 350 -> 450 ms. A relaxed double tap (370-390 ms press to press, measured with real input)
  * did nothing and gave no feedback; desktop double-clicks usually allow about 500 ms. */
 export const DOUBLE_TAP_MS = 450;
+/** R558 (genuine note R31: "if we click on the brain or body and if we drag it ... it will orbit, shift by how much we
+ * drag"): a press that began on the brain or the mirror body and then moves this many CSS px or more is a DRAG (it
+ * turns that item about its centre, in proportion to the movement); a press that moves less is a CLICK (it switches on
+ * what is aimed at) and is delivered when the button is let go. The items a drag can turn. */
+export const DRAG_CLICK_SLOP_PX = 5;
+export const DRAG_TARGETS = Object.freeze(['brain', 'mirror']);
 
 /** Overlay commands accepted by uiCommand() and by `data-ns-ui` buttons under bindDom's options.uiRoot. */
 export const UI_COMMANDS = Object.freeze(['orbit-left', 'orbit-right', 'orbit-forward', 'orbit-back', 'reset-body', 'resume', 'pause']);
@@ -196,9 +202,13 @@ export function createControls({
   const pitchLimit = pitchLimitDeg * DEG;
 
   const releasedButton = () => ({ down: false, seq: 0, downMs: null, upMs: null, via: null, x: null, y: null });
+  /** R558: the press-and-drag gesture: target ('brain' | 'mirror' | null), movement not yet taken by the game (dx, dy,
+   * CSS px), total path length since the press (travel), turning = the press has moved far enough to be a drag. */
+  const noDrag = () => ({ target: null, dx: 0, dy: 0, travel: 0, turning: false });
+  const dragOf = state => (state && state.drag && typeof state.drag === 'object' ? state.drag : noDrag());
   const initialState = () => ({
     keys: releasedKeys(), yaw: 0, pitch: 0, lookMs: null, events: [], ui: [], look: { sensitivity, invertY },
-    pitchLimits: null, viewSeq: 0, pointer: null, button: releasedButton()
+    pitchLimits: null, viewSeq: 0, pointer: null, button: releasedButton(), drag: noDrag()
   });
   /** R5-input: the pitch range and the button of a state (older states without them read the defaults). */
   const limitsOf = state => {
@@ -258,12 +268,43 @@ export function createControls({
     const k = state.keys;
     const b = state.button;
     const held = Boolean(b && b.down === true);
-    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || held)) return state;
+    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || held || dragOf(state).target !== null)) return state;
     const events = k.Space ? [...state.events, stamp({ type: 'space', down: false, safety: true }, timeMs)] : state.events;
     const next = { ...state, keys: releasedKeys(), events };
     if (held) next.button = { ...b, down: false, upMs: Number.isFinite(timeMs) ? timeMs : b.upMs };
+    if (dragOf(state).target !== null) next.drag = noDrag(); // R558: a pause, blur or lost pointer ends a drag at once
     return next;
   }
+
+  /** R558: a press began on a drag target. Any earlier gesture is dropped. */
+  function dragStart(state, target) {
+    if (!DRAG_TARGETS.includes(target)) fail('controls_drag', `drag target must be one of ${DRAG_TARGETS.join(', ')}`);
+    return { ...state, drag: { target, dx: 0, dy: 0, travel: 0, turning: false } };
+  }
+  /** R558: pointer movement during the press (CSS px). It becomes a drag once it has travelled DRAG_CLICK_SLOP_PX; from
+   * then on (and including the px moved so far) the movement waits in dx / dy for the game (takeDrag). Never a look. */
+  function dragMove(state, dx, dy) {
+    const d = dragOf(state);
+    if (d.target === null || !Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return state;
+    const travel = d.travel + Math.hypot(dx, dy);
+    return { ...state, drag: { target: d.target, dx: d.dx + dx, dy: d.dy + dy, travel, turning: d.turning || travel >= DRAG_CLICK_SLOP_PX } };
+  }
+  /** R558: the button was let go. Returns { state, click }: click true = the press never became a drag, so it is a
+   * click (the caller queues it). Movement not yet taken is dropped. */
+  function dragEnd(state) {
+    const d = dragOf(state);
+    if (d.target === null) return { state, click: false };
+    return { state: { ...state, drag: noDrag() }, click: !d.turning };
+  }
+  /** R558: the game takes the drag movement gathered since the last call: { state, drag: { target, dx, dy } | null }
+   * (null while there is no drag, or the press has not moved far enough yet). */
+  function takeDrag(state) {
+    const d = dragOf(state);
+    if (d.target === null || !d.turning || (d.dx === 0 && d.dy === 0)) return { state, drag: null };
+    return { state: { ...state, drag: { ...d, dx: 0, dy: 0 } }, drag: { target: d.target, dx: d.dx, dy: d.dy } };
+  }
+  /** R558: { target, turning } of the gesture now ({ target: null } when none). */
+  function dragState(state) { const d = dragOf(state); return { target: d.target, turning: d.turning }; }
 
   /** Append one UI event (copy-on-write; a state without `ui` gets one). Bounded by UI_QUEUE_LIMIT (see there). */
   function pushUi(state, ev, timeMs) {
@@ -464,6 +505,8 @@ export function createControls({
     buttonUp,
     tap,
     buttonState,
+    // R558 (R31): press-and-drag on the brain or the mirror body
+    dragStart, dragMove, dragEnd, takeDrag, dragState,
     sensitivityRadPerPx: sens,
     pitchLimitRad: pitchLimit,
     sensitivity,
@@ -736,7 +779,15 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, arrowAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function (xCss | null, yCss | null) => "brain" | "mirror" | null');
+  const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
+  /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
+   * crosshair while the pointer is captured. Any failure means "nothing to drag" (the press is then an ordinary click). */
+  const dragTarget = p => {
+    if (!canDrag) return null;
+    try { const t = dragTargetAt(p ? p.x : null, p ? p.y : null); return DRAG_TARGETS.includes(t) ? t : null; } catch { return null; }
+  };
   if (onLockChange !== null && typeof onLockChange !== 'function') fail('controls_dom', 'onLockChange must be a function');
   if (onView !== null && typeof onView !== 'function') fail('controls_dom', 'onView must be a function');
   if (arrowAt !== null && typeof arrowAt !== 'function') fail('controls_dom', 'arrowAt must be a function (xCss, yCss) => truthy on an arrow');
@@ -770,7 +821,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
-  const releaseAll = e => { const at = eventTime(e); apply(s => controls.blur(s, at)); };
+  const releaseAll = e => { const at = eventTime(e); pressDrag = false; apply(s => controls.blur(s, at)); };
   const call = (fn, ...args) => {
     if (!fn) return;
     try { fn(...args); } catch { /* a HUD callback must never break input handling */ }
@@ -792,6 +843,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   let dragging = false;
   let lastClient = null;
   let arrowPress = false;     // R5-input: the held free-mouse press began on a 3D arrow (no drag-to-look while it lasts)
+  let pressDrag = false;      // R558: the held press began on the brain or the mirror body (it may turn that item)
   const hasButtons = typeof controls.buttonDown === 'function' && typeof controls.buttonUp === 'function';
   const hasPointer = typeof controls.pointerAt === 'function' && typeof controls.pointerLeave === 'function';
   /** R5-input: the event's point in canvas CSS px (null without client coordinates or a layout box). */
@@ -894,6 +946,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     lockPending = false;
     dragging = false;
     arrowPress = false;
+    if (pressDrag) { pressDrag = false; apply(s => controls.dragEnd(s).state); } // R558: a lock change ends a drag, with no click
     const now = isLocked();
     if (now) lockFallback = false;
     if (now && hasPointer) apply(s => controls.pointerLeave(s)); // captured: no free pointer
@@ -907,7 +960,12 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   on(target, 'mousedown', e => {
     const at = eventTime(e);
     if (isLocked()) {
-      apply(s => controls.click(s, at));
+      // R558 (R31): a press with the crosshair on the brain or the mirror body may become a drag that turns it. Its
+      // click is then held back until the button is let go (and dropped if the press became a drag). Any other press
+      // (empty space, your own body, an arrow) is a click at once, exactly as before.
+      const t = dragTarget(null);
+      if (t) { pressDrag = true; apply(s => controls.dragStart(s, t)); }
+      else apply(s => controls.click(s, at));
       if (hasButtons) apply(s => controls.buttonDown(s, at, { via: 'crosshair' }));
       return;
     }
@@ -931,14 +989,26 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (!lockPending) requestLock();
       return;
     }
-    apply(s => controls.click(s, at));
+    // R558 (R31), free pointer (the browser refused to capture it): a press on the brain or the mirror body may become a
+    // drag that turns it instead of a drag that turns the look; its click waits for the release, as above.
+    const t = dragTarget(local);
+    if (t) { pressDrag = true; dragging = false; apply(s => controls.dragStart(s, t)); }
+    else apply(s => controls.click(s, at));
     if (canLock && !lockPending) requestLock(); // retry (e.g. after the browser's post-Esc cooldown)
   });
   on(view, 'mouseup', e => {
     if (!(Number.isFinite(e.buttons) && e.buttons !== 0)) {
       dragging = false;
       arrowPress = false;
-      if (hasButtons) { const at = eventTime(e); apply(s => controls.buttonUp(s, at)); }
+      const at = eventTime(e);
+      if (pressDrag) {
+        // R558: the press ends. One that never became a drag is a click, delivered now.
+        pressDrag = false;
+        let clicked = false;
+        apply(s => { const r = controls.dragEnd(s); clicked = r.click; return r.state; });
+        if (clicked) apply(s => controls.click(s, at));
+      }
+      if (hasButtons) apply(s => controls.buttonUp(s, at));
     }
   });
   on(doc, 'mousemove', e => {
@@ -946,6 +1016,8 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       const dx = e.movementX, dy = e.movementY;
       if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
       const at = eventTime(e);
+      // R558: while a press on the brain or the mirror body is held, the movement turns that item, not the look.
+      if (pressDrag) { apply(s => controls.dragMove(s, dx, dy)); return; }
       apply(s => controls.pointerMove(s, dx, dy, at));
       return;
     }
@@ -958,6 +1030,16 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       } else apply(s => controls.pointerLeave(s));
     }
     if (arrowPress) return; // holding a 3D arrow never turns the look
+    if (pressDrag) {
+      // R558: free-pointer drag on the brain or the mirror body.
+      if (Number.isFinite(e.buttons) && e.buttons === 0) return; // the release arrives as mouseup
+      let mx = e.movementX, my = e.movementY;
+      const c = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
+      if (!Number.isFinite(mx) || !Number.isFinite(my)) { if (!c || !lastClient) { lastClient = c; return; } mx = c.x - lastClient.x; my = c.y - lastClient.y; }
+      lastClient = c;
+      apply(s => controls.dragMove(s, mx, my));
+      return;
+    }
     if (!dragging) return;
     if (Number.isFinite(e.buttons) && e.buttons === 0) { dragging = false; return; }
     let dx = e.movementX, dy = e.movementY;
@@ -987,6 +1069,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     for (const [obj, type, fn] of added.splice(0)) obj.removeEventListener(type, fn);
     dragging = false;
   }
-  unbind.status = () => ({ locked: isLocked(), lockFallback, dragging, arrowPress });
+  unbind.status = () => ({ locked: isLocked(), lockFallback, dragging, arrowPress, pressDrag });
   return unbind;
 }

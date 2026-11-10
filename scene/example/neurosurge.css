@@ -230,7 +230,7 @@ html, body {
 /* R4-access: KEY_COLORS.legendSwatchLeftArm / legendSwatchOther (light-blue left-arm and warm-grey other areas stay
    apart for red-green colour-blind players). */
 .ns-legend-item-leftarm .ns-legend-swatch { background: rgba(64, 109, 133, 0.95); border: 2px solid var(--ns-leftarm); }
-.ns-legend-item-other .ns-legend-swatch { background: rgba(105, 103, 97, 0.95); border: 1px solid var(--ns-other); }
+.ns-legend-item-other .ns-legend-swatch { background: rgba(172, 122, 120, 0.95); border: 1px solid var(--ns-other); } /* R558: the tissue-pink areas (was grey 105, 103, 97) */
 /* R4-polish: the switched-on swatch shows the lighter, warmer fill of a switched-on area inside its gold edge. */
 .ns-legend-item-activated .ns-legend-swatch { background: rgba(150, 138, 112, 0.95); border: 2px solid var(--ns-activated); }
 .ns-legend-item-dot .ns-legend-swatch { width: 8px; height: 8px; margin: 0 2.5px; border-radius: 1px; transform: rotate(45deg); background: #a8eefc; }
@@ -815,3 +815,41 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 }
 
 
+
+/* ---- R558 (genuine note R28): the keyboard picture on the start page and the Esc page --------------------------------
+   Lit keys are the keys the game uses; faint blank keys only show where those sit on a keyboard. System sans-serif
+   (inherited). The sizes follow the view width, so the picture stays readable from a phone-sized window to a wide one. */
+.ns-kbd { --k: clamp(26px, 3vw, 42px); display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 26px; align-items: start;
+  margin: 10px 0 12px; padding: 12px 16px 12px; border: 1px solid rgba(232, 238, 245, 0.16); border-radius: 12px; background: rgba(232, 238, 245, 0.04); }
+.ns-kbd-title { grid-column: 1 / -1; margin: 0 0 2px; }
+.ns-kbd-board { display: grid; gap: calc(var(--k) * 0.16); justify-items: start; }
+.ns-kbd-row { display: flex; gap: calc(var(--k) * 0.16); }
+.ns-kbd-row-q { padding-left: calc(var(--k) * 0.7); }
+.ns-kbd-row-a { padding-left: calc(var(--k) * 1.05); }
+.ns-kbd-row-space { padding-left: calc(var(--k) * 3.1); }
+.ns-kbd-key { box-sizing: border-box; flex: 0 0 calc(var(--k) * 1.42); height: var(--k); border-radius: 7px;
+  border: 1px solid rgba(232, 238, 245, 0.13); border-bottom-width: 3px; background: rgba(232, 238, 245, 0.025); }
+.ns-kbd-key.ns-kbd-on { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border-color: #7fd6f2; background: rgba(110, 205, 240, 0.17); color: #ffffff; line-height: 1; }
+.ns-kbd-name { font-size: calc(var(--k) * 0.4); font-weight: 800; letter-spacing: 0.02em; }
+.ns-kbd-word { font-size: max(10px, calc(var(--k) * 0.26)); font-weight: 600; color: #cfe9f5; white-space: nowrap; }
+.ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 8.6); }
+.ns-kbd-key.ns-kbd-key-escape { flex-basis: calc(var(--k) * 1.6); }
+.ns-kbd-pad { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; align-items: center; min-width: 0; }
+.ns-kbd-pad-title { grid-column: 1 / -1; font-weight: 700; font-size: 13px; color: #f2f6fa; }
+.ns-kbd-pad-drawing { position: relative; width: calc(var(--k) * 2.9); height: calc(var(--k) * 2.1); border-radius: 10px;
+  border: 1px solid #7fd6f2; border-bottom-width: 3px; background: rgba(110, 205, 240, 0.1); }
+.ns-kbd-pad-finger { position: absolute; left: 34%; top: 38%; width: calc(var(--k) * 0.42); height: calc(var(--k) * 0.42); border-radius: 50%;
+  background: #ffffff; box-shadow: calc(var(--k) * 0.5) calc(var(--k) * -0.22) 0 calc(var(--k) * -0.12) rgba(255, 255, 255, 0.5), calc(var(--k) * 0.95) calc(var(--k) * -0.4) 0 calc(var(--k) * -0.16) rgba(255, 255, 255, 0.28); }
+.ns-kbd-pad-lines { margin: 0; padding: 0 0 0 16px; font-size: 13px; line-height: 1.4; color: #d6dee8; }
+.ns-kbd-pad-lines li { margin: 0 0 2px; }
+.ns-kbd-notes { grid-column: 1 / -1; font-size: 13px; line-height: 1.45; color: #d6dee8; }
+.ns-kbd-notes p { margin: 2px 0 0; }
+@media (max-width: 900px) {
+  .ns-kbd { grid-template-columns: minmax(0, 1fr); }
+  .ns-kbd-board { justify-self: center; }
+}
+@media (min-width: 900px) and (max-height: 820px) {
+  .ns-shell[data-mode="intro"] .ns-kbd { --k: clamp(24px, 2.5vw, 34px); margin: 6px 0 8px; padding: 8px 14px; }
+  .ns-shell[data-mode="intro"] .ns-kbd-notes { display: none; } /* the same words are in the Controls list beside it */
+}

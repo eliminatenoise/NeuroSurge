@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-10-camera-update",
+  "version": "experimental-2026-11-10-interaction-update",
   "status": "experimental preview",
   "client_side": true,
   "signal_origin": "simulated, unitless",
@@ -8,18 +8,23 @@
   "neural_decoder_validated": false,
   "normal_mechanics_validated": false,
   "complete_game_acceptance": false,
-  "source_lineage": "Based on C410 with the wider view, shared brain and mirror carry, body-bounds corrections, camera hand framing, bounded display search and failure diagnostics. Existing mesh files, asset notices, public provenance redactions and desktop launchers are retained.",
+  "source_lineage": "Based on the 10 November 2026 camera-update preview. Adds display recovery in place of the stop on a refused frame, press-and-drag turning of the brain and mirror body, muscle clicks routed through the existing motor map, paper-ribbon orbit arrows at fixed places, a higher default brain placement, tissue-shaded motor areas, position-welded surface normals, a coordinated forearm and hip turn, a keyboard picture, removal of the floating own-face display, and faster crosshair picking and frame logic. Existing mesh files, asset notices, public provenance redactions and desktop launchers are retained.",
   "anatomy_assets": "490 OBJ meshes retained from the preceding preview. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0.",
   "public_preview_authorized": "10 November 2026 user instruction: experimental previews for all projects",
   "other_project_development": "paused",
-  "browser_verification": "An independent review checked 21 recorded browser states for the camera correction, including hand projection, drags, releases and switching between camera views. Longer reach-and-release tests later found a stop bug. Those failures remain open; this preview does not establish complete control, timing, joint-mechanics or physiological validation.",
+  "browser_verification": "Author development checks only: scripted mouse and key input in one desktop Chromium on one pinned processor core, with screenshots, frame-interval counts and the DevTools sampling profiler, compared against the preceding preview under the same script. No independent review yet. Not checked: Firefox, Safari, touch, phones, screen readers, reduced-motion settings. This does not establish complete control, timing, joint-mechanics or physiological validation.",
   "known_engineering_gaps": [
-    "The mirror is larger on screen but still farther away in the scene",
-    "Some sideways inputs lack matching muscle glow",
-    "Near/far endpoint and regrasp coverage is incomplete",
-    "Combined-key response and latency need further checks",
-    "Complete hand-border and all-view control coverage is not verified",
-    "Releasing a grasp after sustained reaching can stop the game"
+    "Independent browser review of this build has not been done",
+    "Looking around is the slowest path (about 35 frames a second in the author's single-core test, single frames up to about 0.1 s)",
+    "The look stops where the whole arm can no longer be shown; one rare case pauses for about a third of a second and turns the view part of the way back",
+    "Key-driven reach is unchanged: already at arm length, whole-hand-in-view and view-edge limits; a wider sweep needs a different hand-anchor design",
+    "A clicked muscle switches on a whole motor area and its movement's muscles, not one muscle; some muscles have no movement and only light an area",
+    "The leg turn rotates only the hips by 10 degrees; the right upper arm does not turn; hip rotator muscles are not coloured",
+    "The mirror body's shoulder blade and collarbone do not follow the raised arm",
+    "The brain's top arrow is partly off screen at the start view on wide screens; the left arrow can sit behind the arm",
+    "The retired floating-face code paths remain in the renderer, switched off",
+    "SHA256SUMS and release-manifest.json predate these source changes and must be regenerated before release"
   ],
-  "publication_status": "Selected for experimental publication under the user’s latest upload instruction; the known reach-and-release stop bug is disclosed."
+  "publication_status": "Prepared for review. Not yet published; the release aggregates are stale until regenerated.",
+  "design_decisions": "DESIGN-DECISIONS.md"
 }

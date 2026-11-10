@@ -9,7 +9,26 @@ import { SEGMENTS } from './ns-rig.mjs';
 
 const MODE = 'whole-posed-arm-r378', supports = new WeakSet(), planSupports = new WeakMap(), planFits = new WeakMap(), planRequests = new WeakMap();
 const sourceEndpoints = new WeakMap(); // R521 private immutable copies; no point getter/export
+// R558 performance (no predicate change): a typed working copy of each frozen endpoint list (the same float64 values, read
+// without boxed-number loads), and a small exact-input result memo. Both are private; neither is exported or writable
+// from outside, and the frozen R521 lists above stay the certified source.
+const endpointBuffers = new WeakMap(), visibilityMemo = new WeakMap();
+const VISIBILITY_MEMO_ENTRIES = 12;
+function endpointBuffer(group) {
+  let b = endpointBuffers.get(group);
+  if (!b) { b = Float64Array.from(group.endpoints); endpointBuffers.set(group, b); }
+  return b;
+}
 export const WHOLE_ARM_DISPLAY_BOUNDS = Object.freeze({ trials: 8, bones: 30, muscles: 45, positions: 84347 });
+/** R558 performance (a display choice; no check is changed). When the committed camera distance no longer shows the
+ * whole arm and the farthest distance does, the search halves the gap between them to bring the camera back in. It
+ * used every remaining trial for that (6 halvings, about 1 cm), and each trial is a complete hand fit; while the player
+ * kept moving, that full search ran again on almost every frame (measured: 190-300 ms frames). It now halves at most
+ * REFINE_HALVINGS times, so the camera settles up to an eighth of the gap farther back than the nearest distance that
+ * works. The distance is only ever a floor for later frames (it never moved back in by itself before either), so the
+ * small extra room means the next frames usually pass at once instead of searching again. Every candidate that is
+ * accepted is still a fully evaluated one: the same fitHand, the same strict whole-arm check, the same guards. */
+export const WHOLE_ARM_REFINE_HALVINGS = 3;
 const fail = (reason, detail = null) => {
   const error = new Error(`ns:whole_arm_display: ${reason}`);
   error.code = 'whole_arm_display_refused'; error.detail = { status: 'refused', reason, detail };
@@ -265,8 +284,48 @@ export function checkWholeArmSupport(support, matrices, viewport, armOptions = {
 
 // R521: retain the legacy broad result, then refine ONLY a failed broad certificate.
 // All checks below use one copied current matrix map. No pose/clock/fit/scene operation is performed.
+// R558: the check is a pure function of (support, the 22 segment matrices, viewport, the few arm options it reads). An
+// idle frame asks the same question several times with bit-identical inputs, so the frozen result of an earlier
+// identical question is returned instead of visiting every endpoint again. The key holds EVERY number the check reads
+// and is compared with Object.is (no tolerance); any difference, however small, runs the full check. A refusal
+// (throw) is never stored.
+function visibilityKey(support, matrices, viewport, armOptions) {
+  const boxes = support.boxes, o = armOptions || {}, limits = o.viewLimitsNdc || {}, v = viewport || {};
+  const key = new Float64Array(boxes.length * 16 + 12);
+  let k = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    const M = matrices.get(boxes[i].segment);
+    if (!M || M.length !== 16) return null; // let the full check raise its own exact refusal
+    for (let j = 0; j < 16; j++) { const x = M[j]; if (typeof x !== 'number') return null; key[k++] = x; }
+  }
+  // An option that is PRESENT but undefined overrides its default in the full check (and is refused there): never memoize it.
+  for (const name of ['marginNdc', 'near', 'nearMargin', 'viewLimitsNdc']) if (name in o && o[name] === undefined) return null;
+  const scalar = x => x === undefined ? -Infinity : typeof x === 'number' ? x : NaN; // NaN never equals a stored key below
+  for (const x of [v.aspect, v.fovYDeg, v.farM, v.nearM, o.marginNdc, o.near, o.nearMargin, limits.left, limits.right, limits.bottom, limits.top]) {
+    const y = scalar(x); if (y !== y) return null; key[k++] = y;
+  }
+  return key;
+}
 function checkWholeArmVisibility(support, matrices, viewport, armOptions) {
   if (!supports.has(support) || !(matrices instanceof Map)) fail('qualified_support_and_pose_required');
+  const key = visibilityKey(support, matrices, viewport, armOptions);
+  let memo = null;
+  if (key !== null) {
+    memo = visibilityMemo.get(support);
+    if (!memo) { memo = []; visibilityMemo.set(support, memo); }
+    search: for (let e = 0; e < memo.length; e++) {
+      const stored = memo[e].key;
+      if (stored.length !== key.length) continue;
+      for (let i = 0; i < key.length; i++) if (!Object.is(stored[i], key[i])) continue search;
+      if (e > 0) { const hit = memo[e]; memo.splice(e, 1); memo.unshift(hit); }
+      return memo[0].result;
+    }
+  }
+  const result = checkWholeArmVisibilityUncached(support, matrices, viewport, armOptions);
+  if (memo !== null) { memo.unshift({ key, result }); if (memo.length > VISIBILITY_MEMO_ENTRIES) memo.length = VISIBILITY_MEMO_ENTRIES; }
+  return result;
+}
+function checkWholeArmVisibilityUncached(support, matrices, viewport, armOptions) {
   const checkedMatrices = new Map(support.boxes.map(box => [box.segment, Object.freeze(mat(matrices.get(box.segment), box.segment))]));
   const broadCheck = checkWholeArmSupport(support, checkedMatrices, viewport, armOptions);
   if (broadCheck.fits) return broadCheck; // passing broad path retains its exact old kind/fields/values
@@ -303,29 +362,39 @@ function checkWholeArmVisibility(support, matrices, viewport, armOptions) {
   if (sourceVisits !== source.endpointInfluenceVisits || replayTested !== support.coverage.boundPoints || replayTested !== broadCheck.tested ||
       replayOutside !== broadCheck.outside || replayBehind !== broadCheck.behind || replayFarOutside !== broadCheck.farOutside ||
       !Object.is(replayDeficitM, broadCheck.additionalBackDeficitM) || planes.some(k => replayFailures[k] !== broadCheck.failures[k]) || !failed.length) fail('same_current_complete_broad_certificate_required');
-  const failures = Object.fromEntries(planes.map(k => [k, 0]));
+  // R558: identical arithmetic and predicates per endpoint (same operation order as point()+gapsFor()); only the
+  // bookkeeping moved out of the loop: matrix entries and plane limits in locals, counters in locals, the endpoint
+  // values read from the typed working copy, and ONE finiteness test per segment. x - x is 0 for every finite x and
+  // NaN for NaN or +/-Infinity, so the sum below is nonzero exactly when some posed coordinate is not finite; the
+  // refusal is then the same 'nonfinite: posed source endpoint' as before, raised before any result is returned.
+  const sideL = sides.left, sideR = sides.right, sideB = sides.bottom, sideT = sides.top;
+  let fNear = 0, fFar = 0, fLeft = 0, fRight = 0, fBottom = 0, fTop = 0;
   let required = 0, tested = 0, outside = 0, behind = 0;
   for (const i of failed) {
-    const group = source.groups[i], M = checkedMatrices.get(group.segment), P = group.endpoints;
-    required += P.length / 3;
-    for (let j = 0; j < P.length; j += 3) {
-      // Same operation order/predicates as point()+gapsFor(); avoid per-endpoint arrays/objects.
+    const group = source.groups[i], M = checkedMatrices.get(group.segment), P = endpointBuffer(group), n = P.length;
+    if (n !== group.endpoints.length) fail('source_endpoint_group_currentness_required');
+    const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6], m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
+    let nonFinite = 0;
+    required += n / 3;
+    for (let j = 0; j < n; j += 3) {
       const px = P[j], py = P[j + 1], pz = P[j + 2];
-      const x = M[0] * px + M[4] * py + M[8] * pz + M[12];
-      const y = M[1] * px + M[5] * py + M[9] * pz + M[13];
-      const z = M[2] * px + M[6] * py + M[10] * pz + M[14];
-      finite(x, 'posed source endpoint'); finite(y, 'posed source endpoint'); finite(z, 'posed source endpoint');
+      const x = m0 * px + m4 * py + m8 * pz + m12;
+      const y = m1 * px + m5 * py + m9 * pz + m13;
+      const z = m2 * px + m6 * py + m10 * pz + m14;
+      nonFinite += (x - x) + (y - y) + (z - z);
       const d = -z;
       let bad = false; tested++; if (!(d > 0)) behind++;
-      if (nearM - d > 0) { failures.near++; bad = true; }
-      if (d - farM > 0) { failures.far++; bad = true; }
-      if (-sx * x / sides.left - d > 0) { failures.left++; bad = true; }
-      if (sx * x / sides.right - d > 0) { failures.right++; bad = true; }
-      if (-sy * y / sides.bottom - d > 0) { failures.bottom++; bad = true; }
-      if (sy * y / sides.top - d > 0) { failures.top++; bad = true; }
+      if (nearM - d > 0) { fNear++; bad = true; }
+      if (d - farM > 0) { fFar++; bad = true; }
+      if (-sx * x / sideL - d > 0) { fLeft++; bad = true; }
+      if (sx * x / sideR - d > 0) { fRight++; bad = true; }
+      if (-sy * y / sideB - d > 0) { fBottom++; bad = true; }
+      if (sy * y / sideT - d > 0) { fTop++; bad = true; }
       if (bad || !(d > 0)) outside++;
     }
+    if (nonFinite !== 0) fail('nonfinite', 'posed source endpoint');
   }
+  const failures = { near: fNear, far: fFar, left: fLeft, right: fRight, bottom: fBottom, top: fTop };
   if (!(required > 0) || tested !== required || required > source.endpointInfluenceVisits) fail('complete_required_source_endpoint_census_required');
   const sourceEndpointWitness = Object.freeze({ kind: 'strict-source-endpoints-current-frustum-r521-v1',
     sourceSnapshotKind: source.kind, sourcePositions: source.positions, endpointInfluenceVisits: source.endpointInfluenceVisits,
@@ -347,7 +416,7 @@ export function fitWholeArmDisplay({ rig, boxes, request, viewport, armOptions, 
   // R396: a prior JS-render-committed offset is only a floor/candidate, never an assumed fit for this request.
   const floorM = finite(committedBackM, 'committed display back distance');
   if (floorM < 0 || floorM > maxBackM) fail('committed_display_floor_out_of_bound', { floorM, maxBackM });
-  let backM = floorM, lowerM = floorM, upperM = null, best = null, interiorScan = false, interiorIndex = 0;
+  let backM = floorM, lowerM = floorM, upperM = null, best = null, interiorScan = false, interiorIndex = 0, halvings = 0;
   const attempts = [];
   for (let trial = 0; trial < WHOLE_ARM_DISPLAY_BOUNDS.trials; trial++) {
     const mapping = actualCamera ? depthMapping(request, viewport, attachmentFrame, backM, actualCamera) : null;
@@ -385,9 +454,10 @@ export function fitWholeArmDisplay({ rig, boxes, request, viewport, armOptions, 
     // At most eight existing fitHand calls, within the original source-arm-length bound.
     // No monotonicity/minimum-camera claim: only the stored tested witness may be returned.
     if (!(upperM > lowerM)) break;
+    if (halvings >= WHOLE_ARM_REFINE_HALVINGS) break; // R558: keep the tested witness found so far (see the constant)
     const next = lowerM + (upperM - lowerM) / 2;
     if (!(next > lowerM && next < upperM)) break;
-    backM = next;
+    backM = next; halvings++;
   }
   if (best === null) fail('display_iteration_bound', { attempts, maxBackM });
   const selectedBackM = best.backM, check = best.check;
@@ -409,6 +479,7 @@ export function fitWholeArmDisplay({ rig, boxes, request, viewport, armOptions, 
       fitPointsCameraM: Object.fromEntries(['shoulderCam', 'elbowCam', 'wristCam', 'handCentreCam', 'targetCam'].map(k => [k, best.fit.solution[k] ? Array.from(best.fit.solution[k]) : null])) }),
     attempts: Object.freeze(attempts), planningCheck: check, maxBackM, committedFloorM: floorM,
     selectionPolicy: 'Revalidate committed floor first, then retain an actually tested feasible witness at or above that floor; no automatic inward minimization',
+    refineHalvings: WHOLE_ARM_REFINE_HALVINGS,
 
     scope: 'Engineering display viewpoint; tested feasible witness only, not minimum distance or global feasibility. Final commanded pose/actual view must be rechecked; all native/normalmechanics/reference/production gates remain pending.' });
   planSupports.set(plan, support); planFits.set(plan, best.fit);

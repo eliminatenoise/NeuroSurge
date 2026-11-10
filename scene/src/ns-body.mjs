@@ -906,7 +906,10 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   const hipAxis = P('l_hip') && P('r_hip') ? sub(P('l_hip'), P('r_hip')) : LEFTX;
   for (const s of ['r', 'l']) {
     const kneeP = P(`${s}_knee`) || segC(`${s}_shank`);
-    setAxes(`${s}_hip`, { flex: orientAxis(hipAxis, dirTo(`${s}_hip`, kneeP, DOWN), ANT) });
+    // R558 (genuine note R27): `rot` is the thigh's own long axis, from the hip centre to the knee centre (pointing
+    // down the limb). Turning about it is hip internal / external rotation, a different joint and axis from the
+    // forearm's radius-on-ulna turn; the shank and foot follow because they hang from the thigh.
+    setAxes(`${s}_hip`, { flex: orientAxis(hipAxis, dirTo(`${s}_hip`, kneeP, DOWN), ANT), rot: dirTo(`${s}_hip`, kneeP, DOWN) });
     const ankleP = P(`${s}_ankle`) || segC(`${s}_foot`);
     setAxes(`${s}_knee`, { flex: orientAxis(J[`${s}_knee`] && J[`${s}_knee`].axis, dirTo(`${s}_knee`, ankleP, DOWN), POST) });
     if (J[`${s}_patellofemoral`]) J[`${s}_patellofemoral`].axes = J[`${s}_knee`] && J[`${s}_knee`].axes ? { flex: J[`${s}_knee`].axes.flex } : { flex: [1, 0, 0] };
@@ -1108,7 +1111,19 @@ function checkRig(rig) {
 }
 
 /** Per-joint local rotations (rest frame, about each pivot) for the clamped targets. */
-function localMatrices(rig, A) {
+/** R558 (genuine note R27): the optional coordinated limb turn that rides on the palm turn: { hipRotDegR, hipRotDegL }
+ * in degrees about each thigh's long axis (positive = the toes turn toward the subject's right: external rotation of
+ * the right hip, internal rotation of the left). Kept inside LIMB_TURN_LIMIT_DEG, which lies within commonly quoted
+ * active hip rotation (about 30 to 45 degrees each way); not measured on this body. null = no turn. */
+export const LIMB_TURN_LIMIT_DEG = 40;
+function checkLimbTurn(t) {
+  if (t === undefined || t === null) return null;
+  if (typeof t !== 'object') throw new Error('ns:body_pose: options.limbTurn must be { hipRotDegR, hipRotDegL } or null');
+  const one = v => (v === undefined || v === null ? 0 : (() => { if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error('ns:body_pose: limbTurn angles must be finite degrees'); return clamp(v, -LIMB_TURN_LIMIT_DEG, LIMB_TURN_LIMIT_DEG); })());
+  const R = one(t.hipRotDegR), L = one(t.hipRotDegL);
+  return R === 0 && L === 0 ? null : { R, L };
+}
+function localMatrices(rig, A, limbTurn = null) {
   const J = rig.pivots, out = {};
   const rot = (jid, axis, deg) => (J[jid] && J[jid].axes[axis] && deg ? m4RotAbout(J[jid].axes[axis], deg, J[jid].point) : m4I());
   const sh = BODY_JOINT_SHARES;
@@ -1151,7 +1166,8 @@ function localMatrices(rig, A) {
   out.l_upperarm = m4I();
   for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
     const kneeFlex = -A[`knee_ext_${S}`];
-    out[`${s}_thigh`] = rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
+    // R558: hip rotation about the thigh's long axis first (in the rest frame), then hip flexion.
+    out[`${s}_thigh`] = limbTurn && limbTurn[S] ? m4Mul(rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]), rot(`${s}_hip`, 'rot', limbTurn[S])) : rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
     out[`${s}_patella`] = rot(`${s}_patellofemoral`, 'flex', sh.patellaPerKneeFlex * kneeFlex);
     out[`${s}_shank`] = rot(`${s}_knee`, 'flex', kneeFlex);
     out[`${s}_foot`] = rot(`${s}_ankle`, 'dorsi', A[`ankle_dorsi_${S}`]);
@@ -1331,7 +1347,7 @@ function applyArmFollow(rig, local, af) {
 
 /** World (rest -> posed, Float64) matrix of every segment for clamped targets, anchor and external matrices. */
 function worldSegments(rig, applied, options) {
-  const local = localMatrices(rig, applied);
+  const local = localMatrices(rig, applied, checkLimbTurn(options.limbTurn));
   const af = checkArmFollow(options.armFollow);
   if (af) applyArmFollow(rig, local, af);
   const anchor = options.anchor === undefined ? 'pelvis' : options.anchor;

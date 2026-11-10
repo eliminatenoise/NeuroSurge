@@ -155,6 +155,17 @@ export const HAND_Y_NDC = 0.5;
  * elbow sits further forward and the distal upper arm is in view (measured on the real rig, 16:9: about 20 % of the
  * humerus vertices in view vs about 6 % at 0.30; the elbow stays bent about 37 deg). R3 "see the whole arm".
  */
+// R558 (genuine note R33: "greater ... range of motion from the keys ... the maximum reasonably possible"). Measured
+// in the browser (state.reach and the fit's own limits while each key was held to its stop, 1600 x 900):
+//  - W ends at the arm's own length: 0.99 of upper arm + forearm along the hand's sight line (depth 0.45 to 0.49 m);
+//  - S ends where the whole hand, fingers included, still fits in the view (about 0.26 m), before minDepth is reached;
+//  - A / D end at the left edge of the view and at the information panel (x from -0.64 to +0.29 of the half width).
+// Three looser settings were tried (minDepth 0.22 -> 0.17 m, marginNdc 0.04 -> 0.025, minFitSpanM 0.05 -> 0.03): the
+// S stop moved 3 mm, the A / D travel grew by under 1 % and the start pose lost its travel to the right, so they were
+// NOT kept. Under the present rules (the hand stays at one height on screen, the whole arm stays in view) the keys
+// already drive the arm to its limits; what this build adds is that reaching those limits no longer stops the game
+// (DISPLAY_RECOVERY). A visibly larger sweep needs the hand to leave its fixed screen height, which is a different
+// control design and is listed as open work in the notes.
 export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.35 });
 export const WASD_WRIST = Object.freeze({ depthRefM: GAME_ARM_OPTIONS.depthStart, degPerM: -60, xRefNdc: ARM_DEFAULTS.xNdcStart, degPerNdc: 12, maxDeg: 15 });
 /**
@@ -256,9 +267,11 @@ export const ARROW_INPUT_TARGETS = Object.freeze(['brain', 'mirror']);
  * completed tutorial action, an observed pixel or independent validation. */
 export const GUIDE_FEATURES = Object.freeze({ thirdPerson: true, glow: true, mirror: true });
 export const ORBIT_FALLBACK = Object.freeze({ stepDeg: 15, maxYawDeg: 60, maxPitchDeg: 30 });
-/** Face-view settings (R7 / body view): the ghosted facial musculoskeletal layer seen from the eyes at high pitch
- * (default), a labelled inset as the alternative, or off. ns-scene-three setFaceView(mode) renders them. */
-export const FACE_VIEW_MODES = Object.freeze(['ghost', 'inset', 'off']);
+/** R558 (genuine note R26, "no floating face at the top"): the separate own-face display (a ghosted layer seen when
+ * looking up, or an inset box) is retired. 'off' is the only value; the mirror body shows the face, and the view from
+ * behind shows your own head in place. RETIRED_FACE_VIEW_MODES are old saved values: they are read as 'off'. */
+export const FACE_VIEW_MODES = Object.freeze(['off']);
+export const RETIRED_FACE_VIEW_MODES = Object.freeze(['ghost', 'inset']);
 export const FACE_VIEW_LABELS = NT.FACE_VIEW_LABELS;
 /** Optional sibling modules (round-2 shared interfaces 1-3), loaded with loadOptionalModules(). */
 export const OPTIONAL_MODULES = Object.freeze({ colors: './ns-colors.mjs', bodyMap: './ns-bodymap.mjs', body: './ns-body.mjs' });
@@ -1168,6 +1181,46 @@ function frameFocus(strip, aspect, fovYDeg, frame) {
  * half at 720x1280, viewed run-R4-fix-6-shots). Display choice. Until the first W/A/S/D press the hand keeps the start
  * x of the current aspect. */
 export const PORTRAIT_REACH_START_X = -0.13;
+/** R558 (genuine note R27): how far above the middle of the view the motor band's box is centred when the brain is
+ * first framed (normalised device units: 1 = the top edge). 0.2 puts the leg areas, at the bottom of the band's U,
+ * at about the middle of a 16:9 view (they sat about a fifth of the half height below it). Display choice, viewed in
+ * the browser; the user gave no number. */
+export const BRAIN_RAISE_NDC = 0.2;
+/** R558 (genuine note R31): press on the brain or the mirror body and drag to turn it about its centre, "by how much we
+ * drag". degPerPx: degrees turned per CSS px dragged (300 px sweeps a quarter turn of the mirror body; the brain stops
+ * at its own orbit limits). The surface under the pointer follows the drag: drag right and the near side goes right.
+ * noteSeconds: how long the plain line about a tapped muscle stays in the status card. Display choices. */
+export const DRAG_TURN = Object.freeze({ degPerPx: 0.3 });
+/** R558 (genuine note R27: the double-tap palm turn "is only happening in the hand. I want it to happen in all the
+ * other limbs too ... the other hand and arm, and the other legs and feet, where you have the corresponding internal,
+ * external rotation"). The left forearm's eased turn (palm down 0 .. palm up 1) now also drives, by the same share:
+ *  - the RIGHT forearm's own radius-on-ulna turn toward palm up (the body rig's r_pronation, toward rSupinatedDeg);
+ *  - both hips' external rotation about each thigh's long axis (hipExternalDeg at palm up), so the lower legs and feet
+ *    swing with them. Forearm supination pairs with external (outward) rotation of the limb, pronation with the
+ *    neutral / inward position.
+ * These are separate joints with their own axes: the forearm turn is not a shoulder or hip rotation, and nothing is
+ * turned as one rigid block. The angles are display choices inside commonly quoted active ranges (hip external
+ * rotation about 40 to 45 degrees; the game uses far less, see below), not measured on this body, and no muscle force
+ * or recruitment is implied. The
+ * right shoulder has no rotation axis in this rig, so the right upper arm does not turn (stated in the notes). */
+// hipExternalDeg 10: seated with the knees bent, external hip rotation swings each foot toward the other; at 28 degrees
+// the two lower legs crossed and the rigid foot meshes ran through each other (viewed in the browser), so the turn
+// is 10 degrees: at 14 the feet still met; at 10 they move toward each other and stay apart.
+export const LIMB_TURN = Object.freeze({ rSupinatedDeg: 25, hipExternalDeg: 10 });
+export const MUSCLE_TAP = Object.freeze({ noteSeconds: 6 });
+/** R558: which orbit step a drag direction asks for, per item, so that the surface nearest the player follows the
+ * pointer (checked in the browser for both items; an orbit name says which way the VIEW goes round the item). */
+export const DRAG_TURN_DIRS = Object.freeze({
+  brain: Object.freeze({ right: 'left', left: 'right', down: 'forward', up: 'back' }),
+  mirror: Object.freeze({ right: 'left', left: 'right', down: 'forward', up: 'back' })
+});
+/** R558: for a tapped muscle that no map action lists as a mover, the motor-map region of its body part (by the body
+ * rig's segment). The area of that body part lights; no movement is made up for the muscle. */
+export const MUSCLE_TAP_SEGMENT_REGION = Object.freeze({
+  pelvis: 'trunk', lumbar: 'trunk', thorax: 'trunk', cervical: 'neck', skull: 'neck', mandible: 'jaw', hyoid: 'jaw',
+  girdle: 'shoulder', upperarm: 'shoulder', forearm: 'wrist', radius: 'forearm', hand: 'hand',
+  thigh: 'hip', patella: 'knee', shank: 'ankle', foot: 'toes', toes: 'toes'
+});
 /** R4-fix (review RP3): a held W/A/S/D whose hand has not moved by at least xNdc (A/D) or depthM (W/S) in the key's
  * direction within `seconds` shows the plain "cannot go further" note; the guide's move goal counts the same net
  * movement (a hand held at its limit can jitter by about 0.7 mm per frame, which is not a move). Display choices. */
@@ -1315,7 +1368,11 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (!state.viewport || state.viewport.aspect !== aspect || state.viewport.fovYDeg !== fov || !placement || (regionMode && (!brainFrame || !sameCentre || !samePx))) {
       placement = frameFocus(strip, aspect, fov, frame);
       if (regionMode) {
-        const fo = { aspect, fovYDeg: fov, centreNdc: centre };
+        // R558 (genuine note R27: "move the whole brain up a bit ... so that where the right leg and left leg are, are
+        // more centered"): the framing centres the motor band BRAIN_RAISE_NDC above the middle of the view. The whole
+        // brain is placed by this one framing (areas, labels, hit geometry and arrows are all derived from it), so it
+        // moves up rigidly; nothing moves inside the brain.
+        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, BRAIN_RAISE_NDC] };
         if (brainBounds) fo.brainBounds = brainBounds;
         if (px) {
           fo.viewportPx = px;
@@ -1370,7 +1427,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const commandEvents = displayViewport.commandEvents || [];
     if (!gatedStep || !Array.isArray(commandEvents)) fail('app_input', 'whole-arm activity preview needs gated activity and a copied command event array');
     for (const ev of commandEvents) {
-      if (!ev || (ev.type !== 'space' && ev.type !== 'click')) fail('app_event', 'control events are { type: "space", down } or { type: "click" }');
+      if (!ev || (ev.type !== 'space' && ev.type !== 'click' && ev.type !== 'muscle')) fail('app_event', 'control events are { type: "space", down }, { type: "click" } or { type: "muscle", regionId }');
       if (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0)) fail('app_event', 'event.at must be finite seconds >= 0 into the frame');
     }
     const knownSpaceEvents = copyJson(commandEvents.filter(ev => ev.type === 'space'));
@@ -1527,7 +1584,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (!(Number.isFinite(aspect) && aspect > 0)) fail('app_input', 'aspect must be a positive finite number');
     if (!Array.isArray(events)) fail('app_input', 'events must be an array');
     for (const ev of events) {
-      if (!ev || (ev.type !== 'space' && ev.type !== 'click')) fail('app_event', 'control events are { type: "space", down } or { type: "click" }');
+      if (!ev || (ev.type !== 'space' && ev.type !== 'click' && ev.type !== 'muscle')) fail('app_event', 'control events are { type: "space", down }, { type: "click" } or { type: "muscle", regionId }');
       if (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0)) fail('app_event', 'event.at must be finite seconds >= 0 into the frame');
     }
     if (!(Number.isFinite(gazeAt) && gazeAt >= 0)) fail('app_input', 'gazeAt must be finite seconds >= 0 into the frame');
@@ -1991,7 +2048,20 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return out;
   }
 
-  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
+  /** R558 (display recovery): the W/S/A/D reach intent moved `fraction` (0..1) of the way back to its start. No pose,
+   * clock, activity or brain change. ns-app uses it only after a frame could not be shown as requested, so the arm
+   * backs off a little instead of the game stopping. */
+  function retreatReach(state, fraction) {
+    if (!state || !state.reach) fail('app_state', 'state must come from initialState/stepFrame');
+    const f = clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1), s0 = reachStart(armOptions), r = state.reach;
+    // The previous fit's W / S and A / D guard ranges belong to the pose that could not be shown; they would clamp the
+    // retreated reach straight back to the edge it is leaving, so they are dropped (the next fit sets new ones).
+    return { ...state, reach: { ...r, xNdc: r.xNdc + (s0.xNdc - r.xNdc) * f, depth: r.depth + (s0.depth - r.depth) * f },
+      fit: state.fit ? { ...state.fit, limits: null } : state.fit,
+      reachRates: { depth: 0, x: 0 }, reachHold: null, reachBlockedS: 0 };
+  }
+
+  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
     bodyMap: map, regionMode, anatomy, armEnvelope });
 }
 
@@ -2305,6 +2375,51 @@ export function shellToastText(s, { dragLook = true } = {}) {
   return dragLook ? SHELL_TEXT.captureHint : SHELL_TEXT.lookOff;
 }
 
+/** R558 (genuine note R28): rows of the keyboard picture, top to bottom. A KeyboardEvent code ('KeyW', 'Space',
+ * 'Escape') is a key the game uses: it is drawn lit, with its name and a short word. A single lower-case letter is a
+ * neighbouring key drawn faint and blank, only so the lit keys sit where they do on a real keyboard (W above S, E right
+ * of W, I further along the top row). Every lit key is handled by ns-controls (CONTROL_CODES, VIEW_CODE, DETAIL_CODE,
+ * UI_CODES); no key is shown that the game does not use. */
+export const KEYBOARD_PICTURE_ROWS = Object.freeze([
+  Object.freeze({ row: 'esc', keys: Object.freeze(['Escape']) }),
+  Object.freeze({ row: 'q', keys: Object.freeze(['q', 'KeyW', 'KeyE', 'r', 't', 'y', 'u', 'KeyI', 'o']) }),
+  Object.freeze({ row: 'a', keys: Object.freeze(['KeyA', 'KeyS', 'KeyD', 'f', 'g', 'h', 'j', 'k']) }),
+  Object.freeze({ row: 'space', keys: Object.freeze(['Space']) })
+]);
+/** Build the keyboard picture into `parent` (DOM only: createElement and textContent, so the page's content security
+ * policy needs nothing new). The key drawing is hidden from screen readers; the two plain lines under it and the
+ * trackpad lines are ordinary text, and the Controls list below says the same. Returns the root element. */
+export function buildKeyboardPicture(doc, parent, text) {
+  const make = (tag, cls, into, words) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (words !== undefined) e.textContent = words; if (into) into.appendChild(e); return e; };
+  const root = make('section', 'ns-kbd', parent);
+  root.setAttribute('aria-label', text.label);
+  make('h3', 'ns-shell-section-title ns-kbd-title', root, text.title);
+  const board = make('div', 'ns-kbd-board', root);
+  board.setAttribute('aria-hidden', 'true');
+  for (const r of KEYBOARD_PICTURE_ROWS) {
+    const row = make('div', `ns-kbd-row ns-kbd-row-${r.row}`, board);
+    for (const code of r.keys) {
+      const used = code.length > 1;
+      const key = make('span', used ? `ns-kbd-key ns-kbd-on ns-kbd-key-${code.toLowerCase()}` : 'ns-kbd-key', row);
+      if (!used) continue;
+      make('b', 'ns-kbd-name', key, text.names[code] || code);
+      const words = code === 'Space' ? text.spaceWords : text.keys[code];
+      if (words) make('small', 'ns-kbd-word', key, words);
+    }
+  }
+  const pad = make('div', 'ns-kbd-pad', root);
+  make('div', 'ns-kbd-pad-title', pad, text.padTitle);
+  const drawing = make('div', 'ns-kbd-pad-drawing', pad);
+  drawing.setAttribute('aria-hidden', 'true');
+  make('span', 'ns-kbd-pad-finger', drawing);
+  const lines = make('ul', 'ns-kbd-pad-lines', pad);
+  for (const k of ['padMove', 'padClick', 'padDrag']) make('li', '', lines, text[k]);
+  const notes = make('div', 'ns-kbd-notes', root);
+  make('p', '', notes, text.lineMove);
+  make('p', '', notes, text.lineSpace);
+  return root;
+}
+
 /** Persisted player settings (localStorage key, limits, defaults). faceView: FACE_VIEW_MODES. */
 export const SETTINGS_KEY = 'neurosurge.settings.v1';
 export const SETTINGS_LIMITS = Object.freeze({ lookSensitivity: Object.freeze({ min: 0.25, max: 3, step: 0.05 }) });
@@ -2312,7 +2427,7 @@ export const SETTINGS_LIMITS = Object.freeze({ lookSensitivity: Object.freeze({ 
 export const QUALITY_SETTING_MODES = Object.freeze(['auto', 'high', 'low']);
 export const QUALITY_SETTING_LABELS = NT.QUALITY_LABELS;
 // R5-integrate-core (D15): bodyWorlds true = the outer muscles lifted a little (the default, the Esc-page setting).
-export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'ghost', quality: 'auto', bodyWorlds: true });
+export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'off', quality: 'auto', bodyWorlds: true });
 
 /** Clamp and normalise settings from any input (unknown fields dropped; invalid values take the defaults). */
 export function sanitizeSettings(raw) {
@@ -2321,7 +2436,7 @@ export function sanitizeSettings(raw) {
   const v = Number(src.lookSensitivity);
   let sens = Number.isFinite(v) ? clamp(v, L.min, L.max) : SETTINGS_DEFAULTS.lookSensitivity;
   sens = Math.round(Math.round(sens / L.step) * L.step * 100) / 100;
-  const faceView = FACE_VIEW_MODES.includes(src.faceView) ? src.faceView : SETTINGS_DEFAULTS.faceView;
+  const faceView = 'off'; // R558 (R26): an old saved 'ghost' or 'inset' can no longer turn the floating face on
   const quality = QUALITY_SETTING_MODES.includes(src.quality) ? src.quality : SETTINGS_DEFAULTS.quality;
   return { lookSensitivity: clamp(sens, L.min, L.max), invertY: src.invertY === true, faceView, quality, bodyWorlds: src.bodyWorlds !== false };
 }
@@ -2931,13 +3046,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   inv.type = 'checkbox';
   el('span', 'ns-shell-setting-label', invRow, text.invertY);
   const grpView = el('div', 'ns-shell-setgroup', form);
-  const faceRow = el('label', 'ns-shell-setting', grpView);
-  el('span', 'ns-shell-setting-label', faceRow, text.faceView);
-  const face = el('select', 'ns-shell-select', faceRow);
-  for (const m of FACE_VIEW_MODES) {
-    const o = el('option', '', face, FACE_VIEW_LABELS[m]);
-    o.value = m;
-  }
+  // R558 (R26): the "Face view" choice is gone with the floating own face it controlled.
   // R4-integrator (D8): Picture quality: Auto / High / Low (ns-scene-three setQuality). Meaning never changes with it.
   const qualityRow = el('label', 'ns-shell-setting', grpView);
   el('span', 'ns-shell-setting-label', qualityRow, typeof text.quality === 'string' ? text.quality : 'Picture quality');
@@ -2967,6 +3076,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   button('ns-shell-secondary ns-shell-guide-restart', guideRow, guideText.restart, 'guide-restart');
   el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
 
+  // R558 (genuine note R28): a picture of where the keys are, on the start page and the Esc page.
+  if (text.keyboard) buildKeyboardPicture(doc, card, text.keyboard);
   const grid = el('div', 'ns-shell-grid', card);
   const steps = el('section', 'ns-shell-section ns-shell-instructions', grid);
   el('h3', 'ns-shell-section-title', steps, text.instructionsTitle);
@@ -3055,7 +3166,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     sens.setAttribute('aria-valuetext', `${current.lookSensitivity.toFixed(2)} times`);
     sensOut.textContent = `${current.lookSensitivity.toFixed(2)}×`;
     inv.checked = current.invertY;
-    face.value = current.faceView;
     qualitySel.value = current.quality;
     bwSel.value = current.bodyWorlds === false ? 'off' : 'on';
   };
@@ -3099,11 +3209,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   });
   on(inv, 'change', () => {
     current = sanitizeSettings({ ...current, invertY: inv.checked === true });
-    showSettings();
-    call(onSettings, current, true);
-  });
-  on(face, 'change', () => {
-    current = sanitizeSettings({ ...current, faceView: face.value });
     showSettings();
     call(onSettings, current, true);
   });
@@ -3305,6 +3410,25 @@ export function start(params = {}) {
   } = params || {};
   const wholeArmOption = WholeArmDisplay.wholeArmDisplayOptions(wholeArmDisplay);
   let wholeArmLastRefusal = null, wholeArmLastCommitted = null, wholeArmAttempt = null, wholeArmAttemptSerial = 0;
+  // R558 (game-design decision under the R34 quality authority): a frame that the strict display checks refuse no longer
+  // stops the game. The refused frame is never drawn or committed and no check is relaxed; the same frame is tried
+  // again with the previous look, then without the W/A/S/D push, then with the arm pulled back toward its start. A
+  // frame with no accepted attempt is skipped (its key events are kept for the next frame). After homeAfterSkips
+  // skipped frames in a row the view is also brought back toward the start look. Only a long unbroken run of skipped
+  // frames resets the body once and, if that also fails, stops with the original error.
+  const DISPLAY_RECOVERY = Object.freeze({ homeAfterSkips: 10, resetAfterSkips: 45, stopAfterSkips: 150, lookBlockMs: 350, retreat: Object.freeze([0.35, 1]), carryEventLimit: 64 });
+  const displayRecovery = { refusedAttempts: 0, recoveredFrames: 0, skippedFrames: 0, skipStreak: 0, resets: 0, postStepRefusals: 0, reasons: {}, lastReason: null, lastRecoveredBy: null, lookLimited: false, reachLimited: false };
+  const refusalReasonOf = err => String((err && err.detail && err.detail.reason) || (err && err.message) || err).slice(0, 160);
+  const noteDisplayRefusal = err => {
+    const reason = refusalReasonOf(err);
+    displayRecovery.refusedAttempts++; displayRecovery.lastReason = reason;
+    if (!Object.prototype.hasOwnProperty.call(displayRecovery.reasons, reason)) {
+      if (Object.keys(displayRecovery.reasons).length >= 24) return;
+      displayRecovery.reasons[reason] = 0;
+      try { if (view.console && typeof view.console.warn === 'function') view.console.warn(`NeuroSurge: a frame could not be shown as asked (${reason}); the game keeps the last good view instead of stopping.`); } catch { /* console is optional */ }
+    }
+    displayRecovery.reasons[reason]++;
+  };
   const wholeArmFreshness = () => {
     const live = Boolean(wholeArmLastCommitted && wholeArmAttempt && wholeArmAttempt.status === 'committed' &&
       wholeArmLastCommitted.attemptSerial === wholeArmAttempt.serial && wholeArmLastCommitted.jsFrame === frames && !stopped && !failed && phase === 'running');
@@ -3350,6 +3474,12 @@ export function start(params = {}) {
 
   // Game shell and loop state. `tick` is installed by run() once the scene data exist.
   let settings = loadSettings(storage);
+  // R558 (R26): a setting saved by an older build may still say faceView 'ghost' or 'inset'. It was read as 'off' just
+  // above; the stored copy is rewritten once here, so no later build or tab finds the retired value again.
+  try {
+    const stored = storage && typeof storage.getItem === 'function' ? storage.getItem(SETTINGS_KEY) : null;
+    if (typeof stored === 'string' && stored !== '') { const raw = JSON.parse(stored); if (raw && typeof raw === 'object' && raw.faceView !== undefined && raw.faceView !== 'off') saveSettings(storage, settings); }
+  } catch { /* unreadable storage: the in-memory settings are already normalised */ }
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
   let guideFeatures = { thirdPerson: false, glow: false, mirror: false };
@@ -3359,6 +3489,8 @@ export function start(params = {}) {
   let shell = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
   let lastMs = null, frames = 0, renderRequested = false, appliedSize = null, seedNext = false;
+  const carryRawEvents = []; // R558: Space / click events of a skipped (refused) frame, delivered with the next frame
+  let lastGoodLook = null, lookBlock = null, reachBlock = null; // R558: the last look that was shown; short-lived learned look / reach limits
   const orbitQueue = [];
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
@@ -3520,7 +3652,7 @@ export function start(params = {}) {
   }
   /** Face-view setting -> ns-scene-three setFaceView (when it exists). */
   function applyFaceView() {
-    try { callScene('setFaceView', settings.faceView); } catch { /* a renderer refusal must not stop the game */ }
+    try { callScene('setFaceView', 'off'); } catch { /* a renderer refusal must not stop the game */ }
     renderRequested = true;
   }
 
@@ -3966,6 +4098,8 @@ export function start(params = {}) {
         ...base,
         keyDown: (s, code, t) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t) : s),
         click: (s, t) => (shellIsPlaying(shellState) ? base.click(s, t) : s),
+        // R558 (R31): a drag on the brain or the mirror body can only begin while playing.
+        dragStart: (s, target) => (shellIsPlaying(shellState) && typeof base.dragStart === 'function' ? base.dragStart(s, target) : s),
         // R4-arm: the More detail key (ns-controls DETAIL_CODE, I) only while playing.
         toggleDetail: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleDetail === 'function' ? base.toggleDetail(s, t) : s),
         // R5-integrate-core (D18): the view key (E) only while playing; the camera decides in the frame loop (ns-camera).
@@ -3981,7 +4115,17 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => !lockedNow() && usableArrowHitAt(x, y) !== null };
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => !lockedNow() && usableArrowHitAt(x, y) !== null,
+        // R558 (R31): what a new press would drag, at the pointer (free mouse) or at the crosshair (x, y null: captured).
+        // The same pick as the Space grasp: an arrow under the point is an arrow press, the brain in front of the mirror
+        // body takes the press, and while Space holds an item the press never starts a turn (carrying comes first).
+        dragTargetAt: (x, y) => {
+          if (!shellIsPlaying(shellState) || !appliedSize || !sceneFn('graspTargetAt')) return null;
+          if ((cs && cs.keys && cs.keys.Space) || (simState && simState.objectCarry && simState.objectCarry.held)) return null;
+          const px = x === null ? appliedSize.width / 2 : x, py = y === null ? appliedSize.height / 2 : y;
+          let pick = null; try { pick = callScene('graspTargetAt', px, py); } catch { pick = null; }
+          return pick && !pick.blocked && (pick.target === 'brain' || pick.target === 'mirror') ? pick.target : pick && pick.target === 'brain' ? 'brain' : null;
+        } };
       if (lookNative) { bindOptions.sensitivity = settings.lookSensitivity; bindOptions.invertY = settings.invertY; }
       unbind = bindDom(canvas, gated, () => cs, s => { cs = s; }, bindOptions);
       // A binding with a status() (drag-to-look fallback) keeps the drag hint in the toast.
@@ -4096,6 +4240,83 @@ export function start(params = {}) {
         }
       }
 
+      // ---- R558 (genuine note R31): a tap on a body muscle switches on its motor area ----------------------------------
+      // Which motor-map region action lists a muscle as a MOVER (the same lists that colour the muscles when the area
+      // is switched on, read through ns-body bodyMuscleDrives, so the tapped muscle is one of those that light up).
+      // A muscle on one side is routed to the brain half of the other side when both halves list it. A muscle no action
+      // moves is routed to its body part's area with no action: only the area lights. Left-arm muscles go by their
+      // movement-map key. This is the existing whole-area map read from the muscle's end, never a new brain spot.
+      let bodyRoutes = null, bodyRoutesKey = '';
+      const hemiFor = side => (side === 'right' || side === 1 ? 'lh_' : 'rh_');
+      const regionOf = id => (bodyMap && Array.isArray(bodyMap.regions) ? bodyMap.regions.find(r => r && r.id === id) || null : null);
+      function bodyMuscleRoutes() {
+        const key = `${faceLoaded}|${bodyRig ? bodyRig.muscles.length : 0}`;
+        if (bodyRoutes && bodyRoutesKey === key) return bodyRoutes;
+        const routes = new Map();
+        if (bodyRig && bodyMap && mods.body && typeof mods.body.bodyMuscleDrives === 'function') {
+          const sideOf = new Map(bodyRig.muscles.map(m => [m.id, m.side]));
+          for (const r of bodyMap.regions) for (const a of r.actions || []) {
+            if (r.isLeftArm) continue;
+            let drives = null; try { drives = mods.body.bodyMuscleDrives([{ actionId: a.id, level: 1 }], { rig: bodyRig }); } catch { drives = null; }
+            if (!drives) continue;
+            for (const [id, v] of Object.entries(drives)) {
+              if (!(v >= 0.99)) continue; // movers only: a steadying or opposing muscle would get the wrong movement
+              const fits = r.id.startsWith(hemiFor(sideOf.get(id))), prev = routes.get(id);
+              if (!prev || (fits && !prev.fits)) routes.set(id, { regionId: r.id, actionId: a.id, fits });
+            }
+          }
+        }
+        bodyRoutes = routes; bodyRoutesKey = key;
+        return routes;
+      }
+      function muscleRoute(pick) {
+        if (!pick || pick.kind !== 'muscle' || !bodyMap) return null;
+        if (pick.part === 'arm') {
+          // Left arm: the movement-map action that lists this muscle key as a primary mover; the forearm turners and the
+          // shoulder cap have no key and go by name.
+          let actionId = null;
+          if (pick.armKey && inputs.binding && inputs.binding.actions instanceof Map) {
+            for (const [id, a] of inputs.binding.actions) if (a && a.roles && Array.isArray(a.roles.primary_drive_increase) && a.roles.primary_drive_increase.includes(pick.armKey)) { actionId = id; break; }
+          }
+          const n = String(pick.name || '').toLowerCase();
+          if (!actionId) actionId = /pronator/.test(n) ? 'pronation' : /supinator/.test(n) ? 'supination' : /palmaris/.test(n) ? 'wrist_flexion' : null;
+          const r = actionId ? leftArmRegionFor(bodyMap, actionId) : null;
+          if (r) return { regionId: r.id, actionId, regionOnly: false };
+          const fallback = regionOf(/deltoid|supraspinatus|infraspinatus|teres|subscapularis|coracobrachialis/.test(n) ? 'rh_shoulder' : 'rh_elbow');
+          return fallback ? { regionId: fallback.id, actionId: null, regionOnly: true } : null;
+        }
+        const hit = bodyMuscleRoutes().get(pick.id);
+        if (hit) return { regionId: hit.regionId, actionId: hit.actionId, regionOnly: false };
+        const seg = bodyRig && bodyRig.meshSegment && bodyRig.meshSegment[pick.id] ? String(bodyRig.meshSegment[pick.id].segment || '') : '';
+        const base = seg.replace(/^[lr]_/, '').replace(/_(mc|pp|mp|dp)$/, '').replace(/^(thumb|index|middle|ring|little)$/, 'hand');
+        const part = pick.bodyPart === 'face' ? 'lower_face' : MUSCLE_TAP_SEGMENT_REGION[base] || (pick.bodyPart === 'legs' ? 'hip' : pick.bodyPart === 'neck' ? 'neck' : 'trunk');
+        const side = seg.startsWith('r_') ? 'right' : seg.startsWith('l_') ? 'left' : pick.side === 1 ? 'right' : pick.side === -1 ? 'left' : 'middle';
+        const r = regionOf(hemiFor(side) + part) || regionOf('rh_' + part) || regionOf('lh_' + part);
+        return r ? { regionId: r.id, actionId: null, regionOnly: true } : null;
+      }
+      let muscleTapNote = null; // { text, untilT } the plain line about the last tapped muscle (simulated seconds)
+      /** A click that lands on a body muscle: { event, text } (event null for a bone: only the line is shown) or null
+       * when the click is not on the body (the ordinary brain click then applies). */
+      function muscleTap() {
+        if (!sceneFn('muscleAt') || !appliedSize || !simState) return null;
+        const locked = lockedNow() || !cs.pointer;
+        const x = locked ? appliedSize.width / 2 : cs.pointer.x, y = locked ? appliedSize.height / 2 : cs.pointer.y;
+        if (usableArrowHitAt(x, y)) return null;
+        let pick = null; try { pick = callScene('muscleAt', x, y); } catch { pick = null; }
+        if (!pick) return null;
+        // Your own body is see-through for aiming at the brain (as before): a motor area under the crosshair wins.
+        const g = simState.gaze;
+        if (locked && pick.source === 'own' && g && g.target === 'region' && typeof g.regionId === 'string') return null;
+        const where = pick.source === 'mirror' ? NT.MUSCLE_TAP.onMirror : NT.MUSCLE_TAP.onYou;
+        if (pick.kind !== 'muscle') return { event: null, text: NT.muscleTapBoneLine(pick.name, where) };
+        const route = muscleRoute(pick);
+        if (!route) return null;
+        const r = regionOf(route.regionId), a = r && route.actionId ? (r.actions || []).find(q => q && (q.id === route.actionId || q.armActionId === route.actionId)) || null : null;
+        return { event: { type: 'muscle', regionId: route.regionId, actionId: route.regionOnly ? null : route.actionId, regionOnly: route.regionOnly === true },
+          text: NT.muscleTapLine({ muscle: pick.name, where, area: r ? r.label : route.regionId, hemisphere: r ? r.hemisphere : null, movement: a ? a.label : null }),
+          pick: { id: pick.id, name: pick.name, source: pick.source, kind: pick.kind }, route };
+      }
+
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
         // R4-integrator: the controls' UI queue (lock / Esc / More-detail-key events) is drained every frame. The shell
@@ -4132,13 +4353,15 @@ export function start(params = {}) {
         if (!live && frames > 0 && !rs.apply && !renderRequested) return false;
         renderRequested = false;
         const aspect = size.width / size.height;
-        let timing;
+        let timing, rawFrameEvents = [], lastMsBeforeFrame = lastMs;
         if (!live) viewRequests = 0; // E pressed while an overlay shows does nothing (bindDom refuses it there anyway)
         if (live) {
           // Actual elapsed wall time (monotonic performance clock; the rAF timestamp only as a fallback), or the QA
           // fixed clock in step(dtMs). A QA look injected before a fixed step is applied at the start of the step.
-          timing = frameTiming(lastMs, now, controlsApi.drainEvents(cs), cs.lookMs);
+          rawFrameEvents = [...carryRawEvents.splice(0), ...controlsApi.drainEvents(cs)];
+          timing = frameTiming(lastMs, now, rawFrameEvents, cs.lookMs);
           if (fixed === true && qaLookPending) timing = { ...timing, gazeAt: 0 };
+          lastMsBeforeFrame = lastMs;
           lastMs = Number.isFinite(now) ? now : null;
         } else {
           timing = { dt: 0, events: [], gazeAt: 0 };
@@ -4161,13 +4384,45 @@ export function start(params = {}) {
         }
         viewRequests = 0;
         if (live) cam = NC.stepCamera(cam, timing.dt, { reducedMotion: prefersReducedMotion() });
+        // R558 (R31): a click on a body muscle becomes that muscle's tap (its motor area is switched on) instead of a
+        // click on the brain; a click on a bone only says so. Other clicks are untouched.
+        let tapped = null;
+        if (live && timing.events.some(e => e && e.type === 'click')) {
+          tapped = muscleTap();
+          if (tapped) {
+            let used = false;
+            timing = { ...timing, events: timing.events.map(e => (!used && e && e.type === 'click' ? ((used = true), tapped.event ? { ...tapped.event, at: e.at } : null) : e)).filter(Boolean) };
+          }
+        }
+        // R558 (R31): movement of a press-and-drag on the brain or the mirror body since the last frame (CSS px).
+        let dragTurn = null;
+        if (live && typeof controlsApi.takeDrag === 'function') { const r = controlsApi.takeDrag(cs); cs = r.state; dragTurn = r.drag; }
+        // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
+        if (live && lookBlock) {
+          if (now >= lookBlock.untilMs) lookBlock = null;
+          else {
+            const by = lookBlock.yawSign !== 0 && lookBlock.yawSign * (cs.yaw - lookBlock.yaw) > 0, bp = lookBlock.pitchSign !== 0 && lookBlock.pitchSign * (cs.pitch - lookBlock.pitch) > 0;
+            if (by || bp) cs = controlsApi.setLook(cs, { yaw: by ? lookBlock.yaw : cs.yaw, pitch: bp ? lookBlock.pitch : cs.pitch });
+          }
+        }
+        const baseTiming = timing;
+        // R558: ONE attempt at this frame, from the camera choice to the simulation step. It commits nothing: the caller
+        // commits its result or restores the snapshot below. `override` (null = exactly as asked) holds the fallbacks:
+        // { look } a look to use instead, { zeroX / zeroZ } no A/D or W/S push, { retreat } reach moved back toward its start.
+        // (The body of this function is the original frame code, deliberately left at its original indentation.)
+        const attemptFrame = override => {
+        let timing = baseTiming;
+        if (override && override.look) cs = controlsApi.setLook(cs, override.look);
+        if (override && override.retreat > 0 && sim && typeof sim.retreatReach === 'function') simState = sim.retreatReach(simState, override.retreat);
         const lookIn = live || !simState.gaze ? { yaw: cs.yaw, pitch: cs.pitch } : { yaw: simState.gaze.yaw, pitch: simState.gaze.pitch };
         let keepOut = null;
         if (!(cam.view === 'first' && cam.progress === 0) && sceneFn('bodyKeepOut')) { try { keepOut = callScene('bodyKeepOut'); } catch { keepOut = null; } }
         let wholeArmDisplayPlan = null, canonicalFirstFrame = null;
         // Snapshot axes and already-drained events for a virtual copied preview; the actual step keeps its original events.
         // Later arrow filtering removes clicks only. Space objects/offsets stay identical, checked by the plan stamp.
-        const wholeArmCommandAxes = wholeArmOption ? Object.freeze({ ...(live ? controlsApi.axes(cs) : { x: 0, z: 0 }) }) : null;
+        const pressedAxes = live ? controlsApi.axes(cs) : { x: 0, z: 0 };
+        const frameAxes = { x: override && override.zeroX ? 0 : pressedAxes.x, z: override && override.zeroZ ? 0 : pressedAxes.z };
+        const wholeArmCommandAxes = wholeArmOption ? Object.freeze({ ...frameAxes }) : null;
         const wholeArmCommandEvents = wholeArmOption ? copyJson(timing.events) : null;
         const committedBackM = wholeArmOption && wholeArmLastCommitted ? wholeArmLastCommitted.backM : 0;
         if (wholeArmOption) wholeArmAttempt = Object.freeze({ serial: ++wholeArmAttemptSerial, status: 'planning',
@@ -4227,6 +4482,18 @@ export function start(params = {}) {
         const mirrorGuideEvents = [];
         arrowEvents = [];
         if (live) orbitDirs = orbitQueue.splice(0);
+        if (live && dragTurn) {
+          // R558 (R31): turn the dragged item about its own centre by the px dragged. The near surface follows the
+          // pointer. The brain uses its ordinary orbit steps (and limits); the mirror body its own orbit.
+          const yawDeg = dragTurn.dx * DRAG_TURN.degPerPx, pitchDeg = dragTurn.dy * DRAG_TURN.degPerPx;
+          const steps = [];
+          if (yawDeg !== 0) steps.push({ dir: yawDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].right : DRAG_TURN_DIRS[dragTurn.target].left, stepDeg: Math.abs(yawDeg) });
+          if (pitchDeg !== 0) steps.push({ dir: pitchDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].down : DRAG_TURN_DIRS[dragTurn.target].up, stepDeg: Math.abs(pitchDeg) });
+          for (const q of steps) {
+            if (dragTurn.target === 'brain') orbitDirs.push(q);
+            else if (dragTurn.target === 'mirror' && applyMirrorRequest(q)) mirrorGuideEvents.push({ type: 'mirrorOrbit', dir: q.dir, hold: false, t: simState.t });
+          }
+        }
         {
           const W = size.width, H = size.height;
           // QA (no pointer lock in headless runs): the last input wins: the free pointer while it moved after the last look
@@ -4264,7 +4531,7 @@ export function start(params = {}) {
         }
         const objectPick = live && sceneFn('graspTargetAt') ? callScene('graspTargetAt', size.width / 2, size.height / 2) : { target: null, blocked: live ? 'unsupported-normal-scene-pick' : 'paused' };
         const stepInputs = {
-          objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : live ? controlsApi.axes(cs) : { x: 0, z: 0 }, events: timing.events, aspect,
+          objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true, silentGaze: seedNext === true || camPose.silentGaze === true,
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
           ...(wholeArmOption ? { wholeArmDisplayPlan, wholeArmActiveCamera: camPose } : {}),
@@ -4272,6 +4539,96 @@ export function start(params = {}) {
         };
         const prevSim = simState;
         const step = wholeArmOption ? captureWholeArm(() => sim.stepFrame(simState, stepInputs, timing.dt)) : sim.stepFrame(simState, stepInputs, timing.dt);
+        return { timing, look, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step };
+        };
+        // R558 recovery driver. Everything an attempt may touch before the step is restored from this snapshot.
+        const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice() };
+        const restoreAttempt = () => {
+          cs = snap.cs; cam = snap.cam; simState = snap.simState; arrowInput = snap.arrowInput; seedNext = snap.seedNext; camPose = snap.camPose;
+          orbitQueue.length = 0; orbitQueue.push(...snap.orbitQueue);
+          if (arrowHoverKey !== snap.arrowHoverKey) { arrowHoverKey = null; } // re-sent by the next attempt
+          if (mirrorView !== snap.mirrorView) { mirrorView = snap.mirrorView; applyMirrorView(); }
+          // The refused attempt drew nothing: its locked pre-pick projection is discarded, never rendered or reused.
+          if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
+        };
+        // A learned reach limit: for a moment the same blocked key direction is not pushed again (no refused attempt).
+        const pushed = live ? controlsApi.axes(snap.cs) : { x: 0, z: 0 };
+        if (reachBlock && (now >= reachBlock.untilMs || ((reachBlock.x === 0 || reachBlock.x !== pushed.x) && (reachBlock.z === 0 || reachBlock.z !== pushed.z)))) reachBlock = null;
+        const heldReach = reachBlock ? { zeroX: reachBlock.x !== 0 && reachBlock.x === pushed.x, zeroZ: reachBlock.z !== 0 && reachBlock.z === pushed.z } : null;
+        const firstOverride = heldReach && (heldReach.zeroX || heldReach.zeroZ) ? { ...heldReach, by: 'reach held at its limit' } : null;
+        let attempted = null, ladder = null, firstRefusal = null, usedOverride = null;
+        for (let attemptIndex = 0; attempted === null; attemptIndex++) {
+          const override = attemptIndex === 0 ? firstOverride : ladder[attemptIndex - 1];
+          try { attempted = attemptFrame(override); usedOverride = override; }
+          catch (err) {
+            // Only while the game is live and has already shown a frame: start-up and frozen-frame errors stay fatal.
+            if (!live || frames === 0 || !lastGoodLook) throw err;
+            if (firstRefusal === null) firstRefusal = err;
+            noteDisplayRefusal(err);
+            restoreAttempt();
+            if (ladder === null) {
+              const asked = { yaw: snap.cs.yaw, pitch: snap.cs.pitch }, good = lastGoodLook;
+              const yawMoved = asked.yaw !== good.yaw, pitchMoved = asked.pitch !== good.pitch;
+              const zx0 = Boolean(firstOverride && firstOverride.zeroX), zz0 = Boolean(firstOverride && firstOverride.zeroZ);
+              const px = pushed.x !== 0 && !zx0, pz = pushed.z !== 0 && !zz0;
+              ladder = [];
+              // 1. The reach push was too much: drop one key direction, then both, keeping the look that was asked.
+              if (px && pz) { ladder.push({ zeroX: zx0, zeroZ: true, by: 'held the forward/back reach' }); ladder.push({ zeroX: true, zeroZ: zz0, by: 'held the left/right reach' }); }
+              if (px || pz) ladder.push({ zeroX: true, zeroZ: true, by: 'held the reach' });
+              // 2. The look went too far: keep the turn and hold the up/down look, then hold the whole look.
+              if (yawMoved && pitchMoved) ladder.push({ look: { yaw: asked.yaw, pitch: good.pitch }, zeroX: zx0, zeroZ: zz0, by: 'kept the turn, held the up/down look' });
+              if (yawMoved || pitchMoved) ladder.push({ look: good, zeroX: zx0, zeroZ: zz0, by: 'held the look' });
+              // 3. Both, then the arm backs off toward its start.
+              if ((px || pz) && (yawMoved || pitchMoved)) ladder.push({ look: good, zeroX: true, zeroZ: true, by: 'held the look and the reach' });
+              for (const f of DISPLAY_RECOVERY.retreat) ladder.push({ look: good, zeroX: true, zeroZ: true, retreat: f, by: f < 1 ? 'pulled the arm back a little' : 'put the reach back to its start' });
+              // 4. Only after a short run of skipped frames (a visible pause): bring the look part of the way, then all
+              // the way, back to the start look with the reach at its start. A turned view is better than a frozen one.
+              if (displayRecovery.skipStreak >= DISPLAY_RECOVERY.homeAfterSkips) {
+                const home = referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 };
+                ladder.push({ look: { yaw: (good.yaw + home.yaw) / 2, pitch: (good.pitch + home.pitch) / 2 }, zeroX: true, zeroZ: true, retreat: 1, by: 'turned the view part of the way back to the start' });
+                ladder.push({ look: { yaw: home.yaw, pitch: home.pitch }, zeroX: true, zeroZ: true, retreat: 1, by: 'turned the view back to the start' });
+              }
+            }
+            if (attemptIndex >= ladder.length) {
+              // No attempt was accepted: skip this frame. Nothing is drawn, no simulated time passes and its Space /
+              // click events wait for the next frame, so a release is never lost.
+              lastMs = lastMsBeforeFrame;
+              for (const ev of rawFrameEvents) if (carryRawEvents.length < DISPLAY_RECOVERY.carryEventLimit) carryRawEvents.push(ev);
+              displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
+              if (displayRecovery.skipStreak === DISPLAY_RECOVERY.resetAfterSkips) {
+                // One measured rescue: the same Reset body / Reset brain view the Esc page offers, and the start look.
+                displayRecovery.resets++;
+                releaseInputs();
+                simState = sim.resetBrainView(sim.resetBody(simState));
+                mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); arrowInput = initialArrowInput();
+                cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null);
+                cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
+                lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lookBlock = null; reachBlock = null; carryRawEvents.length = 0; seedNext = true;
+                current = { ...current, state: simState };
+                dispatch({ type: 'notice', text: SHELL_TEXT.displayRescue || SHELL_TEXT.bodyReset });
+              }
+              if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw firstRefusal;
+              renderRequested = true;
+              return false;
+            }
+          }
+        }
+        if (firstRefusal !== null) {
+          displayRecovery.recoveredFrames++; displayRecovery.lastRecoveredBy = usedOverride ? usedOverride.by : null;
+          // Learn the limit for a moment, so the next frames do not ask for the same refused look or push again.
+          if (usedOverride && usedOverride.look) {
+            const asked = { yaw: snap.cs.yaw, pitch: snap.cs.pitch };
+            lookBlock = { yawSign: Math.sign(asked.yaw - usedOverride.look.yaw), yaw: usedOverride.look.yaw,
+              pitchSign: Math.sign(asked.pitch - usedOverride.look.pitch), pitch: usedOverride.look.pitch, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
+          }
+          if (usedOverride && (usedOverride.zeroX || usedOverride.zeroZ)) {
+            reachBlock = { x: usedOverride.zeroX ? pushed.x : 0, z: usedOverride.zeroZ ? pushed.z : 0, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
+          }
+        } else if (usedOverride === firstOverride && firstOverride && reachBlock) displayRecovery.lastRecoveredBy = firstOverride.by;
+        displayRecovery.lookLimited = Boolean(lookBlock); displayRecovery.reachLimited = Boolean(reachBlock);
+        if (tapped && tapped.text) muscleTapNote = { text: tapped.text, untilT: attempted.step.state.t + MUSCLE_TAP.noteSeconds };
+        const { look, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step } = attempted;
+        timing = attempted.timing;
         seedNext = false;
         simState = step.state;
         const out = step.out;
@@ -4330,9 +4687,21 @@ export function start(params = {}) {
             armLayerKey = q;
           }
         }
+        // R558: the step above is committed. A strict refusal from here on (retained hand projection, the locked
+        // camera range at render) leaves this frame undrawn and unpublished; the next frame plans afresh.
+        const postStepRefused = err => {
+          if (!live || frames === 0 || !lastGoodLook) throw err;
+          noteDisplayRefusal(err); displayRecovery.postStepRefusals++; displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
+          if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
+          if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw err;
+          renderRequested = true; current = { ...current, state: simState };
+          return false;
+        };
         scene.updatePose(out.appliedArmMatrices || out.fit.solution.matrices);
         if (wholeArmDisplayPlan && wholeArmDisplayPlan.actualCamera) {
-          const retainedProjection = captureWholeArm(() => WholeArmDisplay.retainedHandProjection(wholeArmDisplayPlan, callScene('appliedHandPose'), { aspect, fovYDeg: out.fovYDeg, viewportPx: { width: size.width, height: size.height } }, scene.objects && scene.objects.armGroup && scene.objects.armGroup.matrixWorld.elements));
+          let retainedProjection;
+          try { retainedProjection = captureWholeArm(() => WholeArmDisplay.retainedHandProjection(wholeArmDisplayPlan, callScene('appliedHandPose'), { aspect, fovYDeg: out.fovYDeg, viewportPx: { width: size.width, height: size.height } }, scene.objects && scene.objects.armGroup && scene.objects.armGroup.matrixWorld.elements)); }
+          catch (err) { return postStepRefused(err); }
           out.wholeArmFraming = Object.freeze({ ...out.wholeArmFraming, retainedHandProjection: retainedProjection });
         }
         scene.updateMuscles(out.muscle, out.rotationMuscles || null);
@@ -4358,6 +4727,14 @@ export function start(params = {}) {
           // eases over BODY_WORLDS_EASE_S, instant under reduced motion). R27 (R5-pronation 6.1.2): the coupled palm turn's
           // shoulder-blade slide and slight trunk turn (ns-arm bodyFollowFromCoupling; null palm down = the round-4 body).
           const amount = Math.round(layerAmount * 64) / 64;
+          // R558 (R27): the coordinated limb turn, from the left forearm's actual eased angle this frame (+80 palm down
+          // .. -80 palm up), so every limb turns together and the mirror, which copies these matrices, shows the same.
+          const turnShare = Number.isFinite(out.forearmPronationDeg) ? Math.round(clamp((80 - out.forearmPronationDeg) / 160, 0, 1) * 256) / 256 : 0;
+          let limbTurn = null;
+          if (turnShare > 0) {
+            if (Number.isFinite(targets.r_pronation) && !Object.isFrozen(targets)) targets.r_pronation = clamp(targets.r_pronation + (LIMB_TURN.rSupinatedDeg - targets.r_pronation) * turnShare, 0, 160);
+            limbTurn = { hipRotDegR: LIMB_TURN.hipExternalDeg * turnShare, hipRotDegL: -LIMB_TURN.hipExternalDeg * turnShare };
+          }
           let armFollow = null;
           try { armFollow = out.fit && out.fit.coupling && anatomy ? bodyFollowFromCoupling(out.fit.coupling, anatomy) : null; } catch { armFollow = null; }
           // R173: only the renderer's RETAINED upperarm pose may drive the body attachment.
@@ -4389,7 +4766,7 @@ export function start(params = {}) {
             }
           }
           const fittedBodyChanged = !BodyArmBridge.sameFittedBodyBridge(previousBodyArmBridge, bodyArmBridge);
-          const key = `${JSON.stringify(targets)}|${bodyLayers ? amount : '-'}|${JSON.stringify(armFollow)}`;
+          const key = `${JSON.stringify(targets)}|${bodyLayers ? amount : '-'}|${JSON.stringify(armFollow)}|${turnShare}`;
           // ns-body bodyMuscleDrives(active, { rig }): the rig carries the face packet's names (D20); the shoulder turners of the
           // palm turn are max-merged in (R27).
           let drives = typeof mods.body.bodyMuscleDrives === 'function' ? mods.body.bodyMuscleDrives(active, { rig: bodyRig }) : null;
@@ -4404,6 +4781,7 @@ export function start(params = {}) {
             bodyDriveKey = dkey;
             const po = bodyBaked ? { anchor: bodyAnchor, baked: bodyBaked, ...(bodyLayers ? { layers: bodyLayers, layerAmount: amount } : {}), ...(armFollow ? { armFollow } : {}) } : { anchor: bodyAnchor };
             if (bodyArmBridge) po.external = bodyArmBridge.external; // R173: raw pre-keep matrices; ns-body applies K once.
+            if (limbTurn) po.limbTurn = limbTurn; // R558 (R27)
             callScene('updateBody', mods.body.poseBody(bodyRig, targets, po), drives);
             bodyPosed = targets;
           } else if (dkey !== bodyDriveKey) {
@@ -4448,6 +4826,12 @@ export function start(params = {}) {
         if (glowWired && glowData && glowData.links.length) model.note = [NT.GLOW.legend, model.note].filter(Boolean).join(' \u00b7 ');
         // R5-integrate-core (D18): in the view from behind, one plain line says where you are and how to go back.
         if (!camPose.firstPerson && NT.HUD.thirdPerson) model.note = [NT.HUD.thirdPerson, model.note].filter(Boolean).join(' \u00b7 ');
+        // R558: say plainly why the view stopped turning (the look is held where the whole arm can still be shown).
+        if (displayRecovery.lookLimited && NT.HUD.lookLimit) model.note = [NT.HUD.lookLimit, model.note].filter(Boolean).join(' \u00b7 ');
+        // R558 (R31): what the last tapped muscle switched on, in plain words, for a few seconds.
+        if (muscleTapNote && simState.t < muscleTapNote.untilT) model.note = [muscleTapNote.text, model.note].filter(Boolean).join(' \u00b7 ');
+        else muscleTapNote = null;
+        if (displayRecovery.reachLimited && out.reachBlocked !== true && HUD_TEXT.reachBlocked) model.note = [HUD_TEXT.reachBlocked, model.note].filter(Boolean).join(' \u00b7 ');
         // R4-integrator (D7 "never covers the brain, arrows or panel"): the brain is world-anchored and slides under the
         // top-left status card when you look right or down. While its outline, as drawn now, overlaps the guide line's
         // place in the card, the line moves to a small chip in a clear spot of the usable view (ns-scene-three
@@ -4540,9 +4924,14 @@ export function start(params = {}) {
         // R4-scene (D8): QA step frames (fixed clock) are not frame-time samples for the quality controller.
         // R4-fix (code review F1): neither are frozen frames (intro / Esc page: a settings change, a resize or a reset
         // asks for one redraw); their 250-300 ms gaps had stepped a 60 fps GPU down to half size or the simplest meshes.
-        if (actualCameraFit) captureWholeArm(() => scene.render(live && fixed !== true ? undefined : { live: false }));
-        else scene.render(live && fixed !== true ? undefined : { live: false });
-        if (actualCameraFit) captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
+        if (actualCameraFit) {
+          try {
+            captureWholeArm(() => scene.render(live && fixed !== true ? undefined : { live: false }));
+            captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
+          } catch (err) { return postStepRefused(err); }
+        } else scene.render(live && fixed !== true ? undefined : { live: false });
+        displayRecovery.skipStreak = 0;
+        lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch };
         // Renderer readback is internal evidence, not a completed tutorial action or independently verified pixels.
         // In this frozen API ribbons/active levels have no per-end onScreen proof, so do not invent a glow-complete
         // event from supplied link data. The feature remains available; visibility/guide completion stays unverified.
@@ -4645,7 +5034,8 @@ export function start(params = {}) {
           current: freshness.liveCurrent && committed ? plainCopy(committed.report) : null,
           lastCommitted: committed ? { jsFrame: committed.jsFrame, attemptSerial: committed.attemptSerial, backM: committed.backM,
             report: freshness.liveCurrent ? null : plainCopy(committed.report), reportLocation: freshness.liveCurrent ? 'current' : 'lastCommitted.report' } : null,
-          attempt: plainCopy(wholeArmAttempt), lastRefusal: plainCopy(wholeArmLastRefusal) };
+          attempt: plainCopy(wholeArmAttempt), lastRefusal: plainCopy(wholeArmLastRefusal),
+          recovery: plainCopy({ ...displayRecovery, policy: DISPLAY_RECOVERY, scope: 'Counts of refused attempts and what the game did next. A refused frame is never drawn; no strict check is relaxed or skipped.' }) };
       })() } : {}),
       bodyAnchor,
       bodyBridge: { ...bodyBridgeState, current: Boolean(!stopped && !failed && bodyRig && bodyArmBridge) },

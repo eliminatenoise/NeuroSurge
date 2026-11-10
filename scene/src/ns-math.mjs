@@ -43,14 +43,23 @@ export function identity() {
   return m;
 }
 
-/** c = a * b (apply b first, then a). */
+/** c = a * b (apply b first, then a).
+ * R558 performance: the two loops are written out. Every element is the SAME four products added in the SAME order as
+ * before (a[row] b[4 col] + a[4 + row] b[4 col + 1] + a[8 + row] b[4 col + 2] + a[12 + row] b[4 col + 3]), so each
+ * result is bit-for-bit what the loop gave (checked against the loop on random matrices); only the index arithmetic
+ * and repeated array reads are gone. This function is the inner step of every arm pose solve. */
 export function multiply(a, b) {
   const c = new Float64Array(16);
-  for (let col = 0; col < 4; col++) {
-    for (let row = 0; row < 4; row++) {
-      c[col * 4 + row] = a[row] * b[col * 4] + a[4 + row] * b[col * 4 + 1] + a[8 + row] * b[col * 4 + 2] + a[12 + row] * b[col * 4 + 3];
-    }
-  }
+  const a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5], a6 = a[6], a7 = a[7];
+  const a8 = a[8], a9 = a[9], a10 = a[10], a11 = a[11], a12 = a[12], a13 = a[13], a14 = a[14], a15 = a[15];
+  let x = b[0], y = b[1], z = b[2], w = b[3];
+  c[0] = a0 * x + a4 * y + a8 * z + a12 * w; c[1] = a1 * x + a5 * y + a9 * z + a13 * w; c[2] = a2 * x + a6 * y + a10 * z + a14 * w; c[3] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[4]; y = b[5]; z = b[6]; w = b[7];
+  c[4] = a0 * x + a4 * y + a8 * z + a12 * w; c[5] = a1 * x + a5 * y + a9 * z + a13 * w; c[6] = a2 * x + a6 * y + a10 * z + a14 * w; c[7] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[8]; y = b[9]; z = b[10]; w = b[11];
+  c[8] = a0 * x + a4 * y + a8 * z + a12 * w; c[9] = a1 * x + a5 * y + a9 * z + a13 * w; c[10] = a2 * x + a6 * y + a10 * z + a14 * w; c[11] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[12]; y = b[13]; z = b[14]; w = b[15];
+  c[12] = a0 * x + a4 * y + a8 * z + a12 * w; c[13] = a1 * x + a5 * y + a9 * z + a13 * w; c[14] = a2 * x + a6 * y + a10 * z + a14 * w; c[15] = a3 * x + a7 * y + a11 * z + a15 * w;
   return c;
 }
 

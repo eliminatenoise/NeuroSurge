@@ -105,11 +105,22 @@ export const HONESTY = deepFreeze({
     more: 'The visible crown of the precentral gyrus is thought to be largely premotor (BA6); most primary motor cortex ' +
       '(BA4) lies in the anterior bank of the central sulcus, which is not shown separately.'
   },
+  // R558 (genuine note R26: "no floating face at the top"): the separate own-face display is gone; the face is on the
+  // mirror body, and on your own head when you look from behind.
   face: {
     id: 'face-layer',
-    plain: 'From inside a body you cannot see your own face. So it is shown out in front as a see-through, ghosted ' +
-      'layer, or in a small box (see Settings).',
-    more: 'In first person you cannot normally see your own face, so it is shown as a labelled ghosted layer or an inset.'
+    plain: 'From inside a body you cannot see your own face. Look at the mirror body to see the face and its muscles. ' +
+      'It copies yours.',
+    more: 'In first person your own head is not drawn, because the camera sits inside it. The mirror body shows the same ' +
+      'face, chewing and neck muscles, and the view from behind (E) shows your own head in place.'
+  },
+  // R558 (genuine note R31): what a tap on a muscle does and does not show.
+  muscleTap: {
+    id: 'muscle-tap',
+    plain: 'Clicking a muscle switches on the game’s whole motor area for that body part, the same one you can look ' +
+      'at. It does not show an exact spot of a real brain for that one muscle.',
+    more: 'The link from a muscle to a motor area is read from the same rough map the game uses in the other direction. ' +
+      'Real motor cortex has overlapping zones that vary between people; one muscle does not have one point.'
   },
   // R5-text (D17, user R21): the glow is a picture of the game's area-to-muscle link, never a nerve path.
   glow: {
@@ -168,8 +179,9 @@ const STEP_TABLE = [
   intro: [part('Move the mouse or trackpad to look around. Your body has no skin, just bones and muscles.')] },
   { head: 'Your left arm.', parts: [part('Your whole left arm is in view. The hand stays three quarters up the screen. ' +
     'When you look around, the arm comes along. It is your LEFT arm: the hand reaches past the middle of the screen, ' +
-    'but not to the right edge.')],
-  intro: [part('Your whole left arm is in view. The hand stays three quarters up the screen.')] },
+    'but not to the right edge. Tap Space twice to turn your palms up or down: both forearms turn, and your hips turn ' +
+    'your legs and feet a little with them.')],
+  intro: [part('Your whole left arm is in view. Tap Space twice to turn your palms; your legs turn a little too.')] },
   { head: 'The glass brain.', parts: [
     part('A giant glass brain floats in front of you, out of reach. Its motor areas are the parts that send movement ' +
       'signals to muscles. They glow from dark (resting) to yellow (strongest), and the muscles use the same colours.'),
@@ -177,32 +189,34 @@ const STEP_TABLE = [
     part('A soft glow joins each switched-on area to the muscles it moves (a picture, not a nerve).', 'glow')],
   intro: [part('Its motor areas glow from dark (resting) to yellow (strongest), like the muscles.'),
     part('A soft glow joins each switched-on area to its muscles (a picture, not a nerve).', 'glow')] },
-  { head: 'Two kinds of areas.', parts: [part('Light-blue areas, in the brain’s right half, are for your left arm. Grey ' +
+  { head: 'Two kinds of areas.', parts: [part('Light-blue areas, in the brain’s right half, are for your left arm. Pink ' +
     'areas are for your other body parts, plus a few in-between areas that move nothing.')],
-  intro: [part('Light-blue areas are for your left arm. Grey areas are for other body parts.')] },
+  intro: [part('Light-blue areas are for your left arm. Pink areas are for other body parts.')] },
   { head: 'Switch areas on.', parts: [part('Look at a motor area to switch it on for 1 second. Click to switch it on ' +
-    'again. Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
+    'again. Or click a muscle, on your own body or on the mirror body: the brain area that moves it switches on. ' +
+    'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body.')],
-  intro: [part('Look at a motor area to switch it on for 1 second. Click to switch it on again.')] },
+  intro: [part('Look at a motor area to switch it on for 1 second. Click it again, or click a muscle on the body.')] },
   { head: 'Move other body parts.', parts: [part('Your other body parts respond through the brain, not W/A/S/D. Moving the mirror image does not command their muscles. Hold ' +
     'Space while looking at the brain or visible mirror body. Look around or use W/S to move it farther/closer and A/D left/right. Let go to leave it there. Move the brain down ' +
     'to watch the legs move.')],
   intro: [part('Other body parts respond through the brain. Space on the brain or clear mirror body carries that item; look or use W/A/S/D.')] },
   // R5-text (D16, user R20 "I don't want them to be curved"): the round-4 "curved arrow" wording is gone in both forms.
   { head: 'Turn your view.', parts: [
-    part('Four arrows sit around the brain, like the points of a compass. Click one to turn your view around the brain ' +
-      'a little. Hold it to keep turning. The brain itself stays put.', 'compassArrows'),
+    part('Press on the brain and drag to turn it. Four see-through arrows also sit around it, like the points of a ' +
+      'compass: click one to turn your view around the brain a little, or hold it to keep turning. The arrows stay ' +
+      'where they are, and the brain stays in its place.', 'compassArrows'),
     part('Click an arrow next to the brain to turn your view around it a little. Hold the arrow to keep turning. The ' +
       'brain itself stays put.', '!compassArrows')],
-  intro: [part('Click or hold one of the four arrows by the brain to turn your view. The brain stays put.', 'compassArrows'),
+  intro: [part('Press on the brain and drag to turn it, or click or hold one of its four see-through arrows.', 'compassArrows'),
     part('Click or hold an arrow by the brain to turn your view. The brain stays put.', '!compassArrows')] },
   { head: 'See your body.', parts: [
-    part('Look far down to see your body and legs. Look far right and a little down for your right arm, and high up ' +
-      'for your face.'),
+    part('Look far down to see your body and legs. Look far right and a little down for your right arm. Your face ' +
+      'is on the mirror body: it copies yours.'),
     // R5-text (D15, user R19).
     part('The outer muscles are lifted out a little, like in a Body Worlds exhibit, so you can see the deeper ones.', 'bodyWorlds'),
     part('The “What is happening” panel explains each area you look at or click.')],
-  intro: [part('Look far down for your legs, far right for your right arm, high up for your face.'),
+  intro: [part('Look far down for your legs, far right for your right arm. Your face is on the mirror body.'),
     part('The outer muscles are lifted a little to show the deeper ones.', 'bodyWorlds')] },
   // R5-text (D18, user R22).
   { head: 'See your back.', need: 'thirdPerson', parts: [part('Press E to see your body from behind (third person). ' +
@@ -210,19 +224,24 @@ const STEP_TABLE = [
   intro: [part('Press E to see your back (third person). Press E again to go back.')] },
   // R5-text (D19, user R23: "to move the body around, you have to move the brain that's in front of it away").
   { head: 'The mirror body.', need: 'mirror', parts: [part('Behind the brain stands a mirror image of your body. It ' +
-    'copies everything your body does. Move the brain aside first. Hold Space on the visible mirror to carry it with your look and W/A/S/D, or use its arrows to turn it.')],
-  intro: [part('The closer mirror body copies you. Move the brain aside; Space carries the mirror, and its arrows turn it.')] }
+    'copies everything your body does. You can click its muscles through the clear glass of the brain. To carry or ' +
+    'turn it, move the brain aside first: then hold Space on the mirror body to carry it with your look and W/A/S/D, ' +
+    'and press on it and drag, or use its arrows, to turn it.')],
+  intro: [part('The mirror body copies you. Click its muscles. Move the brain aside to carry it (Space) or drag it round.')] }
 ];
 const CONTROL_TABLE = [
   ['Mouse / trackpad', 'look around (your left shoulder follows)'],
   ['A / D', 'move the left hand left/right; also move a held brain or mirror left/right'],
   ['W / S', 'W moves the hand forward and a held item farther away; S brings them back/closer. Combine with A/D for diagonals.'],
   ['Hold Space', 'make a fist with all five fingers; let go to open the hand'],
-  ['Double-tap Space', 'flip the forearm: palm down ↔ palm up (pronation ↔ supination)'],
+  ['Double-tap Space', 'turn your palms: down ↔ up. Both forearms turn (pronation ↔ supination), and both hips turn the legs and feet a little with them.'],
   ['Look / Click', 'switch on the motor area you aim at (the crosshair) for 1 second, with either mouse button'],
+  // R558 (genuine note R31).
+  ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it, for 1 second'],
+  ['Press and drag', 'on the brain, or on the mirror body once the brain is out of its way: turn it by as much as you drag'],
   ['Space on brain / mirror', 'hold the item: look to carry; W farther, S closer, A/D sideways. Let go to leave it there. Near/far limits keep it in range.'],
   // R5-text (D16): no "curved" (the user's R20).
-  ['Orbit arrows', 'click an arrow by the brain to turn your view around it. Hold it to keep turning.'],
+  ['Orbit arrows', 'click a see-through arrow by the brain to turn your view around it. Hold it to keep turning. The arrows stay in place.'],
   ['Mirror body arrows', 'turn the mirror body. Drag the brain out of the way first.', 'mirror'],
   ['E', 'see your body from behind (third person). Press E again to go back to your own eyes.', 'thirdPerson'],
   // R4-arm More detail key (R4-integrator: 'panel' instead of 'information panel', Flesch 66.1 -> 93.0).
@@ -236,8 +255,10 @@ const INTRO_CONTROL_WORDS = {
   'A / D': 'hand and held item left/right',
   'W / S': 'W farther, S closer; combine with A/D',
   'Hold Space': 'fist; let go to open',
-  'Double-tap Space': 'flip the palm (down ↔ up)',
+  'Double-tap Space': 'turn palms (down ↔ up); legs turn too',
   'Look / Click': 'switch on an area for 1 second',
+  'Click a muscle': 'switch on its brain area',
+  'Press and drag': 'turn the brain or mirror body',
   'Space on brain / mirror': 'hold item; look or W/A/S/D to move; let go to leave',
   'Orbit arrows': 'turn your view around the brain',
   'Mirror body arrows': 'turn the mirror body',
@@ -250,6 +271,7 @@ const LIMIT_TABLE = [
   [HONESTY.virtualInputs.plain],
   [HONESTY.emg.plain],
   [HONESTY.glow.plain, 'glow'],
+  [HONESTY.muscleTap.plain],
   [HONESTY.overlapVary.plain],
   [HONESTY.notExact.plain],
   [HONESTY.leftArmRightHalf.plain],
@@ -302,6 +324,8 @@ export const SHELL = deepFreeze({
   playUnlocked: 'Resume without locking the mouse',
   reload: 'Reload page',
   bodyReset: 'Body reset: your pose, the palm turn and the gold marks are cleared. The brain stays where you left it.',
+  // R558: shown once if the game had to put things back by itself because the view could not be drawn.
+  displayRescue: 'The game could not draw that view, so it put your body, the brain and the mirror body back where they started.',
   /** R3-polish: one plain line under the Esc page buttons saying what the two reset buttons do. */
   // R5-text (D19): Reset brain view also turns the mirror body back to face you (ns-mirror resetMirror). With the
   // separate button (feature mirrorResetButton) shellText uses RESET_HELP.separate instead.
@@ -329,7 +353,21 @@ export const SHELL = deepFreeze({
   settingsTitle: 'Settings',
   sensitivity: 'Look speed',
   invertY: 'Flip up and down when looking (invert Y)',
-  faceView: 'Face view',
+  // R558 (genuine note R28): the keyboard picture on the start page and the Esc page. Short words sit on the keys; the
+  // two lines under the picture say the same in full. Every key named here is a key the game really handles.
+  keyboard: {
+    title: 'Where the keys are',
+    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W. I is further right on the same row. The space bar is the long key at the bottom. Esc is at the top left.',
+    keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyI: 'detail' },
+    names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyI: 'I', Space: 'Space' },
+    spaceWords: 'hold: fist or carry · tap twice: turn palms',
+    lineMove: 'W, A, S, D move your left hand, and anything you are carrying. E shows your back. I opens More detail. Esc pauses and shows this page.',
+    lineSpace: 'Hold Space to make a fist. While you look at the brain or the mirror body, holding Space carries it. Tap Space twice to turn your palms over.',
+    padTitle: 'Trackpad or mouse',
+    padMove: 'Move: look around.',
+    padClick: 'Click: switch on the brain area or the muscle you are aiming at.',
+    padDrag: 'Press and drag on the brain or the mirror body: turn it.'
+  },
   // R4-integrator (D8): the Esc-page picture-quality setting (option names in QUALITY_LABELS).
   quality: 'Picture quality',
   // R4-polish: "softer" was not what a player sees on a software renderer (a half-size, blockier picture); say it plainly.
@@ -390,12 +428,9 @@ export const QUALITY_LABELS = deepFreeze({
   low: 'Low (for slow computers)'
 });
 
-/** Face-view setting names (ns-app FACE_VIEW_LABELS). */
-export const FACE_VIEW_LABELS = deepFreeze({
-  ghost: 'See-through face (look up)',
-  inset: 'Face in a small box',
-  off: 'Off'
-});
+/** R558 (genuine note R26): the face-view choice is retired. The floating own face (a see-through layer or a small
+ * box) is no longer offered; the mirror body shows the face. Only 'off' remains, so an old saved choice has no name. */
+export const FACE_VIEW_LABELS = deepFreeze({ off: 'Off' });
 
 /* ------------------------------------------------------------------ HUD */
 
@@ -442,6 +477,8 @@ export const HUD = deepFreeze({
   reachLimited: 'Reach limited so the whole hand stays on screen',
   // R4-fix (review RP3): shown in the status card while a held W/A/S/D cannot move the hand any further.
   reachBlocked: 'Your hand cannot go further that way, so it stays on screen',
+  // R558: the look stops where the whole arm could no longer stay in view (the game used to stop here).
+  lookLimit: 'You cannot look further that way: your arm has to stay in view',
   contextLost: SHELL.contextLost,
   placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
@@ -791,13 +828,27 @@ export const LEGEND = deepFreeze({
   licenceLinks: ['Licence: CC BY 4.0', 'BodyParts3D licence page (DBCLS)', 'BodyParts3D source']
 });
 
-/** Face layer captions (ns-scene-three FACE_LAYER ghostLabel / insetLabel). */
-export const FACE = deepFreeze({
-  ghostLabel: 'Your face (see-through view): skull, jawbone and neck muscles, seen from the front, not mirrored. The 3D ' +
-    'body has no face, chewing or tongue muscles. From inside, you could not see your own face.',
-  insetLabel: 'Your face (small view): skull, jawbone and neck muscles, seen from the front. The 3D body has no face, ' +
-    'chewing or tongue muscles.'
-});
+/** R558 (R26): the floating own-face display and its captions are removed. The keys stay (the renderer reads them when
+ * it loads) but are empty, and nothing shows them. */
+export const FACE = deepFreeze({ ghostLabel: '', insetLabel: '' });
+
+/* ------------------------------------------------------------------ R558 (genuine note R31): tapping a muscle */
+
+/** Where a tapped muscle was: on your own body or on the mirror body (which copies you; it does not swap sides). */
+export const MUSCLE_TAP = deepFreeze({ onYou: 'on your body', onMirror: 'on the mirror body' });
+const brainHalf = h => (h === 'left' ? 'the brain’s left half' : h === 'right' ? 'the brain’s right half' : 'the brain');
+/** The plain line shown after a muscle is tapped. The link is the game's whole-area map (the same one used when you look
+ * at the area), so the line says "area" and never names a spot for one muscle. movement: the area's action label when
+ * the map moves this muscle, else null (only the area lights). */
+export function muscleTapLine({ muscle, where, area, hemisphere = null, movement = null } = {}) {
+  const head = `You tapped ${muscle} ${where}.`;
+  const lit = `It switched on the ${area} area in ${brainHalf(hemisphere)}`;
+  return movement
+    ? `${head} ${lit}: ${movement}. That area drives a group of muscles, not this one alone (simulated).`
+    : `${head} ${lit}. The game has no movement for this muscle, so only its area lights up (simulated).`;
+}
+/** The line for a tapped bone: bones are not switched on. */
+export function muscleTapBoneLine(name, where) { return `That is a bone (${name}, ${where}). Tap a muscle to switch it on.`; }
 
 /* ------------------------------------------------------------------ round 5 (R5-text): E, arrows, mirror, glow, layers, face */
 
@@ -956,10 +1007,8 @@ export const BODY_WORLDS = deepFreeze({
  * muscles are still missing (the face packet has only face and chewing muscles). On the mirror body and in the view
  * from behind the head is drawn in place. */
 export const FACE_R5 = deepFreeze({
-  ghostLabel: 'Your face (see-through view): skull, jawbone, and face, chewing and neck muscles, seen from the front, ' +
-    'not mirrored. The 3D body has no tongue muscles. From inside, you could not see your own face.',
-  insetLabel: 'Your face (small view): skull, jawbone, and face, chewing and neck muscles, seen from the front. The 3D ' +
-    'body has no tongue muscles.',
+  // R558 (R26): no floating own-face display, so no caption for it (keys kept empty for the renderer).
+  ghostLabel: '', insetLabel: '',
   /** Shown until R5-face confirms the exact source, version, author and licence of the face meshes (faceAttributionLine). */
   // TODO(R5-face / integrator): replace with faceAttributionLine(<R5-face ATTRIBUTION-AND-LICENCES fields>).
   attributionPlaceholder: 'Face and chewing muscles: source and licence still being checked'
@@ -1083,7 +1132,7 @@ export const GUIDE = deepFreeze({
     fist: 'Look at empty space. Hold Space for a fist, then let go.',
     flipPalm: 'Tap Space twice, fast, to flip your palm over.',
     // R4-fix (reviews F3 / SL4-4): 14 grey areas move nothing; this goal completes only on one that moves a joint.
-    otherPart: 'Look at a grey area, like a leg or the right arm. Watch that part move.',
+    otherPart: 'Look at a pink area, like a leg or the right arm. Watch that part move.',
     // R5-text (D17): points out the brain-to-muscle glow; it needs a NEW switch-on while this line shows (ns-guide).
     glow: 'Look at a light-blue area. See the glow that joins it to the muscles it moves?',
     dragBrain: 'Hold Space on the brain and look down to drag it. See your legs?',
