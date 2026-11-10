@@ -8,6 +8,7 @@ import { fitHand, ARM_DEFAULTS, eyeClearance, ARM_PROJECTION_EPS_NDC } from './n
 import { SEGMENTS } from './ns-rig.mjs';
 
 const MODE = 'whole-posed-arm-r378', supports = new WeakSet(), planSupports = new WeakMap(), planFits = new WeakMap(), planRequests = new WeakMap();
+const sourceEndpoints = new WeakMap(); // R521 private immutable copies; no point getter/export
 export const WHOLE_ARM_DISPLAY_BOUNDS = Object.freeze({ trials: 8, bones: 30, muscles: 45, positions: 84347 });
 const fail = (reason, detail = null) => {
   const error = new Error(`ns:whole_arm_display: ${reason}`);
@@ -68,8 +69,8 @@ export function buildWholeArmSupport({ bones, muscles, liftedById = null } = {})
   const include = (segment, p, i) => {
     if (!SEGMENTS.includes(segment)) fail('unknown_skin_segment', segment);
     let g = groups.get(segment);
-    if (!g) { g = { segment, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }; groups.set(segment, g); }
-    for (let k = 0; k < 3; k++) { const x = finite(p[i + k], 'rest endpoint'); if (x < g.min[k]) g.min[k] = x; if (x > g.max[k]) g.max[k] = x; }
+    if (!g) { g = { segment, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], endpoints: [] }; groups.set(segment, g); }
+    for (let k = 0; k < 3; k++) { const x = finite(p[i + k], 'rest endpoint'); if (x < g.min[k]) g.min[k] = x; if (x > g.max[k]) g.max[k] = x; g.endpoints.push(x); }
     endpointInfluenceVisits++;
     if (endpointInfluenceVisits > 4 * B.positions) fail('endpoint_influence_work_bound');
   };
@@ -104,6 +105,8 @@ export function buildWholeArmSupport({ bones, muscles, liftedById = null } = {})
     coverage: Object.freeze({ bones: bones.length, muscles: muscles.length, positions, sourceIds: Object.freeze(Array.from(ids)), liftedMuscles,
       endpointInfluenceVisits, boundPoints: boxes.length * 8,
       scope: 'All75 loaded source-position inputs and original/full-lift linear endpoints under positive normalized LBS. Conservative envelopes; no runtime byte/GPU/occlusion/anatomy/normalmechanics proof.' }) });
+  sourceEndpoints.set(out, Object.freeze({ kind: 'private-source-endpoint-snapshot-r521-v1', positions, endpointInfluenceVisits,
+    groups: Object.freeze(Array.from(groups.values(), g => Object.freeze({ segment: g.segment, endpoints: Object.freeze(g.endpoints) }))) }));
   supports.add(out); return out;
 }
 
@@ -260,6 +263,82 @@ export function checkWholeArmSupport(support, matrices, viewport, armOptions = {
     nearM, farM, sides: Object.freeze(sides), ...(firstOutside === null ? {} : { firstOutside }), scope: support.coverage.scope });
 }
 
+// R521: retain the legacy broad result, then refine ONLY a failed broad certificate.
+// All checks below use one copied current matrix map. No pose/clock/fit/scene operation is performed.
+function checkWholeArmVisibility(support, matrices, viewport, armOptions) {
+  if (!supports.has(support) || !(matrices instanceof Map)) fail('qualified_support_and_pose_required');
+  const checkedMatrices = new Map(support.boxes.map(box => [box.segment, Object.freeze(mat(matrices.get(box.segment), box.segment))]));
+  const broadCheck = checkWholeArmSupport(support, checkedMatrices, viewport, armOptions);
+  if (broadCheck.fits) return broadCheck; // passing broad path retains its exact old kind/fields/values
+  const source = sourceEndpoints.get(support), B = WHOLE_ARM_DISPLAY_BOUNDS;
+  if (!source || source.kind !== 'private-source-endpoint-snapshot-r521-v1' || source.positions !== B.positions ||
+      source.positions !== support.coverage.positions || source.endpointInfluenceVisits !== support.coverage.endpointInfluenceVisits ||
+      source.endpointInfluenceVisits > 4 * B.positions || source.groups.length !== support.boxes.length || checkedMatrices.size !== source.groups.length) fail('complete_private_source_endpoint_snapshot_required');
+  const { nearM, farM, sides } = broadCheck, sy = 1 / Math.tan(viewport.fovYDeg * DEG / 2), sx = sy / viewport.aspect;
+  const planes = ['near', 'far', 'left', 'right', 'bottom', 'top'];
+  const gapsFor = p => {
+    p.forEach(x => finite(x, 'posed source endpoint'));
+    const d = -p[2];
+    return { d, gaps: { near: nearM - d, far: d - farM,
+      left: -sx * p[0] / sides.left - d, right: sx * p[0] / sides.right - d,
+      bottom: -sy * p[1] / sides.bottom - d, top: sy * p[1] / sides.top - d } };
+  };
+  // Recheck EVERY broad corner to identify ALL failed segments; firstOutside alone is insufficient.
+  const failed = [], replayFailures = Object.fromEntries(planes.map(k => [k, 0]));
+  let replayTested = 0, replayOutside = 0, replayBehind = 0, replayDeficitM = 0, replayFarOutside = 0, sourceVisits = 0;
+  for (let i = 0; i < support.boxes.length; i++) {
+    const box = support.boxes[i], group = source.groups[i], M = checkedMatrices.get(box.segment);
+    if (!group || group.segment !== box.segment || !Object.isFrozen(group.endpoints) || !group.endpoints.length || group.endpoints.length % 3) fail('source_endpoint_group_currentness_required');
+    sourceVisits += group.endpoints.length / 3;
+    let segmentFailed = false;
+    for (const q of box.corners) {
+      const { d, gaps } = gapsFor(point(M, q[0], q[1], q[2]));
+      let bad = false; replayTested++; if (!(d > 0)) replayBehind++;
+      for (const k of planes) if (gaps[k] > 0) { replayFailures[k]++; bad = true; if (k !== 'far') replayDeficitM = Math.max(replayDeficitM, gaps[k]); }
+      if (gaps.far > 0) replayFarOutside++;
+      if (bad || !(d > 0)) { segmentFailed = true; replayOutside++; }
+    }
+    if (segmentFailed) failed.push(i);
+  }
+  if (sourceVisits !== source.endpointInfluenceVisits || replayTested !== support.coverage.boundPoints || replayTested !== broadCheck.tested ||
+      replayOutside !== broadCheck.outside || replayBehind !== broadCheck.behind || replayFarOutside !== broadCheck.farOutside ||
+      !Object.is(replayDeficitM, broadCheck.additionalBackDeficitM) || planes.some(k => replayFailures[k] !== broadCheck.failures[k]) || !failed.length) fail('same_current_complete_broad_certificate_required');
+  const failures = Object.fromEntries(planes.map(k => [k, 0]));
+  let required = 0, tested = 0, outside = 0, behind = 0;
+  for (const i of failed) {
+    const group = source.groups[i], M = checkedMatrices.get(group.segment), P = group.endpoints;
+    required += P.length / 3;
+    for (let j = 0; j < P.length; j += 3) {
+      // Same operation order/predicates as point()+gapsFor(); avoid per-endpoint arrays/objects.
+      const px = P[j], py = P[j + 1], pz = P[j + 2];
+      const x = M[0] * px + M[4] * py + M[8] * pz + M[12];
+      const y = M[1] * px + M[5] * py + M[9] * pz + M[13];
+      const z = M[2] * px + M[6] * py + M[10] * pz + M[14];
+      finite(x, 'posed source endpoint'); finite(y, 'posed source endpoint'); finite(z, 'posed source endpoint');
+      const d = -z;
+      let bad = false; tested++; if (!(d > 0)) behind++;
+      if (nearM - d > 0) { failures.near++; bad = true; }
+      if (d - farM > 0) { failures.far++; bad = true; }
+      if (-sx * x / sides.left - d > 0) { failures.left++; bad = true; }
+      if (sx * x / sides.right - d > 0) { failures.right++; bad = true; }
+      if (-sy * y / sides.bottom - d > 0) { failures.bottom++; bad = true; }
+      if (sy * y / sides.top - d > 0) { failures.top++; bad = true; }
+      if (bad || !(d > 0)) outside++;
+    }
+  }
+  if (!(required > 0) || tested !== required || required > source.endpointInfluenceVisits) fail('complete_required_source_endpoint_census_required');
+  const sourceEndpointWitness = Object.freeze({ kind: 'strict-source-endpoints-current-frustum-r521-v1',
+    sourceSnapshotKind: source.kind, sourcePositions: source.positions, endpointInfluenceVisits: source.endpointInfluenceVisits,
+    totalSegments: source.groups.length, narrowSegments: Object.freeze(failed.map(i => source.groups[i].segment)),
+    broadCertifiedSegmentCount: source.groups.length - failed.length, broadCertifiedEndpointVisits: source.endpointInfluenceVisits - required,
+    requiredEndpointVisits: required, testedEndpointVisits: tested, outside, behind, failures: Object.freeze(failures),
+    coverage: 'ALL original bone and original/full-lift muscle endpoints under the builder effective carrier routing; every broad-failed segment checked, all other segments certified by their same-current passing broad corners.',
+    numericLimit: 'Exact existing zero-gap CPU predicates; convex affine/positive-LBS/lift argument is exact-arithmetic only. Float32 skin/lift, GPU, occlusion and native all-geometry acceptance remain separate.' });
+  return Object.freeze({ kind: 'whole-arm-source-endpoint-visibility-r521-v1', fits: outside === 0 && tested === required,
+    broadCheck, sourceEndpointWitness,
+    scope: 'Additional source-endpoint certificate after a retained FAILED conservative AABB check; not a renamed broad PASS or native/fullgame proof.' });
+}
+
 export function fitWholeArmDisplay({ rig, boxes, request, viewport, armOptions, attachment, attachmentFrame, support, committedBackM = 0, actualCamera = null, anatomicalMetadata = null, exactAnchor = false } = {}) {
   if (!supports.has(support) || !rig || rig.kind !== 'ns-rig') fail('whole_arm_inputs_unavailable');
   const G = mat(attachmentFrame && attachmentFrame.eyeToWorld, 'attachment frame');
@@ -275,7 +354,7 @@ export function fitWholeArmDisplay({ rig, boxes, request, viewport, armOptions, 
     const fitRequest = mapping ? { ...request, depth: mapping.offsetM + mapping.scale * request.depth } : request;
     if (!(fitRequest.depth > 0 && Number.isFinite(fitRequest.depth))) fail('actual_camera_depth_not_positive', { trial, backM, fitRequest });
     const options = actualCamera ? actualCameraFitOptions(armOptions, attachment, attachmentFrame, actualCamera) : displayFitOptions(armOptions, attachment, backM);
-    const fit = fitHand(rig, boxes, fitRequest, viewport, options), check = checkWholeArmSupport(support, fit.solution.matrices, viewport, options);
+    const fit = fitHand(rig, boxes, fitRequest, viewport, options), check = checkWholeArmVisibility(support, fit.solution.matrices, viewport, options);
     const handFits = fit.solution.reachable === true && fit.fallback !== 'unsatisfiable' && Number.isFinite(fit.yNdc) && fit.yNdc === request.yNdc && (!(actualCamera || exactAnchor) || fit.xNdc === request.xNdc);
     attempts.push(Object.freeze({ trial, backM, handFits, check, ...(mapping ? { canonicalDepthM: request.depth, requestedActualDepthM: fitRequest.depth, depthMapping: mapping, fitReachable: fit.solution.reachable, fitFallback: fit.fallback, fitXNdc: fit.xNdc, fittedActualDepthM: fit.depth, reach: fit.reach, envelopeReach: fit.envelopeReach, currentCoupling: fit.solution.coupling, fitPointsCameraM: Object.fromEntries(['shoulderCam', 'elbowCam', 'wristCam', 'handCentreCam', 'targetCam'].map(k => [k, Array.isArray(fit.solution[k]) ? fit.solution[k].slice() : null])) } : {}) }));
     if (handFits && check.fits) {
@@ -345,7 +424,7 @@ export function bindHandRayCamera(plan, camera, viewport, armOptions, framing = 
   const view = rendererView(camera), F = mat(plan.renderFrame.eyeToWorld, 'canonical F'), C = mat(camera.cameraToWorld, 'actual C'), V = view.cartesian;
   const actualFromCanonical = multiply(V, F), matrices = new Map();
   for (const [id, M] of fit.solution.matrices) matrices.set(id, multiply(actualFromCanonical, mat(M, id)));
-  const check = checkWholeArmSupport(support, matrices, { ...viewport, nearM: camera.nearM, farM: camera.farM }, armOptions);
+  const check = checkWholeArmVisibility(support, matrices, { ...viewport, nearM: camera.nearM, farM: camera.farM }, armOptions);
   const rawHandMatrix = multiply(multiply(view.raw, F), mat(fit.solution.matrices.get('hand'), 'canonical hand'));
   const projection = actualHandProjection(plan.sourceRig.handCentreMm, matrices, viewport, camera, plan.requestNdc, rawHandMatrix);
   const mapping = depthMapping(request, viewport, plan.attachmentFrame, plan.backM, camera);
@@ -367,7 +446,7 @@ export function bindHandRayCamera(plan, camera, viewport, armOptions, framing = 
 
 export function applyWholeArmDisplayFit({ plan, fit, support, viewport, armOptions, activeCamera } = {}) {
   if (!plan || plan.kind !== 'whole-arm-display-plan-r378' || !supports.has(support) || planSupports.get(plan) !== support) fail('current_display_plan_required');
-  const controlCheck = checkWholeArmSupport(support, fit.solution.matrices, viewport, armOptions);
+  const controlCheck = checkWholeArmVisibility(support, fit.solution.matrices, viewport, armOptions);
   if (!fit.solution.reachable || fit.fallback === 'unsatisfiable' || !controlCheck.fits) fail('final_pose_outside_preselected_display_frame', { controlCheck, backM: plan.backM });
   const parentMatrices = new Map();
   for (const [segment, M] of fit.solution.matrices) parentMatrices.set(segment, multiply(plan.parentFromRender, mat(M, segment)));
@@ -381,7 +460,7 @@ export function applyWholeArmDisplayFit({ plan, fit, support, viewport, armOptio
   const actualV = plan.actualCamera ? rendererView(plan.actualCamera).cartesian : rigidInverse(C);
   const parentToActualView = multiply(actualV, plan.attachmentFrame.eyeToWorld), actualMatrices = new Map();
   for (const [segment, M] of parentMatrices) actualMatrices.set(segment, multiply(parentToActualView, M));
-  const actualCheck = checkWholeArmSupport(support, actualMatrices, { ...viewport, nearM: activeCamera.nearM }, armOptions);
+  const actualCheck = checkWholeArmVisibility(support, actualMatrices, { ...viewport, nearM: activeCamera.nearM }, armOptions);
   if (!actualCheck.fits) fail('whole_arm_outside_actual_camera', { actualCheck, backM: plan.backM });
   const projectionTarget = plan.actualCamera ? plan.requestNdc : { xNdc: fit.xNdc, yNdc: plan.requestNdc.yNdc };
   const rawHandMatrix = plan.actualCamera ? multiply(multiply(rendererView(plan.actualCamera).raw, plan.attachmentFrame.eyeToWorld), mat(parentMatrices.get('hand'), 'submitted hand')) : null;

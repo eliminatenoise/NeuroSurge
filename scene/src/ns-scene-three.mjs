@@ -934,8 +934,8 @@ export function matricesEqual(a, b, tol = 0) {
   return true;
 }
 
-/** Pose changes below this (metres for translations; dimensionless for rotation entries) are not re-skinned:
- * about 2 micrometres, far below a pixel, so decaying drives stop costing CPU skinning once they are invisible. */
+/** Legacy cache-threshold export retained for source compatibility.
+ * updatePose uses the default exact numeric comparison; this constant does not relax pose application. */
 export const RESKIN_TOLERANCE = 2e-6;
 
 /** True when two { id: drive } maps hold the same keys and values (within `tol` per value; default exact). */
@@ -3791,7 +3791,7 @@ export function createScene({
   /** Apply pose matrices (Map(segment -> rest mm -> camera m)). Returns false and does nothing when unchanged. */
   function updatePose(matrices) {
     if (!(matrices instanceof Map)) fail('scene_input', 'matrices must be a Map(segment -> matrix)');
-    if (lastMatrices !== null && matricesEqual(lastMatrices, matrices, RESKIN_TOLERANCE)) return false;
+    if (lastMatrices !== null && matricesEqual(lastMatrices, matrices)) return false;
     armAppliedReady = false; // R173: a partial/throwing application is not a complete retained pose.
     for (const b of bones) {
       const m = matrices.get(b.segment);
@@ -3812,8 +3812,8 @@ export function createScene({
     return true;
   }
 
-  /** R173 public CPU scene-state readback. updatePose keeps its boolean API. On a tolerance skip, the bones still
-   * contain the previous APPLIED matrices; never return the new requested Map as if it had been drawn.
+  /** R173 public CPU scene-state readback. updatePose keeps its boolean API. On an unchanged-pose skip, the bones
+   * contain the previous numerically identical APPLIED matrices; never substitute a requested Map for retained state.
    * null before an applied root / after a replacement or failed application / after disposal. A layer-only pending
    * reskin keeps the actual retained bone pose available and is reported explicitly. No native GL readback. */
   function appliedArmPose() {
