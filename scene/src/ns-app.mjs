@@ -1295,6 +1295,65 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return ReferenceGraph.frameForAttachment(referenceGraph, armAttachment(a, { ...look, bodyYaw: bodyYawForLook(look.yaw, trunkFreeDeg || undefined) }), shift);
   }
   const initialBrainOrigin = referenceGraph ? referenceFrameForLook(referenceGraph.initialLook).position : null;
+  // R469: pre-pick range planning and the actual step share the current viewport's
+  // original brain framing, including first boot, resize/FOV and information-panel room.
+  // This is pure framing only: no activity step, arm fit, scene mutation or state commit.
+  function brainFramingForViewport(state, { aspect, brainCentreNdc = null, viewportPx = null }) {
+    const fov = fovFor(aspect);
+    const centre = Array.isArray(brainCentreNdc) && brainCentreNdc.length === 2 && brainCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)
+      ? brainCentreNdc : [0, 0];
+    // Round 3 (D1): the CSS viewport size gives frameBrain the exact usable area and the arrow room in pixels.
+    const px = viewportPx && viewportPx.width > 0 && viewportPx.height > 0 ? { width: viewportPx.width, height: viewportPx.height } : null;
+    const pxKey = px ? `${px.width}x${px.height}` : '';
+    // Framing, recomputed whenever the viewport changes.
+    let placement = state.placement;
+    let brainFrame = state.brainFrame || null;
+    let reframed = false;
+    const sameCentre = state.viewport && Array.isArray(state.viewport.brainCentreNdc)
+      && state.viewport.brainCentreNdc[0] === centre[0] && state.viewport.brainCentreNdc[1] === centre[1];
+    const samePx = Boolean(state.viewport) && (state.viewport.pxKey || '') === pxKey;
+    if (!state.viewport || state.viewport.aspect !== aspect || state.viewport.fovYDeg !== fov || !placement || (regionMode && (!brainFrame || !sameCentre || !samePx))) {
+      placement = frameFocus(strip, aspect, fov, frame);
+      if (regionMode) {
+        const fo = { aspect, fovYDeg: fov, centreNdc: centre };
+        if (brainBounds) fo.brainBounds = brainBounds;
+        if (px) {
+          fo.viewportPx = px;
+          const usable = brainUsableNdc(px);
+          if (usable) fo.usableNdc = usable;
+        }
+        brainFrame = NsBrain.frameBrain(segmentation, fo);
+      }
+      reframed = true;
+    }
+
+    return { centre, px, pxKey, placement, brainFrame, reframed };
+  }
+  function predictedRangeForCamera(state, cameraPose, preview, viewport, command, physicalFrame) {
+    if (!regionMode || !state.referenceBrain) return { brainTransform: null, mirrorWorldCentre: null };
+    const { brainFrame } = brainFramingForViewport(state, viewport);
+    const view = nextBrainView(state.view, { yaw: cameraPose.gazeLook.yaw, pitch: cameraPose.gazeLook.pitch, act: preview });
+    const raw = brainTransformFor(view, brainFrame);
+    let next = ReferenceGraph.advanceBrainState(copyJson(state.referenceBrain), view, cameraPose.position, raw.transform);
+    let brain = ReferenceGraph.translateBrainRecord(raw, next, initialBrainOrigin);
+    const prior = state.objectCarry;
+    let mirrorWorldCentre = prior && prior.mirror ? prior.mirror.centreWorldM.slice() : null;
+    if (prior && prior.held && (prior.target === 'brain' || prior.target === 'mirror')) {
+      // R480: only the already-held target is known before this camera's real pick.
+      // A null preview pick cannot acquire a new target. The real pick and final range guard remain authoritative.
+      const carried = ReferenceGraph.stepObjectCarry({ ...copyJson(prior), lastPick: null }, { pick: null, events: command.knownSpaceEvents,
+        gazeAt: command.gazeAt, axes: command.axes, wallDt: command.wallDt, poseDt: command.poseDt,
+        origin: cameraPose.position, look: cameraPose.gazeLook, brainView: view, brainTransform: raw.transform,
+        brainCentre: brain.transform.pivotWorld, brainTranslation: next.translation, brainFrame,
+        referenceOrigin: initialBrainOrigin, viewport: { aspect: viewport.aspect, fovYDeg: fovFor(viewport.aspect), nearM: CAMERA.near },
+        constrainBrainMovement: (movement, priorMovement) => NsBrain.constrainBrainTranslation({ frame: brainFrame, transform: raw.transform,
+          translation: next.translation.map((v, i) => v + priorMovement[i]), armOrigin: physicalFrame.position, movement }) });
+      next = ReferenceGraph.offsetBrainState(next, view, raw.transform, carried.brainMovementWorld);
+      brain = ReferenceGraph.translateBrainRecord(raw, next, initialBrainOrigin);
+      mirrorWorldCentre = carried.mirrorWorldCentre;
+    }
+    return { brainTransform: brain.transform, mirrorWorldCentre };
+  }
   const wholeArmOption = WholeArmDisplay.wholeArmDisplayOptions(wholeArmDisplay), wholeArmPlans = new WeakMap();
   if (wholeArmOption && (!referenceGraph || !anatomy || !wholeArmSupport)) fail('app_args', 'whole-arm engineering display requires the normal reference graph and complete75 source/lift support');
   function planWholeArmDisplay(state, look, displayViewport) {
@@ -1318,7 +1377,14 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const commandDt = displayViewport.commandDt;
     const wall = Number.isFinite(commandDt) && commandDt > 0 ? commandDt : 0, h = Math.min(wall, MAX_FRAME_DT);
     const rr = state.reachRates || { depth: 0, x: 0 };
-    const preview = activity.stepGated(copyJson(state.activity), [...knownSpaceEvents,
+    const actualCamera = displayViewport.actualCamera || null;
+    const oldGaze = state.gaze, previewLook = actualCamera ? actualCamera.gazeLook : displayViewport.predictionGazeLook || null;
+    const knownGaze = previewLook && oldGaze ? { type: 'gaze',
+      kind: oldGaze.target === 'region' ? (oldGaze.regionId !== null ? 'region' : 'strip') : oldGaze.target,
+      actionId: oldGaze.actionId, ...(oldGaze.regionId !== null ? { regionId: oldGaze.regionId } : {}),
+      ...(oldGaze.u !== null ? { u: oldGaze.u } : {}), yaw: previewLook.yaw, pitch: previewLook.pitch,
+      at: Math.min(displayViewport.gazeAt === undefined ? wall : displayViewport.gazeAt, wall), seed: true } : null;
+    const preview = activity.stepGated(copyJson(state.activity), [...(knownGaze ? [knownGaze] : []), ...knownSpaceEvents,
       { type: 'reach', axes: { ...knownAxes }, depthRate: rr.depth, xRate: rr.x }], wall).state;
     const previewDrives = activity.drives(preview);
     const rotationState = typeof preview.rotationState === 'string' ? preview.rotationState : stepRotationFallback(state.rotation, knownSpaceEvents, state.t).rotation;
@@ -1332,10 +1398,33 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const joints = wrist !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex) ? { ...pose0.joints, wrist_flex: pose0.joints.wrist_flex + wrist } : pose0.joints;
     const px = displayViewport.viewportPx, limits = px ? handViewLimitsNdc(px, infoPanelRect(px)) : null;
     const options = { ...armOptions, ...(limits ? { viewLimitsNdc: limits } : {}) };
-    const plan0 = WholeArmDisplay.fitWholeArmDisplay({ rig, boxes, request: { xNdc: reach.xNdc, yNdc: handYNdc, depth: reach.depth, joints, rotation },
-      viewport: { aspect, fovYDeg, farM: CAMERA.far }, armOptions: options, attachment, attachmentFrame, support: wholeArmSupport,
-      committedBackM: displayViewport.committedBackM === undefined ? 0 : displayViewport.committedBackM });
-    const commandPrediction = Object.freeze({ kind: 'known-reach-space-activity-r404', axes: Object.freeze({ ...knownAxes }), poseDt: h, wallDt: wall,
+    const planningContext = { kind: 'ns-actual-camera-arm-plan-inputs-r425-v1', scope: 'Current source producer inputs/known preview only; no reach/normalmechanics or working-E claim',
+      sourceRig: { shoulderBpMm: Array.from(rig.pivots.shoulder), elbowBpMm: Array.from(rig.pivots.elbow), wristBpMm: Array.from(rig.pivots.wrist),
+        handCentreMm: Array.from(rig.handCentre), upperLengthMm: rig.upperLength, foreLengthMm: rig.foreLength },
+      anatomy: { eyeBp: a.eyeBp, eyeSource: a.eyeSource, shoulderBp: a.shoulderBp, shoulderBodyM: a.shoulderBodyM },
+      attachment, physicalG: attachmentFrame, canonicalF: displayViewport.canonicalFirstFrame || null, actualCamera, actualProjection: null,
+      request: { xNdc: reach.xNdc, yNdc: handYNdc, depth: reach.depth, joints, rotation }, viewport: { aspect, fovYDeg, viewportPx: px },
+      committedBackM: displayViewport.committedBackM, knownSpaceEventCount: knownSpaceEvents.length, wallDt: wall, poseDt: h };
+    let plan0;
+    try {
+    let projectionPlan = null;
+    if (actualCamera) {
+      if (typeof displayViewport.cameraProjectionForBrain !== 'function') fail('app_input', 'actual-camera fit requires pre-pick projection planning');
+      const predictedRange = predictedRangeForCamera(state, actualCamera, preview, displayViewport,
+        { knownSpaceEvents, axes: knownAxes, poseDt: h, wallDt: wall, gazeAt: Math.min(displayViewport.gazeAt === undefined ? 0 : displayViewport.gazeAt, wall) }, attachmentFrame);
+      projectionPlan = displayViewport.cameraProjectionForBrain(predictedRange.brainTransform, attachmentFrame, predictedRange.mirrorWorldCentre);
+      planningContext.actualProjection = projectionPlan;
+    }
+    plan0 = WholeArmDisplay.fitWholeArmDisplay({ rig, boxes, request: { xNdc: reach.xNdc, yNdc: handYNdc, depth: reach.depth, joints, rotation },
+      viewport: { aspect, fovYDeg, farM: projectionPlan ? projectionPlan.farM : CAMERA.far }, armOptions: options, attachment, attachmentFrame, support: wholeArmSupport,
+      actualCamera: projectionPlan, anatomicalMetadata: copyJson({ eyeBp: a.eyeBp, eyeSource: a.eyeSource, shoulderBp: a.shoulderBp, shoulderBodyM: a.shoulderBodyM,
+        attachment: { shoulderCam: attachment.shoulderCam, pole: attachment.pole, bodyToCamera: attachment.bodyToCamera, girdleShiftM: attachment.girdleShiftM } }),
+      committedBackM: displayViewport.committedBackM === undefined ? 0 : displayViewport.committedBackM, exactAnchor: displayViewport.exactAnchor === true });
+    } catch (err) {
+      if (err && typeof err === 'object') err.detail = { ...(err.detail || { status: 'error', reason: errorText(err) }), actualCameraPlanning: copyJson(planningContext) };
+      throw err;
+    }
+    const commandPrediction = Object.freeze({ kind: 'known-reach-space-activity-r404', axes: Object.freeze({ ...knownAxes }), poseDt: h, wallDt: wall, gazeAt: Math.min(displayViewport.gazeAt === undefined ? 0 : displayViewport.gazeAt, wall),
       reachBefore: Object.freeze({ ...reachIn }), predictedReach: Object.freeze({ ...reach }),
       activity: Object.freeze({ kind: 'deep-copied-current-activity-known-space-only-r404', beforeT: state.activity.t, predictedT: preview.t,
         beforeSpaceHeld: state.activity.spaceHeld, predictedSpaceHeld: preview.spaceHeld,
@@ -1348,7 +1437,25 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         scope: 'One virtual copied step on the original wall dt and Space event offsets; existing pulse/release/rotation easing is advanced locally. No actual state/event queue/clock is advanced here. New camera-dependent gaze/click/orbit and signed elbow-depth refit remain unresolved and strictly checked after the actual step.' }),
       scope: 'Known reach plus current-activity/Space-only prediction, not an exact prediction of new gaze/click/orbit. Same selected camera and full final pose/actual-view checks remain mandatory; no all-controls or normalmechanics claim.' });
     wholeArmPlans.set(plan0, Object.freeze({ lookYaw: look.yaw, lookPitch: look.pitch, aspect, commandPrediction,
-      commandWallDt: wall, commandSpaceKey: JSON.stringify(knownSpaceEvents) })); return plan0;
+      commandWallDt: wall, commandSpaceKey: JSON.stringify(knownSpaceEvents), sourceState: state, preview, planningContext, options })); return plan0;
+  }
+
+  function bindHandRayCamera(state, plan, cameraPose, displayViewport) {
+    const stamp = wholeArmPlans.get(plan);
+    if (!stamp || stamp.sourceState !== state || stamp.aspect !== displayViewport.aspect || !cameraPose || !cameraPose.gazeLook) fail('app_state', 'missing current canonical preview for actual camera');
+    const predictedRange = predictedRangeForCamera(state, cameraPose, stamp.preview, displayViewport, { ...stamp.commandPrediction, knownSpaceEvents: stamp.commandPrediction.activity.knownSpaceEvents }, plan.attachmentFrame);
+    if (typeof displayViewport.cameraProjectionForBrain !== 'function') fail('app_input', 'actual camera requires original pre-pick full projection planning');
+    let actualCamera = null;
+    try {
+      actualCamera = displayViewport.cameraProjectionForBrain(predictedRange.brainTransform, plan.attachmentFrame, predictedRange.mirrorWorldCentre);
+      const next = WholeArmDisplay.bindHandRayCamera(plan, actualCamera,
+        { aspect: stamp.aspect, fovYDeg: fovFor(stamp.aspect), viewportPx: displayViewport.viewportPx }, stamp.options, cameraPose.handRayFraming || null);
+      wholeArmPlans.set(next, stamp); return next;
+    } catch (err) {
+      if (err && typeof err === 'object') err.detail = { ...(err.detail || { status: 'error', reason: errorText(err) }), actualCameraPlanning: copyJson({ ...stamp.planningContext,
+        canonicalF: plan.renderFrame, actualCamera: cameraPose, actualProjection: actualCamera, handRayFraming: cameraPose.handRayFraming || null }) };
+      throw err;
+    }
   }
 
   function initialState() {
@@ -1437,11 +1544,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const referenceFrame = referenceGraph ? ReferenceGraph.frameForAttachment(referenceGraph, att, eyeShift) : null;
     const displayedAttachment = referenceFrame ? ReferenceGraph.applyAttachment(att, referenceFrame) : att;
     if (referenceFrame && !camRay) { camRay = { origin: referenceFrame.position.slice(), dir: NC.gazeDirection(yaw, pitch) }; camKey = `|cam${camRay.origin.join(',')}`; }
-    const centre = Array.isArray(brainCentreNdc) && brainCentreNdc.length === 2 && brainCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)
-      ? brainCentreNdc : [0, 0];
-    // Round 3 (D1): the CSS viewport size gives frameBrain the exact usable area and the arrow room in pixels.
-    const px = viewportPx && viewportPx.width > 0 && viewportPx.height > 0 ? { width: viewportPx.width, height: viewportPx.height } : null;
-    const pxKey = px ? `${px.width}x${px.height}` : '';
+    const framing = brainFramingForViewport(state, { aspect, brainCentreNdc, viewportPx });
+    const { centre, px, pxKey } = framing;
     // R4-arm: the whole hand stays out from under the far-right information column (portrait: the bottom band).
     const handLimits = px ? handViewLimitsNdc(px, infoPanelRect(px)) : null;
     const armOpts0 = att ? { ...armOptions, attachment: att } : armOptions;
@@ -1452,29 +1556,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       displayStamp.commandWallDt !== wall || !axes || displayStamp.commandPrediction.axes.x !== axes.x || displayStamp.commandPrediction.axes.z !== axes.z ||
       displayStamp.commandSpaceKey !== JSON.stringify(copyJson(events.filter(ev => ev.type === 'space'))) ||
       !referenceFrame || displayPlan.attachmentFrame.eyeToWorld.some((v, i) => v !== referenceFrame.eyeToWorld[i]))) fail('app_state', 'missing or stale pre-pick whole-arm display plan');
-    const armOpts = displayPlan ? WholeArmDisplay.displayFitOptions(baseArmOpts, att, displayPlan.backM) : baseArmOpts;
+    const armOpts = displayPlan ? WholeArmDisplay.optionsForDisplayPlan(displayPlan, baseArmOpts, att) : baseArmOpts;
 
-    // Framing, recomputed whenever the viewport changes.
-    let placement = state.placement;
-    let brainFrame = state.brainFrame || null;
-    let reframed = false;
-    const sameCentre = state.viewport && Array.isArray(state.viewport.brainCentreNdc)
-      && state.viewport.brainCentreNdc[0] === centre[0] && state.viewport.brainCentreNdc[1] === centre[1];
-    const samePx = Boolean(state.viewport) && (state.viewport.pxKey || '') === pxKey;
-    if (!state.viewport || state.viewport.aspect !== aspect || state.viewport.fovYDeg !== fov || !placement || (regionMode && (!brainFrame || !sameCentre || !samePx))) {
-      placement = frameFocus(strip, aspect, fov, frame);
-      if (regionMode) {
-        const fo = { aspect, fovYDeg: fov, centreNdc: centre };
-        if (brainBounds) fo.brainBounds = brainBounds;
-        if (px) {
-          fo.viewportPx = px;
-          const usable = brainUsableNdc(px);
-          if (usable) fo.usableNdc = usable;
-        }
-        brainFrame = NsBrain.frameBrain(segmentation, fo);
-      }
-      reframed = true;
-    }
+    const { placement, brainFrame, reframed } = framing;
 
     let actIn = state.activity;
     // What the activity model owns (shared interface 4): orbit (orbitStep), the brain grab and its carry, the orbit
@@ -1608,7 +1692,10 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const wristDeg = wristReach ? wasdWristDeg(base, rotationReq) : 0;
     const pose = wristDeg !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex)
       ? { ...pose0, joints: { ...pose0.joints, wrist_flex: pose0.joints.wrist_flex + wristDeg } } : pose0;
-    const request = d => ({ xNdc: base.xNdc, yNdc: handYNdc, depth: d, joints: pose.joints, rotation: rotationReq });
+    const request = d => {
+      const q = { xNdc: base.xNdc, yNdc: handYNdc, depth: d, joints: pose.joints, rotation: rotationReq };
+      return displayPlan ? WholeArmDisplay.requestForDisplayPlan(displayPlan, q) : q;
+    };
     let fit = fitHand(rig, boxes, request(base.depth), viewport, armOpts);
     let elbow = null;
     if (pose.elbowDeltaDeg !== 0) {
@@ -1618,7 +1705,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const wanted = baseRad + pose.elbowDeltaDeg * DEG;
       const targetRad = clamp(wanted, 0, elbowMaxRad);
       const req = depthForElbow(rig, { xNdc: fit.xNdc, yNdc: handYNdc, elbowFlexRad: targetRad, joints: pose.joints, rotation: rotationReq, aspect, fovYDeg: fov }, armOpts);
-      fit = fitHand(rig, boxes, request(req.depth), viewport, armOpts);
+      fit = fitHand(rig, boxes, displayPlan && displayPlan.actualCamera ? { ...request(base.depth), depth: req.depth } : request(req.depth), viewport, armOpts);
       const actualRad = fit.solution.elbowFlexRad;
       elbow = {
         commandDeg: pose.elbowDeltaDeg,
@@ -1653,26 +1740,27 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       let applied;
       try {
         applied = WholeArmDisplay.applyWholeArmDisplayFit({ plan: displayPlan, fit, support: wholeArmSupport,
-          viewport: { ...viewport, farM: CAMERA.far }, armOptions: armOpts, activeCamera: inputs.wholeArmActiveCamera });
+          viewport: { ...viewport, viewportPx: px, farM: displayPlan.actualCamera ? displayPlan.actualCamera.farM : CAMERA.far }, armOptions: armOpts, activeCamera: inputs.wholeArmActiveCamera });
       } catch (err) {
-        if (err && err.code === 'whole_arm_display_refused' && err.detail) err.detail = { ...err.detail, commandPrediction: displayStamp.commandPrediction, activityComparison };
+        if (err && err.code === 'whole_arm_display_refused' && err.detail) err.detail = { ...err.detail, commandPrediction: displayStamp.commandPrediction, activityComparison, actualCameraContext: { sourceRig: displayPlan.sourceRig, anatomy: displayPlan.anatomicalMetadata, physicalG: displayPlan.attachmentFrame, actualCamera: displayPlan.actualCamera, depthMapping: displayPlan.depthMapping, fitPointsCameraM: Object.fromEntries(['shoulderCam', 'elbowCam', 'wristCam', 'handCentreCam', 'targetCam'].map(k => [k, fit.solution[k] ? Array.from(fit.solution[k]) : null])) } };
         throw err;
       }
       fit = applied.fit; appliedArmMatrices = applied.parentMatrices;
       wholeArmFraming = Object.freeze({ ...applied.report, commandPrediction: displayStamp.commandPrediction, activityComparison });
     }
     // R3-arm: the 0.06 s key-level ramp is carried across frames (carryReachRamp); without it the ramp is inert.
-    const reach = carryReachRamp(nextReach(base, fit, armOptions, Boolean(axes && Number(axes.z))), base);
+    const reachFit = displayPlan ? WholeArmDisplay.canonicalReachFit(displayPlan, fit, base) : fit;
+    const reach = carryReachRamp(nextReach(base, reachFit, armOptions, Boolean(axes && Number(axes.z))), base);
     const reachRates = h > 0 ? { depth: (reach.depth - reachIn.depth) / h, x: (reach.xNdc - reachIn.xNdc) / h } : { depth: 0, x: 0 };
     // R4-fix (review RP3): a held key that moves the hand nothing (it is at the edge of what keeps the whole hand on
     // screen) is said in plain words after REACH_BLOCKED.seconds, instead of only lighting the muscles.
     // Net movement since the hold (or the last counted move) began, in the key's direction.
     const ax = keyed ? Math.sign(Number(axes.x) || 0) : 0, az = keyed ? Math.sign(Number(axes.z) || 0) : 0;
     const sig = `${ax},${az}`;
-    let hold = keyed ? (state.reachHold && state.reachHold.sig === sig ? state.reachHold : { sig, x0: fit.xNdc, d0: fit.depth }) : null;
-    const movedX = Boolean(hold) && ax !== 0 && ax * (fit.xNdc - hold.x0) >= REACH_BLOCKED.xNdc;
-    const movedZ = Boolean(hold) && az !== 0 && az * (fit.depth - hold.d0) >= REACH_BLOCKED.depthM;
-    if (hold && (movedX || movedZ)) hold = { sig, x0: fit.xNdc, d0: fit.depth };
+    let hold = keyed ? (state.reachHold && state.reachHold.sig === sig ? state.reachHold : { sig, x0: reachFit.xNdc, d0: reachFit.depth }) : null;
+    const movedX = Boolean(hold) && ax !== 0 && ax * (reachFit.xNdc - hold.x0) >= REACH_BLOCKED.xNdc;
+    const movedZ = Boolean(hold) && az !== 0 && az * (reachFit.depth - hold.d0) >= REACH_BLOCKED.depthM;
+    if (hold && (movedX || movedZ)) hold = { sig, x0: reachFit.xNdc, d0: reachFit.depth };
     const prevHold = state.reachHold && state.reachHold.sig === sig ? state.reachBlockedS || 0 : 0;
     const reachBlockedS = !keyed || movedX || movedZ ? 0 : prevHold + wall;
     const elbowRad = fit.solution.elbowFlexRad;
@@ -1712,8 +1800,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       },
       trigger,
       fit: {
-        xNdc: fit.xNdc, yNdc: Number.isFinite(fit.yNdc) ? fit.yNdc : null, depth: fit.depth, fallback: fit.fallback, anchor: fit.anchor,
-        limits: fit.xLimits && fit.depthLimits ? { xRange: { xMin: fit.xLimits.xMin, xMax: fit.xLimits.xMax }, depthRange: depthRangeFor(fit, base, elbow) } : null
+        xNdc: reachFit.xNdc, yNdc: Number.isFinite(reachFit.yNdc) ? reachFit.yNdc : null, depth: reachFit.depth, fallback: reachFit.fallback, anchor: reachFit.anchor,
+        limits: reachFit.xLimits && reachFit.depthLimits ? { xRange: { xMin: reachFit.xLimits.xMin, xMax: reachFit.xLimits.xMax }, depthRange: depthRangeFor(reachFit, base, elbow) } : null
       },
       brainFrame,
       view: viewOut,
@@ -1903,7 +1991,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return out;
   }
 
-  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay } : {}), fovYDeg, fovFor, frame, handYNdc,
+  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
     bodyMap: map, regionMode, anatomy, armEnvelope });
 }
 
@@ -4064,10 +4152,10 @@ export function start(params = {}) {
           const aim = current.out && current.out.brainTransform && Array.isArray(current.out.brainTransform.pivotWorld) ? current.out.brainTransform.pivotWorld : null;
           for (; viewRequests > 0; viewRequests--) {
             const toggleFrame = referenceGraph ? sim.referenceFrameForLook(cam.view === 'third' && cam.fpLook ? cam.fpLook : { yaw: cs.yaw, pitch: cs.pitch }) : null;
-            const r = NC.toggleView(cam, { look: { yaw: cs.yaw, pitch: cs.pitch }, bodyToWorld: toggleFrame ? toggleFrame.bodyToWorld : camBodyToWorld, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, aimAt: aim, blocked: grabbing });
+            const r = NC.toggleView(cam, { look: { yaw: cs.yaw, pitch: cs.pitch }, bodyToWorld: toggleFrame ? toggleFrame.bodyToWorld : camBodyToWorld, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, aimAt: aim, blocked: grabbing, geometryFraming: Boolean(wholeArmOption) });
             if (!r.changed) continue;
             cam = r.state;
-            cs = controlsApi.setPitchLimits(cs, cam.view === 'third' ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
+            cs = controlsApi.setPitchLimits(cs, !wholeArmOption && cam.view === 'third' ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
             cs = controlsApi.setLook(cs, r.controlsLook);
           }
         }
@@ -4076,7 +4164,7 @@ export function start(params = {}) {
         const lookIn = live || !simState.gaze ? { yaw: cs.yaw, pitch: cs.pitch } : { yaw: simState.gaze.yaw, pitch: simState.gaze.pitch };
         let keepOut = null;
         if (!(cam.view === 'first' && cam.progress === 0) && sceneFn('bodyKeepOut')) { try { keepOut = callScene('bodyKeepOut'); } catch { keepOut = null; } }
-        let wholeArmDisplayPlan = null;
+        let wholeArmDisplayPlan = null, canonicalFirstFrame = null;
         // Snapshot axes and already-drained events for a virtual copied preview; the actual step keeps its original events.
         // Later arrow filtering removes clicks only. Space objects/offsets stay identical, checked by the plan stamp.
         const wholeArmCommandAxes = wholeArmOption ? Object.freeze({ ...(live ? controlsApi.axes(cs) : { x: 0, z: 0 }) }) : null;
@@ -4085,18 +4173,45 @@ export function start(params = {}) {
         if (wholeArmOption) wholeArmAttempt = Object.freeze({ serial: ++wholeArmAttemptSerial, status: 'planning',
           baseCommittedFrame: wholeArmLastCommitted ? wholeArmLastCommitted.jsFrame : null, committedBackM,
           commandAxes: wholeArmCommandAxes, commandDt: timing.dt });
+        const actualCameraFit = Boolean(wholeArmOption); // Full C/P lock on EVERY opt-in frame, including settled first person.
         const selectedFirstFrame = wholeArmOption ? fp => {
+          // R442: canonical feasibility is tested once, including during E transitions.
           wholeArmDisplayPlan = captureWholeArm(() => sim.planWholeArmDisplay(simState, fp, { aspect, viewportPx: { width: size.width, height: size.height },
-            commandAxes: wholeArmCommandAxes, commandEvents: wholeArmCommandEvents, commandDt: timing.dt, committedBackM }));
+            commandAxes: wholeArmCommandAxes, commandEvents: wholeArmCommandEvents, commandDt: timing.dt, gazeAt: timing.gazeAt, predictionGazeLook: fp, committedBackM, exactAnchor: true }));
           wholeArmAttempt = Object.freeze({ ...wholeArmAttempt, status: 'camera-selected', selectedBackM: wholeArmDisplayPlan.backM,
             selectedTrial: wholeArmDisplayPlan.selectedTrial });
-          return wholeArmDisplayPlan.renderFrame;
+          canonicalFirstFrame = wholeArmDisplayPlan.renderFrame; return canonicalFirstFrame;
         } : sim.referenceFrameForLook;
-        camPose = NC.cameraPose(cam, { ...(referenceGraph ? { firstPersonFrame: selectedFirstFrame } : {}), look: lookIn, bodyToWorld: camBodyToWorld && anatomy ? camBodyToWorld : null, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, avoid: Array.isArray(keepOut) && keepOut.length ? keepOut : null });
+        const cameraPoseForFrame = () => { try { return NC.cameraPose(cam, { ...(referenceGraph ? { firstPersonFrame: selectedFirstFrame } : {}),
+          ...(wholeArmOption ? { handRayFraming: () => {
+            const q = wholeArmDisplayPlan.requestNdc, tan = Math.tan(sim.fovFor(aspect) * DEG / 2);
+            return { ray: [q.xNdc * tan * aspect, q.yNdc * tan, -1] };
+          } } : {}), look: lookIn, bodyToWorld: camBodyToWorld && anatomy ? camBodyToWorld : null, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, avoid: Array.isArray(keepOut) && keepOut.length ? keepOut : null });
+          } catch (err) {
+            if (wholeArmDisplayPlan && err && typeof err === 'object') err.detail = { ...(err.detail || { status: 'error', reason: errorText(err) }),
+              canonicalPlanning: { sourceRig: wholeArmDisplayPlan.sourceRig, anatomy: wholeArmDisplayPlan.anatomicalMetadata, physicalG: wholeArmDisplayPlan.attachmentFrame,
+                canonicalF: wholeArmDisplayPlan.renderFrame, requestNdc: wholeArmDisplayPlan.requestNdc, witness: wholeArmDisplayPlan.canonicalWitness } };
+            throw err;
+          } };
+        camPose = wholeArmOption ? captureWholeArm(cameraPoseForFrame) : cameraPoseForFrame();
         // The body, the shoulder and the hand always use the FIRST-PERSON look (ns-camera bodyLook); the crosshair ray and
         // the brain's grab carry use the camera's own look (gazeRay / gazeLook).
         const look = camPose.firstPerson ? lookIn : camPose.bodyLook;
-        if (wholeArmOption) {
+        if (actualCameraFit) {
+          wholeArmDisplayPlan = captureWholeArm(() => sim.bindHandRayCamera(simState, wholeArmDisplayPlan, camPose, { aspect, brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
+            cameraProjectionForBrain: (brain, G, mirrorWorldCentre) => {
+              if (!sceneFn('releaseCameraProjectionPlan')) fail('app_input', 'actual-camera projection planning is unsupported');
+              scene.setView(look.yaw, look.pitch); callScene('setEyePosition', G.position);
+              const selected = callScene('setCameraPose', { ...camPose, armParentPosition: G.position,
+                projectionPlanning: { brainMatrix: brain ? Array.from(brain.matrix) : null, mirrorWorldCentre } });
+              if (!selected || !selected.projectionPlan) fail('app_state', 'no pre-pick actual camera/projection snapshot');
+              return selected.projectionPlan;
+            } }));
+          const actualC = wholeArmDisplayPlan.actualCamera.cameraToWorld, actualOrigin = Object.freeze([actualC[12], actualC[13], actualC[14]]), actualDir = Object.freeze([-actualC[8], -actualC[9], -actualC[10]]);
+          camPose = Object.freeze({ ...camPose, position: actualOrigin, direction: actualDir, gazeRay: Object.freeze({ origin: actualOrigin, dir: actualDir }), gazeLook: Object.freeze({ ...camPose.gazeLook }) });
+          wholeArmAttempt = Object.freeze({ ...wholeArmAttempt, status: 'camera-selected', selectedBackM: wholeArmDisplayPlan.backM, selectedTrial: wholeArmDisplayPlan.selectedTrial });
+        }
+        if (wholeArmOption && !actualCameraFit) {
           // Active Scene ray/orbit/brain picks and gazeRay use this SAME camera BEFORE input is resolved.
           scene.setView(look.yaw, look.pitch);
           callScene('setEyePosition', wholeArmDisplayPlan.attachmentFrame.position);
@@ -4216,6 +4331,10 @@ export function start(params = {}) {
           }
         }
         scene.updatePose(out.appliedArmMatrices || out.fit.solution.matrices);
+        if (wholeArmDisplayPlan && wholeArmDisplayPlan.actualCamera) {
+          const retainedProjection = captureWholeArm(() => WholeArmDisplay.retainedHandProjection(wholeArmDisplayPlan, callScene('appliedHandPose'), { aspect, fovYDeg: out.fovYDeg, viewportPx: { width: size.width, height: size.height } }, scene.objects && scene.objects.armGroup && scene.objects.armGroup.matrixWorld.elements));
+          out.wholeArmFraming = Object.freeze({ ...out.wholeArmFraming, retainedHandProjection: retainedProjection });
+        }
         scene.updateMuscles(out.muscle, out.rotationMuscles || null);
         scene.updateStrip(out.displayDrives);
         scene.highlightMarker(out.gaze.actionId);
@@ -4421,7 +4540,9 @@ export function start(params = {}) {
         // R4-scene (D8): QA step frames (fixed clock) are not frame-time samples for the quality controller.
         // R4-fix (code review F1): neither are frozen frames (intro / Esc page: a settings change, a resize or a reset
         // asks for one redraw); their 250-300 ms gaps had stepped a 60 fps GPU down to half size or the simplest meshes.
-        scene.render(live && fixed !== true ? undefined : { live: false });
+        if (actualCameraFit) captureWholeArm(() => scene.render(live && fixed !== true ? undefined : { live: false }));
+        else scene.render(live && fixed !== true ? undefined : { live: false });
+        if (actualCameraFit) captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
         // Renderer readback is internal evidence, not a completed tutorial action or independently verified pixels.
         // In this frozen API ribbons/active levels have no per-end onScreen proof, so do not invent a glow-complete
         // event from supplied link data. The feature remains available; visibility/guide completion stays unverified.

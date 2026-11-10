@@ -31,13 +31,15 @@
  * this module only eases between the two (syncView, drive A); with a controls state that has one look only, toggleView
  * stores the first-person look and hands it back (drive B). See createCameraState.
  *
- * What the body and the LEFT ARM do in third person (decision, see round5/R5-camera-NOTES.md):
+ * Legacy bodyLook contract in third person (decision, see round5/R5-camera-NOTES.md):
+ * R425 retains the physical body frame but re-solves the attached arm in actual C to honor the displayed anchor.
+ * Reach feasibility/normal joints/full-body and view qualification remain open; this is not a fixed-pose waiver.
  *  - They keep the FIRST-PERSON frame they had when E was pressed ("body look", pose.bodyLook): the trunk yaw, the neck
  *    flex, the shoulder and the hand's screen-locked aim do not change when the camera leaves the head.
  *  - W / A / S / D keep moving the hand in that first-person frame (A / D across, W / S away / toward), Space makes the fist
  *    and double-tap Space turns the forearm, exactly as in first person.
- *  - The NDC y +0.5 hand lock ("three quarters up the screen") is a FIRST-PERSON screen rule: in third person it still
- *    holds in the (unseen) first-person view the arm is aimed in, not on the third-person screen.
+ *  - The genuine NDC y +0.5 hand lock applies to the actual displayed view too. The optional R425 App/display path
+ *    refits anatomy in this actual camera; the legacy bodyLook alone does not establish that screen rule.
  *  - Why not let the arm follow the third-person camera: the boom turns all the way round the body; a hand locked to
  *    that screen would have to reach behind the back (outside the shoulder's range) and the body would spin with the
  *    mouse. Keeping the first-person frame means E never moves the body or the arm, and E again returns exactly.
@@ -337,12 +339,18 @@ export function syncView(state, mode) {
  *    is still easing back from third person, the third-person look it is leaving (so the camera simply turns round);
  *  - third -> first: tpLook := the clamped look; controlsLook = the stored fpLook EXACTLY (return exactly).
  */
-export function toggleView(state, { look, bodyToWorld = null, eyeBp = null, aimAt = null, blocked = false, rig = THIRD_PERSON } = {}) {
+export function toggleView(state, { look, bodyToWorld = null, eyeBp = null, aimAt = null, blocked = false, rig = THIRD_PERSON, geometryFraming = false } = {}) {
   const r = { ...THIRD_PERSON, ...(rig || {}) };
   const { minPitchDeg, maxPitchDeg } = r;
   const s = checkState(state);
   const l = lookOf(look, 'look');
   if (blocked === true) return { state: s, controlsLook: l, changed: false };
+  // R442 engineering mode: E changes the observer translation, never the live physical-look intent.
+  // Legacy orbit yaw/pitch are NOT reinterpreted as a new anatomical/body look.
+  if (geometryFraming === true) return {
+    state: Object.freeze({ ...s, view: s.view === 'first' ? 'third' : 'first', fpLook: null, tpLook: null, arrived: false, toggles: s.toggles + 1 }),
+    controlsLook: l, changed: true
+  };
   if (s.view === 'first') {
     const back = s.progress > 0 && isLook(s.tpLook) ? { yaw: s.tpLook.yaw, pitch: s.tpLook.pitch } : null;
     const tp = back || defaultThirdLook(l, bodyToWorld, { eyeBp, aimAt: r.aimAtBrain === false ? null : aimAt, defaultPitchDeg: r.defaultPitchDeg,
@@ -421,7 +429,7 @@ export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitch
  *   headInPlace, faceGhost, overBrainSeeThrough (0..1 multipliers, see the header), farExtraM, nearM,
  *   orbitCentre, boom { distance, pushed, blocked } (third-person side, or null in pure first person) }
  */
-export function cameraPose(state, { look = null, bodyLook = null, thirdLook = null, bodyToWorld = null, eyeBp = null, avoid = null, rig = THIRD_PERSON, firstPersonFrame = null } = {}) {
+export function cameraPose(state, { look = null, bodyLook = null, thirdLook = null, bodyToWorld = null, eyeBp = null, avoid = null, rig = THIRD_PERSON, firstPersonFrame = null, handRayFraming = null } = {}) {
   const s = checkState(state);
   const driveA = isLook(bodyLook) && isLook(thirdLook);
   if (!driveA && !isLook(look)) fail('camera_input', 'cameraPose needs { bodyLook, thirdLook } (controls own the view) or { look }');
@@ -434,7 +442,10 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   // step: the crosshair sweeps across the brain without the player aiming.
   const silentGaze = s.arrived === true || s.progress !== target;
   let fp, tpLook;
-  if (driveA) { fp = { yaw: bodyLook.yaw, pitch: bodyLook.pitch }; tpLook = clampThirdLook(thirdLook, r); }
+  if (handRayFraming !== null) {
+    if (driveA || !isLook(look) || typeof handRayFraming !== 'function') fail('camera_input', 'hand-ray framing requires one live physical look and a pure data callback');
+    fp = { yaw: look.yaw, pitch: look.pitch }; tpLook = null;
+  } else if (driveA) { fp = { yaw: bodyLook.yaw, pitch: bodyLook.pitch }; tpLook = clampThirdLook(thirdLook, r); }
   else {
     const live = { yaw: look.yaw, pitch: look.pitch };
     fp = s.view === 'third' && isLook(s.fpLook) ? { yaw: s.fpLook.yaw, pitch: s.fpLook.pitch } : live;
@@ -444,6 +455,24 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   if (firstPersonFrame !== null && typeof firstPersonFrame !== 'function') fail('camera_input', 'firstPersonFrame must be a pure source-frame function');
   const firstOrigin = reference ? vec3(reference.position, 'first-person position world m') : [0, 0, 0];
   if (reference) { if (!isMat4(reference.bodyToWorld) || !isVec3(reference.eyeBp)) fail('camera_input', 'canonical body and original eye required'); bodyToWorld = reference.bodyToWorld; eyeBp = reference.eyeBp; }
+  if (handRayFraming !== null && s.progress > 0) {
+    if (!reference || !isMat4(reference.eyeToWorld)) fail('camera_input', 'hand-ray framing requires the selected canonical F');
+    const data = handRayFraming(), ray = vec3(data && data.ray, 'canonical hand ray');
+    if (ray[2] !== -1) fail('camera_input', 'hand ray uses depth-m parameter with z=-1');
+    const path = handRayBoom(reference, ray, bodyToWorld, eyeBp, Array.isArray(avoid) ? avoid : bodyProxyWorld(bodyToWorld, eyeBp), r);
+    const k = blend * path.exitDepthM, position = firstOrigin.map((v, i) => v + k * path.backDirection[i]);
+    const dir = gazeDirection(fp.yaw, fp.pitch), fromEye = len(sub(position, firstOrigin));
+    const head = bodyProxyWorld(bodyToWorld, eyeBp, [DEFAULT_BODY_PROXY[0]])[0];
+    const headInPlace = smooth(r.headClear.startM, r.headClear.fullM, len(sub(position, head.centre)) - head.radius);
+    return Object.freeze({ view: s.view, progress: s.progress, blend, firstPerson: false, thirdPerson: blend >= 1, moving: s.progress !== target,
+      position, yaw: fp.yaw, pitch: fp.pitch, direction: dir, bodyLook: fp, gazeLook: { ...fp }, gazeRay: { origin: position.slice(), dir },
+      silentGaze, headInPlace, faceGhost: 1 - blend, overBrainSeeThrough: 1 - blend, farExtraM: fromEye, nearM: FIRST_PERSON.nearM,
+      orbitCentre: path.centre, boom: { distance: len(sub(position, path.centre)), pushed: false, blocked: false },
+      handRayFraming: Object.freeze({ kind: 'geometry-hand-ray-observer-r442-v1', canonicalRay: ray, canonicalF: Array.from(reference.eyeToWorld),
+        backDepthM: k, exitDepthM: path.exitDepthM, sphereRadiusM: path.radiusM, maximumRadiusM: path.maximumRadiusM, checkedKeepOutSpheres: path.checked,
+        collisionPolicy: 'Whole continuous canonical-to-boom segment checked with original padded spheres; no jump through an obstacle or silent distance clamp',
+        scope: 'Engineering posterior observer, not a measured anatomical eye or normalmechanics/pixel qualification' }) });
+  }
   if (s.progress === 0 || tpLook === null) {
     const dir = gazeDirection(fp.yaw, fp.pitch);
     return Object.freeze({
@@ -473,6 +502,40 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     silentGaze, headInPlace, faceGhost: 1 - blend, overBrainSeeThrough: 1 - blend, farExtraM: fromEye, nearM: FIRST_PERSON.nearM,
     orbitCentre: centre, boom: { distance: tp.distance, pushed: tp.pushed, blocked: tp.blocked }
   });
+}
+
+// R442: the positive line/sphere exit preserves the existing third-person boom radius.
+// The observer travels BACK on the canonical hand ray. No body/arm matrix is translated here.
+function handRayBoom(reference, ray, bodyToWorld, eyeBp, avoid, r) {
+  const F = reference.eyeToWorld, f = vec3(reference.position, 'canonical F origin');
+  const backDirection = [0, 1, 2].map(i => -(F[i] * ray[0] + F[4 + i] * ray[1] + F[8 + i] * ray[2]));
+  const centre = orbitCentreWorld(bodyToWorld, eyeBp, r), q = sub(f, centre);
+  const A = dot(backDirection, backDirection), B = dot(backDirection, q);
+  const radiusM = r.distanceM, maximumRadiusM = r.maxDistanceM;
+  if (!(A > 0 && isNum(A) && isNum(radiusM) && radiusM > 0 && isNum(maximumRadiusM) && maximumRadiusM >= radiusM && isNum(r.clearanceM) && r.clearanceM >= 0)) fail('camera_input', 'invalid existing boom geometry');
+  const discriminant = B * B - A * (dot(q, q) - radiusM * radiusM);
+  if (!(discriminant >= 0 && isNum(discriminant))) fail('camera_input', 'hand-ray boom sphere has no real intersection');
+  const exitDepthM = (-B + Math.sqrt(discriminant)) / A;
+  if (!(exitDepthM >= 0 && isNum(exitDepthM))) fail('camera_input', 'canonical observer is beyond the forward boom exit');
+  const endpoint = f.map((v, i) => v + exitDepthM * backDirection[i]);
+  // Squared norm is convex: endpoints bound this whole straight path relative to the same body centre.
+  if (Math.max(len(q), len(sub(endpoint, centre))) > maximumRadiusM) fail('camera_input', 'hand-ray path exceeds the original maximum boom bound');
+  let checked = 0;
+  for (let index = 0; index < avoid.length; index++) {
+    const sphere = avoid[index];
+    if (!sphere || !isVec3(sphere.centre) || !(isNum(sphere.radius) && sphere.radius >= 0)) fail('camera_input', 'invalid hand-ray keep-out sphere');
+    const u = sub(f, sphere.centre), at = clamp(-dot(backDirection, u) / A, 0, exitDepthM);
+    const closest = u.map((v, i) => v + at * backDirection[i]), padded = sphere.radius + r.clearanceM;
+    checked++;
+    if (dot(closest, closest) < padded * padded) {
+      const error = new Error('ns:camera_input: continuous hand-ray observer path intersects an original padded keep-out sphere');
+      error.code = 'whole_arm_display_refused'; error.detail = { status: 'refused', reason: 'hand_ray_camera_path_collision',
+        index, sphereName: typeof sphere.name === 'string' ? sphere.name : null, centre: Array.from(sphere.centre), radiusM: sphere.radius,
+        clearanceM: r.clearanceM, closestDepthM: at, closestDistanceM: len(closest), exitDepthM, canonicalF: Array.from(F), ray: Array.from(ray) };
+      throw error;
+    }
+  }
+  return { centre, backDirection, exitDepthM, radiusM, maximumRadiusM, checked };
 }
 
 /* ------------------------------------------------------------------ rays and projection for any camera position */

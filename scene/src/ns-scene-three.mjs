@@ -3588,6 +3588,7 @@ export function createScene({
     arrowRef.k = Number.isFinite(transform.k) && transform.k > 0 ? transform.k : null;
     arrowRef.pivot = transform.pivot && transform.pivot.length === 3 ? Array.from(transform.pivot) : null;
     updateMirrorPlacement();
+    if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked') cameraProjectionPlan.actualBrainSeen = true;
     updateCameraRange();
     overlayDirty = true;
     return true;
@@ -3595,11 +3596,34 @@ export function createScene({
 
   /** R4-scene: the far plane follows the brain's farthest support point (farPlaneFor), so a brain moved farther away is
    * never clipped; the near plane stays CAMERA.near for the hand. Called whenever the brain transform changes. */
+  let cameraProjectionPlan = null;
   const cameraRange = { far: far, brainFarM: null, brainNearM: null, mirrorFarM: null };
+  function releaseCameraProjectionPlan() { checkCameraProjectionMatrices(); cameraProjectionPlan = null; }
+  function projectionRefuse(reason, detail = null) {
+    const err = new Error(`ns:scene_input: ${reason}`); err.code = 'actual_camera_projection_refused';
+    err.detail = { status: 'refused', reason, detail, projectionPlan: cameraProjectionPlan && cameraProjectionPlan.snapshot,
+      current: { cameraToWorld: Array.from(camera.matrixWorld.elements), worldToCamera: Array.from(camera.matrixWorldInverse.elements), projectionMatrix: Array.from(camera.projectionMatrix.elements), nearM: camera.near, farM: camera.far, range: { ...cameraRange } } };
+    throw err;
+  }
+  function checkCameraProjectionMatrices() {
+    if (!cameraProjectionPlan || cameraProjectionPlan.phase !== 'locked') return;
+    const s = cameraProjectionPlan.snapshot;
+    for (const [a, b] of [[camera.matrixWorld.elements, s.cameraToWorld], [camera.matrixWorldInverse.elements, s.worldToCamera], [camera.projectionMatrix.elements, s.projectionMatrix]]) {
+      if (a.length !== 16 || Array.from(a).some((v, i) => !Object.is(v, b[i]))) projectionRefuse('preselected full camera/projection changed after picking');
+    }
+  }
+  function checkCameraProjectionPlan() {
+    if (!cameraProjectionPlan || cameraProjectionPlan.phase !== 'locked') return;
+    // Final range validation uses the original support/farPlaneFor algorithm after all actual body/mirror updates.
+    cameraProjectionPlan.actualBrainSeen = true; updateCameraRange();
+    checkCameraProjectionMatrices();
+  }
   function updateCameraRange() {
+    if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked' && !cameraProjectionPlan.actualBrainSeen) return;
     const P = brainSupport && brainSupport.points;
     if (!P || P.length < 3) return;
-    const e = brainGroup.matrixWorld.elements;
+    const e = cameraProjectionPlan && cameraProjectionPlan.phase === 'planning' && cameraProjectionPlan.brainMatrix
+      ? cameraProjectionPlan.brainMatrix : brainGroup.matrixWorld.elements;
     // R5-scene (D18 / D19): distances from the RENDER camera (the eye in first person) to the brain and the mirror body.
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     let dMax = 0, dMin = Infinity;
@@ -3611,11 +3635,14 @@ export function createScene({
     cameraRange.brainFarM = dMax; cameraRange.brainNearM = dMin;
     let fFar = dMax;
     if (mirror.transform && mirror.body) {
-      const a = mirror.transform.centre, dm = Math.hypot(a[0] - cx, a[1] - cy, a[2] - cz) + mirror.transform.scale * mirror.body.radius;
+      const a = cameraProjectionPlan && cameraProjectionPlan.phase === 'planning' && cameraProjectionPlan.mirrorWorldCentre
+        ? cameraProjectionPlan.mirrorWorldCentre : mirror.transform.centre;
+      const dm = Math.hypot(a[0] - cx, a[1] - cy, a[2] - cz) + mirror.transform.scale * mirror.body.radius;
       cameraRange.mirrorFarM = dm;
       if (dm > fFar) fFar = dm;
     }
     const f = farPlaneFor(fFar, far);
+    if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked' && f !== cameraProjectionPlan.snapshot.farM) projectionRefuse('final brain/mirror range differs from pre-pick projection plan', { candidateFarM: f, originalBaseFarM: far });
     if (f !== camera.far) { camera.far = f; camera.updateProjectionMatrix(); cameraRange.far = f; }
   }
 
@@ -3685,6 +3712,14 @@ export function createScene({
    * soft window opens at the crosshair while it is on a motor area. Returns cameraState(). */
   const camMul = { headInPlace: 0, faceGhost: 1, overBrain: 1, nearM: null };
   function setCameraPose(pose = null) {
+    if (pose && pose.projectionPlanning) {
+      if (cameraProjectionPlan) fail('scene_input', 'previous camera projection frame not released');
+      const m = pose.projectionPlanning.brainMatrix;
+      if (m !== null && (!m || m.length !== 16 || !Array.from(m).every(Number.isFinite))) fail('scene_input', 'planned brain matrix needs finite16 or null');
+      const mirrorCentre = pose.projectionPlanning.mirrorWorldCentre;
+      if (mirrorCentre !== undefined && mirrorCentre !== null && (!mirrorCentre || mirrorCentre.length !== 3 || !Array.from(mirrorCentre).every(Number.isFinite))) fail('scene_input', 'planned mirror centre needs finite world metres');
+      cameraProjectionPlan = { phase: 'planning', brainMatrix: m === null ? null : Array.from(m), mirrorWorldCentre: mirrorCentre ? Array.from(mirrorCentre) : null, actualBrainSeen: false, snapshot: null };
+    }
     const first = pose === null || pose === undefined || pose.mode === 'first' || pose.firstPerson === true || (Number.isFinite(pose.blend) && pose.blend <= 0 && pose.thirdPerson !== true);
     if (first) {
       if (pose !== null && pose !== undefined && Object.prototype.hasOwnProperty.call(pose, 'position')) {
@@ -3713,8 +3748,17 @@ export function createScene({
     }
     applyCamera();
     updateCameraRange();
+    if (cameraProjectionPlan && cameraProjectionPlan.phase === 'planning') {
+      const copy16 = a => { if (!a || a.length !== 16 || !Array.from(a).every(Number.isFinite)) fail('scene_input', 'actual camera/projection needs finite16'); return Object.freeze(Array.from(a)); };
+      cameraProjectionPlan.snapshot = Object.freeze({ kind: 'ns-prepick-actual-camera-r425-v1',
+        cameraToWorld: copy16(camera.matrixWorld.elements), worldToCamera: copy16(camera.matrixWorldInverse.elements), projectionMatrix: copy16(camera.projectionMatrix.elements),
+        sourcePose: Object.freeze({ position: Object.freeze(Array.from(pose.position)), yaw: pose.yaw, pitch: pose.pitch, view: pose.view, progress: pose.progress, blend: pose.blend }),
+        nearM: camera.near, farM: camera.far, aspect: camera.aspect, fovYDeg: camera.fov, cssWidth: cssW, cssHeight: cssH,
+        rangeMeaning: 'Existing farPlaneFor/support algorithm on known copied carry; final unknown gaze/orbit/mirror changes must match or refuse, never change locked P' });
+      cameraProjectionPlan.phase = 'locked';
+    }
     overlayDirty = true;
-    return cameraState();
+    return pose && pose.projectionPlanning ? { ...cameraState(), projectionPlan: cameraProjectionPlan.snapshot } : cameraState();
   }
   function applyCamera() {
     if (camPose) {
@@ -3728,6 +3772,7 @@ export function createScene({
     camera.updateMatrixWorld(true);
     const headIn = camPose !== null && camMul.headInPlace >= R5_SCENE.headInPlaceFrom;
     const nearNow = camMul.nearM !== null ? camMul.nearM : near;
+    if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked' && nearNow !== cameraProjectionPlan.snapshot.nearM) projectionRefuse('preselected camera near changed', { candidateNearM: nearNow });
     if (camera.near !== nearNow) { camera.near = nearNow; camera.updateProjectionMatrix(); }
     if (headIn !== camState.headInPlace) {
       camState.headInPlace = headIn;
@@ -6719,6 +6764,7 @@ export function createScene({
       const envelope = currentMirrorEnvelope();
       if (!(envelope.minCameraDepthM >= camera.near && envelope.maxCameraDepthM <= camera.far)) fail('scene_input', 'current full mirror geometry violates camera range; ordinary pose remains unresolved');
     }
+    checkCameraProjectionPlan();
     renderer.render(scene, camera);
     renderFaceLayer();
     lastRenderCpuMs = nowMs() - now;
@@ -6856,7 +6902,7 @@ export function createScene({
     cachedArrowsState,
     setGlowLinks,
     glowLinkState,
-    setCameraPose,
+    setCameraPose, releaseCameraProjectionPlan,
     cameraState,
     setMirrorView,
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */

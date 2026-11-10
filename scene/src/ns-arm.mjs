@@ -417,6 +417,8 @@ const MM = 0.001;
 const BISECT_STEPS = 32;
 const RANGE_BISECT_STEPS = 14;
 const EPS_NDC = 1e-9;
+// R425 producer projection guard reuses the existing numeric margin; no independent acceptance tolerance.
+export const ARM_PROJECTION_EPS_NDC = EPS_NDC;
 const EPS_DEPTH = 1e-9;
 
 /* ------------------------------------------------------------------ validation */
