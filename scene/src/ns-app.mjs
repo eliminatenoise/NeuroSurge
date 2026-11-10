@@ -1208,6 +1208,8 @@ export const DRAG_TURN = Object.freeze({ degPerPx: 0.3 });
 // is 10 degrees: at 14 the feet still met; at 10 they move toward each other and stay apart.
 export const LIMB_TURN = Object.freeze({ rSupinatedDeg: 25, hipExternalDeg: 10 });
 export const MUSCLE_TAP = Object.freeze({ noteSeconds: 6 });
+/** R558: the body's left shoulder girdle may slide at most this far with the arm (ns-body ARM_FOLLOW_LIMITS, mm). */
+export const GIRDLE_FOLLOW_LIMIT_MM = 50;
 /** R558: which orbit step a drag direction asks for, per item, so that the surface nearest the player follows the
  * pointer (checked in the browser for both items; an orbit name says which way the VIEW goes round the item). */
 export const DRAG_TURN_DIRS = Object.freeze({
@@ -4737,6 +4739,25 @@ export function start(params = {}) {
           }
           let armFollow = null;
           try { armFollow = out.fit && out.fit.coupling && anatomy ? bodyFollowFromCoupling(out.fit.coupling, anatomy) : null; } catch { armFollow = null; }
+          // R558 (genuine note R27: the shoulder movement that follows your look "matches the mirror body also"). The
+          // arm itself is already the same on both bodies (the mirror draws the very same arm matrices). What did not
+          // follow was the body's own left shoulder girdle: the arm solver lifts the shoulder joint a little when you
+          // look up (attachment.girdleShiftM) and carries it forward when the hand crosses the body (fit.girdle), but
+          // the shoulder blade and collarbone stayed where they were, on your body and on the mirror. They now slide by
+          // the same shift, through the existing armFollow path and inside its 50 mm limit. A slide, not a solved
+          // shoulder-blade rotation: an illustration of the girdle following, not measured kinematics.
+          try {
+            const parts = [out.attachment && out.attachment.girdleShiftM, out.fit && out.fit.girdle && out.fit.girdle.shiftBodyM].filter(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
+            if (parts.length) {
+              const base = armFollow && Array.isArray(armFollow.leftGirdleShiftMm) ? armFollow.leftGirdleShiftMm : [0, 0, 0];
+              let sum = [base[0], base[1], base[2]];
+              for (const g of parts) { sum[0] += -1000 * g[0]; sum[1] += 1000 * g[2]; sum[2] += 1000 * g[1]; } // body-frame m -> BodyParts3D mm (as ns-arm bodyFollowFromCoupling)
+              const len = Math.hypot(sum[0], sum[1], sum[2]), cap = 0.98 * GIRDLE_FOLLOW_LIMIT_MM;
+              if (len > cap) sum = sum.map(v => (v * cap) / len);
+              sum = sum.map(v => Math.round(v * 10) / 10);
+              if (sum.some(v => v !== 0)) armFollow = { ...(armFollow || { trunkTwistDeg: 0 }), leftGirdleShiftMm: sum };
+            }
+          } catch { /* the girdle then stays where the palm-turn follow left it */ }
           // R173: only the renderer's RETAINED upperarm pose may drive the body attachment.
           // The prescribed armFollow remains illustrative; it is not a solved/qualified scapular rotation.
           const previousBodyArmBridge = bodyArmBridge;

@@ -83,21 +83,25 @@ Resting opacity went from 0.3 to 0.56 (a used area 0.68, at most 0.78, still onl
 
 The left forearm's own eased turn now also drives the right forearm's radius-on-ulna turn, and 10 degrees of outward rotation at each hip about the thigh's long axis, so the lower legs and feet swing with it. These are separate joints with their own axes; nothing turns as one block. At 28 and 14 degrees the feet crossed or met, so 10 was kept. The right upper arm has no rotation axis in this rig and does not turn. The hip muscles are not coloured for this. The angles are display choices, not measurements.
 
-## 9. Keyboard picture
+## 9. The shoulder girdle follows the arm on both bodies
+
+The mirror body already drew the very same arm as your own, so the arm matched when you looked up or down. What stayed behind, on both bodies, was the left shoulder blade and collarbone: the arm solver lifts the shoulder joint a little when you look up and carries it forward when the hand crosses the body, but the body rig did not move those bones. They now slide by the same shift, at most 50 mm. It is a slide, not a solved shoulder-blade rotation, and it was checked only for running without error in the scripted tours, not against a reference.
+
+## 10. Keyboard picture
 
 The start page and the Esc page show Esc, W, E, I, A, S, D and Space where they sit on a keyboard, with a trackpad drawing and three lines for move, click, and press and drag. Only keys the game handles are lit.
 
-## 10. No floating face
+## 11. No floating face
 
 The see-through or boxed copy of the player's own face is gone, with its setting and captions. An old saved setting is read as off and rewritten. The mirror body's face and the in-place head seen from behind are unchanged.
 
-## 11. Key reach: measured, not changed
+## 12. Key reach: measured, not changed
 
 Holding each key to its stop showed W ending at the arm's full length, S where the whole hand still fits in view, and A/D at the left edge of the view and at the information panel. Three looser settings were tried; they moved the stops by millimetres and took travel away from the start pose, so they were not kept. A visibly larger sweep needs the hand to leave its fixed height on screen, which is a different control design.
 
 ## Still not done
 
 - Independent browser review, other browsers, touch, screen readers.
-- The mirror body's shoulder blade and collarbone do not follow the raised arm.
+- The shoulder-girdle slide has not been compared with reference images.
 - The switched-off floating-face code is still in the renderer.
 - `SHA256SUMS` and `release-manifest.json` predate these changes.
