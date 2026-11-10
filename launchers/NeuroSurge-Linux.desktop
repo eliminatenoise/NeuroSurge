@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NeuroSurge (Experimental Preview)
+Comment=Open the experimental browser game
+Exec=xdg-open https://eliminatenoise.github.io/NeuroSurge/
+TryExec=xdg-open
+Icon=web-browser
+Terminal=false
+Categories=Game;Education;
+StartupNotify=true
+X-Brain2Body-Launcher=neurosurge-web-preview-v1

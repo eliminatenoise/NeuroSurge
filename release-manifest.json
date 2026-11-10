@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-C410-2026-11-10",
+  "version": "experimental-C410-launchers-2026-11-10",
   "experimental": true,
   "source": "C410",
   "incomplete_acceptance": true,
@@ -31,6 +31,11 @@
       "sha256": "bbe9c4837b93fc880106cf1f67006a600a3148c3f408c727bf8c4cf375831892"
     },
     {
+      "path": "LAUNCHERS.md",
+      "bytes": 1768,
+      "sha256": "19db73cf3376fbe29e2728051d539a56e8b94c7a87cefc321982c3c71f8ba9e1"
+    },
+    {
       "path": "LICENSE",
       "bytes": 7048,
       "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
@@ -42,8 +47,8 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 3651,
-      "sha256": "d662b553a00f3359009c031bec1766d9cfc46ba116ee0e6260f2ca58ba7cd74d"
+      "bytes": 3697,
+      "sha256": "b08bf28161b64c88fcdeb177e7065152bee6a5106634d0e26fe8bd3a95f88c62"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -52,8 +57,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 1871,
-      "sha256": "d2a89da7be070f3aa97a224d9ad60154e63466401503343643f32aa7f01d0d67"
+      "bytes": 1974,
+      "sha256": "340e93f5f54d9fccc6317c133cb060d0fa70517936c221bb5be51b4c6ea1bc22"
+    },
+    {
+      "path": "START.html",
+      "bytes": 3040,
+      "sha256": "64568dfd4bd11a43b0e1a5c56f4303ae86a5662abdea576dedf8b7af71725cc7"
     },
     {
       "path": "index.html",
@@ -74,6 +84,46 @@
       "path": "inputs/MOVEMENT-MAP.json",
       "bytes": 41223,
       "sha256": "55205e4fd9468850d2b5e694cb4a7462892efa4f58513d9956ea66a036bef258"
+    },
+    {
+      "path": "launchers/Install-NeuroSurge-Linux.sh",
+      "bytes": 2564,
+      "sha256": "dd063ef8394741fb4222f0bcadb8be732ded10703a39df6742a7680806379eb5"
+    },
+    {
+      "path": "launchers/MANIFEST.json",
+      "bytes": 1618,
+      "sha256": "7e74172f67d199ae3704151f66a321df3f7e74bcea1bbbe2456fa37f9374a500"
+    },
+    {
+      "path": "launchers/NeuroSurge-Launchers.zip",
+      "bytes": 3835,
+      "sha256": "be62c6a3852c1c3da38108505d8666ea0a728e5fe9b4abc22739c4637268783c"
+    },
+    {
+      "path": "launchers/NeuroSurge-Linux.desktop",
+      "bytes": 329,
+      "sha256": "06566fad07fc696ae9e7f9e6684089d49da9aa439fb656c08a31c40ac1c09575"
+    },
+    {
+      "path": "launchers/NeuroSurge-Windows.url",
+      "bytes": 70,
+      "sha256": "23c53adcb243c6833e1a566ef972b33676a0a1da1b056a4c74f149e841028ca5"
+    },
+    {
+      "path": "launchers/NeuroSurge-macOS.webloc",
+      "bytes": 267,
+      "sha256": "dcda8b135840407847f9723bb817021e9a0cb3fd3134885d192538f81be5c679"
+    },
+    {
+      "path": "launchers/README.txt",
+      "bytes": 2384,
+      "sha256": "aea13fadd794d4cbc82a5e7ff5e68b5063aa8970c90f245edc9f99a73cc08d23"
+    },
+    {
+      "path": "launchers/SHA256SUMS",
+      "bytes": 441,
+      "sha256": "c02c6de1eef5abbc642bfd39f9046fb07b998a2c1cc3caff2a58542d6c53a6d3"
     },
     {
       "path": "packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json",
@@ -2826,8 +2876,10 @@
       "sha256": "ce1fa418de16a19495a9f72495580e3015d7745c296d3ce0485897f902ddedfb"
     }
   ],
-  "file_count": 564,
-  "payload_bytes": 119188645,
+  "file_count": 574,
+  "payload_bytes": 119205110,
   "distribution_note": "SHA256SUMS and release-manifest.json are excluded from their own file inventory.",
-  "known_limits": "PREVIEW-NOTES.html"
+  "known_limits": "PREVIEW-NOTES.html",
+  "runtime_game": "C410; R22 wider-view/mirror-carry changes are not yet deployed.",
+  "desktop_launchers": "START.html"
 }

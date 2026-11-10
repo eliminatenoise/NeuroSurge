@@ -1,6 +1,6 @@
 # NeuroSurge
 
-[Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/).
+[Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/). [Download a Windows, macOS or Linux launcher](https://eliminatenoise.github.io/NeuroSurge/START.html).
 
 Move an arm. Watch its muscles and movement-related brain regions light up together. NeuroSurge is a 3D browser game for exploring that connection: a skinless body, a movable brain overview, linked activation colours and keyboard, mouse and trackpad controls. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 

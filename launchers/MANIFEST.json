@@ -1,0 +1,49 @@
+{
+  "project": "NeuroSurge",
+  "kind": "online desktop URL launchers",
+  "target": "https://eliminatenoise.github.io/NeuroSurge/",
+  "hashAlgorithm": "sha256",
+  "self_excluded": true,
+  "files": [
+    {
+      "name": "Install-NeuroSurge-Linux.sh",
+      "bytes": 2564,
+      "sha256": "dd063ef8394741fb4222f0bcadb8be732ded10703a39df6742a7680806379eb5"
+    },
+    {
+      "name": "NeuroSurge-Launchers.zip",
+      "bytes": 3835,
+      "sha256": "be62c6a3852c1c3da38108505d8666ea0a728e5fe9b4abc22739c4637268783c"
+    },
+    {
+      "name": "NeuroSurge-Linux.desktop",
+      "bytes": 329,
+      "sha256": "06566fad07fc696ae9e7f9e6684089d49da9aa439fb656c08a31c40ac1c09575"
+    },
+    {
+      "name": "NeuroSurge-Windows.url",
+      "bytes": 70,
+      "sha256": "23c53adcb243c6833e1a566ef972b33676a0a1da1b056a4c74f149e841028ca5"
+    },
+    {
+      "name": "NeuroSurge-macOS.webloc",
+      "bytes": 267,
+      "sha256": "dcda8b135840407847f9723bb817021e9a0cb3fd3134885d192538f81be5c679"
+    },
+    {
+      "name": "README.txt",
+      "bytes": 2384,
+      "sha256": "aea13fadd794d4cbc82a5e7ff5e68b5063aa8970c90f245edc9f99a73cc08d23"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 441,
+      "sha256": "c02c6de1eef5abbc642bfd39f9046fb07b998a2c1cc3caff2a58542d6c53a6d3"
+    }
+  ],
+  "qualification": "Static formats/source and isolated Linux installer DATA only; Windows/macOS native opening and actual browser launch require separate checks. No offline/model capability implied.",
+  "descriptionsGlossary": {
+    "revision": 36,
+    "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406"
+  }
+}
