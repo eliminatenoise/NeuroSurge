@@ -1,4 +1,4 @@
-/** R356 B: UNSELECTED ordinary initial-design comparison; SOURCE-ONLY preparation, never a chosen default.
+/** R22 / R460 wide-view experimental preview: normal constructor/loading/input path, not production qualification.
  * Same posterior engineering reference, ordinary look0, explicit placement0.
  * Exact C353/R302 loading, validation, streams, ready/firstView/render and input paths are retained.
  * Fixed configuration assertions check these inputs only, not framing/anatomy/normal-mechanics/production acceptance.
@@ -9,7 +9,7 @@ import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
 import { PAGE } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 
-const viewGraph = Object.freeze({ reference: 'posterior-brain-bound', initialLook: Object.freeze({ yaw: 0, pitch: 0 }), fovYDeg: 90, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: 0 }) });
+const viewGraph = Object.freeze({ reference: 'posterior-brain-bound', initialLook: Object.freeze({ yaw: 0, pitch: 0 }), fovYDeg: 110, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: 0 }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);
 // Exact priority IDs in pinned294-entry full-body manifest order (right/left lacrimal bones), not a progress guess.
@@ -246,8 +246,8 @@ export async function assertConfiguredBoot() {
   requireCase(f.bodyRig === true && f.bodyNote === null && f.brainMode === 'region' && f.round5.faceMuscles === 54 && f.round5.faceNote === null, 'normal body/girdle/54face must complete');
   requireCase(s.state && s.state.referenceBrain && Array.isArray(s.state.referenceBrain.initialPivotWorld) && s.state.referenceBrain.initialPivotWorld.length === 3 && s.state.referenceBrain.initialPivotWorld.every(Number.isFinite), 'constructor world brain pivot must bind on actual frame');
   requireCase(s.camera && s.camera.pose && s.camera.pose.firstPerson === true && s.camera.pose.thirdPerson === false, 'actual camera must use configured FIRST-person route');
-  requireCase(g.fovYDeg === 90 && g.initialLook.yaw === 0 && g.initialLook.pitch === 0, 'actual constructor graph must resolve the declared R356 B engineering inputs');
-  requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === 90, 'declared landscape reproduction must use actual simulation FOV90, not posthoc projection');
+  requireCase(g.fovYDeg === 110 && g.initialLook.yaw === 0 && g.initialLook.pitch === 0, 'actual constructor graph must resolve the declared R356 B engineering inputs');
+  requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === 110, 'declared landscape reproduction must use actual simulation FOV110, not posthoc projection');
   requireCase(g.initialBrainPlacement.yaw === 0 && g.initialBrainPlacement.pitch === 0, 'explicit initialBrainPlacement must resolve the declared R356 B engineering inputs');
   requireCase(g.referenceBp[0] === g.originalEyeBp[0] && g.referenceBp[2] === g.originalEyeBp[2] && g.referenceBp[1] > g.originalEyeBp[1], 'normal source posterior plane must remain distinct from original E');
   const initialPose = observations.firstReadyReadback.camera && observations.firstReadyReadback.camera.pose;

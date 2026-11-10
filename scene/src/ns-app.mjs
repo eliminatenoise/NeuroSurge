@@ -102,7 +102,7 @@ const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /* ------------------------------------------------------------------ constants */
 
 export const FOV_Y_DEG = CAMERA.fovYDeg;
-/** Narrow-layout camera (repair R3, Root R2 acceptance finding 1). With a fixed 70 deg vertical FOV a 390x844 portrait
+/** Historical narrow-layout repair R3 retained under the R22 wide display default. With the OLD fixed70degree vertical FOV a 390x844 portrait
  * view is only ~36 deg wide: 72 of the 120 extreme poses (wrist extension, spread) then fit at NO reachable depth at the
  * centre anchor, so no A/D anchor range exists and the hand was pinned at x = 0. Narrow viewports therefore widen the
  * vertical FOV until the horizontal FOV reaches MIN_HORIZONTAL_FOV_DEG (capped at MAX_FOV_Y_DEG); aspects of about
@@ -1355,6 +1355,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return {
       t: 0,           // actual elapsed wall seconds (event / expiry clock)
       poseT: 0,       // accumulated capped pose-integration seconds (motion clock)
+      objectCarry: ReferenceGraph.initialObjectCarry(),
       reach: reachStart(armOptions),
       reachTouched: false, // R4-fix (RP3): no W/A/S/D yet, so the hand keeps the start x of the current aspect
       reachBlockedS: 0,    // R4-fix (RP3): how long a held W/A/S/D has moved nothing (s)
@@ -1499,15 +1500,20 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       yaw: gl.yaw, pitch: gl.pitch, onBrain: gazeOnBrain(state.gaze), spaceEvents: evs, orbitDirs: owns.orbit ? [] : orbitDirs, act: actIn
     });
     const brainRaw = brainTransformFor(view, regionMode ? brainFrame : null);
-    const pickReferenceBrain = referenceGraph ? ReferenceGraph.advanceBrainState(state.referenceBrain, view, camRay.origin, brainRaw.transform) : null;
-    const brain = referenceGraph ? ReferenceGraph.translateBrainRecord(brainRaw, pickReferenceBrain, initialBrainOrigin) : brainRaw;
-    const viewKey = `${view.orbit.yaw}|${view.orbit.pitch}|${view.offset.yaw}|${view.offset.pitch}${camKey}`;
+    const previousReference = referenceGraph ? state.referenceBrain : state.objectBrainReference || null;
+    const pickReferenceBrain = previousReference && brainRaw.transform ? ReferenceGraph.advanceBrainState(previousReference, view, camRay ? camRay.origin : [0, 0, 0], brainRaw.transform) : null;
+    const brain = pickReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRaw, pickReferenceBrain, initialBrainOrigin || [0, 0, 0]) : brainRaw;
+    const viewKey = `${view.orbit.yaw}|${view.orbit.pitch}|${view.offset.yaw}|${view.offset.pitch}${camKey}${pickReferenceBrain ? '|worldPivot:' + pickReferenceBrain.pivotWorld.join(',') : ''}`;
 
     // Gaze: pure focus-strip / region test in source mm (camera at the world origin; the arm never occludes the ray).
     // Legacy mode only knows the arm band: a scene raycast hit on the brain (inputs.glassHit, ns-scene-three
     // raycastBrain, from the previous frame) marks an otherwise empty gaze as glass, so Space can grab the brain there.
     let gaze = classify(state.gaze, gl.yaw, gl.pitch, placement, reframed, viewKey, brain, camRay);
     if (gaze.target === 'empty' && inputs && inputs.glassHit === true && !regionMode) gaze = { ...gaze, kind: 'glass', target: 'glass' };
+    // R22 visible UI/mirror targets do not stimulate a brain area behind them. Actual glass remains graspable.
+    const objectPick = inputs && inputs.objectPick ? inputs.objectPick : null;
+    if (objectPick && (objectPick.target === 'mirror' || objectPick.blocked === 'orbit-arrow')) gaze = { ...gaze, target: 'empty', kind: 'empty', actionId: null, regionId: null, u: null, isLeftArm: false, hemisphere: null, point: null };
+    else if (objectPick && objectPick.target === 'brain' && gaze.target === 'empty') gaze = { ...gaze, target: 'glass', kind: 'glass' };
     // No activation without user input (round-1 A4): on the first frame, on a reframe (resize / DPR / FOV change) while
     // the look itself did not change, and on an orbit step, the region under the crosshair is recorded silently. A
     // reframe in the same frame as a real look change is classified normally. inputs.silentGaze === true forces it.
@@ -1567,8 +1573,18 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // drag); in fallback mode it equals the picking view.
     const viewOut = owns.grab || owns.orbit ? nextBrainView(view, { yaw: gl.yaw, pitch: gl.pitch, act: a }) : view;
     const brainRawOut = viewOut === view ? brainRaw : brainTransformFor(viewOut, regionMode ? brainFrame : null);
-    const nextReferenceBrain = referenceGraph ? ReferenceGraph.advanceBrainState(state.referenceBrain, viewOut, camRay.origin, brainRawOut.transform) : null;
-    const brainOut = referenceGraph ? ReferenceGraph.translateBrainRecord(brainRawOut, nextReferenceBrain, initialBrainOrigin) : (viewOut === view ? brain : brainRawOut);
+    const carryOrigin = camRay ? camRay.origin : [0, 0, 0];
+    let nextReferenceBrain = referenceGraph ? ReferenceGraph.advanceBrainState(state.referenceBrain, viewOut, carryOrigin, brainRawOut.transform)
+      : objectPick && brainRawOut.transform ? ReferenceGraph.advanceBrainState(state.objectBrainReference || ReferenceGraph.initialBrainState([0, 0, 0]), viewOut, carryOrigin, brainRawOut.transform) : null;
+    let brainOut = nextReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRawOut, nextReferenceBrain, initialBrainOrigin || [0, 0, 0]) : (viewOut === view ? brain : brainRawOut);
+    const carried = nextReferenceBrain && objectPick ? ReferenceGraph.stepObjectCarry(state.objectCarry, { pick: objectPick, events: evs, gazeAt: Math.min(gazeAt, wall), axes, wallDt: wall, poseDt: h,
+      origin: carryOrigin, look: gl, brainView: viewOut, brainTransform: brainRawOut.transform, brainCentre: brainOut.transform.pivotWorld, brainTranslation: nextReferenceBrain.translation, brainFrame, referenceOrigin: initialBrainOrigin || [0, 0, 0], viewport: { aspect, fovYDeg: fov, nearM: CAMERA.near },
+      constrainBrainMovement: (movement, priorMovement) => NsBrain.constrainBrainTranslation({ frame: brainFrame, transform: brainRawOut.transform,
+        translation: nextReferenceBrain.translation.map((v, i) => v + priorMovement[i]), armOrigin: referenceFrame ? referenceFrame.position : [0, 0, 0], movement }) }) : null;
+    if (carried) {
+      nextReferenceBrain = ReferenceGraph.offsetBrainState(nextReferenceBrain, viewOut, brainRawOut.transform, carried.brainMovementWorld);
+      brainOut = ReferenceGraph.translateBrainRecord(brainRawOut, nextReferenceBrain, initialBrainOrigin || [0, 0, 0]);
+    }
     const rotationState = typeof a.rotationState === 'string' ? a.rotationState : rotation.rotation;
     // Forearm rotation for the rig: the activity's eased rotation value (double-tap state and pronation/supination
     // region pulses, U1) when present, else the fallback state eased by ns-arm stepPronation (0.4 s), never an
@@ -1677,6 +1693,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const activated = countActivations(state.activated, act.marks, act.restarts, gaze.actionId);
     const objOrNull = v => (v && typeof v === 'object' ? v : null);
     const nextState = {
+      objectCarry: carried ? carried.state : state.objectCarry || ReferenceGraph.initialObjectCarry(),
       t: state.t + wall,
       poseT: (Number.isFinite(state.poseT) ? state.poseT : 0) + h,
       reach,
@@ -1700,7 +1717,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       },
       brainFrame,
       view: viewOut,
-      ...(referenceGraph ? { referenceBrain: nextReferenceBrain } : {}),
+      ...(referenceGraph ? { referenceBrain: nextReferenceBrain } : nextReferenceBrain ? { objectBrainReference: nextReferenceBrain } : {}),
       rotation,
       pron,
       activated
@@ -1712,7 +1729,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         reachBlocked: reachBlockedS >= REACH_BLOCKED.seconds,
         reachMoved: { x: movedX, z: movedZ }, // R4-fix (RP3): the hand really moved this frame (net, key direction)
         marks: act.marks, restarts: act.restarts, dt: h, clock: { wallDt: wall, poseDt: h }, fovYDeg: fov,
-        brainView: viewOut, brainParams: brainOut.params, brainTransform: brainOut.transform, pickParams: brain.params, brainFrame,
+        objectCarry: carried ? { ...carried.diagnostic, mirrorWorldCentre: carried.mirrorWorldCentre } : null, brainView: viewOut, brainParams: brainOut.params, brainTransform: brainOut.transform, pickParams: brain.params, brainFrame,
         brainMode: regionMode ? 'region' : 'legacy', arrow, rotationState,
         regionActivity: objOrNull(a.regionActivity), activatedRegions: objOrNull(a.activatedRegions), activatedActions: activated,
         bodyJointTargets: objOrNull(a.bodyJointTargets), handTargetYNdc: handYNdc, attachment: displayedAttachment,
@@ -1748,7 +1765,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       } else if (g) a = seedActivityGaze(activity, a, g.actionId);
     }
     return {
-      ...state, activity: a, ...(referenceGraph ? { referenceBrain: { ...state.referenceBrain, anchor: null }, view: nextBrainView(state.view, { yaw: g ? g.yaw : 0, pitch: g ? g.pitch : 0, act: a }) } : {}), reach: reachStart(armOptions), reachTouched: false, reachBlockedS: 0, reachHold: null, reachRates: { depth: 0, x: 0 }, elbowRad: null, elbowRate: 0,
+      ...state, objectCarry: ReferenceGraph.clearObjectCarry(state.objectCarry), activity: a, ...(referenceGraph ? { referenceBrain: { ...state.referenceBrain, anchor: null }, view: nextBrainView(state.view, { yaw: g ? g.yaw : 0, pitch: g ? g.pitch : 0, act: a }) } : {}), reach: reachStart(armOptions), reachTouched: false, reachBlockedS: 0, reachHold: null, reachRates: { depth: 0, x: 0 }, elbowRad: null, elbowRate: 0,
       rotation: initialRotation(), pron: pronationStart('pronated'), activated: {}, trigger: { ...state.trigger, at: null }
     };
   }
@@ -1759,8 +1776,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   function setPaused(state, paused) {
     if (!state || !state.activity) fail('app_state', 'state must come from initialState/stepFrame');
     const a = state.activity;
-    if (typeof a.paused !== 'boolean' || a.paused === (paused === true) || typeof activity.step !== 'function') return state;
-    return { ...state, activity: activity.step(a, [{ type: paused === true ? 'pause' : 'resume' }], 0), ...(referenceGraph ? { referenceBrain: { ...state.referenceBrain, anchor: null } } : {}) };
+    if (typeof a.paused !== 'boolean' || a.paused === (paused === true) || typeof activity.step !== 'function') return paused === true ? { ...state, objectCarry: ReferenceGraph.clearObjectCarry(state.objectCarry) } : state;
+    return { ...state, objectCarry: ReferenceGraph.clearObjectCarry(state.objectCarry), activity: activity.step(a, [{ type: paused === true ? 'pause' : 'resume' }], 0), ...(referenceGraph ? { referenceBrain: { ...state.referenceBrain, anchor: null } } : {}) };
   }
 
   /** Reset brain view: orbit and grab offset back to the default framing. When the activity owns them (ns-actions
@@ -1774,7 +1791,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       if (hasOwn(a, 'seedNextGaze')) next.seedNextGaze = true;
       try { activity.drives(next); a = next; } catch { /* the model refused the edited state: keep its own view */ }
     }
-    return { ...state, activity: a, view: initialBrainView(initialActivity.brainPlacement), ...(referenceGraph ? { referenceBrain: ReferenceGraph.initialBrainState(initialBrainOrigin, state.referenceBrain.initialPivotWorld) } : {}) };
+    return { ...state, objectCarry: { ...ReferenceGraph.clearObjectCarry(state.objectCarry), brainKeyOffset: [0, 0, 0] },
+      ...(state.objectBrainReference ? { objectBrainReference: ReferenceGraph.initialBrainState([0, 0, 0], state.objectBrainReference.initialPivotWorld) } : {}), activity: a, view: initialBrainView(initialActivity.brainPlacement), ...(referenceGraph ? { referenceBrain: ReferenceGraph.initialBrainState(initialBrainOrigin, state.referenceBrain.initialPivotWorld) } : {}) };
   }
 
   /** QA (region mode): one VERIFIED look per body-map region for the current brain view: candidate points on the
@@ -2036,7 +2054,7 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
   const marked = tr.at !== null && state.t - tr.at <= TRIGGER_MARK_SECONDS;
   const other = onOther ? regionById(bodyMapOf(bodyMap), g.regionId) : null;
   const sup = a.lastSuppressed && Number.isFinite(a.lastSuppressed.t) && state.t - a.lastSuppressed.t <= SUPPRESSED_FLASH_SECONDS ? a.lastSuppressed : null;
-  const grabbing = Boolean(out.brainView && out.brainView.grab && out.brainView.grab.active);
+  const grabbing = Boolean((out.objectCarry && out.objectCarry.held && out.objectCarry.target) || (out.brainView && out.brainView.grab && out.brainView.grab.active));
   const reachLevel = out.armReach && Number.isFinite(out.armReach.armReach) ? out.armReach.armReach : 0;
   // Round 3 (R17/D3): plain lines from ns-text; the crosshair label is the plain action / area name only.
   let gazeText, hover = '', caption = '';
@@ -3382,6 +3400,12 @@ export function start(params = {}) {
   /** Release every held key (one space-up is queued when Space was held, so the fist opens on resume). */
   function releaseInputs() {
     if (controlsApi && cs) cs = controlsApi.blur(cs, clockMs());
+    // Clear only the new carry latch at the existing safety/stop boundary, with no model or clock advance.
+    // Existing queued Space-up still owns actual opening/double-tap cleanup on the next activity step.
+    if (simState && simState.objectCarry) {
+      simState = { ...simState, objectCarry: ReferenceGraph.clearObjectCarry(simState.objectCarry) };
+      current = { ...current, state: simState };
+    }
   }
 
   // Look settings: when the controls reducer owns sensitivity / invert-Y (ns-controls setLookOptions), they are applied
@@ -4036,7 +4060,7 @@ export function start(params = {}) {
         // the controls' UI queue (drained at the top of the frame); the camera refuses one while Space drags the brain. The
         // pitch range is set BEFORE the handed-over look, so E then E returns exactly (R5-camera 4.1).
         if (live && viewRequests > 0) {
-          const grabbing = Boolean(simState && simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active);
+          const grabbing = Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
           const aim = current.out && current.out.brainTransform && Array.isArray(current.out.brainTransform.pivotWorld) ? current.out.brainTransform.pivotWorld : null;
           for (; viewRequests > 0; viewRequests--) {
             const toggleFrame = referenceGraph ? sim.referenceFrameForLook(cam.view === 'third' && cam.fpLook ? cam.fpLook : { yaw: cs.yaw, pitch: cs.pitch }) : null;
@@ -4123,8 +4147,9 @@ export function start(params = {}) {
           const hk = shown ? `${shown.target}:${shown.dir}:${shown.blocked || ''}` : '';
           if (hk !== arrowHoverKey) { arrowHoverKey = hk; try { callScene('setArrowHover', shown ? { target: shown.target, dir: shown.dir, blocked: shown.blocked || null } : null); } catch { /* highlight only */ } }
         }
+        const objectPick = live && sceneFn('graspTargetAt') ? callScene('graspTargetAt', size.width / 2, size.height / 2) : { target: null, blocked: live ? 'unsupported-normal-scene-pick' : 'paused' };
         const stepInputs = {
-          yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : live ? controlsApi.axes(cs) : { x: 0, z: 0 }, events: timing.events, aspect,
+          objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : live ? controlsApi.axes(cs) : { x: 0, z: 0 }, events: timing.events, aspect,
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true, silentGaze: seedNext === true || camPose.silentGaze === true,
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
           ...(wholeArmOption ? { wholeArmDisplayPlan, wholeArmActiveCamera: camPose } : {}),
@@ -4135,6 +4160,9 @@ export function start(params = {}) {
         seedNext = false;
         simState = step.state;
         const out = step.out;
+        if (out.objectCarry && out.objectCarry.mirrorWorldCentre) {
+          mirrorView = Object.freeze({ ...mirrorView, worldCentre: Object.freeze(out.objectCarry.mirrorWorldCentre.slice()) }); applyMirrorView();
+        }
         // R4-text (D7): the "Try this" guide follows real events of this frame (one pure call; never blocks play).
         // R5-integrate-core (R5-text W2): the E goal hears the view changes (third when the switch starts, first when it ends).
         const guideEvs = NG.guideEventsFromFrame({ prev: prevSim, next: simState, out, inputs: stepInputs, bodyMap });
@@ -4354,6 +4382,16 @@ export function start(params = {}) {
         }
         // Orientation labels (R / L / anterior / posterior): in region mode from the DRAWN brain transform (U2b
         // brainOrientationAnchors), else from the legacy band placement. The arm avoid shapes use the attached shoulder.
+        // R22: current full mirror pose is now applied. Reconcile ONLY a held object's near depth, never the camera/body/arm.
+        if (simState.objectCarry && simState.objectCarry.mirror && sceneFn('reconcileMirrorCarry')) {
+          const held = simState.objectCarry.held && simState.objectCarry.target === 'mirror';
+          const checked = callScene('reconcileMirrorCarry', { held, farM: simState.objectCarry.mirror.bounds.farM });
+          if (checked && checked.movementWorldM && checked.movementWorldM.some(x => x !== 0)) {
+            simState = { ...simState, objectCarry: ReferenceGraph.offsetMirrorCarry(simState.objectCarry, checked.movementWorldM) };
+            mirrorView = Object.freeze({ ...mirrorView, worldCentre: Object.freeze(simState.objectCarry.mirror.centreWorldM.slice()) });
+          }
+          if (out.objectCarry) { out.objectCarry.currentPosePlacement = checked; out.objectCarry.mirrorWorldCentre = simState.objectCarry.mirror.centreWorldM.slice(); }
+        }
         const avoid = armAvoidShapes(out.fit, {
           aspect, fovYDeg: out.fovYDeg, ...(out.fit.solution && Array.isArray(out.fit.solution.shoulderCam) ? { shoulderCam: out.fit.solution.shoulderCam } : {})
         });

@@ -51,9 +51,9 @@ export const MIRROR_VERSION = 'ns-mirror-r5 (R5-mirror, 2026-11-09)';
  *    view (frame.silhouetteNdc). 0.56 leaves room for the top and bottom mirror arrows INSIDE the brain outline, as the
  *    user asked ("within and behind the brain"), on 1280x720, 720x1280 and 2560x1080.
  *  widthShare: the same cap for the width (portrait screens are width-bound).
- *  gapM: the empty shell between the brain's farthest possible drawn point (any orbit, any Space-drag) and the mirror
- *    body's nearest possible point (any mirror orbit), in world metres. Because both distances are measured from the
- *    eye, every ray from a camera inside the brain's ball meets the brain before the mirror body (third person too).
+ *  gapM: R22 initial depth-plane gap between the normal brain support and facing mirror source box, world metres.
+ *    The historical all-orbit brain/body sphere rule is retained only as comparison metadata. Future pose/orbit/carry
+ *    collision is not proved by this initial bound; the transparent brain still blocks mirror input explicitly.
  *  maxNearShare: the mirror's bounding sphere may use at most this share of its centre distance (keeps the solve finite).
  *  minScale / maxScale: a safety range for the enlargement only (measured: 4.6x at 720x1280, 9.2x at 1280x720, 9.4x at
  *    2560x1080; the brain itself is drawn about 50 times life size).
@@ -181,7 +181,7 @@ export const MIRROR_TEXT = Object.freeze({
   reset: 'Reset mirror body',
   resetHelp: 'Turns the mirror body back to face you.',
   simulated: 'Everything here is simulated.',
-  escRow: 'Mirror body: a mirror image of you behind the brain. Drag the brain away, then use its arrows to turn it.',
+  escRow: 'Mirror body: move the brain aside, then hold Space on the visible mirror and look or use W/A/S/D to carry it. Its arrows turn it.',
   partSuffix: ' (mirror image)'
 });
 
@@ -296,9 +296,9 @@ export function brainFarDistance({ frame, brainRadiusMm, distanceM = null } = {}
  *     centre's line of sight (o.centre 'pivot');
  *   - R5-bigbrain (R25): options.targetBoxNdc { x0, x1, y0, y1 } (a mirrorFitBox result in NDC) replaces the two rules
  *     above: the body's projected box is fitted into it (its height or width, whichever binds) and centred on it;
- *   - depth: the distance is the smallest that keeps the body's whole bounding sphere at least gapM beyond the brain's
- *     far ball (so it stays behind the brain for every brain orbit / drag and every mirror orbit); the enlargement
- *     follows from the angular size (s = rho z).
+ *   - R22 depth: the initial facing source body box stays beyond the brain's far plane+gap; height is not depth.
+ *     The separate all-orbit source-sphere near-share guard stays. Carried/orbited/current-pose clearance still needs
+ *     qualification; transparent brain input occlusion remains explicit. Enlargement follows the angular fit (s=rho*z).
  * Returns a frozen { kind: 'ns-mirror-placement', centre, distanceM, scale, toward, right, up, facingYawDeg, reflectAxis,
  *   bodyCentre, body, nearM, brainFarM, gapM, targetHeightNdc, targetWidthNdc, limiting ('height' | 'width' | 'near' |
  *   'scale'), expectedHeightNdc, expectedWidthNdc, expectedCentreNdc, iterations, camera }.
@@ -312,7 +312,8 @@ export function mirrorPlacement({ body = null, brain = null, camera = {}, option
   const eye = camera.eye ? vec3(camera.eye, 'camera.eye') : [0, 0, 0];
   const t = Math.tan((fovYDeg * DEG) / 2), ta = t * aspect;
   const bc = brain && brain.centre ? vec3(brain.centre, 'brain.centre') : [0, 0, -6.5];
-  const farM = brain && Number.isFinite(brain.farM) ? brain.farM : length(sub(bc, eye)) + 2;
+  const legacySphereFarM = brain && Number.isFinite(brain.farM) ? brain.farM : length(sub(bc, eye)) + 2;
+  const farM = brain && Number.isFinite(brain.depthFarM) ? brain.depthFarM : legacySphereFarM;
   const box = brain && brain.outlineNdc ? brain.outlineNdc : { x0: -0.5, x1: 0.5, y0: -0.8, y1: 0.8 };
   const hB = box.y1 - box.y0, wB = box.x1 - box.x0;
   if (!(hB > 0 && wB > 0)) fail('input', 'brain.outlineNdc must have a positive size');
@@ -337,17 +338,26 @@ export function mirrorPlacement({ body = null, brain = null, camera = {}, option
   const ndcOf = p => { const d = sub(p, eye); return [d[0] / (-d[2] * ta), d[1] / (-d[2] * t)]; };
   let dir = normalize(sub(bc, eye));
   const build = (rho, dirv) => {
-    const cz = Math.max(0.2, -dirv[2]);
+    const cz = -dirv[2];
+    if (!(Number.isFinite(cz) && cz > 0)) fail('input', 'initial mirror must have positive camera depth');
     const rhoNear = o.maxNearShare / (cz * r);
     let lim = null, rr = rho;
     if (rr > rhoNear) { rr = rhoNear; lim = 'near'; }
-    let D = (farM + o.gapM) / (1 - rr * cz * r); // nearest sphere point D - s r >= farM + gap, with s = rho cz D
-    let s = rr * cz * D;
-    if (s < o.minScale || s > o.maxScale) { s = clamp(s, o.minScale, o.maxScale); D = Math.max(farM + o.gapM + s * r, D); lim = 'scale'; }
-    const centre = add(eye, scale(dirv, D));
-    const toward = normalize(sub(eye, centre));
+    const toward = scale(dirv, -1);
     const towardH = Math.hypot(toward[0], toward[2]) > 1e-9 ? normalize([toward[0], 0, toward[2]]) : imageFacing;
     const facingYawDeg = o.facing ? Math.atan2(dot(cross(imageFacing, towardH), UP), dot(imageFacing, towardH)) / DEG : 0;
+    const unit = multiply(rotY(facingYawDeg * DEG), reflectionMatrix(reflectAxis));
+    const axes = [b.right ? vec3(b.right, 'body.right') : [1, 0, 0], UP, reflectAxis];
+    const depthHalf = axes.reduce((n, axis, i) => n + Math.abs(transformDirection(unit, axis)[2]) * b.half[i], 0);
+    const oldD = (legacySphereFarM + o.gapM) / (1 - rr * cz * r);
+    // R22: only INITIAL facing placement must stand behind the brain. Body height is not its front/back depth.
+    // Original maxNearShare still bounds the all-orbit sphere away from the camera; no joint/mesh/scale threshold changes.
+    const denominator = cz * (1 - rr * depthHalf);
+    if (!(Number.isFinite(denominator) && denominator > 0)) fail('input', 'initial mirror depth-support solve is not finite');
+    let D = (farM + o.gapM) / denominator;
+    let s = rr * cz * D;
+    if (s < o.minScale || s > o.maxScale) { s = clamp(s, o.minScale, o.maxScale); D = Math.max((farM + o.gapM + s * depthHalf) / cz, D); lim = 'scale'; }
+    const centre = add(eye, scale(dirv, D));
     // Orbit 0: M = T(centre) Ry(facing) S(s) Reflect T(-c0).
     const lin = multiply(rotY(facingYawDeg * DEG), multiply(uniformScale(s), reflectionMatrix(reflectAxis)));
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -356,7 +366,7 @@ export function mirrorPlacement({ body = null, brain = null, camera = {}, option
       const n = ndcOf(q);
       if (n[0] < x0) x0 = n[0]; if (n[0] > x1) x1 = n[0]; if (n[1] < y0) y0 = n[1]; if (n[1] > y1) y1 = n[1];
     }
-    return { rho: rr, D, s, centre, toward, facingYawDeg, lim, h: y1 - y0, w: x1 - x0, cx: (x0 + x1) / 2, cy: (y1 + y0) / 2, cNdc: ndcOf(centre) };
+    return { rho: rr, D, s, centre, toward, facingYawDeg, lim, oldD, depthHalf, initialDepthNearM: cz * D - s * depthHalf, h: y1 - y0, w: x1 - x0, cx: (x0 + x1) / 2, cy: (y1 + y0) / 2, cNdc: ndcOf(centre) };
   };
   // Start from the upright-box estimate, then correct on the real projection.
   let rho = Math.min((targetH * t) / H, (targetW * ta) / W);
@@ -382,7 +392,7 @@ export function mirrorPlacement({ body = null, brain = null, camera = {}, option
     kind: 'ns-mirror-placement', rule: tb ? 'fit-box' : 'outline-share', targetBoxNdc: tb ? freeze({ x0: tb.x0, x1: tb.x1, y0: tb.y0, y1: tb.y1 }) : null,
     centre: freeze(P.centre), distanceM: P.D, scale: P.s, toward: freeze(P.toward), right: freeze(right), up: freeze(up),
     facingYawDeg: P.facingYawDeg, reflectAxis: freeze(reflectAxis), bodyCentre: freeze([...c0]), body: b,
-    nearM: P.D - P.s * r, brainFarM: farM, gapM: o.gapM, targetHeightNdc: targetH, targetWidthNdc: targetW, limiting,
+    nearM: P.D - P.s * r, initialDepthNearM: P.initialDepthNearM, depthSupportHalfM: P.s * P.depthHalf, priorSphereDistanceM: P.oldD, legacySameFitSphereDistanceRatio: P.D / P.oldD, distanceRule: 'initial-facing-depth-support-r22', brainDepthFarM: farM, legacyBrainSphereFarM: legacySphereFarM, brainDepthBasis: brain && brain.depthBasis ? brain.depthBasis : 'legacy-sphere-fallback', brainFarM: farM, gapM: o.gapM, targetHeightNdc: targetH, targetWidthNdc: targetW, limiting,
     expectedHeightNdc: P.h, expectedWidthNdc: P.w, expectedCentreNdc: freeze([P.cx, P.cy]), iterations,
     camera: freeze({ aspect, fovYDeg, eye: freeze(eye) })
   });
@@ -505,9 +515,12 @@ export function mirrorTransform(state) {
   const parent = p.referenceFrame || null;
   if (parent && (parent.length !== 16 || !Array.from(parent).every(Number.isFinite) || parent[3] !== 0 || parent[7] !== 0 || parent[11] !== 0 || parent[15] !== 1 || !(Number.isFinite(det3(parent)) && det3(parent) > 0))) fail('input', 'constructor reference frame must be finite right-handed affine');
   const matrix = parent ? multiply(parent, localMatrix) : localMatrix;
+  const originalWorldCentre = parent ? transformPoint(parent, p.centre) : p.centre;
+  const placedWorldCentre = p.worldCentre ? vec3(p.worldCentre, 'persistent mirror world centre') : originalWorldCentre;
+  for (let i = 0; i < 3; i++) matrix[12 + i] += placedWorldCentre[i] - originalWorldCentre[i];
   const inverse = invertAffine(matrix);
   const direction = v => parent ? transformDirection(parent, v) : v;
-  const worldCentre = parent ? transformPoint(parent, p.centre) : p.centre;
+  const worldCentre = placedWorldCentre;
   const worldLinear = parent ? multiply(parent, lin) : lin;
   if (parent) { worldLinear[12] = 0; worldLinear[13] = 0; worldLinear[14] = 0; }
   return freeze({
@@ -588,10 +601,10 @@ export function mirrorArrowFrame(state, { gapFrac = MIRROR_VIEW.arrowGapFrac, si
   const outward = { forward: up, back: scale(up, -1), left: scale(right, -1), right };
   const anchors = {};
   for (const d of MIRROR_DIRS) {
-    anchors[d] = freeze({ position: freeze(add(p.centre, scale(outward[d], ext[d] + gapM))), outward: freeze(outward[d]), compass: MIRROR_COMPASS[d], orbit: MIRROR_ORBIT_DIRECTIONS[d] });
+    anchors[d] = freeze({ position: freeze(add(T.centre, scale(outward[d], ext[d] + gapM))), outward: freeze(outward[d]), compass: MIRROR_COMPASS[d], orbit: MIRROR_ORBIT_DIRECTIONS[d] });
   }
   return freeze({
-    kind: 'ns-mirror-arrow-frame', centre: p.centre, right, up, toward, extent: freeze(ext), radius: p.body.radius * p.scale, gapM, sizeM,
+    kind: 'ns-mirror-arrow-frame', centre: T.centre, right, up, toward, extent: freeze(ext), radius: p.body.radius * p.scale, gapM, sizeM,
     anchors: freeze(anchors), scale: p.scale, orbit: T.orbit, drawnBoxHeight: H
   });
 }

@@ -1,4 +1,4 @@
-/** R266 optional engineering reference graph. No chosen eye/FOV/look preset; source units are explicit. */
+/** R266 source-derived engineering reference graph. R22 selects a110degree display FOV default; this is not a measured anatomical eye or physiological field of view. */
 import { DEG, multiply, translation, rotationY, lookRotation, rigidInverse, transformDirection, bpToWorldAxes } from './ns-math.mjs';
 const known = new WeakSet();
 const fail = m => { throw new Error('ns:reference_graph: ' + m); };
@@ -26,7 +26,7 @@ export function referenceOptions(options, pitchLimitRad = 80 * DEG) {
   if (!(Number.isFinite(pitchLimitRad) && pitchLimitRad >= 0)) fail('actual Controls pitch limit required');
   const reference = options.reference === undefined ? 'eye' : options.reference;
   if (!['eye', 'posterior-brain-bound'].includes(reference)) fail('unsupported source reference selector');
-  const fovYDeg = options.fovYDeg === undefined ? 70 : options.fovYDeg;
+  const fovYDeg = options.fovYDeg === undefined ? 110 : options.fovYDeg;
   if (!(Number.isFinite(fovYDeg) && fovYDeg >= 70 && fovYDeg <= 120)) fail('base FOV must remain inside existing source70..120degree bounds');
   return Object.freeze({ reference, fovYDeg, initialLook: angles(options.initialLook, Math.min(80 * DEG, pitchLimitRad), 'initialLook'), initialBrainPlacement: angles(options.initialBrainPlacement, 75 * DEG, 'initialBrainPlacement') });
 }
@@ -105,6 +105,158 @@ export function advanceBrainState(state, view, origin, actualTransform) {
   return { translation: shift, pivotWorld, anchor,
     initialPivotWorld: state.initialPivotWorld ? vec(state.initialPivotWorld, 'configured initial world pivot') : pivotWorld.slice() };
 }
+/** R22: translate the already-carried brain without losing its next-frame mouse anchor. */
+export function offsetBrainState(state, view, actualTransform, movementWorld) {
+  const delta = vec(movementWorld, 'brain keyboard movement world m');
+  if (delta.every(v => v === 0)) return state;
+  let anchor = state.anchor;
+  if (anchor) {
+    const relative = multiply(carry(view, actualTransform), rigidInverse(anchor.carry));
+    const atStart = transformDirection(rigidInverse(relative), delta);
+    anchor = { ...anchor, pivotWorld: vec(anchor.pivotWorld, 'brain anchor').map((v, i) => v + atStart[i]) };
+  }
+  return { ...state, translation: vec(state.translation, 'brain translation').map((v, i) => v + delta[i]),
+    pivotWorld: vec(state.pivotWorld, 'brain pivot').map((v, i) => v + delta[i]), anchor };
+}
+export function initialObjectCarry() {
+  return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], mirror: null, diagnostic: null };
+}
+export function offsetMirrorCarry(state, movementWorld) {
+  const delta = vec(movementWorld, 'post-pose mirror placement delta');
+  if (delta.every(x => x === 0)) return state;
+  if (!state || !state.mirror || !state.held || state.target !== 'mirror') fail('only a held mirror can reconcile placement');
+  const m = state.mirror; let anchor = m.anchor;
+  if (anchor) {
+    const relative = multiply(lookRotation(state.lastLook.yaw, state.lastLook.pitch), rigidInverse(lookRotation(anchor.startLook.yaw, anchor.startLook.pitch)));
+    const local = transformDirection(rigidInverse(relative), delta);
+    anchor = { ...anchor, pivotWorld: anchor.pivotWorld.map((x, i) => x + local[i]) };
+  }
+  return { ...state, mirror: { ...m, anchor, centreWorldM: m.centreWorldM.map((x, i) => x + delta[i]) } };
+}
+export function clearObjectCarry(state) {
+  const s = state || initialObjectCarry();
+  return { ...s, held: false, target: null, lastPick: null,
+    mirror: s.mirror ? { ...s.mirror, anchor: null } : null,
+    diagnostic: { status: 'released-by-safety', target: null } };
+}
+/** Pure event/placement reducer only: no activity/FK/IK/clock/scene work.
+ * The pick event has the SAME ordering as the existing activity gaze event: first at equal timestamps.
+ * Keys use only their held-time coverage times the App's existing poseDt/wallDt ratio. */
+export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0, axes = { x: 0, z: 0 }, wallDt = 0, poseDt = 0,
+  origin, look, brainView, brainTransform, brainCentre, brainTranslation, brainFrame, referenceOrigin, viewport, constrainBrainMovement = null } = {}) {
+  const prior = previous || initialObjectCarry(), o = vec(origin, 'active camera origin');
+  if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('finite active carry look required');
+  if (!Array.isArray(events) || !Number.isFinite(wallDt) || wallDt < 0 || !Number.isFinite(poseDt) || poseDt < 0 || poseDt > wallDt || !Number.isFinite(gazeAt) || gazeAt < 0) fail('original carry event timing required');
+  const axis = [Number(axes.x), Number(axes.z)];
+  if (!axis.every(Number.isFinite)) fail('finite carry axes required');
+  const axisNorm = Math.hypot(...axis); if (axisNorm > 1) { axis[0] /= axisNorm; axis[1] /= axisNorm; }
+  const cameraRotation = lookRotation(look.yaw, look.pitch), k = carry(brainView, brainTransform), invK = rigidInverse(k);
+  let held = prior.held === true, target = held ? prior.target : null, lastPick = prior.lastPick;
+  let keys = vec(prior.brainKeyOffset, 'persistent brain key offset');
+  let mirror = prior.mirror ? { ...prior.mirror, centreWorldM: vec(prior.mirror.centreWorldM, 'persistent mirror centre'), anchor: prior.mirror.anchor ? { ...prior.mirror.anchor } : null } : null;
+  const brainMovementWorld = [0, 0, 0];
+  const clearance = brainFrame && brainFrame.clearanceM, minimum = brainFrame && brainFrame.minBrainDistanceM, reach = brainFrame && brainFrame.reachM;
+  const reference = vec(referenceOrigin, 'initial brain reference origin');
+  const previousKeysWorld = transformDirection(k, keys);
+  const baselineTranslation = vec(brainTranslation, 'actual brain translation').map((v, i) => v - previousKeysWorld[i]);
+  const cameraShift = Math.hypot(...o.map((v, i) => v - baselineTranslation[i]));
+  if (![clearance, minimum, reach].every(Number.isFinite) || !(clearance > 0 && reach > 0 && minimum >= reach)) fail('existing full brain clearance metadata unavailable');
+  // The old global minimum is diagnostic context only: equality with reach+clearance must NOT disable W-away or safe lateral movement.
+  // A brain sphere around its centre can enclose the eye in the intentional motor-focused view; it is NOT used to invent a near radius.
+  const keyBudgetM = clearance; // finite FAR workspace, independent of direction-dependent near clearance
+  const bounds = { brainKeyFarOffsetM: keyBudgetM, originalMinBrainDistanceM: minimum, originalReachM: reach, originalClearanceM: clearance, cameraReferenceShiftM: cameraShift, initialReferenceOriginM: reference, baselineClearanceLowerBoundM: minimum - cameraShift, unchangedRequiredMinimumM: reach + clearance, clearanceStatus: 'near bound checked against actual transformed source sample balls; global scalar is context only' };
+  let heldPoseS = 0, clamped = false, selected = null, brainClearance = null;
+  let carryLook = prior.lastLook ? { ...prior.lastLook } : { ...look };
+  let carryOrigin = prior.lastOrigin ? vec(prior.lastOrigin, 'previous active camera origin') : o.slice();
+  const mirrorRotation = a => multiply(lookRotation(carryLook.yaw, carryLook.pitch), rigidInverse(lookRotation(a.startLook.yaw, a.startLook.pitch)));
+  const followMirror = () => {
+    if (!held || target !== 'mirror' || !mirror || !mirror.anchor) return;
+    const d = mirrorRotation(mirror.anchor), q = transformDirection(d, mirror.anchor.pivotWorld.map((v, i) => v - mirror.anchor.origin[i]));
+    mirror.centreWorldM = carryOrigin.map((v, i) => v + q[i]);
+  };
+  const hold = seconds => {
+    if (!held || !target || !(seconds > 0)) return;
+    const dt = wallDt > 0 ? seconds * poseDt / wallDt : 0; heldPoseS += dt;
+    if (!(dt > 0)) return;
+    const speed = target === 'mirror' && mirror ? Math.max(clearance, mirror.radiusM / 2) : clearance;
+    const delta = transformDirection(cameraRotation, [axis[0] * speed * dt, 0, -axis[1] * speed * dt]);
+    if (target === 'brain') {
+      const localDelta = transformDirection(invK, delta), next = keys.map((v, i) => v + localDelta[i]);
+      const n = Math.hypot(...next); if (n > keyBudgetM) { next.forEach((v, i) => { next[i] = n > 0 ? v * keyBudgetM / n : 0; }); clamped = true; }
+      if (typeof constrainBrainMovement !== 'function') fail('current whole-brain source clearance constraint unavailable');
+      const requested = transformDirection(k, next.map((v, i) => v - keys[i]));
+      const checked = constrainBrainMovement(requested, brainMovementWorld);
+      const actual = vec(checked.movement, 'certified brain translation'); brainClearance = checked.diagnostic;
+      clamped = clamped || checked.diagnostic.acceptedFraction !== 1;
+      const acceptedLocal = transformDirection(invK, actual); keys = keys.map((v, i) => v + acceptedLocal[i]);
+      actual.forEach((v, i) => { brainMovementWorld[i] += v; });
+    } else if (target === 'mirror' && mirror && mirror.anchor) {
+      const before = mirror.centreWorldM, next = before.map((v, i) => v + delta[i]);
+      if (axisNorm > 0) {
+        const local = transformDirection(rigidInverse(cameraRotation), next.map((v, i) => v - o[i]));
+        let depth = -local[2]; const b = mirror.bounds;
+        const wantedDepth = depth; depth = Math.max(b.nearM, Math.min(b.farM, depth));
+        const tan = Math.tan(viewport.fovYDeg * DEG / 2), maxX = depth * tan * viewport.aspect;
+        const wantedX = local[0]; local[0] = Math.max(-maxX, Math.min(maxX, local[0])); local[2] = -depth;
+        const world = transformDirection(cameraRotation, local); next.splice(0, 3, ...world.map((v, i) => v + o[i]));
+        clamped = clamped || wantedDepth !== depth || wantedX !== local[0];
+      }
+      const actual = next.map((v, i) => v - before[i]), d = mirrorRotation(mirror.anchor), inAnchor = transformDirection(rigidInverse(d), actual);
+      mirror.anchor = { ...mirror.anchor, pivotWorld: mirror.anchor.pivotWorld.map((v, i) => v + inAnchor[i]) };
+      mirror.centreWorldM = next;
+    }
+  };
+  const timeline = [{ type: 'pick', at: Math.min(gazeAt, wallDt), order: 0, value: pick }];
+  events.forEach((ev, i) => {
+    if (!ev || ev.type !== 'space') return;
+    if (typeof ev.down !== 'boolean' || (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0))) fail('original Space event required');
+    timeline.push({ type: 'space', at: Math.min(ev.at === undefined ? 0 : ev.at, wallDt), order: i + 1, down: ev.down });
+  });
+  timeline.sort((a, b) => a.at - b.at || a.order - b.order);
+  let cursor = 0;
+  for (const ev of timeline) {
+    hold(ev.at - cursor); cursor = ev.at;
+    if (ev.type === 'pick') {
+      carryLook = { ...look }; carryOrigin = o.slice(); followMirror();
+      if (mirror && ev.value && ev.value.mirrorEnvelope) {
+        const radius = ev.value.mirrorEnvelope.radiusM;
+        if (!(Number.isFinite(radius) && radius > 0)) fail('complete current mirror radius required');
+        mirror.radiusM = radius;
+        if (radius + viewport.nearM > mirror.bounds.farM) fail('current mirror geometry exceeds original finite far cap');
+        mirror.bounds = { ...mirror.bounds, nearM: radius + viewport.nearM };
+      }
+      lastPick = ev.value && ['brain', 'mirror'].includes(ev.value.target) ? { ...ev.value, look: { ...look }, origin: o.slice() } : null; continue;
+    }
+    if (ev.down && !held) {
+      held = true; target = lastPick ? lastPick.target : null; selected = target;
+      if (target === 'mirror') {
+        const point = mirror ? mirror.centreWorldM.slice() : vec(lastPick.centreWorldM, 'picked mirror centre'), radius = lastPick.radiusM;
+        if (!(Number.isFinite(radius) && radius > 0)) fail('normal mirror geometry radius unavailable');
+        const L = transformDirection(rigidInverse(cameraRotation), point.map((v, i) => v - o[i])), depth = -L[2];
+        const cameraNear = viewport && viewport.nearM;
+        if (!(Number.isFinite(cameraNear) && cameraNear > 0)) fail('actual camera near plane required for mirror carry');
+        const nearM = radius + cameraNear, farM = Math.max(depth + 2 * radius, nearM + 2 * radius);
+        if (!(Number.isFinite(depth) && depth >= nearM && Number.isFinite(farM))) fail('picked mirror is inside its geometry-derived near limit');
+        mirror = { centreWorldM: point, radiusM: radius, bounds: mirror ? { ...mirror.bounds, nearM: Math.max(mirror.bounds.nearM, nearM), farM: mirror.bounds.farM } : { nearM, farM, basis: 'source mirror bounding radius plus actual near plane; far extends one source object diameter' },
+          anchor: { origin: carryOrigin.slice(), pivotWorld: point.slice(), startLook: { ...carryLook } } };
+      }
+    } else if (!ev.down) { held = false; target = null; if (mirror) mirror.anchor = null; }
+  }
+  hold(wallDt - cursor);
+  if (keys.some(x => x !== 0) && !brainClearance) {
+    if (typeof constrainBrainMovement !== 'function') fail('retained brain offset needs current source clearance');
+    brainClearance = constrainBrainMovement([0, 0, 0], brainMovementWorld).diagnostic;
+  }
+  const base = vec(brainCentre, 'current brain centre').map((v, i) => v - transformDirection(k, vec(prior.brainKeyOffset, 'previous brain key offset'))[i]);
+  const baseDistance = Math.hypot(...base.map((v, i) => v - o[i]));
+  const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, normalizedAxes: axis.slice(), heldPoseS,
+    brainLimits: { ...bounds, centreNearM: Math.max(0, baseDistance - keyBudgetM), centreFarM: baseDistance + keyBudgetM },
+    mirrorLimits: mirror ? { ...mirror.bounds } : null, brainClearance, clamped,
+    timing: 'Original Space/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
+    scope: 'Engineering limits/source clearance only; actual source/current-pose/native/wholebody/normalmechanics qualification remains open' };
+  return { state: { held, target, lastPick, lastLook: { ...look }, lastOrigin: o.slice(), brainKeyOffset: keys, mirror, diagnostic }, brainMovementWorld, mirrorWorldCentre: mirror ? mirror.centreWorldM.slice() : null, diagnostic };
+}
+
 export function translateBrainRecord(record, state, initialOrigin) {
   if (!record.transform) fail('configured graph requires actual region-mode brain transform');
   const t = vec(state.translation, 'brain world translation'), raw = record.transform;

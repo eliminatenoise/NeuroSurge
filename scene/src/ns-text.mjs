@@ -184,10 +184,10 @@ const STEP_TABLE = [
     'again. Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body.')],
   intro: [part('Look at a motor area to switch it on for 1 second. Click to switch it on again.')] },
-  { head: 'Move other body parts.', parts: [part('Other body parts move only through the brain, never by keys. Hold ' +
-    'Space while looking at the brain, then look around to drag it. Let go to leave it there. For example, drag it down ' +
+  { head: 'Move other body parts.', parts: [part('Your other body parts respond through the brain, not W/A/S/D. Moving the mirror image does not command their muscles. Hold ' +
+    'Space while looking at the brain or visible mirror body. Look around or use W/S to move it farther/closer and A/D left/right. Let go to leave it there. Move the brain down ' +
     'to watch the legs move.')],
-  intro: [part('Other body parts move only through the brain. Hold Space on the brain and look around to drag it.')] },
+  intro: [part('Other body parts respond through the brain. Space on the brain or clear mirror body carries that item; look or use W/A/S/D.')] },
   // R5-text (D16, user R20 "I don't want them to be curved"): the round-4 "curved arrow" wording is gone in both forms.
   { head: 'Turn your view.', parts: [
     part('Four arrows sit around the brain, like the points of a compass. Click one to turn your view around the brain ' +
@@ -210,17 +210,17 @@ const STEP_TABLE = [
   intro: [part('Press E to see your back (third person). Press E again to go back.')] },
   // R5-text (D19, user R23: "to move the body around, you have to move the brain that's in front of it away").
   { head: 'The mirror body.', need: 'mirror', parts: [part('Behind the brain stands a mirror image of your body. It ' +
-    'copies everything your body does. To turn it with its own arrows, drag the brain out of the way first.')],
-  intro: [part('The mirror body behind the brain copies you. Drag the brain away to turn it.')] }
+    'copies everything your body does. Move the brain aside first. Hold Space on the visible mirror to carry it with your look and W/A/S/D, or use its arrows to turn it.')],
+  intro: [part('The closer mirror body copies you. Move the brain aside; Space carries the mirror, and its arrows turn it.')] }
 ];
 const CONTROL_TABLE = [
   ['Mouse / trackpad', 'look around (your left shoulder follows)'],
-  ['A / D', 'move the left hand left or right on the screen'],
-  ['W / S', 'move the hand forward or back (use with A / D for diagonals)'],
+  ['A / D', 'move the left hand left/right; also move a held brain or mirror left/right'],
+  ['W / S', 'W moves the hand forward and a held item farther away; S brings them back/closer. Combine with A/D for diagonals.'],
   ['Hold Space', 'make a fist with all five fingers; let go to open the hand'],
   ['Double-tap Space', 'flip the forearm: palm down ↔ palm up (pronation ↔ supination)'],
   ['Look / Click', 'switch on the motor area you aim at (the crosshair) for 1 second, with either mouse button'],
-  ['Space on the brain', 'grab and drag the brain; let go to leave it there'],
+  ['Space on brain / mirror', 'hold the item: look to carry; W farther, S closer, A/D sideways. Let go to leave it there. Near/far limits keep it in range.'],
   // R5-text (D16): no "curved" (the user's R20).
   ['Orbit arrows', 'click an arrow by the brain to turn your view around it. Hold it to keep turning.'],
   ['Mirror body arrows', 'turn the mirror body. Drag the brain out of the way first.', 'mirror'],
@@ -233,12 +233,12 @@ const CONTROL_TABLE = [
  * CONTROL_TABLE's full words. */
 const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'look around',
-  'A / D': 'hand left or right',
-  'W / S': 'hand forward or back',
+  'A / D': 'hand and held item left/right',
+  'W / S': 'W farther, S closer; combine with A/D',
   'Hold Space': 'fist; let go to open',
   'Double-tap Space': 'flip the palm (down ↔ up)',
   'Look / Click': 'switch on an area for 1 second',
-  'Space on the brain': 'drag the brain',
+  'Space on brain / mirror': 'hold item; look or W/A/S/D to move; let go to leave',
   'Orbit arrows': 'turn your view around the brain',
   'Mirror body arrows': 'turn the mirror body',
   E: 'see your back (third person)',
@@ -415,11 +415,11 @@ export const HUD = deepFreeze({
   // are unchanged.
   limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
   hint: 'Move to look. W/S reach forward or back; A/D move left or right. Hold Space to close the hand; let go to open ' +
-    'it. Looking at a new area, or a click, gives 1 second of simulated signal. Click the scene to capture the mouse; ' +
+    'it. Space on the brain or clear mirror also carries it with look and W/A/S/D, within near/far limits. Looking at a new area, or a click, gives 1 second of simulated signal. Click the scene to capture the mouse; ' +
     'Esc frees it.',
   hintShell: 'Look to aim. A/D move the hand left or right, W/S forward or back. Hold Space for a fist; double-tap to ' +
     'flip the forearm. Looking at a motor area gives 1 second of simulated signal, and a click repeats it. Space while ' +
-    'looking at the brain drags it. Esc: how to play, reset and settings.',
+    'looking at the brain or clear mirror body carries it: look or W/A/S/D. Release leaves it there. Esc: controls and reset.',
   markers: 'Dots are rough control spots, not exact points in the brain. The coloured areas overlap.',
   drivesTitle: 'Strongest simulated muscle signals (unitless, 0–1)',
   gazePrefix: 'Looking at: ',
@@ -433,7 +433,7 @@ export const HUD = deepFreeze({
   pulseNone: '',
   pulseResidual: 'Arm relaxing back to rest',
   suppressedPrefix: 'Blocked while you hold a fist: ',
-  grabbing: 'Brain grabbed: look around to move it. Let go of Space to leave it there.',
+  grabbing: 'Item held: look to carry; W farther, S closer, A/D sideways. Let go of Space to leave it there.',
   rotationPrefix: 'Forearm: ',
   rotationHint: ' · double-tap Space to flip',
   wholeGroupTint: 'These finger muscles serve all four fingers, so all four light up, not just one',
@@ -540,7 +540,7 @@ export const INFO = deepFreeze({
   glassTitle: 'Brain glass: no motor area here',
   // R3-polish: the first card a new player sees (the start look is on the glass) now also says what to do next.
   glassBody: 'This part of the glass brain is not a motor area, so looking at it switches nothing on. Look at a ' +
-    'coloured area to switch it on. Hold Space while looking at the brain to grab and drag it.',
+    'coloured area to switch it on. Space on the brain or visible mirror body holds it; look or W/A/S/D moves it within limits.',
   leftArmTag: 'Left-arm motor area (brain’s right half)',
   otherTag: 'Other body part’s motor area (no keys)',
   // R4-fix (review RP12): the technical names (SCAN, pathway names) are in More detail.
@@ -866,18 +866,18 @@ export const MIRROR = deepFreeze({
   reset: SHELL.resetMirror,
   resetHelp: 'Turns the mirror body back to face you.',
   simulated: 'Simulated: it shows the same made-up signals as your body (no real units). Nothing is read from it.',
-  escRow: 'Mirror body: a mirror image of you behind the brain. Drag the brain away, then use its arrows to turn it.',
+  escRow: 'Mirror body: move the brain aside. Hold Space on the visible mirror and look or use W/A/S/D to carry it; its arrows turn it.',
   partSuffix: ' (mirror image)',
   /** The task's two short lines: what it is, and how to reach its arrows. */
   what: 'A mirror image of your body. It copies every move you make.',
-  reach: 'To turn it, drag the brain out of the way first.',
+  reach: 'Move the brain aside. Space holds the visible mirror; look or W/A/S/D carries it, and its arrows turn it.',
   side: 'Like a real mirror: your left arm shows on the same side of the screen. Once you turn it round, you see it ' +
     'from behind.',
   turnedSeparate: 'You see the mirror body from another side. Reset mirror body turns it back to face you.',
   rows: { shows: 'What it shows', side: 'Which side', turn: 'How to turn it' },
   rowShows: 'your pose, colours, lifted muscles and glow, at the same time',
   rowSide: 'like a real mirror, your left arm is on the same side',
-  rowTurn: 'drag the brain away, then click or hold its arrows'
+  rowTurn: 'move the brain aside; Space and look/WASD carry it, click/hold arrows turns it'
 });
 
 /** "Your left arm (mirror image)" for an ns-mirror part id; unknown parts read "Your body (mirror image)". */
@@ -1080,7 +1080,7 @@ export const GUIDE = deepFreeze({
     leftArmArea: 'Look at a light-blue area, like the elbow. Watch your left arm move.',
     moveHand: 'Press W, A, S or D to move your left hand.',
     // R4-fix (review RP14): Space while looking at the brain also grabs it (the user's rule), so look away first.
-    fist: 'Look away from the brain. Hold Space to make a fist, then let go.',
+    fist: 'Look at empty space. Hold Space for a fist, then let go.',
     flipPalm: 'Tap Space twice, fast, to flip your palm over.',
     // R4-fix (reviews F3 / SL4-4): 14 grey areas move nothing; this goal completes only on one that moves a joint.
     otherPart: 'Look at a grey area, like a leg or the right arm. Watch that part move.',
@@ -1094,7 +1094,7 @@ export const GUIDE = deepFreeze({
     thirdPerson: 'Press E to see your own back. Press E again to go back.',
     // R5-text (D19): the brain catches looks and clicks while it is in front of the mirror body's arrows.
     // (shortened after the 1280x720 shot: 4 lines in the status card; now 82 characters)
-    mirror: 'Drag the brain aside. Then click an arrow by the mirror body behind it to turn it.'
+    mirror: 'Move the brain aside. Space carries the visible mirror with look/WASD; its arrows turn it.'
   },
   partial: {
     moveHandNeedX: 'Good! Now try A or D to move it left or right.',

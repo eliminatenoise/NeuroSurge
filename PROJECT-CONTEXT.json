@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-C410-2026-11-10",
+  "version": "experimental-2026-11-10-wide-carry",
   "status": "experimental preview",
   "client_side": true,
   "signal_origin": "simulated, unitless",
@@ -8,8 +8,15 @@
   "neural_decoder_validated": false,
   "normal_mechanics_validated": false,
   "complete_game_acceptance": false,
-  "source_lineage": "C410, with public provenance-path redaction, three matching manifest digest updates, corrected shoulder explanation and preview presentation files",
+  "source_lineage": "C410 plus R22 wider view and shared brain/mirror object carry, current body-bounds and released-view repairs; existing public provenance redaction, assets and launchers retained. Actual-camera integration remains outside this selected preview.",
   "anatomy_assets": "490 OBJ files unchanged; BodyParts3D CC BY4.0 and Z-Anatomy facial derivatives CC BY-SA4.0",
   "public_preview_authorized": "10 November 2026 user instruction: experimental previews for all projects",
-  "other_project_development": "paused"
+  "other_project_development": "paused",
+  "browser_verification": "Scoped local startup, brain/mirror carry and released mirror lookaway/return; complete control, timing, physics and physiology acceptance remains incomplete.",
+  "known_engineering_gaps": [
+    "Third-person hand position",
+    "Some sideways inputs lack matching muscle glow",
+    "Literal closer mirror placement",
+    "Near/far endpoint and regrasp coverage"
+  ]
 }

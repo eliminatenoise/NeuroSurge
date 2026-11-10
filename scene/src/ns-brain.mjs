@@ -2283,6 +2283,67 @@ function stripPositionsList(input) {
  * facing: the frame's facing rotation (null = none). Returns { bound (m, lower bound of the camera-to-brain distance
  * over the orbit limits after scaling), scaleUp (>= 1: multiply k and pivotWorld by it), basis }. Grab carry rotates
  * about the camera and preserves distances, so the bound holds for every carry too. */
+// R22: private reuse of the SAME coverage samples already built by brainClearance.
+// No frame JSON field, source-point dump, model advance or second grid construction.
+const frameClearanceCoverage = new WeakMap();
+/** Pure placement constraint, not a new physiological rule. All source sample balls
+ * must stay outside the ORIGINAL reach+clearance sphere at the anatomical attachment.
+ * Check the whole translation segment, so endpoints cannot tunnel through the brain. */
+export function constrainBrainTranslation({ frame, transform, translation, armOrigin, movement } = {}) {
+  const cover = frameClearanceCoverage.get(frame);
+  if (!cover || cover.basis === 'strips') throw new Error('ns:brain_carry: complete clearance coverage unavailable');
+  if (!transform || transform.k !== frame.k || !transform.matrix || transform.matrix.length !== 16 || !Array.from(transform.matrix).every(Number.isFinite)) throw new Error('ns:brain_carry: actual finite matching brain transform required');
+  const tr = vec3(translation, 'actual brain translation'), origin = vec3(armOrigin, 'anatomical attachment origin'), delta = vec3(movement, 'requested brain movement');
+  const pivot = vec3(transform.pivotWorld, 'actual brain pivot'), M = transform.matrix;
+  // The source transform is k times rotations and optional nonexpansive squash (K>=1).
+  // Thus each source sample's existing cover radius expands by at most k; no orbit margin is needed at this EXACT orbit.
+  if (!(frame.k > 0 && (!Number.isFinite(frame.perspectiveK) || frame.perspectiveK >= 1))) throw new Error('ns:brain_carry: unsupported brain scale');
+  const radius = frame.k * cover.radiusMm, need = frame.reachM + frame.clearanceM, R = need + radius, r2 = R * R;
+  const a = delta.reduce((n, x) => n + x * x, 0);
+  if (![radius, need, r2, a].every(Number.isFinite) || !(need > 0)) throw new Error('ns:brain_carry: finite original clearance required');
+  let fraction = 1, before = Infinity, visits = 0;
+  const each = callback => {
+    for (let i = 0; i < cover.points.length; i += 3) {
+      const qx = cover.points[i], qy = cover.points[i + 1], qz = cover.points[i + 2];
+      const p = [M[0] * qx + M[4] * qy + M[8] * qz + pivot[0] + tr[0] - origin[0],
+        M[1] * qx + M[5] * qy + M[9] * qz + pivot[1] + tr[1] - origin[1],
+        M[2] * qx + M[6] * qy + M[10] * qz + pivot[2] + tr[2] - origin[2]];
+      visits++; callback(p);
+    }
+  };
+  each(p => {
+    const p2 = p.reduce((n, x) => n + x * x, 0), b = p.reduce((n, x, j) => n + x * delta[j], 0), c = p2 - r2;
+    if (![p2, b, c].every(Number.isFinite) || c < 0) throw new Error('ns:brain_carry: current placement violates certified original clearance');
+    before = Math.min(before, Math.sqrt(p2) - radius);
+    if (!(a > 0) || b >= 0) return;
+    const discriminant = b * b - a * c;
+    if (!Number.isFinite(discriminant)) throw new Error('ns:brain_carry: nonfinite segment clearance');
+    if (discriminant > 0) {
+      // Stable first entry root; c=0 and inward movement correctly gives zero.
+      const first = c / (-b + Math.sqrt(discriminant));
+      if (first >= 0 && first < fraction) fraction = first;
+    }
+  });
+  let after = Infinity, safe = false, retries = 0;
+  for (; retries <= 16; retries++) {
+    safe = true; after = Infinity;
+    each(p => {
+      const b = p.reduce((n, x, j) => n + x * delta[j], 0), nearestT = a > 0 ? Math.max(0, Math.min(fraction, -b / a)) : 0;
+      const nearest2 = p.reduce((n, x, j) => n + (x + nearestT * delta[j]) ** 2, 0);
+      const end2 = p.reduce((n, x, j) => n + (x + fraction * delta[j]) ** 2, 0);
+      if (!(Number.isFinite(nearest2) && Number.isFinite(end2) && nearest2 >= r2)) safe = false;
+      after = Math.min(after, Math.sqrt(end2) - radius);
+    });
+    if (safe) break;
+    fraction *= .5; // strict numerical fallback, no extra epsilon or weakened threshold
+  }
+  if (!safe) throw new Error('ns:brain_carry: bounded strict segment check refused movement');
+  return { movement: delta.map(x => x * fraction), diagnostic: { kind: 'source-coverage-segment-clearance-r22-r1', basis: cover.basis,
+    sampleCount: cover.points.length / 3, sourceCoverRadiusM: radius, requiredMinimumM: need, lowerBoundBeforeM: before, lowerBoundAfterM: after,
+    acceptedFraction: fraction, numericalRetries: retries, sampleVisits: visits, armOriginWorldM: origin.slice(),
+    scope: 'Existing source coverage at actual orbit/carry and anatomical origin; not muscle/normalmechanics/GPU/clinical qualification' } };
+}
+
 function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, squash = null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM }) {
   const samples = [];
   let basis, eMm;
@@ -2363,7 +2424,7 @@ function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld
   let bound = minDist - margin, scaleUp = 1;
   if (!(bound > 0)) throw new Error('ns:brain_frame: the brain can reach the camera within the orbit limits (scale-invariant); reduce fill or the orbit limits');
   if (bound < need) { scaleUp = need / bound; bound = need; }
-  return { bound, scaleUp, basis };
+  return { bound, scaleUp, basis, coverage: { points: S3, radiusMm: eMm, basis } };
 }
 
 /**
@@ -2480,12 +2541,14 @@ function frameStripsR2(strips, {
   const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
   const { basis, scaleUp, bound } = cl;
   k *= scaleUp; pivotWorld = pivotWorld.map(x => x * scaleUp);
-  return freezeR2({
+  const frame = freezeR2({
     kind: 'ns-brain-frame', k, aimDistance: D * scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg, fill: f,
     limiting: (b.x1 - b.x0) >= (b.y1 - b.y0) ? 'width' : 'height', ndcBounds: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
     aimOnStrip, minBrainDistanceM: bound, clearanceBasis: basis, scaleUp, reachM, clearanceM, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg,
     fovYDeg, aspect, compact, framing: 'strips', facing: null
   });
+  frameClearanceCoverage.set(frame, cl.coverage);
+  return frame;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2941,6 +3004,7 @@ function frameWholeBrain(strips, {
     const ray = gazeRayForView(0, 0, v);
     frame.aimOnStrip = strips.strips.some(S => rayStripTable(ray.origin, ray.dir, S) !== null);
   }
+  frameClearanceCoverage.set(frame, cl.coverage);
   return freezeR2(frame);
 }
 

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-C410-launchers-2026-11-10",
+  "version": "experimental-2026-11-10-wide-carry",
   "experimental": true,
-  "source": "C410",
+  "source": "C410 plus R22 wider-view/carry and body-bounds/released-view repairs; actual-camera integration excluded",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -42,23 +42,23 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 509,
-      "sha256": "0ec0e553a3f8efe3ca84ac0665031244596a4da03e580d950bd72ae3b84ef1c1"
+      "bytes": 861,
+      "sha256": "b1338c4e7710cdea5e6c74eb4e944c9a905f0f43e328cb713079b2fe9dc6e783"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 3697,
-      "sha256": "b08bf28161b64c88fcdeb177e7065152bee6a5106634d0e26fe8bd3a95f88c62"
+      "bytes": 4393,
+      "sha256": "f56f8c2742124bb0f59632da186ac19283581e3270135d43f08af3cd47ef1da7"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 759,
-      "sha256": "e5429cbd8bdea28249aaec8d311c4e9f25df95f9855ff93a3b498412291d725f"
+      "bytes": 1256,
+      "sha256": "c04fd27e1450ac4d4a0122836679c09e96459f2a6dd672d011784821c6042afe"
     },
     {
       "path": "README.md",
-      "bytes": 1974,
-      "sha256": "340e93f5f54d9fccc6317c133cb060d0fa70517936c221bb5be51b4c6ea1bc22"
+      "bytes": 2433,
+      "sha256": "a5cce310b241869bce9f089368079d791cded26886e46a255acbb0b82824d5ca"
     },
     {
       "path": "START.html",
@@ -2662,8 +2662,8 @@
     },
     {
       "path": "scene/example/display-b-r388.mjs",
-      "bytes": 27748,
-      "sha256": "0e33c6519452eb2e1b9d2000cf950dc9da5cd10775578fea44f51bb63f322730"
+      "bytes": 27760,
+      "sha256": "38e98def26a0058fb86ff59bd2f6b1b23d828009ae63a9ee4eddabdc4abd91c8"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -2742,8 +2742,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1596,
-      "sha256": "3db62082b355f96e286ef19f123cd38e7fde9cf1e1c5741ec5a96a47e53b1ad5"
+      "bytes": 1602,
+      "sha256": "fcbe691b46208ba0c4b0ba895d7ab925dd9dff5e960d639a29cda38da2aeaa4c"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -2752,8 +2752,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 321156,
-      "sha256": "c4f922d651695d4d19760eb514c31e5694c0b2a122da5c5dc7aadeef58c8bbd7"
+      "bytes": 326217,
+      "sha256": "78cbecbfa043914c32f404fb9dee00981a5c3bf7087d87312ed44f310e92696c"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -2787,13 +2787,13 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 220227,
-      "sha256": "e86a8d93d5febd9d8d9325c364ef2fdafb04ef3cec3461911cfafed6d6b25ae7"
+      "bytes": 224885,
+      "sha256": "6abcdbdbe4518d0067b6bba40133164f3bf24d21258d87a87583d35d9d25bfd0"
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 37877,
-      "sha256": "cf5ea21eb3e5dbaad3e99b33c12603e6fc80ceb3f4b9e786eac512a48b5f4747"
+      "bytes": 37899,
+      "sha256": "cce67d5a1b9d549994912961809f8167f3d55fab466ac03346a2305a746e2427"
     },
     {
       "path": "scene/src/ns-colors.mjs",
@@ -2817,8 +2817,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 51687,
-      "sha256": "bd5b29f5367d69f381870ce67da66f54f0a3a31093e5e92bdc19fc976881d323"
+      "bytes": 53352,
+      "sha256": "a2851a3949c3960c3d629c0ccd6eb3a41f2028f015bde6d32b1cf2a0588c6a03"
     },
     {
       "path": "scene/src/ns-obj.mjs",
@@ -2832,8 +2832,8 @@
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 9307,
-      "sha256": "f40093b4381c9bde1e4aa0edc5283ef5a28c2c12ca12cedecec5ac8f84798a13"
+      "bytes": 21989,
+      "sha256": "0326018d19ca3403d78bac286cb18a719cb28d22c213cfa3ee6b3c39767a6500"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -2847,13 +2847,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 520547,
-      "sha256": "dab29d790681718319f5759766cf803fc9a0a708f54513a03acce48dc6e4b23d"
+      "bytes": 533934,
+      "sha256": "d114a18fc869f60b67bb36bb66f4754b5d29caae1e2c52b157e5000ff262ddb0"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 83413,
-      "sha256": "9a8f89e43b198bac92a2f207ba9f8c1ecbedd4134beaf59b4f53690920d605a1"
+      "bytes": 84184,
+      "sha256": "de5e7473e94ad18f53b004700d0db27c5febc69019fec75000e8c2a2b400bd10"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
@@ -2876,10 +2876,10 @@
       "sha256": "ce1fa418de16a19495a9f72495580e3015d7745c296d3ce0485897f902ddedfb"
     }
   ],
-  "file_count": 574,
-  "payload_bytes": 119205110,
   "distribution_note": "SHA256SUMS and release-manifest.json are excluded from their own file inventory.",
   "known_limits": "PREVIEW-NOTES.html",
-  "runtime_game": "C410; R22 wider-view/mirror-carry changes are not yet deployed.",
-  "desktop_launchers": "START.html"
+  "desktop_launchers": "START.html",
+  "file_count": 574,
+  "payload_bytes": 119245378,
+  "runtime_game": "Wider-view/carry experimental preview. Current body-bounds and released-view repairs included. Actual-camera integration excluded; third-person hand placement remains faulty."
 }

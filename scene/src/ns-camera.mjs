@@ -70,10 +70,10 @@ export const VIEW_KEY_LABEL = 'E';
 export const VIEW_TEXT = Object.freeze({
   controlsRow: Object.freeze(['E', 'see your body from behind (third person). Press E again to look out of your own eyes']),
   thirdPersonBadge: 'Seen from behind · E: back to your eyes',
-  armNote: 'Your left arm keeps the aim it had in your own view: W, A, S, D move the hand the same way as before.'
+  armNote: 'W/A/S/D still move your left hand. While you hold the brain or mirror body, they also move that item.'
 });
 
-/** The first-person camera: at the eye, the world origin (ns-scene-three CAMERA: PerspectiveCamera(70, aspect, 0.02, far)). */
+/** The first-person camera: at the eye, the world origin (ns-scene-three CAMERA: PerspectiveCamera(the selected display FOV, aspect, 0.02, far)). */
 export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), nearM: 0.02 });
 
 /**

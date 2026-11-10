@@ -166,7 +166,7 @@ const NS_TEXT = NsText;
 const dirText = o => Object.freeze({ forward: o.forward, back: o.back, left: o.left, right: o.right });
 
 /** Camera contract (DESIGN.md): PerspectiveCamera(70, aspect, 0.02, 500) at the world origin. */
-export const CAMERA = Object.freeze({ fovYDeg: 70, near: 0.02, far: 500 });
+export const CAMERA = Object.freeze({ fovYDeg: 110, near: 0.02, far: 500 });
 
 /** Display materials. Hex colours are sRGB (Three converts them to its linear working space). */
 export const MATERIAL = Object.freeze({
@@ -2678,6 +2678,7 @@ export function createScene({
   let brainTransformSet = false;
   let brainSamples = null; // Float32Array of source-mm sample points (projected bounds for the orbit arrows)
   let brainSupport = null; // R3-scene: supportPoints of every brain vertex (the silhouette hull basis)
+  let brainDepthBounds = null; // R22 all glass+strip SOURCE positions, conservative AABB cached only on normal load
   let brainHullPoints = null; // R3-fix: the segmentation outline points (denser hull basis for the arrow plan)
   let compassBrainSourceRevision = 0; // R345 source replacement identity; no geometry/hash work in the cached getter
   let brainSampleCentre = null; // fix F2: their centroid (cached per sample array)
@@ -2999,7 +3000,7 @@ export function createScene({
   // or transform (setMirrorView), which then wins.
   const mirror = {
     enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0 },
-    external: null, transform: null, outlineNdc: null, frameKey: '', serial: 0, lod: false, twins: 0, brainRadiusMm: null, error: null
+    external: null, worldCentre: null, transform: null, outlineNdc: null, frameKey: '', serial: 0, lod: false, twins: 0, brainRadiusMm: null, error: null
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
   let camPose = null, firstPose = null;
@@ -3095,6 +3096,7 @@ export function createScene({
       armGroup.add(mesh);
       // R5-scene (D19): the mirror twin shares the geometry and takes the same segment matrix.
       const tw = new THREE.Mesh(geo, mirrorBoneMaterial);
+      tw.userData.nsFullGeometry = geo;
       tw.name = `mirror image: ${mesh.name}`;
       tw.matrixAutoUpdate = false;
       mirrorArmGroup.add(tw);
@@ -3125,6 +3127,7 @@ export function createScene({
       depthTwin(mesh, armDepthMaterial, BODY_ORDER.arm - 0.5, armTwins);
       // R5-scene (D19): the mirror twin shares the CPU-skinned buffers (skinned once for both bodies).
       const tw = new THREE.Mesh(geo, mirrorMuscleMaterial());
+      tw.userData.nsFullGeometry = geo;
       tw.name = `mirror image: ${mesh.name}`;
       tw.frustumCulled = false;
       tw.matrixAutoUpdate = false;
@@ -3216,6 +3219,19 @@ export function createScene({
     // and, from the same support planes, each glass vertex's groove depth for the gyri / sulci cue.
     const t0 = nowMs();
     const stripLists = regionMode ? seg.strips.map(st => st.positions) : focus && focus.positions ? [focus.positions] : [];
+    const depthMin = [Infinity, Infinity, Infinity], depthMax = [-Infinity, -Infinity, -Infinity]; let depthCount = 0;
+    for (const P of [...glassList.map(g => g && g.positions), ...stripLists]) {
+      if (!P || !P.length) continue;
+      if (P.length % 3) fail('scene_input', 'whole brain source positions need xyz triples');
+      for (let i = 0; i < P.length; i += 3) {
+        for (let j = 0; j < 3; j++) {
+          const v = P[i + j]; if (!Number.isFinite(v)) fail('scene_input', 'finite whole brain source positions required');
+          depthMin[j] = Math.min(depthMin[j], v); depthMax[j] = Math.max(depthMax[j], v);
+        }
+        depthCount++;
+      }
+    }
+    brainDepthBounds = depthCount ? { min: depthMin, max: depthMax, sourcePositionCount: depthCount } : null;
     // R3-fix (review code F3, load time): with a segmentation, its whole-brain outline (ns-brain brainOutlinePoints, the
     // extreme vertices over 1024 directions, already computed) is the basis, instead of re-scanning every vertex here.
     const outlineBasis = regionMode && seg && seg.outline && seg.outline.points && seg.outline.points.length >= 9 ? seg.outline.points : null;
@@ -4740,7 +4756,7 @@ export function createScene({
         const tw = new THREE.Mesh(geo, tm);
         tw.name = `mirror image: ${bodyMeshName(entry, id)}`;
         tw.matrixAutoUpdate = false;
-        tw.userData = { mirrorOf: id, elementId: id, bodyPart: part, kind, side: rec.side };
+        tw.userData = { mirrorOf: id, elementId: id, bodyPart: part, kind, side: rec.side, nsFullGeometry: geo };
         mirrorBodyGroup.add(tw);
         rec.mirror = tw;
         mesh.userData.nsMirrorTwin = tw;
@@ -5654,26 +5670,102 @@ export function createScene({
   }
 
   /* ---- R5-scene (D19): mirror body (ns-mirror placement, transform and orbit; the scene draws the twins) ------------ */
+  // R22 conservative enclosure of BOTH full-source and current live position buffers.
+  // Primary body LOD may use a different array; no identity or decimator-enclosure assumption.
+  const mirrorPositionBounds = new WeakMap();
+  function mirrorMeshCorners(mesh, matrix, append) {
+    const full = mesh.userData.nsFullGeometry || mesh.geometry;
+    const a = full && full.attributes && full.attributes.position, live = mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.position;
+    if (!a || !live || !(a.count > 0 && live.count >= 0)) fail('scene_input', 'complete source and live mirror position buffers unavailable');
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    const sharedArray = a.array === live.array;
+    // Even distinct attributes can alias one array. Either version changing must invalidate its cached bound.
+    // A shared backing array needs only its longest xyz prefix scanned; distinct arrays need BOTH bounds.
+    const attributes = sharedArray ? [a.count >= live.count ? a : live] : [a, live];
+    for (const attr of attributes) {
+      const sharedAttribute = sharedArray ? (attr === a ? live : a) : null;
+      const sharedVersion = sharedAttribute ? sharedAttribute.version : null;
+      let box = mirrorPositionBounds.get(attr);
+      if (!box || box.array !== attr.array || box.count !== attr.count || box.version !== attr.version || box.sharedAttribute !== sharedAttribute || box.sharedVersion !== sharedVersion
+          || !Number.isFinite(attr.version) || (sharedArray && !Number.isFinite(sharedVersion))) {
+        const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < attr.count; i++) {
+          for (let j = 0; j < 3; j++) {
+            const v = attr.array[3 * i + j]; if (!Number.isFinite(v)) fail('scene_input', 'nonfinite full or live mirror position');
+            min[j] = Math.min(min[j], v); max[j] = Math.max(max[j], v);
+          }
+        }
+        box = { lo: min, hi: max, array: attr.array, count: attr.count, version: attr.version, sharedAttribute, sharedVersion };
+        mirrorPositionBounds.set(attr, box);
+      }
+      for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j], box.lo[j]); hi[j] = Math.max(hi[j], box.hi[j]); }
+    }
+    for (let c = 0; c < 8; c++) {
+      pv.set((c & 1 ? hi : lo)[0], (c & 2 ? hi : lo)[1], (c & 4 ? hi : lo)[2]).applyMatrix4(matrix);
+      append(pv.x, pv.y, pv.z);
+    }
+    return sharedArray ? Math.max(a.count, live.count) : a.count + live.count;
+  }
+  function currentMirrorEnvelope() {
+    if (!mirrorRoot.visible || !mirror.transform) return null;
+    camera.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true);
+    const centre = mirror.transform.centre, V = camera.matrixWorldInverse.elements;
+    let radiusM = 0, minCameraDepthM = Infinity, maxCameraDepthM = -Infinity, positions = 0, meshes = 0;
+    for (const mesh of [...mirrorBodyGroup.children, ...mirrorArmGroup.children]) {
+      mesh.updateMatrixWorld(true); meshes++;
+      positions += mirrorMeshCorners(mesh, mesh.matrixWorld, (x, y, z) => {
+        radiusM = Math.max(radiusM, Math.hypot(x - centre[0], y - centre[1], z - centre[2]));
+        const depth = -(V[2] * x + V[6] * y + V[10] * z + V[14]);
+        if (!Number.isFinite(depth)) fail('scene_input', 'nonfinite current mirror depth');
+        minCameraDepthM = Math.min(minCameraDepthM, depth); maxCameraDepthM = Math.max(maxCameraDepthM, depth);
+      });
+    }
+    if (!(radiusM > 0 && Number.isFinite(radiusM) && meshes > 0)) fail('scene_input', 'complete current mirror enclosure unavailable');
+    return { kind: 'full-and-live-mirror-AABB-corners-r22-r3', radiusM, minCameraDepthM, maxCameraDepthM, meshes, positions,
+      scope: 'Union of full-source and current live position-buffer bounds, including deformed muscles and distinct body LOD arrays; cached by each buffer/version. Conservative corners; native/GPU/normalmechanics unqualified.' };
+  }
+  /** Normal post-pose object-placement reconciliation only: never move the camera, body, arm or a released object. */
+  function reconcileMirrorCarry({ held = false, farM = null } = {}) {
+    const manipulating = Boolean(held);
+    mirror.carryHeldAtReconcile = manipulating; // App supplies this normal frame's actual held-target state before render.
+    if (!mirror.worldCentre || !mirrorRoot.visible) return { status: 'not-carried', movementWorldM: [0, 0, 0], envelope: null };
+    const before = mirror.worldCentre.slice(); let envelope = currentMirrorEnvelope();
+    // A released object is world-fixed and may cross the view's near/far planes as the user looks away.
+    // Still compute the full finite geometry envelope; clipping alone is not physical contact or failed manipulation.
+    if (!manipulating) return { status: 'released-world-fixed', movementWorldM: [0, 0, 0], worldCentreM: before, envelope,
+      viewClip: { near: envelope.minCameraDepthM < camera.near, far: envelope.maxCameraDepthM > camera.far },
+      scope: 'Released world placement is unchanged; camera clipping is permitted. No world-placement, camera-pose or model write; no physical-contact qualification.' };
+    for (let tries = 0; envelope.minCameraDepthM < camera.near && tries < 4; tries++) {
+      if (!(Number.isFinite(farM) && farM > 0)) fail('scene_input', 'finite original mirror carry far cap required');
+      const V = camera.matrixWorldInverse.elements, p = mirror.transform.centre;
+      const centreDepth = -(V[2] * p[0] + V[6] * p[1] + V[10] * p[2] + V[14]);
+      const shift = camera.near - envelope.minCameraDepthM;
+      if (!(Number.isFinite(shift) && centreDepth + shift <= farM)) fail('scene_input', 'current mirror pose cannot fit inside finite carry depth range');
+      const C = camera.matrixWorld.elements;
+      mirror.worldCentre = mirror.worldCentre.map((x, i) => x - C[8 + i] * shift);
+      if (!applyMirror()) fail('scene_input', 'current mirror placement application failed');
+      envelope = currentMirrorEnvelope();
+    }
+    if (!(envelope.minCameraDepthM >= camera.near)) fail('scene_input', 'bounded strict current mirror near-plane check failed');
+    return { status: 'current-pose-near-checked', movementWorldM: mirror.worldCentre.map((x, i) => x - before[i]), worldCentreM: mirror.worldCentre.slice(), envelope,
+      scope: 'Object translation only before render; no active-camera switch. Released placement never silently moved. Refusal is a failed/unresolved ordinary pose, not working R22 acceptance.' };
+  }
+
   /** The player's posed body as world points (R5_SCENE.mirrorPointsPerMesh vertices of every body mesh, head included, and
    * of the arm at the start look) -> ns-mirror bodyBoundsFromPoints; measured once from the first posed body. */
   function computeMirrorBody() {
     if (!body.length) return false;
     bodyGroup.updateMatrixWorld(true);
     const bw = bodyGroup.matrixWorld, pts = [];
-    const take = (geo, m, out) => {
-      const a = geo && geo.attributes && geo.attributes.position;
-      if (!a) return;
-      const n = a.count, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh));
-      for (let i = 0; i < n; i += step) { pv.fromBufferAttribute(a, i).applyMatrix4(m); if (out) pv.applyMatrix4(out); pts.push(pv.x, pv.y, pv.z); }
-    };
-    for (const b of body) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, bw);
-    // Configured arm samples use the SAME eye parent as the drawn arm; legacy start-look sampling stays unchanged.
-    if (referenceOriginSet) eyeRig.updateMatrixWorld(true);
-    for (const b of bones) take(b.mesh.userData.nsFullGeometry || b.mesh.geometry, b.mesh.matrix, referenceOriginSet ? eyeRig.matrixWorld : null);
-    for (const m of muscles) { const p = m.pos; const n = p.length / 3, step = Math.max(1, Math.floor(n / R5_SCENE.mirrorPointsPerMesh)); for (let i = 0; i < n; i += step) {
-      if (referenceOriginSet) { pv.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyMatrix4(eyeRig.matrixWorld); pts.push(pv.x, pv.y, pv.z); }
-      else pts.push(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
-    } }
+    const take = (mesh, matrix) => mirrorMeshCorners(mesh, matrix, (x, y, z) => pts.push(x, y, z));
+    // Body records include face-layer primaries: their ghost/inset ancestry is not the anatomical world frame.
+    // Match the in-place/mirror body route: local source-mm pose, THEN the canonical body mm-to-world-m parent.
+    for (const b of body) mirrorMeshCorners(b.mesh, b.mesh.matrix, (x, y, z) => {
+      pv.set(x, y, z).applyMatrix4(bw); pts.push(pv.x, pv.y, pv.z);
+    });
+    eyeRig.updateMatrixWorld(true);
+    for (const b of bones) { b.mesh.updateMatrixWorld(true); take(b.mesh, b.mesh.matrixWorld); }
+    for (const m of muscles) { m.mesh.updateMatrixWorld(true); take(m.mesh, m.mesh.matrixWorld); }
     if (pts.length < 3) return false;
     try {
       const fwd = [-Math.sin(bodyYaw), 0, -Math.cos(bodyYaw)];
@@ -5726,40 +5818,52 @@ export function createScene({
     mirror.frameKey = key;
     try {
       const farM = NsMirror.brainFarDistance({ frame: { k: arrowRef.k, perspectiveK: farEyeView.K, pivotWorld: P0 }, brainRadiusMm: rMm });
-      const brainIn = { centre: P0, farM, outlineNdc: mirror.outlineNdc }, camIn = { aspect: cssW / cssH, fovYDeg: camera.fov };
+      const bounds = brainDepthBounds;
+      if (!bounds || !(bounds.sourcePositionCount > 0)) throw new Error('complete brain source bounds unavailable for initial mirror separation');
+      const M = brainGroup.matrixWorld.elements; let depthFarM = -Infinity;
+      // AABB contains EVERY normal glass/strip source position, unlike direction-sampled silhouette support.
+      // An affine depth functional is bounded by its 8 corners; include behind-camera corners without clipping.
+      for (let corner = 0; corner < 8; corner++) {
+        const sx = (corner & 1 ? bounds.max : bounds.min)[0], sy0 = (corner & 2 ? bounds.max : bounds.min)[1], sz = (corner & 4 ? bounds.max : bounds.min)[2];
+        const x = M[0] * sx + M[4] * sy0 + M[8] * sz + M[12] - tr[0];
+        const y = M[1] * sx + M[5] * sy0 + M[9] * sz + M[13] - tr[1];
+        const z = M[2] * sx + M[6] * sy0 + M[10] * sz + M[14] - tr[2];
+        const unYawZ = -sy * x + cy * z, depth = -(sp * y + cp * unYawZ);
+        if (![x, y, z, depth].every(Number.isFinite)) throw new Error('nonfinite normal brain depth support');
+        depthFarM = Math.max(depthFarM, depth);
+      }
+      if (!(depthFarM > 0 && Number.isFinite(depthFarM))) throw new Error('positive finite initial brain depth support required');
+      const brainIn = { centre: P0, farM, depthFarM, depthBasis: { kind: 'all-source-brain-AABB-depth-r22', corners: 8, sourcePositionCount: bounds.sourcePositionCount, orbitYawDeg: t && t.orbitYaw, orbitPitchDeg: t && t.orbitPitch, scope: 'conservative all-source AABB at initial/reframe planning; future posed/orbited collision remains unqualified' }, outlineNdc: mirror.outlineNdc }, camIn = { aspect: cssW / cssH, fovYDeg: camera.fov };
       // R5-bigbrain (R25): the brain fills the view, so the body goes into the largest clear place on the brain's
       // midline (ns-mirror mirrorFitBox: no motor area, no brain arrow and no HUD card in front of it or its arrows).
       const fitBox = mirror.outlineNdc.fit && mirror.outlineNdc.fit.boxFor ? mirror.outlineNdc.fit.boxFor(NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn })) : null;
-      mirror.fit = fitBox ? { boxPx: fitBox.box, freePx: fitBox.free, tried: fitBox.tried } : null;
+      mirror.fit = fitBox ? { boxPx: fitBox.box, freePx: fitBox.free, tried: fitBox.tried, rule: 'R22 usable-view/HUD fit, geometry may limit the engineering .6-height/.94-fill target' } : null;
       mirror.placement = NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn, options: fitBox ? { targetBoxNdc: { x0: (2 * fitBox.box.x0) / cssW - 1, x1: (2 * fitBox.box.x1) / cssW - 1, y0: 1 - (2 * fitBox.box.y1) / cssH, y1: 1 - (2 * fitBox.box.y0) / cssH } } : {} });
       mirror.state = mirror.state ? NsMirror.placeMirror(mirror.state, mirror.placement) : NsMirror.createMirrorState(mirror.placement);
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     applyMirror();
     return true;
   }
-  /** R5-bigbrain (R25): the inputs of the mirror body's free-box fit at the default view (CSS px): the brain's drawn
-   * hull, its motor areas (occupancy grid), the brain's own four arrows (laid out exactly as the rig lays them out at
-   * this view) and the HUD cards, the mirror arrows' room and the brain's midline. Returns { boxFor(trialPlacement) }:
-   * the ns-mirror mirrorFitBox result for the body's on-screen aspect, or null. */
+  /** R22: initial mirror fit in the usable view (CSS px), preserving HUD and mirror-arrow room.
+   * The old motor-free-hole restriction is superseded by the visibly larger mirror requirement.
+   * Brain geometry/input occlusion and actual arrow-layout rules remain independent and unchanged.
+   * Returns the bounded existing mirrorFitBox result for the source body aspect; no native footprint proof. */
   function mirrorFitNow(xy, cam, P0) {
-    const grid = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch, position: cam.position }), gridA = motorGridFor({ yaw: cam.yaw, pitch: cam.pitch, position: cam.position }, R5_BIGBRAIN.avoidDilate);
-    if (!grid) return null;
-    const usable = arrowUsable(), obstacles = arrowObstacles();
-    const sizesB = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'brain');
-    const lay = NsArrows.compassLayout(xy, { width: cssW, height: cssH, ...sizesB, usable, obstacles, avoid: gridA, prefer: comfortRectPx(), fallbackObstacles: arrowObstaclesTight() });
-    // the body may stand behind the crosshair (only the brain's arrows keep off it); HUD cards and the brain's arrows block
-    const pad = 4, boxes = [...obstacles.filter(o => !o.crosshair), ...(lay ? ARROW_DIRS.map(d => lay.arrows[d].box).filter(Boolean).map(b => ({ x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad })) : [])];
-    const blocked = b => grid.hits(b) + boxes.reduce((n, o) => n + (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0 ? 1 : 0), 0);
+    // R22: fit a clearly larger mirror in the usable view, rather than the old small motor-free hole in the brain.
+    // The brain is geometrically in front at startup and STILL blocks mirror input; this does not alter arrow picking/layout.
+    // Retain the existing .6 max-height and .94 fill as engineering targets, with source near/scale/width constraints.
+    const usable = arrowUsable(), boxes = arrowObstacles().filter(o => !o.crosshair);
+    const blocked = b => boxes.reduce((n, o) => n + (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0 ? 1 : 0), 0);
     const sizesM = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'mirror');
     const room = NsArrows.arrowRoomPx(sizesM), fp = NsArrows.arrowPath().footprint;
     const band = 2 * fp.half * sizesM.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
     const mirrorReferenceFrame = referenceOriginSet ? NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry) : null;
-    const c = NsArrows.projectWorldPx(mirrorReferenceFrame ? NsMath.transformPoint(mirrorReferenceFrame, P0) : P0, referenceOriginSet ? { ...cam, yaw: referenceAngles.yaw, pitch: referenceAngles.pitch, position: referenceOrigin.slice() } : cam), hull = NsArrows.convexHullPx(xy);
+    const c = NsArrows.projectWorldPx(mirrorReferenceFrame ? NsMath.transformPoint(mirrorReferenceFrame, P0) : P0, referenceOriginSet ? { ...cam, yaw: referenceAngles.yaw, pitch: referenceAngles.pitch, position: referenceOrigin.slice() } : cam);
     return {
       boxFor(trial) {
         if (!trial || !(trial.expectedHeightNdc > 0 && trial.expectedWidthNdc > 0)) return null;
         const aspect = (trial.expectedWidthNdc * cssW) / (trial.expectedHeightNdc * cssH);
-        try { return NsMirror.mirrorFitBox({ width: cssW, height: cssH, usable, blocked, aspect, room: { top: room, bottom: room, side: room }, sideBand: band, hull, centreX: c.x }); } catch { return null; }
+        try { return NsMirror.mirrorFitBox({ width: cssW, height: cssH, usable, blocked, aspect, room: { top: room, bottom: room, side: room }, sideBand: band, hull: null, centreX: c.x }); } catch { return null; }
       }
     };
   }
@@ -5802,7 +5906,12 @@ export function createScene({
    *  - { visible: false | true } shows or hides it (an Esc option, if any); null resets the orbit and drops a handed state.
    * It never turns by itself. Returns mirrorState(). */
   function setMirrorView(v = null) {
-    if (v === null) { mirror.external = null; mirror.orbit = { yaw: 0, pitch: 0 }; }
+    if (v && Object.prototype.hasOwnProperty.call(v, 'worldCentre')) {
+      const p = v.worldCentre;
+      if (p !== null && (!p || p.length !== 3 || !Array.from(p).every(Number.isFinite))) fail('scene_input', 'normal mirror placement needs finite world metres');
+      mirror.worldCentre = p === null ? null : Array.from(p);
+    }
+    if (v === null) { mirror.external = null; mirror.worldCentre = null; mirror.orbit = { yaw: 0, pitch: 0 }; }
     else if (v && (v.kind === 'ns-mirror-transform' || v.kind === 'ns-mirror-state')) {
       if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = { yaw: v.orbit ? v.orbit.yaw : 0, pitch: v.orbit ? v.orbit.pitch : 0 }; }
       else mirror.external = v;
@@ -5819,14 +5928,17 @@ export function createScene({
   /** The scene's current default ns-mirror placement (or null), so an integrator can keep its own state in step:
    * NsMirror.placeMirror(state, scene.mirrorPlacementNow()). */
   function mirrorPlacementNow() {
-    if (!mirror.placement || !referenceOriginSet) return mirror.placement;
-    return Object.freeze({ ...mirror.placement, referenceFrame: Object.freeze(Array.from(NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry))), referenceMeaning: 'constructor canonical world reference; apply exactly once in ns-mirror' });
+    if (!mirror.placement) return mirror.placement;
+    const placement = mirror.worldCentre ? { ...mirror.placement, worldCentre: Object.freeze(mirror.worldCentre.slice()) } : mirror.placement;
+    if (!referenceOriginSet) return placement;
+    return Object.freeze({ ...placement, referenceFrame: Object.freeze(Array.from(NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry))), referenceMeaning: 'constructor canonical world reference; apply exactly once in ns-mirror' });
   }
   /** QA: the mirror body's state, its measured on-screen box (CSS px; the projected body sample) and the share of those
    * points inside the brain's drawn outline (coveredByBrain). */
   function mirrorState() {
     const T = mirror.transform, Pl = mirror.placement;
     const out = { source: 'ns-mirror', enabled: mirror.enabled, ready: mirror.ready, visible: mirrorRoot.visible, error: mirror.error, twins: mirror.twins, armTwins: bones.length + muscles.length,
+      carriedPlacement: { carryHeldAtReconcile: typeof mirror.carryHeldAtReconcile === 'boolean' ? mirror.carryHeldAtReconcile : null, worldCentreM: mirror.worldCentre ? mirror.worldCentre.slice() : null, actualCentreWorldM: T ? T.centre.slice() : null, initialDistanceM: Pl ? Pl.distanceM : null, priorSphereDistanceM: Pl ? Pl.priorSphereDistanceM : null, initialDepthNearM: Pl ? Pl.initialDepthNearM : null, brainDepthFarM: Pl ? Pl.brainDepthFarM : null, legacyBrainSphereFarM: Pl ? Pl.legacyBrainSphereFarM : null, brainDepthBasis: Pl ? Pl.brainDepthBasis : null, distanceComparisonMeaning: 'priorSphereDistanceM is the old formula at the NEW selected fit, not an old runtime measurement', scope: 'render-placement metadata only; not current wholebody/normalmechanics proof' },
       external: mirror.external ? mirror.external.kind : null, orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch } : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch },
       scale: T ? Math.round(T.scale * 1000) / 1000 : null, centre: T ? T.centre.map(v => Math.round(v * 1000) / 1000) : null, determinant: T ? T.det : null,
       placement: Pl ? { distanceM: Math.round(Pl.distanceM * 1000) / 1000, nearM: Math.round(Pl.nearM * 1000) / 1000, brainFarM: Math.round(Pl.brainFarM * 1000) / 1000, limiting: Pl.limiting, expectedHeightNdc: Math.round(Pl.expectedHeightNdc * 1000) / 1000, rule: Pl.rule || null } : null,
@@ -5913,6 +6025,48 @@ export function createScene({
     const covered = regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 });
     return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || null, side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
       name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered };
+  }
+
+  /** R22 normal crosshair pick only. Own body and compass arrows are never graspable.
+   * Transparent glass remains an input blocker of the mirror, including when an outline projection is unavailable. */
+  function graspTargetAt(x, y) {
+    if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return { target: null, blocked: 'unavailable-viewport' };
+    const arrows = pickArrows(x, y);
+    if (arrows.some(h => h.kind === 'arrow')) return { target: null, blocked: 'orbit-arrow' };
+    camera.updateMatrixWorld(true); brainGroup.updateMatrixWorld(true);
+    pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
+    rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
+    const brainHits = brainGroup.visible ? raycaster.intersectObjects(rayTargets || glass, false) : [];
+    let hits = [], mirrorEnvelope = null;
+    if (mirrorRoot.visible && mirror.transform && mirror.body) {
+      mirrorRoot.updateMatrixWorld(true);
+      hits = raycaster.intersectObjects([...mirrorBodyGroup.children, ...mirrorArmGroup.children], false);
+      mirrorEnvelope = currentMirrorEnvelope();
+    }
+    const bh = brainHits[0] || null, mh = hits[0] || null;
+    const mirrorPick = () => ({ target: 'mirror', blocked: null, centreWorldM: mirror.transform.centre.slice(), radiusM: mirrorEnvelope.radiusM,
+      pointWorldM: mh.point.toArray(), mirrorEnvelope, source: 'nearest-visible-mirror-ray/full-current-enclosure-r22-r2' });
+    // Transparent foreground brain STILL catches input; a genuinely nearer mirror is no longer caught by brain behind it.
+    if (bh) return mh && mh.distance < bh.distance ? mirrorPick() : { target: 'brain', blocked: null, pointWorldM: bh.point.toArray(), mirrorEnvelope, source: 'nearest-active-camera-brain-ray' };
+    const outline = regionMode && brainTransformSet && brainCoversRect({ x0: x - .5, y0: y - .5, x1: x + .5, y1: y + .5 });
+    if (outline) {
+      // Preserve the old outline blocker at concavities, except a mirror proved IN FRONT of the full brain AABB.
+      let entry = 0, exit = Infinity, intersects = Boolean(brainDepthBounds);
+      if (brainDepthBounds && mh) {
+        const inverse = NsMirror.invertAffine(Array.from(brainGroup.matrixWorld.elements));
+        const o = NsMath.transformPoint(inverse, [rayOrigin.x, rayOrigin.y, rayOrigin.z]);
+        const d = NsMath.transformDirection(inverse, [rayDir.x, rayDir.y, rayDir.z]);
+        for (let j = 0; j < 3; j++) {
+          if (d[j] === 0) { if (o[j] < brainDepthBounds.min[j] || o[j] > brainDepthBounds.max[j]) intersects = false; continue; }
+          const a = (brainDepthBounds.min[j] - o[j]) / d[j], b = (brainDepthBounds.max[j] - o[j]) / d[j];
+          entry = Math.max(entry, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
+        }
+        intersects = intersects && exit >= entry;
+        if (intersects && mh.distance < entry) return mirrorPick();
+      }
+      return { target: 'brain', blocked: 'brain-input-outline', mirrorEnvelope, source: 'conservative-brain-outline-input-blocker' };
+    }
+    return mh ? mirrorPick() : { target: null, blocked: null, mirrorEnvelope };
   }
 
   /* ---- R5-scene (D17): glow links ------------------------------------------------------------------------------------ */
@@ -6351,7 +6505,10 @@ export function createScene({
       }
       mesh.geometry = g;
       for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
-      if (mesh.userData.nsMirrorTwin) mesh.userData.nsMirrorTwin.geometry = g;
+      if (mesh.userData.nsMirrorTwin) {
+        mesh.userData.nsMirrorTwin.userData.nsFullGeometry = full;
+        mesh.userData.nsMirrorTwin.geometry = g;
+      }
     }
     lodApplied = key;
     if (fresh) st.builtMs = Math.round(nowMs() - t0);
@@ -6394,6 +6551,7 @@ export function createScene({
       const tw = b.mirror;
       if (!tw) continue;
       const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      tw.userData.nsFullGeometry = full;
       const g = cell > 0 ? mirrorIndexLod(full, cell, false) : b.mesh.geometry;
       const use = g || b.mesh.geometry;
       if (!g) pending++;
@@ -6556,6 +6714,11 @@ export function createScene({
       farEyeVec.value.set(v[0] * pw[0] + v[4] * pw[1] + v[8] * pw[2] + v[12], v[1] * pw[0] + v[5] * pw[1] + v[9] * pw[2] + v[13],
         v[2] * pw[0] + v[6] * pw[1] + v[10] * pw[2] + v[14], farEyeView.K);
     } else farEyeVec.value.w = 0;
+    // Camera-range enforcement belongs to active held manipulation, not a released world-fixed object.
+    if (mirror.carryHeldAtReconcile === true && mirror.worldCentre && mirrorRoot.visible) {
+      const envelope = currentMirrorEnvelope();
+      if (!(envelope.minCameraDepthM >= camera.near && envelope.maxCameraDepthM <= camera.far)) fail('scene_input', 'current full mirror geometry violates camera range; ordinary pose remains unresolved');
+    }
     renderer.render(scene, camera);
     renderFaceLayer();
     lastRenderCpuMs = nowMs() - now;
@@ -6699,7 +6862,7 @@ export function createScene({
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
     setMirror: setMirrorView,
     mirrorState,
-    mirrorPartAt,
+    mirrorPartAt, graspTargetAt, reconcileMirrorCarry,
     mirrorPlacementNow,
     bodyKeepOut,
     // R5-integrate-core (D15): the Body Worlds layer labels of the body's muscle meshes, and the lifted left arm.
