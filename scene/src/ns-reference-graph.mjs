@@ -261,7 +261,9 @@ export function translateBrainRecord(record, state, initialOrigin) {
   if (!record.transform) fail('configured graph requires actual region-mode brain transform');
   const t = vec(state.translation, 'brain world translation'), raw = record.transform;
   if (![raw.matrix, raw.inverse].every(m => m && m.length === 16 && Array.from(m).every(Number.isFinite))) fail('actual finite brain matrix/inverse required');
-  const transform = { ...raw, matrix: multiply(translation(t), raw.matrix), inverse: multiply(raw.inverse, translation(t.map(v => -v))),
+  // The un-turned placement (ns-brain restMatrix), when the record carries one, moves with the brain like its matrix.
+  const rest = raw.restMatrix && raw.restMatrix.length === 16 && Array.from(raw.restMatrix).every(Number.isFinite) ? multiply(translation(t), raw.restMatrix) : null;
+  const transform = { ...raw, matrix: multiply(translation(t), raw.matrix), ...(rest ? { restMatrix: rest } : { restMatrix: undefined }), inverse: multiply(raw.inverse, translation(t.map(v => -v))),
     pivotWorld: raw.pivotWorld.map((v, i) => v + t[i]), referenceTranslation: t.slice(), referenceOrigin: initialOrigin.slice() };
   return { ...record, transform };
 }

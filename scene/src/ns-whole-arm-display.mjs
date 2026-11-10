@@ -300,10 +300,17 @@ function visibilityKey(support, matrices, viewport, armOptions) {
   }
   // An option that is PRESENT but undefined overrides its default in the full check (and is refused there): never memoize it.
   for (const name of ['marginNdc', 'near', 'nearMargin', 'viewLimitsNdc']) if (name in o && o[name] === undefined) return null;
-  const scalar = x => x === undefined ? -Infinity : typeof x === 'number' && Number.isFinite(x) ? x : NaN; // supplied nonfinite scalars bypass memo; missing defaults retain their key
+  // Which of the eleven numbers are PRESENT is part of the key (one bit each, in the last slot), so an absent value can
+  // never be mistaken for a given one. (The first form wrote -Infinity for "absent"; a caller that really passed
+  // -Infinity would then have been answered with the stored result for the default instead of being refused.) A value
+  // that is not a finite number is never memoized: the full check decides what to do with it.
+  let present = 0, bit = 1;
   for (const x of [v.aspect, v.fovYDeg, v.farM, v.nearM, o.marginNdc, o.near, o.nearMargin, limits.left, limits.right, limits.bottom, limits.top]) {
-    const y = scalar(x); if (y !== y) return null; key[k++] = y;
+    if (x === undefined) key[k++] = 0;
+    else { if (typeof x !== 'number' || !Number.isFinite(x)) return null; key[k++] = x; present += bit; }
+    bit *= 2;
   }
+  key[k++] = present;
   return key;
 }
 function checkWholeArmVisibility(support, matrices, viewport, armOptions) {

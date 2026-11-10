@@ -1,37 +1,47 @@
-NEUROSURGE: OPEN THE CURRENT PREVIEW
+NEUROSURGE: OPEN THE PREVIEW
 
-Open the browser game and use its keyboard, mouse or trackpad controls. Rendering and simulation run on your computer; the site supplies the files. A modern browser with JavaScript and WebGL is required.
+Open the game, move the arm, and see the simulated activity change. The scene
+runs in your browser on your computer. You need a network connection and a
+modern browser with JavaScript and WebGL; no Node or Python installation.
 
-Windows: download NeuroSurge-Windows.url and double-click it.
-macOS: download NeuroSurge-macOS.webloc and double-click it.
-Linux: open NeuroSurge-Linux.desktop with your desktop's normal launcher handling.
-Keep each filename's extension. If the browser displays the file as text,
-download the ZIP, extract it, and open the launcher for your system.
-Follow normal OS opening/trust prompts. Native Windows/macOS operation has
-not been tested by this package's Linux-only format checks.
+Preview: https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html
+Package: experimental-2026-11-11-control-update
 
-For a Linux application-menu entry, extract the ZIP, open a terminal in that
-folder and run:
+Download the ZIP and extract it. Then open the file for your system:
+  Windows: NeuroSurge-Windows.url
+  macOS: NeuroSurge-macOS.webloc
+  Linux: NeuroSurge-Linux.desktop
+Keep the filename extension and follow your operating system's normal opening
+and trust prompts. Windows and macOS files have been format-checked on Linux;
+opening them on those systems has not been tested.
+
+To add NeuroSurge to the Linux application menu, open a terminal in the
+extracted folder and run:
   sh Install-NeuroSurge-Linux.sh
-The installer opens no browser. It writes one per-user application entry in
-${XDG_DATA_HOME:-$HOME/.local/share}/applications. It prefers the installed
-Omarchy web-app opener, otherwise xdg-open. It needs normal Linux shell/core
-utilities and a configured browser; it installs no software or background job.
-An identical managed entry is left intact. Any different file or symlink
-using the destination name is preserved. The URL stays current when the
-published preview changes, so a new build does not require reinstallation.
-To remove the menu entry later, delete brain2body-neurosurge.desktop from the
-location printed by the installer. Downloaded bookmarks can be deleted normally.
+The installer opens no browser. It writes one entry to
+${XDG_DATA_HOME:-$HOME/.local/share}/applications, using the installed Omarchy
+web-app opener when available and xdg-open otherwise. Normal Linux shell/core
+utilities and a configured browser are required; it installs no other software.
 
-Direct preview: https://eliminatenoise.github.io/NeuroSurge/
+An identical entry stays as it is. An exact older NeuroSurge entry is updated,
+with its previous contents saved at the backup path printed by the installer.
+Custom files, symlinks and directories using that name are preserved. Run the
+installer while no other program is editing the entry: its lock coordinates
+copies of this installer, but cannot exclude unrelated writers. If a lock is
+left after an interrupted run, first check that no installer is running before
+removing the empty .brain2body-neurosurge.install.lock directory at that location.
+To remove the menu entry, delete brain2body-neurosurge.desktop from the printed
+location. Keep any backup you want, or delete it separately. Downloaded launcher
+files can be deleted normally.
+
+The shortcut opens the online preview at the same address as it changes. It
+does not contain an offline game, trained model, neural recording or decoder.
+NeuroSurge uses simulated movement and colours. It does not decode neural
+recordings or demonstrate validated joint mechanics or clinical function.
+
 Project and source: https://github.com/eliminatenoise/NeuroSurge
 Source ZIP: https://github.com/eliminatenoise/NeuroSurge/archive/refs/heads/main.zip
 
-The game is experimental. Its movement and colours are simulated; it does not decode neural recordings or establish validated joint mechanics or clinical function.
-
-These are online URL launchers, not offline model/app bundles. Opening the
-public preview needs a network connection and browser. No Node/Python install
-is needed to open it. Document viewing may use your normal PDF/DOCX application.
-The launchers contain no weights, recordings, credentials or private paths.
-SHA256SUMS identifies the five launcher/instruction files in this package;
-it does not establish OS trust, scientific validation or source authentication.
+SHA256SUMS lists the five launcher/instruction files. It can detect changed
+files against that list; it does not establish who supplied the list or grant
+OS trust or scientific validation. No credentials or private paths are included.

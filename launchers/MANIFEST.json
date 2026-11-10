@@ -1,49 +1,80 @@
 {
   "project": "NeuroSurge",
+  "version": "experimental-2026-11-11-control-update",
   "kind": "online desktop URL launchers",
-  "target": "https://eliminatenoise.github.io/NeuroSurge/",
+  "target": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "hashAlgorithm": "sha256",
-  "self_excluded": true,
   "files": [
+    {
+      "name": "Install-NeuroSurge-Linux.sh",
+      "bytes": 5275,
+      "sha256": "970bb2db8c81d283cb645a8cd960f2522f6498213aa0a1d29d98af997e046153"
+    },
+    {
+      "name": "NeuroSurge-Launchers.zip",
+      "bytes": 9871,
+      "sha256": "e4fb9954c1f4f2673e2228a4b128221ad3dd3163b6501c106e07f4f597531b71"
+    },
+    {
+      "name": "NeuroSurge-Linux.desktop",
+      "bytes": 375,
+      "sha256": "56bad53d88cbb38cf56f0a8467841cd7f2553b04aaa944aa02ee426cf66f4b0e"
+    },
+    {
+      "name": "NeuroSurge-Windows.url",
+      "bytes": 116,
+      "sha256": "ec88e9b330c4f376996afc00f615d67827b357c06cc2f3e5bbe61681a63caa80"
+    },
+    {
+      "name": "NeuroSurge-macOS.webloc",
+      "bytes": 313,
+      "sha256": "19b18ee6f502bc1c77e9512bf490812a70ce1adddb7388c87d62906a6bfa7141"
+    },
+    {
+      "name": "README.txt",
+      "bytes": 2641,
+      "sha256": "35f6528b0a213e33bafaab1b9e1c8f29e39abc2e52198f9b5d3f184877a59110"
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 441,
+      "sha256": "576903f58e40dbc1dd73a9b1009df10a04d58c301d6c8fb7cf84c3841ad7ff3b"
+    }
+  ],
+  "hash_coverage": {
+    "SHA256SUMS": [
+      "Install-NeuroSurge-Linux.sh",
+      "NeuroSurge-Linux.desktop",
+      "NeuroSurge-Windows.url",
+      "NeuroSurge-macOS.webloc",
+      "README.txt"
+    ],
+    "ZIP": [
+      "Install-NeuroSurge-Linux.sh",
+      "NeuroSurge-Linux.desktop",
+      "NeuroSurge-Windows.url",
+      "NeuroSurge-macOS.webloc",
+      "README.txt",
+      "SHA256SUMS"
+    ],
+    "MANIFEST.json": "All seven other replacement files; this manifest excludes itself to avoid a checksum cycle. ZIP excludes ZIP and MANIFEST.json; SHA256SUMS excludes itself, ZIP and MANIFEST.json."
+  },
+  "linux_upgrade": "Only byte-identical older project xdg-open/Omarchy templates; backup before replacement; matching current entry is idempotent; custom files/symlinks/non-regular destinations refused. A cooperating-installer lock is not atomic compare-and-swap protection against unrelated writers.",
+  "qualification": "Static formats/ZIP and isolated Linux installer checks only. No browser launch, Windows/macOS native opening, offline/model capability, game completion, scientific validation, publication or deployment claim.",
+  "descriptionsGlossary": {
+    "revision": 36,
+    "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406"
+  },
+  "source_template_identities": [
     {
       "name": "Install-NeuroSurge-Linux.sh",
       "bytes": 2564,
       "sha256": "dd063ef8394741fb4222f0bcadb8be732ded10703a39df6742a7680806379eb5"
     },
     {
-      "name": "NeuroSurge-Launchers.zip",
-      "bytes": 3835,
-      "sha256": "be62c6a3852c1c3da38108505d8666ea0a728e5fe9b4abc22739c4637268783c"
-    },
-    {
       "name": "NeuroSurge-Linux.desktop",
       "bytes": 329,
       "sha256": "06566fad07fc696ae9e7f9e6684089d49da9aa439fb656c08a31c40ac1c09575"
-    },
-    {
-      "name": "NeuroSurge-Windows.url",
-      "bytes": 70,
-      "sha256": "23c53adcb243c6833e1a566ef972b33676a0a1da1b056a4c74f149e841028ca5"
-    },
-    {
-      "name": "NeuroSurge-macOS.webloc",
-      "bytes": 267,
-      "sha256": "dcda8b135840407847f9723bb817021e9a0cb3fd3134885d192538f81be5c679"
-    },
-    {
-      "name": "README.txt",
-      "bytes": 2384,
-      "sha256": "aea13fadd794d4cbc82a5e7ff5e68b5063aa8970c90f245edc9f99a73cc08d23"
-    },
-    {
-      "name": "SHA256SUMS",
-      "bytes": 441,
-      "sha256": "c02c6de1eef5abbc642bfd39f9046fb07b998a2c1cc3caff2a58542d6c53a6d3"
     }
-  ],
-  "qualification": "Static formats/source and isolated Linux installer DATA only; Windows/macOS native opening and actual browser launch require separate checks. No offline/model capability implied.",
-  "descriptionsGlossary": {
-    "revision": 36,
-    "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406"
-  }
+  ]
 }

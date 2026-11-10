@@ -106,13 +106,16 @@ export const HONESTY = deepFreeze({
       '(BA4) lies in the anterior bank of the central sulcus, which is not shown separately.'
   },
   // R558 (genuine note R26: "no floating face at the top"): the separate own-face display is gone; the face is on the
-  // mirror body, and on your own head when you look from behind.
+  // mirror body, and on your own head when you look from behind. R558 (the user's notes of 2026-11-10; ns-scene-three
+  // FIRST_PERSON_BODY): the ordinary view draws only what is in front of your face.
   face: {
     id: 'face-layer',
-    plain: 'From inside a body you cannot see your own face. Look at the mirror body to see the face and its muscles. ' +
-      'It copies yours.',
-    more: 'In first person your own head is not drawn, because the camera sits inside it. The mirror body shows the same ' +
-      'face, chewing and neck muscles, and the view from behind (E) shows your own head in place.'
+    plain: 'Through your own eyes you cannot see your face, head, neck or back. Look at the mirror body to see them: ' +
+      'it copies yours. Or press E to see yourself from behind.',
+    more: 'In the ordinary view only what is in front of your face is drawn: your left arm, your lap and legs, and ' +
+      'your right forearm and hand. The picture is taken from a little behind your eyes so that the whole left arm ' +
+      'fits; your head, neck, chest and back are left out of it, not missing. The mirror body shows the same face, ' +
+      'chewing, neck and trunk muscles, and the view from behind (E) shows your whole body with the head in place.'
   },
   // R558 (genuine note R31): what a tap on a muscle does and does not show.
   muscleTap: {
@@ -205,18 +208,19 @@ const STEP_TABLE = [
   { head: 'Turn your view.', parts: [
     part('Press on the brain and drag to turn it. Four see-through arrows also sit around it, like the points of a ' +
       'compass: click one to turn your view around the brain a little, or hold it to keep turning. The arrows stay ' +
-      'where they are, and the brain stays in its place.', 'compassArrows'),
+      'where they are, and the brain stays in its place. From straight above you cannot see the lowest face areas ' +
+      '(the tongue): turn the brain to one side to bring them round.', 'compassArrows'),
     part('Click an arrow next to the brain to turn your view around it a little. Hold the arrow to keep turning. The ' +
       'brain itself stays put.', '!compassArrows')],
   intro: [part('Press on the brain and drag to turn it, or click or hold one of its four see-through arrows.', 'compassArrows'),
     part('Click or hold an arrow by the brain to turn your view. The brain stays put.', '!compassArrows')] },
   { head: 'See your body.', parts: [
-    part('Look far down to see your body and legs. Look far right and a little down for your right arm. Your face ' +
-      'is on the mirror body: it copies yours.'),
+    part('Look down to see your lap, legs and feet, and your right hand resting in front of you. Your face, chest ' +
+      'and back are on the mirror body: it copies yours. Press E to see all of yourself from behind.'),
     // R5-text (D15, user R19).
     part('The outer muscles are lifted out a little, like in a Body Worlds exhibit, so you can see the deeper ones.', 'bodyWorlds'),
     part('The “What is happening” panel explains each area you look at or click.')],
-  intro: [part('Look far down for your legs, far right for your right arm. Your face is on the mirror body.'),
+  intro: [part('Look down for your lap and legs. Your face, chest and back are on the mirror body.'),
     part('The outer muscles are lifted a little to show the deeper ones.', 'bodyWorlds')] },
   // R5-text (D18, user R22).
   { head: 'See your back.', need: 'thirdPerson', parts: [part('Press E to see your body from behind (third person). ' +
@@ -371,7 +375,7 @@ export const SHELL = deepFreeze({
   // R4-integrator (D8): the Esc-page picture-quality setting (option names in QUALITY_LABELS).
   quality: 'Picture quality',
   // R4-polish: "softer" was not what a player sees on a software renderer (a half-size, blockier picture); say it plainly.
-  qualityHelp: 'Auto keeps the game smooth. Low draws a simpler, less sharp picture for slow computers. The colours and ' +
+  qualityHelp: 'Auto adjusts picture quality. Low draws a simpler, less sharp picture for slow computers. The colours and ' +
     'what they mean stay the same.',
   // R4-fix (code review M1): edge smoothing is chosen when the page loads; after a Low start, High is fully sharp only
   // after a reload.
@@ -479,6 +483,8 @@ export const HUD = deepFreeze({
   reachBlocked: 'Your hand cannot go further that way, so it stays on screen',
   // R558: the look stops where the whole arm could no longer stay in view (the game used to stop here).
   lookLimit: 'You cannot look further that way: your arm has to stay in view',
+  /** R558: shown for a few seconds after a change of view (E) could not be drawn and was undone. */
+  viewKept: 'That change of view cannot be shown from this pose. Push your hand forward a little or look back toward the middle, then press E again.',
   contextLost: SHELL.contextLost,
   placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
@@ -494,6 +500,11 @@ export const HUD = deepFreeze({
   brainAwayHint: 'Lost the brain? Press Esc, then Reset brain view to bring it back.',
   /** R4-polish (R4-player 1.11): shown while the arrows have turned the view far round the brain. */
   turnedFarHint: 'Turned far round the brain? Press Esc, then Reset brain view to go back.',
+  /** R558: shown while the crosshair is on a face area and the brain has not been turned. The lowest areas of each
+   * motor strip (tongue, and the lowest in-between area) lie on the side of the brain, out of sight from straight above
+   * (computed with the game's own gaze test: 40 of 44 areas can be aimed at from above; one arrow click, 15 degrees,
+   * brings in the two hidden ones on that side). */
+  sideAreasHint: 'More face areas (the tongue) are round the side of the brain: drag the brain, or click the arrow beside it, to turn it.',
   /** R3-fix (M6): shown when looking far right at about eye level. */
   rightArmHint: 'Your right arm rests lower down: look down a little to see it',
   /** R4-integrator (R4-player 1.8, D8): shown while the frame rate stays very low (a slow or software renderer). */
@@ -889,8 +900,9 @@ export const ARROWS = deepFreeze({
     }
   },
   holdHint: 'Click for a small turn. Hold to keep turning.',
-  /** An arrow behind your own arm is drawn as a faint outline; it still works. */
-  behindArm: 'An arrow behind your arm shows as a faint outline. You can still use it.',
+  /** An arrow behind your own arm is hidden where the arm covers it (no faint copy since R558: that copy also veiled
+   * motor areas in front of an arrow). Not shown by the game at present; kept truthful for a caller that shows it. */
+  behindArm: 'Your arm can hide part of an arrow. Move your arm, or press on the brain and drag instead.',
   /** A mirror arrow the brain still covers (the brain catches the look and the click, D19). */
   mirrorBlocked: 'The brain is in the way. Drag the brain aside first.'
 });
@@ -1173,10 +1185,16 @@ export function guideLine(step, total, text, nice = false) {
 }
 
 /** Visible App error wording only. Raw status/shell/ready errors and their causes stay with ns-app. */
-export function appErrorLine(error) {
-  return error === 'ns:app_args: configured viewGraph requires the complete validated54-record face packet'
-    ? 'The face anatomy could not finish loading. Reload the page to try again.'
-    : `NeuroSurge stopped: ${error}`;
+export function appErrorLine(error, hint = null) {
+  if (error === 'ns:app_args: configured viewGraph requires the complete validated54-record face packet') return 'The face anatomy could not finish loading. Reload the page to try again.';
+  // R558: the whole-arm display refused every picture it was offered. hint 'narrow-window' (set by ns-app only when the
+  // very first picture of an upright window was refused because no camera distance shows the whole arm): say what to
+  // do. Any other whole-arm stop (the last step of the recovery in the middle of a game, or a bad input) is not about
+  // the window, so it does not say so. The reason stays in the line for a report.
+  const arm = /^ns:whole_arm_display: (.+)$/.exec(str(error));
+  if (arm && hint === 'narrow-window') return `NeuroSurge could not fit your whole left arm into a window this shape. Make the window wider than it is tall (on a phone or tablet, turn it sideways). If the game does not start again by itself, reload the page. (Reason: ${arm[1]})`;
+  if (arm) return `NeuroSurge could not show your whole left arm from here and stopped. Reload the page to start again. (Reason: ${arm[1]})`;
+  return `NeuroSurge stopped: ${error}`;
 }
 
 /* ------------------------------------------------------------------ page (scene/example/index.html) */

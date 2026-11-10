@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-10-interaction-update",
+  "version": "experimental-2026-11-11-control-update",
   "experimental": true,
-  "source": "Interaction update with narrow cache, ray-boundary and keyboard-layout corrections",
+  "source": "Merged control and arrow update, revised Esc handling, current launchers and explicit limits",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -27,18 +27,18 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 19465,
-      "sha256": "6ccf6fc6d4a383cef299a4a6ca345795815bc78a99997731a4778b4cc9d39ec4"
+      "bytes": 19558,
+      "sha256": "bbe9c4837b93fc880106cf1f67006a600a3148c3f408c727bf8c4cf375831892"
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 12955,
-      "sha256": "6f0e328139ae05f03fd0e677c8c79f504ea979ffd1a1b6bb331efb5c9d5ca183"
+      "bytes": 8512,
+      "sha256": "709bb134e128dd739de8fcadd54c5bee34c30e331b7e5ad19c4adc27ebfbaf15"
     },
     {
       "path": "LAUNCHERS.md",
-      "bytes": 1768,
-      "sha256": "19db73cf3376fbe29e2728051d539a56e8b94c7a87cefc321982c3c71f8ba9e1"
+      "bytes": 2947,
+      "sha256": "f4d15e3a0427160eb389c437cbc17c678b335db0fb8a17acc178c77c3e0b2032"
     },
     {
       "path": "LICENSE",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 1894,
-      "sha256": "daa379635442273ccc8a25b76b804af3b3366101873d8a6d499109c8c6e3ed3d"
+      "bytes": 5015,
+      "sha256": "5f4b43c082c02f9cd0886dcc949cc2448a510bd6bdce9ad86cc6ef38f159a79e"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 9638,
-      "sha256": "9beb288702d7950df3ad47346633af8617e85bd3b9c2dc389224f521bbfa6edc"
+      "bytes": 9155,
+      "sha256": "f2cc221acc00fd1c526266fca7e4d9dfe703967a5b4145e42687bb1efc7e2a3e"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 1832,
-      "sha256": "a8c33984856410b7f2c7eaeba6097c7a85466fc3cd7cf34cab01bc8ee28c9abb"
+      "bytes": 4318,
+      "sha256": "6b6db76ed85d91bbe2ab40a1d3e0caa9db297fc6e7dbebd80f673eb037f1a7a8"
     },
     {
       "path": "README.md",
-      "bytes": 3667,
-      "sha256": "c4ae3f7dfb1ff0512e4f6e6f5a29a3f471d0ecb697d13bbf8a8ab7a0258ae865"
+      "bytes": 5089,
+      "sha256": "d9903146292ba45d1c7fa10ed55dcf9b7992226f27359ad6694a13cb3a38c1ea"
     },
     {
       "path": "START.html",
-      "bytes": 3040,
-      "sha256": "64568dfd4bd11a43b0e1a5c56f4303ae86a5662abdea576dedf8b7af71725cc7"
+      "bytes": 3734,
+      "sha256": "564254aa81968640aec5ca776ae2185a04c3cc3044bdfa00a997d15e0568da7f"
     },
     {
       "path": "index.html",
@@ -92,43 +92,43 @@
     },
     {
       "path": "launchers/Install-NeuroSurge-Linux.sh",
-      "bytes": 2564,
-      "sha256": "dd063ef8394741fb4222f0bcadb8be732ded10703a39df6742a7680806379eb5"
+      "bytes": 5275,
+      "sha256": "970bb2db8c81d283cb645a8cd960f2522f6498213aa0a1d29d98af997e046153"
     },
     {
       "path": "launchers/MANIFEST.json",
-      "bytes": 1618,
-      "sha256": "7e74172f67d199ae3704151f66a321df3f7e74bcea1bbbe2456fa37f9374a500"
+      "bytes": 2991,
+      "sha256": "92fc3f6ebaf9897d0d013ba6a901a41c38d7dd1d949507dd5a348f32baf772d2"
     },
     {
       "path": "launchers/NeuroSurge-Launchers.zip",
-      "bytes": 3835,
-      "sha256": "be62c6a3852c1c3da38108505d8666ea0a728e5fe9b4abc22739c4637268783c"
+      "bytes": 9871,
+      "sha256": "e4fb9954c1f4f2673e2228a4b128221ad3dd3163b6501c106e07f4f597531b71"
     },
     {
       "path": "launchers/NeuroSurge-Linux.desktop",
-      "bytes": 329,
-      "sha256": "06566fad07fc696ae9e7f9e6684089d49da9aa439fb656c08a31c40ac1c09575"
+      "bytes": 375,
+      "sha256": "56bad53d88cbb38cf56f0a8467841cd7f2553b04aaa944aa02ee426cf66f4b0e"
     },
     {
       "path": "launchers/NeuroSurge-Windows.url",
-      "bytes": 70,
-      "sha256": "23c53adcb243c6833e1a566ef972b33676a0a1da1b056a4c74f149e841028ca5"
+      "bytes": 116,
+      "sha256": "ec88e9b330c4f376996afc00f615d67827b357c06cc2f3e5bbe61681a63caa80"
     },
     {
       "path": "launchers/NeuroSurge-macOS.webloc",
-      "bytes": 267,
-      "sha256": "dcda8b135840407847f9723bb817021e9a0cb3fd3134885d192538f81be5c679"
+      "bytes": 313,
+      "sha256": "19b18ee6f502bc1c77e9512bf490812a70ce1adddb7388c87d62906a6bfa7141"
     },
     {
       "path": "launchers/README.txt",
-      "bytes": 2384,
-      "sha256": "aea13fadd794d4cbc82a5e7ff5e68b5063aa8970c90f245edc9f99a73cc08d23"
+      "bytes": 2641,
+      "sha256": "35f6528b0a213e33bafaab1b9e1c8f29e39abc2e52198f9b5d3f184877a59110"
     },
     {
       "path": "launchers/SHA256SUMS",
       "bytes": 441,
-      "sha256": "c02c6de1eef5abbc642bfd39f9046fb07b998a2c1cc3caff2a58542d6c53a6d3"
+      "sha256": "576903f58e40dbc1dd73a9b1009df10a04d58c301d6c8fb7cf84c3841ad7ff3b"
     },
     {
       "path": "packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json",
@@ -1936,6 +1936,11 @@
       "sha256": "17a9886821357c79f46c1e4367c3546c90edc815fe70f2ce70990da60b00c248"
     },
     {
+      "path": "packets/pov-demo-assets-r2/meshes/FJ1466M.obj",
+      "bytes": 51150,
+      "sha256": "c863e99b725f694e708b560b9bf848ce4249bc512dd4d0284a79de20402f0c5f"
+    },
+    {
       "path": "packets/pov-demo-assets/meshes/FJ1467M.obj",
       "bytes": 91869,
       "sha256": "a523b5f2ab862ad6505787f4936098fbcfe3f28a3742b57aac34307fe752f8eb"
@@ -2641,11 +2646,6 @@
       "sha256": "3b327f7169609c03540967f7f8ceba810afda27a427cb5f16ea6641ef429837a"
     },
     {
-      "path": "packets/pov-demo-assets-r2/meshes/FJ1466M.obj",
-      "bytes": 51150,
-      "sha256": "c863e99b725f694e708b560b9bf848ce4249bc512dd4d0284a79de20402f0c5f"
-    },
-    {
       "path": "scene/example/configured-r281.css",
       "bytes": 19072,
       "sha256": "7454b68adef997a34adb7cfc664893bb2ddcb72cb129af8492d73aecf86694c6"
@@ -2747,8 +2747,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1610,
-      "sha256": "8a938241a1f5456c29d5efb5a5653f317c46e55de86257ff8717260e0e41c877"
+      "bytes": 1606,
+      "sha256": "9e9a9f1e24f0ca5ccf95b1a2c2a73291f69dbe250d89c25096b2a5d808d31a5e"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -2757,8 +2757,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 374546,
-      "sha256": "9728782fbe46983cbf2030acc73c6d17b6f32b45c5db81c9d9b7a13496b1bd3e"
+      "bytes": 393935,
+      "sha256": "8450f11af347e6a1091baa312daf7f6b934bb0f6b7c547646fe781ed657cb8da"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -2767,8 +2767,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 92185,
-      "sha256": "c8b39e9ea12a44248fd0f57afce73023d7f3a88116eefaeb5922a08f66871778"
+      "bytes": 92384,
+      "sha256": "153c37435da1e09c1936625d097ca5ea15a53b3c22ce006151f3d34d6daf0ec4"
     },
     {
       "path": "scene/src/ns-assets.mjs",
@@ -2792,8 +2792,8 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 225213,
-      "sha256": "093531c68bbba56c7cf19a24f7712f923859b08b23251268565dc3bdc84d10dd"
+      "bytes": 231619,
+      "sha256": "ede8f2264a86f34be4fbd9de4b44e8714eb286b1c9b20d85b9364159c776eb56"
     },
     {
       "path": "scene/src/ns-camera.mjs",
@@ -2807,8 +2807,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 65380,
-      "sha256": "088458fbb9fce087966089777bf3775d70c72a8ab8271efb919e41723226b24f"
+      "bytes": 66167,
+      "sha256": "bde0ec6ea8681d5052d28f45766de2ddee6261fb41d4488b862aa5e88ffc4ef8"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -2822,8 +2822,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 53352,
-      "sha256": "a2851a3949c3960c3d629c0ccd6eb3a41f2028f015bde6d32b1cf2a0588c6a03"
+      "bytes": 54295,
+      "sha256": "db52c1a38be525713c2d82f3b2b7849b3fe25412dfb24eafc5316607a67562b9"
     },
     {
       "path": "scene/src/ns-obj.mjs",
@@ -2837,13 +2837,13 @@
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
-      "bytes": 8905,
-      "sha256": "e2f6e97a84e62492767d64e935b3a067411a5bd0d806c031aacf3e02d9d137dc"
+      "bytes": 9335,
+      "sha256": "04de3d5a65dfaf0beccb4ce337d6aec23e37bc434d3ddf294a580e0ba4795ffe"
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 21989,
-      "sha256": "0326018d19ca3403d78bac286cb18a719cb28d22c213cfa3ee6b3c39767a6500"
+      "bytes": 22336,
+      "sha256": "d4c4ce2260232973506f0ecbb928d19b11b25c0903c3f3d665fb8b0bd2085e38"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -2857,18 +2857,18 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 567143,
-      "sha256": "56a9398c8c8065a0792abb3a5a2437a60dbe1c93feef2ab6cb328d6a2e1bebc0"
+      "bytes": 588723,
+      "sha256": "f53731064f18d216218e7ef3aa381440888cce0a97ece1f66cf2a7a739965b2b"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 88876,
-      "sha256": "e6103adc3102c3a42bd8d07486b367cb3b7c8a652e963110f55c24b984ef3bf6"
+      "bytes": 91394,
+      "sha256": "b5f40e11429c9df6f66929cf18493660f3e7e4a73d971fd83d9efdfe3161215f"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
-      "bytes": 49327,
-      "sha256": "4616a40bd8507baffca6dfa2c673f7ec543ead6dca659ba8df47706d4f24e5ec"
+      "bytes": 49736,
+      "sha256": "4d71cea6c7fa75ec9fb6f7dc922e509030e66761d2f62abf8de1be6a2f037999"
     },
     {
       "path": "serve-local.mjs",

@@ -90,32 +90,31 @@ export function raycastTriangleBvh(bvh, positions, index, ox, oy, oz, dx, dy, dz
   if (!bvh) return null;
   const { bounds, left, right, start, count, order } = bvh;
   const ix = 1 / dx, iy = 1 / dy, iz = 1 / dz;
+  // A direction component that is zero (or so small that its reciprocal is not finite) makes the ray parallel to that
+  // pair of box faces. It is then handled on its own: the node is skipped only when the origin lies outside the pair,
+  // and otherwise that axis sets no limit. The earlier form multiplied by +/-Infinity and relied on the comparisons;
+  // with the origin exactly ON a face that product is 0 x Infinity = NaN, and a node holding the hit could be skipped.
+  const px = !(Math.abs(ix) < Infinity), py = !(Math.abs(iy) < Infinity), pz = !(Math.abs(iz) < Infinity);
   let best = tMax, bestTriangle = -1, top = 0;
   traversal[top++] = 0;
   while (top > 0) {
     const node = traversal[--top], b = 6 * node;
-    // A +/-zero direction is parallel: outside the CLOSED slab rejects; inside/on adds no interval restriction.
-    // Nonzero reciprocal arithmetic is unchanged; overflow/subnormal corner cases remain separately unqualified.
-    let near = -Infinity, far = Infinity, t0, t1, n2, f2;
-    if (dx === 0) {
-      if (ox < bounds[b] || ox > bounds[b + 3]) continue;
-    } else {
+    // slab test against the node's box (faces included)
+    let near = -Infinity, far = Infinity, t0, t1;
+    if (px) { if (ox < bounds[b] || ox > bounds[b + 3]) continue; }
+    else {
       t0 = (bounds[b] - ox) * ix; t1 = (bounds[b + 3] - ox) * ix;
-      near = t0 < t1 ? t0 : t1; far = t0 < t1 ? t1 : t0;
+      if (t0 < t1) { near = t0; far = t1; } else { near = t1; far = t0; }
     }
-    if (dy === 0) {
-      if (oy < bounds[b + 1] || oy > bounds[b + 4]) continue;
-    } else {
+    if (py) { if (oy < bounds[b + 1] || oy > bounds[b + 4]) continue; }
+    else {
       t0 = (bounds[b + 1] - oy) * iy; t1 = (bounds[b + 4] - oy) * iy;
-      n2 = t0 < t1 ? t0 : t1; f2 = t0 < t1 ? t1 : t0;
-      if (n2 > near) near = n2; if (f2 < far) far = f2;
+      if (t0 < t1) { if (t0 > near) near = t0; if (t1 < far) far = t1; } else { if (t1 > near) near = t1; if (t0 < far) far = t0; }
     }
-    if (dz === 0) {
-      if (oz < bounds[b + 2] || oz > bounds[b + 5]) continue;
-    } else {
+    if (pz) { if (oz < bounds[b + 2] || oz > bounds[b + 5]) continue; }
+    else {
       t0 = (bounds[b + 2] - oz) * iz; t1 = (bounds[b + 5] - oz) * iz;
-      n2 = t0 < t1 ? t0 : t1; f2 = t0 < t1 ? t1 : t0;
-      if (n2 > near) near = n2; if (f2 < far) far = f2;
+      if (t0 < t1) { if (t0 > near) near = t0; if (t1 < far) far = t1; } else { if (t1 > near) near = t1; if (t0 < far) far = t0; }
     }
     if (far < near || far < 0 || near >= best) continue;
     if (left[node] < 0) {

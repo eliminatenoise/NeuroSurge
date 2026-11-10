@@ -269,6 +269,10 @@ export function fallbackBodyBounds() {
  * |a|^2 + (K b)^2 <= (k R)^2, so |p|^2 <= (D + b)^2 + (kR)^2 - K^2 b^2, largest at b* = min(kR / K, D / (K^2 - 1)).
  * frame: a frameBrain result ({ k, perspectiveK, pivotWorld } or distanceM); brainRadiusMm: the largest source distance
  * of any brain vertex from frame.pivot (the brain's bounding radius, mm). Returns metres.
+ * R558: frame.squashAxis (unit u; ns-brain pictureAxis 'view') means the squash is along u, not along the line of sight.
+ * A drawn point is still C + a + b u with |a| <= kR and |b| <= kR / K, so with C = c_par u + c_perp it lies within
+ * sqrt((|c_par| + kR / K)^2 + (|c_perp| + kR)^2) of the eye (a bounding cylinder about the centre: a little loose, never
+ * short). The carry is a rotation about the eye and takes u with it, so the bound holds for every carry.
  */
 export function brainFarDistance({ frame, brainRadiusMm, distanceM = null } = {}) {
   if (!frame || !Number.isFinite(frame.k) || !(frame.k > 0)) fail('input', 'frame (a frameBrain result with k) is required');
@@ -277,6 +281,14 @@ export function brainFarDistance({ frame, brainRadiusMm, distanceM = null } = {}
   if (!(Number.isFinite(D) && D > 0)) fail('input', 'the brain centre distance is unknown');
   const K = Number.isFinite(frame.perspectiveK) && frame.perspectiveK >= 1 ? frame.perspectiveK : 1;
   const kR = frame.k * brainRadiusMm;
+  const u = frame.squashAxis;
+  if (K > 1 && u && u.length === 3 && frame.pivotWorld) {
+    const n = Math.hypot(u[0], u[1], u[2]);
+    if (!(Number.isFinite(n) && n > 0)) fail('input', 'frame.squashAxis must be a finite non-zero vector');
+    const C = vec3(frame.pivotWorld, 'frame.pivotWorld'), par = (C[0] * u[0] + C[1] * u[1] + C[2] * u[2]) / n;
+    const perp = Math.sqrt(Math.max(0, dot(C, C) - par * par));
+    return Math.hypot(Math.abs(par) + kR / K, perp + kR);
+  }
   const b = K > 1 ? Math.min(kR / K, D / (K * K - 1)) : kR;
   return Math.sqrt(Math.max(0, (D + b) * (D + b) + kR * kR - K * K * b * b));
 }

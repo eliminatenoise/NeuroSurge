@@ -1215,7 +1215,9 @@ void main() {
  * Mesh, Group, Object3D, Color, GreaterDepth).
  *  kind: 'brain' | 'mirror' (only a name and the default x-ray choice); xray: the faint see-through copy where an
  *  opaque thing (the arm) is in front (default true for 'brain', false for 'mirror': the mirror body's arrows sit
- *  behind the brain glass and are seen through it anyway).
+ *  behind the brain glass and are seen through it anyway). The copy is drawn wherever ANYTHING that wrote depth is
+ *  nearer, not only the arm: a scene whose arrows must never tint what lies in front of them (the game's motor areas)
+ *  passes xray: false.
  * Returns { group, arrows: { dir: { root, mesh, xray, material } }, setFrames(frames), setHover(dir | null),
  *   setAttention(0..1), setVisible(bool), hovered, geometry, dispose() }. The rig never moves by itself: setFrames
  *   with the plan whenever the target's transform, the view size or the reference look changes.

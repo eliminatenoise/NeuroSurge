@@ -959,6 +959,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   on(doc, 'pointerlockerror', () => lockRefused());
   on(target, 'mousedown', e => {
     const at = eventTime(e);
+    // Review fix: a second button pressed while a press-and-drag is held is ignored. It used to start the gesture
+    // afresh, so letting go gave a click on top of the turn already made.
+    if (pressDrag) return;
     if (isLocked()) {
       // R558 (R31): a press with the crosshair on the brain or the mirror body may become a drag that turns it. Its
       // click is then held back until the button is let go (and dropped if the press became a drag). Any other press
@@ -1017,7 +1020,12 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
       const at = eventTime(e);
       // R558: while a press on the brain or the mirror body is held, the movement turns that item, not the look.
-      if (pressDrag) { apply(s => controls.dragMove(s, dx, dy)); return; }
+      if (pressDrag) {
+        // Review fix: no button is down any more, so the release was missed (it happened outside the page). End the
+        // gesture without a click; this movement is an ordinary look.
+        if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); }
+        else { apply(s => controls.dragMove(s, dx, dy)); return; }
+      }
       apply(s => controls.pointerMove(s, dx, dy, at));
       return;
     }
@@ -1032,7 +1040,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (arrowPress) return; // holding a 3D arrow never turns the look
     if (pressDrag) {
       // R558: free-pointer drag on the brain or the mirror body.
-      if (Number.isFinite(e.buttons) && e.buttons === 0) return; // the release arrives as mouseup
+      // Review fix: with no button down the release was missed; end the gesture without a click (it used to stay armed,
+      // so the next press was delivered twice or turned the brain instead of the look).
+      if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); return; }
       let mx = e.movementX, my = e.movementY;
       const c = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
       if (!Number.isFinite(mx) || !Number.isFinite(my)) { if (!c || !lastClient) { lastClient = c; return; } mx = c.x - lastClient.x; my = c.y - lastClient.y; }

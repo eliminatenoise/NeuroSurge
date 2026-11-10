@@ -163,9 +163,9 @@ export const HAND_Y_NDC = 0.5;
 // Three looser settings were tried (minDepth 0.22 -> 0.17 m, marginNdc 0.04 -> 0.025, minFitSpanM 0.05 -> 0.03): the
 // S stop moved 3 mm, the A / D travel grew by under 1 % and the start pose lost its travel to the right, so they were
 // NOT kept. Under the present rules (the hand stays at one height on screen, the whole arm stays in view) the keys
-// already drive the arm to its limits. DISPLAY_RECOVERY adds fallbacks at those limits; unresolved release and
-// timing paths remain. A visibly larger sweep may need a different hand-height control design;
-// that remains open work in the notes.
+// already drive the arm to its limits; what this build adds is that reaching those limits no longer stops the game
+// (DISPLAY_RECOVERY). A visibly larger sweep needs the hand to leave its fixed screen height, which is a different
+// control design and is listed as open work in the notes.
 export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.35 });
 export const WASD_WRIST = Object.freeze({ depthRefM: GAME_ARM_OPTIONS.depthStart, degPerM: -60, xRefNdc: ARM_DEFAULTS.xNdcStart, degPerNdc: 12, maxDeg: 15 });
 /**
@@ -251,7 +251,7 @@ export const REGION_MODE_NOTE = NT.LEGEND.regionNote;
 export const INTRO_MS = 2000;
 /** R5-integrate-core (D15): the Body Worlds on / off switch eases the lift over this time (s); instant under reduced motion. */
 export const BODY_WORLDS_EASE_S = 0.3;
-/** An Esc keydown this soon after Esc released the pointer lock (which already paused) is the same press (ms). */
+/** Fallback for Esc events without owned native key-release evidence after pointer lock already paused (ms). */
 export const ESC_UNLOCK_GUARD_MS = 400;
 /** Fallback double-tap window (two Space presses, s) used only while ns-actions has no rotationState. */
 export const DOUBLE_TAP_S = 0.35;
@@ -1179,8 +1179,27 @@ function frameFocus(strip, aspect, fovYDeg, frame) {
  * (S then moves the hand 6.6-7 cm, A and D move it; W is at its far limit at 390x844 and moves 1.4 cm at 720x1280;
  * harness/run-R4-fix-2-reach), and the arm still covers little of the brain (-0.05 put the forearm across the left
  * half at 720x1280, viewed run-R4-fix-6-shots). Display choice. Until the first W/A/S/D press the hand keeps the start
- * x of the current aspect. */
-export const PORTRAIT_REACH_START_X = -0.13;
+ * x of the current aspect.
+ * R558: that value (-0.13) was chosen before the whole-arm display. With it, a window taller than it is wide could not
+ * start at all: the very first frame was refused (`bounded_display_bracket_not_found`, no camera distance shows the
+ * whole arm with the hand there) and the page read "NeuroSurge stopped". Measured in this build by starting the game at
+ * six window shapes with six start positions (0.10 to 0.35): each shape starts only inside a band of start x, further
+ * right the narrower the window (0.99 and 0.9 wide per high: 0.15-0.20; 0.75: 0.15-0.25; 0.6: 0.15-0.30; 0.462:
+ * 0.30-0.35; 0.45: 0.35), because the whole arm has to fit across a narrow view. PORTRAIT_REACH_START is a line
+ * through the middle of those bands; portraitReachStartX reads it. Display choice; the fit and its checks are
+ * untouched. PORTRAIT_REACH_START_X stays as the value just below a square window. */
+export const PORTRAIT_REACH_START = Object.freeze([[0.42, 0.38], [0.45, 0.36], [0.462, 0.325], [0.6, 0.23], [0.75, 0.19], [1, 0.175]].map(p => Object.freeze(p)));
+export const PORTRAIT_REACH_START_X = 0.175;
+/** The hand's start x (NDC) on a window of this aspect (width / height) below 1: PORTRAIT_REACH_START, joined by straight
+ * lines and held at its ends. Pure. */
+export function portraitReachStartX(aspect) {
+  const T = PORTRAIT_REACH_START;
+  if (!(aspect > T[0][0])) return T[0][1];
+  for (let i = 1; i < T.length; i++) {
+    if (aspect <= T[i][0]) { const u = (aspect - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[i - 1][1] + u * (T[i][1] - T[i - 1][1]); }
+  }
+  return T[T.length - 1][1];
+}
 /** R558 (genuine note R27): how far above the middle of the view the motor band's box is centred when the brain is
  * first framed (normalised device units: 1 = the top edge). 0.2 puts the leg areas, at the bottom of the band's U,
  * at about the middle of a 16:9 view (they sat about a fifth of the half height below it). Display choice, viewed in
@@ -1343,6 +1362,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   const resetFn = typeof activity.resetBody === 'function' ? s => activity.resetBody(s)
     : typeof NsActions.resetBody === 'function' ? s => NsActions.resetBody(s) : null;
   const initialRotation = () => ({ rotation: 'pronated', lastDownT: null, flips: 0 });
+  let reachStartXOverride = null; // R558: see setReachStartX
   function referenceFrameForLook(look) {
     if (!referenceGraph) return null;
     const shift = neckFlexEyeShiftMm(look.pitch, neckFlex);
@@ -1450,7 +1470,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const pron = stepPronation(state.pron ? { ...state.pron } : pronationStart(rotationState), pronationTarget(rotationState), h, { easeS: pronationEaseS });
     const rotation = preview.rotation && Number.isFinite(preview.rotation.value) ? { value: preview.rotation.value } : pron.deg;
     const lim = state.fit && state.fit.limits ? state.fit.limits : null;
-    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: aspect < 1 ? PORTRAIT_REACH_START_X : reachStart(armOptions).xNdc };
+    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: reachStartXFor(aspect) };
     const reach = stepReach({ ...reachIn }, { ...knownAxes }, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     const pose0 = composePose(previewDrives);
     const wrist = wristReach ? wasdWristDeg(reach, rotation) : 0;
@@ -1743,7 +1763,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // R4-fix (review RP3): until the first W/A/S/D press the hand sits at the start x of THIS aspect (portrait screens
     // start inside their A/D range, so every key moves the hand from the start pose).
     const keyed = Boolean(axes) && (Number(axes.x) !== 0 || Number(axes.z) !== 0);
-    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: aspect < 1 ? PORTRAIT_REACH_START_X : reachStart(armOptions).xNdc };
+    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: reachStartXFor(aspect) };
     const base = stepReach(reachIn, axes, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     // WASD wrist coordination: the wrist moves with the reach state together with shoulder and elbow. Round 3 (R3-arm):
     // ns-arm wasdWristDeg (WASD_WRIST_SYNERGY; the sideways term follows the forearm turn); `wristReach` is the on/off
@@ -2034,7 +2054,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const joints = wd !== 0 && pose.joints && Number.isFinite(pose.joints.wrist_flex) ? { ...pose.joints, wrist_flex: pose.joints.wrist_flex + wd } : pose.joints;
       return fitHand(rig, boxes, { xNdc, yNdc: handYNdc, depth, joints, rotation }, viewport, opts);
     };
-    const start = { ...reachStart(armOptions), ...(aspect < 1 ? { xNdc: PORTRAIT_REACH_START_X } : {}) };
+    const start = { ...reachStart(armOptions), xNdc: reachStartXFor(aspect) };
     const f0 = fitAt(start.xNdc, start.depth);
     const d0 = f0.depthLimits.minDepth, d1 = f0.depthLimits.maxDepth;
     const out = [];
@@ -2053,9 +2073,24 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   /** R558 (display recovery): the W/S/A/D reach intent moved `fraction` (0..1) of the way back to its start. No pose,
    * clock, activity or brain change. ns-app uses it only after a frame could not be shown as requested, so the arm
    * backs off a little instead of the game stopping. */
+  /** R558: the start x of the hand for a window of this aspect, or the one the app found for this window. */
+  function reachStartXFor(aspect) {
+    return reachStartXOverride !== null ? reachStartXOverride : aspect < 1 ? portraitReachStartX(aspect) : reachStart(armOptions).xNdc;
+  }
+  /** R558: use this start x (NDC) for the untouched hand instead of the table's (null: the table again). The app sets it
+   * when the very first picture of a window cannot be shown with the table's value (START_POSE_SEARCH); it changes only
+   * where the hand starts, never a check. Returns the value in use. */
+  function setReachStartX(x) {
+    reachStartXOverride = Number.isFinite(x) && Math.abs(x) < 1 ? x : null;
+    return reachStartXOverride;
+  }
   function retreatReach(state, fraction) {
     if (!state || !state.reach) fail('app_state', 'state must come from initialState/stepFrame');
-    const f = clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1), s0 = reachStart(armOptions), r = state.reach;
+    // Review fix: the start x of THIS window (an upright window starts right of the middle; reachStart's own x is the
+    // wide-window start, which an upright window cannot show), so the retreat moves toward a place that can be drawn.
+    const aspectNow = state.viewport && Number.isFinite(state.viewport.aspect) && state.viewport.aspect > 0 ? state.viewport.aspect : null;
+    const f = clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1), base = reachStart(armOptions), r = state.reach;
+    const s0 = aspectNow === null ? base : { ...base, xNdc: reachStartXFor(aspectNow) };
     // The previous fit's W / S and A / D guard ranges belong to the pose that could not be shown; they would clamp the
     // retreated reach straight back to the edge it is leaving, so they are dropped (the next fit sets new ones).
     return { ...state, reach: { ...r, xNdc: r.xNdc + (s0.xNdc - r.xNdc) * f, depth: r.depth + (s0.depth - r.depth) * f },
@@ -2063,7 +2098,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       reachRates: { depth: 0, x: 0 }, reachHold: null, reachBlockedS: 0 };
   }
 
-  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
+  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, setReachStartX, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
     bodyMap: map, regionMode, anatomy, armEnvelope });
 }
 
@@ -2179,6 +2214,8 @@ export const SUPPRESSED_FLASH_SECONDS = 0.6;
 export const BRAIN_AWAY_RAD = Object.freeze({ dragged: 0.5, fromLook: 0.7 });
 /** R4-polish: the orbit (deg) from which the status card offers the way back (limits: yaw 60, pitch 30). Display choice. */
 export const TURNED_FAR_DEG = Object.freeze({ yaw: 45, pitch: 30 });
+/** R558: the side-areas hint (HUD_TEXT.sideAreasHint) shows on a face area while the brain is turned less than this. */
+export const SIDE_AREAS_HINT_DEG = 10;
 
 /** R4-integrator (D7): the guide line's box is re-read every rectEveryFrames frames; after the brain covered it, the line
  * shows again after clearFrames frames clear of the brain (no flicker at the edge). R4-fix (code review M3): after the
@@ -2246,6 +2283,8 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
   // R4-polish (R4-player 1.11): after a long arrow hold the view can be turned far round the brain; say how to go back.
   const orb = out.brainView && out.brainView.orbit ? out.brainView.orbit : null;
   const turnedFar = !brainAway && Boolean(orb) && (Math.abs(orb.yaw) >= TURNED_FAR_DEG.yaw || Math.abs(orb.pitch) >= TURNED_FAR_DEG.pitch);
+  // R558: on a face area with the brain not turned, say that the lowest face areas are round the side.
+  const sideAreas = onOther && Boolean(other) && other.displayGroup === 'face' && !grabbing && Boolean(orb) && Math.abs(orb.yaw) < SIDE_AREAS_HINT_DEG && typeof HUD_TEXT.sideAreasHint === 'string';
   return {
     gaze: gazeText,
     hover: caption ? `${NT.hoverLabel(hover)} · ${caption}` : NT.hoverLabel(hover),
@@ -2253,7 +2292,7 @@ export function hudFrame({ binding, state, out, brainHit = false, frameMs = null
     note: [WHOLE_GROUP_TINT_ACTIONS.some(id => out.displayDrives && out.displayDrives[id] > 0.2) ? HUD_TEXT.wholeGroupTint : '',
       sup ? NT.suppressedLine(plainActionLabel(binding, bodyMap, sup.actionId)) : '',
       out.reachBlocked === true ? HUD_TEXT.reachBlocked : '',
-      brainAway ? HUD_TEXT.brainAwayHint : '', turnedFar ? HUD_TEXT.turnedFarHint : '', typeof slowNote === 'string' ? slowNote : '']
+      brainAway ? HUD_TEXT.brainAwayHint : '', turnedFar ? HUD_TEXT.turnedFarHint : '', sideAreas ? HUD_TEXT.sideAreasHint : '', typeof slowNote === 'string' ? slowNote : '']
       .filter(Boolean).join(' \u00b7 '),
     pulse: a.pulseAction !== null
       ? NT.pulseLine(plainActionLabel(binding, bodyMap, out.pulse && out.pulse.regionActionId ? out.pulse.regionActionId : a.pulseAction, pulseRegion), a.pulseRemaining)
@@ -2298,8 +2337,8 @@ export function createShellState({ autoPlay = false } = {}) {
 
 /**
  * Pure shell reducer. Events: { type: 'ready', atMs } | { type: 'tick', atMs } (hides the intro at introHideAtMs) |
- * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; an Esc within ESC_UNLOCK_GUARD_MS of
- * the lock loss that already paused is the same press) | { type: 'fatal', message } | { type: 'play' } (overlay click
+ * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; without owned native release
+ * evidence, an Esc within ESC_UNLOCK_GUARD_MS of lock loss is conservatively ignored) | { type: 'fatal', message } | { type: 'play' } (overlay click
  * or QA) | { type: 'locked' } | { type: 'unlocked', atMs } | { type: 'lockError' } | { type: 'lockUnavailable' } |
  * { type: 'playUnlocked' } | { type: 'pause' } | { type: 'notice', text } | { type: 'contextLost', atMs } |
  * { type: 'contextRestored' }. Returns the same object when nothing changes.
@@ -2332,7 +2371,7 @@ export function shellReduce(s, ev) {
       }
       return s;
     case 'fatal':
-      return { ...s, mode: 'error', error: typeof ev.message === 'string' && ev.message ? ev.message : 'unknown error', notice: null };
+      return { ...s, mode: 'error', error: typeof ev.message === 'string' && ev.message ? ev.message : 'unknown error', errorHint: typeof ev.hint === 'string' ? ev.hint : null, notice: null };
     case 'play':
       return overlay ? toPlaying({}) : s;
     case 'locked':
@@ -3266,7 +3305,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     const introWaiting = mode === 'intro' && !Number.isFinite(s.introHideAtMs);
     overlay.setAttribute('data-intro-timer', mode === 'intro' ? (introWaiting ? 'waiting' : 'running') : 'off');
     setText(modeNote, mode === 'intro' ? (introWaiting && typeof text.introNoteLoading === 'string' ? text.introNoteLoading : text.introNote) : mode === 'paused' ? text.pausedNote : '');
-    setText(notice, mode === 'error' ? NT.appErrorLine(s.error) : s.notice);
+    setText(notice, mode === 'error' ? NT.appErrorLine(s.error, s.errorHint) : s.notice);
     if (mode === 'error') setText(status, '');
     renderToast(s);
     show(context, Boolean(s.contextLost));
@@ -3416,11 +3455,47 @@ export function start(params = {}) {
   // stops the game. The refused frame is never drawn or committed and no check is relaxed; the same frame is tried
   // again with the previous look, then without the W/A/S/D push, then with the arm pulled back toward its start. A
   // frame with no accepted attempt is skipped (its key events are kept for the next frame). After homeAfterSkips
-  // skipped frames in a row the view is also brought back toward the start look. Only a long unbroken run of skipped
-  // frames resets the body once and, if that also fails, stops with the original error.
-  const DISPLAY_RECOVERY = Object.freeze({ homeAfterSkips: 10, resetAfterSkips: 45, stopAfterSkips: 150, lookBlockMs: 350, retreat: Object.freeze([0.35, 1]), carryEventLimit: 64 });
-  const displayRecovery = { refusedAttempts: 0, recoveredFrames: 0, skippedFrames: 0, skipStreak: 0, resets: 0, postStepRefusals: 0, reasons: {}, lastReason: null, lastRecoveredBy: null, lookLimited: false, reachLimited: false };
+  // skipped frames in a row the view is also brought back toward the start look, by homeSteps of the way (the smallest
+  // that is accepted). Only a long unbroken run of skipped frames resets the body once and, if that also fails, stops
+  // with the original error.
+  // homeAfterSkips 0 (was 10), homeSteps a quarter first (was a half): measured on a fast sweep of the look from the
+  // left limit to the right one, where even the last good look with the reach at its start was refused. Waiting ten
+  // skipped frames froze the picture for those frames and then turned the view half-way back (45 refused attempts);
+  // turning at once skips no frame and turns it a quarter of the way (12 refused attempts). If the last good view
+  // cannot be drawn there is nothing to wait for.
+  const DISPLAY_RECOVERY = Object.freeze({ homeAfterSkips: 0, homeSteps: Object.freeze([0.25, 0.5, 1]), viewKeptNoteMs: 6000, resetAfterSkips: 45, stopAfterSkips: 150, lookBlockMs: 350, retreat: Object.freeze([0.35, 1]), carryEventLimit: 64 });
+  // R558 start-pose search. A window taller than it is wide could not start: no camera distance shows the whole arm
+  // with the hand at the start x of that shape, the first frame was refused and the page read "NeuroSurge stopped"
+  // (the two previews before this one do the same). portraitReachStartX now gives a start x measured to work at six
+  // shapes, but the band that works also depends on the window's size in pixels (375 x 667 failed where 720 x 1280,
+  // the same shape, started). So when the very first picture is refused, before anything has been drawn, it is
+  // offered again with each of these start positions (NDC, the measured band first). The first one the display accepts
+  // is kept until the window changes size; the first picture of the new size may search again (it tries the old place
+  // first), and once a picture has been shown at a size there is no further search at that size, so the hand never
+  // jumps during play. Only where the hand starts changes; every check is as strict. (Measured: of
+  // fifteen window sizes the table alone started eleven and this search none of the other four, which fail for every
+  // start position; they get a plain message, ns-text appErrorLine. The search is kept for shapes not measured.)
+  const START_POSE_SEARCH = Object.freeze({ reason: 'bounded_display_bracket_not_found', xNdc: Object.freeze([0.2, 0.25, 0.15, 0.3, 0.35, 0.1, 0.4, 0.05, 0, -0.13, -0.3]) });
+  const startPose = { key: null, searched: false, x: null, fresh: true, prevX: null };
+  const displayRecovery = { refusedAttempts: 0, recoveredFrames: 0, skippedFrames: 0, skipStreak: 0, resets: 0, postStepRefusals: 0, reasons: {}, lastReason: null, lastRecoveredBy: null, lookLimited: false, reachLimited: false, startPose: null, rescued: false, viewKept: 0 };
+  /** R558: the camera state that undoes a change of view which could not be drawn. `good` is the state of the last drawn
+   * frame, `now` the refused one. If E was pressed this very frame the last drawn state is simply kept; if the change
+   * was already under way, the state heads back to the view it came from, from the progress last drawn. */
+  const keptViewCamera = (good, now) => (good.view !== now.view ? good
+    : Object.freeze({ ...good, view: good.view === 'third' ? 'first' : 'third', arrived: false }));
+  /** Review fix: of the events waiting from skipped frames keep only a Space release (it must never be lost: a fist
+   * would stay closed); clicks and presses that were never shown to the game are dropped. */
+  const settleCarriedEvents = () => {
+    const up = carryRawEvents.some(ev => ev && ev.type === 'space' && ev.down === false);
+    carryRawEvents.length = 0;
+    if (up) carryRawEvents.push({ type: 'space', down: false, safety: true });
+  };
   const refusalReasonOf = err => String((err && err.detail && err.detail.reason) || (err && err.message) || err).slice(0, 160);
+  /** Review fix: a TypeError, ReferenceError or RangeError raised by the engine is a defect in the code, never a
+   * display check saying "this cannot be shown". No smaller request cures it, and holding the look for it would hide
+   * it behind a "look limit" line. Such an error is not recovered from: it stops the game with its own message, as
+   * every error did before R558. Display checks raise plain Errors (an `ns:` message, most with a code and reason). */
+  const isCodeDefect = err => err instanceof TypeError || err instanceof ReferenceError || err instanceof RangeError;
   const noteDisplayRefusal = err => {
     const reason = refusalReasonOf(err);
     displayRecovery.refusedAttempts++; displayRecovery.lastReason = reason;
@@ -3471,6 +3546,7 @@ export function start(params = {}) {
   const perf = view.performance && typeof view.performance.now === 'function' ? view.performance : null;
   const clockMs = () => (perf ? perf.now() : Date.now());
   let stopped = false, failed = false, raf = 0, unbind = null, scene = null;
+  let narrowReloadArmed = false; // R558: see fatal()
   let phase = 'loading', lastError = null;
   let current = { sim: null, data: null, state: null, controls: null, out: null };
 
@@ -3493,6 +3569,7 @@ export function start(params = {}) {
   let lastMs = null, frames = 0, renderRequested = false, appliedSize = null, seedNext = false;
   const carryRawEvents = []; // R558: Space / click events of a skipped (refused) frame, delivered with the next frame
   let lastGoodLook = null, lookBlock = null, reachBlock = null; // R558: the last look that was shown; short-lived learned look / reach limits
+  let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
   const orbitQueue = [];
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
@@ -3696,12 +3773,69 @@ export function start(params = {}) {
     }
   }
 
-  /** Esc: with the pointer captured the browser releases it (pointerlockchange pauses: the same press); otherwise the
-   * shell toggles intro -> playing, playing -> paused, paused -> playing. */
+  /** Esc without native release evidence (including QA): captured play exits the lock; otherwise use the guarded
+   * reducer. Intro becomes paused, playing becomes paused, and paused becomes playing. */
   function onEscape(atMs) {
     if (phase !== 'running' || failed || stopped) return;
     if (lockedNow()) { exitLock(); return; }
     dispatch({ type: 'esc', atMs });
+  }
+
+  // R589: the browser may consume the unlock keydown, or report pointer-lock loss before/after its DOM key events.
+  // Keep this evidence private to the owned page listeners: a real keyup separates presses; elapsed time does not.
+  // The exported reducer/QA path retains its 400 ms fallback and gains no input/control API.
+  let nativeEscape = { down: false, releasedBeforeUnlock: false, releasedUnlock: false };
+  function clearNativeEscape() {
+    nativeEscape = { down: false, releasedBeforeUnlock: false, releasedUnlock: false };
+  }
+  function observePointerLock(atMs) {
+    const locked = lockedNow(), wasLocked = shellState.locked;
+    // Only a real transition changes the press evidence. Duplicate pointerlockchange notifications cannot re-arm it.
+    if (locked !== wasLocked) {
+      if (locked) {
+        nativeEscape.releasedBeforeUnlock = false;
+        nativeEscape.releasedUnlock = false;
+      } else {
+        nativeEscape.releasedUnlock = nativeEscape.releasedBeforeUnlock && !nativeEscape.down;
+        nativeEscape.releasedBeforeUnlock = false;
+      }
+    }
+    if (!locked) releaseInputs();
+    dispatch({ type: locked ? 'locked' : 'unlocked', atMs });
+  }
+  function nativeEscapeDown(e) {
+    if (!e || e.code !== 'Escape' || e.repeat === true) return;
+    // Untrusted dispatches retain the old guarded behavior; they cannot manufacture native key-release evidence.
+    if (e.isTrusted !== true) { onEscape(clockMs()); return; }
+    if (phase !== 'running' || failed || stopped) return;
+    const atMs = clockMs();
+    // Actual lock loss can precede its queued notification. Observe it once before interpreting this key event.
+    if (shellState.locked && !lockedNow()) observePointerLock(atMs);
+    if (nativeEscape.down) {
+      // A missing keyup can leave this latch stale. Repeats were already ignored above. Without a real intervening
+      // release, keep the original guarded Escape path instead of either inventing fresh-press proof or blocking it.
+      onEscape(atMs);
+      return;
+    }
+    const releasedUnlock = nativeEscape.releasedUnlock && shellState.mode === 'paused' && shellState.unlockPausedAtMs !== null;
+    nativeEscape.down = true;
+    nativeEscape.releasedBeforeUnlock = false;
+    nativeEscape.releasedUnlock = false;
+    if (releasedUnlock) {
+      // An actual intervening keyup proves this is a subsequent press. Hide the overlay without requesting capture;
+      // normal click-to-capture/security behavior is unchanged. Never prevent or trap the browser's Escape action.
+      dispatch({ type: 'play' });
+    } else onEscape(atMs);
+  }
+  function nativeEscapeUp(e) {
+    if (!e || e.code !== 'Escape' || e.isTrusted !== true) return;
+    const atMs = clockMs();
+    if (shellState.locked && !lockedNow()) observePointerLock(atMs);
+    nativeEscape.down = false;
+    // If keyup arrives first, preserve it through the later real lock-loss notification. If loss arrived first,
+    // preserve the same release on the already-paused shell. No synthetic keyup or clock/event-time rewrite occurs.
+    nativeEscape.releasedBeforeUnlock = lockedNow();
+    if (!lockedNow() && shellState.mode === 'paused' && shellState.unlockPausedAtMs !== null) nativeEscape.releasedUnlock = true;
   }
 
   /** R4-arm: show or hide the information panel's More detail section (the visible region card's <details>). */
@@ -3804,20 +3938,21 @@ export function start(params = {}) {
   // R4-fix (review RP10): More detail opened with the mouse (free-mouse play) also scrolls into the panel's view
   // (`toggle` does not bubble, so the listener captures).
   listen(doc, 'toggle', e => { const t = e && e.target; if (t && t.open && typeof t.matches === 'function' && t.matches('details.ns-infopanel-detail')) revealInfoDetail(t); }, true);
-  listen(doc, 'pointerlockchange', () => {
-    const locked = lockedNow();
-    if (!locked) releaseInputs();
-    dispatch({ type: locked ? 'locked' : 'unlocked', atMs: clockMs() });
-  });
+  listen(doc, 'pointerlockchange', () => observePointerLock(clockMs()));
   listen(doc, 'pointerlockerror', () => dispatch({ type: 'lockError' }));
-  listen(view, 'keydown', e => {
-    if (!e || e.code !== 'Escape' || e.repeat === true) return;
-    onEscape(clockMs());
-  });
+  // Capture sees the release even when focus moved onto an overlay control; no default action is prevented.
+  listen(view, 'keydown', nativeEscapeDown, true);
+  listen(view, 'keyup', nativeEscapeUp, true);
+  // A focus/visibility change is not an Escape release. Invalidate only this private proof and retain the
+  // guarded fallback; existing ns-controls listeners continue to own the safety releases of gameplay input.
+  listen(view, 'blur', clearNativeEscape);
+  listen(doc, 'visibilitychange', clearNativeEscape);
+  listen(view, 'pagehide', clearNativeEscape);
   // Orbit arrows drawn by ns-scene-three may announce clicks as a document CustomEvent.
   listen(doc, 'ns-orbit', e => { const d = e && e.detail ? e.detail : null; if (d) orbitHandler(d.dir, d); });
 
   function fatal(err) {
+    clearNativeEscape();
     failed = true;
     phase = 'error';
     lastError = errorText(err);
@@ -3827,8 +3962,21 @@ export function start(params = {}) {
     if (unbind) { unbind(); unbind = null; }
     if (!stopped) {
       exitLock();
-      hud.render({ error: NT.appErrorLine(lastError), status: '' });
-      dispatch({ type: 'fatal', message: lastError });
+      // R558: stopped before any picture, in an upright window, because no camera distance shows the whole arm: that
+      // is a window too narrow for the arm, and the message says to make it wider. Any other stop keeps its own words.
+      const narrow = frames === 0 && lastError === `ns:whole_arm_display: ${START_POSE_SEARCH.reason}` && view.innerHeight >= view.innerWidth;
+      const hint = narrow ? 'narrow-window' : null;
+      hud.render({ error: NT.appErrorLine(lastError, hint), status: '' });
+      dispatch({ type: 'fatal', message: lastError, hint });
+      // When that window does become wider than it is tall, for example a phone turned sideways, load the page again
+      // once, by itself. Nothing else reloads the page. (Registered with the page listeners, so stop() removes it.)
+      if (narrow && !narrowReloadArmed) {
+        narrowReloadArmed = true;
+        listen(view, 'resize', () => {
+          if (stopped || !(view.innerWidth > view.innerHeight)) return;
+          try { view.location.reload(); } catch { /* the Reload page button still works */ }
+        });
+      }
     }
     settle({ ok: false, error: lastError });
     if (viewGraph !== null && settleFirstView) { settleFirstView({ ok: false, error: lastError }); settleFirstView = null; }
@@ -4372,6 +4520,10 @@ export function start(params = {}) {
         // R5-integrate-core (D18): E (the view key) asks ns-camera to switch first person <-> third person. Requests come from
         // the controls' UI queue (drained at the top of the frame); the camera refuses one while Space drags the brain. The
         // pitch range is set BEFORE the handed-over look, so E then E returns exactly (R5-camera 4.1).
+        // Review fix: the camera before this frame's E presses and ease. A skipped frame goes back to it and asks for
+        // the same presses again, so skipped frames no longer add their (growing) time step to the change of view.
+        const camAtFrameStart = cam;
+        let togglesThisFrame = 0;
         if (live && viewRequests > 0) {
           const grabbing = Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
           const aim = current.out && current.out.brainTransform && Array.isArray(current.out.brainTransform.pivotWorld) ? current.out.brainTransform.pivotWorld : null;
@@ -4379,7 +4531,7 @@ export function start(params = {}) {
             const toggleFrame = referenceGraph ? sim.referenceFrameForLook(cam.view === 'third' && cam.fpLook ? cam.fpLook : { yaw: cs.yaw, pitch: cs.pitch }) : null;
             const r = NC.toggleView(cam, { look: { yaw: cs.yaw, pitch: cs.pitch }, bodyToWorld: toggleFrame ? toggleFrame.bodyToWorld : camBodyToWorld, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, aimAt: aim, blocked: grabbing, geometryFraming: Boolean(wholeArmOption) });
             if (!r.changed) continue;
-            cam = r.state;
+            cam = r.state; togglesThisFrame++;
             cs = controlsApi.setPitchLimits(cs, !wholeArmOption && cam.view === 'third' ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
             cs = controlsApi.setLook(cs, r.controlsLook);
           }
@@ -4399,6 +4551,15 @@ export function start(params = {}) {
         // R558 (R31): movement of a press-and-drag on the brain or the mirror body since the last frame (CSS px).
         let dragTurn = null;
         if (live && typeof controlsApi.takeDrag === 'function') { const r = controlsApi.takeDrag(cs); cs = r.state; dragTurn = r.drag; }
+        // Review fix: drag movement taken by a frame that was then skipped is added back here, not lost.
+        if (live && carryDrag) {
+          dragTurn = dragTurn && dragTurn.target === carryDrag.target ? { target: dragTurn.target, dx: dragTurn.dx + carryDrag.dx, dy: dragTurn.dy + carryDrag.dy } : dragTurn || carryDrag;
+          carryDrag = null;
+        }
+        // Review fix: a pause drops clicks and presses still waiting from skipped frames (they were replayed at once
+        // on resume: a click mark, or two Space presses read as a double tap). A waiting release is kept.
+        if (!live && carryRawEvents.length) settleCarriedEvents();
+        if (!live) carryDrag = null;
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
           if (now >= lookBlock.untilMs) lookBlock = null;
@@ -4414,6 +4575,7 @@ export function start(params = {}) {
         // (The body of this function is the original frame code, deliberately left at its original indentation.)
         const attemptFrame = override => {
         let timing = baseTiming;
+        if (override && override.keepView && lastGoodCam) cam = keptViewCamera(lastGoodCam, snap.cam);
         if (override && override.look) cs = controlsApi.setLook(cs, override.look);
         if (override && override.retreat > 0 && sim && typeof sim.retreatReach === 'function') simState = sim.retreatReach(simState, override.retreat);
         const lookIn = live || !simState.gaze ? { yaw: cs.yaw, pitch: cs.pitch } : { yaw: simState.gaze.yaw, pitch: simState.gaze.pitch };
@@ -4553,16 +4715,60 @@ export function start(params = {}) {
           // The refused attempt drew nothing: its locked pre-pick projection is discarded, never rendered or reused.
           if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
         };
+        // One measured rescue per unbroken run of skipped frames: the same Reset body / Reset brain view the Esc page
+        // offers, and the start look. (Review fixes: it is also reached when the run passes its length through a
+        // refusal after the step, and it keeps a Space release that was waiting, so a fist is not left closed.)
+        const rescueAfterLongSkip = () => {
+          if (displayRecovery.rescued || displayRecovery.skipStreak < DISPLAY_RECOVERY.resetAfterSkips) return;
+          displayRecovery.rescued = true; displayRecovery.resets++;
+          releaseInputs();
+          simState = sim.resetBrainView(sim.resetBody(simState));
+          mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); arrowInput = initialArrowInput();
+          cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; carryDrag = null;
+          cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
+          lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lastGoodCam = cam; lookBlock = null; reachBlock = null; seedNext = true;
+          settleCarriedEvents();
+          current = { ...current, state: simState };
+          dispatch({ type: 'notice', text: SHELL_TEXT.displayRescue || SHELL_TEXT.bodyReset });
+        };
         // A learned reach limit: for a moment the same blocked key direction is not pushed again (no refused attempt).
         const pushed = live ? controlsApi.axes(snap.cs) : { x: 0, z: 0 };
         if (reachBlock && (now >= reachBlock.untilMs || ((reachBlock.x === 0 || reachBlock.x !== pushed.x) && (reachBlock.z === 0 || reachBlock.z !== pushed.z)))) reachBlock = null;
         const heldReach = reachBlock ? { zeroX: reachBlock.x !== 0 && reachBlock.x === pushed.x, zeroZ: reachBlock.z !== 0 && reachBlock.z === pushed.z } : null;
         const firstOverride = heldReach && (heldReach.zeroX || heldReach.zeroZ) ? { ...heldReach, by: 'reach held at its limit' } : null;
         let attempted = null, ladder = null, firstRefusal = null, usedOverride = null;
+        // R558 (START_POSE_SEARCH): a new window size forgets the start x found for the last one.
+        {
+          const key = `${size.width}x${size.height}`;
+          if (startPose.key !== key) {
+            startPose.key = key; startPose.searched = false; startPose.fresh = true; startPose.prevX = startPose.x;
+            if (startPose.x !== null && typeof sim.setReachStartX === 'function') sim.setReachStartX(null);
+            startPose.x = null;
+          }
+        }
         for (let attemptIndex = 0; attempted === null; attemptIndex++) {
           const override = attemptIndex === 0 ? firstOverride : ladder[attemptIndex - 1];
           try { attempted = attemptFrame(override); usedOverride = override; }
           catch (err) {
+            if (isCodeDefect(err)) { restoreAttempt(); throw err; }
+            // R558 (START_POSE_SEARCH): no picture has been drawn at this window size yet and its first one is refused
+            // because no camera distance shows the whole arm: offer the same frame again with other start positions of
+            // the hand. Never later: once a picture has been shown at this size, a refused look or reach is held by the
+            // ladder below, and the hand must not jump to another start.
+            if (attemptIndex === 0 && startPose.fresh && wholeArmOption && !startPose.searched && typeof sim.setReachStartX === 'function'
+                && err && err.code === 'whole_arm_display_refused' && refusalReasonOf(err) === START_POSE_SEARCH.reason
+                && snap.simState && snap.simState.reachTouched !== true) {
+              startPose.searched = true;
+              let tried = 0;
+              for (const x of [startPose.prevX, ...START_POSE_SEARCH.xNdc].filter((v, i, a) => Number.isFinite(v) && a.indexOf(v) === i)) {
+                restoreAttempt(); sim.setReachStartX(x); tried++;
+                try { attempted = attemptFrame(override); usedOverride = override; startPose.x = x; break; }
+                catch (again) { if (!(again && again.code === 'whole_arm_display_refused')) { restoreAttempt(); sim.setReachStartX(null); throw again; } }
+              }
+              displayRecovery.startPose = { window: startPose.key, foundXNdc: startPose.x, tried, reason: refusalReasonOf(err) };
+              if (attempted !== null) continue;
+              restoreAttempt(); sim.setReachStartX(null);
+            }
             // Only while the game is live and has already shown a frame: start-up and frozen-frame errors stay fatal.
             if (!live || frames === 0 || !lastGoodLook) throw err;
             if (firstRefusal === null) firstRefusal = err;
@@ -4574,6 +4780,18 @@ export function start(params = {}) {
               const zx0 = Boolean(firstOverride && firstOverride.zeroX), zz0 = Boolean(firstOverride && firstOverride.zeroZ);
               const px = pushed.x !== 0 && !zx0, pz = pushed.z !== 0 && !zz0;
               ladder = [];
+              // 0. A change of view (E) is under way and its next camera place was refused (for example the camera's
+              // way back along the hand line would pass through one of the body's keep-out spheres:
+              // hand_ray_camera_path_collision; measured with the look up and to the right and the hand pulled back).
+              // Undo the change: draw from the last camera that was shown and head back to the view it came from.
+              // Without this every later frame of the change was refused as well, 45 frames were skipped and the body
+              // was reset (seen in a two-minute soak of mixed input: one E press, 270 refused attempts). The check
+              // itself is unchanged; the HUD says what to do (NT.HUD.viewKept).
+              const viewChanging = Boolean(wholeArmOption) && lastGoodCam !== null && (snap.cam.view !== lastGoodCam.view || snap.cam.progress !== lastGoodCam.progress);
+              if (viewChanging) {
+                ladder.push({ keepView: true, zeroX: zx0, zeroZ: zz0, by: 'kept the view you had' });
+                if (yawMoved || pitchMoved || px || pz) ladder.push({ keepView: true, look: good, zeroX: true, zeroZ: true, by: 'kept the view you had' });
+              }
               // 1. The reach push was too much: drop one key direction, then both, keeping the look that was asked.
               if (px && pz) { ladder.push({ zeroX: zx0, zeroZ: true, by: 'held the forward/back reach' }); ladder.push({ zeroX: true, zeroZ: zz0, by: 'held the left/right reach' }); }
               if (px || pz) ladder.push({ zeroX: true, zeroZ: true, by: 'held the reach' });
@@ -4583,12 +4801,14 @@ export function start(params = {}) {
               // 3. Both, then the arm backs off toward its start.
               if ((px || pz) && (yawMoved || pitchMoved)) ladder.push({ look: good, zeroX: true, zeroZ: true, by: 'held the look and the reach' });
               for (const f of DISPLAY_RECOVERY.retreat) ladder.push({ look: good, zeroX: true, zeroZ: true, retreat: f, by: f < 1 ? 'pulled the arm back a little' : 'put the reach back to its start' });
-              // 4. Only after a short run of skipped frames (a visible pause): bring the look part of the way, then all
-              // the way, back to the start look with the reach at its start. A turned view is better than a frozen one.
+              // 4. Not even the last good look can be drawn: bring the look a quarter, a half, then all of the way back
+              // to the start look, with the reach at its start. A turned view is better than a frozen one.
               if (displayRecovery.skipStreak >= DISPLAY_RECOVERY.homeAfterSkips) {
                 const home = referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 };
-                ladder.push({ look: { yaw: (good.yaw + home.yaw) / 2, pitch: (good.pitch + home.pitch) / 2 }, zeroX: true, zeroZ: true, retreat: 1, by: 'turned the view part of the way back to the start' });
-                ladder.push({ look: { yaw: home.yaw, pitch: home.pitch }, zeroX: true, zeroZ: true, retreat: 1, by: 'turned the view back to the start' });
+                for (const f of DISPLAY_RECOVERY.homeSteps) {
+                  ladder.push({ look: { yaw: good.yaw + f * (home.yaw - good.yaw), pitch: good.pitch + f * (home.pitch - good.pitch) }, zeroX: true, zeroZ: true, retreat: 1,
+                    by: f < 1 ? 'turned the view part of the way back to the start' : 'turned the view back to the start' });
+                }
               }
             }
             if (attemptIndex >= ladder.length) {
@@ -4596,19 +4816,12 @@ export function start(params = {}) {
               // click events wait for the next frame, so a release is never lost.
               lastMs = lastMsBeforeFrame;
               for (const ev of rawFrameEvents) if (carryRawEvents.length < DISPLAY_RECOVERY.carryEventLimit) carryRawEvents.push(ev);
+              if (dragTurn) carryDrag = dragTurn;
+              // The camera goes back to where this frame found it, and its E presses are asked again next frame (only in
+              // the whole-arm display, where E changes nothing but the camera).
+              if (wholeArmOption) { cam = camAtFrameStart; viewRequests += togglesThisFrame; }
               displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
-              if (displayRecovery.skipStreak === DISPLAY_RECOVERY.resetAfterSkips) {
-                // One measured rescue: the same Reset body / Reset brain view the Esc page offers, and the start look.
-                displayRecovery.resets++;
-                releaseInputs();
-                simState = sim.resetBrainView(sim.resetBody(simState));
-                mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); arrowInput = initialArrowInput();
-                cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null);
-                cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
-                lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lookBlock = null; reachBlock = null; carryRawEvents.length = 0; seedNext = true;
-                current = { ...current, state: simState };
-                dispatch({ type: 'notice', text: SHELL_TEXT.displayRescue || SHELL_TEXT.bodyReset });
-              }
+              rescueAfterLongSkip();
               if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw firstRefusal;
               renderRequested = true;
               return false;
@@ -4618,17 +4831,27 @@ export function start(params = {}) {
         if (firstRefusal !== null) {
           displayRecovery.recoveredFrames++; displayRecovery.lastRecoveredBy = usedOverride ? usedOverride.by : null;
           // Learn the limit for a moment, so the next frames do not ask for the same refused look or push again.
+          // Review fix: a limit is learned (and the status card says so) only where the player was actually turning or
+          // pushing; a frame saved by pulling the arm back with no look or key input teaches nothing.
           if (usedOverride && usedOverride.look) {
             const asked = { yaw: snap.cs.yaw, pitch: snap.cs.pitch };
-            lookBlock = { yawSign: Math.sign(asked.yaw - usedOverride.look.yaw), yaw: usedOverride.look.yaw,
-              pitchSign: Math.sign(asked.pitch - usedOverride.look.pitch), pitch: usedOverride.look.pitch, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
+            const yawSign = Math.sign(asked.yaw - usedOverride.look.yaw), pitchSign = Math.sign(asked.pitch - usedOverride.look.pitch);
+            if (yawSign !== 0 || pitchSign !== 0) lookBlock = { yawSign, yaw: usedOverride.look.yaw, pitchSign, pitch: usedOverride.look.pitch, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
           }
           if (usedOverride && (usedOverride.zeroX || usedOverride.zeroZ)) {
-            reachBlock = { x: usedOverride.zeroX ? pushed.x : 0, z: usedOverride.zeroZ ? pushed.z : 0, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
+            const bx = usedOverride.zeroX ? pushed.x : 0, bz = usedOverride.zeroZ ? pushed.z : 0;
+            if (bx !== 0 || bz !== 0) reachBlock = { x: bx, z: bz, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
           }
         } else if (usedOverride === firstOverride && firstOverride && reachBlock) displayRecovery.lastRecoveredBy = firstOverride.by;
         displayRecovery.lookLimited = Boolean(lookBlock); displayRecovery.reachLimited = Boolean(reachBlock);
-        if (tapped && tapped.text) muscleTapNote = { text: tapped.text, untilT: attempted.step.state.t + MUSCLE_TAP.noteSeconds };
+        if (usedOverride && usedOverride.keepView) { viewKeptUntilMs = now + DISPLAY_RECOVERY.viewKeptNoteMs; displayRecovery.viewKept = (displayRecovery.viewKept || 0) + 1; }
+        // Review fix: the note says an area was switched on only if this step did so (a closed fist holds back the
+        // finger areas, and that has its own line).
+        if (tapped && tapped.text) {
+          const act = attempted.step.state.activity, ev = tapped.event;
+          const started = !ev || ev.regionOnly === true || (act && act.pulseRegion === ev.regionId);
+          muscleTapNote = started ? { text: tapped.text, untilT: attempted.step.state.t + MUSCLE_TAP.noteSeconds } : null;
+        }
         const { look, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step } = attempted;
         timing = attempted.timing;
         seedNext = false;
@@ -4664,6 +4887,18 @@ export function start(params = {}) {
           anchors = orientationAnchors(data.strip, out.placement, aspect, out.fovYDeg);
           raycastKey = null;
         }
+        // R558: the step above is committed. A strict refusal from here on (the brain / mirror range check when the
+        // brain transform is applied, the retained hand projection, the locked camera range at render) leaves this
+        // frame undrawn and unpublished; the next frame plans afresh.
+        const postStepRefused = err => {
+          if (!live || frames === 0 || !lastGoodLook || isCodeDefect(err)) throw err;
+          noteDisplayRefusal(err); displayRecovery.postStepRefusals++; displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
+          if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
+          if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw err;
+          renderRequested = true; current = { ...current, state: simState };
+          rescueAfterLongSkip();
+          return false;
+        };
         // Polish-round fix: legacy / placeholder mode has no region frame, so brainTransformFor returns no transform
         // (the brain stays where frameFocus placed it); never hand the scene a null transform (it threw at start).
         if (sceneFn('setBrainTransform') && out.brainTransform) {
@@ -4671,7 +4906,12 @@ export function start(params = {}) {
           // brain; keyed on the params alone the drawn brain kept the start framing while gaze picking re-framed.
           const m = out.brainTransform && out.brainTransform.matrix;
           const key = `${JSON.stringify(out.brainParams)}|${m ? Array.prototype.join.call(m, ',') : ''}`;
-          if (key !== brainKey) { brainKey = key; callScene('setBrainTransform', out.brainTransform, out.brainParams); }
+          if (key !== brainKey) {
+            // Review fix: applying the transform runs the locked camera-range check itself; that refusal is handled like
+            // the other refusals after the step instead of stopping the game. The key is kept only when it was applied.
+            try { callScene('setBrainTransform', out.brainTransform, out.brainParams); brainKey = key; }
+            catch (err) { brainKey = null; if (err && err.code === 'actual_camera_projection_refused') return postStepRefused(err); throw err; }
+          }
         }
         // R174: select/apply the display amount BEFORE updatePose. A changed
         // rest array invalidates lastMatrices, forcing this frame's skinning
@@ -4689,16 +4929,6 @@ export function start(params = {}) {
             armLayerKey = q;
           }
         }
-        // R558: the step above is committed. A strict refusal from here on (retained hand projection, the locked
-        // camera range at render) leaves this frame undrawn and unpublished; the next frame plans afresh.
-        const postStepRefused = err => {
-          if (!live || frames === 0 || !lastGoodLook) throw err;
-          noteDisplayRefusal(err); displayRecovery.postStepRefusals++; displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
-          if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
-          if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw err;
-          renderRequested = true; current = { ...current, state: simState };
-          return false;
-        };
         scene.updatePose(out.appliedArmMatrices || out.fit.solution.matrices);
         if (wholeArmDisplayPlan && wholeArmDisplayPlan.actualCamera) {
           let retainedProjection;
@@ -4849,6 +5079,8 @@ export function start(params = {}) {
         if (!camPose.firstPerson && NT.HUD.thirdPerson) model.note = [NT.HUD.thirdPerson, model.note].filter(Boolean).join(' \u00b7 ');
         // R558: say plainly why the view stopped turning (the look is held where the whole arm can still be shown).
         if (displayRecovery.lookLimited && NT.HUD.lookLimit) model.note = [NT.HUD.lookLimit, model.note].filter(Boolean).join(' \u00b7 ');
+        // R558: a change of view that could not be drawn was undone; say so and what to do.
+        if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (R31): what the last tapped muscle switched on, in plain words, for a few seconds.
         if (muscleTapNote && simState.t < muscleTapNote.untilT) model.note = [muscleTapNote.text, model.note].filter(Boolean).join(' \u00b7 ');
         else muscleTapNote = null;
@@ -4951,13 +5183,16 @@ export function start(params = {}) {
             captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
           } catch (err) { return postStepRefused(err); }
         } else scene.render(live && fixed !== true ? undefined : { live: false });
-        displayRecovery.skipStreak = 0;
-        lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch };
+        displayRecovery.skipStreak = 0; displayRecovery.rescued = false;
+        // Review fix: the look this frame actually drew (a frozen frame draws the stored look, not the controls' one).
+        lastGoodLook = look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch) ? { yaw: look.yaw, pitch: look.pitch } : { yaw: cs.yaw, pitch: cs.pitch };
         // Renderer readback is internal evidence, not a completed tutorial action or independently verified pixels.
         // In this frozen API ribbons/active levels have no per-end onScreen proof, so do not invent a glow-complete
         // event from supplied link data. The feature remains available; visibility/guide completion stays unverified.
         glowRendered = glowWired && sceneFn('glowLinkState') ? callScene('glowLinkState') : null;
         frames++;
+        startPose.fresh = false; // a picture has now been shown at this window size (START_POSE_SEARCH)
+        lastGoodCam = cam; // the camera state this drawn frame used (a refused change of view is undone to it)
         current = { sim, data, state: simState, controls: cs, out };
         if (wholeArmOption && out.wholeArmFraming) {
           // Publish the witness only AFTER the normal render, frames++ and current assignment succeed.
@@ -5002,6 +5237,7 @@ export function start(params = {}) {
 
   function stop() {
     if (stopped) return;
+    clearNativeEscape();
     stopped = true;
     releaseInputs();
     cancelOwnedStreams();
@@ -5023,6 +5259,7 @@ export function start(params = {}) {
    * hold the loop. resume() restarts the loop with no catch-up step. */
   function suspend() {
     if (stopped) return;
+    clearNativeEscape();
     releaseInputs();
     exitLock();
     dispatch({ type: 'pause' });
@@ -5221,7 +5458,7 @@ export function start(params = {}) {
         if (!f) return null;
         // R3-fix (review code F5): arrowOvershootNdc is not reported (the drawn arrows come from the scene's own plan, sceneState.arrowPlan).
         // R4-integrator (D5): perspectiveK and the far-eye numbers (perspective) are reported too.
-        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'perspectiveK', 'perspective', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
+        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'perspectiveK', 'pictureAxis', 'perspective', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
         return Object.fromEntries(pick.filter(k => f[k] !== undefined).map(k => [k, f[k]]));
       })()
     });
