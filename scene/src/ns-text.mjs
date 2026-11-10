@@ -208,7 +208,8 @@ const STEP_TABLE = [
   { head: 'Turn your view.', parts: [
     part('Press on the brain and drag to turn it. Four see-through arrows also sit around it, like the points of a ' +
       'compass: click one to turn your view around the brain a little, or hold it to keep turning. The arrows stay ' +
-      'where they are, and the brain stays in its place.', 'compassArrows'),
+      'where they are, and the brain stays in its place. From straight above you cannot see the lowest face areas ' +
+      '(the tongue): turn the brain to one side to bring them round.', 'compassArrows'),
     part('Click an arrow next to the brain to turn your view around it a little. Hold the arrow to keep turning. The ' +
       'brain itself stays put.', '!compassArrows')],
   intro: [part('Press on the brain and drag to turn it, or click or hold one of its four see-through arrows.', 'compassArrows'),
@@ -497,6 +498,11 @@ export const HUD = deepFreeze({
   brainAwayHint: 'Lost the brain? Press Esc, then Reset brain view to bring it back.',
   /** R4-polish (R4-player 1.11): shown while the arrows have turned the view far round the brain. */
   turnedFarHint: 'Turned far round the brain? Press Esc, then Reset brain view to go back.',
+  /** R558: shown while the crosshair is on a face area and the brain has not been turned. The lowest areas of each
+   * motor strip (tongue, and the lowest in-between area) lie on the side of the brain, out of sight from straight above
+   * (computed with the game's own gaze test: 40 of 44 areas can be aimed at from above; one arrow click, 15 degrees,
+   * brings in the two hidden ones on that side). */
+  sideAreasHint: 'More face areas (the tongue) are round the side of the brain: drag the brain, or click the arrow beside it, to turn it.',
   /** R3-fix (M6): shown when looking far right at about eye level. */
   rightArmHint: 'Your right arm rests lower down: look down a little to see it',
   /** R4-integrator (R4-player 1.8, D8): shown while the frame rate stays very low (a slow or software renderer). */
@@ -1176,12 +1182,15 @@ export function guideLine(step, total, text, nice = false) {
 }
 
 /** Visible App error wording only. Raw status/shell/ready errors and their causes stay with ns-app. */
-export function appErrorLine(error) {
+export function appErrorLine(error, hint = null) {
   if (error === 'ns:app_args: configured viewGraph requires the complete validated54-record face packet') return 'The face anatomy could not finish loading. Reload the page to try again.';
-  // R558: the whole-arm display refused every picture it was offered (at the very first frame this is nearly always a
-  // window too narrow for the arm; later, the last step of the recovery). Say what to do; keep the reason for a report.
+  // R558: the whole-arm display refused every picture it was offered. hint 'narrow-window' (set by ns-app only when the
+  // very first picture of an upright window was refused because no camera distance shows the whole arm): say what to
+  // do. Any other whole-arm stop (the last step of the recovery in the middle of a game, or a bad input) is not about
+  // the window, so it does not say so. The reason stays in the line for a report.
   const arm = /^ns:whole_arm_display: (.+)$/.exec(str(error));
-  if (arm) return `NeuroSurge could not fit your whole left arm into a window this shape. Make the window wider than it is tall (on a phone or tablet, turn it sideways). If the game does not start again by itself, reload the page. (Reason: ${arm[1]})`;
+  if (arm && hint === 'narrow-window') return `NeuroSurge could not fit your whole left arm into a window this shape. Make the window wider than it is tall (on a phone or tablet, turn it sideways). If the game does not start again by itself, reload the page. (Reason: ${arm[1]})`;
+  if (arm) return `NeuroSurge could not show your whole left arm from here and stopped. Reload the page to start again. (Reason: ${arm[1]})`;
   return `NeuroSurge stopped: ${error}`;
 }
 

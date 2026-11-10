@@ -2962,7 +2962,7 @@ export function createScene({
   const firstPersonAxisUniform = { value: new THREE.Vector4(0, 0, -1, 0) };
   const firstPersonRangeUniform = { value: new THREE.Vector4(FIRST_PERSON_BODY.planeHideM, FIRST_PERSON_BODY.planeFullM, 0, 0) };
   const firstPersonLegRangeUniform = { value: new THREE.Vector4(FIRST_PERSON_BODY.legsHideM, FIRST_PERSON_BODY.legsFullM, 0, 0) };
-  const firstPersonBody = { applied: null, amount: 0, backM: 0 };
+  const firstPersonBody = { applied: null, amount: 0, backM: 0, base: 0 };
   const overBrainPatch = (m, legs = false) => {
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
     m.transparent = true;
@@ -5217,10 +5217,14 @@ export function createScene({
   function updateFirstPersonBody() {
     let amount = 0, back = 0;
     if (body.length > 0) {
-      if (camPose) amount = fin01(camMul.overBrain);
-      else if (firstPose) {
-        back = Math.hypot(firstPose.position[0] - eyeRig.position.x, firstPose.position[1] - eyeRig.position.y, firstPose.position[2] - eyeRig.position.z);
+      // Review fix: while the view changes to or from the view from behind, the rule fades from what it WAS in the
+      // ordinary view (base). Without the whole-arm display the camera is at the eye and the rule was off there, so it
+      // must stay off through the change instead of switching on for the first frames.
+      if (camPose) amount = firstPersonBody.base * fin01(camMul.overBrain);
+      else {
+        if (firstPose) back = Math.hypot(firstPose.position[0] - eyeRig.position.x, firstPose.position[1] - eyeRig.position.y, firstPose.position[2] - eyeRig.position.z);
         amount = back > FIRST_PERSON_BODY.minBackM ? 1 : 0;
+        firstPersonBody.base = amount;
       }
     }
     firstPersonBody.amount = amount; firstPersonBody.backM = back;
@@ -6529,11 +6533,27 @@ export function createScene({
     if (!hits.length) return null;
     // R558 (FIRST_PERSON_BODY): a part of your own body that the ordinary view does not draw cannot be clicked; the
     // ray goes on to whatever is drawn behind it.
+    const hiddenOwn = h => { const r = musclePickIndex.get(h.object); return Boolean(r) && r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom; };
+    let pool = hits;
+    if (firstPersonUniform.value.w > 0) {
+      // Review fix: the pick trees give only the NEAREST hit of each mesh. When that hit is on a part the ordinary view
+      // does not draw, the same mesh may still have a drawn part farther along the ray (a rib or a muscle that wraps
+      // round the body). Ask Three for every hit of that one mesh and keep its first drawn one.
+      const extra = [];
+      for (const h of hits) {
+        if (!hiddenOwn(h)) continue;
+        const all = [];
+        THREE.Mesh.prototype.raycast.call(h.object, raycaster, all);
+        all.sort((a, b) => a.distance - b.distance);
+        const next = all.find(a => a.distance > h.distance + 1e-6 && !hiddenOwn(a));
+        if (next) extra.push(next);
+      }
+      if (extra.length) pool = hits.concat(extra).sort((a, b) => a.distance - b.distance);
+    }
     let hit = null, rec = null;
-    for (const h of hits) {
+    for (const h of pool) {
       const r = musclePickIndex.get(h.object);
-      if (!r) continue;
-      if (r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom) continue;
+      if (!r || hiddenOwn(h)) continue;
       hit = h; rec = r; break;
     }
     if (!hit) return null;
