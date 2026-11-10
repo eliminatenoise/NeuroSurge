@@ -1,8 +1,8 @@
-# NeuroSurge experimental preview C410: credits and licences
+# NeuroSurge interaction preview: credits and licences
 
-This preview keeps all 490 OBJ files byte-identical to the selected local C410 source. Project-owned manifests have had local filesystem provenance prefixes replaced with public placeholders. The three corresponding runtime manifest hashes are updated so byte verification remains active. Recorded provenance hashes inside those manifests continue to identify the original local source files. Public distribution hashes are in `SHA256SUMS` and `release-manifest.json`.
+This interaction preview keeps all 490 OBJ files byte-identical to the earlier C410 asset selection. Project-owned manifests retain the public provenance placeholders from that edition, and runtime manifest hashes keep byte verification active. Recorded provenance hashes inside those manifests identify their original source files. Current distribution hashes are in `SHA256SUMS` and `release-manifest.json`.
 
-The C410 game uses geometry-based poses and muscle deformation, separate superficial muscle displays, mirror-body rendering and simulated activity colours. These display changes do not establish validated joint mechanics, muscle force or registered functional cortex. Facial files retain the source conversion/transform and share-alike notices. All notices below are retained from the prior public distribution; its round-5 release wording is historical. C410 is the selected experimental preview.
+The game uses geometry-based poses and muscle deformation, separate superficial muscle displays, mirror-body rendering and simulated activity colours. These display changes do not establish validated joint mechanics, muscle force or registered functional cortex. Facial files retain their conversion, transform and share-alike notices. The selected edition is `experimental-2026-11-10-interaction-update`; older C410 and round-5 wording below records the asset history.
 
 # NeuroSurge: credits and licences
 

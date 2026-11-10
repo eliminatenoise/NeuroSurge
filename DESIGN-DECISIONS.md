@@ -2,19 +2,23 @@
 
 This file records what changed in this build, why, and what was actually observed. Where a decision replaces an earlier design instruction, it says which one. Nothing here is a claim about real brains: the signals and movements in the game are simulated and have no units.
 
-## How things were checked
+## Development observations and independent checks
 
-One desktop Chromium, driven by scripted mouse and key events (the same events a keyboard and trackpad send), with browser screenshots, a count of the intervals between animation frames, and the DevTools sampling profiler. The session was held to one processor core, so the browser, its graphics process and the game shared it; the graphics card was the machine's own. Each timing below compares this build with the preceding preview under the same script on the same setup. They are comparisons, not promises about other computers.
+The author reported scripted Chromium tours, screenshots, animation-frame intervals and sampling profiles. The numerical performance and pure-math comparisons below are retained as author reports; their complete raw evidence has not been independently qualified. The rendering backend for those comparisons is not established here, so the claim that they used the hardware graphics card is withdrawn.
 
-Two small programs checked new maths against a reference: the pick tree against testing every triangle with Three.js (4,200 rays, no disagreement, largest distance difference 2e-12), and the written-out matrix product against the earlier loop (3.5 million elements, identical bit for bit).
+An independent review checked a saved 28-state tour of the selected build at Low picture quality in Chromium with software rendering. It checked available hand/upper-arm comparisons and hand projection, mirror carrying, release and camera switching. All sampled states kept running without a reported error. The review did not exercise the recovery branches identified below, validate physiology, or reproduce the author's speed figures. Firefox, Safari, native Windows/macOS opening, touch screens, phones, screen readers and reduced-motion settings remain unchecked.
 
-No independent review has been done. Firefox, Safari, touch screens, phones, screen readers and reduced-motion settings were not run.
+Three small source corrections are included: nonfinite visibility-cache inputs use the uncached validation route; exact zero ray directions use closed box-boundary checks; the existing keyboard diagram appears before settings so it fits on the checked 1280-by-720 startup and Esc pages.
 
-## 1. A frame that cannot be shown no longer stops the game
+## Open input and timing findings
+
+Source review found two ways to lose a Space release: repeated rejected frames followed by automatic recovery, and a full carried-event queue that drops a newer release. It also found camera-transition elapsed time can be counted twice across a skipped frame, and state can advance before late output checks finish. Rendering may begin before one late refusal is reported. These paths were not exercised by the passing tour. A claim that every refused frame is never drawn, every release is preserved, or the game cannot stop is therefore unsupported.
+
+## 1. Recovery when a frame cannot be shown
 
 **Before.** The game checks, every frame, that the whole left arm is in view with the hand exactly on its screen anchor. If a look or a reach asked for a pose that failed the check, the game stopped and asked for a reload. In our script, looking about 40 degrees to one side, or far up or down, stopped the preceding preview.
 
-**Decision.** Keep every check exactly as strict, and change only what happens next. A refused frame is never drawn. The same frame is tried again with less: first without the key push, then with the previous look, then both, then with the arm pulled back toward its start. If nothing is accepted the frame is skipped and its key events wait, so a released Space is never lost. After ten skipped frames in a row the view is also turned back toward the start. Only after 45 does the game put the body, brain and mirror back itself, and only after 150 does it stop with the original error.
+**Decision.** Keep every check exactly as strict, and change only what happens next. The fallback is intended to keep an unacceptable pose off screen; the late-refusal gap above remains open. A failed fit is tried again with less: first without the key push, then with the previous look, then both, then with the arm pulled back toward its start. If nothing is accepted the frame is skipped and its key events wait, although the release-loss paths above remain unresolved. After ten skipped frames in a row the view is also turned back toward the start. Only after 45 does the game put the body, brain and mirror back itself, and only after 150 does it stop with the original error.
 
 **Why.** A game that halts on ordinary input is unusable, and "hold at the edge" is what a player expects from a limit.
 
@@ -22,7 +26,7 @@ No independent review has been done. Firefox, Safari, touch screens, phones, scr
 
 **Open.** The pause in that one case is visible. Other input orders may find cases the script did not.
 
-## 2. Frame rate
+## 2. Author-reported frame rate; not independently reproduced
 
 | Scripted scene | Preceding preview | This build |
 |---|---|---|
@@ -36,7 +40,7 @@ Figures for this build are the mean of two runs, rounded. Its slowest single fra
 **What was slow, by profile.** At rest, three quarters of each frame went to re-deciding where the camera may sit so the whole arm shows, and most of the rest to asking what is under the crosshair by testing every triangle of the brain and the mirror body. While looking around, a fifth went to re-planning the arrows on a 4-pixel grid.
 
 **Decisions.**
-- The whole-arm check returns its earlier answer when asked the identical question again (every number it reads is compared exactly), and reads its 84,347 points from a typed array. The predicates and their order are unchanged.
+- The whole-arm check returns its earlier answer when asked the identical question again (every number it reads is compared exactly), and reads its 84,347 points from a typed array. Finite-input geometric calculations were retained, but source inspection found changes to validation order; broad equivalence remains unqualified.
 - Crosshair picks against rigid meshes use a box tree over each mesh's triangles. The skinned arm muscles keep the old test, because their points move.
 - When the camera must move back, the search halves the gap three times instead of six. The camera settles up to an eighth of the gap farther back, and later frames usually pass at once. Each accepted distance is still fully checked.
 - The arrows no longer re-plan (see 4). The "is this label over a motor area" test uses the areas' own projected points instead of a filled grid.
@@ -59,7 +63,7 @@ Figures for this build are the mean of two runs, rounded. Its slowest single fra
 
 **Stay in place.** The old layout followed the brain's drawn outline, so each turn and each look moved all four arrows. The brain's arrows are now fixed beside the two ends of the motor band and above and below its middle, as the band lay when first framed; the mirror body's are fixed at set distances from its centre. They move only when their target is carried.
 
-**Never block a motor area.** The ribbons are drawn before the motor areas, so an area is always painted over an arrow that shares its pixels, and an area under the pointer takes the click.
+**Motor-area priority.** The ribbons are drawn before motor areas, and motor-area picks are intended to take priority. Complete visual and click overlap coverage remains unchecked; this drawing order alone does not establish that arrows never obscure a relevant area.
 
 **Open.** The brain's top arrow is partly above a wide screen at the start view. The left arrow can sit behind the player's arm, where a faint copy shows through.
 
@@ -95,13 +99,13 @@ The start page and the Esc page show Esc, W, E, I, A, S, D and Space where they 
 
 The see-through or boxed copy of the player's own face is gone, with its setting and captions. An old saved setting is read as off and rewritten. The mirror body's face and the in-place head seen from behind are unchanged.
 
-## 12. Key reach: measured, not changed
+## 12. Key reach: author-observed, not increased
 
 Holding each key to its stop showed W ending at the arm's full length, S where the whole hand still fits in view, and A/D at the left edge of the view and at the information panel. Three looser settings were tried; they moved the stops by millimetres and took travel away from the start pose, so they were not kept. A visibly larger sweep needs the hand to leave its fixed height on screen, which is a different control design.
 
 ## Still not done
 
-- Independent browser review, other browsers, touch, screen readers.
+- Full independent control, timing and performance review; other browsers, touch and screen readers.
 - The shoulder-girdle slide has not been compared with reference images.
 - The switched-off floating-face code is still in the renderer.
-- `SHA256SUMS` and `release-manifest.json` predate these changes.
+- Release checksums and the manifest are regenerated for this selected package; they establish file identity, not functional or scientific validation.

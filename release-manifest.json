@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-10-camera-update",
+  "version": "experimental-2026-11-10-interaction-update",
   "experimental": true,
-  "source": "C410 with wider-view/carry, current-camera hand framing, bounded display search and refusal context",
+  "source": "Interaction update with narrow cache, ray-boundary and keyboard-layout corrections",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -27,8 +27,13 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 19558,
-      "sha256": "bbe9c4837b93fc880106cf1f67006a600a3148c3f408c727bf8c4cf375831892"
+      "bytes": 19465,
+      "sha256": "6ccf6fc6d4a383cef299a4a6ca345795815bc78a99997731a4778b4cc9d39ec4"
+    },
+    {
+      "path": "DESIGN-DECISIONS.md",
+      "bytes": 12955,
+      "sha256": "6f0e328139ae05f03fd0e677c8c79f504ea979ffd1a1b6bb331efb5c9d5ca183"
     },
     {
       "path": "LAUNCHERS.md",
@@ -42,23 +47,23 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 1053,
-      "sha256": "ea15ea917ce6653d8b07bb4901f8ac22ba3095a56b4559cbdde80a115efb9b58"
+      "bytes": 1894,
+      "sha256": "daa379635442273ccc8a25b76b804af3b3366101873d8a6d499109c8c6e3ed3d"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 4724,
-      "sha256": "5231a3868d05b79499383de03b11845c611985a174cfd2d86227a66bb99fe15e"
+      "bytes": 9638,
+      "sha256": "9beb288702d7950df3ad47346633af8617e85bd3b9c2dc389224f521bbfa6edc"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 1881,
-      "sha256": "137e2910c50e72c3408b8a351787b9a8738b62cb5fad8ea4e2e796f36831e599"
+      "bytes": 1832,
+      "sha256": "a8c33984856410b7f2c7eaeba6097c7a85466fc3cd7cf34cab01bc8ee28c9abb"
     },
     {
       "path": "README.md",
-      "bytes": 2699,
-      "sha256": "62e6b644d7a30f8d170f10f6f0e98e2996e048f51cc182571cdb980a47ecc815"
+      "bytes": 3667,
+      "sha256": "c4ae3f7dfb1ff0512e4f6e6f5a29a3f471d0ecb697d13bbf8a8ab7a0258ae865"
     },
     {
       "path": "START.html",
@@ -2732,8 +2737,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 37253,
-      "sha256": "e2ab0444e5ff3ec92ec62fa185fa2e7536655447911c7c4f9296d1882df230c4"
+      "bytes": 40619,
+      "sha256": "2fd94306a8b6c2b8421b91006ccad1574b4083216a2797b0a28a93671bf62d53"
     },
     {
       "path": "scene/example/preview.css",
@@ -2742,18 +2747,18 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1605,
-      "sha256": "112ae7b60d9ffb68bb0055356d68deecdad87c1cd721996e99d31c894216eea0"
+      "bytes": 1610,
+      "sha256": "8a938241a1f5456c29d5efb5a5653f317c46e55de86257ff8717260e0e41c877"
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 133491,
-      "sha256": "a77f3bb4e4afa53dd2117234867a0e79364a5fea7bad27814d881f641e9f431b"
+      "bytes": 134776,
+      "sha256": "c45cab02dff1b857ca8feed3ad20eac6b34c83770caa441fa297e7a456acbfeb"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 338443,
-      "sha256": "8d14356e40f30fd4b2b1d86ca4bfa50efe4dc71f4f1c0634d0e676819fe27e06"
+      "bytes": 374546,
+      "sha256": "9728782fbe46983cbf2030acc73c6d17b6f32b45c5db81c9d9b7a13496b1bd3e"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -2762,8 +2767,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 75526,
-      "sha256": "9e1ca4a408cb7aeba1e77da2e701e03bccf1118d8a1781582be3c36c2f24fdaa"
+      "bytes": 92185,
+      "sha256": "c8b39e9ea12a44248fd0f57afce73023d7f3a88116eefaeb5922a08f66871778"
     },
     {
       "path": "scene/src/ns-assets.mjs",
@@ -2777,18 +2782,18 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 209814,
-      "sha256": "510a2fa826c6d71a1760b7e390c49b68afbac0f6a0f1f15e718a64089192ee4a"
+      "bytes": 211501,
+      "sha256": "0aef72db8f227111f6e1ee576f2f46960c1993424020066232835d88ddce722b"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
-      "bytes": 151633,
-      "sha256": "a22ffe528d741ea5bf3f9867c9b4db7f315abc8d35a1d748dc0cf7489f386fac"
+      "bytes": 151685,
+      "sha256": "18c7c8ecb69869a7e2194f8a8429d8024b4a26edcbe6b1553d94acb63d69386d"
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 224885,
-      "sha256": "6abcdbdbe4518d0067b6bba40133164f3bf24d21258d87a87583d35d9d25bfd0"
+      "bytes": 225213,
+      "sha256": "093531c68bbba56c7cf19a24f7712f923859b08b23251268565dc3bdc84d10dd"
     },
     {
       "path": "scene/src/ns-camera.mjs",
@@ -2797,13 +2802,13 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 30812,
-      "sha256": "76f804a76c0ce79ea99c4a7be94bda5030f5f3ebd0c005b70e1e927209db5d78"
+      "bytes": 31361,
+      "sha256": "ee81d65d442dcd9c2768e589686b1579ef12ccaeb619d2cffe820ae9d20d1f5d"
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 59132,
-      "sha256": "384aa3343be98501bc782d458ef0320065c58d8b249b2a481a0f1e116de33af7"
+      "bytes": 65380,
+      "sha256": "088458fbb9fce087966089777bf3775d70c72a8ab8271efb919e41723226b24f"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -2812,8 +2817,8 @@
     },
     {
       "path": "scene/src/ns-math.mjs",
-      "bytes": 13749,
-      "sha256": "96141c21e88c0d3f7bbf5c8ffffc7c8e121562ecfd9dd1bc4db957a664d3db69"
+      "bytes": 15063,
+      "sha256": "04bd03516ce716682f019f889fc0a2b16608fe2a27a3c61d95ee793888b3553d"
     },
     {
       "path": "scene/src/ns-mirror.mjs",
@@ -2829,6 +2834,11 @@
       "path": "scene/src/ns-placeholder.mjs",
       "bytes": 8451,
       "sha256": "a0ad5b943eb394ab6d66a0106af1ea7384e6fa1027f845de625e7880859d6d3f"
+    },
+    {
+      "path": "scene/src/ns-raybvh.mjs",
+      "bytes": 8905,
+      "sha256": "e2f6e97a84e62492767d64e935b3a067411a5bd0d806c031aacf3e02d9d137dc"
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
@@ -2847,18 +2857,18 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 538657,
-      "sha256": "f66b4915f3b408cc2bcfd007fbd131610e503823192f46a18a087102aecd427e"
+      "bytes": 567143,
+      "sha256": "56a9398c8c8065a0792abb3a5a2437a60dbe1c93feef2ab6cb328d6a2e1bebc0"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 84184,
-      "sha256": "de5e7473e94ad18f53b004700d0db27c5febc69019fec75000e8c2a2b400bd10"
+      "bytes": 88876,
+      "sha256": "e6103adc3102c3a42bd8d07486b367cb3b7c8a652e963110f55c24b984ef3bf6"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
-      "bytes": 37411,
-      "sha256": "a1c0ebafbdab33de14a139e96fc6b8e1745f3d5ecd788ca0f71efac0ce1277c0"
+      "bytes": 49327,
+      "sha256": "4616a40bd8507baffca6dfa2c673f7ec543ead6dca659ba8df47706d4f24e5ec"
     },
     {
       "path": "serve-local.mjs",
@@ -2876,10 +2886,5 @@
       "sha256": "ce1fa418de16a19495a9f72495580e3015d7745c296d3ce0485897f902ddedfb"
     }
   ],
-  "distribution_note": "SHA256SUMS and release-manifest.json are excluded from their own file inventory.",
-  "known_limits": "PREVIEW-NOTES.html",
-  "desktop_launchers": "START.html",
-  "file_count": 574,
-  "payload_bytes": 119290715,
-  "runtime_game": "Experimental camera update. The 21-state camera case is independently checked. A known stop bug after sustained reaching and Space release remains disclosed; complete control, timing, physics and scientific acceptance are unfinished."
+  "self_and_root_checksum_excluded": true
 }

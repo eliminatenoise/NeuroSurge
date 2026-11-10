@@ -163,9 +163,9 @@ export const HAND_Y_NDC = 0.5;
 // Three looser settings were tried (minDepth 0.22 -> 0.17 m, marginNdc 0.04 -> 0.025, minFitSpanM 0.05 -> 0.03): the
 // S stop moved 3 mm, the A / D travel grew by under 1 % and the start pose lost its travel to the right, so they were
 // NOT kept. Under the present rules (the hand stays at one height on screen, the whole arm stays in view) the keys
-// already drive the arm to its limits; what this build adds is that reaching those limits no longer stops the game
-// (DISPLAY_RECOVERY). A visibly larger sweep needs the hand to leave its fixed screen height, which is a different
-// control design and is listed as open work in the notes.
+// already drive the arm to its limits. DISPLAY_RECOVERY adds fallbacks at those limits; unresolved release and
+// timing paths remain. A visibly larger sweep may need a different hand-height control design;
+// that remains open work in the notes.
 export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.35 });
 export const WASD_WRIST = Object.freeze({ depthRefM: GAME_ARM_OPTIONS.depthStart, degPerM: -60, xRefNdc: ARM_DEFAULTS.xNdcStart, degPerNdc: 12, maxDeg: 15 });
 /**
@@ -3027,6 +3027,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const resetHelp = el('p', 'ns-shell-resethelp', card, typeof text.resetHelp === 'string' ? text.resetHelp : '');
   resetHelp.hidden = true;
 
+  // R558 (genuine note R28): a picture of where the keys are, on the start page and the Esc page.
+  if (text.keyboard) buildKeyboardPicture(doc, card, text.keyboard);
   const form = el('fieldset', 'ns-shell-section ns-shell-settings', card);
   form.setAttribute('data-ns-noplay', '');
   el('legend', 'ns-shell-section-title', form, text.settingsTitle);
@@ -3078,8 +3080,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   button('ns-shell-secondary ns-shell-guide-restart', guideRow, guideText.restart, 'guide-restart');
   el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
 
-  // R558 (genuine note R28): a picture of where the keys are, on the start page and the Esc page.
-  if (text.keyboard) buildKeyboardPicture(doc, card, text.keyboard);
   const grid = el('div', 'ns-shell-grid', card);
   const steps = el('section', 'ns-shell-section ns-shell-instructions', grid);
   el('h3', 'ns-shell-section-title', steps, text.instructionsTitle);
@@ -5056,7 +5056,7 @@ export function start(params = {}) {
           lastCommitted: committed ? { jsFrame: committed.jsFrame, attemptSerial: committed.attemptSerial, backM: committed.backM,
             report: freshness.liveCurrent ? null : plainCopy(committed.report), reportLocation: freshness.liveCurrent ? 'current' : 'lastCommitted.report' } : null,
           attempt: plainCopy(wholeArmAttempt), lastRefusal: plainCopy(wholeArmLastRefusal),
-          recovery: plainCopy({ ...displayRecovery, policy: DISPLAY_RECOVERY, scope: 'Counts of refused attempts and what the game did next. A refused frame is never drawn; no strict check is relaxed or skipped.' }) };
+          recovery: plainCopy({ ...displayRecovery, policy: DISPLAY_RECOVERY, scope: 'Counts of refused attempts and what the game did next. Recovery, deferred input and late render/state-commit paths still require independent coverage.' }) };
       })() } : {}),
       bodyAnchor,
       bodyBridge: { ...bodyBridgeState, current: Boolean(!stopped && !failed && bodyRig && bodyArmBridge) },

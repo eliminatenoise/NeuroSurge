@@ -1,14 +1,15 @@
 # Play NeuroSurge
 
-Open https://eliminatenoise.github.io/NeuroSurge/. The page runs locally in your browser after downloading its files. See [preview notes](PREVIEW-NOTES.html) for every control, the current limitations and credits. For offline local hosting, run `node serve-local.mjs` and open the printed address.
+Open https://eliminatenoise.github.io/NeuroSurge/. The game runs on your computer after your browser downloads its files. [Preview notes](PREVIEW-NOTES.html) give the controls, limitations and credits. For local hosting, run `node serve-local.mjs` and open the printed address.
 
-Click the scene once so the mouse looks around. The start page shows a picture of the keys; Esc brings it back.
+Click the scene once to capture the pointer. The startup page shows a picture of the keys; Esc brings the instructions back and pauses. Press Esc again to resume. Reset body and Reset brain view are on that page.
 
-- **Look** at a coloured motor area of the brain: that body part moves for one second. Click to repeat.
-- **Click a muscle** on your own body or on the mirror body: the motor area that moves it switches on. The mirror body's muscles can be clicked through the clear glass.
-- **Press and drag** on the brain to turn it. The mirror body turns the same way once the brain is aside. The see-through ribbon arrows do the same in small steps.
-- **W/A/S/D** move your left hand. **Hold Space** to make a fist, or to carry the brain or the mirror body you are looking at (W farther, S closer, A/D sideways).
-- **Tap Space twice** to turn your palms: both forearms and both legs turn.
-- **E** shows your back. **I** opens More detail.
+- Move the mouse or trackpad to look. Look at a coloured brain area for a one-second pulse; click to repeat it.
+- W/S move the left hand forward and back. A/D move it sideways. Keys can be combined.
+- Hold Space to close all five digits; release to open. While looking at the brain or an unobstructed mirror body, hold Space to carry it. Mouse movement repositions it; W moves it farther away, S closer and A/D sideways. Release to leave it there.
+- Press and drag the brain to rotate it about its centre. Move the brain aside to rotate the mirror body. The ribbon arrows turn the objects in small steps while clicked or held.
+- Click a muscle on either body to select its representative brain movement area. A muscle click can pass through clear brain glass; motor areas take precedence.
+- Tap Space twice to turn both forearms and add a small turn at both hips. The right upper arm is not yet included.
+- E switches between your own eyes and a view from behind. I opens More detail in the panel.
 
-Brain and muscle signals are simulated and unitless. A clicked muscle lights a whole motor area, not a spot for that one muscle. If your look or your reach stops, the arm has reached the edge of what can be shown; the game keeps running. Movement limits, physiological mappings and full movement mechanics are simplified and still need checking.
+Brain activity, muscle colours and movements are simulated and unitless. A muscle click selects a group movement, not a validated brain site for one muscle. Repeated pose failures can expose unresolved release and timing bugs; reload if the fist stays closed or the game stops responding. The [preview notes](PREVIEW-NOTES.html) distinguish the checked tour from the remaining gaps.

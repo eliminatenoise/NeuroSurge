@@ -8,23 +8,19 @@
   "neural_decoder_validated": false,
   "normal_mechanics_validated": false,
   "complete_game_acceptance": false,
-  "source_lineage": "Based on the 10 November 2026 camera-update preview. Adds display recovery in place of the stop on a refused frame, press-and-drag turning of the brain and mirror body, muscle clicks routed through the existing motor map, paper-ribbon orbit arrows at fixed places, a higher default brain placement, tissue-shaded motor areas, position-welded surface normals, a coordinated forearm and hip turn, a keyboard picture, removal of the floating own-face display, and faster crosshair picking and frame logic. Existing mesh files, asset notices, public provenance redactions and desktop launchers are retained.",
+  "source_lineage": "Author interaction-update commit with three independently source-reviewed corrections: nonfinite cache validation, exact-zero ray slabs and earlier keyboard diagram placement.",
   "anatomy_assets": "490 OBJ meshes retained from the preceding preview. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0.",
   "public_preview_authorized": "10 November 2026 user instruction: experimental previews for all projects",
   "other_project_development": "paused",
-  "browser_verification": "Author development checks only: scripted mouse and key input in one desktop Chromium on one pinned processor core, with screenshots, frame-interval counts and the DevTools sampling profiler, compared against the preceding preview under the same script. No independent review yet. Not checked: Firefox, Safari, touch, phones, screen readers, reduced-motion settings. This does not establish complete control, timing, joint-mechanics or physiological validation.",
+  "browser_verification": "Independent review of 28 saved normal-UI states in desktop Chromium, software rendering, Low picture quality. Available hand/upper-arm and hand-projection comparisons passed for this tour. Recovery branches, complete controls, other platforms, hardware performance and physiology remain unverified.",
   "known_engineering_gaps": [
-    "Independent browser review of this build has not been done",
-    "Looking around is the slowest path (about 35 frames a second in the author's single-core test, single frames up to about 0.1 s)",
-    "The look stops where the whole arm can no longer be shown; one rare case pauses for about a third of a second and turns the view part of the way back",
-    "Key-driven reach is unchanged: already at arm length, whole-hand-in-view and view-edge limits; a wider sweep needs a different hand-anchor design",
-    "A clicked muscle switches on a whole motor area and its movement's muscles, not one muscle; some muscles have no movement and only light an area",
-    "The leg turn rotates only the hips by 10 degrees; the right upper arm does not turn; hip rotator muscles are not coloured",
-    "The left shoulder girdle slides with the arm on both bodies; a slide, not a solved shoulder-blade rotation, and not compared with reference images",
-    "The brain's top arrow is partly off screen at the start view on wide screens; the left arrow can sit behind the arm",
-    "The retired floating-face code paths remain in the renderer, switched off",
-    "SHA256SUMS and release-manifest.json predate these source changes and must be regenerated before release"
+    "Space-release loss paths after repeated pose failures or a full carried-event queue",
+    "Camera timing and late internal-state/output consistency edge cases",
+    "Near/far endpoint and diagonal carry behavior incomplete",
+    "Mirror not verified physically closer",
+    "Right upper-arm rotation and hip activity colour incomplete",
+    "Arrow visibility/overlap, full movement range and reference-series comparison incomplete"
   ],
-  "publication_status": "Prepared for review. Not yet published; the release aggregates are stale until regenerated.",
+  "publication_status": "Selected experimental interaction preview; incomplete control, timing, joint-mechanics and scientific acceptance disclosed.",
   "design_decisions": "DESIGN-DECISIONS.md"
 }

@@ -94,16 +94,30 @@ export function raycastTriangleBvh(bvh, positions, index, ox, oy, oz, dx, dy, dz
   traversal[top++] = 0;
   while (top > 0) {
     const node = traversal[--top], b = 6 * node;
-    // slab test against the node's box (a zero direction component gives +/-Infinity, which the comparisons handle)
-    let t0 = (bounds[b] - ox) * ix, t1 = (bounds[b + 3] - ox) * ix;
-    let near = t0 < t1 ? t0 : t1, far = t0 < t1 ? t1 : t0;
-    t0 = (bounds[b + 1] - oy) * iy; t1 = (bounds[b + 4] - oy) * iy;
-    let n2 = t0 < t1 ? t0 : t1, f2 = t0 < t1 ? t1 : t0;
-    if (n2 > near) near = n2; if (f2 < far) far = f2;
-    t0 = (bounds[b + 2] - oz) * iz; t1 = (bounds[b + 5] - oz) * iz;
-    n2 = t0 < t1 ? t0 : t1; f2 = t0 < t1 ? t1 : t0;
-    if (n2 > near) near = n2; if (f2 < far) far = f2;
-    if (far < near || far < 0 || near >= best) continue; // a NaN (a ray lying exactly in a box face) fails no test here, so that node is searched
+    // A +/-zero direction is parallel: outside the CLOSED slab rejects; inside/on adds no interval restriction.
+    // Nonzero reciprocal arithmetic is unchanged; overflow/subnormal corner cases remain separately unqualified.
+    let near = -Infinity, far = Infinity, t0, t1, n2, f2;
+    if (dx === 0) {
+      if (ox < bounds[b] || ox > bounds[b + 3]) continue;
+    } else {
+      t0 = (bounds[b] - ox) * ix; t1 = (bounds[b + 3] - ox) * ix;
+      near = t0 < t1 ? t0 : t1; far = t0 < t1 ? t1 : t0;
+    }
+    if (dy === 0) {
+      if (oy < bounds[b + 1] || oy > bounds[b + 4]) continue;
+    } else {
+      t0 = (bounds[b + 1] - oy) * iy; t1 = (bounds[b + 4] - oy) * iy;
+      n2 = t0 < t1 ? t0 : t1; f2 = t0 < t1 ? t1 : t0;
+      if (n2 > near) near = n2; if (f2 < far) far = f2;
+    }
+    if (dz === 0) {
+      if (oz < bounds[b + 2] || oz > bounds[b + 5]) continue;
+    } else {
+      t0 = (bounds[b + 2] - oz) * iz; t1 = (bounds[b + 5] - oz) * iz;
+      n2 = t0 < t1 ? t0 : t1; f2 = t0 < t1 ? t1 : t0;
+      if (n2 > near) near = n2; if (f2 < far) far = f2;
+    }
+    if (far < near || far < 0 || near >= best) continue;
     if (left[node] < 0) {
       for (let i = start[node], e = i + count[node]; i < e; i++) {
         const tri = order[i];

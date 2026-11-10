@@ -300,7 +300,7 @@ function visibilityKey(support, matrices, viewport, armOptions) {
   }
   // An option that is PRESENT but undefined overrides its default in the full check (and is refused there): never memoize it.
   for (const name of ['marginNdc', 'near', 'nearMargin', 'viewLimitsNdc']) if (name in o && o[name] === undefined) return null;
-  const scalar = x => x === undefined ? -Infinity : typeof x === 'number' ? x : NaN; // NaN never equals a stored key below
+  const scalar = x => x === undefined ? -Infinity : typeof x === 'number' && Number.isFinite(x) ? x : NaN; // supplied nonfinite scalars bypass memo; missing defaults retain their key
   for (const x of [v.aspect, v.fovYDeg, v.farM, v.nearM, o.marginNdc, o.near, o.nearMargin, limits.left, limits.right, limits.bottom, limits.top]) {
     const y = scalar(x); if (y !== y) return null; key[k++] = y;
   }
