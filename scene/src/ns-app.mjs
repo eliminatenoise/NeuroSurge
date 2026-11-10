@@ -1179,8 +1179,27 @@ function frameFocus(strip, aspect, fovYDeg, frame) {
  * (S then moves the hand 6.6-7 cm, A and D move it; W is at its far limit at 390x844 and moves 1.4 cm at 720x1280;
  * harness/run-R4-fix-2-reach), and the arm still covers little of the brain (-0.05 put the forearm across the left
  * half at 720x1280, viewed run-R4-fix-6-shots). Display choice. Until the first W/A/S/D press the hand keeps the start
- * x of the current aspect. */
-export const PORTRAIT_REACH_START_X = -0.13;
+ * x of the current aspect.
+ * R558: that value (-0.13) was chosen before the whole-arm display. With it, a window taller than it is wide could not
+ * start at all: the very first frame was refused (`bounded_display_bracket_not_found`, no camera distance shows the
+ * whole arm with the hand there) and the page read "NeuroSurge stopped". Measured in this build by starting the game at
+ * six window shapes with six start positions (0.10 to 0.35): each shape starts only inside a band of start x, further
+ * right the narrower the window (0.99 and 0.9 wide per high: 0.15-0.20; 0.75: 0.15-0.25; 0.6: 0.15-0.30; 0.462:
+ * 0.30-0.35; 0.45: 0.35), because the whole arm has to fit across a narrow view. PORTRAIT_REACH_START is a line
+ * through the middle of those bands; portraitReachStartX reads it. Display choice; the fit and its checks are
+ * untouched. PORTRAIT_REACH_START_X stays as the value just below a square window. */
+export const PORTRAIT_REACH_START = Object.freeze([[0.42, 0.38], [0.45, 0.36], [0.462, 0.325], [0.6, 0.23], [0.75, 0.19], [1, 0.175]].map(p => Object.freeze(p)));
+export const PORTRAIT_REACH_START_X = 0.175;
+/** The hand's start x (NDC) on a window of this aspect (width / height) below 1: PORTRAIT_REACH_START, joined by straight
+ * lines and held at its ends. Pure. */
+export function portraitReachStartX(aspect) {
+  const T = PORTRAIT_REACH_START;
+  if (!(aspect > T[0][0])) return T[0][1];
+  for (let i = 1; i < T.length; i++) {
+    if (aspect <= T[i][0]) { const u = (aspect - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[i - 1][1] + u * (T[i][1] - T[i - 1][1]); }
+  }
+  return T[T.length - 1][1];
+}
 /** R558 (genuine note R27): how far above the middle of the view the motor band's box is centred when the brain is
  * first framed (normalised device units: 1 = the top edge). 0.2 puts the leg areas, at the bottom of the band's U,
  * at about the middle of a 16:9 view (they sat about a fifth of the half height below it). Display choice, viewed in
@@ -1343,6 +1362,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   const resetFn = typeof activity.resetBody === 'function' ? s => activity.resetBody(s)
     : typeof NsActions.resetBody === 'function' ? s => NsActions.resetBody(s) : null;
   const initialRotation = () => ({ rotation: 'pronated', lastDownT: null, flips: 0 });
+  let reachStartXOverride = null; // R558: see setReachStartX
   function referenceFrameForLook(look) {
     if (!referenceGraph) return null;
     const shift = neckFlexEyeShiftMm(look.pitch, neckFlex);
@@ -1450,7 +1470,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const pron = stepPronation(state.pron ? { ...state.pron } : pronationStart(rotationState), pronationTarget(rotationState), h, { easeS: pronationEaseS });
     const rotation = preview.rotation && Number.isFinite(preview.rotation.value) ? { value: preview.rotation.value } : pron.deg;
     const lim = state.fit && state.fit.limits ? state.fit.limits : null;
-    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: aspect < 1 ? PORTRAIT_REACH_START_X : reachStart(armOptions).xNdc };
+    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: reachStartXFor(aspect) };
     const reach = stepReach({ ...reachIn }, { ...knownAxes }, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     const pose0 = composePose(previewDrives);
     const wrist = wristReach ? wasdWristDeg(reach, rotation) : 0;
@@ -1743,7 +1763,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // R4-fix (review RP3): until the first W/A/S/D press the hand sits at the start x of THIS aspect (portrait screens
     // start inside their A/D range, so every key moves the hand from the start pose).
     const keyed = Boolean(axes) && (Number(axes.x) !== 0 || Number(axes.z) !== 0);
-    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: aspect < 1 ? PORTRAIT_REACH_START_X : reachStart(armOptions).xNdc };
+    const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: reachStartXFor(aspect) };
     const base = stepReach(reachIn, axes, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     // WASD wrist coordination: the wrist moves with the reach state together with shoulder and elbow. Round 3 (R3-arm):
     // ns-arm wasdWristDeg (WASD_WRIST_SYNERGY; the sideways term follows the forearm turn); `wristReach` is the on/off
@@ -2034,7 +2054,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const joints = wd !== 0 && pose.joints && Number.isFinite(pose.joints.wrist_flex) ? { ...pose.joints, wrist_flex: pose.joints.wrist_flex + wd } : pose.joints;
       return fitHand(rig, boxes, { xNdc, yNdc: handYNdc, depth, joints, rotation }, viewport, opts);
     };
-    const start = { ...reachStart(armOptions), ...(aspect < 1 ? { xNdc: PORTRAIT_REACH_START_X } : {}) };
+    const start = { ...reachStart(armOptions), xNdc: reachStartXFor(aspect) };
     const f0 = fitAt(start.xNdc, start.depth);
     const d0 = f0.depthLimits.minDepth, d1 = f0.depthLimits.maxDepth;
     const out = [];
@@ -2053,6 +2073,17 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   /** R558 (display recovery): the W/S/A/D reach intent moved `fraction` (0..1) of the way back to its start. No pose,
    * clock, activity or brain change. ns-app uses it only after a frame could not be shown as requested, so the arm
    * backs off a little instead of the game stopping. */
+  /** R558: the start x of the hand for a window of this aspect, or the one the app found for this window. */
+  function reachStartXFor(aspect) {
+    return reachStartXOverride !== null ? reachStartXOverride : aspect < 1 ? portraitReachStartX(aspect) : reachStart(armOptions).xNdc;
+  }
+  /** R558: use this start x (NDC) for the untouched hand instead of the table's (null: the table again). The app sets it
+   * when the very first picture of a window cannot be shown with the table's value (START_POSE_SEARCH); it changes only
+   * where the hand starts, never a check. Returns the value in use. */
+  function setReachStartX(x) {
+    reachStartXOverride = Number.isFinite(x) && Math.abs(x) < 1 ? x : null;
+    return reachStartXOverride;
+  }
   function retreatReach(state, fraction) {
     if (!state || !state.reach) fail('app_state', 'state must come from initialState/stepFrame');
     const f = clamp(Number.isFinite(fraction) ? fraction : 0, 0, 1), s0 = reachStart(armOptions), r = state.reach;
@@ -2063,7 +2094,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       reachRates: { depth: 0, x: 0 }, reachHold: null, reachBlockedS: 0 };
   }
 
-  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
+  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, setReachStartX, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
     bodyMap: map, regionMode, anatomy, armEnvelope });
 }
 
@@ -3419,7 +3450,18 @@ export function start(params = {}) {
   // skipped frames in a row the view is also brought back toward the start look. Only a long unbroken run of skipped
   // frames resets the body once and, if that also fails, stops with the original error.
   const DISPLAY_RECOVERY = Object.freeze({ homeAfterSkips: 10, resetAfterSkips: 45, stopAfterSkips: 150, lookBlockMs: 350, retreat: Object.freeze([0.35, 1]), carryEventLimit: 64 });
-  const displayRecovery = { refusedAttempts: 0, recoveredFrames: 0, skippedFrames: 0, skipStreak: 0, resets: 0, postStepRefusals: 0, reasons: {}, lastReason: null, lastRecoveredBy: null, lookLimited: false, reachLimited: false };
+  // R558 start-pose search. A window taller than it is wide could not start: no camera distance shows the whole arm
+  // with the hand at the start x of that shape, the first frame was refused and the page read "NeuroSurge stopped"
+  // (the two previews before this one do the same). portraitReachStartX now gives a start x measured to work at six
+  // shapes, but the band that works also depends on the window's size in pixels (375 x 667 failed where 720 x 1280,
+  // the same shape, started). So when the very first picture is refused, before anything has been drawn, it is
+  // offered again with each of these start positions (NDC, the measured band first). The first one the display accepts
+  // is kept until the window changes size. Only where the hand starts changes; every check is as strict. (Measured: of
+  // fifteen window sizes the table alone started eleven and this search none of the other four, which fail for every
+  // start position; they get a plain message, ns-text appErrorLine. The search is kept for shapes not measured.)
+  const START_POSE_SEARCH = Object.freeze({ xNdc: Object.freeze([0.2, 0.25, 0.15, 0.3, 0.35, 0.1, 0.4, 0.05, 0, -0.13, -0.3]) });
+  const startPose = { key: null, searched: false, x: null };
+  const displayRecovery = { refusedAttempts: 0, recoveredFrames: 0, skippedFrames: 0, skipStreak: 0, resets: 0, postStepRefusals: 0, reasons: {}, lastReason: null, lastRecoveredBy: null, lookLimited: false, reachLimited: false, startPose: null };
   const refusalReasonOf = err => String((err && err.detail && err.detail.reason) || (err && err.message) || err).slice(0, 160);
   const noteDisplayRefusal = err => {
     const reason = refusalReasonOf(err);
@@ -3471,6 +3513,7 @@ export function start(params = {}) {
   const perf = view.performance && typeof view.performance.now === 'function' ? view.performance : null;
   const clockMs = () => (perf ? perf.now() : Date.now());
   let stopped = false, failed = false, raf = 0, unbind = null, scene = null;
+  let narrowReloadArmed = false; // R558: see fatal()
   let phase = 'loading', lastError = null;
   let current = { sim: null, data: null, state: null, controls: null, out: null };
 
@@ -3829,6 +3872,18 @@ export function start(params = {}) {
       exitLock();
       hud.render({ error: NT.appErrorLine(lastError), status: '' });
       dispatch({ type: 'fatal', message: lastError });
+      // R558: stopped before any picture because the whole arm does not fit this window (a small upright window; the
+      // message says to make it wider). When the window does become wider than it is tall, for example a phone turned
+      // sideways, load the page again once, by itself. Nothing else reloads the page.
+      if (frames === 0 && /^ns:whole_arm_display:/.test(lastError) && !narrowReloadArmed && typeof view.addEventListener === 'function') {
+        narrowReloadArmed = true;
+        const tallAtStop = view.innerHeight >= view.innerWidth;
+        const onResize = () => {
+          if (!(tallAtStop && view.innerWidth > view.innerHeight)) return;
+          try { view.removeEventListener('resize', onResize); view.location.reload(); } catch { /* the Reload page button still works */ }
+        };
+        if (tallAtStop) view.addEventListener('resize', onResize);
+      }
     }
     settle({ ok: false, error: lastError });
     if (viewGraph !== null && settleFirstView) { settleFirstView({ ok: false, error: lastError }); settleFirstView = null; }
@@ -4559,10 +4614,35 @@ export function start(params = {}) {
         const heldReach = reachBlock ? { zeroX: reachBlock.x !== 0 && reachBlock.x === pushed.x, zeroZ: reachBlock.z !== 0 && reachBlock.z === pushed.z } : null;
         const firstOverride = heldReach && (heldReach.zeroX || heldReach.zeroZ) ? { ...heldReach, by: 'reach held at its limit' } : null;
         let attempted = null, ladder = null, firstRefusal = null, usedOverride = null;
+        // R558 (START_POSE_SEARCH): a new window size forgets the start x found for the last one.
+        {
+          const key = `${size.width}x${size.height}`;
+          if (startPose.key !== key) {
+            startPose.key = key; startPose.searched = false;
+            if (startPose.x !== null && typeof sim.setReachStartX === 'function') sim.setReachStartX(null);
+            startPose.x = null;
+          }
+        }
         for (let attemptIndex = 0; attempted === null; attemptIndex++) {
           const override = attemptIndex === 0 ? firstOverride : ladder[attemptIndex - 1];
           try { attempted = attemptFrame(override); usedOverride = override; }
           catch (err) {
+            // R558 (START_POSE_SEARCH): nothing has been drawn yet and the very first picture is refused: offer the
+            // same frame again with other start positions of the hand. Never later: once a picture has been shown, a
+            // refused look or reach is held by the ladder below, and the hand must not jump to another start.
+            if (attemptIndex === 0 && frames === 0 && wholeArmOption && !startPose.searched && typeof sim.setReachStartX === 'function'
+                && err && err.code === 'whole_arm_display_refused' && snap.simState && snap.simState.reachTouched !== true) {
+              startPose.searched = true;
+              let tried = 0;
+              for (const x of START_POSE_SEARCH.xNdc) {
+                restoreAttempt(); sim.setReachStartX(x); tried++;
+                try { attempted = attemptFrame(override); usedOverride = override; startPose.x = x; break; }
+                catch (again) { if (!(again && again.code === 'whole_arm_display_refused')) { restoreAttempt(); sim.setReachStartX(null); throw again; } }
+              }
+              displayRecovery.startPose = { window: startPose.key, foundXNdc: startPose.x, tried, reason: refusalReasonOf(err) };
+              if (attempted !== null) continue;
+              restoreAttempt(); sim.setReachStartX(null);
+            }
             // Only while the game is live and has already shown a frame: start-up and frozen-frame errors stay fatal.
             if (!live || frames === 0 || !lastGoodLook) throw err;
             if (firstRefusal === null) firstRefusal = err;
@@ -5221,7 +5301,7 @@ export function start(params = {}) {
         if (!f) return null;
         // R3-fix (review code F5): arrowOvershootNdc is not reported (the drawn arrows come from the scene's own plan, sceneState.arrowPlan).
         // R4-integrator (D5): perspectiveK and the far-eye numbers (perspective) are reported too.
-        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'perspectiveK', 'perspective', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
+        const pick = ['framing', 'fit', 'beltFit', 'limiting', 'tiltDeg', 'perspectiveK', 'pictureAxis', 'perspective', 'distanceM', 'minBrainDistanceM', 'silhouetteNdc', 'usableNdc', 'allowedNdc', 'fill', 'ndcBounds'];
         return Object.fromEntries(pick.filter(k => f[k] !== undefined).map(k => [k, f[k]]));
       })()
     });

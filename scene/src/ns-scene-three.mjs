@@ -840,6 +840,57 @@ export function patchOverBrainShaders(vertexShader, fragmentShader, { edge = BOD
   return { vertexShader, fragmentShader: 'uniform vec4 nsOvl;\nuniform vec4 nsOvlWin;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
 }
 export const ARM_SEE = Object.freeze({ radiusFrac: 0.11, edge: 0.6, alpha: 0.22, rimAlpha: 0.85 });
+/** R558 (the user's notes of 2026-11-10: "the individual's head is entirely gone", then "If that's the first person
+ * view, then the camera should really be sitting on top of the shoulder and not show the back of the body"):
+ * IN THE ORDINARY VIEW YOUR OWN BODY IS DRAWN ONLY IN FRONT OF YOUR FACE.
+ * What was wrong. To keep the whole left arm in view, the picture camera of the ordinary view backs away from the eye
+ * along the line of sight (about 0.3 m at the start, more for a long reach). From there it looked at the back of your
+ * own neck, shoulders and trunk, which filled the lower third of the screen, and at a neck that ended in a stump,
+ * because the head is never drawn around the camera. That is neither a first-person view (you cannot see your own back)
+ * nor a view from behind (the head was missing).
+ * The rule now. In the ordinary view a point of your own body (trunk, neck, legs, right arm; never the left arm you
+ * control) is drawn only in front of the upright plane through your eye point that faces the way your body faces (the
+ * plane of your face): hidden up to planeHideM in front of it, fully drawn from planeFullM, soft in between. The legs
+ * use legsHideM / legsFullM instead (behind the plane), so each thigh is drawn whole from the hip joint rather than as
+ * a stump that fades in at mid-thigh (viewed both ways). What is left is what you see of yourself without a mirror:
+ * your lap, knees and feet, and a forearm and hand resting in front of you. Your back, shoulders, neck and head are behind that plane, however far the camera has backed away and
+ * wherever you look. Fragments below `cutoff` are not drawn at all, so a hidden part never blocks what is behind it.
+ * Tried and not kept (viewed in the browser): a plane square to the line of sight, with a ball around the eye. Looking
+ * down it showed the lower ribs, spine and pelvis from behind as a cut-off trunk. Drawing the head in place, see-through
+ * where it covers the motor areas, put a grey-brown smudge over the mirror body and the leg areas at the crosshair.
+ * The view from behind (E) draws the whole body, head and face in place, as before; the change between the two views
+ * fades with ns-camera's own first-person share. With the camera at the eye (no backing away) the rule is off and the
+ * round-3 near-eye rule stands. pickFrom: a click on your own body counts only where it is drawn at least this much.
+ * Display only: the pose, the arm fit, the gaze and the camera are untouched. The eye point is the anatomy's own eye
+ * reference in the body frame; it is not a measured eye. */
+export const FIRST_PERSON_BODY = Object.freeze({ planeHideM: 0.03, planeFullM: 0.15, legsHideM: -0.16, legsFullM: -0.04, cutoff: 0.02, pickFrom: 0.35, minBackM: 0.02 });
+/** Fragment patch for FIRST_PERSON_BODY (pure). Uniforms: nsFp = (the eye point in view space, metres; amount 0..1),
+ * nsFpN = (the body's forward direction in view space, a unit vector; w unused) and nsFpR = (hide, full: metres in
+ * front of the plane of the face, the trunk's or the legs' pair; zw unused). `vViewPosition` must be in scope
+ * (MeshStandardMaterial). null when a hook is missing (the body is then drawn whole, as before). */
+export function patchFirstPersonShaders(vertexShader, fragmentShader, { cutoff = FIRST_PERSON_BODY.cutoff } = {}) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const hook = GLASS_FRAGMENT_HOOKS.find(h => fragmentShader.includes(h));
+  if (!hook || !fragmentShader.includes('vViewPosition')) return null;
+  const f = fragmentShader.indexOf(hook);
+  const body = `
+	if ( nsFp.w > 0.0 ) {
+		float nsFk = smoothstep( nsFpR.x, nsFpR.y, dot( - vViewPosition - nsFp.xyz, nsFpN.xyz ) );
+		nsFk = mix( 1.0, nsFk, nsFp.w );
+		if ( nsFk < ${glslFloat(cutoff)} ) discard;
+		diffuseColor.a *= nsFk;
+	}
+`;
+  return { vertexShader, fragmentShader: 'uniform vec4 nsFp;\nuniform vec4 nsFpN;\nuniform vec4 nsFpR;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
+}
+/** The same rule on the CPU (for picks): how much of a point is drawn, 0..1. aheadM: how far the point is in front of
+ * the plane of the face (metres, negative behind it). */
+export function firstPersonShare(aheadM, amount, legs = false, o = FIRST_PERSON_BODY) {
+  if (!(amount > 0)) return 1;
+  const lo = legs ? o.legsHideM : o.planeHideM, hi = legs ? o.legsFullM : o.planeFullM;
+  const t = Math.min(1, Math.max(0, (aheadM - lo) / (hi - lo)));
+  return 1 + (t * t * (3 - 2 * t) - 1) * Math.min(1, amount);
+}
 /** Draw order of the R3 smooth translucent body layers: after every brain pass (glass up to 6), the torso depth pre-pass,
  * the torso colour, the face-layer depth pre-pass and colour (own scene), then the arm (transparent so its ghost window
  * can blend over the brain drawn before it). */
@@ -2687,7 +2738,9 @@ export function createScene({
   const glassRead = { applied: null, sulcMs: null, supportPoints: 0 };
   // R4-integrator (D5 glass fix): shared uniforms of every glass rim material; set in render() from the brain transform.
   const farEyeRigidN = { value: new THREE.Matrix3() }, farEyeVec = { value: new THREE.Vector4(0, 0, 0, 0) };
-  const farEyeView = { rot: null, pw: null, K: 1 };
+  // R558: axis / axis0 = the squash axis as drawn / before the carry (world unit vectors) when the far-eye picture is
+  // laid parallel to the screen (ns-brain pictureAxis 'view'); null = the round-4 rule (along the line of sight).
+  const farEyeView = { rot: null, pw: null, K: 1, axis: null, axis0: null };
   // R4-scene: the shell's rim uniforms are kept, so the held-brain cue (HELD_CUE) can change them per frame.
   const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower } };
   const heldCue = { target: 0, amount: 0 };
@@ -2902,24 +2955,43 @@ export function createScene({
   const overBrainUniform = { value: new Float32Array([0, BODY_OVER_BRAIN.alpha, 0, 0]) };
   const overBrainWinUniform = { value: new Float32Array([0, 0, 1, 1]) };
   const overBrain = { amount: 0, applied: null, materials: 0 };
-  const overBrainPatch = m => {
+  // R558 (FIRST_PERSON_BODY): every own-body material that takes the over-brain window also takes the first-person
+  // rule (the same set: trunk, neck, legs, right arm; the in-place head twins too, which are drawn only in the view from
+  // behind, where the rule is off). nsFp: the eye point in view space and the amount; set each rendered frame.
+  const firstPersonUniform = { value: new THREE.Vector4(0, 0, 0, 0) };
+  const firstPersonAxisUniform = { value: new THREE.Vector4(0, 0, -1, 0) };
+  const firstPersonRangeUniform = { value: new THREE.Vector4(FIRST_PERSON_BODY.planeHideM, FIRST_PERSON_BODY.planeFullM, 0, 0) };
+  const firstPersonLegRangeUniform = { value: new THREE.Vector4(FIRST_PERSON_BODY.legsHideM, FIRST_PERSON_BODY.legsFullM, 0, 0) };
+  const firstPersonBody = { applied: null, amount: 0, backM: 0 };
+  const overBrainPatch = (m, legs = false) => {
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
     m.transparent = true;
     m.onBeforeCompile = (shader, r) => {
       if (typeof prev === 'function') prev.call(m, shader, r);
       const patched = patchOverBrainShaders(shader.vertexShader, shader.fragmentShader);
       overBrain.applied = patched !== null && overBrain.applied !== false;
-      if (patched === null) return;
-      shader.fragmentShader = patched.fragmentShader;
-      shader.uniforms.nsOvl = overBrainUniform;
-      shader.uniforms.nsOvlWin = overBrainWinUniform;
+      if (patched !== null) {
+        shader.fragmentShader = patched.fragmentShader;
+        shader.uniforms.nsOvl = overBrainUniform;
+        shader.uniforms.nsOvlWin = overBrainWinUniform;
+      }
+      const fp = patchFirstPersonShaders(shader.vertexShader, shader.fragmentShader);
+      firstPersonBody.applied = fp !== null && firstPersonBody.applied !== false;
+      if (fp !== null) {
+        shader.fragmentShader = fp.fragmentShader;
+        shader.uniforms.nsFp = firstPersonUniform;
+        shader.uniforms.nsFpN = firstPersonAxisUniform;
+        shader.uniforms.nsFpR = legs ? firstPersonLegRangeUniform : firstPersonRangeUniform;
+      }
     };
-    m.customProgramCacheKey = () => `${typeof prevKey === 'function' ? prevKey.call(m) : ''}|ns-over-brain-r3fix`;
+    m.customProgramCacheKey = () => `${typeof prevKey === 'function' ? prevKey.call(m) : ''}|ns-over-brain-r3fix|ns-first-person-r558`;
     overBrain.materials++;
     return m;
   };
   overBrainPatch(torsoBoneMaterial);
   overBrainPatch(bodyBoneMaterial);
+  // R558 (FIRST_PERSON_BODY): the leg bones take the legs' own plane, so they need their own material.
+  const legBoneMaterial = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })), true);
   let bodySet = false;
   // Face layer: its own scene drawn as a second pass (ghost: main camera, depth-tested against the main frame; inset:
   // an inset camera in a scissored viewport). The meshes are the same posed geometry as the body.
@@ -3750,6 +3822,12 @@ export function createScene({
     farEyeView.rot = transform.rotation ? Array.from(transform.rotation) : null;
     farEyeView.pw = transform.pivotWorld ? Array.from(transform.pivotWorld) : null;
     farEyeView.K = Number.isFinite(transform.perspectiveK) ? transform.perspectiveK : 1;
+    {
+      const ok = a => a && a.length === 3 && Array.prototype.every.call(a, Number.isFinite);
+      const viewAxis = transform.pictureAxis === 'view' && ok(transform.squashAxis) && ok(transform.squashAxis0);
+      farEyeView.axis = viewAxis ? Array.from(transform.squashAxis) : null;
+      farEyeView.axis0 = viewAxis ? Array.from(transform.squashAxis0) : null;
+    }
     // R3-scene: the arrows' reference view is the default look carried with the grab (brainViewTransform grabYaw /
     // grabPitch, radians), and their anchors sit at the brain pivot's distance.
     arrowRef.yaw = Number.isFinite(transform.grabYaw) ? transform.grabYaw : 0;
@@ -4948,10 +5026,10 @@ export function createScene({
         material = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }));
         if (face) { material.transparent = true; material.opacity = FACE_LAYER.muscleOpacity; material.depthWrite = false; }
         else if (trunk) torsoPatch(material);
-        if (!face) overBrainPatch(material);
+        if (!face) overBrainPatch(material, part === 'legs');
         glowRimPatch(material); // R5-scene (D17)
         shadeMuscle(material, MUSCLE_REST_DRIVE);
-      } else material = face ? faceBoneMaterial : trunk ? torsoBoneMaterial : bodyBoneMaterial;
+      } else material = face ? faceBoneMaterial : trunk ? torsoBoneMaterial : part === 'legs' ? legBoneMaterial : bodyBoneMaterial;
       const mesh = new THREE.Mesh(geo, material);
       mesh.name = bodyMeshName(entry, id) + (face ? ' [face layer]' : '');
       mesh.matrixAutoUpdate = false;
@@ -5133,6 +5211,41 @@ export function createScene({
     return faceMode;
   }
 
+  /** R558 (FIRST_PERSON_BODY): set the first-person uniform for the frame about to be drawn. amount: 1 in the ordinary
+   * view once the camera has backed away from the arm's parent point, ns-camera's first-person share while the view
+   * changes to or from the view from behind, 0 there and with the camera at the eye. */
+  function updateFirstPersonBody() {
+    let amount = 0, back = 0;
+    if (body.length > 0) {
+      if (camPose) amount = fin01(camMul.overBrain);
+      else if (firstPose) {
+        back = Math.hypot(firstPose.position[0] - eyeRig.position.x, firstPose.position[1] - eyeRig.position.y, firstPose.position[2] - eyeRig.position.z);
+        amount = back > FIRST_PERSON_BODY.minBackM ? 1 : 0;
+      }
+    }
+    firstPersonBody.amount = amount; firstPersonBody.backM = back;
+    if (amount > 0) {
+      camera.updateMatrixWorld(true); bodyGroup.updateMatrixWorld(true);
+      pv.set(eyeBp[0], eyeBp[1], eyeBp[2]).applyMatrix4(bodyGroup.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+      firstPersonUniform.value.set(pv.x, pv.y, pv.z, amount);
+      // The body's forward direction (source anterior = -y) in view space: -(column 1 of the body frame), unit, turned
+      // into the camera's frame.
+      const e = bodyGroup.matrixWorld.elements, v = camera.matrixWorldInverse.elements;
+      const ax = -e[4], ay = -e[5], az = -e[6], n = Math.hypot(ax, ay, az) || 1;
+      firstPersonAxisUniform.value.set((v[0] * ax + v[4] * ay + v[8] * az) / n, (v[1] * ax + v[5] * ay + v[9] * az) / n, (v[2] * ax + v[6] * ay + v[10] * az) / n, 0);
+    } else firstPersonUniform.value.w = 0;
+  }
+
+  /** R558 (FIRST_PERSON_BODY): how much of a point of your own body (world metres) the last set frame draws, 0..1
+   * (1 when the rule is off). legs: the point belongs to a leg (the legs' own plane). */
+  function firstPersonShareAt(x, y, z, legs) {
+    const fp = firstPersonUniform.value;
+    if (!(fp.w > 0)) return 1;
+    const v = camera.matrixWorldInverse.elements, n = firstPersonAxisUniform.value;
+    const dx = v[0] * x + v[4] * y + v[8] * z + v[12] - fp.x, dy = v[1] * x + v[5] * y + v[9] * z + v[13] - fp.y, dz = v[2] * x + v[6] * y + v[10] * z + v[14] - fp.z;
+    return firstPersonShare(dx * n.x + dy * n.y + dz * n.z, fp.w, legs === true);
+  }
+
   /** Update the face layer for the current pitch / mode (transform, opacity, label); cheap when unchanged. */
   function updateFaceLayer() {
     const hasFace = faceHeadCentre !== null && faceGroup.children.length > 0;
@@ -5188,6 +5301,12 @@ export function createScene({
     if (camState.headInPlace) for (const b of body) if (b.inPlace && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.inPlace)) { out.face = true; out.counts.face = (out.counts.face || 0) + 1; }
     out.camera = camState.mode;
     for (const b of bones) if (b.mesh.geometry && b.mesh.geometry.boundingSphere && frustum.intersectsObject(b.mesh)) { out.leftArm = true; out.counts.leftArm = (out.counts.leftArm || 0) + 1; }
+    // R558 (FIRST_PERSON_BODY): the flags above say which parts are inside the camera's view volume, as before; this
+    // says how much of the first-person rule the last frame drew with (a part inside the volume may be hidden by it).
+    out.firstPersonBody = { amount: Math.round(firstPersonBody.amount * 1000) / 1000, cameraBackM: Math.round(firstPersonBody.backM * 1000) / 1000,
+      eyeViewM: firstPersonBody.amount > 0 ? [firstPersonUniform.value.x, firstPersonUniform.value.y, firstPersonUniform.value.z].map(v => Math.round(v * 1000) / 1000) : null,
+      forwardView: firstPersonBody.amount > 0 ? [firstPersonAxisUniform.value.x, firstPersonAxisUniform.value.y, firstPersonAxisUniform.value.z].map(v => Math.round(v * 1000) / 1000) : null,
+      planeHideM: FIRST_PERSON_BODY.planeHideM, planeFullM: FIRST_PERSON_BODY.planeFullM, legsHideM: FIRST_PERSON_BODY.legsHideM, legsFullM: FIRST_PERSON_BODY.legsFullM, shader: firstPersonBody.applied };
     return out;
   }
 
@@ -6146,11 +6265,11 @@ export function createScene({
       } catch { /* keep the last outline */ }
     }
     if (!mirror.outlineNdc) return false;
-    const key = `${P0.map(v => v.toFixed(4)).join(',')}|${arrowRef.k}|${farEyeView.K}|${sizeKey}|${mirror.outlineNdc.x0.toFixed(4)},${mirror.outlineNdc.y0.toFixed(4)}`;
+    const key = `${P0.map(v => v.toFixed(4)).join(',')}|${arrowRef.k}|${farEyeView.K}|${farEyeView.axis0 ? farEyeView.axis0.join(',') : 'los'}|${sizeKey}|${mirror.outlineNdc.x0.toFixed(4)},${mirror.outlineNdc.y0.toFixed(4)}`;
     if (key === mirror.frameKey) return false;
     mirror.frameKey = key;
     try {
-      const farM = NsMirror.brainFarDistance({ frame: { k: arrowRef.k, perspectiveK: farEyeView.K, pivotWorld: P0 }, brainRadiusMm: rMm });
+      const farM = NsMirror.brainFarDistance({ frame: { k: arrowRef.k, perspectiveK: farEyeView.K, pivotWorld: P0, squashAxis: farEyeView.axis0 }, brainRadiusMm: rMm });
       const bounds = brainDepthBounds;
       if (!bounds || !(bounds.sourcePositionCount > 0)) throw new Error('complete brain source bounds unavailable for initial mirror separation');
       const M = brainGroup.matrixWorld.elements; let depthFarM = -Infinity;
@@ -6408,12 +6527,20 @@ export function createScene({
     for (const o of musclePickIndex.keys()) if (shown(o)) targets.push(o);
     const hits = raycaster.intersectObjects(targets, false);
     if (!hits.length) return null;
-    const rec = musclePickIndex.get(hits[0].object);
-    if (!rec) return null;
+    // R558 (FIRST_PERSON_BODY): a part of your own body that the ordinary view does not draw cannot be clicked; the
+    // ray goes on to whatever is drawn behind it.
+    let hit = null, rec = null;
+    for (const h of hits) {
+      const r = musclePickIndex.get(h.object);
+      if (!r) continue;
+      if (r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom) continue;
+      hit = h; rec = r; break;
+    }
+    if (!hit) return null;
     const areaMeshes = regionMode ? regionMeshes : strip && strip.mesh ? [strip.mesh] : [];
     const areaHits = brainGroup.visible && areaMeshes.length ? raycaster.intersectObjects(areaMeshes, false) : [];
-    if (areaHits.length && areaHits[0].distance < hits[0].distance) return null;
-    return { ...rec, distance: hits[0].distance };
+    if (areaHits.length && areaHits[0].distance < hit.distance) return null;
+    return { ...rec, distance: hit.distance };
   }
 
   /** R22 normal crosshair pick only. Own body and compass arrows are never graspable.
@@ -6577,8 +6704,16 @@ export function createScene({
       pv.set(rec.markCentre[0], rec.markCentre[1], rec.markCentre[2]).applyMatrix4(brainGroup.matrixWorld);
       const a = [pv.x, pv.y, pv.z];
       // targets -> groups (part + side), weighted centres in the player's world
+      // R558 (FIRST_PERSON_BODY): `own` is false for a muscle of your own body that the ordinary view does not draw.
+      // The glow to your own body then starts from the drawn muscles only (o*), or is left out when none is drawn; the
+      // glow to the mirror body uses every muscle, as before.
       const groups = new Map();
-      const addT = (key, w, p) => { let g = groups.get(key); if (!g) { g = { w: 0, x: 0, y: 0, z: 0 }; groups.set(key, g); } g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2]; };
+      const addT = (key, w, p, own = true) => {
+        let g = groups.get(key);
+        if (!g) { g = { w: 0, x: 0, y: 0, z: 0, ow: 0, ox: 0, oy: 0, oz: 0 }; groups.set(key, g); }
+        g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2];
+        if (own) { g.ow += w; g.ox += w * p[0]; g.oy += w * p[1]; g.oz += w * p[2]; }
+      };
       for (const [bid, w] of Object.entries(link.body)) {
         const b = bodyById.get(bid);
         if (!b || b.kind !== 'muscle') continue;
@@ -6588,7 +6723,8 @@ export function createScene({
         if (b.mirror) setRim(b.mirror.material, em, GLOW_K.muscleRimGain);
         if (b.inPlace) setRim(b.inPlace.material, em, GLOW_K.muscleRimGain);
         pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
-        addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z]);
+        const drawn = b.face ? camState.headInPlace : firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom;
+        addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn);
       }
       const armKeys = Object.keys(link.armKeys);
       if (armKeys.length || link.armNames.length) {
@@ -6607,7 +6743,7 @@ export function createScene({
       for (const g of groups.values()) {
         if (!(g.w > 0)) continue;
         const b = [g.x / g.w, g.y / g.w, g.z / g.w];
-        emitRibbon(glowOwn, a, b, lv, phase, 1);
+        if (g.ow > 0) emitRibbon(glowOwn, a, [g.ox / g.ow, g.oy / g.ow, g.oz / g.ow], lv, phase, 1);
         if (mirrorOn) emitRibbon(glowMirror, a, toMirror(b, glowScratch.b), lv, phase, GLOW_LINK.mirrorAlpha);
       }
     }
@@ -7063,6 +7199,8 @@ export function createScene({
     updateArrows();
     updateFaceLayer();
     layoutOverlay();
+    // R558 (FIRST_PERSON_BODY): the eye point in view space and how much of the rule applies this frame.
+    updateFirstPersonBody();
     // R3-fix (M4): the body is see-through where it covers the brain's on-screen outline (the ellipse in the brain's
     // projected bounds, from the overlay layout of this frame), only while the brain is in front of the camera.
     // R5-scene (D18): NOT in third person (you are there to look at your body): the body stays solid, and only a small
@@ -7101,8 +7239,19 @@ export function createScene({
       camera.updateMatrixWorld(true);
       const v = camera.matrixWorldInverse.elements, R = farEyeView.rot, nm = farEyeRigidN.value.elements, pw = farEyeView.pw;
       for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) nm[3 * c + r] = v[r] * R[3 * c] + v[4 + r] * R[3 * c + 1] + v[8 + r] * R[3 * c + 2];
-      farEyeVec.value.set(v[0] * pw[0] + v[4] * pw[1] + v[8] * pw[2] + v[12], v[1] * pw[0] + v[5] * pw[1] + v[9] * pw[2] + v[13],
-        v[2] * pw[0] + v[6] * pw[1] + v[10] * pw[2] + v[14], farEyeView.K);
+      const cx = v[0] * pw[0] + v[4] * pw[1] + v[8] * pw[2] + v[12], cy = v[1] * pw[0] + v[5] * pw[1] + v[9] * pw[2] + v[13],
+        cz = v[2] * pw[0] + v[6] * pw[1] + v[10] * pw[2] + v[14];
+      const ax = farEyeView.axis;
+      if (ax) {
+        // R558 (ns-brain pictureAxis 'view'): the squash is along a fixed axis u, not the line of sight to the centre.
+        // The real point behind a drawn point p is p + (K - 1) (p . u) u. The shaders compute K c + d + (K - 1) (d . n) n
+        // with d = p - c and n = c / |c|, which is that same point when c is the centre's foot on the axis through the
+        // eye: c = (C . u) u. So only this uniform changes; with u along the line of sight c is the centre, as before.
+        const ux = v[0] * ax[0] + v[4] * ax[1] + v[8] * ax[2], uy = v[1] * ax[0] + v[5] * ax[1] + v[9] * ax[2], uz = v[2] * ax[0] + v[6] * ax[1] + v[10] * ax[2];
+        const along = cx * ux + cy * uy + cz * uz;
+        if (along > 0) farEyeVec.value.set(along * ux, along * uy, along * uz, farEyeView.K);
+        else farEyeVec.value.w = 0; // the brain is not ahead along the axis: Three's own normals for this frame
+      } else farEyeVec.value.set(cx, cy, cz, farEyeView.K);
     } else farEyeVec.value.w = 0;
     // Camera-range enforcement belongs to active held manipulation, not a released world-fixed object.
     if (mirror.carryHeldAtReconcile === true && mirror.worldCentre && mirrorRoot.visible) {
