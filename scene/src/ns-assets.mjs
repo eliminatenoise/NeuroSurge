@@ -401,7 +401,8 @@ export const LICENCE_LINKS = Object.freeze({
 /** What this game changes (CC BY 4.0 section 3(a)(1)(B): indicate modifications). */
 // R4-fix (review SL4-6): Picture quality Low (and Auto at its cheapest levels) draws vertex-clustered, simplified copies
 // of the glass-brain and full-body meshes at run time; say so, like the muscle bending.
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. The OBJ files themselves are unmodified.';
+// R558 (builder AN): the opened rectus sheath (ns-body openRectusSheath) leaves part of a BodyParts3D mesh undrawn; say so.
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. Where rectus abdominis is shown, the part of the external oblique\'s tendon sheet in front of it is not drawn (the strip between the two recti stays). The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 
@@ -1254,6 +1255,17 @@ export function fullbodyAppInputs(manifest, result) {
  * name can use the alias FACE_PACKET_ID from here. */
 export const FACE_PACKET = 'face-muscles-r1';
 export const FACE_PACKET_ID = FACE_PACKET;
+/** R558 (user Message 20, builder FA): the BodyParts3D cranium and eyes (both parietal bones, the occipital bone, the
+ * sphenoid; sclera, iris and lens of each eye), byte-exact archive members that close the head the full-body packet left
+ * open behind the frontal and temporal bones (packets/bodyparts3d-head-r1/README.md). Loaded with the face stage. */
+export const HEAD_PACKET = 'bodyparts3d-head-r1';
+/** R558 (builder AN, anatomy completion): the large muscles the full-body packet lacked (latissimus dorsi, the erector
+ * spinae columns, rectus abdominis, the internal oblique, transversus abdominis, quadratus lumborum, gracilis, the
+ * adductors, tensor fasciae latae, the fibularis muscles, the rhomboids, pectoralis minor, the deep hip rotators, ...)
+ * and the smaller ones the motor map names (neck, throat, foot, eyelid). 93 byte-exact BodyParts3D 4.0 members
+ * (CC BY 4.0) and 18 documented Z-Anatomy derivatives (CC BY-SA 4.0) for the muscles BodyParts3D 4.0 does not have
+ * (packets/missing-muscles-r1/README.md). Loaded with the body, joined to the same rig build. */
+export const MISSING_MUSCLES_PACKET = 'missing-muscles-r1';
 
 /** R5-load: the progressive load order of round 5. 'brain' and 'arm' are MESH-MANIFEST.json (both are needed for the
  * first frame), 'body' is the full-body packet, 'mirror' is the D19 mirror body (no files: it is drawn from the own body's
@@ -1302,6 +1314,49 @@ export const PACKET_SPECS = Object.freeze({
     manifestSha256: '19bf7bc6f52859584c35bd1b3ee5c144240020d8a9217e5bd2a34847d9ee6a05', // Curated face metadata; mesh bytes unchanged; production gates remain separate.
     frame: 'BodyParts3D 4.0 whole-body millimetres (+x subject left, +y posterior, +z superior), registered to the skull',
     licence: 'CC BY-SA 4.0 (share-alike meshes; the game code stays CC0)'
+  }),
+  // R558 (builder FA): rigid parts carried by the skull only (kind 'bone'; the eye parts say tissue 'eye' and are drawn
+  // with eye materials). Frame box: the head_face and neck regions widened by 60 mm (the parietal and occipital bones
+  // reach 36 mm behind the full-body head entries); a mesh in another frame or unit is still refused.
+  [HEAD_PACKET]: Object.freeze({
+    packet: HEAD_PACKET,
+    stage: 'face',
+    kinds: Object.freeze(['bone']),
+    defaultKind: 'bone',
+    defaultRegion: 'head_face',
+    maxEntries: 32,
+    maxBytesPerFile: OBJ_LIMITS.maxBytes,
+    maxTotalBytes: 16 * MIB_BYTES,
+    requireVertices: true,
+    midlineToleranceMm: 15,
+    frameRegions: Object.freeze(['head_face', 'neck']),
+    frameMarginMm: 60,
+    manifestPath: 'HEAD-MESH-MANIFEST.json',
+    manifestSha256: 'dff794c0f34ca75de8264ace4790c95de524fb7c98c178d02550cf3f9b567e20',
+    frame: 'BodyParts3D 4.0 whole-body millimetres (+x subject left, +y posterior, +z superior), unchanged archive coordinates',
+    licence: 'CC BY 4.0 (DBCLS BodyParts3D; the game code stays CC0)'
+  }),
+  // R558 (builder AN): muscles only (111 files, 36.3 MB). Frame box: every full-body region except the right arm,
+  // widened by 40 mm (the largest reach past those entries is the latissimus dorsi toward the humerus, about 10 mm); a
+  // mesh in another frame or unit is still refused. Midline tolerance as the full body (spinalis thoracis, splenius
+  // capitis and serratus posterior inferior lie at it).
+  [MISSING_MUSCLES_PACKET]: Object.freeze({
+    packet: MISSING_MUSCLES_PACKET,
+    stage: 'body',
+    kinds: Object.freeze(['muscle']),
+    defaultKind: 'muscle',
+    defaultRegion: 'torso',
+    maxEntries: 128,
+    maxBytesPerFile: OBJ_LIMITS.maxBytes,
+    maxTotalBytes: 40 * MIB_BYTES,
+    requireVertices: true,
+    midlineToleranceMm: 15,
+    frameRegions: Object.freeze(['torso', 'pelvis', 'right_leg', 'left_leg', 'neck', 'head_face']),
+    frameMarginMm: 40,
+    manifestPath: 'MISSING-MUSCLES-MESH-MANIFEST.json',
+    manifestSha256: 'db638a3e7e6e78ef8c8989274545d3f5162b76cb2d599cdd512df6ec1162603d',
+    frame: 'BodyParts3D 4.0 whole-body millimetres (+x subject left, +y posterior, +z superior); BodyParts3D files unchanged, Z-Anatomy files placed by the face packet\'s recorded similarity',
+    licence: 'CC BY 4.0 (BodyParts3D members) and CC BY-SA 4.0 (Z-Anatomy derivatives, share-alike); the game code stays CC0'
   })
 });
 

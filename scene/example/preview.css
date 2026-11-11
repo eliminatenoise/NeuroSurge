@@ -1,1 +1,8 @@
 .preview-note{position:fixed;z-index:10000;left:12px;bottom:12px;max-width:290px;padding:8px 12px;border:1px solid #69757f;border-radius:8px;background:#0a1118ed;color:#eef5ff;font:12px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}.preview-note a{color:#b8e5ff}.preview-note a:focus-visible{outline:2px solid white;outline-offset:3px}
+
+/* R558: in landscape the note is two small lines in the top band (left of the limits line), which the motor areas never reach; the bottom-left corner now holds the status card. */
+@media (min-aspect-ratio: 1/1){.preview-note{left:6px;top:1px;bottom:auto;max-width:calc(50vw - 340px);padding:1px 6px;border:0;border-radius:6px;background:#0a1118b3;font-size:11px;line-height:1.25}}
+
+/* R558 (issue hunt 2: in a portrait window the note, fixed in the bottom-left corner above everything, covered the text
+   of the Esc page): while the start or Esc page shows, its card ends above the note (the card scrolls inside). */
+@media (max-aspect-ratio: 999/1000){.ns-shell:not([hidden]){padding-bottom:76px}}

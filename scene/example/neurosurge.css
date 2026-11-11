@@ -18,6 +18,8 @@
   --ns-portrait-legend-reserve: 172px; /* INFO_PANEL_PORTRAIT_LEGEND_PX: legend + toast row at the top of the band */
   --ns-portrait-legend-reserve-body: 116px; /* R4-polish: the short body-view legend (about 100-105 px measured) + gap */
   --ns-info-col-maxvh: 66vh;   /* INFO_PANEL.colMaxVh */
+  --ns-info-corner-vw: 18.75vw; /* INFO_PANEL.cornerVw */
+  --ns-info-short-maxvh: 17vh;  /* INFO_PANEL.cornerShortVh */
   --ns-leftarm: #8cf2ff;     /* REGION_STYLE.leftArmOutline (sRGB of the linear [0.55, 0.95, 1.0]) */
   /* Polish: one visual system for every overlay. */
   --ns-other: #d4ccbc;       /* REGION_RENDER.groupLine = ns-colors KEY_COLORS.otherGroupLine (other body-part territories) */
@@ -198,8 +200,17 @@ html, body {
   margin-top: 5px;
   border-radius: 5px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-  background: linear-gradient(to right, #1d193c, #6f1d90, #d13c55, #ff951d, #fff350);
+  /* R558: glow strength (dark resting surface -> bright glow; ns-colors glowStrengthLegendStops); each area keeps its
+     own colour, explained by the family chips. The renderer writes the same stops inline. */
+  background: linear-gradient(to right, #242227, #363437, #8c8a88, #a7a5a2, #bdbab7, #d0cdca, #e1deda, #f1ede9, #fffcf7);
 }
+/* R558 (user Message 2): one chip per area colour family (blues left arm, oranges right arm, purples left leg, yellows
+   right leg, greens belly and back, pinks face and neck, grey moves nothing). The chip background (the family's shades)
+   is written inline from ns-colors areaFamilySwatchCss. Kept visible in body views too: the muscles glow in these
+   colours. */
+.ns-legend-families { list-style: none; margin: 6px 0 2px; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 9px; }
+.ns-legend-family { display: inline-flex; align-items: center; gap: 4px; line-height: 1.2; font-size: 11px; color: var(--ns-fg); white-space: nowrap; }
+.ns-legend-chip { flex: none; width: 18px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
 
 /* Polish: the legend is the colour key in the far-right column, under the information panel. */
 .ns-panel-legend {
@@ -213,7 +224,10 @@ html, body {
 }
 @media (min-aspect-ratio: 1/1) {
   .ns-hud .ns-panel-legend { width: min(var(--ns-info-col-px), var(--ns-info-col-vw)); }
-  .ns-hud .ns-panel-info { width: min(280px, 26vw); }
+  /* R558: fits the free bottom-left corner under the motor areas. R558 (user Message 31, symmetry): exactly as wide as
+     the information card in the bottom-right corner (.ns-infopanel, INFO_PANEL.colPx / cornerVw), so the two corner
+     cards mirror each other (same width, same 12 px side and bottom margins); was min(280px, 17.5vw). */
+  .ns-hud .ns-panel-info { width: min(var(--ns-info-col-px), var(--ns-info-corner-vw)); }
 }
 .ns-panel-legend .ns-slot-legendLabel {
   font-size: 10.5px;
@@ -229,6 +243,8 @@ html, body {
    grey teal, the other areas a near-neutral grey), so "Other parts" no longer looks like the ramp's dark purple end. */
 /* R4-access: KEY_COLORS.legendSwatchLeftArm / legendSwatchOther (light-blue left-arm and warm-grey other areas stay
    apart for red-green colour-blind players). */
+/* R558: the left-arm / other-parts rows are replaced by the family chips (.ns-legend-families); the rules stay for any
+   older key row. */
 .ns-legend-item-leftarm .ns-legend-swatch { background: rgba(64, 109, 133, 0.95); border: 2px solid var(--ns-leftarm); }
 .ns-legend-item-other .ns-legend-swatch { background: rgba(172, 122, 120, 0.95); border: 1px solid var(--ns-other); } /* R558: the tissue-pink areas (was grey 105, 103, 97) */
 /* R4-polish: the switched-on swatch shows the lighter, warmer fill of a switched-on area inside its gold edge. */
@@ -499,26 +515,30 @@ html, body {
   text-align: center;
   white-space: nowrap;
   /* R4-access proposal (wired by R4-integrator): a warm neutral that matches the warm-grey other areas (KEY_COLORS). */
+  /* R558 ("brain labels should be a little more transparent"): one step lower fill and edge (was 0.62 / 0.32); the
+     words keep full strength and their dark shadow so they stay readable over the glass. */
   color: #e2ddd4;
-  background: rgba(8, 10, 18, 0.62);
-  border: 1px solid rgba(212, 204, 188, 0.32);
+  background: rgba(8, 10, 18, 0.46);
+  border: 1px solid rgba(212, 204, 188, 0.26);
   text-shadow: 0 1px 2px #05070b;
 }
-/* Polish: the LEFT ARM territory label is the one strong label (cyan pill, matching the cyan territory outline). */
-.ns-region-label-leftarm {
+/* Polish: the arm labels are the strong labels (cyan pill, matching the cyan left-arm territory outline). R558 ("match
+   on both sides"): the right-arm label on the other half wears the same pill, and the pill is one step more see-through
+   (fill 0.92 -> 0.72, halo 0.18 -> 0.14). */
+.ns-region-label-arm {
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
   padding: 2px 10px;
   color: #05161b;
   border: 1.5px solid var(--ns-leftarm);
-  background: rgba(140, 242, 255, 0.92);
+  background: rgba(140, 242, 255, 0.72);
   text-shadow: none;
-  box-shadow: 0 0 0 3px rgba(140, 242, 255, 0.18), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(140, 242, 255, 0.14), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 .ns-region-label-hemi { font-size: 0.86em; font-weight: 500; opacity: 0.78; }
 .ns-region-label[data-hover="true"] { color: #fff3a0; border-color: #fff3a0; }
-.ns-region-label-leftarm[data-hover="true"] { color: #05161b; background: #fff3a0; border-color: #fff3a0; }
+.ns-region-label-arm[data-hover="true"] { color: #05161b; background: #fff3a0; border-color: #fff3a0; }
 
 /* Far-right information overlay (R14). Never takes pointer events; long content is clipped, not scrolled. */
 .ns-infopanel {
@@ -555,7 +575,8 @@ html, body {
 .ns-infopanel-viewed { margin-top: 3px; color: #ffe066; font-size: 11px; }
 .ns-infopanel-activity { display: flex; align-items: center; gap: 7px; margin: 5px 0 2px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--ns-muted); }
 .ns-infopanel-swatch { flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(232, 238, 245, 0.5); }
-/* Polish: the activity value on the shared ramp (same gradient as the legend, the brain and the muscles). */
+/* Polish: the activity value on a small bar. R558: the bar runs from the area's calm tint to its glow colour (written
+   inline per area), the same colour as the brain area and its muscles. */
 .ns-infopanel-meter { position: relative; height: 6px; margin: 2px 0 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 .ns-infopanel-meter-mark {
   position: absolute;
@@ -692,6 +713,12 @@ html, body {
   .ns-legend-short { display: inline; }
   .ns-legend-item { gap: 4px; }
   .ns-legend-mid { display: none; }
+  /* R558: the colour-family chips take two short lines; tighter spacing keeps the legend inside the portrait band's
+     legend slot (INFO_PANEL_PORTRAIT_LEGEND_PX). */
+  .ns-legend-families { margin: 4px 0 0; gap: 2px 8px; }
+  .ns-legend-family { line-height: 1.15; font-size: 10.5px; }
+  .ns-hud .ns-legend-key { margin: 3px 0 1px; }
+  .ns-legend-bar { height: 7px; }
   /* R3-fix (review SL-3): the map qualifier (verbatim pinned string) stays visible in portrait too. */
   .ns-panel-legend .ns-slot-regionNote { display: block; font-size: 10.5px; }
   .ns-infopanel-caveats, .ns-infopanel-citations { display: none; }
@@ -751,7 +778,7 @@ html[data-ns-glow="on"] .ns-panel-info,
 html[data-ns-glow="on"] .ns-hover,
 html[data-ns-glow="on"] .ns-essential,
 html[data-ns-glow="on"] .ns-orient,
-html[data-ns-glow="on"] .ns-region-label:not(.ns-region-label-leftarm),
+html[data-ns-glow="on"] .ns-region-label:not(.ns-region-label-arm),
 html[data-ns-glow="on"] .ns-face-label,
 html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel { background-color: rgba(5, 7, 11, 0.78); }
 @media (prefers-reduced-motion: no-preference) {
@@ -819,6 +846,10 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 /* ---- R558 (genuine note R28): the keyboard picture on the start page and the Esc page --------------------------------
    Lit keys are the keys the game uses; faint blank keys only show where those sit on a keyboard. System sans-serif
    (inherited). The sizes follow the view width, so the picture stays readable from a phone-sized window to a wide one. */
+/* R558 (user Message 31, symmetry): the start / Esc page's action buttons (Resume, Reset body, Reset brain view) sit as
+   one row centred in the card, on the same centre line as the keyboard picture below (one class stronger than the
+   launcher sheets' .ns-shell-actions, which left-aligned them). */
+.ns-shell-root .ns-shell-actions { justify-content: center; }
 .ns-kbd { --k: clamp(26px, 3vw, 42px); display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 26px; align-items: start;
   margin: 10px 0 12px; padding: 12px 16px 12px; border: 1px solid rgba(232, 238, 245, 0.16); border-radius: 12px; background: rgba(232, 238, 245, 0.04); }
 .ns-kbd-title { grid-column: 1 / -1; margin: 0 0 2px; }
@@ -852,4 +883,22 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 @media (min-width: 900px) and (max-height: 820px) {
   .ns-shell[data-mode="intro"] .ns-kbd { --k: clamp(24px, 2.5vw, 34px); margin: 6px 0 8px; padding: 8px 14px; }
   .ns-shell[data-mode="intro"] .ns-kbd-notes { display: none; } /* the same words are in the Controls list beside it */
+}
+
+/* R558 (motor strip fills the view). In landscape the motor areas reach every edge of the view at the start, so the
+   panels live in the two bottom corners the areas leave free. The information panel is a SHORT card in the bottom
+   right corner (title, body part, signal meter, a clamped sentence and the "More detail" line); key I opens the full
+   card upward. The colour key folds away with it and shows above the status card (bottom left) while More detail is
+   open. On a card without More detail (plain brain glass) key I unfolds the whole card and the colour key instead
+   (data-ns-unfold on the app root, ns-app toggleInfoDetail); in body views (brain out of view) the key keeps showing its ramp. The always-on limits line at the top keeps
+   saying "a rough map". Portrait keeps its bottom band. */
+@media (min-aspect-ratio: 1/1) {
+  .ns-infopanel { top: auto; bottom: var(--ns-gap); width: min(var(--ns-info-col-px), var(--ns-info-corner-vw)); }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) { max-height: var(--ns-info-short-maxvh); overflow: hidden; display: flex; flex-direction: column; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) > * { flex: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-rows, .ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-activations) { display: none; }
+  /* R558 (hunt 2): the compact card also says when it shows the LAST area you looked at (one short line). */
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-viewed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-plain, .ns-infopanel-explanation) { flex: 0 1 auto; min-height: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .ns-app:not([data-ns-unfold="true"]):not(:has(> .ns-scene-overlay[data-ns-brain-in-view="false"])):not(:has(.ns-infopanel-detail[open])) .ns-hud .ns-panel-legend { visibility: hidden; }
 }

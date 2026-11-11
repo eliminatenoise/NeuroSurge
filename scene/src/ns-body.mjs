@@ -12,8 +12,10 @@
 //   BODY_JOINT_LIMITS                            -> { jointId: [minDeg, maxDeg] }
 //   bodySkinWeights / skinBodyPositions          -> optional two-influence CPU skinning of one muscle mesh
 //
-// Round 3 (R3-body, D4): the fixed first-person body SITS (BODY_POSTURES.seated = DEFAULT_BODY_POSTURE).
-//   bakeBodyPosture(rig, meshesById, { posture, keep = 'skull' }) -> { meshesById (seated geometry for the scene), ... }
+// Round 3 (R3-body, D4): the fixed first-person body sat (BODY_POSTURES.seated). R558: it now starts sitting on an
+// invisible flat ground with every limb straight forward (BODY_POSTURES.open = DEFAULT_BODY_POSTURE); 'seated' stays
+// available.
+//   bakeBodyPosture(rig, meshesById, { posture, keep = 'skull' }) -> { meshesById (start-posture geometry for the scene), ... }
 //   bodyPostureTargets(activeBodyActions, { posture })            -> absolute joint targets on top of the rest posture
 //   poseBody(rig, targets, { baked })                             -> matrices relative to the baked geometry
 //   bodyPostureAngles(posture), BODY_POSTURE_TEXT (plain words)
@@ -30,10 +32,12 @@
 //     thigh does not pass into the belly) and the seated elbow bend at 120 deg (so the hand does not fill the view).
 //
 // Round 5 (R5-body):
-//   - D15 Body Worlds layers: bodyWorldsLayers(rig, baked) -> poseBody(rig, targets, { baked, layers, layerAmount })
-//     display-separates eligible regionally qualified outer candidates using the existing rigid display matrix.
-//     Exact-ID anatomy/scope/caveats come from ns-regional-layers; generated TABLE/UNITS retain geometric diagnostics
-//     and display parameters only. detachedRestPositions() uses the same eligibility for CPU-skinned arm meshes.
+//   - D15 Body Worlds layers: bodyWorldsLayers(rig, baked, { meshesById }). Since R558 this is the anchored stack: a
+//     per-vertex radial lift of the regionally qualified outer and intermediate muscles with their attachment ends
+//     left on the bone (BODY_STACK_RULE, bodyStackLevel, bodyStackLiftedPositions, armStackLift for the CPU-skinned
+//     left arm). It replaced the round-5 rigid display matrix. Exact-ID anatomy/scope/caveats come from
+//     ns-regional-layers; the generated TABLE/UNITS and BODY_LAYER_RULE below are kept as the record of the earlier
+//     geometric diagnostics and are no longer what the display uses.
 //   - D19 mirror body: mirrorBodyMatrix (a reflecting group matrix: it faces you, your left stays on your left),
 //     createBodyInstance / createMirrorBodyInstance / poseBodyInstance / syncBodyInstance (shared rig, geometry,
 //     layers and pose), reflectWinding, bodyBoundsBp.
@@ -66,47 +70,116 @@ import { BODY_ARM_SOURCE_DOMAIN, BODY_KEEP_FRAME_KIND } from './ns-body-arm-brid
 // Constants of the agreed interface
 
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification } from './ns-regional-layers.mjs';
+import { SEGMENTS as RIG_SEGMENTS, FOREARM_TWIST_CHAIN, FOREARM_TWIST_LEVELS, TWIST_SKIN, TWIST_TABLE_STEPS } from './ns-rig.mjs';
 
-/** Agreed non-left-arm joint ids (shared interface 2). */
+/** Agreed non-left-arm joint ids (shared interface 2). R558 (Messages 14, 15 and 2: as many activation points as
+ * possible, left-right symmetry, full ranges of motion) adds the right hand's own digit joints (each finger and the
+ * thumb on its own, finger spread, thumb opposition), right wrist side-to-side bend, ankle inversion / eversion, the big
+ * toe on its own, trunk side bend and turn, neck side bend, jaw side shift, the swallow (hyoid lift) and three more
+ * face display ids. r_grasp / r_open stay as whole-hand ids (the 'seated' posture uses them; no map action does). */
 export const BODY_JOINT_IDS = Object.freeze([
-  'hip_flex_L', 'hip_flex_R', 'knee_ext_L', 'knee_ext_R', 'ankle_dorsi_L', 'ankle_dorsi_R', 'toe_flex_L', 'toe_flex_R',
+  'hip_flex_L', 'hip_flex_R', 'hip_abd_L', 'hip_abd_R', 'knee_ext_L', 'knee_ext_R', 'ankle_dorsi_L', 'ankle_dorsi_R',
+  'toe_flex_L', 'toe_flex_R',
   'trunk_flex', 'neck_flex', 'neck_rot', 'jaw_open', 'brow_raise', 'eye_close', 'lip_purse', 'smile',
-  'r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex', 'r_wrist_flex', 'r_wrist_ext', 'r_grasp', 'r_open', 'r_pronation'
+  'r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex', 'r_wrist_flex', 'r_wrist_ext', 'r_grasp', 'r_open', 'r_pronation',
+  'ankle_inv_L', 'ankle_inv_R', 'hallux_flex_L', 'hallux_flex_R', 'trunk_side', 'trunk_rot', 'neck_side', 'jaw_side',
+  'hyoid_elev', 'nose_wrinkle', 'upper_lip', 'lower_lip',
+  'r_wrist_dev', 'r_thumb_flex', 'r_thumb_opp', 'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
+  // R558 (Space dance, Message 2): the right upper arm's own internal / external rotation and each hip's rotation about
+  // the thigh's long axis (positive = external, outward, on both sides).
+  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R'
 ]);
 
 const lim = (lo, hi) => Object.freeze([lo, hi]);
 
 /**
  * Rig limits in degrees from the source (anatomical) pose, using the sign conventions of ns-bodymap JOINT_SEMANTICS.
- * They are rounded, game-safe values inside commonly quoted adult active ranges of motion (for example hip flexion
- * about 120, knee flexion about 135, ankle dorsiflexion about 20 and plantarflexion about 50, elbow flexion about 145,
- * forearm pronation plus supination about 160). They are not measured on this reference body or on the player.
- * The four facial ids are display amplitudes (0..20), not joint rotations: no facial-expression muscle or soft tissue
- * exists in BodyParts3D 4.0, so ns-body moves no mesh for them (see faceDisplayLevels).
+ * R558 (Message 2: "all movements and motions should be to their maximum anatomically feasible range of motion but
+ * never beyond"): each limit is the full commonly quoted adult ACTIVE range (AAOS 1965 "Joint Motion: Method of
+ * Measuring and Recording" table, with the AMA Guides where AAOS gives none or the task brief asked for the wider
+ * value), not a game-safe fraction. Basis per joint:
+ *   hip flexion 120 (AAOS; with a bent knee: HIP_KNEE_COUPLING caps it at 100 with a straight knee, the hamstrings'
+ *     limit), extension 30 (AAOS; the map's extension action stops at the ground, 90); abduction 45, adduction
+ *     30 (AAOS; the map's adduction action stops at 0 so the legs never pass into each other); knee flexion 135
+ *     (AAOS); ankle dorsiflexion 20, plantarflexion 50 (AAOS); foot inversion 35, eversion 15 (AAOS); lesser-toe MTP
+ *     flexion 40, extension 40 (AAOS); big-toe MTP flexion 45, extension 70 (AAOS);
+ *   trunk (thoracolumbar) flexion 80, extension 25, side bend 35 each way, rotation 45 each way (AAOS); neck flexion
+ *     50, extension 60, rotation 80 each way (AMA), side bend 45 each way (AAOS / AMA); jaw opening 30 deg of
+ *     mandibular rotation (with the 0.25 mm/deg forward glide about 40 mm between the incisors, a usual adult
+ *     maximum), jaw side shift 10 mm each way (a usual adult lateral excursion);
+ *   right shoulder flexion 180, extension 60, abduction 180 (AAOS); elbow flexion 145 (between AAOS 150 and AMA 140;
+ *     the forearm mesh meets the biceps mesh there); pronation 80 + supination 80 = 160 (AAOS); wrist flexion 80,
+ *     extension 70, radial deviation 20, ulnar deviation 30 (AAOS); digits: see BODY_JOINT_SHARES (finger MCP 90 /
+ *     PIP 105 / DIP 85, MCP hyperextension 30; thumb CMC opposition 40, MCP 50, IP 80, IP hyperextension 20; finger
+ *     spread 20 at the index MCP).
+ * They are not measured on this reference body or on the player. The facial ids are display amplitudes (-20..20, or
+ * 0..20 where the opposite movement returns to rest), not joint rotations: the face-muscle packet colours the muscles,
+ * and no face mesh changes shape (see faceDisplayLevels). hyoid_elev is a display amplitude 0..20 that lifts the hyoid
+ * bone up to 15 mm (HYOID_LIFT), the usual adult hyoid excursion in a swallow.
  */
 export const BODY_JOINT_LIMITS = Object.freeze({
-  hip_flex_L: lim(-20, 120), hip_flex_R: lim(-20, 120),
+  hip_flex_L: lim(-30, 120), hip_flex_R: lim(-30, 120),
+  hip_abd_L: lim(-30, 45), hip_abd_R: lim(-30, 45),
   knee_ext_L: lim(-135, 0), knee_ext_R: lim(-135, 0),
   ankle_dorsi_L: lim(-50, 20), ankle_dorsi_R: lim(-50, 20),
-  toe_flex_L: lim(-60, 40), toe_flex_R: lim(-60, 40),
-  trunk_flex: lim(-25, 60), neck_flex: lim(-45, 45), neck_rot: lim(-70, 70), jaw_open: lim(0, 30),
-  brow_raise: lim(0, 20), eye_close: lim(0, 20), lip_purse: lim(0, 20), smile: lim(0, 20),
-  r_shoulder_flex: lim(-45, 160), r_shoulder_abd: lim(0, 160), r_elbow_flex: lim(0, 145),
-  r_wrist_flex: lim(0, 80), r_wrist_ext: lim(0, 70), r_grasp: lim(0, 90), r_open: lim(0, 30), r_pronation: lim(0, 160)
+  toe_flex_L: lim(-40, 40), toe_flex_R: lim(-40, 40),
+  trunk_flex: lim(-25, 80), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
+  brow_raise: lim(-20, 20), eye_close: lim(-20, 20), lip_purse: lim(-20, 20), smile: lim(-20, 20),
+  r_shoulder_flex: lim(-60, 180), r_shoulder_abd: lim(0, 180), r_elbow_flex: lim(0, 145),
+  r_wrist_flex: lim(0, 80), r_wrist_ext: lim(0, 70), r_grasp: lim(0, 90), r_open: lim(0, 30), r_pronation: lim(0, 160),
+  ankle_inv_L: lim(-15, 35), ankle_inv_R: lim(-15, 35), hallux_flex_L: lim(-70, 45), hallux_flex_R: lim(-70, 45),
+  trunk_side: lim(-35, 35), trunk_rot: lim(-45, 45), neck_side: lim(-45, 45), jaw_side: lim(-10, 10),
+  hyoid_elev: lim(0, 20), nose_wrinkle: lim(-20, 20), upper_lip: lim(0, 20), lower_lip: lim(-20, 20),
+  r_wrist_dev: lim(-30, 20), r_thumb_flex: lim(-20, 90), r_thumb_opp: lim(-15, 40),
+  r_index_flex: lim(-30, 90), r_middle_flex: lim(-30, 90), r_ring_flex: lim(-30, 90), r_little_flex: lim(-30, 90),
+  r_finger_spread: lim(0, 20),
+  // R558 (Space dance): rotation about the humerus' and the femur's own long axes, positive = external (outward).
+  // Shoulder: internal about 70, external about 90 (commonly quoted active ranges, e.g. AAOS tables, measured with the
+  // upper arm raised; the start posture holds it straight forward, flexed 90). Hip, measured with the hip flexed 90 as
+  // in the long-sitting start posture: internal about 35-45, external about 45 (same sources); internal 40 is used.
+  // Cited from memory, not measured on this body. The Space dance may use less where the feet would touch
+  // (hipRotationClearRange).
+  r_shoulder_rot: lim(-70, 90), hip_rot_L: lim(-40, 45), hip_rot_R: lim(-40, 45)
 });
 
 /** Facial display ids (no joint, no mesh) and their full display amplitude. */
-export const FACE_DISPLAY_IDS = Object.freeze(['brow_raise', 'eye_close', 'lip_purse', 'smile']);
+export const FACE_DISPLAY_IDS = Object.freeze(['brow_raise', 'eye_close', 'lip_purse', 'smile', 'nose_wrinkle', 'upper_lip', 'lower_lip']);
 const FACE_FULL_DEG = 20;
+
+/** R558: the swallow display joint lifts the hyoid bone (and what rides it) by up to `mm` (at hyoid_elev 20), along
+ * `dir` (superior and a little anterior, BodyParts3D frame). Adult hyoid excursion in a swallow is commonly reported as
+ * about 1 to 2 cm, up and forward; 15 mm is a display choice inside that, not a measurement. */
+export const HYOID_LIFT = Object.freeze({ mm: 15, dir: Object.freeze([0, -0.45, 0.89]) });
+
+/** R558 (Message 2, "never beyond"): with the knee straight the hamstrings stop hip flexion at about 90-100 degrees (the
+ * straight-leg limit; the brief's norm "about 90 with a straight knee", and the lead's straight-leg lift end of 100,
+ * 10 degrees off the ground in long sitting); with the knee bent the hip flexes to 120. The hip flexion actually drawn is capped at
+ * straightKneeMaxDeg + (bentKneeMaxDeg - straightKneeMaxDeg) * min(1, knee flexion / fullAtKneeFlexDeg). A two-joint
+ * muscle rule of thumb for display, not a measured hamstring length. */
+export const HIP_KNEE_COUPLING = Object.freeze({ straightKneeMaxDeg: 100, bentKneeMaxDeg: 120, fullAtKneeFlexDeg: 90 });
 
 /** How one agreed joint id is shared between rig joints (documented approximations, not measured kinematics). */
 export const BODY_JOINT_SHARES = Object.freeze({
   trunk_flex: Object.freeze({ lumbosacral: 0.5, thoracolumbar: 0.5 }),
+  // R558: side bend shared evenly; trunk rotation mostly above the lumbar spine (lumbar rotation is only a few degrees
+  // per level), taken at the thoracolumbar stage because the rib cage is one rigid segment here.
+  trunk_side: Object.freeze({ lumbosacral: 0.5, thoracolumbar: 0.5 }),
+  trunk_rot: Object.freeze({ lumbosacral: 0.2, thoracolumbar: 0.8 }),
   neck_flex: Object.freeze({ cervicothoracic: 0.6, atlanto_occipital: 0.4 }),
   neck_rot: Object.freeze({ cervicothoracic: 0.5, atlanto_occipital: 0.5 }),
-  // Net digit angle n = r_grasp - r_open (degrees). Flexion (n > 0) shares, extension (n < 0) shares, joint clamps.
-  finger: Object.freeze({ mcp: [1.0, 1.0, -30, 90], pip: [1.1, 0.3, -10, 100], dip: [0.75, 0.3, -10, 80] }),
-  thumb: Object.freeze({ cmc: [0.35, 0.5, -15, 35], mcp: [0.6, 0.3, -10, 55], ip: [0.8, 0.5, -15, 80] }),
+  neck_side: Object.freeze({ cervicothoracic: 0.8, atlanto_occipital: 0.2 }),
+  // Net digit angle n = (r_grasp - r_open) + the digit's own id (r_index_flex, ...; the thumb's r_thumb_flex) in degrees.
+  // Flexion (n > 0) share, extension (n < 0) share, joint clamps [lo, hi]. R558 (Message 2): a full flexion n = 90
+  // reaches MCP 90, PIP 104 (clamp 105) and DIP 85 (AAOS: MCP 90, PIP 100, DIP 90; the task brief: PIP 100-110, DIP
+  // 80-90); n = -30 opens the MCP 30 into hyperextension with PIP straight and DIP 9 (active MCP hyperextension is
+  // about 20-45 degrees; PIP has none). Thumb: MCP 50 (AAOS 50), IP 81 -> 80 (AAOS 80); n = -20 extends the IP 20
+  // (AAOS IP hyperextension 20). The thumb CMC follows r_thumb_opp (+ 0.35 of a positive whole-hand closure).
+  finger: Object.freeze({ mcp: [1.0, 1.0, -30, 90], pip: [1.16, 0, 0, 105], dip: [0.95, 0.3, -10, 85] }),
+  thumb: Object.freeze({ cmc: [0.35, 0.5, -15, 40], mcp: [0.56, 0.3, -10, 50], ip: [0.9, 1.0, -20, 80] }),
+  // R558: finger spread (r_finger_spread, 0..20 deg) abducts each finger's MCP away from the middle finger by this
+  // share (index 20, ring 15, little 25 at full spread; middle is the reference). Commonly quoted MCP abduction is
+  // about 20-30 degrees; the shares follow the usual wider spread of the border digits.
+  spread: Object.freeze({ index: 1.0, middle: 0, ring: 0.75, little: 1.25 }),
   patellaPerKneeFlex: 0.7,
   jawGlideMmPerDeg: 0.25
 });
@@ -125,8 +198,8 @@ export const BODY_SEGMENTS = Object.freeze([
   'r_index_pp', 'r_index_mp', 'r_index_dp', 'r_middle_pp', 'r_middle_mp', 'r_middle_dp',
   'r_ring_pp', 'r_ring_mp', 'r_ring_dp', 'r_little_pp', 'r_little_mp', 'r_little_dp',
   'l_girdle', 'l_upperarm',
-  'r_thigh', 'r_patella', 'r_shank', 'r_foot', 'r_toes',
-  'l_thigh', 'l_patella', 'l_shank', 'l_foot', 'l_toes'
+  'r_thigh', 'r_patella', 'r_shank', 'r_foot', 'r_toes', 'r_hallux',
+  'l_thigh', 'l_patella', 'l_shank', 'l_foot', 'l_toes', 'l_hallux'
 ]);
 
 const FINGERS = Object.freeze(['index', 'middle', 'ring', 'little']);
@@ -140,8 +213,8 @@ export const BODY_SEGMENT_PARENT = Object.freeze({
   r_thumb_mc: 'r_hand', r_thumb_pp: 'r_thumb_mc', r_thumb_dp: 'r_thumb_pp',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, 'r_hand'], [`r_${f}_mp`, `r_${f}_pp`], [`r_${f}_dp`, `r_${f}_mp`]])),
   l_girdle: 'thorax', l_upperarm: 'l_girdle',
-  r_thigh: 'pelvis', r_patella: 'r_thigh', r_shank: 'r_thigh', r_foot: 'r_shank', r_toes: 'r_foot',
-  l_thigh: 'pelvis', l_patella: 'l_thigh', l_shank: 'l_thigh', l_foot: 'l_shank', l_toes: 'l_foot'
+  r_thigh: 'pelvis', r_patella: 'r_thigh', r_shank: 'r_thigh', r_foot: 'r_shank', r_toes: 'r_foot', r_hallux: 'r_foot',
+  l_thigh: 'pelvis', l_patella: 'l_thigh', l_shank: 'l_thigh', l_foot: 'l_shank', l_toes: 'l_foot', l_hallux: 'l_foot'
 });
 
 /** Segments with no bone in bodyparts3d-fullbody-r1: the left shoulder girdle and humerus belong to the left-arm rig
@@ -156,8 +229,8 @@ export const BODY_SEGMENT_JOINT = Object.freeze({
   r_radius: 'r_radioulnar', r_hand: 'r_wrist', r_thumb_mc: 'r_thumb_cmc', r_thumb_pp: 'r_thumb_mcp', r_thumb_dp: 'r_thumb_ip',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, `r_${f}_mcp`], [`r_${f}_mp`, `r_${f}_pip`], [`r_${f}_dp`, `r_${f}_dip`]])),
   l_girdle: 'l_sternoclavicular_mirror', l_upperarm: 'l_glenohumeral_mirror',
-  r_thigh: 'r_hip', r_patella: 'r_patellofemoral', r_shank: 'r_knee', r_foot: 'r_ankle', r_toes: 'r_mtp',
-  l_thigh: 'l_hip', l_patella: 'l_patellofemoral', l_shank: 'l_knee', l_foot: 'l_ankle', l_toes: 'l_mtp'
+  r_thigh: 'r_hip', r_patella: 'r_patellofemoral', r_shank: 'r_knee', r_foot: 'r_ankle', r_toes: 'r_mtp', r_hallux: 'r_hallux_mtp',
+  l_thigh: 'l_hip', l_patella: 'l_patellofemoral', l_shank: 'l_knee', l_foot: 'l_ankle', l_toes: 'l_mtp', l_hallux: 'l_hallux_mtp'
 });
 
 const SEG_INDEX = new Map(BODY_SEGMENTS.map((s, i) => [s, i]));
@@ -565,9 +638,15 @@ function treePath(a, b) {
   return [...ca.slice(0, ca.indexOf(lca) + 1), ...cb.slice(0, cb.indexOf(lca)).reverse()];
 }
 
+// R558 (Message 14): the big toe is its own segment (r_hallux / l_hallux), so it curls and lifts on its own. Its two
+// phalanges carry rig_hint r_toes / l_toes in the manifest; they are moved here by name. The big toe's long muscles
+// (flexor / extensor hallucis longus) end on it, so their distal attachment follows it (muscleCandidates).
+const HALLUX_BONE = /^(proximal|distal) phalanx of (right|left) big toe$/;
 function boneSegmentFor(entry) {
   const n = entry.name;
   if (n === 'right radius') return 'r_radius';
+  const hx = HALLUX_BONE.exec(n);
+  if (hx && (entry.hint === 'r_toes' || entry.hint === 'l_toes')) return `${hx[2] === 'right' ? 'r' : 'l'}_hallux`;
   if (n === 'left clavicle' || n === 'left scapula') return 'l_girdle';
   const h = typeof entry.hint === 'string' ? entry.hint : null;
   if (h && SEG_INDEX.has(h)) return h;
@@ -580,6 +659,7 @@ function muscleCandidates(entry) {
   if (!p || !d) return null;
   const radiusInsert = RADIUS_DISTAL.some(k => entry.name.includes(k));
   if (radiusInsert && d === 'r_forearm') d = 'r_radius';
+  if (/hallucis/.test(entry.name) && (d === 'r_toes' || d === 'l_toes')) d = `${d[0]}_hallux`;
   let segs;
   if (d === 'r_digits') segs = [...treePath(p, 'r_hand'), ...FINGER_FAN];
   else if (p === 'r_digits') segs = [...treePath('r_hand', d), ...FINGER_FAN];
@@ -746,14 +826,23 @@ function estimateJoints(bone, boneMesh, warn) {
       const mt = bone(`${side} ${ord} metatarsal bone`), pp = bone(`proximal phalanx of ${side} ${toe}`);
       if (mt && pp) { const h = headJoint(mt, pp, { rRange: [3, 15] }); if (h) mtp.push({ ord, ...h }); }
     }
-    if (mtp.length >= 2) {
-      const pts = mtp.map(m => m.point);
+    // R558: the lesser toes (second to fifth) turn about the mean of their own four metatarsal-head centres; the big
+    // toe turns about its own (first) head. Both use the metatarsal break line (first to fifth head) as the axis.
+    const lesser = mtp.filter(m => m.ord !== 'first');
+    if (mtp.length >= 2 && lesser.length >= 1) {
+      const pts = lesser.map(m => m.point);
       const first = mtp.find(m => m.ord === 'first') || mtp[0], last = mtp.find(m => m.ord === 'fifth') || mtp[mtp.length - 1];
       put(`${s}_mtp`, {
         point: scl(pts.reduce(add, [0, 0, 0]), 1 / pts.length), axis: norm(sub(last.point, first.point)),
         rays: Object.fromEntries(mtp.map(m => [m.ord, { point: m.point, method: m.method }])),
-        method: 'mean of the metatarsal-head joint centres; axis from the first to the fifth (metatarsal break)',
+        method: 'mean of the second to fifth metatarsal-head joint centres (the lesser toes); axis from the first to the fifth (metatarsal break)',
         bones: TOES.map(([o]) => `${side} ${o} metatarsal bone`)
+      });
+      const hx = mtp.find(m => m.ord === 'first');
+      if (hx) put(`${s}_hallux_mtp`, {
+        point: hx.point, axis: norm(sub(last.point, first.point)),
+        method: 'first metatarsal-head joint centre (big toe); axis along the metatarsal break (first to fifth head)',
+        bones: [`${side} first metatarsal bone`, `proximal phalanx of ${side} big toe`]
       });
     }
   }
@@ -875,8 +964,10 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   const segC = s => segCentroid[s] || null;
   const dirTo = (jid, target, fallback) => (P(jid) && target ? norm(sub(target, P(jid))) : fallback);
   const setAxes = (jid, axes) => { if (J[jid]) J[jid].axes = Object.fromEntries(Object.entries(axes).map(([k, v]) => [k, norm(v)])); };
+  // R558: `side` is the front-to-back axis; a positive angle bends the part above toward the subject's LEFT (trunk_side,
+  // neck_side), as a positive `rot` turns the front toward the subject's left (trunk_rot, neck_rot).
   for (const jid of ['lumbosacral', 'thoracolumbar', 'cervicothoracic', 'atlanto_occipital']) {
-    setAxes(jid, { flex: orientAxis(LEFTX, UP, ANT), rot: orientAxis(UP, ANT, LEFTX) });
+    setAxes(jid, { flex: orientAxis(LEFTX, UP, ANT), rot: orientAxis(UP, ANT, LEFTX), side: orientAxis(POST, UP, LEFTX) });
   }
   if (J.tmj) {
     const cond = J.tmj.condyles, chin = J.tmj.chin || segC('mandible');
@@ -893,7 +984,9 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   setAxes('r_radioulnar', { pron: orientAxis(J.r_radioulnar && J.r_radioulnar.axis ? J.r_radioulnar.axis : UP, ANT, LEFTX) });
   const mc3 = byName.get('right third metacarpal bone');
   const handTarget = (mc3 && bone('right third metacarpal bone') && centroidOf(bone('right third metacarpal bone'))) || (mc3 && mc3.centroid) || segC('r_hand');
-  setAxes('r_wrist', { flex: orientAxis(null, dirTo('r_wrist', handTarget, DOWN), ANT) });
+  // R558: `dev` turns the hand toward the thumb side (radial deviation, positive) about the palm's normal through the
+  // capitate head; in the source pose (palm forward) the right thumb side is the subject's right (RIGHTX).
+  setAxes('r_wrist', { flex: orientAxis(null, dirTo('r_wrist', handTarget, DOWN), ANT), dev: orientAxis(null, dirTo('r_wrist', handTarget, DOWN), RIGHTX) });
   const boneC = name => { const p = bone(name); if (p) return centroidOf(p); const e = byName.get(name); return e ? e.centroid : null; };
   const THUMB_PALM = norm(add(LEFTX, ANT)); // toward the palm and the ulnar side of the right hand
   setAxes('r_thumb_cmc', { flex: orientAxis(null, dirTo('r_thumb_cmc', boneC('right first metacarpal bone'), DOWN), THUMB_PALM) });
@@ -902,6 +995,9 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   for (const f of FINGERS) {
     const kids = { mcp: `proximal phalanx of right ${f} finger`, pip: `middle phalanx of right ${f} finger`, dip: `distal phalanx of right ${f} finger` };
     for (const [k, n] of Object.entries(kids)) setAxes(`r_${f}_${k}`, { flex: orientAxis(null, dirTo(`r_${f}_${k}`, boneC(n), DOWN), ANT) });
+    // R558: MCP abduction (finger spread) about the palm's normal, positive away from the middle finger: the index toward
+    // the thumb side (RIGHTX in the source pose), the ring and little fingers toward the ulnar side (LEFTX).
+    if (J[`r_${f}_mcp`]) J[`r_${f}_mcp`].axes.abd = norm(orientAxis(null, dirTo(`r_${f}_mcp`, boneC(kids.mcp), DOWN), f === 'index' ? RIGHTX : LEFTX));
   }
   const hipAxis = P('l_hip') && P('r_hip') ? sub(P('l_hip'), P('r_hip')) : LEFTX;
   for (const s of ['r', 'l']) {
@@ -909,13 +1005,26 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     // R558 (genuine note R27): `rot` is the thigh's own long axis, from the hip centre to the knee centre (pointing
     // down the limb). Turning about it is hip internal / external rotation, a different joint and axis from the
     // forearm's radius-on-ulna turn; the shank and foot follow because they hang from the thigh.
-    setAxes(`${s}_hip`, { flex: orientAxis(hipAxis, dirTo(`${s}_hip`, kneeP, DOWN), ANT), rot: dirTo(`${s}_hip`, kneeP, DOWN) });
+    // R558 (start posture with the limbs straight forward): `abd` is the front-to-back axis through the hip centre, at
+    // right angles to the thigh; a positive angle swings that leg out to its own side (hip abduction). The hip turns
+    // first about it and then about `flex`, so with the legs flexed straight forward the abduction spreads them apart
+    // sideways (horizontal abduction), not a twist about the thigh.
+    setAxes(`${s}_hip`, {
+      flex: orientAxis(hipAxis, dirTo(`${s}_hip`, kneeP, DOWN), ANT), rot: dirTo(`${s}_hip`, kneeP, DOWN),
+      abd: orientAxis(null, dirTo(`${s}_hip`, kneeP, DOWN), s === 'r' ? RIGHTX : LEFTX)
+    });
     const ankleP = P(`${s}_ankle`) || segC(`${s}_foot`);
     setAxes(`${s}_knee`, { flex: orientAxis(J[`${s}_knee`] && J[`${s}_knee`].axis, dirTo(`${s}_knee`, ankleP, DOWN), POST) });
     if (J[`${s}_patellofemoral`]) J[`${s}_patellofemoral`].axes = J[`${s}_knee`] && J[`${s}_knee`].axes ? { flex: J[`${s}_knee`].axes.flex } : { flex: [1, 0, 0] };
     const mtpP = P(`${s}_mtp`) || segC(`${s}_toes`);
-    setAxes(`${s}_ankle`, { dorsi: orientAxis(J[`${s}_ankle`] && J[`${s}_ankle`].axis, dirTo(`${s}_ankle`, mtpP, ANT), UP) });
+    // R558: `inv` is the foot's long axis (ankle centre to the lesser metatarsal heads); a positive angle turns the sole
+    // toward the midline (inversion), a negative one away from it (eversion). One axis through the ankle centre stands
+    // in for the combined subtalar and midtarsal joints (their real axis runs obliquely up and forward through the
+    // talus): a display approximation, not a measured axis.
+    const footLong = dirTo(`${s}_ankle`, mtpP, ANT);
+    setAxes(`${s}_ankle`, { dorsi: orientAxis(J[`${s}_ankle`] && J[`${s}_ankle`].axis, footLong, UP), inv: orientAxis(footLong, DOWN, s === 'r' ? LEFTX : RIGHTX) });
     setAxes(`${s}_mtp`, { flex: orientAxis(J[`${s}_mtp`] && J[`${s}_mtp`].axis, dirTo(`${s}_mtp`, segC(`${s}_toes`), ANT), DOWN) });
+    setAxes(`${s}_hallux_mtp`, { flex: orientAxis(J[`${s}_hallux_mtp`] && J[`${s}_hallux_mtp`].axis, dirTo(`${s}_hallux_mtp`, segC(`${s}_hallux`), ANT), DOWN) });
   }
   // r_sternoclavicular has no axis of its own: the girdle turns about the humerus's effective elevation axis.
   for (const r of Object.values(J)) if (!r.axes) r.axes = {};
@@ -1042,8 +1151,13 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       'No facial-expression or masticatory muscle exists in BodyParts3D 4.0; brow_raise, eye_close, lip_purse and smile move nothing and are reported as display levels only.',
       'Muscle drives are simulated, unitless display values: not EMG, not force and not nerve activity.',
       // Round 5 (D20): only when an extra packet (for example the face muscles) is rigged, so the base rig is unchanged.
-      ...(list.some(e => e.extraPacket && e.kind === 'muscle')
-        ? [`Some muscles come from an extra packet (${[...new Set(list.filter(e => e.extraPacket).map(e => e.sourcePacket))].join(', ')}), placed on this body by one fitted transform: they ride the skull, and jaw muscles partly follow the jawbone; face expressions are shown as activity colours, not as moving skin.`]
+      ...(list.some(e => e.extraPacket && e.kind === 'muscle' && e.sourcePacket !== 'missing-muscles-r1')
+        ? [`Some muscles come from an extra packet (${[...new Set(list.filter(e => e.extraPacket && e.sourcePacket !== 'missing-muscles-r1').map(e => e.sourcePacket))].join(', ')}), placed on this body by one fitted transform: they ride the skull, and jaw muscles partly follow the jawbone; face expressions are shown as activity colours, not as moving skin.`]
+        : []),
+      // R558 (builder AN): the missing-muscles packet (BodyParts3D 4.0 files in this body's own frame, plus Z-Anatomy
+      // shapes placed by the face packet's fitted transform) is rigged like the base muscles, by the nearest bones.
+      ...(list.some(e => e.extraPacket && e.kind === 'muscle' && e.sourcePacket === 'missing-muscles-r1')
+        ? ['The back, belly, hip, thigh and shin muscles of the missing-muscles packet follow their nearest bones like the other body muscles; its Z-Anatomy shapes (latissimus dorsi, rectus abdominis, the internal oblique, transversus abdominis, quadratus lumborum, longus colli and three short foot muscles) were placed on this body by one fitted transform and lie a few millimetres from where this atlas would put them.']
         : [])
     ]
   };
@@ -1095,12 +1209,25 @@ export function clampBodyJointTargets(targets = {}) {
     if (c !== v) clamped.push({ id, requested: v, applied: c });
     applied[id] = c;
   }
+  // R558 (Message 2): the hip flexes less with a straight knee (HIP_KNEE_COUPLING); reported like any other clamp.
+  const HK = HIP_KNEE_COUPLING;
+  for (const S of ['L', 'R']) {
+    const kneeFlex = Math.max(0, -applied[`knee_ext_${S}`]);
+    const cap = HK.straightKneeMaxDeg + (HK.bentKneeMaxDeg - HK.straightKneeMaxDeg) * Math.min(1, kneeFlex / HK.fullAtKneeFlexDeg);
+    const id = `hip_flex_${S}`;
+    if (applied[id] > cap) {
+      const prev = clamped.find(c => c.id === id);
+      if (prev) prev.applied = cap; else clamped.push({ id, requested: applied[id], applied: cap });
+      applied[id] = cap;
+    }
+  }
   for (const k of Object.keys(src)) if (!BODY_JOINT_LIMITS[k]) ignored.push(k);
   return { applied, clamped, ignored, nonFinite };
 }
 
-/** Facial display levels 0..1 (target / 20, clamped). They move no mesh: BodyParts3D 4.0 has no facial-expression
- * muscle, so the scene should show them only as labelled, simulated display values. */
+/** Facial display levels -1..1 (target / 20, clamped; R558: negative = the opposite face movement, e.g. a frown for
+ * brow_raise). They move no mesh: the face-muscle packet only colours its muscles, so the scene should show them only
+ * as labelled, simulated display values. */
 export function faceDisplayLevels(targets = {}) {
   const { applied } = clampBodyJointTargets(targets);
   return Object.fromEntries(FACE_DISPLAY_IDS.map(id => [id, applied[id] / FACE_FULL_DEG]));
@@ -1127,16 +1254,43 @@ function localMatrices(rig, A, limbTurn = null) {
   const J = rig.pivots, out = {};
   const rot = (jid, axis, deg) => (J[jid] && J[jid].axes[axis] && deg ? m4RotAbout(J[jid].axes[axis], deg, J[jid].point) : m4I());
   const sh = BODY_JOINT_SHARES;
-  out.lumbar = rot('lumbosacral', 'flex', sh.trunk_flex.lumbosacral * A.trunk_flex);
-  out.thorax = rot('thoracolumbar', 'flex', sh.trunk_flex.thoracolumbar * A.trunk_flex);
-  out.cervical = m4Mul(rot('cervicothoracic', 'flex', sh.neck_flex.cervicothoracic * A.neck_flex), rot('cervicothoracic', 'rot', sh.neck_rot.cervicothoracic * A.neck_rot));
-  out.skull = m4Mul(rot('atlanto_occipital', 'flex', sh.neck_flex.atlanto_occipital * A.neck_flex), rot('atlanto_occipital', 'rot', sh.neck_rot.atlanto_occipital * A.neck_rot));
-  out.mandible = J.tmj && J.tmj.glideDir ? m4Mul(m4Trans(scl(J.tmj.glideDir, sh.jawGlideMmPerDeg * A.jaw_open)), rot('tmj', 'open', A.jaw_open)) : rot('tmj', 'open', A.jaw_open);
-  out.hyoid = m4I();
+  // R558: each spinal stage turns flexion, then side bend, then rotation (each about its own axis through the stage's
+  // pivot, in the rest frame); with only flexion set every matrix is exactly the round-2 one.
+  const spine = (jid, f, sd, r) => m4Mul(m4Mul(rot(jid, 'flex', f), rot(jid, 'side', sd)), rot(jid, 'rot', r));
+  out.lumbar = spine('lumbosacral', sh.trunk_flex.lumbosacral * A.trunk_flex, sh.trunk_side.lumbosacral * A.trunk_side, sh.trunk_rot.lumbosacral * A.trunk_rot);
+  out.thorax = spine('thoracolumbar', sh.trunk_flex.thoracolumbar * A.trunk_flex, sh.trunk_side.thoracolumbar * A.trunk_side, sh.trunk_rot.thoracolumbar * A.trunk_rot);
+  // R558 (user, Message 1: "The cursor now will control head/neck movement"; the eye camera rides on the head). The head
+  // as a whole turns about the trunk's vertical (neck_rot) and then nods about its own turned side-to-side axis
+  // (neck_flex), exactly the order of the camera's yaw and pitch, so the head points where the camera looks. Each joint
+  // keeps its share of both angles: the lower neck (cervicothoracic) turns first and then bends; the skull joint takes
+  // the rest of the turn about that same trunk vertical (expressed in the bent lower neck) and then its share of the
+  // nod. With only one of the two angles non-zero every matrix is exactly what it was before (the earlier order,
+  // bend then turn at each joint, aimed the face up to 25 degrees away from the look when both were large). Display
+  // kinematics of a rigid educational rig, not measured cervical coupling.
+  // R558 (activation points): the neck's side bend (neck_side) is applied first, about the rest frame's front-to-back
+  // axis at each joint, so with only the side bend set each joint tilts exactly as it did without the head look.
+  out.cervical = m4Mul(m4Mul(rot('cervicothoracic', 'rot', sh.neck_rot.cervicothoracic * A.neck_rot), rot('cervicothoracic', 'flex', sh.neck_flex.cervicothoracic * A.neck_flex)), rot('cervicothoracic', 'side', sh.neck_side.cervicothoracic * A.neck_side));
+  {
+    const ao = J.atlanto_occipital, ct = J.cervicothoracic, turn = sh.neck_rot.atlanto_occipital * A.neck_rot;
+    let skullTurn = rot('atlanto_occipital', 'rot', turn);
+    if (turn && ao && ao.axes.rot && ct && ct.axes.flex && A.neck_flex) {
+      const back = m4RotAbout(ct.axes.flex, -sh.neck_flex.cervicothoracic * A.neck_flex, [0, 0, 0]);
+      skullTurn = m4RotAbout(norm(m4Dir(back, ao.axes.rot)), turn, ao.point);
+    }
+    out.skull = m4Mul(m4Mul(skullTurn, rot('atlanto_occipital', 'flex', sh.neck_flex.atlanto_occipital * A.neck_flex)), rot('atlanto_occipital', 'side', sh.neck_side.atlanto_occipital * A.neck_side));
+  }
+  const jawOpen = J.tmj && J.tmj.glideDir ? m4Mul(m4Trans(scl(J.tmj.glideDir, sh.jawGlideMmPerDeg * A.jaw_open)), rot('tmj', 'open', A.jaw_open)) : rot('tmj', 'open', A.jaw_open);
+  // R558: jaw side shift (jaw_side, mm; positive = chin toward the subject's LEFT) as a sideways glide of the mandible.
+  out.mandible = A.jaw_side ? m4Mul(m4Trans(scl(LEFTX, A.jaw_side)), jawOpen) : jawOpen;
+  // R558: the swallow lifts the hyoid bone (display amplitude hyoid_elev 0..20 -> 0..HYOID_LIFT.mm up and forward).
+  out.hyoid = A.hyoid_elev ? m4Trans(scl(norm(HYOID_LIFT.dir), (HYOID_LIFT.mm * A.hyoid_elev) / FACE_FULL_DEG)) : m4I();
 
   // Right shoulder with the mild scapulohumeral rhythm.
   const gh = J.r_glenohumeral;
   if (gh && gh.axes.flex && gh.axes.abd) {
+    // R558 (start posture with the arms straight forward): the arm is first lifted sideways (abd) and then swung about
+    // the side-to-side axis (flex). With the arm straight forward (flexion 90) abduction therefore swings it out to the
+    // side in the horizontal plane (horizontal abduction), not a twist about its own length.
     const total = m4Mul(m4RotAbout(gh.axes.flex, A.r_shoulder_flex, [0, 0, 0]), m4RotAbout(gh.axes.abd, A.r_shoulder_abd, [0, 0, 0]));
     const { axis, angle } = axisAngleOf(total);
     const d0 = norm(gh.restHumerusDir || DOWN);
@@ -1144,34 +1298,52 @@ function localMatrices(rig, A, limbTurn = null) {
     const g = elev > SCAPULOHUMERAL.thresholdDeg && angle > 1e-9 ? SCAPULOHUMERAL.ratio * (elev - SCAPULOHUMERAL.thresholdDeg) * (angle / elev) : 0;
     out.r_girdle = J.r_sternoclavicular && g ? m4RotAbout(axis, g, J.r_sternoclavicular.point) : m4I();
     out.r_upperarm = angle > 1e-9 ? m4RotAbout(axis, angle - (J.r_sternoclavicular ? g : 0), gh.point) : m4I();
+    // R558 (Space dance, Message 2): internal / external rotation about the humerus' own long axis (the shoulder centre to
+    // the elbow centre in the rest frame), turned first, so the swing above carries it and the arm keeps its direction.
+    // About that downward axis a positive angle turns the front of the arm toward the subject's right: outward
+    // (external rotation) for this right arm. Its elevation, and so the shoulder-blade share above, do not change.
+    if (A.r_shoulder_rot) out.r_upperarm = m4Mul(out.r_upperarm, m4RotAbout(norm(gh.restHumerusDir || DOWN), A.r_shoulder_rot, gh.point));
   } else {
     out.r_girdle = m4I();
     out.r_upperarm = m4I();
   }
   out.r_forearm = rot('r_elbow', 'flex', A.r_elbow_flex);
   out.r_radius = rot('r_radioulnar', 'pron', A.r_pronation);
-  out.r_hand = rot('r_wrist', 'flex', A.r_wrist_flex - A.r_wrist_ext);
-  const net = A.r_grasp - A.r_open;
-  const share = ([f, e, lo, hi]) => clamp(net >= 0 ? f * net : e * net, lo, hi);
+  // R558: radial / ulnar deviation first (rest frame), then flexion / extension, both about the capitate head.
+  out.r_hand = m4Mul(rot('r_wrist', 'flex', A.r_wrist_flex - A.r_wrist_ext), rot('r_wrist', 'dev', A.r_wrist_dev));
+  // R558 (Messages 14 / 15): every digit has its own net angle: the whole-hand ids (r_grasp - r_open) plus the digit's
+  // own id, so the right hand bends each finger and the thumb on its own, like the left game hand.
+  const whole = A.r_grasp - A.r_open;
+  const share = (net, [f, e, lo, hi]) => clamp(net >= 0 ? f * net : e * net, lo, hi);
   const T = sh.thumb, F = sh.finger;
-  out.r_thumb_mc = rot('r_thumb_cmc', 'flex', share(T.cmc));
-  out.r_thumb_pp = rot('r_thumb_mcp', 'flex', share(T.mcp));
-  out.r_thumb_dp = rot('r_thumb_ip', 'flex', share(T.ip));
+  const thumbNet = whole + A.r_thumb_flex;
+  out.r_thumb_mc = rot('r_thumb_cmc', 'flex', clamp(share(whole, T.cmc) + A.r_thumb_opp, T.cmc[2], T.cmc[3]));
+  out.r_thumb_pp = rot('r_thumb_mcp', 'flex', share(thumbNet, T.mcp));
+  out.r_thumb_dp = rot('r_thumb_ip', 'flex', share(thumbNet, T.ip));
   for (const f of FINGERS) {
-    out[`r_${f}_pp`] = rot(`r_${f}_mcp`, 'flex', share(F.mcp));
-    out[`r_${f}_mp`] = rot(`r_${f}_pip`, 'flex', share(F.pip));
-    out[`r_${f}_dp`] = rot(`r_${f}_dip`, 'flex', share(F.dip));
+    const net = whole + A[`r_${f}_flex`];
+    const spread = sh.spread[f] * A.r_finger_spread;
+    out[`r_${f}_pp`] = spread ? m4Mul(rot(`r_${f}_mcp`, 'flex', share(net, F.mcp)), rot(`r_${f}_mcp`, 'abd', spread)) : rot(`r_${f}_mcp`, 'flex', share(net, F.mcp));
+    out[`r_${f}_mp`] = rot(`r_${f}_pip`, 'flex', share(net, F.pip));
+    out[`r_${f}_dp`] = rot(`r_${f}_dip`, 'flex', share(net, F.dip));
   }
   out.l_girdle = m4I();
   out.l_upperarm = m4I();
   for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
     const kneeFlex = -A[`knee_ext_${S}`];
-    // R558: hip rotation about the thigh's long axis first (in the rest frame), then hip flexion.
-    out[`${s}_thigh`] = limbTurn && limbTurn[S] ? m4Mul(rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]), rot(`${s}_hip`, 'rot', limbTurn[S])) : rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
+    // R558: hip rotation about the thigh's long axis first (in the rest frame), then hip abduction, then hip flexion.
+    const hipSwing = A[`hip_abd_${S}`] ? m4Mul(rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]), rot(`${s}_hip`, 'abd', A[`hip_abd_${S}`])) : rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
+    // R558 (Space dance): hip_rot_L / hip_rot_R are anatomical (positive = external, the toes turn outward). About the
+    // thigh's downward long axis a positive angle turns the toes toward the subject's right, so the left side is negated.
+    // The older limbTurn option (same axis, signed toward the subject's right) adds to it.
+    const hipTurn = (S === 'R' ? 1 : -1) * A[`hip_rot_${S}`] + (limbTurn && limbTurn[S] ? limbTurn[S] : 0);
+    out[`${s}_thigh`] = hipTurn ? m4Mul(hipSwing, rot(`${s}_hip`, 'rot', hipTurn)) : hipSwing;
     out[`${s}_patella`] = rot(`${s}_patellofemoral`, 'flex', sh.patellaPerKneeFlex * kneeFlex);
     out[`${s}_shank`] = rot(`${s}_knee`, 'flex', kneeFlex);
-    out[`${s}_foot`] = rot(`${s}_ankle`, 'dorsi', A[`ankle_dorsi_${S}`]);
+    // R558: inversion / eversion first (rest frame), then dorsi / plantarflexion about the talocrural axis.
+    out[`${s}_foot`] = m4Mul(rot(`${s}_ankle`, 'dorsi', A[`ankle_dorsi_${S}`]), rot(`${s}_ankle`, 'inv', A[`ankle_inv_${S}`]));
     out[`${s}_toes`] = rot(`${s}_mtp`, 'flex', A[`toe_flex_${S}`]);
+    out[`${s}_hallux`] = rot(`${s}_hallux_mtp`, 'flex', A[`hallux_flex_${S}`]);
   }
   out.pelvis = m4I();
   return out;
@@ -1345,20 +1517,81 @@ function applyArmFollow(rig, local, af) {
   if (af.leftGirdleShiftMm) local.l_girdle = m4Mul(m4Trans(af.leftGirdleShiftMm), local.l_girdle);
 }
 
+/**
+ * R558 (user, Messages 1 and 2: the cursor turns the head and neck; "using anatomically feasible movements, with
+ * anatomically feasible range of motion, you should still be able to see all body parts whilst looking around"). When
+ * a look goes past the neck's turning range the chest turns too: options.lookTwistDeg turns the thorax (and everything
+ * it carries: neck, head, both shoulder girdles and the right arm) about the trunk's own long axis through the
+ * thoracolumbar joint; + = toward the subject's left. The lumbar spine, pelvis and legs stay put, so the body keeps
+ * sitting square on the ground. LOOK_TWIST_LIMIT_DEG (40) is a rounded, game-safe value inside commonly quoted active
+ * thoracolumbar rotation (about 30 to 45 degrees each way); not measured on this body. Display kinematics: the whole
+ * twist is taken at one joint of this rigid rig.
+ */
+export const LOOK_TWIST_LIMIT_DEG = 40;
+/**
+ * R558 (same notes): the trunk bend that goes with the head (options.lookBendDeg, + = the head goes down) is a bend
+ * TOWARD where the head is turned (about the side-to-side axis turned by options.lookBendDirDeg about the vertical):
+ * straight ahead a forward bend, to the side a sideways bend, between them both, shared like trunk_flex between the
+ * lumbosacral and thoracolumbar joints. Bending toward the look keeps the head upright under the level eye camera;
+ * a purely forward bend under a turned head leaned the head over sideways by up to 140 degrees in the worst corner.
+ * Range: the bend's forward / back part stays within trunk_flex (60 forward, 25 back) and its sideways part within
+ * LOOK_BEND_SIDE_LIMIT_DEG (30, a rounded value inside commonly quoted active trunk side bending, about 25 to 35
+ * degrees), as an ellipse between them (refused beyond). Display kinematics, not measured.
+ */
+export const LOOK_BEND_SIDE_LIMIT_DEG = 30;
+/** The largest bend (degrees, >= 0) toward / away from a direction under the ellipse above: sign +1 = the head goes
+ * down toward dirDeg, -1 = the trunk leans away from it (pure). */
+export function lookBendLimit(dirDeg, sign = 1, limits = BODY_JOINT_LIMITS.trunk_flex, sideDeg = LOOK_BEND_SIDE_LIMIT_DEG) {
+  const c = Math.cos(dirDeg * DEG) * (sign < 0 ? -1 : 1), s = Math.sin(dirDeg * DEG);
+  const A = c >= 0 ? limits[1] : -limits[0];
+  return 1 / Math.sqrt((c / A) ** 2 + (s / sideDeg) ** 2);
+}
+function checkLookBend(deg, dir) {
+  const d = deg === undefined || deg === null ? 0 : deg, a = dir === undefined || dir === null ? 0 : dir;
+  if (typeof a !== 'number' || !Number.isFinite(a)) throw new Error('ns:body_pose: options.lookBendDirDeg must be finite degrees');
+  if (typeof d !== 'number' || !Number.isFinite(d) || Math.abs(d) > lookBendLimit(a, Math.sign(d) || 1) + 1e-9) throw new Error('ns:body_pose: options.lookBendDeg must be finite and inside the trunk bend range for its direction');
+  return { deg: d, dirDeg: a };
+}
+function checkLookTwist(v) {
+  if (v === undefined || v === null || v === 0) return 0;
+  if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > LOOK_TWIST_LIMIT_DEG + 1e-9) throw new Error(`ns:body_pose: options.lookTwistDeg must be finite and within ${LOOK_TWIST_LIMIT_DEG} deg`);
+  return v;
+}
+function applyLook(rig, local, twistDeg, bend) {
+  const J = rig.pivots, sh = BODY_JOINT_SHARES.trunk_flex;
+  if (bend.deg) {
+    for (const [seg, jid] of [['lumbar', 'lumbosacral'], ['thorax', 'thoracolumbar']]) {
+      const j = J[jid];
+      if (!j || !j.axes || !j.axes.flex) continue;
+      const axis = norm(m4Dir(m4RotAbout(SOURCE_UP, bend.dirDeg, [0, 0, 0]), j.axes.flex));
+      local[seg] = m4Mul(local[seg], m4RotAbout(axis, sh[jid] * bend.deg, j.point));
+    }
+  }
+  const A = J.thoracolumbar && J.thoracolumbar.point;
+  if (twistDeg && A) local.thorax = m4Mul(local.thorax, m4RotAbout(SOURCE_UP, twistDeg, A));
+}
+
 /** World (rest -> posed, Float64) matrix of every segment for clamped targets, anchor and external matrices. */
 function worldSegments(rig, applied, options) {
   const local = localMatrices(rig, applied, checkLimbTurn(options.limbTurn));
+  // R558 (latch): options.holdChest keeps the chest where it is while the trunk bends, so the head (the eye camera)
+  // and both arm roots stay put and the bend is taken up below the chest: the pelvis and the legs swing instead.
+  const hold = options.holdChest === true && (applied.trunk_flex || applied.trunk_side || applied.trunk_rot) ? m4RigidInv(m4Mul(local.lumbar, local.thorax)) : null;
+  applyLook(rig, local, checkLookTwist(options.lookTwistDeg), checkLookBend(options.lookBendDeg, options.lookBendDirDeg));
   const af = checkArmFollow(options.armFollow);
   if (af) applyArmFollow(rig, local, af);
   const anchor = options.anchor === undefined ? 'pelvis' : options.anchor;
   if (!SEG_INDEX.has(anchor)) throw new Error(`ns:body_pose: unknown anchor segment ${JSON.stringify(anchor)}`);
   const ext = options.external || {};
   const world = {};
+  const fixed = hold ? new Set() : null; // externally placed segments (and what hangs from them) are already in place
   for (const s of BODY_SEGMENTS) {
-    if (VIRTUAL_SEGMENTS.includes(s) && ext[s]) { world[s] = checkExternal(ext[s], s); continue; }
+    if (VIRTUAL_SEGMENTS.includes(s) && ext[s]) { world[s] = checkExternal(ext[s], s); if (fixed) fixed.add(s); continue; }
     const p = BODY_SEGMENT_PARENT[s];
     world[s] = p ? m4Mul(world[p], local[s]) : local[s];
+    if (fixed && p && fixed.has(p)) fixed.add(s);
   }
+  if (hold) for (const s of BODY_SEGMENTS) if (!fixed.has(s)) world[s] = m4Mul(hold, world[s]);
   if (anchor !== 'pelvis') {
     const inv = m4RigidInv(world[anchor]);
     for (const s of BODY_SEGMENTS) world[s] = m4Mul(inv, world[s]);
@@ -1373,6 +1606,13 @@ function worldSegments(rig, applied, options) {
  *   the head, and an eye camera attached to it, stays still while the rest of the body moves relative to it).
  * @param options.external { l_girdle?, l_upperarm? }: shared-frame rest->posed matrices from the left-arm rig, used as
  *   those virtual segments' world matrices (so the left pectoralis/trapezius/serratus follow the left arm).
+ * @param options.holdChest true: the chest stays where it is while the trunk bends (trunk_flex), so the head, an eye
+ *   camera on it and both arm roots keep their place and the pelvis and legs swing instead. With trunk_flex 0 every
+ *   matrix is exactly as without the option. Default false (the body bends from its pelvis).
+ * @param options.lookTwistDeg R558: the thorax's turn about the trunk's long axis that a wide look adds once the neck
+ *   is at the end of its turn (LOOK_TWIST_LIMIT_DEG; + = toward the subject's left). 0 / absent = no turn.
+ * @param options.lookBendDeg / options.lookBendDirDeg R558: the trunk bend a steep look adds once the neck is at the
+ *   end of its bend, toward the direction the head is turned (see checkLookBend). 0 / absent = no bend.
  * @param options.armFollow R5-pronation: { trunkTwistDeg, trunkAxisBp?, leftGirdleShiftMm? } (ARM_FOLLOW_LIMITS): the
  *   slight trunk turn and left shoulder-blade slide that follow the left forearm turn (see checkArmFollow's note).
  *   Absent / null = no follow (every matrix exactly as without the option).
@@ -1382,10 +1622,10 @@ function worldSegments(rig, applied, options) {
  *   (baked.meshesById, the body already in its rest posture) to the posed geometry, so they are the identity whenever
  *   the targets equal the baked posture's angles. Pass absolute targets (bodyPostureTargets), not offsets.
  *   `segments` maps the source-pose geometry to the drawn pose (including the baked posture's keep correction).
- * @param options.layers a bodyWorldsLayers(rig, baked) result (round 5, D15): each superficial muscle's matrix becomes
- *   M . D (detached outward and slightly peeled; the offset rides on the pose). Bones, deep muscles and unknown meshes
- *   are byte-identical to the call without layers. options.layerAmount 0..1 (default layers.amount; 0 = no change).
- *   The detailed result then also has layers: { amount, peel, detached (count) }.
+ * @param options.layers a bodyWorldsLayers(rig, baked) result. Since R558 the Body Worlds stack is a per-vertex lift
+ *   of the drawn GEOMETRY (bodyStackLiftedPositions), not a matrix: every mesh matrix is the same with and without
+ *   layers, and the lifted geometry rides on it. options.layerAmount 0..1 (default layers.amount) is validated and
+ *   reported only. The detailed result then also has layers: { amount, applied: 'geometry', lifted (count) }.
  * @returns { matrices: Map(meshId -> Float32Array(16)), segments: Map(segmentId -> Float32Array(16)), applied,
  *   clamped, ignored, nonFinite, face, anchor, relativeTo: 'source' | 'baked' }
  */
@@ -1396,12 +1636,11 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
   const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
   // A baked posture's constant keep correction applies to every pose, so the deltas are relative to the drawn geometry.
   if (baked) for (const s of BODY_SEGMENTS) world[s] = m4Mul(baked._internal.keepM, world[s]);
-  // Round 5 (D15): Body Worlds layers, D on the right of each superficial muscle's matrix; everything else unchanged.
+  // Body Worlds layers (R558): the lift is in the drawn geometry, so no matrix changes here. The options are still
+  // checked (wrong rig, wrong baked posture or an amount outside 0..1 fail closed) and reported.
   const layers = options.layers === undefined || options.layers === null || options.layers === false ? null : checkLayers(rig, baked, options.layers);
   const layerAmount = layers ? (options.layerAmount === undefined || options.layerAmount === null ? layers.amount : options.layerAmount) : 0;
   if (layers && !(Number.isFinite(layerAmount) && layerAmount >= 0 && layerAmount <= 1)) throw new Error('ns:body_pose: options.layerAmount must be in 0..1');
-  const recs = layers && layerAmount > 0 ? layerMatsFor(layers, layerAmount) : null;
-  let detached = 0;
   const matrices = new Map();
   const fits = rig._fit || {};
   const mode = options.muscleMode === 'blend' ? 'blend' : 'fit';
@@ -1412,18 +1651,179 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
     else if (info.kind === 'bone' || info.blend.length === 1) m = world[info.segment];
     else if (mode === 'fit' && fits[id]) m = fittedMatrix(fits[id], mats);
     else m = blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
-    if (recs) { const D = recs.get(id); if (D) { m = m4Mul(m, D); detached++; } }
     matrices.set(id, Float32Array.from(m));
   }
   const segments = new Map(BODY_SEGMENTS.map(s => [s, Float32Array.from(world[s])]));
   const result = { matrices, segments, applied: t.applied, clamped: t.clamped, ignored: t.ignored, nonFinite: t.nonFinite, face: faceDisplayLevels(t.applied), anchor, relativeTo: baked ? 'baked' : 'source' };
-  if (layers) result.layers = { amount: layerAmount, peel: layers.peel, detached };
+  if (layers) result.layers = { amount: layerAmount, applied: 'geometry', lifted: layers.displaySelected.length };
   return result;
+}
+
+/**
+ * R558 (user Messages 2 and 12): the drawn matrix (source rest mm -> drawn mm, column-major Float64Array) of every
+ * segment for these joint targets, WITHOUT the per-mesh work of poseBodyDetailed: the same clamping, anchor, baked keep
+ * correction, limbTurn, holdChest, armFollow and external options, so a point carried by a segment lands exactly where
+ * poseBodyDetailed's `segments` would put it. For the held-limb joint solve and the stop-at-contact test (cheap enough
+ * to call several times a frame). Returns { segmentId: Float64Array(16) }.
+ */
+export function poseBodySegments(rig, jointTargetsDeg = {}, options = {}) {
+  checkRig(rig);
+  const t = clampBodyJointTargets(jointTargetsDeg);
+  const { world } = worldSegments(rig, t.applied, options);
+  const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
+  if (baked) for (const s of BODY_SEGMENTS) world[s] = m4Mul(baked._internal.keepM, world[s]);
+  return world;
 }
 
 /** Shared interface 3: Map(meshId -> 4x4 column-major Float32Array) in the shared BodyParts3D frame (mm). */
 export function poseBody(rig, jointTargetsDeg = {}, options = {}) {
   return poseBodyDetailed(rig, jointTargetsDeg, options).matrices;
+}
+
+/**
+ * R558 (the eye camera rides on the head): the drawn (posed) frames of the trunk and head chain only, cheap enough for
+ * every look: { pelvis, lumbar, thorax, cervical, skull } (Float64Array(16), source mm -> drawn mm, the baked keep
+ * frame applied exactly as poseBodyDetailed does). The same targets and options give the same matrices as
+ * poseBodyDetailed's `segments` for these segments, up to their Float32 storage (measured: under 1e-4 mm), when the
+ * pose has no palm-turn armFollow (options used: anchor 'pelvis', holdChest, lookTwistDeg, lookBendDeg,
+ * lookBendDirDeg, baked; the
+ * palm turn's armFollow is left out on purpose: it moves the head by under 2 mm and is only known after the arm fit).
+ * The app takes the eye from `skull` and the left shoulder root and trunk axes from `thorax`.
+ */
+export function bodyHeadFrame(rig, jointTargetsDeg = {}, options = {}) {
+  checkRig(rig);
+  const t = clampBodyJointTargets(jointTargetsDeg);
+  const { world } = worldSegments(rig, t.applied, { holdChest: options.holdChest === true, lookTwistDeg: options.lookTwistDeg, lookBendDeg: options.lookBendDeg, lookBendDirDeg: options.lookBendDirDeg });
+  const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
+  const out = { applied: t.applied };
+  for (const s of ['pelvis', 'lumbar', 'thorax', 'cervical', 'skull']) out[s] = Float64Array.from(baked ? m4Mul(baked._internal.keepM, world[s]) : world[s]);
+  return out;
+}
+
+/**
+ * R558 (Space dance; Messages 2 and 11): how far the two hips may turn before the feet touch, in the current leg
+ * posture. The legs lie straight forward side by side (parallel, not spread), so turning both sets of toes inward
+ * (internal rotation) brings the feet together; with bent knees turning them outward does. The game does not spread
+ * the legs to make room: it limits the hip turn instead. For each direction it finds the largest EQUAL turn of both hips
+ * (both inward, or both outward) at which the bone points of the two lower legs (shank, foot and toes: the rig's
+ * voxel-downsampled bone clouds) stay at least boneGapMm apart; that gap leaves room for the muscles, tendons and other
+ * drawn tissue over the bones (FEET_CLEARANCE; checked against the full posed meshes, see the build notes). A smaller
+ * turn of one hip, or a turn the other way, only takes its foot further from the other one.
+ *   boneGapMm      bone-to-bone gap kept between the two lower legs (mm)
+ *   scanSteps      coarse steps over each direction's anatomical range, then bisectSteps halvings of the first failing step
+ * targets: the current joint angles (every joint as posed now; the two hip_rot values are ignored).
+ * Returns { hip_rot_L: [lo, hi], hip_rot_R: [lo, hi] (degrees, lo = most internal), internalDeg, externalDeg (the
+ * touch-free equal turns), gapMm (bone gap with both hips at 0 when it is below boneGapMm, else null), limitedBy: { internal, external } ('feet' | 'range') }.
+ * A posture whose feet are already closer than boneGapMm keeps them at least as far apart as they are.
+ */
+export const FEET_CLEARANCE = Object.freeze({ boneGapMm: 20, scanSteps: 12, bisectSteps: 6 });
+const legCloudCache = new WeakMap();
+function legClouds(rig) {
+  let c = legCloudCache.get(rig);
+  if (c) return c;
+  const clouds = rig._clouds || {};
+  c = {};
+  for (const side of ['l', 'r']) {
+    c[side] = ['shank', 'foot', 'toes'].map(seg => ({ seg: `${side}_${seg}`, pts: clouds[`${side}_${seg}`] || null })).filter(x => x.pts && x.pts.length >= 3);
+  }
+  legCloudCache.set(rig, c);
+  return c;
+}
+function posedLegPoints(parts, world) {
+  let n = 0;
+  for (const p of parts) n += p.pts.length;
+  const out = new Float64Array(n);
+  let k = 0;
+  for (const { seg, pts } of parts) {
+    const m = world[seg];
+    for (let i = 0; i < pts.length; i += 3) {
+      const x = pts[i], y = pts[i + 1], z = pts[i + 2];
+      out[k++] = m[0] * x + m[4] * y + m[8] * z + m[12];
+      out[k++] = m[1] * x + m[5] * y + m[9] * z + m[13];
+      out[k++] = m[2] * x + m[6] * y + m[10] * z + m[14];
+    }
+  }
+  return out;
+}
+function boxOf(a) {
+  const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < a.length; i += 3) for (let c = 0; c < 3; c++) { const v = a[i + c]; if (v < b[c]) b[c] = v; if (v > b[c + 3]) b[c + 3] = v; }
+  return b;
+}
+/** True when every point of a is at least d from every point of b: a box test first, then a uniform grid of cell d on
+ * b (integer-hashed cells; a hash collision only costs an extra exact distance test). */
+function pointSetsApart(a, b, d) {
+  const A = boxOf(a), B = boxOf(b);
+  let gap2 = 0;
+  for (let c = 0; c < 3; c++) { const g = Math.max(0, A[c] - B[c + 3], B[c] - A[c + 3]); gap2 += g * g; }
+  const d2 = d * d;
+  if (gap2 >= d2) return true;
+  const cell = d, hash = (i, j, k) => (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(k, 83492791)) | 0, grid = new Map();
+  for (let i = 0; i < b.length; i += 3) {
+    // only b points that can be near a's box matter
+    if (b[i] < A[0] - d || b[i] > A[3] + d || b[i + 1] < A[1] - d || b[i + 1] > A[4] + d || b[i + 2] < A[2] - d || b[i + 2] > A[5] + d) continue;
+    const kk = hash(Math.floor(b[i] / cell), Math.floor(b[i + 1] / cell), Math.floor(b[i + 2] / cell));
+    const list = grid.get(kk);
+    if (list) list.push(i); else grid.set(kk, [i]);
+  }
+  if (grid.size === 0) return true;
+  for (let i = 0; i < a.length; i += 3) {
+    if (a[i] < B[0] - d || a[i] > B[3] + d || a[i + 1] < B[1] - d || a[i + 1] > B[4] + d || a[i + 2] < B[2] - d || a[i + 2] > B[5] + d) continue;
+    const cx = Math.floor(a[i] / cell), cy = Math.floor(a[i + 1] / cell), cz = Math.floor(a[i + 2] / cell);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const list = grid.get(hash(cx + dx, cy + dy, cz + dz));
+      if (!list) continue;
+      for (const j of list) {
+        const ex = a[i] - b[j], ey = a[i + 1] - b[j + 1], ez = a[i + 2] - b[j + 2];
+        if (ex * ex + ey * ey + ez * ez < d2) return false;
+      }
+    }
+  }
+  return true;
+}
+function minPointDistance(a, b) {
+  let best = Infinity;
+  for (let i = 0; i < a.length; i += 3) for (let j = 0; j < b.length; j += 3) {
+    const ex = a[i] - b[j], ey = a[i + 1] - b[j + 1], ez = a[i + 2] - b[j + 2], q = ex * ex + ey * ey + ez * ez;
+    if (q < best) best = q;
+  }
+  return Math.sqrt(best);
+}
+export function hipRotationClearRange(rig, targets = {}, options = {}) {
+  checkRig(rig);
+  const o = { ...FEET_CLEARANCE, ...(options || {}) };
+  if (!(Number.isFinite(o.boneGapMm) && o.boneGapMm > 0)) throw new Error('ns:body_pose: boneGapMm must be a positive number of millimetres');
+  const LL = BODY_JOINT_LIMITS.hip_rot_L, LR = BODY_JOINT_LIMITS.hip_rot_R;
+  const lo0 = Math.max(LL[0], LR[0]), hi0 = Math.min(LL[1], LR[1]);
+  const clouds = legClouds(rig);
+  const full = { hip_rot_L: [LL[0], LL[1]], hip_rot_R: [LR[0], LR[1]], internalDeg: -lo0, externalDeg: hi0, gapMm: null, limitedBy: { internal: 'range', external: 'range' } };
+  if (!clouds.l.length || !clouds.r.length) return full;
+  const base = { ...(targets instanceof Map ? Object.fromEntries(targets) : targets || {}) };
+  const pointsAt = deg => {
+    const { world } = worldSegments(rig, clampBodyJointTargets({ ...base, hip_rot_L: deg, hip_rot_R: deg }).applied, {});
+    return [posedLegPoints(clouds.l, world), posedLegPoints(clouds.r, world)];
+  };
+  const [l0, r0] = pointsAt(0);
+  // The exact rest gap only matters when the feet are already closer than boneGapMm (then they may not come closer).
+  const gap0 = pointSetsApart(l0, r0, o.boneGapMm) ? null : minPointDistance(l0, r0);
+  const need = gap0 === null ? o.boneGapMm : Math.min(o.boneGapMm, gap0);
+  const clearAt = deg => { const [l, r] = pointsAt(deg); return pointSetsApart(l, r, need); };
+  const furthest = (sign, maxDeg) => {
+    let ok = 0;
+    for (let k = 1; k <= o.scanSteps; k++) {
+      const t = (maxDeg * k) / o.scanSteps;
+      if (clearAt(sign * t)) { ok = t; continue; }
+      let bad = t;
+      for (let i = 0; i < o.bisectSteps; i++) { const mid = 0.5 * (ok + bad); if (clearAt(sign * mid)) ok = mid; else bad = mid; }
+      return { deg: Math.floor(ok * 10) / 10, limited: true };
+    }
+    return { deg: maxDeg, limited: false };
+  };
+  const inn = furthest(-1, -lo0), ext = furthest(1, hi0);
+  return {
+    hip_rot_L: [-inn.deg, ext.deg], hip_rot_R: [-inn.deg, ext.deg], internalDeg: inn.deg, externalDeg: ext.deg,
+    gapMm: gap0 === null ? null : Math.round(gap0 * 10) / 10, limitedBy: { internal: inn.limited ? 'feet' : 'range', external: ext.limited ? 'feet' : 'range' }
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1451,7 +1851,114 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
     i0[v] = SEG_INDEX.get(w.a); w0[v] = w.wa;
     i1[v] = SEG_INDEX.get(w.b || w.a); w1[v] = w.wb;
   }
-  return { segments: BODY_SEGMENTS, i0, i1, w0, w1 };
+  // R558: the right forearm's continuous twist, exactly as the bake (rForearmTwistPass).
+  const tf = (options && options.twist === false) || !avail.includes('r_radius') ? null : rForearmTwistPass(rig, p, i0, i1);
+  return tf ? { segments: BODY_SEGMENTS, i0, i1, w0, w1, tf, twist: rForearmTwistFrame(rig) } : { segments: BODY_SEGMENTS, i0, i1, w0, w1 };
+}
+
+/**
+ * R558 (the right forearm in plates with the palm down and torn apart in the Space dance): the body bakes the start
+ * posture with the right forearm turned 160 deg (palm down) from the supinated source mesh, and a vertex between the
+ * ulna (r_forearm) and the radius (r_radius) was blended LINEARLY between two frames 160 deg apart, which pulls it most
+ * of the way to the turning axis (a 50 / 50 blend keeps cos 80 deg = 17 % of its distance): flat plates near the
+ * elbow. Away from the start posture each forearm muscle then moved as ONE rigid piece, so in the dance the muscles
+ * that span both bones slid through each other. Now the right forearm is skinned like the left game arm (ns-rig
+ * TWIST_SKIN): in a muscle that reaches the radius (a r_radius candidate; muscles on the ulna and the upper arm only,
+ * such as brachialis and anconeus, do not turn), any ulna or radius influence of a vertex becomes the ulna frame turned
+ * by the vertex's own fraction
+ * tf of the radius' turn about the radioulnar axis, tf = smoothstep along the elbow -> wrist line (t0 .. t1 of
+ * R_FOREARM_TWIST, the left arm's constants; 1 = the radius frame itself); next to a hand or digit influence it stays
+ * the full-turn radius (as on the left arm). The bake uses it, and the right forearm muscles are skinned per vertex
+ * with it whenever the forearm, the elbow, the wrist or a digit is away from the start posture (handSkinRecords,
+ * HAND_SKIN_JOINTS). Display mechanics on licensed anatomy, not measured soft-tissue motion.
+ */
+export const R_FOREARM_TWIST = Object.freeze({ t0: TWIST_SKIN.t0, t1: TWIST_SKIN.t1, steps: TWIST_TABLE_STEPS });
+/** The twist frame of the right forearm (rest mm): { elbow, dir (elbow -> wrist, unit), lengthMm, axis (radioulnar
+ * pronation axis, unit), point (its pivot) }, or null when the rig lacks a joint. */
+export function rForearmTwistFrame(rig) {
+  const J = rig && rig.pivots, e = J && J.r_elbow && J.r_elbow.point, w = J && J.r_wrist && J.r_wrist.point, ru = J && J.r_radioulnar;
+  const axis = ru && ru.axes && ru.axes.pron, point = ru && ru.point;
+  if (!e || !w || !axis || !point) return null;
+  const d = sub(w, e), L = len(d);
+  if (!(L > 1)) return null;
+  return Object.freeze({ elbow: e, dir: scl(d, 1 / L), lengthMm: L, axis, point });
+}
+function rTwistAt(tw, x, y, z) {
+  const t = ((x - tw.elbow[0]) * tw.dir[0] + (y - tw.elbow[1]) * tw.dir[1] + (z - tw.elbow[2]) * tw.dir[2]) / tw.lengthMm;
+  const u = clamp((t - R_FOREARM_TWIST.t0) / (R_FOREARM_TWIST.t1 - R_FOREARM_TWIST.t0), 0, 1);
+  return u * u * (3 - 2 * u);
+}
+/** The twist pass on two-influence index arrays (BODY_SEGMENTS indexes; changed in place): returns tf (Float32Array,
+ * the fraction for a twisted r_forearm influence) or null when no vertex is twisted. Both influences of a vertex on the
+ * two forearm bones become the one twisted frame (the weights then do not matter: both maps are the same). */
+function rForearmTwistPass(rig, p, ia, ib) {
+  const tw = rForearmTwistFrame(rig);
+  if (!tw) return null;
+  const RF = SEG_INDEX.get('r_forearm'), RR = SEG_INDEX.get('r_radius');
+  let tf = null;
+  for (let v = 0, k = 0; k < p.length; v++, k += 3) {
+    const a = ia[v], b = ib[v], fa = a === RF || a === RR, fb = b === RF || b === RR;
+    if (!fa && !fb) continue;
+    const other = fa && fb ? -1 : fa ? b : a;
+    if (other >= 0 && HAND_SKIN_RE.test(BODY_SEGMENTS[other])) { if (fa) ia[v] = RR; else ib[v] = RR; continue; }
+    const f = rTwistAt(tw, p[k], p[k + 1], p[k + 2]);
+    const seg = f >= 1 - 1e-6 ? RR : RF;
+    if (fa) ia[v] = seg;
+    if (fb) ib[v] = seg;
+    if (seg === RF && f > 1e-6) { if (!tf) tf = new Float32Array(p.length / 3); tf[v] = f; }
+  }
+  return tf;
+}
+/**
+ * The per-pose table of twisted right-forearm frames: entry k (0..steps) = mF x R(k / steps x turn) about the radioulnar
+ * axis, 16 numbers each (column-major 4x4), where turn is the radius' signed turn about the ulna read from the two
+ * segment matrices (mR = mF x R(turn); |turn| < 180 deg, r_pronation is 0..160). A twisted influence blends the two
+ * entries around its fraction (rForearmTwistMap).
+ */
+export function rForearmTwistTable(mF, mR, frame) {
+  const rel = m4Mul(m4RigidInv(mF), mR), a = frame.axis;
+  const cosA = (rel[0] + rel[5] + rel[10] - 1) / 2;
+  const sinA = ((rel[6] - rel[9]) * a[0] + (rel[8] - rel[2]) * a[1] + (rel[1] - rel[4]) * a[2]) / 2;
+  const turnDeg = Math.atan2(sinA, cosA) / DEG, K = R_FOREARM_TWIST.steps, T = new Float64Array(16 * (K + 1));
+  for (let k = 0; k <= K; k++) T.set(m4Mul(mF, m4RotAbout(a, (k / K) * turnDeg, frame.point)), 16 * k);
+  return T;
+}
+/** The twisted frame (16 numbers) for fraction f from a rForearmTwistTable, into out. */
+export function rForearmTwistMap(T, f, out) {
+  const K = R_FOREARM_TWIST.steps, x = clamp(f, 0, 1) * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k, o = 16 * k;
+  for (let j = 0; j < 16; j++) out[j] = T[o + j] + fr * (T[o + 16 + j] - T[o + j]);
+  return out;
+}
+
+/** R558 (Messages 14 / 15): the right-hand muscles a single rigid matrix cannot carry once the digits move on their own:
+ * every muscle whose candidate segments include the right hand or a right digit (the long finger and thumb muscles, the
+ * wrist muscles and the hand's own muscles and muscle sets). */
+const HAND_SKIN_RE = /^r_(hand|thumb_(mc|pp|dp)|(index|middle|ring|little)_(pp|mp|dp))$/;
+/** The joints whose change from the start posture makes the right hand's muscles need per-vertex skinning. */
+export const HAND_SKIN_JOINTS = Object.freeze(['r_wrist_flex', 'r_wrist_ext', 'r_wrist_dev', 'r_grasp', 'r_open', 'r_thumb_flex', 'r_thumb_opp',
+  'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
+  // R558 (R_FOREARM_TWIST): the right forearm's turn and the elbow bend its muscles per vertex too.
+  'r_pronation', 'r_elbow_flex']);
+/**
+ * Skin records for the scene's setBodySkin: Map(element id -> { src (source positions, Float32Array), i0, i1, w0, w1 })
+ * for every right-hand muscle (HAND_SKIN_RE) with source geometry, from bodySkinWeights: the same two nearest candidate
+ * bones and inverse-square weights that baked the start posture, so the skinned start pose is the baked one exactly.
+ * meshesById: the SOURCE meshes (the ones buildBodyRig / bakeBodyPosture were given).
+ */
+export function handSkinRecords(rig, meshesById, options = {}) {
+  checkRig(rig);
+  const get = meshGetter(meshesById), out = new Map();
+  for (const m of rig.muscles) {
+    const info = rig.meshSegment[m.id];
+    // R558: and every right forearm muscle that reaches the radius, for the continuous twist (R_FOREARM_TWIST).
+    if (!info || !(info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius')) continue;
+    const p = positionsOf(get(m.id));
+    if (!p) continue;
+    const w = bodySkinWeights(rig, m.id, p, options);
+    if (!w) continue;
+    out.set(m.id, { src: p instanceof Float32Array ? p : Float32Array.from(p), i0: w.i0, i1: w.i1, w0: w.w0, w1: w.w1, ...(w.tf ? { tf: w.tf, twist: w.twist } : {}) });
+  }
+  return out;
 }
 
 /** Linear-blend skinning of rest positions with bodySkinWeights and poseBodyDetailed().segments. */
@@ -1598,9 +2105,10 @@ export function rotationBodyDrives(byName, options = {}) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Rest posture (round 3, R3-body): the fixed first-person body SITS
+// Rest postures. R558 (genuine note of 11 November 2026, "start with the limbs fully straight out"): the game now starts
+// in the 'open' posture, standing with every limb straight and spread. The older 'seated' posture stays available.
 //
-// Why seated: from the first-person eye of the upright BodyParts3D body the chest (anterior surface about y = -214 mm)
+// Round 3 (R3-body) history, why the body used to sit: from the first-person eye of the upright BodyParts3D body the chest (anterior surface about y = -214 mm)
 // lies in front of the line of sight to the thighs and feet, so a standing body shows only the chest when you look down
 // (round 2 needed an eye shift and a dithered see-through window). Seated, the thighs run forward from the hips, so
 // looking down shows the chest and belly near you, then the lap, the knees and, past the knees, the feet: nothing has
@@ -1611,7 +2119,21 @@ export function rotationBodyDrives(byName, options = {}) {
 /**
  * Rest postures in degrees from the BodyParts3D source pose (same ids and signs as BODY_JOINT_LIMITS / ns-bodymap
  * JOINT_SEMANTICS; missing ids are 0). Display choices inside ordinary adult ranges of motion, not measured on anyone.
- *  - 'seated' (DEFAULT_BODY_POSTURE): sitting upright on an ordinary seat, thighs level to slightly rising toward the
+ *  - 'open' (DEFAULT_BODY_POSTURE, R558 as corrected by the user: "out straight forward front facing", "an invisible
+ *    ground ... flat", and "all the limbs straight out like a stick (perpendicular from the torso), instead of the
+ *    suggestive spread eagle pose"): every limb straight FORWARD, at right angles to the trunk. The body sits upright
+ *    on an invisible flat ground with both legs straight out in front, side by side ("long sitting": hips flexed 90
+ *    deg, knees, ankles and toes straight). Each leg is swung only 6 deg out to its own side (hip abduction): in the
+ *    source pose the thighs slope inward to the knees, and 6 deg makes them run parallel, so the knees stay about a
+ *    hip width apart instead of nearly touching ("The knees/thighs of the legs should not be so close together")
+ *    without any spread. The right arm points straight forward at shoulder height
+ *    (shoulder flexed 90 deg, elbow, wrist and fingers straight), the forearm turned fully palm down (160 of 160 deg,
+ *    80 deg past thumb-up, the same full pronation as the left game arm's start, for left-right symmetry). The left arm is
+ *    the game arm: it reaches forward to its full length toward the look point (ns-arm), straight forward at look 0/0.
+ *    Hip flexion 90 with a straight knee is at the end of the usual straight-leg range (hamstrings), inside the joint
+ *    limits. The skull stays at its source place (bakeBodyPosture keeps it); no floor is drawn. A display choice
+ *    inside ordinary adult ranges of motion, not a measured pose.
+ *  - 'seated' (the default until R558): sitting upright on an ordinary seat, thighs level to slightly rising toward the
  *    knees (hips flexed 95 deg), lower legs reaching a little forward (knees flexed 45 deg) with relaxed ankles (15 deg
  *    toes-down). Chosen from rendered candidates and a body-only ID-buffer scan (round3/R3-body-NOTES.md): with the
  *    knees bent 55-70 deg the knees hide most of the feet from the eye; hips at 95 instead of 85 deg show the kneecaps
@@ -1630,11 +2152,52 @@ export function rotationBodyDrives(byName, options = {}) {
  */
 export const BODY_POSTURES = deepFreezeRig({
   anatomical: {},
+  open: { hip_flex_L: 90, hip_flex_R: 90, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: 90, r_pronation: 160 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
   }
 });
+/**
+ * R558 (user: "an invisible ground ... flat"; the start posture sits on it with the legs straight forward): keep each
+ * leg on or above the ground. With the thigh lying level (hip flexion 90 at rest) a knee bend would swing the shank
+ * and foot down through the ground; a sitting person instead slides the heel along the ground toward the buttock, so
+ * the thigh rises. In the leg's own plane the heel's height above its start is T sin(t) + S sin(t - k) (T, S: hip-knee
+ * and knee-ankle lengths of this rig, t: thigh rise above level, k: knee bend); the smallest t >= 0 that keeps it at
+ * or above 0 is added to the hip flexion. When even the hip's display cap cannot keep the heel up, the knee bends only
+ * as far as the cap allows. A hip below level (the thigh into the ground) is raised to level. Postures whose hips do
+ * not rest at 90 are returned unchanged. Pure; returns a new object. Not a contact model: no squash, no friction.
+ * @param angles { BODY_JOINT_ID: deg } absolute joint angles
+ * @param options { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) }
+ */
+export function groundLegAngles(rig, angles, { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) } = {}) {
+  const out = { ...angles };
+  const rest = bodyPostureAngles(posture);
+  const pv = rig && rig.pivots ? rig.pivots : {};
+  const pt = k => (pv[k] && Array.isArray(pv[k].point) ? pv[k].point : null);
+  for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
+    if (Math.abs(rest[`hip_flex_${S}`] - 90) > 1e-9) continue;
+    const hip = pt(`${s}_hip`), knee = pt(`${s}_knee`), ankle = pt(`${s}_ankle`);
+    if (!hip || !knee || !ankle || !Number.isFinite(out[`hip_flex_${S}`]) || !Number.isFinite(out[`knee_ext_${S}`])) continue;
+    const T = Math.hypot(knee[0] - hip[0], knee[1] - hip[1], knee[2] - hip[2]);
+    const L = Math.hypot(ankle[0] - knee[0], ankle[1] - knee[1], ankle[2] - knee[2]);
+    if (!(T > 0 && L > 0)) continue;
+    const cap = limits && limits[`hip_flex_${S}`] ? limits[`hip_flex_${S}`][1] : BODY_JOINT_LIMITS[`hip_flex_${S}`][1];
+    const tMax = Math.max(0, cap - 90) * DEG;
+    let k = Math.max(0, -out[`knee_ext_${S}`]) * DEG;
+    const h = out[`hip_flex_${S}`];
+    const heel = t => T * Math.sin(t) + L * Math.sin(t - k);
+    let t = Math.max(0, (h - 90) * DEG);
+    if (heel(t) < 0) {
+      if (heel(tMax) < 0) { t = tMax; k = Math.min(k, tMax + Math.asin(Math.min(1, (T * Math.sin(tMax)) / L))); }
+      else { let lo = t, hi = tMax; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (heel(m) >= 0) hi = m; else lo = m; } t = hi; }
+    }
+    out[`hip_flex_${S}`] = Math.max(h, 90 + t / DEG);
+    out[`knee_ext_${S}`] = -k / DEG;
+  }
+  return out;
+}
+
 /**
  * Display caps for posture-relative targets (bodyPostureTargets), tighter than BODY_JOINT_LIMITS where the rigid 3D
  * meshes would pass into each other (round 4, R4-body). 'seated': lifting a thigh stops at 110 deg hip flexion (15 deg
@@ -1647,15 +2210,22 @@ export const BODY_POSTURES = deepFreezeRig({
  * The seated right elbow bends at most to 120 deg (the body map's +80 would reach the 145 deg limit from the 85 deg
  * armrest rest): "bend right elbow" then ends where it ended in round 3 (40 + 80), with the hand about 265 mm from the
  * eye, instead of about 164 mm at 145 deg, where the hand fills the lower corner of the view.
+ * 'open' keeps the same 110 deg hip-flexion cap (the thigh and belly meshes are the same ones).
+ * R558 audit (Message 2): these are the only caps below BODY_JOINT_LIMITS, and each keeps its documented mesh reason
+ * (the 110 deg thigh lift; the seated 120 deg elbow). Hip extension follows the rig limit (-30, AAOS). With a straight
+ * knee HIP_KNEE_COUPLING (applied in clampBodyJointTargets) holds the hip at 100, below the 110 cap.
  */
 export const BODY_POSTURE_LIMITS = deepFreezeRig({
   anatomical: {},
-  seated: { hip_flex_L: [-20, 110], hip_flex_R: [-20, 110], r_elbow_flex: [0, 120] }
+  open: { hip_flex_L: [-30, 110], hip_flex_R: [-30, 110] },
+  seated: { hip_flex_L: [-30, 110], hip_flex_R: [-30, 110], r_elbow_flex: [0, 120] }
 });
-/** The posture the game uses (decision D4, round 3). */
-export const DEFAULT_BODY_POSTURE = 'seated';
+/** The posture the game uses (R558 decisions 21 and 22: limbs straight forward, sitting on an invisible flat ground;
+ * it replaces decision D4, seated, and the first R558 standing star). */
+export const DEFAULT_BODY_POSTURE = 'open';
 /** Plain-language posture lines for the HUD / Esc page (R17). */
 export const BODY_POSTURE_TEXT = Object.freeze({
+  open: 'Your body sits on an invisible flat ground with every limb straight forward, at right angles to your trunk: legs out in front side by side, both arms reaching forward. Look down to see your chest, legs and feet.',
   seated: 'Your body sits still (no chair is drawn). Your right forearm rests forward, as if on an armrest. Look down to see your chest, lap, knees and feet. Look right and a little down to see your right arm.',
   anatomical: 'Your simulated body stands still with its arms at its sides.'
 });
@@ -1734,6 +2304,8 @@ function poseRows(activeActions) {
  *   Rows may carry their own `joints`; otherwise BODY_MOTOR_MAP supplies them. Rows without joints are ignored.
  * @param options { posture = DEFAULT_BODY_POSTURE (name, angles or baked posture), limits = bodyPostureLimits(posture) }
  * @returns { every BODY_JOINT_ID: deg }
+ * R558: the game no longer poses from this (ns-actions now holds ABSOLUTE joint angles, laid over the posture's own
+ * angles by the app); it is kept for the 'seated' posture tools and existing checks.
  */
 export function bodyPostureTargets(activeActions, { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) } = {}) {
   const rest = bodyPostureAngles(posture);
@@ -2014,7 +2586,8 @@ function bakeSkinWeights(rig, id, p, avail, near, useCache) {
     const w = near(avail, x, y, z);
     ia[v] = SEG_INDEX.get(w.a); ib[v] = SEG_INDEX.get(w.b || w.a); wa[v] = w.wa;
   }
-  const out = { p, avail: avail.join(','), ia, ib, wa };
+  const tf = avail.includes('r_radius') ? rForearmTwistPass(rig, p, ia, ib) : null; // R558: the right forearm's continuous twist (R_FOREARM_TWIST)
+  const out = { p, avail: avail.join(','), ia, ib, wa, tf };
   if (byId) byId.set(id, out);
   return out;
 }
@@ -2074,9 +2647,15 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
           if (!near) near = nearestSearch(clouds, mode);
           const w = bakeSkinWeights(rig, id, p, avail, near, mode === 'index');
           positions = new Float32Array(p.length);
+          // R558: a twisted right-forearm influence uses its own turned ulna frame (R_FOREARM_TWIST).
+          const tw = w.tf ? rForearmTwistFrame(rig) : null;
+          const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
+          const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
           for (let i = 0, v = 0; i < p.length; i += 3, v++) {
-            const x = p[i], y = p[i + 1], z = p[i + 2];
-            const a = mats[w.ia[v]], b = mats[w.ib[v]], wa = w.wa[v], wb = 1 - wa;
+            const x = p[i], y = p[i + 1], z = p[i + 2], f = T ? w.tf[v] : 0;
+            const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
+            const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
+            const wa = w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
           }
           skinned.push(id);
@@ -2170,14 +2749,15 @@ function bakedDelta(rig, baked, id, info, world, mats, mode) {
 // (ns-regional-layers.mjs; R175/R130/R135 pins), with scope/head/part caveats intact.
 // Historical generated topExposure and textbook letters below describe the producer's
 // display selection only. They do not qualify anatomical depth or promote unknown/I/D
-// records to an outer relation.72 qualified outer records remain display candidates;
-//59 scoped intermediate/deeper and95 current unknown records keep zero display offsets.
-// Existing numeric display directions/distances/peel are retained ONLY for eligible
-// candidates. They remain an illustrative choice requiring separate source/reference/
-// native review; they are not physiological detachment measurements. Physical rest,
-// rig, weights, pose, force/controller state and the display-transform formula are unchanged.
-// R174 handles bounds/order/applied first-vertex bookkeeping, not anatomical masks,
-// directions or real-reference/native acceptance.
+// records to an outer relation. 72 qualified outer records are display candidates;
+// 59 scoped intermediate/deeper and 95 current unknown records are in the catalogue.
+//
+// R558: the display no longer uses the numeric directions/distances/peel recorded in
+// this section (BODY_LAYER_RULE.offset, the generated TABLE/UNITS and bodyLayerRecord).
+// They stay as the record of the round-5 producer run. What is drawn is the anchored
+// stack further down (BODY_STACK_RULE): still an illustrative display choice, not a
+// physiological detachment measurement. Physical rest, rig, weights, pose and
+// force/controller state are unchanged by it.
 
 /** Historical producer textbook letters, retained for generation provenance; not anatomical qualification. */
 export const BODY_LAYER_TEXTBOOK = Object.freeze({
@@ -2276,32 +2856,1206 @@ export function bodyLayerRecord(id) {
     axis: displayEligible && axis ? norm(axis) : null, peelDeg: displayEligible ? peelDeg : 0 });
 }
 
-/** D (Float64Array(16), column-major) for a layer record whose dir/hinge/axis are in the frame wanted: rotate by
- * amount x peel x peelDeg about axis through hinge, then move amount x offsetMm along dir. Identity for amount 0. */
-function layerMatrix(rec, amount, peel) {
-  if (!(amount > 0)) return m4I();
-  const a = Math.min(1, amount);
-  const R = rec.axis && rec.peelDeg && peel > 0 ? m4RotAbout(rec.axis, a * peel * rec.peelDeg, rec.hinge) : m4I();
-  return m4Mul(m4Trans(scl(rec.dir, a * rec.offsetMm)), R);
+// ---------------------------------------------------------------------------------------------------------------------
+// R558: the Body Worlds stack with anchored ends
+//
+// The user (2026-11-11): "a Gunther Von Hagens Body Worlds radially (direction, not bone) elevated muscles stack so
+// that deep muscles are clearly visible through and under slightly floating superficial ones. That does not mean
+// transparency effects to muscles and bones." And: "make sure tendon insertions and origins are still accurate and
+// there, even if that means they are much much longer than they otherwise would be."
+//
+// The round-5 display moved every qualified outer muscle with ONE rigid matrix (3 to 15 mm and a small peel). That
+// was too small to read as a stack, and a rigid move takes both ends of the muscle off the bone. It is replaced here
+// by a lift per vertex, worked out once per rig:
+//
+//   lifted(p) = p + share(level) x gap(p) x weight(p) x direction(p)
+//
+//   level      comes first from the exact-ID regional catalogue (ns-regional-layers.mjs). Qualified outer records are
+//              the outer level (share 1). The intermediate level (share 0.5) is the part of the scoped
+//              INTERMEDIATE_DEEP records whose own rule text places them between two qualified layers
+//              (BODY_STACK_RULE.intermediateRuleIds). Every other qualified deeper record stays in place. A muscle
+//              the catalogue leaves unknown gets a level ONLY from an exact-ID row of BODY_STACK_SUPPLEMENT below
+//              (round 2: a display classification from textbook layers, kept apart from the catalogue and reported
+//              as such); with no row it stays in place. The catalogue itself is never changed or overridden.
+//   direction  radial: away from the long axis of the limb segment the muscle lies along, or away from the axis of
+//              the trunk. The axes are straight lines between the rig's own joint pivots and segment centroids. A
+//              compact muscle (all pieces of one named muscle together) moves along the ONE radial direction of its
+//              belly, so its licensed shape is kept and neighbours part; a muscle that wraps far round its axis (the
+//              external oblique, the deltoid) moves along each vertex's own radial direction, blended in by how far
+//              it wraps.
+//   gap        millimetres per body region (BODY_STACK_RULE.gapMm; the neck is its own region), blended across each
+//              joint, and dipping at the knee, ankle, elbow and wrist so a tendon crossing the joint stays near it.
+//   weight     0 on the attachment ends, 1 over the belly, a smooth ramp between, so the tissue between the lifted
+//              belly and the bone is stretched (it becomes much longer than it is) and the ends stay on the bone.
+//
+// How the ends are found (BODY_STACK_RULE.anchor): a muscle vertex within a few millimetres of a bone surface is "on
+// bone". The on-bone vertices in the first and last 30% of a muscle's length (its principal axis, which follows the
+// fibres of these meshes) are its two ends, and an end reaches further in while nearly all of the muscle is still on
+// bone there (a thin tendon lying on the hand bones), as one unbroken run from that end. Bone the belly merely rests
+// on between the ends (ribs under the pectoral belly, the ulna under its extensor) is NOT an attachment and does not
+// hold the belly down. A trunk
+// muscle is also attached wherever it reaches the midline plane, in any part of its length: that is the long origin
+// line of the trapezius on the spinous processes and the nuchal ligament, and the linea alba of the external oblique
+// (neither ligament is a mesh in the packet). An end with no bone under it (a tendon ending in an aponeurosis, or on
+// a bone this build does not have) falls back to pinning the last 6% of the muscle's length where it is.
+//
+// Round 3 adds the display FILL (the user: "The muscles should be full, filled-out and plumpy."): at full amount
+// EVERY muscle, lifted or not, is also drawn a little fuller, its surface moved outward along its smoothed normal by
+// at most a few millimetres per region and at most a share of the local radius (stackFillOffsets), never on the
+// anchored ends. The drawn gap between two storeys is the lift difference less the two fills, so it stays under 20 mm
+// (round 4; 30 mm in round 3).
+//
+// This is a DISPLAY CHOICE on licensed anatomy. The floating bellies, the stretched tissue and the fuller shapes are
+// not measured anatomy, and the anchor rule is a geometric estimate of where a mesh meets bone, not a dissection record of origins
+// and insertions. Physical rest, rig, weights, forces and controller state are not changed by it.
+
+/** The stack display rule (see the block comment above). Millimetres in the source frame. */
+export const BODY_STACK_RULE = Object.freeze({
+  share: Object.freeze({ outer: 1, intermediate: 0.5 }),
+  // FDS: "second of three flexor display layers"; SOLEUS: "deep to gastrocnemius, above deep posterior group";
+  // ADDUCTOR_HAND: "palmar adductor layer before interossei" (the catalogue's own relative_depth words).
+  intermediateRuleIds: Object.freeze(['FDS', 'SOLEUS', 'ADDUCTOR_HAND']),
+  // Every gap is at or below 20 mm ("slightly floating"). The middle level floats at half of it. Round 3: the neck is a
+  // region of its own (a slim neck under a 30 mm trunk lift looked like a collar standing off it); the forearm gap is
+  // smaller, because its outer muscles are slim and a large radial lift parts them into strands with bone between.
+  // Round 4 (Message 18: "anatomical realism and accuracy ... doesn't necessarily have to have a bodybuilder look"):
+  // the gaps are smaller (were trunk 30, neck 14, upper arm 20, forearm 11, hand 7, thigh 30, shank 22, foot 8). A
+  // 30 mm trunk lift drew the pectorals as mounds that hid the thighs from the eye and the deltoid as a balloon; at
+  // these values the outline stays close to an adult body and the storeys read through partings, not through bulk.
+  gapMm: Object.freeze({ trunk: 16, neck: 6, upperarm: 12, forearm: 8, hand: 5, thigh: 20, shank: 14, foot: 6 }),
+  // Each region keeps its own value over its segment; across a joint the value changes over blendMm on each side.
+  regionBlendMm: 50,
+  // Round 3: at the knee, ankle, elbow and wrist the gap dips by `share` (smoothly, over halfWidthMm on each side),
+  // so a long muscle or tendon that crosses the joint (sartorius and the hamstring tendons at the knee, the shin
+  // tendons at the ankle) stays near it instead of standing off the joint as a hoop; bellies keep the full gap.
+  jointDip: Object.freeze({ share: 0.65, halfWidthMm: 45 }),
+  // Round 3, after the start posture put the legs side by side: on a leg, the part of a lift that points toward the
+  // other leg (across the midline side of the limb axis) is removed and the rest is shortened by the same lean
+  // (nothing is left at a lean of marginShare, about 40 deg), so the inner-thigh muscles lift backward or forward
+  // instead, and less, and a turned leg does not swing them into the other leg.
+  legInward: Object.freeze({ marginShare: 0.64 }),
+  // Round 4: on the left game arm, the LIFT fades out where the forearm twist skinning turns neighbouring vertices by
+  // different angles and where the elbow / wrist blends shear them (see armTwistFade); the fill stays (armStackLift).
+  armTwistFade: Object.freeze({ slope: 8, joint: 1 }),
+  // R558 (user Message 30: "The bone tips probably shouldn't be so spikey"): on a finger or a toe a tendon lies on its
+  // bones. Past the knuckles the hand and foot gaps (5 and 6 mm) floated the long finger and toe tendons that far off
+  // phalanges only 8 to 10 mm thick, and each tendon then dived back down to its anchored insertion on the distal
+  // phalanx: drawn tendon-white, that dive was a hooked sliver standing off every fingertip and toe tip (the claws and
+  // needles of the pictures). Now the LIFT of a vertex (the fill stays) is multiplied by sstep((d - nearMm) / rampMm),
+  // where d is its distance to the nearest phalanx (finger and thumb phalanges, toe phalanges; bone vertices plus
+  // triangle samples every sampleMm, source mm): a tendon on a digit keeps its atlas place on the bone, and the lift
+  // comes back over the metacarpals and metatarsals within about rampMm of the knuckles. A display choice.
+  digits: Object.freeze({ nearMm: 4, rampMm: 14, sampleMm: 2 }),
+  anchor: Object.freeze({ boneMm: 4, boneSampleMm: 3, midlineMm: 10, endWindow: 0.3, extendStep: 0.05, extendShare: 0.8,
+    extendLimit: 0.5, cleanShare: 0.005, cleanMin: 3, capShare: 0.06 }),
+  // Round 2: a short ramp (one gap long at least, 36 mm at most). The stretch is taken up close to the attachment,
+  // so the free border of a broad sheet stands a full gap off the layer below instead of swelling gently.
+  // Round 4: the ramp is also at least distShare of the muscle's largest distance from its anchored ends (its 95th
+  // percentile), up to maxMm: the lift then grows over the whole muscle toward the middle of the belly or toward a free
+  // border, like a dissected muscle reflected off its bed, instead of a flat-topped plateau with cliffs at the ends
+  // (the cliff was the "flat cut edge" of the round-3 deltoid). The distances are searched only as far as the longest
+  // ramp a muscle can get (searchMm at least, maxMm for a muscle with its own distShare; see anchoredStackLift).
+  ramp: Object.freeze({ lengthShare: 0.1, minGaps: 1, maxMm: 70, bellyMm: 25, distShare: 0.5, searchMm: 36 }),
+  direction: Object.freeze({ constantBelowDeg: 60, radialAboveDeg: 120, minRadialMm: 2 }),
+  // Round 3, the display FILL (user: "The muscles should be full, filled-out and plumpy."): every muscle, lifted or
+  // not, is drawn slightly fuller by moving its surface outward along the smoothed surface normal (stackFillOffsets):
+  // at most mm[region], and at most radiusShare x the local radius of the surface, so a thin tendon swells by a
+  // fraction of its own thickness while a belly gets the full amount. 0 on the attachment ends, full after endRampMm.
+  // head = muscles posed with the skull or the jaw. A display choice, never measured anatomy.
+  // Round 4 (Message 18 refines Message 9: full and natural, not inflated): the caps are about a third of round 3's
+  // (trunk 3, neck 2.5, head 1.2, upper arm 3.5, forearm 3, hand 1.5, thigh 4, shank 3.5, foot 1.5). Because the
+  // amount is min(cap, radiusShare x local radius), a strand or tendon thinner than cap / radiusShare (about 2 to 3 mm)
+  // still gets exactly the round-3 amount, so the forearm and shin do not turn stringy again; only the broad bellies,
+  // which the atlas already draws full, lost the extra bulk.
+  fill: Object.freeze({
+    mm: Object.freeze({ trunk: 1, neck: 0.8, head: 0.5, upperarm: 1.3, forearm: 1.6, hand: 0.9, thigh: 1.3, shank: 1.6, foot: 0.9 }),
+    radiusShare: 0.6, endRampMm: 8, smoothPasses: 3, weldMm: 0.05,
+    // Round 4: a muscle's fill never pushes it out through a muscle of a higher stack level lying on it (the dark
+    // flecks of round 3, where a deeper muscle's fill came through the outer sheet near the outer muscle's anchored
+    // ends): within coverMm of a higher-level muscle, the fill is at most that muscle's lift there minus
+    // coverMarginMm; where that is below 0 the surface is tucked in by as much (at most by the fill it would have
+    // had), so the storeys keep a thin parting even where they touch in the atlas.
+    coverMm: 4, coverMarginMm: 1
+  }),
+  // Exact-ID display exceptions. Each is used only when the catalogue knows that id under exactly that name.
+  // heldEnds: a tendon that runs UNDER muscles the stack leaves in place is held down from that crossing to its
+  // insertion (the given share of the muscle's length from its far end), so it is not drawn floating over them.
+  heldEnds: Object.freeze([
+    ['FJ1489', 'Right extensor carpi radialis brevis', 0.3], ['FJ1489M', 'Left extensor carpi radialis brevis', 0.3],
+    ['FJ1490', 'Right extensor carpi radialis longus', 0.25], ['FJ1490M', 'Left extensor carpi radialis longus', 0.25]
+  ].map(([id, name, lengthShare]) => Object.freeze({ id, name, end: 'distal', lengthShare,
+    basis: 'tendon passes under abductor pollicis longus and extensor pollicis brevis and the wrist retinaculum' }))),
+  // axisOf: a hip muscle rigged with the pelvis lifts away from the thigh's axis (backwards, off the muscles under
+  // it), not away from the trunk's axis (which would send the buttock sideways).
+  axisOf: Object.freeze([
+    ['FJ1418', 'Right gluteus maximus', 'r_leg'], ['FJ1418M', 'Left gluteus maximus', 'l_leg']
+  ].map(([id, name, axis]) => Object.freeze({ id, name, axis, basis: 'hip muscle behind the hip joint: lifted radially from the thigh axis' }))),
+  // Round 4 (Message 18): exact-ID rows that tune one muscle's lift, display choices with the reason in basis.
+  //   gapScale   multiplies its gap
+  //   distShare  replaces ramp.distShare for it (1 = the lift grows across the whole muscle: a sheet reflected off
+  //              its bed from its origin, highest at its free border)
+  //   region     holds that region's gap and fill along its whole length (no blend into the next region)
+  //   smooth     { innerMm, outerMm, cellMm, reachMm, blurMm }: the relief of the drawn front surface is shaved down
+  //              to a smooth surface through its valleys (stackShaveRelief: only inward), fully within innerMm of the
+  //              midline plane and fading out at outerMm; never on anchored ends
+  unitRules: Object.freeze([
+    ...['FJ1467:Acromial part of right deltoid', 'FJ1468:Clavicular part of right deltoid', 'FJ1513:Spinal part of right deltoid',
+      'FJ1467M:Acromial part of left deltoid', 'FJ1468M:Clavicular part of left deltoid', 'FJ1513M:Spinal part of left deltoid'
+    ].map(s => s.split(':')).map(([id, name]) => Object.freeze({ id, name, gapScale: 0.55, distShare: 0.8,
+      basis: 'lies directly on the humeral head and the rotator cuff: a smaller, gradual lift keeps it a cap of three parts instead of a balloon' })),
+    ...['FJ1447:Clavicular part of right pectoralis major', 'FJ1464:Sternocostal part of right pectoralis major', 'FJ1446:Abdominal part of right pectoralis major',
+      'FJ1447M:Clavicular part of left pectoralis major', 'FJ1464M:Sternocostal part of left pectoralis major', 'FJ1446M:Abdominal part of left pectoralis major'
+    ].map(s => s.split(':')).map(([id, name]) => Object.freeze({ id, name, gapScale: 0.8, distShare: 1,
+      basis: 'reflected from its origin on the sternum and clavicle like a dissected sheet: low near the midline, highest at the free lower outer border over serratus anterior' })),
+    ...[['FJ1452', 'Right external oblique'], ['FJ1452M', 'Left external oblique']].map(([id, name]) => Object.freeze({ id, name,
+      smooth: Object.freeze({ innerMm: 50, outerMm: 85, cellMm: 4, reachMm: 24, blurMm: 10 }),
+      basis: 'the atlas sculpts the segments of rectus abdominis into the front of this sheet (the anterior rectus sheath); that relief is drawn shaved down to a smooth surface within about 50 to 85 mm of the midline, so the sheath does not read as a rectus abdominis ("six-pack"); when the real rectus abdominis is loaded (missing-muscles-r1) the part of the sheet in front of it is not drawn at all (openRectusSheath: the sheath opened, as in a dissection)' })),
+    ...[['FJ1595', 'Right sternocleidomastoid'], ['FJ1573', 'Left sternocleidomastoid']].map(([id, name]) => Object.freeze({ id, name, region: 'neck',
+      basis: 'neck muscle from the mastoid to the sternum and clavicle: the neck gap along its whole length, so its lower end does not stand off as a hood' }))
+  ])
+});
+// A packet row (missing-muscles-r1; `packet` set) is used only for an id the producer catalogue does not know at all, so
+// it can never stand in for a catalogue row; every other row needs the catalogue's exact source name.
+const stackRuleRow = (rows, id) => {
+  const r = typeof id === 'string' ? rows.find(x => x.id === id) : null;
+  if (!r) return null;
+  const q = regionalLayerQualification(id);
+  return (r.packet ? q.id === null : q.sourceName === r.name) ? r : null;
+};
+
+/**
+ * SUPPLEMENTARY stack levels (R558 round 2): exact-ID rows for muscles the producer catalogue
+ * (ns-regional-layers.mjs) leaves UNQUALIFIED, so the thigh, the shin and the side of the chest also show more than
+ * one storey. This table is NOT part of the producer catalogue and never overrides it: a row is used only when the
+ * catalogue knows that exact id under exactly that source name AND gives it no class of its own. The catalogue record
+ * of such a muscle still reads "unclassified"; the level is reported with source 'supplement' and the row's basis.
+ *
+ * The basis of every row is the usual textbook description of the layers of that compartment (which muscle lies on
+ * which). It is a DISPLAY CLASSIFICATION from general anatomy, not a measurement of this body's meshes and not a
+ * reviewed source relation like the catalogue's. A 'deep' row lifts nothing; it records which muscle is the storey
+ * left in place under the lifted ones.
+ *
+ * R558 (builder AN): the muscles that used to be missing here (latissimus dorsi, rectus abdominis, tensor fasciae
+ * latae, gracilis, adductor longus, fibularis longus, the erector spinae, the rhomboids, pectoralis minor, ...) now come
+ * from the missing-muscles packet; their ids are unknown to the producer catalogue, so their levels are in
+ * BODY_STACK_PACKET below, not in this table.
+ */
+const supplementRows = (level, basis, pairs) => pairs.map(([id, name]) => Object.freeze({ id, name, level, basis }));
+export const BODY_STACK_SUPPLEMENT = Object.freeze({
+  kind: 'ns-body-stack-supplement',
+  scope: 'Display classification from standard gross-anatomy layer descriptions. Not a measurement of this body, and not part of the producer catalogue.',
+  rows: Object.freeze([
+    ...supplementRows('intermediate', 'front of thigh: beside and under rectus femoris; covers vastus intermedius',
+      [['FJ1442', 'Right vastus lateralis'], ['FJ1442M', 'Left vastus lateralis'], ['FJ1443', 'Right vastus medialis'], ['FJ1443M', 'Left vastus medialis']]),
+    ...supplementRows('outer', 'back of thigh, superficial hamstring: covers the short head of biceps femoris',
+      [['FJ1395', 'Long head of right biceps femoris'], ['FJ1395M', 'Long head of left biceps femoris']]),
+    ...supplementRows('outer', 'back of thigh, superficial hamstring: lies on semimembranosus',
+      [['FJ1436', 'Right semitendinosus'], ['FJ1436M', 'Left semitendinosus']]),
+    ...supplementRows('intermediate', 'back of thigh: under semitendinosus, on adductor magnus',
+      [['FJ1435', 'Right semimembranosus'], ['FJ1435M', 'Left semimembranosus']]),
+    ...supplementRows('deep', 'back of thigh: on the femur, under the long head of biceps femoris',
+      [['FJ1444', 'Short head of right biceps femoris'], ['FJ1444M', 'Short head of left biceps femoris']]),
+    ...supplementRows('outer', 'front of leg, superficial: covers extensor hallucis longus',
+      [['FJ1439', 'Right tibialis anterior'], ['FJ1439M', 'Left tibialis anterior']]),
+    ...supplementRows('outer', 'front of leg, superficial, beside tibialis anterior: covers extensor hallucis longus',
+      [['FJ1406', 'Right extensor digitorum longus'], ['FJ1406M', 'Left extensor digitorum longus']]),
+    ...supplementRows('deep', 'front of leg: between and under tibialis anterior and extensor digitorum longus',
+      [['FJ1408', 'Right extensor hallucis longus'], ['FJ1408M', 'Left extensor hallucis longus']]),
+    ...supplementRows('intermediate', 'side of chest: on the ribs, under pectoralis major and the shoulder blade',
+      [['FJ1459', 'Right serratus anterior'], ['FJ1459M', 'Left serratus anterior']]),
+    ...supplementRows('outer', 'side of neck, superficial: covers the deep neck muscles',
+      [['FJ1595', 'Right sternocleidomastoid'], ['FJ1573', 'Left sternocleidomastoid']])
+  ])
+});
+const STACK_SUPPLEMENT_BY_ID = new Map(BODY_STACK_SUPPLEMENT.rows.map(r => [r.id, Object.freeze({ level: r.level, source: 'supplement', basis: r.basis, name: r.name })]));
+
+/**
+ * R558 (builder AN): stack levels of the missing-muscles packet (packets/missing-muscles-r1: BodyParts3D 4.0 members and
+ * Z-Anatomy derivatives the producer catalogue has never seen). Exact ids; a row is used only when the catalogue does
+ * not know the id at all (it never overrides or fills in for a catalogue row). Each basis is the usual textbook layer
+ * description of that compartment (which muscle lies on which): a DISPLAY CLASSIFICATION from general anatomy, not a
+ * measurement of these meshes. 'outer' and 'intermediate' rows are lifted by the radial stack like any other muscle of
+ * that level; 'deep' rows stay in place. Both sides of a pair share one row (right id first, then the left id).
+ */
+const packetRows = (level, basis, pairs) => pairs.flatMap(([r, l, name]) => [[r, `right ${name}`], [l, `left ${name}`]])
+  .map(([id, name]) => Object.freeze({ id, name, level, basis, packet: 'missing-muscles-r1' }));
+const bp3dPair = (id, name) => [id, `${id}M`, name];
+export const BODY_STACK_PACKET = Object.freeze({
+  kind: 'ns-body-stack-packet',
+  scope: 'Display classification from standard gross-anatomy layer descriptions for the missing-muscles packet. Not a measurement of these meshes, not part of the producer catalogue.',
+  rows: Object.freeze([
+    ...packetRows('outer', 'back, superficial layer: under the skin from the lower spine and pelvis to the arm; only its upper inner corner lies under the trapezius',
+      [['zm-latissimus-dorsi-r', 'zm-latissimus-dorsi-l', 'latissimus dorsi']]),
+    ...packetRows('outer', 'front of the belly, superficial: beside the midline in the rectus sheath (drawn as if the sheath were opened)',
+      [['zm-rectus-abdominis-r', 'zm-rectus-abdominis-l', 'rectus abdominis']]),
+    ...packetRows('intermediate', 'side of the belly: under the external oblique, over transversus abdominis',
+      [['zm-internal-oblique-r', 'zm-internal-oblique-l', 'internal oblique']]),
+    ...packetRows('deep', 'back wall of the belly: under the erector spinae and beside psoas, from the iliac crest to the twelfth rib',
+      [['zm-quadratus-lumborum-r', 'zm-quadratus-lumborum-l', 'quadratus lumborum']]),
+    ...packetRows('deep', 'front of the neck, on the spine: under the throat and the deep neck muscles',
+      [['zm-longus-colli-r', 'zm-longus-colli-l', 'longus colli']]),
+    ...packetRows('deep', 'back, the erector spinae columns: along the spine under the latissimus dorsi, the trapezius, the serratus posterior and the thoracolumbar fascia',
+      [bp3dPair('FJ1527', 'iliocostalis lumborum'), bp3dPair('FJ1528', 'iliocostalis thoracis'), bp3dPair('FJ1526', 'iliocostalis cervicis'),
+        bp3dPair('FJ1535', 'longissimus thoracis'), bp3dPair('FJ1534', 'longissimus cervicis'), bp3dPair('FJ1533', 'longissimus capitis'),
+        bp3dPair('FJ1544', 'spinalis thoracis')]),
+    ...packetRows('intermediate', 'back of the neck: under the trapezius and sternocleidomastoid, over semispinalis capitis', [bp3dPair('FJ1545', 'splenius capitis')]),
+    ...packetRows('deep', 'back of the neck, deep: under splenius capitis and the trapezius', [bp3dPair('FJ1538', 'semispinalis capitis')]),
+    ...packetRows('deep', 'side of the neck, deep: under sternocleidomastoid, from the neck vertebrae to the first and second ribs',
+      [['FJ1592', 'FJ1570', 'scalenus anterior'], ['FJ1593', 'FJ1571', 'scalenus medius'], ['FJ1594', 'FJ1572', 'scalenus posterior']]),
+    ...packetRows('outer', 'front of the throat, superficial strap muscles: under the platysma, partly under sternocleidomastoid',
+      [['FJ1596', 'FJ1574', 'sternohyoid'], ['FJ1586', 'FJ1565', 'omohyoid']]),
+    ...packetRows('deep', 'front of the throat, deep strap muscles and the stylohyoid: under sternohyoid, omohyoid and the digastric',
+      [['FJ1597', 'FJ1575', 'sternothyroid'], ['FJ1599', 'FJ1577', 'thyrohyoid'], ['FJ1598', 'FJ1576', 'stylohyoid']]),
+    ...packetRows('deep', 'inside the eye socket, above the eyeball: under orbicularis oculi', [['FJ1357', 'FJ1306', 'levator palpebrae superioris']]),
+    ...packetRows('outer', 'inner thigh, superficial: the most medial thigh muscle, under the skin', [bp3dPair('FJ1421', 'gracilis')]),
+    ...packetRows('outer', 'inner thigh, front layer: beside each other, on adductor brevis', [bp3dPair('FJ1402', 'adductor longus'), bp3dPair('FJ1427', 'pectineus')]),
+    ...packetRows('intermediate', 'inner thigh, middle layer: under pectineus and adductor longus, on adductor magnus', [bp3dPair('FJ1401', 'adductor brevis')]),
+    ...packetRows('outer', 'outer hip, superficial: in front of gluteus medius, under the skin', [bp3dPair('FJ1438', 'tensor fasciae latae')]),
+    ...packetRows('deep', 'hip, deepest gluteal layer: under gluteus medius', [bp3dPair('FJ1420', 'gluteus minimus')]),
+    ...packetRows('outer', 'outer side of the leg, superficial: covers fibularis brevis', [bp3dPair('FJ1410', 'fibularis longus')]),
+    ...packetRows('intermediate', 'outer side of the leg: under fibularis longus, on the fibula', [bp3dPair('FJ1409', 'fibularis brevis')]),
+    ...packetRows('outer', 'front of the leg, superficial: the lower outer strip beside extensor digitorum longus', [bp3dPair('FJ1411', 'fibularis tertius')]),
+    ...packetRows('deep', 'back of the leg, deepest layer: under soleus and the long toe flexors', [bp3dPair('FJ1440', 'tibialis posterior')]),
+    ...packetRows('intermediate', 'top of the foot: under the tendons of extensor digitorum longus', [bp3dPair('FJ1407', 'extensor hallucis brevis')]),
+    ...packetRows('deep', 'sole of the foot: under the plantar aponeurosis; left in place, since the heel and sole rest on the ground', [bp3dPair('FJ1413', 'flexor digitorum brevis')]),
+    ...packetRows('intermediate', 'top of the foot: under the tendons of extensor digitorum longus, beside extensor hallucis brevis',
+      [['zm-extensor-digitorum-brevis-r', 'zm-extensor-digitorum-brevis-l', 'extensor digitorum brevis']]),
+    ...[['zm-flexor-hallucis-brevis-medial-r', 'medial head of right flexor hallucis brevis'], ['zm-flexor-hallucis-brevis-medial-l', 'medial head of left flexor hallucis brevis'],
+      ['zm-flexor-hallucis-brevis-lateral-r', 'lateral head of right flexor hallucis brevis'], ['zm-flexor-hallucis-brevis-lateral-l', 'lateral head of left flexor hallucis brevis']]
+      .map(([id, name]) => Object.freeze({ id, name, level: 'deep', packet: 'missing-muscles-r1',
+        basis: 'sole of the foot, deep: under abductor hallucis and the long flexor tendons, along the first metatarsal' })),
+    ...packetRows('deep', 'inner edge of the sole: left in place, since the sole rests on the ground', [bp3dPair('FJ1400', 'abductor hallucis')]),
+    ...packetRows('deep', 'belly wall, deepest layer: under the internal oblique',
+      [['zm-transversus-abdominis-r', 'zm-transversus-abdominis-l', 'transversus abdominis']]),
+    ...packetRows('intermediate', 'upper back, middle layer: under the trapezius, on serratus posterior superior and the erector spinae',
+      [bp3dPair('FJ1536', 'rhomboid major'), bp3dPair('FJ1537', 'rhomboid minor')]),
+    ...packetRows('deep', 'upper back, deep: under the rhomboids, on the erector spinae', [bp3dPair('FJ1542', 'serratus posterior superior')]),
+    ...packetRows('intermediate', 'low back, middle layer: under the latissimus dorsi, on the erector spinae', [bp3dPair('FJ1541', 'serratus posterior inferior')]),
+    ...packetRows('deep', 'back, transversospinal layer: under the erector spinae columns', [bp3dPair('FJ1540', 'semispinalis thoracis'), bp3dPair('FJ1539', 'semispinalis cervicis')]),
+    ...packetRows('deep', 'side and back of the neck: under the trapezius and sternocleidomastoid (as the left one, which the catalogue classes deep)',
+      [['FJ1532', 'FJ1532M', 'levator scapulae']]).filter(r => r.id === 'FJ1532'),
+    ...packetRows('intermediate', 'front of the chest, middle layer: under pectoralis major, on the ribs', [bp3dPair('FJ1456', 'pectoralis minor')]),
+    ...packetRows('deep', 'hip, deep rotators: under gluteus maximus, behind the hip joint',
+      [bp3dPair('FJ1428', 'piriformis'), bp3dPair('FJ1426', 'obturator internus'), bp3dPair('FJ1417', 'gemellus superior'),
+        bp3dPair('FJ1416', 'gemellus inferior'), bp3dPair('FJ1432', 'quadratus femoris')]),
+    ...packetRows('deep', 'hip, deepest at the front: under pectineus and the adductors, on the obturator membrane', [bp3dPair('FJ1425', 'obturator externus')]),
+    ...packetRows('deep', 'back of the knee, deepest: under the heads of gastrocnemius and plantaris', [bp3dPair('FJ1430', 'popliteus')]),
+    ...packetRows('intermediate', 'back of the leg, middle layer: between gastrocnemius and soleus', [bp3dPair('FJ1429', 'plantaris')])
+  ])
+});
+const STACK_PACKET_BY_ID = new Map(BODY_STACK_PACKET.rows.map(r => [r.id, Object.freeze({ level: r.level, source: 'packet', basis: r.basis, name: r.name })]));
+/**
+ * R558 (builder AN): the anterior rectus sheath, opened for display. The BodyParts3D external oblique (FJ1452 /
+ * FJ1452M) includes its flat tendon sheet over the front of the belly (the front layer of the rectus sheath); it lies
+ * 11 to 13 mm in front of the rectus abdominis of the missing-muscles packet and takes the same stack lift, so it hid
+ * the whole muscle (a pick on the front of the belly found only the external oblique; with that sheet opened, the
+ * front lamina of the internal oblique's aponeurosis was found next). Like the classic atlas plate
+ * with the sheath opened, the triangles of that sheet that lie IN FRONT OF rectus abdominis (over its outline, cell by
+ * cell, within frontToleranceMm of its front surface or further forward) are not drawn; the fleshy external oblique
+ * lateral to it, and the sheet above and below it, stay. AN check: the strip of the external oblique sheet BETWEEN the two
+ * recti (the linea alba, 6 to 17 mm wide, 0 to 6 mm in front of the recti) also stays (keepMidline), as on the atlas
+ * plate; cutting it left a slot down the belly through which the lumbar spine showed (and a click there picked a
+ * vertebra). Display only: the licensed files are unchanged, nothing
+ * moves, no vertex is added; used only when both meshes of a side are loaded. Returns { meshesById (a new Map; the
+ * two sheets get a filtered index list, every other mesh is the same object), report }.
+ */
+export const RECTUS_SHEATH_OPENING = Object.freeze({
+  rows: Object.freeze([
+    // insetMm (12): the sheet is kept over the outer insetMm of the muscle's width, so its cut edge lies ON the muscle (a
+    // clean flap edge, as on an atlas plate) and covers the strip along the border where the deeper laminae and the
+    // muscle nearly touch (a first try cut exactly at the border and left brown flecks and slivers there); throughBack
+    // as below (low on the belly the sheet curves in through the muscle and showed as flecks on it)
+    // keepMidlineMm (AN check): the sheet medial to the muscle's inner border (the linea alba between the two recti) is
+    // kept, reaching that far over the inner border so no hairline slit opens along it
+    Object.freeze({ sheath: 'FJ1452', sheathName: 'Right external oblique', rectus: 'zm-rectus-abdominis-r', insetMm: 12, throughBack: true, keepMidlineMm: 2 }),
+    Object.freeze({ sheath: 'FJ1452M', sheathName: 'Left external oblique', rectus: 'zm-rectus-abdominis-l', insetMm: 12, throughBack: true, keepMidlineMm: 2 }),
+    // the same sheath's deeper laminae in the Z-Anatomy meshes: the internal oblique's aponeurosis splits around the
+    // muscle (its front lamina lies 3 to 4 mm in front of it) and, low down, the transversus abdominis aponeurosis
+    // passes in front of it. throughBack: every part of these sheets over the muscle that lies in front of its BACK
+    // surface is left out (the front lamina and the pieces that wrap its border and cut through it under the different
+    // stack lifts: brown flecks along its outer border in the first pictures); the lamina behind it stays. reachCells:
+    // the cut reaches that many 5 mm cells past the muscle's outline (2: about 10 mm), under the external oblique's flap
+    Object.freeze({ sheath: 'zm-internal-oblique-r', sheathName: 'Right internal oblique', rectus: 'zm-rectus-abdominis-r', throughBack: true, reachCells: 2 }),
+    Object.freeze({ sheath: 'zm-internal-oblique-l', sheathName: 'Left internal oblique', rectus: 'zm-rectus-abdominis-l', throughBack: true, reachCells: 2 }),
+    Object.freeze({ sheath: 'zm-transversus-abdominis-r', sheathName: 'Right transversus abdominis', rectus: 'zm-rectus-abdominis-r', throughBack: true, reachCells: 2 }),
+    Object.freeze({ sheath: 'zm-transversus-abdominis-l', sheathName: 'Left transversus abdominis', rectus: 'zm-rectus-abdominis-l', throughBack: true, reachCells: 2 })
+  ]),
+  cellMm: 5, frontToleranceMm: 2,
+  basis: 'display choice: the front layer of the rectus sheath (the obliques\' tendon sheets) is drawn opened, as in a dissection, so rectus abdominis shows (the linea alba between the two recti stays); not measured anatomy'
+});
+export function openRectusSheath(meshesById, rule = RECTUS_SHEATH_OPENING) {
+  if (!(meshesById instanceof Map)) return { meshesById, report: null };
+  const out = new Map(meshesById), report = [];
+  const C = rule.cellMm, tol = rule.frontToleranceMm;
+  for (const r of rule.rows) {
+    const sh = meshesById.get(r.sheath), ra = meshesById.get(r.rectus);
+    if (!sh || !ra || !sh.positions || !sh.indices || !ra.positions) continue;
+    // the rectus front surface: per (x, z) cell the most anterior y (smallest y; +y is posterior) of its vertices
+    // (integer cell keys: x and z cells offset by 4096, so any body coordinate within +-20 m packs into one number)
+    const front = new Map(), back = new Map(), rp = ra.positions, key = (cx, cz) => (cx + 4096) * 8192 + (cz + 4096);
+    for (let i = 0; i + 2 < rp.length; i += 3) {
+      const k = key(Math.floor(rp[i] / C), Math.floor(rp[i + 2] / C)), y = rp[i + 1];
+      if (!(front.get(k) <= y)) front.set(k, y);
+      if (!(back.get(k) >= y)) back.set(k, y);
+    }
+    // the back surface at a point: its own cell's, else (past the outline) the shallowest around it, so a sheet behind
+    // the muscle is never taken for one in front
+    const backAt = (x, z) => {
+      const cx = Math.floor(x / C), cz = Math.floor(z / C), own = back.get(key(cx, cz));
+      if (own !== undefined) return own;
+      let y = Infinity;
+      for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) { const v = back.get(key(cx + a, cz + b)); if (v < y) y = v; }
+      return y;
+    };
+    const R = Number.isInteger(r.reachCells) && r.reachCells > 0 ? r.reachCells : 1;
+    const frontAt = (x, z) => {
+      const cx = Math.floor(x / C), cz = Math.floor(z / C), own = front.get(key(cx, cz));
+      if (own !== undefined) return own;
+      let y = Infinity;
+      for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) { const v = front.get(key(cx + a, cz + b)); if (v < y) y = v; }
+      return y;
+    };
+    // the muscle's outer border per height band (s = its side: -1 right, +1 left): the largest s * x of its vertices
+    let sx = 0;
+    for (let i = 0; i + 2 < rp.length; i += 3) sx += rp[i];
+    const side = sx < 0 ? -1 : 1, border = new Map(), inner = new Map();
+    for (let i = 0; i + 2 < rp.length; i += 3) {
+      const k = Math.floor(rp[i + 2] / C), v = side * rp[i];
+      if (!(border.get(k) >= v)) border.set(k, v);
+      if (!(inner.get(k) <= v)) inner.set(k, v);
+    }
+    const borderAt = z => { const k = Math.floor(z / C); let v = -Infinity; for (let b = -1; b <= 1; b++) { const w = border.get(k + b); if (w > v) v = w; } return v; };
+    // the muscle's inner (midline) border per height band: the smallest s * x of its vertices, the most medial of the
+    // neighbouring bands (so the kept midline strip never reaches over the muscle by more than keepMidlineMm)
+    const innerAt = z => { const k = Math.floor(z / C); let v = Infinity; for (let b = -1; b <= 1; b++) { const w = inner.get(k + b); if (w < v) v = w; } return v; };
+    const keepMid = Number.isFinite(r.keepMidlineMm) ? r.keepMidlineMm : null;
+    const inset = Number.isFinite(r.insetMm) ? r.insetMm : null;
+    const p = sh.positions, ix = sh.indices, keep = new Uint32Array(ix.length);
+    let dropped = 0, n = 0, midline = 0;
+    for (let f = 0; f + 2 < ix.length; f += 3) {
+      const a = 3 * ix[f], b = 3 * ix[f + 1], c = 3 * ix[f + 2];
+      const x = (p[a] + p[b] + p[c]) / 3, y = (p[a + 1] + p[b + 1] + p[c + 1]) / 3, z = (p[a + 2] + p[b + 2] + p[c + 2]) / 3;
+      const fy = frontAt(x, z);
+      const limit = r.throughBack ? backAt(x, z) - tol : fy + tol;
+      if (Number.isFinite(fy) && y < limit && (inset === null || side * x < borderAt(z) - inset)) {
+        if (keepMid === null || !(side * x < innerAt(z) + keepMid)) { dropped++; continue; }
+        midline++;
+      }
+      keep[n++] = ix[f]; keep[n++] = ix[f + 1]; keep[n++] = ix[f + 2];
+    }
+    if (!dropped) continue;
+    out.set(r.sheath, { ...sh, indices: keep.slice(0, n), faceCount: n / 3, displayCut: rule.basis });
+    report.push({ id: r.sheath, name: r.sheathName, over: r.rectus, triangles: ix.length / 3, notDrawn: dropped, ...(keepMid === null ? {} : { midlineKept: midline }) });
+  }
+  return { meshesById: out, report };
 }
 
-/** Source-frame detachment matrix of one mesh id (null when it is not a superficial muscle of the table). */
-export function bodyLayerMatrixSource(id, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
-  const rec = bodyLayerRecord(id);
-  if (!rec.displayEligible) return null;
-  return layerMatrix(rec, amount, peel);
+/** R558 (builder AN): the plain sided name of a missing-muscles packet id ('right gracilis', 'left latissimus dorsi'),
+ * only when the producer catalogue does not know the id (as bodyStackClass), else null. The renderer gives it to
+ * ns-colors muscleToneKey as the source name, so both sides of a packet muscle share one tone (Message 15), including
+ * the right levator scapulae, whose left twin (FJ1532M) is a catalogue muscle of the left shoulder girdle. */
+export function bodyPacketMuscleName(id) {
+  if (typeof id !== 'string' || regionalLayerQualification(id).id !== null) return null;
+  const r = STACK_PACKET_BY_ID.get(id);
+  return r ? r.name : null;
+}
+const STACK_CATALOGUE_CLASS = Object.freeze({
+  outer: Object.freeze({ level: 'outer', source: 'catalogue', basis: null }),
+  intermediate: Object.freeze({ level: 'intermediate', source: 'catalogue', basis: null }),
+  deep: Object.freeze({ level: 'deep', source: 'catalogue', basis: null }),
+  none: Object.freeze({ level: 'unclassified', source: null, basis: null })
+});
+
+/** Stack record of one mesh id: { level: 'outer' | 'intermediate' | 'deep' | 'unclassified', source: 'catalogue' |
+ * 'supplement' | null, basis }. Exact ids only. The producer catalogue always wins; a supplement row is used only for
+ * an id the catalogue knows under exactly the row's name and leaves unqualified. */
+export function bodyStackClass(id) {
+  const q = regionalLayerQualification(id), C = STACK_CATALOGUE_CLASS;
+  if (q.regionalClass === 'SUPERFICIAL') return C.outer;
+  if (q.regionalClass === 'INTERMEDIATE_DEEP') return BODY_STACK_RULE.intermediateRuleIds.includes(q.ruleId) ? C.intermediate : C.deep;
+  const s = typeof id === 'string' ? STACK_SUPPLEMENT_BY_ID.get(id) : null;
+  if (s && q.id === id && q.regionalClass === 'UNQUALIFIED' && q.sourceName === s.name) return s;
+  // R558 (builder AN): a missing-muscles packet id, only when the catalogue does not know the id at all.
+  const k = typeof id === 'string' && q.id === null ? STACK_PACKET_BY_ID.get(id) : null;
+  return k || C.none;
+}
+/** Stack level of one mesh id: 'outer' | 'intermediate' | 'deep' | 'unclassified' (see bodyStackClass). */
+export function bodyStackLevel(id) {
+  return bodyStackClass(id).level;
 }
 
 /**
- * Detached REST positions of one mesh (source frame), for CPU-skinned meshes such as the left arm (ns-arm / ns-rig
- * skinApply): skin these positions with the weights computed from the ORIGINAL rest positions, so the offset rides on the
- * bone-driven pose (sum_k w_k M_k (D p) = skinned point moved with its bones). Returns the input array itself when the
- * mesh is not a superficial muscle or amount is 0 (nothing to change); otherwise a new Float32Array.
+ * Round 4: outer / intermediate / deep of EVERY muscle mesh of the body, the left game arm and the face packet (226
+ * ids), for display code that shades or labels muscles by layer (builder M's per-muscle look). Merged from two display
+ * classifications, both from the usual textbook description of which muscle lies on which:
+ *   - BODY_STACK_SUPPLEMENT above (this file; the rows the radial stack also lifts by), and
+ *   - builder F's see-through classification (its BODY_MUSCLE_LAYER_SUPPLEMENT, ported here: the rows below). F used
+ *     two levels (outer / deeper) and drew every intermediate muscle as deeper; where F's rows and the stack rows name
+ *     the same id they agree once F's 'deeper' is read as 'intermediate or deep' (vasti, semimembranosus and serratus
+ *     anterior are intermediate here, deeper in F; every other shared row is identical), so the stack rows are kept
+ *     and F's rows are added only for ids the stack table does not have. F's 'deeper' becomes 'deep' here, except
+ *     the lumbricals, which lie BETWEEN the long flexor tendons and the interossei ('intermediate', the same reading
+ *     as the catalogue's ADDUCTOR_HAND rule).
+ * Order of evidence, exact ids only: the producer catalogue (ns-regional-layers.mjs: SUPERFICIAL -> outer;
+ * INTERMEDIATE_DEEP -> intermediate for BODY_STACK_RULE.intermediateRuleIds, else deep), never changed or overridden;
+ * then a BODY_STACK_SUPPLEMENT row; then a row below; else 'unclassified'. A row is used only when the catalogue knows
+ * the id under exactly the row's source name and leaves it UNQUALIFIED.
+ * HONESTY: the rows are a display classification from general anatomy, not a measurement of this body's meshes and
+ * not a reviewed source relation like the catalogue's. The rows below lift nothing (the stack lifts only by its own
+ * rows). R558 (builder AN): latissimus dorsi, rectus abdominis, the internal oblique, transversus abdominis,
+ * quadratus lumborum, tensor fasciae latae, gracilis, the adductors, the fibularis muscles, the erector spinae, the
+ * rhomboids and pectoralis minor now come from the missing-muscles packet and take their levels from BODY_STACK_PACKET
+ * (through bodyStackClass, source 'packet').
  */
-export function detachedRestPositions(id, positions, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
-  const D = amount > 0 ? bodyLayerMatrixSource(id, { amount, peel }) : null;
-  if (!D) return positions;
-  return transformPositions(D, positions);
+const layerRows = (level, basis, pairs) => pairs.map(([id, name]) => Object.freeze({ id, name, level, basis, from: 'F' }));
+const faceBoth = (slug, name) => [[`zf-${slug}-r`, `${name}.r`], [`zf-${slug}-l`, `${name}.l`]];
+export const BODY_MUSCLE_LAYER_SUPPLEMENT = Object.freeze({
+  kind: 'ns-body-muscle-layer-supplement',
+  scope: 'Display classification from standard gross-anatomy layer descriptions (which muscle lies on which). ' +
+    'Not a measurement of this body, and not part of the producer catalogue. Used after BODY_STACK_SUPPLEMENT.',
+  rows: Object.freeze([
+    // shoulder girdle and upper arm (the body's right arm and the separately drawn left game arm)
+    ...layerRows('deep', 'rotator cuff, back of the shoulder blade: under the spinal part of the deltoid and the trapezius',
+      [['FJ1500', 'Right infraspinatus muscle'], ['FJ1500M', 'Left infraspinatus muscle'], ['FJ1508', 'Right teres minor'], ['FJ1508M', 'Left teres minor']]),
+    ...layerRows('deep', 'rotator cuff, front of the shoulder blade: against the ribs, under the shoulder blade',
+      [['FJ1504', 'Right subscapularis'], ['FJ1504M', 'Left subscapularis']]),
+    ...layerRows('deep', 'upper arm, inner side: under the short head of biceps brachii and the pectoralis major',
+      [['FJ1488', 'Right coracobrachialis'], ['FJ1488M', 'Left coracobrachialis']]),
+    // hand
+    ...layerRows('intermediate', 'palm: under the long flexor tendons, on the interossei',
+      [['FJ1510', 'Set of lumbricals of right hand'], ['FJ1510M', 'Set of lumbricals of left hand']]),
+    // hip (inner pelvis)
+    ...layerRows('deep', 'deep hip flexor: on the inner pelvis and the lumbar spine, behind the abdominal wall',
+      [['FJ1422', 'Right iliacus'], ['FJ1422M', 'Left iliacus'], ['FJ1431', 'Right psoas major'], ['FJ1431M', 'Left psoas major']]),
+    // neck
+    ...layerRows('outer', 'above the hyoid, superficial: lies on the mylohyoid (the catalogue puts mylohyoid and geniohyoid deeper); its back belly runs under sternocleidomastoid',
+      [['FJ1556', 'Right digastric'], ['FJ1579', 'Right digastric'], ['FJ1555', 'Left digastric'], ['FJ1560', 'Left digastric'], ['FJ1578', 'Left digastric']]),
+    // face and chewing muscles (face packet)
+    ...layerRows('outer', 'scalp: under the skin, on the skull',
+      [...faceBoth('frontalis', 'Frontalis muscle'), ...faceBoth('occipitalis', 'Occipitalis muscle')]),
+    ...layerRows('outer', 'side of the scalp: over the temporal fascia and temporalis', faceBoth('temporoparietalis', 'Temporoparietalis muscle')),
+    ...layerRows('outer', 'ring of the eye, superficial: covers corrugator supercilii',
+      [...faceBoth('orbicularis-oculi-orbital', 'Orbital part of orbicularis oculi'), ...faceBoth('orbicularis-oculi-palpebral', 'Palpebral part of orbicularis oculi')]),
+    ...layerRows('outer', 'nose, superficial: under the skin, over the nasal bones and cartilage',
+      [...faceBoth('procerus', 'Procerus muscle'), ...faceBoth('nasalis', 'Nasalis muscle')]),
+    ...layerRows('outer', 'upper lip elevators, superficial: cover levator anguli oris',
+      [...faceBoth('levator-labii-superioris-alaeque-nasi', 'Levator nasolabialis'), ...faceBoth('levator-labii-superioris', 'Levator labii superioris'),
+        ...faceBoth('zygomaticus-minor', 'Zygomaticus minor muscle')]),
+    ...layerRows('outer', 'cheek and mouth, superficial: under the skin, over buccinator and the deep part of masseter',
+      [...faceBoth('zygomaticus-major', 'Zygomaticus major muscle'), ...faceBoth('risorius', 'Risorius muscle'), ...faceBoth('orbicularis-oris', 'Orbicularis oris muscle')]),
+    ...layerRows('outer', 'lower lip, superficial: covers part of depressor labii inferioris', faceBoth('depressor-anguli-oris', 'Depressor anguli oris')),
+    ...layerRows('outer', 'thin sheet of the neck and lower face, just under the skin', faceBoth('platysma', 'Platysma')),
+    ...layerRows('outer', 'jaw, superficial: covers the deep part of masseter', faceBoth('masseter-superficial', 'Superficial part of masseter')),
+    ...layerRows('deep', 'brow: under frontalis and orbicularis oculi', faceBoth('corrugator-supercilii', 'Corrugator supercilii')),
+    ...layerRows('deep', 'base of the nose: under orbicularis oris', faceBoth('depressor-septi-nasi', 'Depressor septi nasi')),
+    ...layerRows('deep', 'upper lip: under levator labii superioris and zygomaticus minor', faceBoth('levator-anguli-oris', 'Levator anguli oris')),
+    ...layerRows('deep', 'cheek, deep: under masseter and the superficial face muscles', faceBoth('buccinator', 'Bucinator')),
+    ...layerRows('deep', 'lower lip and chin: partly under depressor anguli oris',
+      [...faceBoth('depressor-labii-inferioris', 'Depressor labii inferioris'), ...faceBoth('mentalis', 'Mentalis muscle')]),
+    ...layerRows('deep', 'jaw: under the superficial part of masseter', faceBoth('masseter-deep', 'Deep part of masseter')),
+    ...layerRows('deep', 'side of the head: under the temporal fascia and temporoparietalis; its tendon passes under the zygomatic arch',
+      faceBoth('temporalis', 'Temporalis muscle')),
+    ...layerRows('deep', 'inside the lower jaw (infratemporal fossa): under the ramus of the mandible and temporalis',
+      [...faceBoth('medial-pterygoid', 'Medial pterygoid muscle'), ...faceBoth('lateral-pterygoid-superior', 'Superior head of lateral pterygoid muscle'),
+        ...faceBoth('lateral-pterygoid-inferior', 'Inferior head of lateral pterygoid muscle')])
+  ])
+});
+const MUSCLE_LAYER_ROW = new Map(BODY_MUSCLE_LAYER_SUPPLEMENT.rows.map(r => [r.id, Object.freeze({ level: r.level, source: 'layer-supplement', basis: r.basis, name: r.name })]));
+
+/** Display layer record of one muscle mesh id: { level: 'outer' | 'intermediate' | 'deep' | 'unclassified', source:
+ * 'catalogue' | 'supplement' (BODY_STACK_SUPPLEMENT) | 'layer-supplement' (BODY_MUSCLE_LAYER_SUPPLEMENT) | null,
+ * basis }. Exact ids only; the catalogue always wins. */
+export function bodyMuscleLayerRecord(id) {
+  const c = bodyStackClass(id);
+  if (c.level !== 'unclassified') return c;
+  const q = regionalLayerQualification(id), r = typeof id === 'string' ? MUSCLE_LAYER_ROW.get(id) : null;
+  return r && q.id === id && q.regionalClass === 'UNQUALIFIED' && q.sourceName === r.name ? r : c;
+}
+/** Display layer of one muscle mesh id: 'outer' | 'intermediate' | 'deep' | 'unclassified' (see bodyMuscleLayerRecord). */
+export function bodyMuscleLayer(id) {
+  return bodyMuscleLayerRecord(id).level;
+}
+
+const sstep = t => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/** "Is this point within tauMm of a bone surface?" over bone vertices plus samples of every long triangle (so the
+ * test is against the surface, not the vertex cloud). Hash grid of tauMm cells; built once per lift. */
+function stackBoneIndex(boneMeshes, tauMm, sampleMm) {
+  const inv = 1 / tauMm, t2 = tauMm * tauMm, s2 = sampleMm * sampleMm, cells = new Map(), coarse = new Set();
+  const key = (i, j, k) => ((i & 1023) << 20) | ((j & 1023) << 10) | (k & 1023);
+  let points = 0;
+  const put = (x, y, z) => {
+    const i = Math.floor(x * inv), j = Math.floor(y * inv), k = Math.floor(z * inv), h = key(i, j, k);
+    let c = cells.get(h);
+    if (!c) {
+      cells.set(h, (c = []));
+      // One coarse lookup rejects a query with no occupied neighbour cell.
+      for (let a = -1; a <= 1; a += 2) for (let b = -1; b <= 1; b += 2) for (let d = -1; d <= 1; d += 2) coarse.add(key((i + a) >> 2, (j + b) >> 2, (k + d) >> 2));
+    }
+    c.push(x, y, z); points++;
+  };
+  for (const mesh of boneMeshes) {
+    const p = positionsOf(mesh);
+    if (!p) continue;
+    for (let i = 0; i < p.length; i += 3) put(p[i], p[i + 1], p[i + 2]);
+    const ix = mesh.indices;
+    if (!ix) continue;
+    for (let t = 0; t + 2 < ix.length; t += 3) {
+      const a = 3 * ix[t], b = 3 * ix[t + 1], c = 3 * ix[t + 2];
+      const ax = p[a], ay = p[a + 1], az = p[a + 2], bx = p[b], by = p[b + 1], bz = p[b + 2], cx = p[c], cy = p[c + 1], cz = p[c + 2];
+      const m2 = Math.max((bx - ax) ** 2 + (by - ay) ** 2 + (bz - az) ** 2, (cx - bx) ** 2 + (cy - by) ** 2 + (cz - bz) ** 2, (ax - cx) ** 2 + (ay - cy) ** 2 + (az - cz) ** 2);
+      if (!(m2 > s2)) continue;
+      const n = Math.min(48, Math.ceil(Math.sqrt(m2) / sampleMm));
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+        if ((i === 0 || i === n) && (j === 0 || j === n) || (i === 0 && j === n)) continue;   // the corners are vertices
+        const u = i / n, v = j / n, w = 1 - u - v;
+        put(w * ax + u * bx + v * cx, w * ay + u * by + v * cy, w * az + u * bz + v * cz);
+      }
+    }
+  }
+  const near = (x, y, z) => {
+    const i = Math.floor(x * inv), j = Math.floor(y * inv), k = Math.floor(z * inv);
+    if (!coarse.has(key(i >> 2, j >> 2, k >> 2))) return false;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let d = -1; d <= 1; d++) {
+      const c = cells.get(key(i + a, j + b, k + d));
+      if (!c) continue;
+      for (let q = 0; q < c.length; q += 3) { const dx = c[q] - x, dy = c[q + 1] - y, dz = c[q + 2] - z; if (dx * dx + dy * dy + dz * dz <= t2) return true; }
+    }
+    return false;
+  };
+  return { near, points };
+}
+
+/** Distance to the nearest of a fixed point set (flat xyz): a balanced k-d tree, built once per mesh. */
+function stackNearestDistance(pts) {
+  const n = pts.length / 3, idx = new Int32Array(n), axis = new Uint8Array(n);
+  for (let i = 0; i < n; i++) idx[i] = i;
+  const build = (lo, hi) => {
+    if (hi - lo < 1) return;
+    const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+    for (let q = lo; q < hi; q++) for (let k = 0; k < 3; k++) { const v = pts[3 * idx[q] + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v; }
+    const ex = mx[0] - mn[0], ey = mx[1] - mn[1], ez = mx[2] - mn[2], ax = ex >= ey && ex >= ez ? 0 : ey >= ez ? 1 : 2;
+    if (hi - lo > 1) idx.subarray(lo, hi).sort((a, b) => pts[3 * a + ax] - pts[3 * b + ax]);
+    const mid = (lo + hi) >> 1;
+    axis[mid] = ax;
+    build(lo, mid); build(mid + 1, hi);
+  };
+  build(0, n);
+  let best = 0, X = 0, Y = 0, Z = 0;
+  const visit = (lo, hi) => {
+    if (hi <= lo) return;
+    const mid = (lo + hi) >> 1, q = 3 * idx[mid], ax = axis[mid];
+    const dx = X - pts[q], dy = Y - pts[q + 1], dz = Z - pts[q + 2], d = dx * dx + dy * dy + dz * dz;
+    if (d < best) best = d;
+    const delta = ax === 0 ? dx : ax === 1 ? dy : dz;
+    if (delta < 0) { visit(lo, mid); if (delta * delta < best) visit(mid + 1, hi); }
+    else { visit(mid + 1, hi); if (delta * delta < best) visit(lo, mid); }
+  };
+  return (x, y, z, capMm) => { best = capMm * capMm; X = x; Y = y; Z = z; visit(0, n); return Math.sqrt(best); };
+}
+
+/** Centroid and principal (long) axis of a vertex cloud. */
+function stackPrincipalAxis(p) {
+  const n = p.length / 3;
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < p.length; i += 3) { cx += p[i]; cy += p[i + 1]; cz += p[i + 2]; }
+  cx /= n; cy /= n; cz /= n;
+  let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+  for (let i = 0; i < p.length; i += 3) {
+    const x = p[i] - cx, y = p[i + 1] - cy, z = p[i + 2] - cz;
+    xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+  }
+  let v = xx >= yy && xx >= zz ? [xx, xy, xz] : yy >= zz ? [xy, yy, yz] : [xz, yz, zz];
+  for (let it = 0; it < 64; it++) {
+    const w = [xx * v[0] + xy * v[1] + xz * v[2], xy * v[0] + yy * v[1] + yz * v[2], xz * v[0] + yz * v[1] + zz * v[2]];
+    const l = Math.hypot(w[0], w[1], w[2]);
+    if (!(l > 0)) break;
+    v = [w[0] / l, w[1] / l, w[2] / l];
+  }
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return { c: [cx, cy, cz], e: l > 0 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 0, 1] };
+}
+
+/**
+ * The attachment ends of one muscle mesh and each vertex's distance to them. Everything is a pure function of the
+ * vertex position, so the repeated vertices of a seam get the same answer and the surface cannot tear.
+ * @param midline null | { point, normal }: the midline plane of a trunk muscle (an attachment wherever it is reached)
+ */
+function stackMeshAnchors(p, bone, midline, capMm, hold = null) {
+  const A = BODY_STACK_RULE.anchor, n = p.length / 3;
+  const { c, e } = stackPrincipalAxis(p);
+  const s = new Float32Array(n);
+  let smin = Infinity, smax = -Infinity;
+  for (let i = 0, v = 0; i < p.length; i += 3, v++) {
+    const t = (p[i] - c[0]) * e[0] + (p[i + 1] - c[1]) * e[1] + (p[i + 2] - c[2]) * e[2];
+    s[v] = t; if (t < smin) smin = t; if (t > smax) smax = t;
+  }
+  const L = Math.max(1e-6, smax - smin);
+  if (typeof capMm === 'function') capMm = capMm(L);   // round 4: the distance search reaches only as far as needed
+  // A held end: which end of the principal axis is nearer the far end of the limb.
+  let heldLo = -1, heldHi = 2;
+  if (hold) {
+    const far = t => Math.hypot(c[0] + e[0] * t - hold.toward[0], c[1] + e[1] * t - hold.toward[1], c[2] + e[2] * t - hold.toward[2]);
+    if (far(smin) <= far(smax)) heldLo = hold.lengthShare; else heldHi = 1 - hold.lengthShare;
+  }
+  const BINS = Math.round(1 / A.extendStep), bin = new Uint8Array(n), tot = new Int32Array(BINS), on = new Int32Array(BINS), near = new Uint8Array(n);
+  for (let i = 0, v = 0; i < p.length; i += 3, v++) {
+    const t = (s[v] - smin) / L, b = Math.min(BINS - 1, Math.floor(t * BINS));
+    s[v] = t; bin[v] = b; tot[b]++;
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    let f = midline && Math.abs((x - midline.point[0]) * midline.normal[0] + (y - midline.point[1]) * midline.normal[1] + (z - midline.point[2]) * midline.normal[2]) <= A.midlineMm ? 2 : 0;
+    if (!f && bone.near(x, y, z)) f = 1;
+    if (f) { near[v] = f; on[b]++; }
+  }
+  const w0 = Math.round(A.endWindow * BINS), lim = Math.round(A.extendLimit * BINS), need = Math.max(A.cleanMin, A.cleanShare * n);
+  let n0 = 0, n1 = 0;
+  for (let b = 0; b < w0; b++) n0 += on[b];
+  for (let b = BINS - w0; b < BINS; b++) n1 += on[b];
+  const clean = [n0 >= need, n1 >= need];
+  let lo = w0, hi = BINS - w0;
+  // An end reaches further in only as an UNBROKEN run of bone contact: the innermost slice of its own window must be
+  // on bone too. A belly that lies on a bone again further in, past a free stretch, is resting there, not attached.
+  const solid = b => tot[b] > 0 && on[b] >= A.extendShare * tot[b];
+  if (clean[0] && solid(lo - 1)) while (lo < lim && solid(lo)) lo++;
+  if (clean[1] && solid(hi)) while (hi > BINS - lim && solid(hi - 1)) hi--;
+  const anchor = new Uint8Array(n);
+  let count = 0;
+  for (let v = 0; v < n; v++) {
+    let a = near[v] === 2 || (near[v] === 1 && (bin[v] < lo || bin[v] >= hi)) || s[v] <= heldLo || s[v] >= heldHi;
+    if (!a && ((!clean[0] && s[v] <= A.capShare) || (!clean[1] && s[v] >= 1 - A.capShare))) a = true;
+    if (a) { anchor[v] = 1; count++; }
+  }
+  const pts = new Float32Array(3 * count);
+  for (let v = 0, k = 0; v < n; v++) if (anchor[v]) { pts[k++] = p[3 * v]; pts[k++] = p[3 * v + 1]; pts[k++] = p[3 * v + 2]; }
+  const dist = stackNearestDistance(pts), d = new Float32Array(n);
+  for (let i = 0, v = 0; i < p.length; i += 3, v++) d[v] = anchor[v] ? 0 : dist(p[i], p[i + 1], p[i + 2], capMm);
+  return { n, lengthMm: L, anchor, d, anchored: count, clean, reach: [lo / BINS, 1 - hi / BINS], heldShare: hold ? hold.lengthShare : 0, capMm };
+}
+
+/** R558 (Message 30): rig segments that carry finger, thumb and toe PHALANGES (body rig and left-arm rig names; the
+ * metacarpals and metatarsals ride the hand / thumb_mc / foot segments and are not digits). */
+export const STACK_DIGIT_SEGMENT = /^(?:[lr]_)?(?:thumb_pp|thumb_dp|index_|middle_|ring_|little_|toes$|hallux$)/;
+/** The lift factor on the digits (BODY_STACK_RULE.digits) as a function (x, y, z) -> 0..1, or null without digit
+ * bones: sstep((d - nearMm) / rampMm), d = the distance to the nearest sample of the given phalanx meshes (their
+ * vertices and points on their triangles every sampleMm). */
+function stackDigitFade(digitBones, o = BODY_STACK_RULE.digits) {
+  if (!o || !digitBones) return null;
+  const pts = [];
+  const s2 = o.sampleMm * o.sampleMm;
+  for (const mesh of digitBones) {
+    const p = positionsOf(mesh);
+    if (!p) continue;
+    for (let i = 0; i < p.length; i++) pts.push(p[i]);
+    const ix = mesh.indices;
+    if (!ix) continue;
+    for (let t = 0; t + 2 < ix.length; t += 3) {
+      const a = 3 * ix[t], b = 3 * ix[t + 1], c = 3 * ix[t + 2];
+      const m2 = Math.max((p[b] - p[a]) ** 2 + (p[b + 1] - p[a + 1]) ** 2 + (p[b + 2] - p[a + 2]) ** 2, (p[c] - p[b]) ** 2 + (p[c + 1] - p[b + 1]) ** 2 + (p[c + 2] - p[b + 2]) ** 2,
+        (p[a] - p[c]) ** 2 + (p[a + 1] - p[c + 1]) ** 2 + (p[a + 2] - p[c + 2]) ** 2);
+      if (!(m2 > s2)) continue;
+      const n = Math.min(24, Math.ceil(Math.sqrt(m2) / o.sampleMm));
+      for (let i = 1; i < n; i++) for (let j = 1; j < n - i; j++) {
+        const u = i / n, v = j / n, w = 1 - u - v;
+        pts.push(w * p[a] + u * p[b] + v * p[c], w * p[a + 1] + u * p[b + 1] + v * p[c + 1], w * p[a + 2] + u * p[b + 2] + v * p[c + 2]);
+      }
+    }
+  }
+  if (pts.length < 3) return null;
+  const dist = stackNearestDistance(Float32Array.from(pts)), cap = o.nearMm + o.rampMm;
+  return (x, y, z) => sstep((dist(x, y, z, cap) - o.nearMm) / o.rampMm);
+}
+
+/** An axis chain: straight segments between rig points, one body region (gap) each. null when a point is missing. */
+function stackChain(key, pts, regions, extra = null) {
+  if (!Array.isArray(pts) || pts.length < 2 || pts.some(q => !q || !q.every(Number.isFinite))) return null;
+  const segs = [];
+  let t0 = 0;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], ab = sub(pts[k + 1], a), l = len(ab), gap = BODY_STACK_RULE.gapMm[regions[k]];
+    if (!(l > 1e-6) || !Number.isFinite(gap)) return null;
+    segs.push({ a: [a[0], a[1], a[2]], u: scl(ab, 1 / l), l, t0, region: regions[k], gap });
+    t0 += l;
+  }
+  return { key, segs, ...(extra || {}) };
+}
+/** Nearest chain segment to a point and the arclength of the nearest point on it: [segment index, arclength]. */
+function stackChainNearest(chain, x, y, z) {
+  let bk = 0, bt = 0, bd = Infinity;
+  for (let k = 0; k < chain.segs.length; k++) {
+    const g = chain.segs[k], dx = x - g.a[0], dy = y - g.a[1], dz = z - g.a[2];
+    const t = Math.max(0, Math.min(g.l, dx * g.u[0] + dy * g.u[1] + dz * g.u[2]));
+    const ex = dx - g.u[0] * t, ey = dy - g.u[1] * t, ez = dz - g.u[2] * t, dd = ex * ex + ey * ey + ez * ez;
+    if (dd < bd) { bd = dd; bk = k; bt = g.t0 + t; }
+  }
+  return [bk, bt];
+}
+/** A per-region value (table: region -> mm) at an arclength: each segment keeps its own value, and across a joint
+ * the value changes linearly over BODY_STACK_RULE.regionBlendMm on each side (at most half of either segment). */
+function stackChainValue(chain, t, table) {
+  const S = chain.segs, at = k => table[S[k].region];
+  let k = 0;
+  while (k + 1 < S.length && t >= S[k + 1].t0) k++;
+  const v = at(k);
+  const zone = k => Math.min(BODY_STACK_RULE.regionBlendMm, S[k - 1].l / 2, S[k].l / 2);
+  if (k > 0) { const j = S[k].t0, z = zone(k); if (t < j + z) { const a = at(k - 1); return a + (v - a) * (t - (j - z)) / (2 * z); } }
+  if (k + 1 < S.length) { const j = S[k + 1].t0, z = zone(k + 1); if (t > j - z) { const b = at(k + 1); return v + (b - v) * (t - (j - z)) / (2 * z); } }
+  return v;
+}
+/** The gap at an arclength (BODY_STACK_RULE.gapMm by region, see stackChainValue), with the dip at each joint inside
+ * a limb chain (BODY_STACK_RULE.jointDip; the trunk and neck have none). */
+function stackChainGap(chain, t) {
+  const g = stackChainValue(chain, t, BODY_STACK_RULE.gapMm), D = BODY_STACK_RULE.jointDip;
+  if (!chain.limb) return g;
+  let f = 1;
+  for (let k = 1; k < chain.segs.length; k++) f = Math.min(f, 1 - D.share * (1 - sstep(Math.abs(t - chain.segs[k].t0) / D.halfWidthMm)));
+  return g * f;
+}
+
+/**
+ * The anchored lift of a set of muscle meshes that share one frame (millimetres): the body in its source pose, or the
+ * separately rigged left arm at rest. Only ids at the outer or intermediate stack level are lifted.
+ * @param muscles iterable of { id, positions } (not modified)
+ * @param bones iterable of { positions, indices }: every bone surface there is in that frame (or a stackBoneIndex)
+ * @param chainFor (ids of one named muscle, its vertex counts) => stackChain() result | null
+ * @returns { lifted: Map(id -> Float32Array, full-lift positions), byId, units, unavailable, ends, boneSamples,
+ *   anchorDist: Map(id -> Float32Array, each vertex's distance to the anchored ends, 0 on them) }
+ */
+function anchoredStackLift(muscles, bones, chainFor, digitBones = null) {
+  const R = BODY_STACK_RULE, capMm = Math.max(R.ramp.maxMm, R.ramp.minGaps * Math.max(...Object.values(R.gapMm)));
+  const digitAt = stackDigitFade(digitBones); // R558 (Message 30): BODY_STACK_RULE.digits
+  const bone = bones && typeof bones.near === 'function' ? bones : stackBoneIndex(bones, R.anchor.boneMm, R.anchor.boneSampleMm);
+  const groups = new Map(), byId = Object.create(null), units = Object.create(null), unavailable = [], lifted = new Map(), anchorDist = new Map();
+  for (const m of muscles) {
+    const level = bodyStackLevel(m.id), p = positionsOf(m);
+    if (level !== 'outer' && level !== 'intermediate') continue;
+    if (!p) { unavailable.push(m.id); byId[m.id] = Object.freeze({ level, status: 'unavailable-geometry' }); continue; }
+    const unit = `${muscleLayerKey(regionalLayerQualification(m.id).sourceName).unit} [${level}]`;
+    let g = groups.get(unit);
+    if (!g) groups.set(unit, (g = { level, members: [] }));
+    g.members.push({ id: m.id, p });
+  }
+  const ends = { two: [], one: [], none: [] };
+  for (const [unit, g] of groups) {
+    const share = R.share[g.level], ids = g.members.map(m => m.id);
+    // Round 4: an exact-ID unit rule (BODY_STACK_RULE.unitRules) of any member applies to the whole named muscle.
+    const rule = g.members.map(m => stackRuleRow(R.unitRules, m.id)).find(Boolean) || null;
+    // Round 4: how far the anchor distances are searched (the search is the slow part of the build): as far as the
+    // longest ramp this muscle can get, at least ramp.searchMm. A muscle with its own distShare may reach maxMm.
+    const capFor = L => Math.min(capMm, Math.max(R.ramp.searchMm, R.ramp.minGaps * Math.max(...Object.values(R.gapMm)), R.ramp.lengthShare * L,
+      rule && Number.isFinite(rule.distShare) ? rule.distShare * R.ramp.maxMm : 0));
+    const gapScale = rule && Number.isFinite(rule.gapScale) ? rule.gapScale : 1;
+    const gapAt = t => share * gapScale * (rule && rule.region ? R.gapMm[rule.region] : stackChainGap(chain, t));
+    const chain = chainFor(ids, g.members.map(m => m.p.length / 3));
+    if (!chain) { for (const m of g.members) { unavailable.push(m.id); byId[m.id] = Object.freeze({ level: g.level, status: 'unavailable-axis' }); } continue; }
+    const last = chain.segs[chain.segs.length - 1], toward = [last.a[0] + last.u[0] * last.l, last.a[1] + last.u[1] * last.l, last.a[2] + last.u[2] * last.l];
+    for (const m of g.members) {
+      const h = stackRuleRow(R.heldEnds, m.id);
+      m.a = stackMeshAnchors(m.p, bone, chain.midline || null, capFor, h ? { lengthShare: h.lengthShare, toward } : null);
+    }
+    // The belly: the part away from the ends. Its centroid picks the axis segment and the one radial direction.
+    let sw = 0, bx = 0, by = 0, bz = 0, nAll = 0, px = 0, py = 0, pz = 0;
+    for (const m of g.members) for (let i = 0, v = 0; i < m.p.length; i += 3, v++) {
+      const w = sstep(m.a.d[v] / R.ramp.bellyMm);
+      sw += w; bx += w * m.p[i]; by += w * m.p[i + 1]; bz += w * m.p[i + 2];
+      nAll++; px += m.p[i]; py += m.p[i + 1]; pz += m.p[i + 2];
+    }
+    const belly = sw > 1e-3 * nAll ? [bx / sw, by / sw, bz / sw] : [px / nAll, py / nAll, pz / nAll];
+    const [k, tc] = stackChainNearest(chain, belly[0], belly[1], belly[2]), seg = chain.segs[k], A = seg.a, u = seg.u;
+    const radial = (x, y, z) => { const dx = x - A[0], dy = y - A[1], dz = z - A[2], t = dx * u[0] + dy * u[1] + dz * u[2]; return [dx - u[0] * t, dy - u[1] * t, dz - u[2] * t]; };
+    const rc = radial(belly[0], belly[1], belly[2]), rl = len(rc);
+    if (!(rl >= R.direction.minRadialMm)) { for (const m of g.members) { unavailable.push(m.id); byId[m.id] = Object.freeze({ level: g.level, status: 'unavailable-on-axis' }); } continue; }
+    const dirC = scl(rc, 1 / rl);
+    // How far the muscle wraps round its axis: 2 sqrt(3) x the belly-weighted RMS angle (the full span of an even arc).
+    let sa = 0, swa = 0;
+    for (const m of g.members) for (let i = 0, v = 0; i < m.p.length; i += 3, v++) {
+      const w = sstep(m.a.d[v] / R.ramp.bellyMm);
+      if (!(w > 0)) continue;
+      const r = radial(m.p[i], m.p[i + 1], m.p[i + 2]), l = len(r);
+      if (!(l > 1e-3)) continue;
+      const ang = Math.acos(clamp(dot(r, dirC) / l, -1, 1));
+      sa += w * ang * ang; swa += w;
+    }
+    const wrapDeg = swa > 0 ? 2 * Math.sqrt(3) * Math.sqrt(sa / swa) * 180 / Math.PI : 0;
+    const blend = sstep((wrapDeg - R.direction.constantBelowDeg) / (R.direction.radialAboveDeg - R.direction.constantBelowDeg));
+    const gapC = gapAt(tc);
+    units[unit] = { level: g.level, ids, axis: chain.key, region: seg.region, gapMm: Math.round(gapC * 10) / 10,
+      radialMm: Math.round(rl * 10) / 10, dir: round3(dirC), wrapDeg: Math.round(wrapDeg), radialBlend: Math.round(blend * 100) / 100 };
+    // A leg never lifts toward the other leg: the inward direction at right angles to this segment's axis.
+    let inward = null;
+    if (chain.medial) { const mi = sub(chain.medial, scl(u, dot(chain.medial, u))), ml = len(mi); if (ml > 1e-6) inward = scl(mi, 1 / ml); }
+    // The lift direction with its inward part removed and the rest shortened by the same lean: c = 0 keeps it all,
+    // c >= marginShare (about 40 deg toward the other leg) keeps nothing.
+    const legKeep = (dx, dy, dz) => {
+      const c = dx * inward[0] + dy * inward[1] + dz * inward[2];
+      if (!(c > 0)) return [dx, dy, dz];
+      const k = Math.max(0, 1 - c / R.legInward.marginShare);
+      return [(dx - c * inward[0]) * k, (dy - c * inward[1]) * k, (dz - c * inward[2]) * k];
+    };
+    for (const m of g.members) {
+      const p = m.p, a = m.a, n = a.n, gap = new Float32Array(n);
+      let gmax = 0;
+      for (let i = 0, v = 0; i < p.length; i += 3, v++) { const g1 = gapAt(stackChainNearest(chain, p[i], p[i + 1], p[i + 2])[1]); gap[v] = g1; if (g1 > gmax) gmax = g1; }
+      // Round 4: the ramp also scales with how far the muscle reaches from its anchored ends (95th percentile).
+      // (95th percentile from a 0.5 mm histogram of the distances, which stop at the search cap)
+      const hb = new Int32Array(Math.ceil(2 * a.capMm) + 2);
+      let hn = 0;
+      for (let v = 0; v < n; v++) if (!a.anchor[v]) { hb[Math.min(hb.length - 1, Math.floor(2 * a.d[v]))]++; hn++; }
+      let d95 = 0;
+      for (let b = 0, c = 0; b < hb.length && hn; b++) { c += hb[b]; if (c >= 0.95 * hn) { d95 = (b + 1) / 2; break; } }
+      d95 = Math.min(d95, a.capMm);
+      const distShare = rule && Number.isFinite(rule.distShare) ? rule.distShare : R.ramp.distShare;
+      const ramp = Math.max(R.ramp.minGaps * gmax, Math.min(R.ramp.maxMm, Math.max(R.ramp.lengthShare * a.lengthMm, distShare * d95)));
+      const out = new Float32Array(p.length);
+      let maxLift = 0, full = 0;
+      for (let i = 0, v = 0; i < p.length; i += 3, v++) {
+        const x = p[i], y = p[i + 1], z = p[i + 2], w = a.anchor[v] ? 0 : sstep(a.d[v] / ramp);
+        if (!(w > 0)) { out[i] = x; out[i + 1] = y; out[i + 2] = z; continue; }
+        let dx = dirC[0], dy = dirC[1], dz = dirC[2];
+        if (blend > 0) {
+          const r = radial(x, y, z), l = len(r);
+          if (l > 1e-3) {
+            const mx = dx + (r[0] / l - dx) * blend, my = dy + (r[1] / l - dy) * blend, mz = dz + (r[2] / l - dz) * blend, ml = Math.hypot(mx, my, mz);
+            if (ml > 1e-3) { dx = mx / ml; dy = my / ml; dz = mz / ml; } else { dx = r[0] / l; dy = r[1] / l; dz = r[2] / l; }
+          }
+        }
+        if (inward) { const q = legKeep(dx, dy, dz); dx = q[0]; dy = q[1]; dz = q[2]; }
+        const lift = gap[v] * w * (digitAt ? digitAt(x, y, z) : 1); // R558 (Message 30): none on a finger or toe
+        out[i] = x + lift * dx; out[i + 1] = y + lift * dy; out[i + 2] = z + lift * dz;
+        const moved = inward ? lift * Math.hypot(dx, dy, dz) : lift;   // a leg's inward part may have shortened it
+        if (moved > maxLift) maxLift = moved;
+        if (w >= 0.99) full++;
+      }
+      lifted.set(m.id, out);
+      anchorDist.set(m.id, a.d);
+      const cleanEnds = (a.clean[0] ? 1 : 0) + (a.clean[1] ? 1 : 0);
+      ends[cleanEnds === 2 ? 'two' : cleanEnds === 1 ? 'one' : 'none'].push(m.id);
+      byId[m.id] = Object.freeze({ level: g.level, status: 'anchored-lift', unit, vertices: n, anchored: a.anchored, cleanEnds,
+        capFallback: Object.freeze([!a.clean[0], !a.clean[1]]), endReach: Object.freeze(a.reach.map(v => Math.round(v * 100) / 100)),
+        unitRule: rule ? Object.freeze({ gapScale, distShare, region: rule.region || null }) : null,
+        lengthMm: Math.round(a.lengthMm), rampMm: Math.round(ramp * 10) / 10, maxLiftMm: Math.round(maxLift * 10) / 10,
+        fullLiftShare: Math.round(100 * full / n) / 100, heldEndShare: a.heldShare });
+    }
+  }
+  return { lifted, byId, units, unavailable, ends, boneSamples: bone.points, anchorDist };
+}
+
+/**
+ * The display FILL of one muscle mesh (BODY_STACK_RULE.fill; the user: "The muscles should be full, filled-out and
+ * plumpy."): an outward offset per vertex along the smoothed surface normal,
+ *   offset(v) = weight(v) x min(mm(v), radiusShare x r(v)) x normal(v),
+ * where r(v) = 1 / (2 |H(v)|) is the local radius of the surface from its mean curvature H (a tube of radius r has
+ * H = 1/(2r), a flat sheet H = 0). So a thin tendon or the rounded rim of a sheet swells by a fraction of its own
+ * thickness while a belly or a broad sheet gets the full mm(v), and a concave place is limited the same way, so the
+ * surface does not fold over itself. Repeated seam vertices are welded by position (one offset each, so the surface
+ * cannot tear), normals and radius are smoothed over the surface, and a mesh wound inside out is detected by its
+ * signed volume. A vertex with weight 0 (an attachment end) does not move at all.
+ * @param p positions in the frame the mesh is drawn in; ix its triangle indices
+ * @param mm Float32Array per vertex: the region's largest fill in mm
+ * @param weight Float32Array per vertex, 0..1
+ * @param inward null | [x, y, z] unit: on a leg, the direction toward the other leg in the drawn frame; a surface
+ *   facing it is filled less (none once it leans legInward.marginShare toward it), so the legs do not crowd
+ * @returns { off: Float32Array (same layout as p), maxMm }
+ */
+function stackFillOffsets(p, ix, mm, weight, inward = null, cap = null) {
+  const F = BODY_STACK_RULE.fill, n = p.length / 3, wid = new Int32Array(n), first = new Int32Array(n);
+  // Weld by quantised position: an open-addressing hash over integer cells (exact cell match, so no false merges).
+  const inv = 1 / F.weldMm, Q = new Int32Array(3 * n);
+  let size = 1;
+  while (size < 2 * n) size <<= 1;
+  const slot = new Int32Array(size).fill(-1), mask = size - 1;
+  let m = 0;
+  for (let v = 0; v < n; v++) {
+    const xi = Math.round(p[3 * v] * inv), yi = Math.round(p[3 * v + 1] * inv), zi = Math.round(p[3 * v + 2] * inv);
+    let h = (Math.imul(xi, 73856093) ^ Math.imul(yi, 19349663) ^ Math.imul(zi, 83492791)) & mask, w = -1;
+    while (slot[h] >= 0) {
+      const u = slot[h];
+      if (Q[3 * u] === xi && Q[3 * u + 1] === yi && Q[3 * u + 2] === zi) { w = u; break; }
+      h = (h + 1) & mask;
+    }
+    if (w < 0) { w = m++; slot[h] = w; Q[3 * w] = xi; Q[3 * w + 1] = yi; Q[3 * w + 2] = zi; first[w] = v; }
+    wid[v] = w;
+  }
+  const P = new Float64Array(3 * m), N = new Float64Array(3 * m), Acc = new Float64Array(3 * m);
+  let cx = 0, cy = 0, cz = 0;
+  for (let w = 0; w < m; w++) {
+    const v = 3 * first[w];
+    P[3 * w] = p[v]; P[3 * w + 1] = p[v + 1]; P[3 * w + 2] = p[v + 2];
+    cx += p[v]; cy += p[v + 1]; cz += p[v + 2];
+  }
+  cx /= Math.max(1, m); cy /= Math.max(1, m); cz /= Math.max(1, m);
+  const T = new Int32Array(ix.length);
+  let nt = 0, vol = 0;
+  for (let t = 0; t + 2 < ix.length; t += 3) {
+    const a = wid[ix[t]], b = wid[ix[t + 1]], c = wid[ix[t + 2]];
+    if (a === b || b === c || a === c) continue;
+    T[nt++] = a; T[nt++] = b; T[nt++] = c;
+    const ax = P[3 * a], ay = P[3 * a + 1], az = P[3 * a + 2];
+    const ux = P[3 * b] - ax, uy = P[3 * b + 1] - ay, uz = P[3 * b + 2] - az, vx = P[3 * c] - ax, vy = P[3 * c + 1] - ay, vz = P[3 * c + 2] - az;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    N[3 * a] += nx; N[3 * a + 1] += ny; N[3 * a + 2] += nz;
+    N[3 * b] += nx; N[3 * b + 1] += ny; N[3 * b + 2] += nz;
+    N[3 * c] += nx; N[3 * c + 1] += ny; N[3 * c + 2] += nz;
+    vol += (ax - cx) * nx + (ay - cy) * ny + (az - cz) * nz;
+  }
+  const sign = vol < 0 ? -1 : 1;
+  const unit = X => { for (let w = 0; w < m; w++) { const l = Math.hypot(X[3 * w], X[3 * w + 1], X[3 * w + 2]); if (l > 1e-12) { X[3 * w] /= l; X[3 * w + 1] /= l; X[3 * w + 2] /= l; } } };
+  unit(N);
+  for (let pass = 0; pass < F.smoothPasses; pass++) {
+    Acc.fill(0);
+    for (let t = 0; t < nt; t += 3) {
+      const a = 3 * T[t], b = 3 * T[t + 1], c = 3 * T[t + 2];
+      for (let k = 0; k < 3; k++) { Acc[a + k] += N[b + k] + N[c + k]; Acc[b + k] += N[a + k] + N[c + k]; Acc[c + k] += N[a + k] + N[b + k]; }
+    }
+    for (let i = 0; i < 3 * m; i++) N[i] = N[i] + 0.5 * Acc[i];
+    unit(N);
+  }
+  // Mean curvature from the smoothed normals along each edge: (n_j - n_i).(x_j - x_i) / |x_j - x_i|^2.
+  const K = new Float64Array(m), C = new Float64Array(m);
+  for (let t = 0; t < nt; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const i = 3 * T[t + e], j = 3 * T[t + (e + 1) % 3];
+      const ex = P[j] - P[i], ey = P[j + 1] - P[i + 1], ez = P[j + 2] - P[i + 2], l2 = ex * ex + ey * ey + ez * ez;
+      if (!(l2 > 1e-12)) continue;
+      const c = ((N[j] - N[i]) * ex + (N[j + 1] - N[i + 1]) * ey + (N[j + 2] - N[i + 2]) * ez) / l2;
+      K[i / 3] += c; K[j / 3] += c; C[i / 3]++; C[j / 3]++;
+    }
+  }
+  const base = new Float64Array(m), tmp = new Float64Array(m), cnt = new Float64Array(m);
+  for (let w = 0; w < m; w++) {
+    const kap = C[w] > 0 ? Math.abs(K[w] / C[w]) : 0;
+    base[w] = Math.min(mm[first[w]], F.radiusShare / (2 * kap + 1e-9));
+  }
+  for (let pass = 0; pass < 2; pass++) {   // smooth the amount over the surface (a noisy curvature gives no bumps)
+    tmp.fill(0); cnt.fill(0);
+    for (let t = 0; t < nt; t += 3) {
+      const a = T[t], b = T[t + 1], c = T[t + 2];
+      tmp[a] += base[b] + base[c]; tmp[b] += base[a] + base[c]; tmp[c] += base[a] + base[b];
+      cnt[a] += 2; cnt[b] += 2; cnt[c] += 2;
+    }
+    for (let w = 0; w < m; w++) base[w] = (base[w] + tmp[w]) / (1 + cnt[w]);
+  }
+  const off = new Float32Array(p.length);
+  let maxMm = 0;
+  for (let v = 0; v < n; v++) {
+    const w = wid[v];
+    // Round 4: a cover cap below the fill lowers it, and a negative cap tucks the surface in (at most by the fill it
+    // would have had, so a thin strand is never pushed through itself); both scale with the weight like the fill.
+    let s = weight[first[w]] * (cap ? Math.max(-base[w], Math.min(base[w], cap[first[w]])) : base[w]);
+    if (inward && s > 0) {
+      const c = sign * (N[3 * w] * inward[0] + N[3 * w + 1] * inward[1] + N[3 * w + 2] * inward[2]);
+      if (c > 0) s *= Math.max(0, 1 - c / BODY_STACK_RULE.legInward.marginShare);
+    }
+    if (!s) continue;
+    off[3 * v] = sign * s * N[3 * w]; off[3 * v + 1] = sign * s * N[3 * w + 1]; off[3 * v + 2] = sign * s * N[3 * w + 2];
+    if (s > maxMm) maxMm = s;
+  }
+  return { off, maxMm };
+}
+
+/** The fill of one muscle: region amounts from its axis chain (in the source frame src, where the chain is), weights
+ * from its anchored ends (anchorD: the lift's distances, 0 on the ends) or, for a muscle the stack does not lift,
+ * from its bone contact (0 within anchor.boneMm of a bone surface), and the offsets on the drawn positions. */
+function stackFillMesh(src, drawn, ix, chain, head, anchorD, bone, inward = null, { region = null, cap = null } = {}) {
+  const F = BODY_STACK_RULE.fill, n = src.length / 3, mm = new Float32Array(n), weight = new Float32Array(n);
+  for (let v = 0; v < n; v++) {
+    const x = src[3 * v], y = src[3 * v + 1], z = src[3 * v + 2];
+    mm[v] = head ? F.mm.head : region ? F.mm[region] : chain ? stackChainValue(chain, stackChainNearest(chain, x, y, z)[1], F.mm) : F.mm.trunk;
+  }
+  if (anchorD && anchorD.length === n) for (let v = 0; v < n; v++) weight[v] = sstep(anchorD[v] / F.endRampMm);
+  else {
+    const on = new Uint8Array(n);
+    let c = 0;
+    for (let v = 0; v < n; v++) if (bone.near(src[3 * v], src[3 * v + 1], src[3 * v + 2])) { on[v] = 1; c++; }
+    if (!c) weight.fill(1);
+    else {
+      const pts = new Float32Array(3 * c);
+      for (let v = 0, k = 0; v < n; v++) if (on[v]) { pts[k++] = src[3 * v]; pts[k++] = src[3 * v + 1]; pts[k++] = src[3 * v + 2]; }
+      const dist = stackNearestDistance(pts);
+      for (let v = 0; v < n; v++) weight[v] = on[v] ? 0 : sstep(dist(src[3 * v], src[3 * v + 1], src[3 * v + 2], F.endRampMm) / F.endRampMm);
+    }
+  }
+  return stackFillOffsets(drawn, ix, mm, weight, inward, cap);
+}
+
+/**
+ * Round 4: the cover caps of the display fill (BODY_STACK_RULE.fill.coverMm / coverMarginMm). A muscle vertex within
+ * coverMm (source frame) of a vertex of a muscle at a HIGHER stack level (outer over intermediate over the rest) may
+ * be filled by at most (that muscle's lift there - this vertex's own lift - coverMarginMm); a negative cap tucks it in
+ * (stackFillOffsets). So near the anchored ends of an outer muscle, where its lift is small, the muscle under it is not
+ * filled out through it.
+ * @param list [{ id, rank (2 outer, 1 intermediate, 0 any other muscle), src (source positions), lift (Float32Array of
+ *   each vertex's lift in mm, or null for 0) }]
+ * @returns Map(id -> Float32Array cap per vertex, Infinity where nothing covers it): only muscles with a capped vertex
+ */
+function stackCoverCaps(list) {
+  const F = BODY_STACK_RULE.fill, R = F.coverMm, inv = 1 / R, r2 = R * R, margin = F.coverMarginMm;
+  const key = (i, j, k) => ((i & 1023) << 20) | ((j & 1023) << 10) | (k & 1023);
+  // The cover can only bind where the higher muscle lifts less than the lower one's own lift plus its largest fill,
+  // so each query level gets a grid of only those points: under-the-intermediate (rank 0 queries: points of rank 1
+  // and 2 lifted less than fillMax) and under-the-outer (rank 1 queries: rank 2 points lifted less than lowMax + fillMax).
+  const fillMax = Math.max(...Object.values(F.mm)) + margin;
+  let lowMax = 0;
+  for (const e of list) if (e.rank === 1 && e.lift) for (let v = 0; v < e.lift.length; v++) if (e.lift[v] > lowMax) lowMax = e.lift[v];
+  const grid = (minRank, maxLift) => {
+    const counts = new Map(), coarse = new Set();
+    let total = 0;
+    for (const e of list) {
+      if (e.rank < minRank) continue;
+      for (let v = 0, p = e.src; v < p.length / 3; v++) {
+        if ((e.lift ? e.lift[v] : 0) > maxLift) continue;
+        const i = Math.floor(p[3 * v] * inv), j = Math.floor(p[3 * v + 1] * inv), k = Math.floor(p[3 * v + 2] * inv), h = key(i, j, k);
+        const c = counts.get(h);
+        total++;
+        if (c) { counts.set(h, c + 1); continue; }
+        counts.set(h, 1);
+        // One coarse lookup (cells 4x larger) rejects a query with no occupied neighbour cell, as in stackBoneIndex.
+        for (let a = -1; a <= 1; a += 2) for (let b = -1; b <= 1; b += 2) for (let d = -1; d <= 1; d += 2) coarse.add(key((i + a) >> 2, (j + b) >> 2, (k + d) >> 2));
+      }
+    }
+    const start = new Map(), at = new Map(), pts = new Float32Array(4 * total);
+    let o = 0;
+    for (const [h, c] of counts) { start.set(h, o); at.set(h, o); o += c; }
+    for (const e of list) {
+      if (e.rank < minRank) continue;
+      for (let v = 0, p = e.src; v < p.length / 3; v++) {
+        const L = e.lift ? e.lift[v] : 0;
+        if (L > maxLift) continue;
+        const h = key(Math.floor(p[3 * v] * inv), Math.floor(p[3 * v + 1] * inv), Math.floor(p[3 * v + 2] * inv)), q = at.get(h);
+        pts[4 * q] = p[3 * v]; pts[4 * q + 1] = p[3 * v + 1]; pts[4 * q + 2] = p[3 * v + 2]; pts[4 * q + 3] = L;
+        at.set(h, q + 1);
+      }
+    }
+    return { counts, start, pts, coarse, total };
+  };
+  const grids = [grid(1, fillMax), grid(2, lowMax + fillMax)];
+  const caps = new Map();
+  for (const e of list) {
+    if (e.rank >= 2) continue;
+    const G = grids[e.rank];
+    if (!G.total) continue;
+    const p = e.src, n = p.length / 3;
+    let cap = null;
+    for (let v = 0; v < n; v++) {
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2], i = Math.floor(x * inv), j = Math.floor(y * inv), k = Math.floor(z * inv);
+      if (!G.coarse.has(key(i >> 2, j >> 2, k >> 2))) continue;
+      const own = e.lift ? e.lift[v] : 0;
+      let best = Infinity;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let d = -1; d <= 1; d++) {
+        const h = key(i + a, j + b, k + d), o = G.start.get(h);
+        if (o === undefined) continue;
+        for (let q = o, end = o + G.counts.get(h); q < end; q++) {
+          const dx = G.pts[4 * q] - x, dy = G.pts[4 * q + 1] - y, dz = G.pts[4 * q + 2] - z;
+          if (dx * dx + dy * dy + dz * dz > r2) continue;
+          const c = G.pts[4 * q + 3] - own - margin;
+          if (c < best) best = c;
+        }
+      }
+      if (best < Infinity) { if (!cap) cap = new Float32Array(n).fill(Infinity); cap[v] = best; }
+    }
+    if (cap) caps.set(e.id, cap);
+  }
+  return caps;
+}
+
+/** Round 4 (unitRules.smooth): shave the relief of a sheet facing the front of the trunk down to a smooth surface through
+ * its valleys, in place. Height h = how far forward (-y, drawn frame: the trunk is upright in the start posture) the
+ * front-most surface is, on a grid of cellMm over x and z; the target is the height's minimum over reachMm up and down (not side to side), blurred;
+ * every vertex of a cell (front and back face alike, so the sheet keeps its thickness) moves back by
+ * weight x max(0, h - target), bilinearly between cells. Only inward: no vertex is drawn further out than before.
+ * weight 0 (anchored ends) does not move. */
+function stackShaveRelief(p, weight, { cellMm = 4, reachMm = 24, blurMm = 10 } = {}) {
+  const n = p.length / 3;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let v = 0; v < n; v++) if (weight[v] > 0) { const x = p[3 * v], z = p[3 * v + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  if (!(x1 > x0) || !(z1 > z0)) return 0;
+  const NX = Math.ceil((x1 - x0) / cellMm) + 1, NZ = Math.ceil((z1 - z0) / cellMm) + 1, H = new Float64Array(NX * NZ).fill(-Infinity);
+  for (let v = 0; v < n; v++) {
+    if (!(weight[v] > 0)) continue;
+    const i = Math.round((p[3 * v] - x0) / cellMm), k = Math.round((p[3 * v + 2] - z0) / cellMm), h = -p[3 * v + 1];
+    if (h > H[k * NX + i]) H[k * NX + i] = h;
+  }
+  const r = Math.round(reachMm / cellMm), M = new Float64Array(NX * NZ).fill(NaN), T = new Float64Array(NX * NZ).fill(NaN);
+  for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++) {
+    if (H[k * NX + i] === -Infinity) continue;
+    let m = Infinity;
+    // Up and down only: the relief to remove runs across the trunk (the segments of rectus abdominis), while the
+    // sheet's own curve round the flank runs side to side and must not be cut.
+    for (let b = Math.max(0, k - r); b <= Math.min(NZ - 1, k + r); b++) {
+      const h = H[b * NX + i];
+      if (h !== -Infinity && h < m) m = h;
+    }
+    M[k * NX + i] = m;
+  }
+  const rb = Math.max(1, Math.round(blurMm / cellMm));
+  for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++) {
+    if (!(M[k * NX + i] === M[k * NX + i])) continue;
+    let sw = 0, sv = 0;
+    for (let b = Math.max(0, k - rb); b <= Math.min(NZ - 1, k + rb); b++) for (let a = Math.max(0, i - rb); a <= Math.min(NX - 1, i + rb); a++) {
+      const m = M[b * NX + a];
+      if (!(m === m)) continue;
+      const w = Math.exp(-(((a - i) ** 2 + (b - k) ** 2) * cellMm * cellMm) / (2 * blurMm * blurMm)) ;
+      sw += w; sv += w * m;
+    }
+    T[k * NX + i] = sv / sw;
+  }
+  // The height itself is blurred a little too (over one blur radius' third), so the shave follows the relief, not the
+  // cell-to-cell noise of the fibre texture (which then stays as it is, moved back with its cell).
+  const D = new Float64Array(NX * NZ), rh = Math.max(1, Math.round(blurMm / 3 / cellMm));
+  for (let k = 0; k < NZ; k++) for (let i = 0; i < NX; i++) {
+    const c = k * NX + i;
+    if (H[c] === -Infinity || !(T[c] === T[c])) continue;
+    let sw = 0, sv = 0;
+    for (let b = Math.max(0, k - rh); b <= Math.min(NZ - 1, k + rh); b++) for (let a = Math.max(0, i - rh); a <= Math.min(NX - 1, i + rh); a++) {
+      const h = H[b * NX + a];
+      if (h === -Infinity) continue;
+      sw++; sv += h;
+    }
+    D[c] = Math.max(0, sv / sw - T[c]);
+  }
+  let maxMm = 0;
+  for (let v = 0; v < n; v++) {
+    if (!(weight[v] > 0)) continue;
+    const fx = (p[3 * v] - x0) / cellMm, fz = (p[3 * v + 2] - z0) / cellMm, i = Math.min(NX - 2, Math.max(0, Math.floor(fx))), k = Math.min(NZ - 2, Math.max(0, Math.floor(fz)));
+    const u = Math.min(1, Math.max(0, fx - i)), t = Math.min(1, Math.max(0, fz - k));
+    const d = (1 - u) * (1 - t) * D[k * NX + i] + u * (1 - t) * D[k * NX + i + 1] + (1 - u) * t * D[(k + 1) * NX + i] + u * t * D[(k + 1) * NX + i + 1];
+    const s = weight[v] * d;
+    p[3 * v + 1] += s;   // back (+y)
+    if (s > maxMm) maxMm = s;
+  }
+  return maxMm;
+}
+
+/** Segment -> axis chain of the body rig ('girdle' rides with whatever else the muscle is on). */
+function stackSegmentChain(segment) {
+  if (/_girdle$/.test(segment)) return 'girdle';
+  const m = /^([rl])_(upperarm|forearm|radius|hand|thumb|index|middle|ring|little|thigh|patella|shank|foot|toes)/.exec(segment);
+  if (!m) return 'trunk';
+  return `${m[1]}_${/^(thigh|patella|shank|foot|toes)$/.test(m[2]) ? 'leg' : 'arm'}`;
+}
+function bodyStackChains(rig) {
+  const P = k => (rig.pivots[k] && rig.pivots[k].point) || null, C = s => (rig.segments[s] && rig.segments[s].restCentroid) || null;
+  // The trunk axis is one straight line through the middle of the body (pelvis to neck), not the bent spine: a bent
+  // axis would give two radial directions on the inside of each bend. Its midline plane carries the attachment lines
+  // that have no bone mesh (linea alba, nuchal ligament).
+  // Round 3: a short second segment from the neck to the skull carries the neck region (its own gap and fill).
+  const lo = C('pelvis'), hi = C('cervical'), top = C('skull');
+  let trunk = null;
+  if (lo && hi && len(sub(hi, lo)) > 1e-6) {
+    const u = norm(sub(hi, lo)), side = sub([1, 0, 0], scl(u, u[0]));
+    const neck = top && len(sub(top, hi)) > 1e-6;
+    trunk = stackChain('trunk', neck ? [lo, hi, top] : [lo, hi], neck ? ['trunk', 'neck'] : ['trunk'],
+      { midline: len(side) > 1e-6 ? { point: lo, normal: norm(side) } : null });
+  }
+  const limb = (key, pts, regions, extra = {}) => stackChain(key, pts.map(P), regions, { limb: true, ...extra });
+  // Round 3: a leg never lifts toward the other leg (BODY_STACK_RULE.legInward): medial = toward the midline, +x for
+  // the right leg (the source frame's +x is the subject's left) and -x for the left leg.
+  return {
+    trunk,
+    r_arm: limb('r_arm', ['r_glenohumeral', 'r_elbow', 'r_wrist', 'r_middle_mcp'], ['upperarm', 'forearm', 'hand']),
+    l_arm: null,   // the left arm is the separately rigged view-model: armStackLift
+    r_leg: limb('r_leg', ['r_hip', 'r_knee', 'r_ankle', 'r_mtp'], ['thigh', 'shank', 'foot'], { medial: [1, 0, 0] }),
+    l_leg: limb('l_leg', ['l_hip', 'l_knee', 'l_ankle', 'l_mtp'], ['thigh', 'shank', 'foot'], { medial: [-1, 0, 0] })
+  };
 }
 
 /** Rest matrix (source -> drawn) of a mesh in a baked posture: the segment matrix or the muscle's rigid fit. */
@@ -2313,59 +4067,267 @@ function bakedRestMatrix(rig, baked, id) {
   return B.rigidRest[id] || null;
 }
 
-/** Body Worlds display candidates under unchanged physical pose. The legacy deep list
- * means scoped INTERMEDIATE_DEEP source relations, never a global whole-mesh layer.
- * Anatomical lists remain separate from displaySelected/unavailable display geometry. */
-export function bodyWorldsLayers(rig, baked = null, { amount = 1, peel = BODY_LAYER_RULE.peelDefault } = {}) {
+/** Lifted source positions q of mesh id through exactly the transform bakeBodyPosture gave its source positions p
+ * (the same skin weights, taken from p), so an unmoved vertex lands bit for bit on its unlifted baked place.
+ * A vertex blended between two segments that are turned against each other (the seated forearm) would get a shortened
+ * lift, because the two turned copies of the lift partly cancel: the blended direction is kept and the lift is given
+ * its length back (at most 2.5 times, so a direction that nearly cancels is not blown up). */
+function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
+  const info = rig.meshSegment[id], B = baked._internal;
+  if (skinned.has(id)) {
+    const clouds = rig._clouds || {}, avail = (info.candidates || []).filter(s => clouds[s]);
+    let near = null;
+    const w = bakeSkinWeights(rig, id, p, avail, (segs, x, y, z) => (near || (near = nearestSearch(clouds, 'index')))(segs, x, y, z), true);
+    const out = new Float32Array(q.length), mats = B.mats, bakedMesh = baked.meshesById.get(id), base = bakedMesh ? bakedMesh.positions : null;
+    // R558 (R_FOREARM_TWIST): a twisted right-forearm influence takes its own turned ulna frame, exactly as in
+    // bakeBodyPosture. Without it the lifted copy of a right forearm muscle was carried by the UNturned ulna (up to
+    // 160 deg off the drawn radius side), up to 70 mm from its baked place, so the scene refused the whole body lift.
+    const tw = w.tf ? rForearmTwistFrame(rig) : null;
+    const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
+    const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
+    for (let i = 0, v = 0; i < q.length; i += 3, v++) {
+      const x = q[i], y = q[i + 1], z = q[i + 2], f = T ? w.tf[v] : 0;
+      const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
+      const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
+      const wa = w.wa[v], wb = 1 - wa;
+      for (let r = 0; r < 3; r++) out[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
+      const lx = x - p[i], ly = y - p[i + 1], lz = z - p[i + 2], want2 = lx * lx + ly * ly + lz * lz;
+      if (want2 > 0 && base && base.length === q.length) {
+        const dx = out[i] - base[i], dy = out[i + 1] - base[i + 1], dz = out[i + 2] - base[i + 2], got2 = dx * dx + dy * dy + dz * dz;
+        if (got2 > 1e-12 && got2 < want2) {
+          const k = Math.min(2.5, Math.sqrt(want2 / got2));
+          out[i] = base[i] + k * dx; out[i + 1] = base[i + 1] + k * dy; out[i + 2] = base[i + 2] + k * dz;
+        }
+      }
+    }
+    return out;
+  }
+  const rest = bakedRestMatrix(rig, baked, id);
+  return rest ? transformPositions(rest, q) : null;
+}
+
+/**
+ * The Body Worlds stack of a body rig: classification lists and, when the SOURCE meshes are given, the full-lift
+ * positions of every lifted muscle (see the block comment above). With a baked posture the positions are in the drawn
+ * (baked) frame and line up vertex for vertex with baked.meshesById; the unlifted body is the baked geometry itself.
+ * The legacy `deep` list means scoped INTERMEDIATE_DEEP source relations, never a global whole-mesh layer.
+ * @param options.meshesById the source meshes the rig (and the bake) were made from; without them nothing is lifted
+ * @param options.extraBones more bone meshes in the same source frame (the left arm bones of the arm packet, so the
+ *   left pectoralis major finds the humerus it ends on)
+ * @returns frozen { kind: 'ns-body-layers', relativeTo, amount: 1, rule, regionalCatalogueSha256, superficial, deep,
+ *   unclassified (the three catalogue lists), outer, intermediate (the lifted levels, catalogue and supplement
+ *   together), supplement (ids levelled by BODY_STACK_SUPPLEMENT), filled (every muscle the display fill draws
+ *   fuller), displaySelected (the lifted ones), unavailable, byId, units, ends, boneSamples, ms, fillMs }; the
+ *   full-amount positions (lift plus fill, every filled muscle) come from bodyStackLiftedPositions(layers)
+ */
+export function bodyWorldsLayers(rig, baked = null, { meshesById = null, extraBones = null } = {}) {
   checkRig(rig);
   if (baked) checkBaked(rig, baked);
-  if (!Number.isFinite(amount) || amount < 0 || amount > 1) throw new Error('ns:body_layers: amount must be in 0..1');
-  if (!Number.isFinite(peel) || peel < 0 || peel > 1) throw new Error('ns:body_layers: peel must be in 0..1');
-  const recs = new Map(), superficial = [], deep = [], unclassified = [], displaySelected = [], unavailable = [];
-  const units = Object.create(null), byId = Object.create(null);
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const getMesh = meshGetter(meshesById);
+  const superficial = [], deep = [], unclassified = [], outer = [], intermediate = [], displaySelected = [], unavailable = [], supplement = [];
+  const byId = Object.create(null), muscles = [], bones = [], digitBones = [], chainTally = new Map(), fillList = [], filled = [];
   for (const [id, info] of Object.entries(rig.meshSegment)) {
+    if (info.kind === 'bone') { const b = getMesh(id); if (positionsOf(b)) { bones.push(b); if (STACK_DIGIT_SEGMENT.test(info.segment)) digitBones.push(b); } continue; }
     if (info.kind !== 'muscle') continue;
-    const rec = bodyLayerRecord(id);
-    if (rec.layer === 'superficial') superficial.push(id);
-    else if (rec.layer === 'intermediate_deep') deep.push(id);
+    const q = regionalLayerQualification(id), sc = bodyStackClass(id), level = sc.level;
+    if (q.layer === 'superficial') superficial.push(id);
+    else if (q.layer === 'intermediate_deep') deep.push(id);
     else unclassified.push(id);
-    const meta = { layer: rec.layer, regionalClass: rec.regionalClass, ruleId: rec.ruleId,
-      displaySelected: false, displayStatus: 'not-selected' };
-    byId[id] = meta;
-    if (!rec.displayEligible) { Object.freeze(meta); continue; }
-    let r = rec;
-    if (baked) {
-      const M = bakedRestMatrix(rig, baked, id);
-      if (!M) { unavailable.push(id); meta.displayStatus = 'unavailable-geometry'; Object.freeze(meta); continue; }
-      r = Object.freeze({ ...rec, dir: norm(m4Dir(M, rec.dir)), hinge: m4Point(M, rec.hinge), axis: rec.axis ? norm(m4Dir(M, rec.axis)) : null });
-    }
-    recs.set(id, r);
-    displaySelected.push(id);
-    meta.displaySelected = true; meta.displayStatus = 'selected-target'; Object.freeze(meta);
-    const u = units[rec.unit] || (units[rec.unit] = { layer: 'superficial', ids: [], offsetMm: rec.offsetMm, dir: round3(r.dir) });
-    u.ids.push(id);
+    byId[id] = { layer: q.layer, regionalClass: q.regionalClass, ruleId: q.ruleId, level, levelSource: sc.source, displaySelected: false, displayStatus: 'not-selected' };
+    if (sc.source === 'supplement') { byId[id].levelBasis = sc.basis; supplement.push(id); }
+    else if (sc.source === 'packet') byId[id].levelBasis = sc.basis; // R558 (builder AN): BODY_STACK_PACKET
+    const ax = stackRuleRow(BODY_STACK_RULE.axisOf, id), chainKey = ax ? ax.axis : stackSegmentChain(info.segment);
+    const ur = stackRuleRow(BODY_STACK_RULE.unitRules, id);
+    fillList.push({ id, chainKey, head: /^(skull|mandible)$/.test(info.segment), region: ur && ur.region ? ur.region : null, smooth: ur && ur.smooth ? ur.smooth : null });
+    if (level !== 'outer' && level !== 'intermediate') continue;
+    (level === 'outer' ? outer : intermediate).push(id);
+    const p = positionsOf(getMesh(id));
+    if (!p) { unavailable.push(id); byId[id].displayStatus = 'unavailable-geometry'; continue; }
+    muscles.push({ id, positions: p });
+    chainTally.set(id, chainKey);
   }
+  if (extraBones) for (const b of extraBones) if (positionsOf(b)) bones.push(b);
+  const chains = bodyStackChains(rig), bone = stackBoneIndex(bones, BODY_STACK_RULE.anchor.boneMm, BODY_STACK_RULE.anchor.boneSampleMm);
+  // A named muscle belongs to the axis chain most of its vertices ride (the shoulder girdle does not vote: the deltoid
+  // goes with the arm, the pectoralis and the trapezius with the trunk; girdle only = trunk).
+  const chainFor = (ids, counts) => {
+    const tally = Object.create(null);
+    ids.forEach((id, i) => { const k = chainTally.get(id); if (k && k !== 'girdle') tally[k] = (tally[k] || 0) + counts[i]; });
+    const best = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || 'trunk';
+    return chains[best] || null;
+  };
+  const lift = muscles.length ? anchoredStackLift(muscles, bone, chainFor, digitBones) : { lifted: new Map(), byId: {}, units: {}, unavailable: [], ends: { two: [], one: [], none: [] }, boneSamples: bone.points, anchorDist: new Map() };
+  const skinned = new Set(baked ? baked.skinned : []), positions = new Map();
+  for (const { id, positions: p } of muscles) {
+    const rec = lift.byId[id], meta = byId[id], q = lift.lifted.get(id);
+    if (!q) { unavailable.push(id); meta.displayStatus = (rec && rec.status) || 'unavailable-geometry'; continue; }
+    const drawn = baked ? bakeLiftedPositions(rig, baked, id, p, q, skinned) : q;
+    const flat = baked ? baked.meshesById.get(id) : null;
+    if (!drawn || (baked && (!flat || flat.positions.length !== drawn.length))) { unavailable.push(id); meta.displayStatus = 'unavailable-geometry'; continue; }
+    positions.set(id, drawn);
+    displaySelected.push(id);
+    Object.assign(meta, { displaySelected: true, displayStatus: 'anchored-lift', unit: rec.unit, maxLiftMm: rec.maxLiftMm, rampMm: rec.rampMm,
+      lengthMm: rec.lengthMm, anchored: rec.anchored, vertices: rec.vertices, cleanEnds: rec.cleanEnds, capFallback: rec.capFallback,
+      endReach: rec.endReach, fullLiftShare: rec.fullLiftShare, heldEndShare: rec.heldEndShare });
+  }
+  // Round 3: the fill, on every muscle (lifted or not), added to what is drawn at full amount.
+  const t1lift = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  if (meshesById) {
+    const caps = stackCoverCaps(fillList.map(f => {
+      const src = positionsOf(getMesh(f.id)), q = lift.lifted.get(f.id), lvl = byId[f.id].level;
+      let mag = null;
+      if (q && src && q.length === src.length) { mag = new Float32Array(src.length / 3); for (let v = 0; v < mag.length; v++) mag[v] = Math.hypot(q[3 * v] - src[3 * v], q[3 * v + 1] - src[3 * v + 1], q[3 * v + 2] - src[3 * v + 2]); }
+      return { id: f.id, rank: q ? (lvl === 'outer' ? 2 : lvl === 'intermediate' ? 1 : 0) : 0, src: src || new Float32Array(0), lift: mag };
+    }));
+    for (const f of fillList) {
+      const src = getMesh(f.id), p = positionsOf(src), drawnMesh = baked ? baked.meshesById.get(f.id) : src;
+      const ix = drawnMesh && drawnMesh.indices ? drawnMesh.indices : src && src.indices;
+      if (!p || !drawnMesh || !ix || !drawnMesh.positions || drawnMesh.positions.length !== p.length) continue;
+      const chain = chains[f.chainKey === 'girdle' ? 'trunk' : f.chainKey] || chains.trunk;
+      // On a leg the drawn frame keeps the source's side-to-side axis (the hips bend about it), so the inward
+      // direction toward the other leg is the chain's own medial direction.
+      const { off, maxMm } = stackFillMesh(p, drawnMesh.positions, ix, chain, f.head, lift.anchorDist.get(f.id), bone, chain && chain.medial ? chain.medial : null, { region: f.region, cap: caps.get(f.id) || null });
+      const base = positions.get(f.id) || drawnMesh.positions, out = new Float32Array(base.length);
+      for (let i = 0; i < out.length; i++) out[i] = base[i] + off[i];
+      if (f.smooth && chains.trunk && chains.trunk.midline) {
+        // Round 4 (unitRules.smooth): weight 0 on the anchored ends (as the fill), times the midline band.
+        const S = f.smooth, M = chains.trunk.midline, aD = lift.anchorDist.get(f.id), w = new Float32Array(p.length / 3);
+        for (let v = 0; v < w.length; v++) {
+          const dm = Math.abs((p[3 * v] - M.point[0]) * M.normal[0] + (p[3 * v + 1] - M.point[1]) * M.normal[1] + (p[3 * v + 2] - M.point[2]) * M.normal[2]);
+          w[v] = (aD && aD.length === w.length ? sstep(aD[v] / BODY_STACK_RULE.fill.endRampMm) : 1) * (1 - sstep((dm - S.innerMm) / (S.outerMm - S.innerMm)));
+        }
+        byId[f.id].reliefShavedMm = Math.round(stackShaveRelief(out, w, S) * 10) / 10;
+      }
+      positions.set(f.id, out);
+      filled.push(f.id);
+      byId[f.id].fillMm = Math.round(maxMm * 10) / 10;
+    }
+  }
+  for (const id of Object.keys(byId)) Object.freeze(byId[id]);
+  const t1 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
   const out = {
-    kind: 'ns-body-layers', relativeTo: baked ? 'baked' : 'source', amount, peel,
+    kind: 'ns-body-layers', relativeTo: baked ? 'baked' : 'source', amount: 1, rule: BODY_STACK_RULE,
     regionalCatalogueSha256: REGIONAL_LAYER_PROVENANCE.classificationDataSha256,
     superficial: Object.freeze(superficial), deep: Object.freeze(deep), unclassified: Object.freeze(unclassified),
+    outer: Object.freeze(outer), intermediate: Object.freeze(intermediate),
+    // ids whose level comes from BODY_STACK_SUPPLEMENT (textbook layers), not from the producer catalogue
+    supplement: Object.freeze(supplement),
+    // every muscle drawn fuller by the display fill (lifted or not); their full-amount positions are in the same map
+    filled: Object.freeze(filled),
     displaySelected: Object.freeze(displaySelected), unavailable: Object.freeze(unavailable),
-    byId: Object.freeze(byId), units: deepFreezeRig(units)
+    byId: Object.freeze(byId), units: deepFreezeRig(lift.units),
+    ends: Object.freeze({ two: Object.freeze(lift.ends.two), one: Object.freeze(lift.ends.one), none: Object.freeze(lift.ends.none) }),
+    boneSamples: lift.boneSamples, ms: Math.round((t1 - t0) * 10) / 10, fillMs: Math.round((t1 - t1lift) * 10) / 10
   };
-  Object.defineProperty(out, '_internal', { value: Object.freeze({ rig, baked, recs }), enumerable: false });
+  Object.defineProperty(out, '_internal', { value: Object.freeze({ rig, baked, positions }), enumerable: false });
   return Object.freeze(out);
 }
 
-/** The detachment matrices of a layers object at one amount, cached (the amount changes only while the switch eases). */
-const layerMatCache = new WeakMap();
-function layerMatsFor(layers, amount) {
-  let c = layerMatCache.get(layers);
-  if (!c || c.amount !== amount) {
-    c = { amount, mats: new Map() };
-    for (const [id, r] of layers._internal.recs) c.mats.set(id, layerMatrix(r, amount, layers.peel));
-    layerMatCache.set(layers, c);
+/** Map(meshId -> Float32Array): the full-lift positions of a bodyWorldsLayers() result (drawn frame when it was made
+ * with a baked posture). The scene blends from the unlifted geometry to these by the eased amount; the arrays are
+ * shared, do not write to them. */
+export function bodyStackLiftedPositions(layers) {
+  if (!layers || layers.kind !== 'ns-body-layers' || !layers._internal) throw new Error('ns:body_layers: expected a bodyWorldsLayers() result');
+  return layers._internal.positions;
+}
+
+/**
+ * Round 4 (judges' must-fix: the left forearm splintered into flat plates near the elbow with the palm down): the
+ * left game arm is skinned with the arm rig's forearm TWIST chain (ns-rig FOREARM_TWIST_CHAIN: ulna, three tissue-only
+ * frames, radius), and the palm-down hand is about 178 deg of pronation from the supinated rest mesh. Where the twist
+ * fraction changes along the forearm (the rig's twist ramp, roughly 40 to 80% of the way to the wrist), neighbouring
+ * vertices of these coarse meshes are turned by angles up to about 40 deg apart, so a long triangle becomes a flat
+ * plate cutting across the twisted surface, and every millimetre of lift or fill there widens the plate (it moves the
+ * vertex further from the turning axis). Measured offline at full pronation, elbow 93 deg: edges stretched to more than
+ * 1.6 L + 2 mm, 172 with no stack, 1438 with the round-3 stack. So the LIFT of a vertex (the fill stays: without it
+ * cracks open between the forearm muscles near the elbow) is multiplied by 1 - t x min(1, armTwistFade.slope x f (1 - f)),
+ * where t is the vertex's skin weight on the twist chain and f its weighted twist fraction: it is kept where the tissue
+ * turns as one piece (f near 0 at the elbow, near 1 at the wrist) and fades out where the twist changes fastest; a
+ * vertex blended between two segments that bend against each other (elbow, wrist) also keeps only 1 - 4 w0 w1 x
+ * armTwistFade.joint of it. Same check with this fade and the full fill: 222 stretched edges (172 with no stack);
+ * triangles folded over by more than 100 deg at elbow 86 deg, palm down: 271 (399 with no stack). Most of what is left
+ * comes from the rig's twist and elbow skinning itself, not from the stack. A display choice; the arm rig's skinning
+ * is not changed.
+ * @param weights { i0, i1, w0, w1 } (ns-rig skinWeights) or undefined
+ * @returns Float32Array (0..1 per vertex) or null when the mesh has no weights or no twist-chain influence
+ */
+const TWIST_LEVEL_OF_SEGMENT = (() => {
+  const m = new Float32Array(RIG_SEGMENTS.length).fill(NaN);
+  FOREARM_TWIST_CHAIN.forEach((s, k) => { m[RIG_SEGMENTS.indexOf(s)] = FOREARM_TWIST_LEVELS[k]; });
+  return m;
+})();
+function armTwistFade(weights, n) {
+  if (!weights || !weights.i0 || !weights.i1 || !weights.w0 || !weights.w1 || weights.i0.length < n) return null;
+  const { i0, i1, w0, w1 } = weights, c = BODY_STACK_RULE.armTwistFade.slope, out = new Float32Array(n);
+  // R558: continuous twist weights (ns-rig skinWeights twist 'continuous') carry each vertex's own twist fraction tf
+  // on its ulna influence; the chain's fixed frame levels apply otherwise.
+  const tf = weights.tf && weights.tf.length >= n ? weights.tf : null, U = RIG_SEGMENTS.indexOf('ulna');
+  const level = (seg, v) => (tf && seg === U ? tf[v] : TWIST_LEVEL_OF_SEGMENT[seg]);
+  let any = false;
+  for (let v = 0; v < n; v++) {
+    const la = level(i0[v], v), lb = w1[v] > 0 ? level(i1[v], v) : NaN;
+    let t = 0, f = 0;
+    if (la === la) { t += w0[v]; f += w0[v] * la; }
+    if (lb === lb) { t += w1[v]; f += w1[v] * lb; }
+    // A vertex blended between two segments that bend against each other (upper arm and forearm at the elbow,
+    // forearm and hand at the wrist; two twist-chain frames are handled by the twist term) keeps 1 - 4 w0 w1 x joint
+    // of its displacement: none at an even blend, where linear blending shears the tissue most.
+    const joint = w1[v] > 0 && i0[v] !== i1[v] && !(la === la && lb === lb) ? 4 * w0[v] * w1[v] * BODY_STACK_RULE.armTwistFade.joint : 0;
+    if (!(t > 0) && !(joint > 0)) { out[v] = 1; continue; }
+    if (t > 0) f /= t;
+    out[v] = Math.min(1 - Math.min(1, t) * Math.min(1, c * f * (1 - f)), 1 - Math.min(1, joint));
+    if (out[v] < 1) any = true;
   }
-  return c.mats;
+  return any ? out : null;
+}
+
+/**
+ * The same anchored lift for the separately rigged left arm (the first-person view-model, CPU-skinned every frame):
+ * full-lift REST positions per muscle id. Skin them with the weights computed from the ORIGINAL rest positions, so the
+ * lift rides on the bone-driven pose and an anchored vertex skins exactly as before.
+ * @param muscles [{ id, positions }] at rest (source millimetres, not modified)
+ * @param bones iterable of { positions, indices }: the arm's bone meshes in the same frame
+ * @param pivots the arm rig's pivots: { shoulder, elbow, wrist, middle_mcp } as [x, y, z]
+ * @returns { liftedById: null-prototype object id -> Float32Array (every arm muscle: its lift, if any, plus the
+ *   display fill), lifted (the ids the stack lifts), fillMm, byId, units, unavailable, ends, boneSamples, ms }
+ */
+export function armStackLift(muscles, bones, pivots) {
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const P = k => (pivots && Array.isArray(pivots[k]) ? pivots[k] : null);
+  const chain = stackChain('l_arm', [P('shoulder'), P('elbow'), P('wrist'), P('middle_mcp')], ['upperarm', 'forearm', 'hand'], { limb: true });
+  const A = BODY_STACK_RULE.anchor, bone = stackBoneIndex([...(bones || [])].filter(b => positionsOf(b)), A.boneMm, A.boneSampleMm);
+  // R558 (Message 30): no lift on the fingers and the thumb (BODY_STACK_RULE.digits), from the arm rig's digit bones.
+  const digitBones = [...(bones || [])].filter(b => positionsOf(b) && typeof b.segment === 'string' && STACK_DIGIT_SEGMENT.test(b.segment));
+  const lift = anchoredStackLift(muscles || [], bone, () => chain, digitBones.length ? digitBones : null);
+  // Round 3: every arm muscle also gets the display fill (stackFillOffsets), on top of its lift when it has one.
+  const liftedById = Object.create(null), fillMm = Object.create(null), list = [...(muscles || [])];
+  // Round 4: the cover caps (stackCoverCaps), as on the body.
+  const caps = stackCoverCaps(list.filter(m => positionsOf(m) && typeof m.id === 'string').map(m => {
+    const src = positionsOf(m), q = lift.lifted.get(m.id), lvl = bodyStackLevel(m.id);
+    let mag = null;
+    if (q && q.length === src.length) { mag = new Float32Array(src.length / 3); for (let v = 0; v < mag.length; v++) mag[v] = Math.hypot(q[3 * v] - src[3 * v], q[3 * v + 1] - src[3 * v + 1], q[3 * v + 2] - src[3 * v + 2]); }
+    return { id: m.id, rank: q ? (lvl === 'outer' ? 2 : lvl === 'intermediate' ? 1 : 0) : 0, src, lift: mag };
+  }));
+  let faded = 0;
+  for (const m of list) {
+    const p = positionsOf(m);
+    if (!p || !m.indices || typeof m.id !== 'string') continue;
+    const base = lift.lifted.get(m.id) || p, { off, maxMm } = stackFillMesh(p, p, m.indices, chain, false, lift.anchorDist.get(m.id), bone, null, { cap: caps.get(m.id) || null });
+    // The fade takes the LIFT out where the skinning shears; the fill (at most a millimetre or two) stays, because it
+    // is what closes the small cracks between neighbouring forearm muscles near the elbow (without it they open and
+    // show the background through the forearm).
+    const out = new Float32Array(base.length), fade = armTwistFade(m.weights, p.length / 3);
+    for (let v = 0; v < p.length / 3; v++) {
+      const k = fade ? fade[v] : 1;
+      if (k < 1) faded++;
+      for (let r = 0; r < 3; r++) { const i = 3 * v + r; out[i] = p[i] + k * (base[i] - p[i]) + off[i]; }
+    }
+    liftedById[m.id] = out;
+    fillMm[m.id] = Math.round(maxMm * 10) / 10;
+  }
+  const t1 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  return { liftedById, lifted: [...lift.lifted.keys()], fillMm, twistFadedVertices: faded, byId: lift.byId, units: lift.units, unavailable: lift.unavailable, ends: lift.ends, boneSamples: lift.boneSamples, ms: Math.round((t1 - t0) * 10) / 10 };
 }
 
 function checkLayers(rig, baked, layers) {
@@ -2373,14 +4335,6 @@ function checkLayers(rig, baked, layers) {
   if (layers._internal.rig !== rig) throw new Error('ns:body_pose: options.layers was made for a different rig');
   if ((layers._internal.baked || null) !== (baked || null)) throw new Error('ns:body_pose: options.layers was made for a different baked posture (pass the same baked to both)');
   return layers;
-}
-
-/** Map(meshId -> Float64Array(16)) of the detachment matrices D (drawn frame) at an amount (default layers.amount). */
-export function bodyLayerMatrices(layers, { amount = layers && layers.amount, peel = layers && layers.peel } = {}) {
-  if (!layers || layers.kind !== 'ns-body-layers' || !layers._internal) throw new Error('ns:body_layers: expected a bodyWorldsLayers() result');
-  const out = new Map();
-  for (const [id, r] of layers._internal.recs) out.set(id, layerMatrix(r, amount, peel));
-  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2722,6 +4676,197 @@ export function excludeGenitalAnatomy(entries) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// R558 (user Message 20, builder FA): scalp muscles drawn ON the completed skull
+
+/**
+ * Display choices for conformMusclesToBones. The Z-Anatomy face packet was fitted to the BodyParts3D frontal, temporal and
+ * facial bones; the BodyParts3D parietal and occipital bones (packet bodyparts3d-head-r1) are a little larger than the
+ * skull the scalp muscles were modelled on, so parts of the occipital belly (up to 6 mm deep), the temporoparietalis (8 mm)
+ * and the upper temporalis (5 mm) lie inside them (measured on the source meshes). Those muscles are drawn lifted onto
+ * the bone surface:
+ *  marginMm: how far above the outer bone surface a lifted vertex ends up;
+ *  reachMm: only vertices whose nearest outer bone point is closer than this are tested (the rest stay exactly);
+ *  cellMm: spatial grid of the bone points;
+ *  spreadMm: every vertex takes the largest push found within this distance on the same muscle, so both surfaces of a
+ *    thin sheet move together (its thickness and shape are kept);
+ *  rampPasses: neighbour passes that let the push fade out over a few rings around the lifted part (no crease at its edge);
+ *  maxPushMm: the push is capped here (and reported) so a wrong input can never throw a muscle off the head.
+ * A display choice, never measured anatomy: in a real head these muscles lie on the skull, which is what is drawn.
+ */
+export const SCALP_CONFORM = Object.freeze({ marginMm: 0.6, reachMm: 12, cellMm: 4, spreadMm: 3, rampPasses: 6, maxPushMm: 12 });
+
+/**
+ * Lift muscles that lie inside the given bones out onto the bones' outer surface (pure; source millimetres).
+ * meshesById: Map id -> { positions, indices }; boneIds: the bones to conform to; muscleIds: the muscles that may move.
+ * The outer surface is the bone vertices whose welded normal points away from the centre of the bones' joint bounding box
+ * (the outer table of a cranial bone; the inner table faces the centre). A muscle vertex is pushed along the nearest outer
+ * point's normal by max(0, marginMm - its signed distance to that point's tangent plane); the push is spread over
+ * spreadMm on the same muscle, ramped out over rampPasses rings, capped at maxPushMm; the direction is the neighbour mean
+ * of the bone normals. Muscles that need no push are not returned. Returns { positions: Map id -> Float32Array (new
+ * array; the input is never written), report: { muscles, vertices, maxPushMm, capped, ms, byId } }.
+ */
+export function conformMusclesToBones(meshesById, { boneIds = [], muscleIds = [], options = SCALP_CONFORM } = {}) {
+  const o = { ...SCALP_CONFORM, ...(options || {}) };
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const getMesh = meshGetter(meshesById);
+  const out = new Map(), byId = Object.create(null);
+  let movedTotal = 0, maxPush = 0, capped = 0;
+  // Outer bone points and their welded vertex normals.
+  const bones = boneIds.map(id => getMesh(id)).filter(m => positionsOf(m) && m.indices && m.indices.length >= 3);
+  if (!bones.length) return { positions: out, report: { muscles: 0, vertices: 0, maxPushMm: 0, capped: 0, ms: 0, byId } };
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const b of bones) { const bb = bboxOf(b.positions); for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], bb.min[k]); hi[k] = Math.max(hi[k], bb.max[k]); } }
+  const centre = [0, 1, 2].map(k => (lo[k] + hi[k]) / 2);
+  const px = [], nx = [];
+  for (const b of bones) {
+    const p = b.positions, ix = b.indices, n = p.length / 3, acc = new Float64Array(3 * n);
+    for (let t = 0; t + 2 < ix.length; t += 3) {
+      const a = 3 * ix[t], c = 3 * ix[t + 1], d = 3 * ix[t + 2];
+      const ux = p[c] - p[a], uy = p[c + 1] - p[a + 1], uz = p[c + 2] - p[a + 2], vx = p[d] - p[a], vy = p[d + 1] - p[a + 1], vz = p[d + 2] - p[a + 2];
+      const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+      for (const k of [a, c, d]) { acc[k] += fx; acc[k + 1] += fy; acc[k + 2] += fz; }
+    }
+    // weld by exact position (the OBJ parser splits a vertex where its normals differ): open addressing on the bits
+    const rep = new Int32Array(n);
+    let size = 16; while (size < 2 * n) size <<= 1;
+    const table = new Int32Array(size).fill(-1), f64 = new Float64Array(3), u32 = new Uint32Array(f64.buffer);
+    for (let i = 0; i < n; i++) {
+      f64[0] = p[3 * i]; f64[1] = p[3 * i + 1]; f64[2] = p[3 * i + 2];
+      let h = (Math.imul(u32[0] ^ u32[1], 73856093) ^ Math.imul(u32[2] ^ u32[3], 19349663) ^ Math.imul(u32[4] ^ u32[5], 83492791)) & (size - 1);
+      for (;;) {
+        const j = table[h];
+        if (j < 0) { table[h] = i; rep[i] = i; break; }
+        if (p[3 * j] === p[3 * i] && p[3 * j + 1] === p[3 * i + 1] && p[3 * j + 2] === p[3 * i + 2]) { rep[i] = j; acc[3 * j] += acc[3 * i]; acc[3 * j + 1] += acc[3 * i + 1]; acc[3 * j + 2] += acc[3 * i + 2]; break; }
+        h = (h + 1) & (size - 1);
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      if (rep[i] !== i) continue;
+      const l = Math.hypot(acc[3 * i], acc[3 * i + 1], acc[3 * i + 2]);
+      if (!(l > 0)) continue;
+      const ux = acc[3 * i] / l, uy = acc[3 * i + 1] / l, uz = acc[3 * i + 2] / l;
+      if (ux * (p[3 * i] - centre[0]) + uy * (p[3 * i + 1] - centre[1]) + uz * (p[3 * i + 2] - centre[2]) <= 0) continue; // inner table
+      px.push(p[3 * i], p[3 * i + 1], p[3 * i + 2]); nx.push(ux, uy, uz);
+    }
+  }
+  // Dense grid (CSR) over the bones' box widened by reach.
+  const cs = o.cellMm, g0 = lo.map(v => v - o.reachMm), dims = [0, 1, 2].map(k => Math.max(1, Math.ceil((hi[k] - lo[k] + 2 * o.reachMm) / cs)));
+  const cellOf = (x, y, z) => {
+    const i = Math.floor((x - g0[0]) / cs), j = Math.floor((y - g0[1]) / cs), k = Math.floor((z - g0[2]) / cs);
+    return i < 0 || j < 0 || k < 0 || i >= dims[0] || j >= dims[1] || k >= dims[2] ? -1 : (k * dims[1] + j) * dims[0] + i;
+  };
+  const nCells = dims[0] * dims[1] * dims[2], start = new Int32Array(nCells + 1), np = px.length / 3;
+  for (let i = 0; i < np; i++) { const c = cellOf(px[3 * i], px[3 * i + 1], px[3 * i + 2]); if (c >= 0) start[c + 1]++; }
+  for (let c = 0; c < nCells; c++) start[c + 1] += start[c];
+  const fillAt = start.slice(0, nCells), items = new Int32Array(start[nCells]);
+  for (let i = 0; i < np; i++) { const c = cellOf(px[3 * i], px[3 * i + 1], px[3 * i + 2]); if (c >= 0) items[fillAt[c]++] = i; }
+  const R = Math.ceil(o.reachMm / cs), reach2 = o.reachMm * o.reachMm;
+  // Cells with an outer bone point within reach (a dilation of the occupied cells): every other vertex is skipped at once.
+  const near = new Uint8Array(nCells);
+  for (let c = 0; c < nCells; c++) {
+    if (start[c + 1] === start[c]) continue;
+    const i0 = c % dims[0], j0 = Math.floor(c / dims[0]) % dims[1], k0 = Math.floor(c / (dims[0] * dims[1]));
+    for (let k = Math.max(0, k0 - R); k <= Math.min(dims[2] - 1, k0 + R); k++) for (let j = Math.max(0, j0 - R); j <= Math.min(dims[1] - 1, j0 + R); j++) {
+      const row = (k * dims[1] + j) * dims[0];
+      for (let i = Math.max(0, i0 - R); i <= Math.min(dims[0] - 1, i0 + R); i++) near[row + i] = 1;
+    }
+  }
+  for (const id of muscleIds) {
+    const m = getMesh(id), p = positionsOf(m);
+    if (!p || !m.indices || m.indices.length < 3) continue;
+    const bb = bboxOf(p);
+    if ([0, 1, 2].some(k => bb.max[k] < g0[k] || bb.min[k] > g0[k] + dims[k] * cs)) continue;
+    const n = p.length / 3, need = new Float32Array(n), dir = new Float32Array(3 * n), hasDir = new Uint8Array(n);
+    let any = false;
+    for (let v = 0; v < n; v++) {
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+      const ci = Math.floor((x - g0[0]) / cs), cj = Math.floor((y - g0[1]) / cs), ck = Math.floor((z - g0[2]) / cs);
+      if (ci < 0 || cj < 0 || ck < 0 || ci >= dims[0] || cj >= dims[1] || ck >= dims[2] || !near[(ck * dims[1] + cj) * dims[0] + ci]) continue;
+      // Nearest outer point, ring by ring (Chebyshev rings of cells); stop once no farther ring can hold a nearer point.
+      let best = -1, bd = reach2;
+      for (let r = 0; r <= R; r++) {
+        for (let k = ck - r; k <= ck + r; k++) {
+          if (k < 0 || k >= dims[2]) continue;
+          for (let j = cj - r; j <= cj + r; j++) {
+            if (j < 0 || j >= dims[1]) continue;
+            const edge = k === ck - r || k === ck + r || j === cj - r || j === cj + r, row = (k * dims[1] + j) * dims[0];
+            for (let i = ci - r; i <= ci + r; i += edge ? 1 : 2 * r || 1) {
+              if (i < 0 || i >= dims[0]) continue;
+              const c = row + i;
+              for (let q = start[c]; q < start[c + 1]; q++) { const s = items[q]; const d2 = (px[3 * s] - x) ** 2 + (px[3 * s + 1] - y) ** 2 + (px[3 * s + 2] - z) ** 2; if (d2 < bd) { bd = d2; best = s; } }
+            }
+          }
+        }
+        if (best >= 0 && bd <= (r * cs) * (r * cs)) break;
+      }
+      if (best < 0) continue;
+      const sd = (x - px[3 * best]) * nx[3 * best] + (y - px[3 * best + 1]) * nx[3 * best + 1] + (z - px[3 * best + 2]) * nx[3 * best + 2];
+      dir[3 * v] = nx[3 * best]; dir[3 * v + 1] = nx[3 * best + 1]; dir[3 * v + 2] = nx[3 * best + 2]; hasDir[v] = 1;
+      if (sd < o.marginMm) { need[v] = o.marginMm - sd; any = true; }
+    }
+    if (!any) continue;
+    // Spread over the sheet thickness: each vertex takes the largest push found within spreadMm on this muscle (a dense
+    // grid of spreadMm cells over the muscle's box; every pushed vertex raises the vertices near it).
+    const sc = o.spreadMm, sc2 = sc * sc, sd3 = [0, 1, 2].map(k => Math.max(1, Math.ceil((bb.max[k] - bb.min[k]) / sc) + 1));
+    const scell = v => ((Math.floor((p[3 * v + 2] - bb.min[2]) / sc) * sd3[1]) + Math.floor((p[3 * v + 1] - bb.min[1]) / sc)) * sd3[0] + Math.floor((p[3 * v] - bb.min[0]) / sc);
+    const sN = sd3[0] * sd3[1] * sd3[2], sStart = new Int32Array(sN + 1);
+    for (let v = 0; v < n; v++) sStart[scell(v) + 1]++;
+    for (let c = 0; c < sN; c++) sStart[c + 1] += sStart[c];
+    const sFill = sStart.slice(0, sN), sItems = new Int32Array(n);
+    for (let v = 0; v < n; v++) sItems[sFill[scell(v)]++] = v;
+    const push = Float32Array.from(need);
+    for (let u = 0; u < n; u++) {
+      if (!(need[u] > 0)) continue;
+      const x = p[3 * u], y = p[3 * u + 1], z = p[3 * u + 2];
+      const ci = Math.floor((x - bb.min[0]) / sc), cj = Math.floor((y - bb.min[1]) / sc), ck = Math.floor((z - bb.min[2]) / sc);
+      for (let k = Math.max(0, ck - 1); k <= Math.min(sd3[2] - 1, ck + 1); k++) for (let j = Math.max(0, cj - 1); j <= Math.min(sd3[1] - 1, cj + 1); j++) {
+        const row = (k * sd3[1] + j) * sd3[0];
+        for (let i = Math.max(0, ci - 1); i <= Math.min(sd3[0] - 1, ci + 1); i++) {
+          const c = row + i;
+          for (let q = sStart[c]; q < sStart[c + 1]; q++) {
+            const v = sItems[q];
+            if (push[v] < need[u] && (p[3 * v] - x) ** 2 + (p[3 * v + 1] - y) ** 2 + (p[3 * v + 2] - z) ** 2 <= sc2) push[v] = need[u];
+          }
+        }
+      }
+    }
+    // Ramp out over a few rings and smooth the direction (never below the push a vertex needs).
+    const ix = m.indices, sum = new Float32Array(n), cnt = new Float32Array(n), ds = new Float32Array(3 * n);
+    for (let pass = 0; pass < o.rampPasses; pass++) {
+      sum.fill(0); cnt.fill(0); ds.fill(0);
+      for (let t = 0; t + 2 < ix.length; t += 3) {
+        const a = ix[t], b = ix[t + 1], c = ix[t + 2];
+        sum[a] += push[b] + push[c]; sum[b] += push[a] + push[c]; sum[c] += push[a] + push[b]; cnt[a] += 2; cnt[b] += 2; cnt[c] += 2;
+        const ax = dir[3 * a], ay = dir[3 * a + 1], az = dir[3 * a + 2], bx = dir[3 * b], by = dir[3 * b + 1], bz = dir[3 * b + 2], cx = dir[3 * c], cy = dir[3 * c + 1], cz = dir[3 * c + 2];
+        ds[3 * a] += bx + cx; ds[3 * a + 1] += by + cy; ds[3 * a + 2] += bz + cz;
+        ds[3 * b] += ax + cx; ds[3 * b + 1] += ay + cy; ds[3 * b + 2] += az + cz;
+        ds[3 * c] += ax + bx; ds[3 * c + 1] += ay + by; ds[3 * c + 2] += az + bz;
+      }
+      for (let v = 0; v < n; v++) {
+        if (cnt[v] > 0) push[v] = Math.max(push[v], 0.5 * push[v] + 0.5 * sum[v] / cnt[v]);
+        const dx = dir[3 * v] + ds[3 * v], dy = dir[3 * v + 1] + ds[3 * v + 1], dz = dir[3 * v + 2] + ds[3 * v + 2], l = Math.hypot(dx, dy, dz);
+        if (l > 0) { dir[3 * v] = dx / l; dir[3 * v + 1] = dy / l; dir[3 * v + 2] = dz / l; hasDir[v] = 1; }
+      }
+    }
+    const q = new Float32Array(p);
+    let moved = 0, mx = 0;
+    for (let v = 0; v < n; v++) {
+      let d = push[v];
+      if (!(d > 1e-4) || !hasDir[v]) continue;
+      if (d > o.maxPushMm) { d = o.maxPushMm; capped++; }
+      q[3 * v] += d * dir[3 * v]; q[3 * v + 1] += d * dir[3 * v + 1]; q[3 * v + 2] += d * dir[3 * v + 2];
+      moved++; if (d > mx) mx = d;
+    }
+    if (!moved) continue;
+    out.set(id, q);
+    byId[id] = { vertices: moved, of: n, maxPushMm: Math.round(mx * 100) / 100 };
+    movedTotal += moved; if (mx > maxPush) maxPush = mx;
+  }
+  const ms = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0;
+  return { positions: out, report: { muscles: out.size, vertices: movedTotal, maxPushMm: Math.round(maxPush * 100) / 100, capped, ms: Math.round(ms), byId } };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // BEGIN GENERATED DATA (U3b-body generator over packet bodyparts3d-fullbody-r1; regenerate, do not hand-edit)
 // Source: inputs/FULLBODY-MESH-MANIFEST.json sha256 5b0cbbf880ddd053e761a0a967cbbc924aca135263961b3ad4b036b1d27c6406 and its 294 meshes,
 // parsed with ns-obj parseObj and passed through buildBodyRig (geometry path). REFERENCE_JOINTS holds the geometric
@@ -2758,11 +4903,13 @@ export const REFERENCE_JOINTS = deepFreezeRig({
   r_hip: {"point":[-86.024,-76.415,811.94],"radius":21.999,"rms":0.661,"inliers":82,"method":"sphere-fit of the femoral head (seeded from the acetabular contact patch)","gapMm":0.978,"bones":["right femur","right hip bone"]},
   r_knee: {"point":[-73.297,-79.025,391.856],"axis":[1,0.024,0.016],"radius":22.629,"rms":5.947,"inliers":246,"method":"circle-fit-about-transepicondylar-axis (femoral condyles, distal 35 mm, inferior/posterior-facing normals)","epicondyles":{"medial":[-33.183,-74.386,397.458],"lateral":[-111.106,-76.29,396.198]},"bones":["right femur"]},
   r_ankle: {"point":[-75.931,-71.047,-14.366],"axis":[-0.765,0.553,-0.331],"malleoli":{"medial":[-54.313,-86.661,-5.017],"lateral":[-97.549,-55.434,-23.714]},"method":"midpoint of the malleolus tips (tibia and fibula lowest 3 mm); talocrural axis through them","bones":["right tibia","right fibula"]},
-  r_mtp: {"point":[-123.206,-168.104,-58.604],"axis":[-0.817,0.568,-0.103],"rays":{"first":{"point":[-93.647,-181.901,-55.696],"method":"sphere-fit"},"second":{"point":[-115.83,-178.378,-56.998],"method":"sphere-fit"},"third":{"point":[-126.906,-172.479,-58.592],"method":"sphere-fit"},"fourth":{"point":[-135.426,-161.027,-59.665],"method":"sphere-fit"},"fifth":{"point":[-144.222,-146.737,-62.066],"method":"sphere-fit"}},"method":"mean of the metatarsal-head joint centres; axis from the first to the fifth (metatarsal break)","bones":["right first metatarsal bone","right second metatarsal bone","right third metatarsal bone","right fourth metatarsal bone","right fifth metatarsal bone"]},
+  r_mtp: {"point":[-130.596,-164.655,-59.33],"axis":[-0.817,0.568,-0.103],"rays":{"first":{"point":[-93.647,-181.901,-55.696],"method":"sphere-fit"},"second":{"point":[-115.83,-178.378,-56.998],"method":"sphere-fit"},"third":{"point":[-126.906,-172.479,-58.592],"method":"sphere-fit"},"fourth":{"point":[-135.426,-161.027,-59.665],"method":"sphere-fit"},"fifth":{"point":[-144.222,-146.737,-62.066],"method":"sphere-fit"}},"method":"mean of the second to fifth metatarsal-head joint centres (the lesser toes); axis from the first to the fifth (metatarsal break)","bones":["right first metatarsal bone","right second metatarsal bone","right third metatarsal bone","right fourth metatarsal bone","right fifth metatarsal bone"]},
+  r_hallux_mtp: {"point":[-93.647,-181.901,-55.696],"axis":[-0.817,0.568,-0.103],"method":"first metatarsal-head joint centre (big toe); axis along the metatarsal break (first to fifth head)","bones":["right first metatarsal bone","proximal phalanx of right big toe"]},
   l_hip: {"point":[88.41,-79.133,813.75],"radius":22.348,"rms":0.565,"inliers":79,"method":"sphere-fit of the femoral head (seeded from the acetabular contact patch)","gapMm":0.433,"bones":["left femur","left hip bone"]},
   l_knee: {"point":[74.443,-78.594,392.079],"axis":[-0.996,0.074,0.043],"radius":22.301,"rms":6.099,"inliers":278,"method":"circle-fit-about-transepicondylar-axis (femoral condyles, distal 35 mm, inferior/posterior-facing normals)","epicondyles":{"medial":[33.567,-73.067,399.367],"lateral":[111.257,-78.823,396.018]},"bones":["left femur"]},
   l_ankle: {"point":[75.853,-71.348,-14.173],"axis":[0.767,0.548,-0.335],"malleoli":{"medial":[54.332,-86.722,-4.768],"lateral":[97.375,-55.974,-23.578]},"method":"midpoint of the malleolus tips (tibia and fibula lowest 3 mm); talocrural axis through them","bones":["left tibia","left fibula"]},
-  l_mtp: {"point":[122.391,-168.327,-57.79],"axis":[0.815,0.57,-0.107],"rays":{"first":{"point":[93.712,-182.173,-55.506],"method":"sphere-fit"},"second":{"point":[114.499,-180.165,-58.926],"method":"sphere-fit"},"third":{"point":[126.212,-172.27,-57.602],"method":"sphere-fit"},"fourth":{"point":[133.236,-160.254,-54.754],"method":"sphere-fit"},"fifth":{"point":[144.297,-146.774,-62.163],"method":"sphere-fit"}},"method":"mean of the metatarsal-head joint centres; axis from the first to the fifth (metatarsal break)","bones":["left first metatarsal bone","left second metatarsal bone","left third metatarsal bone","left fourth metatarsal bone","left fifth metatarsal bone"]}
+  l_mtp: {"point":[129.561,-164.866,-58.361],"axis":[0.815,0.57,-0.107],"rays":{"first":{"point":[93.712,-182.173,-55.506],"method":"sphere-fit"},"second":{"point":[114.499,-180.165,-58.926],"method":"sphere-fit"},"third":{"point":[126.212,-172.27,-57.602],"method":"sphere-fit"},"fourth":{"point":[133.236,-160.254,-54.754],"method":"sphere-fit"},"fifth":{"point":[144.297,-146.774,-62.163],"method":"sphere-fit"}},"method":"mean of the second to fifth metatarsal-head joint centres (the lesser toes); axis from the first to the fifth (metatarsal break)","bones":["left first metatarsal bone","left second metatarsal bone","left third metatarsal bone","left fourth metatarsal bone","left fifth metatarsal bone"]},
+  l_hallux_mtp: {"point":[93.712,-182.173,-55.506],"axis":[0.815,0.57,-0.107],"method":"first metatarsal-head joint centre (big toe); axis along the metatarsal break (first to fifth head)","bones":["left first metatarsal bone","proximal phalanx of left big toe"]}
 });
 export const REFERENCE_MUSCLE_BLENDS = deepFreezeRig({
   FJ1467: [["r_upperarm",0.618],["r_girdle",0.382]],

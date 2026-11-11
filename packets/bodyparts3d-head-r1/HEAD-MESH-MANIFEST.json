@@ -1,0 +1,632 @@
+{
+  "schema_version": 1,
+  "version": 1,
+  "packet": "bodyparts3d-head-r1",
+  "created_at_utc": "2026-11-11T09:50:00Z",
+  "status": "SELECTED_OFFICIAL_ARCHIVE_MEMBERS_BYTE_EXACT",
+  "packet_base_hint": "packets/bodyparts3d-head-r1/",
+  "complements": "inputs/FULLBODY-MESH-MANIFEST.json (bodyparts3d-fullbody-r1: frontal, temporal, facial bones and mandible) and packets/face-muscles-r1 (Z-Anatomy face and scalp muscles); no id here repeats one there",
+  "purpose": "Completes the cranium (both parietal bones, the occipital bone, the sphenoid) and adds the eyes (sclera, iris and lens of each eye), so the scalp and face muscles lie on a closed skull instead of floating over a hollow head, and the orbits are not empty. Requested 2026-11-11 for the user's Message 20 (\"The arm and face muscles look the most wrong and disgusting\").",
+  "source": {
+    "atlas": "BodyParts3D 4.0, The Database Center for Life Science (DBCLS)",
+    "archive": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+    "etag": "\"8848a5a-4dd48ec9df000\"",
+    "size": 142903898,
+    "last_modified": "Wed, 22 May 2013 06:46:24 GMT",
+    "central_directory": {
+      "entries": 2234,
+      "offset": 142733851,
+      "size": 170025,
+      "sha256": "edde15c7c5f34b2b9743935fb3c1873cce3a9789164427ddf8343c879bcde96b"
+    },
+    "element_list": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_element_parts.txt (concept -> element file id)"
+  },
+  "rights": "BodyParts3D, (c) The Database Center for Life Science licensed under CC Attribution 4.0 International (https://creativecommons.org/licenses/by/4.0/). Legacy OBJ headers (CC BY-SA 2.1 Japan) retained byte-exact.",
+  "not_included": [
+    "cornea (FJ1289, FJ1340): a clear surface the game has no glass material for on the body; it would cover the iris as an opaque dome",
+    "teeth, ethmoid, vomer, palatine bones, nasal conchae: not needed for the outer look",
+    "galea aponeurotica (epicranial aponeurosis): no BodyParts3D 4.0 element"
+  ],
+  "asset_count": 10,
+  "source_bytes": 9366305,
+  "assets": [
+    {
+      "element_id": "FJ3274",
+      "path": "meshes/FJ3274.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3274.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 956856,
+      "sha256": "45ab8d9b21c1854c9ea744137560020004e694eba3217a0a3fa0876d02207f65",
+      "zip_crc32": 432893483,
+      "vertices": 8367,
+      "faces": 13210,
+      "triangles": 13210,
+      "bounds_min": [
+        -7.8677,
+        -131.686,
+        1517.8
+      ],
+      "bounds_max": [
+        74.8565,
+        14.9522,
+        1636.27
+      ],
+      "centroid": [
+        22.1063,
+        -49.6695,
+        1594.6024
+      ],
+      "groups": [
+        "head_face_bone"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "bone",
+      "requested_structure": "left parietal bone",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA52789",
+          "en": "left parietal bone"
+        }
+      ],
+      "matched_concept_names": [
+        "left parietal bone"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Left parietal bone",
+      "embedded_concept_id": "FMA52789",
+      "embedded_representation_id": "BP9209",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0001,
+      "laterality": "left",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ3380",
+      "path": "meshes/FJ3380.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3380.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 928866,
+      "sha256": "b6874589f3ddcbeae7153c2d499c23d0083eb18e95d139759529c901384758c8",
+      "zip_crc32": 231109223,
+      "vertices": 8028,
+      "faces": 13002,
+      "triangles": 13002,
+      "bounds_min": [
+        -76.1885,
+        -127.886,
+        1517.88
+      ],
+      "bounds_max": [
+        5.0024,
+        14.8314,
+        1636.27
+      ],
+      "centroid": [
+        -27.0032,
+        -51.4714,
+        1591.7832
+      ],
+      "groups": [
+        "head_face_bone"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "bone",
+      "requested_structure": "right parietal bone",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA52788",
+          "en": "right parietal bone"
+        }
+      ],
+      "matched_concept_names": [
+        "right parietal bone"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Right parietal bone",
+      "embedded_concept_id": "FMA52788",
+      "embedded_representation_id": "BP9057",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0,
+      "laterality": "right",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ3309",
+      "path": "meshes/FJ3309.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3309.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 843673,
+      "sha256": "c0262a08591e48504c8a53302525377e0c4ad1c165456475f3bb80aab6202d44",
+      "zip_crc32": 2757054479,
+      "vertices": 6995,
+      "faces": 12450,
+      "triangles": 12450,
+      "bounds_min": [
+        -61.9612,
+        -100.959,
+        1477.77
+      ],
+      "bounds_max": [
+        60.7053,
+        18.001,
+        1584.51
+      ],
+      "centroid": [
+        0.365,
+        -23.1319,
+        1527.2644
+      ],
+      "groups": [
+        "head_face_bone"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "bone",
+      "requested_structure": "occipital bone",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA52735",
+          "en": "occipital bone"
+        }
+      ],
+      "matched_concept_names": [
+        "occipital bone"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Occipital bone",
+      "embedded_concept_id": "FMA52735",
+      "embedded_representation_id": "BP9177",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0,
+      "laterality": "midline",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ3394",
+      "path": "meshes/FJ3394.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3394.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 573595,
+      "sha256": "127f537eb70e6ad4b036a535550ab7a681ce06dbdc1efda85956d910c54d6285",
+      "zip_crc32": 4061649884,
+      "vertices": 4957,
+      "faces": 8154,
+      "triangles": 8154,
+      "bounds_min": [
+        -56.3198,
+        -145.019,
+        1478.91
+      ],
+      "bounds_max": [
+        55.0329,
+        -90.4127,
+        1548.46
+      ],
+      "centroid": [
+        -0.6503,
+        -116.9312,
+        1515.9884
+      ],
+      "groups": [
+        "head_face_bone"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "bone",
+      "requested_structure": "sphenoid bone",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA52736",
+          "en": "sphenoid bone"
+        }
+      ],
+      "matched_concept_names": [
+        "sphenoid bone"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Sphenoid bone",
+      "embedded_concept_id": "FMA52736",
+      "embedded_representation_id": "BP8498",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0,
+      "laterality": "midline",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1317",
+      "path": "meshes/FJ1317.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1317.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 2712740,
+      "sha256": "27adb811c163db6123f525145c1aa05950a6c6e42a8d6c0290b3035f2b8a64e9",
+      "zip_crc32": 2989238369,
+      "vertices": 20372,
+      "faces": 39504,
+      "triangles": 39504,
+      "bounds_min": [
+        15.9892,
+        -163.455,
+        1504.96
+      ],
+      "bounds_max": [
+        42.3104,
+        -138.829,
+        1531.1899
+      ],
+      "centroid": [
+        29.191,
+        -151.6603,
+        1518.0676
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "left sclera",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58272",
+          "en": "left sclera"
+        }
+      ],
+      "matched_concept_names": [
+        "left sclera"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Left sclera",
+      "embedded_concept_id": "FMA58272",
+      "embedded_representation_id": "BP6520",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0065,
+      "laterality": "left",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1368",
+      "path": "meshes/FJ1368.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1368.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 2746869,
+      "sha256": "e1c1bbc9da8924173a3abd341bca49cda8e8444ef5256637a40aad91adab1d65",
+      "zip_crc32": 3828011890,
+      "vertices": 20582,
+      "faces": 39524,
+      "triangles": 39524,
+      "bounds_min": [
+        -43.6181,
+        -163.464,
+        1504.96
+      ],
+      "bounds_max": [
+        31.2616,
+        -138.829,
+        1531.1899
+      ],
+      "centroid": [
+        -30.3503,
+        -151.7841,
+        1518.0393
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "right sclera",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58271",
+          "en": "right sclera"
+        }
+      ],
+      "matched_concept_names": [
+        "right sclera"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Right sclera",
+      "embedded_concept_id": "FMA58271",
+      "embedded_representation_id": "BP6519",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0057,
+      "laterality": "right",
+      "source_anomalies": [
+        "12 of 20582 vertices beyond the 15 mm midline band on the other side; they form zero-area point clusters (degenerate triangles, nothing drawn)"
+      ],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1297",
+      "path": "meshes/FJ1297.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1297.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 206456,
+      "sha256": "65ba07bbbe87b39d5d9cb95fd91c8819f04635bb8f03f281d72f78a0d45dcb2e",
+      "zip_crc32": 662063435,
+      "vertices": 1716,
+      "faces": 3286,
+      "triangles": 3286,
+      "bounds_min": [
+        23.3381,
+        -162.7,
+        1511.3101
+      ],
+      "bounds_max": [
+        36.1918,
+        -159.621,
+        1524.16
+      ],
+      "centroid": [
+        29.8398,
+        -161.4663,
+        1517.8656
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "left iris",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58237",
+          "en": "left iris"
+        }
+      ],
+      "matched_concept_names": [
+        "left iris"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Left iris",
+      "embedded_concept_id": "FMA58237",
+      "embedded_representation_id": "BP5520",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0096,
+      "laterality": "left",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1348",
+      "path": "meshes/FJ1348.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1348.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 208148,
+      "sha256": "a2dd64cf35f6582aa498e7e1874e31722e318a8c09f44e3a1ccfa63e6769280c",
+      "zip_crc32": 761738636,
+      "vertices": 1734,
+      "faces": 3248,
+      "triangles": 3248,
+      "bounds_min": [
+        -37.5038,
+        -162.697,
+        1511.3
+      ],
+      "bounds_max": [
+        -24.6491,
+        -159.621,
+        1524.16
+      ],
+      "centroid": [
+        -31.1079,
+        -161.4464,
+        1517.8521
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "right iris",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58236",
+          "en": "right iris"
+        }
+      ],
+      "matched_concept_names": [
+        "right iris"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Right iris",
+      "embedded_concept_id": "FMA58236",
+      "embedded_representation_id": "BP5519",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0104,
+      "laterality": "right",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1305",
+      "path": "meshes/FJ1305.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1305.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 94398,
+      "sha256": "3e8ca31d6e284af6ea990eb528ba6c31420339802ea5da94ee32dc0ddac8708f",
+      "zip_crc32": 646715371,
+      "vertices": 805,
+      "faces": 1606,
+      "triangles": 1606,
+      "bounds_min": [
+        24.4899,
+        -161.596,
+        1512.67
+      ],
+      "bounds_max": [
+        34.7934,
+        -156.823,
+        1523.11
+      ],
+      "centroid": [
+        29.5431,
+        -159.2488,
+        1517.903
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "left lens",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58243",
+          "en": "left lens"
+        }
+      ],
+      "matched_concept_names": [
+        "left lens"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Left lens",
+      "embedded_concept_id": "FMA58243",
+      "embedded_representation_id": "BP6529",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.013,
+      "laterality": "left",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    },
+    {
+      "element_id": "FJ1356",
+      "path": "meshes/FJ1356.obj",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1356.obj",
+      "source_url": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+      "bytes": 94704,
+      "sha256": "b9b3f98de4ed3a327e841dd129e423345e93d0615ca62181dda72ad8556a8a06",
+      "zip_crc32": 3483756783,
+      "vertices": 801,
+      "faces": 1598,
+      "triangles": 1598,
+      "bounds_min": [
+        -36.099,
+        -161.596,
+        1512.66
+      ],
+      "bounds_max": [
+        -25.7958,
+        -156.827,
+        1523.1
+      ],
+      "centroid": [
+        -31.0295,
+        -159.2601,
+        1517.9058
+      ],
+      "groups": [
+        "head_face_eye"
+      ],
+      "region": "head_face",
+      "kind": "bone",
+      "tissue": "eye",
+      "kind_note": "kind \"bone\" here means a rigid part carried by the skull (the game rig poses bone and muscle kinds only); the tissue is the eye, not bone, and it is drawn with its own eye material",
+      "requested_structure": "right lens",
+      "rig_hint": "skull",
+      "concepts": [
+        {
+          "concept id": "FMA58242",
+          "en": "right lens"
+        }
+      ],
+      "matched_concept_names": [
+        "right lens"
+      ],
+      "concept_tree": "isa",
+      "embedded_source_name": "Right lens",
+      "embedded_concept_id": "FMA58242",
+      "embedded_representation_id": "BP6530",
+      "embedded_compatibility_version": "4.0",
+      "embedded_build_up_logic": "FMA 3.0 is_a",
+      "embedded_volume_cm3": null,
+      "header_bounds_max_deviation_mm": 0.0123,
+      "laterality": "right",
+      "source_anomalies": [],
+      "units": "millimetres: source header explicitly labels Bounds(mm); raw coordinates preserved",
+      "coordinate_frame": "Unchanged BodyParts3D compatibility 4.0 whole-body frame (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); no centring, mirroring, unit conversion or per-file transform",
+      "modifications": "none; byte-exact decompressed archive member",
+      "embedded_license": "Legacy OBJ header says CC BY-SA 2.1 Japan; current official archive licence (updated 2025-02-27, rechecked 2026-11-11) says CC BY 4.0; both retained, no header stripped",
+      "source_packet": "bodyparts3d-head-r1"
+    }
+  ]
+}

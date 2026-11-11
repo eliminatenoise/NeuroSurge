@@ -15,7 +15,7 @@
  *
  * Placement rules (user R3, R9, R10 and the R9 history notes "the hand cannot go beyond the borders of your field of view")
  *  - The hand centre (vertex centroid of metacarpals 2-5) lies exactly on the camera ray through NDC (xNdc, yNdc) with
- *    yNdc = HAND_Y_NDC = +0.5, three quarters up the screen. It never moves vertically on screen.
+ *    yNdc = HAND_Y_NDC (R558: -0.28, the straight level arm at the start look; it was +0.5). It never moves vertically on screen.
  *  - A/D change xNdc; W/S change the depth along that ray inside a per-anchor DEPTH WINDOW [near, far]: far = the arm's
  *    reach (elbow nearly straight), near = the depth at which the projected hand height is at most maxHandHeightNdc.
  *  - The A/D range depends on the viewport and the look (the shoulder moves in camera space), never on the pose. Tier
@@ -63,8 +63,12 @@ import { activityColor, activityShade, hexToLinear } from './ns-colors.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 
-/** Vertical NDC of the hand centre: three quarters up the screen (user note 2026-11-08T03:12Z, R10). */
-export const HAND_Y_NDC = 0.5;
+/** Vertical NDC of the hand centre. It was three quarters up the screen (user note 2026-11-08T03:12Z, R10: +0.5). R558
+ * (user, 11 November: "all the limbs straight out like a stick (perpendicular from the torso)", "out straight forward
+ * front facing"): the hand sits where the straight, level, forward arm puts it at the start look, so the left arm
+ * mirrors the right one. Measured on this rig at the eye camera (90 deg vertical field of view, 16:9): about 0.28
+ * below the centre and 0.17 left of it. The hand stays locked to the view vertically, as before. */
+export const HAND_Y_NDC = -0.28;
 
 /**
  * Elbow pole direction in the BODY frame (world axes at body yaw 0: +x the person's right, +y up, +z backward): DOWN and
@@ -145,8 +149,33 @@ export const ARM_DEFAULTS = Object.freeze({
   wsGuardAtWindow: true,
   // R5-pronation (R27): the palm turn shared by the forearm, the shoulder, the shoulder blade and the upper trunk
   // (ROTATION_COUPLING; false = round 4: the forearm alone turns).
-  rotationCoupling: true
+  rotationCoupling: true,
+  // R558 (Space dance): an extra outward (+) / inward (-) turn of the whole arm about the shoulder -> hand-centre line
+  // (degrees), added to the palm turn's own share; the sum stays inside HUMERAL_ROTATION_RANGE_DEG. The game gives it
+  // per request as rotation.humeralDeg, which also switches the palm-turn coupling off (see swivelOptions).
+  humeralSwivelDeg: 0
 });
+
+/**
+ * R558 (Space dance, the user's Message 2): the upper arm's whole outward (+) / inward (-) turn the game arm may show,
+ * degrees: internal about 70, external about 90 (commonly quoted active ranges, e.g. AAOS tables; cited from memory,
+ * not measured on this arm). With the elbow straight the turn about the shoulder -> hand line is the upper arm's own
+ * axial rotation; with the elbow bent the axial part is smaller (couplingReport humeralTwistDeg), so this bound is
+ * conservative.
+ */
+export const HUMERAL_ROTATION_RANGE_DEG = Object.freeze([-70, 90]);
+
+/**
+ * R558 (Space dance): options for a request whose rotation names the upper arm's turn EXPLICITLY, rotation.humeralDeg
+ * (degrees, + outward): the palm-turn coupling is off, so joints.forearm_pronation (from rotation.value) is the
+ * radius' own turn about the ulna and humeralDeg is the whole turn of the arm about the shoulder -> hand line (kept
+ * inside HUMERAL_ROTATION_RANGE_DEG). The forearm and the shoulder are then two separate joints, each over its full
+ * range, as on the right arm of the body rig. Unchanged without one (the coupled palm turn of R5-pronation).
+ */
+function swivelOptions(options, rotation) {
+  const v = rotation && typeof rotation === 'object' ? rotation.humeralDeg : undefined;
+  return v === undefined || v === null ? options : { ...(options || {}), rotationCoupling: false, humeralSwivelDeg: v };
+}
 
 /**
  * Wrist band (deg) of the envelope used for the A/D range and the W/S window. Strong wrist flexion or extension near
@@ -473,6 +502,7 @@ function mergeOptions(options) {
   if (typeof o.widerTier !== 'boolean') fail('arm_input', 'widerTier must be a boolean');
   if (typeof o.wsGuardAtWindow !== 'boolean') fail('arm_input', 'wsGuardAtWindow must be a boolean');
   o.rotationCoupling = couplingOption(o.rotationCoupling);
+  finite(o.humeralSwivelDeg, 'humeralSwivelDeg');
   o.viewLimitsNdc = viewLimitsOption(o.viewLimitsNdc);
   if (!o.bodyToCamera) o.bodyToCamera = null;
   return o;
@@ -642,26 +672,44 @@ export function bodyYawForLook(yaw, freeDeg = ARM_YAW_FREE_DEG) {
  *   glenohumeral centre is raised by GIRDLE_ELEVATION), anticipatedElevationDeg, cameraToWorld, worldToCamera,
  *   bodyToWorld (BodyParts3D mm -> world m: use it for every body mesh), bodyToCamera (rotation part: body axes ->
  *   camera), relativeYaw (look yaw minus body yaw) }. Pass it as fitHand options.attachment (or its shoulderCam/pole).
+ * @param look.trunk R558 (the eye camera rides on the head, the chest turns and bends with wide looks): optional
+ *   { rotation (column-major 4x4 rotation, world axes: the posed thorax's orientation; it replaces Ry(bodyYaw) for the
+ *   shoulder, the girdle rule, the elbow pole and the shoulder limits), shoulderBodyM (world-axes metres of the posed
+ *   left shoulder root from the posed eye; it replaces anatomy.shoulderBodyM, which assumes an unposed trunk), eyeBp
+ *   (the posed eye in BodyParts3D mm; bodyToWorld then places the drawn body relative to it instead of anatomy.eyeBp) }.
+ *   Pass bodyYaw 0 with it: the drawn body frame no longer turns, the pose does.
  */
-export function armAttachment(anatomy, { yaw = 0, pitch = 0, bodyYaw, poleDir = null } = {}) {
+export function armAttachment(anatomy, { yaw = 0, pitch = 0, bodyYaw, poleDir = null, trunk = null } = {}) {
   if (!anatomy || anatomy.kind !== 'ns-arm-anatomy') fail('arm_input', 'anatomy must come from armAnatomy');
   finite(yaw, 'yaw');
   finite(pitch, 'pitch');
   const by = bodyYaw === undefined ? bodyYawForLook(yaw) : finite(bodyYaw, 'bodyYaw');
   const camToWorld = lookRotation(yaw, pitch);
   const worldToCam = rotationTranspose(camToWorld);
-  const bodyRot = rotationY(by);
+  let bodyRot = rotationY(by), shoulderRest = anatomy.shoulderBodyM, trunkYaw = by, eyeBp = anatomy.eyeBp;
+  if (trunk !== null) {
+    const R = trunk && trunk.rotation;
+    if (!R || R.length !== 16 || !Array.prototype.every.call(R, Number.isFinite)) fail('arm_input', 'trunk.rotation must be a finite column-major 4x4');
+    const c0 = [R[0], R[1], R[2]], c1 = [R[4], R[5], R[6]], c2 = [R[8], R[9], R[10]];
+    // A rotation: unit, orthogonal columns, right-handed (fail closed; a scaled or mirrored trunk frame is a defect).
+    if ([c0, c1, c2].some(c => Math.abs(length(c) - 1) > 1e-6) || Math.abs(dot(c0, c1)) > 1e-6 || Math.abs(dot(c1, c2)) > 1e-6 || Math.abs(dot(c0, c2)) > 1e-6 ||
+      dot(cross(c0, c1), c2) < 0) fail('arm_input', 'trunk.rotation must be a proper rotation');
+    bodyRot = rotationTranspose(rotationTranspose(R));
+    shoulderRest = transformDirection(rotationTranspose(bodyRot), vec3(trunk.shoulderBodyM, 'trunk.shoulderBodyM'));
+    trunkYaw = Math.atan2(c2[0], c2[2]); // the world yaw of the trunk's back (+z body) axis = its facing yaw
+    if (trunk.eyeBp !== undefined && trunk.eyeBp !== null) eyeBp = vec3(trunk.eyeBp, 'trunk.eyeBp');
+  }
   const bodyToCamera = multiply(worldToCam, bodyRot);
   // Anticipated humeral elevation for the hand ray at a nominal depth (body frame), then the girdle shift.
   const G = GIRDLE_ELEVATION;
   const tanHalf = Math.tan((ARM_DEFAULTS.fovYDeg * DEG) / 2);
   const nominalCam = pointOnNdcRay(G.nominalXNdc, HAND_Y_NDC, G.nominalDepthM, tanHalf, 16 / 9);
   const nominalBody = transformDirection(rotationTranspose(bodyToCamera), nominalCam);
-  const toHand = sub(nominalBody, anatomy.shoulderBodyM);
+  const toHand = sub(nominalBody, shoulderRest);
   const elevationDeg = Math.acos(clamp(-toHand[1] / Math.max(1e-9, length(toHand)), -1, 1)) / DEG;
   const gw = smoothstep((elevationDeg - G.elevationStartDeg) / (G.elevationFullDeg - G.elevationStartDeg));
   const girdleShiftM = scale(G.shiftAtFullM, gw);
-  const shoulderBody = add(anatomy.shoulderBodyM, girdleShiftM);
+  const shoulderBody = add(shoulderRest, girdleShiftM);
   const shoulderWorld = transformDirection(bodyRot, shoulderBody);
   const shoulderCam = transformDirection(worldToCam, shoulderWorld);
   const pw = smoothstep((elevationDeg - POLE_OVERHEAD_ELEVATION_DEG[0]) / (POLE_OVERHEAD_ELEVATION_DEG[1] - POLE_OVERHEAD_ELEVATION_DEG[0]));
@@ -669,7 +717,7 @@ export function armAttachment(anatomy, { yaw = 0, pitch = 0, bodyYaw, poleDir = 
   const poleCam = add(shoulderCam, transformDirection(bodyToCamera, poleBody));
   return Object.freeze({
     kind: 'ns-arm-attachment',
-    yaw, pitch, bodyYaw: by, relativeYaw: yaw - by,
+    yaw, pitch, bodyYaw: by, relativeYaw: yaw - trunkYaw,
     shoulderCam: Object.freeze(shoulderCam),
     pole: Object.freeze(poleCam),
     girdleShiftM: Object.freeze(girdleShiftM),
@@ -678,7 +726,7 @@ export function armAttachment(anatomy, { yaw = 0, pitch = 0, bodyYaw, poleDir = 
     cameraToWorld: camToWorld,
     worldToCamera: worldToCam,
     bodyToCamera,
-    bodyToWorld: bodyToWorldMatrix(anatomy.eyeBp, by)
+    bodyToWorld: bodyToWorldMatrix(eyeBp, by)
   });
 }
 
@@ -834,16 +882,27 @@ function coupledPose(ctx, c, u, Dm) {
  */
 function solveArmCore(ctx, target, ox, o) {
   const c = o.rotationCoupling, u = couplingU(c, ctx.J.forearm_pronation);
+  const swivel = o.humeralSwivelDeg || 0; // R558 (Space dance): extra turn about the shoulder -> hand line
+  const total = psi => clamp(psi + swivel, HUMERAL_ROTATION_RANGE_DEG[0], HUMERAL_ROTATION_RANGE_DEG[1]);
   if (!(u > 0)) {
-    const core = solveCore(ctx, target, ox.shoulderCam, ox.pole);
-    return { ...core, ctx, shoulderCam: ox.shoulderCam, coupling: null };
+    if (swivel === 0) {
+      const core = solveCore(ctx, target, ox.shoulderCam, ox.pole);
+      return { ...core, ctx, shoulderCam: ox.shoulderCam, coupling: null };
+    }
+    const ext = total(0);
+    const core = solveCore(ctx, target, ox.shoulderCam, ox.pole, ext * DEG);
+    return {
+      ...core, ctx, shoulderCam: ox.shoulderCam,
+      coupling: { u: 0, pronationDeg: ctx.J.forearm_pronation, humeralExternalDeg: ext, swivelDeg: swivel, forearmDeg: ctx.J.forearm_pronation, elbowRefRad: core.phi, shoulderShiftBodyM: [0, 0, 0], shoulderBodyM: null }
+    };
   }
   const sh = coupledShoulder(o, ox, u);
   const cp = coupledPose(ctx, c, u, length(sub(target, sh.shoulderCam)));
-  const core = solveCore(cp.ctx, target, sh.shoulderCam, sh.pole, cp.psiDeg * DEG);
+  const ext = total(cp.psiDeg);
+  const core = solveCore(cp.ctx, target, sh.shoulderCam, sh.pole, ext * DEG);
   return {
     ...core, ctx: cp.ctx, shoulderCam: sh.shoulderCam,
-    coupling: { u, pronationDeg: ctx.J.forearm_pronation, humeralExternalDeg: cp.psiDeg, forearmDeg: cp.forearmDeg, elbowRefRad: cp.phiRef, shoulderShiftBodyM: sh.shiftBody, shoulderBodyM: sh.shoulderBody }
+    coupling: { u, pronationDeg: ctx.J.forearm_pronation, humeralExternalDeg: ext, swivelDeg: swivel, forearmDeg: cp.forearmDeg, elbowRefRad: cp.phiRef, shoulderShiftBodyM: sh.shiftBody, shoulderBodyM: sh.shoulderBody }
   };
 }
 
@@ -1006,6 +1065,7 @@ export function solveArm(rig, params = {}) {
     ...(p.reachGirdle !== undefined ? { reachGirdle: p.reachGirdle } : {}),
     ...(p.bodyToCamera ? { bodyToCamera: p.bodyToCamera } : {}),
     ...(p.rotationCoupling !== undefined ? { rotationCoupling: p.rotationCoupling } : {}),
+    ...(p.humeralSwivelDeg !== undefined ? { humeralSwivelDeg: p.humeralSwivelDeg } : {}),
     ...(p.cameraOriginBodyM !== undefined ? { cameraOriginBodyM: p.cameraOriginBodyM } : {}) });
   const { xNdc, depth, joints = {}, aspect, fovYDeg = ARM_DEFAULTS.fovYDeg } = p;
   finite(xNdc, 'xNdc');
@@ -1046,19 +1106,22 @@ function couplingReport(o, core, targetCam, elbowCam) {
   const c = o.rotationCoupling;
   const cp = core.coupling;
   const T = core.ctx.J.forearm_pronation;
-  if (!c || !cp) {
-    return { enabled: Boolean(c), u: 0, pronationDeg: T, forearmDeg: T, humeralExternalDeg: 0, humeralTwistDeg: 0, elbowRefDeg: core.phi / DEG,
+  if (!cp) {
+    return { enabled: Boolean(c), u: 0, pronationDeg: T, forearmDeg: T, humeralExternalDeg: 0, humeralTwistDeg: 0, swivelDeg: 0, elbowRefDeg: core.phi / DEG,
       girdleShiftBodyM: [0, 0, 0], trunkTwistDeg: 0, trunkAxisBodyM: null, shoulderShiftBodyM: [0, 0, 0] };
   }
   const H = normalize(sub(targetCam, core.shoulderCam));
   const h = normalize(sub(elbowCam, core.shoulderCam));
   const half = (cp.humeralExternalDeg * DEG) / 2;
   const twist = (2 * Math.atan2(Math.sin(half) * dot(H, h), Math.cos(half))) / DEG;
+  // R558 (Space dance): a swivel with the palm down (u 0) has no girdle or trunk follow.
+  const coupled = Boolean(c) && cp.u > 0 && cp.shoulderBodyM;
   return {
-    enabled: true, u: cp.u, pronationDeg: cp.pronationDeg,
-    forearmDeg: cp.forearmDeg, humeralExternalDeg: cp.humeralExternalDeg, humeralTwistDeg: twist, elbowRefDeg: cp.elbowRefRad / DEG,
-    girdleShiftBodyM: scale(c.girdleShiftM, cp.u), trunkTwistDeg: cp.u * c.trunkTwistDeg,
-    trunkAxisBodyM: trunkAxisFor(c, cp.shoulderBodyM), shoulderShiftBodyM: cp.shoulderShiftBodyM.slice(), shoulderBodyRefM: cp.shoulderBodyM.slice()
+    enabled: Boolean(c), u: cp.u, pronationDeg: cp.pronationDeg,
+    forearmDeg: cp.forearmDeg, humeralExternalDeg: cp.humeralExternalDeg, humeralTwistDeg: twist, swivelDeg: cp.swivelDeg || 0, elbowRefDeg: cp.elbowRefRad / DEG,
+    girdleShiftBodyM: coupled ? scale(c.girdleShiftM, cp.u) : [0, 0, 0], trunkTwistDeg: coupled ? cp.u * c.trunkTwistDeg : 0,
+    trunkAxisBodyM: coupled ? trunkAxisFor(c, cp.shoulderBodyM) : null, shoulderShiftBodyM: cp.shoulderShiftBodyM.slice(),
+    ...(coupled ? { shoulderBodyRefM: cp.shoulderBodyM.slice() } : {})
   };
 }
 
@@ -1088,8 +1151,8 @@ export const WRIST_RANGE_DEG = POSE_RANGES.wrist_flex;
  * Independent per-joint sample levels (deg) of the pose envelope. Each digit's box corners depend only on that
  * digit's own joints and the arm solution only on the wrist and the pronation angle, so the envelope is the union, per
  * (wrist, pronation) level, of every digit's corners over the full product of its own joint levels: it covers mixed
- * poses (e.g. MCP 90 with PIP 0), the Space fist (ns-rig FIST_POSE_DEG), every action target (ns-actions ACTION_TARGETS:
- * wrist 60 / -50, open -5/0/0, spread 15/10/20, index 70/90/60, thumb MCP 50 / -10), both double-tap rotation states
+ * poses (e.g. MCP 90 with PIP 0), the Space fist (ns-rig FIST_POSE_DEG), every action target (ns-actions ACTION_TARGETS,
+ * R558: wrist 70 / -60, open -10/0/0, spread 20/15/20, one finger 90/105/75, thumb MCP 50 / -10, thumb CMC 40 / 0), both double-tap rotation states
  * (+-80) and every blend between them, since every value lies on or between these levels. Levels are no more than 20 deg
  * apart so a corner between two levels stays within ~1.5 mm of the sampled set (covered by RANGE_SLACK_NDC); the
  * per-frame fit always checks the exact current pose.
@@ -1166,12 +1229,15 @@ export const SIZE_REFERENCE_POSES = Object.freeze((() => {
 export const GAME_POSES = Object.freeze([
   Object.freeze({}),
   REST_HAND_POSE_DEG, // R3-arm: the relaxed rest hand (ns-actions REST_POSE) is the pose shown most of the time
-  Object.freeze({ ...Object.fromEntries(DIGIT_NAMES.flatMap(d => [[`${d}_mcp_flex`, -5], [`${d}_pip_flex`, 0], [`${d}_dip_flex`, 0]])), thumb_mcp_flex: -5, thumb_ip_flex: 0 }),
-  Object.freeze({ index_mcp_abd: 15, ring_mcp_abd: 10, little_mcp_abd: 20 }),
+  // R558 (Message 2 / 14): the held poses at their new ends (ns-actions ACTION_TARGETS): open hand at the MCP limit,
+  // the full spread, each single finger fully bent, the thumb across the palm. All lie on the per-joint grid.
+  Object.freeze({ ...Object.fromEntries(DIGIT_NAMES.flatMap(d => [[`${d}_mcp_flex`, -10], [`${d}_pip_flex`, 0], [`${d}_dip_flex`, 0]])), thumb_mcp_flex: -10, thumb_ip_flex: -5 }),
+  Object.freeze({ index_mcp_abd: 20, ring_mcp_abd: 15, little_mcp_abd: 20 }),
   FIST_POSE_DEG,
-  Object.freeze({ index_mcp_flex: 70, index_pip_flex: 90, index_dip_flex: 60 }),
+  ...DIGIT_NAMES.map(d => Object.freeze({ [`${d}_mcp_flex`]: 90, [`${d}_pip_flex`]: 105, [`${d}_dip_flex`]: 75 })),
   Object.freeze({ thumb_mcp_flex: 50 }),
-  Object.freeze({ thumb_mcp_flex: -10 })
+  Object.freeze({ thumb_mcp_flex: -10 }),
+  Object.freeze({ thumb_cmc_opp: 40 })
 ]);
 
 /** The A/D range is computed against a margin this much tighter (NDC) than the per-pose fit check, so poses between
@@ -1276,9 +1342,122 @@ export function handEnvelope(rig, boxes) {
   return env;
 }
 
+/* R558 (performance, P2): the A/D range search (anchorRange: every probe fits up to 40 hand poses) solves the arm many
+ * thousands of times per look frame, and each solve allocated about twenty 4x4 matrices and as many small vectors
+ * (ns-math returns new arrays). handFitMatrix below is solveArmCore's uncoupled branch (no rotation coupling, no swivel:
+ * the reference arm the range search uses) plus handMatrixOf, written into scratch buffers with EVERY operation of the
+ * original in the same order: the same Math.hypot lengths and divisions (normalize), the same products and sums (dot,
+ * cross, reject, transformDirection), the same matrix products element by element (ns-math multiply, with identity,
+ * translation, uniformScale, basis and rotationTranspose filled as ns-math fills them), the same zero-length checks and
+ * throws. So the hand matrix is bit-for-bit the one solveCore + handMatrixOf give (checked on random and real poses),
+ * only without the allocations. Any other case (coupling, swivel) keeps the original path. */
+const FIT_A = new Float64Array(16), FIT_B = new Float64Array(16), FIT_C = new Float64Array(16), FIT_D = new Float64Array(16);
+const FIT_SM = new Float64Array(16), FIT_HM = new Float64Array(16);
+function fitIdentity(m) { m.fill(0); m[0] = m[5] = m[10] = m[15] = 1; return m; }
+/** c = a * b, ns-math multiply's exact arithmetic (c may be a fresh scratch distinct from a and b). */
+function fitMul(c, a, b) {
+  const a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5], a6 = a[6], a7 = a[7];
+  const a8 = a[8], a9 = a[9], a10 = a[10], a11 = a[11], a12 = a[12], a13 = a[13], a14 = a[14], a15 = a[15];
+  let x = b[0], y = b[1], z = b[2], w = b[3];
+  c[0] = a0 * x + a4 * y + a8 * z + a12 * w; c[1] = a1 * x + a5 * y + a9 * z + a13 * w; c[2] = a2 * x + a6 * y + a10 * z + a14 * w; c[3] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[4]; y = b[5]; z = b[6]; w = b[7];
+  c[4] = a0 * x + a4 * y + a8 * z + a12 * w; c[5] = a1 * x + a5 * y + a9 * z + a13 * w; c[6] = a2 * x + a6 * y + a10 * z + a14 * w; c[7] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[8]; y = b[9]; z = b[10]; w = b[11];
+  c[8] = a0 * x + a4 * y + a8 * z + a12 * w; c[9] = a1 * x + a5 * y + a9 * z + a13 * w; c[10] = a2 * x + a6 * y + a10 * z + a14 * w; c[11] = a3 * x + a7 * y + a11 * z + a15 * w;
+  x = b[12]; y = b[13]; z = b[14]; w = b[15];
+  c[12] = a0 * x + a4 * y + a8 * z + a12 * w; c[13] = a1 * x + a5 * y + a9 * z + a13 * w; c[14] = a2 * x + a6 * y + a10 * z + a14 * w; c[15] = a3 * x + a7 * y + a11 * z + a15 * w;
+  return c;
+}
+/** ns-math rotationAxisAngle into m (normalize of the axis included). */
+function fitRotation(m, axis, angle) {
+  const l = Math.hypot(axis[0], axis[1], axis[2]);
+  if (!(l > 1e-12)) throw new Error('normalize: zero-length vector');
+  const x = axis[0] / l, y = axis[1] / l, z = axis[2] / l;
+  const c = Math.cos(angle), s = Math.sin(angle), t = 1 - c;
+  fitIdentity(m);
+  m[0] = t * x * x + c;     m[4] = t * x * y - s * z; m[8] = t * x * z + s * y;
+  m[1] = t * x * y + s * z; m[5] = t * y * y + c;     m[9] = t * y * z - s * x;
+  m[2] = t * x * z - s * y; m[6] = t * y * z + s * x; m[10] = t * z * z + c;
+  return m;
+}
+function fitTranslation(m, x, y, z) { fitIdentity(m); m[12] = x; m[13] = y; m[14] = z; return m; }
+const fitNorm = (x, y, z, out) => {
+  const l = Math.hypot(x, y, z);
+  if (!(l > 1e-12)) throw new Error('normalize: zero-length vector');
+  out[0] = x / l; out[1] = y / l; out[2] = z / l; return out;
+};
+const FV_Q = [0, 0, 0], FV_N = [0, 0, 0], FV_CX = [0, 0, 0], FV_CY = [0, 0, 0], FV_RX = [0, 0, 0], FV_RY = [0, 0, 0], FV_HH = [0, 0, 0];
+/** solveArmCore + handMatrixOf for the uncoupled, unswivelled arm: null when that is not the case (use the original),
+ * else { reachable, M } with M the hand matrix in a scratch buffer (valid until the next call; only when reachable). */
+const FIT_OUT = { reachable: false, M: FIT_HM };
+function handFitMatrix(ctx, target, ox, o) {
+  const c = o.rotationCoupling, u = couplingU(c, ctx.J.forearm_pronation);
+  if (u > 0 || (o.humeralSwivelDeg || 0) !== 0) return null;
+  const shoulderCam = ox.shoulderCam, pole = ox.pole, { base, cG } = ctx;
+  // solveCore
+  const t0 = target[0] - shoulderCam[0], t1 = target[1] - shoulderCam[1], t2 = target[2] - shoulderCam[2];
+  const Dm = Math.hypot(t0, t1, t2);
+  if (!(Dm > 1e-9)) fail('arm_target', 'hand target coincides with the shoulder');
+  const Dmm = Dm / MM;
+  let phi, reachable;
+  if (cG.C < 1e-9) {
+    phi = 0;
+    reachable = Math.abs(chainDist(cG, 0) - Dmm) < 1e-6;
+  } else {
+    const t = ((Dmm * Dmm - cG.uu - cG.vv) / 2 - cG.K) / cG.C;
+    const raw = cG.phi0 + Math.acos(clamp(t, -1, 1));
+    const lo = Math.max(0, ctx.phiLimF);
+    reachable = t <= 1 + 1e-9 && t >= -1 - 1e-9 && raw >= lo - 1e-9 && raw <= ELBOW_MAX + 1e-9;
+    phi = clamp(raw, 0, ELBOW_MAX);
+  }
+  const Ra = fitRotation(FIT_A, base.a, phi), G = ctx.G, U = base.U;
+  const hh = fitNorm(U[0] + (Ra[0] * G[0] + Ra[4] * G[1] + Ra[8] * G[2]), U[1] + (Ra[1] * G[0] + Ra[5] * G[1] + Ra[9] * G[2]), U[2] + (Ra[2] * G[0] + Ra[6] * G[1] + Ra[10] * G[2]), FV_HH);
+  const sH = 1 / Dm, H0 = t0 * sH, H1 = t1 * sH, H2 = t2 * sH;
+  const rejectH = (v0, v1, v2, out) => { const d = v0 * H0 + v1 * H1 + v2 * H2; out[0] = v0 - H0 * d; out[1] = v1 - H1 * d; out[2] = v2 - H2 * d; return out; };
+  let q = rejectH(pole[0] - shoulderCam[0], pole[1] - shoulderCam[1], pole[2] - shoulderCam[2], FV_Q);
+  if (!(Math.hypot(q[0], q[1], q[2]) > 1e-9)) q = rejectH(0, -1, 0, FV_Q);
+  if (!(Math.hypot(q[0], q[1], q[2]) > 1e-9)) q = rejectH(-1, 0, 0, FV_Q);
+  q = fitNorm(q[0], q[1], q[2], FV_Q);
+  const n = fitNorm(q[1] * H2 - q[2] * H1, q[2] * H0 - q[0] * H2, q[0] * H1 - q[1] * H0, FV_N);
+  // frame(H, n) and frame(hHat, base.a): x = normalize(d), y = normalize(reject(a, x)), z = cross(x, y)
+  const frameOf = (d0, d1, d2, a, X, Y) => {
+    fitNorm(d0, d1, d2, X);
+    const k = a[0] * X[0] + a[1] * X[1] + a[2] * X[2];
+    fitNorm(a[0] - X[0] * k, a[1] - X[1] * k, a[2] - X[2] * k, Y);
+  };
+  frameOf(H0, H1, H2, n, FV_CX, FV_CY);
+  frameOf(hh[0], hh[1], hh[2], base.a, FV_RX, FV_RY);
+  const cx = FV_CX, cy = FV_CY, rx = FV_RX, ry = FV_RY;
+  const B = fitIdentity(FIT_B); // basis(cam.d, cam.a, cam.p)
+  B[0] = cx[0]; B[1] = cx[1]; B[2] = cx[2];
+  B[4] = cy[0]; B[5] = cy[1]; B[6] = cy[2];
+  B[8] = cx[1] * cy[2] - cx[2] * cy[1]; B[9] = cx[2] * cy[0] - cx[0] * cy[2]; B[10] = cx[0] * cy[1] - cx[1] * cy[0];
+  const T = fitIdentity(FIT_C); // rotationTranspose(basis(rest.d, rest.a, rest.p))
+  T[0] = rx[0]; T[4] = rx[1]; T[8] = rx[2];
+  T[1] = ry[0]; T[5] = ry[1]; T[9] = ry[2];
+  T[2] = rx[1] * ry[2] - rx[2] * ry[1]; T[6] = rx[2] * ry[0] - rx[0] * ry[2]; T[10] = rx[0] * ry[1] - rx[1] * ry[0];
+  const R = fitMul(FIT_D, B, T);
+  const S0 = base.S0;
+  const US = fitIdentity(FIT_A); US[0] = US[5] = US[10] = MM; // uniformScale(MM)
+  const X1 = fitMul(FIT_B, US, fitTranslation(FIT_C, S0[0] * -1, S0[1] * -1, S0[2] * -1));
+  const X2 = fitMul(FIT_C, R, X1);
+  const SM = fitMul(FIT_SM, fitTranslation(FIT_A, shoulderCam[0], shoulderCam[1], shoulderCam[2]), X2);
+  FIT_OUT.reachable = reachable;
+  if (!reachable) return FIT_OUT;
+  // handMatrixOf: multiply(multiply(SM, rotationAboutPivot(a, phi, E0)), Rw), rotationAboutPivot = T(E0) R(a, phi) T(-E0)
+  const E0 = base.E0;
+  const P1 = fitMul(FIT_B, fitRotation(FIT_A, base.a, phi), fitTranslation(FIT_C, E0[0] * -1, E0[1] * -1, E0[2] * -1));
+  const P2 = fitMul(FIT_D, fitTranslation(FIT_A, E0[0], E0[1], E0[2]), P1);
+  fitMul(FIT_HM, fitMul(FIT_B, SM, P2), ctx.Rw);
+  return FIT_OUT;
+}
+
 function fitsAt(ctx, corners, x, d, tanHalf, aspect, o, box, nearMin) {
   const ox = atAnchor(o, x, tanHalf, aspect);
-  const core = solveArmCore(ctx, pointOnNdcRay(x, o.yNdc, d, tanHalf, aspect), ox, o);
+  const target = pointOnNdcRay(x, o.yNdc, d, tanHalf, aspect);
+  const fast = handFitMatrix(ctx, target, ox, o);
+  if (fast) return fast.reachable ? scoreCorners(fast.M, corners, tanHalf, aspect, box, nearMin).ok : false;
+  const core = solveArmCore(ctx, target, ox, o);
   if (!core.reachable) return false;
   return scoreCorners(handMatrixOf(ctx, core), corners, tanHalf, aspect, box, nearMin).ok;
 }
@@ -1306,7 +1485,14 @@ function sizeAt(sp, x, d, tanHalf, aspect, o) {
   if (iv.empty) return Infinity;
   const dd = clamp(d, iv.lo, iv.hi);
   const ox = atAnchor(o, x, tanHalf, aspect);
-  const core = solveArmCore(sp.ctx, pointOnNdcRay(x, o.yNdc, dd, tanHalf, aspect), ox, o);
+  const target = pointOnNdcRay(x, o.yNdc, dd, tanHalf, aspect);
+  const fast = handFitMatrix(sp.ctx, target, ox, o); // R558 (P2): the same matrix without allocations (see handFitMatrix)
+  if (fast) {
+    if (!fast.reachable) return Infinity;
+    const f = ndcExtents(fast.M, sp.corners, tanHalf, aspect);
+    return f.yHi - f.yLo + 2 * tissuePadNdc(dd, tanHalf);
+  }
+  const core = solveArmCore(sp.ctx, target, ox, o);
   if (!core.reachable) return Infinity;
   const e = ndcExtents(handMatrixOf(sp.ctx, core), sp.corners, tanHalf, aspect);
   return e.yHi - e.yLo + 2 * tissuePadNdc(dd, tanHalf);
@@ -1490,7 +1676,7 @@ function solveRangeTier(env, levels, tier, tanHalf, aspect, o, box, nearMin, las
 export function anchorRange(rig, boxes, { aspect, fovYDeg } = {}, options = {}) {
   // R5-pronation: the A/D range is a property of the reference (palm-down, uncoupled) arm, so W/A/S/D reach does not
   // change with the rotation coupling; the per-frame fit checks the coupled arm exactly.
-  const o = mergeOptions({ ...(options || {}), rotationCoupling: false });
+  const o = mergeOptions({ ...(options || {}), rotationCoupling: false, humeralSwivelDeg: 0 });
   const fov = fovYDeg === undefined ? o.fovYDeg : fovYDeg;
   const tanHalf = tanHalfFov(aspect, fov);
   const env = handEnvelope(rig, boxes);
@@ -1531,7 +1717,7 @@ export function anchorRange(rig, boxes, { aspect, fovYDeg } = {}, options = {}) 
  * { full: {xMin, xMax} | null, game: {xMin, xMax} | null, chosen: anchorRange's result }.
  */
 export function anchorRangeTiers(rig, boxes, { aspect, fovYDeg } = {}, options = {}) {
-  const o = mergeOptions({ ...(options || {}), rotationCoupling: false }); // R5-pronation: the reference arm, as anchorRange
+  const o = mergeOptions({ ...(options || {}), rotationCoupling: false, humeralSwivelDeg: 0 }); // R5-pronation: the reference arm, as anchorRange
   const fov = fovYDeg === undefined ? o.fovYDeg : fovYDeg;
   const tanHalf = tanHalfFov(aspect, fov);
   const env = handEnvelope(rig, boxes);
@@ -1550,7 +1736,7 @@ export function anchorRangeTiers(rig, boxes, { aspect, fovYDeg } = {}, options =
  * its NDC extents. { levels: [{ wristDeg, pronationDeg, farDepth, fits, xLo, xHi, yLo, yHi }], window }.
  */
 export function envelopeDiagnostics(rig, boxes, { xNdc, aspect, fovYDeg } = {}, options = {}) {
-  const o = mergeOptions({ ...(options || {}), rotationCoupling: false }); // R5-pronation: the reference arm, as anchorRange
+  const o = mergeOptions({ ...(options || {}), rotationCoupling: false, humeralSwivelDeg: 0 }); // R5-pronation: the reference arm, as anchorRange
   finite(xNdc, 'xNdc');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
   const env = handEnvelope(rig, boxes);
@@ -1572,7 +1758,7 @@ export function envelopeDiagnostics(rig, boxes, { xNdc, aspect, fovYDeg } = {}, 
  * the hand-size limited end and far the reach limit (see ARM_DEFAULTS.maxHandHeightNdc).
  */
 export function reachWindow(rig, boxes, { xNdc, aspect, fovYDeg } = {}, options = {}) {
-  const o = mergeOptions({ ...(options || {}), rotationCoupling: false }); // R5-pronation: the reference arm, as fitHand's window
+  const o = mergeOptions({ ...(options || {}), rotationCoupling: false, humeralSwivelDeg: 0 }); // R5-pronation: the reference arm, as fitHand's window
   finite(xNdc, 'xNdc');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);
   const env = handEnvelope(rig, boxes);
@@ -1667,8 +1853,10 @@ export const WS_GUARD_SNAP_M = 0.002;
 
 export function fitHand(rig, boxes, request, viewport, options = {}) {
   const { xNdc, depth, joints = {}, yNdc, rotation } = request || {};
+  // R558 (Space dance): rotation.humeralDeg turns the shown arm (every fit and the matrices); the A/D range and the W/S
+  // window stay those of the reference arm (anchorRange and oRef below take the options without it).
   const opts = withRequestY(options, yNdc);
-  const o = mergeOptions(opts);
+  const o = mergeOptions(swivelOptions(opts, rotation));
   finite(xNdc, 'request.xNdc');
   finite(depth, 'request.depth');
   const { aspect, fovYDeg = o.fovYDeg } = viewport || {};
@@ -1690,7 +1878,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   const tierLevels = range && range.tier === 'game' ? env.gameLevels : env.anchorLevels;
   // R5-pronation: the W/S window belongs to the reference arm (as the A/D range); the pose's own reach (ivp) and every
   // fit use the coupled arm, so at palm up the hand stops where the coupled arm's reach ends if that is nearer.
-  const oRef = o.rotationCoupling ? mergeOptions({ ...opts, rotationCoupling: false }) : o;
+  const oRef = o.rotationCoupling || o.humeralSwivelDeg ? mergeOptions({ ...opts, rotationCoupling: false, humeralSwivelDeg: 0 }) : o;
   const fitAtX = (Q, x) => {
     const win = depthWindow(env, x, tanHalf, aspect, oRef, tierLevels);
     const ivp = rayInterval(Q.ctx, x, o, tanHalf, aspect);
@@ -1778,6 +1966,8 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   const ox = atAnchor(o, x, tanHalf, aspect);
   const solution = solveArm(rig, { xNdc: x, depth: d, joints: J, aspect, fovYDeg, shoulderCam: ox.shoulderCam, pole: ox.pole, yNdc: o.yNdc, reachGirdle: false,
     bodyToCamera: o.bodyToCamera || undefined, rotationCoupling: o.rotationCoupling || false,
+    // R558 (Space dance): the shown arm carries the explicit upper-arm turn too (every fit above already used it).
+    humeralSwivelDeg: o.humeralSwivelDeg || 0,
     ...(o.cameraOriginBodyM ? { cameraOriginBodyM: o.cameraOriginBodyM } : {}) });
   const cornersNdc = [];
   let within = solution.reachable;
@@ -1845,7 +2035,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
  * @returns {{ depth: number, elbowFlexRad: number, clamped: boolean, reachable: boolean }}
  */
 export function depthForElbow(rig, { xNdc, elbowFlexRad, joints = {}, aspect, fovYDeg, yNdc, rotation } = {}, options = {}) {
-  const o = mergeOptions(withRequestY(options, yNdc));
+  const o = mergeOptions(swivelOptions(withRequestY(options, yNdc), rotation));
   finite(xNdc, 'xNdc');
   finite(elbowFlexRad, 'elbowFlexRad');
   const tanHalf = tanHalfFov(aspect, fovYDeg === undefined ? o.fovYDeg : fovYDeg);

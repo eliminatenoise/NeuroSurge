@@ -27,19 +27,24 @@
  *
  * U1-controls round 2 (see createActivity): activation of ANY BODY_MOTOR_MAP region (ns-bodymap.mjs) by gaze (1 s
  * pulse) and click (re-trigger), left-arm regions driving the arm actions and every other region driving
- * bodyJointTargets, persistent activatedRegions with Reset body, a Space double-tap (ns-controls DOUBLE_TAP_MS)
- * toggling forearm pronation/supination while hold-to-fist stays immediate, the brain grab (Space while gazing at
- * the brain), the orbit view state, the instructions/pause overlay state and the WASD coordinated joint channels.
+ * bodyJointTargets, persistent activatedRegions with Reset body, the Space dance of all four limbs (R558: hold = slow,
+ * double-tap and hold = fast, see ns-dance.mjs; Space no longer makes a fist, flips the forearm or grabs), the brain
+ * grab state, the orbit view state, the instructions/pause overlay state and the WASD coordinated joint channels.
  * The left upper limb is represented predominantly in the contralateral (right) hemisphere; region extents are the
  * map owner's representative, overlapping schematic, not a unique cortical point per muscle.
  *
  * Pure (browser and Node; no DOM). Errors: Error('ns:<code>: message').
  */
 import { DEG, clamp } from './ns-math.mjs';
-import { FIST_POSE_DEG, REST_HAND_POSE_DEG } from './ns-rig.mjs';
+import { FIST_POSE_DEG, REST_HAND_POSE_DEG, PRONATION_STATES } from './ns-rig.mjs';
 import { DOUBLE_TAP_MS } from './ns-controls.mjs';
+import { createDance, observeDance, stepDance, stopDance, isDanceState, DANCE_LIMBS, DANCE_LIMB_IDS, DANCE_JOINT_IDS } from './ns-dance.mjs';
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+// R558 (Space dance): the game arm's palm turn in degrees (ns-rig: +80 palm down .. -80 palm up) for a rotation value
+// (0 pronated .. 1 supinated), and back.
+const PRONATION_END_DEG = PRONATION_STATES.pronated;
+const PRONATION_DEG_AT_VALUE = v => PRONATION_STATES.pronated + (PRONATION_STATES.supinated - PRONATION_STATES.pronated) * v;
 const isPlainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isFiniteNumber = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -63,11 +68,44 @@ const copyJson = v => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
 // ---------------------------------------------------------------------------------------------
 
 /** The 12 action ids of movement-map.json, in map order. */
-export const ACTION_IDS = Object.freeze([
+export const MOVEMENT_MAP_ACTION_IDS = Object.freeze([
   'grasp_close', 'relax_release', 'open_hand', 'spread_fingers',
   'wrist_flexion', 'wrist_extension', 'elbow_flexion', 'elbow_extension',
   'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension'
 ]);
+/** R558 (Messages 14 and 15: as many activation points as possible; the left hand as detailed as the right): game-defined
+ * left-hand actions that the pinned MOVEMENT-MAP (r2, sha-pinned in ns-app) does not have. bindMovementMap adds them to
+ * the binding with the roles in EXTRA_ARM_ACTIONS (existing muscle_catalog keys only), so every per-action path
+ * (targets, drives, display, latch, muscle colours, muscle taps) treats them like the map's own actions. */
+export const EXTRA_ARM_ACTION_IDS = Object.freeze([
+  // Little, ring, middle: the strip's own order (the right hand's areas run the same way). A tap on a muscle shared by
+  // several of these goes to the first action that lists it as a mover, so this order makes a tap on the left
+  // lumbricals bend the little finger, as a tap on the right lumbricals does (left-right symmetry, Message 15).
+  'fingers_together', 'little_flexion', 'little_extension', 'ring_flexion', 'ring_extension',
+  'middle_flexion', 'middle_extension', 'thumb_opposition', 'thumb_reposition',
+  'wrist_radial_deviation', 'wrist_ulnar_deviation'
+]);
+/** Every game-arm action id: the movement map's 12, then EXTRA_ARM_ACTION_IDS. */
+export const ACTION_IDS = Object.freeze([...MOVEMENT_MAP_ACTION_IDS, ...EXTRA_ARM_ACTION_IDS]);
+const roles = (p, r = [], s = []) => ({ primary_drive_increase: p, relative_drive_reduction: r, limited_stabilization_or_posture_dependent: s });
+/** Labels and muscle roles (MOVEMENT-MAP muscle_catalog keys) of the game-defined left-hand actions. Standard functions:
+ * long finger flexors with the lumbricals bend one finger, the extensors straighten it; palmar interossei bring the
+ * fingers together (the spread's antagonists); opponens pollicis and flexor pollicis brevis turn the thumb across the
+ * palm, the long thumb extensors take it back out; the radial wrist flexor and extensors bend the wrist toward the
+ * thumb, the two ulnar wrist muscles toward the little finger. Simulated display roles, not EMG. */
+export const EXTRA_ARM_ACTIONS = deepFreeze({
+  fingers_together: { label: 'Bring fingers together', roles: roles(['PI'], ['DI', 'ADM']) },
+  middle_flexion: { label: 'Flex middle finger', roles: roles(['FDS', 'FDP', 'LUM'], ['ED'], ['DI']) },
+  middle_extension: { label: 'Extend middle finger', roles: roles(['ED'], ['FDS', 'FDP'], ['LUM', 'DI']) },
+  ring_flexion: { label: 'Flex ring finger', roles: roles(['FDS', 'FDP', 'LUM'], ['ED'], ['PI', 'DI']) },
+  ring_extension: { label: 'Extend ring finger', roles: roles(['ED'], ['FDS', 'FDP'], ['LUM']) },
+  little_flexion: { label: 'Flex little finger', roles: roles(['FDS', 'FDP', 'LUM'], ['ED', 'EDM']) },
+  little_extension: { label: 'Extend little finger', roles: roles(['ED', 'EDM'], ['FDS', 'FDP']) },
+  thumb_opposition: { label: 'Turn thumb across the palm (opposition)', roles: roles(['OP', 'FPB'], ['EPL']) },
+  thumb_reposition: { label: 'Move thumb out from the palm', roles: roles(['EPB', 'EPL'], ['OP', 'FPB']) },
+  wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation; display only on the game arm)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
+  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation; display only on the game arm)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) }
+});
 
 const DIGITS = Object.freeze(['index', 'middle', 'ring', 'little']);
 const ROLE_KEYS = Object.freeze([
@@ -168,16 +206,34 @@ export const ACTION_TARGETS = Object.freeze({
     Object.fromEntries(RELAX_JOINTS.map(j => [j, REST_POSE[j]])),
     { releaseOf: ['grasp_close'] }
   ),
-  open_hand: actionTarget({ ...digitFlex(DIGITS, -5, 0, 0), thumb_mcp_flex: -5, thumb_ip_flex: 0 }),
-  spread_fingers: actionTarget({ index_mcp_abd: 15, ring_mcp_abd: 10, little_mcp_abd: 20 }),
-  wrist_flexion: actionTarget({ wrist_flex: 60 }),
-  wrist_extension: actionTarget({ wrist_flex: -50 }),
+  // R558 (Message 2: every movement to its maximum anatomically feasible range, never beyond): the open hand, a single
+  // finger, the wrist and the spread now end at the game arm's own joint limits (JOINT_LIMITS, inside the adult norms:
+  // finger MCP 90 / PIP 105 / DIP 75 of AAOS 90 / 100 / 90, MCP extension 10 of about 30, wrist flexion 70 / extension
+  // 60 of AAOS 80 / 70, spread 20 at the index and little MCP). The rig and its hand-fit envelope (ns-arm
+  // ENVELOPE_GRID) stop there; the right hand's body rig reaches the full norms (ns-body BODY_JOINT_SHARES).
+  open_hand: actionTarget({ ...digitFlex(DIGITS, -10, 0, 0), thumb_mcp_flex: -10, thumb_ip_flex: -5 }),
+  spread_fingers: actionTarget({ index_mcp_abd: 20, ring_mcp_abd: 15, little_mcp_abd: 20 }),
+  wrist_flexion: actionTarget({ wrist_flex: 70 }),
+  wrist_extension: actionTarget({ wrist_flex: -60 }),
   elbow_flexion: actionTarget({}, { elbowFlexDeg: ELBOW_ACTION_DEG }),
   elbow_extension: actionTarget({}, { elbowFlexDeg: -ELBOW_ACTION_DEG }),
-  index_flexion: actionTarget(digitFlex(['index'], 70, 90, 60)),
-  index_extension: actionTarget(digitFlex(['index'], -5, 0, 0)),
+  index_flexion: actionTarget(digitFlex(['index'], 90, 105, 75)),
+  index_extension: actionTarget(digitFlex(['index'], -10, 0, 0)),
   thumb_mcp_flexion: actionTarget({ thumb_mcp_flex: 50 }),
-  thumb_mcp_extension: actionTarget({ thumb_mcp_flex: -10 })
+  thumb_mcp_extension: actionTarget({ thumb_mcp_flex: -10 }),
+  // R558 (Messages 14 / 15): the game-defined left-hand actions (EXTRA_ARM_ACTIONS), at the same joint limits.
+  fingers_together: actionTarget({ index_mcp_abd: 0, ring_mcp_abd: 0, little_mcp_abd: 0 }),
+  middle_flexion: actionTarget(digitFlex(['middle'], 90, 105, 75)),
+  middle_extension: actionTarget(digitFlex(['middle'], -10, 0, 0)),
+  ring_flexion: actionTarget(digitFlex(['ring'], 90, 105, 75)),
+  ring_extension: actionTarget(digitFlex(['ring'], -10, 0, 0)),
+  little_flexion: actionTarget(digitFlex(['little'], 90, 105, 75)),
+  little_extension: actionTarget(digitFlex(['little'], -10, 0, 0)),
+  thumb_opposition: actionTarget({ thumb_cmc_opp: 40 }),
+  thumb_reposition: actionTarget({ thumb_cmc_opp: 0 }),
+  // The game arm's hand fit has one wrist axis (flexion / extension): the sideways bends colour their muscles only.
+  wrist_radial_deviation: actionTarget({}),
+  wrist_ulnar_deviation: actionTarget({})
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -211,7 +267,7 @@ export function bindMovementMap(map) {
   const byId = new Map();
   for (const a of map.actions) {
     if (!isPlainObject(a) || typeof a.id !== 'string') fail('map_action', 'every action needs a string id');
-    if (!ACTION_IDS.includes(a.id)) fail('map_unknown_action', `unknown action id ${JSON.stringify(a.id)}`);
+    if (!MOVEMENT_MAP_ACTION_IDS.includes(a.id)) fail('map_unknown_action', `unknown action id ${JSON.stringify(a.id)}`);
     if (byId.has(a.id)) fail('map_duplicate', `duplicate action id ${a.id}`);
     if (a.limb !== undefined && a.limb !== 'human_left') fail('map_limb', `action ${a.id} limb must be "human_left"`);
     if (typeof a.label !== 'string' || a.label.trim() === '') fail('map_action', `action ${a.id} needs a label`);
@@ -240,7 +296,7 @@ export function bindMovementMap(map) {
     }
     byId.set(a.id, a);
   }
-  const missing = ACTION_IDS.filter(id => !byId.has(id));
+  const missing = MOVEMENT_MAP_ACTION_IDS.filter(id => !byId.has(id));
   if (missing.length) fail('map_missing_action', `missing action ids: ${missing.join(', ')}`);
 
   const contract = map.cortical_display_contract;
@@ -249,7 +305,7 @@ export function bindMovementMap(map) {
     fail('map_qualifier', 'cortical_display_contract.minimum_qualifier_visible must be a non-empty string');
   }
 
-  const entries = ACTION_IDS.map(id => {
+  const entries = MOVEMENT_MAP_ACTION_IDS.map(id => {
     const a = byId.get(id);
     const roles = {};
     for (const k of ROLE_KEYS) roles[k] = [...a.muscle_roles[k]];
@@ -261,6 +317,19 @@ export function bindMovementMap(map) {
       notes: typeof a.mechanical_and_relaxation_note === 'string' ? a.mechanical_and_relaxation_note : null
     })];
   });
+  // R558: the game-defined left-hand actions, bound with their own roles (every key must be in this map's catalog).
+  for (const id of EXTRA_ARM_ACTION_IDS) {
+    const x = EXTRA_ARM_ACTIONS[id];
+    const roles = {};
+    for (const k of ROLE_KEYS) {
+      roles[k] = [...x.roles[k]];
+      for (const m of roles[k]) if (!hasOwn(catalog, m)) fail('map_unknown_muscle', `game-defined action ${id} names ${JSON.stringify(m)}, which is not a muscle_catalog key`);
+    }
+    entries.push([id, deepFreeze({
+      label: x.label, roles, cortical: null, joint_changes: [],
+      notes: 'Game-defined left-hand action (R558), not part of the pinned movement map; roles from its muscle catalog.'
+    })]);
+  }
 
   return Object.freeze({
     actions: lockedMap(entries),
@@ -413,10 +482,12 @@ export function muscleDrives(binding, drives = {}) {
 
 /** Actions that compete with the Space fist for digit/thumb joints (suppressed while Space is held). */
 export const SPACE_COMPETING = Object.freeze(['open_hand', 'spread_fingers', 'index_flexion', 'index_extension',
-  'thumb_mcp_flexion', 'thumb_mcp_extension', 'relax_release']);
+  'thumb_mcp_flexion', 'thumb_mcp_extension', 'relax_release',
+  'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion',
+  'little_extension', 'thumb_opposition', 'thumb_reposition']);
 /** Pulsed actions that flex digits: cancelled on Space release so a stale pulse cannot reclose the hand. */
-export const DIGIT_FLEXING = Object.freeze(['grasp_close', 'index_flexion', 'thumb_mcp_flexion']);
-const RELEASE_DECAY_FACTOR = 3;      // grasp drive decays 3x faster while relax_release is commanded
+export const DIGIT_FLEXING = Object.freeze(['grasp_close', 'index_flexion', 'thumb_mcp_flexion', 'middle_flexion', 'ring_flexion',
+  'little_flexion', 'thumb_opposition']);
 const REACH_FULL_RATE_DEG_S = 90;    // |elbowRate| at which the legacy display-only reach linkage saturates
 const SNAP = 1e-9;                   // timers / drives within this of their goal snap to it
 
@@ -434,16 +505,22 @@ export const GAZE_RESTART_DEADBAND_DEG = 0.2;
  *  markS          the persistent "switched on" mark (R11c) is added at once for a click (the user: "when you press a
  *                 part ... it slightly changes shade"), but for a look only after the gaze has stayed on the area this
  *                 long, so ordinary looking around does not mark every area gold. The 1 s look activation itself is
- *                 unchanged (it still starts the moment the crosshair reaches a new area). */
-export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5 });
+ *                 unchanged (it still starts the moment the crosshair reaches a new area).
+ *  latchS         R558 (latch): a LOOK moves body parts (and holds them there) only once the gaze has stayed on the
+ *                 area this long; the area's glow still starts at once. With the strip filling the view the crosshair
+ *                 crosses many areas while the player looks around, and each would otherwise move and hold its joints.
+ *                 A click moves at once. */
+export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS: 0.3 });
 
 /**
  * Display (cortex colour) envelope defaults, seconds. UI timing choices, not physiological latencies:
  *   riseTau     fast first-order rise (63% at 35 ms, 94% at 100 ms) toward full display while a command is active;
- *   fadeSeconds smoothstep fade inside the last 0.08 s of a timed command, reaching exactly 0 at its deadline;
+ *   fadeSeconds smoothstep fade inside the last 0.25 s of a timed command, reaching exactly 0 at its deadline (R558,
+ *               Message 22: 0.08 s read as a snap after the power-up charge; 0.25 s is a clean power-down, and the HUD
+ *               meter follows the same envelope, so it stays honest);
  *   decayTau    fast decay for a command that ends early (replaced pulse, Space release of the fist, cancellation).
  */
-export const DISPLAY_ENVELOPE = Object.freeze({ riseTau: 0.035, fadeSeconds: 0.08, decayTau: 0.03 });
+export const DISPLAY_ENVELOPE = Object.freeze({ riseTau: 0.035, fadeSeconds: 0.25, decayTau: 0.03 });
 
 /** Visible label for the display-only reach channel (A/D and the proximal share of W/S). */
 export const ARM_REACH_LABEL = 'simulated arm reach activity (display-only, unitless; shoulder territory not mapped)';
@@ -455,7 +532,8 @@ export const ARM_REACH_LABEL = 'simulated arm reach activity (display-only, unit
  *   fullXRate            |realised horizontal rate| (NDC/s) at which the A/D display saturates (ns-arm default 0.9);
  *   proximalShare        share of the W/S level also shown on the proximal arm-reach channel (armReach);
  *   horizontalFieldShare share of the A/D level shown on EACH of the two most proximal existing representative fields
- *                        (elbow_flexion u 0.34, elbow_extension u 0.38) of the STRIP only; never fed to muscles;
+ *                        (elbow_flexion and elbow_extension, MARKERS u 0.2974 / 0.3212 since the knob-anchored
+ *                        layout) of the STRIP only; never fed to muscles;
  *   riseTau / decayTau   smoothing (s); after release the display falls below 2% within 0.3 s.
  */
 export const REACH_DISPLAY = Object.freeze({
@@ -475,13 +553,110 @@ function pick(m, ids) {
   return o;
 }
 
-const unitMap = (m, ids) => isPlainObject(m) && ids.every(id => isFiniteNumber(m[id]) && m[id] >= 0 && m[id] <= 1);
+// R558 (performance, P2): the same test as isPlainObject(m) && ids.every(id => isFiniteNumber(m[id]) && m[id] >= 0 &&
+// m[id] <= 1) (the id lists are dense arrays), as a loop: checkState runs it on every activity step.
+const unitMap = (m, ids) => {
+  if (!isPlainObject(m)) return false;
+  for (let i = 0; i < ids.length; i++) { const v = m[ids[i]]; if (!(isFiniteNumber(v) && v >= 0 && v <= 1)) return false; }
+  return true;
+};
 const unit = v => isFiniteNumber(v) && v >= 0 && v <= 1;
 const nonNegative = v => isFiniteNumber(v) && v >= 0;
 const actionOrNull = v => v === null || ACTION_IDS.includes(v);
 const angleOrNull = v => v === null || isFiniteNumber(v);
 /** Soft union of two 0..1 levels: 1 - (1 - a)(1 - b). */
 const union = (a, b) => 1 - (1 - a) * (1 - b);
+
+/**
+ * R558 latch (the user's note of 11 Nov 2026: a limb does not come back by itself after a muscle or brain activation;
+ * it has to be activated back by the opposing action, or everything reset; the opposing brain area and muscle are
+ * faintly lit as the way back).
+ *   omega, zeta        the jerk of a body joint to its latched angle: an under-damped spring (natural frequency in
+ *                      rad/s, damping ratio) solved exactly per step, so the joint snaps there with one small recoil.
+ *   restitution        R558 (user, Message 1: "when we look to any motor area of the brain, we are looking for a
+ *                      violent jerking movement, not a graceful shift"): almost every latched goal IS the end of the
+ *                      joint's range, where the overshoot of the spring cannot be shown without passing the range. The
+ *                      joint therefore hits its end stop at full speed and rebounds off it with this share of its
+ *                      speed (then the spring brings it back: a few quick, shrinking recoils), never past the stop.
+ *   reducedMotion      the same for prefers-reduced-motion: slower, without recoil or rebound.
+ *   snapDeg, snapDegS  within these of the goal (degrees, degrees/s) the joint is exactly at its goal.
+ *   restEpsDeg         an angle within this of the start angle counts as "at the start position".
+ *   armPoseTau         seconds: the game arm's jerk into and out of a latched action (reducedArmPoseTau likewise).
+ *   hintLevel          the faint display level (0..1) of an opposing "this brings it back" area and muscle.
+ * R558 tuning (the lead's brief L; this very step function at 60 frames a second): omega 26 / zeta 0.55 / no rebound
+ * took 6 frames (0.10 s) for a 70 degree turn to its end stop (5, 19, 34, 49, 61, 70) and stopped dead: a quick but
+ * smooth swing. omega 50 / zeta 0.35 / restitution 0.4 takes 3 frames (19, 55, 70) and recoils about 5 degrees off the
+ * stop before it settles (about 10 degrees on a 135 degree knee straightening; 31 % overshoot, then back, for a goal
+ * inside the range). Compared: omega 70 is at the stop in 2 frames (one moving frame, too little to read as motion);
+ * zeta 0.25 adds a third recoil (a wobble); restitution 0.3 / 0.5 recoil 4 / 7 degrees. The game arm's ease
+ * 0.045 -> 0.022 s (53 % of the way in one 60 Hz frame, 90 % in three).
+ * A display rule of this game. Nothing here is a measured movement speed, force or nerve signal.
+ */
+export const JOINT_LATCH = Object.freeze({
+  omega: 50, zeta: 0.35, restitution: 0.4, reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
+  snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
+  armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22
+});
+
+/** R558 (issue hunt 2: "Raise right arm up" held together with "Swing right arm out to the side" left the arm out to the
+ * side and down and back, matching neither label: ns-body turns abduction before flexion, so abduction 135 then flexion
+ * 160 is not "up"). Rule: a held movement of the right shoulder in one plane (flexion / extension, or out to the side /
+ * back in) brings the other plane's joint back to its start angle, so the LATER action wins the arm's direction and its
+ * label stays true: raise up -> straight up beside the head; then out to the side -> straight out to the side at
+ * shoulder height (flexion back to the start's 90, forward); then raise up again -> up (out to the side back to 0).
+ * Bringing a joint back with its own opposite action does not touch the other plane. A rule of this game, chosen so
+ * every held label stays true; not a measured coupling of the shoulder joints. */
+export const JOINT_CONFLICTS = Object.freeze({
+  r_shoulder_flex: Object.freeze(['r_shoulder_abd']),
+  r_shoulder_abd: Object.freeze(['r_shoulder_flex'])
+});
+
+/** The opposing (antagonist) game-arm action of each latching arm action: activating it while the other is latched
+ * brings the joint back. relax_release lets go of every latched hand action and never latches itself. */
+export const ARM_OPPOSITES = Object.freeze({
+  grasp_close: 'open_hand', open_hand: 'grasp_close',
+  wrist_flexion: 'wrist_extension', wrist_extension: 'wrist_flexion',
+  elbow_flexion: 'elbow_extension', elbow_extension: 'elbow_flexion',
+  index_flexion: 'index_extension', index_extension: 'index_flexion',
+  thumb_mcp_flexion: 'thumb_mcp_extension', thumb_mcp_extension: 'thumb_mcp_flexion',
+  // R558: the spread's anatomical opposite is now its own action (palmar interossei); relax_release still lets go too.
+  spread_fingers: 'fingers_together', fingers_together: 'spread_fingers',
+  middle_flexion: 'middle_extension', middle_extension: 'middle_flexion',
+  ring_flexion: 'ring_extension', ring_extension: 'ring_flexion',
+  little_flexion: 'little_extension', little_extension: 'little_flexion',
+  thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition'
+  // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm, so there is nothing to hold: they pulse.
+});
+/** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they pulse and never latch. */
+const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+const HAND_LATCH_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
+  'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension',
+  'thumb_opposition', 'thumb_reposition']);
+
+/**
+ * One exact step of a damped spring toward `goal`: x = pos - goal obeys x'' + 2 zeta omega x' + omega^2 x = 0
+ * (zeta < 1 under-damped, zeta >= 1 treated as critically damped). Returns [pos, vel] after h seconds; within
+ * JOINT_LATCH.snapDeg / snapDegS of the goal it returns the goal itself with speed 0.
+ */
+export function stepJointSpring(pos, vel, goal, h, omega = JOINT_LATCH.omega, zeta = JOINT_LATCH.zeta) {
+  if (!(h > 0)) return [pos, vel];
+  const x = pos - goal;
+  let nx, nv;
+  if (zeta < 1 - 1e-6) {
+    const wd = omega * Math.sqrt(1 - zeta * zeta);
+    const B = (vel + zeta * omega * x) / wd;
+    const e = Math.exp(-zeta * omega * h), c = Math.cos(wd * h), sn = Math.sin(wd * h);
+    nx = e * (x * c + B * sn);
+    nv = e * ((B * wd - zeta * omega * x) * c - (x * wd + zeta * omega * B) * sn);
+  } else {
+    const C = vel + omega * x;
+    const e = Math.exp(-omega * h);
+    nx = (x + C * h) * e;
+    nv = (C - omega * (x + C * h)) * e;
+  }
+  if (Math.abs(nx) < JOINT_LATCH.snapDeg && Math.abs(nv) < JOINT_LATCH.snapDegS) return [goal, 0];
+  return [goal + nx, nv];
+}
 
 /** First-order approach of d toward target over h seconds (exact exponential step). */
 function approach(d, target, h, riseTau, decayTau) {
@@ -655,10 +830,46 @@ export const ARM_ACTION_IDS = Object.freeze([...ACTION_IDS, ...ROTATION_ACTION_I
 export const ROTATION_STATES = Object.freeze(['pronated', 'supinated']);
 /** Joint ids of the non-left-arm body (shared interface 2); bodyJointTargets always carries every one (0 = neutral). */
 export const BODY_JOINT_IDS = Object.freeze([
-  'hip_flex_L', 'hip_flex_R', 'knee_ext_L', 'knee_ext_R', 'ankle_dorsi_L', 'ankle_dorsi_R', 'toe_flex_L', 'toe_flex_R',
+  'hip_flex_L', 'hip_flex_R', 'hip_abd_L', 'hip_abd_R', 'knee_ext_L', 'knee_ext_R', 'ankle_dorsi_L', 'ankle_dorsi_R',
+  'toe_flex_L', 'toe_flex_R',
   'trunk_flex', 'neck_flex', 'neck_rot', 'jaw_open', 'brow_raise', 'eye_close', 'lip_purse', 'smile',
-  'r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex', 'r_wrist_flex', 'r_wrist_ext', 'r_grasp', 'r_open', 'r_pronation'
+  'r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex', 'r_wrist_flex', 'r_wrist_ext', 'r_grasp', 'r_open', 'r_pronation',
+  // R558 (Messages 14 / 15 / 2): the new joints of ns-bodymap / ns-body BODY_JOINT_IDS (same order).
+  'ankle_inv_L', 'ankle_inv_R', 'hallux_flex_L', 'hallux_flex_R', 'trunk_side', 'trunk_rot', 'neck_side', 'jaw_side',
+  'hyoid_elev', 'nose_wrinkle', 'upper_lip', 'lower_lip',
+  'r_wrist_dev', 'r_thumb_flex', 'r_thumb_opp', 'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
+  // R558 (Space dance): the right upper arm's and both hips' rotation about their own long axes (+ = external).
+  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R'
 ]);
+/** R558 (Space dance): the body joints the dance turns (ns-dance DANCE_LIMBS minus the game arm's own two). */
+export const DANCE_BODY_JOINTS = Object.freeze(DANCE_JOINT_IDS.filter(j => j !== 'l_forearm' && j !== 'l_shoulder_rot'));
+/**
+ * R558 (Space dance): the motor areas that light while a limb turns, per dance joint (in proportion to its turning
+ * speed; simulated display), and the muscles that turn it, by direction (opening = supination / external rotation,
+ * closing = pronation / internal rotation), by their usual textbook roles. Names are matched like every map muscle
+ * name; muscles the packets do not have simply match nothing. R558 (builder AN): the deep hip rotators, gluteus minimus
+ * and tensor fasciae latae are drawn now (packets/missing-muscles-r1). With the hips bent 90 degrees (long sitting)
+ * the obturators, the gemelli and quadratus femoris still turn the thigh outward with gluteus maximus and sartorius,
+ * while piriformis turns it inward with tensor fasciae latae, gluteus minimus and the front fibres of gluteus medius
+ * (piriformis reverses its action past about 60 degrees of hip flexion; standard anatomy). Left-arm muscles come from
+ * ROTATION_MUSCLES (forearm turners and shoulder rotators).
+ */
+export const DANCE_AREAS = Object.freeze({
+  l_forearm: Object.freeze(['rh_forearm']), l_shoulder_rot: Object.freeze(['rh_shoulder']),
+  r_pronation: Object.freeze(['lh_forearm']), r_shoulder_rot: Object.freeze(['lh_shoulder']),
+  hip_rot_L: Object.freeze(['rh_hip']), hip_rot_R: Object.freeze(['lh_hip'])
+});
+export const DANCE_MUSCLES = deepFreeze({
+  r_pronation: { open: ['right supinator', 'right biceps brachii'], closed: ['right pronator teres', 'right pronator quadratus'] },
+  r_shoulder_rot: {
+    open: ['right infraspinatus', 'right teres minor', 'spinal part of right deltoid'],
+    closed: ['right subscapularis', 'right pectoralis major', 'right latissimus dorsi', 'right teres major', 'clavicular part of right deltoid']
+  },
+  hip_rot_L: { open: ['left gluteus maximus', 'left sartorius', 'left obturator internus', 'left obturator externus', 'left gemellus superior', 'left gemellus inferior', 'left quadratus femoris'],
+    closed: ['left gluteus medius', 'left gluteus minimus', 'left tensor fasciae latae', 'left piriformis'] },
+  hip_rot_R: { open: ['right gluteus maximus', 'right sartorius', 'right obturator internus', 'right obturator externus', 'right gemellus superior', 'right gemellus inferior', 'right quadratus femoris'],
+    closed: ['right gluteus medius', 'right gluteus minimus', 'right tensor fasciae latae', 'right piriformis'] }
+});
 /** Gaze kinds: ns-brain classifyGaze's 'region' | 'glass' (brain, not a motor region) | 'empty', plus the legacy
  * focus-strip 'strip' (an event with only an arm actionId). */
 export const GAZE_KINDS = Object.freeze(['region', 'glass', 'empty', 'strip']);
@@ -730,17 +941,18 @@ export function stepRotationEase(value, speed, goal, h, tau = ROTATION.poseTau) 
  * Representative forearm rotators by mesh-name fragment (standard anatomy; display roles only, not EMG or force).
  * R5-pronation (R27): `shoulder` lists the shoulder rotators that turn the upper arm with the forearm (ns-arm
  * ROTATION_COUPLING), by standard muscle roles: toward palm down (pronation) the upper arm turns INWARD (internal
- * rotation: subscapularis, teres major, pectoralis major, the front (clavicular) part of the deltoid); toward palm up
+ * rotation: subscapularis, teres major, pectoralis major, latissimus dorsi, the front (clavicular) part of the deltoid); toward palm up
  * (supination) OUTWARD (external rotation: infraspinatus, teres minor, the back (spinal) part of the deltoid). The
  * fragments match mesh names case-insensitively: the left-arm view-model draws the two deltoid parts; the left pectoralis
- * major is a full-body mesh (ns-body rotationBodyDrives lights it, left side only); subscapularis, teres major,
+ * major and (R558, builder AN: packets/missing-muscles-r1) the left latissimus dorsi are full-body meshes (ns-body
+ * rotationBodyDrives lights them, left side only); subscapularis, teres major,
  * infraspinatus and teres minor are in the left-arm packet but not drawn in first person (ns-assets
  * SHOULDER_GIRDLE_EXCLUDED), so they light only where an integrator draws them. Their display level is
  * ROTATION_SHOULDER_LEVEL of the forearm turn's (the forearm does most of the turn).
  */
 export const ROTATION_MUSCLES = deepFreeze({
   pronation: { agonists: ['pronator teres', 'pronator quadratus'], antagonists: ['supinator', 'biceps brachii'],
-    shoulder: ['subscapularis', 'teres major', 'pectoralis major', 'clavicular part of left deltoid'] },
+    shoulder: ['subscapularis', 'teres major', 'pectoralis major', 'latissimus dorsi', 'clavicular part of left deltoid'] },
   supination: { agonists: ['supinator', 'biceps brachii'], antagonists: ['pronator teres', 'pronator quadratus'],
     shoulder: ['infraspinatus', 'teres minor', 'spinal part of left deltoid'] }
 });
@@ -760,6 +972,7 @@ export const ROTATION_MUSCLE_PLAIN = deepFreeze({
   subscapularis: 'muscle under the shoulder blade (subscapularis)',
   'teres major': 'round muscle below the shoulder blade (teres major)',
   'pectoralis major': 'chest muscle (pectoralis major)',
+  'latissimus dorsi': 'broad back muscle (latissimus dorsi)',
   'clavicular part of left deltoid': 'front of the shoulder muscle (front deltoid)',
   infraspinatus: 'muscle on the back of the shoulder blade (infraspinatus)',
   'teres minor': 'small round muscle on the shoulder blade (teres minor)',
@@ -789,6 +1002,7 @@ const HEMISPHERES = Object.freeze(['right', 'left', 'both']);
 const BODY_SIDES = Object.freeze(['left', 'right', 'midline']);
 const ARM_ACTION_CHANNEL = Object.freeze({
   elbow_flexion: 'elbow', elbow_extension: 'elbow', wrist_flexion: 'wrist', wrist_extension: 'wrist',
+  wrist_radial_deviation: 'wrist', wrist_ulnar_deviation: 'wrist',
   pronation: 'forearm', supination: 'forearm'
 }); // every other arm action -> 'hand'
 const EFFECTOR_CHANNELS = Object.freeze([
@@ -884,7 +1098,7 @@ export function bindBodyMap(map) {
     regions.push(deepFreeze({
       id, label: typeof r.label === 'string' ? r.label : id, hemisphere: r.hemisphere,
       bodySide: r.bodySide === undefined ? null : r.bodySide, effector: typeof r.effector === 'string' ? r.effector : null,
-      order: isFiniteNumber(r.order) ? r.order : i, extent: [ext[0], ext[1]], medialSurface: r.medialSurface === true,
+      order: isFiniteNumber(r.order) ? r.order : i, extent: [ext[0], ext[1]], core: Array.isArray(r.core) && r.core.length === 2 && isFiniteNumber(r.core[0]) && isFiniteNumber(r.core[1]) && r.core[0] < r.core[1] ? [r.core[0], r.core[1]] : null, medialSurface: r.medialSurface === true,
       isLeftArm: r.isLeftArm, actions, armActionIds, channels: [...channels],
       explanation: typeof r.explanation === 'string' ? r.explanation : null,
       citationKeys: Array.isArray(r.citationKeys) ? r.citationKeys.filter(k => typeof k === 'string') : []
@@ -1040,10 +1254,10 @@ const seqOf = (st, k) => (st && Number.isSafeInteger(st[k]) && st[k] >= 0 ? st[k
  * R4-arm: the plain game events between two consecutive activity states (createActivity state before and after one
  * step), for the optional "Try this" guide (D7) and any HUD that wants edges instead of levels. Pure; reads only
  * documented state fields, all present since round 2 (counters only grow, except that a new state starts again at 0):
- *   spaceHeld         -> { type: 'fist', on }               Space pressed / let go (the fist closes / opens; also during
- *                                                            a brain grab, where the hand closes too)
- *   rotationSeq       -> { type: 'flip', to }                once per double-tap toggle; to = the new rotationState
- *   grabSeq           -> { type: 'grab', on: true }          once per brain grab (Space while looking at the brain)
+ *   spaceHeld         -> { type: 'fist', on }               Space pressed / let go (R558: the limb dance starts / stops;
+ *                                                            the event keeps its old name)
+ *   rotationSeq       -> { type: 'flip', to }                once per double-tap (R558: the fast dance starts); to = rotationState
+ *   grabSeq           -> { type: 'grab', on: true }          once per brain grab (by the grasp key's owner; Space no longer grabs)
  *   brainGrab.active  -> { type: 'grab', on: false, dragRad } the grab ended; dragRad = the angle the brain was moved
  *                                                            (brainPlacement vs the grab's origin, radians)
  *   orbitSeq          -> { type: 'orbit', steps, dir }       orbit steps (an arrow click or hold); dir from the orbit change
@@ -1202,16 +1416,34 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * pulse. A pulse lights its region (regionActivity; crisp envelope, exactly 0 from pulseSeconds after the trigger);
  * a new-area or click start (not a look-movement restart) counts it in activatedRegions (persistent until Reset body). A LEFT-ARM region action drives its arm action
  * (armActionId: the arm pose drive and display, as in round 1) or a transient forearm rotation (pronation/supination);
- * any OTHER region action drives its `joints` through bodyDrive (smoothed: rise tau riseTau, decay tau decayTau, so
- * the pose eases) into bodyJointTargets. Keys never drive non-arm regions. Space/rotation/WASD light left-arm regions
+ * any OTHER region action lights its muscles through bodyDrive / bodyDisplay for the pulse and moves its `joints` by
+ * the LATCH below. Keys never drive non-arm regions. Space/rotation/WASD light left-arm regions
  * through their channels (regionActivity) but never count as an activation.
  *
- * Space. Every press is applied immediately: held -> grasp_close (the fist; SPACE_COMPETING digit pulses suppressed;
- * wrist/elbow compose); release -> spaceOpenSeconds of active open_hand. A press within doubleTapSeconds of the
- * previous press (press to press) also toggles rotationState (pronated <-> supinated); the chain then restarts, so a
- * triple tap toggles once. A press while the gaze kind is 'region' or 'glass' (new-style gaze with yaw/pitch) starts
- * a brain grab: while held the brain keeps its angular offset to the camera (brainPlacement), gaze pulses are
- * suppressed (the gaze is recorded silently) and release leaves the brain where it is.
+ * Space (R558, Message 2: the dance; ns-dance.mjs). Held = the slow dance: all four limbs turn, each between its
+ * inward end (pronation + internal rotation) and its outward end (supination + external rotation), each in the
+ * direction it last moved, with its own tempo (not coordinated). A press within doubleTapSeconds of the previous press
+ * (press to press) and held = the fast dance (rotationSeq counts these). Let go = every limb stays where it is (the
+ * latch rule). Space no longer makes a fist, flips the forearm on its own or grabs the brain; the dance owns the four
+ * limbs' rotation joints while Space is held. The touch-free hip range of the current leg posture arrives as a
+ * { type: 'danceRange', joints } event (ns-app, from ns-body hipRotationClearRange).
+ * R558 (lead decision for user Messages 2 and 12): the F key grasps. { type: 'grasp', down, target? }: a press with
+ * target 'brain' (or no target key at all while the gaze kind is 'region' or 'glass', new-style gaze with yaw/pitch; an
+ * explicit target null holds nothing) starts a brain
+ * grab: while held the brain keeps its angular offset to the camera (brainPlacement), gaze pulses are suppressed (the
+ * gaze is recorded silently) and release leaves the brain where it is. { type: 'limbPose', joints, regionId?, actionId? }
+ * sets held own-limb joints at once (they stay, like a latch) and lights that area.
+ *
+ * Latch (R558, JOINT_LATCH). A deliberate activation (a look onto a new area, a click, a muscle tap; not the restart
+ * of the same area by a small look movement) moves its joints and they STAY there: nothing returns by itself.
+ * Stage rule: if the action opposes where one of its joints is latched (its end angle is at the start angle or on the
+ * other side of it), it brings that joint back to its start angle and does nothing else this time; otherwise its
+ * joints go to their end angles (absolute degrees in the rig's convention, inside bodyJointLimits). A body joint jerks
+ * to its goal with the JOINT_LATCH spring. A joint that no action can bring back is momentary: it follows its pulse
+ * (none in the shipped map since R558, which gave every face display joint an opposing action). Game-arm actions latch the same way through ARM_OPPOSITES (the arm pose drive
+ * follows the latch with armPoseTau; the display stays the one-second pulse); relax_release lets go of every latched
+ * hand action; a look or click on a forearm-turn area sets rotationState (and lets go of a dance-held palm turn). latchView(state) lists what is latched and which opposing
+ * actions bring it back (the faint hints).
  *
  * Instructions/pause. The intro overlay is visible for introSeconds from the start (not paused). Esc toggles the
  * overlay (show + pause / hide + resume); a pointer-lock loss shows it and pauses; an Esc within escLockDedupeSeconds of
@@ -1219,15 +1451,15 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * recorded silently and clicks, Space presses and reach intent are ignored (Space releases still apply); timers run on.
  *
  * Reset body ({ type: 'reset' } or resetBody(state)) clears activatedRegions, cancels the running pulse, snaps the body
- * drives/displays and bodyJointTargets to neutral, snaps arm drives/displays to 0 (except a fist still held), clears the
- * open/relax windows, sets rotationState to defaultRotation (value snapped) and ends any grab. It keeps the brain
+ * drives/displays to 0 and every body joint to its start angle (latches cleared), snaps arm drives/displays to 0 and
+ * clears the arm latches, clears the open/relax windows, sets rotationState to defaultRotation (value snapped), the game arm's dance swivel to 0 and ends any grab. It keeps the brain
  * placement and orbit (round-2 fix R1: the brain stays where it was released; ns-app resetBrainView resets the view),
  * the clock, the pulse/suppression counters, Space held, WASD levels and the instructions/pause state.
  *
  * Returns { options, binding, state, step, stepGated, seed, seedGaze, drives, poseDrives, displayActivity,
  * displayDrives, muscleDisplayDrives, reachOutputs, resetBody, orbitStep, regionActivity, activatedRegions,
  * bodyJointTargets, activeBodyActions, bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView,
- * snapshot }. `state` is plain JSON data; no function mutates its input. `dt` is actual elapsed wall time.
+ * snapshot, latchView }. `state` is plain JSON data; no function mutates its input. `dt` is actual elapsed wall time.
  */
 export function createActivity({
   pulseSeconds = 1, riseTau = 0.12, decayTau = 0.25, spaceOpenSeconds = 0.6,
@@ -1237,10 +1469,12 @@ export function createActivity({
   doubleTapSeconds = DOUBLE_TAP_SECONDS, rotationSeconds = ROTATION.commandSeconds, rotationTau = ROTATION.poseTau,
   defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg, initialBrainPlacement = null,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
-  resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL
+  resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL,
+  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau
 } = {}) {
   const replaceClickS = gazeDwell && isFiniteNumber(gazeDwell.replaceClickS) && gazeDwell.replaceClickS >= 0 ? gazeDwell.replaceClickS : GAZE_DWELL.replaceClickS;
   const markS = gazeDwell && isFiniteNumber(gazeDwell.markS) && gazeDwell.markS >= 0 ? gazeDwell.markS : GAZE_DWELL.markS;
+  const latchS = gazeDwell && isFiniteNumber(gazeDwell.latchS) && gazeDwell.latchS >= 0 ? gazeDwell.latchS : GAZE_DWELL.latchS;
   const timing = {
     pulseSeconds, riseTau, decayTau, spaceOpenSeconds, displayRiseTau, displayFadeSeconds, displayDecayTau,
     doubleTapSeconds, rotationSeconds, rotationTau
@@ -1281,6 +1515,51 @@ export function createActivity({
   const JOINT_IDS = binding.jointIds;
   const rotValue = st => (st === 'supinated' ? 1 : 0);
   const channelFor = st => (st === 'supinated' ? 'supination' : 'pronation');
+
+  // ---- R558 latch tables (see JOINT_LATCH and the Latch paragraph above) --------------------------
+  if (bodyRest !== null && !isPlainObject(bodyRest)) fail('activity_option', 'bodyRest must be an object of jointId -> degrees (the start posture), or null');
+  if (!(isPlainObject(jointSpring) && isFiniteNumber(jointSpring.omega) && jointSpring.omega > 0 && isFiniteNumber(jointSpring.zeta) && jointSpring.zeta > 0
+    && (jointSpring.restitution === undefined || (isFiniteNumber(jointSpring.restitution) && jointSpring.restitution >= 0 && jointSpring.restitution < 1)))) {
+    fail('activity_option', 'jointSpring must be { omega > 0 (rad/s), zeta > 0, restitution? in [0, 1) }');
+  }
+  if (!(isFiniteNumber(armPoseTau) && armPoseTau > 0)) fail('activity_option', 'armPoseTau must be a positive number of seconds');
+  const springOmega = jointSpring.omega, springZeta = jointSpring.zeta, springBounce = jointSpring.restitution === undefined ? 0 : jointSpring.restitution;
+  const limitJoint = (j, v) => (limitsBody && hasOwn(limitsBody, j) ? clamp(v, limitsBody[j][0], limitsBody[j][1]) : v);
+  // Start angle of every joint (the start posture; 0 where none is given), inside the limits.
+  const REST = {};
+  for (const j of JOINT_IDS) {
+    const r = bodyRest !== null && hasOwn(bodyRest, j) ? bodyRest[j] : 0;
+    if (!isFiniteNumber(r)) fail('activity_option', `bodyRest.${j} must be a finite number of degrees`);
+    REST[j] = limitJoint(j, r) + 0;
+  }
+  Object.freeze(REST);
+  const restMap = () => ({ ...REST });
+  // End angle (absolute degrees, inside the limits) of every joint each body action names.
+  const ENDS = new Map();
+  for (const k of BODY_KEYS) {
+    const e = {};
+    for (const [j, deg] of Object.entries(binding.bodyActions.get(k).joints)) e[j] = limitJoint(j, deg) + 0;
+    ENDS.set(k, Object.freeze(e));
+  }
+  /** Side of its start angle an angle of joint j lies on: -1, 0 (at the start angle) or +1. */
+  const sideOf = (j, deg) => (Math.abs(deg - REST[j]) <= JOINT_LATCH.restEpsDeg ? 0 : deg > REST[j] ? 1 : -1);
+  // A joint LATCHES when every action that takes it away from the start angle has an opposing action (one ending at
+  // the start angle or on its other side), so the player can always bring it back. A joint without one stays
+  // MOMENTARY: it follows its pulse and comes back by itself (since R558 every map joint has an opposing action, the
+  // face display joints included, so none is momentary in the shipped map).
+  const LATCHING = {};
+  for (const j of JOINT_IDS) {
+    const sides = [];
+    for (const k of BODY_KEYS) if (hasOwn(ENDS.get(k), j)) sides.push(sideOf(j, ENDS.get(k)[j]));
+    const away = sides.filter(x => x !== 0);
+    LATCHING[j] = away.length > 0 && away.every(x => sides.some(y => y !== x));
+    // R558 (Space dance): a joint the dance turns stays where the dance leaves it (the latch rule) until an opposing
+    // action, another dance or Reset body moves it.
+    if (DANCE_BODY_JOINTS.includes(j)) LATCHING[j] = true;
+  }
+  Object.freeze(LATCHING);
+  for (const j of DANCE_BODY_JOINTS) if (!JOINT_IDS.includes(j)) fail('activity_option', `the body map binding lacks the dance joint ${j}`);
+  const danceStart = () => createDance({ l_forearm: PRONATION_DEG_AT_VALUE(rotValue(defaultRotation)), l_shoulder_rot: 0, ...Object.fromEntries(DANCE_BODY_JOINTS.map(j => [j, REST[j]])) });
 
   // ---- state shape ----------------------------------------------------------------------------
   const noGrab = () => ({ active: false, startYaw: null, startPitch: null, originYaw: null, originPitch: null });
@@ -1326,11 +1605,20 @@ export function createActivity({
       pulseClick: false,                      // R3-fix M3: the running pulse was started (or last re-started) by a click
       pendingGaze: null,                      // R3-fix M3: { area, since } a new area waiting to replace a click pulse
       markPending: null,                      // R3-fix M5: { area, regionId, since } a look that marks after markS
+      latchPending: null,                     // R558: { area, hit, since } a look that moves its joints after latchS
       bodyDrive: zeroMap(BODY_KEYS),          // body POSE drive (smoothed, eases)
       bodyDisplay: zeroMap(BODY_KEYS),        // body DISPLAY envelope (crisp; for muscle colour)
-      bodyJointTargets: zeroMap(JOINT_IDS),   // jointId -> degrees (derived from bodyDrive)
+      bodyJointTargets: restMap(),            // jointId -> absolute degrees (derived: the joint positions, bodyPos)
+      bodyGoal: restMap(),                    // jointId -> degrees: where the joint is latched (start angle = not latched)
+      bodyPos: restMap(),                     // jointId -> degrees: where the joint is now (jerks to its goal)
+      bodyVel: zeroMap(JOINT_IDS),            // jointId -> degrees/s
+      armLatch: zeroMap(ACTION_IDS),          // game-arm actionId -> 0 | 1: latched on (see ARM_OPPOSITES)
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
-      rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease
+      rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
+      armHumeral: null,        // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn
+      armTurnSeen: null,       // R558: { forearmDeg, humeralDeg } the game arm actually showed last frame ('armTurn' event from ns-app)
+      dance: danceStart(),     // R558 (Space dance): ns-dance state (per-limb direction, stroke, levels; history)
+      danceRange: {},          // R558: jointId -> [lo, hi] degrees, the touch-free hip range of the current leg posture
       rotationDisplay: zeroMap(ROTATION_ACTION_IDS),    // rotation channel display (double-tap command or pulse)
       rotationKeyDisplay: zeroMap(ROTATION_ACTION_IDS), // double-tap command part only
       rotationSeq: 0,          // count of double-tap toggles
@@ -1354,7 +1642,11 @@ export function createActivity({
   const bodyKeyOrNull = v => v === null || binding.bodyActions.has(v);
   const rotOrNull = v => v === null || ROTATION_ACTION_IDS.includes(v);
   const angles = v => isPlainObject(v) && isFiniteNumber(v.yaw) && isFiniteNumber(v.pitch);
-  const finiteMap = (m, ids) => isPlainObject(m) && ids.every(id => isFiniteNumber(m[id]));
+  const finiteMap = (m, ids) => { // R558 (P2): isPlainObject(m) && ids.every(id => isFiniteNumber(m[id])), as a loop
+    if (!isPlainObject(m)) return false;
+    for (let i = 0; i < ids.length; i++) if (!isFiniteNumber(m[ids[i]])) return false;
+    return true;
+  };
   const isHit = v => v === null || (isPlainObject(v) && regionOrNull(v.regionId)
     && (v.actionId === null || typeof v.actionId === 'string') && actionOrNull(v.armAction)
     && bodyKeyOrNull(v.bodyKey) && rotOrNull(v.rotation));
@@ -1398,11 +1690,21 @@ export function createActivity({
       && (s.pulseClick === undefined || typeof s.pulseClick === 'boolean')
       && (s.pendingGaze === undefined || s.pendingGaze === null || (isPlainObject(s.pendingGaze) && typeof s.pendingGaze.area === 'string' && nonNegative(s.pendingGaze.since)))
       && (s.markPending === undefined || s.markPending === null || (isPlainObject(s.markPending) && typeof s.markPending.area === 'string' && regionOrNull(s.markPending.regionId) && nonNegative(s.markPending.since)))
+      && (s.latchPending === undefined || s.latchPending === null || (isPlainObject(s.latchPending) && typeof s.latchPending.area === 'string' && isPlainObject(s.latchPending.hit) && nonNegative(s.latchPending.since)))
       && unitMap(s.bodyDrive, BODY_KEYS) && unitMap(s.bodyDisplay, BODY_KEYS)
       && finiteMap(s.bodyJointTargets, JOINT_IDS)
+      && (s.bodyGoal === undefined || finiteMap(s.bodyGoal, JOINT_IDS))
+      && (s.bodyPos === undefined || finiteMap(s.bodyPos, JOINT_IDS))
+      && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
+      && (s.armLatch === undefined || unitMap(s.armLatch, ACTION_IDS))
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
       && (s.rotation.speed === undefined || isFiniteNumber(s.rotation.speed))
+      && (s.rotation.hold === undefined || s.rotation.hold === null || unit(s.rotation.hold))
+      && (s.armHumeral === undefined || s.armHumeral === null || isFiniteNumber(s.armHumeral))
+      && (s.armTurnSeen === undefined || s.armTurnSeen === null || (isPlainObject(s.armTurnSeen) && isFiniteNumber(s.armTurnSeen.forearmDeg) && isFiniteNumber(s.armTurnSeen.humeralDeg)))
+      && (s.dance === undefined || isDanceState(s.dance))
+      && (s.danceRange === undefined || (isPlainObject(s.danceRange) && Object.entries(s.danceRange).every(([k, r]) => DANCE_BODY_JOINTS.includes(k) && Array.isArray(r) && r.length === 2 && r.every(isFiniteNumber))))
       && unitMap(s.rotationDisplay, ROTATION_ACTION_IDS) && unitMap(s.rotationKeyDisplay, ROTATION_ACTION_IDS)
       && safeCount(s.rotationSeq)
       && (s.spaceTapAt === null || nonNegative(s.spaceTapAt))
@@ -1453,11 +1755,22 @@ export function createActivity({
       pulseClick: s.pulseClick === true,
       pendingGaze: s.pendingGaze ? { ...s.pendingGaze } : null,
       markPending: s.markPending ? { ...s.markPending } : null,
+      latchPending: s.latchPending ? { ...s.latchPending, hit: { ...s.latchPending.hit } } : null,
       bodyDrive: pick(s.bodyDrive, BODY_KEYS),
       bodyDisplay: pick(s.bodyDisplay, BODY_KEYS),
       bodyJointTargets: pick(s.bodyJointTargets, JOINT_IDS),
+      // R558 latch: a state from before the latch has none of these; it starts at the start posture, nothing latched.
+      bodyGoal: s.bodyGoal === undefined ? restMap() : pick(s.bodyGoal, JOINT_IDS),
+      bodyPos: s.bodyPos === undefined ? restMap() : pick(s.bodyPos, JOINT_IDS),
+      bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
+      armLatch: s.armLatch === undefined ? zeroMap(ACTION_IDS) : pick(s.armLatch, ACTION_IDS),
       rotationState: s.rotationState,
-      rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel },
+      rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null },
+      // R558 (Space dance): a state from before the dance starts with none (start angles, no history).
+      armHumeral: isFiniteNumber(s.armHumeral) ? s.armHumeral : null,
+      armTurnSeen: s.armTurnSeen ? { forearmDeg: s.armTurnSeen.forearmDeg, humeralDeg: s.armTurnSeen.humeralDeg } : null,
+      dance: s.dance === undefined ? danceStart() : copyJson(s.dance),
+      danceRange: s.danceRange === undefined ? {} : copyJson(s.danceRange),
       rotationDisplay: pick(s.rotationDisplay, ROTATION_ACTION_IDS),
       rotationKeyDisplay: pick(s.rotationKeyDisplay, ROTATION_ACTION_IDS),
       rotationSeq: s.rotationSeq,
@@ -1480,18 +1793,55 @@ export function createActivity({
   function commandTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
     if (s.pulseAction !== null && at < s.pulseRemaining) T[s.pulseAction] = 1;
-    if (s.spaceHeld) T.grasp_close = 1;
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining) T.relax_release = 1;
-    // The held Space fist overrides competing digit intent from gaze/click pulses or a prior release.
-    if (s.spaceHeld) for (const id of SPACE_COMPETING) T[id] = 0;
     return T;
   }
 
-  function releasedBy(T) {
-    const out = new Set();
-    for (const id of ACTION_IDS) if (T[id] > 0) for (const r of ACTION_TARGETS[id].releaseOf) out.add(r);
-    return out;
+  /** R558 latch: what the game arm's POSE follows at `at` seconds into the step: the latched actions, the held Space
+   * fist, the post-release opening window and a running relax pulse. A one-second look/click pulse alone lights its
+   * area (commandTargets) but does not hold a pose; the latch does. */
+  function poseTargets(s, at) {
+    const T = zeroMap(ACTION_IDS);
+    for (const id of ACTION_IDS) if (s.armLatch[id] > 0) T[id] = 1;
+    if (at < s.openRemaining) T.open_hand = 1;
+    if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining)) T.relax_release = 1;
+    return T;
+  }
+
+  /** Stage rule of a deliberate BODY activation: an action that opposes where one of its joints is latched brings
+   * that joint back to its start angle (and does nothing else this time); otherwise its joints go to their end
+   * angles and stay. Momentary joints are not touched (they follow the pulse in integrate). */
+  function latchBodyAction(s, key) {
+    const ends = ENDS.get(key);
+    if (!ends) return;
+    const back = [];
+    for (const j of Object.keys(ends)) {
+      if (!LATCHING[j]) continue;
+      const at = sideOf(j, s.bodyGoal[j]);
+      if (at !== 0 && sideOf(j, ends[j]) !== at) back.push(j);
+    }
+    if (back.length > 0) { for (const j of back) s.bodyGoal[j] = REST[j]; return; }
+    for (const j of Object.keys(ends)) {
+      if (!LATCHING[j]) continue;
+      // A weaker action on the side a joint is already latched on never eases it off (a part closure does not open a
+      // fist): the joint keeps the further of the two end angles.
+      const side = sideOf(j, ends[j]);
+      if (side !== 0 && sideOf(j, s.bodyGoal[j]) === side && Math.abs(s.bodyGoal[j] - REST[j]) >= Math.abs(ends[j] - REST[j])) continue;
+      s.bodyGoal[j] = ends[j];
+      // R558 (JOINT_CONFLICTS): the later of two held movements of one shoulder wins its direction
+      if (side !== 0 && hasOwn(JOINT_CONFLICTS, j)) for (const k of JOINT_CONFLICTS[j]) if (hasOwn(s.bodyGoal, k) && !hasOwn(ends, k)) s.bodyGoal[k] = REST[k];
+    }
+  }
+
+  /** Stage rule of a deliberate GAME-ARM activation (ARM_OPPOSITES): the opposing action of a latched one lets it go
+   * (back to the neutral pose); otherwise the action latches on. relax_release lets go of every hand action. */
+  function latchArmAction(s, id) {
+    if (id === 'relax_release') { for (const h of HAND_LATCH_IDS) s.armLatch[h] = 0; return; }
+    if (DISPLAY_ONLY_ARM_IDS.includes(id)) return; // R558: moves nothing on the game arm, so nothing is held
+    const opp = hasOwn(ARM_OPPOSITES, id) ? ARM_OPPOSITES[id] : null;
+    if (opp !== null && opp !== 'relax_release' && s.armLatch[opp] > 0) s.armLatch[opp] = 0;
+    else s.armLatch[id] = 1;
   }
 
   /** Smoothstep fade of a timed command with `remaining` seconds left: 1 before the fade window, exactly 0 at 0. */
@@ -1504,7 +1854,6 @@ export function createActivity({
 
   /** Display ceiling of action `id` at offset b1 for the commands active from offset b0 (1 when none is timed). */
   function displayCeiling(s, id, b0, b1) {
-    if (id === 'grasp_close' && s.spaceHeld) return 1; // held fist: no deadline
     let c = -1;
     if (s.pulseAction === id && b0 < s.pulseRemaining) c = Math.max(c, fadeCeiling(s.pulseRemaining - b1));
     if (id === 'open_hand' && b0 < s.openRemaining) c = Math.max(c, fadeCeiling(s.openRemaining - b1));
@@ -1514,7 +1863,7 @@ export function createActivity({
 
   /** Space-only commanded targets (no pulse) and their ceilings, for the key lighting of left-arm regions. */
   function keyTarget(s, id, at) {
-    if (id === 'grasp_close') return s.spaceHeld ? 1 : 0;
+    if (id === 'grasp_close') return 0; // R558: Space no longer makes a fist
     if (id === 'open_hand') return at < s.openRemaining ? 1 : 0;
     return at < s.relaxRemaining ? 1 : 0;
   }
@@ -1542,12 +1891,17 @@ export function createActivity({
   }
 
   /** Start (or replace) the single pulse slot for `hit`, unless the held fist suppresses it. Returns true if started. */
-  function startPulse(s, hit, source, at, collect) {
-    if (s.spaceHeld && hit.armAction !== null && SPACE_COMPETING.includes(hit.armAction)) {
-      s.suppressedSeq += 1;
-      s.lastSuppressed = { actionId: hit.armAction, source, t: s.t };
-      return false;
+  /** R558 latch: commit a deliberate activation's movement (stage rules above). A forearm-turn area sets the turn. */
+  function commitLatch(s, hit) {
+    if (hit.bodyKey !== null && hit.bodyKey !== undefined) latchBodyAction(s, hit.bodyKey);
+    if (hit.armAction !== null && hit.armAction !== undefined) latchArmAction(s, hit.armAction);
+    if (hit.rotation !== null && hit.rotation !== undefined) {
+      s.rotationState = hit.rotation === 'supination' ? 'supinated' : 'pronated';
+      s.rotation = { ...s.rotation, hold: null }; // R558: the forearm goes to that end (a dance's held angle is let go)
     }
+  }
+
+  function startPulse(s, hit, source, at, collect, area = null) {
     s.pulseAction = hit.armAction;
     s.pulseRegion = hit.regionId;
     s.pulseBody = hit.bodyKey;
@@ -1558,6 +1912,15 @@ export function createActivity({
     s.lastTriggerSource = source;
     // A look-movement restart of a clicked area stays a click pulse (it is the same deliberate choice).
     s.pulseClick = source === 'click' || (source === 'moved' && s.pulseClick === true);
+    // R558 latch: a deliberate activation (not the restart of the same area by a small look movement) moves its
+    // joints to stay, or brings a latched joint back (stage rules above). A click (or a look that already dwelt to
+    // replace a click) commits at once; a look onto a new area commits once the gaze has stayed there latchS.
+    // A look-movement restart ('moved', the same area) keeps a pending look: its dwell is still running.
+    if (source !== 'moved') {
+      s.latchPending = null;
+      if (source === 'gaze' && latchS > 0 && typeof area === 'string') s.latchPending = { area, hit: { ...hit }, since: s.t };
+      else commitLatch(s, hit);
+    }
     // Persistent marks count deliberate activations: a click at once, a look only once the gaze has stayed on the area
     // for markS (R3-fix M5; applyGaze adds it), never the look-movement restarts within an area.
     if (hit.regionId !== null && source === 'click') { s.activatedRegions[hit.regionId] = (s.activatedRegions[hit.regionId] || 0) + 1; s.markPending = null; }
@@ -1579,8 +1942,10 @@ export function createActivity({
       if (!a) fail('activity_action', `region ${r.id} has no action ${JSON.stringify(actionId)}`);
       return a;
     }
-    if (isFiniteNumber(u) && r.extent[1] > r.extent[0]) {
-      const f = (u - r.extent[0]) / (r.extent[1] - r.extent[0]);
+    // R558: the same split as ns-brain regionActionAt: the region's core (its own control cell), else its extent.
+    const span = Array.isArray(r.core) && r.core[1] > r.core[0] ? r.core : r.extent;
+    if (isFiniteNumber(u) && span[1] > span[0]) {
+      const f = (u - span[0]) / (span[1] - span[0]);
       return r.actions[clamp(Math.floor(f * r.actions.length), 0, r.actions.length - 1)];
     }
     return r.actions[0];
@@ -1624,6 +1989,7 @@ export function createActivity({
       fail('activity_event', 'gaze yaw and pitch must both be finite radians when given');
     }
     const g = resolveGaze(ev);
+    if (s.latchPending && g.area !== s.latchPending.area) s.latchPending = null; // R558: the look left before latchS
     if (hasDir) { s.gazeYaw = ev.yaw; s.gazePitch = ev.pitch; }
     if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
     // Silent: explicit seed (first frame, re-frame), the frame after an orbit/grab release/resume/reset, while paused,
@@ -1634,7 +2000,7 @@ export function createActivity({
     // A look onto a new area starts its 1 s pulse at once, except that it does not replace a running CLICK pulse until
     // the gaze has stayed on it for replaceClickS (R3-fix M3); the look's persistent mark waits for markS (M5).
     const startLook = source => {
-      if (startPulse(s, g.hit, source, at, collect) && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
+      if (startPulse(s, g.hit, source, at, collect, g.area) && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
       s.pendingGaze = null;
     };
     if (silent || g.area === null) {
@@ -1672,15 +2038,10 @@ export function createActivity({
     s.gazeAction = g.hit ? g.hit.armAction : null;
   }
 
-  // ---- Space, rotation, grab ----------------------------------------------------------------------
+  // ---- Space (the dance), grab ----------------------------------------------------------------
 
-  function toggleRotation(s) {
-    s.rotationState = s.rotationState === 'pronated' ? 'supinated' : 'pronated';
-    s.rotation = { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: rotationSeconds, channel: channelFor(s.rotationState) };
-    s.rotationSeq += 1;
-    if (s.pulseRotation !== null) cancelPulse(s); // the explicit key command wins over a transient rotation pulse
-  }
-
+  // The brain grab is no longer started by Space (R558: the grasp moves to its own key). startGrab / endGrab stay for
+  // that key's owner; Space neither starts nor ends a grab.
   function startGrab(s) {
     s.brainGrab = {
       active: true, startYaw: s.gazeYaw, startPitch: s.gazePitch,
@@ -1694,40 +2055,96 @@ export function createActivity({
     s.seedNextGaze = true; // the brain stopped moving under the crosshair: the next gaze is recorded, not a new look
   }
 
+  /**
+   * R558 (Message 2): Space is the dance key. Hold = the slow dance of all four limbs; a press within doubleTapSeconds
+   * of the previous press (press to press) and held = the fast dance (rotationSeq counts these double-taps). Let go =
+   * every limb stays where it is (ns-dance stopDance). No fist, no forearm flip, no grab, no opening window.
+   */
   function applySpace(s, ev) {
     if (ev.down === true) {
-      if (s.paused || s.spaceHeld) return;   // the overlay is up (no fist/grab/tap), or a repeat
+      if (s.paused || s.spaceHeld) return;   // the overlay is up, or a key repeat
       s.spaceHeld = true;
-      // A new fist command supersedes any pending open/relax from a previous release, and a running competing digit
-      // pulse (gate rule 2).
-      s.openRemaining = 0;
-      s.relaxRemaining = 0;
-      if (s.pulseAction !== null && SPACE_COMPETING.includes(s.pulseAction)) cancelPulse(s);
-      // Double-tap (press to press within doubleTapSeconds): flip the forearm; the fist above is never delayed.
-      if (isDoubleTap(s.spaceTapAt, s.t, doubleTapSeconds)) {
-        toggleRotation(s);
-        s.spaceTapAt = null;
-      } else {
-        s.spaceTapAt = s.t;
-      }
-      // Grasp while gazing at any brain area (new-style gaze with a direction): drag the brain.
-      if ((s.gazeKind === 'region' || s.gazeKind === 'glass') && s.gazeYaw !== null && s.gazePitch !== null) startGrab(s);
+      const fast = isDoubleTap(s.spaceTapAt, s.t, doubleTapSeconds);
+      if (fast) { s.rotationSeq += 1; s.spaceTapAt = null; } else s.spaceTapAt = s.t;
+      s.dance = { ...s.dance, fast };
     } else if (ev.down === false) {
       if (s.spaceHeld) {
         s.spaceHeld = false;
-        // Accepted R6 overlay: release immediately selects ACTIVE opening of all five digits (open_hand); it is not
-        // passive relaxation, so relax_release is not commanded here.
-        s.openRemaining = spaceOpenSeconds;
-        s.relaxRemaining = 0;
-        // A stale digit-flexing pulse must not immediately reclose the opening hand; only a fresh gaze event (new
-        // area, movement) or a click can issue new digit intent.
-        if (s.pulseAction !== null && DIGIT_FLEXING.includes(s.pulseAction)) cancelPulse(s);
+        s.dance = stopDance(s.dance);
       }
       if (ev.safety === true) s.spaceTapAt = null; // a safety release is not a tap
-      if (s.brainGrab.active) endGrab(s);          // the brain stays where it was released
     } else {
       fail('activity_event', 'space event needs a boolean down');
     }
+  }
+
+  /** R558 (lead decision for user Messages 2 and 12): the F key grasps (ns-controls GRASP_CODE). A press with the
+   * crosshair on the brain (target 'brain', or no target while the gaze is on a brain area or its glass) starts the
+   * brain grab exactly as Space used to: while held the brain keeps its angular offset to the camera, gaze pulses are
+   * recorded silently, and the release leaves it where it is. A press on another item (target 'mirror' or 'limb': the
+   * mirror body or one of your own limbs, which the app carries) never grabs the brain. A safety release is the same as
+   * a release. */
+  function applyGrasp(s, ev) {
+    if (typeof ev.down !== 'boolean') fail('activity_event', 'grasp event needs a boolean down');
+    if (ev.down === true) {
+      if (s.paused || s.brainGrab.active || s.gazeYaw === null || s.gazePitch === null) return;
+      const onBrain = s.gazeKind === 'region' || s.gazeKind === 'glass';
+      // R558 (hunt 2 code #4): a press labelled with its target holds exactly that (null = nothing, e.g. a press on your
+      // own trunk); only a press with no target key falls back to the gaze.
+      if (ev.target === 'brain' || (ev.target === undefined && onBrain)) startGrab(s);
+    } else if (s.brainGrab.active) endGrab(s);     // the brain stays where it was released
+  }
+
+  /** The current angles of the dance joints (ns-dance DANCE_LIMBS conventions). The game arm: in the explicit mode its
+   * radius turn and upper-arm turn; in the coupled palm turn (before the first dance, after Reset body) the angles it
+   * actually showed last frame (armTurnSeen: the coupling shares the palm turn between them), so the dance starts
+   * from exactly what is on screen. */
+  function danceAngles(s) {
+    const T = PRONATION_DEG_AT_VALUE(s.rotation.value);
+    const seen = s.armHumeral === null && s.armTurnSeen ? s.armTurnSeen : null;
+    const a = isFiniteNumber(s.armHumeral) ? { l_forearm: T, l_shoulder_rot: s.armHumeral }
+      : { l_forearm: seen ? seen.forearmDeg : T, l_shoulder_rot: seen ? seen.humeralDeg : 0 };
+    for (const j of DANCE_BODY_JOINTS) a[j] = s.bodyPos[j];
+    return a;
+  }
+
+  /** Write dance angles back: the body joints are held there (goal = position, no speed), the game arm's palm turn and
+   * upper-arm swivel likewise (rotation.hold keeps the eased forearm value where the dance left it). */
+  function applyDanceAngles(s, a) {
+    const v = clamp((PRONATION_END_DEG - a.l_forearm) / (2 * PRONATION_END_DEG), 0, 1);
+    s.rotation = { ...s.rotation, value: v, speed: 0, hold: v };
+    s.rotationState = v >= 0.5 ? 'supinated' : 'pronated';
+    s.armHumeral = a.l_shoulder_rot + 0; // the explicit mode (until Reset body)
+    for (const j of DANCE_BODY_JOINTS) {
+      const q = limitJoint(j, a[j]) + 0;
+      s.bodyPos[j] = q; s.bodyGoal[j] = q; s.bodyVel[j] = 0;
+    }
+  }
+
+  /** Keep each hip inside the touch-free range of the current leg posture (danceRange, from ns-body
+   * hipRotationClearRange via a 'danceRange' event), whatever moved it. */
+  function clampDanceRange(s) {
+    for (const j of DANCE_BODY_JOINTS) {
+      const r = s.danceRange[j];
+      if (!r) continue;
+      const lo = Math.min(r[0], r[1]), hi = Math.max(r[0], r[1]);
+      const p = clamp(s.bodyPos[j], lo, hi) + 0, g = clamp(s.bodyGoal[j], lo, hi) + 0;
+      if (p !== s.bodyPos[j]) { s.bodyPos[j] = p; s.bodyVel[j] = 0; }
+      s.bodyGoal[j] = g;
+    }
+  }
+
+  /** One dance piece of h seconds (after the springs and eases of the same piece): record outside movement (history),
+   * then, while Space is held and the game runs, turn every limb (ns-dance stepDance). */
+  function danceStep(s, h) {
+    clampDanceRange(s);
+    let d = observeDance(s.dance, danceAngles(s));
+    if (s.spaceHeld && !s.paused && h > 0) {
+      const r = stepDance(d, danceAngles(s), h, { fast: d.fast, ranges: s.danceRange });
+      d = r.dance;
+      applyDanceAngles(s, r.angles);
+    } else if (d.active) d = stopDance(d);
+    s.dance = d;
   }
 
   // ---- instructions, orbit, reset -----------------------------------------------------------------
@@ -1763,19 +2180,25 @@ export function createActivity({
     s.activatedRegions = {};
     s.pendingGaze = null;
     s.markPending = null;
+    s.latchPending = null;
     cancelPulse(s);
     for (const k of BODY_KEYS) { s.bodyDrive[k] = 0; s.bodyDisplay[k] = 0; }
+    // R558 latch: Reset is the other way back: every joint at its start angle at once, nothing latched.
+    s.bodyGoal = restMap();
+    s.bodyPos = restMap();
+    s.bodyVel = zeroMap(JOINT_IDS);
+    s.armLatch = zeroMap(ACTION_IDS);
     for (const r of REGION_IDS) s.regionDisplay[r] = 0;
     for (const id of ACTION_IDS) {
-      if (id === 'grasp_close' && s.spaceHeld) continue; // a fist still held stays a fist
       s.drive[id] = 0;
       s.display[id] = 0;
     }
-    for (const id of KEY_DISPLAY_IDS) if (!(id === 'grasp_close' && s.spaceHeld)) s.keyDisplay[id] = 0;
+    for (const id of KEY_DISPLAY_IDS) s.keyDisplay[id] = 0;
     s.openRemaining = 0;
     s.relaxRemaining = 0;
     s.rotationState = defaultRotation;
-    s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null };
+    s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null };
+    s.armHumeral = null; // R558 (Space dance): back to the coupled palm turn (the dance history records the move)
     s.rotationDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.rotationKeyDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.spaceTapAt = null;
@@ -1819,6 +2242,34 @@ export function createActivity({
       case 'space':
         applySpace(s, ev);
         return;
+      case 'grasp':
+        applyGrasp(s, ev);
+        return;
+      case 'limbPose': {
+        // R558 (user Messages 2 and 12): one of your own limbs, held with F and moved, or turned by a drag. The app
+        // solves its joints inside their anatomical ranges and hands them here: { joints: { jointId: degrees },
+        // regionId?, actionId? }. They are set at once (goal and position: the limb follows the hand that holds it, no
+        // jerk) and STAY there, like a latched activation, until the opposing action or Reset body. regionId / actionId
+        // (a motor-map area and, optionally, its action) light that area and its muscles with the ordinary one-second
+        // pulse, restarted while the limb keeps moving; such a restart commits no latch of its own ('moved').
+        if (s.paused) return;
+        if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPose needs joints { jointId: degrees }');
+        for (const [j, deg] of Object.entries(ev.joints)) {
+          if (!JOINT_IDS.includes(j)) fail('activity_event', `limbPose joint ${JSON.stringify(j)} is not a body joint`);
+          if (!isFiniteNumber(deg)) fail('activity_event', `limbPose joint ${j} needs finite degrees`);
+          const v = limitJoint(j, deg) + 0;
+          s.bodyGoal[j] = v; s.bodyPos[j] = v; s.bodyVel[j] = 0;
+        }
+        if (ev.regionId !== undefined && ev.regionId !== null) {
+          const r = binding.regions.get(ev.regionId);
+          if (!r) fail('activity_region', `limbPose regionId ${JSON.stringify(ev.regionId)} is not a BODY_MOTOR_MAP region`);
+          const hit = r.actions.length === 0 || ev.actionId === undefined || ev.actionId === null
+            ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
+            : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId }).hit;
+          if (hit !== null && (s.pulseRegion !== hit.regionId || s.pulseBody !== hit.bodyKey || s.pulseRemaining < pulseSeconds / 2)) startPulse(s, hit, 'moved', at, collect);
+        }
+        return;
+      }
       case 'orbit': {
         // R5-input: { type: 'orbit', dir, stepDeg?, target? }: target 'brain' (or none). The mirror body's orbit is
         // ns-mirror's (ORBIT_TARGETS), so a 'mirror' request here is a wiring error and is refused loudly.
@@ -1856,6 +2307,31 @@ export function createActivity({
         return;
       case 'reach':
         return; // step-level input, collected before integration
+      case 'armTurn': {
+        // R558 (Space dance): what the game arm actually showed last frame (ns-arm fit coupling: the radius' turn and
+        // the upper arm's turn), so a dance that starts from the coupled palm turn starts exactly there.
+        if (!isFiniteNumber(ev.forearmDeg) || !isFiniteNumber(ev.humeralDeg)) fail('activity_event', 'armTurn needs finite forearmDeg and humeralDeg');
+        s.armTurnSeen = { forearmDeg: ev.forearmDeg + 0, humeralDeg: ev.humeralDeg + 0 };
+        return;
+      }
+      case 'danceRange': {
+        // R558 (Space dance): the touch-free hip range of the current leg posture (ns-app, from ns-body
+        // hipRotationClearRange): { joints: { hip_rot_L: [lo, hi], hip_rot_R: [lo, hi] } }. Kept until the next one.
+        const j = ev.joints;
+        if (!isPlainObject(j)) fail('activity_event', 'danceRange needs joints: { jointId: [lo, hi] }');
+        const next = {};
+        for (const [k, r] of Object.entries(j)) {
+          if (!DANCE_BODY_JOINTS.includes(k)) fail('activity_event', `danceRange: ${k} is not a dance joint`);
+          if (!Array.isArray(r) || r.length !== 2 || !r.every(isFiniteNumber)) fail('activity_event', `danceRange.${k} must be [lo, hi] degrees`);
+          // R558 (hunt 2 code #6): an inverted pair is refused, never swapped (swapping turned an empty overlap of two
+          // touch-free ranges into the band between them, where neither posture is touch-free).
+          if (r[0] > r[1]) fail('activity_event', `danceRange.${k} is inverted ([lo, hi] needs lo <= hi)`);
+          next[k] = [r[0], r[1]];
+        }
+        s.danceRange = next;
+        clampDanceRange(s);
+        return;
+      }
       default:
         fail('activity_event', `unknown event type ${JSON.stringify(ev.type)}`);
     }
@@ -1879,12 +2355,11 @@ export function createActivity({
       const seg = b1 - b0;
       if (!(seg > 0)) continue;
       const T = commandTargets(s, b0);
-      const fast = releasedBy(T);
-      // The post-release opening window also clears the remaining grasp drive quickly.
-      if (b0 < s.openRemaining) fast.add('grasp_close');
+      const P = poseTargets(s, b0);
       for (const id of ACTION_IDS) {
-        const tauDown = fast.has(id) ? decayTau / RELEASE_DECAY_FACTOR : decayTau;
-        s.drive[id] = approach(s.drive[id], T[id], seg, riseTau, tauDown);
+        // R558 latch: the POSE drive jerks to the latched pose targets (armPoseTau both ways) and stays; the DISPLAY
+        // below keeps following the timed commands (a pulse lights its area for a second).
+        s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
         const lvl = approach(s.display[id], T[id], seg, displayRiseTau, displayDecayTau);
         s.display[id] = Math.min(lvl, displayCeiling(s, id, b0, b1));
       }
@@ -1900,6 +2375,19 @@ export function createActivity({
         s.bodyDrive[k] = approach(s.bodyDrive[k], on ? 1 : 0, seg, riseTau, decayTau);
         s.bodyDisplay[k] = envelope(s.bodyDisplay[k], on ? 1 : 0, seg, on ? pc : 1);
       }
+      // R558 latch: every body joint jerks to its goal (the JOINT_LATCH spring, exact per segment) and stays there.
+      // A momentary joint's goal is its action's end angle only while that action's pulse runs. A joint stopped by
+      // its anatomical limit rebounds off it with `restitution` of its speed (0: it stops dead there), so nothing
+      // ever passes a limit.
+      const momentary = pulseOn && s.pulseBody !== null ? (ENDS.get(s.pulseBody) || null) : null;
+      for (const j of JOINT_IDS) {
+        const goal = LATCHING[j] ? s.bodyGoal[j] : momentary !== null && hasOwn(momentary, j) ? momentary[j] : REST[j];
+        if (s.bodyPos[j] === goal && s.bodyVel[j] === 0) continue;
+        const [p, v] = stepJointSpring(s.bodyPos[j], s.bodyVel[j], goal, seg, springOmega, springZeta);
+        const q = limitJoint(j, p);
+        s.bodyPos[j] = q + 0;
+        s.bodyVel[j] = q === p ? v : (springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) + 0;
+      }
       const rotOn = s.rotation.channel !== null && b0 < s.rotation.remaining;
       const rc = rotOn ? fadeCeiling(s.rotation.remaining - b1) : 1;
       for (const c of ROTATION_ACTION_IDS) {
@@ -1909,11 +2397,14 @@ export function createActivity({
         const ceil = key || pul ? Math.max(key ? rc : 0, pul ? pc : 0) : 1;
         s.rotationDisplay[c] = envelope(s.rotationDisplay[c], key || pul ? 1 : 0, seg, ceil);
       }
-      const goal = pulseOn && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0) : rotValue(s.rotationState);
+      const goal = pulseOn && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
+        : isFiniteNumber(s.rotation.hold) ? s.rotation.hold : rotValue(s.rotationState);
       // R3-arm: critically damped ease (smooth start, ~0.30 s settle with the default poseTau); see stepRotationEase.
       const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
       s.rotation.value = eased.value;
       s.rotation.speed = eased.speed;
+      // R558 (Space dance): history of every limb's turn, then the dance itself while Space is held.
+      danceStep(s, seg);
     }
     s.pulseRemaining = countdown(s.pulseRemaining, h);
     if (s.pulseRemaining === 0) cancelPulse(s);
@@ -1923,6 +2414,14 @@ export function createActivity({
       const rid = s.markPending.regionId;
       s.activatedRegions[rid] = (s.activatedRegions[rid] || 0) + 1;
       s.markPending = null;
+    }
+    // R558 (latch): a look's movement once the gaze has stayed on that area for latchS (GAZE_DWELL). Nothing moves
+    // behind the pause page or while the brain is held: a pending look is dropped then.
+    if (s.latchPending && (s.paused || s.brainGrab.active)) s.latchPending = null;
+    if (s.latchPending && s.gazeArea === s.latchPending.area && s.t + h - s.latchPending.since >= latchS - SNAP) {
+      const hit = s.latchPending.hit;
+      s.latchPending = null;
+      commitLatch(s, hit);
     }
     s.openRemaining = countdown(s.openRemaining, h);
     s.relaxRemaining = countdown(s.relaxRemaining, h);
@@ -1946,6 +2445,15 @@ export function createActivity({
       }
       out[id] = clamp(v, 0, 1);
     }
+    // R558 (Space dance): the areas of the turning limbs light in proportion to each joint's turning speed.
+    const dl = s.dance && s.dance.levels ? s.dance.levels : null;
+    if (dl) {
+      for (const [j, rids] of Object.entries(DANCE_AREAS)) {
+        const v = dl[j];
+        if (!(v > 0)) continue;
+        for (const rid of rids) if (hasOwn(out, rid)) out[rid] = Math.max(out[rid], clamp(v, 0, 1));
+      }
+    }
     return out;
   }
 
@@ -1954,8 +2462,8 @@ export function createActivity({
     if (!(s.pulseRemaining > 0)) cancelPulse(s);
     const I = s.instructions;
     if (I.visible && I.autoHideAt !== null && s.t + SNAP >= I.autoHideAt) hideInstructions(s);
-    s.targets = commandTargets(s, 0);
-    s.bodyJointTargets = composeBodyJoints(binding, s.bodyDrive, limitsBody);
+    s.targets = poseTargets(s, 0);          // what the arm pose is following now (latches, held fist, opening)
+    s.bodyJointTargets = pick(s.bodyPos, JOINT_IDS); // absolute joint angles: the latched positions (R558)
     s.regionActivity = computeRegionActivity(s);
     return s;
   }
@@ -2122,10 +2630,73 @@ export function createActivity({
     return { ...state.activatedRegions };
   }
 
-  /** jointId -> degrees for ns-body poseBody (every binding joint id; 0 = neutral). */
+  /** jointId -> ABSOLUTE degrees for ns-body poseBody (every binding joint id): where each joint is now. With the
+   * R558 latch these are the joint positions themselves (start posture angles until something is activated), not a
+   * change from the start posture. */
   function bodyJointTargets(state) {
     checkState(state);
     return pick(state.bodyJointTargets, JOINT_IDS);
+  }
+
+  /**
+   * R558 latch, for the display: what is held away from the start pose and what brings it back.
+   *   joints  [{ jointId, goalDeg, restDeg, posDeg }]   body joints latched away from their start angle
+   *   arm     [actionId]                                 latched game-arm actions
+   *   rotated true when the forearm turn is not the default one
+   *   hints   [{ key, regionId, actionId, armActionId, label, level, muscles, bodySide, isLeftArm, forJoint, forAction }]
+   *           the OPPOSING actions: activating one brings that joint (or arm action) back. `muscles` are the opposing
+   *           action's movers (the map's agonist names), `level` is JOINT_LATCH.hintLevel. One entry per action.
+   *   label   the honest scope line
+   * A reminder of the game's own rule (agonist and antagonist actions), not a recording or a nerve path.
+   */
+  function latchView(state) {
+    checkState(state);
+    const goalOf = state.bodyGoal === undefined ? REST : state.bodyGoal;
+    const posOf = state.bodyPos === undefined ? REST : state.bodyPos;
+    const latchOf = state.armLatch === undefined ? {} : state.armLatch;
+    const joints = [], hints = [], seen = new Set();
+    const add = h => { if (!seen.has(h.key)) { seen.add(h.key); hints.push(h); } };
+    for (const j of JOINT_IDS) {
+      if (!LATCHING[j]) continue;
+      const at = sideOf(j, goalOf[j]);
+      if (at === 0) continue;
+      joints.push({ jointId: j, goalDeg: goalOf[j], restDeg: REST[j], posDeg: posOf[j] });
+      for (const k of BODY_KEYS) {
+        const ends = ENDS.get(k);
+        if (!hasOwn(ends, j) || sideOf(j, ends[j]) === at) continue;
+        const a = binding.bodyActions.get(k);
+        const r = binding.regions.get(a.regionId);
+        add({
+          key: k, regionId: a.regionId, actionId: a.actionId, armActionId: null, label: a.label, level: JOINT_LATCH.hintLevel,
+          muscles: [...a.agonists], bodySide: r.bodySide, isLeftArm: false, forJoint: j, forAction: null
+        });
+      }
+    }
+    const armHint = (armActionId, forAction) => {
+      for (const rid of binding.leftArmRegionIds) {
+        const r = binding.regions.get(rid);
+        const a = r.actions.find(x => x.armActionId === armActionId);
+        if (!a) continue;
+        add({
+          key: `${rid}/${a.id}`, regionId: rid, actionId: a.id, armActionId, label: a.label, level: JOINT_LATCH.hintLevel,
+          muscles: [...a.agonists], bodySide: r.bodySide, isLeftArm: true, forJoint: null, forAction
+        });
+      }
+    };
+    const arm = [];
+    for (const id of ACTION_IDS) {
+      if (!(latchOf[id] > 0)) continue;
+      arm.push(id);
+      if (hasOwn(ARM_OPPOSITES, id)) armHint(ARM_OPPOSITES[id], id);
+    }
+    // R558 (Space dance): a palm turn the dance left part way also counts as held (toward the other end).
+    const heldTurn = state.rotation && isFiniteNumber(state.rotation.hold) && Math.abs(state.rotation.hold - rotValue(defaultRotation)) > 1e-3;
+    const rotated = state.rotationState !== defaultRotation || heldTurn;
+    if (rotated) armHint(defaultRotation === 'supinated' ? 'supination' : 'pronation', defaultRotation === 'supinated' ? 'pronation' : 'supination');
+    return {
+      joints, arm, rotated, hints,
+      label: 'held by the game until the opposing action or Reset (a rule of this simulation; not a recording)'
+    };
   }
 
   /** Active body actions (display or pose drive above 0), in map order:
@@ -2249,6 +2820,18 @@ export function createActivity({
     const shoulder = {};
     for (const c of ROTATION_ACTION_IDS) for (const m of ROTATION_MUSCLES[c].shoulder) shoulder[m] = Math.max(shoulder[m] || 0, d[c] * ROTATION_SHOULDER_LEVEL);
     for (const [m, v] of Object.entries(shoulder)) muscles[m] = Math.max(muscles[m] || 0, v);
+    // R558 (Space dance): while the game arm turns in the dance, its forearm turners and shoulder rotators of the
+    // current direction light in proportion to each joint's turning speed (opening = supination with the outward
+    // rotators, closing = pronation with the inward ones).
+    const dance = state.dance && state.dance.levels ? state.dance : null;
+    let catalogBic = d.supination;
+    if (dance) {
+      const c = dance.limbs.leftArm.dir > 0 ? 'supination' : 'pronation';
+      const fl = dance.levels.l_forearm, sl = dance.levels.l_shoulder_rot;
+      if (fl > 0) for (const m of ROTATION_MUSCLES[c].agonists) muscles[m] = Math.max(muscles[m] || 0, fl);
+      if (sl > 0) for (const m of ROTATION_MUSCLES[c].shoulder) muscles[m] = Math.max(muscles[m] || 0, sl);
+      if (c === 'supination') catalogBic = Math.max(catalogBic, fl);
+    }
     return {
       state: state.rotationState,
       value: state.rotation.value,
@@ -2259,9 +2842,9 @@ export function createActivity({
       display: d,
       keyDisplay: pick(state.rotationKeyDisplay, ROTATION_ACTION_IDS),
       muscles,
-      catalog: { BIC: d.supination },
+      catalog: { BIC: catalogBic },
       seq: state.rotationSeq,
-      label: 'simulated forearm rotation command (display-only, unitless; double-tap Space is a virtual input)'
+      label: 'simulated forearm rotation command (display-only, unitless; Space is a virtual input)'
     };
   }
 
@@ -2294,6 +2877,54 @@ export function createActivity({
     };
   }
 
+  /**
+   * R558 (Space dance): what the dance is doing, plain data. { active, fast, angles: { jointId: degrees } (ns-dance
+   * DANCE_LIMBS conventions), levels: { jointId: 0..1 } (turning speed, the display level of its areas and muscles),
+   * limbs: { limb: { dir: 1 opening | -1 closing, level } }, ranges (the touch-free hip ranges in use),
+   * bodyMuscleRows: rows for ns-body bodyMuscleDrives (the right arm's and the hips' turning muscles of the current
+   * direction at their joint's level; the game arm's are in rotationOutputs().muscles), armHumeralDeg (null = the
+   * coupled palm turn) }.
+   */
+  function danceView(state) {
+    checkState(state);
+    const d = state.dance && isDanceState(state.dance) ? state.dance : danceStart();
+    const limbs = {};
+    for (const l of DANCE_LIMB_IDS) limbs[l] = { dir: d.limbs[l].dir, level: d.limbs[l].level };
+    const limbOf = j => DANCE_LIMB_IDS.find(l => DANCE_LIMBS[l].some(x => x.id === j));
+    const bodyMuscleRows = [];
+    for (const j of DANCE_BODY_JOINTS) {
+      const lv = d.levels[j];
+      if (!(lv > 0) || !hasOwn(DANCE_MUSCLES, j)) continue;
+      const dir = d.limbs[limbOf(j)].dir > 0 ? 'open' : 'closed';
+      bodyMuscleRows.push({ actionId: null, level: lv, agonists: [...DANCE_MUSCLES[j][dir]], antagonists: [], stabilizers: [], dance: j });
+    }
+    const angles = {};
+    const T = PRONATION_DEG_AT_VALUE(state.rotation.value), explicit = isFiniteNumber(state.armHumeral);
+    const seen = !explicit && state.armTurnSeen ? state.armTurnSeen : null;
+    angles.l_forearm = explicit ? T : seen ? seen.forearmDeg : T;
+    angles.l_shoulder_rot = explicit ? state.armHumeral : seen ? seen.humeralDeg : 0;
+    for (const j of DANCE_BODY_JOINTS) angles[j] = state.bodyPos ? state.bodyPos[j] : REST[j];
+    // Colour links (ns-app -> the scene's glow links, without a line): each turning joint's area and its turning muscles
+    // of the current direction, at the joint's level, so the area, your muscles and the mirror body's share one colour.
+    const links = [];
+    for (const j of DANCE_JOINT_IDS) {
+      const lv = d.levels[j], rid = DANCE_AREAS[j] ? DANCE_AREAS[j].find(r => binding.regions.has(r)) : null;
+      if (!(lv > 0) || !rid) continue;
+      const open = d.limbs[limbOf(j)].dir > 0;
+      let muscles;
+      if (j === 'l_forearm') muscles = [...ROTATION_MUSCLES[open ? 'supination' : 'pronation'].agonists];
+      else if (j === 'l_shoulder_rot') muscles = [...ROTATION_MUSCLES[open ? 'supination' : 'pronation'].shoulder];
+      else muscles = hasOwn(DANCE_MUSCLES, j) ? [...DANCE_MUSCLES[j][open ? 'open' : 'closed']] : [];
+      links.push({ key: `dance:${j}`, regionId: rid, isLeftArm: j.startsWith('l_'), actionId: null, level: lv, muscles,
+        catalog: j === 'l_forearm' && open ? ['BIC'] : [], meshNames: [] });
+    }
+    return {
+      active: state.spaceHeld === true && !state.paused, fast: d.fast, angles, levels: { ...d.levels }, limbs,
+      ranges: state.danceRange ? copyJson(state.danceRange) : {}, bodyMuscleRows, links, armHumeralDeg: explicit ? state.armHumeral : null,
+      label: 'simulated limb turning (display-only, unitless; Space is a virtual input, not a recording)'
+    };
+  }
+
   /** Deep, JSON-safe copy of the state plus the derived outputs, for the QA snapshot(). */
   function snapshot(state) {
     checkState(state);
@@ -2304,7 +2935,9 @@ export function createActivity({
       wasdChannels: wasdChannels(state),
       instructionsView: instructionsView(state),
       activeBodyActions: activeBodyActions(state),
-      glowLinks: glowLinks(state)
+      glowLinks: glowLinks(state),
+      latchView: latchView(state),
+      danceView: danceView(state)
     });
   }
 
@@ -2314,6 +2947,10 @@ export function createActivity({
     resetBody, orbitStep: orbitStepModel, regionActivity, activatedRegions, bodyJointTargets, activeBodyActions,
     bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView, snapshot,
     // R5-input
-    glowLinks
+    glowLinks,
+    // R558 latch
+    latchView,
+    // R558 Space dance
+    danceView
   });
 }

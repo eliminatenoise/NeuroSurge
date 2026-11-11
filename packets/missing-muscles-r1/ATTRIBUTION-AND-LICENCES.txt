@@ -1,0 +1,82 @@
+Missing-muscles packet (missing-muscles-r1): attribution and licences
+
+111 OBJ files: 93 BodyParts3D 4.0 files (FJ*.obj) and 18 Z-Anatomy derivatives (zm-*.obj). Two
+licences apply, per file (the manifest's "licence" field says which):
+
+1. BodyParts3D 4.0 files (FJ*.obj): CC BY 4.0
+
+Required attribution (as the official licence page asks, last updated 2025/02/27):
+"BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International"
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+https://creativecommons.org/licenses/by/4.0/
+
+Source: the official archive https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip
+(ETag "8848a5a-4dd48ec9df000", 142,903,898 bytes). Changes: none. Each file is the byte-exact archive member (ZIP
+CRC32, size and sha256 checked; ACQUISITION-RECORD.json). Only a selection of members was taken.
+
+2. Z-Anatomy derivatives (zm-*.obj): CC BY-SA 4.0 (share-alike)
+
+Required supplied credits (quoted exactly as the source asks):
+"Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"
+"BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
+
+Source contributors and roles (as the source names them): Kousaku Okubo / the Database Center for Life Science:
+original BodyParts3D model. Gauthier Kervyn: design, 3D and anatomy. Marcin Zielinski: Blender add-on. Lluis Vinent
+Juanico: Unity application and the distributed FBX export.
+
+Source (the same file and commit as packets/face-muscles-r1):
+LluisV/Z-Anatomy, commit 6c7f9016bd5899ac8edafd31b9900c151df42ed6, file Resources/Models/FBX/MuscularSystem100.fbx
+https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx
+37,343,180 bytes, SHA-256 4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279, git blob 2477e1b6caf97d7174762b5eec6cf1c80db64eed
+
+Licence of these files: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+https://creativecommons.org/licenses/by-sa/4.0/legalcode.en
+The source's own notices and licence are copied unchanged in LICENSES/ (Z-Anatomy-License.txt,
+Z-Anatomy-Model-Notice.txt, Z-Anatomy-Authors-and-Notice.txt, Z-Anatomy-Export-Readme.txt).
+
+Changes made (CC BY-SA 4.0 section 3(a)(1)(B)), by NeuroSurge contributors, 11 November 2026:
+- Selection: only these objects were taken from the FBX file; everything else was left out:
+  meshes/zm-latissimus-dorsi-r.obj  (Right latissimus dorsi; source object "Latissimus dorsi muscle.r")
+  meshes/zm-latissimus-dorsi-l.obj  (Left latissimus dorsi; source object "Latissimus dorsi muscle.l")
+  meshes/zm-rectus-abdominis-r.obj  (Right rectus abdominis; source object "Rectus abdominis muscle.r")
+  meshes/zm-rectus-abdominis-l.obj  (Left rectus abdominis; source object "Rectus abdominis muscle.l")
+  meshes/zm-internal-oblique-r.obj  (Right internal oblique; source object "Internal abdominal oblique muscle.r")
+  meshes/zm-internal-oblique-l.obj  (Left internal oblique; source object "Internal abdominal oblique muscle.l")
+  meshes/zm-quadratus-lumborum-r.obj  (Right quadratus lumborum; source object "Quadratus lumborum muscle.r")
+  meshes/zm-quadratus-lumborum-l.obj  (Left quadratus lumborum; source object "Quadratus lumborum muscle.l")
+  meshes/zm-longus-colli-r.obj  (Right longus colli; source object "Longus colli muscle.r")
+  meshes/zm-longus-colli-l.obj  (Left longus colli; source object "Longus colli muscle.l")
+  meshes/zm-extensor-digitorum-brevis-r.obj  (Right extensor digitorum brevis; source object "Extensor digitorum brevis.r")
+  meshes/zm-extensor-digitorum-brevis-l.obj  (Left extensor digitorum brevis; source object "Extensor digitorum brevis.l")
+  meshes/zm-flexor-hallucis-brevis-medial-r.obj  (Medial head of right flexor hallucis brevis; source object "Medial head of flexor hallucis brevis.r")
+  meshes/zm-flexor-hallucis-brevis-medial-l.obj  (Medial head of left flexor hallucis brevis; source object "Medial head of flexor hallucis brevis.l")
+  meshes/zm-flexor-hallucis-brevis-lateral-r.obj  (Lateral head of right flexor hallucis brevis; source object "Lateral head of flexor hallucis brevis.r")
+  meshes/zm-flexor-hallucis-brevis-lateral-l.obj  (Lateral head of left flexor hallucis brevis; source object "Lateral head of flexor hallucis brevis.l")
+  meshes/zm-transversus-abdominis-r.obj  (Right transversus abdominis; source object "Transversus abdominis muscle.r")
+  meshes/zm-transversus-abdominis-l.obj  (Left transversus abdominis; source object "Transversus abdominis muscle.l")
+- Conversion: FBX to Wavefront OBJ, positions and triangles only (normals, materials and hierarchy dropped; polygons
+  fan-triangulated; vertices not used by any face dropped; face order reversed on the source's mirrored left-side
+  instances so the surfaces still face outward; coordinates rounded to 0.0001 mm).
+- Registration: every vertex was moved by the face packet's recorded similarity (one uniform scale 9.860279, one
+  rotation, one translation; centimetres to millimetres) into the BodyParts3D 4.0 body frame. The three foot objects
+  (extensor digitorum brevis and the two heads of flexor hallucis brevis) were then moved by one more rigid correction
+  per foot (rotation about 14 degrees and translation, no scale), fitted to the same foot muscles in BodyParts3D.
+- Names: each file got a NeuroSurge id (zm-...), a plain name and a label; the source object name is kept in the file
+  header and in the manifest.
+
+These mesh files stay under CC BY-SA 4.0 wherever they go. If you share changed versions of them, share them under
+CC BY-SA 4.0 too, with the credits above, a link to the licence and a note of what you changed. The official
+BodyParts3D notice now states CC BY 4.0; the historical CC BY-SA 2.1 Japan credit the Z-Anatomy source supplies is
+kept as it asks. The other separately licensed models named in the Z-Anatomy notice (inner ear, kidney, brain and
+white matter, cranial nerves) are not in this packet.
+
+Common to both:
+- No endorsement: neither DBCLS, Z-Anatomy nor their authors endorse NeuroSurge or NeuroTranslate 0.0.
+- One reference model for learning, not a measured person, not a population average, not validated.
+- In the game the muscles are coloured by a simulated, unitless signal, lifted and filled a little (the Body Worlds
+  display), follow their nearest bones, and the tendon sheets of the obliques in front of rectus abdominis are not drawn
+  (the sheath opened, as in a dissection). All of this happens only in the browser's memory; the files are as described
+  above.
+- The NeuroSurge game code is CC0 and three.js is MIT; neither relicenses these meshes, and these meshes do not
+  relicense the code.

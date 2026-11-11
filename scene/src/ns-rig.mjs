@@ -95,8 +95,35 @@ export const ULNAR_HEAD_FRACTION = 0.1;
  * (U3a notes): at full pronation, elbow 90 deg, 2 edges stretch to more than 2 L + 3 mm (0 at neutral), versus 1028 for
  * the first trial t0 0.12 / t1 0.88. Display constants, not measured muscle kinematics; proximal radius-attached tissue
  * (supinator, biceps tendon, pronator teres insertion) therefore does not follow the radius fully.
+ *
+ * R558 (left forearm plates near the elbow, palm down): REPLACED by a CONTINUOUS per-vertex twist (twist 'continuous',
+ * the default of skinWeights; the quarter-turn chain above stays available as twist 'chain'). Palm down is about 178 deg
+ * of turn from the supinated rest mesh; packed into t 0.40..0.82 (smoothstep slope up to 3.6 per unit t, so up to about
+ * 640 deg per forearm length) with two influences per vertex, the coarse BodyParts3D forearm triangles (edges up to 0.2
+ * to 0.4 of the forearm length) were turned up to about 120 deg end to end and cut across the arm as flat plates, and
+ * the elbow-blended tissue could not twist at all (one fixed frame per influence). Now each forearm vertex carries its
+ * own twist fraction f (skin weights `tf`): its forearm influence is the ulna frame turned by f x the pronation turn
+ * about the same radial-head -> ulnar-head axis, computed exactly per pose (twistTable), so f can be any number and the
+ * elbow blend (upper arm + forearm) twists continuously too. f = smoothstep((t - t0) / (t1 - t0)) along the forearm,
+ * t0 0.10 .. t1 0.82: the same 178 deg over 72 % of the forearm instead of 42 % (the rate is 0.58 x the old one), and
+ * still exactly the full turn (the radius frame itself) from t 0.82, before the hand's fit domain begins (forearm-only
+ * hand-domain vertices start at t 0.885 on this arm, so ns-app fitBoxes keeps its full-turn radius frame there). No
+ * radial-side term (lambda0 0): it turned neighbouring vertices of one muscle up to about 50 deg apart across the
+ * forearm. And refineForTwist splits the long triangles in the twist zone so no edge spans more than
+ * TWIST_REFINE_MAX_STEP of f. Offline, at the in-game palm-down start pose (elbow 41, forearm 80): edges stretched to
+ * more than 1.6 L + 2 mm 172 -> 0, triangles folded over by more than 100 deg 342 -> 122 (folded rest area 2927 ->
+ * 342 mm2); at elbow 86 palm down 172 / 409 -> 0 / 198. Display constants, not measured muscle kinematics.
  */
-export const TWIST_SKIN = Object.freeze({ t0: 0.40, t1: 0.82, lambda0: 0.3 });
+export const TWIST_SKIN = Object.freeze({ t0: 0.10, t1: 0.82, lambda0: 0 });
+/** The quarter-turn chain's constants (U3a; twist 'chain', used where fixed segment frames are needed, e.g. the
+ * whole-arm display's conservative per-segment bounds). */
+export const TWIST_SKIN_CHAIN = Object.freeze({ t0: 0.40, t1: 0.82, lambda0: 0.3 });
+/** R558: refineForTwist splits an edge whose two ends differ by more than this in twist fraction f (about 14 deg of the
+ * palm-down turn). 0.08 adds about 7400 vertices (10 %) to the 75 000 of the arm's muscles. */
+export const TWIST_REFINE_MAX_STEP = 0.08;
+/** R558: steps of the per-pose twist table (twistTable): a twisted influence blends two table entries 1/64 of the turn
+ * apart (at most 2.8 deg; linear blending shrinks by at most 0.03 %). */
+export const TWIST_TABLE_STEPS = 64;
 
 export const CAP_FRACTION = 0.15;
 export const SHOULDER_CAP_MM = 35;
@@ -693,7 +720,7 @@ export function deriveRig(boneMeshes, {
     pronationSource,
     twist: {
       separated: ulnaSeparate, elbow, forearmEnd, axisDir: dirs.forearm, lengthMm: length(sub(forearmEnd, elbow)),
-      radiusLine: [radialHead, radiusDistal], ulnaLine: [ulnaProx, ulnarHead], ...TWIST_SKIN
+      radiusLine: [radialHead, radiusDistal], ulnaLine: [ulnaProx, ulnarHead], ...TWIST_SKIN, chain: { ...TWIST_SKIN_CHAIN }
     },
     upperLength: length(sub(elbow, shoulder)),
     foreLength: length(sub(wrist, elbow)),
@@ -962,21 +989,87 @@ const { ADJACENT, MEET } = (() => {
 const TWIST_IDX = FOREARM_TWIST_CHAIN.map(s => SEGMENTS.indexOf(s));
 const HAND_MASK = (() => { const m = new Uint8Array(SEGMENTS.length); for (const s of HAND_SEGMENTS) m[SEGMENTS.indexOf(s)] = 1; return m; })();
 
-/** Twist fraction (0..1 of the pronation turn) of a rest-mm point under TWIST_SKIN (see there). */
-export function forearmTwistFraction(rig, p) {
+/** Twist fraction (0..1 of the pronation turn) of a rest-mm point under TWIST_SKIN (see there); `params` { t0, t1,
+ * lambda0 } defaults to the rig's continuous constants (rig.twist; rig.twist.chain holds the chain's). */
+export function forearmTwistFraction(rig, p, params = null) {
   checkRig(rig);
   const tw = rig.twist;
   if (!tw) fail('rig_input', 'rig has no forearm twist data (derive it with the current deriveRig)');
+  const k = params || tw;
   const t = dot(sub(p, tw.elbow), tw.axisDir) / tw.lengthMm;
-  const u = clamp((t - tw.t0) / (tw.t1 - tw.t0), 0, 1);
+  const u = clamp((t - k.t0) / (k.t1 - k.t0), 0, 1);
   const ramp = smoothstep(u);
-  if (!tw.separated) return ramp;
+  if (!tw.separated || !(k.lambda0 > 0)) return ramp;
   const dr = pointSegmentDistance(p, tw.radiusLine[0], tw.radiusLine[1]);
   const du = pointSegmentDistance(p, tw.ulnaLine[0], tw.ulnaLine[1]);
   const side = du * du + dr * dr > 1e-12 ? (du * du) / (du * du + dr * dr) : 0.5;
   const sn = Math.sin(Math.PI * u);
-  const lam = tw.lambda0 * sn * sn;
+  const lam = k.lambda0 * sn * sn;
   return (1 - lam) * ramp + lam * side;
+}
+
+/**
+ * R558: split the long triangles of a muscle mesh where the continuous forearm twist changes along them (display-only
+ * refinement of licensed anatomy: every new vertex is the midpoint of an existing edge, so the rest surface is exactly
+ * the original one; only the posed surface can now follow the twist). Rounds of conforming bisection: an edge whose two
+ * ends differ by more than maxStep in forearmTwistFraction (rig's continuous constants) is split at its midpoint, and
+ * each triangle is re-cut by how many of its edges were split (1 -> 2, 2 -> 3, 3 -> 4 triangles, orientation kept), so
+ * two triangles that share an edge always agree (no T-junction cracks). Pure.
+ * @returns { positions (Float32Array), indices (Uint32Array), added (new vertices), rounds }; the input arrays are
+ *   returned unchanged (added 0) when nothing needs splitting.
+ */
+export function refineForTwist(rig, positions, indices, { maxStep = TWIST_REFINE_MAX_STEP, maxRounds = 6 } = {}) {
+  checkRig(rig);
+  checkPositions(positions, 'positions');
+  if (!indices || indices.length % 3 !== 0) fail('rig_input', 'indices must be triangles');
+  if (!(Number.isFinite(maxStep) && maxStep > 0)) fail('rig_input', 'maxStep must be positive');
+  if (!rig.twist) return { positions, indices, added: 0, rounds: 0 };
+  let pos = null, ix = indices, n = positions.length / 3, added = 0, rounds = 0;
+  const f = [];
+  const P = i => (pos ? pos : positions);
+  const fAt = v => {
+    if (f[v] === undefined) { const q = P(v); f[v] = forearmTwistFraction(rig, [q[3 * v], q[3 * v + 1], q[3 * v + 2]]); }
+    return f[v];
+  };
+  for (; rounds < maxRounds; rounds++) {
+    const mid = new Map(), out = [];
+    let any = false;
+    const need = (a, b) => Math.abs(fAt(a) - fAt(b)) > maxStep;
+    const midOf = (a, b) => {
+      const k = a < b ? a * 16777216 + b : b * 16777216 + a;
+      let m = mid.get(k);
+      if (m === undefined) {
+        if (!pos) pos = Array.from(positions);
+        m = n++;
+        pos.push((pos[3 * a] + pos[3 * b]) / 2, (pos[3 * a + 1] + pos[3 * b + 1]) / 2, (pos[3 * a + 2] + pos[3 * b + 2]) / 2);
+        mid.set(k, m); added++;
+      }
+      return m;
+    };
+    for (let t = 0; t < ix.length; t += 3) {
+      const v0 = ix[t], v1 = ix[t + 1], v2 = ix[t + 2];
+      const s0 = need(v0, v1), s1 = need(v1, v2), s2 = need(v2, v0), c = s0 + s1 + s2;
+      if (!c) { out.push(v0, v1, v2); continue; }
+      any = true;
+      if (c === 3) {
+        const a = midOf(v0, v1), b = midOf(v1, v2), d = midOf(v2, v0);
+        out.push(v0, a, d, a, v1, b, d, b, v2, a, b, d);
+      } else if (c === 1) {
+        const [A, B, C] = s0 ? [v0, v1, v2] : s1 ? [v1, v2, v0] : [v2, v0, v1];
+        const m = midOf(A, B);
+        out.push(A, m, C, m, B, C);
+      } else { // two split edges sharing vertex B; the unsplit edge is C -> A
+        const [A, B, C] = !s0 ? [v1, v2, v0] : !s1 ? [v2, v0, v1] : [v0, v1, v2];
+        const m1 = midOf(A, B), m2 = midOf(B, C);
+        out.push(m1, B, m2, A, m1, m2, A, m2, C);
+      }
+    }
+    if (!any) break;
+    ix = out;
+  }
+  if (!added) return { positions, indices, added: 0, rounds };
+  if (n > 16777216) fail('rig_input', 'refined mesh too large');
+  return { positions: Float32Array.from(pos), indices: Uint32Array.from(ix), added, rounds };
 }
 
 /**
@@ -993,11 +1086,15 @@ export function forearmTwistFraction(rig, p) {
  *    proportional to (b1 - b3) and (b2 - b3). This is continuous wherever segments reorder (a hard top-two cut or a rigid
  *    gap jump is not), and the second influence vanishes exactly where the second and third strongest tie.
  * 4. The minor weight ramps continuously to exactly 0 below SKIN_MINOR_CUTOFF (then i1 = i0, w1 = 0).
- * 5. U3a forearm twist pass (twist: true, the default, whenever 'forearm' is a candidate): a 'forearm' (radius)
- *    influence is moved onto the twist chain by forearmTwistFraction f. A vertex bound to the forearm alone blends the two
- *    neighbouring FOREARM_TWIST_CHAIN frames (weights by f); a forearm + hand/digit vertex keeps the full-turn 'forearm'
- *    (so hand tissue is still bounded by the hand frame and the forearm support box); a forearm + other vertex (elbow
- *    region, where f is 0 by construction) takes the nearest twist frame. Counts are returned in `twist`.
+ * 5. Forearm twist pass (whenever 'forearm' is a candidate). twist 'continuous' (also true, the default; R558): a
+ *    'forearm' (radius) influence becomes the 'ulna' influence turned by its own fraction f = forearmTwistFraction (the
+ *    rig's continuous constants) of the pronation turn: `tf[v]` = f, applied by skinApply through twistTable (f 0 is the
+ *    plain ulna frame; f >= 1 keeps the radius frame 'forearm' itself). A forearm + hand/digit vertex keeps the full-turn
+ *    'forearm' (so hand tissue is still bounded by the hand frame and the forearm support box). The weights then also
+ *    carry `twistAxis` and `twistPivot` (the rig's pronation axis and radial-head pivot, rest mm). twist 'chain' (U3a,
+ *    TWIST_SKIN_CHAIN): the radius influence moves onto the quarter-turn chain instead: a forearm-only vertex blends the
+ *    two neighbouring FOREARM_TWIST_CHAIN frames (weights by f); a forearm + other vertex (elbow region, where f is 0 by
+ *    construction) takes the nearest twist frame; no `tf`. twist false: no pass. Counts are returned in `twist`.
  * Returns exactly two convex influences per vertex: { i0, i1 (Uint8Array), w0, w1 (Float32Array) }, w0 + w1 = 1,
  * w0 >= w1 >= 0; i0 is the dominant influence. Candidates restrict the segments considered (default SKIN_CANDIDATES, the
  * pre-U3a 18). `power`,
@@ -1031,8 +1128,12 @@ export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, powe
   const order = [];
   const TOP = 6;
   const F = SEGMENTS.indexOf('forearm');
-  const tw = twist && allowed[F] && rig.twist ? rig.twist : null;
-  const twistStats = { chain: 0, handKept: 0, nearest: 0, maxNearestError: 0 };
+  const mode = twist === true || twist === 'continuous' ? 'continuous' : twist === 'chain' ? 'chain' : twist === false || twist === null ? null : fail('rig_input', "twist must be 'continuous', 'chain', true or false");
+  const tw = mode && allowed[F] && rig.twist ? rig.twist : null;
+  const chainK = tw && mode === 'chain' ? (tw.chain || TWIST_SKIN_CHAIN) : null;
+  const tf = tw && mode === 'continuous' ? new Float32Array(n) : null;
+  const U = TWIST_IDX[0];
+  const twistStats = { mode: tw ? mode : null, chain: 0, handKept: 0, nearest: 0, maxNearestError: 0, continuous: 0, fullTurn: 0 };
   for (let v = 0; v < n; v++) {
     const px = positions[3 * v], py = positions[3 * v + 1], pz = positions[3 * v + 2];
     if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) fail('rig_input', 'non-finite muscle vertex');
@@ -1076,8 +1177,22 @@ export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, powe
     const wm = m <= SKIN_MINOR_CUTOFF ? 0 : Math.min(0.5, (0.5 * (m - SKIN_MINOR_CUTOFF)) / (0.5 - SKIN_MINOR_CUTOFF));
     let a0 = t1, a1 = t1, ww0 = 1, ww1 = 0;
     if (wm > 0) { a1 = t2; ww1 = wm; ww0 = 1 - wm; }
-    if (tw && (a0 === F || (ww1 > 0 && a1 === F))) {
-      const f = forearmTwistFraction(rig, [px, py, pz]);
+    if (tf && (a0 === F || (ww1 > 0 && a1 === F))) {
+      // R558 continuous twist: the radius influence -> the ulna frame turned by this vertex's own fraction.
+      const other = a0 === F ? (ww1 > 0 ? a1 : -1) : a0;
+      if (other >= 0 && HAND_MASK[other]) twistStats.handKept++;
+      else {
+        const f = forearmTwistFraction(rig, [px, py, pz]);
+        if (f >= 1 - 1e-6) twistStats.fullTurn++;
+        else {
+          if (a0 === F) a0 = U; else a1 = U;
+          if (other < 0) a1 = a0;
+          tf[v] = f <= 1e-6 ? 0 : f;
+          twistStats.continuous++;
+        }
+      }
+    } else if (tw && (a0 === F || (ww1 > 0 && a1 === F))) {
+      const f = forearmTwistFraction(rig, [px, py, pz], chainK);
       const other = a0 === F ? (ww1 > 0 ? a1 : -1) : a0;
       if (other < 0) {
         const x = 4 * f, k = Math.min(3, Math.floor(x)), fr = x - k;
@@ -1101,7 +1216,129 @@ export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, powe
     }
     i0[v] = a0; i1[v] = a1; w0[v] = ww0; w1[v] = ww1;
   }
+  if (tf) return { i0, i1, w0, w1, tf, twistAxis: rig.axes.forearm_pronation, twistPivot: rig.pivots.radialHead, twist: twistStats };
   return { i0, i1, w0, w1, twist: twistStats };
+}
+
+/* R558: the per-pose table of twisted ulna frames for continuous twist weights. The pronation turn is read from the
+ * pose itself: forearm_tw2 = ulna x R(turn / 2) about the rest axis (forwardKinematics), so the signed half turn is the
+ * angle of ulna^-1 x forearm_tw2 about the axis (well conditioned for any turn within +-360 deg). Entry k (0..STEPS) is
+ * ulna x R(k / STEPS x turn) about the axis through the pivot, as 12 numbers (3x3 column-major, then translation); a
+ * twisted influence blends the two entries around its fraction. Cached per matrices Map (one build per pose). */
+const TWIST_TABLES = new WeakMap();
+export function twistTable(matrices, axis, pivot) {
+  if (!(matrices instanceof Map)) fail('rig_skin', 'matrices must be a Map(segment -> matrix)');
+  const hit = TWIST_TABLES.get(matrices);
+  if (hit && hit.axis === axis && hit.pivot === pivot) return hit.table;
+  const Um = matrices.get('ulna'), H = matrices.get('forearm_tw2');
+  if (!Um || !H) fail('rig_skin', 'continuous twist weights need the ulna and forearm_tw2 matrices');
+  if (!axis || axis.length !== 3 || !pivot || pivot.length !== 3) fail('rig_skin', 'continuous twist weights need twistAxis and twistPivot');
+  // 3x3 parts: Rh = U^-1 H (U is a similarity: rotation x uniform scale, possibly mirrored)
+  const a = Um[0], b = Um[4], c = Um[8], d = Um[1], e = Um[5], f = Um[9], g = Um[2], h = Um[6], i = Um[10];
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
+  if (!(Math.abs(det) > 1e-30)) fail('rig_skin', 'singular ulna matrix');
+  const inv = [A / det, B / det, C / det, -(b * i - c * h) / det, (a * i - c * g) / det, -(a * h - b * g) / det, (b * f - c * e) / det, -(a * f - c * d) / det, (a * e - b * d) / det]; // column-major
+  const R = new Float64Array(9); // row-major Rh[row][col]
+  for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) R[3 * r + q] = inv[r] * H[4 * q] + inv[3 + r] * H[4 * q + 1] + inv[6 + r] * H[4 * q + 2];
+  const cosA = (R[0] + R[4] + R[8] - 1) / 2;
+  const sinA = ((R[7] - R[5]) * axis[0] + (R[2] - R[6]) * axis[1] + (R[3] - R[1]) * axis[2]) / 2;
+  const turn = 2 * Math.atan2(sinA, cosA);
+  const K = TWIST_TABLE_STEPS, table = new Float64Array(12 * (K + 1));
+  const [x, y, z] = axis;
+  for (let k = 0; k <= K; k++) {
+    const th = (k / K) * turn, co = Math.cos(th), si = Math.sin(th), t1 = 1 - co;
+    // rotation about the axis (column-major 3x3) and its translation pivot - R pivot
+    const r0 = t1 * x * x + co, r1 = t1 * x * y + si * z, r2 = t1 * x * z - si * y;
+    const r3 = t1 * x * y - si * z, r4 = t1 * y * y + co, r5 = t1 * y * z + si * x;
+    const r6 = t1 * x * z + si * y, r7 = t1 * y * z - si * x, r8 = t1 * z * z + co;
+    const tx = pivot[0] - (r0 * pivot[0] + r3 * pivot[1] + r6 * pivot[2]);
+    const ty = pivot[1] - (r1 * pivot[0] + r4 * pivot[1] + r7 * pivot[2]);
+    const tz = pivot[2] - (r2 * pivot[0] + r5 * pivot[1] + r8 * pivot[2]);
+    const o = 12 * k;
+    for (let col = 0; col < 3; col++) {
+      const cx = col === 0 ? r0 : col === 1 ? r3 : r6, cy = col === 0 ? r1 : col === 1 ? r4 : r7, cz = col === 0 ? r2 : col === 1 ? r5 : r8;
+      table[o + 3 * col] = Um[0] * cx + Um[4] * cy + Um[8] * cz;
+      table[o + 3 * col + 1] = Um[1] * cx + Um[5] * cy + Um[9] * cz;
+      table[o + 3 * col + 2] = Um[2] * cx + Um[6] * cy + Um[10] * cz;
+    }
+    table[o + 9] = Um[0] * tx + Um[4] * ty + Um[8] * tz + Um[12];
+    table[o + 10] = Um[1] * tx + Um[5] * ty + Um[9] * tz + Um[13];
+    table[o + 11] = Um[2] * tx + Um[6] * ty + Um[10] * tz + Um[14];
+  }
+  TWIST_TABLES.set(matrices, { axis, pivot, table, turn });
+  return table;
+}
+
+/* R558 (per-frame cost): continuous twist weights skinned as a flat blend of at most three 12-number maps: the
+ * SEGMENTS frames (slots 0..21) and the twist table entries (slots 22..22+STEPS). A twisted ulna influence of weight w
+ * and fraction f becomes the two table entries around f with weights w (1 - fr) and w fr; the plan depends only on the
+ * weights (made once per weights object), the maps once per pose (cached with the table). */
+const TWIST_SLOT0 = SEGMENTS.length;
+const SKIN_PLANS = new WeakMap(), POSE_MAPS = new WeakMap();
+export function twistSkinPlan(weights, n) {
+  let p = SKIN_PLANS.get(weights);
+  if (p && p.n === n) return p;
+  const { i0, i1, w0, w1, tf } = weights, slots = new Uint8Array(3 * n), wts = new Float32Array(3 * n), K = TWIST_TABLE_STEPS;
+  for (let v = 0; v < n; v++) {
+    let m = 3 * v;
+    const sum = w1[v] > 0 ? w0[v] + w1[v] : w0[v];
+    const put = (seg, w) => {
+      if (!(w > 0)) return;
+      if (seg === ULNA_IDX && tf[v] > 0) {
+        const x = tf[v] * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k;
+        slots[m] = TWIST_SLOT0 + k; wts[m++] = w * (1 - fr);
+        slots[m] = TWIST_SLOT0 + k + 1; wts[m++] = w * fr;
+      } else { slots[m] = seg; wts[m++] = w; }
+    };
+    if (w1[v] > 0 && i1[v] === i0[v]) put(i0[v], 1);
+    else { put(i0[v], w0[v] / sum); if (w1[v] > 0) put(i1[v], w1[v] / sum); }
+    if (m - 3 * v > 3) fail('rig_skin', 'a vertex has two twisted influences');
+  }
+  const used = new Uint8Array(TWIST_SLOT0);
+  for (let q = 0; q < slots.length; q++) if (wts[q] > 0 && slots[q] < TWIST_SLOT0) used[slots[q]] = 1;
+  p = { n, slots, weights: wts, used };
+  SKIN_PLANS.set(weights, p);
+  return p;
+}
+export function twistPoseMaps(matrices, weights) {
+  const table = twistTable(matrices, weights.twistAxis, weights.twistPivot);
+  const hit = POSE_MAPS.get(matrices);
+  if (hit && hit.table === table) return hit.maps;
+  const maps = new Float64Array(12 * (TWIST_SLOT0 + TWIST_TABLE_STEPS + 1));
+  maps.missing = new Uint8Array(TWIST_SLOT0);
+  for (let s = 0; s < TWIST_SLOT0; s++) {
+    const m = matrices.get(SEGMENTS[s]);
+    if (!m) { maps.missing[s] = 1; continue; } // refused in twistMapsFor if a vertex uses it
+    const o = 12 * s;
+    maps[o] = m[0]; maps[o + 1] = m[1]; maps[o + 2] = m[2]; maps[o + 3] = m[4]; maps[o + 4] = m[5]; maps[o + 5] = m[6];
+    maps[o + 6] = m[8]; maps[o + 7] = m[9]; maps[o + 8] = m[10]; maps[o + 9] = m[12]; maps[o + 10] = m[13]; maps[o + 11] = m[14];
+  }
+  maps.set(table, 12 * TWIST_SLOT0);
+  POSE_MAPS.set(matrices, { table, maps });
+  return maps;
+}
+/** The plan and the pose maps of continuous twist weights for n vertices; refuses a pose that lacks a matrix the
+ * weights use (as the plain path does). */
+export function twistMapsFor(matrices, weights, n) {
+  const plan = twistSkinPlan(weights, n), maps = twistPoseMaps(matrices, weights);
+  for (let s = 0; s < TWIST_SLOT0; s++) if (plan.used[s] && maps.missing[s]) fail('rig_skin', `missing matrix for segment index ${s}`);
+  return { plan, maps };
+}
+
+/** The 12-number affine map (3x3 column-major, translation) of influence segment index `seg` for a vertex with twist
+ * fraction f into `dst`: the twisted ulna frame (table blend) when seg is the ulna and f > 0, else the segment matrix. */
+const ULNA_IDX = SEGMENTS.indexOf('ulna');
+export function influenceMap(mats, table, seg, f, dst) {
+  if (table && seg === ULNA_IDX && f > 0) {
+    const x = f * TWIST_TABLE_STEPS, k = x >= TWIST_TABLE_STEPS ? TWIST_TABLE_STEPS - 1 : Math.floor(x), fr = x - k, o = 12 * k;
+    for (let j = 0; j < 12; j++) dst[j] = table[o + j] + fr * (table[o + 12 + j] - table[o + j]);
+    return dst;
+  }
+  const m = mats[seg];
+  if (!m) fail('rig_skin', `missing matrix for segment index ${seg}`);
+  dst[0] = m[0]; dst[1] = m[1]; dst[2] = m[2]; dst[3] = m[4]; dst[4] = m[5]; dst[5] = m[6];
+  dst[6] = m[8]; dst[7] = m[9]; dst[8] = m[10]; dst[9] = m[12]; dst[10] = m[13]; dst[11] = m[14];
+  return dst;
 }
 
 /** Rigid single weights for a bone mesh: every vertex follows `segment` with weight 1. */
@@ -1116,7 +1353,9 @@ export function boneWeights(segment, vertexCount) {
   };
 }
 
-/** Linear blend skinning of rest positions (mm) into `out` (Float32Array, camera metres). Returns out. */
+/** Linear blend skinning of rest positions (mm) into `out` (Float32Array, camera metres). Returns out. Weights with a
+ * continuous twist (`tf`, skinWeights twist 'continuous') turn their ulna influence by tf[v] of the pose's pronation turn
+ * (twistTable); weights without `tf` are skinned exactly as before. */
 export function skinApply(matrices, weights, restPositions, out) {
   if (!(matrices instanceof Map)) fail('rig_skin', 'matrices must be a Map(segment -> matrix)');
   const n = checkPositions(restPositions, 'restPositions');
@@ -1127,6 +1366,18 @@ export function skinApply(matrices, weights, restPositions, out) {
   if (out === undefined) out = new Float32Array(restPositions.length);
   else if (!out || out.length !== restPositions.length) fail('rig_skin', 'out must match restPositions length');
   const mats = SEGMENTS.map(s => matrices.get(s) || null);
+  if (weights.tf) {
+    if (weights.tf.length < n) fail('rig_skin', 'weights.tf must cover every vertex');
+    const { plan, maps } = twistMapsFor(matrices, weights, n), I = plan.slots, W = plan.weights;
+    for (let v = 0, k = 0, q = 0; v < n; v++, k += 3, q += 3) {
+      const x = restPositions[k], y = restPositions[k + 1], z = restPositions[k + 2];
+      const a = 12 * I[q], b = 12 * I[q + 1], c = 12 * I[q + 2], wa = W[q], wb = W[q + 1], wc = W[q + 2];
+      out[k] = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9]) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z + maps[b + 9]) + wc * (maps[c] * x + maps[c + 3] * y + maps[c + 6] * z + maps[c + 9]);
+      out[k + 1] = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10]) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z + maps[b + 10]) + wc * (maps[c + 1] * x + maps[c + 4] * y + maps[c + 7] * z + maps[c + 10]);
+      out[k + 2] = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11]) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z + maps[b + 11]) + wc * (maps[c + 2] * x + maps[c + 5] * y + maps[c + 8] * z + maps[c + 11]);
+    }
+    return out;
+  }
   for (let v = 0; v < n; v++) {
     const k = 3 * v;
     const x = restPositions[k], y = restPositions[k + 1], z = restPositions[k + 2];

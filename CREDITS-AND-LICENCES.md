@@ -8,15 +8,17 @@ The C410 game uses geometry-based poses and muscle deformation, separate superfi
 
 NeuroSurge ships project code and data plus three kinds of third-party material, each under its own licence. The CC0
 dedication for the project's code does **not** extend to the third-party material. In particular, the BodyParts3D
-anatomy is never relabelled CC0, and the Z-Anatomy face muscles stay under their share-alike licence (CC BY-SA 4.0).
+anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under their share-alike licence (CC BY-SA 4.0).
 
 | Material | Where in the distribution | Licence | Rights holder |
 | --- | --- | --- | --- |
 | NeuroSurge project code: game modules, game page and stylesheet, release kit (`serve-local.mjs`, build and export tools) | `scene/src/`, `scene/example/`, `serve-local.mjs` | CC0 1.0 Universal (public-domain dedication) | NeuroSurge project contributors |
 | Project-authored data: mesh manifests, movement map, attribution index | `inputs/`, `ASSET-ATTRIBUTION-INDEX.md` | CC0 1.0 for project-authored content. Quoted third-party notices and cited literature remain their authors'. | NeuroSurge project contributors |
 | three.js r170 (3D engine) | `vendor/three.module.js`, `vendor/LICENSE` | MIT | three.js authors |
-| BodyParts3D 4.0 anatomy meshes | `packets/pov-demo-assets/meshes/`, `packets/pov-demo-assets-r2/meshes/`, `packets/bodyparts3d-fullbody-r1/meshes/` (`FJ*.obj`) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
+| BodyParts3D 4.0 anatomy meshes | `packets/pov-demo-assets/meshes/`, `packets/pov-demo-assets-r2/meshes/`, `packets/bodyparts3d-fullbody-r1/meshes/`, `packets/missing-muscles-r1/meshes/` (`FJ*.obj`) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
 | Z-Anatomy face and chewing muscle meshes (round 5) | `packets/face-muscles-r1/meshes/` (`zf-*.obj`, 54 files) | CC BY-SA 4.0 (share-alike) | Z-Anatomy (built on BodyParts3D, DBCLS) |
+| BodyParts3D 4.0 cranium and eye meshes (R558) | `packets/bodyparts3d-head-r1/meshes/` (`FJ*.obj`, 10 files) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
+| Z-Anatomy back, belly and foot muscle meshes (R558) | `packets/missing-muscles-r1/meshes/` (`zm-*.obj`, 18 files) | CC BY-SA 4.0 (share-alike) | Z-Anatomy (built on BodyParts3D, DBCLS) |
 
 This is the round-5 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
 every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
@@ -47,12 +49,44 @@ the top of the NeuroSurge repository on GitHub.
   switches to these copies when a computer draws very slowly. The copies are made in the browser's memory by merging
   nearby points of the brain-glass and body meshes (vertex clustering); the OBJ files are not changed. On High, and
   on Auto at full quality, the meshes are drawn as they are.
-- New in round 5 (the game's own words: "The outer muscles are moved out a few millimetres and tilted slightly
-  (display only), and a mirror-image copy of the body is drawn behind the brain."):
-  - **Body Worlds layers:** the outer (superficial) muscles are moved outward by a few millimetres and tilted slightly,
-    so that the deeper muscles show in the gaps, like the plastinated bodies of a Body Worlds exhibit. This is a
-    display choice; in a real body the outer muscles lie directly on the deeper ones. It can be switched off on the
-    Esc page ("Lifted outer muscles (Body Worlds style)").
+- New in round 5, changed in R558 (the game's own words: "The outer muscles are lifted out a little, like in a Body
+  Worlds exhibit. That lets you see the deeper muscles under them. Their ends stay on the bones. Every muscle is drawn a
+  little fuller."; and a mirror-image copy of the body is drawn behind the brain):
+  - **Body Worlds layers:** the outer (superficial) muscles are lifted outward from the long axis of their limb or of
+    the trunk, at most 20 mm, and a middle layer by half as much, so that the deeper muscles show in the gaps, like
+    the plastinated bodies of a Body Worlds exhibit. The parts of a lifted muscle that touch bone at its two ends stay
+    where they are, so the tissue between is drawn stretched and longer than it is; where a muscle meets bone is
+    estimated from the mesh shapes, not measured. Every muscle is also drawn up to about 1.6 mm fuller along its
+    surface (never on its attachment ends), and the front of the external oblique is drawn smooth near the midline
+    (the atlas shapes the rectus abdominis into it). R558: when rectus abdominis is loaded (section 2a), the part of
+    the external oblique's flat tendon sheet that lies in front of it (the front of the rectus sheath) is not drawn,
+    as if the sheath were opened in a dissection (the strip between the two recti, the linea alba, stays). All of this is
+    a display choice made in the browser's memory; in a real
+    body the outer muscles lie directly on the deeper ones. It can be switched off on the Esc page ("Lifted outer
+    muscles (Body Worlds style)").
+    On the fingers, the thumb and the toes nothing is lifted (R558: within about 4 mm of a finger, thumb or toe
+    phalanx the lift is zero, and it comes back over about 14 mm toward the palm and the sole), so the long tendons
+    there are drawn where the atlas has them, on their bones.
+  - **Finger and toe bones (R558 display copies, a documented derivative):** the phalanges of the fingers, the thumbs
+    and the toes (source ids: every BodyParts3D phalanx mesh in the packets, e.g. FJ3183, FJ3188, FJ3189, FJ3192) are
+    drawn from a smoothed copy made in the browser's memory: six rounds of Taubin smoothing (a shrink step of 0.5 and
+    an inflate step of 0.53 toward the mean of each point's neighbours, on the mesh welded by position), which irons
+    out the spurs and creases left by the archive's 99 % polygon reduction, and, on each distal phalanx, the free tip
+    is rounded: over the last 45 % of its length no point lies closer to the bone's axis than a capsule a little wider
+    than the shaft (1.1 times the shaft's mean radius, 1.8 to 4.5 mm; a real ungual tuft is as wide as the shaft or
+    wider), ending in a round cap. Points are only pushed outward from the
+    axis, never along it, so the bones keep their length and their joint ends; the largest movement measured on these
+    meshes is about 2.5 mm. Reason: the reduced distal phalanges (112 to 440 triangles) had lost the rounded ungual
+    tuft of a real fingertip and toe tip and were drawn as pointed needles and claws. Tool: the game's own code
+    (ns-scene-three boneTipDisplay); the OBJ files are not changed; licence of the derivative as the source (CC BY 4.0).
+  - **Cranium and eyes (R558):** packet `packets/bodyparts3d-head-r1` adds ten more byte-exact members of the same
+    official archive (both parietal bones FJ3274 / FJ3380, the occipital bone FJ3309, the sphenoid FJ3394, and the
+    sclera FJ1317 / FJ1368, iris FJ1297 / FJ1348 and lens FJ1305 / FJ1356 of each eye), fetched on 2026-11-11 by range
+    requests and checked by ZIP CRC32, byte count, sha256 and header (packet `ACQUISITION-RECORD.json`). They close the
+    head the full-body packet left open behind the frontal and temporal bones. The files are unchanged; the eye parts
+    are listed with kind "bone" only because the game's rig poses bones and muscles, and are drawn with eye colours. The
+    licence page was checked again on 2026-11-11 (CC BY 4.0 statement present). The source's right sclera has 12
+    vertices on the left side that form zero-area points; kept as found (nothing is drawn there).
   - **Mirror body:** a mirror-image copy of the whole body (bones and muscles) is drawn behind the brain. It copies the
     body's pose and colours.
   - When the palm is turned (double-tap Space), the upper arm also turns at the shoulder and the trunk follows a
@@ -130,7 +164,8 @@ Recorded limitations (from the packet's own records):
 - **20 requested structures do not exist** in the BodyParts3D 4.0 lists and were not substituted: both latissimus
   dorsi and both rectus abdominis, the coccyx, and the masseter, temporalis, orbicularis oculi, zygomaticus major,
   frontal belly of occipitofrontalis and buccinator on each side, plus the orbicularis oris and both paracentral lobules.
-  (Round 5 adds the missing face and chewing muscles from a second source, Z-Anatomy; see section 2.)
+  (Round 5 adds the missing face and chewing muscles from a second source, Z-Anatomy; see section 2. R558 adds
+  latissimus dorsi and rectus abdominis from Z-Anatomy too, with more BodyParts3D muscles; see section 2a.)
 - **2 official files were excluded:** FJ1469M ("Right flexor pollicis brevis") failed the laterality check (its
   geometry lies on the left side), and FJ2772 (hyoid bone) duplicates the geometry of FJ3201.
 - **2 included files have recorded source anomalies** (kept byte-exact, not repaired): FJ3345 (right seventh costal
@@ -177,8 +212,15 @@ chewing muscles (except the platysma), so these meshes come from Z-Anatomy. They
 - Names: each file got a NeuroSurge id (`zf-...`), a plain name and a technical name; the source object name is kept in
   the file header and in the manifest.
 - In the game (the game's own words): "only the face and chewing muscles were taken, converted and moved to fit this
-  body; in the game they are coloured by the made-up signal, the jaw muscles bend with the jawbone, the outer ones are
-  moved out a few millimetres (Body Worlds layers) and a mirror-image copy is drawn on the mirror body". Like the
+  body; in the game they are coloured by the made-up signal, the jaw muscles bend with the jawbone, they are drawn a
+  little fuller (part of the Body Worlds display; none of them is lifted) and a mirror-image copy is drawn on the
+  mirror body". New in R558 (the game's own words: "parts of the scalp muscles are drawn lifted onto the skull"): with
+  the BodyParts3D parietal and occipital bones added (section 1), parts of the occipital belly, the temporoparietalis
+  and the upper temporalis would lie inside those bones (up to about 8.5 mm), because the skull these muscles were
+  modelled on is a little smaller there. Those parts are drawn moved outward onto the bone surface (0.6 mm above it),
+  each sheet as a whole so its thickness and shape stay, fading out over a few rings of the mesh; nothing else moves.
+  The face muscles are also drawn with no tendon tint (except a little on masseter and temporalis) and no lengthwise
+  streaks on the ring muscles around the eye and the mouth. Like the
   BodyParts3D meshes, they are also drawn as simplified copies on Picture quality Low, and the surfaces facing the
   inside of the head are drawn in a plain dark colour. All of this happens only in the browser's memory; the shipped
   OBJ files are the converted files described above.
@@ -201,6 +243,72 @@ none of them is in this packet. In the game, the "Sources and rights" links unde
 muscles' licence and source. **No endorsement:** neither Z-Anatomy, its authors nor DBCLS endorse NeuroSurge or
 NeuroTranslate 0.0. The face muscles are one reference model for learning: not a measured person and not validated.
 One muscle group is missing from the source file: the muscles around the ear (auricular muscles).
+
+## 2a. Missing muscles (packets/missing-muscles-r1)
+
+R558 adds 111 mesh files for the large muscles the body packets lacked (the lower back, the belly, the inner thigh and
+the outer shin looked bare) and for every other muscle the game's motor map names that had no mesh: 93 BodyParts3D 4.0
+files and 18 Z-Anatomy derivatives. They were downloaded under the user's Messages 20 and 23 (free tools and freely
+licensed anatomy, pinned, credited, documented). Each muscle was looked up in BodyParts3D 4.0 first; Z-Anatomy was used
+only where BodyParts3D 4.0 has no file.
+
+**BodyParts3D 4.0 files (93, `FJ*.obj`, CC BY 4.0).** Byte-exact members of the official archive
+`isa_BP3D_4.0_obj_99.zip`, fetched by HTTP range requests from the official host in two runs on 2026-11-11 (ZIP CRC32,
+size and sha256 checked; no change at all). Required attribution as in section 1:
+
+> BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+
+They are: the erector spinae columns (iliocostalis lumborum, thoracis and cervicis; longissimus thoracis, cervicis and
+capitis; spinalis thoracis), semispinalis thoracis, cervicis and capitis, splenius capitis, the rhomboids, serratus
+posterior superior and inferior, pectoralis minor, the right levator scapulae (the left one was already in the
+left-arm packet), the scalenes, the throat strap muscles (sternohyoid, omohyoid, sternothyroid, thyrohyoid) and
+stylohyoid, levator palpebrae superioris, gracilis, adductor longus and brevis, pectineus, tensor fasciae latae,
+gluteus minimus, piriformis, obturator internus and externus, the gemelli, quadratus femoris, popliteus, plantaris,
+fibularis longus, brevis and tertius, tibialis posterior, extensor hallucis brevis, flexor digitorum brevis and
+abductor hallucis (both sides unless stated).
+
+**Z-Anatomy derivatives (18, `zm-*.obj`, CC BY-SA 4.0).** Latissimus dorsi, rectus abdominis, the internal oblique,
+transversus abdominis, quadratus lumborum, longus colli, extensor digitorum brevis and the two heads of flexor hallucis
+brevis, each side: BodyParts3D 4.0 has no file for these. Same source, file and commit as section 2
+(`MuscularSystem100.fbx`, SHA-256 `4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279`, commit
+`6c7f9016bd5899ac8edafd31b9900c151df42ed6`).
+
+**Required credit for the Z-Anatomy files (quoted exactly as the source asks):**
+
+> "Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"
+>
+> "BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan"
+
+Authors as in section 2. Licence: **CC BY-SA 4.0**, https://creativecommons.org/licenses/by-sa/4.0/.
+
+**Changes to the Z-Anatomy files (CC BY-SA 4.0 section 3(a)(1)(B)):** selection of the 18 objects; FBX to OBJ
+(positions and triangles only, polygons fan-triangulated, unused vertices dropped, face order reversed on mirrored
+left-side instances, coordinates rounded to 0.0001 mm); moved into the BodyParts3D 4.0 frame by the face packet's own
+recorded similarity (the conversion reproduces all 54 face-packet files exactly); the three foot objects then moved by
+one rigid correction per foot (fitted to the same foot muscles in BodyParts3D); NeuroSurge ids, plain names and labels
+added, source object names kept. **These 18 files stay under CC BY-SA 4.0 (share-alike); the NeuroSurge code is CC0
+and is not relicensed by them.**
+
+In the game (display only, in browser memory): the muscles are coloured by the simulated signal, lifted and filled a
+little like the other muscles (Body Worlds display), follow their nearest bones, are copied onto the mirror body, and
+the obliques' tendon sheets in front of rectus abdominis (part of the BodyParts3D external oblique mesh and of the
+Z-Anatomy internal oblique and transversus abdominis meshes) are not drawn, as if the rectus sheath were opened in a
+dissection; the external oblique's strip between the two recti (the linea alba) stays. The game's "Sources and rights" text adds the Z-Anatomy credit when these files are loaded.
+
+Shipped with the packet:
+- `packets/missing-muscles-r1/ATTRIBUTION-AND-LICENCES.txt`: credits, licences, changes.
+- `packets/missing-muscles-r1/MISSING-MUSCLES-MESH-MANIFEST.json`: the 111 files with ids, names, sides, source member or
+  object, licence and sha256. The game checks this file against a sha256 written into its code before reading it, and
+  every mesh against the manifest.
+- `packets/missing-muscles-r1/ACQUISITION-RECORD.json`: requests, licence checks, conversion, frame registration
+  evidence (median distances to the same structures in BodyParts3D) and what was left out.
+- `packets/missing-muscles-r1/LICENSES/`: the Z-Anatomy notices and licence, unchanged.
+- `packets/missing-muscles-r1/SHA256SUMS.txt`: per-file hashes.
+
+**No endorsement:** neither DBCLS, Z-Anatomy nor their authors endorse NeuroSurge or NeuroTranslate 0.0. One reference
+model for learning: not a measured person and not validated. Still not drawn anywhere: multifidus and the other small
+deep spine muscles, the suboccipital muscles, subclavius, most small muscles of the sole, the pelvic floor, the
+diaphragm and the intercostal muscles.
 
 ## 3. three.js (MIT)
 
@@ -253,4 +361,4 @@ neural-to-muscle decoder.
 - No fonts (the game uses the system font), no images, no audio, no analytics, no trackers and no remote resources.
 - The reference images used by independent reviewers (section 1.1) are not included.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
-- Private account records, unpublished test fixtures and internal review/custody files are excluded. The public `tests/` directory and the acquisition/provenance records listed above are included.
+- Development tests, test harnesses and acquisition evidence are not part of the player distribution.

@@ -1,0 +1,25 @@
+BodyParts3D cranium and eye subset (packet bodyparts3d-head-r1)
+
+BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+Official source: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+Archive: https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip (ETag "8848a5a-4dd48ec9df000", Last-Modified Wed, 22 May 2013 06:46:24 GMT, 142903898 bytes)
+Current primary licence: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html (page text checked 2026-11-11: "Last updated : 2025/02/27", Creative Commons Attribution 4.0 International statement present)
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Contents (10 OBJ meshes, 9366305 bytes; hashes in SHA256SUMS.txt, per-file records in HEAD-MESH-MANIFEST.json):
+  FJ3274 left parietal bone, FJ3380 right parietal bone, FJ3309 occipital bone, FJ3394 sphenoid bone,
+  FJ1317 left sclera, FJ1368 right sclera, FJ1297 left iris, FJ1348 right iris, FJ1305 left lens, FJ1356 right lens.
+
+Changes: selection only. Each OBJ is a byte-exact decompressed member of the official archive (verified ZIP CRC32, byte count and
+SHA-256). No centring, mirroring, renaming, re-meshing, unit conversion or header editing. At run time the game moves these meshes
+rigidly with the skull; the files themselves are unchanged.
+Legacy OBJ comment headers (CC BY-SA 2.1 Japan) are retained as found; the current official archive licence is CC BY 4.0.
+The dataset authors (DBCLS) do not endorse NeuroSurge or NeuroTranslate 0.0. Do not attribute biological, clinical or functional
+validation to these meshes or to the game.
+
+Source anomaly kept as found (not repaired): FJ1368 "Right sclera" has 12 of 20582 vertices on the subject's left side; they form
+zero-area point clusters (degenerate triangles), so nothing is drawn there.
+
+BodyParts3D official notice (quoted in the full-body packet's records): "There are still many concepts not represented in the data.
+There could be many ERRORS to be used as ANATOMICAL EDUCATION. Some parts were made from scratch by artists or distorted to fit into
+the environment." Geometry is a single reference body; it is not this player, any measured person, or a population average.

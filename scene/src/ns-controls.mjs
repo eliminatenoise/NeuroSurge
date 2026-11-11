@@ -4,14 +4,15 @@
  * neural stimulation, brain writing or neural decoding, and nothing here is a measured quantity.
  *
  * The core is DOM-free and runs in Node tests. State is plain, serializable data:
- *   { keys: { KeyW, KeyA, KeyS, KeyD, Space: boolean }, yaw: radians, pitch: radians, lookMs: number | null,
+ *   { keys: { KeyW, KeyA, KeyS, KeyD, Space, KeyF: boolean }, yaw: radians, pitch: radians, lookMs: number | null,
  *     events: [], ui: [], look: { sensitivity: number, invertY: boolean } }
  * `look` (A1-activation round 1) holds the player's look settings: `sensitivity` multiplies the base
  * sensitivityRadPerPx (1 = 0.0025 rad/px) and `invertY` flips the vertical look direction. A state without
  * `look` (older callers) uses the reducer defaults.
  *
  * U1-controls round 2. Two event queues, so a consumer that only understands the game events keeps working:
- *   events  the GAME queue, drained by drainEvents(): { type: 'space', down, safety?, timeMs? } | { type: 'click', timeMs? }.
+ *   events  the GAME queue, drained by drainEvents(): { type: 'space', down, safety?, timeMs? } | { type: 'click', timeMs? }
+ *           | R558 { type: 'grasp', down, safety?, timeMs? } (the F key, GRASP_CODE).
  *           A space-up produced by a safety release (blur, focus/visibility loss, Ctrl/Meta chord, pointer-lock change,
  *           Esc) carries `safety: true`, so the activity model can reset its double-tap chain (DOUBLE_TAP_MS).
  *   ui      the UI queue, drained by drainUiEvents(): { type: 'escape' } (Esc keydown), { type: 'lock', locked }
@@ -24,7 +25,7 @@
  *           ns-actions step (which refuses unknown types); ns-app opens or closes the panel section instead (bindDom
  *           options.onDetail). Like every control it is a virtual game input: it reads nothing from the body or brain.
  * The double-tap (DOUBLE_TAP_MS) is detected by ns-actions on the activity clock, not here: every Space press is
- * delivered immediately (hold-to-fist is never delayed waiting for a second tap).
+ * delivered immediately (the slow limb dance is never delayed waiting for a second tap; R558).
  *
  * Clocks (browser-findings repair R2): every queued event carries `timeMs`, the monotonic performance-timeline time of
  * the real input (DOM event.timeStamp when it is on that timeline, else performance.now() in the handler), and
@@ -70,15 +71,24 @@
  */
 import { DEG, clamp } from './ns-math.mjs';
 
-/** The five control codes (KeyboardEvent.code values, layout-independent). */
-export const CONTROL_CODES = Object.freeze(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space']);
+/** The control codes (KeyboardEvent.code values, layout-independent). R558 (lead decision for user Messages 2 and 12):
+ * F is the grasp key (GRASP_CODE); Space no longer grasps. */
+export const CONTROL_CODES = Object.freeze(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyF']);
+/** R558: the grasp key. HOLD F with the crosshair on one of your own limbs, the glass brain or the mirror body to take
+ * hold of it: while F is held W / S move it forward / back and A / D left / right, and the look carries it up / down;
+ * letting go of F leaves it where it is. Each press and release is queued on the game queue as
+ * { type: 'grasp', down, safety?, timeMs? } (a safety release, as for Space, carries safety: true). Plain F has no
+ * browser meaning (it is prevented while playing); Ctrl/Meta chords are left to the browser by the chord rule. */
+export const GRASP_CODE = 'KeyF';
+/** The grasp key's label for the Esc page controls list and the key cap ("F"). */
+export const GRASP_KEY_LABEL = 'F';
 
 /** Modifier codes whose press starts a browser/OS chord: every held control key is released when one is pressed or
  * released (macOS does not deliver keyup for keys released while Cmd is held). */
 export const CHORD_MODIFIER_CODES = Object.freeze(['MetaLeft', 'MetaRight', 'ControlLeft', 'ControlRight', 'OSLeft', 'OSRight']);
 
 /** Click events are dropped once this many events are queued (a click flood between frames is
- * equivalent to one re-trigger). Space transitions are never dropped: losing one could leave a stale fist. */
+ * equivalent to one re-trigger). Space transitions are never dropped: losing one could leave the limb dance running (R558). */
 export const EVENT_QUEUE_LIMIT = 64;
 
 /** At most this many UI events stay queued: a new event is dropped when full, except a lock change, which drops the
@@ -127,11 +137,11 @@ export const ARROW_HOLD = Object.freeze({ delayMs: 300, everyMs: 100, stepDeg: 1
 export const ARROW_PRESS_VIA = Object.freeze(['crosshair', 'pointer']);
 /** R5-input (D19): a SUGGESTED plain hint for a look or a press on a mirror-body arrow that the brain covers (the text
  * owner, ns-text, may word it differently; keep it this plain). */
-export const ARROW_COVERED_HINT = 'The brain is in the way. Look at the brain and hold Space to drag it aside. ' +
+export const ARROW_COVERED_HINT = 'The brain is in the way. Look at the brain and hold F to move it aside. ' +
   'Then use these arrows.';
 
-/** Double-tap window (ms, press to press): a second Space press within this of the previous press flips the forearm
- * between pronation and supination (ns-actions). A UI timing choice, not a physiological constant.
+/** Double-tap window (ms, press to press): a second Space press within this of the previous press, held, is the FAST
+ * limb dance (ns-actions / ns-dance; R558). A UI timing choice, not a physiological constant.
  * R4-polish (R4-player 2.4): 350 -> 450 ms. A relaxed double tap (370-390 ms press to press, measured with real input)
  * did nothing and gave no feedback; desktop double-clicks usually allow about 500 ms. */
 export const DOUBLE_TAP_MS = 450;
@@ -140,7 +150,7 @@ export const DOUBLE_TAP_MS = 450;
  * turns that item about its centre, in proportion to the movement); a press that moves less is a CLICK (it switches on
  * what is aimed at) and is delivered when the button is let go. The items a drag can turn. */
 export const DRAG_CLICK_SLOP_PX = 5;
-export const DRAG_TARGETS = Object.freeze(['brain', 'mirror']);
+export const DRAG_TARGETS = Object.freeze(['brain', 'mirror', 'limb']);
 
 /** Overlay commands accepted by uiCommand() and by `data-ns-ui` buttons under bindDom's options.uiRoot. */
 export const UI_COMMANDS = Object.freeze(['orbit-left', 'orbit-right', 'orbit-forward', 'orbit-back', 'reset-body', 'resume', 'pause']);
@@ -164,7 +174,9 @@ export const SENSITIVITY_RANGE = Object.freeze([0.05, 20]);
 const isControlCode = code => typeof code === 'string' && CONTROL_CODES.includes(code);
 const hasUiCommand = c => typeof c === 'string' && Object.prototype.hasOwnProperty.call(UI_COMMAND_EVENTS, c);
 const isChordModifier = code => typeof code === 'string' && CHORD_MODIFIER_CODES.includes(code);
-const releasedKeys = () => ({ KeyW: false, KeyA: false, KeyS: false, KeyD: false, Space: false });
+const releasedKeys = () => ({ KeyW: false, KeyA: false, KeyS: false, KeyD: false, Space: false, KeyF: false });
+/** R558: the game-queue event of a control key press / release ('space' for Space, 'grasp' for F), or null. */
+const keyEventType = code => (code === 'Space' ? 'space' : code === GRASP_CODE ? 'grasp' : null);
 
 function fail(code, message) {
   throw new Error(`ns:${code}: ${message}`);
@@ -202,7 +214,7 @@ export function createControls({
   const pitchLimit = pitchLimitDeg * DEG;
 
   const releasedButton = () => ({ down: false, seq: 0, downMs: null, upMs: null, via: null, x: null, y: null });
-  /** R558: the press-and-drag gesture: target ('brain' | 'mirror' | null), movement not yet taken by the game (dx, dy,
+  /** R558: the press-and-drag gesture: target ('brain' | 'mirror' | 'limb' (one of your own limbs) | null), movement not yet taken by the game (dx, dy,
    * CSS px), total path length since the press (travel), turning = the press has moved far enough to be a drag. */
   const noDrag = () => ({ target: null, dx: 0, dy: 0, travel: 0, turning: false });
   const dragOf = state => (state && state.drag && typeof state.drag === 'object' ? state.drag : noDrag());
@@ -249,7 +261,8 @@ export function createControls({
   function keyDown(state, code, timeMs) {
     if (!isControlCode(code) || state.keys[code]) return state;
     const keys = { ...state.keys, [code]: true };
-    const events = code === 'Space' ? [...state.events, stamp({ type: 'space', down: true }, timeMs)] : state.events;
+    const type = keyEventType(code);
+    const events = type ? [...state.events, stamp({ type, down: true }, timeMs)] : state.events;
     return { ...state, keys, events };
   }
 
@@ -257,7 +270,8 @@ export function createControls({
   function keyUp(state, code, timeMs) {
     if (!isControlCode(code) || !state.keys[code]) return state;
     const keys = { ...state.keys, [code]: false };
-    const events = code === 'Space' ? [...state.events, stamp({ type: 'space', down: false }, timeMs)] : state.events;
+    const type = keyEventType(code);
+    const events = type ? [...state.events, stamp({ type, down: false }, timeMs)] : state.events;
     return { ...state, keys, events };
   }
 
@@ -268,8 +282,9 @@ export function createControls({
     const k = state.keys;
     const b = state.button;
     const held = Boolean(b && b.down === true);
-    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || held || dragOf(state).target !== null)) return state;
-    const events = k.Space ? [...state.events, stamp({ type: 'space', down: false, safety: true }, timeMs)] : state.events;
+    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || k.KeyF || held || dragOf(state).target !== null)) return state;
+    let events = k.Space ? [...state.events, stamp({ type: 'space', down: false, safety: true }, timeMs)] : state.events;
+    if (k.KeyF) events = [...events, stamp({ type: 'grasp', down: false, safety: true }, timeMs)]; // R558: a held grasp lets go
     const next = { ...state, keys: releasedKeys(), events };
     if (held) next.button = { ...b, down: false, upMs: Number.isFinite(timeMs) ? timeMs : b.upMs };
     if (dragOf(state).target !== null) next.drag = noDrag(); // R558: a pause, blur or lost pointer ends a drag at once
@@ -386,13 +401,15 @@ export function createControls({
 
   /** R5-input: the pitch range pointerMove keeps: { minDeg, maxDeg } (degrees, -90 < min <= max < 90; e.g. ns-camera
    * THIRD_PERSON.minPitchDeg / maxPitchDeg in third person) or null (back to +/- pitchLimitDeg). The current pitch is
-   * moved inside the new range. */
+   * moved inside the new range. R558 (ns-app HEAD_LOOK): with { relative: true } the range may reach to +/-180: the
+   * look is then a head look added to a held neck / trunk offset, not a camera angle, and the app keeps the camera's
+   * own pitch inside +/-80. */
   function setPitchLimits(state, limits) {
     let next = null;
     if (limits !== null && limits !== undefined) {
-      const { minDeg, maxDeg } = limits;
-      if (!(Number.isFinite(minDeg) && Number.isFinite(maxDeg) && minDeg > -90 && minDeg <= maxDeg && maxDeg < 90)) {
-        fail('controls_look', 'pitch limits need -90 < minDeg <= maxDeg < 90 (degrees)');
+      const { minDeg, maxDeg } = limits, bound = limits.relative === true ? 180 : 90;
+      if (!(Number.isFinite(minDeg) && Number.isFinite(maxDeg) && minDeg > -bound && minDeg <= maxDeg && maxDeg < bound)) {
+        fail('controls_look', `pitch limits need -${bound} < minDeg <= maxDeg < ${bound} (degrees)`);
       }
       next = { min: minDeg * DEG, max: maxDeg * DEG, minDeg, maxDeg };
     }
@@ -436,8 +453,7 @@ export function createControls({
     return { ...state, button: { down: true, seq: (Number.isSafeInteger(b.seq) ? b.seq : 0) + 1, downMs: Number.isFinite(timeMs) ? timeMs : null, upMs: b.upMs, via, x: px, y: py } };
   }
 
-  /** R5-input: every mouse / trackpad button is up. timeMs is when that state was observed: a mouseup event,
-   * or the first reliable buttons===0 movement after a missed release. It does not infer the missing release time. */
+  /** R5-input: every mouse / trackpad button is up. */
   function buttonUp(state, timeMs) {
     const b = buttonOf(state);
     if (!b.down) return state;
@@ -734,8 +750,7 @@ function uiCommandOf(el, root) {
  *     ignored, so a key released by a safety rule stays released until it is pressed again.
  *   - Chord safety: a keydown with Ctrl or Meta held, or a press/release of Ctrl/Meta itself, RELEASES EVERY KEY
  *     (queuing one space-up if Space was held) and is left to the browser. keyup is always applied.
- *   - window blur, document visibilitychange, genuine pointer-lock changes and uncaptured notifications release every key.
- *     A repeated notification that capture is still active preserves the current input.
+ *   - window blur, document visibilitychange and every pointerlockchange -> release every key.
  *   - Pointer lock: a press (mousedown, any button) on the canvas while it is NOT locked requests the lock; that
  *     lock-acquiring press is NOT an activation click. Presses while locked queue one click each. After the lock
  *     is refused (pointerlockerror, a rejected request, or no answer within LOCK_PENDING_MS) unlocked presses DO
@@ -765,15 +780,10 @@ function uiCommandOf(el, root) {
  *     press on an arrow an ARROW PRESS: no pointer-lock request, no drag-to-look and no click (stepArrowInput turns it
  *     into the orbit step / hold); a press anywhere else behaves as before.
  * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onView({ timeMs }), arrowAt(x, y),
- *   onBeforeSafetyRelease(), sensitivity, invertY, dragToLook = true, uiRoot }
- *   onBeforeSafetyRelease is synchronous and runs before the safety reducer fetches its state; its owner may cancel
- *   an overfull queue. The final safety release still runs if the callback throws. cancelInput does not invoke it.
+ *   sensitivity, invertY, dragToLook = true, uiRoot }
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
  * @returns {() => void} unbind, which removes every listener this call added. unbind.status() returns
- *   { locked, lockFallback, dragging, arrowPress } for HUD feedback. unbind.cancelInput(timeMs) synchronously
- *   clears private pointer gesture flags and releases reducer-held input at the caller's observation time.
- *   With { discardQueued: true }, only this App-owned cancellation also discards queued records before blur can copy
- *   them. Ordinary releases preserve their queues. It neither clicks nor cancels an outstanding pointer-lock request.
+ *   { locked, lockFallback, dragging, arrowPress } for HUD feedback.
  */
 export function bindDom(target, controls, getState, setState, options = {}) {
   if (!target || typeof target.addEventListener !== 'function') {
@@ -786,8 +796,8 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
-  if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function (xCss | null, yCss | null) => "brain" | "mirror" | null');
+  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function (xCss | null, yCss | null) => "brain" | "mirror" | "limb" | null');
   const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
   /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
    * crosshair while the pointer is captured. Any failure means "nothing to drag" (the press is then an ordinary click). */
@@ -797,7 +807,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   };
   if (onLockChange !== null && typeof onLockChange !== 'function') fail('controls_dom', 'onLockChange must be a function');
   if (onView !== null && typeof onView !== 'function') fail('controls_dom', 'onView must be a function');
-  if (onBeforeSafetyRelease !== null && typeof onBeforeSafetyRelease !== 'function') fail('controls_dom', 'onBeforeSafetyRelease must be a function');
   if (arrowAt !== null && typeof arrowAt !== 'function') fail('controls_dom', 'arrowAt must be a function (xCss, yCss) => truthy on an arrow');
   if (arrowAt !== null && typeof controls.buttonDown !== 'function') fail('controls_dom', 'controls.buttonDown is needed for arrowAt');
   if (uiRoot !== null && (typeof uiRoot !== 'object' || typeof uiRoot.addEventListener !== 'function')) {
@@ -829,16 +838,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
-  const cancelBoundInput = (at, discardQueued = false) => {
-    clearPointerFlags();
-    apply(s => controls.blur(discardQueued ? { ...s, events: [], ui: [] } : s, at));
-  };
-  const releaseAll = (e, at = eventTime(e)) => {
-    // A synchronous owner callback may replace the reducer state. Read it only AFTER that callback, never from a
-    // stale apply() snapshot. cancelInput calls cancelBoundInput directly, so this hook cannot recurse through it.
-    try { if (onBeforeSafetyRelease) onBeforeSafetyRelease(); }
-    finally { cancelBoundInput(at); }
-  };
+  const releaseAll = e => { const at = eventTime(e); pressDrag = false; apply(s => controls.blur(s, at)); };
   const call = (fn, ...args) => {
     if (!fn) return;
     try { fn(...args); } catch { /* a HUD callback must never break input handling */ }
@@ -863,22 +863,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   let pressDrag = false;      // R558: the held press began on the brain or the mirror body (it may turn that item)
   const hasButtons = typeof controls.buttonDown === 'function' && typeof controls.buttonUp === 'function';
   const hasPointer = typeof controls.pointerAt === 'function' && typeof controls.pointerLeave === 'function';
-  function clearPointerFlags() {
-    dragging = false;
-    arrowPress = false;
-    pressDrag = false;
-    lastClient = null;
-  }
-  // A reliable all-buttons-up observation ends every pointer gesture, including an arrow press. This is GAME
-  // cancellation at the observation time, not a reconstructed mouseup: drop any would-be click and keep the press
-  // sequence so the next genuine down starts a new gesture. Keyboard keys (including Space) are unaffected.
-  function cancelPointerGesture(at) {
-    clearPointerFlags();
-    apply(s => {
-      const next = canDrag ? controls.dragEnd(s).state : s;
-      return hasButtons ? controls.buttonUp(next, at) : next;
-    });
-  }
   /** R5-input: the event's point in canvas CSS px (null without client coordinates or a layout box). */
   const localPoint = e => {
     if (!e || !Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return null;
@@ -930,7 +914,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       // Not prevented: the browser still exits pointer lock. Held keys must not stay latched behind the pause overlay.
       if (e.repeat === true) return;
       const at = eventTime(e);
-      releaseAll(e, at);
+      apply(s => controls.blur(s, at));
       if (typeof controls.escape === 'function') apply(s => controls.escape(s, at));
       return;
     }
@@ -975,9 +959,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   on(view, 'blur', releaseAll);
   on(doc, 'visibilitychange', releaseAll);
   on(doc, 'pointerlockchange', e => {
-    // A repeated captured notification is not a new input boundary. Keep held keys and the current gesture;
-    // genuine acquisition/loss below still safety-releases them, as do Escape, focus and visibility changes.
-    if (isLocked() && locked) { lockPending = false; lockFallback = false; return; }
     releaseAll(e);
     lockPending = false;
     dragging = false;
@@ -999,9 +980,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     // afresh, so letting go gave a click on top of the turn already made.
     if (pressDrag) return;
     if (isLocked()) {
-      // R558 (R31): a press with the crosshair on the brain or the mirror body may become a drag that turns it. Its
-      // click is then held back until the button is let go (and dropped if the press became a drag). Any other press
-      // (empty space, your own body, an arrow) is a click at once, exactly as before.
+      // R558 (R31): a press with the crosshair on the brain, the mirror body or one of your own limbs may become a drag
+      // that turns it. Its click is then held back until the button is let go (and dropped if the press became a drag).
+      // Any other press (empty space, an arrow) is a click at once, exactly as before.
       const t = dragTarget(null);
       if (t) { pressDrag = true; apply(s => controls.dragStart(s, t)); }
       else apply(s => controls.click(s, at));
@@ -1051,16 +1032,16 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     }
   });
   on(doc, 'mousemove', e => {
-    const at = eventTime(e);
-    // Handle this before any arrow/drag early return, and independently of whether movement deltas are usable.
-    if (Number.isFinite(e.buttons) && e.buttons === 0) cancelPointerGesture(at);
     if (isLocked()) {
       const dx = e.movementX, dy = e.movementY;
       if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      const at = eventTime(e);
       // R558: while a press on the brain or the mirror body is held, the movement turns that item, not the look.
       if (pressDrag) {
-        apply(s => controls.dragMove(s, dx, dy));
-        return;
+        // Review fix: no button is down any more, so the release was missed (it happened outside the page). End the
+        // gesture without a click; this movement is an ordinary look.
+        if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); }
+        else { apply(s => controls.dragMove(s, dx, dy)); return; }
       }
       apply(s => controls.pointerMove(s, dx, dy, at));
       return;
@@ -1068,6 +1049,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (hasPointer) {
       // R5-input: the free pointer over the canvas itself (an element above it, e.g. a panel, hides it).
       const local = e && e.target === target ? localPoint(e) : null;
+      const at = eventTime(e);
       if (local && local.x >= 0 && local.y >= 0 && (!(local.w > 0) || local.x <= local.w) && (!(local.h > 0) || local.y <= local.h)) {
         apply(s => controls.pointerAt(s, local.x, local.y, at));
       } else apply(s => controls.pointerLeave(s));
@@ -1075,6 +1057,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (arrowPress) return; // holding a 3D arrow never turns the look
     if (pressDrag) {
       // R558: free-pointer drag on the brain or the mirror body.
+      // Review fix: with no button down the release was missed; end the gesture without a click (it used to stay armed,
+      // so the next press was delivered twice or turned the brain instead of the look).
+      if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); return; }
       let mx = e.movementX, my = e.movementY;
       const c = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
       if (!Number.isFinite(mx) || !Number.isFinite(my)) { if (!c || !lastClient) { lastClient = c; return; } mx = c.x - lastClient.x; my = c.y - lastClient.y; }
@@ -1083,6 +1068,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       return;
     }
     if (!dragging) return;
+    if (Number.isFinite(e.buttons) && e.buttons === 0) { dragging = false; return; }
     let dx = e.movementX, dy = e.movementY;
     const client = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
@@ -1091,6 +1077,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       dy = client.y - lastClient.y;
     }
     lastClient = client;
+    const at = eventTime(e);
     apply(s => controls.pointerMove(s, dx, dy, at));
   });
   on(target, 'contextmenu', e => e.preventDefault());
@@ -1109,9 +1096,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     for (const [obj, type, fn] of added.splice(0)) obj.removeEventListener(type, fn);
     dragging = false;
   }
-  // The App owns pause/reset boundaries; only this binding can clear its private gesture flags.
-  // Keep outstanding pointer-lock requests and their normal browser acknowledgements intact.
-  unbind.cancelInput = (at, options = {}) => cancelBoundInput(Number.isFinite(at) ? at : eventTime(null), Boolean(options && options.discardQueued === true));
   unbind.status = () => ({ locked: isLocked(), lockFallback, dragging, arrowPress, pressDrag });
   return unbind;
 }

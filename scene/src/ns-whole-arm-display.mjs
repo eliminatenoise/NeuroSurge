@@ -100,6 +100,9 @@ export function buildWholeArmSupport({ bones, muscles, liftedById = null } = {})
   for (const m of muscles) {
     const p = positionsOf(m, 'muscle'), n = p.length / 3, w = m.weights;
     if (!w || ['i0', 'i1', 'w0', 'w1'].some(k => !w[k] || w[k].length < n)) fail('complete_skin_weights_required', m.id);
+    // R558: a continuous forearm twist (ns-rig skinWeights twist 'continuous') turns a vertex between the fixed segment
+    // frames, which these per-segment boxes cannot bound: this display needs the 'chain' weights (ns-app armTwist).
+    if (w.tf) for (let v = 0; v < n; v++) if (w.tf[v] > 0) fail('continuous_twist_skin_unbounded', m.id);
     const d = Object.getOwnPropertyDescriptor(liftedById, m.id), L = d ? d.value : p;
     if ((!Array.isArray(L) && !ArrayBuffer.isView(L)) || L instanceof DataView || L.length !== p.length) fail('lift_endpoint_layout', m.id);
     if (L !== p) liftedMuscles++;

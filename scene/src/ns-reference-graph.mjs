@@ -118,6 +118,14 @@ export function offsetBrainState(state, view, actualTransform, movementWorld) {
   return { ...state, translation: vec(state.translation, 'brain translation').map((v, i) => v + delta[i]),
     pivotWorld: vec(state.pivotWorld, 'brain pivot').map((v, i) => v + delta[i]), anchor };
 }
+/** R558 (display choice, hunt 2 look #9: a mirror body carried close and to the side was badly stretched by the wide
+ * view, Message 13 "not absurd ... optical perspective effects"): W/A/S/D keep a carried mirror body's centre within
+ * maxSideDeg of the straight-ahead direction (sideways in the level ground frame). A mirror body already farther out
+ * (released there, then the view turned) may come back in but not go farther out. Chosen over keeping its nearest point
+ * about 1 m from the eye, which would have stopped it short of your body (the start reflection already sits at that
+ * distance) against Message 12 ("moved to and around each other"); straight ahead it can still be brought up to your
+ * body, where the stop-at-contact rule holds it. */
+export const MIRROR_CARRY = Object.freeze({ maxSideDeg: 35 });
 export function initialObjectCarry() {
   return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], mirror: null, diagnostic: null };
 }
@@ -127,11 +135,21 @@ export function offsetMirrorCarry(state, movementWorld) {
   if (!state || !state.mirror || !state.held || state.target !== 'mirror') fail('only a held mirror can reconcile placement');
   const m = state.mirror; let anchor = m.anchor;
   if (anchor) {
-    const relative = multiply(lookRotation(state.lastLook.yaw, state.lastLook.pitch), rigidInverse(lookRotation(anchor.startLook.yaw, anchor.startLook.pitch)));
+    // R558: the held mirror body follows the look's TURN only (yaw), so it stays on the ground (see stepObjectCarry).
+    const relative = multiply(lookRotation(state.lastLook.yaw, 0), rigidInverse(lookRotation(anchor.startLook.yaw, 0)));
     const local = transformDirection(rigidInverse(relative), delta);
     anchor = { ...anchor, pivotWorld: anchor.pivotWorld.map((x, i) => x + local[i]) };
   }
   return { ...state, mirror: { ...m, anchor, centreWorldM: m.centreWorldM.map((x, i) => x + delta[i]) } };
+}
+/** R558 (Message 12): move the mirror body's carried place by `movementWorld` whether it is held or not (the app folds a
+ * held-back share of a move into it, so the carry never runs on inside your body). While it is held, the look anchor is
+ * moved with it (as offsetMirrorCarry), so the look and keys carry on from the new place. */
+export function shiftMirrorCarry(state, movementWorld) {
+  const delta = vec(movementWorld, 'mirror placement shift');
+  if (delta.every(x => x === 0) || !state || !state.mirror) return state;
+  if (state.held && state.target === 'mirror' && state.mirror.anchor) return offsetMirrorCarry(state, delta);
+  return { ...state, mirror: { ...state.mirror, centreWorldM: vec(state.mirror.centreWorldM, 'persistent mirror centre').map((x, i) => x + delta[i]) } };
 }
 export function clearObjectCarry(state) {
   const s = state || initialObjectCarry();
@@ -163,23 +181,36 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   if (![clearance, minimum, reach].every(Number.isFinite) || !(clearance > 0 && reach > 0 && minimum >= reach)) fail('existing full brain clearance metadata unavailable');
   // The old global minimum is diagnostic context only: equality with reach+clearance must NOT disable W-away or safe lateral movement.
   // A brain sphere around its centre can enclose the eye in the intentional motor-focused view; it is NOT used to invent a near radius.
-  const keyBudgetM = clearance; // finite FAR workspace, independent of direction-dependent near clearance
+  // R558 (user Message 12: the items "can be moved to and around each other but not through"): the W/A/S/D offset may
+  // reach as far as the brain's centre is from the camera now (so S can bring it all the way up to your body and W push
+  // it out as far again); the app's stop-at-contact rule (ns-collide, after the step) keeps it from touching your body
+  // or the mirror body and out of your left hand's reach. The earlier budget (the 1 m clearance) kept the brain out of
+  // reach by design, which Message 12 overturns.
+  const centreNow = Array.isArray(brainCentre) || ArrayBuffer.isView(brainCentre) ? Math.hypot(...Array.from(brainCentre).map((v, i) => v - o[i])) : 0;
+  const keyBudgetM = Math.max(clearance, Number.isFinite(centreNow) ? centreNow : 0); // finite workspace
   const bounds = { brainKeyFarOffsetM: keyBudgetM, originalMinBrainDistanceM: minimum, originalReachM: reach, originalClearanceM: clearance, cameraReferenceShiftM: cameraShift, initialReferenceOriginM: reference, baselineClearanceLowerBoundM: minimum - cameraShift, unchangedRequiredMinimumM: reach + clearance, clearanceStatus: 'near bound checked against actual transformed source sample balls; global scalar is context only' };
-  let heldPoseS = 0, clamped = false, selected = null, brainClearance = null;
+  let heldPoseS = 0, clamped = false, selected = null, brainClearance = null, refused = null;
   let carryLook = prior.lastLook ? { ...prior.lastLook } : { ...look };
   let carryOrigin = prior.lastOrigin ? vec(prior.lastOrigin, 'previous active camera origin') : o.slice();
-  const mirrorRotation = a => multiply(lookRotation(carryLook.yaw, carryLook.pitch), rigidInverse(lookRotation(a.startLook.yaw, a.startLook.pitch)));
+  // R558 (user: the mirror body touches "the same ground. The ground is flat and has no incline or decline"): a held
+  // mirror body is carried ALONG THE GROUND. It follows the look's turn (yaw) about the eye, never its up / down
+  // (pitch), and W/A/S/D move it horizontally, so its height never changes while carried; the brain is unchanged.
+  const mirrorRotation = a => multiply(lookRotation(carryLook.yaw, 0), rigidInverse(lookRotation(a.startLook.yaw, 0)));
+  const groundRotation = lookRotation(look.yaw, 0);
   const followMirror = () => {
     if (!held || target !== 'mirror' || !mirror || !mirror.anchor) return;
     const d = mirrorRotation(mirror.anchor), q = transformDirection(d, mirror.anchor.pivotWorld.map((v, i) => v - mirror.anchor.origin[i]));
-    mirror.centreWorldM = carryOrigin.map((v, i) => v + q[i]);
+    mirror.centreWorldM = [carryOrigin[0] + q[0], mirror.anchor.pivotWorld[1], carryOrigin[2] + q[2]]; // R558: same height
   };
   const hold = seconds => {
     if (!held || !target || !(seconds > 0)) return;
     const dt = wallDt > 0 ? seconds * poseDt / wallDt : 0; heldPoseS += dt;
     if (!(dt > 0)) return;
     const speed = target === 'mirror' && mirror ? Math.max(clearance, mirror.radiusM / 2) : clearance;
-    const delta = transformDirection(cameraRotation, [axis[0] * speed * dt, 0, -axis[1] * speed * dt]);
+    // R558 (Message 2: W/S forward / back, A/D left / right, "not up and down as grasped cursor does that"): both held
+    // items move in the LEVEL ground frame (the look's turn only); looking up / down carries them up / down. (The brain
+    // used the camera frame, pitch included, so S on a brain seen from below moved it down onto your body.)
+    const delta = transformDirection(groundRotation, [axis[0] * speed * dt, 0, -axis[1] * speed * dt]);
     if (target === 'brain') {
       const localDelta = transformDirection(invK, delta), next = keys.map((v, i) => v + localDelta[i]);
       const n = Math.hypot(...next); if (n > keyBudgetM) { next.forEach((v, i) => { next[i] = n > 0 ? v * keyBudgetM / n : 0; }); clamped = true; }
@@ -193,12 +224,21 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
     } else if (target === 'mirror' && mirror && mirror.anchor) {
       const before = mirror.centreWorldM, next = before.map((v, i) => v + delta[i]);
       if (axisNorm > 0) {
-        const local = transformDirection(rigidInverse(cameraRotation), next.map((v, i) => v - o[i]));
+        // R558: the near / far limits and the sideways limit in the horizontal (yaw-only) frame; the height stays.
+        const local = transformDirection(rigidInverse(groundRotation), next.map((v, i) => v - o[i]));
         let depth = -local[2]; const b = mirror.bounds;
-        const wantedDepth = depth; depth = Math.max(b.nearM, Math.min(b.farM, depth));
-        const tan = Math.tan(viewport.fovYDeg * DEG / 2), maxX = depth * tan * viewport.aspect;
+        const far = Math.sqrt(Math.max(0, b.farM * b.farM - local[1] * local[1]));
+        const wantedDepth = depth; depth = Math.max(b.nearM, Math.min(Math.max(b.nearM, far), depth));
+        // Sideways: inside the view, and within MIRROR_CARRY.maxSideDeg of straight ahead (or no farther out than now).
+        // R558 (hunt 3): "no farther out" is an ANGLE (sideways over depth), not a sideways distance: kept as a distance,
+        // S (pulling it in) let the angle grow to the edge of the view. The depth before is floored at nearM.
+        const lb = transformDirection(rigidInverse(groundRotation), before.map((v, i) => v - o[i]));
+        const xBefore = lb[0], depthBefore = Math.max(b.nearM, -lb[2]);
+        const tan = Math.tan(viewport.fovYDeg * DEG / 2), side = Math.tan(MIRROR_CARRY.maxSideDeg * DEG);
+        const maxX = Math.min(depth * tan * viewport.aspect, depth * Math.max(side, Math.abs(xBefore) / depthBefore));
         const wantedX = local[0]; local[0] = Math.max(-maxX, Math.min(maxX, local[0])); local[2] = -depth;
-        const world = transformDirection(cameraRotation, local); next.splice(0, 3, ...world.map((v, i) => v + o[i]));
+        const world = transformDirection(groundRotation, local); next.splice(0, 3, ...world.map((v, i) => v + o[i]));
+        next[1] = before[1];
         clamped = clamped || wantedDepth !== depth || wantedX !== local[0];
       }
       const actual = next.map((v, i) => v - before[i]), d = mirrorRotation(mirror.anchor), inAnchor = transformDirection(rigidInverse(d), actual);
@@ -207,10 +247,17 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
     }
   };
   const timeline = [{ type: 'pick', at: Math.min(gazeAt, wallDt), order: 0, value: pick }];
+  // R558 (lead decision for user Messages 2 and 12): the F key grasps ({ type: 'grasp', down, target? }); Space no longer
+  // does. A grasp of one of your own limbs (target 'limb') is the app's, not a carry of the brain or the mirror body.
   events.forEach((ev, i) => {
-    if (!ev || ev.type !== 'space') return;
-    if (typeof ev.down !== 'boolean' || (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0))) fail('original Space event required');
-    timeline.push({ type: 'space', at: Math.min(ev.at === undefined ? 0 : ev.at, wallDt), order: i + 1, down: ev.down });
+    if (!ev || ev.type !== 'grasp') return;
+    if (typeof ev.down !== 'boolean' || (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0))) fail('original grasp event required');
+    // R558 (hunt 2 code #4): a press labelled with what it was aimed at (ev.target: 'brain' | 'mirror' | 'limb' | null, and
+    // ev.pick, the pick at the press point) holds exactly that; null holds nothing. Only an unlabelled press falls back
+    // to this frame's crosshair pick.
+    const labelled = Object.prototype.hasOwnProperty.call(ev, 'target');
+    timeline.push({ type: 'grasp', at: Math.min(ev.at === undefined ? 0 : ev.at, wallDt), order: i + 1, down: ev.down, limb: ev.target === 'limb',
+      labelled, target: labelled ? ev.target : undefined, pick: ev.pick && typeof ev.pick === 'object' ? ev.pick : null });
   });
   timeline.sort((a, b) => a.at - b.at || a.order - b.order);
   let cursor = 0;
@@ -228,18 +275,27 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
       lastPick = ev.value && ['brain', 'mirror'].includes(ev.value.target) ? { ...ev.value, look: { ...look }, origin: o.slice() } : null; continue;
     }
     if (ev.down && !held) {
-      held = true; target = lastPick ? lastPick.target : null; selected = target;
-      if (target === 'mirror') {
-        const point = mirror ? mirror.centreWorldM.slice() : vec(lastPick.centreWorldM, 'picked mirror centre'), radius = lastPick.radiusM;
+      if (ev.limb) continue;
+      const want = ev.labelled ? (ev.target === 'brain' || ev.target === 'mirror' ? ev.target : null) : lastPick ? lastPick.target : null;
+      if (!want) continue; // a press on nothing (or on your trunk, neck or head) holds nothing
+      const picked = ev.labelled ? (ev.pick && ev.pick.target === want ? ev.pick : lastPick && lastPick.target === want ? lastPick : null) : lastPick;
+      if (want === 'mirror') {
+        // R558 (hunt 2 code #1): the carry starts from the mirror body's DRAWN centre (the pick reads it from the scene,
+        // after any stop-at-contact correction), never from a stored carry place.
+        if (!picked || !picked.centreWorldM) { refused = 'no-mirror-pick'; continue; }
+        const point = vec(picked.centreWorldM, 'picked mirror centre'), radius = picked.radiusM;
         if (!(Number.isFinite(radius) && radius > 0)) fail('normal mirror geometry radius unavailable');
         const L = transformDirection(rigidInverse(cameraRotation), point.map((v, i) => v - o[i])), depth = -L[2];
         const cameraNear = viewport && viewport.nearM;
         if (!(Number.isFinite(cameraNear) && cameraNear > 0)) fail('actual camera near plane required for mirror carry');
         const nearM = radius + cameraNear, farM = Math.max(depth + 2 * radius, nearM + 2 * radius);
-        if (!(Number.isFinite(depth) && depth >= nearM && Number.isFinite(farM))) fail('picked mirror is inside its geometry-derived near limit');
-        mirror = { centreWorldM: point, radiusM: radius, bounds: mirror ? { ...mirror.bounds, nearM: Math.max(mirror.bounds.nearM, nearM), farM: mirror.bounds.farM } : { nearM, farM, basis: 'source mirror bounding radius plus actual near plane; far extends one source object diameter' },
+        // A carry never starts inside its geometry-derived near limit; such a press holds nothing (it used to stop the
+        // frame, and every following frame, until the display rescue reset the game).
+        if (!(Number.isFinite(depth) && depth >= nearM && Number.isFinite(farM))) { refused = 'picked mirror is inside its geometry-derived near limit'; continue; }
+        mirror = { centreWorldM: point, radiusM: radius, bounds: mirror ? { ...mirror.bounds, nearM: Math.max(mirror.bounds.nearM, nearM), farM: Math.max(mirror.bounds.farM, farM) } : { nearM, farM, basis: 'source mirror bounding radius plus actual near plane; far extends one source object diameter' },
           anchor: { origin: carryOrigin.slice(), pivotWorld: point.slice(), startLook: { ...carryLook } } };
       }
+      held = true; target = want; selected = target;
     } else if (!ev.down) { held = false; target = null; if (mirror) mirror.anchor = null; }
   }
   hold(wallDt - cursor);
@@ -249,10 +305,10 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   }
   const base = vec(brainCentre, 'current brain centre').map((v, i) => v - transformDirection(k, vec(prior.brainKeyOffset, 'previous brain key offset'))[i]);
   const baseDistance = Math.hypot(...base.map((v, i) => v - o[i]));
-  const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, normalizedAxes: axis.slice(), heldPoseS,
+  const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, graspRefused: refused, normalizedAxes: axis.slice(), heldPoseS,
     brainLimits: { ...bounds, centreNearM: Math.max(0, baseDistance - keyBudgetM), centreFarM: baseDistance + keyBudgetM },
     mirrorLimits: mirror ? { ...mirror.bounds } : null, brainClearance, clamped,
-    timing: 'Original Space/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
+    timing: 'Original grasp (F)/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
     scope: 'Engineering limits/source clearance only; actual source/current-pose/native/wholebody/normalmechanics qualification remains open' };
   return { state: { held, target, lastPick, lastLook: { ...look }, lastOrigin: o.slice(), brainKeyOffset: keys, mirror, diagnostic }, brainMovementWorld, mirrorWorldCentre: mirror ? mirror.centreWorldM.slice() : null, diagnostic };
 }

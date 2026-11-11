@@ -1,0 +1,5041 @@
+{
+ "schema_version": 1,
+ "kind": "missing_muscles_acquisition_record",
+ "packet": "missing-muscles-r1",
+ "writer": "builder AN (R558 anatomy completion)",
+ "authority": "User Messages 20 and 23 (free tools and freely licensed anatomy may be downloaded and used: pinned, vendored with licence files and credits, documented derivatives, raw packets untouched) and Message 1 (\"No invisible ... body parts\"), Message 18 (anatomical realism); the lead's task for builder AN (the large muscles the body packets lack, BodyParts3D 4.0 first, Z-Anatomy where BodyParts3D has none, the face packet's source and registration).",
+ "source_order": "Every muscle was looked up first in the BodyParts3D 4.0 element list (isa_element_parts.txt of the official archive); a BodyParts3D file was taken whenever one exists. Z-Anatomy (the face packet's pinned file) was used only for the muscles with no BodyParts3D 4.0 file: latissimus dorsi, rectus abdominis, internal oblique, transversus abdominis, quadratus lumborum, longus colli, extensor digitorum brevis and flexor hallucis brevis.",
+ "bodyparts3d": {
+  "archive": "https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip",
+  "etag": "\"8848a5a-4dd48ec9df000\"",
+  "bytes": 142903898,
+  "central_directory": {
+   "entries": 2234,
+   "offset": 142733851,
+   "size": 170025,
+   "sha256": "edde15c7c5f34b2b9743935fb3c1873cce3a9789164427ddf8343c879bcde96b"
+  },
+  "licence_check": {
+   "url": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html",
+   "checked_utc": "2026-11-11",
+   "last_updated_text": "Last updated : 2025/02/27",
+   "required_attribution": "BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International",
+   "saved_page_sha256": "9839c892ed934552e249d3f95107fab92fb5656cd33cc5dbd0e7f0eab75c6676"
+  },
+  "element_list_sha256": "a3de74423f943b0d724ae8f59b3a817f87c423a544f8db98113b1980817cbeaf",
+  "method": "HTTP range requests against the official archive only (serial, 1.5 s apart, no retries, same User-Agent naming the project): HEAD for identity (ETag and size must equal the recorded ones), the end of central directory, the central directory (its sha256 must equal the recorded one), then each member's local header and compressed bytes; raw-deflate decompressed; ZIP CRC32 and uncompressed size must equal the central directory's; then sha256. The same route builder FA used for packets/bodyparts3d-head-r1. Script: acquire_bp3d.py (pure Python standard library).",
+  "runs": [
+   {
+    "log": "acquisition-log.json",
+    "requests": 123,
+    "bytes_transferred": 6121839,
+    "first_utc": "2026-11-11T10:38:28Z",
+    "last_utc": "2026-11-11T10:42:49Z",
+    "members": [
+     {
+      "element_id": "FJ1421",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1421.obj",
+      "zip_crc32": 803870437,
+      "compressed_bytes": 71835,
+      "bytes": 227763,
+      "local_header_offset": 12758898,
+      "sha256": "82d12d8359e66303a7e5a21c2b9b24b26d33b8bbeab55f8f97c87881e25e5fa7"
+     },
+     {
+      "element_id": "FJ1421M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1421M.obj",
+      "zip_crc32": 3978041450,
+      "compressed_bytes": 71616,
+      "bytes": 225310,
+      "local_header_offset": 12830793,
+      "sha256": "1c760938cc531c810758cf5f9fb25ff3a6a0cfd7798d102da95b3269f6741b00"
+     },
+     {
+      "element_id": "FJ1402",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1402.obj",
+      "zip_crc32": 137797135,
+      "compressed_bytes": 55741,
+      "bytes": 174040,
+      "local_header_offset": 10239922,
+      "sha256": "f5165be945dbae2a81a1261b5f5c169c9ba677e80c70af263a08efc2f57f3f53"
+     },
+     {
+      "element_id": "FJ1402M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1402M.obj",
+      "zip_crc32": 1836633965,
+      "compressed_bytes": 55344,
+      "bytes": 172318,
+      "local_header_offset": 10295723,
+      "sha256": "6b2f97b45dddd3045655cd1495f09db6baa4d3b9c19a84af5e00f0745c193d88"
+     },
+     {
+      "element_id": "FJ1401",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1401.obj",
+      "zip_crc32": 3809967951,
+      "compressed_bytes": 34661,
+      "bytes": 109236,
+      "local_header_offset": 10170624,
+      "sha256": "388e7598162d73b22c18d198b9fa4abb5359eb95ffbbfbf0941740df85e0a4f6"
+     },
+     {
+      "element_id": "FJ1401M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1401M.obj",
+      "zip_crc32": 4079477809,
+      "compressed_bytes": 34516,
+      "bytes": 107666,
+      "local_header_offset": 10205345,
+      "sha256": "0d4bbe6e641e42b29c32bee8e8e9ad627ff8ed52c1eb6daf805e4661aab3c14f"
+     },
+     {
+      "element_id": "FJ1438",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1438.obj",
+      "zip_crc32": 1369744568,
+      "compressed_bytes": 31567,
+      "bytes": 102407,
+      "local_header_offset": 15529271,
+      "sha256": "181553f080c8fad285e54ebca81432a691442a44d2e23d2dde6c21e000bc9ab0"
+     },
+     {
+      "element_id": "FJ1438M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1438M.obj",
+      "zip_crc32": 2970798926,
+      "compressed_bytes": 31629,
+      "bytes": 101378,
+      "local_header_offset": 15560898,
+      "sha256": "4a1bf02b6a7b3574d60f61ed9bbd264e9e52693b9b4a68dbfb6ac6474245f272"
+     },
+     {
+      "element_id": "FJ1410",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1410.obj",
+      "zip_crc32": 1658340654,
+      "compressed_bytes": 94951,
+      "bytes": 304555,
+      "local_header_offset": 11448867,
+      "sha256": "40c36bc4dc24e161c84daf6e96017f9d78b4cf964579a873e267d2619be4aa2c"
+     },
+     {
+      "element_id": "FJ1410M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1410M.obj",
+      "zip_crc32": 3869113353,
+      "compressed_bytes": 94387,
+      "bytes": 301944,
+      "local_header_offset": 11543878,
+      "sha256": "6a1b953dd854c4b09c59f52752ec38c38d5784c40d7da2bbbce94c713f52b8f4"
+     },
+     {
+      "element_id": "FJ1409",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1409.obj",
+      "zip_crc32": 1286745267,
+      "compressed_bytes": 45348,
+      "bytes": 151020,
+      "local_header_offset": 11358169,
+      "sha256": "ba330adc0128b26a50b4a5bd0a0cedcd3f32dbf09ae25f4e0587949dbd9d3d11"
+     },
+     {
+      "element_id": "FJ1409M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1409M.obj",
+      "zip_crc32": 1852006822,
+      "compressed_bytes": 45229,
+      "bytes": 149364,
+      "local_header_offset": 11403577,
+      "sha256": "00da03d824ec49bb50df14bf8f75af06e9fa095694ee215ae4ade2e42dd529cd"
+     },
+     {
+      "element_id": "FJ1411",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1411.obj",
+      "zip_crc32": 3692448685,
+      "compressed_bytes": 39135,
+      "bytes": 132819,
+      "local_header_offset": 11638326,
+      "sha256": "e6e64e705d75002d677c0483c9c39a80ea3759ff1408e730ab9a5abc2d28e4cb"
+     },
+     {
+      "element_id": "FJ1411M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1411M.obj",
+      "zip_crc32": 4007294714,
+      "compressed_bytes": 39100,
+      "bytes": 131318,
+      "local_header_offset": 11677521,
+      "sha256": "767074f1747e3dccb4480a2375dc2cfa0b35e8a44fe49415cbc91f3c7c818757"
+     },
+     {
+      "element_id": "FJ1527",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1527.obj",
+      "zip_crc32": 3846408371,
+      "compressed_bytes": 367351,
+      "bytes": 1189971,
+      "local_header_offset": 47264463,
+      "sha256": "8a15295f08faac150ee5f16fe1035398dcfa60d3cba8b42b504b53764032b718"
+     },
+     {
+      "element_id": "FJ1527M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1527M.obj",
+      "zip_crc32": 2191127353,
+      "compressed_bytes": 366357,
+      "bytes": 1178614,
+      "local_header_offset": 47631874,
+      "sha256": "1c7f20b34a9639d1996e3ec18873beb6dc114169ae1d310e88e2c3d8b1ff2133"
+     },
+     {
+      "element_id": "FJ1528",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1528.obj",
+      "zip_crc32": 1146214877,
+      "compressed_bytes": 190152,
+      "bytes": 618808,
+      "local_header_offset": 47998292,
+      "sha256": "0ee5ad819949cd4197dd96b00373547b42f7e1831b2add6baea4baf3661f38fa"
+     },
+     {
+      "element_id": "FJ1528M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1528M.obj",
+      "zip_crc32": 3059093611,
+      "compressed_bytes": 189599,
+      "bytes": 613804,
+      "local_header_offset": 48188504,
+      "sha256": "02a7addd5329689094506095570a458982b6dfc2f9509392bf310807183e3df7"
+     },
+     {
+      "element_id": "FJ1526",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1526.obj",
+      "zip_crc32": 2188462837,
+      "compressed_bytes": 74200,
+      "bytes": 237546,
+      "local_header_offset": 47116057,
+      "sha256": "0d2b4b780dd191b9e6518dc3a71ad8c032da0db3631a2a582969faf7dfdbb96b"
+     },
+     {
+      "element_id": "FJ1526M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1526M.obj",
+      "zip_crc32": 1064425643,
+      "compressed_bytes": 74085,
+      "bytes": 235971,
+      "local_header_offset": 47190317,
+      "sha256": "edb4c7f871b6cee0ab8de9d31ad428b779a087a7b66dccf4421a806bfb11812d"
+     },
+     {
+      "element_id": "FJ1535",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1535.obj",
+      "zip_crc32": 1208342964,
+      "compressed_bytes": 410692,
+      "bytes": 1319188,
+      "local_header_offset": 48848126,
+      "sha256": "b555761d298a4bea88a05d2067b0cfff507522546bfc0dcb9b3bad576a3449fa"
+     },
+     {
+      "element_id": "FJ1535M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1535M.obj",
+      "zip_crc32": 1890853969,
+      "compressed_bytes": 409091,
+      "bytes": 1306680,
+      "local_header_offset": 49258878,
+      "sha256": "d238f10400abb5754b2ef1e920eacc720b69835cd31a229ef3d68468f4064a57"
+     },
+     {
+      "element_id": "FJ1534",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1534.obj",
+      "zip_crc32": 3796164122,
+      "compressed_bytes": 71143,
+      "bytes": 229177,
+      "local_header_offset": 48705834,
+      "sha256": "d89596561e6d76dc5d5e6895711d598201056b1c7a834ee0c593702ef9382608"
+     },
+     {
+      "element_id": "FJ1534M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1534M.obj",
+      "zip_crc32": 957485873,
+      "compressed_bytes": 71028,
+      "bytes": 227947,
+      "local_header_offset": 48777037,
+      "sha256": "4d8e49d6e29673284fc79376aafb0baec2cc1999b6440b19a5310c550828a8ac"
+     },
+     {
+      "element_id": "FJ1533",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1533.obj",
+      "zip_crc32": 2306713233,
+      "compressed_bytes": 54985,
+      "bytes": 179817,
+      "local_header_offset": 48595840,
+      "sha256": "845e65ab735bc49c5026fab485f8dd2eb9624ac7c2519927578d7d7508e644cd"
+     },
+     {
+      "element_id": "FJ1533M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1533M.obj",
+      "zip_crc32": 3875445645,
+      "compressed_bytes": 54888,
+      "bytes": 178291,
+      "local_header_offset": 48650885,
+      "sha256": "900be066826b7ac1f38f92a243b28474694c42a1fafa2934d55db020820c7178"
+     },
+     {
+      "element_id": "FJ1544",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1544.obj",
+      "zip_crc32": 2452893062,
+      "compressed_bytes": 189710,
+      "bytes": 598901,
+      "local_header_offset": 51775782,
+      "sha256": "d269ffdde57349435a3cfcc3c53c3b2532acf4ddaabfc7fdc8b0e3df66b15232"
+     },
+     {
+      "element_id": "FJ1544M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1544M.obj",
+      "zip_crc32": 648392518,
+      "compressed_bytes": 189162,
+      "bytes": 594041,
+      "local_header_offset": 51965552,
+      "sha256": "b9a3a13c4b797eb8f3115dac3e80b5a83b03b9b34c25f7f2ef721810fa0c52d2"
+     },
+     {
+      "element_id": "FJ1427",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1427.obj",
+      "zip_crc32": 4021579535,
+      "compressed_bytes": 31651,
+      "bytes": 97969,
+      "local_header_offset": 14051574,
+      "sha256": "8dfb6a8868ddbf1e72679a821fb79ed49573ed6ceab40108bd0d5b8c109171ba"
+     },
+     {
+      "element_id": "FJ1427M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1427M.obj",
+      "zip_crc32": 223853724,
+      "compressed_bytes": 31585,
+      "bytes": 97171,
+      "local_header_offset": 14083285,
+      "sha256": "47b3318cda125c5ecb82ebace21dd8841c46af48b4f0eb9e568e9e0aa0275c36"
+     },
+     {
+      "element_id": "FJ1420",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1420.obj",
+      "zip_crc32": 1885703182,
+      "compressed_bytes": 97776,
+      "bytes": 321500,
+      "local_header_offset": 12563669,
+      "sha256": "61ebd1c4cd97adb69324aa74325c05425dbf37f83862a34c6a2f7400c3c017cd"
+     },
+     {
+      "element_id": "FJ1420M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1420M.obj",
+      "zip_crc32": 1983283981,
+      "compressed_bytes": 97332,
+      "bytes": 318764,
+      "local_header_offset": 12661505,
+      "sha256": "d4fd7a31338758607094164c2d8e3a39f8cd1f5baee7624a0391a7ddd8168272"
+     },
+     {
+      "element_id": "FJ1440",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1440.obj",
+      "zip_crc32": 1642356368,
+      "compressed_bytes": 146969,
+      "bytes": 476926,
+      "local_header_offset": 15724677,
+      "sha256": "6fc367885524fc416139372b55c64d8e1e4bc9010bee64020a72ad8e6f34a57d"
+     },
+     {
+      "element_id": "FJ1440M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1440M.obj",
+      "zip_crc32": 1932707690,
+      "compressed_bytes": 146427,
+      "bytes": 471162,
+      "local_header_offset": 15871706,
+      "sha256": "889b43062ffa5bc75a7acd866f8a9cc5a6296413c5d0fcefd2f5cb144c82ac9a"
+     },
+     {
+      "element_id": "FJ1407",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1407.obj",
+      "zip_crc32": 2180176061,
+      "compressed_bytes": 33821,
+      "bytes": 113557,
+      "local_header_offset": 11207358,
+      "sha256": "cbef129a1fd217b80efe9688ec6b4e0dbf7471d81b5f15a20e12ef7f04f42d17"
+     },
+     {
+      "element_id": "FJ1407M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1407M.obj",
+      "zip_crc32": 2528372225,
+      "compressed_bytes": 33847,
+      "bytes": 112408,
+      "local_header_offset": 11241239,
+      "sha256": "d2a516bfd3720c481ca3e8410729117d527c0d9af08d031d643d51554284e031"
+     },
+     {
+      "element_id": "FJ1413",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1413.obj",
+      "zip_crc32": 3997187535,
+      "compressed_bytes": 72660,
+      "bytes": 227620,
+      "local_header_offset": 11760186,
+      "sha256": "4910cc83a0e1558971c95ce4b73a4845e3ab63a19cd3e92769aaf46f0bd41333"
+     },
+     {
+      "element_id": "FJ1413M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1413M.obj",
+      "zip_crc32": 1680650100,
+      "compressed_bytes": 72629,
+      "bytes": 225781,
+      "local_header_offset": 11832906,
+      "sha256": "77dc59309567b31f6842f30c45f24fccb2a3e9b17fbde558d1ce036c640bfcca"
+     },
+     {
+      "element_id": "FJ1545",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1545.obj",
+      "zip_crc32": 2537732518,
+      "compressed_bytes": 168763,
+      "bytes": 556499,
+      "local_header_offset": 52154775,
+      "sha256": "1d1361ff53074dc46a3a372cfd754121afb7a24511fee225b06b312e3277efa8"
+     },
+     {
+      "element_id": "FJ1545M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1545M.obj",
+      "zip_crc32": 1121938387,
+      "compressed_bytes": 168610,
+      "bytes": 554265,
+      "local_header_offset": 52323598,
+      "sha256": "a80ad7dd892450090022cd108216c21a55dd70872c7cfa832c604c040c79cd98"
+     },
+     {
+      "element_id": "FJ1538",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1538.obj",
+      "zip_crc32": 150464921,
+      "compressed_bytes": 61934,
+      "bytes": 219002,
+      "local_header_offset": 50106065,
+      "sha256": "189e16f70c49bc3465f5216fcb0e0b0ffb114458fde427eaf5406ddd1a1bd315"
+     },
+     {
+      "element_id": "FJ1538M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1538M.obj",
+      "zip_crc32": 918052991,
+      "compressed_bytes": 61441,
+      "bytes": 215105,
+      "local_header_offset": 50168059,
+      "sha256": "8f587a9a50e0ca6555ffb086e60445a499904ce55a5664340cce8ed12d86bb77"
+     },
+     {
+      "element_id": "FJ1592",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1592.obj",
+      "zip_crc32": 18336350,
+      "compressed_bytes": 56764,
+      "bytes": 183341,
+      "local_header_offset": 55576226,
+      "sha256": "a8e09cc9dcc353437edeafeb78873c3f4d9727fcd9187d0f43dd57a3e72efb83"
+     },
+     {
+      "element_id": "FJ1570",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1570.obj",
+      "zip_crc32": 3253772873,
+      "compressed_bytes": 56189,
+      "bytes": 179909,
+      "local_header_offset": 54174769,
+      "sha256": "7cffc2140b07a8966c1bf36937f3e260b4b565b8151ecfa2f683b72bcd5f546d"
+     },
+     {
+      "element_id": "FJ1593",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1593.obj",
+      "zip_crc32": 2277658243,
+      "compressed_bytes": 93555,
+      "bytes": 314596,
+      "local_header_offset": 55633050,
+      "sha256": "d601c1bf83da406115bc5605305b04ef8f4a37518e3d8528ca35e93fde0f4140"
+     },
+     {
+      "element_id": "FJ1571",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1571.obj",
+      "zip_crc32": 605657749,
+      "compressed_bytes": 93387,
+      "bytes": 309508,
+      "local_header_offset": 54231018,
+      "sha256": "87f401434568a449ee7ac71d8d372998611f5eed4190e8273e31cf252fccfbcd"
+     },
+     {
+      "element_id": "FJ1594",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1594.obj",
+      "zip_crc32": 3232828202,
+      "compressed_bytes": 63297,
+      "bytes": 205887,
+      "local_header_offset": 55726665,
+      "sha256": "babdc76481ea863c4f1d5599fbc843da667780a2d7a5abe2c30a4c82374c9f11"
+     },
+     {
+      "element_id": "FJ1572",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1572.obj",
+      "zip_crc32": 2769543608,
+      "compressed_bytes": 61938,
+      "bytes": 200162,
+      "local_header_offset": 54324465,
+      "sha256": "227a19a0ccceb88b370c8fe5af637ccb491bcb2c1f1898cd101c24e93fa82ae7"
+     },
+     {
+      "element_id": "FJ1586",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1586.obj",
+      "zip_crc32": 4107103787,
+      "compressed_bytes": 115187,
+      "bytes": 383387,
+      "local_header_offset": 55084778,
+      "sha256": "2ec30a6720efb6eaf451bc141c61d2419b33027b2f10c5b00378f54861be0605"
+     },
+     {
+      "element_id": "FJ1565",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1565.obj",
+      "zip_crc32": 2643675213,
+      "compressed_bytes": 110224,
+      "bytes": 367436,
+      "local_header_offset": 53972373,
+      "sha256": "1552449f945343885869b8495474e44963c906ce559abf2f508506f784357b59"
+     },
+     {
+      "element_id": "FJ1596",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1596.obj",
+      "zip_crc32": 1450890323,
+      "compressed_bytes": 65414,
+      "bytes": 213915,
+      "local_header_offset": 56013958,
+      "sha256": "262225d820e3b09f05a269a23f32eb1d97ce29dfa569d569c73e88c0a106708c"
+     },
+     {
+      "element_id": "FJ1574",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1574.obj",
+      "zip_crc32": 2530598928,
+      "compressed_bytes": 62545,
+      "bytes": 204287,
+      "local_header_offset": 54600962,
+      "sha256": "ea466d41ef524b945f5e4e50620b74d8c493288c36a3d0207922f514364a5c65"
+     },
+     {
+      "element_id": "FJ1597",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1597.obj",
+      "zip_crc32": 200645854,
+      "compressed_bytes": 53556,
+      "bytes": 176101,
+      "local_header_offset": 56079432,
+      "sha256": "82534889c09ad8efb043e374fdedb9af25dbffa59299d425f233c17173182c11"
+     },
+     {
+      "element_id": "FJ1575",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1575.obj",
+      "zip_crc32": 2766807853,
+      "compressed_bytes": 52883,
+      "bytes": 172843,
+      "local_header_offset": 54663567,
+      "sha256": "2b6162444c2c9447e9f0d2bb0947d9f95d76498ddf71a3277e96dabfef550f5f"
+     },
+     {
+      "element_id": "FJ1598",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1598.obj",
+      "zip_crc32": 2801072150,
+      "compressed_bytes": 27543,
+      "bytes": 86582,
+      "local_header_offset": 56133048,
+      "sha256": "4011f33b0992f727c3468fd2aa50dbb1a9f0eb3ef4667cb0cb60aa04b3c98486"
+     },
+     {
+      "element_id": "FJ1576",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1576.obj",
+      "zip_crc32": 3152442438,
+      "compressed_bytes": 28371,
+      "bytes": 89944,
+      "local_header_offset": 54716510,
+      "sha256": "2c6d6a6008f602842ab36c6738960da0fcc2a1e9bb7ffb4b127f7bfd20ddc057"
+     },
+     {
+      "element_id": "FJ1599",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1599.obj",
+      "zip_crc32": 1906072203,
+      "compressed_bytes": 32360,
+      "bytes": 107757,
+      "local_header_offset": 56160651,
+      "sha256": "fe3834ea88fcbf9d0140df58928bd7df22e00c8b602ef47a92102e507af2266c"
+     },
+     {
+      "element_id": "FJ1577",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1577.obj",
+      "zip_crc32": 741492008,
+      "compressed_bytes": 30078,
+      "bytes": 96410,
+      "local_header_offset": 54744941,
+      "sha256": "f342f7656d7164fc8bf24f3690f3ba1b2ac029beea0ad435347809476c7f8d81"
+     },
+     {
+      "element_id": "FJ1357",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1357.obj",
+      "zip_crc32": 1159964622,
+      "compressed_bytes": 84782,
+      "bytes": 290489,
+      "local_header_offset": 6701182,
+      "sha256": "430068a4d8fc68e5e96b725c8e09849f757ccdc090ab6cec84341d945c22b9c5"
+     },
+     {
+      "element_id": "FJ1306",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1306.obj",
+      "zip_crc32": 3604456415,
+      "compressed_bytes": 82738,
+      "bytes": 281893,
+      "local_header_offset": 2664887,
+      "sha256": "114bfa94da75435db3d4afadafe060c57e0345c78e2174068ef4698a61d72e49"
+     }
+    ],
+    "requests_detail": [
+     {
+      "method": "HEAD",
+      "range": null,
+      "status": 200,
+      "bytes": 0,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": null,
+      "content_length": "142903898",
+      "at_utc": "2026-11-11T10:38:28Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=142838362-142903897",
+      "status": 206,
+      "bytes": 65536,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142838362-142903897/142903898",
+      "content_length": "65536",
+      "at_utc": "2026-11-11T10:38:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=142733851-142903875",
+      "status": 206,
+      "bytes": 170025,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142733851-142903875/142903898",
+      "content_length": "170025",
+      "at_utc": "2026-11-11T10:38:33Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12758898-12759439",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12758898-12759439/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:35Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12758958-12830792",
+      "status": 206,
+      "bytes": 71835,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12758958-12830792/142903898",
+      "content_length": "71835",
+      "at_utc": "2026-11-11T10:38:37Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12830793-12831334",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12830793-12831334/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:39Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12830854-12902469",
+      "status": 206,
+      "bytes": 71616,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12830854-12902469/142903898",
+      "content_length": "71616",
+      "at_utc": "2026-11-11T10:38:41Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10239922-10240463",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10239922-10240463/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:43Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10239982-10295722",
+      "status": 206,
+      "bytes": 55741,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10239982-10295722/142903898",
+      "content_length": "55741",
+      "at_utc": "2026-11-11T10:38:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10295723-10296264",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10295723-10296264/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:47Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10295784-10351127",
+      "status": 206,
+      "bytes": 55344,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10295784-10351127/142903898",
+      "content_length": "55344",
+      "at_utc": "2026-11-11T10:38:50Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10170624-10171165",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10170624-10171165/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:51Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10170684-10205344",
+      "status": 206,
+      "bytes": 34661,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10170684-10205344/142903898",
+      "content_length": "34661",
+      "at_utc": "2026-11-11T10:38:53Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10205345-10205886",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10205345-10205886/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:55Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10205406-10239921",
+      "status": 206,
+      "bytes": 34516,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10205406-10239921/142903898",
+      "content_length": "34516",
+      "at_utc": "2026-11-11T10:38:57Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15529271-15529812",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15529271-15529812/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:38:59Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15529331-15560897",
+      "status": 206,
+      "bytes": 31567,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15529331-15560897/142903898",
+      "content_length": "31567",
+      "at_utc": "2026-11-11T10:39:01Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15560898-15561439",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15560898-15561439/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:03Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15560959-15592587",
+      "status": 206,
+      "bytes": 31629,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15560959-15592587/142903898",
+      "content_length": "31629",
+      "at_utc": "2026-11-11T10:39:05Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11448867-11449408",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11448867-11449408/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:07Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11448927-11543877",
+      "status": 206,
+      "bytes": 94951,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11448927-11543877/142903898",
+      "content_length": "94951",
+      "at_utc": "2026-11-11T10:39:09Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11543878-11544419",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11543878-11544419/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11543939-11638325",
+      "status": 206,
+      "bytes": 94387,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11543939-11638325/142903898",
+      "content_length": "94387",
+      "at_utc": "2026-11-11T10:39:14Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11358169-11358710",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11358169-11358710/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:15Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11358229-11403576",
+      "status": 206,
+      "bytes": 45348,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11358229-11403576/142903898",
+      "content_length": "45348",
+      "at_utc": "2026-11-11T10:39:18Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11403577-11404118",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11403577-11404118/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:20Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11403638-11448866",
+      "status": 206,
+      "bytes": 45229,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11403638-11448866/142903898",
+      "content_length": "45229",
+      "at_utc": "2026-11-11T10:39:22Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11638326-11638867",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11638326-11638867/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:24Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11638386-11677520",
+      "status": 206,
+      "bytes": 39135,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11638386-11677520/142903898",
+      "content_length": "39135",
+      "at_utc": "2026-11-11T10:39:26Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11677521-11678062",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11677521-11678062/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:27Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11677582-11716681",
+      "status": 206,
+      "bytes": 39100,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11677582-11716681/142903898",
+      "content_length": "39100",
+      "at_utc": "2026-11-11T10:39:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47264463-47265004",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47264463-47265004/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:32Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47264523-47631873",
+      "status": 206,
+      "bytes": 367351,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47264523-47631873/142903898",
+      "content_length": "367351",
+      "at_utc": "2026-11-11T10:39:34Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47631874-47632415",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47631874-47632415/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:36Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47631935-47998291",
+      "status": 206,
+      "bytes": 366357,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47631935-47998291/142903898",
+      "content_length": "366357",
+      "at_utc": "2026-11-11T10:39:39Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47998292-47998833",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47998292-47998833/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:41Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47998352-48188503",
+      "status": 206,
+      "bytes": 190152,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47998352-48188503/142903898",
+      "content_length": "190152",
+      "at_utc": "2026-11-11T10:39:44Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48188504-48189045",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48188504-48189045/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48188565-48378163",
+      "status": 206,
+      "bytes": 189599,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48188565-48378163/142903898",
+      "content_length": "189599",
+      "at_utc": "2026-11-11T10:39:49Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47116057-47116598",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47116057-47116598/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:51Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47116117-47190316",
+      "status": 206,
+      "bytes": 74200,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47116117-47190316/142903898",
+      "content_length": "74200",
+      "at_utc": "2026-11-11T10:39:53Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47190317-47190858",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47190317-47190858/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:55Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=47190378-47264462",
+      "status": 206,
+      "bytes": 74085,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 47190378-47264462/142903898",
+      "content_length": "74085",
+      "at_utc": "2026-11-11T10:39:57Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48848126-48848667",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48848126-48848667/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:39:59Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48848186-49258877",
+      "status": 206,
+      "bytes": 410692,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48848186-49258877/142903898",
+      "content_length": "410692",
+      "at_utc": "2026-11-11T10:40:02Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49258878-49259419",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49258878-49259419/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:04Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49258939-49668029",
+      "status": 206,
+      "bytes": 409091,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49258939-49668029/142903898",
+      "content_length": "409091",
+      "at_utc": "2026-11-11T10:40:07Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48705834-48706375",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48705834-48706375/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:09Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48705894-48777036",
+      "status": 206,
+      "bytes": 71143,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48705894-48777036/142903898",
+      "content_length": "71143",
+      "at_utc": "2026-11-11T10:40:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48777037-48777578",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48777037-48777578/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:13Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48777098-48848125",
+      "status": 206,
+      "bytes": 71028,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48777098-48848125/142903898",
+      "content_length": "71028",
+      "at_utc": "2026-11-11T10:40:16Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48595840-48596381",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48595840-48596381/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:18Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48595900-48650884",
+      "status": 206,
+      "bytes": 54985,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48595900-48650884/142903898",
+      "content_length": "54985",
+      "at_utc": "2026-11-11T10:40:20Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48650885-48651426",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48650885-48651426/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:22Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48650946-48705833",
+      "status": 206,
+      "bytes": 54888,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48650946-48705833/142903898",
+      "content_length": "54888",
+      "at_utc": "2026-11-11T10:40:25Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51775782-51776323",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51775782-51776323/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:26Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51775842-51965551",
+      "status": 206,
+      "bytes": 189710,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51775842-51965551/142903898",
+      "content_length": "189710",
+      "at_utc": "2026-11-11T10:40:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51965552-51966093",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51965552-51966093/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:32Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51965613-52154774",
+      "status": 206,
+      "bytes": 189162,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51965613-52154774/142903898",
+      "content_length": "189162",
+      "at_utc": "2026-11-11T10:40:34Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14051574-14052115",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14051574-14052115/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:36Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14051634-14083284",
+      "status": 206,
+      "bytes": 31651,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14051634-14083284/142903898",
+      "content_length": "31651",
+      "at_utc": "2026-11-11T10:40:38Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14083285-14083826",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14083285-14083826/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:40Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14083346-14114930",
+      "status": 206,
+      "bytes": 31585,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14083346-14114930/142903898",
+      "content_length": "31585",
+      "at_utc": "2026-11-11T10:40:42Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12563669-12564210",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12563669-12564210/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:44Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12563729-12661504",
+      "status": 206,
+      "bytes": 97776,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12563729-12661504/142903898",
+      "content_length": "97776",
+      "at_utc": "2026-11-11T10:40:47Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12661505-12662046",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12661505-12662046/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:49Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12661566-12758897",
+      "status": 206,
+      "bytes": 97332,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12661566-12758897/142903898",
+      "content_length": "97332",
+      "at_utc": "2026-11-11T10:40:51Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15724677-15725218",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15724677-15725218/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:53Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15724737-15871705",
+      "status": 206,
+      "bytes": 146969,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15724737-15871705/142903898",
+      "content_length": "146969",
+      "at_utc": "2026-11-11T10:40:55Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15871706-15872247",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15871706-15872247/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:40:57Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=15871767-16018193",
+      "status": 206,
+      "bytes": 146427,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 15871767-16018193/142903898",
+      "content_length": "146427",
+      "at_utc": "2026-11-11T10:41:00Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11207358-11207899",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11207358-11207899/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:02Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11207418-11241238",
+      "status": 206,
+      "bytes": 33821,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11207418-11241238/142903898",
+      "content_length": "33821",
+      "at_utc": "2026-11-11T10:41:04Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11241239-11241780",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11241239-11241780/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:06Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11241300-11275146",
+      "status": 206,
+      "bytes": 33847,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11241300-11275146/142903898",
+      "content_length": "33847",
+      "at_utc": "2026-11-11T10:41:08Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11760186-11760727",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11760186-11760727/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:10Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11760246-11832905",
+      "status": 206,
+      "bytes": 72660,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11760246-11832905/142903898",
+      "content_length": "72660",
+      "at_utc": "2026-11-11T10:41:12Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11832906-11833447",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11832906-11833447/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:14Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=11832967-11905595",
+      "status": 206,
+      "bytes": 72629,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 11832967-11905595/142903898",
+      "content_length": "72629",
+      "at_utc": "2026-11-11T10:41:16Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=52154775-52155316",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 52154775-52155316/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:18Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=52154835-52323597",
+      "status": 206,
+      "bytes": 168763,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 52154835-52323597/142903898",
+      "content_length": "168763",
+      "at_utc": "2026-11-11T10:41:21Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=52323598-52324139",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 52323598-52324139/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:23Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=52323659-52492268",
+      "status": 206,
+      "bytes": 168610,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 52323659-52492268/142903898",
+      "content_length": "168610",
+      "at_utc": "2026-11-11T10:41:25Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50106065-50106606",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50106065-50106606/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:27Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50106125-50168058",
+      "status": 206,
+      "bytes": 61934,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50106125-50168058/142903898",
+      "content_length": "61934",
+      "at_utc": "2026-11-11T10:41:29Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50168059-50168600",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50168059-50168600/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:31Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50168120-50229560",
+      "status": 206,
+      "bytes": 61441,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50168120-50229560/142903898",
+      "content_length": "61441",
+      "at_utc": "2026-11-11T10:41:34Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55576226-55576767",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55576226-55576767/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:35Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55576286-55633049",
+      "status": 206,
+      "bytes": 56764,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55576286-55633049/142903898",
+      "content_length": "56764",
+      "at_utc": "2026-11-11T10:41:38Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54174769-54175310",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54174769-54175310/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:40Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54174829-54231017",
+      "status": 206,
+      "bytes": 56189,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54174829-54231017/142903898",
+      "content_length": "56189",
+      "at_utc": "2026-11-11T10:41:42Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55633050-55633591",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55633050-55633591/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:44Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55633110-55726664",
+      "status": 206,
+      "bytes": 93555,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55633110-55726664/142903898",
+      "content_length": "93555",
+      "at_utc": "2026-11-11T10:41:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54231018-54231559",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54231018-54231559/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:48Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54231078-54324464",
+      "status": 206,
+      "bytes": 93387,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54231078-54324464/142903898",
+      "content_length": "93387",
+      "at_utc": "2026-11-11T10:41:50Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55726665-55727206",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55726665-55727206/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:52Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55726725-55790021",
+      "status": 206,
+      "bytes": 63297,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55726725-55790021/142903898",
+      "content_length": "63297",
+      "at_utc": "2026-11-11T10:41:54Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54324465-54325006",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54324465-54325006/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:41:56Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54324525-54386462",
+      "status": 206,
+      "bytes": 61938,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54324525-54386462/142903898",
+      "content_length": "61938",
+      "at_utc": "2026-11-11T10:41:59Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55084778-55085319",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55084778-55085319/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:00Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=55084838-55200024",
+      "status": 206,
+      "bytes": 115187,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 55084838-55200024/142903898",
+      "content_length": "115187",
+      "at_utc": "2026-11-11T10:42:03Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=53972373-53972914",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 53972373-53972914/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:05Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=53972433-54082656",
+      "status": 206,
+      "bytes": 110224,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 53972433-54082656/142903898",
+      "content_length": "110224",
+      "at_utc": "2026-11-11T10:42:07Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56013958-56014499",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56013958-56014499/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:09Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56014018-56079431",
+      "status": 206,
+      "bytes": 65414,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56014018-56079431/142903898",
+      "content_length": "65414",
+      "at_utc": "2026-11-11T10:42:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54600962-54601503",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54600962-54601503/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:14Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54601022-54663566",
+      "status": 206,
+      "bytes": 62545,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54601022-54663566/142903898",
+      "content_length": "62545",
+      "at_utc": "2026-11-11T10:42:16Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56079432-56079973",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56079432-56079973/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:18Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56079492-56133047",
+      "status": 206,
+      "bytes": 53556,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56079492-56133047/142903898",
+      "content_length": "53556",
+      "at_utc": "2026-11-11T10:42:20Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54663567-54664108",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54663567-54664108/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:22Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54663627-54716509",
+      "status": 206,
+      "bytes": 52883,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54663627-54716509/142903898",
+      "content_length": "52883",
+      "at_utc": "2026-11-11T10:42:24Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56133048-56133589",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56133048-56133589/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:26Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56133108-56160650",
+      "status": 206,
+      "bytes": 27543,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56133108-56160650/142903898",
+      "content_length": "27543",
+      "at_utc": "2026-11-11T10:42:28Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54716510-54717051",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54716510-54717051/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54716570-54744940",
+      "status": 206,
+      "bytes": 28371,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54716570-54744940/142903898",
+      "content_length": "28371",
+      "at_utc": "2026-11-11T10:42:32Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56160651-56161192",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56160651-56161192/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:34Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=56160711-56193070",
+      "status": 206,
+      "bytes": 32360,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 56160711-56193070/142903898",
+      "content_length": "32360",
+      "at_utc": "2026-11-11T10:42:36Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54744941-54745482",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54744941-54745482/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:38Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=54745001-54775078",
+      "status": 206,
+      "bytes": 30078,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 54745001-54775078/142903898",
+      "content_length": "30078",
+      "at_utc": "2026-11-11T10:42:40Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=6701182-6701723",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6701182-6701723/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:42Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=6701242-6786023",
+      "status": 206,
+      "bytes": 84782,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6701242-6786023/142903898",
+      "content_length": "84782",
+      "at_utc": "2026-11-11T10:42:44Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=2664887-2665428",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2664887-2665428/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T10:42:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=2664947-2747684",
+      "status": 206,
+      "bytes": 82738,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2664947-2747684/142903898",
+      "content_length": "82738",
+      "at_utc": "2026-11-11T10:42:49Z"
+     }
+    ]
+   },
+   {
+    "log": "acquisition-log-2.json",
+    "requests": 69,
+    "bytes_transferred": 3233648,
+    "first_utc": "2026-11-11T11:33:06Z",
+    "last_utc": "2026-11-11T11:35:29Z",
+    "members": [
+     {
+      "element_id": "FJ1536",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1536.obj",
+      "zip_crc32": 3532074625,
+      "compressed_bytes": 169413,
+      "bytes": 549548,
+      "local_header_offset": 49668030,
+      "sha256": "81b84d6d2e7c859004ee2d71f8fef2768ec422fbace3967d54e3f3b2965bdb89"
+     },
+     {
+      "element_id": "FJ1536M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1536M.obj",
+      "zip_crc32": 3770688191,
+      "compressed_bytes": 169113,
+      "bytes": 544456,
+      "local_header_offset": 49837503,
+      "sha256": "89601e72c95415990585118c08e0fb1b9c388f5bfa2b45ac1de116759f663701"
+     },
+     {
+      "element_id": "FJ1537",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1537.obj",
+      "zip_crc32": 1414097528,
+      "compressed_bytes": 49715,
+      "bytes": 157909,
+      "local_header_offset": 50006677,
+      "sha256": "acbd2dcd51879085bb2ec7d12b45c0ba2514ce3a2a1bb680bcf78732a1f688ff"
+     },
+     {
+      "element_id": "FJ1537M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1537M.obj",
+      "zip_crc32": 461302229,
+      "compressed_bytes": 49552,
+      "bytes": 156319,
+      "local_header_offset": 50056452,
+      "sha256": "c1708ef88207aef30c32673af54b7c3b8cad2863a29a17f1f7a54859f96232a4"
+     },
+     {
+      "element_id": "FJ1541",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1541.obj",
+      "zip_crc32": 2780900616,
+      "compressed_bytes": 298094,
+      "bytes": 977758,
+      "local_header_offset": 50699196,
+      "sha256": "cc8b7d9461278c3d3a1270277fc656159ee47bd9eed290a0d5aa1c15d5c2c006"
+     },
+     {
+      "element_id": "FJ1541M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1541M.obj",
+      "zip_crc32": 2652745214,
+      "compressed_bytes": 296940,
+      "bytes": 969175,
+      "local_header_offset": 50997350,
+      "sha256": "819635eb6027fc8434ef0966a06efbb1d34bbe4798127729081c0eeefcaf87e0"
+     },
+     {
+      "element_id": "FJ1542",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1542.obj",
+      "zip_crc32": 1872827516,
+      "compressed_bytes": 208620,
+      "bytes": 685962,
+      "local_header_offset": 51294351,
+      "sha256": "5731a87fd7b629112dc376ce82570c8662618a1f6256f7b7d54384c363f6f6fd"
+     },
+     {
+      "element_id": "FJ1542M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1542M.obj",
+      "zip_crc32": 2669193164,
+      "compressed_bytes": 207848,
+      "bytes": 679307,
+      "local_header_offset": 51503031,
+      "sha256": "61070b6f1cb48d0e08434711f12d5a535867520ca16adb20e5cf70f7bd2f29a1"
+     },
+     {
+      "element_id": "FJ1540",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1540.obj",
+      "zip_crc32": 1202134253,
+      "compressed_bytes": 140512,
+      "bytes": 448376,
+      "local_header_offset": 50418385,
+      "sha256": "91211e5154f7ee9191e807ec3e33f6d3ec734aefd6db83f6777c5b2d1b2afc44"
+     },
+     {
+      "element_id": "FJ1540M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1540M.obj",
+      "zip_crc32": 2698941159,
+      "compressed_bytes": 140178,
+      "bytes": 444404,
+      "local_header_offset": 50558957,
+      "sha256": "b2d28afd1fb9b2d08da28f10a13a042d3aba7defbd2ee27b22816a5cda1e2ca8"
+     },
+     {
+      "element_id": "FJ1539",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1539.obj",
+      "zip_crc32": 17144051,
+      "compressed_bytes": 94640,
+      "bytes": 294969,
+      "local_header_offset": 50229561,
+      "sha256": "b8deb92bb40d683fc3dc88ef08c49143ecf123d3ab4bcfd5ec18a576095cfbc2"
+     },
+     {
+      "element_id": "FJ1539M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1539M.obj",
+      "zip_crc32": 2893008316,
+      "compressed_bytes": 94063,
+      "bytes": 291523,
+      "local_header_offset": 50324261,
+      "sha256": "bb9bac24392c7578e7ef6cc096e871fc1b24191b0c37eb2eda4b9e46c54f78ea"
+     },
+     {
+      "element_id": "FJ1532",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1532.obj",
+      "zip_crc32": 3911620221,
+      "compressed_bytes": 108900,
+      "bytes": 355503,
+      "local_header_offset": 48378164,
+      "sha256": "ee7897cbc5cde540e9cc29b03617d90f1b3caaebee4489f6590ee9c4632dcd42"
+     },
+     {
+      "element_id": "FJ1456",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1456.obj",
+      "zip_crc32": 3270128468,
+      "compressed_bytes": 210425,
+      "bytes": 719480,
+      "local_header_offset": 35989316,
+      "sha256": "65831afdc2f80bf5fca581f196de727aa30c3adcc682ac4506a4a5d6cc71db05"
+     },
+     {
+      "element_id": "FJ1456M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1456M.obj",
+      "zip_crc32": 3460348957,
+      "compressed_bytes": 209938,
+      "bytes": 712349,
+      "local_header_offset": 36199801,
+      "sha256": "3fddf544e2ec4cf4f403cba3efe864a9aa6697ec75db0e12ca7589eb3229055b"
+     },
+     {
+      "element_id": "FJ1428",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1428.obj",
+      "zip_crc32": 3266448261,
+      "compressed_bytes": 25975,
+      "bytes": 79475,
+      "local_header_offset": 14114931,
+      "sha256": "b5420d081245d8f0dd276625a3c96fb5180dd2fcc4c0dc6a3f7990869090a23f"
+     },
+     {
+      "element_id": "FJ1428M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1428M.obj",
+      "zip_crc32": 1516731514,
+      "compressed_bytes": 25898,
+      "bytes": 78577,
+      "local_header_offset": 14140966,
+      "sha256": "358d903b3d4f530e4219cfc7e6a64e24afda7e544d74aea5df42e89b8ae543bc"
+     },
+     {
+      "element_id": "FJ1426",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1426.obj",
+      "zip_crc32": 2773582935,
+      "compressed_bytes": 59090,
+      "bytes": 189554,
+      "local_header_offset": 13933471,
+      "sha256": "977a261dc98ce11a53282b2400b4b1f89160000c5e254bbd1755b26bbbab8ed4"
+     },
+     {
+      "element_id": "FJ1426M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1426M.obj",
+      "zip_crc32": 2934273557,
+      "compressed_bytes": 58892,
+      "bytes": 187902,
+      "local_header_offset": 13992621,
+      "sha256": "48e688da5e4d5ce01ff70dbedcf4b6232a4a2f64295ee5c8d89f8b4ee7b3889c"
+     },
+     {
+      "element_id": "FJ1425",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1425.obj",
+      "zip_crc32": 3572664915,
+      "compressed_bytes": 20708,
+      "bytes": 65272,
+      "local_header_offset": 13891872,
+      "sha256": "ccf94b03dc0f4c669c2ac96441127c17ad9287edc0001b5923879df99c75f3ae"
+     },
+     {
+      "element_id": "FJ1425M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1425M.obj",
+      "zip_crc32": 1293571388,
+      "compressed_bytes": 20770,
+      "bytes": 64765,
+      "local_header_offset": 13912640,
+      "sha256": "706257705ecc5fd6b12fa106eceea754e1200a68745e1d474ab4098e186c402a"
+     },
+     {
+      "element_id": "FJ1417",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1417.obj",
+      "zip_crc32": 3878791722,
+      "compressed_bytes": 12454,
+      "bytes": 42970,
+      "local_header_offset": 12263679,
+      "sha256": "57a2cec17f38fe60323d68942a7458512f0fe836a6e9ace69cf5fe6535e64365"
+     },
+     {
+      "element_id": "FJ1417M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1417M.obj",
+      "zip_crc32": 104527881,
+      "compressed_bytes": 12513,
+      "bytes": 42601,
+      "local_header_offset": 12276193,
+      "sha256": "b703d944a851871af8f4aab31d567e328a2b73e4709bc5703531faf7e9d6681d"
+     },
+     {
+      "element_id": "FJ1416",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1416.obj",
+      "zip_crc32": 3415162089,
+      "compressed_bytes": 15903,
+      "bytes": 48712,
+      "local_header_offset": 12231789,
+      "sha256": "4479931f789d919fe352532a1b377f88c48914d461d5bd68ffd008082e7e92c7"
+     },
+     {
+      "element_id": "FJ1416M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1416M.obj",
+      "zip_crc32": 3902705983,
+      "compressed_bytes": 15866,
+      "bytes": 48307,
+      "local_header_offset": 12247752,
+      "sha256": "9fc9803d6dc438dfccb5a12e8644927cefae78db28975a8e864f16bd3ac19d77"
+     },
+     {
+      "element_id": "FJ1432",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1432.obj",
+      "zip_crc32": 2338641197,
+      "compressed_bytes": 29740,
+      "bytes": 96117,
+      "local_header_offset": 14556156,
+      "sha256": "3c1121d358ea50cfb88fe829c5128ecc3470309e3de5d7f642bc8cf35555fdb1"
+     },
+     {
+      "element_id": "FJ1432M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1432M.obj",
+      "zip_crc32": 2442966238,
+      "compressed_bytes": 29725,
+      "bytes": 94874,
+      "local_header_offset": 14585956,
+      "sha256": "50f5a96e1a54247754748700a75f30f65936e639da558845cdb73a4665a5c5cf"
+     },
+     {
+      "element_id": "FJ1430",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1430.obj",
+      "zip_crc32": 1136825477,
+      "compressed_bytes": 20313,
+      "bytes": 60206,
+      "local_header_offset": 14275112,
+      "sha256": "78f5d5b80867116a0bbf59575efb8de3ed681030875a577bc00d310012df80fd"
+     },
+     {
+      "element_id": "FJ1430M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1430M.obj",
+      "zip_crc32": 1906308225,
+      "compressed_bytes": 20273,
+      "bytes": 59674,
+      "local_header_offset": 14295485,
+      "sha256": "96ece008a2edf30338e1b53611c86de64f2cc329af84fe5d54e9375469c3babd"
+     },
+     {
+      "element_id": "FJ1429",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1429.obj",
+      "zip_crc32": 4102767005,
+      "compressed_bytes": 54109,
+      "bytes": 166143,
+      "local_header_offset": 14166925,
+      "sha256": "49fdbe0ba556419a9c29efca287a944630275fb55b75f93168af254efaa777b7"
+     },
+     {
+      "element_id": "FJ1429M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1429M.obj",
+      "zip_crc32": 2772597524,
+      "compressed_bytes": 53957,
+      "bytes": 164531,
+      "local_header_offset": 14221094,
+      "sha256": "58b6f6b7d9707a72e660ca54b526b93a207ab549dd995ebc896588e8aaa3adad"
+     },
+     {
+      "element_id": "FJ1400",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1400.obj",
+      "zip_crc32": 2571034018,
+      "compressed_bytes": 28078,
+      "bytes": 90303,
+      "local_header_offset": 10114439,
+      "sha256": "e09959b4180b40e4272430e9cd7bd1fbfce954cd9c39236a3acca1a4fc495553"
+     },
+     {
+      "element_id": "FJ1400M",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1400M.obj",
+      "zip_crc32": 1660293549,
+      "compressed_bytes": 27986,
+      "bytes": 89074,
+      "local_header_offset": 10142577,
+      "sha256": "d598846d1738e708a810a4a1b621fddce3f0b170ccb8e9905cf1720108018567"
+     }
+    ],
+    "requests_detail": [
+     {
+      "method": "HEAD",
+      "range": null,
+      "status": 200,
+      "bytes": 0,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": null,
+      "content_length": "142903898",
+      "at_utc": "2026-11-11T11:33:06Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=142838362-142903897",
+      "status": 206,
+      "bytes": 65536,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142838362-142903897/142903898",
+      "content_length": "65536",
+      "at_utc": "2026-11-11T11:33:08Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=142733851-142903875",
+      "status": 206,
+      "bytes": 170025,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142733851-142903875/142903898",
+      "content_length": "170025",
+      "at_utc": "2026-11-11T11:33:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49668030-49668571",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49668030-49668571/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:13Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49668090-49837502",
+      "status": 206,
+      "bytes": 169413,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49668090-49837502/142903898",
+      "content_length": "169413",
+      "at_utc": "2026-11-11T11:33:15Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49837503-49838044",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49837503-49838044/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:17Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=49837564-50006676",
+      "status": 206,
+      "bytes": 169113,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 49837564-50006676/142903898",
+      "content_length": "169113",
+      "at_utc": "2026-11-11T11:33:20Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50006677-50007218",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50006677-50007218/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:22Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50006737-50056451",
+      "status": 206,
+      "bytes": 49715,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50006737-50056451/142903898",
+      "content_length": "49715",
+      "at_utc": "2026-11-11T11:33:24Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50056452-50056993",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50056452-50056993/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:26Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50056513-50106064",
+      "status": 206,
+      "bytes": 49552,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50056513-50106064/142903898",
+      "content_length": "49552",
+      "at_utc": "2026-11-11T11:33:28Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50699196-50699737",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50699196-50699737/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50699256-50997349",
+      "status": 206,
+      "bytes": 298094,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50699256-50997349/142903898",
+      "content_length": "298094",
+      "at_utc": "2026-11-11T11:33:32Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50997350-50997891",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50997350-50997891/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:34Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50997411-51294350",
+      "status": 206,
+      "bytes": 296940,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50997411-51294350/142903898",
+      "content_length": "296940",
+      "at_utc": "2026-11-11T11:33:37Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51294351-51294892",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51294351-51294892/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:39Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51294411-51503030",
+      "status": 206,
+      "bytes": 208620,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51294411-51503030/142903898",
+      "content_length": "208620",
+      "at_utc": "2026-11-11T11:33:41Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51503031-51503572",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51503031-51503572/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:43Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=51503092-51710939",
+      "status": 206,
+      "bytes": 207848,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 51503092-51710939/142903898",
+      "content_length": "207848",
+      "at_utc": "2026-11-11T11:33:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50418385-50418926",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50418385-50418926/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:48Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50418445-50558956",
+      "status": 206,
+      "bytes": 140512,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50418445-50558956/142903898",
+      "content_length": "140512",
+      "at_utc": "2026-11-11T11:33:51Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50558957-50559498",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50558957-50559498/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:52Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50559018-50699195",
+      "status": 206,
+      "bytes": 140178,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50559018-50699195/142903898",
+      "content_length": "140178",
+      "at_utc": "2026-11-11T11:33:55Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50229561-50230102",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50229561-50230102/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:33:57Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50229621-50324260",
+      "status": 206,
+      "bytes": 94640,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50229621-50324260/142903898",
+      "content_length": "94640",
+      "at_utc": "2026-11-11T11:33:59Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50324261-50324802",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50324261-50324802/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:01Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=50324322-50418384",
+      "status": 206,
+      "bytes": 94063,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 50324322-50418384/142903898",
+      "content_length": "94063",
+      "at_utc": "2026-11-11T11:34:03Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48378164-48378705",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48378164-48378705/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:07Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=48378224-48487123",
+      "status": 206,
+      "bytes": 108900,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 48378224-48487123/142903898",
+      "content_length": "108900",
+      "at_utc": "2026-11-11T11:34:09Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=35989316-35989857",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 35989316-35989857/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=35989376-36199800",
+      "status": 206,
+      "bytes": 210425,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 35989376-36199800/142903898",
+      "content_length": "210425",
+      "at_utc": "2026-11-11T11:34:14Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=36199801-36200342",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 36199801-36200342/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:16Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=36199862-36409799",
+      "status": 206,
+      "bytes": 209938,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 36199862-36409799/142903898",
+      "content_length": "209938",
+      "at_utc": "2026-11-11T11:34:18Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14114931-14115472",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14114931-14115472/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:20Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14114991-14140965",
+      "status": 206,
+      "bytes": 25975,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14114991-14140965/142903898",
+      "content_length": "25975",
+      "at_utc": "2026-11-11T11:34:22Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14140966-14141507",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14140966-14141507/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:24Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14141027-14166924",
+      "status": 206,
+      "bytes": 25898,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14141027-14166924/142903898",
+      "content_length": "25898",
+      "at_utc": "2026-11-11T11:34:26Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13933471-13934012",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13933471-13934012/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:28Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13933531-13992620",
+      "status": 206,
+      "bytes": 59090,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13933531-13992620/142903898",
+      "content_length": "59090",
+      "at_utc": "2026-11-11T11:34:30Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13992621-13993162",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13992621-13993162/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:32Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13992682-14051573",
+      "status": 206,
+      "bytes": 58892,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13992682-14051573/142903898",
+      "content_length": "58892",
+      "at_utc": "2026-11-11T11:34:35Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13891872-13892413",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13891872-13892413/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:36Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13891932-13912639",
+      "status": 206,
+      "bytes": 20708,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13891932-13912639/142903898",
+      "content_length": "20708",
+      "at_utc": "2026-11-11T11:34:38Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13912640-13913181",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13912640-13913181/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:40Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=13912701-13933470",
+      "status": 206,
+      "bytes": 20770,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 13912701-13933470/142903898",
+      "content_length": "20770",
+      "at_utc": "2026-11-11T11:34:42Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12263679-12264220",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12263679-12264220/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:44Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12263739-12276192",
+      "status": 206,
+      "bytes": 12454,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12263739-12276192/142903898",
+      "content_length": "12454",
+      "at_utc": "2026-11-11T11:34:46Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12276193-12276734",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12276193-12276734/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:48Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12276254-12288766",
+      "status": 206,
+      "bytes": 12513,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12276254-12288766/142903898",
+      "content_length": "12513",
+      "at_utc": "2026-11-11T11:34:50Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12231789-12232330",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12231789-12232330/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:52Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12231849-12247751",
+      "status": 206,
+      "bytes": 15903,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12231849-12247751/142903898",
+      "content_length": "15903",
+      "at_utc": "2026-11-11T11:34:54Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12247752-12248293",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12247752-12248293/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:34:56Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=12247813-12263678",
+      "status": 206,
+      "bytes": 15866,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 12247813-12263678/142903898",
+      "content_length": "15866",
+      "at_utc": "2026-11-11T11:34:58Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14556156-14556697",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14556156-14556697/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:00Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14556216-14585955",
+      "status": 206,
+      "bytes": 29740,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14556216-14585955/142903898",
+      "content_length": "29740",
+      "at_utc": "2026-11-11T11:35:02Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14585956-14586497",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14585956-14586497/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:04Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14586017-14615741",
+      "status": 206,
+      "bytes": 29725,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14586017-14615741/142903898",
+      "content_length": "29725",
+      "at_utc": "2026-11-11T11:35:06Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14275112-14275653",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14275112-14275653/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:07Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14275172-14295484",
+      "status": 206,
+      "bytes": 20313,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14275172-14295484/142903898",
+      "content_length": "20313",
+      "at_utc": "2026-11-11T11:35:09Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14295485-14296026",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14295485-14296026/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:11Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14295546-14315818",
+      "status": 206,
+      "bytes": 20273,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14295546-14315818/142903898",
+      "content_length": "20273",
+      "at_utc": "2026-11-11T11:35:13Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14166925-14167466",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14166925-14167466/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:15Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14166985-14221093",
+      "status": 206,
+      "bytes": 54109,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14166985-14221093/142903898",
+      "content_length": "54109",
+      "at_utc": "2026-11-11T11:35:17Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14221094-14221635",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14221094-14221635/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:19Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=14221155-14275111",
+      "status": 206,
+      "bytes": 53957,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 14221155-14275111/142903898",
+      "content_length": "53957",
+      "at_utc": "2026-11-11T11:35:21Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10114439-10114980",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10114439-10114980/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:23Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10114499-10142576",
+      "status": 206,
+      "bytes": 28078,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10114499-10142576/142903898",
+      "content_length": "28078",
+      "at_utc": "2026-11-11T11:35:25Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10142577-10143118",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10142577-10143118/142903898",
+      "content_length": "542",
+      "at_utc": "2026-11-11T11:35:27Z"
+     },
+     {
+      "method": "GET",
+      "range": "bytes=10142638-10170623",
+      "status": 206,
+      "bytes": 27986,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 10142638-10170623/142903898",
+      "content_length": "27986",
+      "at_utc": "2026-11-11T11:35:29Z"
+     }
+    ]
+   }
+  ],
+  "files_in_packet": 93,
+  "change": "none: every FJ*.obj is the byte-exact decompressed archive member (CRC32, size and sha256 checked)",
+  "header_checks": "each file's embedded File ID equals its element id, Compatibility version is 4.0, its English name is exactly \"<side> <muscle>\", its Concept ID is in the element list rows of that file, and its header bounds match its vertices within 1 mm (right-side files up to 0.48 mm, as in the full-body packet)"
+ },
+ "z_anatomy": {
+  "repository": "https://github.com/LluisV/Z-Anatomy",
+  "commit": "6c7f9016bd5899ac8edafd31b9900c151df42ed6",
+  "file": "Resources/Models/FBX/MuscularSystem100.fbx",
+  "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx",
+  "bytes": 37343180,
+  "sha256": "4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279",
+  "git_blob_sha1": "2477e1b6caf97d7174762b5eec6cf1c80db64eed",
+  "same_as_face_packet": "yes: the same commit, file, byte count and sha256 as packets/face-muscles-r1 (ACQUISITION-RECORD.json, SOURCES.json)",
+  "retrieved": "one GET, 2026-11-11 (response headers below)",
+  "response_headers": [
+   "HTTP/2 200 ",
+   "cache-control: max-age=300",
+   "content-security-policy: default-src 'none'; style-src 'unsafe-inline'; sandbox",
+   "content-type: application/octet-stream",
+   "etag: \"799dc3e80432278991d24f35e0a95ccdbdbf0686cf02e41c8e50c4d07f03e7ef\"",
+   "strict-transport-security: max-age=31536000",
+   "x-content-type-options: nosniff",
+   "x-frame-options: deny",
+   "x-xss-protection: 1; mode=block",
+   "x-github-request-id: D258:34280D:A87CF:11025B:6AF444C5",
+   "x-github-edge-region: australiaeast",
+   "accept-ranges: bytes",
+   "date: Wed, 11 Nov 2026 10:38:31 GMT",
+   "via: 1.1 varnish",
+   "x-served-by: cache-mel11273-MEL",
+   "x-cache: HIT",
+   "x-cache-hits: 0",
+   "x-timer: S1794393511.431691,VS0,VE1",
+   "vary: Authorization,Accept-Encoding",
+   "access-control-allow-origin: *",
+   "cross-origin-resource-policy: cross-origin",
+   "x-fastly-request-id: 1cde1390e09805fc31083594296db25b1ada1c8d",
+   "expires: Wed, 11 Nov 2026 10:43:31 GMT",
+   "source-age: 225",
+   "content-length: 37343180"
+  ],
+  "licence_files": {
+   "LICENSE.txt": "5e7dd512c01cfb822e3253f8f8df923103a64e269deb9bb5303f23b2376cad46",
+   "Model-License.txt": "af62c06f620b9da20138e4c22a3f56565482dd058266540994ace97a4e24b693",
+   "Authors-License.txt": "196b66b56551a862e59872f7cdb70e6d9a6ad84e9105962fca8ec28c14e97520",
+   "Models-Readme.txt": "43eab2cd13ad8be51d20227cad78d427e6078cd91e66a24ae7f947811524c810"
+  },
+  "licence_files_note": "copied unchanged into LICENSES/ as Z-Anatomy-License.txt, Z-Anatomy-Model-Notice.txt, Z-Anatomy-Authors-and-Notice.txt, Z-Anatomy-Export-Readme.txt",
+  "conversion": {
+   "tools": "fbxread.py (a minimal binary FBX 7.x reader written for this packet: nodes, properties, zlib arrays; Python standard library only, no third-party code), zscene.py (scene graph: FBX Lcl translation / rotation (XYZ Euler) / scaling per node, parent chain, no pivots, as the face packet), zconvert.py (OBJ writer). No Blender or other tool was needed.",
+   "route": "p_out = s * R * (W_node * p_src) + t with the face packet's recorded similarity (scale 9.86027892397196, rotation R, translation t in mm; the face packet's ACQUISITION-RECORD), polygons fan-triangulated, winding reversed for mirrored (negative determinant) nodes, unreferenced vertices dropped in source order, coordinates written with four decimals (mm).",
+   "face_packet_reproduction": "zconvert.py --check-face: all 54 face-packet OBJ files reproduced line for line from the FBX (54 identical, 0 different), so this is exactly the face packet's route and transform.",
+   "transform": {
+    "scale": 9.86027892397196,
+    "R": [
+     [
+      0.9999984091929723,
+      0.0014123048115752704,
+      0.001089498344482475
+     ],
+     [
+      0.0010869080085711353,
+      0.0018335913893327504,
+      -0.9999977282842195
+     ],
+     [
+      -0.0014142992980036265,
+      0.9999973216652821,
+      0.0018320534270323263
+     ]
+    ],
+    "t_mm": [
+     -2.803491678533594,
+     -92.66004989565096,
+     -47.8394944350408
+    ]
+   },
+   "selection": [
+    {
+     "id": "zm-latissimus-dorsi-r",
+     "source_object": "Latissimus dorsi muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-latissimus-dorsi-l",
+     "source_object": "Latissimus dorsi muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-rectus-abdominis-r",
+     "source_object": "Rectus abdominis muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-rectus-abdominis-l",
+     "source_object": "Rectus abdominis muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-internal-oblique-r",
+     "source_object": "Internal abdominal oblique muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-internal-oblique-l",
+     "source_object": "Internal abdominal oblique muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-quadratus-lumborum-r",
+     "source_object": "Quadratus lumborum muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-quadratus-lumborum-l",
+     "source_object": "Quadratus lumborum muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-longus-colli-r",
+     "source_object": "Longus colli muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-longus-colli-l",
+     "source_object": "Longus colli muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-extensor-digitorum-brevis-r",
+     "source_object": "Extensor digitorum brevis.r",
+     "side": "right",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-extensor-digitorum-brevis-l",
+     "source_object": "Extensor digitorum brevis.l",
+     "side": "left",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-medial-r",
+     "source_object": "Medial head of flexor hallucis brevis.r",
+     "side": "right",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-medial-l",
+     "source_object": "Medial head of flexor hallucis brevis.l",
+     "side": "left",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-lateral-r",
+     "source_object": "Lateral head of flexor hallucis brevis.r",
+     "side": "right",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-lateral-l",
+     "source_object": "Lateral head of flexor hallucis brevis.l",
+     "side": "left",
+     "foot_refinement": true
+    },
+    {
+     "id": "zm-transversus-abdominis-r",
+     "source_object": "Transversus abdominis muscle.r",
+     "side": "right",
+     "foot_refinement": false
+    },
+    {
+     "id": "zm-transversus-abdominis-l",
+     "source_object": "Transversus abdominis muscle.l",
+     "side": "left",
+     "foot_refinement": false
+    }
+   ],
+   "per_file": [
+    {
+     "id": "zm-latissimus-dorsi-r",
+     "source_object": "Latissimus dorsi muscle.r",
+     "source_object_path": [
+      "Dorsal part of muscular system.g",
+      "Hypaxial muscles of back.g",
+      "Latissimus dorsi muscle.r"
+     ],
+     "source_model_id": 172472462,
+     "source_geometry_id": 548598595,
+     "source_mirrored_instance": false,
+     "vertices": 10796,
+     "triangles": 21580,
+     "bytes": 685531,
+     "sha256": "5231d5362162bb02e07a791c16a02553935b33022da9bff2dae476e5cb002a2a",
+     "bounds_min": [
+      -183.0366,
+      -72.4523,
+      870.509
+     ],
+     "bounds_max": [
+      0.6658,
+      27.8316,
+      1275.5438
+     ],
+     "centroid": [
+      -81.9498,
+      -19.6471,
+      1091.4814
+     ]
+    },
+    {
+     "id": "zm-latissimus-dorsi-l",
+     "source_object": "Latissimus dorsi muscle.l",
+     "source_object_path": [
+      "Dorsal part of muscular system.g",
+      "Hypaxial muscles of back.g",
+      "Latissimus dorsi muscle.l"
+     ],
+     "source_model_id": 817053160,
+     "source_geometry_id": 548598595,
+     "source_mirrored_instance": true,
+     "vertices": 10796,
+     "triangles": 21580,
+     "bytes": 675349,
+     "sha256": "33ca605679fd985a0eff3c2823e16e0ec09cb7cb1a5da5052a5443dc75d64a61",
+     "bounds_min": [
+      -3.7715,
+      -72.0686,
+      870.4855
+     ],
+     "bounds_max": [
+      181.0597,
+      27.9888,
+      1275.0504
+     ],
+     "centroid": [
+      79.4063,
+      -19.4717,
+      1091.2532
+     ]
+    },
+    {
+     "id": "zm-rectus-abdominis-r",
+     "source_object": "Rectus abdominis muscle.r",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Rectus abdominis muscle.r"
+     ],
+     "source_model_id": 811540614,
+     "source_geometry_id": 321014954,
+     "source_mirrored_instance": false,
+     "vertices": 10304,
+     "triangles": 20604,
+     "bytes": 662536,
+     "sha256": "f16faf6759175fd069858c4b577073a1aa624fe65b905e896565e451a20aab68",
+     "bounds_min": [
+      -81.6159,
+      -208.6038,
+      790.1615
+     ],
+     "bounds_max": [
+      -4.4837,
+      -135.5359,
+      1193.0871
+     ],
+     "centroid": [
+      -41.6638,
+      -186.7724,
+      1043.0802
+     ]
+    },
+    {
+     "id": "zm-rectus-abdominis-l",
+     "source_object": "Rectus abdominis muscle.l",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Rectus abdominis muscle.l"
+     ],
+     "source_model_id": 473516794,
+     "source_geometry_id": 321014954,
+     "source_mirrored_instance": true,
+     "vertices": 10304,
+     "triangles": 20604,
+     "bytes": 651992,
+     "sha256": "73acdaa0236e632a166cf21128ad076e5a1ec41acd9e16e23e1de27135b2112f",
+     "bounds_min": [
+      1.4568,
+      -208.5053,
+      790.1424
+     ],
+     "bounds_max": [
+      79.4586,
+      -135.5195,
+      1192.9566
+     ],
+     "centroid": [
+      39.347,
+      -186.6843,
+      1042.9655
+     ]
+    },
+    {
+     "id": "zm-internal-oblique-r",
+     "source_object": "Internal abdominal oblique muscle.r",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Internal abdominal oblique muscle.r"
+     ],
+     "source_model_id": 272619451,
+     "source_geometry_id": 225169782,
+     "source_mirrored_instance": false,
+     "vertices": 14411,
+     "triangles": 28869,
+     "bytes": 950524,
+     "sha256": "de16d3996d856c9070af84816fd6f8a2edc12c1a6621e3c933befeb72e00c44b",
+     "bounds_min": [
+      -127.0435,
+      -211.0461,
+      790.2965
+     ],
+     "bounds_max": [
+      -4.3227,
+      -38.2781,
+      1176.6339
+     ],
+     "centroid": [
+      -57.0418,
+      -163.4883,
+      985.5402
+     ]
+    },
+    {
+     "id": "zm-internal-oblique-l",
+     "source_object": "Internal abdominal oblique muscle.l",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Internal abdominal oblique muscle.l"
+     ],
+     "source_model_id": 642806399,
+     "source_geometry_id": 225169782,
+     "source_mirrored_instance": true,
+     "vertices": 14411,
+     "triangles": 28869,
+     "bytes": 935463,
+     "sha256": "a4550e8d1d5432742e51728e46ba38fbc92a060ae2cf7dc5f33d9f91183a78d7",
+     "bounds_min": [
+      1.3506,
+      -210.9383,
+      790.2791
+     ],
+     "bounds_max": [
+      124.2361,
+      -38.1153,
+      1176.6084
+     ],
+     "centroid": [
+      54.5114,
+      -163.367,
+      985.3824
+     ]
+    },
+    {
+     "id": "zm-quadratus-lumborum-r",
+     "source_object": "Quadratus lumborum muscle.r",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Quadratus lumborum muscle.r"
+     ],
+     "source_model_id": 421310032,
+     "source_geometry_id": 493126198,
+     "source_mirrored_instance": false,
+     "vertices": 1416,
+     "triangles": 2832,
+     "bytes": 84744,
+     "sha256": "8b09db1931bbb7671e9285c4b00957efcdbd64ab37126ce0e7937955b7dd8572",
+     "bounds_min": [
+      -69.525,
+      -62.5847,
+      879.3685
+     ],
+     "bounds_max": [
+      -18.7213,
+      -18.1673,
+      1082.8739
+     ],
+     "centroid": [
+      -41.1106,
+      -38.0096,
+      988.3903
+     ]
+    },
+    {
+     "id": "zm-quadratus-lumborum-l",
+     "source_object": "Quadratus lumborum muscle.l",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Quadratus lumborum muscle.l"
+     ],
+     "source_model_id": 235254145,
+     "source_geometry_id": 493126198,
+     "source_mirrored_instance": true,
+     "vertices": 1416,
+     "triangles": 2832,
+     "bytes": 83447,
+     "sha256": "97390107621b718de258fac992ef716f97d99372d8529887b71b33b0e0f203e3",
+     "bounds_min": [
+      16.178,
+      -62.5192,
+      879.2524
+     ],
+     "bounds_max": [
+      66.7985,
+      -18.0854,
+      1082.8152
+     ],
+     "centroid": [
+      38.3157,
+      -37.9233,
+      988.278
+     ]
+    },
+    {
+     "id": "zm-longus-colli-r",
+     "source_object": "Longus colli muscle.r",
+     "source_object_path": [
+      "Cervical part of muscular system.g",
+      "Muscles of neck.g",
+      "Longus colli muscle.r"
+     ],
+     "source_model_id": 542597791,
+     "source_geometry_id": 962471117,
+     "source_mirrored_instance": false,
+     "vertices": 3153,
+     "triangles": 6294,
+     "bytes": 195056,
+     "sha256": "5da8fdf48dc1b5660f08d3102e611af15edbca7ffeff0dc0845372b0e27c1811",
+     "bounds_min": [
+      -26.4211,
+      -94.5907,
+      1320.2475
+     ],
+     "bounds_max": [
+      -1.919,
+      -61.1978,
+      1475.515
+     ],
+     "centroid": [
+      -13.1179,
+      -82.3227,
+      1407.3161
+     ]
+    },
+    {
+     "id": "zm-longus-colli-l",
+     "source_object": "Longus colli muscle.l",
+     "source_object_path": [
+      "Cervical part of muscular system.g",
+      "Muscles of neck.g",
+      "Longus colli muscle.l"
+     ],
+     "source_model_id": 101539905,
+     "source_geometry_id": 962471117,
+     "source_mirrored_instance": true,
+     "vertices": 3153,
+     "triangles": 6294,
+     "bytes": 191835,
+     "sha256": "70f174be07b0ab84d0be54c309e7e7ae36a4ed4bcf4c496c9b8f0fcbcbeb6531",
+     "bounds_min": [
+      0.6123,
+      -94.578,
+      1320.2294
+     ],
+     "bounds_max": [
+      24.9895,
+      -61.1817,
+      1475.5031
+     ],
+     "centroid": [
+      11.6045,
+      -82.2958,
+      1407.2812
+     ]
+    },
+    {
+     "id": "zm-extensor-digitorum-brevis-r",
+     "source_object": "Extensor digitorum brevis.r",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Extensor digitorum brevis.r"
+     ],
+     "source_model_id": 660006931,
+     "source_geometry_id": 421987225,
+     "source_mirrored_instance": false,
+     "vertices": 1596,
+     "triangles": 3184,
+     "bytes": 97908,
+     "sha256": "62115bc03bb75178b2f7eee2acc843b64b97dd7d33b6a574c3d1c22580f03702",
+     "bounds_min": [
+      -157.7561,
+      -213.0526,
+      -65.3907
+     ],
+     "bounds_max": [
+      -93.5192,
+      -65.1933,
+      -7.8787
+     ],
+     "centroid": [
+      -114.3559,
+      -124.6867,
+      -32.9751
+     ]
+    },
+    {
+     "id": "zm-extensor-digitorum-brevis-l",
+     "source_object": "Extensor digitorum brevis.l",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Extensor digitorum brevis.l"
+     ],
+     "source_model_id": 899759535,
+     "source_geometry_id": 421987225,
+     "source_mirrored_instance": true,
+     "vertices": 1596,
+     "triangles": 3184,
+     "bytes": 96428,
+     "sha256": "d437ec49dc386a1973fd7750498c9aef488da9a74c650c737b7207c3443f9c3b",
+     "bounds_min": [
+      93.4706,
+      -212.9261,
+      -65.3997
+     ],
+     "bounds_max": [
+      157.7002,
+      -65.0535,
+      -7.9057
+     ],
+     "centroid": [
+      114.3253,
+      -124.5343,
+      -32.9952
+     ]
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-medial-r",
+     "source_object": "Medial head of flexor hallucis brevis.r",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Flexor hallucis brevis.g",
+      "Medial head of flexor hallucis brevis.r"
+     ],
+     "source_model_id": 402550054,
+     "source_geometry_id": 141702922,
+     "source_mirrored_instance": false,
+     "vertices": 259,
+     "triangles": 514,
+     "bytes": 16107,
+     "sha256": "702c659225316ef5b4f9e143bc80afdf9cee6cddb6b981b00d54ca86d7de9e5c",
+     "bounds_min": [
+      -93.499,
+      -192.5382,
+      -67.3628
+     ],
+     "bounds_max": [
+      -66.14,
+      -113.5252,
+      -29.1943
+     ],
+     "centroid": [
+      -80.7737,
+      -156.3889,
+      -51.1133
+     ]
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-medial-l",
+     "source_object": "Medial head of flexor hallucis brevis.l",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Flexor hallucis brevis.g",
+      "Medial head of flexor hallucis brevis.l"
+     ],
+     "source_model_id": 273036888,
+     "source_geometry_id": 141702922,
+     "source_mirrored_instance": true,
+     "vertices": 259,
+     "triangles": 514,
+     "bytes": 15967,
+     "sha256": "2d01a913a66d36b2db6654a5ee7470ef5a9edc143feb544ca492a9814d5d25f8",
+     "bounds_min": [
+      66.1038,
+      -192.43,
+      -67.2805
+     ],
+     "bounds_max": [
+      93.4426,
+      -113.3914,
+      -29.1539
+     ],
+     "centroid": [
+      80.7276,
+      -156.2682,
+      -51.0492
+     ]
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-lateral-r",
+     "source_object": "Lateral head of flexor hallucis brevis.r",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Flexor hallucis brevis.g",
+      "Lateral head of flexor hallucis brevis.r"
+     ],
+     "source_model_id": 600174712,
+     "source_geometry_id": 27964006,
+     "source_mirrored_instance": false,
+     "vertices": 481,
+     "triangles": 966,
+     "bytes": 29124,
+     "sha256": "bef981b7cf078d0376c99e97db823e327ba23a2160a5305ab0e6165e28a7b781",
+     "bounds_min": [
+      -103.2826,
+      -190.344,
+      -69.7637
+     ],
+     "bounds_max": [
+      -67.0428,
+      -115.2114,
+      -32.4051
+     ],
+     "centroid": [
+      -85.1756,
+      -143.4561,
+      -50.9039
+     ]
+    },
+    {
+     "id": "zm-flexor-hallucis-brevis-lateral-l",
+     "source_object": "Lateral head of flexor hallucis brevis.l",
+     "source_object_path": [
+      "Muscular system of lower limb.g",
+      "Muscles of lower limb.g",
+      "Muscles of foot.g",
+      "Flexor hallucis brevis.g",
+      "Lateral head of flexor hallucis brevis.l"
+     ],
+     "source_model_id": 767779129,
+     "source_geometry_id": 27964006,
+     "source_mirrored_instance": true,
+     "vertices": 481,
+     "triangles": 966,
+     "bytes": 28761,
+     "sha256": "cee22c4b32d75b133984facee92351253b863f69fac734dc2458972e570c755a",
+     "bounds_min": [
+      67.0077,
+      -190.234,
+      -69.6999
+     ],
+     "bounds_max": [
+      103.2272,
+      -115.081,
+      -32.3665
+     ],
+     "centroid": [
+      85.1255,
+      -143.3337,
+      -50.8608
+     ]
+    },
+    {
+     "id": "zm-transversus-abdominis-r",
+     "source_object": "Transversus abdominis muscle.r",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Transversus abdominis muscle.r"
+     ],
+     "source_model_id": 795120383,
+     "source_geometry_id": 324089139,
+     "source_mirrored_instance": false,
+     "vertices": 17164,
+     "triangles": 34328,
+     "bytes": 1146180,
+     "sha256": "ea517651111e489af07639448cb8a8c4760cf5c4bd92f3a94225df8d54fa0a2a",
+     "bounds_min": [
+      -132.2432,
+      -193.1398,
+      781.6186
+     ],
+     "bounds_max": [
+      -4.977,
+      -28.1435,
+      1196.7996
+     ],
+     "centroid": [
+      -82.8207,
+      -122.0334,
+      1010.7844
+     ]
+    },
+    {
+     "id": "zm-transversus-abdominis-l",
+     "source_object": "Transversus abdominis muscle.l",
+     "source_object_path": [
+      "Abdominal part of muscular system.g",
+      "Muscles of abdomen.g",
+      "Transversus abdominis muscle.l"
+     ],
+     "source_model_id": 881393607,
+     "source_geometry_id": 324089139,
+     "source_mirrored_instance": true,
+     "vertices": 17164,
+     "triangles": 34328,
+     "bytes": 1128023,
+     "sha256": "076d57b98f3b6e87609987fbe8fe93262e8d6734f76d19aa05ea61d311275ecf",
+     "bounds_min": [
+      2.0065,
+      -193.1245,
+      781.5738
+     ],
+     "bounds_max": [
+      130.0708,
+      -27.9234,
+      1196.488
+     ],
+     "centroid": [
+      80.2715,
+      -121.8561,
+      1010.5536
+     ]
+    }
+   ]
+  },
+  "files_in_packet": 18
+ },
+ "frame_registration_check": {
+  "method": "regcheck.py: each Z-Anatomy object converted with the face similarity is compared with the SAME structure in BodyParts3D 4.0 (exact point-to-triangle distances, up to 1500 sampled vertices; mean offset = BodyParts3D minus Z-Anatomy, mm, +x subject left, +y posterior, +z superior). Different atlases model some structures differently (the trapezius parts are cut differently: the large values there are a segmentation difference, not a misplacement).",
+  "trunk_neck_hip_leg_pairs": [
+   {
+    "zanatomy_object": "Sternocleidomastoid muscle.r",
+    "bodyparts3d_element": "FJ1595",
+    "n": 2472,
+    "median": 1.46,
+    "p90": 3.87,
+    "p95": 4.58,
+    "max": 7.65,
+    "rms": 2.35,
+    "mean_offset_to_bp3d_mm": [
+     -0.8,
+     0.46,
+     -0.52
+    ],
+    "centroid_z_mm": 1401.9
+   },
+   {
+    "zanatomy_object": "Descending part of trapezius muscle.r",
+    "bodyparts3d_element": "FJ1521",
+    "n": 1688,
+    "median": 100.67,
+    "p90": 245.38,
+    "p95": 267.96,
+    "max": 308.91,
+    "rms": 147.75,
+    "mean_offset_to_bp3d_mm": [
+     -7.93,
+     -35.3,
+     116.57
+    ],
+    "centroid_z_mm": 1246.6
+   },
+   {
+    "zanatomy_object": "Clavicular head of pectoralis major muscle.r",
+    "bodyparts3d_element": "FJ1447",
+    "n": 425,
+    "median": 3.76,
+    "p90": 8.55,
+    "p95": 9.09,
+    "max": 9.69,
+    "rms": 5.11,
+    "mean_offset_to_bp3d_mm": [
+     0.01,
+     -2.44,
+     -1.9
+    ],
+    "centroid_z_mm": 1308.1
+   },
+   {
+    "zanatomy_object": "Sternocostal head of pectoralis major muscle.r",
+    "bodyparts3d_element": "FJ1464",
+    "n": 1611,
+    "median": 2.5,
+    "p90": 5.61,
+    "p95": 7.38,
+    "max": 17.43,
+    "rms": 3.74,
+    "mean_offset_to_bp3d_mm": [
+     -0.44,
+     -1.87,
+     -0.11
+    ],
+    "centroid_z_mm": 1241.9
+   },
+   {
+    "zanatomy_object": "Serratus anterior muscle.r",
+    "bodyparts3d_element": "FJ1459",
+    "n": 1578,
+    "median": 4.4,
+    "p90": 12.81,
+    "p95": 15.57,
+    "max": 19.38,
+    "rms": 7.28,
+    "mean_offset_to_bp3d_mm": [
+     2.89,
+     -2.91,
+     -1.62
+    ],
+    "centroid_z_mm": 1236.7
+   },
+   {
+    "zanatomy_object": "Transverse part of trapezius muscle.r",
+    "bodyparts3d_element": "FJ1554",
+    "n": 1494,
+    "median": 4.95,
+    "p90": 9.79,
+    "p95": 11.43,
+    "max": 18.03,
+    "rms": 6.7,
+    "mean_offset_to_bp3d_mm": [
+     0.35,
+     -4.68,
+     -1.2
+    ],
+    "centroid_z_mm": 1345.5
+   },
+   {
+    "zanatomy_object": "Ascending part of trapezius muscle.r",
+    "bodyparts3d_element": "FJ1520",
+    "n": 2298,
+    "median": 72.88,
+    "p90": 152.6,
+    "p95": 162.41,
+    "max": 166.57,
+    "rms": 92.51,
+    "mean_offset_to_bp3d_mm": [
+     -2.3,
+     28.72,
+     -71.24
+    ],
+    "centroid_z_mm": 1410.5
+   },
+   {
+    "zanatomy_object": "External abdominal oblique muscle.r",
+    "bodyparts3d_element": "FJ1452",
+    "n": 1646,
+    "median": 2.44,
+    "p90": 5.16,
+    "p95": 6.02,
+    "max": 9.97,
+    "rms": 3.3,
+    "mean_offset_to_bp3d_mm": [
+     -0.09,
+     -2.0,
+     -0.3
+    ],
+    "centroid_z_mm": 1011.4
+   },
+   {
+    "zanatomy_object": "External abdominal oblique muscle.l",
+    "bodyparts3d_element": "FJ1452M",
+    "n": 1646,
+    "median": 3.18,
+    "p90": 5.19,
+    "p95": 6.5,
+    "max": 10.64,
+    "rms": 3.63,
+    "mean_offset_to_bp3d_mm": [
+     0.66,
+     -2.18,
+     -0.32
+    ],
+    "centroid_z_mm": 1011.2
+   },
+   {
+    "zanatomy_object": "Psoas major.r",
+    "bodyparts3d_element": "FJ1431",
+    "n": 2737,
+    "median": 3.98,
+    "p90": 12.93,
+    "p95": 16.3,
+    "max": 23.07,
+    "rms": 7.43,
+    "mean_offset_to_bp3d_mm": [
+     -2.6,
+     0.75,
+     2.03
+    ],
+    "centroid_z_mm": 926.7
+   },
+   {
+    "zanatomy_object": "Iliacus muscle.r",
+    "bodyparts3d_element": "FJ1422",
+    "n": 2179,
+    "median": 5.54,
+    "p90": 16.41,
+    "p95": 19.26,
+    "max": 25.1,
+    "rms": 9.1,
+    "mean_offset_to_bp3d_mm": [
+     -2.69,
+     3.19,
+     2.12
+    ],
+    "centroid_z_mm": 846.7
+   },
+   {
+    "zanatomy_object": "Gluteus maximus muscle.r",
+    "bodyparts3d_element": "FJ1418",
+    "n": 1663,
+    "median": 4.21,
+    "p90": 9.13,
+    "p95": 10.22,
+    "max": 15.71,
+    "rms": 5.53,
+    "mean_offset_to_bp3d_mm": [
+     0.67,
+     -0.19,
+     1.41
+    ],
+    "centroid_z_mm": 794.0
+   },
+   {
+    "zanatomy_object": "Gluteus medius muscle.r",
+    "bodyparts3d_element": "FJ1419",
+    "n": 2590,
+    "median": 6.87,
+    "p90": 13.12,
+    "p95": 15.13,
+    "max": 19.74,
+    "rms": 8.26,
+    "mean_offset_to_bp3d_mm": [
+     -2.31,
+     3.56,
+     2.43
+    ],
+    "centroid_z_mm": 857.4
+   },
+   {
+    "zanatomy_object": "Rectus femoris muscle.r",
+    "bodyparts3d_element": "FJ1433",
+    "n": 2068,
+    "median": 4.13,
+    "p90": 13.04,
+    "p95": 14.73,
+    "max": 17.18,
+    "rms": 7.21,
+    "mean_offset_to_bp3d_mm": [
+     -0.4,
+     -3.91,
+     -0.41
+    ],
+    "centroid_z_mm": 599.4
+   },
+   {
+    "zanatomy_object": "Sartorius muscle.r",
+    "bodyparts3d_element": "FJ1434",
+    "n": 2481,
+    "median": 9.71,
+    "p90": 21.31,
+    "p95": 23.09,
+    "max": 26.33,
+    "rms": 12.79,
+    "mean_offset_to_bp3d_mm": [
+     2.77,
+     -7.21,
+     -1.24
+    ],
+    "centroid_z_mm": 593.4
+   },
+   {
+    "zanatomy_object": "Adductor magnus.r",
+    "bodyparts3d_element": "FJ1403",
+    "n": 2048,
+    "median": 4.95,
+    "p90": 10.69,
+    "p95": 14.99,
+    "max": 23.13,
+    "rms": 7.35,
+    "mean_offset_to_bp3d_mm": [
+     0.62,
+     -4.16,
+     -0.03
+    ],
+    "centroid_z_mm": 603.5
+   },
+   {
+    "zanatomy_object": "Teres major muscle.r",
+    "bodyparts3d_element": "FJ1507",
+    "n": 577,
+    "median": 5.5,
+    "p90": 11.61,
+    "p95": 12.56,
+    "max": 15.74,
+    "rms": 7.06,
+    "mean_offset_to_bp3d_mm": [
+     3.98,
+     -2.98,
+     0.82
+    ],
+    "centroid_z_mm": 1234.9
+   },
+   {
+    "zanatomy_object": "Tibialis anterior muscle.r",
+    "bodyparts3d_element": "FJ1439",
+    "n": 1761,
+    "median": 8.59,
+    "p90": 14.42,
+    "p95": 15.34,
+    "max": 18.36,
+    "rms": 9.38,
+    "mean_offset_to_bp3d_mm": [
+     -2.36,
+     -3.24,
+     -1.37
+    ],
+    "centroid_z_mm": 177.6
+   },
+   {
+    "zanatomy_object": "Soleus muscle.r",
+    "bodyparts3d_element": "FJ1437",
+    "n": 1690,
+    "median": 10.27,
+    "p90": 18.6,
+    "p95": 19.39,
+    "max": 20.89,
+    "rms": 12.47,
+    "mean_offset_to_bp3d_mm": [
+     1.19,
+     -7.86,
+     -0.27
+    ],
+    "centroid_z_mm": 232.5
+   },
+   {
+    "zanatomy_object": "Iliocostalis lumborum muscle.r",
+    "bodyparts3d_element": "FJ1527",
+    "n": 1673,
+    "median": 2.37,
+    "p90": 8.98,
+    "p95": 10.91,
+    "max": 15.23,
+    "rms": 4.83,
+    "mean_offset_to_bp3d_mm": [
+     1.17,
+     1.45,
+     0.74
+    ],
+    "centroid_z_mm": 1007.6
+   },
+   {
+    "zanatomy_object": "Iliocostalis lumborum muscle.l",
+    "bodyparts3d_element": "FJ1527M",
+    "n": 1673,
+    "median": 1.96,
+    "p90": 7.97,
+    "p95": 10.12,
+    "max": 14.41,
+    "rms": 4.37,
+    "mean_offset_to_bp3d_mm": [
+     -0.41,
+     1.43,
+     0.57
+    ],
+    "centroid_z_mm": 1007.5
+   },
+   {
+    "zanatomy_object": "Iliocostalis thoracis muscle.r",
+    "bodyparts3d_element": "FJ1528",
+    "n": 2888,
+    "median": 7.2,
+    "p90": 12.57,
+    "p95": 13.29,
+    "max": 14.97,
+    "rms": 8.17,
+    "mean_offset_to_bp3d_mm": [
+     0.93,
+     -5.69,
+     -2.08
+    ],
+    "centroid_z_mm": 1216.3
+   },
+   {
+    "zanatomy_object": "Longissimus thoracis muscle.r",
+    "bodyparts3d_element": "FJ1535",
+    "n": 1606,
+    "median": 4.49,
+    "p90": 10.18,
+    "p95": 11.22,
+    "max": 13.38,
+    "rms": 6.15,
+    "mean_offset_to_bp3d_mm": [
+     0.5,
+     -3.27,
+     -0.78
+    ],
+    "centroid_z_mm": 1128.1
+   },
+   {
+    "zanatomy_object": "Longissimus thoracis muscle.l",
+    "bodyparts3d_element": "FJ1535M",
+    "n": 1606,
+    "median": 4.67,
+    "p90": 9.93,
+    "p95": 10.87,
+    "max": 13.27,
+    "rms": 6.14,
+    "mean_offset_to_bp3d_mm": [
+     0.08,
+     -3.31,
+     -0.74
+    ],
+    "centroid_z_mm": 1128.0
+   },
+   {
+    "zanatomy_object": "Spinalis thoracis muscle.r",
+    "bodyparts3d_element": "FJ1544",
+    "n": 2768,
+    "median": 5.3,
+    "p90": 7.98,
+    "p95": 9.14,
+    "max": 12.18,
+    "rms": 5.75,
+    "mean_offset_to_bp3d_mm": [
+     0.3,
+     -4.89,
+     0.1
+    ],
+    "centroid_z_mm": 1171.4
+   },
+   {
+    "zanatomy_object": "Gracilis muscle.r",
+    "bodyparts3d_element": "FJ1421",
+    "n": 2404,
+    "median": 4.61,
+    "p90": 18.56,
+    "p95": 20.99,
+    "max": 26.8,
+    "rms": 10.13,
+    "mean_offset_to_bp3d_mm": [
+     1.95,
+     -5.14,
+     -0.01
+    ],
+    "centroid_z_mm": 577.1
+   },
+   {
+    "zanatomy_object": "Adductor longus.r",
+    "bodyparts3d_element": "FJ1402",
+    "n": 1855,
+    "median": 2.16,
+    "p90": 6.18,
+    "p95": 8.08,
+    "max": 9.73,
+    "rms": 3.6,
+    "mean_offset_to_bp3d_mm": [
+     -0.72,
+     -0.17,
+     0.11
+    ],
+    "centroid_z_mm": 648.0
+   },
+   {
+    "zanatomy_object": "Tensor fasciae latae.r",
+    "bodyparts3d_element": "FJ1438",
+    "n": 933,
+    "median": 8.34,
+    "p90": 18.11,
+    "p95": 19.72,
+    "max": 23.56,
+    "rms": 10.74,
+    "mean_offset_to_bp3d_mm": [
+     -6.69,
+     1.35,
+     2.03
+    ],
+    "centroid_z_mm": 825.8
+   },
+   {
+    "zanatomy_object": "Fibularis longus muscle.r",
+    "bodyparts3d_element": "FJ1410",
+    "n": 2739,
+    "median": 11.68,
+    "p90": 32.61,
+    "p95": 35.04,
+    "max": 38.24,
+    "rms": 16.87,
+    "mean_offset_to_bp3d_mm": [
+     4.84,
+     -5.69,
+     -5.17
+    ],
+    "centroid_z_mm": 165.1
+   },
+   {
+    "zanatomy_object": "Gluteus minimus muscle.r",
+    "bodyparts3d_element": "FJ1420",
+    "n": 1564,
+    "median": 7.09,
+    "p90": 13.21,
+    "p95": 14.56,
+    "max": 17.58,
+    "rms": 8.5,
+    "mean_offset_to_bp3d_mm": [
+     -0.93,
+     4.69,
+     2.08
+    ],
+    "centroid_z_mm": 841.0
+   }
+  ],
+  "foot_and_neck_pairs_before_foot_refinement": [
+   {
+    "zanatomy_object": "Extensor hallucis brevis.r",
+    "bodyparts3d_element": "FJ1407",
+    "n": 561,
+    "median": 27.29,
+    "p90": 32.45,
+    "p95": 34.92,
+    "max": 37.23,
+    "rms": 27.98,
+    "mean_offset_to_bp3d_mm": [
+     -6.09,
+     -1.99,
+     -22.45
+    ],
+    "centroid_z_mm": 5.4
+   },
+   {
+    "zanatomy_object": "Flexor digitorum brevis.r",
+    "bodyparts3d_element": "FJ1413",
+    "n": 1610,
+    "median": 29.96,
+    "p90": 36.14,
+    "p95": 37.78,
+    "max": 42.57,
+    "rms": 30.43,
+    "mean_offset_to_bp3d_mm": [
+     0.66,
+     -0.86,
+     -28.16
+    ],
+    "centroid_z_mm": -33.9
+   },
+   {
+    "zanatomy_object": "Extensor hallucis brevis.l",
+    "bodyparts3d_element": "FJ1407M",
+    "n": 561,
+    "median": 29.08,
+    "p90": 33.58,
+    "p95": 35.27,
+    "max": 37.45,
+    "rms": 29.4,
+    "mean_offset_to_bp3d_mm": [
+     11.01,
+     -1.98,
+     -22.21
+    ],
+    "centroid_z_mm": 5.2
+   },
+   {
+    "zanatomy_object": "Flexor digitorum brevis.l",
+    "bodyparts3d_element": "FJ1413M",
+    "n": 1610,
+    "median": 29.42,
+    "p90": 37.1,
+    "p95": 40.28,
+    "max": 45.27,
+    "rms": 30.29,
+    "mean_offset_to_bp3d_mm": [
+     2.26,
+     0.01,
+     -27.52
+    ],
+    "centroid_z_mm": -34.2
+   },
+   {
+    "zanatomy_object": "Scalenus anterior muscle.r",
+    "bodyparts3d_element": "FJ1592",
+    "n": 699,
+    "median": 1.35,
+    "p90": 2.94,
+    "p95": 3.54,
+    "max": 4.98,
+    "rms": 1.84,
+    "mean_offset_to_bp3d_mm": [
+     -0.0,
+     0.37,
+     -0.26
+    ],
+    "centroid_z_mm": 1387.0
+   },
+   {
+    "zanatomy_object": "Splenius capitis muscle.r",
+    "bodyparts3d_element": "FJ1545",
+    "n": 2629,
+    "median": 3.93,
+    "p90": 9.82,
+    "p95": 10.43,
+    "max": 11.37,
+    "rms": 5.7,
+    "mean_offset_to_bp3d_mm": [
+     1.04,
+     -3.39,
+     -1.41
+    ],
+    "centroid_z_mm": 1403.2
+   }
+  ],
+  "deep_back_girdle_hip_pairs": [
+   {
+    "zanatomy_object": "Semispinalis thoracis muscle.r",
+    "bodyparts3d_element": "FJ1540",
+    "n": 2475,
+    "median": 8.25,
+    "p90": 11.28,
+    "p95": 12.02,
+    "max": 14.3,
+    "rms": 8.58,
+    "mean_offset_to_bp3d_mm": [
+     1.01,
+     -7.68,
+     -0.14
+    ],
+    "centroid_z_mm": 1235.1
+   },
+   {
+    "zanatomy_object": "Semispinalis colli muscle.r",
+    "bodyparts3d_element": "FJ1539",
+    "n": 1292,
+    "median": 8.53,
+    "p90": 11.97,
+    "p95": 12.62,
+    "max": 13.56,
+    "rms": 8.68,
+    "mean_offset_to_bp3d_mm": [
+     4.12,
+     -5.99,
+     -2.25
+    ],
+    "centroid_z_mm": 1373.2
+   },
+   {
+    "zanatomy_object": "Rhomboid major muscle.r",
+    "bodyparts3d_element": "FJ1536",
+    "n": 2402,
+    "median": 11.15,
+    "p90": 16.47,
+    "p95": 17.69,
+    "max": 18.94,
+    "rms": 12.12,
+    "mean_offset_to_bp3d_mm": [
+     1.53,
+     -10.75,
+     -2.63
+    ],
+    "centroid_z_mm": 1294.2
+   },
+   {
+    "zanatomy_object": "Rhomboid major muscle.l",
+    "bodyparts3d_element": "FJ1536M",
+    "n": 2402,
+    "median": 11.1,
+    "p90": 16.24,
+    "p95": 17.31,
+    "max": 18.37,
+    "rms": 11.96,
+    "mean_offset_to_bp3d_mm": [
+     -0.88,
+     -10.67,
+     -2.41
+    ],
+    "centroid_z_mm": 1294.1
+   },
+   {
+    "zanatomy_object": "Serratus posterior inferior muscle.r",
+    "bodyparts3d_element": "FJ1541",
+    "n": 2236,
+    "median": 4.04,
+    "p90": 8.01,
+    "p95": 9.18,
+    "max": 12.8,
+    "rms": 5.08,
+    "mean_offset_to_bp3d_mm": [
+     0.71,
+     -2.53,
+     0.91
+    ],
+    "centroid_z_mm": 1044.4
+   },
+   {
+    "zanatomy_object": "Serratus posterior superior muscle.r",
+    "bodyparts3d_element": "FJ1542",
+    "n": 2759,
+    "median": 11.38,
+    "p90": 14.82,
+    "p95": 16.12,
+    "max": 18.54,
+    "rms": 11.81,
+    "mean_offset_to_bp3d_mm": [
+     3.9,
+     -8.75,
+     -4.83
+    ],
+    "centroid_z_mm": 1341.1
+   },
+   {
+    "zanatomy_object": "Pectoralis minor muscle.r",
+    "bodyparts3d_element": "FJ1456",
+    "n": 2067,
+    "median": 1.34,
+    "p90": 4.05,
+    "p95": 5.28,
+    "max": 11.39,
+    "rms": 2.63,
+    "mean_offset_to_bp3d_mm": [
+     0.34,
+     -0.8,
+     0.11
+    ],
+    "centroid_z_mm": 1267.9
+   },
+   {
+    "zanatomy_object": "Piriformis muscle.r",
+    "bodyparts3d_element": "FJ1428",
+    "n": 752,
+    "median": 4.85,
+    "p90": 9.01,
+    "p95": 9.82,
+    "max": 11.14,
+    "rms": 5.97,
+    "mean_offset_to_bp3d_mm": [
+     -1.77,
+     1.98,
+     2.26
+    ],
+    "centroid_z_mm": 827.1
+   },
+   {
+    "zanatomy_object": "Quadratus femoris muscle.r",
+    "bodyparts3d_element": "FJ1432",
+    "n": 825,
+    "median": 4.94,
+    "p90": 12.01,
+    "p95": 13.35,
+    "max": 15.48,
+    "rms": 7.12,
+    "mean_offset_to_bp3d_mm": [
+     -0.94,
+     4.0,
+     1.24
+    ],
+    "centroid_z_mm": 755.7
+   },
+   {
+    "zanatomy_object": "Obturator internus.r",
+    "bodyparts3d_element": "FJ1426",
+    "n": 1882,
+    "median": 4.65,
+    "p90": 10.66,
+    "p95": 11.89,
+    "max": 13.7,
+    "rms": 6.42,
+    "mean_offset_to_bp3d_mm": [
+     1.23,
+     2.17,
+     3.15
+    ],
+    "centroid_z_mm": 788.2
+   },
+   {
+    "zanatomy_object": "Popliteus muscle.r",
+    "bodyparts3d_element": "FJ1430",
+    "n": 566,
+    "median": 12.08,
+    "p90": 17.18,
+    "p95": 17.71,
+    "max": 18.84,
+    "rms": 12.43,
+    "mean_offset_to_bp3d_mm": [
+     0.88,
+     -10.24,
+     0.73
+    ],
+    "centroid_z_mm": 348.9
+   },
+   {
+    "zanatomy_object": "Levator scapulae.r",
+    "bodyparts3d_element": "FJ1532",
+    "n": 1543,
+    "median": 6.03,
+    "p90": 15.48,
+    "p95": 16.56,
+    "max": 18.99,
+    "rms": 8.59,
+    "mean_offset_to_bp3d_mm": [
+     2.56,
+     -4.66,
+     -2.73
+    ],
+    "centroid_z_mm": 1387.1
+   }
+  ],
+  "summary": "Front and side of the trunk: external oblique 2.4 / 3.2 mm median (right / left), pectoralis major 2.5 to 3.8, serratus anterior 4.4, pectoralis minor 1.3; low back: iliocostalis lumborum 2.0 / 2.4, longissimus thoracis 4.5 / 4.7, serratus posterior inferior 4.0; neck: sternocleidomastoid 1.5, scalenus anterior 1.4, splenius capitis 3.9; hip and thigh: adductor longus 2.2, gluteus maximus 4.2, psoas 4.0, rectus femoris 4.1, piriformis 4.9; deep upper back 8 to 11 (semispinalis, rhomboid major, serratus posterior superior; Z-Anatomy lies 7 to 11 mm posterior); lower leg 8.6 to 12 (tibialis anterior, soleus, fibularis longus); feet about 28 to 30 mm before the per-foot correction. The Z-Anatomy files in this packet are trunk, neck and foot muscles; the deep upper back was NOT taken from Z-Anatomy (its muscles there have BodyParts3D files), and multifidus was left out because of that offset.",
+  "foot_refinement": {
+   "why": "after the face similarity the Z-Anatomy foot lies about 28 to 30 mm from the BodyParts3D foot (median), mostly too low: a scale error grows with the distance from the head, where the similarity was fitted.",
+   "method": "footrigid.py: per foot, a rigid correction (rotation + translation, no scale) by trimmed (90 %) point-to-surface ICP, Horn's closed-form absolute orientation, against the SAME two structures in BodyParts3D 4.0 (extensor hallucis brevis FJ1407 / FJ1407M and flexor digitorum brevis FJ1413 / FJ1413M); applied after the similarity to the three Z-Anatomy foot objects of that side (extensor digitorum brevis, the two heads of flexor hallucis brevis).",
+   "result": {
+    "r": {
+     "R": [
+      [
+       0.9698518115517841,
+       0.24049747449949901,
+       -0.039350074829502035
+      ],
+      [
+       -0.23950983279091623,
+       0.9704841184399826,
+       0.028206663259543692
+      ],
+      [
+       0.04497225395943476,
+       -0.01793155361737558,
+       0.9988272902552661
+      ]
+     ],
+     "t_mm": [
+      17.00048491412214,
+      -34.54398305079643,
+      -30.393304111786424
+     ],
+     "rotation_deg": 14.168,
+     "iterations": [
+      {
+       "iter": 0,
+       "median_mm": 28.528,
+       "step_deg": 11.6614,
+       "step_mm": 18.039
+      },
+      {
+       "iter": 1,
+       "median_mm": 7.301,
+       "step_deg": 3.6128,
+       "step_mm": 10.32
+      },
+      {
+       "iter": 2,
+       "median_mm": 4.338,
+       "step_deg": 1.8353,
+       "step_mm": 5.291
+      },
+      {
+       "iter": 3,
+       "median_mm": 3.14,
+       "step_deg": 1.7167,
+       "step_mm": 4.624
+      },
+      {
+       "iter": 4,
+       "median_mm": 2.043,
+       "step_deg": 1.1524,
+       "step_mm": 3.016
+      },
+      {
+       "iter": 5,
+       "median_mm": 1.607,
+       "step_deg": 0.6744,
+       "step_mm": 1.636
+      },
+      {
+       "iter": 6,
+       "median_mm": 1.519,
+       "step_deg": 0.5059,
+       "step_mm": 0.99
+      },
+      {
+       "iter": 7,
+       "median_mm": 1.442,
+       "step_deg": 0.4138,
+       "step_mm": 0.636
+      },
+      {
+       "iter": 8,
+       "median_mm": 1.392,
+       "step_deg": 0.3715,
+       "step_mm": 0.488
+      },
+      {
+       "iter": 9,
+       "median_mm": 1.335,
+       "step_deg": 0.3217,
+       "step_mm": 0.396
+      },
+      {
+       "iter": 10,
+       "median_mm": 1.292,
+       "step_deg": 0.2893,
+       "step_mm": 0.353
+      },
+      {
+       "iter": 11,
+       "median_mm": 1.253,
+       "step_deg": 0.2602,
+       "step_mm": 0.342
+      },
+      {
+       "iter": 12,
+       "median_mm": 1.218,
+       "step_deg": 0.2487,
+       "step_mm": 0.313
+      },
+      {
+       "iter": 13,
+       "median_mm": 1.184,
+       "step_deg": 0.2257,
+       "step_mm": 0.3
+      },
+      {
+       "iter": 14,
+       "median_mm": 1.143,
+       "step_deg": 0.1918,
+       "step_mm": 0.279
+      },
+      {
+       "iter": 15,
+       "median_mm": 1.096,
+       "step_deg": 0.1844,
+       "step_mm": 0.27
+      },
+      {
+       "iter": 16,
+       "median_mm": 1.068,
+       "step_deg": 0.1771,
+       "step_mm": 0.269
+      },
+      {
+       "iter": 17,
+       "median_mm": 1.033,
+       "step_deg": 0.1628,
+       "step_mm": 0.261
+      },
+      {
+       "iter": 18,
+       "median_mm": 1.008,
+       "step_deg": 0.1482,
+       "step_mm": 0.268
+      },
+      {
+       "iter": 19,
+       "median_mm": 0.976,
+       "step_deg": 0.1503,
+       "step_mm": 0.256
+      },
+      {
+       "iter": 20,
+       "median_mm": 0.962,
+       "step_deg": 0.1539,
+       "step_mm": 0.289
+      },
+      {
+       "iter": 21,
+       "median_mm": 0.952,
+       "step_deg": 0.1511,
+       "step_mm": 0.262
+      },
+      {
+       "iter": 22,
+       "median_mm": 0.928,
+       "step_deg": 0.1537,
+       "step_mm": 0.266
+      },
+      {
+       "iter": 23,
+       "median_mm": 0.903,
+       "step_deg": 0.1387,
+       "step_mm": 0.258
+      },
+      {
+       "iter": 24,
+       "median_mm": 0.883,
+       "step_deg": 0.131,
+       "step_mm": 0.219
+      },
+      {
+       "iter": 25,
+       "median_mm": 0.871,
+       "step_deg": 0.1148,
+       "step_mm": 0.202
+      },
+      {
+       "iter": 26,
+       "median_mm": 0.848,
+       "step_deg": 0.1132,
+       "step_mm": 0.198
+      },
+      {
+       "iter": 27,
+       "median_mm": 0.828,
+       "step_deg": 0.1147,
+       "step_mm": 0.175
+      },
+      {
+       "iter": 28,
+       "median_mm": 0.81,
+       "step_deg": 0.105,
+       "step_mm": 0.188
+      },
+      {
+       "iter": 29,
+       "median_mm": 0.795,
+       "step_deg": 0.1167,
+       "step_mm": 0.163
+      }
+     ],
+     "residuals_after": {
+      "Extensor hallucis brevis.r": {
+       "n": 561,
+       "median": 0.92,
+       "p90": 4.5,
+       "p95": 5.15,
+       "max": 5.83,
+       "rms": 2.11
+      },
+      "Flexor digitorum brevis.r": {
+       "n": 537,
+       "median": 0.7,
+       "p90": 1.66,
+       "p95": 3.89,
+       "max": 5.66,
+       "rms": 1.38
+      }
+     }
+    },
+    "l": {
+     "R": [
+      [
+       0.9703398998607283,
+       -0.23873522353929674,
+       0.038025935621792455
+      ],
+      [
+       0.23774983012620116,
+       0.9709029211609385,
+       0.028679887658690666
+      ],
+      [
+       -0.04376639136635556,
+       -0.01878857958427981,
+       0.9988651021354029
+      ]
+     ],
+     "t_mm": [
+      -11.554165442906065,
+      -33.07742654349479,
+      -30.58415461740843
+     ],
+     "rotation_deg": 14.057,
+     "iterations": [
+      {
+       "iter": 0,
+       "median_mm": 29.287,
+       "step_deg": 13.4614,
+       "step_mm": 14.891
+      },
+      {
+       "iter": 1,
+       "median_mm": 7.753,
+       "step_deg": 3.6542,
+       "step_mm": 10.602
+      },
+      {
+       "iter": 2,
+       "median_mm": 4.525,
+       "step_deg": 1.7733,
+       "step_mm": 5.209
+      },
+      {
+       "iter": 3,
+       "median_mm": 3.657,
+       "step_deg": 1.5739,
+       "step_mm": 4.147
+      },
+      {
+       "iter": 4,
+       "median_mm": 2.537,
+       "step_deg": 1.6402,
+       "step_mm": 3.734
+      },
+      {
+       "iter": 5,
+       "median_mm": 1.766,
+       "step_deg": 0.9129,
+       "step_mm": 1.838
+      },
+      {
+       "iter": 6,
+       "median_mm": 1.611,
+       "step_deg": 0.6403,
+       "step_mm": 1.135
+      },
+      {
+       "iter": 7,
+       "median_mm": 1.533,
+       "step_deg": 0.5282,
+       "step_mm": 0.687
+      },
+      {
+       "iter": 8,
+       "median_mm": 1.474,
+       "step_deg": 0.4405,
+       "step_mm": 0.527
+      },
+      {
+       "iter": 9,
+       "median_mm": 1.393,
+       "step_deg": 0.4069,
+       "step_mm": 0.426
+      },
+      {
+       "iter": 10,
+       "median_mm": 1.334,
+       "step_deg": 0.3523,
+       "step_mm": 0.369
+      },
+      {
+       "iter": 11,
+       "median_mm": 1.297,
+       "step_deg": 0.3143,
+       "step_mm": 0.348
+      },
+      {
+       "iter": 12,
+       "median_mm": 1.256,
+       "step_deg": 0.2838,
+       "step_mm": 0.331
+      },
+      {
+       "iter": 13,
+       "median_mm": 1.217,
+       "step_deg": 0.2428,
+       "step_mm": 0.303
+      },
+      {
+       "iter": 14,
+       "median_mm": 1.188,
+       "step_deg": 0.2241,
+       "step_mm": 0.297
+      },
+      {
+       "iter": 15,
+       "median_mm": 1.139,
+       "step_deg": 0.1975,
+       "step_mm": 0.283
+      },
+      {
+       "iter": 16,
+       "median_mm": 1.095,
+       "step_deg": 0.187,
+       "step_mm": 0.265
+      },
+      {
+       "iter": 17,
+       "median_mm": 1.063,
+       "step_deg": 0.1775,
+       "step_mm": 0.262
+      },
+      {
+       "iter": 18,
+       "median_mm": 1.033,
+       "step_deg": 0.1664,
+       "step_mm": 0.257
+      },
+      {
+       "iter": 19,
+       "median_mm": 1.01,
+       "step_deg": 0.147,
+       "step_mm": 0.262
+      },
+      {
+       "iter": 20,
+       "median_mm": 0.978,
+       "step_deg": 0.1496,
+       "step_mm": 0.25
+      },
+      {
+       "iter": 21,
+       "median_mm": 0.959,
+       "step_deg": 0.1535,
+       "step_mm": 0.285
+      },
+      {
+       "iter": 22,
+       "median_mm": 0.95,
+       "step_deg": 0.1506,
+       "step_mm": 0.258
+      },
+      {
+       "iter": 23,
+       "median_mm": 0.927,
+       "step_deg": 0.1522,
+       "step_mm": 0.261
+      },
+      {
+       "iter": 24,
+       "median_mm": 0.903,
+       "step_deg": 0.1401,
+       "step_mm": 0.256
+      },
+      {
+       "iter": 25,
+       "median_mm": 0.882,
+       "step_deg": 0.1295,
+       "step_mm": 0.218
+      },
+      {
+       "iter": 26,
+       "median_mm": 0.87,
+       "step_deg": 0.113,
+       "step_mm": 0.205
+      },
+      {
+       "iter": 27,
+       "median_mm": 0.847,
+       "step_deg": 0.1127,
+       "step_mm": 0.196
+      },
+      {
+       "iter": 28,
+       "median_mm": 0.826,
+       "step_deg": 0.1153,
+       "step_mm": 0.175
+      },
+      {
+       "iter": 29,
+       "median_mm": 0.81,
+       "step_deg": 0.1074,
+       "step_mm": 0.185
+      }
+     ],
+     "residuals_after": {
+      "Extensor hallucis brevis.l": {
+       "n": 561,
+       "median": 0.94,
+       "p90": 4.62,
+       "p95": 5.31,
+       "max": 5.99,
+       "rms": 2.17
+      },
+      "Flexor digitorum brevis.l": {
+       "n": 537,
+       "median": 0.72,
+       "p90": 1.72,
+       "p95": 3.99,
+       "max": 5.78,
+       "rms": 1.42
+      }
+     }
+    }
+   },
+   "rejected_first_try": {
+    "method": "footfit.py: translation only",
+    "result": {
+     "r": {
+      "translation_mm": [
+       -9.474,
+       -12.8525,
+       -32.4037
+      ],
+      "iterations": [
+       [
+        -1.412,
+        -1.078,
+        -25.048,
+        28.11
+       ],
+       [
+        -3.329,
+        -2.768,
+        -28.94,
+        6.96
+       ],
+       [
+        -4.728,
+        -4.141,
+        -30.369,
+        3.63
+       ],
+       [
+        -5.782,
+        -5.359,
+        -31.118,
+        2.83
+       ],
+       [
+        -6.611,
+        -6.441,
+        -31.531,
+        2.65
+       ],
+       [
+        -7.302,
+        -7.437,
+        -31.765,
+        2.55
+       ],
+       [
+        -7.873,
+        -8.358,
+        -31.911,
+        2.47
+       ],
+       [
+        -8.288,
+        -9.21,
+        -32.03,
+        2.44
+       ],
+       [
+        -8.62,
+        -9.992,
+        -32.125,
+        2.37
+       ],
+       [
+        -8.874,
+        -10.702,
+        -32.209,
+        2.29
+       ],
+       [
+        -9.046,
+        -11.348,
+        -32.271,
+        2.27
+       ],
+       [
+        -9.206,
+        -11.922,
+        -32.317,
+        2.3
+       ],
+       [
+        -9.35,
+        -12.42,
+        -32.364,
+        2.32
+       ],
+       [
+        -9.474,
+        -12.852,
+        -32.404,
+        2.39
+       ]
+      ],
+      "residuals_after": {
+       "Extensor hallucis brevis.r": {
+        "n": 561,
+        "median": 5.24,
+        "p90": 11.42,
+        "p95": 13.01,
+        "max": 15.41,
+        "rms": 6.97
+       },
+       "Flexor digitorum brevis.r": {
+        "n": 805,
+        "median": 2.03,
+        "p90": 14.47,
+        "p95": 16.91,
+        "max": 21.42,
+        "rms": 7.13
+       }
+      }
+     },
+     "l": {
+      "translation_mm": [
+       14.808,
+       -12.8652,
+       -32.12
+      ],
+      "iterations": [
+       [
+        4.778,
+        -0.876,
+        -24.527,
+        28.73
+       ],
+       [
+        7.518,
+        -2.567,
+        -28.588,
+        7.62
+       ],
+       [
+        9.327,
+        -3.928,
+        -30.066,
+        4.04
+       ],
+       [
+        10.621,
+        -5.144,
+        -30.829,
+        2.93
+       ],
+       [
+        11.58,
+        -6.26,
+        -31.228,
+        2.63
+       ],
+       [
+        12.337,
+        -7.287,
+        -31.46,
+        2.52
+       ],
+       [
+        12.951,
+        -8.234,
+        -31.627,
+        2.51
+       ],
+       [
+        13.481,
+        -9.094,
+        -31.732,
+        2.44
+       ],
+       [
+        13.864,
+        -9.895,
+        -31.825,
+        2.36
+       ],
+       [
+        14.158,
+        -10.627,
+        -31.907,
+        2.33
+       ],
+       [
+        14.371,
+        -11.292,
+        -31.982,
+        2.23
+       ],
+       [
+        14.532,
+        -11.887,
+        -32.035,
+        2.29
+       ],
+       [
+        14.68,
+        -12.41,
+        -32.081,
+        2.35
+       ],
+       [
+        14.808,
+        -12.865,
+        -32.12,
+        2.34
+       ]
+      ],
+      "residuals_after": {
+       "Extensor hallucis brevis.l": {
+        "n": 561,
+        "median": 5.22,
+        "p90": 11.39,
+        "p95": 13.0,
+        "max": 15.44,
+        "rms": 6.95
+       },
+       "Flexor digitorum brevis.l": {
+        "n": 805,
+        "median": 2.02,
+        "p90": 14.33,
+        "p95": 16.81,
+        "max": 21.12,
+        "rms": 7.07
+       }
+      }
+     }
+    },
+    "why_rejected": "residuals stayed 5.2 / 2.0 mm median with 11 to 15 mm at the 90th percentile; the rigid fit brings them to about 0.9 / 0.7 mm median and 4.5 / 1.7 mm at the 90th percentile"
+   }
+  },
+  "bodyparts3d_files": "unchanged archive coordinates: they are in this body's own frame by construction (the full-body packet is the same archive)."
+ },
+ "duplicates": "No element id here is in inputs/FULLBODY-MESH-MANIFEST.json, inputs/MESH-MANIFEST.json, packets/face-muscles-r1 or packets/bodyparts3d-head-r1 (another branch; its ten files are cranium and eye layers); the loader also refuses a repeated id. FJ1532 (right levator scapulae) is taken alone because its left twin FJ1532M is already in the left-arm packet (shoulder girdle stream). No structure is drawn twice: the Z-Anatomy muscles have no BodyParts3D 4.0 file.",
+ "laterality": "Every file's name side equals the side of its vertex centroid (x < 0 right, x > 0 left); files whose share of vertices on the named side is below 0.97 are listed in the manifest's source_anomalies (midline muscles such as spinalis thoracis, splenius capitis, serratus posterior inferior and the left latissimus dorsi, whose origins reach the spinous processes) and kept unchanged.",
+ "not_included": "Muscles still not drawn anywhere in the game: multifidus and the rotatores (Z-Anatomy only; its deep upper back sits about 8 to 11 mm behind the BodyParts3D deep back, see ACQUISITION-RECORD.json, so it would cut into the BodyParts3D columns without a regional fit), the interspinales and intertransversarii, the suboccipital muscles, subclavius, the small sole muscles other than flexor digitorum brevis, abductor hallucis and flexor hallucis brevis (quadratus plantae, lumbricals, interossei, adductor hallucis, abductor and flexor digiti minimi of the foot), the pelvic floor, the diaphragm and the intercostals.",
+ "game_display_processing": "Not part of the files: in the game (ns-body) the muscles take the Body Worlds stack levels of BODY_STACK_PACKET, the display fill, and the BodyParts3D external oblique's tendon sheet in front of rectus abdominis (and the obliques' laminae there) is not drawn (openRectusSheath, the sheath opened as in a dissection). All of this happens in browser memory only.",
+ "tools_and_scripts": "acquire_bp3d.py, fbxread.py, zscene.py, zconvert.py, regcheck.py, footrigid.py, footfit.py, build_packet.py, write_manifest.py, write_record.py: Python 3 standard library only, written for this packet, run offline (except the downloads named above), pinned to one CPU.",
+ "manifest": {
+  "path": "MISSING-MUSCLES-MESH-MANIFEST.json",
+  "assets": 111,
+  "bytes": 36303140
+ }
+}

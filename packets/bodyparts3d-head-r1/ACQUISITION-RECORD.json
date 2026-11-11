@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "kind": "bodyparts3d_head_acquisition_record",
+  "writer": "builder FA (R558 face and arm muscle quality)",
+  "authority": "User Message 20 (2026-11-11) allows free tools and asks that the face muscles stop looking wrong; the earlier user authorisation (2026-11-08) to download the needed BodyParts3D parts in the same way, with hashes, licence and attribution, is followed.",
+  "method": "HTTP range requests against the official archive (serial, 1.5 s apart, no retries): HEAD for identity (ETag and size must equal the recorded ones), the end of central directory, the central directory, then each member's local header and compressed bytes; raw-deflate decompressed; ZIP CRC32 and uncompressed byte count must match the central directory; then sha256.",
+  "licence_check": {
+    "url": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html",
+    "checked_utc": "2026-11-11",
+    "last_updated_text": "Last updated : 2025/02/27",
+    "cc_by_4_0_statement_present": true
+  },
+  "requests": [
+    {
+      "method": "HEAD",
+      "range": null,
+      "status": 200,
+      "bytes": 0,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": null,
+      "at_utc": "2026-11-11T09:46:36Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=142838362-142903897",
+      "status": 206,
+      "bytes": 65536,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142838362-142903897/142903898",
+      "at_utc": "2026-11-11T09:46:38Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=142733851-142903875",
+      "status": 206,
+      "bytes": 170025,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142733851-142903875/142903898",
+      "at_utc": "2026-11-11T09:46:41Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=127637687-127638228",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 127637687-127638228/142903898",
+      "at_utc": "2026-11-11T09:46:42Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=127637747-127926794",
+      "status": 206,
+      "bytes": 289048,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 127637747-127926794/142903898",
+      "at_utc": "2026-11-11T09:46:45Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=131938820-131939361",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 131938820-131939361/142903898",
+      "at_utc": "2026-11-11T09:46:47Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=131938880-132218123",
+      "status": 206,
+      "bytes": 279244,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 131938880-132218123/142903898",
+      "at_utc": "2026-11-11T09:46:51Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=129068165-129068706",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 129068165-129068706/142903898",
+      "at_utc": "2026-11-11T09:46:53Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=129068225-129320817",
+      "status": 206,
+      "bytes": 252593,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 129068225-129320817/142903898",
+      "at_utc": "2026-11-11T09:46:55Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=133177780-133178321",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 133177780-133178321/142903898",
+      "at_utc": "2026-11-11T09:46:57Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=133177840-133349654",
+      "status": 206,
+      "bytes": 171815,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 133177840-133349654/142903898",
+      "at_utc": "2026-11-11T09:47:00Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=3319176-3319717",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 3319176-3319717/142903898",
+      "at_utc": "2026-11-11T09:47:02Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=3319236-4051314",
+      "status": 206,
+      "bytes": 732079,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 3319236-4051314/142903898",
+      "at_utc": "2026-11-11T09:47:06Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=7360068-7360609",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 7360068-7360609/142903898",
+      "at_utc": "2026-11-11T09:47:08Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=7360128-8099227",
+      "status": 206,
+      "bytes": 739100,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 7360128-8099227/142903898",
+      "at_utc": "2026-11-11T09:47:32Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2078506-2079047",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2078506-2079047/142903898",
+      "at_utc": "2026-11-11T09:47:34Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2078566-2169847",
+      "status": 206,
+      "bytes": 91282,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2078566-2169847/142903898",
+      "at_utc": "2026-11-11T09:47:37Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6112202-6112743",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6112202-6112743/142903898",
+      "at_utc": "2026-11-11T09:47:39Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6112262-6207146",
+      "status": 206,
+      "bytes": 94885,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6112262-6207146/142903898",
+      "at_utc": "2026-11-11T09:47:41Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2417763-2418304",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2417763-2418304/142903898",
+      "at_utc": "2026-11-11T09:47:44Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2417823-2478149",
+      "status": 206,
+      "bytes": 60327,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2417823-2478149/142903898",
+      "at_utc": "2026-11-11T09:47:46Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6455307-6455848",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6455307-6455848/142903898",
+      "at_utc": "2026-11-11T09:47:48Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6455367-6515927",
+      "status": 206,
+      "bytes": 60561,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6455367-6515927/142903898",
+      "at_utc": "2026-11-11T09:47:50Z"
+    },
+    {
+      "method": "HEAD",
+      "range": null,
+      "status": 200,
+      "bytes": 0,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": null,
+      "at_utc": "2026-11-11T09:51:59Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=142838362-142903897",
+      "status": 206,
+      "bytes": 65536,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142838362-142903897/142903898",
+      "at_utc": "2026-11-11T09:52:01Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=142733851-142903875",
+      "status": 206,
+      "bytes": 170025,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 142733851-142903875/142903898",
+      "at_utc": "2026-11-11T09:52:04Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2635552-2636093",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2635552-2636093/142903898",
+      "at_utc": "2026-11-11T09:52:06Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=2635612-2664886",
+      "status": 206,
+      "bytes": 29275,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 2635612-2664886/142903898",
+      "at_utc": "2026-11-11T09:52:08Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6671990-6672531",
+      "status": 206,
+      "bytes": 542,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6671990-6672531/142903898",
+      "at_utc": "2026-11-11T09:52:10Z"
+    },
+    {
+      "method": "GET",
+      "range": "bytes=6672050-6701181",
+      "status": 206,
+      "bytes": 29132,
+      "etag": "\"8848a5a-4dd48ec9df000\"",
+      "content_range": "bytes 6672050-6701181/142903898",
+      "at_utc": "2026-11-11T09:52:12Z"
+    }
+  ],
+  "central_directory": {
+    "entries": 2234,
+    "offset": 142733851,
+    "size": 170025,
+    "sha256": "edde15c7c5f34b2b9743935fb3c1873cce3a9789164427ddf8343c879bcde96b"
+  },
+  "members": [
+    {
+      "element_id": "FJ3274",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3274.obj",
+      "zip_crc32": 432893483,
+      "bytes": 956856,
+      "sha256": "45ab8d9b21c1854c9ea744137560020004e694eba3217a0a3fa0876d02207f65"
+    },
+    {
+      "element_id": "FJ3380",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3380.obj",
+      "zip_crc32": 231109223,
+      "bytes": 928866,
+      "sha256": "b6874589f3ddcbeae7153c2d499c23d0083eb18e95d139759529c901384758c8"
+    },
+    {
+      "element_id": "FJ3309",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3309.obj",
+      "zip_crc32": 2757054479,
+      "bytes": 843673,
+      "sha256": "c0262a08591e48504c8a53302525377e0c4ad1c165456475f3bb80aab6202d44"
+    },
+    {
+      "element_id": "FJ3394",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ3394.obj",
+      "zip_crc32": 4061649884,
+      "bytes": 573595,
+      "sha256": "127f537eb70e6ad4b036a535550ab7a681ce06dbdc1efda85956d910c54d6285"
+    },
+    {
+      "element_id": "FJ1317",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1317.obj",
+      "zip_crc32": 2989238369,
+      "bytes": 2712740,
+      "sha256": "27adb811c163db6123f525145c1aa05950a6c6e42a8d6c0290b3035f2b8a64e9"
+    },
+    {
+      "element_id": "FJ1368",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1368.obj",
+      "zip_crc32": 3828011890,
+      "bytes": 2746869,
+      "sha256": "e1c1bbc9da8924173a3abd341bca49cda8e8444ef5256637a40aad91adab1d65"
+    },
+    {
+      "element_id": "FJ1289",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1289.obj",
+      "zip_crc32": 3362736226,
+      "bytes": 318620,
+      "sha256": "90f935efed26a091bae9b209349b65bee7fe12ef6974d68bfab5a8d5838ed203"
+    },
+    {
+      "element_id": "FJ1340",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1340.obj",
+      "zip_crc32": 2757044655,
+      "bytes": 337119,
+      "sha256": "0ff28bd7911c88b79275f19d2738487b573b2fcc7cd165154e21aed6a22c70eb"
+    },
+    {
+      "element_id": "FJ1297",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1297.obj",
+      "zip_crc32": 662063435,
+      "bytes": 206456,
+      "sha256": "65ba07bbbe87b39d5d9cb95fd91c8819f04635bb8f03f281d72f78a0d45dcb2e"
+    },
+    {
+      "element_id": "FJ1348",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1348.obj",
+      "zip_crc32": 761738636,
+      "bytes": 208148,
+      "sha256": "a2dd64cf35f6582aa498e7e1874e31722e318a8c09f44e3a1ccfa63e6769280c"
+    },
+    {
+      "element_id": "FJ1305",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1305.obj",
+      "zip_crc32": 646715371,
+      "bytes": 94398,
+      "sha256": "3e8ca31d6e284af6ea990eb528ba6c31420339802ea5da94ee32dc0ddac8708f"
+    },
+    {
+      "element_id": "FJ1356",
+      "archive_entry": "isa_BP3D_4.0_obj_99/FJ1356.obj",
+      "zip_crc32": 3483756783,
+      "bytes": 94704,
+      "sha256": "b9b3f98de4ed3a327e841dd129e423345e93d0615ca62181dda72ad8556a8a06"
+    }
+  ],
+  "header_checks": "File ID equals element id; Compatibility version 4.0; Concept ID and English name equal the element list row; parsed bounds within 0.001 mm of the header Bounds(mm) (header_bounds_max_deviation_mm per entry)",
+  "outputs": {
+    "manifest": {
+      "path": "HEAD-MESH-MANIFEST.json"
+    },
+    "meshes": 10,
+    "bytes": 9366305
+  }
+}

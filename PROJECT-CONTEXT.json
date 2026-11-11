@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-11-capture-update",
+  "version": "experimental-2026-11-12-body-update",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -13,201 +13,24 @@
   "play_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "start_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/START.html",
   "canonical_source": "https://github.com/eliminatenoise/NeuroSurge",
-  "source_lineage": "One Controls boundary change on the input-queue edition: repeated currently-captured notification preserves keys/records/gesture; genuine transitions and other safety releases unchanged. Anatomy and solver/model laws unchanged.",
-  "anatomy_assets": "490 human-anatomy OBJ files retained. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0. Runtime transforms, deformation, colouring, shading and separated layers are display changes, not physiological validation.",
+  "source_lineage": "Body update (R558), built from the 10 November interaction update: a camera at your eyes with a 90-degree view; a long-sitting body with every limb straight forward; the mirror body as a literal reflection on the same ground; 54 motor areas, one colour each, shared by the brain area and its muscles on both bodies, with a power-up glow; movements held until the opposite area or Reset body; F to hold and carry the brain, the mirror body or a limb; the Space dance; stop-at-contact between the three items; a closed skull, eyes and 111 more muscles from BodyParts3D and Z-Anatomy; a Borderlands-style cel-shaded comic look with black ink outlines, inked folds on the motor strip and an HDR glow; symmetric placement of paired controls; several performance passes. DESIGN-DECISIONS.md sections 20-53 record each change and why. The input-robustness changes published on 11 November (input epochs, deferred input, pointer capture and their four test files) are not in this version; they are being ported.",
+  "anatomy_assets": "611 human-anatomy OBJ files. BodyParts3D 4.0 (CC BY 4.0), including the new packets bodyparts3d-head-r1 (cranium and eyes) and missing-muscles-r1 (93 files); Z-Anatomy derivatives (CC BY-SA 4.0): the face muscles and 18 back, belly, neck and foot muscles in missing-muscles-r1. Packet files are unchanged archive members or documented conversions; runtime transforms, lifting, smoothing of finger and toe tips, colouring, comic shading and separated layers are display changes, not physiological validation.",
   "code_licence": "Project-owned contributions: CC0-1.0. Third-party material retains its own licences and notices.",
   "credits": "CREDITS-AND-LICENCES.md",
   "design_decisions": "DESIGN-DECISIONS.md",
   "other_project_development": "paused",
   "known_engineering_gaps": [
-    "Earlier input-queue candidate and preceding pause-update build both lost held Space during an early captured Space/W/D sequence; cause unknown. Those failures remain historical; full combined-key acceptance of the corrected runtime is not established.",
-    "New combined64 bound cancels overfull input; native saturation/rescue remains unobserved. Click recording has its own earlier drop-new limit; no all-input capture claim.",
-    "Late model/scene/output/render failures can leave state and display out of step.",
-    "Rare pause/focus/lifecycle orders and missing-input browser cases need broader native coverage; source cancellation is not full event-order acceptance.",
-    "Camera rollback evidence covers the whole-arm route only; natural failure branches remain untested.",
-    "Near/far endpoints, diagonal carrying, full-arm borders and the upper-quarter hand anchor need broader current checks.",
-    "Muscle surfaces remain splotchy/jagged; body/brain layout is crowded and a slow-render notice remains.",
-    "A prior composition failed at 375 \u00d7 667 and was crowded at 390 \u00d7 844; neither observation certifies this package. Portrait and touch use are not checked for this package.",
-    "Right upper-arm turn, hip activity colours, shoulder-girdle mechanics and functional registration remain incomplete or unvalidated.",
-    "Arrow visibility, clearance, pixel stability and all-view coverage remain incomplete.",
-    "Hardware frame rates, other browsers, native Windows/macOS opening, updated Linux launcher target execution, touch, screen readers and reduced motion remain unverified.",
-    "Exact pulse/startup/input-to-display timing, comparison with a series of real references, normal joint mechanics, tests on unseen functional data and complete output/export checks remain unfinished."
+    "The 11 November input-robustness work (pointer capture boundaries, stale-input cancellation, deferred input queue) is not in this version; its earlier failures and fixes do not carry over.",
+    "Frame rate: idle 60 fps, but the Space dance, look sweeps and carries draw about 26-33 fps in the author's single-core tests; a performance pass is under way.",
+    "A one-way look lock can occur after a far side look while an item rests against you; a fix is under way.",
+    "Some muscles still show pointed edges (for example at the base of the neck and the shoulder); a geometry check and fix are under way.",
+    "The crosshair caption naming the part under the crosshair is shown at all times; it is to move to the side panel with an on/off switch.",
+    "Joint mechanics, whole-body coupling, motor-area registration and timing remain simplified and unvalidated."
   ],
   "launcher_scope": "Online URL launchers for Windows, macOS and Linux. Formats checked; native Windows/macOS use unverified. Prior Linux installation/launch does not prove execution of this updated target.",
-  "publication_status": "Experimental preview package. Check the displayed online version before assuming it matches these files.",
-  "previous_control_build_verification": {
-    "scope": "One desktop Chromium ordinary-control check of the merged control build; seven sampled states running, no reported error, current calculated-state readbacks. No full input sequence, GPU/pixel timing or every-control acceptance.",
-    "states": [
-      "initial play",
-      "Esc paused",
-      "Esc resumed",
-      "Space held",
-      "Space released",
-      "E third person",
-      "E first person"
-    ],
-    "rapid_esc": {
-      "commanded_press_gap_ms": 50,
-      "observed_unlock_to_resumed_readback_upper_bound_ms_rounded": 212.9,
-      "input_to_display_100ms_pass": false
-    },
-    "arrows": "Two ordinary right-arrow clicks changed the brain transform while all four recorded nominal CPU arrow anchors and the brain centre stayed exact in that case. Not GPU-buffer, pixel, every-arrow or all-view proof."
-  },
-  "previous_pointer_software_verification": {
-    "suite": "tests/pointer-release.test.mjs",
-    "Node_version_tested": "26.8.2",
-    "cases": 40,
-    "patched_controller_failures": 0,
-    "previous_controller_failures": 20,
-    "keyboard_masks": 32,
-    "pointer_modes_for_key_preservation": 4,
-    "portable_entrypoint_passed": true,
-    "scope": "In-memory event records through the full public controls factory; no browser, rendered pixels or biological validation. Optional API variants are source-reviewed only.",
-    "historical_pause_build_execution_statement": "For historical experimental-2026-11-11-pause-update only: pointer suite was not rerun in that edition. Current verification is in software_verification."
-  },
-  "previous_pointer_browser_verification": {
-    "status": "bounded ordinary desktop Chromium check of this pointer-release package",
-    "states": [
-      "initial play",
-      "right arrow held",
-      "right arrow released",
-      "next right arrow released",
-      "Esc paused",
-      "Esc resumed",
-      "Space with buttonless movement",
-      "Space released",
-      "E third person",
-      "E first person"
-    ],
-    "observations": "All ten sampled states remained running with no reported error. Two arrow presses had successive button sequence values 1 and 2, and both released. Space stayed held through an ordinary buttonless mouse movement, then released. Esc pause/resume and both E transitions were observed.",
-    "native_missing_mouseup_branch": "not established; software-state coverage only",
-    "input_to_display_100ms_pass": false
-  },
-  "previous_pause_browser_verification": {
-    "scope": "Historical pause-update desktop Chromium check:15 sampled states running/error-null. This was an earlier edition, not the later corrected capture runtime.",
-    "observed": [
-      "Actual pointer capture",
-      "Brain carry with small look, pause and resume; saved brain pivot and angular placement exact across that case",
-      "Arrow hold interrupted by pause; no extra orbit on resume; fresh click press2->3/orbit1->2",
-      "E first-third-first",
-      "Visible Reset body command and resume"
-    ],
-    "not_established": [
-      "Zero-paused-animation-callback capture",
-      "Other focus/visibility/pagehide/stop/reset-brain/mirror-carry paths",
-      "Natural missingrelease/overflow/latefailure/graphicscontextloss",
-      "Physical GPU/pixel/original timing/full mechanics/biological acceptance",
-      "Exact requested Reset body pose and activation-reset result; only visible command/cancellation/resume observed"
-    ],
-    "input_to_display_100ms_pass": false
-  },
-  "previous_pause_software_verification": {
-    "suite": "tests/cancel-epoch.test.mjs",
-    "Node_version_tested": "26.8.2",
-    "named_cases": 13,
-    "keyboard_state_subcases": 128,
-    "failures": 0,
-    "scope": "Pure Controls/math and cancellation helpers only; no full App/DOM/browser/actions/model import. App grammar and independent source review passed.",
-    "portable_entrypoint": "Two relative imports adapted; standalone package grammar and13/128 pure cases passed."
-  },
-  "previous_queue_browser_verification": {
-    "scope": "14 ordinary candidate CPU-state snapshots running/error-null, with an unexpected combined-key failure. Separate current-live baseline reproduction and later positive cases.",
-    "combined_Space_W_D_pass": false,
-    "observed_failure": "Soon after capture in the earlier input-queue candidate, Space/model-held became false with W/D still true before requested Space-up; no overflow/cancellation counter change. Same failure in the preceding pause-update build; cause unknown. This is not an observation of the later corrected capture runtime.",
-    "later_observations": "Candidate unlocked staggered and baseline warm captured-staggered/unlocked-fast cases kept all3 held. No universal regression-absence proof.",
-    "other_observed": [
-      "Space alone",
-      "Arrow hold/release",
-      "E first-third-first",
-      "Modifier safety release"
-    ],
-    "not_established": [
-      "Native overflow/long-skip rescue",
-      "Full simultaneous-control matrix",
-      "Actual input-event capture and cause of shared Space loss",
-      "Zero-paused-rAF/focus/lifecycle/context/mirror/reset outcomes",
-      "PhysicalGPU/timing/scientific/mechanics/held-out/fullgame/export acceptance"
-    ],
-    "input_to_display_100ms_pass": false
-  },
+  "publication_status": "Experimental preview published at the user's direct instruction of 12 November 2026, before the project's independent review. Check the displayed online version before assuming it matches these files.",
   "browser_verification": {
-    "scope": "Eight ordinary local CPU snapshots of preceding R1 candidate, allrunning/errornull; exact corrected runtime fullbrowsermatrix notestablished.",
-    "observed": [
-      "Capture",
-      "Space/W/D held together inonecase",
-      "Modifier clearsheldkeys",
-      "FreshSpace thenrelease",
-      "Escgenuineunlock/pause andresume"
-    ],
-    "duplicate_capture_notification_native_coverage": false,
-    "prior_fast_Space_W_D_failure_cause": "UNKNOWN; currentpositivecases do notinvalidate priornegativecases.",
-    "input_to_display_100ms_pass": false,
+    "scope": "Author development checks only: scripted mouse and key input in one desktop Chromium on one pinned processor core, with screenshots and frame-interval counts, plus code reading and node checks by other instances of the same model that wrote it. No independent review yet. Not checked: Firefox, Safari, touch, phones, screen readers, reduced-motion settings in a browser.",
     "full_game_pass": false
-  },
-  "capture_software_verification": {
-    "source_version": "Corrected post-safety-callback capture read",
-    "new_suite_cases": 64,
-    "failures": 0,
-    "previous_R1_hook_failures": 2,
-    "previous_R1_original_cases_passed": 62,
-    "native_duplicate_branch_observed": false,
-    "causality": "PriorfastSpaceW_Dfailure UNKNOWN; suppliedsoftwareobservations do notproveactualcause orfix."
-  },
-  "previous_queue_software_verification": {
-    "Node_version": "26.8.2",
-    "suites": [
-      {
-        "file": "tests/deferred-input.test.mjs",
-        "cases": 11,
-        "capacity_subcases": 25,
-        "keymask_tail_subcases": 64
-      },
-      {
-        "file": "tests/cancel-epoch.test.mjs",
-        "cases": 13,
-        "keymask_subcases": 128
-      },
-      {
-        "file": "tests/pointer-release.test.mjs",
-        "cases": 40
-      }
-    ],
-    "total_named_cases": 64,
-    "failures": 0,
-    "grammar_checks": 5,
-    "scope": "Pure helpers/Controls/math and supplied listener-container doubles. App and text syntax only; no full App/renderer/model/native input execution in units. R2 is a verified3-comment-only correction.",
-    "portable_new_test": "Two relativeimports adapted; packagegrammar and11named/25capacity/64keymask-tail cases passed."
-  },
-  "software_verification": {
-    "Node_version": "26.8.2",
-    "suites": [
-      {
-        "file": "tests/capture-boundary.test.mjs",
-        "cases": 64,
-        "key_masks": 32,
-        "genuine_transition_mask_subcases": 64,
-        "new_synchronous_callback_cases": 2
-      },
-      {
-        "file": "tests/deferred-input.test.mjs",
-        "cases": 11,
-        "capacity_subcases": 25,
-        "keymask_tail_subcases": 64
-      },
-      {
-        "file": "tests/cancel-epoch.test.mjs",
-        "cases": 13,
-        "keymask_subcases": 128
-      },
-      {
-        "file": "tests/pointer-release.test.mjs",
-        "cases": 40
-      }
-    ],
-    "total_named_cases": 128,
-    "failures": 0,
-    "grammar": "Controls and capturetest once; prior unchangedmodulegrammar evidence reused.",
-    "scope": "Controls/math/helper software states and plainlistenerdoubles only. No App/renderer/model/nativeinput execution intheseunits. PublicControls differsfromtestedsource inoneexactmappedJSDoccommentonly.",
-    "portable_new_test": "CLIselectionblock replaced byfixedrelativepublicmodule; entireassertionbodyunchanged; portable64cases/grammar passedonce."
   }
 }

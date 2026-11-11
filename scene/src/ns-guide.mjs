@@ -4,9 +4,9 @@
 // for the status card ("Try this (2 of 7): Press W, A, S or D to move your left hand."). All wording lives in
 // ns-text.mjs (GUIDE); nothing here says the game reads, records or sends brain signals.
 //
-// Goals, in teaching order (GUIDE_GOAL_IDS): look at a light-blue left-arm area -> move the hand with W/A/S/D -> make a
-// fist with Space -> flip the palm with a double-tap -> switch on another body part's (grey) area -> hold Space on the
-// brain and drag it down -> click or hold a curved orbit arrow. Every goal completes from a real game event, in ANY
+// Goals, in teaching order (GUIDE_GOAL_IDS): look at a light-blue left-arm area -> move the hand with W/A/S/D -> hold
+// Space for the limb dance (goal id 'fist', kept for saved progress) -> double-tap and hold for the fast dance (goal id
+// 'flipPalm') -> switch on another body part's (grey) area -> hold F (R558) on the brain and drag it down -> click or hold an orbit arrow. Every goal completes from a real game event, in ANY
 // order: a goal the player already did is skipped when its turn comes. After the last goal a short "All done" line shows
 // for GUIDE_OPTIONS.finishS seconds, then the guide hides itself. The Esc page can hide, show or restart it.
 //
@@ -16,11 +16,15 @@
 //        isLeftArm false and kind !== 'integration' -> otherPart.
 //   { type: 'key', key: 'w' | 'a' | 's' | 'd' } or { type: 'move', axis: 'x' | 'z' }
 //        A/D = axis x, W/S = axis z. moveHand needs both axes (the line asks for the missing one).
-//   { type: 'fist', on: true | false, heldS? }   Space held / let go. The fist goal needs a hold of >= fistMinS (a quick
-//        tap, such as half of a double-tap, is not counted).
-//   { type: 'flip' }                             the forearm flipped (double-tap Space).
-//   { type: 'grab', on: true }                    the brain was grabbed (Space on the brain).
+//   { type: 'fist', on: true | false, heldS? }   Space held / let go (R558: the limb dance; the event keeps its old name).
+//        The goal needs a hold of >= fistMinS (a quick tap, such as half of a double-tap, is not counted).
+//   { type: 'flip' }                             a double-tap of Space (R558: the fast dance starts).
+//   { type: 'grab', on: true }                    the brain was grabbed (F on the brain; R558: Space no longer grabs).
 //   { type: 'grab', on: false, dragRad }          the brain was let go after a drag of dragRad radians (look angle).
+//   { type: 'armMoved', ids }                     R558 (hunt 2): the game arm really moved (a latch or the forearm turn
+//        changed); completes leftArmArea. guideEventsFromFrame then marks left-arm 'activate' events awaitMove: true.
+//   { type: 'carry', m }                          R558 (hunt 2): while F holds the brain, W/A/S/D carried it m metres this
+//        frame (its key offset). dragBrain completes on a release after dragMinRad of look carry OR carryMinM of keys.
 //   { type: 'orbit', dir?, hold? }                an orbit arrow turned the view (click step or hold).
 //   { type: 'pause' } / { type: 'resume' }        Esc page shown / hidden (the line hides while paused).
 //   { type: 'resetBody' }                         Reset body (no effect on the guide; accepted for completeness).
@@ -79,14 +83,15 @@ export function guideGoalIds(features = null, goals = null) {
 }
 
 /** Display and completion constants (display choices, not measurements).
- *  - fistMinS 0.3: a held fist (Space down for at least 0.3 s); ns-app DOUBLE_TAP_S is 0.35 s press to press, so a
- *    double-tap's first press is usually shorter than this and does not count as the fist goal by itself.
+ *  - fistMinS 0.3: a held Space (the limb dance, R558; goal id 'fist' kept) of at least 0.3 s; a double-tap's first press
+ *    (ns-controls DOUBLE_TAP_MS 450 ms press to press) is usually shorter than this and does not count by itself.
  *  - dragMinRad 0.12 (about 7 deg): the brain was really moved, not just grabbed.
  *  - flashS 1.5: "Nice!" shows this long in front of the next goal.
  *  - finishS 8: the "All done" line shows this long, then the guide hides itself. */
 // R5-text: glowWindowS 1.5: a glow drawn within 1.5 s of the switch-on (the 1 s pulse plus its fade) belongs to it;
 // thirdMinS 1.0: the view from behind was on long enough to see the back (the camera eases in over 0.4 s).
-export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0 });
+// R558 (hunt 2): carryMinM 0.2: the held brain carried at least 20 cm by W/A/S/D also counts as moved (dragBrain).
+export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0 });
 
 /** localStorage key suggested for guideToStorage (separate from the settings key, so old settings stay valid). */
 export const GUIDE_STORAGE_KEY = 'neurosurge.guide.v1';
@@ -154,11 +159,14 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         // that follows proves the glow was really drawn). Checked BEFORE this event's own goal marks, so the switch-on
         // that completes otherPart never arms the next goal by itself.
         const armGlow = cur() === 'glow' && ev.kind !== 'integration' && (ev.isLeftArm === true || ev.isLeftArm === false);
-        if (ev.isLeftArm === true) { if (ev.moves !== false) mark('leftArmArea'); }
+        // R558 (hunt 2): awaitMove (guideEventsFromFrame): the left arm's own 'armMoved' event completes the goal instead,
+        // once the arm really moves (a glance that does not dwell, or an action already held, moves nothing).
+        if (ev.isLeftArm === true) { if (ev.moves !== false && ev.awaitMove !== true) mark('leftArmArea'); }
         else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) mark('otherPart');
         if (armGlow) w().glowPending = { at: t, regionId: typeof ev.regionId === 'string' ? ev.regionId : null };
         break;
       }
+      case 'armMoved': mark('leftArmArea'); break;
       case 'glow': {
         const p = (s || state).glowPending;
         if (cur() !== 'glow' || !p || ev.onScreen === false || (isNum(ev.level) && !(ev.level > 0))) break;
@@ -210,8 +218,12 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         break;
       }
       case 'flip': mark('flipPalm'); break;
+      case 'carry': if (isNum(ev.m) && ev.m > 0) w().carryM = (isNum((s || state).carryM) ? (s || state).carryM : 0) + ev.m; break;
       case 'grab': {
-        if (ev.on === false && isNum(ev.dragRad) && ev.dragRad >= o.dragMinRad) {
+        // R558 (hunt 2): the W/A/S/D carry of this hold (carry events) counts as well as the look carry (dragRad).
+        const carried = isNum((s || state).carryM) ? (s || state).carryM : 0;
+        if (ev.on === true || ev.on === false) { if (carried !== 0) w().carryM = 0; }
+        if (ev.on === false && ((isNum(ev.dragRad) && ev.dragRad >= o.dragMinRad) || carried >= (isNum(o.carryMinM) ? o.carryMinM : GUIDE_OPTIONS.carryMinM))) {
           const mirrorNow = cur() === 'mirror';
           mark('dragBrain');
           // R5-text: a real drag while the mirror goal is current: the line moves on to the mirror arrows.
@@ -332,10 +344,35 @@ function regionIndex(bodyMap) {
   return idx;
 }
 
+/** R558: the hand actions a relax pulse lets go of (ns-actions HAND_LATCH_IDS, kept equal by hand). */
+const RELAXABLE_HAND_ACTIONS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension']);
+/** True when an activity state holds a latched hand action (armLatch), i.e. "Relax left grip" would move the hand. */
+export function handLatched(a) {
+  const l = a && a.armLatch && typeof a.armLatch === 'object' ? a.armLatch : null;
+  return Boolean(l && RELAXABLE_HAND_ACTIONS.some(id => l[id] > 0));
+}
+
+/** R558 (hunt 2): the game arm's elbow counts as straight below this flexion (radians; the reach solution's shown
+ * elbow, ns-app state.elbowRad). Display choice: 2 degrees. */
+export const ARM_STRAIGHT_ELBOW_RAD = 2 * Math.PI / 180;
+/** R558 (hunt 2): false when a game-arm action (ns-actions ACTION_IDS id) would move nothing on the arm as it is now:
+ * it is already latched on (ns-actions armLatch: it stays until its opposite), or it straightens an elbow that is
+ * already straight (full reach) with no bend held. arm: { armLatch, elbowRad } of the activity state BEFORE the pulse;
+ * missing fields count as "moves" (the old behaviour). */
+export function armActionMoves(armActionId, arm = null) {
+  if (typeof armActionId !== 'string' || !arm || typeof arm !== 'object') return true;
+  const l = arm.armLatch && typeof arm.armLatch === 'object' ? arm.armLatch : null;
+  if (l && l[armActionId] > 0) return false;
+  if (armActionId === 'elbow_extension' && !(l && l.elbow_flexion > 0) && isNum(arm.elbowRad) && arm.elbowRad < ARM_STRAIGHT_ELBOW_RAD) return false;
+  return true;
+}
+
 /** One activation report (ns-actions stepGated marks: { actionId, regionId, source }) as a guide 'activate' event.
- * ctx (optional, R4-fix reviews F3 / SL4-4 / RP6): { spaceHeld, rotationState } of the frame BEFORE the pulse, so an
- * area whose pulse moves nothing you can see does not complete a "watch it move" goal: "Relax left grip" on an open
- * hand, a forearm turn toward the way the palm already faces, and every area whose plain movement row says "Nothing". */
+ * ctx (optional, R4-fix reviews F3 / SL4-4 / RP6): { handHeld, rotationState, armLatch, elbowRad } of the frame BEFORE
+ * the pulse, so an area whose pulse moves nothing you can see does not complete a "watch it move" goal: "Relax left
+ * grip" on a hand with no latched hand action (R558: handHeld; Space no longer makes a fist), a forearm turn toward the
+ * way the palm already faces, a game-arm action already held or an elbow already straight (R558, hunt 2:
+ * armActionMoves), and every area whose plain movement row says "Nothing". */
 export function activationEvent(mark, bodyMap = null, ctx = null) {
   if (!mark || typeof mark !== 'object') return null;
   const idx = regionIndex(bodyMap);
@@ -358,10 +395,14 @@ export function activationEvent(mark, bodyMap = null, ctx = null) {
   if (moves && ctx && typeof mark.actionId === 'string') {
     const act = r.actions.find(a => a && (a.id === mark.actionId || a.armActionId === mark.actionId)) || null;
     const arm = act && typeof act.armActionId === 'string' ? act.armActionId : mark.actionId;
-    if (arm === 'relax_release' && ctx.spaceHeld !== true) moves = false;
+    if (arm === 'relax_release' && ctx.handHeld !== true) moves = false;
     if ((arm === 'pronation' && ctx.rotationState === 'pronated') || (arm === 'supination' && ctx.rotationState === 'supinated')) moves = false;
+    if (r.isLeftArm === true && ctx.armLatch && !armActionMoves(arm, ctx)) moves = false;
   }
-  return { type: 'activate', regionId: r.id, isLeftArm: r.isLeftArm === true, kind, moves, source: mark.source || null };
+  // R558 (hunt 2): with the arm's own state known (ctx.armLatch), a left-arm switch-on waits for the arm to move
+  // (guideEventsFromFrame 'armMoved': the latch commits after the look has rested GAZE_DWELL.latchS, or at once on a click).
+  const awaitMove = r.isLeftArm === true && Boolean(ctx && ctx.armLatch);
+  return { type: 'activate', regionId: r.id, isLeftArm: r.isLeftArm === true, kind, moves, source: mark.source || null, ...(awaitMove ? { awaitMove: true } : {}) };
 }
 
 const num = v => (isNum(v) ? v : null);
@@ -401,7 +442,9 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const t = num(next.t);
   const add = e => ev.push(t === null ? e : { ...e, t });
   const pa = prev && prev.activity && typeof prev.activity === 'object' ? prev.activity : null;
-  const ctx = pa ? { spaceHeld: pa.spaceHeld === true, rotationState: typeof pa.rotationState === 'string' ? pa.rotationState : prev.rotation && prev.rotation.rotation } : null;
+  // R558: Space no longer makes a fist (it is the limb dance); a relax pulse moves the hand when a hand action is latched.
+  const ctx = pa ? { handHeld: handLatched(pa), rotationState: typeof pa.rotationState === 'string' ? pa.rotationState : prev.rotation && prev.rotation.rotation,
+    armLatch: pa.armLatch && typeof pa.armLatch === 'object' ? pa.armLatch : null, elbowRad: num(prev.elbowRad) } : null;
   for (const m of out && Array.isArray(out.marks) ? out.marks : []) { const e = activationEvent(m, bodyMap, ctx); if (e) add(e); }
   const ax = inputs && inputs.axes && typeof inputs.axes === 'object' ? inputs.axes : null;
   // R4-fix (review RP3): a held W/A/S/D counts only when the hand really moved this frame (the shown hand: the fit's
@@ -420,10 +463,28 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const a0 = prev.activity && typeof prev.activity === 'object' ? prev.activity : {};
   const a1 = next.activity && typeof next.activity === 'object' ? next.activity : {};
   if (typeof a0.spaceHeld === 'boolean' && typeof a1.spaceHeld === 'boolean' && a0.spaceHeld !== a1.spaceHeld) add({ type: 'fist', on: a1.spaceHeld });
+  // R558 (hunt 2): the game arm really moved because of a left-arm area: a latch turned on or off while that area's
+  // pulse runs (ns-actions armLatch; the commit comes at a click, or once the look has rested; Reset body is not a
+  // pulse; a straighten on an elbow already straight moves nothing), or the forearm turn changed by a forearm pulse.
+  if (a0.armLatch && a1.armLatch && typeof a0.armLatch === 'object' && typeof a1.armLatch === 'object') {
+    const straight = isNum(prev.elbowRad) && prev.elbowRad < ARM_STRAIGHT_ELBOW_RAD;
+    const changed = typeof a1.pulseAction === 'string' ? Object.keys(a1.armLatch).filter(k => (a0.armLatch[k] > 0) !== (a1.armLatch[k] > 0) && !(k === 'elbow_extension' && a1.armLatch[k] > 0 && straight)) : [];
+    const turned = typeof a1.pulseRotation === 'string' && typeof a0.rotationState === 'string' && typeof a1.rotationState === 'string' && a0.rotationState !== a1.rotationState;
+    if (changed.length || turned) add({ type: 'armMoved', ids: turned ? [...changed, 'rotation'] : changed });
+  }
   if (num(a0.rotationSeq) !== null && num(a1.rotationSeq) !== null) { if (a1.rotationSeq > a0.rotationSeq) add({ type: 'flip' }); }
   else if (prev.rotation && next.rotation && num(prev.rotation.flips) !== null && num(next.rotation.flips) !== null && next.rotation.flips > prev.rotation.flips) add({ type: 'flip' });
   if (num(a0.grabSeq) !== null && num(a1.grabSeq) !== null && a1.grabSeq > a0.grabSeq) add({ type: 'grab', on: true });
   const g0 = a0.brainGrab, g1 = a1.brainGrab;
+  // R558 (hunt 2): W/A/S/D move a held brain by its key offset (the carry's brainKeyOffset, world m), not its placement.
+  if ((g0 && g0.active === true) || (g1 && g1.active === true)) {
+    const k0 = prev.objectCarry && Array.isArray(prev.objectCarry.brainKeyOffset) ? prev.objectCarry.brainKeyOffset : null;
+    const k1 = next.objectCarry && Array.isArray(next.objectCarry.brainKeyOffset) ? next.objectCarry.brainKeyOffset : null;
+    if (k0 && k1 && k0.length === 3 && k1.length === 3 && k0.every(isNum) && k1.every(isNum)) {
+      const m = Math.hypot(k1[0] - k0[0], k1[1] - k0[1], k1[2] - k0[2]);
+      if (m > 1e-6) add({ type: 'carry', m: Math.min(m, 1) });
+    }
+  }
   if (g0 && g0.active === true && g1 && g1.active !== true) {
     const p = a1.brainPlacement;
     const dy = p && num(p.yaw) !== null && num(g0.originYaw) !== null ? p.yaw - g0.originYaw : null;

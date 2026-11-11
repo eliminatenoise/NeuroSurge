@@ -36,8 +36,8 @@
  * Reach feasibility/normal joints/full-body and view qualification remain open; this is not a fixed-pose waiver.
  *  - They keep the FIRST-PERSON frame they had when E was pressed ("body look", pose.bodyLook): the trunk yaw, the neck
  *    flex, the shoulder and the hand's screen-locked aim do not change when the camera leaves the head.
- *  - W / A / S / D keep moving the hand in that first-person frame (A / D across, W / S away / toward), Space makes the fist
- *    and double-tap Space turns the forearm, exactly as in first person.
+ *  - W / A / S / D keep moving the hand in that first-person frame (A / D across, W / S away / toward), and Space (the
+ *    limb dance; double-tap and hold: fast) works exactly as in first person.
  *  - The genuine NDC y +0.5 hand lock applies to the actual displayed view too. The optional R425 App/display path
  *    refits anatomy in this actual camera; the legacy bodyLook alone does not establish that screen rule.
  *  - Why not let the arm follow the third-person camera: the boom turns all the way round the body; a hand locked to
@@ -95,11 +95,36 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  *  - headClear: the head fades in while the camera is startM..fullM OUTSIDE the head's keep-out sphere (the camera leaves
  *    the eye through the head; at 0.12 m outside the head is about 0.4 of the screen height, at 0.32 m about 0.25);
  *  - clearanceM: the extra gap kept between the camera and any keep-out sphere (3 x the 0.02 m near plane: the near
- *    plane's corners lie up to about 1.9 x near from the camera at a 120 deg vertical FOV);
- *  - maxDistanceM: the longest boom the keep-out rule may use.
+ *    plane's corners lie up to about 1.9 x near from the camera at a 120 deg vertical FOV, about 1.6 x at 90);
+ *  - maxDistanceM: the longest boom the keep-out rule may use;
+ *  - followHead (R558, the user's Message 2: "I'm not sure how, head/neck, shoulder movement, hand placement (locked
+ *    in reference to camera view) tied to cursor/camera movement are affected by third-person view? Perhaps the
+ *    same?"; Message 16: "Ensure things are consistently sized across 1st/3rd person"): true = the mouse keeps turning
+ *    the HEAD in third person exactly as in first person (the head, neck, chest, shoulder and hand all follow the one
+ *    look) and the camera only moves: it rides behind and above the posed head, looking the way the head looks. The
+ *    orbit centre is then centreFromEyeMm's height (19 cm) above the posed eye and its back distance (6 cm) behind it
+ *    along the look; the boom's own pitch is held inside followMinPitchDeg..maxPitchDeg (so it never swings under the
+ *    body) while the camera still faces the head's direction. E never changes the look, the body or anything's size
+ *    or place; E then E returns exactly. false = the earlier orbit camera (its own look, the body frozen);
+ *  - followMinPitchDeg (R558, followHead): the boom follows the head's look all the way down (-80, ns-app HEAD_LOOK
+ *    maxDownDeg), so the camera stays on the head's line of sight and the crosshair stays on the body. With the boom
+ *    held at minPitchDeg (-60) while the camera faced 80 down, the view's centre fell behind the body and the lower
+ *    half of the picture was empty (seen in a screenshot). At -80 the camera is almost straight above the head; the
+ *    keep-out spheres still lengthen the boom out of anything in the way (a raised arm).
+ *  - followOffsetM (R558, issue hunt 2: with the camera straight behind the head, the mirror body, a literal reflection
+ *    on the same line, hid completely behind your own back and only its arrow tips showed, drawn on your body): the
+ *    followHead orbit centre is [right, up, back] metres from the posed eye in the look's own frame (right and back
+ *    along the floor, up along world up): 0.42 m to the right and 0.42 m up (an over-the-shoulder view), 6 cm back as
+ *    before. Seen from there at the start look the mirror body stands beside and above your head: measured with the
+ *    arrow rule's sight lines (ns-scene-three FRAME_VIS), about 0.7 of its frame is seen at 1600x900 (its lower legs
+ *    and one side stay behind your right shoulder) and all of it at 720x1200; your head and back sit in the lower left
+ *    of the picture. With the earlier straight-behind camera none of it showed. Only the camera moves: no
+ *    size or place of anything changes (Message 16), E then E still returns exactly, and the crosshair ray starts at
+ *    the camera as before. Display choice.
  */
 export const THIRD_PERSON = Object.freeze({
   centreFromEyeMm: Object.freeze([0, 60, 190]),
+  followOffsetM: Object.freeze([0.42, 0.42, 0.06]),
   distanceM: 1.4,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
@@ -109,7 +134,9 @@ export const THIRD_PERSON = Object.freeze({
   easeS: 0.4,
   headClear: Object.freeze({ startM: 0.12, fullM: 0.32 }),
   clearanceM: 0.06,
-  maxDistanceM: 4
+  maxDistanceM: 4,
+  followHead: true,
+  followMinPitchDeg: -80
 });
 
 /**
@@ -260,6 +287,22 @@ export function boomDistance(centre, dir, distance, avoid = [], { clearanceM = T
   return { distance: t, pushed: t - distance, blocked: false };
 }
 
+/** R558 (followHead): the orbit centre for a head look (world m; eye: the posed eye in world m). With followOffsetM
+ * [right, up, back] (THIRD_PERSON, issue hunt 2): that far to the right of the look and behind it along the floor, and
+ * up along world up. Without it (null): centreFromEyeMm's superior part above the eye and its posterior part behind it,
+ * along the look's floor direction (the earlier camera straight behind the head). */
+export function followCentre(eye, look, { centreFromEyeMm = THIRD_PERSON.centreFromEyeMm, followOffsetM = THIRD_PERSON.followOffsetM } = {}) {
+  const e = vec3(eye, 'eye'), l = lookOf(look, 'look');
+  if (followOffsetM != null) {
+    const o = vec3(followOffsetM, 'followOffsetM'), s = Math.sin(l.yaw), c = Math.cos(l.yaw);
+    // right of the look along the floor = (cos yaw, 0, -sin yaw); behind it = (sin yaw, 0, cos yaw)
+    return [e[0] + o[0] * c + o[2] * s, e[1] + o[1], e[2] - o[0] * s + o[2] * c];
+  }
+  const off = vec3(centreFromEyeMm, 'centreFromEyeMm');
+  const backM = off[1] * 0.001, upM = off[2] * 0.001;
+  return [e[0] + backM * Math.sin(l.yaw), e[1] + upM, e[2] + backM * Math.cos(l.yaw)];
+}
+
 /**
  * The third-person camera for a look: it looks along gazeDirection(look) THROUGH the orbit centre, from the boom's end
  * (centre - distance x direction), with the boom lengthened out of every keep-out sphere (boomDistance). Returns
@@ -332,7 +375,7 @@ export function syncView(state, mode) {
 /**
  * Drive B: E pressed. look: the controls' current { yaw, pitch }; bodyToWorld / eyeBp: the current body frame (the
  * body's forward, the orbit centre); aimAt: the brain's centre in world m (ns-brain view pivotWorld) for the start pitch;
- * blocked: true to ignore the key (e.g. while Space drags the brain, or while paused).
+ * blocked: true to ignore the key (e.g. while F holds the brain or the mirror body, or while paused).
  * Returns { state, controlsLook, changed }: the app must set the controls' look to controlsLook (ns-controls state yaw /
  * pitch) when changed is true:
  *  - first -> third: fpLook := look; controlsLook = the start third-person look (defaultThirdLook) or, while the camera
@@ -348,6 +391,11 @@ export function toggleView(state, { look, bodyToWorld = null, eyeBp = null, aimA
   // R442 engineering mode: E changes the observer translation, never the live physical-look intent.
   // Legacy orbit yaw/pitch are NOT reinterpreted as a new anatomical/body look.
   if (geometryFraming === true) return {
+    state: Object.freeze({ ...s, view: s.view === 'first' ? 'third' : 'first', fpLook: null, tpLook: null, arrived: false, toggles: s.toggles + 1 }),
+    controlsLook: l, changed: true
+  };
+  // R558 (followHead): one look in both views; only the camera moves.
+  if (r.followHead === true) return {
     state: Object.freeze({ ...s, view: s.view === 'first' ? 'third' : 'first', fpLook: null, tpLook: null, arrived: false, toggles: s.toggles + 1 }),
     controlsLook: l, changed: true
   };
@@ -400,10 +448,10 @@ export function stepCamera(state, dtS, { reducedMotion = false, easeS = THIRD_PE
 
 /** Drive B: the controls' look kept inside the current view's limits: third person clamps the pitch (so the mouse has
  * no dead zone at the limit); first person is unchanged (ns-controls' own +/- 80 deg). */
-export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitchDeg, maxPitchDeg = THIRD_PERSON.maxPitchDeg } = {}) {
+export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitchDeg, maxPitchDeg = THIRD_PERSON.maxPitchDeg, followHead = THIRD_PERSON.followHead } = {}) {
   const s = checkState(state);
   const l = lookOf(look, 'look');
-  return s.view === 'third' ? clampThirdLook(l, { minPitchDeg, maxPitchDeg }) : l;
+  return s.view === 'third' && followHead !== true ? clampThirdLook(l, { minPitchDeg, maxPitchDeg }) : l;
 }
 
 /**
@@ -446,7 +494,11 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     if (driveA || !isLook(look) || typeof handRayFraming !== 'function') fail('camera_input', 'hand-ray framing requires one live physical look and a pure data callback');
     fp = { yaw: look.yaw, pitch: look.pitch }; tpLook = null;
   } else if (driveA) { fp = { yaw: bodyLook.yaw, pitch: bodyLook.pitch }; tpLook = clampThirdLook(thirdLook, r); }
-  else {
+  else if (r.followHead === true) {
+    // R558 (followHead): the body keeps the live look in both views; the boom follows it (its pitch held in range).
+    fp = { yaw: look.yaw, pitch: look.pitch };
+    tpLook = s.view === 'third' || s.progress > 0 ? clampThirdLook(fp, { minPitchDeg: r.followMinPitchDeg, maxPitchDeg: r.maxPitchDeg }) : null;
+  } else {
     const live = { yaw: look.yaw, pitch: look.pitch };
     fp = s.view === 'third' && isLook(s.fpLook) ? { yaw: s.fpLook.yaw, pitch: s.fpLook.pitch } : live;
     tpLook = s.view === 'third' ? clampThirdLook(live, r) : isLook(s.tpLook) ? clampThirdLook(s.tpLook, r) : null;
@@ -483,11 +535,14 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
       orbitCentre: null, boom: null
     });
   }
-  const centre = orbitCentreWorld(bodyToWorld, eyeBp, r);
+  const follow = r.followHead === true && !driveA;
+  // R558 (followHead): the orbit centre rides on the posed head: above the eye and a little behind it along the look.
+  const centre = follow ? followCentre(firstOrigin, fp, r) : orbitCentreWorld(bodyToWorld, eyeBp, r);
   const keepOut = Array.isArray(avoid) ? avoid : bodyProxyWorld(bodyToWorld, eyeBp);
-  const tp = thirdPersonCamera(tpLook, centre, { ...r, avoid: keepOut });
+  const tp = thirdPersonCamera(tpLook, centre, { ...r, ...(follow ? { minPitchDeg: r.followMinPitchDeg } : {}), avoid: keepOut });
   let yaw, pitch;
-  if (blend >= 1) { yaw = tp.yaw; pitch = tp.pitch; }
+  if (follow) { yaw = fp.yaw; pitch = fp.pitch; } // the camera faces the way the head faces; only its place moves
+  else if (blend >= 1) { yaw = tp.yaw; pitch = tp.pitch; }
   else { yaw = fp.yaw + blend * wrapAngle(tp.yaw - fp.yaw); pitch = fp.pitch + blend * (tp.pitch - fp.pitch); }
   const position = reference ? firstOrigin.map((v, i) => (1 - blend) * v + blend * tp.position[i]) : [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
   const dir = gazeDirection(yaw, pitch);

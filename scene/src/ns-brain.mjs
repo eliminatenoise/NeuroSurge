@@ -13,7 +13,8 @@
  * (BRAIN_VIEW default tilt 25 deg, frameBrain, brainViewTransform with orbit about the locked brain centre and grab
  * carry about the player), a coarse whole-brain hit grid, orbit-arrow placement and visibility diagnostics. The colour
  * ramp now lives in ns-colors.mjs (shared with the muscles). Everything earlier in the file is kept for the legacy
- * single-band path.
+ * single-band path. R558 (strip audit round 2): in region mode each hemisphere's primary strip is parameterised by the
+ * along-gyrus coordinate v (alongGyrusCoordinate), not by the |x| fraction u of the legacy path (stripParam, MARKERS).
  *
  * Scientific limits: the strip, markers, fields and colours are a representative, schematic,
  * simulated and unitless display. Marker positions are educational control targets placed by
@@ -170,20 +171,26 @@ export const MARKER_WINDOW = 0.015;
 export const MARKER_KIND = 'representative';
 export const CROWN_NOTE = 'visible crown may be premotor (BA6); M1 (BA4) lies largely in the sulcal bank';
 
-/** Representative marker u per action, in movement-map action order. Educational control targets only. */
+/** Representative marker u per action, in movement-map action order, on the LEGACY |x| fraction u of FJ1801 (stripParam).
+ * Educational control targets only. R558: the hand markers sit on the atlas's own hand knob (|x| about 29 mm, u 0.44)
+ * instead of about 8.5 mm lateral of it; all stay inside ARM_BAND, which is unchanged. R558 (strip audit round 2): these
+ * u values serve only the legacy single-band path (no segmentation). Region mode picks the left-arm actions at the body
+ * map's own positions in the along-gyrus coordinate (ns-bodymap LEFT_ARM_ACTION_U = action uCentre; regionActionAt) and
+ * draws the dots there (placeRegionMarkers). The values are the left-arm actions' positions in the activation-point
+ * layout of the |x| fraction (R558, Message 14), the coordinate this legacy path still uses. */
 export const MARKERS = Object.freeze([
-  ['grasp_close', 0.53],
-  ['relax_release', 0.56],
-  ['open_hand', 0.59],
-  ['spread_fingers', 0.62],
-  ['wrist_flexion', 0.44],
-  ['wrist_extension', 0.48],
-  ['elbow_flexion', 0.34],
-  ['elbow_extension', 0.38],
-  ['index_flexion', 0.65],
-  ['index_extension', 0.67],
-  ['thumb_mcp_flexion', 0.71],
-  ['thumb_mcp_extension', 0.73]
+  ['grasp_close', 0.40657],
+  ['relax_release', 0.41691],
+  ['open_hand', 0.42725],
+  ['spread_fingers', 0.43759],
+  ['wrist_flexion', 0.35774],
+  ['wrist_extension', 0.37021],
+  ['elbow_flexion', 0.30002],
+  ['elbow_extension', 0.31928],
+  ['index_flexion', 0.53825],
+  ['index_extension', 0.55135],
+  ['thumb_mcp_flexion', 0.56289],
+  ['thumb_mcp_extension', 0.57288]
 ].map(([actionId, u]) => Object.freeze({ actionId, u, kind: MARKER_KIND })));
 
 /** True when marker `mi` has the nearest target u to `ui` (exact ties go to the earlier marker). */
@@ -1185,7 +1192,8 @@ function dotsOfUncached(actionsAt) {
   const out = [];
   for (const mk of entries) {
     if (!mk || typeof mk.actionId !== 'string' || !mk.position || mk.position.length !== 3) continue;
-    if (Number.isFinite(mk.u) && (mk.u < ARM_BAND.uMin || mk.u > ARM_BAND.uMax)) continue;
+    const band = mk.band && Number.isFinite(mk.band.uMin) && Number.isFinite(mk.band.uMax) ? mk.band : ARM_BAND; // R558: placeMarkers' own band
+    if (Number.isFinite(mk.u) && (mk.u < band.uMin || mk.u > band.uMax)) continue;
     const p = mk.position;
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !Number.isFinite(p[2])) continue;
     out.push(mk);
@@ -1313,14 +1321,16 @@ export function classifyGaze(rayOriginSrc, rayDirSrc, focus, actionsAt, opts = {
 
 const freezeR2 = Object.freeze;
 
-/** Primary precentral strip meshes (= ns-assets BRAIN.rightPrecentral / BRAIN.leftPrecentral). The right one keeps the
- * existing u parameterisation (stripParam over FJ1801's own |x| range), so the left-arm regions stay consistent with
- * the current arm actions (MARKERS, ARM_BAND, actionForU). */
+/** Primary precentral strip meshes (= ns-assets BRAIN.rightPrecentral / BRAIN.leftPrecentral). R558 (strip audit
+ * round 2): in region mode both take the along-gyrus coordinate v (alongGyrusCoordinate); the left-arm actions are
+ * picked at the body map's own positions in v (action uCentre) and the dots are placed there (placeRegionMarkers). The
+ * legacy single-band path keeps the |x| fraction u of FJ1801 (stripParam, MARKERS, ARM_BAND, actionForU). */
 export const STRIP_MESH_IDS = freezeR2({ right: 'FJ1801', left: 'FJ1800' });
 
-/** Strip mesh kinds: 'precentral' (a primary convexity strip; the first one per hemisphere defines that hemisphere's u
- * range), 'strip' (any further convexity piece, parameterised with the primary's range), 'paracentral' (a medial-wall
- * mesh, e.g. a paracentral lobule added by the acquisition agent; only its motor part is used, see MEDIAL_WALL). */
+/** Strip mesh kinds: 'precentral' (a primary convexity strip; the first one per hemisphere takes the along-gyrus
+ * coordinate and defines that hemisphere's |x| range), 'strip' (any further convexity piece, parameterised with the
+ * primary's |x| range), 'paracentral' (a medial-wall mesh, e.g. a paracentral lobule added by the acquisition agent; only
+ * its motor part is used, see MEDIAL_WALL). */
 export const STRIP_KINDS = freezeR2(['precentral', 'strip', 'paracentral']);
 
 /** Medial-wall rule. A strip triangle is MEDIAL WALL when its centroid lies within bandMm of the hemisphere's most
@@ -1332,14 +1342,20 @@ export const STRIP_KINDS = freezeR2(['precentral', 'strip', 'paracentral']);
  * minMedialTriangles: fewer medial triangles than this in a hemisphere disables the medial rule there. */
 export const MEDIAL_WALL = freezeR2({ bandMm: 4.5, minFacing: 0.5, motorMarginMm: 4, minMedialTriangles: 8 });
 
-/** Segmentation and gaze defaults. gapTolU: a strip point outside every applicable extent joins the nearest region if
- * it is within this distance in u, else it stays unassigned (drawn as glass, never activates). hysteresisU: an active
- * region keeps the gaze until the gaze point is more than this far (in u / medial-depth s) inside a neighbour.
- * hysteresisActionU: the same for the action inside a left-arm region (marker u). */
-export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.01, hysteresisActionU: 0.004 });
+/** Segmentation and gaze defaults, in the strip coordinate (the along-gyrus v on the convexity, medial depth s on the
+ * medial wall). gapTolU: a strip point outside every applicable extent joins the nearest region if it is within this
+ * distance, else it stays unassigned (drawn as glass, never activates). hysteresisU: an active region keeps the gaze
+ * until the gaze point is more than this far inside a neighbour. hysteresisActionU: the same for the action inside a
+ * left-arm region (action uCentre). R558 (strip audit round 2): both hysteresis widths were 0.01 / 0.004 in the old |x|
+ * fraction (about 0.6 / 0.25 mm of |x|); one unit of v is about 2.7 times longer on the gyrus (about 0.006 v per mm along
+ * it on FJ1801 / FJ1800), so they are 0.004 / 0.0015 now, the same distances on the brain as before. */
+export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.004, hysteresisActionU: 0.0015 });
 
-/** Every left-arm action id the body map may reference via armActionId (the 12 MARKERS actions plus forearm rotation). */
-export const LEFT_ARM_ACTION_IDS = freezeR2([...MARKERS.map(m => m.actionId), 'pronation', 'supination']);
+/** Every left-arm action id the body map may reference via armActionId (the 12 MARKERS actions plus forearm rotation,
+ * plus the R558 game-defined left-hand actions of ns-actions EXTRA_ARM_ACTION_IDS). */
+export const LEFT_ARM_ACTION_IDS = freezeR2([...MARKERS.map(m => m.actionId), 'pronation', 'supination',
+  'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion',
+  'little_extension', 'thumb_opposition', 'thumb_reposition', 'wrist_radial_deviation', 'wrist_ulnar_deviation']);
 const MARKER_U = new Map(MARKERS.map(m => [m.actionId, m.u]));
 
 const HEMIS = freezeR2(['right', 'left']);
@@ -1389,9 +1405,13 @@ export function validateBodyMotorMap(map) {
           id: a.id,
           label: isStr(a.label) ? a.label : a.id,
           armActionId: arm,
+          // R558 (strip audit round 2): the map's own representative position of the action (strip coordinate), or null.
+          uCentre: Number.isFinite(a.uCentre) ? a.uCentre : null,
           joints: a.joints && typeof a.joints === 'object' ? a.joints : {},
           agonists: Array.isArray(a.agonists) ? a.agonists : [],
-          antagonists: Array.isArray(a.antagonists) ? a.antagonists : []
+          antagonists: Array.isArray(a.antagonists) ? a.antagonists : [],
+          // R558: the map's representative control position (regionActionAt picks left-arm actions by it).
+          uCentre: Number.isFinite(a.uCentre) ? a.uCentre : null
         }));
       });
     }
@@ -1403,6 +1423,9 @@ export function validateBodyMotorMap(map) {
       effector: isStr(r.effector) ? r.effector : null,
       order: r.order,
       extent: freezeR2([u0, u1]),
+      // R558: the map's own non-overlapping control cell (used to split the region between its actions); null if absent.
+      core: Array.isArray(r.core) && r.core.length === 2 && Number.isFinite(r.core[0]) && Number.isFinite(r.core[1]) && r.core[0] < r.core[1]
+        ? freezeR2([Math.max(0, r.core[0]), Math.min(1, r.core[1])]) : null,
       centre: (u0 + u1) / 2,
       medialSurface: r.medialSurface === true,
       isLeftArm,
@@ -1547,6 +1570,139 @@ function compactPart(pos, idx, vU, vS, tris) {
   return { positions, indices, u, s, sourceIndex, triangles, vertexCount: ids.length, faceCount: tris.length };
 }
 
+/** R558 (strip audit round 2): the along-the-gyrus strip coordinate v of each hemisphere's primary precentral mesh.
+ * v is the harmonic field on the mesh surface (cotangent Laplacian, weights clamped at minCotWeight so the operator is
+ * an M-matrix and v has no false extrema) with v = 0 on the medial wall (the vertices of the MEDIAL_WALL triangles, i.e.
+ * the edge where the strip leaves the midline) and v = 1 at the ventral tip (vertices within tipMm of the mesh's lowest
+ * source z, next to the Sylvian fissure). Its level lines cross the gyrus, so v runs down the whole gyrus in order,
+ * including its lowest part next to the Sylvian fissure, where the old |x| fraction folded back. Measured on FJ1801 /
+ * FJ1800 (welded: 2023 vertices each, one closed surface): Jacobi-preconditioned conjugate gradients converge to a
+ * relative residual 1e-8 in about 200 iterations, 30-60 ms per hemisphere on one core, at load, every load (no data
+ * file). A display coordinate on one atlas brain, not a registration. */
+export const ALONG_GYRUS = freezeR2({ tipMm: 3, tol: 1e-8, maxIter: 4000, minCotWeight: 1e-4 });
+/** R558 (strip audit round 2, checker's finding): v is pinned to 0 on the medial-wall vertices, so the crest next to
+ * them fell in the TOES band (toes on the dorsal crest 82 -> 824 mm2), while the toes belong on the medial wall (the
+ * paracentral lobule) and the crest to ankle, knee and hip. On the primary CONVEXITY strip only, v below crestTop is
+ * compressed linearly into [crestFloor, crestTop]: crestFloor is the toes / ankle core border of the body map
+ * (ns-bodymap STRIP centres 0.0179 / 0.0379), crestTop the trunk end (0.135), so every landmark from the trunk on stays
+ * exactly where it was. A plain linear squeeze gave the ankle most of the crest (about 810 mm2 against knee 300 / hip
+ * 240), so the squeeze is a power curve (gamma 0.56): ankle about 460 to 485, knee about 385 to 395, hip about 265 to
+ * 290 mm2 per hemisphere, close to the proportions before the along-gyrus coordinate (ankle 488, knee 445, hip 371) with the
+ * toes back on the medial wall (5 to 8 mm2 left on the crest, from 824). The medial-wall rule (the toes' place) is
+ * unchanged. Display layout, not a measured border. */
+export const CREST_COMPRESS = freezeR2({ crestFloor: 0.0279, crestTop: 0.135, gamma: 0.56 });
+
+/**
+ * Along-gyrus coordinate per vertex (see ALONG_GYRUS). positions / indices: one closed strip mesh (source mm).
+ * medialVertex(i): true for vertices pinned to v = 0 (the medial-wall edge); the vertices within tipMm of the lowest z
+ * are pinned to v = 1 (a vertex in both sets stays 0). Coincident vertices are welded first (the OBJ parser splits them
+ * along seams). A part of the mesh connected to no pinned vertex takes the v of the nearest vertex that is. Throws when a
+ * pin set is empty or the solve does not converge. Returns { v: Float32Array (per input vertex, 0..1), iterations,
+ * residual, vertices (welded), pinnedMedial, pinnedTip, islands }.
+ */
+export function alongGyrusCoordinate(positions, indices, medialVertex, { tipMm = ALONG_GYRUS.tipMm, tol = ALONG_GYRUS.tol, maxIter = ALONG_GYRUS.maxIter, minCotWeight = ALONG_GYRUS.minCotWeight } = {}) {
+  const P0 = checkPositions(positions, 'positions');
+  const n0 = P0.length / 3;
+  if (!indices || indices.length % 3 !== 0 || indices.length === 0) throw new Error('ns:brain_strip: along-gyrus coordinate needs triangle indices');
+  if (typeof medialVertex !== 'function') throw new Error('ns:brain_strip: medialVertex must be a function');
+  const m = indices.length / 3;
+  // Weld exactly coincident vertices.
+  const keyOf = new Map(), rep = new Int32Array(n0), first = [];
+  for (let i = 0; i < n0; i++) {
+    const k = `${P0[3 * i]},${P0[3 * i + 1]},${P0[3 * i + 2]}`;
+    let r = keyOf.get(k);
+    if (r === undefined) { r = first.length; keyOf.set(k, r); first.push(i); }
+    rep[i] = r;
+  }
+  const n = first.length, P = new Float64Array(3 * n), I = new Uint32Array(3 * m);
+  for (let w = 0; w < n; w++) { const i = first[w]; P[3 * w] = P0[3 * i]; P[3 * w + 1] = P0[3 * i + 1]; P[3 * w + 2] = P0[3 * i + 2]; }
+  for (let j = 0; j < 3 * m; j++) { if (!isIndex(indices[j], n0)) throw new Error(`ns:brain_mesh: triangle ${Math.floor(j / 3)} has an out-of-range index`); I[j] = rep[indices[j]]; }
+  // Pins: -1 free, 0 medial wall, 1 ventral tip.
+  let zMin = Infinity;
+  for (let w = 0; w < n; w++) if (P[3 * w + 2] < zMin) zMin = P[3 * w + 2];
+  const fixed = new Int8Array(n).fill(-1);
+  for (let w = 0; w < n; w++) if (P[3 * w + 2] < zMin + tipMm) fixed[w] = 1;
+  for (let i = 0; i < n0; i++) if (medialVertex(i)) fixed[rep[i]] = 0;
+  let pinnedMedial = 0, pinnedTip = 0;
+  for (let w = 0; w < n; w++) { if (fixed[w] === 0) pinnedMedial++; else if (fixed[w] === 1) pinnedTip++; }
+  if (pinnedMedial === 0 || pinnedTip === 0) throw new Error(`ns:brain_strip: along-gyrus coordinate needs medial-wall and ventral-tip vertices (got ${pinnedMedial} / ${pinnedTip})`);
+  // Clamped cotangent weights per half-edge, gathered into a symmetric CSR matrix (duplicate entries are summed by the
+  // products below, which is the same operator).
+  const deg = new Uint32Array(n + 1);
+  for (let j = 0; j < 3 * m; j++) { deg[I[j] + 1] += 2; }
+  for (let w = 0; w < n; w++) deg[w + 1] += deg[w];
+  const col = new Uint32Array(deg[n]), val = new Float64Array(deg[n]), fill = deg.slice(0, n), diag = new Float64Array(n);
+  for (let t = 0; t < m; t++) {
+    for (let k = 0; k < 3; k++) {
+      const o = I[3 * t + k], a = I[3 * t + (k + 1) % 3], b = I[3 * t + (k + 2) % 3];
+      const ax = P[3 * a] - P[3 * o], ay = P[3 * a + 1] - P[3 * o + 1], az = P[3 * a + 2] - P[3 * o + 2];
+      const bx = P[3 * b] - P[3 * o], by = P[3 * b + 1] - P[3 * o + 1], bz = P[3 * b + 2] - P[3 * o + 2];
+      const cr = Math.hypot(ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx);
+      const wgt = Math.max(minCotWeight, 0.5 * (ax * bx + ay * by + az * bz) / Math.max(cr, 1e-12));
+      let p = fill[a]++; col[p] = b; val[p] = wgt;
+      p = fill[b]++; col[p] = a; val[p] = wgt;
+      diag[a] += wgt; diag[b] += wgt;
+    }
+  }
+  // Components reached from the pins; the rest are islands.
+  const reached = new Uint8Array(n), stack = [];
+  for (let w = 0; w < n; w++) if (fixed[w] >= 0) { reached[w] = 1; stack.push(w); }
+  while (stack.length) { const w = stack.pop(); for (let p = deg[w]; p < deg[w + 1]; p++) { const q = col[p]; if (!reached[q]) { reached[q] = 1; stack.push(q); } } }
+  const free = new Uint8Array(n);
+  let islands = 0;
+  for (let w = 0; w < n; w++) { if (fixed[w] < 0 && reached[w]) free[w] = 1; if (!reached[w]) islands++; }
+  // Solve L_ff x_f = W_f1 * 1 (Dirichlet values 0 and 1) with Jacobi-preconditioned conjugate gradients.
+  const x = new Float64Array(n), r = new Float64Array(n), z = new Float64Array(n), d = new Float64Array(n), Ad = new Float64Array(n);
+  for (let w = 0; w < n; w++) if (fixed[w] === 1) x[w] = 1;
+  let bn = 0;
+  for (let w = 0; w < n; w++) {
+    if (!free[w]) continue;
+    let b = 0;
+    for (let p = deg[w]; p < deg[w + 1]; p++) if (fixed[col[p]] === 1) b += val[p];
+    x[w] = 0.5;
+    let ax = diag[w] * 0.5;
+    for (let p = deg[w]; p < deg[w + 1]; p++) if (free[col[p]]) ax -= val[p] * 0.5;
+    r[w] = b - ax; bn += b * b;
+  }
+  bn = Math.sqrt(bn) || 1;
+  let rz = 0, res = 0;
+  for (let w = 0; w < n; w++) if (free[w]) { z[w] = r[w] / diag[w]; d[w] = z[w]; rz += r[w] * z[w]; res += r[w] * r[w]; }
+  res = Math.sqrt(res) / bn;
+  let it = 0;
+  while (res > tol && it < maxIter) {
+    let dAd = 0;
+    for (let w = 0; w < n; w++) {
+      if (!free[w]) continue;
+      let s = diag[w] * d[w];
+      for (let p = deg[w]; p < deg[w + 1]; p++) { const q = col[p]; if (free[q]) s -= val[p] * d[q]; }
+      Ad[w] = s; dAd += d[w] * s;
+    }
+    const alpha = rz / dAd;
+    let rz2 = 0; res = 0;
+    for (let w = 0; w < n; w++) {
+      if (!free[w]) continue;
+      x[w] += alpha * d[w]; r[w] -= alpha * Ad[w]; z[w] = r[w] / diag[w];
+      rz2 += r[w] * z[w]; res += r[w] * r[w];
+    }
+    res = Math.sqrt(res) / bn;
+    const beta = rz2 / rz; rz = rz2;
+    for (let w = 0; w < n; w++) if (free[w]) d[w] = z[w] + beta * d[w];
+    it++;
+  }
+  if (!(res <= tol)) throw new Error(`ns:brain_strip: the along-gyrus coordinate did not converge (relative residual ${res} after ${it} iterations)`);
+  if (islands > 0) { // islands: the v of the nearest reached vertex
+    for (let w = 0; w < n; w++) {
+      if (reached[w]) continue;
+      let best = -1, bd = Infinity;
+      for (let q = 0; q < n; q++) { if (!reached[q]) continue; const dd = (P[3 * q] - P[3 * w]) ** 2 + (P[3 * q + 1] - P[3 * w + 1]) ** 2 + (P[3 * q + 2] - P[3 * w + 2]) ** 2; if (dd < bd) { bd = dd; best = q; } }
+      x[w] = x[best];
+    }
+  }
+  const v = new Float32Array(n0);
+  for (let i = 0; i < n0; i++) { const y = x[rep[i]]; v[i] = y < 0 ? 0 : y > 1 ? 1 : y; }
+  return { v, iterations: it, residual: res, vertices: n, pinnedMedial, pinnedTip, islands };
+}
+
 /**
  * Segment both hemispheres' motor strips into BODY_MOTOR_MAP regions (pure geometry).
  *
@@ -1555,8 +1711,10 @@ function compactPart(pos, idx, vU, vS, tris) {
  * example from FULLBODY-MESH-MANIFEST region brain_motor) are accepted: further convexity pieces use the primary's u
  * range and paracentral meshes join the medial-wall rule.
  *
- * Rule per triangle (centroid): u = (|x| - lo) / (hi - lo) with the hemisphere's PRIMARY precentral |x| range (for the
- * right hemisphere this is exactly stripParam(FJ1801), the existing parameterisation). Convexity triangles take
+ * Rule per triangle (centroid): u = the mean of its vertices' strip coordinate. R558 (strip audit round 2): on each
+ * hemisphere's PRIMARY precentral mesh that is the along-gyrus coordinate v (alongGyrusCoordinate: 0 at the medial-wall
+ * edge, 1 at the ventral tip next to the Sylvian fissure, level lines across the gyrus); on further convexity pieces and
+ * paracentral meshes it is (|x| - lo) / (hi - lo) with the primary's |x| range. Convexity triangles take
  * s = u and the owner among the regions applying to that hemisphere (hemisphere === h or 'both') by regionOwnerAt.
  * Medial-wall triangles (MEDIAL_WALL) take s = mLo + (mHi - mLo) * (1 - w), with w = medial depth 0 (dorsal margin) ..
  * 1 (deepest medial strip point) and [mLo, mHi] the union of that hemisphere's medialSurface extents, and the owner
@@ -1564,7 +1722,8 @@ function compactPart(pos, idx, vU, vS, tris) {
  *
  * Returns { kind: 'ns-motor-segmentation', version: 1, mapVersion, caveats, citations, warnings, options, regions
  * (normalised, each with triangleCount, areaMm2, byHemisphere: { right|left: { triangleCount, areaMm2, anchor, normal,
- * meanS } }, partIndices), regionById (Map), hemispheres: { right|left: { primaryId, meshIds, lo, hi, medial: null |
+ * meanS } }, partIndices), regionById (Map), hemispheres: { right|left: { primaryId, meshIds, lo, hi, coordinate
+ * ({ kind: 'along-gyrus', iterations, residual, vertices, pinnedMedial, pinnedTip, islands }), medial: null |
  * { zTop, zBottom, sLo, sHi, triangleCount }, regionIds } }, parts: [{ regionId, regionIndex, hemisphere, meshId,
  * surface: 'convexity' | 'medial', positions, indices, u, s, sourceIndex, triangles, vertexCount, faceCount }],
  * unassigned: [same shape without region; drawn as glass], strips: [per-mesh pick tables], coverage, glassGrid,
@@ -1574,9 +1733,10 @@ function compactPart(pos, idx, vU, vS, tris) {
  */
 export function segmentMotorStrips(strips, bodyMap, {
   gapTolU = SEGMENT_DEFAULTS.gapTolU, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU,
-  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true
+  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true, alongGyrus = ALONG_GYRUS
 } = {}) {
   const v = validateBodyMotorMap(bodyMap);
+  const extraWarnings = [];
   if (!v.ok) throw new Error(`ns:brain_bodymap: ${v.errors.join('; ')}`);
   if (!strips || typeof strips[Symbol.iterator] !== 'function') throw new Error('ns:brain_strip: strips must be an array of strip descriptors');
   const descs = [];
@@ -1600,19 +1760,12 @@ export function segmentMotorStrips(strips, bodyMap, {
     const medialRegions = applicable.filter(r => r.medialSurface);
     hemis[h] = { list, primary, lo, hi, applicable, medialRegions };
   }
-  // Per-mesh vertex u, triangle centroid data and medial classification.
+  // Per-mesh triangle centroid data, medial classification and vertex strip coordinate.
   const meshes = descs.map(d => {
     const H = hemis[d.hemisphere];
     const pos = d.positions, idx = d.indices, n = pos.length / 3, m = idx.length / 3;
     for (let t = 0; t < idx.length; t++) if (!isIndex(idx[t], n)) throw new Error(`ns:brain_mesh: ${d.id} triangle ${Math.floor(t / 3)} has an out-of-range index`);
-    let vu;
-    if (d === H.primary && d.hemisphere === 'right' && d.kind === 'precentral') vu = stripParam(pos, 'right'); // exact existing u
-    else {
-      lateralityRange(pos, d.hemisphere, d.id, d === H.primary ? 0 : lateralityTolMm);
-      vu = new Float32Array(n);
-      const span = H.hi - H.lo;
-      for (let i = 0; i < n; i++) { const x = (Math.abs(pos[3 * i]) - H.lo) / span; vu[i] = x < 0 ? 0 : x > 1 ? 1 : x; }
-    }
+    lateralityRange(pos, d.hemisphere, d.id, d === H.primary ? 0 : lateralityTolMm);
     const orient = meshOrientation(pos, idx);
     const toMid = d.hemisphere === 'right' ? 1 : -1; // +x is toward the midline for the right hemisphere
     const triMedial = new Uint8Array(m), triU = new Float32Array(m), triArea = new Float32Array(m);
@@ -1627,9 +1780,30 @@ export function segmentMotorStrips(strips, bodyMap, {
       triN[3 * t] = nx; triN[3 * t + 1] = ny; triN[3 * t + 2] = nz;
       const cx = (pos[3 * a] + pos[3 * b] + pos[3 * c]) / 3, cy = (pos[3 * a + 1] + pos[3 * b + 1] + pos[3 * c + 1]) / 3, cz = (pos[3 * a + 2] + pos[3 * b + 2] + pos[3 * c + 2]) / 3;
       triC[3 * t] = cx; triC[3 * t + 1] = cy; triC[3 * t + 2] = cz;
-      triU[t] = (vu[a] + vu[b] + vu[c]) / 3;
       triMedial[t] = Math.abs(cx) - H.lo < medialWall.bandMm && toMid * nx > medialWall.minFacing ? 1 : 0;
     }
+    // R558 (strip audit round 2): the primary convexity strip of each hemisphere takes the ALONG-GYRUS coordinate v
+    // (alongGyrusCoordinate: 0 at the medial-wall edge, 1 at the ventral tip next to the Sylvian fissure), so the map's
+    // regions run down the whole gyrus in order. Further convexity pieces and paracentral meshes keep the medial-lateral
+    // |x| fraction of the primary's range (no atlas mesh of those kinds is loaded; a warning says so).
+    let vu, coordinate;
+    if (d === H.primary && d.kind !== 'paracentral') {
+      const medialV = new Uint8Array(n);
+      for (let t = 0; t < m; t++) if (triMedial[t]) { medialV[idx[3 * t]] = 1; medialV[idx[3 * t + 1]] = 1; medialV[idx[3 * t + 2]] = 1; }
+      if (!medialV.some(x => x)) for (let i = 0; i < n; i++) if (Math.abs(pos[3 * i]) - H.lo < medialWall.bandMm) medialV[i] = 1; // no medial-facing triangle: the medial band
+      const g = alongGyrusCoordinate(pos, idx, i => medialV[i] === 1, alongGyrus);
+      vu = g.v;
+      { const { crestFloor: f0, crestTop: f1, gamma: g0 } = CREST_COMPRESS; for (let i = 0; i < n; i++) if (vu[i] < f1) vu[i] = f0 + (f1 - f0) * Math.pow(vu[i] / f1, g0); }
+      coordinate = freezeR2({ kind: 'along-gyrus', iterations: g.iterations, residual: g.residual, vertices: g.vertices, pinnedMedial: g.pinnedMedial, pinnedTip: g.pinnedTip, islands: g.islands });
+    } else {
+      vu = new Float32Array(n);
+      const span = H.hi - H.lo;
+      for (let i = 0; i < n; i++) { const x = (Math.abs(pos[3 * i]) - H.lo) / span; vu[i] = x < 0 ? 0 : x > 1 ? 1 : x; }
+      coordinate = freezeR2({ kind: 'medial-lateral' });
+      if (d.kind !== 'paracentral') extraWarnings.push(`${d.id}: an extra ${d.hemisphere} convexity strip uses the medial-lateral |x| fraction, not the along-gyrus coordinate`);
+    }
+    for (let t = 0; t < m; t++) triU[t] = (vu[idx[3 * t]] + vu[idx[3 * t + 1]] + vu[idx[3 * t + 2]]) / 3;
+    if (d === H.primary) H.coordinate = coordinate;
     return { d, H, pos, idx, n, m, vu, triMedial, triU, triArea, triN, triC };
   });
   // Per-hemisphere medial-wall depth range and the motor y range of the primary's medial wall.
@@ -1779,13 +1953,13 @@ export function segmentMotorStrips(strips, bodyMap, {
   for (const h of HEMIS) {
     const H = hemis[h];
     hemispheres[h] = H ? freezeR2({
-      primaryId: H.primary.id, meshIds: freezeR2(H.list.map(d => d.id)), lo: H.lo, hi: H.hi,
+      primaryId: H.primary.id, meshIds: freezeR2(H.list.map(d => d.id)), lo: H.lo, hi: H.hi, coordinate: H.coordinate || null,
       medial: H.medial ? freezeR2({ ...H.medial }) : null,
       regionIds: freezeR2(H.applicable.map(r => r.id)), medialRegionIds: freezeR2(H.medialRegions.map(r => r.id))
     }) : null;
   }
   const seg = {
-    kind: 'ns-motor-segmentation', version: 1, mapVersion: v.version, caveats: v.caveats, citations: v.citations, warnings: freezeR2(v.warnings),
+    kind: 'ns-motor-segmentation', version: 1, mapVersion: v.version, caveats: v.caveats, citations: v.citations, warnings: freezeR2([...v.warnings, ...extraWarnings]),
     options: freezeR2({ gapTolU, hysteresisU, hysteresisActionU }),
     regions: outRegions, regionById: new Map(outRegions.map(r => [r.id, r])),
     hemispheres: freezeR2(hemispheres), parts, unassigned, strips: stripTables, coverage: freezeR2(coverage),
@@ -1804,7 +1978,7 @@ export function segmentMotorStrips(strips, bodyMap, {
 
 const isSegmentation = x => !!x && x.kind === 'ns-motor-segmentation' && Array.isArray(x.strips);
 
-/** Regions of a segmentation sorted by hemisphere then strip order (medial -> lateral): [{ hemisphere, regionId, order,
+/** Regions of a segmentation sorted by hemisphere then strip order (medial wall first): [{ hemisphere, regionId, order,
  * meanS, triangleCount }]. */
 export function regionOrderTable(seg) {
   if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
@@ -1904,31 +2078,39 @@ function leftArmRegionFor(seg, armActionId, u) {
   return list.find(r => Number.isFinite(u) && u >= r.extent[0] && u <= r.extent[1]) || list[0];
 }
 
-/** The action a gaze point selects inside `region`: left-arm regions pick the action whose armActionId has the nearest
- * MARKERS u to the gaze u (the existing actionForU rule restricted to the region's actions; the active action keeps
- * the gaze within hysteresisActionU); otherwise (and for left-arm actions without markers, e.g. pronation/supination)
- * the region's extent is split into equal control sub-bands in the listed action order (display control rule, not a
- * cortical location). Returns the action record or null. */
+/** The action a gaze point selects inside `region`: left-arm regions pick, among their actions that have a marker dot
+ * (the 12 MARKERS actions), the one whose representative position is nearest to the gaze u (the active action keeps the
+ * gaze within hysteresisActionU). R558 (strip audit round 2): the representative position is the map's own action
+ * uCentre (in the segmentation's strip coordinate, the along-gyrus v); only an action without one falls back to its
+ * legacy MARKERS u. Otherwise (and for left-arm actions without a dot, e.g. pronation / supination, as ns-actions
+ * pickRegionAction does) the region's core is split into equal control sub-bands in the listed action order (display
+ * control rule, not a cortical location). Returns the action or null. */
 export function regionActionAt(region, u, s, { activeActionId = null, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU } = {}) {
   const acts = region && region.actions;
   if (!acts || acts.length === 0) return null;
   const matchesActive = a => activeActionId !== null && (a.id === activeActionId || a.armActionId === activeActionId);
+  // R558: a left-arm action's position is its map uCentre when present (every new left-hand action has one), else the
+  // legacy MARKERS u (the two agree for the 12 movement-map actions).
+  const markerU = a => (Number.isFinite(a.uCentre) ? a.uCentre : a.armActionId === null ? undefined : MARKER_U.get(a.armActionId));
   if (region.isLeftArm && Number.isFinite(u)) {
     let best = null, bd = Infinity;
     for (const a of acts) {
-      const mu = a.armActionId === null ? undefined : MARKER_U.get(a.armActionId);
+      const mu = markerU(a);
       if (mu === undefined) continue;
       const d = Math.abs(u - mu);
       if (d < bd) { bd = d; best = a; }
     }
     if (best) {
       const act = acts.find(matchesActive);
-      const mu = act && act.armActionId !== null ? MARKER_U.get(act.armActionId) : undefined;
+      const mu = act ? markerU(act) : undefined;
       if (act && mu !== undefined && Math.abs(u - mu) <= bd + 2 * hysteresisActionU) return act;
       return best;
     }
   }
-  const [u0, u1] = region.extent;
+  // R558 (strip audit): split the region's CORE (its non-overlapping control cell, where the look actually lands on
+  // it), not its wider overlapping display extent: with the extent, the outer sub-bands lay mostly in the neighbours'
+  // cores, so some actions could hardly or never be picked by looking (for example "Raise right arm up": 0 %).
+  const [u0, u1] = Array.isArray(region.core) && region.core[1] > region.core[0] ? region.core : region.extent;
   const x = Number.isFinite(s) ? s : u;
   const n = acts.length, span = u1 - u0;
   const f = Number.isFinite(x) && span > 0 ? Math.min(1, Math.max(0, (x - u0) / span)) : 0;
@@ -1939,6 +2121,93 @@ export function regionActionAt(region, u, s, { activeActionId = null, hysteresis
     if (f >= j / n - h && f <= (j + 1) / n + h) i = j;
   }
   return acts[i];
+}
+
+/**
+ * R558 (strip audit round 2): the left-arm marker DOTS for region mode, placed in the segmentation's own strip coordinate
+ * (the along-gyrus v of the right hemisphere's primary strip) near the body map's own action positions (uCentre), with
+ * the region picker's own rule. A dot sits on the CENTROID of one strip triangle (lifted MARKER_GEOMETRY.liftMm along
+ * superior, as every dot): a triangle drawn in the action's region, visible from above (no strip surface more than
+ * visibilityTolMm above its centroid), whose centroid v picks the action (regionActionAt). Candidates are tried in
+ * order of the share of their edge neighbours drawn in the same region with the same action (most first), then
+ * nearness to uCentre; the first that passes the view check wins: the vertical ray and the rays from the
+ * MARKER_VIEWPOINTS virtual cameras (above the left-arm territory's aim point) through the dot centre all first hit
+ * triangles of the action's region whose point picks the action. With no passing candidate the first visible one is
+ * used (viewChecked false); with no visible one, the region's triangle whose centroid v is nearest (crownVisible false).
+ * So a drawn dot sits inside its own area and its own action's share of it, as the default camera sees it (the old
+ * vertex placement could not: the region bands are only one or two triangles wide where the gyrus is seen from above).
+ * Returns a frozen array in MARKERS order of { actionId, u (uCentre), kind, vertexIndex (a vertex of the triangle),
+ * triangleIndex, position (source mm, the centroid), uVertex (v at the centroid), fallback, crownVisible, viewChecked,
+ * band ({ uMin, uMax }: the left-arm cores' range, which classifyRegionGaze's dot test uses) }, or null when the
+ * segmentation has no right primary strip or the map has no position for one of the MARKERS actions.
+ */
+export function placeRegionMarkers(seg, { visibilityTolMm = MARKER_VISIBILITY_TOL_MM, viewpoints = MARKER_VIEWPOINTS } = {}) {
+  if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
+  const hemi = seg.hemispheres.right;
+  const S = hemi ? seg.strips.find(t => t.hemisphere === 'right' && t.id === hemi.primaryId) : null;
+  if (!S) return null;
+  const arm = seg.regions.filter(r => r.isLeftArm && r.hemisphere === 'right' && !r.medialSurface);
+  const at = new Map(), regionOf = new Map();
+  for (const r of arm) for (const a of r.actions) if (a.armActionId !== null && Number.isFinite(a.uCentre)) { at.set(a.armActionId, a.uCentre); regionOf.set(a.armActionId, r); }
+  if (!MARKERS.every(mk => at.has(mk.actionId))) return null;
+  const cell = r => (Array.isArray(r.core) && r.core[1] > r.core[0] ? r.core : r.extent);
+  const band = freezeR2({ uMin: Math.min(...arm.map(r => cell(r)[0])), uMax: Math.max(...arm.map(r => cell(r)[1])) });
+  const P = S.positions, I = S.indices, U = S.u, m = S.triangleCount;
+  const armIdx = new Set(arm.map(r => r.index));
+  const actAt = (ri, u) => { const a = ri >= 0 && armIdx.has(ri) ? regionActionAt(seg.regions[ri], u, u) : null; return a ? a.armActionId : null; };
+  const cen = new Float64Array(3 * m), cu = new Float64Array(m), cact = new Array(m).fill(null);
+  for (let t = 0; t < m; t++) {
+    const a = I[3 * t], b = I[3 * t + 1], c = I[3 * t + 2];
+    for (let k = 0; k < 3; k++) cen[3 * t + k] = (P[3 * a + k] + P[3 * b + k] + P[3 * c + k]) / 3;
+    cu[t] = (U[a] + U[b] + U[c]) / 3;
+    cact[t] = actAt(S.triRegion[t], cu[t]);
+  }
+  // Edge neighbours (vertices welded by position: the parser splits them along seams).
+  const keyOf = new Map(), wid = new Int32Array(P.length / 3);
+  for (let i = 0; i < wid.length; i++) { const k = `${P[3 * i]},${P[3 * i + 1]},${P[3 * i + 2]}`; if (!keyOf.has(k)) keyOf.set(k, keyOf.size); wid[i] = keyOf.get(k); }
+  const edges = new Map(), nbr = Array.from({ length: m }, () => []);
+  for (let t = 0; t < m; t++) for (let k = 0; k < 3; k++) {
+    const p = wid[I[3 * t + k]], q = wid[I[3 * t + (k + 1) % 3]], e = p < q ? `${p}|${q}` : `${q}|${p}`;
+    const o = edges.get(e);
+    if (o === undefined) edges.set(e, t); else { nbr[t].push(o); nbr[o].push(t); }
+  }
+  const topZ = makeTopZ(P, I);
+  const visible = t => { const z = topZ(cen[3 * t], cen[3 * t + 1]); return z === null || cen[3 * t + 2] >= z - visibilityTolMm; };
+  // Virtual default cameras above the left-arm territory's aim point (bounding-box centre of its triangles, on the strip).
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let t = 0; t < m; t++) if (armIdx.has(S.triRegion[t])) { x0 = Math.min(x0, cen[3 * t]); x1 = Math.max(x1, cen[3 * t]); y0 = Math.min(y0, cen[3 * t + 1]); y1 = Math.max(y1, cen[3 * t + 1]); z1 = Math.max(z1, cen[3 * t + 2]); }
+  const ax = (x0 + x1) / 2, ay = (y0 + y1) / 2, az = topZ(ax, ay) ?? z1, eyes = [];
+  for (const h of viewpoints.heightsMm) eyes.push([ax, ay, az + h]);
+  const off = viewpoints.offsetsMm, hMid = viewpoints.heightsMm[Math.floor(viewpoints.heightsMm.length / 2)];
+  for (const [dx, dy] of [[off, 0], [-off, 0], [0, off], [0, -off]]) eyes.push([ax + dx, ay + dy, az + hMid]);
+  const firstHit = (o, d) => { const h = rayStripTable(o, d, S); if (!h) return null; const k = h.tri, w = 1 - h.b1 - h.b2; return { ri: S.triRegion[k], u: w * U[I[3 * k]] + h.b1 * U[I[3 * k + 1]] + h.b2 * U[I[3 * k + 2]] }; };
+  const viewOk = (t, actionId, ri) => {
+    const c = [cen[3 * t], cen[3 * t + 1], cen[3 * t + 2] + MARKER_GEOMETRY.liftMm];
+    for (const e of [[c[0], c[1], c[2] + 30], ...eyes]) {
+      const h = firstHit(e, normalize(sub(c, e)));
+      if (!h || h.ri !== ri || actAt(h.ri, h.u) !== actionId) return false;
+    }
+    return true;
+  };
+  return freezeR2(MARKERS.map(mk => {
+    const actionId = mk.actionId, target = at.get(actionId), ri = regionOf.get(actionId).index;
+    const mine = [];
+    for (let t = 0; t < m; t++) if (S.triRegion[t] === ri && cact[t] === actionId) mine.push(t);
+    const inside = t => (nbr[t].length ? nbr[t].filter(q => S.triRegion[q] === ri && cact[q] === actionId).length / nbr[t].length : 0);
+    const vis = mine.filter(visible).sort((a, b) => (inside(b) - inside(a)) || (Math.abs(cu[a] - target) - Math.abs(cu[b] - target)) || (a - b));
+    let best = vis.find(t => viewOk(t, actionId, ri)), viewChecked = true, crownVisible = true, fallback = false;
+    if (best === undefined && vis.length) { best = vis[0]; viewChecked = false; }
+    if (best === undefined) {
+      viewChecked = false; crownVisible = false; fallback = true;
+      const pool = mine.length ? mine : Array.from({ length: m }, (_, t) => t).filter(t => S.triRegion[t] === ri);
+      if (!pool.length) throw new Error(`ns:brain_markers: region ${seg.regions[ri].id} has no strip triangle for ${actionId}`);
+      best = pool.reduce((p, t) => (Math.abs(cu[t] - target) < Math.abs(cu[p] - target) ? t : p), pool[0]);
+    }
+    return freezeR2({
+      actionId, u: target, kind: MARKER_KIND, vertexIndex: I[3 * best], triangleIndex: best,
+      position: freezeR2([cen[3 * best], cen[3 * best + 1], cen[3 * best + 2]]), uVertex: cu[best], fallback, crownVisible, viewChecked, band
+    });
+  }));
 }
 
 function rayStripTable(o, d, S) {
@@ -1987,14 +2256,17 @@ function regionResult(kind, extra) {
  *     the legacy picker tests them; the nearest dot entry wins if it is nearer than the strip hit, selecting that
  *     action inside its left-arm region;
  *  2. the nearest STRIP triangle over every strip mesh of both hemispheres (two-sided; the glass never occludes a
- *     strip). Its region is the triangle's assigned region (what is drawn is what is picked). HYSTERESIS: when
+ *     strip). Its region is the owner of the hit point's strip coordinate s (regionOwnerAt over the hemisphere's owner
+ *     list, the segmentation's rule applied per point; R558: the renderer draws the areas per fragment by the same rule,
+ *     so what is drawn is what is picked; a point in a map gap keeps the triangle's assignment). HYSTERESIS: when
  *     `activeRegionId` applies to the hit hemisphere and the gaze point's strip coordinate s lies within hysteresisU of
  *     the active region's owned interval (same surface rule), the active region is kept. Inside the region the action
  *     is regionActionAt (with activeActionId hysteresis). An unassigned strip triangle (a map gap) is 'glass'.
  *  3. otherwise the coarse brain grid (seg.glassGrid, when built) -> 'glass'; else 'empty'.
  * Returns { kind: 'region' | 'glass' | 'empty', regionId, hemisphere, isLeftArm, actionId (the left-arm action id for
- * left-arm regions, else the map action id), mapActionId, armActionId, u (hemisphere strip u at the hit), s (the
- * assignment coordinate: u on the convexity, medial depth on the medial wall), surface ('convexity' | 'medial'), meshId,
+ * left-arm regions, else the map action id), mapActionId, armActionId, u (the hemisphere's strip coordinate at the hit:
+ * the along-gyrus v on a primary strip), s (the assignment coordinate: u on the convexity, medial depth on the medial
+ * wall), surface ('convexity' | 'medial'), meshId,
  * point (source mm), t (mm along the ray), overlaps (ids of other applicable regions whose extents also contain s:
  * representations overlap), via ('dot' | 'strip' | 'grid'), label, bodySide, effector }.
  */
@@ -2052,7 +2324,12 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
       const w0 = (md.zTop - point[2]) / (md.zTop - md.zBottom), w = w0 < 0 ? 0 : w0 > 1 ? 1 : w0;
       s = md.sLo + (md.sHi - md.sLo) * (1 - w);
     }
-    let ri = S.triRegion[k];
+    // R558 (Message 18): the region is the owner of the gaze POINT's strip coordinate (the segmentation's own rule per
+    // point instead of per triangle centre), as the renderer draws the areas per fragment (ns-scene-three REGION_BORDER);
+    // a point in a map gap keeps its triangle's assignment, as drawn.
+    const pointList = owners ? (medialRule ? owners.medial : owners.all) : null;
+    const pointOwner = pointList ? regionOwnerAt(pointList, s, seg.options.gapTolU) : null;
+    let ri = pointOwner && Number.isInteger(pointOwner.index) ? pointOwner.index : S.triRegion[k];
     if (activeRegionId !== null && owners) {
       const active = seg.regionById.get(activeRegionId);
       const list = medialRule ? owners.medial : owners.all;
@@ -2172,6 +2449,18 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *    rule "both ends visible" (D5 priority 2); looking around, the orbit arrows and Space-drag show the rest.
  *    beltFit then reports { fit: 'motor', motorFrac, beltWidthFrac (inside the usable width), beltCentreNdc, limiting,
  *    endsOffNdc { front, back, left, right } (how far the outline passes each usable edge, NDC, <= 0 = inside) }.
+ *    R558 (motor strip fills the view; the user: "should take up the entire view from top to bottom of screen and left
+ *    to right of screen ... so there is more cursor area for fine motor control"): motorFrac 0.82 -> 1, the look limit
+ *    motorEdgeDeg 40 -> 80 (it no longer binds on a normal window) and a side gap of motorSideFrac of the view width
+ *    (0.015) on each side, so in a window that is width-limited the left-most and right-most motor area end 1.5 % of
+ *    the width from the screen edges; a very wide window is height-limited instead (motorMarginPx off the top and the
+ *    bottom) and keeps side gaps. This is a contain fit of the strip's TRUE shape: the whole brain is brought nearer
+ *    and scaled uniformly (frame.k), the strip is never moved, stretched or reshaped on the brain (a display choice).
+ *    perspectiveK 6 -> 20 (pictureAxis 'view'): at this size a nearer picture eye hid the outer (face) areas behind
+ *    the curve of the hemispheres; 20 keeps all 44 motor areas in sight at the start (6, 12 and 16 were tried).
+ *    The flat screen stretches the picture towards its edges, so the outer areas gain little look angle and the
+ *    middle ones most (1600x900: the median area grows from about 4.8 to 9.3 degrees of look across; the thinnest
+ *    slivers at the outer ends stay under 1 degree wide).
  *  fit 'belt' (round 3 / 4) and fit 'brain' (round 3) stay available with their options.
  * R558 (the user's note of 2026-11-10: "the highlighted motor areas look far too low in the brain to be anatomically
  * realistic, the brain is probably too narrow"; measurements in DESIGN-DECISIONS.md, decision 13):
@@ -2201,8 +2490,8 @@ export const BRAIN_VIEW = freezeR2({
   framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
-  motorFrac: 0.82, motorEdgeDeg: 40, motorMarginPx: 4, motorCentreNdc: freezeR2([0, 0]),
-  perspectiveK: 6, pictureAxis: 'view'
+  motorFrac: 1, motorEdgeDeg: 80, motorMarginPx: 6, motorSideFrac: 0.015, motorCentreNdc: freezeR2([0, 0]),
+  perspectiveK: 20, pictureAxis: 'view'
 });
 /** R558: the framing of the preceding preview (near eye, 10 degree forward tilt), for comparison:
  * frameBrain(seg, { ...BRAIN_VIEW_R5 }). */
@@ -2807,7 +3096,8 @@ function frameWholeBrain(strips, {
   arrowsOnScreen = BRAIN_VIEW.arrowsOnScreen, iterations = 60, fit = BRAIN_VIEW.fit, beltFrac = BRAIN_VIEW.beltFrac,
   frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
   backCropMax = BRAIN_VIEW.backCropMax || 0, motorFrac = BRAIN_VIEW.motorFrac, motorEdgeDeg = BRAIN_VIEW.motorEdgeDeg,
-  motorMarginPx = BRAIN_VIEW.motorMarginPx, motorCentreNdc = BRAIN_VIEW.motorCentreNdc, pictureAxis = BRAIN_VIEW.pictureAxis
+  motorMarginPx = BRAIN_VIEW.motorMarginPx, motorSideFrac = BRAIN_VIEW.motorSideFrac, motorCentreNdc = BRAIN_VIEW.motorCentreNdc,
+  pictureAxis = BRAIN_VIEW.pictureAxis
 } = {}) {
   if (pictureAxis !== 'view' && pictureAxis !== 'centre') throw new Error(`ns:brain_frame: pictureAxis must be 'view' or 'centre' (got ${pictureAxis})`);
   if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
@@ -2816,6 +3106,7 @@ function frameWholeBrain(strips, {
   if (!(Number.isFinite(motorFrac) && motorFrac > 0 && motorFrac <= 1.5)) throw new Error('ns:brain_frame: motorFrac must be in (0, 1.5]');
   if (!(Number.isFinite(motorEdgeDeg) && motorEdgeDeg > 5 && motorEdgeDeg < 89)) throw new Error('ns:brain_frame: motorEdgeDeg must be in (5, 89)');
   if (!(Number.isFinite(motorMarginPx) && motorMarginPx >= 0)) throw new Error('ns:brain_frame: motorMarginPx must be finite and >= 0');
+  if (!(Number.isFinite(motorSideFrac) && motorSideFrac >= 0 && motorSideFrac < 0.2)) throw new Error('ns:brain_frame: motorSideFrac must be in [0, 0.2)');
   if (!Array.isArray(motorCentreNdc) || motorCentreNdc.length !== 2 || !motorCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)) throw new Error('ns:brain_frame: motorCentreNdc must be [x, y] inside (-0.9, 0.9)');
   if (!(Number.isFinite(beltFrac) && beltFrac > 0 && beltFrac <= 1)) throw new Error('ns:brain_frame: beltFrac must be in (0, 1]');
   if (!(Number.isFinite(frontCropMax) && frontCropMax >= 0 && frontCropMax < 0.5)) throw new Error('ns:brain_frame: frontCropMax must be in [0, 0.5)');
@@ -2959,11 +3250,11 @@ function frameWholeBrain(strips, {
   let motorInfo = null;
   const solveMotor = () => {
     const Uw = U.x1 - U.x0, [cxT, cyT] = motorCentreNdc, target = motorFrac * Uw;
-    const myN = (2 * motorMarginPx) / hPx, mxN = myN / aspect;
+    const myN = (2 * motorMarginPx) / hPx, mxN = Math.max(myN / aspect, 2 * motorSideFrac);
     const edgeX = Math.min(1 - mxN, Math.tan(motorEdgeDeg * DEG) / ta);
-    // The belt stays inside the usable width (never under the info column / band: the left-arm hand areas sit near the
-    // right hemisphere's lateral end) and within the lateral look limit; its centre is as near motorCentreNdc as that
-    // allows (measured: centring it on the crosshair at 16:9 put 10-12 right-hemisphere regions under the column).
+    // The belt stays inside the usable width (R558: in landscape the whole view, less motorSideFrac of the width on each
+    // side; in portrait above the bottom band) and within the lateral look limit; its centre is as near
+    // motorCentreNdc as that allows.
     const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly0 = U.y0 + myN, ly1 = U.y1 - myN;
     if (!(lx1 - lx0 > 0.1 && ly1 - ly0 > 0.05)) return false;
     // R5-bigbrain: with the squash (perspectiveK) the brain is thin along the line of sight, so it may span a wider

@@ -4,7 +4,8 @@
  * module also loads in Node, where its pure helpers are tested. Three APIs used (all stable since r150): Scene,
  * PerspectiveCamera, WebGLRenderer, Group, Mesh, BufferGeometry, BufferAttribute, MeshStandardMaterial,
  * MeshBasicMaterial, Color, AmbientLight, DirectionalLight, Raycaster, Vector3, Object3D.matrix (Matrix4.fromArray)
- * and DoubleSide. No addons. Colour handling assumes r152+ colour management (linear working space, sRGB output),
+ * and DoubleSide. No addons (R558: ns-outline also uses the r170 core WebGLRenderTarget, DepthTexture, DataTexture,
+ * ShaderMaterial and BatchedMesh; without them the outlines are off). Colour handling assumes r152+ colour management (linear working space, sRGB output),
  * the default of the pinned three@0.170.0, so strip vertex colours come from ns-brain colormapLinear.
  * Framing/HUD repairs R2/R3 add no constructor (THREE_API unchanged); they set plain material properties (colorWrite,
  * polygonOffset*, forceSinglePass r150+, blending = THREE.AdditiveBlending when present) and, for the glass rim,
@@ -106,13 +107,13 @@
  * R5-scene (round 5; decisions D16-D19 and the P2 strip relief; round5/R5-scene-NOTES.md). The math of each feature has
  * one owner and is imported: ns-arrows3d (R5-arrows), ns-mirror (R5-mirror), the ns-camera pose (R5-camera), ns-actions
  * glowLinks (R5-input) and the ns-colors glow / arrow / backing colours (R5-access). This file draws them:
- *  - D16 3D COMPASS ARROWS replace the DOM orbit buttons: two ns-arrows3d rigs (brain; mirror, green), planned with
- *    planCompassArrows round each target's drawn outline in its reference view (the brain's carried with any grab), clear
- *    of the info column, the HUD cards (both homes) and the toast; no see-through copy since R558 (it veiled the motor
- *    areas in front of an arrow);
- *    pickArrows(x, y) returns the ray hit list for ns-controls resolveArrowHit (a mirror arrow behind the brain is
- *    blocked); setArrowHover highlights (or shows the blocked look) with a plain caption; orbitArrowAt / hoverOrbitArrow
- *    keep the round-4 crosshair API. The scene never orbits anything: presses and holds are R5-input's.
+ *  - D16 3D COMPASS ARROWS replace the DOM orbit buttons: two ns-arrows3d rigs (brain; mirror, green). R558 (user
+ *    Message 7): every arrow is a V tip at the middle of a side of its target's frame (the motor strip's 16:9
+ *    frame, the mirror body's 9:16 frame; ns-arrows3d planFrameArrows), drawn on top of the scene; (Message 19) each
+ *    tip is a solid, softly bevelled chevron tilted in depth, its point away from the viewer and its open ends nearer;
+ *    pickArrows(x, y) returns the ray hit list for ns-controls resolveArrowHit (a tip is drawn on top, so a hit tip is
+ *    never blocked by what lies behind it); setArrowHover highlights with a plain caption; orbitArrowAt /
+ *    hoverOrbitArrow keep the round-4 crosshair API. The scene never orbits anything: presses and holds are R5-input's.
  *  - D17 GLOW LINKS (setGlowLinks, glowLinksForScene): a soft additive camera-facing ribbon on a gentle curve from the
  *    active area to each driven muscle group, on your body and on the mirror body, in the ns-colors glow colour; it fades
  *    in from the area, keeps only a thin core over the brain's drawn outline (never hiding an area), pulses gently (not
@@ -123,9 +124,11 @@
  *    brain except a small window at the crosshair while it is on a motor area; distances and the far plane are measured
  *    from the camera; bodyKeepOut() gives the boom its keep-out spheres.
  *  - D19 MIRROR BODY: a twin of every body mesh and arm mesh (shared geometry and pose matrices, own opaque materials
- *    shaded by the same rule), under one ns-mirror reflection matrix (det < 0), placed by ns-mirror behind the brain at the
- *    default view (setMirrorView / setMirror for the orbit or a whole ns-mirror state); tinted where the glass brain covers
- *    it (BEHIND_GLASS) and dimmed behind the motor areas (ns-colors region backing); index-only LOD copies (2.5 mm at full
+ *    shaded by the same rule), under one ns-mirror reflection matrix (det < 0). R558: at the start and after a reset it
+ *    is the literal reflection of your posed body in a vertical plane just in front of your toes and fingertips
+ *    (ns-mirror mirrorReflectionPlacement, set from the posed body, independent of the brain); setMirrorView for the turn,
+ *    the push along the ground or a whole ns-mirror state; tinted only where it lies beyond the brain's nearest point
+ *    (BEHIND_GLASS) and dimmed behind the motor areas (ns-colors region backing); index-only LOD copies (2.5 mm at full
  *    quality, coarser first on slow renderers), built a few per frame; mirrorPartAt(x, y) names the part under a point.
  *  - P2 STRIP RELIEF: the lit motor areas (and the legacy strip) take the brain's rigid normal and the far-eye view vector
  *    under the perspective squash (patchRigidNormalShaders), as the glass did in round 4.
@@ -133,11 +136,24 @@
  *    DOM hold timers. Kept as unused pure exports for the round-3/4 tests until the integrator retires them:
  *    placeOrbitArrows, orbitArrowLayout, orbitArrowHit, arrowGapPx, ARROW_PLACEMENT, armEnvelopeHits; setArmEnvelope is
  *    a recording no-op.
+ * R558 (user Message 2: an optogenetic-style glow with one colour / shade per area, the same on all three items, and a
+ * fix for the confusing connecting lines):
+ *  - AREA COLOURS (ns-colors AREA_COLORS / AREA_LOOK): every motor area has its own colour (one hue family per body
+ *    part). regionDisplayStyle gives each area a calm tint of it at rest and, while active, its glow colour as emission
+ *    plus a matching fresnel rim (applyRegionStyle). The shared activity ramp no longer colours areas or muscles.
+ *  - MUSCLES glow in the colour of the area that drives them (assignMuscleAreas from the glow links: the stronger drive
+ *    wins), shaded toward that colour, with a fresnel rim and a soft additive halo shell (MUSCLE_HALO); one call shades
+ *    your body, its in-place head copy and the mirror body, so all three match. Muscles lit only by an opposing-action
+ *    hint stay faint (AREA_LOOK.hintGain, no halo).
+ *  - LINES (GLOW_LINK.mode): at most one short soft line per newly lit area, to your own body only, in the area's colour;
+ *    the fan of ribbons to both bodies is gone.
+ *  - HUD: the legend bar is the glow strength; chips explain the colour families (HUD_LEGEND_FAMILIES); the info panel's
+ *    swatch and meter use the area's colour.
  * Scientific limits (unchanged): every colour, opacity and label is a simulated, unitless DISPLAY of virtual inputs;
  * regions are control regions of a representative map, not cortical borders, and the face layer is a displaced view,
  * not something a person can see from their own eyes.
  */
-import { SEGMENTS, HAND_SEGMENTS, skinApply } from './ns-rig.mjs';
+import { SEGMENTS, HAND_SEGMENTS, skinApply, twistMapsFor } from './ns-rig.mjs';
 import { ARM_DEFAULTS } from './ns-arm.mjs';
 import {
   brainWorldMatrix, colormapLinear, gazeDirection, MARKER_GEOMETRY, MARKER_OCTAHEDRON, markerSolid, MARKERS,
@@ -146,7 +162,15 @@ import {
 import * as NsBrain from './ns-brain.mjs';
 import * as NsMath from './ns-math.mjs';
 import {
-  activityColor, activityColorCss, ACTIVITY_GLOW, RAMP_STOPS_LINEAR as SHARED_RAMP, hexToLinear, RAMP_LABEL, KEY_COLORS
+  activityColor, activityColorCss, ACTIVITY_GLOW, RAMP_STOPS_LINEAR as SHARED_RAMP, hexToLinear, RAMP_LABEL, KEY_COLORS,
+  // R558 (Message 2): one colour per motor area, shared by the area and the muscles it drives on both bodies.
+  AREA_LOOK, AREA_FAMILIES, areaRecord, areaRestTint, areaGlowInto, areaFamilySwatchCss, bodyPartArea, glowStrengthLegendStops,
+  // R558 (Message 18): the muscle look (per-muscle tones, storey shade, tendon ends, tissue light).
+  MUSCLE_LOOK, MUSCLE_TONES, muscleToneKey, muscleToneFallback, assignMuscleTones, muscleBaseInto, muscleGlowGainScale, EYE_LOOK, eyePartOf, muscleTendonScale, muscleFibreScale,
+  // R558 (Messages 25 to 29): the comic cel look of the bodies (bands, rim, highlight shapes, ink).
+  BODY_CEL,
+  // R558 (Message 22): the power-up charge of an activation (one shared start time per area; the same rule in GLSL).
+  POWER_UP, powerUpGlsl, glowIntensity
 } from './ns-colors.mjs';
 
 import * as NsText from './ns-text.mjs';
@@ -156,10 +180,23 @@ import * as NsColors from './ns-colors.mjs';
 import * as NsArrows from './ns-arrows3d.mjs';
 import * as NsMirror from './ns-mirror.mjs';
 import * as RayBvh from './ns-raybvh.mjs';
+import * as NsCollide from './ns-collide.mjs';
 import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
 import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
+// R558 (Message 20): outlines where limbs and bodies overlap (an ID pass of the body meshes and a screen-space line pass).
+import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
+// R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
+// on the motor areas, inked contours and a crisp highlight on the glass.
+import { foldDepth, foldShade, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues } from './ns-brain-ink.mjs';
 
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
+// R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
+import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST } from './ns-body.mjs';
+// R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
+// not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
+const STACK_FILL_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.fill.mm)) + 0.01;
+const STACK_LIFT_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.gapMm)) + STACK_FILL_CAP_MM;
+const stackCapMm = level => (level === 'outer' || level === 'intermediate' ? STACK_LIFT_CAP_MM : STACK_FILL_CAP_MM);
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 /** User-visible wording comes ONLY from ns-text (the single source of plain UI text; a static import). R3-fix (review
@@ -172,9 +209,23 @@ export const CAMERA = Object.freeze({ fovYDeg: 110, near: 0.02, far: 500 });
 
 /** Display materials. Hex colours are sRGB (Three converts them to its linear working space). */
 export const MATERIAL = Object.freeze({
+  // R558 (user Message 24: "I liked the space black background"): back to the near-black space background (0x05070b).
+  // Message 22 had turned it into a cool slate gradient (backgroundGradientSlate below, kept for reference; backgroundGradient null
+  // here means clinicalBackground draws nothing and the flat colour is used). Black also gives the glows and highlights
+  // their contrast (Message 25: "Contrast and high dynamic range are still visually key").
   background: 0x05070b,
-  bone: 0xe9dfc4, // ivory
-  muscleBase: 0x7a2f24, // red-brown
+  backgroundGradientSlate: Object.freeze({ centre: 0x465259, edge: 0x1e282f, centreX: 0.5, centreY: 0.42, radius: 0.78, ditherLsb: 1.5, size: 512 }),
+  backgroundGradient: null,
+  // R558 (Message 18, "visceral and fleshy but never disgusting"): a softer ivory (was 0xe9dfc4, which glared white
+  // under the headlight next to the muscles) and the fallback muscle colour = the first natural muscle tone of ns-colors
+  // MUSCLE_TONES (was 0x7a2f24, a dark saturated raw-meat red); each muscle normally draws its own tone (muscleBaseOf).
+  // R558 (Message 22, clinical): a clean ivory-white like a bone model (0xd9cdb3 -> 0xe6dfd1, OKLCH 0.851 0.037 86 ->
+  // 0.905 0.020 85: less yellow), a little smoother (roughness 0.7 -> 0.64).
+  bone: 0xe6dfd1, // clean ivory-white
+  // R558 (Messages 25, 29: "real specular highlights", crisp highlight shapes on bone): a little smoother (0.64 -> 0.5),
+  // so the key light's highlight on bone is a compact lobe the comic patch can cut into a crisp shape (BODY_CEL.spec).
+  boneRoughness: 0.5,
+  muscleBase: MUSCLE_TONES[0].hex, // rose red
   muscleHot: 0xff5a1e, // bright red / orange
   muscleEmissiveMax: 0.35,
   // Visual-clarity candidate: the nearest shell carries the outline; deeper layers stay faint.
@@ -207,11 +258,214 @@ export const MATERIAL = Object.freeze({
 /** Lights (display choices). Polish: a lower flat ambient plus a sky/ground hemisphere light gives the muscles and
  * bones shape (the ambient-heavy mix looked flat), and a weak camera-space rim light from behind separates silhouettes
  * from the dark background. The key light is still the camera headlight. */
+// R558 (user Message 22, clinical and surgical): bright, even examination light. The flat fill rises (ambient 0.5 ->
+// 0.8) and the sky / ground hemisphere is a clean cool white over a light neutral grey floor bounce (sky 0xdfe9ff ->
+// 0xeef4fc, ground 0x3a2622 -> 0x868a8e: the old brown-red bounce filled every underside with a murky blood-brown;
+// hemi 1.15 -> 1.35), the camera headlight is a little cooler and softer (white -> 0xf4f8ff, key 2.2 -> 1.9) so the
+// shading is gentle, and the cool rim stays for the silhouettes (1.1 -> 0.85, 0xbcd4ff -> 0xcfe0ff). Worked out for a
+// surface facing the eye: about 1.2 times the light of before (0.68 -> 0.82 x albedo), on its side away from the key
+// light 1.6 times (0.32 -> 0.51 x albedo), so shadows are soft, never murky.
+// R558 (user Message 25: "Let's not make things bland. Contrast and high dynamic range are still visually key"): the
+// even examination fill above flattened the bodies against the black. Less flat fill (ambient 0.8 -> 0.45, hemi 1.35 ->
+// 1.0) over a dark NEUTRAL floor bounce (0x868a8e -> 0x2e3034: shadows go deep again, but grey, never the old murky
+// blood-brown), a stronger cool-white key (1.9 -> 2.5) and a brighter rim (0.85 -> 1.3) to cut the silhouettes out of
+// the black. The muscle tones stay the clinical ones (Message 22).
 export const LIGHT = Object.freeze({
-  ambient: 0.5, key: 2.2,
-  hemi: 1.15, hemiSky: 0xdfe9ff, hemiGround: 0x3a2622,
-  rim: 1.1, rimColor: 0xbcd4ff
+  ambient: 0.45, key: 2.5, keyColor: 0xf4f8ff,
+  hemi: 1.0, hemiSky: 0xeef4fc, hemiGround: 0x2e3034,
+  rim: 1.3, rimColor: 0xcfe0ff
 });
+
+/** R558 (user Message 25: "Contrast and high dynamic range are still visually key"; style guide: the power-up glow
+ * "rendered high dynamic range: bright cores that bloom on the space-black background, selective"): the HDR picture
+ * and its BLOOM (createHdrBloom). Display choices.
+ * How: the main scene is drawn into a half-float multisampled target instead of the canvas, with exactly the colour
+ * values, blending and anti-aliasing the canvas would get (same programs: three.js r170 writes a render target's own
+ * colour space when it is flagged as an XR target, so the target holds the canvas's sRGB-encoded values; nothing is
+ * clamped at 1). Everything at or below display white is therefore unchanged pixel for pixel (glass, areas, the
+ * outline pass's ink, the HUD is HTML); only light ABOVE white, i.e. the glows and the brightest highlights, is new
+ * information. That excess (above `threshold`, soft knee `knee`, a brightness-weighted average so single bright
+ * pixels do not flicker) is blurred down a chain of `levels` half-size targets and added back up (a tent filter per
+ * step, each coarser level weighted upGain), and the composite draws min(picture, 1) plus strength x the bloom, plus a white-hot core where the brightest
+ * channel passes crossFrom (crossK x the excess, toward white): the TONE CURVE is the identity below white, so area
+ * colours and the near-black ink stay exactly as they are. A muscle's power-up peaks (the charge front, the flash,
+ * the ripple: power-up gain above muscleFrom) are brightened by muscleBoost x the excess, which pushes their cores past
+ * white so they bloom (only while HDR is on; held glows are not boosted). Off on a software renderer, without
+ * half-float render targets, and at the coarse quality levels (index >= offFromLevel: lite / lod); at the 0.75 and 0.5
+ * render scales one fewer blur level.
+ * Tuning: a first try (strength 0.85, every blur level added at full weight, muscleBoost 1.5, white-hot from 1.45, and
+ * picture + bloom over white mixed toward white) turned a tapped hand's flash into a white blob with a wide halo, and a
+ * looked-at motor area's flash into a white disc: the area's colour was lost. Now the bloom is added and clamped per
+ * channel (an orange area's core goes yellow-orange, never white), from 1.1 (a held area glow, about 1.13 encoded at
+ * its brightest channel, hardly blooms; a flash, up to about 1.6, does), with a moderate halo.
+ * Measured costs are in the build report (frame rate before and after). */
+export const HDR_BLOOM = Object.freeze({
+  threshold: 1.1, knee: 0.3, strength: 0.45, upGain: 0.7, levels: 5, crossFrom: 2.0, crossK: 0.25,
+  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 3, msaaSamples: 4, ditherLsb: 0.6
+});
+
+/** The HDR target, the bloom chain and the composite (THREE injected). Returns { begin(), end(), setSize(w, h),
+ * setLevel(levels), state(), dispose() } or a disabled stub. begin(): renderer.render(scene) after it draws into the HDR
+ * target (returns false when off: draw to the canvas as before); end(): bloom and composite to the canvas. */
+export function createHdrBloom({ THREE, renderer, msaa = true, enabled = true, o = HDR_BLOOM } = {}) {
+  const has = n => Boolean(renderer && renderer.extensions && typeof renderer.extensions.has === 'function' && renderer.extensions.has(n));
+  const ok = enabled && THREE && renderer && renderer.capabilities && renderer.capabilities.isWebGL2 !== false && typeof THREE.WebGLRenderTarget === 'function' &&
+    typeof THREE.ShaderMaterial === 'function' && THREE.HalfFloatType !== undefined && (has('EXT_color_buffer_float') || has('EXT_color_buffer_half_float'));
+  const st = { supported: Boolean(ok), on: false, levels: 0, size: [0, 0], ms: 0, frames: 0 };
+  if (!ok) return { begin: () => false, end: () => {}, setSize: () => {}, setLevel: () => {}, state: () => ({ ...st }), dispose: () => {} };
+  const mk = (w, h, samples) => {
+    const t = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
+      depthBuffer: samples !== null, stencilBuffer: false, samples: samples || 0 });
+    return t;
+  };
+  const main = mk(1, 1, msaa ? o.msaaSamples : 0);
+  // r170 reads isXRRenderTarget only to pick the output colour space / tone mapping of the programs drawing into a target
+  // (and the internal format of an 8-bit sRGB target); flagged, the target gets the canvas's sRGB-encoded values from
+  // the very same programs (no recompiles), so blending and every colour below white match the canvas exactly.
+  main.isXRRenderTarget = true;
+  if (THREE.SRGBColorSpace !== undefined) main.texture.colorSpace = THREE.SRGBColorSpace;
+  const mips = [];
+  for (let i = 0; i < 6; i++) mips.push(mk(1, 1, null));
+  const VS = 'varying vec2 vUv;\nvoid main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4( position.xy, 0.0, 1.0 ); }';
+  const f = x => (Number.isInteger(x) ? x.toFixed(1) : String(x));
+  const pre = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } }, vertexShader: VS,
+    fragmentShader: `precision highp float;\nuniform sampler2D tSrc;\nuniform vec2 uTexel;\nvarying vec2 vUv;
+vec3 pick( vec2 uv ) {
+	vec3 c = texture2D( tSrc, uv ).rgb;
+	float b = max( c.r, max( c.g, c.b ) );
+	float s = clamp( b - ${f(o.threshold - o.knee)}, 0.0, ${f(2 * o.knee)} );
+	s = s * s / ${f(4 * o.knee + 1e-5)};
+	float w = max( s, b - ${f(o.threshold)} ) / max( b, 1e-4 );
+	return c * w;
+}
+void main() {
+	vec3 a = pick( vUv + uTexel * vec2( -0.5, -0.5 ) ), b = pick( vUv + uTexel * vec2( 0.5, -0.5 ) ), c = pick( vUv + uTexel * vec2( -0.5, 0.5 ) ), d = pick( vUv + uTexel * vec2( 0.5, 0.5 ) );
+	float wa = 1.0 / ( 1.0 + max( a.r, max( a.g, a.b ) ) ), wb = 1.0 / ( 1.0 + max( b.r, max( b.g, b.b ) ) ), wc = 1.0 / ( 1.0 + max( c.r, max( c.g, c.b ) ) ), wd = 1.0 / ( 1.0 + max( d.r, max( d.g, d.b ) ) );
+	gl_FragColor = vec4( ( a * wa + b * wb + c * wc + d * wd ) / ( wa + wb + wc + wd ), 1.0 );
+}`, depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false });
+  const down = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } }, vertexShader: VS,
+    fragmentShader: `precision highp float;\nuniform sampler2D tSrc;\nuniform vec2 uTexel;\nvarying vec2 vUv;
+void main() {
+	vec3 s = texture2D( tSrc, vUv ).rgb * 4.0;
+	s += texture2D( tSrc, vUv + uTexel * vec2( -1.0, -1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 1.0, -1.0 ) ).rgb;
+	s += texture2D( tSrc, vUv + uTexel * vec2( -1.0, 1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 1.0, 1.0 ) ).rgb;
+	gl_FragColor = vec4( s / 8.0, 1.0 );
+}`, depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false });
+  const up = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) }, uGain: { value: 1 } }, vertexShader: VS,
+    fragmentShader: `precision highp float;\nuniform sampler2D tSrc;\nuniform vec2 uTexel;\nuniform float uGain;\nvarying vec2 vUv;
+void main() {
+	vec3 s = texture2D( tSrc, vUv ).rgb * 4.0;
+	s += ( texture2D( tSrc, vUv + uTexel * vec2( -1.0, 0.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 1.0, 0.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 0.0, -1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 0.0, 1.0 ) ).rgb ) * 2.0;
+	s += texture2D( tSrc, vUv + uTexel * vec2( -1.0, -1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 1.0, -1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( -1.0, 1.0 ) ).rgb + texture2D( tSrc, vUv + uTexel * vec2( 1.0, 1.0 ) ).rgb;
+	gl_FragColor = vec4( s / 16.0 * uGain, 1.0 );
+}`, depthTest: false, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending, toneMapped: false });
+  const comp = new THREE.ShaderMaterial({ uniforms: { tBase: { value: main.texture }, tBloom: { value: null }, uBloom: { value: o.strength }, uSize: { value: new THREE.Vector2(1, 1) } }, vertexShader: VS,
+    fragmentShader: `precision highp float;\nuniform sampler2D tBase;\nuniform sampler2D tBloom;\nuniform float uBloom;\nuniform vec2 uSize;\nvarying vec2 vUv;
+void main() {
+	vec3 c = texture2D( tBase, vUv ).rgb;
+	vec3 base = min( max( c, 0.0 ), 1.0 );
+	float mx = max( c.r, max( c.g, c.b ) );
+	base += ( 1.0 - base ) * clamp( ( mx - ${f(o.crossFrom)} ) * ${f(o.crossK)}, 0.0, 1.0 );
+	vec3 b = uBloom > 0.0 ? texture2D( tBloom, vUv ).rgb * uBloom : vec3( 0.0 );
+	vec3 col = base + b;
+	float n = fract( sin( dot( floor( vUv * uSize ), vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ) - 0.5;
+	gl_FragColor = vec4( min( col, 1.0 ) + n * ${f(o.ditherLsb / 255)} * step( 0.0005, b.r + b.g + b.b ), 1.0 );
+}`, depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+  const quad = new THREE.Mesh(geo, pre);
+  quad.frustumCulled = false; quad.matrixAutoUpdate = false;
+  const qScene = new THREE.Scene(); qScene.add(quad);
+  qScene.matrixWorldAutoUpdate = false;
+  const qCam = new THREE.Camera();
+  let W = 0, H = 0, levels = o.levels;
+  function setSize(w, h) {
+    w = Math.max(2, Math.floor(w)); h = Math.max(2, Math.floor(h));
+    if (w === W && h === H) return;
+    W = w; H = h; main.setSize(w, h);
+    let mw = w, mh = h;
+    for (const m of mips) { mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1); m.setSize(mw, mh); }
+    comp.uniforms.uSize.value.set(w, h);
+    st.size = [w, h];
+  }
+  function setLevel(n) { levels = Math.max(0, Math.min(mips.length, n | 0)); }
+  let active = false;
+  function begin() {
+    active = levels > 0 && W > 1 && H > 1;
+    st.on = active; st.levels = active ? levels : 0;
+    if (!active) return false;
+    renderer.setRenderTarget(main);
+    return true;
+  }
+  const pass = (mat, target) => { quad.material = mat; renderer.setRenderTarget(target); renderer.render(qScene, qCam); };
+  function end() {
+    if (!active) return;
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    const auto = renderer.autoClear;
+    // renderer.info keeps describing the MAIN pass (its draw calls and triangles; the frame counter counts every pass, as
+    // it already did for the outline and face passes).
+    const info = renderer.info && renderer.info.render, keepInfo = info ? { calls: info.calls, triangles: info.triangles, points: info.points, lines: info.lines } : null;
+    renderer.autoClear = false;
+    try {
+      pre.uniforms.tSrc.value = main.texture; pre.uniforms.uTexel.value.set(1 / W, 1 / H);
+      renderer.autoClear = true; pass(pre, mips[0]);
+      for (let i = 1; i < levels; i++) {
+        down.uniforms.tSrc.value = mips[i - 1].texture; down.uniforms.uTexel.value.set(1 / mips[i - 1].width, 1 / mips[i - 1].height);
+        pass(down, mips[i]);
+      }
+      renderer.autoClear = false;
+      for (let i = levels - 1; i >= 1; i--) {
+        up.uniforms.tSrc.value = mips[i].texture; up.uniforms.uTexel.value.set(1 / mips[i].width, 1 / mips[i].height); up.uniforms.uGain.value = o.upGain;
+        pass(up, mips[i - 1]);
+      }
+      comp.uniforms.tBloom.value = mips[0].texture;
+      renderer.autoClear = true;
+      pass(comp, null);
+    } finally {
+      renderer.autoClear = auto;
+      renderer.setRenderTarget(null);
+      if (keepInfo && renderer.info && renderer.info.render) Object.assign(renderer.info.render, keepInfo);
+    }
+    st.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; st.frames++;
+  }
+  function dispose() { main.dispose(); for (const m of mips) m.dispose(); pre.dispose(); down.dispose(); up.dispose(); comp.dispose(); geo.dispose(); }
+  return { begin, end, setSize, setLevel, state: () => ({ ...st, cpuMs: Math.round(st.ms * 100) / 100 }), dispose };
+}
+
+/** R558 (Message 22): the clinical background (MATERIAL.backgroundGradient) as a screen-filling texture: a radial
+ * gradient from `centre` to `edge` drawn once into a small canvas (size x size, stretched to the window like any scene
+ * background texture, so it is an ellipse on a wide window), with +-ditherLsb of noise per texel so the slow ramp does
+ * not band. One texture, drawn by Three's own background pass: no per-frame work. null without a canvas (then the flat
+ * MATERIAL.background is used). */
+export function clinicalBackground(THREE, doc, g = MATERIAL.backgroundGradient) {
+  if (!THREE || typeof THREE.CanvasTexture !== 'function' || !doc || typeof doc.createElement !== 'function' || !g) return null;
+  try {
+    const n = g.size, cv = doc.createElement('canvas');
+    cv.width = n; cv.height = n;
+    const ctx = cv.getContext('2d');
+    if (!ctx || typeof ctx.createImageData !== 'function') return null;
+    const img = ctx.createImageData(n, n), d = img.data;
+    const c0 = [(g.centre >> 16) & 255, (g.centre >> 8) & 255, g.centre & 255], c1 = [(g.edge >> 16) & 255, (g.edge >> 8) & 255, g.edge & 255];
+    let seed = 0x9e3779b9;
+    const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return ((seed >>> 0) / 4294967296) - 0.5; };
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const dx = (x + 0.5) / n - g.centreX, dy = (y + 0.5) / n - g.centreY;
+        const t = Math.min(1, Math.hypot(dx, dy) / g.radius), s = t * t * (3 - 2 * t);
+        const o = 4 * (y * n + x), r = 2 * g.ditherLsb * rnd();
+        for (let k = 0; k < 3; k++) d[o + k] = Math.max(0, Math.min(255, Math.round(c0[k] + (c1[k] - c0[k]) * s + r)));
+        d[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    if (THREE.SRGBColorSpace !== undefined) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.generateMipmaps = false;
+    if (THREE.LinearFilter !== undefined) { tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; }
+    tex.name = 'ns-clinical-background (display only)';
+    return tex;
+  } catch { return null; }
+}
 
 /** Glass alpha for a fragment whose interpolated normal makes |N.V| = facing with the view direction (GLSL mirror). */
 export function glassAlpha(facing, body, rim, power) {
@@ -223,11 +477,18 @@ export function glassAlpha(facing, body, rim, power) {
  * wider (a soft glow along the brain's outline and gyri in the glass's own pale colour: not cyan, gold or the activity
  * ramp, so it never reads as activity or the left arm). It eases in (inS) and out (outS) and ends on release; under
  * prefers-reduced-motion it switches without easing. Display only. */
-export const HELD_CUE = Object.freeze({ rimOpacity: 0.9, rimPower: 2.4, inS: 0.1, outS: 0.12 });
-/** Shell rim uniforms for a held-cue amount 0..1 (pure): linear from the resting MATERIAL rim to HELD_CUE. */
+// R558 (issue hunt 2, Message 18: transparency must look clean, not "shard-like"): the held cue was a strong, wide rim
+// (opacity 0.9, power 2.4) that lit every grazing gyral wall inside the glass as jagged white glints. Now it is a
+// thinner (power 3.6), fainter (opacity 0.55) rim on the CROWNS only (rimGroove 1: no rim at all down in the sulci, where
+// the shards sat), so it follows the brain's outer outline.
+export const HELD_CUE = Object.freeze({ rimOpacity: 0.55, rimPower: 3.6, rimGroove: 1, inS: 0.1, outS: 0.12 });
+/** Shell rim uniforms for a held-cue amount 0..1 (pure): linear from the resting MATERIAL rim (and GLASS_READ's groove
+ * share) to HELD_CUE. */
 export function heldCueRim(amount, o = HELD_CUE) {
   const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
-  return { rimOpacity: MATERIAL.glassRimOpacity + (o.rimOpacity - MATERIAL.glassRimOpacity) * a, rimPower: MATERIAL.glassRimPower + (o.rimPower - MATERIAL.glassRimPower) * a };
+  const g0 = GLASS_READ.rimGroove, g1 = Number.isFinite(o.rimGroove) ? o.rimGroove : g0;
+  return { rimOpacity: MATERIAL.glassRimOpacity + (o.rimOpacity - MATERIAL.glassRimOpacity) * a, rimPower: MATERIAL.glassRimPower + (o.rimPower - MATERIAL.glassRimPower) * a,
+    rimGroove: g0 + (g1 - g0) * a };
 }
 
 /**
@@ -243,18 +504,10 @@ export function heldCueRim(amount, o = HELD_CUE) {
  * compatibility. The x-ray pass covers only the GLASS_XRAY subset; the glass DEPTH pass sorts front-to-back
  * (transparentSortNs) so occluded deep layers fail the depth test early.
  */
-/** R558: where the translucent compass ribbons sit in the transparent draw order (see makeArrowRig). */
-export const ARROW_RENDER_ORDER = Object.freeze({ brain: 1.2, mirror: 1.25 });
-/** R558: the brain's top / bottom arrows sit this share of the side arrows' distance from the brain's centre (the motor
- * areas form a wide, low band; a display choice checked on screen, with the per-frame motor-area test as the guard). */
-export const ARROW_VERTICAL_SHARE = 0.62;
-/** R558: room (CSS px at the view centre) between the motor areas' first-framed box and each brain arrow's tail. */
-export const ARROW_MOTOR_GAP_PX = 16;
-/** R558: the least distance (CSS px) the brain's top arrow keeps from the top of the screen at the start look, where
- * one gap to the motor areas allows it (updateArrows). The caption line at the top is about 18 px high. */
-export const ARROW_TOP_EDGE_PX = 22;
-/** R558: the mirror body's arrows, as shares of its enclosing-sphere radius from its centre (display choices). */
-export const MIRROR_ARROW_SHARE = Object.freeze({ vertical: 0.37, side: 0.31 });
+/** R558 (Message 7): the V tips are drawn last of the transparent list and without a depth test, i.e. on top of the
+ * scene (see makeArrowRig). Both sets share one order, so where a brain tip and a mirror tip overlap Three's
+ * back-to-front sort draws the nearer one on top, which is also the one a pick returns first. */
+export const ARROW_RENDER_ORDER = Object.freeze({ brain: 100, mirror: 100 });
 export const RENDER_ORDER = Object.freeze({
   strip: 2, marker: 3, stripDepth: 4, glassXray: 1, glassDepth: 5, glass: 6,
   // U2b-scene region mode: nearest-layer depth pre-pass, translucent region colour, outlines (all before the glass).
@@ -494,6 +747,87 @@ export function clusterDecimate(positions, indices, cell, attrs = null) {
     tri[m++] = a; tri[m++] = b; tri[m++] = c;
   }
   return { positions: out, indices: tri.slice(0, m), attrs: outAttrs, vertices: k, triangles: m / 3 };
+}
+
+/**
+ * R558 (dark flecks on the body at Picture quality Low): the body's coarser copies were vertex clusters of 3D cells
+ * alone. On these meshes a 4-7 mm cell often holds vertices of BOTH faces of a thin muscle sheet (or of a fold), and the
+ * index-only copies of the lifted / filled / skinned muscles also took one original vertex per cluster with its own
+ * full-resolution normal. Measured on the 691 k baked body-muscle triangles at the Low cell (7 mm): 20 % of the copy's
+ * triangles faced inward (13.7 % of its area; front faces only, so they were holes to the darker deep layers behind) and
+ * 42 % had a corner normal more than 70 deg off their face: the dark flecks. clusterLodPlan instead clusters by cell AND
+ * by the vertex normal's main direction (six buckets, so the two faces of a sheet never merge), draws each cluster at
+ * its members' mean with their mean normal (clusterLodMeans, also for every other float attribute), and turns a
+ * triangle that still faces against its corners' normals the right way round (a folded sliver then covers its hole
+ * instead of opening it). The copies hold their own buffers; the body re-writes them from the full buffers whenever
+ * those change (the lift amount, a per-vertex skin). The normal buckets split clusters, so LOD_BUCKET_CELL_SCALE x the
+ * level's cell keeps about the old triangle count (Low: 125 k -> 148 k). Display choice; pure.
+ * @returns { map (Int32Array vertex -> cluster), clusters, inv (Float32Array 1 / members), indices (Uint32Array over
+ *   clusters), triangles, rewound }
+ */
+export const LOD_BUCKET_CELL_SCALE = 1.35;
+export function clusterLodPlan(positions, normals, indices, cell) {
+  const n = positions.length / 3;
+  const map = new Int32Array(n), ids = new Map();
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[3 * i], y = positions[3 * i + 1], z = positions[3 * i + 2];
+    if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y;
+  }
+  const c = cell > 0 ? cell : 1, nx = Math.floor((x1 - x0) / c) + 2, ny = Math.floor((y1 - y0) / c) + 2;
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    let b = 0;
+    if (normals) {
+      const a = normals[3 * i], e = normals[3 * i + 1], f = normals[3 * i + 2], ax = Math.abs(a), ay = Math.abs(e), az = Math.abs(f);
+      b = ax >= ay && ax >= az ? (a >= 0 ? 0 : 1) : ay >= az ? (e >= 0 ? 2 : 3) : (f >= 0 ? 4 : 5);
+    }
+    const key = (Math.floor((positions[3 * i] - x0) / c) + nx * (Math.floor((positions[3 * i + 1] - y0) / c) + ny * Math.floor((positions[3 * i + 2] - z0) / c))) * 6 + b;
+    let q = ids.get(key);
+    if (q === undefined) { q = k++; ids.set(key, q); }
+    map[i] = q;
+  }
+  const cnt = new Float32Array(k), P = new Float64Array(3 * k), N = new Float64Array(3 * k);
+  for (let i = 0; i < n; i++) {
+    const q = map[i];
+    cnt[q]++;
+    P[3 * q] += positions[3 * i]; P[3 * q + 1] += positions[3 * i + 1]; P[3 * q + 2] += positions[3 * i + 2];
+    if (normals) { N[3 * q] += normals[3 * i]; N[3 * q + 1] += normals[3 * i + 1]; N[3 * q + 2] += normals[3 * i + 2]; }
+  }
+  const inv = new Float32Array(k);
+  for (let q = 0; q < k; q++) { inv[q] = 1 / cnt[q]; P[3 * q] *= inv[q]; P[3 * q + 1] *= inv[q]; P[3 * q + 2] *= inv[q]; }
+  const tri = new Uint32Array(indices.length);
+  let m = 0, rewound = 0;
+  for (let t = 0; t < indices.length; t += 3) {
+    const a = map[indices[t]], b = map[indices[t + 1]], d = map[indices[t + 2]];
+    if (a === b || b === d || a === d) continue;
+    let flip = false;
+    if (normals) {
+      const ux = P[3 * b] - P[3 * a], uy = P[3 * b + 1] - P[3 * a + 1], uz = P[3 * b + 2] - P[3 * a + 2];
+      const vx = P[3 * d] - P[3 * a], vy = P[3 * d + 1] - P[3 * a + 1], vz = P[3 * d + 2] - P[3 * a + 2];
+      const gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+      flip = gx * (N[3 * a] + N[3 * b] + N[3 * d]) + gy * (N[3 * a + 1] + N[3 * b + 1] + N[3 * d + 1]) + gz * (N[3 * a + 2] + N[3 * b + 2] + N[3 * d + 2]) < 0;
+    }
+    if (flip) { tri[m++] = b; tri[m++] = a; tri[m++] = d; rewound++; } else { tri[m++] = a; tri[m++] = b; tri[m++] = d; }
+  }
+  return { map, clusters: k, inv, indices: tri.slice(0, m), triangles: m / 3, rewound };
+}
+/** Per-cluster means of a per-vertex attribute (itemSize numbers per vertex) of a clusterLodPlan into out
+ * (clusters x itemSize); unit: renormalise each mean (normals). Returns out. */
+export function clusterLodMeans(plan, src, itemSize, out, unit = false) {
+  const map = plan.map, inv = plan.inv, n = map.length;
+  out.fill(0);
+  for (let i = 0; i < n; i++) { const o = itemSize * map[i], s = itemSize * i; for (let j = 0; j < itemSize; j++) out[o + j] += src[s + j]; }
+  for (let q = 0; q < plan.clusters; q++) {
+    const o = itemSize * q;
+    if (unit) {
+      let l = 0;
+      for (let j = 0; j < itemSize; j++) l += out[o + j] * out[o + j];
+      l = Math.sqrt(l);
+      if (l > 1e-12) for (let j = 0; j < itemSize; j++) out[o + j] /= l;
+    } else for (let j = 0; j < itemSize; j++) out[o + j] *= inv[q];
+  }
+  return out;
 }
 
 /**
@@ -766,6 +1100,38 @@ export function patchGlassShaders(vertexShader, fragmentShader) {
  * groove keeps grooveLight of the light and grooveAlpha of the alpha, and sulcal walls lose most of their rim. So the
  * gyri and sulci read at a glance; nothing about tissue optics is implied. */
 export const GLASS_READ = Object.freeze({ crownOpacity: 0.035, crownBright: 0.45, grooveLight: 0.38, grooveAlpha: 0.3, rimGroove: 0.65, lightDir: Object.freeze([-0.35, 0.55, 0.75]), sulcLoMm: 1.5, sulcHiMm: 9, directions: 320 });
+/** R558 (user Message 18, "transparency effects too"; T): the glass clears next to the motor strip. In the start view the
+ * neighbouring gyri's glass (in front of the strip in projection) laid a whitish veil over the motor areas (the left-arm
+ * areas read lavender-grey instead of blue). Each glass vertex gets its closeness to the strip (1 on it, smoothly 0 at
+ * radiusMm, stripProximity); the shell's alpha is multiplied by 1 - clear x closeness, so the glass stays a glass brain
+ * everywhere else and the motor areas are seen through clear glass. Display choice. A geometry without the attribute
+ * reads 0 (unchanged glass). */
+export const GLASS_CLEAR = Object.freeze({ radiusMm: 7, clear: 0.8 });
+/** Closeness of each vertex to a set of point clouds (pure): 1 at distance 0, smoothstep down to 0 at radiusMm (nearest
+ * point; the strip's vertices are about 3 mm apart, well under the radius). Uniform grid of cell radiusMm. */
+export function stripProximity(positions, pointLists, radiusMm = GLASS_CLEAR.radiusMm) {
+  const n = positions.length / 3, out = new Float32Array(n);
+  if (!(radiusMm > 0) || !pointLists || !pointLists.length) return out;
+  const cell = radiusMm, grid = new Map(), key = (i, j, k) => (i * 73856093) ^ (j * 19349663) ^ (k * 83492791);
+  const pts = [];
+  for (const P of pointLists) if (P && P.length) for (let i = 0; i + 2 < P.length; i += 3) pts.push(P[i], P[i + 1], P[i + 2]);
+  for (let p = 0; p < pts.length; p += 3) {
+    const kk = key(Math.floor(pts[p] / cell), Math.floor(pts[p + 1] / cell), Math.floor(pts[p + 2] / cell));
+    let l = grid.get(kk); if (!l) { l = []; grid.set(kk, l); } l.push(p);
+  }
+  const r2 = radiusMm * radiusMm;
+  for (let v = 0; v < n; v++) {
+    const x = positions[3 * v], y = positions[3 * v + 1], z = positions[3 * v + 2];
+    const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
+    let best = r2;
+    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (let k = ck - 1; k <= ck + 1; k++) {
+      const l = grid.get(key(i, j, k)); if (!l) continue;
+      for (const p of l) { const dx = pts[p] - x, dy = pts[p + 1] - y, dz = pts[p + 2] - z, d2 = dx * dx + dy * dy + dz * dz; if (d2 < best) best = d2; }
+    }
+    if (best < r2) { const t = 1 - Math.sqrt(best) / radiusMm; out[v] = t * t * (3 - 2 * t); }
+  }
+  return out;
+}
 const GLASS_SULC_VERTEX = 'vNsSulc = nsSulc;';
 const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.lightDir) => [
   'vec3 nsN = normalize( vNsNormal ); vec3 nsV = normalize( vNsView );',
@@ -774,8 +1140,8 @@ const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.ligh
   `float nsLam = max( dot( nsN, normalize( vec3( ${glslFloat(light[0])}, ${glslFloat(light[1])}, ${glslFloat(light[2])} ) ) ), 0.0 );`,
   'float nsG = clamp( vNsSulc, 0.0, 1.0 );',
   'float nsA = diffuseColor.a + nsRead.x * nsLam * ( 1.0 - nsG );',
-  `nsA = mix( nsA, nsRimOpacity, pow( 1.0 - nsFacing, nsRimPower ) * ( 1.0 - ${glslFloat(rimGroove)} * nsG ) );`,
-  'diffuseColor.a = nsA * mix( 1.0, nsRead.w, nsG );',
+  `nsA = mix( nsA, nsRimOpacity, pow( 1.0 - nsFacing, nsRimPower ) * ( 1.0 - ${rimGroove === null ? 'nsRimGroove' : glslFloat(rimGroove)} * nsG ) );`,
+  'diffuseColor.a = nsA * mix( 1.0, nsRead.w, nsG ) * ( 1.0 - nsClear * clamp( vNsNear, 0.0, 1.0 ) );',
   'outgoingLight *= ( 1.0 + nsRead.y * nsLam ) * mix( 1.0, nsRead.z, nsG );'
 ].join('\n');
 
@@ -789,9 +1155,13 @@ export function patchGlassReadShaders(vertexShader, fragmentShader) {
   if (v < 0 || !hook || !fragmentShader.includes('outgoingLight')) return null;
   const ve = v + GLASS_VERTEX_HOOK.length, f = fragmentShader.indexOf(hook);
   return {
-    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + vertexShader.slice(ve),
-    fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform vec4 nsRead;\nvarying float vNsSulc;\n' + GLASS_VARYINGS +
-      fragmentShader.slice(0, f) + glassReadGlsl() + '\n' + fragmentShader.slice(f)
+    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;' + vertexShader.slice(ve),
+    // R558 (hunt 2): the groove share of the rim is a uniform (nsRimGroove), so the held cue can leave the sulci out
+    // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
+    // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
+    fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
+      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec3 nsInkG;\n' + GLASS_VARYINGS +
+      fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + glassInkGlsl(GLASS_READ.lightDir) + '\n' + fragmentShader.slice(f)
   };
 }
 
@@ -872,6 +1242,17 @@ export const ARM_SEE = Object.freeze({ radiusFrac: 0.11, edge: 0.6, alpha: 0.22,
  * round-3 near-eye rule stands. pickFrom: a click on your own body counts only where it is drawn at least this much.
  * Display only: the pose, the arm fit, the gaze and the camera are untouched. The eye point is the anatomy's own eye
  * reference in the body frame; it is not a measured eye. */
+/** R558 (user note 2026-11-11: "No invisible or transparent body parts", "Transparency effects should not be applied to
+ * your body when the glass brain is overlapping or near"): your own body is always drawn solid. With this on, none of
+ * the see-through rules is applied to an own-body material: not the arm's window at the crosshair (ARM_GHOST / ARM_SEE),
+ * not the torso's look-down translucency (BODY_TRANSLUCENT), not the window over the brain's outline (BODY_OVER_BRAIN)
+ * and not the first-person plane rule (FIRST_PERSON_BODY). The materials stay plain opaque materials, drawn in the
+ * opaque pass with depth written, so the glass brain is blended over the body where it is in front and is hidden by
+ * the body where the body is in front, like any solid thing behind or in front of glass. The camera now sits at the
+ * eye (scene/example/eye-view-r558.mjs), so nothing has to be cut away to see past your own back. The retired rules
+ * stay in this file as pure functions (their tests and the engineering pages still name them) but are not applied.
+ * The mirror body's behind-the-glass colour tint is not a transparency of your body and stays. */
+export const OWN_BODY_SOLID = true;
 export const FIRST_PERSON_BODY = Object.freeze({ planeHideM: 0.03, planeFullM: 0.15, legsHideM: -0.16, legsFullM: -0.04, cutoff: 0.02, pickFrom: 0.35, minBackM: 0.02 });
 /** Fragment patch for FIRST_PERSON_BODY (pure). Uniforms: nsFp = (the eye point in view space, metres; amount 0..1),
  * nsFpN = (the body's forward direction in view space, a unit vector; w unused) and nsFpR = (hide, full: metres in
@@ -982,6 +1363,110 @@ export function weldNormalsByPosition(positions, normals, { minDot = 0.2, groups
   }
   return { shared, changed, groups: g };
 }
+/** R558 (user Message 30: "The bone tips probably shouldn't be so spikey"): the DISPLAY copy of a finger or toe phalanx
+ * (a documented derivative; the OBJ files and the arrays passed in are never changed).
+ * Diagnosis (pictures and the mesh files): the BodyParts3D phalanges of the 99 % reduced set are coarse (distal
+ * phalanges 112 to 440 triangles, a shaft of 2 to 6 vertices per slice), with small spurs and folds left by the
+ * reduction; bare of soft tissue and inked by the outline, the distal ones read as thin pointed hooks. (The larger
+ * cause, the lifted finger and toe tendons diving back to their insertions as hooked slivers, is fixed in ns-body
+ * BODY_STACK_RULE.digits.) This copy:
+ *  1. Taubin smoothing (lambda, mu: a shrink step and an inflate step, so the shape keeps its size) of `passes`
+ *     passes over the mesh welded by position (the files repeat vertices along seams), which irons out the reduction's
+ *     spurs and creases without rounding the joint ends away;
+ *  2. on a DISTAL phalanx (distal: true), the rounded tuft the reduction cut down to a cone (the measured left thumb:
+ *     a 25 mm cone from a 4 mm radius down to a point; a real distal phalanx ends in an ungual tuft about as wide as its
+ *     shaft): the end with the smaller mean radius is the free tip; over its last tipLenShare of the length no vertex
+ *     lies closer to the bone's axis (the centre line of that end third) than a capsule of radius R would put it: R
+ *     at a distance d >= R from the extreme point, sqrt(R^2 - (R - d)^2) closer to it (a round cap), where
+ *     R = tipShare x the mean radius of the MIDDLE third (the shaft), at least minTipMm and at most maxTipMm; the push
+ *     fades out over the inner fadeShare of that length, so there is no ridge. Vertices are only pushed outward from
+ *     the axis, never along it: the bone keeps its length and its joint end is untouched.
+ * positions: flat xyz (source mm); indices: triangles. Returns a new Float32Array (null for an unusable mesh). Pure. */
+export const BONE_TIP_DISPLAY = Object.freeze({ lambda: 0.5, mu: -0.53, passes: 6, tipShare: 1.1, minTipMm: 1.8, maxTipMm: 4.5, tipLenShare: 0.45, fadeShare: 0.35 });
+export function boneTipDisplay(positions, indices, { distal = false } = {}, o = BONE_TIP_DISPLAY) {
+  const n = positions && indices ? Math.floor(positions.length / 3) : 0;
+  if (n < 8 || indices.length < 12) return null;
+  const { groups } = weldNormalsByPosition(positions, new Float32Array(3 * n), { minDot: 2 });
+  const g = groups || Int32Array.from({ length: n }, (_, i) => i);
+  let m = 0; for (let i = 0; i < n; i++) if (g[i] >= m) m = g[i] + 1;
+  const P = new Float64Array(3 * m);
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) P[3 * g[i] + k] = positions[3 * i + k];
+  // Unique neighbour lists of the welded points (CSR).
+  const deg = new Int32Array(m), pairs = [];
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = g[indices[t]], b = g[indices[t + 1]], c = g[indices[t + 2]];
+    if (a === undefined || b === undefined || c === undefined) return null;
+    pairs.push(a, b, b, c, c, a);
+  }
+  const seen = new Set(), nb = [];
+  for (let e = 0; e < pairs.length; e += 2) {
+    const a = pairs[e], b = pairs[e + 1];
+    if (a === b) continue;
+    const k1 = a * m + b, k2 = b * m + a;
+    if (seen.has(k1)) continue;
+    seen.add(k1); seen.add(k2); nb.push(a, b); deg[a]++; deg[b]++;
+  }
+  const start = new Int32Array(m + 1);
+  for (let i = 0; i < m; i++) start[i + 1] = start[i] + deg[i];
+  const adj = new Int32Array(start[m]), fill = start.slice(0, m);
+  for (let e = 0; e < nb.length; e += 2) { adj[fill[nb[e]]++] = nb[e + 1]; adj[fill[nb[e + 1]]++] = nb[e]; }
+  const Q = new Float64Array(3 * m);
+  const step = f => {
+    for (let i = 0; i < m; i++) {
+      const s0 = start[i], s1 = start[i + 1];
+      if (s1 === s0) { Q[3 * i] = P[3 * i]; Q[3 * i + 1] = P[3 * i + 1]; Q[3 * i + 2] = P[3 * i + 2]; continue; }
+      let x = 0, y = 0, z = 0;
+      for (let s = s0; s < s1; s++) { const j = adj[s]; x += P[3 * j]; y += P[3 * j + 1]; z += P[3 * j + 2]; }
+      const k = 1 / (s1 - s0);
+      Q[3 * i] = P[3 * i] + f * (x * k - P[3 * i]); Q[3 * i + 1] = P[3 * i + 1] + f * (y * k - P[3 * i + 1]); Q[3 * i + 2] = P[3 * i + 2] + f * (z * k - P[3 * i + 2]);
+    }
+    P.set(Q);
+  };
+  for (let p = 0; p < o.passes; p++) { step(o.lambda); step(o.mu); }
+  if (distal) {
+    // Principal axis of the welded points (power iteration on the covariance).
+    const c = [0, 0, 0];
+    for (let i = 0; i < m; i++) for (let k = 0; k < 3; k++) c[k] += P[3 * i + k] / m;
+    const C = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < m; i++) { const d = [P[3 * i] - c[0], P[3 * i + 1] - c[1], P[3 * i + 2] - c[2]]; for (let r = 0; r < 3; r++) for (let s = 0; s < 3; s++) C[3 * r + s] += d[r] * d[s]; }
+    let a = [0.577, 0.577, 0.577];
+    for (let it = 0; it < 64; it++) { const b = [0, 1, 2].map(r => C[3 * r] * a[0] + C[3 * r + 1] * a[1] + C[3 * r + 2] * a[2]); const l = Math.hypot(b[0], b[1], b[2]); if (!(l > 1e-12)) break; a = [b[0] / l, b[1] / l, b[2] / l]; }
+    const t = new Float64Array(m);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < m; i++) { t[i] = (P[3 * i] - c[0]) * a[0] + (P[3 * i + 1] - c[1]) * a[1] + (P[3 * i + 2] - c[2]) * a[2]; if (t[i] < lo) lo = t[i]; if (t[i] > hi) hi = t[i]; }
+    const L = hi - lo;
+    if (L > 1e-6) {
+      // Mean radius of the points in each third (about that third's own centroid line): the free tip is the thinner end.
+      const third = sgn => {
+        const ctr = [0, 0, 0]; let cnt = 0;
+        const inThird = u => (sgn < 0 ? u <= 1 / 3 : sgn > 0 ? u >= 2 / 3 : u > 1 / 3 && u < 2 / 3);
+        for (let i = 0; i < m; i++) { if (inThird((t[i] - lo) / L)) { for (let k = 0; k < 3; k++) ctr[k] += P[3 * i + k] - a[k] * t[i]; cnt++; } }
+        if (!cnt) return { r: Infinity, ctr };
+        for (let k = 0; k < 3; k++) ctr[k] /= cnt;
+        let r = 0;
+        for (let i = 0; i < m; i++) { if (inThird((t[i] - lo) / L)) r += Math.hypot(P[3 * i] - a[0] * t[i] - ctr[0], P[3 * i + 1] - a[1] * t[i] - ctr[1], P[3 * i + 2] - a[2] * t[i] - ctr[2]); }
+        return { r: r / cnt, ctr };
+      };
+      const A = third(-1), B = third(1), Mid = third(0), tipLo = A.r <= B.r, end = tipLo ? A : B;
+      const R = Math.min(o.maxTipMm, Math.max(o.minTipMm, o.tipShare * (Number.isFinite(Mid.r) ? Mid.r : end.r)));
+      const reach = o.tipLenShare * L, fade0 = reach * (1 - o.fadeShare);
+      for (let i = 0; i < m; i++) {
+        const d = tipLo ? t[i] - lo : hi - t[i];
+        if (!(d < reach)) continue;
+        const rx = P[3 * i] - a[0] * t[i] - end.ctr[0], ry = P[3 * i + 1] - a[1] * t[i] - end.ctr[1], rz = P[3 * i + 2] - a[2] * t[i] - end.ctr[2];
+        const rl = Math.hypot(rx, ry, rz), want = d >= R ? R : Math.sqrt(Math.max(0, R * R - (R - d) * (R - d)));
+        if (!(rl > 1e-3) || rl >= want) continue;
+        const f = d <= fade0 ? 1 : 1 - (d - fade0) / (reach - fade0), w = f * f * (3 - 2 * f);
+        const k = w * (want / rl - 1);
+        P[3 * i] += rx * k; P[3 * i + 1] += ry * k; P[3 * i + 2] += rz * k;
+      }
+    }
+  }
+  const out = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) out[3 * i + k] = P[3 * g[i] + k];
+  return out;
+}
+
 /** R558 (R33): weldNormalsByPosition on a THREE BufferGeometry's position / normal attributes (after its normals were
  * computed). Returns the same report, or null when the geometry has no such attributes. */
 export function weldGeometryNormals(geometry) {
@@ -1042,6 +1527,19 @@ export function skinNormals(matrices, weights, restNormals, out) {
   const o = out || new Float32Array(restNormals.length);
   if (o.length !== restNormals.length) fail('scene_skin', 'out must match restNormals length');
   const mats = SEGMENTS.map(s => matrices.get(s) || null);
+  if (weights.tf) { // R558: continuous forearm twist (ns-rig skinWeights twist 'continuous'), the same maps as skinApply
+    const { plan, maps } = twistMapsFor(matrices, weights, n), I = plan.slots, W = plan.weights;
+    for (let v = 0, k = 0; v < n; v++, k += 3) {
+      const x = restNormals[k], y = restNormals[k + 1], z = restNormals[k + 2];
+      const a = 12 * I[k], b = 12 * I[k + 1], c = 12 * I[k + 2], wa = W[k], wb = W[k + 1], wc = W[k + 2];
+      const ox = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z) + wc * (maps[c] * x + maps[c + 3] * y + maps[c + 6] * z);
+      const oy = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z) + wc * (maps[c + 1] * x + maps[c + 4] * y + maps[c + 7] * z);
+      const oz = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z) + wc * (maps[c + 2] * x + maps[c + 5] * y + maps[c + 8] * z);
+      const l = Math.sqrt(ox * ox + oy * oy + oz * oz); // R558 (per-frame cost): Math.hypot is several times slower
+      if (l > 0) { o[k] = ox / l; o[k + 1] = oy / l; o[k + 2] = oz / l; } else { o[k] = x; o[k + 1] = y; o[k + 2] = z; }
+    }
+    return o;
+  }
   for (let v = 0; v < n; v++) {
     const k = 3 * v;
     const x = restNormals[k], y = restNormals[k + 1], z = restNormals[k + 2];
@@ -1059,10 +1557,40 @@ export function skinNormals(matrices, weights, restNormals, out) {
       oy = a * oy + b * (mb[1] * x + mb[5] * y + mb[9] * z);
       oz = a * oz + b * (mb[2] * x + mb[6] * y + mb[10] * z);
     }
-    const l = Math.hypot(ox, oy, oz);
+    // R558 (performance): sqrt of the sum of squares instead of Math.hypot (about 5x faster here; the stored Float32
+    // normals were identical in a 5,000,000-vector comparison of the two).
+    const l = Math.sqrt(ox * ox + oy * oy + oz * oz);
     if (l > 0) { o[k] = ox / l; o[k + 1] = oy / l; o[k + 2] = oz / l; } else { o[k] = x; o[k + 1] = y; o[k + 2] = z; }
   }
   return o;
+}
+
+/** R558 (performance, P2): ns-rig skinApply(matrices, weights, restPositions, outPos) and skinNormals(matrices, weights,
+ * restNormals, outNor) for continuous-twist weights (`tf`, the left game arm's muscles) in ONE pass over the vertices:
+ * the same plan and pose maps (twistMapsFor, asked once instead of twice), and for every vertex the same expressions in
+ * the same order as the two functions' twist branches, so the stored positions and normals are bit-for-bit theirs. Any
+ * other input (no twist, a length or weight mismatch the two would refuse or treat differently) goes to the two
+ * functions themselves, which keeps every refusal exactly as it was. */
+export function skinPositionsAndNormals(matrices, weights, restPositions, restNormals, outPos, outNor) {
+  const w = weights || {}, len = restPositions && typeof restPositions.length === 'number' ? restPositions.length : -1, n = len / 3;
+  const fast = matrices instanceof Map && w.tf && len >= 0 && len % 3 === 0 && restNormals && restNormals.length === len
+    && outPos && outPos.length === len && outNor && outNor.length === len && w.i0 && w.i1 && w.w0 && w.w1
+    && w.i0.length >= n && w.i1.length >= n && w.w0.length >= n && w.w1.length >= n && w.tf.length >= n;
+  if (!fast) { skinApply(matrices, weights, restPositions, outPos); skinNormals(matrices, weights, restNormals, outNor); return; }
+  const { plan, maps } = twistMapsFor(matrices, weights, n), I = plan.slots, W = plan.weights, P = restPositions, N = restNormals;
+  for (let k = 0, e = 3 * n; k < e; k += 3) {
+    const a = 12 * I[k], b = 12 * I[k + 1], c = 12 * I[k + 2], wa = W[k], wb = W[k + 1], wc = W[k + 2];
+    const x = P[k], y = P[k + 1], z = P[k + 2];
+    outPos[k] = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9]) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z + maps[b + 9]) + wc * (maps[c] * x + maps[c + 3] * y + maps[c + 6] * z + maps[c + 9]);
+    outPos[k + 1] = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10]) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z + maps[b + 10]) + wc * (maps[c + 1] * x + maps[c + 4] * y + maps[c + 7] * z + maps[c + 10]);
+    outPos[k + 2] = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11]) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z + maps[b + 11]) + wc * (maps[c + 2] * x + maps[c + 5] * y + maps[c + 8] * z + maps[c + 11]);
+    const u = N[k], v = N[k + 1], t = N[k + 2];
+    const ox = wa * (maps[a] * u + maps[a + 3] * v + maps[a + 6] * t) + wb * (maps[b] * u + maps[b + 3] * v + maps[b + 6] * t) + wc * (maps[c] * u + maps[c + 3] * v + maps[c + 6] * t);
+    const oy = wa * (maps[a + 1] * u + maps[a + 4] * v + maps[a + 7] * t) + wb * (maps[b + 1] * u + maps[b + 4] * v + maps[b + 7] * t) + wc * (maps[c + 1] * u + maps[c + 4] * v + maps[c + 7] * t);
+    const oz = wa * (maps[a + 2] * u + maps[a + 5] * v + maps[a + 8] * t) + wb * (maps[b + 2] * u + maps[b + 5] * v + maps[b + 8] * t) + wc * (maps[c + 2] * u + maps[c + 5] * v + maps[c + 8] * t);
+    const l = Math.sqrt(ox * ox + oy * oy + oz * oz);
+    if (l > 0) { outNor[k] = ox / l; outNor[k + 1] = oy / l; outNor[k + 2] = oz / l; } else { outNor[k] = u; outNor[k + 1] = v; outNor[k + 2] = t; }
+  }
 }
 
 /** True when both pose maps hold element-wise identical matrices for every rig segment. */
@@ -1152,12 +1680,16 @@ export function regionStyleConstants() {
  * hovered region's identity tint added as emission. quantize: updates below 1/quantize activity are skipped. */
 export const REGION_RENDER = Object.freeze({
   // R558 (R32, "a little fleshy"): a moister surface (roughness 0.48 -> 0.36) and the tissue scatter below.
-  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.36, metalness: 0,
+  // R558 (Message 22, clinical): a clean satin finish again (0.36 -> 0.5), no wet sheen.
+  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.5, metalness: 0,
   /** R558 (R32): tissue look of the motor areas, LIGHTING ONLY. Living tissue lets light in and scatters it, so it is
    * never black in shade and glows a little warm toward its silhouette. tissueTint x tissueStrength x (tissueFloor +
    * (1 - tissueFloor) x a view-angle term) of the area's own colour is added to its lit colour. The geometry, the
    * folds, the area borders, the activity colours (emission) and the opacity rules are untouched. Display choice. */
-  tissueTint: Object.freeze([1.0, 0.62, 0.58]), tissueStrength: 0.42, tissueFloor: 0.4, tissuePower: 2.2,
+  // R558 (Message 22, clinical): a cleaner, weaker scatter (tint [1, 0.62, 0.58] -> [1, 0.84, 0.8], strength 0.42 -> 0.28),
+  // so the areas read like a painted teaching model, not like raw tissue.
+  // R558 BB (Message 25, deep shadows): weaker again (0.28 -> 0.12), so the cel shadow bands can go dark.
+  tissueTint: Object.freeze([1.0, 0.84, 0.8]), tissueStrength: 0.12, tissueFloor: 0.4, tissuePower: 2.2,
   /** Polish: the per-region borders inside a body-part territory are faint (they were full-strength and made the strip
    * look like cracked shards); each body-part GROUP (the on-brain label groups) gets one welded outline instead. */
   // R3-scene: left-arm sub-area borders fainter still (0.36 -> 0.22), territory borders softer (groupLineOpacity 0.5 ->
@@ -1174,12 +1706,222 @@ export const REGION_RENDER = Object.freeze({
    * players), so the left-arm / other-body distinction reads at a glance. */
   territoryLine: KEY_COLORS.leftArmLine, territoryLineOpacity: 1, groupLine: KEY_COLORS.otherGroupLine, groupLineOpacity: 0.32
 });
+/** R558 (user, Message 6: "Maybe faintly highlight the opposing area on the brain to reset after brain activation ...
+ * Agonist vs antagonist principles"): while a joint is held where an action put it, the area that brings it back gets
+ * a faint, steady hint: the opposing action's own sub-band of that area (the same rule the look uses to pick an action,
+ * ns-brain regionActionAt), or the whole area when that action has no sub-band of its own (pronation / supination).
+ * Additive pale light over the area's own colour, never picked, no animation (calm under reduced motion). `color` is
+ * linear RGB; a hint may bring its own colour. Display choices. */
+export const REGION_HINT = Object.freeze({ color: Object.freeze([0.62, 0.86, 1.0]), opacity: 0.28, renderOrderOffset: 0.2, minTriangles: 8 });
 /** R3-scene outline smoothing (smoothTerritoryOutline options, source mm): Chaikin rounds, lift off the surface, specks
  * shorter than minChainMm dropped. Display choices. */
 // The BodyParts3D strip parts are not consistently wound (about 40 % of the left-arm faces have +z winding normals), so
 // the lift is straight toward the overhead viewer (source +z, superior), which every default and orbit view looks along
 // within about 65 deg.
 export const REGION_OUTLINE = Object.freeze({ iterations: 2, liftMm: 0.8, minChainMm: 4, quantum: 1e-3, decimate: 2, liftDir: Object.freeze([0, 0, 1]) });
+
+/** R558 (user Message 18: "We should be able to easily differentiate each brain node ... from each other"; issue hunt 1:
+ * the borders between motor areas were sawteeth 20-40 px wide at 1600x900). Measured on FJ1801 / FJ1800 with the body
+ * map: 4497 of the 8084 strip triangles have corners in two or more areas (the areas are narrower than the atlas
+ * triangles), so whole-triangle areas interleaved into a patchwork that read as "flat triangles" and sawteeth. Now an
+ * area is drawn PER FRAGMENT: the strip coordinate s (the same per-vertex coordinate the segmentation assigns by,
+ * interpolated across the triangle) is looked up against the segmentation's own owner rule (ns-brain regionOwnerAt over
+ * the hemisphere's owner list, sampled into exact runs: ownerRuns / ownerTextureData). Each area draws its own triangles
+ * plus the neighbours' triangles that reach into its runs, and keeps only the fragments it owns, so every point of the
+ * strip is drawn exactly once and the border is the smooth level line of s. The picker uses the same per-point rule
+ * (ns-brain classifyRegionGaze), so what is drawn is still what is picked.
+ * Borders are drawn in the same pass, constant in CSS pixels (screen gradient of s times the pixel ratio): a thin dark seam between areas of one body
+ * part, a light line between body parts (cyan on the left-arm side), and the hovered / switched-on area outlined from
+ * the inside. The opposing-action hint (REGION_HINT) is the hinted sub-band of s, soft-edged, in the same pass.
+ * Display choices (colours, widths); the area extents are the body map's. */
+export const REGION_BORDER = Object.freeze({
+  /** Owner lookup resolution (texels over s 0..1; every run of the body map is wider than 0.02). */
+  texels: 2048,
+  /** Seam between two areas of the same body part: dark warm crease, half-width per side (CSS px), opacity. */
+  // R558 (Message 22, clinical): a neutral graphite seam (was a dark red crease [0.075, 0.022, 0.026], #4d292d).
+  // R558 BB (Messages 26, 28, style guide): the finest ink line of the hierarchy: near-black #0b0809 (linear here),
+  // 1 CSS px across (0.5 each side) at 0.62 opacity, so neighbouring areas read as their own pieces without a heavy grid.
+  seamColor: Object.freeze([0.0033, 0.0024, 0.0027]), seamAlpha: 0.62, seamPx: 0.5,
+  /** Line between two body parts (or at a map gap): warm ivory, the left-arm side in the territory cyan. */
+  // R558 BB: between body parts an ink line one step bolder than the seams (1.5 CSS px, 0.85), no glow; the left-arm
+  // territory keeps its cyan identity line (leftArmAlpha, leftArmGlow).
+  territoryColor: Object.freeze([0.0033, 0.0024, 0.0027]), territoryAlpha: 0.85, territoryPx: 0.75, territoryGlow: 0,
+  leftArmAlpha: 0.9, leftArmGlow: 0.35,
+  /** Hovered / switched-on area: outlined from the inside (hover colour / the gold mark colour), half-width CSS px. */
+  hoverPx: 1.8, activatedPx: 1.4, highlightGlow: 0.55,
+  /** Antialiasing ramp of every line (CSS px), never under aaMinDevicePx drawing-buffer pixels (at the 0.5 / 0.4 quality
+   * scales a 0.6 CSS px ramp is under a third of a buffer pixel and the lines alias into stair steps). */
+  aaPx: 0.6, aaMinDevicePx: 0.75,
+  /** Hint (REGION_HINT): soft edge of the hinted sub-band (CSS px) and emission strength of the hint colour. */
+  hintSoftPx: 7, hintGain: 0.45, hintAlpha: 0.12,
+  /** Tissue depth (Message 18, "visceral and fleshy"): the lit colour darkens by up to `cavity` where the strip dives into
+   * its sulci (the glass's own sulcal depth rule, sulcalDepth over the whole brain's support planes, cavityLoMm ..
+   * cavityHiMm), so the gyrus reads as a rounded, living fold instead of flat painted bands. Lighting only. */
+  // R558 (Message 22, clinical): softer (0.4 -> 0.28), so the sulci read as clean folds rather than dark crevices.
+  // R558 BB (Messages 24, 25): the fold depth now comes from the atlas's own brain geometry (ns-brain-ink foldDepth) and
+  // the floors go deeper (0.28 -> 0.4 here, and ns-brain-ink BRAIN_INK.area.floorDark 0.5 on the lit light: a floor keeps
+  // about 30 % of a crown's light), so the crowns stay lit, the floors go dark and the area colours still read on the banks.
+  cavity: 0.4, cavityLoMm: 1.5, cavityHiMm: 10
+});
+
+/** Owner runs of one owner list over the strip coordinate (pure): ownerAt(s) -> owner (any value compared with ===, null
+ * in a map gap). Scans [0, 1] at `samples` steps; every change is refined by bisection to `tol`. A run narrower than
+ * 1 / samples can be skipped (none in the body map). Returns [{ lo, hi, owner }], first lo 0, last hi 1. */
+export function ownerRuns(ownerAt, { samples = 4096, tol = 1e-7 } = {}) {
+  if (typeof ownerAt !== 'function') fail('scene_input', 'ownerAt must be a function');
+  const runs = [];
+  let cur = ownerAt(0), a0 = 0, lo = 0;
+  for (let i = 1; i <= samples; i++) {
+    const s = i / samples;
+    for (let guard = 0; ownerAt(s) !== cur && guard < 16; guard++) {
+      let a = a0, b = s;
+      while (b - a > tol) { const m = 0.5 * (a + b); if (ownerAt(m) === cur) a = m; else b = m; }
+      runs.push({ lo, hi: b, owner: cur });
+      lo = b; cur = ownerAt(b); a0 = b;
+    }
+    a0 = s;
+  }
+  runs.push({ lo, hi: 1, owner: cur });
+  return runs;
+}
+
+/** Border kind between two neighbouring runs (pure): 0 none, 1 two areas of one body part, 2 two body parts, 3 an area
+ * and a map gap. `groupOf(owner)` gives the body-part group key. */
+export function borderKind(a, b, groupOf) {
+  if (a === null && b === null) return 0;
+  if (a === null || b === null) return 3;
+  if (a === b) return 0;
+  return groupOf(a) === groupOf(b) ? 1 : 2;
+}
+
+/** Owner lookup texture data (pure). rows: [runs] (ownerRuns), idOf(owner) -> float id (-1 for null), groupOf(owner).
+ * Two RGBA float texels per (row, texel i) over s in [i / W, (i + 1) / W): texel row 2r = (owner left of B, owner right
+ * of B, B, kind at B), row 2r + 1 = (last border at or below the texel, its kind, first border at or above the texel's
+ * end, its kind). B is the border inside the texel, or (no border inside) the next border above with its kind, so the
+ * shader's rule is: s < B ? (owner x, run [lower, B]) : (owner y, run [B, upper]). Ends of the strip: +-10, kind 0. */
+export function ownerTextureData(rows, idOf, groupOf, width = REGION_BORDER.texels) {
+  const W = width, data = new Float32Array(W * 2 * rows.length * 4);
+  rows.forEach((runs, r) => {
+    const bounds = [];
+    for (let k = 1; k < runs.length; k++) bounds.push({ s: runs[k].lo, kind: borderKind(runs[k - 1].owner, runs[k].owner, groupOf), left: runs[k - 1].owner, right: runs[k].owner });
+    let j = 0; // first border with s > texel start
+    for (let i = 0; i < W; i++) {
+      const t0 = i / W, t1 = (i + 1) / W;
+      while (j < bounds.length && bounds[j].s <= t0) j++;
+      const lower = j > 0 ? bounds[j - 1] : null;
+      const inside = j < bounds.length && bounds[j].s < t1 ? bounds[j] : null;
+      let up = j;
+      while (up < bounds.length && bounds[up].s < t1) up++;
+      const upper = up < bounds.length ? bounds[up] : null;
+      // owner at the texel start
+      let ownerStart = runs[0].owner;
+      for (const run of runs) if (run.lo <= t0 && t0 < run.hi) { ownerStart = run.owner; break; }
+      const o = 4 * ((2 * r) * W + i), o2 = 4 * ((2 * r + 1) * W + i);
+      data[o] = idOf(ownerStart);
+      if (inside) { data[o + 1] = idOf(inside.right); data[o + 2] = inside.s; data[o + 3] = inside.kind; }
+      else { data[o + 1] = idOf(ownerStart); data[o + 2] = upper ? upper.s : 10; data[o + 3] = upper ? upper.kind : 0; }
+      data[o2] = lower ? lower.s : -10; data[o2 + 1] = lower ? lower.kind : 0;
+      data[o2 + 2] = upper ? upper.s : 10; data[o2 + 3] = upper ? upper.kind : 0;
+    }
+  });
+  return data;
+}
+
+/** Smooth vertex normals of one closed atlas surface (pure): coincident vertices are welded (the OBJ parser splits them
+ * along seams) and every face adds its area-weighted normal (winding order, as computeVertexNormals) to its corners.
+ * Returns Float32Array (xyz per input vertex). The positions are untouched: lighting only. */
+export function smoothSurfaceNormals(positions, indices) {
+  const n = positions.length / 3, rep = new Int32Array(n), keyOf = new Map();
+  for (let i = 0; i < n; i++) {
+    const k = `${positions[3 * i]},${positions[3 * i + 1]},${positions[3 * i + 2]}`;
+    let r = keyOf.get(k);
+    if (r === undefined) { r = keyOf.size; keyOf.set(k, r); }
+    rep[i] = r;
+  }
+  const acc = new Float64Array(3 * keyOf.size);
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = indices[t], b = indices[t + 1], c = indices[t + 2];
+    const ax = positions[3 * a], ay = positions[3 * a + 1], az = positions[3 * a + 2];
+    const e1x = positions[3 * b] - ax, e1y = positions[3 * b + 1] - ay, e1z = positions[3 * b + 2] - az;
+    const e2x = positions[3 * c] - ax, e2y = positions[3 * c + 1] - ay, e2z = positions[3 * c + 2] - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    for (const v of [a, b, c]) { const r = 3 * rep[v]; acc[r] += nx; acc[r + 1] += ny; acc[r + 2] += nz; }
+  }
+  const out = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) {
+    const r = 3 * rep[i], L = Math.hypot(acc[r], acc[r + 1], acc[r + 2]) || 1;
+    out[3 * i] = acc[r] / L; out[3 * i + 1] = acc[r + 1] / L; out[3 * i + 2] = acc[r + 2] / L;
+  }
+  return out;
+}
+
+const BORDER_VERTEX_HOOK = '#include <begin_vertex>';
+const BORDER_EARLY_HOOK = '#include <clipping_planes_fragment>';
+const BORDER_COLOR_HOOK = '#include <color_fragment>';
+const BORDER_EMISSIVE_HOOK = '#include <emissivemap_fragment>';
+/** Shader patch (pure) for the per-fragment areas (REGION_BORDER): attributes nsS (strip coordinate) and nsRow (owner
+ * texture row, 1 for a neighbour's triangle). Uniforms: nsOwnTex / nsOwnInfo (texels), nsRegionId, nsSeam, nsTerr
+ * (rgb, alpha), nsTerrGlow, nsLineW (seam, territory half-widths in CSS px, -, pixel ratio), nsHi (highlight rgb,
+ * half-width CSS px; 0 = none), nsHint (lo, hi, strength, alpha), nsHintColor, nsBorderAA (aa px, hint soft px,
+ * highlight glow, cavity darkening); attribute nsCav (sulcal depth 0..1, optional). A fragment the area does not own is discarded (its own
+ * triangles also keep map-gap fragments). null when a hook is missing (the area is then drawn by whole triangles). */
+export function patchRegionBorderShaders(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  if (!vertexShader.includes(BORDER_VERTEX_HOOK) || !fragmentShader.includes(BORDER_EARLY_HOOK) || !fragmentShader.includes(BORDER_COLOR_HOOK) || !fragmentShader.includes(BORDER_EMISSIVE_HOOK)) return null;
+  const early = [
+    // s per CSS pixel (before any discard): the screen gradient of s is per drawing-buffer pixel and one CSS pixel is
+    // nsLineW.w (the pixel ratio) buffer pixels, so the gradient is MULTIPLIED by it (check: dividing made every line
+    // 1 / pr^2 as wide, 4x at the 0.5 quality scale and a quarter at pr 2). Euclidean gradient, so a line is as wide at
+    // every angle (fwidth's |dx| + |dy| thinned diagonal lines by up to 1 / sqrt 2).
+    '\tfloat nsPr = max( nsLineW.w, 0.25 );',
+    '\tfloat nsFw = max( length( vec2( dFdx( vNsS ), dFdy( vNsS ) ) ), 1e-7 ) * nsPr;',
+    // antialiasing ramp: the CSS-pixel ramp, never under aaMinDevicePx drawing-buffer pixels (no stair steps at low scales)
+    `\tfloat nsAA = max( nsBorderAA.x, ${glslFloat(REGION_BORDER.aaMinDevicePx)} / nsPr );`,
+    '\tfloat nsSv = clamp( vNsS, 0.0, 1.0 );',
+    '\tint nsRowI = int( vNsRow.x + 0.5 );',
+    '\tint nsTi = clamp( int( floor( nsSv * nsOwnInfo.x ) ), 0, int( nsOwnInfo.x ) - 1 );',
+    '\tvec4 nsTa = texelFetch( nsOwnTex, ivec2( nsTi, 2 * nsRowI ), 0 );',
+    '\tvec4 nsTb = texelFetch( nsOwnTex, ivec2( nsTi, 2 * nsRowI + 1 ), 0 );',
+    '\tbool nsLeft = nsSv < nsTa.z;',
+    '\tfloat nsOwner = nsLeft ? nsTa.x : nsTa.y;',
+    '\tfloat nsLo = nsLeft ? nsTb.x : nsTa.z, nsKLo = nsLeft ? nsTb.y : nsTa.w;',
+    '\tfloat nsHiS = nsLeft ? nsTa.z : nsTb.z, nsKHi = nsLeft ? nsTa.w : nsTb.w;',
+    '\tbool nsMine = abs( nsOwner - nsRegionId ) < 0.5;',
+    '\tif ( ! nsMine && ! ( vNsRow.y < 0.5 && nsOwner < - 0.5 ) ) discard;',
+    '\tfloat nsDLo = ( nsSv - nsLo ) / nsFw, nsDHi = ( nsHiS - nsSv ) / nsFw;', // CSS px to each end of the run
+    '\tfloat nsSeamCov = 0.0, nsTerrCov = 0.0, nsHiCov = 0.0, nsHintAmt = 0.0;',
+    '\tif ( nsMine ) {',
+    '\t\tnsSeamCov = max( nsKLo == 1.0 ? nsCov( nsDLo, nsLineW.x, nsAA ) : 0.0, nsKHi == 1.0 ? nsCov( nsDHi, nsLineW.x, nsAA ) : 0.0 );',
+    '\t\tnsTerrCov = max( nsKLo >= 2.0 ? nsCov( nsDLo, nsLineW.y, nsAA ) : 0.0, nsKHi >= 2.0 ? nsCov( nsDHi, nsLineW.y, nsAA ) : 0.0 );',
+    '\t\tif ( nsHi.a > 0.0 ) nsHiCov = max( nsKLo >= 1.0 ? nsCov( nsDLo, nsHi.a, nsAA ) : 0.0, nsKHi >= 1.0 ? nsCov( nsDHi, nsHi.a, nsAA ) : 0.0 );',
+    '\t\tif ( nsHint.z > 0.0 ) { float nsHw = nsBorderAA.y * nsFw; nsHintAmt = nsHint.z * smoothstep( nsHint.x - nsHw, nsHint.x + nsHw, nsSv ) * ( 1.0 - smoothstep( nsHint.y - nsHw, nsHint.y + nsHw, nsSv ) ); }',
+    '\t}'
+  ].join('\n');
+  const color = [
+    '\tdiffuseColor.rgb *= 1.0 - nsBorderAA.w * clamp( vNsCav, 0.0, 1.0 );',
+    '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsSeam.rgb, nsSeamCov * nsSeam.a );',
+    '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsTerr.rgb, nsTerrCov * nsTerr.a );',
+    '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsHi.rgb, nsHiCov );',
+    '\tdiffuseColor.a = max( max( diffuseColor.a + nsHintAmt * nsHint.w, nsHiCov ), max( nsSeamCov * nsSeam.a, nsTerrCov * nsTerr.a ) );'
+  ].join('\n');
+  const emissive = [
+    '\ttotalEmissiveRadiance *= 1.0 - 0.75 * max( nsSeamCov * nsSeam.a, nsTerrCov * nsTerr.a );',
+    '\ttotalEmissiveRadiance += nsTerr.rgb * ( nsTerrCov * nsTerr.a * nsTerrGlow );',
+    '\ttotalEmissiveRadiance = mix( totalEmissiveRadiance, nsHi.rgb * nsBorderAA.z, nsHiCov );',
+    '\ttotalEmissiveRadiance += nsHintColor * nsHintAmt;'
+  ].join('\n');
+  const head = 'uniform sampler2D nsOwnTex;\nuniform vec2 nsOwnInfo;\nuniform float nsRegionId;\nuniform vec4 nsSeam;\nuniform vec4 nsTerr;\nuniform float nsTerrGlow;\n' +
+    'uniform vec4 nsLineW;\nuniform vec4 nsHi;\nuniform vec4 nsHint;\nuniform vec3 nsHintColor;\nuniform vec4 nsBorderAA;\nvarying float vNsS;\nvarying vec2 vNsRow;\nvarying float vNsCav;\n' +
+    'float nsCov( float d, float w, float aa ) { return 1.0 - smoothstep( w - aa, w + aa, d ); }\n';
+  return {
+    vertexShader: 'attribute float nsS;\nattribute vec2 nsRow;\nattribute float nsCav;\nvarying float vNsS;\nvarying vec2 vNsRow;\nvarying float vNsCav;\n' +
+      vertexShader.replace(BORDER_VERTEX_HOOK, `${BORDER_VERTEX_HOOK}\nvNsS = nsS;\nvNsRow = nsRow;\nvNsCav = nsCav;`),
+    fragmentShader: head + fragmentShader
+      .replace(BORDER_EARLY_HOOK, `${BORDER_EARLY_HOOK}\n${early}`)
+      .replace(BORDER_COLOR_HOOK, `${BORDER_COLOR_HOOK}\n${color}`)
+      .replace(BORDER_EMISSIVE_HOOK, `${BORDER_EMISSIVE_HOOK}\n${emissive}`)
+  };
+}
 
 /** Outline of the UNION of several region parts (pure): parts [{ positions (xyz), indices }] are welded by position
  * (quantum, source mm) so edges shared between neighbouring parts cancel, and the edges used by exactly one triangle
@@ -1227,7 +1969,10 @@ export function weldedBoundarySegments(parts, quantum = 1e-3) {
  * territory's outer border. The fill keeps the ONE shared activity ramp (same colours on brain and muscles); only a band
  * widthMm wide at the territory edge mixes toward the territory cyan (REGION_RENDER.territoryLine), so the left-arm
  * strip is still told apart from every other area when its activity is low (dark ramp colours) or high. Display only. */
-export const LEFT_ARM_RIM = Object.freeze({ widthMm: 2.5, mix: 0.85, alpha: 0.9, glow: 0.45 });
+// R558 (Message 2): every area now has its own colour and the left-arm areas are the blue family, so the cyan band is
+// only a faint edge (mix 0.85 -> 0.3, glow 0.45 -> 0.12): at full strength it read as one more cyan area and hid the
+// colours of the border areas (shoulder, thumb).
+export const LEFT_ARM_RIM = Object.freeze({ widthMm: 2.5, mix: 0.3, alpha: 0.9, glow: 0.12 });
 
 /** Per-vertex closeness (pure) to a set of boundary segments (Float32Array, 6 floats per segment, e.g.
  * weldedBoundarySegments): 1 on the boundary, falling smoothly to 0 at widthMm (smoothstep). Uses a uniform grid of
@@ -1287,18 +2032,38 @@ export function patchEdgeShaders(vertexShader, fragmentShader) {
 }
 
 /** Display style of one region for its simulated state (pure; `out` reused when given): { tint (identity, linear),
- * albedo, emission (linear), opacity, glow, activated }. Left-arm regions use REGION_STYLE.leftArmTint, the others
- * alternate otherTint / otherTintAlt by strip order; activatedCount >= 1 mixes activatedShadeMix toward activatedShade
- * and raises the opacity (activatedOpacity + activatedOpacityPerExtra per extra activation, capped). */
+ * albedo, emission (linear), rim (linear fresnel rim colour), opacity, glow, activated }. R558: the tint and the glow
+ * come from the area's own colour (ns-colors AREA_COLORS / AREA_LOOK); activatedCount >= 1 moves the tint toward that
+ * colour and raises the opacity (activatedOpacity + activatedOpacityPerExtra per extra activation, capped). */
 export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, hovered = false } = {}, out = null, style = regionStyleConstants(), render = REGION_RENDER) {
   if (!region) fail('scene_region', 'region is required');
-  const o = out || { tint: [0, 0, 0], albedo: [0, 0, 0], emission: [0, 0, 0], opacity: 0, glow: 0, activated: false };
-  const base = region.isLeftArm ? style.leftArmTint : (Math.round(Number(region.order) || 0) % 2 === 0 ? style.otherTint : style.otherTintAlt);
+  const o = out || { tint: [0, 0, 0], albedo: [0, 0, 0], emission: [0, 0, 0], rim: [0, 0, 0], opacity: 0, glow: 0, activated: false };
+  if (!o.rim) o.rim = [0, 0, 0];
   const n = Number.isFinite(activatedCount) ? activatedCount : 0;
   const activated = n >= 1;
-  const mix = activated ? style.activatedShadeMix : 0;
-  for (let i = 0; i < 3; i++) o.tint[i] = base[i] + (style.activatedShade[i] - base[i]) * mix;
-  activityShadeInto(o.tint, activity, o);
+  if (areaRecord(region.id)) {
+    // R558 (Message 2, optogenetic look): every area has its OWN colour (ns-colors AREA_COLORS). At rest a calm tint of
+    // it over the R32 tissue pink; switched on, a little more of it; active, the area emits its glow colour (strength =
+    // ns-colors glowIntensity of the activity) with a matching fresnel rim, and its lit surface darkens so the emitted
+    // colour carries the look. The muscles it drives glow in the very same colour (shadeMuscle).
+    const a = fin01(activity);
+    areaRestTint(region.id, { activated }, o.tint);
+    const k = areaGlowInto(region.id, a, AREA_LOOK.areaGain, o.emission);
+    areaGlowInto(region.id, a, AREA_LOOK.areaRimGain, o.rim);
+    const d = 1 - AREA_LOOK.areaDarken * k;
+    for (let i = 0; i < 3; i++) o.albedo[i] = o.tint[i] * d;
+    // R558 (Message 22): the faint resting self-light of the area's own tint (AREA_LOOK.restLift), gone once it glows.
+    const lift = (Number.isFinite(AREA_LOOK.restLift) ? AREA_LOOK.restLift : 0) * (1 - k);
+    for (let i = 0; i < 3; i++) o.emission[i] += o.tint[i] * lift;
+    o.glow = k;
+  } else {
+    // An id outside the area table (not expected): the older shared-ramp rule.
+    const base = region.isLeftArm ? style.leftArmTint : (Math.round(Number(region.order) || 0) % 2 === 0 ? style.otherTint : style.otherTintAlt);
+    const mix = activated ? style.activatedShadeMix : 0;
+    for (let i = 0; i < 3; i++) o.tint[i] = base[i] + (style.activatedShade[i] - base[i]) * mix;
+    activityShadeInto(o.tint, activity, o);
+    o.rim[0] = o.rim[1] = o.rim[2] = 0;
+  }
   if (hovered) for (let i = 0; i < 3; i++) o.emission[i] += o.tint[i] * render.hoverEmission;
   let op = style.restOpacity;
   if (activated) op = Math.min(style.activatedOpacityMax, style.activatedOpacity + style.activatedOpacityPerExtra * Math.max(0, n - 1));
@@ -1346,9 +2111,17 @@ export function regionGroupLabel(key, hemisphere) {
   return NsText.regionGroupLabel(key, hemisphere);
 }
 
-/** Label groups of a segmentation's regions: [{ key, hemisphere, text, isLeftArm, regionIds, anchor (source mm, the
- * area-weighted mean of the member regions' byHemisphere anchors), areaMm2 }], left-arm group first. */
-export function regionLabelGroups(regions) {
+/** Label groups of a segmentation's regions: [{ key, hemisphere, text, isLeftArm, regionIds, anchor (source mm),
+ * ownAnchor (source mm, the area-weighted mean of the member regions' byHemisphere anchors), pair, areaMm2 }], left-arm
+ * group first. R558 ("brain labels ... match on both sides"): a group and its twin on the other half (arm with arm, leg
+ * with leg, belly with belly, face with face) share `pair` and are anchored at mirrored places: `anchor` is the mean of
+ * the group's own anchor and the twin's anchor mirrored in the plane source x = midX. The scene passes the middle of
+ * the motor strip's own left-right extent, which is what the start view centres on screen: the two halves of a real
+ * brain are not exact mirror images, and with source x = 0 every pair sat about 9 px left of the middle at 1600 px.
+ * A display choice for where a label sits; no area is moved. A group without a twin keeps anchor = ownAnchor and
+ * pair = null. */
+export function regionLabelGroups(regions, { midX = 0 } = {}) {
+  const mx = Number.isFinite(midX) ? midX : 0;
   const groups = new Map();
   for (const r of regions || []) {
     const key = regionGroupKey(r);
@@ -1365,10 +2138,22 @@ export function regionLabelGroups(regions) {
       g.areaMm2 += b.areaMm2;
     }
   }
-  return [...groups.values()].map(g => ({
+  const list = [...groups.values()].map(g => ({
     key: g.key, hemisphere: g.hemisphere, text: g.text, isLeftArm: g.isLeftArm, regionIds: g.regionIds,
-    anchor: g.sum.map(x => x / g.areaMm2), areaMm2: g.areaMm2
+    anchor: g.sum.map(x => x / g.areaMm2), ownAnchor: null, pair: null, areaMm2: g.areaMm2
   })).sort((a, b) => (b.isLeftArm - a.isLeftArm) || (a.hemisphere < b.hemisphere ? 1 : a.hemisphere > b.hemisphere ? -1 : 0));
+  const pairKey = g => (g.key === 'leftArm' ? 'arm' : g.key);
+  for (const g of list) g.ownAnchor = g.anchor;
+  for (const a of list) {
+    if (a.hemisphere !== 'right') continue;
+    const b = list.find(q => q.hemisphere === 'left' && pairKey(q) === pairKey(a));
+    if (!b) continue;
+    const m = [(a.ownAnchor[0] - b.ownAnchor[0]) / 2, (a.ownAnchor[1] + b.ownAnchor[1]) / 2, (a.ownAnchor[2] + b.ownAnchor[2]) / 2];
+    a.anchor = [mx + m[0], m[1], m[2]];
+    b.anchor = [mx - m[0], m[1], m[2]];
+    a.pair = b.pair = pairKey(a);
+  }
+  return list;
 }
 
 /** Orbit arrow buttons (R12): size, a gap of gapCm on screen (CSS reference 96 px per inch) outside the brain's
@@ -1384,7 +2169,7 @@ export const ORBIT_ARROWS = Object.freeze({
   dirs: Object.freeze(['forward', 'back', 'left', 'right']),
   glyph: Object.freeze({ forward: '▲', back: '▼', left: '◀', right: '▶' }),
   /** Polish (R16/R17): short plain hover captions shown beside each arrow. R5-integrate-core (R5-text W5): the 3D arrows'
-   * words, ns-text ARROWS.brain ("Turn your view toward the front" ...; no "curved"), else the round-4 ORBIT words. */
+   * words, ns-text ARROWS.brain ("Turn the brain: show more of its front" ...; no "curved"), else the round-4 ORBIT words. */
   tip: dirText((NS_TEXT.ARROWS && NS_TEXT.ARROWS.brain && NS_TEXT.ARROWS.brain.tip) || NS_TEXT.ORBIT.tip),
   label: dirText((NS_TEXT.ARROWS && NS_TEXT.ARROWS.brain && NS_TEXT.ARROWS.brain.label) || NS_TEXT.ORBIT.label)
 });
@@ -1587,9 +2372,27 @@ export function rectHitsConvexHull(hull, rect) {
  * left of the information column, above the portrait band). Candidates, in order: bottom right, bottom centre, top right,
  * top centre, bottom left (the bottom row stays above a bottomReservePx row kept for the look-around toast; the top left
  * is the status card itself). `clear(rect)` says whether a box is free (of the brain, the arrows ...).
+ * R558 (motor strip fills the view): with topCentreFirst the order is top centre, bottom centre, top right, bottom
+ * left: at the start the motor areas leave the top centre free (the notch between the two halves), so the line has one
+ * steady place under the limits line; the bottom-right corner is the information card's and is not tried.
+ * R558 (Message 7): the brain's forward arrow now sits at the top centre (the middle of the motor strip's frame's top
+ * side). `beside` (its box, CSS px) puts the line just beside it first, right of it, then left of it, level with it,
+ * so the two never collide and the line keeps its place near the top centre. `beside` may also be a list of boxes,
+ * tried in order (the top arrow first, then the bottom arrows), and `under` (a box or a list) adds, after those, the
+ * place centred just below each, above the bottom reserve: in a squarer window (4:3) the motor strip leaves no room
+ * beside the top arrow, while the view below the strip is free.
+ * R558 (issue hunt 2: looking down, the chip wandered to the middle of the view over your legs): topBandPx (CSS px)
+ * keeps every candidate inside the top band of the usable view (its bottom edge at most topBandPx below the usable
+ * top); with no clear spot there the result is null (ns-app then shows the line in the status card).
+ * R558 (user Message 31, symmetry): `centreBelow` (a box, CSS px, or null): with topCentreFirst the first spots of all
+ * are the chip CENTRED on the usable view's vertical centre line, just below that box (the brain frame's planned top
+ * tip, which sits on the same centre line), then at the top of the view. They come before `prefer`, so the chip goes
+ * back to the centre as soon as one of them is clear again (a tip moving across it while you look around sends it to
+ * the other centred spot or aside for a moment; the centred spots never move with the look). Before, the chip sat
+ * beside the top tip, to its right (1600x900: x 851-1131 round a tip at x 800).
  * Returns { x, y, w, h } or null when no spot is clear (the line then is not drawn). Pure. */
-export const GUIDE_FLOAT = Object.freeze({ chipMaxW: 280, gapPx: 12, bottomReservePx: 48 });
-export function guideFloatSpot({ usable, chipH = 40, clear = () => true, o = GUIDE_FLOAT, preferTop = false, prefer = null } = {}) {
+export const GUIDE_FLOAT = Object.freeze({ chipMaxW: 280, gapPx: 12, bottomReservePx: 48, besideMinW: 170, besideStepPx: 20 });
+export function guideFloatSpot({ usable, chipH = 40, clear = () => true, o = GUIDE_FLOAT, preferTop = false, prefer = null, topCentreFirst = false, beside = null, under = null, topBandPx = null, centreBelow = null } = {}) {
   if (!usable || ![usable.x0, usable.y0, usable.x1, usable.y1].every(Number.isFinite)) return null;
   const g = o.gapPx, w = Math.min(o.chipMaxW, usable.x1 - usable.x0 - 2 * g), h = Math.max(1, chipH);
   if (!(w > 80) || !(usable.y1 - usable.y0 > h + 2 * g)) return null;
@@ -1597,13 +2400,39 @@ export function guideFloatSpot({ usable, chipH = 40, clear = () => true, o = GUI
   const yb = usable.y1 - o.bottomReservePx - h, yt = usable.y0 + g;
   // R4-polish: looking down (preferTop), the legs you are watching fill the bottom of the view, so the top spots come
   // first (run-R4-polish-0-baseline 09b: the chip sat on the moving right knee).
-  const order = preferTop ? [[xr, yt], [cx, yt], [xr, yb], [cx, yb], [xl, yb]] : [[xr, yb], [cx, yb], [xr, yt], [cx, yt], [xl, yb]];
+  const order = topCentreFirst ? [[cx, yt], [cx, yb], [xr, yt], [xl, yb]] : preferTop ? [[xr, yt], [cx, yt], [xr, yb], [cx, yb], [xl, yb]] : [[xr, yb], [cx, yb], [xr, yt], [cx, yt], [xl, yb]];
+  const boxesOf = v => (Array.isArray(v) ? v : [v]).filter(b => b && [b.x0, b.y0, b.x1, b.y1].every(Number.isFinite));
+  const near = [];
+  for (const bx of boxesOf(beside)) {
+    // right of the arrow, then left of it, at full width; then narrower in besideStepPx steps down to besideMinW (the
+    // same words on more lines: the height grows in proportion, re-measured by the HUD on the next frame)
+    const minW = Math.min(w, o.besideMinW || 170), step = o.besideStepPx || 20;
+    for (let ww = w; ww >= minW - 1e-9; ww -= step) {
+      const hh = Math.ceil((h * w) / ww), y2 = Math.max(usable.y0 + 4, (bx.y0 + bx.y1) / 2 - hh / 2);
+      for (const x2 of [bx.x1 + g / 2, bx.x0 - g / 2 - ww]) if (x2 >= usable.x0 && x2 + ww <= usable.x1 && y2 + hh <= usable.y1) near.push([x2, y2, ww, hh]);
+    }
+  }
+  for (const bx of boxesOf(under)) {
+    const x2 = (bx.x0 + bx.x1) / 2 - w / 2, y2 = bx.y1 + g / 2;
+    if (x2 >= usable.x0 && x2 + w <= usable.x1 && y2 + h <= usable.y1 - o.bottomReservePx) near.push([x2, y2, w, h]);
+  }
+  order.unshift(...near);
   // R4-fix (review RP9): the spot the chip already has comes first while it stays clear, so the line does not jump
-  // between screen places during one goal (prefer = { x, y } of the last chip).
-  if (prefer && Number.isFinite(prefer.x) && Number.isFinite(prefer.y)) order.unshift([prefer.x, prefer.y]);
-  for (const [x, y] of order) {
-    const r = { x0: x, y0: y, x1: x + w, y1: y + h };
-    if (y >= usable.y0 && clear(r)) return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+  // between screen places during one goal (prefer = { x, y, w? } of the last chip).
+  if (prefer && Number.isFinite(prefer.x) && Number.isFinite(prefer.y)) order.unshift([prefer.x, prefer.y, Number.isFinite(prefer.w) ? prefer.w : w]);
+  // R558 (Message 31): ... but the centred spot comes before it (see centreBelow above).
+  // (two centred spots: just below the planned top tip, then at the top of the view, which is clear where the top tip
+  // is seen lower down: in third person, or while you look up)
+  if (topCentreFirst) {
+    const cb = centreBelow && [centreBelow.x0, centreBelow.y0, centreBelow.x1, centreBelow.y1].every(Number.isFinite) ? centreBelow : null;
+    const over = cb && cb.x0 < cx + w && cb.x1 > cx;
+    order.unshift(...(over && cb.y1 + g / 2 > yt ? [[cx, cb.y1 + g / 2, w, h], [cx, yt, w, h]] : [[cx, yt, w, h]]));
+  }
+  for (const [x, y, ww = w, hh0 = null] of order) {
+    const hh = hh0 !== null ? hh0 : ww === w ? h : Math.ceil((h * w) / ww);
+    const r = { x0: x, y0: y, x1: x + ww, y1: y + hh };
+    if (Number.isFinite(topBandPx) && r.y1 > usable.y0 + topBandPx) continue;
+    if (y >= usable.y0 && clear(r)) return { x: Math.round(x), y: Math.round(y), w: Math.round(ww), h: Math.round(hh) };
   }
   return null;
 }
@@ -1776,8 +2605,10 @@ export function placeOrbitArrows(hull, {
 }
 
 /** R3-scene label layout rules (display choices): at most maxShown labels (maxShownCompact on narrow / portrait views),
- * gapPx between boxes, ring offsets tried around each anchor (ringSteps rings; requiredRingSteps for required labels). */
-export const LABEL_LAYOUT = Object.freeze({ maxShown: 5, maxShownCompact: 4, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15 });
+ * gapPx between boxes, ring offsets tried around each anchor (ringSteps rings; requiredRingSteps for required labels).
+ * R558: the caps are even numbers because labels show in twins (one on each half of the brain): 8 = all four twins
+ * (arms, legs, face and neck, belly and back), 6 = the first three (was 5 / 4, which left one half a label short). */
+export const LABEL_LAYOUT = Object.freeze({ maxShown: 8, maxShownCompact: 6, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15 });
 
 /**
  * Label declutter (pure). items: [{ id, x, y (anchor, CSS px), w, h, priority (higher first), required }]; a label whose
@@ -1792,53 +2623,111 @@ export const LABEL_LAYOUT = Object.freeze({ maxShown: 5, maxShownCompact: 4, gap
  * `maxRings` (default rules.requiredMaxRings for required labels): it never moves more than that many rings from its
  * anchor. A required label with no clear candidate inside those limits keeps its least-overlapping ALLOWED candidate
  * and is marked faded (drawn see-through) instead of jumping far away or onto the other half of the brain.
+ * R558 ("brain labels ... match on both sides"): items that share a `pair` key are twins (the same body part on the two
+ * halves of the brain). Twins are one unit: they take the same offset, mirrored sideways (`mirror` +1 / -1 = which side
+ * of the midline the item's anchor is on), both boxes must be clear (also of each other), and both show or neither
+ * does; the unit ranks by its best member (required first) and counts as two toward maxShown. A twin whose anchor is
+ * off screen is left out and the other is placed alone. Items without `pair` behave exactly as before.
  */
 export function declutterLabels(items, { width, height, topPx = 0, obstacles = [], maxShown = LABEL_LAYOUT.maxShown, rules = LABEL_LAYOUT } = {}) {
   const res = new Array(items.length);
-  const order = items.map((it, i) => i).sort((a, b) => (items[b].required ? 1 : 0) - (items[a].required ? 1 : 0) || (items[b].priority || 0) - (items[a].priority || 0) || a - b);
-  const placed = [];
   const g = rules.gapPx, m = rules.marginPx;
   const overlap = (b, o) => Math.max(0, Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0)) * Math.max(0, Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0));
+  const hide = i => { const it = items[i]; res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false, faded: false }; };
+  // R558: placement units. Items with the same `pair` key are twins: one unit, placed and shown together (below).
+  const units = [], byPair = new Map();
+  for (let i = 0; i < items.length; i++) {
+    const k = typeof items[i].pair === 'string' && items[i].pair !== '' ? items[i].pair : null;
+    let u = k ? byPair.get(k) : null;
+    if (!u) { u = []; units.push(u); if (k) byPair.set(k, u); }
+    u.push(i);
+  }
+  const req = u => (u.some(i => items[i].required) ? 1 : 0), pri = u => u.reduce((a, i) => Math.max(a, items[i].priority || 0), -Infinity);
+  units.sort((a, b) => req(b) - req(a) || pri(b) - pri(a) || a[0] - b[0]);
+  const placed = [];
   let shown = 0;
-  // R3-polish (INTEGRATION 7.1): one label per wording. Both brain halves have a "Belly and back" and a "Face and neck"
-  // area; the same words twice on screen read as clutter, so a non-required label whose text is already shown is hidden.
+  // R3-polish (INTEGRATION 7.1): one label per wording among different units; twins may share their words ("Face and
+  // neck" on both halves, R558).
   const shownText = new Set();
-  for (const i of order) {
-    const it = items[i];
-    const onScreen = Number.isFinite(it.x) && Number.isFinite(it.y) && it.x >= 0 && it.x <= width && it.y >= topPx && it.y <= height;
-    const dupText = !it.required && typeof it.text === 'string' && it.text !== '' && shownText.has(it.text);
-    if (!onScreen || dupText || (!it.required && shown >= maxShown)) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false, faded: false }; continue; }
-    const maxRings = Number.isFinite(it.maxRings) ? it.maxRings : it.required ? (Number.isFinite(rules.requiredMaxRings) ? rules.requiredMaxRings : rules.requiredRingSteps) : rules.ringSteps;
-    const rings = Math.min(it.required ? rules.requiredRingSteps : rules.ringSteps, maxRings);
-    const dy = it.h + g, dx = it.w / 2 + g;
+  for (const unit of units) {
+    const required = req(unit) === 1;
+    const live = [];
+    for (const i of unit) {
+      const it = items[i];
+      const onScreen = Number.isFinite(it.x) && Number.isFinite(it.y) && it.x >= 0 && it.x <= width && it.y >= topPx && it.y <= height;
+      const dupText = !it.required && typeof it.text === 'string' && it.text !== '' && shownText.has(it.text);
+      if (!onScreen || dupText) hide(i); else live.push(i);
+    }
+    if (!live.length) continue;
+    if (!required && shown + live.length > maxShown) { for (const i of live) hide(i); continue; }
+    const maxRingsOf = it => (Number.isFinite(it.maxRings) ? it.maxRings : required ? (Number.isFinite(rules.requiredMaxRings) ? rules.requiredMaxRings : rules.requiredRingSteps) : rules.ringSteps);
+    const rings = live.reduce((a, i) => Math.min(a, maxRingsOf(items[i])), required ? rules.requiredRingSteps : rules.ringSteps);
+    const dy = live.reduce((a, i) => Math.max(a, items[i].h), 0) + g, dx = live.reduce((a, i) => Math.max(a, items[i].w), 0) / 2 + g;
     const cands = [[0, 0]];
     for (let k = 1; k <= rings; k++) cands.push([0, -k * dy], [0, k * dy], [-k * dx, 0], [k * dx, 0], [-k * dx, -k * dy], [k * dx, -k * dy], [-k * dx, k * dy], [k * dx, k * dy]);
-    const sd = it.side && [it.side.x0, it.side.y0, it.side.dxdy].every(Number.isFinite) && (it.side.sign === 1 || it.side.sign === -1) ? it.side : null;
-    let pick = null, bestBad = null;
-    for (const [ox, oy] of cands) {
-      const x = clampTo(it.x + ox, it.w / 2 + m, Math.max(it.w / 2 + m, width - it.w / 2 - m));
-      const y = clampTo(it.y + oy, topPx + 2 + it.h / 2, Math.max(topPx + 2 + it.h / 2, height - m - it.h / 2));
-      const b = { x0: x - it.w / 2 - g / 2, y0: y - it.h / 2 - g / 2, x1: x + it.w / 2 + g / 2, y1: y + it.h / 2 + g / 2 };
-      // R4-fix (RP1): the clamped box must still be near its anchor and on its own side of the midline.
-      if (Math.abs(x - it.x) > rings * dx + 0.5 || Math.abs(y - it.y) > rings * dy + 0.5) continue;
-      if (sd) {
-        const mx0 = sd.x0 + (b.y0 - sd.y0) * sd.dxdy, mx1 = sd.x0 + (b.y1 - sd.y0) * sd.dxdy;
-        const cross = (Number.isFinite(rules.sideCrossFrac) ? rules.sideCrossFrac : 0) * it.w;
-        if (sd.sign > 0 ? b.x0 + cross < Math.max(mx0, mx1) : b.x1 - cross > Math.min(mx0, mx1)) continue;
-      }
-      let bad = 0;
-      for (const o of obstacles) if (o) bad += overlap(b, o);
-      for (const p of placed) bad += overlap(b, p);
-      if (bad === 0) { pick = { x, y, b }; break; }
-      if (!bestBad || bad < bestBad.bad) bestBad = { x, y, b, bad };
+    // Twins move by the same offset mirrored: the sideways part points away from the midline for both or toward it for both.
+    let s0 = 1;
+    if (live.length === 2) {
+      const A = items[live[0]], B = items[live[1]];
+      s0 = A.mirror === 1 || A.mirror === -1 ? A.mirror : B.mirror === 1 || B.mirror === -1 ? -B.mirror : A.x >= B.x ? 1 : -1;
     }
-    let faded = false;
-    if (!pick && it.required && bestBad) { pick = bestBad; faded = true; }
-    if (!pick) { res[i] = { id: it.id, x: it.x, y: it.y, shown: false, moved: false, faded: false }; continue; }
-    placed.push(pick.b);
-    shown++;
-    if (typeof it.text === 'string' && it.text !== '') shownText.add(it.text);
-    res[i] = { id: it.id, x: pick.x, y: pick.y, shown: true, moved: pick.x !== it.x || pick.y !== it.y, faded };
+    // R558 (user Message 31, symmetry): twins are always LEVEL. Seen straight on, their anchors (the same body part on
+    // the two halves) project at one height and the labels mirror each other about the brain's midline; once the brain
+    // is turned (or seen from the side) the anchors project at different heights (perspective), and both labels then
+    // take the height halfway between them (and are clamped to the view with the taller one's height), so the pair
+    // still reads as one row. Their sideways offsets stay mirrored round their own anchors.
+    // R558 check (Message 31): only where NO level place can be near both anchors (each label within its rings of its
+    // own anchor: anchors more than about 2 x rings x dy apart in height, e.g. 104 px for the 22 px labels, as when the
+    // brain is turned far or seen far from the side) is the pair placed as before, each label at its own anchor height
+    // with the same mirrored offset, instead of being hidden (measured: "Face and neck" twins hidden at 120 px apart):
+    // the level rule must not cost the labels where it cannot be met at all. A pair that has level places, all of them
+    // taken by obstacles, is handled as before (hidden, or a required pair forced and faded at its best level place).
+    const twinY0 = live.length === 2 ? (items[live[0]].y + items[live[1]].y) / 2 : null;
+    const twinH0 = live.length === 2 ? Math.max(items[live[0]].h, items[live[1]].h) : null;
+    let pick = null, bestBad = null, levelFits = false;
+    for (const level of twinY0 !== null ? [true, false] : [false]) {
+      if (pick || (!level && levelFits)) break;
+      const twinY = level ? twinY0 : null, twinH = level ? twinH0 : null;
+      for (const [ox, oy] of cands) {
+        const boxes = [];
+        let bad = 0, ok = true;
+        for (let n = 0; n < live.length && ok; n++) {
+          const it = items[live[n]], sx = live.length === 2 ? (n === 0 ? s0 : -s0) : 1;
+          const x = clampTo(it.x + sx * ox, it.w / 2 + m, Math.max(it.w / 2 + m, width - it.w / 2 - m));
+          const hh = twinH !== null ? twinH : it.h;
+          const y = clampTo((twinY !== null ? twinY : it.y) + oy, topPx + 2 + hh / 2, Math.max(topPx + 2 + hh / 2, height - m - hh / 2));
+          const b = { x0: x - it.w / 2 - g / 2, y0: y - it.h / 2 - g / 2, x1: x + it.w / 2 + g / 2, y1: y + it.h / 2 + g / 2 };
+          // R4-fix (RP1): the clamped box must still be near its anchor and on its own side of the midline.
+          if (Math.abs(x - it.x) > rings * dx + 0.5 || Math.abs(y - it.y) > rings * dy + 0.5) { ok = false; break; }
+          const sd = it.side && [it.side.x0, it.side.y0, it.side.dxdy].every(Number.isFinite) && (it.side.sign === 1 || it.side.sign === -1) ? it.side : null;
+          if (sd) {
+            const mx0 = sd.x0 + (b.y0 - sd.y0) * sd.dxdy, mx1 = sd.x0 + (b.y1 - sd.y0) * sd.dxdy;
+            const cross = (Number.isFinite(rules.sideCrossFrac) ? rules.sideCrossFrac : 0) * it.w;
+            if (sd.sign > 0 ? b.x0 + cross < Math.max(mx0, mx1) : b.x1 - cross > Math.min(mx0, mx1)) { ok = false; break; }
+          }
+          let own = 0;
+          for (const o of obstacles) if (o) own += overlap(b, o);
+          for (const p of placed) own += overlap(b, p);
+          for (const q of boxes) own += overlap(b, q.b);
+          bad += own;
+          boxes.push({ i: live[n], x, y, b, bad: own });
+        }
+        if (!ok) continue;
+        if (level) levelFits = true;
+        if (bad === 0) { pick = boxes; break; }
+        if (!bestBad || bad < bestBad.bad) bestBad = { boxes, bad };
+      }
+    }
+    let forced = false;
+    if (!pick && required && bestBad) { pick = bestBad.boxes; forced = true; }
+    if (!pick) { for (const i of live) hide(i); continue; }
+    for (const q of pick) {
+      const it = items[q.i];
+      placed.push(q.b);
+      shown++;
+      if (typeof it.text === 'string' && it.text !== '') shownText.add(it.text);
+      res[q.i] = { id: it.id, x: q.x, y: q.y, shown: true, moved: q.x !== it.x || q.y !== it.y, faded: forced && (q.bad > 0 || live.length === 1) };
+    }
   }
   return res;
 }
@@ -1860,7 +2749,7 @@ export const R3_LABEL_FONT = Object.freeze({ otherPx: 13, leftArmPx: 14.5, subPx
 export const R3_SCENE_CSS = [
   `.ns-region-label.ns-r3 { font-size: ${R3_LABEL_FONT.otherPx}px; padding: ${R3_LABEL_FONT.padYPx - 1}px ${R3_LABEL_FONT.padXPx - 1}px; max-width: none; white-space: nowrap; line-height: 1.3; }`,
   `.ns-region-label.ns-r3 .ns-region-label-hemi { display: block; font-size: ${R3_LABEL_FONT.subPx}px; font-weight: 600; opacity: 0.9; }`,
-  `.ns-region-label.ns-r3.ns-region-label-leftarm { font-size: ${R3_LABEL_FONT.leftArmPx}px; padding: ${R3_LABEL_FONT.padYPx}px ${R3_LABEL_FONT.padXPx}px; border-radius: 12px; line-height: 1.25; }`,
+  `.ns-region-label.ns-r3.ns-region-label-arm { font-size: ${R3_LABEL_FONT.leftArmPx}px; padding: ${R3_LABEL_FONT.padYPx}px ${R3_LABEL_FONT.padXPx}px; border-radius: 12px; line-height: 1.25; }`,
   // R4-fix (RP1): a required label with no clear place near its area, on its own half, is drawn see-through there.
   `.ns-region-label.ns-r3[data-ns-faded="true"] { opacity: ${LABEL_FADED_OPACITY}; }`,
   // R4-fix (F2): the small-area switched-on marker: a gold ring (the mark colour) with a dark edge, never clickable.
@@ -1876,13 +2765,15 @@ export function regionLabelDisplay(group) {
   if (!group) return null;
   const leftArm = group.key === 'leftArm' || group.isLeftArm === true;
   const key = leftArm ? 'leftArm' : group.key;
-  // ns-text regionGroupLabel: "Part (brain's left half)": the part is the label, the bracket its smaller second line
-  // (shown for the left-arm label only: fewer words on the brain; the info panel names the half for every area).
+  // ns-text regionGroupLabel: "Part (brain's left half)": the part is the label, the bracket its smaller second line.
+  // R558 (labels match on both sides): the second line is shown on BOTH arm labels ("Left arm / brain's right half" and,
+  // mirrored, "Right arm / brain's left half"); the other labels carry one line on both halves (fewer words on the
+  // brain; the info panel names the half for every area). It was on the left-arm label only.
   const full = NS_TEXT.regionGroupLabel(key, group.hemisphere);
   if (!(typeof full === 'string' && full.trim())) return null;
   const m = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(full);
   const main = m ? m[1] : full, sub = m ? m[2] : '';
-  return { main, sub: leftArm ? sub : '' };
+  return { main, sub: leftArm || key === 'arm' ? sub : '' };
 }
 
 /** Weld region parts by position (quantum, source mm): { pos: number[] xyz, nrm: Float64Array (area-weighted face normal
@@ -2183,19 +3074,31 @@ export function bodySeeThroughAmount(pitch, o = BODY_SEE_THROUGH) {
 
 /** Rest drive of a body muscle with no simulated drive (= ns-arm MUSCLE_BASELINE_DRIVE, the left arm's baseline). */
 export const MUSCLE_REST_DRIVE = 0.08;
+/** R558: the area whose colour a left-arm muscle shows when no area claims it (the Space palm turn drives the forearm
+ * rotators without a look at the brain): the left forearm area. */
+export const ARM_FALLBACK_AREA = 'rh_forearm';
+/** R558: the optogenetic halo of a glowing muscle (display choices): shell offset along the normals in world mm on your
+ * body (ownMm) and on the mirror body (mirrorMm, wider because it is drawn farther away); power: alpha = (power x
+ * |N.V| of the shell, clamped to 1)^2, 0 at the shell's outer edge and full near the muscle's outline; the halo colour
+ * gain (x the area glow colour x the glow strength). */
+export const MUSCLE_HALO = Object.freeze({ ownMm: 3, mirrorMm: 12, power: 2.5, gain: 0.7, mirrorGain: 0.6 });
 
 /** Far-right information overlay (R14) layout mirror of the CSS (.ns-infopanel): column width min(colPx, colVw vw),
  * the bottom panel height in portrait (portraitVh), and how many caveats / citations are listed. */
 // Round-2 fix V1: colMaxVh 58 -> 66 so every required field (plain lead, simulated, known, caveat, body part, movement,
 // muscles, pathway) fits at 1280x720; the legend under it uses its compact key at heights <= 820 px (CSS).
 // Round 3 (D3): at most maxRows value rows show by default; the rest of the card is behind a collapsed More detail.
-export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4 });
+// R558 (motor strip fills the view): in landscape the panel is a short card in the bottom-right corner (cornerVw wide,
+// cornerShortVh tall; CSS mirrors --ns-info-corner-vw / --ns-info-short-maxvh), one of the two corners the motor areas
+// leave free at the start; "More detail" (key I) opens the full card upward (at most colMaxVh of the height).
+export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4, cornerVw: 18.75, cornerShortVh: 17 });
 /** R3-integrator: in portrait the top of the bottom band holds the legend (right) and the drag-to-look toast (left); the
  * information panel below them is capped to the band minus this height (CSS mirror --ns-portrait-legend-reserve). */
 export const INFO_PANEL_PORTRAIT_LEGEND_PX = 172; // R3-fix (SL-3): room for the legend's map qualifier in portrait
 
-/** Panel rectangle (CSS px) the info overlay occupies for a viewport: the far-right column (wide / compact) or a bottom
- * band (portrait). Other HUD elements and the orbit arrows avoid it. */
+/** Panel rectangle (CSS px) the info overlay occupies for a viewport: the short bottom-right corner card (landscape,
+ * layout 'corner'; R558) or a bottom band (portrait). Other HUD elements and the orbit arrows avoid it. The card
+ * opened with "More detail" (key I) grows upward past this box for as long as the player keeps it open. */
 export function infoPanelRect({ width, height } = {}, topPx = 0) {
   if (!(width > 0 && height > 0)) return null;
   const g = INFO_PANEL.gapPx;
@@ -2203,11 +3106,10 @@ export function infoPanelRect({ width, height } = {}, topPx = 0) {
     const h = (INFO_PANEL.portraitVh / 100) * height;
     return { x0: g, y0: height - g - h, x1: width - g, y1: height - g, layout: 'portrait' };
   }
-  const w = Math.min(INFO_PANEL.colPx, (INFO_PANEL.colVw / 100) * width);
-  // Integration: the column is at most colMaxVh of the height (CSS mirror --ns-info-col-maxvh), so a compact HUD card
-  // can sit under it instead of over the left arm.
-  const y0 = Math.max(g, topPx);
-  return { x0: width - g - w, y0, x1: width - g, y1: Math.min(height - g, Math.max(30, y0) + (INFO_PANEL.colMaxVh / 100) * height), layout: 'column' };
+  // R558: the short corner card (bottom right). Its box depends on the view size only, never on the text.
+  const w = Math.min(INFO_PANEL.colPx, (INFO_PANEL.cornerVw / 100) * width);
+  const h = (INFO_PANEL.cornerShortVh / 100) * height;
+  return { x0: width - g - w, y0: Math.max(topPx, height - g - h), x1: width - g, y1: height - g, layout: 'corner' };
 }
 
 /** Plain-language row headings of the info overlay (round 3: ns-text INFO.rows, R17/D3). */
@@ -2317,7 +3219,8 @@ export function infoPanelContent(model) {
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
     rows: rows.slice(0, INFO_PANEL.maxRows),
-    activity: v === null ? null : { value: v, text: NsText.activityLine(v), css: activityColorCss(v) },
+    // R558: the swatch and the meter show the area's OWN colour (calm tint -> glow), as on the brain and the muscles.
+    activity: v === null ? null : { value: v, text: NsText.activityLine(v), css: NsColors.areaSwatchCss(model.regionId, v) || activityColorCss(v), meter: NsColors.areaMeterCss(model.regionId) },
     activations: NsText.activationsLine(n),
     // Idle / glass: the explanation is the visible body text. Region mode: it is inside More detail.
     explanation: region ? '' : expl,
@@ -2351,7 +3254,7 @@ export function infoPanelContent(model) {
  *  - faceView: FACE_VIEW_MODES entry (default 'ghost'; setFaceView changes it).
  * @returns {{ objects, measure, resize, setView, setArm, setBrain, setPlacement, updatePose, updateMuscles,
  *   updateStrip, highlightMarker, setArmGhost, setShimmer, raycastBrain, projectWorld, render, contextLost: boolean,
- *   dispose, setBrainTransform, updateRegions, setInfo, setBody, setBodyFrame, updateBody, bodyVisibility, setFaceView,
+ *   dispose, setBrainTransform, updateRegions, setRegionHints, regionHintState (R558), setInfo, setBody, setBodyFrame, updateBody, bodyVisibility, setFaceView,
  *   orbitArrowAt, hoverOrbitArrow, setOrbitHandler, brainOrientationAnchors, regionMode: boolean,
  *   setArmEnvelope, setBrainHeld, setQuality, qualityState, setBrainDistanceScale (R4-scene) }}
  */
@@ -2376,7 +3279,11 @@ export function infoPanelContent(model) {
 // the cluster copies drop the thin triangles of sheet-like face and neck muscles, which shows as holes and blotches.
 // At full quality the mirror body is now drawn from the full meshes (mirrorLodFullMm 0 = no copy); the coarser copy
 // used from the first reduced quality level is 3 mm instead of 4 mm. Costs GPU triangles, not frame logic.
-export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 0, mirrorQualityLodFrom: 1, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
+// R558 (Message 14, "everything that should be as detailed as possible"): the mirror body keeps its full meshes through
+// the render-scale and lite levels too and is simplified only from the first triangle-reducing ('lod') level, index 4,
+// with the glass and the own body: the D8 order (render scale first, then passes, then triangles). The scale levels
+// help a fill-limited GPU, where fewer mirror triangles saved nothing but cost detail.
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 0, mirrorQualityLodFrom: 4, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -2386,14 +3293,26 @@ export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
  * mirror body's place (its arrows' rooms already keep it apart; 1 lets it fit on a phone); crosshairKeepPx: half
  * size of the box round the crosshair that no orbit arrow may cover (an arrow obstacle). */
 export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, avoidDilate: 2, mirrorAvoidDilate: 1, crosshairKeepPx: 40 });
-/** R5-bigbrain (R25 + D1(d)): the rect (CSS px) whose points a look of at most comfortDeg puts under the crosshair:
- * |x_ndc| <= tan(c) / (tan(fovY / 2) aspect), |y_ndc| <= tan(c) / tan(fovY / 2) (yaw and pitch separately; inside it
- * max(|yaw|, |pitch|) <= c). Pure. */
-export function arrowComfortRect({ width, height, fovYDeg = CAMERA.fovYDeg, comfortDeg = (NsBrain.BRAIN_VIEW && NsBrain.BRAIN_VIEW.comfortDeg) || 40 } = {}) {
-  const t = Math.tan((fovYDeg * Math.PI) / 360), tc = Math.tan((comfortDeg * Math.PI) / 180), aspect = width / height;
-  const X = Math.min(1, tc / (t * aspect)), Y = Math.min(1, tc / t);
-  return { x0: ((1 - X) / 2) * width, x1: ((1 + X) / 2) * width, y0: ((1 - Y) / 2) * height, y1: ((1 + Y) / 2) * height };
-}
+/** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
+ * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
+ * tip sat on your head). The tips are drawn on top of everything, so they are now drawn, and answer clicks, only where
+ * what they belong to can be seen:
+ *  - a target's whole set only while enough of the target's own frame is seen: the plane rectangle through its four tip
+ *    anchors, sampled on a gridX x gridY grid; a sample is seen when it lies in front of the camera, inside the view,
+ *    and the sight line to it does NOT meet your own body nearer than the target's centre (ns-collide's sphere cover of
+ *    your body). Below minShare of the samples the set hides. (The brain's 16:9 frame fills the view at the start:
+ *    turning the look until a side tip reaches the crosshair leaves about half of it in view, so minShare stays well
+ *    under one half and a side tip can still be aimed at with the crosshair.)
+ *  - each single tip only while your own body is not in front of it: sight lines through the tip's middle and its two
+ *    sides across its pointing direction, hidden when your body is nearer than the tip on two of the three.
+ * Checked every everyFrames frames while the camera, a pose, a plan or a target changed (a few dozen sight lines against
+ * the sphere cover, about 0.1 to 4 ms; frameVis.lastMs in the arrow readback). Display choice. */
+export const FRAME_VIS = Object.freeze({ minShare: 0.3, gridX: 4, gridY: 4, everyFrames: 6 });
+/** R558 (issue hunt 2; Message 18: hints must look clean and deliberate, "never ... diseased-looking"): how a muscle
+ * that only an opposing-action hint names is drawn: its resting tissue colour (no emission over the belly) plus a thin
+ * fresnel rim (rimPower: the higher, the thinner) in its area's glow colour lightened rimWhite toward white, at rimGain.
+ * Display choice. */
+export const MUSCLE_HINT_LOOK = Object.freeze({ rimGain: 0.5, rimWhite: 0.35, rimPower: 5 });
 
 /* ---- R5-scene: glow links (D17, R21) --------------------------------------------------------------------------------- */
 
@@ -2404,8 +3323,16 @@ export function arrowComfortRect({ width, height, fovYDeg = CAMERA.fovYDeg, comf
  * pulse: a soft brighter band travelling from the brain to the muscle (period pulseS, strength pulseAmp; none under
  * prefers-reduced-motion); maxLinks / segments: buffer sizes; mirrorAlpha: links to the mirror body are fainter (they
  * run behind the glass). */
+// R558 (user Message 2: "All the connective lines might get a little confusing, you'll need a fix"): the colour of an
+// area and of its muscles now carries the link (ns-colors AREA_COLORS), so the fan of ribbons (one per driven muscle
+// group, on your body AND on the mirror body, up to 24 at once) is gone. mode 'one-per-area': at most ONE soft line per
+// area that has just switched on, from the area to the muscle group of YOUR body it drives most, in the area's own
+// colour; it shows for holdS and fades out over fadeS even while the area stays lit, and the mirror body gets none
+// (its muscles light in the same colour). No line to a group nearer the camera than minTargetM (your own neck or face
+// from the eyes). mode 'off' draws no line at all. Display choices.
 export const GLOW_LINK = Object.freeze({
-  corePx: 1.6, haloPx: 7, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.35, pulseWidth: 0.12,
+  mode: 'one-per-area', holdS: 0.5, fadeS: 0.7, coreWhite: 0.3, minTargetM: 0.45,
+  corePx: 1.4, haloPx: 6, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.35, pulseWidth: 0.12,
   maxLinks: 24, minLevel: 0.02, mirrorAlpha: 0.7, nearClipM: 0.06,
   // cross-section samples (fraction of the halo half width) for the additive ribbon
   across: Object.freeze([-1, -0.62, -0.32, -0.16, 0, 0.16, 0.32, 0.62, 1])
@@ -2442,9 +3369,19 @@ export function glowAlongAlpha(s, phase = NaN, o = GLOW_LINK) {
   return a;
 }
 
-/** Normalised glow links (pure): links [{ key?, regionId, level 0..1, bodyMeshIds?: [ids] | { id: 0..1 }, armMuscleKeys?:
- * [keys] | { key: 0..1 }, armMuscleNames?: [lower-case name parts] }] -> [{ key, regionId, level, body: { id: w }, armKeys:
- * { key: w }, armNames: [..] }] (levels clamped; links below GLOW_LINK.minLevel or without a region id dropped). */
+/** R558: strength 0..1 of an area's one line `ageS` seconds after the area switched on: 1 for holdS, then a smooth fade
+ * to 0 over fadeS (0 for a negative or non-finite age, and always 0 in mode 'off'). Pure. */
+export function glowLineEnvelope(ageS, o = GLOW_LINK) {
+  if (o.mode === 'off' || !Number.isFinite(ageS) || ageS < 0) return 0;
+  if (ageS <= o.holdS) return 1;
+  const t = Math.min(1, (ageS - o.holdS) / Math.max(1e-6, o.fadeS));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/** Normalised glow links (pure): links [{ key?, regionId, level 0..1, bodyMeshIds?: [ids] | { id: 0..1 }, colorMeshIds?:
+ * [ids] | { id: 0..1 }, armMuscleKeys?: [keys] | { key: 0..1 }, armMuscleNames?: [lower-case name parts] }] -> [{ key,
+ * regionId, level, body: { id: w }, colorBody: { id: w } (the muscles that take the area's colour; defaults to body),
+ * armKeys: { key: w }, armNames: [..] }] (levels clamped; links below GLOW_LINK.minLevel or without a region id dropped). */
 export function normaliseGlowLinks(links) {
   const out = [];
   const asMap = x => {
@@ -2457,7 +3394,9 @@ export function normaliseGlowLinks(links) {
     if (!l || typeof l.regionId !== 'string') continue;
     const level = Number.isFinite(l.level) ? Math.min(1, Math.max(0, l.level)) : 0;
     if (!(level >= GLOW_LINK.minLevel)) continue;
-    out.push({ key: typeof l.key === 'string' && l.key ? l.key : l.regionId, regionId: l.regionId, level, body: asMap(l.bodyMeshIds), armKeys: asMap(l.armMuscleKeys),
+    const body = asMap(l.bodyMeshIds), colorBody = l.colorMeshIds ? asMap(l.colorMeshIds) : body;
+    // R558 (Space dance): line false = a colour-only link (its muscles take the area's colour; no line is drawn).
+    out.push({ key: typeof l.key === 'string' && l.key ? l.key : l.regionId, regionId: l.regionId, level, hint: l.hint === true, line: l.line !== false, body, colorBody, armKeys: asMap(l.armMuscleKeys),
       armNames: Array.isArray(l.armMuscleNames) ? l.armMuscleNames.filter(s => typeof s === 'string' && s).map(s => s.toLowerCase()) : [] });
   }
   return out;
@@ -2476,15 +3415,21 @@ export function glowLinksForScene(links, { bodyDrives = null } = {}) {
     const level = Number.isFinite(l.level) ? l.level : 0;
     if (l.isLeftArm) {
       const names = [...(Array.isArray(l.meshNames) ? l.meshNames : []), ...(Array.isArray(l.muscles) ? l.muscles : [])];
-      out.push({ key: l.key || l.regionId, regionId: l.regionId, level, armMuscleKeys: Array.isArray(l.catalog) ? l.catalog : [], armMuscleNames: names });
+      out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, armMuscleKeys: Array.isArray(l.catalog) ? l.catalog : [], armMuscleNames: names });
       continue;
     }
     let ids = {};
     try { ids = typeof bodyDrives === 'function' ? bodyDrives(l) || {} : {}; } catch { ids = {}; }
     const vals = Object.values(ids).filter(Number.isFinite), top = vals.length ? Math.max(...vals) : 0;
-    const keep = {};
-    for (const [id, v] of Object.entries(ids)) if (Number.isFinite(v) && v >= 0.5 * top && v > 0) keep[id] = v / (top || 1);
-    out.push({ key: l.key || l.regionId, regionId: l.regionId, level, bodyMeshIds: keep });
+    const keep = {}, color = {};
+    for (const [id, v] of Object.entries(ids)) {
+      if (!(Number.isFinite(v) && v > 0)) continue;
+      if (v >= 0.5 * top) keep[id] = v / (top || 1);
+      // R558: the muscles that take the area's colour: the agonists and the stabilisers (ns-body 1 and 0.3), not the
+      // antagonists' 0.08 display floor (below the glow onset anyway).
+      if (v >= 0.2 * top) color[id] = v / (top || 1);
+    }
+    out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, bodyMeshIds: keep, colorMeshIds: color });
   }
   return out;
 }
@@ -2531,6 +3476,550 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
   return { vertexShader, fragmentShader: 'uniform vec4 nsGlowRim;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
 }
 
+/** R558 (user Message 18): the muscle LOOK shader patch (pure). Per vertex the attribute nsTendon (0 over the belly, 1 on
+ * an end attached to bone) becomes the varying vNsTendon. Per fragment:
+ *  - the albedo turns toward the tendon white nsMuscleTendon.rgb by vNsTendon x nsMuscleTendon.a (half as much on a
+ *    glowing muscle, so the glow stays whole), and that part is a little glossier (roughness - nsMuscleShade.w x it);
+ *    R558 (hunt 2): the tendon part fades out as it gets small on screen (MUSCLE_TENDON_FADE: a far body is not speckled);
+ *  - a red-shifted tissue scatter, albedo x nsMuscleScatter.rgb x nsMuscleShade.z, is added to the indirect light (a
+ *    muscle in shade stays warm, never grey-black; not on the tendon part, and not on a glowing muscle, where it would
+ *    pull the glow colour toward red);
+ *  - the LIT light (diffuse and specular, never the emission or the glow rim) is multiplied by
+ *    1 - nsMuscleShade.x x (1 - nsMuscleScatter.a x glow) x (1 - |N.V|)^nsMuscleShade.y: a soft darkening toward the
+ *    muscle's own outline, so the groove between two neighbouring bellies reads as a crease.
+ *  - fibre striation: the albedo varies by +-nsMuscleFibre.x with a smooth noise that runs ALONG the muscle's own long
+ *    axis (per-material nsFibre.xyz, object frame; nsFibre.w = 1 / streak width in object units, 0 = none) and changes
+ *    across it, so a near belly shows fine lengthwise fibre streaks; it fades out where a streak would be narrower than
+ *    about a pixel (fwidth between nsMuscleFibre.z and 2.5 x that), so a far body shows no shimmer; not on the tendon
+ *    part and not on a glowing muscle. The same noise x nsMuscleFibre.w (view units, metres) is a tiny height for a
+ *    derivative bump of the normal, so the streaks also catch the light (hook '#include <emissivemap_fragment>', after
+ *    the normal is known). The coordinate is the vertex position, or the rest position nsRest when NS_FIBRE_REST is
+ *    defined (the CPU-skinned left arm, so the streaks stay on the skin while it moves).
+ *  - sheen: the lit specular is tinted by nsMuscleSheen.rgb (warm, a little weaker), toward white on the tendon part and
+ *    on a glowing muscle: the cool sky and rim lights otherwise laid a white-blue veil over the red (mauve-grey bellies).
+ * glow = smoothstep(0.02, 0.2, the largest emissive channel) (the activation glow of shadeMuscle).
+ * Hooks: vertex '#include <begin_vertex>'; fragment '#include <color_fragment>', '#include <roughnessmap_fragment>',
+ * '#include <aomap_fragment>' (MeshStandardMaterial r170). null when any hook or the emissive / vViewPosition names are
+ * missing (the material then draws as before). */
+// Smooth 3D value noise (0..1) for the fibre striation: cheap, no texture, no derivative discontinuities.
+const MUSCLE_FIBRE_NOISE_GLSL = 'float nsHash3( vec3 p ) { p = fract( p * 0.1031 ); p += dot( p, p.yzx + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }\n' +
+  'float nsVNoise( vec3 x ) { vec3 i = floor( x ); vec3 f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );\n' +
+  '  return mix( mix( mix( nsHash3( i ), nsHash3( i + vec3( 1.0, 0.0, 0.0 ) ), f.x ), mix( nsHash3( i + vec3( 0.0, 1.0, 0.0 ) ), nsHash3( i + vec3( 1.0, 1.0, 0.0 ) ), f.x ), f.y ),\n' +
+  '    mix( mix( nsHash3( i + vec3( 0.0, 0.0, 1.0 ) ), nsHash3( i + vec3( 1.0, 0.0, 1.0 ) ), f.x ), mix( nsHash3( i + vec3( 0.0, 1.0, 1.0 ) ), nsHash3( i + 1.0 ), f.x ), f.y ), f.z ); }\n';
+/** R558 (issue hunt 2, Message 18 "never ... splotchy"): the tendon white fades with its size on screen. Measure: the
+ * length of fwidth of the fragment's view position (metres the surface spans across one drawing-buffer pixel, about
+ * 1.4 x the pixel's footprint). Full white below fullM, none above noneM. At 1600x900 and the 90-degree view the own
+ * body seen from the eyes measures about 1 to 3 mm (unchanged), your back in third person about 5 to 6 mm (partly
+ * faded) and the mirror body, 2.5 to 3.5 m away, 8 mm and more (gone): there its tendon ends were a pixel or two wide
+ * and read as a white speckle over the face, chest and shoulders. Display choice. */
+export const MUSCLE_TENDON_FADE = Object.freeze({ fullM: 0.004, noneM: 0.008 });
+export const MUSCLE_LOOK_HOOKS = Object.freeze({
+  vertex: '#include <begin_vertex>', color: '#include <color_fragment>', roughness: '#include <roughnessmap_fragment>',
+  normal: '#include <emissivemap_fragment>', light: '#include <aomap_fragment>'
+});
+export function patchMuscleLookShaders(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const H = MUSCLE_LOOK_HOOKS;
+  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.color) || !fragmentShader.includes(H.roughness) || !fragmentShader.includes(H.normal) || !fragmentShader.includes(H.light)
+    || !fragmentShader.includes('uniform vec3 emissive') || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('reflectedLight')) return null;
+  const vs = 'attribute float nsTendon;\nvarying float vNsTendon;\nvarying vec3 vNsFib;\n#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\n' +
+    vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsTendon = nsTendon;\n#ifdef NS_FIBRE_REST\n\tvNsFib = nsRest;\n#else\n\tvNsFib = position;\n#endif`);
+  const color = `${H.color}
+	float nsMGlow = smoothstep( 0.02, 0.2, max( emissive.r, max( emissive.g, emissive.b ) ) );
+	float nsMTd = clamp( vNsTendon, 0.0, 1.0 ) * nsMuscleTendon.a * ( 1.0 - 0.5 * nsMGlow );
+	nsMTd *= 1.0 - smoothstep( ${glslFloat(MUSCLE_TENDON_FADE.fullM)}, ${glslFloat(MUSCLE_TENDON_FADE.noneM)}, length( fwidth( vViewPosition ) ) );
+	float nsFh = 0.0;
+	if ( nsFibre.w > 0.0 && nsMuscleFibre.x > 0.0 ) {
+		vec3 nsFa = nsFibre.xyz;
+		vec3 nsFu = normalize( cross( nsFa, abs( nsFa.y ) < 0.9 ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 ) ) );
+		vec3 nsFv = cross( nsFa, nsFu );
+		vec2 nsFc = vec2( dot( vNsFib, nsFu ), dot( vNsFib, nsFv ) ) * nsFibre.w;
+		float nsFl = dot( vNsFib, nsFa ) * nsFibre.w * nsMuscleFibre.y;
+		float nsFn = nsVNoise( vec3( nsFc, nsFl ) ) * 0.65 + nsVNoise( vec3( nsFc * 2.3 + 17.0, nsFl * 1.7 ) ) * 0.35;
+		float nsFfade = ( 1.0 - smoothstep( nsMuscleFibre.z, 2.5 * nsMuscleFibre.z, length( fwidth( nsFc ) ) ) ) * ( 1.0 - nsMTd ) * ( 1.0 - nsMGlow );
+		diffuseColor.rgb *= 1.0 + nsMuscleFibre.x * ( nsFn * 2.0 - 1.0 ) * nsFfade;
+		nsFh = nsMuscleFibre.w * nsFn * nsFfade;
+	}
+	diffuseColor.rgb = mix( diffuseColor.rgb, nsMuscleTendon.rgb, nsMTd );`;
+  const rough = `${H.roughness}
+	roughnessFactor = max( 0.2, roughnessFactor - nsMuscleShade.w * nsMTd );`;
+  const bump = `if ( nsFibre.w > 0.0 && nsMuscleFibre.w > 0.0 ) {
+		vec3 nsSx = dFdx( - vViewPosition ), nsSy = dFdy( - vViewPosition );
+		vec3 nsR1 = cross( nsSy, normal ), nsR2 = cross( normal, nsSx );
+		float nsDet = dot( nsSx, nsR1 );
+		vec3 nsGrad = sign( nsDet ) * ( dFdx( nsFh ) * nsR1 + dFdy( nsFh ) * nsR2 );
+		normal = normalize( abs( nsDet ) * normal - nsGrad );
+	}
+	${H.normal}`;
+  const light = `{
+		float nsMNV = clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 );
+		float nsMOcc = 1.0 - nsMuscleShade.x * ( 1.0 - nsMuscleScatter.a * nsMGlow ) * pow( 1.0 - nsMNV, nsMuscleShade.y );
+		reflectedLight.indirectDiffuse += diffuseColor.rgb * nsMuscleScatter.rgb * ( nsMuscleShade.z * ( 1.0 - nsMTd ) * ( 1.0 - nsMGlow ) );
+		reflectedLight.directDiffuse *= nsMOcc; reflectedLight.indirectDiffuse *= nsMOcc;
+		vec3 nsMSh = nsMOcc * mix( nsMuscleSheen.rgb, vec3( 1.0 ), max( nsMTd, nsMGlow ) );
+		reflectedLight.directSpecular *= nsMSh; reflectedLight.indirectSpecular *= nsMSh;
+	}
+	${H.light}`;
+  const fs = 'uniform vec4 nsMuscleTendon;\nuniform vec4 nsMuscleShade;\nuniform vec4 nsMuscleScatter;\nuniform vec4 nsMuscleSheen;\nuniform vec4 nsMuscleFibre;\nuniform vec4 nsFibre;\n' +
+    'varying float vNsTendon;\nvarying vec3 vNsFib;\n' + MUSCLE_FIBRE_NOISE_GLSL +
+    fragmentShader.replace(H.color, color).replace(H.roughness, rough).replace(H.normal, bump).replace(H.light, light);
+  return { vertexShader: vs, fragmentShader: fs };
+}
+
+/** R558 (user Message 22: "the fluorescent glow up should almost look like a video game power up charge"): the
+ * POWER-UP shader patch (pure) for a glowing muscle (kind 'muscle') or motor area (kind 'area'). Uniforms: nsClock
+ * (x = the scene clock in seconds, y = 1 under prefers-reduced-motion), nsCharge (x = the charge's start on that clock,
+ * y = 1 for a calm opposing-action hint, z = 1 while the glow is on) and, for a muscle, nsChargeRest (its resting albedo)
+ * and nsSweep (u = dot(fibre coordinate, nsFibre.xyz) x nsSweep.x + nsSweep.y: 0 at the origin end, 1 at the insertion
+ * end; powerUpSweep). While the glow is on, per fragment: pu = ns-colors powerUpEnvelope(clock - start, u) (its GLSL
+ * twin powerUpGlsl); a muscle's albedo goes from its resting colour to the glow-tinted one by pu.albedo (hook
+ * '#include <color_fragment>', before the muscle look's tendon and fibre terms); the emission (the glow and its fresnel
+ * rim, which glowRimPatch adds just before '#include <lights_fragment_begin>') is desaturated toward its luminance by
+ * 1 - pu.sat, multiplied by pu.gain and whitened toward its brightest channel by pu.white (a white-hot core of the same
+ * brightness; on an area by pu.white x POWER_UP.areaWhiteScale, so the area keeps its hue). On an area, u runs from
+ * the middle of its band (the strip-coordinate run of patchRegionBorderShaders) out to its borders; without that run,
+ * or without the muscle look's fibre coordinate, u = 0.5. Off (nsCharge.z = 0) the material draws exactly as before. Compose AFTER glowRimPatch and, for muscles, muscleLookPatch. null when a hook is
+ * missing. */
+export const POWER_UP_HOOKS = Object.freeze({ color: '#include <color_fragment>', light: '#include <lights_fragment_begin>' });
+export function patchPowerUpShaders(vertexShader, fragmentShader, kind = 'muscle') {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const H = POWER_UP_HOOKS;
+  if (!fragmentShader.includes(H.color) || !fragmentShader.includes(H.light) || !fragmentShader.includes('totalEmissiveRadiance')) return null;
+  const muscle = kind === 'muscle';
+  let u = '0.5';
+  if (muscle && fragmentShader.includes('varying vec3 vNsFib') && fragmentShader.includes('uniform vec4 nsFibre')) u = 'dot( vNsFib, nsFibre.xyz ) * nsSweep.x + nsSweep.y';
+  else if (!muscle && fragmentShader.includes('float nsSv') && fragmentShader.includes('nsHiS')) {
+    u = 'abs( nsSv - 0.5 * ( clamp( nsLo, 0.0, 1.0 ) + clamp( nsHiS, 0.0, 1.0 ) ) ) / max( 0.5 * ( clamp( nsHiS, 0.0, 1.0 ) - clamp( nsLo, 0.0, 1.0 ) ), 1e-4 )';
+  }
+  const color = `${H.color}\n\tvec4 nsPu = nsCharge.z > 0.5 ? nsPowerUp( nsClock.x - nsCharge.x, ${u}, nsCharge.y, nsClock.y ) : vec4( 1.0, 0.0, 1.0, 1.0 );` +
+    (muscle ? '\n\tdiffuseColor.rgb = mix( nsChargeRest, diffuseColor.rgb, nsPu.w );' : '');
+  const light = '\tif ( nsCharge.z > 0.5 ) {\n' +
+    '\t\tfloat nsPuL = dot( totalEmissiveRadiance, vec3( 0.2126, 0.7152, 0.0722 ) );\n' +
+    '\t\ttotalEmissiveRadiance = mix( vec3( nsPuL ), totalEmissiveRadiance, nsPu.z ) * nsPu.x;\n' +
+    `\t\ttotalEmissiveRadiance = mix( totalEmissiveRadiance, vec3( max( totalEmissiveRadiance.r, max( totalEmissiveRadiance.g, totalEmissiveRadiance.b ) ) ), clamp( nsPu.y${muscle ? '' : ` * ${POWER_UP.areaWhiteScale.toFixed(4)}`}, 0.0, 1.0 ) );\n` +
+    `\t}\n${H.light}`;
+  const head = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\n' + (muscle ? 'uniform vec3 nsChargeRest;\nuniform vec2 nsSweep;\n' : '') + powerUpGlsl('nsPowerUp') + '\n';
+  return { vertexShader, fragmentShader: head + fragmentShader.replace(H.color, color).replace(H.light, light) };
+}
+
+/** R558 (Message 22): the trunk axis (source mm, BodyParts3D frame: the midline x = 0, y = -40, from the hips at z = 880
+ * to the shoulders at z = 1360) that tells a muscle's ORIGIN end from its insertion end for the power-up sweep: the end
+ * nearer this axis is the proximal one, where a limb muscle arises. A rough display rule (it does not read the atlas's
+ * own attachment records); on the trunk and the face either direction is possible. */
+export const POWER_UP_TRUNK = Object.freeze({ y: -40, z0: 880, z1: 1360, endShare: 0.08 });
+/** Sweep coefficients [a, b] of a muscle mesh (pure): u = dot(p, axis) x a + b is 0 at the end nearer the trunk axis
+ * (POWER_UP_TRUNK; the mean of the vertices within endShare of the length from each end) and 1 at the other end.
+ * positions: source mm (xyz); axis: unit [x, y, z] (fibreAxis). null for a degenerate mesh. */
+export function powerUpSweep(positions, axis, trunk = POWER_UP_TRUNK) {
+  if (!positions || positions.length < 9 || !axis || axis.length !== 3) return null;
+  const n = Math.floor(positions.length / 3), ax = axis[0], ay = axis[1], az = axis[2];
+  let lo = Infinity, hi = -Infinity;
+  for (let v = 0; v < n; v++) { const p = positions[3 * v] * ax + positions[3 * v + 1] * ay + positions[3 * v + 2] * az; if (p < lo) lo = p; if (p > hi) hi = p; }
+  const span = hi - lo;
+  if (!(span > 1e-6) || !Number.isFinite(span)) return null;
+  const e = [[0, 0, 0, 0], [0, 0, 0, 0]], cut = trunk.endShare;
+  for (let v = 0; v < n; v++) {
+    const x = positions[3 * v], y = positions[3 * v + 1], z = positions[3 * v + 2];
+    const t = (x * ax + y * ay + z * az - lo) / span;
+    const k = t <= cut ? 0 : t >= 1 - cut ? 1 : -1;
+    if (k >= 0) { e[k][0] += x; e[k][1] += y; e[k][2] += z; e[k][3]++; }
+  }
+  const dist = c => {
+    if (!(c[3] > 0)) return Infinity;
+    const x = c[0] / c[3], y = c[1] / c[3], z = c[2] / c[3];
+    const dz = z < trunk.z0 ? trunk.z0 - z : z > trunk.z1 ? z - trunk.z1 : 0;
+    return Math.hypot(x, y - trunk.y, dz);
+  };
+  return dist(e[0]) <= dist(e[1]) ? [1 / span, -lo / span] : [-1 / span, hi / span];
+}
+
+/** R558 (Message 18): the long axis of a muscle mesh (pure): the principal direction of its vertex cloud (power
+ * iteration on the covariance; every `stride`-th vertex). These meshes run along their fibres, so it is the
+ * striation direction of patchMuscleLookShaders. Returns [x, y, z] unit, or null for a degenerate cloud. */
+export function fibreAxis(positions, stride = 2) {
+  const n = Math.floor(positions.length / 3);
+  if (n < 3) return null;
+  let cx = 0, cy = 0, cz = 0, k = 0;
+  for (let v = 0; v < n; v += stride, k++) { cx += positions[3 * v]; cy += positions[3 * v + 1]; cz += positions[3 * v + 2]; }
+  cx /= k; cy /= k; cz /= k;
+  let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+  for (let v = 0; v < n; v += stride) {
+    const x = positions[3 * v] - cx, y = positions[3 * v + 1] - cy, z = positions[3 * v + 2] - cz;
+    xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+  }
+  let a = [1, 1, 1];
+  for (let it = 0; it < 32; it++) {
+    const b = [xx * a[0] + xy * a[1] + xz * a[2], xy * a[0] + yy * a[1] + yz * a[2], xz * a[0] + yz * a[1] + zz * a[2]];
+    const l = Math.hypot(b[0], b[1], b[2]);
+    if (!(l > 1e-12)) return null;
+    a = [b[0] / l, b[1] / l, b[2] / l];
+  }
+  return a.every(Number.isFinite) ? a : null;
+}
+
+/** R558 (user Messages 24 and 29, the comic ink of the bodies): the per-vertex HATCH FRAME of a muscle or bone mesh
+ * (pure). Ink lines along a muscle's fibres (or a bone's long axis) are the level lines of an angle that runs ROUND the
+ * mesh's long axis: each vertex gets the direction from the centre of its own cross-section to it, measured in that
+ * cross-section's own spread (so a flat sheet is mapped round like a tube and its broad faces get lines, not just its
+ * edges), and N lines are drawn at equal steps of that angle. On a fusiform belly the lines run along it and converge
+ * into the tendon, as fibres do; on a sheet they fan along its long axis. Object-anchored (the attribute rides the
+ * mesh), so nothing swims when the camera turns.
+ *  - axis: fibreAxis (the principal direction); u, v: a fixed basis across it; `bins` slices between the 1st and 99th
+ *    percentile along the axis, each with its centroid and its spread (rms) along u and v, smoothed 1-2-1 and filled
+ *    from neighbours where a slice holds fewer than minCount vertices; per vertex the slice values are interpolated.
+ *  - N: the perimeter of the 75th-percentile slice (the ellipse with semi-axes sqrt(2) x the spreads) / spacingMm,
+ *    rounded to a multiple of 4 (at least 4): every coarser line level (every 2nd, every 4th line) then also wraps
+ *    round without a seam.
+ * Returns { attr: Float32Array(4 n) = [qx, qy, along (mm), N] per vertex, N, axis } or null for a degenerate mesh. */
+export function hatchFrame(positions, { spacingMm = 3, bins = 16, minCount = 4 } = {}) {
+  const n = positions ? Math.floor(positions.length / 3) : 0;
+  const a = n >= 8 ? fibreAxis(positions, 1) : null;
+  if (!a) return null;
+  const ref = Math.abs(a[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let u = [a[1] * ref[2] - a[2] * ref[1], a[2] * ref[0] - a[0] * ref[2], a[0] * ref[1] - a[1] * ref[0]];
+  const ul = Math.hypot(u[0], u[1], u[2]); u = [u[0] / ul, u[1] / ul, u[2] / ul];
+  const v = [a[1] * u[2] - a[2] * u[1], a[2] * u[0] - a[0] * u[2], a[0] * u[1] - a[1] * u[0]];
+  const t = new Float32Array(n), pu = new Float32Array(n), pv = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = positions[3 * i], y = positions[3 * i + 1], z = positions[3 * i + 2];
+    t[i] = x * a[0] + y * a[1] + z * a[2]; pu[i] = x * u[0] + y * u[1] + z * u[2]; pv[i] = x * v[0] + y * v[1] + z * v[2];
+  }
+  const st = Float32Array.from(t).sort();
+  const lo = st[Math.floor(0.01 * (n - 1))], hi = st[Math.ceil(0.99 * (n - 1))];
+  if (!(hi - lo > 1e-6)) return null;
+  const B = bins, cnt = new Float64Array(B), su = new Float64Array(B), sv = new Float64Array(B), suu = new Float64Array(B), svv = new Float64Array(B);
+  const binOf = s => Math.min(B - 1, Math.max(0, Math.floor((s - lo) / (hi - lo) * B)));
+  for (let i = 0; i < n; i++) { const k = binOf(t[i]); cnt[k]++; su[k] += pu[i]; sv[k] += pv[i]; }
+  const cu = new Float64Array(B), cv = new Float64Array(B), ru = new Float64Array(B), rv = new Float64Array(B);
+  for (let k = 0; k < B; k++) if (cnt[k] > 0) { cu[k] = su[k] / cnt[k]; cv[k] = sv[k] / cnt[k]; }
+  for (let i = 0; i < n; i++) { const k = binOf(t[i]); suu[k] += (pu[i] - cu[k]) ** 2; svv[k] += (pv[i] - cv[k]) ** 2; }
+  for (let k = 0; k < B; k++) if (cnt[k] > 0) { ru[k] = Math.sqrt(suu[k] / cnt[k]); rv[k] = Math.sqrt(svv[k] / cnt[k]); }
+  const ok = k => cnt[k] >= minCount;
+  for (let k = 0; k < B; k++) {
+    if (ok(k)) continue;
+    let j = 1; while (j < B && !((k - j >= 0 && ok(k - j)) || (k + j < B && ok(k + j)))) j++;
+    const s = k - j >= 0 && ok(k - j) ? k - j : k + j < B && ok(k + j) ? k + j : -1;
+    if (s < 0) return null;
+    cu[k] = cu[s]; cv[k] = cv[s]; ru[k] = ru[s]; rv[k] = rv[s];
+  }
+  const sm = arr => { const o = new Float64Array(B); for (let k = 0; k < B; k++) o[k] = (arr[Math.max(0, k - 1)] + 2 * arr[k] + arr[Math.min(B - 1, k + 1)]) / 4; return o; };
+  const Cu = sm(cu), Cv = sm(cv), Ru = sm(ru), Rv = sm(rv);
+  const per = [];
+  for (let k = 0; k < B; k++) { const A = Math.SQRT2 * Ru[k], Bb = Math.SQRT2 * Rv[k]; per.push(Math.PI * (3 * (A + Bb) - Math.sqrt(Math.max(0, (3 * A + Bb) * (A + 3 * Bb))))); }
+  per.sort((x, y) => x - y);
+  const N = 4 * Math.max(1, Math.round(per[Math.floor(0.75 * (B - 1))] / (4 * spacingMm)));
+  const attr = new Float32Array(4 * n);
+  for (let i = 0; i < n; i++) {
+    const f = Math.min(B - 1, Math.max(0, (t[i] - lo) / (hi - lo) * B - 0.5)), k0 = Math.floor(f), k1 = Math.min(B - 1, k0 + 1), w = f - k0;
+    const c0 = Cu[k0] + (Cu[k1] - Cu[k0]) * w, c1 = Cv[k0] + (Cv[k1] - Cv[k0]) * w;
+    const s0 = Math.max(1e-3, Ru[k0] + (Ru[k1] - Ru[k0]) * w), s1 = Math.max(1e-3, Rv[k0] + (Rv[k1] - Rv[k0]) * w);
+    let qx = (pu[i] - c0) / s0, qy = (pv[i] - c1) / s1;
+    const ql = Math.hypot(qx, qy);
+    if (ql > 1e-6) { qx /= ql; qy /= ql; } else { qx = 1; qy = 0; }
+    attr[4 * i] = qx; attr[4 * i + 1] = qy; attr[4 * i + 2] = t[i]; attr[4 * i + 3] = N;
+  }
+  return { attr, N, axis: a };
+}
+
+/** R558 (user Messages 25 to 29, Borderlands-style comic shading of the bodies; style guide of the build brief): the
+ * COMIC patch (pure) for the lit MeshStandardMaterial of a muscle (kind 'muscle', composed after the muscle look and the
+ * power-up) or a bone (kind 'bone'). It runs after the lights are summed (hook '#include <aomap_fragment>'), so it reads
+ * the final lit colour of every other patch (tissue tones, crease, sheen, the outline pass's soft shading comes later
+ * on screen) and never touches the emission (the activation glow and its rim stay exactly as they are).
+ *  1. BANDS. The light factor L = luminance(direct + indirect diffuse) / luminance(albedo) is mapped to four tone bands
+ *     (nsCelLv: deep shadow, mid, light, highlight, as factors of the albedo; on bone and tendon parts the highlight is
+ *     nsCelSpecAt.y and the deep and mid tones nsCelSpecAt.z and .w, a light grey: BODY_CEL.boneLevels) at the
+ *     thresholds nsCelBand.xyz, each
+ *     transition a smoothstep of half-width max(nsCelBand.w, 0.75 fwidth(L)) (narrow but anti-aliased, never a hard
+ *     pixel step; on a far figure, over the ink's fade distance nsInkFar.xy, the half-width widens to nsInkFar.z so its
+ *     bands become soft tonal shading instead of blotches); the light's own hue is kept. The deep band goes neutral
+ *     and a touch cool (nsCelDeep: rgb tint, a = how far it is desaturated), never murky brown-red.
+ *  2. RIM. A crisp cool rim band where 1 - |N.V| passes nsCelRim.x (anti-aliased), on the side the camera's rim light
+ *     comes from (nsCelRimDir, view space), adding nsCelRim.y x albedo x the rim colour (nsCelRimCol).
+ *  3. SPECULAR. The direct specular becomes a flat, crisp highlight SHAPE: its luminance through a smoothstep at
+ *     nsCelSpec.x on a muscle belly, nsCelSpecAt.x on a tendon part or bone (half-width nsCelSpec.y or the pixel
+ *     width), times nsCelSpec.z on a belly, nsCelSpec.w on tendon and bone, in the light's own colour.
+ *  4. INK (attribute nsHatch from hatchFrame: the cross-section direction, the position along the axis in mm, the
+ *     line count N). Lines are the level lines of h = N x angle / 2 pi, drawn with an analytic pixel width (no texture,
+ *     no stair steps) and broken into strokes of varying length along the axis. Lines are kept at least nsInkLine.x
+ *     pixels apart by drawing a coarser LEVEL as the figure gets smaller (every 2nd line, every 4th line: a subset of
+ *     the same object-anchored lines, the in-between ones fading, so nothing jumps or swims); past the coarsest level
+ *     allowed the ink fades out, so a far or small figure (the mirror body at its start distance) stays clean; it also
+ *     fades with the distance from the camera (nsInkFar.xy metres), whatever the window size. Off
+ *     when nsInkLine.w = 0 (the coarse quality levels).
+ *      - fibre striation on a muscle (Message 24): levels 0 to 1, nsInkLine.y px wide, nsInkMix.x opacity; on the
+ *        tendon part every 4th line only, at nsInkMix.w (a few long fine strokes on the pearly white);
+ *      - hatching in the shadow bands (style guide): levels 0 to 2, one level finer in the deep band (denser where
+ *        darker), nsInkLine.z px wide, nsInkMix.y opacity x the shadow depth (none in the light bands);
+ *      - bone grain (Message 24): a fine ink stipple of 3D value noise in the bone's own frame (cells nsInkStip.x mm,
+ *        dots above nsInkStip.y), nsInkMix.z opacity (more in shadow), fading out where a cell is under nsInkStip.z px;
+ *        bones get the shadow hatching along their long axis but no striation.
+ *     A glowing muscle keeps its glow clean (ink x (1 - 0.85 glow)). Ink colour nsInk.rgb (linear), the style guide's
+ *     near-black.
+ *  5. HDR (muscles with the power-up patch): while the HDR picture is on, the power-up peaks (gain nsPu.x above
+ *     nsHdrBoost.y) brighten the emission by nsHdrBoost.x x the excess (HDR_BLOOM.muscleBoost), so the cores bloom.
+ * Hooks: vertex '#include <begin_vertex>', fragment '#include <aomap_fragment>'. null when a hook is missing. */
+export const COMIC_HOOKS = Object.freeze({ vertex: '#include <begin_vertex>', light: '#include <aomap_fragment>' });
+/* Anti-aliased coverage of the level lines of h (lines at integer h / 2^l), sp0 = pixels between neighbouring lines of
+ * level 0, lf = log2(min spacing / sp0) = the level needed so lines are at least the minimum spacing apart, maxL the
+ * coarsest level allowed, w the line width in pixels. Between two levels the in-between lines fade (the coarser
+ * level's lines are a subset of the finer one's, so nothing jumps: object-anchored); beyond maxL the lines fade out. */
+const COMIC_LINE_GLSL = `float nsLineCov( float h, float sp0, float lf, float maxL, float w ) {
+	float l = clamp( lf, 0.0, maxL ), l0 = floor( l ), t = l - l0;
+	float s0 = exp2( l0 ), s1 = 2.0 * s0;
+	float d0 = abs( fract( h / s0 + 0.5 ) - 0.5 ) * sp0 * s0, d1 = abs( fract( h / s1 + 0.5 ) - 0.5 ) * sp0 * s1;
+	float c = mix( 1.0 - smoothstep( w - 0.5, w + 0.5, d0 ), 1.0 - smoothstep( w - 0.5, w + 0.5, d1 ), t );
+	return c * ( 1.0 - smoothstep( maxL, maxL + 0.6, lf ) );
+}
+`;
+export function patchComicShaders(vertexShader, fragmentShader, kind = 'muscle') {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const H = COMIC_HOOKS;
+  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.light) || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('reflectedLight')) return null;
+  const muscle = kind === 'muscle';
+  const tendon = muscle && fragmentShader.includes('varying float vNsTendon');
+  const vs = 'attribute vec4 nsHatch;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' +
+    vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsHatch = nsHatch;\n\tvNsObj = position;`);
+  const light = `${H.light}
+	{
+		const vec3 nsLw = vec3( 0.2126, 0.7152, 0.0722 );
+		vec3 nsDif = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
+		float nsAlb = max( dot( diffuseColor.rgb, nsLw ), 1e-4 );
+		float nsL = dot( nsDif, nsLw ) / nsAlb;
+		float nsCw = max( mix( nsCelBand.w, nsInkFar.z, smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) ), 0.75 * fwidth( nsL ) );
+		float nsB1 = smoothstep( nsCelBand.x - nsCw, nsCelBand.x + nsCw, nsL );
+		float nsB2 = smoothstep( nsCelBand.y - nsCw, nsCelBand.y + nsCw, nsL );
+		float nsB3 = smoothstep( nsCelBand.z - nsCw, nsCelBand.z + nsCw, nsL );
+		float nsTd = ${tendon ? 'clamp( vNsTendon, 0.0, 1.0 )' : muscle ? '0.0' : '1.0'};
+		float nsLv = mix( mix( mix( mix( nsCelLv.x, nsCelSpecAt.z, nsTd ), mix( nsCelLv.y, nsCelSpecAt.w, nsTd ), nsB1 ), nsCelLv.z, nsB2 ), mix( nsCelLv.w, nsCelSpecAt.y, nsTd ), nsB3 );
+		vec3 nsCol = nsL > 1e-3 ? nsDif * ( nsLv / nsL ) : diffuseColor.rgb * nsLv;
+		nsCol = mix( nsCol, vec3( dot( nsCol, nsLw ) ) * nsCelDeep.rgb, nsCelDeep.a * ( 1.0 - nsB1 ) );
+		vec3 nsN = normalize( normal ), nsV = normalize( vViewPosition );
+		float nsF = 1.0 - clamp( abs( dot( nsN, nsV ) ), 0.0, 1.0 );
+		float nsFw = max( fwidth( nsF ), 1e-4 );
+		float nsRimSide = smoothstep( -0.15, 0.45, dot( normalize( nsN.xy + vec2( 1e-5 ) ), nsCelRimDir.xy ) );
+		nsCol += diffuseColor.rgb * nsCelRimCol.rgb * ( nsCelRim.y * smoothstep( nsCelRim.x - nsFw, nsCelRim.x + nsFw, nsF ) * nsRimSide );
+		float nsGl = ${muscle ? 'smoothstep( 0.02, 0.2, max( emissive.r, max( emissive.g, emissive.b ) ) )' : '0.0'};
+		vec3 nsSp = reflectedLight.directSpecular;
+		float nsS = dot( nsSp, nsLw );
+		float nsSw = max( nsCelSpec.y, fwidth( nsS ) );
+		float nsSa = mix( nsCelSpec.x, nsCelSpecAt.x, nsTd );
+		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * smoothstep( nsSa - nsSw, nsSa + nsSw, nsS ) * mix( nsCelSpec.z, nsCelSpec.w, nsTd );
+		float nsInkA = 0.0;
+		vec2 nsQ = vNsHatch.xy;
+		float nsQq = dot( nsQ, nsQ );
+		vec2 nsDx = dFdx( nsQ ), nsDy = dFdy( nsQ ); // derivatives outside the branch below (defined in every lane)
+		${muscle ? '' : `vec3 nsSc = vNsObj / nsInkStip.x;
+		float nsSn = nsVNoise( nsSc );
+		float nsSf = max( fwidth( nsSn ), 1e-4 );
+		float nsCellPx = 1.0 / max( length( fwidth( nsSc ) ), 1e-5 );`}
+		if ( nsInkLine.w > 0.5 && vNsHatch.w > 0.5 && nsQq > 1e-6 ) {
+			float nsK = vNsHatch.w * 0.15915494;
+			float nsH = atan( nsQ.y, nsQ.x ) * nsK;
+			float nsHp = ( abs( nsQ.x * nsDx.y - nsQ.y * nsDx.x ) + abs( nsQ.x * nsDy.y - nsQ.y * nsDy.x ) ) / nsQq * nsK + 1e-5;
+			float nsSp0 = 1.0 / nsHp;
+			float nsLf = log2( nsInkLine.x / nsSp0 );
+			float nsLine = floor( nsH * 0.25 + 0.5 );
+			float nsStroke = fract( vNsHatch.z / nsInkStroke.x + fract( sin( nsLine * 12.9898 ) * 43758.5453 ) * 7.0 );
+			float nsDash = smoothstep( 0.0, nsInkStroke.y, nsStroke ) * ( 1.0 - smoothstep( 1.0 - nsInkStroke.z, 1.0, nsStroke ) );
+			float nsShadow = ( 1.0 - nsB2 ) * 0.5 + ( 1.0 - nsB1 ) * 0.5;
+			${muscle ? `float nsFib = nsLineCov( nsH, nsSp0, nsLf, 1.0, nsInkLine.y ) * mix( nsInkMix.x, 0.0, nsTd );
+			float nsTen = nsLineCov( nsH * 0.25, 4.0 * nsSp0, nsLf - 2.0, 0.0, nsInkLine.y ) * nsInkMix.w * nsTd;
+			nsInkA = max( nsFib, nsTen ) * nsDash;` : ''}
+			float nsHat = mix( nsLineCov( nsH, nsSp0, nsLf, 2.0, nsInkLine.z ), nsLineCov( nsH, nsSp0, nsLf - 1.0, 2.0, nsInkLine.z ), 1.0 - nsB1 );
+			nsInkA = max( nsInkA, nsHat * nsInkMix.y * nsShadow * mix( nsDash, 1.0, 0.5 ) );
+			${muscle ? '' : `float nsDot = smoothstep( nsInkStip.y - nsSf, nsInkStip.y + nsSf, nsSn ) * smoothstep( nsInkStip.z, 1.6 * nsInkStip.z, nsCellPx );
+			nsInkA = max( nsInkA, nsDot * nsInkMix.z * ( 0.6 + 0.8 * nsShadow ) );`}
+		}
+		nsInkA *= ( 1.0 - 0.85 * nsGl ) * ( 1.0 - smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) );
+		reflectedLight.directDiffuse = mix( nsCol, nsInk.rgb, nsInkA );
+		reflectedLight.indirectDiffuse = vec3( 0.0 );
+		reflectedLight.directSpecular = nsSpec * ( 1.0 - nsInkA );
+		reflectedLight.indirectSpecular *= ( 1.0 - nsInkA );
+	}${muscle && fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge') ? `
+	if ( nsCharge.z > 0.5 ) totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );` : ''}`;
+  const noise = (fragmentShader.includes('float nsVNoise(') ? '' : MUSCLE_FIBRE_NOISE_GLSL) + COMIC_LINE_GLSL;
+  const fs = 'uniform vec4 nsCelBand;\nuniform vec4 nsCelLv;\nuniform vec4 nsCelDeep;\nuniform vec4 nsCelRim;\nuniform vec4 nsCelRimCol;\nuniform vec4 nsCelRimDir;\nuniform vec4 nsCelSpec;\nuniform vec4 nsCelSpecAt;\n' +
+    'uniform vec4 nsInk;\nuniform vec4 nsInkLine;\nuniform vec4 nsInkMix;\nuniform vec4 nsInkStroke;\nuniform vec4 nsInkStip;\nuniform vec4 nsHdrBoost;\nuniform vec4 nsInkFar;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' + noise +
+    fragmentShader.replace(H.light, light);
+  return { vertexShader: vs, fragmentShader: fs };
+}
+
+/** R558 (Message 18): per-vertex tendon weight of a muscle from its stack display geometry (pure). rest / full: the
+ * drawn positions without and with the full stack display (ns-body: lift plus fill, both ZERO on the vertices the stack
+ * rule anchors on bone, ramping up over the belly). d = |full - rest| per vertex, ref = its 75th percentile (the belly's
+ * displacement); anchored = 1 - smoothstep(0, share x ref, d): 1 on an anchored vertex, falling to 0 a few millimetres in.
+ * Anchored alone is not a tendon: the stack also anchors a belly that LIES on bone along its length (tibialis anterior
+ * on the tibia, the lower gluteus maximus over the ischium, the deltoid over the humerus), and those bellies turned
+ * grey-white over half their length. So the weight is anchored x endness, where endness says "this is where the
+ * muscle narrows into its tendon or ends": along the mesh's long axis (fibreAxis; s = position scaled to -1..1 between
+ * its endPercentile and 1 - endPercentile values) the mesh is cut into `bins` slices, each slice's spread across the
+ * axis (rms distance from the slice centre) is compared with the widest slice; a slice narrower than thinFrom .. thinTo
+ * of it counts as tendon (a fusiform belly narrowing into a cord, a fan converging on its insertion), away from the
+ * middle of the muscle (gateFrom .. gateTo of |s|); and the very tips (tipFrom .. tipTo of |s|) always count (every
+ * muscle ends on its attachment, even a broad one such as a midline origin). A broad, long sheet (widest slice spread
+ * / length from sheetFrom .. sheetTo and length from sheetLenFrom .. sheetLenTo mm: the trapezius parts, the external
+ * oblique, the gluteus maximus, the pectoralis major) counts as end everywhere it is anchored, since a sheet attaches
+ * through aponeuroses along whole borders (a midline origin, the rectus sheath), not only at the tips of its long
+ * axis; the thickness test below then keeps only its thin, aponeurotic parts. Last, where `indices` are given, the
+ * weight is kept only where the muscle is THIN (tendonThickness: the depth to the opposite surface of the same mesh,
+ * full below thinMm, none from thickMm): a tendon or aponeurosis is a cord or sheet a few millimetres thick, a belly is
+ * not, so a thick belly the stack anchors as a whole end cap (the lower gluteus maximus) stays muscle-coloured.
+ * Then smoothed over the surface
+ * (smoothPasses neighbour means over `indices`, when given). A geometric estimate from the anchor rule and the mesh
+ * shape, not a dissection record of where tendon tissue begins. Returns Float32Array(vertexCount) (all 0 when nothing
+ * moved). */
+export const TENDON_FROM_STACK = Object.freeze({
+  share: 0.22, percentile: 0.75, smoothPasses: 3,
+  endPercentile: 0.02, bins: 24, thinFrom: 0.3, thinTo: 0.55, gateFrom: 0.15, gateTo: 0.35, tipFrom: 0.82, tipTo: 0.97,
+  sheetFrom: 0.08, sheetTo: 0.12, sheetLenFrom: 110, sheetLenTo: 160,
+  thinMm: 4, thickMm: 9, cellMm: 3, stepMm: 1.5
+});
+/** The endness of tendonFromStack per vertex (pure; Float32Array(vertexCount), or null for a degenerate mesh). */
+export function tendonEndness(rest, o = TENDON_FROM_STACK) {
+  const n = Math.floor(rest.length / 3);
+  const a = n >= 8 && o && o.bins > 1 ? fibreAxis(rest, 2) : null;
+  if (!a) return null;
+  const pr = new Float32Array(Math.ceil(n / 4));
+  for (let v = 0, j = 0; v < n; v += 4, j++) pr[j] = rest[3 * v] * a[0] + rest[3 * v + 1] * a[1] + rest[3 * v + 2] * a[2];
+  pr.sort();
+  const lo = pr[Math.floor(o.endPercentile * (pr.length - 1))], hi = pr[Math.ceil((1 - o.endPercentile) * (pr.length - 1))];
+  if (!(hi - lo > 1e-6)) return null;
+  const B = o.bins, s = new Float32Array(n), bin = new Int32Array(n);
+  const cnt = new Float64Array(B), sx = new Float64Array(B), sy = new Float64Array(B), sz = new Float64Array(B), st = new Float64Array(B), r2 = new Float64Array(B);
+  for (let v = 0, i = 0; v < n; v++, i += 3) {
+    const t = rest[i] * a[0] + rest[i + 1] * a[1] + rest[i + 2] * a[2];
+    const sv = Math.max(-1, Math.min(1, 2 * (t - lo) / (hi - lo) - 1));
+    const k = Math.min(B - 1, Math.floor((sv + 1) / 2 * B));
+    s[v] = sv; bin[v] = k; cnt[k]++; sx[k] += rest[i]; sy[k] += rest[i + 1]; sz[k] += rest[i + 2]; st[k] += t;
+  }
+  for (let v = 0, i = 0; v < n; v++, i += 3) {
+    const k = bin[v], c = cnt[k];
+    const dx = rest[i] - sx[k] / c, dy = rest[i + 1] - sy[k] / c, dz = rest[i + 2] - sz[k] / c;
+    const dt = rest[i] * a[0] + rest[i + 1] * a[1] + rest[i + 2] * a[2] - st[k] / c;
+    r2[k] += Math.max(0, dx * dx + dy * dy + dz * dz - dt * dt);
+  }
+  const r = new Float64Array(B);
+  for (let k = 0; k < B; k++) r[k] = cnt[k] > 0 ? Math.sqrt(r2[k] / cnt[k]) : 0;
+  // A slice with almost no vertices says little: it takes its nearer filled neighbour; then a 1-2-1 smoothing.
+  const minCount = Math.max(3, n / (B * 20));
+  for (let k = 0; k < B; k++) if (cnt[k] < minCount) { let j = 1; while (j < B && !((k - j >= 0 && cnt[k - j] >= minCount) || (k + j < B && cnt[k + j] >= minCount))) j++; r[k] = k - j >= 0 && cnt[k - j] >= minCount ? r[k - j] : k + j < B ? r[k + j] : r[k]; }
+  const rs = new Float64Array(B);
+  for (let k = 0; k < B; k++) rs[k] = (r[Math.max(0, k - 1)] + 2 * r[k] + r[Math.min(B - 1, k + 1)]) / 4;
+  let rmax = 0;
+  for (let k = 0; k < B; k++) if (rs[k] > rmax) rmax = rs[k];
+  if (!(rmax > 1e-6)) return null;
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // A broad, long sheet: anchored anywhere counts as an attachment (see above).
+  const sheet = smooth(o.sheetFrom, o.sheetTo, rmax / (hi - lo)) * smooth(o.sheetLenFrom, o.sheetLenTo, hi - lo);
+  const thin = new Float64Array(B);
+  for (let k = 0; k < B; k++) thin[k] = 1 - smooth(o.thinFrom, o.thinTo, rs[k] / rmax);
+  const e = new Float32Array(n);
+  for (let v = 0; v < n; v++) {
+    const f = (s[v] + 1) / 2 * B - 0.5, k0 = Math.max(0, Math.min(B - 1, Math.floor(f))), k1 = Math.min(B - 1, k0 + 1), u = Math.max(0, Math.min(1, f - k0));
+    const th = thin[k0] * (1 - u) + thin[k1] * u, as = Math.abs(s[v]);
+    e[v] = Math.max(th * smooth(o.gateFrom, o.gateTo, as), smooth(o.tipFrom, o.tipTo, as), sheet);
+  }
+  return e;
+}
+/** The local thickness of a closed muscle mesh at the vertices where `want[v]` > 0 (pure; millimetres, the source units):
+ * the depth to the nearest vertex of the opposite surface found along the inward normal (steps of stepMm up to
+ * thickMm, a spatial hash of cellMm cells; an opposite vertex faces the other way and lies within one cell of the inward
+ * line). Normals are the area-weighted triangle normals, turned outward by the sign of the mesh's volume. Returns a
+ * Float32Array (thickMm where nothing was found or not asked), or null without triangles. */
+export function tendonThickness(rest, indices, want, o = TENDON_FROM_STACK) {
+  const n = Math.floor(rest.length / 3);
+  if (!indices || indices.length < 3 || !(o.cellMm > 0) || !(o.stepMm > 0) || !(o.thickMm > 0)) return null;
+  const out = new Float32Array(n).fill(o.thickMm);
+  let asked = 0;
+  for (let v = 0; v < n; v++) if (want[v] > 0) asked++;
+  if (!asked) return out;
+  const nor = new Float32Array(3 * n);
+  let vol = 0;
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = 3 * indices[t], b = 3 * indices[t + 1], c = 3 * indices[t + 2];
+    if (a >= 3 * n || b >= 3 * n || c >= 3 * n) continue;
+    const ux = rest[b] - rest[a], uy = rest[b + 1] - rest[a + 1], uz = rest[b + 2] - rest[a + 2];
+    const vx = rest[c] - rest[a], vy = rest[c + 1] - rest[a + 1], vz = rest[c + 2] - rest[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    vol += rest[a] * nx + rest[a + 1] * ny + rest[a + 2] * nz;
+    for (const k of [a, b, c]) { nor[k] += nx; nor[k + 1] += ny; nor[k + 2] += nz; }
+  }
+  const sgn = vol < 0 ? -1 : 1;
+  for (let v = 0; v < n; v++) {
+    const l = Math.hypot(nor[3 * v], nor[3 * v + 1], nor[3 * v + 2]);
+    if (l > 0) { nor[3 * v] *= sgn / l; nor[3 * v + 1] *= sgn / l; nor[3 * v + 2] *= sgn / l; }
+  }
+  const inv = 1 / o.cellMm, key = (x, y, z) => (Math.floor(x * inv) + 4096) * 67108864 + (Math.floor(y * inv) + 4096) * 8192 + (Math.floor(z * inv) + 4096);
+  const cells = new Map();
+  for (let v = 0; v < n; v++) {
+    const k = key(rest[3 * v], rest[3 * v + 1], rest[3 * v + 2]);
+    const l = cells.get(k);
+    if (l) l.push(v); else cells.set(k, [v]);
+  }
+  const lat2 = o.cellMm * o.cellMm;
+  for (let v = 0; v < n; v++) {
+    if (!(want[v] > 0)) continue;
+    const px = rest[3 * v], py = rest[3 * v + 1], pz = rest[3 * v + 2], nx = nor[3 * v], ny = nor[3 * v + 1], nz = nor[3 * v + 2];
+    if (nx === 0 && ny === 0 && nz === 0) continue;
+    let best = o.thickMm, lastKey = NaN;
+    for (let depth = o.stepMm; depth <= o.thickMm + 1e-9 && best > depth - o.cellMm; depth += o.stepMm) {
+      const k = key(px - nx * depth, py - ny * depth, pz - nz * depth);
+      if (k === lastKey) continue;
+      lastKey = k;
+      const l = cells.get(k);
+      if (!l) continue;
+      for (const u of l) {
+        if (u === v || nor[3 * u] * nx + nor[3 * u + 1] * ny + nor[3 * u + 2] * nz > -0.2) continue;
+        const dx = rest[3 * u] - px, dy = rest[3 * u + 1] - py, dz = rest[3 * u + 2] - pz;
+        const dd = -(dx * nx + dy * ny + dz * nz);
+        if (!(dd > 0.3) || dx * dx + dy * dy + dz * dz - dd * dd > lat2) continue;
+        if (dd < best) best = dd;
+      }
+    }
+    out[v] = best;
+  }
+  return out;
+}
+
+export function tendonFromStack(rest, full, out = null, o = TENDON_FROM_STACK, indices = null) {
+  const n = Math.floor(Math.min(rest.length, full.length) / 3);
+  const w = out && out.length === n ? out : new Float32Array(n);
+  const d = new Float32Array(n);
+  for (let v = 0, i = 0; v < n; v++, i += 3) d[v] = Math.hypot(full[i] - rest[i], full[i + 1] - rest[i + 1], full[i + 2] - rest[i + 2]);
+  const sorted = Float32Array.from(d).sort();
+  const ref = n ? sorted[Math.min(n - 1, Math.floor(o.percentile * n))] : 0;
+  const h = o.share * ref;
+  if (!(h > 1e-6) || !Number.isFinite(h)) { w.fill(0); return w; }
+  let any = 0;
+  for (let v = 0; v < n; v++) { const t = Math.min(1, d[v] / h); w[v] = 1 - t * t * (3 - 2 * t); if (w[v] > 0) any++; }
+  if (!any) return w;
+  // Endness: only where the muscle narrows into its tendon or ends (see above). Degenerate mesh: the anchored weight.
+  const end = Number.isFinite(o.bins) ? tendonEndness(rest, o) : null;
+  if (end) for (let v = 0; v < n; v++) w[v] *= end[v];
+  // Thin only (see above): a thick belly is never tendon-white, however it is anchored.
+  if (indices && Number.isFinite(o.thinMm) && o.thickMm > o.thinMm) {
+    for (let v = 0; v < n; v++) if (w[v] < 0.01) w[v] = 0; // below any visible tint: not worth a thickness probe
+    const th = tendonThickness(rest, indices, w, o);
+    if (th) for (let v = 0; v < n; v++) if (w[v] > 0) { const t = Math.min(1, Math.max(0, (th[v] - o.thinMm) / (o.thickMm - o.thinMm))); w[v] *= 1 - t * t * (3 - 2 * t); }
+  }
+  // Smoothed over the surface (each pass: every vertex takes the mean of itself and its triangle neighbours), so the
+  // tendon white fades softly instead of following single triangle edges as white scratches.
+  if (indices && indices.length >= 3 && o.smoothPasses > 0) {
+    const sum = new Float32Array(n), cnt = new Float32Array(n);
+    for (let pass = 0; pass < o.smoothPasses; pass++) {
+      sum.set(w); cnt.fill(1);
+      for (let t = 0; t + 2 < indices.length; t += 3) {
+        const a = indices[t], b = indices[t + 1], c = indices[t + 2];
+        if (a >= n || b >= n || c >= n) continue;
+        sum[a] += w[b] + w[c]; sum[b] += w[a] + w[c]; sum[c] += w[a] + w[b]; cnt[a] += 2; cnt[b] += 2; cnt[c] += 2;
+      }
+      for (let v = 0; v < n; v++) w[v] = sum[v] / cnt[v];
+    }
+  }
+  return w;
+}
+
 /** R5-scene (D19): "behind the glass". Where the brain's drawn outline covers the mirror body (the ellipse of the
  * brain's projected bounds, like BODY_OVER_BRAIN), the mirror body is drawn dimmer and a little glass-blue (dim, tint),
  * so it reads as standing BEHIND the glass brain and the brain areas in front of it stay readable; dragged clear of the
@@ -2538,18 +4027,21 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
 // R5-bigbrain (R26): dim 0.6 -> 0.75 with the more see-through glass (the mirror body reads more clearly through it:
 // its pixel signal at 1280x720 62.8 -> 72.1, round5/R5-bigbrain-NOTES.md); still dimmer and bluer than in the open.
 export const BEHIND_GLASS = Object.freeze({ dim: 0.75, tint: Object.freeze([0.86, 0.93, 1.0]), edge: 0.1 });
-/** Fragment patch (pure): outgoingLight *= mix(1, tint x dim, amount x inside(ellipse nsBgWin)). Hook: before
- * '#include <opaque_fragment>' (r154+) or '#include <output_fragment>'. null when missing. */
+/** Fragment patch (pure): outgoingLight *= mix(1, tint x dim, amount x inside(ellipse nsBgWin) x behind). Hook: before
+ * '#include <opaque_fragment>' (r154+) or '#include <output_fragment>'. null when missing.
+ * R558: behind = 1 only for a fragment farther from the camera than the brain's nearest point (nsBg.z, metres; 0 = no
+ * depth gate). The literal reflection stands in FRONT of the brain at the start: no glass is in front of it there, so
+ * it must not be dimmed as if it were behind the glass (only glass that really is in front tints it). */
 export function patchBehindGlassShaders(vertexShader, fragmentShader, o = BEHIND_GLASS) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const hook = GLASS_FRAGMENT_HOOKS.find(h => fragmentShader.includes(h));
-  if (!hook || !fragmentShader.includes('outgoingLight')) return null;
+  if (!hook || !fragmentShader.includes('outgoingLight') || !fragmentShader.includes('vViewPosition')) return null;
   const f = fragmentShader.indexOf(hook);
   const t = o.tint;
   const body = `
 	if ( nsBg.x > 0.0 ) {
 		vec2 nsBd = ( gl_FragCoord.xy - nsBgWin.xy ) / max( nsBgWin.zw, vec2( 1.0 ) );
-		float nsBin = 1.0 - smoothstep( ${glslFloat(1 - o.edge)}, 1.0, length( nsBd ) );
+		float nsBin = ( 1.0 - smoothstep( ${glslFloat(1 - o.edge)}, 1.0, length( nsBd ) ) ) * ( nsBg.z > 0.0 ? step( nsBg.z, length( vViewPosition ) ) : 1.0 );
 		outgoingLight *= mix( vec3( 1.0 ), vec3( ${glslFloat(t[0])}, ${glslFloat(t[1])}, ${glslFloat(t[2])} ) * nsBg.y, nsBg.x * nsBin );
 	}
 `;
@@ -2560,7 +4052,7 @@ export function patchBehindGlassShaders(vertexShader, fragmentShader, o = BEHIND
  * or { tip, mirrorTip }), else the round-4 ORBIT captions for the brain and ARROW_TIP_FALLBACK for the mirror body.
  * (The fallback wording should move to ns-text; listed in round5/R5-scene-NOTES.md.) */
 export const ARROW_TIP_FALLBACK = Object.freeze({
-  forward: 'Turn the mirror body: top toward you', back: 'Turn the mirror body: bottom toward you',
+  forward: 'Slide the mirror body away from you', back: 'Slide the mirror body back toward you',
   left: 'Turn the mirror body: left side toward you', right: 'Turn the mirror body: right side toward you'
 });
 export function arrowTipText(target, dir, text = NsText) {
@@ -2658,10 +4150,28 @@ export function createScene({
   const transparentSortApplied = typeof renderer.setTransparentSort === 'function';
   if (transparentSortApplied) renderer.setTransparentSort(transparentSortNs);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(MATERIAL.background);
+  { // R558 (Message 22; Message 24 put space black back: MATERIAL.backgroundGradient null): a gradient texture if one is set, else the flat colour
+    const bg = clinicalBackground(THREE, canvas && canvas.ownerDocument);
+    scene.background = bg ? keep(bg) : new THREE.Color(MATERIAL.background);
+  }
   const camera = new THREE.PerspectiveCamera(fovYDeg, 1, near, far);
   camera.rotation.set(0, 0, 0, 'YXZ');
   scene.add(camera); // the camera must be in the scene graph for its children (the arm) to render
+  // R558 (Message 20, ns-outline): body meshes register below (setArm, setBody); the composite draws first of the
+  // transparent list, so glass, areas, glow and arrows are blended over the lines as over the bodies.
+  const outline = createOutlinePass({ THREE, renderer });
+  scene.add(outline.composite);
+  // R558 BB: the motor strip's ink silhouette, after the areas and before the glass (RENDER_ORDER.regionLine + 0.05).
+  outline.stripComposite.renderOrder = RENDER_ORDER.regionLine + 0.05;
+  scene.add(outline.stripComposite);
+  disposables.push({ dispose: () => outline.dispose() });
+  // R558 (Message 25): the HDR picture and its bloom (HDR_BLOOM); off on a software renderer. Its target is always
+  // multisampled (a game started at Picture quality Low has a canvas without MSAA; switched to High it still gets
+  // smooth edges through this target).
+  const hdr = createHdrBloom({ THREE, renderer, msaa: true, enabled: !softwareRenderer });
+  const hdrSize = new THREE.Vector2();
+  const mainPassInfo = { calls: null, triangles: null }; // renderer.info of the main pass (the bloom passes come after it)
+  disposables.push({ dispose: () => hdr.dispose() });
 
   // R5-scene (D18): the arm hangs on the EYE (the first-person look), not on the render camera, so a third-person camera
   // can move away from the head while the arm stays at the shoulder. In first person the eye and the camera coincide
@@ -2684,7 +4194,7 @@ export function createScene({
     hemi.position.set(0, 1, 0);
     scene.add(hemi);
   }
-  const keyLight = new THREE.DirectionalLight(0xffffff, LIGHT.key);
+  const keyLight = new THREE.DirectionalLight(LIGHT.keyColor, LIGHT.key);
   keyLight.position.set(0.6, 1.2, 0.8);
   camera.add(keyLight);
   camera.add(keyLight.target); // headlight: light and target both follow the camera
@@ -2712,6 +4222,7 @@ export function createScene({
   const armSeeUniform = { value: new Float32Array([0, ARM_SEE.alpha, ARM_SEE.rimAlpha, 0]) };
   const armWinUniform = { value: new Float32Array([0, 0, 1, ARM_SEE.edge]) };
   const ghostPatch = m => {
+    if (OWN_BODY_SOLID) return m; // R558: the arm is never see-through
     m.transparent = true;
     m.onBeforeCompile = shader => {
       const patched = patchSeeThroughShaders(shader.vertexShader, shader.fragmentShader);
@@ -2730,6 +4241,7 @@ export function createScene({
   disposables.push(armDepthMaterial);
   const armTwins = [];
   let armTwinsOn = false;
+  const boneTips = { meshes: 0 }; // R558 (Message 30): phalanges drawn from their rounded display copy (boneTipDisplay)
   /** A colour-less depth pre-pass twin of `mesh` (child: inherits its pose; shares the geometry). */
   const depthTwin = (mesh, material, order, list) => {
     const t = new THREE.Mesh(mesh.geometry, material);
@@ -2743,7 +4255,7 @@ export function createScene({
     list.push(t);
     return t;
   };
-  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
+  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })));
   // Strip shader state: applied is null until the strip program compiles, then whether every hook was found.
   const stripShader = { applied: null, shimmer: shimmer === 'auto' ? !reducedMotion : Boolean(shimmer), reducedMotion };
   // Glass (RENDER_ORDER 4..6). Unlit MeshBasicMaterial passes with the glassAlpha rim patch; `glassRim.applied` is
@@ -2752,13 +4264,20 @@ export function createScene({
   // R3-scene: the shell pass reads gyri and sulci (patchGlassReadShaders: crown light + groove cue from the nsSulc attribute).
   const glassReadUniform = { value: new Float32Array([GLASS_READ.crownOpacity, GLASS_READ.crownBright, GLASS_READ.grooveLight, GLASS_READ.grooveAlpha]) };
   const glassRead = { applied: null, sulcMs: null, supportPoints: 0 };
+  const glassClearUniform = { value: GLASS_CLEAR.clear }; // R558: glass clears next to the motor strip (GLASS_CLEAR)
+  // R558 BB: the glass ink uniforms (ns-brain-ink BRAIN_INK.glass; nsGInk.w = the pixel ratio, set in applyBuffer).
+  const glassInkUniforms = (() => {
+    const v = glassInkUniformValues();
+    return { nsGInk: { value: new THREE.Vector4(...v.nsGInk) }, nsGInk2: { value: new THREE.Vector4(...v.nsGInk2) }, nsGHi: { value: new THREE.Vector4(...v.nsGHi) },
+      nsGHi2: { value: new THREE.Vector4(...v.nsGHi2) }, nsInkG: { value: new THREE.Vector3(...v.nsInkG) } };
+  })();
   // R4-integrator (D5 glass fix): shared uniforms of every glass rim material; set in render() from the brain transform.
   const farEyeRigidN = { value: new THREE.Matrix3() }, farEyeVec = { value: new THREE.Vector4(0, 0, 0, 0) };
   // R558: axis / axis0 = the squash axis as drawn / before the carry (world unit vectors) when the far-eye picture is
   // laid parallel to the screen (ns-brain pictureAxis 'view'); null = the round-4 rule (along the line of sight).
   const farEyeView = { rot: null, pw: null, K: 1, axis: null, axis0: null };
   // R4-scene: the shell's rim uniforms are kept, so the held-brain cue (HELD_CUE) can change them per frame.
-  const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower } };
+  const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower }, nsRimGroove: { value: GLASS_READ.rimGroove } };
   const heldCue = { target: 0, amount: 0 };
   // R4-scene: the left-arm rim (LEFT_ARM_RIM) uniforms and state ({ applied: null until a left-arm region compiles }).
   const leftArmRimUniforms = { color: { value: new THREE.Color(REGION_RENDER.territoryLine) }, params: { value: new THREE.Vector3(LEFT_ARM_RIM.mix, LEFT_ARM_RIM.alpha, LEFT_ARM_RIM.glow) } };
@@ -2768,7 +4287,7 @@ export function createScene({
     m.forceSinglePass = true; // r150+: DoubleSide transparent in one pass
     m.onBeforeCompile = shader => {
       const patched = read ? patchGlassReadShaders(shader.vertexShader, shader.fragmentShader) : patchGlassShaders(shader.vertexShader, shader.fragmentShader);
-      if (read) { glassRead.applied = patched !== null; if (patched) shader.uniforms.nsRead = glassReadUniform; }
+      if (read) { glassRead.applied = patched !== null; if (patched) { shader.uniforms.nsRead = glassReadUniform; shader.uniforms.nsClear = glassClearUniform; shader.uniforms.nsRimGroove = shellRimUniforms.nsRimGroove; Object.assign(shader.uniforms, glassInkUniforms); } }
       glassRim[key] = patched !== null;
       glassRim.applied = glassRim.shell !== false && glassRim.xray !== false && (glassRim.shell === true || glassRim.xray === true);
       if (patched === null) return;
@@ -2808,22 +4327,164 @@ export function createScene({
   // side rule, found without visiting the triangles that cannot be hit. Only rigid meshes use it (the brain, the body,
   // the mirror body, the arm bones); the CPU-skinned arm muscles keep Three's test, because their vertices move.
   // A tree is built once per geometry (rebuilt if its buffers are swapped), a few per frame ahead of need.
-  const pickTrees = new WeakMap(), pickMeshes = [], pickStats = { trees: 0, buildMs: 0, pending: 0 };
+  // R558 (the Body Worlds stack): a lifted body muscle is rigid between changes of the lift amount, so it keeps its
+  // tree. While its vertex buffer is being rewritten (the short ease of the lift) the tree's boxes are out of date, so
+  // picks on that buffer use Three's own triangle test on the live vertices (pickStale); once the amount has stopped
+  // changing for PICK_SETTLE_MS the trees over that buffer are rebuilt, a few per frame (pickStamp, stepPickTrees).
+  // What is picked is what is drawn at every amount.
+  const pickTrees = new WeakMap(), pickMeshes = [], pickStats = { trees: 0, buildMs: 0, pending: 0, rewritten: 0 };
+  const pickStamp = new WeakMap(), pickStale = new Set(), PICK_SETTLE_MS = 150;
+  let pickStaleAt = 0;
+  /** A position array used by fastPick meshes was written in place (same array, new vertex values). */
+  function pickBufferWritten(array) {
+    pickStamp.set(array, (pickStamp.get(array) || 0) + 1);
+    pickStale.add(array);
+    pickStaleAt = nowMs();
+    pickStats.rewritten++;
+  }
   const pickInverse = new THREE.Matrix4(), pickRay = new THREE.Ray(), pickSphere = new THREE.Sphere(), pickPoint = new THREE.Vector3();
   function pickTreeOf(geometry) {
     const pos = geometry && geometry.attributes && geometry.attributes.position;
     if (!pos || !pos.array || pos.itemSize !== 3 || pos.isInterleavedBufferAttribute) return null;
-    const index = geometry.index ? geometry.index.array : null;
+    const index = geometry.index ? geometry.index.array : null, stamp = pickStamp.get(pos.array) || 0;
     let rec = pickTrees.get(geometry);
-    if (!rec || rec.positions !== pos.array || rec.index !== index) {
+    if (!rec || rec.positions !== pos.array || rec.index !== index || rec.stamp !== stamp) {
       const t0 = nowMs();
-      rec = { positions: pos.array, index, bvh: RayBvh.buildTriangleBvh(pos.array, index) };
+      rec = { positions: pos.array, index, stamp, bvh: RayBvh.buildTriangleBvh(pos.array, index) };
       pickTrees.set(geometry, rec); pickStats.trees++; pickStats.buildMs += nowMs() - t0;
     }
     return rec;
   }
+  // R558 (performance, P2): Three's own ray test, done in a typed loop, for meshes whose vertices move in place (the
+  // CPU-skinned left-arm muscles and their mirror twins; a body buffer while it is being rewritten, pickStale). Three's
+  // Mesh.raycast visits every triangle through Vector3 objects (fromBufferAttribute, subVectors, crossVectors), which was
+  // the largest part of the per-frame crosshair pick in the Space dance. This keeps every step of it: the same bounding
+  // sphere and box tests (Three's own methods, on the geometry's current, possibly stale, sphere and box), the same
+  // triangle range, the same Moller-Trumbore arithmetic in the same order (Ray.intersectTriangle, the vertices swapped
+  // for BackSide as Three does), the same local point (origin + direction * t), world point (Vector3.applyMatrix4) and
+  // distance (Vector3.distanceTo), the same near / far rule. It reports only the NEAREST hit of the mesh (the first of
+  // equal distances, as Three's stable sort would), with distance, point, object and faceIndex and face null, as
+  // treeRaycast does: every caller reads only the nearest hit's object, distance and point (graspTargetAt,
+  // mirrorPartAt; muscleAt asks Three itself for every hit of a mesh whose nearest hit is not drawn). Anything unusual
+  // (no material, a material array, morph targets, interleaved or normalized positions) goes to Three's own test.
+  // R558 (performance, P2): the box of a position buffer's CURRENT vertices (Math.min / Math.max over every vertex, as
+  // Three's Box3.setFromBufferAttribute), kept per attribute while its array, count and version are unchanged (a
+  // rewritten buffer bumps its version: needsUpdate). Shared by the arm muscles' bounding spheres (muscleAt) and the
+  // live-box pre-test of rawRaycast; the per-vertex skinned buffers are rewritten at most once a frame.
+  const liveBoxes = new WeakMap();
+  function liveBoxOf(pos) {
+    let b = liveBoxes.get(pos);
+    const stamp = pickStamp.get(pos.array) || 0; // a buffer written in place for the picks (pickBufferWritten) counts too
+    if (b && b.array === pos.array && b.count === pos.count && b.version === pos.version && b.stamp === stamp) return b;
+    const A = pos.array, n3 = 3 * pos.count;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let k = 0; k < n3; k += 3) {
+      const x = A[k], y = A[k + 1], z = A[k + 2];
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); z0 = Math.min(z0, z);
+      x1 = Math.max(x1, x); y1 = Math.max(y1, y); z1 = Math.max(z1, z);
+    }
+    b = { array: pos.array, count: pos.count, version: pos.version, stamp, x0, y0, z0, x1, y1, z1 };
+    liveBoxes.set(pos, b);
+    return b;
+  }
+  const plainPositions = (geometry, pos) => Boolean(pos) && pos.array instanceof Float32Array && pos.itemSize === 3 && !pos.normalized && !pos.isInterleavedBufferAttribute
+    && !pos.isGLBufferAttribute && !(geometry.morphAttributes && geometry.morphAttributes.position);
+  /** geometry.computeBoundingSphere() with Three's exact arithmetic (Box3 of the vertices, its centre (min + max) * 0.5,
+   * the largest centre.distanceToSquared(vertex), Math.sqrt), on typed arrays instead of Vector3 per vertex, and not redone
+   * while the buffer and the sphere Three would have left are unchanged. Unusual geometries and a NaN radius (Three
+   * logs it) go to Three's own method. */
+  const sphereMemo = new WeakMap();
+  function computeSphereExact(geometry) {
+    const pos = geometry.attributes.position;
+    if (!plainPositions(geometry, pos)) { geometry.computeBoundingSphere(); return; }
+    const s0 = geometry.boundingSphere, m = sphereMemo.get(geometry), stamp = pickStamp.get(pos.array) || 0;
+    if (s0 && m && m.sphere === s0 && m.array === pos.array && m.count === pos.count && m.version === pos.version && m.stamp === stamp
+        && Object.is(s0.center.x, m.x) && Object.is(s0.center.y, m.y) && Object.is(s0.center.z, m.z) && Object.is(s0.radius, m.r)) return;
+    const b = liveBoxOf(pos), A = pos.array, n3 = 3 * pos.count;
+    const empty = b.x1 < b.x0 || b.y1 < b.y0 || b.z1 < b.z0;
+    const cx = empty ? 0 : (b.x0 + b.x1) * 0.5, cy = empty ? 0 : (b.y0 + b.y1) * 0.5, cz = empty ? 0 : (b.z0 + b.z1) * 0.5;
+    let maxRadiusSq = 0;
+    for (let k = 0; k < n3; k += 3) {
+      const dx = cx - A[k], dy = cy - A[k + 1], dz = cz - A[k + 2];
+      maxRadiusSq = Math.max(maxRadiusSq, dx * dx + dy * dy + dz * dz);
+    }
+    const r = Math.sqrt(maxRadiusSq);
+    if (Number.isNaN(r)) { geometry.computeBoundingSphere(); return; }
+    if (geometry.boundingSphere === null) geometry.boundingSphere = new THREE.Sphere();
+    const s = geometry.boundingSphere;
+    s.center.set(cx, cy, cz); s.radius = r;
+    sphereMemo.set(geometry, { sphere: s, array: pos.array, count: pos.count, version: pos.version, stamp, x: cx, y: cy, z: cz, r });
+  }
+  const rawLiveBox = new THREE.Box3();
+  const rawSphere = new THREE.Sphere(), rawRay = new THREE.Ray(), rawInverse = new THREE.Matrix4(), rawSphereHit = new THREE.Vector3();
+  const rawWorld = new THREE.Vector3(), rawBestPoint = new THREE.Vector3();
+  function rawRaycast(raycasterIn, intersects) {
+    const geometry = this.geometry, material = this.material, matrixWorld = this.matrixWorld;
+    const pos = geometry && geometry.attributes ? geometry.attributes.position : undefined;
+    if (material === undefined || Array.isArray(material) || !pos || pos.isInterleavedBufferAttribute || pos.normalized || pos.itemSize !== 3
+        || (geometry.morphAttributes && geometry.morphAttributes.position && this.morphTargetInfluences)) return THREE.Mesh.prototype.raycast.call(this, raycasterIn, intersects);
+    if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
+    rawSphere.copy(geometry.boundingSphere);
+    rawSphere.applyMatrix4(matrixWorld);
+    rawRay.copy(raycasterIn.ray).recast(raycasterIn.near);
+    if (rawSphere.containsPoint(rawRay.origin) === false) {
+      if (rawRay.intersectSphere(rawSphere, rawSphereHit) === null) return undefined;
+      if (rawRay.origin.distanceToSquared(rawSphereHit) > (raycasterIn.far - raycasterIn.near) ** 2) return undefined;
+    }
+    rawInverse.copy(matrixWorld).invert();
+    rawRay.copy(raycasterIn.ray).applyMatrix4(rawInverse);
+    if (geometry.boundingBox !== null && rawRay.intersectsBox(geometry.boundingBox) === false) return undefined;
+    // R558 (P2): every triangle lies inside the box of the current vertices; a ray that misses that box (widened by a
+    // margin far above rounding) meets no triangle, so the loop below would find nothing.
+    if (pos.array instanceof Float32Array) {
+      const lb = liveBoxOf(pos);
+      if (!(lb.x1 < lb.x0 || lb.y1 < lb.y0 || lb.z1 < lb.z0)) {
+        const pad = 1e-6 * Math.max(lb.x1 - lb.x0, lb.y1 - lb.y0, lb.z1 - lb.z0, Math.abs(lb.x0), Math.abs(lb.x1), Math.abs(lb.y0), Math.abs(lb.y1), Math.abs(lb.z0), Math.abs(lb.z1)) + 1e-12;
+        rawLiveBox.min.set(lb.x0 - pad, lb.y0 - pad, lb.z0 - pad); rawLiveBox.max.set(lb.x1 + pad, lb.y1 + pad, lb.z1 + pad);
+        if (Number.isFinite(pad) && rawRay.intersectsBox(rawLiveBox) === false) return undefined;
+      }
+    }
+    const P = pos.array, index = geometry.index, I = index ? index.array : null, drawRange = geometry.drawRange;
+    const start = Math.max(0, drawRange.start), end = Math.min(index ? index.count : pos.count, drawRange.start + drawRange.count);
+    const back = material.side === THREE.BackSide, cull = back || material.side === THREE.FrontSide;
+    const ox = rawRay.origin.x, oy = rawRay.origin.y, oz = rawRay.origin.z, dx = rawRay.direction.x, dy = rawRay.direction.y, dz = rawRay.direction.z;
+    const rayOriginW = raycasterIn.ray.origin, near = raycasterIn.near, far = raycasterIn.far;
+    let best = Infinity, bestFace = -1;
+    for (let i = start; i < end; i += 3) {
+      // Three: checkIntersection(pA, pB, pC), or (pC, pB, pA) for BackSide, with backface culling for Front and Back.
+      let ia, ib = 3 * (I ? I[i + 1] : i + 1), ic;
+      if (back) { ia = 3 * (I ? I[i + 2] : i + 2); ic = 3 * (I ? I[i] : i); } else { ia = 3 * (I ? I[i] : i); ic = 3 * (I ? I[i + 2] : i + 2); }
+      const ax = P[ia], ay = P[ia + 1], az = P[ia + 2];
+      const e1x = P[ib] - ax, e1y = P[ib + 1] - ay, e1z = P[ib + 2] - az;
+      const e2x = P[ic] - ax, e2y = P[ic + 1] - ay, e2z = P[ic + 2] - az;
+      const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+      let DdN = dx * nx + dy * ny + dz * nz, sign;
+      if (DdN > 0) { if (cull) continue; sign = 1; } else if (DdN < 0) { sign = -1; DdN = -DdN; } else continue;
+      const qx = ox - ax, qy = oy - ay, qz = oz - az;
+      const DdQxE2 = sign * (dx * (qy * e2z - qz * e2y) + dy * (qz * e2x - qx * e2z) + dz * (qx * e2y - qy * e2x));
+      if (DdQxE2 < 0) continue;
+      const DdE1xQ = sign * (dx * (e1y * qz - e1z * qy) + dy * (e1z * qx - e1x * qz) + dz * (e1x * qy - e1y * qx));
+      if (DdE1xQ < 0) continue;
+      if (DdQxE2 + DdE1xQ > DdN) continue;
+      const QdN = -sign * (qx * nx + qy * ny + qz * nz);
+      if (QdN < 0) continue;
+      const t = QdN / DdN;
+      rawWorld.set(ox, oy, oz);
+      rawWorld.x += dx * t; rawWorld.y += dy * t; rawWorld.z += dz * t; // Ray.at: origin + direction * t (addScaledVector)
+      rawWorld.applyMatrix4(matrixWorld);
+      const distance = rayOriginW.distanceTo(rawWorld);
+      if (distance < near || distance > far) continue;
+      if (distance < best) { best = distance; bestFace = Math.floor(i / 3); rawBestPoint.copy(rawWorld); }
+    }
+    if (bestFace >= 0) intersects.push({ distance: best, point: rawBestPoint.clone(), object: this, faceIndex: bestFace, face: null });
+    return undefined;
+  }
   function treeRaycast(raycasterIn, intersects) {
     const geometry = this.geometry, material = this.material;
+    if (pickStale.size > 0) {
+      const live = geometry && geometry.attributes && geometry.attributes.position;
+      if (live && pickStale.has(live.array)) return rawRaycast.call(this, raycasterIn, intersects);
+    }
     const rec = material && !Array.isArray(material) ? pickTreeOf(geometry) : null;
     if (!rec) return THREE.Mesh.prototype.raycast.call(this, raycasterIn, intersects);
     if (!rec.bvh) return undefined;
@@ -2846,6 +4507,8 @@ export function createScene({
   /** Build a few missing pick trees per frame, largest work first in arrival order, within budgetMs (one tree at least). */
   let pickCursor = 0;
   function stepPickTrees(budgetMs = 3) {
+    // R558: buffers rewritten by the lift have settled: walk every mesh again (only the rewritten ones rebuild).
+    if (pickStale.size > 0 && nowMs() - pickStaleAt >= PICK_SETTLE_MS) { pickStale.clear(); pickCursor = 0; }
     if (pickCursor >= pickMeshes.length) { pickStats.pending = 0; return 0; }
     const t0 = nowMs();
     let built = 0;
@@ -2889,6 +4552,91 @@ export function createScene({
   const regionById = new Map();
   const regionMeshes = [];
   const unassignedGlass = [];
+  // R558 (Message 18, REGION_BORDER): per-fragment areas. applied: null until an area program compiles, then whether
+  // every hook was found (false: the neighbours' fill meshes are hidden and the areas draw whole triangles as before).
+  const regionBorder = { applied: null, rows: 0, fillMeshes: 0, fillTriangles: 0, ms: null, reason: null };
+  const borderShared = {
+    nsOwnTex: { value: null }, nsOwnInfo: { value: new THREE.Vector2(REGION_BORDER.texels, 0) },
+    nsSeam: { value: new THREE.Vector4(REGION_BORDER.seamColor[0], REGION_BORDER.seamColor[1], REGION_BORDER.seamColor[2], REGION_BORDER.seamAlpha) },
+    nsLineW: { value: new THREE.Vector4(REGION_BORDER.seamPx, REGION_BORDER.territoryPx, 0, 1) },
+    nsBorderAA: { value: new THREE.Vector4(REGION_BORDER.aaPx, REGION_BORDER.hintSoftPx, REGION_BORDER.highlightGlow, REGION_BORDER.cavity) }
+  };
+  const borderHoverColor = new THREE.Color(REGION_RENDER.hoverLine), borderMarkColor = new THREE.Color(REGION_RENDER.activatedLine);
+  const borderLeftArmColor = new THREE.Color(REGION_RENDER.territoryLine);
+  /** The owner rows (one per hemisphere x surface rule, the picker's own lists), their texture and the smooth strip
+   * normals; null (with regionBorder.reason) when the segmentation does not expose its owner lists. */
+  function regionBorderSetup(seg) {
+    const own = seg && seg._owners, ownerAt = NsBrain.regionOwnerAt;
+    if (!own || typeof ownerAt !== 'function' || typeof THREE.DataTexture !== 'function' || THREE.FloatType === undefined) {
+      regionBorder.reason = 'no owner lists / regionOwnerAt / float texture: areas drawn by whole triangles';
+      return null;
+    }
+    const t0 = nowMs();
+    const gap = seg.options && Number.isFinite(seg.options.gapTolU) ? seg.options.gapTolU : undefined;
+    const rows = [], rowOf = new Map();
+    for (const h of ['right', 'left']) {
+      const o = own[h];
+      if (!o) continue;
+      for (const key of ['all', 'medial']) {
+        const list = o[key];
+        if (!Array.isArray(list) || !list.length) continue;
+        rowOf.set(`${h}|${key}`, rows.length);
+        rows.push(ownerRuns(s => ownerAt(list, s, gap)));
+      }
+    }
+    if (!rows.length) { regionBorder.reason = 'empty owner lists'; return null; }
+    const index = new Map(seg.regions.map((r, i) => [r, i]));
+    const idOf = r => (r === null || r === undefined ? -1 : index.has(r) ? index.get(r) : -1);
+    const tex = keep(new THREE.DataTexture(ownerTextureData(rows, idOf, r => regionGroupKey(r)), REGION_BORDER.texels, 2 * rows.length, THREE.RGBAFormat, THREE.FloatType));
+    tex.minFilter = THREE.NearestFilter; tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+    borderShared.nsOwnTex.value = tex;
+    // The picker's rule (ns-brain classifyRegionGaze): the medial list for a medial-surface hit when the hemisphere has
+    // a medial wall and a medial list, else the hemisphere's list.
+    const rowFor = part => {
+      const h = part.hemisphere, o = own[h];
+      const medial = part.surface === 'medial' && o && o.medial && seg.hemispheres && seg.hemispheres[h] && seg.hemispheres[h].medial;
+      return rowOf.get(`${h}|${medial ? 'medial' : 'all'}`);
+    };
+    const normals = new Map(), cavity = new Map();
+    // R558 BB (Message 24, gyri and sulci): the fold depth of each strip vertex from the atlas's own brain geometry
+    // (ns-brain-ink foldDepth: below a ball rolled over all the atlas brain meshes); the hull-depth rule (sulcalDepth)
+    // only when the brain meshes are not at hand.
+    const tf = nowMs();
+    for (const S of seg.strips || []) {
+      if (!S || !S.positions || !S.indices) continue;
+      const N = smoothSurfaceNormals(S.positions, S.indices);
+      normals.set(S.id, N);
+      if (brainFoldCloud) cavity.set(S.id, foldShade(foldDepth(S.positions, N, brainFoldCloud)));
+      else if (brainSupport) cavity.set(S.id, sulcalDepth(S.positions, brainSupport, { lo: REGION_BORDER.cavityLoMm, hi: REGION_BORDER.cavityHiMm }));
+    }
+    areaInk.foldMethod = brainFoldCloud ? 'atlas fold depth (rolled ball over every brain mesh)' : brainSupport ? 'hull depth' : 'none';
+    areaInk.foldMs = Math.round(nowMs() - tf);
+    areaInk.foldCloudPoints = brainFoldCloud ? brainFoldCloud.length / 3 : 0;
+    regionBorder.rows = rows.length;
+    regionBorder.ms = Math.round(nowMs() - t0);
+    return { rows, rowFor, normals, cavity, idOf, index };
+  }
+  /** Per-region border uniforms and the patch (composePatch chain). */
+  function regionBorderPatch(material, r, regionIndex) {
+    const left = r.isLeftArm === true, B = REGION_BORDER;
+    const terr = left ? [borderLeftArmColor.r, borderLeftArmColor.g, borderLeftArmColor.b, B.leftArmAlpha] : [...B.territoryColor, B.territoryAlpha];
+    const u = {
+      nsRegionId: { value: regionIndex }, nsTerr: { value: new THREE.Vector4(terr[0], terr[1], terr[2], terr[3]) }, nsTerrGlow: { value: left ? B.leftArmGlow : B.territoryGlow },
+      nsHi: { value: new THREE.Vector4(0, 0, 0, 0) }, nsHint: { value: new THREE.Vector4(0, 0, 0, 0) }, nsHintColor: { value: new THREE.Vector3(0, 0, 0) }
+    };
+    material.userData.nsBorder = u;
+    return composePatch(material, 'ns-region-border-r558', shader => {
+      const p = patchRegionBorderShaders(shader.vertexShader, shader.fragmentShader);
+      if (!p) {
+        regionBorder.applied = false;
+        for (const rec of regions) for (const m of rec.fillMeshes || []) m.visible = false;
+        return;
+      }
+      if (regionBorder.applied === null) regionBorder.applied = true;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      Object.assign(shader.uniforms, borderShared, u);
+    });
+  }
   let regionMode = false;
   let segmentation = null;
   let hoveredRegionId = null;
@@ -2896,7 +4644,9 @@ export function createScene({
   let brainTransformSet = false;
   let brainSamples = null; // Float32Array of source-mm sample points (projected bounds for the orbit arrows)
   let brainSupport = null; // R3-scene: supportPoints of every brain vertex (the silhouette hull basis)
+  let brainFoldCloud = null; // R558 BB: every atlas brain vertex while the strip's fold depth is computed (setBrain)
   let brainDepthBounds = null; // R22 all glass+strip SOURCE positions, conservative AABB cached only on normal load
+  let brainSolid = null, brainSolidMs = 0, brainSolidError = null; // R558 (Message 12): ns-collide solidGrid of the brain meshes (source mm)
   let brainHullPoints = null; // R3-fix: the segmentation outline points (denser hull basis for the arrow plan)
   let compassBrainSourceRevision = 0; // R345 source replacement identity; no geometry/hash work in the cached getter
   let brainSampleCentre = null; // fix F2: their centroid (cached per sample array)
@@ -2939,7 +4689,7 @@ export function createScene({
   /** Body records { id, mesh, part, kind, material, face (bool: face layer), lastDrive }. */
   const body = [];
   const bodyById = new Map();
-  const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 }));
+  const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }));
   // Torso see-through window (BODY_SEE_THROUGH): one vec4 uniform shared by the torso/neck materials drawn in place.
   // R3-scene: SMOOTH torso translucency (BODY_TRANSLUCENT) instead of the dithered window: transparent materials (alpha 1
   // until the player looks down), drawn after the brain (BODY_ORDER.torso), and a depth pre-pass twin per torso mesh that is
@@ -2953,6 +4703,7 @@ export function createScene({
     colorWrite: false, depthWrite: true, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
   const torsoPatch = m => {
+    if (OWN_BODY_SOLID) return m; // R558: the trunk is never see-through
     m.transparent = true;
     torsoMaterials.add(m);
     m.onBeforeCompile = shader => {
@@ -2966,7 +4717,7 @@ export function createScene({
     m.customProgramCacheKey = () => 'ns-torso-see-r3';
     return m;
   };
-  const torsoBoneMaterial = torsoPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
+  const torsoBoneMaterial = torsoPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })));
   // R3-fix (M4): body over the brain's outline is drawn see-through (BODY_OVER_BRAIN). Composes with torsoPatch.
   const overBrainUniform = { value: new Float32Array([0, BODY_OVER_BRAIN.alpha, 0, 0]) };
   const overBrainWinUniform = { value: new Float32Array([0, 0, 1, 1]) };
@@ -2980,6 +4731,7 @@ export function createScene({
   const firstPersonLegRangeUniform = { value: new THREE.Vector4(FIRST_PERSON_BODY.legsHideM, FIRST_PERSON_BODY.legsFullM, 0, 0) };
   const firstPersonBody = { applied: null, amount: 0, backM: 0, base: 0 };
   const overBrainPatch = (m, legs = false) => {
+    if (OWN_BODY_SOLID) return m; // R558: no window over the brain and no first-person plane rule
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
     m.transparent = true;
     m.onBeforeCompile = (shader, r) => {
@@ -3007,7 +4759,7 @@ export function createScene({
   overBrainPatch(torsoBoneMaterial);
   overBrainPatch(bodyBoneMaterial);
   // R558 (FIRST_PERSON_BODY): the leg bones take the legs' own plane, so they need their own material.
-  const legBoneMaterial = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })), true);
+  const legBoneMaterial = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })), true);
   let bodySet = false;
   // Face layer: its own scene drawn as a second pass (ghost: main camera, depth-tested against the main frame; inset:
   // an inset camera in a scissored viewport). The meshes are the same posed geometry as the body.
@@ -3021,7 +4773,7 @@ export function createScene({
   faceGroup.name = 'ns-face layer (ghost / inset; displaced view, never around the camera)';
   faceGroup.matrixAutoUpdate = false;
   faceScene.add(faceGroup);
-  const faceBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0, transparent: true, opacity: FACE_LAYER.boneOpacity, depthWrite: false }));
+  const faceBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0, transparent: true, opacity: FACE_LAYER.boneOpacity, depthWrite: false }));
   const faceDepthMaterial = keep(new THREE.MeshBasicMaterial({
     colorWrite: false, depthWrite: true, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
@@ -3051,28 +4803,25 @@ export function createScene({
     overlayParent.appendChild(overlay);
   }
   const el = (tag, cls, parent) => { const e = doc.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
-  // ---- R5-scene (D16, R20): 3D compass arrows round the brain and round the mirror body (ns-arrows3d, R5-arrows) ----
-  // The round-2..4 DOM orbit buttons (SVG icons, the placement planner, pointer pins and DOM hold timers) are gone. Two
-  // ns-arrows3d rigs (four lit 3D arrows each; the game asks for no see-through copy, see makeArrowRig) are placed by
-  // planCompassArrows at fixed compass positions round the brain (top = forward, bottom = back, left, right; a small gap
-  // outside the drawn outline) and round the mirror body (smaller). The scene draws them, highlights the hovered one
-  // (setArrowHover), answers ray picks (pickArrows: the hit list R5-input's resolveArrowHit takes) and gives their screen
-  // boxes to the overlay. Presses and holds are R5-input's (ns-controls stepArrowInput); nothing ever orbits by itself.
+  // ---- R5-scene (D16): compass arrows round the brain and round the mirror body (ns-arrows3d) ----------------------
+  // The round-2..4 DOM orbit buttons are gone. Two ns-arrows3d rigs of four arrows each. R558 (user Message 7): every
+  // arrow is a basic V tip, placed at the middle of a side of its target's frame (updateArrows): the motor strip's
+  // horizontal 16:9 frame and the mirror body's vertical 9:16 frame, as they stand at rest in the reference view. The
+  // scene draws them, highlights the hovered one (setArrowHover), answers ray picks (pickArrows: the hit list R5-input's
+  // resolveArrowHit takes) and gives their screen boxes to the overlay. Presses and holds are R5-input's (ns-controls
+  // stepArrowInput); nothing ever orbits by itself.
   let arrowRigError = null;
   const makeArrowRig = kind => {
     try {
-      // R5-access B1: the colours at the call site (brain grey-white, mirror green, so the two sets read apart).
-      // R558: the ribbons are see-through, so they are drawn in the transparent list, BEFORE the brain-area depth pass
-      // (1.5). Every motor area is therefore drawn over any arrow behind or beside it: an arrow can never hide a motor
-      // area. The faint glass, the body and the arm are drawn after and cover the arrows where they are in front. Both
-      // sets sit at their target's own depth (no slide toward the eye), so they do not shift against the target when
-      // the camera moves.
-      // No see-through copy (xray: false). That copy is drawn last, wherever ANYTHING nearer hides the arrow. It was
-      // meant for the arm, but a motor area in front of an arrow is "something nearer" too, so the copy laid a faint
-      // veil over the motor area: the one thing an arrow must never do. Where the arm covers an arrow, the arrow is
-      // simply hidden there; the rest of its ribbon still shows where it is.
-      const look = { ...(typeof NsColors.arrowLook === 'function' ? { ...NsArrows.ARROW_LOOK, ...NsColors.arrowLook(kind) } : NsArrows.ARROW_LOOK), renderOrder: ARROW_RENDER_ORDER[kind], xrayOpacity: NsArrows.ARROW_LOOK.xrayOpacity };
-      const rig = NsArrows.createArrowRig(THREE, { kind, look, xray: false });
+      // R5-access B1: the colours at the call site (brain grey-white, mirror green, so the two sets read apart): the
+      // light fill is ns-colors' arrow colour, the edge band its dark outline colour.
+      // R558 (Message 7): the tips are drawn ON TOP of everything (no depth test, last in the transparent list): where a
+      // tip lies over a motor area, over the glass or over the body, the tip is what is seen there and what a tap there
+      // means (pickArrows). They are translucent, so what lies under them still shows through. (Message 19) Each is a lit
+      // solid chevron; its rim light takes the set's rim colour.
+      const c = typeof NsColors.arrowLook === 'function' ? NsColors.arrowLook(kind) : null;
+      const look = { ...NsArrows.ARROW_LOOK, ...(c ? { fill: c.tip, edge: c.outlineColor, hover: c.hover, rim: c.rim } : {}), renderOrder: ARROW_RENDER_ORDER[kind] };
+      const rig = NsArrows.createArrowRig(THREE, { kind, look });
       rig.group.visible = false;
       scene.add(rig.group);
       // e2e detection contract (round5/R5-e2e-NOTES.md): userData.nsOrbitArrow { dir, target, hover } on each arrow root.
@@ -3081,7 +4830,9 @@ export function createScene({
     } catch (err) { arrowRigError = String((err && err.message) || err); return null; }
   };
   const arrowSets = {};
-  for (const target of ['brain', 'mirror']) arrowSets[target] = { target, rig: makeArrowRig(target), plan: null, frames: null, key: '', shown: false, boxes: {}, clicks: {}, boxKey: '' };
+  // frameHidden / occluded / vis: R558 (hunt 2, FRAME_VIS): the whole set hidden (its target mostly hidden or off
+  // screen) and the single tips your own body is in front of.
+  for (const target of ['brain', 'mirror']) arrowSets[target] = { target, rig: makeArrowRig(target), plan: null, frames: null, key: '', shown: false, boxes: {}, clicks: {}, boxKey: '', frameHidden: false, occluded: new Set(), vis: null };
   let arrowHover = null; // { target, dir, blocked } (setArrowHover)
   let arrowsShown = false, arrowLayout = null, hoverDir = null;
   // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
@@ -3192,6 +4943,27 @@ export function createScene({
       '  outgoingLight += diffuseColor.rgb * nsTissue.rgb * ( nsTissue.a * nsScatter );\n}\n' + TISSUE_HOOK);
     tissue.applied = tissue.applied !== false;
   });
+  // ---- R558 BB (Messages 24, 29): the comic ink of the motor areas (ns-brain-ink patchAreaInkShaders) ---------------
+  // Cel bands of the direct light, the sulcus ink line along the fold depth, the gyrus contour and the hatching across
+  // the gyrus; one shared uniform set for every area material. applied: null until an area program compiles.
+  const areaInk = { applied: null, cel: null, materials: 0, foldMethod: null, foldMs: null, foldCloudPoints: 0 };
+  const areaInkUniforms = (() => {
+    const v = areaInkUniformValues(), o = {};
+    for (const [k, a] of Object.entries(v)) o[k] = { value: new THREE.Vector4(...a) };
+    return o;
+  })();
+  const areaInkPatch = m => {
+    areaInk.materials++;
+    return composePatch(m, 'ns-area-ink-bb', shader => {
+      const chunk = THREE.ShaderChunk && typeof THREE.ShaderChunk.lights_physical_pars_fragment === 'string' ? THREE.ShaderChunk.lights_physical_pars_fragment : null;
+      const p = patchAreaInkShaders(shader.vertexShader, shader.fragmentShader, chunk);
+      areaInk.applied = p !== null && areaInk.applied !== false;
+      if (!p) return;
+      areaInk.cel = p.cel && areaInk.cel !== false;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      Object.assign(shader.uniforms, areaInkUniforms);
+    });
+  };
   const composePatch = (m, tag, fn) => {
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
     m.onBeforeCompile = (shader, r) => { if (typeof prev === 'function') prev.call(m, shader, r); fn(shader); };
@@ -3225,6 +4997,195 @@ export function createScene({
       shader.uniforms.nsGlowRim = u;
     });
   };
+  // ---- R558 (Message 18): the muscle LOOK (patchMuscleLookShaders; one set of uniforms shared by every muscle) -------
+  // Every muscle material (your body, its in-place head twin, the mirror body, the left game arm and its mirror twin)
+  // takes this patch, so all three items show the same tissue light, tendon ends and outline creases.
+  const muscleLook = { applied: null, materials: 0 };
+  const muscleLookUniforms = {
+    nsMuscleTendon: { value: new THREE.Vector4(MUSCLE_LOOK.tendon[0], MUSCLE_LOOK.tendon[1], MUSCLE_LOOK.tendon[2], MUSCLE_LOOK.tendonMix) },
+    nsMuscleShade: { value: new THREE.Vector4(MUSCLE_LOOK.creaseStrength, MUSCLE_LOOK.creasePower, MUSCLE_LOOK.scatterStrength, MUSCLE_LOOK.tendonRoughnessDrop) },
+    nsMuscleScatter: { value: new THREE.Vector4(MUSCLE_LOOK.scatterTint[0], MUSCLE_LOOK.scatterTint[1], MUSCLE_LOOK.scatterTint[2], MUSCLE_LOOK.glowCreaseRelief) },
+    nsMuscleSheen: { value: new THREE.Vector4(MUSCLE_LOOK.sheenTint[0] * MUSCLE_LOOK.sheenGain, MUSCLE_LOOK.sheenTint[1] * MUSCLE_LOOK.sheenGain, MUSCLE_LOOK.sheenTint[2] * MUSCLE_LOOK.sheenGain, 0) },
+    nsMuscleFibre: { value: new THREE.Vector4(MUSCLE_LOOK.fibreAmp, MUSCLE_LOOK.fibreAlong, MUSCLE_LOOK.fibreFadePx, MUSCLE_LOOK.fibreBumpM) }
+  };
+  /** Per-mesh fibre axis uniform (shared by a mesh's own, mirror and in-place materials): xyz = fibreAxis of its rest
+   * positions (source mm), w = 1 / MUSCLE_LOOK.fibreMm; w = 0 (no striation) for a degenerate mesh. */
+  const fibreUniform = (positions, id = null) => {
+    const a = positions && muscleFibreScale(id) > 0 ? fibreAxis(positions) : null; // R558 (builder FA): none on the face's ring muscles
+    return { value: a ? new THREE.Vector4(a[0], a[1], a[2], 1 / MUSCLE_LOOK.fibreMm) : new THREE.Vector4(0, 0, 1, 0) };
+  };
+  const noFibre = { value: new THREE.Vector4(0, 0, 1, 0) };
+  const muscleLookPatch = m => {
+    muscleLook.materials++;
+    return composePatch(m, 'ns-muscle-look-r558', shader => {
+      const p = patchMuscleLookShaders(shader.vertexShader, shader.fragmentShader);
+      muscleLook.applied = p !== null && muscleLook.applied !== false;
+      if (!p) return;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      shader.uniforms.nsMuscleTendon = muscleLookUniforms.nsMuscleTendon;
+      shader.uniforms.nsMuscleShade = muscleLookUniforms.nsMuscleShade;
+      shader.uniforms.nsMuscleScatter = muscleLookUniforms.nsMuscleScatter;
+      shader.uniforms.nsMuscleSheen = muscleLookUniforms.nsMuscleSheen;
+      shader.uniforms.nsMuscleFibre = muscleLookUniforms.nsMuscleFibre;
+      shader.uniforms.nsFibre = (m.userData && m.userData.nsFibre) || noFibre;
+    });
+  };
+  // ---- R558 (Messages 25 to 29): the COMIC look of every muscle and bone (patchComicShaders; one shared uniform set) --
+  // Composed LAST on each muscle material (after the muscle look and the power-up) and on every bone material, so all
+  // three items (your body, the left game arm, the mirror body, the in-place head) show the same bands, rim, highlight
+  // shapes and ink. The ink is off at the coarse quality levels (comic.inkOn, QUALITY_LEVELS with a lod).
+  const C = BODY_CEL, inkLin = hexToLinear(C.ink);
+  const comic = { applied: null, materials: 0, inkOn: true, hatchMeshes: 0 };
+  const comicUniforms = {
+    nsCelBand: { value: new THREE.Vector4(C.bands[0], C.bands[1], C.bands[2], C.soft) },
+    nsCelLv: { value: new THREE.Vector4(C.levels[0], C.levels[1], C.levels[2], C.levels[3]) },
+    nsCelDeep: { value: new THREE.Vector4(C.deepTint[0], C.deepTint[1], C.deepTint[2], C.deepDesat) },
+    nsCelRim: { value: new THREE.Vector4(C.rim.at, C.rim.gain, 0, 0) },
+    nsCelRimCol: { value: new THREE.Vector4(C.rim.colour[0], C.rim.colour[1], C.rim.colour[2], 0) },
+    nsCelRimDir: { value: new THREE.Vector4(C.rim.dir[0] / Math.hypot(C.rim.dir[0], C.rim.dir[1]), C.rim.dir[1] / Math.hypot(C.rim.dir[0], C.rim.dir[1]), 0, 0) },
+    nsCelSpec: { value: new THREE.Vector4(C.spec.bellyAt, C.spec.soft, C.spec.belly, C.spec.tendonBone) },
+    nsCelSpecAt: { value: new THREE.Vector4(C.spec.tendonBoneAt, C.boneHigh, C.boneLevels[0], C.boneLevels[1]) }, // y: highlight level of bone / tendon; z, w: their deep and mid levels
+    nsInk: { value: new THREE.Vector4(inkLin[0], inkLin[1], inkLin[2], 1) },
+    nsInkLine: { value: new THREE.Vector4(C.line.minSpacingPx, C.line.fibrePx, C.line.hatchPx, 1) },
+    nsInkMix: { value: new THREE.Vector4(C.mix.fibre, C.mix.hatch, C.mix.stipple, C.mix.tendon) },
+    nsInkStroke: { value: new THREE.Vector4(C.stroke.mm, C.stroke.inShare, C.stroke.outShare, 0) },
+    nsInkStip: { value: new THREE.Vector4(C.stipple.cellMm, C.stipple.at, C.stipple.minCellPx, 0) },
+    nsHdrBoost: { value: new THREE.Vector4(0, HDR_BLOOM.muscleFrom, 0, 0) }, // x set while the HDR picture is on
+    nsInkFar: { value: new THREE.Vector4(C.line.farFromM, C.line.farToM, C.farSoft, 0) } // z: band half-width on a far figure
+  };
+  const comicPatch = (m, kind) => {
+    comic.materials++;
+    return composePatch(m, `ns-comic-r558-${kind}`, shader => {
+      const p = patchComicShaders(shader.vertexShader, shader.fragmentShader, kind);
+      comic.applied = p !== null && comic.applied !== false;
+      if (!p) return;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      for (const [k, u] of Object.entries(comicUniforms)) shader.uniforms[k] = u;
+    });
+  };
+  /** The hatch frame attribute (hatchFrame) every geometry drawn with a comic material carries; zeros (no ink) for a
+   * degenerate mesh, so the attribute is always bound (never a stale GL default). */
+  const hatchAttr = (geo, positions, kind, id = null) => {
+    if (!geo || !geo.attributes || !geo.attributes.position) return null;
+    if (geo.attributes.nsHatch) return geo.attributes.nsHatch;
+    const n = geo.attributes.position.count;
+    // No ink lines where lengthwise lines would run the wrong way (builder FA: the face's ring muscles, muscleFibreScale 0).
+    const h = positions && positions.length === 3 * n && !(kind === 'muscle' && muscleFibreScale(id) <= 0) ? hatchFrame(positions, { spacingMm: kind === 'bone' ? C.spacingMm.bone : C.spacingMm.muscle }) : null;
+    const a = new THREE.BufferAttribute(h ? h.attr : new Float32Array(4 * n), 4);
+    geo.setAttribute('nsHatch', a);
+    if (h) comic.hatchMeshes++;
+    return a;
+  };
+  for (const m of [boneMaterial, bodyBoneMaterial, torsoBoneMaterial, legBoneMaterial]) comicPatch(m, 'bone');
+  // ---- R558 (Message 22): the POWER-UP CHARGE of an activation (ns-colors POWER_UP, patchPowerUpShaders) -------------
+  // One clock uniform (x = seconds since this scene was made, y = 1 under prefers-reduced-motion) shared by every muscle,
+  // motor area and halo, and ONE start time per AREA: the area on the brain, the muscles it drives on your body and the
+  // same muscles on the mirror body charge, flash and pulse together (Message 17). A start is taken when the area, or the
+  // first of its muscles, begins to glow; a muscle that begins to glow while its area glows, or within POWER_UP_JOIN_S
+  // of the area's last start, takes that same start. Per frame this costs one uniform write; per change of a glow, one.
+  const POWER_UP_JOIN_S = 0.35;
+  const powerUpEpoch = nowMs();
+  const powerUp = { applied: null, materials: 0, starts: 0, settledStarts: 0, recharges: 0, lastStart: null, lastStartArea: null, byArea: new Map() };
+  const powerUpSettled = new Set(); // setSettledRegions
+  const powerUpClock = { value: new THREE.Vector4(0, reducedMotion ? 1 : 0, 0, 0) };
+  const powerUpNow = () => (nowMs() - powerUpEpoch) / 1000;
+  const noSweep = { value: new THREE.Vector2(0, 0.5) };
+  /** Per-mesh sweep uniform of the power-up front (shared by a mesh's own, mirror and in-place materials and halos). */
+  const sweepUniform = (positions, fibre) => {
+    const f = fibre && fibre.value && fibre.value.w > 0 ? [fibre.value.x, fibre.value.y, fibre.value.z] : null;
+    const s = f && positions ? powerUpSweep(positions, f) : null;
+    return { value: s ? new THREE.Vector2(s[0], s[1]) : new THREE.Vector2(0, 0.5) };
+  };
+  const powerUpPatch = (m, kind) => {
+    const u = { value: new THREE.Vector4(-1e4, 0, 0, 0) };
+    m.userData.nsCharge = u;
+    if (kind === 'muscle') m.userData.nsChargeRest = { value: new THREE.Vector3(0, 0, 0) };
+    powerUp.materials++;
+    return composePatch(m, `ns-power-up-r558-${kind}`, shader => {
+      const p = patchPowerUpShaders(shader.vertexShader, shader.fragmentShader, kind);
+      powerUp.applied = p !== null && powerUp.applied !== false;
+      if (!p) return;
+      shader.fragmentShader = p.fragmentShader;
+      shader.uniforms.nsClock = powerUpClock; shader.uniforms.nsCharge = u;
+      if (kind === 'muscle') { shader.uniforms.nsChargeRest = m.userData.nsChargeRest; shader.uniforms.nsSweep = m.userData.nsSweep || noSweep; }
+    });
+  };
+  /** The shared charge record of area `id` (null id: the neutral glow of a muscle no area claims). members: the charge
+   * uniforms of the muscle materials glowing on that start right now (so a recharge reaches them). */
+  const powerUpArea = id => {
+    const key = id || '';
+    let c = powerUp.byArea.get(key);
+    if (!c) { c = { t0: -1e4, on: false, offAt: -1e4, members: new Set() }; powerUp.byArea.set(key, c); }
+    return c;
+  };
+  /** A new deliberate activation of area `id` while it still glows (its activatedRegions count went up): a fresh start
+   * now for the area (its charge uniform `areaU`) and every muscle glowing on its start, on both bodies (their halos share
+   * the muscles' uniforms), unless the last start is less than POWER_UP.rechargeS old. Returns whether it charged. */
+  function powerUpRecharge(id, areaU) {
+    const c = powerUpArea(id), now = powerUpNow();
+    if (!(now - c.t0 >= POWER_UP.rechargeS)) return false;
+    c.t0 = now; powerUp.starts++; powerUp.recharges++; powerUp.lastStart = now; powerUp.lastStartArea = id || null;
+    if (areaU) areaU.value.x = now;
+    for (const u of c.members) u.value.x = now;
+    return true;
+  }
+  /** The start (clock seconds) a muscle or area of area `id` takes when it begins to glow now: its area's running start
+   * while the area glows, went dark less than POWER_UP.rearmS ago (the dance's turns) or started less than
+   * POWER_UP_JOIN_S ago; else a new start now. */
+  function powerUpJoin(id) {
+    const c = powerUpArea(id), now = powerUpNow();
+    if (!c.on && now - c.t0 > POWER_UP_JOIN_S && now - c.offAt > POWER_UP.rearmS) {
+      // A held-posture glow (setSettledRegions) starts in its settled hold: no charge, no flash.
+      const settled = Boolean(id) && powerUpSettled.has(id);
+      c.t0 = settled ? now - POWER_UP.settledAgeS : now;
+      powerUp.starts++; if (settled) powerUp.settledStarts++;
+      powerUp.lastStart = now; powerUp.lastStartArea = id || null;
+    }
+    return c.t0;
+  }
+  /** R558 (Message 22): the areas whose glow this frame shows a held posture, not an activation (ns-app: the neck and
+   * trunk areas lit only by the mouse look's head turn). Called before the frame's muscles and areas are shaded; an
+   * area that begins to glow while listed starts settled (POWER_UP.settledAgeS). `ids`: array of area ids. */
+  function setSettledRegions(ids) {
+    powerUpSettled.clear();
+    if (Array.isArray(ids)) for (const id of ids) if (typeof id === 'string' && id) powerUpSettled.add(id);
+  }
+  /** The per-vertex tendon attribute every muscle geometry carries (0 until the stack geometry arrives; the patch's
+   * attribute must always be bound, never left to a stale GL default). Returns the attribute. */
+  const tendonAttr = geo => {
+    let a = geo.attributes && geo.attributes.nsTendon;
+    if (!a && geo.attributes && geo.attributes.position) { a = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count), 1); geo.setAttribute('nsTendon', a); }
+    return a || null;
+  };
+  const writeTendon = (geo, rest, full, id = null) => {
+    const a = tendonAttr(geo);
+    if (!a || !rest || !full || rest.length !== full.length || a.array.length * 3 !== rest.length) return false;
+    const t0 = nowMs();
+    tendonFromStack(rest, full, a.array, TENDON_FROM_STACK, geo.index ? geo.index.array : null);
+    // R558 (builder FA): the face muscles keep little or none of the estimate (ns-colors FACE_MUSCLE_LOOK).
+    const k = muscleTendonScale(id);
+    if (k !== 1) for (let i = 0; i < a.array.length; i++) a.array[i] *= k;
+    a.needsUpdate = true;
+    muscleLook.tendonMeshes = (muscleLook.tendonMeshes || 0) + 1;
+    muscleLook.tendonMs = (muscleLook.tendonMs || 0) + (nowMs() - t0);
+    return true;
+  };
+  // Per-muscle tones (ns-colors MUSCLE_TONES / assignMuscleTones): side-free key -> tone index, filled by setBody from
+  // which muscles touch; a muscle shaded before that (the left game arm) is re-shaded once the tones are known.
+  const muscleTones = { byKey: null, contacts: 0, worst: null, keys: 0 };
+  // R558 (builder AN): a missing-muscles packet id has no catalogue source name; its packet row name ('right gracilis')
+  // stands in, so its two sides share one tone like every catalogue pair.
+  const muscleToneKeyOf = id => muscleToneKey(id, typeof id === 'string' ? regionalLayerQualification(id).sourceName || bodyPacketMuscleName(id) : null);
+  /** Resting base colour (linear) of the muscle with element id `id`: its tone and storey (ns-colors muscleBaseInto). */
+  function muscleBaseOf(id, out = [0, 0, 0]) {
+    if (typeof id !== 'string' || !id) return muscleBaseInto(0, null, out);
+    const key = muscleToneKeyOf(id);
+    const t = muscleTones.byKey && muscleTones.byKey.has(key) ? muscleTones.byKey.get(key) : muscleToneFallback(key);
+    // R558: the storey shade follows the full 226-muscle classification (ns-body bodyMuscleLayer: catalogue + the merged
+    // supplement tables), not only the muscles the stack lifts, so every deeper muscle reads a little darker.
+    return muscleBaseInto(t, typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(id) : bodyStackLevel(id), out);
+  }
+  const setMuscleBase = (mat, id) => { if (mat && mat.userData) mat.userData.nsMuscleBase = muscleBaseOf(id); return mat; };
   // ---- R5-scene (D19, R23): the mirror body (a reflected copy of your body and arm, behind the brain, facing you) -----
   // mirrorRoot.matrix = mirrorMatrix (player world -> mirror world, det < 0); mirrorBodyGroup carries the body frame and
   // mirrorArmGroup the eye, so every twin takes exactly the player's pose matrices (the arm muscles even share the CPU-
@@ -3244,7 +5205,7 @@ export function createScene({
   mirrorArmGroup.matrixAutoUpdate = false;
   mirrorRoot.add(mirrorArmGroup);
   // Behind the glass (BEHIND_GLASS): one shared window uniform (the brain's projected ellipse, set in render()).
-  const behindGlass = { applied: null, amount: 0 };
+  const behindGlass = { applied: null, amount: 0, nearM: 0 };
   const bgUniform = { value: new THREE.Vector4(0, BEHIND_GLASS.dim, 0, 0) }, bgWinUniform = { value: new THREE.Vector4(0, 0, 1, 1) };
   const behindGlassPatch = m => composePatch(m, 'ns-behind-glass-r5', shader => {
     const p = patchBehindGlassShaders(shader.vertexShader, shader.fragmentShader);
@@ -3253,15 +5214,31 @@ export function createScene({
     shader.fragmentShader = p.fragmentShader;
     shader.uniforms.nsBg = bgUniform; shader.uniforms.nsBgWin = bgWinUniform;
   });
-  const mirrorBoneMaterial = behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: 0.62, metalness: 0 })));
-  const mirrorMuscleMaterial = () => behindGlassPatch(glowRimPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))));
-  // ns-mirror (R5-mirror) owns the math: bodyBoundsFromPoints (the posed body), brainFarDistance, mirrorPlacement,
-  // createMirrorState / placeMirror (orbit kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when
-  // the body is posed and the brain framed; orbit from setMirrorView), unless the integrator hands a whole ns-mirror state
-  // or transform (setMirrorView), which then wins.
+  const mirrorBoneMaterial = comicPatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }))), 'bone');
+  // R558 (user Message 20, builder FA): the eyes of the completed head (tissue 'eye': sclera, iris, lens) get their own
+  // materials (ns-colors EYE_LOOK), never the ivory bone; one per part for your body in place and one for the mirror
+  // (behind-glass patched like every mirror material). The face-layer copy keeps the face bone material (not drawn).
+  const eyeMaterials = new Map();
+  const eyeMaterial = (part, mirrorTwin) => {
+    const key = `${part}|${mirrorTwin ? 'm' : 'o'}`;
+    let m = eyeMaterials.get(key);
+    if (!m) {
+      const look = EYE_LOOK[part];
+      m = keep(new THREE.MeshStandardMaterial({ color: look.hex, roughness: look.roughness, metalness: 0 }));
+      if (mirrorTwin) behindGlassPatch(m); else overBrainPatch(m); // as the bone materials of each body
+      eyeMaterials.set(key, m);
+    }
+    return m;
+  };
+  const mirrorMuscleMaterial = () => comicPatch(powerUpPatch(muscleLookPatch(behindGlassPatch(glowRimPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }))))), 'muscle'), 'muscle');
+  // ns-mirror owns the math: bodyBoundsFromPoints (the posed body), mirrorReflectionPlacement (R558: the literal plane
+  // reflection, set from the posed body and the eye, independent of the brain), createMirrorState / placeMirror (orbit
+  // kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when the body is posed; orbit from
+  // setMirrorView), unless the integrator hands a whole ns-mirror state or transform (setMirrorView), which then wins.
   const mirror = {
-    enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0 },
-    external: null, worldCentre: null, transform: null, outlineNdc: null, frameKey: '', serial: 0, lod: false, twins: 0, brainRadiusMm: null, error: null
+    enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0, push: 0 },
+    external: null, worldCentre: null, transform: null, serial: 0, planeSerial: 0, measured: null, lod: false, twins: 0, error: null,
+    correction: null, pipelineMatrix: null, reachForemostM: null // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
   let camPose = null, firstPose = null;
@@ -3271,7 +5248,7 @@ export function createScene({
   const camState = { mode: 'first', headInPlace: false, eyeDistM: 0 };
   let bodyPoseSerial = 0, armPoseSerial = 0; // R5-scene: pose change counters (bodyKeepOut cache)
   // ---- R5-scene (D17): glow links -----------------------------------------------------------------------------------
-  const glowState = { links: [], eased: new Map(), touched: new Set(), lastAt: null, ribbons: 0, mirrorRibbons: 0, cpuMs: 0, rimMuscles: 0, rimAreas: 0, set: 0 };
+  const glowState = { links: [], eased: new Map(), lastAt: null, ribbons: 0, mirrorRibbons: 0, cpuMs: 0, rimMuscles: 0, rimAreas: 0, set: 0, lineStart: new Map() };
   const glowVerts = (GLOW_LINK.segments + 1) * GLOW_LINK.across.length;
   const glowIdxPer = GLOW_LINK.segments * (GLOW_LINK.across.length - 1) * 6;
   function makeRibbonMesh(name, order) {
@@ -3318,6 +5295,7 @@ export function createScene({
   const onRestored = () => {
     lost = false;
     lastMatrices = null; // re-skin and recolour on the next frame
+    outline.invalidate(); // R558 (Message 20): the ID target's pixels are gone with the context
     armAppliedReady = false; // R173: a replacement arm has no retained applied pose yet.
     lastStripDrives = null;
     for (const m of muscles) m.lastT = NaN;
@@ -3348,7 +5326,11 @@ export function createScene({
     for (const b of boneList) {
       checkMesh(b, `bone ${b && b.name}`);
       if (!SEGMENTS.includes(b.segment)) fail('scene_input', `bone ${b.name} has unknown segment ${b.segment}`);
-      const geo = indexedGeometry(b.positions, b.indices);
+      // R558 (Message 30): the digit bones (thumb and finger phalanges) are drawn from their rounded display copy.
+      const tipPos = /phalan/i.test(String(b.name || '')) ? boneTipDisplay(b.positions, b.indices, { distal: /distal phalanx/i.test(String(b.name)) }) : null;
+      if (tipPos) boneTips.meshes++;
+      const geo = indexedGeometry(tipPos || b.positions, b.indices);
+      hatchAttr(geo, geo.attributes.position.array, 'bone'); // R558 (Messages 24, 29): the ink lines' frame
       geo.computeVertexNormals();
       weldGeometryNormals(geo); // R558 (R33): no lit seams across the files' duplicated vertices
       const mesh = new THREE.Mesh(geo, boneMaterial);
@@ -3364,6 +5346,7 @@ export function createScene({
       mirrorArmGroup.add(tw);
       mesh.userData.nsMirrorTwin = tw;
       fastPick(mesh); fastPick(tw); // R558: arm bones are rigid (the skinned arm muscles are not, and keep Three's test)
+      { const g = outlineGroupForArmSegment(b.segment); outline.register(mesh, { group: g }); outline.register(tw, { group: g, mirror: true }); }
       bones.push({ mesh, segment: b.segment, mirror: tw,
         // Retain the normal loader's validated source id for copied diagnostics; placeholders may have no id.
         sourceElementId: typeof b.id === 'string' && b.id ? b.id : null });
@@ -3381,21 +5364,47 @@ export function createScene({
       geo.setAttribute('position', posAttr);
       geo.setAttribute('normal', norAttr);
       geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
-      const mat = glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }))));
-      const mesh = new THREE.Mesh(geo, mat);
+      const mat = comicPatch(powerUpPatch(muscleLookPatch(glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }))))), 'muscle'), 'muscle');
+      tendonAttr(geo); // R558 (Message 18): tendon ends, written by setArmLayers
+      hatchAttr(geo, m.positions, 'muscle', m.id); // R558 (Messages 24, 29): the ink lines' frame, from the rest positions
+      // R558 (Message 18): the fibre streaks follow the REST positions (source mm), so they stay on the skinned arm.
+      geo.setAttribute('nsRest', new THREE.BufferAttribute(m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions), 3));
+      const armFibre = fibreUniform(m.positions);
+      const armSweep = sweepUniform(m.positions, armFibre); // R558 (Message 22): the power-up front, origin -> insertion
+      mat.defines = { ...(mat.defines || {}), NS_FIBRE_REST: '' };
+      mat.userData.nsFibre = armFibre;
+      mat.userData.nsSweep = armSweep;
+      const mesh = haloHost(new THREE.Mesh(geo, mat)); // R558: may carry a glow halo
       mesh.name = String(m.name || 'muscle');
       mesh.frustumCulled = false; // CPU-skinned: the rest bounding sphere would be stale
       mesh.renderOrder = BODY_ORDER.arm;
       armGroup.add(mesh);
       depthTwin(mesh, armDepthMaterial, BODY_ORDER.arm - 0.5, armTwins);
       // R5-scene (D19): the mirror twin shares the CPU-skinned buffers (skinned once for both bodies).
-      const tw = new THREE.Mesh(geo, mirrorMuscleMaterial());
+      const tw = haloHost(new THREE.Mesh(geo, mirrorMuscleMaterial()), true);
+      setMuscleBase(mat, m.id); setMuscleBase(tw.material, m.id); // R558 (Message 18): its own tone and storey shade
+      tw.material.defines = { ...(tw.material.defines || {}), NS_FIBRE_REST: '' };
+      tw.material.userData.nsFibre = armFibre;
+      tw.material.userData.nsSweep = armSweep;
       tw.userData.nsFullGeometry = geo;
       tw.name = `mirror image: ${mesh.name}`;
       tw.frustumCulled = false;
       tw.matrixAutoUpdate = false;
+      mesh.raycast = rawRaycast; tw.raycast = rawRaycast; // R558 (P2): Three's test in a typed loop (vertices move)
       mirrorArmGroup.add(tw);
       mesh.userData.nsMirrorTwin = tw;
+      // R558 (Message 20): the outline group of a skinned arm muscle from its skin weight per group (ns-outline
+      // outlineGroupForShares: a forearm muscle with long finger tendons stays forearm).
+      {
+        const sum = new Map(), W = m.weights;
+        for (let v = 0; v < n; v++) {
+          const g0 = outlineGroupForArmSegment(SEGMENTS[W.i0[v]]);
+          sum.set(g0, (sum.get(g0) || 0) + (W.w0 ? W.w0[v] : 1));
+          if (W.i1 && W.w1) { const g1 = outlineGroupForArmSegment(SEGMENTS[W.i1[v]]); sum.set(g1, (sum.get(g1) || 0) + W.w1[v]); }
+        }
+        const g = outlineGroupForShares(sum) || OUTLINE_GROUPS.lFore;
+        outline.register(mesh, { group: g }); outline.register(tw, { group: g, mirror: true });
+      }
       // One weld cache per muscle: its lifted and blended rest copies move the same vertices, so the vertices that
       // share a position in the rest mesh are treated as one point in every copy (their normals stay shared).
       const weld = { groups: null };
@@ -3411,52 +5420,70 @@ export function createScene({
     }
   }
 
-  /** R5-integrate-core (D15, R5-body "Left arm"): Body Worlds layers on the CPU-skinned left arm. liftedById: { elementId:
-   * Float32Array } = ns-body detachedRestPositions(id, restPositions) for each superficial left-arm muscle (rest frame;
-   * one rigid move per muscle); amount 0..1 blends the original and the lifted rest positions. The SAME skin weights
-   * (from the original rest positions) skin the result, so the lift rides on every arm pose, and the mirror twins share
-   * the skinned buffers. Muscles not listed stay as they are. Returns { lifted, amount }. */
+  /** R558 (the Body Worlds stack, left arm): liftedById: { elementId: Float32Array } = the FULL-lift rest positions of
+   * each lifted left-arm muscle from ns-body armStackLift (rest frame; a per-vertex lift: the vertices at the two ends
+   * are the same numbers as in the original, the belly is moved outward, the tissue between stretches). amount 0..1
+   * blends the original and the lifted rest positions; amount 0 is exactly the original. The SAME skin weights (from
+   * the original rest positions) skin the result, so the lift rides on every arm pose, and the mirror twins share the
+   * skinned buffers. Round 3: liftedById may hold EVERY arm muscle, because the display fill (ns-body
+   * stackFillOffsets) draws each one slightly fuller; a muscle the stack rule (bodyStackLevel) does not lift may move
+   * only by the fill, a lifted one by its gap plus the fill (larger is refused). A display choice on licensed
+   * anatomy, never measured anatomy. Returns { lifted (stacked muscles), filled (all with an entry), amount }. */
   let armLayerAmount = 0;
+  const liftExtent = (rest, moved) => { // largest vertex displacement (mm) and the count of vertices that did not move
+    let max2 = 0, still = 0;
+    for (let i = 0; i < rest.length; i += 3) {
+      const dx = moved[i] - rest[i], dy = moved[i + 1] - rest[i + 1], dz = moved[i + 2] - rest[i + 2], d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 === 0) still++; else if (d2 > max2) max2 = d2;
+    }
+    return { maxMm: Math.sqrt(max2), still };
+  };
   function setArmLayers(liftedById = null, amount = 1) {
     const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
-    let n = 0, changed = false;
+    let n = 0, nl = 0, changed = false;
     for (const m of muscles) {
-      const q = regionalLayerQualification(m.id);
-      const L = q.candidate && liftedById && m.id && Object.prototype.hasOwnProperty.call(liftedById, m.id) && liftedById[m.id] && liftedById[m.id].length === m.restBase.length && liftedById[m.id] !== m.restBase ? liftedById[m.id] : null;
-      if (L !== m.lifted) { m.lifted = L; changed = true; }
+      const level = bodyStackLevel(m.id), stacked = level === 'outer' || level === 'intermediate';
+      // Round 3: every arm muscle may take the display fill; only the stacked levels may move further (refused above).
+      const L = liftedById && m.id && Object.prototype.hasOwnProperty.call(liftedById, m.id) && liftedById[m.id] instanceof Float32Array && liftedById[m.id].length === m.restBase.length && liftedById[m.id] !== m.restBase ? liftedById[m.id] : null;
+      if (L !== m.lifted) {
+        const ext = L ? liftExtent(m.restBase, L) : null;
+        if (ext && ext.maxMm > stackCapMm(level)) fail('scene_input', 'arm lift moves a muscle further than the stack rule allows');
+        m.lifted = L; m.liftExtent = ext; changed = true;
+        // R558 (Message 18): tendon white on the anchored ends (the same rule as the body; 0 without stack geometry).
+        const tg = m.mesh.userData.nsFullGeometry || m.mesh.geometry;
+        if (L) writeTendon(tg, m.restBase, L);
+        else { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); ta.needsUpdate = true; } }
+      }
       if (!m.lifted) {
         if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices, undefined, m.weld); changed = true; }
-        const bw = Object.freeze({ ...regionalLayerMetadata(m.id, false), displayStatus: 'not-selected',
-          offsetMm: 0, targetOffsetMm: 0, amount: a, offsetVertex: 0, offsetFrame: 'source-rest-mm' });
+        const bw = Object.freeze({ ...regionalLayerMetadata(m.id, false), stackLevel: level, displaySelected: false, displayStatus: 'not-selected',
+          offsetMm: 0, targetOffsetMm: 0, anchoredVertices: 0, amount: a, offsetMeaning: 'largest-vertex-displacement', offsetFrame: 'source-rest-mm' });
         m.mesh.userData.bodyWorlds = bw;
         if (m.mirror) m.mirror.userData.bodyWorlds = bw;
         continue;
       }
-      n++;
+      n++; if (stacked) nl++;
       let r;
       if (a >= 1) r = m.lifted;
       else if (a <= 0) r = m.restBase;
       else { r = new Float32Array(m.restBase.length); for (let i = 0; i < r.length; i++) r[i] = m.restBase[i] + a * (m.lifted[i] - m.restBase[i]); }
       if (r !== m.rest) { m.rest = r; m.restNormals = computeNormals(r, m.indices, undefined, m.weld); changed = true; }
-      // First-vertex SOURCE-REST displacement, not world motion or a maximum
-      // over the muscle. Keep the full target separate from the applied blend.
-      let targetD = 0, appliedD = 0;
-      for (let i = 0; i < 3; i++) {
-        targetD += (m.lifted[i] - m.restBase[i]) ** 2;
-        appliedD += (m.rest[i] - m.restBase[i]) ** 2;
-      }
+      // The lift is per vertex (zero at the anchored ends): the report is the LARGEST source-rest displacement over the
+      // muscle, full target and applied blend kept apart, and how many vertices the full lift leaves where they were.
+      const ext = m.liftExtent;
       const bw = Object.freeze({
-        ...regionalLayerMetadata(m.id, true),
-        displayStatus: a > 0 ? 'applied' : 'off',
-        offsetMm: Math.round(Math.sqrt(appliedD) * 10) / 10,
-        targetOffsetMm: Math.round(Math.sqrt(targetD) * 10) / 10,
-        amount: a, offsetVertex: 0, offsetFrame: 'source-rest-mm'
+        ...regionalLayerMetadata(m.id, stacked), stackLevel: level, displaySelected: stacked,
+        displayStatus: a > 0 ? (stacked ? 'applied' : 'filled') : 'off',
+        offsetMm: Math.round(ext.maxMm * a * 10) / 10,
+        targetOffsetMm: Math.round(ext.maxMm * 10) / 10,
+        anchoredVertices: ext.still,
+        amount: a, offsetMeaning: 'largest-vertex-displacement', offsetFrame: 'source-rest-mm'
       });
       m.mesh.userData.bodyWorlds = bw;
       if (m.mirror) m.mirror.userData.bodyWorlds = bw;
     }
     if (changed || a !== armLayerAmount) { armLayerAmount = a; lastMatrices = null; } // re-skin on the next updatePose
-    return { lifted: n, amount: armLayerAmount };
+    return { lifted: nl, filled: n, amount: armLayerAmount };
   }
 
   /** Brain meshes in source mm: glass context [{ id?, positions, indices, name }], the focus strip { positions,
@@ -3513,6 +5540,7 @@ export function createScene({
       const geo = indexedGeometry(g.positions, g.indices);
       geo.computeVertexNormals();
       geo.setAttribute('nsSulc', new THREE.BufferAttribute(sulcalDepth(g.positions, brainSupport, { lo: GLASS_READ.sulcLoMm, hi: GLASS_READ.sulcHiMm }), 1));
+      if (stripLists.length) geo.setAttribute('nsNear', new THREE.BufferAttribute(stripProximity(g.positions, stripLists, GLASS_CLEAR.radiusMm), 1));
       const mesh = still(new THREE.Mesh(geo, glassMaterial));
       mesh.name = String(g.name || 'brain glass');
       mesh.renderOrder = RENDER_ORDER.glass;
@@ -3530,8 +5558,25 @@ export function createScene({
       brainGroup.add(xrayMesh);
       glassXray.push(xrayMesh);
     });
-    if (regionMode) buildRegions(seg, still);
-    else buildFocusStrip(focus, markerList, still);
+    // R558 (Message 12: "moved to and around each other but not through"): the glass brain as a solid, from every brain
+    // mesh as given (the strip meshes included): the sealed inside of its surface patches (ns-collide solidGrid, source
+    // mm, about 0.1 s once at load). The app's stop-at-contact rule refuses any move that would leave a point of either
+    // body in it. Null when it cannot be built (the rule then rests on the sphere covers alone).
+    try {
+      const solidMeshes = glassListIn.filter(g => g && g.positions && g.positions.length >= 9).map(g => ({ positions: g.positions, indices: g.indices || null }));
+      const t1 = nowMs();
+      brainSolid = solidMeshes.length ? NsCollide.solidGrid(solidMeshes, { cellMm: NsCollide.COLLIDE.brainSolidCellMm }) : null;
+      brainSolidMs = nowMs() - t1;
+    } catch (err) { brainSolid = null; brainSolidError = String((err && err.message) || err); }
+    if (regionMode) {
+      // R558 BB: every atlas brain vertex (source mm; the strips included) for the strip's fold depth, dropped after use.
+      let total = 0;
+      for (const g of glassListIn) if (g && g.positions && g.positions.length >= 9) total += g.positions.length;
+      brainFoldCloud = total ? new Float32Array(total) : null;
+      if (brainFoldCloud) { let o = 0; for (const g of glassListIn) if (g && g.positions && g.positions.length >= 9) { brainFoldCloud.set(g.positions, o); o += g.positions.length; } }
+      buildRegions(seg, still);
+      brainFoldCloud = null;
+    } else buildFocusStrip(focus, markerList, still);
     buildMarkers(markerList, still);
     rayTargets = regionMode ? [...glass, ...regionMeshes] : [...glass, strip.mesh]; // HUD-only raycast targets, built once
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
@@ -3555,6 +5600,94 @@ export function createScene({
     return Float32Array.from(out);
   }
 
+  /** R558 (REGION_BORDER): an area part's own triangles get the smooth strip normals (welded over the whole strip mesh,
+   * so no shading seam at the area borders or the OBJ seams), the strip coordinate nsS and its owner row. */
+  function borderAttributes(geo, part, border) {
+    const n = part.positions.length / 3, N = border.normals.get(part.meshId), src = part.sourceIndex;
+    if (N && src && src.length === n) {
+      const nor = new Float32Array(3 * n);
+      for (let v = 0; v < n; v++) { const k = 3 * src[v]; nor[3 * v] = N[k]; nor[3 * v + 1] = N[k + 1]; nor[3 * v + 2] = N[k + 2]; }
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    } else geo.computeVertexNormals();
+    const S = part.s && part.s.length === n ? part.s : part.u;
+    geo.setAttribute('nsS', new THREE.BufferAttribute(S instanceof Float32Array ? S : Float32Array.from(S), 1));
+    const row = border.rowFor(part), rows = new Float32Array(2 * n);
+    for (let v = 0; v < n; v++) rows[2 * v] = Number.isInteger(row) ? row : 0;
+    geo.setAttribute('nsRow', new THREE.BufferAttribute(rows, 2));
+    const C = border.cavity.get(part.meshId);
+    if (C && src && src.length === n) { const cav = new Float32Array(n); for (let v = 0; v < n; v++) cav[v] = C[src[v]]; geo.setAttribute('nsCav', new THREE.BufferAttribute(cav, 1)); }
+  }
+
+  /** R558 (REGION_BORDER): per area and strip mesh / surface rule, the NEIGHBOURS' triangles whose corners reach into a
+   * run the area owns, drawn with the area's own material (it keeps only its own fragments), never picked: the picker's
+   * targets stay the areas' own triangles, which cover the strip once. */
+  function buildRegionFills(seg, border, still) {
+    const t0 = nowMs();
+    const groups = new Map();
+    for (const part of seg.parts) {
+      if (!part || !(part.faceCount > 0)) continue;
+      const row = border.rowFor(part);
+      if (!Number.isInteger(row)) continue;
+      const k = `${part.meshId}|${row}`;
+      if (!groups.has(k)) groups.set(k, { row, parts: [] });
+      groups.get(k).parts.push(part);
+    }
+    const regionIndexById = new Map(seg.regions.map((r, i) => [r.id, i]));
+    for (const { row, parts } of groups.values()) {
+      const runs = border.rows[row];
+      const fills = new Map(); // region index -> { pos: [], nor: [], s: [], hemisphere }
+      for (const part of parts) {
+        const P = part.positions, I = part.indices, n = P.length / 3;
+        const S = part.s && part.s.length === n ? part.s : part.u;
+        const N = border.normals.get(part.meshId), src = part.sourceIndex, C = border.cavity.get(part.meshId);
+        const ownId = regionIndexById.get(part.regionId);
+        for (let t = 0; t + 2 < I.length; t += 3) {
+          const a = I[t], b = I[t + 1], c = I[t + 2];
+          const lo = Math.min(S[a], S[b], S[c]), hi = Math.max(S[a], S[b], S[c]);
+          for (const run of runs) {
+            if (run.owner === null || run.hi <= lo || run.lo > hi) continue;
+            const id = border.idOf(run.owner);
+            if (id < 0 || id === ownId) continue;
+            let f = fills.get(id);
+            if (!f) { f = { pos: [], nor: [], s: [], cav: [], hemisphere: part.hemisphere }; fills.set(id, f); }
+            for (const v of [a, b, c]) {
+              f.pos.push(P[3 * v], P[3 * v + 1], P[3 * v + 2]);
+              if (N && src) { const k = 3 * src[v]; f.nor.push(N[k], N[k + 1], N[k + 2]); }
+              if (C && src) f.cav.push(C[src[v]]);
+              f.s.push(S[v]);
+            }
+          }
+        }
+      }
+      for (const [id, f] of fills) {
+        const rec = regions[id];
+        if (!rec || rec.region !== seg.regions[id]) continue;
+        const nv = f.s.length;
+        const geo = keep(new THREE.BufferGeometry());
+        geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(f.pos), 3));
+        if (f.nor.length === 3 * nv) geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(f.nor), 3));
+        else geo.computeVertexNormals();
+        geo.setAttribute('nsS', new THREE.BufferAttribute(Float32Array.from(f.s), 1));
+        if (f.cav.length === nv) geo.setAttribute('nsCav', new THREE.BufferAttribute(Float32Array.from(f.cav), 1));
+        const rows = new Float32Array(2 * nv);
+        for (let v = 0; v < nv; v++) { rows[2 * v] = row; rows[2 * v + 1] = 1; }
+        geo.setAttribute('nsRow', new THREE.BufferAttribute(rows, 2));
+        geo.computeBoundingSphere();
+        const mesh = still(new THREE.Mesh(geo, rec.material));
+        mesh.name = `motor region fill: ${rec.id} (neighbouring strip triangles, drawn only where this area owns the strip; ${f.hemisphere} hemisphere)`;
+        mesh.userData = { regionId: rec.id, hemisphere: f.hemisphere, regionFill: true };
+        mesh.renderOrder = RENDER_ORDER.region;
+        mesh.raycast = () => {}; // never picked: the area's own triangles are the pick targets
+        if (regionBorder.applied === false) mesh.visible = false;
+        brainGroup.add(mesh);
+        rec.fillMeshes.push(mesh);
+        regionBorder.fillMeshes++;
+        regionBorder.fillTriangles += nv / 3;
+      }
+    }
+    regionBorder.ms = (regionBorder.ms || 0) + Math.round(nowMs() - t0);
+  }
+
   /** Region mode: one translucent lit material per region, a depth pre-pass mesh per part, boundary outlines (left-arm
    * regions always, others on hover), and the DOM group labels. */
   function buildRegions(seg, still) {
@@ -3567,10 +5700,14 @@ export function createScene({
     }
     // R4-scene: the left-arm territory's outer border (welded union of every left-arm part) and, per part, each vertex's
     // closeness to it (the cyan rim, LEFT_ARM_RIM).
+    // R558 (Message 18): per-fragment areas with in-pass borders (REGION_BORDER). Without them (older ns-brain), the
+    // whole-triangle areas, the left-arm rim and the line outlines as before.
+    const border = regionBorderSetup(seg);
     const leftParts = [];
-    for (const r of seg.regions) if (r.isLeftArm) for (const pi of r.partIndices || []) { const part = seg.parts[pi]; if (part && part.faceCount > 0 && !leftParts.includes(part)) leftParts.push(part); }
+    if (!border) for (const r of seg.regions) if (r.isLeftArm) for (const pi of r.partIndices || []) { const part = seg.parts[pi]; if (part && part.faceCount > 0 && !leftParts.includes(part)) leftParts.push(part); }
     const t0Rim = nowMs();
     const leftBorder = leftParts.length ? weldedBoundarySegments(leftParts) : null;
+    const lines = hasLines && !border;
     for (const r of seg.regions) {
       const material = keep(new THREE.MeshStandardMaterial({
         color: 0xffffff, roughness: REGION_RENDER.roughness, metalness: REGION_RENDER.metalness, transparent: true,
@@ -3578,6 +5715,7 @@ export function createScene({
         polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
       }));
       material.forceSinglePass = true;
+      if (border) regionBorderPatch(material, r, border.index.get(r));
       if (r.isLeftArm && leftBorder && leftBorder.length) {
         material.onBeforeCompile = shader => {
           const patched = patchEdgeShaders(shader.vertexShader, shader.fragmentShader);
@@ -3593,13 +5731,16 @@ export function createScene({
       // R5-scene: the lit area keeps its gyral relief under the perspective squash (rigid normals, P2) and can glow (D17).
       glowRimPatch(rigidPatch(material));
       tissuePatch(material); // R558 (R32): soft tissue scatter (lighting only)
-      const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity };
+      powerUpPatch(material, 'area'); // R558 (Message 22): the power-up charge, in step with its muscles
+      if (border) areaInkPatch(material); // R558 BB (Messages 24, 29): cel bands, folds, contour and hatching in ink
+      const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], fillMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity, hintKey: '' };
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
         const part = seg.parts[pi];
         if (!part || !(part.faceCount > 0)) continue;
         const geo = indexedGeometry(part.positions, part.indices);
-        geo.computeVertexNormals();
+        if (border) borderAttributes(geo, part, border);
+        else geo.computeVertexNormals();
         if (r.isLeftArm && leftBorder && leftBorder.length) geo.setAttribute('nsEdge', new THREE.BufferAttribute(boundaryCloseness(part.positions, leftBorder, LEFT_ARM_RIM.widthMm), 1));
         const mesh = still(new THREE.Mesh(geo, material));
         const hemiText = part.hemisphere === 'right' ? 'right hemisphere' : 'left hemisphere';
@@ -3614,11 +5755,12 @@ export function createScene({
         depthMesh.renderOrder = RENDER_ORDER.regionDepth;
         brainGroup.add(depthMesh);
         rec.depthMeshes.push(depthMesh);
-        if (hasLines) edgeLists.push(part);
+        if (lines) edgeLists.push(part);
       }
       // R3-scene: a SMOOTH region outline (Chaikin-smoothed, lifted off the surface) instead of the raw triangle-edge
       // zigzag. At rest only the left-arm sub-areas show a faint one; every region shows it while hovered or activated.
-      if (hasLines && edgeLists.length) {
+      // R558: only without the in-pass borders (REGION_BORDER), which replace these line outlines.
+      if (lines && edgeLists.length) {
         const pos = smoothTerritoryOutline(edgeLists, { centre: outlineCentre, ...REGION_OUTLINE });
         if (pos.length) {
           const lg = keep(new THREE.BufferGeometry());
@@ -3654,8 +5796,34 @@ export function createScene({
     }
     leftArmRim.ms = Math.round(nowMs() - t0Rim);
     leftArmRim.borderSegments = leftBorder ? leftBorder.length / 6 : 0;
-    labelGroups = regionLabelGroups(seg.regions);
-    if (hasLines) {
+    if (border) buildRegionFills(seg, border, still);
+    // R558 BB (Message 24): the whole strip as ONE geometry in the brain group's frame for the outline pass's strip
+    // silhouette (seen from above: the central and precentral sulci that bound it), drawn after the areas.
+    {
+      let nv = 0, ni = 0;
+      for (const m of regionMeshes) { nv += m.geometry.attributes.position.count; ni += m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count; }
+      if (nv > 0 && nv < 65536 * 64) {
+        const P = new Float32Array(3 * nv), I = new Uint32Array(ni);
+        let ov = 0, oi = 0;
+        for (const m of regionMeshes) {
+          const a = m.geometry.attributes.position, ix = m.geometry.index;
+          P.set(a.array.subarray(0, 3 * a.count), 3 * ov);
+          if (ix) for (let i = 0; i < ix.count; i++) I[oi + i] = ix.array[i] + ov;
+          else for (let i = 0; i < a.count; i++) I[oi + i] = i + ov;
+          ov += a.count; oi += ix ? ix.count : a.count;
+        }
+        const g = keep(new THREE.BufferGeometry());
+        g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+        g.setIndex(new THREE.BufferAttribute(I, 1));
+        g.computeBoundingSphere();
+        areaInk.stripSilhouette = outline.setStrip(g, brainGroup);
+      }
+    }
+    // R558: the label twins mirror in the middle of the motor strip's own width (see regionLabelGroups); once, at build.
+    let stripX0 = Infinity, stripX1 = -Infinity;
+    for (const m of regionMeshes) { const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { const x = a.getX(i); if (x < stripX0) stripX0 = x; if (x > stripX1) stripX1 = x; } }
+    labelGroups = regionLabelGroups(seg.regions, { midX: stripX1 > stripX0 ? (stripX0 + stripX1) / 2 : 0 });
+    if (lines) {
       for (const g of labelGroups) {
         const parts = [];
         for (const id of g.regionIds) {
@@ -3677,11 +5845,13 @@ export function createScene({
     if (overlay) {
       injectSceneStyle();
       for (const g of labelGroups) {
-        // R3-scene (D3): plain words. The body part reads first and large; only the left-arm label carries the hemisphere
-        // line ("brain's right half (right hemisphere)"), the one science point it must make.
+        // R3-scene (D3): plain words. The body part reads first and large. R558: the two arm labels are twins in one
+        // style (the strong pill with the brain-half line, "Left arm / brain's right half" and "Right arm / brain's left
+        // half"); the left-arm one keeps its own class name as a marker only.
         const disp = regionLabelDisplay(g);
         if (!disp) continue;
-        const e = el('div', `ns-region-label ns-r3${g.isLeftArm ? ' ns-region-label-leftarm' : ''}`, overlay);
+        const strong = g.isLeftArm || g.key === 'arm';
+        const e = el('div', `ns-region-label ns-r3${strong ? ' ns-region-label-arm' : ''}${g.isLeftArm ? ' ns-region-label-leftarm' : ''}`, overlay);
         el('span', 'ns-region-label-part', e).textContent = disp.main;
         if (disp.sub) el('span', 'ns-region-label-hemi', e).textContent = disp.sub;
         e.setAttribute('data-ns-region-group', `${g.hemisphere}:${g.key}`);
@@ -3691,10 +5861,10 @@ export function createScene({
         labelEls.push({ el: e, group: g, display: disp, shownNow: false, last: { left: '', top: '', shown: false, hover: false, faded: false } });
         // Estimated label box (no layout reads): R3_LABEL_FONT sizes, bold sans-serif ~0.6 em per character + padding.
         const F = R3_LABEL_FONT;
-        const w = g.isLeftArm ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.55) + 2 * F.padXPx : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
-        const h = g.isLeftArm ? F.leftArmPx * 1.25 + F.subPx * 1.25 + 2 * F.padYPx : F.otherPx * 1.3 + 2 * F.padYPx;
+        const w = strong ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.55) + 2 * F.padXPx : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
+        const h = strong ? F.leftArmPx * 1.25 + F.subPx * 1.25 + 2 * F.padYPx : F.otherPx * 1.3 + 2 * F.padYPx;
         labelBoxes.push({ x: 0, y: 0, w: Math.ceil(w), h: Math.ceil(h), skip: true });
-        labelItems.push({ id: `${g.hemisphere}:${g.key}`, x: NaN, y: NaN, w: Math.ceil(w), h: Math.ceil(h), priority: REGION_LABEL_PRIORITY[g.key] || 0, required: g.isLeftArm, text: disp.main });
+        labelItems.push({ id: `${g.hemisphere}:${g.key}`, x: NaN, y: NaN, w: Math.ceil(w), h: Math.ceil(h), priority: REGION_LABEL_PRIORITY[g.key] || 0, required: g.isLeftArm, text: disp.main, pair: g.pair || null, mirror: 0 });
       }
     }
   }
@@ -3711,8 +5881,18 @@ export function createScene({
     const s = regionDisplayStyle(rec.region, { activity: q / REGION_RENDER.quantize, activatedCount: n, hovered }, shadeScratch, regionStyle);
     rec.material.color.setRGB(s.albedo[0], s.albedo[1], s.albedo[2]);
     rec.material.emissive.setRGB(s.emission[0], s.emission[1], s.emission[2]);
+    // R558 (Message 2): the area's own fresnel rim (its glow colour), set here from its activity, not from the links.
+    const rimU = rec.material.userData && rec.material.userData.nsGlowRim;
+    if (rimU) rimU.value.set(s.rim[0], s.rim[1], s.rim[2], GLOW_K.rimPower);
     rec.material.opacity = s.opacity;
     rec.opacity = s.opacity;
+    // R558 (REGION_BORDER): the hovered area is outlined from the inside in the hover colour, a switched-on one in gold.
+    const bu = rec.material.userData && rec.material.userData.nsBorder;
+    if (bu) {
+      const c = hovered ? borderHoverColor : n >= 1 ? borderMarkColor : null;
+      if (c) bu.nsHi.value.set(c.r, c.g, c.b, hovered ? REGION_BORDER.hoverPx : REGION_BORDER.activatedPx);
+      else bu.nsHi.value.set(0, 0, 0, 0);
+    }
     if (rec.outline) {
       const leftArm = rec.region.isLeftArm === true;
       rec.outline.material = hovered ? hoverLineMaterial : n >= 1 && activatedLineMaterial ? activatedLineMaterial : (leftArm ? leftArmLineMaterial : otherLineMaterial);
@@ -3869,7 +6049,6 @@ export function createScene({
     arrowRef.dist = Number.isFinite(dist) && dist > 0 ? dist : Math.hypot(m[12], m[13], m[14]) || BRAIN_ANCHOR_DIST_FALLBACK_M;
     arrowRef.k = Number.isFinite(transform.k) && transform.k > 0 ? transform.k : null;
     arrowRef.pivot = transform.pivot && transform.pivot.length === 3 ? Array.from(transform.pivot) : null;
-    updateMirrorPlacement();
     if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked') cameraProjectionPlan.actualBrainSeen = true;
     updateCameraRange();
     overlayDirty = true;
@@ -3976,7 +6155,7 @@ export function createScene({
     if (!initialPlacement || !Number.isFinite(initialPlacement.yaw) || !Number.isFinite(initialPlacement.pitch)) fail('scene_input', 'initial brain carry needs finite radians');
     const K = NsMath.lookRotation(initialPlacement.yaw, initialPlacement.pitch);
     if (referenceCarry && Array.from(K).some((v, i) => v !== referenceCarry[i])) fail('scene_input', 'initial brain carry is constructor-owned');
-    referenceOrigin = Array.from(position); referenceCarry = Array.from(K); referenceAngles = { yaw: initialPlacement.yaw, pitch: initialPlacement.pitch }; referenceOriginSet = true; mirror.frameKey = ''; mirror.outlineNdc = null;
+    referenceOrigin = Array.from(position); referenceCarry = Array.from(K); referenceAngles = { yaw: initialPlacement.yaw, pitch: initialPlacement.pitch }; referenceOriginSet = true;
   }
   function setView(yaw, pitch) {
     eyeRig.rotation.set(pitch, yaw, 0, 'YXZ');
@@ -4087,8 +6266,7 @@ export function createScene({
       if (b.mirror) { b.mirror.matrix.fromArray(m); b.mirror.matrixWorldNeedsUpdate = true; }
     }
     for (const m of muscles) {
-      skinApply(matrices, m.weights, m.rest, m.pos);
-      skinNormals(matrices, m.weights, m.restNormals, m.nor);
+      skinPositionsAndNormals(matrices, m.weights, m.rest, m.restNormals, m.pos, m.nor); // R558 (P2): one pass, same numbers
       m.posAttr.needsUpdate = true;
       m.norAttr.needsUpdate = true;
     }
@@ -4339,7 +6517,7 @@ export function createScene({
     const limits = [
       'CPU retained geometric surfaces only; no GPU fragment/pixel identity, visibility verdict or anatomy/mechanics acceptance',
       'Shader vertex displacement, fragment discard/alpha/maps, stencil/depth functions, polygon offset, blending/sorting, MSAA and raster coverage are not simulated',
-      'Current main-camera main scene and active ghost-face pass only; inset-face pass, DOM/HUD, lines/points/sprites and scene background are outside triangle scope',
+      'Current main-camera main scene and active ghost-face pass only; inset-face pass, DOM/HUD, lines/points/sprites, the outline composite (screen-space display pass) and scene background are outside triangle scope',
       'Cached matrices/bounds/versions can differ from submitted GPU buffers; dirty flags and unchanged counters are observations, not coherent-frame certification',
       'Hits use current position/index/drawRange/groups, not nsFullGeometry indices; transparent DoubleSide may issue two GPU passes but one geometric surface is reported',
       'No-arm fallback is closest geometric candidates only, never established foreground occlusion; equal-distance non-arm surfaces are separately counted',
@@ -4390,6 +6568,7 @@ export function createScene({
       for (const region of regions) {
         for (const mesh of region.meshes) tag(mesh, 'brain-region', null, false, null, region.id);
         for (const mesh of region.depthMeshes) tag(mesh, 'brain-region-depth', null, false, null, region.id);
+        for (const mesh of region.fillMeshes || []) tag(mesh, 'brain-region-fill', null, false, null, region.id);
       }
       tag(glowOwn.mesh, 'own-glow-link'); tag(glowMirror.mesh, 'mirror-glow-link');
       for (const target of ['brain', 'mirror']) {
@@ -4435,6 +6614,7 @@ export function createScene({
         if (++counts.nodesVisited > bounds.nodes) refuse('node_work_bound', { maximum: bounds.nodes });
         if (!object || !Array.isArray(object.children)) refuse('invalid_node', { pass });
         if (object.visible === false) { counts.hiddenSubtrees++; continue; }
+        if (outline && object === outline.composite) continue; // R558 (hunt 3): the outline's screen-space pass is a display aid, not a surface
         const state = readNode(object), chain = [...path, object];
         const order = object.isGroup && (state.layersMask & c.layersMask) ? state.renderOrder : groupOrder;
         if (object.isLOD && object.autoUpdate && (state.layersMask & c.layersMask)) refuse('lod_auto_update_unobserved', { objectId: state.objectId });
@@ -4745,17 +6925,157 @@ export function createScene({
       }
       const t = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : baselineDrive;
       if (t === m.lastT) continue;
-      shadeMuscle(m.mat, t);
-      if (m.mirror) shadeMuscle(m.mirror.material, t);
-      m.mesh.userData.activity = t;
       m.lastT = t;
+      shadeArmMuscle(m);
+      m.mesh.userData.activity = t;
     }
   }
 
-  function shadeMuscle(mat, t) {
-    activityShadeInto(muscleBaseLinear, t, muscleShade);
+  /** R558 (Message 2): a muscle glows in the colour of the area that drives it (ns-colors AREA_COLORS), with the same
+   * strength rule as the area (ns-colors glowIntensity of its drive) and a fresnel rim of that colour (the soft halo).
+   * The lit tissue albedo keeps the shared darkening rule (activityShadeInto), so a resting muscle looks as before
+   * (the resting 0.08 drive is below the glow onset: no emission at all). areaId null = no area claims it (a neutral
+   * warm glow). The SAME call shades your body, its in-place head copy and the mirror body, so all three match. */
+  const muscleRim = [0, 0, 0];
+  function shadeMuscle(mat, t, areaId = null, hint = false) {
+    // A muscle lit only by an opposing-action hint (Message 6) stays faint: AREA_LOOK.hintGain of the emission and rim,
+    // no halo, and its RESTING red-brown surface (darkening it under a faint blue emission read as a grey, discoloured
+    // muscle on the near arm, not as a highlight).
+    // R558 (Message 18): the muscle's own tone and storey shade (setMuscleBase), else the shared fallback colour.
+    const base = mat.userData && mat.userData.nsMuscleBase ? mat.userData.nsMuscleBase : muscleBaseLinear;
+    // R558 (Message 22): the power-up charge. The resting albedo (for the part the energy front has not reached yet),
+    // and the start: a muscle that begins to glow joins its area's start (powerUpJoin), so all three items run in step;
+    // a hint glows calm (no charge, flash, pulse or ripple).
+    const cu = mat.userData && mat.userData.nsCharge;
+    if (cu) {
+      activityShadeInto(base, MUSCLE_REST_DRIVE, muscleShade);
+      const cr = mat.userData.nsChargeRest;
+      if (cr) cr.value.set(muscleShade.albedo[0], muscleShade.albedo[1], muscleShade.albedo[2]);
+      const on = glowIntensity(t) > 0;
+      // A change of owning area while glowing (the first frame often shades with the body-part fallback area before the
+      // links name the real one) takes the new area's start as well.
+      // While it glows on a start the muscle is one of its area's members, so a recharge of the area (a second click,
+      // powerUpRecharge) restarts it too.
+      if (on && !hint && (mat.userData.nsChargeOn !== true || mat.userData.nsChargeArea !== areaId)) {
+        if (mat.userData.nsChargeOn === true) powerUpArea(mat.userData.nsChargeArea).members.delete(cu);
+        cu.value.x = powerUpJoin(areaId);
+        powerUpArea(areaId).members.add(cu);
+      } else if (!(on && !hint) && mat.userData.nsChargeOn === true) {
+        const c = powerUpArea(mat.userData.nsChargeArea);
+        c.offAt = powerUpNow();
+        c.members.delete(cu);
+      }
+      mat.userData.nsChargeOn = on && !hint;
+      mat.userData.nsChargeArea = areaId;
+      cu.value.y = hint ? 1 : 0;
+      cu.value.z = on ? 1 : 0;
+    }
+    activityShadeInto(base, hint ? MUSCLE_REST_DRIVE : t, muscleShade);
+    const hk = hint ? AREA_LOOK.hintGain : 1;
+    // R558 (Message 18): a dim yellow glow reads as olive on a belly in shade; yellows emit a little more (ns-colors).
+    const rcG = areaRecord(areaId), gs = rcG ? muscleGlowGainScale(rcG.glowLinear) : 1;
+    const k = areaGlowInto(areaId, t, AREA_LOOK.muscleGain * hk * gs, muscleShade.emission);
+    // R558 (issue hunt 2, Message 18 "never ... diseased-looking"): a hint no longer lays its faint emission over the
+    // whole belly (a dim green over red-brown tissue read as a murky olive belly); the hinted muscle keeps its resting
+    // tissue colour and gets only a thin, clean rim in a lighter tint of its area's colour (MUSCLE_HINT_LOOK).
+    if (hint) muscleShade.emission[0] = muscleShade.emission[1] = muscleShade.emission[2] = 0;
+    if (k > 0 && !hint) {
+      // Lit albedo toward the glow colour by the glow strength (AREA_LOOK.muscleAlbedo): shaded and round, not flat.
+      const rc = areaRecord(areaId), g = rc ? rc.glowLinear : null;
+      if (g) for (let i = 0; i < 3; i++) muscleShade.albedo[i] += (g[i] * AREA_LOOK.muscleAlbedo - muscleShade.albedo[i]) * k;
+    }
     mat.color.setRGB(muscleShade.albedo[0], muscleShade.albedo[1], muscleShade.albedo[2]);
     mat.emissive.setRGB(muscleShade.emission[0], muscleShade.emission[1], muscleShade.emission[2]);
+    const u = mat.userData && mat.userData.nsGlowRim;
+    if (u && hint) {
+      const g = rcG ? rcG.glowLinear : null, H = MUSCLE_HINT_LOOK;
+      if (g && k > 0) u.value.set((g[0] + (1 - g[0]) * H.rimWhite) * H.rimGain, (g[1] + (1 - g[1]) * H.rimWhite) * H.rimGain, (g[2] + (1 - g[2]) * H.rimWhite) * H.rimGain, H.rimPower);
+      else u.value.set(0, 0, 0, H.rimPower);
+    } else if (u) { areaGlowInto(areaId, t, AREA_LOOK.muscleRimGain * hk, muscleRim); u.value.set(muscleRim[0], muscleRim[1], muscleRim[2], Number.isFinite(AREA_LOOK.muscleRimPower) ? AREA_LOOK.muscleRimPower : GLOW_K.rimPower); }
+    const ud = mat.userData;
+    if (ud && ud.nsHaloHost) {
+      if (k > 0 && !hint) {
+        const h = muscleHalo(mat);
+        if (h) { areaGlowInto(areaId, t, ud.nsHaloGain, muscleRim); h.material.uniforms.nsHaloColor.value.set(muscleRim[0], muscleRim[1], muscleRim[2]); if (!h.visible) { h.visible = true; haloState.shown++; } }
+      } else if (ud.nsHalo && ud.nsHalo.visible) { ud.nsHalo.visible = false; haloState.shown--; }
+    }
+  }
+  /** R558 (Message 2, "optogenetic glow"): a glowing muscle gets a soft additive HALO, a copy of its own surface pushed
+   * out along its normals (MUSCLE_HALO: ownMm on your body, mirrorMm on the far mirror body, so both read on screen),
+   * drawn from the inside (back faces) with alpha rising from 0 at the halo's outer edge toward the muscle, so the light
+   * seems to spill a little past the muscle's outline. The muscle itself hides the halo's middle (depth test); no
+   * depth write, no picking, built only when a muscle first glows and hidden again at rest. Display only. */
+  const haloOk = typeof THREE.ShaderMaterial === 'function' && THREE.AdditiveBlending !== undefined;
+  const haloState = { built: 0, shown: 0 };
+  // R558 (Message 22): the halo runs its muscle's power-up too (the host's own nsCharge / nsSweep / nsFibre uniforms and
+  // the shared clock): the same front, flash, pulse and ripple, and at the peak flash the shell bursts outward by
+  // POWER_UP.haloBurst of its width (the aura of a power-up), settling back with the flash.
+  const HALO_PU = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\nuniform vec4 nsFibre;\nuniform vec2 nsSweep;\n' + powerUpGlsl('nsPowerUp') + '\n';
+  const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
+    '  float flash = nsCharge.z > 0.5 ? nsPowerUpFlash( nsClock.x - nsCharge.x, nsCharge.y, nsClock.y ) : 0.0;\n' +
+    `  vec3 p = position + normalize( normal ) * nsHaloShape.x * ( 1.0 + ${POWER_UP.haloBurst.toFixed(4)} * flash );\n` +
+    '#ifdef NS_FIBRE_REST\n  vNsU = dot( nsRest, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#else\n  vNsU = dot( position, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#endif\n' +
+    '  vec4 mv = modelViewMatrix * vec4( p, 1.0 );\n' +
+    '  vNsN = normalize( normalMatrix * normal );\n  vNsV = - mv.xyz;\n  gl_Position = projectionMatrix * mv;\n}';
+  const HALO_FS = 'uniform vec3 nsHaloColor;\nuniform vec2 nsHaloShape;\n' + HALO_PU + 'varying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
+    '  float f = clamp( abs( dot( normalize( vNsN ), normalize( vNsV ) ) ) * nsHaloShape.y, 0.0, 1.0 );\n  float a = f * f;\n' +
+    '  vec4 pu = nsCharge.z > 0.5 ? nsPowerUp( nsClock.x - nsCharge.x, vNsU, nsCharge.y, nsClock.y ) : vec4( 1.0, 0.0, 1.0, 1.0 );\n' +
+    '  vec3 c = nsHaloColor * pu.x;\n  c = mix( vec3( dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ) ), c, pu.z );\n' +
+    '  c = mix( c, vec3( max( c.r, max( c.g, c.b ) ) ), clamp( pu.y, 0.0, 1.0 ) );\n' +
+    '  gl_FragColor = vec4( c * a, a );\n}';
+  function muscleHalo(mat) {
+    const ud = mat.userData;
+    if (!haloOk || !ud || !ud.nsHaloHost) return null;
+    if (ud.nsHalo) return ud.nsHalo;
+    const host = ud.nsHaloHost;
+    // The shell offset is given in WORLD millimetres: the body meshes are in source mm, the CPU-skinned arm in metres.
+    host.updateMatrixWorld(true);
+    const sc = typeof host.matrixWorld.getMaxScaleOnAxis === 'function' ? host.matrixWorld.getMaxScaleOnAxis() : 0;
+    const offset = sc > 0 && Number.isFinite(sc) ? ud.nsHaloMm / 1000 / sc : 0;
+    const hm = keep(new THREE.ShaderMaterial({
+      uniforms: { nsHaloColor: { value: new THREE.Vector3(0, 0, 0) }, nsHaloShape: { value: new THREE.Vector2(offset, MUSCLE_HALO.power) },
+        // R558 (Message 22): the host muscle's own power-up state (shared objects, so they stay in step).
+        nsClock: powerUpClock, nsCharge: ud.nsCharge || { value: new THREE.Vector4(-1e4, 0, 0, 0) }, nsFibre: ud.nsFibre || noFibre, nsSweep: ud.nsSweep || noSweep },
+      vertexShader: HALO_VS, fragmentShader: HALO_FS, transparent: true, depthWrite: false, side: THREE.BackSide,
+      blending: THREE.AdditiveBlending, toneMapped: false
+    }));
+    if (mat.defines && Object.prototype.hasOwnProperty.call(mat.defines, 'NS_FIBRE_REST')) hm.defines = { NS_FIBRE_REST: '' };
+    const h = new THREE.Mesh(host.geometry, hm);
+    h.name = `${host.name} (glow halo; display only)`;
+    h.matrixAutoUpdate = false;
+    h.raycast = () => {};
+    h.frustumCulled = host.frustumCulled;
+    h.renderOrder = (host.renderOrder || 0) + 0.01;
+    h.visible = false;
+    host.add(h);
+    h.updateMatrixWorld(true);
+    ud.nsHalo = h;
+    haloState.built++;
+    return h;
+  }
+  /** Mark a muscle mesh as able to carry a halo (its material keeps the host; mirror twins get the wider shell). */
+  const haloHost = (mesh, mirrorTwin = false) => {
+    if (haloOk && mesh && mesh.material && mesh.material.userData) {
+      mesh.material.userData.nsHaloHost = mesh;
+      mesh.material.userData.nsHaloMm = mirrorTwin ? MUSCLE_HALO.mirrorMm : MUSCLE_HALO.ownMm;
+      mesh.material.userData.nsHaloGain = mirrorTwin ? MUSCLE_HALO.mirrorGain : MUSCLE_HALO.gain;
+    }
+    return mesh;
+  };
+  /** The left game arm's muscle (and its mirror twin) from its last drive and its owning area (else the left forearm
+   * area, the palm turn of the Space key). */
+  function shadeArmMuscle(m) {
+    const t = Number.isFinite(m.lastT) ? m.lastT : baselineDrive, id = m.owner || ARM_FALLBACK_AREA, h = m.ownerHint === true;
+    shadeMuscle(m.mat, t, id, h);
+    if (m.mirror) shadeMuscle(m.mirror.material, t, id, h);
+  }
+  /** A body muscle (and its mirror and in-place twins) from its last drive and its owning area (else ns-colors
+   * bodyPartArea of its part and side). */
+  function shadeBodyMuscle(b) {
+    const t = Number.isFinite(b.lastDrive) ? b.lastDrive : MUSCLE_REST_DRIVE, id = b.owner || b.fallbackArea || null, h = b.ownerHint === true;
+    shadeMuscle(b.material, t, id, h);
+    if (b.mirror) shadeMuscle(b.mirror.material, t, id, h);
+    if (b.inPlace && b.kind === 'muscle') shadeMuscle(b.inPlace.material, t, id, h);
   }
 
   /** Drive the strip's simulated field from the given action display drives ({ actionId: 0..1 } or a Map). With the
@@ -4854,8 +7174,164 @@ export function createScene({
       const a = regionActivity ? regionActivity[rec.id] : 0;
       const n = activatedRegions ? activatedRegions[rec.id] : 0;
       if (applyRegionStyle(rec, Number.isFinite(a) ? a : 0, Number.isFinite(n) ? n : 0, rec.id === hoveredRegionId)) changed++;
+      // R558 (Message 22): the area's power-up starts when it begins to glow (its muscles join the same start).
+      const cu = rec.material.userData && rec.material.userData.nsCharge;
+      if (cu) {
+        const on = glowIntensity(Number.isFinite(a) ? a : 0) > 0;
+        const count = Number.isFinite(n) ? n : 0;
+        if (on !== (rec.puOn === true)) {
+          rec.puOn = on;
+          const c = powerUpArea(rec.id);
+          if (on) cu.value.x = powerUpJoin(rec.id);
+          else c.offAt = powerUpNow();
+          c.on = on;
+          cu.value.z = on ? 1 : 0;
+        } else if (on && Number.isFinite(rec.puCount) && count > rec.puCount) powerUpRecharge(rec.id, cu); // a second click while it glows
+        rec.puCount = count;
+      }
     }
     return changed;
+  }
+
+  // R558 (Message 6, REGION_HINT): faint hints on the areas whose action would bring a held joint back. Built lazily,
+  // once per (area, action), from the area's own parts: the triangles whose centre the look rule gives to that action.
+  const hintMeshes = new Map(); // `${regionId}/${actionId}` -> { meshes, whole, triangles, material }
+  let hintKey = '';
+  let hintShown = [];
+  // Per VERTEX: 1 where the look rule gives the hinted action, else 0. A triangle on the sub-band's border then fades
+  // across itself (vertex alpha), so the hint has a soft edge instead of a sawtooth of whole triangles.
+  function hintVertexAlpha(rec, part, actionId) {
+    const U = part.u, S = part.s, n = part.vertexCount || (U ? U.length : 0), a = new Float32Array(n);
+    if (!U) return a;
+    for (let v = 0; v < n; v++) {
+      const act = NsBrain.regionActionAt(rec.region, U[v], S ? S[v] : U[v]);
+      a[v] = act && act.id === actionId ? 1 : 0;
+    }
+    return a;
+  }
+  function buildHint(key, regionId, actionId, color) {
+    const rec = regionById.get(regionId);
+    if (!rec || !segmentation) return null;
+    const material = keep(new THREE.MeshBasicMaterial({
+      color: 0xffffff, vertexColors: true, transparent: true, opacity: REGION_HINT.opacity, blending: THREE.AdditiveBlending,
+      depthWrite: false, depthTest: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
+    }));
+    material.forceSinglePass = true;
+    const c = Array.isArray(color) && color.length === 3 && color.every(Number.isFinite) ? color : REGION_HINT.color;
+    const entry = { meshes: [], whole: false, triangles: 0, material };
+    const parts = (rec.region.partIndices || []).map(pi => segmentation.parts[pi]).filter(q => q && q.faceCount > 0);
+    let alphas = parts.map(q => (typeof actionId === 'string' ? hintVertexAlpha(rec, q, actionId) : new Float32Array(q.vertexCount || 0)));
+    // Count the triangles that are fully inside the sub-band; too few (a sliver at the curved end of an area) or none:
+    // light the whole area instead.
+    let inside = 0;
+    parts.forEach((q, i) => { const I = q.indices, A = alphas[i]; for (let t = 0; t + 2 < I.length; t += 3) if (A[I[t]] > 0 && A[I[t + 1]] > 0 && A[I[t + 2]] > 0) inside++; });
+    if (inside < REGION_HINT.minTriangles) { alphas = parts.map(q => new Float32Array(q.vertexCount || q.positions.length / 3).fill(1)); entry.whole = true; }
+    parts.forEach((q, i) => {
+      const I = q.indices, A = alphas[i], keepTris = [];
+      for (let t = 0; t + 2 < I.length; t += 3) if (A[I[t]] > 0 || A[I[t + 1]] > 0 || A[I[t + 2]] > 0) keepTris.push(I[t], I[t + 1], I[t + 2]);
+      if (!keepTris.length) return;
+      const geo = indexedGeometry(q.positions, new Uint32Array(keepTris));
+      const col = new Float32Array(A.length * 4);
+      for (let v = 0; v < A.length; v++) { col[4 * v] = c[0]; col[4 * v + 1] = c[1]; col[4 * v + 2] = c[2]; col[4 * v + 3] = A[v]; }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+      mesh.name = `motor region hint: ${regionId}${actionId ? ` / ${actionId}` : ''} (the opposing action; simulated)`;
+      mesh.userData = { regionHint: true, regionId, actionId: actionId || null };
+      mesh.renderOrder = RENDER_ORDER.region + REGION_HINT.renderOrderOffset;
+      mesh.raycast = () => {}; // a hint is never picked: the area under it keeps its own picking
+      mesh.visible = false;
+      brainGroup.add(mesh);
+      entry.meshes.push(mesh);
+      entry.triangles += keepTris.length / 3;
+    });
+    hintMeshes.set(key, entry);
+    return entry;
+  }
+  // R558 (Message 18, REGION_BORDER): with the per-fragment areas the hint is drawn by the area's own material: the
+  // hinted action's sub-band of the strip coordinate (the same look rule, ns-brain regionActionAt), soft-edged in CSS
+  // pixels, so it follows the drawn area exactly (no extra meshes, no additive overlap). Built once per (area, action).
+  const hintBands = new Map(); // `${regionId}/${actionId}` -> { lo, hi, whole, triangles }
+  function hintBand(rec, actionId) {
+    const k = `${rec.id}/${actionId || ''}`;
+    if (hintBands.has(k)) return hintBands.get(k);
+    let lo = Infinity, hi = -Infinity;
+    if (typeof actionId === 'string') {
+      const N = 4096;
+      for (let i = 0; i <= N; i++) {
+        const s = i / N, act = NsBrain.regionActionAt(rec.region, s, s);
+        if (act && (act.id === actionId || act.armActionId === actionId)) { if (s < lo) lo = s; if (s > hi) hi = s; }
+      }
+      if (lo <= hi) { lo -= 0.5 / N; hi += 0.5 / N; }
+    }
+    const whole = !(lo <= hi);
+    if (whole) { lo = -1; hi = 2; }
+    let triangles = 0;
+    for (const m of [...rec.meshes, ...rec.fillMeshes]) {
+      const a = m.geometry.getAttribute('nsS'), ix = m.geometry.index;
+      if (!a) continue;
+      const cnt = ix ? ix.count : a.count;
+      for (let t = 0; t + 2 < cnt; t += 3) {
+        const i0 = ix ? ix.getX(t) : t, i1 = ix ? ix.getX(t + 1) : t + 1, i2 = ix ? ix.getX(t + 2) : t + 2;
+        const s0 = a.getX(i0), s1 = a.getX(i1), s2 = a.getX(i2);
+        if (Math.max(s0, s1, s2) >= lo && Math.min(s0, s1, s2) <= hi) triangles++;
+      }
+    }
+    const e = { lo, hi, whole, triangles };
+    hintBands.set(k, e);
+    return e;
+  }
+  function setBorderHints(list, keys) {
+    const want = new Map(); // region id -> { lo, hi, color, keys }
+    list.forEach((h, i) => {
+      const rec = regionById.get(h.regionId);
+      if (!rec || !(rec.material.userData && rec.material.userData.nsBorder)) return;
+      const band = hintBand(rec, typeof h.actionId === 'string' ? h.actionId : null);
+      const c = Array.isArray(h.color) && h.color.length === 3 && h.color.every(Number.isFinite) ? h.color : REGION_HINT.color;
+      const w = want.get(rec.id);
+      // Two hints on one area (rare): the span of both sub-bands, the first hint's colour.
+      if (w) { w.lo = Math.min(w.lo, band.lo); w.hi = Math.max(w.hi, band.hi); if (!w.keys.includes(keys[i])) w.keys.push(keys[i]); }
+      else want.set(rec.id, { lo: band.lo, hi: band.hi, color: c, keys: [keys[i]] });
+    });
+    hintShown = [];
+    for (const rec of regions) {
+      const u = rec.material.userData && rec.material.userData.nsBorder;
+      if (!u) continue;
+      const w = want.get(rec.id);
+      if (!w) { u.nsHint.value.set(0, 0, 0, 0); continue; }
+      const g = REGION_BORDER.hintGain * (REGION_HINT.opacity / 0.28);
+      u.nsHint.value.set(w.lo, w.hi, 1, REGION_BORDER.hintAlpha);
+      u.nsHintColor.value.set(w.color[0] * g, w.color[1] * g, w.color[2] * g);
+      for (const k of w.keys) if (!hintShown.includes(k)) hintShown.push(k);
+    }
+    return hintShown.length;
+  }
+  /** R558: show exactly these hints ([{ regionId, actionId?, color? }], e.g. ns-actions latchView().hints); [] or null
+   * hides them all. Cheap when unchanged (one key compare). Returns the number of hint areas shown. */
+  function setRegionHints(hints) {
+    const list = Array.isArray(hints) ? hints.filter(h => h && typeof h.regionId === 'string' && regionById.has(h.regionId)) : [];
+    const keys = list.map(h => `${h.regionId}/${typeof h.actionId === 'string' ? h.actionId : ''}`);
+    const key = Array.from(new Set(keys)).sort().join('|');
+    if (key === hintKey) return hintShown.length;
+    hintKey = key;
+    if (regionBorder.applied !== false && regions.some(r => r.material.userData && r.material.userData.nsBorder)) return setBorderHints(list, keys);
+    for (const e of hintMeshes.values()) for (const m of e.meshes) m.visible = false;
+    hintShown = [];
+    const seen = new Set();
+    list.forEach((h, i) => {
+      const k = keys[i];
+      if (seen.has(k)) return;
+      seen.add(k);
+      const e = hintMeshes.get(k) || buildHint(k, h.regionId, typeof h.actionId === 'string' ? h.actionId : null, h.color);
+      if (!e) return;
+      for (const m of e.meshes) m.visible = true;
+      hintShown.push(k);
+    });
+    return hintShown.length;
+  }
+  /** R558: read-only record of the shown hints (key, whole-area fallback, triangle count). */
+  function regionHintState() {
+    return { shown: hintShown.map(k => { const e = hintMeshes.get(k) || hintBands.get(k); return { key: k, whole: Boolean(e && e.whole), triangles: e ? e.triangles : 0 }; }), built: hintMeshes.size + hintBands.size, style: REGION_HINT, inPass: hintBands.size > 0 };
   }
 
   // R4-fix (review F2): the small-area switched-on markers (DOM rings over the brain, one per marked small area).
@@ -4900,6 +7376,7 @@ export function createScene({
     }
   }
 
+  let sideTieScratch = null; // R558: per-point screen distances of the side-label search (reused, no per-frame allocation)
   /** World points of the brain's orientation labels in region mode ({ right, left, anterior, posterior } just outside
    * the strips' bounds along the transform's axes), for hud.placeOrientation; null in legacy mode or before a transform. */
   function brainOrientationAnchors() {
@@ -4927,13 +7404,27 @@ export function createScene({
         let dx = s1[0] - s0[0], dy = s1[1] - s0[1];
         const L = Math.hypot(dx, dy);
         let best = -1, bestV = -Infinity;
+        const mid = k === 'anterior' || k === 'posterior';
+        const tie = !mid && L > 1e-6;
+        if (tie && (!sideTieScratch || sideTieScratch.v.length < n)) sideTieScratch = { v: new Float64Array(n), u: new Float64Array(n) };
         for (let i = 0; i < P.length; i += 3) {
           // degenerate (the axis points at the camera): fall back to the extreme along the source axis
           const v = L > 1e-6 ? (scr(P[i], P[i + 1], P[i + 2], q), (q[0] - s0[0]) * dx / L + (q[1] - s0[1]) * dy / L)
             : P[i] * a[0] + P[i + 1] * a[1] + P[i + 2] * a[2];
+          if (tie) { sideTieScratch.v[i / 3] = v; sideTieScratch.u[i / 3] = Math.abs((q[1] - s0[1]) * dx - (q[0] - s0[0]) * dy) / L; }
           if (v > bestV) { bestV = v; best = i; }
         }
-        const mid = k === 'anterior' || k === 'posterior';
+        // R558 (issue hunt 1, item 10: "← Your left" and "Your right →" sat at different heights, up to 400 px apart in
+        // the view from behind): a brain side is a long, nearly straight edge on screen, so its single furthest point
+        // could lie anywhere along it, and the two sides picked points far apart. Among the side's points within
+        // SIDE_LABEL_TIE of the furthest one (a share of the centre-to-side distance on screen), take the one nearest
+        // the brain centre's own height across the axis: both side labels then sit level with the brain's middle, as a
+        // pair, while each still sits on its side's outline. Display choice.
+        if (tie && bestV > 0) {
+          const floor = bestV * (1 - SIDE_LABEL_TIE);
+          let bu = Infinity;
+          for (let j = 0; j < n; j++) if (sideTieScratch.v[j] >= floor && sideTieScratch.u[j] < bu) { bu = sideTieScratch.u[j]; best = 3 * j; }
+        }
         out[k] = w([(mid ? c[0] : P[best]) + pad * a[0], P[best + 1] + pad * a[1], P[best + 2] + pad * a[2]]);
       }
       return out;
@@ -4972,6 +7463,7 @@ export function createScene({
     if (c.activity) {
       put(info.activity, c.activity.text);
       if (info.swatch.style) info.swatch.style.background = c.activity.css;
+      if (info.meter.style) { const mb = c.activity.meter || legendGradientCss(9); if (info.meterBg !== mb) { info.meterBg = mb; info.meter.style.background = mb; } }
       info.actRow.hidden = false;
       info.meter.hidden = false;
       if (info.meterMark.style) info.meterMark.style.left = `${(c.activity.value * 100).toFixed(1)}%`;
@@ -5025,6 +7517,65 @@ export function createScene({
   const entryList = entries => (entries instanceof Map ? [...entries.values()] : Array.isArray(entries) ? entries : entries && Array.isArray(entries.assets) ? entries.assets : []);
   const meshOf = (meshesById, id) => (meshesById instanceof Map ? meshesById.get(id) : meshesById ? meshesById[id] : null);
 
+  /** R558 (Message 18, "easily differentiate each ... muscle node"): which muscles touch (they share a cell of
+   * MUSCLE_TONE_CONTACT.cellMm in the drawn rest geometry; every `stride`-th vertex sampled; contact weight = shared
+   * cells) -> ns-colors assignMuscleTones (side-free keys: a left / right pair is one node, so both sides share a tone)
+   * -> every muscle's base colour; then every muscle (your body, its twins, the left game arm) is shaded again. Once,
+   * at setBody. A display choice: the tones do not stand for any tissue property. */
+  const MUSCLE_TONE_CONTACT = Object.freeze({ cellMm: 8, stride: 2 });
+  function assignBodyMuscleTones() {
+    const t0 = nowMs();
+    const recs = body.filter(b => b.kind === 'muscle');
+    const keys = recs.map(b => muscleToneKeyOf(b.id));
+    const inv = 1 / MUSCLE_TONE_CONTACT.cellMm, cells = new Map(), pairs = new Map();
+    recs.forEach((b, i) => {
+      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, p = g && g.attributes && g.attributes.position ? g.attributes.position.array : null;
+      if (!p) return;
+      for (let v = 0; v + 2 < p.length; v += 3 * MUSCLE_TONE_CONTACT.stride) {
+        const c = (Math.floor(p[v] * inv) + 4096) * 67108864 + (Math.floor(p[v + 1] * inv) + 4096) * 8192 + (Math.floor(p[v + 2] * inv) + 4096);
+        const list = cells.get(c);
+        if (!list) cells.set(c, [i]); else if (list[list.length - 1] !== i) list.push(i);
+      }
+    });
+    for (const list of cells.values()) {
+      if (list.length < 2) continue;
+      for (let a = 0; a < list.length; a++) for (let b = a + 1; b < list.length; b++) {
+        const ka = keys[list[a]], kb = keys[list[b]];
+        if (ka === kb) continue;
+        const pk = ka < kb ? `${ka}\u0000${kb}` : `${kb}\u0000${ka}`;
+        pairs.set(pk, (pairs.get(pk) || 0) + 1);
+      }
+    }
+    const contacts = new Map();
+    const add = (a, b, w) => { let m = contacts.get(a); if (!m) contacts.set(a, (m = new Map())); m.set(b, (m.get(b) || 0) + w); };
+    for (const [pk, w] of pairs) { const [a, b] = pk.split('\u0000'); add(a, b, w); add(b, a, w); }
+    muscleTones.byKey = assignMuscleTones(keys, contacts);
+    let worst = Infinity, worstPair = null;
+    for (const [pk, w] of pairs) {
+      if (w < 4) continue; // a real contact, not a corner touch
+      const [a, b] = pk.split('\u0000'), d = muscleToneDistanceOf(a, b);
+      if (d < worst) { worst = d; worstPair = [a, b, w]; }
+    }
+    muscleTones.contacts = pairs.size; muscleTones.keys = new Set(keys).size;
+    muscleTones.worst = Number.isFinite(worst) ? { distance: Math.round(worst * 1000) / 1000, pair: worstPair } : null;
+    muscleTones.ms = Math.round(nowMs() - t0);
+    for (const b of recs) {
+      setMuscleBase(b.material, b.id);
+      if (b.mirror) setMuscleBase(b.mirror.material, b.id);
+      if (b.inPlace) setMuscleBase(b.inPlace.material, b.id);
+      shadeBodyMuscle(b);
+    }
+    for (const m of muscles) {
+      setMuscleBase(m.mat, m.id);
+      if (m.mirror) setMuscleBase(m.mirror.material, m.id);
+      shadeArmMuscle(m);
+    }
+  }
+  const muscleToneDistanceOf = (a, b) => {
+    const t = muscleTones.byKey;
+    return t && t.has(a) && t.has(b) ? NsColors.muscleToneDistance(t.get(a), t.get(b)) : NaN;
+  };
+
   /** Full body (shared interface 3/6). entries: FULLBODY-MESH-MANIFEST assets (or ns-body entries) with element_id,
    * region, kind, label; meshesById: Map | object id -> { positions (source mm), indices }; rig (ns-body
    * buildBodyRig, optional, unused for drawing). Options: bodyToWorld (4x4, else the current body frame). Bones use the
@@ -5047,21 +7598,35 @@ export function createScene({
       const kind = bodyKindOf(entry);
       const near = nearestDistance(m.positions, eyeBp, m.positions.length > 30000 ? 2 : 1) < nearMm;
       const face = part === 'face' || (near && !isBodyGirdleEntry(entry));
-      const geo = indexedGeometry(m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions), m.indices instanceof Uint32Array ? m.indices : Uint32Array.from(m.indices));
+      // R558 (Message 30): a finger or toe phalanx is drawn from its rounded display copy (boneTipDisplay; documented
+      // derivative, the packet arrays are not changed).
+      const tipName = kind === 'bone' ? String(entry.embedded_source_name || (Array.isArray(entry.matched_concept_names) && entry.matched_concept_names[0]) || entry.label || entry.requested_structure || '') : '';
+      const tipPos = /phalan/i.test(tipName) ? boneTipDisplay(m.positions, m.indices, { distal: /distal phalanx/i.test(tipName) }) : null;
+      if (tipPos) boneTips.meshes++;
+      const geo = indexedGeometry(tipPos || (m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions)), m.indices instanceof Uint32Array ? m.indices : Uint32Array.from(m.indices));
       geo.computeVertexNormals();
       weldGeometryNormals(geo); // R558 (R33): own body, its in-place head and the mirror twin all draw this geometry
+      hatchAttr(geo, geo.attributes.position.array, kind === 'muscle' ? 'muscle' : 'bone', id); // R558 (Messages 24, 29): ink frame
       if (typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
       let material;
       const trunk = !face && (part === 'torso' || part === 'neck');
       if (kind === 'muscle') {
-        material = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 }));
+        material = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }));
+        tendonAttr(geo); // R558 (Message 18): tendon ends, written by setBodyLift
+        setMuscleBase(material, id);
+        material.userData.nsFibre = fibreUniform(geo.attributes.position.array, id);
+        material.userData.nsSweep = sweepUniform(geo.attributes.position.array, material.userData.nsFibre); // R558 (Message 22)
         if (face) { material.transparent = true; material.opacity = FACE_LAYER.muscleOpacity; material.depthWrite = false; }
         else if (trunk) torsoPatch(material);
         if (!face) overBrainPatch(material, part === 'legs');
         glowRimPatch(material); // R5-scene (D17)
+        muscleLookPatch(material); // R558 (Message 18)
+        powerUpPatch(material, 'muscle'); // R558 (Message 22): the power-up charge
+        comicPatch(material, 'muscle'); // R558 (Messages 25 to 29): bands, rim, highlight shapes, ink
         shadeMuscle(material, MUSCLE_REST_DRIVE);
       } else material = face ? faceBoneMaterial : trunk ? torsoBoneMaterial : part === 'legs' ? legBoneMaterial : bodyBoneMaterial;
-      const mesh = new THREE.Mesh(geo, material);
+      const eyePart = kind === 'bone' ? eyePartOf(entry) : null; // R558 (builder FA): sclera / iris / lens
+      const mesh = kind === 'muscle' ? haloHost(new THREE.Mesh(geo, material)) : new THREE.Mesh(geo, material); // R558: halo
       mesh.name = bodyMeshName(entry, id) + (face ? ' [face layer]' : '');
       mesh.matrixAutoUpdate = false;
       mesh.userData = { elementId: id, bodyPart: face ? 'face' : part, anatomicalPart: part, kind, region: entry.region || null, faceLayer: face, nearEye: near, activity: kind === 'muscle' ? MUSCLE_REST_DRIVE : null };
@@ -5081,11 +7646,14 @@ export function createScene({
         const c = geo.boundingSphere ? geo.boundingSphere.center : null;
         rec.side = c ? (c.x > 15 ? -1 : c.x < -15 ? 1 : 0) : 0;
       }
+      // R558 (Message 2): the area whose colour this muscle shows when no area claims it (ns-colors bodyPartArea).
+      if (kind === 'muscle') { rec.owner = null; rec.fallbackArea = bodyPartArea(part, rec.side); }
       // R5-scene (D19): the mirror twin (same geometry and pose matrix, opaque, head and face in place).
       {
-        const tm = kind === 'muscle' ? mirrorMuscleMaterial() : mirrorBoneMaterial;
+        const tm = kind === 'muscle' ? setMuscleBase(mirrorMuscleMaterial(), id) : eyePart ? eyeMaterial(eyePart, true) : mirrorBoneMaterial;
+        if (kind === 'muscle') { tm.userData.nsFibre = material.userData.nsFibre; tm.userData.nsSweep = material.userData.nsSweep; }
         if (kind === 'muscle') shadeMuscle(tm, MUSCLE_REST_DRIVE);
-        const tw = new THREE.Mesh(geo, tm);
+        const tw = kind === 'muscle' ? haloHost(new THREE.Mesh(geo, tm), true) : new THREE.Mesh(geo, tm);
         tw.name = `mirror image: ${bodyMeshName(entry, id)}`;
         tw.matrixAutoUpdate = false;
         tw.userData = { mirrorOf: id, elementId: id, bodyPart: part, kind, side: rec.side, nsFullGeometry: geo };
@@ -5096,9 +7664,9 @@ export function createScene({
       }
       // R5-scene (D18): head and face meshes also get an IN-PLACE twin on your own body, shown only in third person.
       if (face) {
-        let im = bodyBoneMaterial;
-        if (kind === 'muscle') { im = glowRimPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: 0.55, metalness: 0 })))); shadeMuscle(im, MUSCLE_REST_DRIVE); }
-        const ip = new THREE.Mesh(geo, im);
+        let im = eyePart ? eyeMaterial(eyePart, false) : bodyBoneMaterial;
+        if (kind === 'muscle') { im = setMuscleBase(comicPatch(powerUpPatch(muscleLookPatch(glowRimPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }))))), 'muscle'), 'muscle'), id); im.userData.nsFibre = material.userData.nsFibre; im.userData.nsSweep = material.userData.nsSweep; shadeMuscle(im, MUSCLE_REST_DRIVE); }
+        const ip = kind === 'muscle' ? haloHost(new THREE.Mesh(geo, im)) : new THREE.Mesh(geo, im);
         ip.name = `${bodyMeshName(entry, id)} [in place: third person]`;
         ip.matrixAutoUpdate = false;
         ip.visible = camState.headInPlace;
@@ -5108,10 +7676,18 @@ export function createScene({
         rec.inPlace = ip;
         mesh.userData.nsInPlaceTwin = ip;
       }
+      // R558 (Message 20): outline codes (a coarse group from the part and side until setOutlineSegments brings the rig's).
+      {
+        const g = outlineGroupForPart(part, rec.side);
+        if (!face) outline.register(rec.mesh, { group: g });
+        if (rec.mirror) outline.register(rec.mirror, { group: g, mirror: true });
+        if (rec.inPlace) outline.register(rec.inPlace, { group: g });
+      }
       body.push(rec);
       bodyById.set(id, rec);
       fastPick(rec.mesh); if (rec.mirror) fastPick(rec.mirror); if (rec.inPlace) fastPick(rec.inPlace); // R558: rigid body meshes
     }
+    assignBodyMuscleTones(); // R558 (Message 18): neighbouring muscles get clearly different natural tones
     // R5-integrate-core (D20): face-muscle packet meshes (R5-face ids zf-..., source_packet face-muscles-r1) are in the body.
     const facePacket = list.filter(e => e && (e.source_packet === 'face-muscles-r1' || e.packet === 'face-muscles-r1' || /^zf-/.test(String(e.element_id || e.id || '')))).length;
     if (facePacket > 0 && NS_TEXT.FACE_R5) {
@@ -5136,34 +7712,189 @@ export function createScene({
   }
 
   /** R183: exact-ID regional anatomy is independent from target display selection.
-   * Full scope/caveats come from the same pinned local catalogue as ns-body. Body
-   * offset values here remain TARGET metadata; applied arm offsets are R174 fields. */
-  let bodyLayerInfo = null;
+   * Full scope/caveats come from the same pinned local catalogue as ns-body.
+   * R558 (the Body Worlds stack): the selection is every drawn muscle the one stack rule (ns-body bodyStackLevel) puts
+   * at the outer or the intermediate level AND the summary lists; the summary's offsets are the largest per-vertex
+   * displacement of the full lift (target). What is actually drawn is set by setBodyLift; until a muscle's lifted
+   * geometry is registered there its status stays 'selected-target' and its applied offset 0. */
+  let bodyLayerInfo = null, bodyLayerSummary = null;
+  const bodyLift = new Map(), bodyLiftGeos = new Map(); // element id -> lift record; full geometry -> the same record
+  let bodyLiftAmount = 0, bodyLiftInfo = null;
+  function writeBodyWorlds(b) {
+    const sum = bodyLayerSummary, q = regionalLayerQualification(b.id), level = bodyStackLevel(b.id);
+    const L = bodyLift.get(b.id) || null;
+    const isSelected = (level === 'outer' || level === 'intermediate') && Boolean(L || (sum && sum.selected.has(b.id)));
+    const listed = sum && Number.isFinite(sum.off[b.id]) ? sum.off[b.id] : 0;
+    const targetOffsetMm = !isSelected ? 0 : L ? Math.round(L.maxMm * 10) / 10 : listed;
+    const bw = Object.freeze({ ...regionalLayerMetadata(b.id, isSelected), stackLevel: level, displaySelected: isSelected,
+      displayStatus: !isSelected ? (L ? (bodyLiftAmount > 0 ? 'filled' : 'off') : 'not-selected') : !L ? 'selected-target' : bodyLiftAmount > 0 ? 'applied' : 'off',
+      offsetMm: L ? Math.round(L.maxMm * bodyLiftAmount * 10) / 10 : 0, targetOffsetMm,
+      anchoredVertices: L ? L.still : 0,
+      offsetMeaning: L ? (isSelected ? 'largest-vertex-displacement' : 'largest-vertex-displacement-fill-only') : 'target-not-applied', offsetFrame: 'drawn-rest-mm',
+      amount: L ? bodyLiftAmount : null,
+      targetAmount: sum && Number.isFinite(sum.targetAmount) ? sum.targetAmount : null });
+    b.mesh.userData.bodyWorlds = bw;
+    if (b.mirror) b.mirror.userData.bodyWorlds = bw;
+    if (b.inPlace) b.inPlace.userData.bodyWorlds = bw;
+    return { q, level, isSelected };
+  }
   function setBodyLayers(summary) {
     if (summary && summary.regionalCatalogueSha256 !== REGIONAL_LAYER_PROVENANCE.classificationDataSha256) {
       fail('scene_input', 'body layer summary catalogue identity does not match the scene');
     }
-    const selected = new Set(summary && Array.isArray(summary.displaySelected) ? summary.displaySelected : []);
-    const off = summary && summary.offsetMm && typeof summary.offsetMm === 'object' ? summary.offsetMm : {};
-    const n = { superficial: 0, intermediate_deep: 0, unclassified: 0, displaySelected: 0 };
+    bodyLayerSummary = {
+      selected: new Set(summary && Array.isArray(summary.displaySelected) ? summary.displaySelected : []),
+      off: summary && summary.offsetMm && typeof summary.offsetMm === 'object' ? summary.offsetMm : {},
+      targetAmount: summary ? summary.targetAmount : null
+    };
+    const n = { superficial: 0, intermediate_deep: 0, unclassified: 0, displaySelected: 0, outer: 0, intermediate: 0 };
     for (const b of body) {
       if (b.kind !== 'muscle') continue;
-      const q = regionalLayerQualification(b.id);
-      const isSelected = q.candidate && selected.has(b.id);
-      const targetOffsetMm = isSelected && Number.isFinite(off[b.id]) ? off[b.id] : 0;
-      const bw = Object.freeze({ ...regionalLayerMetadata(b.id, isSelected),
-        displayStatus: isSelected ? 'selected-target' : 'not-selected',
-        offsetMm: targetOffsetMm, targetOffsetMm, offsetMeaning: 'target-not-applied',
-        targetAmount: summary && Number.isFinite(summary.targetAmount) ? summary.targetAmount : null });
-      b.mesh.userData.bodyWorlds = bw;
-      if (b.mirror) b.mirror.userData.bodyWorlds = bw;
-      if (b.inPlace) b.inPlace.userData.bodyWorlds = bw;
-      n[q.layer]++;
-      if (isSelected) n.displaySelected++;
+      const r = writeBodyWorlds(b);
+      n[r.q.layer]++;
+      if (r.isSelected) { n.displaySelected++; n[r.level]++; }
     }
     // Compatibility count only: scoped intermediate/deeper relations, not all unlifted meshes.
     bodyLayerInfo = { ...n, deep: n.intermediate_deep };
     return { ...bodyLayerInfo };
+  }
+
+  /** R558: the Body Worlds stack on the body. The own body, its in-place head twin and the mirror body draw the SAME
+   * geometry objects, so one write moves all of them together.
+   * liftedById: Map (or plain object) element id -> Float32Array, the FULL-lift vertex positions of one lifted muscle in
+   * the drawn rest frame (ns-body bodyStackLiftedPositions: a per-vertex lift, zero at the anchored ends, so those
+   * vertices are the same numbers as in the unlifted geometry); each id is registered once, later calls pass null and
+   * only change the amount. amount 0..1 blends unlifted -> full lift. Amount 0 copies the unlifted positions and
+   * normals back number for number: exactly the unlifted body.
+   * Cost: the vertex buffers of the lifted muscles are rewritten only when the amount CHANGES (the short ease when the
+   * setting is switched); a steady amount costs nothing per frame. Normals: the unlifted and the full-lift normals are
+   * each computed once (same area weighting and seam weld as every body mesh); in between they are blended and
+   * renormalised, exact at 0 and at 1. Level-of-detail copies of a lifted muscle are index-only over the same buffers
+   * (lodGeometry), and its bounding sphere is grown once to hold the full lift, so culling, the mirror envelope and
+   * picking stay right at every amount. Picking: pickBufferWritten.
+   * A display choice on licensed anatomy; the anchor rule lives in ns-body. Fails closed (scene_input) on an id that
+   * the stack rule does not lift or on geometry that does not match the drawn mesh.
+   * Returns { lifted, registered, missing, amount, maxLiftMm, vertices }. */
+  function applyBodyLift(L, a) {
+    if (L.applied === a) return false;
+    const p = L.pos.array, n = L.nor.array, r = L.rest, f = L.full, rn = L.restN, fn = L.fullN;
+    if (a <= 0) { p.set(r); n.set(rn); }
+    else if (a >= 1) { p.set(f); n.set(fn); }
+    else {
+      const b = 1 - a;
+      for (let i = 0; i < p.length; i++) p[i] = r[i] + a * (f[i] - r[i]);
+      for (let i = 0; i < n.length; i += 3) {
+        const x = b * rn[i] + a * fn[i], y = b * rn[i + 1] + a * fn[i + 1], z = b * rn[i + 2] + a * fn[i + 2], l = Math.hypot(x, y, z);
+        if (l > 1e-6) { n[i] = x / l; n[i + 1] = y / l; n[i + 2] = z / l; } else { n[i] = rn[i]; n[i + 1] = rn[i + 1]; n[i + 2] = rn[i + 2]; }
+      }
+    }
+    L.pos.needsUpdate = true; L.nor.needsUpdate = true;
+    L.applied = a;
+    pickBufferWritten(p);
+    lodTouch(L.geo); // R558: the body's coarser copies follow
+    // R558: a skinned right-hand muscle keeps its pose: the lift rides on the skin (setBodySkin).
+    const sk = bodySkin.get(L.id);
+    if (sk && sk.skinned) skinOne(sk);
+    return true;
+  }
+  function setBodyLift(liftedById = null, amount = 1) {
+    const a = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
+    let registered = 0, missing = 0, relod = false;
+    if (liftedById) {
+      const list = liftedById instanceof Map ? [...liftedById] : Object.keys(liftedById).map(id => [id, liftedById[id]]);
+      for (const [id, full] of list) {
+        const b = bodyById.get(id);
+        if (!b) { missing++; continue; } // a lifted id the scene does not draw (skipped at setBody)
+        const level = bodyStackLevel(id);
+        // Round 3: every muscle may take the display fill; only the levels the stack rule lifts may move further.
+        if (b.kind !== 'muscle') fail('scene_input', 'body lift is only for muscles');
+        const geo = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+        const pos = geo && geo.attributes ? geo.attributes.position : null, nor = geo && geo.attributes ? geo.attributes.normal : null;
+        const had = bodyLift.get(id);
+        if (had) {
+          if (had.full !== full) fail('scene_input', 'a body muscle takes its lifted geometry once');
+          continue;
+        }
+        if (!pos || !nor || !geo.index || !(pos.array instanceof Float32Array) || !(nor.array instanceof Float32Array) || !(full instanceof Float32Array)
+          || full.length !== pos.array.length || nor.array.length !== pos.array.length || full === pos.array) {
+          fail('scene_input', 'lifted body geometry does not match the drawn mesh');
+        }
+        const rest = pos.array; // the caller's baked array: kept as the unlifted reference, never written again
+        let max2 = 0, still = 0;
+        for (let i = 0; i < rest.length; i += 3) {
+          const dx = full[i] - rest[i], dy = full[i + 1] - rest[i + 1], dz = full[i + 2] - rest[i + 2], d2 = dx * dx + dy * dy + dz * dz;
+          if (!(d2 >= 0) || d2 === Infinity) fail('scene_input', 'lifted body geometry must be finite');
+          if (d2 === 0) still++; else if (d2 > max2) max2 = d2;
+        }
+        if (Math.sqrt(max2) > stackCapMm(level)) fail('scene_input', 'body lift moves a muscle further than the stack rule allows');
+        // One drawn buffer per muscle: swap the ARRAY (same length), keep the attribute OBJECT (level-of-detail copies
+        // and the mirror twin keep sharing it).
+        pos.array = new Float32Array(rest);
+        const L = { id, level, geo, pos, nor, rest, full, restN: new Float32Array(nor.array),
+          fullN: computeNormals(full, geo.index.array, undefined, { groups: null }), maxMm: Math.sqrt(max2), still, vertices: rest.length / 3, applied: 0 };
+        pos.needsUpdate = true;
+        // Grow the bounding volumes in place (shared objects) so they hold every amount of the lift.
+        if (!geo.boundingSphere && typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
+        if (geo.boundingSphere) {
+          const c = geo.boundingSphere.center;
+          let r2 = geo.boundingSphere.radius * geo.boundingSphere.radius;
+          for (let i = 0; i < full.length; i += 3) {
+            const d2 = (full[i] - c.x) ** 2 + (full[i + 1] - c.y) ** 2 + (full[i + 2] - c.z) ** 2;
+            if (d2 > r2) r2 = d2;
+          }
+          geo.boundingSphere.radius = Math.sqrt(r2);
+        }
+        if (geo.boundingBox) { const bp = new THREE.Vector3(); for (let i = 0; i < full.length; i += 3) geo.boundingBox.expandByPoint(bp.set(full[i], full[i + 1], full[i + 2])); }
+        bodyLift.set(id, L);
+        bodyLiftGeos.set(geo, L);
+        writeTendon(geo, rest, full, id); // R558 (Message 18): tendon white on the anchored ends
+        // Level-of-detail copies built before the lift hold their own (unlifted) vertices: drop them; lodGeometry now
+        // makes index-only copies over the shared buffers.
+        const byCell = lodOf.get(geo);
+        if (byCell) {
+          for (const g of byCell.values()) {
+            if (g === geo) continue;
+            const t = g.userData && g.userData.nsLodStat;
+            if (t && t.stat) { t.stat[0] -= t.full; t.stat[1] -= t.lod; }
+            if (typeof g.dispose === 'function') g.dispose();
+          }
+          lodOf.delete(geo); lodSyncs.delete(geo);
+          relod = true;
+        }
+        pickBufferWritten(pos.array);
+        registered++;
+      }
+    }
+    let maxLiftMm = 0, vertices = 0;
+    for (const L of bodyLift.values()) { applyBodyLift(L, a); if (L.maxMm > maxLiftMm) maxLiftMm = L.maxMm; vertices += L.vertices; }
+    const amountChanged = a !== bodyLiftAmount;
+    bodyLiftAmount = a;
+    if (registered || amountChanged) for (const L of bodyLift.values()) writeBodyWorlds(bodyById.get(L.id));
+    if (relod && lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied);
+    let outer = 0, intermediate = 0, fillOnly = 0;
+    for (const L of bodyLift.values()) { if (L.level === 'outer') outer++; else if (L.level === 'intermediate') intermediate++; else fillOnly++; }
+    bodyLiftInfo = { lifted: outer + intermediate, filled: bodyLift.size, fillOnly, outer, intermediate, missing: (bodyLiftInfo ? bodyLiftInfo.missing : 0) + missing, amount: a,
+      maxLiftMm: Math.round(maxLiftMm * 10) / 10, vertices };
+    return { ...bodyLiftInfo, registered };
+  }
+
+  /** R558 (Message 20, ns-outline): the limb group of each body mesh from the rig's segment membership (ns-body
+   * buildBodyRig meshSegment: { id: { segment, blend } }); a muscle spanning a joint takes the segment with most of its
+   * weight. Meshes the rig does not list keep their coarse group. Returns how many meshes were set. */
+  function setOutlineSegments(meshSegment) {
+    if (!meshSegment || typeof meshSegment !== 'object') return 0;
+    let n = 0;
+    for (const b of body) {
+      const info = meshSegment[b.id];
+      if (!info) continue;
+      const g = outlineGroupForBlend(info.blend, info.segment);
+      if (!(g > 0)) continue;
+      if (!b.face) outline.setGroup(b.mesh, g);
+      if (b.mirror) outline.setGroup(b.mirror, g);
+      if (b.inPlace) outline.setGroup(b.inPlace, g);
+      n++;
+    }
+    return n;
   }
 
   /** Body frame: a 4x4 BodyParts3D mm -> world m matrix (ns-arm armAttachment().bodyToWorld or ns-math
@@ -5197,6 +7928,244 @@ export function createScene({
    * frame, mm -> mm), drives = bodyMuscleDrives(...) ({ muscleMeshId: 0..1 }, missing ids keep the rest tint). GPU
    * transforms only (no CPU skinning); a matrix or drive is written only when it changed. Returns the number of meshes
    * whose matrix changed. */
+  /* R558 (Messages 14 / 15: each finger of the right hand on its own, as on the left game hand). The long finger and
+   * thumb muscles and the hand's own muscle sets are ONE mesh across several digits (and across the wrist), so a single
+   * rigid matrix cannot follow one bent finger next to a straight one: the tendon of the bent finger would stick out.
+   * These meshes are skinned per vertex instead, with the same two-influence weights that baked the start posture (ns-body
+   * bodySkinWeights on the source vertices), exactly as the left game arm's muscles are skinned (ns-rig skinApply).
+   * setBodySkin(records, bakedSegments) registers them once: records Map(element id -> { src (source positions), i0, i1,
+   * w0, w1 }), bakedSegments the bake's Map(segment -> source->drawn matrix). updateBodySkin(segments) poses them from
+   * poseBodyDetailed().segments (source->drawn) on top of the rigid matrix updateBody has just set (the vertices are
+   * written in the mesh's own frame, so culling, picking, the mirror twin and the in-place head share one buffer as with
+   * the lift); updateBodySkin(null) puts the rigid rest geometry back. The Body Worlds lift rides on the skin: the lift's
+   * per-vertex offset is turned with the vertex's blended rotation. Written only when called (ns-app calls it when the
+   * right hand or wrist is away from the start posture and the pose changed). Display choice on licensed anatomy. */
+  const bodySkin = new Map(), bodySkinGeos = new Map();
+  let bodySkinOn = false, bodySkinSegs = null, bodySkinBaked = null, bodySkinWrites = 0;
+  const rigidInv16 = (m, o) => { // inverse of a rigid (rotation + translation) column-major 4x4
+    o[0] = m[0]; o[1] = m[4]; o[2] = m[8]; o[4] = m[1]; o[5] = m[5]; o[6] = m[9]; o[8] = m[2]; o[9] = m[6]; o[10] = m[10];
+    o[12] = -(o[0] * m[12] + o[4] * m[13] + o[8] * m[14]); o[13] = -(o[1] * m[12] + o[5] * m[13] + o[9] * m[14]); o[14] = -(o[2] * m[12] + o[6] * m[13] + o[10] * m[14]);
+    o[3] = 0; o[7] = 0; o[11] = 0; o[15] = 1; return o;
+  };
+  const mul16 = (a, b, o) => { for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[4 * c + r] = a[r] * b[4 * c] + a[4 + r] * b[4 * c + 1] + a[8 + r] * b[4 * c + 2] + a[12 + r] * b[4 * c + 3]; return o; };
+  function setBodySkin(records, bakedSegments) {
+    if (!(records instanceof Map) || !(bakedSegments instanceof Map)) fail('scene_input', 'setBodySkin needs Map records and the baked segment matrices');
+    let registered = 0, missing = 0;
+    bodySkinBaked = bakedSegments;
+    for (const [id, r] of records) {
+      const b = bodyById.get(id);
+      if (!b || b.kind !== 'muscle') { missing++; continue; }
+      const geo = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      const pos = geo && geo.attributes ? geo.attributes.position : null, nor = geo && geo.attributes ? geo.attributes.normal : null;
+      const n = pos ? pos.array.length / 3 : 0;
+      if (!pos || !nor || !(r.src instanceof Float32Array) || r.src.length !== pos.array.length || !r.i0 || r.i0.length !== n || r.i1.length !== n || r.w0.length !== n || r.w1.length !== n) {
+        fail('scene_input', 'hand skin record does not match the drawn mesh');
+      }
+      if (bodySkin.has(id)) continue;
+      const lift = bodyLift.get(id) || null;
+      // R558 (ns-body R_FOREARM_TWIST): a right forearm muscle's twisted ulna influence carries tf and the twist frame.
+      if (r.tf && (!(r.tf instanceof Float32Array) || r.tf.length !== n || !r.twist || !r.twist.axis || !r.twist.point)) fail('scene_input', 'forearm twist record does not match the drawn mesh');
+      const rec = { id, b, geo, pos, nor, src: r.src, i0: r.i0, i1: r.i1, w0: r.w0, w1: r.w1, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
+        rest: lift ? lift.rest : new Float32Array(pos.array), restN: lift ? null : new Float32Array(nor.array), skinned: false };
+      if (!lift) pos.array = new Float32Array(rec.rest); // one drawn buffer per muscle (attribute object kept; see the lift)
+      // The fingers and the hand move up to about a hand length against the mesh's rigid frame: grow the shared bounding
+      // sphere once so culling stays right at every pose.
+      if (!geo.boundingSphere && typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
+      if (geo.boundingSphere) geo.boundingSphere.radius += 220;
+      if (geo.boundingBox) geo.boundingBox.expandByScalar(220);
+      // Coarser copies built before now hold their own vertices: drop them (lodGeometry makes index-only ones for these).
+      const byCell = lodOf.get(geo);
+      if (byCell) { for (const g of byCell.values()) if (g !== geo && typeof g.dispose === 'function') g.dispose(); lodOf.delete(geo); lodSyncs.delete(geo); }
+      bodySkin.set(id, rec);
+      const used = new Set();
+      for (let v = 0; v < n; v++) { used.add(r.i0[v]); used.add(r.i1[v]); }
+      if (rec.tf) { used.add(SKIN_RF); used.add(SKIN_RR); } // the twisted frames follow the ulna and the radius
+      rec.used = Uint8Array.from(used); // the bones this muscle's vertices hang from (skinOne, skinPoseSame)
+      if (!lift) bodySkinGeos.set(geo, rec);
+      pos.needsUpdate = true;
+      pickBufferWritten(pos.array);
+      registered++;
+    }
+    if (registered && lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied);
+    return { registered, missing, skinned: bodySkin.size };
+  }
+  /** The unskinned drawn geometry of one record (rest, or the lift blend at its current amount) into out arrays. */
+  function skinBase(rec, P, N) {
+    const L = rec.lift;
+    if (!L) { P.set(rec.rest); N.set(rec.restN); return; }
+    const a = L.applied || 0, b = 1 - a, r = L.rest, f = L.full, rn = L.restN, fn = L.fullN;
+    for (let i = 0; i < P.length; i++) P[i] = r[i] + a * (f[i] - r[i]);
+    for (let i = 0; i < N.length; i += 3) {
+      const x = b * rn[i] + a * fn[i], y = b * rn[i + 1] + a * fn[i + 1], z = b * rn[i + 2] + a * fn[i + 2], l = Math.hypot(x, y, z) || 1;
+      N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+    }
+  }
+  const skinMeshInv = new Float64Array(16), skinRefInv = new Float64Array(16), skinRelTmp = new Float64Array(16);
+  let skinBakedInv = null; // skinBakedInv[segment index]: drawn rest -> source (inverse of the bake's segment matrix)
+  // R558 (ns-body R_FOREARM_TWIST): the right forearm's twisted ulna frames, at the bake and at the current pose.
+  const SKIN_RF = BODY_SEGMENT_LIST.indexOf('r_forearm'), SKIN_RR = BODY_SEGMENT_LIST.indexOf('r_radius');
+  let skinTwistBaked = null, skinTwistNow = null, skinTwistNowFor = null;
+  const skinTwA = new Float64Array(16), skinTwB = new Float64Array(16), skinTwInv = new Float64Array(16);
+  const twistNow = rec => { // table of the current pose (one per updateBodySkin call, shared by the records)
+    if (skinTwistNowFor !== bodySkinSegs) { skinTwistNow = rForearmTwistTable(bodySkinSegs[SKIN_RF], bodySkinSegs[SKIN_RR], rec.twist); skinTwistNowFor = bodySkinSegs; }
+    return skinTwistNow;
+  };
+  /** Per-record cache, rebuilt only when the lift amount changes: for each vertex and each of its two bones the source-
+   * frame point and normal whose posing by that bone's source -> drawn matrix gives the skinned vertex (the source
+   * vertex plus the lift offset turned back into that bone's rest frame). Posing is then one blend of two rigid maps. */
+  function skinCache(rec) {
+    const a = rec.lift ? (rec.lift.applied || 0) : 0;
+    if (rec.cacheAt === a && rec.qa) return;
+    const n3 = rec.src.length;
+    if (!rec.qa) { rec.qa = new Float32Array(n3); rec.qb = new Float32Array(n3); rec.na = new Float32Array(n3); rec.nb = new Float32Array(n3); }
+    const base = rec.baseP && rec.baseP.length === n3 ? rec.baseP : (rec.baseP = new Float32Array(n3));
+    const baseN = rec.baseN && rec.baseN.length === n3 ? rec.baseN : (rec.baseN = new Float32Array(n3));
+    skinBase(rec, base, baseN);
+    const src = rec.src, rest = rec.rest, qa = rec.qa, qb = rec.qb, na = rec.na, nb = rec.nb, tf = rec.tf;
+    if (tf && !skinTwistBaked) skinTwistBaked = rForearmTwistTable(bodySkinBaked.get('r_forearm'), bodySkinBaked.get('r_radius'), rec.twist);
+    // the drawn-rest -> source map of an influence: the bake's segment inverse, or the inverse of the baked twisted frame
+    const bakedInv = (seg, v) => (tf && seg === SKIN_RF && tf[v] > 0 ? rigidInv16(rForearmTwistMap(skinTwistBaked, tf[v], skinTwA), skinTwInv) : skinBakedInv[seg]);
+    for (let v = 0, k = 0; k < n3; v++, k += 3) {
+      const dx = base[k] - rest[k], dy = base[k + 1] - rest[k + 1], dz = base[k + 2] - rest[k + 2];
+      const nx = baseN[k], ny = baseN[k + 1], nz = baseN[k + 2];
+      let B = bakedInv(rec.i0[v], v);
+      qa[k] = src[k] + B[0] * dx + B[4] * dy + B[8] * dz; qa[k + 1] = src[k + 1] + B[1] * dx + B[5] * dy + B[9] * dz; qa[k + 2] = src[k + 2] + B[2] * dx + B[6] * dy + B[10] * dz;
+      na[k] = B[0] * nx + B[4] * ny + B[8] * nz; na[k + 1] = B[1] * nx + B[5] * ny + B[9] * nz; na[k + 2] = B[2] * nx + B[6] * ny + B[10] * nz;
+      B = bakedInv(rec.i1[v], v);
+      qb[k] = src[k] + B[0] * dx + B[4] * dy + B[8] * dz; qb[k + 1] = src[k + 1] + B[1] * dx + B[5] * dy + B[9] * dz; qb[k + 2] = src[k + 2] + B[2] * dx + B[6] * dy + B[10] * dz;
+      nb[k] = B[0] * nx + B[4] * ny + B[8] * nz; nb[k + 1] = B[1] * nx + B[5] * ny + B[9] * nz; nb[k + 2] = B[2] * nx + B[6] * ny + B[10] * nz;
+    }
+    rec.cacheAt = a;
+  }
+  /* R558 (ns-body R_FOREARM_TWIST): a record with a forearm twist is posed as a flat blend of at most three maps per
+   * vertex: its bones' maps (slots 0..segments-1) and the twisted ulna table entries (slots segments..), each in this
+   * mesh's frame; a twisted influence of weight w at fraction f takes the two entries around f (w (1 - fr), w fr). The
+   * slot's top bit says which of the vertex's two cached source points (qa / qb, na / nb) it poses. Made once per record. */
+  function twistPlanOf(rec) {
+    if (rec.tp) return rec.tp;
+    const n = rec.src.length / 3, NS = bodySkinSegs.length, K = (twistNow(rec).length / 16) - 1;
+    const slots = new Uint8Array(3 * n), w = new Float32Array(3 * n), { i0, i1, w0, w1, tf } = rec;
+    if (NS + K + 1 > 127) fail('scene_input', 'too many skin slots');
+    for (let v = 0; v < n; v++) {
+      let m = 3 * v;
+      const put = (seg, wt, useB) => {
+        if (!(wt > 0)) return;
+        const hb = useB ? 128 : 0;
+        if (seg === SKIN_RF && tf[v] > 0) {
+          const x = Math.min(1, tf[v]) * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k;
+          slots[m] = (NS + k) | hb; w[m++] = wt * (1 - fr);
+          slots[m] = (NS + k + 1) | hb; w[m++] = wt * fr;
+        } else { slots[m] = seg | hb; w[m++] = wt; }
+      };
+      if (i0[v] === i1[v]) put(i0[v], w0[v] + w1[v], false); // one bone (or the two forearm bones merged into one twisted frame)
+      else { put(i0[v], w0[v], false); put(i1[v], w1[v], true); }
+      if (m - 3 * v > 3) fail('scene_input', 'a forearm skin vertex has two twisted influences');
+    }
+    return (rec.tp = { slots, w, NS, K });
+  }
+  function skinTwisted(rec, M, p, nArr) {
+    const tp = twistPlanOf(rec), T = twistNow(rec), NS = tp.NS, K1 = tp.K + 1;
+    const CC = rec.CC && rec.CC.length === 16 * (NS + K1) ? rec.CC : (rec.CC = new Float64Array(16 * (NS + K1)));
+    for (const i of rec.used) CC.set(mul16(M, bodySkinSegs[i], skinTwB), 16 * i);
+    for (let e = 0; e < K1; e++) CC.set(mul16(M, T.subarray(16 * e, 16 * e + 16), skinTwB), 16 * (NS + e));
+    const S = tp.slots, W = tp.w, qa = rec.qa, qb = rec.qb, na = rec.na, nb = rec.nb, n3 = p.length;
+    for (let k = 0; k < n3; k += 3) {
+      let px = 0, py = 0, pz = 0, nx = 0, ny = 0, nz = 0;
+      for (let e = 0; e < 3; e++) {
+        const wt = W[k + e];
+        if (!(wt > 0)) continue;
+        const sl = S[k + e], o = 16 * (sl & 127), Q = sl & 128 ? qb : qa, Nn = sl & 128 ? nb : na;
+        const x = Q[k], y = Q[k + 1], z = Q[k + 2], a = Nn[k], b = Nn[k + 1], c = Nn[k + 2];
+        px += wt * (CC[o] * x + CC[o + 4] * y + CC[o + 8] * z + CC[o + 12]);
+        py += wt * (CC[o + 1] * x + CC[o + 5] * y + CC[o + 9] * z + CC[o + 13]);
+        pz += wt * (CC[o + 2] * x + CC[o + 6] * y + CC[o + 10] * z + CC[o + 14]);
+        nx += wt * (CC[o] * a + CC[o + 4] * b + CC[o + 8] * c);
+        ny += wt * (CC[o + 1] * a + CC[o + 5] * b + CC[o + 9] * c);
+        nz += wt * (CC[o + 2] * a + CC[o + 6] * b + CC[o + 10] * c);
+      }
+      p[k] = px; p[k + 1] = py; p[k + 2] = pz;
+      const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      nArr[k] = nx / l; nArr[k + 1] = ny / l; nArr[k + 2] = nz / l;
+    }
+  }
+  function skinOne(rec) {
+    const p = rec.pos.array, nArr = rec.nor.array;
+    if (!bodySkinOn || !bodySkinSegs) {
+      if (!rec.skinned) return false;
+      skinBase(rec, p, nArr); rec.skinned = false; rec.relValid = false;
+    } else {
+      skinCache(rec);
+      // C = (drawn -> this mesh's own frame) x (the bone's source -> drawn pose), per bone this muscle uses.
+      const M = rigidInv16(rec.b.mesh.matrix.elements, skinMeshInv), C = rec.C || (rec.C = []);
+      for (const i of rec.used) C[i] = mul16(M, bodySkinSegs[i], C[i] || new Float64Array(16));
+      const n3 = p.length, qa = rec.qa, qb = rec.qb, na = rec.na, nb = rec.nb, i0 = rec.i0, i1 = rec.i1, w0 = rec.w0, w1 = rec.w1;
+      if (rec.tf) skinTwisted(rec, M, p, nArr);
+      else for (let v = 0, k = 0; k < n3; v++, k += 3) {
+        const A = C[i0[v]], B = C[i1[v]], wa = w0[v], wb = w1[v];
+        const ax = qa[k], ay = qa[k + 1], az = qa[k + 2], bx = qb[k], by = qb[k + 1], bz = qb[k + 2];
+        p[k] = wa * (A[0] * ax + A[4] * ay + A[8] * az + A[12]) + wb * (B[0] * bx + B[4] * by + B[8] * bz + B[12]);
+        p[k + 1] = wa * (A[1] * ax + A[5] * ay + A[9] * az + A[13]) + wb * (B[1] * bx + B[5] * by + B[9] * bz + B[13]);
+        p[k + 2] = wa * (A[2] * ax + A[6] * ay + A[10] * az + A[14]) + wb * (B[2] * bx + B[6] * by + B[10] * bz + B[14]);
+        const mx = na[k], my = na[k + 1], mz = na[k + 2], ox = nb[k], oy = nb[k + 1], oz = nb[k + 2];
+        const qx = wa * (A[0] * mx + A[4] * my + A[8] * mz) + wb * (B[0] * ox + B[4] * oy + B[8] * oz);
+        const qy = wa * (A[1] * mx + A[5] * my + A[9] * mz) + wb * (B[1] * ox + B[5] * oy + B[9] * oz);
+        const qz = wa * (A[2] * mx + A[6] * my + A[10] * mz) + wb * (B[2] * ox + B[6] * oy + B[10] * oz);
+        const l = Math.sqrt(qx * qx + qy * qy + qz * qz) || 1;
+        nArr[k] = qx / l; nArr[k + 1] = qy / l; nArr[k + 2] = qz / l;
+      }
+      rec.skinned = true;
+    }
+    rec.pos.needsUpdate = true; rec.nor.needsUpdate = true;
+    pickBufferWritten(p);
+    lodTouch(rec.geo); // R558: the body's coarser copies follow
+    bodySkinWrites++;
+    return true;
+  }
+  /** True when this muscle's bones and its own rigid matrix kept their pose relative to its first bone since its last
+   * skin (within 1e-5 rotation / 1e-3 mm); records the new relative pose either way. */
+  function skinPoseSame(rec) {
+    const used = rec.used, last = rec.relLast || (rec.relLast = new Float64Array(16 * (used.length + 1)));
+    const refInv = rigidInv16(bodySkinSegs[used[0]], skinRefInv);
+    let same = rec.relValid === true, off = 0;
+    const keep = m => {
+      const r = mul16(refInv, m, skinRelTmp);
+      for (let k = 0; k < 16; k++) {
+        if (same && Math.abs(r[k] - last[off + k]) > (k >= 12 ? 1e-3 : 1e-5)) same = false;
+        last[off + k] = r[k];
+      }
+      off += 16;
+    };
+    for (let j = 1; j < used.length; j++) keep(bodySkinSegs[used[j]]);
+    keep(rec.b.mesh.matrix.elements);
+    rec.relValid = true;
+    return same;
+  }
+  function updateBodySkin(segments = null) {
+    if (!bodySkin.size) return 0;
+    let n = 0;
+    if (segments) {
+      if (!(segments instanceof Map) || !bodySkinBaked) fail('scene_input', 'updateBodySkin needs poseBodyDetailed().segments after setBodySkin');
+      const segOrder = [...bodySkinBaked.keys()];
+      if (!skinBakedInv) skinBakedInv = segOrder.map(s => rigidInv16(bodySkinBaked.get(s), new Float64Array(16)));
+      bodySkinSegs = segOrder.map(s => segments.get(s) || bodySkinBaked.get(s));
+      bodySkinOn = true;
+      // Per-frame cost guard. The body is re-posed whenever anything in its key changes (the left arm's bridge; the trunk
+      // turning or bending under a wide look; the Space dance turning the forearm and the upper arm). The vertices are
+      // written in each muscle's own frame, and the blend is the same rigid map of every bone it uses, so a muscle whose
+      // bones and own rigid matrix all keep their pose relative to its first bone needs no new vertices: only the rigid
+      // matrix updateBody has just set moves. Each muscle is re-skinned only when that relative pose changes (a finger or
+      // the wrist bends; for the long forearm muscles also the palm turning; for those that reach the upper arm the elbow).
+      for (const rec of bodySkin.values()) {
+        if (skinPoseSame(rec) && rec.skinned) continue;
+        if (skinOne(rec)) n++;
+      }
+      return n;
+    }
+    bodySkinOn = false;
+    for (const rec of bodySkin.values()) if (skinOne(rec)) n++;
+    return n;
+  }
+
   function updateBody(matrices, drives = null) {
     let n = 0;
     const get = (src, id) => (src instanceof Map ? src.get(id) : src ? src[id] : undefined);
@@ -5225,9 +8194,7 @@ export function createScene({
       const q = Math.round(t * 512) / 512;
       if (q === b.lastDrive) continue;
       b.lastDrive = q;
-      shadeMuscle(b.material, q);
-      if (b.mirror) shadeMuscle(b.mirror.material, q);
-      if (b.inPlace && b.kind === 'muscle') shadeMuscle(b.inPlace.material, q);
+      shadeBodyMuscle(b); // R558: in its area's colour, on all three bodies
       b.mesh.userData.activity = q;
     }
     return n;
@@ -5247,7 +8214,7 @@ export function createScene({
    * changes to or from the view from behind, 0 there and with the camera at the eye. */
   function updateFirstPersonBody() {
     let amount = 0, back = 0;
-    if (body.length > 0) {
+    if (!OWN_BODY_SOLID && body.length > 0) {
       // Review fix: while the view changes to or from the view from behind, the rule fades from what it WAS in the
       // ordinary view (base). Without the whole-arm display the camera is at the eye and the rule was off there, so it
       // must stay off through the change instead of switching on for the first frames.
@@ -5406,8 +8373,17 @@ export function createScene({
     if (arrowsShown && arrowLayout && cssW > 0 && cssH > 0) {
       for (const d of ARROW_DIRS) {
         const p = arrowLayout[d];
-        // R5-scene: the 3D arrows' projected boxes (+4 px); only on-screen brain arrows are obstacles for the HUD labels.
-        if (p && p.box) arrowsOut.push({ dir: d, x0: Math.max(0, (p.box.x0 - 4) / cssW), y0: Math.max(0, (p.box.y0 - 4) / cssH), x1: Math.min(1, (p.box.x1 + 4) / cssW), y1: Math.min(1, (p.box.y1 + 4) / cssH) });
+        // R5-scene: the 3D arrows' projected boxes (+4 px), obstacles for the HUD labels and the guide line.
+        if (p && p.box) arrowsOut.push({ dir: d, target: 'brain', x0: Math.max(0, (p.box.x0 - 4) / cssW), y0: Math.max(0, (p.box.y0 - 4) / cssH), x1: Math.min(1, (p.box.x1 + 4) / cssW), y1: Math.min(1, (p.box.y1 + 4) / cssH) });
+      }
+    }
+    // R558 (Message 7): the mirror body's V tips are drawn on top of the scene too, so the HUD keeps off them as well
+    // (target 'mirror'; callers that need the brain's own tips select target 'brain').
+    const MS = arrowSets.mirror;
+    if (MS.shown && MS.boxes && cssW > 0 && cssH > 0) {
+      for (const d of ARROW_DIRS) {
+        const b = MS.boxes[d];
+        if (b) arrowsOut.push({ dir: d, target: 'mirror', x0: Math.max(0, (b.x0 - 4) / cssW), y0: Math.max(0, (b.y0 - 4) / cssH), x1: Math.min(1, (b.x1 + 4) / cssW), y1: Math.min(1, (b.y1 + 4) / cssH) });
       }
     }
     // R3-fix (M6): the information panel's bottom edge (CSS px) while it is showing, so the HUD can dock the legend under it.
@@ -5420,7 +8396,45 @@ export function createScene({
     // R4-fix (review RP8): the region labels drawn this frame (CSS px), so the guide chip keeps clear of them.
     const labelsPx = [];
     for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) labelsPx.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
-    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx };
+    // R558 (Message 31): the brain frame's planned top tip (its drawn box at hover size, CSS px, in the plan's reference
+    // view; look-independent), so the guide chip can sit centred just below it.
+    const bp = arrowSets.brain.plan && arrowSets.brain.plan.spots && arrowSets.brain.plan.spots.forward;
+    const brainTopPlanPx = arrowSets.brain.shown && bp && bp.box ? { ...bp.box } : null;
+    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx, brainTopPlanPx };
+  }
+  /** R558 (issue hunt 2: the "Try this" chip covered your shin, forearm; "Front (anterior)" was printed across the mirror
+   * body's belly): the on-screen boxes (CSS px, clipped to the view) of your own body and of the mirror body, for the
+   * HUD to keep its chip and the orientation labels off them. Your body: its posed sample (the mesh box corners the mirror
+   * plane is measured from) with points within ownNearM of the camera left out (round the eye in first person they would
+   * spread the box over the whole view); the mirror body: its sample as drawn now. { own, mirror } (null when not in
+   * view). Cached per camera, pose and mirror state. */
+  // everyFrames: while the camera keeps moving the boxes are made again at most every this many drawn frames (a few
+  // thousand points projected), and at once when it rests.
+  const BODY_BOX = Object.freeze({ ownNearM: 0.3, everyFrames: 4 });
+  let bodyBoxCache = null, bodyBoxKey = '', bodyBoxAt = -1e9;
+  function bodyScreenBoxes() {
+    if (!(cssW > 0 && cssH > 0)) return { own: null, mirror: null };
+    const cam = arrowCam();
+    const key = `${arrowCameraKey(cam)}|${mirror.serial}|${bodyPoseSerial}|${mirrorRoot.visible}|${Boolean(mirror.samples)}`;
+    if (bodyBoxCache && key === bodyBoxKey) return bodyBoxCache;
+    if (bodyBoxCache && frameVis.tick - bodyBoxAt < BODY_BOX.everyFrames) return bodyBoxCache;
+    bodyBoxAt = frameVis.tick;
+    const clip = b => {
+      if (!b) return null;
+      const r = { x0: Math.max(0, b.x0), y0: Math.max(0, b.y0), x1: Math.min(cssW, b.x1), y1: Math.min(cssH, b.y1) };
+      return r.x1 > r.x0 && r.y1 > r.y0 ? r : null;
+    };
+    let own = null, mir = null;
+    const S = mirror.samples;
+    if (S && S.length >= 6) {
+      const p = cam.position, keep = [];
+      for (let i = 0; i + 2 < S.length; i += 3) if (Math.hypot(S[i] - p[0], S[i + 1] - p[1], S[i + 2] - p[2]) > BODY_BOX.ownNearM) keep.push(S[i], S[i + 1], S[i + 2]);
+      if (keep.length >= 6) own = clip(NsArrows.screenBoxOf(NsArrows.projectPointsPx(Float64Array.from(keep), null, cam).xy));
+    }
+    const MW = mirrorRoot.visible ? mirrorSamplesWorld() : null;
+    if (MW) mir = clip(NsArrows.screenBoxOf(NsArrows.projectPointsPx(MW, null, cam).xy));
+    bodyBoxCache = { own, mirror: mir }; bodyBoxKey = key;
+    return bodyBoxCache;
   }
   /** R4-integrator (D7): does the brain's outline as drawn NOW (convex hull of its outline support points projected
    * with the live camera, CSS px) overlap rect { x0, y0, x1, y1 } (CSS px)? false before the brain is placed or when it
@@ -5486,20 +8500,6 @@ export function createScene({
     const xy = motorCover.xy, x0 = rect.x0 - motorCoverPadPx, x1 = rect.x1 + motorCoverPadPx, y0 = rect.y0 - motorCoverPadPx, y1 = rect.y1 + motorCoverPadPx;
     for (let i = 0; i < motorCover.n; i += 2) if (xy[i] >= x0 && xy[i] <= x1 && xy[i + 1] >= y0 && xy[i + 1] <= y1) return true;
     return false;
-  }
-  /** Does the ray through CSS point (x, y) hit a motor-area triangle as drawn now (the region meshes' own triangles,
-   * their own front / back side rule, the brain's current matrix)? The exact companion of motorCoversRect's vertex
-   * test, used where one pointer position must be answered without a margin. Own ray objects: the caller's shared
-   * raycaster is left as it was. */
-  const motorPointCaster = new THREE.Raycaster(), motorPointOrigin = new THREE.Vector3(), motorPointDir = new THREE.Vector3();
-  function motorAreaUnderPoint(x, y) {
-    if (!regionMode || !regionMeshes.length || !brainGroup.visible || !(cssW > 0 && cssH > 0)) return false;
-    camera.updateMatrixWorld(true); brainGroup.updateMatrixWorld(true);
-    motorPointDir.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
-    motorPointOrigin.copy(camera.position);
-    motorPointDir.sub(motorPointOrigin).normalize();
-    motorPointCaster.set(motorPointOrigin, motorPointDir);
-    return motorPointCaster.intersectObjects(regionMeshes, false).length > 0;
   }
   /** Orbit click handler (replaces createScene onOrbit); null restores the 'ns-orbit' document event. */
   function setOrbitHandler(fn) {
@@ -5670,11 +8670,13 @@ export function createScene({
     }
     return mirror.transform ? `${mirror.serial},${mirrorRoot.visible}|${mirror.transform.centre.join(',')}|${mirror.transform.matrix.join(',')}` : 'no-mirror-transform';
   };
-  // Nominal unhovered head landmarks from the SAME default design as makeArrowRig. Built during normal planning only.
+  // Nominal unhovered landmarks of each V tip from the SAME design as makeArrowRig (the middle of its open ends and its
+  // point, at mid thickness, where the tilted solid has them; the record keeps its older names headBase / headTip).
+  // Built during normal planning only.
   function nominalArrowHeads(frames) {
     if (!arrowHeadLocal) {
-      const head = NsArrows.arrowPath(NsArrows.ARROW_DESIGN).head;
-      arrowHeadLocal = { base: [head.base[0], head.base[1], 0], tip: [head.tip[0], head.tip[1], 0] };
+      const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN);
+      arrowHeadLocal = { base: o.mouth3.slice(), tip: o.point3.slice() };
     }
     return Object.fromEntries(ARROW_DIRS.map(d => {
       const f = frames && frames[d];
@@ -5691,10 +8693,6 @@ export function createScene({
     else if (reserve && reserve.layout === 'portrait') U.y1 = Math.max(U.y0 + 40, reserve.y0 - g);
     return U;
   }
-  /** R5-bigbrain (R25 + D1(d)): the CSS px rect a look of at most BRAIN_VIEW.comfortDeg (40) puts under the crosshair. The
-   * brain now passes the comfortable look range, so the brain's arrows PREFER it (ns-arrows3d compassLayout prefer); an
-   * arrow with no clear place inside it (never over a motor area, the panel or a HUD card) takes its place outside. */
-  function comfortRectPx() { return arrowComfortRect({ width: cssW, height: cssH, fovYDeg: camera.fov }); }
   /** Things the arrows keep clear of (CSS px), stable while playing: the status card at BOTH its homes (data-ns-home /
    * data-ns-alt, so an arrow does not jump when the hand pushes the card away), the other HUD cards, and the capture /
    * drag-to-look toast (measured, else its estimated bottom-centre box), so no arrow sits under them. */
@@ -5716,27 +8714,19 @@ export function createScene({
     arrowObsKey = out.map(r => `${Math.round(r.x0 / 8)},${Math.round(r.y0 / 8)},${Math.round(r.x1 / 8)},${Math.round(r.y1 / 8)}`).join(';');
     return out;
   }
-  /** R5-bigbrain: the mirror body's on-screen box (CSS px, padded 6 px) for a camera look, or null when it is not shown. */
+  /** R558 (Message 7): the mirror body's on-screen box (CSS px) seen from a reference camera { yaw, pitch, position },
+   * from the body sample as the renderer places it NOW (mirror.transform) but WITHOUT the slide along the ground (the
+   * top / bottom arrows' push, a pure shift: transform centre minus carryCentre), or null when it is not shown. So a
+   * slide tap never moves the tips (the user: arrows "stay in place after tapping on them"). */
   function mirrorBoxPx(look) {
     if (!mirrorRoot.visible || !mirror.transform) return null;
     const W = mirrorSamplesWorld();
     if (!W) return null;
-    const { xy } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() });
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; x0 = Math.min(x0, xy[i]); x1 = Math.max(x1, xy[i]); y0 = Math.min(y0, xy[i + 1]); y1 = Math.max(y1, xy[i + 1]); }
-    return x1 > x0 && y1 > y0 ? { x0: x0 - 6, y0: y0 - 6, x1: x1 + 6, y1: y1 + 6, mirror: true } : null;
-  }
-  /** R5-bigbrain (R25): the last placement tier for a brain arrow with no clear place: the HUD cards' ACTUAL boxes (not
-   * their reserved homes), the toast and the crosshair box. With the larger brain the belt's lateral end can fill the
-   * gap between the status card's two reserved homes (1280x720 after an orbit step). */
-  function arrowObstaclesTight() {
-    const out = [];
-    for (const r of readHudRects() || []) { if (r.info || r.orient || r.chip || r.toast) continue; out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
-    const key = `${cssW}x${cssH}`;
-    out.push(toastSeen && toastSeen.key === key ? { ...toastSeen.rect } : { x0: cssW / 2 - Math.min(310, 0.46 * cssW), y0: cssH - 50, x1: cssW / 2 + Math.min(310, 0.46 * cssW), y1: cssH - 8 });
-    const ch = R5_BIGBRAIN.crosshairKeepPx;
-    out.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch, crosshair: true });
-    return out;
+    const T = mirror.transform, cc = T.carryCentre || T.centre;
+    const px = T.centre[0] - cc[0], py = T.centre[1] - cc[1], pz = T.centre[2] - cc[2];
+    if (px || py || pz) for (let i = 0; i < W.length; i += 3) { W[i] -= px; W[i + 1] -= py; W[i + 2] -= pz; }
+    const { xy, behind } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() });
+    return behind > 0 ? null : NsArrows.screenBoxOf(xy);
   }
   // These metadata readers use retained scalar state only; no projection, bounds, matrix update, clock or GL work.
   const arrowEligibility = target => target === 'brain'
@@ -5757,36 +8747,6 @@ export function createScene({
   const copyCompassEvidence = value => typeof value === 'number' ? (Number.isFinite(value) ? value : { nonfinite: String(value) })
     : Array.isArray(value) ? value.map(copyCompassEvidence)
     : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, copyCompassEvidence(v)])) : value;
-  function planSet(set, args) {
-    // These private inputs are Euler-only, with the active cam and ref equal. Record the exact selected ref, not a label.
-    const ref = args.ref || { yaw: 0, pitch: 0 };
-    const selected = { ...args.cam, yaw: ref.yaw || 0, pitch: ref.pitch || 0, position: ref.position || [0, 0, 0] };
-    set.planningCamera = arrowCameraRecord(selected); set.planningCameraKey = arrowCameraKey(selected);
-    set.planningTarget = { centreWorldM: Array.from(args.centre), supportRows: args.points.length / 3 };
-    set.planningTargetKey = arrowTargetKey(set.target);
-    const matrix = args.matrix ? Array.from(args.matrix) : null;
-    set.planningEvidence = { kind: 'ns-retained-plan-evidence-r345',
-      sourceBinding: 'External exact paired module/packet manifest required; these runtime labels are not file-hash proof.',
-      eligibility: arrowEligibility(set.target), source: arrowSourceRecord(set.target),
-      planMatrix: { status: matrix ? matrix.length === 16 && matrix.every(Number.isFinite) ? 'FINITE_16' : 'NONFINITE_OR_UNSUPPORTED' : 'IDENTITY', elements: matrix },
-      ref: { yaw: ref.yaw, pitch: ref.pitch, position: ref.position ? Array.from(ref.position) : null },
-      camera: arrowCameraRecord(selected), cameraAuthority: args.cam.matrixWorld ? 'matrixWorld' : 'Euler-YXZ-position',
-      cameraMatrixWorld: args.cam.matrixWorld ? Array.from(args.cam.matrixWorld) : null,
-      targetKey: set.planningTargetKey, cameraKey: set.planningCameraKey, revision: (set.serial || 0) + 1,
-      brainGroupVisible: brainGroup.visible, arrowRigVisibleAtPlan: set.rig ? set.rig.group.visible : null,
-      report: {} };
-    set.nominalHeads = null; set.planningError = null;
-    try {
-      if (typeof NsArrows.planCompassArrowsWithReport !== 'function') {
-        set.planningEvidence.report = { outcome: 'unsupported_reporting_api', stage: 'NOT_REACHED' };
-        throw new Error('Retained compass report API unavailable; paired source modules required');
-      }
-      const { plan: p } = NsArrows.planCompassArrowsWithReport(args, set.planningEvidence.report); arrowStats.plans++;
-      set.planningOutcome = p ? 'planned' : 'no-visible-outline';
-      if (p) set.nominalHeads = nominalArrowHeads(p.frames);
-      return p;
-    } catch (err) { set.planningOutcome = 'error'; set.planningError = arrowRigError = String((err && err.message) || err); return null; }
-  }
   /** R5-bigbrain (R25): sample points of every motor area (source mm, the region meshes' vertices, at most
    * R5_BIGBRAIN.motorSamples), built once: an arrow at the screen edge never covers a motor area, and the mirror body's
    * default place keeps clear of them (ns-arrows3d occupancyGrid / compassLayout avoid). */
@@ -5815,177 +8775,221 @@ export function createScene({
     const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() };
     return NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam).xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate, indices: motorIndices });
   }
-  /** R558: the plan no longer follows the look or the target's orbit (ns-arrows3d planStableCompassArrows). */
-  function planStable(set, args) {
+  /** R558 (Message 7): plan one target's four V tips on its frame (ns-arrows3d planFrameArrows) and keep the evidence
+   * record the read-only arrow trace reports. */
+  function planFrame(set, args, record) {
     set.planningCamera = arrowCameraRecord(args.cam); set.planningCameraKey = arrowCameraKey(args.cam);
     set.planningTarget = { centreWorldM: Array.from(args.centre), supportRows: null };
     set.planningTargetKey = arrowTargetKey(set.target);
-    set.planningEvidence = { kind: 'ns-stable-compass-plan-r558',
+    set.planningEvidence = { kind: 'ns-frame-tip-plan-r558',
       sourceBinding: 'Runtime labels only; not file-hash proof.',
       eligibility: arrowEligibility(set.target), source: arrowSourceRecord(set.target),
-      eyeWorldM: Array.from(args.eye), keepRadiusM: Number.isFinite(args.keepRadiusM) ? args.keepRadiusM : null,
-      radiiM: args.radiiM ? { ...args.radiiM } : null, frontM: Number.isFinite(args.frontM) ? args.frontM : null,
+      targetBoxPx: args.box ? { ...args.box } : null, aspect: args.aspect, boundsPx: args.bounds ? { ...args.bounds } : null, sizePx: args.sizePx, avoidBoxes: args.avoid ? args.avoid.length : 0,
       camera: arrowCameraRecord(args.cam), targetKey: set.planningTargetKey, cameraKey: set.planningCameraKey, revision: (set.serial || 0) + 1,
       lookIndependent: true, report: { outcome: 'NOT_REACHED' } };
-    set.nominalHeads = null; set.planningError = null;
+    set.nominalHeads = null; set.planningError = null; set.frameRecord = null;
     try {
-      const p = NsArrows.planStableCompassArrows(args); arrowStats.plans++;
-      set.planningOutcome = p ? 'planned' : 'no-visible-outline';
-      set.planningEvidence.report = { outcome: p ? 'planned' : 'centre_not_in_front_of_reference_eye' };
-      if (p) set.nominalHeads = nominalArrowHeads(p.frames);
+      const p = args.box ? NsArrows.planFrameArrows(args) : null; arrowStats.plans++;
+      set.planningOutcome = p ? 'planned' : 'no-visible-target';
+      set.planningEvidence.report = { outcome: p ? 'planned' : args.box ? 'centre_not_in_front_of_reference_camera' : 'no_target_box' };
+      if (p) {
+        set.nominalHeads = nominalArrowHeads(p.frames);
+        const r1 = v => Math.round(v * 10) / 10, box = b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1)];
+        set.frameRecord = { ...record, aspect: args.aspect, targetBoxPx: box(args.box), framePx: box(p.rect), fittedPx: box(p.rect.fitted), clamped: { ...p.rect.clamped },
+          sizePx: r1(args.sizePx), spots: Object.fromEntries(ARROW_DIRS.map(d => { const q = p.spots[d], pr = q.pair || null;
+            return [d, { midPx: q.mid.map(r1), atPx: [r1(q.x), r1(q.y)], insetPx: r1(q.insetPx), overlap: q.overlap,
+              pair: pr ? { family: pr.family, insetPx: r1(pr.insetPx), movePx: r1(pr.movePx), shiftPx: r1(pr.shiftPx), blockedIgnored: pr.blockedIgnored } : null }]; })) };
+      }
       return p;
     } catch (err) { set.planningOutcome = 'error'; set.planningError = arrowRigError = String((err && err.message) || err); return null; }
   }
-  /** R558: radii (world m) of spheres about the brain's orbit centre that hold (a) every motor area and (b) the whole
-   * brain. A sphere about the orbit centre is unchanged by an orbit, so these are computed once per brain size / source
-   * and the arrows planned from them never move when the brain is turned. */
-  const arrowKeep = { key: '', motorM: 0, brainM: 0 };
-  function brainKeepRadii(e, centre, k) {
-    const key = `${compassBrainSourceRevision}|${k}`;
-    if (key === arrowKeep.key) return arrowKeep;
-    const maxR = P => {
-      let m = 0;
-      if (P) for (let i = 0; i + 2 < P.length; i += 3) {
-        const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12] - centre[0], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13] - centre[1], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14] - centre[2];
-        const d = Math.hypot(x, y, z); if (d > m) m = d;
+  let mirrorSamplesSeen = null, mirrorSamplesRev = 0; // R558 (hunt 2): the mirror body's measured sample, as a key part
+  /** R558 (user Message 31: "left/right arrows of mirror body do not match in height level"): the places a tip may not
+   * take while its frame is planned, as one test for ns-arrows3d frameArrowSpots `blocked`, which moves the tips in
+   * PAIRS (left + right at one height, forward + back on one vertical line; FRAME_PAIR). Hunt 2 slid each tip on its own
+   * along its side instead (TIP_BODY_SLIDE, slideTipsOffBox): at 1600x900 the mirror body's left tip went 120 px down off
+   * your left hand while its right tip stayed, and in a portrait window the brain's bottom tip went 204 px aside off the
+   * mirror body while its top tip stayed. Blocked (CSS px in the plan's reference view `cam`):
+   *  - covered by your own body: two of three sight lines through the tip (its middle and 0.35 x sizePx either way
+   *    along its side) meet your body nearer than the tip's world anchor (the FRAME_VIS rule, which would hide it);
+   *  - `box` (optional): the tip's drawn box at hover size, padded by gapPx, overlaps it (the brain's tips keep off the
+   *    mirror body's box, padded so the mirror's own tips keep their room). */
+  function tipBlocker({ cam, centre, sizePx, box = null, gapPx = 4 }) {
+    const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), grow = NsArrows.ARROW_LOOK.hoverScale;
+    let test = null;
+    return (dir, x, y) => {
+      const side = NsArrows.COMPASS_SCREEN[dir][0] !== 0;
+      if (box) {
+        const hx = (side ? o.halfAlong : o.halfAcross) * sizePx * grow, hy = (side ? o.halfAcross : o.halfAlong) * sizePx * grow;
+        if (x - hx < box.x1 + gapPx && x + hx > box.x0 - gapPx && y - hy < box.y1 + gapPx && y + hy > box.y0 - gapPx) return true;
       }
-      return m;
+      if (!body.length) return false;
+      let a = null;
+      try { const A = NsArrows.frameArrowAnchors({ [dir]: { x, y } }, { cam, centre }); a = A && A[dir]; } catch { a = null; }
+      if (!a) return false;
+      const dist = Math.hypot(a[0] - cam.position[0], a[1] - cam.position[1], a[2] - cam.position[2]);
+      const h = 0.35 * sizePx, ax = side ? 0 : h, ay = side ? h : 0;
+      if (!test) test = ownSightTester(cam);
+      let k = 0;
+      for (const t of [0, -1, 1]) if (test(x + t * ax, y + t * ay, dist) && ++k >= 2) return true;
+      return false;
     };
-    arrowKeep.key = key; arrowKeep.motorM = maxR(motorSamplePoints()); arrowKeep.brainM = Math.max(maxR(brainHullPoints), maxR(brainSupport && brainSupport.points));
-    if (!(arrowKeep.motorM > 0)) arrowKeep.motorM = 0.6 * arrowKeep.brainM; // no region meshes (legacy brain): a plain share
-    return arrowKeep;
   }
-  /** R558: where the motor areas lie when the brain is NOT turned (orbit 0, 0), seen from the reference eye: the box
-   * of their directions as tangents from the line eye -> brain centre (tx along world right, ty up), with the centre
-   * distance it was measured at. It is measured through the brain's un-turned matrix (brainRestElements: ns-brain
-   * restMatrix), which does not change when the brain is turned, so the arrows planned from it stay where they are;
-   * and it IS measured again when the frame changes while the brain is turned (a resized window gives a new brain
-   * size and place), which the earlier rule (record only at orbit 0, 0) missed. Null until first recorded. */
-  let motorRestBox = null, motorRestSerial = 0;
-  function recordMotorRestBox(eNow, centre, eye, k) {
-    const T = lastBrainTransform;
-    if (!T) return;
-    const e = brainRestElements;
-    if (!e) return; // turned, and the transform carried no un-turned matrix: keep the last box
-    const key = `${compassBrainSourceRevision}|${k}|${centre[0]},${centre[1]},${centre[2]}|${eye[0]},${eye[1]},${eye[2]}|${e[0]},${e[1]},${e[2]},${e[4]},${e[5]},${e[6]},${e[8]},${e[9]},${e[10]}`;
-    if (motorRestBox && motorRestBox.key === key) return;
-    const P = motorSamplePoints();
-    if (!P) return;
-    const nx = centre[0] - eye[0], ny = centre[1] - eye[1], nz = centre[2] - eye[2], dist = Math.hypot(nx, ny, nz);
-    if (!(dist > 0)) return;
-    const n = [nx / dist, ny / dist, nz / dist];
-    let r = [n[1] * 0 - n[2] * 1, n[2] * 0 - n[0] * 0, n[0] * 1 - n[1] * 0]; // n x (0, 1, 0)
-    const rl = Math.hypot(r[0], r[1], r[2]);
-    if (!(rl > 1e-6)) return;
-    r = [r[0] / rl, r[1] / rl, r[2] / rl];
-    const u = [r[1] * n[2] - r[2] * n[1], r[2] * n[0] - r[0] * n[2], r[0] * n[1] - r[1] * n[0]]; // right x n
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (let i = 0; i + 2 < P.length; i += 3) {
-      const x = e[0] * P[i] + e[4] * P[i + 1] + e[8] * P[i + 2] + e[12] - eye[0], y = e[1] * P[i] + e[5] * P[i + 1] + e[9] * P[i + 2] + e[13] - eye[1], z = e[2] * P[i] + e[6] * P[i + 1] + e[10] * P[i + 2] + e[14] - eye[2];
-      const d = x * n[0] + y * n[1] + z * n[2];
-      if (!(d > 1e-6)) continue;
-      const tx = (x * r[0] + y * r[1] + z * r[2]) / d, ty = (x * u[0] + y * u[1] + z * u[2]) / d;
-      if (tx < x0) x0 = tx; if (tx > x1) x1 = tx; if (ty < y0) y0 = ty; if (ty > y1) y1 = ty;
+  /** R558 (Message 7): where the V tips may lie (CSS px): the arrows' usable view (the view minus a margin, the top
+   * line and the portrait band) and, in a portrait window, below the status card's planned full-width band at the top
+   * (ns-app brainUsableNdc keeps the same room: top line + 12 + statusCardPlanPx + 8). View size only, so a frame never
+   * moves while playing. */
+  function tipBounds() {
+    const U = arrowUsable();
+    if (cssW / cssH < 1) {
+      const top = NsBrain.BRAIN_VIEW && Number.isFinite(NsBrain.BRAIN_VIEW.topReservePx) ? NsBrain.BRAIN_VIEW.topReservePx : 26;
+      U.y0 = Math.min(U.y1 - 40, Math.max(U.y0, top + 12 + statusCardPlanPx(cssW, cssH, true) + 8));
     }
-    if (!(x1 > x0 && y1 > y0)) return;
-    motorRestBox = { key, x0, x1, y0, y1, dist }; motorRestSerial++;
+    return U;
   }
-  /** Both rigs. R558: an arrow's place depends only on where its target IS (it moves when the player carries the target),
-   * on the fixed reference eye and on the view size. Looking around or turning the target does not move the arrows. */
+  /** R558 (Message 7): the motor strip's on-screen box at REST (every motor-area sample point through the brain's
+   * un-turned matrix, ns-brain restMatrix) seen from a reference camera; null before the region meshes and the rest
+   * matrix exist or when a point lies behind that camera. */
+  function motorRestBoxPx(refCam) {
+    const P = motorSamplePoints(), e = brainRestElements;
+    if (!P || !e) return null;
+    const { xy, behind } = NsArrows.projectPointsPx(P, Array.from(e), refCam);
+    return behind > 0 ? null : NsArrows.screenBoxOf(xy);
+  }
+  /** Both rigs. R558 (user Message 7): "think of the motor strip as a horizontal 16:9 frame and the mirror as a vertical
+   * 9:16 frame, the arrows will be at the centered edges of each frame perimeter side".
+   *  - Brain: the smallest 16:9 rectangle containing the motor strip's on-screen box at REST (the brain un-turned), seen
+   *    from the fixed reference eye with the brain's reference look (arrowRef: the start look, or the look the brain
+   *    was last carried along), centred on that box and clamped to the usable view (tipBounds: the view minus a
+   *    margin, the top line and the HUD bands); its four tips at the midpoints of its four sides, pointing outward, moved
+   *    inward only as far as their drawn boxes (hovered size) need to stay inside the usable view (the left and right
+   *    tips both by the same amount).
+   *  - Mirror body: the smallest 9:16 rectangle containing its on-screen box (its body sample as the renderer places it
+   *    now, read at run time, less its slide along the ground: the top / bottom mirror arrows slide it, and a tap never
+   *    moves a tip), the same way, seen from the reference eye with the START look while the body's centre
+   *    lies well inside that view, else with the look straight at its centre (a body carried far aside). Where its
+   *    tips would overlap a brain tip (the brain's tips come first), the crosshair box or your own body, they move.
+   *  - R558 (Message 31, symmetry): the tips always move in PAIRS (ns-arrows3d frameArrowSpots, FRAME_PAIR): the left
+   *    and right tips stay at exactly one height and the top and bottom tips on one vertical line, by preference on the
+   *    frame's centre lines and at mirrored insets; a pair that must clear something moves together (along its centre
+   *    line by the same amount, or both across it by the same amount); only where one tip cannot follow does each move
+   *    along its own pointing axis alone (still level). Exact mirror symmetry about the view's centre is not the rule:
+   *    the frames are fitted to the targets as they stand (a mirror body carried aside has its frame there).
+   *  - No tip of either set is planned on the box kept free round the crosshair of its reference view; a tip that has
+   *    to move keeps clear of the HUD cards and the hint line.
+   * A frame is made again only when something it depends on changes: the view size, field of view or usable view, the
+   * reference eye and look, the target's place (a carry, or a reset that puts it back), the brain's rest matrix and
+   * source, the mirror body's scale and measured sample. Turning a target, tapping an arrow or looking around changes
+   * none of these, so the tips stay where they are. (A frame made while the mirror body is turned, e.g. after a window
+   * resize, is fitted to the body as it then stands.) */
   function updateArrows() {
     if (!(cssW > 0 && cssH > 0)) return;
     const B = arrowSets.brain, M = arrowSets.mirror, cam = arrowCam();
-    arrowObstacles(); // keeps the HUD-panel key current for the under-panel mask below
+    const hudObs = arrowObstacles(); // also keeps the HUD-panel key current for the under-panel mask below
+    // a tip that would have to move off its side's midpoint (see avoid) keeps clear of the HUD cards and the hint line,
+    // and no tip is planned on the box round the crosshair of its reference view (a look at the start must not rest on an
+    // arrow; with a literal mirror reflection the mirror body's head, and so its top side, is at eye level)
+    const keepOut = hudObs.filter(r => !r.crosshair), crossBox = hudObs.find(r => r.crosshair) || null;
     const eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
-    const view = `${cssW}x${cssH}|${camera.fov}|${eye[0]},${eye[1]},${eye[2]}`;
+    const U = tipBounds();
+    const view = `${cssW}x${cssH}|${camera.fov}|${eye[0]},${eye[1]},${eye[2]}|${U.x0},${U.y0},${U.x1},${U.y1}`;
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
+    if (mirrorSamplesSeen !== mirror.samples) { mirrorSamplesSeen = mirror.samples; mirrorSamplesRev++; }
+    const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
     if (showB) {
-      const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]];
-      const k = Math.hypot(e[0], e[1], e[2]);
-      recordMotorRestBox(e, centre, eye, k);
-      const key = `${view}|${compassBrainSourceRevision}|${k}|${centre[0]},${centre[1]},${centre[2]}|${motorRestSerial}`;
-      if (key !== B.key) {
+      const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]], r = brainRestElements;
+      // R558 (hunt 2): the mirror body's place is part of the key: the brain's tips keep off the mirror body's box.
+      const key = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${arrowRef.yaw},${arrowRef.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|${mirrorPlace}|own${body.length}`;
+      // (a turned brain whose transform carries no rest matrix keeps its frame: a frame is never fitted to a turned brain)
+      if (key !== B.key && (r || !B.frames)) {
         B.key = key;
-        const keep = brainKeepRadii(e, centre, k);
-        // The four anchors: beside the two ends of the motor band at its middle height, and above / below its middle,
-        // as the band lay when first framed (a nearer or farther carried brain scales the same box). Until that box
-        // exists (never at a normal start) the ring about the orbit centre is used.
-        let anchorsTan = null;
-        if (motorRestBox) {
-          const dist = Math.hypot(centre[0] - eye[0], centre[1] - eye[1], centre[2] - eye[2]), q = motorRestBox.dist / dist;
-          const tanH = Math.tan((camera.fov * DEG) / 2), gapT = ARROW_MOTOR_GAP_PX * (2 * tanH) / cssH;
-          const x0 = motorRestBox.x0 * q, x1 = motorRestBox.x1 * q, y0 = motorRestBox.y0 * q, y1 = motorRestBox.y1 * q, xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
-          // The top arrow starts a little higher, clear of the mirror body's head and its own small top arrow.
-          anchorsTan = { forward: [xc, y1 + 2.5 * gapT], back: [xc, y0 - gapT], left: [x0 - gapT, yc], right: [x1 + gapT, yc] };
+        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: Array.from(eye) };
+        const bSize = NsArrows.arrowTipSizePx(cam, 'brain');
+        // R558 (issue hunt 2, portrait: the brain's bottom tip lay across the mirror body's chest): the brain's tips keep off
+        // the mirror body's box (padded by a mirror tip, so the mirror's own tips keep their room) and off places your own
+        // body covers in this view. R558 (Message 31): they move in pairs to do so (tipBlocker, ns-arrows3d FRAME_PAIR).
+        let mPad = null;
+        if (mirrorRoot.visible && mirror.transform && mirror.samples) {
+          const mb = mirrorBoxPx(refCam), o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN);
+          const pad = Math.max(o.halfAlong, o.halfAcross) * NsArrows.arrowTipSizePx(cam, 'mirror') * NsArrows.ARROW_LOOK.hoverScale + 4;
+          if (mb) mPad = { x0: mb.x0 - pad, y0: mb.y0 - pad, x1: mb.x1 + pad, y1: mb.y1 + pad };
         }
-        const planArgs = { centre: Array.from(centre), eye: Array.from(eye), keepRadiusM: keep.motorM, verticalShare: ARROW_VERTICAL_SHARE, anchorsTan, kind: 'brain', cam };
-        B.plan = planStable(B, planArgs);
-        // The top arrow's far end could lie above the top of the screen at the start look (19 px at 1600 x 900, under
-        // the caption line). Seen from the reference eye with the default look, it is lowered by what it overshoots,
-        // but never nearer the motor areas than the one gap the other three arrows keep. Nothing else is moved: an
-        // arrow that still does not fit (a side arrow in an upright window) stays where it is rather than cover a
-        // motor area.
-        B.topLoweredPx = 0;
-        if (B.plan && B.plan.frames && B.plan.frames.forward && anchorsTan) {
-          try {
-            const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: Array.from(eye) };
-            const box = NsArrows.arrowScreenBox(B.plan.frames.forward, refCam);
-            const over = box ? ARROW_TOP_EDGE_PX - box.y0 : 0;
-            if (over > 0) {
-              // px moved on screen per unit of anchor tangent, measured at the anchor (the view is wide: it is not
-              // the same at the edge as at the middle)
-              const A0 = B.plan.frames.forward.origin, dT = 0.01;
-              const nx = centre[0] - eye[0], ny = centre[1] - eye[1], nz = centre[2] - eye[2], dist = Math.hypot(nx, ny, nz);
-              const n = [nx / dist, ny / dist, nz / dist];
-              let r = [-n[2], 0, n[0]]; // n x (0, 1, 0)
-              const rl = Math.hypot(r[0], r[1], r[2]);
-              r = [r[0] / rl, r[1] / rl, r[2] / rl];
-              const u = [r[1] * n[2] - r[2] * n[1], r[2] * n[0] - r[0] * n[2], r[0] * n[1] - r[1] * n[0]]; // right x n
-              const q0 = NsArrows.projectWorldPx(A0, refCam), q1 = NsArrows.projectWorldPx([A0[0] - u[0] * dist * dT, A0[1] - u[1] * dist * dT, A0[2] - u[2] * dist * dT], refCam);
-              const pxPerTan = (q1.y - q0.y) / dT;
-              if (q0.depth > 0 && q1.depth > 0 && pxPerTan > 0) {
-                const gapT = ARROW_MOTOR_GAP_PX * (2 * Math.tan((camera.fov * DEG) / 2)) / cssH, maxT = 1.5 * gapT;
-                const lowerBy = t => planStable(B, { ...planArgs, anchorsTan: { ...anchorsTan, forward: [anchorsTan.forward[0], anchorsTan.forward[1] - t] } });
-                const topOf = plan => { const bx = plan && plan.frames && plan.frames.forward ? NsArrows.arrowScreenBox(plan.frames.forward, refCam) : null; return bx ? bx.y0 : NaN; };
-                let lowerT = Math.min(over / pxPerTan, maxT), lowered = lowerBy(lowerT), top = topOf(lowered);
-                // The arrow's far end moves a little faster than its anchor: one correction from what was measured.
-                if (Number.isFinite(top) && top - box.y0 > 0 && Math.abs(top - ARROW_TOP_EDGE_PX) > 1) {
-                  const better = Math.min(lowerT * over / (top - box.y0), maxT);
-                  if (Math.abs(better - lowerT) > 1e-9) { const again = lowerBy(better), top2 = topOf(again); if (Number.isFinite(top2)) { lowered = again; lowerT = better; top = top2; } }
-                }
-                if (Number.isFinite(top)) { B.plan = lowered; B.topLoweredPx = Math.round(top - box.y0); }
-                else B.plan = planStable(B, planArgs);
-              }
-            }
-          } catch { /* a reference view that cannot project the arrow leaves the plan as it was */ }
-        }
+        B.plan = planFrame(B, { box: motorRestBoxPx(refCam), aspect: NsArrows.FRAME_ASPECT.brain, bounds: U, cam: refCam, centre: Array.from(centre), sizePx: bSize,
+          avoid: crossBox ? [crossBox] : null, keepOut, blocked: tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad }) },
+          { target: 'motor strip at rest', refLook: { yaw: arrowRef.yaw, pitch: arrowRef.pitch } });
+        if (B.plan) B.plan.visAnchors = frameVisAnchors(B.plan, refCam, Array.from(centre)); // check fix: the frame FRAME_VIS samples
         B.frames = B.plan ? B.plan.frames : null;
         B.serial = (B.serial || 0) + 1;
         B.rig.setFrames(B.frames);
         arrowSerial++;
       }
     }
-    B.shown = showB && Boolean(B.frames);
+    B.shown = showB && Boolean(B.frames) && !B.frameHidden;
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
     const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
     if (showM) {
-      const c = mirror.transform.centre, R = mirror.transform.scale * mirror.body.radius;
-      const key = `${view}|${c[0]},${c[1]},${c[2]}|${R}`;
-      if (key !== M.key) {
-        M.key = key;
-        // The mirror body turns about its own centre, so places measured from that centre do not move when it is
-        // turned. R is the radius of the sphere that holds the whole seated body with its raised arm, far larger
-        // than the trunk; the arrows sit "closer to the body" (R17): above the head and below the seat, and beside
-        // the shoulders. A limb can pass behind a see-through arrow at some angles; the arrow keeps its place.
-        M.plan = planStable(M, { centre: Array.from(c), eye: Array.from(eye), radiiM: { forward: MIRROR_ARROW_SHARE.vertical * R, back: MIRROR_ARROW_SHARE.vertical * R, left: MIRROR_ARROW_SHARE.side * R, right: MIRROR_ARROW_SHARE.side * R }, kind: 'mirror', cam });
+      // R558 (Message 19 check): planned on the body's place WITHOUT its slide along the ground (carryCentre; the top /
+      // bottom mirror arrows slide it), so a slide tap neither re-plans nor moves the tips; a carry or a reset does.
+      const c = mirror.transform.carryCentre || mirror.transform.centre;
+      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}`;
+      if (key !== M.key || M.samplesRef !== mirror.samples) {
+        M.key = key; M.samplesRef = mirror.samples;
+        const start = { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
+        let look = start;
+        const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: start.yaw, pitch: start.pitch, position: Array.from(eye) });
+        if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
+          const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
+          look = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
+        }
+        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: Array.from(eye) };
+        // the brain's tips come first: mirror tips that would overlap one move, as a pair, to the nearest clear place
+        // (ns-arrows3d frameArrowSpots)
+        const avoid = (B.plan && B.plan.anchors ? NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }) : []).concat(crossBox ? [crossBox] : []);
+        // R558 (issue hunt 2, portrait: the panels cover the mirror body's lower half, and the frame fitted to the
+        // whole body then cut at the panels ringed only its head): the frame is built from the part of its on-screen box
+        // inside the usable view (the space between the panels), padded by a tip so the tips sit just outside the body;
+        // an axis that had to be cut is not grown again for the 9:16 shape (ns-arrows3d frameRect keep).
+        const mSize = NsArrows.arrowTipSizePx(cam, 'mirror'), full = mirrorBoxPx(refCam);
+        let mBox = full, keep = null;
+        if (full) {
+          const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), pad = o.halfAlong * mSize;
+          const g = { x0: full.x0 - pad, y0: full.y0 - pad, x1: full.x1 + pad, y1: full.y1 + pad };
+          const cut = { x0: Math.max(g.x0, U.x0), y0: Math.max(g.y0, U.y0), x1: Math.min(g.x1, U.x1), y1: Math.min(g.y1, U.y1) };
+          if (cut.x1 > cut.x0 && cut.y1 > cut.y0 && (cut.x0 !== g.x0 || cut.x1 !== g.x1 || cut.y0 !== g.y0 || cut.y1 !== g.y1)) {
+            mBox = cut; keep = { x: cut.x0 !== g.x0 || cut.x1 !== g.x1, y: cut.y0 !== g.y0 || cut.y1 !== g.y1 };
+          }
+        }
+        // R558 (hunt 2): a place your own body covers in this view is not taken (it would be hidden from the start,
+        // FRAME_VIS); R558 (Message 31): the tips move in pairs to keep off it (tipBlocker, ns-arrows3d FRAME_PAIR).
+        M.plan = planFrame(M, { box: mBox, keep, aspect: NsArrows.FRAME_ASPECT.mirror, bounds: U, cam: refCam, centre: Array.from(c), sizePx: mSize, avoid, keepOut,
+          blocked: tipBlocker({ cam: refCam, centre: Array.from(c), sizePx: mSize }) },
+          { target: 'mirror body', refLook: { yaw: look.yaw, pitch: look.pitch }, startLook: look === start, cutToView: keep });
+        if (M.plan) M.plan.visAnchors = frameVisAnchors(M.plan, refCam, Array.from(c)); // check fix: the frame FRAME_VIS samples
         M.frames = M.plan ? M.plan.frames : null;
         M.serial = (M.serial || 0) + 1;
         M.rig.setFrames(M.frames);
+        applyTipOcclusion(M); // check fix: setFrames shows every tip; the occluded ones stay hidden
         arrowSerial++;
       }
     }
-    M.shown = showM && Boolean(M.frames);
+    M.shown = showM && Boolean(M.frames) && !M.frameHidden;
     if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
+    // R558 (Message 7): the planned anchors are fixed world points; each tip FACES the camera in use and keeps its
+    // planned size on screen (ns-arrows3d facingArrowFrames: its depth axis along its own sight line, so the tilted solid
+    // looks the same everywhere in the wide view). A tip fixed in the world and seen from the side, e.g. when the player
+    // turns to look at a tip near the edge of the wide view, would be a thin sliver. Redone only when the camera or the plan
+    // changed (eight small matrices); picks and screen boxes use these same frames.
+    const faceCamKey = arrowCameraKey(cam);
+    for (const set of [B, M]) {
+      if (!set.shown || !set.plan || !set.plan.anchors) continue;
+      const fk = `${faceCamKey}|${set.serial}`;
+      if (fk === set.faceKey) continue;
+      set.faceKey = fk;
+      try { set.frames = NsArrows.facingArrowFrames(set.plan.anchors, { cam, sizePx: set.plan.sizes.sizePx, nearM: camera.near }); } catch (err) { arrowRigError = String((err && err.message) || err); }
+      set.rig.setFrames(set.frames);
+      applyTipOcclusion(set); // check fix: re-facing the tips to a moved camera must not show an occluded mirror tip again
+      arrowSerial++;
+    }
     // A normal pick can replan before the render/overlay pass. Refresh the SAME boxes/panel mask before it uses them.
     // No recursion: arrowScreenLayout -> arrowBoxes, and neither calls updateArrows. Unchanged cache inputs do no work.
     // R558: the brain's own matrix is part of the key, so a turned brain re-checks its arrows against the motor areas.
@@ -5996,7 +9000,7 @@ export function createScene({
       if (B.shown) arrowScreenLayout(); else { underPanel.brain.clear(); arrowBoxes(); }
     }
   }
-  /** Screen boxes (ns-arrows3d arrowScreenBox) and a click point (the middle of the stalk) of every shown arrow, for the
+  /** Screen boxes (ns-arrows3d arrowScreenBox) and a click point (the point of the V, on the drawn stroke) of every shown arrow, for the
    * overlay, captions and QA; recomputed when the plan or the camera changed. */
   function arrowBoxes() {
     if (!(cssW > 0 && cssH > 0)) return;
@@ -6005,7 +9009,6 @@ export function createScene({
     let ck = `${arrowSerial}|${cssW}x${cssH}|${camera.fov}|`;
     for (let i = 0; i < 16; i++) ck += `${ce[i]},`;
     const cam = arrowCam();
-    const mid = [NsArrows.ARROW_DESIGN.stalk * 0.5, 0, 0];
     for (const set of [arrowSets.brain, arrowSets.mirror]) {
       if (set.boxKey === ck) continue;
       set.boxKey = ck;
@@ -6016,11 +9019,12 @@ export function createScene({
         if (f) {
           try {
             box = NsArrows.arrowScreenBox(f, cam);
-            const q = NsArrows.projectWorldPx(NsArrows.frameToWorld(f, mid), cam);
-            click = q.depth > 0 ? [q.x, q.y] : null;
+            const q = NsArrows.arrowClickPx(f, cam);
+            click = q ? [q.x, q.y] : null;
           } catch { box = null; click = null; }
         }
-        set.boxes[d] = box && box.x1 > 0 && box.x0 < cssW && box.y1 > 0 && box.y0 < cssH ? box : null;
+        // R558 (hunt 2, FRAME_VIS): a tip your own body is in front of has no box (not drawn, no caption, no click).
+        set.boxes[d] = box && box.x1 > 0 && box.x0 < cssW && box.y1 > 0 && box.y0 < cssH && !set.occluded.has(d) ? box : null;
         set.clicks[d] = set.boxes[d] ? click : null;
       }
       arrowStats.boxes++;
@@ -6028,8 +9032,12 @@ export function createScene({
   }
   /** R5-scene (D16 / D19): what a ray through CSS point (x, y) hits, nearest first: [{ kind: 'arrow', target: 'brain' |
    * 'mirror', dir, distance (m along the ray) }, { kind: 'brain', distance } (the point is inside the brain's drawn
-   * outline; distance = its nearest point from the camera)] (ns-arrows3d pickArrows per rig, with its pick padding).
-   * Feed it to ns-controls resolveArrowHit: a mirror arrow behind the brain is then 'blocked'. */
+   * outline; distance = its nearest point from the camera)] (ns-arrows3d pickArrows per rig, with its hit shape and
+   * pick padding). Feed it to ns-controls resolveArrowHit.
+   * R558 (Message 7): the V tips are drawn on top of everything, so a tip under the point always wins: over a motor
+   * area (the motor area no longer takes priority over a brain tip) and over the glass (no 'brain' entry is reported
+   * with a tip hit, so a mirror tip drawn over the brain is not 'blocked'). Away from the tips' hit shapes nothing
+   * changes: the motor areas, the glass and the bodies keep their own picking. */
   function pickArrows(x, y) {
     const hits = [];
     if (!(Number.isFinite(x) && Number.isFinite(y)) || !(cssW > 0 && cssH > 0)) return hits;
@@ -6037,35 +9045,28 @@ export function createScene({
     arrowStats.picks++;
     let ray = null;
     try { ray = NsArrows.pixelRay(x, y, arrowCam()); } catch { ray = null; }
-    // R558: a motor area under the pointer always wins over a brain arrow drawn beneath it (a 10 px box at the pointer:
-    // the motor area itself, not its wider surroundings, takes the click).
-    // The box test asks only whether a motor-area VERTEX lies near the pointer. With the brain turned, a motor triangle
-    // can be drawn larger than that box (seen close, or stretched by the far-eye picture), and the pointer can then
-    // rest inside it with no vertex near. So the exact question is asked as well: does the ray through the pointer
-    // hit a drawn motor-area triangle?
-    let motorUnderPointer = false;
-    if (regionMode && brainTransformSet) {
-      try { motorUnderPointer = motorCoversRect({ x0: x + motorCoverPadPx - 5, y0: y + motorCoverPadPx - 5, x1: x - motorCoverPadPx + 5, y1: y - motorCoverPadPx + 5 }) || motorAreaUnderPoint(x, y); } catch { motorUnderPointer = false; }
-    }
     if (ray) {
       for (const set of [arrowSets.brain, arrowSets.mirror]) {
         if (!set.shown || !set.frames) continue;
-        if (set.target === 'brain' && motorUnderPointer) continue;
         let h = null;
-        const hidden = set.target === 'brain' ? underPanel.brain : null;
-        const only = hidden && hidden.size ? ARROW_DIRS.filter(d => !hidden.has(d)) : null;
+        const under = set.target === 'brain' ? underPanel.brain : null;
+        // R558 (hunt 2, FRAME_VIS): a tip your own body is in front of answers no click either.
+        const only = (under && under.size) || set.occluded.size ? ARROW_DIRS.filter(d => !(under && under.has(d)) && !set.occluded.has(d)) : null;
         try { h = only && !only.length ? null : NsArrows.pickArrows(ray, set.frames, only ? { only } : {}); } catch { h = null; }
-        if (h && Number.isFinite(h.t)) hits.push({ kind: 'arrow', target: set.target, dir: h.dir, distance: h.t });
+        if (h && Number.isFinite(h.t)) hits.push({ kind: 'arrow', target: set.target, dir: h.dir, distance: h.t, onTip: h.dist <= 0 });
       }
+      // R558 (Message 19 check): where a brain tip and a mirror tip lie close (third person, portrait), a point ON one
+      // tip's hit shape wins over a tip it only reaches through the pick padding, even if that one is nearer.
+      if (hits.length > 1 && hits.some(q => q.onTip)) for (let i = hits.length - 1; i >= 0; i--) if (!hits[i].onTip) hits.splice(i, 1);
     }
-    if (regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 })) {
+    if (!hits.length && regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 })) {
       hits.push({ kind: 'brain', distance: Number.isFinite(cameraRange.brainNearM) ? cameraRange.brainNearM : arrowRef.dist });
     }
     hits.sort((p, q) => p.distance - q.distance);
     return hits;
   }
   /** R5-scene: highlight the arrow under the pick point. hit: { target, dir, blocked? } (ns-controls arrowHitOf /
-   * stepArrowInput's hover) or null. An unblocked arrow gets ns-arrows3d's hover look (brighter, warm white, 12 % larger)
+   * stepArrowInput's hover) or null. An unblocked arrow gets ns-arrows3d's hover look (brighter, warm white, 10 % larger)
    * and its plain caption; a mirror arrow the brain covers ('blocked') gets the rig's blocked look (grey, not enlarged, no
    * caption: it cannot be used through the brain; R5-input shows the plain hint). Returns the hover or null. */
   function setArrowHover(hit) {
@@ -6100,17 +9101,16 @@ export function createScene({
     let any = false;
     for (const d of ARROW_DIRS) {
       const b = B.boxes[d], c = B.clicks[d];
-      // R558 (genuine note R29: the arrows must "never overlap key areas and block the view"). The ribbons are drawn
-      // BEFORE the motor areas (ARROW_RENDER_ORDER), so a motor area is always drawn over an arrow that shares its
-      // pixels, and pickArrows gives a motor area under the pointer priority over a brain arrow. So an arrow keeps its
-      // place and stays drawn; here its overlap with the motor areas as drawn now is only recorded for the readback.
+      // R558 (Message 7): a tip keeps its place on its frame and is drawn on top; its overlap with the motor areas as
+      // drawn now is only recorded for the readback (a translucent tip over a motor area still shows the area).
       let overMotor = false;
       if (b && regionMode) { try { overMotor = motorCoversRect({ x0: b.x0 + motorCoverPadPx, y0: b.y0 + motorCoverPadPx, x1: b.x1 - motorCoverPadPx, y1: b.y1 - motorCoverPadPx }); } catch { overMotor = false; } }
       if (overMotor) overMotorNow.brain.add(d); else overMotorNow.brain.delete(d);
       const under = Boolean(b) && infoRects.some(r => b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0);
       if (under) underPanel.brain.add(d); else underPanel.brain.delete(d);
       const root = B.rig && B.rig.arrows[d] ? B.rig.arrows[d].root : null;
-      if (root && root.visible === under) root.visible = !under;
+      const hide = under || B.occluded.has(d); // R558 (hunt 2, FRAME_VIS): or your own body is in front of it
+      if (root && root.visible === hide) root.visible = !hide;
       out[d] = b && !under ? { x: c ? c[0] : (b.x0 + b.x1) / 2, y: c ? c[1] : (b.y0 + b.y1) / 2, box: b } : null;
       if (out[d]) any = true;
     }
@@ -6118,6 +9118,178 @@ export function createScene({
   }
   const underPanel = { brain: new Set() }; // R5-integrate-core: brain arrows hidden under the information panel this frame
   const overMotorNow = { brain: new Set() }; // R558: brain arrows whose box overlaps a motor area now (drawn under it)
+
+  /* ---- R558 (hunt 2): tips behind your own body; sets whose target is mostly hidden or off screen (FRAME_VIS) ------ */
+  // Your own body for the FRAME_VIS sight lines: the sphere cover the stop-at-contact rule already keeps of every drawn
+  // body mesh and left-arm bone (collisionItems().own, ns-collide: a cover about 1 cm outside the surface), tested
+  // coarse to fine (mesh bound, group spheres, leaf spheres). Much cheaper than the triangle picks (measured on the
+  // first try with Three's triangle raycasts: 25 to 45 ms for 48 sight lines, far too slow for a check every few frames).
+  const frameVis = { tick: 0, at: -1e9, key: '', runs: 0, rays: 0, lastMs: 0, lastRays: 0 };
+  let ownPartIds = null, ownPartCount = -1;
+  /** A sight-line tester for this pass: (x, y, maxM) -> true when your own body's cover lies on the sight line through
+   * CSS point (x, y) nearer than maxM metres from the camera. In first person the head and neck (round the eye, not
+   * drawn) are left out, and a hit counts only where the first-person view draws the body (FIRST_PERSON_BODY).
+   * refCam (optional, a plain ns-arrows3d camera at the first-person eye): sight lines from that camera instead (tip
+   * planning in the reference view; the head and neck are left out, the drawn-share rule is not applied).
+   * R558 check (Message 31): with refCam, the left game arm's bones (part 'arm') are tested with the sight line through
+   * the same pixel of the EYE as it looks now, not from the reference eye. The game arm hangs on the eye (eyeRig, camera
+   * metres), so it keeps its place on screen whatever the look, while the rest of your body stays put in the world.
+   * Tested from the reference eye, a plan made while you looked elsewhere saw the arm where THAT look put it (carrying
+   * the brain while looking up at it: the arm high above its place in the start view), so the tips it judged clear sat
+   * under your left hand again once you looked back (measured at 1600x900: the mirror body's left tip hidden, its right
+   * tip shown alone; the brain's top and bottom tips shifted 228 px aside). The body's own muscles on the left upper arm
+   * segment, which follow the game arm, are still tested from the reference eye (near the shoulder, rarely in front of
+   * a tip). At the start look the eye and the reference eye coincide, so nothing changes there. */
+  function ownSightTester(refCam = null) {
+    const items = collisionItems(), own = items && items.own;
+    if (!own || !own.entries.length) return () => false;
+    if (!ownPartIds || ownPartCount !== body.length) {
+      ownPartCount = body.length; ownPartIds = { head: new Set(), legs: new Set() };
+      for (const b of body) {
+        if (b.face || b.anatomicalPart === 'face' || b.anatomicalPart === 'neck') ownPartIds.head.add(b.id);
+        if (b.anatomicalPart === 'legs') ownPartIds.legs.add(b.id);
+      }
+    }
+    const fp = refCam ? true : !camState.headInPlace; // the camera at the eye: the head and neck round it are not drawn
+    const entries = fp ? own.entries.filter(e => !(e.tag && e.tag.part === 'body' && ownPartIds.head.has(e.tag.id))) : own.entries;
+    camera.updateMatrixWorld(true);
+    const o = refCam ? Array.from(refCam.position) : [camera.position.x, camera.position.y, camera.position.z];
+    const shareRule = fp && !refCam;
+    // R558 check (Message 31): the eye as it looks now, for the game arm's sight lines in the reference view (see above)
+    const eyeCam = refCam ? { width: refCam.width, height: refCam.height, fovYDeg: refCam.fovYDeg, yaw: lookYaw, pitch: lookPitch, position: [eyeRig.position.x, eyeRig.position.y, eyeRig.position.z] } : null;
+    // nearest entry distance along the unit ray d from origin a of sphere (cx, cy, cz, r), or Infinity
+    const hitT = (d, cx, cy, cz, r, a = o) => {
+      const vx = cx - a[0], vy = cy - a[1], vz = cz - a[2], t = vx * d[0] + vy * d[1] + vz * d[2];
+      const q = vx * vx + vy * vy + vz * vz - t * t;
+      if (q > r * r) return Infinity;
+      const th = t - Math.sqrt(r * r - q);
+      return th < 0 ? (t + Math.sqrt(r * r - q) >= 0 ? 0 : Infinity) : th;
+    };
+    return (x, y, maxM) => {
+      if (!(maxM > 0)) return false;
+      frameVis.rays++; frameVis.lastRays++;
+      let d, dEye = null;
+      if (refCam) d = NsArrows.pixelRay(x, y, refCam).dir;
+      else {
+        pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
+        const dl = Math.hypot(pv.x - o[0], pv.y - o[1], pv.z - o[2]);
+        if (!(dl > 0)) return false;
+        d = [(pv.x - o[0]) / dl, (pv.y - o[1]) / dl, (pv.z - o[2]) / dl];
+      }
+      for (const e of entries) {
+        let dd = d, a = o;
+        if (eyeCam && e.tag && e.tag.part === 'arm') { if (!dEye) dEye = NsArrows.pixelRay(x, y, eyeCam).dir; dd = dEye; a = eyeCam.position; }
+        if (!(hitT(dd, e.c[0], e.c[1], e.c[2], e.r, a) < maxM)) continue;
+        const G = e.table.groups, L = e.table.leaves, m = e.m;
+        for (let i = 0; i < G.length; i += 6) {
+          const gx = m[0] * G[i] + m[4] * G[i + 1] + m[8] * G[i + 2] + m[12], gy = m[1] * G[i] + m[5] * G[i + 1] + m[9] * G[i + 2] + m[13], gz = m[2] * G[i] + m[6] * G[i + 1] + m[10] * G[i + 2] + m[14];
+          if (!(hitT(dd, gx, gy, gz, G[i + 3] * e.s + e.pad, a) < maxM)) continue;
+          for (let k = G[i + 4], n = k + G[i + 5]; k < n; k++) {
+            const j = 4 * k, lx = L[j], ly = L[j + 1], lz = L[j + 2];
+            const t = hitT(dd, m[0] * lx + m[4] * ly + m[8] * lz + m[12], m[1] * lx + m[5] * ly + m[9] * lz + m[13], m[2] * lx + m[6] * ly + m[10] * lz + m[14], L[j + 3] * e.s + e.pad, a);
+            if (!(t < maxM)) continue;
+            if (shareRule && e.tag && e.tag.part === 'body' && firstPersonShareAt(o[0] + t * d[0], o[1] + t * d[1], o[2] + t * d[2], ownPartIds.legs.has(e.tag.id)) < FIRST_PERSON_BODY.pickFrom) continue;
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+  }
+  /** Check fix (hunt 2, FRAME_VIS): the mirror body's tips that your own body is in front of stay hidden. rig.setFrames
+   * shows every tip that has a frame, and the tips are faced to the camera (setFrames) again whenever the camera moves,
+   * so without this an occluded tip came back on the next look movement, drawn on your body but answering no click
+   * (seen in third person: the mirror body's left tip on your right shoulder). The brain's tips get the same rule in
+   * arrowScreenLayout (with the under-panel rule). */
+  function applyTipOcclusion(set) {
+    if (!set || set.target !== 'mirror' || !set.rig) return;
+    for (const d of ARROW_DIRS) {
+      const a = set.rig.arrows[d];
+      if (!a) continue;
+      const want = Boolean(set.frames && set.frames[d]) && !set.occluded.has(d);
+      if (a.root.visible !== want) a.root.visible = want;
+    }
+  }
+  /** Check fix (hunt 2, FRAME_VIS): the world side middles of a plan's frame (plan.rect, planned in the reference view
+   * `cam` round `centre`), taken BEFORE any tip slides along its side; FRAME_VIS samples this frame. */
+  function frameVisAnchors(plan, cam, centre) {
+    const r = plan && plan.rect;
+    if (!r || ![r.x0, r.y0, r.x1, r.y1].every(Number.isFinite)) return null;
+    const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+    try { return NsArrows.frameArrowAnchors({ left: { x: r.x0, y: cy }, right: { x: r.x1, y: cy }, forward: { x: cx, y: r.y0 }, back: { x: cx, y: r.y1 } }, { cam, centre }); } catch { return null; }
+  }
+  /** R558 (hunt 2, FRAME_VIS): decide which tips are drawn and answer clicks. Runs before updateArrows in render(), at
+   * most every FRAME_VIS.everyFrames frames while the camera, a pose, a plan or a target changed. */
+  function stepArrowVisibility() {
+    if (!(cssW > 0 && cssH > 0)) return;
+    frameVis.tick++;
+    const cam = arrowCam(), be = brainGroup.matrixWorld.elements;
+    const key = `${arrowCameraKey(cam)}|${arrowSerial}|${bodyPoseSerial}|${armPoseSerial}|${mirror.serial}|${camState.headInPlace}|${be[12]},${be[13]},${be[14]}`;
+    if (key === frameVis.key || frameVis.tick - frameVis.at < FRAME_VIS.everyFrames) return;
+    const t0 = nowMs();
+    frameVis.key = key; frameVis.at = frameVis.tick; frameVis.runs++; frameVis.lastRays = 0;
+    let test = null;
+    const covered = (x, y, m) => { if (!test) test = ownSightTester(); return test(x, y, m); };
+    let changed = false;
+    for (const set of [arrowSets.brain, arrowSets.mirror]) {
+      const A = set.plan && set.plan.anchors;
+      const targetOn = set.target === 'brain' ? brainGroup.visible && brainTransformSet : mirrorRoot.visible && mirror.transform !== null;
+      let hide = false;
+      const occ = new Set();
+      let vis = null;
+      // the frame's own side middles (planned frame, before any tip slid along its side; frameVisAnchors), else the tips
+      const F = set.plan && set.plan.visAnchors && ARROW_DIRS.every(d => set.plan.visAnchors[d]) ? set.plan.visAnchors : A;
+      if (set.rig && A && targetOn && ARROW_DIRS.every(d => A[d])) {
+        // the frame in the world: the plane rectangle through the four side middles of the planned frame (the left /
+        // right ones span its width, the top / bottom ones its height), sampled on a gridX x gridY grid of cell centres;
+        // a sample counts as seen when it lies in front of the camera, inside the view and with no part of your own body
+        // nearer than the target's centre on its sight line. (Sampling the world rectangle, not its projected box, keeps
+        // a frame that reaches behind the camera, e.g. the brain's when you turn far to one side, counted fairly.)
+        // Check fix (hunt 2): the frame, not the tips: a tip slid along its side (off your hand, off the mirror body)
+        // tilted and shifted the sampled rectangle toward your hands and legs, so a mirror body plainly in view lost its
+        // tips (share 0.125 at a 6-degree look down with the trunk leaning back).
+        const L = F.left, R = F.right, T = F.forward, Bm = F.back;
+        const C0 = [(L[0] + R[0]) / 2, (L[1] + R[1]) / 2, (L[2] + R[2]) / 2];
+        const hx = [(R[0] - L[0]) / 2, (R[1] - L[1]) / 2, (R[2] - L[2]) / 2], hy = [(T[0] - Bm[0]) / 2, (T[1] - Bm[1]) / 2, (T[2] - Bm[2]) / 2];
+        const c = set.target === 'brain' ? (farEyeView.pw || [be[12], be[13], be[14]]) : mirror.transform.centre;
+        const cd = Math.hypot(c[0] - cam.position[0], c[1] - cam.position[1], c[2] - cam.position[2]);
+        let n = 0, on = 0, seen = 0;
+        for (let i = 0; i < FRAME_VIS.gridX; i++) for (let j = 0; j < FRAME_VIS.gridY; j++) {
+          n++;
+          const u = (2 * (i + 0.5)) / FRAME_VIS.gridX - 1, v = (2 * (j + 0.5)) / FRAME_VIS.gridY - 1;
+          const q = NsArrows.projectWorldPx([C0[0] + u * hx[0] + v * hy[0], C0[1] + u * hx[1] + v * hy[1], C0[2] + u * hx[2] + v * hy[2]], cam);
+          if (!(q.depth > camera.near && q.x >= 0 && q.x <= cssW && q.y >= 0 && q.y <= cssH)) continue;
+          on++;
+          if (!covered(q.x, q.y, cd)) seen++;
+        }
+        const share = seen / n;
+        hide = share < FRAME_VIS.minShare;
+        vis = { share: Math.round(share * 1000) / 1000, onScreen: Math.round((on / n) * 1000) / 1000, bodyCovered: on ? Math.round(((on - seen) / on) * 1000) / 1000 : 0 };
+        if (!hide) {
+          // each tip: its middle and its two sides across its pointing direction; your body in front on two of three
+          const h = 0.35 * (set.plan.sizes && Number.isFinite(set.plan.sizes.sizePx) ? set.plan.sizes.sizePx : 40);
+          for (const d of ARROW_DIRS) {
+            const a = A[d], q = NsArrows.projectWorldPx(a, cam), e = NsArrows.COMPASS_SCREEN[d];
+            if (!(q.depth > camera.near)) continue;
+            const dist = Math.hypot(a[0] - cam.position[0], a[1] - cam.position[1], a[2] - cam.position[2]);
+            const ax = e[0] === 0 ? h : 0, ay = e[0] === 0 ? 0 : h;
+            let k = 0, done = 0;
+            for (const s of [0, -1, 1]) { done++; if (covered(q.x + s * ax, q.y + s * ay, dist)) k++; if (k >= 2 || k + (3 - done) < 2) break; }
+            if (k >= 2) occ.add(d);
+          }
+          if (occ.size) vis.occluded = [...occ];
+        }
+      }
+      const sameOcc = occ.size === set.occluded.size && [...occ].every(d => set.occluded.has(d));
+      if (hide !== set.frameHidden || !sameOcc) {
+        set.frameHidden = hide; set.occluded = occ; changed = true;
+        applyTipOcclusion(set);
+      }
+      set.vis = vis;
+    }
+    if (changed) { arrowSerial++; overlayDirty = true; }
+    frameVis.lastMs = Math.round((nowMs() - t0) * 100) / 100;
+  }
   /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
   function layoutArrowTips(reserveRight, reserveBottom, topPx) {
     arrowBoxes();
@@ -6130,16 +9302,21 @@ export function createScene({
       const w = Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
       // just past the arrow's outer end, along its compass direction
       const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
-      const hitsBox = (x, y) => x < box.x1 + 2 && x + w > box.x0 - 2 && y < box.y1 + 2 && y + h > box.y0 - 2;
-      // just past the arrow's outer end along its compass direction; where the screen edge or the panel leaves no room
-      // there, under the arrow (above it for the bottom arrow), never on top of the arrow itself
-      let x = clampTo(e[0] > 0 ? box.x1 + gap : e[0] < 0 ? box.x0 - gap - w : (box.x0 + box.x1) / 2 - w / 2, 4, xMax);
-      let y = clampTo(e[1] > 0 ? box.y1 + gap : e[1] < 0 ? box.y0 - gap - h : (box.y0 + box.y1) / 2 - h / 2, topPx, yMax);
-      if (hitsBox(x, y)) {
-        x = clampTo((box.x0 + box.x1) / 2 - w / 2, 4, xMax);
-        y = e[1] > 0 ? clampTo(box.y0 - gap - h, topPx, yMax) : clampTo(box.y1 + gap, topPx, yMax);
-        if (hitsBox(x, y)) y = clampTo(box.y0 - gap - h, topPx, yMax);
-      }
+      // R558 (Message 7): never on top of ANY shown tip (the two sets' tips can be near each other), its own first.
+      const tipBoxes = [box];
+      for (const st of [arrowSets.brain, arrowSets.mirror]) if (st.shown) for (const dd of ARROW_DIRS) { const b2 = st.boxes[dd]; if (b2 && b2 !== box) tipBoxes.push(b2); }
+      // R558 (issue hunt 2, portrait third person: "Slide the mirror body away from you" covered the "Right arm" label):
+      // nor on the region labels shown last frame or the orientation labels.
+      for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) tipBoxes.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
+      if (orientLive) for (const r of orientLive) tipBoxes.push(r);
+      const hitsBox = (x, y) => tipBoxes.some(b2 => x < b2.x1 + 2 && x + w > b2.x0 - 2 && y < b2.y1 + 2 && y + h > b2.y0 - 2);
+      // just past the arrow's outer end along its compass direction; where the screen edge, the panel or another tip
+      // leaves no room there: under the arrow (above it for the bottom arrow), then beside it, never on top of a tip
+      const cx = (box.x0 + box.x1) / 2 - w / 2, cy = (box.y0 + box.y1) / 2 - h / 2;
+      const spots = [[e[0] > 0 ? box.x1 + gap : e[0] < 0 ? box.x0 - gap - w : cx, e[1] > 0 ? box.y1 + gap : e[1] < 0 ? box.y0 - gap - h : cy],
+        [cx, e[1] > 0 ? box.y0 - gap - h : box.y1 + gap], [cx, box.y0 - gap - h], [box.x1 + gap, cy], [box.x0 - gap - w, cy]]
+        .map(([sx, sy]) => [clampTo(sx, 4, xMax), clampTo(sy, topPx, yMax)]);
+      let [x, y] = spots.find(([sx, sy]) => !hitsBox(sx, sy)) || spots[0];
       const l = px(x), t = px(y);
       if (T.left !== l) { T.el.style.left = l; T.left = l; }
       if (T.top !== t) { T.el.style.top = t; T.top = t; }
@@ -6167,7 +9344,11 @@ export function createScene({
       };
     };
     return { source: 'ns-arrows3d', error: arrowRigError, silhouette: Boolean(arrowSets.brain.rig && arrowSets.brain.rig.arrows.forward.xray), hover: arrowHover ? { ...arrowHover } : null,
-      brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats } };
+      brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
+      // R558 (hunt 2, FRAME_VIS): what the visibility rule decided last and what it cost
+      visibility: { brain: { hidden: arrowSets.brain.frameHidden, occluded: [...arrowSets.brain.occluded], ...(arrowSets.brain.vis || {}) },
+        mirror: { hidden: arrowSets.mirror.frameHidden, occluded: [...arrowSets.mirror.occluded], ...(arrowSets.mirror.vis || {}) },
+        runs: frameVis.runs, rays: frameVis.rays, lastRays: frameVis.lastRays, lastMs: frameVis.lastMs } };
   }
 
   /** READ-ONLY cached compass evidence. Never plans, projects, updates matrices/bounds, renders or reads GPU buffers.
@@ -6189,6 +9370,7 @@ export function createScene({
         retained: set.planningEvidence ? copyCompassEvidence(set.planningEvidence) : null,
         scope: 'Same ordinary invocation; no getter refresh. Current keys are not an atomic render/pixel or source-file identity.' },
       planningOutcome: set.planningOutcome || 'not-planned', planningError: set.planningError || null,
+      frame: set.frameRecord ? copyCompassEvidence(set.frameRecord) : null,
       planRevision: set.serial || 0, planningCamera: cameraCopy(set.planningCamera), boxCamera: cameraCopy(set.boxCamera),
       planMatchesActiveCamera: Boolean(set.planningCameraKey && set.planningCameraKey === activeKey),
       planMatchesCurrentTarget: Boolean(set.planningTargetKey && set.planningTargetKey === arrowTargetKey(set.target)),
@@ -6217,6 +9399,10 @@ export function createScene({
         eulerXYZRadians: [camera.rotation.x, camera.rotation.y, camera.rotation.z], eulerOrder: camera.rotation.order,
         matrixWorld: Array.from(camera.matrixWorld.elements), matrixWorldNeedsUpdate: camera.matrixWorldNeedsUpdate },
       brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
+      // R558 (hunt 2, FRAME_VIS): the last visibility decision (retained data only; nothing is recomputed here)
+      visibility: { brain: { shown: arrowSets.brain.shown, hidden: arrowSets.brain.frameHidden, occluded: [...arrowSets.brain.occluded], ...(arrowSets.brain.vis ? copyCompassEvidence(arrowSets.brain.vis) : {}) },
+        mirror: { shown: arrowSets.mirror.shown, hidden: arrowSets.mirror.frameHidden, occluded: [...arrowSets.mirror.occluded], ...(arrowSets.mirror.vis ? copyCompassEvidence(arrowSets.mirror.vis) : {}) },
+        runs: frameVis.runs, rays: frameVis.rays, lastRays: frameVis.lastRays, lastMs: frameVis.lastMs },
       scope: 'Cached nominal unhovered plan/head landmarks and retained CPU hover/visibility flags. Missing/nonfinite/stale is not valid current-view proof. No GPU buffer, pixel, actual draw or atomic-frame identity claimed.' };
   }
 
@@ -6239,14 +9425,28 @@ export function createScene({
       let box = mirrorPositionBounds.get(attr);
       if (!box || box.array !== attr.array || box.count !== attr.count || box.version !== attr.version || box.sharedAttribute !== sharedAttribute || box.sharedVersion !== sharedVersion
           || !Number.isFinite(attr.version) || (sharedArray && !Number.isFinite(sharedVersion))) {
-        const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
-        for (let i = 0; i < attr.count; i++) {
-          for (let j = 0; j < 3; j++) {
-            const v = attr.array[3 * i + j]; if (!Number.isFinite(v)) fail('scene_input', 'nonfinite full or live mirror position');
-            min[j] = Math.min(min[j], v); max[j] = Math.max(max[j], v);
+        // R558 (performance, P2): the same values in the same order, the same Math.min / Math.max and the same refusal,
+        // with the running bounds in local variables (the per-vertex skinned twins are rescanned every dance frame);
+        // a plain xyz Float32 buffer takes the shared box of its current vertices (liveBoxOf: the same Math.min / Math.max
+        // over the same values; a NaN or infinite coordinate leaves a bound that is not finite, which is refused as before).
+        let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+        if (attr.array instanceof Float32Array && attr.itemSize === 3 && !attr.isInterleavedBufferAttribute) {
+          const lb = liveBoxOf(attr);
+          if (attr.count > 0 && !(Number.isFinite(lb.x0) && Number.isFinite(lb.y0) && Number.isFinite(lb.z0) && Number.isFinite(lb.x1) && Number.isFinite(lb.y1) && Number.isFinite(lb.z1))) fail('scene_input', 'nonfinite full or live mirror position');
+          x0 = lb.x0; y0 = lb.y0; z0 = lb.z0; x1 = lb.x1; y1 = lb.y1; z1 = lb.z1;
+        } else {
+          const A = attr.array, n3 = 3 * attr.count;
+          for (let k = 0; k < n3; k += 3) {
+            const x = A[k], y = A[k + 1], z = A[k + 2];
+            if (!Number.isFinite(x)) fail('scene_input', 'nonfinite full or live mirror position');
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+            if (!Number.isFinite(y)) fail('scene_input', 'nonfinite full or live mirror position');
+            y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+            if (!Number.isFinite(z)) fail('scene_input', 'nonfinite full or live mirror position');
+            z0 = Math.min(z0, z); z1 = Math.max(z1, z);
           }
         }
-        box = { lo: min, hi: max, array: attr.array, count: attr.count, version: attr.version, sharedAttribute, sharedVersion };
+        box = { lo: [x0, y0, z0], hi: [x1, y1, z1], array: attr.array, count: attr.count, version: attr.version, sharedAttribute, sharedVersion };
         mirrorPositionBounds.set(attr, box);
       }
       for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j], box.lo[j]); hi[j] = Math.max(hi[j], box.hi[j]); }
@@ -6257,19 +9457,55 @@ export function createScene({
     }
     return sharedArray ? Math.max(a.count, live.count) : a.count + live.count;
   }
+  // R558 (performance): each twin's eight world corners are kept while its world matrix and both of its position
+  // buffers (object, array, count, version) are unchanged, so a dance or a look re-reads only the twins that moved (the
+  // head, an arm, a leg); the radius about the centre and the camera depths are taken over all corners on each call.
+  // Same numbers as reading every mesh each time.
+  const envTwins = new WeakMap(), envCorners = new Float64Array(24);
   function currentMirrorEnvelope() {
     if (!mirrorRoot.visible || !mirror.transform) return null;
-    camera.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true); // force: every twin's matrixWorld is current
     const centre = mirror.transform.centre, V = camera.matrixWorldInverse.elements;
-    let radiusM = 0, minCameraDepthM = Infinity, maxCameraDepthM = -Infinity, positions = 0, meshes = 0;
-    for (const mesh of [...mirrorBodyGroup.children, ...mirrorArmGroup.children]) {
-      mesh.updateMatrixWorld(true); meshes++;
-      positions += mirrorMeshCorners(mesh, mesh.matrixWorld, (x, y, z) => {
-        radiusM = Math.max(radiusM, Math.hypot(x - centre[0], y - centre[1], z - centre[2]));
-        const depth = -(V[2] * x + V[6] * y + V[10] * z + V[14]);
+    const kids = mirrorBodyGroup.children.concat(mirrorArmGroup.children);
+    let radiusM = 0, minCameraDepthM = Infinity, maxCameraDepthM = -Infinity, positions = 0;
+    const meshes = kids.length;
+    for (const mesh of kids) {
+      const full = mesh.userData.nsFullGeometry || mesh.geometry;
+      const fa = full && full.attributes && full.attributes.position, la = mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.position;
+      const M = mesh.matrixWorld.elements;
+      let rec = envTwins.get(mesh);
+      let same = Boolean(rec) && rec.fa === fa && rec.la === la && Boolean(fa) && Boolean(la) && rec.faArr === fa.array && rec.laArr === la.array
+        && rec.faN === fa.count && rec.laN === la.count && rec.faV === fa.version && rec.laV === la.version;
+      for (let i = 0; same && i < 16; i++) if (rec.m[i] !== M[i]) same = false;
+      if (!same) {
+        // R558 (P2): a twin's record is refilled in place (its corner and matrix arrays reused) once the corners are
+        // all found; the same numbers.
+        const c = envCorners;
+        let k = 0;
+        const n = mirrorMeshCorners(mesh, mesh.matrixWorld, (x, y, z) => { c[k++] = x; c[k++] = y; c[k++] = z; });
+        if (rec) {
+          rec.c.set(c); rec.m.set(M); rec.n = n;
+          rec.fa = fa; rec.la = la; rec.faArr = fa.array; rec.laArr = la.array; rec.faN = fa.count; rec.laN = la.count; rec.faV = fa.version; rec.laV = la.version;
+        } else {
+          rec = { fa, la, faArr: fa.array, laArr: la.array, faN: fa.count, laN: la.count, faV: fa.version, laV: la.version, m: Float64Array.from(M), c: Float64Array.from(c), n };
+          envTwins.set(mesh, rec);
+        }
+      }
+      positions += rec.n;
+      const P = rec.c;
+      for (let i = 0; i < 24; i += 3) {
+        // R558 (P2): Math.hypot only for a corner that can be the farthest so far (a sum of squares below
+        // radius^2 (1 - 1e-9) means Math.hypot < radius: the running maximum is unchanged, bit for bit).
+        const ex = P[i] - centre[0], ey = P[i + 1] - centre[1], ez = P[i + 2] - centre[2];
+        if (!(radiusM > 1e-100 && ex * ex + ey * ey + ez * ez < radiusM * radiusM * (1 - 1e-9))) {
+          const r = Math.hypot(ex, ey, ez);
+          if (r > radiusM) radiusM = r;
+        }
+        const depth = -(V[2] * P[i] + V[6] * P[i + 1] + V[10] * P[i + 2] + V[14]);
         if (!Number.isFinite(depth)) fail('scene_input', 'nonfinite current mirror depth');
-        minCameraDepthM = Math.min(minCameraDepthM, depth); maxCameraDepthM = Math.max(maxCameraDepthM, depth);
-      });
+        if (depth < minCameraDepthM) minCameraDepthM = depth;
+        if (depth > maxCameraDepthM) maxCameraDepthM = depth;
+      }
     }
     if (!(radiusM > 0 && Number.isFinite(radiusM) && meshes > 0)) fail('scene_input', 'complete current mirror enclosure unavailable');
     return { kind: 'full-and-live-mirror-AABB-corners-r22-r3', radiusM, minCameraDepthM, maxCameraDepthM, meshes, positions,
@@ -6292,8 +9528,11 @@ export function createScene({
       const centreDepth = -(V[2] * p[0] + V[6] * p[1] + V[10] * p[2] + V[14]);
       const shift = camera.near - envelope.minCameraDepthM;
       if (!(Number.isFinite(shift) && centreDepth + shift <= farM)) fail('scene_input', 'current mirror pose cannot fit inside finite carry depth range');
-      const C = camera.matrixWorld.elements;
-      mirror.worldCentre = mirror.worldCentre.map((x, i) => x - C[8 + i] * shift);
+      // R558: push it away ALONG THE GROUND (the camera's forward with its vertical part removed), so a held mirror
+      // body never leaves the ground; a horizontal step gains cos(pitch) of view depth per metre.
+      const C = camera.matrixWorld.elements, hx = -C[8], hz = -C[10], hl = Math.hypot(hx, hz);
+      const along = Math.max(0.1, hl), ux = hl > 1e-9 ? hx / hl : 0, uz = hl > 1e-9 ? hz / hl : 0;
+      mirror.worldCentre = [mirror.worldCentre[0] + ux * shift / along, mirror.worldCentre[1], mirror.worldCentre[2] + uz * shift / along];
       if (!applyMirror()) fail('scene_input', 'current mirror placement application failed');
       envelope = currentMirrorEnvelope();
     }
@@ -6302,8 +9541,10 @@ export function createScene({
       scope: 'Object translation only before render; no active-camera switch. Released placement never silently moved. Refusal is a failed/unresolved ordinary pose, not working R22 acceptance.' };
   }
 
-  /** The player's posed body as world points (R5_SCENE.mirrorPointsPerMesh vertices of every body mesh, head included, and
-   * of the arm at the start look) -> ns-mirror bodyBoundsFromPoints; measured once from the first posed body. */
+  /** The player's posed body as world points (the 8 box corners of every body mesh in its posed place, head included,
+   * and of every arm bone and muscle as drawn) -> ns-mirror bodyBoundsFromPoints; measured from the first posed body
+   * and again at a reset of the mirror body. R558: the plane of the literal reflection is set from this measurement
+   * (setMirrorPlane); it does not depend on the brain. */
   function computeMirrorBody() {
     if (!body.length) return false;
     bodyGroup.updateMatrixWorld(true);
@@ -6324,122 +9565,123 @@ export function createScene({
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     mirror.samples = mirror.body.sample;
     mirror.ready = true;
-    mirror.frameKey = '';
-    updateMirrorPlacement();
+    setMirrorPlane();
     return true;
   }
-  /** Brain radius about its pivot (source mm, the outline support points; an orbit / squash-proof bound). */
-  function brainRadiusMm() {
-    if (mirror.brainRadiusMm !== null) return mirror.brainRadiusMm;
-    const P = (brainHullPoints && brainHullPoints.length >= 9 ? brainHullPoints : null) || (brainSupport && brainSupport.points), pv0 = arrowRef.pivot;
-    if (!P || !pv0) return null;
-    let r = 0;
-    for (let i = 0; i < P.length; i += 3) r = Math.max(r, Math.hypot(P[i] - pv0[0], P[i + 1] - pv0[1], P[i + 2] - pv0[2]));
-    mirror.brainRadiusMm = r;
-    return r;
-  }
-  /** Default placement (ns-mirror mirrorPlacement) from the brain frame of the DEFAULT view (the grab carry undone; the
-   * brain outline at no orbit), the measured body and the camera; re-placed (orbit kept) only when the brain frame or the
-   * view size changes, never by a drag or an orbit. */
-  function updateMirrorPlacement() {
-    if (!mirror.ready || !farEyeView.pw || !arrowRef.k || !(cssW > 0 && cssH > 0)) return false;
-    const tr = brainReferenceOrigin();
-    const C = farEyeView.pw.map((v, i) => v - tr[i]);
-    const cy = Math.cos(-arrowRef.yaw), sy = Math.sin(-arrowRef.yaw), cp = Math.cos(-arrowRef.pitch), sp = Math.sin(-arrowRef.pitch);
-    const x1 = cy * C[0] + sy * C[2], z1 = -sy * C[0] + cy * C[2];
-    const P0 = [x1, cp * C[1] - sp * z1, sp * C[1] + cp * z1];
-    const rMm = brainRadiusMm();
-    if (!(rMm > 0)) return false;
-    // The brain outline box at the default view (NDC), taken while the brain is not orbited (else the last one is kept).
-    const t = lastBrainTransform, notOrbited = !t || ((!Number.isFinite(t.orbitYaw) || t.orbitYaw === 0) && (!Number.isFinite(t.orbitPitch) || t.orbitPitch === 0));
-    const sizeKey = `${cssW}x${cssH}|${camera.fov}`;
-    if (notOrbited && (!mirror.outlineNdc || mirror.outlineNdc.key !== sizeKey || mirror.outlineNdc.k !== arrowRef.k)) {
-      const P = brainHullPoints || (brainSupport && brainSupport.points);
-      try {
-        const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: brainReferenceOrigin() };
-        const { xy } = NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam);
-        let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
-        for (let i = 0; i < xy.length; i += 2) { if (!Number.isFinite(xy[i])) continue; a = Math.min(a, xy[i]); c = Math.max(c, xy[i]); b = Math.min(b, xy[i + 1]); d = Math.max(d, xy[i + 1]); }
-        if (c > a && d > b) mirror.outlineNdc = { key: sizeKey, k: arrowRef.k, x0: (2 * a) / cssW - 1, x1: (2 * c) / cssW - 1, y0: 1 - (2 * d) / cssH, y1: 1 - (2 * b) / cssH, hullPx: NsArrows.convexHullPx(xy), fit: mirrorFitNow(xy, cam, P0) };
-      } catch { /* keep the last outline */ }
+  /** R558: the drawn meshes of one body ('own': your body and arm; 'mirror': their twins) with the matrix from their
+   * vertex buffer to the world (body meshes: posed source mm -> world m; arm: the drawn eye-frame arm -> world). */
+  function bodyMeshesFor(which) {
+    const out = [];
+    if (which === 'mirror') {
+      mirrorRoot.updateMatrixWorld(true);
+      for (const b of body) if (b.mirror) out.push({ mesh: b.mirror, world: b.mirror.matrixWorld, arm: false });
+      for (const b of bones) if (b.mirror) out.push({ mesh: b.mirror, world: b.mirror.matrixWorld, arm: true });
+      for (const m of muscles) if (m.mirror) out.push({ mesh: m.mirror, world: m.mirror.matrixWorld, arm: true });
+      return out;
     }
-    if (!mirror.outlineNdc) return false;
-    const key = `${P0.map(v => v.toFixed(4)).join(',')}|${arrowRef.k}|${farEyeView.K}|${farEyeView.axis0 ? farEyeView.axis0.join(',') : 'los'}|${sizeKey}|${mirror.outlineNdc.x0.toFixed(4)},${mirror.outlineNdc.y0.toFixed(4)}`;
-    if (key === mirror.frameKey) return false;
-    mirror.frameKey = key;
-    try {
-      const farM = NsMirror.brainFarDistance({ frame: { k: arrowRef.k, perspectiveK: farEyeView.K, pivotWorld: P0, squashAxis: farEyeView.axis0 }, brainRadiusMm: rMm });
-      const bounds = brainDepthBounds;
-      if (!bounds || !(bounds.sourcePositionCount > 0)) throw new Error('complete brain source bounds unavailable for initial mirror separation');
-      const M = brainGroup.matrixWorld.elements; let depthFarM = -Infinity;
-      // AABB contains EVERY normal glass/strip source position, unlike direction-sampled silhouette support.
-      // An affine depth functional is bounded by its 8 corners; include behind-camera corners without clipping.
-      for (let corner = 0; corner < 8; corner++) {
-        const sx = (corner & 1 ? bounds.max : bounds.min)[0], sy0 = (corner & 2 ? bounds.max : bounds.min)[1], sz = (corner & 4 ? bounds.max : bounds.min)[2];
-        const x = M[0] * sx + M[4] * sy0 + M[8] * sz + M[12] - tr[0];
-        const y = M[1] * sx + M[5] * sy0 + M[9] * sz + M[13] - tr[1];
-        const z = M[2] * sx + M[6] * sy0 + M[10] * sz + M[14] - tr[2];
-        const unYawZ = -sy * x + cy * z, depth = -(sp * y + cp * unYawZ);
-        if (![x, y, z, depth].every(Number.isFinite)) throw new Error('nonfinite normal brain depth support');
-        depthFarM = Math.max(depthFarM, depth);
+    bodyGroup.updateMatrixWorld(true);
+    eyeRig.updateMatrixWorld(true);
+    const bw = bodyGroup.matrixWorld;
+    for (const b of body) out.push({ mesh: b.mesh, world: new THREE.Matrix4().multiplyMatrices(bw, b.mesh.matrix), arm: false });
+    for (const b of bones) out.push({ mesh: b.mesh, world: b.mesh.matrixWorld, arm: true });
+    for (const m of muscles) out.push({ mesh: m.mesh, world: m.mesh.matrixWorld, arm: true });
+    return out;
+  }
+  /** R558: extremes of one drawn body on its REAL vertices (no box corners): the largest distance along the unit
+   * horizontal `forward` from `eye`, the lowest and the highest point (world y), the head top (the highest point of the
+   * body meshes, without the left arm drawn by the arm rig) and the largest / smallest elevation angle seen from `eye`
+   * (which drawn points are highest / lowest on the screen for a look straight at them), each with its point. Only meshes whose
+   * box corners come within `margin` of an extreme are read vertex by vertex, so this costs a few ms; called when the
+   * plane is set and for the QA report (cached), never per frame. */
+  function drawnBodyExtremes(which, eye, forward, margin = 0.25, want = { fore: true, low: true, high: true }) {
+    const list = bodyMeshesFor(which);
+    let foreBound = -Infinity, lowBound = Infinity, highBound = -Infinity;
+    const boxes = list.map(e => {
+      let fore = -Infinity, low = Infinity, high = -Infinity;
+      mirrorMeshCorners(e.mesh, e.world, (x, y, z) => {
+        const a = (x - eye[0]) * forward[0] + (y - eye[1]) * forward[1] + (z - eye[2]) * forward[2];
+        if (a > fore) fore = a; if (y < low) low = y; if (y > high) high = y;
+      });
+      if (fore > foreBound) foreBound = fore; if (low < lowBound) lowBound = low; if (high > highBound) highBound = high;
+      return { ...e, fore, low, high };
+    });
+    let foremostM = -Infinity, foremostPoint = null, lowestM = Infinity, lowestPoint = null, highestM = -Infinity, highestPoint = null, read = 0, vertices = 0;
+    let headTopM = -Infinity, headTopPoint = null, elevMax = -Infinity, elevMaxPoint = null, elevMin = Infinity, elevMinPoint = null;
+    for (const e of boxes) {
+      const wantFore = want.fore && e.fore >= foreBound - margin, wantLow = want.low && e.low <= lowBound + margin, wantHigh = want.high && e.high >= highBound - margin;
+      if (!wantFore && !wantLow && !wantHigh) continue;
+      const attr = e.mesh.geometry && e.mesh.geometry.attributes && e.mesh.geometry.attributes.position;
+      if (!attr || !(attr.count > 0)) continue;
+      const a = attr.array, w = e.world.elements;
+      read++;
+      for (let i = 0; i < attr.count; i++) {
+        const sx = a[3 * i], sy = a[3 * i + 1], sz = a[3 * i + 2];
+        const x = w[0] * sx + w[4] * sy + w[8] * sz + w[12], y = w[1] * sx + w[5] * sy + w[9] * sz + w[13], z = w[2] * sx + w[6] * sy + w[10] * sz + w[14];
+        if (wantFore) { const f = (x - eye[0]) * forward[0] + (y - eye[1]) * forward[1] + (z - eye[2]) * forward[2]; if (f > foremostM) { foremostM = f; foremostPoint = [x, y, z]; } }
+        if (wantLow && y < lowestM) { lowestM = y; lowestPoint = [x, y, z]; }
+        if (wantHigh && y > highestM) { highestM = y; highestPoint = [x, y, z]; }
+        if (wantHigh && !e.arm && y > headTopM) { headTopM = y; headTopPoint = [x, y, z]; }
+        const el = Math.atan2(y - eye[1], Math.hypot(x - eye[0], z - eye[2]));
+        if (el > elevMax) { elevMax = el; elevMaxPoint = [x, y, z]; }
+        if (el < elevMin) { elevMin = el; elevMinPoint = [x, y, z]; }
       }
-      if (!(depthFarM > 0 && Number.isFinite(depthFarM))) throw new Error('positive finite initial brain depth support required');
-      const brainIn = { centre: P0, farM, depthFarM, depthBasis: { kind: 'all-source-brain-AABB-depth-r22', corners: 8, sourcePositionCount: bounds.sourcePositionCount, orbitYawDeg: t && t.orbitYaw, orbitPitchDeg: t && t.orbitPitch, scope: 'conservative all-source AABB at initial/reframe planning; future posed/orbited collision remains unqualified' }, outlineNdc: mirror.outlineNdc }, camIn = { aspect: cssW / cssH, fovYDeg: camera.fov };
-      // R5-bigbrain (R25): the brain fills the view, so the body goes into the largest clear place on the brain's
-      // midline (ns-mirror mirrorFitBox: no motor area, no brain arrow and no HUD card in front of it or its arrows).
-      const fitBox = mirror.outlineNdc.fit && mirror.outlineNdc.fit.boxFor ? mirror.outlineNdc.fit.boxFor(NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn })) : null;
-      mirror.fit = fitBox ? { boxPx: fitBox.box, freePx: fitBox.free, tried: fitBox.tried, rule: 'R22 usable-view/HUD fit, geometry may limit the engineering .6-height/.94-fill target' } : null;
-      mirror.placement = NsMirror.mirrorPlacement({ body: mirror.body, brain: brainIn, camera: camIn, options: fitBox ? { targetBoxNdc: { x0: (2 * fitBox.box.x0) / cssW - 1, x1: (2 * fitBox.box.x1) / cssW - 1, y0: 1 - (2 * fitBox.box.y1) / cssH, y1: 1 - (2 * fitBox.box.y0) / cssH } } : {} });
+      vertices += attr.count;
+    }
+    return { foremostM, foremostPoint, lowestM, lowestPoint, highestM, highestPoint, headTopM, headTopPoint, elevMax, elevMaxPoint, elevMin, elevMinPoint,
+      foreBoxM: foreBound, lowBoxM: lowBound, meshesRead: read, vertices };
+  }
+  /** R558: set the plane of the literal reflection from the posed body: vertical, square to the body's forward axis,
+   * MIRROR_REFLECTION.clearanceM in front of the foremost drawn point measured from the eye. The plane then stays fixed
+   * in the world (like a mirror on a stand) until the next reset; the orbit (turn / push) and the carry start again
+   * from it. */
+  function setMirrorPlane() {
+    if (!mirror.body) return false;
+    try {
+      const eye = [eyeRig.position.x, eyeRig.position.y, eyeRig.position.z];
+      const f = mirror.body.forward;
+      const t0 = nowMs();
+      // Only the foremost point sets the plane: read just the meshes whose box comes within 5 cm of it.
+      const ex = drawnBodyExtremes('own', eye, [f[0], 0, f[2]], 0.05, { fore: true, low: false, high: false });
+      // R558 (Message 12: your body and the mirror body never touch): the plane stands in front of the farthest point your
+      // body can ever REACH with every joint in range (setMirrorReach, measured by the app: the legs with the toes pointed,
+      // the hands), not only of the start pose, so no reachable pose ever meets its own reflection.
+      const drawnF = Number.isFinite(ex.foremostM) ? ex.foremostM : null, reachF = Number.isFinite(mirror.reachForemostM) ? mirror.reachForemostM : null;
+      const foremostM = drawnF === null ? reachF : reachF === null ? drawnF : Math.max(drawnF, reachF);
+      mirror.placement = NsMirror.mirrorReflectionPlacement({ body: mirror.body, eye, foremostM });
+      mirror.measured = { ms: Math.round((nowMs() - t0) * 10) / 10, foremostPointM: ex.foremostPoint, drawnForemostM: drawnF, reachForemostM: reachF, meshesRead: ex.meshesRead, vertices: ex.vertices, bodyPoseSerial, armPoseSerial };
       mirror.state = mirror.state ? NsMirror.placeMirror(mirror.state, mirror.placement) : NsMirror.createMirrorState(mirror.placement);
+      mirror.planeSerial++;
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     applyMirror();
     return true;
   }
-  /** R22: initial mirror fit in the usable view (CSS px), preserving HUD and mirror-arrow room.
-   * The old motor-free-hole restriction is superseded by the visibly larger mirror requirement.
-   * Brain geometry/input occlusion and actual arrow-layout rules remain independent and unchanged.
-   * Returns the bounded existing mirrorFitBox result for the source body aspect; no native footprint proof. */
-  function mirrorFitNow(xy, cam, P0) {
-    // R22: fit a clearly larger mirror in the usable view, rather than the old small motor-free hole in the brain.
-    // The brain is geometrically in front at startup and STILL blocks mirror input; this does not alter arrow picking/layout.
-    // Retain the existing .6 max-height and .94 fill as engineering targets, with source near/scale/width constraints.
-    const usable = arrowUsable(), boxes = arrowObstacles().filter(o => !o.crosshair);
-    const blocked = b => boxes.reduce((n, o) => n + (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0 ? 1 : 0), 0);
-    const sizesM = NsArrows.arrowSizePx({ width: cssW, height: cssH }, 'mirror');
-    // R558: the mirror body's default fit keeps the numbers of the earlier round arrows, so the new ribbon shape
-    // does not shrink or move the body; the ribbons are placed from the body's own radius (updateArrows).
-    const sizesM0 = { sizePx: clampTo(0.05 * Math.min(cssW, cssH), 22, 42), gapPx: sizesM.gapPx };
-    const room = NsArrows.arrowRoomPx(sizesM0, NsArrows.ARROW_DESIGN_ROUND_R20), fp = NsArrows.arrowPath(NsArrows.ARROW_DESIGN_ROUND_R20).footprint;
-    const band = 2 * fp.half * sizesM0.sizePx * NsArrows.ARROW_LAYOUT.perspectiveAllowance + 2 * NsArrows.ARROW_LAYOUT.marginPx;
-    const mirrorReferenceFrame = referenceOriginSet ? NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry) : null;
-    const c = NsArrows.projectWorldPx(mirrorReferenceFrame ? NsMath.transformPoint(mirrorReferenceFrame, P0) : P0, referenceOriginSet ? { ...cam, yaw: referenceAngles.yaw, pitch: referenceAngles.pitch, position: referenceOrigin.slice() } : cam);
-    return {
-      boxFor(trial) {
-        if (!trial || !(trial.expectedHeightNdc > 0 && trial.expectedWidthNdc > 0)) return null;
-        const aspect = (trial.expectedWidthNdc * cssW) / (trial.expectedHeightNdc * cssH);
-        try { return NsMirror.mirrorFitBox({ width: cssW, height: cssH, usable, blocked, aspect, room: { top: room, bottom: room, side: room }, sideBand: band, hull: null, centreX: c.x }); } catch { return null; }
-      }
-    };
-  }
   /** The transform in use: an integrator's ns-mirror transform or state (setMirrorView), else the scene's default state
-   * with its orbit. */
+   * with its orbit (turn and push) and carried place. */
   function applyMirror() {
     let T = null;
     try {
       if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
       else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(mirror.external);
-      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch }) }));
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }) }));
     } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
     if (!T || !T.matrix || T.matrix.length !== 16) return false;
-    const matrix = Array.from(T.matrix), centre = Array.from(T.centre);
+    // R558 (Message 12): the stop-at-contact correction (setMirrorCorrection) rides on top of the placement.
+    mirror.pipelineMatrix = Array.from(T.matrix);
+    mirror.pipelineCarryCentre = T.carryCentre ? Array.from(T.carryCentre) : Array.from(T.centre);
+    const C = mirror.correction || null;
+    const matrix = C ? Array.from(NsCollide.mul(C, T.matrix)) : Array.from(T.matrix), centre = C ? NsCollide.apply(C, T.centre[0], T.centre[1], T.centre[2]) : Array.from(T.centre);
     mirrorRoot.matrix.fromArray(matrix);
     mirrorRoot.matrixWorldNeedsUpdate = true;
-    mirror.transform = { matrix, centre, scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch } : null };
+    mirror.transform = { matrix, centre, carryCentre: T.carryCentre ? (C ? NsCollide.apply(C, T.carryCentre[0], T.carryCentre[1], T.carryCentre[2]) : Array.from(T.carryCentre)) : centre.slice(), push: Number.isFinite(T.push) ? T.push : 0,
+      scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch, push: Number.isFinite(T.orbit.push) ? T.orbit.push : 0 } : null };
     mirror.serial++;
     overlayDirty = true;
     updateCameraRange();
     return true;
   }
+  /** R558: true when the mirror body is untouched (no turn, no push, not carried, no handed state): it must then be the
+   * literal reflection, exactly. */
+  const mirrorAtRest = () => !mirror.external && !mirror.worldCentre && !mirror.correction && mirror.orbit.yaw === 0 && mirror.orbit.pitch === 0 && mirror.orbit.push === 0;
   /** Mirror sample points in the world (the body sample through the mirror matrix). */
   function mirrorSamplesWorld() {
     const S = mirror.samples, M = mirror.transform && mirror.transform.matrix;
@@ -6454,51 +9696,122 @@ export function createScene({
   }
   /** R5-scene (D19): the mirror body's view. v:
    *  - an ns-mirror STATE (createMirrorState / applyMirrorOrbit / resetMirror; its placement may be null: the scene's
-   *    own placement is then used with the state's orbit) or an ns-mirror TRANSFORM (mirrorTransform): used as given;
-   *  - { orbit: { yaw, pitch } } or { yawDeg, pitchDeg } (degrees, ns-mirror convention: yaw > 0 = viewpoint to the
-   *    right, pitch > 0 = viewpoint up) for the scene's own state;
-   *  - { visible: false | true } shows or hides it (an Esc option, if any); null resets the orbit and drops a handed state.
-   * It never turns by itself. Returns mirrorState(). */
+   *    own placement is then used with the state's orbit and carried place) or an ns-mirror TRANSFORM: used as given;
+   *  - { orbit: { yaw, push } } or { yawDeg, pushM } (ns-mirror convention: yaw > 0 = viewpoint to the right, push > 0 =
+   *    farther along the ground; pitch is always 0) for the scene's own state;
+   *  - { visible: false | true } shows or hides it (an Esc option, if any); null resets it.
+   * R558: a state or null that brings a moved mirror body back to rest (resetMirror) is a reset: the plane is set again
+   * from the posed body at the next frame, and the mirror body is the literal reflection again.
+   * It never turns or moves by itself. Returns { serial, ready } (R558, performance: it used to return the whole
+   * mirrorState() report, which projects every body sample and builds the motor areas' occupancy grid, on every call;
+   * the app called it on every frame of a carry and never read it. Ask mirrorState() for the report). */
   function setMirrorView(v = null) {
+    const wasAtRest = mirrorAtRest();
     if (v && Object.prototype.hasOwnProperty.call(v, 'worldCentre')) {
       const p = v.worldCentre;
       if (p !== null && (!p || p.length !== 3 || !Array.from(p).every(Number.isFinite))) fail('scene_input', 'normal mirror placement needs finite world metres');
       mirror.worldCentre = p === null ? null : Array.from(p);
     }
-    if (v === null) { mirror.external = null; mirror.worldCentre = null; mirror.orbit = { yaw: 0, pitch: 0 }; }
+    const orbitOf = o => ({ yaw: o && Number.isFinite(o.yaw) ? o.yaw : 0, pitch: 0, push: o && Number.isFinite(o.push) ? Math.max(0, Math.min(NsMirror.MIRROR_ORBIT.push.maxM, o.push)) : 0 });
+    if (v === null) { mirror.external = null; mirror.worldCentre = null; mirror.orbit = orbitOf(null); }
     else if (v && (v.kind === 'ns-mirror-transform' || v.kind === 'ns-mirror-state')) {
-      if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = { yaw: v.orbit ? v.orbit.yaw : 0, pitch: v.orbit ? v.orbit.pitch : 0 }; }
+      if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = orbitOf(v.orbit); }
       else mirror.external = v;
     } else if (v && typeof v === 'object') {
       const o = v.orbit && typeof v.orbit === 'object' ? v.orbit : v;
       const yaw = Number.isFinite(o.yaw) ? o.yaw : Number.isFinite(o.yawDeg) ? o.yawDeg : null;
-      const pitch = Number.isFinite(o.pitch) ? o.pitch : Number.isFinite(o.pitchDeg) ? o.pitchDeg : null;
-      if (yaw !== null || pitch !== null) { mirror.external = null; mirror.orbit = { yaw: yaw !== null ? yaw : mirror.orbit.yaw, pitch: pitch !== null ? pitch : mirror.orbit.pitch }; }
+      const push = Number.isFinite(o.push) ? o.push : Number.isFinite(o.pushM) ? o.pushM : null;
+      if (yaw !== null || push !== null) { mirror.external = null; mirror.orbit = orbitOf({ yaw: yaw !== null ? yaw : mirror.orbit.yaw, push: push !== null ? push : mirror.orbit.push }); }
       if (typeof v.visible === 'boolean') mirror.enabled = v.visible;
     } else fail('scene_input', 'setMirrorView needs an ns-mirror state / transform, an orbit object or null');
+    // A reset (moved -> rest): measure the posed body again and set the plane from it at the next frame.
+    if (!wasAtRest && mirrorAtRest() && mirror.ready) mirror.ready = false;
     applyMirror();
-    return mirrorState();
+    return { serial: mirror.serial, ready: mirror.ready };
   }
-  /** The scene's current default ns-mirror placement (or null), so an integrator can keep its own state in step:
-   * NsMirror.placeMirror(state, scene.mirrorPlacementNow()). */
+  /** The scene's current default ns-mirror placement (or null), with the carried place when the mirror body has been
+   * carried, so an integrator can keep its own state in step: NsMirror.placeMirror(state, scene.mirrorPlacementNow()).
+   * R558: the placement is in world metres (the plane is set from world points and the eye), so no reference frame is
+   * composed into it. */
   function mirrorPlacementNow() {
     if (!mirror.placement) return mirror.placement;
-    const placement = mirror.worldCentre ? { ...mirror.placement, worldCentre: Object.freeze(mirror.worldCentre.slice()) } : mirror.placement;
-    if (!referenceOriginSet) return placement;
-    return Object.freeze({ ...placement, referenceFrame: Object.freeze(Array.from(NsMath.multiply(NsMath.translation(referenceOrigin), referenceCarry))), referenceMeaning: 'constructor canonical world reference; apply exactly once in ns-mirror' });
+    return mirror.worldCentre ? Object.freeze({ ...mirror.placement, worldCentre: Object.freeze(mirror.worldCentre.slice()) }) : mirror.placement;
+  }
+  /** R558 QA, only on request (inspect({ mirrorCheck: true }); cached; tens of ms when the pose, the look or the mirror
+   * changed): the lowest drawn point of your body and of the mirror
+   * body on their real vertices (the same flat ground), and the drawn left hand: yours, its exact reflection through
+   * the mirror matrix and the mirror twin's own hand (the twin's world matrix as drawn), so a difference between what
+   * you are shown and its mirror image would be seen in millimetres. */
+  let mirrorCheckCache = null, mirrorCheckKey = '';
+  function mirrorBodyCheck() {
+    if (!mirror.transform || !mirror.body) return null;
+    const key = `${mirror.serial}|${bodyPoseSerial}|${armPoseSerial}|${lookYaw},${lookPitch}|${eyeRig.position.x},${eyeRig.position.y},${eyeRig.position.z}`;
+    if (mirrorCheckCache && key === mirrorCheckKey) return mirrorCheckCache;
+    const M = mirror.transform.matrix, f = mirror.body.forward, eye = [eyeRig.position.x, eyeRig.position.y, eyeRig.position.z];
+    // img: the image's extremes with forward reversed, so its 'foremost' is its nearest point toward you.
+    const own = drawnBodyExtremes('own', eye, [f[0], 0, f[2]]), img = drawnBodyExtremes('mirror', eye, [-f[0], 0, -f[2]]);
+    const at = (m, c) => { pv.copy(c).applyMatrix4(m); return [pv.x, pv.y, pv.z]; };
+    const refl = p => [M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12], M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13], M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]];
+    const mm = v => Math.round(v * 1e4) / 10;
+    const arm = {};
+    mirrorRoot.updateMatrixWorld(true); eyeRig.updateMatrixWorld(true);
+    for (const seg of ['upperarm', 'forearm', 'hand', 'middle_dp']) {
+      const b = bones.find(x => x.segment === seg);
+      const g = b && (b.mesh.userData.nsFullGeometry || b.mesh.geometry);
+      if (!b || !b.mirror || !g) continue;
+      if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
+      if (!g.boundingSphere) continue;
+      b.mesh.updateMatrixWorld(true);
+      const o = at(b.mesh.matrixWorld, g.boundingSphere.center), r = refl(o), t = at(b.mirror.matrixWorld, g.boundingSphere.center);
+      arm[seg] = { ownM: o.map(v => Math.round(v * 1e4) / 1e4), reflectedM: r.map(v => Math.round(v * 1e4) / 1e4), mirrorM: t.map(v => Math.round(v * 1e4) / 1e4), diffMm: mm(Math.hypot(t[0] - r[0], t[1] - r[1], t[2] - r[2])) };
+    }
+    // Elevation of the drawn left arm (upper-arm centre -> hand centre) above the horizontal, yours and the twin's.
+    const elev = (a, b) => { const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]; return Math.round(Math.asin(d[1] / Math.hypot(...d)) / DEG * 10) / 10; };
+    if (arm.upperarm && arm.hand) arm.elevationDeg = { own: elev(arm.upperarm.ownM, arm.hand.ownM), mirror: elev(arm.upperarm.mirrorM, arm.hand.mirrorM) };
+    mirrorCheckCache = {
+      ground: { ownLowestM: Math.round(own.lowestM * 1e5) / 1e5, mirrorLowestM: Math.round(img.lowestM * 1e5) / 1e5, diffMm: mm(Math.abs(img.lowestM - own.lowestM)), ownLowestPointM: own.lowestPoint && own.lowestPoint.map(v => Math.round(v * 1e4) / 1e4), mirrorLowestPointM: img.lowestPoint && img.lowestPoint.map(v => Math.round(v * 1e4) / 1e4) },
+      foremost: { ownM: Math.round(own.foremostM * 1e4) / 1e4, ownPointM: own.foremostPoint && own.foremostPoint.map(v => Math.round(v * 1e4) / 1e4), mirrorNearestM: Math.round(-img.foremostM * 1e4) / 1e4, gapMm: mm(-img.foremostM - own.foremostM) },
+      upright: { yRow: [M[1], M[5], M[9]], yColumn: [M[4], M[5], M[6]], tilted: !(M[1] === 0 && M[9] === 0 && M[4] === 0 && M[6] === 0 && M[5] === 1) },
+      leftArm: arm, meshesRead: own.meshesRead + img.meshesRead, onScreen: null
+    };
+    // Where the image lands on the screen now (share of the view height from the top): its head top, its highest and
+    // lowest drawn points as seen from the eye (largest / smallest elevation angle), and the downward look that would
+    // centre those two vertically (mean of the two elevation angles; exact for points on the view's vertical midline).
+    if (cssW > 0 && cssH > 0 && img.elevMaxPoint && img.elevMinPoint) {
+      camera.updateMatrixWorld(true);
+      const yFrac = p => { if (!p) return null; pv.set(p[0], p[1], p[2]).applyMatrix4(camera.matrixWorldInverse); if (pv.z > -camera.near) return null; pv.applyMatrix4(camera.projectionMatrix); return Math.round((1 - pv.y) * 0.5 * 1000) / 1000; };
+      const r4 = p => p && p.map(v => Math.round(v * 1e4) / 1e4), deg = a => Math.round(a / DEG * 100) / 100;
+      mirrorCheckCache.onScreen = { headTopYFrac: yFrac(img.headTopPoint), topYFrac: yFrac(img.elevMaxPoint), bottomYFrac: yFrac(img.elevMinPoint),
+        headTopPointM: r4(img.headTopPoint), topPointM: r4(img.elevMaxPoint), bottomPointM: r4(img.elevMinPoint), topElevationDeg: deg(img.elevMax), bottomElevationDeg: deg(img.elevMin),
+        centringPitchDeg: deg((img.elevMax + img.elevMin) / 2), headTopToBottomCentringPitchDeg: img.headTopPoint ? deg((Math.atan2(img.headTopPoint[1] - eye[1], Math.hypot(img.headTopPoint[0] - eye[0], img.headTopPoint[2] - eye[2])) + img.elevMin) / 2) : null,
+        lookDeg: { yaw: deg(lookYaw), pitch: deg(lookPitch) }, fovYDeg: camera.fov };
+    }
+    mirrorCheckKey = key;
+    return mirrorCheckCache;
   }
   /** QA: the mirror body's state, its measured on-screen box (CSS px; the projected body sample) and the share of those
-   * points inside the brain's drawn outline (coveredByBrain). */
-  function mirrorState() {
+   * points inside the brain's drawn outline (coveredByBrain). R558: the plane of the literal reflection, the matrix in
+   * use (full precision) and, while the mirror body is untouched, how far it is from the pure reflection. opts.check true
+   * adds the vertex-level check (mirrorBodyCheck: same ground, the drawn left arm and its mirror image, where the image
+   * lands on screen). */
+  function mirrorState(opts = {}) {
     const T = mirror.transform, Pl = mirror.placement;
+    const rest = mirrorAtRest();
+    const restDiff = T && Pl && Pl.matrix ? NsMirror.matrixMaxDiff(T.matrix, Pl.matrix) : null;
     const out = { source: 'ns-mirror', enabled: mirror.enabled, ready: mirror.ready, visible: mirrorRoot.visible, error: mirror.error, twins: mirror.twins, armTwins: bones.length + muscles.length,
-      carriedPlacement: { carryHeldAtReconcile: typeof mirror.carryHeldAtReconcile === 'boolean' ? mirror.carryHeldAtReconcile : null, worldCentreM: mirror.worldCentre ? mirror.worldCentre.slice() : null, actualCentreWorldM: T ? T.centre.slice() : null, initialDistanceM: Pl ? Pl.distanceM : null, priorSphereDistanceM: Pl ? Pl.priorSphereDistanceM : null, initialDepthNearM: Pl ? Pl.initialDepthNearM : null, brainDepthFarM: Pl ? Pl.brainDepthFarM : null, legacyBrainSphereFarM: Pl ? Pl.legacyBrainSphereFarM : null, brainDepthBasis: Pl ? Pl.brainDepthBasis : null, distanceComparisonMeaning: 'priorSphereDistanceM is the old formula at the NEW selected fit, not an old runtime measurement', scope: 'render-placement metadata only; not current wholebody/normalmechanics proof' },
-      external: mirror.external ? mirror.external.kind : null, orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch } : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch },
-      scale: T ? Math.round(T.scale * 1000) / 1000 : null, centre: T ? T.centre.map(v => Math.round(v * 1000) / 1000) : null, determinant: T ? T.det : null,
-      placement: Pl ? { distanceM: Math.round(Pl.distanceM * 1000) / 1000, nearM: Math.round(Pl.nearM * 1000) / 1000, brainFarM: Math.round(Pl.brainFarM * 1000) / 1000, limiting: Pl.limiting, expectedHeightNdc: Math.round(Pl.expectedHeightNdc * 1000) / 1000, rule: Pl.rule || null } : null,
-      fit: mirror.fit ? { boxPx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.boxPx[k])), freePx: ['x0', 'y0', 'x1', 'y1'].map(k => Math.round(mirror.fit.freePx[k])), tried: mirror.fit.tried } : null,
+      carriedPlacement: { carryHeldAtReconcile: typeof mirror.carryHeldAtReconcile === 'boolean' ? mirror.carryHeldAtReconcile : null, worldCentreM: mirror.worldCentre ? mirror.worldCentre.slice() : null, actualCentreWorldM: T ? T.centre.slice() : null, carryCentreWorldM: T ? T.carryCentre.slice() : null },
+      external: mirror.external ? mirror.external.kind : null,
+      orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch, pushM: T.orbit.push } : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch, pushM: mirror.orbit.push },
+      scale: T ? T.scale : null, centre: T ? T.centre.map(v => Math.round(v * 1000) / 1000) : null, determinant: T ? T.det : null,
+      matrix: T ? T.matrix.slice() : null,
+      reflection: Pl && Pl.plane ? { rule: Pl.rule, normal: Pl.plane.normal.slice(), offsetM: Pl.plane.offsetM, eyeM: Pl.plane.eyeM.slice(), distanceM: Pl.plane.distanceM, foremostM: Pl.plane.foremostM, boxForemostM: Pl.plane.boxForemostM, clearanceM: Pl.plane.clearanceM,
+        drawnForemostM: mirror.measured && Number.isFinite(mirror.measured.drawnForemostM) ? mirror.measured.drawnForemostM : null, reachForemostM: Number.isFinite(mirror.reachForemostM) ? mirror.reachForemostM : null, // R558 (Message 12)
+        pureMatrix: Pl.matrix.slice(), atRest: rest, restMaxDiff: rest ? restDiff : null, tolerance: NsMirror.MIRROR_REFLECTION.matrixTolerance, planeSerial: mirror.planeSerial, measured: mirror.measured } : null,
       body: mirror.body ? { heightM: Math.round(mirror.body.height * 1000) / 1000, radiusM: Math.round(mirror.body.radius * 1000) / 1000, points: mirror.body.count } : null,
-      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount }, onScreen: null };
+      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount, brainNearM: behindGlass.nearM }, onScreen: null, check: null };
+    // The vertex-level check reads real vertices (25 to 50 ms after a look change): only on an explicit request
+    // (ns-app inspect({ mirrorCheck: true })), never in an ordinary state read, so a QA loop does not slow the game.
+    if (opts && opts.check === true) { try { out.check = mirrorBodyCheck(); } catch (err) { out.check = { error: String((err && err.message) || err) }; } }
     if (referenceOriginSet) out.reference = { originWorldM: referenceOrigin.slice(), initialCarryRadians: { ...referenceAngles }, constructorOwned: true };
     const W = mirrorSamplesWorld();
     if (W && cssW > 0 && cssH > 0) {
@@ -6520,7 +9833,7 @@ export function createScene({
         if (hull && hullSignedDistance(hull, x, y) <= 0) inBrain++;
         if (grid && grid.hits({ x0: x, y0: y, x1: x + 0.01, y1: y + 0.01 }) > 0) behindMotor++;
       }
-      if (n) out.onScreen = { box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], heightPx: Math.round(y1 - y0), heightFrac: Math.round(((y1 - y0) / cssH) * 1000) / 1000, coveredByBrain: Math.round((inBrain / n) * 1000) / 1000, behindMotor: grid ? Math.round((behindMotor / n) * 1000) / 1000 : null, samples: n };
+      if (n) out.onScreen = { box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], heightPx: Math.round(y1 - y0), heightFrac: Math.round(((y1 - y0) / cssH) * 1000) / 1000, topFrac: Math.round((y0 / cssH) * 1000) / 1000, bottomFrac: Math.round((y1 / cssH) * 1000) / 1000, coveredByBrain: Math.round((inBrain / n) * 1000) / 1000, behindMotor: grid ? Math.round((behindMotor / n) * 1000) / 1000 : null, samples: n };
     }
     return out;
   }
@@ -6529,18 +9842,27 @@ export function createScene({
    * mesh matrix), one per arm bone and one per arm muscle (from its CPU-skinned points). Cached until the body pose, the
    * arm pose, the body frame or the look changes. */
   let keepOutCache = null, keepOutKey = '';
+  // R558 (performance): the body's spheres depend only on the body pose and frame, the arm's also on the look (the arm
+  // hangs on the eye), so the body part is kept while only the look or the arm changes (third-person look). Same spheres.
+  let keepOutBody = null, keepOutBodyKey = '';
   function bodyKeepOut() {
     const key = `${bodyPoseSerial}|${lastMatrices ? armPoseSerial : 0}|${lookYaw},${lookPitch}|${bodyFrame.join(',')}`;
     if (keepOutCache && key === keepOutKey) return keepOutCache;
     bodyGroup.updateMatrixWorld(true);
     eyeRig.updateMatrixWorld(true);
-    const out = [], bw = bodyGroup.matrixWorld, col = Math.hypot(bw.elements[0], bw.elements[1], bw.elements[2]) || 0.001;
-    for (const b of body) {
-      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, gs = g.boundingSphere;
-      if (!gs) continue;
-      pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bw);
-      out.push({ centre: [pv.x, pv.y, pv.z], radius: gs.radius * col });
+    const bodyKey = `${bodyPoseSerial}|${bodyFrame.join(',')}|${body.length}`;
+    if (!keepOutBody || bodyKey !== keepOutBodyKey) {
+      keepOutBody = [];
+      const bw = bodyGroup.matrixWorld, col = Math.hypot(bw.elements[0], bw.elements[1], bw.elements[2]) || 0.001;
+      for (const b of body) {
+        const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, gs = g.boundingSphere;
+        if (!gs) continue;
+        pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bw);
+        keepOutBody.push({ centre: [pv.x, pv.y, pv.z], radius: gs.radius * col });
+      }
+      keepOutBodyKey = bodyKey;
     }
+    const out = keepOutBody.slice();
     for (const b of bones) {
       const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
       if (!g.boundingSphere && typeof g.computeBoundingSphere === 'function') g.computeBoundingSphere();
@@ -6553,8 +9875,21 @@ export function createScene({
     armGroup.updateMatrixWorld(true);
     for (const m of muscles) {
       const c = armMuscleCentre(m), p = m.pos, n = p.length / 3, step = Math.max(1, Math.floor(n / 400));
+      // R558 (performance, P2): the radius depends only on the skinned vertices and their centre (arm frame), not on
+      // the look: kept while the centre (recomputed per arm pose) and the buffer (version) are the same; a look in third
+      // person only moves the centre into the world below.
       let r = 0;
-      for (let i = 0; i < n; i += step) r = Math.max(r, Math.hypot(p[3 * i] - c[0], p[3 * i + 1] - c[1], p[3 * i + 2] - c[2]));
+      if (m.keepR && m.keepR.c === c && m.keepR.p === p && m.keepR.v === m.posAttr.version) r = m.keepR.r;
+      else {
+        // Math.hypot only where it can raise the running maximum (a sum of squares below r^2 (1 - 1e-9) cannot; a NaN
+        // still reaches Math.max): the same radius bit for bit.
+        for (let i = 0; i < n; i += step) {
+          const dx = p[3 * i] - c[0], dy = p[3 * i + 1] - c[1], dz = p[3 * i + 2] - c[2];
+          if (r > 1e-100 && dx * dx + dy * dy + dz * dz < r * r * (1 - 1e-9)) continue;
+          r = Math.max(r, Math.hypot(dx, dy, dz));
+        }
+        m.keepR = { c, p, v: m.posAttr.version, r };
+      }
       pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
       out.push({ centre: [pv.x, pv.y, pv.z], radius: r * 1.02 });
     }
@@ -6564,7 +9899,8 @@ export function createScene({
   /** R5-scene (D19): the mirror-body part under CSS point (x, y): { elementId, bodyPart, kind, side (YOUR side: -1 left,
    * +1 right, 0 midline; ns-mirror MIRROR_TEXT names it "your ... (mirror image)"), name, distance, behindBrain } or null.
    * A ray against the mirror twins (a few ms: call it throttled, like raycastBrain). behindBrain: the brain's drawn
-   * outline covers the point, so the brain catches the look (ns-mirror mirrorInputTarget). */
+   * outline covers the point AND the hit lies beyond the brain's nearest point (R558: the literal reflection stands in
+   * front of the brain at the start, where the outline covers it but no glass is in front of it). */
   function mirrorPartAt(x, y) {
     if (!mirrorRoot.visible || !(cssW > 0 && cssH > 0)) return null;
     camera.updateMatrixWorld(true);
@@ -6578,7 +9914,8 @@ export function createScene({
     const o = hits[0].object, u = o.userData || {}, arm = mirrorArmGroup.children.includes(o);
     const covered = regionMode && brainTransformSet && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 });
     return { elementId: u.elementId || null, bodyPart: u.bodyPart || (arm ? 'leftArm' : null), kind: u.kind || null, side: Number.isFinite(u.side) ? u.side : arm ? -1 : 0,
-      name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance, behindBrain: covered };
+      name: String(o.name || '').replace(/^mirror image: /, ''), distance: hits[0].distance,
+      behindBrain: covered && !(Number.isFinite(cameraRange.brainNearM) && hits[0].distance < cameraRange.brainNearM) };
   }
 
   /** R558 (genuine note R31: "if we tap on the body, on any muscles, those muscles will activate"): the nearest body
@@ -6620,7 +9957,7 @@ export function createScene({
     pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
     rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
     // The left arm is skinned on the CPU: its bounding spheres are brought up to date first, so a moved muscle is found.
-    for (const m of muscles) { try { m.mesh.geometry.computeBoundingSphere(); } catch { /* keep the old sphere */ } }
+    for (const m of muscles) { try { computeSphereExact(m.mesh.geometry); } catch { /* keep the old sphere */ } } // R558 (P2): Three's sphere, exact
     const shown = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
     const targets = [];
     for (const o of musclePickIndex.keys()) if (shown(o)) targets.push(o);
@@ -6675,7 +10012,8 @@ export function createScene({
       mirrorEnvelope = currentMirrorEnvelope();
     }
     const bh = brainHits[0] || null, mh = hits[0] || null;
-    const mirrorPick = () => ({ target: 'mirror', blocked: null, centreWorldM: mirror.transform.centre.slice(), radiusM: mirrorEnvelope.radiusM,
+    // R558: the carry moves the centre WITHOUT the push (the push slides along the ground on top of where it is carried).
+    const mirrorPick = () => ({ target: 'mirror', blocked: null, centreWorldM: (mirror.transform.carryCentre || mirror.transform.centre).slice(), radiusM: mirrorEnvelope.radiusM,
       pointWorldM: mh.point.toArray(), mirrorEnvelope, source: 'nearest-visible-mirror-ray/full-current-enclosure-r22-r2' });
     // Transparent foreground brain STILL catches input; a genuinely nearer mirror is no longer caught by brain behind it.
     if (bh) return mh && mh.distance < bh.distance ? mirrorPick() : { target: 'brain', blocked: null, pointWorldM: bh.point.toArray(), mirrorEnvelope, source: 'nearest-active-camera-brain-ray' };
@@ -6700,6 +10038,137 @@ export function createScene({
     return mh ? mirrorPick() : { target: null, blocked: null, mirrorEnvelope };
   }
 
+  /* ---- R558 (user Message 12): the three items as sets of spheres (ns-collide) -------------------------------------- */
+  // "Ensure that your body, the brain and the mirror do not touch or collide ... they can be moved to and around each
+  // other but not through." Each drawn mesh gets a sphere table once (cached by geometry; rebuilt, a few meshes per call,
+  // when its vertices are rewritten, e.g. by the Body Worlds lift). collisionItems() gives the three items with the
+  // world matrices as drawn now; the app decides what may move (it only reads). Your own body: every body mesh where it
+  // is drawn (the head and face IN PLACE, not the face layer at the eye) and the left arm's bones with a pad for the
+  // muscle round them (its muscles are skinned on the CPU every frame); the mirror body: the same tables through the
+  // twins' matrices; the brain: its glass meshes.
+  const collideTables = new WeakMap();
+  let collideRebuilds = 0, collidePass = 0;
+  function collideTable(geo, kind) {
+    const pos = geo && geo.attributes && geo.attributes.position;
+    if (!pos || !(pos.count > 0) || !pos.array) return null;
+    let t = collideTables.get(geo);
+    if (t && (t.version === pos.version || collideRebuilds >= 24)) return t.table;
+    collideRebuilds++;
+    const table = kind === 'brain'
+      ? NsCollide.sphereTable(pos.array.length === pos.count * 3 ? pos.array : Float32Array.from({ length: pos.count * 3 }, (_, i) => pos.getComponent(Math.floor(i / 3), i % 3)), { leaf: NsCollide.COLLIDE.brainLeafMm, group: NsCollide.COLLIDE.brainGroupMm })
+      : NsCollide.sphereTable(pos.array.length === pos.count * 3 ? pos.array : Float32Array.from({ length: pos.count * 3 }, (_, i) => pos.getComponent(Math.floor(i / 3), i % 3)), { leaf: NsCollide.COLLIDE.bodyLeafMm, group: NsCollide.COLLIDE.bodyGroupMm });
+    t = { table, version: pos.version, pass: collidePass };
+    collideTables.set(geo, t);
+    return table;
+  }
+  /* R558 (the right forearm skinned per vertex): in the Space dance 36 body meshes are rewritten every frame, more than
+   * the 24 tables a pass may rebuild, and the loop below always met them in the same order, so the last 12 kept the
+   * table of the pose the dance started from for as long as it lasted. The pass now spends its rebuilds on the stale
+   * body tables oldest first (same budget; when 24 or fewer are stale every one is rebuilt, exactly as before). */
+  function collideRebuildOldest() {
+    const stale = [];
+    for (const b of body) {
+      const src = b.face ? b.inPlace : b.mesh;
+      const geo = src ? (src.userData.nsFullGeometry || src.geometry) : null, pos = geo && geo.attributes && geo.attributes.position;
+      const t = pos ? collideTables.get(geo) : null;
+      if (t && t.version !== pos.version) stale.push(t.pass, stale.length / 3, geo);
+    }
+    if (stale.length <= 3 * 24) return;
+    const order = [];
+    for (let i = 0; i < stale.length; i += 3) order.push(i);
+    order.sort((x, y) => stale[x] - stale[y] || stale[x + 1] - stale[y + 1]);
+    for (let j = 0; j < 24; j++) collideTable(stale[order[j] + 2], 'body');
+  }
+  let collideCache = null, collideKey = '';
+  // R558 (performance): entries carried over from the last build when their table, pad and matrix are unchanged, so
+  // the items rebuilt on every frame of a dance or a look keep their cached world spheres (only moved meshes are new).
+  let collideEntries = new Map();
+  /** { own, mirror (null when not shown), brain (null when not shown), bodyFrame, mirrorMatrix, brainMatrix, brainSolid } with
+   * ns-collide items; own / mirror entries carry tags { id (atlas element id), part 'body' | 'arm' }. Cached until a pose,
+   * the look, the body frame, the mirror or the brain changes. */
+  function collisionItems() {
+    const bm = brainGroup.matrix.elements, mm = mirrorRoot.matrix.elements;
+    const key = `${bodyPoseSerial}|${armPoseSerial}|${lookYaw},${lookPitch}|${eyeRig.position.x},${eyeRig.position.y},${eyeRig.position.z}|${bodyFrame.join(',')}|${mirror.serial}|${mirrorRoot.visible}|${brainGroup.visible}|${Array.prototype.join.call(bm, ',')}|${Array.prototype.join.call(mm, ',')}|${body.length},${bones.length},${glass.length}`;
+    if (collideCache && key === collideKey) return collideCache;
+    collideRebuilds = 0; collidePass++;
+    collideRebuildOldest();
+    bodyGroup.updateMatrixWorld(true); eyeRig.updateMatrixWorld(true); brainGroup.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true);
+    const own = [], twin = [], brainEntries = [];
+    const nextEntries = new Map();
+    const reuse = (obj, t, m, pad, tag) => {
+      const old = collideEntries.get(obj);
+      if (old && old.table === t && old.pad === pad && old.tag === tag) {
+        let same = true;
+        for (let i = 0; i < 16; i++) if (old.m[i] !== m[i]) { same = false; break; }
+        if (same) { nextEntries.set(obj, old); return old; }
+      }
+      const e = NsCollide.entry(t, m, pad, tag);
+      nextEntries.set(obj, e);
+      return e;
+    };
+    const tags = collisionItems.tags || (collisionItems.tags = new Map());
+    const tagOf = (id, part) => { const k = `${part}|${id}`; let tg = tags.get(k); if (!tg) { tg = Object.freeze({ id, part }); tags.set(k, tg); } return tg; };
+    for (const b of body) {
+      const src = b.face ? b.inPlace : b.mesh;
+      if (!src) continue;
+      const t = collideTable(src.userData.nsFullGeometry || src.geometry, 'body');
+      if (!t) continue;
+      const tag = tagOf(b.id, 'body');
+      own.push(reuse(src, t, src.matrixWorld.elements, 0, tag));
+      if (b.mirror) twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, 0, tag));
+    }
+    for (const b of bones) {
+      const t = collideTable(b.mesh.userData.nsFullGeometry || b.mesh.geometry, 'body');
+      if (!t) continue;
+      b.mesh.updateMatrixWorld(true);
+      const tag = tagOf(b.sourceElementId || null, 'arm');
+      own.push(reuse(b.mesh, t, b.mesh.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag));
+      if (b.mirror) { b.mirror.updateMatrixWorld(true); twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag)); }
+    }
+    for (const g of glass) {
+      const t = collideTable(g.geometry, 'brain');
+      if (t) brainEntries.push(reuse(g, t, g.matrixWorld.elements, 0, null));
+    }
+    collideEntries = nextEntries;
+    collideCache = Object.freeze({
+      own: own.length ? NsCollide.item(own) : null,
+      mirror: mirrorRoot.visible && twin.length ? NsCollide.item(twin) : null,
+      brain: brainGroup.visible && brainTransformSet && brainEntries.length ? NsCollide.item(brainEntries) : null,
+      bodyFrame: Float64Array.from(bodyGroup.matrixWorld.elements), mirrorMatrix: Float64Array.from(mm), brainMatrix: Float64Array.from(bm),
+      mirrorCentre: mirror.transform && mirror.transform.centre ? mirror.transform.centre.slice() : null,
+      // R558 (Message 12): the brain as a solid (ns-collide insideSolid with brainMatrix's inverse: the glass meshes sit
+      // at the brain group's own matrix, identity below it).
+      brainSolid: brainGroup.visible && brainTransformSet ? brainSolid : null
+    });
+    collideKey = key;
+    return collideCache;
+  }
+  /** R558 (Message 12): how far in front of the eye (metres, along the body's forward axis) your body can ever reach (the
+   * app measures it over the joint ranges). The mirror plane is set in front of it; when it arrives after the plane was
+   * set and the mirror body is still untouched, the plane is set again at once (the start picture, before any input). */
+  function setMirrorReach(m) {
+    mirror.reachForemostM = Number.isFinite(m) && m > 0 ? m : null;
+    const Pl = mirror.placement && mirror.placement.plane;
+    if (mirror.reachForemostM !== null && Pl && mirrorAtRest() && Number.isFinite(Pl.foremostM) && Pl.foremostM < mirror.reachForemostM - 1e-6) setMirrorPlane();
+    return mirror.placement && mirror.placement.plane ? { distanceM: mirror.placement.plane.distanceM, foremostM: mirror.placement.plane.foremostM } : null;
+  }
+  /** R558 (Message 12): the mirror body's matrices: drawn (what is shown), pipeline (the placement, turn and carry before
+   * the stop-at-contact correction), correction (null = none), the drawn centre and the pipeline's carried centre (the
+   * point the carry places; the app folds a held-back move into it). */
+  function mirrorMatrices() {
+    return { drawn: Float64Array.from(mirrorRoot.matrix.elements), pipeline: mirror.pipelineMatrix ? Float64Array.from(mirror.pipelineMatrix) : null,
+      correction: mirror.correction ? Float64Array.from(mirror.correction) : null, centre: mirror.transform && mirror.transform.centre ? mirror.transform.centre.slice() : null,
+      pipelineCarryCentre: mirror.pipelineCarryCentre ? mirror.pipelineCarryCentre.slice() : null };
+  }
+  /** R558 (Message 12): a rigid world correction applied on top of the mirror body's placement, so a move that would
+   * pass through your body or the brain stops at contact (the app computes it; null removes it). Re-applies at once. */
+  function setMirrorCorrection(m) {
+    if (m !== null && !(m && m.length === 16 && Array.prototype.every.call(m, Number.isFinite))) fail('scene_input', 'setMirrorCorrection needs a finite 4x4 matrix or null');
+    mirror.correction = m === null ? null : Float64Array.from(m);
+    applyMirror();
+    return mirrorMatrices();
+  }
+
   /* ---- R5-scene (D17): glow links ------------------------------------------------------------------------------------ */
   /** R5-scene (D17, R21): the links to draw now, from the simulation (glowLinksFromActions builds them from ns-actions /
    * ns-body): [{ regionId, level 0..1 (the area's activity, which fades with the 1 s activation), bodyMeshIds,
@@ -6709,7 +10178,59 @@ export function createScene({
   function setGlowLinks(links) {
     glowState.links = normaliseGlowLinks(links);
     glowState.set++;
+    assignMuscleAreas(glowState.links);
     return glowState.links.length;
+  }
+  /** R558 (Message 2): which area's colour each driven muscle shows. Rule (ns-colors strongestArea): the STRONGER drive
+   * wins, score = the link's level x the muscle's weight in it; ties keep the earlier link (map order). A muscle keeps
+   * its last area after the links end, so its glow fades out in the same colour. A change of area re-shades the muscle
+   * at once on all three bodies (the drives were applied earlier in the frame). A muscle that no hint names any more
+   * keeps its colour but stops being drawn as a hint (else a later drive with no area of its own, such as the Space
+   * dance, would light it at the faint hint strength without a halo). */
+  const ownerBest = new Map();
+  const hintOwned = new Set(); // muscle records (body and left arm) drawn as an opposing-action hint
+  let assignStamp = 0;
+  function assignMuscleAreas(list) {
+    assignStamp++;
+    ownerBest.clear();
+    for (const link of list) {
+      for (const id in link.colorBody) {
+        const sc = link.level * link.colorBody[id], cur = ownerBest.get(id);
+        if (cur === undefined || sc > cur.s) ownerBest.set(id, { s: sc, r: link.regionId, h: link.hint });
+      }
+    }
+    for (const [id, o] of ownerBest) {
+      const b = bodyById.get(id);
+      if (!b || b.kind !== 'muscle') continue;
+      b.assignStamp = assignStamp;
+      if (o.h) hintOwned.add(b);
+      if (b.owner === o.r && b.ownerHint === o.h) continue;
+      b.owner = o.r; b.ownerHint = o.h;
+      shadeBodyMuscle(b);
+    }
+    const armLinks = list.length ? list.filter(l => l.armNames.length || Object.keys(l.armKeys).length) : list;
+    if (armLinks.length) {
+      for (const m of muscles) {
+        if (m.lname === undefined) m.lname = String(m.mesh.name || '').toLowerCase();
+        let best = null, bs = 0, bh = false;
+        for (const l of armLinks) {
+          const w = m.key !== null && l.armKeys[m.key] !== undefined ? l.armKeys[m.key] : l.armNames.some(n => m.lname.includes(n)) ? 1 : 0;
+          const sc = l.level * w;
+          if (sc > bs) { bs = sc; best = l.regionId; bh = l.hint; }
+        }
+        if (!best) continue;
+        m.assignStamp = assignStamp;
+        if (bh) hintOwned.add(m);
+        if (m.owner !== best || m.ownerHint !== bh) { m.owner = best; m.ownerHint = bh; shadeArmMuscle(m); }
+      }
+    }
+    if (hintOwned.size) {
+      for (const r of hintOwned) {
+        if (r.assignStamp === assignStamp && r.ownerHint === true) continue;
+        hintOwned.delete(r);
+        if (r.ownerHint === true) { r.ownerHint = false; if (r.mat) shadeArmMuscle(r); else shadeBodyMuscle(r); }
+      }
+    }
   }
   /** Arm muscle centre in arm (eye) coordinates from its CPU-skinned positions (cached per pose). */
   function armMuscleCentre(m) {
@@ -6721,11 +10242,19 @@ export function createScene({
     m.centreFor = lastMatrices;
     return m.centre;
   }
-  const glowScratch = { a: [0, 0, 0], b: [0, 0, 0] };
   /** Fill one ribbon (curve a -> b, camera-facing, constant on-screen width) into buf at its next slot. */
-  function emitRibbon(buf, a, b, level, phase, alphaMul) {
+  const lineStyle = { halo: [0, 0, 0], core: [0, 0, 0], intensity: 0, K: GLOW_K };
+  function emitRibbon(buf, a, b, level, phase, alphaMul, regionId = null) {
     if (buf.n >= GLOW_LINK.maxLinks) return false;
-    const st = glowStyle(level), K = st.K;
+    // R558: the line takes its AREA's glow colour (core whitened by GLOW_LINK.coreWhite); strength from the level.
+    let st = lineStyle;
+    const rc = regionId ? areaRecord(regionId) : null;
+    if (rc) {
+      const k = glowStyle(level).intensity;
+      for (let i = 0; i < 3; i++) { lineStyle.halo[i] = rc.glowLinear[i]; lineStyle.core[i] = rc.glowLinear[i] + (1 - rc.glowLinear[i]) * GLOW_LINK.coreWhite; }
+      lineStyle.intensity = k;
+    } else st = glowStyle(level);
+    const K = st.K;
     const curve = glowCurve(a, b, { lift: GLOW_LINK.lift, n: GLOW_LINK.segments });
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     const tanPx = (2 * Math.tan((camera.fov * DEG) / 2)) / Math.max(1, cssH);
@@ -6773,13 +10302,7 @@ export function createScene({
       }
     }
   }
-  const setRim = (mat, rgb, gain) => {
-    const u = mat && mat.userData && mat.userData.nsGlowRim;
-    if (!u) return false;
-    u.value.set(rgb[0] * gain, rgb[1] * gain, rgb[2] * gain, GLOW_K.rimPower);
-    glowState.touched.add(mat);
-    return true;
-  };
+  // R558: the rims of active areas and driven muscles are set with their colours (applyRegionStyle, shadeMuscle).
   /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
   let glowHull = null, glowFlag = '';
   function updateGlow(dtMs) {
@@ -6789,8 +10312,6 @@ export function createScene({
     if (glowState.links.length || glowState.eased.size) {
       if (regionMode && brainTransformSet && brainCoversRect({ x0: 0, y0: 0, x1: 1, y1: 1 }) !== undefined && coverCache.valid) glowHull = coverCache.hull;
     }
-    const prevTouched = glowState.touched;
-    glowState.touched = new Set();
     // The levels are used AS GIVEN: R5-input's link levels already follow the 1 s activation envelope (ns-actions
     // glowLinks), so a second, wall-clock smoothing here would make the glow lag behind the area (and differ between
     // live play and QA step frames). A link that leaves the list is gone at once (it is below GLOW_LINK.minLevel then).
@@ -6799,12 +10320,12 @@ export function createScene({
     let rimMuscles = 0, rimAreas = 0, topLevel = 0, topRegion = null;
     const regionIds = [], targets = [];
     const phase = reducedMotion ? NaN : ((nowMs() / 1000) / GLOW_LINK.pulseS) % 1; // no travelling pulse under reduced motion
-    const mirrorOn = mirrorRoot.visible && mirror.transform !== null;
-    const M = mirrorOn ? mirror.transform.matrix : null;
-    const toMirror = (p, out) => { out[0] = M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12]; out[1] = M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13]; out[2] = M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]; return out; };
+    // R558: one entry per lit area (its strongest link level, all its links' targets), so an area gets at most ONE line.
+    const now = nowMs();
+    const byArea = new Map();
     for (const link of glowState.links) {
       const lv = link.level;
-      if (!(lv >= GLOW_LINK.minLevel)) continue;
+      if (!(lv >= GLOW_LINK.minLevel) || link.hint || link.line === false) continue; // a hint (or a colour-only link) only colours its muscles (assignMuscleAreas)
       glowState.eased.set(link.key, { level: lv, link });
       const rec = regionById.get(link.regionId);
       if (!rec || !rec.markCentre) continue;
@@ -6813,56 +10334,64 @@ export function createScene({
       for (const id of Object.keys(link.body)) targets.push(id);
       for (const n of link.armNames) targets.push(n);
       for (const k of Object.keys(link.armKeys)) targets.push(k);
-      const st = glowStyle(lv);
-      const em = st.halo.map(c => c * st.intensity);
-      if (setRim(rec.material, em, GLOW_K.areaRimGain)) rimAreas++;
+      let e = byArea.get(link.regionId);
+      if (!e) { e = { rec, level: 0, links: [] }; byArea.set(link.regionId, e); }
+      if (lv > e.level) e.level = lv;
+      e.links.push(link);
+      rimAreas++;
+    }
+    // The age of each lit area's line (from the frame it lit); an area that goes dark forgets it.
+    for (const id of [...glowState.lineStart.keys()]) if (!byArea.has(id)) glowState.lineStart.delete(id);
+    for (const id of byArea.keys()) if (!glowState.lineStart.has(id)) glowState.lineStart.set(id, now);
+    for (const [regionId, e] of byArea) {
+      const lv = e.level, rec = e.rec;
+      const env = glowLineEnvelope((now - glowState.lineStart.get(regionId)) / 1000);
+      if (!(env > 0)) continue;
       pv.set(rec.markCentre[0], rec.markCentre[1], rec.markCentre[2]).applyMatrix4(brainGroup.matrixWorld);
       const a = [pv.x, pv.y, pv.z];
-      // targets -> groups (part + side), weighted centres in the player's world
-      // R558 (FIRST_PERSON_BODY): `own` is false for a muscle of your own body that the ordinary view does not draw.
-      // The glow to your own body then starts from the drawn muscles only (o*), or is left out when none is drawn; the
-      // glow to the mirror body uses every muscle, as before.
+      // targets -> groups (part + side), weighted centres in the player's world. R558 (FIRST_PERSON_BODY): only muscles of
+      // your own body that the ordinary view draws count; the line goes to the ONE group with the most weight.
       const groups = new Map();
       const addT = (key, w, p, own = true) => {
+        if (!own) return;
         let g = groups.get(key);
-        if (!g) { g = { w: 0, x: 0, y: 0, z: 0, ow: 0, ox: 0, oy: 0, oz: 0 }; groups.set(key, g); }
+        if (!g) { g = { w: 0, x: 0, y: 0, z: 0 }; groups.set(key, g); }
         g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2];
-        if (own) { g.ow += w; g.ox += w * p[0]; g.oy += w * p[1]; g.oz += w * p[2]; }
       };
-      for (const [bid, w] of Object.entries(link.body)) {
-        const b = bodyById.get(bid);
-        if (!b || b.kind !== 'muscle') continue;
-        const gs = b.mesh.geometry.boundingSphere;
-        if (!gs) continue;
-        if (setRim(b.material, em, GLOW_K.muscleRimGain)) rimMuscles++;
-        if (b.mirror) setRim(b.mirror.material, em, GLOW_K.muscleRimGain);
-        if (b.inPlace) setRim(b.inPlace.material, em, GLOW_K.muscleRimGain);
-        pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
-        const drawn = b.face ? camState.headInPlace : firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom;
-        addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn);
-      }
-      const armKeys = Object.keys(link.armKeys);
-      if (armKeys.length || link.armNames.length) {
-        armGroup.updateMatrixWorld(true);
-        for (const m of muscles) {
-          const nm = String(m.mesh.name || '').toLowerCase();
-          const w = m.key !== null && link.armKeys[m.key] !== undefined ? link.armKeys[m.key] : link.armNames.some(s => nm.includes(s)) ? 1 : 0;
-          if (!(w > 0)) continue;
-          if (setRim(m.mat, em, GLOW_K.muscleRimGain)) rimMuscles++;
-          if (m.mirror) setRim(m.mirror.material, em, GLOW_K.muscleRimGain);
-          const c = armMuscleCentre(m);
-          pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
-          addT('leftArm:-1', w, [pv.x, pv.y, pv.z]);
+      for (const link of e.links) {
+        for (const [bid, w] of Object.entries(link.body)) {
+          const b = bodyById.get(bid);
+          if (!b || b.kind !== 'muscle') continue;
+          const gs = b.mesh.geometry.boundingSphere;
+          if (!gs) continue;
+          rimMuscles++;
+          pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
+          const drawn = b.face ? camState.headInPlace : firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom;
+          addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn);
+        }
+        const armKeys = Object.keys(link.armKeys);
+        if (armKeys.length || link.armNames.length) {
+          armGroup.updateMatrixWorld(true);
+          for (const m of muscles) {
+            const nm = m.lname !== undefined ? m.lname : String(m.mesh.name || '').toLowerCase();
+            const w = m.key !== null && link.armKeys[m.key] !== undefined ? link.armKeys[m.key] : link.armNames.some(q => nm.includes(q)) ? 1 : 0;
+            if (!(w > 0)) continue;
+            rimMuscles++;
+            const c = armMuscleCentre(m);
+            pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
+            addT('leftArm:-1', w, [pv.x, pv.y, pv.z]);
+          }
         }
       }
-      for (const g of groups.values()) {
-        if (!(g.w > 0)) continue;
-        const b = [g.x / g.w, g.y / g.w, g.z / g.w];
-        if (g.ow > 0) emitRibbon(glowOwn, a, [g.ox / g.ow, g.oy / g.ow, g.oz / g.ow], lv, phase, 1);
-        if (mirrorOn) emitRibbon(glowMirror, a, toMirror(b, glowScratch.b), lv, phase, GLOW_LINK.mirrorAlpha);
+      let best = null;
+      for (const g of groups.values()) if (g.w > 0 && (!best || g.w > best.w)) best = g;
+      // No line to a muscle group right at the camera (your own neck or face seen from the eyes): it would be a long
+      // streak across the view toward the eye, not a pointer to the muscles.
+      const b = best ? [best.x / best.w, best.y / best.w, best.z / best.w] : null;
+      if (b && Math.hypot(b[0] - camera.position.x, b[1] - camera.position.y, b[2] - camera.position.z) >= GLOW_LINK.minTargetM) {
+        emitRibbon(glowOwn, a, b, lv, phase, env, regionId);
       }
     }
-    for (const mat of prevTouched) if (!glowState.touched.has(mat)) { const u = mat.userData.nsGlowRim; if (u) u.value.set(0, 0, 0, GLOW_K.rimPower); }
     finishRibbons(glowOwn);
     finishRibbons(glowMirror);
     for (const b of [glowOwn, glowMirror]) { const g = b.mesh.userData.nsGlow; g.regionId = b.n ? topRegion : null; g.regionIds = b.n ? regionIds.slice() : []; g.muscles = b.n ? [...new Set(targets)] : []; g.intensity = b.n ? Math.round(glowStyle(topLevel).intensity * 1000) / 1000 : 0; }
@@ -6876,7 +10405,16 @@ export function createScene({
   function glowLinkState() {
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
-      cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials };
+      cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials,
+      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode,
+      // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
+      powerUp: { shader: powerUp.applied, materials: powerUp.materials, starts: powerUp.starts, settledStarts: powerUp.settledStarts, recharges: powerUp.recharges, clockS: Math.round(powerUpClock.value.x * 1000) / 1000, lastStartS: powerUp.lastStart === null ? null : Math.round(powerUp.lastStart * 1000) / 1000, lastStartArea: powerUp.lastStartArea, reduced: powerUpClock.value.y > 0.5 },
+      // R558 (Message 18): the muscle look (patch state, tendon meshes written, tone assignment summary).
+      // R558 (Messages 25 to 30): the comic look (patch state, materials, meshes with an ink frame, ink on) and the
+      // phalanges drawn from their rounded display copy.
+      comic: { shader: comic.applied, materials: comic.materials, hatchMeshes: comic.hatchMeshes, inkOn: comic.inkOn, boneTips: boneTips.meshes, hdr: hdr.state() },
+      muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
+        toneKeys: muscleTones.keys, toneContacts: muscleTones.contacts, toneWorst: muscleTones.worst, toneMs: muscleTones.ms === undefined ? null : muscleTones.ms } };
   }
 
   /** Per-frame DOM overlay: orbit arrows, region group labels, face label / inset frame. Style writes only on change. */
@@ -6923,12 +10461,21 @@ export function createScene({
         // R4-fix (review RP1, blocker): the required "Left arm / brain's right half" tag stays on ITS half of the brain:
         // the brain's midline (source x = 0, through the anchor's front-back position and height) projected as a
         // screen line; the tag's whole box keeps to the anchor's side of it (declutterLabels `side`).
+        // R558: every label learns which side of that line its anchor is on (`mirror`), so twins move mirrored.
         it.side = null;
-        if (it.required && Number.isFinite(it.x) && Number.isFinite(it.y)) {
+        it.mirror = 0;
+        if (Number.isFinite(it.x) && Number.isFinite(it.y)) {
           const m0 = projPx(0, a[1] - 30, a[2]), m1 = projPx(0, a[1] + 30, a[2]);
           if (m0 && m1 && Math.abs(m1[1] - m0[1]) > 1e-3) {
             const dxdy = (m1[0] - m0[0]) / (m1[1] - m0[1]), mx = m0[0] + (it.y - m0[1]) * dxdy;
-            if (Math.abs(it.x - mx) > 1) it.side = { x0: m0[0], y0: m0[1], dxdy, sign: it.x > mx ? 1 : -1 };
+            if (Math.abs(it.x - mx) > 1) {
+              it.mirror = it.x > mx ? 1 : -1;
+              // Check fix (hunt 2): twins too keep to their anchor's half. They move by the same offset mirrored, so a
+              // pair whose anchors sit near the midline (the legs, in a portrait window) could both step across it and
+              // swap sides ("Left leg" over the brain's left half, which moves the right leg). A twin pair with no
+              // place on its own halves is not shown, never shown on the wrong ones.
+              if (it.required || (typeof it.pair === 'string' && it.pair !== '')) it.side = { x0: m0[0], y0: m0[1], dxdy, sign: it.mirror };
+            }
           }
         }
       }
@@ -6947,7 +10494,21 @@ export function createScene({
       // R4-fix (F2): the small-area switched-on rings stay visible (labels keep clear of them).
       for (const d of markDots.values()) if (d.shown && Number.isFinite(d.px) && Number.isFinite(d.py)) { const R = SMALL_MARK.sizePx / 2 + 3; obst.push({ x0: d.px - R, y0: d.py - R, x1: d.px + R, y1: d.py + R }); }
       const compact = cssW / cssH < 1 || cssW < 900;
-      const pos = declutterLabels(items, { width: cssW, height: cssH, topPx, obstacles: obst, maxShown: compact ? LABEL_LAYOUT.maxShownCompact : LABEL_LAYOUT.maxShown });
+      const maxShown = compact ? LABEL_LAYOUT.maxShownCompact : LABEL_LAYOUT.maxShown;
+      let pos = declutterLabels(items, { width: cssW, height: cssH, topPx, obstacles: obst, maxShown });
+      // R558 (hunt 2 limit): keep the labels off the mirror body's V tips as well (at 16:9 its left tip sat under the
+      // "Right leg" label), but only when every label that has a place without them still has one: the leg pair, which
+      // sits between the mirror body's feet, matters more than a partly covered tip.
+      const MSL = arrowSets.mirror;
+      if (MSL && MSL.shown && MSL.boxes) {
+        const n0 = obst.length;
+        for (const d of ARROW_DIRS) { const b = MSL.boxes[d]; if (b) obst.push({ x0: b.x0 - 4, y0: b.y0 - 4, x1: b.x1 + 4, y1: b.y1 + 4 }); }
+        if (obst.length > n0) {
+          const alt = declutterLabels(items, { width: cssW, height: cssH, topPx, obstacles: obst, maxShown });
+          // (and no label that sat cleanly without them is forced and faded with them: hunt 3)
+          if (alt.every((q, i) => (q.shown || !pos[i].shown) && !(q.faded && !pos[i].faded))) pos = alt;
+        }
+      }
       for (let i = 0; i < labelEls.length; i++) {
         const L = labelEls[i], q = pos[i], b = labelBoxes[i];
         const shown = q.shown;
@@ -7046,9 +10607,14 @@ export function createScene({
       if (typeof renderer.setDrawingBufferSize === 'function') renderer.setDrawingBufferSize(width, height, pr);
       else { renderer.setPixelRatio(pr); renderer.setSize(width, height, false); }
     }
+    outline.setSize(width, height, pr); // R558 (Message 20): the ID target follows the drawing buffer (no-op when unchanged)
+    { const b = typeof renderer.getDrawingBufferSize === 'function' ? renderer.getDrawingBufferSize(hdrSize) : null; hdr.setSize(b ? b.x : width * pr, b ? b.y : height * pr); } // R558 (Message 25)
     const w = armWinUniform.value;
     w[0] = (width * pr) / 2; w[1] = (height * pr) / 2; w[2] = ARM_SEE.radiusFrac * Math.min(width, height) * pr; w[3] = ARM_SEE.edge;
     cssPr = pr;
+    borderShared.nsLineW.value.w = pr; // R558: area border widths are CSS pixels
+    glassInkUniforms.nsGInk.value.w = pr; // R558 BB: the glass ink widths too
+    for (const k of ['brain', 'mirror']) { const r = arrowSets[k] && arrowSets[k].rig; if (r && typeof r.setPixelRatio === 'function') r.setPixelRatio(pr); } // and the arrows' ink
   }
 
   /** Renderer size (CSS size kept by the stylesheet), camera aspect and projection. One drawing-buffer allocation
@@ -7079,6 +10645,15 @@ export function createScene({
       for (const m of glassXray) m.visible = !L.lite;
     }
     const lodKey = L.lod ? `${L.lod.glassMm}/${L.lod.bodyMm}/${L.lod.armMm || 0}` : '';
+    // R558 (Messages 24, 29): the bodies' ink (striation, hatching, stipple) is drawn at every level without a lod
+    // (BODY_CEL; the bands, rim and highlight shapes stay at every level).
+    comic.inkOn = !L.lod;
+    comicUniforms.nsInkLine.value.w = comic.inkOn ? 1 : 0;
+    // R558 (Message 25): the HDR bloom at the full level (HDR_BLOOM.levels), one blur level fewer at the 0.75 / 0.5 render
+    // scales, off from the lite / lod levels; the muscle peaks are boosted only while it is on.
+    const hdrLevels = qState.level >= HDR_BLOOM.offFromLevel ? 0 : qState.level === 0 ? HDR_BLOOM.levels : HDR_BLOOM.levels - 1;
+    hdr.setLevel(hdrLevels);
+    comicUniforms.nsHdrBoost.value.x = hdrLevels > 0 && hdr.state().supported ? HDR_BLOOM.muscleBoost : 0;
     if (lodApplied !== lodKey) setLod(L.lod, lodKey);
     else if ((mirror.lod || 0) !== mirrorLodCell()) applyMirrorLod();
   }
@@ -7088,19 +10663,85 @@ export function createScene({
   let lodApplied = '';
   const lodOf = new Map(); // full geometry -> Map(cell -> lod geometry)
   const lodStats = {};
-  function lodGeometry(geo, cell, stat) {
+  // R558 (dark flecks at Low): the body's copies (clusterLodPlan) hold their own buffers, re-written from the full ones
+  // (lodSync) whenever those change: full geometry -> Set of its copies.
+  const lodSyncs = new Map();
+  function lodSync(lod, moved = false) {
+    const u = lod.userData, plan = u.nsLodPlan, full = u.nsLodFull;
+    for (const name of moved ? ['position', 'normal'] : Object.keys(lod.attributes)) {
+      const a = lod.attributes[name], f = full.attributes[name];
+      if (!a) continue;
+      if (!f) continue;
+      clusterLodMeans(plan, f.array, f.itemSize, a.array, name === 'normal');
+      a.needsUpdate = true;
+    }
+  }
+  // vertices moved. R558 (hunt 3): a Low-quality body copy has its OWN position array (bodyLodGeometry), so its pick tree
+  // must be stamped too, or the crosshair keeps picking the copy's old pose (pickTreeOf keys on the array's stamp).
+  function lodTouch(geo) {
+    const set = lodSyncs.get(geo);
+    if (set) for (const g of set) { lodSync(g, true); if (g.attributes.position) pickBufferWritten(g.attributes.position.array); }
+  }
+  function bodyLodGeometry(geo, cell, stat) {
+    const pos = geo.attributes.position, nor = geo.attributes.normal, idx = geo.index;
+    // the plan is made once on the unlifted, unskinned rest geometry (the lift and the skin move vertices smoothly)
+    const L = bodyLiftGeos.get(geo), R = bodySkinGeos.get(geo);
+    const restP = L ? L.rest : R ? R.rest : pos.array;
+    const restN = L ? L.restN : R && R.restN ? R.restN : nor ? nor.array : computeNormals(pos.array, idx.array);
+    const plan = clusterLodPlan(restP, restN, idx.array, cell * LOD_BUCKET_CELL_SCALE);
+    const lod = keep(new THREE.BufferGeometry());
+    for (const name of Object.keys(geo.attributes)) {
+      const a = geo.attributes[name];
+      if (!(a.array instanceof Float32Array) || !(a.itemSize >= 1 && a.itemSize <= 4) || a.array.length !== a.itemSize * restP.length / 3) continue;
+      lod.setAttribute(name, new THREE.BufferAttribute(new Float32Array(a.itemSize * plan.clusters), a.itemSize));
+    }
+    lod.setIndex(new THREE.BufferAttribute(plan.indices, 1));
+    lod.userData.nsLodPlan = plan; lod.userData.nsLodFull = geo;
+    lodSync(lod);
+    if (!geo.boundingSphere && typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
+    if (geo.boundingSphere) lod.boundingSphere = geo.boundingSphere; // the full sphere already holds every lift / skin pose
+    if (geo.boundingBox) lod.boundingBox = geo.boundingBox;
+    lod.userData.nsLodStat = { stat, full: idx.count / 3, lod: plan.triangles };
+    if (stat) { stat[0] += idx.count / 3; stat[1] += plan.triangles; }
+    let set = lodSyncs.get(geo);
+    if (!set) lodSyncs.set(geo, (set = new Set()));
+    set.add(lod);
+    return lod;
+  }
+  function lodGeometry(geo, cell, stat, kind = null) {
     let byCell = lodOf.get(geo);
     if (!byCell) { byCell = new Map(); lodOf.set(geo, byCell); }
     let lod = byCell.get(cell);
     if (lod) return lod;
     const pos = geo.attributes && geo.attributes.position, idx = geo.index;
     if (!pos || !idx) { byCell.set(cell, geo); return geo; }
+    if (kind === 'body') { lod = bodyLodGeometry(geo, cell, stat); byCell.set(cell, lod); return lod; }
+    // R558: a lifted body muscle has ONE vertex buffer that is rewritten when the lift amount changes, so its coarser
+    // copy is index-only over that buffer (clustered once on the unlifted positions) and follows the lift for free.
+    const lifted = bodyLiftGeos.get(geo) || bodySkinGeos.get(geo); // R558: skinned hand muscles likewise
+    if (lifted) {
+      const r = clusterIndexLod(lifted.rest, idx.array, cell);
+      lod = keep(new THREE.BufferGeometry());
+      for (const name of Object.keys(geo.attributes)) lod.setAttribute(name, geo.attributes[name]);
+      lod.setIndex(new THREE.BufferAttribute(r.indices, 1));
+      if (geo.boundingSphere) lod.boundingSphere = geo.boundingSphere;
+      lod.userData.nsLodStat = { stat, full: idx.count / 3, lod: r.triangles };
+      if (stat) { stat[0] += idx.count / 3; stat[1] += r.triangles; }
+      byCell.set(cell, lod);
+      return lod;
+    }
     const sulc = geo.attributes.nsSulc ? geo.attributes.nsSulc.array : null;
-    const d = clusterDecimate(pos.array, idx.array, cell, sulc ? { nsSulc: sulc } : null);
+    const near = geo.attributes.nsNear ? geo.attributes.nsNear.array : null; // R558: glass clearing (GLASS_CLEAR)
+    const tend = geo.attributes.nsTendon ? geo.attributes.nsTendon.array : null; // R558 (Message 18): muscle tendon ends
+    const carry = sulc || near || tend ? { ...(sulc ? { nsSulc: sulc } : {}), ...(near ? { nsNear: near } : {}), ...(tend ? { nsTendon: tend } : {}) } : null;
+    const d = clusterDecimate(pos.array, idx.array, cell, carry);
     lod = keep(indexedGeometry(d.positions, d.indices));
     lod.computeVertexNormals();
     if (d.attrs && d.attrs.nsSulc) lod.setAttribute('nsSulc', new THREE.BufferAttribute(d.attrs.nsSulc, 1));
+    if (d.attrs && d.attrs.nsNear) lod.setAttribute('nsNear', new THREE.BufferAttribute(d.attrs.nsNear, 1));
+    if (d.attrs && d.attrs.nsTendon) lod.setAttribute('nsTendon', new THREE.BufferAttribute(d.attrs.nsTendon, 1));
     if (typeof lod.computeBoundingSphere === 'function') lod.computeBoundingSphere();
+    lod.userData.nsLodStat = { stat, full: idx.count / 3, lod: d.triangles };
     stat[0] += idx.count / 3; stat[1] += d.triangles;
     byCell.set(cell, lod);
     return lod;
@@ -7109,17 +10750,17 @@ export function createScene({
     const t0 = nowMs();
     const st = lod ? (lodStats[key] ||= { builtMs: null, glass: [0, 0], body: [0, 0] }) : null;
     const fresh = st && st.builtMs === null;
-    const swap = (mesh, cell, stat) => {
+    const swap = (mesh, cell, stat, kind = null) => {
       if (!mesh) return;
       const full = mesh.userData.nsFullGeometry || mesh.geometry;
       if (!mesh.userData.nsFullGeometry) mesh.userData.nsFullGeometry = full;
-      const g = lod ? lodGeometry(full, cell, stat) : full;
+      const g = lod ? lodGeometry(full, cell, stat, kind) : full;
       mesh.geometry = g;
       for (const c of mesh.children || []) if (c.userData && c.userData.depthTwin) c.geometry = g;
       if (mesh.userData.nsInPlaceTwin) mesh.userData.nsInPlaceTwin.geometry = g;
     };
     for (const list of [glass, glassDepth, glassXray]) for (const m of list) swap(m, lod ? lod.glassMm : 0, st ? st.glass : null);
-    for (const b of body) swap(b.mesh, lod ? lod.bodyMm : 0, st ? st.body : null);
+    for (const b of body) swap(b.mesh, lod ? lod.bodyMm : 0, st ? st.body : null, 'body');
     // The arm (bones and CPU-skinned muscles): an index-only LOD over the unchanged (skinned) vertex buffers, only at
     // levels with armMm.
     const armCell = lod && lod.armMm > 0 ? lod.armMm : 0;
@@ -7192,7 +10833,9 @@ export function createScene({
       if (!tw) continue;
       const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
       tw.userData.nsFullGeometry = full;
-      const g = cell > 0 ? mirrorIndexLod(full, cell, false) : b.mesh.geometry;
+      // R558 (dark flecks at Low): at the LOD levels the mirror's cell is the body's own, so it draws the body's copy.
+      const own = cell > 0 && lodOf.get(full) ? lodOf.get(full).get(cell) : null;
+      const g = cell > 0 ? (own || mirrorIndexLod(full, cell, false)) : b.mesh.geometry;
       const use = g || b.mesh.geometry;
       if (!g) pending++;
       if (tw.geometry !== use) { tw.geometry = use; n++; }
@@ -7210,6 +10853,7 @@ export function createScene({
       if (!b.mirror) continue;
       const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
       if (mirrorIndexLod(full, mirrorLodWant, false)) continue;
+      if (lodOf.get(full) && lodOf.get(full).get(mirrorLodWant)) continue; // R558: it draws the body's own copy
       mirrorIndexLod(full, mirrorLodWant, true);
       built++;
       if (nowMs() - t0 > budgetMs) break;
@@ -7244,8 +10888,8 @@ export function createScene({
       buffer: cssW > 0 ? [Math.round(cssW * cssPr), Math.round(cssH * cssPr)] : null,
       lod: lodApplied ? { cellsMm: lodApplied, builtMs: lodStats[lodApplied].builtMs, glassTriangles: lodStats[lodApplied].glass.slice(), bodyTriangles: lodStats[lodApplied].body.slice(), armTriangles: lodStats[lodApplied].arm ? lodStats[lodApplied].arm.slice() : null } : null,
       // Last frame's draw calls and triangles (Three renderer.info; main pass only) and the main-thread ms of render().
-      drawCalls: renderer.info && renderer.info.render ? renderer.info.render.calls : null,
-      triangles: renderer.info && renderer.info.render ? renderer.info.render.triangles : null,
+      drawCalls: mainPassInfo.calls,
+      triangles: mainPassInfo.triangles,
       renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null
     };
   }
@@ -7257,6 +10901,7 @@ export function createScene({
   function render(opts) {
     if (lost || disposed) return;
     const now = nowMs();
+    powerUpClock.value.x = (now - powerUpEpoch) / 1000; // R558 (Message 22): the power-up clock (one uniform write)
     const notLive = Boolean(opts && opts.live === false);
     const dtMs = lastRenderAt === null ? 0 : now - lastRenderAt; // eases (held cue, ghosts): every drawn frame
     lastRenderAt = now;
@@ -7275,11 +10920,11 @@ export function createScene({
       if (Math.abs(heldCue.target - h) < 0.03) h = heldCue.target;
       heldCue.amount = h;
       const rim = heldCueRim(h);
-      shellRimUniforms.nsRimOpacity.value = rim.rimOpacity; shellRimUniforms.nsRimPower.value = rim.rimPower;
+      shellRimUniforms.nsRimOpacity.value = rim.rimOpacity; shellRimUniforms.nsRimPower.value = rim.rimPower; shellRimUniforms.nsRimGroove.value = rim.rimGroove;
     }
     if (strip) strip.uniforms.nsTime.value = (now / 1000) % 1000;
     // Arm ghost window (auto): while the crosshair is on a control region (legacy marker or region mode).
-    const target = armGhostState.mode === 'auto' ? (typeof highlighted === 'string' || gazeOnRegion ? 1 : 0) : armGhostState.mode;
+    const target = OWN_BODY_SOLID ? 0 : armGhostState.mode === 'auto' ? (typeof highlighted === 'string' || gazeOnRegion ? 1 : 0) : armGhostState.mode;
     const k = dtMs > 0 ? 1 - Math.exp(-dtMs / 1000 / ARM_GHOST.easeS) : 1;
     let a = armGhostState.amount + (target - armGhostState.amount) * k;
     if (Math.abs(target - a) < 1e-3) a = target;
@@ -7288,7 +10933,7 @@ export function createScene({
     // R3-scene: the arm's depth pre-pass twins only while its smooth window is open (otherwise the arm is drawn at alpha 1).
     const twinsOn = a > 1e-3;
     if (twinsOn !== armTwinsOn) { armTwinsOn = twinsOn; for (const t of armTwins) t.visible = twinsOn; }
-    const tTarget = body.length && BODY_TRANSLUCENT.enabled !== false ? bodySeeThroughAmount(lookPitch, BODY_TRANSLUCENT) : 0;
+    const tTarget = !OWN_BODY_SOLID && body.length && BODY_TRANSLUCENT.enabled !== false ? bodySeeThroughAmount(lookPitch, BODY_TRANSLUCENT) : 0;
     let ta = torsoGhost.amount + (tTarget - torsoGhost.amount) * (dtMs > 0 ? 1 - Math.exp(-dtMs / 1000 / BODY_TRANSLUCENT.easeS) : 1);
     if (Math.abs(tTarget - ta) < 1e-3) ta = tTarget;
     torsoGhost.amount = ta;
@@ -7311,6 +10956,7 @@ export function createScene({
       const showMirror = mirror.enabled && mirror.ready && mirror.transform !== null;
       if (mirrorRoot.visible !== showMirror) { mirrorRoot.visible = showMirror; overlayDirty = true; }
     }
+    stepArrowVisibility(); // R558 (hunt 2, FRAME_VIS): tips behind your body / sets mostly hidden, before the arrows update
     updateArrows();
     updateFaceLayer();
     layoutOverlay();
@@ -7322,8 +10968,8 @@ export function createScene({
     // soft window at the crosshair opens while the crosshair is on a motor area, so the area you look at is never hidden.
     {
       const third = camState.headInPlace;
-      const on = !third && body.length > 0 && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0 && (camPose ? camMul.overBrain : 1) > 0;
-      const win = third && body.length > 0 && cssW > 0 && cssH > 0 && (gazeOnRegion || typeof highlighted === 'string');
+      const on = !OWN_BODY_SOLID && !third && body.length > 0 && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0 && (camPose ? camMul.overBrain : 1) > 0;
+      const win = !OWN_BODY_SOLID && third && body.length > 0 && cssW > 0 && cssH > 0 && (gazeOnRegion || typeof highlighted === 'string');
       overBrain.amount = on ? (camPose ? camMul.overBrain : 1) : win ? 1 : 0;
       overBrain.mode = on ? 'brain-outline' : win ? 'crosshair' : 'off';
       overBrainUniform.value[0] = overBrain.amount;
@@ -7342,6 +10988,9 @@ export function createScene({
       const on = mirrorRoot.visible && regionMode && brainTransformSet && brainOverlayOk && cssW > 0 && cssH > 0;
       behindGlass.amount = on ? 1 : 0;
       bgUniform.value.x = behindGlass.amount;
+      // R558: only what lies beyond the brain's nearest point (from the render camera) can be behind the glass.
+      behindGlass.nearM = Number.isFinite(cameraRange.brainNearM) && cameraRange.brainNearM > 0 ? cameraRange.brainNearM : 0;
+      bgUniform.value.z = behindGlass.nearM;
       if (on) {
         const b = brainBoundsPx, pr = cssPr || 1;
         bgWinUniform.value.set(((b.x0 + b.x1) / 2) * pr, (cssH - (b.y0 + b.y1) / 2) * pr, ((b.x1 - b.x0) / 2) * pr, ((b.y1 - b.y0) / 2) * pr);
@@ -7374,8 +11023,18 @@ export function createScene({
       if (!(envelope.minCameraDepthM >= camera.near && envelope.maxCameraDepthM <= camera.far)) fail('scene_input', 'current full mirror geometry violates camera range; ordinary pose remains unresolved');
     }
     checkCameraProjectionPlan();
+    // R558 (Message 20): the outline ID pass of this frame's body meshes (the composite in `scene` reads it). The soft
+    // depth shading (ns-outline OUTLINE_AO) is drawn only at the full quality level; the lines at every level.
+    // R558 BB (Message 28): the lines' supersampling follows the quality level too (ns-outline OUTLINE_AA).
+    outline.setOcclusion(qState.level === 0);
+    outline.setQuality(qState.level);
+    outline.render(scene, camera);
+    // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
+    const hdrOn = hdr.begin();
     renderer.render(scene, camera);
+    if (renderer.info && renderer.info.render) { mainPassInfo.calls = renderer.info.render.calls; mainPassInfo.triangles = renderer.info.render.triangles; }
     renderFaceLayer();
+    if (hdrOn) hdr.end();
     lastRenderCpuMs = nowMs() - now;
   }
 
@@ -7482,6 +11141,9 @@ export function createScene({
     // U2b-scene (ns-app SCENE_HOOKS)
     setBrainTransform,
     updateRegions,
+    setSettledRegions, // R558 (Message 22)
+    setRegionHints, // R558 (Message 6)
+    regionHintState,
     brainOrientationAnchors,
     setInfo,
     setBody,
@@ -7495,6 +11157,7 @@ export function createScene({
     setLabelAvoid,
     setOrientationRects,
     overlayObstacles,
+    bodyScreenBoxes, // R558 (hunt 2)
     // R4-scene
     setArmEnvelope,
     setBrainHeld,
@@ -7518,17 +11181,24 @@ export function createScene({
     setMirror: setMirrorView,
     mirrorState,
     mirrorPartAt, graspTargetAt, reconcileMirrorCarry,
+    collisionItems, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,
     // R5-integrate-core (D15): the Body Worlds layer labels of the body's muscle meshes, and the lifted left arm.
+    // R558: setBodyLift draws the stack on the body (own and mirror).
     setBodyLayers,
+    setBodyLift,
+    setBodySkin, updateBodySkin,
     setArmLayers,
+    setOutlineSegments, // R558 (Message 20)
+    outlineState: () => ({ ...outline.state(), quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null }),
     get regionMode() { return regionMode; },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
     sceneState() {
       return {
         regionMode, brainTransformSet, regions: regions.length, hoveredRegionId, gazeOnRegion,
         activatedRegionIds: regions.filter(r => r.activated >= 1).map(r => r.id),
+        regionHints: regionHintState(), // R558 (Message 6)
         // R5-scene (D16): the brain's 3D arrows on screen (x, y: a good point to click, on the outer bend), as in round 4;
         // arrows3d has both sets (brain, mirror) with boxes, distances and materials.
         arrows: arrowsShown && arrowLayout ? Object.fromEntries(ARROW_DIRS.map(d => { const c = arrowSets.brain.clicks[d]; return [d, { x: c ? Math.round(c[0]) : null, y: c ? Math.round(c[1]) : null, clamped: false, usable: Boolean(arrowLayout[d]) }]; })) : null,
@@ -7542,16 +11212,17 @@ export function createScene({
         // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
         // last received them (viewport fractions).
         quality: qualityState(),
+        outline: outline.state(), // R558 (Message 20): the outline pass (batch size, last ID pass draw calls and CPU ms)
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
         hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
-        leftArmRim: { ...leftArmRim },
+        leftArmRim: { ...leftArmRim }, regionBorder: { ...regionBorder }, areaInk: { ...areaInk },
         cameraRange: { near: camera.near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, mirrorFarM: cameraRange.mirrorFarM, brainDistanceScale: brainDistK },
         armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
         arrowHover: hoverDir, mirrorArrowHover: arrowHover && arrowHover.target === 'mirror' && !arrowHover.blocked ? arrowHover.dir : null, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
         markDots: [...markDots].map(([id, d]) => ({ id, shown: d.shown, small: d.small, areaPx: d.area, left: d.x, top: d.y })),
         labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null })),
         info: info ? { shown: !info.panel.hidden } : null,
-        body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
+        body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, lift: bodyLiftInfo ? { ...bodyLiftInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
         face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
       };
     }
@@ -7608,6 +11279,9 @@ export const HUD_DETAILS_SUMMARY = NS_TEXT.LEGEND.detailsSummary;
 /** Polish: the colour key under the activity legend (plain words, ns-text LEGEND.key rows [class, long, short]). One
  * swatch per on-brain cue, so the brain colours, the muscle colours and the activation marks are explained in one place. */
 export const HUD_LEGEND_KEY = Object.freeze(NS_TEXT.LEGEND.key.map(r => Object.freeze([r[0], r[1], r[2]])));
+/** R558 (Message 2): one chip per area colour family ([family key, words]); the chip shows the family's shades
+ * (ns-colors areaFamilySwatchCss), so the key matches the areas and the muscles. */
+export const HUD_LEGEND_FAMILIES = Object.freeze((NS_TEXT.LEGEND.families || []).map(r => Object.freeze([r[0], r[1]])));
 export const HUD_LEGEND_SHARED = NS_TEXT.LEGEND.shared;
 /** Always-visible simulated/representative limits notice. It wraps at a fixed readable font size.
  * The nominal top margin comes from the unchanged arm-fit setting; actual glyph/hand clearance is unverified. */
@@ -7616,6 +11290,10 @@ export const HUD_LIMITS_SHORT = NS_TEXT.HUD.limitsShort;
  * neither this constant nor the approximate arm-avoid shapes prove actual whole-hand pixel bounds. */
 export const ESSENTIAL_BAND = ARM_DEFAULTS.marginNdc / 2;
 export const ORIENTATION_KEYS = Object.freeze(['right', 'left', 'anterior', 'posterior']);
+/** R558: a side label's anchor may be any brain outline point within this share of the furthest one along its side
+ * (on screen); the one level with the brain's centre is taken, so "Your left" and "Your right" sit as a level pair
+ * (brainOrientationAnchors). Display choice. */
+export const SIDE_LABEL_TIE = 0.06;
 const DRIVE_LINES = 5;
 const PANEL_MEASURE_EVERY = 10; // placeOrientation calls between panel-rectangle reads (layout reads are not free)
 /** R3-polish: the status card keeps one home (top left) and moves only away from the hand (to the bottom left). */
@@ -7834,13 +11512,25 @@ export function createHud(hudRoot) {
   const legend = make('section', 'ns-panel ns-panel-legend', col);
   slots.legendLabel = make('div', 'ns-slot ns-slot-legendLabel', legend);
   const bar = make('div', 'ns-legend-bar', legend);
-  // A2-render R1: the default legend is generated from the same ramp function as the strip glow (ns-brain colormap);
-  // render({ legendStops }) still replaces it.
-  if (bar.style) bar.style.background = legendGradientCss(9);
+  // R558: the bar shows the GLOW STRENGTH (dark resting surface -> bright glow; ns-colors glowStrengthLegendStops): each
+  // area keeps its own colour, which the family chips below explain. render({ legendStops }) still replaces it.
+  if (bar.style) bar.style.background = `linear-gradient(to right, ${glowStrengthLegendStops(9).join(', ')})`;
   const ends = make('div', 'ns-legend-ends', legend);
   slots.legendLo = make('span', 'ns-legend-lo', ends);
   make('span', 'ns-legend-mid', ends).textContent = HUD_LEGEND_SHARED;
   slots.legendHi = make('span', 'ns-legend-hi', ends);
+  if (HUD_LEGEND_FAMILIES.length) {
+    const fam = make('ul', 'ns-legend-families', legend);
+    fam.setAttribute('aria-label', NS_TEXT.LEGEND.familiesLabel || '');
+    fam.title = NS_TEXT.LEGEND.familiesLabel || '';
+    for (const [key, words] of HUD_LEGEND_FAMILIES) {
+      const li = make('li', `ns-legend-family ns-legend-family-${key}`, fam);
+      const chip = make('span', 'ns-legend-chip', li);
+      const bg = areaFamilySwatchCss(key);
+      if (chip.style && bg) chip.style.background = bg;
+      make('span', 'ns-legend-family-text', li).textContent = words;
+    }
+  }
   const legendKey = make('ul', 'ns-legend-key', legend);
   for (const [cls, text, short] of HUD_LEGEND_KEY) {
     const li = make('li', `ns-legend-item ns-legend-item-${cls}`, legendKey);
@@ -8046,6 +11736,10 @@ export function createHud(hudRoot) {
         legendSlot = { x, y };
         placed.push({ x0: x / W, y0: y / H, x1: (x + w) / W, y1: (y + h) / H });
       }
+    } else if (reserved && reserved.layout === 'corner' && legend.style && panelSizes && panelSizes[0] && panelSizes[1]) {
+      // R558: the colour key folds away with "More detail" in landscape (CSS); when shown it sits on the left edge,
+      // directly above the status card. It is an on-demand overlay there, so it reserves nothing.
+      legendSlot = { x: g, y: Math.max(top, H - g - panelSizes[0][1] - g - panelSizes[1][1]) };
     } else if (reserved && reserved.layout === 'portrait' && legend.style && panelSizes && panelSizes[1]) {
       // R3-integrator (R3-player item 10): in portrait the legend docks at the top right of the reserved bottom band,
       // above the information panel (which CSS caps to the rest of the band), so it never covers the brain or the hand.
@@ -8086,11 +11780,15 @@ export function createHud(hudRoot) {
         // arrows, whatever happened before.
         const hp = Math.min(statusCardPlanPx(W, H, portrait), Math.max(h, floor - top));
         const atP = (x, y) => ({ x, y, box: { x0: x / W, y0: y / H, x1: (x + w) / W, y1: (y + hp) / H } });
-        const home = atP(left, top), alt = portrait ? home : atP(left, Math.max(top, floor - hp));
+        // R558 (motor strip fills the view): in landscape the card's ONE home is the bottom-left corner, hung from the
+        // floor (it grows upward), because the motor areas now reach the top-left corner of the view; its planned box
+        // is the same corner at the planned height. Portrait keeps the top strip.
+        const corner = { x: left, y: Math.max(top, floor - h), box: { x0: left / W, y0: Math.max(top, floor - hp) / H, x1: (left + w) / W, y1: floor / H } };
+        const home = portrait ? atP(left, top) : corner, alt = home;
         const handClear = c => fit && !hitsAvoid(padded(c.box), handAvoid) && clearPanels(c);
-        const use = handClear(home) ? home : handClear(alt) ? alt : home;
+        const use = home;
         if (!handClear(use)) limited = true;
-        const box = q => `${Math.round(q.x)},${Math.round(q.y)},${Math.round(q.x + w)},${Math.round(q.y + hp)}`;
+        const box = q => [q.box.x0 * W, q.box.y0 * H, q.box.x1 * W, q.box.y1 * H].map(v => Math.round(v)).join(',');
         if (typeof el.getAttribute === 'function') {
           if (el.getAttribute('data-ns-home') !== box(home)) el.setAttribute('data-ns-home', box(home));
           if (el.getAttribute('data-ns-alt') !== box(alt)) el.setAttribute('data-ns-alt', box(alt));
@@ -8160,8 +11858,12 @@ export function createHud(hudRoot) {
       const hs = shownHover ? ((ro && sizeOf(hover)) || [Math.min(260, 0.4 * W, 7.2 * hover.textContent.length + 12), 18]) : [0, 0];
       // R3-fix (review m1 / SL-9): the caption sits beside the crosshair in the first corner (right-below, left-below,
       // right-above, left-above) where no orbit arrow covers it (opts.arrows: viewport-fraction boxes).
+      // R558 check (Message 31): then centred below and centred above the crosshair. The mirror body's side tips sit as a
+      // level pair either side of its head at the start view (both moved up off your left hand, FRAME_PAIR tieShift), so
+      // every corner beside the crosshair touched one of them (measured at 1600x900: the caption 818-921 x 462-480 over
+      // the right tip 896-924 x 440-500) and the caption was drawn over the tip.
       const arrowsF = opts && Array.isArray(opts.arrows) ? opts.arrows : [];
-      const corners = [[18, 12], [-18 - hs[0], 12], [18, -12 - hs[1]], [-18 - hs[0], -12 - hs[1]]];
+      const corners = [[18, 12], [-18 - hs[0], 12], [18, -12 - hs[1]], [-18 - hs[0], -12 - hs[1]], [-hs[0] / 2, 18], [-hs[0] / 2, -18 - hs[1]]];
       let pick = corners[0];
       if (shownHover) {
         // R4-fix (review RP13): nor under the information panel / legend (the caption ran into the panel and was cut).
@@ -8189,6 +11891,25 @@ export function createHud(hudRoot) {
         midline = { x0: a.x, y0: a.y, dxdy, leftKey };
       }
     }
+    // R558 (issue hunt 1, item 10): the candidate index (0 = the anchor, then the slides along the side, then the
+    // inward steps; orientationCandidates) and the height where the first side label went, so the second tries the
+    // same kind of place first, at exactly that height when it is clear there, and the pair stays level.
+    let sidePairIndex = null, sidePairY = null, firstSide = null;
+    const sideHide = {}; // R558 (Message 31): this call's hidden flags of the two side labels (written as a pair below)
+    const candIndex = key => { const d = key.indexOf('.'); return d < 0 ? 0 : Number(key.slice(d + 1)); };
+    // write one label's place (A2-render R1: attribute and style writes only when the value changes, no per-frame DOM
+    // invalidation) and record its box for this call (a label placed again replaces its earlier box)
+    const commitOrient = (k, el, use, chosen) => {
+      setClass(el, `ns-orient ns-orient-${k}`);
+      const last = orientLast[k], placement = chosen ? 'clear-estimate' : 'limited';
+      const left = `${(use.x * 100).toFixed(2)}%`, top = `${(use.y * 100).toFixed(2)}%`;
+      if (last.placement !== placement) { el.setAttribute('data-ns-placement', placement); last.placement = placement; }
+      if (last.left !== left) { el.style.left = left; last.left = left; }
+      if (last.top !== top) { el.style.top = top; last.top = top; }
+      const i = placedOrient.findIndex(q => q.key === k);
+      if (i >= 0) placedOrient.splice(i, 1);
+      if (use.box) placedOrient.push({ key: k, x0: use.box.x0 * W, y0: use.box.y0 * H, x1: use.box.x1 * W, y1: use.box.y1 * H });
+    };
     for (const k of ORIENTATION_KEYS) {
       const el = orient[k];
       if (orientText[k].shortWanted !== shortWanted) { orientText[k].shortWanted = shortWanted; showOrientText(k, shortWanted); }
@@ -8200,7 +11921,8 @@ export function createHud(hudRoot) {
         if (p.visible) cands.push({ key, p });
       }
       const show = cands.length > 0 && el.textContent !== '';
-      if (el.hidden !== !show) el.hidden = !show;
+      const sideKey = k === 'right' || k === 'left';
+      if (sideKey) sideHide[k] = !show; else if (el.hidden !== !show) el.hidden = !show; // (side labels: written below, as a pair)
       if (!show || !el.style) continue;
       let w = 0, h = 0;
       if (W > 0 && H > 0) {
@@ -8243,14 +11965,24 @@ export function createHud(hudRoot) {
       const free = pl => !pl.box || (!hitsAvoid(pl.box, avoid) && !boxesOverlap(pl.box, band) && !(panelRects || []).some(r => boxesOverlap(pl.box, r)) &&
         !(hoverBox && boxesOverlap(pl.box, hoverBox)) && !labelRects.some(r => boxesOverlap(pl.box, r)) && sideOk(pl));
       const placed = cands.map(c => ({ key: c.key, ...placeOf(c.p) }));
+      if (side && sidePairIndex !== null) {
+        const i = placed.findIndex(c => candIndex(c.key) === sidePairIndex);
+        if (i > 0) placed.unshift(placed.splice(i, 1)[0]);
+        const m = placed.find(c => candIndex(c.key) === sidePairIndex), mc = m && cands.find(c => c.key === m.key);
+        if (m && mc && sidePairY !== null && m.y !== sidePairY) placed.unshift({ key: m.key, ...placeOf({ x: mc.p.x, y: sidePairY }) });
+      }
       const current = placed.find(c => c.key === orientPick[k]);
       const best = placed.find(free) || null;
+      // R558 (user Message 31, symmetry): the second side label takes the first one's height whenever any of its own
+      // places is clear there (its own x, the shared y): a level place wins over its sticky current place, so the two
+      // never stay at different heights (seen: 1280x720 third person "← Your left" at y 68, "Your right →" at y 426).
+      const level = side && sidePairY !== null ? cands.map(c => ({ key: c.key, ...placeOf({ x: c.p.x, y: sidePairY }) })).find(free) || null : null;
       // R4-polish: a label stays where it is while that place is clear (no flicker), but moves to a better (earlier,
       // e.g. outside the brain) place once that one has been clear for ORIENT_UPGRADE_FRAMES calls in a row; before,
       // a label that started on an inner fallback stayed there for good.
       if (best && current && best.key !== current.key && placed.indexOf(best) < placed.indexOf(current)) orientUpgrade[k] = (orientUpgrade[k] || 0) + 1;
       else orientUpgrade[k] = 0;
-      let chosen = (current && free(current) && orientUpgrade[k] < ORIENT_UPGRADE_FRAMES ? current : best) || null;
+      let chosen = level || (current && free(current) && orientUpgrade[k] < ORIENT_UPGRADE_FRAMES ? current : best) || null;
       if (chosen !== current) orientUpgrade[k] = 0;
       // Polish: no free anchor -> slide the first anchor toward the screen centre (side labels along x, front/back
       // along y) until it is clear, instead of drawing it over a panel or the limits line.
@@ -8267,18 +11999,30 @@ export function createHud(hudRoot) {
       }
       // R3-polish (labels never overlap): with no clear place (e.g. the brain dragged so its front is under the status
       // card) the label is not drawn this frame instead of being drawn over a card, a caption or the arm.
-      if (!chosen && W > 0 && H > 0) { if (!el.hidden) el.hidden = true; continue; }
+      if (!chosen && W > 0 && H > 0) { if (sideKey) sideHide[k] = true; else if (!el.hidden) el.hidden = true; continue; }
       const use = chosen || placed[0];
+      // R558 (Message 31): no level place for this second side label: the first one moves to this one's height instead
+      // when one of ITS places is clear there; with neither, the two stay where they are (rare; both still shown).
+      if (side && chosen && firstSide && Math.abs(use.y - sidePairY) * H > 0.5) {
+        const re = firstSide.cands.map(c => ({ key: c.key, ...firstSide.placeOf({ x: c.p.x, y: use.y }) })).find(firstSide.free);
+        if (re) { firstSide.commit(re, true); sidePairY = re.y; }
+      }
       orientPick[k] = use.key;
-      setClass(el, `ns-orient ns-orient-${k}`);
-      // A2-render R1: attribute and style writes only when the value changes (no per-frame DOM invalidation).
-      const last = orientLast[k], placement = chosen ? 'clear-estimate' : 'limited';
-      const left = `${(use.x * 100).toFixed(2)}%`, top = `${(use.y * 100).toFixed(2)}%`;
-      if (last.placement !== placement) { el.setAttribute('data-ns-placement', placement); last.placement = placement; }
-      if (last.left !== left) { el.style.left = left; last.left = left; }
-      if (last.top !== top) { el.style.top = top; last.top = top; }
-      if (use.box) placedOrient.push({ key: k, x0: use.box.x0 * W, y0: use.box.y0 * H, x1: use.box.x1 * W, y1: use.box.y1 * H });
+      if (side && chosen && sidePairIndex === null) {
+        sidePairIndex = candIndex(use.key); sidePairY = use.y;
+        firstSide = { cands, placeOf, free, commit: (u, ch) => { orientPick[k] = u.key; commitOrient(k, el, u, ch); } };
+      }
+      commitOrient(k, el, use, chosen);
     }
+    // R558 (Message 31): the two side labels are a pair, like the region label twins: both show or neither does (seen:
+    // portrait third person, "Right →" alone at the right edge while "← Left" had no clear place). Their hidden flags
+    // are written here once per call, only when they change.
+    if (W > 0 && H > 0 && (sideHide.left === true || sideHide.right === true)) {
+      for (const k of ['left', 'right']) {
+        if (sideHide[k] === false) { sideHide[k] = true; const i = placedOrient.findIndex(q => q.key === k); if (i >= 0) placedOrient.splice(i, 1); }
+      }
+    }
+    for (const k of ['left', 'right']) if (typeof sideHide[k] === 'boolean' && orient[k] && orient[k].hidden !== sideHide[k]) orient[k].hidden = sideHide[k];
     return placedOrient;
   }
 

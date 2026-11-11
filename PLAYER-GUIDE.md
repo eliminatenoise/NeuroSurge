@@ -1,51 +1,20 @@
 # Play NeuroSurge
 
-[Open the preview](https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html) or [save a desktop launcher](START.html). You need a keyboard and a mouse or trackpad, JavaScript and WebGL. The browser downloads the anatomy and code, then your computer runs the game. This edition is experimental-2026-11-11-capture-update.
+Open https://eliminatenoise.github.io/NeuroSurge/. The page runs locally in your browser after downloading its files. See [preview notes](PREVIEW-NOTES.html) for what is new, the current limitations and credits. For offline local hosting, run `node serve-local.mjs` and open the printed address.
 
-## Get your bearings
+Click the scene once so the mouse looks around. That first click does nothing else. The start page shows a picture of the keys; Esc brings it back.
 
-The startup instructions show a keyboard picture and are set to close two seconds after the body loads. Press Esc to pause and read them for longer. Press Esc again to resume. Resuming with Esc leaves the mouse free until you click the scene; the visible Resume button can also request pointer capture. Follow your browser's normal permission behavior.
+- **Look** with the mouse or trackpad. Your head and neck turn, and past their reach your chest turns and your trunk bends. Your left hand keeps its place in the view.
+- **Rest your look** on a coloured motor area for about a third of a second, or **click** it. That body part jerks as far as it can go and stays there, and the area and its muscles light up together on the brain and on both bodies. A quick glance only lights the area. An area hidden behind your own body or the mirror body cannot be looked at.
+- **Bring a part back** by switching on the opposite area, which glows faintly, or with **Reset body** on the Esc page.
+- **Click a muscle** on your own body or on the mirror body to switch on the motor area that moves it. The status card names the muscle, bone, area or arrow under the crosshair before you click. Bones do nothing.
+- **W/A/S/D** move your left hand: W forward, S back, A left, D right.
+- **Hold F** on the glass brain, the mirror body or a muscle of one of your limbs to take hold of it. While F is held, W moves it farther, S closer, A/D sideways, and your look carries it up and down. The mirror body stays on the ground. Let go of F to leave it there.
+- **Press and drag** on the brain or the mirror body to turn it. Drag the mirror body up or down to slide it away or back. Drag across one of your limbs to turn it like a dial.
+- **Click an arrow** for a small step, or hold it to keep going. The grey arrows turn the brain in place. The green arrows by the mirror body turn it (left and right) or slide it away and back (top and bottom). Press Esc twice for a free pointer if you want to click them while you watch.
+- **Hold Space**: all four limbs turn slowly in and out, like a dance. **Tap Space twice and hold** for a faster dance. Let go and every limb stays where it is.
+- **E** switches to a view from above and behind your right shoulder, and back. Let go of F first: while F holds something, E only shows a line that says so.
+- **I** shows or hides More detail and the colour key.
+- **Esc** pauses and shows the instructions. **Reset body** puts every body part back where it started. **Reset brain view** puts the brain and the mirror body back. The settings there change the look speed, whether up and down are flipped, the picture quality and the lifted outer muscles, and hide or restart the “Try this” guide.
 
-You control a skinless left arm attached to a body that stays in place. The front-facing body beyond the glass brain mirrors the game's pose and activity. Look down for your lap and legs. The first-person display hides the back of your own trunk; inspect the front on the mirror and press E for the view from behind, including the head. There is no separate floating face.
-
-## Move, grasp and carry
-
-| Input | What to do |
-| --- | --- |
-| Mouse / trackpad | Move to look; the left shoulder follows the view. With a free pointer, press and drag empty scene space to look. |
-| W / S | Move the left hand farther forward / back toward the body. |
-| A / D | Move the hand left / right. You can combine movement keys. These keys do not walk the body or control the other limbs. |
-| Hold Space | Close all five digits. Let go to open. Look at empty space first if you want only the fist. |
-| Space on brain or mirror | Hold the item under your aim. Look to carry it; W moves it farther away, S closer, A/D sideways. Mouse movement and keys can work together. Let go to leave it there. |
-| Double-tap Space | Turn the forearms palm down or palm up: pronation and supination. The game adds a small hip turn; the right upper-arm turn and matching hip-muscle colours are incomplete. |
-| E | Switch between first person and a view from behind; press again to return. |
-
-The brain remains a distant object rather than something the hand touches. Brain and mirror carry use finite near/far limits. Combined-key travel, endpoint behavior and clearance across all poses have not been fully checked. Move the brain aside before carrying the mirror; clear glass still blocks that carry selection when the brain is in front.
-
-If the view refuses an E change, return your look toward the middle or move the hand forward a little and try again. The game can hold or retreat a look/reach when the whole arm cannot fit. It can still fail in other input orders.
-
-## Turn the view of an object
-
-Press on the brain and drag to turn it about its centre. Do the same on the unobstructed mirror body, or click a ribbon arrow for a small turn. Hold an arrow to keep turning; release stops it. Hovering is not a turn command. Space carrying takes precedence over a drag-to-turn gesture.
-
-If a release event goes missing, the game cancels the old mouse gesture when the browser next reports that all buttons are up. A new press starts a fresh gesture. That cancellation adds no click and leaves Space/WASD keys alone; Esc and focus loss release held controls.
-
-Some areas lie around the brain's sides. Turn it to expose them. Your arm can hide an arrow, and brain/mirror arrows can overlap; drag the object when an arrow is hard to reach. The intended stable arrow placement has only a narrow recorded check, not complete coverage at every angle and window size.
-
-## Follow the simulated signal
-
-Move onto a new coloured motor area to start a one-second game pulse; click to repeat it. Linked muscle colours and movement show the game's response. Holding a fist can take precedence over some hand-area responses.
-
-Click a muscle on either body to select the game's representative movement area and group of muscles. A muscle pick may pass through clear brain glass; a motor area under the pointer takes priority. A bone does not trigger muscle activity. Some muscles have no mapped movement and only select a body-area display. A lit area is not a measured stimulation site for one muscle.
-
-The panel explains the area under your aim; I opens More detail. A persistent activation mark is separate from the brief pulse. Pulse values have no biological units, and the exact one-second display timing is still under review.
-
-## Pause, reset or recover
-
-Esc shows instructions, the keyboard diagram and settings. Pausing cancels queued clicks, turns and camera requests; resuming starts with those queues clear. A canceled carry leaves the object at its saved location. Press again after resuming to begin a new gesture. Reset body requests the starting body/hand pose and clears activation marks while leaving the brain's placement. Reset brain view brings the brain back and turns the mirror to face you again. Picture quality: Low may help on a slow machine, with rougher surfaces as a tradeoff.
-
-A repeated notice that pointer capture is still active now leaves held keys and the current gesture alone. Actual capture changes, Esc and focus loss still release them.
-
-If too many game actions are waiting, they are canceled and the game asks you to release and press again. A fast Space + W + D sequence unexpectedly opened the hand in earlier checks of the input-queue candidate and the preceding pause-update build; later sequences worked, and the cause is unknown. Release all keys and try again if this happens.
-
-A rapid second Esc worked in the earlier control-build check. Overflow/rescue, rare focus/lifecycle orders, missing key releases and movement failures still have open edge cases; if a hand stays closed, a press is lost or the scene stops responding, reload. Narrow portrait windows can fail before play begins: use a wider desktop window. Touch controls, native Windows/macOS opening, other browsers and screen readers remain unverified. [Preview notes](PREVIEW-NOTES.html) give the evidence and remaining limits.
+Brain and muscle signals are simulated and unitless. A clicked muscle lights a whole motor area, not a spot for that one muscle. A movement staying until its opposite is a rule of this game. Movement limits, physiological mappings and movement mechanics are simplified and still need checking.
