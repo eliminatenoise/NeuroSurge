@@ -1,6 +1,6 @@
 {
   "project": "NeuroSurge",
-  "version": "experimental-2026-11-11-control-update",
+  "version": "experimental-2026-11-11-pointer-release",
   "kind": "online desktop URL launchers",
   "target": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "hashAlgorithm": "sha256",
@@ -12,8 +12,8 @@
     },
     {
       "name": "NeuroSurge-Launchers.zip",
-      "bytes": 9871,
-      "sha256": "e4fb9954c1f4f2673e2228a4b128221ad3dd3163b6501c106e07f4f597531b71"
+      "bytes": 9872,
+      "sha256": "52ed75911b43d6156bfdc8dce6ebf9e68049956a7aaa04f222e57c34ce423c5f"
     },
     {
       "name": "NeuroSurge-Linux.desktop",
@@ -32,13 +32,13 @@
     },
     {
       "name": "README.txt",
-      "bytes": 2641,
-      "sha256": "35f6528b0a213e33bafaab1b9e1c8f29e39abc2e52198f9b5d3f184877a59110"
+      "bytes": 2642,
+      "sha256": "3506893e56f7f061fbc542401332718b023f01f62076851246f27ff8daf39eff"
     },
     {
       "name": "SHA256SUMS",
       "bytes": 441,
-      "sha256": "576903f58e40dbc1dd73a9b1009df10a04d58c301d6c8fb7cf84c3841ad7ff3b"
+      "sha256": "8607bb2917382f1b40a5a52254feb220e5a466bbe8caa93c8fc2580d3e3213a7"
     }
   ],
   "hash_coverage": {
@@ -60,7 +60,7 @@
     "MANIFEST.json": "All seven other replacement files; this manifest excludes itself to avoid a checksum cycle. ZIP excludes ZIP and MANIFEST.json; SHA256SUMS excludes itself, ZIP and MANIFEST.json."
   },
   "linux_upgrade": "Only byte-identical older project xdg-open/Omarchy templates; backup before replacement; matching current entry is idempotent; custom files/symlinks/non-regular destinations refused. A cooperating-installer lock is not atomic compare-and-swap protection against unrelated writers.",
-  "qualification": "Static formats/ZIP and isolated Linux installer checks only. No browser launch, Windows/macOS native opening, offline/model capability, game completion, scientific validation, publication or deployment claim.",
+  "qualification": "Launcher behavior is unchanged from the independently checked package; only this edition label, readme and linked checksums/ZIP changed. Windows/macOS native opening remains unverified; source unit tests do not establish game or biological completion.",
   "descriptionsGlossary": {
     "revision": 36,
     "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406"

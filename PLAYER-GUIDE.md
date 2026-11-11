@@ -1,6 +1,6 @@
 # Play NeuroSurge
 
-[Open the preview](https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html) or [save a desktop launcher](START.html). You need a keyboard and a mouse or trackpad, JavaScript and WebGL. The browser downloads the anatomy and code, then your computer runs the game. This edition is experimental-2026-11-11-control-update.
+[Open the preview](https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html) or [save a desktop launcher](START.html). You need a keyboard and a mouse or trackpad, JavaScript and WebGL. The browser downloads the anatomy and code, then your computer runs the game. This edition is experimental-2026-11-11-pointer-release.
 
 ## Get your bearings
 
@@ -28,6 +28,8 @@ If the view refuses an E change, return your look toward the middle or move the 
 
 Press on the brain and drag to turn it about its centre. Do the same on the unobstructed mirror body, or click a ribbon arrow for a small turn. Hold an arrow to keep turning; release stops it. Hovering is not a turn command. Space carrying takes precedence over a drag-to-turn gesture.
 
+If a release event goes missing, the game cancels the old mouse gesture when the browser next reports that all buttons are up. A new press starts a fresh gesture. That cancellation adds no click and leaves Space/WASD keys alone; Esc and focus loss release held controls.
+
 Some areas lie around the brain's sides. Turn it to expose them. Your arm can hide an arrow, and brain/mirror arrows can overlap; drag the object when an arrow is hard to reach. The intended stable arrow placement has only a narrow recorded check, not complete coverage at every angle and window size.
 
 ## Follow the simulated signal
@@ -42,4 +44,4 @@ The panel explains the area under your aim; I opens More detail. A persistent ac
 
 Esc shows instructions, the keyboard diagram and settings. Reset body requests the starting body/hand pose and clears activation marks while leaving the brain's placement. Reset brain view brings the brain back and turns the mirror to face you again. Picture quality: Low may help on a slow machine, with rougher surfaces as a tradeoff.
 
-A rapid second Esc worked in the recorded check. Missing key or mouse releases, waiting events and movement failures still have open edge cases; if a hand stays closed, a press is lost or the scene stops responding, reload. Narrow portrait windows can fail before play begins: use a wider desktop window. Touch controls, native Windows/macOS opening, other browsers and screen readers remain unverified. [Preview notes](PREVIEW-NOTES.html) give the evidence and remaining limits.
+A rapid second Esc worked in the earlier control-build check. Waiting events, missing key releases and movement failures still have open edge cases; if a hand stays closed, a press is lost or the scene stops responding, reload. Narrow portrait windows can fail before play begins: use a wider desktop window. Touch controls, native Windows/macOS opening, other browsers and screen readers remain unverified. [Preview notes](PREVIEW-NOTES.html) give the evidence and remaining limits.

@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-11-control-update",
+  "version": "experimental-2026-11-11-pointer-release",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -13,13 +13,29 @@
   "play_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "start_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/START.html",
   "canonical_source": "https://github.com/eliminatenoise/NeuroSurge",
-  "source_lineage": "Control update with revised Esc release handling, camera/input recovery work, brain framing and first-person body display changes. Existing visibility-cache, rigid-pick and keyboard-diagram corrections are retained.",
+  "source_lineage": "Pointer-release and gesture-cancellation repair on the control-update edition. Anatomy assets and the movement model are unchanged. A self-contained software controls suite is included.",
   "anatomy_assets": "490 human-anatomy OBJ files retained. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0. Runtime transforms, deformation, colouring, shading and separated layers are display changes, not physiological validation.",
   "code_licence": "Project-owned contributions: CC0-1.0. Third-party material retains its own licences and notices.",
   "credits": "CREDITS-AND-LICENCES.md",
   "design_decisions": "DESIGN-DECISIONS.md",
   "other_project_development": "paused",
-  "browser_verification": {
+  "known_engineering_gaps": [
+    "Release coalescing can substitute an unstamped safety release, changing original event timing/order.",
+    "The waiting-input queue retains its first 64 events and can lose a later release.",
+    "Late model/scene/output/render failures can leave state and display out of step.",
+    "Pausing between updates can leave fresh or deferred events to replay. Other missing-input browser cases remain unqualified.",
+    "Camera rollback evidence covers the whole-arm route only; natural failure branches remain untested.",
+    "Near/far endpoints, diagonal carrying, full-arm borders and the upper-quarter hand anchor need broader current checks.",
+    "Muscle surfaces remain splotchy/jagged; body/brain layout is crowded and a slow-render notice remains.",
+    "A prior composition failed at 375 × 667 and was crowded at 390 × 844; neither observation certifies this package. Portrait and touch use are not checked for this package.",
+    "Right upper-arm turn, hip activity colours, shoulder-girdle mechanics and functional registration remain incomplete or unvalidated.",
+    "Arrow visibility, clearance, pixel stability and all-view coverage remain incomplete.",
+    "Hardware frame rates, other browsers, native Windows/macOS opening, updated Linux launcher target execution, touch, screen readers and reduced motion remain unverified.",
+    "Exact pulse/startup/input-to-display timing, comparison with a series of real references, normal joint mechanics, tests on unseen functional data and complete output/export checks remain unfinished."
+  ],
+  "launcher_scope": "Online URL launchers for Windows, macOS and Linux. Formats checked; native Windows/macOS use unverified. Prior Linux installation/launch does not prove execution of this updated target.",
+  "publication_status": "Experimental preview package. Check the displayed online version before assuming it matches these files.",
+  "previous_control_build_verification": {
     "scope": "One desktop Chromium ordinary-control check of the merged control build; seven sampled states running, no reported error, current calculated-state readbacks. No full input sequence, GPU/pixel timing or every-control acceptance.",
     "states": [
       "initial play",
@@ -37,20 +53,33 @@
     },
     "arrows": "Two ordinary right-arrow clicks changed the brain transform while all four recorded nominal CPU arrow anchors and the brain centre stayed exact in that case. Not GPU-buffer, pixel, every-arrow or all-view proof."
   },
-  "known_engineering_gaps": [
-    "Release coalescing can substitute an unstamped safety release, changing original event timing/order.",
-    "The waiting-input queue retains its first 64 events and can lose a later release.",
-    "Late model/scene/output/render failures can leave state and display out of step.",
-    "Pausing between updates can leave deferred events to replay; a missed mouseup can interfere with the next press.",
-    "Camera rollback evidence covers the whole-arm route only; natural failure branches remain untested.",
-    "Near/far endpoints, diagonal carrying, full-arm borders and the upper-quarter hand anchor need broader current checks.",
-    "Muscle surfaces remain splotchy/jagged; body/brain layout is crowded and a slow-render notice remains.",
-    "A prior composition failed at 375 \u00d7 667 and was crowded at 390 \u00d7 844; neither observation certifies this package. Portrait and touch use are not checked for this package.",
-    "Right upper-arm turn, hip activity colours, shoulder-girdle mechanics and functional registration remain incomplete or unvalidated.",
-    "Arrow visibility, clearance, pixel stability and all-view coverage remain incomplete.",
-    "Hardware frame rates, other browsers, native Windows/macOS opening, updated Linux launcher target execution, touch, screen readers and reduced motion remain unverified.",
-    "Exact pulse/startup/input-to-display timing, comparison with a series of real references, normal joint mechanics, tests on unseen functional data and complete output/export checks remain unfinished."
-  ],
-  "launcher_scope": "Online URL launchers for Windows, macOS and Linux. Formats checked; native Windows/macOS use unverified. Prior Linux installation/launch does not prove execution of this updated target.",
-  "publication_status": "Experimental preview package. Check the displayed online version before assuming it matches these files."
+  "browser_verification": {
+    "status": "bounded ordinary desktop Chromium check of this pointer-release package",
+    "states": [
+      "initial play",
+      "right arrow held",
+      "right arrow released",
+      "next right arrow released",
+      "Esc paused",
+      "Esc resumed",
+      "Space with buttonless movement",
+      "Space released",
+      "E third person",
+      "E first person"
+    ],
+    "observations": "All ten sampled states remained running with no reported error. Two arrow presses had successive button sequence values 1 and 2, and both released. Space stayed held through an ordinary buttonless mouse movement, then released. Esc pause/resume and both E transitions were observed.",
+    "native_missing_mouseup_branch": "not established; software-state coverage only",
+    "input_to_display_100ms_pass": false
+  },
+  "software_verification": {
+    "suite": "tests/pointer-release.test.mjs",
+    "Node_version_tested": "26.8.2",
+    "cases": 40,
+    "patched_controller_failures": 0,
+    "previous_controller_failures": 20,
+    "keyboard_masks": 32,
+    "pointer_modes_for_key_preservation": 4,
+    "portable_entrypoint_passed": true,
+    "scope": "In-memory event records through the full public controls factory; no browser, rendered pixels or biological validation. Optional API variants are source-reviewed only."
+  }
 }

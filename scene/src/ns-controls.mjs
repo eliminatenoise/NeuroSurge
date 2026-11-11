@@ -436,7 +436,8 @@ export function createControls({
     return { ...state, button: { down: true, seq: (Number.isSafeInteger(b.seq) ? b.seq : 0) + 1, downMs: Number.isFinite(timeMs) ? timeMs : null, upMs: b.upMs, via, x: px, y: py } };
   }
 
-  /** R5-input: every mouse / trackpad button is up. */
+  /** R5-input: every mouse / trackpad button is up. timeMs is when that state was observed: a mouseup event,
+   * or the first reliable buttons===0 movement after a missed release. It does not infer the missing release time. */
   function buttonUp(state, timeMs) {
     const b = buttonOf(state);
     if (!b.down) return state;
@@ -821,7 +822,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
-  const releaseAll = e => { const at = eventTime(e); pressDrag = false; apply(s => controls.blur(s, at)); };
+  const releaseAll = (e, at = eventTime(e)) => { clearPointerFlags(); apply(s => controls.blur(s, at)); };
   const call = (fn, ...args) => {
     if (!fn) return;
     try { fn(...args); } catch { /* a HUD callback must never break input handling */ }
@@ -846,6 +847,22 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   let pressDrag = false;      // R558: the held press began on the brain or the mirror body (it may turn that item)
   const hasButtons = typeof controls.buttonDown === 'function' && typeof controls.buttonUp === 'function';
   const hasPointer = typeof controls.pointerAt === 'function' && typeof controls.pointerLeave === 'function';
+  function clearPointerFlags() {
+    dragging = false;
+    arrowPress = false;
+    pressDrag = false;
+    lastClient = null;
+  }
+  // A reliable all-buttons-up observation ends every pointer gesture, including an arrow press. This is GAME
+  // cancellation at the observation time, not a reconstructed mouseup: drop any would-be click and keep the press
+  // sequence so the next genuine down starts a new gesture. Keyboard keys (including Space) are unaffected.
+  function cancelPointerGesture(at) {
+    clearPointerFlags();
+    apply(s => {
+      const next = canDrag ? controls.dragEnd(s).state : s;
+      return hasButtons ? controls.buttonUp(next, at) : next;
+    });
+  }
   /** R5-input: the event's point in canvas CSS px (null without client coordinates or a layout box). */
   const localPoint = e => {
     if (!e || !Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return null;
@@ -897,7 +914,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       // Not prevented: the browser still exits pointer lock. Held keys must not stay latched behind the pause overlay.
       if (e.repeat === true) return;
       const at = eventTime(e);
-      apply(s => controls.blur(s, at));
+      releaseAll(e, at);
       if (typeof controls.escape === 'function') apply(s => controls.escape(s, at));
       return;
     }
@@ -1015,16 +1032,16 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     }
   });
   on(doc, 'mousemove', e => {
+    const at = eventTime(e);
+    // Handle this before any arrow/drag early return, and independently of whether movement deltas are usable.
+    if (Number.isFinite(e.buttons) && e.buttons === 0) cancelPointerGesture(at);
     if (isLocked()) {
       const dx = e.movementX, dy = e.movementY;
       if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
-      const at = eventTime(e);
       // R558: while a press on the brain or the mirror body is held, the movement turns that item, not the look.
       if (pressDrag) {
-        // Review fix: no button is down any more, so the release was missed (it happened outside the page). End the
-        // gesture without a click; this movement is an ordinary look.
-        if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); }
-        else { apply(s => controls.dragMove(s, dx, dy)); return; }
+        apply(s => controls.dragMove(s, dx, dy));
+        return;
       }
       apply(s => controls.pointerMove(s, dx, dy, at));
       return;
@@ -1032,7 +1049,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (hasPointer) {
       // R5-input: the free pointer over the canvas itself (an element above it, e.g. a panel, hides it).
       const local = e && e.target === target ? localPoint(e) : null;
-      const at = eventTime(e);
       if (local && local.x >= 0 && local.y >= 0 && (!(local.w > 0) || local.x <= local.w) && (!(local.h > 0) || local.y <= local.h)) {
         apply(s => controls.pointerAt(s, local.x, local.y, at));
       } else apply(s => controls.pointerLeave(s));
@@ -1040,9 +1056,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (arrowPress) return; // holding a 3D arrow never turns the look
     if (pressDrag) {
       // R558: free-pointer drag on the brain or the mirror body.
-      // Review fix: with no button down the release was missed; end the gesture without a click (it used to stay armed,
-      // so the next press was delivered twice or turned the brain instead of the look).
-      if (Number.isFinite(e.buttons) && e.buttons === 0) { pressDrag = false; apply(s => controls.dragEnd(s).state); return; }
       let mx = e.movementX, my = e.movementY;
       const c = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
       if (!Number.isFinite(mx) || !Number.isFinite(my)) { if (!c || !lastClient) { lastClient = c; return; } mx = c.x - lastClient.x; my = c.y - lastClient.y; }
@@ -1051,7 +1064,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       return;
     }
     if (!dragging) return;
-    if (Number.isFinite(e.buttons) && e.buttons === 0) { dragging = false; return; }
     let dx = e.movementX, dy = e.movementY;
     const client = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
@@ -1060,7 +1072,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       dy = client.y - lastClient.y;
     }
     lastClient = client;
-    const at = eventTime(e);
     apply(s => controls.pointerMove(s, dx, dy, at));
   });
   on(target, 'contextmenu', e => e.preventDefault());
