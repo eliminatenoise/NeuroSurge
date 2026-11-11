@@ -13,7 +13,9 @@ export function cancelControlsEpoch(api, source, { timeMs, reason } = {}) {
     buttonHeld: Boolean(source.button && source.button.down),
     dragTarget: source.drag && source.drag.target || null
   };
-  const released = api.blur(source, timeMs);
+  // Only counts above refer to old history. blur may append an up, so give it empty queues to avoid copying history
+  // that this boundary deliberately cancels. Settings, key/button identity and all other reducer fields are retained.
+  const released = api.blur({ ...source, events: [], ui: [] }, timeMs);
   return {
     state: {
       ...released, ui: [], pointer: null, lookMs: null,
@@ -23,6 +25,22 @@ export function cancelControlsEpoch(api, source, { timeMs, reason } = {}) {
     },
     canceled
   };
+}
+
+/** Inspect pending record counts before copying, draining, timestamp mapping or model planning. */
+export function inspectPendingInput(carried, fresh, limit) {
+  if (!Array.isArray(carried) || !Array.isArray(fresh) || !Number.isSafeInteger(limit) || limit < 1) {
+    throw new TypeError('ns:input_epoch: expected pending arrays and a positive integer limit');
+  }
+  const carriedRecords = carried.length, freshRecords = fresh.length;
+  const totalRecords = carriedRecords + freshRecords;
+  return { carriedRecords, freshRecords, totalRecords, limit, overflow: totalRecords > limit };
+}
+
+/** Retain an entire bounded refused-frame list, with exact event identities/order. Overflow requires cancellation. */
+export function retainDeferredInput(events, limit) {
+  const capacity = inspectPendingInput([], events, limit);
+  return { ...capacity, events: capacity.overflow ? [] : events.slice() };
 }
 
 /** Clear transient carry latches while retaining every saved placement, pose and time value. */

@@ -6,13 +6,15 @@ Look at a coloured area of the brain and watch the game's linked movement. Click
 
 The brain and muscle activity values are **simulated and unitless**. The anatomy comes from human atlases. The movements come from game rules, not a person's neural recordings or a trained decoder. A muscle click selects a representative movement area and its muscle group; it does not locate a precise brain site for that muscle. Joint motion, muscle deformation and the links between body parts remain simplified.
 
-This package is **experimental-2026-11-11-pause-update**. Pausing clears queued clicks, object turns and camera-switch requests immediately. Resuming starts with those queues clear. Focus changes, resets and observed graphics-context changes use the same cancellation boundary. It drops old commands deliberately and marks a safety release at the time it acts; it cannot recover a missing physical release time.
+This package is **experimental-2026-11-11-input-queue**. A refused movement frame can leave actions waiting for another attempt. The game now keeps the whole pending list, in its original order, within a combined limit of 64 game-event records. Above that limit it cancels the waiting input deliberately, asks you to release and press again, and marks a safety release at the time of cancellation. It does not silently keep the beginning of the queue and lose its end.
 
-A canceled carry leaves the object at its saved position. The game clears the temporary grab and camera anchors before another look can move it. The earlier mouse-release repair remains: when the browser reports no buttons held, it cancels the old pointer gesture so the next press can start normally.
+The count is checked before input records are copied into the frame, assigned simulation offsets or used to plan a view. The existing long-skip rescue also cancels old input explicitly. Neither cancellation recovers the original time of a missing release. Click recording has its own earlier limit, so this is not proof that every physical input was captured or delivered.
 
-A desktop Chromium check of the repaired runtime recorded 15 ordinary states with no reported game error. It carried the brain with a small mouse-look movement, paused and resumed, interrupted an arrow hold, used a fresh arrow click, changed view both ways and used the visible Reset body command before resuming. The saved brain position stayed exactly unchanged across that pause/resume case; the fresh arrow click had a new press number and turned the brain once. This does not establish every input order, physical display latency or normal joint mechanics. A pause with no intervening animation callback, lost graphics events and other focus/lifecycle cases still need their own browser evidence.
+Pause and pointer-release repairs remain. Pausing clears queued clicks, turns and camera requests; a canceled carry keeps its saved placement. The earlier repair also ends a stale pointer gesture when the browser reports no buttons held. The exact movement, timing and scientific limits below remain open.
 
-Press E to see the body from behind; use the mirror to inspect its front. The first-person display hides the back of your own trunk, and the separate floating own-face view stays disabled.
+Browser testing exposed an unresolved input problem in both this repaired runtime and the preceding live build: shortly after pointer capture, one fast Space + W + D sequence unexpectedly released Space while W and D stayed held. Later staggered sequences worked. The cause is unknown; the queue-overflow handler did not fire. Full simultaneous-key behavior is therefore unverified. Release all keys and try again if the hand opens unexpectedly.
+
+Other sampled observations included Space alone, arrow hold/release, E in both directions and a modifier-key safety release, with no reported game error. A running scene is not a pass of every control. The new overflow and long-skip rescue branches have not been captured in an ordinary browser run.
 
 ## Try the controls
 
@@ -24,7 +26,7 @@ Press and drag the brain or mirror to turn it about its centre; move the brain a
 
 The current pictures still show patchy, jagged muscles, crowded anatomy and a slow-render warning. Hardware frame rates have not been independently established. Small portrait windows can fail to start or crowd the controls; this release has no new portrait or touch-device acceptance.
 
-Input recovery also has open edge cases. A full waiting-input queue can lose a later release. Some late failures can leave the simulation, calculated output and displayed scene out of step. Rare pause/focus/lifecycle orders and other missing-input cases need broader browser checks. Reload if the hand stays closed or the game stops responding. [Preview notes](PREVIEW-NOTES.html) explain these limits and the narrow checks behind this release.
+Input recovery also has open edge cases. Input beyond the new bound is canceled rather than delivered; overflow and rescue still need native coverage. Some late failures can leave the simulation, calculated output and displayed scene out of step. Rare pause/focus/lifecycle orders and other missing-input cases need broader browser checks. Reload if the hand stays closed or the game stops responding. [Preview notes](PREVIEW-NOTES.html) explain these limits and the narrow checks behind this release.
 
 Whole-arm visibility, the hand's upper-quarter screen position, normal joint mechanics, functional brain mapping, comparisons against a series of real anatomy and movement references, exact timing, accessibility and complete cross-platform behavior remain unfinished. This is a playable experiment with those gaps still open.
 
@@ -34,11 +36,15 @@ Download and extract the [repository source ZIP](https://github.com/eliminatenoi
 
 ## Check the controls
 
-Run `node tests/cancel-epoch.test.mjs` from the repository folder. Independent testing passed its 13 named cases, including 128 keyboard-state combinations. It checks cancellation, one safety release, fresh input, arrow press numbers and preservation of saved carry values. These are in-memory software records through the public controls reducer and cancellation helpers. They do not load the full application, a browser or a physiological model.
+Run these from the repository folder:
 
-`node tests/pointer-release.test.mjs` supplies the earlier mouse-release suite. All 40 cases passed with the prior pointer-release controller, with 20 failures against its predecessor. Those recorded results are historical; the suite was not rerun for this package. The new binding method and its application wiring received source review and the ordinary browser checks above.
+- `node tests/deferred-input.test.mjs`: 11 named cases, including 25 capacity combinations and 64 keyboard/tail-order subcases.
+- `node tests/cancel-epoch.test.mjs`: 13 named cases, including 128 keyboard-state combinations.
+- `node tests/pointer-release.test.mjs`: 40 named cases for pointer-release and gesture behavior.
 
-Neither suite measures physical releases or displayed pixels. The original timing requirements and a naturally missed mouse-up capture remain open.
+All 64 named cases passed with the repaired controller and helpers. The three suites use software event records and plain listener-container doubles for the public input adapter. They do not load the full application, renderer or physiological model. The large-count checks use a proxy that refuses record access; they do not allocate or process a billion real inputs. Syntax checks also passed for the application and text module. A later source correction changed three comments only; executable and test evidence was retained with exact hashes.
+
+These checks establish bounded software behavior. They do not measure physical releases, displayed pixels or biological activity, and they do not resolve the browser chord failure above. The original timing and naturally missed mouse-up checks remain open.
 
 Project-owned code is CC0. BodyParts3D assets retain CC BY 4.0, Z-Anatomy facial derivatives retain CC BY-SA 4.0, and Three.js retains MIT. [Full credits and licences](CREDITS-AND-LICENCES.md) preserve the source notices and runtime display changes; the code licence does not replace them. No atlas author endorses the game.
 

@@ -1,6 +1,6 @@
 {
   "project": "NeuroSurge",
-  "version": "experimental-2026-11-11-pause-update",
+  "version": "experimental-2026-11-11-input-queue",
   "kind": "online desktop URL launchers",
   "target": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "hashAlgorithm": "sha256",
@@ -12,8 +12,8 @@
     },
     {
       "name": "NeuroSurge-Launchers.zip",
-      "bytes": 9869,
-      "sha256": "30e2ffd2be97c6e8dd3ac21605c75f9e3241965d89dc128d35ef163fe2401e25"
+      "bytes": 9868,
+      "sha256": "cc6fd45a8154205860335c5f261103397d45177128c9a3f3a6a99d34d1a6cb35"
     },
     {
       "name": "NeuroSurge-Linux.desktop",
@@ -32,13 +32,13 @@
     },
     {
       "name": "README.txt",
-      "bytes": 2639,
-      "sha256": "2c932d4e2d72db39dcac6a373e9127ae0765b38342313845c1a9882435f12757"
+      "bytes": 2638,
+      "sha256": "c05990d231bba1e84141ce12b67b2c2c7b21166698130697854c21d88896bfe3"
     },
     {
       "name": "SHA256SUMS",
       "bytes": 441,
-      "sha256": "6ad17afa3fb8df4d52c52e15df20f034ab88c6561e175d93af19305dbe32b188"
+      "sha256": "53e507157257d61cb7a713a07ef7c718fe4bfe4ef1e60656edf072e39cd63ef5"
     }
   ],
   "hash_coverage": {

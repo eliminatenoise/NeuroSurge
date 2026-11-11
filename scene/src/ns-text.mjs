@@ -330,6 +330,7 @@ export const SHELL = deepFreeze({
   bodyReset: 'Body reset: your pose, the palm turn and the gold marks are cleared. The brain stays where you left it.',
   // R558: shown once if the game had to put things back by itself because the view could not be drawn.
   displayRescue: 'The game could not draw that view, so it put your body, the brain and the mirror body back where they started.',
+  inputCleared: 'The game cleared waiting actions. Release and press again.',
   /** R3-polish: one plain line under the Esc page buttons saying what the two reset buttons do. */
   // R5-text (D19): Reset brain view also turns the mirror body back to face you (ns-mirror resetMirror). With the
   // separate button (feature mirrorResetButton) shellText uses RESET_HELP.separate instead.

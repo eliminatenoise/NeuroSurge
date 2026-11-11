@@ -90,7 +90,7 @@ import * as NM from './ns-mirror.mjs';
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
 import * as ReferenceGraph from './ns-reference-graph.mjs';
-import { cancelControlsEpoch, cancelCarryLatches } from './ns-input-epoch.mjs';
+import { cancelControlsEpoch, cancelCarryLatches, inspectPendingInput, retainDeferredInput } from './ns-input-epoch.mjs';
 import { arrowPickPoint, arrowPressPoint, initialArrowInput, stepArrowInput, resolveArrowHit, ARROW_COVERED_HINT } from './ns-controls.mjs';
 import { startPacketStream, packetFrameBox, packetAppInputs, mergeAppInputs, streamShoulderGirdleAssets, shoulderGirdleAppInputs, FACE_PACKET as FACE_PACKET_ID } from './ns-assets.mjs';
 import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED } from './ns-arm.mjs';
@@ -3484,13 +3484,6 @@ export function start(params = {}) {
    * was already under way, the state heads back to the view it came from, from the progress last drawn. */
   const keptViewCamera = (good, now) => (good.view !== now.view ? good
     : Object.freeze({ ...good, view: good.view === 'third' ? 'first' : 'third', arrived: false }));
-  /** Review fix: of the events waiting from skipped frames keep only a Space release (it must never be lost: a fist
-   * would stay closed); clicks and presses that were never shown to the game are dropped. */
-  const settleCarriedEvents = () => {
-    const up = carryRawEvents.some(ev => ev && ev.type === 'space' && ev.down === false);
-    carryRawEvents.length = 0;
-    if (up) carryRawEvents.push({ type: 'space', down: false, safety: true });
-  };
   const refusalReasonOf = err => String((err && err.detail && err.detail.reason) || (err && err.message) || err).slice(0, 160);
   /** Review fix: a TypeError, ReferenceError or RangeError raised by the engine is a defect in the code, never a
    * display check saying "this cannot be shown". No smaller request cures it, and holding the look for it would hide
@@ -3573,7 +3566,7 @@ export function start(params = {}) {
   let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
   const orbitQueue = [];
   let viewRequests = 0; // also owned by synchronous pause/lifecycle cancellation
-  const inputCancellation = { count: 0, last: null };
+  const inputCancellation = { count: 0, pendingRecordsCanceled: 0, reasons: {}, last: null };
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
   let bodyArmBridge = null, bodyBridgeState = Object.freeze({ state: 'not-ready', normalMechanics: 'UNVERIFIED' });
@@ -3711,7 +3704,7 @@ export function start(params = {}) {
   }
 
   /** End an input epoch synchronously. A paused animation frame is never required for cancellation. */
-  function cancelPendingGameplay(reason) {
+  function cancelPendingGameplay(reason, waitingRecords = null) {
     const atMs = clockMs();
     const before = cs;
     const canceled = {
@@ -3719,22 +3712,36 @@ export function start(params = {}) {
       carriedDrag: carryDrag ? carryDrag.target : null
     };
     // No reducer can clear bindDom's private press/drag flags. Do that through its existing owned handle.
-    if (unbind && typeof unbind.cancelInput === 'function') unbind.cancelInput(atMs);
+    if (unbind && typeof unbind.cancelInput === 'function') unbind.cancelInput(atMs, { discardQueued: true });
+    if (controlsApi && before) {
+      const next = cancelControlsEpoch(controlsApi, before, { timeMs: atMs, reason });
+      cs = next.state;
+      const records = Number.isSafeInteger(waitingRecords) && waitingRecords >= 0 ? waitingRecords : next.canceled.gameEvents + canceled.carriedEvents;
+      inputCancellation.last = { ...next.canceled, ...canceled, waitingRecords: records };
+      inputCancellation.count++;
+      inputCancellation.pendingRecordsCanceled += records; // pending records, including generated safety-ups; not physical actions
+      inputCancellation.reasons[reason] = (inputCancellation.reasons[reason] || 0) + 1;
+    }
+    // The helper above has already replaced old queues, even when there is no DOM binding.
     releaseInputs(atMs);
     // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
     simState = cancelCarryLatches(simState);
     seedNext = true;
-    if (controlsApi && before) {
-      const next = cancelControlsEpoch(controlsApi, before, { timeMs: atMs, reason });
-      cs = next.state;
-      inputCancellation.last = { ...next.canceled, ...canceled };
-      inputCancellation.count++;
-    }
     carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
     arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
     try { callScene('setArrowHover', null); } catch { /* highlight only */ }
     current = { ...current, state: simState, controls: cs };
+  }
+
+  /** O(1) preflight before input history can be copied or handed to a frame/plan. */
+  function enforceInputCapacity() {
+    if (!controlsApi || !cs) return false;
+    const pending = inspectPendingInput(carryRawEvents, cs.events, DISPLAY_RECOVERY.carryEventLimit);
+    if (!pending.overflow) return false;
+    cancelPendingGameplay('deferred-input-overflow', pending.totalRecords);
+    dispatch({ type: 'notice', text: SHELL_TEXT.inputCleared });
+    return true;
   }
 
   // Look settings: when the controls reducer owns sensitivity / invert-Y (ns-controls setLookOptions), they are applied
@@ -3835,7 +3842,9 @@ export function start(params = {}) {
         nativeEscape.releasedBeforeUnlock = false;
       }
     }
-    if (!locked) releaseInputs();
+    if (!locked) {
+      if (!enforceInputCapacity()) releaseInputs(atMs);
+    }
     dispatch({ type: locked ? 'locked' : 'unlocked', atMs });
   }
   function nativeEscapeDown(e) {
@@ -4303,7 +4312,7 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31): what a new press would drag, at the pointer (free mouse) or at the crosshair (x, y null: captured).
         // The same pick as the Space grasp: an arrow under the point is an arrow press, the brain in front of the mirror
         // body takes the press, and while Space holds an item the press never starts a turn (carrying comes first).
@@ -4507,6 +4516,9 @@ export function start(params = {}) {
 
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
+        // R34 GAME saturation policy: count before any UI/GAME drain, timestamp mapping, E change or plan binding.
+        // The old carry limit now bounds the combined pending list. Overflow cancels an epoch; no real edge is retimed.
+        enforceInputCapacity();
         // R4-integrator: the controls' UI queue (lock / Esc / More-detail-key events) is drained every frame. The shell
         // handles those through its own listeners, so the events are only discarded; undrained, the queue filled up after
         // enough pointer-lock changes and then refused the More detail key (UI_QUEUE_LIMIT; e2e S41 with real input).
@@ -4561,6 +4573,7 @@ export function start(params = {}) {
         // Review fix: the camera before this frame's E presses and ease. A skipped frame goes back to it and asks for
         // the same presses again, so skipped frames no longer add their (growing) time step to the change of view.
         const camAtFrameStart = cam;
+        const lookAtFrameStart = { yaw: cs.yaw, pitch: cs.pitch };
         let togglesThisFrame = 0;
         if (live && viewRequests > 0) {
           const grabbing = Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
@@ -4594,9 +4607,9 @@ export function start(params = {}) {
           dragTurn = dragTurn && dragTurn.target === carryDrag.target ? { target: dragTurn.target, dx: dragTurn.dx + carryDrag.dx, dy: dragTurn.dy + carryDrag.dy } : dragTurn || carryDrag;
           carryDrag = null;
         }
-        // Review fix: a pause drops clicks and presses still waiting from skipped frames (they were replayed at once
-        // on resume: a click mark, or two Space presses read as a double tap). A waiting release is kept.
-        if (!live && carryRawEvents.length) settleCarriedEvents();
+        // Defensive cancellation for a frozen route that still has deferred records. This is an observed GAME
+        // boundary, never an unstamped substitute for an original release. Ordinary pause already cancels synchronously.
+        if (!live && carryRawEvents.length) cancelPendingGameplay('frozen-pending-input');
         if (!live) carryDrag = null;
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
@@ -4753,19 +4766,18 @@ export function start(params = {}) {
           // The refused attempt drew nothing: its locked pre-pick projection is discarded, never rendered or reused.
           if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
         };
-        // One measured rescue per unbroken run of skipped frames: the same Reset body / Reset brain view the Esc page
-        // offers, and the start look. (Review fixes: it is also reached when the run passes its length through a
-        // refusal after the step, and it keeps a Space release that was waiting, so a fist is not left closed.)
+        // One rescue per unbroken run of skipped frames: the same Reset body / Reset brain view the Esc page offers,
+        // and the start look. A refusal after the step can also reach it. Rescue cancels waiting GAME records and
+        // queues a new observation-time safety release; it does not replay an original release with an invented time.
         const rescueAfterLongSkip = () => {
           if (displayRecovery.rescued || displayRecovery.skipStreak < DISPLAY_RECOVERY.resetAfterSkips) return;
           displayRecovery.rescued = true; displayRecovery.resets++;
-          releaseInputs();
+          cancelPendingGameplay('display-rescue');
           simState = sim.resetBrainView(sim.resetBody(simState));
-          mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); arrowInput = initialArrowInput();
+          mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); // cancellation retained the current arrow press sequence
           cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; carryDrag = null;
           cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
           lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lastGoodCam = cam; lookBlock = null; reachBlock = null; seedNext = true;
-          settleCarriedEvents();
           current = { ...current, state: simState };
           dispatch({ type: 'notice', text: SHELL_TEXT.displayRescue || SHELL_TEXT.bodyReset });
         };
@@ -4850,14 +4862,23 @@ export function start(params = {}) {
               }
             }
             if (attemptIndex >= ladder.length) {
-              // No attempt was accepted: skip this frame. Nothing is drawn, no simulated time passes and its Space /
-              // click events wait for the next frame, so a release is never lost.
+              // No attempt was accepted: no model/time commit or draw. Retain the complete bounded raw list, with
+              // original times/order. A future violated capacity invariant cancels explicitly instead of losing a tail.
               lastMs = lastMsBeforeFrame;
-              for (const ev of rawFrameEvents) if (carryRawEvents.length < DISPLAY_RECOVERY.carryEventLimit) carryRawEvents.push(ev);
-              if (dragTurn) carryDrag = dragTurn;
-              // The camera goes back to where this frame found it, and its E presses are asked again next frame (only in
-              // the whole-arm display, where E changes nothing but the camera).
-              if (wholeArmOption) { cam = camAtFrameStart; viewRequests += togglesThisFrame; }
+              const deferred = retainDeferredInput(rawFrameEvents, DISPLAY_RECOVERY.carryEventLimit);
+              if (deferred.overflow) {
+                cancelPendingGameplay('deferred-input-overflow', deferred.totalRecords);
+                dispatch({ type: 'notice', text: SHELL_TEXT.inputCleared });
+              } else {
+                carryRawEvents.push(...deferred.events);
+                if (dragTurn) carryDrag = dragTurn;
+              }
+              // Ordinary retries preserve the pre-E snapshot/redo scheme. A canceled epoch never requeues E or drag.
+              if (wholeArmOption) {
+                cam = camAtFrameStart;
+                if (deferred.overflow) cs = controlsApi.setLook(cs, lookAtFrameStart);
+                else viewRequests += togglesThisFrame;
+              }
               displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
               rescueAfterLongSkip();
               if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw firstRefusal;

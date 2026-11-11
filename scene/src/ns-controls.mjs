@@ -764,12 +764,15 @@ function uiCommandOf(el, root) {
  *     press on an arrow an ARROW PRESS: no pointer-lock request, no drag-to-look and no click (stepArrowInput turns it
  *     into the orbit step / hold); a press anywhere else behaves as before.
  * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onView({ timeMs }), arrowAt(x, y),
- *   sensitivity, invertY, dragToLook = true, uiRoot }
+ *   onBeforeSafetyRelease(), sensitivity, invertY, dragToLook = true, uiRoot }
+ *   onBeforeSafetyRelease is synchronous and runs before the safety reducer fetches its state; its owner may cancel
+ *   an overfull queue. The final safety release still runs if the callback throws. cancelInput does not invoke it.
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
  * @returns {() => void} unbind, which removes every listener this call added. unbind.status() returns
  *   { locked, lockFallback, dragging, arrowPress } for HUD feedback. unbind.cancelInput(timeMs) synchronously
  *   clears private pointer gesture flags and releases reducer-held input at the caller's observation time.
- *   It neither clicks nor cancels an outstanding browser pointer-lock request.
+ *   With { discardQueued: true }, only this App-owned cancellation also discards queued records before blur can copy
+ *   them. Ordinary releases preserve their queues. It neither clicks nor cancels an outstanding pointer-lock request.
  */
 export function bindDom(target, controls, getState, setState, options = {}) {
   if (!target || typeof target.addEventListener !== 'function') {
@@ -782,7 +785,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
   if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function (xCss | null, yCss | null) => "brain" | "mirror" | null');
   const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
   /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
@@ -793,6 +796,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   };
   if (onLockChange !== null && typeof onLockChange !== 'function') fail('controls_dom', 'onLockChange must be a function');
   if (onView !== null && typeof onView !== 'function') fail('controls_dom', 'onView must be a function');
+  if (onBeforeSafetyRelease !== null && typeof onBeforeSafetyRelease !== 'function') fail('controls_dom', 'onBeforeSafetyRelease must be a function');
   if (arrowAt !== null && typeof arrowAt !== 'function') fail('controls_dom', 'arrowAt must be a function (xCss, yCss) => truthy on an arrow');
   if (arrowAt !== null && typeof controls.buttonDown !== 'function') fail('controls_dom', 'controls.buttonDown is needed for arrowAt');
   if (uiRoot !== null && (typeof uiRoot !== 'object' || typeof uiRoot.addEventListener !== 'function')) {
@@ -824,8 +828,16 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
-  const cancelBoundInput = at => { clearPointerFlags(); apply(s => controls.blur(s, at)); };
-  const releaseAll = (e, at = eventTime(e)) => cancelBoundInput(at);
+  const cancelBoundInput = (at, discardQueued = false) => {
+    clearPointerFlags();
+    apply(s => controls.blur(discardQueued ? { ...s, events: [], ui: [] } : s, at));
+  };
+  const releaseAll = (e, at = eventTime(e)) => {
+    // A synchronous owner callback may replace the reducer state. Read it only AFTER that callback, never from a
+    // stale apply() snapshot. cancelInput calls cancelBoundInput directly, so this hook cannot recurse through it.
+    try { if (onBeforeSafetyRelease) onBeforeSafetyRelease(); }
+    finally { cancelBoundInput(at); }
+  };
   const call = (fn, ...args) => {
     if (!fn) return;
     try { fn(...args); } catch { /* a HUD callback must never break input handling */ }
@@ -1095,7 +1107,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   }
   // The App owns pause/reset boundaries; only this binding can clear its private gesture flags.
   // Keep outstanding pointer-lock requests and their normal browser acknowledgements intact.
-  unbind.cancelInput = at => cancelBoundInput(Number.isFinite(at) ? at : eventTime(null));
+  unbind.cancelInput = (at, options = {}) => cancelBoundInput(Number.isFinite(at) ? at : eventTime(null), Boolean(options && options.discardQueued === true));
   unbind.status = () => ({ locked: isLocked(), lockFallback, dragging, arrowPress, pressDrag });
   return unbind;
 }

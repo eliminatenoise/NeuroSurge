@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-11-pause-update",
+  "version": "experimental-2026-11-11-input-queue",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -13,15 +13,15 @@
   "play_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "start_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/START.html",
   "canonical_source": "https://github.com/eliminatenoise/NeuroSurge",
-  "source_lineage": "Pause/input cancellation on the pointer-release edition. App, Controls and a new pure cancellation helper changed; anatomy, solver limits and movement laws are unchanged.",
+  "source_lineage": "Combined pending-input bound, full below-bound retention and explicit saturation/rescue cancellation on the pause-update edition. Four runtime files changed; anatomy and solver/model laws are unchanged.",
   "anatomy_assets": "490 human-anatomy OBJ files retained. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0. Runtime transforms, deformation, colouring, shading and separated layers are display changes, not physiological validation.",
   "code_licence": "Project-owned contributions: CC0-1.0. Third-party material retains its own licences and notices.",
   "credits": "CREDITS-AND-LICENCES.md",
   "design_decisions": "DESIGN-DECISIONS.md",
   "other_project_development": "paused",
   "known_engineering_gaps": [
-    "Release coalescing can substitute an unstamped safety release, changing original event timing/order.",
-    "The waiting-input queue retains its first 64 events and can lose a later release.",
+    "Shared early captured Space/W/D input loss in candidate and preceding live build; cause unknown. Combined-key control acceptance failed in that case.",
+    "New combined64 bound cancels overfull input; native saturation/rescue remains unobserved. Click recording has its own earlier drop-new limit; no all-input capture claim.",
     "Late model/scene/output/render failures can leave state and display out of step.",
     "Rare pause/focus/lifecycle orders and missing-input browser cases need broader native coverage; source cancellation is not full event-order acceptance.",
     "Camera rollback evidence covers the whole-arm route only; natural failure branches remain untested.",
@@ -63,16 +63,7 @@
     "pointer_modes_for_key_preservation": 4,
     "portable_entrypoint_passed": true,
     "scope": "In-memory event records through the full public controls factory; no browser, rendered pixels or biological validation. Optional API variants are source-reviewed only.",
-    "current_package_execution": "Historical pointer edition results;40-case suite not rerun for this package."
-  },
-  "software_verification": {
-    "suite": "tests/cancel-epoch.test.mjs",
-    "Node_version_tested": "26.8.2",
-    "named_cases": 13,
-    "keyboard_state_subcases": 128,
-    "failures": 0,
-    "scope": "Pure Controls/math and cancellation helpers only; no full App/DOM/browser/actions/model import. App grammar and independent source review passed.",
-    "portable_entrypoint": "Two relative imports adapted; standalone package grammar and13/128 pure cases passed."
+    "historical_pause_build_execution_statement": "Historical pointer edition results;40-case suite not rerun for this package."
   },
   "previous_pointer_browser_verification": {
     "status": "bounded ordinary desktop Chromium check of this pointer-release package",
@@ -92,7 +83,7 @@
     "native_missing_mouseup_branch": "not established; software-state coverage only",
     "input_to_display_100ms_pass": false
   },
-  "browser_verification": {
+  "previous_pause_browser_verification": {
     "scope": "One desktop Chromium ordinary check of the same repaired runtime;15 sampled states running with no reported error.",
     "observed": [
       "Actual pointer capture",
@@ -109,5 +100,59 @@
       "Exact requested Reset body pose and activation-reset result; only visible command/cancellation/resume observed"
     ],
     "input_to_display_100ms_pass": false
+  },
+  "browser_verification": {
+    "scope": "14 ordinary candidate CPU-state snapshots running/error-null, with an unexpected combined-key failure. Separate current-live baseline reproduction and later positive cases.",
+    "combined_Space_W_D_pass": false,
+    "observed_failure": "Soon after capture Space/model-held became false with W/D still true before requested Space-up; no overflow/cancellation counter change. Same in preceding live build; cause unknown.",
+    "later_observations": "Candidate unlocked staggered and baseline warm captured-staggered/unlocked-fast cases kept all3 held. No universal regression-absence proof.",
+    "other_observed": [
+      "Space alone",
+      "Arrow hold/release",
+      "E first-third-first",
+      "Modifier safety release"
+    ],
+    "not_established": [
+      "Native overflow/long-skip rescue",
+      "Full simultaneous-control matrix",
+      "Actual input-event capture and cause of shared Space loss",
+      "Zero-paused-rAF/focus/lifecycle/context/mirror/reset outcomes",
+      "PhysicalGPU/timing/scientific/mechanics/held-out/fullgame/export acceptance"
+    ],
+    "input_to_display_100ms_pass": false
+  },
+  "previous_pause_software_verification": {
+    "suite": "tests/cancel-epoch.test.mjs",
+    "Node_version_tested": "26.8.2",
+    "named_cases": 13,
+    "keyboard_state_subcases": 128,
+    "failures": 0,
+    "scope": "Pure Controls/math and cancellation helpers only; no full App/DOM/browser/actions/model import. App grammar and independent source review passed.",
+    "portable_entrypoint": "Two relative imports adapted; standalone package grammar and13/128 pure cases passed."
+  },
+  "software_verification": {
+    "Node_version": "26.8.2",
+    "suites": [
+      {
+        "file": "tests/deferred-input.test.mjs",
+        "cases": 11,
+        "capacity_subcases": 25,
+        "keymask_tail_subcases": 64
+      },
+      {
+        "file": "tests/cancel-epoch.test.mjs",
+        "cases": 13,
+        "keymask_subcases": 128
+      },
+      {
+        "file": "tests/pointer-release.test.mjs",
+        "cases": 40
+      }
+    ],
+    "total_named_cases": 64,
+    "failures": 0,
+    "grammar_checks": 5,
+    "scope": "Pure helpers/Controls/math and supplied listener-container doubles. App and text syntax only; no full App/renderer/model/native input execution in units. R2 is a verified3-comment-only correction.",
+    "portable_new_test": "Two relativeimports adapted; packagegrammar and11named/25capacity/64keymask-tail cases passed."
   }
 }
