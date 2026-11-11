@@ -72,7 +72,7 @@ import {
   handViewLimitsNdc
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
-import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS } from './ns-actions.mjs';
+import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS, reachMuscleShow, REACH_MUSCLES } from './ns-actions.mjs';
 import {
   ARM_BAND, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
   gazeRayInSource, classifyGaze, colormap
@@ -90,6 +90,9 @@ import * as NM from './ns-mirror.mjs';
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
 import * as ReferenceGraph from './ns-reference-graph.mjs';
+// Input epochs (ported from the public main's 11 November input fixes): cancel stale input at pause / focus /
+// visibility / reset / rescue boundaries, and bound the input carried over refused frames.
+import { cancelControlsEpoch, cancelCarryLatches, inspectPendingInput, retainDeferredInput } from './ns-input-epoch.mjs';
 import { arrowPickPoint, arrowPressPoint, initialArrowInput, stepArrowInput, resolveArrowHit, ARROW_COVERED_HINT } from './ns-controls.mjs';
 import { startPacketStream, packetFrameBox, packetAppInputs, mergeAppInputs, streamShoulderGirdleAssets, shoulderGirdleAppInputs, FACE_PACKET as FACE_PACKET_ID, HEAD_PACKET as HEAD_PACKET_ID, MISSING_MUSCLES_PACKET as MISSING_MUSCLES_PACKET_ID } from './ns-assets.mjs';
 import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED } from './ns-arm.mjs';
@@ -138,6 +141,8 @@ export const WHOLE_GROUP_TINT_ACTIONS = Object.freeze(['index_flexion', 'index_e
 export const BRAIN_RAYCAST_INTERVAL_S = 0.2;
 /** How long the HUD shows a pulse re-trigger mark (s). */
 export const TRIGGER_MARK_SECONDS = 0.3;
+/** R558 (Messages 44 and 55): how long the status card keeps the forearm line after the forearm's state changed. */
+export const ROTATION_NOTE_SECONDS = 6;
 
 /* Round 2 (U4-app) */
 
@@ -379,7 +384,9 @@ export const REGION_MODE_NOTE = NT.LEGEND.regionNote;
 export const INTRO_MS = 2000;
 /** R5-integrate-core (D15): the Body Worlds on / off switch eases the lift over this time (s); instant under reduced motion. */
 export const BODY_WORLDS_EASE_S = 0.3;
-/** An Esc keydown this soon after Esc released the pointer lock (which already paused) is the same press (ms). */
+/** Fallback for Esc events without owned native key-release evidence after pointer lock already paused (ms): such an
+ * Esc keydown this soon after the lock loss is taken as the same press. With a real Esc keyup in between (start():
+ * nativeEscape), the next press resumes at once. */
 export const ESC_UNLOCK_GUARD_MS = 400;
 /** Fallback double-tap window (two Space presses, s) used only while ns-actions has no rotationState. */
 export const DOUBLE_TAP_S = 0.35;
@@ -828,7 +835,7 @@ export function gazeAnglesToward(point) {
 function cancelPulse(s) {
   const old = s.pulseAction;
   const targets = { ...s.targets };
-  if (old !== null && !(old === 'grasp_close' && s.spaceHeld)) targets[old] = 0;
+  if (old !== null && !(old === 'grasp_close' && s.graspHold)) targets[old] = 0;
   return { ...s, pulseAction: null, pulseRemaining: 0, targets };
 }
 
@@ -837,8 +844,9 @@ function cancelPulse(s) {
  * time order at their own offset `at` (seconds into the frame, default 0); the activity is integrated exactly between
  * them (dt = actual elapsed wall seconds), each non-reach event is applied on its own (dt 0) so the gate sees it in
  * order, and the display-only reach events accompany every integration piece.
- *   rule 2: while Space is held a pulse for a SPACE_COMPETING action is cancelled at once;
- *   rule 4: on Space up a DIGIT_FLEX_PULSES pulse is cancelled, so only fresh gaze/click intent recloses the hand;
+ *   rule 2: while the Space grip holds (graspHold, R558 Message 48) a pulse for a SPACE_COMPETING action is cancelled
+ *           at once (the activity itself already refuses to start one; this is the second net);
+ *   rule 4: when the grip lets go a DIGIT_FLEX_PULSES pulse is cancelled, so only fresh gaze/click intent recloses the hand;
  *   rule 5: every click or new-region pulse start that survives the gate is returned as a mark (with its offset).
  * @returns {{ state, marks: Array<{ actionId, source: 'click' | 'gaze', at }>, restarts: number }}
  */
@@ -861,8 +869,8 @@ export function stepActivityGated(activity, actState, events, dt) {
     delete bare.timeMs;
     const before = s;
     s = activity.step(s, [bare], 0);
-    if (s.spaceHeld && s.pulseAction !== null && SPACE_COMPETING.includes(s.pulseAction)) s = cancelPulse(s);
-    if (ev.type === 'space' && before.spaceHeld && !s.spaceHeld && s.pulseAction !== null && DIGIT_FLEX_PULSES.includes(s.pulseAction)) {
+    if (s.graspHold && s.pulseAction !== null && SPACE_COMPETING.includes(s.pulseAction)) s = cancelPulse(s);
+    if (ev.type === 'grip' && before.graspHold && !s.graspHold && s.pulseAction !== null && DIGIT_FLEX_PULSES.includes(s.pulseAction)) {
       s = cancelPulse(s);
     }
     let started = null, source = null;
@@ -1004,10 +1012,16 @@ export function normalizeGaze(g, bodyMap = null) {
   return EMPTY_GAZE;
 }
 
-/** R558: the game-queue event types stepFrame accepts (ns-controls 'space' / 'grasp' / 'click', the app's own 'muscle'
- * tap and 'limbPose' for a held or turned own limb). */
-export const CONTROL_EVENT_TYPES = Object.freeze(['space', 'grasp', 'click', 'muscle', 'limbPose']);
-/** True when the crosshair is on any part of the brain (a motor region or the glass): F then grabs the brain. */
+/** R558: the game-queue event types stepFrame accepts (ns-controls 'grasp' / 'turn' / 'click' (R558, Message 40: the
+ * Space gestures, ns-controls SPACE_GESTURE; 'space' is the legacy raw key event, accepted and ignored by the activity),
+ * the app's own 'muscle' tap, 'limbPose' for a held or turned own limb and 'grip' (Message 48: the left hand closes
+ * while the Space gesture holds or keeps a grasp; the frame loop sends it when that starts or ends)). */
+export const CONTROL_EVENT_TYPES = Object.freeze(['space', 'grasp', 'grip', 'turn', 'click', 'muscle', 'limbPose']);
+const CONTROL_EVENT_HELP = 'control events are { type: "grasp", down, target? }, { type: "grip", on }, { type: "turn", phase }, { type: "click" }, { type: "muscle", regionId }, { type: "limbPose", joints } or the legacy { type: "space", down }';
+/** R558 (Message 40): the events that turn the limbs (and with them the game arm's palm turn), which the whole-arm
+ * display must know before it picks a camera: the limb turn ('turn') and the legacy raw Space event. */
+const isTurnEvent = ev => Boolean(ev) && (ev.type === 'turn' || ev.type === 'space');
+/** True when the crosshair is on any part of the brain (a motor region or the glass): Space then grabs the brain. */
 export const gazeOnBrain = g => Boolean(g) && (g.target === 'region' || g.target === 'glass' || g.kind === 'strip');
 
 /** Initial brain view: orbit around the locked brain centre (DEGREES, as ns-brain brainViewTransform takes it) and the
@@ -1106,7 +1120,7 @@ function carryAny(g, yaw, pitch) {
  * `sign`, see orbitSignFor) when it has one, else the fallback steps for `orbitDirs`. Grab: the activity model's
  * `brainGrab` { active, startYaw, startPitch } and its carry `brainPlacement` { yaw, pitch } (radians) when it has
  * them (shared interface 4; ns-actions computes the carry from the absolute look in its gaze events), else the
- * FALLBACK rule (F down while the crosshair is on the brain grabs; F up releases; while grabbed the offset
+ * FALLBACK rule (a Space grasp while the crosshair is on the brain grabs; its release lets go; while grabbed the offset
  * follows the look, so the brain keeps its place in the view; on release it stays where it was left).
  */
 export function nextBrainView(prev, { yaw, pitch, onBrain = false, graspEvents = [], orbitDirs = [], act = null, sign = ORBIT_SIGN } = {}) {
@@ -1130,7 +1144,7 @@ export function nextBrainView(prev, { yaw, pitch, onBrain = false, graspEvents =
   } else {
     source.grab = 'fallback';
     for (const ev of graspEvents) {
-      if (!ev || ev.type !== 'grasp') continue; // R558: the F key grasps (Space no longer does)
+      if (!ev || ev.type !== 'grasp') continue; // R558 (Message 40): a Space hold or tap grasps
       if (ev.down === true && !grab.active && onBrain) grab = begin(yaw, pitch);
       else if (ev.down === false && grab.active) grab = { ...grab, active: false };
     }
@@ -1238,6 +1252,13 @@ export function infoKnown(region, leftArm = false) {
   return NT.plainKnown(region, leftArm);
 }
 
+/** R558: the live card (infoOverlayModel). minLevel: an area at or below this display level is not "switched on now";
+ * gazeKeeps: the area under the crosshair keeps its card over a reach key's card while its own level is above this. */
+export const INFO_LIVE = Object.freeze({ minLevel: 0.08, gazeKeeps: 0.05 });
+
+/** R558 (Message 48): the strip part of the grip of a Space grasp (BODY_MOTOR_MAP: the left hand's area, home of grasp_close). */
+const GRIP_AREA_ID = 'rh_hand';
+
 /**
  * Model of the far-right information overlay (R14) for what the player looks at or clicks: region, hemisphere, body
  * part, the ONE simulated action and its muscles (working / easing off; never the same muscle in both), a plain lead
@@ -1249,12 +1270,38 @@ export function infoKnown(region, leftArm = false) {
  * Pure: plain JSON out. `key` changes only when the subject changes (the renderer re-draws text only then).
  */
 export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, regionActivity = null, activatedRegions = null,
-  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, jointAngles = null, armState = null } = {}) {
+  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, jointAngles = null, armState = null,
+  reach = null, grip = null, live = true } = {}) {
   const g = gaze && typeof gaze.target === 'string' ? gaze : normalizeGaze(gaze, bodyMap);
   const common = { heading: INFO_TEXT.heading, simulated: INFO_TEXT.simulated, known: INFO_TEXT.known, crownNote: INFO_TEXT.crownNote };
   const blank = { plain: '', regionCaveat: '', action: null };
-  // R558 (hunt 3): the crosshair on the brain behind your body or the mirror body (stepFrame tags the gaze coveredBy;
-  // a motor area there is not looked at): not the glass card's "no motor area ... carry the brain".
+  const levelOf = id => (id && regionActivity && Number.isFinite(regionActivity[id]) ? regionActivity[id] : 0);
+  // R558 (Messages 50 and 56: a learning tool; the panel says WHAT IS HAPPENING, not only what you look at). A reach
+  // key held (W, A, S, D) shows its own card: key, strip part, movement, muscles (ns-text reachInfoCard), unless the
+  // area under the crosshair is itself switched on (then that area's card stays).
+  const reachCard = live !== false && Array.isArray(reach) && reach.length && !(g.target === 'region' && levelOf(g.regionId) > INFO_LIVE.gazeKeeps)
+    ? NT.reachInfoCard(reach) : null;
+  if (reachCard) {
+    const top = reach.reduce((a, r) => (r && Number.isFinite(r.level) && r.level > a ? r.level : a), 0);
+    return { ...common, ...blank, key: `reach|${reachCard.key}`, mode: 'region', viewed: 'now', source: 'reach', title: reachCard.title,
+      technicalTitle: reachCard.title, tag: reachCard.tag, region: null, regionId: REACH_MUSCLES.areaId, actionId: null, hemisphere: 'right',
+      bodyPart: 'Left arm', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
+      activity: top, activations: 0, card: reachCard };
+  }
+  // R558 (Messages 48 and 56): the grip of a Space grasp shows its own card (key, strip part = left hand, movement,
+  // muscles; ns-text graspInfoCard) while the hand closes and while it opens again, unless another area under the
+  // crosshair is itself switched on.
+  const gripCard = live !== false && grip && (grip.phase === 'close' || grip.phase === 'open') && typeof NT.graspInfoCard === 'function'
+    && !(g.target === 'region' && g.regionId !== GRIP_AREA_ID && levelOf(g.regionId) > INFO_LIVE.gazeKeeps) ? NT.graspInfoCard(grip) : null;
+  if (gripCard) {
+    return { ...common, ...blank, key: `grasp|${gripCard.key}`, mode: 'region', viewed: 'now', source: 'grasp', title: gripCard.title,
+      technicalTitle: gripCard.title, tag: gripCard.tag, region: null, regionId: GRIP_AREA_ID, actionId: null, hemisphere: 'right',
+      bodyPart: 'Left hand', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
+      activity: levelOf(GRIP_AREA_ID), activations: 0, card: gripCard };
+  }
+  // R558 (hunt 3): the crosshair on the brain's bare glass behind your body (stepFrame tags the gaze coveredBy; a motor
+  // area there is looked at through the body since the lead decision refining Messages 33 and 34): not the glass card's
+  // "no motor area ... carry the brain".
   if (g.target === 'glass' && (g.coveredBy === 'own' || g.coveredBy === 'mirror')) {
     const own = g.coveredBy === 'own';
     return { ...common, ...blank, key: `covered:${g.coveredBy}`, mode: 'glass', viewed: 'now', source: 'generic',
@@ -1268,6 +1315,30 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
       pathway: '', explanation: INFO_TEXT.glassBody, caveats: [...INFO_TEXT.caveats], citations: [], activity: null, activations: null };
   }
   if (g.target !== 'region') {
+    // R558 (Messages 50 and 56): with the crosshair off the strip, the card of the area that is switched on NOW (by a
+    // key, a click on a muscle, a held limb): the area the running pulse belongs to, else the strongest one. So every
+    // activation names its strip part, movement and muscles without having to look at it.
+    if (live !== false && regionActivity && bodyMap) {
+      let id = pulse && levelOf(pulse.regionId) > INFO_LIVE.minLevel ? pulse.regionId : null;
+      if (!id) {
+        // The strongest area; when several are on together (Space turns every limb), a LEFT-arm area first: the left
+        // arm is the limb the keys drive and the card teaches.
+        let best = INFO_LIVE.minLevel, bestLeft = INFO_LIVE.minLevel, idLeft = null;
+        for (const k of Object.keys(regionActivity)) {
+          const v = levelOf(k);
+          if (v > best) { best = v; id = k; }
+          if (v > bestLeft) { const rk = regionById(bodyMap, k); if (rk && rk.isLeftArm === true) { bestLeft = v; idLeft = k; } }
+        }
+        if (idLeft) id = idLeft;
+      }
+      const r = id ? regionById(bodyMap, id) : null;
+      if (r) {
+        const m = infoOverlayModel({ gaze: { target: 'region', regionId: id, actionId: null, regionActionId: pulse && pulse.regionId === id ? pulse.actionId : null,
+          hemisphere: r.hemisphere || null, isLeftArm: r.isLeftArm === true, u: null }, binding, bodyMap, regionActivity, activatedRegions, activatedActions,
+          displayDrives, last: null, pulse, rotationState, jointAngles, armState, reach: null, live: false });
+        return { ...m, key: `${m.key}|live`, source: 'live' };
+      }
+    }
     // R558 (hunt 2): the kept card shows the area's LIVE signal (it was the value frozen when you looked away, so an
     // area long switched off kept a full bar), the same lookup as a card for the area itself.
     if (last && last.mode === 'region') {
@@ -1515,8 +1586,8 @@ const copyJson = v => JSON.parse(JSON.stringify(v));
 
 /**
  * Pure simulation core shared by start() and tests.
- * stepFrame(state, inputs, dt) with inputs = { yaw, pitch (rad), axes: { x, z }, events: [{ type: 'space', down, at? } |
- * { type: 'click', at? }], aspect, gazeAt?, silentGaze?, orbit?: ['left' | 'right' | 'forward' | 'back'] } and dt =
+ * stepFrame(state, inputs, dt) with inputs = { yaw, pitch (rad), axes: { x, z }, events: [{ type: 'grasp', down, at? } |
+ * { type: 'turn', phase, at? } | { type: 'click', at? } | ...], aspect, gazeAt?, silentGaze?, orbit?: ['left' | 'right' | 'forward' | 'back'] } and dt =
  * ACTUAL elapsed wall seconds since the previous frame (uncapped; non-finite or negative = 0). `at` / `gazeAt` are each
  * input's offset (s) into this frame interval (default 0 = its start; the browser loop passes the real event times).
  * Clocks: the activity (pulse / release / smoothing) advances by the full wall dt; pose/motion integration advances by
@@ -1685,10 +1756,13 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const commandEvents = displayViewport.commandEvents || [];
     if (!gatedStep || !Array.isArray(commandEvents)) fail('app_input', 'whole-arm activity preview needs gated activity and a copied command event array');
     for (const ev of commandEvents) {
-      if (!ev || !CONTROL_EVENT_TYPES.includes(ev.type)) fail('app_event', 'control events are { type: "space", down }, { type: "grasp", down, target? }, { type: "click" }, { type: "muscle", regionId } or { type: "limbPose", joints }');
+      if (!ev || !CONTROL_EVENT_TYPES.includes(ev.type)) fail('app_event', CONTROL_EVENT_HELP);
       if (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0)) fail('app_event', 'event.at must be finite seconds >= 0 into the frame');
     }
-    const knownSpaceEvents = copyJson(commandEvents.filter(ev => ev.type === 'space'));
+    // R558 (Message 40): the limb turn ('turn' events) is what moves the game arm's palm turn now.
+    const knownSpaceEvents = copyJson(commandEvents.filter(isTurnEvent));
+    // R558 (Message 48): the grip of a Space grasp closes the game arm's hand, so the preview steps it too.
+    const knownGripEvents = copyJson(commandEvents.filter(ev => ev.type === 'grip'));
     const commandDt = displayViewport.commandDt;
     const wall = Number.isFinite(commandDt) && commandDt > 0 ? commandDt : 0, h = Math.min(wall, MAX_FRAME_DT);
     const rr = state.reachRates || { depth: 0, x: 0 };
@@ -1699,7 +1773,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       actionId: oldGaze.actionId, ...(oldGaze.regionId !== null ? { regionId: oldGaze.regionId } : {}),
       ...(oldGaze.u !== null ? { u: oldGaze.u } : {}), yaw: previewLook.yaw, pitch: previewLook.pitch,
       at: Math.min(displayViewport.gazeAt === undefined ? wall : displayViewport.gazeAt, wall), seed: true } : null;
-    const preview = activity.stepGated(copyJson(state.activity), [...(knownGaze ? [knownGaze] : []), ...knownSpaceEvents,
+    const preview = activity.stepGated(copyJson(state.activity), [...(knownGaze ? [knownGaze] : []), ...knownSpaceEvents, ...knownGripEvents,
       { type: 'reach', axes: { ...knownAxes }, depthRate: rr.depth, xRate: rr.x }], wall).state;
     const previewDrives = activity.drives(preview);
     const rotationState = typeof preview.rotationState === 'string' ? preview.rotationState : stepRotationFallback(state.rotation, knownSpaceEvents, state.t).rotation;
@@ -1834,7 +1908,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   function stepFrame(state, inputs, dt) {
     if (!state || typeof state !== 'object' || !state.reach || !state.activity) fail('app_state', 'state must come from initialState/stepFrame');
     const { yaw, pitch, axes: keyAxes = { x: 0, z: 0 }, events = [], aspect, gazeAt = 0, orbit = [], brainCentreNdc = null, viewportPx = null } = inputs || {};
-    // R558 (lead decision for Messages 2 and 12): while an item is held with F, W/A/S/D move that item (keyAxes, to the
+    // R558 (lead decision for Messages 2 and 12): while an item is held with Space, W/A/S/D move that item (keyAxes, to the
     // carry) and not the left hand (inputs.armAxes { x: 0, z: 0 }); without a grasp both are the keys.
     const axes = inputs && inputs.armAxes && Number.isFinite(inputs.armAxes.x) && Number.isFinite(inputs.armAxes.z) ? inputs.armAxes : keyAxes;
     if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) fail('app_input', 'yaw and pitch must be finite radians');
@@ -1848,7 +1922,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (!(Number.isFinite(aspect) && aspect > 0)) fail('app_input', 'aspect must be a positive finite number');
     if (!Array.isArray(events)) fail('app_input', 'events must be an array');
     for (const ev of events) {
-      if (!ev || !CONTROL_EVENT_TYPES.includes(ev.type)) fail('app_event', 'control events are { type: "space", down }, { type: "grasp", down, target? }, { type: "click" }, { type: "muscle", regionId } or { type: "limbPose", joints }');
+      if (!ev || !CONTROL_EVENT_TYPES.includes(ev.type)) fail('app_event', CONTROL_EVENT_HELP);
       if (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0)) fail('app_event', 'event.at must be finite seconds >= 0 into the frame');
     }
     if (!(Number.isFinite(gazeAt) && gazeAt >= 0)) fail('app_input', 'gazeAt must be finite seconds >= 0 into the frame');
@@ -1874,7 +1948,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const displayStamp = displayPlan ? wholeArmPlans.get(displayPlan) : null;
     if (wholeArmOption && (!displayStamp || displayStamp.lookYaw !== yaw || displayStamp.lookPitch !== pitch || displayStamp.aspect !== aspect ||
       displayStamp.commandWallDt !== wall || !axes || displayStamp.commandPrediction.axes.x !== axes.x || displayStamp.commandPrediction.axes.z !== axes.z ||
-      displayStamp.commandSpaceKey !== JSON.stringify(copyJson(events.filter(ev => ev.type === 'space'))) ||
+      displayStamp.commandSpaceKey !== JSON.stringify(copyJson(events.filter(isTurnEvent))) ||
       !referenceFrame || displayPlan.attachmentFrame.eyeToWorld.some((v, i) => v !== referenceFrame.eyeToWorld[i]))) fail('app_state', 'missing or stale pre-pick whole-arm display plan');
     const armOpts = displayPlan ? WholeArmDisplay.optionsForDisplayPlan(displayPlan, baseArmOpts, att) : baseArmOpts;
 
@@ -1922,15 +1996,18 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (gaze.target === 'empty' && inputs && inputs.glassHit === true && !regionMode) gaze = { ...gaze, kind: 'glass', target: 'glass' };
     // R22 visible UI/mirror targets do not stimulate a brain area behind them. Actual glass remains graspable.
     const objectPick = inputs && inputs.objectPick ? inputs.objectPick : null;
-    if (objectPick && (objectPick.target === 'mirror' || objectPick.blocked === 'orbit-arrow')) gaze = { ...gaze, target: 'empty', kind: 'empty', actionId: null, regionId: null, u: null, isLeftArm: false, hemisphere: null, point: null };
-    // R558: a motor area covered at the crosshair by your own body or the mirror body (inputs.objectPick.bodyInFront,
-    // the scene's muscleAt: a body part nearer than every motor area on the ray) is not looked at; a click there taps
-    // that muscle instead (muscleTap). The brain glass stays graspable. coveredBy tells the info card which body is in
-    // front, so it does not describe bare glass.
-    else if (objectPick && (objectPick.bodyInFront === 'own' || objectPick.bodyInFront === 'mirror') && gaze.target === 'region') gaze = { ...gaze, target: 'glass', kind: 'glass', actionId: null, regionId: null, regionActionId: null, u: null, isLeftArm: false, hemisphere: null, coveredBy: objectPick.bodyInFront };
+    // LEAD DECISION (refines Messages 33 and 34; reverses decision 45's cover rule): the look reaches a motor area
+    // THROUGH your own body and the mirror body (they stand in front of the strip by design; at the start your right
+    // forearm covers part of the blue left-arm areas and the mirror's feet the foot areas). A body seen at the crosshair
+    // (inputs.objectPick: the mirror body as target, or bodyInFront 'own') no longer turns a region gaze into glass or
+    // empty; it still stands for the mirror body where no area is behind it, and an arrow tip (drawn on top) still hides
+    // what is behind it from the look. Shift reaches the body part in front instead (ns-app controlTargets).
+    const bodySeen = Boolean(objectPick && (objectPick.target === 'mirror' || objectPick.bodyInFront === 'own' || objectPick.bodyInFront === 'mirror'));
+    if (objectPick && (objectPick.blocked === 'orbit-arrow' || (objectPick.target === 'mirror' && gaze.target !== 'region'))) gaze = { ...gaze, target: 'empty', kind: 'empty', actionId: null, regionId: null, u: null, isLeftArm: false, hemisphere: null, point: null };
+    else if (bodySeen && gaze.target === 'region') { /* the look reaches the area behind the body (lead decision above) */ }
     else if (objectPick && objectPick.target === 'brain' && gaze.target === 'empty') gaze = { ...gaze, target: 'glass', kind: 'glass' };
     // ... and the brain's bare glass behind your body or the mirror body is tagged the same way (the card then says which
-    // body is in front, not "hold F here to carry the brain" where F holds your limb).
+    // body is in front, not "hold Space here to carry the brain" where Space holds your limb).
     if (objectPick && (objectPick.bodyInFront === 'own' || objectPick.bodyInFront === 'mirror') && gaze.target === 'glass' && !gaze.coveredBy) gaze = { ...gaze, coveredBy: objectPick.bodyInFront };
     // No activation without user input (round-1 A4): on the first frame, on a reframe (resize / DPR / FOV change) while
     // the look itself did not change, and on an orbit step, the region under the crosshair is recorded silently. A
@@ -2004,6 +2081,12 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     }
     const actionMuscle = muscleDrives(binding, muscleIn);
     const armReach = typeof activity.reachOutputs === 'function' ? activity.reachOutputs(a) : null;
+    // R558 (Message 50): the shoulder muscles of each held reach key (ns-actions REACH_MUSCLES), at the key's display
+    // level. A and D share one unsigned level, so the side last held is kept while it fades.
+    const reachXSign = axes && Number(axes.x) !== 0 ? Math.sign(Number(axes.x)) : (Number.isFinite(state.reachXSign) ? state.reachXSign : 0);
+    const reachShow = a.wasd && typeof reachMuscleShow === 'function' ? reachMuscleShow(a.wasd, reachXSign) : [];
+    // R558 (Message 48): the grip of a Space grasp: 'close' while it holds, 'open' while the hand opens after it let go.
+    const grip = a.graspHold === true ? 'close' : a.graspHold === false && a.openRemaining > 0 ? 'open' : null;
     // R3-fix (review SL-2): the forearm-turn display level of the pronator / supinator meshes (no catalog key in the
     // movement map, so they are tinted by mesh name; the same colour ramp; display only, never a pose input).
     const rotationOut = typeof activity.rotationOutputs === 'function' ? activity.rotationOutputs(a) : null;
@@ -2157,6 +2240,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       elbowRad,
       elbowRate,
       reachRates,
+      reachXSign,
       viewport: { ...viewport, brainCentreNdc: centre, pxKey },
       placement,
       gaze: {
@@ -2185,7 +2269,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return {
       state: nextState,
       out: {
-        fit, pose, base, gaze, drives, displayDrives: display, muscle, rotationMuscles, armReach, placement, reframed, silentGaze, elbowRate, elbow, pulse,
+        fit, pose, base, gaze, drives, displayDrives: display, muscle, rotationMuscles, armReach, reachShow, grip, placement, reframed, silentGaze, elbowRate, elbow, pulse,
         reachBlocked: reachBlockedS >= REACH_BLOCKED.seconds,
         reachMoved: { x: movedX, z: movedZ }, // R4-fix (RP3): the hand really moved this frame (net, key direction)
         marks: act.marks, restarts: act.restarts, dt: h, clock: { wallDt: wall, poseDt: h }, fovYDeg: fov,
@@ -2403,7 +2487,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
    * R558 (user Message 12: things "can be moved to and around each other but not through"). Keep only the share f
    * (0..1) of this frame's brain move: prev / next are the simulation states before and after one stepFrame, out its
    * output. Every source of brain movement is blended by the same share: the orbit (arrows, drag), the carried
-   * placement (F held: the brain follows the look; the grab is re-based so the look keeps carrying it from where it
+   * placement (Space held: the brain follows the look; the grab is re-based so the look keeps carrying it from where it
    * stopped, never a jump) and the W/A/S/D carry. f = 0 is exactly the brain of `prev`. Returns { state, brainTransform,
    * brainParams } (the state with the blended brain pieces; nothing else of the step changes). Pure.
    */
@@ -2553,10 +2637,60 @@ export function elbowText(elbow) {
 }
 
 /** Text that changes per frame. frameMs smooths elapsed update work through render-call return, not CPU time or frame cadence. */
-/** R558 (hunt 2): the muscle under the crosshair for the "Looking at" line (scene muscleAt, a ray against both bodies)
- * is looked up at most every `everyFrames` frames while the camera moves, and every `stillFrames` frames while it
- * rests (a held movement can bring a limb under a still crosshair). Not while the crosshair is on a motor area. */
-export const MUSCLE_GAZE = Object.freeze({ everyFrames: 4, stillFrames: 20 });
+/** R558 (user Messages 33 and 34: "You should be able to grasp-move items even if they are behind another item." ...
+ * "Same for the other controls of course."): THE TARGETING RULE of every control (F, click, press-and-drag, the arrow
+ * tips). `layers` is the scene's controlLayersAt list along the crosshair (or free pointer) ray, nearest first: brain
+ * entries (kind 'area' | 'glass' | 'outline'), own-body and mirror-body entries. Pure. Returns { front, behind }:
+ *  - front: what you SEE there. The brain's clear glass (and the inside of its outline where no surface is hit) is
+ *    see-through, so the first entry that is not clear glass wins: a motor area (the brain), one of your own body parts
+ *    or the mirror body. Only when nothing else lies on the ray is the glass itself what you see (the brain).
+ *  - behind: what you would see if the front item were not there: the same rule over every entry of the OTHER items
+ *    (the brain, the mirror body, your own body). Your own body counts as one item here (behind your limb is the brain
+ *    or the mirror body, never another of your own parts). The brain's clear glass in FRONT of what you see also
+ *    counts: the brain is then the other item on the ray (Shift + F on the mirror body seen through the glass takes the
+ *    brain).
+ * An arrow tip (drawn on top of everything, ns-controls resolveArrowHit) is not in the list: the app puts it in front.
+ * The reach-behind gesture (Shift held at the press, ns-controls REACH_CODES) acts on `behind`, or on `front` when an
+ * arrow tip is in front.
+ * LEAD DECISION (refines Messages 33 and 34): the LOOK reaches the motor strip through your own body and the mirror body
+ * (the bodies stand in front of the strip by design), and every control acts on what the look names. So when a motor
+ * area lies on the ray BEHIND a body part, the default (`front`) is that AREA (the brain: a click switches the area on,
+ * F holds the brain, a drag turns it), and `behind` (the other item, which Shift reaches) is the body part IN FRONT of
+ * it (so Shift + click taps that muscle and Shift + F holds that limb or the mirror body). opts.lookArea: whether the
+ * look's own classifier names a motor area on this ray (the crosshair; state.rawGaze), so the controls follow exactly
+ * what the "Looking at" card names; leave it undefined for a free pointer (the scene's area meshes decide). When it is
+ * true and the ray meets the brain only as clear glass there (a classifier / mesh border), that glass entry stands in
+ * for the area (kind 'area', regionId null, viaLook true). `seen` is what is SEEN (the first entry that is not clear
+ * glass), for the look's overrides and the HUD's "behind your ..." words. */
+export function controlTargets(layers, opts = {}) {
+  const list = Array.isArray(layers) ? layers.filter(l => l && (l.item === 'brain' || l.item === 'own' || l.item === 'mirror') && Number.isFinite(l.distance)) : [];
+  // `after`: among glass-only answers, glass beyond this distance is preferred (the brain behind rather than the glass in
+  // front, so the HUD can say which; the item is the brain either way).
+  const seenIn = (from, after = -Infinity) => {
+    let glass = null, glassAfter = null;
+    for (const l of from) {
+      if (l.item === 'brain' && (l.kind === 'glass' || l.kind === 'outline')) { if (!glass) glass = l; if (!glassAfter && l.distance > after) glassAfter = l; continue; }
+      return l;
+    }
+    return glassAfter || glass;
+  };
+  const seen = seenIn(list);
+  const lookArea = opts && typeof opts.lookArea === 'boolean' ? opts.lookArea : null;
+  const areaEntry = list.find(l => l.item === 'brain' && l.kind === 'area') || null;
+  // The brain entry that stands for the area the look names: the area mesh hit, else (classifier says area) the first
+  // brain entry on the ray.
+  const ref = lookArea === false ? null : areaEntry || (lookArea === true ? list.find(l => l.item === 'brain') || null : null);
+  if (ref) {
+    const area = ref.kind === 'area' ? ref : { ...ref, kind: 'area', regionId: null, viaLook: true };
+    // A body part seen in front of the area the look names: the area is the default, that body part the other item.
+    if (seen && seen.item !== 'brain' && seen.distance < ref.distance) return { front: area, behind: seen, seen };
+    // Nothing in front of the area: the other item is what lies behind the brain there (as below).
+    return { front: area, behind: seenIn(list.filter(l => l.item !== 'brain'), ref.distance), seen };
+  }
+  const front = seen;
+  const behind = front ? seenIn(list.filter(l => l.item !== front.item), front.distance) : null;
+  return { front, behind, seen };
+}
 /** Round 3 (R3-player item 8): the "lost the brain" hint shows when the grab offset exceeds `dragged` and the look is
  * more than `fromLook` from the dragged brain (radians; display choice). */
 export const BRAIN_AWAY_RAD = Object.freeze({ dragged: 0.5, fromLook: 0.7 });
@@ -2593,9 +2727,11 @@ export function stepSlowNotice(prev, frameMs, o = SLOW_NOTICE) {
 }
 
 /** R558 (hunt 2): hudFrame's extra inputs for the "Looking at" line. arrowTip: the caption of the arrow tip under the
- * crosshair ('' = none). bodyPick: the muscle or bone under the crosshair (scene muscleAt: { source 'own' | 'mirror',
- * kind, name, bodyPart }, null = none or a motor area nearer) plus holdable (an own limb F can hold). */
-export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = false, frameMs = null, bodyMap = null, slowNote = '', arrowTip = '', bodyPick = null }) {
+ * crosshair ('' = none). bodyPick: the muscle or bone seen at the crosshair (controlTargets' front: { source 'own' | 'mirror',
+ * kind, name, bodyPart }, null = none or a motor area nearer) plus holdable (an own limb Space can hold). inFront (lead
+ * decision refining Messages 33 and 34): the plain name of the body part seen in front of the motor area the look names
+ * ('' = none), e.g. "your right forearm": the line then says "..., behind your right forearm". */
+export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = false, frameMs = null, bodyMap = null, slowNote = '', arrowTip = '', bodyPick = null, inFront = '', spaceGrasp = 'none', rotationNote = true }) {
   const g = out.gaze;
   const onStrip = (g.kind === 'strip' || g.target === 'region') && g.actionId !== null;
   const onOther = g.target === 'region' && g.actionId === null && typeof g.regionId === 'string';
@@ -2606,6 +2742,10 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
   const other = onOther ? regionById(bodyMapOf(bodyMap), g.regionId) : null;
   const pick = bodyPick && typeof bodyPick === 'object' && (bodyPick.source === 'own' || bodyPick.source === 'mirror') && typeof bodyPick.name === 'string' && bodyPick.name ? bodyPick : null;
   const grabbing = Boolean((out.objectCarry && out.objectCarry.held && out.objectCarry.target) || (out.brainView && out.brainView.grab && out.brainView.grab.active));
+  // R558 (Message 40): what Space holds ('brain' | 'mirror'; an own limb has its own line in the frame loop), whether the
+  // hold was kept by a tap (spaceGrasp 'kept': "tap Space to let go") or lasts while Space is down, and the limb turn.
+  const heldItem = out.objectCarry && out.objectCarry.held && (out.objectCarry.target === 'brain' || out.objectCarry.target === 'mirror') ? out.objectCarry.target : grabbing ? 'brain' : null;
+  const turnMode = a.dance && (a.dance.mode === 'step' || a.dance.mode === 'hold') ? a.dance.mode : null;
   const reachLevel = out.armReach && Number.isFinite(out.armReach.armReach) ? out.armReach.armReach : 0;
   // Round 3 (R17/D3): plain lines from ns-text; the crosshair label is the plain action / area name only.
   let gazeText, hover = '', caption = '';
@@ -2626,7 +2766,7 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
     else if (onLeftArmRegion && other && !(Array.isArray(other.actions) && other.actions.length) && HUD_TEXT.shoulderMoves) caption = HUD_TEXT.shoulderMoves;
   } else if (typeof arrowTip === 'string' && arrowTip) gazeText = NT.gazeLine('arrow', arrowTip); // R558 (hunt 2): what a click on it does
   else if (pick && pick.source === 'own') {
-    // R558 (hunt 2): a click here taps this muscle of your own body (ns-app muscleTap); F holds the limb it belongs to.
+    // R558 (hunt 2): a click here taps this muscle of your own body (ns-app muscleTap); Space holds the limb it belongs to.
     gazeText = NT.gazeMuscleLine({ where: 'own', name: pick.name, kind: pick.kind, holdable: pick.holdable === true });
     hover = pick.name;
   } else if (pick && pick.source === 'mirror') {
@@ -2637,8 +2777,12 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
   else if (g.target === 'glass') gazeText = HUD_TEXT.gazeGlass;
   else gazeText = brainHit ? HUD_TEXT.gazeBrain
     : HUD_TEXT.gazeEmpty;
-  // R558 (hunt 2): while Space is held its own line says the limbs turn; the forearm line then leaves out its Space hint.
-  const rotation = NT.rotationLine(typeof out.rotationState === 'string' ? out.rotationState : '', { hint: !a.spaceHeld });
+  // Lead decision (refines Messages 33 and 34): the look reaches an area through a body in front of it; the line says so.
+  if ((onStrip || onOther) && typeof inFront === 'string' && inFront && typeof NT.gazeBehindLine === 'function') gazeText = NT.gazeBehindLine(gazeText, inFront);
+  // R558 (Messages 44 and 55, less text on the card): the forearm line shows while the limbs turn and for a few seconds
+  // after the forearm's state changes (rotationNote, the frame loop), not all the time; the Space hint lives in the
+  // guide and the controls list.
+  const rotation = rotationNote || turnMode ? NT.rotationLine(typeof out.rotationState === 'string' ? out.rotationState : '', { hint: false }) : '';
   const pulseRegion = out.pulse && typeof out.pulse.regionId === 'string' ? out.pulse.regionId : null;
   // R3-player item 8: after a far drag, a one-line way back while the brain is far from the crosshair (not while held).
   const off = out.brainView && out.brainView.offset ? out.brainView.offset : null;
@@ -2664,8 +2808,12 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
       : out.pulse && out.pulse.residualDisplay > RESIDUAL_DISPLAY_MIN ? HUD_TEXT.pulseResidual : HUD_TEXT.pulseNone,
     trigger: marked ? NT.triggerLine(tr.seq, tr.source, triggerLabel(binding, bodyMap, tr)) : '',
     crosshairActive: onStrip || onOther || marked,
-    // R558 (Space dance): held Space = the slow dance, a double-tap held = the fast one.
-    space: [grabbing ? HUD_TEXT.grabbing : a.spaceHeld ? (a.dance && a.dance.fast && HUD_TEXT.danceFast ? HUD_TEXT.danceFast : HUD_TEXT.spaceHeld) : '', rotation]
+    // R558 (Message 48): the grip ring round the crosshair while Space grips ('item': something is held; an own limb
+    // is added by the frame loop).
+    crosshairHold: a.graspHold === true ? (grabbing ? 'item' : 'empty') : '',
+    // R558 (Message 40): what Space holds and how to let go; a double tap's step; the slow turn of a double tap held.
+    space: [grabbing ? (NT.HUD.holdingItem ? NT.HUD.holdingItem(heldItem, spaceGrasp === 'kept') : HUD_TEXT.grabbing)
+      : turnMode === 'hold' ? HUD_TEXT.spaceHeld : turnMode === 'step' ? HUD_TEXT.turnStep : '', rotation]
       .filter(Boolean).join(' \u00b7 '),
     reach: [out.elbow ? NT.elbowLine(out.elbow) : '', out.fit.clamped.x || out.fit.clamped.depth || out.fit.fallback !== null ? HUD_TEXT.reachLimited : '',
       reachLevel > RESIDUAL_DISPLAY_MIN && out.armReach ? `${HUD_TEXT.armReachLabel}: ${reachLevel.toFixed(2)}` : '']
@@ -2703,8 +2851,8 @@ export function createShellState({ autoPlay = false } = {}) {
 
 /**
  * Pure shell reducer. Events: { type: 'ready', atMs } | { type: 'tick', atMs } (hides the intro at introHideAtMs) |
- * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; an Esc within ESC_UNLOCK_GUARD_MS of
- * the lock loss that already paused is the same press) | { type: 'fatal', message } | { type: 'play' } (overlay click
+ * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; without owned native release
+ * evidence, an Esc within ESC_UNLOCK_GUARD_MS of lock loss is conservatively ignored) | { type: 'fatal', message } | { type: 'play' } (overlay click
  * or QA) | { type: 'locked' } | { type: 'unlocked', atMs } | { type: 'lockError' } | { type: 'lockUnavailable' } |
  * { type: 'playUnlocked' } | { type: 'pause' } | { type: 'notice', text } | { type: 'contextLost', atMs } |
  * { type: 'contextRestored' }. Returns the same object when nothing changes.
@@ -2785,12 +2933,15 @@ export function shellToastText(s, { dragLook = true } = {}) {
 /** R558 (genuine note R28): rows of the keyboard picture, top to bottom. A KeyboardEvent code ('KeyW', 'Space',
  * 'Escape') is a key the game uses: it is drawn lit, with its name and a short word. A single lower-case letter is a
  * neighbouring key drawn faint and blank, only so the lit keys sit where they do on a real keyboard (W above S, E right
- * of W, I further along the top row). Every lit key is handled by ns-controls (CONTROL_CODES, VIEW_CODE, DETAIL_CODE,
- * UI_CODES); no key is shown that the game does not use. */
+ * of W, R right of E, Shift at the left end of the row below A). Every lit key is handled by ns-controls
+ * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, UI_CODES, REACH_CODES); no key is shown that the game does not use. */
 export const KEYBOARD_PICTURE_ROWS = Object.freeze([
   Object.freeze({ row: 'esc', keys: Object.freeze(['Escape']) }),
-  Object.freeze({ row: 'q', keys: Object.freeze(['q', 'KeyW', 'KeyE', 'r', 't', 'y', 'u', 'KeyI', 'o']) }),
-  Object.freeze({ row: 'a', keys: Object.freeze(['KeyA', 'KeyS', 'KeyD', 'KeyF', 'g', 'h', 'j', 'k']) }), // R558: F holds (grasp)
+  Object.freeze({ row: 'q', keys: Object.freeze(['q', 'KeyW', 'KeyE', 'KeyR', 't', 'y', 'u', 'i', 'o']) }),
+  // R558 (Message 40): F is no longer used (Space grasps), so it is drawn as a faint blank neighbour like G.
+  Object.freeze({ row: 'a', keys: Object.freeze(['KeyA', 'KeyS', 'KeyD', 'f', 'g', 'h', 'j', 'k']) }),
+  // R558 (Messages 33 and 34): Shift + a press reaches the item behind (ns-controls REACH_CODES; either Shift works).
+  Object.freeze({ row: 'z', keys: Object.freeze(['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n']) }),
   Object.freeze({ row: 'space', keys: Object.freeze(['Space']) })
 ]);
 /** Build the keyboard picture into `parent` (DOM only: createElement and textContent, so the page's content security
@@ -2834,7 +2985,9 @@ export const SETTINGS_LIMITS = Object.freeze({ lookSensitivity: Object.freeze({ 
 export const QUALITY_SETTING_MODES = Object.freeze(['auto', 'high', 'low']);
 export const QUALITY_SETTING_LABELS = NT.QUALITY_LABELS;
 // R5-integrate-core (D15): bodyWorlds true = the outer muscles lifted a little (the default, the Esc-page setting).
-export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'off', quality: 'auto', bodyWorlds: true });
+// R558 (user Message 37): crosshairCaption false = the name of what is under the crosshair is not drawn next to it; the
+// "Looking at" card (bottom left) always says it. The Esc page switches it on.
+export const SETTINGS_DEFAULTS = Object.freeze({ lookSensitivity: 1, invertY: false, faceView: 'off', quality: 'auto', bodyWorlds: true, crosshairCaption: false });
 
 /** Clamp and normalise settings from any input (unknown fields dropped; invalid values take the defaults). */
 export function sanitizeSettings(raw) {
@@ -2845,7 +2998,7 @@ export function sanitizeSettings(raw) {
   sens = Math.round(Math.round(sens / L.step) * L.step * 100) / 100;
   const faceView = 'off'; // R558 (R26): an old saved 'ghost' or 'inset' can no longer turn the floating face on
   const quality = QUALITY_SETTING_MODES.includes(src.quality) ? src.quality : SETTINGS_DEFAULTS.quality;
-  return { lookSensitivity: clamp(sens, L.min, L.max), invertY: src.invertY === true, faceView, quality, bodyWorlds: src.bodyWorlds !== false };
+  return { lookSensitivity: clamp(sens, L.min, L.max), invertY: src.invertY === true, faceView, quality, bodyWorlds: src.bodyWorlds !== false, crosshairCaption: src.crosshairCaption === true };
 }
 
 /** Read settings from a Storage-like object; any failure (no storage, SecurityError, bad JSON) gives the defaults. */
@@ -3559,6 +3712,12 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   bwSel.name = 'bodyWorlds';
   for (const [v, label] of [['on', NT.BODY_WORLDS.on], ['off', NT.BODY_WORLDS.off]]) { const o = el('option', '', bwSel, label); o.value = v; }
   if (typeof text.bodyWorldsHelp === 'string' && text.bodyWorldsHelp) el('p', 'ns-shell-guidehelp ns-shell-bodyworldshelp', grpView, text.bodyWorldsHelp);
+  // R558 (user Message 37): the crosshair caption, off by default (the "Looking at" card always names what is there).
+  const capRow = el('label', 'ns-shell-setting ns-shell-check', grpView);
+  const capChk = el('input', '', capRow);
+  capChk.type = 'checkbox';
+  capChk.name = 'crosshairCaption';
+  el('span', 'ns-shell-setting-label', capRow, typeof text.crosshairCaption === 'string' ? text.crosshairCaption : 'Name what is under the crosshair next to it');
   // R4-text (D7): the optional "Try this" guide: Hide / Show and Restart (a click here never resumes the game).
   const grpGuide = el('div', 'ns-shell-setgroup', form);
   const guideRow = el('div', 'ns-shell-setting ns-shell-guide', grpGuide);
@@ -3660,6 +3819,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     inv.checked = current.invertY;
     qualitySel.value = current.quality;
     bwSel.value = current.bodyWorlds === false ? 'off' : 'on';
+    capChk.checked = current.crosshairCaption === true;
   };
   showSettings();
   const call = (fn, ...args) => { if (typeof fn === 'function') fn(...args); };
@@ -3706,6 +3866,11 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   });
   on(qualitySel, 'change', () => {
     current = sanitizeSettings({ ...current, quality: qualitySel.value });
+    showSettings();
+    call(onSettings, current, true);
+  });
+  on(capChk, 'change', () => {
+    current = sanitizeSettings({ ...current, crosshairCaption: capChk.checked === true });
     showSettings();
     call(onSettings, current, true);
   });
@@ -3952,15 +4117,6 @@ export function start(params = {}) {
    * was already under way, the state heads back to the view it came from, from the progress last drawn. */
   const keptViewCamera = (good, now) => (good.view !== now.view ? good
     : Object.freeze({ ...good, view: good.view === 'third' ? 'first' : 'third', arrived: false }));
-  /** Review fix: of the events waiting from skipped frames keep only a Space release (it must never be lost: a fist
-   * would stay closed); clicks and presses that were never shown to the game are dropped. */
-  const settleCarriedEvents = () => {
-    const up = carryRawEvents.some(ev => ev && ev.type === 'space' && ev.down === false);
-    const letGo = carryRawEvents.some(ev => ev && ev.type === 'grasp' && ev.down === false); // R558: nor a grasp (F) release
-    carryRawEvents.length = 0;
-    if (up) carryRawEvents.push({ type: 'space', down: false, safety: true });
-    if (letGo) carryRawEvents.push({ type: 'grasp', down: false, safety: true });
-  };
   const refusalReasonOf = err => String((err && err.detail && err.detail.reason) || (err && err.message) || err).slice(0, 160);
   /** Review fix: a TypeError, ReferenceError or RangeError raised by the engine is a defect in the code, never a
    * display check saying "this cannot be shown". No smaller request cures it, and holding the look for it would hide
@@ -4102,18 +4258,22 @@ export function start(params = {}) {
     }
     return { regions, rows };
   }
-  // R558 (hunt 2 controls #4): until when the status card says to let go of F before E (E pressed while F holds something).
+  // R558 (hunt 2 controls #4): until when the status card says to let go of Space before E (E pressed while Space holds something).
   const VIEW_HELD_NOTE_MS = 3500;
   let viewHeldUntilMs = 0;
   let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
-  // R558 (user Messages 2 and 12): the own limb held with F ({ limb, targetMm, lastPitch } or null), the limb a
+  // R558 (user Messages 2 and 12): the own limb held with Space ({ limb, targetMm, lastPitch } or null), the limb a
   // press-and-drag turns and the body segment the press was on, the left arm's dial build-up, and the stop-at-contact
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
   // (the activity holds it, so Reset body puts it back).
   let limbGrasp = null, dragLimb = null, dragLimbSeg = null, leftDial = 0;
   const contact = { stops: 0, last: null, untilMs: 0, bodyBlocked: null, lastStart: null, skipGuards: 0 };
   let collisionReportFn = null; // R558: set once the scene is up (inspect({ collision: true }))
+  // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
+  let controlTargetsShown = null;
   const orbitQueue = [];
+  let viewRequests = 0; // E presses waiting for the frame loop; also owned by synchronous pause/lifecycle cancellation
+  const inputCancellation = { count: 0, pendingRecordsCanceled: 0, reasons: {}, last: null };
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   // R558 (Space dance): the touch-free hip range of the current leg posture (ns-body hipRotationClearRange) and its key.
   let danceLegKey = null, danceLegLast = null, danceLegPending = 0, danceRange = null, armTurnSeen = null;
@@ -4350,15 +4510,68 @@ export function start(params = {}) {
     if (shell) shell.setStatus(text);
   }
 
-  /** Release every held key (one space-up is queued when Space was held, so the fist opens on resume). */
-  function releaseInputs() {
-    if (controlsApi && cs) cs = controlsApi.blur(cs, clockMs());
+  /** Release every held key (a grasp release is queued when Space held something and a turn stop when a slow turn ran,
+   * so the grasp lets go and the turn stops on the next step). atMs: the observation time of the boundary (default now). */
+  function releaseInputs(atMs = clockMs()) {
+    if (controlsApi && cs) cs = controlsApi.blur(cs, atMs);
     // Clear only the new carry latch at the existing safety/stop boundary, with no model or clock advance.
-    // Existing queued Space-up still owns actual opening/double-tap cleanup on the next activity step.
+    // The queued turn stop still owns the actual slow-turn stop on the next activity step.
     if (simState && simState.objectCarry) {
       simState = { ...simState, objectCarry: ReferenceGraph.clearObjectCarry(simState.objectCarry) };
       current = { ...current, state: simState };
     }
+  }
+
+  /** End an input epoch synchronously (ported from the public main, adapted to the R558 controls). A paused animation
+   * frame is never required for cancellation: everything pressed, queued or carried before the boundary is dropped
+   * (clicks, Space presses, E requests, press-drag movement, arrow presses, orbit steps, the input waiting from
+   * refused frames), held keys and the button are released, the binding's private gesture flags end, the brain grab /
+   * carry anchors and the own-limb hold (Space) and limb dial (press-drag) end, and one grasp release plus one turn stop
+   * stamped at the observation time take their place (ns-input-epoch EPOCH_RELEASES). Saved placements, poses, latches
+   * and the simulation clock are kept. waitingRecords: the overflow count when the cause is an overfull queue. */
+  function cancelPendingGameplay(reason, waitingRecords = null) {
+    const atMs = clockMs();
+    const before = cs;
+    const canceled = {
+      carriedEvents: carryRawEvents.length, orbitRequests: orbitQueue.length, viewRequests,
+      carriedDrag: carryDrag ? carryDrag.target : null, limbHeld: limbGrasp ? limbGrasp.limb : null
+    };
+    // No reducer can clear bindDom's private press/drag flags. Do that through its existing owned handle.
+    if (unbind && typeof unbind.cancelInput === 'function') unbind.cancelInput(atMs, { discardQueued: true });
+    if (controlsApi && before) {
+      const next = cancelControlsEpoch(controlsApi, before, { timeMs: atMs, reason });
+      cs = next.state;
+      const records = Number.isSafeInteger(waitingRecords) && waitingRecords >= 0 ? waitingRecords : next.canceled.gameEvents + canceled.carriedEvents;
+      inputCancellation.last = { ...next.canceled, ...canceled, waitingRecords: records };
+      inputCancellation.count++;
+      inputCancellation.pendingRecordsCanceled += records; // pending records, including generated safety-ups; not physical actions
+      inputCancellation.reasons[reason] = (inputCancellation.reasons[reason] || 0) + 1;
+    }
+    // The helper above has already replaced old queues, even when there is no DOM binding.
+    releaseInputs(atMs);
+    // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
+    simState = cancelCarryLatches(simState);
+    // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
+    limbGrasp = null; dragLimb = null; dragLimbSeg = null; leftDial = 0;
+    seedNext = true;
+    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0;
+    const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
+    arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
+    try { callScene('setArrowHover', null); } catch { /* highlight only */ }
+    current = { ...current, state: simState, controls: cs };
+  }
+
+  /** O(1) preflight before input history can be copied or handed to a frame/plan: more than DISPLAY_RECOVERY
+   * carryEventLimit records waiting (carried from refused frames plus fresh) cancels the epoch with a notice. */
+  function enforceInputCapacity() {
+    if (!controlsApi || !cs) return false;
+    // Allocation-free fast path for every frame; the helper below gives the counts only when the bound is crossed.
+    if (Array.isArray(cs.events) && carryRawEvents.length + cs.events.length <= DISPLAY_RECOVERY.carryEventLimit) return false;
+    const pending = inspectPendingInput(carryRawEvents, cs.events, DISPLAY_RECOVERY.carryEventLimit);
+    if (!pending.overflow) return false;
+    cancelPendingGameplay('deferred-input-overflow', pending.totalRecords);
+    dispatch({ type: 'notice', text: SHELL_TEXT.inputCleared });
+    return true;
   }
 
   // Look settings: when the controls reducer owns sensitivity / invert-Y (ns-controls setLookOptions), they are applied
@@ -4402,8 +4615,13 @@ export function start(params = {}) {
     if (after === before) return;
     shellState = after;
     syncActivityPause();
-    if (before.mode === 'playing' && after.mode !== 'playing') releaseInputs();
+    // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
+    // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
+    if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
+    if (before.mode === 'playing' && after.mode !== 'playing') cancelPendingGameplay('leave-playing');
     if (after.mode === 'playing' && before.mode !== 'playing') {
+      // Commands or gesture flags acquired behind an overlay cannot enter the new playing epoch.
+      cancelPendingGameplay('enter-playing');
       lastMs = null; // the first live frame after a frozen period has dt 0
       try { canvas.focus({ preventScroll: true }); } catch { /* focus is a convenience */ }
     }
@@ -4427,33 +4645,111 @@ export function start(params = {}) {
     }
   }
 
-  /** Esc: with the pointer captured the browser releases it (pointerlockchange pauses: the same press); otherwise the
-   * shell toggles intro -> playing, playing -> paused, paused -> playing. */
+  /** Esc without native release evidence (including QA): captured play exits the lock; otherwise use the guarded
+   * reducer. Intro becomes paused, playing becomes paused, and paused becomes playing. */
   function onEscape(atMs) {
     if (phase !== 'running' || failed || stopped) return;
     if (lockedNow()) { exitLock(); return; }
     dispatch({ type: 'esc', atMs });
   }
 
-  /** R4-arm: show or hide the information panel's More detail section (the visible region card's <details>). */
+  // Ported from the public main (Esc should answer the next press): the browser may consume the unlock keydown, or
+  // report pointer-lock loss before/after its DOM key events. Keep this evidence private to the owned page listeners: a
+  // real keyup separates presses; elapsed time does not. The exported reducer/QA path retains its 400 ms fallback.
+  let nativeEscape = { down: false, releasedBeforeUnlock: false, releasedUnlock: false };
+  function clearNativeEscape() {
+    nativeEscape = { down: false, releasedBeforeUnlock: false, releasedUnlock: false };
+  }
+  function observePointerLock(atMs) {
+    const locked = lockedNow(), wasLocked = shellState.locked;
+    // Only a real transition changes the press evidence. Duplicate pointerlockchange notifications cannot re-arm it.
+    if (locked !== wasLocked) {
+      if (locked) {
+        nativeEscape.releasedBeforeUnlock = false;
+        nativeEscape.releasedUnlock = false;
+      } else {
+        nativeEscape.releasedUnlock = nativeEscape.releasedBeforeUnlock && !nativeEscape.down;
+        nativeEscape.releasedBeforeUnlock = false;
+      }
+    }
+    if (!locked) {
+      if (!enforceInputCapacity()) releaseInputs(atMs);
+    }
+    dispatch({ type: locked ? 'locked' : 'unlocked', atMs });
+  }
+  function nativeEscapeDown(e) {
+    if (!e || e.code !== 'Escape' || e.repeat === true) return;
+    // Untrusted dispatches retain the old guarded behavior; they cannot manufacture native key-release evidence.
+    if (e.isTrusted !== true) { onEscape(clockMs()); return; }
+    if (phase !== 'running' || failed || stopped) return;
+    const atMs = clockMs();
+    // Actual lock loss can precede its queued notification. Observe it once before interpreting this key event.
+    if (shellState.locked && !lockedNow()) observePointerLock(atMs);
+    if (nativeEscape.down) {
+      // A missing keyup can leave this latch stale. Repeats were already ignored above. Without a real intervening
+      // release, keep the original guarded Escape path instead of either inventing fresh-press proof or blocking it.
+      onEscape(atMs);
+      return;
+    }
+    const releasedUnlock = nativeEscape.releasedUnlock && shellState.mode === 'paused' && shellState.unlockPausedAtMs !== null;
+    nativeEscape.down = true;
+    nativeEscape.releasedBeforeUnlock = false;
+    nativeEscape.releasedUnlock = false;
+    if (releasedUnlock) {
+      // An actual intervening keyup proves this is a subsequent press. Hide the overlay without requesting capture;
+      // normal click-to-capture/security behavior is unchanged. Never prevent or trap the browser's Escape action.
+      dispatch({ type: 'play' });
+    } else onEscape(atMs);
+  }
+  function nativeEscapeUp(e) {
+    if (!e || e.code !== 'Escape' || e.isTrusted !== true) return;
+    const atMs = clockMs();
+    if (shellState.locked && !lockedNow()) observePointerLock(atMs);
+    nativeEscape.down = false;
+    // If keyup arrives first, preserve it through the later real lock-loss notification. If loss arrived first,
+    // preserve the same release on the already-paused shell. No synthetic keyup or clock/event-time rewrite occurs.
+    nativeEscape.releasedBeforeUnlock = lockedNow();
+    if (!lockedNow() && shellState.mode === 'paused' && shellState.unlockPausedAtMs !== null) nativeEscape.releasedUnlock = true;
+  }
+
+  /** R558 (user Message 48: "the key R should replace the I key for information ... read information ... make sure that
+   * it starts off in that mode so you can see the information on the sides"). The information has three states, kept on
+   * the app root as data-ns-read (CSS): 'read' (the start: the tidy side cards), 'more' (the cards with More detail open,
+   * the whole card and the colour key) and 'off' (cards, colour key and guide hidden; a small chip says "R read
+   * information"; the limits line at the top always stays). A More detail opened by a click (free mouse) counts as
+   * 'more'. */
+  const infoRoot = () => {
+    const root = doc && typeof doc.querySelector === 'function' ? doc.querySelector('.ns-app') : null;
+    return root && typeof root.setAttribute === 'function' && typeof root.getAttribute === 'function' ? root : null;
+  };
+  const infoDetailEl = () => (doc && typeof doc.querySelector === 'function' ? doc.querySelector('details.ns-infopanel-detail:not([hidden])') : null);
+  function infoReadState() {
+    const root = infoRoot();
+    const v = root ? root.getAttribute('data-ns-read') : null;
+    if (v === 'off') return 'off';
+    const d = infoDetailEl();
+    return v === 'more' || (d && d.open) || (root && root.getAttribute('data-ns-unfold') === 'true') ? 'more' : 'read';
+  }
+  /** Set the information state; open false leaves the More detail element as it is (the player just clicked it). */
+  function setInfoRead(mode, { open = true } = {}) {
+    const root = infoRoot();
+    if (!root) return mode;
+    root.setAttribute('data-ns-read', mode);
+    // In landscape the short card and the folded colour key open with the "more" state (CSS, data-ns-unfold).
+    root.setAttribute('data-ns-unfold', mode === 'more' ? 'true' : 'false');
+    const d = infoDetailEl();
+    if (d && open) { d.open = mode === 'more'; if (d.open) revealInfoDetail(d); }
+    const word = doc.querySelector('.ns-infopanel-keyhint-word');
+    const T = NT.INFO.keyHint;
+    if (word && T) word.textContent = String(mode === 'more' ? T.more : T.read).replace(/^R:\s*/, '');
+    return mode;
+  }
+  /** The R key: read -> more -> off -> read. Returns the new state. */
   function toggleInfoDetail() {
     if (sceneFn('toggleInfoDetail')) { try { return callScene('toggleInfoDetail'); } catch { /* fall back to the DOM */ } }
-    const d = doc && typeof doc.querySelector === 'function' ? doc.querySelector('details.ns-infopanel-detail:not([hidden])') : null;
-    // R558 (motor strip fills the view): in landscape the panel is a short card and the colour key is folded away
-    // (CSS). A card without More detail (plain brain glass) has nothing to open, so there key I unfolds the whole
-    // card and the colour key, and folds them again. Opening or closing More detail always folds them.
-    const root = doc && typeof doc.querySelector === 'function' ? doc.querySelector('.ns-app') : null;
-    const canFold = Boolean(root && typeof root.setAttribute === 'function' && typeof root.getAttribute === 'function');
-    if (!d) {
-      if (!canFold) return false;
-      const on = root.getAttribute('data-ns-unfold') !== 'true';
-      root.setAttribute('data-ns-unfold', on ? 'true' : 'false');
-      return on;
-    }
-    if (canFold) root.setAttribute('data-ns-unfold', 'false');
-    d.open = !d.open;
-    if (d.open) revealInfoDetail(d);
-    return d.open;
+    if (!infoRoot()) return false;
+    const now = infoReadState();
+    return setInfoRead(now === 'read' ? 'more' : now === 'more' ? 'off' : 'read');
   }
   /** R4-fix (review RP10): an opened More detail is scrolled into the panel's view (in portrait it opened below the
    * screen edge; at 16:9 only about two lines showed). The panel scrolls while More detail is open (CSS). */
@@ -4469,6 +4765,7 @@ export function start(params = {}) {
 
   function resetBody() {
     if (!sim || !simState) return false;
+    cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
     limbGrasp = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too
     // R558 (HEAD_LOOK; user, Message 6: "they need to be activated back into previous position or the whole thing
@@ -4491,11 +4788,12 @@ export function start(params = {}) {
   }
   function resetBrainView() {
     if (!sim || !simState) return false;
+    cancelPendingGameplay('reset-brain');
     simState = sim.resetBrainView(simState);
     mirrorView = NM.resetMirror(mirrorView);
     if (sceneFn('setMirrorCorrection')) callScene('setMirrorCorrection', null); // R558: the mirror body's stop-at-contact correction goes
     contact.skipGuards = 2; // R558: a reset puts the brain and the mirror body back where they started (clear of each other)
-    arrowInput = initialArrowInput(); applyMirrorView();
+    applyMirrorView(); // cancelPendingGameplay already ended an arrow hold and kept the press sequence
     seedNext = true;
     renderRequested = true;
     current = { ...current, state: simState };
@@ -4559,21 +4857,31 @@ export function start(params = {}) {
   };
   // R4-fix (review RP10): More detail opened with the mouse (free-mouse play) also scrolls into the panel's view
   // (`toggle` does not bubble, so the listener captures).
-  listen(doc, 'toggle', e => { const t = e && e.target; if (t && t.open && typeof t.matches === 'function' && t.matches('details.ns-infopanel-detail')) revealInfoDetail(t); }, true);
-  listen(doc, 'pointerlockchange', () => {
-    const locked = lockedNow();
-    if (!locked) releaseInputs();
-    dispatch({ type: locked ? 'locked' : 'unlocked', atMs: clockMs() });
-  });
+  listen(doc, 'toggle', e => {
+    const t = e && e.target;
+    if (!t || typeof t.matches !== 'function' || !t.matches('details.ns-infopanel-detail')) return;
+    if (t.open) revealInfoDetail(t);
+    // R558 (the R key): a More detail opened or closed by a click keeps the information state in step.
+    const root = infoRoot();
+    const mode = root ? root.getAttribute('data-ns-read') : null;
+    if (t.open && mode !== 'more' && mode !== 'off') setInfoRead('more', { open: false });
+    else if (!t.open && mode === 'more' && !t.hidden) setInfoRead('read', { open: false });
+  }, true);
+  listen(doc, 'pointerlockchange', () => observePointerLock(clockMs()));
   listen(doc, 'pointerlockerror', () => dispatch({ type: 'lockError' }));
-  listen(view, 'keydown', e => {
-    if (!e || e.code !== 'Escape' || e.repeat === true) return;
-    onEscape(clockMs());
-  });
+  // Capture sees the release even when focus moved onto an overlay control; no default action is prevented.
+  listen(view, 'keydown', nativeEscapeDown, true);
+  listen(view, 'keyup', nativeEscapeUp, true);
+  // A focus/visibility change is not an Escape release. Invalidate only this private proof and retain the
+  // guarded fallback. The App cancels pending GAME queues; the binding also clears its private gesture flags.
+  listen(view, 'blur', () => { clearNativeEscape(); cancelPendingGameplay('blur'); });
+  listen(doc, 'visibilitychange', () => { clearNativeEscape(); cancelPendingGameplay('visibility'); });
+  listen(view, 'pagehide', () => { clearNativeEscape(); cancelPendingGameplay('pagehide'); });
   // Orbit arrows drawn by ns-scene-three may announce clicks as a document CustomEvent.
   listen(doc, 'ns-orbit', e => { const d = e && e.detail ? e.detail : null; if (d) orbitHandler(d.dir, d); });
 
   function fatal(err) {
+    clearNativeEscape();
     failed = true;
     phase = 'error';
     lastError = errorText(err);
@@ -4645,9 +4953,19 @@ export function start(params = {}) {
       rotationState: typeof out.rotationState === 'string' ? out.rotationState : null,
       jointAngles: out.latch && Array.isArray(out.latch.joints) ? Object.fromEntries(out.latch.joints.map(j => [j.jointId, j.goalDeg])) : null,
       // R558 (hunt 2): the game arm's own state, for its "already there" (ns-guide armActionMoves)
-      armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad } : null
+      armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad } : null,
+      reach: Array.isArray(out.reachShow) ? out.reachShow : null,
+      // R558 (Message 48): the grip of a Space grasp, what the grasp holds and how it is held (for "how to let go")
+      grip: out.grip === 'close' || out.grip === 'open' ? {
+        phase: out.grip,
+        holding: limbGrasp ? limbGrasp.limb
+          : out.objectCarry && out.objectCarry.held && out.objectCarry.target === 'mirror' ? 'mirror'
+          : (out.objectCarry && out.objectCarry.held && out.objectCarry.target === 'brain') || (out.brainView && out.brainView.grab && out.brainView.grab.active) ? 'brain' : null,
+        kept: Boolean(cs && cs.space && cs.space.grasp === 'kept')
+      } : null
     });
-    if (model.mode === 'region' && model.viewed === 'now') infoLastRegion = model;
+    // The grip card is about the Space key, not a place looked at: when the hand is open again the card that was there returns.
+    if (model.mode === 'region' && model.viewed === 'now' && model.source !== 'grasp') infoLastRegion = model;
     infoModel = model;
     const sig = `${model.key}|${Number.isFinite(model.activity) ? Math.round(model.activity * 20) : '-'}|${model.activations || 0}`;
     if (sig === infoSig) return;
@@ -4662,7 +4980,7 @@ export function start(params = {}) {
     let fullBodyCompletion = null;
     try {
       // R281: finishBody can run before the first frame; initialize its shared caches before that early await.
-      let brainKey = null, bodyKey = null, bodyDriveKey = null, viewRequests = 0, guideView = 'first';
+      let brainKey = null, bodyKey = null, bodyDriveKey = null, guideView = 'first';
       let bodyDrawnKey = null, reachSent = false; // R558 (Message 12): the drawn pose after the stop-at-contact check; the body's reach handed to the mirror plane
       // R4-integrator (D8): the saved Picture quality is known before the WebGL context exists (MSAA is decided then).
       // Under ?qa=1 the scene picks its own deterministic default (High on a real GPU), unless QA settings() set one.
@@ -4901,11 +5219,14 @@ export function start(params = {}) {
       // loss always apply, so nothing can stick); look deltas use the persisted sensitivity and invert-Y.
       const gated = Object.freeze({
         ...base,
-        keyDown: (s, code, t) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t) : s),
-        click: (s, t) => (shellIsPlaying(shellState) ? base.click(s, t) : s),
+        // R558 (Messages 33 and 34): the options (o.behind: the press reached behind, Shift held; also on a Space grasp, Message 40) are passed on.
+        keyDown: (s, code, t, o) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t, o) : s),
+        // A press behind an overlay is not recorded either (an arrow consumer must not see it after the resume).
+        buttonDown: (s, t, o) => (shellIsPlaying(shellState) ? base.buttonDown(s, t, o) : s),
+        click: (s, t, o) => (shellIsPlaying(shellState) ? base.click(s, t, o) : s),
         // R558 (R31): a drag on the brain or the mirror body can only begin while playing.
-        dragStart: (s, target) => (shellIsPlaying(shellState) && typeof base.dragStart === 'function' ? base.dragStart(s, target) : s),
-        // R4-arm: the More detail key (ns-controls DETAIL_CODE, I) only while playing.
+        dragStart: (s, target, o) => (shellIsPlaying(shellState) && typeof base.dragStart === 'function' ? base.dragStart(s, target, o) : s),
+        // The information key (ns-controls DETAIL_CODE, R) only while playing.
         toggleDetail: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleDetail === 'function' ? base.toggleDetail(s, t) : s),
         // R5-integrate-core (D18): the view key (E) only while playing; the camera decides in the frame loop (ns-camera).
         toggleView: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleView === 'function' ? base.toggleView(s, t) : s),
@@ -4920,16 +5241,19 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31; lead decision for Messages 2 and 12): what a new press would drag, at the pointer (free mouse) or at
-        // the crosshair (x, y null: captured). The same pick as the F grasp (itemAt: the nearest of your own limbs, the
-        // brain and the mirror body; an arrow under the point is an arrow press), and while F holds an item the press
-        // never starts a turn (holding comes first). A press on one of your limbs turns it like a dial (applyLimbDial).
-        dragTargetAt: (x, y) => {
-          if (!shellIsPlaying(shellState) || !appliedSize || !sceneFn('graspTargetAt')) return null;
-          if ((cs && cs.keys && cs.keys.KeyF) || limbGrasp || (simState && simState.objectCarry && simState.objectCarry.held)) return null;
+        // the crosshair (x, y null: captured). The same pick as the Space grasp (itemAt: what is seen of your own limbs, the
+        // brain and the mirror body; an arrow under the point is an arrow press), and while Space holds an item (held, or
+        // kept by a tap) the press never starts a turn (holding comes first). A press on one of your limbs turns it like a
+        // dial (applyLimbDial).
+        // R558 (Messages 33 and 34): behind (Shift held at the press) turns the item behind the one seen there.
+        dragTargetAt: (x, y, behind = false) => {
+          if (!shellIsPlaying(shellState) || !appliedSize || !sceneFn('controlLayersAt')) return null;
+          const spaceHolds = cs && cs.space && (cs.space.grasp === 'held' || cs.space.grasp === 'kept');
+          if (spaceHolds || limbGrasp || (simState && simState.objectCarry && simState.objectCarry.held)) return null;
           const px = x === null ? appliedSize.width / 2 : x, py = y === null ? appliedSize.height / 2 : y;
-          const it = itemAt(px, py);
+          const it = itemAt(px, py, behind === true);
           dragLimb = it && it.target === 'limb' ? it.limb : null;
           dragLimbSeg = dragLimb ? it.segment : null;
           if (dragLimb) leftDial = 0;
@@ -5257,20 +5581,57 @@ export function start(params = {}) {
         return toastSpot;
       }
       let muscleTapNote = null; // { text, untilT } the plain line about the last tapped muscle (simulated seconds)
-      let crossPick = null, crossPickKey = '', crossPickAt = -Infinity; // R558 (hunt 2): the muscle under the crosshair (MUSCLE_GAZE)
-      /** A click that lands on a body muscle: { event, text } (event null for a bone: only the line is shown) or null
-       * when the click is not on the body (the ordinary brain click then applies). */
-      function muscleTap() {
-        if (!sceneFn('muscleAt') || !appliedSize || !simState) return null;
+      const rotationSeen = { state: null, until: -Infinity }; // R558: the forearm line shows only around a change
+      let crossPick = null; // R558 (hunt 2): the muscle under the crosshair (what is seen there: controlTargets' front)
+      // ---- R558 (user Messages 33 and 34): what each control acts on (controlTargets) ---------------------------------
+      /** Everything along the ray through CSS (x, y) as the controls see it: { arrow (the usable arrow tip there, drawn
+       * on top: ns-controls resolveArrowHit), front, behind (controlTargets), mirror (the scene's carry data for the
+       * mirror body), mirrorEnvelope } or null (no scene pick). */
+      function targetsAt(x, y) {
+        if (!sceneFn('controlLayersAt') || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+        let L = null; try { L = callScene('controlLayersAt', x, y); } catch { L = null; }
+        if (!L || !Array.isArray(L.layers)) return null;
+        // LEAD DECISION (refines Messages 33 and 34): at the crosshair the controls follow what the look names, so they ask
+        // the look's own classifier (state.rawGaze, before the overrides) whether a motor area is on this ray; elsewhere
+        // (a free pointer off the centre) the scene's area meshes decide.
+        const raw = simState && simState.rawGaze && typeof simState.rawGaze === 'object' ? simState.rawGaze : null;
+        const atCross = Boolean(appliedSize) && Math.abs(x - appliedSize.width / 2) < 0.5 && Math.abs(y - appliedSize.height / 2) < 0.5;
+        const t = controlTargets(L.layers, atCross && raw && typeof raw.target === 'string' ? { lookArea: raw.target === 'region' } : {});
+        return { arrow: usableArrowHitAt(x, y), front: t.front, behind: t.behind, seen: t.seen, atCross, mirror: L.mirror || null, mirrorEnvelope: L.mirror ? L.mirror.mirrorEnvelope : null };
+      }
+      /** The entry a press acts on: by default controlTargets' front (the motor area the look names, else what is seen;
+       * an arrow tip in front of everything is the tip itself: { arrow }); reaching behind (Shift held at the press), the
+       * other item on the line of sight (controlTargets' behind), or, on an arrow tip, the default target behind the
+       * tip. { entry, arrow } (both may be null). */
+      const pressEntry = (T, behind) => (!T ? { entry: null, arrow: null } : behind ? { entry: T.arrow ? T.front : T.behind, arrow: null } : T.arrow ? { entry: null, arrow: T.arrow } : { entry: T.front, arrow: null });
+      /** A brain or mirror-body entry as the scene pick the carry and the activity take ({ target, pointWorldM, ... }). */
+      function itemPick(entry, T) {
+        if (!entry || !T) return null;
+        if (entry.item === 'brain') return { target: 'brain', blocked: null, pointWorldM: entry.point, mirrorEnvelope: T.mirrorEnvelope, source: `controls-${entry.kind}-r558` };
+        if (entry.item === 'mirror' && T.mirror) return { target: 'mirror', blocked: null, centreWorldM: T.mirror.centreWorldM.slice(), radiusM: T.mirror.radiusM, pointWorldM: entry.point, mirrorEnvelope: T.mirrorEnvelope, source: 'controls-mirror-r558' };
+        return null;
+      }
+      /** The press point: the crosshair while the mouse is captured, else the free pointer. */
+      const pressXY = () => {
         const locked = lockedNow() || !cs.pointer;
-        const x = locked ? appliedSize.width / 2 : cs.pointer.x, y = locked ? appliedSize.height / 2 : cs.pointer.y;
-        if (usableArrowHitAt(x, y)) return null;
-        let pick = null; try { pick = callScene('muscleAt', x, y); } catch { pick = null; }
-        if (!pick) return null;
+        return locked ? { x: appliedSize.width / 2, y: appliedSize.height / 2 } : { x: cs.pointer.x, y: cs.pointer.y };
+      };
+      /** A click that lands on a body muscle: { event, text } (event null for a bone: only the line is shown), or
+       * { reachArea } for a reach-behind click on a motor area (the frame loop lets the look see that area for this
+       * click), or null when the click is not on a body part (the ordinary brain click then applies). behind: the click
+       * reached behind (Shift held). Lead decision (refines Messages 33 and 34): a plain click on a motor area the look
+       * names behind a body part is the ordinary area click (controlTargets' front is the area); Shift taps that part. */
+      function muscleTap(behind = false) {
+        if (!sceneFn('controlLayersAt') || !appliedSize || !simState) return null;
+        const { x, y } = pressXY();
+        const T = targetsAt(x, y);
+        const { entry } = pressEntry(T, behind);
+        if (!entry) return null;
+        if (entry.item === 'brain') return behind && entry.kind === 'area' ? { reachArea: { regionId: entry.regionId || null }, pick: itemPick(entry, T) } : null;
+        const pick = { ...entry.rec, distance: entry.distance };
         // R558 (lead decision: "LEFT CLICK = activate whatever is under the crosshair ... and now a muscle on the own
-        // body"): your own body is drawn solid now (OWN_BODY_SOLID), so the nearest thing along the ray wins (muscleAt
-        // already gives a nearer motor area to the brain). The old rule "your own body is see-through for aiming at the
-        // brain: a motor area behind it wins" belonged to the see-through body and is gone.
+        // body"): a muscle is tapped where it is the target (controlTargets): what is seen where the look names no motor
+        // area, or, with Shift, the body part in front of the area the look names (a plain click switches that area on).
         const where = pick.source === 'mirror' ? NT.MUSCLE_TAP.onMirror : NT.MUSCLE_TAP.onYou;
         if (pick.kind !== 'muscle') return { event: null, text: NT.muscleTapBoneLine(pick.name, where) };
         const route = muscleRoute(pick);
@@ -5281,7 +5642,7 @@ export function start(params = {}) {
           pick: { id: pick.id, name: pick.name, source: pick.source, kind: pick.kind }, route };
       }
 
-      // ---- R558 (user Messages 2 and 12): holding with F, turning by drag, and keeping the three items apart ---------
+      // ---- R558 (user Messages 2 and 12): holding with Space, turning by drag, and keeping the three items apart ---------
       /** The own limb a body pick belongs to ('rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg'), or null (your trunk,
        * neck or head, which cannot be held). The left arm's meshes are the game arm's (part 'arm'), plus the body's own
        * muscles on the left upper arm segment (they move with the game arm). */
@@ -5296,28 +5657,63 @@ export function start(params = {}) {
         if (/^l_(thigh|patella|shank|foot|toes)$/.test(seg)) return 'leftLeg';
         return null;
       }
-      /** What a press at CSS (x, y) would hold (F) or turn (drag): { target: 'limb', limb } | { target: 'brain', pick } |
-       * { target: 'mirror', pick } | null (pick: the scene's graspTargetAt at that point, which the carry starts from). The
-       * NEAREST drawn thing along the ray wins (your own body is drawn solid); a press on your trunk, neck or head holds
-       * nothing. */
-      function itemAt(x, y) {
-        if (usableArrowHitAt(x, y)) return null;
-        let item = null, own = null;
-        try { item = sceneFn('graspTargetAt') ? callScene('graspTargetAt', x, y) : null; } catch { item = null; }
-        try { own = sceneFn('muscleAt') ? callScene('muscleAt', x, y) : null; } catch { own = null; }
-        const eye = camPose && Array.isArray(camPose.position) ? camPose.position : [0, 0, 0];
-        const p = item && Array.isArray(item.pointWorldM) ? item.pointWorldM : null;
-        const dItem = p ? Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]) : Infinity;
-        // R558 (docs check): your own limb seen through the CLEAR glass of the brain is what you aim at (your feet reach
-        // inside the brain's outline; the looking-at line then offers "hold F to hold this limb"), so it wins over the
-        // brain's glass in front of it. muscleAt has already given way to any motor area nearer on the ray, and a mirror
-        // body nearer than your limb still wins.
-        if (own && own.source === 'own' && Number.isFinite(own.distance) && (own.distance <= dItem || (item && item.target === 'brain'))) {
-          const limb = limbOfPick(own);
-          return limb ? { target: 'limb', limb, segment: segOfPick(own) } : null;
+      /** What a press at CSS (x, y) would hold (Space) or turn (drag): { target: 'limb', limb } | { target: 'brain', pick } |
+       * { target: 'mirror', pick } | null (pick: the scene pick the carry starts from). R558 (Messages 33 and 34): by
+       * default controlTargets' front: the motor area the look names means the brain, even behind a body part (lead
+       * decision); otherwise what is SEEN there (the brain's clear glass is see-through, so your own limb or the mirror
+       * body seen through it is taken, not the glass); an arrow tip there is an arrow press (null). behind (Shift held
+       * at the press): the other item on the line of sight (the body part in front of that area, the item behind what
+       * is seen, or what is behind an arrow tip). A press on your trunk, neck or head holds nothing. */
+      function itemAt(x, y, behind = false) {
+        const T = targetsAt(x, y);
+        const { entry } = pressEntry(T, behind);
+        if (!entry) return null;
+        if (entry.item === 'own') {
+          const limb = limbOfPick(entry.rec);
+          return limb ? { target: 'limb', limb, segment: segOfPick(entry.rec) } : null;
         }
-        if (item && (item.target === 'brain' || item.target === 'mirror')) return { target: item.target, pick: item };
-        return null;
+        const pick = itemPick(entry, T);
+        return pick ? { target: pick.target, pick } : null;
+      }
+      /** The frame's crosshair pick for the activity and the carry (stepFrame inputs.objectPick) from targetsAt: an arrow
+       * tip ('orbit-arrow': no motor area is looked at through it), the brain or the mirror body SEEN there, or, when one
+       * of your own body parts is seen, the item behind it with bodyInFront 'own'. A body seen in front of a motor area
+       * no longer hides that area from the look (lead decision refining Messages 33 and 34: stepFrame keeps a motor area
+       * the classifier finds); it still marks bare glass behind your body (the covered card) and stands for the mirror
+       * body where no area is behind it. bodyPick: the body part seen there (the HUD's "Looking at" line). */
+      function frameObjectPick(T, live) {
+        if (!live) return { target: null, blocked: 'paused' };
+        if (!T) return { target: null, blocked: 'unsupported-normal-scene-pick' };
+        if (T.arrow) return { target: null, blocked: 'orbit-arrow', mirrorEnvelope: T.mirrorEnvelope };
+        const f = T.seen;
+        if (!f) return { target: null, blocked: null, mirrorEnvelope: T.mirrorEnvelope };
+        const bodyPick = f.item === 'brain' ? null : { ...f.rec, distance: f.distance };
+        if (f.item !== 'own') { const p = itemPick(f, T); return p ? (bodyPick ? { ...p, bodyPick } : p) : { target: null, blocked: null, mirrorEnvelope: T.mirrorEnvelope }; }
+        // The item behind your body part (the area the look names, when the controls default to it, else T.behind).
+        const past = T.front && T.front.item !== 'own' ? T.front : T.behind;
+        const base = past ? itemPick(past, T) : null;
+        return { ...(base || { target: null, blocked: null, mirrorEnvelope: T.mirrorEnvelope }), bodyInFront: 'own', bodyPick };
+      }
+      /** R558 (Messages 33 and 34): the HUD's controls line for targetsAt T: what F and a press-and-drag take there (what
+       * is seen) and how to reach the item behind (hold Shift as you press); while Shift is held (reach), what the press
+       * will act on. '' when there is nothing to say. */
+      /** A short plain key of a controlTargets entry for inspect(): item:kind[:limb][:regionId]. */
+      const ctlKey = e => `${e.item}:${e.kind}${e.item === 'own' ? ':' + (limbOfPick(e.rec) || 'trunk') : ''}${e.regionId ? ':' + e.regionId : ''}`;
+      function controlTargetsLine(T, reach) {
+        if (!T || typeof NT.HUD.controlTargets !== 'function') return '';
+        const nameOf = e => (!e ? null : e.item === 'brain' ? (e.kind === 'area' ? 'area' : 'brain') : e.item === 'mirror' ? 'mirror' : limbOfPick(e.rec) || 'trunk');
+        const be = T.arrow ? T.front : T.behind;
+        // The area is named only from the look's own classifier (the one a click uses: dots first, the per-point owner on
+        // the strip), when stepFrame keeps its answer before the overrides (state.rawGaze); the scene's area meshes give
+        // whole triangles, which can name the neighbour near a border or on a dot, so without it the line says "a brain area".
+        // That answer is about the crosshair only: with a free pointer elsewhere the area stays unnamed.
+        const raw = T.atCross && simState && simState.rawGaze && typeof simState.rawGaze === 'object' ? simState.rawGaze : null;
+        const r = be && be.item === 'brain' && be.kind === 'area' && raw && raw.target === 'region' && typeof raw.regionId === 'string' ? regionOf(raw.regionId) : null;
+        // The other item lies NEARER than the default one: the brain's clear glass in front of what you see (ahead), or
+        // (lead decision) the body part in front of the motor area the look names (inFront).
+        const nearer = Boolean(be && T.front && !T.arrow && be.distance < T.front.distance);
+        return NT.HUD.controlTargets({ front: T.arrow ? 'arrow' : nameOf(T.front), behind: nameOf(be), ahead: nearer && be.item === 'brain', inFront: nearer && be.item !== 'brain',
+          area: r ? NT.plainTitle(r) : '', reach: reach === true });
       }
       const pressPoint = () => {
         const locked = lockedNow() || !cs || !cs.pointer;
@@ -5372,7 +5768,7 @@ export function start(params = {}) {
         if (out) out.bodyJointTargets = simState.activity.bodyJointTargets;
       }
       const worldOf = (B, p) => NsCollide.apply(B, p[0], p[1], p[2]);
-      /** Start holding an own limb (F pressed on it). The left arm is the game arm: holding it is the ordinary reach. */
+      /** Start holding an own limb (Space pressed on it). The left arm is the game arm: holding it is the ordinary reach. */
       function beginLimbGrasp(limb) {
         if (limb === 'leftArm') { limbGrasp = { limb, targetMm: null, lastPitch: cs.pitch }; return; }
         if (!canSolveLimbs() || !NsGrasp.LIMB_CHAIN[limb]) { limbGrasp = null; return; }
@@ -5544,25 +5940,41 @@ export function start(params = {}) {
         if (!items || !items.own) { keep(mm.drawn); return; }
         const from = mirrorDrawn, to = mm.drawn, pivot = NsCollide.apply(from, ...(mm.centre ? NsCollide.apply(NsCollide.affineInverse(to), ...mm.centre) : [0, 0, 0]));
         const reach = reachItem();
+        // R558 (performance): the mirror image of your body at this frame's start (matrix `from`) and at its end (`to`)
+        // are each built once and shared by the tests, the inside-the-brain checks and the kept margin (blendMatrix at
+        // share 0 and 1 gives `from` and `to` themselves: the same numbers).
+        const mirrorFrom = NsCollide.moved(items.own, from), reachImgFrom = reachImage(reach, from);
+        let endIt = null, endReach;
+        const mirrorTo = () => endIt || (endIt = NsCollide.moved(items.own, to));
+        const reachImgTo = () => (endReach !== undefined ? endReach : (endReach = reachImage(reach, to)));
         const test = (f, cap = COLLIDE_CAP) => {
-          const X = NsCollide.blendMatrix(from, to, f, pivot), m = NsCollide.moved(items.own, X), ri = reachImage(reach, X);
+          let m, ri;
+          if (f >= 1) { m = mirrorTo(); ri = reachImgTo(); }
+          else if (f <= 0) { m = mirrorFrom; ri = reachImgFrom; }
+          else { const X = NsCollide.blendMatrix(from, to, f, pivot); m = NsCollide.moved(items.own, X); ri = reachImage(reach, X); }
           return Math.min(gapTo(m, [items.own, items.brain, reach], cap), ri ? gapTo(ri, [items.own, items.brain, reach], cap) : Infinity);
         };
-        const mirrorFrom = NsCollide.moved(items.own, from), reachImgFrom = reachImage(reach, from);
         const travel = NsCollide.rigidTravel(from, to, pivot, mirrorFrom), clr = NsCollide.COLLIDE.clearanceM;
         let f = null, how = 'walk', stoppedBy = 'clear';
         const mk = mirrorMargin;
+        let stale = false;
         if (travel !== null && mk) {
           const t = worstTravel([[mirrorFrom, mk.mirror], [reachImgFrom, mk.reachImg]]) + travel + worstTravel([[items.own, mk.own], [items.brain, mk.brain], [reach, mk.reach]]);
           if (t <= mk.gap - clr) { f = 1; how = 'margin'; }
+          else stale = !(t < Infinity);
         }
         if (f === null) {
-          const capEnd = travel === null ? COLLIDE_CAP : Math.max(MARGIN_CAP, travel + clr), gEnd = test(1, capEnd);
+          // R558 (performance): the end is searched as far as this frame's question needs (travel + clearance: a gap that
+          // large means the whole way is clear). Searching on to MARGIN_CAP only pays when the gap found can be kept as a
+          // margin for the frames after. While the kept margin cannot be carried from one frame to the next (stale: the
+          // look is re-skinning your body, so its sphere tables are new every frame and no travel can be told), the search
+          // stops at what the frame needs. The answer is the same under either cap: clear, or the same walk.
+          const capEnd = travel === null ? COLLIDE_CAP : stale ? travel + clr : Math.max(MARGIN_CAP, travel + clr), gEnd = test(1, capEnd);
           if (travel === null) { f = NsCollide.clearFraction(k => test(k)); if (f < 1) stoppedBy = 'contact'; }
           else ({ share: f, stoppedBy } = NsCollide.walkMove(test, travel, { endGap: gEnd }));
-          if (f > 0 && solidWorse(items, items.brainMatrix, [mirrorFrom], items.brainMatrix, [NsCollide.moved(items.own, NsCollide.blendMatrix(from, to, f, pivot))])) { f = 0; stoppedBy = 'contact'; }
-          mirrorMargin = f >= 1 && travel !== null && insideBrain(items, items.brainMatrix, [NsCollide.moved(items.own, to)]) === 0
-            ? { gap: gEnd, mirror: NsCollide.moved(items.own, to), reachImg: reachImage(reach, to), own: items.own, brain: items.brain, reach } : null;
+          if (f > 0 && solidWorse(items, items.brainMatrix, [mirrorFrom], items.brainMatrix, [f >= 1 ? mirrorTo() : NsCollide.moved(items.own, NsCollide.blendMatrix(from, to, f, pivot))])) { f = 0; stoppedBy = 'contact'; }
+          mirrorMargin = f >= 1 && travel !== null && insideBrain(items, items.brainMatrix, [mirrorTo()]) === 0
+            ? { gap: gEnd, mirror: mirrorTo(), reachImg: reachImgTo(), own: items.own, brain: items.brain, reach } : null;
         }
         contact.lastMirror = { share: f, travelM: travel, how, stoppedBy };
         if (f >= 1) { keep(mm.drawn); return; }
@@ -5599,7 +6011,7 @@ export function start(params = {}) {
         const after = callScene('setMirrorCorrection', identity ? null : R);
         return after && after.drawn ? after.drawn : X;
       }
-      /** The brain moved this frame (arrows, drag, F carry, W/A/S/D): keep only the share of this frame's move that stays
+      /** The brain moved this frame (arrows, drag, Space carry, W/A/S/D): keep only the share of this frame's move that stays
        * clear of your body and the mirror body along the whole way (walkFraction), never leaving a point of either body
        * inside the brain (sim.blendBrainStep takes the rest back, so the look and keys carry on from where it stopped). */
       let brainDrawn = null;
@@ -5988,6 +6400,10 @@ export function start(params = {}) {
 
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
+        // R34 GAME saturation policy (public main): count before any UI/GAME drain, timestamp mapping, E change or plan
+        // binding. The old carry limit now bounds the combined pending list. Overflow cancels an epoch; no real edge is
+        // retimed.
+        enforceInputCapacity();
         // R4-integrator: the controls' UI queue (lock / Esc / More-detail-key events) is drained every frame. The shell
         // handles those through its own listeners, so the events are only discarded; undrained, the queue filled up after
         // enough pointer-lock changes and then refused the More detail key (UI_QUEUE_LIMIT; e2e S41 with real input).
@@ -6027,6 +6443,9 @@ export function start(params = {}) {
         if (live) {
           // Actual elapsed wall time (monotonic performance clock; the rAF timestamp only as a fallback), or the QA
           // fixed clock in step(dtMs). A QA look injected before a fixed step is applied at the start of the step.
+          // R558 (Message 40): first the Space decisions that come from time alone (ns-controls tickSpace: a double tap
+          // still held 0.25 s after its press goes on as the slow turn; a press that waited for a turn takes hold).
+          if (typeof controlsApi.tickSpace === 'function') cs = controlsApi.tickSpace(cs, now);
           rawFrameEvents = [...carryRawEvents.splice(0), ...controlsApi.drainEvents(cs)];
           timing = frameTiming(lastMs, now, rawFrameEvents, cs.lookMs);
           if (fixed === true && qaLookPending) timing = { ...timing, gazeAt: 0 };
@@ -6037,12 +6456,13 @@ export function start(params = {}) {
           lastMs = null;
         }
         // R5-integrate-core (D18): E (the view key) asks ns-camera to switch first person <-> third person. Requests come from
-        // the controls' UI queue (drained at the top of the frame); the camera refuses one while F holds the brain or the mirror
-        // body (R558: the status card then says to let go of F first, NT.HUD.viewWhileHolding). The
+        // the controls' UI queue (drained at the top of the frame); the camera refuses one while Space holds the brain or the
+        // mirror body (R558: the status card then says to let go first, NT.HUD.viewWhileHolding). The
         // pitch range is set BEFORE the handed-over look, so E then E returns exactly (R5-camera 4.1).
         // Review fix: the camera before this frame's E presses and ease. A skipped frame goes back to it and asks for
         // the same presses again, so skipped frames no longer add their (growing) time step to the change of view.
         const camAtFrameStart = cam;
+        const yawAtFrameStart = cs.yaw, pitchAtFrameStart = cs.pitch; // (two numbers: no per-frame object)
         let togglesThisFrame = 0;
         if (live && viewRequests > 0) {
           const grabbing = Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
@@ -6061,28 +6481,57 @@ export function start(params = {}) {
         if (live) cam = NC.stepCamera(cam, timing.dt, { reducedMotion: prefersReducedMotion() });
         // R558 (R31): a click on a body muscle becomes that muscle's tap (its motor area is switched on) instead of a
         // click on the brain; a click on a bone only says so. Other clicks are untouched.
-        let tapped = null;
+        let tapped = null, ctlFrame = null; // ctlFrame: targetsAt at the crosshair, as the frame's attempt saw it
+        // R558 (Messages 33 and 34): a reach-behind click (Shift held) whose item behind is a motor area switches that
+        // area on: for this frame the look sees the area (reachPick, the brain as picked there, instead of what is in
+        // front of it: stepFrame applies the overrides afresh to the classifier's own answer, state.rawGaze) and is placed
+        // at the start of the frame and silent, so the click, which the activity applies to the area the look is on,
+        // finds it. Since the lead decision refining Messages 33 and 34 the look already reaches an area behind a body, so
+        // this is left for the rarer cases (Shift on an arrow tip over an area; an area the scene meshes see behind a body
+        // where the look's classifier did not name one).
+        let reachPick = null;
         if (live && timing.events.some(e => e && e.type === 'click')) {
-          tapped = muscleTap();
+          const first = timing.events.find(e => e && e.type === 'click');
+          tapped = muscleTap(Boolean(first && first.behind === true));
+          if (tapped && tapped.reachArea) { reachPick = tapped.pick; tapped = null; }
+          // A reach-behind click with nothing behind acts on nothing (it never falls back to the item in front).
+          else if (!tapped && first && first.behind === true) tapped = { event: null, text: '' };
           if (tapped) {
             let used = false;
             timing = { ...timing, events: timing.events.map(e => (!used && e && e.type === 'click' ? ((used = true), tapped.event ? { ...tapped.event, at: e.at } : null) : e)).filter(Boolean) };
           }
+          if (reachPick) timing = { ...timing, gazeAt: 0 };
         }
-        // R558 (lead decision for Messages 2 and 12): an F press takes hold of what is under the crosshair: one of your own
-        // limbs, the brain or the mirror body (the nearest; itemAt). Each press is labelled with its target for the
-        // activity (brain grab) and the carry (brain / mirror); an own limb is held here. A release lets go of all.
+        // R558 (Messages 2, 12 and 40): a Space grasp (a hold or a tap; ns-controls SPACE_GESTURE) takes hold of what is
+        // under the crosshair: one of your own limbs, the brain or the mirror body (what is seen there; itemAt). Each press
+        // is labelled with its target for the activity (brain grab) and the carry (brain / mirror); an own limb is held
+        // here. A release lets go of all. (A double tap's 'turn' events go to the activity unchanged.)
+        // R558 (Messages 33 and 34): Shift + Space (behind) holds the item behind the one seen there.
         if (live && timing.events.some(e => e && e.type === 'grasp')) {
           timing = { ...timing, events: timing.events.map(e => {
             if (!e || e.type !== 'grasp') return e;
             if (e.down !== true) { limbGrasp = null; return e; }
-            const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y) : null;
+            const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y, e.behind === true) : null;
             if (it && it.target === 'limb') beginLimbGrasp(it.limb); else limbGrasp = null;
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
         }
         if (!live) limbGrasp = null;
+        // R558 (Message 48: "you can't see the grasping action at all"): the left hand grips for as long as Space holds
+        // or keeps a grasp (ns-controls SPACE_GESTURE grasp 'held' | 'kept'), whatever is under the crosshair, and opens
+        // when the grasp lets go. The activity's graspHold is kept in step with the gesture here, every frame, by a
+        // 'grip' event at the time of the press or release that changed it (so a tap on nothing, which the gesture
+        // forgets at the end of its frame, is a short grip that opens again).
+        if (simState && simState.activity && typeof simState.activity.graspHold === 'boolean') {
+          const sg = cs && cs.space && typeof cs.space.grasp === 'string' ? cs.space.grasp : 'none';
+          const wantGrip = live && sg !== 'none';
+          if (wantGrip !== simState.activity.graspHold) {
+            let at = 0;
+            for (const e of timing.events) if (e && e.type === 'grasp' && (e.down === true) === wantGrip && Number.isFinite(e.at)) at = e.at;
+            timing = { ...timing, events: [...timing.events, { type: 'grip', on: wantGrip, at }] };
+          }
+        }
         // R558 (R31): movement of a press-and-drag on the brain or the mirror body since the last frame (CSS px).
         let dragTurn = null;
         if (live && typeof controlsApi.takeDrag === 'function') { const r = controlsApi.takeDrag(cs); cs = r.state; dragTurn = r.drag; }
@@ -6091,9 +6540,9 @@ export function start(params = {}) {
           dragTurn = dragTurn && dragTurn.target === carryDrag.target ? { target: dragTurn.target, dx: dragTurn.dx + carryDrag.dx, dy: dragTurn.dy + carryDrag.dy } : dragTurn || carryDrag;
           carryDrag = null;
         }
-        // Review fix: a pause drops clicks and presses still waiting from skipped frames (they were replayed at once
-        // on resume: a click mark, or two Space presses read as a double tap). A waiting release is kept.
-        if (!live && carryRawEvents.length) settleCarriedEvents();
+        // Defensive cancellation for a frozen route that still has deferred records. This is an observed GAME
+        // boundary, never an unstamped substitute for an original release. Ordinary pause already cancels synchronously.
+        if (!live && carryRawEvents.length) cancelPendingGameplay('frozen-pending-input');
         if (!live) carryDrag = null;
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
@@ -6260,11 +6709,14 @@ export function start(params = {}) {
           if (togglesThisFrame > 0) arrowMute = { waiting: true, key: null };
           if (arrowMute.waiting && cam.progress === (cam.view === 'third' ? 1 : 0)) arrowMute = { waiting: false, key: pp && pp.via === 'crosshair' ? tipKey(hit) : null };
           if (arrowMute.key && pp && pp.via === 'crosshair') { if (tipKey(hit) === arrowMute.key) hit = null; else arrowMute = { waiting: false, key: null }; }
+          // R558 (Messages 33 and 34): while Shift is held a tip is not hovered (the press will reach what is behind it),
+          // and a press made with Shift held is never a tip press (the click, drag or F acts on what is behind the tip).
+          if (cs.reach === true) hit = null;
           const btn = typeof controlsApi.buttonState === 'function' ? controlsApi.buttonState(cs) : { down: false, seq: 0 };
           let pressHit;
           if (live && Number.isSafeInteger(arrowInput.seq) && btn.seq > arrowInput.seq) {
             const q = arrowPressPoint(cs, { width: W, height: H });
-            pressHit = q ? arrowHitAt(q.x, q.y) : null;
+            pressHit = q && btn.behind !== true ? arrowHitAt(q.x, q.y) : null;
             if (pressHit && arrowMute.key && q.via === 'crosshair' && tipKey(pressHit) === arrowMute.key) pressHit = null;
           }
           const ar = stepArrowInput(arrowInput, { nowMs: now, hit, ...(pressHit !== undefined ? { pressHit } : {}), button: btn, playing: live,
@@ -6287,31 +6739,29 @@ export function start(params = {}) {
           const hk = shown ? `${shown.target}:${shown.dir}:${shown.blocked || ''}` : '';
           if (hk !== arrowHoverKey) { arrowHoverKey = hk; try { callScene('setArrowHover', shown ? { target: shown.target, dir: shown.dir, blocked: shown.blocked || null } : null); } catch { /* highlight only */ } }
         }
-        const objectPick0 = live && sceneFn('graspTargetAt') ? callScene('graspTargetAt', size.width / 2, size.height / 2) : { target: null, blocked: live ? 'unsupported-normal-scene-pick' : 'paused' };
-        // R558 (hunt 2 limit; Message 12, "not through"): what is picked is what is drawn. A motor area that your own
-        // body, or the mirror body, covers at the crosshair is not looked at (in third person your back hides the leg
-        // areas; looking down, your feet cover them): muscleAt answers only when a body part is NEARER than every
-        // motor area on the same ray. Asked only while the crosshair is on the brain; the answer also serves the HUD's
-        // "Looking at (your body)" line this frame (crossPick).
-        let bodyFront = null;
-        if (live && objectPick0 && objectPick0.target === 'brain' && sceneFn('muscleAt')) {
-          try { bodyFront = callScene('muscleAt', size.width / 2, size.height / 2); } catch { bodyFront = null; }
-        }
-        const objectPick = bodyFront && (bodyFront.source === 'own' || bodyFront.source === 'mirror')
-          ? { ...objectPick0, bodyInFront: bodyFront.source, bodyPick: bodyFront } : objectPick0;
+        // R558 (Messages 33 and 34; hunt 2 limit; Message 12, "not through"): what is SEEN at the crosshair (controlTargets:
+        // the brain's clear glass is see-through) goes to stepFrame (frameObjectPick); a motor area the look's classifier
+        // finds behind your own body or the mirror body is still looked at (lead decision refining Messages 33 and 34).
+        // The same answer serves the HUD's "Looking at" line and its controls line this frame. A reach-behind click on a
+        // motor area (reachPick, above) lets the look see that area for its own frame.
+        const ctl = live ? targetsAt(size.width / 2, size.height / 2) : null;
+        ctlFrame = ctl;
+        const objectPick = live && reachPick ? reachPick : frameObjectPick(ctl, live);
         const stepInputs = {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
-          // R558: while something is held with F (the brain, the mirror body or an own limb other than the left arm, which
+          // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
           // IS the reach), W/A/S/D move it and not the left hand.
           ...((limbGrasp && limbGrasp.limb !== 'leftArm') || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || timing.events.some(e => e && e.type === 'grasp' && e.down === true && (e.target === 'brain' || e.target === 'mirror')) ? { armAxes: { x: 0, z: 0 } } : {}),
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true,
           // R558 (HEAD_LOOK): a held neck / trunk action that swings the view is not the player looking somewhere: the
           // area the crosshair lands on is recorded silently (no activation without the player's own look or click).
-          // R558 (Messages 2 and 12): likewise while F holds the mirror body or one of your limbs (not the left arm, which
+          // R558 (Messages 2 and 12): likewise while Space holds the mirror body or one of your limbs (not the left arm, which
           // IS the reach): the look carries it, so the crosshair passing over motor areas switches nothing on (as for the
           // held brain, whose gaze the activity records silently); after the release only a NEW area under the crosshair acts.
-          silentGaze: seedNext === true || camPose.silentGaze === true || Boolean(headOffs && headOffs.moving) || Boolean(limbGrasp && limbGrasp.limb !== 'leftArm')
+          // R558 (Messages 33 and 34): the look's one frame on the area behind, for a reach-behind click, is silent too: the
+          // click switches the area on, the look itself starts nothing there.
+          silentGaze: seedNext === true || objectPick === reachPick || camPose.silentGaze === true || Boolean(headOffs && headOffs.moving) || Boolean(limbGrasp && limbGrasp.limb !== 'leftArm')
             || Boolean(simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target === 'mirror'),
           ...(head ? { head } : {}),
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
@@ -6335,20 +6785,20 @@ export function start(params = {}) {
           if (sceneFn('abandonCameraProjectionPlan')) callScene('abandonCameraProjectionPlan');
         };
         // One measured rescue per unbroken run of skipped frames: the same Reset body / Reset brain view the Esc page
-        // offers, and the start look. (Review fixes: it is also reached when the run passes its length through a
-        // refusal after the step, and it keeps a Space release that was waiting, so a fist is not left closed.)
+        // offers, and the start look. A refusal after the step can also reach it. Rescue cancels waiting GAME records
+        // and queues a new observation-time grasp release and turn stop (cancelPendingGameplay); it no longer replays an original
+        // release with an invented time.
         const rescueAfterLongSkip = () => {
           if (displayRecovery.rescued || displayRecovery.skipStreak < DISPLAY_RECOVERY.resetAfterSkips) return;
           displayRecovery.rescued = true; displayRecovery.resets++;
-          releaseInputs();
+          cancelPendingGameplay('display-rescue');
           simState = sim.resetBrainView(sim.resetBody(simState));
-          limbGrasp = null; leftDial = 0; contact.bodyBlocked = null; contact.skipGuards = 2;
+          contact.bodyBlocked = null; contact.skipGuards = 2; // (the limb hold and dial ended with the cancellation)
           if (sceneFn('setMirrorCorrection')) callScene('setMirrorCorrection', null);
-          mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); arrowInput = initialArrowInput();
+          mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); // cancellation retained the current arrow press sequence
           cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; carryDrag = null;
           cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
           lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lastGoodCam = cam; lookBlock = null; reachBlock = null; seedNext = true;
-          settleCarriedEvents();
           current = { ...current, state: simState };
           dispatch({ type: 'notice', text: SHELL_TEXT.displayRescue || SHELL_TEXT.bodyReset });
         };
@@ -6433,14 +6883,25 @@ export function start(params = {}) {
               }
             }
             if (attemptIndex >= ladder.length) {
-              // No attempt was accepted: skip this frame. Nothing is drawn, no simulated time passes and its Space /
-              // click events wait for the next frame, so a release is never lost.
+              // No attempt was accepted: no model/time commit or draw. Retain the complete bounded raw list, with
+              // original times/order (the old rule kept the first 64 and could lose a later Space release). A
+              // violated capacity bound cancels explicitly instead of losing a tail.
               lastMs = lastMsBeforeFrame;
-              for (const ev of rawFrameEvents) if (carryRawEvents.length < DISPLAY_RECOVERY.carryEventLimit) carryRawEvents.push(ev);
-              if (dragTurn) carryDrag = dragTurn;
+              const deferred = retainDeferredInput(rawFrameEvents, DISPLAY_RECOVERY.carryEventLimit);
+              if (deferred.overflow) {
+                cancelPendingGameplay('deferred-input-overflow', deferred.totalRecords);
+                dispatch({ type: 'notice', text: SHELL_TEXT.inputCleared });
+              } else {
+                carryRawEvents.push(...deferred.events);
+                if (dragTurn) carryDrag = dragTurn;
+              }
               // The camera goes back to where this frame found it, and its E presses are asked again next frame (only in
-              // the whole-arm display, where E changes nothing but the camera).
-              if (wholeArmOption) { cam = camAtFrameStart; viewRequests += togglesThisFrame; }
+              // the whole-arm display, where E changes nothing but the camera). A cancelled epoch never requeues E or drag.
+              if (wholeArmOption) {
+                cam = camAtFrameStart;
+                if (deferred.overflow) cs = controlsApi.setLook(cs, { yaw: yawAtFrameStart, pitch: pitchAtFrameStart });
+                else viewRequests += togglesThisFrame;
+              }
               displayRecovery.skippedFrames++; displayRecovery.skipStreak++;
               rescueAfterLongSkip();
               if (displayRecovery.skipStreak > DISPLAY_RECOVERY.stopAfterSkips) throw firstRefusal;
@@ -6473,7 +6934,7 @@ export function start(params = {}) {
           const started = !ev || ev.regionOnly === true || (act && act.pulseRegion === ev.regionId);
           muscleTapNote = started ? { text: tapped.text, untilT: attempted.step.state.t + MUSCLE_TAP.noteSeconds } : null;
         } else if (muscleTapNote) {
-          // R558 (hunt 2): any newer click (an arrow press too), F press or new pulse makes the tap line out of date.
+          // R558 (hunt 2): any newer click (an arrow press too), Space grasp or new pulse makes the tap line out of date.
           const evs = attempted.timing && Array.isArray(attempted.timing.events) ? attempted.timing.events : [];
           const newInput = evs.some(e => e && (e.type === 'click' || e.type === 'muscle' || (e.type === 'grasp' && e.down === true)))
             || arrowEvents.some(e => e && e.type === 'arrowPress');
@@ -6486,6 +6947,11 @@ export function start(params = {}) {
         seedNext = false;
         simState = step.state;
         const out = step.out;
+        // R558 (performance): the scene rests the arrows of an item while it is held (ns-scene-three setHeldItem)
+        if (sceneFn('setHeldItem')) {
+          const oc = simState.objectCarry, act = simState.activity;
+          callScene('setHeldItem', oc && oc.held && (oc.target === 'brain' || oc.target === 'mirror') ? oc.target : act && act.brainGrab && act.brainGrab.active ? 'brain' : null);
+        }
         if (out.objectCarry && out.objectCarry.mirrorWorldCentre) {
           // R558 (hunt 2 code #1): a carry taken up this frame starts from the DRAWN centre (the pick reads it after any
           // stop-at-contact correction), so the correction left over from before is dropped as the carried place takes over.
@@ -6608,7 +7074,13 @@ export function start(params = {}) {
           }
           callScene('setSettledRegions', settled);
         }
-        scene.updateMuscles(out.muscle, out.rotationMuscles || null);
+        // R558 (Message 50): the reach keys' shoulder muscles on the left arm, by mesh name, next to the palm-turn ones.
+        let armNames = out.rotationMuscles || null;
+        if (Array.isArray(out.reachShow) && out.reachShow.length) {
+          armNames = armNames ? { ...armNames } : {};
+          for (const r of out.reachShow) for (const n of r.arm) if (!(armNames[n] >= r.level)) armNames[n] = r.level;
+        }
+        scene.updateMuscles(out.muscle, armNames);
         scene.updateStrip(out.displayDrives);
         scene.highlightMarker(out.gaze.actionId);
         let regionActivityShown = out.regionActivity;
@@ -6642,6 +7114,8 @@ export function start(params = {}) {
           // R558 (HEAD_LOOK): the head, neck and trunk are where the look (plus any held offset) put them this frame: the
           // same pose the eye camera, the arm's shoulder root and the mirror body use.
           if (headShown) Object.assign(targets, headShown.joints);
+          // R558 (Message 51): a fully extended elbow or knee is drawn slightly bent (ns-body softExtensionAngles).
+          if (typeof mods.body.softExtensionAngles === 'function') targets = mods.body.softExtensionAngles(targets);
           // R558 (Message 10): the legs stay on the invisible flat ground (a knee bend slides the heel; ns-body groundLegAngles).
           if (bodyBaked && typeof mods.body.groundLegAngles === 'function') targets = mods.body.groundLegAngles(bodyRig, targets, { posture: bodyBaked });
           // R5-integrate-core (D15): Body Worlds layers ride on every pose (ns-body poseBody layers / layerAmount; the amount
@@ -6676,10 +7150,11 @@ export function start(params = {}) {
             if (goalSrc && typeof goalSrc === 'object') {
               let goal = { ...targets };
               for (const j of DANCE_LEG_JOINTS) if (Number.isFinite(goalSrc[j])) goal[j] = goalSrc[j];
+              if (typeof mods.body.softExtensionAngles === 'function') goal = mods.body.softExtensionAngles(goal);
               if (bodyBaked && typeof mods.body.groundLegAngles === 'function') goal = mods.body.groundLegAngles(bodyRig, goal, { posture: bodyBaked });
               const goalKey = legKeyOf(goal);
               if (goalKey !== danceGoalKey) {
-                // R558 (performance, hunt 2 code #5): while you hold a leg with F its goal changes on every frame, so the
+                // R558 (performance, hunt 2 code #5): while you hold a leg with Space its goal changes on every frame, so the
                 // goal's range is then taken every DANCE_RANGE_EVERY_FRAMES frames like the posture's own, and at once again
                 // when the leg is let go (or when no leg is held).
                 const legHeld = Boolean(limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg'));
@@ -6771,7 +7246,10 @@ export function start(params = {}) {
           // R558 (Space dance): the right arm's and the hips' turning muscles of the current direction, at each joint's
           // turning speed (ns-actions danceView bodyMuscleRows), on your body and the mirror body (shared drives).
           const danceRows = out.dance && Array.isArray(out.dance.bodyMuscleRows) ? out.dance.bodyMuscleRows : [];
-          const extraRows = hintRows.length || danceRows.length || headRows.length ? [...hintRows, ...danceRows, ...headRows] : null;
+          // R558 (Message 50): the reach keys' chest and back muscles (pectoralis major, latissimus dorsi are body meshes).
+          const reachRows = Array.isArray(out.reachShow) ? out.reachShow.filter(r => r.body.length)
+            .map(r => ({ actionId: null, level: r.level, agonists: r.body, antagonists: [], stabilizers: [] })) : [];
+          const extraRows = hintRows.length || danceRows.length || headRows.length || reachRows.length ? [...hintRows, ...danceRows, ...headRows, ...reachRows] : null;
           let drives = typeof mods.body.bodyMuscleDrives === 'function' ? mods.body.bodyMuscleDrives(extraRows ? [...active, ...extraRows] : active, { rig: bodyRig }) : null;
           if (drives && out.rotationMuscles && typeof mods.body.rotationBodyDrives === 'function') {
             let rot = null;
@@ -6840,7 +7318,11 @@ export function start(params = {}) {
           // R558 (hunt 3): the head-look muscles (headGlowLinks), last: a real activation that drives a shared muscle more
           // strongly still owns it (assignMuscleAreas: the stronger drive wins, ties keep the earlier link).
           const headLinks = headGlowLinks(headGlow);
-          const extraLinks = hintLinks.length || danceLinks.length || headLinks.length ? [...hintLinks, ...danceLinks, ...headLinks] : null;
+          // R558 (Message 50): one link per held reach key, from the left shoulder area to that key's shoulder muscles (the
+          // left-arm meshes by name, the chest and back meshes by id): they take the area's colour and a line joins them.
+          const reachLinks = Array.isArray(out.reachShow) ? out.reachShow.map(r => ({ key: `reach:${r.dir}`, regionId: REACH_MUSCLES.areaId, level: r.level,
+            armMuscleNames: r.arm, armMuscleKeys: [], bodyMeshIds: r.body.length ? danceBodyDrives({ key: `reach:${r.dir}`, muscles: r.body }) : {} })) : [];
+          const extraLinks = hintLinks.length || danceLinks.length || headLinks.length || reachLinks.length ? [...hintLinks, ...danceLinks, ...headLinks, ...reachLinks] : null;
           callScene('setGlowLinks', extraLinks ? [...links, ...extraLinks] : links);
           glowWired = true;
         } else { glowWired = false; glowData = null; if (sceneFn('setGlowLinks')) callScene('setGlowLinks', headGlowLinks(headGlow)); }
@@ -6874,7 +7356,8 @@ export function start(params = {}) {
         // R558: the crosshair on the mirror body (it stands in front of the brain at the start) is named as such.
         const mirrorHit = Boolean(stepInputs && stepInputs.objectPick && stepInputs.objectPick.target === 'mirror');
         // R558 (hunt 2): the arrow tip under the crosshair (its caption: what a click does), and the muscle under the
-        // crosshair on your body or the mirror body (scene muscleAt, the pick a click uses; MUSCLE_GAZE throttle).
+        // crosshair on your body or the mirror body (R558, Messages 33 and 34: the body part SEEN there, controlTargets'
+        // front, asked once this frame for the look as well).
         let arrowTip = '';
         if (stepInputs && stepInputs.objectPick && stepInputs.objectPick.blocked === 'orbit-arrow') {
           const h0 = usableArrowHitAt(size.width / 2, size.height / 2);
@@ -6883,21 +7366,26 @@ export function start(params = {}) {
           arrowTip = typeof T === 'string' ? T : '';
         }
         const onArea = out.gaze && out.gaze.target === 'region';
-        // R558 (hunt 3): on ANY arrow tip, muted ones included, no muscle behind it is named: a click there is not a muscle
-        // tap (muscleTap gives way to the tip, and an inert tip after E does nothing), so the line stays empty to match.
-        const onTip = Boolean(stepInputs && stepInputs.objectPick && stepInputs.objectPick.blocked === 'orbit-arrow');
-        if (!live || onArea || arrowTip || onTip || !sceneFn('muscleAt')) { crossPick = null; crossPickKey = ''; }
-        else {
-          const k = `${camPose.position.join(',')}|${camPose.gazeLook.yaw}|${camPose.gazeLook.pitch}|${size.width}x${size.height}`;
-          const fresh = stepInputs && stepInputs.objectPick && stepInputs.objectPick.bodyPick ? stepInputs.objectPick.bodyPick : null; // asked this frame
-          if (fresh || frames - crossPickAt >= (k !== crossPickKey ? MUSCLE_GAZE.everyFrames : MUSCLE_GAZE.stillFrames)) {
-            let p = fresh;
-            if (!p) { try { p = callScene('muscleAt', size.width / 2, size.height / 2); } catch { p = null; } }
-            crossPick = p ? { source: p.source, kind: p.kind, name: p.name, bodyPart: p.bodyPart, holdable: p.source === 'own' && Boolean(limbOfPick(p)) } : null;
-            crossPickKey = k; crossPickAt = frames;
-          }
-        }
-        const model = hudFrame({ binding: inputs.binding, state: simState, out, brainHit, mirrorHit, frameMs, bodyMap, slowNote, arrowTip, bodyPick: crossPick });
+        // R558 (hunt 3, kept): on ANY arrow tip, muted ones included, no muscle behind it is named (ctlFrame.arrow: the tip
+        // is in front; a click there is not a muscle tap).
+        const seen = live && ctlFrame && !ctlFrame.arrow && ctlFrame.seen && ctlFrame.seen.item !== 'brain' ? ctlFrame.seen.rec : null;
+        // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
+        crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
+        // Lead decision (refines Messages 33 and 34): on a motor area the look reaches through a body part, that part is
+        // named ("..., behind your right forearm"): the body part SEEN there, nearer than the brain entry on the ray.
+        const brainOnRay = ctlFrame ? [ctlFrame.front, ctlFrame.behind].find(e => e && e.item === 'brain') : null;
+        const inFrontPick = live && onArea && seen && brainOnRay && ctlFrame.seen.distance < brainOnRay.distance ? ctlFrame.seen : null;
+        const inFront = inFrontPick && typeof NT.inFrontName === 'function'
+          ? NT.inFrontName({ where: inFrontPick.item, segment: inFrontPick.item === 'own' ? segOfPick(inFrontPick.rec) : '', limb: inFrontPick.item === 'own' ? limbOfPick(inFrontPick.rec) : null }) : '';
+        // R558 (Message 40): how Space holds what it holds ('held' while down | 'kept' by a tap), for the "let go" words.
+        const spaceGrasp = cs && cs.space && typeof cs.space.grasp === 'string' ? cs.space.grasp : 'none';
+        // R558 (Messages 44 and 55): the forearm line shows for ROTATION_NOTE_SECONDS after the forearm's state changes.
+        const rotNow = typeof out.rotationState === 'string' ? out.rotationState : '';
+        if (rotationSeen.state !== null && rotNow !== rotationSeen.state) rotationSeen.until = simState.t + ROTATION_NOTE_SECONDS;
+        rotationSeen.state = rotNow;
+        const model = hudFrame({ binding: inputs.binding, state: simState, out, brainHit, mirrorHit, frameMs, bodyMap, slowNote, arrowTip, bodyPick: crossPick, inFront, spaceGrasp, rotationNote: simState.t < rotationSeen.until });
+        // R558 (user Message 37): no caption next to the crosshair unless the player switched it on; the "Looking at" card says it.
+        if (settings.crosshairCaption !== true) model.hover = '';
         if (glowWired && glowData && glowData.links.length) model.note = [NT.GLOW.legend, model.note].filter(Boolean).join(' \u00b7 ');
         // R5-integrate-core (D18): in the view from behind, one plain line says where you are and how to go back.
         if (!camPose.firstPerson && NT.HUD.thirdPerson) model.note = [NT.HUD.thirdPerson, model.note].filter(Boolean).join(' \u00b7 ');
@@ -6906,13 +7394,23 @@ export function start(params = {}) {
         // R558: a change of view that could not be drawn was undone; say so and what to do.
         if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         if (now < viewHeldUntilMs && NT.HUD.viewWhileHolding) model.note = [NT.HUD.viewWhileHolding, model.note].filter(Boolean).join(' \u00b7 ');
-        // R558 (Messages 2 and 12): what F holds, and a plain word when a move stopped at contact.
-        if (limbGrasp && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(limbGrasp.limb), model.space].filter(Boolean).join(' \u00b7 ');
+        // R558 (Messages 2, 12 and 40): what Space holds (and how to let go), and a plain word when a move stopped at contact.
+        if (limbGrasp && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(limbGrasp.limb, spaceGrasp === 'kept'), model.space].filter(Boolean).join(' \u00b7 ');
+        if (limbGrasp && model.crosshairHold === 'empty') model.crosshairHold = 'item';
         if (now < contact.untilMs && NT.HUD.contactStop) model.note = [NT.HUD.contactStop(contact.last), model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (R31): what the last tapped muscle switched on, in plain words, for a few seconds.
         if (muscleTapNote && simState.t < muscleTapNote.untilT) model.note = [muscleTapNote.text, model.note].filter(Boolean).join(' \u00b7 ');
         else muscleTapNote = null;
         if (displayRecovery.reachLimited && out.reachBlocked !== true && HUD_TEXT.reachBlocked) model.note = [HUD_TEXT.reachBlocked, model.note].filter(Boolean).join(' \u00b7 ');
+        // R558 (Messages 33 and 34): first under "Looking at": what F and a drag take here, and how to reach the item behind
+        // (hold Shift as you press); while Shift is held, what the press will reach. Not while something is held.
+        const holdingNow = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        // With a free mouse the presses act under the pointer, so the line describes what is under the pointer.
+        const freePointer = live && !lockedNow() && cs.pointer && Number.isFinite(cs.pointer.x) && Number.isFinite(cs.pointer.y);
+        const hudT = freePointer ? targetsAt(cs.pointer.x, cs.pointer.y) : ctlFrame;
+        const targetsNote = live && !holdingNow ? controlTargetsLine(hudT, cs.reach === true) : '';
+        if (targetsNote) model.note = [targetsNote, model.note].filter(Boolean).join(' \u00b7 ');
+        controlTargetsShown = live ? { line: targetsNote, at: freePointer ? 'pointer' : 'crosshair', front: hudT && hudT.front ? ctlKey(hudT.front) : null, behind: hudT && hudT.behind ? ctlKey(hudT.behind) : null, arrow: Boolean(hudT && hudT.arrow), reach: cs.reach === true } : null;
         // R4-integrator (D7 "never covers the brain, arrows or panel"): the brain is world-anchored and slides under the
         // top-left status card when you look right or down. While its outline, as drawn now, overlaps the guide line's
         // place in the card, the line moves to a small chip in a clear spot of the usable view (ns-scene-three
@@ -7036,10 +7534,10 @@ export function start(params = {}) {
         // asks for one redraw); their 250-300 ms gaps had stepped a 60 fps GPU down to half size or the simplest meshes.
         if (actualCameraFit) {
           try {
-            captureWholeArm(() => scene.render(live && fixed !== true ? undefined : { live: false }));
+            captureWholeArm(() => scene.render(live && fixed !== true ? { frameStartMs: now } : { live: false }));
             captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
           } catch (err) { return postStepRefused(err); }
-        } else scene.render(live && fixed !== true ? undefined : { live: false });
+        } else scene.render(live && fixed !== true ? { frameStartMs: now } : { live: false });
         displayRecovery.skipStreak = 0; displayRecovery.rescued = false;
         // Review fix: the look this frame actually drew (a frozen frame draws the stored look, not the controls' one).
         // R558 (HEAD_LOOK): the recovery works in the controls' look (the drawn look is the head's, offsets included).
@@ -7052,6 +7550,17 @@ export function start(params = {}) {
         frames++;
         startPose.fresh = false; // a picture has now been shown at this window size (START_POSE_SEARCH)
         lastGoodCam = cam; // the camera state this drawn frame used (a refused change of view is undone to it)
+        // R558 (Message 40): tell the Space gesture what the game now holds and whether a limb turn still runs (only after
+        // a frame whose events were really applied: a skipped frame hands its events on). A tap that took nothing is then
+        // forgotten, and a press made during a turn takes hold once the turn has ended.
+        if (live && typeof controlsApi.noteSpace === 'function') {
+          const act = simState && simState.activity;
+          cs = controlsApi.noteSpace(cs, {
+            holding: Boolean(limbGrasp) || Boolean(simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
+              || Boolean(act && act.brainGrab && act.brainGrab.active),
+            turning: Boolean(act && act.dance && act.dance.mode)
+          });
+        }
         current = { sim, data, state: simState, controls: cs, out };
         if (wholeArmOption && out.wholeArmFraming) {
           // Publish the witness only AFTER the normal render, frames++ and current assignment succeed.
@@ -7096,8 +7605,9 @@ export function start(params = {}) {
 
   function stop() {
     if (stopped) return;
+    clearNativeEscape();
     stopped = true;
-    releaseInputs();
+    cancelPendingGameplay('stop');
     cancelOwnedStreams();
     phase = failed ? 'error' : 'stopped';
     if (raf && typeof view.cancelAnimationFrame === 'function') view.cancelAnimationFrame(raf);
@@ -7117,7 +7627,8 @@ export function start(params = {}) {
    * hold the loop. resume() restarts the loop with no catch-up step. */
   function suspend() {
     if (stopped) return;
-    releaseInputs();
+    clearNativeEscape();
+    cancelPendingGameplay('suspend');
     exitLock();
     dispatch({ type: 'pause' });
     hold('lifecycle');
@@ -7223,18 +7734,24 @@ export function start(params = {}) {
         mirror: (() => { try { return mirrorWired && sceneFn('mirrorState') ? callScene('mirrorState', { check: Boolean(options && options.mirrorCheck === true) }) : null; } catch (err) { return { error: errorText(err) }; } })(),
         glow: plainCopy(glowRendered),
         glassRim: objects.glassRim || null,
+        // R558 BB2: the brain ink's plain state (the strip relief, the glass fold-depth background job).
+        brainInk: objects.brainInk || null,
         counts: { bones: count(objects.bones), muscles: count(objects.muscles), glass: count(objects.glass), markers: count(objects.markers) },
         // Which body parts are in view (ns-scene-three bodyVisibility; the face layer is drawn in its own pass).
         bodyVisibility: (() => { try { return sceneFn('bodyVisibility') ? callScene('bodyVisibility') : null; } catch { return null; } })(),
         render: info && info.render ? { calls: info.render.calls, triangles: info.render.triangles, frame: info.render.frame } : null,
         // R558 (Message 20): the outline pass as the scene holds it (batch size, the last ID pass's draw calls and CPU ms).
-        outline: (() => { try { return sceneFn('outlineState') ? callScene('outlineState') : null; } catch { return null; } })()
+        outline: (() => { try { return sceneFn('outlineState') ? callScene('outlineState') : null; } catch { return null; } })(),
+        // R558: the picture-quality controller as the scene holds it (level, last change, last held down-step).
+        quality: (() => { try { return sceneFn('qualityState') ? callScene('qualityState') : null; } catch { return null; } })()
       };
     }
     return plainCopy({
       phase, error: lastError, placeholder: isPlaceholder, qa: qaEnabled, frames, loop: { held: [...holds] },
       shell: shellState, settings, pointerLocked: lockedNow(),
       state: current.state, controls: current.controls,
+      // Input epochs: how often pending input was cancelled at a boundary, why, and what the last one dropped.
+      inputCancellation: plainCopy(inputCancellation),
       // R558 (Message 6): what the activity holds, the opposite-action hints and the brain's hint meshes (plain data
       // the app and the scene already hold); the verified per-region looks only on request (cached per brain view).
       latch: current.out && current.out.latch ? current.out.latch : null,
@@ -7245,6 +7762,8 @@ export function start(params = {}) {
           lastReason: displayRecovery.lastReason, lastRecoveredBy: displayRecovery.lastRecoveredBy, reasons: displayRecovery.reasons } } : null,
       regionHints: sceneFn('regionHintState') ? (() => { try { return callScene('regionHintState'); } catch { return null; } })() : null,
       // R558 (Message 12): the gaps between your body, the brain and the mirror body, only on request.
+      // R558 (Messages 33 and 34): what F / click / drag act on at the crosshair (seen) and the item behind (Shift).
+      controlTargets: controlTargetsShown,
       collision: options && options.collision === true ? (() => { try { return collisionReportFn ? collisionReportFn() : null; } catch (err) { return { error: errorText(err) }; } })() : undefined,
       regionTargets: options && options.regionTargets === true ? (() => { try { return sim && typeof sim.regionTargets === 'function' ? sim.regionTargets(current.state) : null; } catch { return null; } })() : null,
       // Opt-in copied producer/readback data; no model, clock or renderer write.
@@ -7259,6 +7778,7 @@ export function start(params = {}) {
           model: {
             t: act && Number.isFinite(act.t) ? act.t : null,
             spaceHeld: act && typeof act.spaceHeld === 'boolean' ? act.spaceHeld : null,
+            graspHold: act && typeof act.graspHold === 'boolean' ? act.graspHold : null,
             targets: copy(act && act.targets), drives: copy(act && act.drive)
           },
           produced: {

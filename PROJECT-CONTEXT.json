@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-12-body-update",
+  "version": "experimental-2026-11-12-body-update-2",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -13,24 +13,25 @@
   "play_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "start_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/START.html",
   "canonical_source": "https://github.com/eliminatenoise/NeuroSurge",
-  "source_lineage": "Body update (R558), built from the 10 November interaction update: a camera at your eyes with a 90-degree view; a long-sitting body with every limb straight forward; the mirror body as a literal reflection on the same ground; 54 motor areas, one colour each, shared by the brain area and its muscles on both bodies, with a power-up glow; movements held until the opposite area or Reset body; F to hold and carry the brain, the mirror body or a limb; the Space dance; stop-at-contact between the three items; a closed skull, eyes and 111 more muscles from BodyParts3D and Z-Anatomy; a Borderlands-style cel-shaded comic look with black ink outlines, inked folds on the motor strip and an HDR glow; symmetric placement of paired controls; several performance passes. DESIGN-DECISIONS.md sections 20-53 record each change and why. The input-robustness changes published on 11 November (input epochs, deferred input, pointer capture and their four test files) are not in this version; they are being ported.",
+  "source_lineage": "Body update (R558), second upload, built from the 10 November interaction update: a camera at your eyes with a 90-degree view; a long-sitting body with every limb forward and a slight bend in a stretched elbow or knee; the mirror body as a literal reflection on the same ground; 54 motor areas, one colour each, shared by the brain area and its muscles on both bodies, with a neon flash and one line from a lit area to the body part it moves; movements held until the opposite area or Reset body; Space as the one hand key (hold or tap to take hold of the brain, the mirror body or a limb, tap twice to turn all four limbs); reach keys that light only the shoulder and elbow parts of the strip and their muscles; an information card that names the strip part, the movement and the muscles, read with the R key; a motor strip that spans about half the width of the view; stop-at-contact between the three items; a closed skull, eyes and 111 more muscles from BodyParts3D and Z-Anatomy; a cel-shaded comic look with gloss, lighter ink outlines, inked folds on the motor strip and an HDR glow; symmetric placement of paired controls; two performance passes. DESIGN-DECISIONS.md sections 20-58 record each change and why. The input-robustness changes published on 11 November (input epochs, deferred input, pointer capture) are included, adapted to the new keys, with their test files.",
   "anatomy_assets": "611 human-anatomy OBJ files. BodyParts3D 4.0 (CC BY 4.0), including the new packets bodyparts3d-head-r1 (cranium and eyes) and missing-muscles-r1 (93 files); Z-Anatomy derivatives (CC BY-SA 4.0): the face muscles and 18 back, belly, neck and foot muscles in missing-muscles-r1. Packet files are unchanged archive members or documented conversions; runtime transforms, lifting, smoothing of finger and toe tips, colouring, comic shading and separated layers are display changes, not physiological validation.",
   "code_licence": "Project-owned contributions: CC0-1.0. Third-party material retains its own licences and notices.",
   "credits": "CREDITS-AND-LICENCES.md",
   "design_decisions": "DESIGN-DECISIONS.md",
   "other_project_development": "paused",
   "known_engineering_gaps": [
-    "The 11 November input-robustness work (pointer capture boundaries, stale-input cancellation, deferred input queue) is not in this version; its earlier failures and fixes do not carry over.",
-    "Frame rate: idle 60 fps, but the Space dance, look sweeps and carries draw about 26-33 fps in the author's single-core tests; a performance pass is under way.",
-    "A one-way look lock can occur after a far side look while an item rests against you; a fix is under way.",
-    "Some muscles still show pointed edges (for example at the base of the neck and the shoulder); a geometry check and fix are under way.",
-    "The crosshair caption naming the part under the crosshair is shown at all times; it is to move to the side panel with an on/off switch.",
+    "Frame rate in the author's scripted runs at 1920 by 1080 on one desktop computer: 60 fps sitting still, 53-60 looking around, 52-54 in the slow limb turn, 46-50 while holding or carrying the mirror body, 47-55 in the view over the shoulder. Some frames still take longer than a thirtieth of a second; more performance work is under way.",
+    "Ease of use: the arrows can lie over motor areas near the middle of the view, the mirror body stands in front of the leg end of the strip, and the first steps are not guided clearly enough. An ease-of-use pass is under way.",
+    "Controls asked for and not built yet: the look swinging a held item round you with the same face toward you; the mirror body's arrows orbiting instead of sliding it away and back; reaching every joint position by brain activation, including hip extension and lowering the arm.",
+    "The left shoulder can come away from its socket at a far-left look, and the left shoulder muscle can show a pointed edge; fixes are under way.",
+    "A one-way look lock after a far side look while an item rests against you was reported in the first upload and has not been checked again in this one.",
+    "The 11 November input-robustness work (pointer capture boundaries, stale-input cancellation, deferred input queue) is included and covered by scripted tests; it has not been tried in several browsers.",
     "Joint mechanics, whole-body coupling, motor-area registration and timing remain simplified and unvalidated."
   ],
   "launcher_scope": "Online URL launchers for Windows, macOS and Linux. Formats checked; native Windows/macOS use unverified. Prior Linux installation/launch does not prove execution of this updated target.",
-  "publication_status": "Experimental preview published at the user's direct instruction of 12 November 2026, before the project's independent review. Check the displayed online version before assuming it matches these files.",
+  "publication_status": "Experimental preview. Since 12 November 2026 each finished version is uploaded at the user's direct instruction, before the project's independent review. Check the displayed online version before assuming it matches these files.",
   "browser_verification": {
-    "scope": "Author development checks only: scripted mouse and key input in one desktop Chromium on one pinned processor core, with screenshots and frame-interval counts, plus code reading and node checks by other instances of the same model that wrote it. No independent review yet. Not checked: Firefox, Safari, touch, phones, screen readers, reduced-motion settings in a browser.",
+    "scope": "Author development checks only: scripted mouse and key input in one desktop Chromium, with screenshots, frame-interval counts and profiles, plus twelve scripted node tests of the input rules and the picture-quality controller. Earlier parts were also read and checked by other instances of the same model that wrote them. No independent review yet. Not checked: Firefox, Safari, touch, phones, screen readers, reduced-motion settings in a browser.",
     "full_game_pass": false
   }
 }

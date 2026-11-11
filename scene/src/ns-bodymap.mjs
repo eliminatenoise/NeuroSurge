@@ -726,7 +726,7 @@ const CONTENT = {
       leftArm('relax_release', 'Relax / release left grasp', [], ['FDS', 'FDP', 'FPB', 'FPL', 'ED', 'EI', 'EDM', 'EPB', 'EPL'], [],
         null, null, 'Release lowers flexor and extensor drive; it is not active extension and not cortical silence (Motawar 2012).'),
       leftArm('open_hand', 'Open left hand', ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['FDS', 'FDP', 'FPB', 'FPL'], ['LUM', 'DI', 'PI'],
-        null, null, 'Opening on Space release is a game convention; natural release can be passive.'),
+        null, null, 'Opening on release is a game convention; natural release can be passive.'),
       leftArm('spread_fingers', 'Spread left fingers', ['DI', 'ADM'], ['PI'], ['ED', 'LUM']),
       // R558 (Messages 14 / 15 / 6): the anatomical opposite of spreading (palmar interossei), as on the right hand.
       leftArm('fingers_together', 'Bring left fingers together', ['PI'], ['DI', 'ADM'], [])
@@ -1228,7 +1228,7 @@ const PLAIN_REGION = {
   forearm: c => (c.H === 'right' ? {
     plainLabel: 'Left forearm turn',
     plainLead: `This spot in ${half(c)} tells your left palm to turn down or up.`,
-    plainMoves: 'Turns your left palm down or up. Holding Space turns it too, in the dance of all four limbs.',
+    plainMoves: 'Turns your left palm down or up. Tapping Space twice turns it too, with all four limbs.',
     plainCaveat: 'No study shows a separate spot for turning the palm. So this place is a game choice.'
   } : {
     plainLabel: 'Right forearm turn',
@@ -1620,7 +1620,7 @@ const PLAIN_DETAIL = {
     detail: 'This is the area for turning your LEFT forearm (forearm rotation). The game places it between the elbow ' +
       `and wrist areas of the brain’s right half (right hemisphere). ${ARM_PATH_PLAIN('the forearm-turning muscles', ', forearm rotators')} ` +
       'In the game, looking here turns the left palm down (pronator teres and quadratus) or up (supinator and biceps ' +
-      'brachii). That is the same flip a double-tap of Space makes. In the brain, turning the forearm shares overlapping ' +
+      'brachii). A double tap of Space turns it too, together with the other limbs. In the brain, turning the forearm shares overlapping ' +
       'areas with the wrist and elbow (overlapping fields; Meier 2008 tested the wrist and forearm together). No study has ' +
       'published a separate spot for turning the palm down (pronation point). So this spot is a game placement.'
   } : {
@@ -1653,13 +1653,13 @@ const PLAIN_DETAIL = {
     detail: 'This is the hand area for your LEFT hand (the hand knob), in the brain’s right half (right hemisphere). It ' +
       'covers whole-hand moves: grasp, release, open, spread and bringing the fingers together. Its fibres cross over and reach the nerve cells for the ' +
       'hand (crossed corticospinal fibres, hand motor neurons). Some of them link straight to those nerve cells, which ' +
-      'helps fine finger control (direct cortico-motoneuronal connections; Lemon 2008). In the game, looking here, or ' +
-      'holding Space for a fist, drives the left-hand actions. The muscles that bend or straighten the fingers (finger ' +
+      'helps fine finger control (direct cortico-motoneuronal connections; Lemon 2008). In the game, looking here ' +
+      'drives the left-hand actions. The muscles that bend or straighten the fingers (finger ' +
       'flexors or extensors) glow in this area’s own colour, as on the brain. One study measured left-hand grasp and ' +
       'pulling back in the brain’s right half (Huber 2020; grasp and retraction in the right motor cortex). It found ' +
       'overlapping patches that repeat and differ between people (repeated action patches). A real hand can also let go ' +
-      'of a grip without any effort (grip release can be passive; Motawar 2012). So opening the hand when you let go of ' +
-      'Space is a game rule (game convention).'
+      'of a grip without any effort (grip release can be passive; Motawar 2012). So opening the hand when it lets go ' +
+      'is a game rule (game convention).'
   }),
   little: () => ({
     detail: 'This is the little-finger area for your LEFT hand. It sits inside the hand zone of the brain’s right half ' +
@@ -1967,7 +1967,7 @@ const PLAIN_NOTE = {
   relax_release: () => 'Letting go lowers the signal to the muscles that bend and straighten the fingers (flexor and ' +
     'extensor drive). It is not an active straightening, and the brain does not go quiet (not active extension and not ' +
     'cortical silence; Motawar 2012).',
-  open_hand: () => 'Opening the hand when you let go of Space is a game rule (game convention). A real hand can let go ' +
+  open_hand: () => 'Opening the hand when it lets go is a game rule (game convention). A real hand can let go ' +
     'without any effort (natural release can be passive).',
   neck_turn_left: () => NECK_CHOICE_PLAIN,
   neck_turn_right: () => NECK_CHOICE_PLAIN,

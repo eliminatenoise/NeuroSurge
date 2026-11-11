@@ -247,8 +247,8 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
     }
   };
   const timeline = [{ type: 'pick', at: Math.min(gazeAt, wallDt), order: 0, value: pick }];
-  // R558 (lead decision for user Messages 2 and 12): the F key grasps ({ type: 'grasp', down, target? }); Space no longer
-  // does. A grasp of one of your own limbs (target 'limb') is the app's, not a carry of the brain or the mirror body.
+  // R558 (user Message 40): a Space hold or tap grasps ({ type: 'grasp', down, target? }; ns-controls SPACE_GESTURE; the
+  // F key is gone). A grasp of one of your own limbs (target 'limb') is the app's, not a carry of the brain or the mirror body.
   events.forEach((ev, i) => {
     if (!ev || ev.type !== 'grasp') return;
     if (typeof ev.down !== 'boolean' || (ev.at !== undefined && !(Number.isFinite(ev.at) && ev.at >= 0))) fail('original grasp event required');
@@ -308,7 +308,7 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, graspRefused: refused, normalizedAxes: axis.slice(), heldPoseS,
     brainLimits: { ...bounds, centreNearM: Math.max(0, baseDistance - keyBudgetM), centreFarM: baseDistance + keyBudgetM },
     mirrorLimits: mirror ? { ...mirror.bounds } : null, brainClearance, clamped,
-    timing: 'Original grasp (F)/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
+    timing: 'Original grasp (Space)/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
     scope: 'Engineering limits/source clearance only; actual source/current-pose/native/wholebody/normalmechanics qualification remains open' };
   return { state: { held, target, lastPick, lastLook: { ...look }, lastOrigin: o.slice(), brainKeyOffset: keys, mirror, diagnostic }, brainMovementWorld, mirrorWorldCentre: mirror ? mirror.centreWorldM.slice() : null, diagnostic };
 }

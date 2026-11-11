@@ -414,27 +414,43 @@ export function minGap(a, b, cap = Infinity, stopBelow = -Infinity) {
   // in the inner loops), and each pair of entries first keeps only the groups of y that come within best of x's own
   // bounding sphere. Both are exact rewrites of the same tests: the gap found is unchanged.
   const far = (dx, dy, dz, rr) => { const lim = best + rr; return lim <= 0 ? false : dx * dx + dy * dy + dz * dz >= lim * lim; };
+  // R558 (performance, P3): the two leaf loops first ask a squared test with a margin (sureFar) and call Math.hypot only
+  // when it cannot rule the pair out. sureFar is true only when the hypot test would also find the pair no closer than
+  // `best`: the squared distance must pass (best + radii)^2 with a relative margin of 1e-9 and 1e-12 m on top, far more
+  // than the rounding of either form at the scene's metre scale; NaN and an infinite best never pass it. Pairs it skips
+  // are pairs the original loop tested without effect, so every update of `best` happens in the same order with the
+  // same value: the gap is unchanged bit for bit. The group test loop reads x's centre once (the same subtractions).
+  const sureFar = (d2, lim) => lim > 0 && d2 > (lim + lim * 1e-9 + 1e-12) * (lim + lim * 1e-9 + 1e-12);
   const gyCand = [];
   for (const x of ea) {
     const gxAll = worldGroups(x), cand = [];
     for (let i = 0; i < gxAll.length; i += 4) if (near(gxAll, i, b.lo, b.hi) < best) cand.push(i);
     if (!cand.length) continue;
+    const xc0 = x.c[0], xc1 = x.c[1], xc2 = x.c[2], xr = x.r;
     for (const y of eb) {
-      if (far(x.c[0] - y.c[0], x.c[1] - y.c[1], x.c[2] - y.c[2], x.r + y.r)) continue;
+      if (far(xc0 - y.c[0], xc1 - y.c[1], xc2 - y.c[2], xr + y.r)) continue;
       const gx = gxAll, gy = worldGroups(y);
       gyCand.length = 0;
-      for (let j = 0; j < gy.length; j += 4) if (!far(gy[j] - x.c[0], gy[j + 1] - x.c[1], gy[j + 2] - x.c[2], gy[j + 3] + x.r)) gyCand.push(j);
+      for (let j = 0; j < gy.length; j += 4) {
+        const dx = gy[j] - xc0, dy = gy[j + 1] - xc1, dz = gy[j + 2] - xc2, lim = best + (gy[j + 3] + xr);
+        if (lim <= 0 || !(dx * dx + dy * dy + dz * dz >= lim * lim)) gyCand.push(j);
+      }
       if (!gyCand.length) continue;
       for (const i of cand) {
         if (far(gx[i] - y.c[0], gx[i + 1] - y.c[1], gx[i + 2] - y.c[2], gx[i + 3] + y.r)) continue;
         for (const j of gyCand) {
           if (far(gx[i] - gy[j], gx[i + 1] - gy[j + 1], gx[i + 2] - gy[j + 2], gx[i + 3] + gy[j + 3])) continue;
           const lx = worldLeaves(x, i / 4), ly = worldLeaves(y, j / 4);
+          const g0 = gy[j], g1 = gy[j + 1], g2 = gy[j + 2], g3 = gy[j + 3];
           for (let p = 0; p < lx.length; p += 4) {
             // A leaf farther from the other group's sphere than the best gap so far cannot do better.
-            if (Math.hypot(lx[p] - gy[j], lx[p + 1] - gy[j + 1], lx[p + 2] - gy[j + 2]) - lx[p + 3] - gy[j + 3] >= best) continue;
+            const px = lx[p], py = lx[p + 1], pz = lx[p + 2], pr = lx[p + 3];
+            { const ex = px - g0, ey = py - g1, ez = pz - g2; if (sureFar(ex * ex + ey * ey + ez * ez, best + pr + g3)) continue; }
+            if (Math.hypot(px - g0, py - g1, pz - g2) - pr - g3 >= best) continue;
             for (let q = 0; q < ly.length; q += 4) {
-              const g = Math.hypot(lx[p] - ly[q], lx[p + 1] - ly[q + 1], lx[p + 2] - ly[q + 2]) - lx[p + 3] - ly[q + 3];
+              const dx = px - ly[q], dy = py - ly[q + 1], dz = pz - ly[q + 2];
+              if (sureFar(dx * dx + dy * dy + dz * dz, best + pr + ly[q + 3])) continue;
+              const g = Math.hypot(dx, dy, dz) - pr - ly[q + 3];
               if (g < best) { best = g; if (best < stopBelow) return best; }
             }
           }
@@ -650,6 +666,9 @@ export function itemTravel(now, then) {
   if (!now || !then) return now === null && then === null ? 0 : Infinity;
   const A = now.entries, B = then.entries;
   if (!A || !B || A.length !== B.length) return Infinity;
+  // R558 (performance): entries that cannot be compared (a re-skinned mesh has a new table) are looked for first, before
+  // any matrix work; the answer is the same Infinity the loop below gives when it reaches one.
+  for (let i = 0; i < A.length; i++) { const e = A[i], o = B[i]; if (e !== o && (e.table !== o.table || e.pad !== o.pad)) return Infinity; }
   let worst = 0;
   for (let i = 0; i < A.length; i++) {
     const e = A[i], o = B[i];
@@ -727,4 +746,11 @@ export function sphereGap(c, r, it, cap = Infinity) {
 export function entryGroups(e) {
   if (!e || !e.table) fail('entryGroups needs an entry');
   return worldGroups(e);
+}
+
+/** R558 (performance, P3): the leaf spheres of an entry's group gi in the world (x, y, z, r per leaf, in the table's
+ * order; cached on the entry, as minGap uses them). */
+export function entryLeaves(e, gi) {
+  if (!e || !e.table) fail('entryLeaves needs an entry');
+  return worldLeaves(e, gi);
 }

@@ -27,8 +27,9 @@
  *
  * U1-controls round 2 (see createActivity): activation of ANY BODY_MOTOR_MAP region (ns-bodymap.mjs) by gaze (1 s
  * pulse) and click (re-trigger), left-arm regions driving the arm actions and every other region driving
- * bodyJointTargets, persistent activatedRegions with Reset body, the Space dance of all four limbs (R558: hold = slow,
- * double-tap and hold = fast, see ns-dance.mjs; Space no longer makes a fist, flips the forearm or grabs), the brain
+ * bodyJointTargets, persistent activatedRegions with Reset body, the turn of all four limbs (R558, user Message 40: a
+ * double tap of Space = one step, a double tap held = the slow turn, see ns-dance.mjs and ns-controls SPACE_GESTURE;
+ * holding or tapping Space grasps, through the 'grasp' event), the brain
  * grab state, the orbit view state, the instructions/pause overlay state and the WASD coordinated joint channels.
  * The left upper limb is represented predominantly in the contralateral (right) hemisphere; region extents are the
  * map owner's representative, overlapping schematic, not a unique cortical point per muscle.
@@ -38,7 +39,7 @@
 import { DEG, clamp } from './ns-math.mjs';
 import { FIST_POSE_DEG, REST_HAND_POSE_DEG, PRONATION_STATES } from './ns-rig.mjs';
 import { DOUBLE_TAP_MS } from './ns-controls.mjs';
-import { createDance, observeDance, stepDance, stopDance, isDanceState, DANCE_LIMBS, DANCE_LIMB_IDS, DANCE_JOINT_IDS } from './ns-dance.mjs';
+import { createDance, observeDance, stepDance, stopDance, startTurnStep, startTurnHold, isDanceState, DANCE_LIMBS, DANCE_LIMB_IDS, DANCE_JOINT_IDS } from './ns-dance.mjs';
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // R558 (Space dance): the game arm's palm turn in degrees (ns-rig: +80 palm down .. -80 palm up) for a rotation value
@@ -480,7 +481,7 @@ export function muscleDrives(binding, drives = {}) {
 // R5 activation dynamics (virtual control; UI smoothing only), A1-activation round 1 revision
 // ---------------------------------------------------------------------------------------------
 
-/** Actions that compete with the Space fist for digit/thumb joints (suppressed while Space is held). */
+/** Actions that compete with the Space grip for digit/thumb joints (they do not start while the grip holds: graspHold). */
 export const SPACE_COMPETING = Object.freeze(['open_hand', 'spread_fingers', 'index_flexion', 'index_extension',
   'thumb_mcp_flexion', 'thumb_mcp_extension', 'relax_release',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion',
@@ -536,8 +537,11 @@ export const ARM_REACH_LABEL = 'simulated arm reach activity (display-only, unit
  *                        layout) of the STRIP only; never fed to muscles;
  *   riseTau / decayTau   smoothing (s); after release the display falls below 2% within 0.3 s.
  */
+// R558 (Messages 48 and 50): horizontalFieldShare is 0. A and D are shoulder movements (the hand swings out or in at the
+// shoulder), so they light the shoulder area and its muscles only; lighting the elbow fields for them made the whole
+// arm zone glow and hid which part does the work.
 export const REACH_DISPLAY = Object.freeze({
-  holdLevel: 0.55, fullDepthRate: 0.35, fullXRate: 0.9, proximalShare: 0.6, horizontalFieldShare: 0.35,
+  holdLevel: 0.55, fullDepthRate: 0.35, fullXRate: 0.9, proximalShare: 0.6, horizontalFieldShare: 0,
   riseTau: 0.05, decayTau: 0.075
 });
 
@@ -987,15 +991,62 @@ export const WASD_CHANNELS = Object.freeze(['shoulder', 'elbow', 'wrist', 'hand'
 /**
  * WASD joint-channel display shares (display-only game convention, not a measured synergy):
  *   shoulder  every reach key (the representative proximal reach field; direction is not a place on the cortex);
- *   elbow     W/S (elbow extension/flexion change the hand depth), plus elbowXShare of A/D;
- *   wrist     wristShare of any reach key (the wrist re-orients to keep the hand on its screen ray);
- *   hand      handShare of any reach key (hand posture maintained during transport).
+ *   elbow     W/S (elbow extension/flexion change the hand depth), plus elbowXShare of A/D (0 since R558);
+ *   wrist     wristShare of any reach key (0 since R558);
+ *   hand      handShare of any reach key (0 since R558).
+ * R558 (Messages 48 and 50: "The entire left arm region activates, where only small regions should be activating"): a
+ * reach key lights the shoulder area (every key) and the elbow area (W and S only): the two parts that move the hand.
+ * The wrist, hand and finger areas stay dark until they are used themselves.
  * Each held channel shows holdLevel + (1 - holdLevel) * motion (REACH_DISPLAY), where motion is the realised base
  * rate, or the realised joint rate (deg/s, saturating at fullJointRateDegS) when the reach event carries jointRates.
  */
-export const REACH_JOINT_DISPLAY = Object.freeze({ elbowXShare: 0.35, wristShare: 0.45, handShare: 0.3, fullJointRateDegS: 90 });
+export const REACH_JOINT_DISPLAY = Object.freeze({ elbowXShare: 0, wristShare: 0, handShare: 0, fullJointRateDegS: 90 });
 export const WASD_JOINT_LABEL =
-  'simulated coordinated reach activity (display-only, unitless): shoulder + elbow + wrist + hand shares are a game convention, not a measured synergy';
+  'simulated reach activity (display-only, unitless): the shoulder share of every reach key and the elbow share of W and S are a game convention, not a measured synergy';
+
+/**
+ * R558 (Message 50: "it's not even showing which muscles are activating when we're using the D key and ... the A key"):
+ * the muscles each reach key shows, and the brain area that drives them. Display only: standard textbook roles of the
+ * shoulder muscles, simulated and unitless, not a measured pattern (the elbow muscles of W and S are shown by the
+ * elbow_extension / elbow_flexion actions as before).
+ *   forward (W)  the hand goes forward: the shoulder flexes (front deltoid, coracobrachialis, upper pectoralis major);
+ *   back (S)     the hand comes back: the shoulder extends (rear deltoid, teres major, latissimus dorsi);
+ *   left (A)     the left hand swings out, away from the midline: horizontal abduction (rear and middle deltoid,
+ *                infraspinatus, teres minor);
+ *   right (D)    the left hand swings in, across the chest: horizontal adduction (pectoralis major, front deltoid,
+ *                coracobrachialis).
+ * arm: lower-case name parts of the left-arm rig's meshes; body: plain names of body rig muscles (ns-body
+ * bodyMuscleDrives rows). areaId: the area whose colour they take and to which their line runs.
+ * Not drawn: the left teres major, infraspinatus and teres minor lie on the shoulder blade, which the left-arm rig
+ * leaves out (ns-assets SHOULDER_GIRDLE_EXCLUDED), so their name parts match no mesh and only the drawn muscles light;
+ * the information card (ns-text REACH_INFO) still names them.
+ */
+export const REACH_MUSCLES = Object.freeze({
+  areaId: 'rh_shoulder',
+  forward: Object.freeze({ label: 'Reach forward', arm: Object.freeze(['clavicular part of left deltoid', 'left coracobrachialis']), body: Object.freeze(['clavicular part of left pectoralis major']) }),
+  back: Object.freeze({ label: 'Pull back', arm: Object.freeze(['spinal part of left deltoid', 'left teres major']), body: Object.freeze(['left latissimus dorsi']) }),
+  left: Object.freeze({ label: 'Swing out to the left', arm: Object.freeze(['spinal part of left deltoid', 'acromial part of left deltoid', 'left infraspinatus', 'left teres minor']), body: Object.freeze([]) }),
+  right: Object.freeze({ label: 'Swing in to the right', arm: Object.freeze(['clavicular part of left deltoid', 'left coracobrachialis']), body: Object.freeze(['left pectoralis major']) })
+});
+export const REACH_DIRECTIONS = Object.freeze(['forward', 'back', 'left', 'right']);
+
+/**
+ * PURE: the reach directions shown now. levels: the reach display levels { flex, ext, x } (state.wasd); xSign: the
+ * sign of the last held A/D intent (-1 = A, +1 = D; the x level itself is unsigned, and keeps fading in the direction
+ * it was last held). Returns [{ dir, level, label, arm, body }] for every direction above minLevel (W = ext, S = flex).
+ */
+export function reachMuscleShow(levels, xSign, minLevel = 0.02) {
+  const out = [];
+  if (!isPlainObject(levels)) return out;
+  const lv = { forward: levels.ext, back: levels.flex, left: xSign < 0 ? levels.x : 0, right: xSign > 0 ? levels.x : 0 };
+  for (const dir of REACH_DIRECTIONS) {
+    const level = lv[dir];
+    if (!(isFiniteNumber(level) && level > minLevel)) continue;
+    const m = REACH_MUSCLES[dir];
+    out.push({ dir, level: clamp(level, 0, 1), label: m.label, arm: m.arm, body: m.body });
+  }
+  return out;
+}
 
 const KEY_DISPLAY_IDS = Object.freeze(['grasp_close', 'open_hand', 'relax_release']);
 const HEMISPHERES = Object.freeze(['right', 'left', 'both']);
@@ -1254,10 +1305,11 @@ const seqOf = (st, k) => (st && Number.isSafeInteger(st[k]) && st[k] >= 0 ? st[k
  * R4-arm: the plain game events between two consecutive activity states (createActivity state before and after one
  * step), for the optional "Try this" guide (D7) and any HUD that wants edges instead of levels. Pure; reads only
  * documented state fields, all present since round 2 (counters only grow, except that a new state starts again at 0):
- *   spaceHeld         -> { type: 'fist', on }               Space pressed / let go (R558: the limb dance starts / stops;
- *                                                            the event keeps its old name)
- *   rotationSeq       -> { type: 'flip', to }                once per double-tap (R558: the fast dance starts); to = rotationState
- *   grabSeq           -> { type: 'grab', on: true }          once per brain grab (by the grasp key's owner; Space no longer grabs)
+ *   spaceHeld         -> { type: 'fist', on }               the slow turn of a double tap held starts / stops (R558,
+ *                                                            Message 40; the event keeps its old name)
+ *   rotationSeq       -> { type: 'flip', to }                once per double tap of Space (R558: one turn step of all four
+ *                                                            limbs); to = rotationState
+ *   grabSeq           -> { type: 'grab', on: true }          once per brain grab (a Space hold or tap on the brain)
  *   brainGrab.active  -> { type: 'grab', on: false, dragRad } the grab ended; dragRad = the angle the brain was moved
  *                                                            (brainPlacement vs the grab's origin, radians)
  *   orbitSeq          -> { type: 'orbit', steps, dir }       orbit steps (an arrow click or hold); dir from the orbit change
@@ -1405,7 +1457,11 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  *       action by its share of the region extent, else the first action; arrow: the orbit arrow under the crosshair
  *       ('left' | 'right' | 'forward' | 'back'), which then counts as empty space and turns the next click into an orbit.
  *   { type: 'click' }   re-trigger the area under the crosshair, or orbit when an arrow is under it
- *   { type: 'space', down: boolean, safety? }   safety: true = a safety release (never part of a double-tap)
+ *   { type: 'turn', phase: 'step' | 'hold' | 'stop', safety? }   R558 (Message 40): the limb turn (ns-controls
+ *       SPACE_GESTURE turns the Space key into these): 'step' = a double tap (one stroke per limb), 'hold' = that double
+ *       tap is held (the slow turn), 'stop' = let go (every limb stays where it is).
+ *   { type: 'space', down: boolean, safety? }   legacy: accepted and checked, but it moves nothing any more (R558,
+ *       Message 40: Space reaches the activity as 'grasp' and 'turn' events)
  *   { type: 'reach', axes?: {x, z} | keys?: {KeyW, KeyA, KeyS, KeyD}, depthRate?, xRate?, elbowRate?, jointRates? }
  *   { type: 'orbit', dir, stepDeg? }  { type: 'reset' }  { type: 'escape' }  { type: 'lock', locked }  { type: 'resume' }
  *   { type: 'pause' }       (the ns-controls UI queue events)
@@ -1420,18 +1476,22 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * the LATCH below. Keys never drive non-arm regions. Space/rotation/WASD light left-arm regions
  * through their channels (regionActivity) but never count as an activation.
  *
- * Space (R558, Message 2: the dance; ns-dance.mjs). Held = the slow dance: all four limbs turn, each between its
+ * The limb turn (R558: Message 2's dance as reshaped by Message 40; ns-dance.mjs). All four limbs turn, each between its
  * inward end (pronation + internal rotation) and its outward end (supination + external rotation), each in the
- * direction it last moved, with its own tempo (not coordinated). A press within doubleTapSeconds of the previous press
- * (press to press) and held = the fast dance (rotationSeq counts these). Let go = every limb stays where it is (the
- * latch rule). Space no longer makes a fist, flips the forearm on its own or grabs the brain; the dance owns the four
- * limbs' rotation joints while Space is held. The touch-free hip range of the current leg posture arrives as a
- * { type: 'danceRange', joints } event (ns-app, from ns-body hipRotationClearRange).
- * R558 (lead decision for user Messages 2 and 12): the F key grasps. { type: 'grasp', down, target? }: a press with
+ * direction it last moved, with its own tempo (not coordinated). { type: 'turn', phase: 'step' } (a double tap of Space)
+ * = one stroke per limb, then it stops by itself (rotationSeq counts these); 'hold' (the double tap held) = the turn
+ * goes on slowly (spaceHeld is true while it does); 'stop' (let go) = every limb stays where it is (the latch rule). A
+ * pause or Reset body ends any turn where the limbs are. The turn owns the four limbs' rotation joints while it runs.
+ * The touch-free hip range of the current leg posture arrives as a { type: 'danceRange', joints } event (ns-app, from
+ * ns-body hipRotationClearRange).
+ * R558 (user Message 40: "Holding the spacebar should again be grasping. And so should one tap spacebar"): holding or
+ * tapping Space grasps (ns-controls SPACE_GESTURE; the F key is gone). { type: 'grasp', down, target? }: a press with
  * target 'brain' (or no target key at all while the gaze kind is 'region' or 'glass', new-style gaze with yaw/pitch; an
  * explicit target null holds nothing) starts a brain
  * grab: while held the brain keeps its angular offset to the camera (brainPlacement), gaze pulses are suppressed (the
- * gaze is recorded silently) and release leaves the brain where it is. { type: 'limbPose', joints, regionId?, actionId? }
+ * gaze is recorded silently) and release leaves the brain where it is. { type: 'grip', on }: the left hand closes while
+ * Space holds or keeps a grasp (graspHold; the hand area and the finger benders light) and opens when it lets go
+ * (R558, Message 48). { type: 'limbPose', joints, regionId?, actionId? }
  * sets held own-limb joints at once (they stay, like a latch) and lights that area.
  *
  * Latch (R558, JOINT_LATCH). A deliberate activation (a look onto a new area, a click, a muscle tap; not the restart
@@ -1448,13 +1508,14 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * Instructions/pause. The intro overlay is visible for introSeconds from the start (not paused). Esc toggles the
  * overlay (show + pause / hide + resume); a pointer-lock loss shows it and pauses; an Esc within escLockDedupeSeconds of
  * a lock-loss overlay is the same gesture; re-acquiring the lock resumes when resumeOnLock. While paused, gaze is
- * recorded silently and clicks, Space presses and reach intent are ignored (Space releases still apply); timers run on.
+ * recorded silently and clicks, grasps, turn steps and reach intent are ignored (releases and turn stops still apply);
+ * timers run on.
  *
  * Reset body ({ type: 'reset' } or resetBody(state)) clears activatedRegions, cancels the running pulse, snaps the body
  * drives/displays to 0 and every body joint to its start angle (latches cleared), snaps arm drives/displays to 0 and
- * clears the arm latches, clears the open/relax windows, sets rotationState to defaultRotation (value snapped), the game arm's dance swivel to 0 and ends any grab. It keeps the brain
+ * clears the arm latches, clears the open/relax windows, sets rotationState to defaultRotation (value snapped), the game arm's dance swivel to 0, ends any limb turn and ends any grab. It keeps the brain
  * placement and orbit (round-2 fix R1: the brain stays where it was released; ns-app resetBrainView resets the view),
- * the clock, the pulse/suppression counters, Space held, WASD levels and the instructions/pause state.
+ * the clock, the pulse/suppression counters, WASD levels and the instructions/pause state.
  *
  * Returns { options, binding, state, step, stepGated, seed, seedGaze, drives, poseDrives, displayActivity,
  * displayDrives, muscleDisplayDrives, reachOutputs, resetBody, orbitStep, regionActivity, activatedRegions,
@@ -1572,7 +1633,8 @@ export function createActivity({
       pulseAction: null,       // arm action of the active pulse (single slot; null for body/rotation/display-only pulses)
       pulseRemaining: 0,       // wall seconds left in that pulse (logical target expiry)
       spaceHeld: false,
-      openRemaining: 0,        // wall seconds left of the open_hand window after Space release
+      graspHold: false,        // R558 (Message 48): the left hand grips while Space holds (or keeps) a grasp ('grip' events)
+      openRemaining: 0,        // wall seconds left of the open_hand window after the grip lets go
       relaxRemaining: 0,       // seconds left of the relax_release command after Space release
       reachRate: 0,            // last elbowRate (deg/s) received this step; legacy display linkage only
       targets: zeroMap(ACTION_IDS),     // commanded targets going forward (0 or 1)
@@ -1587,7 +1649,7 @@ export function createActivity({
       pulseSeq: 0,             // count of distinct pulses started (each click is its own pulse)
       lastTriggerAt: null,     // wall time (s, activity clock) of the latest pulse start; deadline = this + pulseSeconds
       lastTriggerSource: null, // 'gaze' (new area) | 'moved' (look movement on the area) | 'click'
-      suppressedSeq: 0,        // count of pulse starts suppressed by the held Space fist (for HUD feedback)
+      suppressedSeq: 0,        // count of pulse starts suppressed by the held Space grip (graspHold)
       lastSuppressed: null,    // { actionId, source, t } of the latest suppressed start
       // U1-controls round 2
       gazeKind: null,          // GAZE_KINDS entry of the latest gaze, or null before any
@@ -1664,6 +1726,7 @@ export function createActivity({
       && actionOrNull(s.pulseAction)
       && nonNegative(s.pulseRemaining)
       && typeof s.spaceHeld === 'boolean'
+      && typeof s.graspHold === 'boolean'
       && nonNegative(s.openRemaining)
       && nonNegative(s.relaxRemaining)
       && isFiniteNumber(s.reachRate)
@@ -1723,6 +1786,7 @@ export function createActivity({
       pulseAction: s.pulseAction,
       pulseRemaining: s.pulseRemaining,
       spaceHeld: s.spaceHeld,
+      graspHold: s.graspHold,
       openRemaining: s.openRemaining,
       relaxRemaining: s.relaxRemaining,
       reachRate: s.reachRate,
@@ -1793,19 +1857,22 @@ export function createActivity({
   function commandTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
     if (s.pulseAction !== null && at < s.pulseRemaining) T[s.pulseAction] = 1;
+    if (s.graspHold) T.grasp_close = 1; // R558 (Message 48): the Space grip shows its hand area and finger benders
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining) T.relax_release = 1;
     return T;
   }
 
-  /** R558 latch: what the game arm's POSE follows at `at` seconds into the step: the latched actions, the held Space
-   * fist, the post-release opening window and a running relax pulse. A one-second look/click pulse alone lights its
-   * area (commandTargets) but does not hold a pose; the latch does. */
+  /** R558 latch: what the game arm's POSE follows at `at` seconds into the step: the latched actions, the Space grip
+   * (graspHold: the hand is closed while Space holds or keeps a grasp, and the grip wins the fingers over any latched
+   * finger pose until it lets go), the opening window after the grip lets go and a running relax pulse. A one-second
+   * look/click pulse alone lights its area (commandTargets) but does not hold a pose; the latch does. */
   function poseTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
     for (const id of ACTION_IDS) if (s.armLatch[id] > 0) T[id] = 1;
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining)) T.relax_release = 1;
+    if (s.graspHold) { for (const id of SPACE_COMPETING) T[id] = 0; T.grasp_close = 1; }
     return T;
   }
 
@@ -1854,6 +1921,7 @@ export function createActivity({
 
   /** Display ceiling of action `id` at offset b1 for the commands active from offset b0 (1 when none is timed). */
   function displayCeiling(s, id, b0, b1) {
+    if (id === 'grasp_close' && s.graspHold) return 1; // a grip still held has no deadline
     let c = -1;
     if (s.pulseAction === id && b0 < s.pulseRemaining) c = Math.max(c, fadeCeiling(s.pulseRemaining - b1));
     if (id === 'open_hand' && b0 < s.openRemaining) c = Math.max(c, fadeCeiling(s.openRemaining - b1));
@@ -1863,7 +1931,7 @@ export function createActivity({
 
   /** Space-only commanded targets (no pulse) and their ceilings, for the key lighting of left-arm regions. */
   function keyTarget(s, id, at) {
-    if (id === 'grasp_close') return 0; // R558: Space no longer makes a fist
+    if (id === 'grasp_close') return s.graspHold ? 1 : 0; // R558 (Message 48): the grip of a Space grasp
     if (id === 'open_hand') return at < s.openRemaining ? 1 : 0;
     return at < s.relaxRemaining ? 1 : 0;
   }
@@ -1902,6 +1970,13 @@ export function createActivity({
   }
 
   function startPulse(s, hit, source, at, collect, area = null) {
+    // R558 (Message 48): while the Space grip holds the hand closed, an action that needs the same fingers does not
+    // start (its area would light while nothing moved). Returns false; the count is kept for the shell.
+    if (s.graspHold && hit.armAction !== null && SPACE_COMPETING.includes(hit.armAction)) {
+      s.suppressedSeq += 1;
+      s.lastSuppressed = { actionId: hit.armAction, source, t: s.t };
+      return false;
+    }
     s.pulseAction = hit.armAction;
     s.pulseRegion = hit.regionId;
     s.pulseBody = hit.bodyKey;
@@ -2056,31 +2131,47 @@ export function createActivity({
   }
 
   /**
-   * R558 (Message 2): Space is the dance key. Hold = the slow dance of all four limbs; a press within doubleTapSeconds
-   * of the previous press (press to press) and held = the fast dance (rotationSeq counts these double-taps). Let go =
-   * every limb stays where it is (ns-dance stopDance). No fist, no forearm flip, no grab, no opening window.
+   * Legacy Space key event. R558 (user Message 40): Space now grasps (hold or tap) and turns the limbs (double tap, held
+   * double tap); ns-controls SPACE_GESTURE turns the key into 'grasp' and 'turn' events, so a raw { type: 'space' }
+   * event is only checked and moves nothing (an older caller still sending it neither fails nor starts a turn).
    */
   function applySpace(s, ev) {
-    if (ev.down === true) {
-      if (s.paused || s.spaceHeld) return;   // the overlay is up, or a key repeat
+    if (typeof ev.down !== 'boolean') fail('activity_event', 'space event needs a boolean down');
+    if (ev.safety === true) s.spaceTapAt = null;
+  }
+
+  /**
+   * R558 (user Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
+   * slowly"). { type: 'turn', phase }:
+   *   'step'  a double tap: every limb makes one stroke to its next end (ns-dance startTurnStep), then stops by itself.
+   *           rotationSeq counts these (the guide's flipPalm goal).
+   *   'hold'  the double tap is still held (ns-controls SPACE_GESTURE.tapMaxMs after its press): the turn goes on,
+   *           slowly (ns-dance startTurnHold), while spaceHeld is true.
+   *   'stop'  let go after a hold, or a safety release: every limb stays where it is (stopDance; the latch rule).
+   * While paused a step or a hold starts nothing; a stop always applies.
+   */
+  function applyTurn(s, ev) {
+    if (ev.phase === 'step') {
+      if (s.paused) return;
+      s.rotationSeq += 1;
+      s.spaceTapAt = null;
+      s.dance = startTurnStep(s.dance);
+    } else if (ev.phase === 'hold') {
+      if (s.paused) return;
       s.spaceHeld = true;
-      const fast = isDoubleTap(s.spaceTapAt, s.t, doubleTapSeconds);
-      if (fast) { s.rotationSeq += 1; s.spaceTapAt = null; } else s.spaceTapAt = s.t;
-      s.dance = { ...s.dance, fast };
-    } else if (ev.down === false) {
-      if (s.spaceHeld) {
-        s.spaceHeld = false;
-        s.dance = stopDance(s.dance);
-      }
-      if (ev.safety === true) s.spaceTapAt = null; // a safety release is not a tap
+      s.dance = startTurnHold(s.dance);
+    } else if (ev.phase === 'stop') {
+      s.spaceHeld = false;
+      if (s.dance.mode !== null || s.dance.active) s.dance = stopDance(s.dance);
     } else {
-      fail('activity_event', 'space event needs a boolean down');
+      fail('activity_event', 'turn event needs phase "step", "hold" or "stop"');
     }
   }
 
-  /** R558 (lead decision for user Messages 2 and 12): the F key grasps (ns-controls GRASP_CODE). A press with the
+  /** R558 (user Message 40): holding or tapping Space grasps (ns-controls SPACE_GESTURE; the F key of Messages 2 and 12
+   * is gone). A press with the
    * crosshair on the brain (target 'brain', or no target while the gaze is on a brain area or its glass) starts the
-   * brain grab exactly as Space used to: while held the brain keeps its angular offset to the camera, gaze pulses are
+   * brain grab: while held the brain keeps its angular offset to the camera, gaze pulses are
    * recorded silently, and the release leaves it where it is. A press on another item (target 'mirror' or 'limb': the
    * mirror body or one of your own limbs, which the app carries) never grabs the brain. A safety release is the same as
    * a release. */
@@ -2093,6 +2184,33 @@ export function createActivity({
       // own trunk); only a press with no target key falls back to the gaze.
       if (ev.target === 'brain' || (ev.target === undefined && onBrain)) startGrab(s);
     } else if (s.brainGrab.active) endGrab(s);     // the brain stays where it was released
+  }
+
+  /**
+   * R558 (user Message 48: "the grasping action, you can't see the grasping action at all"). { type: 'grip', on }: the
+   * left hand of the game arm closes while Space holds or keeps a grasp and opens when the grasp lets go. The shell
+   * sends it whenever the Space gesture's grasp (ns-controls SPACE_GESTURE: held or kept) starts or ends, whatever the
+   * crosshair is on, so the grasp is always seen on your own hand and on the hand part of the strip.
+   *   on true   graspHold: the pose closes the hand (grasp_close wins the fingers over any latched finger pose, which
+   *             returns afterwards), the hand area and the finger benders light for as long as the grip lasts. A
+   *             running pulse of an action that competes for the fingers ends. Ignored while paused.
+   *   on false  the grip lets go: the hand opens for spaceOpenSeconds (open_hand: a game rule, a real hand can also
+   *             let go by relaxing), unless a latched grasp_close keeps it closed. Always applies.
+   */
+  function applyGrip(s, ev) {
+    if (typeof ev.on !== 'boolean') fail('activity_event', 'grip event needs a boolean on');
+    if (ev.on === true) {
+      if (s.paused || s.graspHold) return;
+      s.graspHold = true;
+      s.openRemaining = 0;
+      s.relaxRemaining = 0;
+      if (s.pulseAction !== null && SPACE_COMPETING.includes(s.pulseAction)) cancelPulse(s);
+    } else if (s.graspHold) {
+      s.graspHold = false;
+      s.relaxRemaining = 0;
+      if (!(s.armLatch.grasp_close > 0)) s.openRemaining = spaceOpenSeconds;
+      if (s.pulseAction !== null && DIGIT_FLEXING.includes(s.pulseAction)) cancelPulse(s);
+    }
   }
 
   /** The current angles of the dance joints (ns-dance DANCE_LIMBS conventions). The game arm: in the explicit mode its
@@ -2134,16 +2252,17 @@ export function createActivity({
     }
   }
 
-  /** One dance piece of h seconds (after the springs and eases of the same piece): record outside movement (history),
-   * then, while Space is held and the game runs, turn every limb (ns-dance stepDance). */
+  /** One turn piece of h seconds (after the springs and eases of the same piece): record outside movement (history),
+   * then, while a turn runs (a double tap's step, or the slow turn of a double tap held) and the game runs, turn every
+   * limb (ns-dance stepDance). A pause ends the turn where the limbs are (nothing moves by itself after a resume). */
   function danceStep(s, h) {
     clampDanceRange(s);
     let d = observeDance(s.dance, danceAngles(s));
-    if (s.spaceHeld && !s.paused && h > 0) {
-      const r = stepDance(d, danceAngles(s), h, { fast: d.fast, ranges: s.danceRange });
+    if (d.mode !== null && !s.paused && h > 0) {
+      const r = stepDance(d, danceAngles(s), h, { ranges: s.danceRange });
       d = r.dance;
       applyDanceAngles(s, r.angles);
-    } else if (d.active) d = stopDance(d);
+    } else if (s.paused && (d.mode !== null || d.active)) { d = stopDance(d); s.spaceHeld = false; }
     s.dance = d;
   }
 
@@ -2156,6 +2275,10 @@ export function createActivity({
     // could fall inside the double-tap window. A pause or resume always ends the tap chain.
     s.spaceTapAt = null;
     if (s.brainGrab.active) endGrab(s);
+    // R558 (Message 40): a pause ends a limb turn (a step or the slow turn) where the limbs are.
+    if (s.dance.mode !== null || s.dance.active) s.dance = stopDance(s.dance);
+    s.spaceHeld = false;
+    s.graspHold = false; // the grip ends with the pause (no opening window: nothing moves while paused)
   }
 
   function hideInstructions(s) {
@@ -2199,6 +2322,9 @@ export function createActivity({
     s.rotationState = defaultRotation;
     s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null };
     s.armHumeral = null; // R558 (Space dance): back to the coupled palm turn (the dance history records the move)
+    // R558 (Message 40): Reset body also ends a limb turn under way; every limb is back at its start angle.
+    if (s.dance.mode !== null || s.dance.active) s.dance = stopDance(s.dance);
+    s.spaceHeld = false;
     s.rotationDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.rotationKeyDisplay = zeroMap(ROTATION_ACTION_IDS);
     s.spaceTapAt = null;
@@ -2242,11 +2368,17 @@ export function createActivity({
       case 'space':
         applySpace(s, ev);
         return;
+      case 'turn':
+        applyTurn(s, ev);
+        return;
       case 'grasp':
         applyGrasp(s, ev);
         return;
+      case 'grip':
+        applyGrip(s, ev);
+        return;
       case 'limbPose': {
-        // R558 (user Messages 2 and 12): one of your own limbs, held with F and moved, or turned by a drag. The app
+        // R558 (user Messages 2, 12 and 40): one of your own limbs, held with Space and moved, or turned by a drag. The app
         // solves its joints inside their anatomical ranges and hands them here: { joints: { jointId: degrees },
         // regionId?, actionId? }. They are set at once (goal and position: the limb follows the hand that holds it, no
         // jerk) and STAY there, like a latched activation, until the opposing action or Reset body. regionId / actionId
@@ -2878,7 +3010,8 @@ export function createActivity({
   }
 
   /**
-   * R558 (Space dance): what the dance is doing, plain data. { active, fast, angles: { jointId: degrees } (ns-dance
+   * R558 (Space dance; Message 40): what the limb turn is doing, plain data. { active, mode (null | 'step' | 'hold'),
+   * fast (true while a double tap's quick step runs; kept for older readers), angles: { jointId: degrees } (ns-dance
    * DANCE_LIMBS conventions), levels: { jointId: 0..1 } (turning speed, the display level of its areas and muscles),
    * limbs: { limb: { dir: 1 opening | -1 closing, level } }, ranges (the touch-free hip ranges in use),
    * bodyMuscleRows: rows for ns-body bodyMuscleDrives (the right arm's and the hips' turning muscles of the current
@@ -2919,7 +3052,7 @@ export function createActivity({
         catalog: j === 'l_forearm' && open ? ['BIC'] : [], meshNames: [] });
     }
     return {
-      active: state.spaceHeld === true && !state.paused, fast: d.fast, angles, levels: { ...d.levels }, limbs,
+      active: d.mode !== null && !state.paused, mode: d.mode, fast: d.mode === 'step', angles, levels: { ...d.levels }, limbs,
       ranges: state.danceRange ? copyJson(state.danceRange) : {}, bodyMuscleRows, links, armHumeralDeg: explicit ? state.armHumeral : null,
       label: 'simulated limb turning (display-only, unitless; Space is a virtual input, not a recording)'
     };

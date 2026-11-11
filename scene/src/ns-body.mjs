@@ -653,6 +653,26 @@ function boneSegmentFor(entry) {
   return null;
 }
 
+/**
+ * R558 (Message 32: "The far right base of the neck muscles ... above the clavicles" stuck out): exact-ID extra candidate
+ * segments of a muscle whose packet hint misses a bone it lies on. The face packet hints the platysma thorax -> mandible
+ * only, so the posture bake left it where it was while the shoulder girdle under its lower border moved with the arm
+ * held forward (right clavicle up to 17 mm, scapula up to 39 mm): its lower lateral corner then stood up to 17 mm off the
+ * shoulder as a flat pointed wing above the right clavicle (the left girdle follows the left game arm, not the bake).
+ * With the girdle as a candidate the lower border is skinned to the clavicle like the trapezius and pectoralis next to
+ * it. Used only when the entry has exactly that id and name.
+ */
+const MUSCLE_EXTRA_CANDIDATES = Object.freeze([
+  Object.freeze({ id: 'zf-platysma-r', name: 'right platysma', segments: Object.freeze(['r_girdle']),
+    basis: 'the lower border of the platysma lies on the clavicle and the fascia of the upper chest and shoulder' }),
+  Object.freeze({ id: 'zf-platysma-l', name: 'left platysma', segments: Object.freeze(['l_girdle']),
+    basis: 'the lower border of the platysma lies on the clavicle and the fascia of the upper chest and shoulder' }),
+  // The descending trapezius is hinted cervical -> girdle, but it arises from the occipital bone (superior nuchal line,
+  // external occipital protuberance): with the neck skinned per vertex (neckSkinnedMuscle) its upper end then stood up to
+  // 32 mm off the turned and nodded skull. With the skull as a candidate it follows the skull there.
+  ...[['FJ1521', 'descending part of right trapezius'], ['FJ1521M', 'descending part of left trapezius']].map(([id, name]) => Object.freeze({ id, name,
+    segments: Object.freeze(['skull']), basis: 'the descending part of the trapezius arises from the superior nuchal line and the external occipital protuberance' }))
+]);
 function muscleCandidates(entry) {
   const hint = Array.isArray(entry.hint) ? entry.hint : typeof entry.hint === 'string' ? [entry.hint, entry.hint] : [];
   let [p, d] = hint.map(resolveHintSegment);
@@ -664,6 +684,8 @@ function muscleCandidates(entry) {
   if (d === 'r_digits') segs = [...treePath(p, 'r_hand'), ...FINGER_FAN];
   else if (p === 'r_digits') segs = [...treePath('r_hand', d), ...FINGER_FAN];
   else segs = treePath(p, d);
+  const extra = MUSCLE_EXTRA_CANDIDATES.find(r => r.id === entry.id && r.name === entry.name);
+  if (extra) segs = [...segs, ...extra.segments];
   return { proximal: p, distal: d, segments: [...new Set(segs)] };
 }
 
@@ -1375,36 +1397,39 @@ function blendMatrix(blend, segMats, c) {
   return m4FromQuat(qn, sub(target, m4Point(R, c)));
 }
 
-/** Eigenvector of the largest eigenvalue of a symmetric 4x4 matrix (cyclic Jacobi). */
+/** Eigenvector of the largest eigenvalue of a symmetric 4x4 matrix (cyclic Jacobi). R558 (performance, P3): the same
+ * sweeps, rotations and products in the same order on flat Float64Arrays (a[4 i + j] for a[i][j]) instead of arrays of
+ * arrays, so every number is the same; it runs for every muscle that spans a moving joint on every posed frame. */
 function topEigenvector4(N) {
-  const a = N.map(r => r.slice()), v = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+  const a = new Float64Array(16), v = new Float64Array(16);
+  for (let i = 0; i < 4; i++) { for (let j = 0; j < 4; j++) a[4 * i + j] = N[i][j]; v[5 * i] = 1; }
   for (let sweep = 0; sweep < 50; sweep++) {
     let off = 0;
-    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) off += a[i][j] * a[i][j];
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) off += a[4 * i + j] * a[4 * i + j];
     if (off < 1e-24) break;
     for (let p = 0; p < 4; p++) {
       for (let q = p + 1; q < 4; q++) {
-        if (Math.abs(a[p][q]) < 1e-300) continue;
-        const th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        if (Math.abs(a[4 * p + q]) < 1e-300) continue;
+        const th = (a[4 * q + q] - a[4 * p + p]) / (2 * a[4 * p + q]);
         const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
         for (let k = 0; k < 4; k++) {
-          const akp = a[k][p], akq = a[k][q];
-          a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq;
+          const akp = a[4 * k + p], akq = a[4 * k + q];
+          a[4 * k + p] = c * akp - s * akq; a[4 * k + q] = s * akp + c * akq;
         }
         for (let k = 0; k < 4; k++) {
-          const apk = a[p][k], aqk = a[q][k];
-          a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk;
+          const apk = a[4 * p + k], aqk = a[4 * q + k];
+          a[4 * p + k] = c * apk - s * aqk; a[4 * q + k] = s * apk + c * aqk;
         }
         for (let k = 0; k < 4; k++) {
-          const vkp = v[k][p], vkq = v[k][q];
-          v[k][p] = c * vkp - s * vkq; v[k][q] = s * vkp + c * vkq;
+          const vkp = v[4 * k + p], vkq = v[4 * k + q];
+          v[4 * k + p] = c * vkp - s * vkq; v[4 * k + q] = s * vkp + c * vkq;
         }
       }
     }
   }
   let best = 0;
-  for (let i = 1; i < 4; i++) if (a[i][i] > a[best][best]) best = i;
-  return [v[0][best], v[1][best], v[2][best], v[3][best]];
+  for (let i = 1; i < 4; i++) if (a[5 * i] > a[5 * best]) best = i;
+  return [v[best], v[4 + best], v[8 + best], v[12 + best]];
 }
 
 /** Least-squares rigid transform (Horn 1987, unit quaternions) mapping rest points P onto target points Q (flat). */
@@ -1645,9 +1670,10 @@ export function poseBodyDetailed(rig, jointTargetsDeg = {}, options = {}) {
   const fits = rig._fit || {};
   const mode = options.muscleMode === 'blend' ? 'blend' : 'fit';
   const mats = BODY_SEGMENTS.map(s => world[s]);
+  const memo = baked ? bakedDeltaMemo(rig, baked._internal, mode, mats) : null;
   for (const [id, info] of Object.entries(rig.meshSegment)) {
     let m;
-    if (baked) m = bakedDelta(rig, baked, id, info, world, mats, mode);
+    if (memo) { matrices.set(id, bakedDeltaKept(memo, rig, baked, id, info, world, mats, mode).slice()); continue; }
     else if (info.kind === 'bone' || info.blend.length === 1) m = world[info.segment];
     else if (mode === 'fit' && fits[id]) m = fittedMatrix(fits[id], mats);
     else m = blendMatrix(info.blend, world, info.restCentroid || [0, 0, 0]);
@@ -1835,6 +1861,54 @@ export function hipRotationClearRange(rig, targets = {}, options = {}) {
  * null when the muscle is unknown or has fewer than two candidate segments with geometry.
  * options.nearest: 'index' (default, round 4) or 'scan' (every cloud point; same result, for the exactness test).
  */
+/**
+ * R558 (Message 32: "The far right base of the neck muscles ... above the clavicles" stuck out): a muscle that spans the
+ * neck (a head segment, cervical / skull / mandible, AND a trunk segment, thorax or a shoulder girdle, among its
+ * candidates: the sternocleidomastoids, the platysmas, the descending trapezius and the levator scapulae) was posed as
+ * ONE rigid piece, a least-squares fit between the head and the trunk. The mouse look turns the head all the time, and
+ * at a 30 degree turn the platysma stood off the right side of the neck as a flat pointed wing and the
+ * sternocleidomastoid left the clavicle as a strap (measured with the head turned 70 and nodded: up to 37 mm free).
+ * These muscles are now skinned per vertex like the right hand's (handSkinRecords, HAND_SKIN_JOINTS has the neck and jaw
+ * joints), with CONTINUOUS weights (neckSkinWeights): the plain two-nearest-bones rule jumps where a third candidate
+ * becomes the second nearest, and the neck's thorax, cervical and skull frames turn apart. Display mechanics on licensed
+ * anatomy, not measured soft-tissue motion.
+ */
+const NECK_HEAD = new Set(['cervical', 'skull', 'mandible']), NECK_TRUNK = new Set(['thorax', 'r_girdle', 'l_girdle']);
+// GQ check (frame rate): the missing-muscles packet (decision 53) brought 29 more neck-spanning meshes, and skinning all 36
+// (116k vertices) on every frame of a look cost about a quarter of the frame rate while looking around (36 -> 24 fps).
+// Five deep pairs that lie under the trapezius, splenius and rhomboids at the back of the neck and upper back, or
+// against the front of the spine, and attach to no head bone (iliocostalis, longissimus and semispinalis cervicis,
+// serratus posterior superior, longus colli: 34k vertices) stay one rigid least-squares piece, as every other muscle. The
+// protrusion check measured no visible change from that in ordinary and extreme head poses; making more of the deep neck
+// muscles rigid did show (longissimus capitis through the levator scapulae by 14 mm at a 30 degree look, the
+// sternothyroid off the sternum, a scalenus through the levator scapulae by 5 mm), so those keep the per-vertex skin.
+const NECK_SKIN_RIGID = new Set(['FJ1526', 'FJ1526M', 'FJ1534', 'FJ1534M', 'FJ1539', 'FJ1539M', 'FJ1542', 'FJ1542M', 'zm-longus-colli-r', 'zm-longus-colli-l']);
+const neckSkinnedMuscle = (info, id = null) => Boolean(info && info.kind === 'muscle' && (info.candidates || []).some(s => NECK_HEAD.has(s)) && (info.candidates || []).some(s => NECK_TRUNK.has(s))
+  && !(info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') && !(id !== null && NECK_SKIN_RIGID.has(id)));
+/**
+ * Continuous two-influence weights over a muscle's candidate bones: u_s = 1 / d_s^2 for the distance d_s to each
+ * candidate's bone cloud; the two largest are kept LESS the third largest (w_a = u1 - u3, w_b = u2 - u3, normalised), so a
+ * vertex where the second and third nearest bones swap has w_b = 0 on both sides: no jump, no tear. With two candidates
+ * it is the plain inverse-square rule. A pure function of the position (seam vertices agree).
+ * @returns { a: Uint8Array, b: Uint8Array (BODY_SEGMENTS indexes), wa: Float64Array } or null
+ */
+function continuousSkinWeights(rig, p, avail) {
+  const idx = cloudIndexes(rig._clouds || {}), segs = avail.filter(s => idx[s]);
+  if (segs.length < 2) return null;
+  const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n), u = new Float64Array(segs.length);
+  for (let v = 0; v < n; v++) {
+    const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+    let k1 = -1, k2 = -1, k3 = -1;
+    for (let k = 0; k < segs.length; k++) {
+      const d2 = nnNearestD2(idx[segs[k]], x, y, z);
+      u[k] = d2 > 1e-12 ? 1 / d2 : 1e12;
+      if (k1 < 0 || u[k] > u[k1]) { k3 = k2; k2 = k1; k1 = k; } else if (k2 < 0 || u[k] > u[k2]) { k3 = k2; k2 = k; } else if (k3 < 0 || u[k] > u[k3]) k3 = k;
+    }
+    const u3 = k3 >= 0 ? u[k3] : 0, a = u[k1] - u3, b = u[k2] - u3, t = a + b;
+    ia[v] = SEG_INDEX.get(segs[k1]); ib[v] = SEG_INDEX.get(segs[k2]); wa[v] = t > 0 ? a / t : 1;
+  }
+  return { ia, ib, wa };
+}
 export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   checkRig(rig);
   const info = rig.meshSegment[meshId];
@@ -1843,6 +1917,14 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   const clouds = rig._clouds || {};
   const avail = (info.candidates || []).filter(s => clouds[s]);
   if (avail.length < 2) return null;
+  if (neckSkinnedMuscle(info, meshId)) {
+    // R558 (Message 32): the neck muscles' continuous weights (the bake uses the same: bakeSkinWeights).
+    const c = continuousSkinWeights(rig, p, avail);
+    if (!c) return null;
+    const n = p.length / 3, w0 = new Float32Array(n), w1 = new Float32Array(n);
+    for (let v = 0; v < n; v++) { w0[v] = c.wa[v]; w1[v] = 1 - c.wa[v]; }
+    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1 };
+  }
   const n = p.length / 3;
   const i0 = new Uint8Array(n), i1 = new Uint8Array(n), w0 = new Float32Array(n), w1 = new Float32Array(n);
   const near = nearestSearch(clouds, options && options.nearest);
@@ -1938,7 +2020,9 @@ const HAND_SKIN_RE = /^r_(hand|thumb_(mc|pp|dp)|(index|middle|ring|little)_(pp|m
 export const HAND_SKIN_JOINTS = Object.freeze(['r_wrist_flex', 'r_wrist_ext', 'r_wrist_dev', 'r_grasp', 'r_open', 'r_thumb_flex', 'r_thumb_opp',
   'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
   // R558 (R_FOREARM_TWIST): the right forearm's turn and the elbow bend its muscles per vertex too.
-  'r_pronation', 'r_elbow_flex']);
+  'r_pronation', 'r_elbow_flex',
+  // R558 (Message 32): the neck muscles (neckSkinnedMuscle) follow the head's turn, nod and side bend and the jaw.
+  'neck_rot', 'neck_flex', 'neck_side', 'jaw_open', 'jaw_side']);
 /**
  * Skin records for the scene's setBodySkin: Map(element id -> { src (source positions, Float32Array), i0, i1, w0, w1 })
  * for every right-hand muscle (HAND_SKIN_RE) with source geometry, from bodySkinWeights: the same two nearest candidate
@@ -1950,8 +2034,9 @@ export function handSkinRecords(rig, meshesById, options = {}) {
   const get = meshGetter(meshesById), out = new Map();
   for (const m of rig.muscles) {
     const info = rig.meshSegment[m.id];
-    // R558: and every right forearm muscle that reaches the radius, for the continuous twist (R_FOREARM_TWIST).
-    if (!info || !(info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius')) continue;
+    // R558: and every right forearm muscle that reaches the radius, for the continuous twist (R_FOREARM_TWIST); and
+    // (Message 32) every muscle that spans the neck (neckSkinnedMuscle).
+    if (!info || !((info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') || neckSkinnedMuscle(info, m.id))) continue;
     const p = positionsOf(get(m.id));
     if (!p) continue;
     const w = bodySkinWeights(rig, m.id, p, options);
@@ -2158,6 +2243,28 @@ export const BODY_POSTURES = deepFreezeRig({
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
   }
 });
+/**
+ * R558 (user Message 51: "let's have the extended arm and legs, you know, slightly bent. Not perfectly straight"): the
+ * DRAWN right elbow and both knees keep a small bend at full extension, the way a relaxed limb is rarely locked
+ * straight. drawn bend = sqrt(bend^2 + min^2): `min` degrees at a fully extended joint, within 1 degree of the joint's
+ * own angle from about 4 x min on, smooth in between (no step when a joint starts to bend) and never past the joint's
+ * limit. A display choice, not a measured resting angle. Only the drawn pose changes: the activity's joint angles, the
+ * joint limits and the body map keep 0 = straight. The left game arm needs none: its reach stops at ns-arm
+ * WRIST_REACH_FRACTION of the arm's length, about 16 degrees of elbow bend.
+ */
+export const EXTENSION_SOFT_BEND = Object.freeze({ elbowDeg: 12, kneeDeg: 10 });
+/** The joint angles to DRAW (see EXTENSION_SOFT_BEND): a new object; ids without a finite angle are left alone. Call it
+ * before groundLegAngles, so the slightly bent knee still rests its heel on the ground. */
+export function softExtensionAngles(angles, o = EXTENSION_SOFT_BEND) {
+  const out = { ...angles };
+  if (Number.isFinite(out.r_elbow_flex) && o.elbowDeg > 0) out.r_elbow_flex = Math.min(BODY_JOINT_LIMITS.r_elbow_flex[1], Math.hypot(Math.max(0, out.r_elbow_flex), o.elbowDeg));
+  if (o.kneeDeg > 0) for (const S of ['L', 'R']) {
+    const id = `knee_ext_${S}`;
+    if (Number.isFinite(out[id])) out[id] = Math.max(BODY_JOINT_LIMITS[id][0], -Math.hypot(Math.max(0, -out[id]), o.kneeDeg));
+  }
+  return out;
+}
+
 /**
  * R558 (user: "an invisible ground ... flat"; the start posture sits on it with the legs straight forward): keep each
  * leg on or above the ground. With the thigh lying level (hip flexion 90 at rest) a knee bend would swing the shank
@@ -2560,11 +2667,63 @@ function boundsOf(p) {
  * never reads or fills the cache.
  */
 const bakeWeightCache = new WeakMap();
+
+/**
+ * R558 (Message 32: "No muscles should arbitrarily be pointy and stick out"): the posture bake skins a muscle that spans
+ * a joint the start posture bends (the hips and the right shoulder at 90 degrees, the girdle that follows the arm) with
+ * two bones per vertex and inverse-square distance weights. Those weights change steeply where a vertex's distances to
+ * the two bones cross (and their gradient jumps along the bones' medial lines), and at a 90 degree bend a weight step of
+ * 0.1 over 2 mm moves neighbouring vertices up to about 20 mm apart: measured on the start posture, ridges, folds and
+ * pointed plates up to 21 mm high on the gluteus maximus, rectus femoris, sartorius, iliacus, the right pectoralis,
+ * deltoid and serratus anterior (the GQ protrusion check). So the bake's displacement from the muscle's own rigid rest
+ * fit, d = baked - rest(src), is smoothed over the welded surface (`passes` neighbour means of d itself, not of the
+ * positions, so the mesh does not shrink and the bend is kept): the bend stays, its ridges go. The right hand and forearm
+ * muscles keep the plain skin, because the scene skins them per vertex from the same weights at every pose
+ * (handSkinRecords) and the skinned start pose must equal the baked one. The lifted copy gets the same correction
+ * (bakeLiftedPositions). A display choice on licensed anatomy, not measured soft-tissue mechanics.
+ */
+export const BAKE_SMOOTH = Object.freeze({ passes: 24 });
+/** The welded neighbour-mean smoothing of a displacement field d (Float32Array, layout of p) over a mesh, in place. */
+function smoothDisplacement(p, ix, d, passes) {
+  const n = p.length / 3, rep = new Int32Array(n), key = new Map();
+  for (let v = 0; v < n; v++) { const k = `${p[3 * v]},${p[3 * v + 1]},${p[3 * v + 2]}`; const r = key.get(k); rep[v] = r === undefined ? (key.set(k, v), v) : r; }
+  const nb = new Map();
+  for (let t = 0; t + 2 < ix.length; t += 3) {
+    const a = rep[ix[t]], b = rep[ix[t + 1]], c = rep[ix[t + 2]];
+    if (a === b || b === c || a === c) continue;
+    for (const [x, y] of [[a, b], [b, c], [c, a]]) { let s = nb.get(x); if (!s) nb.set(x, (s = new Set())); s.add(y); s = nb.get(y); if (!s) nb.set(y, (s = new Set())); s.add(x); }
+  }
+  const reps = [...nb.keys()], start = new Int32Array(reps.length + 1), slot = new Int32Array(n).fill(-1);
+  reps.forEach((r, i) => { slot[r] = i; });
+  let m = 0; const list = [];
+  reps.forEach((r, i) => { start[i] = m; for (const y of nb.get(r)) { list.push(slot[y]); m++; } });
+  start[reps.length] = m;
+  let A = new Float64Array(3 * reps.length), B = new Float64Array(3 * reps.length);
+  reps.forEach((r, i) => { A[3 * i] = d[3 * r]; A[3 * i + 1] = d[3 * r + 1]; A[3 * i + 2] = d[3 * r + 2]; });
+  for (let pass = 0; pass < passes; pass++) {
+    for (let i = 0; i < reps.length; i++) {
+      let x = A[3 * i], y = A[3 * i + 1], z = A[3 * i + 2];
+      for (let q = start[i]; q < start[i + 1]; q++) { const j = 3 * list[q]; x += A[j]; y += A[j + 1]; z += A[j + 2]; }
+      const c = 1 + start[i + 1] - start[i];
+      B[3 * i] = x / c; B[3 * i + 1] = y / c; B[3 * i + 2] = z / c;
+    }
+    const t = A; A = B; B = t;
+  }
+  for (let v = 0; v < n; v++) { const i = slot[rep[v]]; if (i < 0) continue; d[3 * v] = A[3 * i]; d[3 * v + 1] = A[3 * i + 1]; d[3 * v + 2] = A[3 * i + 2]; }
+  return d;
+}
+/** True for a muscle the scene skins per vertex (handSkinRecords' rule): its bake stays the plain skin. */
+const sceneSkinnedMuscle = (info, id) => Boolean(info && ((info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') || neckSkinnedMuscle(info, id)));
 function bakeSkinWeights(rig, id, p, avail, near, useCache) {
   let byId = useCache ? bakeWeightCache.get(rig) : null;
   if (useCache && !byId) bakeWeightCache.set(rig, (byId = new Map()));
   const hit = byId ? byId.get(id) : null;
   if (hit && hit.p === p && hit.avail === avail.join(',')) return hit;
+  if (neckSkinnedMuscle(rig.meshSegment[id], id)) {
+    // R558 (Message 32): the neck muscles' continuous weights, exactly as bodySkinWeights gives them to the scene's skin.
+    const c = continuousSkinWeights(rig, p, avail);
+    if (c) { const out = { p, avail: avail.join(','), ia: c.ia, ib: c.ib, wa: c.wa, tf: null }; if (byId) byId.set(id, out); return out; }
+  }
   const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n);
   // About a third of the muscle vertices repeat an earlier vertex of the same mesh exactly (seams). The weights are a
   // pure function of the position, so a repeated position copies the first one's result (open-addressing hash on the
@@ -2626,7 +2785,7 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
   const mats = BODY_SEGMENTS.map(s => world[s]);
   const inv = Object.fromEntries(BODY_SEGMENTS.map(s => [s, m4RigidInv(world[s])]));
   const fits = rig._fit || {}, clouds = rig._clouds || {};
-  const out = new Map(), fitBaked = {}, rigidRest = {};
+  const out = new Map(), fitBaked = {}, rigidRest = {}, bakeFix = {};
   const skinned = [], rigid = [], missing = [];
   let near = null;
   const mode = nearest === undefined || nearest === null ? 'index' : nearest;
@@ -2658,6 +2817,15 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
             const wa = w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
           }
+          // R558 (Message 32): the bake's displacement from the rigid rest fit, smoothed (BAKE_SMOOTH), except for the
+          // muscles the scene skins per vertex. The correction is kept for the lifted copy (bakeLiftedPositions).
+          if (BAKE_SMOOTH.passes > 0 && !sceneSkinnedMuscle(info, id) && mesh.indices) {
+            const d = new Float32Array(p.length);
+            for (let i = 0; i < p.length; i += 3) for (let r = 0; r < 3; r++) d[i + r] = positions[i + r] - (rest[r] * p[i] + rest[4 + r] * p[i + 1] + rest[8 + r] * p[i + 2] + rest[12 + r]);
+            const s = smoothDisplacement(p, mesh.indices, Float32Array.from(d), BAKE_SMOOTH.passes), c = new Float32Array(p.length);
+            for (let i = 0; i < p.length; i++) { c[i] = s[i] - d[i]; positions[i] += c[i]; }
+            bakeFix[id] = c;
+          }
           skinned.push(id);
         }
       }
@@ -2680,7 +2848,7 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
     skinned: Object.freeze(skinned), rigid: Object.freeze(rigid), missing: Object.freeze(missing),
     ms: Math.round((t1 - t0) * 10) / 10
   };
-  Object.defineProperty(result, '_internal', { value: Object.freeze({ rig, world, mats, inv, fitBaked, rigidRest, keepM }), enumerable: false });
+  Object.defineProperty(result, '_internal', { value: Object.freeze({ rig, world, mats, inv, fitBaked, rigidRest, keepM, bakeFix }), enumerable: false });
   return Object.freeze(result);
 }
 
@@ -2724,6 +2892,53 @@ export function bodyRootAnchor(rig, baked = null) {
     rigGeneration: rig, bakeGeneration: b, meaning: 'Rig-derived lumbosacral/pelvis reference after exact baked keep frame; not measured or normal-biomechanics qualification' });
 }
 
+
+/* R558 (performance, user Message 42): the body is re-posed on most frames (the head and the left arm follow the look),
+ * but most of its segments do not move from one pose to the next. bakedDelta is a pure function of the matrices of the
+ * segments a mesh uses, so its last result is kept per mesh and returned again while every one of those matrices is
+ * exactly (element for element) what it was in the previous pose; a bone's matrix is worked out once per segment instead
+ * of once per bone. Same numbers as before: nothing is approximated, and a changed element recomputes. Kept per baked
+ * posture, for one rig and one muscle mode at a time. */
+const bakedDeltaMemos = new WeakMap();
+function bakedDeltaMemo(rig, B, mode, mats) {
+  let c = bakedDeltaMemos.get(B);
+  if (!c || c.rig !== rig || c.mode !== mode) {
+    c = { rig, mode, mats: null, changed: new Uint8Array(mats.length), seg: new Array(mats.length).fill(null), mesh: new Map(), used: new Map() };
+    bakedDeltaMemos.set(B, c);
+  }
+  const prev = c.mats;
+  for (let i = 0; i < mats.length; i++) {
+    let ch = 1;
+    if (prev) { const a = prev[i], b = mats[i]; ch = 0; for (let k = 0; k < 16; k++) if (a[k] !== b[k]) { ch = 1; break; } }
+    c.changed[i] = ch;
+    if (ch) c.seg[i] = null;
+  }
+  c.mats = mats;
+  return c;
+}
+/** bakedDelta as a Float32Array(16), from the memo when no segment the mesh uses has changed (the caller copies it). */
+function bakedDeltaKept(c, rig, baked, id, info, world, mats, mode) {
+  if (info.kind === 'bone' || info.blend.length === 1) {
+    const si = SEG_INDEX.get(info.segment);
+    if (si === undefined) return Float32Array.from(bakedDelta(rig, baked, id, info, world, mats, mode));
+    return c.seg[si] || (c.seg[si] = Float32Array.from(bakedDelta(rig, baked, id, info, world, mats, mode)));
+  }
+  let used = c.used.get(id);
+  if (used === undefined) {
+    const f = (rig._fit || {})[id];
+    // What bakedDelta reads: the fit samples' segments in 'fit' mode with a fit record, else the blend's segments.
+    used = mode === 'fit' && f ? fitUsed(f) : info.blend.map(([s]) => SEG_INDEX.get(s));
+    if (used.some(i => !Number.isInteger(i))) used = null;
+    c.used.set(id, used);
+  }
+  let kept = used ? c.mesh.get(id) : undefined;
+  if (kept) for (let k = 0; k < used.length; k++) if (c.changed[used[k]]) { kept = undefined; break; }
+  if (!kept) {
+    kept = Float32Array.from(bakedDelta(rig, baked, id, info, world, mats, mode));
+    if (used) c.mesh.set(id, kept);
+  }
+  return kept;
+}
 
 /** Matrix mapping a mesh's BAKED geometry to its posed geometry (see poseBodyDetailed options.baked). */
 function bakedDelta(rig, baked, id, info, world, mats, mode) {
@@ -3012,7 +3227,31 @@ export const BODY_STACK_RULE = Object.freeze({
       basis: 'the atlas sculpts the segments of rectus abdominis into the front of this sheet (the anterior rectus sheath); that relief is drawn shaved down to a smooth surface within about 50 to 85 mm of the midline, so the sheath does not read as a rectus abdominis ("six-pack"); when the real rectus abdominis is loaded (missing-muscles-r1) the part of the sheet in front of it is not drawn at all (openRectusSheath: the sheath opened, as in a dissection)' })),
     ...[['FJ1595', 'Right sternocleidomastoid'], ['FJ1573', 'Left sternocleidomastoid']].map(([id, name]) => Object.freeze({ id, name, region: 'neck',
       basis: 'neck muscle from the mastoid to the sternum and clavicle: the neck gap along its whole length, so its lower end does not stand off as a hood' }))
-  ])
+  ]),
+  // R558 (Message 32: "No muscles should arbitrarily be pointy and stick out. The far right base of the neck muscles do,
+  // above the clavicles."): exact-ID rows of a muscle that the stack does not lift but that the atlas draws OVER muscles it
+  // does lift. Without this the lifted muscle came out THROUGH the thin sheet lying on it (measured on the start posture:
+  // the sternocleidomastoid by up to 7.3 mm over 411 vertices of the platysma, the descending trapezius by up to 14.3 mm
+  // just above the clavicle), and what was left of the sheet stood off as flat, pointed scraps at the base of the neck.
+  // A carried muscle rides on the muscles in `on` (stackCarryOffsets): where the atlas has it lying on one of them, it is
+  // drawn at least carry.marginMm outside that muscle's drawn surface, spread over the sheet's thickness and faded out
+  // over a few rings, so the atlas order of the layers (platysma outermost) is kept. A display choice, never measured
+  // anatomy; the scene allows a carried muscle at most the largest lift plus two fills plus the margin (scene_input).
+  carry: Object.freeze([
+    // (GQ check) and on the infrahyoid strap muscles of the missing-muscles packet (omohyoid, sternohyoid; outer, lifted):
+    // without them the omohyoid came out through the platysma by up to 9 mm at the front of the neck in the start posture
+    ['zf-platysma-r', 'Platysma.r', ['FJ1595', 'FJ1521', 'FJ1586', 'FJ1596']], ['zf-platysma-l', 'Platysma.l', ['FJ1573', 'FJ1521M', 'FJ1565', 'FJ1574']]
+  ].map(([id, name, on]) => Object.freeze({ id, name, on: Object.freeze(on),
+    basis: 'the platysma is the outermost sheet of the neck: it lies on the sternocleidomastoid, on the infrahyoid strap muscles and, above the clavicle, on the anterior border of the trapezius, all of which the stack lifts' }))),
+  carryRule: Object.freeze({ reachMm: 5, coverMm: -1, marginMm: 0.6, spreadMm: 3, rampPasses: 6 }),
+  // R558 (Message 32): the whole display offset of every drawn muscle (lift + fill + carry, from the baked geometry) is
+  // smoothed over its welded surface by `passes` neighbour means at the end. The parts of it change from one vertex to
+  // the next by rule (the per-vertex radial direction, the fill's curvature cap, a cover cap that tucks a vertex in while
+  // its neighbour just outside coverMm keeps its fill), and single vertices stood out of their neighbourhood as needles
+  // and ridges 3 to 7 mm high (measured: the tibialis anterior tendon, the descending and transverse trapezius, the long
+  // head of biceps femoris, the extensors of the forearm). A mean never moves a vertex further than the furthest of its
+  // neighbours, so no muscle moves further than the stack rule allows.
+  displaySmooth: Object.freeze({ passes: 3 })
 });
 // A packet row (missing-muscles-r1; `packet` set) is used only for an id the producer catalogue does not know at all, so
 // it can never stand in for a catalogue row; every other row needs the catalogue's exact source name.
@@ -3957,6 +4196,125 @@ function stackCoverCaps(list) {
   return caps;
 }
 
+/**
+ * R558 (Message 32): the CARRY of one muscle A on the muscles under it (BODY_STACK_RULE.carry / carryRule). Pairs are
+ * found in the SOURCE frame (the atlas): a vertex of A whose nearest base vertex lies within reachMm and on whose outer
+ * side it lies (signed distance along the base's outward normal above coverMm) is a covering vertex. In the DRAWN frame
+ * (lift and fill done) it must lie at least marginMm outside that base vertex's drawn tangent plane; the shortfall is its
+ * push, along the base's drawn normal. Every vertex of A then takes the largest push within spreadMm on A (both faces of
+ * a thin sheet move together), and the push fades out over rampPasses rings of A's welded surface (never below what a
+ * vertex needs), with the direction smoothed alike, so the carried part has no crease at its edge.
+ * @param srcA, drawnA, ixA the carried muscle (source positions, drawn positions, triangle indices)
+ * @param bases [{ src, drawn, ix }] the muscles it rides on
+ * @returns { off: Float32Array (drawn offsets, layout of drawnA), maxMm, vertices (moved) }
+ */
+function stackCarryOffsets(srcA, drawnA, ixA, bases) {
+  const C = BODY_STACK_RULE.carryRule, n = srcA.length / 3, off = new Float32Array(srcA.length);
+  // Outward unit normals of a mesh at each vertex (area weighted, welded by exact position, sign from the signed volume
+  // of the SOURCE mesh so the source and drawn normals of one mesh always point the same way).
+  const normals = (p, ix, sign) => {
+    const N = new Float64Array(p.length), key = new Map(), rep = new Int32Array(p.length / 3);
+    for (let v = 0; v < p.length / 3; v++) { const k = `${p[3 * v]},${p[3 * v + 1]},${p[3 * v + 2]}`; const r = key.get(k); rep[v] = r === undefined ? (key.set(k, v), v) : r; }
+    let vol = 0;
+    for (let t = 0; t + 2 < ix.length; t += 3) {
+      const a = 3 * ix[t], b = 3 * ix[t + 1], c = 3 * ix[t + 2];
+      const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      for (const k of [a, b, c]) { const r = 3 * rep[k / 3]; N[r] += nx; N[r + 1] += ny; N[r + 2] += nz; }
+      vol += p[a] * nx + p[a + 1] * ny + p[a + 2] * nz;
+    }
+    const s = sign || (vol < 0 ? -1 : 1);
+    for (let v = 0; v < p.length / 3; v++) {
+      const r = 3 * rep[v], l = Math.hypot(N[r], N[r + 1], N[r + 2]) || 1;
+      N[3 * v] = s * N[r] / l; N[3 * v + 1] = s * N[r + 1] / l; N[3 * v + 2] = s * N[r + 2] / l;
+    }
+    return { N, sign: s };
+  };
+  // Base points: source position, source normal, drawn position, drawn normal; in a grid of reachMm cells (source frame).
+  const inv = 1 / C.reachMm, cells = new Map(), key = (i, j, k) => `${i},${j},${k}`, B = [];
+  for (const b of bases) {
+    const ns = normals(b.src, b.ix, 0), nd = normals(b.drawn, b.ix, ns.sign), bi = B.length;
+    B.push({ src: b.src, drawn: b.drawn, ns: ns.N, nd: nd.N });
+    for (let v = 0; v < b.src.length / 3; v++) {
+      const k = key(Math.floor(b.src[3 * v] * inv), Math.floor(b.src[3 * v + 1] * inv), Math.floor(b.src[3 * v + 2] * inv));
+      let c = cells.get(k); if (!c) cells.set(k, (c = [])); c.push(bi, v);
+    }
+  }
+  // Nearest base vertex within reachMm of a source point: [base, vertex] or null.
+  const nearest = (grid, which, x, y, z) => {
+    const i = Math.floor(x * inv), j = Math.floor(y * inv), k = Math.floor(z * inv);
+    let bd = C.reachMm * C.reachMm, bb = -1, bv = -1;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+      const L = grid.get(key(i + a, j + b, k + c)); if (!L) continue;
+      for (let q = 0; q < L.length; q += 2) { const P = B[L[q]][which], u = 3 * L[q + 1], d2 = (P[u] - x) ** 2 + (P[u + 1] - y) ** 2 + (P[u + 2] - z) ** 2; if (d2 < bd) { bd = d2; bb = L[q]; bv = L[q + 1]; } }
+    }
+    return bb < 0 ? null : [bb, bv];
+  };
+  const need = new Float32Array(n), dir = new Float32Array(3 * n), hasDir = new Uint8Array(n);
+  let any = false;
+  for (let v = 0; v < n; v++) {
+    // Covering in the atlas: the nearest base vertex (source frame) has this vertex on its outer side.
+    const x = srcA[3 * v], y = srcA[3 * v + 1], z = srcA[3 * v + 2], hs = nearest(cells, 'src', x, y, z);
+    if (!hs) continue;
+    const S = B[hs[0]], u = 3 * hs[1];
+    const sSrc = (x - S.src[u]) * S.ns[u] + (y - S.src[u + 1]) * S.ns[u + 1] + (z - S.src[u + 2]) * S.ns[u + 2];
+    if (!(sSrc > C.coverMm)) continue;
+    // Drawn: tested against the same base vertex's drawn tangent plane, but only while the pair is still local along the
+    // surface (a base that slid away along its own surface, as the lift moves the trapezius' anterior border out from
+    // under the platysma, has left this vertex: nothing to carry there).
+    const ax = drawnA[3 * v], ay = drawnA[3 * v + 1], az = drawnA[3 * v + 2];
+    const ex = ax - S.drawn[u], ey = ay - S.drawn[u + 1], ez = az - S.drawn[u + 2];
+    const sDr = ex * S.nd[u] + ey * S.nd[u + 1] + ez * S.nd[u + 2];
+    if (Math.hypot(ex - sDr * S.nd[u], ey - sDr * S.nd[u + 1], ez - sDr * S.nd[u + 2]) > C.reachMm) continue;
+    dir[3 * v] = S.nd[u]; dir[3 * v + 1] = S.nd[u + 1]; dir[3 * v + 2] = S.nd[u + 2]; hasDir[v] = 1;
+    if (sDr < C.marginMm) { need[v] = C.marginMm - sDr; any = true; }
+  }
+  if (!any) return { off, maxMm: 0, vertices: 0 };
+  // Spread over the sheet's thickness (source frame, spreadMm cells).
+  const sinv = 1 / C.spreadMm, sc2 = C.spreadMm * C.spreadMm, scells = new Map();
+  for (let v = 0; v < n; v++) { const k = key(Math.floor(srcA[3 * v] * sinv), Math.floor(srcA[3 * v + 1] * sinv), Math.floor(srcA[3 * v + 2] * sinv)); let c = scells.get(k); if (!c) scells.set(k, (c = [])); c.push(v); }
+  const push = Float32Array.from(need);
+  for (let u = 0; u < n; u++) {
+    if (!(need[u] > 0)) continue;
+    const x = srcA[3 * u], y = srcA[3 * u + 1], z = srcA[3 * u + 2], i = Math.floor(x * sinv), j = Math.floor(y * sinv), k = Math.floor(z * sinv);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+      const L = scells.get(key(i + a, j + b, k + c)); if (!L) continue;
+      for (const v of L) if (push[v] < need[u] && (srcA[3 * v] - x) ** 2 + (srcA[3 * v + 1] - y) ** 2 + (srcA[3 * v + 2] - z) ** 2 <= sc2) {
+        push[v] = need[u];
+        if (!hasDir[v]) { dir[3 * v] = dir[3 * u]; dir[3 * v + 1] = dir[3 * u + 1]; dir[3 * v + 2] = dir[3 * u + 2]; hasDir[v] = 1; }
+      }
+    }
+  }
+  // Fade out over a few rings of the WELDED surface (repeated seam vertices move as one) and smooth the direction.
+  const wkey = new Map(), wid = new Int32Array(n);
+  for (let v = 0; v < n; v++) { const k = `${srcA[3 * v]},${srcA[3 * v + 1]},${srcA[3 * v + 2]}`; const r = wkey.get(k); wid[v] = r === undefined ? (wkey.set(k, v), v) : r; }
+  for (let v = 0; v < n; v++) { const r = wid[v]; if (push[v] > push[r]) push[r] = push[v]; if (hasDir[v] && !hasDir[r]) { dir[3 * r] = dir[3 * v]; dir[3 * r + 1] = dir[3 * v + 1]; dir[3 * r + 2] = dir[3 * v + 2]; hasDir[r] = 1; } }
+  const sum = new Float32Array(n), cnt = new Float32Array(n), ds = new Float32Array(3 * n);
+  for (let pass = 0; pass < C.rampPasses; pass++) {
+    sum.fill(0); cnt.fill(0); ds.fill(0);
+    for (let t = 0; t + 2 < ixA.length; t += 3) {
+      const a = wid[ixA[t]], b = wid[ixA[t + 1]], c = wid[ixA[t + 2]];
+      sum[a] += push[b] + push[c]; sum[b] += push[a] + push[c]; sum[c] += push[a] + push[b]; cnt[a] += 2; cnt[b] += 2; cnt[c] += 2;
+      for (let r = 0; r < 3; r++) { const da = push[a] * dir[3 * a + r], db = push[b] * dir[3 * b + r], dc = push[c] * dir[3 * c + r]; ds[3 * a + r] += db + dc; ds[3 * b + r] += da + dc; ds[3 * c + r] += da + db; }
+    }
+    for (let v = 0; v < n; v++) {
+      if (wid[v] !== v || !(cnt[v] > 0)) continue;
+      push[v] = Math.max(push[v], 0.5 * push[v] + 0.5 * sum[v] / cnt[v]);
+      const dx = push[v] * dir[3 * v] + ds[3 * v] / cnt[v], dy = push[v] * dir[3 * v + 1] + ds[3 * v + 1] / cnt[v], dz = push[v] * dir[3 * v + 2] + ds[3 * v + 2] / cnt[v], l = Math.hypot(dx, dy, dz);
+      if (l > 1e-9) { dir[3 * v] = dx / l; dir[3 * v + 1] = dy / l; dir[3 * v + 2] = dz / l; hasDir[v] = 1; }
+    }
+  }
+  let maxMm = 0, moved = 0;
+  for (let v = 0; v < n; v++) {
+    const r = wid[v], d = push[r];
+    if (!(d > 1e-4) || !hasDir[r]) continue;
+    off[3 * v] = d * dir[3 * r]; off[3 * v + 1] = d * dir[3 * r + 1]; off[3 * v + 2] = d * dir[3 * r + 2];
+    if (d > maxMm) maxMm = d;
+    if (r === v) moved++;
+  }
+  return { off, maxMm, vertices: moved };
+}
+
 /** Round 4 (unitRules.smooth): shave the relief of a sheet facing the front of the trunk down to a smooth surface through
  * its valleys, in place. Height h = how far forward (-y, drawn frame: the trunk is upright in the start posture) the
  * front-most surface is, on a grid of cellMm over x and z; the target is the height's minimum over reachMm up and down (not side to side), blurred;
@@ -4078,7 +4436,11 @@ function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
     const clouds = rig._clouds || {}, avail = (info.candidates || []).filter(s => clouds[s]);
     let near = null;
     const w = bakeSkinWeights(rig, id, p, avail, (segs, x, y, z) => (near || (near = nearestSearch(clouds, 'index')))(segs, x, y, z), true);
-    const out = new Float32Array(q.length), mats = B.mats, bakedMesh = baked.meshesById.get(id), base = bakedMesh ? bakedMesh.positions : null;
+    const out = new Float32Array(q.length), mats = B.mats, bakedMesh = baked.meshesById.get(id);
+    // R558 (BAKE_SMOOTH): the plain skin of the baked positions (the smoothing correction is added back at the end).
+    const fix = B.bakeFix && B.bakeFix[id] && B.bakeFix[id].length === q.length ? B.bakeFix[id] : null;
+    let base = bakedMesh ? bakedMesh.positions : null;
+    if (base && fix) { const b = new Float32Array(base.length); for (let i = 0; i < b.length; i++) b[i] = base[i] - fix[i]; base = b; }
     // R558 (R_FOREARM_TWIST): a twisted right-forearm influence takes its own turned ulna frame, exactly as in
     // bakeBodyPosture. Without it the lifted copy of a right forearm muscle was carried by the UNturned ulna (up to
     // 160 deg off the drawn radius side), up to 70 mm from its baked place, so the scene refused the whole body lift.
@@ -4100,6 +4462,7 @@ function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
         }
       }
     }
+    if (fix) for (let i = 0; i < out.length; i++) out[i] += fix[i];
     return out;
   }
   const rest = bakedRestMatrix(rig, baked, id);
@@ -4202,6 +4565,35 @@ export function bodyWorldsLayers(rig, baked = null, { meshesById = null, extraBo
       positions.set(f.id, out);
       filled.push(f.id);
       byId[f.id].fillMm = Math.round(maxMm * 10) / 10;
+    }
+    // R558 (Message 32): the carry (BODY_STACK_RULE.carry): a sheet the atlas draws over lifted muscles rides on them,
+    // after every lift and fill is known, so a lifted muscle never comes out through it.
+    for (const f of fillList) {
+      const row = stackRuleRow(BODY_STACK_RULE.carry, f.id), drawnA = positions.get(f.id), srcA = positionsOf(getMesh(f.id));
+      if (!row || !drawnA || !srcA) continue;
+      const ixOf = id => { const d = baked ? baked.meshesById.get(id) : getMesh(id); return (d && d.indices) || (getMesh(id) && getMesh(id).indices) || null; };
+      const bases = row.on.map(id => ({ src: positionsOf(getMesh(id)), drawn: positions.get(id), ix: ixOf(id) })).filter(b => b.src && b.drawn && b.ix && b.drawn.length === b.src.length);
+      const ixA = ixOf(f.id);
+      if (!bases.length || !ixA) continue;
+      const { off, maxMm, vertices } = stackCarryOffsets(srcA, drawnA, ixA, bases);
+      if (!vertices) continue;
+      const out = new Float32Array(drawnA.length);
+      for (let i = 0; i < out.length; i++) out[i] = drawnA[i] + off[i];
+      positions.set(f.id, out);
+      byId[f.id].carryMm = Math.round(maxMm * 10) / 10;
+      byId[f.id].carriedVertices = vertices;
+    }
+    // R558 (Message 32): the display offset smoothed over each muscle's surface (BODY_STACK_RULE.displaySmooth).
+    if (BODY_STACK_RULE.displaySmooth.passes > 0) for (const f of fillList) {
+      const drawn = positions.get(f.id), bakedMesh = baked ? baked.meshesById.get(f.id) : getMesh(f.id), src = positionsOf(getMesh(f.id));
+      const base = bakedMesh && bakedMesh.positions, ix = (bakedMesh && bakedMesh.indices) || (getMesh(f.id) && getMesh(f.id).indices);
+      if (!drawn || !base || !src || !ix || base.length !== drawn.length || src.length !== drawn.length) continue;
+      const d = new Float32Array(drawn.length);
+      for (let i = 0; i < d.length; i++) d[i] = drawn[i] - base[i];
+      smoothDisplacement(src, ix, d, BODY_STACK_RULE.displaySmooth.passes);
+      const out = new Float32Array(drawn.length);
+      for (let i = 0; i < out.length; i++) out[i] = base[i] + d[i];
+      positions.set(f.id, out);
     }
   }
   for (const id of Object.keys(byId)) Object.freeze(byId[id]);

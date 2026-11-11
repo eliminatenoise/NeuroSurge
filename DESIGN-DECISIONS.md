@@ -4,6 +4,8 @@ Decisions 13 to 17 were made later the same day, after the user looked at pictur
 
 Decisions 20 onward were made on 11 November, after the user's newest notes (eye camera, field of view, start posture, held movements, the strip filling the view, and the work still in progress listed under "What is left").
 
+Decisions 54 onward were made on 12 November, after the user played the build: Space as the one hand key, the R key for information, what each activation shows, a neon flash, gloss, slightly bent limbs, the mirror body in the view over the shoulder, and a second performance pass.
+
 This file records what changed in this build, why, and what was actually observed. Where a decision replaces an earlier design instruction, it says which one. Nothing here is a claim about real brains: the signals and movements in the game are simulated and have no units.
 
 ## How things were checked
@@ -262,6 +264,8 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 ## 24. The motor strip fills the view; the labels match on both sides
 
+*Changed on 12 November: the strip now spans about half the width of the view (section 55).*
+
 **The notes.** "The primary motor cortex strip / motor homunculus should take up the entire view from top to bottom of screen and left to right of screen." "Motor strip again should take up entire panorama left to right so there is more cursor area for fine motor control." "Brain labels should be a little more transparent and match on both sides."
 
 **Decision.** At the start, the whole brain is brought nearer and scaled uniformly, so the strip's true shape fits the whole view with a 1.5 % side margin. The strip is never moved or reshaped on the brain. The far-eye picture is flatter: perspective factor 20, after 6, 12 and 16 were tried and cut off or hid the lateral areas. At 1600 by 900 (at 120 degrees) the strip covered 97 % of the width and 90 % of the height; before, 27 % by 24 %. Very wide windows (2560 by 1080) are limited by height. Labels are lighter (fill 0.62 to 0.46, edge 0.32 to 0.26, arm labels 0.92 to 0.72) and come in mirrored pairs about the strip's middle; a pair is dropped together, never one side alone. The info panel became a corner card, and the colour key folds behind key I in landscape.
@@ -328,6 +332,8 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 ## 31. The Space dance of all four limbs
 
+*Changed on 12 November: Space is the hand key again, and the dance is the limb turn on a double tap (section 54).*
+
 **The note.** "Holding the space bar now more slowly shifts pronation/supination / external/internal rotation and between continuously like in a dance (think opening and closing up the body/limbs) simultaneously among all 4 limbs (though not coordinatively ...). The current rotational direction of each limb's rotation depends on previous actions. Same for double space bar which more quickly affects all limbs again ... Make sure feet are spread far enough that they do not overlap during simultaneous internal rotation."
 
 **Decision.**
@@ -336,7 +342,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 - **Speed and release.** A full stroke takes 2.6 s held and 1.0 s after a double-tap and hold. Released, the limbs stay where they are.
 - **Ranges.** Forearm 80 each way from thumb-up; shoulder 70 internal and 90 external; hip 40 internal and 45 external.
 - **Feet.** With the legs side by side the feet never come close (82.6 mm at full internal rotation). With the knees bent, external rotation is limited at run time to keep a 20 mm bone gap. The legs are never spread.
-- **Space's old roles.** Space no longer makes a fist, flips the palm or grabs; the grab moves to F.
+- **Space's old roles.** Space no longer makes a fist, flips the palm or grabs; the grab moves to F. (Changed again on 12 November: section 54.)
 - **Start posture.** The right forearm now starts fully palm down, like the left.
 
 **Limit.** Shoulder and hip rotation have no area of their own yet, so after a dance only another dance or Reset brings them back.
@@ -356,6 +362,8 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 **Limit.** From behind, the inside of the facial skull shows: the packet has no parietal or occipital bones and no muscles at the back of the neck.
 
 ## 33. Grasp with F, move, click your own body, drag to turn; nothing passes through anything
+
+*Changed on 12 November: the F key is gone; Space takes hold (section 54).*
 
 **The notes.** Message 2 asks for all three items to be handled with all the control keys: W/A/S/D move a grasped limb, brain or mirror body, clicking activates whatever it hits including your own body, and click-and-drag "shifts orbit or external/internal rotation". Message 12: "Ensure that your body, the brain and the mirror do not touch or collide ... they can be moved to and around each other but not through."
 
@@ -505,6 +513,8 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 ## 43. Clinical colours and a power-up charge, then black again with more contrast
 
+*Changed on 12 November: the power-up charge is now a neon flash (section 56).*
+
 **The notes.** Message 22: "Make them clinical instead. Everything should look clinical and surgical. And the fluorescent glow up should almost look like a video game power up charge." Message 24: "I liked the space black background." Message 25: "Let's not make things bland. Contrast and high dynamic range are still visually key."
 
 **Decisions.**
@@ -529,6 +539,8 @@ All meshes go into one batched draw, so the pass costs about 0.1–0.8 ms a fram
 **Limit.** The hidden pass has no edge smoothing, so long shallow diagonals show small steps. Message 27 asks for lines that do not hurt the eyes, and Message 28 asks to keep them black. Section 46 covers both.
 
 ## 45. What is picked is what is drawn: a body in front blocks the look
+
+*Changed on 11 November: the look now reaches a motor area behind a body, and Shift reaches the body in front (section 54).*
 
 **The fault.** The look picked motor areas straight through your own body. Looking down, your feet switched on the leg areas behind them. In third person, your back could do the same.
 
@@ -643,7 +655,7 @@ Measured at the start: the mirror's side tips are 0 px apart in height at 1024x7
 **Rendering, fixed.**
 - **Picks at Low quality.** Simplified body copies kept stale pick trees after skinning or the lift, so the crosshair could miss the drawn forearm.
 - **Head-turn flash.** The far-side neck muscle still flashed during head turns.
-- **Charge-to-flash seam.** The power-up's hand-off from charge to flash dropped about 40% for one frame. It is now continuous in both copies, the main program and the shader, which agree to within 3e-8.
+- **Charge-to-flash seam.** (The charge itself was removed on 12 November: section 56.) The power-up's hand-off from charge to flash dropped about 40% for one frame. It is now continuous in both copies, the main program and the shader, which agree to within 3e-8.
 - **Labels.** A label could be forced and faded in the mirror-tip fallback.
 - **QA trace.** A QA trace counted the outline pass as a surface.
 
@@ -696,12 +708,104 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Quadratus lumborum and the inner edge of the latissimus are 5–12 mm off the bone they attach to, in the deep back, where they are covered.
 - A click exactly on the belly's midline still selects a vertebra.
 
+## 54. Space is the one hand key; R reads the information (12 November)
+
+**The notes.** Message 40: "I see now I gave confusing instructions. So holding the spacebar, get rid of F. Holding the spacebar should again be grasping. And so should one tap spacebar. But double tapping causes rotation, and double tapping and holding continues that rotation, but slowly." Message 48: "the grasping action, you can't see the grasping action at all", and "maybe R should, the letter R, the key R should replace the I key for information ... make sure the information isn't such an eyesore as it is now, and make sure that it starts off in that mode so you can see the information on the sides."
+
+**Decision.** This replaces section 31 (the Space dance) and the F key of section 33.
+- **Hold Space:** take hold of what you look at for as long as the key is down.
+- **Tap Space:** take hold and keep holding; the next tap lets go.
+- **Tap twice:** all four limbs turn once (forearms palm up or down, upper arms and hips inward or outward). Each limb carries on the way it last turned.
+- **Tap twice and hold:** the turn carries on slowly until the key is released.
+- **What a press acts on** (Messages 33 and 34, 11 November: "You should be able to grasp-move items even if they are behind another item." "Same for the other controls of course."). The look reaches a motor area even when your own body or the mirror body is in front of it. The “Looking at” card names the area and says what is in front, and every control acts on what the card names. Shift reaches the other thing on the line of sight: where an area is named, the body part in front of it (Shift + click taps its muscle, Shift + Space holds that limb or the mirror body, Shift + drag dials the limb or turns the mirror body); away from the strip, the thing behind what you see. This replaces the rule of section 45 that a body in front blocks the look.
+- **The hold is visible.** The left hand closes while Space holds and opens when the hold ends. The hand part of the left-arm strip lights, the information card names the key, the strip part, the movement and the muscles, and the crosshair shows a ring: white while the hand is closed on nothing, the accent colour while something is held.
+- **R reads the information.** R replaces I and steps through three states: the side cards (the start), the cards with More detail and the colour key, and everything hidden, with a small chip that says how to bring it back. The status card has shorter wording. Ctrl+R stays the browser's reload.
+
+**How it is built.** The Space gesture is one small state machine in `ns-controls.mjs` (press, release, tick) that emits hold and turn events. Losing focus, losing the pointer and every input cancel of 11 November release a hold and stop a slow turn exactly once. A unit test covers the tap limit, the double-tap window, a press that waits while a turn runs and the safety releases.
+
+**Limits.**
+- The closed hand is a sign of the hold only. The fingers do not wrap round what is carried.
+- A hold or a tap takes hold at the press itself, with no wait for a possible second tap. A double tap on an item therefore takes hold of it for a moment; it is let go before the limbs turn.
+- Message 46 also asks that the look swings a held item round you with the same face toward you, and that a press and drag turns it about itself. The first half is not built yet: the look still carries a held item up and down.
+
+## 55. Each activation names its strip part, movement and muscles; the strip spans about half the view
+
+**The notes.** Message 43: "The brain is far too big, it should only take up 50% of the width of the panorama screen view." Message 48: "it's not clear which brain part is being activated by each body movement at all. So maybe you need to reintroduce linking lines ... The entire left arm region activates, where only small regions should be activating." Message 50: "it's not even showing which muscles are activating when we're using the D key and we're using the A key." Message 56: "the game is a educational game, essentially. It's a learning tool for people learning motor neuroanatomy."
+
+**Decision.**
+- **Reach keys light only what moves.** W, A, S and D light the shoulder part of the left-arm strip, with the elbow part for W and S. The wrist and hand parts stay dark. This replaces the whole-arm display of the reach.
+- **Their muscles light too.** A table, `REACH_MUSCLES` in `ns-actions.mjs`, lists the usual textbook movers of the shoulder for each direction. They light at a made-up level, like every signal in the game.
+- **One line per lit area.** While an area is lit, one line in its colour joins it to the body part it moves on the mirror body (on your own body only when no mirror body is shown). This brings back the linking lines in a quieter form: one line, held, instead of one short line for a second.
+- **The information card says it in words.** For a reach it names the key, the strip part, the movement and the muscles. With the crosshair off the strip it shows the area that is on now.
+- **The strip spans about half the width of the view** (0.475 of it), which replaces "fills the view" in section 24 and leaves room for both bodies beside the brain.
+
+**Limits.**
+- The left teres major, infraspinatus and teres minor lie on the shoulder blade, which the left game arm leaves out. The card names them and nothing lights for them.
+- Which muscle does how much of a reach is not modelled. The list is the textbook one, the level is made up, and nothing is measured.
+- With the smaller brain the mirror body and your own feet sit in front of the leg end of the strip. The look still reaches those areas (section 45), but they are harder to see. How many areas the crosshair can rest on from the start has not been counted again.
+- The grey and green arrows can lie over strip areas near the middle of the view. This is on the list for the ease-of-use pass.
+
+## 56. A neon flash, gloss, and lighter ink
+
+**The notes.** Message 53: "instead of making it a glowing power up, level up, let's make it more of a neon fluorescent flash." Message 54: "it's very ugly and matte. Maybe we should add a bit of shine, a bit of glossiness." Message 49: "Maybe you've overdone it with the borderlands style?"
+
+**Decision.**
+- **Neon flash.** An area and its muscles come on at once, flash once like a neon tube being switched on, and then glow steadily. The 0.26 s front that ran along each muscle, the slow pulse and the ripples of section 43 are gone, so the glow answers within 0.05 s. There is one flash for each activation and no flicker. The reduced-motion rule and the faint hint on the opposing area are unchanged.
+- **Gloss.** Muscles and bones were matte because the muscle highlight sat under the comic highlight's threshold, so none was drawn. They are now more polished, and the comic highlight has a second, brighter core. A rule keeps small far parts from sparkling. Motor areas carry a soft sheen along the gyrus crowns, and the glass has a larger soft highlight.
+- **Lighter ink.** Outlines are thinner and lighter, and the bodies carry much less hatching and stipple. The contour and hatch lines on the brain are lighter too. This tones down sections 46, 48 and 52 without removing the comic look.
+
+**Limit.** These are choices of look, checked by eye in screenshots. No reader other than the author has compared the before and after.
+
+## 57. Slightly bent limbs; the mirror body backs away in the view over the shoulder
+
+**The notes.** Message 51: "let's have the extended arm and legs, you know, slightly bent. Not perfectly straight." Message 52: "if when you press E to go into third person, that your body gets further away, then the mirror body should also get further away equally. Otherwise, then it's just getting far too close."
+
+**Decision.**
+- **Soft extension.** A fully stretched right elbow is drawn with about 12 degrees of bend and each knee with about 10. The drawn bend is the square root of (the joint's bend squared plus that minimum squared), so it joins the joint's own angle smoothly and never passes the joint's limit. Only the drawing changes: the game's joint angles, the limits and the body map still count from straight. The bend is applied before the ground rule of section 25, so the heels stay on the ground. The left game arm needs none, because its reach already stops at about 16 degrees of elbow bend. This replaces "like a stick" in section 22.
+- **The mirror body keeps its distance.** E moves the camera 1.4 m behind you. The mirror body now slides away from your body by the same 1.4 m, with the same easing, and returns exactly when you press E again. It is a slide for the view only: it is not part of the mirror body's orbit and is not saved.
+
+**Limit.** The 12 and 10 degrees are display values chosen by eye, not measured resting angles.
+
+## 58. Performance, second pass: less work in each frame, and the picture is kept
+
+**The notes.** Message 42: "Do everything you can do to fix game performance. It is horrible at the moment." Message 48: "there are serious performance issues here, so do what you've got to do." Message 50: "You may also have to simplify certain elements ... to maximize performance."
+
+**What was slow.** On the user's screen size (1920 by 1080) the frame time was the game's own work on the main thread, not the graphics card. Carrying an item stalled, and the automatic picture quality answered slow frames by lowering the picture, which made the picture rough and the frames no faster.
+
+**Decision.** Each change gives the same picture and the same answers, and each was checked against the computation it replaces.
+- **Carrying no longer stalls.** A held item's own arrows rest while it is carried and are planned once when it is let go; before, they were hidden and planned again on every frame. The information panel writes only the parts that changed, so a moving number no longer makes the browser measure the whole layout again.
+- **The carry guard does its work once.** The guard that keeps a carried mirror body clear of your body and the brain built the same mirror image four times a frame. It is built once and shared. Checked over 260 guarded frames against the previous computation: no difference in how far the item moved or why it stopped.
+- **Body pose reuses what did not move.** A mesh's matrix is recomputed only when one of its segments moved. Checked against a fresh computation for 655,398 matrices over 1,374 poses: no element differed.
+- **Left arm skinning skips unused blend slots.** Nineteen in twenty of the arm's vertices use one or two of three slots; terms with a weight of exactly zero are left out.
+- **The brain's glass is drawn in three draws instead of 145.** The merged mesh shares memory with the pieces, which stay for picking and collision. Draw calls at the start went from 1,137 to 995. Five views were pixel-identical at Low quality.
+- **Picture quality is given up only when that helps.** With Picture quality: Auto, slow frames that are mostly the game's own work now leave the picture alone. Every step down is measured for about a second; without a gain of at least a tenth the next kind of step is tried, and when none helps the starting level comes back and is held (20 s, longer each time, 5 minutes at most). A renderer limited by triangle count still reaches the simpler meshes. Seven unit tests cover the rules with made-up frame times.
+
+**Measured.** Scripted runs in one desktop Chromium at 1920 by 1080 on the machine's own graphics card, with eight processor cores for the browser (the earlier sections used one core, so these numbers do not compare with theirs). Frames a second; "before" is the build of section 57, one run; "after" is three runs. Runs differ by several frames a second, and the frame times are locked to the 60 Hz screen.
+
+| What the script does | Before | After |
+|---|---|---|
+| Sitting still | 60 | 60 |
+| Looking around | 56.5 | 52.7 to 58.5 |
+| Reaching with the keys | 60 | 60 |
+| Holding the mirror body and looking around | 33.9 | 46 to 48.8 |
+| Carrying it with the keys into contact | 42.6, with one frame of 233 ms | 48.6 to 49.5, longest frame 50 ms |
+| The slow limb turn | 54.2 | 51.6 to 53.6 |
+| Looking around again at the end of the run | 53.7 | 56.3 to 60 |
+| Looking around in the view over the shoulder | 47.8 | 47.2 to 54.8 |
+| Picture at the end of the run | the roughest level (simplified meshes, 0.7 million triangles) | full (3.2 million triangles) |
+
+**Limits.**
+- The target of 60 frames a second is met only when sitting still and when reaching. Holding, carrying, the limb turn and the view over the shoulder still drop frames, and some frames take longer than a thirtieth of a second.
+- Looking around and the limb turn are about as fast as before. What changed there is that the full picture is kept; before, the same speed was reached only with the roughest picture.
+- The game's own work per frame is still the limit: re-skinning both bodies when the look moves, about a thousand draw calls, and one material per muscle. Sharing materials between resting muscles and merging the draws of the mirror body's bones are the next candidates. They change more code and have not been tried.
+- One machine, one browser. Nothing was measured on a laptop or on integrated graphics of another make.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
 - Independent browser review of the whole build, including other browsers, touch and screen readers. The author's scripted checks and three readings by other instances of the same model do not replace it.
-- `SHA256SUMS` and `release-manifest.json` predate these changes. They carry the release's own review statements and are regenerated at release.
-- Publication. Nothing here has been pushed.
+- `SHA256SUMS` and `release-manifest.json` in this working copy predate these changes. They are regenerated over the published files at each upload.
+- Publication. Since 12 November the user asks for each finished version to be uploaded to the project's GitHub repository, and that is done. An upload is not an independent review.
 
 **Limits of this build that were looked at and left, each with its reason in the section named.**
 - Four of the 44 motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them (13).

@@ -19,7 +19,7 @@
   --ns-portrait-legend-reserve-body: 116px; /* R4-polish: the short body-view legend (about 100-105 px measured) + gap */
   --ns-info-col-maxvh: 66vh;   /* INFO_PANEL.colMaxVh */
   --ns-info-corner-vw: 18.75vw; /* INFO_PANEL.cornerVw */
-  --ns-info-short-maxvh: 17vh;  /* INFO_PANEL.cornerShortVh */
+  --ns-info-short-maxvh: 48vh;  /* INFO_PANEL.cornerShortVh */
   --ns-leftarm: #8cf2ff;     /* REGION_STYLE.leftArmOutline (sRGB of the linear [0.55, 0.95, 1.0]) */
   /* Polish: one visual system for every overlay. */
   --ns-other: #d4ccbc;       /* REGION_RENDER.groupLine = ns-colors KEY_COLORS.otherGroupLine (other body-part territories) */
@@ -439,6 +439,19 @@ html, body {
 .ns-crosshair-v { top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; }
 .ns-crosshair-active .ns-crosshair-h,
 .ns-crosshair-active .ns-crosshair-v { background: var(--ns-accent); }
+/* R558 (Message 48): the grip ring. It closes round the crosshair while Space grips: white on nothing, the accent
+   colour while something is held (ns-scene-three crosshairHold). */
+.ns-crosshair::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transition: inset 90ms ease-out, border-color 90ms ease-out;
+  pointer-events: none;
+}
+.ns-crosshair-grip::before { inset: -3px; border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 0 3px rgba(0, 0, 0, 0.9); }
+.ns-crosshair-holding::before { border-color: var(--ns-accent); }
 
 /* Orientation labels: each extends AWAY from the band from its anchor (ns-scene-three ORIENTATION_ALIGN). */
 .ns-orient {
@@ -857,6 +870,7 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 .ns-kbd-row { display: flex; gap: calc(var(--k) * 0.16); }
 .ns-kbd-row-q { padding-left: calc(var(--k) * 0.7); }
 .ns-kbd-row-a { padding-left: calc(var(--k) * 1.05); }
+.ns-kbd-row-z { padding-left: 0; } /* R558 (Messages 33 and 34): the wide left Shift starts the row, as on a real keyboard */
 .ns-kbd-row-space { padding-left: calc(var(--k) * 3.1); }
 .ns-kbd-key { box-sizing: border-box; flex: 0 0 calc(var(--k) * 1.42); height: var(--k); border-radius: 7px;
   border: 1px solid rgba(232, 238, 245, 0.13); border-bottom-width: 3px; background: rgba(232, 238, 245, 0.025); }
@@ -866,6 +880,7 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 .ns-kbd-word { font-size: max(10px, calc(var(--k) * 0.26)); font-weight: 600; color: #cfe9f5; white-space: nowrap; }
 .ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 8.6); }
 .ns-kbd-key.ns-kbd-key-escape { flex-basis: calc(var(--k) * 1.6); }
+.ns-kbd-key.ns-kbd-key-shiftleft { flex-basis: calc(var(--k) * 2.6); }
 .ns-kbd-pad { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; align-items: center; min-width: 0; }
 .ns-kbd-pad-title { grid-column: 1 / -1; font-weight: 700; font-size: 13px; color: #f2f6fa; }
 .ns-kbd-pad-drawing { position: relative; width: calc(var(--k) * 2.9); height: calc(var(--k) * 2.1); border-radius: 10px;
@@ -887,18 +902,41 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 
 /* R558 (motor strip fills the view). In landscape the motor areas reach every edge of the view at the start, so the
    panels live in the two bottom corners the areas leave free. The information panel is a SHORT card in the bottom
-   right corner (title, body part, signal meter, a clamped sentence and the "More detail" line); key I opens the full
+   right corner (title, body part, signal meter, a clamped sentence and the "More detail" line); key R opens the full
    card upward. The colour key folds away with it and shows above the status card (bottom left) while More detail is
-   open. On a card without More detail (plain brain glass) key I unfolds the whole card and the colour key instead
+   open. On a card without More detail (plain brain glass) key R unfolds the whole card and the colour key instead
    (data-ns-unfold on the app root, ns-app toggleInfoDetail); in body views (brain out of view) the key keeps showing its ramp. The always-on limits line at the top keeps
    saying "a rough map". Portrait keeps its bottom band. */
 @media (min-aspect-ratio: 1/1) {
   .ns-infopanel { top: auto; bottom: var(--ns-gap); width: min(var(--ns-info-col-px), var(--ns-info-corner-vw)); }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) { max-height: var(--ns-info-short-maxvh); overflow: hidden; display: flex; flex-direction: column; }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) > * { flex: none; }
-  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-rows, .ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-activations) { display: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-simulated, .ns-infopanel-known, .ns-infopanel-caveat, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-activations) { display: none; }
+  /* R558 (Messages 44, 50 and 56, a learning tool): the compact card KEEPS its teaching rows (key, strip part,
+     movement, muscles), each as a small label over one short line, so a player always reads which part of the strip
+     drives which movement through which muscles. The long honesty lines stay inside the opened card. */
+  .ns-infopanel-rows dt { display: block; margin-top: 5px; }
+  .ns-infopanel-rows dt::after { content: none; }
+  .ns-infopanel-rows dd { display: block; font-size: 12.5px; line-height: 1.35; color: #eef3f8; }
+  .ns-infopanel-rows dd::after { content: none; }
   /* R558 (hunt 2): the compact card also says when it shows the LAST area you looked at (one short line). */
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-viewed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-plain, .ns-infopanel-explanation) { flex: 0 1 auto; min-height: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
   .ns-app:not([data-ns-unfold="true"]):not(:has(> .ns-scene-overlay[data-ns-brain-in-view="false"])):not(:has(.ns-infopanel-detail[open])) .ns-hud .ns-panel-legend { visibility: hidden; }
 }
+
+/* R558 (user Message 48, the R key: "read information ... make sure the information isn't such an eyesore ... and
+   make sure that it starts off in that mode"). The app root carries the information state (ns-app setInfoRead):
+   no attribute or "read" = the tidy side cards (the start), "more" = More detail and the colour key open,
+   "off" = cards, colour key and guide hidden. The limits line at the top always stays. A small key prompt in the
+   card's corner says what R does next; while the information is hidden a chip in the same corner says how to bring
+   it back. */
+.ns-keycap { display: inline-block; min-width: 15px; padding: 0 4px; border: 1px solid rgba(232, 238, 245, 0.55); border-bottom-width: 2px; border-radius: 4px; background: rgba(232, 238, 245, 0.08); color: #f3f6fa; font-size: 10.5px; font-weight: 700; line-height: 15px; text-align: center; }
+.ns-infopanel-heading { padding-right: 66px; }
+.ns-infopanel-keyhint { position: absolute; top: 8px; right: 10px; display: flex; align-items: center; gap: 5px; color: var(--ns-label); font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+.ns-read-chip { display: none; position: absolute; right: var(--ns-gap); bottom: var(--ns-gap); align-items: center; gap: 6px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--ns-surface-line); background: var(--ns-surface); color: var(--ns-label); font-size: 11.5px; font-weight: 600; pointer-events: none; }
+.ns-app[data-ns-read="off"] .ns-read-chip { display: flex; }
+/* !important: the landscape short-card rule above is more specific and sets display: flex. */
+.ns-app[data-ns-read="off"] .ns-infopanel,
+.ns-app[data-ns-read="off"] .ns-hud .ns-panel-info,
+.ns-app[data-ns-read="off"] .ns-hud .ns-panel-legend { display: none !important; }

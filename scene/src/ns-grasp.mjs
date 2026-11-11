@@ -3,7 +3,7 @@
  * will move those accordingly ... Clicking and dragging anything shifts orbit or external/internal rotation (imagine
  * pulling/pushing in a direction or turning a dial around the center point)").
  *
- * Pure maths, no DOM. A held limb (HOLD F on it) moves its END (the right hand, or a foot at the ankle) toward a target
+ * Pure maths, no DOM. A held limb (HOLD or TAP Space on it; R558, Message 40) moves its END (the right hand, or a foot at the ankle) toward a target
  * point that W/A/S/D and the look move; solveLimb finds the joint angles that bring the end there, every joint inside
  * its anatomical range (the body rig's limits; nothing goes past them): a small solve over the limb's three joints
  * (two at the root, one bend). A drag on a limb turns it about its own long axis like a dial (rollDeg), through the

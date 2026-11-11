@@ -50,6 +50,7 @@ import {
   DEG, add, sub, scale, dot, cross, length, normalize, clamp, identity, multiply, translation, uniformScale, transformPoint,
   transformDirection, det3
 } from './ns-math.mjs';
+import { THIRD_PERSON } from './ns-camera.mjs';
 
 export const MIRROR_VERSION = 'ns-mirror-r558 (literal plane reflection on a level ground, 2026-11-11)';
 
@@ -58,6 +59,16 @@ export const MIRROR_VERSION = 'ns-mirror-r558 (literal plane reflection on a lev
  * fractions of the mirror body's drawn height. Display choices.
  */
 export const MIRROR_VIEW = Object.freeze({ arrowGapFrac: 0.06, arrowSizeFrac: 0.16 });
+
+/**
+ * R558 (user Message 52: "if when you press E to go into third person, that your body gets further away, then the
+ * mirror body should also get further away equally. Otherwise, then it's just getting far too close"): in the outside
+ * view the camera backs away from your body by the boom length (ns-camera THIRD_PERSON.distanceM); the mirror body then
+ * backs away from your body by the same distance, eased with the same blend (state.viewAwayM, set by the scene from
+ * the camera pose). It is a view slide only: it is not part of the orbit, is not saved, does not count towards the
+ * push limit and is 0 in the first-person view, where the literal reflection holds exactly.
+ */
+export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, maxM: 4 });
 
 /**
  * R558: the literal reflection (display choices; the numbers measured at run time are reported by the scene).
@@ -123,7 +134,7 @@ export const MIRROR_TEXT = Object.freeze({
   reset: 'Reset mirror body',
   resetHelp: 'Puts the mirror body back where a real mirror would show you.',
   simulated: 'Everything here is simulated.',
-  escRow: 'Mirror body: hold F on it and look or use W/A/S/D to carry it along the ground. Its side arrows turn it; its top and bottom arrows slide it away or back.',
+  escRow: 'Mirror body: hold Space on it and look or use W/A/S/D to carry it along the ground. Its side arrows turn it; its top and bottom arrows slide it away or back.',
   partSuffix: ' (mirror image)'
 });
 
@@ -403,12 +414,14 @@ export function mirrorTransform(state) {
   let away = p.plane ? [carryCentre[0] - p.plane.eyeM[0], 0, carryCentre[2] - p.plane.eyeM[2]] : [0, 0, 0];
   away = Math.hypot(away[0], away[2]) > 1e-6 ? normalize(away) : scale(p.toward, -1);
   away[1] = 0;
-  const pushV = scale(away, push);
+  // Outside view (MIRROR_OUTSIDE): the same slide, as far as the camera has backed away from your body.
+  const viewAwayM = Number.isFinite(state.viewAwayM) && state.viewAwayM > 0 ? Math.min(state.viewAwayM, MIRROR_OUTSIDE.maxM) : 0;
+  const pushV = scale(away, push + viewAwayM);
   for (let i = 0; i < 3; i++) matrix[12 + i] += pushV[i];
   const centre = add(carryCentre, pushV);
   const inverse = invertAffine(matrix);
   return freeze({
-    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, scale: p.scale,
+    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, viewAwayM, scale: p.scale,
     frame: freeze({ right: p.right, up: p.up, toward: p.toward }), orbit: state.orbit, placement: p
   });
 }

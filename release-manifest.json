@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-12-body-update",
+  "version": "experimental-2026-11-12-body-update-2",
   "experimental": true,
-  "source": "Body update (R558) published at the user's direct instruction of 12 November 2026, before independent review. Comic-style bodies, brain and outlines; eye camera; mirror reflection; held movements; F carry; Space dance; stop-at-contact; closed skull, eyes and 111 more atlas muscles. The 11 November input-robustness changes are not included yet. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md.",
+  "source": "Body update (R558), second upload, published at the user's standing instruction of 12 November 2026 to upload each finished version, before independent review. Since the first upload: Space as the one hand key (hold, tap, double tap), the R key for information, reach keys that light only the shoulder and elbow strip parts with their muscles, one line from a lit area to the mirror body, a neon flash, gloss and lighter ink, slightly bent limbs, the mirror body backing away in the view over the shoulder, a motor strip about half the view wide, a second performance pass, and the 11 November input-robustness changes with their tests. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 95437,
-      "sha256": "c30b9f296ec4dde51491192493856ad9cd845f96ff9dae1d6c5d68e7ed3a6138"
+      "bytes": 109822,
+      "sha256": "5aac8dc44e1923d558074088e0749ccbc1a02e24ac2f48a852e7ec0e98e6363c"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 3123,
-      "sha256": "61dea3c8faf8617cfe437825956e40d4dab733b02da85341032c61a4d000f375"
+      "bytes": 4222,
+      "sha256": "3a937f42527577db2aa6603ae84064a83bfd16430daf10d9695ba6f9844ca268"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 21884,
-      "sha256": "1a8bd18f070de52d90a47bbc5138c78764bfff751f92f2c929b100727f76f3e0"
+      "bytes": 26235,
+      "sha256": "199f74834b09cc3f89209bf07b13cdac269e68bc063b6fc61a273567af813d1b"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 4381,
-      "sha256": "9850606718d7840dea9aa7bf2b2a6c81b2368bcc06ae05a9d04e0414f9a194ba"
+      "bytes": 5483,
+      "sha256": "6437d08662cf8d2cc40a1360f5dcd965c6f2d2f2317e91fda8a4d06f4029c7d6"
     },
     {
       "path": "README.md",
-      "bytes": 6791,
-      "sha256": "52756d6d0bcc5476da4cbf944f68b227f636947f267bb63f52b5440f4b0b36ee"
+      "bytes": 7910,
+      "sha256": "0e164f7d1417493da599d24344d72ba3d82fde273505f7cc8e92cc85cf90ab30"
     },
     {
       "path": "START.html",
-      "bytes": 3731,
-      "sha256": "4b86868affd5312aebc3ec047899656edd19439aa627a38b7a16e661ccd91319"
+      "bytes": 3733,
+      "sha256": "daf70bef192766ac85d861777541dbd47edf39a5d1d5669401d46d4a61a17fa3"
     },
     {
       "path": "index.html",
@@ -3417,8 +3417,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 45766,
-      "sha256": "1d897764c37272447949be891d4f762cb38cf3b35622d4a7fb046d93b853826f"
+      "bytes": 48929,
+      "sha256": "bbd9693d2477930f203d201caa68d1f8eb2d2bb82839de553ed17504bc9c2213"
     },
     {
       "path": "scene/example/preview.css",
@@ -3432,13 +3432,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 182091,
-      "sha256": "2fa4b577dea78b5ed2a992f41ed5c5e450719faf9d0d28563658bc78c9cc30ec"
+      "bytes": 191531,
+      "sha256": "fb5f97ffe9534a3aca5ecd0c701f5e8ea0ca03db070fed004a5cedc2ef1e15aa"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 558858,
-      "sha256": "e78c0223db205acbbee93415984307ce7e201b97fe20341dca16fa4543fe32c9"
+      "bytes": 603827,
+      "sha256": "d097a49065e06e27a982f8c2b3fe629a6f800fe43c1f86d33c327593dbcd9d2a"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3447,8 +3447,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 71569,
-      "sha256": "262ce36a984521a9ff30613339dba46e0417b6f8a449fddc27568a30ce8101b5"
+      "bytes": 73221,
+      "sha256": "b7b60dca26bf6e4f00987bf303a005f55da91e2bf365133a29fb5cee3454cf06"
     },
     {
       "path": "scene/src/ns-assets.mjs",
@@ -3462,58 +3462,63 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 377160,
-      "sha256": "ecdd4e1f3bda698d238a02d4f1c45c079098e522f70540b5eff7f99b5adc9e7d"
+      "bytes": 407572,
+      "sha256": "45c78239a3b026bb5beca9ac0d05e79bf4fac6919aa7ba413c19a8e4bae0cb2a"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
-      "bytes": 228624,
-      "sha256": "e3a6d0aa3e408ff201616b0a8fab0eb6c7ac0e7851f935599622c06ede588edf"
+      "bytes": 228581,
+      "sha256": "b6a3bbb5badec09ae1d0c8c75e84e2f38cf36e35922fcb44cd3fcd14fbb5e2ad"
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 19127,
-      "sha256": "d4582e2083d5467e2699be371270dee5d8e611afe461de54d4c14fa50e452c70"
+      "bytes": 38363,
+      "sha256": "2328a4c96f7c0f55abdc725fb90725331ef7deff2644e76509ca9eb47a2a9bf2"
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 255768,
-      "sha256": "f6f6a9ff4049f80682aff6453cba4941a4c488f1a5665207ddf9dade2080ac16"
+      "bytes": 256114,
+      "sha256": "91c1966c0cc6cd719522758f61b54165df220dba5ca636d17a88a44f15b24dc2"
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 48709,
-      "sha256": "071accd0d2deea561454229b0cc0bdfbc25bef856884ea3cb60151fc859c007e"
+      "bytes": 48790,
+      "sha256": "af330cfdd32e274145bbfeee941a35a2b58828a86a497447062b4241e647ad86"
     },
     {
       "path": "scene/src/ns-collide.mjs",
-      "bytes": 43820,
-      "sha256": "3f03a8fc3d606fdd83a52e5046b896547e5df9059288f7dccd3588f5903ad5ad"
+      "bytes": 45808,
+      "sha256": "4db6a839ab1fffa251f5aa61d121eccd833a31396cc2897ac0b0d31baaca3841"
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 85806,
-      "sha256": "faf3eadb865c0bddf4806a98ca4e48884d28d62e2679e4d03043b0afbc31cbcd"
+      "bytes": 83646,
+      "sha256": "3c09462f3e76e1866020cee53f207b8a500015b63d560012898fd98cd588a665"
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 67856,
-      "sha256": "9cbe2cbd986de72c23e8777e5118a67e0b80bec74cd92b4c34c6ed1deb6f466c"
+      "bytes": 91166,
+      "sha256": "c712ef788faab2cacc8745e7894029a42a9f7f0831c1a4175d08023e328a71ff"
     },
     {
       "path": "scene/src/ns-dance.mjs",
-      "bytes": 13516,
-      "sha256": "4c6960885be7dc23bc78b6e663ae2276c2e6c4b4e16d28b9bfb20d624dc8a371"
+      "bytes": 17399,
+      "sha256": "fd1c52cec3636be5d8b37e4fce085efae13f5289b3238c71d584701d4e21320c"
     },
     {
       "path": "scene/src/ns-grasp.mjs",
-      "bytes": 12677,
-      "sha256": "b984f32a00364333d301a1390fac4f4105b947e5d9702c2513bd760fc4041a5b"
+      "bytes": 12706,
+      "sha256": "d02083cd46153134cf3f5a3ca900529de3eca5feb274250bef7d147efab999e7"
     },
     {
       "path": "scene/src/ns-guide.mjs",
-      "bytes": 37330,
-      "sha256": "547794245ee8851231bf58b4bc484c1e1238e6719ae45604932c21682ca5730a"
+      "bytes": 37512,
+      "sha256": "b51be408b615e4abc70ab9517f9160be2e74223a5716ffccde0ae6221983ad7f"
+    },
+    {
+      "path": "scene/src/ns-input-epoch.mjs",
+      "bytes": 5562,
+      "sha256": "f7e9fd1c231bdb4a776702867af6c90ebdf565c69637ff0b5a1a6074e69a02b9"
     },
     {
       "path": "scene/src/ns-math.mjs",
@@ -3522,8 +3527,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 38487,
-      "sha256": "4b147fa46e5d9adec816ca99be57a1a3c617aebe693641c87991a4c17b387659"
+      "bytes": 39576,
+      "sha256": "06018f220ceca4bc1a58f9a6bbb298fd31832a4da30dec90e15e1b0c8d5668d7"
     },
     {
       "path": "scene/src/ns-obj.mjs",
@@ -3532,8 +3537,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 57797,
-      "sha256": "aae2ccd8a38d33af8c4cad4cc7ad09d5080a5d492b1fed31f08348f7405d2ebd"
+      "bytes": 58143,
+      "sha256": "f124afeaf4ca09e57a68f4d053a4df21482b873435bf882d82a7ae04951eeef5"
     },
     {
       "path": "scene/src/ns-placeholder.mjs",
@@ -3547,8 +3552,8 @@
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 28065,
-      "sha256": "0d4199e58d241d47e64473b5aba449eb895b1ef32e3a4867430239cca55d7361"
+      "bytes": 28078,
+      "sha256": "e7a4acc1c997a675d150896d6659c423d2d8433f8b5667564f5b0e560cdc11ff"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -3562,13 +3567,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 874053,
-      "sha256": "64f1744e18606f621eb5d23dbdbecf8ceec497243d9ac28db431592bb449b4c2"
+      "bytes": 914580,
+      "sha256": "d67b712a4ae97693f6bdd234020f0cbfbdedab770982b1a3452c6efe658d81a2"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 105978,
-      "sha256": "953484151890b32e04c842bb0fe7d9679500f0f143ec97edbc49858d67ca506e"
+      "bytes": 122798,
+      "sha256": "eeab9c924d36bb76906da23ab65d3f1428e9cb69360304164ea8a55f2f092006"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
@@ -3579,6 +3584,36 @@
       "path": "serve-local.mjs",
       "bytes": 13366,
       "sha256": "961f50c5be4c8993db667a38516feeb6bd0092861a513e0f36eaaec9b2435df1"
+    },
+    {
+      "path": "tests/cancel-epoch.test.mjs",
+      "bytes": 17087,
+      "sha256": "ba12a76da59927487f5d506287b8e22acf306d70139c88e20ce95c6ec66f21c2"
+    },
+    {
+      "path": "tests/capture-boundary.test.mjs",
+      "bytes": 25478,
+      "sha256": "8e196cfd013efac7aaac49e51bb136697432dba02a99e749126275aaab52edb0"
+    },
+    {
+      "path": "tests/deferred-input.test.mjs",
+      "bytes": 14387,
+      "sha256": "7c6096638e72d59580dd0fe3139676c0acd3d681aa24b7c2a982a0b8344d80cf"
+    },
+    {
+      "path": "tests/pointer-release.test.mjs",
+      "bytes": 12072,
+      "sha256": "5c413b1ebd9b45acccea745aabaaa253d6d7f709947b6eb27eaa7f7b0ec0c8b8"
+    },
+    {
+      "path": "tests/quality-controller.test.mjs",
+      "bytes": 4917,
+      "sha256": "865dd38dc6bd030900c4189037e1854797b473f09be5348d023e8e18596781e1"
+    },
+    {
+      "path": "tests/space-gesture.test.mjs",
+      "bytes": 11209,
+      "sha256": "e2da75f97f45d2c44875930a1d419a15c5fcb3b116921fc7e19585197cdad12e"
     },
     {
       "path": "vendor/LICENSE",

@@ -78,11 +78,14 @@
  *  boundary inside one limb, or between two joining limbs, counts as an overlap (strong line).
  *  levelM: depth difference under which two touching muscles count as level (the parting is then drawn on the side
  *  of the higher mesh number only, so it stays one line wide).
- *  renderOrder: the composite's place in the transparent list (first). */
+ *  renderOrder: the composite's place in the transparent list (first).
+ *  R558 (user Message 49, "Maybe you've overdone it with the borderlands style?"): the lines are a little thinner
+ *  (bold 2.4 -> 2.0, inner 1.2 -> 1.0, fine 0.8 -> 0.7 CSS px) and the lines INSIDE a figure lighter (silhouette
+ *  0.94 -> 0.85, inner 0.8 -> 0.6, faint 0.7 -> 0.45); a line where one limb overlaps another keeps full strength. */
 export const OUTLINE = Object.freeze({
   colour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]),
-  boldCss: 2.4, innerCss: 1.2, fineCss: 0.8,
-  strong: 1, silhouette: 0.94, inner: 0.8, faint: 0.7,
+  boldCss: 2.0, innerCss: 1.0, fineCss: 0.7,
+  strong: 1, silhouette: 0.85, inner: 0.6, faint: 0.45,
   taperFullPxCm: 7, taperMin: 0.42,
   detailFromPxCm: 0.9, detailFullPxCm: 2.6,
   maxRadiusSs: 7,

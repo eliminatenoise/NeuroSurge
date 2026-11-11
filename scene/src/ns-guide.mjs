@@ -4,9 +4,10 @@
 // for the status card ("Try this (2 of 7): Press W, A, S or D to move your left hand."). All wording lives in
 // ns-text.mjs (GUIDE); nothing here says the game reads, records or sends brain signals.
 //
-// Goals, in teaching order (GUIDE_GOAL_IDS): look at a light-blue left-arm area -> move the hand with W/A/S/D -> hold
-// Space for the limb dance (goal id 'fist', kept for saved progress) -> double-tap and hold for the fast dance (goal id
-// 'flipPalm') -> switch on another body part's (grey) area -> hold F (R558) on the brain and drag it down -> click or hold an orbit arrow. Every goal completes from a real game event, in ANY
+// Goals, in teaching order (GUIDE_GOAL_IDS): look at a light-blue left-arm area -> move the hand with W/A/S/D -> tap
+// Space twice: every limb turns once (goal id 'flipPalm', kept for saved progress; R558, Message 40) -> tap Space twice
+// and hold: the limbs keep turning slowly (goal id 'fist', kept) -> switch on another body part's (grey) area -> hold
+// Space (R558, Message 40; the F key is gone) on the brain and carry it -> click or hold an orbit arrow. Every goal completes from a real game event, in ANY
 // order: a goal the player already did is skipped when its turn comes. After the last goal a short "All done" line shows
 // for GUIDE_OPTIONS.finishS seconds, then the guide hides itself. The Esc page can hide, show or restart it.
 //
@@ -16,14 +17,14 @@
 //        isLeftArm false and kind !== 'integration' -> otherPart.
 //   { type: 'key', key: 'w' | 'a' | 's' | 'd' } or { type: 'move', axis: 'x' | 'z' }
 //        A/D = axis x, W/S = axis z. moveHand needs both axes (the line asks for the missing one).
-//   { type: 'fist', on: true | false, heldS? }   Space held / let go (R558: the limb dance; the event keeps its old name).
-//        The goal needs a hold of >= fistMinS (a quick tap, such as half of a double-tap, is not counted).
-//   { type: 'flip' }                             a double-tap of Space (R558: the fast dance starts).
-//   { type: 'grab', on: true }                    the brain was grabbed (F on the brain; R558: Space no longer grabs).
+//   { type: 'fist', on: true | false, heldS? }   the slow limb turn of a double tap held starts / stops (R558, Message 40;
+//        the event keeps its old name). The goal needs a turn of >= fistMinS.
+//   { type: 'flip' }                             a double tap of Space (R558, Message 40: every limb turns once).
+//   { type: 'grab', on: true }                    the brain was grabbed (a Space hold or tap on the brain).
 //   { type: 'grab', on: false, dragRad }          the brain was let go after a drag of dragRad radians (look angle).
 //   { type: 'armMoved', ids }                     R558 (hunt 2): the game arm really moved (a latch or the forearm turn
 //        changed); completes leftArmArea. guideEventsFromFrame then marks left-arm 'activate' events awaitMove: true.
-//   { type: 'carry', m }                          R558 (hunt 2): while F holds the brain, W/A/S/D carried it m metres this
+//   { type: 'carry', m }                          R558 (hunt 2): while Space holds the brain, W/A/S/D carried it m metres this
 //        frame (its key offset). dragBrain completes on a release after dragMinRad of look carry OR carryMinM of keys.
 //   { type: 'orbit', dir?, hold? }                an orbit arrow turned the view (click step or hold).
 //   { type: 'pause' } / { type: 'resume' }        Esc page shown / hidden (the line hides while paused).
@@ -56,10 +57,11 @@
 import { GUIDE, guideLine } from './ns-text.mjs';
 
 /** The round-4 goal ids in teaching order (the guide of a build without the round-5 features). */
-export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'fist', 'flipPalm', 'otherPart', 'dragBrain', 'orbit']);
+// R558 (Message 40): the double tap (flipPalm) is taught before the double tap held (fist), which builds on it.
+export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'flipPalm', 'fist', 'otherPart', 'dragBrain', 'orbit']);
 
 /** Every goal id in teaching order, round 5 included (R5-text). */
-export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'fist', 'flipPalm', 'otherPart', 'glow', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
+export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'flipPalm', 'fist', 'otherPart', 'glow', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
 
 /** The round-5 goals and the build feature each one needs (ns-text ROUND5_FEATURES names). */
 export const GUIDE_FEATURE_GOALS = Object.freeze({ glow: 'glow', thirdPerson: 'thirdPerson', mirror: 'mirror' });
@@ -83,8 +85,7 @@ export function guideGoalIds(features = null, goals = null) {
 }
 
 /** Display and completion constants (display choices, not measurements).
- *  - fistMinS 0.3: a held Space (the limb dance, R558; goal id 'fist' kept) of at least 0.3 s; a double-tap's first press
- *    (ns-controls DOUBLE_TAP_MS 450 ms press to press) is usually shorter than this and does not count by itself.
+ *  - fistMinS 0.3: the slow limb turn of a double tap held (R558, Message 40; goal id 'fist' kept) of at least 0.3 s.
  *  - dragMinRad 0.12 (about 7 deg): the brain was really moved, not just grabbed.
  *  - flashS 1.5: "Nice!" shows this long in front of the next goal.
  *  - finishS 8: the "All done" line shows this long, then the guide hides itself. */
@@ -416,8 +417,9 @@ export const MOVE_MIN = Object.freeze({ xNdc: 2e-4, depthM: 2e-5 });
  * Reads only plain fields and tolerates any of them missing (then that event is simply not produced):
  *   out.marks[]                         -> 'activate' (each new look or click pulse)
  *   inputs.axes.x / .z != 0              -> 'move' x / z
- *   activity.spaceHeld false -> true     -> 'fist' on;  true -> false -> 'fist' off (heldS from the state clocks)
- *   activity.rotationSeq increased       -> 'flip' (fallback: state.rotation.flips increased)
+ *   activity.spaceHeld false -> true     -> 'fist' on;  true -> false -> 'fist' off (heldS from the state clocks); R558
+ *                                            (Message 40): spaceHeld is the slow turn of a double tap held
+ *   activity.rotationSeq increased       -> 'flip' (a double tap; fallback: state.rotation.flips increased)
  *   activity.grabSeq increased           -> 'grab' on
  *   activity.brainGrab.active true->false -> 'grab' off with dragRad = |placement - placement at grab start|
  *   activity.orbitSeq increased          -> 'orbit' (fallback: state.view.orbit changed)
@@ -442,7 +444,7 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const t = num(next.t);
   const add = e => ev.push(t === null ? e : { ...e, t });
   const pa = prev && prev.activity && typeof prev.activity === 'object' ? prev.activity : null;
-  // R558: Space no longer makes a fist (it is the limb dance); a relax pulse moves the hand when a hand action is latched.
+  // R558: Space makes no fist (it grasps and turns the limbs); a relax pulse moves the hand when a hand action is latched.
   const ctx = pa ? { handHeld: handLatched(pa), rotationState: typeof pa.rotationState === 'string' ? pa.rotationState : prev.rotation && prev.rotation.rotation,
     armLatch: pa.armLatch && typeof pa.armLatch === 'object' ? pa.armLatch : null, elbowRad: num(prev.elbowRad) } : null;
   for (const m of out && Array.isArray(out.marks) ? out.marks : []) { const e = activationEvent(m, bodyMap, ctx); if (e) add(e); }

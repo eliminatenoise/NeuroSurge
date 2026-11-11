@@ -2461,6 +2461,9 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *    The flat screen stretches the picture towards its edges, so the outer areas gain little look angle and the
  *    middle ones most (1600x900: the median area grows from about 4.8 to 9.3 degrees of look across; the thinnest
  *    slivers at the outer ends stay under 1 degree wide).
+ *    R558 (user Message 43, 12 Nov: "The brain is far too big, it should only take up 50% of the width of the panorama
+ *    screen view"): motorFrac 1 -> 0.475, so the WHOLE brain (its outline is a little wider than the motor belt) spans
+ *    about half the width of a 16:9 view at the start; this supersedes the fill-the-view rule above.
  *  fit 'belt' (round 3 / 4) and fit 'brain' (round 3) stay available with their options.
  * R558 (the user's note of 2026-11-10: "the highlighted motor areas look far too low in the brain to be anatomically
  * realistic, the brain is probably too narrow"; measurements in DESIGN-DECISIONS.md, decision 13):
@@ -2490,7 +2493,7 @@ export const BRAIN_VIEW = freezeR2({
   framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
-  motorFrac: 1, motorEdgeDeg: 80, motorMarginPx: 6, motorSideFrac: 0.015, motorCentreNdc: freezeR2([0, 0]),
+  motorFrac: 0.475, motorEdgeDeg: 80, motorMarginPx: 6, motorSideFrac: 0.015, motorCentreNdc: freezeR2([0, 0]),
   perspectiveK: 20, pictureAxis: 'view'
 });
 /** R558: the framing of the preceding preview (near eye, 10 degree forward tilt), for comparison:

@@ -36,8 +36,9 @@
  * Reach feasibility/normal joints/full-body and view qualification remain open; this is not a fixed-pose waiver.
  *  - They keep the FIRST-PERSON frame they had when E was pressed ("body look", pose.bodyLook): the trunk yaw, the neck
  *    flex, the shoulder and the hand's screen-locked aim do not change when the camera leaves the head.
- *  - W / A / S / D keep moving the hand in that first-person frame (A / D across, W / S away / toward), and Space (the
- *    limb dance; double-tap and hold: fast) works exactly as in first person.
+ *  - W / A / S / D keep moving the hand in that first-person frame (A / D across, W / S away / toward), and Space (hold
+ *    or tap: grasp; double tap: the limbs turn once; double tap and hold: they keep turning slowly; R558, Message 40)
+ *    works exactly as in first person.
  *  - The genuine NDC y +0.5 hand lock applies to the actual displayed view too. The optional R425 App/display path
  *    refits anatomy in this actual camera; the legacy bodyLook alone does not establish that screen rule.
  *  - Why not let the arm follow the third-person camera: the boom turns all the way round the body; a hand locked to

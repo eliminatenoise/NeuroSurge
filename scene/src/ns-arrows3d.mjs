@@ -601,6 +601,20 @@ export function pixelRay(x, y, cam) {
   return { origin: [...c.pos], dir: apply(c.R, v) };
 }
 
+/** R558 (performance, P3): pixelRay(x, y, cam).dir for many rays from one camera, with the camera worked out once
+ * (camOf): the same arithmetic in the same order, so the same numbers (pure). Returns (x, y) -> [dx, dy, dz]. */
+export function pixelRayDirFn(cam) {
+  const c = camOf(cam);
+  return (x, y) => apply(c.R, norm3([((2 * x) / c.W - 1) * c.tanH * c.aspect, (1 - (2 * y) / c.H) * c.tanH, -1]));
+}
+
+/** R558 (performance, P3): the camera as the pure helpers use it (camOf): { R (rows), tanH, aspect, W, H, pos } (pure;
+ * a copy). */
+export function cameraFrame(cam) {
+  const c = camOf(cam);
+  return { R: c.R.map(r => r.slice()), tanH: c.tanH, aspect: c.aspect, W: c.W, H: c.H, pos: [c.pos[0], c.pos[1], c.pos[2]] };
+}
+
 /** Project flat source points through a column-major world matrix (or none) to CSS px: { xy: Float64Array (NaN for
  * points behind the near distance), behind } (pure). */
 export function projectPointsPx(points, matrix, cam, near = 0.02) {
@@ -639,6 +653,21 @@ export function frameArrowAnchors(spots, { cam, centre } = {}) {
     out[dir] = add3(c.pos, apply(c.R, [xc, yc, -D]));
   }
   return out;
+}
+
+/** R558 (performance, P3): frameArrowAnchors for one spot at a time from one camera and centre, worked out once: the
+ * same checks (a bad centre or camera throws as frameArrowAnchors does) and the same arithmetic in the same order (pure).
+ * Returns (x, y) -> [x, y, z] | null (a spot that is not finite), or null when the centre is not in front of the camera. */
+export function frameAnchorFn(cam, centre) {
+  if (!centre || centre.length !== 3 || !Array.from(centre).every(isNum)) fail('frameArrowAnchors needs a finite target centre');
+  const c = camOf(cam), fwd = apply(c.R, [0, 0, -1]);
+  const D = dot3(sub3([centre[0], centre[1], centre[2]], c.pos), fwd);
+  if (!(D > 1e-6)) return null;
+  return (x, y) => {
+    if (!isNum(x) || !isNum(y)) return null;
+    const xc = ((2 * x) / c.W - 1) * c.tanH * c.aspect * D, yc = (1 - (2 * y) / c.H) * c.tanH * D;
+    return add3(c.pos, apply(c.R, [xc, yc, -D]));
+  };
 }
 
 /**

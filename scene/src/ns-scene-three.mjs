@@ -145,8 +145,9 @@
  *    wins), shaded toward that colour, with a fresnel rim and a soft additive halo shell (MUSCLE_HALO); one call shades
  *    your body, its in-place head copy and the mirror body, so all three match. Muscles lit only by an opposing-action
  *    hint stay faint (AREA_LOOK.hintGain, no halo).
- *  - LINES (GLOW_LINK.mode): at most one short soft line per newly lit area, to your own body only, in the area's colour;
- *    the fan of ribbons to both bodies is gone.
+ *  - LINES (GLOW_LINK.mode 'held', R558 Messages 48 and 56): one line per lit area, in the area's colour, held for as
+ *    long as the area is lit. It runs from the lit strip part to the muscle group it drives on the mirror body; with
+ *    no mirror body shown it runs to your own body instead. The fan of ribbons to both bodies stays gone.
  *  - HUD: the legend bar is the glow strength; chips explain the colour families (HUD_LEGEND_FAMILIES); the info panel's
  *    swatch and meter use the area's colour.
  * Scientific limits (unchanged): every colour, opacity and label is a simulated, unitless DISPLAY of virtual inputs;
@@ -187,7 +188,7 @@ import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
-import { foldDepth, foldShade, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues } from './ns-brain-ink.mjs';
+import { BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD } from './ns-brain-ink.mjs';
 
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
@@ -196,7 +197,11 @@ import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName,
 // not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
 const STACK_FILL_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.fill.mm)) + 0.01;
 const STACK_LIFT_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.gapMm)) + STACK_FILL_CAP_MM;
-const stackCapMm = level => (level === 'outer' || level === 'intermediate' ? STACK_LIFT_CAP_MM : STACK_FILL_CAP_MM);
+// R558 (Message 32): a muscle CARRIED on lifted muscles (ns-body BODY_STACK_RULE.carry, exact ids) may move as far as what
+// it rides on can push it: the largest lift, its own fill and theirs, the carry margin and the source tolerance.
+const STACK_CARRY_CAP_MM = STACK_LIFT_CAP_MM + 2 * STACK_FILL_CAP_MM + BODY_STACK_RULE.carryRule.marginMm - BODY_STACK_RULE.carryRule.coverMm;
+const STACK_CARRY_IDS = new Set(BODY_STACK_RULE.carry.map(r => r.id));
+const stackCapMm = (level, id = null) => (id !== null && STACK_CARRY_IDS.has(id) ? STACK_CARRY_CAP_MM : level === 'outer' || level === 'intermediate' ? STACK_LIFT_CAP_MM : STACK_FILL_CAP_MM);
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 /** User-visible wording comes ONLY from ns-text (the single source of plain UI text; a static import). R3-fix (review
@@ -224,7 +229,8 @@ export const MATERIAL = Object.freeze({
   bone: 0xe6dfd1, // clean ivory-white
   // R558 (Messages 25, 29: "real specular highlights", crisp highlight shapes on bone): a little smoother (0.64 -> 0.5),
   // so the key light's highlight on bone is a compact lobe the comic patch can cut into a crisp shape (BODY_CEL.spec).
-  boneRoughness: 0.5,
+  // R558 (user Message 54, "a bit of shine, a bit of glossiness"): 0.5 -> 0.38, a polished bone model.
+  boneRoughness: 0.38,
   muscleBase: MUSCLE_TONES[0].hex, // rose red
   muscleHot: 0xff5a1e, // bright red / orange
   muscleEmissiveMax: 0.35,
@@ -641,27 +647,41 @@ export const QUALITY_LEVELS = Object.freeze([
  *    re-allocated in that frame).
  *  - R4-fix (code review M2): a down-step that swaps the meshes (into a level with a different `lod`) also needs the
  *    MEAN of the window above lodDownMeanMs, so a median sitting right at slowMs does not swap meshes back and forth;
- *    and each time a level is left for being slow again, its block lasts one rememberMs longer (30 s, 60 s, 90 s ...). */
+ *    and each time a level is left for being slow again, its block lasts one rememberMs longer (30 s, 60 s, 90 s ...).
+ *  - R558 (performance; the picture went soft in a carry and the game was no faster): a cheaper picture is kept only
+ *    when the picture is what takes the time.
+ *    (a) Main thread: `busyMs` is the game's own work in a frame (frame start to the end of its render). When it fills
+ *        busyShare of the slow frames' time, the frames are slow in the game's code and not in the drawing, and no
+ *        level is left (lastHold says so). Without busyMs this rule is off.
+ *    (b) Probe: after a down-step the next probeFrames samples (or probeMs of them, at least probeMinFrames) are
+ *        compared with the slow frames that caused the step. Not gainMin faster -> the next level of another KIND is
+ *        tried (render scale -> without the x-ray pass -> simpler meshes; a mesh swap still needs lodDownMeanMs), and
+ *        when no kind is left the level the run began at comes back ('no-gain') and is not left for being slow again
+ *        for noGainHoldMs (x 2, 3 ... each time it happens again, at most noGainHoldMaxMs). A step that does help
+ *        clears that count. */
 export const QUALITY_AUTO = Object.freeze({
   slowMs: 1000 / 40, fastMs: 1000 / 55, jumpMs: 1000 / 12, window: 7, gapMs: 1000,
   downHoldMs: 700, downMinFrames: 4, upHoldMs: 6000, upMinFrames: 90, rememberMs: 30000, settleFrames: 2,
-  lodDownMeanMs: 1000 / 36
+  lodDownMeanMs: 1000 / 36,
+  busyShare: 0.6, probeFrames: 30, probeMs: 1000, probeMinFrames: 4, gainMin: 0.1, noGainHoldMs: 20000, noGainHoldMaxMs: 300000
 });
 
 /** A fresh controller state for `mode` (QUALITY_MODES). `level` is the QUALITY_LEVELS index. */
 export function qualityStart(mode = 'auto', levels = QUALITY_LEVELS) {
   const m = QUALITY_MODES.includes(mode) ? mode : 'auto';
-  return { mode: m, level: m === 'low' ? levels.length - 1 : 0, samples: [], slowFor: 0, slowN: 0, fastFor: 0, fastN: 0, settle: 0, clockMs: 0, blockedUntil: {}, slowLeft: {}, changes: 0, lastChange: null };
+  return { mode: m, level: m === 'low' ? levels.length - 1 : 0, samples: [], slowFor: 0, slowN: 0, slowBusy: 0, slowBusyFor: 0, fastFor: 0, fastN: 0, settle: 0, clockMs: 0, blockedUntil: {}, slowLeft: {}, changes: 0, lastChange: null, probe: null, noGain: {}, noGainN: {}, lastHold: null };
 }
 
 const medianOf = a => { const s = a.slice().sort((x, y) => x - y); const n = s.length; return n ? (n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
 
 /** Pure controller step: state (qualityStart) + one frame interval (ms) -> the next state (a new object). 'high' and
- * 'low' never change level. See QUALITY_AUTO for the rules. `lastChange` records { from, to, medianMs, atMs, why }. */
-export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALITY_LEVELS) {
+ * 'low' never change level. See QUALITY_AUTO for the rules. `busyMs` (optional) is the main-thread work of that frame.
+ * `lastChange` records { from, to, medianMs, atMs, why: 'slow' | 'fast' | 'no-gain' }; `lastHold` records a down-step
+ * that was not taken { level, atMs, why: 'main-thread' | 'no-gain', busyShare }. */
+export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALITY_LEVELS, busyMs = NaN) {
   const o = { ...QUALITY_AUTO, ...opts };
   const s = state && typeof state === 'object' ? state : qualityStart('auto', levels);
-  const next = { ...s, samples: s.samples.slice(), blockedUntil: { ...s.blockedUntil }, slowLeft: { ...(s.slowLeft || {}) } };
+  const next = { ...s, samples: s.samples.slice(), blockedUntil: { ...s.blockedUntil }, slowLeft: { ...(s.slowLeft || {}) }, noGain: { ...(s.noGain || {}) }, noGainN: { ...(s.noGainN || {}) } };
   const last = levels.length - 1;
   if (next.mode === 'high') { next.level = 0; return next; }
   if (next.mode === 'low') { next.level = last; return next; }
@@ -670,30 +690,67 @@ export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALIT
   if (next.settle > 0) { next.settle -= 1; return next; }
   next.samples.push(frameMs);
   if (next.samples.length > o.window) next.samples.shift();
+  const lodKey = l => (levels[l] && levels[l].lod ? JSON.stringify(levels[l].lod) : '');
+  const noSlow = () => { next.slowFor = 0; next.slowN = 0; next.slowBusy = 0; next.slowBusyFor = 0; };
+  const leave = (from, to) => {
+    for (let l = from; l < to; l++) {
+      next.slowLeft[l] = (next.slowLeft[l] || 0) + 1;
+      next.blockedUntil[l] = next.clockMs + o.rememberMs * next.slowLeft[l];
+    }
+  };
+  const change = (to, why, ms) => {
+    next.lastChange = { from: next.level, to, medianMs: Math.round(ms * 10) / 10, atMs: Math.round(next.clockMs), why };
+    next.level = to; next.changes += 1;
+    next.samples = []; noSlow(); next.fastFor = 0; next.fastN = 0; next.settle = o.settleFrames;
+  };
+  if (next.probe) {
+    // (b) Did the down-step make the frames faster? Nothing else is decided while this is being measured.
+    const p = { ...next.probe, sum: next.probe.sum + frameMs, n: next.probe.n + 1 };
+    next.probe = p;
+    if (!(p.n >= o.probeFrames || (p.sum >= o.probeMs && p.n >= o.probeMinFrames))) return next;
+    const afterMs = p.sum / p.n;
+    if (afterMs <= p.beforeMs * (1 - o.gainMin)) { next.probe = null; delete next.noGainN[p.anchor]; delete next.noGain[p.anchor]; return next; }
+    const kind = l => `${Boolean(levels[l].lite)}|${levels[l].lod ? 1 : 0}`;
+    let cand = next.level + 1;
+    while (cand <= last && kind(cand) === kind(next.level)) cand += 1;
+    if (cand <= last && (lodKey(cand) === lodKey(next.level) || afterMs > o.lodDownMeanMs)) {
+      leave(next.level, cand);
+      next.probe = { ...p, sum: 0, n: 0 };
+      change(cand, 'slow', afterMs);
+    } else {
+      next.blockedUntil = { ...p.blockedUntil }; next.slowLeft = { ...p.slowLeft };
+      const n = (next.noGainN[p.anchor] || 0) + 1;
+      next.noGainN[p.anchor] = n;
+      next.noGain[p.anchor] = next.clockMs + Math.min(o.noGainHoldMaxMs, o.noGainHoldMs * n);
+      next.probe = null;
+      change(p.anchor, 'no-gain', afterMs);
+    }
+    return next;
+  }
   if (next.samples.length < Math.min(3, o.window)) return next;
   const med = medianOf(next.samples);
-  if (med > o.slowMs) { next.slowFor += frameMs; next.slowN += 1; next.fastFor = 0; next.fastN = 0; }
-  else if (med < o.fastMs) { next.fastFor += frameMs; next.fastN += 1; next.slowFor = 0; next.slowN = 0; }
-  else { next.slowFor = 0; next.slowN = 0; next.fastFor = 0; next.fastN = 0; }
-  let to = next.level, why = '';
+  if (med > o.slowMs) {
+    next.slowFor += frameMs; next.slowN += 1; next.fastFor = 0; next.fastN = 0;
+    if (Number.isFinite(busyMs) && busyMs >= 0) { next.slowBusy = (next.slowBusy || 0) + Math.min(busyMs, frameMs); next.slowBusyFor = (next.slowBusyFor || 0) + frameMs; }
+  }
+  else if (med < o.fastMs) { next.fastFor += frameMs; next.fastN += 1; noSlow(); }
+  else { noSlow(); next.fastFor = 0; next.fastN = 0; }
   if (next.slowFor >= o.downHoldMs && next.slowN >= o.downMinFrames && next.level < last) {
     const cand = Math.min(last, next.level + (med > 2 * o.jumpMs ? 3 : med > o.jumpMs ? 2 : 1));
-    const lodKey = l => (levels[l] && levels[l].lod ? JSON.stringify(levels[l].lod) : '');
     const mean = next.samples.reduce((a, b) => a + b, 0) / next.samples.length;
-    if (lodKey(cand) === lodKey(next.level) || mean > o.lodDownMeanMs) {
-      to = cand; why = 'slow';
-      for (let l = next.level; l < to; l++) {
-        next.slowLeft[l] = (next.slowLeft[l] || 0) + 1;
-        next.blockedUntil[l] = next.clockMs + o.rememberMs * next.slowLeft[l];
-      }
+    // (a) the share of the slow frames' time that was the game's own main-thread work (known for most of them, or unknown)
+    const share = next.slowBusyFor >= next.slowFor * 0.5 ? next.slowBusy / next.slowBusyFor : NaN;
+    const held = next.noGain[next.level] > next.clockMs;
+    if (held || share >= o.busyShare) {
+      next.lastHold = { level: next.level, atMs: Math.round(next.clockMs), why: held ? 'no-gain' : 'main-thread', busyShare: Number.isFinite(share) ? Math.round(share * 100) / 100 : null };
+      noSlow();
+    } else if (lodKey(cand) === lodKey(next.level) || mean > o.lodDownMeanMs) {
+      next.probe = { anchor: next.level, beforeMs: next.slowFor / next.slowN, sum: 0, n: 0, blockedUntil: { ...next.blockedUntil }, slowLeft: { ...next.slowLeft } };
+      leave(next.level, cand);
+      change(cand, 'slow', med);
     }
   } else if (next.fastFor >= o.upHoldMs && next.fastN >= o.upMinFrames && next.level > 0 && !(next.blockedUntil[next.level - 1] > next.clockMs)) {
-    to = next.level - 1; why = 'fast';
-  }
-  if (to !== next.level) {
-    next.lastChange = { from: next.level, to, medianMs: Math.round(med * 10) / 10, atMs: Math.round(next.clockMs), why };
-    next.level = to; next.changes += 1;
-    next.samples = []; next.slowFor = 0; next.slowN = 0; next.fastFor = 0; next.fastN = 0; next.settle = o.settleFrames;
+    change(next.level - 1, 'fast', med);
   }
   return next;
 }
@@ -1094,19 +1151,25 @@ export function patchGlassShaders(vertexShader, fragmentShader) {
 }
 
 /** R3-scene glass readability (display choices). The glass shell keeps the fresnel rim and gains (a) a soft key-light
- * term on gyral CROWNS (view-space light from lightDir, upper left: lit faces get up to crownOpacity more alpha and
+ * term on gyral CROWNS (view-space light from lightDir, the key light's side since BB2: lit faces get up to crownOpacity more alpha and
  * crownBright more light, which gives each gyrus a rounded, lit relief) and (b) a
  * darker, more see-through GROOVE cue from the per-vertex sulcal depth (sulcalDepth; 0 crown .. 1 deep groove): the
  * groove keeps grooveLight of the light and grooveAlpha of the alpha, and sulcal walls lose most of their rim. So the
  * gyri and sulci read at a glance; nothing about tissue optics is implied. */
-export const GLASS_READ = Object.freeze({ crownOpacity: 0.035, crownBright: 0.45, grooveLight: 0.38, grooveAlpha: 0.3, rimGroove: 0.65, lightDir: Object.freeze([-0.35, 0.55, 0.75]), sulcLoMm: 1.5, sulcHiMm: 9, directions: 320 });
+// R558 BB2 (style guide: one strong key light): the glass's light comes from the scene's key light (the camera headlight,
+// camera-space direction (0.6, 1.5, 1.8), upper right), not from the upper left, so the glass gyri and the motor strip
+// are lit from the same side. The groove input nsSulc is first the hull depth below and, once the background job has
+// run, the glass fold depth of ns-brain-ink (BRAIN_INK.glassFold, see glassFold in createScene).
+export const GLASS_READ = Object.freeze({ crownOpacity: 0.035, crownBright: 0.45, grooveLight: 0.38, grooveAlpha: 0.3, rimGroove: 0.65, lightDir: Object.freeze([0.6, 1.5, 1.8]), sulcLoMm: 1.5, sulcHiMm: 9, directions: 320 });
 /** R558 (user Message 18, "transparency effects too"; T): the glass clears next to the motor strip. In the start view the
  * neighbouring gyri's glass (in front of the strip in projection) laid a whitish veil over the motor areas (the left-arm
  * areas read lavender-grey instead of blue). Each glass vertex gets its closeness to the strip (1 on it, smoothly 0 at
  * radiusMm, stripProximity); the shell's alpha is multiplied by 1 - clear x closeness, so the glass stays a glass brain
  * everywhere else and the motor areas are seen through clear glass. Display choice. A geometry without the attribute
  * reads 0 (unchanged glass). */
-export const GLASS_CLEAR = Object.freeze({ radiusMm: 7, clear: 0.8 });
+// R558 BB2: the glass OVER the strip (glassFold's stripCover) clears too, and a cleared glass keeps a tenth of its alpha
+// (clear 0.8 -> 0.9), so the strip's folds are not veiled; the contours and inked sulci of the glass fade with it.
+export const GLASS_CLEAR = Object.freeze({ radiusMm: 7, clear: 0.9 });
 /** Closeness of each vertex to a set of point clouds (pure): 1 at distance 0, smoothstep down to 0 at radiusMm (nearest
  * point; the strip's vertices are about 3 mm apart, well under the radius). Uniform grid of cell radiusMm. */
 export function stripProximity(positions, pointLists, radiusMm = GLASS_CLEAR.radiusMm) {
@@ -1160,7 +1223,7 @@ export function patchGlassReadShaders(vertexShader, fragmentShader) {
     // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
     // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
     fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
-      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec3 nsInkG;\n' + GLASS_VARYINGS +
+      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\n' + GLASS_INK_HEAD + GLASS_VARYINGS +
       fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + glassInkGlsl(GLASS_READ.lightDir) + '\n' + fragmentShader.slice(f)
   };
 }
@@ -1568,7 +1631,8 @@ export function skinNormals(matrices, weights, restNormals, out) {
 /** R558 (performance, P2): ns-rig skinApply(matrices, weights, restPositions, outPos) and skinNormals(matrices, weights,
  * restNormals, outNor) for continuous-twist weights (`tf`, the left game arm's muscles) in ONE pass over the vertices:
  * the same plan and pose maps (twistMapsFor, asked once instead of twice), and for every vertex the same expressions in
- * the same order as the two functions' twist branches, so the stored positions and normals are bit-for-bit theirs. Any
+ * the same order as the two functions' twist branches (terms with weight exactly 0 left out), so the stored positions
+ * and normals are theirs to the last bit, bar the sign of a zero. Any
  * other input (no twist, a length or weight mismatch the two would refuse or treat differently) goes to the two
  * functions themselves, which keeps every refusal exactly as it was. */
 export function skinPositionsAndNormals(matrices, weights, restPositions, restNormals, outPos, outNor) {
@@ -1579,15 +1643,38 @@ export function skinPositionsAndNormals(matrices, weights, restPositions, restNo
   if (!fast) { skinApply(matrices, weights, restPositions, outPos); skinNormals(matrices, weights, restNormals, outNor); return; }
   const { plan, maps } = twistMapsFor(matrices, weights, n), I = plan.slots, W = plan.weights, P = restPositions, N = restNormals;
   for (let k = 0, e = 3 * n; k < e; k += 3) {
-    const a = 12 * I[k], b = 12 * I[k + 1], c = 12 * I[k + 2], wa = W[k], wb = W[k + 1], wc = W[k + 2];
-    const x = P[k], y = P[k + 1], z = P[k + 2];
-    outPos[k] = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9]) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z + maps[b + 9]) + wc * (maps[c] * x + maps[c + 3] * y + maps[c + 6] * z + maps[c + 9]);
-    outPos[k + 1] = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10]) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z + maps[b + 10]) + wc * (maps[c + 1] * x + maps[c + 4] * y + maps[c + 7] * z + maps[c + 10]);
-    outPos[k + 2] = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11]) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z + maps[b + 11]) + wc * (maps[c + 2] * x + maps[c + 5] * y + maps[c + 8] * z + maps[c + 11]);
-    const u = N[k], v = N[k + 1], t = N[k + 2];
-    const ox = wa * (maps[a] * u + maps[a + 3] * v + maps[a + 6] * t) + wb * (maps[b] * u + maps[b + 3] * v + maps[b + 6] * t) + wc * (maps[c] * u + maps[c + 3] * v + maps[c + 6] * t);
-    const oy = wa * (maps[a + 1] * u + maps[a + 4] * v + maps[a + 7] * t) + wb * (maps[b + 1] * u + maps[b + 4] * v + maps[b + 7] * t) + wc * (maps[c + 1] * u + maps[c + 4] * v + maps[c + 7] * t);
-    const oz = wa * (maps[a + 2] * u + maps[a + 5] * v + maps[a + 8] * t) + wb * (maps[b + 2] * u + maps[b + 5] * v + maps[b + 8] * t) + wc * (maps[c + 2] * u + maps[c + 5] * v + maps[c + 8] * t);
+    const a = 12 * I[k], wa = W[k], wb = W[k + 1], wc = W[k + 2];
+    const x = P[k], y = P[k + 1], z = P[k + 2], u = N[k], v = N[k + 1], t = N[k + 2];
+    let ox, oy, oz;
+    if (wc === 0) {
+      /* R558 (performance): 19 in 20 of the arm's vertices use one or two of the three slots (a slot the plan leaves
+       * unused has weight exactly 0, and a lone slot has weight exactly 1). Leaving out a term that is 0 times a
+       * finite number, or a multiplication by exactly 1, gives the same number -- at most the sign of a zero differs. */
+      if (wb === 0 && wa === 1) {
+        outPos[k] = maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9];
+        outPos[k + 1] = maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10];
+        outPos[k + 2] = maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11];
+        ox = maps[a] * u + maps[a + 3] * v + maps[a + 6] * t;
+        oy = maps[a + 1] * u + maps[a + 4] * v + maps[a + 7] * t;
+        oz = maps[a + 2] * u + maps[a + 5] * v + maps[a + 8] * t;
+      } else {
+        const b = 12 * I[k + 1];
+        outPos[k] = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9]) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z + maps[b + 9]);
+        outPos[k + 1] = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10]) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z + maps[b + 10]);
+        outPos[k + 2] = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11]) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z + maps[b + 11]);
+        ox = wa * (maps[a] * u + maps[a + 3] * v + maps[a + 6] * t) + wb * (maps[b] * u + maps[b + 3] * v + maps[b + 6] * t);
+        oy = wa * (maps[a + 1] * u + maps[a + 4] * v + maps[a + 7] * t) + wb * (maps[b + 1] * u + maps[b + 4] * v + maps[b + 7] * t);
+        oz = wa * (maps[a + 2] * u + maps[a + 5] * v + maps[a + 8] * t) + wb * (maps[b + 2] * u + maps[b + 5] * v + maps[b + 8] * t);
+      }
+    } else {
+      const b = 12 * I[k + 1], c = 12 * I[k + 2];
+      outPos[k] = wa * (maps[a] * x + maps[a + 3] * y + maps[a + 6] * z + maps[a + 9]) + wb * (maps[b] * x + maps[b + 3] * y + maps[b + 6] * z + maps[b + 9]) + wc * (maps[c] * x + maps[c + 3] * y + maps[c + 6] * z + maps[c + 9]);
+      outPos[k + 1] = wa * (maps[a + 1] * x + maps[a + 4] * y + maps[a + 7] * z + maps[a + 10]) + wb * (maps[b + 1] * x + maps[b + 4] * y + maps[b + 7] * z + maps[b + 10]) + wc * (maps[c + 1] * x + maps[c + 4] * y + maps[c + 7] * z + maps[c + 10]);
+      outPos[k + 2] = wa * (maps[a + 2] * x + maps[a + 5] * y + maps[a + 8] * z + maps[a + 11]) + wb * (maps[b + 2] * x + maps[b + 5] * y + maps[b + 8] * z + maps[b + 11]) + wc * (maps[c + 2] * x + maps[c + 5] * y + maps[c + 8] * z + maps[c + 11]);
+      ox = wa * (maps[a] * u + maps[a + 3] * v + maps[a + 6] * t) + wb * (maps[b] * u + maps[b + 3] * v + maps[b + 6] * t) + wc * (maps[c] * u + maps[c + 3] * v + maps[c + 6] * t);
+      oy = wa * (maps[a + 1] * u + maps[a + 4] * v + maps[a + 7] * t) + wb * (maps[b + 1] * u + maps[b + 4] * v + maps[b + 7] * t) + wc * (maps[c + 1] * u + maps[c + 4] * v + maps[c + 7] * t);
+      oz = wa * (maps[a + 2] * u + maps[a + 5] * v + maps[a + 8] * t) + wb * (maps[b + 2] * u + maps[b + 5] * v + maps[b + 8] * t) + wc * (maps[c + 2] * u + maps[c + 5] * v + maps[c + 8] * t);
+    }
     const l = Math.sqrt(ox * ox + oy * oy + oz * oz);
     if (l > 0) { outNor[k] = ox / l; outNor[k + 1] = oy / l; outNor[k + 2] = oz / l; } else { outNor[k] = u; outNor[k + 1] = v; outNor[k + 2] = t; }
   }
@@ -1681,7 +1768,9 @@ export function regionStyleConstants() {
 export const REGION_RENDER = Object.freeze({
   // R558 (R32, "a little fleshy"): a moister surface (roughness 0.48 -> 0.36) and the tissue scatter below.
   // R558 (Message 22, clinical): a clean satin finish again (0.36 -> 0.5), no wet sheen.
-  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.5, metalness: 0,
+  // R558 (user Message 54, "very ugly and matte ... add a bit of shine, a bit of glossiness"): glossy (0.5 -> 0.32), so
+  // the key light draws a bright highlight along the gyrus crowns.
+  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.32, metalness: 0,
   /** R558 (R32): tissue look of the motor areas, LIGHTING ONLY. Living tissue lets light in and scatters it, so it is
    * never black in shade and glows a little warm toward its silhouette. tissueTint x tissueStrength x (tissueFloor +
    * (1 - tissueFloor) x a view-angle term) of the area's own colour is added to its lit colour. The geometry, the
@@ -1761,7 +1850,10 @@ export const REGION_BORDER = Object.freeze({
   // R558 BB (Messages 24, 25): the fold depth now comes from the atlas's own brain geometry (ns-brain-ink foldDepth) and
   // the floors go deeper (0.28 -> 0.4 here, and ns-brain-ink BRAIN_INK.area.floorDark 0.5 on the lit light: a floor keeps
   // about 30 % of a crown's light), so the crowns stay lit, the floors go dark and the area colours still read on the banks.
-  cavity: 0.4, cavityLoMm: 1.5, cavityHiMm: 10
+  // R558 BB2: the cavity input is now the strip's own relief share (ns-brain-ink reliefShare), which also bands the light
+  // and darkens the indirect fill (patchAreaInkShaders); the albedo keeps a lighter share of it (0.4 -> 0.2), so the area
+  // colours stay recognisable on the deepest bands.
+  cavity: 0.2, cavityLoMm: 1.5, cavityHiMm: 10
 });
 
 /** Owner runs of one owner list over the strip coordinate (pure): ownerAt(s) -> owner (any value compared with ===, null
@@ -3090,15 +3182,15 @@ export const MUSCLE_HALO = Object.freeze({ ownMm: 3, mirrorMm: 12, power: 2.5, g
 // Round 3 (D3): at most maxRows value rows show by default; the rest of the card is behind a collapsed More detail.
 // R558 (motor strip fills the view): in landscape the panel is a short card in the bottom-right corner (cornerVw wide,
 // cornerShortVh tall; CSS mirrors --ns-info-corner-vw / --ns-info-short-maxvh), one of the two corners the motor areas
-// leave free at the start; "More detail" (key I) opens the full card upward (at most colMaxVh of the height).
-export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4, cornerVw: 18.75, cornerShortVh: 17 });
+// leave free at the start; "More detail" (key R) opens the full card upward (at most colMaxVh of the height).
+export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4, cornerVw: 18.75, cornerShortVh: 48 });
 /** R3-integrator: in portrait the top of the bottom band holds the legend (right) and the drag-to-look toast (left); the
  * information panel below them is capped to the band minus this height (CSS mirror --ns-portrait-legend-reserve). */
 export const INFO_PANEL_PORTRAIT_LEGEND_PX = 172; // R3-fix (SL-3): room for the legend's map qualifier in portrait
 
 /** Panel rectangle (CSS px) the info overlay occupies for a viewport: the short bottom-right corner card (landscape,
  * layout 'corner'; R558) or a bottom band (portrait). Other HUD elements and the orbit arrows avoid it. The card
- * opened with "More detail" (key I) grows upward past this box for as long as the player keeps it open. */
+ * opened with "More detail" (key R) grows upward past this box for as long as the player keeps it open. */
 export function infoPanelRect({ width, height } = {}, topPx = 0) {
   if (!(width > 0 && height > 0)) return null;
   const g = INFO_PANEL.gapPx;
@@ -3190,7 +3282,8 @@ export function infoPanelContent(model) {
     if (pull.length) items.push([T.rows.agonists, pull.join(', ')]);
     if (relax.length) items.push([T.rows.antagonists, relax.join(', ')]);
     if (list(mus.steady).length) items.push([T.steadying, list(mus.steady).join(', ')]);
-    more = {
+    // R558: a card with more === null (ns-text reachInfoCard) has no technical layer to open.
+    more = card.more === null ? null : {
       summary: s(cm.title) || T.moreDetail, items, explanation: s(cm.explanation) || expl, note: s(cm.note),
       caveats: list(cm.caveats).length ? list(cm.caveats) : caveats, sources: s(cm.sources) || (citations ? `${T.sourcesPrefix}${citations}` : '')
     };
@@ -3330,10 +3423,17 @@ export const MUSCLE_HINT_LOOK = Object.freeze({ rimGain: 0.5, rimWhite: 0.35, ri
 // colour; it shows for holdS and fades out over fadeS even while the area stays lit, and the mirror body gets none
 // (its muscles light in the same colour). No line to a group nearer the camera than minTargetM (your own neck or face
 // from the eyes). mode 'off' draws no line at all. Display choices.
+// R558 (user Messages 48 and 56: "it's not clear which brain part is being activated by each body movement at all. So
+// maybe you need to reintroduce linking lines"; the game is a learning tool): mode 'held' keeps the ONE line of a lit
+// area for as long as the area is lit (it fades with the area's own level), a little thicker, and draws it to the
+// MIRROR body too (mirror: true): the mirror body stands whole beside the strip, so the line "this strip part -> this
+// body part" is short and always on screen, also when the part of your own body is at the camera (your left shoulder
+// in the ordinary view). overBrainCore / overBrainHalo: how much of the line shows where it crosses the drawn brain
+// (the core stays readable; the halo is kept low so it does not wash the areas out). Still one line per area and body.
 export const GLOW_LINK = Object.freeze({
-  mode: 'one-per-area', holdS: 0.5, fadeS: 0.7, coreWhite: 0.3, minTargetM: 0.45,
-  corePx: 1.4, haloPx: 6, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.35, pulseWidth: 0.12,
-  maxLinks: 24, minLevel: 0.02, mirrorAlpha: 0.7, nearClipM: 0.06,
+  mode: 'held', holdS: 0.5, fadeS: 0.7, coreWhite: 0.3, minTargetM: 0.45, mirror: true, own: 'no-mirror',
+  corePx: 2.2, haloPx: 8, lift: 0.16, segments: 40, brainFade: 0.1, muscleFade: 0.04, pulseS: 1.1, pulseAmp: 0.35, pulseWidth: 0.12,
+  maxLinks: 24, minLevel: 0.02, mirrorAlpha: 0.9, nearClipM: 0.06, overBrainCore: 0.9, overBrainHalo: 0.2,
   // cross-section samples (fraction of the halo half width) for the additive ribbon
   across: Object.freeze([-1, -0.62, -0.32, -0.16, 0, 0.16, 0.32, 0.62, 1])
 });
@@ -3369,11 +3469,12 @@ export function glowAlongAlpha(s, phase = NaN, o = GLOW_LINK) {
   return a;
 }
 
-/** R558: strength 0..1 of an area's one line `ageS` seconds after the area switched on: 1 for holdS, then a smooth fade
- * to 0 over fadeS (0 for a negative or non-finite age, and always 0 in mode 'off'). Pure. */
+/** R558: strength 0..1 of an area's one line `ageS` seconds after the area switched on. Mode 'held': 1 for as long as
+ * the area is lit. Mode 'one-per-area': 1 for holdS, then a smooth fade to 0 over fadeS. 0 for a negative or non-finite
+ * age, and always 0 in mode 'off'. Pure. */
 export function glowLineEnvelope(ageS, o = GLOW_LINK) {
   if (o.mode === 'off' || !Number.isFinite(ageS) || ageS < 0) return 0;
-  if (ageS <= o.holdS) return 1;
+  if (o.mode === 'held' || ageS <= o.holdS) return 1;
   const t = Math.min(1, (ageS - o.holdS) / Math.max(1e-6, o.fadeS));
   return 1 - t * t * (3 - 2 * t);
 }
@@ -3739,6 +3840,12 @@ export function hatchFrame(positions, { spacingMm = 3, bins = 16, minCount = 4 }
  *  3. SPECULAR. The direct specular becomes a flat, crisp highlight SHAPE: its luminance through a smoothstep at
  *     nsCelSpec.x on a muscle belly, nsCelSpecAt.x on a tendon part or bone (half-width nsCelSpec.y or the pixel
  *     width), times nsCelSpec.z on a belly, nsCelSpec.w on tendon and bone, in the light's own colour.
+ *     GLOSS (R558, user Message 54, "a bit of shine, a bit of glossiness"): inside that shape a brighter CORE where the
+ *     luminance passes nsCelGloss.x times the shape's threshold (plus nsCelGloss.y on a belly, .z on tendon and bone),
+ *     and round both a SMOOTH share of the real highlight (nsCelGloss2.x x the specular, its luminance kept under
+ *     nsCelGloss2.y), so the highlight has a soft falloff like a polished surface instead of one flat patch. The two
+ *     crisp steps fade out where the normal turns by more than nsCelGloss2.z radians per pixel (gone at twice that): a
+ *     highlight that would be a pixel or two wide (a finger bone, a far figure's bumps) is left out, never a sparkle.
  *  4. INK (attribute nsHatch from hatchFrame: the cross-section direction, the position along the axis in mm, the
  *     line count N). Lines are the level lines of h = N x angle / 2 pi, drawn with an analytic pixel width (no texture,
  *     no stair steps) and broken into strokes of varying length along the axis. Lines are kept at least nsInkLine.x
@@ -3804,7 +3911,11 @@ export function patchComicShaders(vertexShader, fragmentShader, kind = 'muscle')
 		float nsS = dot( nsSp, nsLw );
 		float nsSw = max( nsCelSpec.y, fwidth( nsS ) );
 		float nsSa = mix( nsCelSpec.x, nsCelSpecAt.x, nsTd );
-		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * smoothstep( nsSa - nsSw, nsSa + nsSw, nsS ) * mix( nsCelSpec.z, nsCelSpec.w, nsTd );
+		float nsSk = nsSa * nsCelGloss.x;
+		float nsGk = 1.0 - smoothstep( nsCelGloss2.z, 2.0 * nsCelGloss2.z, length( fwidth( nsN ) ) );
+		float nsHi = smoothstep( nsSa - nsSw, nsSa + nsSw, nsS ) * mix( nsCelSpec.z, nsCelSpec.w, nsTd )
+			+ smoothstep( nsSk - nsSw, nsSk + nsSw, nsS ) * mix( nsCelGloss.y, nsCelGloss.z, nsTd );
+		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * ( nsHi * nsGk + min( nsS, nsCelGloss2.y ) * nsCelGloss2.x );
 		float nsInkA = 0.0;
 		vec2 nsQ = vNsHatch.xy;
 		float nsQq = dot( nsQ, nsQ );
@@ -3839,7 +3950,7 @@ export function patchComicShaders(vertexShader, fragmentShader, kind = 'muscle')
 	}${muscle && fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge') ? `
 	if ( nsCharge.z > 0.5 ) totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );` : ''}`;
   const noise = (fragmentShader.includes('float nsVNoise(') ? '' : MUSCLE_FIBRE_NOISE_GLSL) + COMIC_LINE_GLSL;
-  const fs = 'uniform vec4 nsCelBand;\nuniform vec4 nsCelLv;\nuniform vec4 nsCelDeep;\nuniform vec4 nsCelRim;\nuniform vec4 nsCelRimCol;\nuniform vec4 nsCelRimDir;\nuniform vec4 nsCelSpec;\nuniform vec4 nsCelSpecAt;\n' +
+  const fs = 'uniform vec4 nsCelBand;\nuniform vec4 nsCelLv;\nuniform vec4 nsCelDeep;\nuniform vec4 nsCelRim;\nuniform vec4 nsCelRimCol;\nuniform vec4 nsCelRimDir;\nuniform vec4 nsCelSpec;\nuniform vec4 nsCelSpecAt;\nuniform vec4 nsCelGloss;\nuniform vec4 nsCelGloss2;\n' +
     'uniform vec4 nsInk;\nuniform vec4 nsInkLine;\nuniform vec4 nsInkMix;\nuniform vec4 nsInkStroke;\nuniform vec4 nsInkStip;\nuniform vec4 nsHdrBoost;\nuniform vec4 nsInkFar;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' + noise +
     fragmentShader.replace(H.light, light);
   return { vertexShader: vs, fragmentShader: fs };
@@ -4142,7 +4253,7 @@ export function createScene({
   let brainRestElements = null; // R558: the brain's matrix with the orbit taken out (setBrainTransform), or null
   let lastRenderAt = null;
   let lastSampleAt = null; // R4-fix (code review F1): the quality controller's own interval clock (live frames only)
-  let lastRenderCpuMs = NaN;
+  let lastRenderCpuMs = NaN, lastBusyMs = NaN;
 
   const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
@@ -4269,8 +4380,81 @@ export function createScene({
   const glassInkUniforms = (() => {
     const v = glassInkUniformValues();
     return { nsGInk: { value: new THREE.Vector4(...v.nsGInk) }, nsGInk2: { value: new THREE.Vector4(...v.nsGInk2) }, nsGHi: { value: new THREE.Vector4(...v.nsGHi) },
-      nsGHi2: { value: new THREE.Vector4(...v.nsGHi2) }, nsInkG: { value: new THREE.Vector3(...v.nsInkG) } };
+      nsGHi2: { value: new THREE.Vector4(...v.nsGHi2) }, nsGCel: { value: new THREE.Vector4(...v.nsGCel) }, nsGCel2: { value: new THREE.Vector4(...v.nsGCel2) },
+      nsInkG: { value: new THREE.Vector3(...v.nsInkG) } };
   })();
+  // R558 BB2 (target 2, "the glass brain shows its own gyri and sulci"): the glass fold depth (ns-brain-ink foldDepth
+  // over every atlas brain vertex, BRAIN_INK.glassFold) replaces the coarse hull depth in each glass geometry's groove
+  // attribute nsSulc. About 0.5 s of work for the 178,743 glass vertices, so it runs in slices of at most sliceMs on
+  // timer turns while the rest of the anatomy loads; until it is done the glass shows the hull grooves and no inked
+  // sulci (nsGInk2.z = 0). state: 'none' | 'running' | 'done' | 'failed'.
+  const glassFold = { state: 'none', vertices: 0, meshes: 0, slices: 0, workMs: 0, gridMs: 0, coverMs: null, covered: 0, wallMs: null, error: null, token: 0 };
+  let stripCoverInput = null; // R558 BB2: the strip's vertices and envelope normals (regionBorderSetup), for the glass over the strip
+  function startGlassFold(sourceList) {
+    const token = ++glassFold.token, F = BRAIN_INK.glassFold;
+    glassInkUniforms.nsGInk2.value.z = 0;
+    const jobs = [];
+    for (const m of glass) {
+      const geo = m && m.geometry, P = geo && geo.attributes.position, Nn = geo && geo.attributes.normal, A = geo && geo.attributes.nsSulc;
+      if (!P || !Nn || !A || P.count !== A.count) continue;
+      jobs.push({ positions: P.array, normals: Nn.array, attr: A, near: geo.attributes.nsNear || null, out: null, at: geo.userData.nsGlassAt });
+    }
+    let total = 0;
+    for (const g of sourceList || []) if (g && g.positions && g.positions.length >= 9) total += g.positions.length;
+    if (!jobs.length || !total) { glassFold.state = 'none'; return; }
+    let cloud = new Float32Array(total);
+    { let o = 0; for (const g of sourceList) if (g && g.positions && g.positions.length >= 9) { cloud.set(g.positions, o); o += g.positions.length; } }
+    Object.assign(glassFold, { state: 'running', vertices: 0, meshes: jobs.length, slices: 0, workMs: 0, gridMs: 0, coverMs: null, covered: 0, wallMs: null, error: null });
+    const coverIn = stripCoverInput;
+    const t00 = nowMs();
+    let grid = null, ji = 0, v = 0;
+    const later = typeof globalThis.setTimeout === 'function' ? fn => globalThis.setTimeout(fn, 0) : null;
+    const step = () => {
+      if (token !== glassFold.token) return; // a newer brain took over
+      const t0 = nowMs();
+      try {
+        if (!grid) {
+          grid = foldGrid(cloud, F.cellMm); cloud = null; glassFold.gridMs = Math.round(nowMs() - t0);
+          // GLASS_CLEAR (BB2): the glass that lies OVER the strip (ns-brain-ink stripCover: within a few mm of the line from a
+          // strip vertex out along the envelope normal) clears like the glass next to it, so the buried banks of the strip
+          // (the anterior bank under the frontal gyri) are seen without a veil; the gyri beside the strip keep their glass.
+          if (coverIn) {
+            const tc = nowMs(), withNear = jobs.filter(J => J.near && J.near.count === J.positions.length / 3);
+            const cov = stripCover(withNear.map(J => J.positions), coverIn.positions, coverIn.env);
+            withNear.forEach((J, i) => {
+              const a = J.near.array, c = cov[i];
+              for (let k = 0; k < c.length; k++) if (c[k] > a[k]) { a[k] = c[k]; glassFold.covered++; }
+              J.near.needsUpdate = true;
+            });
+            glassAllTouch('nsNear');
+            glassFold.coverMs = Math.round(nowMs() - tc);
+          }
+        }
+        while (ji < jobs.length && (!later || nowMs() - t0 < F.sliceMs)) {
+          const J = jobs[ji], n = J.positions.length / 3;
+          if (!J.out) J.out = new Float32Array(n);
+          const e = Math.min(n, v + 1024);
+          foldDepth(J.positions, J.normals, grid, { radiusMm: F.radiusMm, ballMm: F.ballMm, maxMm: F.maxMm, start: v, end: e, out: J.out });
+          glassFold.vertices += e - v;
+          v = e;
+          if (v >= n) {
+            const shade = foldShade(J.out, { loMm: F.loMm, hiMm: F.hiMm });
+            J.attr.array.set(shade); J.attr.needsUpdate = true;
+            glassAllTouch('nsSulc', J.at, n);
+            J.out = null; ji++; v = 0;
+          }
+        }
+      } catch (err) {
+        glassFold.state = 'failed'; glassFold.error = String((err && err.message) || err); grid = null; return;
+      }
+      glassFold.slices++; glassFold.workMs += nowMs() - t0;
+      if (ji < jobs.length) { later(step); return; }
+      glassFold.state = 'done'; glassFold.wallMs = Math.round(nowMs() - t00); glassFold.workMs = Math.round(glassFold.workMs);
+      grid = null;
+      glassInkUniforms.nsGInk2.value.z = 1;
+    };
+    if (later) later(step); else step();
+  }
   // R4-integrator (D5 glass fix): shared uniforms of every glass rim material; set in render() from the brain transform.
   const farEyeRigidN = { value: new THREE.Matrix3() }, farEyeVec = { value: new THREE.Vector4(0, 0, 0, 0) };
   // R558: axis / axis0 = the squash axis as drawn / before the carry (world unit vectors) when the far-eye picture is
@@ -4529,6 +4713,61 @@ export function createScene({
   const glass = [];
   const glassDepth = [];
   const glassXray = [];
+  // R558 (performance): the glass is DRAWN by three meshes over one merged geometry (shell, depth pre-pass, x-ray
+  // subset) instead of one mesh per piece and pass (57 + 57 + 31 draws at the start). Same vertices, same triangle
+  // order as the pieces' creation order (which was their draw order: equal depth key, then object id), same three
+  // materials, so the picture is the same. The per-piece meshes above stay for picking, collision, the coarser copies
+  // and the counts, on GLASS_PIECE_LAYER: the camera does not draw that layer, the raycaster tests it.
+  const GLASS_PIECE_LAYER = 1;
+  const glassAll = { shell: null, depth: null, xray: null, full: null, lod: new Map() };
+  /** One merged geometry of the glass pieces' CURRENT geometries (and one of the x-ray subset over the same vertex
+   * buffers). `sulcAll` / `nearAll`: the full pieces' shared arrays (their attributes are views into these), else
+   * the values are copied. */
+  function glassAllBuild(sulcAll = null, nearAll = null) {
+    let nv = 0, ni = 0, nx = 0;
+    for (const m of glass) { const g = m.geometry; nv += g.attributes.position.count; ni += g.index.count; if (m.userData.nsXray) nx += g.index.count; }
+    const wantNear = glass.every(m => m.geometry.attributes.nsNear);
+    const P = new Float32Array(3 * nv), N = new Float32Array(3 * nv), S = sulcAll || new Float32Array(nv);
+    const E = wantNear ? nearAll || new Float32Array(nv) : null, I = new Uint32Array(ni), X = new Uint32Array(nx);
+    let vo = 0, io = 0, xo = 0;
+    for (const m of glass) {
+      const g = m.geometry, a = g.attributes, idx = g.index.array, n = a.position.count;
+      P.set(a.position.array, 3 * vo);
+      if (a.normal) N.set(a.normal.array, 3 * vo);
+      if (!sulcAll && a.nsSulc) S.set(a.nsSulc.array, vo);
+      if (E && !nearAll) E.set(a.nsNear.array, vo);
+      for (let k = 0; k < idx.length; k++) I[io + k] = idx[k] + vo;
+      if (m.userData.nsXray) { for (let k = 0; k < idx.length; k++) X[xo + k] = idx[k] + vo; xo += idx.length; }
+      io += idx.length; vo += n;
+    }
+    const attrs = { position: new THREE.BufferAttribute(P, 3), normal: new THREE.BufferAttribute(N, 3), nsSulc: new THREE.BufferAttribute(S, 1) };
+    if (E) attrs.nsNear = new THREE.BufferAttribute(E, 1);
+    const make = index => {
+      const g = keep(new THREE.BufferGeometry());
+      for (const name of Object.keys(attrs)) g.setAttribute(name, attrs[name]);
+      g.setIndex(new THREE.BufferAttribute(index, 1));
+      return g;
+    };
+    const all = make(I), xray = nx ? make(X) : null;
+    if (typeof all.computeBoundingSphere === 'function') { all.computeBoundingSphere(); if (xray && all.boundingSphere) xray.boundingSphere = all.boundingSphere.clone(); }
+    return { all, xray, attrs };
+  }
+  /** The merged glass follows the pieces' level of detail (setLod): cell 0 = the full geometry. */
+  function glassAllLod(cell) {
+    if (!glassAll.shell) return;
+    let G = glassAll.full;
+    if (cell) { G = glassAll.lod.get(cell); if (!G) { G = glassAllBuild(); glassAll.lod.set(cell, G); } }
+    glassAll.shell.geometry = G.all; glassAll.depth.geometry = G.all;
+    if (glassAll.xray && G.xray) glassAll.xray.geometry = G.xray;
+  }
+  /** A write into a full piece's nsSulc / nsNear view (the background fold): the merged buffer goes to the GPU again
+   * (only vertices at .. at + n when given). */
+  function glassAllTouch(name, at = null, n = 0) {
+    const a = glassAll.full && glassAll.full.attrs[name];
+    if (!a) return;
+    if (Number.isInteger(at) && n > 0 && typeof a.addUpdateRange === 'function') a.addUpdateRange(at, n);
+    a.needsUpdate = true;
+  }
   const markers = [];
   let strip = null;
   let rayTargets = null;
@@ -4597,24 +4836,39 @@ export function createScene({
       const medial = part.surface === 'medial' && o && o.medial && seg.hemispheres && seg.hemispheres[h] && seg.hemispheres[h].medial;
       return rowOf.get(`${h}|${medial ? 'medial' : 'all'}`);
     };
-    const normals = new Map(), cavity = new Map();
-    // R558 BB (Message 24, gyri and sulci): the fold depth of each strip vertex from the atlas's own brain geometry
-    // (ns-brain-ink foldDepth: below a ball rolled over all the atlas brain meshes); the hull-depth rule (sulcalDepth)
-    // only when the brain meshes are not at hand.
+    const normals = new Map(), cavity = new Map(), relief = new Map();
+    // R558 BB2 (Messages 24, 35, gyri and sulci): the strip's OWN relief from the atlas geometry (ns-brain-ink
+    // reliefDepth: below a large ball rolled over the strip meshes alone, along the brain's envelope normal from the
+    // hull support planes): 0 on the crown top, about 1.5 mm at the lip of each sulcus, deeper down the banks. The
+    // relief share (reliefShare) is the cavity input; the depth itself (nsRelief) drives the banded light and the
+    // inked sulcus lines (patchAreaInkShaders). It replaces BB's whole-brain fold depth on the strip, under which the
+    // medial crown (lower than its neighbours in this atlas) read as deep.
     const tf = nowMs();
-    for (const S of seg.strips || []) {
-      if (!S || !S.positions || !S.indices) continue;
+    const stripList = (seg.strips || []).filter(S => S && S.positions && S.indices);
+    let stripCloud = null;
+    if (stripList.length) {
+      stripCloud = new Float32Array(stripList.reduce((a, S) => a + S.positions.length, 0));
+      let o = 0; for (const S of stripList) { stripCloud.set(S.positions, o); o += S.positions.length; }
+    }
+    const stripGrid = stripCloud ? foldGrid(stripCloud, BRAIN_INK.relief.cellMm) : null;
+    const stripEnv = stripCloud ? new Float32Array(stripCloud.length) : null;
+    let envAt = 0;
+    for (const S of stripList) {
       const N = smoothSurfaceNormals(S.positions, S.indices);
       normals.set(S.id, N);
-      if (brainFoldCloud) cavity.set(S.id, foldShade(foldDepth(S.positions, N, brainFoldCloud)));
-      else if (brainSupport) cavity.set(S.id, sulcalDepth(S.positions, brainSupport, { lo: REGION_BORDER.cavityLoMm, hi: REGION_BORDER.cavityHiMm }));
+      const env = brainSupport ? envelopeNormals(S.positions, brainSupport, { fallback: N }) : N;
+      stripEnv.set(env, envAt); envAt += env.length;
+      const hd = stripGrid ? reliefDepth(S.positions, env, stripGrid) : new Float32Array(S.positions.length / 3);
+      relief.set(S.id, hd);
+      cavity.set(S.id, reliefShare(hd));
     }
-    areaInk.foldMethod = brainFoldCloud ? 'atlas fold depth (rolled ball over every brain mesh)' : brainSupport ? 'hull depth' : 'none';
+    areaInk.foldMethod = brainSupport ? 'strip relief (large ball over the strip alone, along the envelope normal)' : 'strip relief along its own normals (no hull)';
     areaInk.foldMs = Math.round(nowMs() - tf);
-    areaInk.foldCloudPoints = brainFoldCloud ? brainFoldCloud.length / 3 : 0;
+    areaInk.foldCloudPoints = stripCloud ? stripCloud.length / 3 : 0;
+    stripCoverInput = stripCloud && brainSupport ? { positions: stripCloud, env: stripEnv } : null; // for the glass over the strip (startGlassFold)
     regionBorder.rows = rows.length;
     regionBorder.ms = Math.round(nowMs() - t0);
-    return { rows, rowFor, normals, cavity, idOf, index };
+    return { rows, rowFor, normals, cavity, relief, idOf, index };
   }
   /** Per-region border uniforms and the patch (composePatch chain). */
   function regionBorderPatch(material, r, regionIndex) {
@@ -4644,7 +4898,6 @@ export function createScene({
   let brainTransformSet = false;
   let brainSamples = null; // Float32Array of source-mm sample points (projected bounds for the orbit arrows)
   let brainSupport = null; // R3-scene: supportPoints of every brain vertex (the silhouette hull basis)
-  let brainFoldCloud = null; // R558 BB: every atlas brain vertex while the strip's fold depth is computed (setBrain)
   let brainDepthBounds = null; // R22 all glass+strip SOURCE positions, conservative AABB cached only on normal load
   let brainSolid = null, brainSolidMs = 0, brainSolidError = null; // R558 (Message 12): ns-collide solidGrid of the brain meshes (source mm)
   let brainHullPoints = null; // R3-fix: the segmentation outline points (denser hull basis for the arrow plan)
@@ -4834,6 +5087,19 @@ export function createScene({
   // screen) and the single tips your own body is in front of.
   for (const target of ['brain', 'mirror']) arrowSets[target] = { target, rig: makeArrowRig(target), plan: null, frames: null, key: '', shown: false, boxes: {}, clicks: {}, boxKey: '', frameHidden: false, occluded: new Set(), vis: null };
   let arrowHover = null; // { target, dir, blocked } (setArrowHover)
+  /** R558 (performance; user Messages 42, 48 and 50): the item the player holds now ('brain' | 'mirror' | null; ns-app
+   * says so on every frame, before the picture is drawn). A held item is at a new place on every frame, and every new
+   * place used to plan BOTH arrow frames again (the fit, the pair moves and a sight test against your own body for each
+   * place tried): about a fifth of the time of a carried frame. So while an item is held its own arrows are not drawn
+   * (it is in the hand; its arrows turn or slide it once it is let go) and no frame is planned again; the first frame
+   * after it is let go plans both frames for the new place, as before. The other item's arrows stay where they were. */
+  let arrowHeld = null;
+  function setHeldItem(target) {
+    const t = target === 'brain' || target === 'mirror' ? target : null;
+    if (t === arrowHeld) return false;
+    arrowHeld = t; overlayDirty = true;
+    return true;
+  }
   let arrowsShown = false, arrowLayout = null, hoverDir = null;
   // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
   // while the "Try this" goal is 'orbit'.
@@ -4904,6 +5170,16 @@ export function createScene({
     info.moreBody = el('div', 'ns-infopanel-detail-body', info.more);
     info.moreKey = null;
     info.actRow = act;
+    // R558 (Message 48, the R key "read information"): a small key prompt in the card's top right corner says what R
+    // does next ("R more", "R hide"; ns-app toggleInfoDetail sets the word), and a chip in the same corner of the view
+    // says how to bring the information back while it is hidden (CSS shows it only then: data-ns-read="off").
+    const hintText = NsText.INFO.keyHint || { read: '', more: '', off: '' };
+    const keyCap = (into, word, wordCls) => { el('span', 'ns-keycap', into).textContent = 'R'; el('span', wordCls, into).textContent = word; };
+    info.keyHint = el('div', 'ns-infopanel-keyhint', p);
+    info.keyHint.setAttribute('aria-hidden', 'true');
+    keyCap(info.keyHint, String(hintText.read || '').replace(/^R:\s*/, ''), 'ns-infopanel-keyhint-word');
+    info.readChip = el('div', 'ns-read-chip', overlay);
+    keyCap(info.readChip, String(hintText.off || '').replace(/^R:\s*/, ''), 'ns-read-chip-word');
   }
   let faceLabel = null, insetFrame = null, faceLabelW = 0, xlShift = 0, faceCaption = null;
   // R5-integrate-core (D20): the face layer's captions: the round-4 FACE ("no face, chewing or tongue muscles") until the
@@ -4948,7 +5224,7 @@ export function createScene({
   // the gyrus; one shared uniform set for every area material. applied: null until an area program compiles.
   const areaInk = { applied: null, cel: null, materials: 0, foldMethod: null, foldMs: null, foldCloudPoints: 0 };
   const areaInkUniforms = (() => {
-    const v = areaInkUniformValues(), o = {};
+    const v = areaInkUniformValues(BRAIN_INK, GLASS_READ.lightDir), o = {};
     for (const [k, a] of Object.entries(v)) o[k] = { value: new THREE.Vector4(...a) };
     return o;
   })();
@@ -5045,6 +5321,8 @@ export function createScene({
     nsCelRimDir: { value: new THREE.Vector4(C.rim.dir[0] / Math.hypot(C.rim.dir[0], C.rim.dir[1]), C.rim.dir[1] / Math.hypot(C.rim.dir[0], C.rim.dir[1]), 0, 0) },
     nsCelSpec: { value: new THREE.Vector4(C.spec.bellyAt, C.spec.soft, C.spec.belly, C.spec.tendonBone) },
     nsCelSpecAt: { value: new THREE.Vector4(C.spec.tendonBoneAt, C.boneHigh, C.boneLevels[0], C.boneLevels[1]) }, // y: highlight level of bone / tendon; z, w: their deep and mid levels
+    nsCelGloss: { value: new THREE.Vector4(C.gloss.coreMul, C.gloss.coreBelly, C.gloss.coreTendonBone, 0) },
+    nsCelGloss2: { value: new THREE.Vector4(C.gloss.smooth, C.gloss.smoothMax, C.gloss.speckRad, 0) },
     nsInk: { value: new THREE.Vector4(inkLin[0], inkLin[1], inkLin[2], 1) },
     nsInkLine: { value: new THREE.Vector4(C.line.minSpacingPx, C.line.fibrePx, C.line.hatchPx, 1) },
     nsInkMix: { value: new THREE.Vector4(C.mix.fibre, C.mix.hatch, C.mix.stipple, C.mix.tendon) },
@@ -5238,7 +5516,8 @@ export function createScene({
   const mirror = {
     enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0, push: 0 },
     external: null, worldCentre: null, transform: null, serial: 0, planeSerial: 0, measured: null, lod: false, twins: 0, error: null,
-    correction: null, pipelineMatrix: null, reachForemostM: null // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
+    correction: null, pipelineMatrix: null, reachForemostM: null, // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
+    viewAwayM: 0 // R558 (Message 52): the outside view's slide (ns-mirror MIRROR_OUTSIDE), set from the camera pose
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
   let camPose = null, firstPose = null;
@@ -5535,14 +5814,28 @@ export function createScene({
     brainHullPoints = outlineBasis ? Float32Array.from(outlineBasis) : null;
     compassBrainSourceRevision++;
     glassRead.supportPoints = brainSupport.points.length / 3;
+    // R558 (performance, glassAll): every piece's nsSulc / nsNear attribute is a VIEW into one array of all pieces, so
+    // the merged geometry that is drawn shares the values (and the background fold's later writes) without a copy.
+    let glassVertices = 0;
+    for (const g of glassList) { checkMesh(g, `glass ${g && g.name}`); glassVertices += g.positions.length / 3; }
+    const allSulc = new Float32Array(glassVertices), allNear = stripLists.length ? new Float32Array(glassVertices) : null;
+    let glassAt = 0;
     glassList.forEach((g, gi) => {
-      checkMesh(g, `glass ${g && g.name}`);
-      const geo = indexedGeometry(g.positions, g.indices);
+      const geo = indexedGeometry(g.positions, g.indices), nv = g.positions.length / 3;
       geo.computeVertexNormals();
-      geo.setAttribute('nsSulc', new THREE.BufferAttribute(sulcalDepth(g.positions, brainSupport, { lo: GLASS_READ.sulcLoMm, hi: GLASS_READ.sulcHiMm }), 1));
-      if (stripLists.length) geo.setAttribute('nsNear', new THREE.BufferAttribute(stripProximity(g.positions, stripLists, GLASS_CLEAR.radiusMm), 1));
+      const sulc = allSulc.subarray(glassAt, glassAt + nv);
+      sulc.set(sulcalDepth(g.positions, brainSupport, { lo: GLASS_READ.sulcLoMm, hi: GLASS_READ.sulcHiMm }));
+      geo.setAttribute('nsSulc', new THREE.BufferAttribute(sulc, 1));
+      if (allNear) {
+        const near = allNear.subarray(glassAt, glassAt + nv);
+        near.set(stripProximity(g.positions, stripLists, GLASS_CLEAR.radiusMm));
+        geo.setAttribute('nsNear', new THREE.BufferAttribute(near, 1));
+      }
+      geo.userData.nsGlassAt = glassAt; // first vertex of this piece in the merged buffers
+      glassAt += nv;
       const mesh = still(new THREE.Mesh(geo, glassMaterial));
       mesh.name = String(g.name || 'brain glass');
+      mesh.userData.nsXray = xraySet.has(gi);
       mesh.renderOrder = RENDER_ORDER.glass;
       brainGroup.add(mesh);
       glass.push(mesh);
@@ -5558,6 +5851,20 @@ export function createScene({
       brainGroup.add(xrayMesh);
       glassXray.push(xrayMesh);
     });
+    if (glass.length && glass[0].layers && typeof glass[0].layers.set === 'function') {
+      const G = glassAll.full = glassAllBuild(allSulc, allNear);
+      const one = (geo, material, order, name) => {
+        const m = still(new THREE.Mesh(geo, material));
+        m.name = name; m.renderOrder = order;
+        brainGroup.add(m);
+        return m;
+      };
+      glassAll.shell = one(G.all, glassMaterial, RENDER_ORDER.glass, 'brain glass (every piece, one draw)');
+      glassAll.depth = one(G.all, glassDepthMaterial, RENDER_ORDER.glassDepth, 'brain glass (every piece, depth pre-pass)');
+      glassAll.xray = G.xray ? one(G.xray, glassXrayMaterial, RENDER_ORDER.glassXray, 'brain glass (x-ray pieces, one draw)') : null;
+      for (const list of [glass, glassDepth, glassXray]) for (const m of list) m.layers.set(GLASS_PIECE_LAYER);
+      raycaster.layers.enable(GLASS_PIECE_LAYER);
+    }
     // R558 (Message 12: "moved to and around each other but not through"): the glass brain as a solid, from every brain
     // mesh as given (the strip meshes included): the sealed inside of its surface patches (ns-collide solidGrid, source
     // mm, about 0.1 s once at load). The app's stop-at-contact rule refuses any move that would leave a point of either
@@ -5568,15 +5875,10 @@ export function createScene({
       brainSolid = solidMeshes.length ? NsCollide.solidGrid(solidMeshes, { cellMm: NsCollide.COLLIDE.brainSolidCellMm }) : null;
       brainSolidMs = nowMs() - t1;
     } catch (err) { brainSolid = null; brainSolidError = String((err && err.message) || err); }
-    if (regionMode) {
-      // R558 BB: every atlas brain vertex (source mm; the strips included) for the strip's fold depth, dropped after use.
-      let total = 0;
-      for (const g of glassListIn) if (g && g.positions && g.positions.length >= 9) total += g.positions.length;
-      brainFoldCloud = total ? new Float32Array(total) : null;
-      if (brainFoldCloud) { let o = 0; for (const g of glassListIn) if (g && g.positions && g.positions.length >= 9) { brainFoldCloud.set(g.positions, o); o += g.positions.length; } }
-      buildRegions(seg, still);
-      brainFoldCloud = null;
-    } else buildFocusStrip(focus, markerList, still);
+    if (regionMode) buildRegions(seg, still);
+    else buildFocusStrip(focus, markerList, still);
+    // R558 BB2 (target 2): the glass's own sulci from the atlas, computed in short background slices (glassFold).
+    startGlassFold(glassListIn);
     buildMarkers(markerList, still);
     rayTargets = regionMode ? [...glass, ...regionMeshes] : [...glass, strip.mesh]; // HUD-only raycast targets, built once
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
@@ -5616,6 +5918,8 @@ export function createScene({
     geo.setAttribute('nsRow', new THREE.BufferAttribute(rows, 2));
     const C = border.cavity.get(part.meshId);
     if (C && src && src.length === n) { const cav = new Float32Array(n); for (let v = 0; v < n; v++) cav[v] = C[src[v]]; geo.setAttribute('nsCav', new THREE.BufferAttribute(cav, 1)); }
+    const D = border.relief && border.relief.get(part.meshId); // R558 BB2: the strip's relief depth (mm)
+    if (D && src && src.length === n) { const rel = new Float32Array(n); for (let v = 0; v < n; v++) rel[v] = D[src[v]]; geo.setAttribute('nsRelief', new THREE.BufferAttribute(rel, 1)); }
   }
 
   /** R558 (REGION_BORDER): per area and strip mesh / surface rule, the NEIGHBOURS' triangles whose corners reach into a
@@ -5639,7 +5943,7 @@ export function createScene({
       for (const part of parts) {
         const P = part.positions, I = part.indices, n = P.length / 3;
         const S = part.s && part.s.length === n ? part.s : part.u;
-        const N = border.normals.get(part.meshId), src = part.sourceIndex, C = border.cavity.get(part.meshId);
+        const N = border.normals.get(part.meshId), src = part.sourceIndex, C = border.cavity.get(part.meshId), D = border.relief && border.relief.get(part.meshId);
         const ownId = regionIndexById.get(part.regionId);
         for (let t = 0; t + 2 < I.length; t += 3) {
           const a = I[t], b = I[t + 1], c = I[t + 2];
@@ -5649,11 +5953,12 @@ export function createScene({
             const id = border.idOf(run.owner);
             if (id < 0 || id === ownId) continue;
             let f = fills.get(id);
-            if (!f) { f = { pos: [], nor: [], s: [], cav: [], hemisphere: part.hemisphere }; fills.set(id, f); }
+            if (!f) { f = { pos: [], nor: [], s: [], cav: [], rel: [], hemisphere: part.hemisphere }; fills.set(id, f); }
             for (const v of [a, b, c]) {
               f.pos.push(P[3 * v], P[3 * v + 1], P[3 * v + 2]);
               if (N && src) { const k = 3 * src[v]; f.nor.push(N[k], N[k + 1], N[k + 2]); }
               if (C && src) f.cav.push(C[src[v]]);
+              if (D && src) f.rel.push(D[src[v]]);
               f.s.push(S[v]);
             }
           }
@@ -5669,6 +5974,7 @@ export function createScene({
         else geo.computeVertexNormals();
         geo.setAttribute('nsS', new THREE.BufferAttribute(Float32Array.from(f.s), 1));
         if (f.cav.length === nv) geo.setAttribute('nsCav', new THREE.BufferAttribute(Float32Array.from(f.cav), 1));
+        if (f.rel.length === nv) geo.setAttribute('nsRelief', new THREE.BufferAttribute(Float32Array.from(f.rel), 1));
         const rows = new Float32Array(2 * nv);
         for (let v = 0; v < nv; v++) { rows[2 * v] = row; rows[2 * v + 1] = 1; }
         geo.setAttribute('nsRow', new THREE.BufferAttribute(rows, 2));
@@ -6211,6 +6517,9 @@ export function createScene({
       camMul.overBrain = Number.isFinite(pose.overBrainSeeThrough) ? fin01(pose.overBrainSeeThrough) : 1 - far0;
       camMul.nearM = Number.isFinite(pose.nearM) && pose.nearM > 0 ? pose.nearM : null;
     }
+    // R558 (Message 52): in the outside view the mirror body backs away from your body as far as the camera does.
+    const viewAwayM = camPose ? fin01(camPose.blend) * NsMirror.MIRROR_OUTSIDE.awayM : 0;
+    if (Math.abs(viewAwayM - mirror.viewAwayM) > 1e-4) { mirror.viewAwayM = viewAwayM; if (mirror.transform) applyMirror(); }
     applyCamera();
     updateCameraRange();
     if (cameraProjectionPlan && cameraProjectionPlan.phase === 'planning') {
@@ -6565,6 +6874,7 @@ export function createScene({
       for (const mesh of glass) tag(mesh, 'brain-glass');
       for (const mesh of glassDepth) tag(mesh, 'brain-glass-depth');
       for (const mesh of glassXray) tag(mesh, 'brain-glass-xray');
+      tag(glassAll.shell, 'brain-glass'); tag(glassAll.depth, 'brain-glass-depth'); tag(glassAll.xray, 'brain-glass-xray'); // the meshes that are drawn
       for (const region of regions) {
         for (const mesh of region.meshes) tag(mesh, 'brain-region', null, false, null, region.id);
         for (const mesh of region.depthMeshes) tag(mesh, 'brain-region-depth', null, false, null, region.id);
@@ -7007,9 +7317,9 @@ export function createScene({
    * depth write, no picking, built only when a muscle first glows and hidden again at rest. Display only. */
   const haloOk = typeof THREE.ShaderMaterial === 'function' && THREE.AdditiveBlending !== undefined;
   const haloState = { built: 0, shown: 0 };
-  // R558 (Message 22): the halo runs its muscle's power-up too (the host's own nsCharge / nsSweep / nsFibre uniforms and
-  // the shared clock): the same front, flash, pulse and ripple, and at the peak flash the shell bursts outward by
-  // POWER_UP.haloBurst of its width (the aura of a power-up), settling back with the flash.
+  // R558 (Messages 22 and 53): the halo runs its muscle's neon flash too (the host's own nsCharge / nsSweep / nsFibre
+  // uniforms and the shared clock): the same strike and flash, and at the peak the shell flares outward by
+  // POWER_UP.haloBurst of its width, settling back with the flash.
   const HALO_PU = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\nuniform vec4 nsFibre;\nuniform vec2 nsSweep;\n' + powerUpGlsl('nsPowerUp') + '\n';
   const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
     '  float flash = nsCharge.z > 0.5 ? nsPowerUpFlash( nsClock.x - nsCharge.x, nsCharge.y, nsClock.y ) : 0.0;\n' +
@@ -7451,64 +7761,98 @@ export function createScene({
     const sig = JSON.stringify(c);
     if (sig === info.last) return false;
     info.last = sig;
-    overlayDirty = true;
-    hudDirty = true; // R4-scene: the panel's size may change with its text: re-read the obstacles in this same frame
-    const put = (e, t) => { if (e.textContent !== t) e.textContent = t; const h = t === ''; if (e.hidden !== h) e.hidden = h; };
-    info.panel.setAttribute('data-mode', c.mode);
-    info.panel.setAttribute('data-left-arm', c.leftArm ? 'true' : 'false');
+    // R558 (performance; user Messages 42, 48 and 50): only what changed is written. While an area's activity rose or
+    // fell, its number changed on every frame, and every such frame used to empty and fill all the rows, the caveats and
+    // the "More detail" text again and made the browser lay the page out anew for the arrows and labels (the cards'
+    // boxes are read again when the panel may have changed size). Now `grew` says that something that can change the
+    // panel's SIZE was written; the activity's number (same count of characters), colour and meter mark cannot, and
+    // they are told apart from it by the HUD watcher too (relevantHudRecord, infoQuietTarget).
+    let grew = false;
+    const put = (e, t) => { if (e.textContent !== t) { e.textContent = t; grew = true; } const h = t === ''; if (e.hidden !== h) { e.hidden = h; grew = true; } };
+    const hide = (e, h) => { if (e.hidden !== h) { e.hidden = h; grew = true; } };
+    const attr = (k, v) => { if (info.panel.getAttribute(k) !== v) { info.panel.setAttribute(k, v); grew = true; } };
+    attr('data-mode', c.mode);
+    attr('data-left-arm', c.leftArm ? 'true' : 'false');
     put(info.heading, c.heading);
     put(info.title, c.title);
     put(info.tag, c.tag);
     put(info.viewed, c.viewed);
     if (c.activity) {
-      put(info.activity, c.activity.text);
-      if (info.swatch.style) info.swatch.style.background = c.activity.css;
+      const was = info.activity.textContent, t = c.activity.text;
+      if (was !== t) {
+        const g = grew;
+        put(info.activity, t);
+        if (was.length === t.length && was !== '') grew = g; // the same count of characters: the row keeps its size
+      }
+      if (info.swatch.style && info.swatchCss !== c.activity.css) { info.swatchCss = c.activity.css; info.swatch.style.background = c.activity.css; }
       if (info.meter.style) { const mb = c.activity.meter || legendGradientCss(9); if (info.meterBg !== mb) { info.meterBg = mb; info.meter.style.background = mb; } }
-      info.actRow.hidden = false;
-      info.meter.hidden = false;
-      if (info.meterMark.style) info.meterMark.style.left = `${(c.activity.value * 100).toFixed(1)}%`;
-    } else { put(info.activity, ''); info.actRow.hidden = true; info.meter.hidden = true; }
+      hide(info.actRow, false);
+      hide(info.meter, false);
+      if (info.meterMark.style) { const left = `${(c.activity.value * 100).toFixed(1)}%`; if (info.markLeft !== left) { info.markLeft = left; info.meterMark.style.left = left; } }
+    } else { put(info.activity, ''); hide(info.actRow, true); hide(info.meter, true); }
     put(info.activations, c.activations);
-    while (info.rows.firstChild) info.rows.removeChild(info.rows.firstChild);
-    for (const [k, v] of c.rows) {
-      const slug = ROW_SLUG[k] || k.toLowerCase().split(/[^a-z]+/)[0] || 'row';
-      el('dt', `ns-infopanel-key-${slug}`, info.rows).textContent = k;
-      el('dd', `ns-infopanel-row-${slug}`, info.rows).textContent = v;
+    const rowsSig = JSON.stringify(c.rows);
+    if (rowsSig !== info.rowsSig) {
+      info.rowsSig = rowsSig; grew = true;
+      while (info.rows.firstChild) info.rows.removeChild(info.rows.firstChild);
+      for (const [k, v] of c.rows) {
+        const slug = ROW_SLUG[k] || k.toLowerCase().split(/[^a-z]+/)[0] || 'row';
+        el('dt', `ns-infopanel-key-${slug}`, info.rows).textContent = k;
+        el('dd', `ns-infopanel-row-${slug}`, info.rows).textContent = v;
+      }
     }
-    info.rows.hidden = c.rows.length === 0;
+    hide(info.rows, c.rows.length === 0);
     put(info.plain, c.plain);
     put(info.explanation, c.explanation);
     put(info.simulated, c.simulated);
     put(info.known, c.known);
     put(info.regionCaveat, c.regionCaveat);
-    while (info.caveats.firstChild) info.caveats.removeChild(info.caveats.firstChild);
-    for (const t of c.caveats) el('li', '', info.caveats).textContent = t;
-    info.caveats.hidden = c.caveats.length === 0;
+    const cavSig = JSON.stringify(c.caveats);
+    if (cavSig !== info.cavSig) {
+      info.cavSig = cavSig; grew = true;
+      while (info.caveats.firstChild) info.caveats.removeChild(info.caveats.firstChild);
+      for (const t of c.caveats) el('li', '', info.caveats).textContent = t;
+    }
+    hide(info.caveats, c.caveats.length === 0);
     put(info.citations, c.citations ? `${NsText.INFO.sourcesPrefix}${c.citations}` : '');
     // Round 3 (D3): the technical layer, collapsed again whenever the subject changes.
-    while (info.moreBody.firstChild) info.moreBody.removeChild(info.moreBody.firstChild);
+    const moreSig = c.more ? JSON.stringify(c.more) : '';
+    if (moreSig !== info.moreSig) {
+      info.moreSig = moreSig; grew = true;
+      while (info.moreBody.firstChild) info.moreBody.removeChild(info.moreBody.firstChild);
+      if (c.more) {
+        for (const [k, t] of c.more.items) {
+          const d = el('p', 'ns-infopanel-detail-item', info.moreBody);
+          el('span', 'ns-infopanel-detail-key', d).textContent = k;
+          el('span', 'ns-infopanel-detail-value', d).textContent = ` ${t}`;
+        }
+        if (c.more.explanation) el('p', 'ns-infopanel-detail-text', info.moreBody).textContent = c.more.explanation;
+        if (c.more.note) el('p', 'ns-infopanel-detail-text', info.moreBody).textContent = c.more.note;
+        if (c.more.caveats.length) {
+          const ul = el('ul', 'ns-infopanel-detail-caveats', info.moreBody);
+          for (const t of c.more.caveats) el('li', '', ul).textContent = t;
+        }
+        if (c.more.sources) el('p', 'ns-infopanel-detail-sources', info.moreBody).textContent = c.more.sources;
+      }
+    }
     if (c.more) {
       put(info.moreSummary, c.more.summary);
-      for (const [k, t] of c.more.items) {
-        const d = el('p', 'ns-infopanel-detail-item', info.moreBody);
-        el('span', 'ns-infopanel-detail-key', d).textContent = k;
-        el('span', 'ns-infopanel-detail-value', d).textContent = ` ${t}`;
+      if (info.moreKey !== c.key) {
+        // R558 (the R key): in the "more" state the player asked for More detail, so it stays open from area to area.
+        const root = typeof info.panel.closest === 'function' ? info.panel.closest('.ns-app') : null;
+        const open = Boolean(root && typeof root.getAttribute === 'function' && root.getAttribute('data-ns-read') === 'more');
+        if (info.more.open !== open) { info.more.open = open; grew = true; }
+        info.moreKey = c.key;
       }
-      if (c.more.explanation) el('p', 'ns-infopanel-detail-text', info.moreBody).textContent = c.more.explanation;
-      if (c.more.note) el('p', 'ns-infopanel-detail-text', info.moreBody).textContent = c.more.note;
-      if (c.more.caveats.length) {
-        const ul = el('ul', 'ns-infopanel-detail-caveats', info.moreBody);
-        for (const t of c.more.caveats) el('li', '', ul).textContent = t;
-      }
-      if (c.more.sources) el('p', 'ns-infopanel-detail-sources', info.moreBody).textContent = c.more.sources;
-      if (info.moreKey !== c.key) { info.more.open = false; info.moreKey = c.key; }
-      info.more.hidden = false;
+      hide(info.more, false);
     } else {
-      info.more.hidden = true;
-      info.more.open = false;
+      hide(info.more, true);
+      if (info.more.open) { info.more.open = false; grew = true; }
       info.moreKey = null;
     }
-    if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; hudDirty = true; } // R3-scene: re-measure the obstacles now
+    if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; grew = true; } // R3-scene: re-measure the obstacles now
+    // R4-scene: the panel's size may change with its text: re-read the obstacles in this same frame
+    if (grew) { overlayDirty = true; hudDirty = true; }
     return true;
   }
 
@@ -7826,7 +8170,7 @@ export function createScene({
           if (!(d2 >= 0) || d2 === Infinity) fail('scene_input', 'lifted body geometry must be finite');
           if (d2 === 0) still++; else if (d2 > max2) max2 = d2;
         }
-        if (Math.sqrt(max2) > stackCapMm(level)) fail('scene_input', 'body lift moves a muscle further than the stack rule allows');
+        if (Math.sqrt(max2) > stackCapMm(level, id)) fail('scene_input', 'body lift moves a muscle further than the stack rule allows');
         // One drawn buffer per muscle: swap the ARRAY (same length), keep the attribute OBJECT (level-of-detail copies
         // and the mirror twin keep sharing it).
         pos.array = new Float32Array(rest);
@@ -8553,11 +8897,14 @@ export function createScene({
   // HUD parts neurosurge.css never draws in play (display: none): their per-frame text (e.g. the update-time line) does
   // not move any card, so it does not trigger a layout read. A closed <details> (except its summary) likewise.
   const HUD_UNDRAWN = '.ns-slot-frame, .ns-drives, .ns-slot-drivesTitle, .ns-notices, .ns-slot-hint, .ns-slot-reach';
+  /** R558 (performance): the parts of the information panel whose writes cannot change its size (the activity's number,
+   * colour swatch, meter and meter mark); setInfo itself says when the number's count of characters changes. */
+  const infoQuietTarget = t => Boolean(info) && (t === info.activity || t === info.swatch || t === info.meterMark || t === info.meter);
   function relevantHudRecord(rec) {
     let t = rec && rec.target;
     if (t && t.nodeType === 3) t = t.parentNode;
     if (!t || t === canvas) return false;
-    if (inside(overlay, t)) return Boolean(info && inside(info.panel, t));
+    if (inside(overlay, t)) return Boolean(info && inside(info.panel, t)) && !infoQuietTarget(t);
     if (typeof t.closest === 'function') {
       if (orientLive && t.closest('.ns-orient')) return false;
       if (t.closest(HUD_UNDRAWN)) return false;
@@ -8816,16 +9163,31 @@ export function createScene({
    *    mirror body's box, padded so the mirror's own tips keep their room). */
   function tipBlocker({ cam, centre, sizePx, box = null, gapPx = 4 }) {
     const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), grow = NsArrows.ARROW_LOOK.hoverScale;
-    let test = null;
+    let test = null, anchorAt;
+    // R558 (performance, P3): frameArrowSpots asks the same place (dir, x, y) several times while it looks for a pair's
+    // place (each tip alone, then both together, then the common shifts); within one plan nothing the answer depends on
+    // changes (the sight-line tester and the boxes are fixed for the plan), so each place is worked out once.
+    const seen = new Map();
     return (dir, x, y) => {
+      let byX = seen.get(dir);
+      if (!byX) seen.set(dir, (byX = new Map()));
+      let byY = byX.get(x);
+      if (!byY) byX.set(x, (byY = new Map()));
+      let v = byY.get(y);
+      if (v === undefined) { v = blockedAt(dir, x, y); byY.set(y, v); }
+      return v;
+    };
+    function blockedAt(dir, x, y) {
       const side = NsArrows.COMPASS_SCREEN[dir][0] !== 0;
       if (box) {
         const hx = (side ? o.halfAlong : o.halfAcross) * sizePx * grow, hy = (side ? o.halfAcross : o.halfAlong) * sizePx * grow;
         if (x - hx < box.x1 + gapPx && x + hx > box.x0 - gapPx && y - hy < box.y1 + gapPx && y + hy > box.y0 - gapPx) return true;
       }
       if (!body.length) return false;
+      // the anchor through the place: frameArrowAnchors' arithmetic with the camera and centre worked out once
+      if (anchorAt === undefined) { try { anchorAt = NsArrows.frameAnchorFn(cam, centre); } catch { anchorAt = null; } }
       let a = null;
-      try { const A = NsArrows.frameArrowAnchors({ [dir]: { x, y } }, { cam, centre }); a = A && A[dir]; } catch { a = null; }
+      try { a = anchorAt ? anchorAt(x, y) : null; } catch { a = null; }
       if (!a) return false;
       const dist = Math.hypot(a[0] - cam.position[0], a[1] - cam.position[1], a[2] - cam.position[2]);
       const h = 0.35 * sizePx, ax = side ? 0 : h, ay = side ? h : 0;
@@ -8833,7 +9195,7 @@ export function createScene({
       let k = 0;
       for (const t of [0, -1, 1]) if (test(x + t * ax, y + t * ay, dist) && ++k >= 2) return true;
       return false;
-    };
+    }
   }
   /** R558 (Message 7): where the V tips may lie (CSS px): the arrows' usable view (the view minus a margin, the top
    * line and the portrait band) and, in a portrait window, below the status card's planned full-width band at the top
@@ -8901,7 +9263,8 @@ export function createScene({
       // R558 (hunt 2): the mirror body's place is part of the key: the brain's tips keep off the mirror body's box.
       const key = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${arrowRef.yaw},${arrowRef.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|${mirrorPlace}|own${body.length}`;
       // (a turned brain whose transform carries no rest matrix keeps its frame: a frame is never fitted to a turned brain)
-      if (key !== B.key && (r || !B.frames)) {
+      // R558 (performance): nor is a frame planned again while an item is held (setHeldItem): once it is let go
+      if (key !== B.key && (r || !B.frames) && (!arrowHeld || !B.key)) {
         B.key = key;
         const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: Array.from(eye) };
         const bSize = NsArrows.arrowTipSizePx(cam, 'brain');
@@ -8924,7 +9287,7 @@ export function createScene({
         arrowSerial++;
       }
     }
-    B.shown = showB && Boolean(B.frames) && !B.frameHidden;
+    B.shown = showB && Boolean(B.frames) && !B.frameHidden && arrowHeld !== 'brain';
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
     const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
     if (showM) {
@@ -8932,7 +9295,7 @@ export function createScene({
       // bottom mirror arrows slide it), so a slide tap neither re-plans nor moves the tips; a carry or a reset does.
       const c = mirror.transform.carryCentre || mirror.transform.centre;
       const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}`;
-      if (key !== M.key || M.samplesRef !== mirror.samples) {
+      if ((key !== M.key || M.samplesRef !== mirror.samples) && (!arrowHeld || !M.key)) { // (not while an item is held: setHeldItem)
         M.key = key; M.samplesRef = mirror.samples;
         const start = { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
         let look = start;
@@ -8972,7 +9335,7 @@ export function createScene({
         arrowSerial++;
       }
     }
-    M.shown = showM && Boolean(M.frames) && !M.frameHidden;
+    M.shown = showM && Boolean(M.frames) && !M.frameHidden && arrowHeld !== 'mirror';
     if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
     // R558 (Message 7): the planned anchors are fixed world points; each tip FACES the camera in use and keeps its
     // planned size on screen (ns-arrows3d facingArrowFrames: its depth axis along its own sight line, so the tilted solid
@@ -9165,28 +9528,87 @@ export function createScene({
       const th = t - Math.sqrt(r * r - q);
       return th < 0 ? (t + Math.sqrt(r * r - q) >= 0 ? 0 : Infinity) : th;
     };
+    // R558 (performance, P3): what hitT computes from each entry's bounding sphere before the ray is known (the sphere
+    // centre from the entry's ray origin, its squared length and the radius) is computed once per tester, in typed
+    // arrays, with the same expressions in the same order; the per-ray test below is hitT's own arithmetic inlined, so
+    // every answer is unchanged. The group and leaf spheres in the world are the entries' cached ones (ns-collide
+    // entryGroups / entryLeaves: the same products as the inline transforms they replace).
+    const nE = entries.length, pre = new Float64Array(5 * nE), isArm = new Uint8Array(nE);
+    for (let i = 0; i < nE; i++) {
+      const e = entries[i], arm = Boolean(eyeCam && e.tag && e.tag.part === 'arm'), a = arm ? eyeCam.position : o;
+      const vx = e.c[0] - a[0], vy = e.c[1] - a[1], vz = e.c[2] - a[2];
+      pre[5 * i] = vx; pre[5 * i + 1] = vy; pre[5 * i + 2] = vz; pre[5 * i + 3] = vx * vx + vy * vy + vz * vz; pre[5 * i + 4] = e.r;
+      isArm[i] = arm ? 1 : 0;
+    }
+    // R558 (performance, P3): with a reference camera every sight line goes through a CSS pixel of that camera from its
+    // eye, so each entry's bounding sphere can only be met by the pixels of its projected footprint. The footprints are
+    // binned on a coarse pixel grid (built on the first sight line) and a sight line tests only the entries of its cell,
+    // plus every entry whose footprint is not bounded (the game arm's bones, tested from the eye as it looks now; a
+    // sphere round or near the eye or reaching beside or behind it); a pixel off the grid tests every entry. The
+    // footprint is conservative: a unit sight line d that meets the sphere in front of the eye is within its angular
+    // radius a = asin(r / |v|) of the sphere's direction u, so each camera-space component of d is within 2 sin(a / 2) <=
+    // a of u's, and the pixel lies inside the box those component bounds give (grown by 1 % + 1e-9 rad and 2 px for
+    // rounding). Every entry left out would fail hitT's first test, so the answer is unchanged (the reference-camera
+    // test answers "any hit", in no particular order).
+    let grid = null;
+    const GRID_PX = 32;
+    const buildGrid = () => {
+      const F = NsArrows.cameraFrame(refCam), R = F.R, kx = F.tanH * F.aspect, ky = F.tanH;
+      const nx = Math.max(1, Math.ceil(F.W / GRID_PX)), ny = Math.max(1, Math.ceil(F.H / GRID_PX));
+      const cells = Array.from({ length: nx * ny }, () => []), always = [];
+      for (let i = 0; i < nE; i++) {
+        if (isArm[i]) { always.push(i); continue; }
+        const vx = pre[5 * i], vy = pre[5 * i + 1], vz = pre[5 * i + 2], r = pre[5 * i + 4], dist = Math.sqrt(pre[5 * i + 3]);
+        if (!(dist > r + 1e-3) || !Number.isFinite(dist)) { always.push(i); continue; }
+        const ux = (R[0][0] * vx + R[1][0] * vy + R[2][0] * vz) / dist, uy = (R[0][1] * vx + R[1][1] * vy + R[2][1] * vz) / dist, uz = (R[0][2] * vx + R[1][2] * vy + R[2][2] * vz) / dist;
+        const dl = Math.asin(Math.min(1, r / dist)) * 1.01 + 1e-9;
+        if (!(uz + dl < -1e-3)) { always.push(i); continue; }
+        const zn = -(uz - dl), zf = -(uz + dl); // -d_z lies in [zf, zn], zf > 0
+        const xs = [(ux - dl) / zn, (ux - dl) / zf, (ux + dl) / zn, (ux + dl) / zf], ys = [(uy - dl) / zn, (uy - dl) / zf, (uy + dl) / zn, (uy + dl) / zf];
+        const px0 = (Math.min(...xs) / kx + 1) * 0.5 * F.W - 2, px1 = (Math.max(...xs) / kx + 1) * 0.5 * F.W + 2;
+        const py0 = (1 - Math.max(...ys) / ky) * 0.5 * F.H - 2, py1 = (1 - Math.min(...ys) / ky) * 0.5 * F.H + 2;
+        if (![px0, px1, py0, py1].every(Number.isFinite)) { always.push(i); continue; }
+        const cx0 = Math.max(0, Math.floor(px0 / GRID_PX)), cx1 = Math.min(nx - 1, Math.floor(px1 / GRID_PX));
+        const cy0 = Math.max(0, Math.floor(py0 / GRID_PX)), cy1 = Math.min(ny - 1, Math.floor(py1 / GRID_PX));
+        for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) cells[cy * nx + cx].push(i);
+      }
+      const all = Int32Array.from({ length: nE }, (_, i) => i);
+      return { nx, ny, W: F.W, H: F.H, cells: cells.map(c => Int32Array.from(always.concat(c))), all };
+    };
+    const rayDir = refCam ? NsArrows.pixelRayDirFn(refCam) : null;
+    const eyeRayDir = eyeCam ? NsArrows.pixelRayDirFn(eyeCam) : null;
     return (x, y, maxM) => {
       if (!(maxM > 0)) return false;
       frameVis.rays++; frameVis.lastRays++;
-      let d, dEye = null;
-      if (refCam) d = NsArrows.pixelRay(x, y, refCam).dir;
-      else {
+      let d, dEye = null, list = null;
+      if (refCam) {
+        d = rayDir(x, y);
+        if (!grid) grid = buildGrid();
+        const cx = Math.floor(x / GRID_PX), cy = Math.floor(y / GRID_PX);
+        list = x >= 0 && y >= 0 && x < grid.W && y < grid.H && cx < grid.nx && cy < grid.ny ? grid.cells[cy * grid.nx + cx] : grid.all;
+      } else {
         pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
         const dl = Math.hypot(pv.x - o[0], pv.y - o[1], pv.z - o[2]);
         if (!(dl > 0)) return false;
         d = [(pv.x - o[0]) / dl, (pv.y - o[1]) / dl, (pv.z - o[2]) / dl];
       }
-      for (const e of entries) {
+      for (let li = 0, nL = list ? list.length : nE; li < nL; li++) {
+        const ei = list ? list[li] : li;
         let dd = d, a = o;
-        if (eyeCam && e.tag && e.tag.part === 'arm') { if (!dEye) dEye = NsArrows.pixelRay(x, y, eyeCam).dir; dd = dEye; a = eyeCam.position; }
-        if (!(hitT(dd, e.c[0], e.c[1], e.c[2], e.r, a) < maxM)) continue;
-        const G = e.table.groups, L = e.table.leaves, m = e.m;
-        for (let i = 0; i < G.length; i += 6) {
-          const gx = m[0] * G[i] + m[4] * G[i + 1] + m[8] * G[i + 2] + m[12], gy = m[1] * G[i] + m[5] * G[i + 1] + m[9] * G[i + 2] + m[13], gz = m[2] * G[i] + m[6] * G[i + 1] + m[10] * G[i + 2] + m[14];
-          if (!(hitT(dd, gx, gy, gz, G[i + 3] * e.s + e.pad, a) < maxM)) continue;
-          for (let k = G[i + 4], n = k + G[i + 5]; k < n; k++) {
-            const j = 4 * k, lx = L[j], ly = L[j + 1], lz = L[j + 2];
-            const t = hitT(dd, m[0] * lx + m[4] * ly + m[8] * lz + m[12], m[1] * lx + m[5] * ly + m[9] * lz + m[13], m[2] * lx + m[6] * ly + m[10] * lz + m[14], L[j + 3] * e.s + e.pad, a);
+        if (isArm[ei]) { if (!dEye) dEye = eyeRayDir(x, y); dd = dEye; a = eyeCam.position; }
+        {
+          const p = 5 * ei, r = pre[p + 4], t = pre[p] * dd[0] + pre[p + 1] * dd[1] + pre[p + 2] * dd[2];
+          const q = pre[p + 3] - t * t;
+          if (q > r * r) continue;
+          const th = t - Math.sqrt(r * r - q);
+          if (!((th < 0 ? (t + Math.sqrt(r * r - q) >= 0 ? 0 : Infinity) : th) < maxM)) continue;
+        }
+        const e = entries[ei], G = e.table.groups, Gw = NsCollide.entryGroups(e);
+        for (let i = 0, gi = 0; i < G.length; i += 6, gi++) {
+          if (!(hitT(dd, Gw[4 * gi], Gw[4 * gi + 1], Gw[4 * gi + 2], Gw[4 * gi + 3], a) < maxM)) continue;
+          const Lw = NsCollide.entryLeaves(e, gi);
+          for (let j = 0; j < Lw.length; j += 4) {
+            const t = hitT(dd, Lw[j], Lw[j + 1], Lw[j + 2], Lw[j + 3], a);
             if (!(t < maxM)) continue;
             if (shareRule && e.tag && e.tag.part === 'body' && firstPersonShareAt(o[0] + t * d[0], o[1] + t * d[1], o[2] + t * d[2], ownPartIds.legs.has(e.tag.id)) < FIRST_PERSON_BODY.pickFrom) continue;
             return true;
@@ -9232,6 +9654,7 @@ export function createScene({
     const covered = (x, y, m) => { if (!test) test = ownSightTester(); return test(x, y, m); };
     let changed = false;
     for (const set of [arrowSets.brain, arrowSets.mirror]) {
+      if (set.target === arrowHeld) continue; // R558 (performance): a held item's arrows are not drawn (setHeldItem)
       const A = set.plan && set.plan.anchors;
       const targetOn = set.target === 'brain' ? brainGroup.visible && brainTransformSet : mirrorRoot.visible && mirror.transform !== null;
       let hide = false;
@@ -9661,8 +10084,8 @@ export function createScene({
     let T = null;
     try {
       if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
-      else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(mirror.external);
-      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }) }));
+      else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.external, viewAwayM: mirror.viewAwayM }));
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }), viewAwayM: mirror.viewAwayM }));
     } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
     if (!T || !T.matrix || T.matrix.length !== 16) return false;
     // R558 (Message 12): the stop-at-contact correction (setMirrorCorrection) rides on top of the placement.
@@ -9918,21 +10341,23 @@ export function createScene({
       behindBrain: covered && !(Number.isFinite(cameraRange.brainNearM) && hits[0].distance < cameraRange.brainNearM) };
   }
 
-  /** R558 (genuine note R31: "if we tap on the body, on any muscles, those muscles will activate"): the nearest body
-   * part a ray through CSS point (x, y) meets, on your own body (trunk, legs, right arm, the in-place head seen from
-   * behind, the left arm) or on the mirror body. Returns null when nothing is hit or a MOTOR AREA of the brain is nearer
-   * along the same ray (a click on a motor area always belongs to that area), else
-   * [design decision under the R34 authority: a tap passes through the brain's CLEAR GLASS to the mirror body behind
-   * it. The glass is see-through, the mirror body is plainly visible inside the brain's U at the start, a click on
-   * clear glass did nothing before, and the user's own example is tapping the mirror body's chest while watching the
-   * brain. Grasping and turning the mirror body still need the brain moved aside (graspTargetAt is unchanged).]
-   * { source: 'own' | 'mirror', part: 'body' | 'arm', kind: 'muscle' | 'bone', id (the atlas element id), name, side
-   * (-1 your left, +1 your right, 0 middle), bodyPart, armKey (movement-map muscle key of a left-arm muscle or null),
-   * distance (m) }. Only meshes that are drawn now are tested. Called on a click, not every frame. A mirror-body hit
-   * names the same anatomical muscle as on your own body: the mirror copies you, it does not swap left and right. */
+  /** R558 (user Messages 33 and 34: "You should be able to grasp-move items even if they are behind another item." ...
+   * "Same for the other controls of course."): everything a ray through CSS point (x, y) meets, nearest first, as the
+   * controls see it. { layers, mirror } or null:
+   *  - layers: [{ item: 'brain', kind: 'area' (a motor area: regionId) | 'glass' (the clear glass) | 'outline' (inside
+   *    the brain's drawn outline where the ray meets no brain surface, a concavity; the old conservative input blocker),
+   *    distance (m), point ([x, y, z] world m or null) } | { item: 'own' | 'mirror', kind: 'muscle' | 'bone', distance,
+   *    point, rec: { source, part: 'body' | 'arm', kind, id (atlas element id), name, side (-1 your left, +1 your right,
+   *    0 middle), bodyPart, armKey } }], one entry per mesh (its nearest DRAWN hit: a part of your own body that the
+   *    ordinary first-person view does not draw is passed through, FIRST_PERSON_BODY, as a click always did). The orbit
+   *    arrows are not in the list (pickArrows: they are drawn on top of everything).
+   *  - mirror: { centreWorldM (the carry's centre, without the slide), radiusM, mirrorEnvelope } while the mirror body is
+   *    shown, else null (what a carry of the mirror body starts from).
+   * Which of these a control acts on (what you see, or the item behind it) is the app's rule (ns-app controlTargets).
+   * Only meshes drawn now are tested; the left arm's CPU-skinned muscles get fresh bounding spheres first. A mirror-body
+   * hit names the same anatomical part as on your own body (the mirror copies you, it does not swap left and right). */
   let musclePickIndex = null, musclePickCount = -1;
-  function muscleAt(x, y) {
-    if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
+  function bodyPickIndex() {
     if (!musclePickIndex || musclePickCount !== body.length + bones.length + muscles.length) {
       musclePickIndex = new Map(); musclePickCount = body.length + bones.length + muscles.length;
       const clean = n => String(n || '').replace(/^mirror image: /, '').replace(/ \[[^\]]*\]$/, '').replace(/ \([A-Za-z0-9-]+\)$/, '');
@@ -9953,19 +10378,27 @@ export function createScene({
         if (m.mirror) musclePickIndex.set(m.mirror, { ...rec, source: 'mirror' });
       }
     }
-    camera.updateMatrixWorld(true); scene.updateMatrixWorld(true);
+    return musclePickIndex;
+  }
+  function controlLayersAt(x, y) {
+    if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
+    const index = bodyPickIndex();
+    // The world matrices as the renderer will use them (it updates the same way); the brain and the mirror body forced, as
+    // their picks always were (their matrices are set directly), then the camera's own.
+    scene.updateMatrixWorld(); brainGroup.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true); camera.updateMatrixWorld(true);
     pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
     rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
     // The left arm is skinned on the CPU: its bounding spheres are brought up to date first, so a moved muscle is found.
     for (const m of muscles) { try { computeSphereExact(m.mesh.geometry); } catch { /* keep the old sphere */ } } // R558 (P2): Three's sphere, exact
     const shown = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
     const targets = [];
-    for (const o of musclePickIndex.keys()) if (shown(o)) targets.push(o);
+    for (const o of index.keys()) if (shown(o)) targets.push(o);
+    const brainOn = brainGroup.visible;
+    if (brainOn) for (const o of rayTargets || glass) if (shown(o)) targets.push(o);
     const hits = raycaster.intersectObjects(targets, false);
-    if (!hits.length) return null;
-    // R558 (FIRST_PERSON_BODY): a part of your own body that the ordinary view does not draw cannot be clicked; the
-    // ray goes on to whatever is drawn behind it.
-    const hiddenOwn = h => { const r = musclePickIndex.get(h.object); return Boolean(r) && r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom; };
+    // R558 (FIRST_PERSON_BODY): a part of your own body that the ordinary view does not draw is not seen; the ray goes on
+    // to whatever is drawn behind it.
+    const hiddenOwn = h => { const r = index.get(h.object); return Boolean(r) && r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom; };
     let pool = hits;
     if (firstPersonUniform.value.w > 0) {
       // Review fix: the pick trees give only the NEAREST hit of each mesh. When that hit is on a part the ordinary view
@@ -9982,60 +10415,90 @@ export function createScene({
       }
       if (extra.length) pool = hits.concat(extra).sort((a, b) => a.distance - b.distance);
     }
-    let hit = null, rec = null;
+    const layers = [], seen = new Set();
     for (const h of pool) {
-      const r = musclePickIndex.get(h.object);
-      if (!r || hiddenOwn(h)) continue;
-      hit = h; rec = r; break;
+      if (seen.has(h.object)) continue;
+      const r = index.get(h.object);
+      if (r) {
+        if (hiddenOwn(h)) continue;
+        seen.add(h.object);
+        layers.push({ item: r.source, kind: r.kind, distance: h.distance, point: h.point.toArray(), rec: { ...r } });
+        continue;
+      }
+      seen.add(h.object);
+      const u = h.object.userData || {}, regionId = typeof u.regionId === 'string' ? u.regionId : null;
+      const area = regionId !== null || Boolean(!regionMode && strip && h.object === strip.mesh);
+      layers.push({ item: 'brain', kind: area ? 'area' : 'glass', distance: h.distance, point: h.point.toArray(), regionId });
     }
-    if (!hit) return null;
-    const areaMeshes = regionMode ? regionMeshes : strip && strip.mesh ? [strip.mesh] : [];
-    const areaHits = brainGroup.visible && areaMeshes.length ? raycaster.intersectObjects(areaMeshes, false) : [];
-    if (areaHits.length && areaHits[0].distance < hit.distance) return null;
-    return { ...rec, distance: hit.distance };
+    if (brainOn && regionMode && brainTransformSet && !layers.some(l => l.item === 'brain') && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 })) {
+      // Inside the brain's drawn outline where the ray meets none of its surfaces (a concavity): the brain still catches
+      // the press there unless something is seen in front of it, as before (its conservative input outline), placed
+      // where the ray enters the brain's box (or at the brain's nearest point).
+      let entry = Number.isFinite(cameraRange.brainNearM) ? cameraRange.brainNearM : 0;
+      if (brainDepthBounds) {
+        brainGroup.updateMatrixWorld(true);
+        const inverse = NsMirror.invertAffine(Array.from(brainGroup.matrixWorld.elements));
+        const o = NsMath.transformPoint(inverse, [rayOrigin.x, rayOrigin.y, rayOrigin.z]);
+        const d = NsMath.transformDirection(inverse, [rayDir.x, rayDir.y, rayDir.z]);
+        let a0 = 0, a1 = Infinity, meets = true;
+        for (let j = 0; j < 3; j++) {
+          if (d[j] === 0) { if (o[j] < brainDepthBounds.min[j] || o[j] > brainDepthBounds.max[j]) meets = false; continue; }
+          const a = (brainDepthBounds.min[j] - o[j]) / d[j], b = (brainDepthBounds.max[j] - o[j]) / d[j];
+          a0 = Math.max(a0, Math.min(a, b)); a1 = Math.min(a1, Math.max(a, b));
+        }
+        // An affine map keeps the ray parameter, so a0 (found in the brain's own frame) is metres along the world ray.
+        if (meets && a1 >= a0) entry = a0;
+      }
+      layers.push({ item: 'brain', kind: 'outline', distance: entry, point: [rayOrigin.x + rayDir.x * entry, rayOrigin.y + rayDir.y * entry, rayOrigin.z + rayDir.z * entry], regionId: null });
+      layers.sort((p, q) => p.distance - q.distance);
+    }
+    let mirrorInfo = null;
+    if (mirrorRoot.visible && mirror.transform && mirror.body) {
+      const env = currentMirrorEnvelope();
+      // R558: the carry moves the centre WITHOUT the push (the push slides along the ground on top of where it is carried).
+      if (env) mirrorInfo = { centreWorldM: (mirror.transform.carryCentre || mirror.transform.centre).slice(), radiusM: env.radiusM, mirrorEnvelope: env };
+    }
+    return { layers, mirror: mirrorInfo };
   }
 
-  /** R22 normal crosshair pick only. Own body and compass arrows are never graspable.
-   * Transparent glass remains an input blocker of the mirror, including when an outline projection is unavailable. */
+  /** R558 (genuine note R31: "if we tap on the body, on any muscles, those muscles will activate"): the nearest body
+   * part seen along a ray through CSS point (x, y), on your own body (trunk, legs, right arm, the in-place head seen
+   * from behind, the left arm) or on the mirror body: the first body entry of controlLayersAt. The brain's CLEAR GLASS is
+   * see-through (a body part behind it is what you see); null when nothing is hit or a MOTOR AREA of the brain is nearer
+   * along the same ray (a click on a motor area belongs to that area). Returns { ...rec, distance } (controlLayersAt).
+   * R558 (Messages 33 and 34): the controls now read controlLayersAt themselves (what is seen, or the item behind it);
+   * this is the same answer as before for what is seen. */
+  function muscleAt(x, y) {
+    const L = controlLayersAt(x, y);
+    if (!L) return null;
+    for (const l of L.layers) {
+      if (l.item === 'brain') { if (l.kind === 'area') return null; continue; }
+      return { ...l.rec, distance: l.distance };
+    }
+    return null;
+  }
+
+  /** R22 normal crosshair pick: { target: 'brain' | 'mirror' | null, blocked, pointWorldM?, centreWorldM?, radiusM?,
+   * mirrorEnvelope, source }. Compass arrows block (an arrow tip under the point is an arrow press). R558 (Messages 33
+   * and 34): the brain's clear glass no longer blocks the mirror body behind it: the nearest of the two that is SEEN wins
+   * (a motor area is seen; clear glass is seen only when nothing of the mirror body lies behind it); your own body is not
+   * an item here (ns-app controlTargets handles it). */
   function graspTargetAt(x, y) {
     if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return { target: null, blocked: 'unavailable-viewport' };
     const arrows = pickArrows(x, y);
     if (arrows.some(h => h.kind === 'arrow')) return { target: null, blocked: 'orbit-arrow' };
-    camera.updateMatrixWorld(true); brainGroup.updateMatrixWorld(true);
-    pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
-    rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
-    const brainHits = brainGroup.visible ? raycaster.intersectObjects(rayTargets || glass, false) : [];
-    let hits = [], mirrorEnvelope = null;
-    if (mirrorRoot.visible && mirror.transform && mirror.body) {
-      mirrorRoot.updateMatrixWorld(true);
-      hits = raycaster.intersectObjects([...mirrorBodyGroup.children, ...mirrorArmGroup.children], false);
-      mirrorEnvelope = currentMirrorEnvelope();
+    const L = controlLayersAt(x, y);
+    if (!L) return { target: null, blocked: 'unavailable-viewport' };
+    const env = L.mirror ? L.mirror.mirrorEnvelope : null;
+    let seenGlass = null;
+    for (const l of L.layers) {
+      if (l.item === 'own') continue;
+      if (l.item === 'brain' && l.kind !== 'area') { if (!seenGlass) seenGlass = l; continue; }
+      if (l.item === 'mirror' && L.mirror) return { target: 'mirror', blocked: null, centreWorldM: L.mirror.centreWorldM.slice(), radiusM: L.mirror.radiusM, pointWorldM: l.point, mirrorEnvelope: env, source: 'seen-mirror-ray-r558' };
+      if (l.item === 'brain') return { target: 'brain', blocked: null, pointWorldM: l.point, mirrorEnvelope: env, source: 'seen-brain-ray-r558' };
     }
-    const bh = brainHits[0] || null, mh = hits[0] || null;
-    // R558: the carry moves the centre WITHOUT the push (the push slides along the ground on top of where it is carried).
-    const mirrorPick = () => ({ target: 'mirror', blocked: null, centreWorldM: (mirror.transform.carryCentre || mirror.transform.centre).slice(), radiusM: mirrorEnvelope.radiusM,
-      pointWorldM: mh.point.toArray(), mirrorEnvelope, source: 'nearest-visible-mirror-ray/full-current-enclosure-r22-r2' });
-    // Transparent foreground brain STILL catches input; a genuinely nearer mirror is no longer caught by brain behind it.
-    if (bh) return mh && mh.distance < bh.distance ? mirrorPick() : { target: 'brain', blocked: null, pointWorldM: bh.point.toArray(), mirrorEnvelope, source: 'nearest-active-camera-brain-ray' };
-    const outline = regionMode && brainTransformSet && brainCoversRect({ x0: x - .5, y0: y - .5, x1: x + .5, y1: y + .5 });
-    if (outline) {
-      // Preserve the old outline blocker at concavities, except a mirror proved IN FRONT of the full brain AABB.
-      let entry = 0, exit = Infinity, intersects = Boolean(brainDepthBounds);
-      if (brainDepthBounds && mh) {
-        const inverse = NsMirror.invertAffine(Array.from(brainGroup.matrixWorld.elements));
-        const o = NsMath.transformPoint(inverse, [rayOrigin.x, rayOrigin.y, rayOrigin.z]);
-        const d = NsMath.transformDirection(inverse, [rayDir.x, rayDir.y, rayDir.z]);
-        for (let j = 0; j < 3; j++) {
-          if (d[j] === 0) { if (o[j] < brainDepthBounds.min[j] || o[j] > brainDepthBounds.max[j]) intersects = false; continue; }
-          const a = (brainDepthBounds.min[j] - o[j]) / d[j], b = (brainDepthBounds.max[j] - o[j]) / d[j];
-          entry = Math.max(entry, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
-        }
-        intersects = intersects && exit >= entry;
-        if (intersects && mh.distance < entry) return mirrorPick();
-      }
-      return { target: 'brain', blocked: 'brain-input-outline', mirrorEnvelope, source: 'conservative-brain-outline-input-blocker' };
-    }
-    return mh ? mirrorPick() : { target: null, blocked: null, mirrorEnvelope };
+    if (seenGlass) return { target: 'brain', blocked: null, pointWorldM: seenGlass.point, mirrorEnvelope: env, source: 'seen-brain-glass-r558' };
+    return { target: null, blocked: null, mirrorEnvelope: env };
   }
 
   /* ---- R558 (user Message 12): the three items as sets of spheres (ns-collide) -------------------------------------- */
@@ -10108,12 +10571,16 @@ export function createScene({
     };
     const tags = collisionItems.tags || (collisionItems.tags = new Map());
     const tagOf = (id, part) => { const k = `${part}|${id}`; let tg = tags.get(k); if (!tg) { tg = Object.freeze({ id, part }); tags.set(k, tg); } return tg; };
+    // R558 (performance): each record keeps the tag it was given (the same shared object as tagOf returns), so a pass
+    // does not build a text key per mesh.
+    const kept = collisionItems.tagOfRecord || (collisionItems.tagOfRecord = new WeakMap());
+    const tagFor = (rec, id, part) => { let tg = kept.get(rec); if (!tg || tg.id !== id || tg.part !== part) { tg = tagOf(id, part); kept.set(rec, tg); } return tg; };
     for (const b of body) {
       const src = b.face ? b.inPlace : b.mesh;
       if (!src) continue;
       const t = collideTable(src.userData.nsFullGeometry || src.geometry, 'body');
       if (!t) continue;
-      const tag = tagOf(b.id, 'body');
+      const tag = tagFor(b, b.id, 'body');
       own.push(reuse(src, t, src.matrixWorld.elements, 0, tag));
       if (b.mirror) twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, 0, tag));
     }
@@ -10121,7 +10588,7 @@ export function createScene({
       const t = collideTable(b.mesh.userData.nsFullGeometry || b.mesh.geometry, 'body');
       if (!t) continue;
       b.mesh.updateMatrixWorld(true);
-      const tag = tagOf(b.sourceElementId || null, 'arm');
+      const tag = tagFor(b, b.sourceElementId || null, 'arm');
       own.push(reuse(b.mesh, t, b.mesh.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag));
       if (b.mirror) { b.mirror.updateMatrixWorld(true); twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag)); }
     }
@@ -10262,7 +10729,9 @@ export function createScene({
     const core = GLOW_LINK.corePx / GLOW_LINK.haloPx;
     // R5-access A3: over the brain's drawn outline (the hull refreshed once per frame in updateGlow) only overBrainCore of
     // the core and overBrainHalo of the halo are drawn, so a link never hides the brain areas it crosses.
-    const hull = glowHull, oc = Number.isFinite(K.overBrainCore) ? K.overBrainCore : 0.5, oh = Number.isFinite(K.overBrainHalo) ? K.overBrainHalo : 0;
+    const hull = glowHull;
+    const oc = Number.isFinite(GLOW_LINK.overBrainCore) ? GLOW_LINK.overBrainCore : Number.isFinite(K.overBrainCore) ? K.overBrainCore : 0.5;
+    const oh = Number.isFinite(GLOW_LINK.overBrainHalo) ? GLOW_LINK.overBrainHalo : Number.isFinite(K.overBrainHalo) ? K.overBrainHalo : 0;
     const vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
     for (let i = 0; i <= nS; i++) {
       const px0 = curve[3 * i], py0 = curve[3 * i + 1], pz0 = curve[3 * i + 2];
@@ -10305,6 +10774,7 @@ export function createScene({
   // R558: the rims of active areas and driven muscles are set with their colours (applyRegionStyle, shadeMuscle).
   /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
   let glowHull = null, glowFlag = '';
+  const glowMirrorPoint = new THREE.Vector3();
   function updateGlow(dtMs) {
     const t0 = nowMs();
     glowState.overSamples = 0;
@@ -10343,6 +10813,10 @@ export function createScene({
     // The age of each lit area's line (from the frame it lit); an area that goes dark forgets it.
     for (const id of [...glowState.lineStart.keys()]) if (!byArea.has(id)) glowState.lineStart.delete(id);
     for (const id of byArea.keys()) if (!glowState.lineStart.has(id)) glowState.lineStart.set(id, now);
+    // R558 (Message 48): the same line to the mirror body, when it is shown (group matrices only; the twins share the
+    // pose matrix of their own-body mesh).
+    const mirrorOn = GLOW_LINK.mirror === true && byArea.size > 0 && mirrorRoot.visible && mirror.transform !== null;
+    if (mirrorOn) { mirrorRoot.updateWorldMatrix(true, false); mirrorBodyGroup.updateWorldMatrix(false, false); mirrorArmGroup.updateWorldMatrix(false, false); }
     for (const [regionId, e] of byArea) {
       const lv = e.level, rec = e.rec;
       const env = glowLineEnvelope((now - glowState.lineStart.get(regionId)) / 1000);
@@ -10352,11 +10826,12 @@ export function createScene({
       // targets -> groups (part + side), weighted centres in the player's world. R558 (FIRST_PERSON_BODY): only muscles of
       // your own body that the ordinary view draws count; the line goes to the ONE group with the most weight.
       const groups = new Map();
-      const addT = (key, w, p, own = true) => {
-        if (!own) return;
+      const addT = (key, w, p, own = true, mp = null) => {
+        if (!own && !mp) return;
         let g = groups.get(key);
-        if (!g) { g = { w: 0, x: 0, y: 0, z: 0 }; groups.set(key, g); }
-        g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2];
+        if (!g) { g = { w: 0, x: 0, y: 0, z: 0, mw: 0, mx: 0, my: 0, mz: 0 }; groups.set(key, g); }
+        if (own) { g.w += w; g.x += w * p[0]; g.y += w * p[1]; g.z += w * p[2]; }
+        if (mp) { g.mw += w; g.mx += w * mp[0]; g.my += w * mp[1]; g.mz += w * mp[2]; }
       };
       for (const link of e.links) {
         for (const [bid, w] of Object.entries(link.body)) {
@@ -10367,7 +10842,9 @@ export function createScene({
           rimMuscles++;
           pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
           const drawn = b.face ? camState.headInPlace : firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom;
-          addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn);
+          let mp = null;
+          if (mirrorOn && b.mirror) { glowMirrorPoint.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(mirrorBodyGroup.matrixWorld); mp = [glowMirrorPoint.x, glowMirrorPoint.y, glowMirrorPoint.z]; }
+          addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn, mp);
         }
         const armKeys = Object.keys(link.armKeys);
         if (armKeys.length || link.armNames.length) {
@@ -10379,16 +10856,28 @@ export function createScene({
             rimMuscles++;
             const c = armMuscleCentre(m);
             pv.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrixWorld);
-            addT('leftArm:-1', w, [pv.x, pv.y, pv.z]);
+            let mp = null;
+            if (mirrorOn) { glowMirrorPoint.set(c[0], c[1], c[2]).applyMatrix4(armGroup.matrix).applyMatrix4(mirrorArmGroup.matrixWorld); mp = [glowMirrorPoint.x, glowMirrorPoint.y, glowMirrorPoint.z]; }
+            addT('leftArm:-1', w, [pv.x, pv.y, pv.z], true, mp);
           }
         }
       }
-      let best = null;
-      for (const g of groups.values()) if (g.w > 0 && (!best || g.w > best.w)) best = g;
+      let best = null, bestM = null;
+      for (const g of groups.values()) {
+        if (g.w > 0 && (!best || g.w > best.w)) best = g;
+        if (g.mw > 0 && (!bestM || g.mw > bestM.mw)) bestM = g;
+      }
       // No line to a muscle group right at the camera (your own neck or face seen from the eyes): it would be a long
       // streak across the view toward the eye, not a pointer to the muscles.
       const b = best ? [best.x / best.w, best.y / best.w, best.z / best.w] : null;
-      if (b && Math.hypot(b[0] - camera.position.x, b[1] - camera.position.y, b[2] - camera.position.z) >= GLOW_LINK.minTargetM) {
+      // R558 (Messages 48 and 56): ONE line per lit area. It goes to the mirror body when that body is shown (the
+      // whole body is in view there, so the line reads as "this strip part drives that muscle group"); the line to
+      // your own body is drawn only when there is no mirror body (GLOW_LINK.own 'no-mirror'): from the eyes it was a
+      // long streak toward the bottom of the screen.
+      const toMirror = mirrorOn && bestM;
+      if (toMirror) emitRibbon(glowMirror, a, [bestM.mx / bestM.mw, bestM.my / bestM.mw, bestM.mz / bestM.mw], lv, phase, env * GLOW_LINK.mirrorAlpha, regionId);
+      const ownOn = GLOW_LINK.own === true || (GLOW_LINK.own === 'no-mirror' && !toMirror);
+      if (ownOn && b && Math.hypot(b[0] - camera.position.x, b[1] - camera.position.y, b[2] - camera.position.z) >= GLOW_LINK.minTargetM) {
         emitRibbon(glowOwn, a, b, lv, phase, env, regionId);
       }
     }
@@ -10643,6 +11132,7 @@ export function createScene({
     if (liteApplied !== L.lite) {
       liteApplied = L.lite;
       for (const m of glassXray) m.visible = !L.lite;
+      if (glassAll.xray) glassAll.xray.visible = !L.lite;
     }
     const lodKey = L.lod ? `${L.lod.glassMm}/${L.lod.bodyMm}/${L.lod.armMm || 0}` : '';
     // R558 (Messages 24, 29): the bodies' ink (striation, hatching, stipple) is drawn at every level without a lod
@@ -10760,6 +11250,7 @@ export function createScene({
       if (mesh.userData.nsInPlaceTwin) mesh.userData.nsInPlaceTwin.geometry = g;
     };
     for (const list of [glass, glassDepth, glassXray]) for (const m of list) swap(m, lod ? lod.glassMm : 0, st ? st.glass : null);
+    glassAllLod(lod ? lod.glassMm : 0);
     for (const b of body) swap(b.mesh, lod ? lod.bodyMm : 0, st ? st.body : null, 'body');
     // The arm (bones and CPU-skinned muscles): an index-only LOD over the unchanged (skinned) vertex buffers, only at
     // levels with armMm.
@@ -10885,6 +11376,10 @@ export function createScene({
       antialias: msaa, softwareRenderer, rendererName,
       pixelRatio: qualityPixelRatio(qState.level, deviceRatio(), maxPixelRatio), deviceRatio: deviceRatio(),
       medianFrameMs: med === null ? null : Math.round(med * 10) / 10, changes: qState.changes, lastChange: qState.lastChange,
+      // R558: a down-step that was not taken (the game's own work filled the frame, or the level is held after a step
+      // that did not help), the levels so held (controller clock, ms) and whether a step is being measured right now.
+      lastHold: qState.lastHold || null, noGainUntil: { ...(qState.noGain || {}) }, clockMs: Math.round(qState.clockMs), probing: Boolean(qState.probe),
+      busyMs: Number.isFinite(lastBusyMs) ? Math.round(lastBusyMs * 100) / 100 : null,
       buffer: cssW > 0 ? [Math.round(cssW * cssPr), Math.round(cssH * cssPr)] : null,
       lod: lodApplied ? { cellsMm: lodApplied, builtMs: lodStats[lodApplied].builtMs, glassTriangles: lodStats[lodApplied].glass.slice(), bodyTriangles: lodStats[lodApplied].body.slice(), armTriangles: lodStats[lodApplied].arm ? lodStats[lodApplied].arm.slice() : null } : null,
       // Last frame's draw calls and triangles (Three renderer.info; main pass only) and the main-thread ms of render().
@@ -10909,7 +11404,7 @@ export function createScene({
     lastSampleAt = notLive ? null : now;
     if (!notLive && sampleMs > 0 && (qState.mode === 'auto')) {
       const before = qState.level;
-      qState = stepQuality(qState, sampleMs, qualityOpts);
+      qState = stepQuality(qState, sampleMs, qualityOpts, QUALITY_LEVELS, lastBusyMs);
       if (qState.level !== before) applyQuality();
     }
     if (liteApplied === null) applyQuality();
@@ -11028,14 +11523,25 @@ export function createScene({
     // R558 BB (Message 28): the lines' supersampling follows the quality level too (ns-outline OUTLINE_AA).
     outline.setOcclusion(qState.level === 0);
     outline.setQuality(qState.level);
-    outline.render(scene, camera);
-    // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
-    const hdrOn = hdr.begin();
-    renderer.render(scene, camera);
+    // R558 (performance, P3): the scene's world matrices are brought up to date ONCE for the frame, here, instead of by
+    // the outline pass and again by the main render (each of which updated the whole graph when it found the scene's
+    // auto update on). Nothing moves between the two passes, so both see exactly the matrices they computed before.
+    const autoWorld = scene.matrixWorldAutoUpdate === true;
+    if (autoWorld) { scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false; }
+    let hdrOn = false;
+    try {
+      outline.render(scene, camera);
+      // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
+      hdrOn = hdr.begin();
+      renderer.render(scene, camera);
+    } finally { if (autoWorld) scene.matrixWorldAutoUpdate = true; }
     if (renderer.info && renderer.info.render) { mainPassInfo.calls = renderer.info.render.calls; mainPassInfo.triangles = renderer.info.render.triangles; }
     renderFaceLayer();
     if (hdrOn) hdr.end();
-    lastRenderCpuMs = nowMs() - now;
+    const end = nowMs();
+    lastRenderCpuMs = end - now;
+    // R558 (quality controller, rule a): this live frame's main-thread work, from the frame's start (ns-app) to here.
+    lastBusyMs = !notLive && opts && Number.isFinite(opts.frameStartMs) ? end - opts.frameStartMs : NaN;
   }
 
   /** Second pass for the face layer: 'ghost' with the main camera, depth-tested against the main frame (the arm in
@@ -11092,6 +11598,9 @@ export function createScene({
       materials: { bone: boneMaterial, glass: glassMaterial, glassDepth: glassDepthMaterial, glassXray: glassXrayMaterial },
       /** applied: null until the first glass compile, then whether the fresnel hook was found (Root's browser check). */
       glassRim,
+      /** R558 BB2: the brain's comic ink as plain data: areaInk (the motor areas' patch, the strip relief and its load ms)
+       * and glassFold (the glass's background fold-depth job: state, vertices, slices, work and wall ms). */
+      get brainInk() { const { token, ...gf } = glassFold; return { areaInk: { ...areaInk }, glassFold: gf }; },
       /** A2-render R1: { applied (null until the strip compiles, then whether the shader hooks were found), shimmer,
        * reducedMotion }. applied === false means the CPU vertex-colour fallback is drawn. */
       stripShader,
@@ -11180,7 +11689,7 @@ export function createScene({
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
     setMirror: setMirrorView,
     mirrorState,
-    mirrorPartAt, graspTargetAt, reconcileMirrorCarry,
+    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem,
     collisionItems, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,
@@ -11215,7 +11724,7 @@ export function createScene({
         outline: outline.state(), // R558 (Message 20): the outline pass (batch size, last ID pass draw calls and CPU ms)
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
         hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
-        leftArmRim: { ...leftArmRim }, regionBorder: { ...regionBorder }, areaInk: { ...areaInk },
+        leftArmRim: { ...leftArmRim }, regionBorder: { ...regionBorder }, areaInk: { ...areaInk }, glassFold: (({ token, ...gf }) => gf)(glassFold),
         cameraRange: { near: camera.near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, mirrorFarM: cameraRange.mirrorFarM, brainDistanceScale: brainDistK },
         armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
         arrowHover: hoverDir, mirrorArrowHover: arrowHover && arrowHover.target === 'mirror' && !arrowHover.blocked ? arrowHover.dir : null, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
@@ -11570,6 +12079,7 @@ export function createHud(hudRoot) {
   slots.limitsShort = essential;
 
   const cross = make('div', 'ns-crosshair', root);
+  let crossActive = false, crossHold = '';
   make('span', 'ns-crosshair-h', cross);
   make('span', 'ns-crosshair-v', cross);
   // A2-render R1: label of the control region under the crosshair (explicit `hover` text, else derived from `gaze`).
@@ -11620,8 +12130,11 @@ export function createHud(hudRoot) {
           if (key === 'orientationLabels') orientText[k].long = v[k]; else orientText[k].short = v[k];
           showOrientText(k, orientText[k].shortWanted);
         }
-      } else if (key === 'crosshairActive') {
-        setClass(cross, v ? 'ns-crosshair ns-crosshair-active' : 'ns-crosshair');
+      } else if (key === 'crosshairActive' || key === 'crosshairHold') {
+        // R558 (Message 48): crosshairHold '' | 'empty' | 'item': a ring closes round the crosshair while Space grips
+        // (white on nothing, the accent colour while something is held).
+        if (key === 'crosshairActive') crossActive = Boolean(v); else crossHold = v === 'item' || v === 'empty' ? v : '';
+        setClass(cross, `ns-crosshair${crossActive ? ' ns-crosshair-active' : ''}${crossHold ? ` ns-crosshair-grip${crossHold === 'item' ? ' ns-crosshair-holding' : ''}` : ''}`);
       } else if (key === 'limitsShort') {
         const t = v === null || v === undefined || String(v).trim() === '' ? HUD_LIMITS_SHORT : String(v);
         if (essential.textContent !== t) essential.textContent = t; // never hidden: empty restores the default
@@ -11922,7 +12435,11 @@ export function createHud(hudRoot) {
       }
       const show = cands.length > 0 && el.textContent !== '';
       const sideKey = k === 'right' || k === 'left';
-      if (sideKey) sideHide[k] = !show; else if (el.hidden !== !show) el.hidden = !show; // (side labels: written below, as a pair)
+      // (side labels: written below, as a pair.) R558 (performance): a front/back label with no clear place used to be
+      // shown here and hidden again a few lines down on EVERY call (two attribute writes a frame, and the page's style
+      // work with them; seen: "Back" under the status card, 182 writes in 273 frames). It is now shown only once its
+      // place is known (below); its size while hidden is the last measured one or the estimate from its text.
+      if (sideKey) sideHide[k] = !show; else if (el.hidden !== !show && (!show || !el.style)) el.hidden = !show;
       if (!show || !el.style) continue;
       let w = 0, h = 0;
       if (W > 0 && H > 0) {
@@ -12000,6 +12517,7 @@ export function createHud(hudRoot) {
       // R3-polish (labels never overlap): with no clear place (e.g. the brain dragged so its front is under the status
       // card) the label is not drawn this frame instead of being drawn over a card, a caption or the arm.
       if (!chosen && W > 0 && H > 0) { if (sideKey) sideHide[k] = true; else if (!el.hidden) el.hidden = true; continue; }
+      if (!sideKey && el.hidden) el.hidden = false;
       const use = chosen || placed[0];
       // R558 (Message 31): no level place for this second side label: the first one moves to this one's height instead
       // when one of ITS places is clear there; with neither, the two stay where they are (rare; both still shown).

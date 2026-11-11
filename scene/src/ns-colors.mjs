@@ -861,12 +861,18 @@ export function muscleToneDistance(i, j) {
 // glossier (0xdcd6cf -> 0xe1e4e7, OKLCH 0.92 0.006 240; tendonMix 0.85 -> 0.9, tendonRoughnessDrop 0.16 -> 0.2).
 // The per-muscle tones (Message 18) and the activation glow (Message 17) are kept apart from these: none of these
 // terms acts on the glow.
+// R558 (user Message 54, "it's very ugly and matte. Maybe we should add a bit of shine, a bit of glossiness"): a
+// polished finish instead of the satin one. roughness 0.6 -> 0.42 and sheenGain 0.55 -> 0.85: at 0.6 x 0.55 the
+// highlight of a belly under the key light measured about 0.035, UNDER the comic patch's highlight threshold (BODY_CEL
+// spec.bellyAt, 0.045 then), so no muscle showed any highlight at all (the matte look of the pictures); now it peaks near 0.2
+// and is tighter (the normal within about 11 degrees of the mirror direction). tendonRoughnessDrop 0.2 -> 0.1: a
+// tendon part is then at roughness 0.32, glossier than the belly without a pin-point glint.
 export const MUSCLE_LOOK = freeze({
   deepShade: 0.84, intermediateShade: 0.93,
-  roughness: 0.6,
-  tendon: freeze(hexToLinear(0xe1e4e7)), tendonMix: 0.9, tendonRoughnessDrop: 0.2,
+  roughness: 0.42,
+  tendon: freeze(hexToLinear(0xe1e4e7)), tendonMix: 0.9, tendonRoughnessDrop: 0.1,
   scatterTint: freeze([1.0, 0.76, 0.68]), scatterStrength: 0.12,
-  sheenTint: freeze([1.0, 0.95, 0.92]), sheenGain: 0.55,
+  sheenTint: freeze([1.0, 0.95, 0.92]), sheenGain: 0.85,
   creaseStrength: 0.3, creasePower: 2.8, glowCreaseRelief: 1,
   /** Fibre striation: albedo +- fibreAmp and a bump of fibreBumpM metres, streaks about fibreMm wide (source mm) along
    * each muscle's long axis, changing along it over 1 / fibreAlong streak widths; fading out from fibreFadePx streaks
@@ -903,6 +909,15 @@ export const MUSCLE_LOOK = freeze({
  *  - spec: the highlight SHAPE: the specular luminance through a step at bellyAt on a muscle belly and tendonBoneAt on
  *    a tendon part or a bone (soft half-width), times belly or tendonBone (crisp bright spots on tendon and bone, a
  *    small sheen on muscle).
+ *  - gloss (user Message 54): the polished look of the highlight. coreMul: a brighter core where the specular passes
+ *    coreMul x the shape's threshold, adding coreBelly on a muscle belly, coreTendonBone on tendon and bone; smooth /
+ *    smoothMax: the share of the real, smooth highlight kept round the two crisp steps and the most its luminance may
+ *    add (a soft falloff, so the highlight reads as gloss and not as a flat sticker); speckRad: the crisp steps fade
+ *    out where the surface normal turns by more than this many radians per pixel (gone at twice that), so a highlight
+ *    a pixel or two wide (finger bones, a far figure's bumps) is left out and nothing sparkles.
+ *  - Message 49 ("Maybe you've overdone it with the borderlands style?"): the ink inside the forms is lighter than
+ *    first drawn: mix fibre 0.3 -> 0.2, hatch 0.85 -> 0.5, stipple 0.32 -> 0.2, tendon 0.28 -> 0.18. The four tones,
+ *    the deep shadow and the outline are kept (Messages 26 and 27: the look itself is liked, deep shades stay).
  *  - ink: the style guide's near-black ink (sRGB hex). line: minSpacingPx = lines closer than this fade out (far or
  *    small figures stay clean; full from 1.6 x that), fibrePx / hatchPx = line widths in drawing-buffer pixels;
  *    farFromM / farToM: the ink also fades out with the distance from the camera, from farFromM to farToM metres, so
@@ -943,10 +958,11 @@ export const BODY_CEL = freeze({
   // spec: GGX peaks under the key measured from the materials: muscle belly (roughness 0.6) about 0.06, tendon part
   // (0.4) about 0.3, bone (boneRoughness 0.5) about 0.13. A first try (one step at 0.05, gain 1.25 on bone) turned
   // every bone face toward the headlight into a white patch that bloomed (the pelvis seen from the eyes).
-  spec: freeze({ bellyAt: 0.045, tendonBoneAt: 0.1, soft: 0.01, belly: 0.25, tendonBone: 0.35 }),
+  spec: freeze({ bellyAt: 0.05, tendonBoneAt: 0.1, soft: 0.012, belly: 0.14, tendonBone: 0.26 }),
+  gloss: freeze({ coreMul: 2.4, coreBelly: 0.24, coreTendonBone: 0.26, smooth: 0.55, smoothMax: 0.3, speckRad: 0.1 }),
   ink: 0x0b0809,
   line: freeze({ minSpacingPx: 4.5, fibrePx: 0.55, hatchPx: 0.8, farFromM: 1.0, farToM: 1.35 }),
-  mix: freeze({ fibre: 0.3, hatch: 0.85, stipple: 0.32, tendon: 0.28 }),
+  mix: freeze({ fibre: 0.2, hatch: 0.5, stipple: 0.2, tendon: 0.18 }),
   stroke: freeze({ mm: 22, inShare: 0.1, outShare: 0.16 }),
   stipple: freeze({ cellMm: 2.0, at: 0.8, minCellPx: 1.8 }),
   spacingMm: freeze({ muscle: 3.2, bone: 3.0 })
@@ -1070,137 +1086,88 @@ export function muscleTendonScale(id, look = FACE_MUSCLE_LOOK) {
 export function muscleFibreScale(id, look = FACE_MUSCLE_LOOK) { return isFaceMuscleId(id) && look.noFibre.test(id) ? 0 : 1; }
 
 // ---------------------------------------------------------------------------------------------
-// R558 (user Message 22: "the fluorescent glow up should almost look like a video game power up charge"; Message 17:
-// "clear fluorescent glow correspondence across all 3 systems during activation"): the POWER-UP CHARGE. When an area
-// switches on, the area on the brain and the muscles it drives on your body and on the mirror body run the SAME short
-// sequence in the area's colour, from one shared start time:
-//   1 charge-up (chargeS): an energy front runs along each muscle from its origin to its insertion (and on the brain
-//     area from the middle of its band out to its borders); behind the front the glow builds from chargeFrom to full
-//     strength and its colour saturates from satFrom; ahead of it the muscle shows only a faint pre-glow (aheadLevel)
-//     and mostly its resting tissue colour (aheadAlbedo); the front itself is a bright, whitened band (frontGain,
-//     frontWhite, half-width frontWidth of the length);
-//   2 peak flash: once the front arrives, the whole muscle / area flashes (rises over flashAttackS to 1 + flashGain
-//     times the settled glow, whitened by flashWhite, the muscle's halo shell bursting outward by haloBurst of its
-//     width) and settles exponentially (flashTau); on the brain area the whitening is scaled by areaWhiteScale so the
-//     area keeps its own hue at the peak;
-//   3 energised hold: while the activity holds, a gentle living pulse (pulseAmp at pulseHz, fading in after pulseInS)
-//     and a faint energy ripple running origin -> insertion every rippleS seconds (rippleGain, rippleWhite; first
-//     after rippleInS);
+// R558 (user Message 53: "instead of making it a glowing power up, level up, let's make it more of a neon fluorescent
+// flash"; Message 17: "clear fluorescent glow correspondence across all 3 systems during activation"): the NEON FLASH.
+// When an area switches on, the area on the brain and the muscles it drives on your body and on the mirror body run the
+// SAME short sequence in the area's colour, from one shared start time, like a neon tube being switched on:
+//   1 strike (strikeS): the whole muscle / area comes on at once (no front runs along it) and rises straight to the
+//     flash peak; the surface colour goes from the resting tissue colour (strikeAlbedo of the glow tint) to the tint;
+//   2 flash: at the peak the glow is 1 + flashGain times the settled glow, with a white-hot core (flashWhite; on a
+//     brain area scaled by areaWhiteScale so the area keeps its own hue) and the muscle's halo shell flaring by
+//     haloBurst of its width; it settles exponentially (flashTau);
+//   3 steady glow: while the activity holds the glow is steady, like a lit tube (no pulse, no ripple);
 //   4 fade: the glow then follows the activity down (the activity's own fade; ns-actions DISPLAY_ENVELOPE).
-// A glow that comes back within rearmS of going dark (the turns of the Space dance) carries on its hold, no new flash.
-// The STRENGTH of every phase scales with the activity (glowIntensity), so stronger activity is brighter. Opposing-
-// action hints are CALM (no charge, pulse or ripple: Messages 6 and 17, "faint"). Under prefers-reduced-motion
-// there is no front, flash, pulse or ripple: one calm ramp to the settled glow over reducedRampS.
-// powerUpEnvelope is the CPU record of the rule; powerUpGlsl emits the identical function for the shaders.
-// Timings are UI choices (a 1 s look / click pulse shows the whole charge, flash and settle), not physiology.
+// It replaces the power-up charge of Message 22 (a 0.26 s energy front, a burst, a breathing pulse and running
+// ripples), which read as a game's level-up rather than as an area switching on, and it answers at once: the glow is
+// at full strength strikeS after the activation instead of 0.26 s after it.
+// One flash per activation, never a flicker: with rechargeS an area flashes at most about 1.7 times a second (below 3
+// a second). A glow that comes back within rearmS of going dark (the turns of the Space dance) stays steady, no new
+// flash. The STRENGTH scales with the activity (glowIntensity), so stronger activity is brighter. Opposing-action hints
+// are CALM (no flash: Messages 6 and 17, "faint"). Under prefers-reduced-motion there is no flash: one calm ramp to the
+// steady glow over reducedRampS.
+// powerUpEnvelope is the CPU record of the rule; powerUpGlsl emits the identical function for the shaders. (The names
+// keep "powerUp" so the shader interface is unchanged.) Timings are UI choices, not physiology.
 export const POWER_UP = freeze({
-  chargeS: 0.26, frontWidth: 0.16, frontGain: 1.5, frontWhite: 0.45, aheadLevel: 0.1, chargeFrom: 0.3, satFrom: 0.45, aheadAlbedo: 0.2,
-  flashAttackS: 0.035, flashTau: 0.1, flashGain: 1.3, flashWhite: 0.32, haloBurst: 1.2,
-  pulseHz: 0.85, pulseAmp: 0.1, pulseInS: 0.35,
-  rippleS: 1.25, rippleWidth: 0.09, rippleGain: 0.22, rippleWhite: 0.25, rippleInS: 0.3,
+  strikeS: 0.045, strikeAlbedo: 0.2,
+  flashTau: 0.14, flashGain: 1.5, flashWhite: 0.36, haloBurst: 0.6,
   reducedRampS: 0.3,
-  /** An area (and its muscles) that lights again within rearmS seconds of going dark carries on its energised hold
-   * instead of charging and flashing again: the Space dance's levels follow each stroke's speed (a half cosine), so
-   * every limb goes dark for about 0.33 s at each turn of the slow dance (0.04 s in the fast one); without this every
-   * stroke of every limb would flash. A new look or click after a 1 s pulse has ended (dark longer than this) charges. */
+  /** An area (and its muscles) that lights again within rearmS seconds of going dark carries on its steady glow
+   * instead of flashing again: the Space dance's levels follow each stroke's speed (a half cosine), so every limb goes
+   * dark for about 0.33 s at each turn of the slow dance (0.04 s in the fast one); without this every stroke of every
+   * limb would flash. A new look or click after a 1 s pulse has ended (dark longer than this) flashes. */
   rearmS: 0.4,
   /** A new deliberate activation (a click, a muscle tap, a look held for ns-actions GAZE_DWELL.markS: one more count in
-   * activatedRegions) of an area that is STILL glowing charges it again, area and muscles together, so a second click
+   * activatedRegions) of an area that is STILL glowing flashes it again, area and muscles together, so a second click
    * is seen; not sooner than rechargeS after its last start (longer than markS 0.5 s, so the held look that lit the
-   * area does not charge it twice, and at most about 1.7 flashes a second per area, below 3 a second). */
+   * area does not flash it twice, and at most about 1.7 flashes a second per area, below 3 a second). */
   rechargeS: 0.6,
   /** A glow that shows a HELD POSTURE rather than an activation (the neck and trunk areas while the mouse look turns the
    * head, ns-app headActivity) starts already settled: its start is dated settledAgeS in the past, so it shows the
-   * energised hold (pulse and ripple) at once, with no charge front and no flash. The head is turned almost all the
-   * time, so a flash at every new turn of the head was a stream of small flashes on the neck. A click or a held look on
-   * such an area still recharges it (rechargeS) and flashes. */
+   * steady glow at once, with no flash. The head is turned almost all the time, so a flash at every new turn of the
+   * head was a stream of small flashes on the neck. A click or a held look on such an area still flashes it
+   * (rechargeS). */
   settledAgeS: 1.2,
-  /** On a brain AREA the whitening (front, flash, ripple) is scaled by this: an area's emission is about 4.5 times a
-   * muscle's (AREA_LOOK areaGain 1.35 against muscleGain 0.3) and already at full brightness, so the full whitening
-   * turned the flashing area near-white and its own hue was lost (measured in the browser: the lit left elbow area went
-   * from sRGB 127, 235, 235 settled to 232, 233, 234 at the peak). */
+  /** On a brain AREA the whitening of the flash is scaled by this: an area's emission is about 4.5 times a muscle's
+   * (AREA_LOOK areaGain 1.35 against muscleGain 0.3) and already at full brightness, so the full whitening turned the
+   * flashing area near-white and its own hue was lost (measured in the browser: the lit left elbow area went from sRGB
+   * 127, 235, 235 settled to 232, 233, 234 at the peak). */
   areaWhiteScale: 0.35
 });
-const puGauss = (d, w) => { const q = d / w; return Math.exp(-2 * q * q); };
-/** Flash amount 0..1 of the power-up at ageS seconds after the charge started (0 during the charge, calm or reduced). */
+/** Flash amount 0..1 of the neon flash at ageS seconds after the activation started (0 when calm or reduced): a
+ * straight rise over strikeS, then an exponential settle (flashTau). */
 export function powerUpFlash(ageS, { calm = false, reduced = false } = {}, p = POWER_UP) {
   if (calm || reduced) return 0;
-  const s = (Number.isFinite(ageS) ? ageS : 1e3) - p.chargeS;
-  if (s < 0) return 0;
-  return s < p.flashAttackS ? s / p.flashAttackS : Math.exp(-(s - p.flashAttackS) / p.flashTau);
+  const a = Number.isFinite(ageS) ? Math.max(0, ageS) : 1e3;
+  return a < p.strikeS ? a / p.strikeS : Math.exp(-(a - p.strikeS) / p.flashTau);
 }
-/** Power-up envelope at ageS seconds after the charge started and at u (0 = the muscle's origin / the middle of the
- * area's band, 1 = its insertion / the band's border): { gain (x the settled glow emission), white (0..1 toward white of
- * the same brightness), sat (0..1 colour saturation), albedo (0..1: share of the glow-tinted surface colour, the rest the
- * resting tissue colour), flash (0..1) }. calm: an opposing-action hint (always the settled glow); reduced:
- * prefers-reduced-motion (a calm ramp). Pure. */
+/** Neon-flash envelope at ageS seconds after the activation started: { gain (x the settled glow emission), white (0..1
+ * toward white of the same brightness), sat (colour saturation, always 1), albedo (0..1: share of the glow-tinted
+ * surface colour, the rest the resting tissue colour), flash (0..1) }. `u` (the place along the muscle or across the
+ * area's band) is not used: the whole muscle / area lights at once; the argument stays so the callers and the shaders
+ * keep one interface. calm: an opposing-action hint (always the settled glow); reduced: prefers-reduced-motion (a calm
+ * ramp). Pure. */
 export function powerUpEnvelope(ageS, u = 0.5, { calm = false, reduced = false } = {}, p = POWER_UP) {
   if (calm) return { gain: 1, white: 0, sat: 1, albedo: 1, flash: 0 };
   const a = Number.isFinite(ageS) ? Math.max(0, ageS) : 1e3;
-  const x01 = Number.isFinite(u) ? clamp01(u) : 0.5;
   if (reduced) { const r = smoothstep(0, p.reducedRampS, a); return { gain: r, white: 0, sat: 1, albedo: r, flash: 0 }; }
-  if (a < p.chargeS) {
-    const x = a / p.chargeS, w = p.frontWidth;
-    const behind = 1 - smoothstep(x - w, x + w, x01);
-    const level = p.aheadLevel + (p.chargeFrom + (1 - p.chargeFrom) * x - p.aheadLevel) * behind;
-    const front = puGauss(x01 - x, w);
-    return { gain: level + p.frontGain * front * (0.6 + 0.4 * x), white: p.frontWhite * front, sat: p.satFrom + (1 - p.satFrom) * x,
-      albedo: p.aheadAlbedo + (1 - p.aheadAlbedo) * behind, flash: 0 };
-  }
-  const s = a - p.chargeS;
   const flash = powerUpFlash(a, {}, p);
-  const pulse = 1 + p.pulseAmp * Math.sin(2 * Math.PI * p.pulseHz * (s - p.pulseInS)) * smoothstep(0.5 * p.pulseInS, p.pulseInS + 0.2, s);
-  const rs = s - p.rippleInS;
-  let ripple = 0;
-  if (rs > 0) { const ph = rs / p.rippleS - Math.floor(rs / p.rippleS); ripple = puGauss(x01 - (1.3 * ph - 0.15), p.rippleWidth) * smoothstep(0, 0.25, rs); }
-  let gain = pulse * (1 + p.flashGain * flash) + p.rippleGain * ripple, white = p.flashWhite * flash + p.rippleWhite * ripple, albedo = 1;
-  // R558 (hunt 3): the hand-off from the charge to the flash is continuous. During the flash attack the hold values are
-  // blended in from the charge's end state at this u (x = 1), so the insertion end no longer drops about 40 % in
-  // brightness, loses its white core and snaps its surface colour for a frame before the flash.
-  if (s < p.flashAttackS) {
-    const k = s / p.flashAttackS, w = p.frontWidth;
-    const be = 1 - smoothstep(1 - w, 1 + w, x01), fe = puGauss(x01 - 1, w);
-    const gEnd = p.aheadLevel + (1 - p.aheadLevel) * be + p.frontGain * fe, aEnd = p.aheadAlbedo + (1 - p.aheadAlbedo) * be;
-    gain = Math.max(gain, gEnd + (1 + p.flashGain - gEnd) * k); // toward the flash peak (1 + flashGain): no dip
-    white = Math.max(white, p.frontWhite * fe * (1 - k));
-    albedo = aEnd + (1 - aEnd) * k;
-  }
-  return { gain, white, sat: 1, albedo, flash };
+  const on = a < p.strikeS ? a / p.strikeS : 1;
+  return { gain: on * (1 + p.flashGain * flash), white: p.flashWhite * flash, sat: 1, albedo: p.strikeAlbedo + (1 - p.strikeAlbedo) * on, flash };
 }
-/** GLSL of the power-up: `vec4 <name>( float age, float u, float calm, float reduced )` -> (gain, white, sat, albedo),
+/** GLSL of the neon flash: `vec4 <name>( float age, float u, float calm, float reduced )` -> (gain, white, sat, albedo),
  * the same rule as powerUpEnvelope, and `float <name>Flash( float age, float calm, float reduced )` (powerUpFlash). */
 export function powerUpGlsl(name = 'nsPowerUp', p = POWER_UP) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('ns:colors_glsl: name must be a GLSL identifier');
   const f = glslFloat;
   return [
-    `float ${name}Gauss( float d, float w ) { float q = d / w; return exp( -2.0 * q * q ); }`,
-    `float ${name}Flash( float age, float calm, float reduced ) { if ( calm > 0.5 || reduced > 0.5 ) return 0.0; float s = age - ${f(p.chargeS)}; if ( s < 0.0 ) return 0.0; return s < ${f(p.flashAttackS)} ? s / ${f(p.flashAttackS)} : exp( -( s - ${f(p.flashAttackS)} ) / ${f(p.flashTau)} ); }`,
+    `float ${name}Flash( float age, float calm, float reduced ) { if ( calm > 0.5 || reduced > 0.5 ) return 0.0; float a = max( age, 0.0 ); return a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : exp( -( a - ${f(p.strikeS)} ) / ${f(p.flashTau)} ); }`,
     `vec4 ${name}( float age, float u, float calm, float reduced ) {`,
     '  if ( calm > 0.5 ) return vec4( 1.0, 0.0, 1.0, 1.0 );',
-    '  float a = max( age, 0.0 ); float x01 = clamp( u, 0.0, 1.0 );',
+    '  float a = max( age, 0.0 );',
     `  if ( reduced > 0.5 ) { float r = smoothstep( 0.0, ${f(p.reducedRampS)}, a ); return vec4( r, 0.0, 1.0, r ); }`,
-    `  if ( a < ${f(p.chargeS)} ) {`,
-    `    float x = a / ${f(p.chargeS)};`,
-    `    float behind = 1.0 - smoothstep( x - ${f(p.frontWidth)}, x + ${f(p.frontWidth)}, x01 );`,
-    `    float level = ${f(p.aheadLevel)} + ( ${f(p.chargeFrom)} + ${f(1 - p.chargeFrom)} * x - ${f(p.aheadLevel)} ) * behind;`,
-    `    float front = ${name}Gauss( x01 - x, ${f(p.frontWidth)} );`,
-    `    return vec4( level + ${f(p.frontGain)} * front * ( 0.6 + 0.4 * x ), ${f(p.frontWhite)} * front, ${f(p.satFrom)} + ${f(1 - p.satFrom)} * x, ${f(p.aheadAlbedo)} + ${f(1 - p.aheadAlbedo)} * behind );`,
-    '  }',
-    `  float s = a - ${f(p.chargeS)};`,
     `  float flash = ${name}Flash( a, 0.0, 0.0 );`,
-    `  float pulse = 1.0 + ${f(p.pulseAmp)} * sin( ${f(2 * Math.PI * p.pulseHz)} * ( s - ${f(p.pulseInS)} ) ) * smoothstep( ${f(0.5 * p.pulseInS)}, ${f(p.pulseInS + 0.2)}, s );`,
-    `  float rs = s - ${f(p.rippleInS)}; float ripple = 0.0;`,
-    `  if ( rs > 0.0 ) { float ph = fract( rs / ${f(p.rippleS)} ); ripple = ${name}Gauss( x01 - ( 1.3 * ph - 0.15 ), ${f(p.rippleWidth)} ) * smoothstep( 0.0, 0.25, rs ); }`,
-    `  float gain = pulse * ( 1.0 + ${f(p.flashGain)} * flash ) + ${f(p.rippleGain)} * ripple; float white = ${f(p.flashWhite)} * flash + ${f(p.rippleWhite)} * ripple; float albedo = 1.0;`,
-    `  if ( s < ${f(p.flashAttackS)} ) {`,
-    `    float k = s / ${f(p.flashAttackS)};`,
-    `    float be = 1.0 - smoothstep( ${f(1 - p.frontWidth)}, ${f(1 + p.frontWidth)}, x01 ); float fe = ${name}Gauss( x01 - 1.0, ${f(p.frontWidth)} );`,
-    `    float gEnd = ${f(p.aheadLevel)} + ${f(1 - p.aheadLevel)} * be + ${f(p.frontGain)} * fe; float aEnd = ${f(p.aheadAlbedo)} + ${f(1 - p.aheadAlbedo)} * be;`,
-    `    gain = max( gain, gEnd + ( ${f(1 + p.flashGain)} - gEnd ) * k );`,
-    `    white = max( white, ${f(p.frontWhite)} * fe * ( 1.0 - k ) );`,
-    '    albedo = aEnd + ( 1.0 - aEnd ) * k;',
-    '  }',
-    '  return vec4( gain, white, 1.0, albedo );',
+    `  float on = a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : 1.0;`,
+    `  return vec4( on * ( 1.0 + ${f(p.flashGain)} * flash ), ${f(p.flashWhite)} * flash, 1.0, ${f(p.strikeAlbedo)} + ${f(1 - p.strikeAlbedo)} * on );`,
     '}'
   ].join('\n');
 }
