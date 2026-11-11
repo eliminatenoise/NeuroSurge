@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-11-input-queue",
+  "version": "experimental-2026-11-11-capture-update",
   "experimental": true,
-  "source": "Bounded pending input, preserved below-bound records and explicit cancellation; shared fast-key failure remains unresolved",
+  "source": "Repeated captured notifications preserve heldinput; trueboundaries retainpost-callback capture observation. SharedfastSpaceW_Dcause remainsUNKNOWN.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -27,18 +27,18 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 19558,
-      "sha256": "bbe9c4837b93fc880106cf1f67006a600a3148c3f408c727bf8c4cf375831892"
+      "bytes": 19653,
+      "sha256": "325232bfb0578c8c6cd6912a6b98e90325a317448be49278f360bd3cc2727447"
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 14148,
-      "sha256": "f262ff676fafb506b480b2fbf9bb0dfe0f853f51fca2d6e109c7dbe4483d22f1"
+      "bytes": 15923,
+      "sha256": "49a707fa0195edfffd747b1165d39784e97da150cfd45089749d083c058b6479"
     },
     {
       "path": "LAUNCHERS.md",
-      "bytes": 2944,
-      "sha256": "abe446bea2dcae7f8f60a26f210e24c573727582d3427d173dc585b286fdab3b"
+      "bytes": 2947,
+      "sha256": "2dd661446be474b74c8adf033484c0d36dbae815af6a7868dcf6fba96819d6ce"
     },
     {
       "path": "LICENSE",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 5859,
-      "sha256": "e5065784a89b55089349e6457331040c9f88a26250b045200a1ade422081a2be"
+      "bytes": 6049,
+      "sha256": "efb9abf063efdbad843094caa3ca4b88e389a29426222b43455939dff7646643"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 14249,
-      "sha256": "73d615a3463ad97e08896135c0b8f7613a13b2c87624b837c8a78a228e87f796"
+      "bytes": 15495,
+      "sha256": "fb33776652a28e50bf4743f05f01cc90662e49820920459d2c38a3a723603e72"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 9498,
-      "sha256": "c27b5152e986e85ee7a6174aac147955ce352f66b2b5733d6bf37089f14bf34d"
+      "bytes": 12089,
+      "sha256": "ae2df3d50fccc3d4b13c2db3e5c861841aaec331293b4ce09f29b1a9314e16e9"
     },
     {
       "path": "README.md",
-      "bytes": 7274,
-      "sha256": "0058958a822d29f6965a3f79ac9f0d7d08224549458003f83310c04f46f1dae3"
+      "bytes": 8382,
+      "sha256": "9fb6d5e90f731d78c28e1e32dd2fc4535e6009784a3937fd0893a02789de27aa"
     },
     {
       "path": "START.html",
-      "bytes": 3731,
-      "sha256": "c74f9639ebe7af06afacafd86ad95e532bcb5fed29c938b0f7dbe777cf4c36b9"
+      "bytes": 3734,
+      "sha256": "70098e8d42ba8cd3b23d3cb7c6611fd145a6ee3cc0b70b26d29e703f7fb42d72"
     },
     {
       "path": "index.html",
@@ -97,13 +97,13 @@
     },
     {
       "path": "launchers/MANIFEST.json",
-      "bytes": 3031,
-      "sha256": "33735e36425ce4a68b835e4d607a5fe967ed8149c7b770e3f604c2b63e80e2ea"
+      "bytes": 3034,
+      "sha256": "fc41259011bca4bc57e98b6583955ae6e249a75cf7e5ba31167fef547ddc3f2b"
     },
     {
       "path": "launchers/NeuroSurge-Launchers.zip",
-      "bytes": 9868,
-      "sha256": "cc6fd45a8154205860335c5f261103397d45177128c9a3f3a6a99d34d1a6cb35"
+      "bytes": 4649,
+      "sha256": "2355938b4fca9787afe1db03a31c61b88efb2abf1b61002ab6ac547be7aae821"
     },
     {
       "path": "launchers/NeuroSurge-Linux.desktop",
@@ -122,13 +122,13 @@
     },
     {
       "path": "launchers/README.txt",
-      "bytes": 2638,
-      "sha256": "c05990d231bba1e84141ce12b67b2c2c7b21166698130697854c21d88896bfe3"
+      "bytes": 2641,
+      "sha256": "1053b120ca78845d408c9e59d44061c598f3b4e541e61246fbb28b6f68cd4c7b"
     },
     {
       "path": "launchers/SHA256SUMS",
       "bytes": 441,
-      "sha256": "53e507157257d61cb7a713a07ef7c718fe4bfe4ef1e60656edf072e39cd63ef5"
+      "sha256": "caebd215d55cfcff33b0d684a56c8611ba86ce2891cc36e11edc5d9eaf59a344"
     },
     {
       "path": "packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json",
@@ -1936,6 +1936,11 @@
       "sha256": "17a9886821357c79f46c1e4367c3546c90edc815fe70f2ce70990da60b00c248"
     },
     {
+      "path": "packets/pov-demo-assets-r2/meshes/FJ1466M.obj",
+      "bytes": 51150,
+      "sha256": "c863e99b725f694e708b560b9bf848ce4249bc512dd4d0284a79de20402f0c5f"
+    },
+    {
       "path": "packets/pov-demo-assets/meshes/FJ1467M.obj",
       "bytes": 91869,
       "sha256": "a523b5f2ab862ad6505787f4936098fbcfe3f28a3742b57aac34307fe752f8eb"
@@ -2641,11 +2646,6 @@
       "sha256": "3b327f7169609c03540967f7f8ceba810afda27a427cb5f16ea6641ef429837a"
     },
     {
-      "path": "packets/pov-demo-assets-r2/meshes/FJ1466M.obj",
-      "bytes": 51150,
-      "sha256": "c863e99b725f694e708b560b9bf848ce4249bc512dd4d0284a79de20402f0c5f"
-    },
-    {
       "path": "scene/example/configured-r281.css",
       "bytes": 19072,
       "sha256": "7454b68adef997a34adb7cfc664893bb2ddcb72cb129af8492d73aecf86694c6"
@@ -2747,8 +2747,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1610,
-      "sha256": "a92ef183395ec343665c8ccfc780be506956de9e4a8db5ffd2de5d2d188b5fc0"
+      "bytes": 1606,
+      "sha256": "ad31184928cf8d9f453d0b57179a0045481518f58a804d4106dd5195a4b99142"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -2807,8 +2807,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 68028,
-      "sha256": "553750f58312e83a72c585c0fd0cf3b9536e64c1583404d69e319e3a790a7ce7"
+      "bytes": 68449,
+      "sha256": "6b36043eef09e0cc2a2d39653b21868be245093be5eae8a983872d87825c9b44"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -2884,6 +2884,11 @@
       "path": "tests/cancel-epoch.test.mjs",
       "bytes": 9824,
       "sha256": "48dbdfaacdf18133e5a638dbf4050e734e8e67048b5b27525fcd156802316503"
+    },
+    {
+      "path": "tests/capture-boundary.test.mjs",
+      "bytes": 21133,
+      "sha256": "2ee531c215e21f99403baebe2cf35e1c9de18d5c5446d9e020b6d0485f738daa"
     },
     {
       "path": "tests/deferred-input.test.mjs",

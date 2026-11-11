@@ -1,6 +1,6 @@
 # Play NeuroSurge
 
-[Open the preview](https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html) or [save a desktop launcher](START.html). You need a keyboard and a mouse or trackpad, JavaScript and WebGL. The browser downloads the anatomy and code, then your computer runs the game. This edition is experimental-2026-11-11-input-queue.
+[Open the preview](https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html) or [save a desktop launcher](START.html). You need a keyboard and a mouse or trackpad, JavaScript and WebGL. The browser downloads the anatomy and code, then your computer runs the game. This edition is experimental-2026-11-11-capture-update.
 
 ## Get your bearings
 
@@ -44,6 +44,8 @@ The panel explains the area under your aim; I opens More detail. A persistent ac
 
 Esc shows instructions, the keyboard diagram and settings. Pausing cancels queued clicks, turns and camera requests; resuming starts with those queues clear. A canceled carry leaves the object at its saved location. Press again after resuming to begin a new gesture. Reset body requests the starting body/hand pose and clears activation marks while leaving the brain's placement. Reset brain view brings the brain back and turns the mirror to face you again. Picture quality: Low may help on a slow machine, with rougher surfaces as a tradeoff.
 
-If too many game actions are waiting, they are canceled and the game asks you to release and press again. A fast Space + W + D sequence also unexpectedly opened the hand in browser checks of both this runtime and the preceding build; later sequences worked, and the cause is unknown. Release all keys and try again if this happens.
+A repeated notice that pointer capture is still active now leaves held keys and the current gesture alone. Actual capture changes, Esc and focus loss still release them.
+
+If too many game actions are waiting, they are canceled and the game asks you to release and press again. A fast Space + W + D sequence unexpectedly opened the hand in earlier checks of the input-queue candidate and the preceding pause-update build; later sequences worked, and the cause is unknown. Release all keys and try again if this happens.
 
 A rapid second Esc worked in the earlier control-build check. Overflow/rescue, rare focus/lifecycle orders, missing key releases and movement failures still have open edge cases; if a hand stays closed, a press is lost or the scene stops responding, reload. Narrow portrait windows can fail before play begins: use a wider desktop window. Touch controls, native Windows/macOS opening, other browsers and screen readers remain unverified. [Preview notes](PREVIEW-NOTES.html) give the evidence and remaining limits.

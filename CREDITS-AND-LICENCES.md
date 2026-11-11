@@ -253,4 +253,4 @@ neural-to-muscle decoder.
 - No fonts (the game uses the system font), no images, no audio, no analytics, no trackers and no remote resources.
 - The reference images used by independent reviewers (section 1.1) are not included.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
-- Development tests, test harnesses and acquisition evidence are not part of the player distribution.
+- Private account records, unpublished test fixtures and internal review/custody files are excluded. The public `tests/` directory and the acquisition/provenance records listed above are included.

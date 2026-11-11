@@ -734,7 +734,8 @@ function uiCommandOf(el, root) {
  *     ignored, so a key released by a safety rule stays released until it is pressed again.
  *   - Chord safety: a keydown with Ctrl or Meta held, or a press/release of Ctrl/Meta itself, RELEASES EVERY KEY
  *     (queuing one space-up if Space was held) and is left to the browser. keyup is always applied.
- *   - window blur, document visibilitychange and every pointerlockchange -> release every key.
+ *   - window blur, document visibilitychange, genuine pointer-lock changes and uncaptured notifications release every key.
+ *     A repeated notification that capture is still active preserves the current input.
  *   - Pointer lock: a press (mousedown, any button) on the canvas while it is NOT locked requests the lock; that
  *     lock-acquiring press is NOT an activation click. Presses while locked queue one click each. After the lock
  *     is refused (pointerlockerror, a rejected request, or no answer within LOCK_PENDING_MS) unlocked presses DO
@@ -974,6 +975,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   on(view, 'blur', releaseAll);
   on(doc, 'visibilitychange', releaseAll);
   on(doc, 'pointerlockchange', e => {
+    // A repeated captured notification is not a new input boundary. Keep held keys and the current gesture;
+    // genuine acquisition/loss below still safety-releases them, as do Escape, focus and visibility changes.
+    if (isLocked() && locked) { lockPending = false; lockFallback = false; return; }
     releaseAll(e);
     lockPending = false;
     dragging = false;

@@ -6,15 +6,17 @@ Look at a coloured area of the brain and watch the game's linked movement. Click
 
 The brain and muscle activity values are **simulated and unitless**. The anatomy comes from human atlases. The movements come from game rules, not a person's neural recordings or a trained decoder. A muscle click selects a representative movement area and its muscle group; it does not locate a precise brain site for that muscle. Joint motion, muscle deformation and the links between body parts remain simplified.
 
-This package is **experimental-2026-11-11-input-queue**. A refused movement frame can leave actions waiting for another attempt. The game now keeps the whole pending list, in its original order, within a combined limit of 64 game-event records. Above that limit it cancels the waiting input deliberately, asks you to release and press again, and marks a safety release at the time of cancellation. It does not silently keep the beginning of the queue and lose its end.
+This package is **experimental-2026-11-11-capture-update**. A repeated browser notification used to clear held keys even when pointer capture was still active. The controller now keeps those keys and the current pointer gesture when it observes that same captured state again. A genuine capture change, Esc, a modifier shortcut or focus loss still releases held controls. This is a repair to one software boundary; the earlier fast Space + W + D failure has no confirmed cause.
+
+The earlier queue repair remains. A refused movement frame can leave actions waiting for another attempt. The game now keeps the whole pending list, in its original order, within a combined limit of 64 game-event records. Above that limit it cancels the waiting input deliberately, asks you to release and press again, and marks a safety release at the time of cancellation. It does not silently keep the beginning of the queue and lose its end.
 
 The count is checked before input records are copied into the frame, assigned simulation offsets or used to plan a view. The existing long-skip rescue also cancels old input explicitly. Neither cancellation recovers the original time of a missing release. Click recording has its own earlier limit, so this is not proof that every physical input was captured or delivered.
 
 Pause and pointer-release repairs remain. Pausing clears queued clicks, turns and camera requests; a canceled carry keeps its saved placement. The earlier repair also ends a stale pointer gesture when the browser reports no buttons held. The exact movement, timing and scientific limits below remain open.
 
-Browser testing exposed an unresolved input problem in both this repaired runtime and the preceding live build: shortly after pointer capture, one fast Space + W + D sequence unexpectedly released Space while W and D stayed held. Later staggered sequences worked. The cause is unknown; the queue-overflow handler did not fire. Full simultaneous-key behavior is therefore unverified. Release all keys and try again if the hand opens unexpectedly.
+Earlier browser testing exposed an unresolved input problem in the input-queue candidate and the preceding pause-update build: shortly after pointer capture, one fast Space + W + D sequence unexpectedly released Space while W and D stayed held. Later staggered sequences worked. The cause is unknown; the queue-overflow handler did not fire. Full simultaneous-key behavior is therefore unverified. Release all keys and try again if the hand opens unexpectedly.
 
-Other sampled observations included Space alone, arrow hold/release, E in both directions and a modifier-key safety release, with no reported game error. A running scene is not a pass of every control. The new overflow and long-skip rescue branches have not been captured in an ordinary browser run.
+In the preceding candidate’s local browser check, eight sampled states covered capture, Space with W and D, modifier-key release, a fresh Space press/release and Esc pause/resume. They stayed running without a reported game error. No repeated captured notification was identified in that run. Earlier observations also included arrow hold/release and E in both directions. A running scene is not a pass of every control. The new overflow and long-skip rescue branches have not been captured in an ordinary browser run.
 
 ## Try the controls
 
@@ -36,13 +38,16 @@ Download and extract the [repository source ZIP](https://github.com/eliminatenoi
 
 ## Check the controls
 
+The new capture-boundary suite passed 64 named cases. The existing 11 queue, 13 cancellation and 40 pointer cases also passed with the corrected controller: 128 current software cases in total. These are supplied-data checks, not native event coverage.
+
 Run these from the repository folder:
 
+- `node tests/capture-boundary.test.mjs`: 64 named capture-boundary cases, including two synchronous callback cases.
 - `node tests/deferred-input.test.mjs`: 11 named cases, including 25 capacity combinations and 64 keyboard/tail-order subcases.
 - `node tests/cancel-epoch.test.mjs`: 13 named cases, including 128 keyboard-state combinations.
 - `node tests/pointer-release.test.mjs`: 40 named cases for pointer-release and gesture behavior.
 
-All 64 named cases passed with the repaired controller and helpers. The three suites use software event records and plain listener-container doubles for the public input adapter. They do not load the full application, renderer or physiological model. The large-count checks use a proxy that refuses record access; they do not allocate or process a billion real inputs. Syntax checks also passed for the application and text module. A later source correction changed three comments only; executable and test evidence was retained with exact hashes.
+All 128 named cases passed with the corrected controller and helpers. The four suites use software event records and plain listener-container doubles for the public input adapter. They do not load the full application, renderer or physiological model. The large-count checks use a proxy that refuses record access; they do not allocate or process a billion real inputs. Syntax checks also passed for the application and text module. A historical three-comment correction in the queue repair left executable and test bytes unchanged. The current 64-case capture-boundary suite is listed above.
 
 These checks establish bounded software behavior. They do not measure physical releases, displayed pixels or biological activity, and they do not resolve the browser chord failure above. The original timing and naturally missed mouse-up checks remain open.
 
