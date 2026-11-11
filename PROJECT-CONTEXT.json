@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-11-pointer-release",
+  "version": "experimental-2026-11-11-pause-update",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -13,7 +13,7 @@
   "play_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
   "start_url": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/START.html",
   "canonical_source": "https://github.com/eliminatenoise/NeuroSurge",
-  "source_lineage": "Pointer-release and gesture-cancellation repair on the control-update edition. Anatomy assets and the movement model are unchanged. A self-contained software controls suite is included.",
+  "source_lineage": "Pause/input cancellation on the pointer-release edition. App, Controls and a new pure cancellation helper changed; anatomy, solver limits and movement laws are unchanged.",
   "anatomy_assets": "490 human-anatomy OBJ files retained. BodyParts3D is CC BY 4.0; Z-Anatomy facial derivatives are CC BY-SA 4.0. Runtime transforms, deformation, colouring, shading and separated layers are display changes, not physiological validation.",
   "code_licence": "Project-owned contributions: CC0-1.0. Third-party material retains its own licences and notices.",
   "credits": "CREDITS-AND-LICENCES.md",
@@ -23,7 +23,7 @@
     "Release coalescing can substitute an unstamped safety release, changing original event timing/order.",
     "The waiting-input queue retains its first 64 events and can lose a later release.",
     "Late model/scene/output/render failures can leave state and display out of step.",
-    "Pausing between updates can leave fresh or deferred events to replay. Other missing-input browser cases remain unqualified.",
+    "Rare pause/focus/lifecycle orders and missing-input browser cases need broader native coverage; source cancellation is not full event-order acceptance.",
     "Camera rollback evidence covers the whole-arm route only; natural failure branches remain untested.",
     "Near/far endpoints, diagonal carrying, full-arm borders and the upper-quarter hand anchor need broader current checks.",
     "Muscle surfaces remain splotchy/jagged; body/brain layout is crowded and a slow-render notice remains.",
@@ -53,7 +53,28 @@
     },
     "arrows": "Two ordinary right-arrow clicks changed the brain transform while all four recorded nominal CPU arrow anchors and the brain centre stayed exact in that case. Not GPU-buffer, pixel, every-arrow or all-view proof."
   },
-  "browser_verification": {
+  "previous_pointer_software_verification": {
+    "suite": "tests/pointer-release.test.mjs",
+    "Node_version_tested": "26.8.2",
+    "cases": 40,
+    "patched_controller_failures": 0,
+    "previous_controller_failures": 20,
+    "keyboard_masks": 32,
+    "pointer_modes_for_key_preservation": 4,
+    "portable_entrypoint_passed": true,
+    "scope": "In-memory event records through the full public controls factory; no browser, rendered pixels or biological validation. Optional API variants are source-reviewed only.",
+    "current_package_execution": "Historical pointer edition results;40-case suite not rerun for this package."
+  },
+  "software_verification": {
+    "suite": "tests/cancel-epoch.test.mjs",
+    "Node_version_tested": "26.8.2",
+    "named_cases": 13,
+    "keyboard_state_subcases": 128,
+    "failures": 0,
+    "scope": "Pure Controls/math and cancellation helpers only; no full App/DOM/browser/actions/model import. App grammar and independent source review passed.",
+    "portable_entrypoint": "Two relative imports adapted; standalone package grammar and13/128 pure cases passed."
+  },
+  "previous_pointer_browser_verification": {
     "status": "bounded ordinary desktop Chromium check of this pointer-release package",
     "states": [
       "initial play",
@@ -71,15 +92,22 @@
     "native_missing_mouseup_branch": "not established; software-state coverage only",
     "input_to_display_100ms_pass": false
   },
-  "software_verification": {
-    "suite": "tests/pointer-release.test.mjs",
-    "Node_version_tested": "26.8.2",
-    "cases": 40,
-    "patched_controller_failures": 0,
-    "previous_controller_failures": 20,
-    "keyboard_masks": 32,
-    "pointer_modes_for_key_preservation": 4,
-    "portable_entrypoint_passed": true,
-    "scope": "In-memory event records through the full public controls factory; no browser, rendered pixels or biological validation. Optional API variants are source-reviewed only."
+  "browser_verification": {
+    "scope": "One desktop Chromium ordinary check of the same repaired runtime;15 sampled states running with no reported error.",
+    "observed": [
+      "Actual pointer capture",
+      "Brain carry with small look, pause and resume; saved brain pivot and angular placement exact across that case",
+      "Arrow hold interrupted by pause; no extra orbit on resume; fresh click press2->3/orbit1->2",
+      "E first-third-first",
+      "Visible Reset body command and resume"
+    ],
+    "not_established": [
+      "Zero-paused-animation-callback capture",
+      "Other focus/visibility/pagehide/stop/reset-brain/mirror-carry paths",
+      "Natural missingrelease/overflow/latefailure/graphicscontextloss",
+      "Physical GPU/pixel/original timing/full mechanics/biological acceptance",
+      "Exact requested Reset body pose and activation-reset result; only visible command/cancellation/resume observed"
+    ],
+    "input_to_display_100ms_pass": false
   }
 }

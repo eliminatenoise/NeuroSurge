@@ -767,7 +767,9 @@ function uiCommandOf(el, root) {
  *   sensitivity, invertY, dragToLook = true, uiRoot }
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
  * @returns {() => void} unbind, which removes every listener this call added. unbind.status() returns
- *   { locked, lockFallback, dragging, arrowPress } for HUD feedback.
+ *   { locked, lockFallback, dragging, arrowPress } for HUD feedback. unbind.cancelInput(timeMs) synchronously
+ *   clears private pointer gesture flags and releases reducer-held input at the caller's observation time.
+ *   It neither clicks nor cancels an outstanding browser pointer-lock request.
  */
 export function bindDom(target, controls, getState, setState, options = {}) {
   if (!target || typeof target.addEventListener !== 'function') {
@@ -822,7 +824,8 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
-  const releaseAll = (e, at = eventTime(e)) => { clearPointerFlags(); apply(s => controls.blur(s, at)); };
+  const cancelBoundInput = at => { clearPointerFlags(); apply(s => controls.blur(s, at)); };
+  const releaseAll = (e, at = eventTime(e)) => cancelBoundInput(at);
   const call = (fn, ...args) => {
     if (!fn) return;
     try { fn(...args); } catch { /* a HUD callback must never break input handling */ }
@@ -1090,6 +1093,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     for (const [obj, type, fn] of added.splice(0)) obj.removeEventListener(type, fn);
     dragging = false;
   }
+  // The App owns pause/reset boundaries; only this binding can clear its private gesture flags.
+  // Keep outstanding pointer-lock requests and their normal browser acknowledgements intact.
+  unbind.cancelInput = at => cancelBoundInput(Number.isFinite(at) ? at : eventTime(null));
   unbind.status = () => ({ locked: isLocked(), lockFallback, dragging, arrowPress, pressDrag });
   return unbind;
 }

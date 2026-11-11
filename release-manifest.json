@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-11-pointer-release",
+  "version": "experimental-2026-11-11-pause-update",
   "experimental": true,
-  "source": "Pointer-release cancellation update with self-contained controls tests and explicit limits",
+  "source": "Synchronous pause/input cancellation and carry-anchor release; experimental with explicit limits",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,13 +32,13 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 9876,
-      "sha256": "26caaff30f6e52295a2074efe11e3fa2e83ae3494a7239b234205cea2b9a7b88"
+      "bytes": 11735,
+      "sha256": "f162cc56b6596f84e1da672b971431305da1e82141b2a0739c70bca56469332f"
     },
     {
       "path": "LAUNCHERS.md",
-      "bytes": 2948,
-      "sha256": "c36b95089eef0fd06e527d8c85b066e2c6c04a9985a61076ea85131811969986"
+      "bytes": 2945,
+      "sha256": "eb0fd78a8774260fcafacda2d6433ba3b6236703b96083d1310b16be9497d847"
     },
     {
       "path": "LICENSE",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 5292,
-      "sha256": "b993f9a16fc59ac9ceccd787b5270fdb85f825011002eb5d8644d0b1301be73f"
+      "bytes": 5538,
+      "sha256": "7ee22112e5a4ea94064be06f72d5da8353769f2487c330c59a3950f7dff1c7f8"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 10317,
-      "sha256": "67d7c36b1e5862eaef354f99592cf8b1d0cc3a3bc36cd6956510a78c6977fe96"
+      "bytes": 11871,
+      "sha256": "6c324e0bb886072920aa18155e0a8054a5b7f2afb365ed1a38c0187bd2ef62d3"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 5657,
-      "sha256": "bac345e5f7a67619dd71e96a7d5b96e0379c158bdcbccb402c653964808de621"
+      "bytes": 7270,
+      "sha256": "af2c02b0a9852e2ca779aba978335ebbca7a443c49708bd355981b7e2a282b1a"
     },
     {
       "path": "README.md",
-      "bytes": 6474,
-      "sha256": "4b5a02806a69bf97d6c068a2c76b62ae146d9b3a403a9e6330faa58f81c50ac9"
+      "bytes": 6734,
+      "sha256": "8684204ef659edf86c7358dec19696acf1b07df4b5025c82c5cb69a26b1d03fd"
     },
     {
       "path": "START.html",
-      "bytes": 3735,
-      "sha256": "eb582c083ca6a571301c97dfba9de2f0a832802f3e7289f82fd4d1f51a583d8c"
+      "bytes": 3732,
+      "sha256": "8a3e844495fce1f09e24444d761b8121095c3f9669171683e0292c2c9215c2bf"
     },
     {
       "path": "index.html",
@@ -97,13 +97,13 @@
     },
     {
       "path": "launchers/MANIFEST.json",
-      "bytes": 3035,
-      "sha256": "354a476597c1febdee5e41c7eea0f8bba664ece61f948e96606bd9db9db697e3"
+      "bytes": 3032,
+      "sha256": "f182f767bc3c54c95bf78848ea2a0e405bf28faa0d58bee9afcc0eb240d88c24"
     },
     {
       "path": "launchers/NeuroSurge-Launchers.zip",
-      "bytes": 9872,
-      "sha256": "52ed75911b43d6156bfdc8dce6ebf9e68049956a7aaa04f222e57c34ce423c5f"
+      "bytes": 9869,
+      "sha256": "30e2ffd2be97c6e8dd3ac21605c75f9e3241965d89dc128d35ef163fe2401e25"
     },
     {
       "path": "launchers/NeuroSurge-Linux.desktop",
@@ -122,13 +122,13 @@
     },
     {
       "path": "launchers/README.txt",
-      "bytes": 2642,
-      "sha256": "3506893e56f7f061fbc542401332718b023f01f62076851246f27ff8daf39eff"
+      "bytes": 2639,
+      "sha256": "2c932d4e2d72db39dcac6a373e9127ae0765b38342313845c1a9882435f12757"
     },
     {
       "path": "launchers/SHA256SUMS",
       "bytes": 441,
-      "sha256": "8607bb2917382f1b40a5a52254feb220e5a466bbe8caa93c8fc2580d3e3213a7"
+      "sha256": "6ad17afa3fb8df4d52c52e15df20f034ab88c6561e175d93af19305dbe32b188"
     },
     {
       "path": "packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json",
@@ -2747,8 +2747,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1606,
-      "sha256": "e0b238134a4989070f29522557bfa03f19d1df1112a2ba0050a8ad176f4db4f5"
+      "bytes": 1604,
+      "sha256": "92cfac3b945934de65969697677e7f646fbd0e3c589ccf6be9d9057c73c20c1b"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -2757,8 +2757,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 393935,
-      "sha256": "8450f11af347e6a1091baa312daf7f6b934bb0f6b7c547646fe781ed657cb8da"
+      "bytes": 396564,
+      "sha256": "d7c2aa2ff0758551e33bfd2ee691a51fa1d82cde78d3d8982f96f6b1850c4e51"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -2807,13 +2807,18 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 66399,
-      "sha256": "887a14b340828cd62045d78b5f4b0a740c984431bdcec8651d626a9b741ba7e8"
+      "bytes": 66965,
+      "sha256": "ab9e4687e08e11d3eac6219218c8ddfcc36c3d180b6a8afb16d842327f7b3212"
     },
     {
       "path": "scene/src/ns-guide.mjs",
       "bytes": 31475,
       "sha256": "9e49a975cafcd237a6f97d8d1b67ccc1f1948a1b8bab33882a6ff3b9a5221aa0"
+    },
+    {
+      "path": "scene/src/ns-input-epoch.mjs",
+      "bytes": 2130,
+      "sha256": "df50356519cbfd5ed2b68a72934d008a0cc6958251dbdac0c0bb704b011d1191"
     },
     {
       "path": "scene/src/ns-math.mjs",
@@ -2874,6 +2879,11 @@
       "path": "serve-local.mjs",
       "bytes": 13366,
       "sha256": "961f50c5be4c8993db667a38516feeb6bd0092861a513e0f36eaaec9b2435df1"
+    },
+    {
+      "path": "tests/cancel-epoch.test.mjs",
+      "bytes": 9824,
+      "sha256": "48dbdfaacdf18133e5a638dbf4050e734e8e67048b5b27525fcd156802316503"
     },
     {
       "path": "tests/pointer-release.test.mjs",

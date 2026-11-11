@@ -90,6 +90,7 @@ import * as NM from './ns-mirror.mjs';
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
 import * as ReferenceGraph from './ns-reference-graph.mjs';
+import { cancelControlsEpoch, cancelCarryLatches } from './ns-input-epoch.mjs';
 import { arrowPickPoint, arrowPressPoint, initialArrowInput, stepArrowInput, resolveArrowHit, ARROW_COVERED_HINT } from './ns-controls.mjs';
 import { startPacketStream, packetFrameBox, packetAppInputs, mergeAppInputs, streamShoulderGirdleAssets, shoulderGirdleAppInputs, FACE_PACKET as FACE_PACKET_ID } from './ns-assets.mjs';
 import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED } from './ns-arm.mjs';
@@ -3571,6 +3572,8 @@ export function start(params = {}) {
   let lastGoodLook = null, lookBlock = null, reachBlock = null; // R558: the last look that was shown; short-lived learned look / reach limits
   let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
   const orbitQueue = [];
+  let viewRequests = 0; // also owned by synchronous pause/lifecycle cancellation
+  const inputCancellation = { count: 0, last: null };
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
   let bodyArmBridge = null, bodyBridgeState = Object.freeze({ state: 'not-ready', normalMechanics: 'UNVERIFIED' });
@@ -3697,14 +3700,41 @@ export function start(params = {}) {
   }
 
   /** Release every held key (one space-up is queued when Space was held, so the fist opens on resume). */
-  function releaseInputs() {
-    if (controlsApi && cs) cs = controlsApi.blur(cs, clockMs());
+  function releaseInputs(atMs = clockMs()) {
+    if (controlsApi && cs) cs = controlsApi.blur(cs, atMs);
     // Clear only the new carry latch at the existing safety/stop boundary, with no model or clock advance.
     // Existing queued Space-up still owns actual opening/double-tap cleanup on the next activity step.
     if (simState && simState.objectCarry) {
       simState = { ...simState, objectCarry: ReferenceGraph.clearObjectCarry(simState.objectCarry) };
       current = { ...current, state: simState };
     }
+  }
+
+  /** End an input epoch synchronously. A paused animation frame is never required for cancellation. */
+  function cancelPendingGameplay(reason) {
+    const atMs = clockMs();
+    const before = cs;
+    const canceled = {
+      carriedEvents: carryRawEvents.length, orbitRequests: orbitQueue.length, viewRequests,
+      carriedDrag: carryDrag ? carryDrag.target : null
+    };
+    // No reducer can clear bindDom's private press/drag flags. Do that through its existing owned handle.
+    if (unbind && typeof unbind.cancelInput === 'function') unbind.cancelInput(atMs);
+    releaseInputs(atMs);
+    // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
+    simState = cancelCarryLatches(simState);
+    seedNext = true;
+    if (controlsApi && before) {
+      const next = cancelControlsEpoch(controlsApi, before, { timeMs: atMs, reason });
+      cs = next.state;
+      inputCancellation.last = { ...next.canceled, ...canceled };
+      inputCancellation.count++;
+    }
+    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0;
+    const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
+    arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
+    try { callScene('setArrowHover', null); } catch { /* highlight only */ }
+    current = { ...current, state: simState, controls: cs };
   }
 
   // Look settings: when the controls reducer owns sensitivity / invert-Y (ns-controls setLookOptions), they are applied
@@ -3748,8 +3778,13 @@ export function start(params = {}) {
     if (after === before) return;
     shellState = after;
     syncActivityPause();
-    if (before.mode === 'playing' && after.mode !== 'playing') releaseInputs();
+    // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
+    // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
+    if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
+    if (before.mode === 'playing' && after.mode !== 'playing') cancelPendingGameplay('leave-playing');
     if (after.mode === 'playing' && before.mode !== 'playing') {
+      // Commands or gesture flags acquired behind an overlay cannot enter the new playing epoch.
+      cancelPendingGameplay('enter-playing');
       lastMs = null; // the first live frame after a frozen period has dt 0
       try { canvas.focus({ preventScroll: true }); } catch { /* focus is a convenience */ }
     }
@@ -3861,6 +3896,7 @@ export function start(params = {}) {
 
   function resetBody() {
     if (!sim || !simState) return false;
+    cancelPendingGameplay('reset-body');
     simState = sim.resetBody(simState);
     seedNext = true;          // the next frame seeds the gaze silently: a reset never starts a pulse
     renderRequested = true;
@@ -3871,9 +3907,10 @@ export function start(params = {}) {
   }
   function resetBrainView() {
     if (!sim || !simState) return false;
+    cancelPendingGameplay('reset-brain');
     simState = sim.resetBrainView(simState);
     mirrorView = NM.resetMirror(mirrorView);
-    arrowInput = initialArrowInput(); applyMirrorView();
+    applyMirrorView(); // cancelPendingGameplay already ended the hold and retained the press sequence
     seedNext = true;
     renderRequested = true;
     current = { ...current, state: simState };
@@ -3944,10 +3981,10 @@ export function start(params = {}) {
   listen(view, 'keydown', nativeEscapeDown, true);
   listen(view, 'keyup', nativeEscapeUp, true);
   // A focus/visibility change is not an Escape release. Invalidate only this private proof and retain the
-  // guarded fallback; existing ns-controls listeners continue to own the safety releases of gameplay input.
-  listen(view, 'blur', clearNativeEscape);
-  listen(doc, 'visibilitychange', clearNativeEscape);
-  listen(view, 'pagehide', clearNativeEscape);
+  // guarded fallback. The App cancels pending GAME queues; the binding also clears its private gesture flags.
+  listen(view, 'blur', () => { clearNativeEscape(); cancelPendingGameplay('blur'); });
+  listen(doc, 'visibilitychange', () => { clearNativeEscape(); cancelPendingGameplay('visibility'); });
+  listen(view, 'pagehide', () => { clearNativeEscape(); cancelPendingGameplay('pagehide'); });
   // Orbit arrows drawn by ns-scene-three may announce clicks as a document CustomEvent.
   listen(doc, 'ns-orbit', e => { const d = e && e.detail ? e.detail : null; if (d) orbitHandler(d.dir, d); });
 
@@ -4038,7 +4075,7 @@ export function start(params = {}) {
     let fullBodyCompletion = null;
     try {
       // R281: finishBody can run before the first frame; initialize its shared caches before that early await.
-      let brainKey = null, bodyKey = null, bodyDriveKey = null, viewRequests = 0, guideView = 'first';
+      let brainKey = null, bodyKey = null, bodyDriveKey = null, guideView = 'first';
       // R4-integrator (D8): the saved Picture quality is known before the WebGL context exists (MSAA is decided then).
       // Under ?qa=1 the scene picks its own deterministic default (High on a real GPU), unless QA settings() set one.
       scene = createScene({ THREE, canvas, onOrbit: orbitHandler, ...(graphOptionPreflight ? { fovYDeg: graphOptionPreflight.fovYDeg } : {}), ...(qaEnabled ? {} : { quality: settings.quality }) });
@@ -4247,6 +4284,7 @@ export function start(params = {}) {
       const gated = Object.freeze({
         ...base,
         keyDown: (s, code, t) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t) : s),
+        buttonDown: (s, t, o) => (shellIsPlaying(shellState) ? base.buttonDown(s, t, o) : s),
         click: (s, t) => (shellIsPlaying(shellState) ? base.click(s, t) : s),
         // R558 (R31): a drag on the brain or the mirror body can only begin while playing.
         dragStart: (s, target) => (shellIsPlaying(shellState) && typeof base.dragStart === 'function' ? base.dragStart(s, target) : s),
@@ -4265,7 +4303,7 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31): what a new press would drag, at the pointer (free mouse) or at the crosshair (x, y null: captured).
         // The same pick as the Space grasp: an arrow under the point is an arrow press, the brain in front of the mirror
         // body takes the press, and while Space holds an item the press never starts a turn (carrying comes first).
@@ -5239,7 +5277,7 @@ export function start(params = {}) {
     if (stopped) return;
     clearNativeEscape();
     stopped = true;
-    releaseInputs();
+    cancelPendingGameplay('stop');
     cancelOwnedStreams();
     phase = failed ? 'error' : 'stopped';
     if (raf && typeof view.cancelAnimationFrame === 'function') view.cancelAnimationFrame(raf);
@@ -5260,7 +5298,7 @@ export function start(params = {}) {
   function suspend() {
     if (stopped) return;
     clearNativeEscape();
-    releaseInputs();
+    cancelPendingGameplay('suspend');
     exitLock();
     dispatch({ type: 'pause' });
     hold('lifecycle');
@@ -5353,6 +5391,7 @@ export function start(params = {}) {
       phase, error: lastError, placeholder: isPlaceholder, qa: qaEnabled, frames, loop: { held: [...holds] },
       shell: shellState, settings, pointerLocked: lockedNow(),
       state: current.state, controls: current.controls,
+      inputCancellation: plainCopy(inputCancellation),
       // Opt-in copied producer/readback data; no model, clock or renderer write.
       graspTrace: options && options.graspTrace === true ? (() => {
         const out = current.out;
