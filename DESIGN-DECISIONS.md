@@ -301,7 +301,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 **The notes.** "The mirror body should literally be a 1:1 perpendicular perfect reflection and it needs to be coming from the exact same reflection angle at the beginning until manipulated." "If we imagine an invisible ground, the mirror body should be touching the same ground. The ground is flat and has no incline or decline whatsoever. The arm placement and shoulder extension from the mirror often does not match your own, with the mirror's arm being much much higher."
 
-**Decision.** At the start, and after a reset, the mirror body is the exact image of the own body in a vertical plane 5 cm beyond the foremost drawn point (0.85 m from the eye). The largest matrix difference from a pure reflection is 0; the determinant is -1 and the scale exactly 1. The lowest points of both bodies are at the same height to 0.0 mm through turns, pushes and carries, and the mirror is never tilted. Its top and bottom arrows and up/down drags slide it along the ground rather than tipping it. Its placement no longer depends on the brain.
+**Decision.** At the start, and after a reset, the mirror body is the exact image of the own body in a vertical plane 5 cm beyond the foremost drawn point (0.85 m from the eye). The largest matrix difference from a pure reflection is 0; the determinant is -1 and the scale exactly 1. The lowest points of both bodies are at the same height to 0.0 mm through turns, pushes and carries, and the mirror is never tilted. Its top and bottom arrows and up/down drags slide it along the ground rather than tipping it. Its placement no longer depends on the brain. (Changed in 73: the top and bottom arrows and up/down drags now tilt it, and only when the player asks.)
 
 **The arm.** The mirror arm matched the drawn arm to 0.0 mm. The "much higher" arm was the drawn left arm itself, pinned high on the screen; that is fixed in 25.
 
@@ -382,7 +382,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 **Performance.** The checks first cost the Space dance half its frame rate (60 to 27 fps). Rewriting the gap search into exact squared comparisons with pair pruning, and reusing unchanged collision entries, brought it back to about 47 fps. The gap search returned identical results on 900 random cases. More work toward 60 is under way.
 
-**Limits.** At the start the literal mirror image covers two of the strip's foot and ankle areas from the look; sliding the mirror back or turning the brain reveals them. Moving either by default would break the literal reflection or the full-width strip. The fixes from the second issue hunt are listed in 39.
+**Limits.** At the start the literal mirror image covers two of the strip's foot and ankle areas from the look; sliding the mirror back (since 73: carrying it back) or turning the brain reveals them. Moving either by default would break the literal reflection or the full-width strip. The fixes from the second issue hunt are listed in 39.
 
 ## 34. More activation points, symmetric, with full ranges
 
@@ -1056,6 +1056,81 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Holding, carrying, the limb turn and the view over the shoulder still drop frames. One carrying frame in one run took 67 ms. Message 42 stays open.
 - One machine, one browser.
 
+## 72. The left shoulder's muscles stay on the shoulder
+
+**The notes.** Message 36: "Now there seems to be a problem with the shoulder muscle jutting out." and, after it, "It looks to me the shoulder problem is should problem is on the left shoulder." Message 48: "And the shoulder literally detaches when you look to the far left, and the socket rips open and dislocates."
+
+**What was wrong.** Your left arm is its own model. The hand is held at a place in the view and the arm is worked out from there back to the shoulder. Every muscle of that arm moved with one or two of its bones, and the muscles round the shoulder (the three parts of the deltoid and the short muscles under them) moved rigidly with the upper-arm bone. On a body those muscles begin on the collarbone and the shoulder blade, which stay with the chest. So when the upper arm swung far from its rest direction, the top of the shoulder muscle swung away with it. Over 61 looks, each held still and measured, the place where the deltoid begins moved between 0.7 and 9.5 cm against the chest. At a far-left look that showed as a shoulder standing off the trunk with an open end. At a look to the left and down it showed as a pointed fin of muscle beside the view, at rest and during the limb turn.
+
+**Decision.**
+- The pose of the arm now also carries the frame of the chest: the trunk's orientation, placed so that the shoulder joint is where the arm has it (`chestMatrix` in ns-arm).
+- Each point of an arm muscle that moved with the upper-arm bone gets a place along the upper arm (`SHOULDER_SKIN` and `skinWeights` in ns-rig). From 35 mm above the centre of the shoulder joint upward it follows the chest. From 130 mm below the centre, about where the deltoid ends on the bone, it follows the upper-arm bone as before.
+- Between those two, the upper arm's rotation against the chest is taken up step by step (`shoulderFrames`): the swing of the arm about the centre of the joint, and the turn of the arm about its own length. Both are eased at the two ends. Every step keeps the centre of the joint in place, so the muscle is spread round the joint and not pulled off it.
+- Past 150 degrees of swing the rule fades out, and from 170 degrees the muscles are rigid with the bone again, because a swing that large has no one shortest way round. None of the 61 looks reaches it.
+- Only the muscles of the left arm model change. Its bones move as before. The mirror body draws the same arm, so it has the same shoulder. The right arm is part of the body model, whose skin is not changed.
+- The numbers are display constants. They are not measured muscle paths, attachments or the way a real shoulder blade moves with the arm.
+
+**Tried and not kept.** For looks to the left and down, where the arm is folded close beside the head, two changes to the arm's pose were tried on the measured looks outside the game: a different rule for where the elbow points, and holding the hand further from the shoulder. The first gave poses with the elbow high behind the back. Both together laid the upper arm nearly level, pointing backward, which looked worse from the side than the pose the game has. The arm's pose is unchanged.
+
+**Checked.**
+- Measured on the same 61 looks with the new skin: the place where each part of the deltoid begins moves at most 0.6 cm against the chest. No edge of the three parts is stretched beyond 2.4 times its rest length or shortened below 0.3 of it, and at most 17 triangles of a part are turned over at any look. The upper ends of the other arm muscles that begin on the shoulder blade (both heads of the biceps, the coracobrachialis and the long head of the triceps) move at most 1.9 cm against the chest. The lateral and medial heads of the triceps begin on the upper-arm bone and still move with it. These are measurements of the model's surface, worked out from the game's arm code outside the browser.
+- Pictures before and after at 14 looks, and of the mirror body at 8: the shoulder no longer stands off the trunk at far-left looks. Pictures of the limb turn at three looks, before and after: at the look to the left and down the fin is gone.
+- `tests/shoulder-skin.test.mjs`, 14 cases on supplied frames: the top of the zone follows the chest and the lower end the upper arm; every step keeps the joint centre and is a plain rotation; the steps follow the eased profile; the fade; a pose without a chest frame, a mirrored chest frame, or weights without places give the skin from before. Each of four deliberate faults put into a copy of the code failed a case. All 20 node tests (14 files) pass.
+- The full scripted run of the game ended without an error. Two runs of the frame-rate script gave rates inside or above the ranges of section 71 for every step except the view over the shoulder in one run (56.2; the other run 57.5; the range is 57.2 to 58.2).
+
+**Limit.**
+- At looks far to the left and down, the eye is 4 to 7 cm from the left shoulder muscle. From that close the front part of the deltoid shows the ragged border it has in the source model, and the upper-arm bone shows past it. During the limb turn at such a look a small gap opens between two parts of the muscle, with bone under it. Before the change those looks showed the fin instead.
+- The pictures were looked at by the author only. One machine, one browser.
+
+## 73. The mirror body turns all the way round, and its top and bottom arrows tilt it
+
+**The notes.** Message 45: "The body arrows for the body should also be for orbit not back and forth." Message 46: "But then if you click on that item and you move it around using the cursor, you are rotating it in relation to itself. So by doing that, you are orbiting it, as we would say." Message 10, earlier: "If we imagine an invisible ground, the mirror body should be touching the same ground. The ground is flat and has no incline or decline whatsoever."
+
+**What was wrong.**
+- The top and bottom arrows by the mirror body, and a drag up or down on it, slid it away and back along the ground (27). The brain's top and bottom arrows turn the brain. Two sets of arrows that look alike did different things.
+- The side arrows did turn the body, but not all the way. The mirror body carries, unseen, the mirror image of everything your left hand can reach, so that your hand never meets it. Turned about the body's centre, that image swung through the mirror plane toward you, and the rule that stops a move at contact (33) held the turn: at 171.5 degrees one way and 123.2 degrees the other, measured in the browser, in this build and in the third revision as uploaded. The back of the body could not be brought fully round.
+
+**Decision.**
+- All four arrows by the mirror body turn it about its own centre, as the brain's do. The side arrows and a sideways drag turn it about the upright axis, with no limit. The top and bottom arrows and a drag up or down tilt it about the level axis across the screen: the top arrow shows it more from above, the bottom one more from below, and a drag down shows it more from above, the same way round as a drag on the brain. One click is 15 degrees, a held arrow goes on at 12 degrees a second, and a drag turns 0.3 degrees for each pixel (`MIRROR_ORBIT` and `MIRROR_ORBIT_DIRECTIONS` in ns-mirror, `DRAG_TURN` in ns-app).
+- The tilt ends at the view from straight above and from straight below, 90 degrees each way. Past that the body would only be upside down. Its back is reached with the side arrows.
+- Message 10 and Message 45 pull against each other, because a body tilted about its centre lifts its feet. The rule kept: at the start and after Reset brain view the tilt is 0 and the body is the exact reflection, upright, on the same ground. Only a tilt the player asks for lifts the feet, and tilting back or the reset puts them down. A turn about the upright axis and a carry keep every point at its height.
+- A turned or tilted body stands back along the ground by just what it needs, and comes forward again as it is turned back. Two things can need the room: the tilted body's box reaching nearer than the upright one (`mirrorTiltAwayM`), and the image of your hand's reach passing the mirror plane (`mirrorReachAwayM`). The body stands back by the larger of the two, not their sum. Both are 0 at the start, so the reflection is unchanged, and both depend on the angles only, so the same turn always gives the same place.
+- Nothing slides the mirror body away and back any more. To move it, carry it with Space. The view over the shoulder still moves it away by as much as your own body (Message 52) and keeps the stand-back.
+- Reset brain view also puts the mirror body back: no turn and no tilt.
+
+**Checked.**
+- In the browser at 1920 by 1080: at the start the body is the reflection exactly (largest difference 0). A full turn by clicks on the right arrow, and one by clicks on the left, pass every angle with no stop. After 24 clicks one way (360 degrees) it is the exact reflection again, and so it is after a tilt to the view from straight above and back.
+- Stand-back, measured: none for the first part of a turn (0 at 15, 60, 75 and 105 degrees one way, 0 at 30 and 60 the other). With the back toward you it is 0.38 m. It is most, about 0.41 m, at 150 to 165 degrees the other way. A tilt alone needs up to 0.19 m. The most seen, turned 150 degrees and tilted 30, is 0.45 m.
+- Drags, with the pointer captured and the crosshair on the body: 100 pixels down tilt it 30 degrees toward the view from above, 300 pixels to the left turn it 90 degrees, and a long drag up ends at the view from straight below.
+- 31 readings (the start, then six turns 60 degrees apart, each upright and at 45 and 90 degrees of tilt each way), taken at the start look: no move was stopped and nothing touches. Your body and the mirror body are never nearer than 0.28 m, which is their distance at the start. Your left arm and the mirror body are never nearer than 0.66 m. The image of your hand's reach and your own body are never nearer than 0.19 m.
+- `tests/mirror-orbit.test.mjs`, 19 cases: the four directions and their signs, the same as the brain's; one step and the tilt's end; the full turn; the stand-back for the tilt and for the reach, each 0 at the start and never more than is needed; the reflection after a turn and back; the drag; the words. Of 21 deliberate faults put into copies of the code, 20 failed a case. The one that did not, the sign of the tilt inside the body box's reach, gives the same numbers as the code: the box's own axes are level, and such a box reaches equally far toward you tilted either way.
+- The full scripted run of the game ended without an error, and its eight pictures show the same views as the run before the change.
+
+**Limit.**
+- The four arrows stay on the frame round the upright body, where section 30 put them. A tilted body can reach past that frame, and at a downward look your own left arm can hide the left arrow.
+- Seen from straight above or below, the mirror body fills much of the lower view, and in a picture it can look as if it touched your knees. The measured gaps say it does not. They were measured at the start look and with the limbs at their start only.
+- One machine, one browser, and the author's own reading of the pictures.
+
+## 74. A white square at one exact look
+
+**What was seen.** While the mirror body's tilt was being checked at 1920 by 1080, one look, straight ahead and 8.02 degrees down, showed a pure-white square 278 pixels on a side a little right of the middle of the view (from x 997 to 1275, from y 229 to 507). One step of the look away it was gone. The third revision as uploaded shows the same square at the same look: 71,375 pure-white pixels, against a few hundred in the views next to it. No user note reports it.
+
+**Cause.** The scene is drawn into a picture with a wide range of brightness, and the glow of section 48 is made from a chain of smaller and smaller copies of it. The see-through layer of the glass brain brightens toward its rim by a power of one less the share of the surface that faces the eye. Where a surface faces the eye exactly, rounding in the graphics card can put that a hair below zero. The power of a negative number is not defined in a shader, and the pixel came out as a value that is not a number. At that look there was one such pixel, at (1133, 354). Every copy in the chain that took it in became such a value too, and the square is the smallest copy's footprint, drawn white.
+
+**Decision.**
+- The three rim terms of that form are kept at or above zero before the power is taken: the see-through glass (`GLASS_RIM_GLSL`), the glass shell (`glassReadGlsl`) and the glow rim (`patchGlowRimShaders`), all in ns-scene-three. Only the first was shown to give the bad pixel. The other two have the same form.
+- The glow's first step reads the picture clamped to the range 0 to 64, and adds nothing for a value that is not a number (`HDR_BLOOM.safeMax`). The brightest values the picture holds are a few units (a flash peaks near 3), so the glow is as it was. The step is there so that one bad pixel, from any material, stays one pixel.
+
+**Checked.**
+- At the exact look, with only the glow's step changed: 318 pure-white pixels and no square. With only the rim terms changed: the bad pixel is gone. With both, at nine looks round the exact one: between 304 and 378 pure-white pixels and no square.
+- The full scripted run ended without an error. Each of its eight pictures has the same count of pure-white pixels as before the change, to within 3.
+- Frame rates, one run of the script of section 71 with the changes of sections 73 and 74: sitting still 60, looking around 59.5, reaching 59.6, holding the mirror body 51.1, carrying it 51.9 (longest frame 50 ms), the slow limb turn 58.7, looking around again 60, the view over the shoulder 57.5. Each is inside the range of section 71.
+- `tests/shader-safe.test.mjs`, 5 cases on the shader text: every power in the three changed shaders has a base that cannot be negative, and the glow's first step has the clamp and drops what is not a number. Each of seven deliberate faults put into a copy of the code failed a case. All 26 node tests (16 files) pass.
+
+**Limit.**
+- The cases read shader text. They cannot show what a graphics card does with it. That was checked by pictures only, in headless Chromium on one machine.
+- The shaders of three.js itself were not gone through for other terms of this kind. The glow's first step is what would hold one of those to a single pixel.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1075,6 +1150,8 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - From one measured pose the view from behind cannot be shown until the hand or the look moves; the game says so (18).
 - Your own arm can hide part of the brain's left arrow (19). The overlap of the brain's top arrow with the mirror body's top arrow noted there is gone since section 59, which puts the brain above the mirror body.
 - The shoulder-girdle slide has not been compared with reference images (9).
+- At looks far to the left and down the eye is 4 to 7 cm from the left shoulder muscle: its front part shows a ragged border, the upper-arm bone shows past it, and during the limb turn a small gap can open between two of its parts (72).
+- The mirror body's four arrows stay on the frame of the upright body: a tilted body can reach past them, and at a downward look your left arm can hide its left arrow (73).
 - The switched-off floating-face code is still in the renderer (11). It draws nothing and was left to keep this change small.
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
@@ -1082,8 +1159,7 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - The strip spans 42 % of the width of the view, not the 50 % of Message 43 (59).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
-- The left shoulder (Messages 36 and 48). At a far-left look the shoulder can come away from its socket, and during the limb turn the shoulder muscle can show a pointed edge. Neither is fixed.
-- Controls (Messages 45 and 46). The look does not yet swing a held thing round you with the same face toward you (54), and the top and bottom arrows by the mirror body still slide it away and back instead of turning it.
+- Controls (Message 46). The look does not yet swing a held thing round you with the same face toward you (54). The mirror body's top and bottom arrows now turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

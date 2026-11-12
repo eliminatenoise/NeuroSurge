@@ -21,12 +21,15 @@
  *      forward axis, a distance d in front of the eye, d = the posed body's forward extent from the eye plus a few
  *      centimetres (MIRROR_REFLECTION). The plane is fixed in the world once set (like a mirror on a stand); the scene
  *      sets it from the posed body at the start and at a reset. It does not depend on the brain at all;
- *   2. the mirror transform (mirrorTransform; det -1): the reflection, composed with the player's turn about the
- *      vertical axis through the image's centre, the player's push along the ground and the grasp carry. Nothing can
- *      tilt it, so it always stands on the same flat ground as your body;
- *   3. its own orbit state: yaw (wraps, any amount, so the back can be seen) and push (m, along the ground, away from
- *      the plane); pitch stays 0 (the ground is level). Click = one step, hold = gentle continuous change, never
- *      autonomous (mirrorOrbitStep, mirrorHoldSteps, applyMirrorOrbit, resetMirror);
+ *   2. the mirror transform (mirrorTransform; det -1): the reflection, composed with the player's orbit about the
+ *      image's own centre (a turn about the vertical axis and a tilt about the screen's horizontal axis), the push
+ *      along the ground and the grasp carry. A turn and a carry keep it on the same flat ground as your body; only a
+ *      tilt takes it off the upright, and tilting back or a reset stands it up again. Turned or tilted, it stands
+ *      back along the ground as far as it takes to keep the mirror image of your left hand's reach on its own side
+ *      of the mirror (MIRROR_ORBIT.reachClear), so it can be turned all the way round;
+ *   3. its own orbit state: yaw (wraps, any amount, so the back can be seen), pitch (the tilt, inside
+ *      +-MIRROR_ORBIT.pitchLimitDeg) and push (m, along the ground, away from the plane). Click = one step, hold =
+ *      gentle continuous change, never autonomous (mirrorOrbitStep, mirrorHoldSteps, applyMirrorOrbit, resetMirror);
  *   4. the frame of its four arrows (mirrorArrowFrame) for the arrow module;
  *   5. the state-sync contract from the primary body (MIRROR_SYNC) and the mapping of glow end points (mirrorPoint);
  *   6. plain texts for the panel and the Esc page (MIRROR_TEXT, mirrorPartName, mirrorInfoCard).
@@ -52,7 +55,7 @@ import {
 } from './ns-math.mjs';
 import { THIRD_PERSON } from './ns-camera.mjs';
 
-export const MIRROR_VERSION = 'ns-mirror-r558 (literal plane reflection on a level ground, 2026-11-11)';
+export const MIRROR_VERSION = 'ns-mirror-r558 (literal plane reflection on a level ground; all four arrows orbit, 2026-11-12)';
 
 /**
  * The mirror's arrow frame (mirrorArrowFrame): the arrows' gap outside the body's drawn extent and their size, as
@@ -87,22 +90,39 @@ export const MIRROR_FALLBACK_BODY = Object.freeze({
 });
 
 /**
- * Orbit of the mirror body (about its OWN vertical axis; the brain's step and hold speed).
+ * Orbit of the mirror body (about its OWN centre; the brain's step and hold speed).
  *  stepDeg: one click on a mirror arrow (= ns-brain BRAIN_VIEW.orbitStepDeg, 15).
  *  hold: holding an arrow keeps turning gently (= ns-scene-three ORBIT_HOLD: after 300 ms, 1.2 deg every 100 ms =
  *    12 deg/s, at most 5 steps banked per frame).
- *  pitchLimitDeg: 0. R558 (user: "the mirror body should be touching the same ground. The ground is flat and has no
- *    incline or decline whatsoever"): the mirror body is never tipped; a turn is only about the vertical axis through
- *    its centre, which keeps every point at its height, so it stays on the ground. Yaw has no limit (it wraps to
- *    (-180, 180]), so the body can be turned all the way round to show its back.
- *  push: the top and bottom arrows (and an up / down drag), which used to tip it, now slide it along the ground: away
- *    from you (top, drag up) or back toward you (bottom, drag down), in steps of perDegM metres per degree of the
- *    arrow step (a click 15 deg = 0.3 m, a held arrow 0.24 m/s, a drag 6 mm per px). 0 = where it stands (the literal
- *    reflection, or where you carried it); it never comes nearer than that (the plane is just in front of your toes
- *    and fingertips), and at most maxM farther.
+ *  pitchLimitDeg: 90. R558 (user Message 45: "The body arrows for the body should also be for orbit not back and
+ *    forth"; Message 46: pressing on an item and moving the pointer orbits it): the top and bottom arrows and an up /
+ *    down drag tilt the body about the screen's horizontal axis through its centre, as far as a view from straight
+ *    above (+90) or straight below (-90). Going further would only show it upside down; the back is reached by the
+ *    side arrows, since yaw has no limit (it wraps to (-180, 180]). At the start and after a reset the tilt is 0 (user
+ *    Message 10: "the mirror body should be touching the same ground. The ground is flat and has no incline or decline
+ *    whatsoever"); a turn about the vertical axis and a carry keep every point at its height, so only a tilt lifts
+ *    the feet off that ground, until it is tilted back or reset.
+ *  tiltClear: a tilted body's box reaches farther toward you than the upright one (the head, or the forward legs,
+ *    swing toward you, and the plane is only a few centimetres beyond your toes and fingertips). The body therefore
+ *    stands back along the ground by exactly that extra reach (mirrorTiltAwayM), so a tilt never brings its box nearer
+ *    than a turn alone does. It is 0 at pitch 0, so the literal reflection and a carry are unchanged.
+ *  reachClear: the game arm goes wherever you look, so the mirror body carries the mirror image of everything your
+ *    left hand can reach: a sphere about the left shoulder (the placement's `reach`). Reflected and untouched, that
+ *    image is behind the mirror plane, as your own reach is in front of it. Turned or tilted about the body's centre
+ *    it would swing through the plane and into the space your own legs and hands use (measured before this rule: the
+ *    stop-at-contact guard held a turn at 171.5 degrees one way and 123.2 degrees the other, so the body could not
+ *    be turned all the way round, and near those angles the unseen sphere could hold back a move of your own
+ *    limbs). The body therefore stands back along the ground by exactly the distance that sphere would pass the
+ *    plane (mirrorReachAwayM): 0 while the sphere is behind the plane anyway (so 0 at the start, after a reset and
+ *    for the first part of a turn either way), growing smoothly to its most where the image shoulder is nearest
+ *    you. A turn still keeps every point at its height. The body stands back by the larger of this and the tilt's
+ *    own clearance, never the sum. Without a `reach` on the placement the rule does nothing.
+ *  push: metres along the ground, away from you. No arrow or drag drives it any more (the top and bottom arrows slid
+ *    the body away and back between 11 and 12 November); it is kept for the scene's own path (setMirrorView({ pushM
+ *    })) and for old states. 0 = where it stands; at most maxM farther. perDegM is the old arrow step's scale.
  */
 export const MIRROR_ORBIT = Object.freeze({
-  stepDeg: 15, pitchLimitDeg: 0,
+  stepDeg: 15, pitchLimitDeg: 90, tiltClear: true, reachClear: true,
   hold: Object.freeze({ delayMs: 300, everyMs: 100, stepDeg: 1.2, maxStepsPerFrame: 5 }),
   push: Object.freeze({ perDegM: 0.02, maxM: 6 })
 });
@@ -110,15 +130,16 @@ export const MIRROR_ORBIT = Object.freeze({
 /** The four mirror orbit directions, named like the brain's (ns-app ORBIT_DIRS) so one arrow module serves both. */
 export const MIRROR_DIRS = Object.freeze(['forward', 'back', 'left', 'right']);
 /** Fixed compass position of each arrow on screen (R20: "a top arrow, a bottom arrow, a left arrow, and a right
- * arrow"). For the mirror body 'forward' (top) slides it away from you along the ground, 'back' (bottom) back toward
- * you, 'left' / 'right' turn it about its vertical axis (your viewpoint goes round its side, the body turns the other
- * way). */
+ * arrow"). For the mirror body 'forward' (top) tilts its top toward you (your viewpoint goes up over it: you see it
+ * from above), 'back' (bottom) tilts its top away (you see it from below), 'left' / 'right' turn it about its vertical
+ * axis (your viewpoint goes round its side, the body turns the other way). */
 export const MIRROR_COMPASS = Object.freeze({ forward: 'top', back: 'bottom', left: 'left', right: 'right' });
-/** Step sign per direction ({ yaw, pitch, push } in steps): yaw > 0 = viewpoint toward screen right (same convention
- * as ns-brain ORBIT_DIRECTIONS); push > 0 = farther away along the ground; pitch is always 0 (never tipped). */
+/** Step sign per direction ({ yaw, pitch, push } in steps): yaw > 0 = viewpoint toward screen right, pitch > 0 =
+ * viewpoint up, the body's top toward you (the same names and signs as ns-brain ORBIT_DIRECTIONS); push > 0 = farther
+ * away along the ground (no direction drives it). */
 export const MIRROR_ORBIT_DIRECTIONS = Object.freeze({
   left: Object.freeze({ yaw: -1, pitch: 0, push: 0 }), right: Object.freeze({ yaw: 1, pitch: 0, push: 0 }),
-  forward: Object.freeze({ yaw: 0, pitch: 0, push: 1 }), back: Object.freeze({ yaw: 0, pitch: 0, push: -1 })
+  forward: Object.freeze({ yaw: 0, pitch: 1, push: 0 }), back: Object.freeze({ yaw: 0, pitch: -1, push: 0 })
 });
 const DIR_ALIASES = Object.freeze({ top: 'forward', up: 'forward', bottom: 'back', down: 'back', left: 'left', right: 'right', forward: 'forward', back: 'back' });
 
@@ -129,12 +150,12 @@ export const MIRROR_TEXT = Object.freeze({
   label: 'Mirror body (a mirror image of you)',
   lead: 'This is a mirror image of your own body, as in a real mirror in front of you. It copies every move you make. Your left arm shows on the same side of the screen.',
   explanation: 'It shows the same pose and the same made-up signal colours as your body, at the same time. It is only a picture. It is not a second person.',
-  arrows: 'Click the side arrows of the mirror body to turn it one step, or the top and bottom arrows to slide it away or back. Hold an arrow to keep going. Turn it all the way round to see its back.',
+  arrows: 'Click the side arrows of the mirror body to turn it one step, or the top and bottom arrows to tilt it and see it from above or below. Hold an arrow to keep going. Turn it all the way round to see its back.',
   turned: 'You are looking at the mirror body from another side. Reset brain view puts it back.',
   reset: 'Reset mirror body',
   resetHelp: 'Puts the mirror body back where a real mirror would show you.',
   simulated: 'Everything here is simulated.',
-  escRow: 'Mirror body: hold Space on it and look or use W/A/S/D to carry it along the ground. Its side arrows turn it; its top and bottom arrows slide it away or back.',
+  escRow: 'Mirror body: hold Space on it and look or use W/A/S/D to carry it along the ground. Its side arrows turn it; its top and bottom arrows tilt it.',
   partSuffix: ' (mirror image)'
 });
 
@@ -250,12 +271,16 @@ export function matrixMaxDiff(a, b) {
  *   foremostM: optional, the body's largest extent along forward measured from the eye on the real vertices (the scene
  *     measures it); without it the extent of the measured box is used (never short: the box holds every point).
  *   clearanceM: MIRROR_REFLECTION.clearanceM.
+ *   reach: optional { centre (world m), radiusM }: everything your left hand can reach, a sphere about the left
+ *     shoulder of the posed body. It does not move the plane (foremostM already allows for it); it is kept on the
+ *     placement so a turned or tilted mirror body can stand back for it (MIRROR_ORBIT.reachClear).
  * Returns a frozen { kind: 'ns-mirror-placement', rule: 'literal-reflection', plane { normal, offsetM, pointM, eyeM,
  *   distanceM (d), foremostM, clearanceM }, matrix (the pure reflection), centre (the image of the body's box centre:
  *   the pivot of the turn), distanceM (eye to that centre), scale 1, toward / right / up (the frame of the turn:
- *   toward = from the image toward you, horizontal; up = world up), facingYawDeg 0, reflectAxis, bodyCentre, body }.
+ *   toward = from the image toward you, horizontal; up = world up), facingYawDeg 0, reflectAxis, bodyCentre, body,
+ *   reach ({ centre, radiusM } or null) }.
  */
-export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearanceM = MIRROR_REFLECTION.clearanceM } = {}) {
+export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearanceM = MIRROR_REFLECTION.clearanceM, reach = null } = {}) {
   if (!body || !isVec3(body.centre) || !(Array.isArray(body.half) || ArrayBuffer.isView(body.half))) fail('input', 'body must be a bodyBoundsFromPoints result of the posed body');
   const e = vec3(eye, 'eye');
   const f0 = body.forward ? vec3(body.forward, 'body.forward') : [0, 0, -1];
@@ -274,11 +299,18 @@ export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearan
   const centre = transformPoint(matrix, c0);
   const toward = scale(n, -1).map(v => v + 0);
   const right = normalize(cross(UP, toward)).map(v => v + 0);
+  let reachS = null;
+  if (reach !== null && reach !== undefined) {
+    const rc = vec3(reach.centre, 'reach.centre');
+    if (!(Number.isFinite(reach.radiusM) && reach.radiusM > 0)) fail('input', 'reach.radiusM must be > 0');
+    reachS = freeze({ centre: freeze(rc), radiusM: reach.radiusM });
+  }
   return freeze({
     kind: 'ns-mirror-placement', rule: 'literal-reflection',
     plane: freeze({ normal: freeze(n), offsetM: offset, pointM: freeze(add(e, scale(n, d))), eyeM: freeze(e), distanceM: d, foremostM: fore, boxForemostM: boxFore, clearanceM }),
     matrix: freeze(Array.from(matrix)), centre: freeze(centre), distanceM: length(sub(centre, e)), scale: 1,
-    toward: freeze(toward), right: freeze(right), up: UP, facingYawDeg: 0, reflectAxis: freeze(n), bodyCentre: freeze(c0), body
+    toward: freeze(toward), right: freeze(right), up: UP, facingYawDeg: 0, reflectAxis: freeze(n), bodyCentre: freeze(c0), body,
+    reach: reachS
   });
 }
 
@@ -302,9 +334,9 @@ export function placeMirror(state, placement) {
  * 'down'); null when unknown. */
 export function mirrorDir(dir) { return typeof dir === 'string' && DIR_ALIASES[dir] ? DIR_ALIASES[dir] : null; }
 
-/** One step from `orbit` in direction `dir` (pure): left / right turn the yaw by stepDeg (wraps); forward / back slide
- * the push by stepDeg x MIRROR_ORBIT.push.perDegM metres (0 .. maxM). Pitch stays within +-pitchLimitDeg (0: the
- * mirror body is never tipped). */
+/** One step from `orbit` in direction `dir` (pure): left / right turn the yaw by stepDeg (wraps); forward / back tilt
+ * the pitch by stepDeg, inside +-pitchLimitDeg (it stops at the view from straight above or below). The push is kept
+ * (no direction changes it; the term stays for a caller's own direction table). */
 export function mirrorOrbitStep(orbit, dir, { stepDeg = MIRROR_ORBIT.stepDeg, pitchLimitDeg = MIRROR_ORBIT.pitchLimitDeg, push = MIRROR_ORBIT.push } = {}) {
   const d = mirrorDir(dir);
   if (!d) fail('input', `direction must be one of ${MIRROR_DIRS.join(', ')} (or top, bottom, up, down); got ${dir}`);
@@ -353,7 +385,7 @@ export function applyMirrorOrbit(state, { clicks = [], press = null, release = f
   return freeze({ ...state, orbit, hold: hold ? freeze({ ...hold }) : null });
 }
 
-/** Reset: the mirror body is the literal reflection again (no turn, no push, no carried place, no hold). Call it from
+/** Reset: the mirror body is the literal reflection again (no turn, no tilt, no push, no carried place, no hold). Call it from
  * Reset brain view (and from a separate "Reset mirror body" if the Esc page offers one); the scene then sets the plane
  * again from the posed body. */
 export function resetMirror(state) {
@@ -386,16 +418,71 @@ export function mirrorOrbitLocal(yawDeg, pitchDeg) {
   return multiply(rotX(pitchDeg * DEG), rotY(-yawDeg * DEG));
 }
 
+/** The body box's three axes (right, up, forward; each scaled, reflected and turned by the placement's own facing) in
+ * the VIEW frame (x = right, y = up, z = toward the eye), before the orbit. */
+const viewPre = p => multiply(transpose3(basis4(p.right, p.up, p.toward)), multiply(rotY(p.facingYawDeg * DEG), multiply(uniformScale(p.scale), reflectionMatrix(p.reflectAxis))));
+const boxAxes = p => [p.body.right ? vec3(p.body.right, 'body.right') : [1, 0, 0], [0, 1, 0], p.body.forward ? vec3(p.body.forward, 'body.forward') : [0, 0, -1]];
+
+/**
+ * How far (m, >= 0) a tilted mirror body stands back along the ground (MIRROR_ORBIT.tiltClear): the reach of its box
+ * toward the eye at this yaw and pitch, less its reach at the same yaw with no tilt. The box is the placement's posed
+ * body box (half extents along body right / up / forward). 0 at pitch 0, and 0 where the tilt makes the box reach less
+ * far toward you (it never comes nearer than it stood). Pure.
+ */
+export function mirrorTiltAwayM(placement, yawDeg, pitchDeg) {
+  const p = placement;
+  if (!p || !p.body || !p.body.half) fail('input', 'placement must be a mirrorReflectionPlacement result');
+  const pitch = clamp(Number.isFinite(pitchDeg) ? pitchDeg : 0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
+  if (pitch === 0) return 0;
+  const M = multiply(rotY(-(Number.isFinite(yawDeg) ? yawDeg : 0) * DEG), viewPre(p));
+  const s = Math.sin(pitch * DEG), c = Math.cos(pitch * DEG), half = p.body.half;
+  let tilted = 0, upright = 0;
+  boxAxes(p).forEach((a, k) => {
+    const b = transformDirection(M, a);
+    tilted += Math.abs(s * b[1] + c * b[2]) * half[k];
+    upright += Math.abs(b[2]) * half[k];
+  });
+  return Math.max(0, tilted - upright);
+}
+
+/**
+ * How far (m, >= 0) a turned or tilted mirror body stands back along the ground for the mirror image of your left
+ * hand's reach (MIRROR_ORBIT.reachClear). The placement's `reach` sphere rides on the body: at this yaw and pitch its
+ * image is centred (sin(pitch) * up + cos(pitch) * toward) of its turned offset in front of the body's centre, and
+ * its front is one radius nearer you. The room is the distance from the body's centre to the mirror plane (or the
+ * sphere's own front at the start, if that were ever nearer). The result is the front less the room, never below 0:
+ * with it the image sphere touches the plane at most. It depends on the angles only, not on where the body has
+ * been carried. 0 without a reach sphere. Pure.
+ */
+export function mirrorReachAwayM(placement, yawDeg, pitchDeg) {
+  const p = placement;
+  if (!p || p.kind !== 'ns-mirror-placement') fail('input', 'placement must be a mirrorReflectionPlacement result');
+  const r = p.reach;
+  if (!r) return 0;
+  const yaw = Number.isFinite(yawDeg) ? yawDeg : 0;
+  const pitch = clamp(Number.isFinite(pitchDeg) ? pitchDeg : 0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
+  const pre = viewPre(p), off = sub(r.centre, p.bodyCentre);
+  const b0 = transformDirection(pre, off);
+  const b = transformDirection(multiply(rotY(-yaw * DEG), pre), off);
+  const front = Math.sin(pitch * DEG) * b[1] + Math.cos(pitch * DEG) * b[2] + r.radiusM;
+  const room = Math.max(p.plane ? dot(sub(p.plane.pointM, p.centre), p.toward) : 0, b0[2] + r.radiusM);
+  return Math.max(0, front - room);
+}
+
 /**
  * The mirror transform for a state: matrix maps PRIMARY world points (your posed body as drawn) to MIRROR world points:
- *   M = T(push) . T(centre) . B . O(yaw) . B^T . Ry(facingYaw) . S(scale) . Reflect(bodyForward) . T(-bodyCentre)
- * B = [right up toward] (up = world up, toward horizontal), so O(yaw) turns the image about the vertical axis through its
- * centre; pitch is 0 (MIRROR_ORBIT.pitchLimitDeg), facingYaw 0 and scale 1 for the literal reflection, so at orbit 0,
- * push 0 and no carry M is exactly placement.matrix (the pure reflection). A carried place (placement.worldCentre, the
- * grasp carry) replaces the centre; push then slides it along the ground away from the plane's eye (horizontal).
+ *   M = T(away) . T(centre) . B . O(yaw, pitch) . B^T . Ry(facingYaw) . S(scale) . Reflect(bodyForward) . T(-bodyCentre)
+ * B = [right up toward] (up = world up, toward horizontal), so O turns the image about the vertical axis through its
+ * centre (yaw) and tilts it about the screen's horizontal axis through its centre (pitch, inside
+ * +-MIRROR_ORBIT.pitchLimitDeg). facingYaw is 0 and scale 1 for the literal reflection, so at orbit 0 and no carry M is
+ * exactly placement.matrix (the pure reflection). A carried place (placement.worldCentre, the grasp carry) replaces the
+ * centre. T(away) then moves it along the ground (horizontal), away from the plane's eye, by the push, the outside
+ * view's slide and the stand-back of a turned or tilted body (standBackM: the larger of the tilt's own clearance,
+ * tiltAwayM / mirrorTiltAwayM, and the reach sphere's, reachAwayM / mirrorReachAwayM).
  * det(M) = -scale^3 < 0 (a mirror image; Three flips the front face for it automatically). Returns a frozen
  * { kind: 'ns-mirror-transform', matrix, inverse, linear (3x3 as 4x4, no translation), det, centre (drawn), carryCentre
- *   (the centre without the push: what a grasp carries), push, scale, frame { right, up, toward }, orbit, placement }.
+ *   (the centre without the moves along the ground: what a grasp carries), push, tiltAwayM, reachAwayM, standBackM,
+ *   scale, frame { right, up, toward }, orbit, placement }.
  */
 export function mirrorTransform(state) {
   if (!state || state.kind !== 'ns-mirror-state') fail('input', 'state must be a createMirrorState result');
@@ -416,12 +503,17 @@ export function mirrorTransform(state) {
   away[1] = 0;
   // Outside view (MIRROR_OUTSIDE): the same slide, as far as the camera has backed away from your body.
   const viewAwayM = Number.isFinite(state.viewAwayM) && state.viewAwayM > 0 ? Math.min(state.viewAwayM, MIRROR_OUTSIDE.maxM) : 0;
-  const pushV = scale(away, push + viewAwayM);
+  // A tilted body stands back by the extra reach of its box toward you (0 while it is upright).
+  const tiltAwayM = MIRROR_ORBIT.tiltClear && pitch !== 0 ? mirrorTiltAwayM(p, state.orbit.yaw, pitch) : 0;
+  // Turned or tilted, it also stands back so the image of your left hand's reach stays behind the mirror plane.
+  const reachAwayM = MIRROR_ORBIT.reachClear && p.reach ? mirrorReachAwayM(p, state.orbit.yaw, pitch) : 0;
+  const standBackM = Math.max(tiltAwayM, reachAwayM);
+  const pushV = scale(away, push + viewAwayM + standBackM);
   for (let i = 0; i < 3; i++) matrix[12 + i] += pushV[i];
   const centre = add(carryCentre, pushV);
   const inverse = invertAffine(matrix);
   return freeze({
-    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, viewAwayM, scale: p.scale,
+    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, viewAwayM, tiltAwayM, reachAwayM, standBackM, scale: p.scale,
     frame: freeze({ right: p.right, up: p.up, toward: p.toward }), orbit: state.orbit, placement: p
   });
 }
@@ -480,8 +572,8 @@ export function mirrorTwinMatrix(transform, inPlaceWorld) {
  *   left, right } (m from the centre, along up / -up / -right / right), radius (the body's bounding sphere, m), gapM,
  *   sizeM (suggested arrow length), anchors { forward, back, left, right: { position, outward (unit), compass, orbit } },
  *   scale, orbit }.
- * 'forward' sits at the TOP and slides the body away along the ground (R558; it no longer tips it); 'back' at the
- * bottom slides it back; 'left' / 'right' at the sides turn it (the same names and yaw signs as the brain's arrows).
+ * 'forward' sits at the TOP and tilts the body's top toward you; 'back' at the bottom tilts it away; 'left' / 'right'
+ * at the sides turn it (the same names and signs as the brain's arrows).
  */
 export function mirrorArrowFrame(state, { gapFrac = MIRROR_VIEW.arrowGapFrac, sizeFrac = MIRROR_VIEW.arrowSizeFrac } = {}) {
   const T = mirrorTransform(state);

@@ -1049,6 +1049,21 @@ function ndcExtents(m, corners, tanHalf, aspect) {
 /* ------------------------------------------------------------------ public API: solve */
 
 /**
+ * R558 shoulder skin (ns-rig SHOULDER_SKIN): the chest frame of an arm pose, a mesh matrix like the segments' (source
+ * millimetres -> camera metres). It has the trunk's orientation (bodyToCamera x the source-to-body axes) and puts the
+ * rest joint centre `shoulderRestMm` at `shoulderCam`, where the arm has it. Tissue that follows this frame stays on
+ * the shoulder girdle while the humerus swings and turns. At the rest pose of the meshes it equals the upper-arm
+ * matrix. Display frame only: the trunk here is one rigid frame, with no scapular or clavicular motion of its own.
+ */
+export function chestMatrix(bodyToCamera, shoulderCam, shoulderRestMm) {
+  const B = multiply(bodyToCamera, bpToWorldAxes()), S = shoulderRestMm, m = new Float64Array(16);
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) m[4 * j + i] = B[4 * j + i] * MM;
+  for (let i = 0; i < 3; i++) m[12 + i] = shoulderCam[i] - (m[i] * S[0] + m[4 + i] * S[1] + m[8 + i] * S[2]);
+  m[15] = 1;
+  return m;
+}
+
+/**
  * Place the arm so the hand centre lies exactly on the camera ray through NDC (xNdc, yNdc) at `depth` metres.
  * params: { xNdc, depth, joints, aspect, fovYDeg, yNdc = HAND_Y_NDC, attachment | shoulderCam + pole (+ bodyToCamera),
  *   rotationCoupling (R5-pronation, default true) }.
@@ -1056,7 +1071,8 @@ function ndcExtents(m, corners, tanHalf, aspect) {
  *   iterations, targetCam, coupling}} iterations is 1: the solve is closed form. Unreachable targets return reachable:
  *   false with a best effort (elbow angle clamped to 0..145 deg, hand on the shoulder-to-target line). R5-pronation:
  *   joints.forearm_pronation is the commanded palm turn; with the rotation coupling the matrices show the coupled arm
- *   (couplingReport) and shoulderCam is the shoulder joint centre actually used.
+ *   (couplingReport) and shoulderCam is the shoulder joint centre actually used. With a bodyToCamera the matrices
+ *   also carry 'chest' (chestMatrix), which the shoulder skin reads; it is not a segment and no bone follows it.
  */
 export function solveArm(rig, params = {}) {
   const p = params || {};
@@ -1077,6 +1093,7 @@ export function solveArm(rig, params = {}) {
   const ox = atAnchor(o, xNdc, tanHalf, aspect);
   const core = solveArmCore(ctx, targetCam, ox, o);
   const matrices = forwardKinematics(rig, { shoulderMatrix: core.SM, elbowFlexRad: core.phi, joints: core.ctx.J });
+  if (o.bodyToCamera) matrices.set('chest', chestMatrix(o.bodyToCamera, core.shoulderCam, rig.pivots.shoulder));
   const elbowCam = transformPoint(matrices.get('upperarm'), rig.pivots.elbow);
   return {
     shoulderMatrix: core.SM,

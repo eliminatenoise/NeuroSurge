@@ -321,11 +321,12 @@ const STEP_TABLE = [
     'Press E again to go back to your own eyes.')],
   intro: [part('Press E to see your back (third person). Press E again to go back.')] },
   // R558 (user: "a 1:1 perpendicular perfect reflection"; "touching the same ground"): the mirror body sits in front
-  // of you like your image in a real mirror, on the same ground (legs forward, as you sit). It is never tipped.
+  // of you like your image in a real mirror, on the same ground (legs forward, as you sit). Its arrows and a drag turn
+  // it round or tilt it (user Message 45: all four arrows orbit).
   { head: 'The mirror body.', need: 'mirror', parts: [part('In front of you sits a mirror image of your body, as in a ' +
     'real mirror, on the same ground. It copies everything your body does. Click its muscles. To carry it, hold Space ' +
     'on it (or tap Space, and tap again to let go) and look or use W/A/S/D: it stays on the ground. Press on it and drag, ' +
-    'or use its arrows, to turn it round or slide it away. Seen through the brain’s clear glass it is still the mirror ' +
+    'or use its arrows, to turn it round or tilt it. Seen through the brain’s clear glass it is still the mirror ' +
     'body you take (hold Shift as you press to take the brain instead). Where it stands in front of a motor area, a ' +
     'press acts on that area and Space holds the brain: hold Shift as you press to take the mirror body.')],
   intro: [part('The mirror body copies you, like a real mirror. Click its muscles. Hold Space on it to carry it, or drag it round.')] }
@@ -347,12 +348,12 @@ const CONTROL_TABLE = [
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
   ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it'],
-  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag (drag the mirror body up or down to slide it away or back). On one of your limbs: drag across it to turn it about its length, like a dial (inside its range).'],
+  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag across it to turn it about its length, like a dial (inside its range).'],
   // R558 (Messages 33 and 34): one reach-behind gesture for every control (ns-controls REACH_CODES).
   ['Shift + press', 'hold Shift as you click, press Space or press and drag: the press acts on the other thing on the same line of sight (the body part in front of a motor area, the brain behind the mirror body, what is behind an arrow tip). Without Shift a press acts on what the “Looking at” card names: a motor area even behind a body, otherwise what you see (the brain’s glass is clear).'],
   // R5-text (D16): no "curved" (the user's R20).
   ['Orbit arrows', 'click an arrow tip by the brain to turn the brain a little about its own centre. Hold it to keep turning. The arrows stay in place.'],
-  ['Mirror body arrows', 'the green arrow tips round the mirror body: the side tips turn it round; the top and bottom tips slide it away or back along the ground. Click for a small step, hold to keep going.', 'mirror'],
+  ['Mirror body arrows', 'the green arrow tips round the mirror body: the side ones turn it round; the top and bottom ones tilt it, so you see it from above or below. Click for a small step, hold to keep going.', 'mirror'],
   ['E', 'see your body from behind your right shoulder (third person). Press E again to go back to your own eyes. Let go of what Space holds first.', 'thirdPerson'],
   // R558 (Message 48): R ("read information") replaces the I key. It steps the information: the side cards (the start),
   // then More detail and the colour key as well, then everything hidden, then the side cards again.
@@ -376,7 +377,7 @@ const INTRO_CONTROL_WORDS = {
   'Press and drag': 'turn the brain, the mirror body or a limb',
   'Shift + press': 'with a click, Space or a drag: reach the other thing in line',
   'Orbit arrows': 'turn the brain in place',
-  'Mirror body arrows': 'turn or slide the mirror body',
+  'Mirror body arrows': 'turn or tilt the mirror body',
   E: 'see your back (third person)',
   R: 'read information: more detail, hide, show',
   Esc: 'pause, help, Reset body, settings'
@@ -1274,8 +1275,8 @@ export const VIEW = deepFreeze({
 
 /** The 3D compass arrows (D16, user R20): four arrows round the brain (top = toward the front, bottom = toward the back,
  * left, right) and four smaller ones round the mirror body. tip = the short hover caption; label = the accessible name
- * (aria-label / title), which also says what a click and a hold do. Mirror arrows: the top / bottom tips slide it
- * away / back along the ground, the side tips turn it round. The round-4 ORBIT captions stay for the HUD buttons until
+ * (aria-label / title), which also says what a click and a hold do. Mirror arrows: the top / bottom tips tilt it (a
+ * view from above / below), the side tips turn it round. The round-4 ORBIT captions stay for the HUD buttons until
  * ns-scene-three retires them.
  * R558 (hunt 2): the camera stays at your eyes, so a brain arrow turns the BRAIN about its own centre (it stays where it
  * is) and shows more of the side the arrow points to; the same turn as a press-and-drag on the brain. */
@@ -1290,11 +1291,12 @@ export const ARROWS = deepFreeze({
     }
   },
   mirror: {
-    // R558: the mirror body stands on the ground and is never tipped; its top and bottom arrows slide it along the ground.
-    tip: { forward: 'Slide the mirror body away from you', back: 'Slide the mirror body back toward you', left: 'Turn the mirror body: go round to the left', right: 'Turn the mirror body: go round to the right' },
+    // R558 (user Message 45): all four arrows orbit. The top and bottom arrows tilt the mirror body about its own
+    // centre (the brain's top and bottom arrows do the same to the brain); they no longer slide it along the ground.
+    tip: { forward: 'Tilt the mirror body: see it from above', back: 'Tilt the mirror body: see it from below', left: 'Turn the mirror body: go round to the left', right: 'Turn the mirror body: go round to the right' },
     label: {
-      forward: 'Slide the mirror body away from you along the ground. Click for a small step. Hold to keep going.',
-      back: 'Slide the mirror body back toward you along the ground. It comes no nearer than where a mirror shows you. Click for a small step. Hold to keep going.',
+      forward: 'Tilt the mirror body so you see it more from above. Click for a small turn. Hold to keep turning. It stops when you look straight down on it.',
+      back: 'Tilt the mirror body so you see it more from below. Click for a small turn. Hold to keep turning. It stops when you look straight up at it.',
       left: 'Turn the mirror body: go round it to the left. Click for a small turn. Hold to keep turning. Go all the way round to see its back.',
       right: 'Turn the mirror body: go round it to the right. Click for a small turn. Hold to keep turning. Go all the way round to see its back.'
     }
@@ -1321,24 +1323,24 @@ export const MIRROR = deepFreeze({
   lead: 'This is a mirror image of you, as in a real mirror in front of you. It copies every move your body makes.',
   explanation: 'It shows the same pose, muscle colours, lifted outer muscles and glow as your body, at the same time. ' +
     'It is only a picture. It is not a second person.',
-  arrows: 'Click a side arrow by the mirror body to turn it a little, or the top or bottom arrow to slide it away or back. ' +
+  arrows: 'Click a side arrow by the mirror body to turn it a little, or the top or bottom arrow to tilt it and see it from above or below. ' +
     'Hold an arrow to keep going. Go all the way round to see its back.',
-  turned: 'You see the mirror body from another side, or farther away. Reset brain view puts it back.',
+  turned: 'You see the mirror body from another side. Reset brain view puts it back.',
   reset: SHELL.resetMirror,
   resetHelp: 'Puts the mirror body back where a mirror shows you.',
   simulated: 'Simulated: it shows the same made-up signals as your body (no real units). Nothing is read from it.',
-  escRow: 'Mirror body: hold Space on it (also through the brain’s clear glass) and look or use W/A/S/D to carry it along the ground; its arrows turn it or slide it. In front of a motor area Space takes the brain, so hold Shift as you press Space; elsewhere Shift + Space takes the brain behind it.',
+  escRow: 'Mirror body: hold Space on it (also through the brain’s clear glass) and look or use W/A/S/D to carry it along the ground; its arrows turn it or tilt it. In front of a motor area Space takes the brain, so hold Shift as you press Space; elsewhere Shift + Space takes the brain behind it.',
   partSuffix: ' (mirror image)',
   /** The task's two short lines: what it is, and how to reach its arrows. */
   what: 'A mirror image of your body. It copies every move you make.',
-  reach: 'Space holds the mirror body; look or W/A/S/D carries it along the ground, and its arrows turn it or slide it.',
+  reach: 'Space holds the mirror body; look or W/A/S/D carries it along the ground, and its arrows turn it or tilt it.',
   side: 'Like a real mirror: your left arm shows on the same side of the screen. Once you turn it round, you see it ' +
     'from behind.',
-  turnedSeparate: 'You see the mirror body from another side, or farther away. Reset mirror body puts it back.',
+  turnedSeparate: 'You see the mirror body from another side. Reset mirror body puts it back.',
   rows: { shows: 'What it shows', side: 'Which side', turn: 'How to turn it' },
   rowShows: 'your pose, colours, lifted muscles and glow, at the same time',
   rowSide: 'like a real mirror, your left arm is on the same side',
-  rowTurn: 'Space and look/WASD carry it on the ground; side arrows turn it, top/bottom arrows slide it'
+  rowTurn: 'Space and look/WASD carry it on the ground; side arrows turn it, top/bottom arrows tilt it'
 });
 
 /** "Your left arm (mirror image)" for an ns-mirror part id; unknown parts read "Your body (mirror image)". */
@@ -1578,7 +1580,7 @@ export const GUIDE = deepFreeze({
     thirdPerson: 'Press E to see your own back. Press E again to go back.',
     // R5-text (D19): the brain catches looks and clicks while it is in front of the mirror body's arrows.
     // (shortened after the 1280x720 shot: 4 lines in the status card; now 82 characters)
-    mirror: 'Space carries the mirror body along the ground with look/WASD; its arrows turn or slide it.'
+    mirror: 'Space carries the mirror body along the ground with look/WASD; its arrows turn or tilt it.'
   },
   partial: {
     moveHandNeedX: 'Good! Now try A or D to move it left or right.',

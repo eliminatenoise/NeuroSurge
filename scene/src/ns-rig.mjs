@@ -124,6 +124,29 @@ export const TWIST_REFINE_MAX_STEP = 0.08;
 /** R558: steps of the per-pose twist table (twistTable): a twisted influence blends two table entries 1/64 of the turn
  * apart (at most 2.8 deg; linear blending shrinks by at most 0.03 %). */
 export const TWIST_TABLE_STEPS = 64;
+/**
+ * R558 (user Messages 36 and 48: the left shoulder muscle jutted out, and at a far-left look the joint looked torn
+ * open). Every arm muscle vertex near the shoulder followed the humerus rigidly, so when the upper arm swung or turned
+ * about its own axis against the chest (up to about 110 deg at a far-left look), the deltoid's origin and the upper ends
+ * of the biceps, coracobrachialis and triceps left the shoulder girdle with it (the deltoid's origin by up to 9.5 cm).
+ * With `shoulder: true` (continuous twist weights only) skinWeights gives each vertex with an upper-arm influence a
+ * place `sf` along the humeral axis: s = the distance (mm) of the vertex below the joint centre along the rest axis
+ * shoulder -> elbow, sf = (s - s0Mm) / (twistMm - s0Mm) clamped to 0..1. At sf 0 the vertex follows the chest frame of
+ * the pose (matrices 'chest': the trunk's orientation, placed so the joint centre is where the arm has it), at sf 1 the
+ * humerus. Between, the upper arm's rotation against the chest is split in two (shoulderFrames): the SWING of the axis,
+ * about the joint centre, so each vertex keeps its distance from the centre, taken up from s0Mm to swingMm; and the
+ * TURN about the axis, so each vertex keeps its distance from the shaft, taken up from s0Mm to twistMm. Both are eased
+ * at their two ends (smoothstep). The two stretches are the same here: from 35 mm above the joint centre, where the
+ * deltoid's origin lies on the girdle, to 130 mm below it, about the deltoid's insertion, so the whole deltoid spreads
+ * the rotation along its length. Measured over 61 looks: the origin of the three parts of the deltoid moves at most
+ * 0.6 cm against the chest, and no edge of them is stretched beyond 2.4 times its rest length or shortened below 0.3 of
+ * it. Above fadeDeg[0] of swing the split fades back to the humerus frame, and from fadeDeg[1] the tissue is rigid with
+ * the humerus again (the swing axis is undefined with the arm opposite its rest direction). The rule is by place only,
+ * the same for every muscle, so neighbouring muscles stay together; bones are not changed. A pose without a 'chest'
+ * matrix skins exactly as before. Display constants: no measured muscle path, origin, insertion or scapulohumeral
+ * rhythm.
+ */
+export const SHOULDER_SKIN = Object.freeze({ s0Mm: -35, swingMm: 130, twistMm: 130, fadeDeg: Object.freeze([150, 170]) });
 
 export const CAP_FRACTION = 0.15;
 export const SHOULDER_CAP_MM = 35;
@@ -1106,7 +1129,7 @@ export function refineForTwist(rig, positions, indices, { maxStep = TWIST_REFINE
  * to bones, and linear blending still thins tissue on the inside of strongly flexed joints. Not calibrated to any
  * recorded contraction or motion.
  */
-export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, power = SKIN_POWER, meetBoost = SKIN_MEET_BOOST, meetCap = SKIN_MEET_CAP, twist = true } = {}) {
+export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, power = SKIN_POWER, meetBoost = SKIN_MEET_BOOST, meetCap = SKIN_MEET_CAP, twist = true, shoulder = false } = {}) {
   checkRig(rig);
   const n = checkPositions(positions, 'positions');
   if (!candidates || typeof candidates.length !== 'number' || candidates.length === 0) fail('rig_segment', 'candidates must list at least one segment');
@@ -1134,6 +1157,12 @@ export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, powe
   const tf = tw && mode === 'continuous' ? new Float32Array(n) : null;
   const U = TWIST_IDX[0];
   const twistStats = { mode: tw ? mode : null, chain: 0, handKept: 0, nearest: 0, maxNearestError: 0, continuous: 0, fullTurn: 0 };
+  // R558 shoulder skin (SHOULDER_SKIN): the place of each upper-arm vertex along the humeral axis; 1 = the humerus frame.
+  const UP = SEGMENTS.indexOf('upperarm');
+  const sf = shoulder && tf && allowed[UP] ? new Float32Array(n).fill(1) : null;
+  const shS = rig.pivots.shoulder, shU = sf ? normalize(sub(rig.pivots.elbow, shS)) : null;
+  const shLen = SHOULDER_SKIN.twistMm - SHOULDER_SKIN.s0Mm;
+  let shoulderCount = 0;
   for (let v = 0; v < n; v++) {
     const px = positions[3 * v], py = positions[3 * v + 1], pz = positions[3 * v + 2];
     if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) fail('rig_input', 'non-finite muscle vertex');
@@ -1214,9 +1243,17 @@ export function skinWeights(rig, positions, { candidates = SKIN_CANDIDATES, powe
         if (a0 === F) a0 = lvl; else a1 = lvl;
       }
     }
+    if (sf && (a0 === UP || (ww1 > 0 && a1 === UP)) && !(tf[v] > 0)) { // a turned ulna influence keeps its two table entries
+      const s = (px - shS[0]) * shU[0] + (py - shS[1]) * shU[1] + (pz - shS[2]) * shU[2];
+      if (s < SHOULDER_SKIN.twistMm) { sf[v] = s <= SHOULDER_SKIN.s0Mm ? 0 : (s - SHOULDER_SKIN.s0Mm) / shLen; shoulderCount++; }
+    }
     i0[v] = a0; i1[v] = a1; w0[v] = ww0; w1[v] = ww1;
   }
-  if (tf) return { i0, i1, w0, w1, tf, twistAxis: rig.axes.forearm_pronation, twistPivot: rig.pivots.radialHead, twist: twistStats };
+  if (tf) {
+    const out = { i0, i1, w0, w1, tf, twistAxis: rig.axes.forearm_pronation, twistPivot: rig.pivots.radialHead, twist: twistStats };
+    if (shoulderCount > 0) { out.sf = sf; out.shoulderPivot = shS; out.shoulderAxis = shU; out.shoulder = { vertices: shoulderCount }; }
+    return out;
+  }
   return { i0, i1, w0, w1, twist: twistStats };
 }
 
@@ -1274,11 +1311,17 @@ export function twistTable(matrices, axis, pivot) {
  * and fraction f becomes the two table entries around f with weights w (1 - fr) and w fr; the plan depends only on the
  * weights (made once per weights object), the maps once per pose (cached with the table). */
 const TWIST_SLOT0 = SEGMENTS.length;
+/** R558 shoulder skin: the slots after the twist table hold the pose's shoulder frames (shoulderFrames), entry k for the
+ * place k / STEPS along the zone; an upper-arm influence with sf < 1 blends the two entries around its place. */
+const SHOULDER_SLOT0 = TWIST_SLOT0 + TWIST_TABLE_STEPS + 1;
+const UPPERARM_IDX = SEGMENTS.indexOf('upperarm');
 const SKIN_PLANS = new WeakMap(), POSE_MAPS = new WeakMap();
 export function twistSkinPlan(weights, n) {
   let p = SKIN_PLANS.get(weights);
   if (p && p.n === n) return p;
   const { i0, i1, w0, w1, tf } = weights, slots = new Uint8Array(3 * n), wts = new Float32Array(3 * n), K = TWIST_TABLE_STEPS;
+  const sf = weights.sf && weights.sf.length >= n ? weights.sf : null;
+  let shoulder = false;
   for (let v = 0; v < n; v++) {
     let m = 3 * v;
     const sum = w1[v] > 0 ? w0[v] + w1[v] : w0[v];
@@ -1288,6 +1331,11 @@ export function twistSkinPlan(weights, n) {
         const x = tf[v] * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k;
         slots[m] = TWIST_SLOT0 + k; wts[m++] = w * (1 - fr);
         slots[m] = TWIST_SLOT0 + k + 1; wts[m++] = w * fr;
+      } else if (seg === UPPERARM_IDX && sf && sf[v] < 1) {
+        const x = Math.max(0, sf[v]) * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k;
+        slots[m] = SHOULDER_SLOT0 + k; wts[m++] = w * (1 - fr);
+        slots[m] = SHOULDER_SLOT0 + k + 1; wts[m++] = w * fr;
+        shoulder = true;
       } else { slots[m] = seg; wts[m++] = w; }
     };
     if (w1[v] > 0 && i1[v] === i0[v]) put(i0[v], 1);
@@ -1296,26 +1344,104 @@ export function twistSkinPlan(weights, n) {
   }
   const used = new Uint8Array(TWIST_SLOT0);
   for (let q = 0; q < slots.length; q++) if (wts[q] > 0 && slots[q] < TWIST_SLOT0) used[slots[q]] = 1;
-  p = { n, slots, weights: wts, used };
+  if (shoulder) used[UPPERARM_IDX] = 1; // the shoulder frames are built from the upper-arm matrix
+  p = { n, slots, weights: wts, used, shoulder };
   SKIN_PLANS.set(weights, p);
   return p;
 }
+
+/**
+ * R558: the pose's shoulder frames (SHOULDER_SKIN), written into `maps` as STEPS + 1 twelve-number maps from `offset`.
+ * Rrel = chest^-1 x upperarm (3x3, scales divided out) is split into swing x turn: the swing is the shortest rotation
+ * that takes the rest humeral axis `axis` to its posed direction, the turn is the rest, a rotation about `axis`. Entry k
+ * (place x = k / STEPS, s = s0Mm + x (twistMm - s0Mm)) is chest x swing(a) x turn(b), a = smoothstep((s - s0Mm) /
+ * (swingMm - s0Mm)) of the swing angle and b = smoothstep(x) of the turn angle (both 1 - fade x (1 - smoothstep) once
+ * the swing is past fadeDeg[0]), and it keeps the joint centre `pivot` where the pose has it (blended by a from the
+ * chest's to the upper arm's, which are the same point in the game). The last entry is the upper-arm matrix itself.
+ * Without a 'chest' matrix, with a mirrored or degenerate frame, or past fadeDeg[1] of swing, every entry is the
+ * upper-arm matrix (the rigid skin from before).
+ * @returns { swingDeg, turnDeg, fade } (null values when the rigid fallback was used).
+ */
+export function shoulderFrames(matrices, axis, pivot, maps, offset = 0) {
+  if (!(matrices instanceof Map)) fail('rig_skin', 'matrices must be a Map(segment -> matrix)');
+  if (!axis || axis.length !== 3 || !pivot || pivot.length !== 3) fail('rig_skin', 'shoulder skin weights need shoulderAxis and shoulderPivot');
+  const K = TWIST_TABLE_STEPS, Um = matrices.get('upperarm'), C = matrices.get('chest');
+  if (!Um) fail('rig_skin', 'shoulder skin weights need the upperarm matrix');
+  const up = [Um[0], Um[1], Um[2], Um[4], Um[5], Um[6], Um[8], Um[9], Um[10], Um[12], Um[13], Um[14]];
+  const rigid = () => { for (let k = 0; k <= K; k++) for (let j = 0; j < 12; j++) maps[offset + 12 * k + j] = up[j]; return { swingDeg: null, turnDeg: null, fade: 0 }; };
+  if (!C || C.length !== 16) return rigid();
+  const su = Math.hypot(Um[0], Um[1], Um[2]), sc = Math.hypot(C[0], C[1], C[2]);
+  if (!(su > 1e-12) || !(sc > 1e-12)) return rigid();
+  // Rrel (row-major): column i of the chest's rotation . column j of the upper arm's
+  const R = new Float64Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) R[3 * i + j] = (C[4 * i] * Um[4 * j] + C[4 * i + 1] * Um[4 * j + 1] + C[4 * i + 2] * Um[4 * j + 2]) / (sc * su);
+  const det = R[0] * (R[4] * R[8] - R[5] * R[7]) - R[1] * (R[3] * R[8] - R[5] * R[6]) + R[2] * (R[3] * R[7] - R[4] * R[6]);
+  if (!(Math.abs(det - 1) < 1e-3)) return rigid();
+  const [ax, ay, az] = axis;
+  const dx = R[0] * ax + R[1] * ay + R[2] * az, dy = R[3] * ax + R[4] * ay + R[5] * az, dz = R[6] * ax + R[7] * ay + R[8] * az;
+  let nx = ay * dz - az * dy, ny = az * dx - ax * dz, nz = ax * dy - ay * dx;
+  const sn = Math.hypot(nx, ny, nz), theta = Math.atan2(sn, ax * dx + ay * dy + az * dz);
+  const fade = 1 - smoothstep((theta / DEG - SHOULDER_SKIN.fadeDeg[0]) / (SHOULDER_SKIN.fadeDeg[1] - SHOULDER_SKIN.fadeDeg[0]));
+  if (!(fade > 0)) return rigid();
+  if (sn > 1e-9) { nx /= sn; ny /= sn; nz /= sn; } else { nx = ny = nz = 0; } // no swing: the axis is not used
+  // rotation about a unit axis (row-major 3x3)
+  const rot = (x, y, z, th) => {
+    const co = Math.cos(th), si = Math.sin(th), t = 1 - co;
+    return [t * x * x + co, t * x * y - si * z, t * x * z + si * y, t * x * y + si * z, t * y * y + co, t * y * z - si * x, t * x * z - si * y, t * y * z + si * x, t * z * z + co];
+  };
+  const mul3 = (A, B) => { const o = new Array(9); for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[3 * i + j] = A[3 * i] * B[j] + A[3 * i + 1] * B[3 + j] + A[3 * i + 2] * B[6 + j]; return o; };
+  // the turn about the axis: swing^-1 x Rrel
+  const S = sn > 1e-9 ? rot(nx, ny, nz, theta) : [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const St = [S[0], S[3], S[6], S[1], S[4], S[7], S[2], S[5], S[8]], T = mul3(St, R);
+  const tau = Math.atan2(((T[7] - T[5]) * ax + (T[2] - T[6]) * ay + (T[3] - T[1]) * az) / 2, (T[0] + T[4] + T[8] - 1) / 2);
+  // the joint centre in the pose, by the chest and by the upper arm
+  const pc = [C[0] * pivot[0] + C[4] * pivot[1] + C[8] * pivot[2] + C[12], C[1] * pivot[0] + C[5] * pivot[1] + C[9] * pivot[2] + C[13], C[2] * pivot[0] + C[6] * pivot[1] + C[10] * pivot[2] + C[14]];
+  const pu = [Um[0] * pivot[0] + Um[4] * pivot[1] + Um[8] * pivot[2] + Um[12], Um[1] * pivot[0] + Um[5] * pivot[1] + Um[9] * pivot[2] + Um[13], Um[2] * pivot[0] + Um[6] * pivot[1] + Um[10] * pivot[2] + Um[14]];
+  const swingZone = (SHOULDER_SKIN.swingMm - SHOULDER_SKIN.s0Mm) / (SHOULDER_SKIN.twistMm - SHOULDER_SKIN.s0Mm);
+  const g = su / sc;
+  for (let k = 0; k < K; k++) {
+    const x = k / K;
+    const a = 1 - fade * (1 - smoothstep(x / swingZone)), b = 1 - fade * (1 - smoothstep(x));
+    const M = mul3(sn > 1e-9 ? rot(nx, ny, nz, a * theta) : S, rot(ax, ay, az, b * tau)); // row-major, rest -> chest frame
+    const o = offset + 12 * k;
+    for (let j = 0; j < 3; j++) { // column j of chest3 x M, at the upper arm's scale
+      const m0 = M[j], m1 = M[3 + j], m2 = M[6 + j];
+      maps[o + 3 * j] = g * (C[0] * m0 + C[4] * m1 + C[8] * m2);
+      maps[o + 3 * j + 1] = g * (C[1] * m0 + C[5] * m1 + C[9] * m2);
+      maps[o + 3 * j + 2] = g * (C[2] * m0 + C[6] * m1 + C[10] * m2);
+    }
+    for (let r = 0; r < 3; r++) {
+      maps[o + 9 + r] = pc[r] + a * (pu[r] - pc[r]) - (maps[o + r] * pivot[0] + maps[o + 3 + r] * pivot[1] + maps[o + 6 + r] * pivot[2]);
+    }
+  }
+  for (let j = 0; j < 12; j++) maps[offset + 12 * K + j] = up[j];
+  return { swingDeg: theta / DEG, turnDeg: tau / DEG, fade };
+}
+
 export function twistPoseMaps(matrices, weights) {
   const table = twistTable(matrices, weights.twistAxis, weights.twistPivot);
-  const hit = POSE_MAPS.get(matrices);
-  if (hit && hit.table === table) return hit.maps;
-  const maps = new Float64Array(12 * (TWIST_SLOT0 + TWIST_TABLE_STEPS + 1));
-  maps.missing = new Uint8Array(TWIST_SLOT0);
-  for (let s = 0; s < TWIST_SLOT0; s++) {
-    const m = matrices.get(SEGMENTS[s]);
-    if (!m) { maps.missing[s] = 1; continue; } // refused in twistMapsFor if a vertex uses it
-    const o = 12 * s;
-    maps[o] = m[0]; maps[o + 1] = m[1]; maps[o + 2] = m[2]; maps[o + 3] = m[4]; maps[o + 4] = m[5]; maps[o + 5] = m[6];
-    maps[o + 6] = m[8]; maps[o + 7] = m[9]; maps[o + 8] = m[10]; maps[o + 9] = m[12]; maps[o + 10] = m[13]; maps[o + 11] = m[14];
+  let hit = POSE_MAPS.get(matrices);
+  if (!hit || hit.table !== table) {
+    const maps = new Float64Array(12 * (SHOULDER_SLOT0 + TWIST_TABLE_STEPS + 1));
+    maps.missing = new Uint8Array(TWIST_SLOT0);
+    for (let s = 0; s < TWIST_SLOT0; s++) {
+      const m = matrices.get(SEGMENTS[s]);
+      if (!m) { maps.missing[s] = 1; continue; } // refused in twistMapsFor if a vertex uses it
+      const o = 12 * s;
+      maps[o] = m[0]; maps[o + 1] = m[1]; maps[o + 2] = m[2]; maps[o + 3] = m[4]; maps[o + 4] = m[5]; maps[o + 5] = m[6];
+      maps[o + 6] = m[8]; maps[o + 7] = m[9]; maps[o + 8] = m[10]; maps[o + 9] = m[12]; maps[o + 10] = m[13]; maps[o + 11] = m[14];
+    }
+    maps.set(table, 12 * TWIST_SLOT0);
+    hit = { table, maps, shoulderPivot: null, shoulder: null };
+    POSE_MAPS.set(matrices, hit);
   }
-  maps.set(table, 12 * TWIST_SLOT0);
-  POSE_MAPS.set(matrices, { table, maps });
-  return maps;
+  // The shoulder frames are filled when the first weights that use them are skinned in this pose (the maps are shared
+  // by every muscle of the pose, and most muscles have no shoulder vertex).
+  if (weights.sf && hit.shoulderPivot !== weights.shoulderPivot && !hit.maps.missing[UPPERARM_IDX]) {
+    hit.shoulder = shoulderFrames(matrices, weights.shoulderAxis, weights.shoulderPivot, hit.maps, 12 * SHOULDER_SLOT0);
+    hit.shoulderPivot = weights.shoulderPivot;
+  }
+  return hit.maps;
 }
 /** The plan and the pose maps of continuous twist weights for n vertices; refuses a pose that lacks a matrix the
  * weights use (as the plain path does). */

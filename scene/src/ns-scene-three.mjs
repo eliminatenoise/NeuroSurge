@@ -304,10 +304,15 @@ export const LIGHT = Object.freeze({
  * looked-at motor area's flash into a white disc: the area's colour was lost. Now the bloom is added and clamped per
  * channel (an orange area's core goes yellow-orange, never white), from 1.1 (a held area glow, about 1.13 encoded at
  * its brightest channel, hardly blooms; a flash, up to about 1.6, does), with a moderate halo.
- * Measured costs are in the build report (frame rate before and after). */
+ * Measured costs are in the build report (frame rate before and after).
+ * safeMax (12 November): the bloom's first pass reads every picture value clamped to 0..safeMax and drops a value that
+ * is not a number. One such pixel used to be spread by the blur chain into a white square about 280 px across (seen at
+ * one exact look, where the x-ray glass's rim term took the power of a number a rounding step below zero; that term
+ * and the two like it are now kept at or above zero). No real picture value is near safeMax (a flash peaks near 3), so
+ * the picture is unchanged. */
 export const HDR_BLOOM = Object.freeze({
   threshold: 1.1, knee: 0.3, strength: 0.45, upGain: 0.7, levels: 5, crossFrom: 2.0, crossK: 0.25,
-  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 3, msaaSamples: 4, ditherLsb: 0.6
+  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 3, msaaSamples: 4, ditherLsb: 0.6, safeMax: 64
 });
 
 /** The HDR target, the bloom chain and the composite (THREE injected). Returns { begin(), end(), setSize(w, h),
@@ -337,12 +342,12 @@ export function createHdrBloom({ THREE, renderer, msaa = true, enabled = true, o
   const pre = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } }, vertexShader: VS,
     fragmentShader: `precision highp float;\nuniform sampler2D tSrc;\nuniform vec2 uTexel;\nvarying vec2 vUv;
 vec3 pick( vec2 uv ) {
-	vec3 c = texture2D( tSrc, uv ).rgb;
+	vec3 c = min( max( texture2D( tSrc, uv ).rgb, 0.0 ), ${f(o.safeMax)} );
 	float b = max( c.r, max( c.g, c.b ) );
 	float s = clamp( b - ${f(o.threshold - o.knee)}, 0.0, ${f(2 * o.knee)} );
 	s = s * s / ${f(4 * o.knee + 1e-5)};
 	float w = max( s, b - ${f(o.threshold)} ) / max( b, 1e-4 );
-	return c * w;
+	return b <= ${f(o.safeMax)} ? c * w : vec3( 0.0 );
 }
 void main() {
 	vec3 a = pick( vUv + uTexel * vec2( -0.5, -0.5 ) ), b = pick( vUv + uTexel * vec2( 0.5, -0.5 ) ), c = pick( vUv + uTexel * vec2( -0.5, 0.5 ) ), d = pick( vUv + uTexel * vec2( 0.5, 0.5 ) );
@@ -1131,7 +1136,7 @@ const GLASS_VERTEX_HOOK = '#include <project_vertex>';
 const GLASS_VERTEX_GLSL = 'if (nsFarEye.w > 1.0) {\n  vNsNormal = normalize( nsRigidN * normal );\n  vec3 nsC = nsFarEye.xyz; vec3 nsU = normalize(nsC); vec3 nsD = mvPosition.xyz - nsC;\n  vNsView = - nsFarEye.w * nsC - (nsD + (nsFarEye.w - 1.0) * dot(nsD, nsU) * nsU);\n} else {\n  vNsNormal = normalize( normalMatrix * normal );\n  vNsView = - mvPosition.xyz;\n}';
 const GLASS_RIM_GLSL = [
   'float nsFacing = abs( dot( normalize( vNsNormal ), normalize( vNsView ) ) );',
-  'diffuseColor.a = mix( diffuseColor.a, nsRimOpacity, pow( 1.0 - nsFacing, nsRimPower ) );'
+  'diffuseColor.a = mix( diffuseColor.a, nsRimOpacity, pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) );'
 ].join('\n');
 const GLASS_FRAGMENT_HOOKS = Object.freeze(['#include <opaque_fragment>', '#include <output_fragment>']);
 
@@ -1203,7 +1208,7 @@ const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.ligh
   `float nsLam = max( dot( nsN, normalize( vec3( ${glslFloat(light[0])}, ${glslFloat(light[1])}, ${glslFloat(light[2])} ) ) ), 0.0 );`,
   'float nsG = clamp( vNsSulc, 0.0, 1.0 );',
   'float nsA = diffuseColor.a + nsRead.x * nsLam * ( 1.0 - nsG );',
-  `nsA = mix( nsA, nsRimOpacity, pow( 1.0 - nsFacing, nsRimPower ) * ( 1.0 - ${rimGroove === null ? 'nsRimGroove' : glslFloat(rimGroove)} * nsG ) );`,
+  `nsA = mix( nsA, nsRimOpacity, pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - ${rimGroove === null ? 'nsRimGroove' : glslFloat(rimGroove)} * nsG ) );`,
   'diffuseColor.a = nsA * mix( 1.0, nsRead.w, nsG ) * ( 1.0 - nsClear * clamp( vNsNear, 0.0, 1.0 ) );',
   'outgoingLight *= ( 1.0 + nsRead.y * nsLam ) * mix( 1.0, nsRead.z, nsG );'
 ].join('\n');
@@ -1689,6 +1694,13 @@ export function matricesEqual(a, b, tol = 0) {
     const x = a.get(s), y = b.get(s);
     if (!x || !y || x.length !== 16 || y.length !== 16) return false;
     for (let i = 0; i < 16; i++) if (!(Math.abs(x[i] - y[i]) <= tol)) return false;
+  }
+  // R558 shoulder skin: the chest frame moves the tissue round the shoulder, so a pose with another chest is another pose.
+  const cx = a.get('chest'), cy = b.get('chest');
+  if (!cx !== !cy) return false;
+  if (cx) {
+    if (cx.length !== 16 || cy.length !== 16) return false;
+    for (let i = 0; i < 16; i++) if (!(Math.abs(cx[i] - cy[i]) <= tol)) return false;
   }
   return true;
 }
@@ -3593,7 +3605,7 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const f = fragmentShader.indexOf(GLOW_RIM_HOOK);
   if (f < 0 || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('totalEmissiveRadiance')) return null;
-  const body = '\tif ( nsGlowRim.r + nsGlowRim.g + nsGlowRim.b > 0.0 ) { float nsGf = 1.0 - abs( dot( normalize( normal ), normalize( vViewPosition ) ) ); ' +
+  const body = '\tif ( nsGlowRim.r + nsGlowRim.g + nsGlowRim.b > 0.0 ) { float nsGf = max( 1.0 - abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0 ); ' +
     'totalEmissiveRadiance += nsGlowRim.rgb * pow( nsGf, max( nsGlowRim.a, 0.5 ) ); }\n';
   return { vertexShader, fragmentShader: 'uniform vec4 nsGlowRim;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
 }
@@ -4184,7 +4196,7 @@ export function patchBehindGlassShaders(vertexShader, fragmentShader, o = BEHIND
  * or { tip, mirrorTip }), else the round-4 ORBIT captions for the brain and ARROW_TIP_FALLBACK for the mirror body.
  * (The fallback wording should move to ns-text; listed in round5/R5-scene-NOTES.md.) */
 export const ARROW_TIP_FALLBACK = Object.freeze({
-  forward: 'Slide the mirror body away from you', back: 'Slide the mirror body back toward you',
+  forward: 'Tilt the mirror body: see it from above', back: 'Tilt the mirror body: see it from below',
   left: 'Turn the mirror body: left side toward you', right: 'Turn the mirror body: right side toward you'
 });
 export function arrowTipText(target, dir, text = NsText) {
@@ -5112,7 +5124,7 @@ export function createScene({
    * says so on every frame, before the picture is drawn). A held item is at a new place on every frame, and every new
    * place used to plan BOTH arrow frames again (the fit, the pair moves and a sight test against your own body for each
    * place tried): about a fifth of the time of a carried frame. So while an item is held its own arrows are not drawn
-   * (it is in the hand; its arrows turn or slide it once it is let go) and no frame is planned again; the first frame
+   * (it is in the hand; its arrows turn or tilt it once it is let go) and no frame is planned again; the first frame
    * after it is let go plans both frames for the new place, as before. The other item's arrows stay where they were. */
   let arrowHeld = null;
   function setHeldItem(target) {
@@ -5542,6 +5554,7 @@ export function createScene({
     enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0, push: 0 },
     external: null, worldCentre: null, transform: null, serial: 0, planeSerial: 0, measured: null, lod: false, twins: 0, error: null,
     correction: null, pipelineMatrix: null, reachForemostM: null, // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
+    reachSphere: null, // R558 (Message 45): your left hand's reach, { centre (world m), radiusM }: a turned mirror body stands back for its image
     viewAwayM: 0 // R558 (Message 52): the outside view's slide (ns-mirror MIRROR_OUTSIDE), set from the camera pose
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
@@ -9134,9 +9147,10 @@ export function createScene({
     return out;
   }
   /** R558 (Message 7): the mirror body's on-screen box (CSS px) seen from a reference camera { yaw, pitch, position },
-   * from the body sample as the renderer places it NOW (mirror.transform) but WITHOUT the slide along the ground (the
-   * top / bottom arrows' push, a pure shift: transform centre minus carryCentre), or null when it is not shown. So a
-   * slide tap never moves the tips (the user: arrows "stay in place after tapping on them"). */
+   * from the body sample as the renderer places it NOW (mirror.transform) but WITHOUT its moves along the ground (the
+   * push, the outside view's slide and a tilt's clearance, a pure shift: transform centre minus carryCentre), or null
+   * when it is not shown. The frame is planned again only for a new place (planFrames' key), so an arrow tap never moves
+   * the tips (the user: arrows "stay in place after tapping on them"). */
   function mirrorBoxPx(look) {
     if (!mirrorRoot.visible || !mirror.transform) return null;
     const W = mirrorSamplesWorld();
@@ -9336,8 +9350,8 @@ export function createScene({
    *    inward only as far as their drawn boxes (hovered size) need to stay inside the usable view (the left and right
    *    tips both by the same amount).
    *  - Mirror body: the smallest 9:16 rectangle containing its on-screen box (its body sample as the renderer places it
-   *    now, read at run time, less its slide along the ground: the top / bottom mirror arrows slide it, and a tap never
-   *    moves a tip), the same way, seen from the reference eye with the START look while the body's centre
+   *    now, read at run time, less its moves along the ground; a tap on an arrow never moves a tip), the same way,
+   *    seen from the reference eye with the START look while the body's centre
    *    lies well inside that view, else with the look straight at its centre (a body carried far aside). Where its
    *    tips would overlap a brain tip (the brain's tips come first), the crosshair box or your own body, they move.
    *  - R558 (Message 31, symmetry): the tips always move in PAIRS (ns-arrows3d frameArrowSpots, FRAME_PAIR): the left
@@ -9423,8 +9437,9 @@ export function createScene({
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
     const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
     if (showM) {
-      // R558 (Message 19 check): planned on the body's place WITHOUT its slide along the ground (carryCentre; the top /
-      // bottom mirror arrows slide it), so a slide tap neither re-plans nor moves the tips; a carry or a reset does.
+      // R558 (Message 19 check): planned on the body's place WITHOUT its moves along the ground (carryCentre), and the
+      // key leaves the orbit out, so an arrow tap (a turn or a tilt) neither re-plans nor moves the tips; a carry or a
+      // reset does.
       const c = mirror.transform.carryCentre || mirror.transform.centre;
       const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}`;
       if ((key !== M.key || M.samplesRef !== mirror.samples) && (!arrowHeld || !M.key)) { // (not while an item is held: setHeldItem)
@@ -10195,7 +10210,7 @@ export function createScene({
       // the hands), not only of the start pose, so no reachable pose ever meets its own reflection.
       const drawnF = Number.isFinite(ex.foremostM) ? ex.foremostM : null, reachF = Number.isFinite(mirror.reachForemostM) ? mirror.reachForemostM : null;
       const foremostM = drawnF === null ? reachF : reachF === null ? drawnF : Math.max(drawnF, reachF);
-      mirror.placement = NsMirror.mirrorReflectionPlacement({ body: mirror.body, eye, foremostM });
+      mirror.placement = NsMirror.mirrorReflectionPlacement({ body: mirror.body, eye, foremostM, reach: mirror.reachSphere });
       mirror.measured = { ms: Math.round((nowMs() - t0) * 10) / 10, foremostPointM: ex.foremostPoint, drawnForemostM: drawnF, reachForemostM: reachF, meshesRead: ex.meshesRead, vertices: ex.vertices, bodyPoseSerial, armPoseSerial };
       mirror.state = mirror.state ? NsMirror.placeMirror(mirror.state, mirror.placement) : NsMirror.createMirrorState(mirror.placement);
       mirror.planeSerial++;
@@ -10221,7 +10236,7 @@ export function createScene({
     mirrorRoot.matrix.fromArray(matrix);
     mirrorRoot.matrixWorldNeedsUpdate = true;
     mirror.transform = { matrix, centre, carryCentre: T.carryCentre ? (C ? NsCollide.apply(C, T.carryCentre[0], T.carryCentre[1], T.carryCentre[2]) : Array.from(T.carryCentre)) : centre.slice(), push: Number.isFinite(T.push) ? T.push : 0,
-      scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch, push: Number.isFinite(T.orbit.push) ? T.orbit.push : 0 } : null };
+      tiltAwayM: Number.isFinite(T.tiltAwayM) ? T.tiltAwayM : 0, reachAwayM: Number.isFinite(T.reachAwayM) ? T.reachAwayM : 0, standBackM: Number.isFinite(T.standBackM) ? T.standBackM : 0, scale: T.scale, det: T.det, orbit: T.orbit ? { yaw: T.orbit.yaw, pitch: T.orbit.pitch, push: Number.isFinite(T.orbit.push) ? T.orbit.push : 0 } : null };
     mirror.serial++;
     overlayDirty = true;
     updateCameraRange();
@@ -10245,8 +10260,9 @@ export function createScene({
   /** R5-scene (D19): the mirror body's view. v:
    *  - an ns-mirror STATE (createMirrorState / applyMirrorOrbit / resetMirror; its placement may be null: the scene's
    *    own placement is then used with the state's orbit and carried place) or an ns-mirror TRANSFORM: used as given;
-   *  - { orbit: { yaw, push } } or { yawDeg, pushM } (ns-mirror convention: yaw > 0 = viewpoint to the right, push > 0 =
-   *    farther along the ground; pitch is always 0) for the scene's own state;
+   *  - { orbit: { yaw, pitch, push } } or { yawDeg, pitchDeg, pushM } (ns-mirror convention: yaw > 0 = viewpoint to the
+   *    right, pitch > 0 = viewpoint up, inside +-MIRROR_ORBIT.pitchLimitDeg, push > 0 = farther along the ground) for
+   *    the scene's own state; a value left out keeps what it was;
    *  - { visible: false | true } shows or hides it (an Esc option, if any); null resets it.
    * R558: a state or null that brings a moved mirror body back to rest (resetMirror) is a reset: the plane is set again
    * from the posed body at the next frame, and the mirror body is the literal reflection again.
@@ -10260,7 +10276,8 @@ export function createScene({
       if (p !== null && (!p || p.length !== 3 || !Array.from(p).every(Number.isFinite))) fail('scene_input', 'normal mirror placement needs finite world metres');
       mirror.worldCentre = p === null ? null : Array.from(p);
     }
-    const orbitOf = o => ({ yaw: o && Number.isFinite(o.yaw) ? o.yaw : 0, pitch: 0, push: o && Number.isFinite(o.push) ? Math.max(0, Math.min(NsMirror.MIRROR_ORBIT.push.maxM, o.push)) : 0 });
+    const pitchLimit = NsMirror.MIRROR_ORBIT.pitchLimitDeg;
+    const orbitOf = o => ({ yaw: o && Number.isFinite(o.yaw) ? o.yaw : 0, pitch: o && Number.isFinite(o.pitch) ? Math.max(-pitchLimit, Math.min(pitchLimit, o.pitch)) + 0 : 0, push: o && Number.isFinite(o.push) ? Math.max(0, Math.min(NsMirror.MIRROR_ORBIT.push.maxM, o.push)) : 0 });
     if (v === null) { mirror.external = null; mirror.worldCentre = null; mirror.orbit = orbitOf(null); }
     else if (v && (v.kind === 'ns-mirror-transform' || v.kind === 'ns-mirror-state')) {
       if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = orbitOf(v.orbit); }
@@ -10269,7 +10286,8 @@ export function createScene({
       const o = v.orbit && typeof v.orbit === 'object' ? v.orbit : v;
       const yaw = Number.isFinite(o.yaw) ? o.yaw : Number.isFinite(o.yawDeg) ? o.yawDeg : null;
       const push = Number.isFinite(o.push) ? o.push : Number.isFinite(o.pushM) ? o.pushM : null;
-      if (yaw !== null || push !== null) { mirror.external = null; mirror.orbit = orbitOf({ yaw: yaw !== null ? yaw : mirror.orbit.yaw, push: push !== null ? push : mirror.orbit.push }); }
+      const pitch = Number.isFinite(o.pitch) ? o.pitch : Number.isFinite(o.pitchDeg) ? o.pitchDeg : null;
+      if (yaw !== null || push !== null || pitch !== null) { mirror.external = null; mirror.orbit = orbitOf({ yaw: yaw !== null ? yaw : mirror.orbit.yaw, pitch: pitch !== null ? pitch : mirror.orbit.pitch, push: push !== null ? push : mirror.orbit.push }); }
       if (typeof v.visible === 'boolean') mirror.enabled = v.visible;
     } else fail('scene_input', 'setMirrorView needs an ns-mirror state / transform, an orbit object or null');
     // A reset (moved -> rest): measure the posed body again and set the plane from it at the next frame.
@@ -10349,11 +10367,13 @@ export function createScene({
     const out = { source: 'ns-mirror', enabled: mirror.enabled, ready: mirror.ready, visible: mirrorRoot.visible, error: mirror.error, twins: mirror.twins, armTwins: bones.length + muscles.length,
       carriedPlacement: { carryHeldAtReconcile: typeof mirror.carryHeldAtReconcile === 'boolean' ? mirror.carryHeldAtReconcile : null, worldCentreM: mirror.worldCentre ? mirror.worldCentre.slice() : null, actualCentreWorldM: T ? T.centre.slice() : null, carryCentreWorldM: T ? T.carryCentre.slice() : null },
       external: mirror.external ? mirror.external.kind : null,
-      orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch, pushM: T.orbit.push } : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch, pushM: mirror.orbit.push },
+      orbit: T && T.orbit ? { yawDeg: T.orbit.yaw, pitchDeg: T.orbit.pitch, pushM: T.orbit.push, tiltAwayM: Number.isFinite(T.tiltAwayM) ? T.tiltAwayM : 0, reachAwayM: Number.isFinite(T.reachAwayM) ? T.reachAwayM : 0, standBackM: Number.isFinite(T.standBackM) ? T.standBackM : 0 }
+        : { yawDeg: mirror.orbit.yaw, pitchDeg: mirror.orbit.pitch, pushM: mirror.orbit.push, tiltAwayM: 0, reachAwayM: 0, standBackM: 0 },
       scale: T ? T.scale : null, centre: T ? T.centre.map(v => Math.round(v * 1000) / 1000) : null, determinant: T ? T.det : null,
       matrix: T ? T.matrix.slice() : null,
       reflection: Pl && Pl.plane ? { rule: Pl.rule, normal: Pl.plane.normal.slice(), offsetM: Pl.plane.offsetM, eyeM: Pl.plane.eyeM.slice(), distanceM: Pl.plane.distanceM, foremostM: Pl.plane.foremostM, boxForemostM: Pl.plane.boxForemostM, clearanceM: Pl.plane.clearanceM,
         drawnForemostM: mirror.measured && Number.isFinite(mirror.measured.drawnForemostM) ? mirror.measured.drawnForemostM : null, reachForemostM: Number.isFinite(mirror.reachForemostM) ? mirror.reachForemostM : null, // R558 (Message 12)
+        reach: Pl.reach ? { centreM: Pl.reach.centre.slice(), radiusM: Pl.reach.radiusM } : null, // R558 (Message 45): the reach sphere a turned body stands back for
         pureMatrix: Pl.matrix.slice(), atRest: rest, restMaxDiff: rest ? restDiff : null, tolerance: NsMirror.MIRROR_REFLECTION.matrixTolerance, planeSerial: mirror.planeSerial, measured: mirror.measured } : null,
       body: mirror.body ? { heightM: Math.round(mirror.body.height * 1000) / 1000, radiusM: Math.round(mirror.body.radius * 1000) / 1000, points: mirror.body.count } : null,
       lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount, brainNearM: behindGlass.nearM }, onScreen: null, check: null };
@@ -10737,11 +10757,19 @@ export function createScene({
   }
   /** R558 (Message 12): how far in front of the eye (metres, along the body's forward axis) your body can ever reach (the
    * app measures it over the joint ranges). The mirror plane is set in front of it; when it arrives after the plane was
-   * set and the mirror body is still untouched, the plane is set again at once (the start picture, before any input). */
-  function setMirrorReach(m) {
+   * set and the mirror body is still untouched, the plane is set again at once (the start picture, before any input).
+   * `sphere` (optional, R558 Message 45): { centre (world m), radiusM }, everything your left hand can reach; it is
+   * kept on the placement so a turned or tilted mirror body stands back for its mirror image (ns-mirror
+   * MIRROR_ORBIT.reachClear). It never moves the plane. */
+  function setMirrorReach(m, sphere = null) {
     mirror.reachForemostM = Number.isFinite(m) && m > 0 ? m : null;
+    const sc = sphere && sphere.centre;
+    mirror.reachSphere = sc && sc.length === 3 && Array.prototype.every.call(sc, Number.isFinite) && Number.isFinite(sphere.radiusM) && sphere.radiusM > 0
+      ? { centre: [sc[0], sc[1], sc[2]], radiusM: sphere.radiusM } : null;
     const Pl = mirror.placement && mirror.placement.plane;
-    if (mirror.reachForemostM !== null && Pl && mirrorAtRest() && Number.isFinite(Pl.foremostM) && Pl.foremostM < mirror.reachForemostM - 1e-6) setMirrorPlane();
+    const nearer = mirror.reachForemostM !== null && Pl && Number.isFinite(Pl.foremostM) && Pl.foremostM < mirror.reachForemostM - 1e-6;
+    const noSphere = Boolean(mirror.reachSphere && mirror.placement && !mirror.placement.reach);
+    if ((nearer || noSphere) && Pl && mirrorAtRest()) setMirrorPlane();
     return mirror.placement && mirror.placement.plane ? { distanceM: mirror.placement.plane.distanceM, foremostM: mirror.placement.plane.foremostM } : null;
   }
   /** R558 (Message 12): the mirror body's matrices: drawn (what is shown), pipeline (the placement, turn and carry before

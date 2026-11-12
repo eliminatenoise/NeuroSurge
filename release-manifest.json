@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-12-body-update-4",
+  "version": "experimental-2026-11-12-body-update-5",
   "experimental": true,
-  "source": "Body update (R558), fourth upload, published at the user's standing instruction of 12 November 2026 to upload each finished version, before independent review. Since the third upload: a held trunk movement bends the trunk under the head and keeps the view; after a head movement the bottom-left card says how to bring the head back and names the number key; a movement whose part is held the other way is marked “first press brings it back”, and the card says when a key only brought a part back or moved nothing; the short information card shows each of its parts whole or leaves it out; the card takes an area in the frame a look's rest takes its movement; two new test files. No performance work went into this upload. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 67 to 71.",
+  "source": "Body update (R558), fifth upload, published at the user's standing instruction of 12 November 2026 to upload each finished version, before independent review. Since the fourth upload: the mirror body turns all the way round and tilts, from its four arrows or a drag, and stands farther back where a turned or tilted body would otherwise reach you; the muscles of the left shoulder stay on the shoulder at far looks; a white square that covered part of the picture at one exact look is gone; three new test files. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 72 to 74.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 143454,
-      "sha256": "080b6d1a3ba51f5422b00ab04295e0646438a25dd7df6804fb1d172f83385721"
+      "bytes": 158265,
+      "sha256": "e09bfe44ea3fbbb00591e8dd783f5c68c211be46deb69415edecb9ee0aed2694"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 7149,
-      "sha256": "66ae54f2cbc75d2bff1709cf2de945bd0d7fc58c7b8cbe08423079739dd6ccde"
+      "bytes": 7479,
+      "sha256": "d1be4f96c8a69d997f3478033d0081e7087cf16599c4d6a6911659219825c088"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 34728,
-      "sha256": "d25236d7e5ac8be0e67cc8fc2c80702e161a0bd12cb3e9fc1bf5069704751ffa"
+      "bytes": 37175,
+      "sha256": "5d7ef99a16310766cc0cbde53440b3e3434ddea2167ceceb3b6561adc5e8ad09"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 8710,
-      "sha256": "20d8ff9f7a30dbd0f4284d558b66c8a754fabfe866ac592d8dc0ef408bd30113"
+      "bytes": 10102,
+      "sha256": "5a1d69843a0623d3647b58cbd671ee7ce0c0d507c36022295d570fd2728841e2"
     },
     {
       "path": "README.md",
-      "bytes": 9616,
-      "sha256": "571212e5be98ea4eb0e9ae0cab3efa0d040c509b79af9070f6c4bd282fc17dac"
+      "bytes": 9923,
+      "sha256": "5cd06906e254b23385872d459a8932fdffa21c30c1ff1961494f1d8c5779ec21"
     },
     {
       "path": "START.html",
       "bytes": 3733,
-      "sha256": "f72df6f7714bb216346a7c12f9ee5362da1154eb9970c31858070a37470b4e59"
+      "sha256": "25c2c179d74bd3c70b4f3382d76bc55df51b8d20cd6dab0520f021182d30f818"
     },
     {
       "path": "index.html",
@@ -3437,13 +3437,13 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 656895,
-      "sha256": "3e80933d542430923b9da32d9145ba37fe4c8ac2f8fc63b355a73ec4bc54f622"
+      "bytes": 657386,
+      "sha256": "b1d5e833894ce66f45061d25fb8c02ca6a762c535be8a27683d25ae225dfe09c"
     },
     {
       "path": "scene/src/ns-arm.mjs",
-      "bytes": 143187,
-      "sha256": "5c59acbaf7c2319f7c3756dc741bac856795c4ef3d831fb00b5dba87a911e07b"
+      "bytes": 144443,
+      "sha256": "bd136fa6e855b29b69e75049f9584703a535c67f6e017fab4ac015e77fedb662"
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
@@ -3527,8 +3527,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 39576,
-      "sha256": "06018f220ceca4bc1a58f9a6bbb298fd31832a4da30dec90e15e1b0c8d5668d7"
+      "bytes": 47043,
+      "sha256": "d667975efdb8ee31cba1225a57af8d1ac8629c98c5a5951694328626a50331af"
     },
     {
       "path": "scene/src/ns-obj.mjs",
@@ -3562,18 +3562,18 @@
     },
     {
       "path": "scene/src/ns-rig.mjs",
-      "bytes": 85244,
-      "sha256": "8c70b4df6e4c19ee112c24b5fb82814a604e113403912726650bca0f06fd743c"
+      "bytes": 95534,
+      "sha256": "aa9d969beff4cd3607f766c84bbb0bd893b32bc394e53f2a6e512e196e693727"
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 925193,
-      "sha256": "a8c7b01cd5a7a24832bd7dd6682ec7ea906b909145c050b609c7a80857db87d3"
+      "bytes": 928184,
+      "sha256": "86706c80b1196ee6edcbf6f12d82a0885068edf98b9e6cc5c1630bdffe9d3262"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 133411,
-      "sha256": "7284c36bfff57c9f794185a34da2398bed2d09a3df63623873361590e9c75496"
+      "bytes": 133574,
+      "sha256": "053adbb9309d0c36473af21f57d28e51080a2c606b4833ee6b46940659ffc113"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
@@ -3631,6 +3631,11 @@
       "sha256": "70f863e170166adb8c9be1320d422b3cf6ffa1af568b5cb1043f0ecd00c568ac"
     },
     {
+      "path": "tests/mirror-orbit.test.mjs",
+      "bytes": 17978,
+      "sha256": "85057bb3abb3704c7bc28922a6dd6885109ec9927b13d08abafb160778db8d4a"
+    },
+    {
       "path": "tests/move-key.test.mjs",
       "bytes": 23358,
       "sha256": "02bfab3e1c9c7148a97b4a3364cd3df9b6195811586c7665e35a41ed890f1bb3"
@@ -3644,6 +3649,16 @@
       "path": "tests/quality-controller.test.mjs",
       "bytes": 4917,
       "sha256": "865dd38dc6bd030900c4189037e1854797b473f09be5348d023e8e18596781e1"
+    },
+    {
+      "path": "tests/shader-safe.test.mjs",
+      "bytes": 6259,
+      "sha256": "01bc946dc92e6c62131372b6648abd6de8361d81e019d3689d21517c52d48d13"
+    },
+    {
+      "path": "tests/shoulder-skin.test.mjs",
+      "bytes": 15357,
+      "sha256": "8212be6e1782ef4f7327538f09aa250a600513f08923322581335825fd518f0e"
     },
     {
       "path": "tests/space-gesture.test.mjs",

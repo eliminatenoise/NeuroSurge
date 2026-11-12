@@ -757,7 +757,7 @@ export function prepareSceneData({ binding, assets = null, placeholder = false, 
       const r = refineForTwist(rig, positions, indices);
       if (r.added) { positions = r.positions; indices = r.indices; refined.vertices += r.added; refined.muscles++; }
     }
-    muscles.push({ id, name: role.name, muscleKey: key, positions, indices, weights: skinWeights(rig, positions, { twist: armTwist }) });
+    muscles.push({ id, name: role.name, muscleKey: key, positions, indices, weights: skinWeights(rig, positions, { twist: armTwist, shoulder: true }) });
     if (key === null) unmapped.push({ id, name: role.name });
   }
   const right = assets.brain.get(BRAIN.rightPrecentral);
@@ -1782,9 +1782,9 @@ export const GIRDLE_FOLLOW_LIMIT_MM = 50;
  * pointer (checked in the browser for both items; an orbit name says which way the VIEW goes round the item). */
 export const DRAG_TURN_DIRS = Object.freeze({
   brain: Object.freeze({ right: 'left', left: 'right', down: 'forward', up: 'back' }),
-  // R558: the mirror body is never tipped (it stands on the ground); an up / down drag slides it along the ground: drag
-  // up pushes it away ('forward', its top arrow), drag down pulls it back ('back', its bottom arrow).
-  mirror: Object.freeze({ right: 'left', left: 'right', down: 'back', up: 'forward' })
+  // R558 (user Messages 45 and 46): an up / down drag on the mirror body tilts it, as on the brain: drag down brings its
+  // top toward you ('forward', its top arrow), drag up tilts its top away ('back', its bottom arrow).
+  mirror: Object.freeze({ right: 'left', left: 'right', down: 'forward', up: 'back' })
 });
 /** R558: for a tapped muscle that no map action lists as a mover, the motor-map region of its body part (by the body
  * rig's segment). The area of that body part lights; no movement is made up for the muscle. */
@@ -6517,16 +6517,16 @@ export function start(params = {}) {
       }
       /** R558 (hunt 2 code #1): a mirror move held back at contact (X: the matrix found clear, share f of this frame's move)
        * is folded into where the mirror body is placed, so nothing runs on hidden behind a correction: the same share of a
-       * turn or a slide (arrows, drag) into its turn and slide, a carry's held-back part into the carried place itself (and
+       * turn or a tilt (arrows, drag) into its turn and tilt, a carry's held-back part into the carried place itself (and
        * the held carry's look anchor: ns-reference-graph shiftMirrorCarry), so letting go and taking it again starts from
-       * where it is drawn. What is left (a sliver from the turn and slide paths differing a little from the blend) stays a
+       * where it is drawn. What is left (a sliver from the turn and tilt paths differing a little from the blend) stays a
        * correction on top, so the drawn body is exactly the share found clear. Returns the drawn matrix. */
       function foldMirror(X, mm, f) {
         const prev = mirrorViewDrawn, cur = mirrorView;
         let view = cur;
-        if (prev && prev.orbit && cur.orbit && (prev.orbit.yaw !== cur.orbit.yaw || (prev.orbit.push || 0) !== (cur.orbit.push || 0))) {
+        if (prev && prev.orbit && cur.orbit && (prev.orbit.yaw !== cur.orbit.yaw || (prev.orbit.pitch || 0) !== (cur.orbit.pitch || 0) || (prev.orbit.push || 0) !== (cur.orbit.push || 0))) {
           const mix = (a, b) => a + (b - a) * f;
-          view = Object.freeze({ ...view, orbit: Object.freeze({ ...cur.orbit, yaw: mix(prev.orbit.yaw, cur.orbit.yaw), push: mix(prev.orbit.push || 0, cur.orbit.push || 0) }) });
+          view = Object.freeze({ ...view, orbit: Object.freeze({ ...cur.orbit, yaw: mix(prev.orbit.yaw, cur.orbit.yaw), pitch: mix(prev.orbit.pitch || 0, cur.orbit.pitch || 0), push: mix(prev.orbit.push || 0, cur.orbit.push || 0) }) });
         }
         if (cur.worldCentre && Array.isArray(mm.pipelineCarryCentre)) {
           const C = NsCollide.mul(X, NsCollide.affineInverse(mm.pipeline)), c0 = mm.pipelineCarryCentre, c1 = NsCollide.apply(C, c0[0], c0[1], c0[2]);
@@ -6886,7 +6886,10 @@ export function start(params = {}) {
         if (!sh || !ri) return null;
         const hand = (sh[0] - eyeW[0]) * fw[0] + (sh[1] - eyeW[1]) * fw[1] + (sh[2] - eyeW[2]) * fw[2] + armReachM + 0.05;
         const foremostM = Math.max(legs, arm, hand);
-        reachForward = { foremostM, restForemostM: restF, by: foremostM === legs ? 'legs' : foremostM === arm ? 'right arm' : 'left hand reach', legsM: legs, rightArmM: arm, leftHandReachM: hand, armReachM };
+        // The same sphere (the shoulder as measured, the arm's length and the same few centimetres) is handed to the
+        // scene with the reach, so a turned or tilted mirror body stands back for its mirror image (Message 45).
+        reachForward = { foremostM, restForemostM: restF, by: foremostM === legs ? 'legs' : foremostM === arm ? 'right arm' : 'left hand reach', legsM: legs, rightArmM: arm, leftHandReachM: hand, armReachM,
+          shoulderM: [sh[0], sh[1], sh[2]], handReachRadiusM: armReachM + 0.05 };
         return reachForward;
       }
       /** QA (inspect({ collision: true })): the smallest gaps now between the three items (metres, searched up to 5 m;
@@ -7944,7 +7947,7 @@ export function start(params = {}) {
         // stands in front of every reachable pose (it is set again at once if it was nearer; only before any input).
         if (!reachSent && bodyPosed && sceneFn('setMirrorReach')) {
           let r = null; try { r = bodyReachForward(); } catch { r = null; }
-          if (r && Number.isFinite(r.foremostM)) { try { callScene('setMirrorReach', r.foremostM); } catch { /* the plane stays at the drawn foremost point */ } reachSent = true; }
+          if (r && Number.isFinite(r.foremostM)) { try { callScene('setMirrorReach', r.foremostM, { centre: r.shoulderM, radiusM: r.handReachRadiusM }); } catch { /* the plane stays at the drawn foremost point */ } reachSent = true; }
         }
         // The activity supplies the SAME current display levels used by the brain and muscle colours. The existing
         // scene adapter resolves each existing action to its catalog/mesh targets; no new motor map or signal is added.
