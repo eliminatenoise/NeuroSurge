@@ -60,7 +60,7 @@
  */
 import { DEG, clamp } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
-import { createControls, bindDom, CONTROL_CODES } from './ns-controls.mjs';
+import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
   MUSCLE_COVERAGE_GAPS, eyePosition, parseObjFast, streamFullbodyAssets, fullbodyAppInputs
@@ -89,6 +89,8 @@ import * as NM from './ns-mirror.mjs';
 // Round 5 (R5-integrate-core, stage 1): the third-person camera (R5-camera, D18), the 3D compass-arrow input (R5-input,
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
+// R558 (Messages 55 / 56): the arrow tips' sizes, for the brain's floor above the mirror body's top tip (brainFloorNdc).
+import { arrowTipSizePx, arrowHitHalfPx } from './ns-arrows3d.mjs';
 import * as ReferenceGraph from './ns-reference-graph.mjs';
 // Input epochs (ported from the public main's 11 November input fixes): cancel stale input at pause / focus /
 // visibility / reset / rescue boundaries, and bound the input carried over refused frames.
@@ -400,7 +402,7 @@ export const ORBIT_DIRS = Object.freeze(['left', 'right', 'forward', 'back']);
 export const ARROW_INPUT_TARGETS = Object.freeze(['brain', 'mirror']);
 /** Available app wiring, refined against the actual scene/activity/body hooks at runtime. Availability is not a
  * completed tutorial action, an observed pixel or independent validation. */
-export const GUIDE_FEATURES = Object.freeze({ thirdPerson: true, glow: true, mirror: true });
+export const GUIDE_FEATURES = Object.freeze({ thirdPerson: true, glow: true, mirror: true, moveKeys: true });
 export const ORBIT_FALLBACK = Object.freeze({ stepDeg: 15, maxYawDeg: 60, maxPitchDeg: 30 });
 /** R558 (genuine note R26, "no floating face at the top"): the separate own-face display (a ghosted layer seen when
  * looking up, or an inset box) is retired. 'off' is the only value; the mirror body shows the face, and the view from
@@ -830,6 +832,45 @@ export function gazeAnglesToward(point) {
   return { yaw: Math.atan2(-point[0] / l, -point[2] / l), pitch: Math.asin(clamp(point[1] / l, -1, 1)) };
 }
 
+/** R558 (Messages 55 and 56: easier to use; a learning tool): the motor areas as ONE WALK across both strips, for the
+ * area keys (ns-controls AREA_CODES). Each strip is ordered by the body map's own `order` (0 = toes, on the inner
+ * face of the hemisphere, up over the top and down the side to 26 = the lowest face area). The two strips meet at the
+ * midline, so the walk is: the LEFT hemisphere from its lowest area up to its toes, then the RIGHT hemisphere from its
+ * toes down to its lowest area. At the starting view that reads from the screen's left to its right. Pure: region ids
+ * in walk order; entries without an id, an order or a hemisphere are left out. */
+export function areaChain(regions) {
+  const list = Array.isArray(regions) ? regions.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.order) && (r.hemisphere === 'left' || r.hemisphere === 'right')) : [];
+  const side = h => list.filter(r => r.hemisphere === h).sort((a, b) => a.order - b.order).map(r => r.id);
+  return Object.freeze([...side('left').reverse(), ...side('right')]);
+}
+/** The areas an area key tries from `fromId`, nearest first, walking the chain by `step` (+1 | -1) to its end. Empty
+ * for an id the chain does not have, for another step, and at the end of the walk (it does not wrap around). Pure. */
+export function areaStepCandidates(chain, fromId, step) {
+  const i = Array.isArray(chain) && typeof fromId === 'string' ? chain.indexOf(fromId) : -1;
+  if (i < 0 || (step !== 1 && step !== -1)) return [];
+  const out = [];
+  for (let k = i + step; k >= 0 && k < chain.length; k += step) out.push(chain[k]);
+  return out;
+}
+/** R558 (Messages 55 and 56): the area an area key's walk goes on from (pure). The crosshair can leave an area without
+ * the player doing anything: a look resting on a neck or trunk area takes its movement, and the head, which the camera
+ * rides on, carries the view away. The walk must then go on from the area it was on, not from wherever the view came
+ * to rest (seen in the browser: after the trunk area the next key press jumped to the throat area). The kept area
+ * stays while the player has neither moved the look (`lookMs`: the controls' time of the last look movement) nor
+ * pressed the button (`buttonSeq`); with nothing kept the area under the look (`gazeId`) is taken; the area an area
+ * key just landed on (`steppedId`) always is. Returns { id, lookMs, buttonSeq } | null. */
+export function areaWalkStep(prev, { gazeId = null, steppedId = null, lookMs = null, buttonSeq = null } = {}) {
+  const area = v => (typeof v === 'string' && v.length > 0 ? v : null);
+  if (area(steppedId)) return { id: steppedId, lookMs, buttonSeq };
+  if (prev && area(prev.id) && prev.lookMs === lookMs && prev.buttonSeq === buttonSeq) return prev;
+  return area(gazeId) ? { id: gazeId, lookMs, buttonSeq } : null;
+}
+/** How an area key finds the look that puts the crosshair on a point (areaStep in createSim). Solver choices, not
+ * measurements: the look is corrected until the crosshair ray is within doneRad of the point (well inside the
+ * smallest area), in at most maxIter corrections; at most `looksPerArea` points of an area are tried; one key press
+ * may spend at most maxTests classifier calls and maxRays camera rays, after which the step gives up for that press. */
+export const AREA_STEP = Object.freeze({ doneRad: 3e-4, maxIter: 12, looksPerArea: 3, maxTests: 900, maxRays: 90, gainMin: 0.05, gainMax: 2 });
+
 /* ------------------------------------------------------------------ activity gate (addendum) */
 
 function cancelPulse(s) {
@@ -1216,15 +1257,18 @@ const uniq = list => [...new Set(list.filter(x => typeof x === 'string' && x !==
 
 /**
  * The ONE action of a body-map region the info overlay explains (round-2 fix SCI-1 / F5): the action the activity is
- * actually pulsing in this region, else the gaze's action id (region action id or arm action id), else the same
- * position rule as ns-actions pickRegionAction (the strip position u inside the region's core, else its extent), else
- * the first action. Null for a region without actions.
+ * actually pulsing in this region, else the movement a number key chose here (`chosenId`, R558: infoChosenStep), else
+ * the gaze's action id (region action id or arm action id), else the same position rule as ns-actions pickRegionAction
+ * (the strip position u inside the region's core, else its extent), else the first action. Null for a region without
+ * actions.
  */
-export function infoRegionAction(region, { actionId = null, u = null, pulse = null } = {}) {
+export function infoRegionAction(region, { actionId = null, u = null, pulse = null, chosenId = null } = {}) {
   const acts = region && Array.isArray(region.actions) ? region.actions.filter(a => a && typeof a === 'object') : [];
   if (!acts.length) return null;
   const byId = id => (typeof id === 'string' ? acts.find(a => a.id === id || a.armActionId === id) || null : null);
   if (pulse && pulse.regionId === region.id) { const p = byId(pulse.actionId); if (p) return p; }
+  const c = byId(chosenId);
+  if (c) return c;
   const g = byId(actionId);
   if (g) return g;
   // R558 (strip audit round 2): the core, as ns-actions pickRegionAction and ns-brain regionActionAt split it.
@@ -1234,6 +1278,60 @@ export function infoRegionAction(region, { actionId = null, u = null, pulse = nu
     return acts[clamp(Math.floor(f * acts.length), 0, acts.length - 1)];
   }
   return acts[0];
+}
+
+/**
+ * R558 (latch): true when a body-map action would move nothing now. A body movement: the activity's own answer
+ * (`still`: ns-actions latchView still, the keys "areaId/movementId" of the movements whose joints are already where
+ * the movement puts them, the start posture included), for the area `regionId`. A game-arm movement: from the arm's
+ * own state (ns-guide armActionMoves: already latched on, or a straighten of an elbow already straight); a forearm
+ * turn from the palm's state (`rotationState`). Pure; false when the state needed is not given.
+ */
+export function infoActionAtEnd(a, { leftArm = false, regionId = null, still = null, armState = null, rotationState = null } = {}) {
+  if (!a || typeof a !== 'object') return false;
+  if (leftArm) {
+    const armId = typeof a.armActionId === 'string' ? a.armActionId : a.id;
+    if (armId === 'pronation') return rotationState === 'pronated';
+    if (armId === 'supination') return rotationState === 'supinated';
+    return Boolean(armId && armState && !NG.armActionMoves(armId, armState));
+  }
+  return typeof regionId === 'string' && typeof a.id === 'string' && Array.isArray(still) && still.includes(`${regionId}/${a.id}`);
+}
+
+/**
+ * R558 (Messages 55 and 56): how long the movement a number key chose stays the one the information card explains.
+ * `chosen` = { regionId, actionId, gazePick } (gazePick undefined until the first frame after the key). It is kept
+ * while the look stays where it was when the key was pressed (the same band of the strip, or off the strip), and
+ * dropped (null) when the look moves to another band or area, or when another movement of that area is switched on
+ * (`pulse` = { regionId, actionId }). Pure.
+ */
+export function infoChosenStep(chosen, { gaze = null, pulse = null } = {}) {
+  if (!chosen || typeof chosen.regionId !== 'string' || typeof chosen.actionId !== 'string') return null;
+  const pick = gaze && gaze.target === 'region' && typeof gaze.regionId === 'string'
+    ? `${gaze.regionId}/${gaze.actionId || gaze.regionActionId || ''}` : null;
+  if (chosen.gazePick !== undefined && chosen.gazePick !== pick) return null;
+  if (pulse && pulse.regionId === chosen.regionId && typeof pulse.actionId === 'string' && pulse.actionId !== chosen.actionId) return null;
+  return chosen.gazePick === pick ? chosen : { regionId: chosen.regionId, actionId: chosen.actionId, gazePick: pick };
+}
+
+/** R558 (Messages 55 and 56): the most movements one card lists; the number keys 1..9 (ns-controls MOVE_CODES) do them. */
+export const INFO_MOVES_MAX = 9;
+
+/**
+ * R558 (Messages 55 "a lot easier to use and play and more intuitive" and 56 "a learning tool for people learning motor
+ * neuroanatomy"): the numbered movement list of one motor area, in the map's own order (the order of its bands along
+ * the strip). The information card shows it and number key n does movement n, so every movement of an area can be
+ * reached without aiming at its narrow band. Returns [{ n (1..9), id, label (plain words), current (the movement the
+ * card explains), atEnd (it would move nothing now) }]; [] for an area that moves nothing. Pure.
+ */
+export function infoMoves(region, { currentId = null, leftArm = false, still = null, armState = null, rotationState = null } = {}) {
+  const acts = region && Array.isArray(region.actions) ? region.actions.filter(a => a && typeof a === 'object' && typeof a.id === 'string') : [];
+  return acts.slice(0, INFO_MOVES_MAX).map((a, i) => ({
+    n: i + 1, id: a.id,
+    label: (typeof a.plainLabel === 'string' && a.plainLabel) || (typeof a.label === 'string' && a.label) || a.id,
+    current: a.id === currentId,
+    atEnd: infoActionAtEnd(a, { leftArm, regionId: region.id, still, armState, rotationState })
+  }));
 }
 
 /** Plain-language pathway line for a body-map region (round-2 fixes SCI-3, SCI-5, F6): built from the region's own
@@ -1260,6 +1358,51 @@ export const INFO_LIVE = Object.freeze({ minLevel: 0.08, gazeKeeps: 0.05 });
 const GRIP_AREA_ID = 'rh_hand';
 
 /**
+ * R558 (Messages 55 and 56: "a lot easier to use and play and more intuitive"): when the look takes over the information
+ * card. restS: the look has to rest on a motor area this long before the card (and with it the number keys) changes to
+ * that area: the same time the activity asks before a look's movement stays (ns-actions GAZE_DWELL.latchS), so the
+ * card changes when the movement is taken. An area the look only crossed stays out of the "switched on now" card for
+ * as long as the glow of that crossing lasts, and at least graceS after the look left it.
+ */
+export const INFO_SETTLE = Object.freeze({ restS: NsActions.GAZE_DWELL.latchS, graceS: 0.6 });
+
+/**
+ * R558 (Messages 55 and 56): one step of the rule above. The areas of the strip are small and lie side by side, so a
+ * look that leaves a chosen area for the body crosses others on its way; without this rule the card, and the area the
+ * number keys act on, became the last area crossed. Pure.
+ * `prev`: the state returned last frame (null at the start or after a reset). Input: `regionId` the motor area under
+ * the look (null: none); `t` simulated seconds; `keptId` the area whose card is kept now (null: no card yet, so there
+ * is nothing to protect and the first area looked at is taken at once); `chosenId` the area of the movement a number
+ * key chose; `clickedId` the area of a running pulse that a click, a tap on a muscle or a number key started;
+ * `levels` the areas' display levels; `pulseId` the area of the running pulse.
+ * Returns { regionId, since, settled, crossed }: `settled` is true when the card may follow the look (always false with
+ * no area under it); `crossed` = { areaId: untilT } are the areas the look only crossed (the area under an unsettled
+ * look included).
+ */
+export function infoSettleStep(prev, { regionId = null, t = 0, keptId = null, chosenId = null, clickedId = null, levels = null, pulseId = null } = {}) {
+  const p = prev && typeof prev === 'object' ? prev : null;
+  const now = Number.isFinite(t) ? t : 0;
+  const on = typeof regionId === 'string' && regionId !== '' ? regionId : null;
+  const meant = id => typeof id === 'string' && (id === chosenId || id === clickedId);
+  let since = null, settled = false;
+  if (on) {
+    const same = Boolean(p && p.regionId === on && Number.isFinite(p.since) && p.since <= now);
+    since = same ? p.since : now;
+    settled = (same && p.settled === true) || typeof keptId !== 'string' || keptId === on || meant(on) || now - since >= INFO_SETTLE.restS - 1e-9;
+  }
+  const crossed = {};
+  if (p && p.crossed && typeof p.crossed === 'object') {
+    for (const [id, until] of Object.entries(p.crossed)) {
+      if (id === on || meant(id)) continue;
+      const level = levels && Number.isFinite(levels[id]) ? levels[id] : 0;
+      if (now < until || level > INFO_LIVE.minLevel || pulseId === id) crossed[id] = until;
+    }
+  }
+  if (on && !settled) crossed[on] = now + INFO_SETTLE.graceS;
+  return { regionId: on, since, settled, crossed };
+}
+
+/**
  * Model of the far-right information overlay (R14) for what the player looks at or clicks: region, hemisphere, body
  * part, the ONE simulated action and its muscles (working / easing off; never the same muscle in both), a plain lead
  * sentence, a plain pathway, simulated vs known, the region's own short caveat, the longer explanation, general caveats
@@ -1267,19 +1410,24 @@ const GRIP_AREA_ID = 'rh_hand';
  * movement-map left-arm action (binding), else generic text. With the crosshair on empty space the previous model is
  * kept and marked 'last'. `pulse` = { regionId, actionId } of the activity's running pulse (ns-app stepFrame out.pulse
  * regionId / regionActionId), so the card names the action that is actually simulated.
+ * R558 (Messages 55 and 56; infoSettleStep): `settled` false = the look has not rested on the area under it yet, so
+ * the card stays what it was (the area switched on now, else the kept one); `ignore` = { areaId: ... } the areas the
+ * look only crossed, which the "switched on now" card leaves out.
  * Pure: plain JSON out. `key` changes only when the subject changes (the renderer re-draws text only then).
  */
 export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, regionActivity = null, activatedRegions = null,
-  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, jointAngles = null, armState = null,
-  reach = null, grip = null, live = true } = {}) {
+  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, still = null, armState = null,
+  reach = null, grip = null, chosen = null, live = true, settled = true, ignore = null } = {}) {
   const g = gaze && typeof gaze.target === 'string' ? gaze : normalizeGaze(gaze, bodyMap);
+  const onArea = g.target === 'region' && settled !== false;
+  const crossed = id => Boolean(ignore && typeof id === 'string' && Object.prototype.hasOwnProperty.call(ignore, id));
   const common = { heading: INFO_TEXT.heading, simulated: INFO_TEXT.simulated, known: INFO_TEXT.known, crownNote: INFO_TEXT.crownNote };
   const blank = { plain: '', regionCaveat: '', action: null };
   const levelOf = id => (id && regionActivity && Number.isFinite(regionActivity[id]) ? regionActivity[id] : 0);
   // R558 (Messages 50 and 56: a learning tool; the panel says WHAT IS HAPPENING, not only what you look at). A reach
   // key held (W, A, S, D) shows its own card: key, strip part, movement, muscles (ns-text reachInfoCard), unless the
   // area under the crosshair is itself switched on (then that area's card stays).
-  const reachCard = live !== false && Array.isArray(reach) && reach.length && !(g.target === 'region' && levelOf(g.regionId) > INFO_LIVE.gazeKeeps)
+  const reachCard = live !== false && Array.isArray(reach) && reach.length && !(onArea && levelOf(g.regionId) > INFO_LIVE.gazeKeeps)
     ? NT.reachInfoCard(reach) : null;
   if (reachCard) {
     const top = reach.reduce((a, r) => (r && Number.isFinite(r.level) && r.level > a ? r.level : a), 0);
@@ -1292,39 +1440,31 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
   // muscles; ns-text graspInfoCard) while the hand closes and while it opens again, unless another area under the
   // crosshair is itself switched on.
   const gripCard = live !== false && grip && (grip.phase === 'close' || grip.phase === 'open') && typeof NT.graspInfoCard === 'function'
-    && !(g.target === 'region' && g.regionId !== GRIP_AREA_ID && levelOf(g.regionId) > INFO_LIVE.gazeKeeps) ? NT.graspInfoCard(grip) : null;
+    && !(onArea && g.regionId !== GRIP_AREA_ID && levelOf(g.regionId) > INFO_LIVE.gazeKeeps) ? NT.graspInfoCard(grip) : null;
   if (gripCard) {
     return { ...common, ...blank, key: `grasp|${gripCard.key}`, mode: 'region', viewed: 'now', source: 'grasp', title: gripCard.title,
       technicalTitle: gripCard.title, tag: gripCard.tag, region: null, regionId: GRIP_AREA_ID, actionId: null, hemisphere: 'right',
       bodyPart: 'Left hand', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
       activity: levelOf(GRIP_AREA_ID), activations: 0, card: gripCard };
   }
-  // R558 (hunt 3): the crosshair on the brain's bare glass behind your body (stepFrame tags the gaze coveredBy; a motor
-  // area there is looked at through the body since the lead decision refining Messages 33 and 34): not the glass card's
-  // "no motor area ... carry the brain".
-  if (g.target === 'glass' && (g.coveredBy === 'own' || g.coveredBy === 'mirror')) {
-    const own = g.coveredBy === 'own';
-    return { ...common, ...blank, key: `covered:${g.coveredBy}`, mode: 'glass', viewed: 'now', source: 'generic',
-      title: own ? INFO_TEXT.coveredOwnTitle : INFO_TEXT.coveredMirrorTitle, tag: '',
-      region: null, regionId: null, actionId: null, hemisphere: null, bodyPart: null, agonists: [], antagonists: [],
-      pathway: '', explanation: own ? INFO_TEXT.coveredOwnBody : INFO_TEXT.coveredMirrorBody, caveats: [...INFO_TEXT.caveats], citations: [], activity: null, activations: null };
-  }
-  if (g.target === 'glass') {
-    return { ...common, ...blank, key: 'glass', mode: 'glass', viewed: 'now', source: 'generic', title: INFO_TEXT.glassTitle, tag: '',
-      region: null, regionId: null, actionId: null, hemisphere: g.hemisphere, bodyPart: null, agonists: [], antagonists: [],
-      pathway: '', explanation: INFO_TEXT.glassBody, caveats: [...INFO_TEXT.caveats], citations: [], activity: null, activations: null };
-  }
-  if (g.target !== 'region') {
+  if (!onArea) {
     // R558 (Messages 50 and 56): with the crosshair off the strip, the card of the area that is switched on NOW (by a
     // key, a click on a muscle, a held limb): the area the running pulse belongs to, else the strongest one. So every
     // activation names its strip part, movement and muscles without having to look at it.
+    // R558 (Messages 55 and 56): the brain's bare glass counts as off the strip here too (it had its own card first):
+    // the area you looked at last keeps its card and its numbered movements while you look at the glass around it,
+    // at your body or at the mirror body, so the number keys go on working there.
+    // R558 (infoSettleStep): the same while the look has not rested on the area under it yet; and an area the look only
+    // crossed (`ignore`) is not "switched on now" for the card, though its short look pulse shows on the brain.
+    const lastActionOf = id => (last && last.mode === 'region' && last.regionId === id && last.action && typeof last.action.id === 'string' ? last.action.id : null);
     if (live !== false && regionActivity && bodyMap) {
-      let id = pulse && levelOf(pulse.regionId) > INFO_LIVE.minLevel ? pulse.regionId : null;
+      let id = pulse && !crossed(pulse.regionId) && levelOf(pulse.regionId) > INFO_LIVE.minLevel ? pulse.regionId : null;
       if (!id) {
         // The strongest area; when several are on together (Space turns every limb), a LEFT-arm area first: the left
         // arm is the limb the keys drive and the card teaches.
         let best = INFO_LIVE.minLevel, bestLeft = INFO_LIVE.minLevel, idLeft = null;
         for (const k of Object.keys(regionActivity)) {
+          if (crossed(k)) continue;
           const v = levelOf(k);
           if (v > best) { best = v; id = k; }
           if (v > bestLeft) { const rk = regionById(bodyMap, k); if (rk && rk.isLeftArm === true) { bestLeft = v; idLeft = k; } }
@@ -1333,11 +1473,21 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
       }
       const r = id ? regionById(bodyMap, id) : null;
       if (r) {
-        const m = infoOverlayModel({ gaze: { target: 'region', regionId: id, actionId: null, regionActionId: pulse && pulse.regionId === id ? pulse.actionId : null,
+        // The pulse's own movement; after the pulse, the movement this area's card showed last (not its first one).
+        const m = infoOverlayModel({ gaze: { target: 'region', regionId: id, actionId: null, regionActionId: pulse && pulse.regionId === id ? pulse.actionId : lastActionOf(id),
           hemisphere: r.hemisphere || null, isLeftArm: r.isLeftArm === true, u: null }, binding, bodyMap, regionActivity, activatedRegions, activatedActions,
-          displayDrives, last: null, pulse, rotationState, jointAngles, armState, reach: null, live: false });
+          displayDrives, last: null, pulse, rotationState, still, armState, reach: null, live: false });
         return { ...m, key: `${m.key}|live`, source: 'live' };
       }
+    }
+    // R558 (Messages 55 and 56): the kept card of a body-map area is built afresh from the area and the state now (its
+    // live signal, and which of its numbered movements are already at their end), with the movement it showed last.
+    const lastRegion = last && last.mode === 'region' && last.region && bodyMap ? regionById(bodyMap, last.regionId) : null;
+    if (lastRegion) {
+      const m = infoOverlayModel({ gaze: { target: 'region', regionId: lastRegion.id, actionId: null, regionActionId: lastActionOf(lastRegion.id),
+        hemisphere: lastRegion.hemisphere || null, isLeftArm: lastRegion.isLeftArm === true, u: null }, binding, bodyMap, regionActivity, activatedRegions, activatedActions,
+        displayDrives, last: null, pulse, rotationState, still, armState, reach: null, live: false });
+      return { ...m, key: `${m.key}|last`, viewed: 'last', source: last.source };
     }
     // R558 (hunt 2): the kept card shows the area's LIVE signal (it was the value frozen when you looked away, so an
     // area long switched off kept a full bar), the same lookup as a card for the area itself.
@@ -1347,6 +1497,21 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
       const liveActivations = last.regionId && activatedRegions && Number.isFinite(activatedRegions[last.regionId]) ? activatedRegions[last.regionId]
         : last.actionId && activatedActions && Number.isFinite(activatedActions[last.actionId]) ? activatedActions[last.actionId] : 0;
       return { ...last, key: `${last.key}|last`, viewed: 'last', activity: liveActivity, activations: liveActivations };
+    }
+    // R558 (hunt 3): the crosshair on the brain's bare glass behind your body (stepFrame tags the gaze coveredBy; a motor
+    // area there is looked at through the body since the lead decision refining Messages 33 and 34): not the glass card's
+    // "no motor area ... carry the brain".
+    if (g.target === 'glass' && (g.coveredBy === 'own' || g.coveredBy === 'mirror')) {
+      const own = g.coveredBy === 'own';
+      return { ...common, ...blank, key: `covered:${g.coveredBy}`, mode: 'glass', viewed: 'now', source: 'generic',
+        title: own ? INFO_TEXT.coveredOwnTitle : INFO_TEXT.coveredMirrorTitle, tag: '',
+        region: null, regionId: null, actionId: null, hemisphere: null, bodyPart: null, agonists: [], antagonists: [],
+        pathway: '', explanation: own ? INFO_TEXT.coveredOwnBody : INFO_TEXT.coveredMirrorBody, caveats: [...INFO_TEXT.caveats], citations: [], activity: null, activations: null };
+    }
+    if (g.target === 'glass') {
+      return { ...common, ...blank, key: 'glass', mode: 'glass', viewed: 'now', source: 'generic', title: INFO_TEXT.glassTitle, tag: '',
+        region: null, regionId: null, actionId: null, hemisphere: g.hemisphere, bodyPart: null, agonists: [], antagonists: [],
+        pathway: '', explanation: INFO_TEXT.glassBody, caveats: [...INFO_TEXT.caveats], citations: [], activity: null, activations: null };
     }
     return { ...common, ...blank, key: 'idle', mode: 'idle', viewed: 'now', source: 'generic', title: INFO_TEXT.idleTitle, tag: '',
       region: null, regionId: null, actionId: null, hemisphere: null, bodyPart: null, agonists: [], antagonists: [],
@@ -1363,7 +1528,8 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
     // Round 3 (R17/D3): the plain name leads (ns-bodymap plainLabel); the technical label stays for More detail.
     title = NT.plainTitle(region);
     bodyPart = typeof region.effector === 'string' ? region.effector : null;
-    picked = infoRegionAction(region, { actionId: g.actionId || g.regionActionId || null, u: g.u, pulse });
+    picked = infoRegionAction(region, { actionId: g.actionId || g.regionActionId || null, u: g.u, pulse,
+      chosenId: chosen && chosen.regionId === region.id ? chosen.actionId : null });
     if (picked) {
       if (Array.isArray(picked.agonists)) agonists.push(...picked.agonists);
       if (Array.isArray(picked.antagonists)) antagonists.push(...picked.antagonists);
@@ -1398,20 +1564,20 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
   // Round 3 (D3): the plain card (lead + at most 4 rows + short honesty lines; the technical layer in a collapsed
   // "More detail"), built by ns-text from the same region, action and numbers.
   // R558 (latch): a body movement whose every joint already sits at its end moves nothing; the card says so.
-  const pj = picked && !leftArm && picked.joints && typeof picked.joints === 'object' ? Object.entries(picked.joints) : [];
-  // R558 (hunt 2): a game-arm movement from the arm's own state (ns-guide armActionMoves: already latched on, or a
-  // straighten of an elbow already straight); the forearm turns keep their own "already" words (rotationState).
+  // R558 (hunt 2): a game-arm movement from the arm's own state (infoActionAtEnd); the forearm turns keep their own
+  // "already" words (rotationState), so the card's atEnd leaves them out.
   const armId = picked && leftArm ? (typeof picked.armActionId === 'string' ? picked.armActionId : picked.id) : null;
   const armRot = armId === 'pronation' || armId === 'supination';
-  const atEnd = leftArm ? Boolean(armId && !armRot && armState && !NG.armActionMoves(armId, armState))
-    : Boolean(jointAngles && pj.length && pj.every(([j, v]) => Number.isFinite(jointAngles[j]) && Math.abs(jointAngles[j] - v) < 0.5));
+  const atEnd = Boolean(picked) && !armRot && infoActionAtEnd(picked, { leftArm, regionId: region ? region.id : null, still, armState, rotationState });
   const card = region ? NT.plainInfoCard({ region, action: picked, leftArm, activity, activations, citations, caveats: [...INFO_TEXT.caveats], rotationState, atEnd }) : null;
+  // R558 (Messages 55 and 56): the area's numbered movement list; `movesRegionId` is the area a number key acts on.
+  const moves = region ? infoMoves(region, { currentId: picked ? picked.id : null, leftArm, still, armState, rotationState }) : [];
   // R3-fix (SL-2): a forearm-turn card changes when the palm flips (its "already ... nothing moves" note).
   const rotKey = (picked && (picked.armActionId === 'pronation' || picked.armActionId === 'supination') && typeof rotationState === 'string' ? `|${rotationState}` : '') + (atEnd ? '|at-end' : '');
   return {
     ...common, key: `region|${regionKey}|${picked ? picked.id : g.actionId || ''}${rotKey}`, mode: 'region', viewed: 'now', source, title,
     technicalTitle: region && typeof region.label === 'string' ? region.label : title,
-    tag: leftArm ? INFO_TEXT.leftArmTag : integration ? INFO_TEXT.integrationTag : INFO_TEXT.otherTag,
+    tag: region ? NT.areaTag(region, leftArm) : leftArm ? INFO_TEXT.leftArmTag : integration ? INFO_TEXT.integrationTag : INFO_TEXT.otherTag,
     region: region ? { id: region.id, label: title, bodySide: region.bodySide || null, medialSurface: region.medialSurface === true, kind: region.kind || 'effector' } : null,
     regionId: g.regionId, actionId: g.actionId, hemisphere: g.hemisphere, bodyPart,
     action: picked ? {
@@ -1424,7 +1590,8 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
     pathway: region ? infoPathway(region, leftArm) : leftArm ? INFO_TEXT.leftArmPathway : INFO_TEXT.otherPathway,
     known: region ? infoKnown(region, leftArm) : leftArm ? infoKnown({ kind: 'effector' }, true) : INFO_TEXT.known,
     regionCaveat: region ? String(region.plainCaveat || region.caveat || '') : '',
-    explanation, caveats, citations, activity, activations, card
+    explanation, caveats, citations, activity, activations, card,
+    moves, movesRegionId: moves.length ? region.id : null
   };
 }
 
@@ -1468,8 +1635,36 @@ export function portraitReachStartX(aspect) {
 /** R558 (genuine note R27): how far above the middle of the view the motor band's box is centred when the brain is
  * first framed (normalised device units: 1 = the top edge). 0.2 puts the leg areas, at the bottom of the band's U,
  * at about the middle of a 16:9 view (they sat about a fifth of the half height below it). Display choice, viewed in
- * the browser; the user gave no number. */
+ * the browser; the user gave no number. Since Messages 55 / 56 this is the rule only where brainFloorNdc gives no
+ * floor (no pixel size yet). */
 export const BRAIN_RAISE_NDC = 0.2;
+/**
+ * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
+ * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
+ * mirror body's head covered the middle of the motor strip, which is where the leg, foot and toe areas are, so a
+ * learner could not see or aim at them.
+ *  mirrorFrameTopFrac  where the top of the mirror body's 9:16 arrow frame is at the start, as a share of the view
+ *                      height from the top. MEASURED in the browser at the start pose (480.2 / 1080, 400.2 / 900 and
+ *                      341.5 / 768); the vertical field of view is the same for every landscape window, so one share
+ *                      serves them all. In a portrait window the frame's top is a little lower (550.1 / 1200 = 0.458,
+ *                      885.6 / 1920 = 0.461), so the same share leaves a slightly larger gap there. The mirror body's
+ *                      top arrow tip sits on the middle of that line.
+ *  clearPx             the gap kept between the strip and that tip's click area (4 px + one 4 px planning cell).
+ *  minAspect           narrower windows than this would keep the BRAIN_RAISE_NDC rule; 0 = none do. Portrait windows
+ *                      get the floor too: without it the mirror body's head hid the leg areas there as well and its
+ *                      top tip had no clear place (viewed and measured at 800x1200 and 1080x1920).
+ * This is a display choice with no anatomical meaning. When the mirror body is moved or the look changes the brain and
+ * the body can overlap again, as before; the arrow planner still keeps every tip off the motor areas (ns-scene-three).
+ */
+export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0 });
+/** The lowest height of the view the motor strip may reach at the start (normalised device units, +1 = the top edge),
+ * or null when there is no floor (no size, or a window narrower than rule.minAspect). Pure. */
+export function brainFloorNdc(size, { rule = BRAIN_FLOOR } = {}) {
+  if (!size || !(size.width > 0 && size.height > 0) || size.width / size.height < rule.minAspect) return null;
+  const tip = arrowTipSizePx(size, 'mirror');
+  const floorPx = rule.mirrorFrameTopFrac * size.height - arrowHitHalfPx(tip).halfAlongPx - rule.clearPx;
+  return Math.round(clamp(1 - 2 * floorPx / size.height, -0.85, 0.85) * 1e4) / 1e4;
+}
 /** R558 (genuine note R31): press on the brain or the mirror body and drag to turn it about its centre, "by how much we
  * drag". degPerPx: degrees turned per CSS px dragged (300 px sweeps a quarter turn of the mirror body; the brain stops
  * at its own orbit limits). The surface under the pointer follows the drag: drag right and the near side goes right.
@@ -1703,7 +1898,12 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         // more centered"): the framing centres the motor band BRAIN_RAISE_NDC above the middle of the view. The whole
         // brain is placed by this one framing (areas, labels, hit geometry and arrows are all derived from it), so it
         // moves up rigidly; nothing moves inside the brain.
-        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, BRAIN_RAISE_NDC] };
+        // R558 (Messages 55 / 56): once the pixel size is known the band instead rests on brainFloorNdc, just above the mirror
+        // body's top arrow tip, so the leg and foot areas are in the open and still the nearest areas to the middle of
+        // the view. The floor is a pure function of the pixel size, which the re-frame test above already covers.
+        const floor = px ? brainFloorNdc(px) : null;
+        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, floor === null ? BRAIN_RAISE_NDC : floor] };
+        if (floor !== null) fo.motorFloorNdc = floor;
         if (brainBounds) fo.brainBounds = brainBounds;
         if (px) {
           fo.viewportPx = px;
@@ -1879,8 +2079,10 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   // person: the eye's ray, exactly as in round 4).
   // R558 (hunt 3): prev is the previous frame's RAW classifier gaze (state.rawGaze), never the gaze after the object-pick
   // overrides, so an override that ends (your body moves off the crosshair) gives the area back under a still look.
-  function classify(prev, yaw, pitch, placement, reframed, viewKey, brain, camRay = null) {
-    if (sameClassifyInput(prev, yaw, pitch, reframed, viewKey)) {
+  // R558 (Messages 55 and 56): `fresh` (an area key just placed the look) classifies with no memory of the area looked
+  // at before, so the classifier's boundary hysteresis cannot keep the old area under a look placed on its neighbour.
+  function classify(prev, yaw, pitch, placement, reframed, viewKey, brain, camRay = null, fresh = false) {
+    if (!fresh && sameClassifyInput(prev, yaw, pitch, reframed, viewKey)) {
       return { ...prev, moved: false };
     }
     const moved = Boolean(prev) && (Math.abs(yaw - prev.yaw) > movedRad || Math.abs(pitch - prev.pitch) > movedRad);
@@ -1892,7 +2094,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       // (dots first, then strip triangles, then the glass grid), with region and action hysteresis.
       const ray = camRay ? NC.brainSourceRay(camRay, brain.transform) : NsBrain.gazeRayForView(yaw, pitch, brain.transform);
       raw = NsBrain.classifyRegionGaze(ray.origin, ray.dir, segmentation, {
-        activeRegionId: prev ? prev.regionId : null, activeActionId: prev ? prev.actionId : null, markers: strip.markers
+        activeRegionId: prev && !fresh ? prev.regionId : null, activeActionId: prev && !fresh ? prev.actionId : null, markers: strip.markers
       });
     } else {
       const ray = gazeRayInSource(yaw, pitch, placement);
@@ -1990,8 +2192,10 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // to it afresh EVERY frame: the scene's picks (your body or the mirror body in front, an arrow tip) change while the
     // look stays still, so a cached overridden gaze would keep a newly uncovered area dead until the mouse moved.
     const prevRaw = state.rawGaze || null;
-    const rawCached = sameClassifyInput(prevRaw, gl.yaw, gl.pitch, reframed, viewKey);
-    const rawGaze = classify(prevRaw, gl.yaw, gl.pitch, placement, reframed, viewKey, brain, camRay);
+    // R558 (Messages 55 and 56): an area key placed this look (inputs.gazeFresh): classified anew, like a look that moved.
+    const gazeFresh = Boolean(inputs && inputs.gazeFresh === true);
+    const rawCached = !gazeFresh && sameClassifyInput(prevRaw, gl.yaw, gl.pitch, reframed, viewKey);
+    const rawGaze = classify(prevRaw, gl.yaw, gl.pitch, placement, reframed, viewKey, brain, camRay, gazeFresh);
     let gaze = rawGaze;
     if (gaze.target === 'empty' && inputs && inputs.glassHit === true && !regionMode) gaze = { ...gaze, kind: 'glass', target: 'glass' };
     // R22 visible UI/mirror targets do not stimulate a brain area behind them. Actual glass remains graspable.
@@ -2422,6 +2626,164 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return out;
   }
 
+  /** R558 (Messages 55 and 56: easier to use; a learning tool): the look an AREA KEY steps to. The motor areas are small
+   * and lie side by side, so the mouse alone needs a steady hand; an area key puts the crosshair on the NEXT area of the
+   * walk (areaChain) in the key's direction on the screen, at a point of that area which the classifier really returns
+   * for the ray the camera casts there. `rayForLook(look)` is the app's own crosshair ray for a controls look (head
+   * pose, held neck / trunk offsets and the view included) and `clampLook(look)` its look range; the look is corrected
+   * (secant steps) until that ray passes through the point, then classified once more with no hysteresis.
+   * The walk starts from `startId` (the area the walk was last on while the player has not moved the look: the app's
+   * areaWalkStep), else the area under the look, else (look off the brain) `fromId` (the card's area), else the area
+   * nearest the crosshair, which is then the first one tried. An area with no point that can be
+   * looked at from here (hidden by the brain's own shape in this view, or outside the look's range) is passed over.
+   * @returns {{ regionId, look: { yaw, pitch }, from, passed, tests, rays }
+   *   | { regionId: null, end: boolean, from, passed, tests, rays } | null}
+   *   end true: no further area that way; end false: the search budget (AREA_STEP) ran out; null: not available. */
+  const areaIds = regionMode && segmentation && Array.isArray(segmentation.regions) && segmentation.regionById instanceof Map
+    ? areaChain(segmentation.regions) : Object.freeze([]);
+  const AREA_POINTS_PER_PART = 24;
+  const areaPoints = new Map();
+  let areaSides = null;
+  /** Candidate look points of an area in the brain's own space (so they hold for every view): its label anchor and
+   * centroid, then sampled triangle centroids of its surface parts. Built once per area. */
+  function areaPointsOf(id) {
+    let pts = areaPoints.get(id);
+    if (pts) return pts;
+    pts = [];
+    const r = segmentation.regionById.get(id);
+    if (r) {
+      for (const h of ['right', 'left']) {
+        const b = r.byHemisphere && r.byHemisphere[h];
+        if (b && b.anchor) pts.push(b.anchor);
+        if (b && b.centroid) pts.push(b.centroid);
+      }
+      for (const part of segmentation.parts || []) {
+        if (part.regionId !== id || !part.indices || !part.positions) continue;
+        const nTri = part.indices.length / 3, stepT = Math.max(1, Math.floor(nTri / AREA_POINTS_PER_PART));
+        for (let t = 0; t < nTri; t += stepT) {
+          const P = part.positions, I = part.indices, c = [0, 0, 0];
+          for (let k = 0; k < 3; k++) for (let a = 0; a < 3; a++) c[a] += P[3 * I[3 * t + k] + a] / 3;
+          pts.push(c);
+        }
+      }
+    }
+    areaPoints.set(id, pts);
+    return pts;
+  }
+  function areaStep(state, { dir, fromId = null, startId = null, look, rayForLook, clampLook } = {}) {
+    if (!regionMode || !areaIds.length || !state || !state.view || !state.brainFrame) return null;
+    if ((dir !== 1 && dir !== -1) || !look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch) || typeof rayForLook !== 'function') return null;
+    const rawBrain = brainTransformFor(state.view, state.brainFrame);
+    const { transform } = referenceGraph ? ReferenceGraph.translateBrainRecord(rawBrain, state.referenceBrain, initialBrainOrigin) : rawBrain;
+    if (!transform) return null;
+    const A = AREA_STEP, limit = typeof clampLook === 'function' ? clampLook : c => c;
+    let tests = 0, rays = 0;
+    const vec = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+    const cast = c => { rays++; const r = rayForLook(c); return r && vec(r.origin) && vec(r.dir) ? r : null; };
+    const start = limit({ yaw: look.yaw, pitch: look.pitch });
+    const ray0 = cast(start);
+    if (!ray0) return null;
+    const worldOf = c => NsBrain.viewSourceToWorld(c, transform);
+    /** The area the classifier returns for a world ray (no hysteresis), or null. */
+    const areaOn = (origin, dirW) => {
+      tests++;
+      const ray = NC.brainSourceRay({ origin, dir: dirW }, transform);
+      const q = NsBrain.classifyRegionGaze(ray.origin, ray.dir, segmentation, { markers: strip.markers });
+      return q && q.kind === 'region' && typeof q.regionId === 'string' ? q.regionId : null;
+    };
+    // Which way the walk runs on the screen: the side of the view the right hemisphere's areas lie on.
+    if (!areaSides) {
+      const m = { left: [0, 0, 0, 0], right: [0, 0, 0, 0] };
+      for (const id of areaIds) {
+        const r = segmentation.regionById.get(id), p0 = areaPointsOf(id)[0];
+        if (!r || !p0 || !m[r.hemisphere]) continue;
+        const acc = m[r.hemisphere];
+        acc[0] += p0[0]; acc[1] += p0[1]; acc[2] += p0[2]; acc[3] += 1;
+      }
+      areaSides = m.left[3] && m.right[3] ? { left: m.left.slice(0, 3).map(v => v / m.left[3]), right: m.right.slice(0, 3).map(v => v / m.right[3]) } : {};
+    }
+    let side = 1;
+    if (areaSides.left && areaSides.right) {
+      const d = ray0.dir, l = Math.hypot(d[0], d[2]);
+      const right = l > 1e-9 ? [-d[2] / l, 0, d[0] / l] : [1, 0, 0];
+      const a = worldOf(areaSides.right), b = worldOf(areaSides.left);
+      if ((a[0] - b[0]) * right[0] + (a[2] - b[2]) * right[2] < -1e-6) side = -1;
+    }
+    const step = dir * side;
+    const known = id => typeof id === 'string' && areaIds.includes(id);
+    const g = state.gaze || null;
+    let from = known(startId) ? startId : g && g.target === 'region' && known(g.regionId) ? g.regionId
+      : g && g.target === 'glass' ? null : known(fromId) ? fromId : null;
+    let order;
+    if (from) order = areaStepCandidates(areaIds, from, step);
+    else {
+      // No area to start from: the one nearest the crosshair is the first to try, then on along the walk.
+      let best = null, bestDot = -Infinity;
+      const o = ray0.origin, d = ray0.dir;
+      for (const id of areaIds) {
+        const p0 = areaPointsOf(id)[0];
+        if (!p0) continue;
+        const w = worldOf(p0), v = [w[0] - o[0], w[1] - o[1], w[2] - o[2]], l = Math.hypot(v[0], v[1], v[2]);
+        const dot = l > 0 ? (v[0] * d[0] + v[1] * d[1] + v[2] * d[2]) / l : -Infinity;
+        if (dot > bestDot) { bestDot = dot; best = id; }
+      }
+      if (!best) return null;
+      order = [best, ...areaStepCandidates(areaIds, best, step)];
+    }
+    const passed = [];
+    const report = extra => ({ ...extra, from, passed, tests, rays });
+    if (!order.length) return report({ regionId: null, end: true });
+    const wrap = x => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
+    /** The controls look whose crosshair ray passes through world point w: { look, ray } | null. */
+    const solve = w => {
+      let c = start, gy = 1, gp = 1, prev = null;
+      for (let i = 0; i < A.maxIter && rays < A.maxRays; i++) {
+        const ray = i === 0 ? ray0 : cast(c);
+        if (!ray) return null;
+        let a, b;
+        try { a = gazeAnglesToward([w[0] - ray.origin[0], w[1] - ray.origin[1], w[2] - ray.origin[2]]); b = gazeAnglesToward(ray.dir); } catch { return null; }
+        const ey = wrap(a.yaw - b.yaw), ep = a.pitch - b.pitch;
+        if (Math.abs(ey) + Math.abs(ep) < A.doneRad) return { look: c, ray };
+        if (prev) {
+          // How much of a change of the look reaches the crosshair ray (1 in first person; less in third person, whose
+          // camera swings round the body with the look): measured from the last correction, kept inside sane bounds.
+          const dy = c.yaw - prev.c.yaw, dp = c.pitch - prev.c.pitch;
+          if (Math.abs(dy) > 1e-6) { const k = wrap(prev.ey - ey) / dy; if (k >= A.gainMin && k <= A.gainMax) gy = k; }
+          if (Math.abs(dp) > 1e-6) { const k = (prev.ep - ep) / dp; if (k >= A.gainMin && k <= A.gainMax) gp = k; }
+        }
+        prev = { c, ey, ep };
+        const n = limit({ yaw: c.yaw + ey / gy, pitch: c.pitch + ep / gp });
+        if (!n || !Number.isFinite(n.yaw) || !Number.isFinite(n.pitch) || (n.yaw === c.yaw && n.pitch === c.pitch)) return null; // held at an end of the look's range
+        c = n;
+      }
+      return null;
+    };
+    const m = TARGET_MARGIN_RAD, o0 = ray0.origin;
+    for (const id of order) {
+      if (tests >= A.maxTests || rays >= A.maxRays) return report({ regionId: null, end: false });
+      // Points of this area that can be seen from here; one with the area all round it first (a steadier look).
+      let first = null, inner = null, seen = 0;
+      for (const c of areaPointsOf(id)) {
+        if (tests >= A.maxTests) break;
+        const w = worldOf(c);
+        let a;
+        try { a = gazeAnglesToward([w[0] - o0[0], w[1] - o0[1], w[2] - o0[2]]); } catch { continue; }
+        if (areaOn(o0, NC.gazeDirection(a.yaw, a.pitch)) !== id) continue;
+        if (!first) first = w;
+        if (areaOn(o0, NC.gazeDirection(a.yaw + m, a.pitch)) === id && areaOn(o0, NC.gazeDirection(a.yaw - m, a.pitch)) === id
+          && areaOn(o0, NC.gazeDirection(a.yaw, a.pitch + m)) === id && areaOn(o0, NC.gazeDirection(a.yaw, a.pitch - m)) === id) { inner = w; break; }
+        if (++seen >= A.looksPerArea * 2) break;
+      }
+      const tries = inner && first !== inner ? [inner, first] : first ? [first] : [];
+      for (const w of tries.slice(0, A.looksPerArea)) {
+        const hit = solve(w);
+        if (hit && areaOn(hit.ray.origin, hit.ray.dir) === id) return report({ regionId: id, look: { yaw: hit.look.yaw, pitch: hit.look.pitch } });
+      }
+      passed.push(id);
+    }
+    return report({ regionId: null, end: true });
+  }
+
   /** R4-scene wiring: armAvoidShapes of the player's arm at xSamples x depthSamples poses across its A/D x W/S range,
    * at the default look (yaw 0, pitch 0), rest pose, palm down, with the WASD wrist synergy. For scene.setArmEnvelope. */
   function armEnvelope(aspect, { xSamples = 9, depthSamples = 3 } = {}) {
@@ -2527,7 +2889,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   }
 
   return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, setReachStartX, blendBrainStep, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
-    bodyMap: map, regionMode, anatomy, armEnvelope });
+    bodyMap: map, regionMode, anatomy, armEnvelope, areaStep, areaIds });
 }
 
 /* ------------------------------------------------------------------ HUD text (pure) */
@@ -2751,14 +3113,16 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
   let gazeText, hover = '', caption = '';
   if (onStrip) {
     hover = plainActionLabel(binding, bodyMap, g.actionId, g.regionId);
-    gazeText = NT.gazeLine('strip', hover);
+    // R558 (Messages 55 and 56): the line names the area, then the movement ("Left elbow · Bend left elbow").
+    const stripArea = typeof g.regionId === 'string' ? regionById(bodyMapOf(bodyMap), g.regionId) : null;
+    gazeText = NT.gazeLine('strip', hover, stripArea ? NT.plainTitle(stripArea) : '');
     // R4-integrator (R4-player 1.1): "Relax left grip" on an open hand shows nothing; the caption says so.
     // R558: Space no longer makes a fist; the hand grips only through a latched hand action (ns-guide handLatched).
     if (g.actionId === 'relax_release' && !NG.handLatched(a)) caption = HUD_TEXT.relaxNothing;
   } else if (onOther) {
     // R558: on a body area, the crosshair names the sub-band's own movement (each area now holds up to five).
     hover = other ? (!onLeftArmRegion && typeof g.regionActionId === 'string' ? plainActionLabel(binding, bodyMap, g.regionActionId, g.regionId) : NT.plainTitle(other)) : g.regionId;
-    gazeText = NT.gazeLine(onLeftArmRegion ? 'leftArm' : other && other.kind === 'integration' ? 'between' : 'other', hover);
+    gazeText = NT.gazeLine(onLeftArmRegion ? 'leftArm' : other && other.kind === 'integration' ? 'between' : 'other', hover, other ? NT.plainTitle(other) : '');
     // R4-integrator (R4-player 1.4): in-between areas and the face areas the 3D body has no muscles for move nothing you
     // can see (their panel says so too: plainMoves "Nothing ..."); the caption says it at the crosshair.
     if (other && !onLeftArmRegion && typeof other.plainMoves === 'string' && /^Nothing\b/.test(other.plainMoves)) caption = HUD_TEXT.nothingMoves;
@@ -2934,15 +3298,22 @@ export function shellToastText(s, { dragLook = true } = {}) {
  * 'Escape') is a key the game uses: it is drawn lit, with its name and a short word. A single lower-case letter is a
  * neighbouring key drawn faint and blank, only so the lit keys sit where they do on a real keyboard (W above S, E right
  * of W, R right of E, Shift at the left end of the row below A). Every lit key is handled by ns-controls
- * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, UI_CODES, REACH_CODES); no key is shown that the game does not use. */
+ * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, UI_CODES, REACH_CODES, MOVE_CODES, AREA_CODES); no key is shown that the game does not
+ * use. A row's `note` names a text (SHELL.keyboard) written once at the end of the row instead of a word on each key. */
 export const KEYBOARD_PICTURE_ROWS = Object.freeze([
-  Object.freeze({ row: 'esc', keys: Object.freeze(['Escape']) }),
+  // The words of the number row are written beside Esc, in the free space right above that row (at the end of the
+  // number row itself they made the board wider than its card).
+  Object.freeze({ row: 'esc', keys: Object.freeze(['Escape']), note: 'numWords' }),
+  // R558 (Messages 55 and 56): the number row, 1 to 9: the numbered movements on the information card (MOVE_CODES).
+  Object.freeze({ row: 'num', keys: MOVE_CODES }),
   Object.freeze({ row: 'q', keys: Object.freeze(['q', 'KeyW', 'KeyE', 'KeyR', 't', 'y', 'u', 'i', 'o']) }),
   // R558 (Message 40): F is no longer used (Space grasps), so it is drawn as a faint blank neighbour like G.
   Object.freeze({ row: 'a', keys: Object.freeze(['KeyA', 'KeyS', 'KeyD', 'f', 'g', 'h', 'j', 'k']) }),
   // R558 (Messages 33 and 34): Shift + a press reaches the item behind (ns-controls REACH_CODES; either Shift works).
   Object.freeze({ row: 'z', keys: Object.freeze(['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n']) }),
-  Object.freeze({ row: 'space', keys: Object.freeze(['Space']) })
+  // R558 (Messages 55 and 56): the left and right arrow keys step the look along the motor strip (AREA_CODES). They
+  // sit right of the space bar, as the arrow keys do on a keyboard.
+  Object.freeze({ row: 'space', keys: Object.freeze(['Space', ...AREA_CODES]) })
 ]);
 /** Build the keyboard picture into `parent` (DOM only: createElement and textContent, so the page's content security
  * policy needs nothing new). The key drawing is hidden from screen readers; the two plain lines under it and the
@@ -2964,6 +3335,7 @@ export function buildKeyboardPicture(doc, parent, text) {
       const words = code === 'Space' ? text.spaceWords : text.keys[code];
       if (words) make('small', 'ns-kbd-word', key, words);
     }
+    if (r.note && typeof text[r.note] === 'string' && text[r.note]) make('small', 'ns-kbd-rownote', row, text[r.note]);
   }
   const pad = make('div', 'ns-kbd-pad', root);
   make('div', 'ns-kbd-pad-title', pad, text.padTitle);
@@ -3728,6 +4100,16 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
 
   // R558 (genuine note R28): a picture of where the keys are, on the start page and the Esc page.
   if (text.keyboard) buildKeyboardPicture(doc, card, text.keyboard);
+  // R558 (Messages 55 and 56: "a lot easier to use"): the Esc page opens with the SHORT steps and controls, the same
+  // words as the start page, and this button swaps in the full words and back. Esc page only; a click on it never
+  // resumes the game. A text without the two labels or the short lists keeps the full words (no button).
+  const canShorten = typeof text.detailsMore === 'string' && text.detailsMore !== '' && typeof text.detailsLess === 'string' &&
+    text.detailsLess !== '' && Array.isArray(text.introInstructions) && Array.isArray(text.introControls);
+  const detailRow = el('div', 'ns-shell-detailrow', card);
+  detailRow.hidden = true;
+  const detailToggle = canShorten ? button('ns-shell-secondary ns-shell-detail-toggle', detailRow, text.detailsMore, 'detail-toggle') : null;
+  if (detailToggle) detailToggle.setAttribute('aria-expanded', 'false');
+  let fullWords = !canShorten;
   const grid = el('div', 'ns-shell-grid', card);
   const steps = el('section', 'ns-shell-section ns-shell-instructions', grid);
   el('h3', 'ns-shell-section-title', steps, text.instructionsTitle);
@@ -3735,7 +4117,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   // R3-polish: each step starts with a short bold lead-in (text.instructionHeads), so the page can be scanned.
   const heads = Array.isArray(text.instructionHeads) ? text.instructionHeads : [];
   // R5-integrate-core (R5-text W1): the 2 s start page (modes loading / intro) shows the SHORT step and control words
-  // (text.introInstructions / introControls), so every step and control fits; every other mode the full text.
+  // (text.introInstructions / introControls), so every step and control fits. R558: the Esc page shows them as well
+  // until the player asks for the full words (fullWords).
   const stepTexts = [];
   text.instructions.forEach((line, i) => {
     const li = el('li', '', stepList);
@@ -3752,6 +4135,16 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     const kt = short && Array.isArray(text.introControls) ? text.introControls : text.controls;
     stepTexts.forEach((x, i) => { if (typeof st[i] === 'string') { const t = `${x.pad}${st[i]}`; if (x.e.textContent !== t) x.e.textContent = t; } });
     keyTexts.forEach((d, i) => { if (kt[i] && typeof kt[i][1] === 'string' && d.textContent !== kt[i][1]) d.textContent = kt[i][1]; });
+  };
+  const shortWordsNow = m => m === 'intro' || m === 'loading' || !fullWords;
+  const setFullWords = v => {
+    fullWords = v === true || !canShorten;
+    if (detailToggle) {
+      detailToggle.textContent = fullWords ? text.detailsLess : text.detailsMore;
+      detailToggle.setAttribute('aria-expanded', fullWords ? 'true' : 'false');
+    }
+    overlay.setAttribute('data-words', shortWordsNow(mode) ? 'short' : 'full');
+    stepWords(shortWordsNow(mode));
   };
 
   const limits = el('section', 'ns-shell-section ns-shell-limits', card);
@@ -3833,6 +4226,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     if (kind === 'reset-brain') { if (!resetBrain.hidden) call(onResetBrain); return; }
     if (kind === 'guide-toggle') { call(onGuide, 'toggle'); return; }
     if (kind === 'guide-restart') { call(onGuide, 'restart'); return; }
+    if (kind === 'detail-toggle') { if (detailToggle && !detailRow.hidden) setFullWords(!fullWords); return; }
     if (closest(e.target, '[data-ns-noplay]')) return;
     if (play.disabled) return;
     if (mode === 'intro' || kind === 'play') { call(onPlay); return; }
@@ -3903,7 +4297,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     const changed = s.mode !== mode;
     mode = s.mode;
     overlay.setAttribute('data-mode', mode);
-    if (changed) stepWords(mode === 'intro' || mode === 'loading');
+    if (changed) { stepWords(shortWordsNow(mode)); overlay.setAttribute('data-words', shortWordsNow(mode) ? 'short' : 'full'); }
     const visible = mode !== 'playing';
     show(overlay, visible);
     heading.textContent = text.headings[mode] || '';
@@ -3914,6 +4308,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     show(resetBrain, mode === 'paused');
     show(resetHelp, mode === 'paused' && resetHelp.textContent !== '');
     show(form, mode === 'paused');
+    show(detailRow, mode === 'paused' && canShorten);
     show(unlocked, Boolean(s.lockFailed) && mode === 'paused');
     show(reload, mode === 'error');
     // R4-integrator (R4-load W8): while the body still streams in (introHideAtMs null) the 2 s timer has not started:
@@ -4187,7 +4582,7 @@ export function start(params = {}) {
   } catch { /* unreadable storage: the in-memory settings are already normalised */ }
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
-  let guideFeatures = { thirdPerson: false, glow: false, mirror: false };
+  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false };
   let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures });
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
@@ -4273,6 +4668,28 @@ export function start(params = {}) {
   let controlTargetsShown = null;
   const orbitQueue = [];
   let viewRequests = 0; // E presses waiting for the frame loop; also owned by synchronous pause/lifecycle cancellation
+  // R558 (Messages 55 and 56): number-key presses (1 to 9) waiting for the frame loop, oldest first. Each asks for the
+  // movement with that number in the list the information card shows (infoModel.moves); owned and cancelled like E.
+  const moveRequests = [];
+  const MOVE_REQUEST_LIMIT = 8;
+  // The movement the last number key chose (infoChosenStep keeps or drops it): the card goes on explaining it.
+  let infoChosen = null;
+  // When the look takes over the card (infoSettleStep): the area under the look, since when, and the areas only crossed.
+  let infoLook = null;
+  // R558 (Messages 55 and 56): area-key presses (left / right arrow) waiting for the frame loop, oldest first; each asks
+  // for the look to step to the next motor area along the strip (sim.areaStep). Owned and cancelled like E; a press
+  // that could not be done within AREA_REQUEST_KEEP_MS (the view was still changing) is dropped, never done late.
+  const areaRequests = [];
+  const AREA_REQUEST_LIMIT = 2, AREA_REQUEST_KEEP_MS = 1000;
+  // The area the last area key stepped to ({ id, t, seen }): a key press means its area at once, like a click.
+  let infoStepped = null;
+  // The frame after a step classifies the stepped look afresh (no "stay on the last area" margin).
+  let areaFreshPending = false;
+  let areaStepLast = null; // QA: what the last area key did
+  // The area the walk goes on from while the player has not moved the look or clicked (areaWalkStep): a latched neck or
+  // trunk movement may have carried the crosshair off it.
+  let areaWalk = null;
+  let areaNote = null; // { key: 'areaEnd' | 'areaWhileHolding', untilMs }: the status card says why a key did nothing
   const inputCancellation = { count: 0, pendingRecordsCanceled: 0, reasons: {}, last: null };
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   // R558 (Space dance): the touch-free hip range of the current leg posture (ns-body hipRotationClearRange) and its key.
@@ -4449,7 +4866,11 @@ export function start(params = {}) {
   }
   function refreshGuideFeatures() {
     const next = { thirdPerson: GUIDE_FEATURES.thirdPerson && Boolean(sceneFn('setCameraPose')),
-      glow: GUIDE_FEATURES.glow && glowWired, mirror: GUIDE_FEATURES.mirror && mirrorWired && Boolean(bodyRig) };
+      glow: GUIDE_FEATURES.glow && glowWired, mirror: GUIDE_FEATURES.mirror && mirrorWired && Boolean(bodyRig),
+      // R558 (Messages 55 and 56): the number-key goals need the numbered movement list on screen (only the scene's own
+      // information card draws it) and the number keys wired in the controls (the controls arrive after the first
+      // body install, so this is asked again on a later refresh).
+      moveKeys: GUIDE_FEATURES.moveKeys && Boolean(sceneFn('setInfo')) && Boolean(controlsApi) && typeof controlsApi.moveKey === 'function' };
     if (Object.keys(next).every(k => next[k] === guideFeatures[k])) return;
     const configured = NG.guideFromStorage(NG.guideToStorage(guide), simState && Number.isFinite(simState.t) ? simState.t : 0, { features: next });
     // Keep the current gesture/timing/pause state when the body stream makes a feature available. ns-guide still
@@ -4554,7 +4975,7 @@ export function start(params = {}) {
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
     limbGrasp = null; dragLimb = null; dragLimbSeg = null; leftDial = 0;
     seedNext = true;
-    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0;
+    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
     arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
     try { callScene('setArrowHover', null); } catch { /* highlight only */ }
@@ -4782,7 +5203,7 @@ export function start(params = {}) {
     seedNext = true;          // the next frame seeds the gaze silently: a reset never starts a pulse
     renderRequested = true;
     current = { ...current, state: simState };
-    infoLastRegion = null;
+    infoLastRegion = null; infoChosen = null; infoLook = null; infoStepped = null; areaNote = null; areaWalk = null;
     dispatch({ type: 'notice', text: SHELL_TEXT.bodyReset });
     return true;
   }
@@ -4946,12 +5367,33 @@ export function start(params = {}) {
   /** Info overlay (R14): build the model for the current gaze and hand it to the scene's panel, the HUD's, or the
    * shell fallback panel, only when its subject or displayed activity changes. */
   function updateInfo(binding, out) {
+    const pulseNow = out.pulse && out.pulse.regionId ? { regionId: out.pulse.regionId, actionId: out.pulse.regionActionId } : null;
+    // R558 (Messages 55 and 56): the movement a number key chose stays the card's movement while the look stays put.
+    if (infoChosen) infoChosen = infoChosenStep(infoChosen, { gaze: out.gaze, pulse: pulseNow });
+    // R558 (Messages 55 and 56): the card follows a look that RESTS on an area (or a click, a tap on a muscle, a number
+    // key), not every area the look crosses on its way to the body; the areas only crossed stay out of the live card.
+    const act = simState && simState.activity ? simState.activity : null;
+    const gazeAreaId = out.gaze && out.gaze.target === 'region' && typeof out.gaze.regionId === 'string' ? out.gaze.regionId : null;
+    // An area key means the area it stepped to at once, like a click: no rest needed while the look stays on it.
+    const tInfo = act && Number.isFinite(act.t) ? act.t : 0;
+    if (infoStepped) {
+      if (gazeAreaId === infoStepped.id) infoStepped.seen = true;
+      else if (infoStepped.seen || !(tInfo - infoStepped.t >= 0 && tInfo - infoStepped.t < 0.5)) infoStepped = null;
+    }
+    const steppedId = infoStepped && infoStepped.seen ? infoStepped.id : null;
+    infoLook = infoSettleStep(infoLook, { regionId: gazeAreaId, t: tInfo,
+      keptId: infoLastRegion && typeof infoLastRegion.regionId === 'string' ? infoLastRegion.regionId : null,
+      chosenId: infoChosen ? infoChosen.regionId : null,
+      clickedId: steppedId || (act && act.pulseClick === true && pulseNow ? pulseNow.regionId : null),
+      levels: out.regionActivity, pulseId: pulseNow ? pulseNow.regionId : null });
     const model = infoOverlayModel({
+      settled: gazeAreaId ? infoLook.settled : true, ignore: infoLook.crossed,
       gaze: out.gaze, binding, bodyMap: sim.bodyMap, regionActivity: out.regionActivity, activatedRegions: out.activatedRegions,
       activatedActions: out.activatedActions, displayDrives: out.displayDrives, last: infoLastRegion,
-      pulse: out.pulse && out.pulse.regionId ? { regionId: out.pulse.regionId, actionId: out.pulse.regionActionId } : null,
+      pulse: pulseNow, chosen: infoChosen,
       rotationState: typeof out.rotationState === 'string' ? out.rotationState : null,
-      jointAngles: out.latch && Array.isArray(out.latch.joints) ? Object.fromEntries(out.latch.joints.map(j => [j.jointId, j.goalDeg])) : null,
+      // The movements that would move nothing now, from the activity's own rule (ns-actions latchView still).
+      still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
       // R558 (hunt 2): the game arm's own state, for its "already there" (ns-guide armActionMoves)
       armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad } : null,
       reach: Array.isArray(out.reachShow) ? out.reachShow : null,
@@ -4967,7 +5409,9 @@ export function start(params = {}) {
     // The grip card is about the Space key, not a place looked at: when the hand is open again the card that was there returns.
     if (model.mode === 'region' && model.viewed === 'now' && model.source !== 'grasp') infoLastRegion = model;
     infoModel = model;
-    const sig = `${model.key}|${Number.isFinite(model.activity) ? Math.round(model.activity * 20) : '-'}|${model.activations || 0}`;
+    // The movement list is part of what is shown: which movement is the current one and which are already at their end.
+    const movesSig = Array.isArray(model.moves) ? model.moves.map(m => `${m.id}${m.current ? '*' : ''}${m.atEnd ? '!' : ''}`).join(',') : '';
+    const sig = `${model.key}|${Number.isFinite(model.activity) ? Math.round(model.activity * 20) : '-'}|${model.activations || 0}|${movesSig}`;
     if (sig === infoSig) return;
     infoSig = sig;
     if (sceneFn('setInfo')) { infoRenderer = 'scene.setInfo'; callScene('setInfo', model); }
@@ -5230,6 +5674,10 @@ export function start(params = {}) {
         toggleDetail: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleDetail === 'function' ? base.toggleDetail(s, t) : s),
         // R5-integrate-core (D18): the view key (E) only while playing; the camera decides in the frame loop (ns-camera).
         toggleView: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleView === 'function' ? base.toggleView(s, t) : s),
+        // R558 (Messages 55 and 56): the number keys (ns-controls MOVE_CODES) only while playing; the frame loop decides.
+        moveKey: (s, n, t) => (shellIsPlaying(shellState) && typeof base.moveKey === 'function' ? base.moveKey(s, n, t) : s),
+        // R558 (Messages 55 and 56): the area keys step the look only while playing (elsewhere the arrows scroll the page).
+        areaKey: (s, d, t) => (shellIsPlaying(shellState) && typeof base.areaKey === 'function' ? base.areaKey(s, d, t) : s),
         pointerMove: (s, dx, dy, t) => {
           if (!shellIsPlaying(shellState)) return s;
           if (lookNative) return base.pointerMove(s, dx, dy, t);
@@ -5773,17 +6221,10 @@ export function start(params = {}) {
         if (limb === 'leftArm') { limbGrasp = { limb, targetMm: null, lastPitch: cs.pitch }; return; }
         if (!canSolveLimbs() || !NsGrasp.LIMB_CHAIN[limb]) { limbGrasp = null; return; }
         const seg = segmentsFor(bodyPosed);
-        limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch, groundMm: limbGroundMm(limb) };
-      }
-      /** The lowest a held limb's end may go (drawn mm, +z up): a foot never below where it rests on the ground, a hand a
-       * little above the ground (the start posture's ankles, less the ankle's height, are the ground). */
-      function limbGroundMm(limb) {
-        try {
-          const rest = bodyBaked && typeof mods.body.bodyPostureAngles === 'function' ? mods.body.bodyPostureAngles(bodyBaked) : {};
-          const seg = segmentsFor(rest);
-          const ankle = Math.min(NsGrasp.limbPoint(bodyRig, seg, 'rightLeg', 'end')[2], NsGrasp.limbPoint(bodyRig, seg, 'leftLeg', 'end')[2]);
-          return limb === 'rightArm' ? ankle - 60 + NsGrasp.LIMB_GRASP.groundMarginMm : ankle;
-        } catch { return -Infinity; }
+        // No floor under a held limb (Messages 47 and 48: any position must be reachable): the joint limits and the
+        // contact guard are what stop it. The earlier floor (a foot never below its rest height, a hand a little above
+        // the invisible ground) went with the leg ground model.
+        limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch };
       }
       /** One frame of a held limb: W/A/S/D move its end in the view's horizontal plane, the look's up / down carries it
        * up / down (so it stays under the crosshair), the joint solve keeps every joint in range. */
@@ -5811,7 +6252,6 @@ export function start(params = {}) {
         const Bi = NsCollide.affineInverse(B);
         const dm = [0, 1, 2].map(i => Bi[i] * dw[0] + Bi[4 + i] * dw[1] + Bi[8 + i] * dw[2]);
         const want = g.targetMm.map((v, i) => v + dm[i]);
-        if (want[2] < g.groundMm) want[2] = g.groundMm;
         const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor, targets: bodyPosed, limb: g.limb, targetMm: want, limits: limbLimits() });
         g.lastSolve = { want: want.map(v => Math.round(v)), end: r.endMm.map(v => Math.round(v)), errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints };
         // The target never runs far ahead of what the limb can reach (out of reach, or a joint at its limit).
@@ -6408,7 +6848,13 @@ export function start(params = {}) {
         // handles those through its own listeners, so the events are only discarded; undrained, the queue filled up after
         // enough pointer-lock changes and then refused the More detail key (UI_QUEUE_LIMIT; e2e S41 with real input).
         // R5-integrate-core (D18): the E key's { type: 'view' } requests are counted here (the camera switch happens below).
-        if (controlsApi && cs && typeof controlsApi.drainUiEvents === 'function') for (const ev of controlsApi.drainUiEvents(cs)) if (ev && ev.type === 'view') viewRequests += 1;
+        if (controlsApi && cs && typeof controlsApi.drainUiEvents === 'function') for (const ev of controlsApi.drainUiEvents(cs)) {
+          if (ev && ev.type === 'view') viewRequests += 1;
+          // R558 (Messages 55 and 56): a number key asks for a numbered movement (decided below, once the frame is live).
+          else if (ev && ev.type === 'move' && Number.isInteger(ev.n) && moveRequests.length < MOVE_REQUEST_LIMIT) moveRequests.push(ev.n);
+          // R558 (Messages 55 and 56): an area key asks for a step of the look along the strip (done below, before the frame).
+          else if (ev && ev.type === 'area' && (ev.dir === 1 || ev.dir === -1) && areaRequests.length < AREA_REQUEST_LIMIT) areaRequests.push({ dir: ev.dir, t: now });
+        }
         if (shellState.mode === 'intro') dispatch({ type: 'tick', atMs: now }); // the 2 s instructions hide by themselves
         const lost = scene.contextLost === true;
         if (lost !== shellState.contextLost) dispatch(lost ? { type: 'contextLost', atMs: now } : { type: 'contextRestored' });
@@ -6439,7 +6885,7 @@ export function start(params = {}) {
         renderRequested = false;
         const aspect = size.width / size.height;
         let timing, rawFrameEvents = [], lastMsBeforeFrame = lastMs;
-        if (!live) viewRequests = 0; // E pressed while an overlay shows does nothing (bindDom refuses it there anyway)
+        if (!live) { viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; } // E, a number or an arrow pressed while an overlay shows does nothing (bindDom refuses it there anyway)
         if (live) {
           // Actual elapsed wall time (monotonic performance clock; the rAF timestamp only as a fallback), or the QA
           // fixed clock in step(dtMs). A QA look injected before a fixed step is applied at the start of the step.
@@ -6502,6 +6948,27 @@ export function start(params = {}) {
           }
           if (reachPick) timing = { ...timing, gazeAt: 0 };
         }
+        // R558 (Messages 55 and 56: "a lot easier to use and play and more intuitive"; "a learning tool for people learning
+        // motor neuroanatomy"): a number key does the movement with that number in the list the information card shows
+        // (infoModel.moves: the movements of the motor area looked at, or looked at last). It is the same activity event as
+        // a tap on a muscle of that movement ('muscle': the area's ordinary pulse), so nothing new is claimed about the
+        // brain. What you see is what the keys do: no list on the card (or the information hidden with R) = no effect.
+        const movesThisFrame = live ? moveRequests.splice(0) : [];
+        // For the "Try this" guide (ns-guide 'moveKey'): which numbers did a movement, whether it could still move (the
+        // card's own "already there" flag) and whether the look was on the brain. Handed over only when the frame is applied.
+        const moveGuideEvents = [];
+        if (movesThisFrame.length && infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId && infoReadState() !== 'off') {
+          const add = [];
+          for (const n of movesThisFrame) {
+            const mv = infoModel.moves[n - 1];
+            if (mv && typeof mv.id === 'string') {
+              add.push({ type: 'muscle', regionId: infoModel.movesRegionId, actionId: mv.id, regionOnly: false, at: timing.dt });
+              infoChosen = { regionId: infoModel.movesRegionId, actionId: mv.id, gazePick: undefined };
+              moveGuideEvents.push({ type: 'moveKey', n, moved: mv.atEnd !== true, onBrain: gazeOnBrain(simState.gaze) });
+            }
+          }
+          if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
+        }
         // R558 (Messages 2, 12 and 40): a Space grasp (a hold or a tap; ns-controls SPACE_GESTURE) takes hold of what is
         // under the crosshair: one of your own limbs, the brain or the mirror body (what is seen there; itemAt). Each press
         // is labelled with its target for the activity (brain grab) and the carry (brain / mirror); an own limb is held
@@ -6563,6 +7030,81 @@ export function start(params = {}) {
           cs = controlsApi.setPitchLimits(cs, { minDeg: Math.max(-179, r.pitchMinDeg), maxDeg: Math.min(179, r.pitchMaxDeg), relative: true });
           const y = clamp(cs.yaw, r.yawMinDeg * DEG, r.yawMaxDeg * DEG);
           if (y !== cs.yaw) cs = controlsApi.setLook(cs, { yaw: y, pitch: cs.pitch });
+        }
+        // R558 (Messages 55 and 56: easier to use; a learning tool): an area key (left / right arrow) turns the look to the
+        // next motor area along the strip, in the key's direction on the screen (sim.areaStep; the walk is ns-app
+        // areaChain). The step is a look like any other: the area pulses at once, the card shows it, its number keys act
+        // on it, and a look left resting there takes its movement. Nothing is stepped while something is held (the look
+        // then carries it); a step waits while the view is still changing or a held neck / trunk movement is under way.
+        const walkMarks = { lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null };
+        if (live) {
+          const gz = simState && simState.gaze ? simState.gaze : null;
+          areaWalk = areaWalkStep(areaWalk, { gazeId: gz && gz.target === 'region' && typeof gz.regionId === 'string' ? gz.regionId : null, ...walkMarks });
+        }
+        if (live && areaRequests.length) {
+          const reqs = areaRequests.splice(0).filter(q => now - q.t >= 0 && now - q.t < AREA_REQUEST_KEEP_MS);
+          const actNow = simState && simState.activity ? simState.activity : null;
+          const holding = Boolean(limbGrasp || (actNow && actNow.brainGrab && actNow.brainGrab.active)
+            || (simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
+            || (cs.space && (cs.space.grasp === 'held' || cs.space.grasp === 'kept')) || (cs.button && cs.button.down)
+            || (cs.drag && cs.drag.target !== null && cs.drag.target !== undefined)); // (cs.drag is always an object: no drag is target null)
+          const able = Boolean(referenceGraph && !wholeArmOption && sim && sim.regionMode && typeof sim.areaStep === 'function');
+          if (!reqs.length || !able) { /* nothing to do, or this build has no areas to step through */ }
+          else if (holding) areaNote = { key: 'areaWhileHolding', untilMs: now + VIEW_HELD_NOTE_MS };
+          else if (cam.progress !== (cam.view === 'third' ? 1 : 0) || (headOffs && headOffs.moving)) areaRequests.push(...reqs);
+          else {
+            const stepT0 = perf ? perf.now() : NaN;
+            let keepOutRead = false, keepOut = null;
+            // The crosshair ray this frame's camera would cast for a controls look (as attemptFrame builds it).
+            const rayForCtl = c => {
+              try {
+                const head = headLookOn ? headPoseForLook(c, headOffs ? headOffs.now : null, headLimits) : null;
+                if (!keepOutRead) {
+                  keepOutRead = true;
+                  if (!(cam.view === 'first' && cam.progress === 0) && sceneFn('bodyKeepOut')) { try { keepOut = callScene('bodyKeepOut'); } catch { keepOut = null; } }
+                }
+                const pose = NC.cameraPose(cam, { firstPersonFrame: head ? fp => sim.referenceFrameForLook(fp, head) : sim.referenceFrameForLook,
+                  look: head ? head.look : c, bodyToWorld: camBodyToWorld && anatomy ? camBodyToWorld : null, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null,
+                  avoid: Array.isArray(keepOut) && keepOut.length ? keepOut : null });
+                return pose && pose.gazeRay ? pose.gazeRay : null;
+              } catch { return null; }
+            };
+            const pitchRange = c => {
+              if (headOffs) { const r = headLookRange(headOffs.goal, headLimits, c); return { r, minDeg: Math.max(-179, r.pitchMinDeg), maxDeg: Math.min(179, r.pitchMaxDeg) }; }
+              const lim = controlsApi.pitchLimits(cs);
+              return { r: null, minDeg: lim.minDeg, maxDeg: lim.maxDeg };
+            };
+            const limitLook = c => {
+              const q = pitchRange(c);
+              return { yaw: q.r ? clamp(c.yaw, q.r.yawMinDeg * DEG, q.r.yawMaxDeg * DEG) : c.yaw, pitch: clamp(c.pitch, q.minDeg * DEG, q.maxDeg * DEG) };
+            };
+            const fromId = infoModel && infoModel.mode === 'region' && typeof infoModel.regionId === 'string' ? infoModel.regionId : null;
+            // The walk goes on from the area it was on (areaWalk), also when a latched neck or trunk movement has since
+            // carried the crosshair off it; sim.areaStep's own start rule covers a look the player has moved.
+            let lookNow = { yaw: cs.yaw, pitch: cs.pitch }, startId = areaWalk ? areaWalk.id : null, reached = null, ended = false;
+            const record = { from: null, to: null, end: false, passed: [], tests: 0, rays: 0, ms: null };
+            for (const q of reqs) {
+              let res = null;
+              try { res = sim.areaStep(simState, { dir: q.dir, fromId, startId, look: lookNow, rayForLook: rayForCtl, clampLook: limitLook }); } catch { res = null; }
+              if (!res) break;
+              if (record.from === null) record.from = res.from || null;
+              record.tests += res.tests; record.rays += res.rays; record.passed.push(...res.passed);
+              if (typeof res.regionId !== 'string') { ended = res.end === true; break; }
+              reached = res.regionId; startId = res.regionId; lookNow = res.look;
+            }
+            if (reached) {
+              if (headOffs) { const q = pitchRange(lookNow); cs = controlsApi.setPitchLimits(cs, { minDeg: q.minDeg, maxDeg: q.maxDeg, relative: true }); }
+              cs = controlsApi.setLook(cs, lookNow);
+              lookBlock = null; // the step is a new look, not a push against the limit learned before it
+              infoStepped = { id: reached, t: actNow && Number.isFinite(actNow.t) ? actNow.t : 0, seen: false };
+              areaWalk = areaWalkStep(areaWalk, { steppedId: reached, lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: walkMarks.buttonSeq });
+              areaFreshPending = true;
+              areaNote = null;
+            } else if (ended) areaNote = { key: 'areaEnd', untilMs: now + VIEW_HELD_NOTE_MS };
+            record.to = reached; record.end = ended;
+            record.ms = perf ? Math.round((perf.now() - stepT0) * 100) / 100 : null;
+            areaStepLast = record;
+          }
         }
         // R558 (Message 12, hunt 2 code #2): the look's trunk bend and chest turn (a steep or wide look) and a held trunk
         // bend are moves like any other. Before the frame, the head this look asks for is tested from the pose as drawn
@@ -6767,6 +7309,7 @@ export function start(params = {}) {
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
           ...(wholeArmOption ? { wholeArmDisplayPlan, wholeArmActiveCamera: camPose } : {}),
           ...(!referenceGraph && camPose.firstPerson ? {} : { gazeRay: camPose.gazeRay, gazeLook: camPose.gazeLook }),
+          ...(areaFreshPending ? { gazeFresh: true } : {}),
           ...(danceRange ? { danceRange } : {}), // R558 (Space dance): the touch-free hip range of the current leg posture
           ...(armTurnSeen ? { armTurn: armTurnSeen } : {}) // R558 (Space dance): the game arm's shown radius / upper-arm turn
         };
@@ -6796,7 +7339,7 @@ export function start(params = {}) {
           contact.bodyBlocked = null; contact.skipGuards = 2; // (the limb hold and dial ended with the cancellation)
           if (sceneFn('setMirrorCorrection')) callScene('setMirrorCorrection', null);
           mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); // cancellation retained the current arrow press sequence
-          cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; carryDrag = null;
+          cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false; areaWalk = null; carryDrag = null;
           cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
           lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lastGoodCam = cam; lookBlock = null; reachBlock = null; seedNext = true;
           current = { ...current, state: simState };
@@ -6894,6 +7437,8 @@ export function start(params = {}) {
               } else {
                 carryRawEvents.push(...deferred.events);
                 if (dragTurn) carryDrag = dragTurn;
+                // The number keys of a skipped frame are asked again next frame (their muscle events were not applied).
+                if (movesThisFrame.length) moveRequests.unshift(...movesThisFrame.slice(0, MOVE_REQUEST_LIMIT - moveRequests.length));
               }
               // The camera goes back to where this frame found it, and its E presses are asked again next frame (only in
               // the whole-arm display, where E changes nothing but the camera). A cancelled epoch never requeues E or drag.
@@ -6971,6 +7516,7 @@ export function start(params = {}) {
         // R5-integrate-core (R5-text W2): the E goal hears the view changes (third when the switch starts, first when it ends).
         const guideEvs = NG.guideEventsFromFrame({ prev: prevSim, next: simState, out, inputs: stepInputs, bodyMap });
         guideEvs.push(...mirrorGuideEvents.map(e => ({ ...e, t: simState.t })));
+        guideEvs.push(...moveGuideEvents.map(e => ({ ...e, t: simState.t })));
         if (cam.view !== guideView) { guideView = cam.view; guideEvs.push({ type: 'view', mode: cam.view, t: simState.t }); }
         const nextGuide = NG.guideStep(guide, guideEvs, simState.t);
         if (nextGuide !== guide) { const saveNow = NG.goalsDone(nextGuide) !== NG.goalsDone(guide); guide = nextGuide; if (saveNow) saveGuide(); }
@@ -7114,10 +7660,12 @@ export function start(params = {}) {
           // R558 (HEAD_LOOK): the head, neck and trunk are where the look (plus any held offset) put them this frame: the
           // same pose the eye camera, the arm's shoulder root and the mirror body use.
           if (headShown) Object.assign(targets, headShown.joints);
+          // R558 (Messages 47 and 48: every leg movement achievable and plain to see): a thigh lifted past the
+          // straight-knee limit is drawn with the knee giving way (ns-body passiveKneeAngles). No ground stops a leg: a knee
+          // bends all the way and a hip extends below level (the earlier heel-on-the-ground model is retired).
+          if (typeof mods.body.passiveKneeAngles === 'function') targets = mods.body.passiveKneeAngles(targets);
           // R558 (Message 51): a fully extended elbow or knee is drawn slightly bent (ns-body softExtensionAngles).
           if (typeof mods.body.softExtensionAngles === 'function') targets = mods.body.softExtensionAngles(targets);
-          // R558 (Message 10): the legs stay on the invisible flat ground (a knee bend slides the heel; ns-body groundLegAngles).
-          if (bodyBaked && typeof mods.body.groundLegAngles === 'function') targets = mods.body.groundLegAngles(bodyRig, targets, { posture: bodyBaked });
           // R5-integrate-core (D15): Body Worlds layers ride on every pose (ns-body poseBody layers / layerAmount; the amount
           // eases over BODY_WORLDS_EASE_S, instant under reduced motion). R27 (R5-pronation 6.1.2): the coupled palm turn's
           // shoulder-blade slide and slight trunk turn (ns-arm bodyFollowFromCoupling; null palm down = the round-4 body).
@@ -7129,7 +7677,7 @@ export function start(params = {}) {
           // leg joint other than the hip rotation has changed (quantised to 0.5 degrees): once the posture has settled
           // (same key two frames running), and every DANCE_RANGE_EVERY_FRAMES frames while a leg is still moving. The
           // next frame gives it to the activity, which keeps each hip inside it.
-          // Check fix: the range of the leg posture the activity is heading for (its latched goals, grounded) is taken
+          // Check fix: the range of the leg posture the activity is heading for (its latched goals, as drawn) is taken
           // as well, at once when that goal changes, so a knee bend narrows the hip range before the legs move (the
           // posture's own range alone lagged up to DANCE_RANGE_EVERY_FRAMES frames behind a moving leg).
           if (typeof mods.body.hipRotationClearRange === 'function') {
@@ -7150,8 +7698,8 @@ export function start(params = {}) {
             if (goalSrc && typeof goalSrc === 'object') {
               let goal = { ...targets };
               for (const j of DANCE_LEG_JOINTS) if (Number.isFinite(goalSrc[j])) goal[j] = goalSrc[j];
+              if (typeof mods.body.passiveKneeAngles === 'function') goal = mods.body.passiveKneeAngles(goal);
               if (typeof mods.body.softExtensionAngles === 'function') goal = mods.body.softExtensionAngles(goal);
-              if (bodyBaked && typeof mods.body.groundLegAngles === 'function') goal = mods.body.groundLegAngles(bodyRig, goal, { posture: bodyBaked });
               const goalKey = legKeyOf(goal);
               if (goalKey !== danceGoalKey) {
                 // R558 (performance, hunt 2 code #5): while you hold a leg with Space its goal changes on every frame, so the
@@ -7394,6 +7942,7 @@ export function start(params = {}) {
         // R558: a change of view that could not be drawn was undone; say so and what to do.
         if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         if (now < viewHeldUntilMs && NT.HUD.viewWhileHolding) model.note = [NT.HUD.viewWhileHolding, model.note].filter(Boolean).join(' \u00b7 ');
+        if (areaNote && now < areaNote.untilMs && NT.HUD[areaNote.key]) model.note = [NT.HUD[areaNote.key], model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (Messages 2, 12 and 40): what Space holds (and how to let go), and a plain word when a move stopped at contact.
         if (limbGrasp && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(limbGrasp.limb, spaceGrasp === 'kept'), model.space].filter(Boolean).join(' \u00b7 ');
         if (limbGrasp && model.crosshairHold === 'empty') model.crosshairHold = 'item';
@@ -7541,6 +8090,7 @@ export function start(params = {}) {
         displayRecovery.skipStreak = 0; displayRecovery.rescued = false;
         // Review fix: the look this frame actually drew (a frozen frame draws the stored look, not the controls' one).
         // R558 (HEAD_LOOK): the recovery works in the controls' look (the drawn look is the head's, offsets included).
+        areaFreshPending = false; // the stepped look has now been classified and drawn
         lastGoodLook = headLookOn ? (ctlLook ? { yaw: ctlLook.yaw, pitch: ctlLook.pitch } : { yaw: cs.yaw, pitch: cs.pitch })
           : look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch) ? { yaw: look.yaw, pitch: look.pitch } : { yaw: cs.yaw, pitch: cs.pitch };
         // Renderer readback is internal evidence, not a completed tutorial action or independently verified pixels.
@@ -7752,6 +8302,7 @@ export function start(params = {}) {
       state: current.state, controls: current.controls,
       // Input epochs: how often pending input was cancelled at a boundary, why, and what the last one dropped.
       inputCancellation: plainCopy(inputCancellation),
+      areaStep: areaStepLast ? plainCopy(areaStepLast) : null,
       // R558 (Message 6): what the activity holds, the opposite-action hints and the brain's hint meshes (plain data
       // the app and the scene already hold); the verified per-region looks only on request (cached per brain view).
       latch: current.out && current.out.latch ? current.out.latch : null,
@@ -7920,7 +8471,8 @@ export function start(params = {}) {
       if (holds.has('qa')) qaLookPending = true;
       return { yaw: cs.yaw, pitch: cs.pitch };
     },
-    /** key('KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space' | 'Escape', down: boolean) -> the held keys. Escape down = esc(). */
+    /** key('KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space' | 'Escape' | 'KeyE' | 'Digit1'..'Digit9', down: boolean) -> the held
+     * keys. Escape down = esc(). A digit asks for that numbered movement of the information card's list (as the real key). */
     key(code, down) {
       requireLoop();
       if (typeof down !== 'boolean') fail('qa_input', 'key(code, down): down must be a boolean');
@@ -7933,7 +8485,17 @@ export function start(params = {}) {
         if (down && typeof controlsApi.toggleView === 'function') cs = controlsApi.toggleView(cs, qaTime());
         return plainCopy(cs.keys);
       }
-      if (!CONTROL_CODES.includes(code)) fail('qa_input', `key(code, down): code must be one of ${[...CONTROL_CODES, 'Escape', 'KeyE'].join(', ')}`);
+      const moveN = moveKeyNumber(code);
+      if (moveN) {
+        if (down && typeof controlsApi.moveKey === 'function') cs = controlsApi.moveKey(cs, moveN, qaTime());
+        return plainCopy(cs.keys);
+      }
+      const areaDir = areaKeyDir(code);
+      if (areaDir !== 0) {
+        if (down && typeof controlsApi.areaKey === 'function') cs = controlsApi.areaKey(cs, areaDir, qaTime());
+        return plainCopy(cs.keys);
+      }
+      if (!CONTROL_CODES.includes(code)) fail('qa_input', `key(code, down): code must be one of ${[...CONTROL_CODES, 'Escape', 'KeyE', ...MOVE_CODES, ...AREA_CODES].join(', ')}`);
       const t = qaTime();
       cs = down ? controlsApi.keyDown(cs, code, t) : controlsApi.keyUp(cs, code, t);
       return plainCopy(cs.keys);

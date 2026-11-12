@@ -6,6 +6,8 @@ Decisions 20 onward were made on 11 November, after the user's newest notes (eye
 
 Decisions 54 onward were made on 12 November, after the user played the build: Space as the one hand key, the R key for information, what each activation shows, a neon flash, gloss, slightly bent limbs, the mirror body in the view over the shoulder, and a second performance pass.
 
+Decisions 59 onward were made later on 12 November, after two more notes from the user: the game has to be much easier to use, and it is a learning tool for people learning motor neuroanatomy. They cover the brain above the mirror body, numbered movements with number keys, the order of the “Try this” guide, legs that reach every hip and knee movement, a card that waits for the look to rest, arrow keys that step along the strip, a shorter Esc page with sentences that teach, the words that name an area, and the frame rates of that build.
+
 This file records what changed in this build, why, and what was actually observed. Where a decision replaces an earlier design instruction, it says which one. Nothing here is a claim about real brains: the signals and movements in the game are simulated and have no units.
 
 ## How things were checked
@@ -280,7 +282,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 **Fixed.**
 - **The look delay was cancelled by any small mouse movement.** A tiny movement inside an area counted as a restart and dropped the waiting movement, so in real play a look almost never moved the body. A small movement now keeps the delay running. A waiting look is dropped while paused or while the brain is held.
-- **Legs went through the invisible ground.** `groundLegAngles` in ns-body now keeps each leg on or above the ground. A knee bend slides the heel along the ground and the thigh rises: the heel's height is T sin(t) + L sin(t - k), solved for the thigh rise t. That goes up to the hip's 110-degree display cap, where the knee stops at about 41 degrees. Hip extension now ends at the ground (90) instead of swinging the leg into it.
+- **Legs went through the invisible ground.** `groundLegAngles` in ns-body now keeps each leg on or above the ground. A knee bend slides the heel along the ground and the thigh rises: the heel's height is T sin(t) + L sin(t - k), solved for the thigh rise t. That goes up to the hip's 110-degree display cap, where the knee stops at about 41 degrees. Hip extension now ends at the ground (90) instead of swinging the leg into it. *Replaced on 12 November: section 61 retires this ground rule, because it left knee bends and hip extension out of reach.*
 - **The left game arm pointed up and inward.** The hand was pinned three quarters up the screen (the older R10 design). It now sits where a straight, level, forward arm puts it at the start look (screen position -0.17, -0.28 at 90 degrees). Both arms start straight forward as mirror images, and the arm no longer hides the right-arm motor areas.
 - **An area's actions were split over its wider display extent.** Some actions lay almost entirely in the neighbouring areas: "Raise right arm up" could never be picked by looking, and "Bend head forward" had 3 % of its area. The split is now over each area's own core (its non-overlapping control cell), so each action gets an equal share.
 - The hint now fades softly at its edge instead of showing a sawtooth of triangles. The words say a look must rest about a third of a second, and that a movement stays until the opposite area or Reset. An info line says "already there, so nothing moves now". The Esc-page notice no longer pushes the buttons out from under the pointer. Texts that described the old arm and the old field of view were corrected.
@@ -737,12 +739,12 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - **Their muscles light too.** A table, `REACH_MUSCLES` in `ns-actions.mjs`, lists the usual textbook movers of the shoulder for each direction. They light at a made-up level, like every signal in the game.
 - **One line per lit area.** While an area is lit, one line in its colour joins it to the body part it moves on the mirror body (on your own body only when no mirror body is shown). This brings back the linking lines in a quieter form: one line, held, instead of one short line for a second.
 - **The information card says it in words.** For a reach it names the key, the strip part, the movement and the muscles. With the crosshair off the strip it shows the area that is on now.
-- **The strip spans about half the width of the view** (0.475 of it), which replaces "fills the view" in section 24 and leaves room for both bodies beside the brain.
+- **The strip spans about half the width of the view** (0.475 of it), which replaces "fills the view" in section 24 and leaves room for both bodies beside the brain. *Section 59 moves the brain above the mirror body and draws the strip a little smaller: 42 % of the width at 1920 by 1080.*
 
 **Limits.**
 - The left teres major, infraspinatus and teres minor lie on the shoulder blade, which the left game arm leaves out. The card names them and nothing lights for them.
 - Which muscle does how much of a reach is not modelled. The list is the textbook one, the level is made up, and nothing is measured.
-- With the smaller brain the mirror body and your own feet sit in front of the leg end of the strip. The look still reaches those areas (section 45), but they are harder to see. How many areas the crosshair can rest on from the start has not been counted again.
+- With the smaller brain the mirror body and your own feet sit in front of the leg end of the strip. The look still reaches those areas (section 45), but they are harder to see. How many areas the crosshair can rest on from the start has not been counted again. *Section 59 moves the brain above the mirror body, so nothing stands in front of the leg end at the start. The count is still not redone.*
 - The grey and green arrows can lie over strip areas near the middle of the view. This is on the list for the ease-of-use pass.
 
 ## 56. A neon flash, gloss, and lighter ink
@@ -761,7 +763,7 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 **The notes.** Message 51: "let's have the extended arm and legs, you know, slightly bent. Not perfectly straight." Message 52: "if when you press E to go into third person, that your body gets further away, then the mirror body should also get further away equally. Otherwise, then it's just getting far too close."
 
 **Decision.**
-- **Soft extension.** A fully stretched right elbow is drawn with about 12 degrees of bend and each knee with about 10. The drawn bend is the square root of (the joint's bend squared plus that minimum squared), so it joins the joint's own angle smoothly and never passes the joint's limit. Only the drawing changes: the game's joint angles, the limits and the body map still count from straight. The bend is applied before the ground rule of section 25, so the heels stay on the ground. The left game arm needs none, because its reach already stops at about 16 degrees of elbow bend. This replaces "like a stick" in section 22.
+- **Soft extension.** A fully stretched right elbow is drawn with about 12 degrees of bend and each knee with about 10. The drawn bend is the square root of (the joint's bend squared plus that minimum squared), so it joins the joint's own angle smoothly and never passes the joint's limit. Only the drawing changes: the game's joint angles, the limits and the body map still count from straight. The bend is applied before the ground rule of section 25, so the heels stay on the ground. *Section 61 retires the ground rule; the bent knee now lowers the heel a few centimetres.* The left game arm needs none, because its reach already stops at about 16 degrees of elbow bend. This replaces "like a stick" in section 22.
 - **The mirror body keeps its distance.** E moves the camera 1.4 m behind you. The mirror body now slides away from your body by the same 1.4 m, with the same easing, and returns exactly when you press E again. It is a slide for the view only: it is not part of the mirror body's orbit and is not saved.
 
 **Limit.** The 12 and 10 degrees are display values chosen by eye, not measured resting angles.
@@ -800,6 +802,161 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - The game's own work per frame is still the limit: re-skinning both bodies when the look moves, about a thousand draw calls, and one material per muscle. Sharing materials between resting muscles and merging the draws of the mirror body's bones are the next candidates. They change more code and have not been tried.
 - One machine, one browser. Nothing was measured on a laptop or on integrated graphics of another make.
 
+## 59. The brain above, the mirror body below; numbered movements with number keys
+
+**The notes.** Message 55: "The game has to be a lot easier to use and play and more intuitive." Message 56: "And remember, the game is a educational game, essentially. It's a learning tool for people learning motor neuroanatomy." Message 43: "The brain is far too big, it should only take up 50% of the width of the panorama screen view." Message 7: "think of the motor strip as a horizontal 16:9 frame and the mirror as a vertical 9:16 frame, the arrows will be at the centered edges of each frame perimeter side". Message 47: "And the limbs should be manipulatable to any position by brain activation."
+
+**What was hard.** The mirror body and your own feet stood in front of the middle of the strip, where the leg and foot areas are (a limit noted in section 55). And an area with several movements gave no way to choose one: which movement a look took depended on where inside a small area the crosshair rested.
+
+**Decision.**
+- **Brain above, body below.** The glass brain sits in the upper part of the view and the mirror body below it. `BRAIN_VIEW.motorFloorNdc` in ns-brain keeps the strip's box above a set height of the view, and `brainFloorNdc(size)` in ns-app gives that height for each window size.
+- **The strip is a little under half the width.** To stay above that height the strip is drawn at 0.88 of the size section 55 gave it in a 1920 by 1080 window: 801 pixels, 42 % of the width, with the whole brain about 45 %. That is less than the 50 % of Message 43 and is recorded here as a departure from it.
+- **Numbered movements.** The information card lists the movements of the area you look at, or looked at last, with numbers. Keys 1 to 9, on the top row or the number pad, do the movement with that number through the same activity event as a tap on one of its muscles, so one rule serves both. The list stays while you look down at the body. That is the loop the game teaches: look at the area, look at the body, press a number, watch the part move.
+- **The chosen movement stays on the card** until the look moves to another area or another movement of the same area is switched on.
+- **“Already there”.** A movement that would not move the body from where it is now is marked. The mark is read from the activity's own latch rule (`latchView().still`), not from a second copy of it.
+- **Latch rule.** A joint that a movement merely wants at its start angle now goes there with the rest of the movement, in the same activation: Purse the lips with the upper lip lifted is one example. Before, that counted as an opposing movement and needed an activation of its own. A truly opposing movement still takes its own activation (section 23).
+- **The brain's bottom arrow moved.** With the body below the brain, the middle of the lower side of the brain's frame is where the mirror body's top arrow sits. The brain's bottom arrow therefore moves up its own centre line into the hollow of the strip's U (`BRAIN_TIP_RULES` in ns-scene-three): 196 pixels up at 1920 by 1080 and 170 at 1600 by 900. This is a known departure from "the centered edges of each frame" for that one arrow. The other three brain arrows are on the middles of their sides or a few pixels out.
+- **The clear space kept round the crosshair** went from 40 to 8 pixels (`R5_BIGBRAIN.crosshairKeepPx`). The mirror body's top arrow is 60 pixels above the crosshair at 1920 by 1080, 50 at 1600 by 900 and 43 at 1366 by 768.
+- **The keyboard picture** has a number row.
+
+**Checked.** `tests/move-key.test.mjs`, 13 cases: which movement a number picks, the “already there” mark and the latch rule. The strip's size and the arrow places were read in the browser at the three window sizes named above.
+
+**Limits.**
+- A number key does the whole movement, as a click does. Stopping a part half-way, or moving it by degrees while a key is held, is not built, so Message 47 is still open in that respect.
+- The left shoulder, the tongue and the three in-between areas have no movements, so their cards list none.
+- The scene has to draw the list for the number keys to be offered. Where it does not, the keys do nothing and the guide leaves out the two goals that use them (section 60).
+- While the look is on the leg end of the strip the mirror body's legs are below the picture. You look down to watch them, and the card keeps the area.
+- With the crosshair on the brain's glass between areas, the card of the last area stays instead of a card about the glass.
+- In a window about 800 pixels high the lower rows of the card fade out at its edge.
+- The labels on the brain hide near the crosshair, so the label of the area you aim at is not on the brain while you aim. The “Looking at” card names it (section 65).
+
+## 60. The guide starts with the learning loop
+
+**The notes.** Messages 55 and 56, quoted in section 59.
+
+**Decision.**
+- The “Try this” guide has 12 goals. The first four are what the game teaches: look at a left-arm area, press a number from the card, look at another body part's area, then look down at the body and press a number to watch the leg. The hand, Space and arrow goals come after.
+- Two goals are new: press a number, and watch the body while you do. They are asked only when the card draws its numbered list and the number keys are connected.
+- Progress saved by the older guide still loads. Only the new goals are asked of a player who had finished the others.
+- A number that moves nothing gets its own line: “That movement is already there. Press another number from the card.”
+
+**Checked.** `tests/guide-order.test.mjs`, 10 cases, and one browser pass at 1920 by 1080 through the first four goals and the lines that replace them.
+
+**Limit.** Whether the new order is easier to learn from has not been tried with a person.
+
+## 61. Legs: every hip and knee movement can be reached
+
+**The notes.** Message 48: "it's really hard to get the legs to, you know, to extend the hip and such, and to lower the arm. These should all be achievable". Message 47, quoted in section 59. Message 10: "If we imagine an invisible ground, the mirror body should be touching the same ground."
+
+**What was wrong.** The ground rule of section 25 kept each heel on or above an invisible ground. From the sitting start a knee bend went only to about 41 degrees, and hip extension did nothing, because the thigh already lay on the ground.
+
+**Decision.**
+- **The ground rule is retired** (`groundLegAngles`). The invisible ground is where the two bodies sit at the start and after a reset, which is what Message 10 asks. It no longer stops a leg that moves.
+- **A knee bends all the way** with the thigh level.
+- **Hip extension is a real movement.** The hip area's “swing down and back” takes the thigh down past the line of the trunk to 20 degrees behind it. The joint's own limit is 30 degrees, a textbook figure for an adult hip; ns-body names the source.
+- **The knee gives way under a high thigh.** With a straight knee the muscles at the back of the thigh stop a thigh lift at 100 degrees (`HIP_KNEE_COUPLING`). Instead of holding the thigh back there, the drawn knee bends just far enough for the lift to reach what was asked: at least (hip − 100) / 20 × 90 degrees of knee bend (`passiveKneeAngles` in ns-body). Only the drawn knee changes. This is a display rule for a muscle group that crosses two joints, not a measured muscle length.
+- **A thigh lift still stops at 110 degrees,** where the rigid thigh and belly shapes would start to pass into each other (section 34).
+- **A held limb has no floor.** Space can carry a foot or a hand below the level the bodies sit on.
+
+**Follows from this.** Section 57 said the slight knee bend was applied before the ground rule, so the heels stayed on the ground. With the rule gone, the 10 degrees of drawn bend lower each heel a few centimetres below the level you sit on. No floor is drawn, so nothing shows this except the height of the feet.
+
+**Limits.**
+- A leg that swings down or back can leave your own view. The mirror body shows it.
+- Below the level the bodies sit on there is nothing: no floor is drawn and nothing stops a limb there.
+- Your own limbs still pass through each other (section 33). The adduction movement stops at the middle so that the two legs do not cross.
+- “Lower the arm” in the same note is not done for the left arm: its shoulder follows the look and the keys and has no movements of its own on the strip. It is on the list at the end of this file.
+
+## 62. The information card takes an area when the look rests on it
+
+**The notes.** Messages 55 and 56, quoted in section 59.
+
+**What was wrong.** The motor areas are small and lie side by side. A look that left a chosen area for the body crossed others on the way, and the card, with the area the number keys act on, ended on whichever area was crossed last.
+
+**Decision.**
+- The card takes a newly looked-at area after the look has rested on it for 0.3 seconds, the same time a look needs to move the part.
+- Taken at once: the first card, the area whose card is already shown, a click, a tap on a muscle and a number key.
+- Areas the look only crossed stay out of the “switched on now” card while their glow lasts.
+- The “Looking at” card and the glow on the brain still answer at once, so the game does not feel slower to respond.
+
+**Checked.** `tests/info-settle.test.mjs`, 10 cases, and one browser run at 1920 by 1080: the card was kept after looking down from the knee area and after a sweep across the strip, the number keys acted on the kept area, a rest on the hip area took the card, and a tap on a mirror-body muscle opened its area's card with the number keys following it.
+
+**Limit.** A held neck or trunk movement turns the head, so the crosshair leaves the area that was rested on: after the trunk area it ends on the brain's glass and after the neck area in empty space. The card keeps the area.
+
+## 63. The left and right arrow keys step the look along the strip
+
+**The notes.** Messages 55 and 56, quoted in section 59.
+
+**Decision.**
+- ← and → put the look on the next motor area toward that side of the screen, in the order of the body map along the strip. The information card follows at once.
+- A held key repeats at most once every 180 milliseconds.
+- Areas hidden in the current view are passed over. At the end of the strip a line says so: “No more motor areas that way from here. Press the other arrow key, or turn the brain to bring more areas into view.”
+- While Space holds something the keys wait and a line says: “Let go of what you hold first, then press the arrow key.”
+- With no area chosen yet, the first press takes the area nearest the crosshair.
+- When a held neck or trunk movement has carried the view off the area, the next step goes on from that area, not from where the crosshair ended.
+- On the start page and the Esc page the arrow keys still scroll the page.
+
+**How it is built.** ns-controls reports the key as a request. ns-app holds the walk order (`areaChain`), the areas a step tries (`areaStepCandidates`), the look that lands on the area (`areaStep`) and the area the walk goes on from (`areaWalkStep`).
+
+**Checked.** `tests/area-step.test.mjs`, 11 cases.
+
+**Limits.**
+- A step is an ordinary look. Resting where it lands takes that area's movement, as any look does.
+- Left and right follow the screen at an ordinary view of the brain. In a view exactly from the side the direction is arbitrary.
+
+## 64. A shorter Esc page, and sentences that teach what the strip is
+
+**The notes.** Messages 55 and 56, quoted in section 59. Message 44: "Text is hard to read as it's all clumped together."
+
+**What was wrong.** The Esc page opened 3.7 screens tall at 1920 by 1080, and its trackpad text broke after every word.
+
+**Decision.**
+- The Esc page opens with the short instructions, 2.2 screens tall at 1920 by 1080. **Show the full instructions** has the rest, and **Show the short instructions** goes back. That button never resumes the game.
+- The trackpad block is one column. The two keyboard notes and the help lines under the settings are shorter. The list of limits runs in two columns in wide windows, with every line still shown.
+- Steps 3 and 4 now teach: the coloured band is the motor strip, drawn as a simplified map; each half of the brain mainly moves the opposite side of the body; and the order of the body along the strip. Step 4 is named “A map of the body.”
+- The words are held to what the game can stand behind: “mainly” for the opposite side, “a simplified map” for the strip, and no claim that the band is a measured map of anyone's brain.
+
+**Checked.** A browser tour of the start page and the Esc page at 1920 by 1080 and 1280 by 720: the button works both ways, the game stays paused, no errors.
+
+**Limits.**
+- 2.2 screens is still more than one. The start page also scrolls: it is about 1.8 screens tall at 1920 by 1080.
+- The sentence about outlines and crease shading at each picture quality moved from the Esc page to the player guide.
+
+## 65. The look line names the area, then its movement; the card names the strip part
+
+**The notes.** Message 56, quoted in section 59. Message 48: "it's not clear which brain part is being activated by each body movement at all."
+
+**Decision.**
+- The “Looking at” card reads “Looking at (motor area): Left knee · Bend left knee” for every motor area: the area first, then the movement the crosshair is on. The left arm no longer has a different opening.
+- The line under the card's title used to say “Motor area for another body part” for everything but the left arm. It now names the part of the strip, in the words of the labels on the brain, and the half the area is drawn on: “Right-leg motor area (brain’s left half)”, “Face-and-neck motor area (brain’s right half)”, “Belly-and-back motor area (brain’s left half)”.
+- That half is where the area is drawn. It is not a claim that only that half drives the part.
+- The left-arm and in-between tags are unchanged.
+
+**Checked.** `tests/area-words.test.mjs`, 8 cases over every mapped area.
+
+**Limit.** In the bottom-left card a long line wraps after the “·”.
+
+## 66. Frame rates of the second revision
+
+**Measured.** The script of section 58, on the same machine and setup: one desktop Chromium at 1920 by 1080, the machine's own graphics card, eight processor cores for the browser. Three runs of the build of sections 59 to 65, in frames a second. The script also read what the crosshair was on before three of its steps, which does not change what is drawn.
+
+| What the script does | Three runs |
+|---|---|
+| Sitting still | 60 |
+| Looking around | 59.1 to 59.6 |
+| Reaching with the keys | 59.6 |
+| Holding the mirror body and looking around | 51.7 to 53 |
+| Carrying it with the keys into contact | 49.7 to 53.4, longest frame 50 ms |
+| The slow limb turn | 51.9 to 59 |
+| Looking around again at the end of the run | 59.4 to 60 |
+| Looking around in the view over the shoulder | 52.3 to 58.2 |
+| Picture at the end of the run | full (3.2 million triangles, 996 draw calls) |
+
+**What this does and does not show.**
+- The script sends the same mouse and key input as in section 58, but the layout changed in section 59, so the views it passes are not the same pictures. The higher numbers for looking around are not a like-for-like gain and no speed-up is claimed for these sections.
+- No performance work was done in sections 59 to 65. The table shows that the changes did not make the game slower in this script.
+- Holding, carrying, the limb turn and the view over the shoulder still drop frames, and some frames take longer than a thirtieth of a second. Message 42 stays open.
+- One machine, one browser, three runs.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -808,12 +965,23 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Publication. Since 12 November the user asks for each finished version to be uploaded to the project's GitHub repository, and that is done. An upload is not an independent review.
 
 **Limits of this build that were looked at and left, each with its reason in the section named.**
-- Four of the 44 motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them (13).
+- Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
 - Looking down shows your lap and legs, not your chest and belly. From a camera above and behind the eyes those surfaces face away; they are on the mirror body and in the view from behind (14).
 - Small upright windows, narrower than about 340 pixels or shorter than about 800, cannot start and say so; on a phone-sized screen the panels crowd the brain. The game needs a keyboard and a mouse or trackpad in any case (15).
 - When even the last good view cannot be drawn, the view turns part of the way back by itself (16).
 - From one measured pose the view from behind cannot be shown until the hand or the look moves; the game says so (18).
-- Your own arm can hide part of the brain's left arrow, and the brain's top arrow overlaps the mirror body's small top arrow at the start (19).
+- Your own arm can hide part of the brain's left arrow (19). The overlap of the brain's top arrow with the mirror body's top arrow noted there is gone since section 59, which puts the brain above the mirror body.
 - The shoulder-girdle slide has not been compared with reference images (9).
 - The switched-off floating-face code is still in the renderer (11). It draws nothing and was left to keep this change small.
+
+**Asked for in the user's notes and not done yet.** These stay with the author of these changes.
+- Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66).
+- The strip spans 42 % of the width of the view, not the 50 % of Message 43 (59).
+- Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
+- Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
+- The left shoulder (Messages 36 and 48). At a far-left look the shoulder can come away from its socket, and during the limb turn the shoulder muscle can show a pointed edge. Neither is fixed.
+- Controls (Messages 45 and 46). The look does not yet swing a held thing round you with the same face toward you (54), and the top and bottom arrows by the mirror body still slide it away and back instead of turning it.
+- Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
+- Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
+- The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

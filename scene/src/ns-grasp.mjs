@@ -46,11 +46,11 @@ export const LIMB_CHAIN = Object.freeze({
  *  solveIters / tolMm / lambdaMm / stepCapDeg / probeDeg: the joint solve (damped least squares on a numerical
  *    Jacobian; at most stepCapDeg per joint per iteration; probe of probeDeg for each Jacobian column).
  *  rollDegPerPx: degrees of turn per CSS pixel of drag across the limb (about a quarter turn for a 230 px drag).
- *  groundMarginMm: a held hand stays this far above the invisible ground; a held foot never goes below where it rests.
+ *  (No floor: a held limb goes wherever its joints let it; the earlier groundMarginMm went with the leg ground model.)
  */
 export const LIMB_GRASP = Object.freeze({
   speedMps: 0.35, solveIters: 6, tolMm: 0.5, lambdaMm: 8, stepCapDeg: 12, probeDeg: 0.5,
-  rollDegPerPx: 0.4, groundMarginMm: 60
+  rollDegPerPx: 0.4
 });
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];

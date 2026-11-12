@@ -152,6 +152,30 @@ export const VIEW_CODE = 'KeyE';
 /** The view key's label for the Esc page controls list, the intro and the key cap ("E"). */
 export const VIEW_KEY_LABEL = 'E';
 
+/** R558 (Messages 55 and 56, "easier to use", "a learning tool"): the movement keys. The information card lists the
+ * movements of the motor area being looked at (or the last one looked at), each with a number; pressing that number
+ * does that movement, the same as a click on that part of the area. The number row and the number pad both count
+ * (KeyboardEvent.code, layout independent). UI keys, not CONTROL_CODES: they hold nothing down and auto-repeat is
+ * ignored. Ctrl/Meta chords (Ctrl+1 switches tabs) and Alt chords are left to the browser. */
+export const MOVE_CODES = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9']);
+/** 1..9 for a movement key (number row or number pad), else 0. */
+export function moveKeyNumber(code) {
+  const m = typeof code === 'string' ? /^(?:Digit|Numpad)([1-9])$/.exec(code) : null;
+  return m ? Number(m[1]) : 0;
+}
+
+/** R558 (Messages 55 and 56): the area keys. The motor areas are small and lie side by side along the strip, so the
+ * left and right arrow keys move the look exactly one area along it (to the next area on that side on the screen), in
+ * body-map order: a walk along the motor homunculus. UI keys like the movement keys; a held key repeats, but no faster
+ * than AREA_KEY_REPEAT_MS, so each area on the way is seen. The app does the step (and only while playing). */
+export const AREA_CODES = Object.freeze(['ArrowLeft', 'ArrowRight']);
+/** The shortest time (ms) between two steps of a held area key. Display choice: about five areas a second. */
+export const AREA_KEY_REPEAT_MS = 180;
+/** -1 (toward the screen's left) or +1 (right) for an area key, else 0. */
+export function areaKeyDir(code) {
+  return code === 'ArrowLeft' ? -1 : code === 'ArrowRight' ? 1 : 0;
+}
+
 /** R5-input (D16, D19): targets of the 3D compass arrows: the brain's four and the mirror body's four. */
 export const ARROW_TARGETS = Object.freeze(['brain', 'mirror']);
 /** R5-input: arrow directions (compass: top = forward, bottom = back, left, right); the orbit directions of ns-actions. */
@@ -279,7 +303,7 @@ function checkSensitivity(v) {
  * and invertY (default false); the last two are the initial `state.look` and can be changed with setLookOptions.
  * @returns {{ state, initialState, keyDown, keyUp, blur, releaseAll, pointerMove, click, axes, drainEvents,
  *   escape, lockChange, uiCommand, toggleDetail, drainUiEvents, setLookOptions, lookOptions,
- *   toggleView, setLook, setPitchLimits, pitchLimits, pointerAt, pointerLeave, buttonDown, buttonUp, tap, buttonState,
+ *   toggleView, moveKey, areaKey, setLook, setPitchLimits, pitchLimits, pointerAt, pointerLeave, buttonDown, buttonUp, tap, buttonState,
  *   sensitivityRadPerPx: number, pitchLimitRad: number, sensitivity: number, invertY: boolean }}
  *   `state` is a fresh initial state (as createActivity exposes its initial state); initialState()
  *   makes another.
@@ -581,6 +605,22 @@ export function createControls({
     return pushUi({ ...state, viewSeq: seq }, { type: 'view', seq }, timeMs);
   }
 
+  /** R558 (Messages 55 and 56): a movement key (1..9): queue { type: 'move', n } on the UI queue, a REQUEST to do the
+   * n-th movement the information card lists. The app decides which motor area that is (the one looked at, else the
+   * last one) and ignores a number the list does not have. Holds nothing down; never touches the game queue. */
+  function moveKey(state, n, timeMs) {
+    if (!Number.isInteger(n) || n < 1 || n > 9) return state;
+    return pushUi(state, { type: 'move', n }, timeMs);
+  }
+
+  /** R558 (Messages 55 and 56): an area key (AREA_CODES): queue { type: 'area', dir } on the UI queue, a REQUEST to move
+   * the look one motor area along the strip toward the screen's left (dir -1) or right (+1). The app finds that area
+   * and turns the look; the look itself is not changed here. Holds nothing down; never touches the game queue. */
+  function areaKey(state, dir, timeMs) {
+    if (dir !== -1 && dir !== 1) return state;
+    return pushUi(state, { type: 'area', dir }, timeMs);
+  }
+
   /** R5-input: set the look { yaw, pitch } (radians) the camera hands over on a view switch (ns-camera toggleView's
    * controlsLook); pitch kept inside the current pitch range. Not a player look movement: lookMs is kept unless
    * opts.lookMs is given. Non-finite values are refused. */
@@ -712,6 +752,8 @@ export function createControls({
     lookOptions,
     // R5-input
     toggleView,
+    moveKey,
+    areaKey,
     setLook,
     setPitchLimits,
     pitchLimits,
@@ -1160,6 +1202,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const t = e && e.target;
     return !!(t && typeof t.closest === 'function' && t.closest('.ns-shell') && t.closest('button, input, select, textarea, summary, a[href]'));
   };
+  let lastAreaKeyMs = NaN; // the time of the last accepted area key (AREA_KEY_REPEAT_MS)
   on(view, 'keydown', e => {
     const code = e.code;
     if (e.ctrlKey || e.metaKey || isChordModifier(code)) {
@@ -1195,6 +1238,36 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       const before = getState();
       const after = controls.toggleView(before, at);
       if (after !== before) { setState(after); call(onView, { timeMs: at }); }
+      return;
+    }
+    const moveN = moveKeyNumber(code);
+    if (moveN > 0) {
+      // R558 (Messages 55 and 56): a movement key (1..9) asks for the n-th movement the information card lists. Not in
+      // a text field or on a page control, and never with Alt (browser menus).
+      if (e.altKey || isTextEntry(e.target) || onPageControl(e)) return;
+      e.preventDefault();
+      if (e.repeat === true || typeof controls.moveKey !== 'function') return;
+      const at = eventTime(e);
+      const before = getState();
+      const after = controls.moveKey(before, moveN, at);
+      if (after !== before) setState(after);
+      return;
+    }
+    const areaDir = areaKeyDir(code);
+    if (areaDir !== 0) {
+      // R558 (Messages 55 and 56): an area key (left / right arrow) asks for the next motor area along the strip. Not in
+      // a text field or on a page control, and never with Alt (browser history). The key is taken from the page only
+      // when the request was accepted (while playing: the app's own gate), so on the start and Esc pages the arrows
+      // still scroll. A held key repeats, at most one step per AREA_KEY_REPEAT_MS.
+      if (e.altKey || isTextEntry(e.target) || onPageControl(e) || typeof controls.areaKey !== 'function') return;
+      const at = eventTime(e);
+      if (e.repeat === true && Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
+      const before = getState();
+      const after = controls.areaKey(before, areaDir, at);
+      if (after === before) return;
+      e.preventDefault();
+      lastAreaKeyMs = at;
+      setState(after);
       return;
     }
     if (isReachCode(code)) {

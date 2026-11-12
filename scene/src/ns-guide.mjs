@@ -4,9 +4,12 @@
 // for the status card ("Try this (2 of 7): Press W, A, S or D to move your left hand."). All wording lives in
 // ns-text.mjs (GUIDE); nothing here says the game reads, records or sends brain signals.
 //
-// Goals, in teaching order (GUIDE_GOAL_IDS): look at a light-blue left-arm area -> move the hand with W/A/S/D -> tap
+// Goals, in teaching order (GUIDE_GOAL_IDS). R558 (Messages 55 and 56: the game is a learning tool, so what it teaches
+// comes first and the hand gestures after): look at a light-blue left-arm area -> (feature moveKeys) press a number key:
+// one movement of that area's list -> switch on another body part's area -> (feature moveKeys) press a number key with
+// the look off the brain, to watch the movement on the body ('watchBody') -> move the hand with W/A/S/D -> tap
 // Space twice: every limb turns once (goal id 'flipPalm', kept for saved progress; R558, Message 40) -> tap Space twice
-// and hold: the limbs keep turning slowly (goal id 'fist', kept) -> switch on another body part's (grey) area -> hold
+// and hold: the limbs keep turning slowly (goal id 'fist', kept) -> hold
 // Space (R558, Message 40; the F key is gone) on the brain and carry it -> click or hold an orbit arrow. Every goal completes from a real game event, in ANY
 // order: a goal the player already did is skipped when its turn comes. After the last goal a short "All done" line shows
 // for GUIDE_OPTIONS.finishS seconds, then the guide hides itself. The Esc page can hide, show or restart it.
@@ -29,6 +32,11 @@
 //   { type: 'orbit', dir?, hold? }                an orbit arrow turned the view (click step or hold).
 //   { type: 'pause' } / { type: 'resume' }        Esc page shown / hidden (the line hides while paused).
 //   { type: 'resetBody' }                         Reset body (no effect on the guide; accepted for completeness).
+//   { type: 'moveKey', n, moved, onBrain }        R558 (Messages 55 and 56): number key n did movement n of the information
+//        card's list. moved false = that movement was already at its end (nothing moved): the line then asks for
+//        another number and no goal completes. onBrain = the look was on the brain when the key went down: a key that
+//        moved something completes numberKey; with onBrain false it also completes watchBody (the look was on the
+//        body, where the movement shows).
 //
 // guideEventsFromFrame() derives these events from two consecutive ns-app simulation states (the frame loop's
 // simState before and after stepFrame), the frame's `out` and its inputs, so the integrator needs one call per frame.
@@ -58,21 +66,24 @@ import { GUIDE, guideLine } from './ns-text.mjs';
 
 /** The round-4 goal ids in teaching order (the guide of a build without the round-5 features). */
 // R558 (Message 40): the double tap (flipPalm) is taught before the double tap held (fist), which builds on it.
-export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'flipPalm', 'fist', 'otherPart', 'dragBrain', 'orbit']);
+// R558 (Messages 55 and 56): what the game teaches comes first: an area of the left arm, then an area of another body
+// part; the hand, Space and arrow gestures follow. The ids are unchanged, so saved progress keeps.
+export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'otherPart', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit']);
 
-/** Every goal id in teaching order, round 5 included (R5-text). */
-export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'moveHand', 'flipPalm', 'fist', 'otherPart', 'glow', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
+/** Every goal id in teaching order, the feature goals included (R5-text; R558 numberKey). */
+export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
 
-/** The round-5 goals and the build feature each one needs (ns-text ROUND5_FEATURES names). */
-export const GUIDE_FEATURE_GOALS = Object.freeze({ glow: 'glow', thirdPerson: 'thirdPerson', mirror: 'mirror' });
+/** The feature goals and the build feature each one needs (ns-text ROUND5_FEATURES names; R558: moveKeys = the
+ * information card draws its numbered movement list and the number keys are wired). */
+export const GUIDE_FEATURE_GOALS = Object.freeze({ numberKey: 'moveKeys', watchBody: 'moveKeys', glow: 'glow', thirdPerson: 'thirdPerson', mirror: 'mirror' });
 
-/** The full round-5 feature set for the guide (pass as `features` when every round-5 feature is wired). */
-export const GUIDE_ALL_FEATURES = Object.freeze({ glow: true, thirdPerson: true, mirror: true });
+/** The full feature set for the guide (pass as `features` when every feature is wired). */
+export const GUIDE_ALL_FEATURES = Object.freeze({ moveKeys: true, glow: true, thirdPerson: true, mirror: true });
 
 /**
  * The goal list of a build, in teaching order: the seven round-4 goals plus each round-5 goal whose feature is true.
- * features: { glow, thirdPerson, mirror } (booleans; missing = false). goals (optional): an explicit list, kept in
- * teaching order, unknown ids dropped (used by restart to keep the same list).
+ * features: { moveKeys, glow, thirdPerson, mirror } (booleans; missing = false). goals (optional): an explicit list,
+ * kept in teaching order, unknown ids dropped (used by restart to keep the same list).
  */
 export function guideGoalIds(features = null, goals = null) {
   if (Array.isArray(goals) && goals.length) {
@@ -107,7 +118,8 @@ const goalsOf = s => (s && Array.isArray(s.goals) && s.goals.length ? s.goals : 
  * features ({ glow, thirdPerson, mirror }: the round-5 goals this build can teach; none by default) or goals (an
  * explicit goal list, see guideGoalIds). Returns { v: 1, hidden, paused, goals: [ids], done: { id: bool } (every
  * known goal), axes: { x, z }, fistAt, flashUntil, finishedAt, startedAt, view, thirdAt, glowPending, mirrorBlocked,
- * mirrorMoved }.
+ * mirrorMoved, numberStill (R558: the last number key pressed while a number-key goal showed moved nothing),
+ * watchOnBrain (R558: while the watchBody goal showed, a number key moved something with the look still on the brain) }.
  */
 export function createGuide({ now = 0, hidden = false, done = [], features = null, goals = null } = {}) {
   const d = noneDone();
@@ -118,7 +130,7 @@ export function createGuide({ now = 0, hidden = false, done = [], features = nul
     v: 1, hidden: hidden === true, paused: false, goals: list, done: d,
     axes: { x: d.moveHand, z: d.moveHand }, fistAt: null, flashUntil: null,
     finishedAt: all ? nowOf(now) - GUIDE_OPTIONS.finishS : null, startedAt: nowOf(now),
-    view: 'first', thirdAt: null, glowPending: null, mirrorBlocked: false, mirrorMoved: false
+    view: 'first', thirdAt: null, glowPending: null, mirrorBlocked: false, mirrorMoved: false, numberStill: false, watchOnBrain: false
   };
 }
 
@@ -219,6 +231,19 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         break;
       }
       case 'flip': mark('flipPalm'); break;
+      case 'moveKey': {
+        // R558 (Messages 55 and 56): a number key did a movement of the information card's list. One that was already
+        // at its end moves nothing: the goal stays open and its line asks for another number (while a number-key goal
+        // is the current one). A key that moved something completes numberKey; pressed with the look off the brain
+        // (on the body, where the movement shows) it also completes watchBody.
+        const c = cur(), numberGoal = c === 'numberKey' || c === 'watchBody';
+        if (ev.moved === false) { if (numberGoal && (s || state).numberStill !== true) w().numberStill = true; break; }
+        if ((s || state).numberStill === true) w().numberStill = false;
+        if (ev.onBrain === false) mark('watchBody');
+        else if (c === 'watchBody' && (s || state).watchOnBrain !== true) w().watchOnBrain = true;
+        mark('numberKey');
+        break;
+      }
       case 'carry': if (isNum(ev.m) && ev.m > 0) w().carryM = (isNum((s || state).carryM) ? (s || state).carryM : 0) + ev.m; break;
       case 'grab': {
         // R558 (hunt 2): the W/A/S/D carry of this hold (carry events) counts as well as the look carry (dragRad).
@@ -270,6 +295,10 @@ export function guideView(state, now = 0, opts = GUIDE_OPTIONS) {
   }
   let text = GUIDE.goals[id];
   if (id === 'moveHand' && s.axes.x !== s.axes.z) text = s.axes.z ? GUIDE.partial.moveHandNeedX : GUIDE.partial.moveHandNeedZ;
+  // R558: a number moved the part while the look was still on the brain: ask for a look down at the body.
+  if (id === 'watchBody' && s.watchOnBrain === true) text = GUIDE.partial.watchBodyLookDown;
+  // R558: the number just pressed moved nothing (that movement was already at its end): ask for another number.
+  if ((id === 'numberKey' || id === 'watchBody') && s.numberStill === true) text = GUIDE.partial.numberKeyStill;
   // R5-text partial lines: in the view from behind; the brain in the way of the mirror arrows; the brain moved aside.
   if (id === 'thirdPerson' && s.view === 'third') text = GUIDE.partial.thirdPersonBack;
   if (id === 'mirror' && s.mirrorBlocked === true) text = GUIDE.partial.mirrorBlocked;

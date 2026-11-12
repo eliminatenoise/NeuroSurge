@@ -608,6 +608,19 @@ html, body {
 .ns-infopanel-rows dt::after { content: "  "; white-space: pre; }
 .ns-infopanel-rows dd { display: inline; margin: 0; overflow-wrap: break-word; }
 .ns-infopanel-rows dd::after { content: ""; display: block; margin-bottom: 2px; }
+/* R558 (Messages 55 and 56: easier to play; a learning tool): the area's movements, each with the number key (1 to 9)
+   that does it. The movement shown now is marked (its muscles are the rows below); one already at its end says so. */
+.ns-infopanel-moves-heading { margin: 5px 0 3px; padding-top: 5px; border-top: 1px solid var(--ns-surface-line); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ns-label); }
+.ns-infopanel-moves-heading[hidden],
+.ns-infopanel-moves[hidden] { display: none; }
+.ns-infopanel-moves { list-style: none; display: grid; gap: 2px; margin: 0 0 3px; padding: 0; }
+.ns-infopanel-move { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 0 7px; padding: 1px 4px 2px 3px; border-radius: 5px; font-size: 12.5px; line-height: 1.35; color: #d6dee8; }
+.ns-infopanel-move-label { overflow-wrap: break-word; }
+.ns-infopanel-move-note { margin-left: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--ns-muted); white-space: nowrap; }
+.ns-infopanel-move[data-current="true"] { background: rgba(232, 238, 245, 0.1); color: #ffffff; font-weight: 700; }
+.ns-infopanel-move[data-current="true"] .ns-infopanel-move-key { border-color: #ffe066; color: #ffe066; }
+.ns-infopanel-move[data-current="true"] .ns-infopanel-move-note { color: #ffe066; }
+.ns-infopanel-move[data-at-end="true"]:not([data-current="true"]) .ns-infopanel-move-label { color: var(--ns-muted); }
 /* Round-2 fixes V1 / SCI-4 / F6: plain lead, then short simulated / known / caveat lines, then the rows, then the long
    explanation ("More detail", clamped last), so the required fields stay inside the column at 1280x720. */
 .ns-infopanel-plain,
@@ -868,6 +881,11 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 .ns-kbd-title { grid-column: 1 / -1; margin: 0 0 2px; }
 .ns-kbd-board { display: grid; gap: calc(var(--k) * 0.16); justify-items: start; }
 .ns-kbd-row { display: flex; gap: calc(var(--k) * 0.16); }
+/* R558 (Messages 55 and 56): the number row; the 1 key sits half a key left of Q, as on a real keyboard. Its words
+   are written once, beside Esc in the free space right above it (the row stays narrower than the Q row). */
+.ns-kbd-row-num { padding-left: 0; }
+.ns-kbd-row-esc { align-items: center; }
+.ns-kbd-rownote { margin-left: calc(var(--k) * 0.5); max-width: calc(var(--k) * 11); font-size: max(10px, calc(var(--k) * 0.28)); font-weight: 600; line-height: 1.2; color: #cfe9f5; }
 .ns-kbd-row-q { padding-left: calc(var(--k) * 0.7); }
 .ns-kbd-row-a { padding-left: calc(var(--k) * 1.05); }
 .ns-kbd-row-z { padding-left: 0; } /* R558 (Messages 33 and 34): the wide left Shift starts the row, as on a real keyboard */
@@ -878,11 +896,16 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
   border-color: #7fd6f2; background: rgba(110, 205, 240, 0.17); color: #ffffff; line-height: 1; }
 .ns-kbd-name { font-size: calc(var(--k) * 0.4); font-weight: 800; letter-spacing: 0.02em; }
 .ns-kbd-word { font-size: max(10px, calc(var(--k) * 0.26)); font-weight: 600; color: #cfe9f5; white-space: nowrap; }
-.ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 8.6); }
+.ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 7.6); }
+/* R558 (Messages 55 and 56): the two arrow keys right of the space bar, a little apart from it as on a keyboard. The
+   row stays inside the Q row's width (3.1 + 7.6 + 0.4 + 2 keys and gaps = 14.26 key heights against 14.76). */
+.ns-kbd-key.ns-kbd-key-arrowleft { margin-left: calc(var(--k) * 0.4); }
 .ns-kbd-key.ns-kbd-key-escape { flex-basis: calc(var(--k) * 1.6); }
 .ns-kbd-key.ns-kbd-key-shiftleft { flex-basis: calc(var(--k) * 2.6); }
-.ns-kbd-pad { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; align-items: center; min-width: 0; }
-.ns-kbd-pad-title { grid-column: 1 / -1; font-weight: 700; font-size: 13px; color: #f2f6fa; }
+/* R558 (Message 55): one column (title, drawing, then the three lines at the pad's full width). Beside the drawing the
+   lines had about 80 px and broke after every word. */
+.ns-kbd-pad { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; justify-items: start; min-width: 0; }
+.ns-kbd-pad-title { font-weight: 700; font-size: 13px; color: #f2f6fa; }
 .ns-kbd-pad-drawing { position: relative; width: calc(var(--k) * 2.9); height: calc(var(--k) * 2.1); border-radius: 10px;
   border: 1px solid #7fd6f2; border-bottom-width: 3px; background: rgba(110, 205, 240, 0.1); }
 .ns-kbd-pad-finger { position: absolute; left: 34%; top: 38%; width: calc(var(--k) * 0.42); height: calc(var(--k) * 0.42); border-radius: 50%;
@@ -940,3 +963,17 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
 .ns-app[data-ns-read="off"] .ns-infopanel,
 .ns-app[data-ns-read="off"] .ns-hud .ns-panel-info,
 .ns-app[data-ns-read="off"] .ns-hud .ns-panel-legend { display: none !important; }
+
+/* ---- R558 (Messages 55 and 56): an easier Esc page -------------------------------------------------------------------
+   The Esc page opens with the short steps and controls; this row holds the button that swaps in the full words. */
+.ns-shell-detailrow { display: flex; justify-content: flex-start; margin: 2px 0 0; }
+.ns-shell-detailrow[hidden] { display: none; }
+.ns-shell-detail-toggle { padding: 5px 12px; font-size: 13px; }
+/* The "what this game is, and is not" list in two columns on a wide card: every line stays, the page is shorter. */
+@media (min-width: 900px) {
+  .ns-shell-limits ul { columns: 2; column-gap: 30px; }
+  .ns-shell-limits li { break-inside: avoid; }
+}
+@media (min-width: 1700px) and (min-aspect-ratio: 2/1) {
+  .ns-shell-limits ul { columns: auto; }
+}

@@ -1876,17 +1876,19 @@ export function createActivity({
     return T;
   }
 
-  /** Stage rule of a deliberate BODY activation: an action that opposes where one of its joints is latched brings
-   * that joint back to its start angle (and does nothing else this time); otherwise its joints go to their end
-   * angles and stay. Momentary joints are not touched (they follow the pulse in integrate). */
+  /** Stage rule of a deliberate BODY activation: an action that opposes where one of its joints is latched (its end
+   * for that joint lies on the other side of the start angle) brings that joint back to its start angle (and does
+   * nothing else this time); otherwise its joints go to their end angles and stay. A joint the action merely wants at
+   * its start angle ("Purse the lips" wants the upper lip down) is not an opposition: it goes there with the rest of
+   * the action, in the same activation. Momentary joints are not touched (they follow the pulse in integrate). */
   function latchBodyAction(s, key) {
     const ends = ENDS.get(key);
     if (!ends) return;
     const back = [];
     for (const j of Object.keys(ends)) {
       if (!LATCHING[j]) continue;
-      const at = sideOf(j, s.bodyGoal[j]);
-      if (at !== 0 && sideOf(j, ends[j]) !== at) back.push(j);
+      const at = sideOf(j, s.bodyGoal[j]), side = sideOf(j, ends[j]);
+      if (at !== 0 && side !== 0 && side !== at) back.push(j);
     }
     if (back.length > 0) { for (const j of back) s.bodyGoal[j] = REST[j]; return; }
     for (const j of Object.keys(ends)) {
@@ -2775,6 +2777,9 @@ export function createActivity({
    *   joints  [{ jointId, goalDeg, restDeg, posDeg }]   body joints latched away from their start angle
    *   arm     [actionId]                                 latched game-arm actions
    *   rotated true when the forearm turn is not the default one
+   *   still   [bodyActionKey]                            body actions a deliberate activation would not move now (the
+   *           latchBodyAction rule: no joint of theirs to bring back, and each latching joint already at its end or
+   *           further on that side). The information card's "already there" (R558, Messages 55 and 56).
    *   hints   [{ key, regionId, actionId, armActionId, label, level, muscles, bodySide, isLeftArm, forJoint, forAction }]
    *           the OPPOSING actions: activating one brings that joint (or arm action) back. `muscles` are the opposing
    *           action's movers (the map's agonist names), `level` is JOINT_LATCH.hintLevel. One entry per action.
@@ -2815,6 +2820,20 @@ export function createActivity({
         });
       }
     };
+    const still = [];
+    for (const k of BODY_KEYS) {
+      const ends = ENDS.get(k);
+      let latching = 0, moves = false;
+      for (const j of Object.keys(ends)) {
+        if (!LATCHING[j]) continue;
+        latching += 1;
+        const at = sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
+        if (at !== 0 && side !== at) { moves = true; break; } // held on the other side: the action brings it back
+        if (side !== 0 && at === side && Math.abs(goalOf[j] - REST[j]) >= Math.abs(ends[j] - REST[j])) continue; // at its end, or further
+        if (Math.abs(goalOf[j] - ends[j]) > JOINT_LATCH.restEpsDeg) { moves = true; break; }
+      }
+      if (latching > 0 && !moves) still.push(k);
+    }
     const arm = [];
     for (const id of ACTION_IDS) {
       if (!(latchOf[id] > 0)) continue;
@@ -2826,7 +2845,7 @@ export function createActivity({
     const rotated = state.rotationState !== defaultRotation || heldTurn;
     if (rotated) armHint(defaultRotation === 'supinated' ? 'supination' : 'pronation', defaultRotation === 'supinated' ? 'pronation' : 'supination');
     return {
-      joints, arm, rotated, hints,
+      joints, arm, rotated, hints, still,
       label: 'held by the game until the opposing action or Reset (a rule of this simulation; not a recording)'
     };
   }

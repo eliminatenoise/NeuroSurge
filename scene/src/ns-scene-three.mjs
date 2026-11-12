@@ -3305,12 +3305,21 @@ export function infoPanelContent(model) {
       more = { summary: T.moreDetail, items, explanation: expl, note: act ? s(act.note) : '', caveats, sources: citations ? `${T.sourcesPrefix}${citations}` : '' };
     }
   }
+  // R558 (Messages 55 and 56: easier to play; a learning tool): the numbered movement list (ns-app infoMoves): every
+  // movement of the area with the number key that does it. The one shown now is marked and its muscles are the rows
+  // below it, so the Movement row is not written a second time.
+  const moves = region && Array.isArray(model.moves)
+    ? model.moves.filter(m => m && Number.isInteger(m.n) && s(m.label)).map(m => ({ n: m.n, label: s(m.label), current: m.current === true, atEnd: m.atEnd === true }))
+    : [];
+  if (moves.some(m => m.current)) rows = rows.filter(r => r[0] !== INFO_ROW_LABELS.movement);
+  const TM = T.moves && typeof T.moves === 'object' ? T.moves : {};
   return {
     key: s(model.key), mode: s(model.mode) || 'idle', leftArm,
     heading: s(model.heading) || T.heading,
     title: s(card && card.title) || s(model.title), tag: s(card && card.tag) || s(model.tag),
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
+    moves, movesHeading: moves.length ? s(TM.heading) : '', movesAtEnd: s(TM.atEnd), movesCurrent: s(TM.current),
     rows: rows.slice(0, INFO_PANEL.maxRows),
     // R558: the swatch and the meter show the area's OWN colour (calm tint -> glow), as on the brain and the muscles.
     activity: v === null ? null : { value: v, text: NsText.activityLine(v), css: NsColors.areaSwatchCss(model.regionId, v) || activityColorCss(v), meter: NsColors.areaMeterCss(model.regionId) },
@@ -3384,8 +3393,20 @@ export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
  * avoidCellPx / avoidDilate: their occupancy grid (CSS px cell, cells marked round each point and triangle; 2 = an 8 px
  * margin for the arrows, whose drawn hook is a little larger than their planned box); mirrorAvoidDilate: the same for the
  * mirror body's place (its arrows' rooms already keep it apart; 1 lets it fit on a phone); crosshairKeepPx: half
- * size of the box round the crosshair that no orbit arrow may cover (an arrow obstacle). */
-export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, avoidDilate: 2, mirrorAvoidDilate: 1, crosshairKeepPx: 40 });
+ * size of the box round the crosshair that no orbit arrow's CLICK AREA may come within 4 px of (an arrow obstacle).
+ * R558 (Messages 55 / 56): 40 -> 8. The mirror body's top tip belongs on the middle of its frame's top side, just above
+ * its head, which with a literal reflection is only 40 to 60 px above the crosshair at the start (measured: 59.8 px at
+ * 1920x1080, 49.8 at 1600x900, 42.5 at 1366x768); the old 40 px box pushed that tip 86 to 116 px up, onto the brain's
+ * leg areas. A tip's click area is larger than its drawn shape (about 31 px from its middle along its pointing
+ * axis at 52 px), so with 8 + 4 px the crosshair mark (11 px half size) and a start look are still never on a tip. */
+export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, avoidDilate: 2, mirrorAvoidDilate: 1, crosshairKeepPx: 8 });
+/** R558 (Messages 55 / 56): how the brain's top / bottom arrow tips move off obstacles (ns-arrows3d FRAME_PAIR
+ * overrides; display choices). With the brain just above the mirror body's head, the middle of the brain frame's bottom
+ * side is where the mirror body's top tip is. The brain's bottom tip therefore goes UP the hollow of the motor strip's U
+ * to the lowest place where its click area covers no motor area (inwardMaxFrac 1.6: it may pass the frame's middle;
+ * measured 196 px up at 1920x1080, 170 px at 1600x900), and the pair does not move sideways off the brain's midline
+ * instead (perpCost 12: a sideways move costs 24 per px, the way up 5 per px). */
+export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, perpCost: 12 }) });
 /** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
  * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
  * tip sat on your head). The tips are drawn on top of everything, so they are now drawn, and answer clicks, only where
@@ -5157,6 +5178,10 @@ export function createScene({
     // known, the region's own caveat), then everything technical in a collapsed <details> "More detail" (its summary is
     // the panel's only pointer target, for the drag-to-look mode; with the mouse captured it stays collapsed).
     info.plain = el('p', 'ns-infopanel-plain', p);
+    // R558 (Messages 55 and 56): the area's movements, each with its number key (1 to 9).
+    info.movesHeading = el('div', 'ns-infopanel-moves-heading', p);
+    info.moves = el('ol', 'ns-infopanel-moves', p);
+    info.movesHeading.hidden = true; info.moves.hidden = true;
     info.rows = el('dl', 'ns-infopanel-rows', p);
     info.simulated = el('p', 'ns-infopanel-simulated', p);
     info.known = el('p', 'ns-infopanel-known', p);
@@ -7803,6 +7828,24 @@ export function createScene({
     }
     hide(info.rows, c.rows.length === 0);
     put(info.plain, c.plain);
+    // The movement list: rebuilt only when a label, the current mark or an "already there" changes.
+    const movesSig = JSON.stringify([c.moves, c.movesAtEnd, c.movesCurrent]);
+    if (movesSig !== info.movesSig) {
+      info.movesSig = movesSig; grew = true;
+      while (info.moves.firstChild) info.moves.removeChild(info.moves.firstChild);
+      for (const m of c.moves) {
+        const li = el('li', 'ns-infopanel-move', info.moves);
+        li.setAttribute('data-current', m.current ? 'true' : 'false');
+        li.setAttribute('data-at-end', m.atEnd ? 'true' : 'false');
+        el('span', 'ns-keycap ns-infopanel-move-key', li).textContent = String(m.n);
+        const words = el('span', 'ns-infopanel-move-label', li);
+        words.textContent = m.label;
+        const note = m.atEnd ? c.movesAtEnd : m.current ? c.movesCurrent : '';
+        if (note) el('span', 'ns-infopanel-move-note', words).textContent = note;
+      }
+    }
+    put(info.movesHeading, c.movesHeading);
+    hide(info.moves, c.moves.length === 0);
     put(info.explanation, c.explanation);
     put(info.simulated, c.simulated);
     put(info.known, c.known);
@@ -9122,6 +9165,34 @@ export function createScene({
     const cam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() };
     return NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(brainGroup.matrixWorld.elements), cam).xy, { width: cssW, height: cssH, cellPx: R5_BIGBRAIN.avoidCellPx, dilate, indices: motorIndices });
   }
+  /** R558 (Messages 55 / 56): the motor areas' occupancy grid (CSS px, no margin) with the brain at REST (un-turned,
+   * ns-brain restMatrix) seen from a plan's reference camera: tipBlocker tests a tip's click area against it, so at the
+   * start a click on a motor area never lands on an arrow. Kept for the last camera asked (the brain's and the mirror
+   * body's plans usually share it). null before the region meshes and the rest matrix exist. */
+  let motorRestGridMemo = null;
+  function motorRestGrid(refCam) {
+    const P = motorSamplePoints(), e = brainRestElements;
+    if (!P || !e || !(refCam.width > 0 && refCam.height > 0)) return null;
+    const key = `${refCam.width}x${refCam.height}|${refCam.fovYDeg}|${refCam.yaw},${refCam.pitch}|${refCam.position.join(',')}|${Array.prototype.join.call(e, ',')}|${compassBrainSourceRevision}`;
+    if (!motorRestGridMemo || motorRestGridMemo.key !== key) {
+      motorRestGridMemo = { key, grid: NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(e), refCam).xy,
+        { width: refCam.width, height: refCam.height, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 0, indices: motorIndices }) };
+    }
+    return motorRestGridMemo.grid;
+  }
+  /** R558 (Messages 55 / 56): the box the mirror body's 9:16 arrow frame is built from, seen from a reference camera
+   * (see updateArrows): its on-screen box padded by a tip and cut to the usable view U. { box, keep } or null. */
+  function mirrorFrameBox(refCam, U, mSize) {
+    const full = mirrorBoxPx(refCam);
+    if (!full) return null;
+    const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), pad = o.halfAlong * mSize;
+    const g = { x0: full.x0 - pad, y0: full.y0 - pad, x1: full.x1 + pad, y1: full.y1 + pad };
+    const cut = { x0: Math.max(g.x0, U.x0), y0: Math.max(g.y0, U.y0), x1: Math.min(g.x1, U.x1), y1: Math.min(g.y1, U.y1) };
+    if (cut.x1 > cut.x0 && cut.y1 > cut.y0 && (cut.x0 !== g.x0 || cut.x1 !== g.x1 || cut.y0 !== g.y0 || cut.y1 !== g.y1)) {
+      return { box: cut, keep: { x: cut.x0 !== g.x0 || cut.x1 !== g.x1, y: cut.y0 !== g.y0 || cut.y1 !== g.y1 } };
+    }
+    return { box: full, keep: null };
+  }
   /** R558 (Message 7): plan one target's four V tips on its frame (ns-arrows3d planFrameArrows) and keep the evidence
    * record the read-only arrow trace reports. */
   function planFrame(set, args, record) {
@@ -9160,9 +9231,14 @@ export function createScene({
    *  - covered by your own body: two of three sight lines through the tip (its middle and 0.35 x sizePx either way
    *    along its side) meet your body nearer than the tip's world anchor (the FRAME_VIS rule, which would hide it);
    *  - `box` (optional): the tip's drawn box at hover size, padded by gapPx, overlaps it (the brain's tips keep off the
-   *    mirror body's box, padded so the mirror's own tips keep their room). */
-  function tipBlocker({ cam, centre, sizePx, box = null, gapPx = 4 }) {
+   *    mirror body's box, padded so the mirror's own tips keep their room);
+   *  - `grid` (optional, R558 Messages 55 / 56): the tip's CLICK area (ns-arrows3d arrowHitHalfPx, or its hovered drawn
+   *    size where that is larger) lies over a marked cell (motorRestGrid: the motor areas at rest). The motor areas are
+   *    what the player aims at and learns from; a tip over one hid it and took its clicks. */
+  function tipBlocker({ cam, centre, sizePx, box = null, gapPx = 4, grid = null }) {
     const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), grow = NsArrows.ARROW_LOOK.hoverScale;
+    const hit = NsArrows.arrowHitHalfPx(sizePx);
+    const kA = Math.max(hit.halfAlongPx, o.halfAlong * sizePx * grow), kC = Math.max(hit.halfAcrossPx, o.halfAcross * sizePx * grow);
     let test = null, anchorAt;
     // R558 (performance, P3): frameArrowSpots asks the same place (dir, x, y) several times while it looks for a pair's
     // place (each tip alone, then both together, then the common shifts); within one plan nothing the answer depends on
@@ -9182,6 +9258,10 @@ export function createScene({
       if (box) {
         const hx = (side ? o.halfAlong : o.halfAcross) * sizePx * grow, hy = (side ? o.halfAcross : o.halfAlong) * sizePx * grow;
         if (x - hx < box.x1 + gapPx && x + hx > box.x0 - gapPx && y - hy < box.y1 + gapPx && y + hy > box.y0 - gapPx) return true;
+      }
+      if (grid) {
+        const kx = side ? kA : kC, ky = side ? kC : kA;
+        if (grid.hits({ x0: x - kx - 1, y0: y - ky - 1, x1: x + kx + 1, y1: y + ky + 1 }) > 0) return true;
       }
       if (!body.length) return false;
       // the anchor through the place: frameArrowAnchors' arithmetic with the camera and centre worked out once
@@ -9239,6 +9319,14 @@ export function createScene({
    *    the frames are fitted to the targets as they stand (a mirror body carried aside has its frame there).
    *  - No tip of either set is planned on the box kept free round the crosshair of its reference view; a tip that has
    *    to move keeps clear of the HUD cards and the hint line.
+   *  - R558 (Messages 55 / 56, the brain above the mirror body): no tip of either set is planned where its click area
+   *    covers a motor area of the brain at rest (motorRestGrid), and the brain's tips keep off the click area of the
+   *    mirror body's top tip, which stays on the middle of its frame's top side. The brain's BOTTOM tip therefore does
+   *    not sit on the middle of its frame's bottom side (that is where the mirror body's top tip is): it moves up its
+   *    centre line into the hollow of the strip's U (BRAIN_TIP_RULES). This is a known departure from "the centered
+   *    edges of each frame" for that one tip; the other three brain tips are on their sides' middles or a few px out.
+   *    (The brain's plan uses the brain's reference look and the mirror's its own; they are the same look at the
+   *    start, which is when the two frames meet.)
    * A frame is made again only when something it depends on changes: the view size, field of view or usable view, the
    * reference eye and look, the target's place (a carry, or a reset that puts it back), the brain's rest matrix and
    * source, the mirror body's scale and measured sample. Turning a target, tapping an arrow or looking around changes
@@ -9271,14 +9359,29 @@ export function createScene({
         // R558 (issue hunt 2, portrait: the brain's bottom tip lay across the mirror body's chest): the brain's tips keep off
         // the mirror body's box (padded by a mirror tip, so the mirror's own tips keep their room) and off places your own
         // body covers in this view. R558 (Message 31): they move in pairs to do so (tipBlocker, ns-arrows3d FRAME_PAIR).
-        let mPad = null;
+        // R558 (Messages 55 / 56): the brain now sits just above the mirror body's head, so three more things hold:
+        //  - the mirror body's TOP tip keeps its own place (the middle of its frame's top side): its click area there is
+        //    kept free of the brain's tips, which are planned first (mTop);
+        //  - no brain tip lies over a motor area (motorRestGrid): the left and right tips move out off the strip's ends;
+        //  - the brain's bottom tip, whose side's middle is where the mirror body's top tip is, moves up into the hollow
+        //    of the strip's U (BRAIN_TIP_RULES; the 0.5 default would stop it on the leg areas).
+        let mPad = null, mTop = null;
         if (mirrorRoot.visible && mirror.transform && mirror.samples) {
-          const mb = mirrorBoxPx(refCam), o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN);
-          const pad = Math.max(o.halfAlong, o.halfAcross) * NsArrows.arrowTipSizePx(cam, 'mirror') * NsArrows.ARROW_LOOK.hoverScale + 4;
+          const mb = mirrorBoxPx(refCam), o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), grow = NsArrows.ARROW_LOOK.hoverScale;
+          const mSize = NsArrows.arrowTipSizePx(cam, 'mirror');
+          const pad = Math.max(o.halfAlong, o.halfAcross) * mSize * grow + 4;
           if (mb) mPad = { x0: mb.x0 - pad, y0: mb.y0 - pad, x1: mb.x1 + pad, y1: mb.y1 + pad };
+          const fb = mirrorFrameBox(refCam, U, mSize), fr = fb ? NsArrows.frameRect(fb.box, NsArrows.FRAME_ASPECT.mirror, U, fb.keep) : null;
+          if (fr) {
+            const h = NsArrows.arrowHitHalfPx(mSize), ha = Math.max(h.halfAlongPx, o.halfAlong * mSize * grow), hc = Math.max(h.halfAcrossPx, o.halfAcross * mSize * grow);
+            const mx = (fr.x0 + fr.x1) / 2, ty = Math.max(fr.y0, U.y0 + o.halfAlong * mSize * grow);
+            mTop = { x0: mx - hc, y0: ty - ha, x1: mx + hc, y1: ty + ha };
+          }
         }
+        const bAvoid = (crossBox ? [crossBox] : []).concat(mTop ? [mTop] : []);
         B.plan = planFrame(B, { box: motorRestBoxPx(refCam), aspect: NsArrows.FRAME_ASPECT.brain, bounds: U, cam: refCam, centre: Array.from(centre), sizePx: bSize,
-          avoid: crossBox ? [crossBox] : null, keepOut, blocked: tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad }) },
+          avoid: bAvoid.length ? bAvoid : null, keepOut, rules: BRAIN_TIP_RULES,
+          blocked: tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad, grid: motorRestGrid(refCam) }) },
           { target: 'motor strip at rest', refLook: { yaw: arrowRef.yaw, pitch: arrowRef.pitch } });
         if (B.plan) B.plan.visAnchors = frameVisAnchors(B.plan, refCam, Array.from(centre)); // check fix: the frame FRAME_VIS samples
         B.frames = B.plan ? B.plan.frames : null;
@@ -9312,20 +9415,13 @@ export function createScene({
         // whole body then cut at the panels ringed only its head): the frame is built from the part of its on-screen box
         // inside the usable view (the space between the panels), padded by a tip so the tips sit just outside the body;
         // an axis that had to be cut is not grown again for the 9:16 shape (ns-arrows3d frameRect keep).
-        const mSize = NsArrows.arrowTipSizePx(cam, 'mirror'), full = mirrorBoxPx(refCam);
-        let mBox = full, keep = null;
-        if (full) {
-          const o = NsArrows.arrowTipOutline(NsArrows.ARROW_DESIGN), pad = o.halfAlong * mSize;
-          const g = { x0: full.x0 - pad, y0: full.y0 - pad, x1: full.x1 + pad, y1: full.y1 + pad };
-          const cut = { x0: Math.max(g.x0, U.x0), y0: Math.max(g.y0, U.y0), x1: Math.min(g.x1, U.x1), y1: Math.min(g.y1, U.y1) };
-          if (cut.x1 > cut.x0 && cut.y1 > cut.y0 && (cut.x0 !== g.x0 || cut.x1 !== g.x1 || cut.y0 !== g.y0 || cut.y1 !== g.y1)) {
-            mBox = cut; keep = { x: cut.x0 !== g.x0 || cut.x1 !== g.x1, y: cut.y0 !== g.y0 || cut.y1 !== g.y1 };
-          }
-        }
+        const mSize = NsArrows.arrowTipSizePx(cam, 'mirror'), fb = mirrorFrameBox(refCam, U, mSize);
+        const mBox = fb ? fb.box : null, keep = fb ? fb.keep : null;
         // R558 (hunt 2): a place your own body covers in this view is not taken (it would be hidden from the start,
         // FRAME_VIS); R558 (Message 31): the tips move in pairs to keep off it (tipBlocker, ns-arrows3d FRAME_PAIR).
+        // R558 (Messages 55 / 56): nor a place over a motor area of the brain at rest (motorRestGrid).
         M.plan = planFrame(M, { box: mBox, keep, aspect: NsArrows.FRAME_ASPECT.mirror, bounds: U, cam: refCam, centre: Array.from(c), sizePx: mSize, avoid, keepOut,
-          blocked: tipBlocker({ cam: refCam, centre: Array.from(c), sizePx: mSize }) },
+          blocked: tipBlocker({ cam: refCam, centre: Array.from(c), sizePx: mSize, grid: showB ? motorRestGrid(refCam) : null }) },
           { target: 'mirror body', refLook: { yaw: look.yaw, pitch: look.pitch }, startLook: look === start, cutToView: keep });
         if (M.plan) M.plan.visAnchors = frameVisAnchors(M.plan, refCam, Array.from(c)); // check fix: the frame FRAME_VIS samples
         M.frames = M.plan ? M.plan.frames : null;

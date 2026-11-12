@@ -90,8 +90,8 @@ export const JOINT_SEMANTICS = deepFreeze({
   // R558 audit (Message 2: "maximum anatomically feasible range of motion but never beyond"): every suggestedRange is
   // now the full ns-body BODY_JOINT_LIMITS range (adult active norms, AAOS 1965 / AMA Guides; the basis per joint is
   // in ns-body BODY_JOINT_LIMITS), so an action's end angle may be the joint's anatomical end.
-  hip_flex_L: sem('hip flexion (thigh forward and up; about 90 at most with the knee straight, ns-body HIP_KNEE_COUPLING)', 'hip extension (thigh back)', -30, 120, 'left'),
-  hip_flex_R: sem('hip flexion (thigh forward and up; about 90 at most with the knee straight, ns-body HIP_KNEE_COUPLING)', 'hip extension (thigh back)', -30, 120, 'right'),
+  hip_flex_L: sem('hip flexion (thigh forward and up; about 100 at most with the knee straight, ns-body HIP_KNEE_COUPLING)', 'hip extension (thigh down and back)', -30, 120, 'left'),
+  hip_flex_R: sem('hip flexion (thigh forward and up; about 100 at most with the knee straight, ns-body HIP_KNEE_COUPLING)', 'hip extension (thigh down and back)', -30, 120, 'right'),
   hip_abd_L: sem('hip abduction (leg out to the side)', 'hip adduction (leg toward the midline)', -30, 45, 'left'),
   hip_abd_R: sem('hip abduction (leg out to the side)', 'hip adduction (leg toward the midline)', -30, 45, 'right'),
   knee_ext_L: sem('knee extension (0 = straight, the source pose)', 'knee flexion', -135, 0, 'left'),
@@ -514,7 +514,7 @@ const CONTENT = {
         agonists: sided(c.S, 'biceps femoris', 'semitendinosus', 'semimembranosus', 'popliteus'),
         antagonists: sided(c.S, 'rectus femoris', 'vastus lateralis', 'vastus medialis', 'vastus intermedius'),
         stabilizers: sided(c.S, 'gastrocnemius', 'plantaris'),
-        note: 'From the long-sitting start the heel stays on the ground and the thigh lift is capped (ns-body groundLegAngles), so the drawn knee bends only part of the way while the held goal is the full bend.' },
+        note: 'From the long-sitting start the thigh stays level and the shank swings down and back under it, all the way to 135 degrees. No ground is modelled under the legs.' },
       { id: `${c.code}_knee_extend`, label: `Straighten ${c.S} knee`, joints: { [`knee_ext_${c.J}`]: 0 },
         agonists: sided(c.S, 'rectus femoris', 'vastus lateralis', 'vastus medialis', 'vastus intermedius'),
         antagonists: sided(c.S, 'biceps femoris', 'semitendinosus', 'semimembranosus'),
@@ -527,19 +527,22 @@ const CONTENT = {
     label: `${c.Sc} hip`, shortLabel: `${c.Sc[0]} hip`, effector: `hip (${c.S} leg)`, bodySide: c.S, medialSurface: false,
     displayGroup: `${c.S}_leg`, pathway: 'corticospinal', laterality: 'contralateral',
     actions: [
-      // R558 (latch; start posture: sitting on an invisible flat ground, legs straight forward, hips flexed 90). Lifting
-      // ends at 120 (AAOS, knee bent); the drawn hip stops at 100 while the knee is straight (ns-body HIP_KNEE_COUPLING,
-      // the straight-leg limit set by the hamstrings) and at 110 where the rigid thigh and belly meshes meet
-      // (BODY_POSTURE_LIMITS). Extension lowers it back to the ground (90), where the leg rests: it cannot go below a
-      // flat ground (user: "an invisible ground ... flat"). Abduction ends at 45 (AAOS); adduction stops at 0, the legs
-      // side by side.
+      // R558 (latch; start posture: long sitting, legs straight forward, hips flexed 90). Lifting ends at 120 (AAOS,
+      // knee bent) and is held at 110 where the rigid thigh and belly meshes meet (BODY_POSTURE_LIMITS); a straight knee
+      // would stop the hip at 100 (ns-body HIP_KNEE_COUPLING, the hamstrings), so the knee is drawn giving way as the
+      // thigh rises (ns-body passiveKneeAngles). Extension swings the thigh down past the line of the trunk to 20
+      // degrees behind it (user Messages 47 and 48: hip extension must be achievable; the earlier action "lowered the
+      // thigh to the ground", 90, which is where the leg already rests, so it never moved). The invisible ground is
+      // where the bodies sit; it does not stop a limb. Abduction ends at 45 (AAOS); adduction stops at 0, the legs side
+      // by side.
       { id: `${c.code}_hip_flex`, label: `Lift ${c.S} thigh (hip flexion)`, joints: { [`hip_flex_${c.J}`]: 120 },
         agonists: sided(c.S, 'iliacus', 'psoas major', 'rectus femoris', 'sartorius', 'tensor fasciae latae', 'pectineus'),
         antagonists: sided(c.S, 'gluteus maximus', 'biceps femoris', 'semitendinosus', 'semimembranosus'),
-        note: 'With the knee straight, the hamstrings stop hip flexion at about 100 degrees, 10 above the ground; bend the knee first and the thigh lifts on to 110 degrees, where the rigid thigh and belly meshes would start to pass into each other (anatomical range about 120 with a bent knee).' },
-      { id: `${c.code}_hip_extend`, label: `Lower ${c.S} thigh to the ground (hip extension)`, joints: { [`hip_flex_${c.J}`]: 90 },
+        note: 'With the knee straight, the hamstrings would stop hip flexion at about 100 degrees, so the knee is drawn bending as the thigh rises (a display coupling, not a measured hamstring length). The lift stops at 110 degrees, where the rigid thigh and belly meshes would start to pass into each other (anatomical range about 120 with a bent knee).' },
+      { id: `${c.code}_hip_extend`, label: `Swing ${c.S} thigh down and back (hip extension)`, joints: { [`hip_flex_${c.J}`]: -20 },
         agonists: sided(c.S, 'gluteus maximus', 'biceps femoris', 'semitendinosus', 'semimembranosus'),
-        antagonists: sided(c.S, 'iliacus', 'psoas major') },
+        antagonists: sided(c.S, 'iliacus', 'psoas major'),
+        note: 'From the long-sitting start the thigh swings down past the line of the trunk and on to 20 degrees behind it, as when standing up and pushing the leg back (commonly quoted range up to 30). No ground is modelled under the legs.' },
       // R558 (builder AN): with the hip bent 90 degrees (long sitting), piriformis swings the thigh out as well (its
       // action reverses from outward turning to abduction when the hip is bent past about 60 degrees; standard anatomy).
       { id: `${c.code}_hip_abduct`, label: `Swing ${c.S} thigh out (hip abduction)`, joints: { [`hip_abd_${c.J}`]: 45 },
@@ -550,7 +553,7 @@ const CONTENT = {
         antagonists: sided(c.S, 'gluteus medius', 'gluteus minimus'),
         note: 'Stops with the legs side by side (the source pose, knees nearly touching): the full 30 degrees of adduction would take the leg into the other leg.' }
     ],
-    explanation: `Hip area for the ${c.S} leg, at the outer ring of the foot zone where it meets trunk territory. ${LEG_PATHWAY(c)} The game simulates lifting the ${c.S} thigh (iliopsoas, rectus femoris and sartorius) or lowering it back to the ground (gluteus maximus and hamstrings), and swinging it out (gluteus medius and minimus) or back in (the adductors). Proximal leg muscles also take part in posture and balance, which this game does not model.`,
+    explanation: `Hip area for the ${c.S} leg, at the outer ring of the foot zone where it meets trunk territory. ${LEG_PATHWAY(c)} The game simulates lifting the ${c.S} thigh (iliopsoas, rectus femoris and sartorius) or swinging it down and back (gluteus maximus and hamstrings), and swinging it out (gluteus medius and minimus) or back in (the adductors). Proximal leg muscles also take part in posture and balance, which this game does not model.`,
     citationKeys: ['PENFIELD1937', 'GORDON2023', 'UAMS_LOWER']
   }),
   scan_superior: c => ({
@@ -584,7 +587,7 @@ const CONTENT = {
       { id: `${c.code}_trunk_turn`, label: `Turn trunk to the ${c.S}`, joints: { trunk_rot: c.S === 'left' ? 45 : -45 },
         agonists: [`${c.So} external oblique`, `${c.S} internal oblique`],
         antagonists: [`${c.S} external oblique`, `${c.So} internal oblique`],
-        note: 'Game choice, as for the neck: each hemisphere turns the trunk toward the opposite body side. The pelvis and legs stay on the ground; the chest, arms and head turn, and your view turns with the head.' }
+        note: 'Game choice, as for the neck: each hemisphere turns the trunk toward the opposite body side. The pelvis and legs stay where they are; the chest, arms and head turn, and your view turns with the head.' }
     ],
     explanation: `Trunk area for the abdominal and back muscles, between the hip and shoulder areas and overlapping the superior inter-effector region. Axial muscles receive corticospinal input from both hemispheres (erector spinae: Ferbert 1992), so each hemisphere's trunk region moves the whole trunk in the game. The game simulates bending forward (rectus abdominis and obliques), leaning back (the erector spinae columns: iliocostalis, longissimus and spinalis, with quadratus lumborum), bending to the ${c.S} (the ${c.S} obliques, quadratus lumborum and erector spinae) and turning to the ${c.S} (the ${c.So} external and ${c.S} internal oblique). Abdominal contraction also co-activates the inter-effector regions (Gordon 2023), and Penfield's maps had too few trunk stimulations to measure (Catani 2017); breathing and posture are not modelled.`,
     citationKeys: ['GORDON2023', 'FERBERT1992', 'CATANI2017', 'UAMS_ABDOMEN', 'UAMS_BACK']
@@ -1192,8 +1195,8 @@ const PLAIN_REGION = {
   }),
   hip: c => ({
     plainLabel: `${c.Sc} hip`,
-    plainLead: `This spot in ${half(c)} tells your ${c.S} thigh to lift, lower, or swing out or in.`,
-    plainMoves: `Lifts your ${c.S} thigh a little (more after the knee bends) or lowers it back to the ground, or swings it out to the side or back in.`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} thigh to lift, swing down and back, or swing out or in.`,
+    plainMoves: `Lifts your ${c.S} thigh (the knee bends as it rises) or swings it down and back, or swings it out to the side or back in.`,
     plainCaveat: 'Hip muscles also help with balance and posture, which the game does not show.'
   }),
   scan_superior: () => ({
@@ -1406,7 +1409,7 @@ const PLAIN_ACTION = {
   knee_flex: c => ({ plainLabel: `Bend ${c.S} knee`, pull: 'muscles at the back of the thigh (hamstrings)', relax: 'muscles at the front of the thigh (quadriceps)' }),
   knee_extend: c => ({ plainLabel: `Straighten ${c.S} knee`, pull: 'muscles at the front of the thigh (quadriceps)', relax: 'muscles at the back of the thigh (hamstrings)' }),
   hip_flex: c => ({ plainLabel: `Lift ${c.S} thigh`, pull: 'deep hip muscles and two front thigh muscles', relax: 'buttock muscle and back-of-thigh muscles' }),
-  hip_extend: c => ({ plainLabel: `Lower ${c.S} thigh to the ground`, pull: 'buttock muscle and back-of-thigh muscles', relax: 'deep hip muscles' }),
+  hip_extend: c => ({ plainLabel: `Swing ${c.S} thigh down and back`, pull: 'buttock muscle and back-of-thigh muscles', relax: 'deep hip muscles' }),
   hip_abduct: c => ({ plainLabel: `Swing ${c.S} thigh out`, pull: 'side buttock muscles (and one at the side of the hip)', relax: 'inner thigh muscles' }),
   hip_adduct: c => ({ plainLabel: `Swing ${c.S} thigh in`, pull: 'inner thigh muscles', relax: 'side buttock muscles' }),
   trunk_flex: () => ({ plainLabel: 'Bend forward', pull: 'belly muscles on both sides', relax: 'back muscles along the spine' }),
@@ -1556,7 +1559,7 @@ const PLAIN_DETAIL = {
   hip: c => ({
     detail: `This is the hip area for your ${c.S} leg, in ${BRAIN_HALF(c)}. It sits in the outer ring of the foot zone, where it meets the ` +
       `area for the trunk (trunk territory). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} lifts the ${c.S} thigh ` +
-      '(iliopsoas, rectus femoris and sartorius) or lowers it back to the ground (gluteus maximus and hamstrings). It can also swing ' +
+      '(iliopsoas, rectus femoris and sartorius) or swings it down and back (gluteus maximus and hamstrings). It can also swing ' +
       'the thigh out to the side (gluteus medius and minimus) or back in (the adductors). Muscles near the top of the leg ' +
       '(proximal leg muscles) also help with posture and balance. The game does not model that.'
   }),
@@ -1924,10 +1927,9 @@ const NECK_CHOICE_PLAIN = 'This is a game choice: each half of the brain turns t
 // stick"): the body sits on an invisible ground with every limb straight forward (ns-body BODY_POSTURES.open), so the
 // knees and the right elbow start straight and the right palm faces down.
 const PLAIN_NOTE = {
-  // Docs check: from the long-sitting start the heel stays on the ground and the thigh lift is capped (ns-body
-  // groundLegAngles), so the drawn knee bends only part of the way while the latch holds the full goal.
-  knee_flex: () => 'Your heel stays on the ground and your thigh lifts only so far, so from the start the knee bends only ' +
-    'part of the way.',
+  // R558 (Messages 47 and 48): no ground under the legs; the knee bends all the way with the thigh level.
+  knee_flex: () => 'Your thigh stays where it is and your lower leg swings down and back under it, all the way. ' +
+    'The game has no ground under your legs.',
   knee_extend: () => 'Your knee starts straight, so at first this shows the front thigh muscles (quadriceps) without moving ' +
     'your leg. After you bend the knee, it straightens the knee again. Muscle force without movement is not modelled (isometric force).',
   r_elbow_extend: () => 'Your right elbow starts straight, so at first this shows the muscle at the back of the arm (triceps) ' +
@@ -1942,15 +1944,17 @@ const PLAIN_NOTE = {
     'brings it back.',
   ankle_invert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
   ankle_evert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
-  hip_flex: () => 'With the knee straight, the muscles at the back of the thigh stop the hip at about 100 degrees (hamstrings), ' +
-    'only 10 above the ground. Bend the knee first and the thigh lifts on to 110 degrees, where the stiff 3D thigh and belly ' +
+  hip_flex: () => 'With a straight knee, the muscles at the back of the thigh would stop the lift early (hamstrings), so the ' +
+    'game shows your knee bending as the thigh rises. The lift stops at 110 degrees, where the stiff 3D thigh and belly ' +
     'shapes would start to pass into each other (rigid meshes; about 120 with a bent knee in real life).',
+  hip_extend: () => 'From sitting, your thigh swings down past the line of your trunk and a little behind it, as when you ' +
+    'stand up and push a leg back. The game has no ground under your legs.',
   hip_adduct: () => 'It stops with your legs side by side (the source pose, knees nearly touching). Going the full 30 degrees ' +
     '(adduction) would push one leg into the other.',
   trunk_side: () => 'This is a game choice, as for the neck: each half of the brain bends the trunk toward the other side (each ' +
     'hemisphere, opposite body side). The trunk muscles get signals from both halves.',
   trunk_turn: () => 'This is a game choice, as for the neck: each half of the brain turns the trunk toward the other side. Your ' +
-    'hips and legs stay on the ground; your chest, arms and head turn, so your view turns too.',
+    'hips and legs stay where they are; your chest, arms and head turn, so your view turns too.',
   neck_side: () => 'This is a game choice, as for turning: each half of the brain tilts the head toward the other side (each ' +
     'hemisphere, opposite side). Which half really drives it is not known (unresolved).',
   eye_open: () => 'The muscle that lifts the eyelid lights up (levator palpebrae superioris lights; it lies inside the eye socket, ' +

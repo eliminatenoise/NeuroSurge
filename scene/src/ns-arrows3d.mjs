@@ -409,7 +409,11 @@ export function frameRect(box, aspect, bounds = null, keep = null) {
  *  - inwardCost per px a tip moves inward past its base place (over the brain's motor areas or the mirror body itself,
  *    the "key areas" the tips must not cover); and a tip never moves inward more than inwardMaxFrac of the way from its
  *    side to the frame's middle (further in it would read as belonging to something else, e.g. the brain's bottom tip
- *    pointing at the mirror body's top tip in a portrait window);
+ *    pointing at the mirror body's top tip in a portrait window). R558 (Messages 55 / 56): a value above 1 (at most
+ *    1.9) lets a tip pass the frame's middle; the pair's two tips then still keep their hit boxes apart. The brain's top
+ *    / bottom pair is planned so (ns-scene-three BRAIN_TIP_RULES): the middle of its frame's bottom side is where the
+ *    mirror body's top tip is, and the nearest place that covers no motor area is the hollow of the strip's U just
+ *    above the leg areas;
  *  - asymCost per px the two tips of a pair end up at DIFFERENT insets (still on their centre line, so still level);
  *  - perpCost per px of the COMMON shift of both tips across their pointing axis (the side pair up or down together,
  *    the top / bottom pair sideways together): they stay level and mirror images of each other, off the centre line.
@@ -446,7 +450,7 @@ export const FRAME_PAIR = freeze({ stepPx: 2, perpStepPx: 4, moveCost: 1, inward
  *  - a pair whose base place is not clear moves to the cheapest clear place (FRAME_PAIR costs): both along their
  *    centre line by the same amount, or both shifted across their pointing axis by the same amount; only the top and
  *    bottom tips may also move along their vertical line by different amounts (the side tips only as a last resort);
- *    inward never more than inwardMaxFrac of the way to the frame's middle.
+ *    inward never more than inwardMaxFrac of the way to the frame's middle (above 1: past it).
  * Clear means: the drawn box inside `bounds`; the HIT box (hitHalfAlongPx / hitHalfAcrossPx, default the drawn halves)
  * clear of every `avoid` box by gapPx (other arrows' hit boxes, the box kept free round the crosshair); for a moved tip
  * the drawn box clear of `keepOut` (HUD boxes: cards, the hint line); and `blocked(dir, x, y)` false when given (e.g.
@@ -484,7 +488,9 @@ export function frameArrowSpots(rect, { halfAlongPx, halfAcrossPx, bounds = null
     const base = { [dA]: eqB ? bothB : own(needA), [dB]: eqB ? bothB : own(needB) };
     // moves m from the base (positive = inward): outward as far as the tip's side of the bounds allows, inward at most
     // inwardMaxFrac of the way from its base to the frame's middle
-    const fr = isNum(R.inwardMaxFrac) ? clamp(R.inwardMaxFrac, 0, 1) : 1;
+    // (R558, Messages 55 / 56: above 1 a tip may pass the frame's middle, e.g. the brain's bottom tip going up the hollow
+    // of the motor strip's U; the pair's two tips then still keep their hit boxes apart, see `apart`)
+    const fr = isNum(R.inwardMaxFrac) ? clamp(R.inwardMaxFrac, 0, 1.9) : 1;
     const mMin = { [dA]: Math.min(0, Math.max(isNum(needA) ? needA : -half, -half) - base[dA]), [dB]: Math.min(0, Math.max(isNum(needB) ? needB : -half, -half) - base[dB]) };
     const mMax = { [dA]: fr * Math.max(0, half - base[dA]), [dB]: fr * Math.max(0, half - base[dB]) };
     // the shared place across the pointing axis: the frame's centre line, clamped into the bounds once for both
@@ -505,6 +511,8 @@ export function frameArrowSpots(rect, { halfAlongPx, halfAcrossPx, bounds = null
       if (moved && hitsList(x - hx, y - hy, x + hx, y + hy, ko)) return false;
       return !(useBlocked && typeof blocked === 'function' && blocked(dir, x, y));
     };
+    const kA = sideP ? kx : ky;
+    const apart = (ma, mb) => fr <= 1 || (hi - base[dB] - mb) - (lo + base[dA] + ma) >= 2 * kA + gapPx - 1e-9;
     const cost = (ma, mb, t) => R.moveCost * (Math.abs(ma) + Math.abs(mb)) + R.asymCost * Math.abs(ma - mb) + R.inwardCost * (Math.max(0, ma) + Math.max(0, mb)) + R.perpCost * 2 * Math.abs(t);
     // the moves along the axis, nearest first (a tie goes outward)
     const lowM = Math.min(mMin[dA], mMin[dB]), highM = Math.max(mMax[dA], mMax[dB]);
@@ -543,6 +551,7 @@ export function frameArrowSpots(rect, { halfAlongPx, halfAcrossPx, bounds = null
         if (ok(dA, 0, t, useBlocked) && ok(dB, 0, t, useBlocked)) { cands.push({ ma: 0, mb: 0, t }); if (t > 0) tp = true; else tn = true; if (tp && tn) break; }
       }
       for (const c of cands) {
+        if (!apart(c.ma, c.mb)) continue;
         c.cost = cost(c.ma, c.mb, c.t);
         const outward = Math.min(c.ma, c.mb) < -1e-9;
         if (!pick || c.cost < pick.cost - 1e-9 || (Math.abs(c.cost - pick.cost) <= 1e-9 && outward && !pick.outward)) pick = { ...c, outward, useBlocked };
@@ -716,16 +725,17 @@ export function frameArrowFrames(spots, { cam, centre, sizePx } = {}) {
  * centre (world m); sizePx: arrowTipSizePx(); hoverScale: the drawn growth under the pointer (the hovered tip stays on
  * screen too); avoid: boxes the tips' hit boxes keep clear of (other arrows' hit boxes, the crosshair box) and keepOut:
  * HUD boxes a moved tip keeps clear of; blocked(dir, x, y): extra places a tip may not take (frameArrowSpots; R558
- * Message 31: the tips move in pairs). Returns { rect, spots, anchors (world m), frames (facing the reference camera),
+ * Message 31: the tips move in pairs); rules: FRAME_PAIR overrides for this frame (e.g. { ends: { ...FRAME_PAIR.ends,
+ * inwardMaxFrac: 1.6 } } for the brain, whose bottom tip may go into the hollow of the motor strip's U). Returns { rect, spots, anchors (world m), frames (facing the reference camera),
  * sizes: { sizePx }, layout: { arrows, sizePx, frame: rect, stable: true } } or null (empty box, or the centre not in
  * front of the camera).
  */
-export function planFrameArrows({ box, aspect, bounds = null, cam, centre, sizePx, design = ARROW_DESIGN, hoverScale = ARROW_LOOK.hoverScale, avoid = null, keepOut = null, keep = null, blocked = null } = {}) {
+export function planFrameArrows({ box, aspect, bounds = null, cam, centre, sizePx, design = ARROW_DESIGN, hoverScale = ARROW_LOOK.hoverScale, avoid = null, keepOut = null, keep = null, blocked = null, rules = null } = {}) {
   const rect = frameRect(box, aspect, bounds, keep);
   if (!rect) return null;
   const o = arrowTipOutline(design), grow = isNum(hoverScale) && hoverScale > 1 ? hoverScale : 1;
   const hit = arrowHitHalfPx(sizePx, { design });
-  const spots = frameArrowSpots(rect, { halfAlongPx: o.halfAlong * sizePx * grow, halfAcrossPx: o.halfAcross * sizePx * grow, bounds, avoid, keepOut, blocked,
+  const spots = frameArrowSpots(rect, { halfAlongPx: o.halfAlong * sizePx * grow, halfAcrossPx: o.halfAcross * sizePx * grow, bounds, avoid, keepOut, blocked, rules: rules || FRAME_PAIR,
     hitHalfAlongPx: Math.max(hit.halfAlongPx, o.halfAlong * sizePx * grow), hitHalfAcrossPx: Math.max(hit.halfAcrossPx, o.halfAcross * sizePx * grow) });
   const anchors = frameArrowAnchors(spots, { cam, centre });
   if (!anchors) return null;

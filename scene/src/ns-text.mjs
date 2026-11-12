@@ -231,34 +231,57 @@ const STEP_TABLE = [
     part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
       'both hips turn inward or outward. Each limb goes its own way: it carries on in the direction it last turned. Tap ' +
       'twice and hold, and they keep turning, slowly. Let go and every limb stays where it is.')],
-  intro: [part('Your whole left arm is in view. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
+  intro: [part('Your whole left arm is in view: W, A, S and D move its hand. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
   { head: 'The glass brain.', parts: [
     // R558 (user Message 2): every motor area has its own colour, and its muscles glow in the same colour.
     part('A giant glass brain floats in front of you. Its motor areas are the parts that send movement ' +
       'signals to muscles. Each area has its own colour. When it switches on, it glows brightly in that colour, and so ' +
       'do the muscles it moves, on your body and on the mirror body. Brighter means stronger.'),
+    // R558 (Message 56: a learning tool for motor neuroanatomy): what the band is and which side each half moves, in
+    // the words of HONESTY.crown and HONESTY.leftArmRightHalf (the Esc limits say both in full).
+    part('The coloured band across the brain is the motor strip, drawn as a simplified map. Each half of the brain ' +
+      'mainly moves the opposite side of your body: your left arm and leg are on the brain’s right half.'),
     // R5-text (D17): the brain-to-muscle glow, with its honesty in brackets (the Esc limits say it in full).
     part('For a moment a soft line in the same colour joins a newly switched-on area to its muscles (a picture, not a ' +
       'nerve).', 'glow')],
-  intro: [part('Each motor area has its own colour. Switched on, it and its muscles glow in that colour.'),
-    part('A short soft line in the same colour joins it to its muscles (a picture, not a nerve).', 'glow')] },
-  { head: 'One colour family per body part.', parts: [part('Blues are for your left arm (in the brain’s right half), ' +
+  intro: [part('The coloured band across the brain is the motor strip (a simplified map). Each half of the brain mainly ' +
+    'moves the opposite side of your body. Each motor area has its own colour: switched on, it and its muscles glow in that colour.'),
+    part('A soft line in that colour joins them for a moment (a picture, not a nerve).', 'glow')] },
+  // R558 (Message 56): the order of the body along the strip comes first (ns-bodymap order 0 to 26: toes, ankle, knee,
+  // hip, trunk, shoulder, elbow, forearm, wrist, hand, little finger to thumb, neck, forehead to jaw, tongue, throat),
+  // then the colour families. The order is the game's simplified map (HONESTY.notExact, HONESTY.overlapVary).
+  { head: 'A map of the body.', parts: [
+    part('The body is laid out in order along the strip. From the top middle of the brain down each side: the leg ' +
+      '(toes, ankle, knee, hip), the trunk, the arm (shoulder, elbow, forearm, wrist, hand, then the fingers from ' +
+      'little finger to thumb), the neck, the face (from the forehead down to the jaw), then the tongue and the throat. ' +
+      'This is the simple textbook order; real areas overlap.'),
+    part('Each body part has one colour family. Blues are for your left arm (in the brain’s right half), ' +
     'oranges for your right arm, purples for your left leg, yellows for your right leg, greens for your belly and ' +
     'back, and pinks for your face and neck. Grey in-between areas move nothing. Neighbouring areas are lighter and ' +
     'darker shades of their colour.')],
-  intro: [part('Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. Greens: belly and back. ' +
-    'Pinks: face and neck.')] },
+  intro: [part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder ' +
+    'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
+    'Greens: belly and back. Pinks: face and neck.')] },
   { head: 'Switch areas on.', parts: [part('Rest the crosshair on a motor area for a moment (about a third of a second), ' +
     'or click it, and that body part moves. Its glow lasts about a second. Or click a muscle, on your own body or on ' +
     'the mirror body: the brain area that moves it switches on. A quick glance across an area lights it but moves nothing. ' +
     'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
     'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
+    // R558 (Messages 55 and 56): the numbered movement list on the information card, and the number keys.
+    part('The information card lists every movement of the area you look at, each with a number. Press that number ' +
+      'key (1 to 9) to do exactly that movement. The list stays for the last area you looked at, so you can look at ' +
+      'your body or the mirror body and press the numbers to watch each movement.'),
+    // R558 (Messages 55 and 56): the area keys (ns-controls AREA_CODES; ns-app areaStep).
+    part('The motor areas are small and lie side by side. The left and right arrow keys step your look along them, ' +
+      'one area for each press, so you can visit every area in turn: from the face areas at one side, up over the ' +
+      'top of the brain where the leg areas are, and down the other side. The look lands on the next area you can ' +
+      'see on that side; resting there moves its part, as with any look.'),
     // R558 (Message 6): held movements and the opposite-area hint.
     part('A movement stays where it went: the body part does not drift back by itself. To bring it back, switch on ' +
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
-  intro: [part('Rest your look on a motor area, or click it, to move that part. It stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
+  intro: [part('Rest your look on a motor area, or click it: that part moves, and the area glows for about a second. The left and right arrow keys step your look to the next area. A number key (1 to 9) does a movement from the card’s list. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
   { head: 'Move other body parts.', parts: [part('Your other body parts respond through the brain, not W/A/S/D. Moving the mirror image does not command their muscles. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
     'W/S move it farther/closer, A/D left/right, and looking up or down carries it up or down (the mirror body stays on the ground). Let go of Space to leave it there. ' +
@@ -318,6 +341,10 @@ const CONTROL_TABLE = [
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
   ['Look / Click', 'rest the crosshair on a motor area (about a third of a second) or click it: that part moves and stays'],
+  // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
+  ['1 to 9', 'do the movement with that number in the list on the information card: the movements of the motor area you are looking at, or looked at last'],
+  // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
+  ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
   ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it'],
   ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag (drag the mirror body up or down to slide it away or back). On one of your limbs: drag across it to turn it about its length, like a dial (inside its range).'],
@@ -332,8 +359,8 @@ const CONTROL_TABLE = [
   ['R', 'read information: the side cards are on at the start. Press R for More detail and the colour key, R again to hide all of it, R again to bring the cards back.'],
   ['Esc', 'pause and show this page: how to play, Reset body and settings']
 ];
-/** R5-text: the short control words for the 2 s start page (introControls), by control key; the Esc page keeps
- * CONTROL_TABLE's full words. */
+/** R5-text: the short control words for the 2 s start page (introControls), by control key. R558 (Messages 55 and 56):
+ * the Esc page opens with these short words too; its "Show the full instructions" button swaps in CONTROL_TABLE's. */
 const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
   'A / D': 'hand and held item left/right',
@@ -343,6 +370,8 @@ const INTRO_CONTROL_WORDS = {
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
   'Look / Click': 'rest on or click an area: that part moves and stays',
+  '1 to 9': 'do a numbered movement from the card’s list',
+  '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
   'Press and drag': 'turn the brain, the mirror body or a limb',
   'Shift + press': 'with a click, Space or a drag: reach the other thing in line',
@@ -419,9 +448,9 @@ export const SHELL = deepFreeze({
   /** R3-polish: one plain line under the Esc page buttons saying what the two reset buttons do. */
   // R5-text (D19): Reset brain view also turns the mirror body back to face you (ns-mirror resetMirror). With the
   // separate button (feature mirrorResetButton) shellText uses RESET_HELP.separate instead.
-  resetHelp: 'Reset body puts every body part, your arm and palm back the way they started and clears the gold marks. ' +
-    'Reset brain view puts the brain back where it started, and the mirror body back where a mirror shows you. To read More ' +
-    'detail in the panel, press R while you play (or press Esc to go back with a free mouse, then click More detail).',
+  // R558 (Message 55): two short sentences; how to read More detail is the R row of the controls.
+  resetHelp: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+    'Reset brain view puts the brain back where it started, and the mirror body back where a mirror shows you.',
   brainReset: 'Brain view reset: the brain is back in its first place and angle. The mirror body is back where a mirror shows you.',
   // R5-text (D19, optional): a separate "Reset mirror body" button and its notice.
   resetMirror: 'Reset mirror body',
@@ -433,12 +462,15 @@ export const SHELL = deepFreeze({
   instructionHeads: stepHeads(ALL_FEATURES),
   // R5-text: the SHORT step texts for the 2 s start page (loading and intro modes), same order and heads as
   // instructions; the round-5 steps and controls made the full page taller than the screen at 1280x720 (round5/
-  // R5-text-NOTES.md 4.1). The Esc page keeps `instructions`.
+  // R5-text-NOTES.md 4.1). R558 (Messages 55 and 56): the Esc page opens with these short texts as well, and
+  // `instructions` (the full words) is one click away (detailsMore / detailsLess).
   introInstructions: introStepTexts(ALL_FEATURES),
+  detailsMore: 'Show the full instructions',
+  detailsLess: 'Show the short instructions',
   controlsTitle: 'Controls',
   // R5-text: built from CONTROL_TABLE (E and the mirror arrows added; no "curved" arrows).
   controls: controlRows(ALL_FEATURES),
-  // R5-text: the same controls with short words for the 2 s start page (Esc keeps `controls`).
+  // R5-text: the same controls with short words for the 2 s start page (and, R558, for the Esc page as it opens).
   introControls: introControlRows(ALL_FEATURES),
   settingsTitle: 'Settings',
   sensitivity: 'Look speed',
@@ -449,33 +481,39 @@ export const SHELL = deepFreeze({
   // two lines under the picture say the same in full. Every key named here is a key the game really handles.
   keyboard: {
     title: 'Where the keys are',
-    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A. The space bar is the long key at the bottom: it takes hold of things and turns your limbs. Esc is at the top left.',
-    keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyR: 'read', ShiftLeft: 'other in line' },
-    names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyR: 'R', Space: 'Space', ShiftLeft: 'Shift' },
+    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A. The space bar is the long key at the bottom: it takes hold of things and turns your limbs. Esc is at the top left. The number keys 1 to 9 are the row above W: each does the movement with that number in the list on the information card. The left and right arrow keys are at the bottom right: each steps your look to the next motor area on that side.',
+    keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyR: 'read', ShiftLeft: 'other in line', ArrowLeft: 'area', ArrowRight: 'area' },
+    names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyR: 'R', Space: 'Space', ShiftLeft: 'Shift',
+      Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
+      ArrowLeft: '←', ArrowRight: '→' },
+    // R558 (Messages 55 and 56): written once at the end of the number row (ns-app KEYBOARD_PICTURE_ROWS note).
+    numWords: 'Number keys 1 to 9 (the row below): do the movement with that number in the card’s list',
     // R558 (Message 40): the three Space gestures, in short words on the key.
     spaceWords: 'hold or tap: take hold · tap twice: turn · tap twice and hold: keep turning slowly',
-    lineMove: 'W, A, S, D move your left hand. Hold Space on the brain, the mirror body or one of your limbs to take hold of it: W, A, S, D and your look then move that instead; let go of Space to leave it there. Hold Shift as you press Space, click or drag to reach the other thing in line with the crosshair (the body part in front of an area, or what is behind what you see). E shows your back. I opens More detail and the colour key. Esc pauses and shows this page.',
-    lineSpace: 'Tap Space once to take hold and keep holding; tap it again to let go. Tap Space twice: all four limbs turn once (palms up or down, arms and hips inward or outward). Tap twice and hold: they keep turning, slowly. Let go: every limb stays where it is.',
+    // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number
+    // row do; the full words are in the Controls list.
+    lineMove: 'W, A, S, D move your left hand, or the thing Space holds. Hold Shift as you click, press Space or drag to reach the other thing in line with the crosshair.',
+    lineSpace: 'Space takes hold of the brain, the mirror body or a limb: hold it, or tap once (tap again to let go). Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
     padTitle: 'Trackpad or mouse',
     padMove: 'Move: turn your head to look around.',
-    padClick: 'Click: switch on the brain area you look at (even behind a body) or the muscle you are aiming at. Shift + click: the other one in line.',
-    padDrag: 'Press and drag on the brain or the mirror body: turn it. Drag across one of your limbs: turn it like a dial. Shift + drag: turn the other one in line.'
+    padClick: 'Click a motor area: its body part moves. Click a muscle: its motor area switches on.',
+    padDrag: 'Press and drag: turn the brain, the mirror body or a limb.'
   },
   // R4-integrator (D8): the Esc-page picture-quality setting (option names in QUALITY_LABELS).
   quality: 'Picture quality',
   // R4-polish: "softer" was not what a player sees on a software renderer (a half-size, blockier picture); say it plainly.
   // R558 (Message 20): the thin dark outlines between limbs are drawn at every quality; the soft shading in the creases
   // only at full quality (High, or Auto on a fast computer).
+  // R558 (Message 55): the help is two short sentences; the outline and crease detail is in the player guide.
   qualityHelp: 'Auto keeps the game smooth. Low draws a simpler, less sharp picture for slow computers. The colours and ' +
-    'what they mean stay the same. The thin outlines between limbs stay at every quality; the soft shading in the creases ' +
-    'is drawn only at full quality.',
+    'what they mean stay the same.',
   // R4-fix (code review M1): edge smoothing is chosen when the page loads; after a Low start, High is fully sharp only
   // after a reload.
   qualityReload: 'Reload the page for the sharpest edges.',
   // R5-text (D15, optional Esc-page setting "Body Worlds layers: on / off"; option names in BODY_WORLDS.on / .off).
   bodyWorlds: 'Lifted outer muscles (Body Worlds style)',
-  bodyWorldsHelp: 'On lifts the outer muscles a little, so you can see the deeper ones, and draws every muscle a ' +
-    'little fuller. Their ends stay on the bones. In a real body they lie flat on top of the deeper ones.',
+  bodyWorldsHelp: 'On lifts the outer muscles a little and draws every muscle a little fuller, so you can see the ' +
+    'deeper ones. In a real body they lie flat on top of the deeper ones.',
   limitsTitle: 'What this game is, and is not',
   // R5-text: built from LIMIT_TABLE (the glow, the lifted outer muscles and the mirror body added).
   limits: limitLines(ALL_FEATURES),
@@ -490,13 +528,10 @@ export const SHELL = deepFreeze({
 
 /** The reset help line and the Reset brain view notice for each mirror-reset choice (R5-text, D19). */
 export const RESET_HELP = deepFreeze({
-  noMirror: 'Reset body puts every body part, your arm and palm back the way they started and clears the gold marks. ' +
-    'Reset brain view puts the brain back where it started. To read More detail in the panel, press R while you play ' +
-    '(or press Esc to go back with a free mouse, then click More detail).',
-  separate: 'Reset body puts every body part, your arm and palm back the way they started and clears the gold marks. ' +
-    'Reset brain view puts the brain back where it started. Reset mirror body puts the mirror body back where a mirror shows you. ' +
-    'To read More detail in the panel, press R while you play (or press Esc to go back with a free mouse, then click ' +
-    'More detail).',
+  noMirror: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+    'Reset brain view puts the brain back where it started.',
+  separate: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+    'Reset brain view puts the brain back where it started. Reset mirror body puts the mirror body back where a mirror shows you.',
   brainResetNoMirror: 'Brain view reset: the brain is back in its first place and angle.'
 });
 
@@ -557,10 +592,12 @@ export const HUD = deepFreeze({
   gazeEmpty: 'Looking at: empty space (nothing switches on)',
   gazeBrain: 'Looking at: the brain, but not a motor area (nothing switches on)',
   gazeGlass: 'Looking at: brain glass, not a motor area (nothing switches on)',
-  gazeOtherPrefix: 'Looking at (other body part): ',
-  gazeLeftArmPrefix: 'Looking at (left arm): ',
+  // R558 (Messages 55 and 56): one opening for every motor area, and the line names the AREA first, then its movement
+  // ("Looking at (motor area): Left knee · Bend left knee"). It was "(left arm): " for the left-arm areas and
+  // "(other body part): " for the rest, followed by the movement alone, which never said which area it was.
+  gazeAreaPrefix: 'Looking at (motor area): ',
+  gazeAreaJoin: ' · ',
   gazeBetweenPrefix: 'Looking at (moves nothing): ',
-  gazeStripPrefix: 'Looking at (left arm): ',
   pulseNone: '',
   pulseResidual: 'Arm relaxing back to rest',
   grabbing: 'Held with Space: look to carry; W farther, S closer, A/D sideways. Let go of Space to leave it there.',
@@ -592,6 +629,10 @@ export const HUD = deepFreeze({
   /** R558 (hunt 2 controls #4): shown for a few seconds when E is pressed while Space holds the brain or the mirror body
    * (the view does not change while something is held). */
   viewWhileHolding: 'Let go of what Space holds first (or tap Space if you tapped to take hold), then press E.',
+  /** R558 (Messages 55 and 56): the area keys (left / right arrow). Shown for a few seconds when a press found no
+   * further area that way, and when it was pressed while something is held (a step is a look; a held thing follows the look). */
+  areaEnd: 'No more motor areas that way from here. Press the other arrow key, or turn the brain to bring more areas into view.',
+  areaWhileHolding: 'Let go of what you hold first, then press the arrow key.',
   contextLost: SHELL.contextLost,
   placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
@@ -669,13 +710,18 @@ const str = v => (typeof v === 'string' ? v : v === null || v === undefined ? ''
 
 /** HUD gaze line. kind: 'leftArm' | 'other' | 'between' (an in-between SCAN area) | 'strip' (a left-arm action point) |
  * 'mirror' (R5: the mirror body; label = the mirrored part, e.g. mirrorPartName('leftArm')) | 'glass' | 'brain' |
- * 'empty'. */
-export function gazeLine(kind, label = '') {
+ * 'empty'.
+ * R558 (Messages 55 and 56): for a motor area ('leftArm' | 'strip' | 'other') `label` is the movement under the look
+ * and `area` the area's plain title; the line names the area, then the movement ("Looking at (motor area): Left knee ·
+ * Bend left knee"). With one of the two (or the same words twice, as for an area without a movement of its own) the
+ * line carries that one. */
+export function gazeLine(kind, label = '', area = '') {
   const l = str(label).trim();
   if (kind === 'mirror') return l ? `${HUD.gazeMirrorPrefix}${l}` : HUD.gazeMirror;
-  if (kind === 'leftArm') return `${HUD.gazeLeftArmPrefix}${l}`;
-  if (kind === 'strip') return `${HUD.gazeStripPrefix}${l}`;
-  if (kind === 'other') return `${HUD.gazeOtherPrefix}${l}`;
+  if (kind === 'leftArm' || kind === 'strip' || kind === 'other') {
+    const t = str(area).trim();
+    return `${HUD.gazeAreaPrefix}${t && l && t !== l ? `${t}${HUD.gazeAreaJoin}${l}` : t || l}`;
+  }
   if (kind === 'between') return `${HUD.gazeBetweenPrefix}${l}`;
   if (kind === 'arrow') return l ? `${HUD.gazeArrowPrefix}${l}` : HUD.gazeBrain;
   if (kind === 'glass') return HUD.gazeGlass;
@@ -702,7 +748,8 @@ export function gazeMuscleLine({ where = 'own', name = '', kind = 'muscle', part
   return `${head}${what}, ${HUD.gazeMuscleClick}${holdable ? `; ${HUD.gazeMuscleHold}` : ''}`;
 }
 /** Lead decision (refines Messages 33 and 34): the look reaches a motor area through a body part in front of it; the
- * "Looking at" line then ends with that part, e.g. "Looking at (left arm): Bend left elbow, behind your right forearm". */
+ * "Looking at" line then ends with that part, e.g. "Looking at (motor area): Left elbow · Bend left elbow, behind your
+ * right forearm". */
 export function gazeBehindLine(line, name) {
   const l = str(line), n = str(name).trim();
   return n ? `${l}, behind ${n}` : l;
@@ -759,7 +806,10 @@ export const INFO = deepFreeze({
   coveredMirrorTitle: 'The mirror body is in front here',
   coveredMirrorBody: 'The mirror body is in front of the brain. Click a muscle to switch on its area; Space carries the mirror body (Shift + Space the brain).',
   leftArmTag: 'Left-arm motor area (brain’s right half)',
-  otherTag: 'Other body part’s motor area (no keys)',
+  // R558 (Messages 55 and 56): "(no keys)" is gone: the number keys do this area's movements too. (The panel reads
+  // "left arm" in a tag to tell a left-arm card, so this tag must not say it.) Now only the fallback of areaTag (an
+  // area whose part of the strip is not known); every mapped area names its part: "Left-leg motor area (...)".
+  otherTag: 'Motor area for another body part',
   // R4-fix (review RP12): the technical names (SCAN, pathway names) are in More detail.
   integrationTag: 'In-between spot: moves nothing',
   leftArmPathway: 'Brain → crosses to the left at the base of the brain → spinal cord in the neck → arm ' +
@@ -794,7 +844,10 @@ export const INFO = deepFreeze({
   alreadyDown: ' (your palm is already down, so nothing moves now)',
   alreadyUp: ' (your palm is already up, so nothing moves now)',
   /** R558 (latch): every joint of this movement is already at its end (held there, or the start posture). */
-  alreadyThere: ' (already there, so nothing moves now)'
+  alreadyThere: ' (already there, so nothing moves now)',
+  /** R558 (Messages 55 and 56): the numbered list of an area's movements on the card (ns-app infoMoves). A number key
+   * does the movement beside it; `atEnd` marks a movement whose joints are already at its end. */
+  moves: { heading: 'Movements: press a number', atEnd: 'already there', current: 'shown now' }
 });
 
 /** "Simulated signal 0.80 of 1 (no units)". R558 (Messages 44 and 55): one short line; the colour key and More detail
@@ -889,6 +942,27 @@ export function plainTitle(region) {
   return str(region.plainLabel) || str(region.label) || str(region.id);
 }
 
+/** R558 (Messages 55 and 56: easier to follow; a learning tool for motor neuroanatomy): the card's line under the
+ * title says which PART of the strip the area belongs to and which half of the brain it is drawn on, in the words of
+ * the labels on the brain ("Left leg", "Belly and back", "Face and neck"): "Left-leg motor area (brain’s right half)".
+ * It was "Motor area for another body part" for everything but the left arm. The half is where the area is drawn, not
+ * a claim that only that half drives the part (the card's "Known" line says which parts both halves signal).
+ * The left-arm wording is INFO.leftArmTag and is given for a left-arm card only (`leftArm`): the panel tells a
+ * left-arm card by that tag, so no other tag may read "left arm". Pure. */
+export function areaTag(region, leftArm = false) {
+  if (leftArm === true) return INFO.leftArmTag;
+  if (!region) return INFO.otherTag;
+  if (region.kind === 'integration') return INFO.integrationTag;
+  const h = halfOf(region.hemisphere), g = str(region.displayGroup);
+  if (!h) return INFO.otherTag;
+  const half = `(brain’s ${h} half)`;
+  const limb = limbOf(g), side = /^left_/.test(g) ? 'Left' : /^right_/.test(g) ? 'Right' : '';
+  if (limb && side && !(limb === 'arm' && side === 'Left')) return `${side}-${limb} motor area ${half}`;
+  if (g === 'trunk') return `Belly-and-back motor area ${half}`;
+  if (g === 'neck' || g === 'face') return `Face-and-neck motor area ${half}`;
+  return INFO.otherTag;
+}
+
 /**
  * The proposed info card (lead + at most 4 short rows + short honesty lines; everything else in a collapsed
  * "More detail"). Pure: plain JSON out. Inputs:
@@ -922,7 +996,7 @@ export function plainInfoCard({ region = null, action = null, leftArm = false, a
   const relax = action ? list(action.antagonists).filter(m => !pull.includes(m)) : [];
   return {
     title: plainTitle(region),
-    tag: leftArm ? INFO.leftArmTag : integration ? INFO.integrationTag : INFO.otherTag,
+    tag: areaTag(region, leftArm),
     lead: plainLead(region, leftArm),
     activity: Number.isFinite(activity) ? activityLine(activity) : '',
     activations: activationsLine(activations),
@@ -1452,8 +1526,11 @@ export function muscleLabel(plain, technical = '') {
 
 /** Wording of the optional first-time "Try this" guide (ns-guide.mjs is the state machine; this is only text).
  * One short plain line at a time. Every line names a game control and what you will see; none says the game reads,
- * records or sends brain signals (looks, clicks and keys stay game controls). Goal ids match ns-guide GUIDE_GOAL_IDS,
- * in teaching order. `partial` lines replace a goal's line when half of it is done. */
+ * records or sends brain signals (looks, clicks and keys stay game controls). Goal ids match ns-guide
+ * GUIDE_ALL_GOAL_IDS. `partial` lines replace a goal's line when half of it is done.
+ * R558 (Messages 55 and 56: easier to use; a learning tool for motor neuroanatomy): the first lines teach what the game
+ * is for (an area of the brain, its numbered movements on the card, the same for another body part, then watching the
+ * movement on the body); the hand, Space and arrow gestures come after. */
 export const GUIDE = deepFreeze({
   label: 'Try this',
   // Short on purpose: the line sits in the status card (about 40 characters per line there), so each goal is one or
@@ -1461,14 +1538,21 @@ export const GUIDE = deepFreeze({
   goals: {
     // R4-fix (reviews SL4-4 / RP6): name areas that visibly move the arm (the shoulder area and "Relax left grip" on
     // an open hand move nothing you can see, and do not complete this goal).
-    leftArmArea: 'Look at a blue area, like the elbow. Watch your left arm move.',
+    leftArmArea: 'Look at a blue area on the brain, like the elbow. Watch your left arm move.',
+    // R558 (Messages 55 and 56): the information card lists the area's movements with numbers; a number key does the
+    // movement with that number (ns-app; the same simulated pulse as a tap on one of its muscles).
+    numberKey: 'Now press 1 or 2. Each number does one movement from the card on the right.',
     moveHand: 'Press W, A, S or D to move your left hand.',
     // R558 (Message 40): the goal ids stay so saved progress keeps: 'flipPalm' = a double tap (one turn of every limb),
     // 'fist' = a double tap held (the slow turn); ns-guide now teaches flipPalm first.
     fist: 'Tap Space twice and hold: the limbs keep turning, slowly. Let go to stop.',
     flipPalm: 'Tap Space twice, fast: all four limbs turn once.',
     // R4-fix (reviews F3 / SL4-4): 14 grey areas move nothing; this goal completes only on one that moves a joint.
-    otherPart: 'Look at an area of another colour, like a yellow leg area or an orange right-arm area. Watch that part move.',
+    // R558: names the orange right-arm areas (your right arm is in view while you look at the brain; the legs are not).
+    otherPart: 'Look at an area of another colour, like an orange right-arm area (the ← and → keys step from area to area). Watch that part move.',
+    // R558 (Messages 55 and 56): the card keeps the last area's numbered list while the look is somewhere else, so a
+    // movement can be watched on the body. Completes on a number key that moves something with the look off the brain.
+    watchBody: 'Look at a purple leg area. Then look down at the body and press 1 or 2: watch the leg move.',
     // R5-text (D17): points out the brain-to-muscle glow; it needs a NEW switch-on while this line shows (ns-guide).
     glow: 'Look at a blue area. See its muscles glow in the same blue?',
     // R558 (hunt 2): the brain is carried by the look AND by W/A/S/D while Space holds it (ns-guide counts both).
@@ -1485,6 +1569,10 @@ export const GUIDE = deepFreeze({
   partial: {
     moveHandNeedX: 'Good! Now try A or D to move it left or right.',
     moveHandNeedZ: 'Good! Now try W or S to move it forward or back.',
+    // R558: shown while a number-key goal is current, after a number whose movement was already at its end.
+    numberKeyStill: 'That movement is already there. Press another number from the card.',
+    // R558: shown while the watchBody goal is current, after a number moved a part with the look still on the brain.
+    watchBodyLookDown: 'It moved! Now look down at the body and press another number. The card keeps the list.',
     // R5-text: shown while the thirdPerson goal is current and the view from behind is on.
     thirdPersonBack: 'This is your back! Move the mouse to look around. Press E to go back.',
     // R5-text: shown while the mirror goal is current, after the brain caught a look or click at the mirror body.
@@ -1594,7 +1682,11 @@ export function plainStrings() {
   walk(PAGE, 'PAGE');
   walk(MAP_CAVEATS, 'MAP_CAVEATS');
   const samples = [
-    ['gazeLine(leftArm)', gazeLine('leftArm', 'Left wrist')], ['gazeLine(other)', gazeLine('other', 'Right knee')],
+    ['gazeLine(leftArm)', gazeLine('leftArm', 'Left shoulder', 'Left shoulder')], ['gazeLine(other)', gazeLine('other', 'Bend right knee', 'Right knee')],
+    ['areaTag(leg)', areaTag({ kind: 'effector', hemisphere: 'left', displayGroup: 'right_leg' })],
+    ['areaTag(arm)', areaTag({ kind: 'effector', hemisphere: 'left', displayGroup: 'right_arm' })],
+    ['areaTag(trunk)', areaTag({ kind: 'effector', hemisphere: 'right', displayGroup: 'trunk' })],
+    ['areaTag(face)', areaTag({ kind: 'effector', hemisphere: 'right', displayGroup: 'face' })],
     ['pulseLine', pulseLine('Bend left knee', 0.6)], ['triggerLine(click)', triggerLine(3, 'click', 'Bend left knee')],
     ['triggerLine(gaze)', triggerLine(4, 'gaze', 'Close left hand')],
     ['gazeMuscleLine(own)', gazeMuscleLine({ where: 'own', name: 'right biceps brachii', holdable: true })],

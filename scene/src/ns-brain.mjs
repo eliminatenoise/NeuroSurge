@@ -2464,6 +2464,13 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
  *    R558 (user Message 43, 12 Nov: "The brain is far too big, it should only take up 50% of the width of the panorama
  *    screen view"): motorFrac 1 -> 0.475, so the WHOLE brain (its outline is a little wider than the motor belt) spans
  *    about half the width of a 16:9 view at the start; this supersedes the fill-the-view rule above.
+ *    R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play", "a learning tool for people learning motor
+ *    neuroanatomy"): motorFloorNdc (default null = no floor; ns-app brainFloorNdc gives it for every window size). The
+ *    belt's box stays ABOVE this height of the view (NDC, +1 = the top edge), so the leg and foot areas at the bottom
+ *    of the belt's U are not hidden behind the mirror body's head; with the box centred on the floor it rests on it,
+ *    and when the belt at motorFrac is taller than the room between the floor and the top line it is made smaller
+ *    (limiting 'height'; measured at 1920x1080: the belt 801 px = 0.88 of its motorFrac size = 42 % of the width, the
+ *    whole brain about 45 % of the width).
  *  fit 'belt' (round 3 / 4) and fit 'brain' (round 3) stay available with their options.
  * R558 (the user's note of 2026-11-10: "the highlighted motor areas look far too low in the brain to be anatomically
  * realistic, the brain is probably too narrow"; measurements in DESIGN-DECISIONS.md, decision 13):
@@ -2494,7 +2501,7 @@ export const BRAIN_VIEW = freezeR2({
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
   motorFrac: 0.475, motorEdgeDeg: 80, motorMarginPx: 6, motorSideFrac: 0.015, motorCentreNdc: freezeR2([0, 0]),
-  perspectiveK: 20, pictureAxis: 'view'
+  motorFloorNdc: null, perspectiveK: 20, pictureAxis: 'view'
 });
 /** R558: the framing of the preceding preview (near eye, 10 degree forward tilt), for comparison:
  * frameBrain(seg, { ...BRAIN_VIEW_R5 }). */
@@ -3100,7 +3107,7 @@ function frameWholeBrain(strips, {
   frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
   backCropMax = BRAIN_VIEW.backCropMax || 0, motorFrac = BRAIN_VIEW.motorFrac, motorEdgeDeg = BRAIN_VIEW.motorEdgeDeg,
   motorMarginPx = BRAIN_VIEW.motorMarginPx, motorSideFrac = BRAIN_VIEW.motorSideFrac, motorCentreNdc = BRAIN_VIEW.motorCentreNdc,
-  pictureAxis = BRAIN_VIEW.pictureAxis
+  motorFloorNdc = BRAIN_VIEW.motorFloorNdc, pictureAxis = BRAIN_VIEW.pictureAxis
 } = {}) {
   if (pictureAxis !== 'view' && pictureAxis !== 'centre') throw new Error(`ns:brain_frame: pictureAxis must be 'view' or 'centre' (got ${pictureAxis})`);
   if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
@@ -3111,6 +3118,7 @@ function frameWholeBrain(strips, {
   if (!(Number.isFinite(motorMarginPx) && motorMarginPx >= 0)) throw new Error('ns:brain_frame: motorMarginPx must be finite and >= 0');
   if (!(Number.isFinite(motorSideFrac) && motorSideFrac >= 0 && motorSideFrac < 0.2)) throw new Error('ns:brain_frame: motorSideFrac must be in [0, 0.2)');
   if (!Array.isArray(motorCentreNdc) || motorCentreNdc.length !== 2 || !motorCentreNdc.every(v => Number.isFinite(v) && Math.abs(v) < 0.9)) throw new Error('ns:brain_frame: motorCentreNdc must be [x, y] inside (-0.9, 0.9)');
+  if (motorFloorNdc !== null && !(Number.isFinite(motorFloorNdc) && Math.abs(motorFloorNdc) < 0.9)) throw new Error('ns:brain_frame: motorFloorNdc must be null or inside (-0.9, 0.9)');
   if (!(Number.isFinite(beltFrac) && beltFrac > 0 && beltFrac <= 1)) throw new Error('ns:brain_frame: beltFrac must be in (0, 1]');
   if (!(Number.isFinite(frontCropMax) && frontCropMax >= 0 && frontCropMax < 0.5)) throw new Error('ns:brain_frame: frontCropMax must be in [0, 0.5)');
   if (!(Number.isFinite(beltCentreShare) && beltCentreShare >= 0 && beltCentreShare <= 1)) throw new Error('ns:brain_frame: beltCentreShare must be in [0, 1]');
@@ -3258,7 +3266,9 @@ function frameWholeBrain(strips, {
     // The belt stays inside the usable width (R558: in landscape the whole view, less motorSideFrac of the width on each
     // side; in portrait above the bottom band) and within the lateral look limit; its centre is as near
     // motorCentreNdc as that allows.
-    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly0 = U.y0 + myN, ly1 = U.y1 - myN;
+    // R558 (Messages 55 / 56): with motorFloorNdc the belt also stays above that height (see BRAIN_VIEW).
+    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly1 = U.y1 - myN;
+    const ly0 = motorFloorNdc === null ? U.y0 + myN : Math.max(U.y0 + myN, motorFloorNdc);
     if (!(lx1 - lx0 > 0.1 && ly1 - ly0 > 0.05)) return false;
     // R5-bigbrain: with the squash (perspectiveK) the brain is thin along the line of sight, so it may span a wider
     // angle than the round-4 cap (0.9 / rMax) while every point stays well in front of the eye (checked: minDepth).
@@ -3285,7 +3295,7 @@ function frameWholeBrain(strips, {
     const dir = dirFor(px, py), F = rotFor(dir), o = projBox(P, s, dir, F), bb = projBox(Bt, s, dir, F);
     if (!(o.minDepth > 0.1)) return false; // every brain point well in front of the eye (else the whole-brain fit)
     motorInfo = {
-      fit: 'motor', motorFrac, motorEdgeDeg, motorMarginPx, motorCentreNdc: [cxT, cyT], limiting: why,
+      fit: 'motor', motorFrac, motorEdgeDeg, motorMarginPx, motorCentreNdc: [cxT, cyT], motorFloorNdc, limiting: why,
       beltInUsableNdc: Math.min(U.x1, bb.x1) - Math.max(U.x0, bb.x0), beltCentreNdc: [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2],
       beltBoxNdc: { x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 },
       endsOffNdc: { front: o.y1 - U.y1, back: U.y0 - o.y0, left: U.x0 - o.x0, right: o.x1 - U.x1 }

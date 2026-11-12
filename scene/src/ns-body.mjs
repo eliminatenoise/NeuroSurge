@@ -99,7 +99,8 @@ const lim = (lo, hi) => Object.freeze([lo, hi]);
  * Measuring and Recording" table, with the AMA Guides where AAOS gives none or the task brief asked for the wider
  * value), not a game-safe fraction. Basis per joint:
  *   hip flexion 120 (AAOS; with a bent knee: HIP_KNEE_COUPLING caps it at 100 with a straight knee, the hamstrings'
- *     limit), extension 30 (AAOS; the map's extension action stops at the ground, 90); abduction 45, adduction
+ *     limit, and the game draws the knee giving way instead: passiveKneeAngles), extension 30 (AAOS; the map's
+ *     extension action swings the thigh down and back to 20, inside it); abduction 45, adduction
  *     30 (AAOS; the map's adduction action stops at 0 so the legs never pass into each other); knee flexion 135
  *     (AAOS); ankle dorsiflexion 20, plantarflexion 50 (AAOS); foot inversion 35, eversion 15 (AAOS); lesser-toe MTP
  *     flexion 40, extension 40 (AAOS); big-toe MTP flexion 45, extension 70 (AAOS);
@@ -2253,8 +2254,7 @@ export const BODY_POSTURES = deepFreezeRig({
  * WRIST_REACH_FRACTION of the arm's length, about 16 degrees of elbow bend.
  */
 export const EXTENSION_SOFT_BEND = Object.freeze({ elbowDeg: 12, kneeDeg: 10 });
-/** The joint angles to DRAW (see EXTENSION_SOFT_BEND): a new object; ids without a finite angle are left alone. Call it
- * before groundLegAngles, so the slightly bent knee still rests its heel on the ground. */
+/** The joint angles to DRAW (see EXTENSION_SOFT_BEND): a new object; ids without a finite angle are left alone. */
 export function softExtensionAngles(angles, o = EXTENSION_SOFT_BEND) {
   const out = { ...angles };
   if (Number.isFinite(out.r_elbow_flex) && o.elbowDeg > 0) out.r_elbow_flex = Math.min(BODY_JOINT_LIMITS.r_elbow_flex[1], Math.hypot(Math.max(0, out.r_elbow_flex), o.elbowDeg));
@@ -2266,41 +2266,28 @@ export function softExtensionAngles(angles, o = EXTENSION_SOFT_BEND) {
 }
 
 /**
- * R558 (user: "an invisible ground ... flat"; the start posture sits on it with the legs straight forward): keep each
- * leg on or above the ground. With the thigh lying level (hip flexion 90 at rest) a knee bend would swing the shank
- * and foot down through the ground; a sitting person instead slides the heel along the ground toward the buttock, so
- * the thigh rises. In the leg's own plane the heel's height above its start is T sin(t) + S sin(t - k) (T, S: hip-knee
- * and knee-ankle lengths of this rig, t: thigh rise above level, k: knee bend); the smallest t >= 0 that keeps it at
- * or above 0 is added to the hip flexion. When even the hip's display cap cannot keep the heel up, the knee bends only
- * as far as the cap allows. A hip below level (the thigh into the ground) is raised to level. Postures whose hips do
- * not rest at 90 are returned unchanged. Pure; returns a new object. Not a contact model: no squash, no friction.
+ * R558 (user Messages 47 and 48: every leg movement must be achievable and plain to see; "it's really hard to get the
+ * legs to ... extend the hip"): the knee to DRAW for a thigh lifted past where a straight knee lets it go.
+ * HIP_KNEE_COUPLING stops hip flexion at straightKneeMaxDeg while the knee is straight (the hamstrings). Instead of
+ * holding the thigh back there, the drawn knee gives way just far enough for the hip to reach the angle it was asked
+ * for: knee flexion >= (hip - straightKneeMax) / (bentKneeMax - straightKneeMax) x fullAtKneeFlexDeg. That is how a
+ * sitting person lifts a thigh: the knee bends as it rises. A display coupling for a two-joint muscle group, not a
+ * measured hamstring length. Only the drawn knee changes: the activity's own knee angle, the limits and the body map
+ * are untouched, and a knee already bent further is left alone. Pure; returns a new object.
+ * It replaces the earlier leg ground model (groundLegAngles: the heel slid along an invisible ground, a knee bend was
+ * drawn only as far as that allowed, and a thigh could never go below level, so hip extension did nothing). The
+ * invisible ground is where the two bodies sit at the start; it no longer stops a limb.
  * @param angles { BODY_JOINT_ID: deg } absolute joint angles
- * @param options { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) }
  */
-export function groundLegAngles(rig, angles, { posture = DEFAULT_BODY_POSTURE, limits = bodyPostureLimits(posture) } = {}) {
+export function passiveKneeAngles(angles, hk = HIP_KNEE_COUPLING) {
   const out = { ...angles };
-  const rest = bodyPostureAngles(posture);
-  const pv = rig && rig.pivots ? rig.pivots : {};
-  const pt = k => (pv[k] && Array.isArray(pv[k].point) ? pv[k].point : null);
-  for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
-    if (Math.abs(rest[`hip_flex_${S}`] - 90) > 1e-9) continue;
-    const hip = pt(`${s}_hip`), knee = pt(`${s}_knee`), ankle = pt(`${s}_ankle`);
-    if (!hip || !knee || !ankle || !Number.isFinite(out[`hip_flex_${S}`]) || !Number.isFinite(out[`knee_ext_${S}`])) continue;
-    const T = Math.hypot(knee[0] - hip[0], knee[1] - hip[1], knee[2] - hip[2]);
-    const L = Math.hypot(ankle[0] - knee[0], ankle[1] - knee[1], ankle[2] - knee[2]);
-    if (!(T > 0 && L > 0)) continue;
-    const cap = limits && limits[`hip_flex_${S}`] ? limits[`hip_flex_${S}`][1] : BODY_JOINT_LIMITS[`hip_flex_${S}`][1];
-    const tMax = Math.max(0, cap - 90) * DEG;
-    let k = Math.max(0, -out[`knee_ext_${S}`]) * DEG;
-    const h = out[`hip_flex_${S}`];
-    const heel = t => T * Math.sin(t) + L * Math.sin(t - k);
-    let t = Math.max(0, (h - 90) * DEG);
-    if (heel(t) < 0) {
-      if (heel(tMax) < 0) { t = tMax; k = Math.min(k, tMax + Math.asin(Math.min(1, (T * Math.sin(tMax)) / L))); }
-      else { let lo = t, hi = tMax; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (heel(m) >= 0) hi = m; else lo = m; } t = hi; }
-    }
-    out[`hip_flex_${S}`] = Math.max(h, 90 + t / DEG);
-    out[`knee_ext_${S}`] = -k / DEG;
+  const span = hk.bentKneeMaxDeg - hk.straightKneeMaxDeg;
+  if (!(span > 0)) return out;
+  for (const S of ['L', 'R']) {
+    const hip = out[`hip_flex_${S}`], id = `knee_ext_${S}`;
+    if (!Number.isFinite(hip) || !Number.isFinite(out[id]) || hip <= hk.straightKneeMaxDeg) continue;
+    const need = Math.min(1, (hip - hk.straightKneeMaxDeg) / span) * hk.fullAtKneeFlexDeg;
+    out[id] = Math.max(BODY_JOINT_LIMITS[id][0], Math.min(out[id], -need));
   }
   return out;
 }
@@ -2320,7 +2307,8 @@ export function groundLegAngles(rig, angles, { posture = DEFAULT_BODY_POSTURE, l
  * 'open' keeps the same 110 deg hip-flexion cap (the thigh and belly meshes are the same ones).
  * R558 audit (Message 2): these are the only caps below BODY_JOINT_LIMITS, and each keeps its documented mesh reason
  * (the 110 deg thigh lift; the seated 120 deg elbow). Hip extension follows the rig limit (-30, AAOS). With a straight
- * knee HIP_KNEE_COUPLING (applied in clampBodyJointTargets) holds the hip at 100, below the 110 cap.
+ * knee HIP_KNEE_COUPLING (applied in clampBodyJointTargets) would hold the hip at 100, below the 110 cap; the game
+ * draws the knee bending with the lift instead (passiveKneeAngles), so the thigh reaches the cap.
  */
 export const BODY_POSTURE_LIMITS = deepFreezeRig({
   anatomical: {},
