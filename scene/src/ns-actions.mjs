@@ -631,6 +631,14 @@ export const ARM_OPPOSITES = Object.freeze({
   thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition'
   // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm, so there is nothing to hold: they pulse.
 });
+/** The stage rule of a deliberate game-arm activation, as one question: the latched action that an activation of `id`
+ * would let go INSTEAD of latching `id` on (its opposite in ARM_OPPOSITES, when that one is latched), or null when
+ * `id` would latch on. armLatch: actionId -> 0 | 1. latchArmAction and the information card (ns-app infoActionBack)
+ * both ask here. */
+export function armOpposedLatch(id, armLatch) {
+  const opp = typeof id === 'string' && hasOwn(ARM_OPPOSITES, id) ? ARM_OPPOSITES[id] : null;
+  return opp !== null && opp !== 'relax_release' && armLatch && armLatch[opp] > 0 ? opp : null;
+}
 /** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they pulse and never latch. */
 const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
 const HAND_LATCH_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
@@ -1668,6 +1676,7 @@ export function createActivity({
       pendingGaze: null,                      // R3-fix M3: { area, since } a new area waiting to replace a click pulse
       markPending: null,                      // R3-fix M5: { area, regionId, since } a look that marks after markS
       latchPending: null,                     // R558: { area, hit, since } a look that moves its joints after latchS
+      lookTaken: null,                        // R558: { regionId, n } the area whose movement a look's rest took last; n counts them
       bodyDrive: zeroMap(BODY_KEYS),          // body POSE drive (smoothed, eases)
       bodyDisplay: zeroMap(BODY_KEYS),        // body DISPLAY envelope (crisp; for muscle colour)
       bodyJointTargets: restMap(),            // jointId -> absolute degrees (derived: the joint positions, bodyPos)
@@ -1754,6 +1763,7 @@ export function createActivity({
       && (s.pendingGaze === undefined || s.pendingGaze === null || (isPlainObject(s.pendingGaze) && typeof s.pendingGaze.area === 'string' && nonNegative(s.pendingGaze.since)))
       && (s.markPending === undefined || s.markPending === null || (isPlainObject(s.markPending) && typeof s.markPending.area === 'string' && regionOrNull(s.markPending.regionId) && nonNegative(s.markPending.since)))
       && (s.latchPending === undefined || s.latchPending === null || (isPlainObject(s.latchPending) && typeof s.latchPending.area === 'string' && isPlainObject(s.latchPending.hit) && nonNegative(s.latchPending.since)))
+      && (s.lookTaken === undefined || s.lookTaken === null || (isPlainObject(s.lookTaken) && regionOrNull(s.lookTaken.regionId) && nonNegative(s.lookTaken.n)))
       && unitMap(s.bodyDrive, BODY_KEYS) && unitMap(s.bodyDisplay, BODY_KEYS)
       && finiteMap(s.bodyJointTargets, JOINT_IDS)
       && (s.bodyGoal === undefined || finiteMap(s.bodyGoal, JOINT_IDS))
@@ -1820,6 +1830,7 @@ export function createActivity({
       pendingGaze: s.pendingGaze ? { ...s.pendingGaze } : null,
       markPending: s.markPending ? { ...s.markPending } : null,
       latchPending: s.latchPending ? { ...s.latchPending, hit: { ...s.latchPending.hit } } : null,
+      lookTaken: s.lookTaken ? { regionId: s.lookTaken.regionId, n: s.lookTaken.n } : null,
       bodyDrive: pick(s.bodyDrive, BODY_KEYS),
       bodyDisplay: pick(s.bodyDisplay, BODY_KEYS),
       bodyJointTargets: pick(s.bodyJointTargets, JOINT_IDS),
@@ -1876,6 +1887,20 @@ export function createActivity({
     return T;
   }
 
+  /** How many joints of body action `ends` are latched on the OTHER side of their start angle (goalOf: jointId ->
+   * degrees); `into`, when given, collects them. A deliberate activation brings these back and does nothing else
+   * (latchBodyAction); 0 = it goes to its ends. One place for the rule, so the information card's "first press
+   * brings it back" (latchView back) cannot drift from it. */
+  function opposedJoints(ends, goalOf, into = null) {
+    let n = 0;
+    for (const j of Object.keys(ends)) {
+      if (!LATCHING[j]) continue;
+      const at = sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
+      if (at !== 0 && side !== 0 && side !== at) { n += 1; if (into) into.push(j); }
+    }
+    return n;
+  }
+
   /** Stage rule of a deliberate BODY activation: an action that opposes where one of its joints is latched (its end
    * for that joint lies on the other side of the start angle) brings that joint back to its start angle (and does
    * nothing else this time); otherwise its joints go to their end angles and stay. A joint the action merely wants at
@@ -1885,12 +1910,7 @@ export function createActivity({
     const ends = ENDS.get(key);
     if (!ends) return;
     const back = [];
-    for (const j of Object.keys(ends)) {
-      if (!LATCHING[j]) continue;
-      const at = sideOf(j, s.bodyGoal[j]), side = sideOf(j, ends[j]);
-      if (at !== 0 && side !== 0 && side !== at) back.push(j);
-    }
-    if (back.length > 0) { for (const j of back) s.bodyGoal[j] = REST[j]; return; }
+    if (opposedJoints(ends, s.bodyGoal, back) > 0) { for (const j of back) s.bodyGoal[j] = REST[j]; return; }
     for (const j of Object.keys(ends)) {
       if (!LATCHING[j]) continue;
       // A weaker action on the side a joint is already latched on never eases it off (a part closure does not open a
@@ -1908,8 +1928,8 @@ export function createActivity({
   function latchArmAction(s, id) {
     if (id === 'relax_release') { for (const h of HAND_LATCH_IDS) s.armLatch[h] = 0; return; }
     if (DISPLAY_ONLY_ARM_IDS.includes(id)) return; // R558: moves nothing on the game arm, so nothing is held
-    const opp = hasOwn(ARM_OPPOSITES, id) ? ARM_OPPOSITES[id] : null;
-    if (opp !== null && opp !== 'relax_release' && s.armLatch[opp] > 0) s.armLatch[opp] = 0;
+    const opp = armOpposedLatch(id, s.armLatch);
+    if (opp !== null) s.armLatch[opp] = 0;
     else s.armLatch[id] = 1;
   }
 
@@ -1969,6 +1989,13 @@ export function createActivity({
       s.rotationState = hit.rotation === 'supination' ? 'supinated' : 'pronated';
       s.rotation = { ...s.rotation, hold: null }; // R558: the forearm goes to that end (a dance's held angle is let go)
     }
+  }
+
+  /** R558 (Messages 55 and 56): note that the REST of a look took this area's movement. The shell reads it so the
+   * information card takes the area in the same frame; the movement itself can carry the look off the area at once
+   * (a neck movement moves the view). */
+  function tookByLook(s, hit) {
+    s.lookTaken = { regionId: typeof hit.regionId === 'string' ? hit.regionId : null, n: (s.lookTaken && Number.isFinite(s.lookTaken.n) ? s.lookTaken.n : 0) + 1 };
   }
 
   function startPulse(s, hit, source, at, collect, area = null) {
@@ -2077,7 +2104,9 @@ export function createActivity({
     // A look onto a new area starts its 1 s pulse at once, except that it does not replace a running CLICK pulse until
     // the gaze has stayed on it for replaceClickS (R3-fix M3); the look's persistent mark waits for markS (M5).
     const startLook = source => {
-      if (startPulse(s, g.hit, source, at, collect, g.area) && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
+      const started = startPulse(s, g.hit, source, at, collect, g.area);
+      if (started && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
+      if (started && source === 'dwell') tookByLook(s, g.hit); // the look had rested there already: taken at once
       s.pendingGaze = null;
     };
     if (silent || g.area === null) {
@@ -2556,6 +2585,7 @@ export function createActivity({
       const hit = s.latchPending.hit;
       s.latchPending = null;
       commitLatch(s, hit);
+      tookByLook(s, hit);
     }
     s.openRemaining = countdown(s.openRemaining, h);
     s.relaxRemaining = countdown(s.relaxRemaining, h);
@@ -2780,6 +2810,10 @@ export function createActivity({
    *   still   [bodyActionKey]                            body actions a deliberate activation would not move now (the
    *           latchBodyAction rule: no joint of theirs to bring back, and each latching joint already at its end or
    *           further on that side). The information card's "already there" (R558, Messages 55 and 56).
+   *   back    [bodyActionKey]                            body actions a deliberate activation would only bring BACK now:
+   *           one of their joints is latched on the other side of its start angle, so this activation returns it there
+   *           and the next one does the movement (latchBodyAction, opposedJoints). The card's "first press brings it back".
+   *           (The game arm's own answer is armOpposedLatch, asked with the arm's latches.)
    *   hints   [{ key, regionId, actionId, armActionId, label, level, muscles, bodySide, isLeftArm, forJoint, forAction }]
    *           the OPPOSING actions: activating one brings that joint (or arm action) back. `muscles` are the opposing
    *           action's movers (the map's agonist names), `level` is JOINT_LATCH.hintLevel. One entry per action.
@@ -2820,9 +2854,10 @@ export function createActivity({
         });
       }
     };
-    const still = [];
+    const still = [], back = [];
     for (const k of BODY_KEYS) {
       const ends = ENDS.get(k);
+      if (opposedJoints(ends, goalOf) > 0) back.push(k);
       let latching = 0, moves = false;
       for (const j of Object.keys(ends)) {
         if (!LATCHING[j]) continue;
@@ -2845,7 +2880,7 @@ export function createActivity({
     const rotated = state.rotationState !== defaultRotation || heldTurn;
     if (rotated) armHint(defaultRotation === 'supinated' ? 'supination' : 'pronation', defaultRotation === 'supinated' ? 'pronation' : 'supination');
     return {
-      joints, arm, rotated, hints, still,
+      joints, arm, rotated, hints, still, back,
       label: 'held by the game until the opposing action or Reset (a rule of this simulation; not a recording)'
     };
   }

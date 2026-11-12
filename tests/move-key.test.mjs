@@ -3,9 +3,10 @@
  * Pure parts are checked here: the controls reducer (a number key queues one interface request and nothing else), the
  * list itself (ns-app infoMoves: the map's own order, numbered from 1, at most nine, with the "shown now" and "already
  * there" marks), which movement the card explains (infoRegionAction, infoChosenStep), and the activity's own list of
- * movements that would move nothing now (ns-actions latchView().still). No scene, model, browser or native fixture;
- * every time below is a supplied number. These cases establish queued records and list contents only, never pixels,
- * key timing or biology.
+ * movements that would move nothing now (ns-actions latchView().still) and of movements a press would only bring back
+ * now (latchView().back for the body, armOpposedLatch for the game arm; the card's "first press brings it back"). No
+ * scene, model, browser or native fixture; every time below is a supplied number. These cases establish queued records
+ * and list contents only, never pixels, key timing or biology.
  * Run: node tests/move-key.test.mjs (no arguments).
  */
 import assert from 'node:assert/strict';
@@ -16,8 +17,9 @@ const mod = await import(target.href);
 const { createControls, MOVE_CODES, moveKeyNumber, UI_QUEUE_LIMIT } = mod;
 const app = await import(new URL('../scene/src/ns-app.mjs', import.meta.url).href);
 const { BODY_MOTOR_MAP } = await import(new URL('../scene/src/ns-bodymap.mjs', import.meta.url).href);
-const { createActivity } = await import(new URL('../scene/src/ns-actions.mjs', import.meta.url).href);
-const { infoMoves, infoRegionAction, infoChosenStep, INFO_MOVES_MAX, KEYBOARD_PICTURE_ROWS } = app;
+const { createActivity, armOpposedLatch } = await import(new URL('../scene/src/ns-actions.mjs', import.meta.url).href);
+const NT = await import(new URL('../scene/src/ns-text.mjs', import.meta.url).href);
+const { infoMoves, infoActionBack, infoRegionAction, infoChosenStep, INFO_MOVES_MAX, KEYBOARD_PICTURE_ROWS } = app;
 const results = [];
 function check(name, fn) {
   try { fn(); results.push({ name, passed: true }); }
@@ -33,16 +35,19 @@ try {
   const A = createActivity();
   let s = A.step(A.state, [], 2.5); // past the start instructions
   const still = () => A.latchView(s).still;
+  const backNow = () => A.latchView(s).back;
   const press = (regionId, actionId) => { s = A.step(s, [{ type: 'muscle', regionId, actionId, regionOnly: false, at: 0 }], 0.05); s = A.step(s, [], 1.6); };
   const start = still();
   stillCase.checks.push(['the list is an array of area/movement keys', Array.isArray(start) && start.every(k => typeof k === 'string' && k.includes('/'))]);
   stillCase.checks.push(['at the start the knee is straight: "straighten" moves nothing', start.includes('rh_knee/rh_knee_extend')]);
   stillCase.checks.push(['at the start the bend would move the knee', !start.includes('rh_knee/rh_knee_flex')]);
+  stillCase.checks.push(['at the start no movement would only bring a part back', Array.isArray(backNow()) && backNow().length === 0]);
   press('rh_knee', 'rh_knee_flex');
   const bent = still();
   stillCase.checks.push(['after the bend, the bend moves nothing', bent.includes('rh_knee/rh_knee_flex')]);
   stillCase.checks.push(['after the bend, "straighten" would move the knee', !bent.includes('rh_knee/rh_knee_extend')]);
   stillCase.checks.push(['the other knee is not touched', bent.includes('lh_knee/lh_knee_extend') && !bent.includes('lh_knee/lh_knee_flex')]);
+  stillCase.checks.push(['a knee only bends one way from straight: "straighten" is the movement itself, not a bring-back', backNow().length === 0]);
   press('rh_knee', 'rh_knee_extend');
   const back = still();
   stillCase.checks.push(['after straightening, the list is the start list again', JSON.stringify(back) === JSON.stringify(start)]);
@@ -55,10 +60,34 @@ try {
   // A truly opposing movement first brings the joint back to its start angle; activated again, it goes to its own end.
   press('rh_trunk', 'rh_trunk_flex');
   stillCase.checks.push(['the trunk bends forward and stays', A.latchView(s).joints.some(j => j.jointId === 'trunk_flex' && j.goalDeg > 0)]);
+  // The same rule, asked before the press: the list of movements a press would only bring back now (latchView().back).
+  const bentTrunk = backNow();
+  stillCase.checks.push(['with the trunk bent forward, "lean back" is listed as bring-back, from both halves of the brain',
+    bentTrunk.includes('rh_trunk/rh_trunk_extend') && bentTrunk.includes('lh_trunk/lh_trunk_extend')]);
+  stillCase.checks.push(['the movement that is already there is not a bring-back', !bentTrunk.includes('rh_trunk/rh_trunk_flex') && still().includes('rh_trunk/rh_trunk_flex')]);
+  stillCase.checks.push(['no movement is both "already there" and bring-back', bentTrunk.every(k => !still().includes(k))]);
+  stillCase.checks.push(['a movement of another joint is not a bring-back', !bentTrunk.includes('rh_trunk/rh_trunk_side') && !bentTrunk.some(k => k.startsWith('rh_knee/'))]);
+  stillCase.backMoves = infoMoves(region('rh_trunk'), { still: still(), back: bentTrunk }).map(m => [m.id, m.atEnd, m.back]);
   press('rh_trunk', 'rh_trunk_extend');
   stillCase.checks.push(['the opposing movement first brings the trunk back', !A.latchView(s).joints.some(j => j.jointId === 'trunk_flex')]);
+  stillCase.checks.push(['brought back, nothing of the trunk is a bring-back any more', !backNow().some(k => k.includes('_trunk/'))]);
   press('rh_trunk', 'rh_trunk_extend');
   stillCase.checks.push(['activated again, it arches the trunk back', A.latchView(s).joints.some(j => j.jointId === 'trunk_flex' && j.goalDeg < 0) && A.latchView(s).still.includes('rh_trunk/rh_trunk_extend')]);
+  stillCase.checks.push(['arched back, "bend forward" is the bring-back', backNow().includes('rh_trunk/rh_trunk_flex') && !backNow().includes('rh_trunk/rh_trunk_extend')]);
+  // The hip: the thigh lifts, and the swing down and back first brings it to where it started.
+  press('rh_hip', 'rh_hip_flex');
+  stillCase.checks.push(['with the left thigh lifted, the swing down and back is the bring-back', backNow().includes('rh_hip/rh_hip_extend') && !backNow().includes('lh_hip/lh_hip_extend')]);
+  press('rh_hip', 'rh_hip_extend');
+  stillCase.checks.push(['one press brings the thigh back', !A.latchView(s).joints.some(j => j.jointId === 'hip_flex_L') && !backNow().some(k => k.startsWith('rh_hip/'))]);
+  press('rh_hip', 'rh_hip_extend');
+  stillCase.checks.push(['the next press swings it down and back', A.latchView(s).joints.some(j => j.jointId === 'hip_flex_L' && j.goalDeg < 0) && backNow().includes('rh_hip/rh_hip_flex')]);
+  // The game arm: a held grasp makes "open the hand" a bring-back (armOpposedLatch with the arm's own latches).
+  stillCase.armBefore = armOpposedLatch('open_hand', s.armLatch);
+  press('rh_hand', 'grasp_close');
+  stillCase.armHeld = { open: armOpposedLatch('open_hand', s.armLatch), grasp: armOpposedLatch('grasp_close', s.armLatch), relax: armOpposedLatch('relax_release', s.armLatch) };
+  stillCase.handMoves = infoMoves(region('rh_hand'), { leftArm: true, armState: s, still: still(), back: backNow() }).map(m => [m.id, m.atEnd, m.back]);
+  press('rh_hand', 'open_hand');
+  stillCase.armAfter = { open: armOpposedLatch('open_hand', s.armLatch), held: Object.keys(s.armLatch).filter(k => s.armLatch[k] > 0) };
   stillCase.ran = true;
 } catch (error) { stillCase.why = String(error); }
 
@@ -179,6 +208,77 @@ check('the activity itself says which movements would move nothing: the start po
   for (const [name, ok] of stillCase.checks) assert.ok(ok, name);
 });
 
+check('the list marks a movement whose first press would only bring the part back', () => {
+  assert.ok(stillCase.ran, `the activity check did not run: ${stillCase.why}`);
+  // From the activity's own lists, with the trunk bent forward.
+  assert.deepEqual(stillCase.backMoves, [['rh_trunk_flex', true, false], ['rh_trunk_extend', false, true], ['rh_trunk_side', false, false], ['rh_trunk_turn', false, false]]);
+  const trunk = region('rh_trunk');
+  assert.deepEqual(infoMoves(trunk).filter(m => m.back), [], 'a movement is marked without any list given');
+  assert.deepEqual(infoMoves(trunk, { back: 'rh_trunk/rh_trunk_extend' }).filter(m => m.back), [], 'a list that is not an array marks nothing');
+  assert.deepEqual(infoMoves(trunk, { back: ['lh_trunk/rh_trunk_extend', 'rh_knee/rh_trunk_extend'] }).filter(m => m.back), [], 'a key of another area marks nothing');
+  // "already there" comes first: the two marks never stand on one line.
+  const both = infoMoves(trunk, { still: ['rh_trunk/rh_trunk_extend'], back: ['rh_trunk/rh_trunk_extend'] }).find(m => m.id === 'rh_trunk_extend');
+  assert.deepEqual([both.atEnd, both.back], [true, false]);
+  for (const m of infoMoves(trunk, { back: ['rh_trunk/rh_trunk_extend'] })) assert.equal(typeof m.back, 'boolean', m.id);
+});
+
+check('the game arm: an opposing latch makes the movement a bring-back; straightening the elbow and the forearm turns never are', () => {
+  assert.ok(stillCase.ran, `the activity check did not run: ${stillCase.why}`);
+  assert.equal(stillCase.armBefore, null, 'nothing is held at the start');
+  assert.deepEqual(stillCase.armHeld, { open: 'grasp_close', grasp: null, relax: null });
+  assert.deepEqual(stillCase.handMoves.filter(m => m[2]).map(m => m[0]), ['open_hand'], 'only "open the hand" is a bring-back while the grasp is held');
+  assert.ok(stillCase.handMoves.every(m => !(m[1] && m[2])), 'a hand movement is both "already there" and bring-back');
+  assert.deepEqual(stillCase.armAfter, { open: null, held: [] }, 'the first press only lets the grasp go');
+  // armOpposedLatch: the pairs both ways, and nothing for ids without an opposite.
+  assert.equal(armOpposedLatch('elbow_extension', { elbow_flexion: 1 }), 'elbow_flexion');
+  assert.equal(armOpposedLatch('elbow_flexion', { elbow_extension: 1 }), 'elbow_extension');
+  assert.equal(armOpposedLatch('wrist_flexion', { wrist_extension: 1 }), 'wrist_extension');
+  assert.equal(armOpposedLatch('wrist_flexion', { wrist_extension: 0, wrist_flexion: 1 }), null);
+  for (const id of ['relax_release', 'wrist_radial_deviation', 'wrist_ulnar_deviation', 'pronation', 'no_such_id', '', null, undefined, 7]) {
+    assert.equal(armOpposedLatch(id, { grasp_close: 1, wrist_flexion: 1, wrist_extension: 1, elbow_flexion: 1 }), null, `armOpposedLatch(${String(id)})`);
+  }
+  assert.equal(armOpposedLatch('open_hand', null), null);
+  assert.equal(armOpposedLatch('open_hand', undefined), null);
+  // infoActionBack: the card's question for one movement.
+  const held = { armLatch: { grasp_close: 1, elbow_flexion: 1, wrist_flexion: 1 } };
+  const arm = (id, armState = held) => infoActionBack({ id, armActionId: id }, { leftArm: true, armState });
+  assert.equal(arm('open_hand'), true);
+  assert.equal(arm('wrist_extension'), true);
+  assert.equal(arm('grasp_close'), false, 'the held movement itself');
+  assert.equal(arm('elbow_extension'), false, 'letting go of a held bend is the straightening');
+  assert.equal(arm('pronation'), false);
+  assert.equal(arm('supination'), false);
+  assert.equal(arm('open_hand', null), false, 'no arm state given');
+  assert.equal(arm('open_hand', {}), false, 'an arm state without latches');
+  assert.equal(infoActionBack({ id: 'open_hand' }, { leftArm: true, armState: held }), true, 'the id stands in for a missing arm id');
+  // A body movement is asked through the activity's list, by area and movement.
+  assert.equal(infoActionBack({ id: 'rh_trunk_extend' }, { regionId: 'rh_trunk', back: ['rh_trunk/rh_trunk_extend'] }), true);
+  assert.equal(infoActionBack({ id: 'rh_trunk_extend' }, { regionId: 'lh_trunk', back: ['rh_trunk/rh_trunk_extend'] }), false);
+  assert.equal(infoActionBack({ id: 'rh_trunk_extend' }, { regionId: 'rh_trunk' }), false);
+  for (const bad of [null, undefined, 'open_hand', 3]) assert.equal(infoActionBack(bad, { leftArm: true, armState: held }), false, `infoActionBack(${String(bad)})`);
+});
+
+check('the card and the status line say in plain words what a bring-back press does', () => {
+  const trunk = region('rh_trunk');
+  const lean = trunk.actions.find(a => a.id === 'rh_trunk_extend');
+  const movementRow = card => card.rows.find(r => r[0] === 'Movement')[1];
+  const plain = movementRow(NT.plainInfoCard({ region: trunk, action: lean, leftArm: false }));
+  const back = movementRow(NT.plainInfoCard({ region: trunk, action: lean, leftArm: false, back: true }));
+  assert.equal(back, plain + NT.INFO.bringsBack);
+  assert.ok(!plain.includes(NT.INFO.bringsBack));
+  // "already there" wins over bring-back on the card as it does in the list.
+  const atEnd = movementRow(NT.plainInfoCard({ region: trunk, action: lean, leftArm: false, atEnd: true, back: true }));
+  assert.ok(!atEnd.includes(NT.INFO.bringsBack), atEnd);
+  assert.equal(typeof NT.INFO.moves.back, 'string');
+  assert.ok(NT.INFO.moves.back.length > 0 && NT.INFO.moves.back !== NT.INFO.moves.atEnd && NT.INFO.moves.back !== NT.INFO.moves.current);
+  for (const n of [1, 9]) {
+    const backLine = NT.HUD.moveBack(n), stillLine = NT.HUD.moveStill(n);
+    assert.ok(backLine.includes(`Key ${n}`) && backLine.includes(`Press ${n} again`), backLine);
+    assert.ok(stillLine.includes(`Key ${n}`) && /already there/.test(stillLine), stillLine);
+    assert.notEqual(backLine, stillLine);
+  }
+});
+
 check('every area of the map fits the nine number keys, and an area that moves nothing has no list', () => {
   let listed = 0;
   for (const r of BODY_MOTOR_MAP.regions) {
@@ -208,6 +308,6 @@ process.stdout.write(JSON.stringify({
   cases: results.length,
   failed: failed.length,
   results,
-  scope: 'Pure checks of the number-key request queue (ns-controls), of the numbered movement list and the movement the card explains (ns-app infoMoves, infoRegionAction, infoChosenStep over the shipped body map), and of the activity\'s list of movements that would move nothing (ns-actions latchView().still, default activity). Not checked here: the drawn card, real key events, or that a request reaches the activity model (browser run).'
+  scope: 'Pure checks of the number-key request queue (ns-controls), of the numbered movement list and the movement the card explains (ns-app infoMoves, infoRegionAction, infoChosenStep over the shipped body map), of the activity\'s list of movements that would move nothing (ns-actions latchView().still, default activity), and of the movements a press would only bring back (latchView().back, armOpposedLatch, ns-app infoActionBack, and the words for it in ns-text). Not checked here: the drawn card, real key events, how long the status line stays, or that a request reaches the activity model (browser run).'
 }, null, 2) + '\n');
 if (failed.length) process.exitCode = 1;

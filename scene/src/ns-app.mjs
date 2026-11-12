@@ -226,9 +226,14 @@ export function neckFlexEyeShiftMm(pitch, o = NECK_FLEX) {
  *    stays on the ground, TOWARD where the head is turned (ns-body lookBendDeg / lookBendDirDeg: forward when looking
  *    ahead, sideways when looking to the side, within the trunk's forward / back / sideways ranges), so the head stays
  *    upright under the level camera;
- *  - a held (latched) neck or trunk action is an OFFSET: each joint = its held angle + the look's share, clamped to
- *    its range, any overflow passed on as above (headPoseForLook). The look is kept inside what is left
- *    (headLookRange), so the mouse never has a dead zone; the opposing area or Reset body removes the offset;
+ *  - a held (latched) neck action is an OFFSET to the look: the neck = its held angle + the look's share, clamped to
+ *    its range, any overflow passed on as above (headPoseForLook), so the view moves with the head (Message 1: "the
+ *    head/neck will jerk accordingly"). The look is kept inside what is left (headLookRange), so the mouse never has
+ *    a dead zone; the opposing area or Reset body removes the offset;
+ *  - a held trunk bend (the trunk area: bend forward / lean back) moves the trunk UNDER the head (Message 55: the
+ *    view used to be thrown off the trunk area by its own movement): the neck takes up the difference as far as its
+ *    range goes, so the view keeps its direction, and only past the neck's range does the trunk give way from its
+ *    held bend, exactly as a steep look bends it. The body for a given head direction is the same as before;
  *  - the camera takes the head's own direction AND roll (the eyes never turn in the head): the head is never leaned
  *    over, so the level camera is exactly the head. A held trunk bend (the trunk area: bend forward / lean back) is a
  *    bend of the same trunk toward where the head is turned, so it too keeps the head upright; straight ahead it is
@@ -268,7 +273,8 @@ export function headBendLimit(dirDeg, sign, L = HEAD_LOOK) {
  * signs; the held trunk bend is taken toward where the head is turned). Returns { joints: { neck_rot, neck_flex,
  * trunk_flex: 0 } (absolute degrees over a start posture where all three are 0; the whole trunk bend is the look bend),
  * twistDeg (ns-body lookTwistDeg), bendDeg / bendDirDeg (ns-body lookBendDeg / lookBendDirDeg: the trunk's whole bend,
- * held + look, and its direction), trunkDeg (= bendDeg), heldTrunkDeg (the held part as drawn), look: { yaw, pitch }
+ * the held bend while the neck can take up the difference and the look's overflow past that, and its direction),
+ * trunkDeg (= bendDeg), heldTrunkDeg (the held bend asked for, inside the trunk's range), look: { yaw, pitch }
  * (radians: the head's own direction, the camera's look), rollDeg (the head's lean against the level camera: 0 up to
  * rounding) }. The direction is the rig's own chain (ns-body localMatrices and applyLook): the bend toward the head's
  * direction shared between the two trunk joints, the chest turn about the trunk's long axis, the neck turn, then the
@@ -284,8 +290,11 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   const down = headBendLimit(psiDeg, 1, L), up = headBendLimit(psiDeg, -1, L);
   const f = headOffset(offsets, 'neck_flex') - lp;
   const held = clamp(headOffset(offsets, 'trunk_flex'), -up, down);
-  let neckFlex = clamp(f, -L.neckExtDeg, L.neckFlexDeg);
-  let bend = clamp(held + (f - neckFlex), -up, down);
+  // A held trunk bend moves the trunk under the head: the neck takes up the difference as far as its range goes, so
+  // the head keeps the direction the look and the held neck angle give it. Past the neck's range the trunk gives
+  // way from its held bend, exactly as an ordinary steep look bends it.
+  let neckFlex = clamp(f - held, -L.neckExtDeg, L.neckFlexDeg);
+  let bend = clamp(f - neckFlex, -up, down);
   // While a held offset springs the sum may pass the camera's limits for a moment: the neck gives way first.
   if (neckFlex + bend > L.maxDownDeg) { neckFlex = Math.max(-L.neckExtDeg, L.maxDownDeg - bend); bend = Math.min(bend, L.maxDownDeg - neckFlex); }
   if (neckFlex + bend < -L.maxUpDeg) { neckFlex = Math.min(L.neckFlexDeg, -L.maxUpDeg - bend); bend = Math.max(bend, -L.maxUpDeg - neckFlex); }
@@ -314,9 +323,35 @@ export function headLookRange(goalOffsets = null, L = HEAD_LOOK, look = null) {
   const ly = look && Number.isFinite(look.yaw) ? clamp(look.yaw / DEG, yawMinDeg, yawMaxDeg) : 0;
   const psiDeg = clamp(nr + ly, -turn, turn);
   const down = headBendLimit(psiDeg, 1, L), up = headBendLimit(psiDeg, -1, L);
-  const tf = clamp(headOffset(goalOffsets, 'trunk_flex'), -up, down);
-  const fMin = Math.max(-L.neckExtDeg - up - tf, -L.maxUpDeg - tf), fMax = Math.min(L.neckFlexDeg + down - tf, L.maxDownDeg - tf);
+  // A held trunk bend does not shift the range: the neck takes it up (headPoseForLook), so the head's direction, and
+  // with it this range, depends on the look and the held neck angles alone.
+  const fMin = Math.max(-L.neckExtDeg - up, -L.maxUpDeg), fMax = Math.min(L.neckFlexDeg + down, L.maxDownDeg);
   return { yawMinDeg, yawMaxDeg, pitchMinDeg: nf - fMax, pitchMaxDeg: nf - fMin };
+}
+/** R558 (Messages 55 and 56: easier to use; a learning tool): the neck joint of a held neck movement that was just
+ * taken and moves the view, or null (pure). prev / next: the held goal offsets of two frames ({ neck_rot, neck_flex },
+ * degrees from the start posture). A joint counts when its goal changed and is now away from the start posture: the
+ * head, and the camera on it, then goes somewhere else (Message 1: "the head/neck will jerk accordingly"). Null when
+ * nothing changed, when there is no earlier frame, or when the neck only came back to its start (the view then returns
+ * to where the look left it). A held trunk bend never counts: the neck takes it up (headPoseForLook). */
+export function headGoalTaken(prev, next) {
+  if (!prev || !next) return null;
+  for (const k of ['neck_rot', 'neck_flex']) { const a = headOffset(prev, k), b = headOffset(next, k); if (Math.abs(b - a) > 1e-6 && Math.abs(b) > 1e-6) return k; }
+  return null;
+}
+/** R558 (Messages 55 and 56): the number of the card row that brings the head back after a neck movement on `joint`
+ * moved the view, or 0 (pure). rows: the card's movement list (infoMoves: { n, id, back }); region: the body-map area
+ * the list belongs to. The row has to be marked "first press brings it back" and its movement has to act on that
+ * joint, so the key undoes the movement just made and not another held one. 0 when there is no such row: the two head
+ * turns (the opposite turn is on the other half's neck area), or a card that shows another area. */
+export function headBackKey(rows, region, joint) {
+  if (!Array.isArray(rows) || !region || !Array.isArray(region.actions) || typeof joint !== 'string') return 0;
+  for (const m of rows) {
+    if (!m || m.back !== true || !Number.isInteger(m.n)) continue;
+    const a = region.actions.find(x => x && x.id === m.id);
+    if (a && a.joints && typeof a.joints === 'object' && Number.isFinite(a.joints[joint]) && a.joints[joint] !== 0) return m.n;
+  }
+  return 0;
 }
 /** ns-body poseBody / bodyHeadFrame options for a headPoseForLook result (the chest turn and the look's trunk bend). */
 export function headPoseOptions(head) {
@@ -1299,6 +1334,25 @@ export function infoActionAtEnd(a, { leftArm = false, regionId = null, still = n
 }
 
 /**
+ * R558 (Messages 6, 55 and 56): true when switching a body-map action on now would only bring a part BACK to where it
+ * started, and the movement itself needs a second activation (the game's stage rule: a part that is held on the other
+ * side of its start is first brought back). A body movement: the activity's own answer (`back`: ns-actions latchView
+ * back, keys "areaId/movementId"). A game-arm movement: its latched opposite would be let go (ns-actions
+ * armOpposedLatch, asked with the arm's latches). Not for "Straighten left elbow": letting go of a held bend IS the
+ * straightening the player asked for, and after it the movement may be "already there". Not for the forearm turns
+ * (they have their own state and words). Pure; false when the state needed is not given.
+ */
+export function infoActionBack(a, { leftArm = false, regionId = null, back = null, armState = null } = {}) {
+  if (!a || typeof a !== 'object') return false;
+  if (leftArm) {
+    const armId = typeof a.armActionId === 'string' ? a.armActionId : a.id;
+    if (!armId || armId === 'elbow_extension' || armId === 'pronation' || armId === 'supination') return false;
+    return Boolean(armState && armState.armLatch && NsActions.armOpposedLatch(armId, armState.armLatch) !== null);
+  }
+  return typeof regionId === 'string' && typeof a.id === 'string' && Array.isArray(back) && back.includes(`${regionId}/${a.id}`);
+}
+
+/**
  * R558 (Messages 55 and 56): how long the movement a number key chose stays the one the information card explains.
  * `chosen` = { regionId, actionId, gazePick } (gazePick undefined until the first frame after the key). It is kept
  * while the look stays where it was when the key was pressed (the same band of the strip, or off the strip), and
@@ -1322,16 +1376,21 @@ export const INFO_MOVES_MAX = 9;
  * neuroanatomy"): the numbered movement list of one motor area, in the map's own order (the order of its bands along
  * the strip). The information card shows it and number key n does movement n, so every movement of an area can be
  * reached without aiming at its narrow band. Returns [{ n (1..9), id, label (plain words), current (the movement the
- * card explains), atEnd (it would move nothing now) }]; [] for an area that moves nothing. Pure.
+ * card explains), atEnd (it would move nothing now), back (it would only bring the part back to where it started
+ * now; infoActionBack; never together with atEnd) }]; [] for an area that moves nothing. Pure.
  */
-export function infoMoves(region, { currentId = null, leftArm = false, still = null, armState = null, rotationState = null } = {}) {
+export function infoMoves(region, { currentId = null, leftArm = false, still = null, back = null, armState = null, rotationState = null } = {}) {
   const acts = region && Array.isArray(region.actions) ? region.actions.filter(a => a && typeof a === 'object' && typeof a.id === 'string') : [];
-  return acts.slice(0, INFO_MOVES_MAX).map((a, i) => ({
-    n: i + 1, id: a.id,
-    label: (typeof a.plainLabel === 'string' && a.plainLabel) || (typeof a.label === 'string' && a.label) || a.id,
-    current: a.id === currentId,
-    atEnd: infoActionAtEnd(a, { leftArm, regionId: region.id, still, armState, rotationState })
-  }));
+  return acts.slice(0, INFO_MOVES_MAX).map((a, i) => {
+    const atEnd = infoActionAtEnd(a, { leftArm, regionId: region.id, still, armState, rotationState });
+    return {
+      n: i + 1, id: a.id,
+      label: (typeof a.plainLabel === 'string' && a.plainLabel) || (typeof a.label === 'string' && a.label) || a.id,
+      current: a.id === currentId,
+      atEnd,
+      back: !atEnd && infoActionBack(a, { leftArm, regionId: region.id, back, armState })
+    };
+  });
 }
 
 /** Plain-language pathway line for a body-map region (round-2 fixes SCI-3, SCI-5, F6): built from the region's own
@@ -1365,6 +1424,16 @@ const GRIP_AREA_ID = 'rh_hand';
  * as long as the glow of that crossing lasts, and at least graceS after the look left it.
  */
 export const INFO_SETTLE = Object.freeze({ restS: NsActions.GAZE_DWELL.latchS, graceS: 0.6 });
+
+/**
+ * R558 (Messages 55 and 56): the area whose movement the rest of a look has taken since the card last looked, or null.
+ * `seenN` is the count the card saw last; `activity` the activity state (its lookTaken = { regionId, n }). Pure.
+ */
+export function infoTookId(seenN, activity) {
+  const tk = activity && activity.lookTaken && typeof activity.lookTaken === 'object' ? activity.lookTaken : null;
+  if (!tk || !Number.isFinite(tk.n) || tk.n === seenN) return null;
+  return typeof tk.regionId === 'string' && tk.regionId !== '' ? tk.regionId : null;
+}
 
 /**
  * R558 (Messages 55 and 56): one step of the rule above. The areas of the strip are small and lie side by side, so a
@@ -1416,7 +1485,7 @@ export function infoSettleStep(prev, { regionId = null, t = 0, keptId = null, ch
  * Pure: plain JSON out. `key` changes only when the subject changes (the renderer re-draws text only then).
  */
 export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, regionActivity = null, activatedRegions = null,
-  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, still = null, armState = null,
+  activatedActions = null, displayDrives = null, last = null, pulse = null, rotationState = null, still = null, back = null, armState = null,
   reach = null, grip = null, chosen = null, live = true, settled = true, ignore = null } = {}) {
   const g = gaze && typeof gaze.target === 'string' ? gaze : normalizeGaze(gaze, bodyMap);
   const onArea = g.target === 'region' && settled !== false;
@@ -1476,17 +1545,18 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
         // The pulse's own movement; after the pulse, the movement this area's card showed last (not its first one).
         const m = infoOverlayModel({ gaze: { target: 'region', regionId: id, actionId: null, regionActionId: pulse && pulse.regionId === id ? pulse.actionId : lastActionOf(id),
           hemisphere: r.hemisphere || null, isLeftArm: r.isLeftArm === true, u: null }, binding, bodyMap, regionActivity, activatedRegions, activatedActions,
-          displayDrives, last: null, pulse, rotationState, still, armState, reach: null, live: false });
+          displayDrives, last: null, pulse, rotationState, still, back, armState, reach: null, live: false });
         return { ...m, key: `${m.key}|live`, source: 'live' };
       }
     }
     // R558 (Messages 55 and 56): the kept card of a body-map area is built afresh from the area and the state now (its
-    // live signal, and which of its numbered movements are already at their end), with the movement it showed last.
+    // live signal, and which of its numbered movements are already at their end or would only bring the part back),
+    // with the movement it showed last.
     const lastRegion = last && last.mode === 'region' && last.region && bodyMap ? regionById(bodyMap, last.regionId) : null;
     if (lastRegion) {
       const m = infoOverlayModel({ gaze: { target: 'region', regionId: lastRegion.id, actionId: null, regionActionId: lastActionOf(lastRegion.id),
         hemisphere: lastRegion.hemisphere || null, isLeftArm: lastRegion.isLeftArm === true, u: null }, binding, bodyMap, regionActivity, activatedRegions, activatedActions,
-        displayDrives, last: null, pulse, rotationState, still, armState, reach: null, live: false });
+        displayDrives, last: null, pulse, rotationState, still, back, armState, reach: null, live: false });
       return { ...m, key: `${m.key}|last`, viewed: 'last', source: last.source };
     }
     // R558 (hunt 2): the kept card shows the area's LIVE signal (it was the value frozen when you looked away, so an
@@ -1569,11 +1639,13 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
   const armId = picked && leftArm ? (typeof picked.armActionId === 'string' ? picked.armActionId : picked.id) : null;
   const armRot = armId === 'pronation' || armId === 'supination';
   const atEnd = Boolean(picked) && !armRot && infoActionAtEnd(picked, { leftArm, regionId: region ? region.id : null, still, armState, rotationState });
-  const card = region ? NT.plainInfoCard({ region, action: picked, leftArm, activity, activations, citations, caveats: [...INFO_TEXT.caveats], rotationState, atEnd }) : null;
+  // R558 (Messages 6, 55 and 56): a movement that would only bring the part back now (the stage rule); the card says so.
+  const backNow = Boolean(picked) && !atEnd && infoActionBack(picked, { leftArm, regionId: region ? region.id : null, back, armState });
+  const card = region ? NT.plainInfoCard({ region, action: picked, leftArm, activity, activations, citations, caveats: [...INFO_TEXT.caveats], rotationState, atEnd, back: backNow }) : null;
   // R558 (Messages 55 and 56): the area's numbered movement list; `movesRegionId` is the area a number key acts on.
-  const moves = region ? infoMoves(region, { currentId: picked ? picked.id : null, leftArm, still, armState, rotationState }) : [];
+  const moves = region ? infoMoves(region, { currentId: picked ? picked.id : null, leftArm, still, back, armState, rotationState }) : [];
   // R3-fix (SL-2): a forearm-turn card changes when the palm flips (its "already ... nothing moves" note).
-  const rotKey = (picked && (picked.armActionId === 'pronation' || picked.armActionId === 'supination') && typeof rotationState === 'string' ? `|${rotationState}` : '') + (atEnd ? '|at-end' : '');
+  const rotKey = (picked && (picked.armActionId === 'pronation' || picked.armActionId === 'supination') && typeof rotationState === 'string' ? `|${rotationState}` : '') + (atEnd ? '|at-end' : backNow ? '|back' : '');
   return {
     ...common, key: `region|${regionKey}|${picked ? picked.id : g.actionId || ''}${rotKey}`, mode: 'region', viewed: 'now', source, title,
     technicalTitle: region && typeof region.label === 'string' ? region.label : title,
@@ -4690,6 +4762,14 @@ export function start(params = {}) {
   // trunk movement may have carried the crosshair off it.
   let areaWalk = null;
   let areaNote = null; // { key: 'areaEnd' | 'areaWhileHolding', untilMs }: the status card says why a key did nothing
+  // R558 (Messages 55 and 56): what a number key just did when it was not the movement itself: { key: 'moveStill' (it
+  // was already there) | 'moveBack' (it only brought the part back), n, untilMs }. The status card says so for a while.
+  let moveNote = null;
+  const MOVE_NOTE_MS = 5000;
+  // R558 (Messages 55 and 56): a held neck movement was just taken, so the head turned and the view with it, off the
+  // area that was looked at: { joint, untilMs }. The status card says so, and how to bring the head back, for a while.
+  // neckGoalPrev: the held neck / trunk goal offsets of the frame before (headGoalTaken).
+  let neckNote = null, neckGoalPrev = null;
   const inputCancellation = { count: 0, pendingRecordsCanceled: 0, reasons: {}, last: null };
   let mods = { colors: null, bodyMap: null, body: null, errors: {} };
   // R558 (Space dance): the touch-free hip range of the current leg posture (ns-body hipRotationClearRange) and its key.
@@ -4727,6 +4807,7 @@ export function start(params = {}) {
   let bodyRig = null, bodyBaked = null, bodyPosed = null, bodyNote = '', brainModeNote = null, anatomy = null, eyeNote = null, bodyFrameKey = null, bodyAnchor = 'pelvis';
   let bodyArmBridge = null, bodyBridgeState = Object.freeze({ state: 'not-ready', normalMechanics: 'UNVERIFIED' });
   let infoModel = null, infoLastRegion = null, infoSig = null, infoRenderer = null;
+  let infoTakenN = 0; // R558: the count of look-taken movements the card has seen (activity lookTaken.n)
   let slowState = null, slowLastMs = null; // R4-integrator: slow-computer note (stepSlowNotice) over live frames only
   let guideBox = null, guideBoxAt = -Infinity, guideCovered = false, guideClear = 0; // R4-integrator: guide vs brain
   let guideHandPx = null; // R4-polish: last frame's hand boxes (CSS px) for the guide chip
@@ -5203,7 +5284,8 @@ export function start(params = {}) {
     seedNext = true;          // the next frame seeds the gaze silently: a reset never starts a pulse
     renderRequested = true;
     current = { ...current, state: simState };
-    infoLastRegion = null; infoChosen = null; infoLook = null; infoStepped = null; areaNote = null; areaWalk = null;
+    infoLastRegion = null; infoChosen = null; infoLook = null; infoStepped = null; areaNote = null; moveNote = null; neckNote = null; neckGoalPrev = null; areaWalk = null;
+    infoTakenN = simState && simState.activity && simState.activity.lookTaken ? simState.activity.lookTaken.n : 0;
     dispatch({ type: 'notice', text: SHELL_TEXT.bodyReset });
     return true;
   }
@@ -5381,10 +5463,15 @@ export function start(params = {}) {
       else if (infoStepped.seen || !(tInfo - infoStepped.t >= 0 && tInfo - infoStepped.t < 0.5)) infoStepped = null;
     }
     const steppedId = infoStepped && infoStepped.seen ? infoStepped.id : null;
+    // A look whose rest has just moved the body means that area, as a click does. The activity counts the rest from
+    // one frame earlier than this card does, and a neck movement carries the view off the area at once: without this
+    // the head jerked while the card still showed the area before, and its number keys still acted there.
+    const tookId = infoTookId(infoTakenN, act);
+    infoTakenN = act && act.lookTaken && Number.isFinite(act.lookTaken.n) ? act.lookTaken.n : 0;
     infoLook = infoSettleStep(infoLook, { regionId: gazeAreaId, t: tInfo,
       keptId: infoLastRegion && typeof infoLastRegion.regionId === 'string' ? infoLastRegion.regionId : null,
       chosenId: infoChosen ? infoChosen.regionId : null,
-      clickedId: steppedId || (act && act.pulseClick === true && pulseNow ? pulseNow.regionId : null),
+      clickedId: steppedId || tookId || (act && act.pulseClick === true && pulseNow ? pulseNow.regionId : null),
       levels: out.regionActivity, pulseId: pulseNow ? pulseNow.regionId : null });
     const model = infoOverlayModel({
       settled: gazeAreaId ? infoLook.settled : true, ignore: infoLook.crossed,
@@ -5394,6 +5481,8 @@ export function start(params = {}) {
       rotationState: typeof out.rotationState === 'string' ? out.rotationState : null,
       // The movements that would move nothing now, from the activity's own rule (ns-actions latchView still).
       still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
+      // The movements that would only bring a part back now (ns-actions latchView back): "first press brings it back".
+      back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
       // R558 (hunt 2): the game arm's own state, for its "already there" (ns-guide armActionMoves)
       armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad } : null,
       reach: Array.isArray(out.reachShow) ? out.reachShow : null,
@@ -6965,6 +7054,9 @@ export function start(params = {}) {
               add.push({ type: 'muscle', regionId: infoModel.movesRegionId, actionId: mv.id, regionOnly: false, at: timing.dt });
               infoChosen = { regionId: infoModel.movesRegionId, actionId: mv.id, gazePick: undefined };
               moveGuideEvents.push({ type: 'moveKey', n, moved: mv.atEnd !== true, onBrain: gazeOnBrain(simState.gaze) });
+              // What the press did when it was not the movement itself, from the card's own marks as they were shown.
+              moveNote = mv.atEnd === true ? { key: 'moveStill', n, untilMs: now + MOVE_NOTE_MS }
+                : mv.back === true ? { key: 'moveBack', n, untilMs: now + MOVE_NOTE_MS } : null;
             }
           }
           if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
@@ -7030,6 +7122,12 @@ export function start(params = {}) {
           cs = controlsApi.setPitchLimits(cs, { minDeg: Math.max(-179, r.pitchMinDeg), maxDeg: Math.min(179, r.pitchMaxDeg), relative: true });
           const y = clamp(cs.yaw, r.yawMinDeg * DEG, r.yawMaxDeg * DEG);
           if (y !== cs.yaw) cs = controlsApi.setLook(cs, { yaw: y, pitch: cs.pitch });
+          // R558 (Messages 55 and 56): a neck movement just taken turns the head and the view with it (Message 1), off
+          // the area that was looked at: the status card says so for a while. Back at the start, the line goes.
+          const neckJoint = headGoalTaken(neckGoalPrev, headOffs.goal);
+          if (neckJoint) neckNote = { joint: neckJoint, untilMs: now + MOVE_NOTE_MS };
+          else if (neckNote && Math.abs(headOffs.goal[neckNote.joint]) <= 1e-6) neckNote = null;
+          neckGoalPrev = headOffs.goal;
         }
         // R558 (Messages 55 and 56: easier to use; a learning tool): an area key (left / right arrow) turns the look to the
         // next motor area along the strip, in the key's direction on the screen (sim.areaStep; the walk is ns-app
@@ -7943,6 +8041,23 @@ export function start(params = {}) {
         if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         if (now < viewHeldUntilMs && NT.HUD.viewWhileHolding) model.note = [NT.HUD.viewWhileHolding, model.note].filter(Boolean).join(' \u00b7 ');
         if (areaNote && now < areaNote.untilMs && NT.HUD[areaNote.key]) model.note = [NT.HUD[areaNote.key], model.note].filter(Boolean).join(' \u00b7 ');
+        // R558 (Messages 55 and 56): a number key that moved nothing, or only brought the part back, says so (unless the
+        // "Try this" line is saying the same thing just now).
+        if (moveNote && now >= moveNote.untilMs) moveNote = null;
+        if (moveNote && typeof NT.HUD[moveNote.key] === 'function') {
+          const sameAsGuide = moveNote.key === 'moveStill' && NG.guideView(guide, simState.t).text === NT.GUIDE.partial.numberKeyStill;
+          if (!sameAsGuide) model.note = [NT.HUD[moveNote.key](moveNote.n), model.note].filter(Boolean).join(' \u00b7 ');
+        }
+        // R558 (Messages 55 and 56): the head moved with a neck movement, so the view moved; with the neck area's list on
+        // the card, the line names the key marked "first press brings it back" (headBackKey).
+        if (neckNote && now >= neckNote.untilMs) neckNote = null;
+        if (neckNote && NT.HUD.headMoved) {
+          const shown = infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId && infoReadState() !== 'off';
+          const n = shown ? headBackKey(infoModel.moves, regionById(bodyMap, infoModel.movesRegionId), neckNote.joint) : 0;
+          const line = n && typeof NT.HUD.headMovedKey === 'function' ? NT.HUD.headMovedKey(n)
+            : neckNote.joint === 'neck_rot' && NT.HUD.headTurned ? NT.HUD.headTurned : NT.HUD.headMoved;
+          model.note = [line, model.note].filter(Boolean).join(' \u00b7 ');
+        }
         // R558 (Messages 2, 12 and 40): what Space holds (and how to let go), and a plain word when a move stopped at contact.
         if (limbGrasp && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(limbGrasp.limb, spaceGrasp === 'kept'), model.space].filter(Boolean).join(' \u00b7 ');
         if (limbGrasp && model.crosshairHold === 'empty') model.crosshairHold = 'item';

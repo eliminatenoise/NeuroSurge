@@ -616,7 +616,9 @@ html, body {
 .ns-infopanel-moves { list-style: none; display: grid; gap: 2px; margin: 0 0 3px; padding: 0; }
 .ns-infopanel-move { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 0 7px; padding: 1px 4px 2px 3px; border-radius: 5px; font-size: 12.5px; line-height: 1.35; color: #d6dee8; }
 .ns-infopanel-move-label { overflow-wrap: break-word; }
-.ns-infopanel-move-note { margin-left: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--ns-muted); white-space: nowrap; }
+/* The note is one box: when it does not fit beside the label it goes whole onto the next line, and the label is not
+   broken in two for it. */
+.ns-infopanel-move-note { display: inline-block; margin-left: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--ns-muted); white-space: nowrap; }
 .ns-infopanel-move[data-current="true"] { background: rgba(232, 238, 245, 0.1); color: #ffffff; font-weight: 700; }
 .ns-infopanel-move[data-current="true"] .ns-infopanel-move-key { border-color: #ffe066; color: #ffe066; }
 .ns-infopanel-move[data-current="true"] .ns-infopanel-move-note { color: #ffe066; }
@@ -946,6 +948,15 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-viewed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-plain, .ns-infopanel-explanation) { flex: 0 1 auto; min-height: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
   .ns-app:not([data-ns-unfold="true"]):not(:has(> .ns-scene-overlay[data-ns-brain-in-view="false"])):not(:has(.ns-infopanel-detail[open])) .ns-hud .ns-panel-legend { visibility: hidden; }
+  /* R558 (Messages 44 and 48): the short card shows each part whole or leaves it out. ns-scene-three fitInfoCard tries
+     the card with everything and, while it runs over, marks one more part to leave out (data-ns-trim): 1 the lead
+     sentence, 2 the signal path, 3 the muscles that work the other way, 4 the muscles that pull. The opened card
+     always shows every part. */
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel[data-ns-trim]:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { flex: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:is([data-ns-trim="1"], [data-ns-trim="2"], [data-ns-trim="3"], [data-ns-trim="4"]):not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { display: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:is([data-ns-trim="2"], [data-ns-trim="3"], [data-ns-trim="4"]):not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-key-pathway, .ns-infopanel-row-pathway) { display: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:is([data-ns-trim="3"], [data-ns-trim="4"]):not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-key-easing, .ns-infopanel-row-easing) { display: none; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel[data-ns-trim="4"]:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-rows { display: none; }
 }
 
 /* R558 (user Message 48, the R key: "read information ... make sure the information isn't such an eyesore ... and

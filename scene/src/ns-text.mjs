@@ -633,6 +633,18 @@ export const HUD = deepFreeze({
    * further area that way, and when it was pressed while something is held (a step is a look; a held thing follows the look). */
   areaEnd: 'No more motor areas that way from here. Press the other arrow key, or turn the brain to bring more areas into view.',
   areaWhileHolding: 'Let go of what you hold first, then press the arrow key.',
+  /** R558 (Messages 6, 55 and 56): what a number key (n) just did when it was not the movement itself. moveStill: the
+   * part was already there. moveBack: the part was held on the other side of its start, so this press brought it back
+   * (the game's stage rule); the same number again does the movement. Shown for a few seconds. */
+  moveStill: n => `Key ${n}: that movement is already there, so nothing moved. Try another number on the card.`,
+  moveBack: n => `Key ${n} brought the part back to where it started. Press ${n} again for the movement itself.`,
+  /** R558 (Messages 1, 55 and 56): a neck movement was just taken, so the head moved and the view with it, off the area
+   * that was looked at. Shown for a few seconds. headMovedKey: key n on the card is the opposite movement (marked
+   * "first press brings it back"). headTurned: a head turn, whose opposite is on the other half's neck area (a choice
+   * of this game). headMoved: any other case (the card is hidden or shows another area). */
+  headMovedKey: n => `Your head moved, so your view moved with it. Press ${n} to bring your head back.`,
+  headTurned: 'Your head turned, so your view turned with it. In this game the neck area on the other half of the brain turns it back; so does Reset body on the Esc page.',
+  headMoved: 'Your head moved, so your view moved with it. The opposite neck movement brings it back; so does Reset body on the Esc page.',
   contextLost: SHELL.contextLost,
   placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
@@ -845,9 +857,11 @@ export const INFO = deepFreeze({
   alreadyUp: ' (your palm is already up, so nothing moves now)',
   /** R558 (latch): every joint of this movement is already at its end (held there, or the start posture). */
   alreadyThere: ' (already there, so nothing moves now)',
+  /** R558 (Messages 6, 55 and 56): the part is held on the other side of its start, so this movement first brings it back. */
+  bringsBack: ' (the part is held the other way, so the first time only brings it back)',
   /** R558 (Messages 55 and 56): the numbered list of an area's movements on the card (ns-app infoMoves). A number key
    * does the movement beside it; `atEnd` marks a movement whose joints are already at its end. */
-  moves: { heading: 'Movements: press a number', atEnd: 'already there', current: 'shown now' }
+  moves: { heading: 'Movements: press a number', atEnd: 'already there', current: 'shown now', back: 'first press brings it back' }
 });
 
 /** "Simulated signal 0.80 of 1 (no units)". R558 (Messages 44 and 55): one short line; the colour key and More detail
@@ -975,13 +989,13 @@ export function areaTag(region, leftArm = false) {
  *   note (plain), caveats, sources, technical: { explanation, note } (the unchanged technical wording) } }.
  */
 export function plainInfoCard({ region = null, action = null, leftArm = false, activity = null, activations = 0,
-  citations = [], caveats = [], rotationState = null, atEnd = false } = {}) {
+  citations = [], caveats = [], rotationState = null, atEnd = false, back = false } = {}) {
   if (!region) return null;
   const integration = region.kind === 'integration';
   const rows = [];
   // R3-fix (review SL-2): a forearm-turn area whose palm is already turned that way moves nothing; say so plainly.
   const already = action && ((action.armActionId === 'pronation' && rotationState === 'pronated') || (action.armActionId === 'supination' && rotationState === 'supinated'));
-  if (action) rows.push([INFO.rows.movement, `${str(action.plainLabel) || str(action.label)}${already ? (rotationState === 'pronated' ? INFO.alreadyDown : INFO.alreadyUp) : atEnd === true ? INFO.alreadyThere : ''}`]);
+  if (action) rows.push([INFO.rows.movement, `${str(action.plainLabel) || str(action.label)}${already ? (rotationState === 'pronated' ? INFO.alreadyDown : INFO.alreadyUp) : atEnd === true ? INFO.alreadyThere : back === true ? INFO.bringsBack : ''}`]);
   else rows.push([INFO.rows.movement, str(region.plainMoves) || INFO.noMovement]);
   const pm = action && action.plainMuscles ? action.plainMuscles : null;
   if (pm && pm.pull) rows.push([INFO.rows.agonists, pm.pull]);

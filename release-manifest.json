@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-12-body-update-3",
+  "version": "experimental-2026-11-12-body-update-4",
   "experimental": true,
-  "source": "Body update (R558), third upload, published at the user's standing instruction of 12 November 2026 to upload each finished version, before independent review. Since the second upload: the glass brain above the mirror body; a numbered list of each motor area's movements on the information card, done with the number keys 1 to 9; the left and right arrow keys stepping the look along the motor strip; an information card that takes an area when the look rests on it; a look line and a card line that name the area, its movement, the strip part and the half of the brain; a guide that starts with the learning loop; knees that bend all the way and a hip that swings the thigh down and back; a shorter Esc page with sentences that say what the motor strip is; five new test files. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 59 to 66.",
+  "source": "Body update (R558), fourth upload, published at the user's standing instruction of 12 November 2026 to upload each finished version, before independent review. Since the third upload: a held trunk movement bends the trunk under the head and keeps the view; after a head movement the bottom-left card says how to bring the head back and names the number key; a movement whose part is held the other way is marked “first press brings it back”, and the card says when a key only brought a part back or moved nothing; the short information card shows each of its parts whole or leaves it out; the card takes an area in the frame a look's rest takes its movement; two new test files. No performance work went into this upload. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 67 to 71.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 128198,
-      "sha256": "073075243427a02a9d5caff17e2e02a3d0d42b73463b9bed8e56e4532987dbaa"
+      "bytes": 143454,
+      "sha256": "080b6d1a3ba51f5422b00ab04295e0646438a25dd7df6804fb1d172f83385721"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 6036,
-      "sha256": "0d37e3591365047e15df45e9ad635f56804667b1d0cf26c6d5a28b0d103459c5"
+      "bytes": 7149,
+      "sha256": "66ae54f2cbc75d2bff1709cf2de945bd0d7fc58c7b8cbe08423079739dd6ccde"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 31877,
-      "sha256": "f99654f8b89aa4494079f5cf50e908db045f7cb28a31ebfebe77e07f4707d2f0"
+      "bytes": 34728,
+      "sha256": "d25236d7e5ac8be0e67cc8fc2c80702e161a0bd12cb3e9fc1bf5069704751ffa"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 7393,
-      "sha256": "da2bb6fd69648e56be27d8b4b7180b69c0fe62f0cdf1bc7af12728d29c984825"
+      "bytes": 8710,
+      "sha256": "20d8ff9f7a30dbd0f4284d558b66c8a754fabfe866ac592d8dc0ef408bd30113"
     },
     {
       "path": "README.md",
-      "bytes": 9078,
-      "sha256": "7b5bedf3252213319ed9cf4fdeb7ad5f312bed571f05351e61f9ed1a8f7736a9"
+      "bytes": 9616,
+      "sha256": "571212e5be98ea4eb0e9ae0cab3efa0d040c509b79af9070f6c4bd282fc17dac"
     },
     {
       "path": "START.html",
       "bytes": 3733,
-      "sha256": "357844c312a097a4c93fd49aeea2b0bdea96c497b67b7b174cf06018350f428e"
+      "sha256": "f72df6f7714bb216346a7c12f9ee5362da1154eb9970c31858070a37470b4e59"
     },
     {
       "path": "index.html",
@@ -3417,8 +3417,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 52144,
-      "sha256": "1a8586c3e1c86a629425b6f3bbda5434946eab8e92afa089e40a72dd5705e9c1"
+      "bytes": 53635,
+      "sha256": "436167eb0231ddcfce2cad98c0cd62fe944bb6d82c569ec955e751c2701279ac"
     },
     {
       "path": "scene/example/preview.css",
@@ -3432,13 +3432,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 192873,
-      "sha256": "f61ebab3f12b50e1f643b9cfeb1957116b9bd6fd3b9596fdd81fda57fb180336"
+      "bytes": 195518,
+      "sha256": "51a01ccf34d6c75c5b633aebc3a8a1232cdd4ea8b3b6e728ac063db353b8c608"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 647317,
-      "sha256": "84b593fdd1c7927c774a2fe2193a60698c1be1dfef59193287bb4e1d98aace0b"
+      "bytes": 656895,
+      "sha256": "3e80933d542430923b9da32d9145ba37fe4c8ac2f8fc63b355a73ec4bc54f622"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3567,13 +3567,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 922813,
-      "sha256": "89b6afa59d5dc13c7fe77c56b1f2902a530d2727694ccb3736478127bd725cb9"
+      "bytes": 925193,
+      "sha256": "a8c7b01cd5a7a24832bd7dd6682ec7ea906b909145c050b609c7a80857db87d3"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 131680,
-      "sha256": "58f6d49c73c8b606fca02fc290f160e30479d857abb4b07c9c3bace394de57dd"
+      "bytes": 133411,
+      "sha256": "7284c36bfff57c9f794185a34da2398bed2d09a3df63623873361590e9c75496"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
@@ -3616,14 +3616,24 @@
       "sha256": "bcf6a12ec2e384d8ac2103d4a711e1b955de206117b1715bdf6d1f648b716bd9"
     },
     {
+      "path": "tests/head-hold.test.mjs",
+      "bytes": 16277,
+      "sha256": "aa12ad54336afdcb7fce6d1fd3c64bfa47108eace91bd96097e70c8984db2b8e"
+    },
+    {
       "path": "tests/info-settle.test.mjs",
       "bytes": 8985,
       "sha256": "3f0fa9c5f5d047897a89256b4080edce1280e1479ce47f4938c1f5d53b4511c4"
     },
     {
+      "path": "tests/look-taken.test.mjs",
+      "bytes": 9470,
+      "sha256": "70f863e170166adb8c9be1320d422b3cf6ffa1af568b5cb1043f0ecd00c568ac"
+    },
+    {
       "path": "tests/move-key.test.mjs",
-      "bytes": 14056,
-      "sha256": "46996418aba9b8011a17c9db0949c49d668d5e960f43f34d60a3a80a630e77a2"
+      "bytes": 23358,
+      "sha256": "02bfab3e1c9c7148a97b4a3364cd3df9b6195811586c7665e35a41ed890f1bb3"
     },
     {
       "path": "tests/pointer-release.test.mjs",

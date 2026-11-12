@@ -3309,7 +3309,7 @@ export function infoPanelContent(model) {
   // movement of the area with the number key that does it. The one shown now is marked and its muscles are the rows
   // below it, so the Movement row is not written a second time.
   const moves = region && Array.isArray(model.moves)
-    ? model.moves.filter(m => m && Number.isInteger(m.n) && s(m.label)).map(m => ({ n: m.n, label: s(m.label), current: m.current === true, atEnd: m.atEnd === true }))
+    ? model.moves.filter(m => m && Number.isInteger(m.n) && s(m.label)).map(m => ({ n: m.n, label: s(m.label), current: m.current === true, atEnd: m.atEnd === true, back: m.back === true && m.atEnd !== true }))
     : [];
   if (moves.some(m => m.current)) rows = rows.filter(r => r[0] !== INFO_ROW_LABELS.movement);
   const TM = T.moves && typeof T.moves === 'object' ? T.moves : {};
@@ -3319,7 +3319,7 @@ export function infoPanelContent(model) {
     title: s(card && card.title) || s(model.title), tag: s(card && card.tag) || s(model.tag),
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
-    moves, movesHeading: moves.length ? s(TM.heading) : '', movesAtEnd: s(TM.atEnd), movesCurrent: s(TM.current),
+    moves, movesHeading: moves.length ? s(TM.heading) : '', movesAtEnd: s(TM.atEnd), movesCurrent: s(TM.current), movesBack: s(TM.back),
     rows: rows.slice(0, INFO_PANEL.maxRows),
     // R558: the swatch and the meter show the area's OWN colour (calm tint -> glow), as on the brain and the muscles.
     activity: v === null ? null : { value: v, text: NsText.activityLine(v), css: NsColors.areaSwatchCss(model.regionId, v) || activityColorCss(v), meter: NsColors.areaMeterCss(model.regionId) },
@@ -7829,7 +7829,7 @@ export function createScene({
     hide(info.rows, c.rows.length === 0);
     put(info.plain, c.plain);
     // The movement list: rebuilt only when a label, the current mark or an "already there" changes.
-    const movesSig = JSON.stringify([c.moves, c.movesAtEnd, c.movesCurrent]);
+    const movesSig = JSON.stringify([c.moves, c.movesAtEnd, c.movesCurrent, c.movesBack]);
     if (movesSig !== info.movesSig) {
       info.movesSig = movesSig; grew = true;
       while (info.moves.firstChild) info.moves.removeChild(info.moves.firstChild);
@@ -7837,10 +7837,12 @@ export function createScene({
         const li = el('li', 'ns-infopanel-move', info.moves);
         li.setAttribute('data-current', m.current ? 'true' : 'false');
         li.setAttribute('data-at-end', m.atEnd ? 'true' : 'false');
+        li.setAttribute('data-back', m.back ? 'true' : 'false');
         el('span', 'ns-keycap ns-infopanel-move-key', li).textContent = String(m.n);
         const words = el('span', 'ns-infopanel-move-label', li);
         words.textContent = m.label;
-        const note = m.atEnd ? c.movesAtEnd : m.current ? c.movesCurrent : '';
+        // One note per line: nothing would move; else the press would only bring the part back; else it is the one shown.
+        const note = m.atEnd ? c.movesAtEnd : m.back ? c.movesBack : m.current ? c.movesCurrent : '';
         if (note) el('span', 'ns-infopanel-move-note', words).textContent = note;
       }
     }
@@ -7895,7 +7897,7 @@ export function createScene({
     }
     if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; grew = true; } // R3-scene: re-measure the obstacles now
     // R4-scene: the panel's size may change with its text: re-read the obstacles in this same frame
-    if (grew) { overlayDirty = true; hudDirty = true; }
+    if (grew) { info.grewN = (info.grewN | 0) + 1; overlayDirty = true; hudDirty = true; }
     return true;
   }
 
@@ -8983,8 +8985,35 @@ export function createScene({
     try { return readHudRectsNow(key); } finally { hudReadMs += nowMs() - tRead; }
   }
   let hudReadMs = 0;
+  /** R558 (Messages 44 and 48, text that is easy to read): the short card shows each of its parts whole or leaves it
+   * out; nothing is cut through. The short card has a greatest height (INFO_PANEL.cornerShortVh). On a card with many
+   * lines the lead sentence used to give way pixel by pixel and ended as a sliver of a line, and in a small window the
+   * card's last rows were cut through the middle. Here the card is tried with everything, and while it runs over one
+   * more part is left out, in this order: the lead sentence (the numbered movements say the same), the signal path, the
+   * muscles that work the other way, the muscles that pull. Title, strip part, signal bar and the numbered movements
+   * always stay. The mark (data-ns-trim on the panel, "0" to "4") is read by the CSS of the short card only, so the
+   * opened card (key R) always has every part. Tried again only when the card's content, the view's size or the card's
+   * mode changed: the mark's own write makes the HUD boxes be read once more, not this. */
+  const INFO_TRIM_MAX = 4;
+  function fitInfoCard() {
+    const p = info && info.panel;
+    if (!p || p.hidden || typeof p.setAttribute !== 'function' || typeof p.getAttribute !== 'function') return;
+    if (!(p.clientHeight > 0)) { info.fitSig = null; return; } // not drawn (information hidden): try when it is
+    const root = typeof p.closest === 'function' ? p.closest('.ns-app') : null;
+    const open = Boolean(info.more && info.more.open) || Boolean(root && root.getAttribute('data-ns-unfold') === 'true');
+    const sig = `${cssW}x${cssH}|${info.grewN | 0}|${open ? 1 : 0}`;
+    if (sig === info.fitSig) return;
+    info.fitSig = sig;
+    for (let t = 0; t <= (open ? 0 : INFO_TRIM_MAX); t++) {
+      const mark = String(t);
+      if (p.getAttribute('data-ns-trim') !== mark) p.setAttribute('data-ns-trim', mark);
+      const over = p.scrollHeight - p.clientHeight;
+      if (!(Number.isFinite(over) && over > 1)) break;
+    }
+  }
   function readHudRectsNow(key) {
     hudRectCache = [];
+    try { fitInfoCard(); } catch { /* the card keeps its last mark */ }
     const parent = overlay && overlay.parentNode;
     if (!parent || typeof parent.querySelectorAll !== 'function' || typeof parent.getBoundingClientRect !== 'function') return hudRectCache;
     try {

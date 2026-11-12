@@ -957,6 +957,105 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Holding, carrying, the limb turn and the view over the shoulder still drop frames, and some frames take longer than a thirtieth of a second. Message 42 stays open.
 - One machine, one browser, three runs.
 
+## 67. The card says when a press only brings a part back
+
+**The notes.** Messages 55 and 56, quoted in section 59. Message 6: "Limbs do not return to previous position are muscle or brain activation to be clear, they need to be activated back into previous position or the whole thing reset."
+
+**What was wrong.** By the rule of section 23, a movement switched on while its part is held the other way only brings the part back to where it started. The movement itself takes one more activation. Nothing on the screen said so. With the thigh swung down and back, key 1 for “Lift left thigh” stopped the thigh level, and it looked as if the key had failed.
+
+**Decision.**
+- The numbered list marks such a movement “first press brings it back”. The card's Movement row adds “(the part is held the other way, so the first time only brings it back)”.
+- After a number key that only brought the part back, the bottom-left card says for five seconds: “Key 1 brought the part back to where it started. Press 1 again for the movement itself.”
+- After a number key that moved nothing it says: “Key 2: that movement is already there, so nothing moved. Try another number on the card.” The line is left out while the “Try this” line says the same thing.
+- The rule is asked in one place. `opposedJoints` (body) and `armOpposedLatch` (game arm) in `ns-actions.mjs` decide what an activation does, and the same two answer `latchView().back` and the card (`infoActionBack` in `ns-app.mjs`). The mark cannot disagree with what the key does.
+- On the left arm, “Straighten left elbow” is never marked: letting go of a held bend is the straightening that was asked for. The two forearm turns are not marked either; they have their own state and words.
+- No new colour or shape. The mark is plain text in the place of “already there”, and a movement never carries both marks.
+
+**Checked.** `tests/move-key.test.mjs`, now 16 cases: the trunk, the hip, the knee, the lips and the game arm, and the words of the card and the status line. All 17 node tests pass. One browser run at 1920 by 1080: the hand (open, then key 1 for close), the hip (thigh down and back, then keys 1, 2 and 2 again) and the knee showed the marks and the two lines as written above, and the lines went away after about five seconds.
+
+**Limit.** In the browser run for this section the look did not stay on the trunk area, because leaning the trunk back carried the view up with it; the trunk case was checked in the node tests only. Section 68 changes that, and its browser run covers the trunk.
+
+## 68. A held trunk bend keeps the view; a head movement says how to bring the head back
+
+**The notes.** Messages 55 and 56, quoted in section 59. Message 1: "The cursor now will control head/neck movement with corresponding activity on the brain and mirror body. And of course if you look towards the head/neck motor areas of the glass brain, the head/neck will jerk accordingly."
+
+**What was wrong.** A held trunk bend was added to the look. Resting the look on “Belly and back” leaned the trunk back and threw the view 25 degrees up, off the area that had just been chosen. “Bend forward” threw it down. The brain left the view for a movement that is not about the head, and the numbered movements of the card could not be tried while watching the area. A held neck movement moves the view too. That is asked for in Message 1, but nothing on the screen said why the view had jumped or how to get it back.
+
+**Decision.**
+- A held trunk bend moves the trunk under the head. The neck takes up the difference as far as its range goes, so the head, and with it the view, stays where the look put it (`headPoseForLook` and `headLookRange` in `ns-app.mjs`). The trunk bends on your body and on the mirror body as before.
+- A held neck movement still moves the view. The camera is in the head, and Message 1 asks for the jerk.
+- When a neck movement that moves the view has just been taken, the bottom-left card says for five seconds: “Your head moved, so your view moved with it. Press 1 to bring your head back.” The number is the key of the opposite movement on the card that is shown (`headGoalTaken` and `headBackKey` in `ns-app.mjs`).
+- A turn of the head has no opposite on the same card: in this game the opposite turn belongs to the neck area on the other half of the brain. The line then says: “Your head turned, so your view turned with it. In this game the neck area on the other half of the brain turns it back; so does Reset body on the Esc page.”
+- When the card shown is not the neck card, no key is named: “Your head moved, so your view moved with it. The opposite neck movement brings it back; so does Reset body on the Esc page.”
+- The line goes away at once when the head is back where it started.
+
+**A fault found on the way.** The card that is kept after the look has left its area (“Last area shown”) had lost the mark “first press brings it back” of section 67. The kept card was built without the list of movements that would only bring a part back. It now gets the same lists as the card under the look. The fault came in with section 67 and was in no uploaded version: the second revision as uploaded had no such mark, and its kept card did show “already there”.
+
+**What follows from the decision.**
+- The neck can make up 60 degrees backward and 50 forward. “Bend forward” asks for 80 degrees. While you look up at the brain, the trunk is therefore drawn bent forward by less than that: about 40 degrees with the look at the height of the trunk area, 60 with a level look, and the whole 80 only with the look 20 degrees below level or lower. The held bend stays 80 and shows more as the look comes down. “Lean back” is 25 degrees and is drawn whole unless the look is more than 25 degrees below level.
+- After “Tilt head back” and then the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it. While the head was held back the look could not go higher, and the look stays where that limit left it. This was left as it is: putting the look back on the neck area would rest on it and tilt the head back again.
+
+**Checked.** `tests/head-hold.test.mjs`, 12 cases: the head's direction and the drawn trunk bend with a held trunk bend, the look range, a held neck movement still moving the view, when the line is due, the key it names, its words, and the kept card's mark. One browser run at 1920 by 1080. With the look resting on “Belly and back” the view stayed in one direction (9.5 degrees right, 20.3 up) through lean back, key 1 (back to the start), key 1 again (bend forward) and a later reading of each; the held trunk angle read −25, 0 and 80. On the neck area the view went to 70 degrees up and the line named key 1; key 1 brought the view to 10 degrees up and the card said that the key had brought the part back. A head turn sent the view 80 degrees to the left and showed the line for a turn.
+
+**Limit.** One browser, one window size, scripted input. How much of a forward bend is drawn at each look is worked out from the two ranges above and was not measured on the picture.
+
+**Earlier sections this changes.** Section 32 says that held neck or trunk actions add to the look; since this section only held neck actions do. The limit of section 62, and the point of section 63 about the arrow keys going on from the area, speak of a held trunk movement carrying the view off the area. A held trunk movement no longer does that; a held neck movement still does.
+
+## 69. The short card shows each part whole or leaves it out
+
+**The notes.** Message 44: "Text is hard to read as it's all clumped together." Message 48: "you have to make sure the information isn't such an eyesore as it is now". Message 55, quoted in section 59.
+
+**What was wrong.** The short information card has a greatest height, 48 % of the height of the view. On a card with many lines the lead sentence gave way a pixel at a time and ended as a sliver of one line. In a window of 1280 by 720 every card ran over, and its last rows were cut through the middle of the letters. The mark beside a numbered movement (“already there”, “first press brings it back”) broke in two when the row was too narrow.
+
+**Decision.**
+- The short card is tried with every part. While it runs over, one more part is left out, in this order: the lead sentence, the signal path, the muscles that work the other way, the muscles that pull (`fitInfoCard` in `ns-scene-three.mjs`; the mark `data-ns-trim` on the card, read by `neurosurge.css`).
+- The title, the strip part, the signal bar and the numbered movements always stay. The lead sentence goes first because the numbered movements say the same thing.
+- The opened card (key R) always has every part, with its own scroll bar.
+- The card is tried again only when its content, the size of the view or its mode changed, not every frame.
+- A mark beside a numbered movement stays in one piece: it sits beside a short name and goes whole onto the next line under a long one.
+
+**Checked.** One scripted browser run at each size, with the look put on eight areas in turn. At 1920 by 1080 the knee, hip, trunk, left shoulder and both hand cards showed every part and the neck card left out its lead sentence; none ran over. (The look meant for the elbow landed on the left shoulder at that size, so the elbow card was seen at the smaller size only.) At 1280 by 720, the left shoulder card left out its lead sentence, the knee and elbow cards kept the muscles that pull, and the hip, trunk, hand and neck cards kept the title, the signal bar and the numbered movements only; none ran over, and the “More detail” line was whole on every card. Key R opened the card with every part at both sizes, and the short card came back with the same parts left out.
+
+**Limit.** In a window of 1280 by 720 most short cards do not name the muscles; key R does. Other sizes, larger text settings and other browsers were not tried. The picture was looked at by the author only.
+
+## 70. The card takes an area in the frame its movement is taken
+
+**The notes.** Messages 55 and 56, quoted in section 59.
+
+**What was wrong.** By section 62 the card takes an area when the look has rested on it for about a third of a second, the same time after which the area's movement is taken. The two counted from different moments: the movement from the time before the first frame on the area, the card from the time after it. So the card took the area one frame after the movement. For most areas that cannot be seen. A neck movement moves the view, and in that one frame the look had often left the small neck area. Then the head jerked while the card still showed the area before, its number keys still acted there, and the line of section 68 could not name a key. It showed in one of the author's scripted runs and not in the others, with the same input.
+
+**Decision.**
+- The activity records the area whose movement the rest of a look has taken, and counts them (`lookTaken` in `ns-actions.mjs`).
+- The card treats that area as meant, the way it treats a click or a number key, in the frame of the movement (`infoTookId` in `ns-app.mjs`, given to `infoSettleStep`). It no longer depends on the two counts agreeing.
+
+**Checked.** `tests/look-taken.test.mjs`, 8 cases: the record appears in the frame the movement is taken and only once; a look that leaves early and a click record nothing; with the record the card takes the area in that frame, and without it the same frame still counts the area as only crossed. All 19 node tests (13 files) pass. Two browser runs at 1920 by 1080 after the change: both showed the neck card and the line naming key 1, and the picture of one showed “Tilt head back” marked “already there” and “Bend head forward” marked “first press brings it back”. The full scripted run of the game ended without an error.
+
+**Limit.** Two browser runs do not show that the fault cannot come back by another way; the node cases cover the way that was found.
+
+## 71. Frame rates of the third revision
+
+**Measured.** The script of sections 58 and 66, on the same machine and setup. Seven runs of the build of sections 67 to 70, in frames a second, and between them four runs of the second revision as uploaded. In two runs of each, the test harness also timed the game's own script in every frame: the time the frame's code takes on the main thread, before the graphics card draws. That timing is done from outside the game's files.
+
+| What the script does | Third revision, seven runs | Second revision, four runs in the same session |
+|---|---|---|
+| Sitting still | 60 | 60 |
+| Looking around | 58 to 59.7 | 59.3 to 59.7 |
+| Reaching with the keys | 59.6 to 60 | 59.6 to 60 |
+| Holding the mirror body and looking around | 45.8 to 52.6 | 51.3 to 53.4 |
+| Carrying it with the keys into contact | 49.6 to 54.1, longest frame 67 ms | 52.2 to 53.9, longest frame 50 ms |
+| The slow limb turn | 54.8 to 59.7 | 56.5 to 59.7 |
+| Looking around again at the end of the run | 59.5 to 60 | 59.1 to 60 |
+| Looking around in the view over the shoulder | 57.2 to 58.2 | 53.8 to 58.2 |
+| Picture at the end of the run | full (3.2 million triangles, 996 draw calls) | the same |
+
+**What this does and does not show.**
+- No performance work was done in sections 67 to 70.
+- The three lowest holding runs are the third revision's: 45.8, 48.8 and 49.3, against a lowest of 51.3 for the second. That could be a slowdown of a few frames a second, so it was looked into. The script time per frame while holding was the same in both: 16.4 and 17.0 ms for the third revision, 16.6 and 16.7 ms for the second. A sampling profile of that step shows the same work in both, with one difference: the layout of the side cards is now worked out in the card fit of section 69 instead of where the cards' positions are read, at the same cost. No cause of a slowdown was found. The lower runs are put down to the difference between runs; a small slowdown is not ruled out.
+- The script time shows why holding drops frames. A frame at 60 a second has 16.7 ms, and while the mirror body is held the game's script alone takes about 16.5 ms of it. Looking around takes about 12 ms.
+- In the profiled run, a holding frame's script time went to: drawing the picture, 37 %; the check that keeps the held body out of the other things, 14 %; moving the skin of the two bodies, 14 %; fitting the left hand into the view, 7 %; finding what the look is on, 6 %; working out the space the held body takes up, 4 %; the rest in smaller parts. The profiler slows the script, so these are shares, not times.
+- Holding, carrying, the limb turn and the view over the shoulder still drop frames. One carrying frame in one run took 67 ms. Message 42 stays open.
+- One machine, one browser.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -968,6 +1067,9 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
 - Looking down shows your lap and legs, not your chest and belly. From a camera above and behind the eyes those surfaces face away; they are on the mirror body and in the view from behind (14).
+- In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69).
+- After “Tilt head back” and the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it (68).
+- While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
 - Small upright windows, narrower than about 340 pixels or shorter than about 800, cannot start and say so; on a phone-sized screen the panels crowd the brain. The game needs a keyboard and a mouse or trackpad in any case (15).
 - When even the last good view cannot be drawn, the view turns part of the way back by itself (16).
 - From one measured pose the view from behind cannot be shown until the hand or the look moves; the game says so (18).
@@ -976,7 +1078,7 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - The switched-off floating-face code is still in the renderer (11). It draws nothing and was left to keep this change small.
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
-- Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66).
+- Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
 - The strip spans 42 % of the width of the view, not the 50 % of Message 43 (59).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
