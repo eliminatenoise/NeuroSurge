@@ -24,4 +24,4 @@ To run locally, use Node.js and `node serve-local.mjs`, then open the printed HT
 
 Project code is CC0. BodyParts3D assets remain CC BY 4.0; Z-Anatomy derivatives (face muscles and 18 back, belly, neck and foot muscles) remain CC BY-SA 4.0; Three.js remains MIT. [Credits and licences](CREDITS-AND-LICENCES.md) retain source notices and changes. No dataset author endorses the game.
 
-The broader NeuroTranslation programme aims to connect qualified neural, muscle and movement observations with explicit units, clocks, provenance and uncertainty. That research goal is distinct from the simulated game shown here. Separate NeuroTranslation development remains paused.
+The broader NeuroTranslation programme aims to connect qualified neural, muscle and movement observations with explicit units, clocks, provenance and uncertainty. That research goal is distinct from the simulated game shown here. Work continues on NeuroTranslation, NeuroSurge and Interoceptomics, in that priority order. The Interoceptomics presentation is paused.
