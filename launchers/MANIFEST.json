@@ -1,44 +1,44 @@
 {
   "project": "NeuroSurge",
-  "version": "experimental-2026-11-11-capture-update",
+  "version": "experimental-2026-11-12-body-update-5",
   "kind": "online desktop URL launchers",
-  "target": "https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html",
+  "target": "https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html",
   "hashAlgorithm": "sha256",
   "files": [
     {
       "name": "Install-NeuroSurge-Linux.sh",
-      "bytes": 5275,
-      "sha256": "970bb2db8c81d283cb645a8cd960f2522f6498213aa0a1d29d98af997e046153"
+      "bytes": 6519,
+      "sha256": "af3350e0edf5c6dacc2bc1d58bd0676486ba083e833c57e364cc2a5070a3daa6"
     },
     {
       "name": "NeuroSurge-Launchers.zip",
-      "bytes": 4649,
-      "sha256": "2355938b4fca9787afe1db03a31c61b88efb2abf1b61002ab6ac547be7aae821"
+      "bytes": 4655,
+      "sha256": "2d6e7958778432ea45e887f9c18743b8c42321212cabf008c1d0faececb5ecb6"
     },
     {
       "name": "NeuroSurge-Linux.desktop",
-      "bytes": 375,
-      "sha256": "56bad53d88cbb38cf56f0a8467841cd7f2553b04aaa944aa02ee426cf66f4b0e"
+      "bytes": 355,
+      "sha256": "4c2cc7a956650f6557a292175b2e20dc4efee84480c7819ef36d59fdf591fe68"
     },
     {
       "name": "NeuroSurge-Windows.url",
-      "bytes": 116,
-      "sha256": "ec88e9b330c4f376996afc00f615d67827b357c06cc2f3e5bbe61681a63caa80"
+      "bytes": 96,
+      "sha256": "7d248eee0ae47e30a1f5740a2b25f941e9ee910c2fce989c1516d680c4eafa5c"
     },
     {
       "name": "NeuroSurge-macOS.webloc",
-      "bytes": 313,
-      "sha256": "19b18ee6f502bc1c77e9512bf490812a70ce1adddb7388c87d62906a6bfa7141"
+      "bytes": 293,
+      "sha256": "4e48e6fc2248a48f0f31b09cd895bdb55f2ba88adbe3de3634f168c5652a5704"
     },
     {
       "name": "README.txt",
-      "bytes": 2641,
-      "sha256": "1053b120ca78845d408c9e59d44061c598f3b4e541e61246fbb28b6f68cd4c7b"
+      "bytes": 2620,
+      "sha256": "4fa26191566dc5a5b6da4d45070ea777ff71e2612d1730af7d7c537c3e7a72b1"
     },
     {
       "name": "SHA256SUMS",
       "bytes": 441,
-      "sha256": "caebd215d55cfcff33b0d684a56c8611ba86ce2891cc36e11edc5d9eaf59a344"
+      "sha256": "a49691e23ef73e357db3944e828fbec3b4a974f42997db2a3f505fdd4515e854"
     }
   ],
   "hash_coverage": {
@@ -60,7 +60,7 @@
     "MANIFEST.json": "All seven other replacement files; this manifest excludes itself to avoid a checksum cycle. ZIP excludes ZIP and MANIFEST.json; SHA256SUMS excludes itself, ZIP and MANIFEST.json."
   },
   "linux_upgrade": "Only byte-identical older project xdg-open/Omarchy templates; backup before replacement; matching current entry is idempotent; custom files/symlinks/non-regular destinations refused. A cooperating-installer lock is not atomic compare-and-swap protection against unrelated writers.",
-  "qualification": "Launcher behavior is unchanged from the independently checked package; only this edition label, readme and linked checksums/ZIP changed. Windows/macOS native opening remains unverified; source unit tests do not establish game or biological completion.",
+  "qualification": "Static file and shell syntax checks only; no installer or launcher was run. Windows/macOS native opening and Linux installation/launch with the updated target remain unverified; source unit tests do not establish game or biological completion.",
   "descriptionsGlossary": {
     "revision": 36,
     "sha256": "40b98695e6204bc9e305ecdea853756aec30f48a6ae67d29e92c8bb220b3e406"

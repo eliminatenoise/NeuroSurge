@@ -4,8 +4,8 @@ Open the game, move the arm, and see the simulated activity change. The scene
 runs in your browser on your computer. You need a network connection and a
 modern browser with JavaScript and WebGL; no Node or Python installation.
 
-Preview: https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html
-Package: experimental-2026-11-11-capture-update
+Preview: https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html
+Package: experimental-2026-11-12-body-update-5
 
 Download the ZIP and extract it. Then open the file for your system:
   Windows: NeuroSurge-Windows.url

@@ -19,7 +19,7 @@ elif command -v xdg-open >/dev/null 2>&1; then
   launcher_exec='xdg-open'
   launcher_tryexec='xdg-open'
 else
-  printf '%s\n' 'No desktop URL opener was found. Open https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html in your browser.' >&2
+  printf '%s\n' 'No desktop URL opener was found. Open https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html in your browser.' >&2
   exit 1
 fi
 if [ -L "$applications_dir" ] || { [ -e "$applications_dir" ] && [ ! -d "$applications_dir" ]; }; then
@@ -36,7 +36,7 @@ fi
 work_dir=
 cleanup() {
   if [ -n "$work_dir" ]; then
-    rm -f -- "$work_dir/new.desktop" "$work_dir/old-xdg.desktop" "$work_dir/old-omarchy.desktop"
+    rm -f -- "$work_dir/new.desktop" "$work_dir/old-xdg.desktop" "$work_dir/old-omarchy.desktop" "$work_dir/old-sites-xdg.desktop" "$work_dir/old-sites-omarchy.desktop"
     rmdir -- "$work_dir" 2>/dev/null || :
   fi
   rmdir -- "$lock_dir" 2>/dev/null || :
@@ -52,7 +52,7 @@ Version=1.0
 Type=Application
 Name=NeuroSurge (Experimental Preview)
 Comment=Open the experimental browser game
-Exec=$launcher_exec https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html
+Exec=$launcher_exec https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html
 TryExec=$launcher_tryexec
 Icon=web-browser
 Terminal=false
@@ -91,6 +91,34 @@ Categories=Game;Education;
 StartupNotify=true
 X-Brain2Body-Launcher=neurosurge-web-preview-v1
 _NEUROSURGE_OLD_OMARCHY_
+cat > "$work_dir/old-sites-xdg.desktop" <<'_NEUROSURGE_OLD_SITES_XDG_'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NeuroSurge (Experimental Preview)
+Comment=Open the experimental browser game
+Exec=xdg-open https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html
+TryExec=xdg-open
+Icon=web-browser
+Terminal=false
+Categories=Game;Education;
+StartupNotify=true
+X-Brain2Body-Launcher=neurosurge-web-preview-v1
+_NEUROSURGE_OLD_SITES_XDG_
+cat > "$work_dir/old-sites-omarchy.desktop" <<'_NEUROSURGE_OLD_SITES_OMARCHY_'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NeuroSurge (Experimental Preview)
+Comment=Open the experimental browser game
+Exec=omarchy launch webapp https://neurosurge-public-preview-20261110.tr1-set.chatgpt.site/scene/example/preview.html
+TryExec=omarchy
+Icon=web-browser
+Terminal=false
+Categories=Game;Education;
+StartupNotify=true
+X-Brain2Body-Launcher=neurosurge-web-preview-v1
+_NEUROSURGE_OLD_SITES_OMARCHY_
 if [ -e "$destination" ] || [ -L "$destination" ]; then
   if [ -L "$destination" ] || [ ! -f "$destination" ]; then
     printf 'Existing destination preserved: %s\n' "$destination" >&2
@@ -101,7 +129,7 @@ if [ -e "$destination" ] || [ -L "$destination" ]; then
     printf 'Already installed: %s\n' "$destination"
     exit 0
   fi
-  if ! cmp -s "$work_dir/old-xdg.desktop" "$destination" && ! cmp -s "$work_dir/old-omarchy.desktop" "$destination"; then
+  if ! cmp -s "$work_dir/old-xdg.desktop" "$destination" && ! cmp -s "$work_dir/old-omarchy.desktop" "$destination" && ! cmp -s "$work_dir/old-sites-xdg.desktop" "$destination" && ! cmp -s "$work_dir/old-sites-omarchy.desktop" "$destination"; then
     printf 'Existing file preserved: %s\n' "$destination" >&2
     printf '%s\n' 'This is not an exact older NeuroSurge launcher. Nothing was replaced.' >&2
     exit 1
@@ -113,7 +141,7 @@ if [ -e "$destination" ] || [ -L "$destination" ]; then
     printf 'The destination changed; nothing was replaced. Backup: %s\n' "$backup" >&2
     exit 1
   fi
-  if ! cmp -s "$work_dir/old-xdg.desktop" "$backup" && ! cmp -s "$work_dir/old-omarchy.desktop" "$backup"; then
+  if ! cmp -s "$work_dir/old-xdg.desktop" "$backup" && ! cmp -s "$work_dir/old-omarchy.desktop" "$backup" && ! cmp -s "$work_dir/old-sites-xdg.desktop" "$backup" && ! cmp -s "$work_dir/old-sites-omarchy.desktop" "$backup"; then
     printf 'The backup differs from the known older templates; nothing was replaced. Backup: %s\n' "$backup" >&2
     exit 1
   fi
