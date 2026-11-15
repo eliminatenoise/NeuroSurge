@@ -37,8 +37,8 @@
     },
     {
       "path": "LAUNCHERS.md",
-      "bytes": 2926,
-      "sha256": "ebbd5808fea0f790f4f3acaa9355d2ef82aa2c8323c3376b3b94e72a84bd4fc6"
+      "bytes": 3129,
+      "sha256": "b624eea2801c6bdce7942977e18f9729b5175429f5693286f72f501c2ec79312"
     },
     {
       "path": "LICENSE",
@@ -62,13 +62,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 10005,
-      "sha256": "ffc46b8e0a985dc9e0f827d3018c5186913ee0043b3ce32c6b2f04e45790e9be"
+      "bytes": 10314,
+      "sha256": "026c4d5d355378871acbbd3da5670e7f20a5aa29761f4d6daf5183df3dae6530"
     },
     {
       "path": "START.html",
-      "bytes": 3733,
-      "sha256": "25c2c179d74bd3c70b4f3382d76bc55df51b8d20cd6dab0520f021182d30f818"
+      "bytes": 3910,
+      "sha256": "48c64e56edbe5a6f594ea350c7e335496f2b90d73778c836c49beef4da805951"
     },
     {
       "path": "index.html",
