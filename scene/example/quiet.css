@@ -58,3 +58,15 @@
 
 /* The "click to look around" line: smaller and out of the way. */
 .ns-shell-root .ns-shell-toast { font-size: 13px; padding: 5px 12px; opacity: 0.9; }
+
+/* The Esc page in its short form (the default; "Show the full instructions" has the rest): the buttons, the settings,
+   the keyboard picture and the short list of controls. No paragraphs. */
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-subtitle,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-modenote,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-resethelp,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-guidehelp,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-instructions,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-limits,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-notes,
+.ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-pad ul { display: none; }
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-heading { margin-top: 6px; }

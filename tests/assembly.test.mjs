@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { parseObjBytes, meshNormalsAndCentre } from '../scene/src/ns-assembly-core.mjs';
+import { parseObjBytes, meshNormalsAndCentre, brainBeat, BRAIN_BEAT } from '../scene/src/ns-assembly-core.mjs';
 import { assemblyKindOf, assemblyKindsOfManifest, assemblyKindOfUrl, ASSEMBLY_EXPECTED_FILES } from '../scene/src/ns-assembly.mjs';
 
 const bytes = s => new TextEncoder().encode(s);
@@ -60,4 +60,15 @@ test('part kinds come from the manifests the game loads', () => {
   assert.ok(count.bone > 150 && count.muscle > 250 && count.brain === 57 && count.strip === 2 && count.eye === 6);
   assert.equal(assemblyKindsOfManifest(null).size, 0);
   assert.equal(assemblyKindsOfManifest({ assets: 'x' }).size, 0);
+});
+
+test('the loading picture\'s brain beat is a quick rise and a slower fall, once per beat, on a slow breathing wave', () => {
+  let peakAt = 0, peak = 0;
+  for (let i = 0; i < 920; i++) { const v = brainBeat(i / 1000).beat; assert.ok(v >= 0 && v <= 1); if (v > peak) { peak = v; peakAt = i / 1000; } }
+  assert.ok(peak > 0.99 && peakAt > 0.08 && peakAt < 0.2, 'the top of the beat comes early (a quick rise)');
+  assert.ok(brainBeat(0).beat < 0.01, 'a beat starts from rest');
+  assert.ok(brainBeat(0.6).beat < 0.2, 'and has mostly fallen away by two thirds of the beat');
+  assert.ok(Math.abs(brainBeat(0.3).beat - brainBeat(0.3 + BRAIN_BEAT.beatS).beat) < 1e-9, 'it repeats every beat');
+  assert.ok(Math.abs(brainBeat(BRAIN_BEAT.breathS / 4).breath - 1) < 1e-9 && Math.abs(brainBeat(0).breath) < 1e-9);
+  assert.ok(BRAIN_BEAT.swell <= 0.02 && BRAIN_BEAT.breathSwell <= 0.02, 'a small swell, not a wobble');
 });

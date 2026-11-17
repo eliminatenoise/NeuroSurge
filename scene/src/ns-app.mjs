@@ -73,6 +73,7 @@ import {
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
 import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS, reachMuscleShow, REACH_MUSCLES } from './ns-actions.mjs';
+import { MOVE_GLOW, createMoveChannels } from './ns-move-glow.mjs';
 import {
   ARM_BAND, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
   gazeRayInSource, classifyGaze, colormap
@@ -244,7 +245,17 @@ export function neckFlexEyeShiftMm(pitch, o = NECK_FLEX) {
  * camera off straight down / up (the controls' own 80, and 70 up = the neck's 45 + the trunk's 25). headLookLimits
  * reads them from the body module when it is there, so the look can never ask for more than the drawn body can do.
  */
-export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 80, maxUpDeg: 70 });
+/* 17 November 2026 (user: "make sure the neck has extreme range of motion, so any part of the body is available from
+ * first person view", in the same note as "does not result in impossible ranges of motions and dislocations"): the VIEW
+ * now reaches all the way round and almost straight down and up, without wringing the drawn neck past what a neck does:
+ *  - eyeYawDeg: past the end of the neck's and chest's turn the EYES turn the rest of the way, up to 60 degrees to each
+ *    side (the camera turns in the head; the head, neck and chest stay at their ends). With the neck's 80 and the chest's
+ *    40 that is a look of 180 degrees to either side: with the view's own width you can see straight behind you.
+ *    This replaces "the eyes never turn in the head" (11 November) for the part of a look the head cannot reach;
+ *  - maxDownDeg 80 -> 88 and maxUpDeg 70 -> 85: the neck and trunk already had the range (50 + 80 down, 60 + 25 up);
+ *    only the camera's own stops were nearer. 88 keeps the camera just off straight down.
+ * Display choices, not measured ranges of eye, neck or trunk movement. */
+export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 88, maxUpDeg: 85, eyeYawDeg: 60 });
 /** R558 (HEAD_LOOK, "corresponding activity on the brain and mirror body"): the display level (0..1) of the neck / trunk
  * area and muscles at the end of a joint's range, linear below; under a click or look activation (1). Display choice. */
 export const HEAD_GLOW = Object.freeze({ level: 0.75 });
@@ -287,6 +298,9 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   const n = headOffset(offsets, 'neck_rot') + ly;
   const neckRot = clamp(n, -L.neckRotDeg, L.neckRotDeg);
   const twist = clamp(n - neckRot, -L.twistDeg, L.twistDeg);
+  // What the head, neck and chest cannot turn, the eyes do (HEAD_LOOK eyeYawDeg): the camera turns in the head.
+  const eyeMax = Number.isFinite(L.eyeYawDeg) && L.eyeYawDeg > 0 ? L.eyeYawDeg : 0;
+  const eyeYaw = clamp(n - neckRot - twist, -eyeMax, eyeMax);
   const psiDeg = twist + neckRot;
   const down = headBendLimit(psiDeg, 1, L), up = headBendLimit(psiDeg, -1, L);
   const f = headOffset(offsets, 'neck_flex') - lp;
@@ -311,8 +325,10 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   // The level camera's up for this direction: (sin yaw sin pitch, cos pitch, cos yaw sin pitch) (ns-camera cameraRotation).
   const cux = Math.sin(yaw) * Math.sin(pitch), cuy = Math.cos(pitch), cuz = Math.cos(yaw) * Math.sin(pitch);
   const rollDeg = Math.acos(clamp(ux * cux + uy * cuy + uz * cuz, -1, 1)) / DEG;
+  // look: where the camera looks = the head's own direction, turned further by the eyes when the head is at its end
+  // (headLook: the head's direction alone, for whoever draws or lights the head).
   return { joints: { neck_rot: neckRot + 0, neck_flex: neckFlex + 0, trunk_flex: 0 }, twistDeg: twist + 0, bendDeg: bend + 0, bendDirDeg: psiDeg + 0,
-    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw, pitch }, rollDeg };
+    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, rollDeg };
 }
 /** The controls' look range (degrees) that headPoseForLook uses without loss for held goal offsets (pure): the yaw the
  * neck and chest can still turn, and, for the head's turn this look gives (from `look`, the controls' current look),
@@ -320,7 +336,10 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
 export function headLookRange(goalOffsets = null, L = HEAD_LOOK, look = null) {
   const nr = headOffset(goalOffsets, 'neck_rot'), nf = headOffset(goalOffsets, 'neck_flex');
   const turn = L.neckRotDeg + L.twistDeg;
-  const yawMinDeg = -turn - nr, yawMaxDeg = turn - nr;
+  // The look's own range adds what the eyes turn past the head's end (HEAD_LOOK eyeYawDeg); the head's turn (psi
+  // below) stays inside the neck's and chest's.
+  const eye = Number.isFinite(L.eyeYawDeg) && L.eyeYawDeg > 0 ? L.eyeYawDeg : 0;
+  const yawMinDeg = -turn - eye - nr, yawMaxDeg = turn + eye - nr;
   const ly = look && Number.isFinite(look.yaw) ? clamp(look.yaw / DEG, yawMinDeg, yawMaxDeg) : 0;
   const psiDeg = clamp(nr + ly, -turn, turn);
   const down = headBendLimit(psiDeg, 1, L), up = headBendLimit(psiDeg, -1, L);
@@ -2383,6 +2402,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       : objectPick && brainRawOut.transform ? ReferenceGraph.advanceBrainState(state.objectBrainReference || ReferenceGraph.initialBrainState([0, 0, 0]), viewOut, carryOrigin, brainRawOut.transform) : null;
     let brainOut = nextReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRawOut, nextReferenceBrain, initialBrainOrigin || [0, 0, 0]) : (viewOut === view ? brain : brainRawOut);
     const carried = nextReferenceBrain && objectPick ? ReferenceGraph.stepObjectCarry(state.objectCarry, { pick: objectPick, events: evs, gazeAt: Math.min(gazeAt, wall), axes: keyAxes, wallDt: wall, poseDt: h,
+      shiftM: inputs && Array.isArray(inputs.carryShiftM) ? inputs.carryShiftM : null, // R17: the pointer's move of the held item
       origin: carryOrigin, look: gl, brainView: viewOut, brainTransform: brainRawOut.transform, brainCentre: brainOut.transform.pivotWorld, brainTranslation: nextReferenceBrain.translation, brainFrame, referenceOrigin: initialBrainOrigin || [0, 0, 0], viewport: { aspect, fovYDeg: fov, nearM: CAMERA.near },
       // R558 (user Message 12: "moved to and around each other but not through"): the old certified rule kept every brain
       // point outside reach + clearance (2 m) of the eye, so the brain could never be brought up to your body. It is
@@ -4733,15 +4753,103 @@ export function start(params = {}) {
     }
     return { regions, rows };
   }
+  /** R17 (owner, 17 November: "when you grasp-cursor, for the right hand to also grasp"): while Space holds or keeps a
+   * grasp the RIGHT hand closes too. rightGrip is its eased share (0 open .. 1 closed, GRIP_BOTH.perS per second); the
+   * body pose takes it as the right hand's whole-hand closure (r_grasp), and moveGlow lights the right hand's area on
+   * the strip (lh_hand) and the body map's own "Close right hand" muscles (lh_r_grasp) at GRIP_BOTH.level, on your
+   * body and the mirror body. A display of the game's grip rule, not measured activity. */
+  const GRIP_BOTH = Object.freeze({ perS: 7, closeDeg: 90, level: 0.95, regionId: 'lh_hand', actionId: 'lh_r_grasp' });
+  let rightGrip = 0;
+  /**
+   * R17 (owner, 17 November: "you've got to get the small details right, such as when you're moving the cursor around.
+   * That's naturally going to activate muscles of the shoulder, etc., muscles of the neck, etc."): every movement the
+   * player causes lights what does it, in step with the movement (ns-move-glow: each moving joint feeds a channel with
+   * its speed; the level is plain while moving and fades when still). Only the muscles of the direction moved light:
+   * the body map's own action -> muscle lists (the same rows headActivity uses) and the left shoulder's reach-key
+   * lists (ns-actions REACH_MUSCLES). Display values (simulated, no units), never measured activity.
+   */
+  const moveCh = createMoveChannels();
+  const movePrev = { has: false, rot: 0, flex: 0, twist: 0, sag: 0, yaw: 0, pitch: 0, limb: null, joints: null };
+  const moveFeed = (key, speedDegS, row, soft) => moveCh.feed(key, speedDegS, row, soft);
+  /** The frame's display glow: the head / trunk posture glow (headActivity) plus what the player's own movement adds
+   * (R17: the moving joints' channels, and the right hand's share of a Space grasp). { regions, rows, reach } (reach:
+   * left-shoulder rows in ns-actions reachMuscleShow's shape, or null). Returns `base` itself when nothing is added. */
+  function moveGlow(base, dt, gripOn) {
+    const h = dt > 0 ? Math.min(dt, 0.1) : 0;
+    rightGrip = gripOn ? Math.min(1, rightGrip + GRIP_BOTH.perS * h) : Math.max(0, rightGrip - GRIP_BOTH.perS * h);
+    moveCh.step(dt);
+    if (!(rightGrip > 0) && moveCh.size === 0) return base;
+    const g = { regions: base ? { ...base.regions } : {}, rows: base ? base.rows.slice() : [], reach: null };
+    const put = (rid, v) => { if (!(g.regions[rid] >= v)) g.regions[rid] = v; };
+    if (rightGrip > 0) {
+      const v = GRIP_BOTH.level * rightGrip;
+      put(GRIP_BOTH.regionId, v);
+      g.rows.push({ actionId: GRIP_BOTH.actionId, level: v, regionId: GRIP_BOTH.regionId });
+    }
+    moveCh.each((key, lv, r) => {
+      if (!r) return;
+      if (r.reach) {
+        const m = REACH_MUSCLES[r.reach];
+        (g.reach || (g.reach = [])).push({ dir: r.reach, level: lv, label: m.label, arm: m.arm, body: m.body });
+        put(REACH_MUSCLES.areaId, lv);
+        return;
+      }
+      for (const rid of r.regions || [r.regionId]) put(rid, lv);
+      if (r.actionId || (Array.isArray(r.agonists) && r.agonists.length)) g.rows.push({ actionId: r.actionId || null, level: lv, agonists: r.agonists || [], antagonists: [], stabilizers: [], regionId: r.regionId });
+    });
+    return g;
+  }
+  /** The reach rows to DRAW: the activity's (W/A/S/D) with the look-driven ones merged in (the stronger level per
+   * direction). The activity's own list (and the card that reads it) is left as it is. */
+  const reachRowsShown = (own, extra) => {
+    if (!extra || !extra.length) return own;
+    if (!Array.isArray(own) || !own.length) return extra;
+    const out = own.slice();
+    for (const e of extra) { const i = out.findIndex(q => q.dir === e.dir); if (i < 0) out.push(e); else if (e.level > out[i].level) out[i] = { ...out[i], level: e.level }; }
+    return out;
+  };
+  const NECK_BOTH = Object.freeze(['lh_neck', 'rh_neck']), TRUNK_BOTH = Object.freeze(['lh_trunk', 'rh_trunk']);
+  const MOVE_ROWS = Object.freeze({
+    neckLeft: Object.freeze({ actionId: 'rh_neck_turn_left', regionId: 'rh_neck' }), neckRight: Object.freeze({ actionId: 'lh_neck_turn_right', regionId: 'lh_neck' }),
+    neckDown: Object.freeze({ actionId: 'lh_neck_flex', regionId: 'lh_neck', regions: NECK_BOTH }), neckUp: Object.freeze({ actionId: 'lh_neck_extend', regionId: 'lh_neck', regions: NECK_BOTH }),
+    trunkDown: Object.freeze({ actionId: 'lh_trunk_flex', regionId: 'lh_trunk', regions: TRUNK_BOTH }), trunkUp: Object.freeze({ actionId: 'lh_trunk_extend', regionId: 'lh_trunk', regions: TRUNK_BOTH }),
+    // Turning the chest: the same named muscles and areas as headActivity's twist row.
+    twistLeft: Object.freeze({ agonists: Object.freeze(['right external oblique', 'left internal oblique']), regionId: 'rh_trunk', regions: TRUNK_BOTH }),
+    twistRight: Object.freeze({ agonists: Object.freeze(['left external oblique', 'right internal oblique']), regionId: 'lh_trunk', regions: TRUNK_BOTH }),
+    // The left arm follows the look: the left shoulder's own reach lists (swing out / in, raise = flex, lower = extend).
+    armLeft: Object.freeze({ reach: 'left' }), armRight: Object.freeze({ reach: 'right' }), armUp: Object.freeze({ reach: 'forward' }), armDown: Object.freeze({ reach: 'back' })
+  });
+  /** Feed this frame's head, trunk and look movement (head: the posed head as drawn; dt seconds). */
+  function feedHeadMove(head, dt) {
+    if (!head || !head.joints || !(dt > 0)) { movePrev.has = false; return; }
+    const j = head.joints, tb = Number.isFinite(head.trunkDeg) ? head.trunkDeg : j.trunk_flex, dir = Number.isFinite(head.bendDirDeg) ? head.bendDirDeg * DEG : 0;
+    const cur = { rot: j.neck_rot, flex: j.neck_flex, twist: Number.isFinite(head.twistDeg) ? head.twistDeg : 0, sag: tb * Math.cos(dir),
+      yaw: head.look ? head.look.yaw / DEG : 0, pitch: head.look ? head.look.pitch / DEG : 0 };
+    if (movePrev.has) {
+      const rate = k => (cur[k] - movePrev[k]) / dt, eps = 0.5; // degrees per second below which nothing is fed
+      const rot = rate('rot'), flex = rate('flex'), twist = rate('twist'), sag = rate('sag'), yaw = rate('yaw'), pitch = rate('pitch');
+      if (rot > eps) moveFeed('neck:left', rot, MOVE_ROWS.neckLeft); else if (rot < -eps) moveFeed('neck:right', rot, MOVE_ROWS.neckRight);
+      if (flex > eps) moveFeed('neck:down', flex, MOVE_ROWS.neckDown); else if (flex < -eps) moveFeed('neck:up', flex, MOVE_ROWS.neckUp);
+      if (twist > eps) moveFeed('trunk:left', twist, MOVE_ROWS.twistLeft); else if (twist < -eps) moveFeed('trunk:right', twist, MOVE_ROWS.twistRight);
+      if (sag > eps) moveFeed('trunk:down', sag, MOVE_ROWS.trunkDown); else if (sag < -eps) moveFeed('trunk:up', sag, MOVE_ROWS.trunkUp);
+      // The left arm keeps its place in the view, so it swings and lifts at the shoulder as the look turns.
+      if (yaw > eps) moveFeed('arm:left', yaw, MOVE_ROWS.armLeft, MOVE_GLOW.lookSoftDegS); else if (yaw < -eps) moveFeed('arm:right', yaw, MOVE_ROWS.armRight, MOVE_GLOW.lookSoftDegS);
+      if (pitch > eps) moveFeed('arm:up', pitch, MOVE_ROWS.armUp, MOVE_GLOW.lookSoftDegS); else if (pitch < -eps) moveFeed('arm:down', pitch, MOVE_ROWS.armDown, MOVE_GLOW.lookSoftDegS);
+    }
+    movePrev.has = true; movePrev.rot = cur.rot; movePrev.flex = cur.flex; movePrev.twist = cur.twist; movePrev.sag = cur.sag; movePrev.yaw = cur.yaw; movePrev.pitch = cur.pitch;
+  }
   // R558 (hunt 2 controls #4): until when the status card says to let go of Space before E (E pressed while Space holds something).
   const VIEW_HELD_NOTE_MS = 3500;
   let viewHeldUntilMs = 0;
   let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
+  // R17 (hold-and-move): this frame's pointer movement (px) for a held own limb (stepLimbGrasp). (Movement taken by a
+  // frame that is then skipped is dropped: a few px, and the look it may have turned is not replayed.)
+  let limbMovePx = null;
   // R558 (user Messages 2 and 12): the own limb held with Space ({ limb, targetMm, lastPitch } or null), the limb a
   // press-and-drag turns and the body segment the press was on, the left arm's dial build-up, and the stop-at-contact
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
   // (the activity holds it, so Reset body puts it back).
-  let limbGrasp = null, dragLimb = null, dragLimbSeg = null, leftDial = 0;
+  let limbGrasp = null, dragLimb = null, dragLimbSeg = null, dragLimbVia = null, leftDial = 0;
   const contact = { stops: 0, last: null, untilMs: 0, bodyBlocked: null, lastStart: null, skipGuards: 0 };
   let collisionReportFn = null; // R558: set once the scene is up (inspect({ collision: true }))
   // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
@@ -5062,9 +5170,9 @@ export function start(params = {}) {
     // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
     simState = cancelCarryLatches(simState);
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
-    limbGrasp = null; dragLimb = null; dragLimbSeg = null; leftDial = 0;
+    limbGrasp = null; dragLimb = null; dragLimbSeg = null; dragLimbVia = null; leftDial = 0;
     seedNext = true;
-    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
+    carryRawEvents.length = 0; carryDrag = null; limbMovePx = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
     arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
     try { callScene('setArrowHover', null); } catch { /* highlight only */ }
@@ -5801,6 +5909,7 @@ export function start(params = {}) {
           const it = itemAt(px, py, behind === true);
           dragLimb = it && it.target === 'limb' ? it.limb : null;
           dragLimbSeg = dragLimb ? it.segment : null;
+          dragLimbVia = dragLimb && it.via ? it.via : null; // R17: the press was on the mirror body's limb
           if (dragLimb) leftDial = 0;
           return it ? it.target : null;
         } };
@@ -6192,8 +6301,15 @@ export function start(params = {}) {
        * neck or head, which cannot be held). The left arm's meshes are the game arm's (part 'arm'), plus the body's own
        * muscles on the left upper arm segment (they move with the game arm). */
       const segOfPick = p => (p && bodyRig && bodyRig.meshSegment && bodyRig.meshSegment[p.id] ? String(bodyRig.meshSegment[p.id].segment || '') : '');
-      function limbOfPick(p) {
-        if (!p || p.source !== 'own') return null;
+      /** R17 (owner, 17 November: "if you grab the mirror body by the torso, you're controlling the whole body. But then if
+       * you target, grasp, or click specific limbs, then you're controlling those limbs such as you would your own"): the
+       * limb a body part belongs to, on your body or on the mirror body alike (the mirror body is your reflection: its
+       * meshes are your meshes' twins, so the image of your right leg is the mirror body's right leg). null: the trunk,
+       * neck or head. */
+      const limbOfPick = p => (p && p.source === 'own' ? limbOfRec(p) : null);
+      const mirrorLimbOf = e => (e && e.item === 'mirror' && e.rec && e.rec.source === 'mirror' ? limbOfRec(e.rec) : null);
+      function limbOfRec(p) {
+        if (!p) return null;
         if (p.part === 'arm') return 'leftArm';
         const seg = segOfPick(p);
         if (seg === 'l_upperarm') return 'leftArm';
@@ -6217,6 +6333,10 @@ export function start(params = {}) {
           const limb = limbOfPick(entry.rec);
           return limb ? { target: 'limb', limb, segment: segOfPick(entry.rec) } : null;
         }
+        // R17: a limb of the mirror body is YOUR limb (seen in the mirror: via 'mirror'); its trunk, neck and head are
+        // the whole mirror body.
+        const viaMirror = mirrorLimbOf(entry);
+        if (viaMirror) return { target: 'limb', limb: viaMirror, segment: segOfPick(entry.rec), via: 'mirror' };
         const pick = itemPick(entry, T);
         return pick ? { target: pick.target, pick } : null;
       }
@@ -6243,10 +6363,10 @@ export function start(params = {}) {
        * is seen) and how to reach the item behind (hold Shift as you press); while Shift is held (reach), what the press
        * will act on. '' when there is nothing to say. */
       /** A short plain key of a controlTargets entry for inspect(): item:kind[:limb][:regionId]. */
-      const ctlKey = e => `${e.item}:${e.kind}${e.item === 'own' ? ':' + (limbOfPick(e.rec) || 'trunk') : ''}${e.regionId ? ':' + e.regionId : ''}`;
+      const ctlKey = e => `${e.item}:${e.kind}${e.item === 'own' ? ':' + (limbOfPick(e.rec) || 'trunk') : e.item === 'mirror' ? ':' + (mirrorLimbOf(e) || 'trunk') : ''}${e.regionId ? ':' + e.regionId : ''}`;
       function controlTargetsLine(T, reach) {
         if (!T || typeof NT.HUD.controlTargets !== 'function') return '';
-        const nameOf = e => (!e ? null : e.item === 'brain' ? (e.kind === 'area' ? 'area' : 'brain') : e.item === 'mirror' ? 'mirror' : limbOfPick(e.rec) || 'trunk');
+        const nameOf = e => (!e ? null : e.item === 'brain' ? (e.kind === 'area' ? 'area' : 'brain') : e.item === 'mirror' ? (mirrorLimbOf(e) || 'mirror') : limbOfPick(e.rec) || 'trunk'); // R17: a mirror limb is your limb
         const be = T.arrow ? T.front : T.behind;
         // The area is named only from the look's own classifier (the one a click uses: dots first, the per-point owner on
         // the strip), when stepFrame keeps its answer before the overrides (state.rawGaze); the scene's area meshes give
@@ -6287,6 +6407,26 @@ export function start(params = {}) {
         const other = a[sign > 0 ? '-1' : '1'];
         return other ? { regionId: other.regionId, actionId: null } : null;
       }
+      /** R17 (MOVE_GLOW): a limb held with Space or turned by a press-and-drag (not the left arm, which is the game arm):
+       * each of its joints that moved this frame feeds its channel with its speed, and lights the body map's own area
+       * and action for that joint and direction (areaFor), on top of the pulse of the joint that moved most. */
+      function feedLimbMove(out, dt) {
+        const turning = Boolean(dragLimb && dragLimb !== 'leftArm' && cs && cs.drag && cs.drag.target === 'limb'); // a press-and-drag on a limb is under way
+        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : turning ? dragLimb : null;
+        const c = limb ? NsGrasp.LIMB_CHAIN[limb] : null, J = out && out.bodyJointTargets;
+        if (!c || !J || !(dt > 0)) { movePrev.limb = null; return; }
+        const ids = c.upperDial ? [...c.joints, c.dial.joint, c.upperDial.joint] : [...c.joints, c.dial.joint];
+        if (movePrev.limb === limb && movePrev.joints) {
+          for (let i = 0; i < ids.length; i++) {
+            const id = ids[i], v = J[id], p = movePrev.joints[i];
+            if (!Number.isFinite(v) || !Number.isFinite(p) || Math.abs(v - p) < 1e-3) continue;
+            const sign = v > p ? 1 : -1, key = `limb:${id}:${sign}`;
+            if (!moveCh.hasRow(key)) { const a = areaFor(id, sign) || (id === c.dial.joint && c.dial.area ? { regionId: c.dial.area, actionId: null } : null); if (!a) continue; moveCh.setRow(key, { actionId: a.actionId, regionId: a.regionId }); }
+            moveFeed(key, (v - p) / dt, moveCh.row(key));
+          }
+        }
+        movePrev.limb = limb; movePrev.joints = ids.map(id => J[id]);
+      }
       /** Apply a held / turned limb's joints to the activity at once (they stay, like a latch) and light the area of the
        * joint that moved most. Returns true when something changed. */
       function applyLimbJoints(joints, out) {
@@ -6314,17 +6454,23 @@ export function start(params = {}) {
       }
       const worldOf = (B, p) => NsCollide.apply(B, p[0], p[1], p[2]);
       /** Start holding an own limb (Space pressed on it). The left arm is the game arm: holding it is the ordinary reach. */
-      function beginLimbGrasp(limb) {
-        if (limb === 'leftArm') { limbGrasp = { limb, targetMm: null, lastPitch: cs.pitch }; return; }
+      function beginLimbGrasp(limb, via = null) {
+        if (limb === 'leftArm') { limbGrasp = { limb, targetMm: null, lastPitch: cs.pitch, via }; return; }
         if (!canSolveLimbs() || !NsGrasp.LIMB_CHAIN[limb]) { limbGrasp = null; return; }
         const seg = segmentsFor(bodyPosed);
         // No floor under a held limb (Messages 47 and 48: any position must be reachable): the joint limits and the
         // contact guard are what stop it. The earlier floor (a foot never below its rest height, a hand a little above
         // the invisible ground) went with the leg ground model.
-        limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch };
+        limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch, via }; // via 'mirror' (R17): taken on the mirror body
       }
-      /** One frame of a held limb: W/A/S/D move its end in the view's horizontal plane, the look's up / down carries it
-       * up / down (so it stays under the crosshair), the joint solve keeps every joint in range. */
+      /** One frame of a held limb: the pointer moves its end left / right and up / down across the view (R17, owner 17
+       * November: X and Y; limbMovePx, a pixel of pointer is about a pixel of limb end), W/A/S/D move it level (X and Z:
+       * A / D sideways, W farther, S nearer), a look up / down (when the look itself moves) carries it up / down, and the
+       * joint solve keeps every joint in range.
+       * R17 (owner: "if you ... target, grasp, or click specific limbs [of the mirror body], then you're controlling those
+       * limbs such as you would your own"): a limb taken on the MIRROR body (g.via 'mirror') is your own limb, and every
+       * direction is the one seen on the mirror body: the wanted movement of the limb's mirror image is taken back
+       * through the mirror body's own matrix to the movement of your limb that shows it. */
       function stepLimbGrasp(dt, out) {
         const g = limbGrasp;
         if (!g) return;
@@ -6334,9 +6480,15 @@ export function start(params = {}) {
         const fwd = [-Math.sin(look.yaw), 0, -Math.cos(look.yaw)], right = [Math.cos(look.yaw), 0, -Math.sin(look.yaw)];
         const sp = NsGrasp.LIMB_GRASP.speedMps * (dt > 0 ? Math.min(dt, 0.1) : 0);
         const endW = worldOf(B, g.targetMm), eye = camPose.position || [0, 0, 0];
-        const dist = Math.hypot(endW[0] - eye[0], endW[1] - eye[1], endW[2] - eye[2]);
-        const dw = [0, 1, 2].map(i => right[i] * keys.x * sp + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch : 0));
+        let M = null;
+        if (g.via === 'mirror' && sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); M = mm && mm.drawn ? mm.drawn : null; } catch { M = null; } }
+        const seen = M ? NsCollide.apply(M, endW[0], endW[1], endW[2]) : endW; // the point the player looks at and moves
+        const dist = Math.hypot(seen[0] - eye[0], seen[1] - eye[1], seen[2] - eye[2]);
+        const px = limbMovePx, mPerPx = px && appliedSize ? dist * 2 * Math.tan(sim.fovFor(appliedSize.width / appliedSize.height) * DEG / 2) / appliedSize.height : 0;
+        const mx = px ? px.dx * mPerPx : 0, my = px ? -px.dy * mPerPx : 0;
+        let dw = [0, 1, 2].map(i => right[i] * (keys.x * sp + mx) + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch + my : 0));
         if (dw.every(v => v === 0)) return;
+        if (M) { const Mi = NsCollide.affineInverse(M); dw = [0, 1, 2].map(i => Mi[i] * dw[0] + Mi[4 + i] * dw[1] + Mi[8 + i] * dw[2]); }
         const lead = 15; // mm: how far the target may run ahead of the limb's end
         // While the drawn pose is held back at contact (guardBodyPose), the target is kept within `lead` of where the
         // limb's end is DRAWN, so pushing on against the brain or the mirror body does not wind the target up inside it:
@@ -6362,10 +6514,16 @@ export function start(params = {}) {
         const B = camBodyToWorld, look = camPose.gazeLook || { yaw: cs.yaw, pitch: cs.pitch };
         const cy = Math.cos(look.yaw), sy = Math.sin(look.yaw), cp = Math.cos(look.pitch), spp = Math.sin(look.pitch);
         const viewDir = [-sy * cp, spp, -cy * cp], rightW = [cy, 0, -sy], upW = [sy * spp, cp, cy * spp];
+        // R17: a press on the MIRROR body's limb turns your limb so that the mirror image's near surface follows the
+        // pointer: the dial is read on the image (its axis and place through the mirror body's matrix) and its turn is
+        // taken back with the sign flipped (a mirror image turns the other way round its own axis).
+        let M = null;
+        if (dragLimbVia === 'mirror' && sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); M = mm && mm.drawn ? mm.drawn : null; } catch { M = null; } }
+        const seenPoint = q => (M ? NsCollide.apply(M, q[0], q[1], q[2]) : q), seenDir = d => (M ? [0, 1, 2].map(i => M[i] * d[0] + M[4 + i] * d[1] + M[8 + i] * d[2]) : d), turnSign = M ? -1 : 1;
         if (dragLimb === 'leftArm') {
           // The game arm: a quarter of a turn or so one way or the other switches its palm-down / palm-up area on.
-          const axis = viewDir; // the left arm points along the look at full reach
-          leftDial += NsGrasp.rollDeg({ axisWorld: axis, viewDirWorld: [0, -1, 0], rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
+          const axis = seenDir(viewDir); // the left arm points along the look at full reach
+          leftDial += turnSign * NsGrasp.rollDeg({ axisWorld: axis, viewDirWorld: [0, -1, 0], rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
           const want = leftDial <= -25 ? 'supination' : leftDial >= 25 ? 'pronation' : null;
           if (!want) return;
           leftDial = 0;
@@ -6381,10 +6539,10 @@ export function start(params = {}) {
         // A press on the right UPPER arm turns the upper arm (its own axis: shoulder -> elbow); anywhere else on a limb
         // turns the limb's dial joint about root -> end (the forearm turn, a leg's hip rotation).
         const upper = Boolean(c.upperDial) && dragLimbSeg === c.rootSeg, dial = upper ? c.upperDial : c.dial;
-        const root = worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, 'root')), end = worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, upper ? 'bend' : 'end'));
+        const root = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, 'root'))), end = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, upper ? 'bend' : 'end')));
         const eye = camPose.position || [0, 0, 0], mid = root.map((v, i) => (v + end[i]) / 2);
         const toLimb = mid.map((v, i) => v - eye[i]), tl = Math.hypot(...toLimb) || 1;
-        const deg = NsGrasp.rollDeg({ axisWorld: end.map((v, i) => v - root[i]), viewDirWorld: toLimb.map(v => v / tl), rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
+        const deg = turnSign * NsGrasp.rollDeg({ axisWorld: end.map((v, i) => v - root[i]), viewDirWorld: toLimb.map(v => v / tl), rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
         if (deg === 0 || !dial) return;
         // The dial joint is one of the body's rotation joints (the Space dance's, held like a latch, Reset body puts it
         // back): the turn starts from the angle the activity holds and stays inside the joint's range (the activity also
@@ -6933,7 +7091,7 @@ export function start(params = {}) {
           // Your left game arm's own bones (part 'arm') against the mirror body and the brain (it is kept out of them through
           // its reach sphere, reachItem).
           ...(() => { const arm = items.own ? NsCollide.item(items.own.entries.filter(e => e.tag && e.tag.part === 'arm')) : null; return arm && arm.entries.length ? { armMirrorM: g(arm, items.mirror), armBrainM: g(arm, items.brain) } : {}; })(),
-          stops: contact.stops, lastStop: contact.last, lastBrain: contact.lastBrain || null, bodyBlocked: Boolean(contact.bodyBlocked), limbGrasp: limbGrasp ? { limb: limbGrasp.limb, targetMm: limbGrasp.targetMm, lastSolve: limbGrasp.lastSolve || null } : null,
+          stops: contact.stops, lastStop: contact.last, lastBrain: contact.lastBrain || null, bodyBlocked: Boolean(contact.bodyBlocked), limbGrasp: limbGrasp ? { limb: limbGrasp.limb, via: limbGrasp.via || null, targetMm: limbGrasp.targetMm, lastSolve: limbGrasp.lastSolve || null } : null,
           tables: (() => { try { return sceneFn('collisionStats') ? callScene('collisionStats') : null; } catch { return null; } })(),
           scope: 'sphere covers of drawn meshes (ns-collide); a game rule, not tissue contact' };
       }
@@ -7083,7 +7241,7 @@ export function start(params = {}) {
             if (!e || e.type !== 'grasp') return e;
             if (e.down !== true) { limbGrasp = null; return e; }
             const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y, e.behind === true) : null;
-            if (it && it.target === 'limb') beginLimbGrasp(it.limb); else limbGrasp = null;
+            if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null); else limbGrasp = null;
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
@@ -7115,6 +7273,36 @@ export function start(params = {}) {
         // boundary, never an unstamped substitute for an original release. Ordinary pause already cancels synchronously.
         if (!live && carryRawEvents.length) cancelPendingGameplay('frozen-pending-input');
         if (!live) carryDrag = null;
+        // R17 (owner, 17 November: "trackpad drag to move items essentially within the XY dimension ... one of the main
+        // issues is when you grasp cursor, you're not actually moving things. When it comes to the mirror body, up and
+        // down, you need to be able to move up and down"): while a grasp holds the brain, the mirror body or one of your
+        // limbs (not the left arm, whose reach IS the look), the pointer's movement is the held item's, not the look's
+        // (ns-controls setCarry / takeCarry). The item crosses the view left / right / up / down with the pointer while
+        // the view stays where it is; only a push past the comfortable part of the view (ns-reference-graph CARRY_VIEW)
+        // turns the look, which then carries the item on (carryPointer). W/A/S/D stay level: X and Z.
+        let carryShiftM = null;
+        limbMovePx = null;
+        if (live && typeof controlsApi.takeCarry === 'function') {
+          const r = controlsApi.takeCarry(cs); cs = r.state;
+          let mv = r.move;
+          if (mv) {
+            const k = typeof controlsApi.lookOptions === 'function' ? controlsApi.lookOptions(cs).sensitivity : 1;
+            mv = { dx: mv.dx * k, dy: mv.dy * k };
+            const oc = simState && simState.objectCarry, eye = camPose && camPose.position && camPose.position.length === 3 ? camPose.position : null;
+            const lk = camPose && camPose.gazeLook ? camPose.gazeLook : { yaw: cs.yaw, pitch: cs.pitch };
+            if (limbGrasp && limbGrasp.limb !== 'leftArm') limbMovePx = mv;
+            else if (oc && oc.held && eye) {
+              const bt = current.out && current.out.brainTransform;
+              const centre = oc.target === 'mirror' && oc.mirror ? oc.mirror.centreWorldM : oc.target === 'brain' && bt && Array.isArray(bt.pivotWorld) ? bt.pivotWorld : null;
+              if (centre) {
+                const q = ReferenceGraph.carryPointer({ centre, eye, look: lk, dxPx: mv.dx, dyPx: mv.dy, viewHeightPx: size.height, fovYDeg: sim.fovFor(aspect), lookRadPerPx: controlsApi.sensitivityRadPerPx,
+                  heightM: oc.target === 'mirror' ? ReferenceGraph.CARRY_VIEW.mirrorHeightM : null });
+                carryShiftM = q.shiftM;
+                if (q.lookDelta.yaw !== 0 || q.lookDelta.pitch !== 0) cs = controlsApi.setLook(cs, { yaw: cs.yaw + q.lookDelta.yaw, pitch: cs.pitch + q.lookDelta.pitch });
+              }
+            }
+          }
+        }
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
           if (now >= lookBlock.untilMs) lookBlock = null;
@@ -7406,6 +7594,7 @@ export function start(params = {}) {
           ...((limbGrasp && limbGrasp.limb !== 'leftArm') || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || timing.events.some(e => e && e.type === 'grasp' && e.down === true && (e.target === 'brain' || e.target === 'mirror')) ? { armAxes: { x: 0, z: 0 } } : {}),
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true,
+          ...(carryShiftM ? { carryShiftM } : {}), // R17: the pointer's move of the held brain / mirror body (right, up; m)
           // R558 (HEAD_LOOK): a held neck / trunk action that swings the view is not the player looking somewhere: the
           // area the crosshair lands on is recorded silently (no activation without the player's own look or click).
           // R558 (Messages 2 and 12): likewise while Space holds the mirror body or one of your limbs (not the left arm, which
@@ -7710,7 +7899,11 @@ export function start(params = {}) {
         // R558 (HEAD_LOOK): the neck and trunk areas glow in proportion to how far the head and trunk are turned / bent.
         // That glow shows a held posture, not an activation: areas lit only by it start settled (no power-up flash at
         // every turn of the head; ns-colors POWER_UP.settledAgeS). Told to the scene before any muscle or area is shaded.
-        const headGlow = headActivity(headShown);
+        // R17: plus what the player's own movement adds this frame (moveGlow: the right hand's share of a Space grasp).
+        if (live) { feedHeadMove(headShown, timing.dt); feedLimbMove(out, timing.dt); }
+        const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && simState.activity && simState.activity.graspHold === true));
+        // The left shoulder's rows to draw: the reach keys' and the look's (the arm follows the look).
+        const reachShown = reachRowsShown(out.reachShow, headGlow ? headGlow.reach : null);
         if (sceneFn('setSettledRegions')) {
           const settled = [];
           if (headGlow) {
@@ -7732,9 +7925,9 @@ export function start(params = {}) {
         }
         // R558 (Message 50): the reach keys' shoulder muscles on the left arm, by mesh name, next to the palm-turn ones.
         let armNames = out.rotationMuscles || null;
-        if (Array.isArray(out.reachShow) && out.reachShow.length) {
+        if (Array.isArray(reachShown) && reachShown.length) {
           armNames = armNames ? { ...armNames } : {};
-          for (const r of out.reachShow) for (const n of r.arm) if (!(armNames[n] >= r.level)) armNames[n] = r.level;
+          for (const r of reachShown) for (const n of r.arm) if (!(armNames[n] >= r.level)) armNames[n] = r.level;
         }
         scene.updateMuscles(out.muscle, armNames);
         scene.updateStrip(out.displayDrives);
@@ -7770,6 +7963,8 @@ export function start(params = {}) {
           // R558 (HEAD_LOOK): the head, neck and trunk are where the look (plus any held offset) put them this frame: the
           // same pose the eye camera, the arm's shoulder root and the mirror body use.
           if (headShown) Object.assign(targets, headShown.joints);
+          // R17: both hands close on a grasp: the right hand's whole-hand closure follows the Space grip (GRIP_BOTH).
+          if (rightGrip > 0) targets.r_grasp = Math.max(Number.isFinite(targets.r_grasp) ? targets.r_grasp : 0, GRIP_BOTH.closeDeg * rightGrip);
           // R558 (Messages 47 and 48: every leg movement achievable and plain to see): a thigh lifted past the
           // straight-knee limit is drawn with the knee giving way (ns-body passiveKneeAngles). No ground stops a leg: a knee
           // bends all the way and a hip extends below level (the earlier heel-on-the-ground model is retired).
@@ -7905,7 +8100,7 @@ export function start(params = {}) {
           // turning speed (ns-actions danceView bodyMuscleRows), on your body and the mirror body (shared drives).
           const danceRows = out.dance && Array.isArray(out.dance.bodyMuscleRows) ? out.dance.bodyMuscleRows : [];
           // R558 (Message 50): the reach keys' chest and back muscles (pectoralis major, latissimus dorsi are body meshes).
-          const reachRows = Array.isArray(out.reachShow) ? out.reachShow.filter(r => r.body.length)
+          const reachRows = Array.isArray(reachShown) ? reachShown.filter(r => r.body.length)
             .map(r => ({ actionId: null, level: r.level, agonists: r.body, antagonists: [], stabilizers: [] })) : [];
           const extraRows = hintRows.length || danceRows.length || headRows.length || reachRows.length ? [...hintRows, ...danceRows, ...headRows, ...reachRows] : null;
           let drives = typeof mods.body.bodyMuscleDrives === 'function' ? mods.body.bodyMuscleDrives(extraRows ? [...active, ...extraRows] : active, { rig: bodyRig }) : null;
@@ -7978,7 +8173,7 @@ export function start(params = {}) {
           const headLinks = headGlowLinks(headGlow);
           // R558 (Message 50): one link per held reach key, from the left shoulder area to that key's shoulder muscles (the
           // left-arm meshes by name, the chest and back meshes by id): they take the area's colour and a line joins them.
-          const reachLinks = Array.isArray(out.reachShow) ? out.reachShow.map(r => ({ key: `reach:${r.dir}`, regionId: REACH_MUSCLES.areaId, level: r.level,
+          const reachLinks = Array.isArray(reachShown) ? reachShown.map(r => ({ key: `reach:${r.dir}`, regionId: REACH_MUSCLES.areaId, level: r.level,
             armMuscleNames: r.arm, armMuscleKeys: [], bodyMeshIds: r.body.length ? danceBodyDrives({ key: `reach:${r.dir}`, muscles: r.body }) : {} })) : [];
           const extraLinks = hintLinks.length || danceLinks.length || headLinks.length || reachLinks.length ? [...hintLinks, ...danceLinks, ...headLinks, ...reachLinks] : null;
           callScene('setGlowLinks', extraLinks ? [...links, ...extraLinks] : links);
@@ -8264,6 +8459,12 @@ export function start(params = {}) {
               || Boolean(act && act.brainGrab && act.brainGrab.active),
             turning: Boolean(act && act.dance && act.dance.mode)
           });
+          // R17: from now on the pointer moves what is held (the brain, the mirror body, an own limb other than the left
+          // arm) instead of turning the look; with nothing such held it turns the look again.
+          if (typeof controlsApi.setCarry === 'function') {
+            cs = controlsApi.setCarry(cs, Boolean((limbGrasp && limbGrasp.limb !== 'leftArm')
+              || (simState && simState.objectCarry && simState.objectCarry.held && (simState.objectCarry.target === 'brain' || simState.objectCarry.target === 'mirror'))));
+          }
         }
         current = { sim, data, state: simState, controls: cs, out };
         if (wholeArmOption && out.wholeArmFraming) {

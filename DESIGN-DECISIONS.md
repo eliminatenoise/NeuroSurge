@@ -1193,6 +1193,59 @@ The view from the eyes is 108 degrees from top to bottom, about 136 across a 16:
 
 The head's range was not the limit: it was already the neck's and trunk's whole range, 120 degrees to each side, 80 down and 70 up, and no look was being refused. But one pixel of pointer travel turned the look 0.0025 radian, so the end of the turn was about 840 pixels away, several swipes on a trackpad. It is now 0.0038 radian, about 550 pixels. The dead band that keeps one pixel of jitter from restarting an area grew with it, from 0.2 to 0.31 degrees. The Esc page's look speed still scales it.
 
+## 80. Hold with Space, move with the pointer (17 November)
+
+The user: "I want trackpad drag to move items essentially within the XY dimension, whilst WASD moves things in the XZ dimension. And click cursor to move things in the orbital rotation direction. So one of the main issues is when you grasp cursor, you're not actually moving things. When it comes to the mirror body, up and down, you need to be able to move up and down." and "ensure that you can control limbs if you're, say, grasping or clicking, even if the cursor moves away, as long as you're continuing those functions."
+
+Before (section 54, Message 46): while Space held a thing, the look carried it, so the camera turned and the thing stayed under the crosshair; on screen nothing seemed to move. The mirror body was carried along the ground only.
+
+Now: while Space holds the brain, the mirror body or one of your limbs, the pointer moves THAT THING across the view, left, right, up and down, about a pixel of thing for a pixel of pointer, and the view stays where it is. The mirror body lifts off the ground and comes down again; its centre stays between about one body length below where it starts and two above, so it cannot be lost under the floor. Pushing a held thing past the comfortable part of the view turns the look, which carries it on. W, A, S and D stay level: A and D sideways, W farther, S nearer. A press and drag with the pointer button still turns a thing about itself. A hold or a drag keeps the thing it started on until it is let go, wherever the crosshair is meanwhile. The held thing also follows a free, uncaptured pointer.
+
+This replaces the swing-around-you reading of Message 46 for the pointer.
+
+## 81. The mirror body: its trunk takes the whole body, its limbs are yours; both hands close
+
+The user: "if you grab the mirror body by the torso, you're controlling the whole body. But then if you target, grasp, or click specific limbs, then you're controlling those limbs such as you would your own." and "when you grasp-cursor, for the right hand to also grasp."
+
+Space or a press on the mirror body's head, neck or trunk takes the whole mirror body, as before. On one of its arms or legs it now holds or turns YOUR matching limb, since the mirror body is your reflection: your limb moves and the reflection shows it. Directions are the ones seen on the mirror body: the pointer to the left moves the drawn limb to the left.
+
+While Space holds anything, the right hand closes like the left, and its finger-bending muscles and the right-hand part of the strip light on your body and on the mirror body.
+
+Considered and withdrawn by the user the same day: the right arm following the cursor all the time ("the cursor is already controlling the left arm, so it's quite confusing"). The right arm follows the pointer only while Space holds it.
+
+## 82. Moving lights what moves
+
+The user: "when you're moving the cursor around. That's naturally going to activate muscles of the shoulder, etc., muscles of the neck, etc."
+
+Turning or nodding the head with the pointer lights the neck muscles of that direction, the trunk's when the trunk turns or bends, and the neck part of the strip; the left shoulder's muscles light as the left arm follows the look; every joint of a limb that is held or turned lights its own muscles and its area. The glow follows the speed of the movement and fades when it stops (`ns-move-glow.mjs`). The muscle lists are the body map's own, for the direction moved. These are simulated display values, like every glow in the game.
+
+## 83. A living brain, and motor areas as keys
+
+The user: "The brain area looks awful, by the way. Maybe it should be far more fleshy and with far more colorful areas."; "neural activation should be much more obvious on the motor strip"; "the brain turns into a bunch of buttons essentially. So the brain turns into a control panel essentially."
+
+Before: a dark grey glass shell with pastel, half see-through motor areas.
+
+Now the shell is shaded as cortex in the same single draw: a pink-grey surface with lit folds, dark sulci and a wet sheen, on the space-black background. The motor strip cuts it exactly (a stencil mark written by the strip's own first pass), so the areas stay whole and crisp from every side.
+
+Every area keeps its body part's colour family (blues for the left arm, oranges for the right arm, purples and yellows for the legs, greens for the trunk, pinks for the face), in saturated shades that alternate along the strip so that no two neighbours look alike; the two halves match.
+
+Each area is drawn as a separate raised key with a dark gap to its neighbours. The key under the crosshair lights in its own colour inside a white frame, and the tip beside the crosshair (section 77) names it and lists what it does. A new activation pushes the key down for a moment and it springs back. While an area is switched on, only that key sends out its colour far above white, so it has a halo, inside a white-hot frame, with a slow pulse and a ring running from its middle to its edges; every other key dims. A glow that only shows how the head is held stays a calm background light.
+
+Not built yet: the brain beating and reacting as an exposed brain does in surgery (asked for on 17 November). The loading picture's brain already beats (section 75).
+
+## 84. The look reaches all the way round
+
+The user: "make sure the neck has extreme range of motion, so any part of the body is available from first person view", in the same note as "does not result in impossible ranges of motions and dislocations".
+
+The look now reaches 180 degrees to either side, 88 down and 85 up (it was 120, 80 and 70). The drawn neck and chest are not turned further than before: past the end of their turn (the neck's 80 degrees and the chest's 40) the EYES turn the rest of the way, up to 60 degrees, so the camera turns in the head while the head stays at its end. Down and up, the neck and trunk already had the range; only the camera's own stops were nearer. Looking back over a shoulder and down now shows that shoulder and the back behind it.
+
+This replaces "the eyes never turn in the head" (section 32) for the part of a look the head cannot reach. A wrung neck would have been the other way to do it, and the same note asks for no impossible positions. The 60 degrees is a display choice, not a measured range of eye movement.
+
+## 85. Small things of 17 November
+
+- The short Esc page shows its buttons, the settings, the keyboard picture and the list of controls; its paragraphs are under "Show the full instructions". About 1300 pixels tall instead of 2250.
+- The loading picture's brain swells a little with a heartbeat shape on a slow breathing rise and fall.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1221,9 +1274,8 @@ The head's range was not the limit: it was already the neck's and trunk's whole 
 - The strip spans 42 % of the width of the view, not the 50 % of Message 43 (59).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
-- Controls (Message 46). The look does not yet swing a held thing round you with the same face toward you (54). The mirror body's top and bottom arrows now turn it (73).
+- Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 November, in work and not in this upload: holding a thing with Space and moving it left, right, up and down with the pointer, the mirror body included; a hold or a drag that keeps its target when the crosshair leaves it; the mirror body's limbs moved like your own; both hands closing on a grasp; the muscles of the neck and shoulders lighting as the look moves the head and arm; a fleshier brain with more colourful, button-like areas and a much stronger activation on the strip.
-- From the same notes, not started: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; muscles that come away from their bones at some positions.
+- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; muscles that come away from their bones, joints that come apart and impossible positions after some muscle clicks; a brain that beats and reacts as in surgery; a view of everything from the neck down in one level look; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

@@ -534,65 +534,74 @@ const area = (family, color, glow) => {
 };
 
 /** The 54 motor areas (ns-bodymap region ids, both hemispheres) -> { family, color, glow (sRGB 0xRRGGBB), css, glowCss,
- * colorLinear, glowLinear }. R558 (Message 14): the little, ring and middle finger, nose and throat areas of each half
- * are new; their colours are PROVISIONAL picks in the same scheme (family hue, alternating light and dark along the
- * strip; OKLab distance to each strip neighbour 0.077-0.27, mirrored finger areas 0.19-0.32 apart), not run through
- * the OKLCH generator and dichromat check the other entries were; lh_fingers is now lh_index (same colour). */
+ * colorLinear, glowLinear }.
+ * 17 November (owner: "The brain area looks awful ... far more colorful areas"): a new, SATURATED table. The families
+ * are the ones the on-screen words name (blues for the left arm, oranges for the right arm, purples for the left leg,
+ * yellows for the right leg, greens for the trunk, pinks for the face and neck, grey for the in-between areas that
+ * move nothing), and the two halves are built alike, area for area: each colour is OKLCH (lightness, hue) at 95 % of
+ * the largest chroma sRGB can show there, and along the strip a light shade of one hue alternates with a deep shade of
+ * another hue of the family (cyan / royal blue / sky / azure ..., peach / vermilion / amber / orange ..., pink /
+ * magenta / orchid / raspberry ...), so no two neighbours look alike. Measured (OKLab distance, 0.1 = clearly
+ * different): every strip neighbour pair >= 0.159 (the old table: 0.052 under colour-blind simulation, and its resting
+ * tints 0.048); the same area of the two halves >= 0.077 apart (the face pinks are the closest pairs; the limbs are far
+ * apart, blue against orange, purple against yellow). `glow` is the same hue as bright as sRGB shows it. The earlier
+ * dichromat simulation was NOT re-run on this table: neighbours differ strongly in lightness, which every colour vision
+ * keeps, but two areas far apart on the strip can look alike to a dichromat, as before. */
 export const AREA_COLORS = freeze({
-  rh_toes: area('leftLeg', 0xa19eff, 0xafaeff),
-  rh_ankle: area('leftLeg', 0x8161d4, 0x9261ff),
-  rh_knee: area('leftLeg', 0xae7aee, 0xbd88ff),
-  rh_hip: area('leftLeg', 0x8c47b1, 0xc44fff),
-  rh_scan_superior: area('scan', 0x78818b, 0xddeeff),
-  rh_trunk: area('trunk', 0x05995a, 0x19ff9b),
-  rh_shoulder: area('leftArm', 0x0eb8d1, 0x10e1ff),
-  rh_elbow: area('leftArm', 0x148ead, 0x27d3ff),
-  rh_forearm: area('leftArm', 0x5bccfe, 0x86d8ff),
-  rh_wrist: area('leftArm', 0x0b99dd, 0x11b2ff),
-  rh_hand: area('leftArm', 0x6db7fc, 0x8ac6ff),
-  rh_little: area('leftArm', 0x2a8fd0, 0x29afff),
-  rh_ring: area('leftArm', 0x9fc3fd, 0x80c5ff),
-  rh_middle: area('leftArm', 0x3f7fe2, 0x398fff),
-  rh_index: area('leftArm', 0xaacdfe, 0xb6d5ff),
-  rh_thumb: area('leftArm', 0x5880e6, 0x5f8bff),
-  rh_neck: area('faceNeck', 0xed99fa, 0xf4afff),
-  rh_scan_middle: area('scan', 0x6d767f, 0xdbecff),
-  rh_brow: area('faceNeck', 0xc26cc7, 0xf675ff),
-  rh_eyelid: area('faceNeck', 0xee90ea, 0xff9df9),
-  rh_nose: area('faceNeck', 0xd277d9, 0xf770ff),
-  rh_lower_face: area('faceNeck', 0xbc5db0, 0xff68ef),
-  rh_lips: area('faceNeck', 0xe781d2, 0xff84e7),
-  rh_jaw: area('faceNeck', 0xbb54a0, 0xff5bd6),
-  rh_tongue: area('faceNeck', 0xe072ba, 0xff6cd0),
-  rh_throat: area('faceNeck', 0xa8458a, 0xff54d1),
-  rh_scan_inferior: area('scan', 0x616a73, 0xd9ebff),
-  lh_toes: area('rightLeg', 0xffe5b2, 0xffc84f),
-  lh_ankle: area('rightLeg', 0xe9c01e, 0xffd31b),
-  lh_knee: area('rightLeg', 0xf4dd22, 0xffe62a),
-  lh_hip: area('rightLeg', 0xbebf22, 0xfeff2d),
-  lh_scan_superior: area('scan', 0x877f75, 0xffeedc),
-  lh_trunk: area('trunk', 0x4e9d0e, 0x83ff21),
-  lh_shoulder: area('rightArm', 0xfc7754, 0xff9073),
-  lh_elbow: area('rightArm', 0xd05418, 0xff640e),
-  lh_forearm: area('rightArm', 0xfca679, 0xffba97),
-  lh_wrist: area('rightArm', 0xd86e05, 0xff830a),
-  lh_hand: area('rightArm', 0xfd9320, 0xffa759),
-  lh_little: area('rightArm', 0xc96510, 0xff8010),
-  lh_ring: area('rightArm', 0xffcd96, 0xffcd78),
-  lh_middle: area('rightArm', 0xe08a2c, 0xff9d28),
-  lh_index: area('rightArm', 0xfdbc79, 0xffc68d),
-  lh_thumb: area('rightArm', 0xb67705, 0xffa910),
-  lh_neck: area('faceNeck', 0xff9ac0, 0xffb2ce),
-  lh_scan_middle: area('scan', 0x7c7369, 0xffedda),
-  lh_brow: area('faceNeck', 0xd9668f, 0xff62a0),
-  lh_eyelid: area('faceNeck', 0xfe91af, 0xffa8be),
-  lh_nose: area('faceNeck', 0xea7499, 0xff65a7),
-  lh_lower_face: area('faceNeck', 0xce5978, 0xff5789),
-  lh_lips: area('faceNeck', 0xf97f96, 0xff94a7),
-  lh_jaw: area('faceNeck', 0xc95367, 0xff5274),
-  lh_tongue: area('faceNeck', 0xec737e, 0xff7c89),
-  lh_throat: area('faceNeck', 0xb4475a, 0xff5080),
-  lh_scan_inferior: area('scan', 0x70675e, 0xffecd8),
+  rh_toes: area('leftLeg', 0xba93fb, 0xc29fff),
+  rh_ankle: area('leftLeg', 0x6017dd, 0x805aff),
+  rh_knee: area('leftLeg', 0xe453fa, 0xeb6aff),
+  rh_hip: area('leftLeg', 0x8717ce, 0xb865ff),
+  rh_scan_superior: area('scan', 0x5e646a, 0xecf5ff),
+  rh_trunk: area('trunk', 0x26cb64, 0x77ff9b),
+  rh_shoulder: area('leftArm', 0x30ecf0, 0x5efcff),
+  rh_elbow: area('leftArm', 0x0c58e9, 0x387bff),
+  rh_forearm: area('leftArm', 0x59cdfc, 0x6ed4ff),
+  rh_wrist: area('leftArm', 0x1989e5, 0x51a9ff),
+  rh_hand: area('leftArm', 0x32f6e4, 0x57ffed),
+  rh_little: area('leftArm', 0x3619f0, 0x454dff),
+  rh_ring: area('leftArm', 0x58bbfb, 0x6dc4ff),
+  rh_middle: area('leftArm', 0x1374e1, 0x4c9aff),
+  rh_index: area('leftArm', 0x4dedfd, 0x65f0ff),
+  rh_thumb: area('leftArm', 0x2b3ff7, 0x3b5dff),
+  rh_neck: area('faceNeck', 0xfc88dd, 0xff95e2),
+  rh_scan_middle: area('scan', 0x53595f, 0xebf4ff),
+  rh_brow: area('faceNeck', 0xc21bc3, 0xff73fd),
+  rh_eyelid: area('faceNeck', 0xfdaaf1, 0xffb4f4),
+  rh_nose: area('faceNeck', 0xd028fa, 0xd950ff),
+  rh_lower_face: area('faceNeck', 0xb71579, 0xff63b7),
+  rh_lips: area('faceNeck', 0xfb60f3, 0xff76f6),
+  rh_jaw: area('faceNeck', 0xab18bf, 0xeb6eff),
+  rh_tongue: area('faceNeck', 0xfc97d8, 0xffa1dc),
+  rh_throat: area('faceNeck', 0x931082, 0xff6de5),
+  rh_scan_inferior: area('scan', 0x484e54, 0xe9f4ff),
+  lh_toes: area('rightLeg', 0xfef559, 0xfff764),
+  lh_ankle: area('rightLeg', 0xedb425, 0xffca56),
+  lh_knee: area('rightLeg', 0xf6fe32, 0xf7ff59),
+  lh_hip: area('rightLeg', 0xc4a11f, 0xffdd72),
+  lh_scan_superior: area('scan', 0x68625c, 0xfff6ec),
+  lh_trunk: area('trunk', 0x92e629, 0xacff57),
+  lh_shoulder: area('rightArm', 0xfc9157, 0xff9c68),
+  lh_elbow: area('rightArm', 0xea4016, 0xff6645),
+  lh_forearm: area('rightArm', 0xfdbc70, 0xffc580),
+  lh_wrist: area('rightArm', 0xf16a1b, 0xff8346),
+  lh_hand: area('rightArm', 0xfdc769, 0xffcd77),
+  lh_little: area('rightArm', 0xc54312, 0xff845e),
+  lh_ring: area('rightArm', 0xfcb364, 0xffbb74),
+  lh_middle: area('rightArm', 0xed5f19, 0xff7c46),
+  lh_index: area('rightArm', 0xfdc26d, 0xffca7f),
+  lh_thumb: area('rightArm', 0xd24113, 0xff7853),
+  lh_neck: area('faceNeck', 0xfc95a2, 0xffa0ac),
+  lh_scan_middle: area('scan', 0x5c5751, 0xfff5ea),
+  lh_brow: area('faceNeck', 0xdf1b3f, 0xff5a66),
+  lh_eyelid: area('faceNeck', 0xfdb3c0, 0xffbcc7),
+  lh_nose: area('faceNeck', 0xf8207b, 0xff4788),
+  lh_lower_face: area('faceNeck', 0xb61437, 0xff6271),
+  lh_lips: area('faceNeck', 0xfb7c9b, 0xff8ba6),
+  lh_jaw: area('faceNeck', 0xce1850, 0xff6280),
+  lh_tongue: area('faceNeck', 0xfca0a8, 0xffa9b0),
+  lh_throat: area('faceNeck', 0xa21139, 0xff657d),
+  lh_scan_inferior: area('scan', 0x514c46, 0xfff5e9),
 });
 
 /** Hue families in legend order: { key, regions (strip order, right hemisphere first) }. */
@@ -625,6 +634,13 @@ export const AREA_FAMILIES = freeze(['leftArm', 'rightArm', 'leftLeg', 'rightLeg
  * old rim: no change (still clipped). The active AREAS keep areaDarken 0.45: 0.8 changed a lit area by a few sRGB steps
  * only (the lit left wrist 119, 221, 230 -> 102, 227, 241; the right knee unchanged), because a lit area already shows
  * its glow colour; the light shades of a family simply have light, pastel glow colours (left knee 0xbd88ff). */
+// 17 November (owner: far more colourful areas; the areas as keys; activation "much more obvious"): restMix 0.62 -> 1
+// (a resting area shows its OWN colour, not a pink-washed tint; activatedMix is then nothing), drawn as a calm unlit key
+// (restValue 0.72 of it, restLift 0.14 -> 0.06 self-light), so that the lit key has room above it. A lit area sends out
+// areaNeonInto light (areaGain 1.35 -> 2.4, far above display white: the scene's bloom gives it a halo; areaNeon 1.8
+// keeps its hue) and its lit surface nearly goes out (areaDarken 0.45 -> 0.7), so the light alone carries the colour.
+// Looked at in the browser: gain 3 with a plain multiple of the glow colour turned an orange key pale yellow and a cyan
+// key white; power 1.6 at gain 3 still did for orange; 1.8 at 2.4 keeps orange orange and blue a bright blue.
 export const AREA_LOOK = freeze({
   // R558 (Message 17): calmer resting tints (0.72 -> 0.5 of the identity colour in the tissue pink) and a stronger lit
   // glow (area gain 1.0 -> 1.35), so the switched-on area stands out from its neighbours at a glance.
@@ -632,12 +648,12 @@ export const AREA_LOOK = freeze({
   // warm families read as clean orange / yellow bands instead of brown and olive; it also separates neighbours more
   // (smallest OKLab distance between strip neighbours at rest 0.038 -> 0.048, mean 0.085 -> 0.103; mirrored areas
   // 0.038 -> 0.048). The lit, active area still stands out by its emitted glow.
-  tissue: KEY_COLORS.otherTint, restMix: 0.62, activatedMix: 0.25,
+  tissue: KEY_COLORS.otherTint, restMix: 1, activatedMix: 0,
   // R558 (Message 22, clean areas): a faint self-light of the area's own resting tint (restLift x tint, fading out as the
   // activation glow takes over), like a backlit teaching panel: the warm families no longer sink to brown and olive on
   // the side away from the key light. Small enough that a lit area still stands far above it (areaGain 1.35).
-  restLift: 0.14,
-  areaDarken: 0.45, areaGain: 1.35, areaRimGain: 1.0,
+  restLift: 0.06, restValue: 0.72,
+  areaDarken: 0.7, areaGain: 2.4, areaNeon: 1.8, areaRimGain: 1.0,
   muscleGain: 0.3, muscleAlbedo: 0.5, muscleRimGain: 1.0, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
 });
 
@@ -712,6 +728,23 @@ export function areaGlowInto(regionId, v, gain, out, look = AREA_LOOK, glow = GL
   return k;
 }
 const NEUTRAL_GLOW = freeze([1.0, 0.86, 0.72]);
+
+/** The light of a switched-on motor AREA (LINEAR RGB, above display white): glow colour ^ look.areaNeon (its largest
+ * channel stays 1) x glowIntensity(v) x gain. 17 November ("neural activation should be much more obvious on the motor
+ * strip"; earlier: "a neon fluorescent flash"): the lit key is drawn far above display white so that the scene's bloom
+ * gives it a halo, and a picture value is cut at white per channel, so a plain multiple of the glow colour turned every
+ * lit key pale (an orange key at 3 x (1, 0.3, 0.1) shows as pale yellow). Raising the colour to a power first keeps
+ * the weaker channels low: the same key shows as a bright, saturated orange, and its halo is orange. Unknown ids glow
+ * a neutral warm white. Returns the intensity; `out` receives the colour. */
+export function areaNeonInto(regionId, v, gain, out, look = AREA_LOOK, glow = GLOW) {
+  const a = lookupArea(regionId);
+  const c = a ? a.glowLinear : NEUTRAL_GLOW;
+  const k = glowIntensity(v, glow);
+  const p = Number.isFinite(look.areaNeon) && look.areaNeon > 0 ? look.areaNeon : 1, s = k * (Number.isFinite(gain) ? gain : 1);
+  const hi = Math.max(c[0], c[1], c[2]) || 1;
+  for (let i = 0; i < 3; i++) out[i] = Math.pow(Math.max(0, c[i] / hi), p) * s;
+  return k;
+}
 
 /** Same as areaGlowInto, allocating: { color: [r, g, b] linear, intensity }. */
 export function areaGlowEmission(regionId, v, gain = 1) {

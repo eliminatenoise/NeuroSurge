@@ -103,6 +103,18 @@ export function meshNormalsAndCentre(positions, indices) {
 
 const easeOut = u => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
 
+/** The loading picture's brain beats, as an exposed brain does in surgery (user note of 17 November 2026: "a beating
+ * reacting brain as you would see in neurosurgery"): a heartbeat-shaped swell (a quick rise, a slower fall with a small
+ * second bump) on a slow rise and fall like breathing. Returns { beat: 0..1, breath: -1..1 } for a time in seconds.
+ * A display rhythm for a picture; nothing is measured. Pure. */
+export const BRAIN_BEAT = Object.freeze({ beatS: 0.92, breathS: 4.4, swell: 0.014, breathSwell: 0.008 });
+export function brainBeat(t, o = BRAIN_BEAT) {
+  const ph = ((t % o.beatS) + o.beatS) % o.beatS / o.beatS;
+  const rise = ph < 0.14 ? Math.sin((Math.PI / 2) * (ph / 0.14)) ** 2 : Math.exp(-(ph - 0.14) / 0.2);
+  const notch = 0.14 * Math.exp(-(((ph - 0.42) / 0.06) ** 2));
+  return { beat: Math.min(1, rise + notch), breath: Math.sin((2 * Math.PI * t) / o.breathS) };
+}
+
 /**
  * The picture. THREE: the three.js module; canvas: a canvas or an OffscreenCanvas; width / height: CSS pixels;
  * pixelRatio: device pixels per CSS pixel (kept at most 1.5: this is a loading picture).
@@ -219,8 +231,12 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     const sway = Math.sin((t / o.swayS) * 2 * Math.PI) * o.swayDeg * Math.PI / 180;
     bodyPivot.rotation.z = sway;
     brainPivot.rotation.z = sway * 0.8;
-    // the strip breathes, brighter once everything is in and the game is being built
-    base.strip.emissiveIntensity = 0.35 + (finishing ? 0.45 : 0.15) * (0.5 + 0.5 * Math.sin(t * (finishing ? 5.2 : 2.6)));
+    // The brain beats (a heartbeat swell on a slow breathing rise and fall), and the strip's light beats with it,
+    // brighter once everything is in and the game is being built.
+    const pulse = brainBeat(t);
+    brainTilt.scale.setScalar(o.brainScale * (1 + BRAIN_BEAT.swell * pulse.beat + BRAIN_BEAT.breathSwell * pulse.breath));
+    brainPivot.position.z = o.brainAt[2] + 6 * pulse.breath;
+    base.strip.emissiveIntensity = 0.3 + (finishing ? 0.55 : 0.3) * pulse.beat;
     shown += (progress - shown) * Math.min(1, dt * 6);
     bar.scale.set(Math.max(0.0001, 0.36 * shown), 3 / H, 1);
     barMat.opacity = finishing ? 0.55 + 0.4 * (0.5 + 0.5 * Math.sin(t * 6)) : 0.95;

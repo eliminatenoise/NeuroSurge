@@ -165,7 +165,7 @@ import * as NsMath from './ns-math.mjs';
 import {
   activityColor, activityColorCss, ACTIVITY_GLOW, RAMP_STOPS_LINEAR as SHARED_RAMP, hexToLinear, RAMP_LABEL, KEY_COLORS,
   // R558 (Message 2): one colour per motor area, shared by the area and the muscles it drives on both bodies.
-  AREA_LOOK, AREA_FAMILIES, areaRecord, areaRestTint, areaGlowInto, areaFamilySwatchCss, bodyPartArea, glowStrengthLegendStops,
+  AREA_LOOK, AREA_FAMILIES, areaRecord, areaRestTint, areaGlowInto, areaNeonInto, areaFamilySwatchCss, bodyPartArea, glowStrengthLegendStops,
   // R558 (Message 18): the muscle look (per-muscle tones, storey shade, tendon ends, tissue light).
   MUSCLE_LOOK, MUSCLE_TONES, muscleToneKey, muscleToneFallback, assignMuscleTones, muscleBaseInto, muscleGlowGainScale, EYE_LOOK, eyePartOf, muscleTendonScale, muscleFibreScale,
   // R558 (Messages 25 to 29): the comic cel look of the bodies (bands, rim, highlight shapes, ink).
@@ -188,7 +188,7 @@ import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
-import { BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD } from './ns-brain-ink.mjs';
+import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
 
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
@@ -326,7 +326,9 @@ export function createHdrBloom({ THREE, renderer, msaa = true, enabled = true, o
   if (!ok) return { begin: () => false, end: () => {}, setSize: () => {}, setLevel: () => {}, state: () => ({ ...st }), dispose: () => {} };
   const mk = (w, h, samples) => {
     const t = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
-      depthBuffer: samples !== null, stencilBuffer: false, samples: samples || 0 });
+      // 17 November: the main target (the only one with a depth buffer) also has a stencil buffer, for the motor
+      // strip's cut-out of the fleshy brain surface (STRIP_CUT).
+      depthBuffer: samples !== null, stencilBuffer: samples !== null, samples: samples || 0 });
     return t;
   };
   const main = mk(1, 1, msaa ? o.msaaSamples : 0);
@@ -1175,6 +1177,13 @@ export const GLASS_READ = Object.freeze({ crownOpacity: 0.035, crownBright: 0.45
 // R558 BB2: the glass OVER the strip (glassFold's stripCover) clears too, and a cleared glass keeps a tenth of its alpha
 // (clear 0.8 -> 0.9), so the strip's folds are not veiled; the contours and inked sulci of the glass fade with it.
 export const GLASS_CLEAR = Object.freeze({ radiusMm: 7, clear: 0.9 });
+/** 17 November (fleshy cortex): the brain surface is now solid tissue (ns-brain-ink BRAIN_FLESH), so the soft clearing
+ * above left dark see-through smears of nothing round the motor strip. Instead the strip CUTS the surface exactly:
+ * the motor areas' depth pre-pass (drawn first, after everything opaque) writes stencil `ref` where a strip pixel is
+ * visible, and the brain surface (one draw, later) is not drawn there. Every motor area is therefore seen whole and
+ * crisp from every side, like keys set into the surface, at no extra draw. Needs a stencil buffer (the HDR picture's
+ * target and the canvas both ask for one); without one the test is off and the soft clearing is used as before. */
+export const STRIP_CUT = Object.freeze({ ref: 1 });
 /** Closeness of each vertex to a set of point clouds (pure): 1 at distance 0, smoothstep down to 0 at radiusMm (nearest
  * point; the strip's vertices are about 3 mm apart, well under the radius). Uniform grid of cell radiusMm. */
 export function stripProximity(positions, pointLists, radiusMm = GLASS_CLEAR.radiusMm) {
@@ -1216,20 +1225,23 @@ const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.ligh
 /** R3-scene glass patch (pure): patchGlassShaders plus the crown / groove terms. Needs a float vertex attribute `nsSulc`
  * (a geometry without it reads 0 = crown, i.e. the plain rim look) and uniforms nsRimOpacity, nsRimPower and nsRead
  * (vec4: crownOpacity, crownBright, grooveLight, grooveAlpha). null when a hook is missing (plain glass is drawn). */
-export function patchGlassReadShaders(vertexShader, fragmentShader) {
+export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Boolean(BRAIN_FLESH) } = {}) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const v = vertexShader.indexOf(GLASS_VERTEX_HOOK);
   const hook = GLASS_FRAGMENT_HOOKS.find(h => fragmentShader.includes(h));
   if (v < 0 || !hook || !fragmentShader.includes('outgoingLight')) return null;
   const ve = v + GLASS_VERTEX_HOOK.length, f = fragmentShader.indexOf(hook);
   return {
-    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;' + vertexShader.slice(ve),
+    // 17 November (fleshy cortex): vNsObj = the atlas position (source mm), for the tissue mottling of cortexFleshGlsl.
+    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\nvarying vec3 vNsObj;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;\nvNsObj = position;' + vertexShader.slice(ve),
     // R558 (hunt 2): the groove share of the rim is a uniform (nsRimGroove), so the held cue can leave the sulci out
     // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
     // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
     fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
-      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\n' + GLASS_INK_HEAD + GLASS_VARYINGS +
-      fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + glassInkGlsl(GLASS_READ.lightDir) + '\n' + fragmentShader.slice(f)
+      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + GLASS_VARYINGS +
+      // 17 November: the shell is shaded as living cortex (ns-brain-ink cortexFleshGlsl) instead of inked glass; `flesh`
+      // false gives the glass back (glassInkGlsl), for the engineering pages.
+      fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + (flesh ? cortexFleshGlsl(GLASS_READ.lightDir) : glassInkGlsl(GLASS_READ.lightDir)) + '\n' + fragmentShader.slice(f)
   };
 }
 
@@ -1782,7 +1794,13 @@ export const REGION_RENDER = Object.freeze({
   // R558 (Message 22, clinical): a clean satin finish again (0.36 -> 0.5), no wet sheen.
   // R558 (user Message 54, "very ugly and matte ... add a bit of shine, a bit of glossiness"): glossy (0.5 -> 0.32), so
   // the key light draws a bright highlight along the gyrus crowns.
-  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.14, quantize: 256, roughness: 0.32, metalness: 0,
+  // 17 November (keys): the hovered area lights up clearly (hoverEmission 0.14 -> 0.5 of its own colour).
+  activityOpacityGain: 0.65, maxOpacity: 0.92, hoverEmission: 0.5, quantize: 256, roughness: 0.32, metalness: 0,
+  /** 17 November ("only small regions should be activating"): a glow that only shows a HELD POSTURE (the neck and
+   * trunk areas while the mouse look turns the head: ns-app setSettledRegions) keeps this share of the glow and none of
+   * the lit key's frame, pulse and ring, so it is a calm background light and never competes with the area that was
+   * switched on. */
+  postureGlow: 0.3,
   /** R558 (R32): tissue look of the motor areas, LIGHTING ONLY. Living tissue lets light in and scatters it, so it is
    * never black in shade and glows a little warm toward its silhouette. tissueTint x tissueStrength x (tissueFloor +
    * (1 - tissueFloor) x a view-angle term) of the area's own colour is added to its lit colour. The geometry, the
@@ -1795,7 +1813,7 @@ export const REGION_RENDER = Object.freeze({
    * look like cracked shards); each body-part GROUP (the on-brain label groups) gets one welded outline instead. */
   // R3-scene: left-arm sub-area borders fainter still (0.36 -> 0.22), territory borders softer (groupLineOpacity 0.5 ->
   // 0.32); all outlines are now smoothed (smoothTerritoryOutline), and other-body region borders show on hover/activation.
-  hoverLine: 0xfff3a0, lineOpacity: 1, leftArmLineOpacity: 0.22,
+  hoverLine: 0xffffff, lineOpacity: 1, leftArmLineOpacity: 0.22,
   /** Non-left-arm regions: faint outlines so every motor area reads as a region (not glass), and a small rest opacity
    * lift; the left-arm regions keep the stronger cyan identity. */
   otherLine: KEY_COLORS.otherLine, otherLineOpacity: 0.16, otherOpacityLift: 0.06,
@@ -1842,14 +1860,21 @@ export const REGION_BORDER = Object.freeze({
   // R558 (Message 22, clinical): a neutral graphite seam (was a dark red crease [0.075, 0.022, 0.026], #4d292d).
   // R558 BB (Messages 26, 28, style guide): the finest ink line of the hierarchy: near-black #0b0809 (linear here),
   // 1 CSS px across (0.5 each side) at 0.62 opacity, so neighbouring areas read as their own pieces without a heavy grid.
-  seamColor: Object.freeze([0.0033, 0.0024, 0.0027]), seamAlpha: 0.62, seamPx: 0.5,
+  // 17 November (keys): a clear dark GAP between neighbouring areas (0.5 px at 0.62 -> 1.1 px a side at 0.92), so each
+  // area is a separate key (ns-brain-ink BRAIN_KEYS draws the bevel inside it).
+  seamColor: Object.freeze([0.0033, 0.0024, 0.0027]), seamAlpha: 0.92, seamPx: 1.1,
   /** Line between two body parts (or at a map gap): warm ivory, the left-arm side in the territory cyan. */
   // R558 BB: between body parts an ink line one step bolder than the seams (1.5 CSS px, 0.85), no glow; the left-arm
   // territory keeps its cyan identity line (leftArmAlpha, leftArmGlow).
-  territoryColor: Object.freeze([0.0033, 0.0024, 0.0027]), territoryAlpha: 0.85, territoryPx: 0.75, territoryGlow: 0,
-  leftArmAlpha: 0.9, leftArmGlow: 0.35,
+  // 17 November (keys): a slightly wider gap between body parts (0.75 -> 1.6 px a side); the left-arm territory's own
+  // glowing cyan line is off (leftArmCyan false): with every area in its own strong colour it read as one more thing
+  // lit, and only the area that is switched on may glow now.
+  territoryColor: Object.freeze([0.0033, 0.0024, 0.0027]), territoryAlpha: 0.95, territoryPx: 1.6, territoryGlow: 0,
+  leftArmCyan: false, leftArmAlpha: 0.9, leftArmGlow: 0.35,
   /** Hovered / switched-on area: outlined from the inside (hover colour / the gold mark colour), half-width CSS px. */
-  hoverPx: 1.8, activatedPx: 1.4, highlightGlow: 0.55,
+  // 17 November (keys): the hovered key's frame is wider and brighter (1.8 -> 2.8 px, glow 0.55 -> 1); the gold mark
+  // of an area switched on earlier is thinner (1.4 -> 1 px), so it cannot be taken for the area that is on now.
+  hoverPx: 2.8, activatedPx: 1.0, highlightGlow: 1.0,
   /** Antialiasing ramp of every line (CSS px), never under aaMinDevicePx drawing-buffer pixels (at the 0.5 / 0.4 quality
    * scales a 0.6 CSS px ramp is under a third of a buffer pixel and the lines alias into stair steps). */
   aaPx: 0.6, aaMinDevicePx: 0.75,
@@ -2139,7 +2164,7 @@ export function patchEdgeShaders(vertexShader, fragmentShader) {
  * albedo, emission (linear), rim (linear fresnel rim colour), opacity, glow, activated }. R558: the tint and the glow
  * come from the area's own colour (ns-colors AREA_COLORS / AREA_LOOK); activatedCount >= 1 moves the tint toward that
  * colour and raises the opacity (activatedOpacity + activatedOpacityPerExtra per extra activation, capped). */
-export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, hovered = false } = {}, out = null, style = regionStyleConstants(), render = REGION_RENDER) {
+export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, hovered = false, posture = false } = {}, out = null, style = regionStyleConstants(), render = REGION_RENDER) {
   if (!region) fail('scene_region', 'region is required');
   const o = out || { tint: [0, 0, 0], albedo: [0, 0, 0], emission: [0, 0, 0], rim: [0, 0, 0], opacity: 0, glow: 0, activated: false };
   if (!o.rim) o.rim = [0, 0, 0];
@@ -2152,9 +2177,13 @@ export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, h
     // colour carries the look. The muscles it drives glow in the very same colour (shadeMuscle).
     const a = fin01(activity);
     areaRestTint(region.id, { activated }, o.tint);
-    const k = areaGlowInto(region.id, a, AREA_LOOK.areaGain, o.emission);
-    areaGlowInto(region.id, a, AREA_LOOK.areaRimGain, o.rim);
-    const d = 1 - AREA_LOOK.areaDarken * k;
+    const pg = posture && Number.isFinite(render.postureGlow) ? render.postureGlow : 1; // a held posture glows calmly
+    // (the lit key keeps its own hue far above display white: ns-colors areaNeonInto)
+    const k = areaNeonInto(region.id, a, AREA_LOOK.areaGain * pg, o.emission) * pg;
+    areaNeonInto(region.id, a, AREA_LOOK.areaRimGain * pg, o.rim);
+    // 17 November (keys): a resting key is a calm, unlit key (restValue of its colour), so the lit one has room to be
+    // brighter AND still its own colour.
+    const d = (1 - AREA_LOOK.areaDarken * k) * (Number.isFinite(AREA_LOOK.restValue) ? AREA_LOOK.restValue : 1);
     for (let i = 0; i < 3; i++) o.albedo[i] = o.tint[i] * d;
     // R558 (Message 22): the faint resting self-light of the area's own tint (AREA_LOOK.restLift), gone once it glows.
     const lift = (Number.isFinite(AREA_LOOK.restLift) ? AREA_LOOK.restLift : 0) * (1 - k);
@@ -2168,7 +2197,8 @@ export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, h
     activityShadeInto(o.tint, activity, o);
     o.rim[0] = o.rim[1] = o.rim[2] = 0;
   }
-  if (hovered) for (let i = 0; i < 3; i++) o.emission[i] += o.tint[i] * render.hoverEmission;
+  // (17 November: not on top of a lit key, whose own light would be washed toward white by it)
+  if (hovered) for (let i = 0; i < 3; i++) o.emission[i] += o.tint[i] * render.hoverEmission * (1 - o.glow);
   let op = style.restOpacity;
   if (activated) op = Math.min(style.activatedOpacityMax, style.activatedOpacity + style.activatedOpacityPerExtra * Math.max(0, n - 1));
   if (!region.isLeftArm && Number.isFinite(render.otherOpacityLift)) op += render.otherOpacityLift;
@@ -4332,7 +4362,7 @@ export function createScene({
   let lastRenderCpuMs = NaN, lastBusyMs = NaN;
 
   const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance', stencil: true }); // stencil: STRIP_CUT
   // Front-to-back glass depth pre-pass (guarded: setTransparentSort is a core WebGLRenderer method since r142).
   const transparentSortApplied = typeof renderer.setTransparentSort === 'function';
   if (transparentSortApplied) renderer.setTransparentSort(transparentSortNs);
@@ -4565,6 +4595,12 @@ export function createScene({
   const glassMaterial = rimMaterial('shell', {
     color: MATERIAL.glass, transparent: true, opacity: MATERIAL.glassOpacity, depthWrite: false, side: THREE.DoubleSide
   }, MATERIAL.glassRimOpacity, MATERIAL.glassRimPower, 'ns-glass-shell-read-r3s', true);
+  // 17 November (STRIP_CUT): the brain surface is not drawn over a visible motor-strip pixel.
+  const canvasStencil = (() => { try { const a = renderer.getContextAttributes && renderer.getContextAttributes(); return Boolean(a && a.stencil); } catch { return false; } })();
+  const stripCut = { supported: THREE.NotEqualStencilFunc !== undefined && THREE.ReplaceStencilOp !== undefined, canvasStencil, on: false };
+  if (stripCut.supported) {
+    glassMaterial.stencilWrite = true; glassMaterial.stencilWriteMask = 0; glassMaterial.stencilRef = STRIP_CUT.ref; glassMaterial.stencilFunc = THREE.NotEqualStencilFunc;
+  }
   // X-RAY: every camera-facing layer, additive (order-independent). FrontSide is the Material default: no `side`.
   const xrayParams = { color: MATERIAL.glassXray, transparent: true, opacity: MATERIAL.glassXrayOpacity, depthWrite: false };
   if (THREE.AdditiveBlending !== undefined) xrayParams.blending = THREE.AdditiveBlending;
@@ -4948,7 +4984,7 @@ export function createScene({
   }
   /** Per-region border uniforms and the patch (composePatch chain). */
   function regionBorderPatch(material, r, regionIndex) {
-    const left = r.isLeftArm === true, B = REGION_BORDER;
+    const B = REGION_BORDER, left = r.isLeftArm === true && B.leftArmCyan !== false;
     const terr = left ? [borderLeftArmColor.r, borderLeftArmColor.g, borderLeftArmColor.b, B.leftArmAlpha] : [...B.territoryColor, B.territoryAlpha];
     const u = {
       nsRegionId: { value: regionIndex }, nsTerr: { value: new THREE.Vector4(terr[0], terr[1], terr[2], terr[3]) }, nsTerrGlow: { value: left ? B.leftArmGlow : B.territoryGlow },
@@ -4994,6 +5030,9 @@ export function createScene({
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
   regionDepthMaterial.forceSinglePass = true;
+  if (stripCut.supported) { // 17 November (STRIP_CUT): a visible strip pixel marks the stencil
+    regionDepthMaterial.stencilWrite = true; regionDepthMaterial.stencilRef = STRIP_CUT.ref; regionDepthMaterial.stencilFunc = THREE.AlwaysStencilFunc; regionDepthMaterial.stencilZPass = THREE.ReplaceStencilOp;
+  }
   const leftArmLineMaterial = hasLines ? keep(new THREE.LineBasicMaterial({ transparent: true, depthWrite: false, opacity: REGION_RENDER.leftArmLineOpacity })) : null;
   if (leftArmLineMaterial) { const c = regionStyle.leftArmOutline; leftArmLineMaterial.color.setRGB(c[0], c[1], c[2]); }
   const hoverLineMaterial = hasLines ? keep(new THREE.LineBasicMaterial({ color: REGION_RENDER.hoverLine, transparent: true, depthWrite: false, opacity: REGION_RENDER.lineOpacity })) : null;
@@ -5308,9 +5347,13 @@ export function createScene({
     for (const [k, a] of Object.entries(v)) o[k] = { value: new THREE.Vector4(...a) };
     return o;
   })();
+  const keyFocus = { target: 0, amount: 0 }; // 17 November (BRAIN_KEYS focus), eased in render()
   const areaInkPatch = m => {
     areaInk.materials++;
-    return composePatch(m, 'ns-area-ink-bb', shader => {
+    // 17 November (ns-brain-ink BRAIN_KEYS): the area's key state (hovered, time of the last press, -, glow strength).
+    const keyU = { value: new THREE.Vector4(0, -1e4, 0, 0) };
+    m.userData.nsKey = keyU;
+    return composePatch(m, 'ns-area-ink-bb-keys', shader => {
       const chunk = THREE.ShaderChunk && typeof THREE.ShaderChunk.lights_physical_pars_fragment === 'string' ? THREE.ShaderChunk.lights_physical_pars_fragment : null;
       const p = patchAreaInkShaders(shader.vertexShader, shader.fragmentShader, chunk);
       areaInk.applied = p !== null && areaInk.applied !== false;
@@ -5318,6 +5361,8 @@ export function createScene({
       areaInk.cel = p.cel && areaInk.cel !== false;
       shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
       Object.assign(shader.uniforms, areaInkUniforms);
+      shader.uniforms.nsKey = keyU;
+      areaInk.keys = p.keys === true && areaInk.keys !== false; areaInk.keyClock = p.clock === true && areaInk.keyClock !== false;
     });
   };
   const composePatch = (m, tag, fn) => {
@@ -6428,15 +6473,15 @@ export function createScene({
   }
 
   /** Write one region's material state from its simulated state (skipped when the quantised state is unchanged). */
-  function applyRegionStyle(rec, activity, activatedCount, hovered, force = false) {
+  function applyRegionStyle(rec, activity, activatedCount, hovered, force = false, posture = false) {
     const a = fin01(activity);
     const q = Math.round(a * REGION_RENDER.quantize);
     const n = Number.isFinite(activatedCount) ? Math.max(0, Math.floor(activatedCount)) : 0;
-    const key = `${q}|${n}|${hovered ? 1 : 0}`;
+    const key = `${q}|${n}|${hovered ? 1 : 0}|${posture ? 1 : 0}`;
     if (!force && key === rec.key) return false;
     rec.key = key;
     rec.activity = a; rec.activated = n; rec.hovered = hovered;
-    const s = regionDisplayStyle(rec.region, { activity: q / REGION_RENDER.quantize, activatedCount: n, hovered }, shadeScratch, regionStyle);
+    const s = regionDisplayStyle(rec.region, { activity: q / REGION_RENDER.quantize, activatedCount: n, hovered, posture }, shadeScratch, regionStyle);
     rec.material.color.setRGB(s.albedo[0], s.albedo[1], s.albedo[2]);
     rec.material.emissive.setRGB(s.emission[0], s.emission[1], s.emission[2]);
     // R558 (Message 2): the area's own fresnel rim (its glow colour), set here from its activity, not from the links.
@@ -6444,6 +6489,8 @@ export function createScene({
     if (rimU) rimU.value.set(s.rim[0], s.rim[1], s.rim[2], GLOW_K.rimPower);
     rec.material.opacity = s.opacity;
     rec.opacity = s.opacity;
+    const ku = rec.material.userData && rec.material.userData.nsKey; // 17 November: the key's hover and glow (BRAIN_KEYS)
+    if (ku) { ku.value.x = hovered ? 1 : 0; ku.value.w = posture ? 0 : s.glow; }
     // R558 (REGION_BORDER): the hovered area is outlined from the inside in the hover colour, a switched-on one in gold.
     const bu = rec.material.userData && rec.material.userData.nsBorder;
     if (bu) {
@@ -7731,11 +7778,11 @@ export function createScene({
     const nextHover = onRegion ? gaze.regionId : null;
     if (nextHover !== hoveredRegionId) overlayDirty = true;
     hoveredRegionId = nextHover;
-    let changed = 0;
+    let changed = 0, anyOn = false;
     for (const rec of regions) {
       const a = regionActivity ? regionActivity[rec.id] : 0;
       const n = activatedRegions ? activatedRegions[rec.id] : 0;
-      if (applyRegionStyle(rec, Number.isFinite(a) ? a : 0, Number.isFinite(n) ? n : 0, rec.id === hoveredRegionId)) changed++;
+      if (applyRegionStyle(rec, Number.isFinite(a) ? a : 0, Number.isFinite(n) ? n : 0, rec.id === hoveredRegionId, false, powerUpSettled.has(rec.id))) changed++;
       // R558 (Message 22): the area's power-up starts when it begins to glow (its muscles join the same start).
       const cu = rec.material.userData && rec.material.userData.nsCharge;
       if (cu) {
@@ -7749,9 +7796,13 @@ export function createScene({
           c.on = on;
           cu.value.z = on ? 1 : 0;
         } else if (on && Number.isFinite(rec.puCount) && count > rec.puCount) powerUpRecharge(rec.id, cu); // a second click while it glows
+        // 17 November (BRAIN_KEYS): every new activation count (a click, a number key, a held look) presses the key down.
+        if (Number.isFinite(rec.puCount) && count > rec.puCount) { const ku = rec.material.userData.nsKey; if (ku) { ku.value.y = powerUpNow(); areaInk.presses = (areaInk.presses || 0) + 1; } }
         rec.puCount = count;
+        if (on && !powerUpSettled.has(rec.id)) anyOn = true;
       }
     }
+    keyFocus.target = anyOn ? 1 : 0; // 17 November (BRAIN_KEYS focus): the other keys dim while an area is switched on
     return changed;
   }
 
@@ -7906,7 +7957,8 @@ export function createScene({
     const inView = brainTransformSet && cssW > 0 && cssH > 0;
     for (const rec of regions) {
       let d = markDots.get(rec.id);
-      const want = inView && rec.activated > 0 && rec.markPts && rec.markCentre;
+      // 17 November: not while the area is lit (the lit key shows itself; the ring would sit on its bright core).
+      const want = inView && rec.activated > 0 && rec.markPts && rec.markCentre && rec.puOn !== true;
       if (!want) { if (d && d.shown) { d.shown = false; d.el.hidden = true; } continue; }
       if (!d) {
         const e = el('div', 'ns-mark-dot', overlay);
@@ -11864,6 +11916,14 @@ export function createScene({
       const rim = heldCueRim(h);
       shellRimUniforms.nsRimOpacity.value = rim.rimOpacity; shellRimUniforms.nsRimPower.value = rim.rimPower; shellRimUniforms.nsRimGroove.value = rim.rimGroove;
     }
+    // 17 November (BRAIN_KEYS focus): the keys that are not lit dim while an area is switched on (one uniform write).
+    if (keyFocus.amount !== keyFocus.target) {
+      const tau = keyFocus.target > keyFocus.amount ? BRAIN_KEYS.focusInS : BRAIN_KEYS.focusOutS;
+      let f = reducedMotion || !(dtMs > 0) ? keyFocus.target : keyFocus.amount + (keyFocus.target - keyFocus.amount) * (1 - Math.exp(-dtMs / 1000 / tau));
+      if (Math.abs(keyFocus.target - f) < 0.02) f = keyFocus.target;
+      keyFocus.amount = f;
+      areaInkUniforms.nsKeyDim.value.x = f;
+    }
     if (strip) strip.uniforms.nsTime.value = (now / 1000) % 1000;
     // Arm ghost window (auto): while the crosshair is on a control region (legacy marker or region mode).
     const target = OWN_BODY_SOLID ? 0 : armGhostState.mode === 'auto' ? (typeof highlighted === 'string' || gazeOnRegion ? 1 : 0) : armGhostState.mode;
@@ -11981,6 +12041,8 @@ export function createScene({
       outline.render(scene, camera);
       // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
       hdrOn = hdr.begin();
+      stripCut.on = stripCut.supported && (hdrOn || stripCut.canvasStencil); // 17 November: the strip cuts the brain surface (STRIP_CUT)
+      glassClearUniform.value = stripCut.on ? 0 : GLASS_CLEAR.clear;
       renderer.render(scene, camera);
     } finally { if (autoWorld) scene.matrixWorldAutoUpdate = true; }
     if (renderer.info && renderer.info.render) { mainPassInfo.calls = renderer.info.render.calls; mainPassInfo.triangles = renderer.info.render.triangles; }

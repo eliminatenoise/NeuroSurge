@@ -100,14 +100,14 @@ export const BRAIN_INK = Object.freeze({
   relief: Object.freeze({ envTauMm: 3, ballMm: 25, radiusMm: 10, cellMm: 4 }),
   glassFold: Object.freeze({ radiusMm: 10, ballMm: 8, maxMm: 6, loMm: 0.5, hiMm: 5, cellMm: 4, sliceMs: 8 }),
   cover: Object.freeze({ depthMm: 30, latMm: 3, latFullMm: 1.5, cellMm: 3 }),
-  cel: Object.freeze({ steps: Object.freeze([0.14, 0.38, 0.72]), levels: Object.freeze([0.12, 0.4, 0.75, 1.0]), soft: 0.035 }),
+  cel: Object.freeze({ steps: Object.freeze([0.14, 0.38, 0.72]), levels: Object.freeze([0.3, 0.55, 0.8, 1.0]), soft: 0.035 }),
   area: Object.freeze({
     contourCss: 1.05, contourAlpha: 0.8,
     lipMm: 1.5, lipCss: 1.0, lipAlpha: 0.8, fundusMm: 7, fundusCss: 0.45, fundusAlpha: 0.55,
-    reliefMm: 1.5, reliefDark: 0.95, lightGamma: 0.6, aoMin: 0.45, specRelief: 2, crossMm: 1.6, crossFrom: 0.7, crossFull: 0.95,
-    floorDark: 0.25, floorFrom: 0.55, floorTo: 1.0, indirect: 0.6, solid: 0.7,
-    hatchPerS: 150, hatchCss: 0.42, hatchAlpha: 0.35, hatchFrom: 0.2, hatchFull: 0.06, denseFrom: 0.1, denseFull: 0.02,
-    reliefHatch: 0.85, hatchMinSpacingCss: 4, glowFade: Object.freeze([0.04, 0.32]),
+    reliefMm: 1.5, reliefDark: 0.6, lightGamma: 0.6, aoMin: 0.6, specRelief: 2, crossMm: 1.6, crossFrom: 0.7, crossFull: 0.95,
+    floorDark: 0.15, floorFrom: 0.55, floorTo: 1.0, indirect: 0.6, solid: 0.96,
+    hatchPerS: 150, hatchCss: 0.42, hatchAlpha: 0, hatchFrom: 0.2, hatchFull: 0.06, denseFrom: 0.1, denseFull: 0.02,
+    reliefHatch: 0.85, hatchMinSpacingCss: 4, glowFade: Object.freeze([0.3, 0.7]),
     gloss: Object.freeze({ power: 20, sheen: 0.22, coreLo: 0.8, coreHi: 0.86, core: 0.28 })
   }),
   glass: Object.freeze({
@@ -332,6 +332,39 @@ float nsCelBand( float x ) {
 }
 `;
 
+/** The motor areas as KEYS of a control panel (owner, 17 November: "the brain turns into a bunch of buttons ... a
+ * control panel"; "neural activation should be much more obvious on the motor strip"; 12 November: "only small regions
+ * should be activating"). Drawn in the area patch below from what the per-fragment area patch already knows (the
+ * distance in CSS pixels to the area's two borders along the strip) and one small per-area uniform, nsKey = (hovered
+ * 0 / 1, the clock time of the last press, -, the glow strength 0..1). No new draw, no texture.
+ *  - bevel: inside each border a band bevelCss wide (at most bevelShare of the key's width) is lightened where that edge faces the key light on the screen and
+ *    darkened where it faces away (bevelLight / bevelDark, plus a small white edge bevelSpec), so every area reads as a
+ *    separate raised key next to the dark gap the border patch draws (ns-scene-three REGION_BORDER seam); toward both
+ *    borders the key's lit colour also falls off a little (pillowDark over pillowCss), like a rounded key top.
+ *  - hover: the scene lights the hovered key (its own colour as emission) and frames it; here its bevel is stronger
+ *    (hoverBevel).
+ *  - press: for pressS after a press (a click, a number key, a held look: one more activation count) the key goes
+ *    DOWN: the bevel turns over, the key darkens by pressDark and a solid dark frame pressCss wide (at most pressShare
+ *    of the key's width) closes in from its borders (full until pressHoldS, then it springs back), so the flash of
+ *    the activation is seen inside a key that is going down and coming up again. Not under prefers-reduced-motion.
+ *  - on: while the area glows, ONLY that key shows a white-hot frame just inside its borders (frameCss wide, frameGain
+ *    x the glow, whitened by frameWhite), a slow pulse of the whole key (pulse at pulseHz) and a ring that runs from
+ *    the key's middle out to its edges again and again (ringHz, width ringW in key radii, ringGain x the glow, fading
+ *    as it grows; the key's radius is 1 at its borders along the strip and at ringReliefMm of relief depth across the
+ *    gyrus). Under prefers-reduced-motion the frame and the glow are steady and there is no pulse or ring. The glow
+ *    itself is above display white (ns-colors AREA_LOOK.areaGain), so the scene's bloom gives the lit key a halo.
+ *  - focus: while any area is switched on, every key that is neither lit nor hovered is dimmed by focusDim (the shared
+ *    uniform nsKeyDim.x, eased by the scene over focusInS / focusOutS), so the lit key is the one bright thing on the
+ *    strip. A glow that only shows a held posture (the scene's postureGlow) does not count as switched on.
+ * Display choices; timings are UI choices, not physiology. */
+export const BRAIN_KEYS = Object.freeze({
+  bevelCss: 5, bevelShare: 0.3, bevelLight: 0.7, bevelDark: 0.55, bevelSpec: 0.28, hoverBevel: 1.5, pillowCss: 8, pillowShare: 0.4, pillowDark: 0.38,
+  pressS: 0.2, pressHoldS: 0.07, pressDark: 0.45, pressCss: 4, pressShare: 0.3,
+  frameCss: 2.2, frameShare: 0.12, frameGain: 2.0, frameWhite: 0.3, pulse: 0.22, pulseHz: 1.1,
+  ringHz: 0.9, ringW: 0.16, ringGain: 1.1, ringSpan: 1.5, ringReliefMm: 9,
+  focusDim: 0.5, focusInS: 0.12, focusOutS: 0.45
+});
+
 /**
  * Motor-area ink patch (pure). Needs the per-fragment area patch first (its varyings vNsS, vNsCav and its uniform
  * nsLineW, whose w is the pixel ratio). lightsChunk: THREE.ShaderChunk.lights_physical_pars_fragment (for the bands;
@@ -343,7 +376,8 @@ float nsCelBand( float x ) {
  * floorTo, indirect), nsARel (reliefMm, reliefDark, lightGamma, solid), nsARel2 (aoMin, fundus mm, fundus half-width
  * CSS, fundus alpha), nsAKey (the key light's direction in view space, unit), nsAGloss (power, sheen, coreLo, coreHi),
  * nsAGloss2 (core, -, -, -).
- * Returns { vertexShader, fragmentShader, cel } or null when a hook is missing.
+ * Returns { vertexShader, fragmentShader, cel, keys, clock } or null when a hook is missing (keys / clock: whether the
+ * key look and its timed parts were added, BRAIN_KEYS; they need the per-area uniform nsKey).
  */
 export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = null) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
@@ -351,6 +385,11 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
   if (!fragmentShader.includes(AREA_OPAQUE_HOOK) || !fragmentShader.includes('varying float vNsCav') || !fragmentShader.includes('varying float vNsS') ||
     !fragmentShader.includes('uniform vec4 nsLineW') || !fragmentShader.includes('vViewPosition')) return null;
   let fs = fragmentShader;
+  // 17 November (BRAIN_KEYS): the keys need the border patch's run distances; the press, the pulse and the ring also
+  // the power-up patch's clock (without it they are left out and the frame is steady).
+  const keys = fragmentShader.includes('float nsDLo') && fragmentShader.includes('nsKHi') && fragmentShader.includes('float nsSv');
+  const clock = keys && fragmentShader.includes('uniform vec4 nsClock');
+  const K = BRAIN_KEYS, kf = glslFloat;
   let cel = false;
   if (typeof lightsChunk === 'string' && lightsChunk.includes(AREA_LIGHT_LINE) && fs.includes(AREA_LIGHTS_INCLUDE) && fs.includes(AREA_LIGHTS_BEGIN)) {
     const banded = lightsChunk.replace(AREA_LIGHT_LINE,
@@ -362,7 +401,7 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
   }
   const relief = '\tnsRel01 = 1.0 - exp( - max( vNsRel, 0.0 ) / max( nsARel.x, 1e-3 ) );\n\tnsRelK = 1.0 - nsARel.y * nsRel01;\n';
   if (cel) fs = fs.replace(AREA_LIGHTS_BEGIN, `${relief}${AREA_LIGHTS_BEGIN}`);
-  const head = INK_LINE_GLSL + 'varying float vNsRel;\nuniform vec4 nsInkC;\nuniform vec4 nsCelS;\nuniform vec4 nsCelL;\nuniform vec4 nsAInk;\nuniform vec4 nsAInk2;\nuniform vec4 nsAHatch;\nuniform vec4 nsAHatch2;\nuniform vec4 nsAFold;\nuniform vec4 nsARel;\nuniform vec4 nsARel2;\nuniform vec4 nsARel3;\nuniform vec4 nsAKey;\nuniform vec4 nsAGloss;\nuniform vec4 nsAGloss2;\n' +
+  const head = INK_LINE_GLSL + 'varying float vNsRel;\nuniform vec4 nsInkC;\nuniform vec4 nsCelS;\nuniform vec4 nsCelL;\nuniform vec4 nsAInk;\nuniform vec4 nsAInk2;\nuniform vec4 nsAHatch;\nuniform vec4 nsAHatch2;\nuniform vec4 nsAFold;\nuniform vec4 nsARel;\nuniform vec4 nsARel2;\nuniform vec4 nsARel3;\nuniform vec4 nsAKey;\nuniform vec4 nsAGloss;\nuniform vec4 nsAGloss2;\nuniform vec4 nsKey;\nuniform vec4 nsKeyDim;\n' +
     (cel ? '' : 'float nsDirect = 1.0;\nfloat nsDirectW = 1.0;\nfloat nsRelK = 1.0;\nfloat nsRel01 = 0.0;\n');
   const body = `
 	{
@@ -412,10 +451,48 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
 		float nsGm = 0.5 * ( nsAGloss.z + nsAGloss.w );
 		float nsGloss = ( nsAGloss.y * nsGp + nsAGloss2.x * smoothstep( nsGm - nsGe, nsGm + nsGe, nsGp ) ) * pow( nsRelK, nsARel3.x );
 		vec3 nsRefl = min( outgoingLight - totalEmissiveRadiance + vec3( nsGloss ), vec3( 1.0 ) );
-		outgoingLight = totalEmissiveRadiance * mix( 1.0, nsFloor * nsAo, nsGlowK ) + nsRefl * nsFloor;
-		float nsLine = max( nsCont * nsAInk.y, max( nsLip * nsAInk2.x, nsFun * nsARel2.w ) * nsGlowK );
+		vec3 nsEmit = totalEmissiveRadiance;
+		float nsKfr = 0.0;
+		${keys ? `// the keys (BRAIN_KEYS): bevel, press, and the lit key's frame, pulse and ring
+		float nsKlo = nsKLo >= 1.0 ? nsDLo : 1e6, nsKhi = nsKHi >= 1.0 ? nsDHi : 1e6;
+		float nsKedge = min( nsKlo, nsKhi );
+		float nsKpress = 0.0;
+		${clock ? `{ float nsKage = nsClock.x - nsKey.y; nsKpress = nsClock.y > 0.5 || nsKage < 0.0 ? 0.0 : 1.0 - smoothstep( ${kf(K.pressHoldS)}, ${kf(K.pressS)}, nsKage ); }` : ''}
+		vec2 nsKg = vec2( dFdx( vNsS ), dFdy( vNsS ) );
+		nsKg /= max( length( nsKg ), 1e-9 );
+		float nsKw = min( nsKlo + nsKhi, 1e4 ); // the key's width (CSS px); a narrow key gets narrower bands
+		float nsKbw = min( ${kf(K.bevelCss)}, ${kf(K.bevelShare)} * nsKw );
+		float nsKb = ( smoothstep( 0.0, nsKbw, nsKlo ) - smoothstep( 0.0, nsKbw, nsKhi ) ) * dot( nsKg, normalize( nsAKey.xy ) );
+		nsKb *= ( 1.0 - 2.0 * nsKpress ) * mix( 1.0, ${kf(K.hoverBevel)}, nsKey.x );
+		nsRefl = nsRefl * ( 1.0 + ${kf(K.bevelLight)} * max( nsKb, 0.0 ) - ${kf(K.bevelDark)} * max( - nsKb, 0.0 ) ) + vec3( ${kf(K.bevelSpec)} * max( nsKb, 0.0 ) );
+		nsRefl = min( nsRefl, vec3( 1.0 ) ) * ( 1.0 - ${kf(K.pressDark)} * nsKpress ) * ( 1.0 - ${kf(K.pillowDark)} * ( 1.0 - smoothstep( 0.0, min( ${kf(K.pillowCss)}, ${kf(K.pillowShare)} * nsKw ), nsKedge ) ) );
+		{ float nsKdim = 1.0 - ${kf(K.focusDim)} * nsKeyDim.x * ( 1.0 - nsKey.x ) * ( 1.0 - step( 1e-4, nsKey.w ) ); nsRefl *= nsKdim; nsEmit *= nsKdim; }
+		if ( nsKey.w > 0.0 ) {
+			float nsKmax = max( nsEmit.r, max( nsEmit.g, nsEmit.b ) );
+			vec3 nsKc = mix( nsEmit / max( nsKmax, 1e-4 ), vec3( 1.0 ), ${kf(K.frameWhite)} );
+			float nsKaa = max( 0.6, ${kf(INK_MIN_HALF_PX)} / nsPrI );
+			float nsKfw = min( ${kf(K.frameCss)}, ${kf(K.frameShare)} * nsKw ); // a narrow key keeps most of its width for its own colour
+			nsKfr = ( 1.0 - smoothstep( nsKfw - nsKaa, nsKfw + nsKaa, nsKedge - nsLineW.x ) ) * smoothstep( nsLineW.x - nsKaa, nsLineW.x + nsKaa, nsKedge );
+			float nsKmove = 1.0, nsKring = 0.0;
+			${clock ? `if ( nsClock.y < 0.5 ) {
+				nsKmove = 1.0 + ${kf(K.pulse)} * sin( 6.2831853 * ${kf(K.pulseHz)} * ( nsClock.x - nsCharge.x ) );
+				float nsKlo01 = clamp( nsLo, 0.0, 1.0 ), nsKhi01 = clamp( nsHiS, 0.0, 1.0 );
+				float nsKu = abs( nsSv - 0.5 * ( nsKlo01 + nsKhi01 ) ) / max( 0.5 * ( nsKhi01 - nsKlo01 ), 1e-4 );
+				float nsKrad = length( vec2( nsKu, max( vNsRel, 0.0 ) / ${kf(K.ringReliefMm)} ) );
+				float nsKph = fract( ( nsClock.x - nsCharge.x ) * ${kf(K.ringHz)} );
+				float nsKd = ( nsKrad - nsKph * ${kf(K.ringSpan)} ) / ${kf(K.ringW)};
+				nsKring = exp( - nsKd * nsKd ) * ( 1.0 - nsKph );
+			}` : ''}
+			nsEmit = nsEmit * ( nsKmove + ${kf(K.ringGain)} * nsKring ) + nsKc * ( ${kf(K.frameGain)} * nsKey.w * nsKfr * nsKmove );
+		}` : ''}
+		outgoingLight = nsEmit * mix( 1.0, nsFloor * nsAo, nsGlowK ) + nsRefl * nsFloor;
+		float nsLine = max( nsCont * nsAInk.y, max( nsLip * nsAInk2.x, nsFun * nsARel2.w ) * nsGlowK ) * ( 1.0 - nsKfr );
 		float nsInkA = max( nsLine, nsHat );
 		outgoingLight = mix( outgoingLight, nsInkC.rgb, nsInkA );
+		${keys ? `{ // the press: a dark frame closes in from the key's borders
+			float nsKin = min( ${kf(K.pressCss)}, ${kf(K.pressShare)} * nsKw ) * nsKpress;
+			outgoingLight = mix( outgoingLight, nsInkC.rgb, min( 1.0, 3.0 * nsKpress ) * ( 1.0 - smoothstep( nsKin - 0.7, nsKin + 0.7, nsKedge ) ) );
+		}` : ''}
 		// solid (BB2): more solid than the material alpha, so the bands are not washed out by the black behind the strip
 		diffuseColor.a = 1.0 - ( 1.0 - diffuseColor.a ) * ( 1.0 - nsARel.w );
 		diffuseColor.a = max( diffuseColor.a, nsLine * 0.9 );
@@ -424,7 +501,7 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
   fs = head + fs.replace(AREA_OPAQUE_HOOK, body + AREA_OPAQUE_HOOK);
   if (fs.includes(AREA_LIGHTS_END)) fs = fs.replace(AREA_LIGHTS_END, `${AREA_LIGHTS_END}\n\treflectedLight.indirectDiffuse *= nsAFold.w * mix( 1.0, nsARel2.x, nsRel01 );`);
   const vs = 'attribute float nsRelief;\nvarying float vNsRel;\n' + vertexShader.replace(AREA_VERTEX_HOOK, `${AREA_VERTEX_HOOK}\nvNsRel = nsRelief;`);
-  return { vertexShader: vs, fragmentShader: fs, cel };
+  return { vertexShader: vs, fragmentShader: fs, cel, keys, clock };
 }
 
 /** Uniform values (plain arrays) of the motor-area ink patch for BRAIN_INK. keyDir: the key light's direction in view
@@ -436,6 +513,7 @@ export function areaInkUniformValues(o = BRAIN_INK, keyDir = [0.6, 1.5, 1.8]) {
     nsAKey: [keyDir[0] / kl, keyDir[1] / kl, keyDir[2] / kl, 0],
     nsAGloss: [g.power, g.sheen, g.coreLo, g.coreHi],
     nsAGloss2: [g.core, 0, 0, 0],
+    nsKeyDim: [0, 0, 0, 0],
     nsInkC: [srgbToLinear(o.ink[0]), srgbToLinear(o.ink[1]), srgbToLinear(o.ink[2]), 1],
     nsCelS: [o.cel.steps[0], o.cel.steps[1], o.cel.steps[2], o.cel.soft],
     nsCelL: [o.cel.levels[0], o.cel.levels[1], o.cel.levels[2], o.cel.levels[3]],
@@ -508,4 +586,85 @@ export function glassInkUniformValues(o = BRAIN_INK) {
     nsGCel2: [g.cel.soft, g.cel.shadow, 0, 0],
     nsInkG: [srgbToLinear(o.ink[0]), srgbToLinear(o.ink[1]), srgbToLinear(o.ink[2])]
   };
+}
+
+/* ------------------------------------------------------------------ the fleshy cortex (17 November) */
+
+/** The brain surface as LIVING CORTEX (owner, 17 November: "The brain area looks awful ... Maybe it should be far more
+ * fleshy"; earlier: "visceral and fleshy but never disgusting", "clinical", "a bit of shine, a bit of glossiness",
+ * "contrast and high dynamic range are still visually key").
+ * Until now the brain was a glass shell: a face-on alpha of 0.01 with a pale rim, so at the start it read as a dark
+ * glass ornament. The shell pass (still ONE draw of the nearest surface, after its depth pre-pass; no new pass, no
+ * texture) now shades that surface as tissue:
+ *  - colour: a warm pink-grey on the gyral crowns that deepens to a dark rose down the sulci (the same per-vertex fold
+ *    depth the glass used: 0 crown .. 1 groove), with a faint mottling fixed to the tissue (two octaves of value noise
+ *    of the atlas position, mottleMm / mottleFineMm across), so the surface is not one flat paint; the same mottling
+ *    is a height of bumpMm for a derivative bump of the normal (the atlas mesh has about 1.7 mm facets; the bump breaks
+ *    their flat highlights up), faded out when its grain would be finer than about bumpFadePx pixels;
+ *  - light: the scene's key light (the camera headlight, upper right), wrapped by `wrap` because tissue scatters, over
+ *    a small flat fill; a fold keeps aoMin of both at its floor, so every sulcus is a dark line and every gyrus a
+ *    rounded, lit fold (light-to-dark range); what the key light does not reach is filled a little with a warm red
+ *    (scatter), so the shaded side stays tissue-coloured, never grey;
+ *  - wet: a soft sheen (sheen x (N.H)^sheenPower) and a small crisp glint (glint inside the step glintLo .. glintHi of
+ *    (N.H)^glintPower) of the key light on the crowns, both off in the sulci, like a moist surface under an examination
+ *    lamp; the reflected light is kept at or under white, so it never blooms or sparkles (only the activation glows may);
+ *  - rim: a faint pale rim toward the silhouette (the shell's rim uniforms: stronger while the brain is held);
+ *  - solid: alpha `alpha` face-on and rimAlpha at the silhouette (a little see-through at the very edge, so a hand or the
+ *    mirror body crossing the outline is not cut hard). Next to and over the motor strip the surface still clears
+ *    (the scene's GLASS_CLEAR attribute), so the motor areas are seen whole, as before.
+ * Colours are sRGB 0..1 as drawn face-on in full light. Display choices only: no tissue optics are implied. */
+export const BRAIN_FLESH = Object.freeze({
+  crown: Object.freeze([0.87, 0.7, 0.69]), groove: Object.freeze([0.4, 0.16, 0.2]), grooveCurve: 0.8,
+  mottle: 0.18, mottleMm: 11, mottleFineMm: 3.2, mottleWarm: Object.freeze([1.0, 0.9, 0.88]), bumpMm: 0.5, bumpFadePx: 5,
+  key: 1.0, wrap: 0.35, fill: 0.2, aoMin: 0.22,
+  scatter: 0.22, scatterTint: Object.freeze([1.0, 0.34, 0.3]),
+  sheen: 0.2, sheenPower: 28, glint: 0.42, glintPower: 180, glintLo: 0.55, glintHi: 0.75, wetGroove: 0.9,
+  rim: Object.freeze([1.0, 0.82, 0.8]), rimGain: 0.55,
+  alpha: 0.97, rimAlpha: 0.8
+});
+
+/** Value noise for the mottling (GLSL head; names are the patch's own). */
+export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 ); p += dot( p, p.yzx + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }\n' +
+  'float nsFlN( vec3 x ) { vec3 i = floor( x ); vec3 f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );\n' +
+  '  return mix( mix( mix( nsFlH( i ), nsFlH( i + vec3( 1.0, 0.0, 0.0 ) ), f.x ), mix( nsFlH( i + vec3( 0.0, 1.0, 0.0 ) ), nsFlH( i + vec3( 1.0, 1.0, 0.0 ) ), f.x ), f.y ),\n' +
+  '    mix( mix( nsFlH( i + vec3( 0.0, 0.0, 1.0 ) ), nsFlH( i + vec3( 1.0, 0.0, 1.0 ) ), f.x ), mix( nsFlH( i + vec3( 0.0, 1.0, 1.0 ) ), nsFlH( i + 1.0 ), f.x ), f.y ), f.z ); }\n';
+
+/** GLSL appended to the shell's read patch in place of the glass ink (ns-scene-three patchGlassReadShaders; nsN, nsV,
+ * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
+ * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. Pure. */
+export function cortexFleshGlsl(light, o = BRAIN_FLESH) {
+  const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
+  return `
+{
+	float nsClr = 1.0 - nsClear * clamp( vNsNear, 0.0, 1.0 );
+	float nsMot = 0.65 * nsFlN( vNsObj * ${f(1 / o.mottleMm)} ) + 0.35 * nsFlN( vNsObj * ${f(1 / o.mottleFineMm)} + 7.3 );
+	vec3 nsAlb = mix( ${lin(o.crown)}, ${lin(o.groove)}, pow( nsG, ${f(o.grooveCurve)} ) );
+	nsAlb *= mix( vec3( 1.0 ), ${v3(o.mottleWarm)}, nsMot ) * ( 1.0 + ${f(o.mottle)} * ( nsMot - 0.5 ) );
+	// a slight unevenness of the surface from the same mottling (a derivative bump of the normal: the wet highlights
+	// break up like on moist tissue); it fades out where the fine mottling would be under bumpFadePx pixels across
+	{
+		vec3 nsSx = dFdx( - vNsView ), nsSy = dFdy( - vNsView );
+		vec3 nsR1 = cross( nsSy, nsN ), nsR2 = cross( nsN, nsSx );
+		float nsDet = dot( nsSx, nsR1 );
+		float nsBf = 1.0 - smoothstep( ${f(1 / o.bumpFadePx)}, ${f(2.5 / o.bumpFadePx)}, length( fwidth( vNsObj * ${f(1 / o.mottleFineMm)} ) ) );
+		float nsBh = nsMot * ${f(o.bumpMm)} * nsBf * length( nsSx ) / max( length( dFdx( vNsObj ) ), 1e-6 );
+		vec3 nsGrad = sign( nsDet ) * ( dFdx( nsBh ) * nsR1 + dFdy( nsBh ) * nsR2 );
+		nsN = normalize( abs( nsDet ) * nsN - nsGrad );
+	}
+	vec3 nsLk = normalize( vec3( ${light.map(f).join(', ')} ) );
+	float nsDif = clamp( ( dot( nsN, nsLk ) + ${f(o.wrap)} ) / ${f(1 + o.wrap)}, 0.0, 1.0 );
+	float nsAo = mix( 1.0, ${f(o.aoMin)}, nsG );
+	vec3 nsCol = nsAlb * ( ${f(o.key)} * nsDif + ${f(o.fill)} ) * nsAo;
+	nsCol += nsAlb * ${v3(o.scatterTint)} * ( ${f(o.scatter)} * ( 1.0 - nsDif ) * nsAo );
+	float nsNH = max( dot( nsN, normalize( nsLk + nsV ) ), 0.0 );
+	float nsGl = pow( nsNH, ${f(o.glintPower)} );
+	float nsGe = max( ${f(0.5 * (o.glintHi - o.glintLo))}, fwidth( nsGl ) );
+	float nsWet = ${f(o.sheen)} * pow( nsNH, ${f(o.sheenPower)} ) + ${f(o.glint)} * smoothstep( ${f(0.5 * (o.glintLo + o.glintHi))} - nsGe, ${f(0.5 * (o.glintLo + o.glintHi))} + nsGe, nsGl );
+	nsCol += vec3( nsWet * ( 1.0 - ${f(o.wetGroove)} * nsG ) );
+	float nsRimF = pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - nsRimGroove * nsG );
+	nsCol += ${lin(o.rim)} * ( nsRimF * nsRimOpacity * ${f(o.rimGain)} );
+	outgoingLight = min( nsCol, vec3( 1.0 ) );
+	diffuseColor.a = mix( ${f(o.alpha)}, ${f(o.rimAlpha)}, pow( max( 1.0 - nsFacing, 0.0 ), 4.0 ) ) * nsClr;
+}
+`;
 }
