@@ -181,6 +181,10 @@ export const BODY_JOINT_SHARES = Object.freeze({
   // share (index 20, ring 15, little 25 at full spread; middle is the reference). Commonly quoted MCP abduction is
   // about 20-30 degrees; the shares follow the usual wider spread of the border digits.
   spread: Object.freeze({ index: 1.0, middle: 0, ring: 0.75, little: 1.25 }),
+  // 17 November 2026 (the range-of-motion sweep, tools/rom-sweep.mjs): tried 0.8 and 0.9 so that the kneecap would stay
+  // nearer the shin at a fully bent knee (at 0.7 it ends 21 mm farther from the tibia than at the start). It then
+  // left the thigh bone instead (0.8: 14 mm from the tibia and 13 from the femur; 0.9: 7 and 15). A rigid kneecap on
+  // a circle about the knee cannot follow both; 0.7 keeps it on the femur, which is what shows. Kept.
   patellaPerKneeFlex: 0.7,
   jawGlideMmPerDeg: 0.25
 });

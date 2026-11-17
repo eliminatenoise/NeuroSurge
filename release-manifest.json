@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-8",
+  "version": "experimental-2026-11-17-body-update-9",
   "experimental": true,
-  "source": "Body update (R558), eighth upload, published at the user's standing instruction to upload each version, before independent review. Since the seventh upload: the body lies back as on a declined sofa (hips straight, back rounded, head upright) with a start look a little below level and the brain lower, so the first view holds the motor strip, the mirror body and your own chest, arms, legs and feet together; every muscle that crosses a joint is skinned per vertex so its ends stay on their bones; the number keys work with the cards off. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 86 to 88.",
+  "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 182260,
-      "sha256": "80c230fc9811015e46088423f269626c974cf8c92b46c192a9e3fdb753af6128"
+      "bytes": 184571,
+      "sha256": "a0c74b2f9c41b13a86ac7b6a78594f4b2e8899aed617d7817065c90c9aad2de3"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,13 +52,13 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 45849,
-      "sha256": "c14f1e97176f23ea66d022bf42ff6e6ecbfeff7fea59716fa442feb4436d9b4b"
+      "bytes": 46819,
+      "sha256": "880231ffa3f065af23d2d6e7986390474f57b2a8d697a4fbaed895d364d7412b"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 15544,
-      "sha256": "19ae383b0f28e4a83c12f10edfea7282f4d0845fa01a11c3667f2e1d6e4a7460"
+      "bytes": 16545,
+      "sha256": "b4a4e654ae0cad39bb464960775f7fec09c2f4e67f2af3b3de2e96d790bb866c"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 3910,
-      "sha256": "86503f03f6c5f87a4457df519ba973949f3c6aa7d01e4b2a513f5f62ed31962a"
+      "sha256": "0913d59650348743e047bcf22423d2baeb766db488d60a925ba12f41300ba377"
     },
     {
       "path": "index.html",
@@ -3487,8 +3487,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 409677,
-      "sha256": "c57d8a5b8bc448e18f041a2a12d7250a62561bc49d2d90d2ad6ddb3fad5b0164"
+      "bytes": 410134,
+      "sha256": "953ab23d2e3f69bcf4acf2a1d1f27bc4b59f8e4b4438dac204f173e0645f91ee"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -3729,6 +3729,16 @@
       "path": "tests/space-gesture.test.mjs",
       "bytes": 11209,
       "sha256": "e2da75f97f45d2c44875930a1d419a15c5fcb3b116921fc7e19585197cdad12e"
+    },
+    {
+      "path": "tools/load-body.mjs",
+      "bytes": 2112,
+      "sha256": "caaaa898d2a185c82f816a15fc675e320430647a0fe9f54c15f8ccb99add2368"
+    },
+    {
+      "path": "tools/rom-sweep.mjs",
+      "bytes": 11731,
+      "sha256": "6d612c86e0de734c7455a169afc844d5af20cb0c19d306b03b0c2e5c3b0174da"
     },
     {
       "path": "vendor/LICENSE",

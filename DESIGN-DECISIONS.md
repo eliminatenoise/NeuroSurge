@@ -1272,7 +1272,22 @@ Cost, and how it is held. The scene re-skins a muscle only when its bones have m
 
 Checked: a bent knee, a lifted thigh, a raised right arm and a bent right elbow, alone and stacked, on your own body and on the mirror body brought close, in pictures. Muscles followed their bones in each.
 
-NOT done: the full sweep the user asked for. No measurement yet goes through every movement of the body map and every common stack and reports the distance of each muscle's ends from its bones, the gap at each joint and the joint angles against a combined range. Linear blending also thins a muscle at a sharply bent joint. The left game arm has its own skinning and was not changed.
+The sweep (`node tools/rom-sweep.mjs`, added with this change). Every movement of the body map (108) and six stacks of movements (thigh lifted + swung out + knee bent; right arm up + across + elbow bent; lean back + turn + head back; bend forward + head forward + head turned; both knees bent + both thighs lifted; right arm back + out + elbow bent + palm up) is posed with the game's own rig and skin, and two things are measured as the change from the start posture: how much farther from its bone each attachment vertex of a muscle is (206 of the 232 muscles; a vertex within 6 mm of a bone the muscle attaches to counts), and how much the closest approach of two bones that meet at a joint has grown (99 bone-to-segment pairs).
+
+Muscle ends, 114 poses:
+
+| | poses with an end over 8 mm | ends over 8 mm | over 20 mm | over 40 mm | largest |
+|---|---|---|---|---|---|
+| one rigid piece per muscle (before) | 60 | 1158 | 393 | 153 | beyond 60 mm (gluteus maximus 72 mm off the thigh at a lifted thigh; external oblique 58 mm off the pelvis at a side bend) |
+| skinned per vertex (now) | 26 | 96 | 10 | 0 | 34 mm |
+
+What is left over 20 mm now: the right rhomboid and serratus anterior, 24 to 34 mm, which lie ON the ribs and slide over them when the shoulder blade moves with a raised arm (they are not torn from an attachment); and the lower end of rectus femoris, 31 to 32 mm from the shin at a fully bent knee, because it follows the thigh bone and the kneecap is not one of its bones.
+
+Joints: no hip, knee, elbow, ankle, wrist or finger joint opens by more than 4 mm in any pose. Over 5 mm: the right shoulder girdle lifts off the rib cage by 22 mm with the arm raised 180 degrees and by 36 to 37 mm with the arm back, out and bent; the kneecap ends 21 mm farther from the tibia at a fully bent knee (it stays on the thigh bone; 0.8 and 0.9 of the knee's turn were tried and left the thigh bone by 13 to 15 mm instead); the jaw joint 10 mm at a side shift of the jaw; the spine up to 7 mm at a full turn of the trunk.
+
+The sweep measures geometry in the game's own model. It does not see one part passing through another, it leaves out the right forearm's twisted muscles and the left game arm, and it does not judge whether joint angles are believable in combination: every angle stays inside its own single-axis range (the rig clamps it), and no rule yet limits combinations.
+
+Still open from the user's notes: the shoulder girdle's lift, the kneecap and the lower end of rectus femoris; a combined-range rule; pointed shapes (the sweep does not look for them). Linear blending also thins a muscle at a sharply bent joint. The left game arm has its own skinning and was not changed.
 
 ## 88. Number keys with the cards off
 
@@ -1308,6 +1323,6 @@ With the cards off (the start, section 77) the number keys did nothing, because 
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; the measured sweep of every movement for loose muscles, joints that come apart and impossible positions (87 fixed the main cause of loose muscles and checked four movements in pictures); a brain that beats and reacts as in surgery; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look; shoulders rolled forward and a rounded upper back (the rig has no such joints).
+- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the shoulder girdle lifting off the ribs, the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; a brain that beats and reacts as in surgery; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look; shoulders rolled forward and a rounded upper back (the rig has no such joints).
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.
