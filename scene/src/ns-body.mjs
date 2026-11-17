@@ -1884,7 +1884,18 @@ const NECK_HEAD = new Set(['cervical', 'skull', 'mandible']), NECK_TRUNK = new S
 // muscles rigid did show (longissimus capitis through the levator scapulae by 14 mm at a 30 degree look, the
 // sternothyroid off the sternum, a scalenus through the levator scapulae by 5 mm), so those keep the per-vertex skin.
 const NECK_SKIN_RIGID = new Set(['FJ1526', 'FJ1526M', 'FJ1534', 'FJ1534M', 'FJ1539', 'FJ1539M', 'FJ1542', 'FJ1542M', 'zm-longus-colli-r', 'zm-longus-colli-l']);
-const neckSkinnedMuscle = (info, id = null) => Boolean(info && info.kind === 'muscle' && (info.candidates || []).some(s => NECK_HEAD.has(s)) && (info.candidates || []).some(s => NECK_TRUNK.has(s))
+/* 17 November 2026 (user: "fix it when muscles essentially become detached, which is still a problem when they're moved
+ * into certain ranges of motion"; "clicking of the muscles does not result in ... detachments of muscles"): the rule
+ * that was made for the neck now holds for EVERY muscle that crosses a joint (two or more candidate segments: 226 of
+ * the 232 muscles, 819 thousand of 844 thousand vertices). Such a muscle used to be drawn as one rigid piece, a
+ * least-squares fit between the bones it attaches to, so with a joint far from the start posture both of its ends
+ * stood off their bones: the hamstrings and the calf at a bent knee, the hip flexors at a lifted thigh, the belly
+ * muscles on a bent trunk, the deltoid and the chest muscle at a raised arm. Now each of its vertices follows the two
+ * bones nearest to it, with the continuous weights below, so its ends stay on their bones and its belly bends with the
+ * joint. The scene re-skins a muscle only while the bones it attaches to move against each other. The right hand's
+ * and forearm's muscles keep their own rule (the twist), and the five deep neck pairs stay rigid as before. The name
+ * is kept: it is the neck's rule. Display mechanics on licensed anatomy, not measured soft-tissue motion. */
+const neckSkinnedMuscle = (info, id = null) => Boolean(info && info.kind === 'muscle' && new Set(info.candidates || []).size >= 2
   && !(info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') && !(id !== null && NECK_SKIN_RIGID.has(id)));
 /**
  * Continuous two-influence weights over a muscle's candidate bones: u_s = 1 / d_s^2 for the distance d_s to each
@@ -2238,7 +2249,22 @@ export function rotationBodyDrives(byName, options = {}) {
  */
 export const BODY_POSTURES = deepFreezeRig({
   anatomical: {},
-  open: { hip_flex_L: 90, hip_flex_R: 90, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: 90, r_pronation: 160 },
+  // 17 November 2026 (user: "someone who is leaning laid back in a really leaning laid back chair ... can see
+  // everything at the front of their body from the chin down all at once, shoulders, chest and everything"; "Torso
+  // should be declining back in an invisible imaginary decline sofa"; "the shoulders rolled forward and the back
+  // convexly curved"; "see all of the front of the torso at once without the chest pumping out but depressed
+  // down/inwards"; "full neutral hip extension. The bend is from the back and not the hips"): the body lies back as on
+  // a declined sofa with the upper back curled up. The hips are NEUTRAL (0: the thighs in line with the pelvis), and
+  // the pelvis and legs lie level on the ground. All of the bend is in the back and neck ("Almost full kyphosis /
+  // flexion of the spine for full view"): the trunk rounded forward 68 of its 80 degrees (a convex back, the chest
+  // sunk toward the pelvis) and the neck 22 more, which brings the head upright and leaves the neck 28 degrees of its
+  // own for the downward look the game starts with. The rig bends the trunk at two joints below a rigid rib cage, so
+  // the rounding shows at the waist rather than between the shoulder blades.
+  // The head keeps its place (the bake keeps the skull), so the body lies out ahead of the eyes, chin to toes. The
+  // right arm is raised 68 from the trunk so it still points level forward. No sofa is drawn. A display choice inside
+  // the joints' ranges (trunk 80 forward, neck 50), not a measured pose. The rig has no joint that rolls the shoulder
+  // blades forward.
+  open: { neck_flex: 22, trunk_flex: 68, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: 68, r_pronation: 160 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -2320,7 +2346,7 @@ export const BODY_POSTURE_LIMITS = deepFreezeRig({
 export const DEFAULT_BODY_POSTURE = 'open';
 /** Plain-language posture lines for the HUD / Esc page (R17). */
 export const BODY_POSTURE_TEXT = Object.freeze({
-  open: 'Your body sits on an invisible flat ground with every limb straight forward, at right angles to your trunk: legs out in front side by side, both arms reaching forward. Look down to see your chest, legs and feet.',
+  open: 'Your body lies back as on a declined sofa (none is drawn), the upper back curled up, hips straight, legs out in front side by side and both arms reaching forward. Your chest, belly, arms and legs lie in view below the brain.',
   seated: 'Your body sits still (no chair is drawn). Your right forearm rests forward, as if on an armrest. Look down to see your chest, lap, knees and feet. Look right and a little down to see your right arm.',
   anatomical: 'Your simulated body stands still with its arms at its sides.'
 });

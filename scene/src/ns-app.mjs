@@ -260,12 +260,15 @@ export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckEx
  * area and muscles at the end of a joint's range, linear below; under a click or look activation (1). Display choice. */
 export const HEAD_GLOW = Object.freeze({ level: 0.75 });
 /** HEAD_LOOK with the ranges taken from an ns-body module (BODY_JOINT_LIMITS, LOOK_TWIST_LIMIT_DEG) when present (pure). */
-export function headLookLimits(body = null, base = HEAD_LOOK) {
+export function headLookLimits(body = null, base = HEAD_LOOK, rest = null) {
   const L = body && body.BODY_JOINT_LIMITS ? body.BODY_JOINT_LIMITS : null;
   const ok = r => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[0] <= 0 && r[1] >= 0;
   const nr = L && ok(L.neck_rot) ? Math.min(-L.neck_rot[0], L.neck_rot[1]) : base.neckRotDeg;
-  const nf = L && ok(L.neck_flex) ? L.neck_flex : [-base.neckExtDeg, base.neckFlexDeg];
-  const tf = L && ok(L.trunk_flex) ? L.trunk_flex : [-base.trunkExtDeg, base.trunkFlexDeg];
+  // rest: the start posture's own neck and trunk bend (the reclined posture of 17 November 2026 starts with both bent
+  // forward). The look bends them FROM there, so what is left of each range is counted from the posture.
+  const shift = (r, k) => { const q = rest && Number.isFinite(rest[k]) ? rest[k] : 0; const lo = r[0] - q, hi = r[1] - q; return [Math.min(0, lo), Math.max(0, hi)]; };
+  const nf = shift(L && ok(L.neck_flex) ? L.neck_flex : [-base.neckExtDeg, base.neckFlexDeg], 'neck_flex');
+  const tf = shift(L && ok(L.trunk_flex) ? L.trunk_flex : [-base.trunkExtDeg, base.trunkFlexDeg], 'trunk_flex');
   const tw = body && Number.isFinite(body.LOOK_TWIST_LIMIT_DEG) && body.LOOK_TWIST_LIMIT_DEG >= 0 ? body.LOOK_TWIST_LIMIT_DEG : base.twistDeg;
   const ts = body && Number.isFinite(body.LOOK_BEND_SIDE_LIMIT_DEG) && body.LOOK_BEND_SIDE_LIMIT_DEG > 0 ? body.LOOK_BEND_SIDE_LIMIT_DEG : base.trunkSideDeg;
   return Object.freeze({ ...base, neckRotDeg: nr, neckFlexDeg: nf[1], neckExtDeg: -nf[0], trunkFlexDeg: tf[1], trunkExtDeg: -tf[0], twistDeg: tw, trunkSideDeg: ts,
@@ -4659,7 +4662,7 @@ export function start(params = {}) {
   // information cards are off (ns-quiet: the tip by the crosshair and one short prompt). Its root is the HUD root.
   let quietUi = null;
   try { quietUi = createQuietUi({ doc, root: hudRoot }); } catch { quietUi = null; }
-  let quietRoot = null;
+  let quietRoot = null, quietLast = null;
   const isPlaceholder = placeholder === true;
   const qaEnabled = qa === true;
   const useShell = Boolean(shellRoot);
@@ -4693,7 +4696,10 @@ export function start(params = {}) {
   let lastGoodLook = null, lookBlock = null, reachBlock = null; // R558: the last look that was shown; short-lived learned look / reach limits
   // R558 (HEAD_LOOK): the look turns the head; on with the configured eye-view graph (the R558 eye camera). headLimits
   // come from the body module once it is loaded; lastHeadPose / headShown: the head of the last drawn frame.
-  let headLookOn = false, headLimits = HEAD_LOOK, lastHeadPose = null, headShown = null, headPrevNow = null;
+  let headLookOn = false, headLimits = HEAD_LOOK, headRest = null, lastHeadPose = null, headShown = null, headPrevNow = null;
+  /** The look's head joints (counted from the start posture) as the rig's own angles: the posture's neck and trunk bend
+   * added back (the reclined posture of 17 November 2026 starts with both bent forward). */
+  const headAbsJoints = j => ({ neck_rot: j.neck_rot + (headRest ? headRest.neck_rot : 0), neck_flex: j.neck_flex + (headRest ? headRest.neck_flex : 0), trunk_flex: j.trunk_flex + (headRest ? headRest.trunk_flex : 0) });
   /** R558 (HEAD_LOOK): the held neck / trunk angles of an activity state from the start posture (now: where the joint
    * is this instant, springing included; goal: where its latch holds it), and whether they moved since the last frame. */
   // R558 (performance, hunt 2 code #7): the activity's joint targets and latch view (a full state check) are read once
@@ -4709,7 +4715,8 @@ export function start(params = {}) {
       headOffsAct = act; headOffsRead = { pos, lv };
     }
     const now = {}, goal = {};
-    for (const k of ['neck_rot', 'neck_flex', 'trunk_flex']) { now[k] = pos && Number.isFinite(pos[k]) ? pos[k] : 0; goal[k] = 0; }
+    // (counted from the start posture: the reclined posture's own neck and trunk bend is not a held movement)
+    for (const k of ['neck_rot', 'neck_flex', 'trunk_flex']) { now[k] = (pos && Number.isFinite(pos[k]) ? pos[k] : 0) - (headRest && Number.isFinite(headRest[k]) ? headRest[k] : 0); goal[k] = 0; }
     if (lv && Array.isArray(lv.joints)) for (const j of lv.joints) if (j && hasOwn(goal, j.jointId) && Number.isFinite(j.goalDeg)) goal[j.jointId] = j.goalDeg - (Number.isFinite(j.restDeg) ? j.restDeg : 0);
     const moving = Boolean(headPrevNow) && Object.keys(now).some(k => Math.abs(now[k] - headPrevNow[k]) > 1e-3);
     headPrevNow = now;
@@ -5112,7 +5119,7 @@ export function start(params = {}) {
   /** R558 (Messages 14 / 15): after the body (and its lift) is in the scene, register the right-hand muscles for
    * per-vertex skinning (ns-body handSkinRecords -> scene setBodySkin), so each finger's tendons follow that finger. On
    * any error the hand stays rigid (as before) and handSkinNote says why (inspect().features.handSkin). */
-  let handSkinReady = false, handSkinNote = null;
+  let handSkinReady = false, handSkinNote = null, skinSegmentsLast = null, skinPosedThisFrame = false;
   function installHandSkin(sourceMeshes) {
     handSkinReady = false;
     if (!bodyRig || !bodyBaked || !sceneFn('setBodySkin') || !sceneFn('updateBodySkin') || typeof mods.body.handSkinRecords !== 'function'
@@ -5840,7 +5847,9 @@ export function start(params = {}) {
       const actOpts = { ...latchOpts, ...(activityOptions || {}) };
       // R558 (HEAD_LOOK): the look drives the head with the configured eye camera (not the whole-arm engineering view).
       headLookOn = Boolean(referenceGraph) && !wholeArmOption;
-      headLimits = headLookLimits(mods.body);
+      // The look bends the neck and trunk from the start posture's own bend (the reclined posture): limits counted from it.
+      headRest = mods.body && typeof mods.body.bodyPostureAngles === 'function' ? (() => { try { const r = mods.body.bodyPostureAngles(mods.body.DEFAULT_BODY_POSTURE); return { neck_flex: r.neck_flex || 0, trunk_flex: r.trunk_flex || 0, neck_rot: r.neck_rot || 0 }; } catch { return null; } })() : null;
+      headLimits = headLookLimits(mods.body, HEAD_LOOK, headRest);
       const wholeArmSupport = wholeArmOption ? captureWholeArm(() => WholeArmDisplay.buildWholeArmSupport({ bones: data.bones, muscles: data.muscles, liftedById: armLifted })) : null;
       sim = createSimulation({
         rig: data.rig, boxes: data.boxes, strip: data.strip, binding: inputs.binding, activityOptions: actOpts, bodyMap,
@@ -5851,7 +5860,7 @@ export function start(params = {}) {
         // R558 (HEAD_LOOK): the posed trunk and head chain of the CURRENT body rig (it may stream in, and be rebuilt with
         // the face packet, after the first frames; null until then, and the eye keeps the earlier rule meanwhile).
         ...(headLookOn ? { headLimits, headFrame: head => (bodyRig && typeof mods.body.bodyHeadFrame === 'function'
-          ? mods.body.bodyHeadFrame(bodyRig, { neck_rot: head.joints.neck_rot, neck_flex: head.joints.neck_flex, trunk_flex: head.joints.trunk_flex }, { baked: bodyBaked, ...headPoseOptions(head) }) : null) } : {})
+          ? mods.body.bodyHeadFrame(bodyRig, headAbsJoints(head.joints), { baked: bodyBaked, ...headPoseOptions(head) }) : null) } : {})
       });
       if (referenceGraph) {
         const initialFrame = sim.referenceFrameForLook(referenceGraph.initialLook);
@@ -6987,7 +6996,7 @@ export function start(params = {}) {
         if (sameHeadOpts(h0, h1)) return true;
         const items = collideItems();
         if (!items || !items.own) return true;
-        const base = withCameraJoints(bodyPosed, headNew.joints);
+        const base = withCameraJoints(bodyPosed, headAbsJoints(headNew.joints));
         const S0 = segsWith(base, h0), S1 = segsWith(base, h1);
         const mover = bodyMover(items, S0);
         // R558 (hunt 3): a move that starts in contact (the untested neck joints brought your head near the brain or the
@@ -7216,13 +7225,19 @@ export function start(params = {}) {
         // For the "Try this" guide (ns-guide 'moveKey'): which numbers did a movement, whether it could still move (the
         // card's own "already there" flag) and whether the look was on the brain. Handed over only when the frame is applied.
         const moveGuideEvents = [];
-        if (movesThisFrame.length && infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId && infoReadState() !== 'off') {
+        // 17 November 2026 (the quiet screen): with the cards off, the numbers belong to the list the tip by the crosshair
+        // shows, at once (no wait for the card to settle), or to the last area it showed, so they still work while you
+        // look down at the body. With the cards on they belong to the card's list, as before.
+        const movesFrom = !movesThisFrame.length ? null
+          : infoReadState() === 'off' ? (quietLast && Array.isArray(quietLast.moves) ? quietLast : null)
+          : infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId ? { moves: infoModel.moves, regionId: infoModel.movesRegionId } : null;
+        if (movesFrom) {
           const add = [];
           for (const n of movesThisFrame) {
-            const mv = infoModel.moves[n - 1];
+            const mv = movesFrom.moves[n - 1];
             if (mv && typeof mv.id === 'string') {
-              add.push({ type: 'muscle', regionId: infoModel.movesRegionId, actionId: mv.id, regionOnly: false, at: timing.dt });
-              infoChosen = { regionId: infoModel.movesRegionId, actionId: mv.id, gazePick: undefined };
+              add.push({ type: 'muscle', regionId: movesFrom.regionId, actionId: mv.id, regionOnly: false, at: timing.dt });
+              infoChosen = { regionId: movesFrom.regionId, actionId: mv.id, gazePick: undefined };
               moveGuideEvents.push({ type: 'moveKey', n, moved: mv.atEnd !== true, onBrain: gazeOnBrain(simState.gaze) });
               // What the press did when it was not the movement itself, from the card's own marks as they were shown.
               moveNote = mv.atEnd === true ? { key: 'moveStill', n, untilMs: now + MOVE_NOTE_MS }
@@ -7962,7 +7977,8 @@ export function start(params = {}) {
           let targets = { ...(bodyRestAngles || {}), ...(out.bodyJointTargets || {}) };
           // R558 (HEAD_LOOK): the head, neck and trunk are where the look (plus any held offset) put them this frame: the
           // same pose the eye camera, the arm's shoulder root and the mirror body use.
-          if (headShown) Object.assign(targets, headShown.joints);
+          // (the look's angles are counted from the start posture: its own neck and trunk bend is added back)
+          if (headShown) Object.assign(targets, headAbsJoints(headShown.joints));
           // R17: both hands close on a grasp: the right hand's whole-hand closure follows the Space grip (GRIP_BOTH).
           if (rightGrip > 0) targets.r_grasp = Math.max(Number.isFinite(targets.r_grasp) ? targets.r_grasp : 0, GRIP_BOTH.closeDeg * rightGrip);
           // R558 (Messages 47 and 48: every leg movement achievable and plain to see): a thigh lifted past the
@@ -8129,13 +8145,16 @@ export function start(params = {}) {
             // vertex (installHandSkin), so the pose also hands the segment matrices to the scene.
             const T = guarded.targets;
             const rest = handSkinReady ? mods.body.bodyPostureAngles(bodyBaked) : null;
-            const skinHand = Boolean(rest) && mods.body.HAND_SKIN_JOINTS.some(j => Number.isFinite(T[j]) && Math.abs(T[j] - rest[j]) > 1e-6);
+            // 17 November 2026: every muscle that crosses a joint is skinned per vertex now (ns-body neckSkinnedMuscle), so
+            // the segment matrices always go to the scene; it re-skins a muscle only when its own bones moved.
+            const skinHand = Boolean(rest);
             if (handSkinReady) {
               const det = mods.body.poseBodyDetailed(bodyRig, T, po);
               callScene('updateBody', det.matrices, drives);
-              try { callScene('updateBodySkin', skinHand ? det.segments : null); } catch (err) { handSkinReady = false; handSkinNote = errorText(err); }
+              try { callScene('updateBodySkin', skinHand ? det.segments : null); skinSegmentsLast = skinHand ? det.segments : null; } catch (err) { handSkinReady = false; handSkinNote = errorText(err); }
             } else callScene('updateBody', mods.body.poseBody(bodyRig, T, po), drives);
             bodyPosed = T; headDrawn = headShown; // R558 (hunt 2 code #2): the head options this pose was drawn with
+            skinPosedThisFrame = true;
           } else if (guarded && dkey !== bodyDriveKey) {
             bodyKey = guarded.targets === targets ? key : null;
             bodyDriveKey = dkey;
@@ -8147,6 +8166,12 @@ export function start(params = {}) {
             callScene('updateBody', null, drives);
           }
         }
+        // 17 November 2026: the scene skins at most a budget of vertices per frame; muscles that waited are finished on
+        // the following frames, also when the pose itself has stopped changing.
+        if (handSkinReady && !skinPosedThisFrame && skinSegmentsLast && sceneFn('bodySkinPending')) {
+          try { if (callScene('bodySkinPending') > 0) callScene('updateBodySkin', skinSegmentsLast); } catch { /* the next pose skins them */ }
+        }
+        skinPosedThisFrame = false;
         // R558 (Message 12): once the body is posed, tell the scene how far your body can ever reach, so the mirror plane
         // stands in front of every reachable pose (it is set again at once if it was nearer; only before any input).
         if (!reachSent && bodyPosed && sceneFn('setMirrorReach')) {
@@ -8362,13 +8387,12 @@ export function start(params = {}) {
             if (area) {
               const leftArm = out.gaze.isLeftArm === true;
               const act = simState && simState.activity ? simState.activity : null;
-              tipModel = quietTipModel({
-                area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId,
-                moves: infoMoves(area, { leftArm, still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
-                  back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
-                  armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
-                  rotationState: typeof out.rotationState === 'string' ? out.rotationState : null })
-              });
+              const areaMoves = infoMoves(area, { leftArm, still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
+                back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
+                armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
+                rotationState: typeof out.rotationState === 'string' ? out.rotationState : null });
+              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves });
+              quietLast = { regionId: area.id, moves: areaMoves }; // what the number keys do (also after the look has left the area)
             } else tipModel = quietTipModel({ pick: crossPick, arrow: arrowTip });
           }
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;

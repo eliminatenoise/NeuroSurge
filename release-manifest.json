@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-7",
+  "version": "experimental-2026-11-17-body-update-8",
   "experimental": true,
-  "source": "Body update (R558), seventh upload, published at the user's standing instruction to upload each version, before independent review. Since the sixth upload: Space holds a thing and the pointer moves it left, right, up and down across the view, the mirror body included, while the view stays put; the mirror body's limbs move your own matching limb; both hands close on a grasp; the muscles that move the head and arm light as the look moves; the brain drawn as living tissue with strongly coloured motor areas as separate keys and one bright area while it is on; a look that reaches all the way round, the eyes turning past the end of the neck's turn; a shorter Esc page; fourteen more tests. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 80 to 85.",
+  "source": "Body update (R558), eighth upload, published at the user's standing instruction to upload each version, before independent review. Since the seventh upload: the body lies back as on a declined sofa (hips straight, back rounded, head upright) with a start look a little below level and the brain lower, so the first view holds the motor strip, the mirror body and your own chest, arms, legs and feet together; every muscle that crosses a joint is skinned per vertex so its ends stay on their bones; the number keys work with the cards off. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md sections 86 to 88.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 175508,
-      "sha256": "bc7331b2d166522b80e3f34c210a1c585caeff62a030fa84b49656543b4b210a"
+      "bytes": 182260,
+      "sha256": "80c230fc9811015e46088423f269626c974cf8c92b46c192a9e3fdb753af6128"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 8421,
-      "sha256": "4097a5961013ad85a24ab5c8059ea49061a561ec27e9320fed481ccdfffa9437"
+      "bytes": 8551,
+      "sha256": "e16b9665a03f63d454eebfed22b0debaace09532c4bd7a30533ad54bb3895f38"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 43788,
-      "sha256": "231180dc2769f8c314fa80d1495b01bed9b081c2d3645101797bbc0ac292c57c"
+      "bytes": 45849,
+      "sha256": "c14f1e97176f23ea66d022bf42ff6e6ecbfeff7fea59716fa442feb4436d9b4b"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 14132,
-      "sha256": "594beb0a0ce18fc4b2bbfe2197a952174c86dbe2bb12d9f173a45ae51152cdfe"
+      "bytes": 15544,
+      "sha256": "19ae383b0f28e4a83c12f10edfea7282f4d0845fa01a11c3667f2e1d6e4a7460"
     },
     {
       "path": "README.md",
-      "bytes": 12175,
-      "sha256": "6f746f0459b620219d8c5c4294f35a4f8086b0bb97873c0a39e0d5d52d701632"
+      "bytes": 12581,
+      "sha256": "c19b4cc576606c434df3bdeeb1c39b6ab6c949adaa5dbe9b48e33745c6511ba5"
     },
     {
       "path": "START.html",
       "bytes": 3910,
-      "sha256": "ad8accd192e9358671a689003926538eeb6b46dbc1de77c88364359ba4d1bef0"
+      "sha256": "86503f03f6c5f87a4457df519ba973949f3c6aa7d01e4b2a513f5f62ed31962a"
     },
     {
       "path": "index.html",
@@ -3352,8 +3352,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 36854,
-      "sha256": "51630c0747706e10d359c8cf3fcbcacafd926503fffdc64b67ec936b101e556e"
+      "bytes": 37461,
+      "sha256": "3fae269aaf189b049a3125edc21efb06c6df6e14ba78a966c4e7c51e84bf7ff9"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3447,8 +3447,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 679554,
-      "sha256": "5c0b54368b824850804fe276a42f581445bbdeb9a465470d08827c5822104148"
+      "bytes": 682591,
+      "sha256": "c7c94ddf3d692fd2e691dc8c7265fad2a0fcfde281b1549dca3bfcf421edea31"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3487,8 +3487,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 406839,
-      "sha256": "41778f13365305ce62c46d132c17702ee4c32d9701fd95f4be850a23dea1cb5a"
+      "bytes": 409677,
+      "sha256": "c57d8a5b8bc448e18f041a2a12d7250a62561bc49d2d90d2ad6ddb3fad5b0164"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -3602,8 +3602,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 958639,
-      "sha256": "7917ae7cf2507628d6c07aab9aef5c003c74e95d8fec5f651ce121477b61935c"
+      "bytes": 960786,
+      "sha256": "4b7fcb09508bd7f5a0019ba7f699f9325ec1f7566839cdec9ed7608fee46b1dc"
     },
     {
       "path": "scene/src/ns-text.mjs",

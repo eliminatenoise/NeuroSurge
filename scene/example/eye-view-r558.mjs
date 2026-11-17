@@ -18,7 +18,12 @@ import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
 // Including everything from the neck down"): 108 degrees up and down (about 136 across at 16:9), between the 90 of
 // 11 November and the 120 whose edge stretching the user called absurd.
 const EYE_FOV_Y_DEG = 108;
-const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: 0 }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: 0 }) });
+// 17 November 2026 (user: "what if we made the brain far lower so that the relevant body parts were always in view?";
+// "You will naturally be looking a little downwards and that is where the motor strip should naturally be"): the game
+// starts with the look a little below level, as someone leaning back on a sofa looks, and the brain starts there too,
+// over the body that lies out below your eyes, so the limbs an area moves stay on screen while you aim at it.
+const START_LOOK_PITCH_DEG = -20, BRAIN_START_PITCH_DEG = -20;
+const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);
 // Exact priority IDs in pinned294-entry full-body manifest order (right/left lacrimal bones), not a progress guess.
@@ -267,7 +272,7 @@ export async function assertConfiguredBoot() {
   requireCase(f.bodyRig === true && f.bodyNote === null && f.brainMode === 'region' && f.round5.faceMuscles === 54 && f.round5.faceNote === null, 'normal body/girdle/54face must complete');
   requireCase(s.state && s.state.referenceBrain && Array.isArray(s.state.referenceBrain.initialPivotWorld) && s.state.referenceBrain.initialPivotWorld.length === 3 && s.state.referenceBrain.initialPivotWorld.every(Number.isFinite), 'constructor world brain pivot must bind on actual frame');
   requireCase(s.camera && s.camera.pose && s.camera.pose.firstPerson === true && s.camera.pose.thirdPerson === false, 'actual camera must use configured FIRST-person route');
-  requireCase(g.fovYDeg === EYE_FOV_Y_DEG && g.initialLook.yaw === 0 && g.initialLook.pitch === 0, 'actual constructor graph must resolve the declared R558 eye-view inputs');
+  requireCase(g.fovYDeg === EYE_FOV_Y_DEG && g.initialLook.yaw === 0 && g.initialLook.pitch === START_LOOK_PITCH_DEG * DEG, 'actual constructor graph must resolve the declared R558 eye-view inputs');
   requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === EYE_FOV_Y_DEG, 'declared landscape reproduction must use actual simulation FOV90, not posthoc projection');
   requireCase(g.initialBrainPlacement.yaw === 0 && g.initialBrainPlacement.pitch === 0, 'explicit initialBrainPlacement must resolve the declared R558 eye-view inputs');
   // R558 (the motor strip fills the view). The earlier start layout (the strip 0.82 of the free width beside a right-hand

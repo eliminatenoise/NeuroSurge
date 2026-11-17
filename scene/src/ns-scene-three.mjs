@@ -8792,24 +8792,38 @@ export function createScene({
     return true;
   }
   /** True when this muscle's bones and its own rigid matrix kept their pose relative to its first bone since its last
-   * skin (within 1e-5 rotation / 1e-3 mm); records the new relative pose either way. */
+   * SKIN, within SKIN_POSE_TOLERANCE. The pose it compares with is the one of the last skin, so small steps add up and
+   * are never lost. 17 November 2026: every muscle that crosses a joint is skinned now (819 thousand vertices in all),
+   * and a slow turn moved dozens of them by a hair on every frame; with the tolerance a muscle is re-skinned once its
+   * bones have turned about a third of a degree against each other (under a millimetre at its ends), and its own rigid
+   * matrix still moves on every frame in between. */
+  const SKIN_POSE_TOLERANCE = Object.freeze({ rotation: 0.006, mm: 0.5 });
   function skinPoseSame(rec) {
-    const used = rec.used, last = rec.relLast || (rec.relLast = new Float64Array(16 * (used.length + 1)));
+    const used = rec.used, size = 16 * (used.length + 1);
+    const last = rec.relLast || (rec.relLast = new Float64Array(size)), cur = rec.relCur || (rec.relCur = new Float64Array(size));
     const refInv = rigidInv16(bodySkinSegs[used[0]], skinRefInv);
     let same = rec.relValid === true, off = 0;
     const keep = m => {
       const r = mul16(refInv, m, skinRelTmp);
       for (let k = 0; k < 16; k++) {
-        if (same && Math.abs(r[k] - last[off + k]) > (k >= 12 ? 1e-3 : 1e-5)) same = false;
-        last[off + k] = r[k];
+        if (same && Math.abs(r[k] - last[off + k]) > (k >= 12 ? SKIN_POSE_TOLERANCE.mm : SKIN_POSE_TOLERANCE.rotation)) same = false;
+        cur[off + k] = r[k];
       }
       off += 16;
     };
     for (let j = 1; j < used.length; j++) keep(bodySkinSegs[used[j]]);
     keep(rec.b.mesh.matrix.elements);
-    rec.relValid = true;
     return same;
   }
+  /** The pose a muscle was just skinned in becomes the one later poses are compared with. */
+  function skinPoseKeep(rec) { rec.relLast.set(rec.relCur); rec.relValid = true; }
+  /* 17 November 2026: a budget for one frame's skinning. With every joint-crossing muscle skinned, a turn of the trunk
+   * or of all four limbs asked for several hundred thousand vertices in one frame. At most SKIN_FRAME_VERTICES are
+   * written per call; the muscles left over keep their rigid matrix (so they still move with their bones) and are
+   * skinned in the next calls, starting where this one stopped. bodySkinPending says how many are waiting, and the
+   * game calls again on the following frames until none is. */
+  const SKIN_FRAME_VERTICES = 60000;
+  let bodySkinList = null, bodySkinNext = 0, bodySkinWaiting = 0;
   function updateBodySkin(segments = null) {
     if (!bodySkin.size) return 0;
     let n = 0;
@@ -8825,16 +8839,26 @@ export function createScene({
       // bones and own rigid matrix all keep their pose relative to its first bone needs no new vertices: only the rigid
       // matrix updateBody has just set moves. Each muscle is re-skinned only when that relative pose changes (a finger or
       // the wrist bends; for the long forearm muscles also the palm turning; for those that reach the upper arm the elbow).
-      for (const rec of bodySkin.values()) {
+      if (!bodySkinList || bodySkinList.length !== bodySkin.size) { bodySkinList = [...bodySkin.values()]; bodySkinNext = 0; }
+      const N = bodySkinList.length;
+      let budget = SKIN_FRAME_VERTICES, waiting = 0, firstWaiting = -1;
+      for (let i = 0; i < N; i++) {
+        const at = (bodySkinNext + i) % N, rec = bodySkinList[at];
         if (skinPoseSame(rec) && rec.skinned) continue;
-        if (skinOne(rec)) n++;
+        if (budget <= 0) { waiting++; if (firstWaiting < 0) firstWaiting = at; continue; }
+        if (skinOne(rec)) { n++; budget -= rec.src.length / 3; }
+        skinPoseKeep(rec);
       }
+      bodySkinWaiting = waiting;
+      if (firstWaiting >= 0) bodySkinNext = firstWaiting;
       return n;
     }
-    bodySkinOn = false;
+    bodySkinOn = false; bodySkinWaiting = 0;
     for (const rec of bodySkin.values()) if (skinOne(rec)) n++;
     return n;
   }
+  /** How many skinned muscles still wait for their turn (see SKIN_FRAME_VERTICES). */
+  function bodySkinPending() { return bodySkinWaiting; }
 
   function updateBody(matrices, drives = null) {
     let n = 0;
@@ -12207,7 +12231,7 @@ export function createScene({
     // R558: setBodyLift draws the stack on the body (own and mirror).
     setBodyLayers,
     setBodyLift,
-    setBodySkin, updateBodySkin,
+    setBodySkin, updateBodySkin, bodySkinPending,
     setArmLayers,
     setOutlineSegments, // R558 (Message 20)
     outlineState: () => ({ ...outline.state(), quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null }),

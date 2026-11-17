@@ -1246,6 +1246,38 @@ This replaces "the eyes never turn in the head" (section 32) for the part of a l
 - The short Esc page shows its buttons, the settings, the keyboard picture and the list of controls; its paragraphs are under "Show the full instructions". About 1300 pixels tall instead of 2250.
 - The loading picture's brain swells a little with a heartbeat shape on a slow breathing rise and fall.
 
+## 86. Lying back as on a declined sofa; a look a little downward; the brain lower
+
+The user, in a run of notes on 17 November: "the field of view should be even wider, such that you can see everything from your eyes. Including everything from the neck down"; "Think about someone who is leaning laid back in a really leaning laid back chair, they can see everything at the front of their body from the chin down all at once, shoulders, chest and everything"; "Torso should be declining back in an invisible imaginary decline sofa"; "the shoulders rolled forward and the back convexly curved"; "see all of the front of the torso at once without the chest pumping out but depressed down/inwards"; "full neutral hip extension. The bend is from the back and not the hips"; "Almost full kyphosis/flexion of the spine for full view"; "what if we made the brain far lower so that the relevant body parts were always in view?"; "You will naturally be looking a little downwards and that is where the motor strip should naturally be."
+
+Before: the body sat upright on the ground with the hips bent 90 degrees and the legs out in front (section 22). From the eyes an upright trunk is straight below the chin, so a level look showed the hands and feet only, and the brain was above eye level, so aiming at it took the body out of view.
+
+Now the body lies back as on a declined sofa (none is drawn). The hips are straight: the pelvis and legs lie level and in line. All of the bend is in the back and neck: the trunk is rounded forward 68 of its 80 degrees and the neck 22 more, which brings the head upright. The right arm is raised 68 degrees from the trunk so that it still points level forward. The game starts with the look 20 degrees below level, and the brain starts 20 degrees lower than it did. The first view now holds, from top to bottom: the whole motor strip, the mirror body under it, your feet, legs and pelvis, both arms, and your chest at the bottom edge.
+
+How it was reached. The posture is the neck and trunk bend of `BODY_POSTURES.open` (the bake keeps the skull in place, so bending the neck and trunk forward lays the body out ahead of the head). Five distributions were drawn and looked at: 30 + 12 with hips 48, 15 + 40 with hips 35, 40 + 25 with hips 25, then, after "full neutral hip extension", 40 + 50, 30 + 60 and 18 + 72 with straight hips; 22 + 68 is "almost full" flexion of the trunk and leaves the neck 28 degrees for the downward look.
+
+What had to change with it. The look's ranges are now counted from the posture's own neck and trunk bend (`headLookLimits` takes the rest angles), the head joints handed to the rig and the camera add that bend back, and the bend is no longer read as a held neck movement. Before these three fixes the camera stood behind the neck stump and looked down into the chest.
+
+Limits. The rig bends the trunk at two joints below a rigid rib cage, so the rounding shows at the waist, not between the shoulder blades, and the rig has no joint that rolls the shoulder blades forward. The chest still hides most of the belly from the eyes. With the trunk already rounded, the look reaches 40 degrees below level instead of 88; up and sideways are unchanged. The mirror body lies back too, since it is your reflection, and its head and shoulders stand in front of the leg areas at the lowest part of the strip. The view over the shoulder (E) was not re-framed for the lying body.
+
+## 87. Muscles stay on their bones
+
+The user: "fix it when muscles essentially become detached, which is still a problem when they're moved into certain ranges of motion"; "Make sure clicking of the muscles does not result in impossible ranges of motions and dislocations and detachments of muscles, as currently happens"; "No muscles or joints should be pointy (unless naturally so), detached, dislocated"; "test all major ranges of motions for plausibility".
+
+The cause. A muscle that crosses a joint was drawn as ONE rigid piece, a least-squares fit between the bones it attaches to (226 of the 232 muscles of the body cross a joint: 819 thousand of 844 thousand vertices). Near the start posture the fit is close. With a joint far from it, both ends of the muscle stand off their bones: the hamstrings and the calf at a bent knee, the hip flexors at a lifted thigh, the deltoid and the chest muscle at a raised arm, and, with the new posture, the belly muscles on the rounded trunk. Only the right hand's, the right forearm's and the neck's muscles were skinned per vertex (sections 40 and 53).
+
+The change. The neck's rule now holds for every muscle that crosses a joint: each vertex follows the two bones nearest to it, with the continuous weights that avoid a jump where a third bone becomes the second nearest, in the baked start posture and in every pose. A muscle's ends therefore stay on their bones and its belly bends with the joint. The five deep neck pairs that were kept rigid for speed stay rigid.
+
+Cost, and how it is held. The scene re-skins a muscle only when its bones have moved against each other since its last skin: now by a third of a degree or half a millimetre (the comparison is with the pose of the last skin, so small steps add up), and it writes at most 60,000 vertices per frame; muscles that wait keep their rigid matrix, so they still move with their bones, and are skinned on the following frames. In one scripted run on the test machine's single processor core, with the script itself competing for it: looking around 32.4 frames a second (32.1 before the change), bending the trunk with the look 34.1 (32.8), the slow limb turn 32.0 (34.4), still 60 (60). Without the budget the same run gave 29.5, 28.7 and 30.3.
+
+Checked: a bent knee, a lifted thigh, a raised right arm and a bent right elbow, alone and stacked, on your own body and on the mirror body brought close, in pictures. Muscles followed their bones in each.
+
+NOT done: the full sweep the user asked for. No measurement yet goes through every movement of the body map and every common stack and reports the distance of each muscle's ends from its bones, the gap at each joint and the joint angles against a combined range. Linear blending also thins a muscle at a sharply bent joint. The left game arm has its own skinning and was not changed.
+
+## 88. Number keys with the cards off
+
+With the cards off (the start, section 77) the number keys did nothing, because they took their list from the information card. They now do the movements the tip by the crosshair lists, at once, without the third of a second the card waits, and keep the list of the last area the tip showed, so they still work while you look down at your body.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1276,6 +1308,6 @@ This replaces "the eyes never turn in the head" (section 32) for the part of a l
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; muscles that come away from their bones, joints that come apart and impossible positions after some muscle clicks; a brain that beats and reacts as in surgery; a view of everything from the neck down in one level look; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
+- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; the measured sweep of every movement for loose muscles, joints that come apart and impossible positions (87 fixed the main cause of loose muscles and checked four movements in pictures); a brain that beats and reacts as in surgery; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look; shoulders rolled forward and a rounded upper back (the rig has no such joints).
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.
