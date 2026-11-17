@@ -124,7 +124,7 @@ export const BODY_JOINT_LIMITS = Object.freeze({
   knee_ext_L: lim(-135, 0), knee_ext_R: lim(-135, 0),
   ankle_dorsi_L: lim(-50, 20), ankle_dorsi_R: lim(-50, 20),
   toe_flex_L: lim(-40, 40), toe_flex_R: lim(-40, 40),
-  trunk_flex: lim(-25, 80), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
+  trunk_flex: lim(-25, 90), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
   brow_raise: lim(-20, 20), eye_close: lim(-20, 20), lip_purse: lim(-20, 20), smile: lim(-20, 20),
   r_shoulder_flex: lim(-60, 180), r_shoulder_abd: lim(0, 180), r_elbow_flex: lim(0, 145),
   r_wrist_flex: lim(0, 80), r_wrist_ext: lim(0, 70), r_grasp: lim(0, 90), r_open: lim(0, 30), r_pronation: lim(0, 160),
@@ -159,13 +159,92 @@ export const HYOID_LIFT = Object.freeze({ mm: 15, dir: Object.freeze([0, -0.45, 
  * muscle rule of thumb for display, not a measured hamstring length. */
 export const HIP_KNEE_COUPLING = Object.freeze({ straightKneeMaxDeg: 100, bentKneeMaxDeg: 120, fullAtKneeFlexDeg: 90 });
 
+/**
+ * 18 November 2026 (user: "Think about the shoulders rolled forward and the back convexly curved"; "see all of the
+ * front of the torso at once without the chest pumping out but depressed down/inwards"; "Almost full kyphosis/flexion
+ * of the spine"): the spine is one stage per vertebra. [segment, joint] from the sacrum up: the segment is the
+ * vertebra ABOVE the joint. 'lumbar' is the fifth lumbar vertebra and 'thorax' the first thoracic vertebra (the names
+ * the packets' hints and the rest of the game already use for the bottom and the top of the trunk: the neck and, through
+ * the breastbone, both shoulder girdles hang from 'thorax'). Before, the five lumbar vertebrae were one rigid block
+ * and the whole rib cage with its twelve vertebrae another, so a bent back was two sharp bends at the waist under a
+ * straight chest.
+ */
+export const SPINE_STAGES = Object.freeze([
+  ['lumbar', 'lumbosacral'], ['l4', 'l4_l5'], ['l3', 'l3_l4'], ['l2', 'l2_l3'], ['l1', 'l1_l2'],
+  ['t12', 'thoracolumbar'], ['t11', 't11_t12'], ['t10', 't10_t11'], ['t9', 't9_t10'], ['t8', 't8_t9'], ['t7', 't7_t8'],
+  ['t6', 't6_t7'], ['t5', 't5_t6'], ['t4', 't4_t5'], ['t3', 't3_t4'], ['t2', 't2_t3'], ['thorax', 't1_t2']
+].map(r => Object.freeze(r)));
+const ORDINALS = Object.freeze(['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth']);
+/** The segment of the n-th lumbar / thoracic vertebra (1-based). */
+function vertebraSegment(region, n) {
+  if (region === 'lumbar') return n === 5 ? 'lumbar' : `l${n}`;
+  return n === 1 ? 'thorax' : `t${n}`;
+}
+/**
+ * The rib cage is a linkage, not one block (same notes): each of the ribs 1 to 10 is its own segment, held at the back
+ * by its vertebra and at the front by the breastbone ('sternum': manubrium, body and xiphoid process; the costal
+ * cartilages are segments between a rib's front end and the breastbone). When the thoracic spine bends the ribs turn
+ * on their vertebrae and close up at the front, and the breastbone sinks toward the pelvis: the chest caves instead of
+ * standing out. The floating ribs 11 and 12 ride their vertebrae. See buildRibLinks / linkMatrix.
+ */
+const RIB_SEGMENTS = Object.freeze(['r', 'l'].flatMap(s => Array.from({ length: 10 }, (_, k) => `${s}_rib${k + 1}`)));
+const CARTILAGE_SEGMENTS = Object.freeze(['r', 'l'].flatMap(s => Array.from({ length: 7 }, (_, k) => `${s}_cc${k + 1}`)));
+/** Segments placed by the rib-cage linkage (their matrix is fitted to the segments they hang between). */
+// The base each shoulder girdle turns on (no bones of its own): the breastbone at the sternoclavicular joint and the
+// ribs under the shoulder blade, so the blade stays on the ribs when the upper back rounds or the trunk turns.
+const GIRDLE_BASES = Object.freeze(['r_gbase', 'l_gbase']);
+/* 18 November 2026, later (a check: "the right shoulder blade stands off the ribs ... shows as a thin pointed sliver";
+ * the sweep's start posture: the blade 9 to 24 mm off the ribs, the muscles between blade and ribs up to 20 mm off): the
+ * collar bone is its own piece, a STRUT between the breastbone and the shoulder blade, as in a real shoulder (it turns
+ * at the sternoclavicular joint and the blade turns on its outer end). Before, collar bone and blade were one rigid
+ * girdle pinned at the breastbone, and when the chest sank (the breastbone goes down some 30 mm against the ribs under
+ * the blade in the start posture) the blade could not stay on the ribs. Now the girdle (the blade, and the arm on it)
+ * follows the ribs under the blade, and each collar bone is fitted between its inner end on the breastbone and its
+ * outer end on the blade (buildRibLinks; a 'late' link: it needs the girdle's own matrix). Both sides: the left
+ * girdle's matrix may come from the left-arm rig, the strut joins it to the breastbone all the same. */
+const CLAVICLE_STRUTS = Object.freeze(['r_clav', 'l_clav']);
+export const LINKED_SEGMENTS = Object.freeze(['sternum', ...RIB_SEGMENTS, ...CARTILAGE_SEGMENTS, ...GIRDLE_BASES]);
+/** Every segment of the lumbar spine / of the rib cage: a packet hint 'lumbar' or 'thorax' means any of them. */
+const LUMBAR_GROUP = Object.freeze(SPINE_STAGES.slice(0, 5).map(r => r[0]));
+const THORAX_GROUP = Object.freeze([...SPINE_STAGES.slice(5).map(r => r[0]), 'sternum', ...RIB_SEGMENTS, ...CARTILAGE_SEGMENTS]);
+const spineShares = list => { const t = list.reduce((a, b) => a + b, 0); return Object.freeze(Object.fromEntries(SPINE_STAGES.map((r, i) => [r[1], list[i] / t]))); };
+
 /** How one agreed joint id is shared between rig joints (documented approximations, not measured kinematics). */
 export const BODY_JOINT_SHARES = Object.freeze({
-  trunk_flex: Object.freeze({ lumbosacral: 0.5, thoracolumbar: 0.5 }),
-  // R558: side bend shared evenly; trunk rotation mostly above the lumbar spine (lumbar rotation is only a few degrees
-  // per level), taken at the thoracolumbar stage because the rib cage is one rigid segment here.
-  trunk_side: Object.freeze({ lumbosacral: 0.5, thoracolumbar: 0.5 }),
-  trunk_rot: Object.freeze({ lumbosacral: 0.2, thoracolumbar: 0.8 }),
+  // 18 November 2026 (user: "the back convexly curved", "Almost full kyphosis/flexion of the spine"): the trunk's bend,
+  // side bend and turn are shared between all seventeen joints from the sacrum to the first thoracic vertebra
+  // (SPINE_STAGES), in proportion to commonly quoted ranges per level (after White and Panjabi's tables, rounded, cited
+  // from memory): flexion most at L4-S1 and the thoracolumbar junction and least between the rib-bearing vertebrae,
+  // side bend fairly even. Flexion is weighted toward the thoracic spine (about a third lumbar, two thirds thoracic:
+  // at the start posture's 70 degrees the low back flattens by about 25 and the upper back rounds by about 45), because
+  // it is the rounding of the upper back that carries the eyes over the chest ("almost full kyphosis ... for full
+  // view"). (Tried later, with flexion weighted to the low back and the thoracolumbar junction instead: the chest then
+  // takes less of the picture from the eyes but hides the belly behind it.) The side bend and the turn have their own
+  // tables, below. Each table sums to 1, so trunk_flex / trunk_side / trunk_rot keep their meaning
+  // and limits. Display shares on one reference body, not measured segmental motion. (Before: two hinges, at the
+  // lumbosacral and thoracolumbar joints.)
+  // 18 November 2026, third pass (a check, and the owner again: "flat depressed chest not booby pumped out chest";
+  // from the eyes the chest was a broad plate filling the lower 38 % of the picture and the legs were seen end-on):
+  // the bend is now weighted to the LOW back, about two thirds lumbar and one third thoracic: at the start posture's
+  // 80 degrees the low back gives 51 (the lordosis flattens and reverses, most at L4 to S1) and the rib-bearing spine
+  // 29 (the ribs limit it). That is also nearer to what a spine does. With the thoracic-heavy shares (first and second
+  // pass: [12, 10, 9, 8, 7 | 9, 9, 8, 6, 6, 6, 6, 6, 6, 6, 7, 7]) the whole rib cage lay back some 40 degrees under
+  // the chin, so the eyes looked at the chest muscles from just above as at a table top; now the trunk rises more
+  // steeply from the pelvis, the eyes are 42 cm above the hips instead of 37, the breastbone hangs more nearly
+  // upright below the chin, and belly, pelvis and thighs get a real share of the picture. (The earlier remark "hides
+  // the belly behind it" held for a head carried straight above the chest; the head is now carried forward as well,
+  // HEAD_FORWARD.)
+  trunk_flex: spineShares([16, 14, 13, 12, 10, 8, 6, 5, 4, 3, 3, 3, 3, 3, 3, 3, 3]),
+  // 18 November 2026, later (a check stacked "Bend to the right" and "Turn to the right" from the strip and the chest
+  // came apart: ribs stood through the gaps between the chest and belly muscles): the side bend and the turn are taken
+  // almost entirely BELOW the rib cage (the five lumbar joints and the joint between T12 and L1); the eleven joints
+  // between the rib-bearing vertebrae get one part each, about a fifth of the side bend and a quarter of the turn in
+  // all (with a larger share at T10 to T12 the floating ribs fanned away from the tenth rib under the flank muscles).
+  // With the tables' shares the rib-bearing vertebrae took 25 of 35 degrees of side bend and 18 of 45 of turn between them, and these rigid ribs cannot give as real ones do: stacked, the
+  // linkage's fit left rib ends 15 mm off their cartilages and muscle ends 16 mm off. A display compromise for rigid
+  // ribs: the low back and the thoracolumbar junction bend and turn more per joint than a real spine does there.
+  trunk_side: spineShares([6, 6, 8, 6, 6, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+  trunk_rot: spineShares([5, 5, 5, 5, 5, 6, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
   neck_flex: Object.freeze({ cervicothoracic: 0.6, atlanto_occipital: 0.4 }),
   neck_rot: Object.freeze({ cervicothoracic: 0.5, atlanto_occipital: 0.5 }),
   neck_side: Object.freeze({ cervicothoracic: 0.8, atlanto_occipital: 0.2 }),
@@ -197,12 +276,13 @@ export const SCAPULOHUMERAL = Object.freeze({ thresholdDeg: 30, ratio: 0.2 });
 
 /** Rigid segments, parents before children. Virtual segments have no bones in this packet. */
 export const BODY_SEGMENTS = Object.freeze([
-  'pelvis', 'lumbar', 'thorax', 'cervical', 'skull', 'mandible', 'hyoid',
-  'r_girdle', 'r_upperarm', 'r_forearm', 'r_radius', 'r_hand',
+  'pelvis', ...SPINE_STAGES.map(r => r[0]), 'sternum', ...RIB_SEGMENTS, ...CARTILAGE_SEGMENTS, ...GIRDLE_BASES,
+  'cervical', 'skull', 'mandible', 'hyoid',
+  'r_girdle', 'r_clav', 'r_upperarm', 'r_forearm', 'r_radius', 'r_hand',
   'r_thumb_mc', 'r_thumb_pp', 'r_thumb_dp',
   'r_index_pp', 'r_index_mp', 'r_index_dp', 'r_middle_pp', 'r_middle_mp', 'r_middle_dp',
   'r_ring_pp', 'r_ring_mp', 'r_ring_dp', 'r_little_pp', 'r_little_mp', 'r_little_dp',
-  'l_girdle', 'l_upperarm',
+  'l_girdle', 'l_clav', 'l_upperarm',
   'r_thigh', 'r_patella', 'r_shank', 'r_foot', 'r_toes', 'r_hallux',
   'l_thigh', 'l_patella', 'l_shank', 'l_foot', 'l_toes', 'l_hallux'
 ]);
@@ -213,11 +293,14 @@ const TOES = Object.freeze([['first', 'big toe'], ['second', 'second toe'], ['th
 
 /** Parent segment of each segment (pelvis is the root). */
 export const BODY_SEGMENT_PARENT = Object.freeze({
-  pelvis: null, lumbar: 'pelvis', thorax: 'lumbar', cervical: 'thorax', skull: 'cervical', mandible: 'skull', hyoid: 'cervical',
-  r_girdle: 'thorax', r_upperarm: 'r_girdle', r_forearm: 'r_upperarm', r_radius: 'r_forearm', r_hand: 'r_radius',
+  pelvis: null, ...Object.fromEntries(SPINE_STAGES.map((r, i) => [r[0], i ? SPINE_STAGES[i - 1][0] : 'pelvis'])),
+  sternum: 'thorax', ...Object.fromEntries(RIB_SEGMENTS.map(s => [s, vertebraSegment('thoracic', Number(s.slice(5)))])),
+  ...Object.fromEntries(CARTILAGE_SEGMENTS.map(s => [s, 'sternum'])), r_gbase: 'sternum', l_gbase: 'sternum',
+  cervical: 'thorax', skull: 'cervical', mandible: 'skull', hyoid: 'cervical',
+  r_girdle: 'r_gbase', r_clav: 'r_girdle', l_clav: 'l_girdle', r_upperarm: 'r_girdle', r_forearm: 'r_upperarm', r_radius: 'r_forearm', r_hand: 'r_radius',
   r_thumb_mc: 'r_hand', r_thumb_pp: 'r_thumb_mc', r_thumb_dp: 'r_thumb_pp',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, 'r_hand'], [`r_${f}_mp`, `r_${f}_pp`], [`r_${f}_dp`, `r_${f}_mp`]])),
-  l_girdle: 'thorax', l_upperarm: 'l_girdle',
+  l_girdle: 'l_gbase', l_upperarm: 'l_girdle',
   r_thigh: 'pelvis', r_patella: 'r_thigh', r_shank: 'r_thigh', r_foot: 'r_shank', r_toes: 'r_foot', r_hallux: 'r_foot',
   l_thigh: 'pelvis', l_patella: 'l_thigh', l_shank: 'l_thigh', l_foot: 'l_shank', l_toes: 'l_foot', l_hallux: 'l_foot'
 });
@@ -229,7 +312,7 @@ export const VIRTUAL_SEGMENTS = Object.freeze(['l_girdle', 'l_upperarm']);
 
 /** The rig joint that moves each non-root segment. */
 export const BODY_SEGMENT_JOINT = Object.freeze({
-  lumbar: 'lumbosacral', thorax: 'thoracolumbar', cervical: 'cervicothoracic', skull: 'atlanto_occipital', mandible: 'tmj',
+  ...Object.fromEntries(SPINE_STAGES), cervical: 'cervicothoracic', skull: 'atlanto_occipital', mandible: 'tmj',
   hyoid: 'hyoid_fixed', r_girdle: 'r_sternoclavicular', r_upperarm: 'r_glenohumeral', r_forearm: 'r_elbow',
   r_radius: 'r_radioulnar', r_hand: 'r_wrist', r_thumb_mc: 'r_thumb_cmc', r_thumb_pp: 'r_thumb_mcp', r_thumb_dp: 'r_thumb_ip',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, `r_${f}_mcp`], [`r_${f}_mp`, `r_${f}_pip`], [`r_${f}_dp`, `r_${f}_dip`]])),
@@ -652,8 +735,23 @@ function boneSegmentFor(entry) {
   if (n === 'right radius') return 'r_radius';
   const hx = HALLUX_BONE.exec(n);
   if (hx && (entry.hint === 'r_toes' || entry.hint === 'l_toes')) return `${hx[2] === 'right' ? 'r' : 'l'}_hallux`;
-  if (n === 'left clavicle' || n === 'left scapula') return 'l_girdle';
+  if (n === 'right clavicle') return 'r_clav'; // 18 November 2026, later: the collar bones are struts (CLAVICLE_STRUTS)
+  if (n === 'left clavicle') return 'l_clav';
+  if (n === 'left scapula') return 'l_girdle';
   const h = typeof entry.hint === 'string' ? entry.hint : null;
+  // 18 November 2026: one segment per vertebra, rib (1 to 10) and costal cartilage; the breastbone is its own segment
+  // (SPINE_STAGES, LINKED_SEGMENTS). The packet hints only say 'lumbar' / 'thorax': the bone's own name says which.
+  if (h === 'lumbar' || h === 'thorax') for (const nm of entry.names || [n]) {
+    const v = /^(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth) (lumbar|thoracic) vertebra$/.exec(nm);
+    if (v) return vertebraSegment(v[2], ORDINALS.indexOf(v[1]) + 1);
+    const r = /^(left|right) (first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth) (rib|costal cartilage)$/.exec(nm);
+    if (r) {
+      const k = ORDINALS.indexOf(r[2]) + 1;
+      if (r[3] === 'rib') return k <= 10 ? `${r[1][0]}_rib${k}` : vertebraSegment('thoracic', k);
+      if (k <= 7) return `${r[1][0]}_cc${k}`;
+    }
+    if (nm === 'manubrium' || nm === 'body of sternum' || nm === 'xiphoid process' || nm === 'sternum') return 'sternum';
+  }
   if (h && SEG_INDEX.has(h)) return h;
   return null;
 }
@@ -678,6 +776,13 @@ const MUSCLE_EXTRA_CANDIDATES = Object.freeze([
   ...[['FJ1521', 'descending part of right trapezius'], ['FJ1521M', 'descending part of left trapezius']].map(([id, name]) => Object.freeze({ id, name,
     segments: Object.freeze(['skull']), basis: 'the descending part of the trapezius arises from the superior nuchal line and the external occipital protuberance' }))
 ]);
+/** 'l' / 'r' for a muscle entry that names its side ("left ...", "... of right ...", "....l", an id ending -l / -r), else null. */
+function muscleSideOf(entry) {
+  const n = typeof entry.name === 'string' ? entry.name.toLowerCase() : '', id = typeof entry.id === 'string' ? entry.id.toLowerCase() : '';
+  if (/\bleft\b/.test(n) || /\.l$/.test(n) || /-l$/.test(id)) return 'l';
+  if (/\bright\b/.test(n) || /\.r$/.test(n) || /-r$/.test(id)) return 'r';
+  return null;
+}
 function muscleCandidates(entry) {
   const hint = Array.isArray(entry.hint) ? entry.hint : typeof entry.hint === 'string' ? [entry.hint, entry.hint] : [];
   let [p, d] = hint.map(resolveHintSegment);
@@ -691,6 +796,22 @@ function muscleCandidates(entry) {
   else segs = treePath(p, d);
   const extra = MUSCLE_EXTRA_CANDIDATES.find(r => r.id === entry.id && r.name === entry.name);
   if (extra) segs = [...segs, ...extra.segments];
+  // 18 November 2026: a hint 'lumbar' / 'thorax' means the whole lumbar spine / the whole rib cage (every vertebra, rib,
+  // cartilage and the breastbone are segments of their own now), so each vertex finds the bones it really lies on.
+  if (segs.includes('lumbar')) segs = [...segs, ...LUMBAR_GROUP];
+  if (segs.includes('thorax')) segs = [...segs, ...THORAX_GROUP];
+  segs = segs.filter(x => !GIRDLE_BASES.includes(x)); // a girdle base carries no bone: nothing is skinned to it
+  // (later: the collar bone is its own segment, CLAVICLE_STRUTS: a muscle on a girdle may lie on its collar bone)
+  if (segs.includes('r_girdle')) segs = [...segs, 'r_clav'];
+  if (segs.includes('l_girdle')) segs = [...segs, 'l_clav'];
+  // 18 November 2026, later: a muscle of one side never takes a rib or a costal cartilage of the OTHER side (near the
+  // midline the left external oblique and the left pectoralis major had picked the right seventh cartilage as their
+  // nearest bone, and went with the wrong side when the trunk bent sideways and turned). The breastbone and the
+  // vertebrae are both sides' own.
+  {
+    const sd = muscleSideOf(entry);
+    if (sd) { const other = new RegExp(`^${sd === 'l' ? 'r' : 'l'}_(rib|cc)\\d+$`); segs = segs.filter(x => !other.test(x)); }
+  }
   return { proximal: p, distal: d, segments: [...new Set(segs)] };
 }
 
@@ -703,6 +824,143 @@ function muscleCandidates(entry) {
 // REFERENCE_JOINTS, REFERENCE_MUSCLE_BLENDS and FULLBODY_MUSCLE_CATALOG live in the generated block at the end of
 // this file and are only read inside functions (after module evaluation).
 const REFERENCE_PACKET = 'bodyparts3d-fullbody-r1';
+
+/**
+ * 18 November 2026 (user: "see all of the front of the torso at once without the chest pumping out but depressed
+ * down/inwards"; "the back convexly curved"): the rib-cage linkage. With one segment per thoracic vertebra a rib cannot
+ * simply ride its vertebra: the front ends of neighbouring ribs would pass through each other and tear off the
+ * breastbone. So, as in a real chest, each rib 1 to 10 hangs between two things: its head and neck stay on its own
+ * vertebra, its front end stays with the breastbone. Each linked segment has a few anchor points with a carrier segment
+ * and a weight; its matrix for a pose is the least-squares rigid fit (Horn) of the anchor points to where their
+ * carriers take them:
+ *   breastbone   the sternal ends of the costal cartilages 1 to 7 of both sides, each carried by that rib's vertebra
+ *                (where a rigid rib would hold it), weighted by RIB_LINK.sternumWeights: the first three pairs count
+ *                twenty times the others, as the breastbone hangs from the upper ribs. So it goes with the top of
+ *                the chest when the back rounds, and the lower ribs fold down to it: the chest sinks toward the
+ *                pelvis instead of standing out. (With equal weights the fit turned the breastbone's lower end
+ *                forward to take up the closing of the rib ends: the chest stood out, rib heads up to 6 mm off their
+ *                vertebrae. Rigid with the first thoracic vertebra: rib heads up to 24 mm off.)
+ *   rib 1 to 10  head and neck (carried by its vertebra) and front end (carried by the breastbone); the back counts
+ *                RIB_LINK.backWeight times the front (the false ribs 8 to 10 falseBackWeight: they reach the breastbone
+ *                only through the long shared cartilage), so the head stays on the vertebra and the rib turns about it;
+ *   cartilage    its rib end (carried by its rib; the seventh also by the ribs 8 to 10 that join it) and its sternal
+ *                end (carried by the breastbone);
+ *   girdle base  (GIRDLE_BASES, no bone of its own) the shoulder blade's rib side on the ribs 2 to 8 it lies on, so
+ *                the blade goes with the ribs under it when the upper back rounds or the trunk turns, and (lightly:
+ *                girdleJointWeight) the collar bone's inner end on the breastbone;
+ *   collar bone  (CLAVICLE_STRUTS) its inner end on the breastbone and its outer end on the girdle (the shoulder
+ *                blade): a strut between the two, fitted after the girdles are placed.
+ * At the source pose and whenever all carriers move together the fit is that common matrix exactly. Needs the bone
+ * meshes; without them the linked segments ride their parents. Measured at the start posture (tests/spine.test.mjs
+ * keeps looser bounds): rib heads within 4.4 mm of where their vertebra holds them (false ribs 6.9), cartilage ends
+ * within 4 mm (the shared seventh 9). Display mechanics on one reference body, not measured rib kinematics.
+ */
+export const RIB_LINK = Object.freeze({ backReachMm: 28, frontReachMm: 14, endReachMm: 9, maxPoints: 10, backWeight: 4, falseBackWeight: 9, sternumWeights: Object.freeze([1, 1, 1, 0.05, 0.05, 0.05, 0.05]),
+  girdleJointWeight: 0.5, strutEndReachMm: 14, girdleRibReachMm: 6, girdleRibMaxGapMm: 12, girdleRibWeights: Object.freeze([0.5, 0.5, 1, 2, 4, 6, 6]) });
+function buildRibLinks(segPos, girdle = null) {
+  const o = RIB_LINK, links = {};
+  const has = s => Boolean(segPos[s] && segPos[s].length >= 9);
+  const cloudCache = {};
+  const cloud = s => cloudCache[s] || (cloudCache[s] = downsample(segPos[s], 3));
+  // The end of A that lies toward B: A's vertices within `reach` of the smallest distance to B, thinned to maxPoints.
+  const endToward = (a, b, reach) => {
+    const A = segPos[a], B = cloud(b), n = A.length / 3, d = new Float64Array(n);
+    let dmin = Infinity;
+    for (let i = 0; i < n; i++) { d[i] = nearestDistance(B, A[3 * i], A[3 * i + 1], A[3 * i + 2]); if (d[i] < dmin) dmin = d[i]; }
+    const pick = [];
+    for (let i = 0; i < n; i++) if (d[i] <= dmin + reach) pick.push(i);
+    const step = Math.max(1, Math.floor(pick.length / o.maxPoints)), out = [];
+    for (let k = 0; k < pick.length && out.length < 3 * o.maxPoints; k += step) out.push(A[3 * pick[k]], A[3 * pick[k] + 1], A[3 * pick[k] + 2]);
+    return out;
+  };
+  const make = groups => {
+    const p = [], w = [], c = [];
+    for (const g of groups) {
+      const n = g.points.length / 3;
+      if (!n) return null;
+      for (let i = 0; i < n; i++) { p.push(g.points[3 * i], g.points[3 * i + 1], g.points[3 * i + 2]); w.push(g.weight / n); c.push(SEG_INDEX.get(g.carrier)); }
+    }
+    return { p: Float64Array.from(p), w: Float64Array.from(w), c: Uint8Array.from(c), carriers: [...new Set(c)] };
+  };
+  if (!has('sternum')) return links;
+  // Breastbone: where each true rib's cartilage meets it, carried by that rib's vertebra.
+  {
+    const groups = [];
+    for (const sd of ['r', 'l']) for (let k = 1; k <= 7; k++) {
+      const cc = `${sd}_cc${k}`, vert = vertebraSegment('thoracic', k);
+      if (!has(cc) || !has(vert)) continue;
+      groups.push({ points: endToward(cc, 'sternum', o.endReachMm), carrier: vert, weight: o.sternumWeights[k - 1] });
+    }
+    const L = groups.length >= 6 ? make(groups) : null;
+    if (!L) return links;
+    links.sternum = L;
+  }
+  for (const sd of ['r', 'l']) for (let k = 1; k <= 10; k++) {
+    const rib = `${sd}_rib${k}`, vert = vertebraSegment('thoracic', k), cc = `${sd}_cc${Math.min(k, 7)}`;
+    if (!has(rib) || !has(vert) || !has(cc)) continue;
+    const L = make([
+      { points: endToward(rib, vert, o.backReachMm), carrier: vert, weight: k <= 7 ? o.backWeight : o.falseBackWeight },
+      { points: endToward(rib, cc, o.frontReachMm), carrier: 'sternum', weight: 1 }
+    ]);
+    if (L) links[rib] = L;
+  }
+  for (const sd of ['r', 'l']) for (let k = 1; k <= 7; k++) {
+    const cc = `${sd}_cc${k}`;
+    if (!has(cc)) continue;
+    const ribs = (k === 7 ? [7, 8, 9, 10] : [k]).map(j => `${sd}_rib${j}`).filter(r => links[r]);
+    if (!ribs.length) continue;
+    const L = make([
+      ...ribs.map(r => ({ points: endToward(cc, r, o.endReachMm), carrier: r, weight: 1 / ribs.length })),
+      { points: endToward(cc, 'sternum', o.endReachMm), carrier: 'sternum', weight: 1 }
+    ]);
+    if (L) links[cc] = L;
+  }
+  // The base of each shoulder girdle (GIRDLE_BASES): the shoulder blade's rib side follows the ribs it lies on (ribs 2
+  // to 8, girdleRibWeights: the lower ribs count most, because it is the blade's lower end that stands off a rounded
+  // back). The left girdle's base uses the mirror image of the right one's anchor points.
+  // First build: collar bone and blade were ONE rigid piece pinned at the breastbone (girdleJointWeight 100), and when
+  // the chest sank the blade could not follow the ribs: in the start posture it stood 10 mm (at most 16) farther from
+  // the nearest rib than in the source pose. Now the collar bone is a strut of its own (CLAVICLE_STRUTS, below) and the
+  // pin is light (0.5): the blade lies within 1.5 mm of where it was on the ribs (4 mm nearer on the median), the
+  // collar bone's inner end within 6 mm of the breastbone and its outer end within 5 mm of the blade (measured at the
+  // start posture; the arm's own movements turn the girdle about the sternoclavicular point as before).
+  if (girdle && girdle.scapula && girdle.clavicle && girdle.sc) {
+    const sc = girdle.sc, cl = girdle.clavicle, joint = [];
+    for (let i = 0; i < cl.length; i += 3) if (Math.hypot(cl[i] - sc[0], cl[i + 1] - sc[1], cl[i + 2] - sc[2]) < 12) joint.push(cl[i], cl[i + 1], cl[i + 2]);
+    const thin = pts => { const n = pts.length / 3, step = Math.max(1, Math.floor(n / o.maxPoints)), out = []; for (let k = 0; k < n && out.length < 3 * o.maxPoints; k += step) out.push(pts[3 * k], pts[3 * k + 1], pts[3 * k + 2]); return out; };
+    segPos.__scapula = girdle.scapula;
+    const onRibs = [];
+    for (let k = 2; k <= 8; k++) {
+      if (!links[`r_rib${k}`] || !links[`l_rib${k}`]) continue;
+      const A = girdle.scapula, B = cloud(`r_rib${k}`), near = [];
+      let dmin = Infinity; const d = new Float64Array(A.length / 3);
+      for (let i = 0; i < d.length; i++) { d[i] = nearestDistance(B, A[3 * i], A[3 * i + 1], A[3 * i + 2]); if (d[i] < dmin) dmin = d[i]; }
+      if (dmin > o.girdleRibMaxGapMm) continue;
+      for (let i = 0; i < d.length; i++) if (d[i] <= dmin + o.girdleRibReachMm) near.push(A[3 * i], A[3 * i + 1], A[3 * i + 2]);
+      onRibs.push({ k, points: thin(near) });
+    }
+    delete segPos.__scapula;
+    if (joint.length >= 9 && onRibs.length >= 3) {
+      const flip = pts => pts.map((v, i) => (i % 3 === 0 ? -v : v));
+      const R = make([{ points: thin(joint), carrier: 'sternum', weight: o.girdleJointWeight }, ...onRibs.map(g => ({ points: g.points, carrier: `r_rib${g.k}`, weight: o.girdleRibWeights[g.k - 2] }))]);
+      const Lf = make([{ points: flip(thin(joint)), carrier: 'sternum', weight: o.girdleJointWeight }, ...onRibs.map(g => ({ points: flip(g.points), carrier: `l_rib${g.k}`, weight: o.girdleRibWeights[g.k - 2] }))]);
+      if (R && Lf) { links.r_gbase = R; links.l_gbase = Lf; }
+      // The collar bones as struts (CLAVICLE_STRUTS): the inner end (within strutEndReachMm of the sternoclavicular
+      // joint) goes with the breastbone, the outer end (within strutEndReachMm of the acromial end) with the girdle
+      // (the shoulder blade). 'late': fitted after the girdles are placed.
+      if (R && Lf && sc.length >= 3 && girdle.acromialEnd) {
+        const ac = girdle.acromialEnd, outer = [];
+        for (let i = 0; i < cl.length; i += 3) if (Math.hypot(cl[i] - ac[0], cl[i + 1] - ac[1], cl[i + 2] - ac[2]) < o.strutEndReachMm) outer.push(cl[i], cl[i + 1], cl[i + 2]);
+        if (outer.length >= 9) {
+          const sr = make([{ points: thin(joint), carrier: 'sternum', weight: 2 }, { points: thin(outer), carrier: 'r_girdle', weight: 1 }]);
+          const sl = make([{ points: flip(thin(joint)), carrier: 'sternum', weight: 2 }, { points: flip(thin(outer)), carrier: 'l_girdle', weight: 1 }]);
+          if (sr && sl) { sr.late = true; sl.late = true; links.r_clav = sr; links.l_clav = sl; }
+        }
+      }
+    }
+  }
+  return links;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Joint estimation
@@ -749,6 +1007,16 @@ function estimateJoints(bone, boneMesh, warn) {
   if (L5 && S) put('lumbosacral', { point: mid(centroidOf(L5), centroidOf(slab(S, UP, 15))), method: 'midpoint L5 centroid / sacral-top centroid', bones: ['fifth lumbar vertebra', 'sacrum'] });
   const T12 = bone('twelfth thoracic vertebra'), L1 = bone('first lumbar vertebra');
   if (T12 && L1) put('thoracolumbar', { point: mid(centroidOf(T12), centroidOf(L1)), method: 'midpoint T12 / L1 centroids', bones: ['twelfth thoracic vertebra', 'first lumbar vertebra'] });
+  // 18 November 2026: every joint between two neighbouring lumbar / thoracic vertebrae, the same rule as the two above.
+  {
+    const vert = [...[5, 4, 3, 2, 1].map(k => `${ORDINALS[k - 1]} lumbar vertebra`), ...[12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(k => `${ORDINALS[k - 1]} thoracic vertebra`)];
+    for (let i = 1; i < SPINE_STAGES.length; i++) {
+      const jid = SPINE_STAGES[i][1];
+      if (jid === 'thoracolumbar') continue;
+      const lo = bone(vert[i - 1]), hi = bone(vert[i]);
+      if (lo && hi) put(jid, { point: mid(centroidOf(hi), centroidOf(lo)), method: 'midpoint of the two vertebral centroids', bones: [vert[i], vert[i - 1]] });
+    }
+  }
   const C7 = bone('seventh cervical vertebra'), T1 = bone('first thoracic vertebra');
   if (C7 && T1) put('cervicothoracic', { point: mid(centroidOf(C7), centroidOf(T1)), method: 'midpoint C7 / T1 centroids', bones: ['seventh cervical vertebra', 'first thoracic vertebra'] });
   const atlas = bone('atlas');
@@ -772,6 +1040,30 @@ function estimateJoints(bone, boneMesh, warn) {
   // Right upper limb.
   const clav = bone('right clavicle');
   if (clav) put('r_sternoclavicular', { point: centroidOf(slab(clav, LEFTX, 10)), acromialEnd: centroidOf(slab(clav, RIGHTX, 10)), method: 'centroid of the medial 10 mm of the right clavicle', bones: ['right clavicle'] });
+  // 18 November 2026 (SHOULDER_ROLL): the shoulder blade lies on the rib cage. The axis the girdle rolls forward about
+  // runs from the sternoclavicular joint through the centre of the sphere that best fits the ribs under the blade (the
+  // rib points within 14 mm of it), so the blade slides ON that sphere instead of lifting off the ribs or digging in.
+  {
+    const scap = bone('right scapula'), sc = J.r_sternoclavicular;
+    if (scap && sc) {
+      const cloudS = downsample(scap, 4), under = [];
+      for (let k = 2; k <= 8; k++) {
+        const rib = bone(`right ${ORDINALS[k - 1]} rib`);
+        if (!rib) continue;
+        for (let i = 0; i < rib.length; i += 3) if (rib[i + 1] > sc.point[1] + 40 && nearestDistance(cloudS, rib[i], rib[i + 1], rib[i + 2]) < 14) under.push(rib[i], rib[i + 1], rib[i + 2]);
+      }
+      const f = under.length >= 90 ? fitSphere(Float64Array.from(under)) : null;
+      if (f && f.radius > 40 && f.radius < 400) {
+        let axis = norm(sub(f.center, sc.point));
+        // a positive roll takes the shoulder (the collar bone's outer end) forward
+        if (cross(axis, sub(sc.acromialEnd, sc.point))[1] > 0) axis = scl(axis, -1);
+        sc.rollAxis = axis; sc.rollSphere = { center: f.center, radius: f.radius, rms: f.rms, points: f.n };
+        // (third pass) the way out of that sphere through the middle of the ribs under the blade: the blade turns in
+        // its own plane about this line when the arm is raised (SCAPULOHUMERAL)
+        sc.rollSphere.spinAxis = norm(sub(centroidOf(Float64Array.from(under)), f.center));
+      }
+    }
+  }
   const hum = bone('right humerus'), scap = bone('right scapula');
   if (hum && scap) {
     const h = headJoint(hum, scap, { margin: 6, r0: 23, rRange: [15, 35], cull: 25 });
@@ -952,7 +1244,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     for (const e of es) { const v = Math.max(1, e.vertices); c = add(c, scl(e.centroid || mid(e.bmin, e.bmax), v)); w += v; }
     segCentroid[s] = scl(c, 1 / w);
   }
-  for (const [v, r] of [['l_girdle', 'r_girdle'], ['l_upperarm', 'r_upperarm']]) {
+  for (const [v, r] of [['l_girdle', 'r_girdle'], ['l_clav', 'r_clav'], ['l_upperarm', 'r_upperarm']]) {
     if (!segBox[v] && segBox[r]) {
       const b = segBox[r];
       segBox[v] = { min: [-b.max[0], b.min[1], b.min[2]], max: [-b.min[0], b.max[1], b.max[2]] };
@@ -979,7 +1271,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       warn(`joint ${jid}: segment centroid used`);
     }
   }
-  if (J.r_sternoclavicular) J.l_sternoclavicular_mirror = { point: mirrorX(J.r_sternoclavicular.point), method: 'mirror (x -> -x) of the right sternoclavicular joint; the left girdle is in the left-arm rig', source: 'mirror' };
+  if (J.r_sternoclavicular) J.l_sternoclavicular_mirror = { point: mirrorX(J.r_sternoclavicular.point), ...(J.r_sternoclavicular.rollAxis ? { rollAxis: mirrorX(J.r_sternoclavicular.rollAxis) } : {}), method: 'mirror (x -> -x) of the right sternoclavicular joint; the left girdle is in the left-arm rig', source: 'mirror' };
   if (J.r_glenohumeral) J.l_glenohumeral_mirror = { point: mirrorX(J.r_glenohumeral.point), method: 'mirror (x -> -x) of the right glenohumeral centre; the left humerus is in the left-arm rig', source: 'mirror' };
   for (const s of ['r', 'l']) if (J[`${s}_knee`]) J[`${s}_patellofemoral`] = { point: J[`${s}_knee`].point, method: `knee pivot; the patella turns ${BODY_JOINT_SHARES.patellaPerKneeFlex} of the knee flexion about it`, source: 'derived' };
 
@@ -993,7 +1285,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   const setAxes = (jid, axes) => { if (J[jid]) J[jid].axes = Object.fromEntries(Object.entries(axes).map(([k, v]) => [k, norm(v)])); };
   // R558: `side` is the front-to-back axis; a positive angle bends the part above toward the subject's LEFT (trunk_side,
   // neck_side), as a positive `rot` turns the front toward the subject's left (trunk_rot, neck_rot).
-  for (const jid of ['lumbosacral', 'thoracolumbar', 'cervicothoracic', 'atlanto_occipital']) {
+  for (const jid of [...SPINE_STAGES.map(r => r[1]), 'cervicothoracic', 'atlanto_occipital']) {
     setAxes(jid, { flex: orientAxis(LEFTX, UP, ANT), rot: orientAxis(UP, ANT, LEFTX), side: orientAxis(POST, UP, LEFTX) });
   }
   if (J.tmj) {
@@ -1076,7 +1368,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     const diag = len(sub(bb.max, bb.min));
     clouds[s] = downsample(all, clamp(diag / 40, 2, 10));
   }
-  for (const [v, r] of [['l_girdle', 'r_girdle'], ['l_upperarm', 'r_upperarm']]) {
+  for (const [v, r] of [['l_girdle', 'r_girdle'], ['l_clav', 'r_clav'], ['l_upperarm', 'r_upperarm']]) {
     if (!clouds[v] && clouds[r]) {
       const c = Float64Array.from(clouds[r]);
       for (let i = 0; i < c.length; i += 3) c[i] = -c[i];
@@ -1172,7 +1464,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     warnings,
     caveats: [
       'One reference body from an educational dataset (BodyParts3D warns of errors and artist-made parts); not the player or a population average.',
-      'Joint pivots are geometric estimates (sphere/circle fits, contact patches, malleolus tips), not measured joint centres; spinal motion is lumped into two lumbar/thoracic and two cervical/cranial stages.',
+      'Joint pivots are geometric estimates (sphere/circle fits, contact patches, malleolus tips), not measured joint centres; the trunk bends at every joint from the sacrum to the first thoracic vertebra by fixed shares, the neck at two cervical/cranial stages; the ribs and the breastbone are a fitted linkage, not measured rib motion.',
       'Bones move rigidly. Muscles get one blended rigid matrix (or optional two-influence skin weights) and slide rather than deform.',
       'The left girdle and humerus are not in this packet: the left pectoralis major, trapezius and serratus anterior use mirrored right-side pivots and ride the thorax unless the left-arm rig matrices are supplied.',
       'No facial-expression or masticatory muscle exists in BodyParts3D 4.0; brow_raise, eye_close, lip_purse and smile move nothing and are reported as display levels only.',
@@ -1188,6 +1480,15 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
         : [])
     ]
   };
+  // 18 November 2026: the rib-cage linkage (buildRibLinks), from the full bone meshes of each segment.
+  {
+    const segPos = {};
+    for (const s of ['sternum', ...RIB_SEGMENTS, ...CARTILAGE_SEGMENTS, ...SPINE_STAGES.slice(5).map(r => r[0])]) {
+      const parts = segBones[s].map(e => positionsOf(getMesh(e.id))).filter(Boolean);
+      if (parts.length === segBones[s].length && parts.length) segPos[s] = concatPositions(parts);
+    }
+    Object.defineProperty(rig, '_links', { value: buildRibLinks(segPos, { scapula: bone('right scapula'), clavicle: bone('right clavicle'), sc: P('r_sternoclavicular'), acromialEnd: J.r_sternoclavicular && J.r_sternoclavicular.acromialEnd }), enumerable: false });
+  }
   Object.defineProperty(rig, '_clouds', { value: clouds, enumerable: false });
   Object.defineProperty(rig, '_fit', { value: fit, enumerable: false });
   return deepFreezeRig(rig);
@@ -1269,6 +1570,55 @@ function checkRig(rig) {
  * in degrees about each thigh's long axis (positive = the toes turn toward the subject's right: external rotation of
  * the right hip, internal rotation of the left). Kept inside LIMB_TURN_LIMIT_DEG, which lies within commonly quoted
  * active hip rotation (about 30 to 45 degrees each way); not measured on this body. null = no turn. */
+/**
+ * 18 November 2026 (user: "Think about the shoulders rolled forward and the back convexly curved"): a rounded back
+ * comes with protracted shoulder girdles: the collar bone's outer end and the shoulder blade slide forward round the
+ * rib cage. Each girdle (collar bone and shoulder blade, one rigid piece in this rig) turns about its sternoclavicular
+ * joint by perTrunkFlex degrees per degree of trunk_flex, between minDeg (a back arched backward draws the shoulders
+ * slightly back) and maxDeg. The axis runs from that joint through the centre of the sphere fitted to the ribs under
+ * the shoulder blade (the joint record's rollAxis, from the bones), so the blade stays on the ribs as it goes round
+ * them; without the bones it is the trunk's long axis. At the start posture's 80 degrees the roll is 16 degrees (70 and 14 before the third pass),
+ * inside the commonly quoted 15 to 20 degrees of clavicular protraction: the shoulder comes forward about 3 cm, a
+ * little outward and down. It follows the trunk joint only (not the trunk bend a steep look adds), so it changes when
+ * the player bends or straightens the back and never with the look. A display coupling, not measured scapular
+ * kinematics.
+ */
+export const SHOULDER_ROLL = Object.freeze({ perTrunkFlex: 0.2, minDeg: -4, maxDeg: 16 });
+/**
+ * 18 November 2026, third pass (user: "flat depressed chest ... You should be able to see your own shoulders and
+ * stomach/abs"; the lead: "the head carried further forward over the chest"): a slumped, rounded back comes with the
+ * head carried FORWARD: the lower neck bends forward and the head tips back on the top of the neck by the same angle,
+ * so the head keeps its direction and moves forward (and a little down) over the chest. The angle is perTrunkFlex
+ * degrees per degree of trunk_flex (16 degrees at the start posture's 80: the eyes about 3 cm further forward), 0 with a
+ * straight or arched back. It follows the trunk joint only, never the look, like SHOULDER_ROLL. With it the eyes see
+ * past the lower edge of the chest to the belly. The head's direction for every neck angle is unchanged (the two
+ * angles cancel), so the look's own arithmetic (ns-app headPoseForLook) still holds. A display coupling inside what a
+ * neck does (forward head posture), not measured cervical kinematics.
+ */
+export const HEAD_FORWARD = Object.freeze({ perTrunkFlex: 0.2, minDeg: 0, maxDeg: 20 });
+export function headForwardDeg(trunkFlexDeg, o = HEAD_FORWARD) {
+  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg, o.minDeg, o.maxDeg) + 0 : 0;
+}
+export function shoulderRollDeg(trunkFlexDeg, o = SHOULDER_ROLL) {
+  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg, o.minDeg, o.maxDeg) + 0 : 0;
+}
+/** joint: the sternoclavicular record ({ point, rollAxis? }); side: -1 = the right girdle (its shoulder lies toward
+ * -x), +1 = the left (the mirror image: the mirrored axis and the opposite sense). */
+function shoulderRollMatrix(rollDeg, joint, side) {
+  // (the joint record is stored rounded to 0.001: the axis is made unit length again, or the matrix is not a rotation)
+  if (joint.rollAxis) return m4RotAbout(norm(joint.rollAxis), side < 0 ? rollDeg : -rollDeg, joint.point);
+  // About +z a positive turn carries -x toward -y (forward): the right shoulder goes forward with +roll, the left with -roll.
+  return m4RotAbout(UP, -side * rollDeg, joint.point);
+}
+
+/**
+ * 18 November 2026 (user: "you are gazing diagonally downwards"): in the reclined start posture the eyes are lowered in
+ * the head by downDeg while the head is level or bowed; the lowering fades to nothing as the head tips back by
+ * endAtHeadUpDeg (the look's own code: ns-app HEAD_LOOK eyeDownDeg, eyeDownForHead). Eyes lower about 40 degrees in the
+ * head; 22 is a comfortable downward gaze. A display choice, not a measured gaze.
+ */
+export const POSTURE_EYES = Object.freeze({ downDeg: 22, endAtHeadUpDeg: 40 });
+
 export const LIMB_TURN_LIMIT_DEG = 40;
 function checkLimbTurn(t) {
   if (t === undefined || t === null) return null;
@@ -1284,8 +1634,20 @@ function localMatrices(rig, A, limbTurn = null) {
   // R558: each spinal stage turns flexion, then side bend, then rotation (each about its own axis through the stage's
   // pivot, in the rest frame); with only flexion set every matrix is exactly the round-2 one.
   const spine = (jid, f, sd, r) => m4Mul(m4Mul(rot(jid, 'flex', f), rot(jid, 'side', sd)), rot(jid, 'rot', r));
-  out.lumbar = spine('lumbosacral', sh.trunk_flex.lumbosacral * A.trunk_flex, sh.trunk_side.lumbosacral * A.trunk_side, sh.trunk_rot.lumbosacral * A.trunk_rot);
-  out.thorax = spine('thoracolumbar', sh.trunk_flex.thoracolumbar * A.trunk_flex, sh.trunk_side.thoracolumbar * A.trunk_side, sh.trunk_rot.thoracolumbar * A.trunk_rot);
+  // 18 November 2026: one stage per vertebra (SPINE_STAGES), each with its share of the three trunk angles.
+  // 18 November 2026, third pass (a check: "Turn to the right" from the strip rolled the whole upper body onto its
+  // side: in the reclined posture the low back lies almost level, so a turn about each LOW vertebra's own long axis is
+  // a roll about the body's length, and it swung the head some 17 cm sideways): the trunk's turn is taken about the
+  // long axis of the TOP of the chest, exactly as the look's own chest turn is (chestTurn below), still shared between
+  // the joints by BODY_JOINT_SHARES.trunk_rot. So "turn" turns the shoulders under the head about the chest's own
+  // axis; for the low-back joints of a rounded back that is mostly a side bend of those joints (which a low back can
+  // do) and hardly any twist (which it cannot). With a straight back it is exactly the old turn about each joint's own
+  // axis.
+  for (const [seg, jid] of SPINE_STAGES) out[seg] = spine(jid, sh.trunk_flex[jid] * A.trunk_flex, sh.trunk_side[jid] * A.trunk_side, 0);
+  if (A.trunk_rot) chestTurn(J, out, A.trunk_rot);
+  // The rib-cage linkage's segments are placed by fit in worldSegments (linkMatrix); without it they ride their parents.
+  for (const seg of LINKED_SEGMENTS) out[seg] = m4I();
+  for (const seg of CLAVICLE_STRUTS) out[seg] = m4I(); // placed by fit after the girdles (worldSegments); without it they ride their girdle
   // R558 (user, Message 1: "The cursor now will control head/neck movement"; the eye camera rides on the head). The head
   // as a whole turns about the trunk's vertical (neck_rot) and then nods about its own turned side-to-side axis
   // (neck_flex), exactly the order of the camera's yaw and pitch, so the head points where the camera looks. Each joint
@@ -1296,15 +1658,16 @@ function localMatrices(rig, A, limbTurn = null) {
   // kinematics of a rigid educational rig, not measured cervical coupling.
   // R558 (activation points): the neck's side bend (neck_side) is applied first, about the rest frame's front-to-back
   // axis at each joint, so with only the side bend set each joint tilts exactly as it did without the head look.
-  out.cervical = m4Mul(m4Mul(rot('cervicothoracic', 'rot', sh.neck_rot.cervicothoracic * A.neck_rot), rot('cervicothoracic', 'flex', sh.neck_flex.cervicothoracic * A.neck_flex)), rot('cervicothoracic', 'side', sh.neck_side.cervicothoracic * A.neck_side));
+  const hf = headForwardDeg(A.trunk_flex), lowNeck = sh.neck_flex.cervicothoracic * A.neck_flex + hf;
+  out.cervical = m4Mul(m4Mul(rot('cervicothoracic', 'rot', sh.neck_rot.cervicothoracic * A.neck_rot), rot('cervicothoracic', 'flex', lowNeck)), rot('cervicothoracic', 'side', sh.neck_side.cervicothoracic * A.neck_side));
   {
     const ao = J.atlanto_occipital, ct = J.cervicothoracic, turn = sh.neck_rot.atlanto_occipital * A.neck_rot;
     let skullTurn = rot('atlanto_occipital', 'rot', turn);
-    if (turn && ao && ao.axes.rot && ct && ct.axes.flex && A.neck_flex) {
-      const back = m4RotAbout(ct.axes.flex, -sh.neck_flex.cervicothoracic * A.neck_flex, [0, 0, 0]);
+    if (turn && ao && ao.axes.rot && ct && ct.axes.flex && lowNeck) {
+      const back = m4RotAbout(ct.axes.flex, -lowNeck, [0, 0, 0]);
       skullTurn = m4RotAbout(norm(m4Dir(back, ao.axes.rot)), turn, ao.point);
     }
-    out.skull = m4Mul(m4Mul(skullTurn, rot('atlanto_occipital', 'flex', sh.neck_flex.atlanto_occipital * A.neck_flex)), rot('atlanto_occipital', 'side', sh.neck_side.atlanto_occipital * A.neck_side));
+    out.skull = m4Mul(m4Mul(skullTurn, rot('atlanto_occipital', 'flex', sh.neck_flex.atlanto_occipital * A.neck_flex - hf)), rot('atlanto_occipital', 'side', sh.neck_side.atlanto_occipital * A.neck_side));
   }
   const jawOpen = J.tmj && J.tmj.glideDir ? m4Mul(m4Trans(scl(J.tmj.glideDir, sh.jawGlideMmPerDeg * A.jaw_open)), rot('tmj', 'open', A.jaw_open)) : rot('tmj', 'open', A.jaw_open);
   // R558: jaw side shift (jaw_side, mm; positive = chin toward the subject's LEFT) as a sideways glide of the mandible.
@@ -1323,8 +1686,22 @@ function localMatrices(rig, A, limbTurn = null) {
     const d0 = norm(gh.restHumerusDir || DOWN);
     const elev = Math.acos(clamp(dot(norm(m4Dir(total, d0)), d0), -1, 1)) / DEG;
     const g = elev > SCAPULOHUMERAL.thresholdDeg && angle > 1e-9 ? SCAPULOHUMERAL.ratio * (elev - SCAPULOHUMERAL.thresholdDeg) * (angle / elev) : 0;
-    out.r_girdle = J.r_sternoclavicular && g ? m4RotAbout(axis, g, J.r_sternoclavicular.point) : m4I();
-    out.r_upperarm = angle > 1e-9 ? m4RotAbout(axis, angle - (J.r_sternoclavicular ? g : 0), gh.point) : m4I();
+    const bed = J.r_sternoclavicular && J.r_sternoclavicular.rollSphere;
+    if (bed && bed.spinAxis && elev > SCAPULOHUMERAL.thresholdDeg && angle > 1e-9) {
+      // 18 November 2026, third pass (the range-of-motion sweep: "Swing right arm out to the side" lifted the shoulder
+      // blade 44 mm off the ribs; a check: "the blade stays on the ribs when the arm itself moves"): the girdle's share
+      // of the lift is now an UPWARD ROTATION of the shoulder blade in its own plane, about the line from the centre of
+      // the sphere fitted to the ribs under it out through the middle of those ribs. The blade turns where it lies, on
+      // the ribs, as a shoulder blade does when the arm goes up; the collar bone follows as the strut it is. (Before:
+      // the whole girdle swung about the sternoclavicular joint, about the arm's own axis, which carried the blade up
+      // and away from the rib cage.) The upper arm takes the rest, so the arm points exactly where it did.
+      const n = norm(bed.spinAxis), up = SCAPULOHUMERAL.ratio * (elev - SCAPULOHUMERAL.thresholdDeg);
+      out.r_girdle = m4RotAbout(n, up, bed.center);
+      out.r_upperarm = m4Mul(m4RotAbout(n, -up, gh.point), m4RotAbout(axis, angle, gh.point));
+    } else {
+      out.r_girdle = J.r_sternoclavicular && g ? m4RotAbout(axis, g, J.r_sternoclavicular.point) : m4I();
+      out.r_upperarm = angle > 1e-9 ? m4RotAbout(axis, angle - (J.r_sternoclavicular ? g : 0), gh.point) : m4I();
+    }
     // R558 (Space dance, Message 2): internal / external rotation about the humerus' own long axis (the shoulder centre to
     // the elbow centre in the rest frame), turned first, so the swing above carries it and the arm keeps its direction.
     // About that downward axis a positive angle turns the front of the arm toward the subject's right: outward
@@ -1356,6 +1733,13 @@ function localMatrices(rig, A, limbTurn = null) {
   }
   out.l_girdle = m4I();
   out.l_upperarm = m4I();
+  // 18 November 2026 (SHOULDER_ROLL): with the back bent forward both shoulder girdles roll forward about their
+  // sternoclavicular joints (after the right girdle's own share of the arm's lift).
+  {
+    const roll = shoulderRollDeg(A.trunk_flex), scR = J.r_sternoclavicular, scL = J.l_sternoclavicular_mirror;
+    if (roll && scR && scR.point) out.r_girdle = m4Mul(shoulderRollMatrix(roll, scR, -1), out.r_girdle);
+    if (roll && scL && scL.point) out.l_girdle = shoulderRollMatrix(roll, scL, 1);
+  }
   for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
     const kneeFlex = -A[`knee_ext_${S}`];
     // R558: hip rotation about the thigh's long axis first (in the rest frame), then hip abduction, then hip flexion.
@@ -1536,7 +1920,12 @@ function applyArmFollow(rig, local, af) {
     const A = af.trunkAxisBp || (J.thoracolumbar && J.thoracolumbar.point);
     const C = J.cervicothoracic && J.cervicothoracic.point;
     if (A) {
-      local.thorax = m4Mul(local.thorax, m4RotAbout(SOURCE_UP, af.trunkTwistDeg, A));
+      // 18 November 2026: the rib cage turns as a whole at the thoracolumbar joint (segment t12), about the long axis of
+      // the TOP of the chest (`thorax`, the first thoracic vertebra) as it lies in t12's frame, so the neck's
+      // counter-turn below still cancels it exactly.
+      let Q = m4I();
+      for (let i = SPINE_STAGES.length - 1; SPINE_STAGES[i][0] !== 't12'; i--) Q = m4Mul(local[SPINE_STAGES[i][0]], Q);
+      local.t12 = m4Mul(local.t12, m4RotAbout(norm(m4Dir(Q, SOURCE_UP)), af.trunkTwistDeg, A));
       if (C) local.cervical = m4Mul(m4RotAbout(SOURCE_UP, -af.trunkTwistDeg, C), local.cervical);
       // the resting right arm keeps its direction (it rests as if on an armrest): it turns back about the vertical through
       // its shoulder joint, so it only moves with that shoulder (a few mm) instead of swinging its hand ~1 cm
@@ -1573,13 +1962,22 @@ export const LOOK_BEND_SIDE_LIMIT_DEG = 30;
  * down toward dirDeg, -1 = the trunk leans away from it (pure). */
 export function lookBendLimit(dirDeg, sign = 1, limits = BODY_JOINT_LIMITS.trunk_flex, sideDeg = LOOK_BEND_SIDE_LIMIT_DEG) {
   const c = Math.cos(dirDeg * DEG) * (sign < 0 ? -1 : 1), s = Math.sin(dirDeg * DEG);
-  const A = c >= 0 ? limits[1] : -limits[0];
+  const A = Math.max(1e-9, c >= 0 ? limits[1] : -limits[0]);
   return 1 / Math.sqrt((c / A) ** 2 + (s / sideDeg) ** 2);
 }
-function checkLookBend(deg, dir) {
+/* 18 November 2026 (found while checking the trunk movements: "Lean back" on the motor strip stopped the game with
+ * "lookBendDeg must be ... inside the trunk bend range"): the look's bend is added to the trunk joint's own angle, and
+ * since 17 November the start posture holds that joint far forward (60 degrees now). The room the bend has is what is
+ * left of the trunk's range FROM that angle (20 more forward, 85 back), which is what the game asks for (ns-app
+ * headLookLimits counts from the posture too); the check here still measured the bend against the range from a
+ * straight trunk (80 forward, 25 back), so a lean of more than 25 degrees back from the reclined posture was refused.
+ * trunkFlexDeg: the trunk joint's angle the bend is added to. */
+function checkLookBend(deg, dir, trunkFlexDeg = 0) {
   const d = deg === undefined || deg === null ? 0 : deg, a = dir === undefined || dir === null ? 0 : dir;
   if (typeof a !== 'number' || !Number.isFinite(a)) throw new Error('ns:body_pose: options.lookBendDirDeg must be finite degrees');
-  if (typeof d !== 'number' || !Number.isFinite(d) || Math.abs(d) > lookBendLimit(a, Math.sign(d) || 1) + 1e-9) throw new Error('ns:body_pose: options.lookBendDeg must be finite and inside the trunk bend range for its direction');
+  const L = BODY_JOINT_LIMITS.trunk_flex, q = Number.isFinite(trunkFlexDeg) ? trunkFlexDeg : 0;
+  const left = [Math.min(0, L[0] - q), Math.max(0, L[1] - q)];
+  if (typeof d !== 'number' || !Number.isFinite(d) || Math.abs(d) > lookBendLimit(a, Math.sign(d) || 1, left) + 1e-6) throw new Error('ns:body_pose: options.lookBendDeg must be finite and inside the trunk bend range for its direction');
   return { deg: d, dirDeg: a };
 }
 function checkLookTwist(v) {
@@ -1590,15 +1988,93 @@ function checkLookTwist(v) {
 function applyLook(rig, local, twistDeg, bend) {
   const J = rig.pivots, sh = BODY_JOINT_SHARES.trunk_flex;
   if (bend.deg) {
-    for (const [seg, jid] of [['lumbar', 'lumbosacral'], ['thorax', 'thoracolumbar']]) {
+    // 18 November 2026: the look's bend is shared between all the spinal joints like trunk_flex (SPINE_STAGES).
+    const turn = m4RotAbout(SOURCE_UP, bend.dirDeg, [0, 0, 0]);
+    for (const [seg, jid] of SPINE_STAGES) {
       const j = J[jid];
       if (!j || !j.axes || !j.axes.flex) continue;
-      const axis = norm(m4Dir(m4RotAbout(SOURCE_UP, bend.dirDeg, [0, 0, 0]), j.axes.flex));
-      local[seg] = m4Mul(local[seg], m4RotAbout(axis, sh[jid] * bend.deg, j.point));
+      local[seg] = m4Mul(local[seg], m4RotAbout(norm(m4Dir(turn, j.axes.flex)), sh[jid] * bend.deg, j.point));
     }
   }
-  const A = J.thoracolumbar && J.thoracolumbar.point;
-  if (twistDeg && A) local.thorax = m4Mul(local.thorax, m4RotAbout(SOURCE_UP, twistDeg, A));
+  // 18 November 2026: the chest's turn is shared between the spinal joints like trunk_rot. Every joint turns about the
+  // long axis of the TOP of the chest (the first thoracic vertebra) as it lies in that joint's frame, so the shares
+  // add up to exactly the one turn about the chest's own long axis that the look asks for (as when it was taken at the
+  // thoracolumbar joint alone); the pelvis and legs still do not turn.
+  if (twistDeg) chestTurn(J, local, twistDeg);
+}
+/** A turn of the chest by `deg` (+ = the front toward the subject's left) about the long axis of the top of the chest,
+ * shared between the spinal joints by BODY_JOINT_SHARES.trunk_rot: each joint turns about that axis as it lies in the
+ * joint's own frame (the bends of the joints above it undone), about its own pivot. `local` is changed in place. */
+function chestTurn(J, local, deg) {
+  const rs = BODY_JOINT_SHARES.trunk_rot;
+  let Q = m4I();
+  for (let i = SPINE_STAGES.length - 1; i >= 0; i--) {
+    const [seg, jid] = SPINE_STAGES[i], j = J[jid], bent = local[seg];
+    if (j && j.point && rs[jid]) local[seg] = m4Mul(bent, m4RotAbout(norm(m4Dir(Q, SOURCE_UP)), rs[jid] * deg, j.point));
+    Q = m4Mul(bent, Q);
+  }
+}
+
+/** Weighted least-squares rigid transform (Horn, as rigidFit) of points P (flat) onto Q with weights w. */
+function rigidFitWeighted(P, Q, w) {
+  const n = w.length;
+  let tw = 0, px = 0, py = 0, pz = 0, qx = 0, qy = 0, qz = 0;
+  for (let k = 0, i = 0; k < n; k++, i += 3) { const u = w[k]; tw += u; px += u * P[i]; py += u * P[i + 1]; pz += u * P[i + 2]; qx += u * Q[i]; qy += u * Q[i + 1]; qz += u * Q[i + 2]; }
+  px /= tw; py /= tw; pz /= tw; qx /= tw; qy /= tw; qz /= tw;
+  let Sxx = 0, Sxy = 0, Sxz = 0, Syx = 0, Syy = 0, Syz = 0, Szx = 0, Szy = 0, Szz = 0;
+  for (let k = 0, i = 0; k < n; k++, i += 3) {
+    const u = w[k], ax = u * (P[i] - px), ay = u * (P[i + 1] - py), az = u * (P[i + 2] - pz);
+    const bx = Q[i] - qx, by = Q[i + 1] - qy, bz = Q[i + 2] - qz;
+    Sxx += ax * bx; Sxy += ax * by; Sxz += ax * bz;
+    Syx += ay * bx; Syy += ay * by; Syz += ay * bz;
+    Szx += az * bx; Szy += az * by; Szz += az * bz;
+  }
+  const N = [
+    [Sxx + Syy + Szz, Syz - Szy, Szx - Sxz, Sxy - Syx],
+    [Syz - Szy, Sxx - Syy - Szz, Sxy + Syx, Szx + Sxz],
+    [Szx - Sxz, Sxy + Syx, -Sxx + Syy - Szz, Syz + Szy],
+    [Sxy - Syx, Szx + Sxz, Syz + Szy, -Sxx - Syy + Szz]
+  ];
+  const [qw, x, y, z] = topEigenvector4(N);
+  const l = Math.hypot(qw, x, y, z) || 1;
+  const q = [x / l, y / l, z / l, qw / l];
+  const R = m4FromQuat(q, [0, 0, 0]);
+  return m4FromQuat(q, sub([qx, qy, qz], m4Point(R, [px, py, pz])));
+}
+/** The matrix of one linked rib-cage segment (buildRibLinks) for the matrices `mats` (BODY_SEGMENTS order) of its
+ * carriers: their common matrix when they all agree, else the weighted rigid fit. */
+function linkMatrix(L, mats) {
+  const m0 = mats[L.carriers[0]];
+  let same = true;
+  for (let k = 1; k < L.carriers.length && same; k++) same = sameMatrix(mats[L.carriers[k]], m0);
+  if (same) return m0;
+  const P = L.p, n = L.w.length, Q = new Float64Array(P.length);
+  for (let k = 0, i = 0; k < n; k++, i += 3) {
+    const m = mats[L.c[k]], x = P[i], y = P[i + 1], z = P[i + 2];
+    Q[i] = m[0] * x + m[4] * y + m[8] * z + m[12]; Q[i + 1] = m[1] * x + m[5] * y + m[9] * z + m[13]; Q[i + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  }
+  return rigidFitWeighted(P, Q, L.w);
+}
+/* The linkage depends only on the thoracic vertebrae's matrices in the pelvis frame, and the body is posed several times
+ * a frame (the head frame, the limb solve, the drawn pose) mostly with the same trunk: the last result is kept per rig
+ * and returned while every one of those matrices is exactly what it was. Same numbers; nothing is approximated. */
+const linkMemo = new WeakMap();
+const LINK_KEY_SEGMENTS = SPINE_STAGES.slice(5).map(r => r[0]);
+function linkedWorld(rig, links, world) {
+  let c = linkMemo.get(rig);
+  if (!c) linkMemo.set(rig, (c = { key: new Float64Array(16 * LINK_KEY_SEGMENTS.length).fill(NaN), out: null }));
+  let same = c.out !== null;
+  for (let s = 0, o = 0; s < LINK_KEY_SEGMENTS.length; s++) { const m = world[LINK_KEY_SEGMENTS[s]]; for (let k = 0; k < 16; k++, o++) if (c.key[o] !== m[k]) { same = false; c.key[o] = m[k]; } }
+  if (same) return c.out;
+  const mats = BODY_SEGMENTS.map(s => world[s] || null), out = {};
+  for (const seg of LINKED_SEGMENTS) {
+    const L = links[seg];
+    if (!L || L.late) continue;
+    out[seg] = linkMatrix(L, mats);
+    mats[SEG_INDEX.get(seg)] = out[seg];
+  }
+  c.out = out;
+  return out;
 }
 
 /** World (rest -> posed, Float64) matrix of every segment for clamped targets, anchor and external matrices. */
@@ -1606,8 +2082,8 @@ function worldSegments(rig, applied, options) {
   const local = localMatrices(rig, applied, checkLimbTurn(options.limbTurn));
   // R558 (latch): options.holdChest keeps the chest where it is while the trunk bends, so the head (the eye camera)
   // and both arm roots stay put and the bend is taken up below the chest: the pelvis and the legs swing instead.
-  const hold = options.holdChest === true && (applied.trunk_flex || applied.trunk_side || applied.trunk_rot) ? m4RigidInv(m4Mul(local.lumbar, local.thorax)) : null;
-  applyLook(rig, local, checkLookTwist(options.lookTwistDeg), checkLookBend(options.lookBendDeg, options.lookBendDirDeg));
+  const hold = options.holdChest === true && (applied.trunk_flex || applied.trunk_side || applied.trunk_rot) ? m4RigidInv(SPINE_STAGES.reduce((m, r) => m4Mul(m, local[r[0]]), m4I())) : null;
+  applyLook(rig, local, checkLookTwist(options.lookTwistDeg), checkLookBend(options.lookBendDeg, options.lookBendDirDeg, applied.trunk_flex));
   const af = checkArmFollow(options.armFollow);
   if (af) applyArmFollow(rig, local, af);
   const anchor = options.anchor === undefined ? 'pelvis' : options.anchor;
@@ -1615,13 +2091,30 @@ function worldSegments(rig, applied, options) {
   const ext = options.external || {};
   const world = {};
   const fixed = hold ? new Set() : null; // externally placed segments (and what hangs from them) are already in place
+  // 18 November 2026: the rib-cage linkage (buildRibLinks). Its segments come right after the spine in BODY_SEGMENTS, so
+  // the vertebrae they hang from are placed when the first of them is reached, and everything that hangs from the
+  // breastbone (both shoulder girdles and arms) comes after.
+  const links = rig._links || null;
+  let linked = null;
   for (const s of BODY_SEGMENTS) {
     if (VIRTUAL_SEGMENTS.includes(s) && ext[s]) { world[s] = checkExternal(ext[s], s); if (fixed) fixed.add(s); continue; }
     const p = BODY_SEGMENT_PARENT[s];
-    world[s] = p ? m4Mul(world[p], local[s]) : local[s];
+    if (links && links[s] && !links[s].late) {
+      if (!linked) linked = linkedWorld(rig, links, world);
+      world[s] = linked[s];
+    } else world[s] = p ? m4Mul(world[p], local[s]) : local[s];
     if (fixed && p && fixed.has(p)) fixed.add(s);
   }
   if (hold) for (const s of BODY_SEGMENTS) if (!fixed.has(s)) world[s] = m4Mul(hold, world[s]);
+  // 18 November 2026, later: the collar bones (CLAVICLE_STRUTS) are fitted last, between the breastbone and the girdles
+  // as they now stand (a girdle may have come from the left-arm rig).
+  if (links) for (const s of CLAVICLE_STRUTS) {
+    const L = links[s];
+    if (!L) continue;
+    const mats = [];
+    for (const ci of L.carriers) mats[ci] = world[BODY_SEGMENTS[ci]];
+    world[s] = linkMatrix(L, mats);
+  }
   if (anchor !== 'pelvis') {
     const inv = m4RigidInv(world[anchor]);
     for (const s of BODY_SEGMENTS) world[s] = m4Mul(inv, world[s]);
@@ -1713,7 +2206,7 @@ export function poseBody(rig, jointTargetsDeg = {}, options = {}) {
 
 /**
  * R558 (the eye camera rides on the head): the drawn (posed) frames of the trunk and head chain only, cheap enough for
- * every look: { pelvis, lumbar, thorax, cervical, skull } (Float64Array(16), source mm -> drawn mm, the baked keep
+ * every look: { pelvis, lumbar, thorax, sternum, cervical, skull, l_girdle } (Float64Array(16), source mm -> drawn mm, the baked keep
  * frame applied exactly as poseBodyDetailed does). The same targets and options give the same matrices as
  * poseBodyDetailed's `segments` for these segments, up to their Float32 storage (measured: under 1e-4 mm), when the
  * pose has no palm-turn armFollow (options used: anchor 'pelvis', holdChest, lookTwistDeg, lookBendDeg,
@@ -1727,7 +2220,9 @@ export function bodyHeadFrame(rig, jointTargetsDeg = {}, options = {}) {
   const { world } = worldSegments(rig, t.applied, { holdChest: options.holdChest === true, lookTwistDeg: options.lookTwistDeg, lookBendDeg: options.lookBendDeg, lookBendDirDeg: options.lookBendDirDeg });
   const baked = options.baked === undefined || options.baked === null ? null : checkBaked(rig, options.baked);
   const out = { applied: t.applied };
-  for (const s of ['pelvis', 'lumbar', 'thorax', 'cervical', 'skull']) out[s] = Float64Array.from(baked ? m4Mul(baked._internal.keepM, world[s]) : world[s]);
+  // 18 November 2026: also the breastbone and the left shoulder girdle's own frame (the breastbone with the shoulder
+  // roll, SHOULDER_ROLL): the left game arm's shoulder root rides on it.
+  for (const s of ['pelvis', 'lumbar', 'thorax', 'sternum', 'cervical', 'skull', 'l_girdle']) out[s] = Float64Array.from(baked ? m4Mul(baked._internal.keepM, world[s]) : world[s]);
   return out;
 }
 
@@ -1912,14 +2407,31 @@ function continuousSkinWeights(rig, p, avail) {
   const idx = cloudIndexes(rig._clouds || {}), segs = avail.filter(s => idx[s]);
   if (segs.length < 2) return null;
   const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n), u = new Float64Array(segs.length);
+  // 18 November 2026: a trunk muscle now has some fifty candidate bones (every vertebra, rib and cartilage). Only the
+  // three nearest matter, so a candidate whose bounding box is farther than the third-nearest distance found so far is
+  // given weight 0 without searching it (it cannot be one of the three). The three that the previous vertex kept are
+  // searched first (neighbouring vertices mostly keep the same bones), so most of the others are skipped at once. Ties
+  // go to the earlier candidate, whatever the search order, so the result is still a pure function of the position.
+  const prune = segs.length > 4, K = segs.length;
+  let p1 = -1, p2 = -1, p3 = -1;
   for (let v = 0; v < n; v++) {
     const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
     let k1 = -1, k2 = -1, k3 = -1;
-    for (let k = 0; k < segs.length; k++) {
-      const d2 = nnNearestD2(idx[segs[k]], x, y, z);
+    for (let q = prune ? -3 : 0; q < K; q++) {
+      const k = q >= 0 ? q : q === -3 ? p1 : q === -2 ? p2 : p3;
+      if (k < 0 || (q >= 0 && prune && (k === p1 || k === p2 || k === p3))) continue;
+      const lim = prune && k3 >= 0 ? 1 / u[k3] : Infinity;
+      if (lim < Infinity && nnBoxD2(idx[segs[k]].box, 0, x, y, z) > lim) { u[k] = 0; continue; }
+      // (third pass) only a bone nearer than the third-nearest so far can matter: the search stops as soon as it
+      // knows this one is not (the long curved ribs' boxes overlap most of the chest, so the box test alone let
+      // nearly every rib through)
+      const d2 = nnNearestD2(idx[segs[k]], x, y, z, lim);
+      if (d2 >= lim) { u[k] = 0; continue; }
       u[k] = d2 > 1e-12 ? 1 / d2 : 1e12;
-      if (k1 < 0 || u[k] > u[k1]) { k3 = k2; k2 = k1; k1 = k; } else if (k2 < 0 || u[k] > u[k2]) { k3 = k2; k2 = k; } else if (k3 < 0 || u[k] > u[k3]) k3 = k;
+      const better = (i, j) => j < 0 || u[i] > u[j] || (u[i] === u[j] && i < j);
+      if (better(k, k1)) { k3 = k2; k2 = k1; k1 = k; } else if (better(k, k2)) { k3 = k2; k2 = k; } else if (better(k, k3)) k3 = k;
     }
+    p1 = k1; p2 = k2; p3 = k3;
     const u3 = k3 >= 0 ? u[k3] : 0, a = u[k1] - u3, b = u[k2] - u3, t = a + b;
     ia[v] = SEG_INDEX.get(segs[k1]); ib[v] = SEG_INDEX.get(segs[k2]); wa[v] = t > 0 ? a / t : 1;
   }
@@ -2260,15 +2772,36 @@ export const BODY_POSTURES = deepFreezeRig({
   // down/inwards"; "full neutral hip extension. The bend is from the back and not the hips"): the body lies back as on
   // a declined sofa with the upper back curled up. The hips are NEUTRAL (0: the thighs in line with the pelvis), and
   // the pelvis and legs lie level on the ground. All of the bend is in the back and neck ("Almost full kyphosis /
-  // flexion of the spine for full view"): the trunk rounded forward 68 of its 80 degrees (a convex back, the chest
-  // sunk toward the pelvis) and the neck 22 more, which brings the head upright and leaves the neck 28 degrees of its
-  // own for the downward look the game starts with. The rig bends the trunk at two joints below a rigid rib cage, so
-  // the rounding shows at the waist rather than between the shoulder blades.
+  // flexion of the spine for full view").
+  // 18 November 2026, first build (superseded by the note above `open` below: trunk 70, neck 20, eyes lowered) (the same
+  // notes, read again with a spine that bends at every vertebra; SPINE_STAGES): trunk 60 of
+  // its 80 degrees and neck 30 of its 50 (17 November: 68 and 22). The trunk's 60 is shared by BODY_JOINT_SHARES: the
+  // low back flattens by about 22 degrees and the upper back rounds by about 38, one even curve from the sacrum to the
+  // neck. With the bend moved up the back and into the neck the eyes sit OVER the chest instead of behind a steep one:
+  // at the start look the chest lies face-on below the chin and the belly, thighs, knees and feet show beyond it
+  // (17 November: the chest stood like a wall and hid the belly). The breastbone sinks with the upper ribs and both
+  // shoulder girdles roll forward (SHOULDER_ROLL). The start look (20 degrees down) takes the neck to its 50; past
+  // that the trunk bends with the look, to 40 degrees down as before.
   // The head keeps its place (the bake keeps the skull), so the body lies out ahead of the eyes, chin to toes. The
-  // right arm is raised 68 from the trunk so it still points level forward. No sofa is drawn. A display choice inside
-  // the joints' ranges (trunk 80 forward, neck 50), not a measured pose. The rig has no joint that rolls the shoulder
-  // blades forward.
-  open: { neck_flex: 22, trunk_flex: 68, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: 68, r_pronation: 160 },
+  // right arm is raised 54 from the trunk so it still points level forward. No sofa is drawn. A display choice inside
+  // the joints' ranges (trunk 80 forward, neck 50), not a measured pose.
+  // 18 November 2026, later (user, after seeing the game: "I want flat depressed chest not booby pumped out chest. And
+  // you are gazing diagonally downwards. You should be able to see your own shoulders and stomach/abs"): trunk 70 of
+  // its 80 and neck 20 (still 90 together: the pelvis and legs lie level), and the eyes are lowered in the head
+  // (POSTURE_EYES below). The game starts with the look 34 degrees below level: the head is bowed 12 of them (the neck
+  // at 32 of its 50) and the eyes do the other 22. With the chin no longer pressed down (the neck was at its 50) the
+  // eyes are 14 cm from the breastbone instead of 11 and further back: the chest takes less of the picture, the belly
+  // more, and both shoulders are inside the lower corners. The right arm is raised 63 so it still points level.
+  // 18 November 2026, third pass (a check of the second: the chest still filled the lower 38 % of the picture as a broad
+  // plate, the legs were seen end-on, the right armpit showed its inside in the lower corner of the first picture, and
+  // the right hand lay over the mirror body): trunk 80 and neck 10 (still 90 together), with the bend now mostly in the
+  // LOW back (BODY_JOINT_SHARES.trunk_flex) and the head carried forward (HEAD_FORWARD). The right arm no longer points
+  // level at the mirror body: it rests, the upper arm hanging beside the trunk (5 degrees behind it, a little out), the
+  // elbow bent 80, the forearm lying palm down on the right thigh, as an arm lies on someone slumped back. The armpit
+  // is closed and the hand is in the picture on the thigh. (Tried 25 forward with the elbow at 55: seen from the side
+  // the forearm pointed up into the air.) The game starts with the look 36 degrees below level (the head bowed 14 of
+  // them, the eyes 22).
+  open: { neck_flex: 10, trunk_flex: 80, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: -5, r_shoulder_abd: 8, r_elbow_flex: 80, r_pronation: 160 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -2536,10 +3069,13 @@ function nnBoxD2(B, k, x, y, z) {
  * starts in the leaf of the previous query's nearest point (the warm start), then walks up to the root and searches
  * each sibling subtree on the way whose box is nearer than the best point so far. The start leaf and those siblings
  * together are the whole tree, so every point is either measured or provably not nearer. */
-function nnNearestD2(t, x, y, z) {
+function nnNearestD2(t, x, y, z, bound = Infinity) {
   if (!t.n) return Infinity;
   const P = t.pts, B = t.box, L = t.left, R = t.right, LO = t.lo, HI = t.hi, PA = t.parent;
-  let bi = t.last, best = Infinity;
+  // 18 November 2026, third pass (loading was 1.5 s slower with a segment per vertebra and rib): `bound` is a squared
+  // distance the caller already has; only a point NEARER than it is looked for, and `bound` itself comes back when
+  // there is none (the caller then knows this cloud is not nearer, without the search having to find how far it is).
+  let bi = t.last, best = bound;
   const k0 = t.leafOf[bi];
   for (let i = LO[k0], e2 = HI[k0]; i < e2; i++) {
     const j = 3 * i, dx = P[j] - x, dy = P[j + 1] - y, dz = P[j + 2] - z, e = dx * dx + dy * dy + dz * dz;
@@ -2646,7 +3182,14 @@ function twoNearestIdx(segs, idx, x, y, z) {
   let a = null, da = Infinity, b = null, db = Infinity;
   for (let i = 0; i < n; i++) {
     if (NN_D[i] < 0 && NN_LB[i] > bound) continue;
-    const d = NN_D[i] >= 0 ? NN_D[i] : Math.sqrt(nnNearestD2(idx[segs[i]], x, y, z));
+    let d;
+    if (NN_D[i] >= 0) d = NN_D[i];
+    else {
+      // (third pass) only a candidate nearer than the second-nearest so far can be chosen
+      const lim = db * db, d2 = nnNearestD2(idx[segs[i]], x, y, z, lim);
+      if (d2 >= lim) continue;
+      d = Math.sqrt(d2);
+    }
     const s = segs[i];
     if (d < da) { b = a; db = da; a = s; da = d; } else if (d < db) { b = s; db = d; }
   }
@@ -5286,6 +5829,22 @@ export const REFERENCE_MANIFEST_SHA256 = '5b0cbbf880ddd053e761a0a967cbbc924aca13
 export const REFERENCE_JOINTS = deepFreezeRig({
   lumbosacral: {"point":[-0.386,-50.605,926.766],"method":"midpoint L5 centroid / sacral-top centroid","bones":["fifth lumbar vertebra","sacrum"]},
   thoracolumbar: {"point":[-1.053,-59.051,1062.428],"method":"midpoint T12 / L1 centroids","bones":["twelfth thoracic vertebra","first lumbar vertebra"]},
+  // 18 November 2026: the joints between neighbouring lumbar / thoracic vertebrae (SPINE_STAGES), by the same estimator.
+  l4_l5: {"point":[-0.618,-59.246,948.635],"method":"midpoint of the two vertebral centroids","bones":["fourth lumbar vertebra","fifth lumbar vertebra"]},
+  l3_l4: {"point":[-0.55,-65.758,977.118],"method":"midpoint of the two vertebral centroids","bones":["third lumbar vertebra","fourth lumbar vertebra"]},
+  l2_l3: {"point":[-1.408,-67.842,1004.631],"method":"midpoint of the two vertebral centroids","bones":["second lumbar vertebra","third lumbar vertebra"]},
+  l1_l2: {"point":[-1.226,-65.639,1032.531],"method":"midpoint of the two vertebral centroids","bones":["first lumbar vertebra","second lumbar vertebra"]},
+  t11_t12: {"point":[-0.632,-50.415,1092.962],"method":"midpoint of the two vertebral centroids","bones":["eleventh thoracic vertebra","twelfth thoracic vertebra"]},
+  t10_t11: {"point":[-0.494,-41.967,1120.614],"method":"midpoint of the two vertebral centroids","bones":["tenth thoracic vertebra","eleventh thoracic vertebra"]},
+  t9_t10: {"point":[-0.734,-35.714,1148.94],"method":"midpoint of the two vertebral centroids","bones":["ninth thoracic vertebra","tenth thoracic vertebra"]},
+  t8_t9: {"point":[-0.867,-31.35,1177.076],"method":"midpoint of the two vertebral centroids","bones":["eighth thoracic vertebra","ninth thoracic vertebra"]},
+  t7_t8: {"point":[-0.67,-27.512,1204.284],"method":"midpoint of the two vertebral centroids","bones":["seventh thoracic vertebra","eighth thoracic vertebra"]},
+  t6_t7: {"point":[-1.005,-25.604,1232.996],"method":"midpoint of the two vertebral centroids","bones":["sixth thoracic vertebra","seventh thoracic vertebra"]},
+  t5_t6: {"point":[-1.53,-27.299,1261.147],"method":"midpoint of the two vertebral centroids","bones":["fifth thoracic vertebra","sixth thoracic vertebra"]},
+  t4_t5: {"point":[-0.639,-31.991,1287.825],"method":"midpoint of the two vertebral centroids","bones":["fourth thoracic vertebra","fifth thoracic vertebra"]},
+  t3_t4: {"point":[0.028,-39.277,1312.871],"method":"midpoint of the two vertebral centroids","bones":["third thoracic vertebra","fourth thoracic vertebra"]},
+  t2_t3: {"point":[-0.174,-49.223,1335.793],"method":"midpoint of the two vertebral centroids","bones":["second thoracic vertebra","third thoracic vertebra"]},
+  t1_t2: {"point":[-0.94,-57.511,1354.409],"method":"midpoint of the two vertebral centroids","bones":["first thoracic vertebra","second thoracic vertebra"]},
   cervicothoracic: {"point":[-0.762,-63.359,1370.476],"method":"midpoint C7 / T1 centroids","bones":["seventh cervical vertebra","first thoracic vertebra"]},
   atlanto_occipital: {"point":[0.055,-73.482,1478.299],"method":"centroid of the atlas superior 6 mm (lateral-mass facets; the occipital bone is not in the packet)","bones":["atlas"]},
   tmj: {"point":[-0.691,-94.508,1503.48],"condyles":{"left":[41.492,-94.479,1503.514],"right":[-42.873,-94.537,1503.445]},"chin":[-0.562,-169.681,1440.286],"method":"midpoint of the mandibular condyle tops (posterior 20 mm, top 6 mm per side)","bones":["mandible"]},

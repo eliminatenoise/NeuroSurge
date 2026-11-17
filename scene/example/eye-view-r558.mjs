@@ -22,7 +22,21 @@ const EYE_FOV_Y_DEG = 108;
 // "You will naturally be looking a little downwards and that is where the motor strip should naturally be"): the game
 // starts with the look a little below level, as someone leaning back on a sofa looks, and the brain starts there too,
 // over the body that lies out below your eyes, so the limbs an area moves stay on screen while you aim at it.
-const START_LOOK_PITCH_DEG = -20, BRAIN_START_PITCH_DEG = -20;
+// 18 November 2026 (user, after playing: "And you are gazing diagonally downwards. You should be able to see your own
+// shoulders and stomach/abs"): the game now starts with the look 34 degrees below level, down your own front (the
+// head bowed 12 degrees, the eyes lowered the rest: ns-body POSTURE_EYES). The brain stays where it was (20 below
+// level): the mirror body is a reflection that stands where the body puts it, just under the motor strip, and your
+// own feet come up to it, so the brain cannot come lower without the mirror body or your feet covering the leg
+// areas. From the start look the arm, leg and trunk areas are inside the top of the picture and the face areas are
+// just above it. (Tried: 35 with the brain 8 lower: the mirror body then stood in front of the leg areas; 30: the
+// crosshair started on the mirror body's lower arrow, so the first click tilted it instead of taking the pointer.)
+// 18 November 2026, third pass (a check: at 34 the upper part of the strip was cut off by the top edge and the first
+// prompt lay over it): the look now starts 36 degrees below level (the head bowed 14, the eyes 22) and the brain is
+// drawn smaller at the start (ns-app BRAIN_START_MOTOR_FRAC), so the WHOLE motor strip, face areas included, is inside
+// the picture above your own legs, and your arms, belly and chest are seen around and under it. The brain still
+// stands 20 below level, on the mirror body's head, for the reason given above; the crosshair therefore starts on
+// your own knees, about 22 degrees under the strip's lower edge, not on the strip itself.
+const START_LOOK_PITCH_DEG = -36, BRAIN_START_PITCH_DEG = -20;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);

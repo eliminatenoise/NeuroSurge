@@ -114,6 +114,13 @@ export function brainBeat(t, o = BRAIN_BEAT) {
   const notch = 0.14 * Math.exp(-(((ph - 0.42) / 0.06) ** 2));
   return { beat: Math.min(1, rise + notch), breath: Math.sin((2 * Math.PI * t) / o.breathS) };
 }
+/** The beat's clock (seconds), shared by the loading picture and the game's living brain (ns-brain-live), so the brain
+ * that came together on the loading picture goes on beating in step in the game: the wall clock, wrapped at a whole
+ * number of beats and of breaths (110 beats = 23 breaths = 101.2 s), so the wrap is not seen. Pure but for the clock. */
+export function brainBeatClock(epochMs = Date.now(), o = BRAIN_BEAT) {
+  const wrapMs = Math.round(110 * o.beatS * 1000);
+  return (((epochMs % wrapMs) + wrapMs) % wrapMs) / 1000;
+}
 
 /**
  * The picture. THREE: the three.js module; canvas: a canvas or an OffscreenCanvas; width / height: CSS pixels;
@@ -233,7 +240,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     brainPivot.rotation.z = sway * 0.8;
     // The brain beats (a heartbeat swell on a slow breathing rise and fall), and the strip's light beats with it,
     // brighter once everything is in and the game is being built.
-    const pulse = brainBeat(t);
+    const pulse = brainBeat(brainBeatClock()); // the shared clock: the game's brain takes the beat over in step
     brainTilt.scale.setScalar(o.brainScale * (1 + BRAIN_BEAT.swell * pulse.beat + BRAIN_BEAT.breathSwell * pulse.breath));
     brainPivot.position.z = o.brainAt[2] + 6 * pulse.breath;
     base.strip.emissiveIntensity = 0.3 + (finishing ? 0.55 : 0.3) * pulse.beat;

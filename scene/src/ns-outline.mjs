@@ -125,7 +125,7 @@ export const OUTLINE_ADJACENT = Object.freeze([
 export function outlineGroupForBodySegment(segment) {
   const s = typeof segment === 'string' ? segment : '';
   const G = OUTLINE_GROUPS;
-  if (/^(pelvis|lumbar|thorax|[lr]_girdle)$/.test(s)) return G.trunk;
+  if (/^(pelvis|lumbar|thorax|sternum|[lt]\d+|[lr]_(girdle|gbase|clav|rib\d+|cc\d+))$/.test(s)) return G.trunk; // 18 November 2026: one segment per vertebra, rib and cartilage (ns-body SPINE_STAGES)
   if (/^(cervical|skull|mandible|hyoid)$/.test(s)) return G.head;
   const m = /^([lr])_(.+)$/.exec(s);
   if (!m) return 0;
@@ -520,8 +520,12 @@ const STRIP_COMPOSITE_FS = `
 precision highp float;
 uniform sampler2D tInk;
 uniform vec3 uColour; // linear
+uniform vec3 uLive; // the living brain's beat: xy the brain centre on the screen (buffer px), z the share it has grown
 void main() {
-	float a = texelFetch( tInk, ivec2( gl_FragCoord.xy ), 0 ).b;
+	// the ink picture is kept between frames, so it is drawn of the brain at rest; the beat's swell about the brain's
+	// centre is put on here (the same scale about the centre's place on the screen)
+	vec2 p = uLive.xy + ( gl_FragCoord.xy - uLive.xy ) / ( 1.0 + uLive.z );
+	float a = texelFetch( tInk, ivec2( p ), 0 ).b;
 	if ( a <= 0.003 ) discard;
 	gl_FragColor = vec4( linearToOutputTexel( vec4( uColour, 1.0 ) ).rgb * a, a );
 }`;
@@ -617,7 +621,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   composite.visible = false;
   // R558 BB: the strip's silhouette (the sulci that bound it, seen from above) drawn right after the motor areas.
   const stripCompMat = new THREE.ShaderMaterial({
-    uniforms: { tInk: compMat.uniforms.tInk, uColour: compMat.uniforms.uColour }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
+    uniforms: { tInk: compMat.uniforms.tInk, uColour: compMat.uniforms.uColour, uLive: { value: new THREE.Vector3(0, 0, 0) } }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending, depthTest: false, depthWrite: false, toneMapped: false, fog: false
   });
   const stripComposite = screenMesh(stripCompMat, 'ns-outline strip composite (ink silhouette of the motor strip; display only)');
@@ -907,6 +911,10 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     return Boolean(strip.mesh);
   }
   function invalidate() { force = true; }
+  /** The living brain (ns-brain-live): the beat's swell is put on the strip's ink when it is drawn (a scale by 1 + share
+   * about (x, y), the brain centre's place in buffer pixels). stripMaterial (returned below) can take the scene's
+   * vertex rule for what the kept picture itself must follow (the wobble, the blooms); call invalidate() while they move. */
+  function setStripLive(x, y, share) { stripCompMat.uniforms.uLive.value.set(Number.isFinite(x) ? x : 0, Number.isFinite(y) ? y : 0, Number.isFinite(share) ? share : 0); }
   /** Depth shading (OUTLINE_AO) on or off; the scene turns it on only at the full quality level. */
   function setOcclusion(v) { const n = v === true; if (n !== occOn) force = true; occOn = n; return occOn; }
   function setEnabled(v) {
@@ -931,5 +939,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     adjTex.dispose(); quadGeo.dispose(); compMat.dispose(); idMat.dispose(); edgeMat.dispose(); inkMat.dispose();
     reg.length = 0; bySource.clear(); geoms.clear();
   }
-  return { composite, stripComposite, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setOcclusion, state, dispose, get enabled() { return on; }, get supersample() { return ss; } };
+  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setOcclusion, state, dispose, get enabled() { return on; }, get supersample() { return ss; } };
 }

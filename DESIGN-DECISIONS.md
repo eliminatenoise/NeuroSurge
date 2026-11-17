@@ -1293,6 +1293,55 @@ Still open from the user's notes: the shoulder girdle's lift, the kneecap and th
 
 With the cards off (the start, section 77) the number keys did nothing, because they took their list from the information card. They now do the movements the tip by the crosshair lists, at once, without the third of a second the card waits, and keep the list of the last area the tip showed, so they still work while you look down at your body.
 
+## 89. A brain that beats and reacts (18 November)
+
+The user: "Perhaps let's also get a beating reacting brain as you would see in neurosurgery."
+
+Before, only the brain in the loading picture moved. Now the game's brain beats: a quick rise and a slower fall about once a second, on a slow swell like breathing, with the same wave and the same clock as the loading picture. The wet highlights slide over the folds with it, the tissue flushes a little at the top of a beat, and fine red vessels with twigs and blue-violet veins along the groove lips lie on the surface.
+
+How the beat is drawn. The brain's group, its picking, labels, arrows and contact spheres are not touched. Every brain material moves its vertices by one shared rule (`ns-brain-live.mjs`, `nsLiveMove`), so the surface, the keys, the outline and the small markers never separate. The beat is a plain scale about the point of the crosshair's line of sight that is nearest the brain's centre. A scale about a point of that line leaves the line where it is, so what is under the crosshair stays under it through the whole beat, and aiming, which uses the rest shape, agrees with the picture there.
+
+It reacts in three ways.
+- To the look and to activity. An area the look rests on shows a faint flush of its key's colour and dips slightly. A movement switched on gives the full bloom: the tissue round the key swells a little, flushes and takes the key's hue while keeping its own folds and shine, and one ring of the key's colour runs outward for 0.8 s. The beat picks up 14 % for each area that is on, to at most 1.45 times, and settles back over a few seconds. The grey in-between areas do not bloom. The hand area of a Space grip shows a fifth of a bloom while it holds.
+- To being handled. While the brain is carried or turned the tissue trails behind and swings into place when it stops, like firm jelly: a damped spring at 3 Hz, at most about 4 mm of lag, at rest about half a second after the stop. Nothing moves at rest.
+- Under `prefers-reduced-motion` there is no beat, no wobble, no swell and no ring; an area that is on shows its colour steadily.
+
+Measured, in the builder's worktree with the brain at its former size: one beat moves the brain's outline about 6 px on a 1600 by 900 canvas, and 2.2 % of the pixels change by more than 5 %. Since section 90 the brain is drawn about half as wide at the start, so the beat moves about half as many pixels there. Frame rates were equal to the build before within scatter. Twelve tests hold the rules.
+
+An independent checker tested the first version and found the beat too small to notice, the bloom washing the tissue out while something was held, and no wobble for W/A/S/D and the arrows; the numbers above are after those were fixed.
+
+Limits. Nothing was watched in motion by anyone: the beat, the wobble and the ring were judged from single frames, edge records and state numbers. The vessels are drawn by a rule, not from anatomy: forks are few, and in places a vein follows both lips of a groove and reads as a soft violet outline. While the brain is carried, the picture and the aim differ by up to about 4 mm for half a second. The labels do not move with the tissue. The key under the crosshair dips by 0.8 mm, which is hard to see from straight on. At low quality levels the brain's surface shows ragged dark holes at edge-on views; that was there before and is not fixed.
+
+## 90. A back that bends at every vertebra; a diagonal downward gaze (18 November)
+
+The user on 17 November: "Think about the shoulders rolled forward and the back convexly curved"; "see all of the front of the torso at once without the chest pumping out but depressed down/inwards"; "Almost full kyphosis/flexion of the spine for full view". On 18 November, on the ninth upload: "I want flat depressed chest not booby pumped out chest. And you are gazing diagonally downwards. You should be able to see your own shoulders and stomach/abs."
+
+Before, the trunk bent at two joints under a rigid rib cage (section 86), the eyes looked 20 degrees below level, and the chest hid the belly.
+
+What is built.
+- The spine bends at every lumbar and thoracic vertebra (the rig has 93 segments instead of 41). About two thirds of the forward bend is taken in the low back, where the hollow flattens and reverses, and one third between the rib-bearing vertebrae. Each rib goes with its vertebra and the breastbone hangs on the ribs as a linkage, so the front of the chest closes up and drops as the back rounds.
+- The shoulder girdles roll forward with the bend (0.2 degrees per degree, at most 16), each collar bone working as a strut between breastbone and shoulder blade, and the head is carried forward by the same share.
+- The start posture is trunk 80, neck 10 (the pelvis and legs stay level; the limit of the forward bend is now 90 so that "Bend forward" still moves). The right arm rests beside the trunk with the forearm on the right thigh.
+- The eyes are lowered 22 degrees in the head while the head is level or bowed. The game starts with the look 36 degrees below level: the head bowed 14, the eyes the rest. The look goes on down to about 70 degrees.
+- The brain is drawn about half as wide at the start (`BRAIN_START_MOTOR_FRAC` in `ns-app.mjs`), so that the whole strip is inside the top of the picture above the mirror body and your feet.
+- The view from outside (E) orbits a centre fixed over the body with its own 60 degree view, so the body is seen whole and in true proportions.
+
+From the eyes at the start, the chest now lies in about the lower fifth of the picture, with the belly, pelvis, both thighs, knees, shins and feet above it and both forearms on the thighs.
+
+Three builders worked on this in turn, each after an independent checker had tested the one before. The checkers found, and the later builders fixed: two trunk movements stacked pulled the chest apart; any trunk turn tore the chest open from the eyes (the eyes now ride on the body as drawn); "Lean back" stopped the game; the shoulder blade stood off the ribs when the right arm was raised.
+
+Not achieved, and still asked for.
+- Neither shoulder is in the start picture. The shoulder joints lie 7 cm behind the eyes and 15 cm below them, and no gaze of 36 to 45 degrees with this field of view reaches them. They come into the lower corners past about 55 degrees down.
+- The chest is not flat. It is lower and smaller, but it is the same deep chest of the source model: two rounded mounds from the eyes, a dome that fills the lower half when you look straight down.
+- The crosshair does not start on the motor strip. It starts on your own knees, about 22 degrees under the strip, and every area is smaller to aim at than before.
+- The trunk's turn and side bend are taken mostly in the low back, more than a real spine gives there, because the ribs are rigid pieces.
+- Looking up and far round to the right is closed off from 155 degrees: the look reaches only 30 degrees up there, where the left arm was drawn torn.
+- Looking down to the left, the left shoulder is drawn as broken pieces with the arm bone showing. A white strip of spine shows between the two straight belly muscles.
+- The sweep on the merged build (117 poses): a muscle end more than 8 mm farther from its bone than at the start in 26 poses, a joint more than 5 mm farther apart in 12; the largest are still the lower end of rectus femoris (32 mm) and the kneecap from the tibia (21 mm) at a fully bent knee. Counted from the start posture the right shoulder girdle now moves at most 7 mm from the ribs when the arm is raised (before: 22 to 37). But the start posture itself, against the source pose, is less clean than before: 18 of the 827 muscle ends the sweep now measures are more than 8 mm from their bone, the largest 16 mm (by the earlier count of 436 ends: 10, before: 2), and the right shoulder girdle stands 14 to 23 mm farther from three ribs than in the source pose, which the builder reads as the blade sliding outward with the shoulder roll. Single rows are worse than before: "Bend head forward" 11 to 13 mm, "Lean back" joint 1 to 6 mm, "Swing right arm down and back" 10 to 13 mm.
+- From outside, the brain is cut off at the right edge at the start. Loading takes about a second longer.
+
+A next package is given the two things the three builders did not allow themselves: a camera set back from the anatomical eye, and a thinner chest muscle.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1303,7 +1352,7 @@ With the cards off (the start, section 77) the number keys did nothing, because 
 **Limits of this build that were looked at and left, each with its reason in the section named.**
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
-- Looking down shows your chest, arms and legs, but not your belly, which the chest hides from the eyes; it is on the mirror body and in the view from behind (14, 79).
+- Looking down shows your chest, belly, arms and legs since section 90; your shoulders only at a look of about 55 degrees down or to a side (14, 79, 90).
 - In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69).
 - After “Tilt head back” and the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it (68).
 - While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
@@ -1323,6 +1372,6 @@ With the cards off (the start, section 77) the number keys did nothing, because 
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 November, not done yet: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the shoulder girdle lifting off the ribs, the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; a brain that beats and reacts as in surgery; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look; shoulders rolled forward and a rounded upper back (the rig has no such joints).
+- From the notes of 17 and 18 November, not done yet: both shoulders in the start picture, a flat chest, and the crosshair starting on the motor strip (90); the rough, pock-marked look of some muscles such as the hip flexors; collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

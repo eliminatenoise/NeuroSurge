@@ -104,7 +104,7 @@ export const JOINT_SEMANTICS = deepFreeze({
   toe_flex_R: sem('second to fifth toe flexion at the MTP joints (curl)', 'second to fifth toe extension (lift)', -40, 40, 'right'),
   hallux_flex_L: sem('big toe flexion at the first MTP joint (curl)', 'big toe extension (lift)', -70, 45, 'left'),
   hallux_flex_R: sem('big toe flexion at the first MTP joint (curl)', 'big toe extension (lift)', -70, 45, 'right'),
-  trunk_flex: sem('trunk flexion (bend forward)', 'trunk extension (lean back)', -25, 80, 'midline'),
+  trunk_flex: sem('trunk flexion (bend forward)', 'trunk extension (lean back)', -25, 90, 'midline'),
   trunk_side: sem("trunk side bend toward the subject's LEFT", "side bend toward the subject's RIGHT", -35, 35, 'midline'),
   trunk_rot: sem("trunk rotation turning the chest toward the subject's LEFT", "rotation toward the subject's RIGHT", -45, 45, 'midline'),
   neck_flex: sem('neck flexion (chin down)', 'neck extension (chin up)', -60, 50, 'midline'),
@@ -573,7 +573,9 @@ const CONTENT = {
       // spinalis; BodyParts3D 4.0 members) and quadratus lumborum (Z-Anatomy), are drawn now (packets/missing-muscles-r1),
       // so "Lean trunk back" names them again and the issue-hunt-2 stopgap (latissimus dorsi and gluteus maximus standing
       // in for them) is dropped. Multifidus and the other transversospinal muscles are still not drawn.
-      { id: `${c.code}_trunk_flex`, label: 'Bend trunk forward', joints: { trunk_flex: 80 },
+      // 18 November 2026: 90 (was 80): the reclined start posture already holds the back bent 80 (ns-body BODY_POSTURES
+      // open), so "Bend forward" needs somewhere to go; 90 is the rig's limit (ns-body BODY_JOINT_LIMITS).
+      { id: `${c.code}_trunk_flex`, label: 'Bend trunk forward', joints: { trunk_flex: 90 },
         agonists: [...both('rectus abdominis'), ...both('external oblique'), ...both('internal oblique')],
         antagonists: [...both('iliocostalis lumborum'), ...both('iliocostalis thoracis'), ...both('longissimus thoracis'), ...both('spinalis thoracis'), ...both('semispinalis thoracis')],
         stabilizers: both('transversus abdominis') },

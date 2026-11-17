@@ -10,7 +10,12 @@
  * It measures geometry in the game's own model. It says nothing about whether a real body would do the same, and it
  * does not see one part passing through another.
  *
- * Usage:  node tools/rom-sweep.mjs [--rigid] [--json out.json]
+ * Usage:  node tools/rom-sweep.mjs [--rigid] [--blocks] [--json out.json] [--poses <regexp>]
+ *   --blocks measure against the lumbar spine as ONE bone and the rib cage (thoracic vertebrae, ribs, cartilages,
+ *            breastbone) as ONE bone, and each collar bone with its shoulder blade, as the rig had them before
+ *            18 November 2026: a muscle end or a shoulder blade that slides from one rib to the next then counts as
+ *            staying on the rib cage, as it did then. For a like-for-like comparison with a sweep of that rig; the
+ *            default (every vertebra, rib and cartilage its own bone) is the stricter measure.
  *   --rigid  measure every muscle as ONE rigid piece, as muscles outside the hand and neck were drawn before
  *            17 November 2026 (for comparison).
  * Not measured: the right forearm's twisted muscles (they need the twist table) and the left game arm (its own rig).
@@ -21,6 +26,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const jsonOut = process.argv.includes('--json') ? process.argv[process.argv.indexOf('--json') + 1] : null;
+// --poses <regexp>: only the poses whose name matches (the start posture is always measured), for a quick look at one area
+const ONLY = process.argv.includes('--poses') ? new RegExp(process.argv[process.argv.indexOf('--poses') + 1], 'i') : null;
+const BLOCKS = process.argv.includes('--blocks');
 const RIGID = process.argv.includes('--rigid'); // measure each muscle as ONE rigid piece (how every muscle outside the hand and neck was drawn before 17 November)
 const { body, inputs, rig, baked } = await loadBody(repo);
 const { BODY_MOTOR_MAP } = await import(repo + '/scene/src/ns-bodymap.mjs');
@@ -67,6 +75,28 @@ for (const e of inputs.entries) {
   boneList.push({ id: e.element_id, seg: info.segment, pts, name: (e.concepts && e.concepts[0] && e.concepts[0].en) || e.element_id });
 }
 const segCloud = {}; for (const s of Object.keys(segPoints)) segCloud[s] = cloud(segPoints[s]);
+// The unit a segment is measured in: itself, or with --blocks the block it belonged to before 18 November 2026.
+const unitOf = s => !BLOCKS ? s : /^(thorax|t\d+|sternum|[rl]_rib\d+|[rl]_cc\d+)$/.test(s) ? 'thorax' : /^(lumbar|l[1-4])$/.test(s) ? 'lumbar' : /^[rl]_clav$/.test(s) ? s[0] + '_girdle' : s;
+const unitSegs = {}; for (const s of Object.keys(segCloud)) (unitSegs[unitOf(s)] || (unitSegs[unitOf(s)] = [])).push(s);
+const boxOf = {};
+for (const s of Object.keys(segPoints)) { const p = segPoints[s], b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { if (p[i + k] < b[k]) b[k] = p[i + k]; if (p[i + k] > b[3 + k]) b[3 + k] = p[i + k]; } boxOf[s] = b; }
+const boxGap = (b, x, y, z) => Math.hypot(Math.max(b[0] - x, 0, x - b[3]), Math.max(b[1] - y, 0, y - b[4]), Math.max(b[2] - z, 0, z - b[5]));
+/** Distance from a point to the bones of a unit; toLocal(seg, x, y, z) gives the point in that segment's own frame. */
+function unitNearest(unit, toLocal, x, y, z, maxCells) {
+  const segs = unitSegs[unit];
+  if (segs.length === 1) { const q = toLocal(segs[0], x, y, z); return nearest(segCloud[segs[0]], q[0], q[1], q[2], maxCells); }
+  // the nearest members first (by their boxes), so most of the others are skipped without a search
+  const cand = [];
+  for (const s of segs) { const q = toLocal(s, x, y, z), gap = boxGap(boxOf[s], q[0], q[1], q[2]); if (gap < maxCells * CELL) cand.push([gap, s, q]); }
+  cand.sort((a, b) => a[0] - b[0]);
+  let best = Infinity;
+  for (const [gap, s, q] of cand) {
+    if (gap >= best) break;
+    const d = nearest(segCloud[s], q[0], q[1], q[2], Math.max(1, Math.min(maxCells, Math.ceil(Math.min(best, maxCells * CELL) / CELL)))); if (d < best) best = d;
+  }
+  return best;
+}
+const sourceFrame = (s, x, y, z) => [x, y, z];
 
 // A. attachment samples of each muscle on each candidate segment's bones (start-posture distances)
 const muscles = [];
@@ -74,13 +104,13 @@ for (const mu of rig.muscles) {
   const info = rig.meshSegment[mu.id]; if (!info || info.kind !== 'muscle') continue;
   const mesh = inputs.meshesById.get(mu.id); if (!mesh) continue;
   const p = mesh.positions, w = body.bodySkinWeights(rig, mu.id, p);
-  const cands = [...new Set(info.candidates || [])].filter(s => segCloud[s]);
+  const cands = [...new Set((info.candidates || []).filter(s => segCloud[s]).map(unitOf))];
   const att = [];
   const step = Math.max(1, Math.floor(p.length / 3 / 1500));
   for (const s of cands) {
     let n = 0;
     for (let v = 0; v < p.length / 3 && n < 220; v += step) {
-      const d = nearest(segCloud[s], p[3 * v], p[3 * v + 1], p[3 * v + 2], 1);
+      const d = unitNearest(s, sourceFrame, p[3 * v], p[3 * v + 1], p[3 * v + 2], 1);
       if (d < 6) { att.push({ v, seg: s, d0: d }); n++; }
     }
   }
@@ -90,11 +120,26 @@ for (const mu of rig.muscles) {
 // The measure is the CLOSEST approach of that part to the other bones: a joint that slides or turns keeps it near zero,
 // a joint that comes apart does not.
 const joints = [];
-for (const A of boneList) for (const s of Object.keys(segCloud)) {
-  if (s === A.seg) continue;
-  const near = []; let touch = Infinity;
-  for (let i = 0; i < A.pts.length; i += 3) { const d = nearest(segCloud[s], A.pts[i], A.pts[i + 1], A.pts[i + 2], 3); if (d < 30) { near.push(A.pts[i], A.pts[i + 1], A.pts[i + 2]); if (d < touch) touch = d; } }
-  if (near.length >= 30 && touch < 4) joints.push({ a: A, bseg: s, near: near.length > 900 ? near.slice(0, 900) : near });
+// 18 November 2026: with a segment per vertebra, rib and cartilage there are four times as many pairs to try. A point
+// farther than 30 mm from the other segment's bounding box cannot be within 30 mm of its bones, so it is skipped
+// without a search (the same pairs and the same points as before, found much faster).
+const segBox = {};
+for (const s of Object.keys(segPoints)) { const p = segPoints[s], b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { if (p[i + k] < b[k]) b[k] = p[i + k]; if (p[i + k] > b[3 + k]) b[3 + k] = p[i + k]; } segBox[s] = b; }
+for (const u of Object.keys(unitSegs)) { const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (const m of unitSegs[u]) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], segBox[m][k]); b[3 + k] = Math.max(b[3 + k], segBox[m][3 + k]); } segBox['unit:' + u] = b; }
+for (const A of boneList) for (const s of Object.keys(unitSegs)) {
+  if (s === unitOf(A.seg)) continue;
+  const near = [], B = segBox['unit:' + s]; let touch = Infinity;
+  for (let i = 0; i < A.pts.length; i += 3) {
+    const x = A.pts[i], y = A.pts[i + 1], z = A.pts[i + 2];
+    if (x < B[0] - 30 || x > B[3] + 30 || y < B[1] - 30 || y > B[4] + 30 || z < B[2] - 30 || z > B[5] + 30) continue;
+    const d = unitNearest(s, sourceFrame, x, y, z, 3); if (d < 30) { near.push(x, y, z); if (d < touch) touch = d; }
+  }
+  if (near.length >= 30 && touch < 4) {
+    const kept = near.length > 900 ? near.slice(0, 900) : near;
+    // the closest approach of the KEPT points in the source pose (the start-posture lines below are changes from it)
+    let d0 = Infinity; for (let i = 0; i < kept.length; i += 3) { const d = unitNearest(s, sourceFrame, kept[i], kept[i + 1], kept[i + 2], 3); if (d < d0) d0 = d; }
+    joints.push({ a: A, bseg: s, near: kept, d0 });
+  }
 }
 const rest = body.bodyPostureAngles(baked);
 const limits = body.bodyPostureLimits(body.DEFAULT_BODY_POSTURE);
@@ -104,6 +149,7 @@ function measure(name, joints_) {
   const det = body.poseBodyDetailed(rig, targets, { baked });
   const seg = det.segments, inv = {};
   const invOf = s => inv[s] || (inv[s] = rigidInv(seg.get(s)));
+  const posedFrame = (s, x, y, z) => apply(invOf(s), x, y, z);
   const muscleNow = {}, jointNow = {};
   for (const m of muscles) {
     if (!m.att.length || (m.w && m.w.tf)) continue; // (the right forearm's twisted muscles need the twist table: not measured here)
@@ -114,14 +160,13 @@ function measure(name, joints_) {
       let x, y, z;
       if (pos) { x = pos[3 * a.v]; y = pos[3 * a.v + 1]; z = pos[3 * a.v + 2]; }
       else { [x, y, z] = apply(seg.get(m.rigidSeg), m.p[3 * a.v], m.p[3 * a.v + 1], m.p[3 * a.v + 2]); }
-      const q = apply(invOf(a.seg), x, y, z);
-      const d = nearest(segCloud[a.seg], q[0], q[1], q[2], 6) - a.d0, k = m.name + '>' + a.seg;
+      const d = unitNearest(a.seg, posedFrame, x, y, z, 6) - a.d0, k = m.name + '>' + a.seg;
       if (!(muscleNow[k] >= d)) muscleNow[k] = d;
     }
   }
   for (const j of joints) {
-    const mA = seg.get(j.a.seg), iB = invOf(j.bseg); let closest = Infinity;
-    for (let i = 0; i < j.near.length; i += 3) { const w = apply(mA, j.near[i], j.near[i + 1], j.near[i + 2]); const q = apply(iB, w[0], w[1], w[2]); const d = nearest(segCloud[j.bseg], q[0], q[1], q[2], 6); if (d < closest) closest = d; }
+    const mA = seg.get(j.a.seg); let closest = Infinity;
+    for (let i = 0; i < j.near.length; i += 3) { const w = apply(mA, j.near[i], j.near[i + 1], j.near[i + 2]); const d = unitNearest(j.bseg, posedFrame, w[0], w[1], w[2], 6); if (d < closest) closest = d; }
     jointNow[j.a.id + '>' + j.bseg] = closest;
   }
   const changed = Object.fromEntries(Object.entries(targets).filter(([k, v]) => Math.abs(v - (rest[k] || 0)) > 0.5).map(([k, v]) => [k, Math.round(v)]));
@@ -134,12 +179,17 @@ const stack = (...ids) => Object.assign({}, ...ids.map(J));
 poses.push(['STACK lift left thigh + swing out + bend knee', stack('rh_hip_flex', 'rh_hip_abduct', 'rh_knee_flex')]);
 poses.push(['STACK right arm up + across + bend elbow', stack('lh_shoulder_flex', 'lh_shoulder_adduct', 'lh_elbow_flex')]);
 poses.push(['STACK lean back + turn + head back', { trunk_flex: -25, trunk_rot: 40, neck_flex: -60 }]);
-poses.push(['STACK bend forward + head forward + turn head', { trunk_flex: 80, neck_flex: 50, neck_rot: 80 }]);
+poses.push(['STACK bend forward + head forward + turn head', { trunk_flex: 90, neck_flex: 50, neck_rot: 80 }]);
+// 18 November 2026 (a check found the chest pulled apart when two trunk movements were stacked from the strip): side
+// bend and turn together, to both sides, and with the back straightened.
+poses.push(['STACK trunk bend right + turn right', { trunk_side: -35, trunk_rot: -45 }]);
+poses.push(['STACK trunk bend left + turn right', { trunk_side: 35, trunk_rot: -45 }]);
+poses.push(['STACK trunk lean back + bend left + turn left', { trunk_flex: -25, trunk_side: 35, trunk_rot: 45 }]);
 poses.push(['STACK both knees bent + both thighs lifted', { knee_ext_L: -135, knee_ext_R: -135, hip_flex_L: 110, hip_flex_R: 110 }]);
 poses.push(['STACK right arm back + out + elbow bent + palm up', { r_shoulder_flex: -50, r_shoulder_abd: 90, r_elbow_flex: 145, r_pronation: 0 }]);
 
 const t0 = Date.now(), results = [];
-for (const [name, j] of poses) { try { results.push(measure(name, j)); } catch (e) { results.push({ name, error: String(e && e.message || e).slice(0, 200) }); } }
+for (const [name, j] of ONLY ? poses.filter((p, i) => i === 0 || ONLY.test(p[0])) : poses) { try { results.push(measure(name, j)); } catch (e) { results.push({ name, error: String(e && e.message || e).slice(0, 200) }); } }
 // everything is reported as the change from the start posture
 const base = results[0];
 const rows = [];
@@ -155,8 +205,19 @@ console.log(`poses ${results.length} in ${Date.now() - t0} ms; muscles measured 
 console.log('errors', results.filter(r => r.error).map(r => r.name + ': ' + r.error).join(' | ') || 'none');
 console.log('poses where a muscle end is more than 8 mm farther from its bone than at the start:', rows.filter(r => r.loose.length).length, 'of', rows.length);
 console.log('poses where a joint is more than 5 mm farther apart than at the start:', rows.filter(r => r.gaps.length).length, 'of', rows.length);
+// 18 November 2026: the start posture itself, against the anatomical source pose the meshes come in (the start posture
+// bends the whole spine, so what it does to the muscle ends and the joints is worth its own lines).
+{
+  const ends = Object.entries(base.muscleNow).map(([k, d]) => [k, Math.round(d * 10) / 10]).sort((a, b) => b[1] - a[1]);
+  const d0 = Object.fromEntries(joints.map(j => [j.a.id + '>' + j.bseg, j.d0]));
+  const gaps = Object.entries(base.jointNow).map(([k, d]) => { const [id, sg] = k.split('>'); return [`${names(id)} from ${sg}`, Math.round((d - d0[k]) * 10) / 10]; }).sort((a, b) => b[1] - a[1]);
+  console.log('--- the start posture itself, against the source pose');
+  console.log(`muscle ends more than 8 mm farther from their bone than in the source pose: ${ends.filter(e => e[1] > 8).length} of ${ends.length}; largest: ${ends.slice(0, 6).map(e => `${e[1]} mm ${e[0]}`).join(' | ')}`);
+  console.log(`joints more than 5 mm farther apart than in the source pose: ${gaps.filter(e => e[1] > 5).length} of ${gaps.length}; largest: ${gaps.slice(0, 8).map(e => `${e[1]} mm ${e[0]}`).join(' | ')}`);
+}
 console.log('--- largest muscle-end changes');
 for (const r of rows.slice().sort((a, b) => b.worstMuscle.mm - a.worstMuscle.mm).slice(0, 16)) console.log(`${r.worstMuscle.mm} mm  ${r.worstMuscle.end}  | ${r.name} ${JSON.stringify(r.joints)} (${r.loose.length} ends over 8 mm)`);
 console.log('--- largest joint openings');
 for (const r of rows.slice().sort((a, b) => b.worstJoint.mm - a.worstJoint.mm).slice(0, 14)) { const [id, sg] = (r.worstJoint.joint || '>').split('>'); console.log(`${r.worstJoint.mm} mm  ${names(id)} from ${sg}  | ${r.name} ${JSON.stringify(r.joints)}`); }
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(rows, null, 1));
+if (jsonOut) fs.writeFileSync(jsonOut.replace(/\.json$/, '') + '-start.json', JSON.stringify({ muscleEnds: base.muscleNow, joints: base.jointNow }, null, 1));

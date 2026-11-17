@@ -123,10 +123,58 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  *    size or place of anything changes (Message 16), E then E still returns exactly, and the crosshair ray starts at
  *    the camera as before. Display choice.
  */
+/* 18 November 2026 (the body now LIES BACK, stretched out ahead of the eyes, where on 11 November it sat upright): the
+ * view from behind was framed for an upright body, 1.4 m straight behind and above the head, looking the way the head
+ * looks. From there the lying body was a small top-down shape under the back of the brain (seen in a screenshot: about
+ * 150 px of a 900 px picture), and its posture could not be read at all. Now, for the followHead camera:
+ *  - followOffsetM puts the orbit centre over the middle of the lying body: 0.6 m AHEAD of the eyes along the look's
+ *    floor direction (a negative "back") and 0.25 m below them;
+ *  - followYawDeg turns the boom, and the camera with it, 75 degrees to the left of the head's direction about that
+ *    centre, so the camera stands behind and to the RIGHT of the body and looks across it: the curved back, the rolled
+ *    shoulder, the chest, the straight hips and the legs are seen in one three-quarter picture, with the brain and
+ *    the mirror body beyond the feet;
+ *  - distanceM 1.4 -> 0.85: with the 108 degree view a camera has to stand close for the body to be more than a
+ *    small shape (the mirror body's slide in this view, ns-mirror MIRROR_OUTSIDE, follows the same number).
+ * The mouse still turns the head exactly as in the eye view and the camera turns with it (by the same angles, the
+ * fixed 75 degrees apart); E changes nothing but the camera; E then E returns exactly. The crosshair ray starts at
+ * the camera and runs along the camera's own direction, as before. Display choices, checked in screenshots. */
+/* 18 November 2026, later (a check of that view: turning the look swung the body out of the picture, because the orbit
+ * centre lay 0.6 m ahead of the eyes ALONG THE LOOK; the head at the picture's edge was drawn as a long white egg by
+ * the wide view; no look showed the back; and the crosshair opened on your own thigh, so a muscle name came up at
+ * once). Now, with followBody:
+ *  - the orbit centre is fixed over the BODY, which never turns (the pelvis stays put): followOffsetM is measured from
+ *    the eye along the body's own forward (the start direction), not along the look: 0.48 m ahead of the eye and
+ *    5 cm above it, about 0.3 m ABOVE the middle of the lying body (at the eye's own height the crosshair rested on
+ *    the right hand, which lies level in front of the chest);
+ *  - the camera always looks straight through that centre, so the whole body stays in the middle of the picture
+ *    wherever the look goes (and nothing of it is stretched at the picture's edge: within about 26 degrees of the
+ *    middle at distanceM 1.6, drawn with a narrower view: followFovYDeg), and the crosshair passes just over the body instead of resting on it;
+ *  - the mouse turns the head as before AND carries the camera round the body: at the start look it stands behind
+ *    and to the right (followYawDeg 75), a look 75 degrees to the right brings it straight behind the head, where
+ *    the rounded upper back shows, and further round it comes to the left side. followYawMinDeg / followYawMaxDeg
+ *    stop it before it would stand inside the brain beyond the feet;
+ *  - it stands followPitchBiasDeg lower than the look's own pitch would put it (at the start look about 18 degrees
+ *    above the body's level, a side-on picture of the posture rather than a top-down one), never lower than
+ *    followMaxPitchDeg (just under the body's level, looking up at the back) however far up the look goes.
+ * E still changes nothing but the camera, and E then E returns exactly. Display choices, checked in screenshots. */
 export const THIRD_PERSON = Object.freeze({
   centreFromEyeMm: Object.freeze([0, 60, 190]),
-  followOffsetM: Object.freeze([0.42, 0.42, 0.06]),
-  distanceM: 1.4,
+  // (third pass, a check: from straight behind the head the crosshair rested on the player's own skull and a bone name
+  // came up: the centre is now 12 cm above the eye, not 5, so the line of sight clears the head from behind; 18 cm cut the feet off at the bottom of the picture)
+  followOffsetM: Object.freeze([0, 0.12, -0.48]),
+  followYawDeg: 75,
+  followBody: true,
+  followPitchBiasDeg: 16,
+  followMaxPitchDeg: 5,
+  followYawMinDeg: -130,
+  followYawMaxDeg: 130,
+  // followFovYDeg: the view's own angle (up and down) from outside. The eye view's 108 degrees makes a body 1.5 m
+  // away a small shape in the middle of the picture and stretches whatever nears an edge; at 60 degrees and 1.6 m
+  // the lying body fills about half the picture's width and keeps its proportions. The scene eases the angle with
+  // the view (ns-scene-three setCameraPose viewFovYDeg). null = the eye view's angle.
+  followFovYDeg: 60,
+  // (third pass: 1.6 -> 1.9: with the trunk rising more steeply from the pelvis and the centre a little higher, the feet left the bottom of the picture at 1.6)
+  distanceM: 1.9,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
   aimAtBrain: true,
@@ -478,6 +526,7 @@ export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitch
  *   headInPlace, faceGhost, overBrainSeeThrough (0..1 multipliers, see the header), farExtraM, nearM,
  *   orbitCentre, boom { distance, pushed, blocked } (third-person side, or null in pure first person) }
  */
+const LEVEL_AHEAD = Object.freeze({ yaw: 0, pitch: 0 });
 export function cameraPose(state, { look = null, bodyLook = null, thirdLook = null, bodyToWorld = null, eyeBp = null, avoid = null, rig = THIRD_PERSON, firstPersonFrame = null, handRayFraming = null } = {}) {
   const s = checkState(state);
   const driveA = isLook(bodyLook) && isLook(thirdLook);
@@ -538,11 +587,24 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   }
   const follow = r.followHead === true && !driveA;
   // R558 (followHead): the orbit centre rides on the posed head: above the eye and a little behind it along the look.
-  const centre = follow ? followCentre(firstOrigin, fp, r) : orbitCentreWorld(bodyToWorld, eyeBp, r);
+  // 18 November 2026, later (followBody): the centre is fixed over the body (the offset runs along the body's own
+  // forward, the start direction), not carried round with the look.
+  const overBody = follow && r.followBody === true;
+  const centre = follow ? followCentre(firstOrigin, overBody ? LEVEL_AHEAD : fp, r) : orbitCentreWorld(bodyToWorld, eyeBp, r);
   const keepOut = Array.isArray(avoid) ? avoid : bodyProxyWorld(bodyToWorld, eyeBp);
-  const tp = thirdPersonCamera(tpLook, centre, { ...r, ...(follow ? { minPitchDeg: r.followMinPitchDeg } : {}), avoid: keepOut });
+  // 18 November 2026 (followYawDeg): the boom, and the camera on it, stand turned by a fixed angle from the head's
+  // direction, so the lying body is seen from behind and to one side; the turn eases in with the view.
+  const yawOff = follow && isNum(r.followYawDeg) ? r.followYawDeg * DEG : 0;
+  let boomLook = yawOff ? { yaw: tpLook.yaw + yawOff, pitch: tpLook.pitch } : tpLook;
+  if (overBody) {
+    const lo = isNum(r.followYawMinDeg) ? r.followYawMinDeg * DEG : -Infinity, hi = isNum(r.followYawMaxDeg) ? r.followYawMaxDeg * DEG : Infinity;
+    const bias = isNum(r.followPitchBiasDeg) ? r.followPitchBiasDeg * DEG : 0, top = isNum(r.followMaxPitchDeg) ? r.followMaxPitchDeg * DEG : r.maxPitchDeg * DEG;
+    boomLook = { yaw: clamp(boomLook.yaw, lo, hi), pitch: Math.min(top, boomLook.pitch + bias) };
+  }
+  const tp = thirdPersonCamera(boomLook, centre, { ...r, ...(follow ? { minPitchDeg: r.followMinPitchDeg } : {}), avoid: keepOut });
   let yaw, pitch;
-  if (follow) { yaw = fp.yaw; pitch = fp.pitch; } // the camera faces the way the head faces; only its place moves
+  if (overBody) { yaw = fp.yaw + blend * (tp.yaw - fp.yaw); pitch = fp.pitch + blend * (tp.pitch - fp.pitch); } // the camera faces the centre over the body; the turn eases in with the view
+  else if (follow) { yaw = fp.yaw + blend * yawOff; pitch = fp.pitch; } // the camera turns with the head (a fixed angle apart); only its place moves
   else if (blend >= 1) { yaw = tp.yaw; pitch = tp.pitch; }
   else { yaw = fp.yaw + blend * wrapAngle(tp.yaw - fp.yaw); pitch = fp.pitch + blend * (tp.pitch - fp.pitch); }
   const position = reference ? firstOrigin.map((v, i) => (1 - blend) * v + blend * tp.position[i]) : [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
@@ -556,7 +618,8 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     position, yaw, pitch, direction: dir,
     bodyLook: fp, gazeLook: { yaw, pitch }, gazeRay: { origin: position.slice(), dir },
     silentGaze, headInPlace, faceGhost: 1 - blend, overBrainSeeThrough: 1 - blend, farExtraM: fromEye, nearM: FIRST_PERSON.nearM,
-    orbitCentre: centre, boom: { distance: tp.distance, pushed: tp.pushed, blocked: tp.blocked }
+    orbitCentre: centre, boom: { distance: tp.distance, pushed: tp.pushed, blocked: tp.blocked },
+    viewFovYDeg: overBody && isNum(r.followFovYDeg) && r.followFovYDeg > 0 ? r.followFovYDeg : null
   });
 }
 

@@ -255,7 +255,48 @@ export function neckFlexEyeShiftMm(pitch, o = NECK_FLEX) {
  *  - maxDownDeg 80 -> 88 and maxUpDeg 70 -> 85: the neck and trunk already had the range (50 + 80 down, 60 + 25 up);
  *    only the camera's own stops were nearer. 88 keeps the camera just off straight down.
  * Display choices, not measured ranges of eye, neck or trunk movement. */
-export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 88, maxUpDeg: 85, eyeYawDeg: 60 });
+/* 18 November 2026 (user: "And you are gazing diagonally downwards. You should be able to see your own shoulders and
+ * stomach/abs"): someone slumped back who looks down their own front does it with the EYES as well as the neck. So
+ * the camera now looks eyeDownDeg below the head's own direction while the head is level or bowed (the eyes lowered in
+ * the head); as the head tips back the eyes come back up, and from eyeDownEndDeg of head tilt upward the camera is
+ * the head's own direction again, so the look still reaches as far up as before. Between the two the head moves a
+ * little slower than the look (one continuous map, no jump: eyeDownForHead / headPitchForLook). With it the diagonal
+ * downward gaze does not need the chin pressed on the chest: the head stays further back and higher, the chest is
+ * seen from further off and both shoulders come into the lower corners of the picture. 0 here (the pure functions'
+ * default); the reclined posture's value comes from ns-body POSTURE_EYES through headLookLimits. A display choice
+ * inside what eyes do (they lower some 40 degrees), not a measured gaze. */
+export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 88, maxUpDeg: 85, eyeYawDeg: 60, eyeDownDeg: 0, eyeDownEndDeg: 40 });
+/* 18 November 2026 (a check: looking up AND all the way round to the right showed torn muscle sheets and bare bone
+ * from inside; the base build had the same at 60 and 85 degrees up). What is seen there is the LEFT game arm: the
+ * hand is held in front of the camera wherever it looks, and for a look straight behind over the right shoulder and
+ * upward the left arm would have to pass through the head, so the camera ends up inside its shoulder. That corner of
+ * the look is closed: past fromYawDeg to the right the look's upper limit comes down in a straight line to maxUpDeg
+ * at endYawDeg (the eyes are then turned 60 degrees to the side, where real eyes do not look far up either). Checked
+ * in screenshots: at 180 degrees right the view is clean up to 30 degrees and torn from 45. Used by headLookRange
+ * when the limits carry it (headLookLimits with a start posture). A display limit of this arm rig. */
+/* Third pass (a check: the torn views were still there along the first limit and inside it, at 160 / 45, 165 / 58,
+ * 170 / 48 and 175 / 39 degrees right / up): the corner is closed from further out and all the way across: the limit
+ * comes down between 140 and 155 degrees right, and from there round to straight behind it is 30. Viewed again at
+ * 150 / 48, 155, 160, 170 and 180 / 30. */
+export const HEAD_FAR_RIGHT_UP = Object.freeze({ fromYawDeg: -140, endYawDeg: -155, maxUpDeg: 30 });
+/** How far (degrees) the eyes are lowered in the head for a head pitch (degrees, + = up; pure): eyeDownDeg at level
+ * and below, falling linearly to 0 at eyeDownEndDeg of upward tilt. */
+export function eyeDownForHead(headPitchDeg, L = HEAD_LOOK) {
+  const e = L && Number.isFinite(L.eyeDownDeg) && L.eyeDownDeg > 0 ? L.eyeDownDeg : 0;
+  if (!e || !Number.isFinite(headPitchDeg)) return 0;
+  const end = Number.isFinite(L.eyeDownEndDeg) && L.eyeDownEndDeg > 0 ? L.eyeDownEndDeg : 0;
+  if (headPitchDeg <= 0) return e;
+  return headPitchDeg >= end ? 0 : e * (1 - headPitchDeg / end);
+}
+/** The head's pitch (degrees) for a look pitch (the camera's; degrees, + = up): the inverse of
+ * look = head - eyeDownForHead(head) (pure; exact, both are piecewise linear and rising). */
+export function headPitchForLook(lookPitchDeg, L = HEAD_LOOK) {
+  const e = L && Number.isFinite(L.eyeDownDeg) && L.eyeDownDeg > 0 ? L.eyeDownDeg : 0;
+  if (!e || !Number.isFinite(lookPitchDeg)) return lookPitchDeg;
+  const end = Number.isFinite(L.eyeDownEndDeg) && L.eyeDownEndDeg > 0 ? L.eyeDownEndDeg : 0;
+  if (lookPitchDeg <= -e) return lookPitchDeg + e;
+  return lookPitchDeg >= end ? lookPitchDeg : end * (lookPitchDeg + e) / (end + e);
+}
 /** R558 (HEAD_LOOK, "corresponding activity on the brain and mirror body"): the display level (0..1) of the neck / trunk
  * area and muscles at the end of a joint's range, linear below; under a click or look activation (1). Display choice. */
 export const HEAD_GLOW = Object.freeze({ level: 0.75 });
@@ -271,10 +312,18 @@ export function headLookLimits(body = null, base = HEAD_LOOK, rest = null) {
   const tf = shift(L && ok(L.trunk_flex) ? L.trunk_flex : [-base.trunkExtDeg, base.trunkFlexDeg], 'trunk_flex');
   const tw = body && Number.isFinite(body.LOOK_TWIST_LIMIT_DEG) && body.LOOK_TWIST_LIMIT_DEG >= 0 ? body.LOOK_TWIST_LIMIT_DEG : base.twistDeg;
   const ts = body && Number.isFinite(body.LOOK_BEND_SIDE_LIMIT_DEG) && body.LOOK_BEND_SIDE_LIMIT_DEG > 0 ? body.LOOK_BEND_SIDE_LIMIT_DEG : base.trunkSideDeg;
+  // 18 November 2026: the eyes lowered in the head (ns-body POSTURE_EYES; see HEAD_LOOK eyeDownDeg). maxDownDeg is the
+  // HEAD's limit: the camera looks eyeDownDeg lower still and has to stay off straight down.
+  const E = body && body.POSTURE_EYES && rest ? body.POSTURE_EYES : null;
+  const eyeDown = E && Number.isFinite(E.downDeg) && E.downDeg > 0 ? E.downDeg : base.eyeDownDeg || 0;
+  const eyeEnd = E && Number.isFinite(E.endAtHeadUpDeg) && E.endAtHeadUpDeg > 0 ? E.endAtHeadUpDeg : base.eyeDownEndDeg;
   return Object.freeze({ ...base, neckRotDeg: nr, neckFlexDeg: nf[1], neckExtDeg: -nf[0], trunkFlexDeg: tf[1], trunkExtDeg: -tf[0], twistDeg: tw, trunkSideDeg: ts,
-    maxUpDeg: Math.min(base.maxUpDeg, -nf[0] - tf[0]), maxDownDeg: Math.min(base.maxDownDeg, nf[1] + tf[1]) });
+    eyeDownDeg: eyeDown, eyeDownEndDeg: eyeEnd, ...(rest ? { farRightUp: HEAD_FAR_RIGHT_UP } : {}),
+    maxUpDeg: Math.min(base.maxUpDeg, -nf[0] - tf[0]), maxDownDeg: Math.min(base.maxDownDeg - eyeDown, nf[1] + tf[1]) });
 }
 const headOffset = (o, k) => (o && Number.isFinite(o[k]) ? o[k] : 0);
+/** The joints that move the head without being part of the look (see headPoseForLook `carry`). */
+export const HEAD_CARRY_JOINTS = Object.freeze(['trunk_rot', 'trunk_side', 'neck_side']);
 /** The largest trunk bend (degrees, >= 0) toward (sign +1: the head goes down) or away from (sign -1) a direction,
  * inside the forward / back / sideways ranges as an ellipse (ns-body lookBendLimit; pure). */
 export function headBendLimit(dirDeg, sign, L = HEAD_LOOK) {
@@ -297,7 +346,8 @@ export function headBendLimit(dirDeg, sign, L = HEAD_LOOK) {
  */
 export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('app_input', 'head look needs finite { yaw, pitch } radians');
-  const ly = look.yaw / DEG, lp = look.pitch / DEG;
+  // (18 November 2026: lp is the HEAD's pitch for this look; the eyes take the rest, HEAD_LOOK eyeDownDeg)
+  const ly = look.yaw / DEG, lp = headPitchForLook(look.pitch / DEG, L);
   const n = headOffset(offsets, 'neck_rot') + ly;
   const neckRot = clamp(n, -L.neckRotDeg, L.neckRotDeg);
   const twist = clamp(n - neckRot, -L.twistDeg, L.twistDeg);
@@ -330,8 +380,15 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   const rollDeg = Math.acos(clamp(ux * cux + uy * cuy + uz * cuz, -1, 1)) / DEG;
   // look: where the camera looks = the head's own direction, turned further by the eyes when the head is at its end
   // (headLook: the head's direction alone, for whoever draws or lights the head).
+  const eyeDown = eyeDownForHead(pitch / DEG, L);
   return { joints: { neck_rot: neckRot + 0, neck_flex: neckFlex + 0, trunk_flex: 0 }, twistDeg: twist + 0, bendDeg: bend + 0, bendDirDeg: psiDeg + 0,
-    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, rollDeg };
+    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch: pitch - eyeDown * DEG }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, eyeDownDeg: eyeDown + 0, rollDeg,
+    // 18 November 2026 (a check: any trunk turn or side bend tore the chest open in the eye view): the held trunk turn,
+    // trunk side bend and neck side bend are handed on as they are, so whoever places the eye (the camera) and the left
+    // shoulder root on the posed head and chest places them on the body AS DRAWN. Before, the eye stayed where a head
+    // over an unturned trunk would be while the drawn rib cage swung away under it, and the camera looked into the
+    // shoulder from inside. The camera's direction is still the look's alone.
+    carry: { trunk_rot: headOffset(offsets, 'trunk_rot'), trunk_side: headOffset(offsets, 'trunk_side'), neck_side: headOffset(offsets, 'neck_side') } };
 }
 /** The controls' look range (degrees) that headPoseForLook uses without loss for held goal offsets (pure): the yaw the
  * neck and chest can still turn, and, for the head's turn this look gives (from `look`, the controls' current look),
@@ -349,7 +406,16 @@ export function headLookRange(goalOffsets = null, L = HEAD_LOOK, look = null) {
   // A held trunk bend does not shift the range: the neck takes it up (headPoseForLook), so the head's direction, and
   // with it this range, depends on the look and the held neck angles alone.
   const fMin = Math.max(-L.neckExtDeg - up, -L.maxUpDeg), fMax = Math.min(L.neckFlexDeg + down, L.maxDownDeg);
-  return { yawMinDeg, yawMaxDeg, pitchMinDeg: nf - fMax, pitchMaxDeg: nf - fMin };
+  // (18 November 2026: the head's range, given as the look's: the eyes are lowered in the head, HEAD_LOOK eyeDownDeg)
+  const lookOf = h => h - eyeDownForHead(h, L);
+  let pitchMaxDeg = lookOf(nf - fMin);
+  // the corner up and far round to the right is closed (HEAD_FAR_RIGHT_UP)
+  const C = L.farRightUp;
+  if (C && look && Number.isFinite(look.yaw) && look.yaw / DEG < C.fromYawDeg) {
+    const k = clamp((C.fromYawDeg - look.yaw / DEG) / (C.fromYawDeg - C.endYawDeg), 0, 1);
+    pitchMaxDeg = Math.min(pitchMaxDeg, Math.max(lookOf(nf - fMax), 85 + k * (C.maxUpDeg - 85)));
+  }
+  return { yawMinDeg, yawMaxDeg, pitchMinDeg: lookOf(nf - fMax), pitchMaxDeg };
 }
 /** R558 (Messages 55 and 56: easier to use; a learning tool): the neck joint of a held neck movement that was just
  * taken and moves the view, or null (pure). prev / next: the held goal offsets of two frames ({ neck_rot, neck_flex },
@@ -1733,6 +1799,13 @@ export function portraitReachStartX(aspect) {
  * the browser; the user gave no number. Since Messages 55 / 56 this is the rule only where brainFloorNdc gives no
  * floor (no pixel size yet). */
 export const BRAIN_RAISE_NDC = 0.2;
+/** 18 November 2026 (user: "you are gazing diagonally downwards. You should be able to see your own shoulders and
+ * stomach/abs"; a check: the strip's upper part was cut off by the top edge at the start look): the share of the usable
+ * width the motor strip spans at the start (ns-brain frameBrain motorFrac; its own default is 0.475). The brain is
+ * drawn about half as wide as before, so with the look starting 36 degrees below level the whole strip is still
+ * inside the top of the picture and the player's own front is seen around and under it. The price: every area is
+ * smaller to aim at. A display choice; one number to change if the areas prove too small. */
+export const BRAIN_START_MOTOR_FRAC = 0.25;
 /**
  * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
  * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
@@ -1944,13 +2017,16 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   // Returns { attachment, eyeShift (BodyParts3D mm of the eye from its start place) }.
   const headCache = { key: '', frame: null };
   function headAttachment(look, head = null) {
-    const j = head && head.joints, key = j ? `${j.neck_rot}|${j.neck_flex}|${j.trunk_flex}|${head.twistDeg}|${head.bendDeg}|${head.bendDirDeg}` : '';
+    const j = head && head.joints, cy = head && head.carry, key = j ? `${j.neck_rot}|${j.neck_flex}|${j.trunk_flex}|${head.twistDeg}|${head.bendDeg}|${head.bendDirDeg}|${cy ? cy.trunk_rot + '|' + cy.trunk_side + '|' + cy.neck_side : ''}` : '';
     // headFrame returns null while the body rig is not there (it streams in after the first frames).
     if (j && headFrame && fitAnatomy && headCache.key !== key) { headCache.frame = headFrame(head) || null; headCache.key = headCache.frame ? key : ''; }
     if (j && headFrame && fitAnatomy && headCache.frame && headCache.key === key) {
       const fr = headCache.frame, e0 = fitAnatomy.eyeBp, s0 = fitAnatomy.shoulderBp;
       const pt = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
-      const eye = pt(fr.skull, e0), sh = pt(fr.thorax, s0), T = fr.thorax;
+      // 18 November 2026: the left shoulder girdle hangs from the breastbone and rolls forward with a bent back
+      // (ns-body SHOULDER_ROLL); the game arm's shoulder root and its body axes are that girdle's frame (fr.l_girdle),
+      // as the right arm's are. (Before: the one rigid chest, fr.thorax, which is now the first thoracic vertebra.)
+      const T = fr.l_girdle || fr.thorax, eye = pt(fr.skull, e0), sh = pt(T, s0);
       // BodyParts3D axes -> world axes: x -> -x, y -> +z, z -> +y (ns-math bpToWorldAxes); R_world = A R_bp A^T.
       const w = v => [-v[0], v[2], v[1]];
       const c0 = w([-T[0], -T[1], -T[2]]), c1 = w([T[8], T[9], T[10]]), c2 = w([T[4], T[5], T[6]]);
@@ -1997,7 +2073,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         // body's top arrow tip, so the leg and foot areas are in the open and still the nearest areas to the middle of
         // the view. The floor is a pure function of the pixel size, which the re-frame test above already covers.
         const floor = px ? brainFloorNdc(px) : null;
-        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, floor === null ? BRAIN_RAISE_NDC : floor] };
+        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, floor === null ? BRAIN_RAISE_NDC : floor], motorFrac: BRAIN_START_MOTOR_FRAC };
         if (floor !== null) fo.motorFloorNdc = floor;
         if (brainBounds) fo.brainBounds = brainBounds;
         if (px) {
@@ -4717,6 +4793,9 @@ export function start(params = {}) {
     const now = {}, goal = {};
     // (counted from the start posture: the reclined posture's own neck and trunk bend is not a held movement)
     for (const k of ['neck_rot', 'neck_flex', 'trunk_flex']) { now[k] = (pos && Number.isFinite(pos[k]) ? pos[k] : 0) - (headRest && Number.isFinite(headRest[k]) ? headRest[k] : 0); goal[k] = 0; }
+    // (18 November 2026: the trunk's turn and side bend and the neck's side bend as they are now; headPoseForLook
+    // hands them on as `carry`, so the eye rides on the head as drawn)
+    for (const k of HEAD_CARRY_JOINTS) now[k] = pos && Number.isFinite(pos[k]) ? pos[k] : 0;
     if (lv && Array.isArray(lv.joints)) for (const j of lv.joints) if (j && hasOwn(goal, j.jointId) && Number.isFinite(j.goalDeg)) goal[j.jointId] = j.goalDeg - (Number.isFinite(j.restDeg) ? j.restDeg : 0);
     const moving = Boolean(headPrevNow) && Object.keys(now).some(k => Math.abs(now[k] - headPrevNow[k]) > 1e-3);
     headPrevNow = now;
@@ -5860,7 +5939,7 @@ export function start(params = {}) {
         // R558 (HEAD_LOOK): the posed trunk and head chain of the CURRENT body rig (it may stream in, and be rebuilt with
         // the face packet, after the first frames; null until then, and the eye keeps the earlier rule meanwhile).
         ...(headLookOn ? { headLimits, headFrame: head => (bodyRig && typeof mods.body.bodyHeadFrame === 'function'
-          ? mods.body.bodyHeadFrame(bodyRig, headAbsJoints(head.joints), { baked: bodyBaked, ...headPoseOptions(head) }) : null) } : {})
+          ? mods.body.bodyHeadFrame(bodyRig, { ...(head.carry || null), ...headAbsJoints(head.joints) }, { baked: bodyBaked, ...headPoseOptions(head) }) : null) } : {})
       });
       if (referenceGraph) {
         const initialFrame = sim.referenceFrameForLook(referenceGraph.initialLook);
@@ -7917,6 +7996,9 @@ export function start(params = {}) {
         // R17: plus what the player's own movement adds this frame (moveGlow: the right hand's share of a Space grasp).
         if (live) { feedHeadMove(headShown, timing.dt); feedLimbMove(out, timing.dt); }
         const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && simState.activity && simState.activity.graspHold === true));
+        // 18 November (the living brain): the grip of a Space grasp is not a movement switched on from the brain; while it
+        // holds, the tissue round its hand area only flushes faintly (no bloom, no ring).
+        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_AREA_ID : null);
         // The left shoulder's rows to draw: the reach keys' and the look's (the arm follows the look).
         const reachShown = reachRowsShown(out.reachShow, headGlow ? headGlow.reach : null);
         if (sceneFn('setSettledRegions')) {

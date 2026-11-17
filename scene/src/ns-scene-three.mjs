@@ -190,6 +190,9 @@ import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, out
 // on the motor areas, inked contours and a crisp highlight on the glass.
 import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
 
+// 18 November (the living brain): the beat, the blooms round switched-on areas and the wobble when it is handled.
+import { BRAIN_LIVE, createBrainLive, stepBeat, stepBlooms, stepWobble, bloomOn, bloomOff, bloomPulse, bloomCentreOf, writeLiveUniforms, beatCentre, patchLiveVertex, liveFragmentHead } from './ns-brain-live.mjs';
+import { brainBeatClock } from './ns-assembly-core.mjs';
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
 import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST } from './ns-body.mjs';
@@ -1233,12 +1236,15 @@ export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Bo
   const ve = v + GLASS_VERTEX_HOOK.length, f = fragmentShader.indexOf(hook);
   return {
     // 17 November (fleshy cortex): vNsObj = the atlas position (source mm), for the tissue mottling of cortexFleshGlsl.
-    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\nvarying vec3 vNsObj;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;\nvNsObj = position;' + vertexShader.slice(ve),
+    vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\nvarying vec3 vNsObj;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;\nvNsObj = position;' +
+      // 18 November (ns-brain-live): where a bloom swells the tissue, the surface leans away from its middle (only in a
+      // shader that carries the living brain's vertex head: nsLiveTilt)
+      '\n#ifdef NS_LIVE_TILT\n{ vec3 nsLt = nsLiveTilt( position ); if ( nsFarEye.w > 1.0 ) vNsNormal = normalize( vNsNormal + nsRigidN * nsLt ); else vNsNormal = normalize( vNsNormal + normalMatrix * nsLt ); }\n#endif' + vertexShader.slice(ve),
     // R558 (hunt 2): the groove share of the rim is a uniform (nsRimGroove), so the held cue can leave the sulci out
     // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
     // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
     fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
-      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + GLASS_VARYINGS +
+      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + (flesh ? liveFragmentHead() : '') + GLASS_VARYINGS +
       // 17 November: the shell is shaded as living cortex (ns-brain-ink cortexFleshGlsl) instead of inked glass; `flesh`
       // false gives the glass back (glassInkGlsl), for the engineering pages.
       fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + (flesh ? cortexFleshGlsl(GLASS_READ.lightDir) : glassInkGlsl(GLASS_READ.lightDir)) + '\n' + fragmentShader.slice(f)
@@ -4372,6 +4378,7 @@ export function createScene({
     scene.background = bg ? keep(bg) : new THREE.Color(MATERIAL.background);
   }
   const camera = new THREE.PerspectiveCamera(fovYDeg, 1, near, far);
+  let eyeFovY = fovYDeg; // the eye view's own angle (the view from outside may use another: setCameraPose)
   camera.rotation.set(0, 0, 0, 'YXZ');
   scene.add(camera); // the camera must be in the scene graph for its children (the arm) to render
   // R558 (Message 20, ns-outline): body meshes register below (setArm, setBody); the composite draws first of the
@@ -4561,6 +4568,38 @@ export function createScene({
     };
     if (later) later(step); else step();
   }
+  // ---- 18 November: the LIVING brain (ns-brain-live) --------------------------------------------------------------
+  // One state and one set of uniforms for every brain material (the surface, its depth pre-pass, the x-ray pieces, the
+  // motor areas and their depth pre-pass, the hints, the outline pass's strip): their vertex shaders move a vertex by
+  // the same function of its rest position, so nothing separates. render() steps the state and writes the uniforms.
+  const brainLive = createBrainLive({ reducedMotion });
+  const liveValues = { live: new Float32Array(4), q: new Float32Array(4), a: new Float32Array(4), b: new Float32Array(4 * brainLive.slots), bc: new Float32Array(4 * brainLive.slots), ring: new Float32Array(4), ringc: new Float32Array(4) };
+  const liveUniforms = {
+    nsLive: { value: liveValues.live }, nsLiveC: { value: new Float32Array([0, 0, 0, 1 / BRAIN_LIVE.wobble.radiusMm]) }, nsLiveO: { value: new Float32Array(4) }, nsLiveQ: { value: liveValues.q },
+    nsLiveA: { value: liveValues.a }, nsLiveB: { value: liveValues.b }, nsLiveBc: { value: liveValues.bc }, nsLiveR: { value: liveValues.ring }, nsLiveRc: { value: liveValues.ringc }
+  };
+  // The hand area of a Space grip while it holds (ns-app tells it: setBrainLiveHeld): a grip is not a movement switched
+  // on from the brain, so its area shows only a faint flush (no swell, no ring) for as long as it is lit.
+  let liveHeldId = null;
+  function setBrainLiveHeld(id) { liveHeldId = typeof id === 'string' && id ? id : null; return liveHeldId; }
+  // The outline pass keeps its picture of the strip between frames, so that picture leaves the beat out (x = 0); the
+  // beat is put on when the picture is drawn (outline.setStripLive). The wobble and the blooms are in it.
+  const liveNoBeat = new Float32Array(4);
+  const liveStats = { programs: 0, missed: 0, moved: false, areaKey: null };
+  const liveCompile = (shader, uniforms = liveUniforms) => {
+    const vs = patchLiveVertex(shader.vertexShader);
+    if (!vs) { liveStats.missed++; return false; }
+    shader.vertexShader = vs; Object.assign(shader.uniforms, uniforms); liveStats.programs++;
+    return true;
+  };
+  // The outline pass's own picture of the strip (the strip's ink silhouette) follows the wobble and the blooms.
+  if (outline.stripMaterial) {
+    const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
+    outline.stripMaterial.onBeforeCompile = shader => { liveCompile(shader, u); };
+    outline.stripMaterial.customProgramCacheKey = () => 'ns-live-outline-strip';
+  }
+  /** A material with no other shader patch joins the living brain. */
+  const livePlain = (m, key = 'ns-live-plain') => { m.onBeforeCompile = shader => { liveCompile(shader); }; m.customProgramCacheKey = () => key; return m; };
   // R4-integrator (D5 glass fix): shared uniforms of every glass rim material; set in render() from the brain transform.
   const farEyeRigidN = { value: new THREE.Matrix3() }, farEyeVec = { value: new THREE.Vector4(0, 0, 0, 0) };
   // R558: axis / axis0 = the squash axis as drawn / before the carry (world unit vectors) when the far-eye picture is
@@ -4586,8 +4625,11 @@ export function createScene({
       if (key === 'shell') { shader.uniforms.nsRimOpacity = shellRimUniforms.nsRimOpacity; shader.uniforms.nsRimPower = shellRimUniforms.nsRimPower; }
       else { shader.uniforms.nsRimOpacity = { value: rim }; shader.uniforms.nsRimPower = { value: power }; }
       shader.uniforms.nsRigidN = farEyeRigidN; shader.uniforms.nsFarEye = farEyeVec;
+      // 18 November: the glass moves with the living brain; the surface also leans where a bloom swells it
+      if (liveCompile(shader) && read) shader.vertexShader = '#define NS_LIVE_TILT\n' + shader.vertexShader;
+      else if (read) Object.assign(shader.uniforms, liveUniforms); // the surface's colour reads the blooms either way
     };
-    m.customProgramCacheKey = () => cacheKey;
+    m.customProgramCacheKey = () => `${cacheKey}-live`;
     return m;
   };
   // SHELL: nearest glass surface only (after the depth pre-pass), normal blending. DoubleSide so an open or inward
@@ -4612,6 +4654,7 @@ export function createScene({
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
   glassDepthMaterial.forceSinglePass = true;
+  livePlain(glassDepthMaterial, 'ns-live-glass-depth');
   // U2b-scene: muscle base colour (linear) for the shared ns-colors shading rule; muscleHot is kept for compatibility.
   const muscleBaseLinear = hexToLinear(MATERIAL.muscleBase);
   const muscleHot = new THREE.Color(MATERIAL.muscleHot);
@@ -5030,6 +5073,7 @@ export function createScene({
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
   regionDepthMaterial.forceSinglePass = true;
+  livePlain(regionDepthMaterial, 'ns-live-region-depth'); // 18 November: with the living brain
   if (stripCut.supported) { // 17 November (STRIP_CUT): a visible strip pixel marks the stencil
     regionDepthMaterial.stencilWrite = true; regionDepthMaterial.stencilRef = STRIP_CUT.ref; regionDepthMaterial.stencilFunc = THREE.AlwaysStencilFunc; regionDepthMaterial.stencilZPass = THREE.ReplaceStencilOp;
   }
@@ -6336,6 +6380,7 @@ export function createScene({
       tissuePatch(material); // R558 (R32): soft tissue scatter (lighting only)
       powerUpPatch(material, 'area'); // R558 (Message 22): the power-up charge, in step with its muscles
       if (border) areaInkPatch(material); // R558 BB (Messages 24, 29): cel bands, folds, contour and hatching in ink
+      composePatch(material, 'ns-live-r18', shader => { liveCompile(shader); }); // 18 November: the keys move with the living brain
       const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], fillMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity, hintKey: '' };
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
@@ -6393,6 +6438,20 @@ export function createScene({
         for (let i = 0; i < pts.length; i += 3) { c[0] += pts[i] / n; c[1] += pts[i + 1] / n; c[2] += pts[i + 2] / n; }
         rec.markPts = n >= 3 ? Float32Array.from(pts) : null;
         rec.markCentre = n >= 1 ? c : null;
+      }
+      // 18 November (ns-brain-live): where this area's bloom sits: on the visible face of its key (bloomCentreOf), one
+      // per hemisphere. The grey in-between areas have no movement of their own: they do not bloom.
+      {
+        const by = new Map();
+        for (const pi of r.partIndices || []) {
+          const part = seg.parts[pi];
+          if (!part || !(part.faceCount > 0)) continue;
+          let e = by.get(part.hemisphere); if (!e) { e = { id: `${r.id}/${part.hemisphere}`, parts: [] }; by.set(part.hemisphere, e); }
+          e.parts.push(part.positions);
+        }
+        const O = outlineCentre || [0, 0, 0];
+        rec.liveBlooms = regionGroupKey(r) === 'scan' ? null : [...by.values()].map(e => ({ id: e.id, c: bloomCentreOf([0, 0, 0], e.parts, O) }));
+        rec.liveKey = ''; rec.liveCount = NaN; rec.liveOn = false; rec.livePressed = false; rec.liveQuiet = false; rec.livePulse = false; rec.livePend = 0;
       }
       regions.push(rec);
       regionById.set(r.id, rec);
@@ -6554,6 +6613,7 @@ export function createScene({
     };
     mat.customProgramCacheKey = () => 'ns-strip-a2r1';
     rigidPatch(mat); // R5-scene (P2): rigid normals under the perspective squash
+    composePatch(mat, 'ns-live-r18', shader => { liveCompile(shader); }); // 18 November: with the living brain
     const mesh = still(new THREE.Mesh(geo, mat));
     mesh.name = 'representative left-arm/hand band of the right precentral strip (simulated activity)';
     mesh.renderOrder = RENDER_ORDER.strip;
@@ -6580,6 +6640,18 @@ export function createScene({
       const solid = markerSolid(mk, false); // the picker's solid (repair R5): centre = position + lift, scale = radius
       mesh.position.set(solid.centre[0], solid.centre[1], solid.centre[2]);
       mesh.scale.setScalar(solid.scale);
+      {
+        // 18 November (ns-brain-live): the marker rides the living brain: it moves, whole, as the tissue under its
+        // centre moves (its own vertices are in its own small frame, so the move is divided by its scale each frame).
+        const at = { value: new THREE.Vector4(solid.centre[0], solid.centre[1], solid.centre[2], 1 / (solid.scale || 1)) };
+        mmat.onBeforeCompile = shader => {
+          const vs = patchLiveVertex(shader.vertexShader, undefined, { rigidAt: true });
+          if (!vs) { liveStats.missed++; return; }
+          shader.vertexShader = vs; Object.assign(shader.uniforms, liveUniforms); shader.uniforms.nsLiveAt = at; liveStats.programs++;
+        };
+        mmat.customProgramCacheKey = () => 'ns-live-marker';
+        mesh.onBeforeRender = () => { at.value.w = 1 / (mesh.scale.x || 1); };
+      }
       still(mesh); // static; highlightMarker re-composes the matrix when the scale changes
       mesh.renderOrder = RENDER_ORDER.marker;
       brainGroup.add(mesh);
@@ -6809,7 +6881,8 @@ export function createScene({
       if (!p || p.length !== 3 || !Array.prototype.every.call(p, Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) {
         fail('scene_input', 'setCameraPose needs an ns-camera pose { position: [x, y, z], yaw, pitch } (finite) or null');
       }
-      camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1 };
+      camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1,
+        fov: Number.isFinite(pose.viewFovYDeg) && pose.viewFovYDeg > 0 && pose.viewFovYDeg < 179 ? pose.viewFovYDeg : null }; // 18 November 2026: the outside view's own angle (ns-camera followFovYDeg)
       const far0 = Math.hypot(p[0], p[1], p[2]) >= 0.35 ? 1 : 0;
       camMul.headInPlace = Number.isFinite(pose.headInPlace) ? fin01(pose.headInPlace) : far0;
       camMul.faceGhost = Number.isFinite(pose.faceGhost) ? fin01(pose.faceGhost) : 1 - far0;
@@ -6843,6 +6916,10 @@ export function createScene({
       camera.rotation.set(firstPose ? firstPose.pitch : lookPitch, firstPose ? firstPose.yaw : lookYaw, 0, 'YXZ');
     }
     camera.updateMatrixWorld(true);
+    // 18 November 2026: the view from outside has its own, narrower angle (ns-camera THIRD_PERSON.followFovYDeg), eased
+    // in and out with the view's blend; the eye view's angle (eyeFovY: the launcher's, or resize's) is untouched.
+    const fovNow = camPose && camPose.fov !== null && !(cameraProjectionPlan && cameraProjectionPlan.phase === 'locked') ? eyeFovY + fin01(camPose.blend) * (camPose.fov - eyeFovY) : eyeFovY;
+    if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
     const headIn = camPose !== null && camMul.headInPlace >= R5_SCENE.headInPlaceFrom;
     const nearNow = camMul.nearM !== null ? camMul.nearM : near;
     if (cameraProjectionPlan && cameraProjectionPlan.phase === 'locked' && nearNow !== cameraProjectionPlan.snapshot.nearM) projectionRefuse('preselected camera near changed', { candidateNearM: nearNow });
@@ -7801,6 +7878,33 @@ export function createScene({
         rec.puCount = count;
         if (on && !powerUpSettled.has(rec.id)) anyOn = true;
       }
+      // 18 November (ns-brain-live): the tissue round an area reacts (not to a held posture's glow):
+      //  - under the crosshair: the tissue gives (a dimple) and flushes faintly; an area the look only crossed keeps
+      //    that faint flush while its glow fades;
+      //  - a movement switched on (one more activation count: a number key, a click, a look that has rested): the
+      //    full bloom with its swell while the area is lit, and one ring that runs outward when it lights;
+      //  - the hand area of a Space grip while it holds: a faint flush only, until it goes dark again.
+      if (rec.liveBlooms) {
+        const B = BRAIN_LIVE.bloom, count = Number.isFinite(n) ? n : 0;
+        const glow = powerUpSettled.has(rec.id) ? 0 : Math.round(glowIntensity(Number.isFinite(a) ? a : 0) * 20) / 20;
+        if (rec.id === liveHeldId && glow > 0) rec.liveQuiet = true;
+        // the count can rise a frame or two before the area's glow does: the press waits for it (livePend frames)
+        if (Number.isFinite(rec.liveCount) && count > rec.liveCount && !rec.liveQuiet && rec.id !== liveHeldId) { rec.livePressed = true; rec.livePulse = true; rec.livePend = 30; }
+        rec.liveCount = count;
+        if (glow > 0) rec.liveOn = true;
+        else if (rec.liveOn) { rec.liveOn = false; rec.livePressed = false; rec.liveQuiet = false; rec.livePulse = false; }
+        else if (rec.livePressed && !(--rec.livePend > 0)) { rec.livePressed = false; rec.livePulse = false; }
+        const hovered = rec.id === hoveredRegionId;
+        const level = rec.liveQuiet ? glow * B.holdLevel : Math.max(glow * (rec.livePressed ? 1 : B.lookLevel), hovered ? B.lookLevel : 0);
+        const lift = rec.liveQuiet ? 0 : rec.livePressed && glow > 0 ? B.swellMm * glow : hovered ? -B.dipMm : 0;
+        const key = `${level}|${lift}`;
+        if (key !== rec.liveKey) {
+          rec.liveKey = key;
+          const e = rec.material.emissive;
+          for (const b of rec.liveBlooms) { if (level > 0 || lift !== 0) bloomOn(brainLive, b.id, b.c[0], b.c[1], b.c[2], e.r, e.g, e.b, level, lift); else bloomOff(brainLive, b.id); }
+        }
+        if (rec.livePulse && glow > 0) { rec.livePulse = false; for (const b of rec.liveBlooms) bloomPulse(brainLive, b.id); }
+      }
     }
     keyFocus.target = anyOn ? 1 : 0; // 17 November (BRAIN_KEYS focus): the other keys dim while an area is switched on
     return changed;
@@ -7830,6 +7934,7 @@ export function createScene({
       depthWrite: false, depthTest: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
     }));
     material.forceSinglePass = true;
+    livePlain(material, 'ns-live-hint');
     const c = Array.isArray(color) && color.length === 3 && color.every(Number.isFinite) ? color : REGION_HINT.color;
     const entry = { meshes: [], whole: false, triangles: 0, material };
     const parts = (rec.region.partIndices || []).map(pi => segmentation.parts[pi]).filter(q => q && q.faceCount > 0);
@@ -11633,7 +11738,7 @@ export function createScene({
     const pr = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
     applyBuffer(width, height, pr);
     // Optional narrow-layout FOV from ns-app (effectiveFovYDeg); absent or invalid keeps the current FOV.
-    if (Number.isFinite(fov) && fov > 0 && fov < 179) camera.fov = fov;
+    if (Number.isFinite(fov) && fov > 0 && fov < 179) { eyeFovY = fov; camera.fov = fov; }
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     cssW = width; cssH = height;
@@ -11912,6 +12017,48 @@ export function createScene({
     };
   }
 
+  /** 18 November (ns-brain-live): one step of the living brain and its uniforms (no allocation). The beat and the
+   * blooms run on the frame's time; the wobble follows the brain's placement as the scene last received it. */
+  const liveKeyBase = [areaInkUniforms.nsAKey.value.x, areaInkUniforms.nsAKey.value.y, areaInkUniforms.nsAKey.value.z];
+  const liveEye = new Float64Array(3), liveDir = new Float64Array(3);
+  function stepBrainLive(dtMs) {
+    const dtS = dtMs > 0 ? dtMs / 1000 : 0, T = brainTransformSet ? lastBrainTransform : null;
+    stepBlooms(brainLive, dtS);
+    stepBeat(brainLive, dtS, brainLive.on, brainBeatClock()); // the beat picks up with the areas that are on
+    stepWobble(brainLive, dtS, T && T.pivotWorld, T && T.rotation, T && T.k);
+    writeLiveUniforms(brainLive, liveValues);
+    const c = liveUniforms.nsLiveC.value, oc = liveUniforms.nsLiveO.value;
+    if (T && T.pivot) { c[0] = T.pivot[0]; c[1] = T.pivot[1]; c[2] = T.pivot[2]; }
+    // The beat grows about the point of the crosshair's line of sight nearest the brain's centre (ns-brain-live
+    // beatCentre), so what is under the crosshair stays under it: the camera's place and its forward axis, brought
+    // into the brain's own millimetres with the placement's inverse.
+    if (T && T.pivot && T.inverse && T.inverse.length === 16) {
+      const e = camera.matrixWorld.elements, v = T.inverse;
+      liveEye[0] = v[0] * e[12] + v[4] * e[13] + v[8] * e[14] + v[12]; liveEye[1] = v[1] * e[12] + v[5] * e[13] + v[9] * e[14] + v[13]; liveEye[2] = v[2] * e[12] + v[6] * e[13] + v[10] * e[14] + v[14];
+      liveDir[0] = -(v[0] * e[8] + v[4] * e[9] + v[8] * e[10]); liveDir[1] = -(v[1] * e[8] + v[5] * e[9] + v[9] * e[10]); liveDir[2] = -(v[2] * e[8] + v[6] * e[9] + v[10] * e[10]);
+      beatCentre(oc, T.pivot, liveEye, liveDir);
+    } else { oc[0] = c[0]; oc[1] = c[1]; oc[2] = c[2]; }
+    // The outline pass's picture of the strip: with the wobble and the blooms' swell (redrawn while they move), without
+    // the beat, which is put on as a scale about the brain centre's place on the screen when the picture is drawn.
+    liveNoBeat[3] = liveValues.live[3];
+    const moving = brainLive.wobbling || (brainLive.bloomMoving && !reducedMotion);
+    if (moving || liveStats.moved) outline.invalidate();
+    liveStats.moved = moving;
+    if (T && T.matrix && outline.setStripLive) {
+      const m = T.matrix; // where the swell's fixed point is on the screen
+      pv.set(m[0] * oc[0] + m[4] * oc[1] + m[8] * oc[2] + m[12], m[1] * oc[0] + m[5] * oc[1] + m[9] * oc[2] + m[13], m[2] * oc[0] + m[6] * oc[1] + m[10] * oc[2] + m[14]).project(camera);
+      const pr = cssPr || 1;
+      outline.setStripLive((pv.x * 0.5 + 0.5) * cssW * pr, (pv.y * 0.5 + 0.5) * cssH * pr, pv.z < 1 ? brainLive.swell : 0);
+    }
+    // The wet highlight of the motor areas (their gloss) slides with the beat like the surface's (one uniform write).
+    {
+      const B = BRAIN_LIVE.beat, k = areaInkUniforms.nsAKey.value;
+      const x = liveKeyBase[0] + B.slide * brainLive.beat + B.breathSlide * brainLive.breath, y = liveKeyBase[1] - 0.6 * B.slide * brainLive.beat + 0.5 * B.breathSlide * brainLive.breath, z = liveKeyBase[2];
+      const l = Math.hypot(x, y, z) || 1;
+      k.x = x / l; k.y = y / l; k.z = z / l;
+    }
+  }
+
   /** Draw one frame. opts.live === false (ns-app QA step frames, frozen intro / Esc-page redraws, held-loop
    * screenshots) keeps the frame out of the quality controller's samples AND restarts the interval clock, so the gap
    * after it is not a sample either (R4-fix, code review F1); every other call is a sample (the interval since the
@@ -12044,6 +12191,7 @@ export function createScene({
         else farEyeVec.value.w = 0; // the brain is not ahead along the axis: Three's own normals for this frame
       } else farEyeVec.value.set(cx, cy, cz, farEyeView.K);
     } else farEyeVec.value.w = 0;
+    stepBrainLive(dtMs);
     // Camera-range enforcement belongs to active held manipulation, not a released world-fixed object.
     if (mirror.carryHeldAtReconcile === true && mirror.worldCentre && mirrorRoot.visible) {
       const envelope = currentMirrorEnvelope();
@@ -12134,7 +12282,16 @@ export function createScene({
       glassRim,
       /** R558 BB2: the brain's comic ink as plain data: areaInk (the motor areas' patch, the strip relief and its load ms)
        * and glassFold (the glass's background fold-depth job: state, vertices, slices, work and wall ms). */
-      get brainInk() { const { token, ...gf } = glassFold; return { areaInk: { ...areaInk }, glassFold: gf }; },
+      get brainInk() {
+        const { token, ...gf } = glassFold, L = brainLive, r3 = v => Math.round(v * 1000) / 1000;
+        // 18 November (ns-brain-live): the living brain as plain numbers (this frame's beat, breath and swell share, the
+        // beat's rate, the blooms, the tissue's lag in source mm) and how many shader programs carry its vertex rule.
+        const live = { reducedMotion: L.reducedMotion, beat: r3(L.beat), breath: r3(L.breath), swell: Math.round(L.swell * 1e5) / 1e5, rate: r3(L.rate), blooms: L.blooms, on: L.on,
+          bloomIds: L.slotId.slice(), bloomStrength: Array.from(L.slotS, r3), bloomLiftMm: Array.from(L.slotL, r3), ringAge: r3(L.ringAge), heldId: liveHeldId,
+          wobbling: L.wobbling, lagMm: Array.from(L.q, r3), turnRad: Array.from(L.a, v => Math.round(v * 1e4) / 1e4), speedMm: Math.round(L.speedMm * 10) / 10, turnRadS: r3(L.turnRadS), programs: liveStats.programs, missed: liveStats.missed,
+          centre: Array.from(liveUniforms.nsLiveC.value).slice(0, 3).map(r3), beatCentre: Array.from(liveUniforms.nsLiveO.value).slice(0, 3).map(r3) };
+        return { areaInk: { ...areaInk }, glassFold: gf, live };
+      },
       /** A2-render R1: { applied (null until the strip compiles, then whether the shader hooks were found), shimmer,
        * reducedMotion }. applied === false means the CPU vertex-colour fallback is drawn. */
       stripShader,
@@ -12185,6 +12342,7 @@ export function createScene({
     setBrainTransform,
     updateRegions,
     setSettledRegions, // R558 (Message 22)
+    setBrainLiveHeld, // 18 November (ns-brain-live): the hand area of a Space grip while it holds
     setRegionHints, // R558 (Message 6)
     regionHintState,
     brainOrientationAnchors,

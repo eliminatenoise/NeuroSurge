@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-9",
+  "version": "experimental-2026-11-17-body-update-10",
   "experimental": true,
   "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
   "incomplete_acceptance": true,
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 184571,
-      "sha256": "a0c74b2f9c41b13a86ac7b6a78594f4b2e8899aed617d7817065c90c9aad2de3"
+      "bytes": 192989,
+      "sha256": "88c036d817895544a9e664d56b619f89cbdc3990c4faf438b6cb2e56900a6a85"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 8551,
-      "sha256": "e16b9665a03f63d454eebfed22b0debaace09532c4bd7a30533ad54bb3895f38"
+      "bytes": 8655,
+      "sha256": "d24726f531997600110959a43ff22e480ef7e214dff91e31c08fd37a23942e65"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 46819,
-      "sha256": "880231ffa3f065af23d2d6e7986390474f57b2a8d697a4fbaed895d364d7412b"
+      "bytes": 48665,
+      "sha256": "7e47fc194f775b251c741a43ff5dc03aea395b2722a99cbd301a2bdc61edb11c"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 16545,
-      "sha256": "b4a4e654ae0cad39bb464960775f7fec09c2f4e67f2af3b3de2e96d790bb866c"
+      "bytes": 19312,
+      "sha256": "82063d01a4a752489b77d97d7256081b42c5e235ff0bbe28fcfe52f8f4ffb250"
     },
     {
       "path": "README.md",
-      "bytes": 12581,
-      "sha256": "c19b4cc576606c434df3bdeeb1c39b6ab6c949adaa5dbe9b48e33745c6511ba5"
+      "bytes": 12934,
+      "sha256": "bd5e49dd7d99494bdca3e6a8ea8b4afafc33d344d919bb42159010d139389202"
     },
     {
       "path": "START.html",
-      "bytes": 3910,
-      "sha256": "0913d59650348743e047bcf22423d2baeb766db488d60a925ba12f41300ba377"
+      "bytes": 3911,
+      "sha256": "c5a1b4705a1c31b33ac98f7e7617b710cfbd1c1241bb8f501553105b28baa11e"
     },
     {
       "path": "index.html",
@@ -3352,8 +3352,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 37461,
-      "sha256": "3fae269aaf189b049a3125edc21efb06c6df6e14ba78a966c4e7c51e84bf7ff9"
+      "bytes": 39059,
+      "sha256": "4675998249ad9a77f6ce4d3dc45c788532190f47180d4f677ff6f651a39146e0"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3447,8 +3447,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 682591,
-      "sha256": "c7c94ddf3d692fd2e691dc8c7265fad2a0fcfde281b1549dca3bfcf421edea31"
+      "bytes": 690595,
+      "sha256": "8a7b7b5d0616fe68cdb76621a61ab92d7e009518b59560e5f1da1f0409185abe"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3462,8 +3462,8 @@
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
-      "bytes": 16186,
-      "sha256": "db3529a0eabf7e3ee52ed73c02db29639998dd92ae0700ddafae176aed78e611"
+      "bytes": 16808,
+      "sha256": "0f4572567baa90fa0b237610307707d1f8dbb07d242a096f864bc232b28e02f7"
     },
     {
       "path": "scene/src/ns-assembly-worker.mjs",
@@ -3487,18 +3487,23 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 410134,
-      "sha256": "953ab23d2e3f69bcf4acf2a1d1f27bc4b59f8e4b4438dac204f173e0645f91ee"
+      "bytes": 455687,
+      "sha256": "40590ce59d7311afbe4d834284765f2437c54f194a18a8c4925b3645df99a8dc"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
-      "bytes": 229193,
-      "sha256": "7026a93c1038c55d1dfe8d1eb7165a8771648782057159b9e70a193a0ae90ffd"
+      "bytes": 229422,
+      "sha256": "c827517e1aa3e15e2b4d82b3dcbf0dfa0c8c228531867e2aa98a8296c22717f2"
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 52015,
-      "sha256": "e86999398be8ec2f33f8397f742394aa4568618c14be7b5586010fa4ecb7ad84"
+      "bytes": 59749,
+      "sha256": "1e4ee1cd49b10c22d5c24a93ed1fc2eeccb3466dc5a49e841643ce7170f41ccb"
+    },
+    {
+      "path": "scene/src/ns-brain-live.mjs",
+      "bytes": 35248,
+      "sha256": "b2830c8637f0065430e1b4bd2037c886fd877b7c77d587dc65857c209882186d"
     },
     {
       "path": "scene/src/ns-brain.mjs",
@@ -3507,8 +3512,8 @@
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 48790,
-      "sha256": "af330cfdd32e274145bbfeee941a35a2b58828a86a497447062b4241e647ad86"
+      "bytes": 54925,
+      "sha256": "d8766eea899fdcdde55601bca9fc8c11c26b1461b6798c305cd072367f5e68cc"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -3567,8 +3572,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 58143,
-      "sha256": "f124afeaf4ca09e57a68f4d053a4df21482b873435bf882d82a7ae04951eeef5"
+      "bytes": 59270,
+      "sha256": "c818becca692144f132deb7987249f023bb6726563652c9ca3a673ff82156326"
     },
     {
       "path": "scene/src/ns-placeholder.mjs",
@@ -3602,8 +3607,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 960786,
-      "sha256": "4b7fcb09508bd7f5a0019ba7f699f9325ec1f7566839cdec9ed7608fee46b1dc"
+      "bytes": 974565,
+      "sha256": "cbf9f33a2d39be914e6091f7e63c991fe66d7f82abd5050e814d30b9a283576c"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -3636,6 +3641,16 @@
       "sha256": "dfc9265093ead7e02b13fdedd7f17dc8c610735672cba8c4a76a1b63f065fa7b"
     },
     {
+      "path": "tests/behind-view.test.mjs",
+      "bytes": 4093,
+      "sha256": "c78792eb3a41e005ba1bcdef1e8f3be9a361f50a458919d6941b2764c23f37e8"
+    },
+    {
+      "path": "tests/brain-live.test.mjs",
+      "bytes": 20664,
+      "sha256": "2d00173429ef66821403b649ca209f55a741388fa406b8d90c20d0f30ba82e5d"
+    },
+    {
       "path": "tests/cancel-epoch.test.mjs",
       "bytes": 17087,
       "sha256": "ba12a76da59927487f5d506287b8e22acf306d70139c88e20ce95c6ec66f21c2"
@@ -3654,6 +3669,11 @@
       "path": "tests/deferred-input.test.mjs",
       "bytes": 14387,
       "sha256": "7c6096638e72d59580dd0fe3139676c0acd3d681aa24b7c2a982a0b8344d80cf"
+    },
+    {
+      "path": "tests/eye-gaze.test.mjs",
+      "bytes": 4972,
+      "sha256": "e3bcf519d855d58aec4f9b3ec18db3a0e0104ff2484c258e45e61f83bc6b4abc"
     },
     {
       "path": "tests/guide-order.test.mjs",
@@ -3731,14 +3751,19 @@
       "sha256": "e2da75f97f45d2c44875930a1d419a15c5fcb3b116921fc7e19585197cdad12e"
     },
     {
+      "path": "tests/spine.test.mjs",
+      "bytes": 15123,
+      "sha256": "f46e62911cafe4b55e8969ecad85da8d5f6fe828400c8b89dfd9f655bd088a4e"
+    },
+    {
       "path": "tools/load-body.mjs",
       "bytes": 2112,
       "sha256": "caaaa898d2a185c82f816a15fc675e320430647a0fe9f54c15f8ccb99add2368"
     },
     {
       "path": "tools/rom-sweep.mjs",
-      "bytes": 11731,
-      "sha256": "6d612c86e0de734c7455a169afc844d5af20cb0c19d306b03b0c2e5c3b0174da"
+      "bytes": 17697,
+      "sha256": "fcb1064c1675644f366f956c3eee4537439edf7103b9c4566894d1c773244a0d"
     },
     {
       "path": "vendor/LICENSE",

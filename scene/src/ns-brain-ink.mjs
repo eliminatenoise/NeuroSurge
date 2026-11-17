@@ -56,6 +56,8 @@
  * Display only: every number below is a display choice; none is a measurement of tissue or of neural activity.
  */
 
+import { BRAIN_LIVE, liveBloomGlsl } from './ns-brain-live.mjs';
+
 /** Display choices (see the BB and BB2 reports for what was tried).
  *  ink: near-black #0b0809 as drawn (sRGB), the style guide's ink, shared with ns-outline OUTLINE.colour.
  *  fold: foldDepth radiusMm / ballMm (whole-brain fold depth); foldShade loMm (crown up to here) .. hiMm (floor from here).
@@ -620,8 +622,69 @@ export const BRAIN_FLESH = Object.freeze({
   scatter: 0.22, scatterTint: Object.freeze([1.0, 0.34, 0.3]),
   sheen: 0.2, sheenPower: 28, glint: 0.42, glintPower: 180, glintLo: 0.55, glintHi: 0.75, wetGroove: 0.9,
   rim: Object.freeze([1.0, 0.82, 0.8]), rimGain: 0.55,
-  alpha: 0.97, rimAlpha: 0.8
+  alpha: 0.97, rimAlpha: 0.8,
+  vessel: Object.freeze({
+    warpMm: 9, warpAcrossMm: 17,
+    artery: Object.freeze([0.74, 0.1, 0.1]), arteryMm: 0.7, arteryAcrossMm: 15, arteryAlpha: 0.66,
+    fine: Object.freeze([0.8, 0.2, 0.2]), fineMm: 0.34, fineAcrossMm: 6, fineAlpha: 0.5, twigMm: 10, twigTip: 0.3,
+    vein: Object.freeze([0.36, 0.17, 0.45]), veinMm: 1.25, veinLevel: 0.33, veinWander: 0.16, veinAlpha: 0.46, veinAcrossMm: 24, veinShare: 0.55,
+    pulse: 0.3, minPx: 0.3, fullPx: 0.7, endSlope: 0.12, runSlope: 0.38
+  })
 });
+
+/** The fine surface vessels (18 November; owner: "far more fleshy", "hyper-detailed hyper-real glossy fleshy but not
+ * gory"): thin bright arteries that wander over the gyral crowns in two sizes, and darker veins that run ALONG the
+ * grooves, all fixed to the tissue. No texture and no new draw: each family is the level line of something the shader
+ * already has or can get from the tissue-fixed value noise:
+ *  - arteries: the 0.5 level of one value-noise field of the (gently warped) atlas position, arteryAcrossMm across,
+ *    drawn arteryMm wide: the trunks. They fade into the grooves, where they dive under, and their width follows the
+ *    mottling, so a trunk thickens and thins along its way. Where the field is nearly flat (its slope under endSlope
+ *    .. runSlope) a level line would close into a small ring: there the vessel fades out instead, so the eye sees
+ *    runs that end, not rings;
+ *  - their branches (18 November, after the check: single hairlines that "wander and stop" and never branch read as
+ *    squiggles close up): the finer family (fineAcrossMm, fineMm) is drawn ONLY as twigs that leave a trunk: from the
+ *    trunk out to twigMm from it, on one side of the trunk at a time (the side changes slowly along the trunk), and
+ *    each twig thins from fineMm at the trunk to twigTip of that at its end. So the picture is trunks that give off
+ *    side branches that taper out, not loose lines;
+ *  - veins: a level of the fold depth itself (veinLevel, wandering by veinWander with the mottling), so a vein follows
+ *    its sulcus round every bend, just inside the lip of the groove; only veinShare of the sulci carry one (a slow
+ *    noise field veinAcrossMm across). They are a dull blue-violet against the red-brown of the grooves (18 November:
+ *    in the first colour, a dark red-violet at mid bank, they could not be told from the groove's own shade), soft
+ *    and half transparent so they read as a vessel under the wet film and not as a drawn outline of the gyrus;
+ *  - the arteries swell and brighten a little with the beat (pulse x the beat uniform nsLive.y; the veins do not).
+ * Widths are true millimetres on the tissue; a vessel that would be under minPx pixels wide is not drawn (fullPx: from
+ * here on at full strength), so from far away the surface shows no sub-pixel scribble. The vessels are painted into
+ * the tissue colour BEFORE the light, so they are shaded, wet and shadowed exactly like the tissue they lie on.
+ * Display choices; no vascular anatomy of this atlas brain is implied. nsAlb, nsG, nsMot and vNsObj in scope. */
+export function cortexVesselGlsl(v = BRAIN_FLESH.vessel) {
+  const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
+  const line = (field, w) => `( 1.0 - smoothstep( ${w} - 0.5, ${w} + 0.6, abs( ${field} ) / max( fwidth( ${field} ), 1e-5 ) ) ) * smoothstep( ${f(0.5 * v.minPx)}, ${f(0.5 * v.fullPx)}, ${w} )`;
+  // where the field is nearly flat its level line closes into a small ring: there the vessel thins out and ends
+  // (slope = the field's change over its own length scale, about 1 on a steady run)
+  const run = (field, acrossMm) => `smoothstep( ${f(v.endSlope)}, ${f(v.runSlope)}, fwidth( ${field} ) / nsVmm * ${f(acrossMm)} )`;
+  return `{
+		float nsVmm = max( length( fwidth( vNsObj ) ), 1e-4 ); // millimetres of tissue per pixel
+		float nsVslow = nsFlN( vNsObj * ${f(1 / v.warpAcrossMm)} + 5.1 ) - 0.5;
+		vec3 nsVp = vNsObj + ${f(v.warpMm)} * nsVslow * vec3( 1.0, -0.7, 0.6 );
+		float nsVcrown = 1.0 - smoothstep( 0.35, 0.75, nsG );
+		float nsVbeat = 1.0 + ${f(v.pulse)} * nsLive.y;
+		float nsVa = nsFlN( nsVp * ${f(1 / v.arteryAcrossMm)} + 13.7 ) - 0.5;
+		float nsVwa = ${f(0.5 * v.arteryMm)} * ( 0.45 + 1.1 * nsMot ) * nsVbeat / nsVmm;
+		float nsVla = ${line('nsVa', 'nsVwa')} * ${run('nsVa', v.arteryAcrossMm)};
+		float nsVb = nsFlN( nsVp * ${f(1 / v.fineAcrossMm)} + 41.3 ) - 0.5;
+		// a twig: 1 at its trunk .. 0 at twigMm from it (the trunk's distance from its field's slope), on the side of
+		// the trunk that bears twigs here
+		float nsVtw = clamp( 1.0 - abs( nsVa ) * nsVmm / ( max( fwidth( nsVa ), 1e-5 ) * ${f(v.twigMm)} ), 0.0, 1.0 ) * smoothstep( 0.0, 0.004, nsVa * nsVslow );
+		float nsVwb = ${f(0.5 * v.fineMm)} * mix( ${f(v.twigTip)}, 1.0, nsVtw ) * ( 0.7 + 0.6 * nsMot ) * nsVbeat / nsVmm;
+		float nsVlb = ${line('nsVb', 'nsVwb')} * ${run('nsVb', v.fineAcrossMm)} * smoothstep( 0.0, 0.3, nsVtw ) * ${run('nsVa', v.arteryAcrossMm)};
+		float nsVv = nsG - ( ${f(v.veinLevel)} + ${f(2 * v.veinWander)} * ( nsMot - 0.5 ) );
+		float nsVwv = ${f(0.5 * v.veinMm)} * ( 0.6 + 0.8 * nsMot ) / nsVmm;
+		float nsVlv = ${line('nsVv', 'nsVwv')} * smoothstep( ${f(1 - v.veinShare - 0.08)}, ${f(1 - v.veinShare + 0.08)}, nsFlN( vNsObj * ${f(1 / v.veinAcrossMm)} + 71.9 ) );
+		nsAlb = mix( nsAlb, ${lin(v.fine)}, ${f(v.fineAlpha)} * nsVlb * nsVcrown );
+		nsAlb = mix( nsAlb, ${lin(v.artery)}, min( 1.0, ${f(v.arteryAlpha)} * nsVbeat ) * nsVla * nsVcrown );
+		nsAlb = mix( nsAlb, ${lin(v.vein)}, ${f(v.veinAlpha)} * nsVlv );
+	}`;
+}
 
 /** Value noise for the mottling (GLSL head; names are the patch's own). */
 export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 ); p += dot( p, p.yzx + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }\n' +
@@ -632,14 +695,20 @@ export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 
 /** GLSL appended to the shell's read patch in place of the glass ink (ns-scene-three patchGlassReadShaders; nsN, nsV,
  * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
  * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. Pure. */
-export function cortexFleshGlsl(light, o = BRAIN_FLESH) {
+export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
+  const B = live.bloom, P = live.beat;
   return `
 {
 	float nsClr = 1.0 - nsClear * clamp( vNsNear, 0.0, 1.0 );
 	float nsMot = 0.65 * nsFlN( vNsObj * ${f(1 / o.mottleMm)} ) + 0.35 * nsFlN( vNsObj * ${f(1 / o.mottleFineMm)} + 7.3 );
 	vec3 nsAlb = mix( ${lin(o.crown)}, ${lin(o.groove)}, pow( nsG, ${f(o.grooveCurve)} ) );
 	nsAlb *= mix( vec3( 1.0 ), ${v3(o.mottleWarm)}, nsMot ) * ( 1.0 + ${f(o.mottle)} * ( nsMot - 0.5 ) );
+	${o.vessel ? cortexVesselGlsl(o.vessel) : ''}
+	// the living brain (ns-brain-live): the tissue flushes a little with every beat, and rosy round an area that is on
+	${liveBloomGlsl('vNsObj')}
+	nsAlb *= vec3( 1.0 + ${f(P.flush)} * nsLive.y, 1.0 - ${f(0.6 * P.flush)} * nsLive.y, 1.0 - ${f(0.5 * P.flush)} * nsLive.y );
+	nsAlb = mix( nsAlb, nsAlb * ${v3(B.flushTint)}, ${f(B.flush)} * nsLvF );
 	// a slight unevenness of the surface from the same mottling (a derivative bump of the normal: the wet highlights
 	// break up like on moist tissue); it fades out where the fine mottling would be under bumpFadePx pixels across
 	{
@@ -656,14 +725,29 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH) {
 	float nsAo = mix( 1.0, ${f(o.aoMin)}, nsG );
 	vec3 nsCol = nsAlb * ( ${f(o.key)} * nsDif + ${f(o.fill)} ) * nsAo;
 	nsCol += nsAlb * ${v3(o.scatterTint)} * ( ${f(o.scatter)} * ( 1.0 - nsDif ) * nsAo );
-	float nsNH = max( dot( nsN, normalize( nsLk + nsV ) ), 0.0 );
+	// the wet highlights slide over the folds with the beat and the breath (the light of the highlights leans a little)
+	vec3 nsLs = normalize( nsLk + vec3( ${f(P.slide)} * nsLive.y + ${f(P.breathSlide)} * nsLive.z, ${f(-0.6 * P.slide)} * nsLive.y + ${f(0.5 * P.breathSlide)} * nsLive.z, 0.0 ) );
+	float nsNH = max( dot( nsN, normalize( nsLs + nsV ) ), 0.0 );
 	float nsGl = pow( nsNH, ${f(o.glintPower)} );
 	float nsGe = max( ${f(0.5 * (o.glintHi - o.glintLo))}, fwidth( nsGl ) );
 	float nsWet = ${f(o.sheen)} * pow( nsNH, ${f(o.sheenPower)} ) + ${f(o.glint)} * smoothstep( ${f(0.5 * (o.glintLo + o.glintHi))} - nsGe, ${f(0.5 * (o.glintLo + o.glintHi))} + nsGe, nsGl );
 	nsCol += vec3( nsWet * ( 1.0 - ${f(o.wetGroove)} * nsG ) );
 	float nsRimF = pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - nsRimGroove * nsG );
 	nsCol += ${lin(o.rim)} * ( nsRimF * nsRimOpacity * ${f(o.rimGain)} );
-	outgoingLight = min( nsCol, vec3( 1.0 ) );
+	// The tissue round a switched-on key takes the key's HUE and keeps its own light and shade (its brightness x the
+	// key's colour): the folds, the vessels and the wet highlights stay, so it reads as flushed tissue, not as a wash.
+	// Where the surface is seen edge-on the colour is held back (it smeared into a long pale stain there).
+	float nsLvA = mix( 1.0, 0.45, nsG ) * ( 0.35 + 0.65 * nsDif );
+	float nsLvZ = smoothstep( ${f(B.grazeLo)}, ${f(B.grazeHi)}, nsFacing );
+	float nsLvM = max( nsLvC.r, max( nsLvC.g, nsLvC.b ) );
+	float nsLvY = dot( min( nsCol, vec3( 1.0 ) ), vec3( 0.2126, 0.7152, 0.0722 ) );
+	nsCol = mix( nsCol, ( nsLvC / max( nsLvM, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY ), ${f(B.spill)} * min( nsLvM, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
+	// the ring of a movement being switched on runs over the tissue in the key's colour
+	float nsLvPm = max( nsLvP.r, max( nsLvP.g, nsLvP.b ) );
+	nsCol = mix( nsCol, ( nsLvP / max( nsLvPm, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY + 0.1 ), ${f(B.pulse)} * min( nsLvPm, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
+	// ... and right next to the key (and on the ring) a little of it is above white (the scene's bloom turns that into
+	// a soft halo); none where the surface is seen edge-on
+	outgoingLight = min( nsCol, vec3( 1.0 ) ) + ( nsLvK * ( ${f(B.glow)} * nsLvA ) + nsLvP * ${f(B.pulseGlow)} ) * nsLvZ;
 	diffuseColor.a = mix( ${f(o.alpha)}, ${f(o.rimAlpha)}, pow( max( 1.0 - nsFacing, 0.0 ), 4.0 ) ) * nsClr;
 }
 `;
