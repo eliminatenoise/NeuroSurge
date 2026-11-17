@@ -4192,6 +4192,49 @@ export function patchBehindGlassShaders(vertexShader, fragmentShader, o = BEHIND
   return { vertexShader, fragmentShader: 'uniform vec4 nsBg;\nuniform vec4 nsBgWin;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
 }
 
+/** R558 (performance; Messages 42, 48, 50): the per-muscle values that a CLASS of muscles carries as vertex attributes
+ * (one value for the whole mesh) in place of uniforms, so the whole class can draw with ONE material (createScene: "ONE
+ * material per class of muscle"). on: the one switch (false: every muscle keeps its own material, as before).
+ * rowFloats / chunkRows: the layout of the value rows (24 numbers a muscle, 64 muscles a buffer). uniforms: the
+ * declarations patchMuscleShareShaders replaces. */
+export const MUSCLE_SHARE = Object.freeze({
+  on: true, rowFloats: 24, chunkRows: 64,
+  uniforms: Object.freeze(['vec3 diffuse', 'vec3 emissive', 'vec4 nsGlowRim', 'vec4 nsCharge', 'vec3 nsChargeRest', 'vec2 nsSweep', 'vec4 nsFibre'])
+});
+
+/** Rewrite a muscle's (already patched) standard-material shader pair so its seven per-muscle values come from vertex
+ * attributes instead of uniforms (pure; tests/shader-safe.test.mjs runs it on the real patch chains).
+ *  - Each `uniform T name;` of MUSCLE_SHARE.uniforms in the fragment shader becomes a plain global `T name;`, so every
+ *    later use of the name is untouched, and the first statement of the fragment `main` fills the globals from six
+ *    `flat` varyings (one value for the whole triangle, not interpolated: the same 32-bit numbers the uniforms had).
+ *  - The vertex shader gains three attributes named after the set letter (`nsS<set>A` a mat4, `nsS<set>B` and
+ *    `nsS<set>C` a vec4 each) and hands them on. Their 24 numbers: A[0] = colour rgb, sweep x; A[1] = glow (emissive)
+ *    rgb, sweep y; A[2] = glow rim; A[3] = charge; B = charge rest colour rgb, spare; C = fibre axis and scale.
+ *    The set letter lets two meshes that share one geometry (a muscle and its mirror twin) each have their own row.
+ * Returns { vertexShader, fragmentShader }, or null (shaders untouched, caller keeps one material per muscle) when a
+ * `main` or one of the seven declarations is missing or doubled, when the vertex shader reads one of the seven (it
+ * would still need the uniform), when the rewrite is there already, or when `set` is not one lower-case letter. */
+export function patchMuscleShareShaders(vertexShader, fragmentShader, set = 'o') {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || typeof set !== 'string' || !/^[a-z]$/.test(set)) return null;
+  const MAIN = 'void main() {';
+  const once = (s, t) => { const i = s.indexOf(t); return i >= 0 && s.indexOf(t, i + t.length) < 0; };
+  if (!once(vertexShader, MAIN) || !once(fragmentShader, MAIN)) return null;
+  if (/\bvNsS[0-5]\b|\bnsS[a-z][ABC]\b/.test(vertexShader + fragmentShader)) return null;
+  if (/\b(?:diffuse|emissive|nsGlowRim|nsCharge|nsChargeRest|nsSweep|nsFibre)\b/.test(vertexShader)) return null;
+  let f = fragmentShader;
+  for (const d of MUSCLE_SHARE.uniforms) {
+    const u = `uniform ${d};`;
+    if (!once(f, u)) return null;
+    f = f.replace(u, `${d};`);
+  }
+  const A = `nsS${set}A`, B = `nsS${set}B`, C = `nsS${set}C`;
+  const vary = 'flat varying vec4 vNsS0;\nflat varying vec4 vNsS1;\nflat varying vec4 vNsS2;\nflat varying vec4 vNsS3;\nflat varying vec4 vNsS4;\nflat varying vec4 vNsS5;\n';
+  const vs = `attribute mat4 ${A};\nattribute vec4 ${B};\nattribute vec4 ${C};\n` + vary
+    + vertexShader.replace(MAIN, MAIN + `\n\tvNsS0 = ${A}[ 0 ]; vNsS1 = ${A}[ 1 ]; vNsS2 = ${A}[ 2 ]; vNsS3 = ${A}[ 3 ]; vNsS4 = ${B}; vNsS5 = ${C};`);
+  const fs = vary + f.replace(MAIN, MAIN + '\n\tdiffuse = vNsS0.rgb; emissive = vNsS1.rgb; nsSweep = vec2( vNsS0.a, vNsS1.a ); nsGlowRim = vNsS2; nsCharge = vNsS3; nsChargeRest = vNsS4.rgb; nsFibre = vNsS5;');
+  return { vertexShader: vs, fragmentShader: fs };
+}
+
 /** Plain hover caption of a 3D arrow (pure): ns-text ARROWS when R5-text provides it ({ brain: { tip }, mirror: { tip } }
  * or { tip, mirrorTip }), else the round-4 ORBIT captions for the brain and ARROW_TIP_FALLBACK for the mirror body.
  * (The fallback wording should move to ns-text; listed in round5/R5-scene-NOTES.md.) */
@@ -5546,6 +5589,176 @@ export function createScene({
     return m;
   };
   const mirrorMuscleMaterial = () => comicPatch(powerUpPatch(muscleLookPatch(behindGlassPatch(glowRimPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }))))), 'muscle'), 'muscle');
+  // ---- R558 (performance; Messages 42, 48, 50): ONE material per class of muscle --------------------------------------
+  // Every muscle used to draw with its own material (several hundred of them), and what the renderer does at each change of
+  // material (sending every value of the standard shader again) was the largest single part of a frame. Two muscles
+  // of the same kind differ only in seven values (MUSCLE_SHARE.uniforms: colour, glow, glow rim, charge, charge rest
+  // colour, sweep, fibre axis), so the muscles of a CLASS (same shader patches, same render state) now draw with one
+  // material, and each mesh carries its seven values as vertex attributes that hold one value for the whole mesh
+  // (patchMuscleShareShaders has the shader side).
+  //  - A muscle's own material stays as the HOLDER of its values (mesh.userData.nsShade; shadeMatOf(mesh) finds it):
+  //    shadeMuscle, setMuscleBase, the power-up charge and the halos write and read it exactly as before, and
+  //    syncMuscleShade copies the holders' values into the attribute rows once a frame, after the frame's last writer.
+  //  - The first holder of a class becomes the class material (it is still the holder of its own mesh's values).
+  //  - The values are the same 32-bit numbers the uniforms carried, so a muscle's colour is unchanged. What can differ
+  //    is the ORDER the solid muscles of a class are drawn in (nearest first now; by material number before), which
+  //    can show only where two solid surfaces lie at exactly the same depth.
+  //  - A class whose shader text cannot be rewritten, or whose program does not link, goes back to one material per
+  //    muscle (unshareMuscleClass); nothing is shared when the renderer lacks the attribute or varying slots or
+  //    MUSCLE_SHARE.on is false. muscleShareState() (inspect: glow.muscleShare) counts what is shared; asked to
+  //    (glowLinkState({ audit: true }), which the app's inspect does), it audits it too.
+  const SHARE_STATE = ['type', 'transparent', 'opacity', 'depthWrite', 'depthTest', 'depthFunc', 'side', 'shadowSide', 'blending', 'blendSrc', 'blendDst', 'blendEquation', 'roughness', 'metalness',
+    'polygonOffset', 'polygonOffsetFactor', 'polygonOffsetUnits', 'alphaTest', 'colorWrite', 'stencilWrite', 'visible', 'flatShading', 'vertexColors', 'fog', 'toneMapped', 'envMapIntensity',
+    'wireframe', 'premultipliedAlpha', 'dithering', 'forceSinglePass', 'alphaToCoverage'];
+  const SHARE_MAPS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'aoMap', 'envMap', 'lightMap', 'bumpMap', 'displacementMap'];
+  /** Everything about a material that the muscles of one class must have in common (its seven per-muscle values and
+   * its shader patches aside: the patches are in the program key, which is part of the class key too). */
+  const shareSignature = m => {
+    let s = '';
+    for (const k of SHARE_STATE) s += `${m[k]},`;
+    for (const k of SHARE_MAPS) s += `${m[k] && m[k].uuid ? m[k].uuid : 0},`;
+    const d = m.defines || {};
+    return s + JSON.stringify(Object.keys(d).sort().map(k => [k, d[k]]));
+  };
+  /** The material that HOLDS a muscle mesh's values: its own first material when the mesh draws with a class material. */
+  const shadeMatOf = mesh => (mesh && mesh.userData && mesh.userData.nsShade) || (mesh ? mesh.material : null);
+  const muscleShare = {
+    ok: !!(MUSCLE_SHARE.on && renderer.capabilities && renderer.capabilities.maxVaryings >= 15 && renderer.capabilities.maxAttributes >= 16
+      && typeof THREE.InstancedInterleavedBuffer === 'function' && typeof THREE.InterleavedBufferAttribute === 'function'),
+    classes: new Map(), holders: [], chunks: [], rows: 0, rowWrites: 0, skipped: 0, warned: false
+  };
+  const shareRow = new Float32Array(MUSCLE_SHARE.rowFloats), shareZero = new THREE.Vector4(0, 0, 0, 0);
+  /** The 24 numbers of one holder in row order (patchMuscleShareShaders lists them) into `t`. The glow is emissive x
+   * emissiveIntensity, as the renderer sends it; colours are read as stored (the working colour space). */
+  const fillShareRow = (mat, t) => {
+    const ud = mat.userData || {}, c = mat.color, e = mat.emissive, ei = mat.emissiveIntensity;
+    const sw = (ud.nsSweep || noSweep).value, rim = ud.nsGlowRim ? ud.nsGlowRim.value : shareZero, ch = ud.nsCharge ? ud.nsCharge.value : shareZero;
+    const cr = ud.nsChargeRest ? ud.nsChargeRest.value : shareZero, fb = (ud.nsFibre || noFibre).value;
+    t[0] = c.r; t[1] = c.g; t[2] = c.b; t[3] = sw.x;
+    t[4] = e.r * ei; t[5] = e.g * ei; t[6] = e.b * ei; t[7] = sw.y;
+    t[8] = rim.x; t[9] = rim.y; t[10] = rim.z; t[11] = rim.w;
+    t[12] = ch.x; t[13] = ch.y; t[14] = ch.z; t[15] = ch.w;
+    t[16] = cr.x; t[17] = cr.y; t[18] = cr.z; t[19] = 0;
+    t[20] = fb.x; t[21] = fb.y; t[22] = fb.z; t[23] = fb.w;
+  };
+  /** A class back to one material per muscle (its shader could not be rewritten, or its program did not link). */
+  function unshareMuscleClass(cls, why) {
+    cls.on = false; cls.failed = String(why); cls.pendingOff = null;
+    for (const h of cls.members) h.mesh.material = h.mat;
+    muscleShare.holders = muscleShare.holders.filter(h => h.cls !== cls);
+    cls.material.needsUpdate = true; // its program key now says "not shared": the plain program of before
+    if (!muscleShare.warned) {
+      muscleShare.warned = true;
+      try { console.warn(`NeuroSurge: muscles of one kind draw with one material each again (${cls.failed}).`); } catch { /* no console */ }
+    }
+  }
+  /** Give muscle `mesh` its value row and let it draw with its class material. `set`: one letter that names the
+   * attributes ('o' your own body and arm, 'm' the mirror twins, 'p' the in-place head twins), because a muscle and
+   * its twins share one geometry and each needs a row of its own there. Call it once the mesh's material has all its
+   * render state (transparent, defines, patches) and the mesh its userData. Returns whether the mesh is shared. */
+  function shareMuscle(mesh, set) {
+    if (!muscleShare.ok || !mesh || !mesh.material || Array.isArray(mesh.material) || !mesh.geometry) return false;
+    if (!mesh.userData) mesh.userData = {};
+    if (mesh.userData.nsShade) return false;
+    const holder = mesh.material, full = mesh.userData.nsFullGeometry || mesh.geometry;
+    const A = `nsS${set}A`, B = `nsS${set}B`, C = `nsS${set}C`;
+    // Two meshes of one set on one geometry would need the same attribute names: the second keeps its own material.
+    if (!full.attributes || full.attributes[A] || !holder.color || !holder.emissive) { muscleShare.skipped++; return false; }
+    const key = `${set}|${typeof holder.customProgramCacheKey === 'function' ? holder.customProgramCacheKey() : ''}|${shareSignature(holder)}`;
+    let cls = muscleShare.classes.get(key);
+    if (!cls) {
+      const made = { set, material: holder, members: [], on: true, failed: null, pendingOff: null, compiled: 0 };
+      cls = made;
+      muscleShare.classes.set(key, made);
+      // The rewrite goes last in the patch chain, and the program key says whether it is on, so a class that falls
+      // back compiles the plain program again.
+      const prev = holder.onBeforeCompile, prevKey = holder.customProgramCacheKey;
+      holder.onBeforeCompile = (shader, r) => {
+        if (typeof prev === 'function') prev.call(holder, shader, r);
+        if (!made.on) return;
+        const p = patchMuscleShareShaders(shader.vertexShader, shader.fragmentShader, set);
+        if (!p) { made.pendingOff = 'its shader text could not be rewritten'; return; }
+        shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; made.compiled++;
+      };
+      holder.customProgramCacheKey = () => `${typeof prevKey === 'function' ? prevKey.call(holder) : ''}|ns-muscle-share-${set}-${made.on ? 1 : 0}`;
+      holder.needsUpdate = true;
+    }
+    if (!cls.on) return false;
+    const n = MUSCLE_SHARE.chunkRows, w = MUSCLE_SHARE.rowFloats, row = muscleShare.rows++, ci = Math.floor(row / n), at = (row % n) * w;
+    let ib = muscleShare.chunks[ci];
+    if (!ib) {
+      // Not keep()-ed: the buffer has no dispose of its own; the renderer frees it with the geometries that use it.
+      ib = new THREE.InstancedInterleavedBuffer(new Float32Array(n * w), w, 1);
+      ib.setUsage(THREE.DynamicDrawUsage);
+      muscleShare.chunks[ci] = ib;
+    }
+    const aA = new THREE.InterleavedBufferAttribute(ib, 16, at), aB = new THREE.InterleavedBufferAttribute(ib, 4, at + 16), aC = new THREE.InterleavedBufferAttribute(ib, 4, at + 20);
+    const put = g => { if (g && g.attributes && !g.attributes[A]) { g.setAttribute(A, aA); g.setAttribute(B, aB); g.setAttribute(C, aC); } };
+    put(full); put(mesh.geometry);
+    // Coarser copies of this geometry that exist already (those made later copy the attributes themselves).
+    for (const copies of [lodOf.get(full), mirrorLodOf.get(full)]) if (copies) for (const g of copies.values()) put(g);
+    fillShareRow(holder, shareRow); ib.array.set(shareRow, at); ib.needsUpdate = true;
+    const h = { mat: holder, mesh, cls, ib, at };
+    cls.members.push(h); muscleShare.holders.push(h);
+    mesh.userData.nsShade = holder;
+    mesh.material = cls.material;
+    return true;
+  }
+  /** Once a frame, after the frame's last change to a muscle's colour or glow: copy every holder's values into its row
+   * (a buffer is sent to the graphics card again only when one of its rows changed), and let a class whose shared
+   * program failed fall back first. */
+  function syncMuscleShade() {
+    if (!muscleShare.holders.length) return;
+    for (const cls of muscleShare.classes.values()) {
+      if (!cls.on) continue;
+      let why = cls.pendingOff;
+      if (!why) {
+        try {
+          const prog = renderer.properties.get(cls.material).currentProgram;
+          if (prog && prog.diagnostics && prog.diagnostics.runnable === false) why = 'its shared shader program did not link';
+        } catch { /* no program yet */ }
+      }
+      if (why) unshareMuscleClass(cls, why);
+    }
+    const t = shareRow, w = t.length;
+    for (const h of muscleShare.holders) {
+      fillShareRow(h.mat, t);
+      const a = h.ib.array, o = h.at;
+      for (let j = 0; j < w; j++) if (t[j] !== a[o + j]) { a.set(t, o); h.ib.needsUpdate = true; muscleShare.rowWrites++; break; }
+    }
+  }
+  /** What is shared (a few counters: the app reads the glow state on every drawn frame). With `audit` (inspect only:
+   * it reads every holder's whole render state) also the classes and an audit that must read 0, 0, 0 (stateDiffers:
+   * holders whose render state has drifted from their class material's; materialDiffers: shared meshes that do not
+   * draw with their class material; rowWrong: shared meshes whose geometry of the moment lacks their own value row). */
+  function muscleShareState(audit = false) {
+    let uploads = 0, stateDiffers = 0, materialDiffers = 0, rowWrong = 0;
+    for (const ib of muscleShare.chunks) if (ib) uploads += ib.version;
+    if (!audit) return { ok: muscleShare.ok, on: MUSCLE_SHARE.on, audited: false, holders: muscleShare.holders.length, rows: muscleShare.rows, chunks: muscleShare.chunks.length, uploads,
+      rowWrites: muscleShare.rowWrites, skipped: muscleShare.skipped, classes: muscleShare.classes.size };
+    const sig = new Map();
+    for (const h of muscleShare.holders) {
+      const c = h.cls, s = c.set;
+      if (!sig.has(c)) sig.set(c, shareSignature(c.material));
+      if (h.mat !== c.material && shareSignature(h.mat) !== sig.get(c)) stateDiffers++;
+      if (h.mesh.material !== c.material) materialDiffers++;
+      const at = h.mesh.geometry && h.mesh.geometry.attributes, a = at && at[`nsS${s}A`], b = at && at[`nsS${s}B`], cc = at && at[`nsS${s}C`];
+      if (!a || !b || !cc || a.data !== h.ib || b.data !== h.ib || cc.data !== h.ib || a.offset !== h.at || b.offset !== h.at + 16 || cc.offset !== h.at + 20) rowWrong++;
+    }
+    return {
+      ok: muscleShare.ok, on: MUSCLE_SHARE.on, audited: true, maxVaryings: renderer.capabilities ? renderer.capabilities.maxVaryings : null, maxAttributes: renderer.capabilities ? renderer.capabilities.maxAttributes : null,
+      holders: muscleShare.holders.length, rows: muscleShare.rows, chunks: muscleShare.chunks.length, uploads, rowWrites: muscleShare.rowWrites, skipped: muscleShare.skipped,
+      classes: [...muscleShare.classes.values()].map(c => ({ set: c.set, members: c.members.length, on: c.on, failed: c.failed, compiled: c.compiled, transparent: c.material.transparent === true })),
+      stateDiffers, materialDiffers, rowWrong
+    };
+  }
+  /** Free a coarser copy of a geometry. A shared muscle's value rows are on the copy by reference, and freeing the copy
+   * with them on it would free the rows' buffer under every other muscle that uses it, so they come off first. */
+  const disposeLodCopy = g => {
+    if (!g) return;
+    if (g.attributes && typeof g.deleteAttribute === 'function') for (const name of Object.keys(g.attributes)) if (g.attributes[name] && g.attributes[name].isInterleavedBufferAttribute) g.deleteAttribute(name);
+    if (typeof g.dispose === 'function') g.dispose();
+  };
   // ns-mirror owns the math: bodyBoundsFromPoints (the posed body), mirrorReflectionPlacement (R558: the literal plane
   // reflection, set from the posed body and the eye, independent of the brain), createMirrorState / placeMirror (orbit
   // kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when the body is posed; orbit from
@@ -5734,6 +5947,7 @@ export function createScene({
         id: typeof m.id === 'string' ? m.id : null, restBase: m.positions, indices: m.indices, lifted: null
       });
       mesh.userData.elementId = typeof m.id === 'string' ? m.id : null;
+      shareMuscle(mesh, 'o'); shareMuscle(tw, 'm'); // R558 (performance): one material per class of muscle
     }
   }
 
@@ -7415,15 +7629,15 @@ export function createScene({
   function shadeArmMuscle(m) {
     const t = Number.isFinite(m.lastT) ? m.lastT : baselineDrive, id = m.owner || ARM_FALLBACK_AREA, h = m.ownerHint === true;
     shadeMuscle(m.mat, t, id, h);
-    if (m.mirror) shadeMuscle(m.mirror.material, t, id, h);
+    if (m.mirror) shadeMuscle(shadeMatOf(m.mirror), t, id, h);
   }
   /** A body muscle (and its mirror and in-place twins) from its last drive and its owning area (else ns-colors
    * bodyPartArea of its part and side). */
   function shadeBodyMuscle(b) {
     const t = Number.isFinite(b.lastDrive) ? b.lastDrive : MUSCLE_REST_DRIVE, id = b.owner || b.fallbackArea || null, h = b.ownerHint === true;
     shadeMuscle(b.material, t, id, h);
-    if (b.mirror) shadeMuscle(b.mirror.material, t, id, h);
-    if (b.inPlace && b.kind === 'muscle') shadeMuscle(b.inPlace.material, t, id, h);
+    if (b.mirror) shadeMuscle(shadeMatOf(b.mirror), t, id, h);
+    if (b.inPlace && b.kind === 'muscle') shadeMuscle(shadeMatOf(b.inPlace), t, id, h);
   }
 
   /** Drive the strip's simulated field from the given action display drives ({ actionId: 0..1 } or a Map). With the
@@ -7963,13 +8177,13 @@ export function createScene({
     muscleTones.ms = Math.round(nowMs() - t0);
     for (const b of recs) {
       setMuscleBase(b.material, b.id);
-      if (b.mirror) setMuscleBase(b.mirror.material, b.id);
-      if (b.inPlace) setMuscleBase(b.inPlace.material, b.id);
+      if (b.mirror) setMuscleBase(shadeMatOf(b.mirror), b.id);
+      if (b.inPlace) setMuscleBase(shadeMatOf(b.inPlace), b.id);
       shadeBodyMuscle(b);
     }
     for (const m of muscles) {
       setMuscleBase(m.mat, m.id);
-      if (m.mirror) setMuscleBase(m.mirror.material, m.id);
+      if (m.mirror) setMuscleBase(shadeMatOf(m.mirror), m.id);
       shadeArmMuscle(m);
     }
   }
@@ -8085,6 +8299,8 @@ export function createScene({
         if (rec.mirror) outline.register(rec.mirror, { group: g, mirror: true });
         if (rec.inPlace) outline.register(rec.inPlace, { group: g });
       }
+      // R558 (performance): one material per class of muscle (after every material above has its final state)
+      if (kind === 'muscle') { shareMuscle(rec.mesh, 'o'); if (rec.mirror) shareMuscle(rec.mirror, 'm'); if (rec.inPlace) shareMuscle(rec.inPlace, 'p'); }
       body.push(rec);
       bodyById.set(id, rec);
       fastPick(rec.mesh); if (rec.mirror) fastPick(rec.mirror); if (rec.inPlace) fastPick(rec.inPlace); // R558: rigid body meshes
@@ -8258,7 +8474,7 @@ export function createScene({
             if (g === geo) continue;
             const t = g.userData && g.userData.nsLodStat;
             if (t && t.stat) { t.stat[0] -= t.full; t.stat[1] -= t.lod; }
-            if (typeof g.dispose === 'function') g.dispose();
+            disposeLodCopy(g);
           }
           lodOf.delete(geo); lodSyncs.delete(geo);
           relod = true;
@@ -8377,7 +8593,7 @@ export function createScene({
       if (geo.boundingBox) geo.boundingBox.expandByScalar(220);
       // Coarser copies built before now hold their own vertices: drop them (lodGeometry makes index-only ones for these).
       const byCell = lodOf.get(geo);
-      if (byCell) { for (const g of byCell.values()) if (g !== geo && typeof g.dispose === 'function') g.dispose(); lodOf.delete(geo); lodSyncs.delete(geo); }
+      if (byCell) { for (const g of byCell.values()) if (g !== geo) disposeLodCopy(g); lodOf.delete(geo); lodSyncs.delete(geo); }
       bodySkin.set(id, rec);
       const used = new Set();
       for (let v = 0; v < n; v++) { used.add(r.i0[v]); used.add(r.i1[v]); }
@@ -10648,19 +10864,57 @@ export function createScene({
 
   /* ---- R558 (user Message 12): the three items as sets of spheres (ns-collide) -------------------------------------- */
   // "Ensure that your body, the brain and the mirror do not touch or collide ... they can be moved to and around each
-  // other but not through." Each drawn mesh gets a sphere table once (cached by geometry; rebuilt, a few meshes per call,
-  // when its vertices are rewritten, e.g. by the Body Worlds lift). collisionItems() gives the three items with the
+  // other but not through." Each drawn mesh gets a sphere table once (cached by geometry). A body mesh whose vertices
+  // are rewritten afterwards (the look, the arm, the Body Worlds lift) gets a lazy table: see collideLazyTable.
+  // collisionItems() gives the three items with the
   // world matrices as drawn now; the app decides what may move (it only reads). Your own body: every body mesh where it
   // is drawn (the head and face IN PLACE, not the face layer at the eye) and the left arm's bones with a pad for the
   // muscle round them (its muscles are skinned on the CPU every frame); the mirror body: the same tables through the
   // twins' matrices; the brain: its glass meshes.
   const collideTables = new WeakMap();
-  let collideRebuilds = 0, collidePass = 0;
+  let collideRebuilds = 0, collidePass = 0, collideLazyMade = 0, collideLazyBuilt = 0, collideLate = 0, collideMirrorBuilds = 0;
+  /* R558 (performance): a body mesh whose vertices were rewritten since its table was made (a look re-skins shoulder,
+   * neck and trunk muscles on most of its frames, the arm its forearm muscles) used to have the whole table rebuilt at
+   * once, up to 24 meshes a pass. It now gets a lazy table (ns-collide lazySphereTable). Its bounding sphere is known
+   * straight away from the box of the written vertices; its leaf and group spheres are made only if a test comes near
+   * enough to read them, and then from a copy of the vertices taken here, so they are the spheres of THIS pose even if
+   * the buffer has been written again. On most frames none of them is read.
+   * The bound: a leaf sphere's centre is the mean of some of the vertices, so it lies in their box, and its radius is
+   * at most the diagonal of one leaf cell; a sphere about the box's centre with half the box's diagonal plus that cell
+   * diagonal therefore holds every leaf sphere (a hair is added for rounding).
+   * The copy is one buffer per geometry. Should a table be read only after a later table of the same geometry was made
+   * (nothing in the game does that: lateBuilds in collisionStats() stays 0), it becomes its one bounding sphere, a
+   * cover larger than the mesh and never smaller. The same spheres as before whenever they are read in time: the
+   * table is built by the same sphereTable from the same numbers. */
+  const collideLazyOk = (geo, pos) => plainPositions(geo, pos) && pos.array.length === pos.count * 3;
+  function collideLazyTable(rec, pos) {
+    const b = liveBoxOf(pos), cx = 0.5 * (b.x0 + b.x1), cy = 0.5 * (b.y0 + b.y1), cz = 0.5 * (b.z0 + b.z1);
+    const leaf = NsCollide.COLLIDE.bodyLeafMm, group = NsCollide.COLLIDE.bodyGroupMm;
+    const r = (0.5 * Math.hypot(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0) + leaf * Math.sqrt(3)) * (1 + 1e-9) + 1e-6;
+    if (!(Number.isFinite(cx) && Number.isFinite(cy) && Number.isFinite(cz) && Number.isFinite(r))) return null;
+    if (!rec.snap || rec.snap.length !== pos.array.length) rec.snap = new Float32Array(pos.array.length);
+    rec.snap.set(pos.array);
+    const gen = rec.gen = (rec.gen || 0) + 1;
+    collideLazyMade++;
+    return NsCollide.lazySphereTable([cx, cy, cz, r], () => {
+      collideLazyBuilt++;
+      if (rec.gen !== gen) {
+        collideLate++;
+        return Object.freeze({ leaves: Float64Array.of(cx, cy, cz, r), groups: Float64Array.of(cx, cy, cz, r, 0, 1), bound: Object.freeze([cx, cy, cz, r]), count: 1 });
+      }
+      return NsCollide.sphereTable(rec.snap, { leaf, group });
+    });
+  }
   function collideTable(geo, kind) {
     const pos = geo && geo.attributes && geo.attributes.position;
     if (!pos || !(pos.count > 0) || !pos.array) return null;
     let t = collideTables.get(geo);
-    if (t && (t.version === pos.version || collideRebuilds >= 24)) return t.table;
+    if (t && t.version === pos.version) return t.table;
+    if (t && kind !== 'brain' && collideLazyOk(geo, pos)) {
+      const lazy = collideLazyTable(t, pos);
+      if (lazy) { t.table = lazy; t.version = pos.version; t.pass = collidePass; return lazy; }
+    }
+    if (t && collideRebuilds >= 24) return t.table;
     collideRebuilds++;
     const table = kind === 'brain'
       ? NsCollide.sphereTable(pos.array.length === pos.count * 3 ? pos.array : Float32Array.from({ length: pos.count * 3 }, (_, i) => pos.getComponent(Math.floor(i / 3), i % 3)), { leaf: NsCollide.COLLIDE.brainLeafMm, group: NsCollide.COLLIDE.brainGroupMm })
@@ -10672,14 +10926,16 @@ export function createScene({
   /* R558 (the right forearm skinned per vertex): in the Space dance 36 body meshes are rewritten every frame, more than
    * the 24 tables a pass may rebuild, and the loop below always met them in the same order, so the last 12 kept the
    * table of the pose the dance started from for as long as it lasted. The pass now spends its rebuilds on the stale
-   * body tables oldest first (same budget; when 24 or fewer are stale every one is rebuilt, exactly as before). */
+   * body tables oldest first (same budget; when 24 or fewer are stale every one is rebuilt, exactly as before).
+   * R558 (performance): this is now only for a body buffer that cannot take a lazy table (none of the shipped meshes);
+   * every other stale table is replaced by a lazy one, with no limit on how many a pass. */
   function collideRebuildOldest() {
     const stale = [];
     for (const b of body) {
       const src = b.face ? b.inPlace : b.mesh;
       const geo = src ? (src.userData.nsFullGeometry || src.geometry) : null, pos = geo && geo.attributes && geo.attributes.position;
       const t = pos ? collideTables.get(geo) : null;
-      if (t && t.version !== pos.version) stale.push(t.pass, stale.length / 3, geo);
+      if (t && t.version !== pos.version && !collideLazyOk(geo, pos)) stale.push(t.pass, stale.length / 3, geo);
     }
     if (stale.length <= 3 * 24) return;
     const order = [];
@@ -10690,7 +10946,7 @@ export function createScene({
   let collideCache = null, collideKey = '';
   // R558 (performance): entries carried over from the last build when their table, pad and matrix are unchanged, so
   // the items rebuilt on every frame of a dance or a look keep their cached world spheres (only moved meshes are new).
-  let collideEntries = new Map();
+  let collideEntries = new Map(), collideTwinEntries = new Map();
   /** { own, mirror (null when not shown), brain (null when not shown), bodyFrame, mirrorMatrix, brainMatrix, brainSolid } with
    * ns-collide items; own / mirror entries carry tags { id (atlas element id), part 'body' | 'arm' }. Cached until a pose,
    * the look, the body frame, the mirror or the brain changes. */
@@ -10701,7 +10957,14 @@ export function createScene({
     collideRebuilds = 0; collidePass++;
     collideRebuildOldest();
     bodyGroup.updateMatrixWorld(true); eyeRig.updateMatrixWorld(true); brainGroup.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true);
-    const own = [], twin = [], brainEntries = [];
+    const own = [], brainEntries = [];
+    // R558 (performance): the mirror body's item is made the first time something reads it (the brain or your body
+    // being moved, the QA report). Carrying the mirror body moves every twin on every frame, and the test of that
+    // move (the app's guardMirror) images your own item through the mirror's matrix and never reads this one, so on
+    // those frames about two hundred entries were made for nothing. What the item needs is noted here: each twin's
+    // table, pad and tag, and its world matrix as drawn now (copied: the twins move on).
+    const twinObj = [], twinTable = [], twinPad = [], twinTag = [], twinM = new Float64Array(16 * (body.length + bones.length));
+    const twinNote = (obj, t, pad, tag) => { twinM.set(obj.matrixWorld.elements, 16 * twinObj.length); twinObj.push(obj); twinTable.push(t); twinPad.push(pad); twinTag.push(tag); };
     const nextEntries = new Map();
     const reuse = (obj, t, m, pad, tag) => {
       const old = collideEntries.get(obj);
@@ -10727,7 +10990,7 @@ export function createScene({
       if (!t) continue;
       const tag = tagFor(b, b.id, 'body');
       own.push(reuse(src, t, src.matrixWorld.elements, 0, tag));
-      if (b.mirror) twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, 0, tag));
+      if (b.mirror) twinNote(b.mirror, t, 0, tag);
     }
     for (const b of bones) {
       const t = collideTable(b.mesh.userData.nsFullGeometry || b.mesh.geometry, 'body');
@@ -10735,16 +10998,37 @@ export function createScene({
       b.mesh.updateMatrixWorld(true);
       const tag = tagFor(b, b.sourceElementId || null, 'arm');
       own.push(reuse(b.mesh, t, b.mesh.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag));
-      if (b.mirror) { b.mirror.updateMatrixWorld(true); twin.push(reuse(b.mirror, t, b.mirror.matrixWorld.elements, NsCollide.COLLIDE.armBonePadM, tag)); }
+      if (b.mirror) { b.mirror.updateMatrixWorld(true); twinNote(b.mirror, t, NsCollide.COLLIDE.armBonePadM, tag); }
     }
     for (const g of glass) {
       const t = collideTable(g.geometry, 'brain');
       if (t) brainEntries.push(reuse(g, t, g.matrixWorld.elements, 0, null));
     }
     collideEntries = nextEntries;
-    collideCache = Object.freeze({
+    // (a matrix that is not finite fails here, in the pass, as it did when the entries were made here)
+    for (let i = 0, n = 16 * twinObj.length; i < n; i++) if (!Number.isFinite(twinM[i])) fail('scene_state', 'collisionItems: a mirror twin has a nonfinite matrix');
+    const mirrorShown = mirrorRoot.visible && twinObj.length > 0;
+    let mirrorItem, self = null;
+    // The same entries in the same order as before (body twins in body order, then the bone twins), and an entry
+    // whose table, pad, tag and matrix are unchanged since the mirror item was last made is the very same object
+    // (ns-collide itemTravel relies on both).
+    const buildMirror = () => {
+      const list = new Array(twinObj.length), next = new Map();
+      for (let i = 0; i < list.length; i++) {
+        const obj = twinObj[i], t = twinTable[i], pad = twinPad[i], tag = twinTag[i], o = 16 * i;
+        let e = collideTwinEntries.get(obj) || null;
+        if (e && e.table === t && e.pad === pad && e.tag === tag) { for (let k = 0; k < 16; k++) if (e.m[k] !== twinM[o + k]) { e = null; break; } }
+        else e = null;
+        if (!e) e = NsCollide.entry(t, twinM.subarray(o, o + 16), pad, tag);
+        next.set(obj, e); list[i] = e;
+      }
+      if (collideCache === self) collideTwinEntries = next;
+      collideMirrorBuilds++;
+      return NsCollide.item(list);
+    };
+    self = collideCache = Object.freeze({
       own: own.length ? NsCollide.item(own) : null,
-      mirror: mirrorRoot.visible && twin.length ? NsCollide.item(twin) : null,
+      get mirror() { if (mirrorItem === undefined) mirrorItem = mirrorShown ? buildMirror() : null; return mirrorItem; },
       brain: brainGroup.visible && brainTransformSet && brainEntries.length ? NsCollide.item(brainEntries) : null,
       bodyFrame: Float64Array.from(bodyGroup.matrixWorld.elements), mirrorMatrix: Float64Array.from(mm), brainMatrix: Float64Array.from(bm),
       mirrorCentre: mirror.transform && mirror.transform.centre ? mirror.transform.centre.slice() : null,
@@ -10754,6 +11038,13 @@ export function createScene({
     });
     collideKey = key;
     return collideCache;
+  }
+  /** R558 (performance, QA): counts since the page opened. pass: how often the items were made anew; lazyMade: lazy
+   * tables given to re-skinned body meshes; lazyBuilt: how many of them something read (their spheres were made);
+   * lateBuilds: of those, read only after a later table of the same mesh existed (they became one bounding sphere;
+   * expected 0); mirrorBuilds: how often the mirror body's item was asked for and made. */
+  function collisionStats() {
+    return { pass: collidePass, lazyMade: collideLazyMade, lazyBuilt: collideLazyBuilt, lateBuilds: collideLate, mirrorBuilds: collideMirrorBuilds };
   }
   /** R558 (Message 12): how far in front of the eye (metres, along the body's forward axis) your body can ever reach (the
    * app measures it over the joint ranges). The mirror plane is set in front of it; when it arrives after the plane was
@@ -11043,11 +11334,11 @@ export function createScene({
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
     glowState.cpuMs = nowMs() - t0;
   }
-  /** QA: the glow state. */
-  function glowLinkState() {
+  /** QA: the glow state. { audit: true } adds the audit of the muscles that share a material (muscleShareState). */
+  function glowLinkState(opts) {
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
-      cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials,
+      cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials, muscleShare: muscleShareState(Boolean(opts && opts.audit === true)),
       halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode,
       // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
       powerUp: { shader: powerUp.applied, materials: powerUp.materials, starts: powerUp.starts, settledStarts: powerUp.settledStarts, recharges: powerUp.recharges, clockS: Math.round(powerUpClock.value.x * 1000) / 1000, lastStartS: powerUp.lastStart === null ? null : Math.round(powerUp.lastStart * 1000) / 1000, lastStartArea: powerUp.lastStartArea, reduced: powerUpClock.value.y > 0.5 },
@@ -11315,6 +11606,7 @@ export function createScene({
       const a = lod.attributes[name], f = full.attributes[name];
       if (!a) continue;
       if (!f) continue;
+      if (a.isInterleavedBufferAttribute) continue; // R558: a shared muscle's value row (one value for the whole mesh)
       clusterLodMeans(plan, f.array, f.itemSize, a.array, name === 'normal');
       a.needsUpdate = true;
     }
@@ -11335,6 +11627,7 @@ export function createScene({
     const lod = keep(new THREE.BufferGeometry());
     for (const name of Object.keys(geo.attributes)) {
       const a = geo.attributes[name];
+      if (a.isInterleavedBufferAttribute) { lod.setAttribute(name, a); continue; } // R558: a shared muscle's value row, by reference
       if (!(a.array instanceof Float32Array) || !(a.itemSize >= 1 && a.itemSize <= 4) || a.array.length !== a.itemSize * restP.length / 3) continue;
       lod.setAttribute(name, new THREE.BufferAttribute(new Float32Array(a.itemSize * plan.clusters), a.itemSize));
     }
@@ -11379,6 +11672,7 @@ export function createScene({
     const carry = sulc || near || tend ? { ...(sulc ? { nsSulc: sulc } : {}), ...(near ? { nsNear: near } : {}), ...(tend ? { nsTendon: tend } : {}) } : null;
     const d = clusterDecimate(pos.array, idx.array, cell, carry);
     lod = keep(indexedGeometry(d.positions, d.indices));
+    for (const name of Object.keys(geo.attributes)) if (geo.attributes[name].isInterleavedBufferAttribute) lod.setAttribute(name, geo.attributes[name]); // R558: value rows
     lod.computeVertexNormals();
     if (d.attrs && d.attrs.nsSulc) lod.setAttribute('nsSulc', new THREE.BufferAttribute(d.attrs.nsSulc, 1));
     if (d.attrs && d.attrs.nsNear) lod.setAttribute('nsNear', new THREE.BufferAttribute(d.attrs.nsNear, 1));
@@ -11646,6 +11940,7 @@ export function createScene({
     }
     // R5-scene (D17): glow links and rims for this frame (cheap; glowLinkState().cpuMs).
     updateGlow(dtMs);
+    syncMuscleShade(); // R558 (performance): this frame's muscle colours and glows into the class materials' value rows
     // R4-integrator (D5 glass fix): view-space rigid normal matrix and far-eye centre for the glass rim (K > 1 only).
     if (farEyeView.rot && farEyeView.pw && farEyeView.K > 1) {
       camera.updateMatrixWorld(true);
@@ -11843,7 +12138,7 @@ export function createScene({
     setMirror: setMirrorView,
     mirrorState,
     mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem,
-    collisionItems, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
+    collisionItems, collisionStats, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,
     // R5-integrate-core (D15): the Body Worlds layer labels of the body's muscle meshes, and the lifted left arm.

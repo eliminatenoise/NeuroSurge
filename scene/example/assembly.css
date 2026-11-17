@@ -1,0 +1,79 @@
+/* NeuroSurge: the loading picture (parts coming together) and the five-second picture of the main controls.
+   17 November 2026: no start page and no loading page. */
+
+/* The loading picture covers the game canvas until the game has drawn its first frame, then fades out over it. */
+.ns-assembly {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
+  z-index: 8; background: #000; pointer-events: none; opacity: 1;
+}
+.ns-assembly.ns-assembly-out { opacity: 0; transition: opacity 0.8s ease; }
+
+/* While files load: no start page, no HUD words; an error still shows its page. */
+.ns-app[data-ns-phase="loading"] .ns-shell[data-mode="loading"] { display: none; }
+.ns-app[data-ns-phase="loading"] .ns-hud-root,
+.ns-app[data-ns-phase="loading"] .ns-scene-overlay { visibility: hidden; }
+.ns-app[data-ns-phase="loading"] ~ .preview-note, body:has(.ns-app[data-ns-phase="loading"]) .preview-note { opacity: 0; }
+.preview-note { transition: opacity 0.6s ease; }
+
+/* The main controls: W A S D, E, R, Space, and the trackpad with its click, in two panels either side of the middle
+   of the picture. Shown for --ns-keys-ms, then it fades by itself (an opacity animation: it runs on time even while
+   the page is busy). */
+.ns-keys {
+  --ns-keys-ms: 5000ms;
+  position: fixed; inset: 0; z-index: 9; pointer-events: none; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(16px, 7vw, 150px);
+  color: #eaf3fb; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.02em;
+  animation: ns-keys-in 0.35s ease-out both, ns-keys-out 0.7s ease-in var(--ns-keys-ms) forwards;
+}
+@keyframes ns-keys-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ns-keys-out { to { opacity: 0; visibility: hidden; } }
+.ns-keys-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 22px 26px 18px; border-radius: 18px;
+  background: rgba(6, 10, 15, 0.74); border: 1px solid rgba(160, 190, 215, 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+.ns-keys-board { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ns-keys-row { display: flex; gap: 6px; }
+.ns-keys-row2 { margin-left: -24px; }
+.ns-keys-wasd { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-left: 24px; }
+.ns-key {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  width: 48px; height: 48px; border-radius: 9px;
+  background: linear-gradient(#27313c, #161d25); border: 1px solid #5d7286; border-bottom-width: 3px;
+  color: #fff; font: 800 19px/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-key-alt { border-color: #4f8fb0; color: #bfe8ff; }
+.ns-key-space { width: 100%; min-width: 190px; height: 40px; font-size: 15px; letter-spacing: 0.06em; }
+.ns-keys-words { display: grid; grid-template-columns: auto auto; gap: 4px 14px; margin: 0; align-self: stretch; }
+.ns-keys-words dt { color: #fff; font-weight: 800; text-align: right; }
+.ns-keys-words dd { margin: 0; color: #b9c8d6; }
+.ns-pad-plate {
+  position: relative; width: 190px; height: 128px; border-radius: 14px;
+  background: linear-gradient(#222b35, #141a21); border: 1px solid #5d7286;
+}
+.ns-pad-finger {
+  position: absolute; left: 34px; top: 74px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.14);
+  animation: ns-pad-move 2.4s ease-in-out infinite;
+}
+.ns-pad-click {
+  position: absolute; right: 30px; top: 28px; width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #7fe3ff; animation: ns-pad-tap 1.2s ease-out infinite;
+}
+@keyframes ns-pad-move { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(70px, -34px); } }
+@keyframes ns-pad-tap { 0% { transform: scale(0.5); opacity: 1; } 70%, 100% { transform: scale(1.8); opacity: 0; } }
+/* A narrow or upright window: both panels side by side along the bottom, smaller. */
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  .ns-keys { align-items: flex-end; justify-content: center; gap: 10px; padding: 0 8px 44px; font-size: 12px; }
+  .ns-keys-panel { padding: 12px 12px 10px; gap: 10px; }
+  .ns-key { width: 34px; height: 34px; font-size: 15px; }
+  .ns-key-space { min-width: 130px; height: 30px; }
+  .ns-keys-row2 { margin-left: -17px; } .ns-keys-wasd { padding-left: 17px; }
+  .ns-pad-plate { width: 120px; height: 84px; }
+  .ns-pad-finger { left: 18px; top: 46px; width: 16px; height: 16px; }
+  @keyframes ns-pad-move { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(44px, -22px); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ns-pad-finger, .ns-pad-click { animation: none; }
+}

@@ -1131,6 +1131,68 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - The cases read shader text. They cannot show what a graphics card does with it. That was checked by pictures only, in headless Chromium on one machine.
 - The shaders of three.js itself were not gone through for other terms of this kind. The glow's first step is what would hold one of those to a single pixel.
 
+## 75. No start page: the parts come together while they load (17 November)
+
+The user: "I don't want a start page anymore. Instead, don't have a loading page. Instead, have a visual of all the parts and components coming together. When they're loading, because obviously it takes time to load. So you can physically see the muscles and the bones and the parts of the brain and the mirror body load."
+
+What the game did: it opened on a page with the instructions, a keyboard picture and a "Start now" button, and that page stayed until every file was in and for two seconds after.
+
+What it does now. There is no start page and no loading page. While the files load, a picture covers the canvas: the atlas body stands in the lower part, facing you like the mirror body will, and the brain is above it, six times larger than in the head and tipped 48 degrees toward you so the motor strip shows. Each bone, muscle and brain part flies in from a little way out and settles in its place when its file arrives, with a short flash; a thin bar at the bottom shows the share of the 611 files that are in, and pulses once nearly all are in and the page is building the body. When the game has drawn its first view the picture fades out over it in 0.8 seconds and play begins at once. Esc still shows the instructions.
+
+How it is made. The picture has its own canvas and is drawn by a worker (`ns-assembly-worker.mjs`, `ns-assembly-core.mjs`), so it keeps moving while the page's own thread is busy. The launcher hands the worker a copy of each file's bytes from its ordinary fetch function, and the kinds of part (bone, muscle, eye, brain, strip) from the packet manifests; the game receives exactly what it received before. The worker reads the triangles with a small reader of its own. Where a worker canvas is not available the same picture is drawn on the page, and then pauses while the page is busy; if that fails too there is no picture and the game loads as before.
+
+What it is not. A picture of the loading only. It shows the files in the atlas's standing posture and plain colours, not the game's seated body, and it verifies nothing: the game's loader still checks every file's hash and shape, and a part shown in the picture could still be refused there.
+
+Measured on the test machine (one desktop browser, files from the same computer). Before: the files were in after about 6 seconds and the page then built the body for about 6 more, with one stretch of 4.3 seconds in which the page could draw nothing. Now the worker drew about 30 pictures a second through the whole load, including those stretches (15 one-second samples, 30 or 31 frames each). The game was ready after 15 to 17 seconds instead of 12 in that test browser, which had a single processor core for the page and the worker together; on a computer with several cores the difference has not been measured. The worker is held to about 30 pictures a second to leave the processor to the loading.
+
+Tried and rejected: drawing the real game scene as it loads. The game builds its rig, posture and muscle layers from the complete set of files, before its first frame, so nothing of the real scene exists to draw until the end.
+
+Not done: the picture does not show your own seated body or the mirror body in its game posture; the change from the standing atlas figure to the game's first view is a cross-fade, not a movement.
+
+## 76. The main controls for the first five seconds
+
+The user: "for the first 5 seconds, I want you to have an overlay of the main controls. WASD, ER, space, and trackpad with click."
+
+Two small panels stand either side of the loading picture for the first five seconds of the page, then fade: on the left the keys W, A, S, D, E, R and Space with one word each (move, grab, view, info); on the right a trackpad with a moving finger and a click mark, and three pairs of words (move: look, click: press, drag: turn). The fade is a CSS animation, so it happens on time even while the page is busy. In a narrow or upright window the panels sit side by side along the bottom. On a computer that loads everything in under five seconds the panels stay over the first moments of play and take no input.
+
+## 77. A quiet screen, and a tip that says what an area does
+
+The user: "Way too much text now. The amount of text is completely overwhelming." and "bring back the feature where if you highlight any part of the brain, you see what it does, its function essentially, and the brain turns into a bunch of buttons ... a control panel."
+
+Before, the first view carried about 25 pieces of text: a line of limits across the top, a preview note, a "Try this" card, a "Looking at" card with a second line of controls and a note about the model's name, an information card, a hint line, the words "Your left" and "Your right", and ten two-line names on the brain.
+
+Now the game starts with the cards off (the state the R key already had as "off"). What is left:
+- a tip beside the crosshair: on a motor area, the area's name and its movements with their number keys ("Left thumb: 1 Bend at the knuckle, 2 Straighten at the knuckle ..."), the way a key shows its legend; a movement that would move nothing now is dimmed. On a body, the name of the muscle or bone. It follows the free pointer when the pointer is not captured. It changes at once, without the third of a second the information card waits;
+- one short line at the top: the guide's current goal in at most 48 characters ("Look at a blue area on the brain", "Press 1 or 2");
+- the ten names on the brain, one line each;
+- at the bottom left, in small grey type, "Simulated activity · experimental preview · notes and credits"; at the bottom right "R info".
+
+R brings the cards back as they were (R: cards, R: More detail and the colour key, R: off). The long limits line across the top shows with the cards; with the cards off the small line at the bottom left says that the activity is simulated, and links to the notes.
+
+This overturns two earlier decisions: the cards on at the start (Message 48, section 54) and no name next to the crosshair (Message 37, section 51). The reason for Message 37 was a caption that changed with every pixel of movement; the tip names areas and parts only, and the number keys need their list somewhere once the card is off.
+
+Not done here: the look of the areas as buttons, and a stronger activation on the strip, are being built separately. The Esc page is still long.
+
+## 78. The limb turn is led by the wrists and ankles
+
+The user: "with pronation, supination, / internal rotation, external rotation, you've gone way too far. What I really want is for the wrist / ankle to be the main moving element instead of the massive movements you're doing at the moment, where really the hip or the shoulder with the elbow and the knee are leading the movement ... any elbow or knee movement and minimal shoulder and hip movement follows from there. And really we're showing the overside muscles and then the underside muscles. That's the whole point of it."
+
+Before (section 31), a Space double tap turned each forearm through its whole range and each upper arm from 70 degrees inward to 90 outward, and each hip from 40 inward to 45 outward; the legs had no other joint in the turn.
+
+Now the far end of each limb leads and makes the whole turn: the forearm turns the palm up and down (80 degrees each way from thumb-up on the left arm, 0 to 160 on the right), which shows the front and then the back of the forearm and hand; the ankle turns the sole outward 15 degrees and inward 35, the range of the map's own "Turn sole" movements. The upper arm and the thigh only follow: for a whole stroke of the leader the upper arm turns 14 degrees and the thigh 10, the same way, from wherever they are and inside their own ranges, and less for a shorter stroke. Elbows and knees are not moved by the turn. The ankle's own motor area and its muscles (the fibularis group outward, tibialis posterior and anterior inward) light with it; a follower's glow is about a third of its leader's.
+
+Measured in the game: after one double tap the right forearm went from 160 to 0, the right upper arm from 0 to 14, both ankles from 0 to 35 and both hips from 0 to -7; after the next, 160, 0, -15 and 3.
+
+The rule "each limb keeps the direction it last moved in" and the two speeds are unchanged. The numbers 14 and 10 are a display choice, not a measurement of how much a shoulder or hip turns with the hand or foot.
+
+## 79. A wider view from the eyes, and a look that reaches further
+
+The user: "the field of view should be even wider, such that you can see everything from your eyes. Including everything from the neck down, essentially." and "you should be able to move the head around much more and see other parts of the body, just as you would in real life, because often limbs become out of view and you can't control them anymore."
+
+The view from the eyes is 108 degrees from top to bottom, about 136 across a 16:9 window. It was 90 since 11 November (section 23) and 120 before that, which the user then called absurd at the edges. At the start both arms and the legs down to the knees are now in view, where only the hands and feet were; looking 60 degrees down shows the chest, both arms and the legs together. A flat picture this wide stretches what is near its edges: your right arm, close to the eye at the side of a downward look, is drawn clearly too large. A view of everything from the neck down in one level look would need about 170 degrees, which a flat picture cannot show; a curved (fisheye) picture could, and has not been built.
+
+The head's range was not the limit: it was already the neck's and trunk's whole range, 120 degrees to each side, 80 down and 70 up, and no look was being refused. But one pixel of pointer travel turned the look 0.0025 radian, so the end of the turn was about 840 pixels away, several swipes on a trackpad. It is now 0.0038 radian, about 550 pixels. The dead band that keeps one pixel of jitter from restarting an area grew with it, from 0.2 to 0.31 degrees. The Esc page's look speed still scales it.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1141,7 +1203,7 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 **Limits of this build that were looked at and left, each with its reason in the section named.**
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
-- Looking down shows your lap and legs, not your chest and belly. From a camera above and behind the eyes those surfaces face away; they are on the mirror body and in the view from behind (14).
+- Looking down shows your chest, arms and legs, but not your belly, which the chest hides from the eyes; it is on the mirror body and in the view from behind (14, 79).
 - In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69).
 - After “Tilt head back” and the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it (68).
 - While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
@@ -1161,5 +1223,7 @@ Every new muscle has a stack level and a colour shared by both sides. Every move
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). The look does not yet swing a held thing round you with the same face toward you (54). The mirror body's top and bottom arrows now turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
+- From the notes of 17 November, in work and not in this upload: holding a thing with Space and moving it left, right, up and down with the pointer, the mirror body included; a hold or a drag that keeps its target when the crosshair leaves it; the mirror body's limbs moved like your own; both hands closing on a grasp; the muscles of the neck and shoulders lighting as the look moves the head and arm; a fleshier brain with more colourful, button-like areas and a much stronger activation on the strip.
+- From the same notes, not started: collision effects and one limb pushing another; a limb hidden behind another limb staying visible; muscles that come away from their bones at some positions.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

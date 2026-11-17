@@ -17,27 +17,26 @@
  * Pure module (browser and Node; no DOM, no imports). ns-actions keeps the state inside the activity state and calls
  * stepDance / observeDance; ns-app reads the joint angles back through the activity's own joint state.
  *
- * Limbs and joints (degrees, each in its own joint's convention; "open" = turned outward, "closed" = turned inward):
- *   leftArm   l_forearm       the game arm's radius turn about the ulna (ns-arm forearm_pronation): open -80 palm up,
- *                             closed +80 palm down (80 each way from thumb-up, the rig's own display range)
- *             l_shoulder_rot  the game arm's upper-arm turn about the shoulder -> hand line (ns-arm rotation.humeralDeg;
- *                             with the elbow straight, as at the start, that is the upper arm's own axial rotation):
- *                             open +90 (external), closed -70 (internal), ns-arm HUMERAL_ROTATION_RANGE_DEG
- *                             Once the dance has turned the game arm, both are set explicitly (the palm-turn coupling of
- *                             R5-pronation is off until Reset body), so the left arm uses the same two full ranges as
- *                             the right arm of the body rig.
- *   rightArm  r_pronation     ns-body right forearm: open 0 (palm up, the anatomical source pose), closed 160 (palm down)
- *             r_shoulder_rot  ns-body right upper arm about its own long axis: open +90 (external), closed -70 (internal)
- *   leftLeg   hip_rot_L       ns-body left hip about the thigh's long axis: open +45 (external), closed -40 (internal)
- *   rightLeg  hip_rot_R       likewise for the right hip
- * Every end is the joint's whole anatomically feasible range as the game models it (see ns-body BODY_JOINT_LIMITS and
- * ns-rig PRONATION_RANGE_DEG for the basis); a range passed in `ranges` (the feet clearance of the current leg posture,
- * ns-body hipRotationClearRange) can only narrow it.
+ * Limbs and joints (degrees, each in its own joint's convention; "open" = turned outward, "closed" = turned inward).
+ * Since 17 November 2026 the far end of each limb LEADS and the near joint only FOLLOWS a little (see DANCE_LIMBS):
+ *   leftArm   l_forearm       LEADS: the game arm's radius turn about the ulna (ns-arm forearm_pronation): open -80
+ *                             palm up, closed +80 palm down (80 each way from thumb-up, the rig's own display range)
+ *             l_shoulder_rot  follows: the game arm's upper-arm turn (ns-arm rotation.humeralDeg), DANCE_FOLLOW.shoulderDeg
+ *                             for a whole stroke, from where it is, inside -70 .. +90
+ *   rightArm  r_pronation     LEADS: ns-body right forearm: open 0 (palm up, the anatomical source pose), closed 160
+ *             r_shoulder_rot  follows likewise (ns-body right upper arm about its own long axis)
+ *   leftLeg   ankle_inv_L     LEADS: ns-body left foot about the ankle: open -15 (sole outward), closed +35 (sole inward)
+ *             hip_rot_L       follows: the thigh about its long axis, DANCE_FOLLOW.hipDeg for a whole stroke, inside
+ *                             -40 .. +45 and the feet clearance of the current leg posture (`ranges`)
+ *   rightLeg  ankle_inv_R / hip_rot_R  likewise
+ * A leader's ends are the joint's whole range as the game models it (ns-body BODY_JOINT_LIMITS, ns-rig
+ * PRONATION_RANGE_DEG); a range passed in `ranges` can only narrow it.
  *
  * The rule (record of the design):
- *  1. Opening and closing. Each limb moves its joints together between its two ends: supination with external rotation
- *     ("opening up"), pronation with internal rotation ("closing"). One stroke takes every joint of the limb from where
- *     it is to the same end at the same moment, with a smooth start and stop (half a cosine), then the limb turns round.
+ *  1. Opening and closing. Each limb's leading joint moves between its two ends: palm up / sole outward ("opening"),
+ *     palm down / sole inward ("closing"), and its follower turns a few degrees the same way with it. One stroke takes
+ *     the limb's joints from where they are to their targets at the same moment, with a smooth start and stop (half a
+ *     cosine), then the limb turns round.
  *  2. Direction from history. Each limb keeps the direction it last moved in, whatever moved it: an activation, a
  *     drag, a reset or the dance itself (observeDance watches the joint angles every step). When Space is pressed it
  *     carries on that way; a limb already at that end turns round at once. So a limb that an activation has just turned
@@ -60,22 +59,38 @@
  *  tempo                      per-limb speed factors; ratios chosen so no two limbs stay in step (not coordinated)
  *  endEps                     a limb within this fraction of its range of the end it is heading for turns round
  *  moveEpsDeg                 a joint change smaller than this (degrees) is not counted as a movement (history)
- *  glowFullSpeed              turning speed (fraction of the range per second) shown as activity level 1 */
+ *  glowFullSpeed              turning speed (fraction of the range per second) shown as activity level 1
+ *  followGlow                 a follower joint's share of that level (its turn is small and only accompanies the leader) */
 export const DANCE = Object.freeze({
   stepStrokeS: 1.0,
   slowStrokeS: 2.6,
   tempo: Object.freeze({ leftArm: 1.0, rightArm: 1.27, leftLeg: 0.86, rightLeg: 1.13 }),
   endEps: 0.004,
   moveEpsDeg: 0.05,
-  glowFullSpeed: 1.2
+  glowFullSpeed: 1.2,
+  followGlow: 0.35
 });
 
-/** The four limbs and their joints: id, open end, closed end (degrees in each joint's own convention). */
+/** The four limbs and their joints (degrees in each joint's own convention).
+ *
+ * 17 November 2026 (user: "with pronation, supination / internal rotation, external rotation, you've gone way too far.
+ * What I really want is for the wrist / ankle to be the main moving element instead of the massive movements ... where
+ * really the hip or the shoulder with the elbow and the knee are leading the movement ... any elbow or knee movement
+ * and minimal shoulder and hip movement follows from there. And really we're showing the overside muscles and then the
+ * underside muscles."): the FIRST joint of each limb LEADS and makes the whole turn: the forearm (the wrist end turns
+ * palm up <-> palm down, so the front and then the back of the forearm and hand are shown) and the ankle (the sole
+ * turns outward <-> inward). The second joint only FOLLOWS: the upper arm and the thigh turn a few degrees the same
+ * way, from wherever they are (`follow`: degrees for one whole stroke of the leader, signed toward "open"; lo / hi:
+ * the follower's own joint range). A follower's open / closed below are only its nominal ends for speeds and history.
+ * Nothing else in the limb is moved by the turn (elbow and knee keep their bend).
+ */
+export const DANCE_FOLLOW = Object.freeze({ shoulderDeg: 14, hipDeg: 10 });
+const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg / 2, closed: -deg / 2, follow: deg, lo, hi });
 export const DANCE_LIMBS = Object.freeze({
-  leftArm: Object.freeze([Object.freeze({ id: 'l_forearm', open: -80, closed: 80 }), Object.freeze({ id: 'l_shoulder_rot', open: 90, closed: -70 })]),
-  rightArm: Object.freeze([Object.freeze({ id: 'r_pronation', open: 0, closed: 160 }), Object.freeze({ id: 'r_shoulder_rot', open: 90, closed: -70 })]),
-  leftLeg: Object.freeze([Object.freeze({ id: 'hip_rot_L', open: 45, closed: -40 })]),
-  rightLeg: Object.freeze([Object.freeze({ id: 'hip_rot_R', open: 45, closed: -40 })])
+  leftArm: Object.freeze([Object.freeze({ id: 'l_forearm', open: -80, closed: 80 }), follower('l_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
+  rightArm: Object.freeze([Object.freeze({ id: 'r_pronation', open: 0, closed: 160 }), follower('r_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
+  leftLeg: Object.freeze([Object.freeze({ id: 'ankle_inv_L', open: -15, closed: 35 }), follower('hip_rot_L', DANCE_FOLLOW.hipDeg, -40, 45)]),
+  rightLeg: Object.freeze([Object.freeze({ id: 'ankle_inv_R', open: -15, closed: 35 }), follower('hip_rot_R', DANCE_FOLLOW.hipDeg, -40, 45)])
 });
 export const DANCE_LIMB_IDS = Object.freeze(Object.keys(DANCE_LIMBS));
 export const DANCE_JOINT_IDS = Object.freeze(DANCE_LIMB_IDS.flatMap(l => DANCE_LIMBS[l].map(j => j.id)));
@@ -164,17 +179,29 @@ export function observeDance(dance, angles) {
 const ease = q => 0.5 - 0.5 * Math.cos(Math.PI * q);
 const easeRate = q => 0.5 * Math.PI * Math.sin(Math.PI * q); // d ease / d q
 
-/** A new stroke for limb l from the current angles in direction dir (null when every joint is already at that end). */
+/** A new stroke for limb l from the current angles in direction dir (null when the leading joint is already at that
+ * end). The leader goes to its end; each follower turns the same way by its `follow` degrees times the share of a
+ * whole stroke the leader still has to go, from where it is, inside its own range (and a narrower one in `ranges`). */
 function newStroke(l, angles, dir, ranges, strokeS) {
   const from = {}, to = {};
-  let frac = 0;
-  for (const j of DANCE_LIMBS[l]) {
-    const e = endsOf(j, ranges);
-    from[j.id] = angles[j.id];
-    to[j.id] = dir > 0 ? e.open : e.closed;
-    frac = Math.max(frac, Math.abs(to[j.id] - from[j.id]) / Math.abs(j.open - j.closed));
-  }
+  const joints = DANCE_LIMBS[l], lead = joints[0], e0 = endsOf(lead, ranges);
+  from[lead.id] = angles[lead.id];
+  to[lead.id] = dir > 0 ? e0.open : e0.closed;
+  const frac = Math.abs(to[lead.id] - from[lead.id]) / Math.abs(lead.open - lead.closed);
   if (!(frac > DANCE.endEps)) return null;
+  for (let i = 1; i < joints.length; i++) {
+    const j = joints[i];
+    from[j.id] = angles[j.id];
+    if (isNum(j.follow)) {
+      const r = ranges && Array.isArray(ranges[j.id]) && ranges[j.id].length === 2 && isNum(ranges[j.id][0]) && isNum(ranges[j.id][1]) ? ranges[j.id] : null;
+      const lo = Math.max(j.lo, r ? Math.min(r[0], r[1]) : -Infinity), hi = Math.min(j.hi, r ? Math.max(r[0], r[1]) : Infinity);
+      // A follower already outside a narrowed range is not pushed further; it may only come back.
+      to[j.id] = clamp(from[j.id] + dir * j.follow * Math.min(1, frac), Math.min(lo, from[j.id]), Math.max(hi, from[j.id]));
+    } else {
+      const e = endsOf(j, ranges);
+      to[j.id] = dir > 0 ? e.open : e.closed;
+    }
+  }
   return { from, to, t: 0, T: (frac * strokeS) / DANCE.tempo[l], frac };
 }
 
@@ -246,7 +273,8 @@ export function stepDance(dance, angles, h, { ranges = null } = {}) {
       for (const j of DANCE_LIMBS[l]) out[j.id] = k.from[j.id] + (k.to[j.id] - k.from[j.id]) * ease(q);
       // speed as a fraction of the range per second (the limb: the joint with the farthest to go; and each joint)
       speed = (k.frac * easeRate(q)) / k.T;
-      for (const j of DANCE_LIMBS[l]) jspeed[j.id] = (Math.abs(k.to[j.id] - k.from[j.id]) / Math.abs(j.open - j.closed)) * easeRate(q) / k.T;
+      // (a follower's small turn is shown fainter than the leader's: the wrist and the ankle are what the turn is about)
+      for (const j of DANCE_LIMBS[l]) jspeed[j.id] = (Math.abs(k.to[j.id] - k.from[j.id]) / Math.abs(j.open - j.closed)) * easeRate(q) / k.T * (isNum(j.follow) ? DANCE.followGlow : 1);
       if (k.t >= k.T - 1e-12) {
         s.stroke = null; s.dir = -s.dir;
         // A step makes one stroke per limb; the slow hold goes on with the next one.

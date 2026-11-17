@@ -7,7 +7,9 @@
  *     grid of small cells (leaf cells), and each occupied cell becomes one sphere: centre = the mean of its vertices,
  *     radius = the farthest of its vertices from that centre (so every vertex lies inside, and neighbouring spheres
  *     overlap where the surface runs on, so the surface between the vertices is covered too). Leaves are grouped by a
- *     coarser grid (group spheres enclose their leaves) and the whole table has one bounding sphere;
+ *     coarser grid (group spheres enclose their leaves) and the whole table has one bounding sphere. A mesh whose
+ *     vertices are rewritten often can be given a lazySphereTable instead: its bounding sphere is known at once
+ *     and its spheres are made the first time something reads them;
  *   - an ITEM is a list of entries { table, matrix (geometry -> world metres, column-major 4x4), scale (the largest
  *     column length of the matrix, so a radius never shrinks under a squash), pad (extra world metres added to every
  *     radius, e.g. muscle thickness around a bone) }. A whole body is one item (one entry per mesh), the brain is one
@@ -157,6 +159,34 @@ export function sphereTable(positions, { leaf, group, stride = 1 } = {}) {
   let br = 0;
   for (let i = 0; i < groups.length; i += 6) br = Math.max(br, Math.hypot(groups[i] - bx, groups[i + 1] - by, groups[i + 2] - bz) + groups[i + 3]);
   return Object.freeze({ leaves, groups, bound: Object.freeze([bx, by, bz, br]), count: k });
+}
+
+/**
+ * A sphere table whose leaf and group spheres are made on first use (R558, performance: a body mesh re-skinned on
+ * every frame of a look got a new table every frame, and most frames nothing came near enough to read it).
+ * `bound` [x, y, z, r] is the table's bounding sphere and MUST hold every leaf sphere the built table will have (the
+ * caller's promise; group spheres may reach past it: gaps are taken leaf to leaf, and every test that drops a whole
+ * entry by its bounding sphere is a statement about its leaves). `build` returns the sphereTable; it runs at most once,
+ * the first time `leaves`, `groups` or `count` is read. Everything that reads only the bound (entry, moved, item
+ * boxes, the far tests of minGap and sphereGap, itemTravel, rigidTravel) never runs it. `built` says whether it ran.
+ */
+export function lazySphereTable(bound, build) {
+  if (!bound || bound.length !== 4 || !Array.prototype.every.call(bound, Number.isFinite) || !(bound[3] >= 0)) fail('lazySphereTable needs a finite bound [x, y, z, r]');
+  if (typeof build !== 'function') fail('lazySphereTable needs a build function');
+  let t = null;
+  const get = () => {
+    if (t === null) {
+      const made = build();
+      if (!made || !made.leaves || !made.groups) fail('lazySphereTable: build must return a sphereTable');
+      t = made;
+    }
+    return t;
+  };
+  return Object.freeze({
+    bound: Object.freeze(Array.from(bound)), lazy: true,
+    get leaves() { return get().leaves; }, get groups() { return get().groups; }, get count() { return get().count; },
+    get built() { return t !== null; }
+  });
 }
 
 /** The original sphereTable (string cell keys; the reference the fast version reproduces bit for bit, and its fallback). */
@@ -324,12 +354,31 @@ export function blendMatrix(from, to, f, pivot) {
 
 /* ------------------------------------------------------------------ items */
 
+/** One entry of an item (see the module note): table, m (the matrix), s (its scale), pad, tag, c and r (the bounding
+ * sphere in the world) and the caches g and l. R558 (performance): the matrix is read through a getter. An entry that
+ * entry() makes holds its matrix from the start. An entry that moved() makes holds the two factors (the move, copied
+ * once per moved item, and the source entry's matrix) and multiplies them the first time something reads `m`: most
+ * entries of a moved item are passed over by the box and sphere tests and never do, and a 16-number array is costly to
+ * make. The product is mul(move, source matrix), the same call on the same numbers as before, so it has the same bits
+ * whenever it is made. Nothing writes into an entry's matrix after it is made. */
+class Entry {
+  constructor(table, m, s, pad, tag, c, r, md, mb) {
+    this.table = table; this.s = s; this.pad = pad; this.tag = tag; this.c = c; this.r = r; this.g = null; this.l = null;
+    this.mm = m; this.md = md; this.mb = mb;
+  }
+  get m() {
+    let m = this.mm;
+    if (m === null) { m = this.mm = mul(this.md, this.mb); this.md = null; this.mb = null; }
+    return m;
+  }
+}
+
 /** One entry of an item (see the module note). */
 export function entry(table, matrix, pad = 0, tag = null) {
-  if (!table || !table.leaves) fail('entry needs a sphereTable');
+  if (!table || !table.bound) fail('entry needs a sphereTable'); // (the bound, not the leaves: a lazy table is not built for an entry)
   if (!finite16(matrix)) fail('entry needs a finite 4x4 matrix');
   const m = Float64Array.from(matrix), s = maxScale(m), b = table.bound, c = apply(m, b[0], b[1], b[2]);
-  return { table, m, s, pad, tag, c, r: b[3] * s + pad, g: null, l: null };
+  return new Entry(table, m, s, pad, tag, c, b[3] * s + pad, null, null);
 }
 
 /** An item from entries, with its world box. */
@@ -339,16 +388,30 @@ export function item(entries) {
   return { entries, lo, hi };
 }
 
-/** The item moved by world matrix d (every entry's matrix becomes d * matrix). R558 (performance): the product is used
- * as the entry's matrix directly (entry() copied it once more); the same numbers. */
+/** The item moved by world matrix d (every entry's matrix becomes d * matrix). R558 (performance): each product is
+ * worked out here in plain numbers, with the expressions of mul() (the same four products added in the same order, so
+ * the same bits), for the finite check and for the entry's scale, centre and radius (the expressions of maxScale() and
+ * apply()); the 16-number matrix itself is left to the entry (see Entry), which makes it with mul() when it is read.
+ * d is copied once, so a caller that reuses its array afterwards changes nothing here. */
 export function moved(it, d) {
   if (!finite16(d)) fail('moved needs a finite 4x4 matrix');
+  const D = Float64Array.from(d), fin = Number.isFinite;
+  const a0 = D[0], a1 = D[1], a2 = D[2], a3 = D[3], a4 = D[4], a5 = D[5], a6 = D[6], a7 = D[7];
+  const a8 = D[8], a9 = D[9], a10 = D[10], a11 = D[11], a12 = D[12], a13 = D[13], a14 = D[14], a15 = D[15];
   const out = new Array(it.entries.length);
   for (let i = 0; i < out.length; i++) {
-    const e = it.entries[i], m = mul(d, e.m);
-    if (!finite16(m)) fail('moved: nonfinite matrix');
-    const sc = maxScale(m), b = e.table.bound;
-    out[i] = { table: e.table, m, s: sc, pad: e.pad, tag: e.tag, c: apply(m, b[0], b[1], b[2]), r: b[3] * sc + e.pad, g: null, l: null };
+    const e = it.entries[i], b = e.m;
+    let x = b[0], y = b[1], z = b[2], w = b[3];
+    const c0 = a0 * x + a4 * y + a8 * z + a12 * w, c1 = a1 * x + a5 * y + a9 * z + a13 * w, c2 = a2 * x + a6 * y + a10 * z + a14 * w, c3 = a3 * x + a7 * y + a11 * z + a15 * w;
+    x = b[4]; y = b[5]; z = b[6]; w = b[7];
+    const c4 = a0 * x + a4 * y + a8 * z + a12 * w, c5 = a1 * x + a5 * y + a9 * z + a13 * w, c6 = a2 * x + a6 * y + a10 * z + a14 * w, c7 = a3 * x + a7 * y + a11 * z + a15 * w;
+    x = b[8]; y = b[9]; z = b[10]; w = b[11];
+    const c8 = a0 * x + a4 * y + a8 * z + a12 * w, c9 = a1 * x + a5 * y + a9 * z + a13 * w, c10 = a2 * x + a6 * y + a10 * z + a14 * w, c11 = a3 * x + a7 * y + a11 * z + a15 * w;
+    x = b[12]; y = b[13]; z = b[14]; w = b[15];
+    const c12 = a0 * x + a4 * y + a8 * z + a12 * w, c13 = a1 * x + a5 * y + a9 * z + a13 * w, c14 = a2 * x + a6 * y + a10 * z + a14 * w, c15 = a3 * x + a7 * y + a11 * z + a15 * w;
+    if (!(fin(c0) && fin(c1) && fin(c2) && fin(c3) && fin(c4) && fin(c5) && fin(c6) && fin(c7) && fin(c8) && fin(c9) && fin(c10) && fin(c11) && fin(c12) && fin(c13) && fin(c14) && fin(c15))) fail('moved: nonfinite matrix');
+    const sc = Math.max(Math.hypot(c0, c1, c2), Math.hypot(c4, c5, c6), Math.hypot(c8, c9, c10)), t = e.table.bound, tx = t[0], ty = t[1], tz = t[2];
+    out[i] = new Entry(e.table, null, sc, e.pad, e.tag, [c0 * tx + c4 * ty + c8 * tz + c12, c1 * tx + c5 * ty + c9 * tz + c13, c2 * tx + c6 * ty + c10 * tz + c14], t[3] * sc + e.pad, D, b);
   }
   return item(out);
 }
@@ -422,20 +485,47 @@ export function minGap(a, b, cap = Infinity, stopBelow = -Infinity) {
   // same value: the gap is unchanged bit for bit. The group test loop reads x's centre once (the same subtractions).
   const sureFar = (d2, lim) => lim > 0 && d2 > (lim + lim * 1e-9 + 1e-12) * (lim + lim * 1e-9 + 1e-12);
   const gyCand = [];
+  // R558 (performance): an entry's group spheres are asked for as late as the tests allow, because for a
+  // lazySphereTable that is the moment its spheres are made (a re-skinned muscle's, new on every frame of a look).
+  //  - x's are asked for at the first entry y of b that is near x's own sphere, and, when y's are at hand, only if
+  //    one of y's groups is near x's sphere too (the gyCand test below, which never needed x's groups; before, the
+  //    brain's wide bounding spheres had every muscle of the mirror body's neck and shoulders made every frame);
+  //  - y's, when they are not made yet, only if one of x's kept groups is near y's own sphere (the first test of the
+  //    group loop below, asked ahead).
+  // These are the same tests in another order. `best` changes only in the leaf tests, and none runs for x before
+  // its groups are asked for, so `cand` holds the same groups as when it was filled at the top of the loop, the
+  // same leaf pairs are tested in the same order, and the gap found is unchanged bit for bit.
+  const notMade = e => !e.g && e.table.lazy === true && !e.table.built;
+  const fillGyCand = gy => {
+    gyCand.length = 0;
+    for (let j = 0; j < gy.length; j += 4) {
+      const dx = gy[j] - xc0, dy = gy[j + 1] - xc1, dz = gy[j + 2] - xc2, lim = best + (gy[j + 3] + xr);
+      if (lim <= 0 || !(dx * dx + dy * dy + dz * dz >= lim * lim)) gyCand.push(j);
+    }
+  };
+  let xc0 = 0, xc1 = 0, xc2 = 0, xr = 0;
   for (const x of ea) {
-    const gxAll = worldGroups(x), cand = [];
-    for (let i = 0; i < gxAll.length; i += 4) if (near(gxAll, i, b.lo, b.hi) < best) cand.push(i);
-    if (!cand.length) continue;
-    const xc0 = x.c[0], xc1 = x.c[1], xc2 = x.c[2], xr = x.r;
+    let gxAll = null, cand = null;
+    xc0 = x.c[0]; xc1 = x.c[1]; xc2 = x.c[2]; xr = x.r;
     for (const y of eb) {
       if (far(xc0 - y.c[0], xc1 - y.c[1], xc2 - y.c[2], xr + y.r)) continue;
-      const gx = gxAll, gy = worldGroups(y);
-      gyCand.length = 0;
-      for (let j = 0; j < gy.length; j += 4) {
-        const dx = gy[j] - xc0, dy = gy[j + 1] - xc1, dz = gy[j + 2] - xc2, lim = best + (gy[j + 3] + xr);
-        if (lim <= 0 || !(dx * dx + dy * dy + dz * dz >= lim * lim)) gyCand.push(j);
+      let gy = null;
+      if (gxAll === null) {
+        if (!x.g && !notMade(y)) { gy = worldGroups(y); fillGyCand(gy); if (!gyCand.length) continue; }
+        gxAll = worldGroups(x); cand = [];
+        for (let i = 0; i < gxAll.length; i += 4) if (near(gxAll, i, b.lo, b.hi) < best) cand.push(i);
       }
-      if (!gyCand.length) continue;
+      if (!cand.length) break;
+      const gx = gxAll;
+      if (gy === null) {
+        if (notMade(y)) {
+          let any = false;
+          for (const i of cand) if (!far(gx[i] - y.c[0], gx[i + 1] - y.c[1], gx[i + 2] - y.c[2], gx[i + 3] + y.r)) { any = true; break; }
+          if (!any) continue;
+        }
+        gy = worldGroups(y); fillGyCand(gy);
+        if (!gyCand.length) continue;
+      }
       for (const i of cand) {
         if (far(gx[i] - y.c[0], gx[i + 1] - y.c[1], gx[i + 2] - y.c[2], gx[i + 3] + y.r)) continue;
         for (const j of gyCand) {

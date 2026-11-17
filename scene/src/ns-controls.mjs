@@ -7,7 +7,7 @@
  *   { keys: { KeyW, KeyA, KeyS, KeyD, Space: boolean }, yaw: radians, pitch: radians, lookMs: number | null,
  *     events: [], ui: [], look: { sensitivity: number, invertY: boolean }, space: (the Space gesture, SPACE_GESTURE) }
  * `look` (A1-activation round 1) holds the player's look settings: `sensitivity` multiplies the base
- * sensitivityRadPerPx (1 = 0.0025 rad/px) and `invertY` flips the vertical look direction. A state without
+ * sensitivityRadPerPx (1 = 0.0038 rad/px) and `invertY` flips the vertical look direction. A state without
  * `look` (older callers) uses the reducer defaults.
  *
  * U1-controls round 2. Two event queues, so a consumer that only understands the game events keeps working:
@@ -279,7 +279,11 @@ const UI_COMMAND_EVENTS = Object.freeze({
 export const LOCK_PENDING_MS = 2000;
 
 /** Default base look sensitivity (radians per pointer pixel) and the allowed range of the `sensitivity` multiplier. */
-export const DEFAULT_SENSITIVITY_RAD_PER_PX = 0.0025;
+// 17 November 2026 (user: "you should be able to move the head around much more and see other parts of the body, just as
+// you would in real life"): 0.0025 -> 0.0038 rad per pixel. The head's range was already the neck's and trunk's whole
+// range (120 degrees each way, 80 down, 70 up); on a trackpad it took about 840 pixels of travel to reach the end of the
+// turn, so in practice the far looks were out of reach. Now about 550. The Esc page's look speed still scales it.
+export const DEFAULT_SENSITIVITY_RAD_PER_PX = 0.0038;
 export const SENSITIVITY_RANGE = Object.freeze([0.05, 20]);
 
 const isControlCode = code => typeof code === 'string' && CONTROL_CODES.includes(code);
@@ -299,7 +303,7 @@ function checkSensitivity(v) {
 
 /**
  * Create the input reducer API.
- * Options: sensitivityRadPerPx (base, default 0.0025), pitchLimitDeg (default 80), sensitivity (multiplier, default 1)
+ * Options: sensitivityRadPerPx (base, default 0.0038), pitchLimitDeg (default 80), sensitivity (multiplier, default 1)
  * and invertY (default false); the last two are the initial `state.look` and can be changed with setLookOptions.
  * @returns {{ state, initialState, keyDown, keyUp, blur, releaseAll, pointerMove, click, axes, drainEvents,
  *   escape, lockChange, uiCommand, toggleDetail, drainUiEvents, setLookOptions, lookOptions,

@@ -1,0 +1,60 @@
+/* NeuroSurge: the quiet screen (17 November 2026: far less text). The game starts with the information cards off
+   (data-ns-read="off" on the app root; R brings the cards back). What is left: the crosshair, the tip beside it, one
+   short prompt, the brain's part names, and one small line that says the activity is simulated. */
+
+/* The one small honest line, bottom left, in every mode. */
+.preview-note, .preview-note[class] {
+  position: fixed; left: 10px; bottom: 6px; top: auto; right: auto; max-width: none; z-index: 10000;
+  padding: 1px 6px; border: 0; border-radius: 6px; background: transparent;
+  color: #b9c6d2; opacity: 0.62; font: 11px/1.3 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.preview-note a { color: #b8e5ff; }
+.preview-note:hover, .preview-note:focus-within { opacity: 1; }
+
+/* Cards off: also the long limits line, the left / right words and the second line of the brain's part names. */
+.ns-app[data-ns-read="off"] .ns-essential,
+.ns-app[data-ns-read="off"] .ns-orient,
+.ns-app[data-ns-read="off"] .ns-region-label-hemi { display: none !important; }
+.ns-app[data-ns-read="off"] .ns-read-chip {
+  right: 10px; bottom: 6px; padding: 2px 7px; border: 0; background: transparent; opacity: 0.62; font-size: 11px;
+}
+
+/* The quiet layer (ns-quiet.mjs). */
+.ns-quiet { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.ns-quiet[hidden] { display: none; }
+
+/* The tip: what is under the crosshair. A motor area shows its name and its numbered movements, like a key's legend. */
+.ns-tip {
+  position: absolute; left: 50%; top: 50%; box-sizing: border-box; max-width: min(300px, 44vw);
+  padding: 7px 11px 8px; border-radius: 10px;
+  background: rgba(7, 11, 16, 0.86); border: 1px solid rgba(190, 215, 235, 0.42);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+  color: #f2f7fb; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-tip[hidden] { display: none; }
+.ns-tip-title { font-weight: 800; font-size: 15px; letter-spacing: 0.01em; }
+.ns-tip[data-kind="muscle"] .ns-tip-title, .ns-tip[data-kind="bone"] .ns-tip-title, .ns-tip[data-kind="part"] .ns-tip-title { font-weight: 700; font-size: 13.5px; }
+.ns-tip-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.ns-tip-rows[hidden] { display: none; }
+.ns-tip-row { display: flex; align-items: baseline; gap: 8px; color: #cfdbe6; font-weight: 600; font-size: 13px; }
+.ns-tip-key {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px;
+  border-radius: 5px; border: 1px solid #6c8194; border-bottom-width: 2px; background: #1b232c;
+  color: #fff; font: 800 11.5px/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-tip-now { color: #fff; }
+.ns-tip-now .ns-tip-key { border-color: #7fe3ff; background: #12394a; }
+.ns-tip-dim { opacity: 0.5; }
+
+/* The prompt: the next thing to try, a few words, top centre. */
+.ns-prompt {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(560px, 86vw);
+  padding: 6px 14px; border-radius: 999px;
+  background: rgba(7, 11, 16, 0.78); border: 1px solid rgba(255, 214, 102, 0.55);
+  color: #ffe9a8; font: 700 14px/1.3 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.01em;
+  text-align: center;
+}
+.ns-prompt[hidden] { display: none; }
+
+/* The "click to look around" line: smaller and out of the way. */
+.ns-shell-root .ns-shell-toast { font-size: 13px; padding: 5px 12px; opacity: 0.9; }

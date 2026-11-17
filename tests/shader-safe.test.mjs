@@ -14,7 +14,11 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { patchGlassShaders, patchGlassReadShaders, patchGlowRimShaders, createHdrBloom, HDR_BLOOM } from '../scene/src/ns-scene-three.mjs';
+import {
+  patchGlassShaders, patchGlassReadShaders, patchGlowRimShaders, createHdrBloom, HDR_BLOOM,
+  patchMuscleLookShaders, patchPowerUpShaders, patchComicShaders, patchBehindGlassShaders, patchMuscleShareShaders, MUSCLE_SHARE
+} from '../scene/src/ns-scene-three.mjs';
+import * as THREE from '../vendor/three.module.js';
 
 const VERTEX = 'void main() {\n#include <project_vertex>\n}';
 const FRAGMENT = 'void main() {\nvec3 outgoingLight = vec3( 0.0 );\nvec3 totalEmissiveRadiance = vec3( 0.0 );\nvec3 vViewPosition;\n' +
@@ -103,4 +107,62 @@ test('the bloom reads the picture clamped and drops what is not a number', () =>
   // only the first pass reads the picture itself; the composite keeps its own clamp to 0..1
   const comp = made.find(m => typeof m.fragmentShader === 'string' && m.fragmentShader.includes('tBase'));
   assert.ok(comp && comp.fragmentShader.includes('vec3 base = min( max( c, 0.0 ), 1.0 );'));
+});
+
+// R558 (performance): one material per class of muscle. The rewrite must apply to the REAL patch chains (the ones
+// createScene composes for your own muscles and for the mirror's), change nothing but the seven declarations and the
+// two lines it adds, and refuse (null: the caller keeps one material per muscle) whenever it cannot be sure.
+test('the one-material-per-class rewrite moves a muscle\'s seven values from uniforms to per-mesh attributes, and nothing else', () => {
+  const lib = THREE.ShaderLib.physical;
+  const count = (s, t) => s.split(t).length - 1;
+  const chain = steps => {
+    let v = lib.vertexShader, f = lib.fragmentShader;
+    for (const fn of steps) {
+      const p = fn(v, f);
+      assert.ok(p, 'every patch of the chain applies');
+      if (p.vertexShader) v = p.vertexShader;
+      if (p.fragmentShader) f = p.fragmentShader;
+    }
+    return { v, f };
+  };
+  const power = (v, f) => patchPowerUpShaders(v, f, 'muscle'), comic = (v, f) => patchComicShaders(v, f, 'muscle');
+  const own = chain([patchGlowRimShaders, patchMuscleLookShaders, power, comic]);
+  const mirror = chain([patchGlowRimShaders, patchBehindGlassShaders, patchMuscleLookShaders, power, comic]);
+  assert.equal(MUSCLE_SHARE.uniforms.length, 7);
+  assert.equal(MUSCLE_SHARE.rowFloats, 24); // a mat4 and two vec4
+  for (const [c, set] of [[own, 'o'], [mirror, 'm'], [own, 'p']]) {
+    const p = patchMuscleShareShaders(c.v, c.f, set);
+    assert.ok(p && typeof p.vertexShader === 'string' && typeof p.fragmentShader === 'string');
+    for (const d of MUSCLE_SHARE.uniforms) {
+      assert.equal(count(c.f, `uniform ${d};`), 1, `the chain declares ${d} once`);
+      assert.equal(count(p.fragmentShader, `uniform ${d};`), 0);
+      assert.equal(count(c.f, `\n${d};`), 0);
+      assert.equal(count(p.fragmentShader, `\n${d};`), 1, `${d} is a plain global now`);
+    }
+    assert.ok(p.vertexShader.startsWith(`attribute mat4 nsS${set}A;\nattribute vec4 nsS${set}B;\nattribute vec4 nsS${set}C;\n`));
+    for (let i = 0; i < 6; i++) for (const s of [p.vertexShader, p.fragmentShader]) assert.equal(count(s, `flat varying vec4 vNsS${i};`), 1);
+    assert.ok(p.vertexShader.includes(`void main() {\n\tvNsS0 = nsS${set}A[ 0 ]; vNsS1 = nsS${set}A[ 1 ]; vNsS2 = nsS${set}A[ 2 ]; vNsS3 = nsS${set}A[ 3 ]; vNsS4 = nsS${set}B; vNsS5 = nsS${set}C;\n`));
+    assert.ok(p.fragmentShader.includes('void main() {\n\tdiffuse = vNsS0.rgb; emissive = vNsS1.rgb; nsSweep = vec2( vNsS0.a, vNsS1.a ); nsGlowRim = vNsS2; nsCharge = vNsS3; nsChargeRest = vNsS4.rgb; nsFibre = vNsS5;\n'));
+    for (const other of 'omp') if (other !== set) assert.ok(!p.vertexShader.includes(`nsS${other}A`));
+    // take the added lines away again: the vertex shader is the chain's, the fragment shader differs only in the seven declarations
+    assert.equal(p.vertexShader.split('\n').filter(l => !/vNsS[0-5]|nsS[a-z][ABC]/.test(l)).join('\n'), c.v);
+    assert.equal(p.fragmentShader.split('\n').filter(l => !/vNsS[0-5]/.test(l)).join('\n'), MUSCLE_SHARE.uniforms.reduce((s, d) => s.replace(`uniform ${d};`, `${d};`), c.f));
+    assert.ok(!(p.vertexShader + p.fragmentShader).includes('undefined') && !(p.vertexShader + p.fragmentShader).includes('NaN'));
+    // refusals
+    assert.equal(patchMuscleShareShaders(p.vertexShader, p.fragmentShader, set), null, 'not twice');
+    assert.equal(patchMuscleShareShaders(p.vertexShader, p.fragmentShader, set === 'o' ? 'm' : 'o'), null, 'not twice under another letter either');
+    assert.equal(patchMuscleShareShaders(c.v + '\nvoid main() {}', c.f, set), null, 'two mains (vertex)');
+    assert.equal(patchMuscleShareShaders(c.v, c.f + '\nvoid main() {}', set), null, 'two mains (fragment)');
+    assert.equal(patchMuscleShareShaders(c.v.replace('void main() {', 'void main(){'), c.f, set), null, 'no main it knows');
+    for (const d of MUSCLE_SHARE.uniforms) {
+      assert.equal(patchMuscleShareShaders(c.v, c.f.replace(`uniform ${d};`, ''), set), null, `${d} missing`);
+      assert.equal(patchMuscleShareShaders(c.v, c.f.replace(`uniform ${d};`, `uniform ${d};\nuniform ${d};`), set), null, `${d} doubled`);
+    }
+    assert.equal(patchMuscleShareShaders(c.v.replace('void main() {', 'uniform vec4 nsFibre;\nvoid main() {'), c.f, set), null, 'the vertex shader reads one of the seven');
+  }
+  for (const bad of ['O', 'ab', '', '1', 5, null]) assert.equal(patchMuscleShareShaders(own.v, own.f, bad), null);
+  assert.ok(patchMuscleShareShaders(own.v, own.f), 'the set letter has a default');
+  assert.equal(patchMuscleShareShaders(lib.vertexShader, lib.fragmentShader, 'o'), null, 'an unpatched standard shader has no muscle values');
+  assert.equal(patchMuscleShareShaders(null, own.f, 'o'), null);
+  assert.equal(patchMuscleShareShaders(own.v, undefined, 'o'), null);
 });

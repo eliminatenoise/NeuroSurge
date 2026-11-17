@@ -1,6 +1,6 @@
 /** R558 preview launcher (user note 2026-11-11): the first-person camera sits at the person's eye reference point,
- * FOV 90 vertical (about 121 deg across at 16:9: very wide, at the top of ordinary game settings, without the absurd
- * edge stretching of the earlier 120; R558 user: "ensure it is not absurd"), ordinary look0, explicit placement0. No backed-off camera and no whole-arm engineering display: the whole
+ * FOV 108 vertical since 17 November 2026 (EYE_FOV_Y_DEG below; it was 90 from 11 November, and 120 before that, whose
+ * edge stretching the user called absurd), ordinary look0, explicit placement0. No backed-off camera and no whole-arm engineering display: the whole
  * own body is drawn solid from the eyes. The eye point is the atlas-derived display reference, not a measured eye.
  * Normal constructor/loading/input path; an experimental preview, not production qualification.
  * Exact C353/R302 loading, validation, streams, ready/firstView/render and input paths are retained.
@@ -12,8 +12,13 @@ import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
 import { PAGE } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
+import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
 
-const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: 0 }), fovYDeg: 90, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: 0 }) });
+// 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
+// Including everything from the neck down"): 108 degrees up and down (about 136 across at 16:9), between the 90 of
+// 11 November and the 120 whose edge stretching the user called absurd.
+const EYE_FOV_Y_DEG = 108;
+const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: 0 }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: 0 }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);
 // Exact priority IDs in pinned294-entry full-body manifest order (right/left lacrimal bones), not a progress guess.
@@ -31,6 +36,13 @@ const canvas = document.getElementById('ns-canvas');
 const hudRoot = document.getElementById('ns-hud');
 const shellRoot = document.getElementById('ns-shell-root');
 const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
+// 17 November 2026: no start page and no loading page. While the files load, a picture of the parts coming together
+// covers the canvas (ns-assembly: it gets a COPY of the bytes fetched below and changes nothing the game receives),
+// and the main controls are shown for the first five seconds. Only the ordinary boot case; the two test cases keep
+// their plain page.
+const assembly = mode === 'boot' ? startAssembly({ host: app }) : null;
+if (mode === 'boot') { app.dataset.nsPhase = 'loading'; showControlsCard({ host: document.body }); }
+const endLoadingPicture = () => { app.dataset.nsPhase = 'playing'; if (assembly) assembly.finish(); };
 const observations = { mode, configurationSignature: CONFIGURED_R302_SIGNATURE, qa: false, placeholder: false,
   bodyFactoryCalls: 0, faceFactoryCalls: 0, bodyProgress: null, bodyProgressAtStop: null, ownedStreams: [], stopIssued: false, stopBefore: null,
   ready: null, firstView: null, firstReadyReadback: null, fatal: null, httpFailures: [], b03Prefix: null };
@@ -53,12 +65,16 @@ function refuseHttp(response, url, reader) {
 async function fetchText(url) {
   const response = await fetch(url, { credentials: 'same-origin' });
   if (!response.ok) refuseHttp(response, url, 'text');
-  return response.text();
+  const text = await response.text();
+  if (assembly && /MANIFEST\.json(?:[?#].*)?$/i.test(String(url))) assembly.noteManifest(url, text);
+  return text;
 }
 async function fetchBytes(url) {
   const response = await fetch(url, { credentials: 'same-origin' });
   if (!response.ok) refuseHttp(response, url, 'bytes');
-  return new Uint8Array(await response.arrayBuffer());
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (assembly) assembly.noteBytes(url, bytes);
+  return bytes;
 }
 async function sha256HexBytes(bytes) {
   const subtle = window.crypto && window.crypto.subtle;
@@ -201,12 +217,13 @@ try {
     movementMapUrl: app.dataset.movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes,
     placeholder: false, qa: false, storage, streamBody, streamFace, viewGraph });
   ready = scene.ready.then(r => {
-    observations.ready = copy(r); observations.firstReadyReadback = summarizeInspect(scene.inspect()); return r;
-  });
+    observations.ready = copy(r); observations.firstReadyReadback = summarizeInspect(scene.inspect()); endLoadingPicture(); return r;
+  }, err => { endLoadingPicture(); throw err; });
   scene.firstView.then(r => { observations.firstView = copy(r); });
   canvas.focus({ preventScroll: true });
 } catch (err) {
   bootError = messageOf(err); observations.fatal = bootError; showFatal(PAGE.fatalPrefix + bootError);
+  endLoadingPicture();
   ready = Promise.resolve({ ok: false, error: bootError });
 }
 function summarizeInspect(s) {
@@ -250,8 +267,8 @@ export async function assertConfiguredBoot() {
   requireCase(f.bodyRig === true && f.bodyNote === null && f.brainMode === 'region' && f.round5.faceMuscles === 54 && f.round5.faceNote === null, 'normal body/girdle/54face must complete');
   requireCase(s.state && s.state.referenceBrain && Array.isArray(s.state.referenceBrain.initialPivotWorld) && s.state.referenceBrain.initialPivotWorld.length === 3 && s.state.referenceBrain.initialPivotWorld.every(Number.isFinite), 'constructor world brain pivot must bind on actual frame');
   requireCase(s.camera && s.camera.pose && s.camera.pose.firstPerson === true && s.camera.pose.thirdPerson === false, 'actual camera must use configured FIRST-person route');
-  requireCase(g.fovYDeg === 90 && g.initialLook.yaw === 0 && g.initialLook.pitch === 0, 'actual constructor graph must resolve the declared R558 eye-view inputs');
-  requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === 90, 'declared landscape reproduction must use actual simulation FOV90, not posthoc projection');
+  requireCase(g.fovYDeg === EYE_FOV_Y_DEG && g.initialLook.yaw === 0 && g.initialLook.pitch === 0, 'actual constructor graph must resolve the declared R558 eye-view inputs');
+  requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === EYE_FOV_Y_DEG, 'declared landscape reproduction must use actual simulation FOV90, not posthoc projection');
   requireCase(g.initialBrainPlacement.yaw === 0 && g.initialBrainPlacement.pitch === 0, 'explicit initialBrainPlacement must resolve the declared R558 eye-view inputs');
   // R558 (the motor strip fills the view). The earlier start layout (the strip 0.82 of the free width beside a right-hand
   // info column) is overturned; this is the equally strict check of the new one, read from the frame the App itself
@@ -389,7 +406,7 @@ export async function runDeclaredCase() {
   return { status: 'real-missing-face-configured-fatal-and-friendly-DOM-observed', evidence: readback(),
     limitation: 'Requires an actual HTTP404 from this fixed absent URL. This is a negative source/loader case, not anatomy or normal GPU cleanup proof' };
 }
-window.__nsQA = Object.freeze({ ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
+window.__nsQA = Object.freeze({ assembly: () => assembly ? assembly.state() : null, ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
 window.__nsLoadingR302 = Object.freeze({ mode, configurationSignature: CONFIGURED_R302_SIGNATURE, ready,
   readback, runDeclaredCase, assertConfiguredBoot, stop, stopAfterConfiguredReady, assertStoppedUnchanged });
 window.addEventListener('pagehide', () => stop()); // finite caller never auto-restarts a completed/stopped App

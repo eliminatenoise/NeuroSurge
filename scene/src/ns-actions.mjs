@@ -495,11 +495,11 @@ const SNAP = 1e-9;                   // timers / drives within this of their goa
 /**
  * Gaze restart deadband (degrees of view angle). On the SAME strip region a 'moved' restart fires only once the
  * gaze direction has turned more than this from the direction at the last (re)trigger, seed or region change. At the
- * default look sensitivity (0.0025 rad/px = 0.143 deg/px) one pointer pixel stays inside it and two pixels leave it,
+ * default look sensitivity (0.0038 rad/px = 0.218 deg/px) one pointer pixel stays inside it and two pixels leave it,
  * so sub-pixel/1-px jitter, resizes and re-framing never re-trigger, while any deliberate look movement does
  * (the user: activation stops "unless we move again"). A UI choice, not a physiological threshold.
  */
-export const GAZE_RESTART_DEADBAND_DEG = 0.2;
+export const GAZE_RESTART_DEADBAND_DEG = 0.31;
 /** R3-fix (review M3 / M5, display choices, seconds of continuous gaze on one area):
  *  replaceClickS  a CLICK-started pulse is not replaced by areas the crosshair only passes over while the player turns
  *                 to watch the body; a new area must hold the gaze this long first (a new click always replaces).
@@ -869,7 +869,9 @@ export const DANCE_BODY_JOINTS = Object.freeze(DANCE_JOINT_IDS.filter(j => j !==
 export const DANCE_AREAS = Object.freeze({
   l_forearm: Object.freeze(['rh_forearm']), l_shoulder_rot: Object.freeze(['rh_shoulder']),
   r_pronation: Object.freeze(['lh_forearm']), r_shoulder_rot: Object.freeze(['lh_shoulder']),
-  hip_rot_L: Object.freeze(['rh_hip']), hip_rot_R: Object.freeze(['lh_hip'])
+  hip_rot_L: Object.freeze(['rh_hip']), hip_rot_R: Object.freeze(['lh_hip']),
+  // 17 November 2026: the ankle leads the legs' turn (ns-dance DANCE_LIMBS); the map's own ankle areas.
+  ankle_inv_L: Object.freeze(['rh_ankle']), ankle_inv_R: Object.freeze(['lh_ankle'])
 });
 export const DANCE_MUSCLES = deepFreeze({
   r_pronation: { open: ['right supinator', 'right biceps brachii'], closed: ['right pronator teres', 'right pronator quadratus'] },
@@ -880,7 +882,11 @@ export const DANCE_MUSCLES = deepFreeze({
   hip_rot_L: { open: ['left gluteus maximus', 'left sartorius', 'left obturator internus', 'left obturator externus', 'left gemellus superior', 'left gemellus inferior', 'left quadratus femoris'],
     closed: ['left gluteus medius', 'left gluteus minimus', 'left tensor fasciae latae', 'left piriformis'] },
   hip_rot_R: { open: ['right gluteus maximus', 'right sartorius', 'right obturator internus', 'right obturator externus', 'right gemellus superior', 'right gemellus inferior', 'right quadratus femoris'],
-    closed: ['right gluteus medius', 'right gluteus minimus', 'right tensor fasciae latae', 'right piriformis'] }
+    closed: ['right gluteus medius', 'right gluteus minimus', 'right tensor fasciae latae', 'right piriformis'] },
+  // The sole turns outward (open, eversion) / inward (closed, inversion): the muscle lists of the map's own
+  // "Turn sole outward" / "Turn sole inward" movements (ns-bodymap ankle_evert / ankle_invert).
+  ankle_inv_L: { open: ['left fibularis longus', 'left fibularis brevis', 'left fibularis tertius', 'left extensor digitorum longus'], closed: ['left tibialis posterior', 'left tibialis anterior'] },
+  ankle_inv_R: { open: ['right fibularis longus', 'right fibularis brevis', 'right fibularis tertius', 'right extensor digitorum longus'], closed: ['right tibialis posterior', 'right tibialis anterior'] }
 });
 /** Gaze kinds: ns-brain classifyGaze's 'region' | 'glass' (brain, not a motor region) | 'empty', plus the legacy
  * focus-strip 'strip' (an event with only an arm actionId). */

@@ -85,6 +85,7 @@ import * as NsBrain from './ns-brain.mjs';
 // Round 3 (R3-integrator): every visible string comes from ns-text (R3-text, the single source of plain UI text; R17/D3).
 import * as NT from './ns-text.mjs';
 import * as NG from './ns-guide.mjs';
+import { createQuietUi, quietTipModel, quietPromptText } from './ns-quiet.mjs';
 import * as NM from './ns-mirror.mjs';
 // Round 5 (R5-integrate-core, stage 1): the third-person camera (R5-camera, D18), the 3D compass-arrow input (R5-input,
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
@@ -3302,8 +3303,10 @@ export function shellReduce(s, ev) {
     case 'ready':
       if (s.mode !== 'loading') return s;
       if (s.autoPlay) return toPlaying({});
-      // R4-load: holdIntro (the body is still streaming): the instructions show, Start now works, and the 2 s timer starts
-      // with 'introTimer' once the body is in.
+      // 17 November 2026 (user: "I don't want a start page anymore"): the game begins as soon as it is ready. The
+      // instructions are one Esc away, and the page shows the main controls for its first five seconds by itself.
+      // (A caller that still wants the old start page passes startPage: true; holdIntro then waits for the body.)
+      if (ev.startPage !== true) return toPlaying({});
       return { ...s, mode: 'intro', introShown: true, introHideAtMs: at !== null && ev.holdIntro !== true ? at + INTRO_MS : null };
     case 'introTimer':
       return s.mode === 'intro' && s.introHideAtMs === null && at !== null ? { ...s, introHideAtMs: at + INTRO_MS } : s;
@@ -4632,6 +4635,11 @@ export function start(params = {}) {
   const view = doc.defaultView;
   if (typeof view.requestAnimationFrame !== 'function') fail('app_args', 'the canvas window must provide requestAnimationFrame');
   const hud = createHud(hudRoot);
+  // 17 November 2026 (less text; the brain as a control panel): the small layer that stays on screen while the
+  // information cards are off (ns-quiet: the tip by the crosshair and one short prompt). Its root is the HUD root.
+  let quietUi = null;
+  try { quietUi = createQuietUi({ doc, root: hudRoot }); } catch { quietUi = null; }
+  let quietRoot = null;
   const isPlaceholder = placeholder === true;
   const qaEnabled = qa === true;
   const useShell = Boolean(shellRoot);
@@ -6926,6 +6934,7 @@ export function start(params = {}) {
           // its reach sphere, reachItem).
           ...(() => { const arm = items.own ? NsCollide.item(items.own.entries.filter(e => e.tag && e.tag.part === 'arm')) : null; return arm && arm.entries.length ? { armMirrorM: g(arm, items.mirror), armBrainM: g(arm, items.brain) } : {}; })(),
           stops: contact.stops, lastStop: contact.last, lastBrain: contact.lastBrain || null, bodyBlocked: Boolean(contact.bodyBlocked), limbGrasp: limbGrasp ? { limb: limbGrasp.limb, targetMm: limbGrasp.targetMm, lastSolve: limbGrasp.lastSolve || null } : null,
+          tables: (() => { try { return sceneFn('collisionStats') ? callScene('collisionStats') : null; } catch { return null; } })(),
           scope: 'sphere covers of drawn meshes (ns-collide); a game rule, not tissue contact' };
       }
       collisionReportFn = collisionReport;
@@ -8145,6 +8154,33 @@ export function start(params = {}) {
           }
         } else guideCovered = false;
         hud.render({ status: '', ...model, guide: guideText, guideFloat, guideSpoken: guideNow && guideNow.visible ? guideNow.line : '' });
+        // 17 November 2026: the quiet layer. The tip names what is under the crosshair right now (the motor area and
+        // its numbered movements, or the muscle or bone there); the prompt is the guide's goal in a few words. Shown
+        // while the information cards are off (the start; R brings the cards back) and the game is being played.
+        if (quietUi) {
+          if (!quietRoot) quietRoot = infoRoot();
+          const quietOn = shellIsPlaying(shellState) && Boolean(quietRoot) && quietRoot.getAttribute('data-ns-read') === 'off';
+          let tipModel = null;
+          if (quietOn && live) {
+            const areaId = onArea && typeof out.gaze.regionId === 'string' ? out.gaze.regionId : null;
+            const area = areaId ? regionById(bodyMap, areaId) : null;
+            if (area) {
+              const leftArm = out.gaze.isLeftArm === true;
+              const act = simState && simState.activity ? simState.activity : null;
+              tipModel = quietTipModel({
+                area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId,
+                moves: infoMoves(area, { leftArm, still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
+                  back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
+                  armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
+                  rotationState: typeof out.rotationState === 'string' ? out.rotationState : null })
+              });
+            } else tipModel = quietTipModel({ pick: crossPick, arrow: arrowTip });
+          }
+          const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
+          quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+            x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,
+            width: size.width, height: size.height });
+        }
         if (shell && typeof shell.placeToast === 'function') shell.placeToast(toastSpotFor(size));
         updateInfo(inputs.binding, out);
         if (shell) {
@@ -8400,7 +8436,13 @@ export function start(params = {}) {
         contextLost: scene.contextLost === true,
         // R558: inspect({ mirrorCheck: true }) adds the mirror body's vertex-level check (a few tens of ms; QA only).
         mirror: (() => { try { return mirrorWired && sceneFn('mirrorState') ? callScene('mirrorState', { check: Boolean(options && options.mirrorCheck === true) }) : null; } catch (err) { return { error: errorText(err) }; } })(),
-        glow: plainCopy(glowRendered),
+        // R558 (performance): the last drawn frame's glow state; the audit of the muscles that share a material is
+        // taken here, when asked for, not on every frame.
+        glow: (() => {
+          const g = plainCopy(glowRendered);
+          try { if (g && glowWired && sceneFn('glowLinkState')) g.muscleShare = plainCopy(callScene('glowLinkState', { audit: true }).muscleShare); } catch { /* the frame's counters stay */ }
+          return g;
+        })(),
         glassRim: objects.glassRim || null,
         // R558 BB2: the brain ink's plain state (the strip relief, the glass fold-depth background job).
         brainInk: objects.brainInk || null,

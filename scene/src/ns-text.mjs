@@ -519,7 +519,8 @@ export const SHELL = deepFreeze({
   // R5-text: built from LIMIT_TABLE (the glow, the lifted outer muscles and the mirror body added).
   limits: limitLines(ALL_FEATURES),
   // The information key (R) works in captured play, so the toast names it.
-  captureHint: 'Click the scene to look around · R: more or less information · Esc: how to play',
+  // 17 November 2026 (far less text): three short parts; the Esc page has the rest.
+  captureHint: 'Click to look around · Esc: controls',
   lockRefused: 'The browser did not lock the mouse. After Esc it waits about a second. Click the scene to try again, or ' +
     'hold a button and drag to look. Clicks still switch areas on · Esc: how to play',
   lookOff: 'Mouse lock does not work here. W/A/S/D, Space and clicks still work · Esc: how to play',
@@ -847,7 +848,7 @@ export const INFO = deepFreeze({
   moreDetail: 'More detail',
   /** R558 (Message 48, the R key "read information"): the small line at the foot of the card says what R does next, and
    * the chip shown while the information is hidden says how to bring it back (ns-app toggleInfoDetail). */
-  keyHint: { read: 'R: more', more: 'R: hide', off: 'R: read information' },
+  keyHint: { read: 'R: more', more: 'R: hide', off: 'R: info' },
   sourcesPrefix: 'Sources: ',
   unverified: ' (unverified)',
   technicalName: 'Technical name',
@@ -1596,6 +1597,33 @@ export const GUIDE = deepFreeze({
     mirrorBlocked: 'The brain is in the way. Press and drag the mirror body to turn it (hold Shift as you press when a brain area is in front of it).',
     // R5-text: shown while the mirror goal is current, after the brain was dragged.
     mirrorNowArrows: 'Good! Now click an arrow by the mirror body to turn it around.'
+  },
+  // 17 November 2026 (far less text): the same goals in a few words, for the one-line prompt of the quiet screen
+  // (ns-quiet). byText gives the short line for a goal's alternative sentence (the keys are the sentences above).
+  short: {
+    leftArmArea: 'Look at a blue area on the brain',
+    numberKey: 'Press 1 or 2',
+    moveHand: 'Press W, A, S or D',
+    flipPalm: 'Tap Space twice',
+    fist: 'Tap Space twice and hold',
+    otherPart: 'Look at an area of another colour',
+    watchBody: 'Look at a leg area, then down, and press 1',
+    glow: 'Look at a blue area again: its muscles glow',
+    dragBrain: 'Hold Space on the brain and move',
+    orbit: 'Press and drag the brain to turn it',
+    thirdPerson: 'Press E',
+    mirror: 'Hold Space on the mirror body and move',
+    nice: 'Nice!',
+    finished: 'All done. Esc shows the controls.',
+    byText: {
+      'Good! Now try A or D to move it left or right.': 'Now A or D',
+      'Good! Now try W or S to move it forward or back.': 'Now W or S',
+      'That movement is already there. Press another number from the card.': 'Already there: press another number',
+      'It moved! Now look down at the body and press another number. The card keeps the list.': 'Now look down and press a number',
+      'This is your back! Move the mouse to look around. Press E to go back.': 'Press E to go back',
+      'The brain is in the way. Press and drag the mirror body to turn it (hold Shift as you press when a brain area is in front of it).': 'Hold Shift to reach past the brain',
+      'Good! Now click an arrow by the mirror body to turn it around.': 'Now drag the mirror body to turn it'
+    }
   },
   nice: 'Nice!',
   finished: 'All done! Press Esc any time to see all the controls.',
