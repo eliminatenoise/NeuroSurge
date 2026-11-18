@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { quietTipModel, quietPromptText, tipMoveWords, TIP_MOVES_MAX } from '../scene/src/ns-quiet.mjs';
-import { GUIDE } from '../scene/src/ns-text.mjs';
+import { GUIDE, TIP } from '../scene/src/ns-text.mjs';
 import { BODY_MOTOR_MAP } from '../scene/src/ns-bodymap.mjs';
 
 test('a movement drops the part its area already names', () => {
@@ -28,6 +28,21 @@ test('the tip names the motor area and numbers its movements; a body part gets i
   assert.equal(quietTipModel({ arrow: 'Turn the brain left' }).kind, 'arrow');
   assert.equal(quietTipModel({}), null);
   assert.equal(quietTipModel({ pick: { name: '' } }), null);
+});
+
+test('the compact tip identifies a held object and the right way to release it', () => {
+  const pick = { name: 'right deltoid', kind: 'muscle' };
+  const held = quietTipModel({ held: TIP.holding('mirror', false), pick });
+  assert.deepEqual(
+    { kind: held.kind, title: held.title, hint: held.hint, rows: held.rows },
+    { kind: 'hold', title: 'Holding the mirror body', hint: 'Let go of Space.', rows: [] },
+  );
+  const kept = quietTipModel({ held: TIP.holding('mirror', true), pick });
+  assert.equal(kept.hint, 'Tap Space to let go.');
+  assert.notEqual(held.key, kept.key);
+  assert.equal(quietTipModel({ held: TIP.holding('brain', false) }).title, 'Holding the brain');
+  assert.equal(quietTipModel({ held: TIP.holding('rightLeg', false) }).title, 'Holding your right foot');
+  assert.equal(quietTipModel({ held: TIP.holding('unknown', false), pick }).kind, 'muscle');
 });
 
 test('every guide goal and every alternative sentence has a short line', () => {

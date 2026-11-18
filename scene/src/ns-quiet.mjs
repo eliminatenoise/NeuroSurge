@@ -4,7 +4,8 @@
  *
  * The game now starts with the information cards off (R brings them back). What stays on screen is this small layer:
  *  - the TIP by the crosshair: the name of the motor area under it and its numbered movements (the number keys do
- *    them, a click does the marked one), or the name of the muscle or bone under it. Nothing else.
+ *    them, a click does the marked one), or the name of the muscle or bone under it. While holding something,
+ *    it names what Space holds and how to release it.
  *  - one short PROMPT at the top: the next thing to try, a few words.
  * Both are plain DOM text, written only when their words change. The words name game controls and atlas parts; the
  * signals in this game are simulated and unitless.
@@ -76,7 +77,11 @@ export function pairTipRows(rows, actionOf) {
  * groups apart; the row a click does is filled and carries a pointer mark. `teach` (ns-text TIP.teach: "Click, or
  * press a number") is one line under the choices for a newcomer.
  */
-export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '', teach = '' } = {}) {
+export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '', teach = '', held = null } = {}) {
+  if (held?.title) {
+    const { title, hint } = held;
+    return { kind: 'hold', title, hint, rows: [], key: `hold|${title}|${hint}` };
+  }
   if (area && typeof area === 'object') {
     const title = str(area.plainLabel) || str(area.shortLabel) || str(area.label) || str(area.id);
     const list = (Array.isArray(moves) ? moves : []).slice(0, TIP_MOVES_MAX);

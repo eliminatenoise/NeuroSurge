@@ -284,7 +284,7 @@ const STEP_TABLE = [
   intro: [part('Look at a motor area to see its movements. Click it or press a number from the list to move the body part. The arrow keys step to the next area. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
   { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
-    'move the pointer to carry it sideways, up or down. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
+    'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
     'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
     'A held limb moves only as far as its joints allow, and the brain area that moves it lights up. Press on a limb and drag across it to turn it, like a dial. ' +
@@ -337,7 +337,7 @@ const CONTROL_TABLE = [
   ['W / S', 'W moves the hand forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
-  ['Hold Space', 'aim at the brain, the mirror body or a limb. Move the pointer sideways, up or down to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Things stop where they would touch.'],
+  ['Hold Space', 'aim at the brain, the mirror body or a limb. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Things stop where they would touch.'],
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
@@ -366,7 +366,7 @@ const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
   'A / D': 'hand and held item left/right',
   'W / S': 'W farther, S closer; combine with A/D',
-  'Hold Space': 'hold the brain, mirror body or a limb. Move the pointer to carry it.',
+  'Hold Space': 'hold the brain, mirror body or a limb. Turn your view to carry it.',
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
@@ -618,11 +618,11 @@ export const HUD = deepFreeze({
   gazeBetweenPrefix: 'Looking at (moves nothing): ',
   pulseNone: '',
   pulseResidual: 'Arm relaxing back to rest',
-  grabbing: 'Move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. Let go of Space.',
+  grabbing: 'Turn your view to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space.',
   /** R558 (Message 40): while Space holds the brain or the mirror body (what: 'brain' | 'mirror'); kept: the hold was
    * taken with a tap (it stays after the tap, so a tap lets go), else it lasts while Space is down. */
   holdingItem: (what, kept = false) => `Holding ${what === 'mirror' ? 'the mirror body' : 'the brain'}. ` +
-    'Move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. ' +
+    'Turn your view to carry it. W moves it farther, S nearer, and A/D sideways. ' +
     (kept ? 'Tap Space to let go.' : 'Let go of Space to leave it there.'),
   /** R558 (Messages 2, 12 and 40): while Space holds one of your own limbs (ns-grasp LIMB_IDS); kept as above. */
   holdingLimb: (limb, kept = false) => `Holding your ${({ rightArm: 'right hand', leftArm: 'left hand (W/A/S/D and your look move it, as always)', rightLeg: 'right foot', leftLeg: 'left foot' })[limb] || 'limb'}` +
@@ -1589,7 +1589,7 @@ export const GUIDE = deepFreeze({
     // R5-text (D17): points out the brain-to-muscle glow; it needs a NEW switch-on while this line shows (ns-guide).
     glow: 'Look at a blue area. See its muscles glow in the same blue?',
     // The brain can be carried with the pointer or with W/A/S/D while Space holds it.
-    dragBrain: 'Hold Space on the brain. Move the pointer to carry it, then let go of Space to leave it there.',
+    dragBrain: 'Hold Space on the brain. Turn your view to carry it, then let go of Space.',
     // R4-fix (review RP4): with the mouse captured the crosshair must look far from the brain to reach an arrow; a free
     // mouse (Esc twice) lets you click the arrows while you watch the brain. R5-text (D16): no "curved" (user R20).
     orbit: 'Press Esc twice for a free mouse. Then click or hold an arrow by the brain to turn the brain.',
@@ -1630,7 +1630,7 @@ export const GUIDE = deepFreeze({
     otherPart: 'Look at another colour and click it',
     watchBody: 'Look at a leg area, then down, and press 1',
     glow: 'Look at a blue area again: its muscles glow',
-    dragBrain: 'Hold Space on the brain. Move it. Let go',
+    dragBrain: 'Hold Space on the brain. Look around. Let go',
     orbit: 'Press and drag the brain to turn it',
     thirdPerson: 'Press E: the view from outside',
     mirror: 'Click a green arrow by the mirror body',
@@ -1666,7 +1666,17 @@ export const GUIDE = deepFreeze({
 /** 19 November 2026 (EASE; the owner: "It's not clear what the numbers do"): the one line under a motor area's choices
  * in the tip, shown to a newcomer only (ns-app stops it after a few presses). The filled row carries a drawn pointer:
  * a click does that one; each row's key cap is the number key that does it. */
-export const TIP = deepFreeze({ teach: 'Click, or press a number' });
+const HELD_TARGET_WORDS = Object.freeze({
+  brain: 'the brain', mirror: 'the mirror body',
+  rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot',
+});
+export const TIP = deepFreeze({
+  teach: 'Click, or press a number',
+  holding(target, kept) {
+    const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;
+    return name ? { title: `Holding ${name}`, hint: kept ? 'Tap Space to let go.' : 'Let go of Space.' } : null;
+  },
+});
 
 /** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";
  * nice = true puts "Nice! " in front (a goal was just done). */

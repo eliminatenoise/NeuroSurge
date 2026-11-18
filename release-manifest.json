@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-31",
+  "version": "experimental-2026-11-19-body-update-32",
   "experimental": true,
-  "source": "Body update 31. Coarser meshes (3.2 MB), a dark edge on every limb, pale fingertips and toes, one fast carry.",
+  "source": "Body update 32. The compact tip identifies what Space holds and how to let go.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9505,
-      "sha256": "119bf009082d6f68d023d196e8c31bb0540e94aefdf5adc638cec561639a552e"
+      "bytes": 9462,
+      "sha256": "0f3ca70b9dfdccff5da52401a278a3c96c9448032ef984ac0693eaf4ef9a0b3e"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 58160,
-      "sha256": "6ea1f6b19184cf4b4e2432e4a74e07465f015daf2adce30e401de357985a43f6"
+      "bytes": 58456,
+      "sha256": "ba31232dd4716e13b7cfe0971d5151ec3bce09bfb6b09223d6760906b9df4925"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 32098,
-      "sha256": "adaf075d8d2010e5eb26af0eac607c48823d7c84e4696d23181a9aca7f9bee66"
+      "bytes": 32104,
+      "sha256": "5432bacc2d0ef537ed210c85bd2e17faf0edab5404d356d30825156e60822c43"
     },
     {
       "path": "README.md",
-      "bytes": 16812,
-      "sha256": "e6bf8d943d61c922bd0ec25f78153dbc24ca91e5fe944f0882554c22f746e2f1"
+      "bytes": 17028,
+      "sha256": "4b36b2f4790a7fb86ec2dd6f2bc2f9d2f5d15851a99a7de45031703da4af5531"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "dde819be65b2202527f4e63522e90e649e8233cec60993e440553d501347ce91"
+      "sha256": "503adabda7270641ffc0db1932080377b325afcc6fc199db85ecb91101f1dc2c"
     },
     {
       "path": "index.html",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 752228,
-      "sha256": "0233d3ba277963f5020b58479750894edfc99195193ef1cfaf0e3f9b4ea8b27d"
+      "bytes": 752488,
+      "sha256": "e821d4a4fcfaee38d22063e1d0ddf4d4233e62f17c1a20d406c3362771e84b15"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4132,8 +4132,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 12998,
-      "sha256": "ee4ddbf09cd8d6e656bdbf13ea0113b8c5362a9d31dc5ff9b8727b53aabdab9b"
+      "bytes": 13218,
+      "sha256": "358b8449380b428d332c9ef7db72495bb68e6b8e37c8c64377bf749b8b0924e0"
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
@@ -4172,8 +4172,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 137845,
-      "sha256": "48f8cf151e0f2f5ac42468f2b484b0af31183c887147fd7781905149982f277f"
+      "bytes": 138243,
+      "sha256": "878a10c1f4d8b3cdce6fd2e05fe83faad86b7221dead9f1340426b7d673cbfa5"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4397,8 +4397,8 @@
     },
     {
       "path": "tests/quiet.test.mjs",
-      "bytes": 4483,
-      "sha256": "8a819942e5f6d18d8699e7a122552a8c24c283cc866c0b3ff60aef1775812763"
+      "bytes": 5372,
+      "sha256": "4ba412bdc85f6f55086a04bfaadb6cc2463d90ca34d661f9920b3f49ac6d6696"
     },
     {
       "path": "tests/room.test.mjs",

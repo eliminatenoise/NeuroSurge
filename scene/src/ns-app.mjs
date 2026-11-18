@@ -9123,8 +9123,11 @@ export function start(params = {}) {
             // 18 November 2026 (SEE, brief: "Shift takes the leg - make that visible"): while Shift is held the tip names the
             // body part Shift reaches (the leg in front of the area looked at, the limb hidden behind the part seen).
             if (reachBody && !arrowTip) tipModel = quietTipModel({ pick: reachBody.rec });
+            const carried = simState.objectCarry;
+            const held = NT.TIP.holding(limbGrasp?.limb || (carried?.held ? carried.target : null), spaceGrasp === 'kept');
+            if (held) tipModel = quietTipModel({ held });
           }
-          if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', Boolean(tipModel?.hint));
+          if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', tipModel?.kind === 'area' && Boolean(tipModel.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
