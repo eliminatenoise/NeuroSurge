@@ -1652,6 +1652,15 @@ The user, after body update 31: “Maybe we were much better off with the matte 
 - **Hands.** Space closes the left hand only; the right hand closes while the mouse or trackpad button is down. (Since 17 November a Space hold had closed both.)
 - **Beat.** The brain's beat, slide and flush are about a third of the morning's again: there if looked for.
 
+## 125. Drag a limb to turn and bend it; turn a held thing while carrying it (19 November)
+
+The user: “when we click on a limb and go left and right, that gives us rotation of the limb. But if we go up and down with the cursor, that gives us extension / flexion of the limb. And we're talking about full range of motion here, according to how far we push it on the trackpad or mouse.” And: “simultaneous controls where we might be moving something in the horizontal plane ... or the vertical plane ... And then if we click whilst ... grasping, then we can do orbital shift at the same time.”
+
+- **A limb.** Press on one of your limbs and drag (`LIMB_DRAG` in `ns-app.mjs`). Left and right turn it about its own length, half a degree a pixel. Up bends it and down straightens it, 0.55 degrees a pixel: a press on the upper arm or the thigh moves the shoulder or the hip, a press anywhere below moves the elbow or the knee. The joint goes as far as the drag goes, through its whole range, and stays there; its muscles and its strip area light as for a movement switched on from the brain. (Before, a drag only rolled the limb, by a rule that mixed both directions.) The left arm, which has its own rig, turns as before and comes nearer or reaches farther with up and down, inside the short reach its fit still allows.
+- **A held thing.** While Space holds the brain or the mirror body, the pointer carries it with the look, W / A / S / D carry it away, nearer and sideways, and a press-and-drag now turns it about itself at the same time; while the button is down the view stays, and when it comes up the pointer carries the thing with the look again. (Before, a press during a hold did nothing.)
+
+Checked by the author in the browser: the right thigh raised to 110 degrees by a 200 px drag up, turned to the end of its range by a drag right, and lowered to its full extension by a drag down; the held brain turned by a drag while D went on moving it.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

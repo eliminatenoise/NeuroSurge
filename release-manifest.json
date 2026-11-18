@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-33",
+  "version": "experimental-2026-11-19-body-update-34",
   "experimental": true,
-  "source": "Body update 33. A matte, flat-toned look with dark edges; a larger, brighter motor strip; Space closes the left hand and a click the right.",
+  "source": "Body update 34. Drag a limb to turn and bend it through its whole range; turn a held thing while carrying it.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 251347,
-      "sha256": "493f0df92384350708e4d011c7093dbe14432f79efea3ff57352df9429fcab85"
+      "bytes": 253306,
+      "sha256": "a8c1e7931ac3af3bc4a9254337100f2f0589a74e36565ddf3f3a8e0bf94d594b"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 32664,
-      "sha256": "bc113abc92ecd91a0dabc7624d96a8fc1e5d8fe52178a7d8f3105261e95eae9f"
+      "bytes": 32775,
+      "sha256": "31f98ce7becfc31a00a39579bf60d37e04c6fab0da177eea1416135506174f75"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "8bf6f6b81aea8aaa233bb3b01fc913ba8ed137fc67a79e4f7d545e2cba7fdbbf"
+      "sha256": "b550ea654fed13abf934de44fb57afde08d199ad8ad62000a0c690b61ae61db4"
     },
     {
       "path": "index.html",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 753058,
-      "sha256": "cbb5f7f614d49cc827345c5a45a7eb2e4bbc1b70ddfc7b3d5e05bd84a1161e71"
+      "bytes": 756011,
+      "sha256": "165d2be542ca657c2d70a3dca4a44c32940bbc0f60b89b1a9742c40c4fd78a1b"
     },
     {
       "path": "scene/src/ns-arm.mjs",

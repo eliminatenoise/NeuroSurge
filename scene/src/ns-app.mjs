@@ -6249,7 +6249,12 @@ export function start(params = {}) {
         dragTargetAt: (x, y, behind = false) => {
           if (!shellIsPlaying(shellState) || !appliedSize || !sceneFn('controlLayersAt')) return null;
           const spaceHolds = cs && cs.space && (cs.space.grasp === 'held' || cs.space.grasp === 'kept');
-          if (spaceHolds || limbGrasp || (simState && simState.objectCarry && simState.objectCarry.held)) return null;
+          // 19 November 2026 (the owner: "if we click whilst ... grasping, then we can do orbital shift at the same time"):
+          // a press while Space holds the brain or the mirror body turns that thing about itself for as long as the
+          // button is down; W / A / S / D go on carrying it meanwhile. (Before, a press during a hold did nothing.)
+          const carried = simState && simState.objectCarry && simState.objectCarry.held ? simState.objectCarry.target : null;
+          if (carried === 'brain' || carried === 'mirror') { dragLimb = null; dragLimbSeg = null; dragLimbVia = null; return carried; }
+          if (spaceHolds || limbGrasp || carried) return null;
           const px = x === null ? appliedSize.width / 2 : x, py = y === null ? appliedSize.height / 2 : y;
           const it = itemAt(px, py, behind === true);
           dragLimb = it && it.target === 'limb' ? it.limb : null;
@@ -6903,8 +6908,35 @@ export function start(params = {}) {
         g.targetMm = offLen > lead ? r.endMm.map((v, i) => v + off[i] * lead / offLen) : want;
         applyLimbJoints(r.joints, out);
       }
+      /** 19 November 2026 (the owner: "when we click on a limb and go left and right, that gives us rotation of the limb.
+       * But if we go up and down with the cursor, that gives us extension / flexion of the limb. And we're talking about
+       * full range of motion here, according to how far we push it on the trackpad or mouse"). LIMB_DRAG: a press on one
+       * of your limbs and a drag: LEFT / RIGHT turns it about its own length (turnDegPerPx; the limb's dial joint, as
+       * before), UP bends it and DOWN straightens it (flexDegPerPx): the joint above the part pressed (a press on the
+       * upper arm or thigh moves the shoulder or hip; anywhere below it the elbow or knee), in proportion to the drag
+       * and through the joint's whole range. The left arm (its own rig) turns as before and comes nearer / reaches
+       * farther with up / down (reachMPerPx, inside the reach its fit allows). */
+      const LIMB_DRAG = Object.freeze({ on: true, turnDegPerPx: 0.5, flexDegPerPx: 0.55, reachMPerPx: 0.0016 });
+      function applyLimbFlex(drag, out) {
+        if (!LIMB_DRAG.on || !drag || !dragLimb || !(Math.abs(drag.dy) > 0)) return;
+        const up = -drag.dy; // pointer up = bend
+        if (dragLimb === 'leftArm') {
+          const r = simState && simState.reach;
+          if (r && Number.isFinite(r.depth)) simState = { ...simState, reach: { ...r, depth: Math.max(0.05, r.depth - up * LIMB_DRAG.reachMPerPx) } };
+          return;
+        }
+        const c = NsGrasp.LIMB_CHAIN[dragLimb];
+        if (!c || !canSolveLimbs()) return;
+        const root = dragLimbSeg === c.rootSeg, joint = root ? c.joints[0] : c.bend, sign = root ? 1 : c.bendSign;
+        const held = simState && simState.activity && simState.activity.bodyJointTargets ? simState.activity.bodyJointTargets[joint] : undefined;
+        const L = limbLimits()[joint] || (mods.body.BODY_JOINT_LIMITS && mods.body.BODY_JOINT_LIMITS[joint]) || [-180, 180];
+        const cur = Number.isFinite(held) ? held : Number.isFinite(bodyPosed[joint]) ? bodyPosed[joint] : 0;
+        const next = clamp(cur + sign * up * LIMB_DRAG.flexDegPerPx, L[0], L[1]);
+        if (next !== cur) applyLimbJoints({ [joint]: next }, out);
+      }
       /** A press-and-drag on an own limb: turn it about its long axis like a dial (rolling a rod under a finger). */
       function applyLimbDial(drag, out) {
+        applyLimbFlex(drag, out);
         if (!drag || !dragLimb || !camPose || !camBodyToWorld) return;
         const B = camBodyToWorld, look = camPose.gazeLook || { yaw: cs.yaw, pitch: cs.pitch };
         const cy = Math.cos(look.yaw), sy = Math.sin(look.yaw), cp = Math.cos(look.pitch), spp = Math.sin(look.pitch);
@@ -6918,7 +6950,7 @@ export function start(params = {}) {
         if (dragLimb === 'leftArm') {
           // The game arm: a quarter of a turn or so one way or the other switches its palm-down / palm-up area on.
           const axis = seenDir(viewDir); // the left arm points along the look at full reach
-          leftDial += turnSign * NsGrasp.rollDeg({ axisWorld: axis, viewDirWorld: [0, -1, 0], rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
+          leftDial += LIMB_DRAG.on ? turnSign * drag.dx * LIMB_DRAG.turnDegPerPx : turnSign * NsGrasp.rollDeg({ axisWorld: axis, viewDirWorld: [0, -1, 0], rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
           const want = leftDial <= -25 ? 'supination' : leftDial >= 25 ? 'pronation' : null;
           if (!want) return;
           leftDial = 0;
@@ -6937,7 +6969,8 @@ export function start(params = {}) {
         const root = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, 'root'))), end = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, upper ? 'bend' : 'end')));
         const eye = camPose.position || [0, 0, 0], mid = root.map((v, i) => (v + end[i]) / 2);
         const toLimb = mid.map((v, i) => v - eye[i]), tl = Math.hypot(...toLimb) || 1;
-        const deg = turnSign * NsGrasp.rollDeg({ axisWorld: end.map((v, i) => v - root[i]), viewDirWorld: toLimb.map(v => v / tl), rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
+        const deg = LIMB_DRAG.on ? turnSign * drag.dx * LIMB_DRAG.turnDegPerPx
+          : turnSign * NsGrasp.rollDeg({ axisWorld: end.map((v, i) => v - root[i]), viewDirWorld: toLimb.map(v => v / tl), rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
         if (deg === 0 || !dial) return;
         // The dial joint is one of the body's rotation joints (the Space dance's, held like a latch, Reset body puts it
         // back): the turn starts from the angle the activity holds and stays inside the joint's range (the activity also
