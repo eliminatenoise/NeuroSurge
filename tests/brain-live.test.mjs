@@ -38,19 +38,21 @@ test('the game brain beats with the loading picture\'s wave, on the same clock',
   assert.ok(Math.abs(L.beat - brainBeat(12.3).beat) < 1e-12 && Math.abs(L.breath - brainBeat(12.3).breath) < 1e-12);
 });
 
-test('the beat is seen without looking for it, and still small', () => {
+test('the beat is there but faint', () => {
   // 18 November (the check of the first build): at the loading picture's size or less the beat was not noticed in the
   // game (a 3.5 px move of the outline of a 700 px brain). Since the tissue under the crosshair stays put (next test),
   // the swell is now at least the loading picture's, and still a calm one.
   const B = BRAIN_LIVE.beat;
-  assert.ok(B.swell >= BRAIN_BEAT.swell && B.swell <= 0.02, 'at least the loading picture\'s, but no throb');
-  assert.ok(B.breathSwell >= BRAIN_BEAT.breathSwell && B.breathSwell <= 0.01);
+  // 19 November 2026 (the owner: "the beating of the brain is way too obvious. It should be far more subtle"): a faint
+  // beat, well under the loading picture's.
+  assert.ok(B.swell > 0 && B.swell <= 0.006, 'a faint beat');
+  assert.ok(B.breathSwell > 0 && B.breathSwell <= 0.004);
   // a point 75 mm from where the swell grows (the far end of the motor strip from a look at the brain's middle): the
   // whole swing there (beat and breath together) is between 1.2 and 3 mm
   const L = createBrainLive();
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < 600; i++) { stepBeat(L, 1 / 60, 0, 0); const m = liveMove(L, [75, 0, 0], [0, 0, 0])[0]; lo = Math.min(lo, m); hi = Math.max(hi, m); }
-  assert.ok(hi - lo > 1.2 && hi - lo < 3, `swing ${hi - lo} mm`);
+  assert.ok(hi - lo > 0.2 && hi - lo < 1, `swing ${hi - lo} mm`);
 });
 
 test('what is under the crosshair stays under it through the whole beat', () => {

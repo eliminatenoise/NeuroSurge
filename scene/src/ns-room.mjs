@@ -58,7 +58,8 @@ export const ROOM = Object.freeze({
   centre: Object.freeze([0, -7.5]), bodyAt: Object.freeze([-0.04, -0.23, -0.53]),
   black: Object.freeze([0.0015, 0.0021, 0.0033]),
   pool: Object.freeze({ colour: Object.freeze([0.020, 0.040, 0.042]), radiusM: 19, amb: 0.05 }),
-  tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0.55 }),
+  // 19 November 2026 (eye comfort; the owner liked a plain dark background): the tile lines are barely there (dark 0.55 before).
+  tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0.12 }),
   wall: Object.freeze({ colour: Object.freeze([0.0045, 0.0105, 0.0115]), heightM: 30, lobes: 7, uneven: 0.16 }),
   lamps: Object.freeze([Object.freeze([0.3, 4.9, 3.8, 1]), Object.freeze([-5, 9.3, 1.7, 0.75]), Object.freeze([-6.2, 5.1, 1.2, 0.6])]),
   lamp: Object.freeze({ colour: Object.freeze([0.19, 0.245, 0.25]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),

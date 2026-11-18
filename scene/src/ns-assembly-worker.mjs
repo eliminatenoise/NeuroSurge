@@ -3,9 +3,13 @@
  * coming together. It runs off the page's main thread, so the picture keeps moving while the game builds the body.
  * A loading picture only: nothing here is read by the game.
  *
- * Messages in:  { type: 'init', canvas, width, height, pixelRatio } | { type: 'obj', kind, bytes (ArrayBuffer) } |
- *               { type: 'progress', fraction } | { type: 'resize', width, height, pixelRatio } | { type: 'stop' }
- * Messages out: { type: 'ready' } | { type: 'error', message } | { type: 'state', ... } (once a second)
+ * Messages in:  { type: 'init', canvas, width, height, pixelRatio, room, reducedMotion, expectReadyS } |
+ *               { type: 'obj', kind, place ({ track, tier, frac, name, groups, layer } or null), bytes (ArrayBuffer) } |
+ *               { type: 'progress', fraction } | { type: 'resize', width, height, pixelRatio } |
+ *               { type: 'known', counts } (a manifest's parts per tier) |
+ *               { type: 'hurry' } (the game is ready: the parts still held come in quickly) | { type: 'stop' }
+ * Messages out: { type: 'ready' } | { type: 'error', message } | { type: 'state', ... } (once a second) |
+ *               { type: 'starts', starts: [[time s, track, tier], ...], at } (once, at the hurry)
  */
 import * as THREE from '../../vendor/three.module.js';
 import { createAssemblyView, parseObjBytes } from './ns-assembly-core.mjs';
@@ -24,7 +28,7 @@ function tick(now) {
   const t0 = performance.now();
   while (queue.length && performance.now() - t0 < 6) {
     const q = queue.shift();
-    try { view.add(q.kind, parseObjBytes(new Uint8Array(q.bytes))); } catch { /* a part this picture cannot read is left out */ }
+    try { view.add(q.kind, parseObjBytes(new Uint8Array(q.bytes)), q.place); } catch { /* a part this picture cannot read is left out */ }
   }
   // "Finishing": nearly every file is in and none has come for a moment, so the page is now building the body.
   view.setProgress(fraction, fraction > 0.9 && queue.length === 0 && performance.now() - lastObjAt > 900);
@@ -37,12 +41,18 @@ self.onmessage = ev => {
   const m = ev.data || {};
   try {
     if (m.type === 'init') {
-      view = createAssemblyView({ THREE, canvas: m.canvas, width: m.width, height: m.height, pixelRatio: m.pixelRatio, room: m.room || null });
+      view = createAssemblyView({ THREE, canvas: m.canvas, width: m.width, height: m.height, pixelRatio: m.pixelRatio, room: m.room || null, reducedMotion: m.reducedMotion === true,
+        expectReadyS: Number.isFinite(m.expectReadyS) ? m.expectReadyS : null });
       running = true;
       self.postMessage({ type: 'ready' });
       raf(tick);
     } else if (m.type === 'obj') {
-      if (running) { queue.push({ kind: m.kind, bytes: m.bytes }); lastObjAt = performance.now(); }
+      if (running) { queue.push({ kind: m.kind, place: m.place || null, bytes: m.bytes }); lastObjAt = performance.now(); }
+    } else if (m.type === 'known') {
+      if (view) view.know(m.counts);
+    } else if (m.type === 'hurry') {
+      // The order of the starts so far goes back once, for checks (the page keeps it in its state()).
+      if (view) { self.postMessage({ type: 'starts', starts: view.starts(), at: Math.round(performance.now()) }); view.hurry(); }
     } else if (m.type === 'progress') {
       if (Number.isFinite(m.fraction)) fraction = Math.max(fraction, m.fraction);
     } else if (m.type === 'resize') {

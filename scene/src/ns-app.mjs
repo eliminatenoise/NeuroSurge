@@ -106,6 +106,8 @@ import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED } fr
 import * as BodyArmBridge from './ns-body-arm-bridge.mjs';
 import * as NsCollide from './ns-collide.mjs';
 import * as NsGrasp from './ns-grasp.mjs';
+import * as NsContact from './ns-contact.mjs'; // 18 November 2026 (package CONTACT): limbs push limbs
+import { seeHiddenEntry, seeTakesGhost, seeLimbOfGroup } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs
 
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
@@ -316,7 +318,10 @@ export function headPitchForLook(lookPitchDeg, L = HEAD_LOOK) {
 }
 /** R558 (HEAD_LOOK, "corresponding activity on the brain and mirror body"): the display level (0..1) of the neck / trunk
  * area and muscles at the end of a joint's range, linear below; under a click or look activation (1). Display choice. */
-export const HEAD_GLOW = Object.freeze({ level: 0.75 });
+// 19 November 2026 (the owner: "when you look up and down, the pelvis pops out"; "simplicity, clarity"): 0.75 -> 0.22. A
+// look down the body lit the whole belly and pelvis in full colour, as strongly as a movement switched on from the
+// brain; a look now only tints the muscles that turn the head and bend the trunk.
+export const HEAD_GLOW = Object.freeze({ level: 0.22 });
 /** HEAD_LOOK with the ranges taken from an ns-body module (BODY_JOINT_LIMITS, LOOK_TWIST_LIMIT_DEG) when present (pure). */
 export function headLookLimits(body = null, base = HEAD_LOOK, rest = null) {
   const L = body && body.BODY_JOINT_LIMITS ? body.BODY_JOINT_LIMITS : null;
@@ -3241,7 +3246,15 @@ export function elbowText(elbow) {
  * what the "Looking at" card names; leave it undefined for a free pointer (the scene's area meshes decide). When it is
  * true and the ray meets the brain only as clear glass there (a classifier / mesh border), that glass entry stands in
  * for the area (kind 'area', regionId null, viaLook true). `seen` is what is SEEN (the first entry that is not clear
- * glass), for the look's overrides and the HUD's "behind your ..." words. */
+ * glass), for the look's overrides and the HUD's "behind your ..." words.
+ * 18 November 2026 (SEE, owner 17 November: "fix it when limbs become invisible because they're blocked behind other
+ * limbs"; ns-see): `hidden` is the limb hidden behind the body part seen there (ns-see seeHiddenEntry: another limb of the
+ * same body, drawn over it as a ghost). opts.ghost: the limbs LOCKED AWAY ([9] booleans by ghost code: hidden and hardly
+ * seen anywhere in the picture; the scene's census). A locked-away limb's ghost (drawn filled) is what the player aims at
+ * (ns-see seeTakesGhost): it becomes `front` (and `ghost`), and the body part seen in front of it is `behind` (Shift
+ * reaches it). Elsewhere a hidden limb is the first thing Shift reaches behind a body part (before the brain or the
+ * mirror body). Behind a motor area the look names, the area stays the default and Shift takes a locked-away ghost there,
+ * else the body part seen. */
 export function controlTargets(layers, opts = {}) {
   const list = Array.isArray(layers) ? layers.filter(l => l && (l.item === 'brain' || l.item === 'own' || l.item === 'mirror') && Number.isFinite(l.distance)) : [];
   // `after`: among glass-only answers, glass beyond this distance is preferred (the brain behind rather than the glass in
@@ -3255,6 +3268,9 @@ export function controlTargets(layers, opts = {}) {
     return glassAfter || glass;
   };
   const seen = seenIn(list);
+  // 18 November 2026 (SEE): the limb hidden behind the body part seen, and whether its drawn ghost is what is aimed at.
+  const hidden = seen && seen.item !== 'brain' ? seeHiddenEntry(list) : null;
+  const ghost = hidden && opts && seeTakesGhost(opts.ghost, hidden) ? hidden : null;
   const lookArea = opts && typeof opts.lookArea === 'boolean' ? opts.lookArea : null;
   const areaEntry = list.find(l => l.item === 'brain' && l.kind === 'area') || null;
   // The brain entry that stands for the area the look names: the area mesh hit, else (classifier says area) the first
@@ -3263,13 +3279,14 @@ export function controlTargets(layers, opts = {}) {
   if (ref) {
     const area = ref.kind === 'area' ? ref : { ...ref, kind: 'area', regionId: null, viaLook: true };
     // A body part seen in front of the area the look names: the area is the default, that body part the other item.
-    if (seen && seen.item !== 'brain' && seen.distance < ref.distance) return { front: area, behind: seen, seen };
+    if (seen && seen.item !== 'brain' && seen.distance < ref.distance) return { front: area, behind: ghost || seen, seen, hidden, ghost };
     // Nothing in front of the area: the other item is what lies behind the brain there (as below).
-    return { front: area, behind: seenIn(list.filter(l => l.item !== 'brain'), ref.distance), seen };
+    return { front: area, behind: seenIn(list.filter(l => l.item !== 'brain'), ref.distance), seen, hidden: null, ghost: null };
   }
+  if (ghost) return { front: ghost, behind: seen, seen, hidden, ghost }; // 18 November 2026 (SEE)
   const front = seen;
-  const behind = front ? seenIn(list.filter(l => l.item !== front.item), front.distance) : null;
-  return { front, behind, seen };
+  const behind = hidden || (front ? seenIn(list.filter(l => l.item !== front.item), front.distance) : null);
+  return { front, behind, seen, hidden, ghost: null };
 }
 /** Round 3 (R3-player item 8): the "lost the brain" hint shows when the grab offset exceeds `dragged` and the look is
  * more than `fromLook` from the dragged brain (radians; display choice). */
@@ -4858,9 +4875,17 @@ export function start(params = {}) {
    * from the start posture, whether the look or a held action put it there (holding the head turned is the neck's
    * work). Turning left uses the right hemisphere's area and right the left's (the body map's own game choice); bending
    * and the chest turn use both sides' areas (axial muscles, bilateral input in the body map). Display values only. */
+  // 19 November 2026: counted from where the head and trunk are when play begins (the start look is a steep look down
+  // the body, which bends the trunk: the belly was lit in its area's colour from the first frame, on both bodies, with
+  // nothing pressed). headActBase: the first head state seen.
+  let headActBase = null;
   function headActivity(head) {
     if (!head || !head.joints) return null;
-    const j = head.joints, L = headLimits, k = HEAD_GLOW.level, regions = {}, rows = [];
+    const j0 = head.joints, L = headLimits, k = HEAD_GLOW.level, regions = {}, rows = [];
+    const tb0 = Number.isFinite(head.trunkDeg) ? head.trunkDeg : j0.trunk_flex, dir0 = Number.isFinite(head.bendDirDeg) ? head.bendDirDeg * DEG : 0;
+    const raw = { rot: j0.neck_rot || 0, flex: j0.neck_flex || 0, sag: (tb0 || 0) * Math.cos(dir0), side: (tb0 || 0) * Math.sin(dir0), twist: head.twistDeg || 0 };
+    if (!headActBase) headActBase = raw;
+    const j = { neck_rot: raw.rot - headActBase.rot, neck_flex: raw.flex - headActBase.flex };
     const put = (rid, v) => { if (v > 0 && !(regions[rid] >= v)) regions[rid] = Math.min(1, v); };
     const turn = clamp(j.neck_rot / L.neckRotDeg, -1, 1) * k;
     // R558 (hunt 3): each row names the area it lights (regionId): its muscles take that area's colour and start
@@ -4871,8 +4896,7 @@ export function start(params = {}) {
     if (bend !== 0) { put('lh_neck', Math.abs(bend)); put('rh_neck', Math.abs(bend)); rows.push({ actionId: bend > 0 ? 'lh_neck_flex' : 'lh_neck_extend', level: Math.abs(bend), regionId: 'lh_neck' }); }
     // The trunk bend toward the head's direction: its forward / back part (abdominals / back muscles) and its sideways
     // part (the obliques of the side it bends to).
-    const tb = Number.isFinite(head.trunkDeg) ? head.trunkDeg : j.trunk_flex, dir = Number.isFinite(head.bendDirDeg) ? head.bendDirDeg * DEG : 0;
-    const sag = tb * Math.cos(dir), side = tb * Math.sin(dir);
+    const sag = raw.sag - headActBase.sag, side = raw.side - headActBase.side;
     const trunk = clamp(sag >= 0 ? sag / L.trunkFlexDeg : sag / L.trunkExtDeg, -1, 1) * k;
     if (trunk !== 0) { put('lh_trunk', Math.abs(trunk)); put('rh_trunk', Math.abs(trunk)); rows.push({ actionId: trunk > 0 ? 'lh_trunk_flex' : 'lh_trunk_extend', level: Math.abs(trunk), regionId: 'lh_trunk' }); }
     const lean = clamp(side / L.trunkSideDeg, -1, 1) * k;
@@ -4882,7 +4906,7 @@ export function start(params = {}) {
       // The body map's own areas for these movements: bending to the left is rh_trunk's, to the right lh_trunk's.
       rows.push({ actionId: null, level: Math.abs(lean), agonists: [`${sideName} external oblique`, `${sideName} internal oblique`], antagonists: [], stabilizers: [], regionId: lean > 0 ? 'rh_trunk' : 'lh_trunk' });
     }
-    const twist = L.twistDeg > 0 ? clamp(head.twistDeg / L.twistDeg, -1, 1) * k : 0;
+    const twist = L.twistDeg > 0 ? clamp((raw.twist - headActBase.twist) / L.twistDeg, -1, 1) * k : 0;
     if (twist !== 0) {
       put('lh_trunk', Math.abs(twist)); put('rh_trunk', Math.abs(twist));
       // Turning the chest to the left: the right external and left internal oblique (and the mirror image to the right).
@@ -5000,6 +5024,7 @@ export function start(params = {}) {
   const brainPointWorld = (q, T) => (q && T && T.matrix ? NsCollide.apply(T.matrix, q[0], q[1], q[2]) : null);
   const contact = { stops: 0, last: null, untilMs: 0, bodyBlocked: null, lastStart: null, skipGuards: 0 };
   let collisionReportFn = null; // R558: set once the scene is up (inspect({ collision: true }))
+  let selfContactReportFn = null; // 18 November 2026 (package CONTACT): inspect({ contact: true })
   // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
   let controlTargetsShown = null;
   const orbitQueue = [];
@@ -5273,6 +5298,26 @@ export function start(params = {}) {
       const rec = mods.body.handSkinRecords(bodyRig, sourceMeshes);
       if (rec.size) { callScene('setBodySkin', rec, bodyBaked.segments); handSkinReady = true; }
     } catch (err) { handSkinNote = errorText(err); }
+  }
+
+  /** 18 November 2026 (package CONTACT, ns-contact): your own limbs against each other and the trunk. The contact balls
+   * are built once per body from its source meshes (about 50-90 ms), with each pair's allowed overlap taken at the start
+   * posture as drawn (the knees and elbow slightly bent). selfContactStep uses them every frame a limb moves. */
+  let selfContact = null;
+  let armContactPivots = null; // the game arm rig's own pivots (source mm: shoulder, elbow, wrist), for its contact balls
+  function installSelfContact(sourceMeshes) {
+    selfContact = null;
+    const B = mods.body;
+    if (!bodyRig || !bodyBaked || !B || typeof B.poseBodySegments !== 'function' || typeof B.bodyPostureAngles !== 'function' || typeof B.clampBodyJointTargets !== 'function') return;
+    try {
+      const model = NsContact.buildContactBalls(bodyRig, sourceMeshes);
+      let rest = B.clampBodyJointTargets(B.bodyPostureAngles(bodyBaked)).applied;
+      if (typeof B.passiveKneeAngles === 'function') rest = B.passiveKneeAngles(rest);
+      if (typeof B.softExtensionAngles === 'function') rest = B.softExtensionAngles(rest);
+      NsContact.contactPairs(model, NsContact.poseBalls(model, B.poseBodySegments(bodyRig, rest, { anchor: bodyAnchor, baked: bodyBaked, holdChest: false })));
+      selfContact = { model, rig: bodyRig, B0: null, B0of: null, lastOut: null, lastBase: null, prevAct: null, pushedLast: null, recoil: null,
+        touching: new Set(), flashAt: new Map(), pushes: 0, stops: 0, flashes: 0, lastMs: 0, maxMs: 0, last: null, note: null };
+    } catch (err) { selfContact = { model: null, note: errorText(err) }; }
   }
 
   /** 18 November 2026 (package BULK, ns-body MUSCLE_SWELL): the muscles' contraction swell. Its per-vertex data is
@@ -5563,6 +5608,8 @@ export function start(params = {}) {
     cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
     limbGrasp = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too
+    // 18 November 2026 (package CONTACT): every pushed joint went back with the activity; no recoil or push carries on
+    if (selfContact && selfContact.model) { selfContact.recoil = null; selfContact.pushedLast = null; selfContact.B0 = null; selfContact.B0of = null; selfContact.lastOut = null; selfContact.lastBase = null; selfContact.prevAct = null; selfContact.touching = new Set(); contact.selfBlocked = false; }
     // R558 (HEAD_LOOK; user, Message 6: "they need to be activated back into previous position or the whole thing
     // reset"): the look IS the head, so the start posture includes the head facing straight ahead. Without this the
     // held neck / trunk offset was removed but the mouse look that had made up for it stayed: after a held "turn head
@@ -5848,6 +5895,7 @@ export function start(params = {}) {
 
       const bodyMap = bodyMapOf(mods.bodyMap);
       const data = prepareSceneData({ binding: inputs.binding, assets: inputs.assets, placeholder: isPlaceholder, armTwist: wholeArmOption ? 'chain' : 'continuous' });
+      armContactPivots = !isPlaceholder && data && data.rig && data.rig.pivots ? data.rig.pivots : null; // 18 November 2026 (package CONTACT)
       // Region mode only when the scene can also DRAW the brain transform (what is drawn is what is picked).
       const regionPrep = sceneFn('setBrainTransform') ? prepareBrainSegmentation({ assets: inputs.assets, bodyMap })
         : { segmentation: null, brainBounds: null, reason: 'ns-scene-three has no setBrainTransform' };
@@ -6332,6 +6380,7 @@ export function start(params = {}) {
           bodyLayers = layers;
           installBodyLift();
           installHandSkin(inputsB.meshesById);
+          installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
           startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
           // 18 November (package VESSELS): the named vessels of the limbs, riveted to this body's drawn muscles and bones
           if (sceneFn('setBodyVessels')) {
@@ -6484,8 +6533,10 @@ export function start(params = {}) {
         // (a free pointer off the centre) the scene's area meshes decide.
         const raw = simState && simState.rawGaze && typeof simState.rawGaze === 'object' ? simState.rawGaze : null;
         const atCross = Boolean(appliedSize) && Math.abs(x - appliedSize.width / 2) < 0.5 && Math.abs(y - appliedSize.height / 2) < 0.5;
-        const t = controlTargets(L.layers, atCross && raw && typeof raw.target === 'string' ? { lookArea: raw.target === 'region' } : {});
-        return { arrow: usableArrowHitAt(x, y), front: t.front, behind: t.behind, seen: t.seen, atCross, mirror: L.mirror || null, mirrorEnvelope: L.mirror ? L.mirror.mirrorEnvelope : null };
+        // 18 November 2026 (SEE): the limbs the scene finds locked away (their ghosts are drawn filled).
+        let locked = null; try { locked = sceneFn('ghostLocked') ? callScene('ghostLocked') : null; } catch { locked = null; }
+        const t = controlTargets(L.layers, { ...(atCross && raw && typeof raw.target === 'string' ? { lookArea: raw.target === 'region' } : {}), ghost: locked });
+        return { arrow: usableArrowHitAt(x, y), front: t.front, behind: t.behind, seen: t.seen, hidden: t.hidden, ghost: t.ghost, atCross, mirror: L.mirror || null, mirrorEnvelope: L.mirror ? L.mirror.mirrorEnvelope : null };
       }
       /** The entry a press acts on: by default controlTargets' front (the motor area the look names, else what is seen;
        * an arrow tip in front of everything is the tip itself: { arrow }); reaching behind (Shift held at the press), the
@@ -6541,7 +6592,11 @@ export function start(params = {}) {
        * meshes are your meshes' twins, so the image of your right leg is the mirror body's right leg). null: the trunk,
        * neck or head. */
       const limbOfPick = p => (p && p.source === 'own' ? limbOfRec(p) : null);
-      const mirrorLimbOf = e => (e && e.item === 'mirror' && e.rec && e.rec.source === 'mirror' ? limbOfRec(e.rec) : null);
+      // 19 November 2026 (the owner: "Forget about controlling individual elements of the mirror, just allow full control
+      // of the mirror body"): any part of the mirror body is the mirror body. A hold carries all of it and a drag turns
+      // all of it; its limbs no longer stand for your own (R17, withdrawn). MIRROR_LIMBS_ARE_YOURS keeps the old rule's code.
+      const MIRROR_LIMBS_ARE_YOURS = false;
+      const mirrorLimbOf = e => (MIRROR_LIMBS_ARE_YOURS && e && e.item === 'mirror' && e.rec && e.rec.source === 'mirror' ? limbOfRec(e.rec) : null);
       function limbOfRec(p) {
         if (!p) return null;
         if (p.part === 'arm') return 'leftArm';
@@ -6727,7 +6782,7 @@ export function start(params = {}) {
         // While the drawn pose is held back at contact (guardBodyPose), the target is kept within `lead` of where the
         // limb's end is DRAWN, so pushing on against the brain or the mirror body does not wind the target up inside it:
         // moving the other way then moves the limb at once, and what the activity holds stays at the contact.
-        if (contact.bodyBlocked) {
+        if (contact.bodyBlocked || contact.selfBlocked) { // (selfBlocked: stopped against your own body, 18 November 2026)
           const drawnEnd = NsGrasp.limbPoint(bodyRig, segmentsFor(bodyPosed), g.limb, 'end');
           const back = g.targetMm.map((v, i) => v - drawnEnd[i]), backLen = Math.hypot(...back);
           if (backLen > lead) g.targetMm = drawnEnd.map((v, i) => v + back[i] * lead / backLen);
@@ -6843,7 +6898,7 @@ export function start(params = {}) {
       const reachImage = (reach, mirrorMatrix) => (reach && mirrorMatrix ? NsCollide.moved(reach, mirrorMatrix) : null);
       const sameMatrix = (a, b) => Boolean(a && b) && a.length === 16 && b.length === 16 && Array.prototype.every.call(a, (v, i) => v === b[i]);
       const collideItems = () => { try { return sceneFn('collisionItems') ? callScene('collisionItems') : null; } catch { return null; } };
-      const noteContact = (what, now) => { contact.stops++; contact.last = what; contact.untilMs = now + 1500; };
+      const noteContact = (what, now) => { contact.stops++; contact.last = what; contact.untilMs = now + 1500; contact.fxPending = what; }; // fxPending: itemContactFx (18 November 2026)
       const gapTo = (it, others, cap = COLLIDE_CAP) => { let g = Infinity; for (const o of others) if (o) g = Math.min(g, NsCollide.minGap(it, o, cap)); return g; };
       /** R558 (Message 12, hunt 2 look #1): how many of `list`'s items have a sphere centre in the glass brain's sealed
        * inside (ns-collide solidGrid / insideSolid) with the brain at world matrix B; with `full`, how many centres. 0
@@ -7249,6 +7304,234 @@ export function start(params = {}) {
         if (NsCollide.clearFraction(k => (k > 0 ? g.plain1 : g.plainWas())) < 1) return false;
         return !mover.solidWorseAt(S1);
       }
+      /** 18 November 2026 (package CONTACT, ns-contact; owner: "limb pushing limb effects"; "move one limb into another
+       * will obviously move the other limbs (passively)"): your own limbs against each other and the trunk, before the
+       * stop at the brain and the mirror body (guardBodyPose). prev: the targets as last drawn; cur: this frame's (with the
+       * display couplings); act: the activity's own angles this frame.
+       *  - A limb that moved into a still one PUSHES it: the still limb's shoulder or hip gives way (NsContact solvePush,
+       *    inside its range and the combined-range rule) and the activity is told (a limbPose without an area: nothing is
+       *    switched on), so the pushed limb STAYS where it was pushed until something moves it, or Reset body. While it
+       *    pushes, the moving limb makes CONTACT.weight of its step (the rest follows on the next frames).
+       *  - What cannot give way (the trunk, the head, a limb held with Space, a limb at the end of its range or itself
+       *    against a third part) stops the moving limb at the largest share of its step that adds no depth, and the stop is
+       *    handed to the activity too (nothing runs on unseen and comes through later).
+       *  - Two limbs that both move are not held by each other (the Space double-tap turns all four limbs at once and keeps
+       *    its own clearances); the look's own trunk bend may push a limb but is never held here (the camera rides on it).
+       * Returns the targets to draw (cur itself when nothing touches and nothing recoils). */
+      const SELF_CONTACT_ON = false;
+      function selfContactStep(prev, cur, act, now, frameOut) {
+        const sc = selfContact;
+        if (!sc || !sc.model || !prev || sc.rig !== bodyRig) return cur;
+        const C = NsContact.CONTACT;
+        const prevBase = prev === sc.lastOut && sc.lastBase ? sc.lastBase : prev;
+        let changed = false;
+        for (const id in cur) if (cur[id] !== prevBase[id] && !HEAD_CAMERA_JOINTS.includes(id)) { changed = true; break; }
+        const h0 = headOptsOf(headDrawn || headShown), h1 = headOptsOf(headShown), lookBend = !sameHeadOpts(h0, h1);
+        // the game arm (its own rig): its balls ride on its segment matrices; the model takes them the first time they are seen
+        const armNow = armContactSegs(frameOut) || sc.armPrev;
+        if (armNow && armContactPivots && !sc.armAdded) {
+          try {
+            const ext = NsContact.addArmBalls(sc.model, armContactPivots);
+            NsContact.armPairs(ext, sc.model, NsContact.poseBalls(ext, { ...segsWith(withCameraJoints(prevBase, cur), h0), ...armNow }));
+            sc.bodyModel = sc.model; sc.model = ext; sc.B0 = null; sc.B0of = null;
+          } catch (err) { sc.note = errorText(err); }
+          sc.armAdded = true; sc.armPrev = armNow;
+        }
+        const model = sc.model, hasArm = Boolean(model.bodyBalls), armUse = hasArm ? armNow : null;
+        let armMoved = false;
+        if (armUse && sc.armPrev) for (const k in armUse) { const a = armUse[k], b = sc.armPrev[k]; for (let i = 0; i < 16; i++) if (a[i] !== b[i]) { armMoved = true; break; } if (armMoved) break; }
+        if (!changed && !lookBend && !armMoved) return finishSelf(sc, cur, null, act, now, null);
+        const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : 0;
+        const B = mods.body, clamp = t => B.clampBodyJointTargets(t).applied;
+        const knee = typeof B.passiveKneeAngles === 'function' ? B.passiveKneeAngles : t => t;
+        const withArm = (S, A) => (A ? Object.assign({}, S, A) : S);
+        const pose1 = t => withArm(segsWith(knee(t), h1), armUse);
+        const cached = sc.B0of === prevBase && sc.B0 && sc.B0.length === 3 * model.n ? sc.B0 : null;
+        const B0 = cached || NsContact.poseBalls(model, withArm(segsWith(withCameraJoints(prevBase, cur), h0), hasArm ? sc.armPrev || armUse : null));
+        let work = cur, B1;
+        if (!changed && !lookBend && cached) { B1 = Float64Array.from(B0); NsContact.poseBalls(model, armUse, B1, model.bodyBalls); } // only the game arm moved
+        else B1 = NsContact.poseBalls(model, pose1(work));
+        sc.armPrev = armUse || sc.armPrev;
+        const list = NsContact.contactsOf(model, B1, B0);
+        const done = { pushed: null, held: false, share: 1, list, flash: [], B1, Bc: B1 };
+        if (list.length) {
+          // Who pushes whom is read from how far each ball of the pair travelled this frame (not from which joints
+          // changed: the grip of a Space hold curls the right hand's fingers and must not make the whole arm a mover).
+          // The ball that travelled more is the mover's; the other limb is still when its ball travelled less than
+          // CONTACT.stillShare of that.
+          const travel = NsContact.ballTravel(model, B1, B0), movers = new Set(), pushLimbs = new Set(), together = new Set();
+          let hold = false;
+          for (const c of list) {
+            const ti = travel[c.i], tj = travel[c.j], hi = Math.max(ti, tj);
+            if (!(hi > 0.05)) continue; // neither moved (the look's neck): nothing new
+            if (NsContact.pairDepth(model, B0, c.k) > C.deepShare * Math.min(model.r[c.i], model.r[c.j])) continue; // gone through on an earlier frame (the game arm cannot be stopped): left alone
+            const mover = ti >= tj ? c.i : c.j, other = mover === c.i ? c.j : c.i;
+            if (model.part[mover] === 'fingers') continue; // fingers curling (the Space grip closes the right hand too) push nothing
+            if (model.limb[mover] === 'leftArm' && !sc.armPushes) continue; // carried by the look alone: it pushes nothing (19 November 2026)
+            if (Math.min(ti, tj) > C.stillShare * hi) { together.add(model.limbIndex[c.i] * 8 + model.limbIndex[c.j]); continue; } // both move: not held by each other
+            const still = model.limb[other];
+            // a leg is not held by the game arm (which cannot give way here): lifting a thigh the arm lies along goes on
+            if (still === 'leftArm' && model.limb[mover] !== 'rightArm') continue;
+            movers.add(model.limb[mover]);
+            if (NsContact.PUSH_JOINTS[still] && !(limbGrasp && limbGrasp.limb === still)) pushLimbs.add(still); else hold = true;
+            done.flash.push(c); // a contact that pushes or stops something is marked where it happens
+          }
+          const moverIds = [];
+          for (const id in cur) if (cur[id] !== prevBase[id] && !HEAD_CAMERA_JOINTS.includes(id) && Number.isFinite(prevBase[id]) && Number.isFinite(cur[id]) && movers.has(NsContact.limbOfJoint(id))) moverIds.push(id);
+          for (const L of pushLimbs) if (movers.has(L)) pushLimbs.delete(L); // a limb that pushes is not pushed back in the same frame
+          const blendMovers = (base, f) => { const o = { ...base }; for (const id of moverIds) o[id] = prevBase[id] + (base[id] - prevBase[id]) * f; return o; };
+          if (pushLimbs.size) {
+            // a little weight: the moving limb makes CONTACT.weight of its step while it pushes
+            if (moverIds.length) { work = blendMovers(cur, C.weight); done.share = C.weight; }
+            done.pushed = {};
+            // the legs lie on the sofa: a push never presses a thigh down below where it rests (or already is)
+            const ra = bodyRestAngles || {}, floor = { hip_flex_R: Number.isFinite(ra.hip_flex_R) ? ra.hip_flex_R : 0, hip_flex_L: Number.isFinite(ra.hip_flex_L) ? ra.hip_flex_L : 0 };
+            for (const L of pushLimbs) {
+              const r = NsContact.solvePush({ model, limb: L, targets: work, pose: pose1, clamp, B0, floor });
+              work = r.targets; B1 = r.balls;
+              done.pushed[L] = r.moved;
+            }
+          }
+          const skip = together.size ? (i, j) => together.has(model.limbIndex[i] * 8 + model.limbIndex[j]) || together.has(model.limbIndex[j] * 8 + model.limbIndex[i]) : null;
+          if ((hold || NsContact.worstGain(model, B1, B0, C.tolMm, skip) > C.tolMm) && moverIds.length) {
+            const base = work, f = NsContact.holdShare(k => NsContact.worstGain(model, NsContact.poseBalls(model, pose1(blendMovers(base, k))), B0, C.tolMm, skip) <= C.tolMm);
+            work = blendMovers(base, f); B1 = NsContact.poseBalls(model, pose1(work));
+            done.held = true; done.share *= f;
+            // the stop is handed to the activity: each moving joint the activity holds, at the same share of its own step
+            const pa = sc.prevAct, joints = {};
+            if (pa && act) for (const id of moverIds) if (hasOwn(act, id) && Number.isFinite(pa[id]) && Number.isFinite(act[id]) && act[id] !== pa[id]) joints[id] = pa[id] + (act[id] - pa[id]) * done.share;
+            if (Object.keys(joints).length) tellActivity(joints);
+          }
+          if (done.pushed) {
+            const joints = {};
+            for (const L of Object.keys(done.pushed)) for (const id of NsContact.PUSH_JOINTS[L]) if (Math.abs(work[id] - cur[id]) > 1e-6) joints[id] = work[id];
+            if (Object.keys(joints).length) tellActivity(joints);
+          }
+          done.B1 = B1;
+        }
+        const ms = t0 ? (typeof performance !== 'undefined' && performance.now ? performance.now() : 0) - t0 : 0;
+        sc.lastMs = Math.round(ms * 100) / 100; if (ms > sc.maxMs) sc.maxMs = sc.lastMs;
+        return finishSelf(sc, work, B1, act, now, done);
+      }
+      /** The game arm's segment matrices for its contact balls (NsContact ARM_BALL_SEGMENTS: source mm -> drawn mm of your
+       * body), from this frame's arm pose and the arm group's place in the world; null when either is missing. */
+      const armSegKeep = { key: new Float64Array(16 * 5), out: null };
+      function armContactSegs(o) {
+        const M = o && (o.appliedArmMatrices || (o.fit && o.fit.solution && o.fit.solution.matrices));
+        const objs = scene && scene.objects, G = objs && objs.armGroup;
+        if (!(M instanceof Map) || !G || !camBodyToWorld) return null;
+        try { if (objs.eyeRig) objs.eyeRig.updateMatrixWorld(true); } catch { return null; }
+        const W = G.matrixWorld.elements, K = armSegKeep.key, parts = [W, camBodyToWorld, M.get('upperarm'), M.get('ulna'), M.get('hand')];
+        if (parts.some(m => !m || m.length !== 16)) return null;
+        // unchanged arm pose, arm group and body frame: the same matrices as last time (no new arrays)
+        let same = armSegKeep.out !== null;
+        for (let p = 0; p < 5; p++) for (let i = 0; i < 16; i++) { const v = parts[p][i]; if (K[16 * p + i] !== v) { same = false; K[16 * p + i] = v; } }
+        if (same) return armSegKeep.out;
+        const Bi = NsCollide.affineInverse(camBodyToWorld), out = {};
+        for (const [name, seg] of Object.entries(NsContact.ARM_BALL_SEGMENTS)) out[name] = NsCollide.mul(Bi, NsCollide.mul(W, M.get(seg)));
+        armSegKeep.out = out;
+        return out;
+      }
+      /** A limbPose without an area: the activity holds these joints (goal and position) from now on. */
+      function tellActivity(joints) {
+        if (!simState || !simState.activity || typeof sim.activity.step !== 'function') return;
+        try { simState = { ...simState, activity: sim.activity.step(simState.activity, [{ type: 'limbPose', joints }], 0) }; } catch { /* the drawn pose still shows it */ }
+      }
+      /** The bookkeeping of a self-contact frame: the flash at a new contact, the recoil of a limb whose push has ended,
+       * what is cached for the next frame, the QA numbers. base: the targets without recoil; B1: their balls (null when
+       * nothing moved). Returns the targets to draw. */
+      function finishSelf(sc, base, B1, act, now, done) {
+        const model = sc.model, C = NsContact.CONTACT;
+        // contacts that start now flash at their place (on your body and on the mirror body); one flash per pair of limbs
+        const touching = new Set();
+        if (done && done.flash.length) for (const c of done.flash) {
+          const li = model.limb[c.i], lj = model.limb[c.j], key = li < lj ? `${li}|${lj}` : `${lj}|${li}`;
+          touching.add(key);
+          if (sc.touching.has(key) || now < (sc.flashAt.get(key) || 0)) continue;
+          sc.flashAt.set(key, now + C.flashGapS * 1000);
+          flashAt(NsContact.contactPoint(model, done.Bc, c.i, c.j), Math.min(1, 0.5 + c.depth / 20), 'self');
+        }
+        sc.touching = touching;
+        if (done && done.pushed) {
+          sc.pushes++;
+          const acc = sc.pushedLast || {};
+          for (const [L, mv] of Object.entries(done.pushed)) { acc[L] = acc[L] || {}; for (const [id, d] of Object.entries(mv)) acc[L][id] = (acc[L][id] || 0) + d; }
+          sc.pushedLast = acc;
+        } else if (sc.pushedLast) {
+          // a push has ended: the pushed limb swings a little past and settles (drawn only; never under reduced motion)
+          const [L, mv] = Object.entries(sc.pushedLast)[0];
+          const n = Math.hypot(...Object.values(mv));
+          sc.recoil = n > 0.05 && !prefersReducedMotion() ? { limb: L, dir: Object.fromEntries(Object.entries(mv).map(([id, d]) => [id, d / n])), t0: now } : null;
+          sc.pushedLast = null;
+        }
+        if (done && done.held) { sc.stops++; contact.selfBlocked = true; } else contact.selfBlocked = false;
+        if (done && (done.pushed || done.held)) sc.last = { pushed: done.pushed, held: done.held, share: Math.round(done.share * 1000) / 1000, atMs: Math.round(now) };
+        sc.prevAct = simState && simState.activity && simState.activity.bodyJointTargets ? simState.activity.bodyJointTargets : act;
+        if (B1) { sc.B0 = B1; sc.B0of = base; }
+        let out = base;
+        const R = sc.recoil;
+        if (R) {
+          const t = (now - R.t0) / 1000, k = NsContact.recoilShare(t);
+          if (t >= C.recoil.s) sc.recoil = null;
+          else { out = { ...base }; for (const [id, d] of Object.entries(R.dir)) if (Number.isFinite(out[id])) out[id] += d * k * C.recoil.deg; out = mods.body.clampBodyJointTargets ? { ...out, ...pickJoints(mods.body.clampBodyJointTargets(out).applied, Object.keys(R.dir)) } : out; }
+        }
+        sc.lastBase = base; sc.lastOut = out;
+        return out;
+      }
+      const pickJoints = (o, ids) => { const r = {}; for (const id of ids) r[id] = o[id]; return r; };
+      /** 18 November 2026 (package CONTACT): an item contact (a carried brain or mirror body stopping at another item, your
+       * body stopping at the brain or the mirror body; noteContact) flashes where the two items meet, and when the brain is
+       * one of them its tissue gives and wobbles away from the touch (the scene's contactKick on the living brain).
+       * Once per contact (CONTACT.flashGapS), after the frame has drawn the stop. */
+      let itemFxUntil = 0;
+      function itemContactFx(now) {
+        const what = contact.fxPending;
+        contact.fxPending = null;
+        if (!what || now < itemFxUntil || !sceneFn('contactFlash')) return;
+        const items = collideItems();
+        if (!items || !items.own) return;
+        let best = null;
+        for (const [a, b, brain] of [[items.own, items.brain, true], [items.mirror, items.brain, true], [items.own, items.mirror, false]]) {
+          if (!a || !b) continue;
+          const r = NsCollide.closestPoints(a, b, best ? best.gap : NsCollide.COLLIDE.clearanceM * 3);
+          if (r) best = { ...r, brain };
+        }
+        if (!best) return;
+        itemFxUntil = now + NsContact.CONTACT.flashGapS * 1000;
+        try { callScene('contactFlash', [[0, 1, 2].map(k => (best.a[k] + best.b[k]) / 2)], { strength: 0.8, what }); } catch { /* no flash */ }
+        // the brain is the second item of its pairs: the touch pushes its tissue along the normal (from the other item in)
+        if (best.brain && sceneFn('contactKick')) { try { callScene('contactKick', best.normal, 1); } catch { /* no wobble */ } }
+      }
+      /** QA (inspect({ collision: true }).self): the contact balls and what the self contact did (counts, the last push or
+       * stop, its cost), and every ball as drawn now in the world (centre and radius in metres) for pictures. */
+      function selfContactReport() {
+        const sc = selfContact;
+        if (!sc) return null;
+        if (!sc.model) return { note: sc.note || null };
+        const m = sc.model;
+        let world = null, deepestMm = null;
+        try {
+          if (camBodyToWorld && bodyPosed && canSolveLimbs()) {
+            const arm = m.bodyBalls ? armContactSegs(current.out) || sc.armPrev : null;
+            const B = NsContact.poseBalls(m, arm ? { ...segmentsFor(bodyPosed), ...arm } : segmentsFor(bodyPosed)), s = NsCollide.maxScale(camBodyToWorld), r4 = v => Math.round(v * 10000) / 10000;
+            world = [];
+            for (let i = 0; i < m.n; i++) world.push({ limb: m.limb[i], part: m.part[i], c: worldOf(camBodyToWorld, [B[3 * i], B[3 * i + 1], B[3 * i + 2]]).map(r4), r: r4(m.r[i] * s) });
+            let d = -Infinity;
+            for (let k = 0; k < m.pairs.length / 2; k++) d = Math.max(d, NsContact.pairDepth(m, B, k));
+            deepestMm = Math.round(d * 10) / 10;
+          }
+        } catch { world = null; }
+        return { balls: m.n, pairs: m.pairs.length / 2, restOverlapPairs: Array.prototype.filter.call(m.allow, v => v > 0).length, deepestMm,
+          pushes: sc.pushes, stops: sc.stops, flashes: sc.flashes, lastFlash: sc.lastFlash || null, fx: sceneFn('contactFxState') ? callScene('contactFxState') : null,
+          lastMs: sc.lastMs, maxMs: sc.maxMs, last: sc.last, recoil: Boolean(sc.recoil), touching: [...sc.touching], selfBlocked: Boolean(contact.selfBlocked), world };
+      }
+      /** A contact's flash at a point of your body (drawn mm): there and at the same point of the mirror body. */
+      function flashAt(pMm, strength, what) {
+        if (!camBodyToWorld || !sceneFn('contactFlash')) return;
+        const pw = worldOf(camBodyToWorld, pMm), pts = [pw], scales = [1];
+        if (sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); if (mm && mm.drawn) { pts.push(NsCollide.apply(mm.drawn, pw[0], pw[1], pw[2])); scales.push(NsCollide.maxScale(mm.drawn)); } } catch { /* your body's flash only */ } }
+        try { callScene('contactFlash', pts, { strength, what, scales }); if (selfContact) { selfContact.flashes++; selfContact.lastFlash = pts.map(p => p.map(v => Math.round(v * 1000) / 1000)); } } catch { /* no flash */ }
+      }
       /** How far in front of the eye (metres, along the body's forward axis) any part of your body can ever reach with
        * every joint inside its range: the legs and feet (hip, knee, ankle and toes over their ranges, sampled), the right
        * hand (shoulder and elbow), and the left hand's reach sphere (reachM about the eye). The mirror plane must stand in
@@ -7323,13 +7606,17 @@ export function start(params = {}) {
             for (const limb of Object.keys(NsGrasp.LIMB_CHAIN)) {
               const a = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, seg, limb, 'bend')), b = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, seg, limb, 'end'));
               const p = a.map((v, i) => v + (b[i] - v) * 0.6 - eye[i]);
+              // 18 November 2026 (package CONTACT): also the look onto the upper part (thigh / upper arm), 0.6 from root to bend
+              const r = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, seg, limb, 'root')), u = r.map((v, i) => v + (a[i] - v) * 0.6 - eye[i]);
               aims[limb] = { yawDeg: Math.round(Math.atan2(-p[0], -p[2]) / DEG * 100) / 100, pitchDeg: Math.round(Math.atan2(p[1], Math.hypot(p[0], p[2])) / DEG * 100) / 100,
-                endWorldM: b.map(v => Math.round(v * 1000) / 1000) };
+                endWorldM: b.map(v => Math.round(v * 1000) / 1000),
+                upper: { yawDeg: Math.round(Math.atan2(-u[0], -u[2]) / DEG * 100) / 100, pitchDeg: Math.round(Math.atan2(u[1], Math.hypot(u[0], u[2])) / DEG * 100) / 100 } };
             }
           }
         } catch { /* aims are a convenience only */ }
         const reach = reachItem();
-        return { ownBrainM: g(items.own, items.brain), ownMirrorM: g(items.own, items.mirror), brainMirrorM: g(items.brain, items.mirror), clearanceM: NsCollide.COLLIDE.clearanceM, aims,
+        return { self: selfContactReport(), // 18 November 2026 (package CONTACT)
+          ownBrainM: g(items.own, items.brain), ownMirrorM: g(items.own, items.mirror), brainMirrorM: g(items.brain, items.mirror), clearanceM: NsCollide.COLLIDE.clearanceM, aims,
           handReachBrainM: g(reach, items.brain), handReachMirrorM: g(reach, items.mirror),
           // The mirror image of your left hand's reach sphere: its gaps to your body, the brain and your own reach sphere.
           ...(() => { const ri = items.mirror ? reachImage(reach, items.mirrorMatrix) : null; return { imageReachOwnM: g(ri, items.own), imageReachBrainM: g(ri, items.brain), imageReachHandReachM: g(ri, reach) }; })(),
@@ -7346,6 +7633,7 @@ export function start(params = {}) {
           scope: 'sphere covers of drawn meshes (ns-collide); a game rule, not tissue contact' };
       }
       collisionReportFn = collisionReport;
+      selfContactReportFn = selfContactReport; // 18 November 2026 (package CONTACT)
 
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
@@ -8263,6 +8551,21 @@ export function start(params = {}) {
           if (typeof mods.body.passiveKneeAngles === 'function') targets = mods.body.passiveKneeAngles(targets);
           // R558 (Message 51): a fully extended elbow or knee is drawn slightly bent (ns-body softExtensionAngles).
           if (typeof mods.body.softExtensionAngles === 'function') targets = mods.body.softExtensionAngles(targets);
+          // 18 November 2026 (package CONTACT): a limb that moves into another pushes it (it gives way and stays), and stops
+          // where nothing can give way (selfContactStep, ns-contact); then the stop at the brain and the mirror body below.
+          // 19 November 2026: SELF_CONTACT_ON is false. As merged, a reach key swept the left arm through the legs and the
+          // push threw both legs and the right arm into poses nobody could bring back (seen by the lead in the browser).
+          // Limb-pushes-limb stays switched off, with its code and tests kept, until the push is rebuilt to be gentle.
+          if (SELF_CONTACT_ON && selfContact && selfContact.model && live) {
+            // 19 November 2026: the left arm follows the look, so a look alone swept it across the body and pushed the right
+            // arm and the legs to the ends of their ranges, where they stayed. The left arm pushes only when the player
+            // moves it (a reach key, held or let go within the last 0.4 s) or while the look is still (an area moved it).
+            const sc = selfContact, ax = controlsApi.axes(cs), keys = ax.x !== 0 || ax.z !== 0, lookMoved = sc.lookYaw !== look.yaw || sc.lookPitch !== look.pitch;
+            sc.lookYaw = look.yaw; sc.lookPitch = look.pitch;
+            if (keys) sc.armKeysUntil = now + 400;
+            sc.armPushes = keys || now < (sc.armKeysUntil || 0) || !lookMoved;
+            targets = selfContactStep(bodyPosed, targets, out.bodyJointTargets || null, now, out);
+          }
           // R5-integrate-core (D15): Body Worlds layers ride on every pose (ns-body poseBody layers / layerAmount; the amount
           // eases over BODY_WORLDS_EASE_S, instant under reduced motion). R27 (R5-pronation 6.1.2): the coupled palm turn's
           // shoulder-blade slide and slight trunk turn (ns-arm bodyFollowFromCoupling; null palm down = the round-4 body).
@@ -8448,6 +8751,7 @@ export function start(params = {}) {
           try { if (callScene('bodySkinPending') > 0) callScene('updateBodySkin', skinSegmentsLast); } catch { /* the next pose skins them */ }
         }
         skinPosedThisFrame = false;
+        if (contact.fxPending) itemContactFx(now); // 18 November 2026 (package CONTACT): the flash of an item contact
         // R558 (Message 12): once the body is posed, tell the scene how far your body can ever reach, so the mirror plane
         // stands in front of every reachable pose (it is set again at once if it was nearer; only before any input).
         if (!reachSent && bodyPosed && sceneFn('setMirrorReach')) {
@@ -8537,7 +8841,9 @@ export function start(params = {}) {
         const onArea = out.gaze && out.gaze.target === 'region';
         // R558 (hunt 3, kept): on ANY arrow tip, muted ones included, no muscle behind it is named (ctlFrame.arrow: the tip
         // is in front; a click there is not a muscle tap).
-        const seen = live && ctlFrame && !ctlFrame.arrow && ctlFrame.seen && ctlFrame.seen.item !== 'brain' ? ctlFrame.seen.rec : null;
+        // 18 November 2026 (SEE): a locked-away limb's ghost at the crosshair is what is aimed at: the tip names that part.
+        const seenOrGhost = ctlFrame ? ctlFrame.ghost || ctlFrame.seen : null;
+        const seen = live && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item !== 'brain' ? seenOrGhost.rec : null;
         // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
         crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
         // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
@@ -8549,6 +8855,12 @@ export function start(params = {}) {
         const inFrontPick = live && onArea && seen && brainOnRay && ctlFrame.seen.distance < brainOnRay.distance ? ctlFrame.seen : null;
         const inFront = inFrontPick && typeof NT.inFrontName === 'function'
           ? NT.inFrontName({ where: inFrontPick.item, segment: inFrontPick.item === 'own' ? segOfPick(inFrontPick.rec) : '', limb: inFrontPick.item === 'own' ? limbOfPick(inFrontPick.rec) : null }) : '';
+        // 18 November 2026 (SEE): while Shift is held (and nothing is held), the body part Shift reaches here gets a line all
+        // round its limb in the limb's colour (the scene's ghost pass), and the tip names it (below).
+        const reachHolding = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        const reachE = live && cs && cs.reach === true && !reachHolding && ctlFrame && !ctlFrame.arrow ? pressEntry(ctlFrame, true).entry : null;
+        const reachBody = reachE && (reachE.item === 'own' || reachE.item === 'mirror') && reachE.rec ? reachE : null;
+        if (sceneFn('setGhostFocus')) { try { callScene('setGhostFocus', reachBody ? seeLimbOfGroup(reachBody.rec.group) : 0); } catch { /* display aid */ } }
         // R558 (Message 40): how Space holds what it holds ('held' while down | 'kept' by a tap), for the "let go" words.
         const spaceGrasp = cs && cs.space && typeof cs.space.grasp === 'string' ? cs.space.grasp : 'none';
         // R558 (Messages 44 and 55): the forearm line shows for ROTATION_NOTE_SECONDS after the forearm's state changes.
@@ -8700,6 +9012,9 @@ export function start(params = {}) {
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
             } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
               color: crossRoute && mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(crossRoute.regionId) || '' : '' });
+            // 18 November 2026 (SEE, brief: "Shift takes the leg - make that visible"): while Shift is held the tip names the
+            // body part Shift reaches (the leg in front of the area looked at, the limb hidden behind the part seen).
+            if (reachBody && !arrowTip) tipModel = quietTipModel({ pick: reachBody.rec });
           }
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', Boolean(tipModel?.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
@@ -8985,6 +9300,7 @@ export function start(params = {}) {
         render: info && info.render ? { calls: info.render.calls, triangles: info.render.triangles, frame: info.render.frame } : null,
         // R558 (Message 20): the outline pass as the scene holds it (batch size, the last ID pass's draw calls and CPU ms).
         outline: (() => { try { return sceneFn('outlineState') ? callScene('outlineState') : null; } catch { return null; } })(),
+        ghost: (() => { try { return sceneFn('ghostState') ? callScene('ghostState') : null; } catch { return null; } })(), // 18 November 2026 (SEE)
         // R558: the picture-quality controller as the scene holds it (level, last change, last held down-step).
         quality: (() => { try { return sceneFn('qualityState') ? callScene('qualityState') : null; } catch { return null; } })()
       };
@@ -9011,6 +9327,8 @@ export function start(params = {}) {
       // R558 (Messages 33 and 34): what F / click / drag act on at the crosshair (seen) and the item behind (Shift).
       controlTargets: controlTargetsShown,
       collision: options && options.collision === true ? (() => { try { return collisionReportFn ? collisionReportFn() : null; } catch (err) { return { error: errorText(err) }; } })() : undefined,
+      // 18 November 2026 (package CONTACT): your own limbs against each other (counts, the last push or stop, the balls)
+      contact: options && options.contact === true ? (() => { try { return selfContactReportFn ? selfContactReportFn() : null; } catch (err) { return { error: errorText(err) }; } })() : undefined,
       regionTargets: options && options.regionTargets === true ? (() => { try { return sim && typeof sim.regionTargets === 'function' ? sim.regionTargets(current.state) : null; } catch { return null; } })() : null,
       // Opt-in copied producer/readback data; no model, clock or renderer write.
       graspTrace: options && options.graspTrace === true ? (() => {

@@ -269,6 +269,9 @@ void main() {
 	vNsId = vec3( 0.0 );
 	#endif
 }`;
+/** 18 November 2026 (SEE, ns-see): the ID pass's vertex shader, for the hidden-limb pass that draws the same batch again
+ * (same instances, matrices, depth preference and code). */
+export const OUTLINE_ID_VS = ID_VS;
 const ID_FS = `
 flat varying vec3 vNsId;
 #include <logdepthbuf_pars_fragment>
@@ -701,6 +704,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   let headroom = 1.15, overflow = false; // batch space: 15 % spare; each time it overflows (LOD copies arriving) +40 %, at most 2x
   let on = enabled !== false && ok;
   let occOn = false;
+  let afterId = null; // 18 November 2026 (SEE): setAfterId(fn), the hidden-limb pass (ns-see createGhostPass)
   let bufW = 0, bufH = 0, pr = 1, ss = 1, level = 0, ssW = 0, ssH = 0;
   const maxTexture = renderer.capabilities && Number.isFinite(renderer.capabilities.maxTextureSize) ? renderer.capabilities.maxTextureSize : 4096;
   const camKey = new Float64Array(32);
@@ -950,6 +954,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       passTo(target, idScene, camera);
       const info = renderer.info && renderer.info.render;
       stats.draws = info ? info.calls : 0;
+      // 18 November 2026 (SEE, ns-see): the hidden-limb pass reads this frame's ID picture (only when it was redrawn).
+      if (afterId) { try { afterId({ renderer, idScene, batch, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
         renderer.setRenderTarget(stripTarget);
@@ -1014,5 +1020,11 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     adjTex.dispose(); quadGeo.dispose(); compMat.dispose(); idMat.dispose(); edgeMat.dispose(); inkMat.dispose();
     reg.length = 0; bySource.clear(); geoms.clear();
   }
-  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setOcclusion, state, dispose, get enabled() { return on; }, get supersample() { return ss; } };
+  /** 18 November 2026 (SEE, ns-see): fn(ctx) runs right after each redrawn ID pass (ctx: the renderer, the ID scene and
+   * batch, the ID target and its depth texture, the adjacency table, sizes, the camera); null removes it. groupOf(mesh):
+   * a registered mesh's limb group as the ID pass codes it (OUTLINE_GROUPS, + OUTLINE_MIRROR_OFFSET on the mirror
+   * body), 0 when not registered. */
+  function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
+  function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
+  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get supersample() { return ss; } };
 }

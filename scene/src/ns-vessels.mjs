@@ -189,7 +189,8 @@ export function envelopeRadius(E, dx, dy, dz) {
 /** Look of the vessels (sRGB 0..1 and millimetres; display choices). Arteries: a clean bright red (not the dark red of
  * blood), glossy; they swell by pulseMm along their normals at the top of a beat and brighten by pulseGlow. Veins: dark
  * blue-violet, wet; the sinus a little greyer (it is seen through the dura in life). */
-export const ARTERY_LOOK = Object.freeze({ colour: Object.freeze([0.78, 0.13, 0.13]), roughness: 0.3, pulseMm: 0.22, pulseGlow: 0.22 });
+// 19 November 2026 (eye comfort): a muted red (0.78, 0.13, 0.13 before), less shine and a third of the pulse.
+export const ARTERY_LOOK = Object.freeze({ colour: Object.freeze([0.56, 0.24, 0.24]), roughness: 0.5, pulseMm: 0.07, pulseGlow: 0.07 });
 export const VEIN_LOOK = Object.freeze({ colour: Object.freeze([0.29, 0.23, 0.45]), sinus: Object.freeze([0.33, 0.3, 0.45]), roughness: 0.22, sides: 8,
   flat: 0.5, liftMm: 0.15, stepMm: 1.2, smooth: 2, drapeWinMm: 4, meanderMm: Object.freeze([1.6, 0.6]), meanderWaveMm: Object.freeze([23, 8.5]) });
 /** Over the motor strip (distance to the nearest strip vertex under nearMm, full at fullMm): a vein keeps widthKeep of

@@ -223,7 +223,8 @@ test('the look keeps deep shades and light lights, a bright wet highlight, and n
   const o = BODY_FLESH, F = o.fibre;
   assert.ok(o.muscle.deep <= 0.1 && o.muscle.high >= 1.1, 'deep deep shades to light light shades (the comic look had 0.08 and 1.1)');
   assert.ok(o.white.deep >= 0.3, 'a white finger bone does not end in a black point');
-  assert.ok(o.wet.max >= 0.5 && o.wet.maxWhite >= 0.4, 'glossy: the highlight may be bright');
+  // 19 November 2026 (the owner: "too glossy ... hard to differentiate"): satin, a modest highlight
+  assert.ok(o.wet.max > 0.1 && o.wet.max <= 0.35 && o.wet.maxWhite <= 0.35 && o.wet.glint <= 0.15, 'satin: a modest highlight');
   assert.ok(o.white.high + o.wet.maxWhite + o.wet.glint * 0.5 < 1.75 && o.muscle.high + o.wet.max + o.wet.glint < 2.2);
   assert.ok(F.fadeFrom < F.fadeTo && F.fadeTo <= 0.5, 'a level of fibres is gone before its bundles are two pixels wide');
   assert.ok(F.groupMm > F.bundleMm && F.bundleMm > F.strandMm);

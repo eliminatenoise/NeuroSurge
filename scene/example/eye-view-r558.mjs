@@ -150,6 +150,7 @@ async function fetchText(url) {
   if (!response.ok) refuseHttp(response, url, 'text');
   const text = await response.text();
   if (assembly && /MANIFEST\.json(?:[?#].*)?$/i.test(String(url))) assembly.noteManifest(url, text);
+  else if (assembly && /\.obj(?:[?#].*)?$/i.test(String(url))) assembly.noteText(url, text); // 18 Nov 2026: the cerebral arteries come as text
   return text;
 }
 async function fetchBytes(url) {

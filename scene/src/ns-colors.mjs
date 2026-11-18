@@ -1242,10 +1242,13 @@ export function powerUpEnvelope(ageS, u = 0.5, { calm = false, reduced = false }
 // Photosensitivity: three strike pulses in a quarter second, then at most about two shallow dips (40 % or less) a second;
 // a re-click restarts the strike no sooner than POWER_UP.rechargeS. Under prefers-reduced-motion there is no blink: a
 // steady glow (powerUpEnvelope's reduced ramp). Opposing-action hints are calm (no blink). Display choices.
+// 19 November 2026 (the owner: "The game currently physically hurts to look at with your eyes"): no strike pulses and no
+// flicker. The light of a switched-on area comes up once and stays steady (the earlier numbers: three strike pulses
+// [0.07, 1], [0.115, 0.12], [0.19, 1], [0.235, 0.3] and dips of up to 0.4 about twice a second).
 export const BLINK = freeze({
-  strike: freeze([freeze([0.07, 1]), freeze([0.115, 0.12]), freeze([0.19, 1]), freeze([0.235, 0.3])]),
+  strike: freeze([]),
   flickerFromS: 0.5, cellS: 0.06,
-  dips: freeze([0, 0, 0, 0.4, 0.15, 0, 0, 0, 0, 0, 0, 0.3, 0, 0, 0, 0, 0, 0.4, 0.2, 0, 0, 0, 0, 0])
+  dips: freeze([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 });
 /** Blink level (0..1, multiplies the glow) at ageS seconds after the area's start (BLINK). 1 when calm or reduced. Pure. */
 export function powerUpBlink(ageS, { calm = false, reduced = false } = {}, b = BLINK) {
@@ -1273,7 +1276,8 @@ export function powerUpBlinkGlsl(name = 'nsPowerUpBlink', b = BLINK) {
 // strength (0..1). Two sines (hz1, hz2) with a phase per point (spatial, per metre) make it irregular. Kept small (the
 // ink outlines are drawn from the still meshes, so a larger shake would part the tissue from its line). None under
 // prefers-reduced-motion. Display choices.
-export const SHUDDER = freeze({ finePx: 0.75, kickPx: 2.2, kickTauS: 0.16, hz1: 21, hz2: 29, spatial: 260, keyScale: 0.8 });
+// 19 November 2026 (eye comfort): no standing quiver; only a small settle at the moment an area switches on (0.75 and 2.2 before).
+export const SHUDDER = freeze({ finePx: 0, kickPx: 0.5, kickTauS: 0.16, hz1: 21, hz2: 29, spatial: 260, keyScale: 0.8 });
 /** GLSL: `vec3 <name>( vec3 worldPos, float age, float strength, float pxToM )` -> a weight w (x = along the normal for a
  * muscle; y, z = the screen-plane offset for a key), all in metres. */
 export function shudderGlsl(name = 'nsShudder', o = SHUDDER) {

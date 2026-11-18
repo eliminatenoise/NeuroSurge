@@ -191,6 +191,7 @@ import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
 import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 // R558 (Message 20): outlines where limbs and bodies overlap (an ID pass of the body meshes and a screen-space line pass).
 import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
+import { createGhostPass } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
 import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
@@ -202,6 +203,7 @@ import { brainBeatClock } from './ns-assembly-core.mjs';
 import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, FLESH_DEPTH_LIFT_GLSL, FLESH_DEPTH_LIFT_PARS_GLSL, BODY_DEPTH_PREFERENCE, depthPreferenceAttr, depthPreferenceFootprint, fibreFrame } from './ns-flesh.mjs';
 // 18 November (the room): a dark operating theatre out of focus in place of the black void.
 import { ROOM, createRoom } from './ns-room.mjs';
+import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
 import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget } from './ns-body.mjs';
@@ -4444,6 +4446,10 @@ export function createScene({
   const room = createRoom({ THREE, reducedMotion });
   scene.add(room.group);
   disposables.push(room);
+  // 18 November 2026 (package CONTACT): the mark where a contact happens (ns-contact-fx; ns-app contactFlash)
+  const contactFx = createContactFx({ THREE, reducedMotion });
+  scene.add(contactFx.group);
+  disposables.push(contactFx);
   const roomFrame = { dtMs: 0, beat: 0, active: 0, brain: null, brainShape: null, mirror: null, body: ROOM.bodyAt };
   // the brain as the room sees it: the middle and the half sizes of its sample points (source mm, kept per set of
   // samples), and from them each frame its place in the world and the matrix from the world into its own measure
@@ -4460,6 +4466,11 @@ export function createScene({
   outline.stripComposite.renderOrder = RENDER_ORDER.regionLine + 0.05;
   scene.add(outline.stripComposite);
   disposables.push({ dispose: () => outline.dispose() });
+  // 18 November 2026 (SEE, ns-see): a limb covered by another limb or the trunk is drawn over it as a ghost (its line and a
+  // soft fill in its own colour, stronger when the limb is locked away), right after the outline's ink.
+  const ghost = createGhostPass({ THREE, renderer, outline, reducedMotion });
+  scene.add(ghost.composite);
+  disposables.push({ dispose: () => ghost.dispose() });
   // R558 (Message 25): the HDR picture and its bloom (HDR_BLOOM); off on a software renderer. Its target is always
   // multisampled (a game started at Picture quality Low has a canvas without MSAA; switched to High it still gets
   // smooth edges through this target).
@@ -4666,6 +4677,17 @@ export function createScene({
     return liveHeldId;
   }
   const liveHeld = rid => liveHeldSet.has(rid);
+  // 18 November 2026 (package CONTACT): a touch on the living brain (ns-app, when a body or the mirror body stops at it):
+  // its tissue is given a speed along dir (world, unit) and swings back on the wobble's own spring (ns-brain-live
+  // stepWobble). amount 0..1. Nothing under reduced motion (the wobble itself never leaves rest there).
+  function contactKick(dir, amount = 1) {
+    const T = brainTransformSet ? lastBrainTransform : null, R = T && T.rotation;
+    if (reducedMotion || !R || !Array.isArray(dir) || dir.length !== 3 || !dir.every(Number.isFinite)) return false;
+    const v = CONTACT_FX.kickMmS * Math.max(0, Math.min(1, amount)), qv = brainLive.qv;
+    qv[0] += v * (R[0] * dir[0] + R[1] * dir[1] + R[2] * dir[2]); qv[1] += v * (R[3] * dir[0] + R[4] * dir[1] + R[5] * dir[2]); qv[2] += v * (R[6] * dir[0] + R[7] * dir[1] + R[8] * dir[2]);
+    brainLive.wobbling = true;
+    return true;
+  }
   // The outline pass keeps its picture of the strip between frames, so that picture leaves the beat out (x = 0); the
   // beat is put on when the picture is drawn (outline.setStripLive). The wobble and the blooms are in it.
   const liveNoBeat = new Float32Array(4);
@@ -11470,7 +11492,7 @@ export function createScene({
       if (r) {
         if (hiddenOwn(h)) continue;
         seen.add(h.object);
-        layers.push({ item: r.source, kind: r.kind, distance: h.distance, point: h.point.toArray(), rec: { ...r } });
+        layers.push({ item: r.source, kind: r.kind, distance: h.distance, point: h.point.toArray(), rec: { ...r, group: outline.groupOf(h.object) } }); // 18 November 2026 (SEE): the outline group decides hidden limbs
         continue;
       }
       seen.add(h.object);
@@ -12655,6 +12677,7 @@ export function createScene({
     }
     if (liteApplied === null) applyQuality();
     refreshBodyVessels(); // 18 November (package VESSELS): the body's vessels follow its pose, lift and skin
+    contactFx.step(dtMs, camera); // 18 November 2026 (package CONTACT): the contact marks open and fade
     // R4-scene held-brain cue: ease toward the target (instant under prefers-reduced-motion).
     if (heldCue.amount !== heldCue.target) {
       const tau = heldCue.target > heldCue.amount ? HELD_CUE.inS : HELD_CUE.outS;
@@ -12818,6 +12841,7 @@ export function createScene({
     let hdrOn = false;
     try {
       outline.render(scene, camera);
+      ghost.frame(); // 18 November 2026 (SEE): the ghost composite follows the outline; which limbs are locked away
       // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
       hdrOn = hdr.begin();
       stripCut.on = stripCut.supported && (hdrOn || stripCut.canvasStencil); // 17 November: the strip cuts the brain surface (STRIP_CUT)
@@ -12954,6 +12978,9 @@ export function createScene({
     updateRegions,
     setSettledRegions, // R558 (Message 22)
     setBrainLiveHeld, // 18 November (ns-brain-live): the hand area of a Space grip while it holds
+    contactFlash: (points, opts) => contactFx.flash(points, opts), // 18 November 2026 (package CONTACT): a contact's mark
+    contactKick, // 18 November 2026 (package CONTACT): a touch gives the living brain's tissue a push
+    contactFxState: () => contactFx.state(),
     setBrainVessels, // 18 November (package VESSELS): the cerebral arteries, veins and sinuses
     setBodyVessels, // 18 November (package VESSELS): the vessels of the limbs on both bodies
     setRegionHints, // R558 (Message 6)
@@ -13005,6 +13032,9 @@ export function createScene({
     setBodySkin, updateBodySkin, bodySkinPending, setBodySwell,
     setArmLayers,
     setOutlineSegments, // R558 (Message 20)
+    // 18 November 2026 (SEE, ns-see): the limbs locked away ([9] by ghost code; their ghosts are filled and taken by the
+    // crosshair), what Shift would take (a line round that limb), and the pass's state.
+    ghostLocked: () => ghost.locked(), setGhostFocus: code => ghost.setFocus(code), ghostState: () => ghost.state(),
     outlineState: () => ({ ...outline.state(), quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null }),
     get regionMode() { return regionMode; },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
@@ -13026,6 +13056,7 @@ export function createScene({
         // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
         // last received them (viewport fractions).
         quality: qualityState(),
+        ghost: ghost.state(), // 18 November 2026 (SEE): the hidden-limb pass
         outline: outline.state(), // R558 (Message 20): the outline pass (batch size, last ID pass draw calls and CPU ms)
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
         hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },

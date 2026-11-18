@@ -551,6 +551,38 @@ export function minGap(a, b, cap = Infinity, stopBelow = -Infinity) {
   return best;
 }
 
+/**
+ * 18 November 2026 (package CONTACT): where items a and b come nearest, searched below `cap` (world metres): { gap, a
+ * (the point of a's cover nearest b), b (the point of b's cover nearest a), normal (unit, from a toward b) }, or null
+ * when nothing is nearer than cap. Leaf sphere to leaf sphere with the same broad tests as minGap, written plainly: it
+ * places a contact's flash once per contact, it is not for every frame. Pure.
+ */
+export function closestPoints(a, b, cap = Infinity) {
+  if (!a || !b || !a.entries.length || !b.entries.length) return null;
+  let best = cap, pa = null, pb = null;
+  for (const x of a.entries) {
+    if (boxGap(x.c, x.r, b.lo, b.hi) >= best) continue;
+    for (const y of b.entries) {
+      if (Math.hypot(x.c[0] - y.c[0], x.c[1] - y.c[1], x.c[2] - y.c[2]) - x.r - y.r >= best) continue;
+      const gx = worldGroups(x), gy = worldGroups(y);
+      for (let i = 0; i < gx.length; i += 4) {
+        if (Math.hypot(gx[i] - y.c[0], gx[i + 1] - y.c[1], gx[i + 2] - y.c[2]) - gx[i + 3] - y.r >= best) continue;
+        for (let j = 0; j < gy.length; j += 4) {
+          if (Math.hypot(gx[i] - gy[j], gx[i + 1] - gy[j + 1], gx[i + 2] - gy[j + 2]) - gx[i + 3] - gy[j + 3] >= best) continue;
+          const lx = worldLeaves(x, i / 4), ly = worldLeaves(y, j / 4);
+          for (let p = 0; p < lx.length; p += 4) for (let q = 0; q < ly.length; q += 4) {
+            const g = Math.hypot(lx[p] - ly[q], lx[p + 1] - ly[q + 1], lx[p + 2] - ly[q + 2]) - lx[p + 3] - ly[q + 3];
+            if (g < best) { best = g; pa = [lx[p], lx[p + 1], lx[p + 2], lx[p + 3]]; pb = [ly[q], ly[q + 1], ly[q + 2], ly[q + 3]]; }
+          }
+        }
+      }
+    }
+  }
+  if (!pa) return null;
+  const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2], d = Math.hypot(dx, dy, dz) || 1, n = [dx / d, dy / d, dz / d];
+  return { gap: best, a: [pa[0] + n[0] * pa[3], pa[1] + n[1] * pa[3], pa[2] + n[2] * pa[3]], b: [pb[0] - n[0] * pb[3], pb[1] - n[1] * pb[3], pb[2] - n[2] * pb[3]], normal: n };
+}
+
 /** True when items a and b come closer than clearance anywhere. */
 export function touches(a, b, clearance = COLLIDE.clearanceM) {
   return minGap(a, b, clearance, clearance) < clearance;

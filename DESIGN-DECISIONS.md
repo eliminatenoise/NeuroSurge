@@ -1535,6 +1535,28 @@ For muscles that cross the right elbow and already use the twisting frame, the w
 
 The human reference series covers bones turning and bending in living volunteers, and the BodyParts3D atlas supplies the game’s surfaces. The weight rule and the stretch counts describe the render mesh. Human muscle deformation at the combined end pose remains untested. [Goto et al. (2004)](https://pubmed.ncbi.nlm.nih.gov/15220886/), [Matsuki et al. (2010)](https://pubmed.ncbi.nlm.nih.gov/20696507/), [Fu et al. (2009)](https://pubmed.ncbi.nlm.nih.gov/19576700/).
 
+## 110. The whole mirror body, whatever part you take (19 November)
+
+The user: “Forget about controlling individual elements of the mirror, just allow full control of the mirror body.” Since 17 November a hold or a drag on an arm or leg of the mirror body moved your own matching limb. Now any part of the mirror body is the mirror body: Space on it carries all of it and a drag turns all of it. The older rule's code stays behind one switch (`MIRROR_LIMBS_ARE_YOURS` in `ns-app.mjs`).
+
+## 111. Calmer to look at (19 November)
+
+The user: “The game currently physically hurts to look at with your eyes”; “Body is probably too glossy and it makes everything really hard to differentiate from each other”; “the beating of the brain is way too obvious. It should be far more subtle”; “when you look up and down, the pelvis pops out”. A first pass that changes numbers only:
+
+- A switched-on area gives a steady light. The three strike pulses and the flicker of section 102 are gone, and the standing quiver of the tissue with them; a small settle at the moment an area switches on is kept.
+- The brain's beat, slide and flush are about a third of what they were.
+- The bodies' wet highlight is under half as strong (a satin surface), so a muscle's own tone and edge carry the picture.
+- A look down the body only tints the muscles that turn the head and bend the trunk (level 0.22, was 0.75). Before, it lit the whole belly and pelvis in full colour, which is what popped out. The tint is now counted from where the head and trunk are when play begins, so the belly is no longer lit from the first frame.
+- The cerebral arteries are a muted red with less shine and a third of the pulse; the floor's tile lines are barely there.
+
+A fuller redesign of the look (few clean tones, strong light and dark, one saturated colour for activity) is still to come.
+
+## 112. What came in from the last round, and what stays switched off (19 November)
+
+Merged from the round of 18 November: a limb hidden behind another limb or the trunk shows through as a ghost in its own colour and can be aimed at (`ns-see.mjs`); the loading picture builds from the inside out, bones from the spine outward and then deep to outer muscle, the brain from its stem outward (`ns-assembly-order.mjs`), next to the stationary progress bar another maintainer added for reduced motion.
+
+Limb-pushes-limb (`ns-contact.mjs`) was merged and then switched off (`SELF_CONTACT_ON = false` in `ns-app.mjs`). In the browser a reach key swept the left arm through the legs, and the push threw both legs and the right arm to the ends of their ranges, where they stayed; a look alone did the same more slowly, because the left arm follows the look. Its code and tests stay for a gentler rebuild. Your own limbs therefore still pass through each other.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

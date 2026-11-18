@@ -7,24 +7,10 @@ import * as THREE from '../vendor/three.module.js';
 import { BLINK, powerUpBlink, powerUpBlinkGlsl, powerUpEnvelope, powerUpGlsl, SHUDDER, shudderGlsl } from '../scene/src/ns-colors.mjs';
 import { patchShudderVertex, patchPowerUpShaders } from '../scene/src/ns-scene-three.mjs';
 
-test('the blink strikes like a neon tube (three pulses in the first quarter second), then flickers shallowly', () => {
-  const at = a => powerUpBlink(a);
-  assert.equal(at(0.02), 1);
-  assert.ok(at(0.09) < 0.2, 'first dark gap');
-  assert.equal(at(0.15), 1);
-  assert.ok(at(0.21) < 0.5, 'second gap');
-  assert.equal(at(0.3), 1);
-  // flicker: count dips over 10 s, and their depth
-  let dips = 0, deepest = 0, prev = 1;
-  for (let t = BLINK.flickerFromS; t < BLINK.flickerFromS + 10; t += 0.005) {
-    const v = at(t);
-    if (v < 1 && prev === 1) dips++;
-    deepest = Math.max(deepest, 1 - v);
-    prev = v;
-  }
-  assert.ok(dips / 10 <= 3, `at most three dips a second (${dips / 10})`);
-  assert.ok(dips / 10 >= 1, 'a living flicker, not a steady light');
-  assert.ok(deepest <= 0.4 + 1e-9, 'shallow dips');
+test('a switched-on area gives a steady light: no strike pulses and no flicker', () => {
+  // 19 November 2026 (the owner: "The game currently physically hurts to look at with your eyes"): the neon strike and
+  // the flicker of 18 November are gone; the light never dips.
+  for (let t = 0; t < 12; t += 0.005) assert.equal(powerUpBlink(t), 1, `steady at ${t}`);
 });
 
 test('no blink under reduced motion or for a calm hint; the envelope carries the blink in its light only', () => {
@@ -32,8 +18,8 @@ test('no blink under reduced motion or for a calm hint; the envelope carries the
     assert.equal(powerUpBlink(a, { reduced: true }), 1);
     assert.equal(powerUpBlink(a, { calm: true }), 1);
   }
-  const dark = powerUpEnvelope(0.09), lit = powerUpEnvelope(0.15);
-  assert.ok(dark.gain < 0.5 * lit.gain, 'the strike gap darkens the light');
+  const early = powerUpEnvelope(0.09), lit = powerUpEnvelope(0.15);
+  assert.ok(early.gain > 0.5 * lit.gain, 'no dark gap in the light as it comes on');
   assert.equal(powerUpEnvelope(0.09, 0.5, { reduced: true }).gain, powerUpEnvelope(0.09, 0.5, { reduced: true }).albedo);
 });
 

@@ -116,7 +116,10 @@ export const BODY_FLESH = freeze({
     capFrom: 0.3, capTo: 0.6, crossFrom: 0.8, crossTo: 0.94,
     tendonAmp: 0.45, glowKeep: 1, fadeFrom: 0.22, fadeTo: 0.5, aaPx: 0.9, edgeMin: 0.1, viewFrom: 0.2, viewTo: 0.55
   }),
-  wet: freeze({ gain: 4, max: 0.62, maxWhite: 0.5, glint: 0.34, glintLo: 0.1, glintHi: 0.3, partKeep: 0.35, glowKeep: 0.3 }),
+  // 19 November 2026 (the owner: "Body is probably too glossy and it makes everything really hard to differentiate from
+  // each other"): a satin surface. The highlight is under half of what it was (gain 4, max 0.62, maxWhite 0.5, glint
+  // 0.34), so a muscle's own tone and its edge carry the picture, not the reflections lying across them.
+  wet: freeze({ gain: 1.6, max: 0.26, maxWhite: 0.28, glint: 0.1, glintLo: 0.1, glintHi: 0.3, partKeep: 0.35, glowKeep: 0.3 }),
   rim: freeze({ gain: 0.42, power: 3.4, colour: freeze([0.8, 0.9, 1.0]), white: 0.15, film: 0 }),
   glowForm: freeze({ lo: 1.3, hi: 1.0, max: 0.97, tint: 0.85, glowTint: 0.5, hueDeepen: 0.8 }),
   bone: freeze({ mottle: 0.06, mottleMm: 18, warm: freeze([1.0, 0.94, 0.86]),

@@ -282,7 +282,7 @@ const STEP_TABLE = [
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
   intro: [part('Look at a motor area to see its movements. Click it or press a number from the list to move the body part. The arrow keys step to the next area. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
-  { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. Hold a limb on the mirror body to move your matching limb. ' +
+  { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
     'move the pointer to carry it sideways, up or down. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
