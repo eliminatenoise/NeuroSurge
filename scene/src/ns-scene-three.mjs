@@ -7152,6 +7152,12 @@ export function createScene({
     const k = p && Number.isFinite(p.fovScale) ? p.fovScale : 1;
     return k === 1 ? eyeFovY : (2 * Math.atan(Math.tan((eyeFovY * DEG) / 2) * k)) / DEG;
   }
+  /** Resize supplies the base eye angle. The active lens keeps the current look and outside-view blend. */
+  function activeLensFov() {
+    const eyeFov = flatLensFov(camPose || firstPose);
+    if (!camPose || camPose.fov === null || cameraProjectionPlan?.phase === 'locked') return eyeFov;
+    return eyeFov + fin01(camPose.blend) * (camPose.fov - eyeFov);
+  }
   function setCameraPose(pose = null) {
     if (pose && pose.projectionPlanning) {
       if (cameraProjectionPlan) fail('scene_input', 'previous camera projection frame not released');
@@ -7216,10 +7222,7 @@ export function createScene({
       camera.rotation.set(firstPose ? firstPose.pitch : lookPitch, firstPose ? firstPose.yaw : lookYaw, 0, 'YXZ');
     }
     camera.updateMatrixWorld(true);
-    // 18 November 2026: the view from outside has its own, narrower angle (ns-camera THIRD_PERSON.followFovYDeg), eased
-    // in and out with the view's blend; the eye view's angle (eyeFovY: the launcher's, or resize's) is untouched.
-    const eyeFovNow = flatLensFov(camPose || firstPose); // 18 November 2026, late: the eye view's lens for this look (ns-camera EYE_DOLLY)
-    const fovNow = camPose && camPose.fov !== null && !(cameraProjectionPlan && cameraProjectionPlan.phase === 'locked') ? eyeFovNow + fin01(camPose.blend) * (camPose.fov - eyeFovNow) : eyeFovNow;
+    const fovNow = activeLensFov();
     if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
     const headIn = camPose !== null && camMul.headInPlace >= R5_SCENE.headInPlaceFrom;
     const nearNow = camMul.nearM !== null ? camMul.nearM : !camPose && firstPose && firstPose.nearM ? firstPose.nearM : near;
@@ -12307,7 +12310,10 @@ export function createScene({
     const pr = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
     applyBuffer(width, height, pr);
     // Optional narrow-layout FOV from ns-app (effectiveFovYDeg); absent or invalid keeps the current FOV.
-    if (Number.isFinite(fov) && fov > 0 && fov < 179) { eyeFovY = fov; camera.fov = fov; }
+    if (Number.isFinite(fov) && fov > 0 && fov < 179) {
+      eyeFovY = fov;
+      camera.fov = activeLensFov();
+    }
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     cssW = width; cssH = height;
