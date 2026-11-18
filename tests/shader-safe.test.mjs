@@ -157,14 +157,19 @@ test('the one-material-per-class rewrite moves a muscle\'s seven values from uni
     assert.equal(patchMuscleShareShaders(c.v, c.f + '\nvoid main() {}', set), null, 'two mains (fragment)');
     assert.equal(patchMuscleShareShaders(c.v.replace('void main() {', 'void main(){'), c.f, set), null, 'no main it knows');
     for (const d of MUSCLE_SHARE.uniforms) {
-      assert.equal(patchMuscleShareShaders(c.v, c.f.replace(`uniform ${d};`, ''), set), null, `${d} missing`);
+      // 19 November 2026 (the plain look): a look patch that is not applied leaves its uniform out; the rewrite then
+      // declares a plain global for the row's value. Only the standard material's own two must be there.
+      const gone = patchMuscleShareShaders(c.v, c.f.replace(`uniform ${d};`, ''), set);
+      if (/^vec3 (?:diffuse|emissive)$/.test(d)) assert.equal(gone, null, `${d} missing`);
+      else assert.ok(gone && gone.fragmentShader.includes(`${d};`) && !gone.fragmentShader.includes(`uniform ${d};`), `${d} left out: a plain global`);
       assert.equal(patchMuscleShareShaders(c.v, c.f.replace(`uniform ${d};`, `uniform ${d};\nuniform ${d};`), set), null, `${d} doubled`);
     }
     assert.equal(patchMuscleShareShaders(c.v.replace('void main() {', 'uniform vec4 nsFibre;\nvoid main() {'), c.f, set), null, 'the vertex shader reads one of the seven');
   }
   for (const bad of ['O', 'ab', '', '1', 5, null]) assert.equal(patchMuscleShareShaders(own.v, own.f, bad), null);
   assert.ok(patchMuscleShareShaders(own.v, own.f), 'the set letter has a default');
-  assert.equal(patchMuscleShareShaders(lib.vertexShader, lib.fragmentShader, 'o'), null, 'an unpatched standard shader has no muscle values');
+  // 19 November 2026 (the plain look): a plain standard shader is rewritten too (its colour and glow come from the row)
+  { const plain = patchMuscleShareShaders(lib.vertexShader, lib.fragmentShader, 'o'); assert.ok(plain && plain.fragmentShader.includes('diffuse = vNsS0.rgb'), 'a plain standard shader takes its colour and glow from the row'); }
   assert.equal(patchMuscleShareShaders(null, own.f, 'o'), null);
   assert.equal(patchMuscleShareShaders(own.v, undefined, 'o'), null);
 });

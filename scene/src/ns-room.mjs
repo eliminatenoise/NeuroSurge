@@ -57,12 +57,16 @@ export const ROOM = Object.freeze({
   floorY: -13, ceilY: 16, wallR: 260,
   centre: Object.freeze([0, -7.5]), bodyAt: Object.freeze([-0.04, -0.23, -0.53]),
   black: Object.freeze([0.0015, 0.0021, 0.0033]),
-  pool: Object.freeze({ colour: Object.freeze([0.020, 0.040, 0.042]), radiusM: 19, amb: 0.05 }),
+  // 19 November 2026 (the owner: "Let's go back to far more black of a background, but with a little bit of a gradient.
+  // So not exactly pitch black, with the gradient changing as you go further or closer away"): the floor's pool of light
+  // is the gradient (brightest under you, fading with distance) at about a third of its strength (0.020, 0.040, 0.042
+  // before); no tile lines, no lamps, a wall that is nearly black.
+  pool: Object.freeze({ colour: Object.freeze([0.0065, 0.0105, 0.0125]), radiusM: 19, amb: 0.05 }),
   // 19 November 2026 (eye comfort; the owner liked a plain dark background): the tile lines are barely there (dark 0.55 before).
-  tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0.12 }),
-  wall: Object.freeze({ colour: Object.freeze([0.0045, 0.0105, 0.0115]), heightM: 30, lobes: 7, uneven: 0.16 }),
+  tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0 }),
+  wall: Object.freeze({ colour: Object.freeze([0.0016, 0.0028, 0.0034]), heightM: 30, lobes: 7, uneven: 0.16 }),
   lamps: Object.freeze([Object.freeze([0.3, 4.9, 3.8, 1]), Object.freeze([-5, 9.3, 1.7, 0.75]), Object.freeze([-6.2, 5.1, 1.2, 0.6])]),
-  lamp: Object.freeze({ colour: Object.freeze([0.19, 0.245, 0.25]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),
+  lamp: Object.freeze({ colour: Object.freeze([0, 0, 0]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),
   gloss: Object.freeze({ f0: 0.05, wall: 0.7 }),
   aura: Object.freeze({ colour: Object.freeze([0.72, 0.96, 1]), brain: Object.freeze([0.012, 0.4, 1]), mirror: Object.freeze([0.02, 0.9, 0]), body: Object.freeze([0.02, 0.9, 0]), radii: Object.freeze([7, 0.85, 0.85]) }),
   shade: Object.freeze({ brain: Object.freeze([8, 0.6]), brainK: 0.75, mirror: Object.freeze([4, 0]), body: Object.freeze([4, 0]) }),
@@ -73,7 +77,8 @@ export const ROOM = Object.freeze({
   // depth 0; the brain keeps its own): the floor reads as a distant room, not as ground under them. radiusM is about
   // the floor's own depth below the eyes (with 10 m the lines still showed 13 m out from the bodies in the view from E).
   ground: Object.freeze({ radiusM: 13, keep: 0.12 }),
-  live: Object.freeze({ beat: 0.3, beatS: 0.11, active: 0.4, inS: 0.25, outS: 1.2 }),
+  // 19 November 2026 (plain look): the backdrop's light is steady (it swelled 0.3 with the beat and 0.4 with a movement).
+  live: Object.freeze({ beat: 0, beatS: 0.11, active: 0, inS: 0.25, outS: 1.2 }),
   ditherLsb: 0.75
 });
 

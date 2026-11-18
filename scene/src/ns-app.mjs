@@ -108,7 +108,14 @@ import * as NsCollide from './ns-collide.mjs';
 import * as NsGrasp from './ns-grasp.mjs';
 import * as NsContact from './ns-contact.mjs'; // 18 November 2026 (package CONTACT): limbs push limbs
 import { seeHiddenEntry, seeTakesGhost, seeLimbOfGroup } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs
+import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performance): frame time by part, inspect().perf
 
+/** 19 November 2026 (the owner: "Performance and reliability should be our number one priority. even if that means
+ * extreme simplicity and streamlining"; "Perhaps game is way too big at the moment"). What the plain game leaves out:
+ * the vessels (the cerebral arteries alone are 80 files and about 9 MB to fetch, 180,000 triangles to draw), the
+ * contraction swell (baked after loading and stepped every frame) and the limb-contact model (built at load for a
+ * rule that is switched off). Their code stays; set one back to true to bring it in again. */
+export const PLAIN_GAME = Object.freeze({ vessels: false, swell: false, selfContact: false });
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -4833,6 +4840,12 @@ export function start(params = {}) {
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
+  const frameTimer = createFrameTimer(); // 18 November 2026 (performance): frame time by part (ns-perf; inspect().perf)
+  /* 19 November 2026 (performance): what is under the crosshair (targetsAt: a ray against every drawn mesh, 2 to 6 ms)
+   * was asked on every frame. While nothing is pressed, held, carried or reached for and no input event arrived, the
+   * answer of the frame before is used once more and the ray is cast on the next frame, so the look names what is
+   * under it at most one frame late; any click, key, hold, carry, Shift reach, QA step frame or view change asks at once. */
+  const pickHold = { ctl: null, frame: -2, n: 0, w: 0, h: 0, view: null, reused: 0, asked: 0 };
   let lastMs = null, frames = 0, renderRequested = false, appliedSize = null, seedNext = false;
   const carryRawEvents = []; // R558: Space / click events of a skipped (refused) frame, delivered with the next frame
   let lastGoodLook = null, lookBlock = null, reachBlock = null; // R558: the last look that was shown; short-lived learned look / reach limits
@@ -5934,7 +5947,7 @@ export function start(params = {}) {
       scene.setBrain({ glass: data.glass, focus: data.strip.focus, markers: data.strip.markers, bodyMap, segmentation: regionPrep.segmentation });
       // 18 November (package VESSELS): the cerebral arteries (their own checked packet, ns-vessels) and the hand-laid veins
       // and sinuses join the brain once the files are in; the first frame does not wait. A refusal shows the veins only.
-      if (!isPlaceholder && sceneFn('setBrainVessels')) {
+      if (PLAIN_GAME.vessels && !isPlaceholder && sceneFn('setBrainVessels')) {
         const vesselsIn = arteries => { if (!stopped && !failed) { try { callScene('setBrainVessels', { arteries }); } catch (err) { console.warn('ns: brain vessels not drawn:', errorText(err)); } } };
         loadCerebralArteries({ fetchText, sha256Hex, parse: parseObjFast, yieldFn: yieldToPaint })
           .then(r => vesselsIn(r.meshes), err => { console.warn('ns: cerebral arteries not shown:', errorText(err)); vesselsIn([]); });
@@ -6381,10 +6394,10 @@ export function start(params = {}) {
           bodyLayers = layers;
           installBodyLift();
           installHandSkin(inputsB.meshesById);
-          installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
-          startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
+          if (PLAIN_GAME.selfContact) installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
+          if (PLAIN_GAME.swell) startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
           // 18 November (package VESSELS): the named vessels of the limbs, riveted to this body's drawn muscles and bones
-          if (sceneFn('setBodyVessels')) {
+          if (PLAIN_GAME.vessels && sceneFn('setBodyVessels')) {
             const src = inputsB;
             (async () => {
               const list = await loadBodyVessels({ fetchText, sha256Hex });
@@ -7638,6 +7651,8 @@ export function start(params = {}) {
 
       /** One frame at `now` (ms). fixed: the QA fixed clock (always live). Returns true when a frame was rendered. */
       tick = (now, fixed) => {
+        frameTimer.begin(); // 18 November 2026 (performance): frame time by part
+        pickHold.n++;
         // R34 GAME saturation policy (public main): count before any UI/GAME drain, timestamp mapping, E change or plan
         // binding. The old carry limit now bounds the combined pending list. Overflow cancels an epoch; no real edge is
         // retimed.
@@ -8149,11 +8164,20 @@ export function start(params = {}) {
         // finds behind your own body or the mirror body is still looked at (lead decision refining Messages 33 and 34).
         // The same answer serves the HUD's "Looking at" line and its controls line this frame. A reach-behind click on a
         // motor area (reachPick, above) lets the look see that area for its own frame.
-        const ctl = live ? targetsAt(size.width / 2, size.height / 2) : null;
+        frameTimer.mark('input');
+        // 19 November 2026 (plain game): the answer serves two more frames (not one), and a held Space or button no longer
+        // forces a new ray every frame (6 ms a frame through the whole limb turn): any input EVENT still asks at once.
+        const pickQuiet = live && fixed !== true && pickHold.ctl !== null && pickHold.n - pickHold.frame <= 2 && pickHold.w === size.width && pickHold.h === size.height
+          && pickHold.view === cam.view && cam.progress === (cam.view === 'third' ? 1 : 0) && !reachPick && !tapped && timing.events.length === 0 && cs.reach !== true
+          && !dragLimb;
+        let ctl = null;
+        if (pickQuiet) { ctl = pickHold.ctl; pickHold.reused++; } // the frame after a fresh answer: frame stays, so the next one asks
+        else if (live) { ctl = targetsAt(size.width / 2, size.height / 2); pickHold.ctl = ctl; pickHold.frame = ctl ? pickHold.n : -2; pickHold.w = size.width; pickHold.h = size.height; pickHold.view = cam.view; pickHold.asked++; }
         ctlFrame = ctl;
         const objectPick = live && reachPick ? reachPick : frameObjectPick(ctl, live);
         const keyboardAimId = live && infoStepped && infoStepped.lookMs === walkMarks.lookMs && infoStepped.buttonSeq === walkMarks.buttonSeq
           && infoStepped.viewToggle === cam.toggles && infoStepped.inputEpoch === inputCancellation.count ? infoStepped.id : null;
+        frameTimer.mark('pick');
         const stepInputs = {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
@@ -8182,6 +8206,7 @@ export function start(params = {}) {
         };
         const prevSim = simState;
         const step = wholeArmOption ? captureWholeArm(() => sim.stepFrame(simState, stepInputs, timing.dt)) : sim.stepFrame(simState, stepInputs, timing.dt);
+        frameTimer.mark('sim');
         return { timing, look, ctlLook, head, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step };
         };
         // R558 recovery driver. Everything an attempt may touch before the step is restored from this snapshot.
@@ -8433,6 +8458,7 @@ export function start(params = {}) {
             catch (err) { brainKey = null; if (err && err.code === 'actual_camera_projection_refused') return postStepRefused(err); throw err; }
           }
         }
+        frameTimer.mark('other');
         // R174: select/apply the display amount BEFORE updatePose. A changed
         // rest array invalidates lastMatrices, forcing this frame's skinning
         // even when its joint matrices are unchanged. All amounts share the
@@ -8456,6 +8482,7 @@ export function start(params = {}) {
           }
         }
         scene.updatePose(out.appliedArmMatrices || out.fit.solution.matrices);
+        frameTimer.mark('arm');
         // R558 (Space dance): the radius and upper-arm turn the game arm shows now; the next frame tells the activity.
         { const c = out.fit && out.fit.coupling; armTurnSeen = c && Number.isFinite(c.forearmDeg) && Number.isFinite(c.humeralExternalDeg) ? { forearmDeg: c.forearmDeg, humeralDeg: c.humeralExternalDeg } : null; }
         if (wholeArmDisplayPlan && wholeArmDisplayPlan.actualCamera) {
@@ -8708,7 +8735,9 @@ export function start(params = {}) {
           const dkey = drives ? Object.keys(drives).sort().map(k => `${k}:${Math.round(drives[k] * 256)}`).join(',') : '';
           // R558 (Message 12): the new pose stops where your body would touch the brain or the mirror body (or a limb its
           // own mirror image); while it is held back the request is tried again every frame (cheap while nothing moved).
+          frameTimer.mark('other');
           const guarded = key !== bodyKey || fittedBodyChanged ? guardBodyPose(bodyPosed, targets, now) : null;
+          frameTimer.mark('guard');
           const drawnKey = guarded ? `${JSON.stringify(guarded.targets)}|${bodyLayers ? amount : '-'}|${JSON.stringify(armFollow)}|${headShown ? JSON.stringify(headPoseOptions(headShown)) : '-'}` : null;
           if (guarded && (drawnKey !== bodyDrawnKey || fittedBodyChanged)) {
             bodyKey = guarded.targets === targets ? key : null;
@@ -8731,12 +8760,14 @@ export function start(params = {}) {
             if (handSkinReady) {
               const det = mods.body.poseBodyDetailed(bodyRig, T, po);
               callScene('updateBody', det.matrices, drives);
+              frameTimer.mark('pose');
               try {
                 skinSegmentsLast = skinHand ? det.segments : null;
                 skinElbowFlexLast = det.applied.r_elbow_flex;
                 callScene('updateBodySkin', skinSegmentsLast, skinElbowFlexLast);
               } catch (err) { handSkinReady = false; handSkinNote = errorText(err); }
             } else callScene('updateBody', mods.body.poseBody(bodyRig, T, po), drives);
+            frameTimer.mark(handSkinReady ? 'skin' : 'pose');
             bodyPosed = T; headDrawn = headShown; // R558 (hunt 2 code #2): the head options this pose was drawn with
             skinPosedThisFrame = true;
           } else if (guarded && dkey !== bodyDriveKey) {
@@ -8754,6 +8785,7 @@ export function start(params = {}) {
         // the following frames, also when the pose itself has stopped changing.
         if (handSkinReady && !skinPosedThisFrame && skinSegmentsLast && sceneFn('bodySkinPending')) {
           try { if (callScene('bodySkinPending') > 0) callScene('updateBodySkin', skinSegmentsLast, skinElbowFlexLast); } catch { /* the next pose skins them */ }
+          frameTimer.mark('skin');
         }
         skinPosedThisFrame = false;
         if (contact.fxPending) itemContactFx(now); // 18 November 2026 (package CONTACT): the flash of an item contact
@@ -8804,6 +8836,7 @@ export function start(params = {}) {
           callScene('setGlowLinks', extraLinks ? [...links, ...extraLinks] : links);
           glowWired = true;
         } else { glowWired = false; glowData = null; if (sceneFn('setGlowLinks')) callScene('setGlowLinks', headGlowLinks(headGlow)); }
+        frameTimer.mark('glow');
         refreshGuideFeatures();
         // R558 (hunt 3 check): the sim re-applies the legacy glassHit override to its cached RAW gaze every frame, so in
         // legacy mode the hit is kept while the raw gaze is empty (the glass it made); clearing it there lost the glass
@@ -9029,6 +9062,7 @@ export function start(params = {}) {
         }
         if (shell && typeof shell.placeToast === 'function') shell.placeToast(toastSpotFor(size));
         updateInfo(inputs.binding, out);
+        frameTimer.mark('hud');
         if (shell) {
           const say = announcer.update(model.gaze, now);
           if (say) shell.announce(say);
@@ -9087,6 +9121,7 @@ export function start(params = {}) {
             captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
           } catch (err) { return postStepRefused(err); }
         } else scene.render(live && fixed !== true ? { frameStartMs: now } : { live: false });
+        frameTimer.mark('other'); frameTimer.add('draw', scene.lastRenderMs || 0, 'other'); frameTimer.add('outline', scene.lastOutlineMs || 0, 'draw'); frameTimer.end();
         displayRecovery.skipStreak = 0; displayRecovery.rescued = false;
         // Review fix: the look this frame actually drew (a frozen frame draws the stored look, not the controls' one).
         // R558 (HEAD_LOOK): the recovery works in the controls' look (the drawn look is the head's, offsets included).
@@ -9313,6 +9348,8 @@ export function start(params = {}) {
     return plainCopy({
       phase, error: lastError, placeholder: isPlaceholder, qa: qaEnabled, frames, loop: { held: [...holds] },
       shell: shellState, settings, pointerLocked: lockedNow(),
+      // 18 November 2026 (performance, ns-perf): main-thread ms per frame by part over the last frames (mean, 90th pct).
+      perf: { ...frameTimer.state(), picks: { asked: pickHold.asked, reused: pickHold.reused } },
       state: current.state, controls: current.controls,
       // Input epochs: how often pending input was cancelled at a boundary, why, and what the last one dropped.
       inputCancellation: plainCopy(inputCancellation),

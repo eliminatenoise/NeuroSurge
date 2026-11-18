@@ -903,13 +903,16 @@ const muscleTone = (name, L, C, h) => {
 // 1.28. Old (L, h): 0.630 28, 0.560 40, 0.595 17, 0.520 30, 0.705 33, 0.665 20. The steps between the tones are kept,
 // so the neighbour separation (Message 18) is as before.
 export const MUSCLE_TONE_CHROMA = 1.28;
+// 19 November 2026 (the owner: "everything should look a lot more like the loading screen models"): the muscles take the
+// loading picture's reds (ns-assembly-core ASSEMBLY_KINDS.muscle 0xb2343c and its three layer reds), in six steps of
+// lightness so neighbours still part. Before: six pale salmon / rose / clay tones (L 0.465 to 0.650, chroma about 0.1).
 export const MUSCLE_TONES = freeze([
-  muscleTone('salmon rose', 0.575, 0.088 * MUSCLE_TONE_CHROMA, 32),
-  muscleTone('soft red-brown', 0.505, 0.076 * MUSCLE_TONE_CHROMA, 44),
-  muscleTone('muted rose', 0.540, 0.094 * MUSCLE_TONE_CHROMA, 21),
-  muscleTone('clay rose', 0.465, 0.074 * MUSCLE_TONE_CHROMA, 34),
-  muscleTone('light salmon', 0.650, 0.078 * MUSCLE_TONE_CHROMA, 37),
-  muscleTone('dusty rose', 0.610, 0.066 * MUSCLE_TONE_CHROMA, 24)
+  muscleTone('red', 0.500, 0.160, 22),
+  muscleTone('deep red', 0.410, 0.132, 20),
+  muscleTone('outer red', 0.545, 0.165, 23),
+  muscleTone('dark red', 0.450, 0.146, 21),
+  muscleTone('light red', 0.585, 0.152, 24),
+  muscleTone('mid red', 0.475, 0.156, 20.5)
 ]);
 /** OKLab distance between two tones (0.1 = clearly different, 0.03 = just noticeable side by side). */
 export function muscleToneDistance(i, j) {

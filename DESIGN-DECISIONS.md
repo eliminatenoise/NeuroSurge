@@ -1565,6 +1565,16 @@ The rendering weights now change more gradually over the outside of the hinge. T
 
 This changes one atlas muscle. The unchanged deep bend still has 104 severe edge stretches around the elbow across the measured right-arm meshes. Ultrasound measures the fibres inside the living anconeus. The game measures edges on the atlas surface. A lifelike full-bend deformation still needs a suitable measured surface reference. [Stevens et al. (2014)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4292751/).
 
+## 114. The plain look of the loading picture, and a lighter game (19 November)
+
+The user: “Performance and reliability should be our number one priority. even if that means extreme simplicity and streamlining. And perhaps visually, there should be a major visual overhaul and everything should look a lot more like the loading screen models instead of what you have right now, which is overkill and overcomplicates everything.” And: “Let's go back to far more black of a background, but with a little bit of a gradient.”
+
+The game is now drawn the way its loading picture draws its models. One switch, `SIMPLE_LOOK` in `ns-scene-three.mjs`, leaves out the comic bands, painted fibres, wet highlights and ink of the bodies, the ink outline pass, the hidden-limb ghost pass and the bloom; `PLAIN_GAME` in `ns-app.mjs` leaves out the vessels (the cerebral arteries were 80 files and about 9 MB to fetch), the contraction swell and the limb-contact model. The muscles take the loading picture's reds in six steps of lightness, so that neighbours still part; bone stays pale. The backdrop is nearly black with a faint pool of light that fades with distance: no tile lines, no lamps, and its light no longer swells with the beat or a movement. The older look's code stays behind the two switches.
+
+With it came the performance work begun on 18 November: the muscles of your body, the mirror body and the left arm are skinned on the graphics card (they follow their bones on every frame and no vertex buffers are re-sent), the game reports its frame time by part (`inspect().perf`), and what is under the crosshair is asked every third frame while no input arrives.
+
+Measured in one headless desktop Chromium at 1600 by 900 on one computer's own graphics card, before and after: looking around 36 to about 50 frames a second, looking down and up 35 to about 56, the limb turn 33 to about 54; standing still 60 in both. The main thread's work per frame while the look moves fell from about 25 ms to about 17 ms. These are one machine's figures and say nothing certain about a weaker one. A frame still makes about 1,240 draws of 4.6 million triangles; fewer draws, coarser meshes and a look that does not bend the whole trunk are the next steps.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

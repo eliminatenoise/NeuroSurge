@@ -39,7 +39,7 @@
  * Display only: a drawing aid and a picking aid. It changes no pose, activity value or collision.
  */
 import * as NsColors from './ns-colors.mjs';
-import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLINE_ID_VS } from './ns-outline.mjs';
+import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLINE_ID_VS, OUTLINE_SKIN_ID_VS, OUTLINE_SKIN_BATCH_VS } from './ns-outline.mjs';
 
 /** Display and picking choices (18 November 2026).
  *  gapM / gapRel: how far behind the front part (metres, plus a share of its distance) a part must lie to be hidden.
@@ -411,10 +411,13 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
   const inkTarget = ok ? nearest({ depthBuffer: false }) : null;
   const censusTarget = ok ? nearest({ depthBuffer: false }) : null;
   const view = new THREE.Vector4(1, 0.01, 100, 1);
-  const geoMat = new THREE.ShaderMaterial({
-    uniforms: { tId: { value: null }, tDepth: { value: null }, tAdj: { value: null }, uView: { value: view }, uGap: { value: new THREE.Vector2(SEE.gapM, SEE.gapRel) } },
-    vertexShader: OUTLINE_ID_VS, fragmentShader: GHOST_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false
-  });
+  const geoUni = { tId: { value: null }, tDepth: { value: null }, tAdj: { value: null }, uView: { value: view }, uGap: { value: new THREE.Vector2(SEE.gapM, SEE.gapRel) } };
+  const geoOf = (vertexShader, uniforms) => new THREE.ShaderMaterial({ uniforms: { ...geoUni, ...uniforms }, vertexShader, fragmentShader: GHOST_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  const geoMat = geoOf(OUTLINE_ID_VS, {});
+  // 19 November 2026 (performance): the muscles skinned on the graphics card are in the ID pass as a skinned batch (the
+  // body's) and as skinned proxies (the left game arm's); they are drawn here with the same vertex shaders.
+  const geoSkinBatchMat = geoOf(OUTLINE_SKIN_BATCH_VS, { nsBoneTex: { value: null }, nsHalf: { value: 128 } });
+  const geoSkinIdMat = geoOf(OUTLINE_SKIN_ID_VS, { nsId: { value: new THREE.Vector3() } });
   const inkUni = {
     tGhost: { value: ghostTarget ? ghostTarget.texture : null }, tId: { value: null }, tDepth: { value: null },
     uSize: { value: [1, 1] }, uSS: { value: 1 }, uView: { value: view },
@@ -500,13 +503,24 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     if (ghostTarget.width !== w || ghostTarget.height !== h) ghostTarget.setSize(w, h);
     const cam = ctx.camera;
     view.set(1, cam.near, cam.far, cam.isOrthographicCamera ? 0 : 1);
-    geoMat.uniforms.tId.value = ctx.target.texture; geoMat.uniforms.tDepth.value = ctx.depthTexture; geoMat.uniforms.tAdj.value = ctx.adjTex;
-    const scene = ctx.idScene, prevOverride = scene.overrideMaterial;
-    scene.overrideMaterial = geoMat;
+    geoUni.tId.value = ctx.target.texture; geoUni.tDepth.value = ctx.depthTexture; geoUni.tAdj.value = ctx.adjTex;
+    // each thing of the ID pass with its own vertex shader and the ghost fragment shader (the batch, the skinned batch,
+    // then the skinned proxies over the same depth)
+    const scene = ctx.idScene, sb = ctx.skinBatch || null, sk = ctx.skinScene || null;
+    const prevBatch = ctx.batch ? ctx.batch.material : null, prevSb = sb ? sb.material : null, prevSk = sk ? sk.overrideMaterial : null, prevAuto = renderer.autoClear;
+    if (ctx.batch) ctx.batch.material = geoMat;
+    if (sb) { sb.material = geoSkinBatchMat; geoSkinBatchMat.uniforms.nsBoneTex.value = ctx.skinBatchUniforms.nsBoneTex.value; geoSkinBatchMat.uniforms.nsHalf.value = ctx.skinBatchUniforms.nsHalf.value; }
+    if (sk) sk.overrideMaterial = geoSkinIdMat;
     let q = null;
     if (queries && !pendingQuery) { try { q = gl.createQuery(); if (q) gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, q); } catch { q = null; } }
-    try { renderer.setRenderTarget(ghostTarget); renderer.render(scene, cam); } finally {
-      scene.overrideMaterial = prevOverride;
+    try {
+      renderer.setRenderTarget(ghostTarget); renderer.render(scene, cam);
+      if (sk) { renderer.autoClear = false; renderer.render(sk, cam); }
+    } finally {
+      renderer.autoClear = prevAuto;
+      if (ctx.batch) ctx.batch.material = prevBatch;
+      if (sb) sb.material = prevSb;
+      if (sk) sk.overrideMaterial = prevSk;
       if (q) { try { gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE); pendingQuery = q; } catch { pendingQuery = null; } }
     }
     if (hasGhost || focus) { ink(ctx); inkStale = false; } else inkStale = true;
@@ -559,7 +573,7 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     outline.setAfterId(null);
     if (pendingQuery) { try { gl.deleteQuery(pendingQuery); } catch { /* lost context */ } pendingQuery = null; }
     for (const t of [ghostTarget, inkTarget, censusTarget]) if (t) t.dispose();
-    geoMat.dispose(); inkMat.dispose(); censusMat.dispose(); compMat.dispose(); quad.dispose();
+    geoMat.dispose(); geoSkinBatchMat.dispose(); geoSkinIdMat.dispose(); inkMat.dispose(); censusMat.dispose(); compMat.dispose(); quad.dispose();
   }
   return { composite, frame, locked: () => (on && composite.visible ? locked.slice() : null), setFocus, setEnabled, state, dispose, get enabled() { return on; } };
 }

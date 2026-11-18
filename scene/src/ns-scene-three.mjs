@@ -155,6 +155,7 @@
  * not something a person can see from their own eyes.
  */
 import { SEGMENTS, HAND_SEGMENTS, skinApply, twistMapsFor } from './ns-rig.mjs';
+import { twistSkinPlan, twistPoseMaps, TWIST_TABLE_STEPS } from './ns-rig.mjs'; // 18 November 2026 (performance): the arm's skin on the graphics card
 import { ARM_DEFAULTS } from './ns-arm.mjs';
 import {
   brainWorldMatrix, colormapLinear, gazeDirection, MARKER_GEOMETRY, MARKER_OCTAHEDRON, markerSolid, MARKERS,
@@ -649,6 +650,13 @@ export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererNam
  *    triangles, not pixels (SwiftShader: 975 k triangles per frame at the default view, 3-4 fps at any render scale;
  *    round4/R4-scene-NOTES.md). The motor regions, outlines, marks, the player's arm and every colour are unchanged.
  */
+/** 19 November 2026 (the owner: "Performance and reliability should be our number one priority. even if that means
+ * extreme simplicity and streamlining ... everything should look a lot more like the loading screen models instead of
+ * what you have right now, which is overkill"). SIMPLE_LOOK: the bodies, the arm and the mirror body are drawn as the
+ * loading picture draws its models: plain smooth-shaded standard materials. The comic bands, painted fibres, wet
+ * highlights and ink (muscleLookPatch, comicPatch), the ink outline pass, the hidden-limb ghost pass and the HDR bloom
+ * are not applied and not run. The older look's code stays behind this one switch. */
+export const SIMPLE_LOOK = true;
 export const QUALITY_LEVELS = Object.freeze([
   Object.freeze({ name: 'full', scale: 1, lite: false, lod: null }),
   Object.freeze({ name: 'scale-0.75', scale: 0.75, lite: false, lod: null }),
@@ -4310,6 +4318,62 @@ export const MUSCLE_SHARE = Object.freeze({
  * Returns { vertexShader, fragmentShader }, or null (shaders untouched, caller keeps one material per muscle) when a
  * `main` or one of the seven declarations is missing or doubled, when the vertex shader reads one of the seven (it
  * would still need the uniform), when the rewrite is there already, or when `set` is not one lower-case letter. */
+/** 18 November 2026 (performance; createScene armSkinPrepare): the vertex shader of a material that draws the left game
+ * arm's muscles skinned on the graphics card (pure). Only under Three's USE_SKINNING (the arm muscle meshes are marked
+ * as skinned; anything else drawn with the same material is untouched): the skin starts from the attributes nsSkinRest
+ * / nsSkinRestN (rest positions and normals) instead of position / normal, the position is skinned right after
+ * begin_vertex with Three's own four-slot blend (bindMatrix, boneMatX..W, skinWeight; so the lines other patches put
+ * after begin_vertex, which read `position`, see the posed position, as they did when the processor wrote it), and
+ * Three's own skinning_vertex is removed (it would skin a second time). Returns the shader unchanged when it is already
+ * patched, null when a hook is missing. */
+export const ARM_SKIN_MARK = 'nsSkinRest';
+export function patchArmSkinVertex(vertexShader) {
+  if (typeof vertexShader !== 'string') return null;
+  if (vertexShader.includes(`attribute vec3 ${ARM_SKIN_MARK};`)) return vertexShader;
+  const B = '#include <begin_vertex>', N = '#include <beginnormal_vertex>', S = '#include <skinning_vertex>';
+  if (!vertexShader.includes(B) || !vertexShader.includes(N) || !vertexShader.includes(S)) return null;
+  return `#ifdef USE_SKINNING\nattribute vec3 ${ARM_SKIN_MARK};\nattribute vec3 nsSkinRestN;\n#endif\n` + vertexShader
+    .replace(N, `${N}\n#ifdef USE_SKINNING\n\tobjectNormal = nsSkinRestN;\n#endif`)
+    .replace(B, `${B}\n#ifdef USE_SKINNING\n\ttransformed = ${ARM_SKIN_MARK};\n\t{\n\t\tvec4 nsSv = bindMatrix * vec4( transformed, 1.0 );\n` +
+      '\t\tvec4 nsSk = boneMatX * nsSv * skinWeight.x + boneMatY * nsSv * skinWeight.y + boneMatZ * nsSv * skinWeight.z + boneMatW * nsSv * skinWeight.w;\n' +
+      '\t\ttransformed = ( bindMatrixInverse * nsSk ).xyz;\n\t}\n\tvec3 nsSkinPos = transformed;\n\t#define position nsSkinPos\n#endif')
+    .replace(S, '');
+}
+
+/** 18 November 2026 (performance; createScene bodyGpu): the vertex shader of a material that draws the body's muscles
+ * skinned on the graphics card (pure). Under USE_SKINNING only, every vertex is posed exactly as the processor skin
+ * posed it (updateBodySkin / skinOne): position = M^-1 x (wa (Sa x source + Ra x lift offset) + wb (Sb x source +
+ * Rb x lift offset)), normal = M^-1 x (wa Ra + wb Rb) x unskinned normal, with S a segment's source -> drawn pose (table
+ * entry i), R = S x the bake's inverse (entry i + half) and M^-1 the mesh's own matrix inverse (Three's per-object
+ * bindMatrixInverse). The per-vertex data rides in the attributes Three declares for skinning anyway (WebGL counts every
+ * declared attribute against its 16, and the shared muscle classes use 12 or 13): skinIndex = (source xyz, ia + 128 ib),
+ * skinWeight = (unskinned normal xyz, wa), nsSkinD = (lift offset xyz, swell). wb = 1 - wa (the two weights of a record
+ * sum to one; bodyGpuInstall checks it). 19 November 2026: `swell` is the millimetres this vertex stands out along its
+ * posed normal (the contracting muscle's belly and what lies over it: updateBodySkin's swellApply, written per vertex
+ * only when a muscle's swell amount changes: bodyGpuSwell). A rigid muscle, or one the processor still
+ * skins, comes as an identity skin of its own vertices (entries half - 1 and 2 half - 1 are the identity). position and
+ * normal are not read under USE_SKINNING; Three's own skin chunks are removed; the lines other patches put after
+ * begin_vertex read the posed position (`position` is redefined there). Returns the shader unchanged when already
+ * patched, null when a hook is missing. */
+export const BODY_SKIN_MARK = 'nsSkinD';
+export function patchBodySkinVertex(vertexShader, half = 128) {
+  if (typeof vertexShader !== 'string') return null;
+  if (vertexShader.includes(`attribute vec4 ${BODY_SKIN_MARK};`)) return vertexShader;
+  const N = '#include <beginnormal_vertex>', B = '#include <begin_vertex>', K = ['#include <skinbase_vertex>', '#include <skinnormal_vertex>', '#include <skinning_vertex>'];
+  if (!vertexShader.includes(N) || !vertexShader.includes(B) || K.some(k => !vertexShader.includes(k))) return null;
+  const H = `${Math.round(half)}.0`;
+  let out = `#ifdef USE_SKINNING\nattribute vec4 ${BODY_SKIN_MARK};\n#endif\n` + vertexShader;
+  for (const k of K) out = out.replace(k, '');
+  out = out.replace(N, `#ifdef USE_SKINNING\n\tfloat nsIb = floor( skinIndex.w / 128.0 ), nsIa = skinIndex.w - 128.0 * nsIb, nsWb = 1.0 - skinWeight.w;\n` +
+    `\tmat4 nsRa = getBoneMatrix( nsIa + ${H} ), nsRb = getBoneMatrix( nsIb + ${H} );\n` +
+    `\tvec3 objectNormal = ( bindMatrixInverse * ( skinWeight.w * ( nsRa * vec4( skinWeight.xyz, 0.0 ) ) + nsWb * ( nsRb * vec4( skinWeight.xyz, 0.0 ) ) ) ).xyz;\n#else\n${N}\n#endif`);
+  out = out.replace(B, `#ifdef USE_SKINNING\n\tvec4 nsS4 = vec4( skinIndex.xyz, 1.0 ), nsD4 = vec4( ${BODY_SKIN_MARK}.xyz, 0.0 );\n` +
+    `\tvec3 transformed = ( bindMatrixInverse * ( skinWeight.w * ( getBoneMatrix( nsIa ) * nsS4 + nsRa * nsD4 ) + nsWb * ( getBoneMatrix( nsIb ) * nsS4 + nsRb * nsD4 ) ) ).xyz;\n` +
+    `\tif ( ${BODY_SKIN_MARK}.w != 0.0 ) transformed += normalize( objectNormal ) * ${BODY_SKIN_MARK}.w;\n` +
+    `\tvec3 nsSkinPos = transformed;\n\t#define position nsSkinPos\n#else\n${B}\n#endif`);
+  return out;
+}
+
 export function patchMuscleShareShaders(vertexShader, fragmentShader, set = 'o') {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || typeof set !== 'string' || !/^[a-z]$/.test(set)) return null;
   const MAIN = 'void main() {';
@@ -4324,6 +4388,9 @@ export function patchMuscleShareShaders(vertexShader, fragmentShader, set = 'o')
   let f = fragmentShader;
   for (const d of MUSCLE_SHARE.uniforms) {
     const u = `uniform ${d};`;
+    // 19 November 2026 (SIMPLE_LOOK): a look patch that is not applied leaves its uniform out; the row's value then
+    // lands in a plain global nobody reads (diffuse and emissive are the standard material's own and must be there).
+    if (!f.includes(u) && !/^vec3 (?:diffuse|emissive)$/.test(d)) { f = f.replace(MAIN, `${d};\n${MAIN}`); continue; }
     if (!once(f, u)) return null;
     f = f.replace(u, `${d};`);
   }
@@ -4430,6 +4497,7 @@ export function createScene({
   let lastRenderAt = null;
   let lastSampleAt = null; // R4-fix (code review F1): the quality controller's own interval clock (live frames only)
   let lastRenderCpuMs = NaN, lastBusyMs = NaN;
+  let lastOutlineMs = 0; // 18 November 2026 (performance): the outline passes' share of the last render (ns-app inspect().perf)
 
   const msaa = antialiasFor({ antialias, quality: startMode, rendererName });
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance', stencil: true }); // stencil: STRIP_CUT
@@ -4460,7 +4528,7 @@ export function createScene({
   scene.add(camera); // the camera must be in the scene graph for its children (the arm) to render
   // R558 (Message 20, ns-outline): body meshes register below (setArm, setBody); the composite draws first of the
   // transparent list, so glass, areas, glow and arrows are blended over the lines as over the bodies.
-  const outline = createOutlinePass({ THREE, renderer });
+  const outline = createOutlinePass({ THREE, renderer, enabled: !SIMPLE_LOOK });
   scene.add(outline.composite);
   // R558 BB: the motor strip's ink silhouette, after the areas and before the glass (RENDER_ORDER.regionLine + 0.05).
   outline.stripComposite.renderOrder = RENDER_ORDER.regionLine + 0.05;
@@ -4474,7 +4542,7 @@ export function createScene({
   // R558 (Message 25): the HDR picture and its bloom (HDR_BLOOM); off on a software renderer. Its target is always
   // multisampled (a game started at Picture quality Low has a canvas without MSAA; switched to High it still gets
   // smooth edges through this target).
-  const hdr = createHdrBloom({ THREE, renderer, msaa: true, enabled: !softwareRenderer });
+  const hdr = createHdrBloom({ THREE, renderer, msaa: true, enabled: !softwareRenderer && !SIMPLE_LOOK });
   const hdrSize = new THREE.Vector2();
   const mainPassInfo = { calls: null, triangles: null }; // renderer.info of the main pass (the bloom passes come after it)
   disposables.push({ dispose: () => hdr.dispose() });
@@ -5578,6 +5646,7 @@ export function createScene({
   };
   const noFibre = { value: new THREE.Vector4(0, 0, 1, 0) };
   const muscleLookPatch = m => {
+    if (SIMPLE_LOOK) return m;
     muscleLook.materials++;
     return composePatch(m, 'ns-muscle-look-r558', shader => {
       const p = patchMuscleLookShaders(shader.vertexShader, shader.fragmentShader);
@@ -5618,6 +5687,7 @@ export function createScene({
     nsInkFar: { value: new THREE.Vector4(C.line.farFromM, C.line.farToM, C.farSoft, 0) } // z: band half-width on a far figure
   };
   const comicPatch = (m, kind) => {
+    if (SIMPLE_LOOK) return m;
     comic.materials++;
     return composePatch(m, `ns-comic-r558-${kind}`, shader => {
       const p = patchComicShaders(shader.vertexShader, shader.fragmentShader, kind);
@@ -6186,6 +6256,7 @@ export function createScene({
       });
       mesh.userData.elementId = typeof m.id === 'string' ? m.id : null;
       shareMuscle(mesh, 'o'); shareMuscle(tw, 'm'); // R558 (performance): one material per class of muscle
+      armSkinPrepare(muscles[muscles.length - 1]); // 18 November 2026 (performance): skinned on the graphics card (last patch)
     }
   }
 
@@ -6253,6 +6324,221 @@ export function createScene({
     }
     if (changed || a !== armLayerAmount) { armLayerAmount = a; lastMatrices = null; } // re-skin on the next updatePose
     return { lifted: nl, filled: n, amount: armLayerAmount };
+  }
+
+  // ---- 18 November 2026 (performance): the left game arm's muscles skinned on the graphics card ---------------------
+  /* The arm's matrices are in the eye frame, so they change on every frame the look moves (by 25 to 110 mm a frame
+   * against the eye), and every arm muscle was re-skinned on the processor (positions and normals) and sent to the
+   * graphics card again: about 2.9 MB a frame, and the largest single part of the arm's frame time. Now each arm muscle,
+   * its mirror twin, its depth twin and its glow halo are drawn as skinned meshes: the vertex shader blends the SAME
+   * slots, weights and maps the processor used (ns-rig twistSkinPlan / twistPoseMaps: up to three of the pose's maps,
+   * the twisted ulna table and the shoulder frames) from one small float texture, so a pose change writes about 160
+   * matrices instead of every vertex. The shader's inputs are the rest positions and rest normals (the lifted copy when
+   * the Body Worlds stack is on): attributes nsSkinRest / nsSkinRestN. The drawn `position` buffer keeps a processor copy
+   * for what reads vertices on the processor (the crosshair picks, the mirror envelope, the glow links' end points);
+   * that copy is made only when one of them asks for it, positions only (armSkinCpu; armSkinSubset for the sparse
+   * readers), and is never sent to the graphics card. The outline pass draws these meshes with the same skin
+   * (ns-outline: one proxy each). Exactness: the same maps and weights, in 32-bit floats on the graphics card. Off
+   * (the processor path of before) without vertex textures, or when ARM_GPU_SKIN.on is false. */
+  const ARM_GPU_SKIN = Object.freeze({ on: true });
+  const ARM_TWIST_SLOT0 = SEGMENTS.length, ARM_SHOULDER_SLOT0 = ARM_TWIST_SLOT0 + TWIST_TABLE_STEPS + 1;
+  const ARM_SKIN_ENTRIES = ARM_SHOULDER_SLOT0 + TWIST_TABLE_STEPS + 1, ARM_SKIN_ID = ARM_SKIN_ENTRIES; // the last entry: identity
+  const armGpu = { ok: false, on: false, size: 0, tex: null, data: null, skeleton: null, eye: new THREE.Matrix4(), refWeights: null, shoulderWeights: null,
+    tables: 0, cpuPoses: 0, subsetPoses: 0, note: null, marked: [] };
+  {
+    const caps = renderer.capabilities || {};
+    const hooks = typeof THREE.ShaderLib === 'object' && THREE.ShaderLib.standard && THREE.ShaderLib.basic
+      && patchArmSkinVertex(THREE.ShaderLib.standard.vertexShader) !== null && patchArmSkinVertex(THREE.ShaderLib.basic.vertexShader) !== null;
+    armGpu.ok = ARM_GPU_SKIN.on && caps.isWebGL2 !== false && caps.maxVertexTextures > 0 && caps.maxAttributes >= 16 && typeof THREE.DataTexture === 'function' && Boolean(hooks);
+    if (!armGpu.ok) armGpu.note = !hooks ? 'shader hooks missing' : 'no vertex textures';
+    else {
+      const size = Math.max(4, Math.ceil(Math.ceil(Math.sqrt((ARM_SKIN_ENTRIES + 1) * 4)) / 4) * 4); // rows of whole matrices
+      armGpu.size = size; armGpu.data = new Float32Array(size * size * 4);
+      for (let e = 0; e <= ARM_SKIN_ENTRIES; e++) { const o = 16 * e; armGpu.data[o] = 1; armGpu.data[o + 5] = 1; armGpu.data[o + 10] = 1; armGpu.data[o + 15] = 1; }
+      armGpu.tex = keep(new THREE.DataTexture(armGpu.data, size, size, THREE.RGBAFormat, THREE.FloatType));
+      armGpu.tex.needsUpdate = true;
+      // What Three reads of a skeleton: boneTexture, and update() once a frame (the table is written in updatePose).
+      armGpu.skeleton = { boneTexture: armGpu.tex, boneMatrices: armGpu.data, bones: [], update() {}, dispose() {} };
+    }
+  }
+  /** Draw `o` (a mesh on an arm muscle's geometry) with the arm's skin. */
+  function armSkinMark(o) {
+    if (!o || !armGpu.on) return o;
+    o.isSkinnedMesh = true; o.skeleton = armGpu.skeleton; o.bindMatrix = armGpu.eye; o.bindMatrixInverse = armGpu.eye; o.bindMode = 'attached';
+    armGpu.marked.push(o);
+    return o;
+  }
+  const armSkinPatch = m => composePatch(m, 'ns-arm-gpu-skin', shader => {
+    const vs = patchArmSkinVertex(shader.vertexShader);
+    if (vs) shader.vertexShader = vs; else armGpu.note = 'a shader of an arm muscle could not take the skin';
+  });
+  /** Give arm muscle record m its skin attributes and draw it (and its twins) skinned. Called once per muscle in setArm,
+   * after its materials have every other patch (the skin patch must be the last one: it puts its lines right after
+   * Three's begin_vertex, ahead of the lines the other patches put there, so they read the skinned position). */
+  function armSkinPrepare(m) {
+    if (!armGpu.ok || !m) return false;
+    armGpu.on = true;
+    const n = m.rest.length / 3, W = m.weights, idx = new Uint16Array(4 * n), wts = new Float32Array(4 * n);
+    idx.fill(ARM_SKIN_ID);
+    if (W.tf) {
+      const plan = twistSkinPlan(W, n);
+      for (let v = 0; v < n; v++) for (let j = 0; j < 3; j++) { const q = 3 * v + j; if (plan.weights[q] > 0) { idx[4 * v + j] = plan.slots[q]; wts[4 * v + j] = plan.weights[q]; } }
+      if (!armGpu.refWeights) armGpu.refWeights = W;
+      if (W.sf) {
+        const ref = armGpu.shoulderWeights;
+        if (!ref) armGpu.shoulderWeights = W;
+        else if (!sameVec(ref.shoulderPivot, W.shoulderPivot) || !sameVec(ref.shoulderAxis, W.shoulderAxis)) { armGpu.note = 'arm muscles with different shoulder frames'; armSkinOff(); return false; }
+      }
+      if (armGpu.refWeights !== W && (!sameVec(armGpu.refWeights.twistAxis, W.twistAxis) || !sameVec(armGpu.refWeights.twistPivot, W.twistPivot))) { armGpu.note = 'arm muscles with different twist axes'; armSkinOff(); return false; }
+    } else {
+      // the processor's plain path (skinApply / skinNormals): two segments, weights over their sum
+      for (let v = 0; v < n; v++) {
+        const a = W.w0[v], b = W.w1[v];
+        if (b > 0 && W.i1[v] === W.i0[v]) { idx[4 * v] = W.i0[v]; wts[4 * v] = 1; continue; }
+        const sum = b > 0 ? a + b : a;
+        idx[4 * v] = W.i0[v]; wts[4 * v] = a / sum;
+        if (b > 0) { idx[4 * v + 1] = W.i1[v]; wts[4 * v + 1] = b / sum; }
+      }
+    }
+    const g = m.mesh.geometry;
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(idx, 4));
+    g.setAttribute('skinWeight', new THREE.BufferAttribute(wts, 4));
+    m.gpuRest = m.rest instanceof Float32Array ? m.rest : Float32Array.from(m.rest);
+    m.gpuRestN = m.restNormals;
+    g.setAttribute('nsSkinRest', new THREE.BufferAttribute(m.gpuRest, 3));
+    g.setAttribute('nsSkinRestN', new THREE.BufferAttribute(m.gpuRestN, 3));
+    m.gpu = true; m.cpuFor = null; m.subFor = null;
+    m.subStep = Math.max(1, Math.floor(n / 400)); // the readers' own step (armMuscleCentre, bodyKeepOut)
+    // its own materials (the holders of its values) and the class materials that draw it (shareMuscle)
+    armSkinPatchOnce(m.mat); armSkinPatchOnce(m.mesh.material);
+    if (m.mirror) { armSkinPatchOnce(m.mirror.userData.nsShade || m.mirror.material); armSkinPatchOnce(m.mirror.material); }
+    armSkinPatchOnce(armDepthMaterial);
+    armSkinMark(m.mesh); armSkinMark(m.mirror);
+    for (const c of m.mesh.children) if (c.userData && c.userData.depthTwin) armSkinMark(c);
+    m.mesh.raycast = armSkinRaycast; if (m.mirror) m.mirror.raycast = armSkinRaycast;
+    m.mesh.userData.nsArmSkin = m; if (m.mirror) m.mirror.userData.nsArmSkin = m;
+    return true;
+  }
+  const armSkinPatched = new WeakSet();
+  function armSkinPatchOnce(mat) { if (mat && !armSkinPatched.has(mat)) { armSkinPatched.add(mat); armSkinPatch(mat); mat.needsUpdate = true; } }
+  const sameVec = (a, b) => a === b || (Boolean(a) && Boolean(b) && a.length === b.length && Array.prototype.every.call(a, (v, i) => v === b[i]));
+  /** Back to the processor skin (a muscle the table cannot serve): every mesh drawn plain again, re-skinned next pose. */
+  function armSkinOff() {
+    armGpu.on = false;
+    for (const o of armGpu.marked) { o.isSkinnedMesh = false; delete o.skeleton; }
+    armGpu.marked.length = 0;
+    for (const m of muscles) { if (m.gpu) { m.gpu = false; m.mesh.raycast = rawRaycast; if (m.mirror) m.mirror.raycast = rawRaycast; } }
+    lastMatrices = null;
+  }
+  /** One pose: the maps into the table (or false: the processor path runs, which also keeps its refusals). */
+  function armSkinPose(matrices) {
+    if (!armGpu.on) return false;
+    let maps;
+    if (armGpu.refWeights) {
+      maps = twistPoseMaps(matrices, armGpu.refWeights);
+      if (armGpu.shoulderWeights) maps = twistPoseMaps(matrices, armGpu.shoulderWeights); // the same maps, shoulder frames filled
+    } else {
+      maps = new Float64Array(12 * ARM_TWIST_SLOT0); maps.missing = new Uint8Array(ARM_TWIST_SLOT0);
+      for (let s = 0; s < ARM_TWIST_SLOT0; s++) {
+        const q = matrices.get(SEGMENTS[s]), o = 12 * s;
+        if (!q) { maps.missing[s] = 1; continue; }
+        maps[o] = q[0]; maps[o + 1] = q[1]; maps[o + 2] = q[2]; maps[o + 3] = q[4]; maps[o + 4] = q[5]; maps[o + 5] = q[6];
+        maps[o + 6] = q[8]; maps[o + 7] = q[9]; maps[o + 8] = q[10]; maps[o + 9] = q[12]; maps[o + 10] = q[13]; maps[o + 11] = q[14];
+      }
+    }
+    // a segment a muscle uses but the pose lacks: the processor path refuses it as before
+    for (const m of muscles) {
+      if (!m.gpu) continue;
+      const W = m.weights;
+      if (W.tf) { const plan = twistSkinPlan(W, m.rest.length / 3); for (let s = 0; s < ARM_TWIST_SLOT0; s++) if (plan.used[s] && maps.missing[s]) return false; }
+      else if (!m.usedSegs) { m.usedSegs = new Uint8Array(ARM_TWIST_SLOT0); for (let v = 0; v < W.i0.length; v++) { m.usedSegs[W.i0[v]] = 1; if (W.w1[v] > 0) m.usedSegs[W.i1[v]] = 1; } }
+      if (!W.tf) for (let s = 0; s < ARM_TWIST_SLOT0; s++) if (m.usedSegs[s] && maps.missing[s]) return false;
+    }
+    const D = armGpu.data, E = Math.min(ARM_SKIN_ENTRIES, maps.length / 12);
+    for (let e = 0; e < E; e++) {
+      const o = 16 * e, q = 12 * e;
+      D[o] = maps[q]; D[o + 1] = maps[q + 1]; D[o + 2] = maps[q + 2]; D[o + 3] = 0;
+      D[o + 4] = maps[q + 3]; D[o + 5] = maps[q + 4]; D[o + 6] = maps[q + 5]; D[o + 7] = 0;
+      D[o + 8] = maps[q + 6]; D[o + 9] = maps[q + 7]; D[o + 10] = maps[q + 8]; D[o + 11] = 0;
+      D[o + 12] = maps[q + 9]; D[o + 13] = maps[q + 10]; D[o + 14] = maps[q + 11]; D[o + 15] = 1;
+    }
+    armGpu.tex.needsUpdate = true;
+    armGpu.tables++;
+    for (const m of muscles) {
+      if (!m.gpu) continue;
+      // the rest the shader starts from: the lifted blend when the stack is on (setArmLayers swaps m.rest)
+      if (m.gpuRest !== m.rest) { const a = m.mesh.geometry.attributes.nsSkinRest; m.gpuRest = m.rest instanceof Float32Array ? m.rest : Float32Array.from(m.rest); a.array = m.gpuRest; a.needsUpdate = true; }
+      if (m.gpuRestN !== m.restNormals) { const a = m.mesh.geometry.attributes.nsSkinRestN; m.gpuRestN = m.restNormals; a.array = m.gpuRestN; a.needsUpdate = true; }
+    }
+    outline.invalidate(); // the skinned outline proxies moved without a matrix change
+    return true;
+  }
+  /** The processor copy of an arm muscle's posed positions, made when a reader needs it (positions only; the same
+   * numbers the processor skin wrote before: ns-rig skinApply over the same maps). Never sent to the graphics card. */
+  function armSkinCpu(m) {
+    if (!m.gpu || m.cpuFor === lastMatrices || !lastMatrices) return;
+    skinApply(lastMatrices, m.weights, m.rest, m.pos);
+    m.cpuFor = lastMatrices; m.subFor = lastMatrices;
+    pickBufferWritten(m.pos);
+    armGpu.cpuPoses++;
+  }
+  function armSkinCpuAll() { if (armGpu.on) for (const m of muscles) armSkinCpu(m); }
+  /** Only the vertices the sparse readers take (every subStep-th: the glow links' centre, the keep-out radius, the pick
+   * sphere), the same numbers as the full copy at those vertices. */
+  const armSubW = { i0: new Uint8Array(1), i1: new Uint8Array(1), w0: new Float32Array(1), w1: new Float32Array(1) };
+  function armSkinSubset(m) {
+    if (!m.gpu || m.subFor === lastMatrices || !lastMatrices) return;
+    const n = m.rest.length / 3, s = m.subStep, cnt = Math.ceil(n / s), W = m.weights;
+    if (!m.subRest || m.subRest.length !== 3 * cnt || m.subRestOf !== m.rest) {
+      m.subRest = new Float32Array(3 * cnt); m.subOut = new Float32Array(3 * cnt); m.subRestOf = m.rest;
+      m.subW = { i0: new Uint8Array(cnt), i1: new Uint8Array(cnt), w0: new Float32Array(cnt), w1: new Float32Array(cnt) };
+      if (W.tf) { m.subW.tf = new Float32Array(cnt); for (const k of ['twistAxis', 'twistPivot', 'shoulderAxis', 'shoulderPivot']) if (W[k]) m.subW[k] = W[k]; if (W.sf) m.subW.sf = new Float32Array(cnt); }
+      for (let j = 0, v = 0; v < n; v += s, j++) {
+        m.subRest[3 * j] = m.rest[3 * v]; m.subRest[3 * j + 1] = m.rest[3 * v + 1]; m.subRest[3 * j + 2] = m.rest[3 * v + 2];
+        m.subW.i0[j] = W.i0[v]; m.subW.i1[j] = W.i1[v]; m.subW.w0[j] = W.w0[v]; m.subW.w1[j] = W.w1[v];
+        if (W.tf) m.subW.tf[j] = W.tf[v];
+        if (W.sf) m.subW.sf[j] = W.sf[v];
+      }
+    }
+    skinApply(lastMatrices, m.subW, m.subRest, m.subOut);
+    for (let j = 0, v = 0; v < n; v += s, j++) { m.pos[3 * v] = m.subOut[3 * j]; m.pos[3 * v + 1] = m.subOut[3 * j + 1]; m.pos[3 * v + 2] = m.subOut[3 * j + 2]; }
+    m.subFor = lastMatrices;
+    armGpu.subsetPoses++;
+  }
+  /** The crosshair's pick sphere of a skinned arm muscle: the sphere round its sparse posed vertices, widened (a third
+   * of its radius and 5 mm) so it holds every vertex; the full copy is made only when a ray meets it. */
+  const armSphereC = new THREE.Vector3();
+  function armSkinSphere(m) {
+    if (!m.gpu) return false;
+    armSkinSubset(m);
+    if (m.sphereFor === lastMatrices && m.mesh.geometry.boundingSphere) return true;
+    const p = m.pos, n = m.rest.length / 3, s = m.subStep;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let v = 0; v < n; v += s) { const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+    armSphereC.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    let r2 = 0;
+    for (let v = 0; v < n; v += s) { const dx = p[3 * v] - armSphereC.x, dy = p[3 * v + 1] - armSphereC.y, dz = p[3 * v + 2] - armSphereC.z; const d = dx * dx + dy * dy + dz * dz; if (d > r2) r2 = d; }
+    const g = m.mesh.geometry;
+    if (!g.boundingSphere) g.boundingSphere = new THREE.Sphere();
+    g.boundingSphere.center.copy(armSphereC); g.boundingSphere.radius = Math.sqrt(r2) * 1.34 + 0.005; // arm frame: metres
+    m.sphereFor = lastMatrices;
+    return true;
+  }
+  /** Raycast of a skinned arm muscle (or its mirror twin): the widened sphere first, then the full processor copy and
+   * the same triangle test as before (rawRaycast). */
+  function armSkinRaycast(raycasterIn, intersects) {
+    const m = this.userData && this.userData.nsArmSkin;
+    if (m && m.gpu) {
+      armSkinSphere(m);
+      const g = this.geometry;
+      if (g.boundingSphere) {
+        rawSphere.copy(g.boundingSphere).applyMatrix4(this.matrixWorld);
+        rawRay.copy(raycasterIn.ray).recast(raycasterIn.near);
+        if (!rawSphere.containsPoint(rawRay.origin) && rawRay.intersectSphere(rawSphere, rawSphereHit) === null) return undefined;
+      }
+      armSkinCpu(m);
+    }
+    return rawRaycast.call(this, raycasterIn, intersects);
   }
 
   /** Brain meshes in source mm: glass context [{ id?, positions, indices, name }], the focus strip { positions,
@@ -7278,7 +7564,7 @@ export function createScene({
       b.mesh.matrixWorldNeedsUpdate = true;
       if (b.mirror) { b.mirror.matrix.fromArray(m); b.mirror.matrixWorldNeedsUpdate = true; }
     }
-    for (const m of muscles) {
+    if (!armSkinPose(matrices)) for (const m of muscles) { // 18 November 2026: on the graphics card when it can (armSkinPose)
       skinPositionsAndNormals(matrices, m.weights, m.rest, m.restNormals, m.pos, m.nor); // R558 (P2): one pass, same numbers
       m.posAttr.needsUpdate = true;
       m.norAttr.needsUpdate = true;
@@ -7471,6 +7757,7 @@ export function createScene({
    * Only local math/report objects are written. No raycaster, bounds computation, world update or GL call.
    * This is retained geometric candidate evidence, never a fragment/pixel/occlusion or anatomy verdict. */
   function foregroundSurfaceTrace(request) {
+    armSkinCpuAll(); bodyGpuCpuAll(); // 18 November 2026: the processor copies (GPU skin) for the triangle query
     const kind = 'ns-foreground-surface-trace-r311';
     const bounds = { cssPoints: 2, nodes: 2048, meshes: 1024, groupsPerMesh: 128,
       triangleVisits: 8000000, reportedSurfaces: 64, noArmClosestCandidates: 8, diagnosticUtf8Bytes: 32768 };
@@ -8030,7 +8317,24 @@ export function createScene({
   // BODY_DEPTH_PREFERENCE, the attribute nsLift of the host's geometry). Without it the shell's far side, which lies
   // a few millimetres behind the sheet, came IN FRONT of the part of the sheet that is drawn further back in the
   // depth buffer, and the additive glow lay over a lit belly in broad yellow and white bands.
-  const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + FLESH_DEPTH_LIFT_PARS_GLSL + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
+  // 18 November 2026 (performance): a halo on a muscle skinned on the graphics card (the left game arm) takes the same
+  // skin: under USE_SKINNING `position` / `normal` below are the skinned rest position and normal (armSkinPrepare).
+  const HALO_SKIN_PARS = '#include <skinning_pars_vertex>\n#if defined( USE_SKINNING ) && defined( NS_BODY_SKIN )\nattribute vec4 nsSkinD;\n' +
+    '#elif defined( USE_SKINNING )\nattribute vec3 nsSkinRest;\nattribute vec3 nsSkinRestN;\n#endif\n';
+  // the body's muscles (bodyGpu, patchBodySkinVertex): the same rule, table entries + 128 for R
+  const HALO_BODY_MAIN = '#if defined( USE_SKINNING ) && defined( NS_BODY_SKIN )\n' +
+    '  float nsIb = floor( skinIndex.w / 128.0 ), nsIa = skinIndex.w - 128.0 * nsIb;\n' +
+    '  mat4 nsRa = getBoneMatrix( nsIa + 128.0 ), nsRb = getBoneMatrix( nsIb + 128.0 );\n  vec4 nsS4 = vec4( skinIndex.xyz, 1.0 ), nsD4 = vec4( nsSkinD.xyz, 0.0 );\n  float nsWb = 1.0 - skinWeight.w;\n' +
+    '  vec3 nsHaloP = ( bindMatrixInverse * ( skinWeight.w * ( getBoneMatrix( nsIa ) * nsS4 + nsRa * nsD4 ) + nsWb * ( getBoneMatrix( nsIb ) * nsS4 + nsRb * nsD4 ) ) ).xyz;\n' +
+    '  vec3 nsHaloN = ( bindMatrixInverse * ( skinWeight.w * ( nsRa * vec4( skinWeight.xyz, 0.0 ) ) + nsWb * ( nsRb * vec4( skinWeight.xyz, 0.0 ) ) ) ).xyz;\n' +
+    '  if ( nsSkinD.w != 0.0 ) nsHaloP += normalize( nsHaloN ) * nsSkinD.w;\n' + // 19 November 2026: the swell (bodyGpuSwell)
+
+    '  #define position nsHaloP\n  #define normal nsHaloN\n#elif defined( USE_SKINNING )\n';
+  const HALO_SKIN_MAIN = HALO_BODY_MAIN + '  #include <skinbase_vertex>\n  vec4 nsSv = bindMatrix * vec4( nsSkinRest, 1.0 );\n' +
+    '  vec3 nsHaloP = ( bindMatrixInverse * ( boneMatX * nsSv * skinWeight.x + boneMatY * nsSv * skinWeight.y + boneMatZ * nsSv * skinWeight.z + boneMatW * nsSv * skinWeight.w ) ).xyz;\n' +
+    '  mat4 nsSkM = bindMatrixInverse * ( skinWeight.x * boneMatX + skinWeight.y * boneMatY + skinWeight.z * boneMatZ + skinWeight.w * boneMatW ) * bindMatrix;\n' +
+    '  vec3 nsHaloN = ( nsSkM * vec4( nsSkinRestN, 0.0 ) ).xyz;\n  #define position nsHaloP\n  #define normal nsHaloN\n#endif\n';
+  const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + FLESH_DEPTH_LIFT_PARS_GLSL + HALO_SKIN_PARS + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' + HALO_SKIN_MAIN +
     '  float flash = nsCharge.z > 0.5 ? nsPowerUpFlash( nsClock.x - nsCharge.x, nsCharge.y, nsClock.y ) : 0.0;\n' +
     `  vec3 p = position + normalize( normal ) * nsHaloShape.x * ( 1.0 + ${POWER_UP.haloBurst.toFixed(4)} * flash );\n` +
     '#ifdef NS_FIBRE_REST\n  vNsU = dot( nsRest, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#else\n  vNsU = dot( position, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#endif\n' +
@@ -8061,6 +8365,10 @@ export function createScene({
     if (mat.defines && Object.prototype.hasOwnProperty.call(mat.defines, 'NS_FIBRE_REST')) hm.defines = { NS_FIBRE_REST: '' };
     if (mat.defines && mat.defines.NS_DEPTH_LIFT && host.geometry && host.geometry.attributes && host.geometry.attributes.nsLift) hm.defines = { ...(hm.defines || {}), NS_DEPTH_LIFT: 1 };
     const h = new THREE.Mesh(host.geometry, hm);
+    if (host.isSkinnedMesh === true && host.skeleton) { // 18 November 2026: the halo of a muscle skinned on the graphics card
+      h.isSkinnedMesh = true; h.skeleton = host.skeleton; h.bindMatrix = host.bindMatrix; h.bindMatrixInverse = host.bindMatrixInverse; h.bindMode = 'attached';
+      if (host.skeleton.nsBody) { hm.defines = { ...(hm.defines || {}), NS_BODY_SKIN: '' }; bodyGpu.marked.push(h); } else armGpu.marked.push(h);
+    }
     h.name = `${host.name} (glow halo; display only)`;
     h.matrixAutoUpdate = false;
     h.raycast = () => {};
@@ -8931,7 +9239,8 @@ export function createScene({
     lodTouch(L.geo); // R558: the body's coarser copies follow
     // R558: a skinned right-hand muscle keeps its pose: the lift rides on the skin (setBodySkin).
     const sk = bodySkin.get(L.id);
-    if (sk && sk.skinned) skinOne(sk);
+    if (sk && sk.gpu && bodyGpu.on) { bodyGpuLift(sk); if (sk.skinned) bodyGpuCpu(sk); } // 18 November 2026: the graphics card's skin starts from the new lift (and the processor copy follows, as before)
+    else if (sk && sk.skinned) skinOne(sk);
     return true;
   }
   function setBodyLift(liftedById = null, amount = 1) {
@@ -9128,6 +9437,7 @@ export function createScene({
       registered++;
     }
     if (registered && lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied);
+    bodyGpuInstall(); // 18 November 2026 (performance): the body's muscles skinned on the graphics card
     return { registered, missing, skinned: bodySkin.size };
   }
   /** The unskinned drawn geometry of one record (rest, or the lift blend at its current amount) into out arrays. */
@@ -9324,6 +9634,9 @@ export function createScene({
       bodySkinOn = true;
       anconeusMix = anconeusBendBlend(elbowFlexDeg);
       if (swell.on) swellStep(); // package BULK (MUSCLE_SWELL): ease each muscle's swell toward its activity and shortening
+      // 18 November 2026 (performance): the records skinned on the graphics card take the pose table, not this loop
+      if (bodyGpu.installed && !bodyGpu.on && !bodyGpu.lod) { bodyGpu.on = true; bodyGpuShow(true); }
+      if (bodyGpu.on) { for (const rec of bodyGpu.recs) bodyGpuLift(rec); bodyGpuPose(); }
       // Per-frame cost guard. The body is re-posed whenever anything in its key changes (the left arm's bridge; the trunk
       // turning or bending under a wide look; the Space dance turning the forearm and the upper arm). The vertices are
       // written in each muscle's own frame, and the blend is the same rigid map of every bone it uses, so a muscle whose
@@ -9338,7 +9651,9 @@ export function createScene({
         if (skinPoseSame(rec) && rec.skinned && (!rec.sw || rec.sw.key === rec.sw.drawnKey)
           && (!rec.anconeusDelta || rec.anconeusMixDrawn === anconeusMix)) continue;
         if (budget <= 0) { waiting++; if (firstWaiting < 0) firstWaiting = at; continue; }
-        if (skinOne(rec)) { n++; budget -= rec.src.length / 3; }
+        // 18 November 2026: a record drawn by the graphics card (bodyGpuPose) gets only the processor copy of its
+        // positions here, for the readers on the processor (picks, the mirror envelope), as fresh as before
+        if (rec.gpu && bodyGpu.on ? bodyGpuCpu(rec) : skinOne(rec)) { n++; budget -= rec.src.length / 3; }
         skinPoseKeep(rec);
       }
       bodySkinWaiting = waiting;
@@ -9346,6 +9661,7 @@ export function createScene({
       return n;
     }
     bodySkinOn = false; bodySkinWaiting = 0;
+    if (bodyGpu.on) { bodyGpu.on = false; bodyGpuShow(false); } // 18 November 2026: the rigid rest shapes, drawn plain
     for (const rec of bodySkin.values()) if (skinOne(rec)) n++;
     return n;
   }
@@ -9412,6 +9728,235 @@ export function createScene({
     }
     swell.applied++;
   }
+
+  // ---- 18 November 2026 (performance): the body's muscles skinned on the graphics card ------------------------------
+  /* updateBodySkin re-posed up to SKIN_FRAME_VERTICES vertices a frame on the processor (positions and normals) for
+   * your body and the mirror body, sent them to the graphics card again and copied them into the outline pass's batch
+   * (about 2.4 MB a frame while the look moves), and muscles over the budget lagged a frame or more behind their bones.
+   * Now every muscle the skin records cover (all but the right forearm's twisted ones, which keep the processor path) is
+   * drawn skinned: the vertex shader computes exactly what skinOne computed (patchBodySkinVertex) from a table of the
+   * segments' poses (S, and R = S x the bake's inverse; one float texture written per pose), each mesh's own matrix
+   * inverse (Three's per-object bindMatrixInverse) and per vertex the source position, the two segments, the unskinned
+   * normal, the two weights and the Body Worlds lift offset (rewritten only when the lift amount changes), packed into
+   * skinIndex, skinWeight and nsSkinD (WebGL counts every declared attribute against its 16; the shared muscle classes
+   * already declare 12 or 13). Every mesh drawn with these materials is marked as skinned (a rigid or processor-skinned
+   * muscle as an identity skin of its own vertices, copied once a frame when they change: bodyGpuAliasSync), so a class
+   * material keeps one program. LATER MERGES: a new attribute on the body's or the arm's muscle materials passes 16 in
+   * some classes (the shared class then falls back to one material per muscle: right, but slower). The drawn `position`
+   * buffer keeps the processor copy of the positions for what reads vertices on the processor (the crosshair picks, the
+   * mirror envelope and measure), made in the same budget and tolerance as before (bodyGpuCpu: positions only, no
+   * normals, never sent to the graphics card), so those readers see what they saw before; the outline pass draws these
+   * meshes in a skinned batch of its own (ns-outline).
+   * At the quality levels that draw the body's coarser copies the processor path of before runs instead. Off without
+   * vertex textures or when BODY_GPU_SKIN.on is false. */
+  const BODY_GPU_SKIN = Object.freeze({ on: true, half: 128, sparse: 64 });
+  const bodyGpu = { ok: false, on: false, installed: false, lod: false, tex: null, data: null, skeleton: null, eye: new THREE.Matrix4(), serial: 0,
+    recs: [], marked: [], aliases: [], tables: 0, cpuPoses: 0, note: null, zero4: null, weightDev: 0, swells: 0 };
+  {
+    const caps = renderer.capabilities || {};
+    const hooks = typeof THREE.ShaderLib === 'object' && THREE.ShaderLib.standard && THREE.ShaderLib.basic
+      && patchBodySkinVertex(THREE.ShaderLib.standard.vertexShader) !== null && patchBodySkinVertex(THREE.ShaderLib.basic.vertexShader) !== null;
+    bodyGpu.ok = BODY_GPU_SKIN.on && caps.isWebGL2 !== false && caps.maxVertexTextures > 0 && caps.maxAttributes >= 16 && typeof THREE.DataTexture === 'function' && Boolean(hooks);
+    if (!bodyGpu.ok) bodyGpu.note = !hooks ? 'shader hooks missing' : 'no vertex textures';
+    else {
+      const n = 2 * BODY_GPU_SKIN.half + 1, size = Math.max(4, Math.ceil(Math.ceil(Math.sqrt(n * 4)) / 4) * 4);
+      bodyGpu.data = new Float32Array(size * size * 4);
+      for (let e = 0; e < n; e++) { const o = 16 * e; bodyGpu.data[o] = 1; bodyGpu.data[o + 5] = 1; bodyGpu.data[o + 10] = 1; bodyGpu.data[o + 15] = 1; }
+      bodyGpu.tex = keep(new THREE.DataTexture(bodyGpu.data, size, size, THREE.RGBAFormat, THREE.FloatType));
+      bodyGpu.tex.needsUpdate = true;
+      bodyGpu.skeleton = { boneTexture: bodyGpu.tex, boneMatrices: bodyGpu.data, bones: [], nsBody: true, half: BODY_GPU_SKIN.half, update() {}, dispose() {} };
+    }
+  }
+  const bodyGpuPatch = m => composePatch(m, 'ns-body-gpu-skin', shader => {
+    const vs = patchBodySkinVertex(shader.vertexShader, BODY_GPU_SKIN.half);
+    if (vs) shader.vertexShader = vs; else bodyGpu.note = 'a shader of a body muscle could not take the skin';
+  });
+  const bodyGpuPatched = new WeakSet();
+  function bodyGpuPatchOnce(mat) { if (mat && !Array.isArray(mat) && !bodyGpuPatched.has(mat)) { bodyGpuPatched.add(mat); bodyGpuPatch(mat); mat.needsUpdate = true; } }
+  /** The meshes that draw body record b (its own mesh, mirror twin, in-place twin and their depth twins). */
+  const bodyGpuMeshes = b => {
+    const out = [b.mesh];
+    if (b.mirror) out.push(b.mirror);
+    if (b.inPlace) out.push(b.inPlace);
+    for (const o of out.slice()) for (const c of o.children || []) if (c.userData && c.userData.depthTwin) out.push(c);
+    return out;
+  };
+  function bodyGpuMark(o, bindInv) {
+    o.isSkinnedMesh = true; o.skeleton = bodyGpu.skeleton; o.bindMatrix = bodyGpu.eye; o.bindMatrixInverse = bindInv; o.bindMode = 'attached';
+    bodyGpu.marked.push(o);
+  }
+  /** Give every body muscle its skin attributes (zero weights where the processor skins or nothing does) and patch its
+   * materials; called once the skin records are registered (setBodySkin). */
+  function bodyGpuInstall() {
+    if (!bodyGpu.ok || bodyGpu.installed || !bodySkinBaked) return false;
+    if (bodySkinBaked.size >= BODY_GPU_SKIN.half) { bodyGpu.note = 'more segments than the table holds'; return false; }
+    bodyGpu.installed = true;
+    let maxN = 0;
+    for (const b of body) if (b.kind === 'muscle') { const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry; maxN = Math.max(maxN, g.attributes.position.count); }
+    // the identity skin of a rigid (or processor-skinned) muscle: entries half - 1 (S) and 2 x half - 1 (R) stay the
+    // identity (no segment uses them: at most half - 1 segments), weight 1 on both slots' first
+    bodyGpu.zero4 = new THREE.BufferAttribute(new Float32Array(4 * maxN), 4);
+    const I = BODY_GPU_SKIN.half - 1, IP = I + 128 * I;
+    for (const b of body) {
+      if (b.kind !== 'muscle') continue;
+      const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+      const rec = bodySkin.get(b.id);
+      // 19 November 2026: a muscle whose weights change with the elbow's bend (anconeusDelta) keeps the processor's skin
+      const gpu = Boolean(rec && !rec.tf && !rec.anconeusDelta && rec.geo === full);
+      let attrs;
+      if (gpu) {
+        const n = rec.src.length / 3, SI = new Float32Array(4 * n), SW = new Float32Array(4 * n), SD = new Float32Array(4 * n), SP = new Float32Array(2 * n);
+        for (let v = 0; v < n; v++) {
+          SI[4 * v] = rec.src[3 * v]; SI[4 * v + 1] = rec.src[3 * v + 1]; SI[4 * v + 2] = rec.src[3 * v + 2]; SI[4 * v + 3] = rec.i0[v] + 128 * rec.i1[v];
+          SW[4 * v + 3] = rec.w0[v]; // SD.w: the swell (bodyGpuSwell); wb = 1 - wa in the shader
+          SP[2 * v] = SI[4 * v + 3]; SP[2 * v + 1] = rec.w0[v];
+          const dev = Math.abs(rec.w0[v] + rec.w1[v] - 1); if (dev > bodyGpu.weightDev) bodyGpu.weightDev = dev;
+        }
+        attrs = { skinIndex: new THREE.BufferAttribute(SI, 4), skinWeight: new THREE.BufferAttribute(SW, 4), nsSkinD: new THREE.BufferAttribute(SD, 4) };
+        rec.gpuAttrs = attrs;
+        // the outline pass's skin batch: the source positions and the packed segments with the first weight
+        rec.gpuSrc = new THREE.BufferAttribute(rec.src, 3); rec.gpuP = new THREE.BufferAttribute(SP, 2);
+        full.userData.nsBodyGpuRec = rec;
+        rec.gpu = true; rec.bindInv = new THREE.Matrix4(); rec.cpuFor = -1; rec.liftFor = NaN;
+        bodyGpuLift(rec);
+        bodyGpu.recs.push(rec);
+      } else {
+        const pos = full.attributes.position, nor = full.attributes.normal, n = pos.count;
+        const SI = new Float32Array(4 * n), SW = new Float32Array(4 * n);
+        const al = { pos, nor, si: new THREE.BufferAttribute(SI, 4), sw: new THREE.BufferAttribute(SW, 4), arr: null, narr: null, pv: -1, nv: -1 };
+        for (let v = 0; v < n; v++) { SI[4 * v + 3] = IP; SW[4 * v + 3] = 1; }
+        bodyGpu.aliases.push(al);
+        attrs = { skinIndex: al.si, skinWeight: al.sw, nsSkinD: bodyGpu.zero4 };
+      }
+      const put = g => { if (g && g.attributes && !g.attributes.nsSkinD) for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a); };
+      put(full); put(b.mesh.geometry);
+      for (const copies of [mirrorLodOf.get(full)]) if (copies) for (const g of copies.values()) if (g !== full) put(g);
+      if (b.mirror) put(b.mirror.geometry);
+      const inv = gpu ? rec.bindInv : bodyGpu.eye;
+      for (const o of bodyGpuMeshes(b)) { bodyGpuMark(o, inv); o.userData.nsBodyGpu = gpu ? rec : null; }
+      for (const o of [b.mesh, b.mirror, b.inPlace]) if (o) { bodyGpuPatchOnce(o.userData.nsShade || o.material); bodyGpuPatchOnce(o.material); }
+      if (b.material) bodyGpuPatchOnce(b.material);
+    }
+    bodyGpuPatchOnce(torsoDepthMaterial); bodyGpuPatchOnce(faceDepthMaterial);
+    bodyGpu.on = !bodyGpu.lod;
+    if (!bodyGpu.on) bodyGpuShow(false);
+    return true;
+  }
+  /** The identity skins follow their position / normal arrays (the lift and the processor skin rewrite them; the lift
+   * swaps the array once): once a frame (render). */
+  function bodyGpuAliasSync() {
+    for (const al of bodyGpu.aliases) {
+      const P = al.pos.array, N = al.nor.array;
+      if (al.arr !== P || al.pv !== al.pos.version) {
+        const D = al.si.array; for (let v = 0, k = 0; k < P.length; v += 4, k += 3) { D[v] = P[k]; D[v + 1] = P[k + 1]; D[v + 2] = P[k + 2]; }
+        al.si.needsUpdate = true; al.arr = P; al.pv = al.pos.version;
+      }
+      if (al.narr !== N || al.nv !== al.nor.version) {
+        const D = al.sw.array; for (let v = 0, k = 0; k < N.length; v += 4, k += 3) { D[v] = N[k]; D[v + 1] = N[k + 1]; D[v + 2] = N[k + 2]; }
+        al.sw.needsUpdate = true; al.narr = N; al.nv = al.nor.version;
+      }
+    }
+  }
+  /** Marked or plain (the quality levels that draw the body's coarser copies, which the processor skins). */
+  function bodyGpuShow(on) {
+    for (const o of bodyGpu.marked) o.isSkinnedMesh = on;
+    for (const rec of bodyGpu.recs) { rec.relValid = false; rec.cpuFor = -1; if (rec.sw) rec.sw.drawnKey = NaN; if (rec.bindOf) rec.bindOf.fill(NaN); }
+    if (!on) { bodySkinList = null; } // the processor skins every record again on the next pose (budgeted)
+  }
+  function bodyGpuLod(lodOn) {
+    bodyGpu.lod = lodOn;
+    if (!bodyGpu.installed) return;
+    const on = !lodOn;
+    if (on === bodyGpu.on) return;
+    bodyGpu.on = on;
+    bodyGpuShow(on);
+  }
+  /** The unskinned shape the shader starts from: the lift offset (base - rest) and the base normal (skinBase), rewritten
+   * when the lift amount changes. */
+  function bodyGpuLift(rec) {
+    const a = rec.lift ? (rec.lift.applied || 0) : 0;
+    if (rec.liftFor === a) return;
+    const n3 = rec.src.length;
+    const base = rec.baseP && rec.baseP.length === n3 ? rec.baseP : (rec.baseP = new Float32Array(n3));
+    const baseN = rec.baseN && rec.baseN.length === n3 ? rec.baseN : (rec.baseN = new Float32Array(n3));
+    skinBase(rec, base, baseN);
+    const D = rec.gpuAttrs.nsSkinD.array, W = rec.gpuAttrs.skinWeight.array, r = rec.rest;
+    for (let v = 0, k = 0; k < n3; v += 4, k += 3) {
+      D[v] = base[k] - r[k]; D[v + 1] = base[k + 1] - r[k + 1]; D[v + 2] = base[k + 2] - r[k + 2];
+      W[v] = baseN[k]; W[v + 1] = baseN[k + 1]; W[v + 2] = baseN[k + 2];
+    }
+    rec.gpuAttrs.nsSkinD.needsUpdate = true; rec.gpuAttrs.skinWeight.needsUpdate = true;
+    rec.liftFor = a;
+  }
+  /** 19 November 2026: the swell of a muscle skinned on the graphics card (swellApply's amount per vertex: this
+   * muscle's own swell and the lift by the muscle beneath, millimetres along the posed normal) into nsSkinD.w. Written
+   * only when the muscle's swell key changed (quantised steps while it eases); returns true when it wrote. */
+  function bodyGpuSwell(rec) {
+    const w = rec.sw;
+    if (!w || w.key === w.drawnKey) return false;
+    const own = w.own, under = w.under, uIdx = w.uIdx, U = w.unders, q = w.q, D = rec.gpuAttrs.nsSkinD.array;
+    for (let v = 0, k = 3; v < own.length; v++, k += 4) {
+      const ui = uIdx[v], uq = ui !== 255 && U[ui] ? U[ui].q : 0;
+      D[k] = q * own[v] + uq * under[v];
+    }
+    rec.gpuAttrs.nsSkinD.needsUpdate = true;
+    w.drawnKey = w.key;
+    bodyGpu.swells++; swell.applied++;
+    return true;
+  }
+  const bodyGpuTmp = new Float64Array(16);
+  /** One pose: the segments' S and R into the table, each skinned mesh's matrix inverse. 19 November 2026: the table
+   * is sent, and the outline pass told, only when a number in it changed (the game asks again on every frame while a
+   * swell eases or a muscle waits for its processor copy, with the same pose). */
+  function bodyGpuPose() {
+    const D = bodyGpu.data, NS = bodySkinSegs.length, H = BODY_GPU_SKIN.half;
+    let changed = false;
+    for (let i = 0; i < NS; i++) {
+      const S = bodySkinSegs[i], o = 16 * i;
+      let same = true;
+      for (let k = 0; k < 16; k++) if (D[o + k] !== Math.fround(S[k])) { same = false; break; }
+      if (same) continue;
+      const R = mul16(S, skinBakedInv[i], bodyGpuTmp), o2 = 16 * (H + i);
+      for (let k = 0; k < 16; k++) { D[o + k] = S[k]; D[o2 + k] = R[k]; }
+      changed = true;
+    }
+    for (const rec of bodyGpu.recs) {
+      const m = rec.b.mesh.matrix.elements, L = rec.bindOf || (rec.bindOf = new Float64Array(16).fill(NaN));
+      let same = true;
+      for (let k = 0; k < 16; k++) if (L[k] !== m[k]) { same = false; L[k] = m[k]; }
+      if (same) continue;
+      rigidInv16(m, rec.bindInv.elements); changed = true;
+    }
+    if (swell.on) for (const rec of swell.recs) if (rec.gpu && bodyGpuSwell(rec)) changed = true;
+    if (!changed) return false;
+    bodyGpu.tex.needsUpdate = true;
+    bodyGpu.serial++; bodyGpu.tables++;
+    outline.invalidate();
+    return true;
+  }
+  /** The processor copy of a skinned muscle's posed positions (skinOne's positions, in the mesh's own frame), made when
+   * a reader asks for it; never sent to the graphics card. */
+  function bodyGpuCpu(rec) {
+    if (!bodyGpu.on || !rec.gpu || !bodySkinSegs) return false;
+    skinCache(rec);
+    const M = rigidInv16(rec.b.mesh.matrix.elements, skinMeshInv), C = rec.C || (rec.C = []);
+    for (const i of rec.used) C[i] = mul16(M, bodySkinSegs[i], C[i] || new Float64Array(16));
+    const p = rec.pos.array, n3 = p.length, qa = rec.qa, qb = rec.qb, i0 = rec.i0, i1 = rec.i1, w0 = rec.w0, w1 = rec.w1;
+    for (let v = 0, k = 0; k < n3; v++, k += 3) {
+      const A = C[i0[v]], B = C[i1[v]], wa = w0[v], wb = w1[v];
+      const ax = qa[k], ay = qa[k + 1], az = qa[k + 2], bx = qb[k], by = qb[k + 1], bz = qb[k + 2];
+      p[k] = wa * (A[0] * ax + A[4] * ay + A[8] * az + A[12]) + wb * (B[0] * bx + B[4] * by + B[8] * bz + B[12]);
+      p[k + 1] = wa * (A[1] * ax + A[5] * ay + A[9] * az + A[13]) + wb * (B[1] * bx + B[5] * by + B[9] * bz + B[13]);
+      p[k + 2] = wa * (A[2] * ax + A[6] * ay + A[10] * az + A[14]) + wb * (B[2] * bx + B[6] * by + B[10] * bz + B[14]);
+    }
+    rec.cpuFor = bodyGpu.serial; rec.skinned = true;
+    pickBufferWritten(p);
+    bodyGpu.cpuPoses++;
+    return true;
+  }
+  /** Every processor copy up to the pose now (the readers that measure the whole body once: the mirror body's size,
+   * the QA triangle query). */
+  function bodyGpuCpuAll() { if (bodyGpu.on && bodySkinSegs) for (const rec of bodyGpu.recs) if (!skinPoseSame(rec) || !rec.skinned) { bodyGpuCpu(rec); skinPoseKeep(rec); } }
 
   function updateBody(matrices, drives = null) {
     let n = 0;
@@ -10926,7 +11471,8 @@ export function createScene({
       const sharedAttribute = sharedArray ? (attr === a ? live : a) : null;
       const sharedVersion = sharedAttribute ? sharedAttribute.version : null;
       let box = mirrorPositionBounds.get(attr);
-      if (!box || box.array !== attr.array || box.count !== attr.count || box.version !== attr.version || box.sharedAttribute !== sharedAttribute || box.sharedVersion !== sharedVersion
+      const stamp = pickStamp.get(attr.array) || 0; // 18 November 2026: a processor copy written in place (GPU skin, pickBufferWritten)
+      if (!box || box.array !== attr.array || box.count !== attr.count || box.version !== attr.version || box.stamp !== stamp || box.sharedAttribute !== sharedAttribute || box.sharedVersion !== sharedVersion
           || !Number.isFinite(attr.version) || (sharedArray && !Number.isFinite(sharedVersion))) {
         // R558 (performance, P2): the same values in the same order, the same Math.min / Math.max and the same refusal,
         // with the running bounds in local variables (the per-vertex skinned twins are rescanned every dance frame);
@@ -10949,7 +11495,7 @@ export function createScene({
             z0 = Math.min(z0, z); z1 = Math.max(z1, z);
           }
         }
-        box = { lo: [x0, y0, z0], hi: [x1, y1, z1], array: attr.array, count: attr.count, version: attr.version, sharedAttribute, sharedVersion };
+        box = { lo: [x0, y0, z0], hi: [x1, y1, z1], array: attr.array, count: attr.count, version: attr.version, stamp, sharedAttribute, sharedVersion };
         mirrorPositionBounds.set(attr, box);
       }
       for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j], box.lo[j]); hi[j] = Math.max(hi[j], box.hi[j]); }
@@ -10967,6 +11513,7 @@ export function createScene({
   const envTwins = new WeakMap(), envCorners = new Float64Array(24);
   function currentMirrorEnvelope() {
     if (!mirrorRoot.visible || !mirror.transform) return null;
+    armSkinCpuAll(); // 18 November 2026: the arm twins' processor copy (GPU skin) for their live bounds
     camera.updateMatrixWorld(true); mirrorRoot.updateMatrixWorld(true); // force: every twin's matrixWorld is current
     const centre = mirror.transform.centre, V = camera.matrixWorldInverse.elements;
     const kids = mirrorBodyGroup.children.concat(mirrorArmGroup.children);
@@ -10978,7 +11525,7 @@ export function createScene({
       const M = mesh.matrixWorld.elements;
       let rec = envTwins.get(mesh);
       let same = Boolean(rec) && rec.fa === fa && rec.la === la && Boolean(fa) && Boolean(la) && rec.faArr === fa.array && rec.laArr === la.array
-        && rec.faN === fa.count && rec.laN === la.count && rec.faV === fa.version && rec.laV === la.version;
+        && rec.faN === fa.count && rec.laN === la.count && rec.faV === fa.version && rec.laV === la.version && rec.st === (pickStamp.get(la.array) || 0) + (pickStamp.get(fa.array) || 0);
       for (let i = 0; same && i < 16; i++) if (rec.m[i] !== M[i]) same = false;
       if (!same) {
         // R558 (P2): a twin's record is refilled in place (its corner and matrix arrays reused) once the corners are
@@ -10988,9 +11535,9 @@ export function createScene({
         const n = mirrorMeshCorners(mesh, mesh.matrixWorld, (x, y, z) => { c[k++] = x; c[k++] = y; c[k++] = z; });
         if (rec) {
           rec.c.set(c); rec.m.set(M); rec.n = n;
-          rec.fa = fa; rec.la = la; rec.faArr = fa.array; rec.laArr = la.array; rec.faN = fa.count; rec.laN = la.count; rec.faV = fa.version; rec.laV = la.version;
+          rec.fa = fa; rec.la = la; rec.faArr = fa.array; rec.laArr = la.array; rec.faN = fa.count; rec.laN = la.count; rec.faV = fa.version; rec.laV = la.version; rec.st = (pickStamp.get(la.array) || 0) + (pickStamp.get(fa.array) || 0);
         } else {
-          rec = { fa, la, faArr: fa.array, laArr: la.array, faN: fa.count, laN: la.count, faV: fa.version, laV: la.version, m: Float64Array.from(M), c: Float64Array.from(c), n };
+          rec = { fa, la, faArr: fa.array, laArr: la.array, faN: fa.count, laN: la.count, faV: fa.version, laV: la.version, st: (pickStamp.get(la.array) || 0) + (pickStamp.get(fa.array) || 0), m: Float64Array.from(M), c: Float64Array.from(c), n };
           envTwins.set(mesh, rec);
         }
       }
@@ -11060,6 +11607,7 @@ export function createScene({
     });
     eyeRig.updateMatrixWorld(true);
     for (const b of bones) { b.mesh.updateMatrixWorld(true); take(b.mesh, b.mesh.matrixWorld); }
+    armSkinCpuAll(); bodyGpuCpuAll(); // 18 November 2026: the processor copies of the skins (GPU skin), before the corners are read
     for (const m of muscles) { m.mesh.updateMatrixWorld(true); take(m.mesh, m.mesh.matrixWorld); }
     if (pts.length < 3) return false;
     try {
@@ -11474,7 +12022,7 @@ export function createScene({
     pv.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
     rayDir.copy(pv).sub(camera.position).normalize(); rayOrigin.copy(camera.position); raycaster.set(rayOrigin, rayDir);
     // The left arm is skinned on the CPU: its bounding spheres are brought up to date first, so a moved muscle is found.
-    for (const m of muscles) { try { computeSphereExact(m.mesh.geometry); } catch { /* keep the old sphere */ } } // R558 (P2): Three's sphere, exact
+    for (const m of muscles) { try { if (!armSkinSphere(m)) computeSphereExact(m.mesh.geometry); } catch { /* keep the old sphere */ } } // R558 (P2): Three's sphere, exact (18 November: a widened sparse one when skinned on the graphics card)
     const shown = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
     const targets = [];
     for (const o of index.keys()) if (shown(o)) targets.push(o);
@@ -11870,6 +12418,7 @@ export function createScene({
   /** Arm muscle centre in arm (eye) coordinates from its CPU-skinned positions (cached per pose). */
   function armMuscleCentre(m) {
     if (m.centre && m.centreFor === lastMatrices) return m.centre;
+    armSkinSubset(m); // 18 November 2026: the sparse vertices read below, posed on the processor only now (GPU skin)
     const p = m.pos, n = p.length / 3, step = Math.max(1, Math.floor(n / 400));
     let x = 0, y = 0, z = 0, k = 0;
     for (let i = 0; i < n; i += step) { x += p[3 * i]; y += p[3 * i + 1]; z += p[3 * i + 2]; k++; }
@@ -12477,6 +13026,7 @@ export function createScene({
     return lod;
   }
   function setLod(lod, key) {
+    bodyGpuLod(Boolean(lod && lod.bodyMm > 0)); // 18 November 2026: the body's coarser copies are skinned on the processor
     const t0 = nowMs();
     const st = lod ? (lodStats[key] ||= { builtMs: null, glass: [0, 0], body: [0, 0] }) : null;
     const fresh = st && st.builtMs === null;
@@ -12787,6 +13337,7 @@ export function createScene({
     // R5-scene (D17): glow links and rims for this frame (cheap; glowLinkState().cpuMs).
     updateGlow(dtMs);
     syncMuscleShade(); // R558 (performance): this frame's muscle colours and glows into the class materials' value rows
+    if (bodyGpu.on) bodyGpuAliasSync(); // 18 November 2026 (performance): the identity skins follow their vertex arrays
     // R4-integrator (D5 glass fix): view-space rigid normal matrix and far-eye centre for the glass rim (K > 1 only).
     if (farEyeView.rot && farEyeView.pw && farEyeView.K > 1) {
       camera.updateMatrixWorld(true);
@@ -12855,12 +13406,15 @@ export function createScene({
     if (autoWorld) { scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false; }
     let hdrOn = false;
     try {
-      outline.render(scene, camera);
-      ghost.frame(); // 18 November 2026 (SEE): the ghost composite follows the outline; which limbs are locked away
+      const outlineAt = nowMs();
+      if (!SIMPLE_LOOK) outline.render(scene, camera);
+      if (!SIMPLE_LOOK) ghost.frame(); // 18 November 2026 (SEE): the ghost composite follows the outline; which limbs are locked away
+      lastOutlineMs = nowMs() - outlineAt;
       // R558 (Message 25): into the HDR target when it is on (createHdrBloom), then bloom and composite to the canvas.
       hdrOn = hdr.begin();
       stripCut.on = stripCut.supported && (hdrOn || stripCut.canvasStencil); // 17 November: the strip cuts the brain surface (STRIP_CUT)
       glassClearUniform.value = stripCut.on ? 0 : GLASS_CLEAR.clear;
+      if (globalThis.__nsCensus === true) drawCensusFrame(); else
       renderer.render(scene, camera);
     } finally { if (autoWorld) scene.matrixWorldAutoUpdate = true; }
     if (renderer.info && renderer.info.render) { mainPassInfo.calls = renderer.info.render.calls; mainPassInfo.triangles = renderer.info.render.triangles; }
@@ -12870,6 +13424,32 @@ export function createScene({
     lastRenderCpuMs = end - now;
     // R558 (quality controller, rule a): this live frame's main-thread work, from the frame's start (ns-app) to here.
     lastBusyMs = !notLive && opts && Number.isFinite(opts.frameStartMs) ? end - opts.frameStartMs : NaN;
+  }
+
+  /* 19 November 2026 (performance; QA only, globalThis.__nsCensus = true for one frame): the main pass's draws and
+   * triangles by kind (whose body, what part), read with sceneState().census. Nothing runs without the flag. */
+  let lastCensus = null;
+  function drawCensusFrame() {
+    globalThis.__nsCensus = false;
+    const orig = renderer.renderBufferDirect, by = {}, mats = new Set();
+    const under = (o, g) => { for (let p = o; p; p = p.parent) if (p === g) return true; return false; };
+    const bodyKind = new Map();
+    for (const b of body) { for (const o of [b.mesh, b.mirror, b.inPlace]) if (o) bodyKind.set(o, b.kind); }
+    renderer.renderBufferDirect = function (cam, sc, geometry, material, object, group) {
+      const nm = String(object.name || '');
+      const host = object.userData && object.userData.depthTwin ? object.parent : object;
+      const where = under(object, mirrorRoot) ? 'mirror' : under(object, armGroup) ? 'arm' : under(object, bodyGroup) ? 'body' : under(object, brainGroup) ? 'brain' : under(object, room.group) ? 'room' : 'other';
+      let what = bodyKind.get(host) || (/vessel|arter|vein/i.test(nm) ? 'vessel' : /bone|skel/i.test(nm) ? 'bone' : object.isSkinnedMesh ? 'muscle' : '');
+      if (object.userData && object.userData.depthTwin) what += ' depth-twin';
+      else if (/halo/.test(nm)) what = 'halo';
+      const k = `${where} ${what}`.trim();
+      const e = by[k] || (by[k] = { draws: 0, triangles: 0, materials: new Set() });
+      const dr = geometry.drawRange, cnt = geometry.index ? geometry.index.count : geometry.attributes.position ? geometry.attributes.position.count : 0;
+      e.draws++; e.triangles += Math.max(0, Math.min(cnt - dr.start, dr.count)) / 3 * (object.isInstancedMesh ? object.count : 1); e.materials.add(material); mats.add(material);
+      return orig.apply(this, arguments);
+    };
+    try { renderer.render(scene, camera); } finally { renderer.renderBufferDirect = orig; }
+    lastCensus = { materials: mats.size, by: Object.fromEntries(Object.entries(by).map(([k, e]) => [k, { draws: e.draws, triangles: Math.round(e.triangles), materials: e.materials.size }])) };
   }
 
   /** Second pass for the face layer: 'ghost' with the main camera, depth-tested against the main frame (the arm in
@@ -13050,7 +13630,12 @@ export function createScene({
     // 18 November 2026 (SEE, ns-see): the limbs locked away ([9] by ghost code; their ghosts are filled and taken by the
     // crosshair), what Shift would take (a line round that limb), and the pass's state.
     ghostLocked: () => ghost.locked(), setGhostFocus: code => ghost.setFocus(code), ghostState: () => ghost.state(),
-    outlineState: () => ({ ...outline.state(), quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null }),
+    outlineState: () => ({ ...outline.state(), census: lastCensus, quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null,
+      armSkin: { on: armGpu.on, note: armGpu.note, tables: armGpu.tables, cpuPoses: armGpu.cpuPoses, subsetPoses: armGpu.subsetPoses, meshes: armGpu.marked.length },
+      bodySkin: { on: bodyGpu.on, installed: bodyGpu.installed, lod: bodyGpu.lod, note: bodyGpu.note, records: bodyGpu.recs.length, tables: bodyGpu.tables, cpuPoses: bodyGpu.cpuPoses, swells: bodyGpu.swells, weightDev: bodyGpu.weightDev, meshes: bodyGpu.marked.length, waiting: bodySkinWaiting } }), // 18 November 2026
+    /** 18 November 2026 (performance): the last render's main-thread ms, and the outline passes' part of it. */
+    get lastRenderMs() { return Number.isFinite(lastRenderCpuMs) ? lastRenderCpuMs : 0; },
+    get lastOutlineMs() { return lastOutlineMs; },
     get regionMode() { return regionMode; },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
     sceneState() {
@@ -13070,9 +13655,12 @@ export function createScene({
         glassRead: { ...glassRead },
         // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
         // last received them (viewport fractions).
-        quality: qualityState(),
+        quality: qualityState(), census: lastCensus,
         ghost: ghost.state(), // 18 November 2026 (SEE): the hidden-limb pass
         outline: outline.state(), // R558 (Message 20): the outline pass (batch size, last ID pass draw calls and CPU ms)
+        // 18 November 2026 (performance): the left game arm skinned on the graphics card (pose tables written, processor
+        // copies made for the picks and the mirror envelope, sparse copies for the glow links' ends)
+        armSkin: { on: armGpu.on, ok: armGpu.ok, note: armGpu.note, tables: armGpu.tables, cpuPoses: armGpu.cpuPoses, subsetPoses: armGpu.subsetPoses, meshes: armGpu.marked.length },
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
         hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
         leftArmRim: { ...leftArmRim }, regionBorder: { ...regionBorder }, areaInk: { ...areaInk }, glassFold: (({ token, ...gf }) => gf)(glassFold),

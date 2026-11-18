@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-25",
+  "version": "experimental-2026-11-19-body-update-26",
   "experimental": true,
-  "source": "Body update 25. The right anconeus draws fewer sharp triangles during a shallow elbow bend.",
+  "source": "Body update 26. The plain look of the loading picture on a nearly black backdrop, and a lighter, faster game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 235766,
-      "sha256": "2341ca5c24166627e1b45aa80421b28e95798f183425362d09cb6a23d204fc0e"
+      "bytes": 238014,
+      "sha256": "f2f8823b63227277047e0ef6c4b3f0e071f91df6014313f5799a3e9f7627994d"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 29549,
-      "sha256": "91e099818a4129041e3fa1eed2d28bb9b206001b3e6df423a353843c1278c35e"
+      "bytes": 30218,
+      "sha256": "783efb3390589b1431b1b827b078748188e70f1abf13958c21570e9063eeab5f"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "b734919b051ef3b67f4b889320b40b60a15fbeae37dc888cd988a22e4d98096e"
+      "sha256": "6ad0f554fb8dc8a877bfc99a7a22a41aac5990c67b48f3b7e35d0f9b8cd43c2c"
     },
     {
       "path": "index.html",
@@ -3897,8 +3897,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 741369,
-      "sha256": "66506e22ad3e16fbdb912c73f4650d859cf1b419cc06f76faf605abfc11a008a"
+      "bytes": 744783,
+      "sha256": "d56fb8f4d6216f35393cbf27ce151305721e73f577a11f82c503a059be5c9ad0"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3977,8 +3977,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 98011,
-      "sha256": "c9e9442e61e6bb13da56840a8c8f9be36bd6420889820ddaf2eb73e6f5a9ca3f"
+      "bytes": 98226,
+      "sha256": "dbf0bdac1ae48a82f1686f2f2f5352685e2547a3a11334456af2edb166813c2c"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4052,8 +4052,13 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 66643,
-      "sha256": "6997de66c14356afd8ffeaf20c52eea6aed8083a3053ee156344d37556fb172c"
+      "bytes": 79622,
+      "sha256": "ed553103bac9cfd1d442417e2bf3fe1d438020b6000d039d533f03949da4cee0"
+    },
+    {
+      "path": "scene/src/ns-perf.mjs",
+      "bytes": 4652,
+      "sha256": "6038f5b3fe1a6a87f8b59a9f5a49966ad40a0f958a6c6ec60e5e7f7c7cecf898"
     },
     {
       "path": "scene/src/ns-placeholder.mjs",
@@ -4087,18 +4092,18 @@
     },
     {
       "path": "scene/src/ns-room.mjs",
-      "bytes": 26674,
-      "sha256": "36db504e0ab38963a82bd1f98d3a45a90cb05e56479d97e55d627a1684da35f5"
+      "bytes": 27213,
+      "sha256": "532df877af17c72f62eab44e5959c594fc8914579c020a96893a7b1a69610351"
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1030918,
-      "sha256": "95256019bfa1ea4fc6608f342a42715d16b41e605cf3101235216cc886fbe58b"
+      "bytes": 1076912,
+      "sha256": "2e2805d07f93041fee5b708032b3f733bec75ef9405532ed4bfd8c752900116d"
     },
     {
       "path": "scene/src/ns-see.mjs",
-      "bytes": 35529,
-      "sha256": "07f7353f4864b7826e8481d2c60f9230743cb30cd9c640a74eb4a8a343d40ac5"
+      "bytes": 36950,
+      "sha256": "88e7e289a6c528c3aea48b4a697ca4c517f089a8031f04d304a228e4c1e66cef"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4139,6 +4144,11 @@
       "path": "tests/area-words.test.mjs",
       "bytes": 7892,
       "sha256": "6700d0d77a883796cbb48eae583d3e0c5594375d155db0fc8d69a648bac3218a"
+    },
+    {
+      "path": "tests/arm-skin.test.mjs",
+      "bytes": 8589,
+      "sha256": "2bf1f0d05501fd78c84788607c2030094635d7c61d23c6b3ffffb7c52adae358"
     },
     {
       "path": "tests/assembly.test.mjs",
@@ -4281,6 +4291,11 @@
       "sha256": "9c30aad7ba48611d689c2cd6a9b9ecc2cb145582db3b6f8c30919443968e23c8"
     },
     {
+      "path": "tests/perf.test.mjs",
+      "bytes": 2192,
+      "sha256": "6c0a6542091caed78a33a5ff5a44229fae884c6d1615ec0a85a7c7f152245143"
+    },
+    {
       "path": "tests/pointer-release.test.mjs",
       "bytes": 12072,
       "sha256": "5c413b1ebd9b45acccea745aabaaa253d6d7f709947b6eb27eaa7f7b0ec0c8b8"
@@ -4297,8 +4312,8 @@
     },
     {
       "path": "tests/room.test.mjs",
-      "bytes": 10083,
-      "sha256": "24a044a9ec04472e9bf5c1ad248079121969bfb554d4e40dae75ddedaf2b8f15"
+      "bytes": 9591,
+      "sha256": "b5540a898777c05dda188a2230b1004be7fe111b324f6440801de0d0e46e77a4"
     },
     {
       "path": "tests/see.test.mjs",
@@ -4307,8 +4322,8 @@
     },
     {
       "path": "tests/shader-safe.test.mjs",
-      "bytes": 11606,
-      "sha256": "634ec13db5739db1a78820252e263209c9de4b6bb1386d831c304828acd8f888"
+      "bytes": 12256,
+      "sha256": "21dc06ed69d58a8ed4c6326e53ae3d630c380a0b80338e14547a1f6d5bc5bf9e"
     },
     {
       "path": "tests/shoulder-skin.test.mjs",
@@ -4317,8 +4332,8 @@
     },
     {
       "path": "tests/small-fixes.test.mjs",
-      "bytes": 10539,
-      "sha256": "2cf87bf8e0ac77ba63f19d83db7e6b7705dfe8cb30cd853603c0a855f17b533d"
+      "bytes": 10092,
+      "sha256": "e2cb6582ab43561a97e77a5ccd4bf88bd421264b6b803d6c0eeade8ee1a18ca0"
     },
     {
       "path": "tests/space-gesture.test.mjs",

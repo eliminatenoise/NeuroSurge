@@ -90,11 +90,8 @@ test('S23: the floor does not read as ground under the bodies: no grout lines un
   // a grout line (x = 0, the light's axis) against the middle of a tile (x = 1.5), right under your body and far off
   const contrast = (z, st) => at(1.5, z, st) - at(0, z, st);
   const zUnder = ROOM.bodyAt[2] - 0.5, zFar = 41;
-  assert.ok(contrast(zUnder, {}) > 0, 'without a body there the grout shows');
-  assert.ok(contrast(zUnder, { aura }) < 0.2 * contrast(zUnder, {}), `under the body the grout fades (${contrast(zUnder, { aura })} vs ${contrast(zUnder, {})})`);
-  assert.ok(Math.abs(contrast(zFar, { aura }) - contrast(zFar, {})) < 0.05 * contrast(zFar, {}), 'far from the bodies the floor is as before');
-  // from your own eyes (inside your body) your body's zone does not apply, as its halo does not
-  assert.ok(Math.abs((at(1.5, zUnder, { aura }, EYE) - at(0, zUnder, { aura }, EYE)) - (at(1.5, zUnder, {}, EYE) - at(0, zUnder, {}, EYE))) < 1e-6);
+  // 19 November 2026 (the owner: a far blacker background with only a faint gradient): the floor has no tile lines at all
+  assert.equal(ROOM.tile.dark, 0, 'no grout lines anywhere');
   assert.equal(ROOM.shade.mirror[1], 0); assert.equal(ROOM.shade.body[1], 0);
   assert.ok(ROOM.shade.brain[1] > 0, 'the brain keeps its shadow');
   // the shader text declares no variable with a GLSL reserved name (an `out` made the whole room program invalid)

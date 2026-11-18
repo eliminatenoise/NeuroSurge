@@ -72,10 +72,10 @@ test('the pool of light is under the brain and falls away; the grout is darker t
   assert.ok(shaded < 0.8 * lit, 'the brain shades the floor under it');
 });
 
-test('the light swells with the beat and for a moment when a movement is switched on: enough to be seen, never a flash', () => {
+test('the backdrop\'s light is steady: no swell with the beat or with a movement', () => {
   assert.equal(roomGain(0, 0), 1);
-  assert.ok(roomGain(1, 0) >= 1.12 && roomGain(1, 0) <= 1.35);
-  assert.ok(roomGain(0, 1) >= 1.25 && roomGain(1, 1) <= 1.75);
+  // 19 November 2026 (the owner: "far more black of a background", "simplicity"): the backdrop's light is steady
+  assert.equal(roomGain(1, 0), 1); assert.equal(roomGain(0, 1), 1); assert.equal(roomGain(1, 1), 1);
   let l = 0;
   for (let i = 0; i < 120; i++) l = roomActiveStep(l, true, 1 / 60);
   assert.equal(l, 1, 'on within two seconds');
@@ -85,11 +85,6 @@ test('the light swells with the beat and for a moment when a movement is switche
   assert.ok(roomBeatStep(0, 1, 1 / 60) < 0.2);
   let b = 0; for (let i = 0; i < 60; i++) b = roomBeatStep(b, 1, 1 / 60);
   assert.ok(b > 0.99);
-  // on the floor at the side of the first picture a switched-on movement is several steps of 255 brighter
-  const at = g => roomLight(EYE, dirOf(60, -41), { gain: g }, ROOM, 0.5).colour.map(srgbOf).map(v => v * 255);
-  const rest = at(1), on = at(roomGain(0, 1)), beat = at(roomGain(0.7, 0));
-  assert.ok(on[1] - rest[1] >= 5 && on[1] - rest[1] <= 14, `a movement: +${(on[1] - rest[1]).toFixed(1)} steps of green`);
-  assert.ok(beat[1] - rest[1] >= 1.8 && beat[1] - rest[1] <= 6, `a beat: +${(beat[1] - rest[1]).toFixed(1)} steps of green`);
 });
 
 test('under reduced motion the light does not change at all', () => {

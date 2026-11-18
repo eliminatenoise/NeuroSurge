@@ -272,6 +272,70 @@ void main() {
 /** 18 November 2026 (SEE, ns-see): the ID pass's vertex shader, for the hidden-limb pass that draws the same batch again
  * (same instances, matrices, depth preference and code). */
 export const OUTLINE_ID_VS = ID_VS;
+/* 18 November 2026 (performance): the ID pass of a mesh skinned on the graphics card (the left game arm's muscles,
+ * ns-scene-three armSkinPrepare): Three's own skin chunks on the rest positions (attribute nsSkinRest), the code as a
+ * uniform (one proxy draw per mesh; the batch's copy of the vertices would have to be skinned on the processor). */
+const SKIN_ID_VS = `
+#include <common>
+#include <skinning_pars_vertex>
+#include <logdepthbuf_pars_vertex>
+#ifdef USE_SKINNING
+attribute vec3 nsSkinRest;
+#endif
+uniform vec3 nsId;
+flat varying vec3 vNsId;
+void main() {
+	#include <skinbase_vertex>
+	#include <begin_vertex>
+	#ifdef USE_SKINNING
+	transformed = nsSkinRest;
+	#endif
+	#include <skinning_vertex>
+	#include <project_vertex>
+	#include <logdepthbuf_vertex>
+	vNsId = nsId;
+}`;
+/* 18 November 2026 (performance): the ID pass of the body's muscles skinned on the graphics card (ns-scene-three bodyGpu,
+ * patchBodySkinVertex): a batch of their source positions, segments, weights and lift offsets; each instance's matrix is
+ * its body's (the parent group's), the skin puts the vertex in that frame: sum of w (S x source + R x lift offset). */
+const SKIN_BATCH_VS = `
+#include <common>
+#include <batching_pars_vertex>
+#include <logdepthbuf_pars_vertex>
+uniform highp sampler2D nsBoneTex;
+uniform float nsHalf;
+attribute float nsLift;
+attribute vec2 nsSkinP; // ia + 128 ib, wa (wb = 1 - wa)
+attribute vec4 nsSkinD; // lift offset, swell (mm along the posed normal; 19 November 2026)
+attribute vec4 nsSkinN; // unskinned normal (the swell's direction)
+flat varying vec3 vNsId;
+mat4 nsBone( const in float i ) {
+	int size = textureSize( nsBoneTex, 0 ).x;
+	int j = int( i ) * 4;
+	int x = j % size;
+	int y = j / size;
+	return mat4( texelFetch( nsBoneTex, ivec2( x, y ), 0 ), texelFetch( nsBoneTex, ivec2( x + 1, y ), 0 ), texelFetch( nsBoneTex, ivec2( x + 2, y ), 0 ), texelFetch( nsBoneTex, ivec2( x + 3, y ), 0 ) );
+}
+void main() {
+	#include <batching_vertex>
+	float nsIb = floor( nsSkinP.x / 128.0 ), nsIa = nsSkinP.x - 128.0 * nsIb;
+	vec4 nsS4 = vec4( position, 1.0 ), nsD4 = vec4( nsSkinD.xyz, 0.0 );
+	float nsWb = 1.0 - nsSkinP.y;
+	mat4 nsRa = nsBone( nsIa + nsHalf ), nsRb = nsBone( nsIb + nsHalf );
+	vec3 transformed = ( nsSkinP.y * ( nsBone( nsIa ) * nsS4 + nsRa * nsD4 ) + nsWb * ( nsBone( nsIb ) * nsS4 + nsRb * nsD4 ) ).xyz;
+	if ( nsSkinD.w != 0.0 ) transformed += normalize( ( nsSkinP.y * ( nsRa * vec4( nsSkinN.xyz, 0.0 ) ) + nsWb * ( nsRb * vec4( nsSkinN.xyz, 0.0 ) ) ).xyz ) * nsSkinD.w;
+	#include <project_vertex>
+	if ( nsLift != 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) gl_Position.z = ( projectionMatrix[ 3 ][ 2 ] / max( gl_Position.w - nsLift, 1e-4 ) - projectionMatrix[ 2 ][ 2 ] ) * gl_Position.w;
+	#include <logdepthbuf_vertex>
+	#ifdef USE_BATCHING_COLOR
+	vNsId = getBatchingColor( getIndirectIndex( gl_DrawID ) );
+	#else
+	vNsId = vec3( 0.0 );
+	#endif
+}`;
+/** 19 November 2026 (performance): the ID pass's two vertex shaders for meshes skinned on the graphics card, for the
+ * hidden-limb pass (ns-see), which draws the same things again with its own fragment shader. */
+export const OUTLINE_SKIN_ID_VS = SKIN_ID_VS, OUTLINE_SKIN_BATCH_VS = SKIN_BATCH_VS;
 const ID_FS = `
 flat varying vec3 vNsId;
 #include <logdepthbuf_pars_fragment>
@@ -634,6 +698,17 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   idScene.name = 'ns-outline ID pass (one batch of the drawn body meshes)';
   idScene.matrixWorldAutoUpdate = false;
   const idMat = new THREE.ShaderMaterial({ vertexShader: ID_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  // 18 November 2026 (performance): meshes skinned on the graphics card are drawn into the ID target by proxies (one
+  // draw each, after the batch) that share their geometry, skeleton and bind matrices (SKIN_ID_VS).
+  const skinScene = new THREE.Scene();
+  skinScene.name = 'ns-outline ID pass (meshes skinned on the graphics card)';
+  skinScene.matrixWorldAutoUpdate = false;
+  const skinIdMat = new THREE.ShaderMaterial({ uniforms: { nsId: { value: new THREE.Vector3() } }, vertexShader: SKIN_ID_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  let skinShown = 0;
+  // 18 November 2026 (performance): the body's muscles skinned on the graphics card, in a batch of their own (sbBuild)
+  const skinBatchMat = new THREE.ShaderMaterial({ uniforms: { nsBoneTex: { value: null }, nsHalf: { value: 128 } }, vertexShader: SKIN_BATCH_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  const sb = { batch: null, geoms: new Map(), dirty: false, members: 0, rebuilds: 0 };
+  const isBodyGpu = s => s.isSkinnedMesh === true && Boolean(s.skeleton) && s.skeleton.nsBody === true && Boolean(s.userData && s.userData.nsBodyGpu && s.userData.nsBodyGpu.gpuSrc);
   const depthTexture = ok ? new THREE.DepthTexture(1, 1) : null;
   if (depthTexture) { depthTexture.minFilter = THREE.NearestFilter; depthTexture.magFilter = THREE.NearestFilter; }
   const nearestTarget = extra => new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false, stencilBuffer: false, ...extra });
@@ -793,7 +868,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     if (batch) { idScene.remove(batch); batch.dispose(); batch = null; }
     geoms.clear();
     const set = new Set();
-    for (const r of reg) if (usable(r.src.geometry)) set.add(r.src.geometry);
+    for (const r of reg) if (usable(r.src.geometry) && !isBodyGpu(r.src)) set.add(r.src.geometry); // 18 November 2026: not the skin batch's
     let V = 0, I = 0;
     for (const g of set) { V += g.attributes.position.count; I += g.index.count; }
     if (!reg.length || !V) return;
@@ -843,7 +918,19 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     chain.clear();
     let drawn = 0, copied = 0;
     const done = new Set();
+    skinShown = 0;
+    sbPrepare(); // 18 November 2026: which sources the skin batch draws (rebuilt when that set changes)
     for (const r of reg) {
+      if (r.skinBody || isBodyGpu(r.src)) { // 18 November 2026: the body's muscles skinned on the graphics card (syncBodySkin)
+        const k = syncBodySkin(r, scene);
+        if (k.changed) changed = true;
+        if (k.skinned) { if (k.shown) drawn++; continue; }
+      }
+      if ((r.src.isSkinnedMesh === true && !(r.src.skeleton && r.src.skeleton.nsBody)) || r.proxy) { // 18 November 2026: the arm, skinned on the graphics card (syncSkinned)
+        const sk = syncSkinned(r, scene);
+        if (sk.changed) changed = true;
+        if (sk.skinned) { if (sk.shown) { drawn++; skinShown++; } continue; }
+      }
       if (r.iid < 0) { if (r.src.visible) rebuild = true; continue; }
       const s = r.src, m = s.material, g = s.geometry;
       let show = s.visible === true && m && !Array.isArray(m) && m.visible !== false && m.transparent !== true && m.colorWrite !== false &&
@@ -897,6 +984,115 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     stats.drawn = drawn;
     stats.copiedVertices = copied;
     return changed;
+  }
+  /** 18 November 2026 (performance): a source skinned on the graphics card is drawn by its proxy and hidden in the
+   * batch; one that is no longer skinned goes back to the batch. Returns { skinned, shown, changed }. */
+  function syncSkinned(r, scene) {
+    const s = r.src, skinned = s.isSkinnedMesh === true && Boolean(s.skeleton) && !s.skeleton.nsBody;
+    let changed = false;
+    if (!skinned) {
+      if (r.proxy && r.proxy.visible) { r.proxy.visible = false; r.m.fill(NaN); changed = true; } // back to the batch: its matrix is written again
+      return { skinned: false, shown: false, changed };
+    }
+    if (batch && r.iid >= 0 && r.show) { r.show = false; batch.setVisibleAt(r.iid, false); changed = true; }
+    const m = s.material, g = s.geometry;
+    const show = s.visible === true && m && !Array.isArray(m) && m.visible !== false && m.transparent !== true && m.colorWrite !== false &&
+      m.depthWrite !== false && usable(g) && Boolean(g.attributes.nsSkinRest) && drawnChain(s, scene);
+    if (!r.proxy) {
+      const p = new THREE.Mesh(g, skinIdMat);
+      p.name = `ns-outline ID proxy: ${s.name}`; p.matrixAutoUpdate = false; p.matrixWorldAutoUpdate = false; p.frustumCulled = false;
+      p.userData.nsCode = new THREE.Color();
+      // the code goes to the material just before this proxy's draw
+      // (19 November 2026: to whichever material draws it: the ID pass's, or the hidden-limb pass's override)
+      p.onBeforeRender = (r, sc, cam, geo, mat) => { const c = p.userData.nsCode, m = mat && mat.uniforms && mat.uniforms.nsId ? mat : skinIdMat; m.uniforms.nsId.value.set(c.r, c.g, c.b); m.uniformsNeedUpdate = true; };
+      skinScene.add(p);
+      r.proxy = p; r.m.fill(NaN);
+    }
+    const p = r.proxy;
+    if (p.geometry !== g) { p.geometry = g; changed = true; }
+    p.isSkinnedMesh = true; p.skeleton = s.skeleton; p.bindMatrix = s.bindMatrix; p.bindMatrixInverse = s.bindMatrixInverse;
+    if (show) {
+      const w = s.matrixWorld.elements, k = r.m;
+      let moved = false;
+      for (let i = 0; i < 16; i++) if (k[i] !== w[i]) { moved = true; k[i] = w[i]; }
+      const dbl = m.side === THREE.DoubleSide;
+      // the proxy draws with its own world matrix, so Three already turns its faces for a mirrored matrix (flip stays off)
+      if (moved) { p.matrixWorld.copy(s.matrixWorld); changed = true; }
+      if (r.flip || dbl !== r.dbl || !r.codeSet) { r.flip = false; r.dbl = dbl; r.codeSet = true; p.userData.nsCode.copy(colourOf(r)); changed = true; }
+    }
+    if (p.visible !== show) { p.visible = show; changed = true; }
+    return { skinned: true, shown: show, changed };
+  }
+  /** 18 November 2026 (performance): the skin batch. A geometry's copy: its source positions as `position`, its
+   * segments and weights, its lift offset and depth preference. */
+  const skinCopy = (g, rec) => {
+    const w = new THREE.BufferGeometry();
+    w.setAttribute('position', rec.gpuSrc);
+    w.setAttribute('nsSkinP', rec.gpuP);
+    w.setAttribute('nsSkinD', rec.gpuAttrs.nsSkinD);
+    w.setAttribute('nsSkinN', rec.gpuAttrs.skinWeight); // 19 November 2026: the unskinned normal, for the swell
+    const l = g.attributes.nsLift, n = rec.gpuSrc.count;
+    if (l && l.itemSize === 1 && l.count === n && !l.isInterleavedBufferAttribute) w.setAttribute('nsLift', l);
+    else { if (zeroLift.length < n) zeroLift = new Float32Array(Math.ceil(n * 1.5)); w.setAttribute('nsLift', new THREE.BufferAttribute(zeroLift.subarray(0, n), 1)); }
+    w.setIndex(g.index);
+    return w;
+  };
+  function sbPrepare() {
+    let n = 0, missing = false;
+    for (const r of reg) if (isBodyGpu(r.src)) { n++; if (!sb.batch || r.sid === undefined || r.sid < 0 || !sb.geoms.has(r.src.geometry)) missing = true; }
+    if (n !== sb.members || (n > 0 && missing)) sbBuild(n);
+  }
+  function sbBuild(n) {
+    if (sb.batch) { idScene.remove(sb.batch); sb.batch.dispose(); sb.batch = null; }
+    sb.geoms.clear(); sb.members = n; sb.rebuilds++;
+    for (const r of reg) { r.sid = -1; r.sshow = false; }
+    if (!n) return;
+    const srcs = reg.filter(r => isBodyGpu(r.src)), set = new Map(srcs.map(r => [r.src.geometry, r.src.userData.nsBodyGpu]));
+    let V = 0, I = 0;
+    for (const [g, rec] of set) { V += rec.gpuSrc.count; I += g.index.count; }
+    const b = new THREE.BatchedMesh(srcs.length + 8, V + 1024, I + 3072, skinBatchMat);
+    b.name = 'ns-outline ID skin batch (body muscles skinned on the graphics card)';
+    b.perObjectFrustumCulled = false; b.sortObjects = false; b.frustumCulled = false; b.matrixAutoUpdate = false; b.matrixWorldAutoUpdate = false;
+    for (const [g, rec] of set) { const w = skinCopy(g, rec); let gid = -1; try { gid = b.addGeometry(w); } catch { gid = -1; } if (gid >= 0) sb.geoms.set(g, { gid, w, rec, dv: rec.gpuAttrs.nsSkinD.version }); }
+    for (const r of srcs) {
+      const e = sb.geoms.get(r.src.geometry);
+      r.sid = e ? b.addInstance(e.gid) : -1;
+      r.sm = new Float64Array(16).fill(NaN); r.scode = false;
+      if (r.sid >= 0) b.setVisibleAt(r.sid, false);
+    }
+    const tex = srcs[0].src.skeleton.boneTexture;
+    skinBatchMat.uniforms.nsBoneTex.value = tex; skinBatchMat.uniforms.nsHalf.value = srcs[0].src.skeleton.half || 128;
+    sb.batch = b;
+    idScene.add(b);
+  }
+  /** Returns { skinned, shown, changed } for a source the skin batch draws (or drew until now). */
+  function syncBodySkin(r, scene) {
+    const s = r.src;
+    let changed = false;
+    if (!isBodyGpu(s)) {
+      if (r.skinBody) { r.skinBody = false; r.m.fill(NaN); if (sb.batch && r.sid >= 0 && r.sshow) { sb.batch.setVisibleAt(r.sid, false); r.sshow = false; } changed = true; }
+      return { skinned: false, shown: false, changed };
+    }
+    r.skinBody = true;
+    if (batch && r.iid >= 0 && r.show) { r.show = false; batch.setVisibleAt(r.iid, false); changed = true; }
+    const m = s.material, g = s.geometry, e = sb.geoms.get(g);
+    if (!sb.batch || !(r.sid >= 0) || !e) return { skinned: true, shown: false, changed };
+    const show = s.visible === true && m && !Array.isArray(m) && m.visible !== false && m.transparent !== true && m.colorWrite !== false &&
+      m.depthWrite !== false && usable(g) && drawnChain(s, scene);
+    if (show) {
+      if (e.dv !== e.rec.gpuAttrs.nsSkinD.version) { sb.batch.setGeometryAt(e.gid, e.w); e.dv = e.rec.gpuAttrs.nsSkinD.version; changed = true; } // the lift moved
+      const P = s.parent && s.parent.matrixWorld ? s.parent.matrixWorld : null;
+      if (P) {
+        const w = P.elements, k = r.sm;
+        let moved = false;
+        for (let i = 0; i < 16; i++) if (k[i] !== w[i]) { moved = true; k[i] = w[i]; }
+        const flip = P.determinant() < 0, dbl = m.side === THREE.DoubleSide;
+        if (moved) { sb.batch.setMatrixAt(r.sid, P); changed = true; }
+        if (!r.scode || flip !== r.flip || dbl !== r.dbl) { r.flip = flip; r.dbl = dbl; r.scode = true; sb.batch.setColorAt(r.sid, colourOf(r)); changed = true; }
+      }
+    }
+    if (show !== r.sshow) { r.sshow = show; sb.batch.setVisibleAt(r.sid, show); changed = true; }
+    return { skinned: true, shown: show, changed };
   }
   /** The ID pass for the frame about to be drawn. Returns true when the composite will draw. */
   const passTo = (rt, sceneIn, camera) => {
@@ -954,8 +1150,9 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       passTo(target, idScene, camera);
       const info = renderer.info && renderer.info.render;
       stats.draws = info ? info.calls : 0;
+      if (skinShown > 0) { renderer.autoClear = false; renderer.render(skinScene, camera); renderer.autoClear = true; stats.draws += skinShown; } // 18 November 2026
       // 18 November 2026 (SEE, ns-see): the hidden-limb pass reads this frame's ID picture (only when it was redrawn).
-      if (afterId) { try { afterId({ renderer, idScene, batch, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
+      if (afterId) { try { afterId({ renderer, idScene, batch, skinBatch: sb.batch, skinBatchUniforms: skinBatchMat.uniforms, skinScene: skinShown > 0 ? skinScene : null, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
         renderer.setRenderTarget(stripTarget);
@@ -1010,10 +1207,12 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       vertexCapacity: stats.vertexCapacity, indexCapacity: stats.indexCapacity, copiedVertices: stats.copiedVertices,
       multiDraw: Boolean(renderer.extensions && typeof renderer.extensions.has === 'function' && renderer.extensions.has('WEBGL_multi_draw')),
       buffer: [bufW, bufH], supersample: ss, idTarget: [ssW, ssH], widthPx: Math.round(outlineWidthPx(pr) * 1000) / 1000,
-      strip: Boolean(strip.mesh), stripShown: strip.shown };
+      strip: Boolean(strip.mesh), stripShown: strip.shown, skinnedProxies: skinShown, skinBatch: { members: sb.members, rebuilds: sb.rebuilds } };
   }
   function dispose() {
     if (batch) { batch.dispose(); batch = null; }
+    skinIdMat.dispose(); // 18 November 2026: the skinned proxies share their sources' geometry (not disposed here)
+    if (sb.batch) { sb.batch.dispose(); sb.batch = null; } skinBatchMat.dispose();
     for (const t of [target, edgeTarget, inkTarget, stripTarget]) if (t) t.dispose();
     stripMat.dispose(); stripCompMat.dispose(); if (strip.mesh && strip.mesh.geometry) strip.mesh.geometry.dispose();
     if (depthTexture) depthTexture.dispose();
