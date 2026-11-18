@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-11",
+  "version": "experimental-2026-11-17-body-update-12",
   "experimental": true,
   "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
   "incomplete_acceptance": true,
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 199726,
-      "sha256": "c4bbd6cf526aaf23ee81c1bde174ff98ff1fa549f44a70ef29350d24ee6bd7aa"
+      "bytes": 200117,
+      "sha256": "7e94115947729b2592740edeb4017646eb850294ca96a73f189df8277a8ad522"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,13 +52,13 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 50192,
-      "sha256": "73d7c5116589fca788ff191fefa33148af83848eae099d6e6d96931de38a2f93"
+      "bytes": 50361,
+      "sha256": "3447ce73c93475cdb199030819e0d8edbe0415933ebe0b39ffe07919f4b7cfec"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 20095,
-      "sha256": "e3bf2d029812b404423c1d6057c27d9bfc3ef02ddea61d61218c3b23b97a7a79"
+      "bytes": 20215,
+      "sha256": "301152184364e60e88f73c60d9402c3fb1fc328785629d2749fd863c26e285db"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 3911,
-      "sha256": "3352060bef011c6a69a8ab3999dfdb0c80b561318dd608170a5a78837d569f82"
+      "sha256": "3c2f1840fc42b84a55690ed04c02cba8e536240ca70d27bcd0d93682a2277134"
     },
     {
       "path": "index.html",
@@ -3487,8 +3487,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 475110,
-      "sha256": "011071137706d14d4f2197e41a0151f940cd3a434ac304ab8cbcb93369716182"
+      "bytes": 475296,
+      "sha256": "4fceca4bed4cca754703d35e3f8c76a6ec5281354710bf17f88c4e79aafa98bb"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",

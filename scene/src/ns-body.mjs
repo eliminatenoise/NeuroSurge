@@ -2833,8 +2833,9 @@ export const BODY_POSTURES = deepFreezeRig({
   // 18 November 2026 (the owner: "we start the game in an underside view of the limbs"; "minimal elbow and knee
   // flexion initially, although they must still look naturalistic, but yet be fully extended out"): the right palm up
   // (r_pronation 0) and both soles at the limb turn's underside end (ankle_inv -15, ns-dance DANCE_UNDERSIDE), the
-  // knees soft (6 degrees), the elbow 8.
-  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 12, hip_abd_R: 12, knee_ext_L: -6, knee_ext_R: -6, ankle_inv_L: -15, ankle_inv_R: -15, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
+  // knees soft (6 degrees), the elbow 8. The legs 7 degrees apart each (12 in the eleventh upload; the owner: "they're
+  // probably a little too wide at the moment, the ankles"): the feet still clear each other on the overside.
+  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, ankle_inv_L: -15, ankle_inv_R: -15, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
