@@ -12,7 +12,8 @@ import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
 import { PAGE, SHELL } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
-import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
+import { startAssembly } from '../src/ns-assembly.mjs';
+import { showControlsCard } from '../src/ns-controls-card.mjs';
 
 // 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
 // Including everything from the neck down"): 108 degrees up and down (about 136 across at 16:9), between the 90 of

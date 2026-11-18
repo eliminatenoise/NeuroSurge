@@ -35,7 +35,8 @@ check('teaching order: the areas and their numbered movements come before the ha
 
 check('every goal and every replacement line has plain wording', () => {
   for (const id of NG.GUIDE_ALL_GOAL_IDS) assert.ok(typeof GUIDE.goals[id] === 'string' && GUIDE.goals[id].length > 10, id);
-  for (const id of Object.keys(GUIDE.goals)) assert.ok(NG.GUIDE_ALL_GOAL_IDS.includes(id), `wording without a goal: ${id}`);
+  // 19 November 2026: the tutorial's own steps have wording too (GUIDE_KNOWN_GOAL_IDS = the twelve and the tutorial's).
+  for (const id of Object.keys(GUIDE.goals)) assert.ok(NG.GUIDE_KNOWN_GOAL_IDS.includes(id), `wording without a goal: ${id}`);
   for (const k of ['numberKeyStill', 'watchBodyLookDown']) assert.ok(typeof GUIDE.partial[k] === 'string' && GUIDE.partial[k].length > 10, k);
 });
 

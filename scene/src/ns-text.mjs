@@ -220,7 +220,7 @@ export const BRAND = deepFreeze({
  * instead of Reset brain view also turning the mirror body back). */
 const part = (text, need = null) => ({ text, need });
 const STEP_TABLE = [
-  { head: 'Look around.', parts: [part('You see through the eyes of a body that sits in one place. It has no skin, just ' +
+  { head: 'Look around.', parts: [part('You see through the eyes of a body that lies back in one place, as on a sofa. It has no skin, just ' +
     'bones and muscles. Move the mouse or trackpad to turn its head and look around: the eyes always look straight ahead, ' +
     'so the head and neck turn, and past their reach the chest turns and the trunk bends.')],
   intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
@@ -269,8 +269,8 @@ const STEP_TABLE = [
     'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
     'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
     // R558 (Messages 55 and 56): the numbered movement list on the information card, and the number keys.
-    part('The information card lists every movement of the area you look at, each with a number. Press that number ' +
-      'key (1 to 9) to do exactly that movement. The list stays for the last area you looked at, so you can look at ' +
+    part('The tip beside the crosshair and the information card list every movement of the area you look at, each ' +
+      'beside a key cap with a number. A click does the filled one; press a number key to do exactly that movement, or hold it to move the part only part of the way. The list stays for the last area you looked at, so you can look at ' +
       'your body or the mirror body and press the numbers to watch each movement.'),
     // R558 (Messages 55 and 56): the area keys (ns-controls AREA_CODES; ns-app areaStep).
     part('The motor areas are small and lie side by side. The left and right arrow keys step your look along them, ' +
@@ -308,7 +308,7 @@ const STEP_TABLE = [
   intro: [part('Press on the brain and drag to turn it, or click or hold one of its four arrow tips.', 'compassArrows'),
     part('Click or hold an arrow by the brain to turn the brain in place.', '!compassArrows')] },
   { head: 'See your body.', parts: [
-    part('You sit on an invisible flat ground with every limb straight forward. Look down to see your ' +
+    part('You lie back as on a sofa. Look down to see your trunk, your ' +
       'legs and your feet; both arms are in front of you. Your face and back are on the mirror body: ' +
       'it copies yours. Press E to see all of yourself from behind.'),
     // R5-text (D15, user R19).
@@ -324,7 +324,7 @@ const STEP_TABLE = [
   // of you like your image in a real mirror, on the same ground (legs forward, as you sit). Its arrows and a drag turn
   // it round or tilt it (user Message 45: all four arrows orbit).
   { head: 'The mirror body.', need: 'mirror', parts: [part('In front of you sits a mirror image of your body, as in a ' +
-    'real mirror, on the same ground. It copies everything your body does. Click its muscles. To carry it, hold Space ' +
+    'real mirror. It copies everything your body does. Click its muscles. To carry it, hold Space ' +
     'while aiming at its head or trunk. Move the pointer up to lift it, or down to lower it. Press on it and drag, ' +
     'or use its arrows, to turn it round or tilt it. Seen through the brain’s clear glass it is still the mirror ' +
     'body you take (hold Shift as you press to take the brain instead). Where it stands in front of a motor area, a ' +
@@ -343,7 +343,7 @@ const CONTROL_TABLE = [
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
   ['Look / Click', 'look at a motor area to see its movements. Click it to do the highlighted movement.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
-  ['1 to 9', 'do the movement with that number in the tip or information card. The list stays with the last area you selected.'],
+  ['1 to 9', 'do the movement beside that number in the tip or the information card; hold the key and the part moves only while you hold. The list stays with the last area you selected.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
@@ -357,7 +357,7 @@ const CONTROL_TABLE = [
   ['E', 'see your body from behind your right shoulder (third person). Press E again to go back to your own eyes. Let go of what Space holds first.', 'thirdPerson'],
   // R558 (Message 48): R ("read information") replaces the I key. It steps the information: the side cards (the start),
   // then More detail and the colour key as well, then everything hidden, then the side cards again.
-  ['R', 'read information: the side cards are on at the start. Press R for More detail and the colour key, R again to hide all of it, R again to bring the cards back.'],
+  ['R', 'read information: one short card is on at the start. Press R for the full cards and the colour key, R again to hide all of it, R again to bring the short card back.'],
   ['Esc', 'pause and show this page: how to play, Reset body and settings']
 ];
 /** R5-text: the short control words for the 2 s start page (introControls), by control key. R558 (Messages 55 and 56):
@@ -371,7 +371,7 @@ const INTRO_CONTROL_WORDS = {
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
   'Look / Click': 'look to see the movements. Click to move the part.',
-  '1 to 9': 'do a movement from the tip or the card',
+  '1 to 9': 'the movement beside that number; hold to go part-way',
   '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
   'Press and drag': 'turn the brain, the mirror body or a limb',
@@ -426,7 +426,7 @@ function limitLines(f) { return LIMIT_TABLE.filter(r => needOk(r[1], f)).map(r =
 export const SHELL = deepFreeze({
   title: BRAND.name,
   subtitle: `${BRAND.tagline} ${BRAND.modelName}`,
-  headings: { loading: 'Loading…', intro: 'How to play', playing: '', paused: 'Paused: how to play', error: 'NeuroSurge stopped' },
+  headings: { loading: 'Loading…', intro: 'How to play', playing: '', paused: 'Paused', error: 'NeuroSurge stopped' },
   introNote: 'This page closes by itself after 2 seconds. Click to start now. Press Esc to see it again.',
   // R4-integrator (R4-load W8): while the rest of the body still streams in, the 2 s timer has not started yet.
   introNoteLoading: 'This page closes by itself 2 seconds after your body has loaded. Click to start now. Press Esc to ' +
@@ -474,8 +474,24 @@ export const SHELL = deepFreeze({
   // R5-text: the same controls with short words for the 2 s start page (and, R558, for the Esc page as it opens).
   introControls: introControlRows(ALL_FEATURES),
   settingsTitle: 'Settings',
+  // 19 November 2026 (EASE; the owner: "Things should be chunked together and those chunks should be spaced away from
+  // each other"; "It's not clear what the numbers do and it just adds to confusion on the menu"). The Esc page is a
+  // FEW titled groups with wide gutters, not one long list: each group is one picture of its keys (ns-app
+  // buildShellMenu: pad = the trackpad, wasd = the pyramid, space, keys = the key caps named) and at most five short
+  // rows, [what you do, what it does]. Settings is the last group. The number keys are no longer a row of nine keys
+  // with a sentence: one row here says a number does the movement beside it, as the tip shows it.
+  menu: [
+    { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look around'], ['Click', 'press the area you look at'],
+      ['1 2 3', 'a movement, by its number'], ['← →', 'the next area']] },
+    { id: 'move', title: 'Move', picture: 'wasd', rows: [['W S', 'farther, nearer'], ['A D', 'left, right']],
+      note: 'Your left hand, or what Space holds.' },
+    { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Hold', 'take what you look at'],
+      ['Move', 'carry it'], ['Drag', 'turn it'], ['Tap twice', 'your limbs turn'], ['Shift', 'reach the thing behind']] },
+    { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'the view from behind'],
+      ['R', 'information: short, more, off'], ['Esc', 'this page']] }
+  ],
   sensitivity: 'Look speed',
-  invertY: 'Flip up and down when looking (invert Y)',
+  invertY: 'Flip up and down (invert Y)',
   // R558 (user Message 37): off by default; the "Looking at" card (bottom left) always names what is under the crosshair.
   crosshairCaption: 'Also show the name next to the crosshair (the “Looking at” card always shows it)',
   // R558 (genuine note R28): the keyboard picture on the start page and the Esc page. Short words sit on the keys; the
@@ -1580,7 +1596,13 @@ export const GUIDE = deepFreeze({
     // R5-text (D18): E to the view from behind, and E again back to your own eyes.
     thirdPerson: 'Press E to see your own back. Press E again to go back.',
     // The mirror step completes when the player turns the body, by arrow or drag.
-    mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.'
+    mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.',
+    // 19 November 2026 (the tutorial, ns-guide TUTORIAL_GOAL_IDS): the steps the older guide did not have. A look only
+    // arms an area; a click or its number presses it; a number key held runs the movement for as long as it is held.
+    lookStrip: 'Look at a coloured area on the brain: the tip beside the crosshair names it and lists its movements.',
+    pressArea: 'Click the area. The part it names moves: watch it on your body or on the mirror body.',
+    holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
+    readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
   },
   partial: {
     moveHandNeedX: 'Good! Now try A or D to move it left or right.',
@@ -1602,18 +1624,25 @@ export const GUIDE = deepFreeze({
   short: {
     leftArmArea: 'Look at a blue area and click it',
     numberKey: 'Press 1 or 2',
-    moveHand: 'Press W, A, S or D',
+    moveHand: 'Press W, A, S or D: your left arm',
     flipPalm: 'Tap Space twice',
     fist: 'Tap Space twice and hold',
     otherPart: 'Look at another colour and click it',
     watchBody: 'Look at a leg area, then down, and press 1',
     glow: 'Look at a blue area again: its muscles glow',
-    dragBrain: 'Hold Space on the brain and move the pointer',
+    dragBrain: 'Hold Space on the brain. Move it. Let go',
     orbit: 'Press and drag the brain to turn it',
-    thirdPerson: 'Press E',
+    thirdPerson: 'Press E: the view from outside',
     mirror: 'Click a green arrow by the mirror body',
+    // 19 November (the tutorial): one short line per step, each ONE action
+    lookStrip: 'Look at a coloured area on the brain',
+    pressArea: 'Click it. Watch that part move',
+    holdPart: 'Hold down 1 or 2. Let go to stop',
+    readInfo: 'Press R for more to read',
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',
+    // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
+    skip: 'Enter: skip',
     byText: {
       'Good! Now try A or D to move it left or right.': 'Now A or D',
       'Good! Now try W or S to move it forward or back.': 'Now W or S',
@@ -1627,12 +1656,17 @@ export const GUIDE = deepFreeze({
   nice: 'Nice!',
   finished: 'All done! Press Esc any time to see all the controls.',
   // Esc page: a small "Try this guide" row in Settings (ns-guide wiring, round4/R4-text-NOTES.md).
-  escTitle: 'Try this guide',
-  escHelp: 'The “Try this” guide gives you one small task at a time. It never stops the game.',
-  hide: 'Hide the guide',
-  show: 'Show the guide',
-  restart: 'Restart the guide'
+  escTitle: 'Tutorial',
+  escHelp: 'The tutorial asks for one action at a time, at the top of the screen. It never stops the game. Enter skips a step.',
+  hide: 'Hide',
+  show: 'Show',
+  restart: 'Start again'
 });
+
+/** 19 November 2026 (EASE; the owner: "It's not clear what the numbers do"): the one line under a motor area's choices
+ * in the tip, shown to a newcomer only (ns-app stops it after a few presses). The filled row carries a drawn pointer:
+ * a click does that one; each row's key cap is the number key that does it. */
+export const TIP = deepFreeze({ teach: 'Click, or press a number' });
 
 /** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";
  * nice = true puts "Nice! " in front (a goal was just done). */

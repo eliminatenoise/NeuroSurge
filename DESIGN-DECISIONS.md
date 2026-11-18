@@ -1575,6 +1575,21 @@ With it came the performance work begun on 18 November: the muscles of your body
 
 Measured in one headless desktop Chromium at 1600 by 900 on one computer's own graphics card, before and after: looking around 36 to about 50 frames a second, looking down and up 35 to about 56, the limb turn 33 to about 54; standing still 60 in both. The main thread's work per frame while the look moves fell from about 25 ms to about 17 ms. These are one machine's figures and say nothing certain about a weaker one. A frame still makes about 1,240 draws of 4.6 million triangles; fewer draws, coarser meshes and a look that does not bend the whole trunk are the next steps.
 
+## 115. Chunked overlays, plain movement lists, reading on at the start, a playable tutorial (19 November)
+
+The user: “You didn't take my visual chunking feedback seriously. Things should be chunked together and those chunks should be spaced away from each other.” “It's not clear what the numbers do and it just adds to confusion on the menu. And reader should be on by default.” “And there should be a playable tutorial to learn how to use the game ... and to master the controls quickly.”
+
+- **Chunks.** The five-second controls card is four framed groups set well apart: W over A S D, the E R pair, Space, and the trackpad with its three actions. The Esc page is four titled groups side by side (look and press, move, hold and carry, views and reading) and Settings as a fifth; it fits without scrolling at 1280 by 720. The tip and the card show the name, what it does and the choices as separate groups.
+- **The numbers.** A movement is a key cap with its word beside it; opposite movements sit together; the row a click does is filled and carries a pointer. A newcomer sees one line, “Click, or press a number”, for the first three presses. A list of movements is never on screen twice: the tip has it while you look at an area, the card when you look away.
+- **Reading on.** The short reading level is on from the start: the tip, the tutorial line and one small card at the bottom right once an area has been looked at. R cycles short, full, off.
+- **Tutorial.** Eight steps in a small card at the top left, each one action and done the moment you do it (look at an area, click it, hold a number, carry the brain with Space, drag to turn it, W A S D, E and back, R), with a count, Enter to skip a step, and Hide / Start again on the Esc page. It starts by itself.
+
+Built by one helper and looked at by the author in its pictures and in the merged game; its independent check was not run.
+
+## 116. A coarser mirror body (19 November)
+
+The mirror body, a figure about 300 px tall, cost 2.0 of a frame's 4.6 million triangles. It is drawn again from index-only copies of its meshes with 5 mm cells: 0.58 million. Brought very near, thin sheets of the face and neck can show small holes.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

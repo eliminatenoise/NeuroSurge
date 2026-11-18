@@ -112,7 +112,8 @@ try {
 
   const arrow = await aim();
   await page.keyboard.press('r');
-  await page.waitForFunction(() => document.querySelector('#ns-app[data-ns-read="read"]') !== null, null, { polling: 80, timeout: 5_000 });
+  // 19 November 2026: reading starts ON at its short level (the tip stays with it), so R now goes to the full cards.
+  await page.waitForFunction(() => document.querySelector('#ns-app[data-ns-read="more"]') !== null, null, { polling: 80, timeout: 5_000 });
   const withCards = await nextFrames(arrow.covered.frames);
   assert.equal(withCards.area, arrow.covered.area);
   assert.ok(withCards.status.includes(arrow.covered.tip.text.split('\n')[0]));

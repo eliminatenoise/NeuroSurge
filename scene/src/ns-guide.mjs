@@ -73,6 +73,33 @@ export const GUIDE_GOAL_IDS = Object.freeze(['leftArmArea', 'otherPart', 'moveHa
 /** Every goal id in teaching order, the feature goals included (R5-text; R558 numberKey). */
 export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror']);
 
+/**
+ * 19 November 2026 (EASE; the owner: "there should be a playable tutorial to learn how to use the game, as it's not very
+ * clear at all, and to master the controls quickly"). The TUTORIAL is this same guide with its own short list, played
+ * in the game itself: eight steps, each asking for ONE action and moving on the moment the player does it.
+ *   lookStrip    look at a motor area of the strip                         event { type: 'look', regionId }
+ *   pressArea    click it (or press its number): a part moves              'activate' that moves something / 'armMoved'
+ *   holdPart     hold a number key: the part moves while it is held and    { type: 'moveHold', heldS } (the key came up
+ *                stops part-way when it comes up                           after at least holdMinS; a tap is not a hold)
+ *   dragBrain    Space on the brain, carry it, let go                      as before ('grab', 'carry')
+ *   orbit        press and drag the brain to turn it                       as before ('orbit')
+ *   moveHand     W A S D: the left arm                                     as before ('move' / 'key', both axes)
+ *   thirdPerson  E: the view from outside, E again to come back            as before ('view'; feature thirdPerson)
+ *   readInfo     R: the reading levels                                     { type: 'read' }
+ * A tutorial is STRICT: only the step that shows can be done (createGuide({ tutorial: true }) sets strict), so the
+ * count goes 1, 2, 3 ... and every step is really played. { type: 'skip' } passes the step that shows (the Enter key in
+ * ns-app). The Esc page hides it, shows it and starts it again, as it did the guide. Saved under the same key with
+ * v: 2 and tutorial: true; progress saved by the older guide (v: 1) starts the tutorial from its first step.
+ */
+export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'holdPart', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
+/** Every goal id the guide knows: the older guide's twelve and the tutorial's own. */
+export const GUIDE_KNOWN_GOAL_IDS = Object.freeze([...new Set(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror', ...TUTORIAL_GOAL_IDS])]);
+/** The tutorial's steps for a build: the eight, less a step whose feature the build lacks (pure). */
+export function tutorialGoalIds(features = null) {
+  const f = features && typeof features === 'object' ? features : {};
+  return Object.freeze(TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson' || f.thirdPerson === true));
+}
+
 /** The feature goals and the build feature each one needs (ns-text ROUND5_FEATURES names; R558: moveKeys = the
  * information card draws its numbered movement list and the number keys are wired). */
 export const GUIDE_FEATURE_GOALS = Object.freeze({ numberKey: 'moveKeys', watchBody: 'moveKeys', glow: 'glow', thirdPerson: 'thirdPerson', mirror: 'mirror' });
@@ -103,14 +130,16 @@ export function guideGoalIds(features = null, goals = null) {
 // R5-text: glowWindowS 1.5: a glow drawn within 1.5 s of the switch-on (the 1 s pulse plus its fade) belongs to it;
 // thirdMinS 1.0: the view from behind was on long enough to see the back (the camera eases in over 0.4 s).
 // R558 (hunt 2): carryMinM 0.2: the held brain carried at least 20 cm by W/A/S/D also counts as moved (dragBrain).
-export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0 });
+// 19 November (the tutorial): holdMinS 0.25: a number key held at least this long is a hold, not a tap (ns-actions
+// MOVE_HOLD.tapMs is 0.22 s).
+export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0, holdMinS: 0.25 });
 
 /** localStorage key suggested for guideToStorage (separate from the settings key, so old settings stay valid). */
 export const GUIDE_STORAGE_KEY = 'neurosurge.guide.v1';
 
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const nowOf = (now, fallback = 0) => (isNum(now) ? now : fallback);
-const noneDone = () => Object.fromEntries(GUIDE_ALL_GOAL_IDS.map(id => [id, false]));
+const noneDone = () => Object.fromEntries(GUIDE_KNOWN_GOAL_IDS.map(id => [id, false]));
 const goalsOf = s => (s && Array.isArray(s.goals) && s.goals.length ? s.goals : GUIDE_GOAL_IDS);
 
 /**
@@ -121,12 +150,15 @@ const goalsOf = s => (s && Array.isArray(s.goals) && s.goals.length ? s.goals : 
  * mirrorMoved, numberStill (R558: the last number key pressed while a number-key goal showed moved nothing),
  * watchOnBrain (R558: while the watchBody goal showed, a number key moved something with the look still on the brain) }.
  */
-export function createGuide({ now = 0, hidden = false, done = [], features = null, goals = null } = {}) {
+export function createGuide({ now = 0, hidden = false, done = [], features = null, goals = null, tutorial = false } = {}) {
   const d = noneDone();
   for (const id of Array.isArray(done) ? done : []) if (Object.prototype.hasOwnProperty.call(d, id)) d[id] = true;
-  const list = [...guideGoalIds(features, goals)];
+  const list = tutorial === true ? [...tutorialGoalIds(features)] : [...guideGoalIds(features, goals)];
   const all = list.every(id => d[id]);
   return {
+    // 19 November: tutorial true = the eight-step tutorial (its own list and order); strict = only the step that shows
+    // can be done.
+    ...(tutorial === true ? { tutorial: true, strict: true } : {}),
     v: 1, hidden: hidden === true, paused: false, goals: list, done: d,
     axes: { x: d.moveHand, z: d.moveHand }, fistAt: null, flashUntil: null,
     finishedAt: all ? nowOf(now) - GUIDE_OPTIONS.finishS : null, startedAt: nowOf(now),
@@ -161,8 +193,11 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
   const before = currentGoal(state);
   let s = null;
   const w = () => (s || (s = copy(state)));
-  const mark = id => { if (!(s || state).done[id]) w().done[id] = true; };
   const cur = () => currentGoal(s || state);
+  // 19 November (the tutorial): a strict guide takes only the step that shows.
+  const strict = state.strict === true;
+  let skipped = false; // a skipped step is not praised
+  const mark = id => { if (strict && cur() !== id) return; if (!(s || state).done[id]) w().done[id] = true; };
   for (const ev of list) {
     if (!ev || typeof ev !== 'object') continue;
     const t = isNum(ev.t) ? ev.t : nowOf(now);
@@ -174,12 +209,21 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         const armGlow = cur() === 'glow' && ev.kind !== 'integration' && (ev.isLeftArm === true || ev.isLeftArm === false);
         // R558 (hunt 2): awaitMove (guideEventsFromFrame): the left arm's own 'armMoved' event completes the goal instead,
         // once the arm really moves (a glance that does not dwell, or an action already held, moves nothing).
-        if (ev.isLeftArm === true) { if (ev.moves !== false && ev.awaitMove !== true) mark('leftArmArea'); }
-        else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) mark('otherPart');
+        // 19 November (the tutorial's pressArea): a look only ARMS an area (ns-actions LOOK_ARMS) and moves nothing,
+        // so only a press (a click, a number key, a tap on a muscle: source 'click') finishes "click it: watch it move".
+        const pressed = ev.source !== 'gaze' && ev.source !== 'dwell';
+        if (ev.isLeftArm === true) { if (ev.moves !== false && ev.awaitMove !== true) { mark('leftArmArea'); if (pressed) mark('pressArea'); } }
+        else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) { mark('otherPart'); if (pressed) mark('pressArea'); }
         if (armGlow) w().glowPending = { at: t, regionId: typeof ev.regionId === 'string' ? ev.regionId : null };
         break;
       }
-      case 'armMoved': mark('leftArmArea'); break;
+      case 'armMoved': mark('leftArmArea'); mark('pressArea'); break;
+      // 19 November (the tutorial): the look is on a motor area; a number key was held and came up; R was pressed; the
+      // step that shows was skipped.
+      case 'look': if (typeof ev.regionId === 'string' && ev.regionId) mark('lookStrip'); break;
+      case 'moveHold': if (isNum(ev.heldS) && ev.heldS >= (isNum(o.holdMinS) ? o.holdMinS : GUIDE_OPTIONS.holdMinS)) mark('holdPart'); break;
+      case 'read': mark('readInfo'); break;
+      case 'skip': { const c = cur(); if (c && !(s || state).done[c]) { w().done[c] = true; skipped = true; } break; }
       case 'glow': {
         const p = (s || state).glowPending;
         if (cur() !== 'glow' || !p || ev.onScreen === false || (isNum(ev.level) && !(ev.level > 0))) break;
@@ -267,7 +311,7 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
   const after = currentGoal(s);
   if (after !== before) {
     if (after === null) { if (s.finishedAt === null) s.finishedAt = nowOf(now); s.flashUntil = null; }
-    else s.flashUntil = nowOf(now) + o.flashS;
+    else s.flashUntil = skipped ? null : nowOf(now) + o.flashS;
   }
   return s;
 }
@@ -325,7 +369,8 @@ export function showGuide(state, now = 0) {
 
 /** Restart from the first goal (Esc page "Restart the guide"): all progress cleared, shown, not paused. */
 export function restartGuide(state, now = 0) {
-  const n = createGuide({ now, goals: state && Array.isArray(state.goals) ? state.goals : null });
+  const n = createGuide({ now, goals: state && Array.isArray(state.goals) ? state.goals : null, tutorial: Boolean(state && state.tutorial === true),
+    features: state && state.tutorial === true ? { thirdPerson: Array.isArray(state.goals) && state.goals.includes('thirdPerson') } : null });
   if (state && state.paused === true) n.paused = true; // restarting from the Esc page: the line appears on resume
   return n;
 }
@@ -340,15 +385,22 @@ export function setGuidePaused(state, paused) {
  * the next visit; a guide in progress resumes at its first open goal. */
 export function guideToStorage(state) {
   const s = state && state.done ? state : createGuide();
+  if (s.tutorial === true) return { v: 2, tutorial: true, hidden: s.hidden === true, done: GUIDE_KNOWN_GOAL_IDS.filter(id => s.done[id]) };
   return { v: 1, hidden: s.hidden === true, done: GUIDE_ALL_GOAL_IDS.filter(id => s.done[id]) };
 }
 
 /** Rebuild a guide from guideToStorage output (or its JSON text). Anything unreadable gives a fresh guide. A guide
  * that was already finished comes back finished and quiet (no "All done" line again). opts.features / opts.goals: this
  * build's round-5 goals (createGuide); a player who finished the round-4 guide then meets only the new goals. */
-export function guideFromStorage(raw, now = 0, { features = null, goals = null } = {}) {
+export function guideFromStorage(raw, now = 0, { features = null, goals = null, tutorial = false } = {}) {
   let v = raw;
   if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
+  // 19 November (the tutorial): only progress saved BY the tutorial counts for it (v: 2); what the older guide saved
+  // (v: 1: other steps, another order) starts the tutorial from its first step, shown.
+  if (tutorial === true) {
+    if (!v || typeof v !== 'object' || v.v !== 2 || v.tutorial !== true) return createGuide({ now, features, tutorial: true });
+    return createGuide({ now, hidden: v.hidden === true, done: Array.isArray(v.done) ? v.done.filter(x => typeof x === 'string') : [], features, tutorial: true });
+  }
   if (!v || typeof v !== 'object' || v.v !== 1) return createGuide({ now, features, goals });
   return createGuide({ now, hidden: v.hidden === true, done: Array.isArray(v.done) ? v.done.filter(x => typeof x === 'string') : [], features, goals });
 }
@@ -389,7 +441,12 @@ export const ARM_STRAIGHT_ELBOW_RAD = 2 * Math.PI / 180;
  * it is already latched on (ns-actions armLatch: it stays until its opposite), or it straightens an elbow that is
  * already straight (full reach) with no bend held. arm: { armLatch, elbowRad } of the activity state BEFORE the pulse;
  * missing fields count as "moves" (the old behaviour). */
+/** 19 November 2026 (EASE, audit S14): the game arm has no sideways wrist joint, so these two movements of the left
+ * wrist move nothing (ns-actions DISPLAY_ONLY_ARM_IDS, kept equal by hand); the tip and the card dim them like a
+ * movement already at its end. A stopgap until the game arm's wrist bends sideways. */
+export const ARM_ACTIONS_MOVE_NOTHING = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
 export function armActionMoves(armActionId, arm = null) {
+  if (typeof armActionId === 'string' && ARM_ACTIONS_MOVE_NOTHING.includes(armActionId)) return false;
   if (typeof armActionId !== 'string' || !arm || typeof arm !== 'object') return true;
   const l = arm.armLatch && typeof arm.armLatch === 'object' ? arm.armLatch : null;
   if (l && l[armActionId] > 0) return false;

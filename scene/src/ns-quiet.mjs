@@ -69,8 +69,14 @@ export function pairTipRows(rows, actionOf) {
  * moves: its numbered movements (ns-app infoMoves: [{ n, id, label, atEnd, back }]); actionId: the movement a click
  * would do now; pick: the body part under the crosshair ({ name, kind }) or null; arrow: an arrow tip's words.
  * Returns { key, title, rows: [{ n, words, now, dim }], kind } or null when there is nothing to name.
+ *
+ * 19 November 2026 (EASE, the owner: "It's not clear what the numbers do"; "Things should be chunked together and
+ * those chunks should be spaced away from each other"). The tip is drawn as CHUNKS: the name; then the choices, each a
+ * key cap with its movement beside it (a key you can press), opposite movements together as one small group and the
+ * groups apart; the row a click does is filled and carries a pointer mark. `teach` (ns-text TIP.teach: "Click, or
+ * press a number") is one line under the choices for a newcomer.
  */
-export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '' } = {}) {
+export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '', teach = '' } = {}) {
   if (area && typeof area === 'object') {
     const title = str(area.plainLabel) || str(area.shortLabel) || str(area.label) || str(area.id);
     const list = (Array.isArray(moves) ? moves : []).slice(0, TIP_MOVES_MAX);
@@ -84,6 +90,9 @@ export function quietTipModel({ area = null, moves = null, actionId = null, pick
     const out = { kind: 'area', title, rows, groups, key: `a|${str(area.id)}|${rows.map(r => `${r.n}${r.now ? '*' : ''}${r.dim ? '-' : ''}`).join('')}|${groups.map(g => g.join('+')).join(',')}|${str(color)}` };
     if (str(color)) out.color = color;
     if (hint) { out.hint = hint; out.key += `|${hint}`; }
+    // 19 November (EASE: "It's not clear what the numbers do"): one short line under the choices, the first times only
+    // (the caller stops passing it once the player has pressed a few areas), and only when there is something to choose.
+    if (str(teach) && rows.length) { out.teach = teach; out.key += '|t'; }
     return out;
   }
   if (str(arrow)) return { kind: 'arrow', title: arrow, rows: [], key: `r|${arrow}` };
@@ -95,6 +104,14 @@ export function quietTipModel({ area = null, moves = null, actionId = null, pick
   return null;
 }
 
+/** How many presses of a motor area (a click, a number key, a tap on a muscle) the tip's newcomer line lasts. */
+export const TIP_TEACH_PRESSES = 3;
+/** Whether the tip still shows its newcomer line (pure). presses: how many times the player has pressed a motor area
+ * so far (ns-app counts and stores them). After a few the player has seen what a click and a number do. */
+export function tipTeachNow(presses) {
+  return !(Number.isFinite(presses) && presses >= TIP_TEACH_PRESSES);
+}
+
 /** The prompt's words for a guide view (ns-guide guideView) and the short lines (ns-text GUIDE.short), or '' (pure). */
 export function quietPromptText(guide, short) {
   if (!guide || guide.visible !== true || !short || typeof short !== 'object') return '';
@@ -103,6 +120,12 @@ export function quietPromptText(guide, short) {
   const words = partial || str(short[guide.goalId]);
   if (!words) return '';
   return guide.nice ? `${str(short.nice)} ${words}`.trim() : words;
+}
+
+/** The step count beside the prompt, "2/8", for a guide view; '' when nothing shows or all is done (pure). */
+export function quietPromptCount(guide) {
+  if (!guide || guide.visible !== true || guide.finished || !Number.isFinite(guide.step) || !Number.isFinite(guide.total) || guide.total < 1) return '';
+  return `${guide.step}/${guide.total}`;
 }
 
 /**
@@ -117,13 +140,24 @@ export function createQuietUi({ doc, root }) {
   tip.hidden = true;
   const tipTitle = el('div', 'ns-tip-title', tip);
   const tipRows = el('ol', 'ns-tip-rows', tip);
+  const tipTeach = el('div', 'ns-tip-teach', tip);
+  tipTeach.hidden = true;
   const tipHint = el('div', 'ns-tip-hint', tip);
   tipHint.hidden = true;
+  // 19 November 2026 (the playable tutorial): the prompt is three chunks in one pill: the step count, the one line,
+  // and how to skip. The count and the skip words are not read out with each step (aria-hidden): the line is.
   const prompt = el('div', 'ns-prompt', layer);
-  prompt.setAttribute('role', 'status');
   prompt.hidden = true;
-  let tipKey = null, promptText = '', placeKey = '', shown = true;
-  function update({ tip: model = null, prompt: words = '', x = 0, y = 0, width = 0, height = 0, show = true } = {}) {
+  const promptCount = el('span', 'ns-prompt-count', prompt);
+  promptCount.setAttribute('aria-hidden', 'true');
+  promptCount.hidden = true;
+  const promptWords = el('span', 'ns-prompt-words', prompt);
+  promptWords.setAttribute('role', 'status');
+  const promptSkip = el('span', 'ns-prompt-skip', prompt);
+  promptSkip.setAttribute('aria-hidden', 'true');
+  promptSkip.hidden = true;
+  let tipKey = null, promptText = '', countText = '', skipText = '', placeKey = '', shown = true;
+  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
     const key = model ? model.key : null;
@@ -139,18 +173,22 @@ export function createQuietUi({ doc, root }) {
         tipRows.textContent = '';
         const groups = Array.isArray(model.groups) && model.groups.length ? model.groups : model.rows.map((_, i) => [i]);
         for (const g of groups) {
+          // one group: a movement alone, or two opposite movements one under the other (close together, one rule
+          // down their left side); the groups stand apart
           const li = el('li', 'ns-tip-row' + (g.length > 1 ? ' ns-tip-pair' : ''), tipRows);
-          g.forEach((i, k) => {
+          g.forEach(i => {
             const r = model.rows[i];
             if (!r) return;
-            // a pair: "[1] Bend <-> [2] Straighten" on one line (a drawn arrow, no word)
-            if (k > 0) el('span', 'ns-tip-swap', li).setAttribute('aria-hidden', 'true');
             const part = el('span', 'ns-tip-move' + (r.now ? ' ns-tip-now' : '') + (r.dim ? ' ns-tip-dim' : ''), li);
             el('kbd', 'ns-tip-key', part).textContent = String(r.n);
             el('span', 'ns-tip-words', part).textContent = r.words;
+            // the row a click does: a drawn pointer, no word
+            if (r.now) el('span', 'ns-tip-click', part).setAttribute('aria-hidden', 'true');
           });
         }
         tipRows.hidden = model.rows.length === 0;
+        tipTeach.hidden = !model.teach;
+        tipTeach.textContent = model.teach || '';
         tipHint.hidden = !model.hint;
         tipHint.textContent = model.hint || '';
       }
@@ -168,7 +206,10 @@ export function createQuietUi({ doc, root }) {
       }
     }
     const w = str(words);
-    if (w !== promptText) { promptText = w; prompt.textContent = w; prompt.hidden = w === ''; }
+    if (w !== promptText) { promptText = w; promptWords.textContent = w; prompt.hidden = w === ''; }
+    const c = w === '' ? '' : str(count), k = w === '' ? '' : str(skip);
+    if (c !== countText) { countText = c; promptCount.textContent = c; promptCount.hidden = c === ''; }
+    if (k !== skipText) { skipText = k; promptSkip.textContent = k; promptSkip.hidden = k === ''; }
   }
   return { update, dispose() { try { layer.remove(); } catch { /* gone */ } } };
 }

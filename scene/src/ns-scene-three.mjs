@@ -204,6 +204,7 @@ import { brainBeatClock } from './ns-assembly-core.mjs';
 import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, FLESH_DEPTH_LIFT_GLSL, FLESH_DEPTH_LIFT_PARS_GLSL, BODY_DEPTH_PREFERENCE, depthPreferenceAttr, depthPreferenceFootprint, fibreFrame } from './ns-flesh.mjs';
 // 18 November (the room): a dark operating theatre out of focus in place of the black void.
 import { ROOM, createRoom } from './ns-room.mjs';
+import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a movement reads the same on the card as in the tip
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
@@ -3448,7 +3449,9 @@ export function infoPanelContent(model) {
   // movement of the area with the number key that does it. The one shown now is marked and its muscles are the rows
   // below it, so the Movement row is not written a second time.
   const moves = region && Array.isArray(model.moves)
-    ? model.moves.filter(m => m && Number.isInteger(m.n) && s(m.label)).map(m => ({ n: m.n, label: s(m.label), current: m.current === true, atEnd: m.atEnd === true, back: m.back === true && m.atEnd !== true }))
+    // 19 November 2026 (EASE: one form for a list of movements everywhere): the part the card's title already names is
+    // not repeated on every row ("Bend left elbow" under "Left elbow" reads "Bend", as in the tip)
+    ? model.moves.filter(m => m && Number.isInteger(m.n) && s(m.label)).map(m => ({ n: m.n, label: tipMoveWords(s(m.label), s(card && card.title) || s(model.title)), current: m.current === true, atEnd: m.atEnd === true, back: m.back === true && m.atEnd !== true }))
     : [];
   if (moves.some(m => m.current)) rows = rows.filter(r => r[0] !== INFO_ROW_LABELS.movement);
   const TM = T.moves && typeof T.moves === 'object' ? T.moves : {};
@@ -3524,7 +3527,10 @@ export function infoPanelContent(model) {
 // the render-scale and lite levels too and is simplified only from the first triangle-reducing ('lod') level, index 4,
 // with the glass and the own body: the D8 order (render scale first, then passes, then triangles). The scale levels
 // help a fill-limited GPU, where fewer mirror triangles saved nothing but cost detail.
-export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 0, mirrorQualityLodFrom: 4, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
+// 19 November 2026 (performance first): the mirror body is a figure about 300 px tall that cost 2.0 of the frame's 4.6
+// million triangles. It is drawn again from index-only copies, with 5 mm cells (about a pixel at its usual distance):
+// 0.58 million. Brought very near, thin face and neck sheets can show small holes (the reason full meshes were chosen).
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 5, mirrorQualityLodFrom: 4, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points

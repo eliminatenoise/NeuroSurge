@@ -33,7 +33,7 @@ test('the tip names the motor area and numbers its movements; a body part gets i
 test('every guide goal and every alternative sentence has a short line', () => {
   for (const id of Object.keys(GUIDE.goals)) assert.ok(typeof GUIDE.short[id] === 'string' && GUIDE.short[id].length > 0 && GUIDE.short[id].length <= 48, `short line for ${id}`);
   for (const text of Object.values(GUIDE.partial)) assert.ok(typeof GUIDE.short.byText[text] === 'string' && GUIDE.short.byText[text].length <= 48, `short line for: ${text}`);
-  assert.equal(quietPromptText({ visible: true, goalId: 'moveHand', text: GUIDE.goals.moveHand, nice: false }, GUIDE.short), 'Press W, A, S or D');
+  assert.equal(quietPromptText({ visible: true, goalId: 'moveHand', text: GUIDE.goals.moveHand, nice: false }, GUIDE.short), 'Press W, A, S or D: your left arm'); // 19 November: the tutorial's line says what the keys move
   assert.equal(quietPromptText({ visible: true, goalId: 'moveHand', text: GUIDE.partial.moveHandNeedX, nice: true }, GUIDE.short), 'Nice! Now A or D');
   assert.equal(quietPromptText({ visible: true, finished: true }, GUIDE.short), GUIDE.short.finished);
   assert.equal(quietPromptText({ visible: false, goalId: 'moveHand' }, GUIDE.short), '');

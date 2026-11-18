@@ -87,7 +87,7 @@ import * as NsBrain from './ns-brain.mjs';
 // Round 3 (R3-integrator): every visible string comes from ns-text (R3-text, the single source of plain UI text; R17/D3).
 import * as NT from './ns-text.mjs';
 import * as NG from './ns-guide.mjs';
-import { createQuietUi, quietTipModel, quietPromptText } from './ns-quiet.mjs';
+import { createQuietUi, quietTipModel, quietPromptText, quietPromptCount, tipTeachNow } from './ns-quiet.mjs';
 // 18 November (MAP): the links between an area and its body part (looked at; named from a muscle).
 import { hoverLink, reverseLink } from './ns-links.mjs';
 import * as NM from './ns-mirror.mjs';
@@ -3594,6 +3594,33 @@ export function buildKeyboardPicture(doc, parent, text) {
   return root;
 }
 
+/** 19 November 2026 (EASE; the owner: "Things should be chunked together and those chunks should be spaced away from
+ * each other"): the Esc page's control groups, built into `parent` from the text's `menu` table (ns-text SHELL.menu):
+ * one framed chunk per group with its title, ONE picture of its keys (pad: the trackpad; wasd: W over A S D; space;
+ * keys: the caps named in group.keys) and its short rows [what you do, what it does], then an optional note. DOM only
+ * (createElement, textContent). Returns the root element (class ns-menu), or null without groups. */
+export function buildShellMenu(doc, parent, groups) {
+  const list = Array.isArray(groups) ? groups.filter(g => g && typeof g === 'object' && typeof g.title === 'string') : [];
+  if (!list.length) return null;
+  const make = (tag, cls, into, words) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (words !== undefined) e.textContent = words; if (into) into.appendChild(e); return e; };
+  const root = make('div', 'ns-menu', parent);
+  root.setAttribute('data-ns-noplay', '');
+  for (const g of list) {
+    const box = make('section', `ns-menu-group ns-menu-${String(g.id || 'group')}`, root);
+    make('h3', 'ns-menu-title', box, g.title);
+    const pic = make('div', `ns-menu-pic ns-menu-pic-${String(g.picture || 'none')}`, box);
+    pic.setAttribute('aria-hidden', 'true');
+    if (g.picture === 'pad') make('span', 'ns-menu-finger', make('div', 'ns-menu-plate', pic));
+    else if (g.picture === 'wasd') { make('kbd', 'ns-menu-key', make('div', 'ns-menu-keyrow', pic), 'W'); const r = make('div', 'ns-menu-keyrow', pic); for (const k of ['A', 'S', 'D']) make('kbd', 'ns-menu-key', r, k); }
+    else if (g.picture === 'space') make('kbd', 'ns-menu-key ns-menu-key-space', pic, 'Space');
+    else if (g.picture === 'keys') { const r = make('div', 'ns-menu-keyrow', pic); for (const k of Array.isArray(g.keys) ? g.keys : []) make('kbd', k.length > 1 ? 'ns-menu-key ns-menu-key-wide' : 'ns-menu-key', r, k); }
+    const rows = make('dl', 'ns-menu-rows', box);
+    for (const row of Array.isArray(g.rows) ? g.rows : []) { if (!Array.isArray(row)) continue; make('dt', '', rows, String(row[0])); make('dd', '', rows, String(row[1])); }
+    if (typeof g.note === 'string' && g.note) make('p', 'ns-menu-note', box, g.note);
+  }
+  return root;
+}
+
 /** Persisted player settings (localStorage key, limits, defaults). faceView: FACE_VIEW_MODES. */
 export const SETTINGS_KEY = 'neurosurge.settings.v1';
 export const SETTINGS_LIMITS = Object.freeze({ lookSensitivity: Object.freeze({ min: 0.25, max: 3, step: 0.05 }) });
@@ -4285,6 +4312,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const resetHelp = el('p', 'ns-shell-resethelp', card, typeof text.resetHelp === 'string' ? text.resetHelp : '');
   resetHelp.hidden = true;
 
+  // 19 November 2026 (EASE): the controls as a few titled groups set well apart (buildShellMenu); Esc page only.
+  const menu = buildShellMenu(doc, card, text.menu);
+  if (menu) menu.hidden = true;
   const form = el('fieldset', 'ns-shell-section ns-shell-settings', card);
   form.setAttribute('data-ns-noplay', '');
   el('legend', 'ns-shell-section-title', form, text.settingsTitle);
@@ -4328,12 +4358,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   bwSel.name = 'bodyWorlds';
   for (const [v, label] of [['on', NT.BODY_WORLDS.on], ['off', NT.BODY_WORLDS.off]]) { const o = el('option', '', bwSel, label); o.value = v; }
   if (typeof text.bodyWorldsHelp === 'string' && text.bodyWorldsHelp) el('p', 'ns-shell-guidehelp ns-shell-bodyworldshelp', grpView, text.bodyWorldsHelp);
-  // R558 (user Message 37): the crosshair caption, off by default (the "Looking at" card always names what is there).
-  const capRow = el('label', 'ns-shell-setting ns-shell-check', grpView);
-  const capChk = el('input', '', capRow);
-  capChk.type = 'checkbox';
-  capChk.name = 'crosshairCaption';
-  el('span', 'ns-shell-setting-label', capRow, typeof text.crosshairCaption === 'string' ? text.crosshairCaption : 'Name what is under the crosshair next to it');
+  // 19 November 2026 (EASE): the "also show the name next to the crosshair" setting is gone from the page: the tip
+  // beside the crosshair always names what is there, so the setting only offered the same name twice. A stored
+  // crosshairCaption is still read and kept (sanitizeSettings) and still applies at the full reading level.
   // R4-text (D7): the optional "Try this" guide: Hide / Show and Restart (a click here never resumes the game).
   const grpGuide = el('div', 'ns-shell-setgroup', form);
   const guideRow = el('div', 'ns-shell-setting ns-shell-guide', grpGuide);
@@ -4456,7 +4483,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     inv.checked = current.invertY;
     qualitySel.value = current.quality;
     bwSel.value = current.bodyWorlds === false ? 'off' : 'on';
-    capChk.checked = current.crosshairCaption === true;
   };
   showSettings();
   const call = (fn, ...args) => { if (typeof fn === 'function') fn(...args); };
@@ -4507,11 +4533,6 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     showSettings();
     call(onSettings, current, true);
   });
-  on(capChk, 'change', () => {
-    current = sanitizeSettings({ ...current, crosshairCaption: capChk.checked === true });
-    showSettings();
-    call(onSettings, current, true);
-  });
   on(bwSel, 'change', () => {
     current = sanitizeSettings({ ...current, bodyWorlds: bwSel.value !== 'off' });
     showSettings();
@@ -4552,6 +4573,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     show(resetBrain, mode === 'paused');
     show(resetHelp, mode === 'paused' && resetHelp.textContent !== '');
     show(form, mode === 'paused');
+    if (menu) show(menu, mode === 'paused');
     show(detailRow, mode === 'paused' && canShorten);
     if (keyboard) show(keyboard, mode !== 'error');
     show(grid, mode !== 'error');
@@ -4835,7 +4857,14 @@ export function start(params = {}) {
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
   let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false };
-  let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures });
+  let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures, tutorial: true });
+  // 19 November 2026 (EASE, the playable tutorial): steps done outside the frame loop (R pressed, Enter to skip a
+  // step) wait here for the next frame's guideStep.
+  const guideAsyncEvents = [];
+  // 19 November 2026 (EASE): how many times a motor area has been pressed, for the tip's newcomer line ("Click, or
+  // press a number": ns-quiet tipTeachNow). Kept across visits; counted in the frame loop from the frame's own events.
+  const TIP_PRESSES_KEY = 'neurosurge.presses.v1';
+  let tipPresses = (() => { try { const v = storage && typeof storage.getItem === 'function' ? Number(storage.getItem(TIP_PRESSES_KEY)) : 0; return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0; } catch { return 0; } })();
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
@@ -5259,7 +5288,7 @@ export function start(params = {}) {
       // body install, so this is asked again on a later refresh).
       moveKeys: GUIDE_FEATURES.moveKeys && Boolean(sceneFn('setInfo')) && Boolean(controlsApi) && typeof controlsApi.moveKey === 'function' };
     if (Object.keys(next).every(k => next[k] === guideFeatures[k])) return;
-    const configured = NG.guideFromStorage(NG.guideToStorage(guide), simState && Number.isFinite(simState.t) ? simState.t : 0, { features: next });
+    const configured = NG.guideFromStorage(NG.guideToStorage(guide), simState && Number.isFinite(simState.t) ? simState.t : 0, { features: next, tutorial: true });
     // Keep the current gesture/timing/pause state when the body stream makes a feature available. ns-guide still
     // owns the goal list and saved completion flags; availability never fabricates a completed action.
     guide = { ...guide, goals: configured.goals, done: configured.done,
@@ -5603,6 +5632,7 @@ export function start(params = {}) {
     if (sceneFn('toggleInfoDetail')) { try { return callScene('toggleInfoDetail'); } catch { /* fall back to the DOM */ } }
     if (!infoRoot()) return false;
     const now = infoReadState();
+    guideAsyncEvents.push({ type: 'read' }); // the tutorial's last step
     return setInfoRead(now === 'read' ? 'more' : now === 'more' ? 'off' : 'read');
   }
   /** R4-fix (review RP10): an opened More detail is scrolled into the panel's view (in portrait it opened below the
@@ -5723,6 +5753,14 @@ export function start(params = {}) {
     const mode = root ? root.getAttribute('data-ns-read') : null;
     if (t.open && mode !== 'more' && mode !== 'off') setInfoRead('more', { open: false });
     else if (!t.open && mode === 'more' && !t.hidden) setInfoRead('read', { open: false });
+  }, true);
+  // 19 November 2026 (EASE, the playable tutorial: "a way to skip"): Enter passes the step that shows, while playing
+  // and only while a step shows. A focused button or field keeps its own Enter.
+  listen(view, 'keydown', e => {
+    if (!e || e.code !== 'Enter' || e.repeat || e.isTrusted !== true || !shellIsPlaying(shellState)) return;
+    const t = e.target;
+    if (t && typeof t.matches === 'function' && t.matches('button, a[href], input, select, textarea, summary')) return;
+    if (guide && guide.tutorial === true && !guide.hidden && NG.currentGoal(guide) !== null) guideAsyncEvents.push({ type: 'skip' });
   }, true);
   listen(doc, 'pointerlockchange', () => observePointerLock(clockMs()));
   listen(doc, 'pointerlockerror', () => dispatch({ type: 'lockError' }));
@@ -7776,9 +7814,17 @@ export function start(params = {}) {
         // 17 November 2026 (the quiet screen): with the cards off, the numbers belong to the list the tip by the crosshair
         // shows, at once (no wait for the card to settle), or to the last area it showed, so they still work while you
         // look down at the body. With the cards on they belong to the card's list, as before.
-        const movesFrom = !movesThisFrame.length ? null
-          : infoReadState() === 'off' ? (quietLast && Array.isArray(quietLast.moves) ? quietLast : null)
-          : infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId ? { moves: infoModel.moves, regionId: infoModel.movesRegionId } : null;
+        // 19 November 2026 (EASE, reading on from the start): at the short level both can show. While the look is on
+        // the area the tip lists, the numbers are the tip's (at once, as with the cards off); with the look elsewhere
+        // they are the card's list, which is the one on screen then.
+        let movesFrom = null;
+        if (movesThisFrame.length) {
+          const readNow = infoReadState();
+          const tipList = quietLast && Array.isArray(quietLast.moves) ? quietLast : null;
+          const cardList = infoModel && Array.isArray(infoModel.moves) && infoModel.movesRegionId ? { moves: infoModel.moves, regionId: infoModel.movesRegionId } : null;
+          movesFrom = readNow === 'off' ? tipList : readNow === 'more' ? cardList
+            : tipList && simState.gaze && simState.gaze.regionId === tipList.regionId ? tipList : cardList;
+        }
         if (movesFrom) {
           const add = [];
           for (const n of movesThisFrame) {
@@ -7804,6 +7850,7 @@ export function start(params = {}) {
             if (!h) continue;
             moveHeld.delete(n);
             rel.push({ type: 'muscleRelease', regionId: h.regionId, actionId: h.actionId, tap: now - h.downMs < NsActions.MOVE_HOLD.tapMs, at: timing.dt });
+            moveGuideEvents.push({ type: 'moveHold', heldS: (now - h.downMs) / 1000 }); // the tutorial: a number key held, then let go
           }
           if (rel.length) timing = { ...timing, events: [...timing.events, ...rel] };
         }
@@ -8409,7 +8456,16 @@ export function start(params = {}) {
         const guideEvs = NG.guideEventsFromFrame({ prev: prevSim, next: simState, out, inputs: stepInputs, bodyMap });
         guideEvs.push(...mirrorGuideEvents.map(e => ({ ...e, t: simState.t })));
         guideEvs.push(...moveGuideEvents.map(e => ({ ...e, t: simState.t })));
+        // 19 November (the tutorial): the look is on a motor area (asked only while that is the step shown); R and
+        // Enter, pressed since the last frame.
+        if (out.gaze && out.gaze.target === 'region' && typeof out.gaze.regionId === 'string' && guide.tutorial === true && NG.currentGoal(guide) === 'lookStrip') guideEvs.push({ type: 'look', regionId: out.gaze.regionId, t: simState.t });
+        if (guideAsyncEvents.length) guideEvs.push(...guideAsyncEvents.splice(0).map(e => ({ ...e, t: simState.t })));
         if (cam.view !== guideView) { guideView = cam.view; guideEvs.push({ type: 'view', mode: cam.view, t: simState.t }); }
+        if (tipTeachNow(tipPresses)) {
+          let pressed = 0;
+          for (const e of guideEvs) if (e && e.type === 'activate' && e.source === 'click') pressed++;
+          if (pressed) { tipPresses += pressed; try { if (storage && typeof storage.setItem === 'function') storage.setItem(TIP_PRESSES_KEY, String(tipPresses)); } catch { /* storage blocked */ } }
+        }
         const nextGuide = NG.guideStep(guide, guideEvs, simState.t);
         if (nextGuide !== guide) { const saveNow = NG.goalsDone(nextGuide) !== NG.goalsDone(guide); guide = nextGuide; if (saveNow) saveGuide(); }
         // R5-integrate-core (D18): setView turns the EYE (the arm hangs on it); in third person the render camera takes the
@@ -9023,7 +9079,10 @@ export function start(params = {}) {
         // while the information cards are off (the start; R brings the cards back) and the game is being played.
         if (quietUi) {
           if (!quietRoot) quietRoot = infoRoot();
-          const quietOn = shellIsPlaying(shellState) && Boolean(quietRoot) && quietRoot.getAttribute('data-ns-read') === 'off';
+          // 19 November 2026 (EASE; the owner: "reader should be on by default"): the game starts at the SHORT reading
+          // level ('read': one small card for the area looked at), and the tip and the prompt stay with it; only the
+          // full cards ('more': the "Looking at" card, the long guide line, the colour key) take their place.
+          const quietOn = shellIsPlaying(shellState) && Boolean(quietRoot) && quietRoot.getAttribute('data-ns-read') !== 'more';
           let tipModel = null;
           if (quietOn && live) {
             const areaId = onArea && typeof out.gaze.regionId === 'string' ? out.gaze.regionId : null;
@@ -9045,7 +9104,7 @@ export function start(params = {}) {
               const areaCss = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) : ''; // 18 November (MAP)
               const overlap = lockedNow() && ctlFrame?.arrow && area.id === stepInputs?.keyboardAimId;
               const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : '';
-              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '', hint });
+              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '', hint, teach: !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });
               if (quietRest.settled || area.id === stepInputs?.keyboardAimId) quietLast = { regionId: area.id, moves: areaMoves };
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
             } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
@@ -9057,6 +9116,7 @@ export function start(params = {}) {
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', Boolean(tipModel?.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+            count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,
             width: size.width, height: size.height });
         }

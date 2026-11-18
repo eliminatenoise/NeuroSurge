@@ -105,3 +105,176 @@
   background: var(--ns-tip-color); box-shadow: 0 0 7px var(--ns-tip-color); vertical-align: 0.04em;
 }
 .ns-tip[data-colored="true"][data-kind="area"] .ns-tip-move.ns-tip-now .ns-tip-key { border-color: var(--ns-tip-color); background: color-mix(in oklab, var(--ns-tip-color) 30%, #10161d); }
+
+/* ==== 19 November 2026 (EASE): visual chunking. "Things should be chunked together and those chunks should be spaced
+   away from each other." One rule for every overlay: a chunk is a few things that belong together, close to each other
+   (--ns-in), in one frame, on one alignment; between chunks there is at least three times that room (--ns-out). */
+:root { --ns-in: 6px; --ns-out: 28px; --ns-chunk-bg: rgba(6, 10, 15, 0.86); --ns-chunk-rim: rgba(200, 222, 240, 0.5); }
+
+/* The five-second controls card (ns-controls-card.mjs): four chunks. Left, as on a keyboard: the W A S D pyramid, the
+   E R pair set apart from it, Space under them. Right: the trackpad with its three actions. The root keeps the fade of
+   assembly.css (.ns-keys). */
+.ns-keys.ns-ctl { --ns-k: 54px; --ns-out: 36px; padding: 0 clamp(16px, 5vw, 110px); font-size: 17px; }
+.ns-ctl-side { display: grid; gap: var(--ns-out); align-items: start; justify-items: start; }
+.ns-ctl-side-keys { grid-template-columns: auto auto; }
+.ns-ctl-chunk {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; box-sizing: border-box;
+  padding: 14px 16px 10px; border-radius: 16px;
+  background: var(--ns-chunk-bg); border: 1.5px solid var(--ns-chunk-rim); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+}
+.ns-ctl-row { display: flex; gap: var(--ns-in); justify-content: center; }
+.ns-ctl-wasd .ns-ctl-row + .ns-ctl-row { margin-top: calc(var(--ns-in) - 10px); }
+.ns-ctl-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ns-ctl .ns-key { width: var(--ns-k); height: var(--ns-k); background: #1b2530; border: 1.5px solid #9fb6ca; border-bottom-width: 4px; color: #fff; font-size: 22px; }
+.ns-ctl .ns-key-space { width: 100%; min-width: 0; height: calc(var(--ns-k) - 6px); font-size: 15px; letter-spacing: 0.08em; }
+.ns-ctl-space { grid-column: 1 / -1; justify-self: stretch; align-items: stretch; text-align: center; }
+.ns-ctl-word { color: #ffe9a8; font: 800 15px/1.1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+.ns-ctl-pad { padding: 16px 16px 12px; gap: 12px; }
+.ns-ctl .ns-pad-plate { width: 196px; height: 122px; background: #1b2530; border: 1.5px solid #9fb6ca; }
+.ns-ctl-acts { display: grid; grid-template-columns: auto auto; gap: 4px 12px; margin: 0; align-self: stretch; justify-content: center; }
+.ns-ctl-acts dt { color: #fff; font-weight: 800; text-align: right; }
+.ns-ctl-acts dd { margin: 0; color: #ffe9a8; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-size: 15px; align-self: center; }
+@media (max-width: 1400px), (max-height: 760px) { .ns-keys.ns-ctl { --ns-k: 44px; --ns-out: 28px; font-size: 15px; } .ns-ctl .ns-key { font-size: 18px; } .ns-ctl .ns-pad-plate { width: 160px; height: 100px; } }
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  .ns-keys.ns-ctl { --ns-k: 32px; --ns-out: 18px; padding: 0 8px 44px; gap: 18px; font-size: 12px; }
+  .ns-ctl-chunk { padding: 9px 10px 7px; gap: 6px; border-radius: 12px; }
+  .ns-ctl .ns-key { font-size: 14px; } .ns-ctl-word, .ns-ctl-acts dd { font-size: 11px; }
+  .ns-ctl .ns-pad-plate { width: 104px; height: 66px; }
+}
+
+/* The tip beside the crosshair (ns-quiet.mjs), in chunks: the NAME; then the CHOICES, each a key cap with its movement
+   (opposite movements one under the other as a small group with one rule down its side; the groups apart); the row a
+   click does is filled and carries a pointer; a newcomer gets one line under them. */
+.ns-tip { max-width: min(280px, 44vw); padding: 10px 12px 11px; border-radius: 12px; background: rgba(5, 8, 12, 0.94); border: 1.5px solid var(--ns-chunk-rim); }
+.ns-tip-title { font-size: 16px; }
+.ns-tip-rows { margin: 9px 0 0; padding: 9px 0 0; gap: 9px; border-top: 1px solid rgba(200, 222, 240, 0.28); }
+.ns-tip-row { display: grid; gap: 2px; align-items: stretch; padding-left: 6px; border-left: 2px solid transparent; }
+.ns-tip-pair { border-left-color: rgba(200, 222, 240, 0.55); flex-wrap: nowrap; }
+.ns-tip-move { display: grid; grid-template-columns: 24px 1fr 14px; align-items: center; gap: 8px; padding: 2px 6px 2px 2px; border-radius: 8px; color: #dfe9f2; font-size: 14px; }
+.ns-tip-key { min-width: 0; width: 24px; height: 23px; box-sizing: border-box; border-radius: 6px; border: 1.5px solid #9fb6ca; border-bottom-width: 3px; background: #1b2530; font-size: 12.5px; }
+.ns-tip-move.ns-tip-now { color: #fff; background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.75); }
+.ns-tip[data-colored="true"] .ns-tip-move.ns-tip-now { background: color-mix(in oklab, var(--ns-tip-color) 34%, #0b1016); box-shadow: inset 0 0 0 1.5px var(--ns-tip-color); }
+.ns-tip-move.ns-tip-now .ns-tip-key, .ns-tip[data-colored="true"][data-kind="area"] .ns-tip-move.ns-tip-now .ns-tip-key { border-color: #fff; background: #26323f; }
+.ns-tip-click, .ns-tip-teach::before {
+  width: 14px; height: 16px;
+  background: no-repeat center / 14px 16px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 16'%3E%3Cpath d='M2 1v11.2l2.9-2.5 2 4.3 2-.9-2-4.2h4z' fill='%23fff' stroke='%23000' stroke-width='1' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.ns-tip-teach { display: flex; align-items: center; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(200, 222, 240, 0.28); color: #ffe9a8; font-weight: 700; font-size: 13px; }
+.ns-tip-teach[hidden] { display: none; }
+.ns-tip-teach::before { content: ""; flex: none; }
+.ns-tip-hint { margin-top: 9px; }
+
+/* ==== 19 November 2026 (EASE; the owner: "reader should be on by default"). The game starts at the SHORT reading level
+   (data-ns-read="read"): the tip, the prompt, and ONE small card for the motor area looked at. R goes on to the full
+   cards ("more"), then to none ("off"), then back. The short level shows none of the standing text of the full one:
+   no limits line, no left / right words, no "Looking at" card, no long guide line, no colour key, and no card at all
+   until a motor area has been looked at. */
+.ns-app[data-ns-read="read"] .ns-essential,
+.ns-app[data-ns-read="read"] .ns-orient,
+.ns-app[data-ns-read="read"] .ns-region-label-hemi,
+.ns-app[data-ns-read="read"] .ns-hud .ns-panel-info,
+.ns-app[data-ns-read="read"] .ns-hud .ns-panel-legend,
+.ns-app[data-ns-read="read"] .ns-slot-guide,
+.ns-app[data-ns-read="read"] .ns-infopanel:not([data-mode="region"]),
+.ns-app:not([data-ns-read="more"]) .ns-hover { display: none !important; }
+
+/* The short card, in chunks: the NAME (title and which strip it is), WHAT IT DOES (one sentence), the CHOICES (the
+   same key caps as the tip), the MUSCLES that pull. Close inside a chunk, a rule and room between chunks. Everything
+   else on the card waits for "more". */
+/* No list twice: while the look is ON the area the tip beside the crosshair has its choices, and the card leaves them
+   out; once the look has left it (the card then marks itself "last area shown") the card shows them, so a movement
+   can still be chosen while watching the body. */
+.ns-app[data-ns-read="read"] .ns-infopanel:has(.ns-infopanel-viewed[hidden]) .ns-infopanel-moves { display: none !important; }
+.ns-app[data-ns-read="read"] .ns-infopanel :is(.ns-infopanel-heading, .ns-infopanel-viewed, .ns-infopanel-tag, .ns-infopanel-activity, .ns-infopanel-meter,
+  .ns-infopanel-activations, .ns-infopanel-moves-heading, .ns-infopanel-move-note, .ns-infopanel-simulated, .ns-infopanel-known,
+  .ns-infopanel-caveat, .ns-infopanel-explanation, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-detail,
+  .ns-infopanel-key-easing, .ns-infopanel-row-easing, .ns-infopanel-key-pathway, .ns-infopanel-row-pathway,
+  .ns-infopanel-key-movement, .ns-infopanel-row-movement, .ns-infopanel-key-body, .ns-infopanel-row-body) { display: none !important; }
+.ns-app[data-ns-read="read"] .ns-infopanel { max-height: none !important; -webkit-mask-image: none; mask-image: none; bottom: 16px; padding: 14px 16px 14px; border-radius: 14px; background: rgba(5, 8, 12, 0.94); border: 1.5px solid var(--ns-chunk-rim); border-left-width: 5px; }
+.ns-app[data-ns-read="read"] .ns-infopanel-title { margin: 0 64px 2px 0; font-size: 19px; font-weight: 800; color: #fff; }
+.ns-app[data-ns-read="read"] .ns-infopanel :is(.ns-infopanel-plain, .ns-infopanel-moves, .ns-infopanel-rows) {
+  margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid rgba(200, 222, 240, 0.28);
+}
+.ns-app[data-ns-read="read"] .ns-infopanel-plain { font-size: 13.5px; line-height: 1.4; color: #f2f7fb; -webkit-line-clamp: 3; }
+.ns-app[data-ns-read="read"] .ns-infopanel-rows { font-size: 13px; line-height: 1.4; color: #f2f7fb; }
+.ns-app[data-ns-read="read"] .ns-infopanel-rows dt { display: block; margin-bottom: 2px; font-size: 11px; color: #ffe9a8; letter-spacing: 0.06em; }
+.ns-app[data-ns-read="read"] .ns-infopanel-rows dt::after, .ns-app[data-ns-read="read"] .ns-infopanel-rows dd::after { content: none; }
+.ns-app[data-ns-read="read"] .ns-infopanel-rows dd { display: block; }
+
+/* A list of movements has ONE form everywhere (the tip, the card at both levels): a key cap with the movement beside
+   it; the chosen row filled; rows already at their end dimmed. */
+.ns-infopanel-moves { gap: 3px; }
+.ns-infopanel-move { grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 0 8px; padding: 2px 6px 2px 2px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: #dfe9f2; }
+.ns-infopanel-move .ns-infopanel-move-key { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 24px; height: 23px; min-width: 0; padding: 0;
+  border-radius: 6px; border: 1.5px solid #9fb6ca; border-bottom-width: 3px; background: #1b2530; color: #fff; font: 800 12.5px/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+.ns-infopanel-move[data-current="true"] { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.75); color: #fff; }
+.ns-infopanel-move[data-current="true"] .ns-infopanel-move-key { border-color: #fff; color: #fff; background: #26323f; }
+.ns-infopanel-move[data-at-end="true"]:not([data-current="true"]) { opacity: 0.5; }
+
+/* ==== 19 November 2026 (EASE): the Esc page as a FEW titled groups with wide gutters (ns-app buildShellMenu), not one
+   long list. Top: the name and the three buttons. Then four control groups side by side, each in its own frame: one
+   picture of its keys and a few short rows. Then Settings, one more frame. The old keyboard picture, the steps, the
+   long controls list and the limits wait behind "Show the full instructions". */
+.ns-shell[data-mode="paused"] .ns-shell-card { display: block; max-width: 1240px; padding: 22px 30px 20px; background: rgba(6, 9, 14, 0.97); }
+.ns-shell[data-mode="paused"] .ns-shell-title { display: inline-block; font-size: 26px; vertical-align: baseline; }
+.ns-shell[data-mode="paused"] .ns-shell-title::after { display: none; }
+.ns-shell[data-mode="paused"] .ns-shell-heading { display: inline-block; margin: 0 0 0 14px; font-size: 16px; vertical-align: baseline; }
+.ns-shell[data-mode="paused"] .ns-shell-actions { margin: 14px 0 0; justify-content: flex-start; }
+.ns-shell[data-mode="paused"] .ns-kbd, .ns-shell[data-mode="paused"][data-words="short"] .ns-shell-grid { display: none; }
+.ns-shell[data-mode="paused"] .ns-shell-resethelp { margin: 8px 0 0; }
+.ns-menu { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ns-out); margin: var(--ns-out) 0 0; }
+.ns-menu[hidden] { display: none; }
+.ns-menu-group, .ns-shell[data-mode="paused"] .ns-shell-settings {
+  box-sizing: border-box; min-width: 0; margin: 0; padding: 14px 16px 14px; border-radius: 14px;
+  background: #0d141c; border: 1.5px solid var(--ns-chunk-rim);
+}
+.ns-menu-title, .ns-shell[data-mode="paused"] .ns-shell-settings > legend {
+  margin: 0; padding: 0; color: #ffe9a8; font: 800 13px/1.2 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ns-menu-pic { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--ns-in); height: 96px; margin: 8px 0 10px; }
+.ns-menu-keyrow { display: flex; gap: var(--ns-in); }
+.ns-menu-key {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 40px; height: 40px; border-radius: 8px;
+  background: #1b2530; border: 1.5px solid #9fb6ca; border-bottom-width: 4px; color: #fff; font: 800 17px/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-menu-key.ns-menu-key-wide { width: 58px; font-size: 14px; margin-left: 18px; }
+.ns-menu-key.ns-menu-key-space { width: 100%; max-width: 220px; height: 36px; font-size: 14px; letter-spacing: 0.08em; }
+.ns-menu-plate { position: relative; width: 132px; height: 84px; border-radius: 12px; background: #1b2530; border: 1.5px solid #9fb6ca; }
+.ns-menu-finger { position: absolute; left: 30%; top: 46%; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.16); }
+.ns-menu-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 14.5px; line-height: 1.3; }
+.ns-menu-rows dt { color: #fff; font-weight: 800; white-space: nowrap; }
+.ns-menu-rows dd { margin: 0; color: #dfe9f2; }
+.ns-menu-note { margin: 8px 0 0; color: #dfe9f2; font-size: 14.5px; line-height: 1.3; }
+/* Settings: the fifth frame, the same look; its three small groups side by side inside it. */
+.ns-shell[data-mode="paused"] .ns-shell-settings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px var(--ns-out); margin-top: var(--ns-out); border-top: 1.5px solid var(--ns-chunk-rim); }
+.ns-shell[data-mode="paused"] .ns-shell-settings[hidden] { display: none; }
+.ns-shell[data-mode="paused"] .ns-shell-settings > legend { float: left; width: 100%; grid-column: 1 / -1; margin-bottom: 6px; }
+.ns-shell[data-mode="paused"] .ns-shell-detailrow { margin-top: var(--ns-out); }
+@media (max-width: 1100px) { .ns-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ns-menu-pic { height: 84px; } }
+@media (max-width: 640px) { .ns-menu, .ns-shell[data-mode="paused"] .ns-shell-settings { grid-template-columns: minmax(0, 1fr); } }
+@media (max-height: 760px) {
+  .ns-shell[data-mode="paused"] .ns-shell-card { padding: 14px 24px 14px; }
+  .ns-menu, .ns-shell[data-mode="paused"] .ns-shell-settings, .ns-shell[data-mode="paused"] .ns-shell-detailrow { --ns-out: 20px; }
+  .ns-menu-pic { height: 84px; margin: 6px 0 8px; } .ns-menu-key { width: 36px; height: 36px; }
+  .ns-menu-rows, .ns-menu-note { font-size: 13.5px; }
+}
+
+/* ==== 19 November 2026 (EASE, the playable tutorial): the prompt is one small card of three chunks in the TOP LEFT
+   corner: the step count ("2/8"), the one line to do, and under it how to skip the step. Top left, not top centre:
+   the brain, the mirror body's head and their upper arrows and captions live at the top centre, and a line there
+   covered them. The corner is the room's empty wall at every window size. */
+.ns-prompt { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; left: 16px; top: 14px; transform: none; padding: 0;
+  max-width: min(330px, 62vw); border-radius: 14px; text-align: left;
+  background: rgba(5, 8, 12, 0.94); border: 1.5px solid rgba(255, 214, 102, 0.8); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5); color: #fff; font-size: 17px; font-weight: 800; line-height: 1.25; }
+.ns-prompt[hidden], .ns-prompt-count[hidden], .ns-prompt-skip[hidden] { display: none; }
+.ns-prompt-count { grid-row: 1 / span 2; display: flex; align-items: center; padding: 10px 13px; border-right: 1.5px solid rgba(255, 214, 102, 0.5); color: #ffe9a8; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.ns-prompt-words { grid-column: 2; padding: 10px 15px 3px; }
+.ns-prompt-skip { grid-column: 2; padding: 0 15px 9px; color: #c9d6e2; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.ns-prompt:has(.ns-prompt-skip[hidden]) .ns-prompt-words { padding-bottom: 10px; }
+.ns-prompt:has(.ns-prompt-count[hidden]) .ns-prompt-words { grid-column: 1 / -1; }
+@media (max-width: 1400px) { .ns-prompt { max-width: min(290px, 62vw); font-size: 16px; } }
+@media (max-width: 700px) { .ns-prompt { font-size: 14px; left: 8px; top: 8px; } }
+
+/* 19 November 2026 (EASE, audit S24): at the full reading level the bottom-left cards stood on the one-line
+   "Simulated activity" note. Both cards stand 20 px higher there; the note keeps its place. */
+.ns-app[data-ns-read="more"] .ns-hud .ns-panel-info, .ns-app[data-ns-read="more"] .ns-hud .ns-panel-legend { transform: translateY(-20px); }
