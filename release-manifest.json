@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-10",
+  "version": "experimental-2026-11-17-body-update-11",
   "experimental": true,
   "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
   "incomplete_acceptance": true,
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 192989,
-      "sha256": "88c036d817895544a9e664d56b619f89cbdc3990c4faf438b6cb2e56900a6a85"
+      "bytes": 199726,
+      "sha256": "c4bbd6cf526aaf23ee81c1bde174ff98ff1fa549f44a70ef29350d24ee6bd7aa"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 8655,
-      "sha256": "d24726f531997600110959a43ff22e480ef7e214dff91e31c08fd37a23942e65"
+      "bytes": 8903,
+      "sha256": "18917692539b5b7f171434f43a4411f8a5884f09f7266df9e46807f1c4c8a32d"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 48665,
-      "sha256": "7e47fc194f775b251c741a43ff5dc03aea395b2722a99cbd301a2bdc61edb11c"
+      "bytes": 50192,
+      "sha256": "73d7c5116589fca788ff191fefa33148af83848eae099d6e6d96931de38a2f93"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 19312,
-      "sha256": "82063d01a4a752489b77d97d7256081b42c5e235ff0bbe28fcfe52f8f4ffb250"
+      "bytes": 20095,
+      "sha256": "e3bf2d029812b404423c1d6057c27d9bfc3ef02ddea61d61218c3b23b97a7a79"
     },
     {
       "path": "README.md",
-      "bytes": 12934,
-      "sha256": "bd5e49dd7d99494bdca3e6a8ea8b4afafc33d344d919bb42159010d139389202"
+      "bytes": 13244,
+      "sha256": "9599524d0da0d4bd3f070ee31906212f46b785c2c79fe75e0d87facfe404cade"
     },
     {
       "path": "START.html",
       "bytes": 3911,
-      "sha256": "c5a1b4705a1c31b33ac98f7e7617b710cfbd1c1241bb8f501553105b28baa11e"
+      "sha256": "3352060bef011c6a69a8ab3999dfdb0c80b561318dd608170a5a78837d569f82"
     },
     {
       "path": "index.html",
@@ -3352,8 +3352,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 39059,
-      "sha256": "4675998249ad9a77f6ce4d3dc45c788532190f47180d4f677ff6f651a39146e0"
+      "bytes": 41226,
+      "sha256": "e3ff37af7f373c4a9bd0c2944ca3d64ab9ea6b25bbb8f42e0ab9950b3cd2f3de"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3442,13 +3442,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 196322,
-      "sha256": "0cda26839469442414dfb72bb50b58324ab400c671c9a570386a0b4d2e737b8c"
+      "bytes": 196428,
+      "sha256": "cc9b8d5484c4a5119cf15546f5f494dd4bbec734b1c98946cf24e3c7525a5c18"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 690595,
-      "sha256": "8a7b7b5d0616fe68cdb76621a61ab92d7e009518b59560e5f1da1f0409185abe"
+      "bytes": 694525,
+      "sha256": "af04782b21667644b99d83f43397fab0d68ab6f43f99bd2d68e0e6a1016ad405"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3487,8 +3487,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 455687,
-      "sha256": "40590ce59d7311afbe4d834284765f2437c54f194a18a8c4925b3645df99a8dc"
+      "bytes": 475110,
+      "sha256": "011071137706d14d4f2197e41a0151f940cd3a434ac304ab8cbcb93369716182"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -3512,8 +3512,8 @@
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 54925,
-      "sha256": "d8766eea899fdcdde55601bca9fc8c11c26b1461b6798c305cd072367f5e68cc"
+      "bytes": 60816,
+      "sha256": "5930bd6e164d6ca5d92f3658d2f61908939a0911f1ebbe1eed3783bdeb90beed"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -3532,8 +3532,8 @@
     },
     {
       "path": "scene/src/ns-dance.mjs",
-      "bytes": 19890,
-      "sha256": "faa7ef08faab730c1ee8c3f4d923070be72fea77b7b0bc3fa916c93c837b69cd"
+      "bytes": 22016,
+      "sha256": "13da68a1500b21039c59f0bd5a5a305b1ce39abdc81a7828ba5c02bf705894ca"
     },
     {
       "path": "scene/src/ns-grasp.mjs",
@@ -3642,8 +3642,8 @@
     },
     {
       "path": "tests/behind-view.test.mjs",
-      "bytes": 4093,
-      "sha256": "c78792eb3a41e005ba1bcdef1e8f3be9a361f50a458919d6941b2764c23f37e8"
+      "bytes": 4323,
+      "sha256": "4c26f35c9819c95c7e7e1da31126353b9055af83fc678d642494943f9d274d63"
     },
     {
       "path": "tests/brain-live.test.mjs",
@@ -3672,8 +3672,8 @@
     },
     {
       "path": "tests/eye-gaze.test.mjs",
-      "bytes": 4972,
-      "sha256": "e3bcf519d855d58aec4f9b3ec18db3a0e0104ff2484c258e45e61f83bc6b4abc"
+      "bytes": 5277,
+      "sha256": "94832ff69176a539afdd09e118285c679e32a5658ee5bb7b220ef27bb8c0d079"
     },
     {
       "path": "tests/guide-order.test.mjs",
@@ -3697,8 +3697,8 @@
     },
     {
       "path": "tests/limb-turn.test.mjs",
-      "bytes": 4962,
-      "sha256": "696aa1a6767cdc794d3acf3df2469b83534f24e79b8fefb623a05b9000a4063a"
+      "bytes": 8359,
+      "sha256": "36e5c0ae48cd990b7240a256234718f68e09dc54f27585a1c457a5fb4edcc610"
     },
     {
       "path": "tests/look-range.test.mjs",
@@ -3719,6 +3719,11 @@
       "path": "tests/move-key.test.mjs",
       "bytes": 23358,
       "sha256": "02bfab3e1c9c7148a97b4a3364cd3df9b6195811586c7665e35a41ed890f1bb3"
+    },
+    {
+      "path": "tests/own-front-view.test.mjs",
+      "bytes": 11045,
+      "sha256": "b43cc1df1e9042e2a06ffc890addfad2c5b42f68e79ea86950dfdcd6cc3cbd6f"
     },
     {
       "path": "tests/pointer-release.test.mjs",
@@ -3752,13 +3757,13 @@
     },
     {
       "path": "tests/spine.test.mjs",
-      "bytes": 15123,
-      "sha256": "f46e62911cafe4b55e8969ecad85da8d5f6fe828400c8b89dfd9f655bd088a4e"
+      "bytes": 15947,
+      "sha256": "f84367b569ec69da10152d0a5c10df3e382ca709352fc0191381e3be279a5caf"
     },
     {
       "path": "tools/load-body.mjs",
-      "bytes": 2112,
-      "sha256": "caaaa898d2a185c82f816a15fc675e320430647a0fe9f54c15f8ccb99add2368"
+      "bytes": 2686,
+      "sha256": "6ee2811d3664bbc706636e31162dc96b427d6c4cb5e7a328a01edad1287bbcb0"
     },
     {
       "path": "tools/rom-sweep.mjs",

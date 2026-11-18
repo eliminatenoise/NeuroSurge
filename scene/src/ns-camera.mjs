@@ -80,6 +80,59 @@ export const VIEW_TEXT = Object.freeze({
 export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), nearM: 0.02 });
 
 /**
+ * 18 November 2026 (the owner: "they can see everything at the front of their body from the chin down all at once,
+ * shoulders, chest and everything"; "You should be able to see your own shoulders and stomach/abs"): the game's view
+ * point is no longer bound to the anatomical eye. The first-person camera is pulled BACK along its own viewing
+ * direction (a dolly), as if you looked from the back of your head through your eyes:
+ *  - the line through the crosshair is the same line as before, so aiming is unchanged;
+ *  - near things (the chest under the chin) are drawn smaller and flatter, far things (the brain, the feet) barely
+ *    change, and the shoulders, which lie about level with the eyes' plane, come into the lower corners;
+ *  - only the CAMERA moves: the anatomical eye that the arm fit, the head pose and the reference frame use stays
+ *    where it is (ns-app referenceFrameForLook; the pose carries it as armParentPosition for the scene).
+ * 18 November 2026, later (the start posture changed: the pelvis rolled under, the upper back straight and leaning
+ * back, the neck bent forward 40 degrees; ns-body BODY_POSTURES.open): with the head bowed that far the top of the
+ * breastbone lies only 12 cm under the eyes, and a camera pulled BACK the 7 to 10 cm that suited the rounded back
+ * looked straight down into the open root of the neck (the first ribs as loops; the neck near the eye is never
+ * drawn). So the camera now rides ABOVE the eyes on the head: upM along the HEAD's own up direction (the head is
+ * bowed less than the look: the eyes are lowered headAboveLookDeg in it, ns-body POSTURE_EYES, fading out by
+ * headLevelEndDeg of upward tilt exactly as ns-app headPitchForLook has it). From there the collar bones lie along
+ * the lower edge of the picture with the opening just below it, the caps of both shoulders are in the lower corners,
+ * and the eyes see OVER the lower edge of the chest to the belly (from the eye itself the belly is edge-on behind the
+ * chest: 5 % of the picture's half height; from 12 cm higher 14 %). Because the offset turns with the head, the
+ * picture of your own chest and collar stays the same however far down you look. The crosshair's line is no longer
+ * the eye's own line but one parallel to it; aiming uses the camera, as the picture does. backM (along the line of
+ * sight) is kept as a second knob and is 0.
+ * While the look rises from upFromDeg to upFullDeg both ease to 0 (the camera would otherwise sink into your own neck
+ * and back when you look up), and while it turns from sideFromDeg to sideFullDeg to either side they ease to sideShare
+ * of that (the opening at the root of the neck comes into the picture from behind there). Every part is continuous,
+ * so no look makes the picture jump. Display choices found on screenshots and on the posed body's landmarks; not a
+ * measurement of anything.
+ */
+export const EYE_DOLLY = Object.freeze({
+  backM: 0.01, upM: 0.12, headAboveLookDeg: 30, headLevelEndDeg: 40,
+  upFromDeg: -12, upFullDeg: 25, sideShare: 0, sideFromDeg: 100, sideFullDeg: 150
+});
+/** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
+ * forward): { backM along the line of sight, upM along the head's up direction, headPitch (radians: the head's own
+ * pitch for this look), offset [x, y, z] (world metres: the whole displacement from the eye) }. Pure; continuous. */
+export function eyeDolly(look, o = EYE_DOLLY) {
+  const l = lookOf(look, 'look');
+  const up = smooth(o.upFromDeg * DEG, o.upFullDeg * DEG, l.pitch);
+  const side = smooth(o.sideFromDeg * DEG, o.sideFullDeg * DEG, Math.abs(wrapAngle(l.yaw)));
+  const share = (1 - up) * (1 + (o.sideShare - 1) * side);
+  const backM = Math.max(0, o.backM * share), upM = Math.max(0, o.upM * share);
+  // the head's pitch for this look (ns-app headPitchForLook with the posture's eye lowering)
+  const e = o.headAboveLookDeg, end = o.headLevelEndDeg, pd = l.pitch / DEG;
+  const hd = pd <= -e ? pd + e : pd >= end ? pd : (end * (pd + e)) / (end + e), h = hd * DEG;
+  const g = gazeDirection(l.yaw, l.pitch), sy = Math.sin(l.yaw), cy = Math.cos(l.yaw), sh = Math.sin(h), ch = Math.cos(h);
+  // head up = (sin yaw sin h, cos h, cos yaw sin h) (cameraRotation's up column for the head's own pitch)
+  const offset = [upM * sy * sh - backM * g[0], upM * ch - backM * g[1], upM * cy * sh - backM * g[2]];
+  return { backM, upM, headPitch: h, offset };
+}
+/** How far back (m) the camera stands (eyeDolly's backM). */
+export function eyeDollyBackM(look, o = EYE_DOLLY) { return eyeDolly(look, o).backM; }
+
+/**
  * Third-person rig (display choices, chosen from viewed screenshots: round5/R5-camera-NOTES.md):
  *  - centreFromEyeMm: the orbit centre, from the eye, in BodyParts3D axes (+y posterior, +z superior): 6 cm back (over
  *    the middle of the head) and 19 cm up (about 7 cm over the top of the skull, which is about 12 cm above the eye);
@@ -162,7 +215,12 @@ export const THIRD_PERSON = Object.freeze({
   // (third pass, a check: from straight behind the head the crosshair rested on the player's own skull and a bone name
   // came up: the centre is now 12 cm above the eye, not 5, so the line of sight clears the head from behind; 18 cm cut the feet off at the bottom of the picture)
   followOffsetM: Object.freeze([0, 0.12, -0.48]),
-  followYawDeg: 75,
+  // (fourth pass, 18 November 2026: 75 -> 24. Side-on, the brain beyond the feet was cut off at the right edge, so no
+  // area could be switched on from outside. From 24 degrees round, the camera stands behind your right shoulder: the
+  // whole body is seen three-quarter from behind, in its true proportions, with the whole motor strip beyond the
+  // feet, and the crosshair opens on the bare brain between its arrows and the mirror body. A look 51 degrees to the
+  // left still brings the side-on picture of the posture, 24 to the right the one from straight behind.)
+  followYawDeg: 24,
   followBody: true,
   followPitchBiasDeg: 16,
   followMaxPitchDeg: 5,
@@ -556,6 +614,11 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   const reference = typeof firstPersonFrame === 'function' ? firstPersonFrame(fp) : null;
   if (firstPersonFrame !== null && typeof firstPersonFrame !== 'function') fail('camera_input', 'firstPersonFrame must be a pure source-frame function');
   const firstOrigin = reference ? vec3(reference.position, 'first-person position world m') : [0, 0, 0];
+  // 18 November 2026 (EYE_DOLLY): with the configured eye view the first-person camera stands behind the eye on its
+  // own line of sight; firstOrigin stays the eye (the arm's parent point, the orbit centre's base).
+  const dolly = reference && handRayFraming === null ? eyeDolly(fp) : null;
+  const dollyM = dolly ? dolly.backM : 0, raiseM = dolly ? dolly.upM : 0, dollyOn = dollyM > 0 || raiseM > 0;
+  const firstCam = dollyOn ? [firstOrigin[0] + dolly.offset[0], firstOrigin[1] + dolly.offset[1], firstOrigin[2] + dolly.offset[2]] : firstOrigin;
   if (reference) { if (!isMat4(reference.bodyToWorld) || !isVec3(reference.eyeBp)) fail('camera_input', 'canonical body and original eye required'); bodyToWorld = reference.bodyToWorld; eyeBp = reference.eyeBp; }
   if (handRayFraming !== null && s.progress > 0) {
     if (!reference || !isMat4(reference.eyeToWorld)) fail('camera_input', 'hand-ray framing requires the selected canonical F');
@@ -579,10 +642,11 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     const dir = gazeDirection(fp.yaw, fp.pitch);
     return Object.freeze({
       view: s.view, progress: s.progress, blend: 0, firstPerson: s.view === 'first', thirdPerson: false, moving: s.progress !== target,
-      position: reference ? firstOrigin.slice() : [0, 0, 0], yaw: fp.yaw, pitch: fp.pitch, direction: dir,
-      bodyLook: fp, gazeLook: fp, gazeRay: { origin: reference ? firstOrigin.slice() : [0, 0, 0], dir },
-      silentGaze, headInPlace: 0, faceGhost: 1, overBrainSeeThrough: 1, farExtraM: 0, nearM: FIRST_PERSON.nearM,
-      orbitCentre: null, boom: null
+      position: reference ? firstCam.slice() : [0, 0, 0], yaw: fp.yaw, pitch: fp.pitch, direction: dir,
+      bodyLook: fp, gazeLook: fp, gazeRay: { origin: reference ? firstCam.slice() : [0, 0, 0], dir },
+      silentGaze, headInPlace: 0, faceGhost: 1, overBrainSeeThrough: 1, farExtraM: dollyOn ? len(sub(firstCam, firstOrigin)) : 0, nearM: FIRST_PERSON.nearM,
+      orbitCentre: null, boom: null,
+      ...(dollyOn ? { armParentPosition: firstOrigin.slice(), eyeDollyM: dollyM, eyeRaiseM: raiseM } : {})
     });
   }
   const follow = r.followHead === true && !driveA;
@@ -607,7 +671,7 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
   else if (follow) { yaw = fp.yaw + blend * yawOff; pitch = fp.pitch; } // the camera turns with the head (a fixed angle apart); only its place moves
   else if (blend >= 1) { yaw = tp.yaw; pitch = tp.pitch; }
   else { yaw = fp.yaw + blend * wrapAngle(tp.yaw - fp.yaw); pitch = fp.pitch + blend * (tp.pitch - fp.pitch); }
-  const position = reference ? firstOrigin.map((v, i) => (1 - blend) * v + blend * tp.position[i]) : [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
+  const position = reference ? firstCam.map((v, i) => (1 - blend) * v + blend * tp.position[i]) : [blend * tp.position[0], blend * tp.position[1], blend * tp.position[2]];
   const dir = gazeDirection(yaw, pitch);
   const fromEye = len(reference ? sub(position, firstOrigin) : position);
   const head = bodyProxyWorld(bodyToWorld, eyeBp, [DEFAULT_BODY_PROXY[0]])[0];

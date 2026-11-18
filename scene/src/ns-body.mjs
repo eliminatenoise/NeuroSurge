@@ -87,7 +87,13 @@ export const BODY_JOINT_IDS = Object.freeze([
   'r_wrist_dev', 'r_thumb_flex', 'r_thumb_opp', 'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
   // R558 (Space dance, Message 2): the right upper arm's own internal / external rotation and each hip's rotation about
   // the thigh's long axis (positive = external, outward, on both sides).
-  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R'
+  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R',
+  // 18 November 2026 (the owner: "we want maximum posterior pelvic tilt with some degree of neck flexion so that you
+  // can look down upon your body"): the pelvis rolled under. A forward bend of the LOW back only (the five lumbar
+  // joints, BODY_JOINT_SHARES.pelvic_tilt), so the start posture can flatten and reverse the low back's hollow while
+  // the rib-bearing spine stays straight. A posture term: no motor area moves it; trunk_flex still bends the whole
+  // back from wherever this leaves it.
+  'pelvic_tilt'
 ]);
 
 const lim = (lo, hi) => Object.freeze([lo, hi]);
@@ -124,7 +130,7 @@ export const BODY_JOINT_LIMITS = Object.freeze({
   knee_ext_L: lim(-135, 0), knee_ext_R: lim(-135, 0),
   ankle_dorsi_L: lim(-50, 20), ankle_dorsi_R: lim(-50, 20),
   toe_flex_L: lim(-40, 40), toe_flex_R: lim(-40, 40),
-  trunk_flex: lim(-25, 90), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
+  trunk_flex: lim(-25, 90), pelvic_tilt: lim(0, 60), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
   brow_raise: lim(-20, 20), eye_close: lim(-20, 20), lip_purse: lim(-20, 20), smile: lim(-20, 20),
   r_shoulder_flex: lim(-60, 180), r_shoulder_abd: lim(0, 180), r_elbow_flex: lim(0, 145),
   r_wrist_flex: lim(0, 80), r_wrist_ext: lim(0, 70), r_grasp: lim(0, 90), r_open: lim(0, 30), r_pronation: lim(0, 160),
@@ -235,6 +241,9 @@ export const BODY_JOINT_SHARES = Object.freeze({
   // the belly behind it" held for a head carried straight above the chest; the head is now carried forward as well,
   // HEAD_FORWARD.)
   trunk_flex: spineShares([16, 14, 13, 12, 10, 8, 6, 5, 4, 3, 3, 3, 3, 3, 3, 3, 3]),
+  // 18 November 2026 (pelvic_tilt, see BODY_JOINT_IDS): the low back only, most at the lumbosacral joint and L4-L5,
+  // as a low back flattens when the pelvis rolls under; nothing between the rib-bearing vertebrae.
+  pelvic_tilt: spineShares([27, 24, 20, 16, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
   // 18 November 2026, later (a check stacked "Bend to the right" and "Turn to the right" from the strip and the chest
   // came apart: ribs stood through the gaps between the chest and belly muscles): the side bend and the turn are taken
   // almost entirely BELOW the rib cage (the five lumbar joints and the joint between T12 and L1); the eleven joints
@@ -1583,7 +1592,10 @@ function checkRig(rig) {
  * the player bends or straightens the back and never with the look. A display coupling, not measured scapular
  * kinematics.
  */
-export const SHOULDER_ROLL = Object.freeze({ perTrunkFlex: 0.2, minDeg: -4, maxDeg: 16 });
+// (18 November 2026, later: perPelvicTilt. With the pelvis rolled under and the upper back straight (the start posture's
+// pelvic_tilt) the shoulders still sit forward, as on someone slumped back with the arms stretched out toward the
+// knees: 0.3 degrees per degree of pelvic tilt, 15.5 degrees at the start posture.)
+export const SHOULDER_ROLL = Object.freeze({ perTrunkFlex: 0.2, perPelvicTilt: 0.3, minDeg: -4, maxDeg: 16 });
 /**
  * 18 November 2026, third pass (user: "flat depressed chest ... You should be able to see your own shoulders and
  * stomach/abs"; the lead: "the head carried further forward over the chest"): a slumped, rounded back comes with the
@@ -1595,12 +1607,12 @@ export const SHOULDER_ROLL = Object.freeze({ perTrunkFlex: 0.2, minDeg: -4, maxD
  * angles cancel), so the look's own arithmetic (ns-app headPoseForLook) still holds. A display coupling inside what a
  * neck does (forward head posture), not measured cervical kinematics.
  */
-export const HEAD_FORWARD = Object.freeze({ perTrunkFlex: 0.2, minDeg: 0, maxDeg: 20 });
-export function headForwardDeg(trunkFlexDeg, o = HEAD_FORWARD) {
-  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg, o.minDeg, o.maxDeg) + 0 : 0;
+export const HEAD_FORWARD = Object.freeze({ perTrunkFlex: 0.2, perPelvicTilt: 0.2, minDeg: 0, maxDeg: 20 }); // (perPelvicTilt: the slumped start posture carries the head 10 degrees forward)
+export function headForwardDeg(trunkFlexDeg, o = HEAD_FORWARD, pelvicTiltDeg = 0) {
+  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg + (o.perPelvicTilt || 0) * (Number.isFinite(pelvicTiltDeg) ? pelvicTiltDeg : 0), o.minDeg, o.maxDeg) + 0 : 0;
 }
-export function shoulderRollDeg(trunkFlexDeg, o = SHOULDER_ROLL) {
-  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg, o.minDeg, o.maxDeg) + 0 : 0;
+export function shoulderRollDeg(trunkFlexDeg, o = SHOULDER_ROLL, pelvicTiltDeg = 0) {
+  return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg + (o.perPelvicTilt || 0) * (Number.isFinite(pelvicTiltDeg) ? pelvicTiltDeg : 0), o.minDeg, o.maxDeg) + 0 : 0;
 }
 /** joint: the sternoclavicular record ({ point, rollAxis? }); side: -1 = the right girdle (its shoulder lies toward
  * -x), +1 = the left (the mirror image: the mirrored axis and the opposite sense). */
@@ -1617,7 +1629,9 @@ function shoulderRollMatrix(rollDeg, joint, side) {
  * endAtHeadUpDeg (the look's own code: ns-app HEAD_LOOK eyeDownDeg, eyeDownForHead). Eyes lower about 40 degrees in the
  * head; 22 is a comfortable downward gaze. A display choice, not a measured gaze.
  */
-export const POSTURE_EYES = Object.freeze({ downDeg: 22, endAtHeadUpDeg: 40 });
+// (18 November 2026, later: 22 -> 30. With the pelvis rolled under and the neck already bent 40 of its 50 degrees in
+// the start posture, the eyes do more of the downward gaze: at the start look of 35 degrees the head is bowed only 5.)
+export const POSTURE_EYES = Object.freeze({ downDeg: 30, endAtHeadUpDeg: 40 });
 
 export const LIMB_TURN_LIMIT_DEG = 40;
 function checkLimbTurn(t) {
@@ -1643,7 +1657,8 @@ function localMatrices(rig, A, limbTurn = null) {
   // axis; for the low-back joints of a rounded back that is mostly a side bend of those joints (which a low back can
   // do) and hardly any twist (which it cannot). With a straight back it is exactly the old turn about each joint's own
   // axis.
-  for (const [seg, jid] of SPINE_STAGES) out[seg] = spine(jid, sh.trunk_flex[jid] * A.trunk_flex, sh.trunk_side[jid] * A.trunk_side, 0);
+  const tilt = A.pelvic_tilt || 0;
+  for (const [seg, jid] of SPINE_STAGES) out[seg] = spine(jid, sh.trunk_flex[jid] * A.trunk_flex + sh.pelvic_tilt[jid] * tilt, sh.trunk_side[jid] * A.trunk_side, 0);
   if (A.trunk_rot) chestTurn(J, out, A.trunk_rot);
   // The rib-cage linkage's segments are placed by fit in worldSegments (linkMatrix); without it they ride their parents.
   for (const seg of LINKED_SEGMENTS) out[seg] = m4I();
@@ -1658,7 +1673,7 @@ function localMatrices(rig, A, limbTurn = null) {
   // kinematics of a rigid educational rig, not measured cervical coupling.
   // R558 (activation points): the neck's side bend (neck_side) is applied first, about the rest frame's front-to-back
   // axis at each joint, so with only the side bend set each joint tilts exactly as it did without the head look.
-  const hf = headForwardDeg(A.trunk_flex), lowNeck = sh.neck_flex.cervicothoracic * A.neck_flex + hf;
+  const hf = headForwardDeg(A.trunk_flex, HEAD_FORWARD, A.pelvic_tilt || 0), lowNeck = sh.neck_flex.cervicothoracic * A.neck_flex + hf;
   out.cervical = m4Mul(m4Mul(rot('cervicothoracic', 'rot', sh.neck_rot.cervicothoracic * A.neck_rot), rot('cervicothoracic', 'flex', lowNeck)), rot('cervicothoracic', 'side', sh.neck_side.cervicothoracic * A.neck_side));
   {
     const ao = J.atlanto_occipital, ct = J.cervicothoracic, turn = sh.neck_rot.atlanto_occipital * A.neck_rot;
@@ -1736,7 +1751,7 @@ function localMatrices(rig, A, limbTurn = null) {
   // 18 November 2026 (SHOULDER_ROLL): with the back bent forward both shoulder girdles roll forward about their
   // sternoclavicular joints (after the right girdle's own share of the arm's lift).
   {
-    const roll = shoulderRollDeg(A.trunk_flex), scR = J.r_sternoclavicular, scL = J.l_sternoclavicular_mirror;
+    const roll = shoulderRollDeg(A.trunk_flex, SHOULDER_ROLL, A.pelvic_tilt || 0), scR = J.r_sternoclavicular, scL = J.l_sternoclavicular_mirror;
     if (roll && scR && scR.point) out.r_girdle = m4Mul(shoulderRollMatrix(roll, scR, -1), out.r_girdle);
     if (roll && scL && scL.point) out.l_girdle = shoulderRollMatrix(roll, scL, 1);
   }
@@ -2801,7 +2816,25 @@ export const BODY_POSTURES = deepFreezeRig({
   // is closed and the hand is in the picture on the thigh. (Tried 25 forward with the elbow at 55: seen from the side
   // the forearm pointed up into the air.) The game starts with the look 36 degrees below level (the head bowed 14 of
   // them, the eyes 22).
-  open: { neck_flex: 10, trunk_flex: 80, hip_abd_L: 6, hip_abd_R: 6, r_shoulder_flex: -5, r_shoulder_abd: 8, r_elbow_flex: 80, r_pronation: 160 },
+  // 18 November 2026, the owner after seeing the rounded back ("maybe I was wrong about the spinal flexion. I think we
+  // need to go into spinal extension ... while still leaning quite a bit back"; "we want maximum posterior pelvic tilt
+  // with some degree of neck flexion so that you can look down upon your body"; "minimal elbow and knee flexion
+  // initially, although they must still look naturalistic, but yet be fully extended out"; "we start the game in an
+  // underside view of the limbs"): slumped back on a sofa. The PELVIS is rolled under as far as it goes (pelvic_tilt
+  // 55: all of the forward bend sits in the low back, most of it at the lumbosacral joint), the rib-bearing spine is
+  // straight to slightly extended (trunk_flex -5) and leans back about 35 degrees from upright, and the neck is bent
+  // forward 40 (of its 50) so the eyes look down the body. 55 - 5 + 40 = 90: the legs still lie level under an upright
+  // head, hips neutral. The shoulders sit a little forward and the head is carried a little forward, as on someone
+  // slumped back (SHOULDER_ROLL and HEAD_FORWARD now follow the pelvis roll as well: 15.5 and 10 degrees here). Legs
+  // spread 12 degrees each (were 6), so the motor strip beyond them shows between them. Both arms are stretched out
+  // along the body toward the knees: the right upper arm 37 degrees forward of the leaning trunk, the elbow 8 (soft,
+  // not locked), the forearm palm UP (r_pronation 0, the limb turn's open end); the knees keep their soft 10
+  // (EXTENSION_SOFT_BEND). A display choice inside the joints' ranges, not a measured pose.
+  // 18 November 2026 (the owner: "we start the game in an underside view of the limbs"; "minimal elbow and knee
+  // flexion initially, although they must still look naturalistic, but yet be fully extended out"): the right palm up
+  // (r_pronation 0) and both soles at the limb turn's underside end (ankle_inv -15, ns-dance DANCE_UNDERSIDE), the
+  // knees soft (6 degrees), the elbow 8.
+  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 12, hip_abd_R: 12, knee_ext_L: -6, knee_ext_R: -6, ankle_inv_L: -15, ankle_inv_R: -15, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -2875,7 +2908,11 @@ export function passiveKneeAngles(angles, hk = HIP_KNEE_COUPLING) {
  */
 export const BODY_POSTURE_LIMITS = deepFreezeRig({
   anatomical: {},
-  open: { hip_flex_L: [-30, 110], hip_flex_R: [-30, 110] },
+  // (18 November 2026: trunk_flex. The start posture rolls the pelvis under by 55 degrees, all of it in the low back;
+  // two thirds of trunk_flex bend the low back too, so from this posture the trunk's own forward bend stops at 30:
+  // the low back then folds about 75 degrees in all, the most a low back is drawn to do here. The look's own trunk
+  // bend takes the same stop, ns-app headLookLimits.)
+  open: { hip_flex_L: [-30, 110], hip_flex_R: [-30, 110], trunk_flex: [-25, 30] },
   seated: { hip_flex_L: [-30, 110], hip_flex_R: [-30, 110], r_elbow_flex: [0, 120] }
 });
 /** The posture the game uses (R558 decisions 21 and 22: limbs straight forward, sitting on an invisible flat ground;
@@ -2883,7 +2920,7 @@ export const BODY_POSTURE_LIMITS = deepFreezeRig({
 export const DEFAULT_BODY_POSTURE = 'open';
 /** Plain-language posture lines for the HUD / Esc page (R17). */
 export const BODY_POSTURE_TEXT = Object.freeze({
-  open: 'Your body lies back as on a declined sofa (none is drawn), the upper back curled up, hips straight, legs out in front side by side and both arms reaching forward. Your chest, belly, arms and legs lie in view below the brain.',
+  open: 'Your body is slumped back as on a sofa (none is drawn): pelvis rolled under, upper back straight and leaning back, head bowed, legs and arms stretched out, palms up. Your chest, belly, arms and legs lie in view in front of the brain.',
   seated: 'Your body sits still (no chair is drawn). Your right forearm rests forward, as if on an armrest. Look down to see your chest, lap, knees and feet. Look right and a little down to see your right arm.',
   anatomical: 'Your simulated body stands still with its arms at its sides.'
 });
@@ -3781,8 +3818,11 @@ export const BODY_STACK_RULE = Object.freeze({
       basis: 'lies directly on the humeral head and the rotator cuff: a smaller, gradual lift keeps it a cap of three parts instead of a balloon' })),
     ...['FJ1447:Clavicular part of right pectoralis major', 'FJ1464:Sternocostal part of right pectoralis major', 'FJ1446:Abdominal part of right pectoralis major',
       'FJ1447M:Clavicular part of left pectoralis major', 'FJ1464M:Sternocostal part of left pectoralis major', 'FJ1446M:Abdominal part of left pectoralis major'
-    ].map(s => s.split(':')).map(([id, name]) => Object.freeze({ id, name, gapScale: 0.8, distShare: 1,
-      basis: 'reflected from its origin on the sternum and clavicle like a dissected sheet: low near the midline, highest at the free lower outer border over serratus anterior' })),
+    ].map(s => s.split(':')).map(([id, name]) => Object.freeze({ id, name, gapScale: 0.25, distShare: 1,
+      // 18 November 2026 (the owner: "flat depressed chest not booby pumped out chest"): gapScale 0.8 -> 0.25. The sheet
+      // stood up to 12.8 mm off the muscles under it at its free border, which is half of what made the chest two
+      // mounds (the other half was the muscle's own depth: flattenChest); now 4 mm, a thin parting.
+      basis: 'reflected from its origin on the sternum and clavicle like a dissected sheet, but only a thin parting high (the chest is drawn flat): low near the midline, highest at the free lower outer border over serratus anterior' })),
     ...[['FJ1452', 'Right external oblique'], ['FJ1452M', 'Left external oblique']].map(([id, name]) => Object.freeze({ id, name,
       smooth: Object.freeze({ innerMm: 50, outerMm: 85, cellMm: 4, reachMm: 24, blurMm: 10 }),
       basis: 'the atlas sculpts the segments of rectus abdominis into the front of this sheet (the anterior rectus sheath); that relief is drawn shaved down to a smooth surface within about 50 to 85 mm of the midline, so the sheath does not read as a rectus abdominis ("six-pack"); when the real rectus abdominis is loaded (missing-muscles-r1) the part of the sheet in front of it is not drawn at all (openRectusSheath: the sheath opened, as in a dissection)' })),
@@ -4048,6 +4088,221 @@ export function openRectusSheath(meshesById, rule = RECTUS_SHEATH_OPENING) {
     report.push({ id: r.sheath, name: r.sheathName, over: r.rectus, triangles: ix.length / 3, notDrawn: dropped, ...(keepMid === null ? {} : { midlineKept: midline }) });
   }
   return { meshesById: out, report };
+}
+
+/**
+ * 18 November 2026 (the owner, three times: "without the chest pumping out but depressed down/inwards"; "I want flat
+ * depressed chest not booby pumped out chest"): the chest muscles are drawn FLAT. The source model's pectoralis major
+ * is a deep, athletic muscle: over the middle of each side of the chest it stands 20 to 26 mm (at most about 40 mm)
+ * off its own rib-side surface, and seen from the eyes the two sides read as two mounds with the breastbone between.
+ * Here every part of pectoralis major, both sides, is thinned toward the ribs:
+ *  - a vertex keeps its place ACROSS the chest wall (its angle round the trunk's long axis and its height), and its
+ *    height above the muscle's own deep surface is multiplied by thicknessShare. The chest wall is taken as an
+ *    upright elliptical tube (axis: halfWidthMm x halfDepthMm about the line x = 0, y = yMm), which only fixes which
+ *    way "toward the ribs" points at each place; the deep surface is the muscle's own: the lowest of its vertices in
+ *    each cell of a grid over (angle, height), read between cell centres, so the rib side of the muscle stays where
+ *    it is (it moves by at most a fraction of a millimetre) and the muscle still lies on the ribs and on pectoralis
+ *    minor exactly as before;
+ *  - toward the arm the change fades out (between fade.fromMm and fade.toMm from the midline), so the tendon that
+ *    crosses the armpit and its end on the upper arm bone are untouched; within hold.fromMm of the collar bone or
+ *    the breastbone nothing moves and the change grows to its full amount over hold.toMm from them (a first try
+ *    without this drew the upper edge of the muscle in behind the front of the collar bone, which then lay bare).
+ * It is done on the REST mesh before the rig is built, so your body, the mirror body, picking, the skin weights and
+ * the layer lift all get the same shape. A display choice that departs from the source model on purpose, to be told
+ * to the player honestly. Measured on this body (10 mm cells over the chest wall, outermost minus innermost vertex):
+ * the sternocostal part is on average 13 mm deep where the source model has 21 (about two thirds; at most 27 where
+ * the source has 42), the clavicular part 12 where the source has 15, the abdominal part 3 where it has 6.5; the
+ * front surface itself comes down by up to 17 mm. The licensed files are unchanged. Returns { meshesById (a new Map; the thinned meshes get new position arrays), report }.
+ */
+export const CHEST_FLATTEN = Object.freeze({
+  rows: Object.freeze([
+    ['FJ1447', 'Clavicular part of right pectoralis major'], ['FJ1464', 'Sternocostal part of right pectoralis major'], ['FJ1446', 'Abdominal part of right pectoralis major'],
+    ['FJ1447M', 'Clavicular part of left pectoralis major'], ['FJ1464M', 'Sternocostal part of left pectoralis major'], ['FJ1446M', 'Abdominal part of left pectoralis major']
+  ].map(([id, name]) => Object.freeze({ id, name }))),
+  thicknessShare: 0.4,
+  axis: Object.freeze({ yMm: -105, halfWidthMm: 135, halfDepthMm: 105 }),
+  cellRad: 0.05, cellMm: 6, fillPasses: 3, smoothCells: 2, smoothPasses: 3,
+  fade: Object.freeze({ fromMm: 120, toMm: 158 }),
+  hold: Object.freeze({ fromMm: 2, toMm: 14, bones: Object.freeze([['FJ3362', true], ['FJ3290', false], ['FJ3178', false]].map(r => Object.freeze(r))) }),
+  basis: 'display choice (the owner asked for a flat, sunken chest): pectoralis major drawn at about two thirds of the source model\'s depth, thinned toward its own rib-side surface; not measured anatomy'
+});
+export function flattenChest(meshesById, rule = CHEST_FLATTEN) {
+  if (!(meshesById instanceof Map)) return { meshesById, report: null };
+  const out = new Map(meshesById), report = [];
+  const { yMm: yc, halfWidthMm: A, halfDepthMm: B } = rule.axis, k = rule.thicknessShare, cT = rule.cellRad, cZ = rule.cellMm;
+  if (!(k > 0 && k < 1)) return { meshesById, report: [] };
+  const pad = rule.fillPasses + 1;
+  // the bones the muscle starts on (collar bone, breastbone): a vertex on them does not move, and the change grows
+  // to its full amount over hold.toMm from them. The right collar bone also stands in, mirrored, for the left one
+  // (which comes with the left arm's packet under another id); the band is far wider than the two sides differ.
+  const H = rule.hold, hc = H.toMm, hold = new Map(), hkey = (a, b, c) => ((a + 512) * 1024 + (b + 512)) * 4096 + (c + 2048);
+  for (const [id, mirror] of H.bones) {
+    const b = meshesById.get(id), bp = b && b.positions;
+    if (!bp) continue;
+    for (let i = 0; i + 2 < bp.length; i += 3) for (const sx of mirror ? [1, -1] : [1]) {
+      const c = hkey(Math.floor((sx * bp[i]) / hc), Math.floor(bp[i + 1] / hc), Math.floor(bp[i + 2] / hc));
+      let cell = hold.get(c); if (!cell) hold.set(c, cell = []);
+      cell.push(sx * bp[i], bp[i + 1], bp[i + 2]);
+    }
+  }
+  const holdAt = (x, y, z) => {
+    const a = Math.floor(x / hc), b = Math.floor(y / hc), c = Math.floor(z / hc);
+    let best = hc * hc;
+    for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) for (let dc = -1; dc <= 1; dc++) {
+      const cell = hold.get(hkey(a + da, b + db, c + dc));
+      if (!cell) continue;
+      for (let i = 0; i < cell.length; i += 3) { const d = (cell[i] - x) ** 2 + (cell[i + 1] - y) ** 2 + (cell[i + 2] - z) ** 2; if (d < best) best = d; }
+    }
+    return sstep((Math.sqrt(best) - H.fromMm) / (H.toMm - H.fromMm));
+  };
+  for (const row of rule.rows) {
+    const m = meshesById.get(row.id), p = m && m.positions;
+    if (!p || p.length < 9) continue;
+    const n = p.length / 3, rad = new Float32Array(n), th = new Float32Array(n);
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (let v = 0; v < n; v++) {
+      const x = p[3 * v] / A, y = (p[3 * v + 1] - yc) / B;
+      rad[v] = Math.hypot(x, y); th[v] = Math.atan2(x, -y);
+      const a = Math.floor(th[v] / cT), b = Math.floor(p[3 * v + 2] / cZ);
+      if (a < a0) a0 = a; if (a > a1) a1 = a; if (b < b0) b0 = b; if (b > b1) b1 = b;
+    }
+    a0 -= pad; b0 -= pad;
+    const na = a1 - a0 + 1 + pad, nb = b1 - b0 + 1 + pad;
+    // the deep surface: per (angle, height) cell the smallest radius of the muscle's own vertices ...
+    let deep = new Float32Array(na * nb).fill(Infinity);
+    for (let v = 0; v < n; v++) {
+      const c = (Math.floor(th[v] / cT) - a0) * nb + (Math.floor(p[3 * v + 2] / cZ) - b0);
+      if (rad[v] < deep[c]) deep[c] = rad[v];
+    }
+    // ... cells just outside the outline (and holes) take the lowest of their neighbours ...
+    for (let pass = 0; pass < rule.fillPasses; pass++) {
+      const next = deep.slice();
+      for (let a = 0; a < na; a++) for (let b = 0; b < nb; b++) {
+        if (deep[a * nb + b] < Infinity) continue;
+        let lo = Infinity;
+        for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) {
+          const a2 = a + da, b2 = b + db;
+          if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue;
+          const w = deep[a2 * nb + b2]; if (w < lo) lo = w;
+        }
+        next[a * nb + b] = lo;
+      }
+      deep = next;
+    }
+    // ... smoothed (the mean of the cells within smoothCells, a few times), so the relief of the muscle's rib side
+    // (the ribs' imprint, single low vertices) is not printed onto its front when the height above it is scaled
+    for (let pass = 0; pass < rule.smoothPasses; pass++) {
+      const next = deep.slice(), R = rule.smoothCells;
+      for (let a = 0; a < na; a++) for (let b = 0; b < nb; b++) {
+        if (!(deep[a * nb + b] < Infinity)) continue;
+        let sum = 0, cnt = 0;
+        for (let da = -R; da <= R; da++) for (let db = -R; db <= R; db++) {
+          const a2 = a + da, b2 = b + db;
+          if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue;
+          const w = deep[a2 * nb + b2]; if (w < Infinity) { sum += w; cnt++; }
+        }
+        next[a * nb + b] = sum / cnt;
+      }
+      deep = next;
+    }
+    const q = new Float32Array(p);
+    let moved = 0, maxMm = 0, sumBefore = 0, sumAfter = 0, counted = 0;
+    for (let v = 0; v < n; v++) {
+      const side = 1 - sstep((Math.abs(p[3 * v]) - rule.fade.fromMm) / (rule.fade.toMm - rule.fade.fromMm));
+      if (!(side > 0) || !(rad[v] > 1e-6)) continue;
+      const w = side * holdAt(p[3 * v], p[3 * v + 1], p[3 * v + 2]);
+      if (!(w > 0)) continue;
+      // the deep surface here, read between the four nearest cell centres
+      const fa = th[v] / cT - 0.5 - a0, fb = p[3 * v + 2] / cZ - 0.5 - b0, ia = Math.floor(fa), ib = Math.floor(fb), ta = fa - ia, tb = fb - ib;
+      let d = 0, ws = 0;
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+        const a2 = ia + i, b2 = ib + j;
+        if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue;
+        const val = deep[a2 * nb + b2];
+        if (!(val < Infinity)) continue;
+        const wt = (i ? ta : 1 - ta) * (j ? tb : 1 - tb);
+        d += wt * val; ws += wt;
+      }
+      if (!(ws > 1e-6)) continue;
+      d /= ws;
+      const h = rad[v] - d;
+      if (!(h > 0)) continue;
+      const r2 = d + h * (1 - (1 - k) * w), f = r2 / rad[v];
+      const x = p[3 * v], y = p[3 * v + 1] - yc;
+      q[3 * v] = x * f; q[3 * v + 1] = yc + y * f;
+      const mm = Math.hypot(x * (1 - f), y * (1 - f));
+      if (mm > 0.05) moved++;
+      if (mm > maxMm) maxMm = mm;
+      if (side >= 1) { sumBefore += h; sumAfter += r2 - d; counted++; }
+    }
+    out.set(row.id, { ...m, positions: q, displayShape: rule.basis });
+    report.push({ id: row.id, name: row.name, vertices: n, moved, maxMovedMm: Math.round(maxMm * 10) / 10, thicknessShare: counted && sumBefore > 0 ? Math.round((sumAfter / sumBefore) * 1000) / 1000 : null });
+  }
+  return { meshesById: out, report };
+}
+
+/**
+ * 18 November 2026 (a check of the view down your own front: a white strip showed between the two straight belly
+ * muscles and the crosshair there named "Sacrum"): the belly wall is drawn CLOSED at the midline. The two rectus
+ * abdominis meshes of the missing-muscles packet leave a slot 5 to 17 mm wide between their inner borders (in a body
+ * the linea alba, a tendon band, fills it; the packet has no mesh for it, and the strip of the external oblique's
+ * sheet that is kept there does not cover it in the bent trunk), and through it the lumbar spine and the sacrum were
+ * seen and picked. Here the inner border of each muscle is moved to the middle of the slot (plus overlapMm, so no
+ * hairline opens between them): per height band (bandMm) the two inner borders and their middle are found and
+ * smoothed over the neighbouring bands, and a vertex is moved toward the midline by the width of its side's half of
+ * the slot at its height, fully on the inner border and fading to nothing reachMm lateral to it. So each muscle is
+ * drawn at most half the slot wider (about 3 to 10 mm), only along its inner edge; nothing else moves. Where the two
+ * muscles part round the lower end of the breastbone (a slot wider than wideFromMm) they are left apart. Done on the
+ * rest mesh before the rig is built. A display choice, not measured anatomy; the licensed files are unchanged.
+ * Returns { meshesById (a new Map; the two muscles get new position arrays), report }.
+ */
+export const BELLY_MIDLINE = Object.freeze({
+  right: 'zm-rectus-abdominis-r', left: 'zm-rectus-abdominis-l', bandMm: 5, smoothBands: 2, reachMm: 30, overlapMm: 1, wideFromMm: 20, wideToMm: 32,
+  basis: 'display choice: the two rectus abdominis muscles are drawn meeting at the midline (their inner borders moved to the middle of the slot the source meshes leave for the linea alba); not measured anatomy'
+});
+export function closeBellyMidline(meshesById, rule = BELLY_MIDLINE) {
+  if (!(meshesById instanceof Map)) return { meshesById, report: null };
+  const R = meshesById.get(rule.right), L = meshesById.get(rule.left);
+  if (!R || !L || !R.positions || !L.positions) return { meshesById, report: null };
+  // +x is the subject's LEFT: the right muscle lies at negative x (its inner border is its largest x), the left one at
+  // positive x (inner border: its smallest x)
+  const band = z => Math.floor(z / rule.bandMm), inR = new Map(), inL = new Map();
+  for (let i = 0; i + 2 < R.positions.length; i += 3) { const k = band(R.positions[i + 2]), x = R.positions[i]; if (!(inR.get(k) >= x)) inR.set(k, x); }
+  for (let i = 0; i + 2 < L.positions.length; i += 3) { const k = band(L.positions[i + 2]), x = L.positions[i]; if (!(inL.get(k) <= x)) inL.set(k, x); }
+  const smoothed = m => {
+    const out = new Map();
+    for (const k of m.keys()) { let s = 0, n = 0; for (let d = -rule.smoothBands; d <= rule.smoothBands; d++) { const v = m.get(k + d); if (v !== undefined) { s += v; n++; } } out.set(k, s / n); }
+    return out;
+  };
+  const sR = smoothed(inR), sL = smoothed(inL);
+  // the borders at a height: a band one muscle does not reach takes the nearest band it does reach
+  const at = (m, k) => { if (m.has(k)) return m.get(k); let best = null, bd = Infinity; for (const [k2, v] of m) { const d = Math.abs(k2 - k); if (d < bd) { bd = d; best = v; } } return best; };
+  let widest = 0, narrowest = Infinity;
+  const move = (mesh, own, other, sign) => {
+    const p = mesh.positions, q = new Float32Array(p);
+    let maxMm = 0;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      const k = band(p[i + 2]), a = at(own, k), b = at(other, k);
+      const slot = sign < 0 ? b - a : a - b; // the slot's width at this height (mm)
+      if (!(slot > -2 * rule.overlapMm)) continue;
+      if (slot > widest) widest = slot; if (slot < narrowest) narrowest = slot;
+      const lateral = sign < 0 ? a - p[i] : p[i] - a; // how far this vertex lies lateral to its muscle's inner border
+      const w = 1 - sstep(lateral / rule.reachMm);
+      if (!(w > 0)) continue;
+      // at the very top the two muscles part round the lower end of the breastbone: a slot wider than wideFromMm is
+      // closed less and less, and one of wideToMm or more is left as it is
+      const by = (slot / 2 + rule.overlapMm) * w * (1 - sstep((slot - rule.wideFromMm) / (rule.wideToMm - rule.wideFromMm)));
+      q[i] = p[i] - sign * by;
+      if (by > maxMm) maxMm = by;
+    }
+    return { q, maxMm };
+  };
+  const r = move(R, sR, sL, -1), l = move(L, sL, sR, 1);
+  const out = new Map(meshesById);
+  out.set(rule.right, { ...R, positions: r.q, displayShape: rule.basis });
+  out.set(rule.left, { ...L, positions: l.q, displayShape: rule.basis });
+  const mm = v => Math.round(v * 10) / 10;
+  return { meshesById: out, report: { slotMm: [mm(narrowest), mm(widest)], rightMovedMm: mm(r.maxMm), leftMovedMm: mm(l.maxMm) } };
 }
 
 /** R558 (builder AN): the plain sided name of a missing-muscles packet id ('right gracilis', 'left latissimus dorsi'),

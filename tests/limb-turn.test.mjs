@@ -3,7 +3,7 @@
  * degrees, from wherever they are. Pure software state on supplied times; no browser, no anatomy validation. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDance, startTurnStep, startTurnHold, stepDance, stopDance, observeDance, DANCE_LIMBS, DANCE_JOINT_IDS, DANCE_FOLLOW } from '../scene/src/ns-dance.mjs';
+import { createDance, startTurnStep, startTurnHold, stepDance, stopDance, observeDance, DANCE, DANCE_LIMBS, DANCE_JOINT_IDS, DANCE_FOLLOW, DANCE_UNDERSIDE } from '../scene/src/ns-dance.mjs';
 import { DANCE_AREAS, DANCE_MUSCLES, DANCE_BODY_JOINTS } from '../scene/src/ns-actions.mjs';
 
 const start = { l_forearm: 80, l_shoulder_rot: 0, r_pronation: 160, r_shoulder_rot: 0, ankle_inv_L: 0, hip_rot_L: 0, ankle_inv_R: 0, hip_rot_R: 0 };
@@ -27,13 +27,14 @@ test('one double tap: the forearms and ankles go end to end, the shoulders and h
   const r = run(startTurnStep(createDance(start)), start, 3);
   assert.equal(r.dance.mode, null, 'the step ends by itself');
   assert.ok(Math.abs(r.angles.l_forearm - -80) < 1e-6 && Math.abs(r.angles.r_pronation - 0) < 1e-6, 'both palms turned up');
-  // a foot at rest (0) is nearer its outward end, so its first stroke is the bigger one, to the inward end
-  assert.ok(Math.abs(r.angles.ankle_inv_L - 35) < 1e-6 && Math.abs(r.angles.ankle_inv_R - 35) < 1e-6, 'both soles turned inward');
+  // all four limbs go to the same side (18 November 2026): with both palms down the limbs are mostly on the overside,
+  // so the switch goes to the underside: palms up and soles outward
+  assert.ok(Math.abs(r.angles.ankle_inv_L - -15) < 1e-6 && Math.abs(r.angles.ankle_inv_R - -15) < 1e-6, 'both soles turned outward');
   assert.ok(Math.abs(r.angles.l_shoulder_rot - DANCE_FOLLOW.shoulderDeg) < 1e-6 && Math.abs(r.angles.r_shoulder_rot - DANCE_FOLLOW.shoulderDeg) < 1e-6, 'a whole forearm stroke turns the upper arm by the follow amount');
   for (const j of ['hip_rot_L', 'hip_rot_R']) assert.ok(Math.abs(r.angles[j]) > 1 && Math.abs(r.angles[j]) <= DANCE_FOLLOW.hipDeg + 1e-9, `${j} only follows`);
   // the next double tap turns every leader to its other end; a third brings each joint back to where the first left it
   const second = run(startTurnStep(r.dance), r.angles, 3);
-  assert.ok(Math.abs(second.angles.l_forearm - 80) < 1e-6 && Math.abs(second.angles.ankle_inv_L - -15) < 1e-6);
+  assert.ok(Math.abs(second.angles.l_forearm - 80) < 1e-6 && Math.abs(second.angles.ankle_inv_L - 35) < 1e-6);
   assert.ok(Math.abs(second.angles.l_shoulder_rot) < 1e-6 && Math.abs(second.angles.r_shoulder_rot) < 1e-6, 'a whole stroke back undoes the upper arm\'s turn');
   const third = run(startTurnStep(second.dance), second.angles, 3);
   for (const j of DANCE_JOINT_IDS) assert.ok(Math.abs(third.angles[j] - r.angles[j]) < 1e-6, `${j} is back where the first stroke left it`);
@@ -58,4 +59,45 @@ test('the slow turn of a double tap held keeps going and stops where it is', () 
   const after = stepDance(stopped, r.angles, 0.5);
   assert.deepEqual(after.angles, r.angles, 'nothing moves after the key is let go');
   for (const j of ['l_shoulder_rot', 'r_shoulder_rot']) assert.ok(Math.abs(r.angles[j]) <= DANCE_FOLLOW.shoulderDeg + 1e-6, 'the shoulders never wind up over many strokes');
+});
+
+test('the game starts on the underside; a double tap is a quick switch of all four limbs to the overside and back', () => {
+  const under = { ...start, ...DANCE_UNDERSIDE };
+  assert.deepEqual(DANCE_UNDERSIDE, { l_forearm: -80, r_pronation: 0, ankle_inv_L: -15, ankle_inv_R: -15 }, 'palms up, soles outward');
+  let d = startTurnStep(createDance(under)), a = { ...under }, t = 0;
+  assert.equal(d.target, -1, 'from the underside the switch goes to the overside');
+  while (d.mode === 'step' && t < 3) { d = observeDance(d, a); const r = stepDance(d, a, 1 / 120); d = r.dance; a = r.angles; t += 1 / 120; }
+  assert.ok(t <= DANCE.stepStrokeS + 0.02 && DANCE.stepStrokeS <= 0.5, `a quick switch: every limb there after ${t.toFixed(3)} s`);
+  assert.ok(Math.abs(a.l_forearm - 80) < 1e-6 && Math.abs(a.r_pronation - 160) < 1e-6 && Math.abs(a.ankle_inv_L - 35) < 1e-6 && Math.abs(a.ankle_inv_R - 35) < 1e-6, 'all four on the overside');
+  const back = run(startTurnStep(d), a, 1);
+  for (const j of Object.keys(DANCE_UNDERSIDE)) assert.ok(Math.abs(back.angles[j] - DANCE_UNDERSIDE[j]) < 1e-6, `${j} is back on the underside`);
+});
+
+test('limbs on different sides are brought to one side; a second double tap during a switch turns it round', () => {
+  // an activation has turned the right palm down; the other three limbs are on the underside
+  const mixed = { ...start, ...DANCE_UNDERSIDE, r_pronation: 160 };
+  const r = run(startTurnStep(createDance(mixed)), mixed, 1);
+  assert.ok(Math.abs(r.angles.r_pronation - 160) < 1e-6, 'the limb already on the overside stays');
+  assert.ok(Math.abs(r.angles.l_forearm - 80) < 1e-6 && Math.abs(r.angles.ankle_inv_L - 35) < 1e-6, 'the others join it');
+  // a second double tap half way turns the switch round
+  const under = { ...start, ...DANCE_UNDERSIDE };
+  let d = startTurnStep(createDance(under)), a = { ...under };
+  for (let t = 0; t < DANCE.stepStrokeS / 2; t += 1 / 120) { d = observeDance(d, a); const s2 = stepDance(d, a, 1 / 120); d = s2.dance; a = s2.angles; }
+  assert.ok(a.l_forearm > -70 && a.l_forearm < 70, 'half way');
+  d = startTurnStep(d);
+  assert.equal(d.target, 1, 'turned round');
+  const end = run(d, a, 1);
+  for (const j of Object.keys(DANCE_UNDERSIDE)) assert.ok(Math.abs(end.angles[j] - DANCE_UNDERSIDE[j]) < 1e-6, `${j} went back to the underside`);
+});
+
+test('a double tap held goes on slowly between the two sides', () => {
+  const under = { ...start, ...DANCE_UNDERSIDE };
+  let d = startTurnStep(createDance(under)), a = { ...under };
+  for (let t = 0; t < 0.1; t += 1 / 120) { d = observeDance(d, a); const s2 = stepDance(d, a, 1 / 120); d = s2.dance; a = s2.angles; }
+  d = startTurnHold(d);
+  let lo = Infinity, hi = -Infinity, turns = 0, last = a.r_pronation, lastDir = 0;
+  for (let t = 0; t < 12; t += 1 / 60) { d = observeDance(d, a); const s2 = stepDance(d, a, 1 / 60); d = s2.dance; a = s2.angles; lo = Math.min(lo, a.r_pronation); hi = Math.max(hi, a.r_pronation); const dir = Math.sign(a.r_pronation - last); if (dir && lastDir && dir !== lastDir) turns++; if (dir) lastDir = dir; last = a.r_pronation; }
+  assert.equal(d.mode, 'hold');
+  assert.ok(lo < 1 && hi > 159, 'the right forearm reaches both sides');
+  assert.ok(turns >= 2 && turns <= 8, `it turns round slowly (${turns} turns in 12 s)`);
 });

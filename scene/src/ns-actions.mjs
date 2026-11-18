@@ -917,8 +917,9 @@ export const BRAIN_GRAB = Object.freeze({ pitchLimitDeg: 75 });
 /** Double-tap window in seconds (press to press), from ns-controls DOUBLE_TAP_MS. */
 export const DOUBLE_TAP_SECONDS = DOUBLE_TAP_MS / 1000;
 /**
- * Forearm rotation defaults. defaultState 'pronated' (palm and hand dorsum oriented for the first-person view; the
- * BodyParts3D rest pose is the anatomical, supinated position). A double-tap commands the other posture: the display
+ * Forearm rotation defaults. defaultState 'supinated' since 18 November 2026 (the owner: "we start the game in an
+ * underside view of the limbs": palm up, the front of the forearm showing; it was 'pronated' before; the BodyParts3D
+ * rest pose is the anatomical, supinated position). A double-tap commands the other posture: the display
  * envelope of the commanded channel lasts commandSeconds (UI timing), the pose value eases with poseTau.
  * R3-arm: poseTau is the time constant (1/omega) of a CRITICALLY DAMPED ease (stepRotationEase) instead of a
  * first-order lag. The first-order lag (round 2, tau 0.1 s) started at full speed and covered 55 % of the flip in the
@@ -928,7 +929,7 @@ export const DOUBLE_TAP_SECONDS = DOUBLE_TAP_MS / 1000;
  * pronationRangeDeg is a SUGGESTED rig mapping: value 0 (pronated) = this many degrees of pronation away from the
  * anatomical (supinated) rest, value 1 (supinated) = 0. The rig owner (ns-arm/ns-rig) clamps and may choose its own.
  */
-export const ROTATION = Object.freeze({ defaultState: 'pronated', commandSeconds: 0.5, poseTau: 1 / 16, pronationRangeDeg: 150,
+export const ROTATION = Object.freeze({ defaultState: 'supinated', commandSeconds: 0.5, poseTau: 1 / 16, pronationRangeDeg: 150,
   // R5-pronation (R27): the pose ease under prefers-reduced-motion (pass createActivity({ rotationTau:
   // ROTATION.reducedMotionPoseTau })): 95 % at about 0.15 s instead of 0.30 s; shorter, still eased (no snap). The whole
   // coupled motion (ns-arm ROTATION_COUPLING: upper arm, shoulder blade, trunk) follows the same eased value.

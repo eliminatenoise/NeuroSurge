@@ -10,7 +10,7 @@ const app = await import('../scene/src/ns-app.mjs');
 const body = await import('../scene/src/ns-body.mjs');
 const DEG = Math.PI / 180;
 const rest = body.bodyPostureAngles(body.DEFAULT_BODY_POSTURE);
-const L = app.headLookLimits(body, app.HEAD_LOOK, { neck_flex: rest.neck_flex, trunk_flex: rest.trunk_flex, neck_rot: 0 });
+const L = app.headLookLimits(body, app.HEAD_LOOK, { neck_flex: rest.neck_flex, trunk_flex: rest.trunk_flex, neck_rot: 0, trunkFlexMaxDeg: body.bodyPostureLimits().trunk_flex[1] });
 const look = (y, p) => ({ yaw: y * DEG, pitch: p * DEG });
 
 test('without a posture the eyes are not lowered: the look is the head, as before', () => {
@@ -42,11 +42,13 @@ test('in the reclined posture the eyes are lowered while the head is level or bo
 });
 
 test('the game starts with the pelvis and legs level and the gaze diagonally down, the head only part of the way', () => {
-  assert.equal(rest.trunk_flex + rest.neck_flex, 90, 'trunk and neck together turn the head upright over a level pelvis');
+  // (18 November 2026, later: the pelvis roll, pelvic_tilt, is the third part of the sum)
+  assert.equal((rest.pelvic_tilt || 0) + rest.trunk_flex + rest.neck_flex, 90, 'pelvis roll, trunk and neck together turn the head upright over a level pelvis');
   const h = app.headPoseForLook(look(0, -34), null, L);
   assert.ok(Math.abs(h.look.pitch / DEG + 34) < 1e-9, 'the camera looks where the controls look');
   assert.ok(Math.abs(h.headLook.pitch / DEG + 34 - L.eyeDownDeg) < 1e-9, 'the head is bowed less: the eyes do the rest');
-  assert.ok(rest.neck_flex + h.joints.neck_flex < body.BODY_JOINT_LIMITS.neck_flex[1] - 10, 'the chin is not pressed on the chest');
+  // (18 November 2026, later: the start posture bends the neck 40 of its 50 degrees, as the owner asked; the look adds a few)
+  assert.ok(rest.neck_flex + h.joints.neck_flex <= body.BODY_JOINT_LIMITS.neck_flex[1], 'the neck stays inside its range');
   // the look still reaches well below the start and up to the camera's own stop
   const r = app.headLookRange(null, L, look(0, -36));
   assert.ok(r.pitchMinDeg <= -55 && r.pitchMinDeg > -88, `down to ${r.pitchMinDeg}`);

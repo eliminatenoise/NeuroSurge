@@ -53,11 +53,14 @@ test('in the source pose nothing has moved, and in the start posture the back is
   for (const s of body.BODY_SEGMENTS) for (let k = 0; k < 16; k++) assert.ok(Math.abs(zero[s][k] - (k % 5 === 0 ? 1 : 0)) < 1e-12, `${s} is the identity`);
   const S = body.poseBodySegments(rig, rest, {});
   for (const s of body.BODY_SEGMENTS) assert.ok(rotationError(S[s]) < 1e-9, `${s} is a rotation`);
-  assert.ok(Math.abs(angleBetween(S.pelvis, S.thorax) - rest.trunk_flex) < 1e-6, 'the stages together bend the trunk by trunk_flex');
+  // (18 November 2026, later: the start posture's bend is the pelvis roll, in the low back only, less a little extension of the whole back)
+  assert.ok(Math.abs(angleBetween(S.pelvis, S.thorax) - (rest.trunk_flex + (rest.pelvic_tilt || 0))) < 1e-6, 'the stages together bend the trunk by trunk_flex plus the pelvis roll');
+  for (const seg of ['t11', 't8', 't5', 't2']) assert.ok(angleBetween(S.t12, S[seg]) < 6, `the rib-bearing spine stays straight (${seg})`);
   let prev = 'pelvis', largest = 0;
   for (const [seg] of body.SPINE_STAGES) { largest = Math.max(largest, angleBetween(S[prev], S[seg])); prev = seg; }
   // (18 November, third pass: the bend is weighted to the low back; the largest share is the lumbosacral joint's, 12.5 of 80 degrees)
-  assert.ok(largest < 0.17 * rest.trunk_flex, `no single joint is a hinge (largest ${largest.toFixed(1)} degrees of ${rest.trunk_flex})`);
+  // (later: with the pelvis rolled under, the lumbosacral joint takes the most, 27 % of the roll less its share of the extension)
+  assert.ok(largest < 16, `no single joint is a hinge (largest ${largest.toFixed(1)} degrees)`);
 });
 
 test('in the start posture the ribs stay on their vertebrae and cartilages, and the collar bone on the breastbone', () => {
@@ -86,7 +89,8 @@ test('in the start posture the ribs stay on their vertebrae and cartilages, and 
 
 test('the shoulder girdles roll forward with a bent back, by the same amount on both sides', () => {
   assert.equal(body.shoulderRollDeg(0), 0);
-  assert.ok(body.shoulderRollDeg(rest.trunk_flex) > 8 && body.shoulderRollDeg(rest.trunk_flex) <= body.SHOULDER_ROLL.maxDeg);
+  const rollNow = body.shoulderRollDeg(rest.trunk_flex, body.SHOULDER_ROLL, rest.pelvic_tilt || 0); // (later: the pelvis roll counts too)
+  assert.ok(rollNow > 8 && rollNow <= body.SHOULDER_ROLL.maxDeg);
   assert.equal(body.shoulderRollDeg(500), body.SHOULDER_ROLL.maxDeg);
   assert.equal(body.shoulderRollDeg(-500), body.SHOULDER_ROLL.minDeg);
   const sc = rig.pivots.r_sternoclavicular, up = body.poseBodySegments(rig, {}, {}), bent = body.poseBodySegments(rig, { trunk_flex: 60 }, {});
@@ -124,7 +128,8 @@ test('from the reclined posture the trunk can lean all the way back and only a l
   assert.throws(() => body.poseBodySegments(rig, rest, { lookBendDeg: lim[0] - q - 1 }), /lookBendDeg/);
   assert.throws(() => body.poseBodySegments(rig, rest, { lookBendDeg: lim[1] - q + 1 }), /lookBendDeg/);
   const back = body.poseBodySegments(rig, rest, { lookBendDeg: lim[0] - q });
-  assert.ok(Math.abs(angleBetween(back.pelvis, back.thorax) + lim[0]) < 1e-6, 'the trunk is then at its backward limit');
+  // (later: the pelvis roll stays under a trunk leaned all the way back)
+  assert.ok(Math.abs(angleBetween(back.pelvis, back.thorax) - Math.abs(lim[0] + (rest.pelvic_tilt || 0))) < 1e-6, 'the trunk is then at its backward limit');
   // from a straight trunk the old range still holds
   assert.doesNotThrow(() => body.poseBodySegments(rig, {}, { lookBendDeg: lim[0] }));
   assert.throws(() => body.poseBodySegments(rig, {}, { lookBendDeg: lim[0] - 1 }), /lookBendDeg/);
@@ -144,7 +149,8 @@ test('a trunk turn turns the chest about its own long axis and leaves the head n
     assert.ok(angleBetween(S0.pelvis, S.pelvis) < 1e-9, 'the pelvis does not turn');
     // (with the turn about each low vertebra's own axis the eye swung some 170 mm sideways in the reclined posture)
     const moved = dist(at(S0.skull, EYE_BP), at(S.skull, EYE_BP));
-    assert.ok(moved < 60, `the eye moves ${moved.toFixed(0)} mm`);
+    // (later: with the chest leaning back 35 degrees over a rolled pelvis the head sits further from that axis: about 120 mm at a full turn)
+    assert.ok(moved < 130, `the eye moves ${moved.toFixed(0)} mm`);
   }
   // with a straight back it is the plain turn about the trunk's long axis, as before
   const up = body.poseBodySegments(rig, { trunk_rot: 30 }, {});
@@ -162,7 +168,8 @@ test('the eye camera can ride on the head of the body as drawn: the head frame t
 test('a rounded back carries the head forward without changing where it points', () => {
   assert.equal(body.headForwardDeg(0), 0);
   assert.equal(body.headForwardDeg(-25), 0);
-  assert.ok(body.headForwardDeg(rest.trunk_flex) > 10 && body.headForwardDeg(rest.trunk_flex) <= body.HEAD_FORWARD.maxDeg);
+  const hfNow = body.headForwardDeg(rest.trunk_flex, body.HEAD_FORWARD, rest.pelvic_tilt || 0); // (later: the pelvis roll counts too)
+  assert.ok(hfNow >= 8 && hfNow <= body.HEAD_FORWARD.maxDeg);
   const rotOf = S => { const T = S.thorax, K = S.skull, o = []; for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) o.push(T[4 * r] * K[4 * c] + T[4 * r + 1] * K[4 * c + 1] + T[4 * r + 2] * K[4 * c + 2]); return o; };
   const inChest = (S, p) => { const T = S.thorax, d = [p[0] - T[12], p[1] - T[13], p[2] - T[14]]; return [d[0] * T[0] + d[1] * T[1] + d[2] * T[2], d[0] * T[4] + d[1] * T[5] + d[2] * T[6], d[0] * T[8] + d[1] * T[9] + d[2] * T[10]]; };
   for (const neck of [{ neck_flex: 20, neck_rot: 30 }, { neck_flex: -30, neck_rot: -60 }, { neck_flex: 45 }]) {

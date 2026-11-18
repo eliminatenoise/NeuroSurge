@@ -310,6 +310,9 @@ export function headLookLimits(body = null, base = HEAD_LOOK, rest = null) {
   const shift = (r, k) => { const q = rest && Number.isFinite(rest[k]) ? rest[k] : 0; const lo = r[0] - q, hi = r[1] - q; return [Math.min(0, lo), Math.max(0, hi)]; };
   const nf = shift(L && ok(L.neck_flex) ? L.neck_flex : [-base.neckExtDeg, base.neckFlexDeg], 'neck_flex');
   const tf = shift(L && ok(L.trunk_flex) ? L.trunk_flex : [-base.trunkExtDeg, base.trunkFlexDeg], 'trunk_flex');
+  // (18 November 2026: the start posture's own stop for the trunk's forward bend, ns-body BODY_POSTURE_LIMITS: the
+  // look does not fold the low back further than a trunk movement may)
+  if (rest && Number.isFinite(rest.trunkFlexMaxDeg)) tf[1] = Math.max(0, Math.min(tf[1], rest.trunkFlexMaxDeg - (Number.isFinite(rest.trunk_flex) ? rest.trunk_flex : 0)));
   const tw = body && Number.isFinite(body.LOOK_TWIST_LIMIT_DEG) && body.LOOK_TWIST_LIMIT_DEG >= 0 ? body.LOOK_TWIST_LIMIT_DEG : base.twistDeg;
   const ts = body && Number.isFinite(body.LOOK_BEND_SIDE_LIMIT_DEG) && body.LOOK_BEND_SIDE_LIMIT_DEG > 0 ? body.LOOK_BEND_SIDE_LIMIT_DEG : base.trunkSideDeg;
   // 18 November 2026: the eyes lowered in the head (ns-body POSTURE_EYES; see HEAD_LOOK eyeDownDeg). maxDownDeg is the
@@ -1805,7 +1808,13 @@ export const BRAIN_RAISE_NDC = 0.2;
  * drawn about half as wide as before, so with the look starting 36 degrees below level the whole strip is still
  * inside the top of the picture and the player's own front is seen around and under it. The price: every area is
  * smaller to aim at. A display choice; one number to change if the areas prove too small. */
-export const BRAIN_START_MOTOR_FRAC = 0.25;
+/* 18 November 2026, later: 0.25 -> 0.33. The look now starts 25 degrees below level (the camera stands behind the eye,
+ * ns-camera EYE_DOLLY, so the shoulders, chest and belly are in the picture at a shallower look), which leaves room
+ * above the mirror body's head for a strip a third larger: about 570 px across at 1600x900, face areas included,
+ * all of it inside the picture (viewed at 1600x900 and 1280x720). */
+/* 18 November 2026, the owner ("a slightly wider and larger motor strip, which will probably also mean a larger
+ * brain"): 0.33 -> 0.5: the strip is about 800 px across at 1600x900 (640 in the ninth upload, 400 in the tenth). */
+export const BRAIN_START_MOTOR_FRAC = 0.5;
 /**
  * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
  * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
@@ -1824,11 +1833,21 @@ export const BRAIN_START_MOTOR_FRAC = 0.25;
  * This is a display choice with no anatomical meaning. When the mirror body is moved or the look changes the brain and
  * the body can overlap again, as before; the arrow planner still keeps every tip off the motor areas (ns-scene-three).
  */
-export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0 });
+/* 18 November 2026 (the owner: "we want the motor strip, the middle bit, to be below our ankles, essentially, so that
+ * the body is actually above the motor strip, even if that means parts of the body occlude parts of the motor strip.
+ * And perhaps we do want a slightly wider and larger motor strip, which will probably also mean a larger brain"): the
+ * brain no longer rests on the mirror body's head. It stands beyond and BELOW your feet, facing the start look, and
+ * startNdc is where the strip's lowest part (its middle: the leg and foot areas) lies in the start picture: a little
+ * below the middle of the view, under your own ankles, seen between your legs; the strip's two arms rise on either
+ * side of your legs, and the mirror body stands in the hollow between them, above your feet. Your legs and feet lie
+ * in front of the strip and hide parts of it. The mirror-body rule above (mirrorFrameTopFrac, clearPx) is kept for
+ * whoever passes startNdc: null. A display choice with no anatomical meaning. */
+export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0, startNdc: -0.11 });
 /** The lowest height of the view the motor strip may reach at the start (normalised device units, +1 = the top edge),
  * or null when there is no floor (no size, or a window narrower than rule.minAspect). Pure. */
 export function brainFloorNdc(size, { rule = BRAIN_FLOOR } = {}) {
   if (!size || !(size.width > 0 && size.height > 0) || size.width / size.height < rule.minAspect) return null;
+  if (Number.isFinite(rule.startNdc)) return rule.startNdc;
   const tip = arrowTipSizePx(size, 'mirror');
   const floorPx = rule.mirrorFrameTopFrac * size.height - arrowHitHalfPx(tip).halfAlongPx - rule.clearPx;
   return Math.round(clamp(1 - 2 * floorPx / size.height, -0.85, 0.85) * 1e4) / 1e4;
@@ -4775,7 +4794,10 @@ export function start(params = {}) {
   let headLookOn = false, headLimits = HEAD_LOOK, headRest = null, lastHeadPose = null, headShown = null, headPrevNow = null;
   /** The look's head joints (counted from the start posture) as the rig's own angles: the posture's neck and trunk bend
    * added back (the reclined posture of 17 November 2026 starts with both bent forward). */
-  const headAbsJoints = j => ({ neck_rot: j.neck_rot + (headRest ? headRest.neck_rot : 0), neck_flex: j.neck_flex + (headRest ? headRest.neck_flex : 0), trunk_flex: j.trunk_flex + (headRest ? headRest.trunk_flex : 0) });
+  // (18 November 2026: the start posture's pelvis roll, ns-body pelvic_tilt, is part of the body the head sits on: it
+  // goes with the look's joints to whoever places the eye, the camera and the left shoulder on the posed body)
+  const headAbsJoints = j => ({ neck_rot: j.neck_rot + (headRest ? headRest.neck_rot : 0), neck_flex: j.neck_flex + (headRest ? headRest.neck_flex : 0), trunk_flex: j.trunk_flex + (headRest ? headRest.trunk_flex : 0),
+    ...(headRest && headRest.pelvic_tilt ? { pelvic_tilt: headRest.pelvic_tilt } : {}) });
   /** R558 (HEAD_LOOK): the held neck / trunk angles of an activity state from the start posture (now: where the joint
    * is this instant, springing included; goal: where its latch holds it), and whether they moved since the last frame. */
   // R558 (performance, hunt 2 code #7): the activity's joint targets and latch view (a full state check) are read once
@@ -5037,7 +5059,7 @@ export function start(params = {}) {
   // conform of the scalp muscles onto it (ns-body conformMusclesToBones report).
   let headStream = null, headNote = '', headLoaded = 0, headConform = null;
   // R558 (builder AN): the missing-muscles packet stream (loaded with the body), its note and its mesh count.
-  let musclesStream = null, musclesNote = '', musclesLoaded = 0, sheathOpened = null;
+  let musclesStream = null, musclesNote = '', musclesLoaded = 0, sheathOpened = null, chestFlattened = null, bellyClosed = null;
   let girdleStream = null; // Separate finite body-domain stream; existing cancellation owner.
   const streamCancelAttempted = new WeakSet(), streamCancelErrors = [];
   let streamCancelErrorTotal = 0, streamCancelErrorDropped = 0;
@@ -5798,6 +5820,12 @@ export function start(params = {}) {
       if (bodyStream && !bodyModule) { cancelOwnedStream(bodyStream, 'body'); bodyStream = null; }
       // The normal initial loader already checked these manifest bytes; retain its original source packet.
       // A separate owned stream keeps all8 outside arm fitting and inside the one fixed-body rig/bake/scene install.
+      // 18 November 2026: the chest muscles are drawn flat (ns-body flattenChest: pectoralis major thinned toward the
+      // ribs on the rest mesh, before the rig, the bake, the layers and the mirror body are made from it).
+      const withFlatChest = b => {
+        if (!b || !(b.meshesById instanceof Map) || !mods.body || typeof mods.body.flattenChest !== 'function') return b;
+        try { const o = mods.body.flattenChest(b.meshesById); chestFlattened = o.report; return { ...b, meshesById: o.meshesById }; } catch (err) { chestFlattened = { error: errorText(err) }; return b; }
+      };
       const withShoulderGirdle = async base => {
         if (isPlaceholder) return base;
         if (stopped || failed) return null;
@@ -5836,7 +5864,7 @@ export function start(params = {}) {
             expectedManifestSha256: expectedSha256 && typeof expectedSha256.fullbodyManifest === 'string' ? expectedSha256.fullbodyManifest : null,
             onProgress: (n, total) => { if (!stopped) setStatus(`Loading the 3D body files ${n}/${total}…`); }
           });
-          const b = await withShoulderGirdle(loadedBody);
+          const b = withFlatChest(await withShoulderGirdle(loadedBody));
           if (stopped || failed) return { ok: false, error: 'stopped' };
           if (b && b.entries && b.meshesById) {
             setStatus('Getting the body ready…');
@@ -5927,7 +5955,7 @@ export function start(params = {}) {
       // R558 (HEAD_LOOK): the look drives the head with the configured eye camera (not the whole-arm engineering view).
       headLookOn = Boolean(referenceGraph) && !wholeArmOption;
       // The look bends the neck and trunk from the start posture's own bend (the reclined posture): limits counted from it.
-      headRest = mods.body && typeof mods.body.bodyPostureAngles === 'function' ? (() => { try { const r = mods.body.bodyPostureAngles(mods.body.DEFAULT_BODY_POSTURE); return { neck_flex: r.neck_flex || 0, trunk_flex: r.trunk_flex || 0, neck_rot: r.neck_rot || 0 }; } catch { return null; } })() : null;
+      headRest = mods.body && typeof mods.body.bodyPostureAngles === 'function' ? (() => { try { const r = mods.body.bodyPostureAngles(mods.body.DEFAULT_BODY_POSTURE); const pl = typeof mods.body.bodyPostureLimits === 'function' ? mods.body.bodyPostureLimits(mods.body.DEFAULT_BODY_POSTURE) : null; return { neck_flex: r.neck_flex || 0, trunk_flex: r.trunk_flex || 0, neck_rot: r.neck_rot || 0, pelvic_tilt: r.pelvic_tilt || 0, ...(pl && Array.isArray(pl.trunk_flex) ? { trunkFlexMaxDeg: pl.trunk_flex[1] } : {}) }; } catch { return null; } })() : null;
       headLimits = headLookLimits(mods.body, HEAD_LOOK, headRest);
       const wholeArmSupport = wholeArmOption ? captureWholeArm(() => WholeArmDisplay.buildWholeArmSupport({ bones: data.bones, muscles: data.muscles, liftedById: armLifted })) : null;
       sim = createSimulation({
@@ -6027,7 +6055,7 @@ export function start(params = {}) {
         try {
           const loadedBody = await bodyJob.start();
           if (stopped || failed) return;
-          const b = await withShoulderGirdle(loadedBody);
+          const b = withFlatChest(await withShoulderGirdle(loadedBody));
           if (stopped || failed || !b) return;
           // R5-integrate-core (D20): the face and chewing muscles join the SAME rig build (setBody may run once, and the
           // bake and the Body Worlds layers must know every mesh; R5-body / R5-load). A missing or refused face packet is a
@@ -6152,6 +6180,10 @@ export function start(params = {}) {
                   const o = mods.body.openRectusSheath(inputsB.meshesById);
                   inputsB = { ...inputsB, meshesById: o.meshesById };
                   sheathOpened = o.report;
+                }
+                // 18 November 2026: the belly wall is drawn closed at the midline (ns-body closeBellyMidline).
+                if (typeof mods.body.closeBellyMidline === 'function') {
+                  try { const o = mods.body.closeBellyMidline(inputsB.meshesById); inputsB = { ...inputsB, meshesById: o.meshesById }; bellyClosed = o.report; } catch (err) { bellyClosed = { error: errorText(err) }; }
                 }
                 markPerf('ns:muscles-complete');
               } else musclesNote = `Extra muscles not shown: ${r ? r.error || r.status : 'no result'}`;
@@ -8686,7 +8718,7 @@ export function start(params = {}) {
         mirror: mirrorWired && Boolean(bodyRig), mirrorOrbit: plainCopy(mirrorView.orbit), glow: glowWired,
         glowLabel: glowData ? glowData.label : null, glowRendered: plainCopy(glowRendered),
         glowEndpointVisibility: 'UNVERIFIED: frozen renderer exposes ribbon counts, not per-end onScreen evidence',
-        guideFeatures: { ...guideFeatures }, faceMuscles: faceLoaded, faceNote: faceNote || null, headPacket: { loaded: headLoaded, note: headNote || null, conform: headConform }, missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, sheathOpened: plainCopy(sheathOpened) },
+        guideFeatures: { ...guideFeatures }, faceMuscles: faceLoaded, faceNote: faceNote || null, headPacket: { loaded: headLoaded, note: headNote || null, conform: headConform }, missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed),
         streamCancellationErrors: plainCopy(streamCancelErrors), streamCancelErrorTotal, streamCancelErrorDropped,
         arrowTargets: [...ARROW_INPUT_TARGETS] }
     };
@@ -8889,7 +8921,7 @@ export function start(params = {}) {
       })(),
       faceMuscles: { loaded: faceLoaded, note: faceNote || null, packet: FACE_PACKET_ID },
       headPacket: { loaded: headLoaded, note: headNote || null, packet: HEAD_PACKET_ID, conform: headConform },
-      missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, packet: MISSING_MUSCLES_PACKET_ID, sheathOpened: plainCopy(sheathOpened) },
+      missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, packet: MISSING_MUSCLES_PACKET_ID, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed),
       arrowInput: { ...plainCopy(arrowInput), events: plainCopy(arrowEvents), targets: [...ARROW_INPUT_TARGETS] },
       guide: (() => { try { const t = simState && Number.isFinite(simState.t) ? simState.t : 0; return { ...NG.guideView(guide, t), done: NG.goalsDone(guide), hidden: guide.hidden === true, current: NG.currentGoal(guide) }; } catch { return null; } })(),
       reducedMotion: (() => { try { return typeof view.matchMedia === 'function' ? view.matchMedia('(prefers-reduced-motion: reduce)').matches : null; } catch { return null; } })(),

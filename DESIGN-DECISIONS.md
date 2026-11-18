@@ -1342,6 +1342,41 @@ Not achieved, and still asked for.
 
 A next package is given the two things the three builders did not allow themselves: a camera set back from the anatomical eye, and a thinner chest muscle.
 
+## 91. Slumped back, the whole torso in view, the motor strip under the ankles (18 November)
+
+The user, after the tenth upload with its rounded back, in a run of notes: "maybe I was wrong about the spinal flexion. I think we need to go into spinal extension, quite frankly. while still leaning quite a bit back"; "we want maximum posterior pelvic tilt with some degree of neck flexion so that you can look down upon your body. And then we want the motor strip, the middle bit, to be below our ankles, essentially, so that the body is actually above the motor strip, even if that means parts of the body occlude parts of the motor strip. And perhaps we do want a slightly wider and larger motor strip, which will probably also mean a larger brain"; "there's essentially minimal elbow and knee flexion initially, although they must still look naturalistic, but yet be fully extended out"; "all of the torso has to be visible at once, even if that means you're a little flat-chested. Maybe we need an even greater field of view."
+
+Before (section 90): the whole back was rounded, the chest lay as two mounds under the chin, neither shoulder was in the start picture, the crosshair started on your knees and the brain was drawn at half size above your feet.
+
+Now the body is slumped back as on a sofa.
+- The pelvis is rolled under by 55 degrees, a bend of the low back only (a new posture term, `pelvic_tilt`). The upper back is straight, 5 degrees into extension, and leans back. The neck is bent 40 degrees. The hips are neutral and the legs level, spread 12 degrees each, with the knees 6 degrees soft. The right arm is stretched toward the knee with the elbow at 8 degrees. The trunk's own forward bend stops at 30 degrees from this posture.
+- The picture is taken from 12 cm above the eyes, on the head's own upward line, and 1 cm back, with a field of view of 116 degrees (it was 108). The look starts 41 degrees below level and goes down to 75. For upward and far sideways looks the view point eases back to the eye.
+- The chest muscles are drawn at about two thirds of the source model's depth (13 mm where the source has 21 in the part from the breastbone); their hold on collar bone and breastbone is kept. The two straight belly muscles are closed at the midline, where the source meshes left a slot through which the spine showed.
+- The brain stands beyond and below the feet, larger than it has been: the strip is about 800 px wide on a 1600 px picture (640 before the tenth upload, about 400 in it). The middle of the strip is just under your ankles and shows between your legs; the crosshair starts there. The mirror body stands in the hollow of the strip, above your feet.
+
+The start picture, from the bottom up: the collar bones along the lower edge, both shoulders in the corners, the flat chest, the stomach, the pelvis, both legs running up to the feet, the motor strip behind and round them, and the mirror body above. Your legs hide part of the strip's middle; an area behind a leg is still taken by the crosshair (the tip names it), and Shift takes the leg in front.
+
+How it was reached. Three builders had kept the camera at the anatomical eye and the chest muscle's shape, and could not get the shoulders or a flat chest (section 90). Both limits were lifted by decision. The view point was first set back along the line of sight; that showed the open root of the neck at steep downward looks, and the head-mounted point above the eyes replaced it. The crosshair's line is therefore parallel to the eye's own, 12 cm above it, not the same line. Looks of 31 to 39 degrees put the start crosshair on the mirror body's lower arrow, so that the first click tilted the mirror body; 41 clears it.
+
+What it costs and what is not right.
+- With the wider view, things in the middle are about a seventh smaller and the corners stretch more.
+- The stomach is a narrow band, about 50 px of 900, and the legs are seen at a flat angle: with a straight upper back the eyes sit low over the chest.
+- The brain is not tilted to face the eyes; it is the same upright picture, lower and larger. From outside (E) the brain is a very large shape under and round the body, and it hides the pelvis and legs from most sides. Whether the legs clear the brain everywhere was not measured.
+- The left game arm still reaches level into the picture instead of lying along the thigh like the right one.
+- A full trunk turn now moves the view point about 120 mm (45 before), because it sits above the eyes.
+- At the start posture, against the source pose, the largest muscle-end distance is 23 mm in the neck and upper back (16 before), with 13 of 829 ends over 8 mm (18 before).
+- Not checked by the builder on the final build: the trunk movements from the strip, the look extremes as pictures, reduced motion, frames per second. An independent check of this package was still running when this version was published; its findings go into the next one.
+
+## 92. A double tap is a quick switch between the underside and the overside (18 November)
+
+The user: "we start the game in an underside view of the limbs. And of course, if you double tap, you'll get the overside. And then if you double tap and hold, you will continuously slowly switch between the two. But if you just double tap, it will be a quick switch."
+
+Before (section 78): a double tap turned each limb to its own next end in about a second, each limb by its own history, so limbs could end on different sides; the game started with the right palm down, the left thumb up and the soles level.
+
+Now the limb turn has two named sides. The underside is palms up and soles turned outward (the "open" ends of `ns-dance.mjs`, `DANCE_UNDERSIDE`); the overside is palms down and soles inward. The game starts on the underside: the start posture holds the right forearm and both ankles there, and the left forearm's default is palm up. A double tap switches all four limbs together to the other side in 0.4 s, every limb at the same speed. The side they go to is the one most of them are not on, judged by the four leading joints, so limbs that an activation has left on different sides are brought together. A limb already there stays. A second double tap during the switch turns it round. A double tap held goes on as before, slowly, limb by limb, between the two sides, and stops where it is when the key is let go.
+
+Checked in the browser: from the underside a double tap had both ankles at their other end within 0.3 s; a second brought the forearm and ankles back; held, the right forearm ran from one end to the other about every 2.5 s. Four tests hold the rule. The left forearm's palm-up start was not looked at in a picture.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1352,7 +1387,7 @@ A next package is given the two things the three builders did not allow themselv
 **Limits of this build that were looked at and left, each with its reason in the section named.**
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
-- Looking down shows your chest, belly, arms and legs since section 90; your shoulders only at a look of about 55 degrees down or to a side (14, 79, 90).
+- The start picture holds your whole torso since section 91; the stomach is a narrow band in it (14, 79, 90, 91).
 - In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69).
 - After “Tilt head back” and the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it (68).
 - While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
@@ -1372,6 +1407,6 @@ A next package is given the two things the three builders did not allow themselv
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 and 18 November, not done yet: both shoulders in the start picture, a flat chest, and the crosshair starting on the motor strip (90); the rough, pock-marked look of some muscles such as the hip flexors; collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
+- From the notes of 17 and 18 November, not done yet: the colour code of the strip and the body redone from scratch with visible links between an area and its part; grouping ("chunking") of every overlay; a pass over all earlier notes for small fixes; the rough, pock-marked look of some muscles such as the hip flexors; collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

@@ -21,6 +21,9 @@ export async function loadBody(repo) {
     if (r && r.status === 'complete') { const extra = assets.packetAppInputs(await job.manifest, r); inputs = assets.mergeAppInputs(inputs, extra); notes.push(`missing muscles merged: ${extra.entries.length}`); }
     else notes.push('missing muscles: ' + (r && (r.error || r.status)));
   } catch (e) { notes.push('missing muscles not loaded: ' + String(e && e.message || e).slice(0, 200)); }
+  // the chest muscles are drawn flat (ns-body flattenChest), as on the page
+  if (typeof body.flattenChest === 'function' && !process.env.NS_SOURCE_CHEST) { const o = body.flattenChest(inputs.meshesById); inputs = { ...inputs, meshesById: o.meshesById }; notes.push('chest flattened: ' + JSON.stringify(o.report)); }
+  if (typeof body.closeBellyMidline === 'function' && !process.env.NS_SOURCE_CHEST) { const o = body.closeBellyMidline(inputs.meshesById); inputs = { ...inputs, meshesById: o.meshesById }; notes.push('belly midline closed: ' + JSON.stringify(o.report)); }
   const rig = body.buildBodyRig(inputs.entries, inputs.meshesById);
   const baked = body.bakeBodyPosture(rig, inputs.meshesById, { posture: body.DEFAULT_BODY_POSTURE });
   return { app, body, inputs, rig, baked, notes };

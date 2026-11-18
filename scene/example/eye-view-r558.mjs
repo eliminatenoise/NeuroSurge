@@ -17,7 +17,13 @@ import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
 // 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
 // Including everything from the neck down"): 108 degrees up and down (about 136 across at 16:9), between the 90 of
 // 11 November and the 120 whose edge stretching the user called absurd.
-const EYE_FOV_Y_DEG = 108;
+// 18 November 2026 (the owner: "Remember, all of the torso has to be visible at once, even if that means you're a
+// little flat-chested. Maybe we need an even greater field of view."): 108 -> 116 degrees up and down (about 141
+// across at 16:9). With the look starting 41 degrees below level the picture now reaches from 17 degrees above level
+// down to 99 below: the collar bones lie inside its lower edge with both shoulders in the lower corners, and the
+// chest, stomach and pelvis above them. The price: things in the middle are drawn about a seventh smaller and the
+// corners are stretched more (120 was called absurd on 17 November; 116 stays under it).
+const EYE_FOV_Y_DEG = 116;
 // 17 November 2026 (user: "what if we made the brain far lower so that the relevant body parts were always in view?";
 // "You will naturally be looking a little downwards and that is where the motor strip should naturally be"): the game
 // starts with the look a little below level, as someone leaning back on a sofa looks, and the brain starts there too,
@@ -36,7 +42,20 @@ const EYE_FOV_Y_DEG = 108;
 // the picture above your own legs, and your arms, belly and chest are seen around and under it. The brain still
 // stands 20 below level, on the mirror body's head, for the reason given above; the crosshair therefore starts on
 // your own knees, about 22 degrees under the strip's lower edge, not on the strip itself.
-const START_LOOK_PITCH_DEG = -36, BRAIN_START_PITCH_DEG = -20;
+// 18 November 2026, fourth pass (the owner: "I want flat depressed chest ... you are gazing diagonally downwards. You
+// should be able to see your own shoulders and stomach/abs"; the lead: the crosshair should start on, or as near as
+// can be to, the motor strip, and the strip should be large again). The camera now stands a little behind the eye on
+// its own line of sight (ns-camera EYE_DOLLY), so both shoulders, the collar bones, the chest and the belly are in
+// the lower part of the picture at a shallower look than before, and the look starts 25 degrees below level (the
+// head bowed 3, the eyes 22). Why 25 and not 36: the strip stands above the mirror body's head, which is at eye level
+// (the mirror body is a literal reflection on the same ground), so every degree the look comes up brings the strip
+// that much nearer the crosshair and leaves room to draw it larger (ns-app BRAIN_START_MOTOR_FRAC 0.25 -> 0.33: the
+// whole strip, face areas included, is inside the picture). Between 27 and 34 degrees the crosshair starts on the
+// mirror body's lower arrow (its tip comes up at once and the first click tilts the mirror body instead of taking
+// the pointer); at 25 it starts in the open between the mirror body's legs, about 120 px under the leg areas at
+// 1600x900. It does NOT start on the strip: at any look that still shows your chest, your own legs and feet and the
+// mirror body lie under the crosshair, and the strip cannot stand in front of them without hiding them.
+const START_LOOK_PITCH_DEG = -41, BRAIN_START_PITCH_DEG = -41;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);

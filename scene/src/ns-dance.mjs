@@ -48,21 +48,30 @@
  *     stroke that is under way keeps its progress and only stretches its remaining time (startTurnHold / stepDance),
  *     so nothing jumps or restarts, it just slows down. Let go (stopDance) and every limb stays exactly where it is (the
  *     latch rule): only an opposing activation, a drag, another turn or Reset body moves it.
+ *  6. Two sides (the owner, 18 November 2026: "we start the game in an underside view of the limbs. And of course, if
+ *     you double tap, you'll get the overside. And then if you double tap and hold, you will continuously slowly switch
+ *     between the two. But if you just double tap, it will be a quick switch."). The "open" ends are the UNDERSIDE view
+ *     (palms up, soles outward: DANCE_UNDERSIDE, where the game starts); the "closed" ends are the OVERSIDE view. A
+ *     double tap is a quick switch of ALL FOUR limbs together to the other side: the side most of them are not on (the
+ *     mean openness of the four leading joints decides; a second double tap while the switch is still under way turns
+ *     it round), every limb at the same speed (DANCE.stepStrokeS), a limb already on that side stays. This replaces
+ *     rule 2 for the step only; the slow turn of a double tap held still goes on limb by limb with rules 2 and 3.
  *  5. Activity: each limb's level is its current turning speed (DANCE.glowFullSpeed of its range per second = level 1),
  *     for the brain areas of the turning limbs and their rotator muscles. Simulated, unitless display values.
  * Not measured motion, EMG, force or nerve signals; a game display rule.
  */
 
 /** Tuning (display choices; see the rule above).
- *  stepStrokeS / slowStrokeS  seconds for a full end-to-end stroke at tempo 1: a double tap's one step (1.0 s, the old
- *                             fast dance's speed) / the slow turn of a double tap held (2.6 s, the old slow dance's)
+ *  stepStrokeS / slowStrokeS  seconds for a full end-to-end stroke: a double tap's quick switch (0.4 s for every limb;
+ *                             it was 1.0 s before 18 November 2026) / the slow turn of a double tap held (2.6 s at
+ *                             tempo 1)
  *  tempo                      per-limb speed factors; ratios chosen so no two limbs stay in step (not coordinated)
  *  endEps                     a limb within this fraction of its range of the end it is heading for turns round
  *  moveEpsDeg                 a joint change smaller than this (degrees) is not counted as a movement (history)
  *  glowFullSpeed              turning speed (fraction of the range per second) shown as activity level 1
  *  followGlow                 a follower joint's share of that level (its turn is small and only accompanies the leader) */
 export const DANCE = Object.freeze({
-  stepStrokeS: 1.0,
+  stepStrokeS: 0.4,
   slowStrokeS: 2.6,
   tempo: Object.freeze({ leftArm: 1.0, rightArm: 1.27, leftLeg: 0.86, rightLeg: 1.13 }),
   endEps: 0.004,
@@ -93,6 +102,8 @@ export const DANCE_LIMBS = Object.freeze({
   rightLeg: Object.freeze([Object.freeze({ id: 'ankle_inv_R', open: -15, closed: 35 }), follower('hip_rot_R', DANCE_FOLLOW.hipDeg, -40, 45)])
 });
 export const DANCE_LIMB_IDS = Object.freeze(Object.keys(DANCE_LIMBS));
+/** The UNDERSIDE view (rule 6): every leading joint at its "open" end. The game starts here. */
+export const DANCE_UNDERSIDE = Object.freeze(Object.fromEntries(Object.keys(DANCE_LIMBS).map(l => [DANCE_LIMBS[l][0].id, DANCE_LIMBS[l][0].open])));
 export const DANCE_JOINT_IDS = Object.freeze(DANCE_LIMB_IDS.flatMap(l => DANCE_LIMBS[l].map(j => j.id)));
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
@@ -182,7 +193,7 @@ const easeRate = q => 0.5 * Math.PI * Math.sin(Math.PI * q); // d ease / d q
 /** A new stroke for limb l from the current angles in direction dir (null when the leading joint is already at that
  * end). The leader goes to its end; each follower turns the same way by its `follow` degrees times the share of a
  * whole stroke the leader still has to go, from where it is, inside its own range (and a narrower one in `ranges`). */
-function newStroke(l, angles, dir, ranges, strokeS) {
+function newStroke(l, angles, dir, ranges, strokeS, tempo = DANCE.tempo[l]) {
   const from = {}, to = {};
   const joints = DANCE_LIMBS[l], lead = joints[0], e0 = endsOf(lead, ranges);
   from[lead.id] = angles[lead.id];
@@ -202,18 +213,24 @@ function newStroke(l, angles, dir, ranges, strokeS) {
       to[j.id] = dir > 0 ? e.open : e.closed;
     }
   }
-  return { from, to, t: 0, T: (frac * strokeS) / DANCE.tempo[l], frac };
+  return { from, to, t: 0, T: (frac * strokeS) / tempo, frac };
 }
 
 /**
- * Message 40: a DOUBLE TAP starts one step: every limb makes one stroke to its next end (rule 2 picks the way), then
- * stops by itself. A limb whose stroke of an earlier step is still under way keeps it (it is not restarted, so nothing
- * stutters); a limb that has finished turns once more. Returns a new state.
+ * A DOUBLE TAP (Message 40, and rule 6 since 18 November 2026): a quick switch. All four limbs go to the SAME side:
+ * the one most of them are not on now (the mean openness of the four leading joints at the angles last seen; at or
+ * above one half counts as the underside, so the switch goes to the overside). A double tap while a switch is still
+ * under way turns it round. A limb already on that side stays; a stroke under way is dropped and the limb starts
+ * again from where it is. Returns a new state (`target`: 1 = to the underside / open ends, -1 = to the overside).
  */
 export function startTurnStep(dance) {
+  let sum = 0;
+  for (const l of DANCE_LIMB_IDS) { const j = DANCE_LIMBS[l][0]; sum += clamp(openness(j, dance.seen[j.id]), 0, 1); }
+  const running = dance.mode === 'step' && (dance.target === 1 || dance.target === -1) && DANCE_LIMB_IDS.some(l => !dance.limbs[l].done);
+  const target = running ? -dance.target : (sum / DANCE_LIMB_IDS.length >= 0.5 ? -1 : 1);
   const limbs = {};
-  for (const l of DANCE_LIMB_IDS) limbs[l] = { ...dance.limbs[l], done: false };
-  return { ...dance, limbs, mode: 'step', active: true };
+  for (const l of DANCE_LIMB_IDS) limbs[l] = { ...dance.limbs[l], dir: target, stroke: null, done: false };
+  return { ...dance, limbs, mode: 'step', active: true, target };
 }
 
 /**
@@ -260,7 +277,9 @@ export function stepDance(dance, angles, h, { ranges = null } = {}) {
         if (mode === 'step' && s.done) break; // this step's stroke is made: the limb waits where it is
         const cur = {};
         for (const j of DANCE_LIMBS[l]) cur[j.id] = out[j.id];
-        let k = newStroke(l, cur, s.dir, ranges, strokeS);
+        // A quick switch (rule 6) moves every limb at one speed and leaves a limb that is already on the wanted side.
+        let k = newStroke(l, cur, s.dir, ranges, strokeS, mode === 'step' ? 1 : DANCE.tempo[l]);
+        if (!k && mode === 'step') { s.done = true; break; }
         if (!k) { s.dir = -s.dir; k = newStroke(l, cur, s.dir, ranges, strokeS); }
         if (!k) { s.done = true; break; } // a limb with no room at all (both ends at its angle) stays where it is
         s.stroke = { ...k, mode };
