@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-20",
+  "version": "experimental-2026-11-19-body-update-21",
   "experimental": true,
-  "source": "Body update 20. The outside view keeps its field of view through window, display-scale and picture-quality changes.",
+  "source": "Body update 21. The first prompt, Esc instructions and player notes explain how to select and move a body part.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 228875,
-      "sha256": "4a8a57d5ddc61e6bd50ce4b1286fe364e99b71788b7af8f8cdf4c3af15a70c72"
+      "bytes": 229500,
+      "sha256": "601b9bdc1a9548f53caba4b4f3ef3b7da3cf5cc6fcc563f50dce8ddc54eb458f"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9301,
-      "sha256": "ee817e8efc31580dd08d938e6e46c6a7b82d2c76956582d291a9ecd51b8f7e3b"
+      "bytes": 9528,
+      "sha256": "a42e2c5e4bd5df2549912bc82d082ecc2940eae745d0eccda9fb8b073a6ad500"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 56239,
-      "sha256": "8107ffd9f77347d3cd1819b593c388632ba53f69abece204212bcded0237791b"
+      "bytes": 56427,
+      "sha256": "e24c8a215ae1b9a70aeea88309ef92f2c506f5649e970d05208040aa085e6e58"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 27120,
-      "sha256": "094a95d6524096fce7701c4f87008589e2dde931789e64f77ac3720978498f55"
+      "bytes": 27169,
+      "sha256": "5ffa148954e2e448859f0f6e643acdcb03c0b6c223e659b095227a6ca4ad6d7f"
     },
     {
       "path": "README.md",
-      "bytes": 15281,
-      "sha256": "bebb5e7837b79bc39ac7948de159686d9cdde74d85eef230cc46aa224bed9bf4"
+      "bytes": 15507,
+      "sha256": "f051aac535d842ab79f71cd7573111608af1d3abd463e5d70e94acab5c1c9378"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "8dcbf7762336ea9525d353404335d83f1a663b8a23ab7498dad811898c1f6720"
+      "sha256": "797eebc3ee7b4406724a4196e88c85d780c5165b4bdd26b742c5c5cac6b21f16"
     },
     {
       "path": "index.html",
@@ -4082,8 +4082,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 135517,
-      "sha256": "184b6d35082d65a8e74f4c47736ad1e432a4f98bd2e5472f91378fdcece6045b"
+      "bytes": 135094,
+      "sha256": "9afdf04786dc58cb5b20554281609e3ae1dce809fd6a3733c9736aaa51222501"
     },
     {
       "path": "scene/src/ns-vessels.mjs",

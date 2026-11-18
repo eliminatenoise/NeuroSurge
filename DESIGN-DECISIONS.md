@@ -1515,6 +1515,12 @@ In the outside view, changing the resolution of the picture could narrow the vie
 
 The renderer now selects the lens from the current camera pose whenever it resizes. The eye view still adjusts for the shape of the window, and the two lenses blend when you press E. In Chromium on AMD Vulkan, the outside lens held at 66 degrees through changes to display scale, window size and Picture quality. The forward mirror arrow still took a click at the same point after a display-scale change with the window dimensions held fixed.
 
+## 107. Look to see the movement, press to do it (19 November)
+
+The opening guide, the Esc instructions and parts of the preview notes still said that resting the crosshair on a motor area moved the body. The game changed that rule in section 103. Looking now shows the choice. A click or a number does the movement.
+
+In the ordinary first-person preview in Chromium on AMD Vulkan, looking at Left wrist held the hand where it started. Pressing 1 bent the left wrist toward the palm. Pressing 2 returned it to rest. Pressing 2 again bent it back, and pressing 1 returned it to rest. These are movements of the game’s rig.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

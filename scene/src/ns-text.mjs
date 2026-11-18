@@ -263,9 +263,8 @@ const STEP_TABLE = [
   intro: [part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder ' +
     'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
     'Greens: belly and back. Pinks: face and neck.')] },
-  { head: 'Switch areas on.', parts: [part('Rest the crosshair on a motor area for a moment (about a third of a second), ' +
-    'or click it, and that body part moves. Its glow lasts about a second. Or click a muscle, on your own body or on ' +
-    'the mirror body: the brain area that moves it switches on. A quick glance across an area lights it but moves nothing. ' +
+  { head: 'Switch areas on.', parts: [part('Look at a motor area to see its movements. Click it to do the highlighted movement. ' +
+    'Its simulated glow lasts about a second. Click a muscle on either body to switch on its motor area. ' +
     'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
     'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
@@ -277,12 +276,12 @@ const STEP_TABLE = [
     part('The motor areas are small and lie side by side. The left and right arrow keys step your look along them, ' +
       'one area for each press, so you can visit every area in turn: from the face areas at one side, up over the ' +
       'top of the brain where the leg areas are, and down the other side. The look lands on the next area you can ' +
-      'see on that side; resting there moves its part, as with any look.'),
+      'see on that side. Press a number to choose a movement.'),
     // R558 (Message 6): held movements and the opposite-area hint.
     part('A movement stays where it went: the body part does not drift back by itself. To bring it back, switch on ' +
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
-  intro: [part('Rest your look on a motor area, or click it: that part moves, and the area glows for about a second. The left and right arrow keys step your look to the next area. A number key (1 to 9) does a movement from the card’s list. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
+  intro: [part('Look at a motor area to see its movements. Click it or press a number from the list to move the body part. The arrow keys step to the next area. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
   { head: 'Move other body parts.', parts: [part('Your other body parts respond through the brain, not W/A/S/D. Moving the mirror image does not command their muscles. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
     'W/S move it farther/closer, A/D left/right, and looking up or down carries it up or down (the mirror body stays on the ground). Let go of Space to leave it there. ' +
@@ -342,9 +341,9 @@ const CONTROL_TABLE = [
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
-  ['Look / Click', 'rest the crosshair on a motor area (about a third of a second) or click it: that part moves and stays'],
+  ['Look / Click', 'look at a motor area to see its movements. Click it to do the highlighted movement.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
-  ['1 to 9', 'do the movement with that number in the list on the information card: the movements of the motor area you are looking at, or looked at last'],
+  ['1 to 9', 'do the movement with that number in the tip or information card. The list stays with the last area you selected.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
@@ -371,8 +370,8 @@ const INTRO_CONTROL_WORDS = {
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
-  'Look / Click': 'rest on or click an area: that part moves and stays',
-  '1 to 9': 'do a numbered movement from the card’s list',
+  'Look / Click': 'look to see the movements. Click to move the part.',
+  '1 to 9': 'do a movement from the tip or the card',
   '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
   'Press and drag': 'turn the brain, the mirror body or a limb',
@@ -489,7 +488,7 @@ export const SHELL = deepFreeze({
       Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
       ArrowLeft: '←', ArrowRight: '→' },
     // R558 (Messages 55 and 56): written once at the end of the number row (ns-app KEYBOARD_PICTURE_ROWS note).
-    numWords: 'Number keys 1 to 9 (the row below): do the movement with that number in the card’s list',
+    numWords: 'Number keys 1 to 9 (the row below): do the movement with that number in the tip or card',
     // R558 (Message 40): the three Space gestures, in short words on the key.
     spaceWords: 'hold or tap: take hold · tap twice: turn · tap twice and hold: keep turning slowly',
     // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number
@@ -584,10 +583,10 @@ export const HUD = deepFreeze({
   // are unchanged.
   limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
   hint: 'Move to look. W/S reach forward or back; A/D move left or right. Hold Space on the brain, the mirror body or one of ' +
-    'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); things stop where they would touch. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Resting your look on an area (about a third of a second), or a click, moves that part; it stays until the opposite area or Reset body. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
+    'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); things stop where they would touch. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area to see its movements. Click it or press a number to move its body part. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
     'Esc frees it.',
   hintShell: 'Look to aim. A/D move the hand left or right, W/S forward or back. Tap Space twice: all four limbs turn ' +
-    'once; tap twice and hold: they keep turning slowly. Resting your look on a motor area, or a click, moves that part until the opposite area or Reset body; the simulated glow lasts about a second. Hold Space on ' +
+    'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movements. Click it or press a number to move its body part. Hold Space on ' +
     'the brain, the mirror body or a limb to carry it: look or W/A/S/D. Let go to leave it there (or tap Space to take hold, and tap again to let go). Shift + a press reaches the other thing in line. Esc: controls and reset.',
   markers: 'Dots are rough control spots, not exact points in the brain. The coloured areas overlap.',
   drivesTitle: 'Strongest simulated muscle signals (unitless, 0–1)',
@@ -1556,10 +1555,10 @@ export const GUIDE = deepFreeze({
   goals: {
     // R4-fix (reviews SL4-4 / RP6): name areas that visibly move the arm (the shoulder area and "Relax left grip" on
     // an open hand move nothing you can see, and do not complete this goal).
-    leftArmArea: 'Look at a blue area on the brain, like the elbow. Watch your left arm move.',
+    leftArmArea: 'Look at a blue area, like the left wrist. Click it to move your arm.',
     // R558 (Messages 55 and 56): the information card lists the area's movements with numbers; a number key does the
     // movement with that number (ns-app; the same simulated pulse as a tap on one of its muscles).
-    numberKey: 'Now press 1 or 2. Each number does one movement from the card on the right.',
+    numberKey: 'Now press 1 or 2. Each number does one movement from the tip or the card.',
     moveHand: 'Press W, A, S or D to move your left hand.',
     // R558 (Message 40): the goal ids stay so saved progress keeps: 'flipPalm' = a double tap (one turn of every limb),
     // 'fist' = a double tap held (the slow turn); ns-guide now teaches flipPalm first.
@@ -1567,7 +1566,7 @@ export const GUIDE = deepFreeze({
     flipPalm: 'Tap Space twice, fast: all four limbs turn once.',
     // R4-fix (reviews F3 / SL4-4): 14 grey areas move nothing; this goal completes only on one that moves a joint.
     // R558: names the orange right-arm areas (your right arm is in view while you look at the brain; the legs are not).
-    otherPart: 'Look at an area of another colour, like an orange right-arm area (the ← and → keys step from area to area). Watch that part move.',
+    otherPart: 'Look at an area of another colour, like an orange right-arm area. Click it to move that part.',
     // R558 (Messages 55 and 56): the card keeps the last area's numbered list while the look is somewhere else, so a
     // movement can be watched on the body. Completes on a number key that moves something with the look off the brain.
     watchBody: 'Look at a purple leg area. Then look down at the body and press 1 or 2: watch the leg move.',
@@ -1602,12 +1601,12 @@ export const GUIDE = deepFreeze({
   // 17 November 2026 (far less text): the same goals in a few words, for the one-line prompt of the quiet screen
   // (ns-quiet). byText gives the short line for a goal's alternative sentence (the keys are the sentences above).
   short: {
-    leftArmArea: 'Look at a blue area on the brain',
+    leftArmArea: 'Look at a blue area and click it',
     numberKey: 'Press 1 or 2',
     moveHand: 'Press W, A, S or D',
     flipPalm: 'Tap Space twice',
     fist: 'Tap Space twice and hold',
-    otherPart: 'Look at an area of another colour',
+    otherPart: 'Look at another colour and click it',
     watchBody: 'Look at a leg area, then down, and press 1',
     glow: 'Look at a blue area again: its muscles glow',
     dragBrain: 'Hold Space on the brain and move',
