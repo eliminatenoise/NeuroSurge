@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-19-body-update-24",
+  "version": "experimental-2026-11-19-body-update-25",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -9,6 +9,7 @@
   "camera_resize": "The outside lens keeps its field of view when the window, display scale or Picture quality changes. E switches views.",
   "motor_control_help": "Look at a motor area to see its movements. Click or press a listed number to move its body part.",
   "right_elbow_mesh": "The ulna and radius share a weight slot for muscles spanning the right elbow. This smooths how the drawn tissue follows the bend with the palm up or down. The effect is measured on the game mesh.",
+  "right_anconeus_shallow_bend": "An adjustment to rendering weights smooths the right anconeus in the first part of elbow flexion. The adjustment ends at 67 degrees, before the distorted deep bend. Joint targets and geometry outside that range retain their earlier behavior.",
   "carry_control_help": "While Space holds the brain or mirror body, move the pointer sideways, up or down. W/S move it farther or nearer, and A/D move it sideways. Both hands close to show the hold.",
   "client_side": true,
   "signal_origin": "simulated, unitless brain and muscle activity values",

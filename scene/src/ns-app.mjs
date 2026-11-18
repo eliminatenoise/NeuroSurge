@@ -5290,6 +5290,7 @@ export function start(params = {}) {
    * per-vertex skinning (ns-body handSkinRecords -> scene setBodySkin), so each finger's tendons follow that finger. On
    * any error the hand stays rigid (as before) and handSkinNote says why (inspect().features.handSkin). */
   let handSkinReady = false, handSkinNote = null, skinSegmentsLast = null, skinPosedThisFrame = false;
+  let skinElbowFlexLast = 0;
   function installHandSkin(sourceMeshes) {
     handSkinReady = false;
     if (!bodyRig || !bodyBaked || !sceneFn('setBodySkin') || !sceneFn('updateBodySkin') || typeof mods.body.handSkinRecords !== 'function'
@@ -8730,7 +8731,11 @@ export function start(params = {}) {
             if (handSkinReady) {
               const det = mods.body.poseBodyDetailed(bodyRig, T, po);
               callScene('updateBody', det.matrices, drives);
-              try { callScene('updateBodySkin', skinHand ? det.segments : null); skinSegmentsLast = skinHand ? det.segments : null; } catch (err) { handSkinReady = false; handSkinNote = errorText(err); }
+              try {
+                skinSegmentsLast = skinHand ? det.segments : null;
+                skinElbowFlexLast = det.applied.r_elbow_flex;
+                callScene('updateBodySkin', skinSegmentsLast, skinElbowFlexLast);
+              } catch (err) { handSkinReady = false; handSkinNote = errorText(err); }
             } else callScene('updateBody', mods.body.poseBody(bodyRig, T, po), drives);
             bodyPosed = T; headDrawn = headShown; // R558 (hunt 2 code #2): the head options this pose was drawn with
             skinPosedThisFrame = true;
@@ -8748,7 +8753,7 @@ export function start(params = {}) {
         // 17 November 2026: the scene skins at most a budget of vertices per frame; muscles that waited are finished on
         // the following frames, also when the pose itself has stopped changing.
         if (handSkinReady && !skinPosedThisFrame && skinSegmentsLast && sceneFn('bodySkinPending')) {
-          try { if (callScene('bodySkinPending') > 0) callScene('updateBodySkin', skinSegmentsLast); } catch { /* the next pose skins them */ }
+          try { if (callScene('bodySkinPending') > 0) callScene('updateBodySkin', skinSegmentsLast, skinElbowFlexLast); } catch { /* the next pose skins them */ }
         }
         skinPosedThisFrame = false;
         if (contact.fxPending) itemContactFx(now); // 18 November 2026 (package CONTACT): the flash of an item contact

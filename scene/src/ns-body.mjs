@@ -3030,6 +3030,40 @@ function continuousSkinWeights(rig, p, avail, skin = null, groupForearm = false)
   }
   return { ia, ib, wa };
 }
+/**
+ * The posterior anconeus is stretched in the first part of a bend by a sharp change in its
+ * humerus and ulna weights. The correction is limited to this atlas mesh and fades out before
+ * the joint closes into the deep bend, where the softer weights can squash its triangles.
+ */
+export function anconeusBendBlend(flexDeg) {
+  if (!(flexDeg > 12 && flexDeg < 67)) return 0;
+  return smooth01((flexDeg - 12) / 13) * (1 - smooth01((flexDeg - 60) / 7));
+}
+
+function anconeusWeightDelta(rig, id, p, avail, weights) {
+  if (id !== 'FJ1485' || avail.length !== 2 || !avail.includes('r_upperarm') || !avail.includes('r_forearm')) return null;
+  const elbow = rig.pivots.r_elbow;
+  const wrist = rig.pivots.r_wrist?.point;
+  const radius = elbow?.radius;
+  if (!(radius > 0) || !wrist || !elbow.axes?.flex) return null;
+  const direction = norm(sub(wrist, elbow.point));
+  const bendDirection = norm(cross(elbow.axes.flex, direction));
+  const idx = cloudIndexes(rig._clouds);
+  const delta = new Float32Array(weights.wa.length);
+  for (let v = 0, i = 0; i < p.length; v++, i += 3) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    const dx = x - elbow.point[0], dy = y - elbow.point[1], dz = z - elbow.point[2];
+    const axial = Math.abs(dx * direction[0] + dy * direction[1] + dz * direction[2]);
+    const outside = -(dx * bendDirection[0] + dy * bendDirection[1] + dz * bendDirection[2]);
+    const taper = (1 - smooth01((axial / radius - 2) / 2)) * smooth01(outside / radius);
+    if (taper <= 0) continue;
+    const a = nnNearestD2(idx[BODY_SEGMENTS[weights.ia[v]]], x, y, z) + radius ** 2 * taper;
+    const b = nnNearestD2(idx[BODY_SEGMENTS[weights.ib[v]]], x, y, z) + radius ** 2 * taper;
+    delta[v] = b / (a + b) - weights.wa[v];
+  }
+  return delta;
+}
+
 function elbowSkinWeights(rig, p, avail) {
   if (!avail.includes('r_upperarm') || !avail.includes('r_forearm') || !avail.includes('r_radius')) return null;
   return continuousSkinWeights(rig, p, avail, null, true);
@@ -3049,7 +3083,8 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
     if (!c) return null;
     const n = p.length / 3, w0 = new Float32Array(n), w1 = new Float32Array(n);
     for (let v = 0; v < n; v++) { w0[v] = c.wa[v]; w1[v] = 1 - c.wa[v]; }
-    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1 };
+    const anconeusDelta = anconeusWeightDelta(rig, meshId, p, avail, c);
+    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1, ...(anconeusDelta ? { anconeusDelta } : {}) };
   }
   const n = p.length / 3;
   const elbow = elbowSkinWeights(rig, p, avail);
@@ -3173,13 +3208,14 @@ export function handSkinRecords(rig, meshesById, options = {}) {
     if (!p) continue;
     const w = bodySkinWeights(rig, m.id, p, options);
     if (!w) continue;
-    out.set(m.id, { src: p instanceof Float32Array ? p : Float32Array.from(p), i0: w.i0, i1: w.i1, w0: w.w0, w1: w.w1, ...(w.tf ? { tf: w.tf, twist: w.twist } : {}) });
+    out.set(m.id, { src: p instanceof Float32Array ? p : Float32Array.from(p), i0: w.i0, i1: w.i1, w0: w.w0, w1: w.w1, ...(w.tf ? { tf: w.tf, twist: w.twist } : {}),
+      ...(w.anconeusDelta ? { anconeusDelta: w.anconeusDelta } : {}) });
   }
   return out;
 }
 
 /** Linear-blend skinning of rest positions with bodySkinWeights and poseBodyDetailed().segments. */
-export function skinBodyPositions(segmentMatrices, weights, restPositions, out) {
+export function skinBodyPositions(segmentMatrices, weights, restPositions, out, { elbowFlexDeg = 0 } = {}) {
   if (!(segmentMatrices instanceof Map)) throw new Error('ns:body_skin: segmentMatrices must be a Map(segment -> matrix)');
   const p = positionsOf(restPositions);
   if (!p || !weights || !weights.i0) throw new Error('ns:body_skin: need rest positions and bodySkinWeights output');
@@ -3187,9 +3223,11 @@ export function skinBodyPositions(segmentMatrices, weights, restPositions, out) 
   const o = out || new Float32Array(p.length);
   if (o.length !== p.length) throw new Error('ns:body_skin: out must match restPositions length');
   const mats = BODY_SEGMENTS.map(s => segmentMatrices.get(s) || null);
+  const mix = weights.anconeusDelta ? anconeusBendBlend(elbowFlexDeg) : 0;
   for (let v = 0; v < n; v++) {
     const k = 3 * v, x = p[k], y = p[k + 1], z = p[k + 2];
-    const a = mats[weights.i0[v]], b = mats[weights.i1[v]], wa = weights.w0[v], wb = weights.w1[v];
+    const shift = mix > 0 ? mix * weights.anconeusDelta[v] : 0;
+    const a = mats[weights.i0[v]], b = mats[weights.i1[v]], wa = weights.w0[v] + shift, wb = weights.w1[v] - shift;
     if (!a || !b) throw new Error(`ns:body_skin: missing segment matrix at vertex ${v}`);
     for (let r = 0; r < 3; r++) {
       o[k + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
@@ -3924,7 +3962,11 @@ function bakeSkinWeights(rig, id, p, avail, near, useCache) {
   if (neckSkinnedMuscle(rig.meshSegment[id], id)) {
     // R558 (Message 32): the neck muscles' continuous weights, exactly as bodySkinWeights gives them to the scene's skin.
     const c = continuousSkinWeights(rig, p, avail, rig.meshSegment[id].skin || null);
-    if (c) { const out = { p, avail: avail.join(','), ia: c.ia, ib: c.ib, wa: c.wa, tf: null }; if (byId) byId.set(id, out); return out; }
+    if (c) {
+      const out = { p, avail: avail.join(','), ...c, tf: null, anconeusDelta: anconeusWeightDelta(rig, id, p, avail, c) };
+      if (byId) byId.set(id, out);
+      return out;
+    }
   }
   const elbow = elbowSkinWeights(rig, p, avail);
   if (elbow) {
@@ -4019,11 +4061,12 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
           const tw = w.tf ? rForearmTwistFrame(rig) : null;
           const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
           const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
+          const anconeusMix = w.anconeusDelta ? anconeusBendBlend(angles.r_elbow_flex) : 0;
           for (let i = 0, v = 0; i < p.length; i += 3, v++) {
             const x = p[i], y = p[i + 1], z = p[i + 2], f = T ? w.tf[v] : 0;
             const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
             const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
-            const wa = w.wa[v], wb = 1 - wa;
+            const wa = anconeusMix > 0 ? w.wa[v] + anconeusMix * w.anconeusDelta[v] : w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
           }
           // R558 (Message 32): the bake's displacement from the rigid rest fit, smoothed (BAKE_SMOOTH), except for the
@@ -6847,11 +6890,12 @@ function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
     const tw = w.tf ? rForearmTwistFrame(rig) : null;
     const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
     const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
+    const anconeusMix = w.anconeusDelta ? anconeusBendBlend(baked.angles.r_elbow_flex) : 0;
     for (let i = 0, v = 0; i < q.length; i += 3, v++) {
       const x = q[i], y = q[i + 1], z = q[i + 2], f = T ? w.tf[v] : 0;
       const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
       const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
-      const wa = w.wa[v], wb = 1 - wa;
+      const wa = anconeusMix > 0 ? w.wa[v] + anconeusMix * w.anconeusDelta[v] : w.wa[v], wb = 1 - wa;
       for (let r = 0; r < 3; r++) out[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
       const lx = x - p[i], ly = y - p[i + 1], lz = z - p[i + 2], want2 = lx * lx + ly * ly + lz * lz;
       if (want2 > 0 && base && base.length === q.length) {

@@ -387,3 +387,42 @@ test('the right elbow keeps short neighbouring muscle edges when it bends with t
     }
   }
 });
+
+test('the shallow anconeus correction keeps edges short and hands the unaltered skin back smoothly', () => {
+  const id = 'FJ1485';
+  const mesh = inputs.meshesById.get(id);
+  const fixture = new Map([[id, mesh]]);
+  const delta = body.bodySkinWeights(rig, id, mesh.positions);
+  const original = { ...delta, anconeusDelta: null };
+  for (const angle of [0, 8, 12, 67, 90, 136, 145]) assert.equal(body.anconeusBendBlend(angle), 0);
+  for (const angle of [25, 45, 60]) assert.equal(body.anconeusBendBlend(angle), 1);
+  for (const angle of [12, 25, 60, 67]) {
+    const eps = 1e-3;
+    assert.ok(Math.abs(body.anconeusBendBlend(angle + eps) - body.anconeusBendBlend(angle - eps)) < 1e-7);
+  }
+  const center = rig.pivots.r_elbow.point;
+  const distance = (p, a, b) => Math.hypot(p[3 * a] - p[3 * b], p[3 * a + 1] - p[3 * b + 1], p[3 * a + 2] - p[3 * b + 2]);
+  const near = Array.from({ length: mesh.positions.length / 3 }, (_, v) =>
+    Math.hypot(...center.map((p, i) => p - mesh.positions[3 * v + i])) <= 100);
+  const stretched = p => {
+    const edges = new Set();
+    for (let i = 0; i < mesh.indices.length; i++) {
+      const a = mesh.indices[i], b = mesh.indices[i % 3 === 2 ? i - 2 : i + 1];
+      const s = distance(mesh.positions, a, b), t = distance(p, a, b);
+      if (near[a] && near[b] && s >= 0.7 && t > 3 * s && t - s > 2) edges.add(Math.min(a, b) + ':' + Math.max(a, b));
+    }
+    return edges.size;
+  };
+  for (const angle of [8, 62, 67, 145]) {
+    const posture = { ...rest, r_elbow_flex: angle, r_pronation: 160 };
+    const pose = body.bakeBodyPosture(rig, fixture, { posture, keep: 'pelvis' });
+    const before = body.skinBodyPositions(pose.segments, original, mesh.positions);
+    const posed = body.skinBodyPositions(pose.segments, delta, mesh.positions, undefined, { elbowFlexDeg: angle });
+    if (angle !== 62) assert.deepEqual(posed, before);
+    else {
+      assert.ok(stretched(before) >= 2);
+      assert.equal(stretched(posed), 0);
+      assert.equal(stretched(pose.meshesById.get(id).positions), 0);
+    }
+  }
+});

@@ -1557,6 +1557,14 @@ Merged from the round of 18 November: a limb hidden behind another limb or the t
 
 Limb-pushes-limb (`ns-contact.mjs`) was merged and then switched off (`SELF_CONTACT_ON = false` in `ns-app.mjs`). In the browser a reach key swept the left arm through the legs, and the push threw both legs and the right arm to the ends of their ranges, where they stayed; a look alone did the same more slowly, because the left arm follows the look. Its code and tests stay for a gentler rebuild. Your own limbs therefore still pass through each other.
 
+## 113. A smoother shallow bend at the right elbow (19 November)
+
+At the back of the elbow, neighbouring anconeus vertices can sit close to both the humerus and the ulna but follow them by very different amounts. The inverse-square weights change steeply there, which can turn a short edge into a sharp triangle as the elbow bends.
+
+The rendering weights now change more gradually over the outside of the hinge. The effect eases in from 12 to 25 degrees and out again from 60 to 67 degrees. A wider trial compressed too many edges and triangles at full bend, so the correction ends before that pose. At 62 degrees it removed both severe anconeus edge stretches, defined as growth greater than 2 mm to more than three times the source length. The measured counts of edges below half their length and triangles below half their area also fell at that pose. The same rule follows the real-time render and the offline bake.
+
+This changes one atlas muscle. The unchanged deep bend still has 104 severe edge stretches around the elbow across the measured right-arm meshes. Ultrasound measures the fibres inside the living anconeus. The game measures edges on the atlas surface. A lifelike full-bend deformation still needs a suitable measured surface reference. [Stevens et al. (2014)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4292751/).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

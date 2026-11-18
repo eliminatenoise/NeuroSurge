@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-24",
+  "version": "experimental-2026-11-19-body-update-25",
   "experimental": true,
-  "source": "Body update 24. Any part of the mirror body takes all of it; a calmer picture; hidden limbs show through; the loading picture builds from the inside out.",
+  "source": "Body update 25. The right anconeus draws fewer sharp triangles during a shallow elbow bend.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 234433,
-      "sha256": "60f3737e9c6240729ed446843d2e47be6511f887ff8d76d67ef6898835e60d00"
+      "bytes": 235766,
+      "sha256": "2341ca5c24166627e1b45aa80421b28e95798f183425362d09cb6a23d204fc0e"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,23 +52,23 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 56816,
-      "sha256": "651058ed1c7ee9161dc1594f25e299b352cc8a48eb4bca17b7022f2818dedbaa"
+      "bytes": 57537,
+      "sha256": "6fdb1ef41d4642f70566067457e0a5d0b45fdff07937c9742333518633917a12"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 29271,
-      "sha256": "1fe09e774ecabe711047ceed607b05e9216f283ae906e75720d48b5b3606eb32"
+      "bytes": 29549,
+      "sha256": "91e099818a4129041e3fa1eed2d28bb9b206001b3e6df423a353843c1278c35e"
     },
     {
       "path": "README.md",
-      "bytes": 15908,
-      "sha256": "77fe43d1094458bd97aefb2620cd71fe0cb87b150daf2dce71701e8980e86fc3"
+      "bytes": 16327,
+      "sha256": "48926a32f4c05d1f12981df4507a879708852a4066f4c6940a31922841476c39"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "cf55a4576b5e1391e218739de5a0bdeca2e16341e39dfe4207692d7ddb1512cd"
+      "sha256": "b734919b051ef3b67f4b889320b40b60a15fbeae37dc888cd988a22e4d98096e"
     },
     {
       "path": "index.html",
@@ -3897,8 +3897,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 741208,
-      "sha256": "317673ff89ed17adab173500398da01c7c641aec36111b1497379ab2e6f47725"
+      "bytes": 741369,
+      "sha256": "66506e22ad3e16fbdb912c73f4650d859cf1b419cc06f76faf605abfc11a008a"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 595343,
-      "sha256": "7ab586d2896ab5873787ad4fff9aa937b02d00e9f558ae448375a60eea8d563e"
+      "bytes": 597847,
+      "sha256": "1d7c4e3ae3804c9dd79e5fe7b8aec0a6ac8628eb7aea5a738fc0644c8e803dcc"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -4092,8 +4092,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1030202,
-      "sha256": "c82265ffdc92d6afc9dd0f6d3ed306e88c6ab31e54336cb615b06d77536a555b"
+      "bytes": 1030918,
+      "sha256": "95256019bfa1ea4fc6608f342a42715d16b41e605cf3101235216cc886fbe58b"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4247,8 +4247,8 @@
     },
     {
       "path": "tests/joints.test.mjs",
-      "bytes": 31419,
-      "sha256": "7283e0c40df17eaac24e9fc257209a8518f5d5314884487849b1c654a83740f8"
+      "bytes": 33470,
+      "sha256": "37fb74cdf2a5bf2c9f80ac49d0053ab1ce42f8a5a6650e429a81b27752f4c0fd"
     },
     {
       "path": "tests/limb-turn.test.mjs",
@@ -4342,8 +4342,8 @@
     },
     {
       "path": "tools/rom-sweep.mjs",
-      "bytes": 46498,
-      "sha256": "64aa7798375b4e7be3d5612fb1fef4534be5971fe6e6ec525393c480ac6741ee"
+      "bytes": 46682,
+      "sha256": "791cca45a61c11013db90585a6b9a08cf1f6dfd5137eb530005a1b28b06dac7d"
     },
     {
       "path": "vendor/LICENSE",

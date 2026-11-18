@@ -391,12 +391,14 @@ function twistRel(m, segObj) {
     return cache.get(k);
   };
 }
-function drawnSkin(m, rel, segObj) {
+function drawnSkin(m, rel, segObj, elbowFlexDeg) {
   const b = baked.meshesById.get(m.id).positions, w = m.w, n = b.length / 3, out = new Float32Array(b.length);
   const tf = w.tf || null, tr = tf ? twistRel(m, segObj) : null;
+  const mix = w.anconeusDelta ? body.anconeusBendBlend(elbowFlexDeg) : 0;
   for (let v = 0, k = 0; v < n; v++, k += 3) {
     const tw = tf && tf[v] > 0;
-    const A = tw && w.i0[v] === SEG_RF ? tr(tf[v]) : rel[w.i0[v]], B = tw && w.i1[v] === SEG_RF ? tr(tf[v]) : rel[w.i1[v]], wa = w.w0[v], wb = w.w1[v], x = b[k], y = b[k + 1], z = b[k + 2];
+    const delta = mix > 0 ? mix * w.anconeusDelta[v] : 0;
+    const A = tw && w.i0[v] === SEG_RF ? tr(tf[v]) : rel[w.i0[v]], B = tw && w.i1[v] === SEG_RF ? tr(tf[v]) : rel[w.i1[v]], wa = w.w0[v] + delta, wb = w.w1[v] - delta, x = b[k], y = b[k + 1], z = b[k + 2];
     out[k] = wa * (A[0] * x + A[4] * y + A[8] * z + A[12]) + wb * (B[0] * x + B[4] * y + B[8] * z + B[12]);
     out[k + 1] = wa * (A[1] * x + A[5] * y + A[9] * z + A[13]) + wb * (B[1] * x + B[5] * y + B[9] * z + B[13]);
     out[k + 2] = wa * (A[2] * x + A[6] * y + A[10] * z + A[14]) + wb * (B[2] * x + B[6] * y + B[10] * z + B[14]);
@@ -418,7 +420,7 @@ function measure(p, isStart) {
     if (!m.att.length && !m.samples) continue;
     let pos = null;
     if (RIGID) { const M = det.matrices.get(m.id), bp = baked.meshesById.get(m.id).positions; pos = new Float32Array(bp.length); for (let i = 0; i < bp.length; i += 3) { const q = apply(M, bp[i], bp[i + 1], bp[i + 2]); pos[i] = q[0]; pos[i + 1] = q[1]; pos[i + 2] = q[2]; } }
-    else if (m.w) pos = drawnSkin(m, rel, segObj);
+    else if (m.w) pos = drawnSkin(m, rel, segObj, targets.r_elbow_flex);
     for (const a of m.att) {
       let x, y, z;
       if (pos) { x = pos[3 * a.v]; y = pos[3 * a.v + 1]; z = pos[3 * a.v + 2]; }
