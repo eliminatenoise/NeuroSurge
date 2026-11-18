@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-29",
+  "version": "experimental-2026-11-19-body-update-30",
   "experimental": true,
-  "source": "Body update 29. A look no longer bends the trunk; no hitches while looking to the right.",
+  "source": "Body update 30. The anconeus at the back of the right elbow follows a deep bend with fewer sharp creases.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 245355,
-      "sha256": "89bfa804e9ed2903d9fc4e0768e1f53d6c2792aae5a2ad5e4d0489f6c5ce8869"
+      "bytes": 246599,
+      "sha256": "c9eb9a1574ba9a7fcd188c31df51dd1078eb9fe83c761da45c9b7b84c53e3623"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,23 +52,23 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 57537,
-      "sha256": "6fdb1ef41d4642f70566067457e0a5d0b45fdff07937c9742333518633917a12"
+      "bytes": 58160,
+      "sha256": "6ea1f6b19184cf4b4e2432e4a74e07465f015daf2adce30e401de357985a43f6"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 31532,
-      "sha256": "b5301c0d306c3d5e2367b9418516123e9c3a74d786719ef3c1e51fff0a3a19af"
+      "bytes": 31884,
+      "sha256": "16c9d3e83f89830df22fbf55f59ad96de6ed9dfed14f8f262e1d11cc34dd32b2"
     },
     {
       "path": "README.md",
-      "bytes": 16327,
-      "sha256": "48926a32f4c05d1f12981df4507a879708852a4066f4c6940a31922841476c39"
+      "bytes": 16812,
+      "sha256": "e6bf8d943d61c922bd0ec25f78153dbc24ca91e5fe944f0882554c22f746e2f1"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "f30930d1d33df95f03a7a9b813e79595bf3b7b59c5c894c7e106035c42fb797d"
+      "sha256": "b4b53cb17d7e6c3ef8ab6a35a07f2320839c4767c0f708a6c002bfa4a3c668ec"
     },
     {
       "path": "index.html",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 597847,
-      "sha256": "1d7c4e3ae3804c9dd79e5fe7b8aec0a6ac8628eb7aea5a738fc0644c8e803dcc"
+      "bytes": 601901,
+      "sha256": "ab08f2d22a3833a68e2505d562f80fd4f3e5b3343d07510991cab07957303264"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -4167,8 +4167,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1077674,
-      "sha256": "ddca218b114ce629808413e5910b32019deca4a2d257d2e4c82df999c99905e7"
+      "bytes": 1078187,
+      "sha256": "4d0db02dd9b70ae8675f588712b2628e0f4520f107245c1879d56ff07aff7774"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4337,8 +4337,8 @@
     },
     {
       "path": "tests/joints.test.mjs",
-      "bytes": 33470,
-      "sha256": "37fb74cdf2a5bf2c9f80ac49d0053ab1ce42f8a5a6650e429a81b27752f4c0fd"
+      "bytes": 35464,
+      "sha256": "31a10f8d8bbf35fab56f0a3a9f661acae1a99f8dfa0ec801793a12429c68447c"
     },
     {
       "path": "tests/limb-turn.test.mjs",
@@ -4457,8 +4457,8 @@
     },
     {
       "path": "tools/rom-sweep.mjs",
-      "bytes": 46682,
-      "sha256": "791cca45a61c11013db90585a6b9a08cf1f6dfd5137eb530005a1b28b06dac7d"
+      "bytes": 46684,
+      "sha256": "22ff0378d59c09c34b94ac7823ab83697fcf1a0750c066150e0429bff00d38f9"
     },
     {
       "path": "vendor/LICENSE",

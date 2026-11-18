@@ -1619,6 +1619,12 @@ Two things made looking around the most expensive thing in the game, and one of 
 
 In the author's headless test browser (two runs) the main thread's work per frame while looking down and up fell from about 13 ms to 6 to 8 ms, and while looking around from about 23 ms (with the hitches) to about 10 ms; all four test cases (still, looking around, looking down and up, the limb turn) now hold 60 frames a second there.
 
+## 120. The back of the elbow at a deep bend (19 November)
+
+The anconeus runs from the outer knob of the humerus to the upper back of the ulna. At a deep bend, short edges between vertices that follow different amounts of humerus and ulna can stretch into ridges. The atlas surface now hands that motion from one bone to the other more gradually, with equal weights at split seams. The bone shares at the 407 attachment candidates stay as they were. The change eases in between 112 and 120 degrees of flexion. [Coriolano et al. (2009)](https://www.scielo.cl/scielo.php?pid=S0717-95022009000400008&script=sci_arttext), [McGee et al. (2026)](https://doi.org/10.1111/joa.70154).
+
+At 145 degrees of elbow flexion and 160 degrees of forearm turn from palm up, 11 severe edge stretches become 4 in this muscle. Severe means more than triple the source edge length and more than 2 mm of growth. Triangles below a quarter of their source area drop from 14 to 2. The rest of the right arm still has 93 severe stretches in the same sample. Switched poses are tests of the game rig. Ultrasound measures living fascicles, which are different from the edges of the atlas surface. [Stevens et al. (2014)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4292751/).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

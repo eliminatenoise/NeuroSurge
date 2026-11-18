@@ -4,7 +4,13 @@
 
 Look at a motor area to select it. Click or choose a numbered movement to see the body part move. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
-Body update 25 smooths the small anconeus muscle at the back of the right elbow during a shallow bend. Hold 1 on Right elbow and let go partway to see it. A quick tap can go straight to the full bend, which still has visible creases.
+Body update 30 smooths the small muscle at the back of the right elbow when you bend it all the way. Use the arrow keys to reach **Right elbow**, then tap **1** for the full bend or **2** to straighten. Press **E** to see it from outside. The muscle still creases at the deepest bend.
+
+Body update 29 keeps the trunk still when you look around. The head and eyes carry the view.
+
+Body update 28 loads anatomy from mesh packs with a progress bar. The brain sits higher, and you can look around while carrying it.
+
+Body update 25 smooths the small anconeus muscle at the back of the right elbow during a shallow bend. Hold 1 on Right elbow and let go partway to see it. A quick tap can skip the shallow part of the bend.
 
 Body update 24 lets you carry and turn the whole mirror body from any part. The lighting is calmer, hidden limbs can show through, and the opening picture builds from the inside out.
 
