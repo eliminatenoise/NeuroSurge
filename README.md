@@ -4,6 +4,10 @@
 
 Look at a motor area to select it. Click or choose a numbered movement to see the body part move. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 36 keeps the whole drag. Give the mirror body a quick flick. It turns as far as you moved the pointer, even if you let go before the next frame. Hold **Space** and drag to turn it while **W/A/S/D** carry it.
+
+Body update 35 makes the motor strip easier to read. Try one movement and look back at its area. The area and the muscles you switched on stay a shade darker at rest, so you can see what’s left to try.
+
 Body update 32 corrects the carry instructions. Hold **Space**, then move your mouse or trackpad to turn your view. The held object follows your look. The tip names what you are holding and tells you how to let go.
 
 Body update 30 smooths the small muscle at the back of the right elbow when you bend it all the way. Use the arrow keys to reach **Right elbow**, then tap **1** for the full bend or **2** to straighten. Press **E** to see it from outside. The muscle still creases at the deepest bend.

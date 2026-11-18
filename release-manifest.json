@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-35",
+  "version": "experimental-2026-11-19-body-update-36",
   "experimental": true,
-  "source": "Body update 35. A strip without lines, every muscle its own shade, what has been tried stays marked, bony fingertips, darker blacks.",
+  "source": "Body update 36. Quick drags keep their full movement when the mouse button is released between frames.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 255968,
-      "sha256": "7ae8c69a4a9eec07fb40127551fac1b41131af55798a2e32303f3da2098a09ca"
+      "bytes": 256654,
+      "sha256": "198db20ba8132587a72569756b57c7a82ca1d846794476559ee42c7ff9a17687"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9462,
-      "sha256": "0f3ca70b9dfdccff5da52401a278a3c96c9448032ef984ac0693eaf4ef9a0b3e"
+      "bytes": 9572,
+      "sha256": "1dea875488e54a6eca65fd36747f2a04285102e27def49553514929dd917835f"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 58456,
-      "sha256": "ba31232dd4716e13b7cfe0971d5151ec3bce09bfb6b09223d6760906b9df4925"
+      "bytes": 58807,
+      "sha256": "d6dcdfae063f8881f859ebc57e7a60fd1fc5b651faf3415076d04ea86c4dd7b5"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 33303,
-      "sha256": "d19b46bad025f0988dcd49ab7252d9dec2faa12bf3f0cd1ef5f34389bdc8efe3"
+      "bytes": 33558,
+      "sha256": "a9f53fe0b94c6052cffe6b7307e681c613c27faa9d8645930e685bbdf980cdef"
     },
     {
       "path": "README.md",
-      "bytes": 17028,
-      "sha256": "4b36b2f4790a7fb86ec2dd6f2bc2f9d2f5d15851a99a7de45031703da4af5531"
+      "bytes": 17454,
+      "sha256": "fd727155ba98336c8a2ce0761a9d85588b41afdaa13c30843779d987780b97a7"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "d8e7d92a3ca1ac0ef748fce5142ec1172468f8ce28adf5f014f78dbe5c390bc1"
+      "sha256": "90324978c4150e360df9ade29d61d0ffe8f0f0686181c90f27a2d9d308ea5119"
     },
     {
       "path": "index.html",
-      "bytes": 919,
-      "sha256": "2e6e47553f58cea04dae78bba14f37d5a303e9da88b168ef41595ac3e115bad3"
+      "bytes": 1000,
+      "sha256": "7c22dd9544ddb45ba9fb036f1579e418af8390a22530453ba9d4f5d62e0d08c5"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 756011,
-      "sha256": "165d2be542ca657c2d70a3dca4a44c32940bbc0f60b89b1a9742c40c4fd78a1b"
+      "bytes": 755927,
+      "sha256": "56bbf9cf6fe9cf7631e7fa658fa971f2e14fc0a80007fc1c3c5bbb1f4e9c27ec"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4037,8 +4037,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 97709,
-      "sha256": "ff9a271d9d87f856c459b65273708d0b9b4260dcacdad3453d1c414c99be86c0"
+      "bytes": 98081,
+      "sha256": "2ccb0df8942e524e1d3e85d1fabde628801c796a18b99b1b7ccbb3d3e876d258"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4387,8 +4387,8 @@
     },
     {
       "path": "tests/pointer-release.test.mjs",
-      "bytes": 12072,
-      "sha256": "5c413b1ebd9b45acccea745aabaaa253d6d7f709947b6eb27eaa7f7b0ec0c8b8"
+      "bytes": 14168,
+      "sha256": "b1446b1befe56c4e085df2b954d8540e3ff2e21acf3ce8766724552cbe361e5b"
     },
     {
       "path": "tests/quality-controller.test.mjs",

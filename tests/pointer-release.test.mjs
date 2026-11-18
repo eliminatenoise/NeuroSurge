@@ -32,7 +32,7 @@ class ListenerBucket {
   }
 }
 
-function fixture({ kind = 'brain', locked = false, keyMask = 0 } = {}) {
+function fixture({ kind = 'brain', locked = false, keyMask = 0, dragTargetAt = null } = {}) {
   const controls = api.createControls();
   let state = controls.initialState();
   for (const [i, code] of CODES.entries()) {
@@ -48,7 +48,7 @@ function fixture({ kind = 'brain', locked = false, keyMask = 0 } = {}) {
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 600, height: 400 });
   const unbind = api.bindDom(canvas, controls, () => state, next => { state = next; }, {
     arrowAt: () => kind === 'arrow',
-    dragTargetAt: () => ITEMS.includes(kind) ? kind : null
+    dragTargetAt: dragTargetAt || (() => ITEMS.includes(kind) ? kind : null)
   });
   const pointer = { target: canvas, clientX: 120, clientY: 160 };
   return {
@@ -99,6 +99,7 @@ for (const kind of ITEMS) for (const locked of [false, true]) {
       assert.equal(f.state.button.upMs, observation.timeStamp, 'use observation time, never a guessed release time');
       assert.equal(f.state.drag.target, null);
       allPointerFlagsOff(f);
+      assert.deepEqual(f.state.events, prior.events, 'missed release must not commit the undrawn movement');
       assert.equal(clicks(f.state).length, 0, 'cancellation must not fabricate activation');
       assert.deepEqual(prior, priorCopy, 'the previous reducer state must not be mutated');
       f.up();
@@ -164,6 +165,53 @@ check('free arrow: missed up releases hold and next press orbits once', () => {
     const second = api.stepArrowInput(arrow, frame());
     assert.equal(second.orbit.length, 1, 'new arrow press must not be lost or duplicated');
     assert.equal(clicks(f.state).length, 0, 'arrow input must not also activate a brain area');
+  });
+});
+
+for (const locked of [false, true]) {
+  check(`genuine ${locked ? 'captured' : 'free'} release delivers the undrawn tail once`, () => {
+    withFixture({ locked }, f => {
+      f.down(); f.move(1, 12, 5);
+      f.up(1);
+      assert.equal(f.state.events.length, 0);
+      const up = f.up();
+      assert.deepEqual(f.controls.drainEvents(f.state), [{ type: 'drag', target: 'brain', dx: 12, dy: 5, timeMs: up.timeStamp }]);
+      f.up();
+      assert.deepEqual(f.controls.drainEvents(f.state), []);
+    });
+  });
+}
+
+check('the part chosen at each press survives a later press before the next frame', () => {
+  const first = { target: 'limb', limb: 'rightLeg', segment: 'r_thigh' };
+  const second = { target: 'limb', limb: 'leftLeg', segment: 'l_shank' };
+  let pick = first;
+  withFixture({ locked: true, dragTargetAt: () => pick }, f => {
+    f.down(); f.move(1, 0, -22);
+    const firstUp = f.up();
+    pick = second;
+    f.down(); f.move(1, 17, 0);
+    const secondUp = f.up();
+    assert.deepEqual(f.controls.drainEvents(f.state), [
+      { type: 'drag', target: 'limb', binding: first, dx: 0, dy: -22, timeMs: firstUp.timeStamp },
+      { type: 'drag', target: 'limb', binding: second, dx: 17, dy: 0, timeMs: secondUp.timeStamp }
+    ]);
+  });
+});
+
+check('a real release does not repeat movement already drawn; a small move still clicks', () => {
+  const controls = api.createControls();
+  let state = controls.dragStart(controls.initialState(), 'mirror');
+  state = controls.dragMove(state, 15, 0);
+  const first = controls.takeDrag(state);
+  assert.deepEqual(first.drag, { target: 'mirror', dx: 15, dy: 0 });
+  const up = controls.dragEnd(first.state, { releasedAtMs: performance.now() });
+  assert.equal(up.click, false);
+  assert.deepEqual(up.state.events, []);
+  withFixture({ locked: true }, f => {
+    f.down(); f.move(1, 4, 0); f.up();
+    assert.equal(clicks(f.state).length, 1);
+    assert.equal(f.state.events.length, 1);
   });
 });
 

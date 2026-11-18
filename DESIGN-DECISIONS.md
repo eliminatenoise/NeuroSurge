@@ -1674,6 +1674,12 @@ The user: “the motor strip is just very, very hard to look at right now becaus
 
 Not in this version, from the same notes: the chest still stands in front of the belly in the eye view (the user: “a smaller and much flatter chest ... and a more observable bottom torso”; three quick tries with posture and camera numbers each pushed the whole torso out of the picture, so it needs a change of the trunk's shape), and the leg turn still shows the front of the legs on both of its sides (the user: flexors on the underside, extensors on the overside).
 
+## 127. The whole drag reaches the game (19 November)
+
+A quick flick could leave the mirror body right where it started. When the pointer moved and the button came up between two frames, the game dropped the movement it had yet to draw. A real release now keeps those pixels and the part picked at the press. A click still presses. Losing the pointer or pausing still cancels the gesture.
+
+In Chromium on AMD Vulkan, a 100-pixel drag between frames turned the mirror body by 30 degrees, the same as when the drag straddled two frames. Shift took the brain behind the mirror body. A drag up from the left foot bent the left knee, and the mirror body turned while D carried it sideways.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

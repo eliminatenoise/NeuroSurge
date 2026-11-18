@@ -5067,12 +5067,12 @@ export function start(params = {}) {
   // R558 (hunt 2 controls #4): until when the status card says to let go of Space before E (E pressed while Space holds something).
   const VIEW_HELD_NOTE_MS = 3500;
   let viewHeldUntilMs = 0;
-  let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
+  let lastGoodCam = null, viewKeptUntilMs = 0; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
   // R558 (user Messages 2 and 12): the own limb held with Space ({ limb, targetMm, lastPitch } or null), the limb a
   // press-and-drag turns and the body segment the press was on, the left arm's dial build-up, and the stop-at-contact
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
   // (the activity holds it, so Reset body puts it back).
-  let limbGrasp = null, dragLimb = null, dragLimbSeg = null, dragLimbVia = null, leftDial = 0;
+  let limbGrasp = null, leftDialBinding = null, leftDial = 0;
   // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
   // dimension"): the point of the brain the crosshair took it at, in the brain's own frame (null: not held that way).
   let brainHoldLocal = null;
@@ -5435,7 +5435,7 @@ export function start(params = {}) {
     const before = cs;
     const canceled = {
       carriedEvents: carryRawEvents.length, orbitRequests: orbitQueue.length, viewRequests,
-      carriedDrag: carryDrag ? carryDrag.target : null, limbHeld: limbGrasp ? limbGrasp.limb : null
+      carriedDrag: carryRawEvents.slice().reverse().find(e => e.type === 'drag')?.target || null, limbHeld: limbGrasp ? limbGrasp.limb : null
     };
     // No reducer can clear bindDom's private press/drag flags. Do that through its existing owned handle.
     if (unbind && typeof unbind.cancelInput === 'function') unbind.cancelInput(atMs, { discardQueued: true });
@@ -5453,9 +5453,9 @@ export function start(params = {}) {
     // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
     simState = cancelCarryLatches(simState);
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
-    limbGrasp = null; dragLimb = null; dragLimbSeg = null; dragLimbVia = null; leftDial = 0;
+    limbGrasp = null; leftDialBinding = null; leftDial = 0;
     seedNext = true;
-    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
+    carryRawEvents.length = 0; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
     arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
     try { callScene('setArrowHover', null); } catch { /* highlight only */ }
@@ -6253,15 +6253,11 @@ export function start(params = {}) {
           // a press while Space holds the brain or the mirror body turns that thing about itself for as long as the
           // button is down; W / A / S / D go on carrying it meanwhile. (Before, a press during a hold did nothing.)
           const carried = simState && simState.objectCarry && simState.objectCarry.held ? simState.objectCarry.target : null;
-          if (carried === 'brain' || carried === 'mirror') { dragLimb = null; dragLimbSeg = null; dragLimbVia = null; return carried; }
+          if (carried === 'brain' || carried === 'mirror') return carried;
           if (spaceHolds || limbGrasp || carried) return null;
           const px = x === null ? appliedSize.width / 2 : x, py = y === null ? appliedSize.height / 2 : y;
           const it = itemAt(px, py, behind === true);
-          dragLimb = it && it.target === 'limb' ? it.limb : null;
-          dragLimbSeg = dragLimb ? it.segment : null;
-          dragLimbVia = dragLimb && it.via ? it.via : null; // R17: the press was on the mirror body's limb
-          if (dragLimb) leftDial = 0;
-          return it ? it.target : null;
+          return it?.target === 'limb' ? it : it?.target || null;
         } };
       if (lookNative) { bindOptions.sensitivity = settings.lookSensitivity; bindOptions.invertY = settings.invertY; }
       unbind = bindDom(canvas, gated, () => cs, s => { cs = s; }, bindOptions);
@@ -6810,9 +6806,8 @@ export function start(params = {}) {
       /** R17 (MOVE_GLOW): a limb held with Space or turned by a press-and-drag (not the left arm, which is the game arm):
        * each of its joints that moved this frame feeds its channel with its speed, and lights the body map's own area
        * and action for that joint and direction (areaFor), on top of the pulse of the joint that moved most. */
-      function feedLimbMove(out, dt) {
-        const turning = Boolean(dragLimb && dragLimb !== 'leftArm' && cs && cs.drag && cs.drag.target === 'limb'); // a press-and-drag on a limb is under way
-        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : turning ? dragLimb : null;
+      function feedLimbMove(out, dt, dragLimb) {
+        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : dragLimb === 'leftArm' ? null : dragLimb;
         const c = limb ? NsGrasp.LIMB_CHAIN[limb] : null, J = out && out.bodyJointTargets;
         if (!c || !J || !(dt > 0)) { movePrev.limb = null; return; }
         const ids = c.upperDial ? [...c.joints, c.dial.joint, c.upperDial.joint] : [...c.joints, c.dial.joint];
@@ -6918,16 +6913,17 @@ export function start(params = {}) {
        * farther with up / down (reachMPerPx, inside the reach its fit allows). */
       const LIMB_DRAG = Object.freeze({ on: true, turnDegPerPx: 0.5, flexDegPerPx: 0.55, reachMPerPx: 0.0016 });
       function applyLimbFlex(drag, out) {
-        if (!LIMB_DRAG.on || !drag || !dragLimb || !(Math.abs(drag.dy) > 0)) return;
+        if (!LIMB_DRAG.on || drag.dy === 0) return;
+        const { limb, segment } = drag.binding;
         const up = -drag.dy; // pointer up = bend
-        if (dragLimb === 'leftArm') {
+        if (limb === 'leftArm') {
           const r = simState && simState.reach;
           if (r && Number.isFinite(r.depth)) simState = { ...simState, reach: { ...r, depth: Math.max(0.05, r.depth - up * LIMB_DRAG.reachMPerPx) } };
           return;
         }
-        const c = NsGrasp.LIMB_CHAIN[dragLimb];
+        const c = NsGrasp.LIMB_CHAIN[limb];
         if (!c || !canSolveLimbs()) return;
-        const root = dragLimbSeg === c.rootSeg, joint = root ? c.joints[0] : c.bend, sign = root ? 1 : c.bendSign;
+        const root = segment === c.rootSeg, joint = root ? c.joints[0] : c.bend, sign = root ? 1 : c.bendSign;
         const held = simState && simState.activity && simState.activity.bodyJointTargets ? simState.activity.bodyJointTargets[joint] : undefined;
         const L = limbLimits()[joint] || (mods.body.BODY_JOINT_LIMITS && mods.body.BODY_JOINT_LIMITS[joint]) || [-180, 180];
         const cur = Number.isFinite(held) ? held : Number.isFinite(bodyPosed[joint]) ? bodyPosed[joint] : 0;
@@ -6936,8 +6932,9 @@ export function start(params = {}) {
       }
       /** A press-and-drag on an own limb: turn it about its long axis like a dial (rolling a rod under a finger). */
       function applyLimbDial(drag, out) {
+        const { limb, segment, via } = drag.binding;
         applyLimbFlex(drag, out);
-        if (!drag || !dragLimb || !camPose || !camBodyToWorld) return;
+        if (!camPose || !camBodyToWorld) return;
         const B = camBodyToWorld, look = camPose.gazeLook || { yaw: cs.yaw, pitch: cs.pitch };
         const cy = Math.cos(look.yaw), sy = Math.sin(look.yaw), cp = Math.cos(look.pitch), spp = Math.sin(look.pitch);
         const viewDir = [-sy * cp, spp, -cy * cp], rightW = [cy, 0, -sy], upW = [sy * spp, cp, cy * spp];
@@ -6945,9 +6942,13 @@ export function start(params = {}) {
         // pointer: the dial is read on the image (its axis and place through the mirror body's matrix) and its turn is
         // taken back with the sign flipped (a mirror image turns the other way round its own axis).
         let M = null;
-        if (dragLimbVia === 'mirror' && sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); M = mm && mm.drawn ? mm.drawn : null; } catch { M = null; } }
+        if (via === 'mirror' && sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); M = mm && mm.drawn ? mm.drawn : null; } catch { M = null; } }
         const seenPoint = q => (M ? NsCollide.apply(M, q[0], q[1], q[2]) : q), seenDir = d => (M ? [0, 1, 2].map(i => M[i] * d[0] + M[4 + i] * d[1] + M[8 + i] * d[2]) : d), turnSign = M ? -1 : 1;
-        if (dragLimb === 'leftArm') {
+        if (limb === 'leftArm') {
+          if (leftDialBinding !== drag.binding) {
+            leftDialBinding = drag.binding;
+            leftDial = 0;
+          }
           // The game arm: a quarter of a turn or so one way or the other switches its palm-down / palm-up area on.
           const axis = seenDir(viewDir); // the left arm points along the look at full reach
           leftDial += LIMB_DRAG.on ? turnSign * drag.dx * LIMB_DRAG.turnDegPerPx : turnSign * NsGrasp.rollDeg({ axisWorld: axis, viewDirWorld: [0, -1, 0], rightWorld: rightW, upWorld: upW, dx: drag.dx, dy: drag.dy });
@@ -6962,11 +6963,11 @@ export function start(params = {}) {
         }
         if (!canSolveLimbs()) return;
         const seg = segmentsFor(bodyPosed);
-        const c = NsGrasp.LIMB_CHAIN[dragLimb];
+        const c = NsGrasp.LIMB_CHAIN[limb];
         // A press on the right UPPER arm turns the upper arm (its own axis: shoulder -> elbow); anywhere else on a limb
         // turns the limb's dial joint about root -> end (the forearm turn, a leg's hip rotation).
-        const upper = Boolean(c.upperDial) && dragLimbSeg === c.rootSeg, dial = upper ? c.upperDial : c.dial;
-        const root = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, 'root'))), end = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, dragLimb, upper ? 'bend' : 'end')));
+        const upper = Boolean(c.upperDial) && segment === c.rootSeg, dial = upper ? c.upperDial : c.dial;
+        const root = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, limb, 'root'))), end = seenPoint(worldOf(B, NsGrasp.limbPoint(bodyRig, seg, limb, upper ? 'bend' : 'end')));
         const eye = camPose.position || [0, 0, 0], mid = root.map((v, i) => (v + end[i]) / 2);
         const toLimb = mid.map((v, i) => v - eye[i]), tl = Math.hypot(...toLimb) || 1;
         const deg = LIMB_DRAG.on ? turnSign * drag.dx * LIMB_DRAG.turnDegPerPx
@@ -7824,6 +7825,7 @@ export function start(params = {}) {
         renderRequested = false;
         const aspect = size.width / size.height;
         let timing, rawFrameEvents = [], lastMsBeforeFrame = lastMs;
+        const dragTurns = [];
         if (!live) { viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; } // E, a number or an arrow pressed while an overlay shows does nothing (bindDom refuses it there anyway)
         if (live) {
           // Actual elapsed wall time (monotonic performance clock; the rAF timestamp only as a fallback), or the QA
@@ -7832,7 +7834,19 @@ export function start(params = {}) {
           // still held 0.25 s after its press goes on as the slow turn; a press that waited for a turn takes hold).
           if (typeof controlsApi.tickSpace === 'function') cs = controlsApi.tickSpace(cs, now);
           rawFrameEvents = [...carryRawEvents.splice(0), ...controlsApi.drainEvents(cs)];
-          timing = frameTiming(lastMs, now, rawFrameEvents, cs.lookMs);
+          if (typeof controlsApi.takeDrag === 'function') {
+            const result = controlsApi.takeDrag(cs);
+            cs = result.state;
+            if (result.drag) rawFrameEvents.push({ type: 'drag', ...result.drag });
+          }
+          // Completed gestures and the current gesture's latest movement share the frame's existing bounded input path.
+          // A refused frame keeps each pick in order; the activity only receives events it understands.
+          const gameEvents = [];
+          for (const event of rawFrameEvents) {
+            if (event.type === 'drag') dragTurns.push(event);
+            else gameEvents.push(event);
+          }
+          timing = frameTiming(lastMs, now, gameEvents, cs.lookMs);
           if (fixed === true && qaLookPending) timing = { ...timing, gazeAt: 0 };
           lastMsBeforeFrame = lastMs;
           lastMs = Number.isFinite(now) ? now : null;
@@ -7972,18 +7986,9 @@ export function start(params = {}) {
             timing = { ...timing, events: [...timing.events, { type: 'grip', on: wantGrip, at }] };
           }
         }
-        // R558 (R31): movement of a press-and-drag on the brain or the mirror body since the last frame (CSS px).
-        let dragTurn = null;
-        if (live && typeof controlsApi.takeDrag === 'function') { const r = controlsApi.takeDrag(cs); cs = r.state; dragTurn = r.drag; }
-        // Review fix: drag movement taken by a frame that was then skipped is added back here, not lost.
-        if (live && carryDrag) {
-          dragTurn = dragTurn && dragTurn.target === carryDrag.target ? { target: dragTurn.target, dx: dragTurn.dx + carryDrag.dx, dy: dragTurn.dy + carryDrag.dy } : dragTurn || carryDrag;
-          carryDrag = null;
-        }
         // Defensive cancellation for a frozen route that still has deferred records. This is an observed GAME
         // boundary, never an unstamped substitute for an original release. Ordinary pause already cancels synchronously.
         if (!live && carryRawEvents.length) cancelPendingGameplay('frozen-pending-input');
-        if (!live) carryDrag = null;
         // 19 November 2026: the pointer no longer moves a held thing while the view stands still (R17, withdrawn: see
         // noteSpace below). The look turns as always and carries what is held; nothing is shifted across the view here.
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
@@ -8197,7 +8202,8 @@ export function start(params = {}) {
         const mirrorGuideEvents = [];
         arrowEvents = [];
         if (live) orbitDirs = orbitQueue.splice(0);
-        if (live && dragTurn && dragTurn.target !== 'limb') {
+        for (const dragTurn of dragTurns) {
+          if (dragTurn.target === 'limb') continue;
           // R558 (R31): turn the dragged item about its own centre by the px dragged. The near surface follows the
           // pointer. The brain uses its ordinary orbit steps (and limits); the mirror body its own orbit.
           const yawDeg = dragTurn.dx * DRAG_TURN.degPerPx, pitchDeg = dragTurn.dy * DRAG_TURN.degPerPx;
@@ -8264,7 +8270,7 @@ export function start(params = {}) {
         // forces a new ray every frame (6 ms a frame through the whole limb turn): any input EVENT still asks at once.
         const pickQuiet = live && fixed !== true && pickHold.ctl !== null && pickHold.n - pickHold.frame <= 2 && pickHold.w === size.width && pickHold.h === size.height
           && pickHold.view === cam.view && cam.progress === (cam.view === 'third' ? 1 : 0) && !reachPick && !tapped && timing.events.length === 0 && cs.reach !== true
-          && !dragLimb;
+          && !cs.drag?.binding?.limb && !dragTurns.some(drag => drag.target === 'limb');
         let ctl = null;
         if (pickQuiet) { ctl = pickHold.ctl; pickHold.reused++; } // the frame after a fresh answer: frame stays, so the next one asks
         else if (live) { ctl = targetsAt(size.width / 2, size.height / 2); pickHold.ctl = ctl; pickHold.frame = ctl ? pickHold.n : -2; pickHold.w = size.width; pickHold.h = size.height; pickHold.view = cam.view; pickHold.asked++; }
@@ -8325,7 +8331,7 @@ export function start(params = {}) {
           contact.bodyBlocked = null; contact.skipGuards = 2; // (the limb hold and dial ended with the cancellation)
           if (sceneFn('setMirrorCorrection')) callScene('setMirrorCorrection', null);
           mirrorView = NM.resetMirror(mirrorView); applyMirrorView(); // cancellation retained the current arrow press sequence
-          cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false; areaWalk = null; carryDrag = null;
+          cam = NC.createCameraState(); cs = controlsApi.setPitchLimits(cs, null); viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false; areaWalk = null;
           cs = controlsApi.setLook(cs, referenceGraph ? referenceGraph.initialLook : { yaw: 0, pitch: 0 });
           lastGoodLook = { yaw: cs.yaw, pitch: cs.pitch }; lastGoodCam = cam; lookBlock = null; reachBlock = null; seedNext = true;
           current = { ...current, state: simState };
@@ -8422,7 +8428,6 @@ export function start(params = {}) {
                 dispatch({ type: 'notice', text: SHELL_TEXT.inputCleared });
               } else {
                 carryRawEvents.push(...deferred.events);
-                if (dragTurn) carryDrag = dragTurn;
                 // The number keys of a skipped frame are asked again next frame (their muscle events were not applied).
                 if (movesThisFrame.length) moveRequests.unshift(...movesThisFrame.slice(0, MOVE_REQUEST_LIMIT - moveRequests.length));
               }
@@ -8491,12 +8496,17 @@ export function start(params = {}) {
         }
         // R558 (Message 12): what moved this frame stops at contact (the mirror body first, then the brain against it), and
         // a held or turned own limb moves (its pose is checked with the rest of the body's below).
+        let turningLimb = cs.drag?.binding?.limb || null;
         if (live) {
           guardMirror(now);
           guardBrain(prevSim, out, now);
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
-          if (dragTurn && dragTurn.target === 'limb') applyLimbDial(dragTurn, out);
+          for (const dragTurn of dragTurns) {
+            if (dragTurn.target !== 'limb' || !dragTurn.binding) continue;
+            applyLimbDial(dragTurn, out);
+            turningLimb = dragTurn.binding.limb;
+          }
         }
         // R4-text (D7): the "Try this" guide follows real events of this frame (one pure call; never blocks play).
         // R5-integrate-core (R5-text W2): the E goal hears the view changes (third when the switch starts, first when it ends).
@@ -8598,7 +8608,10 @@ export function start(params = {}) {
         // That glow shows a held posture, not an activation: areas lit only by it start settled (no power-up flash at
         // every turn of the head; ns-colors POWER_UP.settledAgeS). Told to the scene before any muscle or area is shaded.
         // R17: plus what the player's own movement adds this frame (moveGlow: the right hand's share of a Space grasp).
-        if (live) { feedHeadMove(headShown, timing.dt); feedLimbMove(out, timing.dt); }
+        if (live) {
+          feedHeadMove(headShown, timing.dt);
+          feedLimbMove(out, timing.dt, turningLimb);
+        }
         // 19 November 2026 (the owner: "the spacebar only grasps the left hand, whilst clicking grasps the right hand"):
         // the right hand closes while the mouse or trackpad button is down (it closed with a Space hold before).
         const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && cs && cs.button && cs.button.down === true));

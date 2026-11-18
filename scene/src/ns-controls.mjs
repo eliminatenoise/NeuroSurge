@@ -516,7 +516,9 @@ export function createControls({
    * (REACH_CODES); its click, if it stays a click, is marked so too. */
   function dragStart(state, target, opts = {}) {
     if (!DRAG_TARGETS.includes(target)) fail('controls_drag', `drag target must be one of ${DRAG_TARGETS.join(', ')}`);
-    return { ...state, drag: { target, dx: 0, dy: 0, travel: 0, turning: false, behind: Boolean(opts && opts.behind === true) } };
+    const binding = opts && opts.binding;
+    return { ...state, drag: { target, dx: 0, dy: 0, travel: 0, turning: false, behind: opts?.behind === true,
+      ...(binding ? { binding } : {}) } };
   }
   /** R558: pointer movement during the press (CSS px). It becomes a drag once it has travelled DRAG_CLICK_SLOP_PX; from
    * then on (and including the px moved so far) the movement waits in dx / dy for the game (takeDrag). Never a look. */
@@ -524,21 +526,25 @@ export function createControls({
     const d = dragOf(state);
     if (d.target === null || !Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return state;
     const travel = d.travel + Math.hypot(dx, dy);
-    return { ...state, drag: { target: d.target, dx: d.dx + dx, dy: d.dy + dy, travel, turning: d.turning || travel >= DRAG_CLICK_SLOP_PX, behind: d.behind === true } };
+    return { ...state, drag: { ...d, dx: d.dx + dx, dy: d.dy + dy, travel, turning: d.turning || travel >= DRAG_CLICK_SLOP_PX } };
   }
-  /** R558: the button was let go. Returns { state, click, behind }: click true = the press never became a drag, so it
-   * is a click (the caller queues it, marked behind when the press reached behind). Movement not yet taken is dropped. */
-  function dragEnd(state) {
+  function pendingDrag(d) {
+    if (d.target === null || !d.turning || (d.dx === 0 && d.dy === 0)) return null;
+    return { target: d.target, dx: d.dx, dy: d.dy, ...(d.binding ? { binding: d.binding } : {}) };
+  }
+  /** A real button release queues the remaining pixels. Safety and missed releases still cancel the gesture. */
+  function dragEnd(state, { releasedAtMs } = {}) {
     const d = dragOf(state);
     if (d.target === null) return { state, click: false, behind: false };
-    return { state: { ...state, drag: noDrag() }, click: !d.turning, behind: d.behind === true };
+    const movement = Number.isFinite(releasedAtMs) ? pendingDrag(d) : null;
+    const events = movement ? [...state.events, stamp({ type: 'drag', ...movement }, releasedAtMs)] : state.events;
+    return { state: { ...state, events, drag: noDrag() }, click: !d.turning, behind: d.behind === true };
   }
-  /** R558: the game takes the drag movement gathered since the last call: { state, drag: { target, dx, dy } | null }
-   * (null while there is no drag, or the press has not moved far enough yet). */
+  /** Movement gathered since the last draw, with the target selected at the press. */
   function takeDrag(state) {
-    const d = dragOf(state);
-    if (d.target === null || !d.turning || (d.dx === 0 && d.dy === 0)) return { state, drag: null };
-    return { state: { ...state, drag: { ...d, dx: 0, dy: 0 } }, drag: { target: d.target, dx: d.dx, dy: d.dy } };
+    const d = dragOf(state), drag = pendingDrag(d);
+    if (!drag) return { state, drag };
+    return { state: { ...state, drag: { ...d, dx: 0, dy: 0 } }, drag };
   }
   /** R558: { target, turning } of the gesture now ({ target: null } when none). */
   function dragState(state) { const d = dragOf(state); return { target: d.target, turning: d.turning }; }
@@ -1049,7 +1055,8 @@ function uiCommandOf(el, root) {
  *     press on an arrow an ARROW PRESS: no pointer-lock request, no drag-to-look and no click (stepArrowInput turns it
  *     into the orbit step / hold); a press anywhere else behaves as before.
  * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onView({ timeMs }), arrowAt(x, y),
- *   dragTargetAt(x, y), onBeforeSafetyRelease(), sensitivity, invertY, dragToLook = true, uiRoot }
+ *   dragTargetAt(x, y) returning a target name or a { target, ... } pick, onBeforeSafetyRelease(), sensitivity,
+ *   invertY, dragToLook = true, uiRoot }
  *   onBeforeSafetyRelease is synchronous and runs before the safety reducer fetches its state; its owner may cancel
  *   an overfull queue. The final safety release still runs if the callback throws. cancelInput does not invoke it.
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
@@ -1072,7 +1079,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
   const { onLockChange = null, onLockError = null, onDetail = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
-  if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function (xCss | null, yCss | null, behind) => "brain" | "mirror" | "limb" | null');
+  if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function that returns a drag target or null');
   const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
   /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
    * crosshair while the pointer is captured. Any failure means "nothing to drag" (the press is then an ordinary click).
@@ -1080,7 +1087,11 @@ export function bindDom(target, controls, getState, setState, options = {}) {
    * the item behind the one in front. */
   const dragTarget = (p, behind = false) => {
     if (!canDrag) return null;
-    try { const t = dragTargetAt(p ? p.x : null, p ? p.y : null, behind === true); return DRAG_TARGETS.includes(t) ? t : null; } catch { return null; }
+    try {
+      const pick = dragTargetAt(p ? p.x : null, p ? p.y : null, behind === true);
+      if (DRAG_TARGETS.includes(pick)) return { target: pick };
+      return pick && DRAG_TARGETS.includes(pick.target) ? { target: pick.target, binding: pick } : null;
+    } catch { return null; }
   };
   /** R558 (Messages 33 and 34): Shift held at this input (the event's own modifier flag; a missing flag reads false). */
   const reachOf = e => Boolean(e && e.shiftKey === true);
@@ -1361,7 +1372,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       // that turns it. Its click is then held back until the button is let go (and dropped if the press became a drag).
       // Any other press (empty space, an arrow) is a click at once, exactly as before.
       const t = dragTarget(null, behind);
-      if (t) { pressDrag = true; apply(s => controls.dragStart(s, t, { behind })); }
+      if (t) { pressDrag = true; apply(s => controls.dragStart(s, t.target, { behind, binding: t.binding })); }
       else apply(s => controls.click(s, at, { behind }));
       if (hasButtons) apply(s => controls.buttonDown(s, at, { via: 'crosshair', behind }));
       return;
@@ -1389,7 +1400,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     // R558 (R31), free pointer (the browser refused to capture it): a press on the brain or the mirror body may become a
     // drag that turns it instead of a drag that turns the look; its click waits for the release, as above.
     const t = dragTarget(local, behind);
-    if (t) { pressDrag = true; dragging = false; apply(s => controls.dragStart(s, t, { behind })); }
+    if (t) { pressDrag = true; dragging = false; apply(s => controls.dragStart(s, t.target, { behind, binding: t.binding })); }
     else apply(s => controls.click(s, at, { behind }));
     if (canLock && !lockPending) requestLock(); // retry (e.g. after the browser's post-Esc cooldown)
   });
@@ -1402,7 +1413,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
         // R558: the press ends. One that never became a drag is a click, delivered now.
         pressDrag = false;
         let clicked = false, behindClick = false;
-        apply(s => { const r = controls.dragEnd(s); clicked = r.click; behindClick = r.behind === true; return r.state; });
+        apply(s => { const r = controls.dragEnd(s, { releasedAtMs: at }); clicked = r.click; behindClick = r.behind === true; return r.state; });
         if (clicked) apply(s => controls.click(s, at, { behind: behindClick }));
       }
       if (hasButtons) apply(s => controls.buttonUp(s, at));
