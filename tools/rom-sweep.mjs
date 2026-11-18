@@ -275,7 +275,7 @@ const muscles = [];
 for (const mu of rig.muscles) {
   const info = rig.meshSegment[mu.id]; if (!info || info.kind !== 'muscle') continue;
   const mesh = inputs.meshesById.get(mu.id); if (!mesh) continue;
-  const p = mesh.positions, w = body.bodySkinWeights(rig, mu.id, p);
+  const p = mesh.positions, w = body.bodySkinWeights(rig, mu.id, mesh);
   const cands = [...new Set((info.candidates || []).filter(s => segCloud[s]).map(unitOf))];
   // every segment whose motion matters to this muscle: the bones it is skinned to and the bones it is measured against
   const used = new Set(info.candidates || []);
@@ -394,10 +394,10 @@ function twistRel(m, segObj) {
 function drawnSkin(m, rel, segObj, elbowFlexDeg) {
   const b = baked.meshesById.get(m.id).positions, w = m.w, n = b.length / 3, out = new Float32Array(b.length);
   const tf = w.tf || null, tr = tf ? twistRel(m, segObj) : null;
-  const mix = w.anconeusDelta ? body.anconeusBendBlend(elbowFlexDeg) : 0;
+  const { delta: bendDelta, mix } = body.anconeusPoseWeights(w, elbowFlexDeg);
   for (let v = 0, k = 0; v < n; v++, k += 3) {
     const tw = tf && tf[v] > 0;
-    const delta = mix > 0 ? mix * w.anconeusDelta[v] : 0;
+    const delta = mix > 0 ? mix * bendDelta[v] : 0;
     const A = tw && w.i0[v] === SEG_RF ? tr(tf[v]) : rel[w.i0[v]], B = tw && w.i1[v] === SEG_RF ? tr(tf[v]) : rel[w.i1[v]], wa = w.w0[v] + delta, wb = w.w1[v] - delta, x = b[k], y = b[k + 1], z = b[k + 2];
     out[k] = wa * (A[0] * x + A[4] * y + A[8] * z + A[12]) + wb * (B[0] * x + B[4] * y + B[8] * z + B[12]);
     out[k + 1] = wa * (A[1] * x + A[5] * y + A[9] * z + A[13]) + wb * (B[1] * x + B[5] * y + B[9] * z + B[13]);

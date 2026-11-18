@@ -208,7 +208,7 @@ import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a mov
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
-import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget } from './ns-body.mjs';
+import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, anconeusDeepBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget } from './ns-body.mjs';
 import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, brainEnvelope as vesselEnvelope, buildCerebralVeins, pointField as vesselPointField, stripGive as vesselStripGive, vesselVertexGlsl, vesselFragmentGlsl, evalBodyVessels, bodyTubeIndex, writeBodyTubes } from './ns-vessels.mjs'; // 18 November (package VESSELS)
 // 18 November 2026 (package DETAIL): smoother shading normals of the decimated body meshes (ns-detail smoothNormalField).
 import { smoothNormalField, boneEndWeights } from './ns-detail.mjs';
@@ -9397,7 +9397,7 @@ export function createScene({
    * right hand or wrist is away from the start posture and the pose changed). Display choice on licensed anatomy. */
   const bodySkin = new Map(), bodySkinGeos = new Map();
   let bodySkinOn = false, bodySkinSegs = null, bodySkinBaked = null, bodySkinWrites = 0;
-  let anconeusMix = 0;
+  let anconeusMix = 0, anconeusDeepMix = 0;
   const rigidInv16 = (m, o) => { // inverse of a rigid (rotation + translation) column-major 4x4
     o[0] = m[0]; o[1] = m[4]; o[2] = m[8]; o[4] = m[1]; o[5] = m[5]; o[6] = m[9]; o[8] = m[2]; o[9] = m[6]; o[10] = m[10];
     o[12] = -(o[0] * m[12] + o[4] * m[13] + o[8] * m[14]); o[13] = -(o[1] * m[12] + o[5] * m[13] + o[9] * m[14]); o[14] = -(o[2] * m[12] + o[6] * m[13] + o[10] * m[14]);
@@ -9421,7 +9421,8 @@ export function createScene({
       const lift = bodyLift.get(id) || null;
       // R558 (ns-body R_FOREARM_TWIST): a right forearm muscle's twisted ulna influence carries tf and the twist frame.
       if (r.tf && (!(r.tf instanceof Float32Array) || r.tf.length !== n || !r.twist || !r.twist.axis || !r.twist.point)) fail('scene_input', 'forearm twist record does not match the drawn mesh');
-      const rec = { id, b, geo, pos, nor, src: r.src, i0: r.i0, i1: r.i1, w0: r.w0, w1: r.w1, anconeusDelta: r.anconeusDelta || null, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
+      const rec = { id, b, geo, pos, nor, src: r.src, i0: r.i0, i1: r.i1, w0: r.w0, w1: r.w1, anconeusDelta: r.anconeusDelta || null,
+        anconeusDeepDelta: r.anconeusDeepDelta || null, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
         rest: lift ? lift.rest : new Float32Array(pos.array), restN: lift ? null : new Float32Array(nor.array), skinned: false };
       if (!lift) pos.array = new Float32Array(rec.rest); // one drawn buffer per muscle (attribute object kept; see the lift)
       // The fingers and the hand move up to about a hand length against the mesh's rigid frame: grow the shared bounding
@@ -9561,15 +9562,17 @@ export function createScene({
       const M = rigidInv16(rec.b.mesh.matrix.elements, skinMeshInv), C = rec.C || (rec.C = []);
       for (const i of rec.used) C[i] = mul16(M, bodySkinSegs[i], C[i] || new Float64Array(16));
       const n3 = p.length, qa = rec.qa, qb = rec.qb, na = rec.na, nb = rec.nb, i0 = rec.i0, i1 = rec.i1;
-      const mix = rec.anconeusDelta ? anconeusMix : 0;
+      const isDeep = rec.anconeusDeepDelta && anconeusDeepMix > 0;
+      const delta = isDeep ? rec.anconeusDeepDelta : rec.anconeusDelta;
+      const mix = isDeep ? anconeusDeepMix : (delta ? anconeusMix : 0);
       let w0 = rec.w0, w1 = rec.w1;
       if (mix > 0) {
         w0 = rec.anconeusW0 ||= new Float64Array(w0.length);
         w1 = rec.anconeusW1 ||= new Float64Array(w1.length);
-        if (rec.anconeusMixDrawn !== mix) for (let v = 0; v < w0.length; v++) {
-          const delta = mix * rec.anconeusDelta[v];
-          w0[v] = rec.w0[v] + delta;
-          w1[v] = rec.w1[v] - delta;
+        if (rec.anconeusMixDrawn !== mix || rec.anconeusDeepDrawn !== isDeep) for (let v = 0; v < w0.length; v++) {
+          const shift = mix * delta[v];
+          w0[v] = rec.w0[v] + shift;
+          w1[v] = rec.w1[v] - shift;
         }
       }
       if (rec.tf) skinTwisted(rec, M, p, nArr);
@@ -9587,7 +9590,7 @@ export function createScene({
         nArr[k] = qx / l; nArr[k + 1] = qy / l; nArr[k + 2] = qz / l;
       }
       rec.skinned = true;
-      if (rec.anconeusDelta) rec.anconeusMixDrawn = mix;
+      if (rec.anconeusDelta) { rec.anconeusMixDrawn = mix; rec.anconeusDeepDrawn = isDeep; }
       if (rec.sw) swellApply(rec, p, nArr); // package BULK: the belly's swell and the lift of what lies over it
     }
     rec.pos.needsUpdate = true; rec.nor.needsUpdate = true;
@@ -9639,6 +9642,7 @@ export function createScene({
       bodySkinSegs = segOrder.map(s => segments.get(s) || bodySkinBaked.get(s));
       bodySkinOn = true;
       anconeusMix = anconeusBendBlend(elbowFlexDeg);
+      anconeusDeepMix = anconeusDeepBendBlend(elbowFlexDeg);
       if (swell.on) swellStep(); // package BULK (MUSCLE_SWELL): ease each muscle's swell toward its activity and shortening
       // 18 November 2026 (performance): the records skinned on the graphics card take the pose table, not this loop
       if (bodyGpu.installed && !bodyGpu.on && !bodyGpu.lod) { bodyGpu.on = true; bodyGpuShow(true); }
@@ -9654,8 +9658,9 @@ export function createScene({
       let budget = SKIN_FRAME_VERTICES, waiting = 0, firstWaiting = -1;
       for (let i = 0; i < N; i++) {
         const at = (bodySkinNext + i) % N, rec = bodySkinList[at];
-        if (skinPoseSame(rec) && rec.skinned && (!rec.sw || rec.sw.key === rec.sw.drawnKey)
-          && (!rec.anconeusDelta || rec.anconeusMixDrawn === anconeusMix)) continue;
+        const isDeep = rec.anconeusDeepDelta && anconeusDeepMix > 0;
+        if (skinPoseSame(rec) && rec.skinned && (!rec.sw || rec.sw.key === rec.sw.drawnKey) &&
+          (!rec.anconeusDelta || (rec.anconeusDeepDrawn === isDeep && rec.anconeusMixDrawn === (isDeep ? anconeusDeepMix : anconeusMix)))) continue;
         if (budget <= 0) { waiting++; if (firstWaiting < 0) firstWaiting = at; continue; }
         // 18 November 2026: a record drawn by the graphics card (bodyGpuPose) gets only the processor copy of its
         // positions here, for the readers on the processor (picks, the mirror envelope), as fresh as before

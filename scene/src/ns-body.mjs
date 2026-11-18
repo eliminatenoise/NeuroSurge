@@ -3040,6 +3040,10 @@ export function anconeusBendBlend(flexDeg) {
   return smooth01((flexDeg - 12) / 13) * (1 - smooth01((flexDeg - 60) / 7));
 }
 
+export function anconeusDeepBendBlend(flexDeg) {
+  return flexDeg > 112 ? smooth01((flexDeg - 112) / 8) : 0;
+}
+
 function anconeusWeightDelta(rig, id, p, avail, weights) {
   if (id !== 'FJ1485' || avail.length !== 2 || !avail.includes('r_upperarm') || !avail.includes('r_forearm')) return null;
   const elbow = rig.pivots.r_elbow;
@@ -3064,6 +3068,84 @@ function anconeusWeightDelta(rig, id, p, avail, weights) {
   return delta;
 }
 
+/** Smooth the transfer from the lateral humeral attachment to the proximal ulna across the atlas surface.
+ * Hold bone-near vertices in both attachment patches at their existing weights. Short edges transfer more of
+ * their neighbours' weights than long ones. Weld coincident vertices before solving so seams cannot pull apart.
+ * This computes new skin weights once on the source mesh. It does not predict fibre motion. */
+function anconeusDeepWeightDelta(rig, p, ix, weights) {
+  if (!ix?.length) return null;
+  const { point, axes } = rig.pivots.r_elbow;
+  const along = norm(sub(rig.pivots.r_wrist.point, point));
+  const bend = norm(cross(axes.flex, along));
+  const across = norm(cross(bend, axes.flex));
+  const clouds = cloudIndexes(rig._clouds);
+  const upper = SEG_INDEX.get('r_upperarm');
+  const n = p.length / 3;
+  const weld = new Map(), slots = new Uint32Array(n), reps = [], neighbors = [];
+  for (let v = 0; v < n; v++) {
+    const i = 3 * v, key = `${p[i]},${p[i + 1]},${p[i + 2]}`;
+    if (!weld.has(key)) {
+      weld.set(key, reps.length);
+      reps.push(v);
+      neighbors.push(new Map());
+    }
+    slots[v] = weld.get(key);
+  }
+  for (let t = 0; t + 2 < ix.length; t += 3) {
+    const a = slots[ix[t]], b = slots[ix[t + 1]], c = slots[ix[t + 2]];
+    if (a === b || b === c || c === a) continue;
+    for (const [u, v] of [[a, b], [a, c], [b, c]]) {
+      if (neighbors[u].has(v)) continue;
+      const i = 3 * reps[u], j = 3 * reps[v];
+      const length = Math.hypot(p[i] - p[j], p[i + 1] - p[j + 1], p[i + 2] - p[j + 2]);
+      const influence = 1 / Math.max(0.4, length);
+      neighbors[u].set(v, influence);
+      neighbors[v].set(u, influence);
+    }
+  }
+  const original = new Float64Array(reps.length), target = new Float64Array(reps.length);
+  const pinned = new Uint8Array(reps.length), neighborTotal = new Float64Array(reps.length);
+  for (const [j, v] of reps.entries()) {
+    const i = 3 * v, x = p[i], y = p[i + 1], z = p[i + 2];
+    const humerus = nnNearestD2(clouds.r_upperarm, x, y, z);
+    const ulna = nnNearestD2(clouds.r_forearm, x, y, z);
+    // The closest and unambiguous atlas points mark the two attachment patches.
+    pinned[j] = (humerus < 5.5 ** 2 && 4 * humerus < ulna) || (ulna < 5.5 ** 2 && 4 * ulna < humerus);
+    original[j] = weights.ia[v] === upper ? 1 - weights.wa[v] : weights.wa[v];
+    const offset = [x - point[0], y - point[1], z - point[2]];
+    const around = Math.atan2(dot(offset, across), -dot(offset, bend));
+    target[j] = smooth01((around + 1.4) / 2.6);
+    for (const weight of neighbors[j].values()) neighborTotal[j] += weight;
+  }
+  const tether = 0.05;
+  let from = original.slice(), to = original.slice();
+  for (let pass = 0; pass < 10; pass++) {
+    for (let i = 0; i < from.length; i++) {
+      if (pinned[i] || !neighborTotal[i]) continue;
+      let sum = 0;
+      for (const [j, weight] of neighbors[i]) sum += weight * from[j];
+      const mean = (sum / neighborTotal[i] + tether * target[i]) / (1 + tether);
+      to[i] = 0.25 * from[i] + 0.75 * mean;
+    }
+    [from, to] = [to, from];
+  }
+  return Float32Array.from(slots, (slot, v) =>
+    (from[slot] - original[slot]) * (weights.ia[v] === upper ? -1 : 1));
+}
+
+function anconeusSkinDeltas(rig, id, p, indices, avail, weights) {
+  const anconeusDelta = anconeusWeightDelta(rig, id, p, avail, weights);
+  if (!anconeusDelta) return null;
+  const anconeusDeepDelta = anconeusDeepWeightDelta(rig, p, indices, weights);
+  return anconeusDeepDelta ? { anconeusDelta, anconeusDeepDelta } : { anconeusDelta };
+}
+
+export function anconeusPoseWeights(weights, flexDeg) {
+  const deep = weights.anconeusDeepDelta ? anconeusDeepBendBlend(flexDeg) : 0;
+  if (deep > 0) return { delta: weights.anconeusDeepDelta, mix: deep };
+  return { delta: weights.anconeusDelta, mix: weights.anconeusDelta ? anconeusBendBlend(flexDeg) : 0 };
+}
+
 function elbowSkinWeights(rig, p, avail) {
   if (!avail.includes('r_upperarm') || !avail.includes('r_forearm') || !avail.includes('r_radius')) return null;
   return continuousSkinWeights(rig, p, avail, null, true);
@@ -3083,8 +3165,8 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
     if (!c) return null;
     const n = p.length / 3, w0 = new Float32Array(n), w1 = new Float32Array(n);
     for (let v = 0; v < n; v++) { w0[v] = c.wa[v]; w1[v] = 1 - c.wa[v]; }
-    const anconeusDelta = anconeusWeightDelta(rig, meshId, p, avail, c);
-    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1, ...(anconeusDelta ? { anconeusDelta } : {}) };
+    const bend = anconeusSkinDeltas(rig, meshId, p, restPositions.indices, avail, c);
+    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1, ...bend };
   }
   const n = p.length / 3;
   const elbow = elbowSkinWeights(rig, p, avail);
@@ -3204,12 +3286,13 @@ export function handSkinRecords(rig, meshesById, options = {}) {
     // R558: and every right forearm muscle that reaches the radius, for the continuous twist (R_FOREARM_TWIST); and
     // (Message 32) every muscle that spans the neck (neckSkinnedMuscle).
     if (!info || !((info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') || neckSkinnedMuscle(info, m.id))) continue;
-    const p = positionsOf(get(m.id));
+    const mesh = get(m.id), p = positionsOf(mesh);
     if (!p) continue;
-    const w = bodySkinWeights(rig, m.id, p, options);
+    const w = bodySkinWeights(rig, m.id, mesh, options);
     if (!w) continue;
     out.set(m.id, { src: p instanceof Float32Array ? p : Float32Array.from(p), i0: w.i0, i1: w.i1, w0: w.w0, w1: w.w1, ...(w.tf ? { tf: w.tf, twist: w.twist } : {}),
-      ...(w.anconeusDelta ? { anconeusDelta: w.anconeusDelta } : {}) });
+      ...(w.anconeusDelta ? { anconeusDelta: w.anconeusDelta } : {}),
+      ...(w.anconeusDeepDelta ? { anconeusDeepDelta: w.anconeusDeepDelta } : {}) });
   }
   return out;
 }
@@ -3223,10 +3306,10 @@ export function skinBodyPositions(segmentMatrices, weights, restPositions, out, 
   const o = out || new Float32Array(p.length);
   if (o.length !== p.length) throw new Error('ns:body_skin: out must match restPositions length');
   const mats = BODY_SEGMENTS.map(s => segmentMatrices.get(s) || null);
-  const mix = weights.anconeusDelta ? anconeusBendBlend(elbowFlexDeg) : 0;
+  const { delta, mix } = anconeusPoseWeights(weights, elbowFlexDeg);
   for (let v = 0; v < n; v++) {
     const k = 3 * v, x = p[k], y = p[k + 1], z = p[k + 2];
-    const shift = mix > 0 ? mix * weights.anconeusDelta[v] : 0;
+    const shift = mix > 0 ? mix * delta[v] : 0;
     const a = mats[weights.i0[v]], b = mats[weights.i1[v]], wa = weights.w0[v] + shift, wb = weights.w1[v] - shift;
     if (!a || !b) throw new Error(`ns:body_skin: missing segment matrix at vertex ${v}`);
     for (let r = 0; r < 3; r++) {
@@ -3954,16 +4037,16 @@ function smoothDisplacement(p, ix, d, passes) {
 }
 /** True for a muscle the scene skins per vertex (handSkinRecords' rule): its bake stays the plain skin. */
 const sceneSkinnedMuscle = (info, id) => Boolean(info && ((info.candidates || []).some(s => HAND_SKIN_RE.test(s) || s === 'r_radius') || neckSkinnedMuscle(info, id)));
-function bakeSkinWeights(rig, id, p, avail, near, useCache) {
+function bakeSkinWeights(rig, id, p, avail, near, useCache, indices = null) {
   let byId = useCache ? bakeWeightCache.get(rig) : null;
   if (useCache && !byId) bakeWeightCache.set(rig, (byId = new Map()));
   const hit = byId ? byId.get(id) : null;
-  if (hit && hit.p === p && hit.avail === avail.join(',')) return hit;
+  if (hit && hit.p === p && hit.avail === avail.join(',') && (id !== 'FJ1485' || hit.indices === indices)) return hit;
   if (neckSkinnedMuscle(rig.meshSegment[id], id)) {
     // R558 (Message 32): the neck muscles' continuous weights, exactly as bodySkinWeights gives them to the scene's skin.
     const c = continuousSkinWeights(rig, p, avail, rig.meshSegment[id].skin || null);
     if (c) {
-      const out = { p, avail: avail.join(','), ...c, tf: null, anconeusDelta: anconeusWeightDelta(rig, id, p, avail, c) };
+      const out = { p, avail: avail.join(','), ...c, tf: null, indices, ...anconeusSkinDeltas(rig, id, p, indices, avail, c) };
       if (byId) byId.set(id, out);
       return out;
     }
@@ -4055,18 +4138,18 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
         fitBaked[id] = skinFitSamples(f, mats);
         if (p) {
           if (!near) near = nearestSearch(clouds, mode);
-          const w = bakeSkinWeights(rig, id, p, avail, near, mode === 'index');
+          const w = bakeSkinWeights(rig, id, p, avail, near, mode === 'index', mesh.indices);
           positions = new Float32Array(p.length);
           // R558: a twisted right-forearm influence uses its own turned ulna frame (R_FOREARM_TWIST).
           const tw = w.tf ? rForearmTwistFrame(rig) : null;
           const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
           const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
-          const anconeusMix = w.anconeusDelta ? anconeusBendBlend(angles.r_elbow_flex) : 0;
+          const { delta, mix } = anconeusPoseWeights(w, angles.r_elbow_flex);
           for (let i = 0, v = 0; i < p.length; i += 3, v++) {
             const x = p[i], y = p[i + 1], z = p[i + 2], f = T ? w.tf[v] : 0;
             const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
             const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
-            const wa = anconeusMix > 0 ? w.wa[v] + anconeusMix * w.anconeusDelta[v] : w.wa[v], wb = 1 - wa;
+            const wa = mix > 0 ? w.wa[v] + mix * delta[v] : w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
           }
           // R558 (Message 32): the bake's displacement from the rigid rest fit, smoothed (BAKE_SMOOTH), except for the
@@ -6878,8 +6961,8 @@ function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
   if (skinned.has(id)) {
     const clouds = rig._clouds || {}, avail = (info.candidates || []).filter(s => clouds[s]);
     let near = null;
-    const w = bakeSkinWeights(rig, id, p, avail, (segs, x, y, z) => (near || (near = nearestSearch(clouds, 'index')))(segs, x, y, z), true);
-    const out = new Float32Array(q.length), mats = B.mats, bakedMesh = baked.meshesById.get(id);
+    const bakedMesh = baked.meshesById.get(id), out = new Float32Array(q.length), mats = B.mats;
+    const w = bakeSkinWeights(rig, id, p, avail, (segs, x, y, z) => (near || (near = nearestSearch(clouds, 'index')))(segs, x, y, z), true, bakedMesh?.indices);
     // R558 (BAKE_SMOOTH): the plain skin of the baked positions (the smoothing correction is added back at the end).
     const fix = B.bakeFix && B.bakeFix[id] && B.bakeFix[id].length === q.length ? B.bakeFix[id] : null;
     let base = bakedMesh ? bakedMesh.positions : null;
@@ -6890,12 +6973,12 @@ function bakeLiftedPositions(rig, baked, id, p, q, skinned) {
     const tw = w.tf ? rForearmTwistFrame(rig) : null;
     const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
     const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
-    const anconeusMix = w.anconeusDelta ? anconeusBendBlend(baked.angles.r_elbow_flex) : 0;
+    const { delta, mix } = anconeusPoseWeights(w, baked.angles.r_elbow_flex);
     for (let i = 0, v = 0; i < q.length; i += 3, v++) {
       const x = q[i], y = q[i + 1], z = q[i + 2], f = T ? w.tf[v] : 0;
       const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
       const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
-      const wa = anconeusMix > 0 ? w.wa[v] + anconeusMix * w.anconeusDelta[v] : w.wa[v], wb = 1 - wa;
+      const wa = mix > 0 ? w.wa[v] + mix * delta[v] : w.wa[v], wb = 1 - wa;
       for (let r = 0; r < 3; r++) out[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
       const lx = x - p[i], ly = y - p[i + 1], lz = z - p[i + 2], want2 = lx * lx + ly * ly + lz * lz;
       if (want2 > 0 && base && base.length === q.length) {

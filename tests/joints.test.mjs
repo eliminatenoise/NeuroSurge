@@ -426,3 +426,40 @@ test('the shallow anconeus correction keeps edges short and hands the unaltered 
     }
   }
 });
+
+test('the right anconeus keeps its attachment weights and eases into the deep bend', () => {
+  const id = 'FJ1485', mesh = inputs.meshesById.get(id);
+  const weights = body.handSkinRecords(rig, new Map([[id, mesh]])).get(id);
+  const original = { ...weights, anconeusDeepDelta: null };
+  const frozen = [];
+  for (let v = 0; v < weights.anconeusDeepDelta.length; v++) {
+    if (!weights.anconeusDeepDelta[v]) frozen.push(v);
+  }
+  assert.ok(frozen.length >= 407);
+  const edgeRatios = p => {
+    const edges = new Set();
+    const distance = (q, a, b) => Math.hypot(q[3 * a] - q[3 * b], q[3 * a + 1] - q[3 * b + 1], q[3 * a + 2] - q[3 * b + 2]);
+    for (let i = 0; i < mesh.indices.length; i++) {
+      const a = mesh.indices[i], b = mesh.indices[i % 3 === 2 ? i - 2 : i + 1];
+      const size = distance(mesh.positions, a, b), drawn = distance(p, a, b);
+      if (size >= 0.7 && drawn > 3 * size && drawn - size > 2) edges.add(`${Math.min(a, b)},${Math.max(a, b)}`);
+    }
+    return edges.size;
+  };
+  for (const angle of [8, 62, 112, 120, 145]) {
+    const posture = { ...rest, r_elbow_flex: angle, r_pronation: 160 };
+    const pose = body.bakeBodyPosture(rig, new Map([[id, mesh]]), { posture, keep: 'pelvis' });
+    const opts = { elbowFlexDeg: angle };
+    const before = body.skinBodyPositions(pose.segments, original, mesh.positions, null, opts);
+    const after = body.skinBodyPositions(pose.segments, weights, mesh.positions, null, opts);
+    const baked = pose.meshesById.get(id).positions;
+    assert.ok(after.every((x, i) => Math.abs(x - baked[i]) < 0.0004));
+    if (angle <= 112) assert.deepEqual(after, before);
+    else assert.ok(edgeRatios(after) < edgeRatios(before));
+    for (const v of frozen) assert.deepEqual(after.subarray(3 * v, 3 * v + 3), before.subarray(3 * v, 3 * v + 3));
+  }
+  for (const boundary of [112, 120]) {
+    const e = 1e-3;
+    assert.ok(Math.abs(body.anconeusDeepBendBlend(boundary + e) - body.anconeusDeepBendBlend(boundary - e)) < 1e-7);
+  }
+});
