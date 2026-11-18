@@ -1863,7 +1863,10 @@ export const BRAIN_RAISE_NDC = 0.2;
  * brain"): 0.33 -> 0.5: the strip is about 800 px across at 1600x900 (640 in the ninth upload, 400 in the tenth). */
 /* 19 November 2026 (the brain a lot higher, package VIEW): 0.5 -> 0.46: the strip is about 700 px across at 1600x900,
  * the largest at which all of it, face areas included, stands above your hands and feet inside the picture. */
-export const BRAIN_START_MOTOR_FRAC = 0.46;
+/* 19 November 2026, later (the owner: "we have to make the [motor] strip far more obvious, probably a good deal larger and
+ * far brighter and more colorful"): 0.46 -> 0.58: the strip is about 930 px across at 1600x900. Its outermost (face)
+ * areas now start above the top edge; a look upward brings them in. */
+export const BRAIN_START_MOTOR_FRAC = 0.58;
 /**
  * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
  * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
@@ -8563,11 +8566,13 @@ export function start(params = {}) {
         // every turn of the head; ns-colors POWER_UP.settledAgeS). Told to the scene before any muscle or area is shaded.
         // R17: plus what the player's own movement adds this frame (moveGlow: the right hand's share of a Space grasp).
         if (live) { feedHeadMove(headShown, timing.dt); feedLimbMove(out, timing.dt); }
-        const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && simState.activity && simState.activity.graspHold === true));
+        // 19 November 2026 (the owner: "the spacebar only grasps the left hand, whilst clicking grasps the right hand"):
+        // the right hand closes while the mouse or trackpad button is down (it closed with a Space hold before).
+        const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && cs && cs.button && cs.button.down === true));
         // 18 November (the living brain): the grip of a Space grasp is not a movement switched on from the brain; while it
         // holds, the tissue round its hand area only flushes faintly (no bloom, no ring).
         // 18 Nov (SMALL, S7): both hands grip, so both hand areas are held (the right hand's is GRIP_BOTH's).
-        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_HELD_IDS : null);
+        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_AREA_ID : null); // Space: the left hand's area only
         // The left shoulder's rows to draw: the reach keys' and the look's (the arm follows the look).
         const reachShown = reachRowsShown(out.reachShow, headGlow ? headGlow.reach : null);
         if (sceneFn('setSettledRegions')) {

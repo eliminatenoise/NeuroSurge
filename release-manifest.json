@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-32",
+  "version": "experimental-2026-11-19-body-update-33",
   "experimental": true,
-  "source": "Body update 32. The compact tip identifies what Space holds and how to let go.",
+  "source": "Body update 33. A matte, flat-toned look with dark edges; a larger, brighter motor strip; Space closes the left hand and a click the right.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 249551,
-      "sha256": "5e75a9c264c51e7f34e6e144562d15d742c0894ada0f36b54590a4c53cfc2311"
+      "bytes": 251347,
+      "sha256": "493f0df92384350708e4d011c7093dbe14432f79efea3ff57352df9429fcab85"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 32104,
-      "sha256": "5432bacc2d0ef537ed210c85bd2e17faf0edab5404d356d30825156e60822c43"
+      "bytes": 32664,
+      "sha256": "bc113abc92ecd91a0dabc7624d96a8fc1e5d8fe52178a7d8f3105261e95eae9f"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "503adabda7270641ffc0db1932080377b325afcc6fc199db85ecb91101f1dc2c"
+      "sha256": "8bf6f6b81aea8aaa233bb3b01fc913ba8ed137fc67a79e4f7d545e2cba7fdbbf"
     },
     {
       "path": "index.html",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 752488,
-      "sha256": "e821d4a4fcfaee38d22063e1d0ddf4d4233e62f17c1a20d406c3362771e84b15"
+      "bytes": 753058,
+      "sha256": "cbb5f7f614d49cc827345c5a45a7eb2e4bbc1b70ddfc7b3d5e05bd84a1161e71"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3992,13 +3992,13 @@
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 61175,
-      "sha256": "ebc6d248e33a841db4362221872df8f4f210621a8b2283dc2e8aed0420fef6a5"
+      "bytes": 61303,
+      "sha256": "956bd795b01b0404fb84f401b507e5c6d3d633f02447f1230d1baa871eaa4b07"
     },
     {
       "path": "scene/src/ns-brain-live.mjs",
-      "bytes": 35452,
-      "sha256": "2f5914b5e51b0ac17cf3dd5d94a2acd251c364640be2f41855258f6b36e5c05a"
+      "bytes": 35681,
+      "sha256": "360b2019e24795badbb063a4c90192b113384920376e6b1f8c25108ed77964f8"
     },
     {
       "path": "scene/src/ns-brain.mjs",
@@ -4017,8 +4017,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 98226,
-      "sha256": "dbf0bdac1ae48a82f1686f2f2f5352685e2547a3a11334456af2edb166813c2c"
+      "bytes": 98571,
+      "sha256": "6ba3cdc881defdf5fcfbc4b2820176467a3600d41d86a7001da4af3a63069de8"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4162,8 +4162,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1081214,
-      "sha256": "1a7a2d6ce49ad5cebc9ac50dcd64eedcf2d01bbf92738d9a7e4e4d2c41e56c01"
+      "bytes": 1082738,
+      "sha256": "4846f1385efd04f1fd57be3d5c4db8846259630cf3ffeef868aef142232f9df8"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4232,8 +4232,8 @@
     },
     {
       "path": "tests/brain-live.test.mjs",
-      "bytes": 20731,
-      "sha256": "e0c77fa81d71c9b25944e311444a656a6b530677d695c871eef9d8ffdc79f63e"
+      "bytes": 20755,
+      "sha256": "8f351c6a3d1bf6bad04f63d30a536aea887555d6477d78056a98f53ff6a8d1a3"
     },
     {
       "path": "tests/browser-camera-resize.mjs",
@@ -4382,8 +4382,8 @@
     },
     {
       "path": "tests/plain-look.test.mjs",
-      "bytes": 2215,
-      "sha256": "dcf56e281d904687d49d6d9695d312cde6e60c6ac6930955b8439fed5b158f87"
+      "bytes": 2819,
+      "sha256": "eb95ab629d2890fa7165efaaacb41558e08415e2ce2cb1d74dd9c4ee9e5e4adb"
     },
     {
       "path": "tests/pointer-release.test.mjs",

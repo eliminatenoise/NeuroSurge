@@ -1643,6 +1643,15 @@ The plain look of section 114 gets one small shader patch (`patchPlainShaders` i
 
 The user: “XZ plane with grasp WASD should be consistent between the mirror body and the brain should move much faster.” While Space holds the brain or the mirror body, W / S carry it away and nearer and A / D sideways by one rule and much faster than before, and the look goes on turning the head and view, with the held thing going with it (section 118). The older hold-and-move mode, in which the pointer moved the held thing and the view stood still, is removed. Also from the same helper: no dark hollow at the bottom of the start picture and no ragged neck stumps when the head is turned far; the left hand starts beside the left knee at the height of the right hand.
 
+## 124. Matte, flat-toned and outlined again; a larger, brighter strip; one hand per control (19 November)
+
+The user, after body update 31: “Maybe we were much better off with the matte look that we had from the original Telltale Borderlands look, similar to that.” “And we have to make the [motor] strip far more obvious, probably a good deal larger and far brighter and more colorful.” “And the spacebar only grasps the left hand, whilst clicking grasps the right hand.” “And again, let's make blood flow and brain beating far less noticeable. But there, if you really, really pay attention.”
+
+- **Matte comic look, still one cheap patch.** The plain look's patch (section 122) now leaves the specular light out altogether, steps the lit colour into four flat tones with a soft join, and draws a thin dark line where a surface turns away from the eye, inside the wider edge shade. That is the look of the earlier comic style, bands and outlines on matte tissue, without its outline pass, hatching, fibres or gloss. The brain's wet sheen and glint are off as well.
+- **The strip.** A resting motor area shows its whole colour and lights itself strongly (`AREA_LOOK.restValue` 0.72 to 1, `restLift` 0.06 to 0.5), so the strip is the brightest, most colourful thing in the picture before anything is pressed; and it is drawn larger (`BRAIN_START_MOTOR_FRAC` 0.46 to 0.58, about 930 px across at 1600 by 900). Its outermost face areas now start above the top edge of the picture; a look upward brings them in.
+- **Hands.** Space closes the left hand only; the right hand closes while the mouse or trackpad button is down. (Since 17 November a Space hold had closed both.)
+- **Beat.** The brain's beat, slide and flush are about a third of the morning's again: there if looked for.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

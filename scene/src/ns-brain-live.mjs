@@ -75,7 +75,9 @@ import { BRAIN_BEAT } from './ns-assembly-core.mjs';
 export const BRAIN_LIVE = Object.freeze({
   // 19 November 2026 (the owner: "the beating of the brain is way too obvious. It should be far more subtle"): about a
   // third of the earlier swell, slide and flush (0.017, 0.008, 0.24, 0.12, 0.07).
-  beat: Object.freeze({ swell: 0.005, breathSwell: 0.003, aimMm: 130, slide: 0.08, breathSlide: 0.04, flush: 0.022 }),
+  // 19 November 2026, later (the owner: "let's make blood flow and brain beating far less noticeable. But there, if you
+  // really, really pay attention"): about a third again (0.005, 0.003, 0.08, 0.04, 0.022 that morning).
+  beat: Object.freeze({ swell: 0.0018, breathSwell: 0.0012, aimMm: 130, slide: 0.03, breathSlide: 0.015, flush: 0.007 }),
   rate: Object.freeze({ perArea: 0.14, max: 1.45, upS: 0.9, downS: 3.0 }),
   bloom: Object.freeze({ slots: 6, swellMm: 1.6, dipMm: 0.8, lookLevel: 0.35, holdLevel: 0.2, radiusMm: 17, radius0: 0.4, growS: 0.6, inS: 0.16, outS: 0.8,
     flush: 0.6, flushTint: Object.freeze([1.22, 0.7, 0.74]), spill: 0.4, spillGain: 1.3, glow: 0.12, grazeLo: 0.12, grazeHi: 0.45, grazeKeep: 0.35,

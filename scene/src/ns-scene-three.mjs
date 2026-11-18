@@ -3758,7 +3758,12 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
  *    away from the eye, inside PLAIN_LOOK.edgeWidth of |N.V|), so every limb and muscle has a dark edge of its own
  *    and two overlapping limbs part without an outline pass.
  * boneLinear: the bone colour, linear RGB. */
-export const PLAIN_LOOK = Object.freeze({ tendonMix: 0.92, edge: 0.3, edgeWidth: 0.5 });
+// 19 November 2026, later (the owner: "Maybe we were much better off with the matte look that we had from the original
+// Telltale Borderlands look, similar to that"): the plain look is MATTE and flat-toned, like that comic look but in
+// this one patch: no specular light at all (matte), the lit colour stepped into `bands` flat tones with a soft join
+// (bandSoft, as a share of a band), and the dark edge drawn as an ink line (below inkAt of |N.V|, soft over inkSoft,
+// down to inkDark) inside the wider shade (edge, edgeWidth).
+export const PLAIN_LOOK = Object.freeze({ tendonMix: 0.92, edge: 0.55, edgeWidth: 0.5, matte: true, bands: 4, bandSoft: 0.12, bandTop: 1.15, inkAt: 0.2, inkSoft: 0.05, inkDark: 0.1 });
 export function patchPlainShaders(vertexShader, fragmentShader, kind, boneLinear, o = PLAIN_LOOK) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || !Array.isArray(boneLinear)) return null;
   const OUT = ['#include <opaque_fragment>', '#include <output_fragment>'].find(h => fragmentShader.includes(h));
@@ -3771,7 +3776,16 @@ export function patchPlainShaders(vertexShader, fragmentShader, kind, boneLinear
     vs = 'attribute float nsTendon;\nvarying float vNsTendon;\n' + vs.replace(BEG, `${BEG}\n\tvNsTendon = nsTendon;`);
     fs = 'varying float vNsTendon;\n' + fs.replace(COL, `${COL}\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, vec3( ${boneLinear.map(f).join(', ')} ), clamp( vNsTendon, 0.0, 1.0 ) * ${f(o.tendonMix)} );`);
   }
-  fs = fs.replace(OUT, `\tfloat nsPlainEdge = smoothstep( 0.0, ${f(o.edgeWidth)}, abs( dot( normalize( normal ), normalize( vViewPosition ) ) ) );\n\toutgoingLight *= mix( ${f(o.edge)}, 1.0, nsPlainEdge );\n${OUT}`);
+  const matte = o.matte && fs.includes('reflectedLight') && fs.includes('totalEmissiveRadiance')
+    ? '\toutgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;\n' : '';
+  const bands = o.bands > 1
+    ? `\tfloat nsPlainL = max( max( outgoingLight.r, outgoingLight.g ), outgoingLight.b );\n` +
+      `\tif ( nsPlainL > 0.0001 ) { float nsPlainB = min( nsPlainL / ${f(o.bandTop)}, 1.0 ) * ${f(o.bands)}; ` +
+      `float nsPlainQ = ( floor( nsPlainB ) + smoothstep( 0.5 - ${f(o.bandSoft)}, 0.5 + ${f(o.bandSoft)}, fract( nsPlainB ) ) ) / ${f(o.bands)} * ${f(o.bandTop)}; ` +
+      `outgoingLight *= max( nsPlainQ, ${f(0.35 * o.bandTop / o.bands)} ) / nsPlainL; }\n` : '';
+  fs = fs.replace(OUT, `${matte}${bands}\tfloat nsPlainNv = abs( dot( normalize( normal ), normalize( vViewPosition ) ) );\n` +
+    `\tfloat nsPlainEdge = smoothstep( 0.0, ${f(o.edgeWidth)}, nsPlainNv );\n` +
+    `\toutgoingLight *= mix( ${f(o.edge)}, 1.0, nsPlainEdge ) * mix( ${f(o.inkDark)}, 1.0, smoothstep( ${f(o.inkAt - o.inkSoft)}, ${f(o.inkAt + o.inkSoft)}, nsPlainNv ) );\n${OUT}`);
   return { vertexShader: vs, fragmentShader: fs };
 }
 

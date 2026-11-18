@@ -676,7 +676,10 @@ export const AREA_LOOK = freeze({
   // R558 (Message 22, clean areas): a faint self-light of the area's own resting tint (restLift x tint, fading out as the
   // activation glow takes over), like a backlit teaching panel: the warm families no longer sink to brown and olive on
   // the side away from the key light. Small enough that a lit area still stands far above it (areaGain 1.35).
-  restLift: 0.06, restValue: 0.72,
+  // 19 November 2026 (the owner: "we have to make the [motor] strip far more obvious, probably a good deal larger and
+  // far brighter and more colorful"): a resting key shows its whole colour (restValue 0.72 -> 1) and lights itself
+  // strongly (restLift 0.06 -> 0.5), so the strip is the brightest, most colourful thing in the picture at rest.
+  restLift: 0.5, restValue: 1,
   // 18 November (MAP, "a NEON GLOW: bright, saturated"): the lit key burned to white in the pictures (gain 2.4 above
   // display white with the bloom, and the white-hot frame): areaGain 2.4 -> 1.8 with areaNeon 1.8 -> 2.4 keeps an orange
   // key orange and a blue key blue while still above white (the bloom halo stays); the muscles' glow was hard to see on

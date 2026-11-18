@@ -628,7 +628,8 @@ export const BRAIN_FLESH = Object.freeze({
   mottle: 0.18, mottleMm: 11, mottleFineMm: 3.2, mottleWarm: Object.freeze([1.0, 0.95, 0.96]), bumpMm: 0.5, bumpFadePx: 5,
   key: 1.0, wrap: 0.35, fill: 0.2, aoMin: 0.22,
   scatter: 0.22, scatterTint: Object.freeze([0.95, 0.62, 0.7]),
-  sheen: 0.2, sheenPower: 28, glint: 0.42, glintPower: 180, glintLo: 0.55, glintHi: 0.75, wetGroove: 0.9,
+  // 19 November 2026 (the owner: "the matte look"): no wet sheen or glint on the brain (sheen 0.2, glint 0.42, wetGroove 0.9 before).
+  sheen: 0, sheenPower: 28, glint: 0, glintPower: 180, glintLo: 0.55, glintHi: 0.75, wetGroove: 0,
   rim: Object.freeze([0.92, 0.9, 0.96]), rimGain: 0.55,
   alpha: 0.97, rimAlpha: 0.8,
   // 18 November (package VESSELS): no procedural vessels any more. The arteries are the BodyParts3D cerebral arteries
