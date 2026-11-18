@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-19",
+  "version": "experimental-2026-11-19-body-update-20",
   "experimental": true,
-  "source": "Body update 19. Orbit arrows fade over the motor strip and retain their click targets.",
+  "source": "Body update 20. The outside view keeps its field of view through window, display-scale and picture-quality changes.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 228079,
-      "sha256": "f5bb6c90959e5c3bbf8f49937975e6e5ac8eccd59519ffff8b3b3214404680ab"
+      "bytes": 228875,
+      "sha256": "4a8a57d5ddc61e6bd50ce4b1286fe364e99b71788b7af8f8cdf4c3af15a70c72"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,23 +52,23 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 55998,
-      "sha256": "1a39d9d1b112dd528f052f7f0ff46f0816c227daeb63afe0af27c1450bc3bb8e"
+      "bytes": 56239,
+      "sha256": "8107ffd9f77347d3cd1819b593c388632ba53f69abece204212bcded0237791b"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 26980,
-      "sha256": "9d80bba58b94a07ec6bf649c87fe386a9cb816f2e83b3474310758e93fd82184"
+      "bytes": 27120,
+      "sha256": "094a95d6524096fce7701c4f87008589e2dde931789e64f77ac3720978498f55"
     },
     {
       "path": "README.md",
-      "bytes": 15083,
-      "sha256": "18b48a7abe242f017bc847dc4f88a2afef6a38668afadf186c93c478260983a3"
+      "bytes": 15281,
+      "sha256": "bebb5e7837b79bc39ac7948de159686d9cdde74d85eef230cc46aa224bed9bf4"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "7833c51013e63ccb599c7da0de240419f0cc8c097056077cb5085a6841768784"
+      "sha256": "8dcbf7762336ea9525d353404335d83f1a663b8a23ab7498dad811898c1f6720"
     },
     {
       "path": "index.html",
@@ -4077,8 +4077,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1027584,
-      "sha256": "902a0a50ae50cea706a54207705374c621d358dba0881437b2e3f5dc4a8076c1"
+      "bytes": 1027438,
+      "sha256": "05cf2b6f9d9fe84f9352646a33f0a078bb838bda987d5330807d27483353e7c1"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4139,6 +4139,11 @@
       "path": "tests/brain-live.test.mjs",
       "bytes": 20664,
       "sha256": "2d00173429ef66821403b649ca209f55a741388fa406b8d90c20d0f30ba82e5d"
+    },
+    {
+      "path": "tests/browser-camera-resize.mjs",
+      "bytes": 6697,
+      "sha256": "e766f6ef7cc8901bb5456b3c3b21d6a3b86ee26271f3a9b99b0bc70b3b732a83"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",

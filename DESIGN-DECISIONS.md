@@ -1509,6 +1509,12 @@ At 1600 by 900 in Chromium on AMD Vulkan, the hovered arrow over the left toes w
 
 The overlap check uses the outline's screen box, so a tip can fade a little before its stroke reaches the strip. A tip may still cross an area. The two window sizes and one desktop browser cover only part of the game.
 
+## 106. Keep the outside camera’s lens when the picture resizes (19 November)
+
+In the outside view, changing the resolution of the picture could narrow the view from 66 to 54 degrees without moving the camera. In a 1600 by 900 window, changing display scale moved the forward mirror arrow about 27 CSS pixels. A click at its former point missed it.
+
+The renderer now selects the lens from the current camera pose whenever it resizes. The eye view still adjusts for the shape of the window, and the two lenses blend when you press E. In Chromium on AMD Vulkan, the outside lens held at 66 degrees through changes to display scale, window size and Picture quality. The forward mirror arrow still took a click at the same point after a display-scale change with the window dimensions held fixed.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
