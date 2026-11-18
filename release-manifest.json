@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-22",
+  "version": "experimental-2026-11-19-body-update-23",
   "experimental": true,
-  "source": "Body update 22. The status card, Esc page and guide show how to carry the brain and mirror body.",
+  "source": "Body update 23. Right elbow muscle meshes bend more smoothly with the palm turned down.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 230161,
-      "sha256": "80f39f28a54da2a030dcd2ac02a9607969c4e1c53178b31c54649bd414ef64da"
+      "bytes": 231610,
+      "sha256": "67264010fa88e22d276bcf3892091984012710e6cbd76a0c9d70652c0f962bef"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,23 +52,23 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 56637,
-      "sha256": "c4e27bc80dfd40e5f6a7a378a3af87aa35de4fa00f63b39ad66d4d30ebd16dbd"
+      "bytes": 56899,
+      "sha256": "6d88b53e16753c938fa4105be9b4f89acb9d498a2e2b0ad46f501b98727497d0"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 27371,
-      "sha256": "bbdd331b405f37d799372541d1436e29923b247e1df02c5f901fe1403aa50a08"
+      "bytes": 27592,
+      "sha256": "ba5c04fbf2006696a72dc067117db47290ced69dad421e5d411849aa880d08f4"
     },
     {
       "path": "README.md",
-      "bytes": 15727,
-      "sha256": "4edeb4a8505ccbae33da833366417a4b746aef7e8cc76e7441fb160c18e3f8cb"
+      "bytes": 15975,
+      "sha256": "dd9860d123091eb723014736d1d6b0687b0195597df906d5fa1e0c90b3e0fa59"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "256ff62233d334bb954f5172e15a6fa213bde4312b5bc959a6df4e6d1bfc846b"
+      "sha256": "bd2f268a8f5ed5f72f4ab74d60b938bf99f50abeaf38b4c8fbf568f42e2c5d9c"
     },
     {
       "path": "index.html",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 593882,
-      "sha256": "e22e7c407212ad808f0750d645a7ad61f2c1cce6033f56f7ef3d039c149832d2"
+      "bytes": 595343,
+      "sha256": "7ab586d2896ab5873787ad4fff9aa937b02d00e9f558ae448375a60eea8d563e"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -4227,8 +4227,8 @@
     },
     {
       "path": "tests/joints.test.mjs",
-      "bytes": 30205,
-      "sha256": "96e49a0a7732afd94403c8c7043e455be535cbecf613d8a9f2c5479e617e3e73"
+      "bytes": 31419,
+      "sha256": "7283e0c40df17eaac24e9fc257209a8518f5d5314884487849b1c654a83740f8"
     },
     {
       "path": "tests/limb-turn.test.mjs",

@@ -362,3 +362,28 @@ test('the right shoulder\'s muscles wrap through a half-way frame: it turns half
   }
   assert.ok(viaWrap > 0 && direct === 0, `${m.name}: ${viaWrap} vertices through the half-way frame, ${direct} straight across`);
 });
+
+test('the right elbow keeps short neighbouring muscle edges when it bends with the palm down', () => {
+  // BodyParts3D meshes at the seam where the two forearm bones used to crowd out the upper arm.
+  const cases = [
+    ['FJ1502', 2159, 2136], // palmaris longus
+    ['FJ1487', 2222, 2221], // brachioradialis
+    ['FJ1473', 49, 43], // humeral head of flexor carpi ulnaris
+    ['FJ1475', 1065, 1064], // flexor digitorum superficialis
+  ];
+  const fibres = new Map(cases.map(([id]) => [id, inputs.meshesById.get(id)]));
+  const edgeLength = (p, a, b) => Math.hypot(
+    p[3 * a] - p[3 * b], p[3 * a + 1] - p[3 * b + 1], p[3 * a + 2] - p[3 * b + 2]
+  );
+  for (const r_pronation of [0, 160]) {
+    const posture = { ...rest, r_elbow_flex: 145, r_pronation };
+    const bent = body.bakeBodyPosture(rig, fibres, { posture });
+    for (const [id, a, b] of cases) {
+      const from = edgeLength(fibres.get(id).positions, a, b);
+      const to = edgeLength(bent.meshesById.get(id).positions, a, b);
+      assert.ok(bent.skinned.includes(id), id);
+      assert.ok(from > 1 && from < 2, `${id}: source edge ${from} mm`);
+      assert.ok(to < 3 * from, `${id}: ${from} mm source edge becomes ${to} mm`);
+    }
+  }
+});

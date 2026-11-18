@@ -4,6 +4,8 @@
 
 Look at a motor area to select it. Click or choose a numbered movement to see the body part move. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 23 smooths the right elbow when you bend it with your palm down. Use the arrow keys to find Right forearm turn and press 1. Step to Right elbow and press 1 again to bend it. You can see the bend on your own arm and on the mirror body.
+
 Body update 22 makes the carry instructions match the controls. Hold Space on the mirror body’s chest, then move the pointer up to lift it. W and S move it farther or nearer at that height. Let go of Space to leave it there.
 
 Body update 21 puts the same motor controls in the opening guide, the Esc page and these notes. Look at Left wrist on the brain’s right half and press 1 to bend it toward the palm. Press 2 once to bring it back. Press 2 again to bend it back.

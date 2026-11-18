@@ -1527,6 +1527,14 @@ The status card said the mirror body had to stay on the ground. In the game, mov
 
 The status card, Esc page and guide now name the pointer motion. The last guide step asks for a turn of the mirror body, which is the action that finishes the step. The game’s pose and carry rules are the same.
 
+## 109. A right elbow that bends without the big spikes (19 November)
+
+Turn your right palm down, then bend your elbow. In the game, small patches of muscle could stretch into long triangles. One edge in palmaris longus went from 1.30 mm to 52.14 mm in the model. The ulna and radius could take both of a vertex’s weight slots even though the two were already using one twisting frame. An adjacent vertex could still follow the upper arm. The two vertices pulled apart as the elbow bent.
+
+For muscles that cross the right elbow and already use the twisting frame, the weight search now treats those two forearm bones as a pair. The same weight rule draws both bodies and builds the start pose. In the palm-down pose at 145 degrees of flexion, edges within 100 mm of the elbow that stretched over three times their source length and by more than 2 mm fell from 581 to 104. The sweep counted source edges at least 0.7 mm long. Some triangles still fold or stretch at full bend.
+
+The human reference series covers bones turning and bending in living volunteers, and the BodyParts3D atlas supplies the game’s surfaces. The weight rule and the stretch counts describe the render mesh. Human muscle deformation at the combined end pose remains untested. [Goto et al. (2004)](https://pubmed.ncbi.nlm.nih.gov/15220886/), [Matsuki et al. (2010)](https://pubmed.ncbi.nlm.nih.gov/20696507/), [Fu et al. (2009)](https://pubmed.ncbi.nlm.nih.gov/19576700/).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

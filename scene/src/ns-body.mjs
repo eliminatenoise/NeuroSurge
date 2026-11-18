@@ -2951,8 +2951,24 @@ function wallSkinWeights(idx, segs, p, o = WALL_SKIN) {
  */
 export const BALL_SKIN = Object.freeze({ noneWithin: 1.1, fullFrom: 1.6,
   joints: Object.freeze([Object.freeze({ seg: 'r_thigh', parent: 'pelvis', joint: 'r_hip' }), Object.freeze({ seg: 'l_thigh', parent: 'pelvis', joint: 'l_hip' })]) });
-function continuousSkinWeights(rig, p, avail, skin = null) {
-  const idx = cloudIndexes(rig._clouds || {}), segs = avail.filter(s => idx[s]);
+// The ulna and radius use the same twist frame in elbow-spanning muscles. Search their two clouds as one,
+// so they cannot take both slots at a vertex beside one that still follows the humerus.
+const elbowWeightIndexes = new WeakMap();
+function elbowWeightIndex(clouds) {
+  let idx = elbowWeightIndexes.get(clouds);
+  if (idx) return idx;
+  const ulna = clouds.r_forearm, radius = clouds.r_radius;
+  const forearm = new Float64Array(ulna.length + radius.length);
+  forearm.set(ulna);
+  forearm.set(radius, ulna.length);
+  idx = { ...cloudIndexes(clouds), r_forearm: nnIndex(forearm) };
+  elbowWeightIndexes.set(clouds, idx);
+  return idx;
+}
+function continuousSkinWeights(rig, p, avail, skin = null, groupForearm = false) {
+  const clouds = rig._clouds || {};
+  const idx = groupForearm ? elbowWeightIndex(clouds) : cloudIndexes(clouds);
+  const segs = avail.filter(s => idx[s] && (!groupForearm || s !== 'r_radius'));
   if (segs.length < 2) return null;
   if (skin === 'wall') return wallSkinWeights(idx, segs, p);
   const quadSide = segs.includes('r_patella') ? 'r' : segs.includes('l_patella') ? 'l' : null; // a head of the quadriceps (muscleCandidates)
@@ -3001,7 +3017,7 @@ function continuousSkinWeights(rig, p, avail, skin = null) {
   }
   if (quadSide) quadWrapWeights(rig, quadSide, p, ia, ib, wa, idx);
   // 18 November 2026 (ARM_WRAP): a share between another bone and the right upper arm goes through the half-way frame
-  if (segs.includes('r_upperarm')) {
+  if (!groupForearm && segs.includes('r_upperarm')) {
     const U = SEG_INDEX.get('r_upperarm'), W = SEG_INDEX.get(ARM_WRAP.segment), F = SEG_INDEX.get('r_forearm');
     for (let v = 0; v < n; v++) {
       const a = ia[v], b = ib[v];
@@ -3014,6 +3030,11 @@ function continuousSkinWeights(rig, p, avail, skin = null) {
   }
   return { ia, ib, wa };
 }
+function elbowSkinWeights(rig, p, avail) {
+  if (!avail.includes('r_upperarm') || !avail.includes('r_forearm') || !avail.includes('r_radius')) return null;
+  return continuousSkinWeights(rig, p, avail, null, true);
+}
+
 export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   checkRig(rig);
   const info = rig.meshSegment[meshId];
@@ -3031,12 +3052,18 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
     return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1 };
   }
   const n = p.length / 3;
-  const i0 = new Uint8Array(n), i1 = new Uint8Array(n), w0 = new Float32Array(n), w1 = new Float32Array(n);
-  const near = nearestSearch(clouds, options && options.nearest);
-  for (let v = 0; v < n; v++) {
-    const w = near(avail, p[3 * v], p[3 * v + 1], p[3 * v + 2]);
-    i0[v] = SEG_INDEX.get(w.a); w0[v] = w.wa;
-    i1[v] = SEG_INDEX.get(w.b || w.a); w1[v] = w.wb;
+  const elbow = elbowSkinWeights(rig, p, avail);
+  const i0 = elbow?.ia || new Uint8Array(n), i1 = elbow?.ib || new Uint8Array(n);
+  const w0 = new Float32Array(n), w1 = new Float32Array(n);
+  if (elbow) {
+    for (let v = 0; v < n; v++) { w0[v] = elbow.wa[v]; w1[v] = 1 - elbow.wa[v]; }
+  } else {
+    const near = nearestSearch(clouds, options && options.nearest);
+    for (let v = 0; v < n; v++) {
+      const w = near(avail, p[3 * v], p[3 * v + 1], p[3 * v + 2]);
+      i0[v] = SEG_INDEX.get(w.a); w0[v] = w.wa;
+      i1[v] = SEG_INDEX.get(w.b || w.a); w1[v] = w.wb;
+    }
   }
   // R558: the right forearm's continuous twist, exactly as the bake (rForearmTwistPass).
   const tf = (options && options.twist === false) || !avail.includes('r_radius') ? null : rForearmTwistPass(rig, p, i0, i1);
@@ -3898,6 +3925,13 @@ function bakeSkinWeights(rig, id, p, avail, near, useCache) {
     // R558 (Message 32): the neck muscles' continuous weights, exactly as bodySkinWeights gives them to the scene's skin.
     const c = continuousSkinWeights(rig, p, avail, rig.meshSegment[id].skin || null);
     if (c) { const out = { p, avail: avail.join(','), ia: c.ia, ib: c.ib, wa: c.wa, tf: null }; if (byId) byId.set(id, out); return out; }
+  }
+  const elbow = elbowSkinWeights(rig, p, avail);
+  if (elbow) {
+    const tf = rForearmTwistPass(rig, p, elbow.ia, elbow.ib);
+    const out = { p, avail: avail.join(','), ...elbow, tf };
+    if (byId) byId.set(id, out);
+    return out;
   }
   const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n);
   // About a third of the muscle vertices repeat an earlier vertex of the same mesh exactly (seams). The weights are a
