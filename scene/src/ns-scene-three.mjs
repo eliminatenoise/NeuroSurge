@@ -199,7 +199,8 @@ import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, 
 import { ROOM, createRoom } from './ns-room.mjs';
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
-import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST } from './ns-body.mjs';
+import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget } from './ns-body.mjs';
+import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, brainEnvelope as vesselEnvelope, buildCerebralVeins, pointField as vesselPointField, stripGive as vesselStripGive, vesselVertexGlsl, vesselFragmentGlsl, evalBodyVessels, bodyTubeIndex, writeBodyTubes } from './ns-vessels.mjs'; // 18 November (package VESSELS)
 // R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
 // not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
 const STACK_FILL_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.fill.mm)) + 0.01;
@@ -5612,7 +5613,12 @@ export function createScene({
     if (!a && geo.attributes && geo.attributes.position) { a = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count), 1); geo.setAttribute('nsTendon', a); }
     return a || null;
   };
+  // 18 November 2026 (package BULK, ns-body DIGIT_PADS): the soft-tissue sleeves round the phalanges are drawn in the
+  // white tendon tone all over (a sheath, pads and pulp, not a muscle belly); the stack's tendon estimate leaves them so.
+  const SOFT_TISSUE_TONE = 0.85, softTissueGeos = new WeakSet();
+  const softTissueTone = geo => { const a = tendonAttr(geo); if (!a) return; a.array.fill(SOFT_TISSUE_TONE); a.needsUpdate = true; softTissueGeos.add(geo); };
   const writeTendon = (geo, rest, full, id = null) => {
+    if (softTissueGeos.has(geo)) return false;
     const a = tendonAttr(geo);
     if (!a || !rest || !full || rest.length !== full.length || a.array.length * 3 !== rest.length) return false;
     const t0 = nowMs();
@@ -5993,6 +5999,7 @@ export function createScene({
       geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
       const mat = comicPatch(powerUpPatch(muscleLookPatch(glowRimPatch(ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }))))), 'muscle'), 'muscle');
       tendonAttr(geo); // R558 (Message 18): tendon ends, written by setArmLayers
+      if (m.softTissue === true) softTissueTone(geo); // package BULK: a digit pad
       hatchAttr(geo, m.positions, 'muscle', m.id); // R558 (Messages 24, 29): the ink lines' frame, from the rest positions
       // R558 (Message 18): the fibre streaks follow the REST positions (source mm), so they stay on the skinned arm.
       geo.setAttribute('nsRest', new THREE.BufferAttribute(m.positions instanceof Float32Array ? m.positions : Float32Array.from(m.positions), 3));
@@ -6080,7 +6087,7 @@ export function createScene({
         // R558 (Message 18): tendon white on the anchored ends (the same rule as the body; 0 without stack geometry).
         const tg = m.mesh.userData.nsFullGeometry || m.mesh.geometry;
         if (L) writeTendon(tg, m.restBase, L);
-        else { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); ta.needsUpdate = true; } }
+        else if (!softTissueGeos.has(tg)) { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); ta.needsUpdate = true; } }
       }
       if (!m.lifted) {
         if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices, undefined, m.weld); changed = true; }
@@ -6233,6 +6240,148 @@ export function createScene({
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
     brainSamples = sampleBrain(glassList, regionMode ? seg.strips : (focus ? [focus] : []));
     glassRead.sulcMs = Math.round(nowMs() - t0);
+  }
+
+  // ---- 18 November (package VESSELS): the vessels of the brain (ns-vessels) ------------------------------------------
+  // setBrainVessels({ arteries }) after setBrain: the BodyParts3D cerebral arteries (already checked by the app's loader:
+  // [{ id, name, territory, positions, indices }], source mm, the brain's own frame) as ONE opaque mesh, and the hand-laid
+  // veins and sinuses (ns-vessels buildCerebralVeins, draped on this brain's envelope) as two more; all three ride the
+  // living brain's vertex rule (liveCompile), the arteries swell with the beat. Drawn (alpha 1) after the motor areas and
+  // before the brain surface's depth pre-pass: the surface then hides what lies in a sulcus, what lies on the surface
+  // shows, and nothing is drawn over a visible key (STRIP_CUT). Not picked, not outlined; the aim never sees them. Near
+  // the motor strip the veins also narrow and sink (ns-vessels STRIP_GIVE).
+  const brainVessels = { set: false, arteries: 0, arteryTriangles: 0, veins: [], veinTriangles: 0, buildMs: 0, programs: 0, error: null };
+  const VESSEL_ORDER = RENDER_ORDER.stripDepth + 0.5; // after the motor areas' stencil, before the surface's depth pre-pass
+  function vesselMaterial(look, colour, { pulseMm = 0, tuckMm = 0, pulseGlow = 0, key }) {
+    const m = keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 }));
+    // Drawn just after the motor areas (VESSEL_ORDER, transparent list, alpha 1 = as opaque) and never over a visible key
+    // pixel (STRIP_CUT's stencil): the keys are translucent, so a vessel under one would show through it.
+    m.transparent = true; m.depthWrite = true;
+    if (stripCut.supported) { m.stencilWrite = true; m.stencilWriteMask = 0; m.stencilRef = STRIP_CUT.ref; m.stencilFunc = THREE.NotEqualStencilFunc; }
+    m.onBeforeCompile = shader => {
+      if (!liveCompile(shader)) return;
+      const hook = 'transformed += nsLiveMove( position );';
+      shader.vertexShader = (tuckMm ? 'attribute float nsGive;\n' : '') + shader.vertexShader.replace(hook, hook + vesselVertexGlsl({ pulseMm, tuckMm }));
+      if (pulseGlow) shader.fragmentShader = 'uniform vec4 nsLive;\n' + shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>' + vesselFragmentGlsl({ pulseGlow }));
+      brainVessels.programs++;
+    };
+    m.customProgramCacheKey = () => key;
+    return m;
+  }
+  function setBrainVessels({ arteries = [] } = {}) {
+    if (!brainSet) fail('scene_state', 'setBrainVessels needs setBrain first');
+    if (brainVessels.set) fail('scene_state', 'setBrainVessels may be called once');
+    brainVessels.set = true;
+    const t0 = nowMs();
+    const still = obj => { obj.matrixAutoUpdate = false; obj.updateMatrix(); return obj; };
+    const stripPos = segmentation && Array.isArray(segmentation.strips) ? segmentation.strips.map(s => s.positions) : [];
+    const near = stripPos.length ? vesselPointField(stripPos) : null;
+    // arteries: one geometry (normals per source mesh, then joined), per-vertex give over the strip
+    let nv = 0, ni = 0;
+    for (const a of arteries) { nv += a.positions.length / 3; ni += a.indices.length; }
+    if (nv) {
+      const P = new Float32Array(3 * nv), I = new Uint32Array(ni), N = new Float32Array(3 * nv);
+      let v0 = 0, i0 = 0;
+      for (const a of arteries) {
+        const g = indexedGeometry(a.positions instanceof Float32Array ? a.positions : Float32Array.from(a.positions), a.indices instanceof Uint32Array ? a.indices : Uint32Array.from(a.indices));
+        g.computeVertexNormals();
+        P.set(g.attributes.position.array, 3 * v0); N.set(g.attributes.normal.array, 3 * v0);
+        for (let k = 0; k < a.indices.length; k++) I[i0 + k] = a.indices[k] + v0;
+        v0 += a.positions.length / 3; i0 += a.indices.length;
+        g.dispose();
+      }
+      const geo = indexedGeometry(P, I);
+      geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+      geo.setAttribute('nsGive', new THREE.BufferAttribute(near ? vesselStripGive(P, near) : new Float32Array(nv), 1));
+      geo.computeBoundingSphere();
+      const mesh = still(new THREE.Mesh(keep(geo), vesselMaterial(ARTERY_LOOK, ARTERY_LOOK.colour, { pulseMm: ARTERY_LOOK.pulseMm, tuckMm: STRIP_GIVE.tuckMm, pulseGlow: ARTERY_LOOK.pulseGlow, key: 'ns-vessel-artery' })));
+      mesh.name = `cerebral arteries (BodyParts3D, ${arteries.length} meshes, one draw)`;
+      mesh.renderOrder = VESSEL_ORDER;
+      brainGroup.add(mesh);
+      brainVessels.arteries = arteries.length; brainVessels.arteryTriangles = ni / 3;
+    }
+    // veins and sinuses: laid on this brain's envelope (glass pieces and the strip meshes)
+    try {
+      const E = vesselEnvelope([...glass.map(m => m.geometry.attributes.position.array), ...stripPos]);
+      const give = near ? (x, y, z) => { const d = near(x, y, z); return d >= STRIP_GIVE.nearMm ? 0 : d <= STRIP_GIVE.fullMm ? 1 : 1 - (d - STRIP_GIVE.fullMm) / (STRIP_GIVE.nearMm - STRIP_GIVE.fullMm); } : null;
+      const V = buildCerebralVeins(E, { give });
+      for (const [part, colour, key] of [[V.veins, VEIN_LOOK.colour, 'ns-vessel-vein'], [V.sinus, VEIN_LOOK.sinus, 'ns-vessel-sinus']]) {
+        if (!part.indices.length) continue;
+        const geo = indexedGeometry(part.positions, part.indices);
+        geo.setAttribute('normal', new THREE.BufferAttribute(part.normals, 3));
+        geo.computeBoundingSphere();
+        const mesh = still(new THREE.Mesh(keep(geo), vesselMaterial(VEIN_LOOK, colour, { pulseMm: 0.03, key })));
+        mesh.name = key === 'ns-vessel-sinus' ? 'dural sinuses (laid by hand on the brain)' : 'cerebral veins (laid by hand on the brain)';
+        mesh.renderOrder = VESSEL_ORDER;
+        brainGroup.add(mesh);
+      }
+      brainVessels.veins = V.names; brainVessels.veinTriangles = V.counts.triangles;
+    } catch (err) { brainVessels.error = String((err && err.message) || err); }
+    brainVessels.buildMs = Math.round(nowMs() - t0);
+    return { ...brainVessels };
+  }
+  // ---- 18 November (package VESSELS): the vessels of the bodies (ns-vessels bindBodyVessels) -------------------------
+  // setBodyVessels({ arteries, veins }) after setBody: each a binding of centre-line points to drawn body meshes (rivets);
+  // drawn as round tubes on your body (bodyGroup) and, sharing the geometry, on the mirror body. refreshBodyVessels()
+  // (every rendered frame) re-places them only when the body's pose, lift or skin changed since the last time.
+  const bodyVessels = { set: false, parts: [], points: 0, triangles: 0, updates: 0, lastMs: 0, key: '', names: [], dropped: [] };
+  function setBodyVessels({ arteries = null, veins = null } = {}) {
+    if (!bodySet) fail('scene_state', 'setBodyVessels needs setBody first');
+    if (bodyVessels.set) fail('scene_state', 'setBodyVessels may be called once');
+    bodyVessels.set = true;
+    const sides = BODY_VESSEL_LOOK.sides;
+    for (const [B, look, colour] of [[arteries, ARTERY_LOOK, ARTERY_LOOK.colour], [veins, VEIN_LOOK, VEIN_LOOK.colour]]) {
+      if (!B || !B.points) continue;
+      const pos = new Float32Array(B.points * sides * 3), nor = new Float32Array(pos.length);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setIndex(new THREE.BufferAttribute(bodyTubeIndex(B, sides), 1));
+      const own = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 })));
+      const mir = behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 })));
+      const mesh = new THREE.Mesh(keep(geo), own), twin = new THREE.Mesh(geo, mir);
+      for (const m of [mesh, twin]) { m.matrixAutoUpdate = false; m.frustumCulled = false; m.renderOrder = BODY_ORDER.torso; }
+      mesh.name = `body ${look === ARTERY_LOOK ? 'arteries' : 'veins'} (BodyParts3D centre lines, riveted to the drawn body)`;
+      twin.name = `mirror image: ${mesh.name}`;
+      bodyGroup.add(mesh); mirrorBodyGroup.add(twin);
+      const R = B.meshIds.map(() => null), recs = B.meshIds.map(id => bodyById.get(id) || null);
+      bodyVessels.parts.push({ B, pos, nor, geo, mesh, twin, R, recs, pts: new Float32Array(B.points * 3) });
+      bodyVessels.points += B.points; bodyVessels.triangles += geo.index.count / 3;
+      bodyVessels.names.push(...new Set(B.names)); bodyVessels.dropped.push(...(B.dropped || []));
+    }
+    bodyVessels.key = '';
+    refreshBodyVessels();
+    return { points: bodyVessels.points, triangles: bodyVessels.triangles };
+  }
+  function refreshBodyVessels() {
+    if (!bodyVessels.parts.length) return false;
+    const key = `${bodyPoseSerial}|${bodyLiftAmount}|${bodySkinWrites}`;
+    if (key === bodyVessels.key) return false;
+    bodyVessels.key = key;
+    const t0 = nowMs();
+    for (const part of bodyVessels.parts) {
+      for (let i = 0; i < part.recs.length; i++) {
+        const b = part.recs[i];
+        if (!b) { part.R[i] = null; continue; }
+        const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
+        const r = part.R[i] || (part.R[i] = { p: null, n: null, m: null });
+        r.p = g.attributes.position.array; r.n = g.attributes.normal.array; r.m = b.mesh.matrix.elements;
+      }
+      evalBodyVessels(part.B, part.R, part.pts);
+      writeBodyTubes(part.B, part.pts, part.pos, part.nor, BODY_VESSEL_LOOK.sides);
+      // QA: how far each piece of a vessel is stretched against its length at the first placing (worst piece)
+      const B = part.B, P = part.pts;
+      if (!part.rest) { part.rest = new Float32Array(B.points); for (let b = 0; b + 1 < B.branchStart.length; b++) for (let i = B.branchStart[b]; i + 1 < B.branchStart[b + 1]; i++) part.rest[i] = Math.hypot(P[3 * i + 3] - P[3 * i], P[3 * i + 4] - P[3 * i + 1], P[3 * i + 5] - P[3 * i + 2]); }
+      let worst = 1, worstMm = 0;
+      for (let b = 0; b + 1 < B.branchStart.length; b++) for (let i = B.branchStart[b]; i + 1 < B.branchStart[b + 1]; i++) {
+        const l = Math.hypot(P[3 * i + 3] - P[3 * i], P[3 * i + 4] - P[3 * i + 1], P[3 * i + 5] - P[3 * i + 2]), r = part.rest[i] > 0.2 ? l / part.rest[i] : 1;
+        if (r > worst) worst = r; if (l - part.rest[i] > worstMm) { worstMm = l - part.rest[i]; part.stretchAt = B.names[b]; }
+      }
+      part.stretch = worst; part.stretchMm = worstMm;
+      part.geo.attributes.position.needsUpdate = true; part.geo.attributes.normal.needsUpdate = true;
+    }
+    bodyVessels.updates++;
+    bodyVessels.lastMs = Math.round((nowMs() - t0) * 100) / 100;
+    return true;
   }
 
   /** Up to ~maxPoints source-mm points spread over the brain meshes (strided vertices), for the projected bounds that
@@ -8401,6 +8550,7 @@ export function createScene({
       if (kind === 'muscle') {
         material = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }));
         tendonAttr(geo); // R558 (Message 18): tendon ends, written by setBodyLift
+        if (entry.soft_tissue === true) softTissueTone(geo); // package BULK: a digit pad
         setMuscleBase(material, id);
         depthLift(geo, material, id); // 18 November: the depth preference round rectus abdominis (ns-flesh BODY_DEPTH_PREFERENCE)
         material.userData.nsFibre = fibreUniform(geo.attributes.position.array, id);
@@ -8927,6 +9077,7 @@ export function createScene({
         nArr[k] = qx / l; nArr[k + 1] = qy / l; nArr[k + 2] = qz / l;
       }
       rec.skinned = true;
+      if (rec.sw) swellApply(rec, p, nArr); // package BULK: the belly's swell and the lift of what lies over it
     }
     rec.pos.needsUpdate = true; rec.nor.needsUpdate = true;
     pickBufferWritten(p);
@@ -8976,6 +9127,7 @@ export function createScene({
       if (!skinBakedInv) skinBakedInv = segOrder.map(s => rigidInv16(bodySkinBaked.get(s), new Float64Array(16)));
       bodySkinSegs = segOrder.map(s => segments.get(s) || bodySkinBaked.get(s));
       bodySkinOn = true;
+      if (swell.on) swellStep(); // package BULK (MUSCLE_SWELL): ease each muscle's swell toward its activity and shortening
       // Per-frame cost guard. The body is re-posed whenever anything in its key changes (the left arm's bridge; the trunk
       // turning or bending under a wide look; the Space dance turning the forearm and the upper arm). The vertices are
       // written in each muscle's own frame, and the blend is the same rigid map of every bone it uses, so a muscle whose
@@ -8987,7 +9139,7 @@ export function createScene({
       let budget = SKIN_FRAME_VERTICES, waiting = 0, firstWaiting = -1;
       for (let i = 0; i < N; i++) {
         const at = (bodySkinNext + i) % N, rec = bodySkinList[at];
-        if (skinPoseSame(rec) && rec.skinned) continue;
+        if (skinPoseSame(rec) && rec.skinned && (!rec.sw || rec.sw.key === rec.sw.drawnKey)) continue;
         if (budget <= 0) { waiting++; if (firstWaiting < 0) firstWaiting = at; continue; }
         if (skinOne(rec)) { n++; budget -= rec.src.length / 3; }
         skinPoseKeep(rec);
@@ -9001,7 +9153,68 @@ export function createScene({
     return n;
   }
   /** How many skinned muscles still wait for their turn (see SKIN_FRAME_VERTICES). */
-  function bodySkinPending() { return bodySkinWaiting; }
+  function bodySkinPending() { return bodySkinWaiting + (swell.on && swell.busy ? 1 : 0); }
+
+  /* 18 November 2026 (package BULK, ns-body MUSCLE_SWELL; the owner: "ensure naturalistic stacking deformation during
+   * muscle contraction"). A muscle that is active and shortens swells at its belly; what lies over it is lifted with it;
+   * a lengthened muscle (the antagonist on the other side of the limb) goes slimmer. setBodySwell(Map id -> { own, under,
+   * underIdx, unders, anchors }) registers the baked data on the per-vertex skinned muscles; each skin adds, after the
+   * blend, own x s (this muscle's amount) + under x s(the muscle beneath) along the vertex's posed normal, so picking,
+   * the outlines and the mirror body (one shared buffer) get the same surface. s eases toward muscleSwellTarget(activity,
+   * shortening) with MUSCLE_SWELL.easeS (easeSReduced under prefers-reduced-motion: no quiver, only a slow change),
+   * quantised to MUSCLE_SWELL.step, and a muscle is re-skinned only when its own or a beneath muscle's quantised amount
+   * changed (the frame's skin budget applies). Shortening: the distance between two points of the muscle carried by its
+   * two main segments, against the start posture. Simulated and unitless; not measured muscle shape. */
+  const swell = { on: false, recs: [], busy: false, lastMs: 0, muscles: 0, applied: 0 };
+  function setBodySwell(data) {
+    if (!(data instanceof Map)) fail('scene_input', 'setBodySwell needs a Map of swell records');
+    const recs = [];
+    for (const [id, d] of data) {
+      const rec = bodySkin.get(id);
+      if (!rec || !d || !(d.own instanceof Float32Array) || d.own.length * 3 !== rec.src.length || d.under.length !== d.own.length || d.underIdx.length !== d.own.length) continue;
+      const an = d.anchors && Array.isArray(d.anchors.segs) ? { a: BODY_SEGMENT_LIST.indexOf(d.anchors.segs[0]), b: BODY_SEGMENT_LIST.indexOf(d.anchors.segs[1]), pa: d.anchors.points[0], pb: d.anchors.points[1] } : null;
+      rec.sw = { own: d.own, under: d.under, uIdx: d.underIdx, underIds: d.unders || [], unders: [], s: 0, target: 0, q: 0, key: 0, drawnKey: 0, an: an && an.a >= 0 && an.b >= 0 ? an : null, lRest: 0 };
+      recs.push(rec);
+    }
+    for (const rec of recs) rec.sw.unders = rec.sw.underIds.map(u => { const r = bodySkin.get(u); return r && r.sw ? r.sw : null; });
+    swell.recs = recs; swell.on = recs.length > 0; swell.muscles = recs.length; swell.lastMs = nowMs(); swell.busy = true;
+    return { muscles: recs.length };
+  }
+  const swPt = (M, p) => [M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12], M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13], M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]];
+  const swLen = (MA, MB, pa, pb) => { const a = swPt(MA, pa), b = swPt(MB, pb); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
+  function swellStep() {
+    const now = nowMs(), dt = Math.min(0.1, Math.max(0, (now - swell.lastMs) / 1000)), O = MUSCLE_SWELL;
+    swell.lastMs = now;
+    const k = 1 - Math.exp(-dt / (reducedMotion ? O.easeSReduced : O.easeS));
+    let busy = false;
+    for (const rec of swell.recs) {
+      const w = rec.sw;
+      let sh = 0;
+      if (w.an && bodySkinSegs && bodySkinBaked) {
+        if (!(w.lRest > 0)) w.lRest = swLen(bodySkinBaked.get(BODY_SEGMENT_LIST[w.an.a]), bodySkinBaked.get(BODY_SEGMENT_LIST[w.an.b]), w.an.pa, w.an.pb);
+        const MA = bodySkinSegs[w.an.a], MB = bodySkinSegs[w.an.b];
+        if (MA && MB && w.lRest > 1) sh = 1 - swLen(MA, MB, w.an.pa, w.an.pb) / w.lRest;
+      }
+      w.target = muscleSwellTarget(Number.isFinite(rec.b.lastDrive) ? rec.b.lastDrive : MUSCLE_REST_DRIVE, sh);
+      const d = w.target - w.s;
+      if (Math.abs(d) < 0.004) w.s = w.target; else { w.s += d * k; busy = true; }
+      w.q = Math.round(w.s / O.step) * O.step;
+    }
+    for (const rec of swell.recs) { const w = rec.sw; let key = w.q; for (let i = 0; i < w.unders.length; i++) if (w.unders[i]) key += w.unders[i].q * (i + 1.618); w.key = key; }
+    swell.busy = busy;
+  }
+  function swellApply(rec, p, nArr) {
+    const w = rec.sw, own = w.own, under = w.under, uIdx = w.uIdx, U = w.unders, q = w.q;
+    let anyUnder = false; for (const u of U) if (u && u.q !== 0) { anyUnder = true; break; }
+    w.drawnKey = w.key;
+    if (q === 0 && !anyUnder) return;
+    for (let v = 0, k = 0; k < p.length; v++, k += 3) {
+      const ui = uIdx[v], uq = ui !== 255 && U[ui] ? U[ui].q : 0, amt = q * own[v] + uq * under[v];
+      if (amt === 0) continue;
+      p[k] += nArr[k] * amt; p[k + 1] += nArr[k + 1] * amt; p[k + 2] += nArr[k + 2] * amt;
+    }
+    swell.applied++;
+  }
 
   function updateBody(matrices, drives = null) {
     let n = 0;
@@ -9031,6 +9244,7 @@ export function createScene({
       const q = Math.round(t * 512) / 512;
       if (q === b.lastDrive) continue;
       b.lastDrive = q;
+      swell.busy = swell.on; // package BULK: the swell eases toward the new activity on the next skin calls
       shadeBodyMuscle(b); // R558: in its area's colour, on all three bodies
       b.mesh.userData.activity = q;
     }
@@ -12116,6 +12330,7 @@ export function createScene({
       if (qState.level !== before) applyQuality();
     }
     if (liteApplied === null) applyQuality();
+    refreshBodyVessels(); // 18 November (package VESSELS): the body's vessels follow its pose, lift and skin
     // R4-scene held-brain cue: ease toward the target (instant under prefers-reduced-motion).
     if (heldCue.amount !== heldCue.target) {
       const tau = heldCue.target > heldCue.amount ? HELD_CUE.inS : HELD_CUE.outS;
@@ -12360,7 +12575,9 @@ export function createScene({
           bloomIds: L.slotId.slice(), bloomStrength: Array.from(L.slotS, r3), bloomLiftMm: Array.from(L.slotL, r3), ringAge: r3(L.ringAge), heldId: liveHeldId,
           wobbling: L.wobbling, lagMm: Array.from(L.q, r3), turnRad: Array.from(L.a, v => Math.round(v * 1e4) / 1e4), speedMm: Math.round(L.speedMm * 10) / 10, turnRadS: r3(L.turnRadS), programs: liveStats.programs, missed: liveStats.missed,
           centre: Array.from(liveUniforms.nsLiveC.value).slice(0, 3).map(r3), beatCentre: Array.from(liveUniforms.nsLiveO.value).slice(0, 3).map(r3) };
-        return { areaInk: { ...areaInk }, glassFold: gf, live };
+        return { areaInk: { ...areaInk }, glassFold: gf, live, vessels: { ...brainVessels, veins: brainVessels.veins.slice(), // vessels: 18 November (package VESSELS)
+          body: { set: bodyVessels.set, points: bodyVessels.points, triangles: bodyVessels.triangles, updates: bodyVessels.updates, lastMs: bodyVessels.lastMs, names: bodyVessels.names.slice(), dropped: bodyVessels.dropped.slice(),
+            stretch: bodyVessels.parts.map(p => Math.round((p.stretch || 1) * 100) / 100), stretchMm: bodyVessels.parts.map(p => Math.round((p.stretchMm || 0) * 10) / 10), stretchAt: bodyVessels.parts.map(p => p.stretchAt || null) } } };
       },
       /** A2-render R1: { applied (null until the strip compiles, then whether the shader hooks were found), shimmer,
        * reducedMotion }. applied === false means the CPU vertex-colour fallback is drawn. */
@@ -12413,6 +12630,8 @@ export function createScene({
     updateRegions,
     setSettledRegions, // R558 (Message 22)
     setBrainLiveHeld, // 18 November (ns-brain-live): the hand area of a Space grip while it holds
+    setBrainVessels, // 18 November (package VESSELS): the cerebral arteries, veins and sinuses
+    setBodyVessels, // 18 November (package VESSELS): the vessels of the limbs on both bodies
     setRegionHints, // R558 (Message 6)
     regionHintState,
     brainOrientationAnchors,
@@ -12459,7 +12678,7 @@ export function createScene({
     // R558: setBodyLift draws the stack on the body (own and mirror).
     setBodyLayers,
     setBodyLift,
-    setBodySkin, updateBodySkin, bodySkinPending,
+    setBodySkin, updateBodySkin, bodySkinPending, setBodySwell,
     setArmLayers,
     setOutlineSegments, // R558 (Message 20)
     outlineState: () => ({ ...outline.state(), quality: QUALITY_LEVELS[qState.level].name, renderMs: Number.isFinite(lastRenderCpuMs) ? Math.round(lastRenderCpuMs * 100) / 100 : null }),

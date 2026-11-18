@@ -66,6 +66,7 @@ import {
   MUSCLE_COVERAGE_GAPS, eyePosition, parseObjFast, streamFullbodyAssets, fullbodyAppInputs
 } from './ns-assets.mjs';
 import { deriveRig, segmentBoxes, skinWeights, refineForTwist, SEGMENTS, HAND_SEGMENTS } from './ns-rig.mjs';
+import { loadCerebralArteries, loadBodyVessels, bindBodyVessels, BODY_VESSEL_SKIP } from './ns-vessels.mjs'; // 18 November (package VESSELS)
 import {
   ARM_DEFAULTS, REACH_STATE_MAX_DEPTH, ELBOW_MAX_DEG, FOREARM_SUPPORT_KEY, fitHand, stepReach, reachStart, depthForElbow,
   armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg,
@@ -858,6 +859,12 @@ export function prepareSceneData({ binding, assets = null, placeholder = false, 
     }
     muscles.push({ id, name: role.name, muscleKey: key, positions, indices, weights: skinWeights(rig, positions, { twist: armTwist, shoulder: true }) });
     if (key === null) unmapped.push({ id, name: role.name });
+  }
+  // 18 November 2026 (package BULK, ns-body DIGIT_PADS): the soft-tissue sleeves round the left hand's phalanges, skinned
+  // like the arm's muscles (they follow their own phalanx), drawn in the tendon tone; no movement-map key.
+  if (Array.isArray(assets.armPads)) for (const pad of assets.armPads) {
+    if (!pad || !(pad.positions instanceof Float32Array) || !(pad.indices instanceof Uint32Array)) continue;
+    muscles.push({ id: pad.id, name: pad.name, muscleKey: null, positions: pad.positions, indices: pad.indices, softTissue: true, weights: skinWeights(rig, pad.positions, { twist: armTwist, shoulder: true }) });
   }
   const right = assets.brain.get(BRAIN.rightPrecentral);
   if (!right) fail('app_asset', `${BRAIN.rightPrecentral} (right precentral gyrus) is required`);
@@ -5066,7 +5073,7 @@ export function start(params = {}) {
   // conform of the scalp muscles onto it (ns-body conformMusclesToBones report).
   let headStream = null, headNote = '', headLoaded = 0, headConform = null;
   // R558 (builder AN): the missing-muscles packet stream (loaded with the body), its note and its mesh count.
-  let musclesStream = null, musclesNote = '', musclesLoaded = 0, sheathOpened = null, chestFlattened = null, bellyClosed = null;
+  let musclesStream = null, musclesNote = '', musclesLoaded = 0, sheathOpened = null, chestFlattened = null, bellyClosed = null, bodyBulked = null, armBulked = null;
   let girdleStream = null; // Separate finite body-domain stream; existing cancellation owner.
   const streamCancelAttempted = new WeakSet(), streamCancelErrors = [];
   let streamCancelErrorTotal = 0, streamCancelErrorDropped = 0;
@@ -5236,6 +5243,31 @@ export function start(params = {}) {
       const rec = mods.body.handSkinRecords(bodyRig, sourceMeshes);
       if (rec.size) { callScene('setBodySkin', rec, bodyBaked.segments); handSkinReady = true; }
     } catch (err) { handSkinNote = errorText(err); }
+  }
+
+  /** 18 November 2026 (package BULK, ns-body MUSCLE_SWELL): the muscles' contraction swell. Its per-vertex data is
+   * baked AFTER the body is shown, in short slices (about 6 ms per frame), so it adds nothing to the loading time and
+   * no long frame; then the scene's per-vertex skin adds the swell (setBodySwell). Without it the body is as before. */
+  let swellState = null;
+  function startBodySwell(sourceMeshes) {
+    swellState = { status: 'waiting', muscles: 0, ms: 0 };
+    if (!handSkinReady || !bodyRig || !sceneFn('setBodySwell') || !mods.body || typeof mods.body.bodySwellList !== 'function' || typeof mods.body.muscleSwellSteps !== 'function') { swellState.status = 'off'; return; }
+    const rig = bodyRig, now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    let it = null;
+    const run = () => {
+      if (stopped || failed || bodyRig !== rig) return;
+      const t0 = now();
+      try {
+        if (!it) it = mods.body.muscleSwellSteps(mods.body.bodySwellList(rig, sourceMeshes));
+        let r;
+        do { r = it.next(); } while (!r.done && now() - t0 < 6);
+        swellState.ms += now() - t0;
+        if (!r.done) { setTimeout(run, 16); return; }
+        const o = callScene('setBodySwell', r.value);
+        swellState = { status: 'on', muscles: o && o.muscles, ms: Math.round(swellState.ms) };
+      } catch (err) { swellState = { status: 'error', error: errorText(err) }; }
+    };
+    setTimeout(run, 400);
   }
 
   function setStatus(text) {
@@ -5776,6 +5808,10 @@ export function start(params = {}) {
       ]);
       mods = { colors: null, bodyMap: null, body: null, errors: {}, ...(loaded || {}) };
       if (stopped) return { ok: false, error: 'stopped' };
+      // 18 November 2026 (package BULK): the left game arm gets the same build as the body's arms (ns-body bulkArmAssets).
+      if (!isPlaceholder && inputs.assets && inputs.assets.arm instanceof Map && mods.body && typeof mods.body.bulkArmAssets === 'function') {
+        try { const o = mods.body.bulkArmAssets(inputs.assets.arm, id => SEGMENT_OF[id] || null); inputs.assets = { ...inputs.assets, arm: o.arm, armPads: o.pads || null }; armBulked = o.report; } catch (err) { armBulked = { error: errorText(err) }; }
+      }
       setStatus('Getting the arm and brain ready…');
       await yieldToPaint();
       if (stopped) return { ok: false, error: 'stopped' };
@@ -5817,6 +5853,13 @@ export function start(params = {}) {
       // R558 (strip audit round 2): region mode draws and picks the dots placed in the along-gyrus coordinate.
       if (regionPrep.segmentation && Array.isArray(regionPrep.markers)) data.strip.markers = regionPrep.markers;
       scene.setBrain({ glass: data.glass, focus: data.strip.focus, markers: data.strip.markers, bodyMap, segmentation: regionPrep.segmentation });
+      // 18 November (package VESSELS): the cerebral arteries (their own checked packet, ns-vessels) and the hand-laid veins
+      // and sinuses join the brain once the files are in; the first frame does not wait. A refusal shows the veins only.
+      if (!isPlaceholder && sceneFn('setBrainVessels')) {
+        const vesselsIn = arteries => { if (!stopped && !failed) { try { callScene('setBrainVessels', { arteries }); } catch (err) { console.warn('ns: brain vessels not drawn:', errorText(err)); } } };
+        loadCerebralArteries({ fetchText, sha256Hex, parse: parseObjFast, yieldFn: yieldToPaint })
+          .then(r => vesselsIn(r.meshes), err => { console.warn('ns: cerebral arteries not shown:', errorText(err)); vesselsIn([]); });
+      }
       const legendStops = legendStopsFromColors(mods.colors);
       const staticHud = () => hudStatic({ binding: inputs.binding, data, placeholder: isPlaceholder, shell: useShell, legendStops, bodyNote: [bodyNote, faceNote, headNote, musclesNote].filter(Boolean).join(' '), faceMuscles: faceLoaded, extraMuscles: musclesLoaded });
       hud.render(staticHud());
@@ -5832,6 +5875,18 @@ export function start(params = {}) {
       const withFlatChest = b => {
         if (!b || !(b.meshesById instanceof Map) || !mods.body || typeof mods.body.flattenChest !== 'function') return b;
         try { const o = mods.body.flattenChest(b.meshesById); chestFlattened = o.report; return { ...b, meshesById: o.meshesById }; } catch (err) { chestFlattened = { error: errorText(err) }; return b; }
+      };
+      // 18 November 2026 (package BULK): the trained build (ns-body bulkBody: bulkier limbs, wider forearms, hands, shins
+      // and feet, a thicker neck, the shoulder cap and upper trapezius, the belly's segments) on the merged rest meshes just
+      // before the rig, so the rig, the bake, the layers, picking and the mirror body all use it. Once per input set.
+      const bulkCache = new WeakMap();
+      const withBulk = x => {
+        if (!x || !(x.meshesById instanceof Map) || !mods.body || typeof mods.body.bulkBody !== 'function') return x;
+        if (bulkCache.has(x)) return bulkCache.get(x);
+        let y = x;
+        try { const o = mods.body.bulkBody(x.entries, x.meshesById); bodyBulked = o.report; y = { ...x, entries: o.entries || x.entries, meshesById: o.meshesById }; } catch (err) { bodyBulked = { error: errorText(err) }; }
+        bulkCache.set(x, y);
+        return y;
       };
       const withShoulderGirdle = async base => {
         if (isPlaceholder) return base;
@@ -5871,7 +5926,7 @@ export function start(params = {}) {
             expectedManifestSha256: expectedSha256 && typeof expectedSha256.fullbodyManifest === 'string' ? expectedSha256.fullbodyManifest : null,
             onProgress: (n, total) => { if (!stopped) setStatus(`Loading the 3D body files ${n}/${total}…`); }
           });
-          const b = withFlatChest(await withShoulderGirdle(loadedBody));
+          const b = withBulk(withFlatChest(await withShoulderGirdle(loadedBody)));
           if (stopped || failed) return { ok: false, error: 'stopped' };
           if (b && b.entries && b.meshesById) {
             setStatus('Getting the body ready…');
@@ -6207,20 +6262,21 @@ export function start(params = {}) {
           await yieldToPaint();
           if (stopped || failed) return;
           let rig;
+          inputsB = withBulk(inputsB); // package BULK
           try { rig = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById); } catch (err) {
-            if (inputsB === b) throw err;
+            if (inputsB === withBulk(b)) throw err;
             // a packet the rig refuses: first without the extra muscles, then without the face and head (shown in the notes),
             // never no body
             let rebuilt = false;
             if (musclesLoaded && inputsFace !== inputsB) {
-              musclesNote = `Extra muscles not shown: ${errorText(err)}`; musclesLoaded = 0; sheathOpened = null; inputsB = inputsFace;
+              musclesNote = `Extra muscles not shown: ${errorText(err)}`; musclesLoaded = 0; sheathOpened = null; inputsB = withBulk(inputsFace);
               try { rig = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById); rebuilt = true; } catch (err2) { err = err2; }
             }
             if (!rebuilt) {
-              if (inputsB === b) throw err;
-              faceNote = `Face muscles not shown: ${errorText(err)}`; faceLoaded = 0; musclesLoaded = 0; sheathOpened = null; inputsB = b;
+              if (inputsB === withBulk(b)) throw err;
+              faceNote = `Face muscles not shown: ${errorText(err)}`; faceLoaded = 0; musclesLoaded = 0; sheathOpened = null; inputsB = withBulk(b);
               if (headLoaded) { headNote = 'Skull and eyes not completed: the body rig refused the face and head packets'; headLoaded = 0; headConform = null; }
-              rig = mods.body.buildBodyRig(b.entries, b.meshesById);
+              rig = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById);
             }
           }
           let baked = null;
@@ -6244,6 +6300,23 @@ export function start(params = {}) {
           bodyLayers = layers;
           installBodyLift();
           installHandSkin(inputsB.meshesById);
+          startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
+          // 18 November (package VESSELS): the named vessels of the limbs, riveted to this body's drawn muscles and bones
+          if (sceneFn('setBodyVessels')) {
+            const src = inputsB;
+            (async () => {
+              const list = await loadBodyVessels({ fetchText, sha256Hex });
+              const meshes = [];
+              for (const e of src.entries) { const m = e && e.region !== 'head_face' ? src.meshesById.get(e.element_id) : null; if (m && m.positions && m.indices) meshes.push({ id: e.element_id, positions: m.positions, indices: m.indices }); }
+              const keep = list.filter(v => !BODY_VESSEL_SKIP.test(v.name));
+              await yieldToPaint(); if (stopped || failed || bodyRig !== rig) return;
+              const arteries = bindBodyVessels(keep.filter(v => v.kind === 'artery'), meshes);
+              await yieldToPaint(); if (stopped || failed || bodyRig !== rig) return;
+              const veins = bindBodyVessels(keep.filter(v => v.kind === 'vein'), meshes);
+              await yieldToPaint(); if (stopped || failed || bodyRig !== rig) return;
+              callScene('setBodyVessels', { arteries, veins });
+            })().catch(err => console.warn('ns: body vessels not shown:', errorText(err)));
+          }
           bodyKey = null;
           bodyDriveKey = null;
           bodyDrawnKey = null; bodyPosed = null; // R558: a new body has no drawn pose to stop from yet
@@ -8725,7 +8798,7 @@ export function start(params = {}) {
         mirror: mirrorWired && Boolean(bodyRig), mirrorOrbit: plainCopy(mirrorView.orbit), glow: glowWired,
         glowLabel: glowData ? glowData.label : null, glowRendered: plainCopy(glowRendered),
         glowEndpointVisibility: 'UNVERIFIED: frozen renderer exposes ribbon counts, not per-end onScreen evidence',
-        guideFeatures: { ...guideFeatures }, faceMuscles: faceLoaded, faceNote: faceNote || null, headPacket: { loaded: headLoaded, note: headNote || null, conform: headConform }, missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed),
+        guideFeatures: { ...guideFeatures }, faceMuscles: faceLoaded, faceNote: faceNote || null, headPacket: { loaded: headLoaded, note: headNote || null, conform: headConform }, missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed), bodyBulk: plainCopy({ body: bodyBulked, arm: armBulked, swell: swellState }),
         streamCancellationErrors: plainCopy(streamCancelErrors), streamCancelErrorTotal, streamCancelErrorDropped,
         arrowTargets: [...ARROW_INPUT_TARGETS] }
     };
@@ -8929,7 +9002,7 @@ export function start(params = {}) {
       })(),
       faceMuscles: { loaded: faceLoaded, note: faceNote || null, packet: FACE_PACKET_ID },
       headPacket: { loaded: headLoaded, note: headNote || null, packet: HEAD_PACKET_ID, conform: headConform },
-      missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, packet: MISSING_MUSCLES_PACKET_ID, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed),
+      missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, packet: MISSING_MUSCLES_PACKET_ID, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed), bodyBulk: plainCopy({ body: bodyBulked, arm: armBulked, swell: swellState }),
       arrowInput: { ...plainCopy(arrowInput), events: plainCopy(arrowEvents), targets: [...ARROW_INPUT_TARGETS] },
       guide: (() => { try { const t = simState && Number.isFinite(simState.t) ? simState.t : 0; return { ...NG.guideView(guide, t), done: NG.goalsDone(guide), hidden: guide.hidden === true, current: NG.currentGoal(guide) }; } catch { return null; } })(),
       reducedMotion: (() => { try { return typeof view.matchMedia === 'function' ? view.matchMedia('(prefers-reduced-motion: reduce)').matches : null; } catch { return null; } })(),

@@ -614,22 +614,34 @@ export function glassInkUniformValues(o = BRAIN_INK) {
  *  - solid: alpha `alpha` face-on and rimAlpha at the silhouette (a little see-through at the very edge, so a hand or the
  *    mirror body crossing the outline is not cut hard). Next to and over the motor strip the surface still clears
  *    (the scene's GLASS_CLEAR attribute), so the motor areas are seen whole, as before.
- * Colours are sRGB 0..1 as drawn face-on in full light. Display choices only: no tissue optics are implied. */
+ * Colours are sRGB 0..1 as drawn face-on in full light. Display choices only: no tissue optics are implied.
+ * 18 November (owner: "make sure the brain and the body are noticeably different, or at least noticeably different
+ * shades"): living cortex is a pale, cool pearl-grey rose, not the salmon of the muscles. crown [0.87, 0.7, 0.69] ->
+ * [0.9, 0.85, 0.86], groove [0.4, 0.16, 0.2] -> [0.56, 0.4, 0.46] (a mauve rose, no longer a red-brown), mottleWarm
+ * [1, 0.9, 0.88] -> [1, 0.95, 0.96], scatterTint [1, 0.34, 0.3] -> [0.95, 0.62, 0.7] (the shaded side stays rose,
+ * not red), rim [1, 0.82, 0.8] -> [0.92, 0.9, 0.96] (a pearly film). Measured at the start view (fixed patches,
+ * CIE L* of the mean colour): brain 46.7 / muscle 43.5 before, see the vessels notes for after. */
 export const BRAIN_FLESH = Object.freeze({
-  crown: Object.freeze([0.87, 0.7, 0.69]), groove: Object.freeze([0.4, 0.16, 0.2]), grooveCurve: 0.8,
-  mottle: 0.18, mottleMm: 11, mottleFineMm: 3.2, mottleWarm: Object.freeze([1.0, 0.9, 0.88]), bumpMm: 0.5, bumpFadePx: 5,
+  crown: Object.freeze([0.9, 0.85, 0.86]), groove: Object.freeze([0.56, 0.4, 0.46]), grooveCurve: 0.8,
+  mottle: 0.18, mottleMm: 11, mottleFineMm: 3.2, mottleWarm: Object.freeze([1.0, 0.95, 0.96]), bumpMm: 0.5, bumpFadePx: 5,
   key: 1.0, wrap: 0.35, fill: 0.2, aoMin: 0.22,
-  scatter: 0.22, scatterTint: Object.freeze([1.0, 0.34, 0.3]),
+  scatter: 0.22, scatterTint: Object.freeze([0.95, 0.62, 0.7]),
   sheen: 0.2, sheenPower: 28, glint: 0.42, glintPower: 180, glintLo: 0.55, glintHi: 0.75, wetGroove: 0.9,
-  rim: Object.freeze([1.0, 0.82, 0.8]), rimGain: 0.55,
+  rim: Object.freeze([0.92, 0.9, 0.96]), rimGain: 0.55,
   alpha: 0.97, rimAlpha: 0.8,
-  vessel: Object.freeze({
-    warpMm: 9, warpAcrossMm: 17,
-    artery: Object.freeze([0.74, 0.1, 0.1]), arteryMm: 0.7, arteryAcrossMm: 15, arteryAlpha: 0.66,
-    fine: Object.freeze([0.8, 0.2, 0.2]), fineMm: 0.34, fineAcrossMm: 6, fineAlpha: 0.5, twigMm: 10, twigTip: 0.3,
-    vein: Object.freeze([0.36, 0.17, 0.45]), veinMm: 1.25, veinLevel: 0.33, veinWander: 0.16, veinAlpha: 0.46, veinAcrossMm: 24, veinShare: 0.55,
-    pulse: 0.3, minPx: 0.3, fullPx: 0.7, endSlope: 0.12, runSlope: 0.38
-  })
+  // 18 November (package VESSELS): no procedural vessels any more. The arteries are the BodyParts3D cerebral arteries
+  // and the veins and sinuses are laid along this brain's landmarks (ns-vessels), drawn as their own meshes; the noise
+  // lines below drew vessels that followed no anatomy and would now stand beside the real ones.
+  vessel: null
+});
+/** The procedural vessel lines of 18 November (cortexVesselGlsl's parameters), kept for reference; BRAIN_FLESH.vessel is
+ * null since the anatomical vessels (ns-vessels) replaced them. */
+export const PROCEDURAL_VESSELS = Object.freeze({
+  warpMm: 9, warpAcrossMm: 17,
+  artery: Object.freeze([0.74, 0.1, 0.1]), arteryMm: 0.7, arteryAcrossMm: 15, arteryAlpha: 0.66,
+  fine: Object.freeze([0.8, 0.2, 0.2]), fineMm: 0.34, fineAcrossMm: 6, fineAlpha: 0.5, twigMm: 10, twigTip: 0.3,
+  vein: Object.freeze([0.36, 0.17, 0.45]), veinMm: 1.25, veinLevel: 0.33, veinWander: 0.16, veinAlpha: 0.46, veinAcrossMm: 24, veinShare: 0.55,
+  pulse: 0.3, minPx: 0.3, fullPx: 0.7, endSlope: 0.12, runSlope: 0.38
 });
 
 /** The fine surface vessels (18 November; owner: "far more fleshy", "hyper-detailed hyper-real glossy fleshy but not
@@ -656,7 +668,7 @@ export const BRAIN_FLESH = Object.freeze({
  * here on at full strength), so from far away the surface shows no sub-pixel scribble. The vessels are painted into
  * the tissue colour BEFORE the light, so they are shaded, wet and shadowed exactly like the tissue they lie on.
  * Display choices; no vascular anatomy of this atlas brain is implied. nsAlb, nsG, nsMot and vNsObj in scope. */
-export function cortexVesselGlsl(v = BRAIN_FLESH.vessel) {
+export function cortexVesselGlsl(v = PROCEDURAL_VESSELS) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
   const line = (field, w) => `( 1.0 - smoothstep( ${w} - 0.5, ${w} + 0.6, abs( ${field} ) / max( fwidth( ${field} ), 1e-5 ) ) ) * smoothstep( ${f(0.5 * v.minPx)}, ${f(0.5 * v.fullPx)}, ${w} )`;
   // where the field is nearly flat its level line closes into a small ring: there the vessel thins out and ends

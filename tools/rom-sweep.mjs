@@ -210,6 +210,18 @@ if (!LEGACY) {
   add('more', 'TURN right arm turned in (limb turn end)', { r_shoulder_rot: -70 });
   add('more', 'TURN right arm out to the side + turned out', { r_shoulder_abd: 135, r_shoulder_rot: 90 });
   add('more', 'TURN right arm up + turned in', { r_shoulder_flex: 180, r_shoulder_rot: -70 });
+  // 18 November 2026, late (package TURN): the limb switch turns the whole arm over (ns-dance ARM_TURN): its overside end
+  // from the start (the start posture is the underside end), and the overside with the arm raised or out to the side
+  // (the upper arm's turn then narrowed as the game narrows it, ns-dance shoulderTurnRange).
+  {
+    const { ARM_TURN, shoulderTurnRange, shoulderElevationDeg } = await import(repo + '/scene/src/ns-dance.mjs');
+    const over = (f, a) => Math.max(ARM_TURN.shoulder.closed, shoulderTurnRange(shoulderElevationDeg(f, a))[0]);
+    add('more', 'SWITCH right arm overside (palm down, upper arm turned in)', { r_pronation: 160, r_shoulder_rot: ARM_TURN.shoulder.closed });
+    add('more', 'SWITCH right arm up + overside', { r_shoulder_flex: 180, r_pronation: 160, r_shoulder_rot: over(180, 8) });
+    add('more', 'SWITCH right arm out to the side + overside', { r_shoulder_abd: 90, r_pronation: 160, r_shoulder_rot: over(37, 90) });
+    add('more', 'SWITCH right arm out to the side + underside', { r_shoulder_abd: 90, r_pronation: 0, r_shoulder_rot: ARM_TURN.shoulder.open });
+    add('more', 'SWITCH right elbow bent + overside', { r_elbow_flex: 145, r_pronation: 160, r_shoulder_rot: ARM_TURN.shoulder.closed });
+  }
   add('more', 'MORE trunk bent forward + turned left', { trunk_flex: 90, trunk_rot: 45 });
   add('more', 'MORE trunk bent forward + bent right + turned right', { trunk_flex: 90, trunk_side: -35, trunk_rot: -45 });
   add('more', 'MORE trunk arched back + turned right', { trunk_flex: -25, trunk_rot: -45 });

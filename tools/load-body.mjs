@@ -23,7 +23,12 @@ export async function loadBody(repo) {
   } catch (e) { notes.push('missing muscles not loaded: ' + String(e && e.message || e).slice(0, 200)); }
   // the chest muscles are drawn flat (ns-body flattenChest), as on the page
   if (typeof body.flattenChest === 'function' && !process.env.NS_SOURCE_CHEST) { const o = body.flattenChest(inputs.meshesById); inputs = { ...inputs, meshesById: o.meshesById }; notes.push('chest flattened: ' + JSON.stringify(o.report)); }
+  // the front layer of the rectus sheath drawn opened, as on the page (ns-body openRectusSheath; 18 November 2026: the
+  // tool had left it out, so the belly it measured was the closed sheet, not what the game draws)
+  if (typeof body.openRectusSheath === 'function' && !process.env.NS_SOURCE_CHEST) { const o = body.openRectusSheath(inputs.meshesById); inputs = { ...inputs, meshesById: o.meshesById }; notes.push('rectus sheath opened'); }
   if (typeof body.closeBellyMidline === 'function' && !process.env.NS_SOURCE_CHEST) { const o = body.closeBellyMidline(inputs.meshesById); inputs = { ...inputs, meshesById: o.meshesById }; notes.push('belly midline closed: ' + JSON.stringify(o.report)); }
+  // the trained build (ns-body bulkBody, 18 November 2026), as on the page: just before the rig (NS_SOURCE_BULK=1 skips it)
+  if (typeof body.bulkBody === 'function' && !process.env.NS_SOURCE_BULK) { const o = body.bulkBody(inputs.entries, inputs.meshesById); inputs = { ...inputs, entries: o.entries || inputs.entries, meshesById: o.meshesById }; notes.push('bulk: ' + JSON.stringify(o.report)); }
   const rig = body.buildBodyRig(inputs.entries, inputs.meshesById);
   const baked = body.bakeBodyPosture(rig, inputs.meshesById, { posture: body.DEFAULT_BODY_POSTURE });
   return { app, body, inputs, rig, baked, notes };

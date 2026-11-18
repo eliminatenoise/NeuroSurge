@@ -3394,7 +3394,9 @@ export const BODY_POSTURES = deepFreezeRig({
   // ns-dance LEG_TURN_ENDS, DANCE_UNDERSIDE), the
   // knees soft (6 degrees), the elbow 8. The legs 7 degrees apart each (12 in the eleventh upload; the owner: "they're
   // probably a little too wide at the moment, the ankles"): the feet still clear each other on the overside.
-  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, leg_turn_L: 25, leg_turn_R: 25, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
+  // 18 November 2026, late (the whole arm turns over in the limb switch, ns-dance ARM_TURN): the right upper arm starts
+  // at the underside end of its own turn (r_shoulder_rot 35 outward), with the palm up.
+  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, leg_turn_L: 25, leg_turn_R: 25, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0, r_shoulder_rot: 35 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -4879,6 +4881,929 @@ export function closeBellyMidline(meshesById, rule = BELLY_MIDLINE) {
   out.set(rule.left, { ...L, positions: l.q, displayShape: rule.basis });
   const mm = v => Math.round(v * 10) / 10;
   return { meshesById: out, report: { slotMm: [mm(narrowest), mm(widest)], rightMovedMm: mm(r.maxMm), leftMovedMm: mm(l.maxMm) } };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 18 November 2026 (package BULK): a trained body, the same on your body, the mirror body and the left game arm.
+//
+/**
+ * The owner, 18 November: "perhaps we should go bulkier with the muscles, especially for the limbs ... more of a
+ * bodybuilder aesthetic"; "the arms and legs shouldn't look small either"; "We actually want wider wrists, wider
+ * ankles, wider feet, wider hands, wider forearms, wider forelegs"; "Maybe you also need a thicker neck too";
+ * "Undeveloped muscles need work, such as the abdomen". The source model (BodyParts3D) is an averagely built body.
+ * BODY_BULK is a PROPORTION CHANGE of that model, done once on the rest meshes before the rig (so your body, the mirror
+ * body, picking, the skin weights, the bake and the layer lift all get the same shape), as a few smooth spatial rules
+ * rather than muscle-by-muscle patches:
+ *  1. LIMB FIELDS. Each limb is a chain of straight axes between the reference joint centres (REFERENCE_JOINTS; the left
+ *     arm uses the right arm's mirrored): upper arm (shoulder -> elbow), forearm (elbow -> wrist), hand (wrist -> the
+ *     middle finger's knuckle, carried on through the fingers); thigh (hip -> knee), shin (knee -> ankle), foot (the
+ *     ankle's own frame). Neighbouring axes are blended over blendMm either side of a joint, so the field is continuous.
+ *     a. BULK (muscles only): a muscle vertex at distance rho from its axis moves straight away from the axis by
+ *        k x (rho - r0), where r0 is the height of the segment's BONE surface under it (a polar height map of the
+ *        bones, binMm along the axis x binDeg round it). A vertex on the bone does not move and every layer above it
+ *        moves in proportion to its height, so deep and superficial muscles grow together, keep their order and
+ *        nothing leaves its bone. k = bulk x belly(t) x ang(theta): belly is 0 at the joints and 1 at `belly[1]` of the
+ *        segment's length (attachments and tendons keep their size); ang adds lobes for the muscles that make the
+ *        look (biceps and triceps, the quadriceps' sweep, the calf) and takes some off the side that faces the trunk
+ *        or the other thigh (`medial`). theta: 0 front, 90 out to the side, 180 back, 270 toward the midline.
+ *     b. WIDER FAR ENDS (bones, tendons and muscles alike): the forearm and the shin are scaled across their own axis by
+ *        a factor that rises from 1 just below the elbow / knee (`widenFrom` of their length: the tendons' ends on the
+ *        tuberosities keep their place) to `widen` by `widenTo` and goes on to `wrist`
+ *        at the wrist / ankle. The hand is scaled in its own width (`width`) and thickness (`thick`, faded out over
+ *        the fingers, which get their bulk from the digit pads of DIGIT_PADS); the foot in its width (about the line
+ *        from the ankle to the toes) and a little in its thickness (about its own mid-height). The two sides of a
+ *        joint get the same factor there, so wrist, ankle and the joints of the hand and foot stay closed; the rig's
+ *        joint centres are found afterwards from the widened bones.
+ *  2. NECK: the muscles that span the neck move away from the cervical spine (axis from the cervicothoracic to the
+ *     atlanto-occipital joint centre) by the same rule (r0 = the cervical vertebrae's polar height map), most at the
+ *     back and sides, little at the throat; and MUSCLE_THICKEN below thickens the descending trapezius.
+ *  3. MUSCLE_THICKEN: a few muscles are thickened toward their own outside (the inverse of flattenChest): the deltoid's
+ *     three parts (the shoulder cap), the descending trapezius (the slope from the ear to the shoulder), and rectus
+ *     abdominis, which also gets its tendinous intersections and segments (ABDOMEN_RELIEF).
+ *  The chest is left as flattenChest made it. Display choice that departs from the source model on purpose, to be told
+ *  to the player honestly (factors in the report and in DESIGN notes); not a measured physique. Returns
+ *  { meshesById (a new Map; changed meshes get new position arrays), report }.
+ */
+export const BODY_BULK = Object.freeze({
+  blendMm: 20, binMm: 8, binDeg: 12, fillPasses: 6, smoothPasses: 2,
+  arm: Object.freeze({
+    joints: Object.freeze(['glenohumeral', 'elbow', 'wrist', 'middle_mcp']), reachMm: Object.freeze([80, 120]),
+    upper: Object.freeze({ bulk: 0.42, belly: Object.freeze([0.04, 0.56, 0.97]), lobes: Object.freeze([Object.freeze([0, 0.35, 70]), Object.freeze([180, 0.3, 70]), Object.freeze([90, 0.15, 60])]), medial: 0.45 }),
+    fore: Object.freeze({ bulk: 0.26, belly: Object.freeze([-0.04, 0.24, 0.85]), lobes: Object.freeze([]), medial: 0.2, widen: 1.15, widenFrom: 0.08, widenTo: 0.4, end: 1.17 }),
+    hand: Object.freeze({ width: 1.2, thick: 1.12, rampTo: 0.35, thickFadeMm: 16 })
+  }),
+  leg: Object.freeze({
+    joints: Object.freeze(['hip', 'knee', 'ankle', 'mtp']), reachMm: Object.freeze([115, 165]),
+    upper: Object.freeze({ bulk: 0.33, belly: Object.freeze([0.04, 0.5, 0.93]), lobes: Object.freeze([Object.freeze([25, 0.35, 75]), Object.freeze([180, 0.15, 60])]), medial: 0.4 }),
+    fore: Object.freeze({ bulk: 0.28, belly: Object.freeze([-0.02, 0.27, 0.78]), lobes: Object.freeze([Object.freeze([180, 0.5, 70])]), medial: 0.1, widen: 1.14, widenFrom: 0.1, widenTo: 0.42, end: 1.16 }),
+    foot: Object.freeze({ width: 1.16, thick: 1.06, ankleBlendMm: Object.freeze([-25, 15]) })
+  }),
+  neck: Object.freeze({ bulk: 0.3, reachMm: Object.freeze([62, 92]), along: Object.freeze([-0.4, -0.05, 0.85, 1.15]), lobes: Object.freeze([Object.freeze([90, 0.25, 60]), Object.freeze([180, 0.2, 70])]), front: 0.65 }),
+  basis: 'display choice (the owner asked for a bodybuilder build, wider forearms, wrists, hands, shins, ankles and feet, a thicker neck): a proportion change of the source model by smooth rules, not a measured physique'
+});
+const BULK_ARM_SEGS = /^(r|l)_(upperarm|armwrap|forearm|radius|hand|thumb_(mc|pp|dp)|(index|middle|ring|little)_(pp|mp|dp))$/;
+const BULK_LEG_SEGS = /^(r|l)_(thigh|patella|quad\d|shank|foot|toes|hallux)$/;
+const bulkRc = (d, w) => (Math.abs(d) >= w ? 0 : 0.5 * (1 + Math.cos(Math.PI * d / w))); // raised cosine, half width w
+const bulkAngDiff = (a, b) => { let d = (a - b) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
+/** belly profile: 0 at t <= t0, 1 at tp, 0 at t >= t1 (smooth both sides). */
+export function bulkBelly(t, [t0, tp, t1]) {
+  if (!(t > t0 && t < t1)) return 0;
+  return t <= tp ? sstep((t - t0) / (tp - t0)) : sstep((t1 - t) / (t1 - tp));
+}
+/** angular weight round a limb axis: 1 + lobes, less `medial` toward the midline (theta 270). */
+export function bulkAngle(thetaDeg, lobes, medial) {
+  let a = 1;
+  for (const [c, e, w] of lobes) a += e * bulkRc(bulkAngDiff(thetaDeg, c), w);
+  return a * (1 - medial * bulkRc(bulkAngDiff(thetaDeg, 270), 100));
+}
+/** The axis chain of one limb: { side: 'r' | 'l', kind: 'arm' | 'leg', pts: [P0, P1, P2, P3] } from REFERENCE_JOINTS (the
+ * left arm is the right arm mirrored in x = 0: the left arm's own packet sits within a few millimetres of that). */
+export function bulkLimbChain(kind, side) {
+  const R = REFERENCE_JOINTS, names = BODY_BULK[kind].joints;
+  const pick = n => {
+    const own = R[`${side}_${n}`];
+    if (own && own.point) return own.point.slice();
+    const r = R[`r_${n}`];
+    return r && r.point ? (side === 'l' ? mirrorX(r.point) : r.point.slice()) : null;
+  };
+  const pts = names.map(pick);
+  return pts.every(Boolean) ? { kind, side, pts } : null;
+}
+/** A straight axis a -> b with a reference "front" (source anterior) and "out" direction (away from the midline). */
+function bulkAxis(a, b, side) {
+  const d = sub(b, a), L = len(d), u = scl(d, 1 / L);
+  let f = sub(ANT, scl(u, dot(ANT, u)));
+  if (len(f) < 1e-6) f = sub(UP, scl(u, dot(UP, u)));
+  f = norm(f);
+  let o = cross(u, f); // completes the frame; flip so it points away from the midline
+  const outX = side === 'l' ? 1 : -1;
+  if (o[0] * outX < 0) o = scl(o, -1);
+  return { a, b, u, L, f, o };
+}
+/** Polar height map of bone points round an axis: per cell (binMm along x binDeg round) the largest distance from the
+ * axis; empty cells take their neighbours' (fillPasses), then a light smoothing. at(t, theta) reads it (t in mm). */
+function bulkBoneMap(axis, bonePositions, rule = BODY_BULK) {
+  const nb = Math.round(360 / rule.binDeg), tMin = -60, tMax = axis.L + 60, nt = Math.ceil((tMax - tMin) / rule.binMm) + 1;
+  let m = new Float32Array(nt * nb).fill(-1);
+  const { a, u, f, o } = axis;
+  for (const p of bonePositions) {
+    if (!p) continue;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      const x = p[i] - a[0], y = p[i + 1] - a[1], z = p[i + 2] - a[2];
+      const t = x * u[0] + y * u[1] + z * u[2];
+      if (t < tMin || t > tMax) continue;
+      const rx = x - t * u[0], ry = y - t * u[1], rz = z - t * u[2];
+      const rho = Math.hypot(rx, ry, rz);
+      let th = Math.atan2(rx * o[0] + ry * o[1] + rz * o[2], rx * f[0] + ry * f[1] + rz * f[2]) / DEG;
+      if (th < 0) th += 360;
+      const c = Math.min(nt - 1, Math.floor((t - tMin) / rule.binMm)) * nb + (Math.floor(th / rule.binDeg) % nb);
+      if (rho > m[c]) m[c] = rho;
+    }
+  }
+  for (let pass = 0; pass < rule.fillPasses; pass++) {
+    const next = m.slice();
+    for (let it = 0; it < nt; it++) for (let ib = 0; ib < nb; ib++) {
+      if (m[it * nb + ib] >= 0) continue;
+      let s = 0, n = 0;
+      for (let dt = -1; dt <= 1; dt++) for (let db = -1; db <= 1; db++) {
+        const jt = it + dt; if (jt < 0 || jt >= nt) continue;
+        const v = m[jt * nb + ((ib + db + nb) % nb)]; if (v >= 0) { s += v; n++; }
+      }
+      if (n) next[it * nb + ib] = s / n;
+    }
+    m = next;
+  }
+  for (let pass = 0; pass < rule.smoothPasses; pass++) {
+    const next = m.slice();
+    for (let it = 0; it < nt; it++) for (let ib = 0; ib < nb; ib++) {
+      let s = 0, n = 0;
+      for (let dt = -1; dt <= 1; dt++) for (let db = -1; db <= 1; db++) {
+        const jt = it + dt; if (jt < 0 || jt >= nt) continue;
+        const v = m[jt * nb + ((ib + db + nb) % nb)]; if (v >= 0) { s += v; n++; }
+      }
+      if (n) next[it * nb + ib] = s / n;
+    }
+    m = next;
+  }
+  const at = (t, th) => { // bilinear between cell centres; -1 where nothing is known (no bone near)
+    const ft = (t - tMin) / rule.binMm - 0.5, fb = th / rule.binDeg - 0.5, it = Math.floor(ft), ib = Math.floor(fb), wt = ft - it, wb = fb - ib;
+    let s = 0, ws = 0;
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      const jt = it + i; if (jt < 0 || jt >= nt) continue;
+      const v = m[jt * nb + (((ib + j) % nb) + nb) % nb]; if (!(v >= 0)) continue;
+      const w = (i ? wt : 1 - wt) * (j ? wb : 1 - wb); s += w * v; ws += w;
+    }
+    return ws > 1e-6 ? s / ws : -1;
+  };
+  return { at };
+}
+/**
+ * The limb field of one limb (pure): field.apply(p, isBone, out) writes the moved positions of p into out (Float32Array,
+ * may be p itself) and returns the largest displacement (mm). bones: { upper, fore } arrays of bone position arrays
+ * for the bulk's height maps (missing: r0 = 0, i.e. the whole distance from the axis counts); footBones: positions of
+ * the foot's bones for its mid-height line (legs).
+ */
+export function bulkLimbField(chain, bones = {}, rule = BODY_BULK) {
+  const R = rule[chain.kind], [P0, P1, P2, P3] = chain.pts, side = chain.side, h = rule.blendMm;
+  const ax1 = bulkAxis(P0, P1, side), ax2 = bulkAxis(P1, P2, side), ax3 = bulkAxis(P2, P3, side);
+  const map1 = bulkBoneMap(ax1, bones.upper || [], rule), map2 = bulkBoneMap(ax2, bones.fore || [], rule);
+  const arm = chain.kind === 'arm';
+  // the hand's own frame: n = palm normal (source anterior, square to the hand's axis), b = across the palm
+  const hn = ax3.f, hb = ax3.o;
+  // the foot's frame: forward = level direction ankle -> toes, lateral across, up; its mid-height line from the bones
+  let fwd = null, lat = null, mids = null, fMin = -80, fBin = 10;
+  if (!arm) {
+    fwd = norm([P3[0] - P2[0], P3[1] - P2[1], 0]); lat = norm(cross(fwd, UP));
+    const nbin = 32, lo = new Float32Array(nbin).fill(Infinity), hi = new Float32Array(nbin).fill(-Infinity);
+    for (const p of bones.foot || []) for (let i = 0; i + 2 < p.length; i += 3) {
+      const fx = (p[i] - P2[0]) * fwd[0] + (p[i + 1] - P2[1]) * fwd[1];
+      const k = Math.floor((fx - fMin) / fBin); if (k < 0 || k >= nbin) continue;
+      const z = p[i + 2] - P2[2]; if (z < lo[k]) lo[k] = z; if (z > hi[k]) hi[k] = z;
+    }
+    mids = new Float32Array(nbin); let last = -35;
+    for (let k = 0; k < nbin; k++) { if (lo[k] < Infinity) last = (lo[k] + hi[k]) / 2; mids[k] = last; }
+    for (let k = nbin - 1, nxt = mids[nbin - 1]; k >= 0; k--) { if (lo[k] < Infinity) nxt = mids[k]; else if (!(k > 0 && lo.slice(0, k).some(v => v < Infinity))) mids[k] = nxt; }
+    const sm = mids.slice(); for (let k = 0; k < nbin; k++) { let s = 0, n = 0; for (let d = -2; d <= 2; d++) if (k + d >= 0 && k + d < nbin) { s += mids[k + d]; n++; } sm[k] = s / n; } mids = sm;
+  }
+  const midAt = fx => { const x = (fx - fMin) / fBin - 0.5, k = Math.floor(x), w = x - k, a = mids[clamp(k, 0, mids.length - 1)], b = mids[clamp(k + 1, 0, mids.length - 1)]; return a + w * (b - a); };
+  const F = R.fore, U = R.upper;
+  const widenAt = t => (t <= F.widenFrom ? 1 : t < F.widenTo ? 1 + (F.widen - 1) * sstep((t - F.widenFrom) / (F.widenTo - F.widenFrom)) : t < 1 ? F.widen + (F.end - F.widen) * (t - F.widenTo) / (1 - F.widenTo) : F.end);
+  const radial = (ax, x, y, z) => { // t (fraction), rho, theta (deg), unit radial
+    const dx = x - ax.a[0], dy = y - ax.a[1], dz = z - ax.a[2];
+    const tm = dx * ax.u[0] + dy * ax.u[1] + dz * ax.u[2];
+    const rx = dx - tm * ax.u[0], ry = dy - tm * ax.u[1], rz = dz - tm * ax.u[2], rho = Math.hypot(rx, ry, rz);
+    let th = Math.atan2(rx * ax.o[0] + ry * ax.o[1] + rz * ax.o[2], rx * ax.f[0] + ry * ax.f[1] + rz * ax.f[2]) / DEG;
+    if (th < 0) th += 360;
+    return { tm, t: tm / ax.L, rho, th, rx, ry, rz };
+  };
+  const D = [0, 0, 0];
+  const bulkInto = (ax, map, S, q, isBone, wgt) => {
+    if (isBone || !(wgt > 0) || !(q.rho > 1e-6)) return;
+    const k = S.bulk * bulkBelly(q.t, S.belly) * bulkAngle(q.th, S.lobes, S.medial);
+    if (!(k > 0)) return;
+    const r0 = Math.max(0, map.at(q.tm, q.th));
+    const dr = k * Math.max(0, q.rho - r0) * wgt / q.rho;
+    D[0] += dr * q.rx; D[1] += dr * q.ry; D[2] += dr * q.rz;
+  };
+  function apply(p, isBone, out = new Float32Array(p.length)) {
+    let maxMm = 0;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      const x = p[i], y = p[i + 1], z = p[i + 2];
+      D[0] = 0; D[1] = 0; D[2] = 0;
+      const q1 = radial(ax1, x, y, z), q2 = radial(ax2, x, y, z);
+      // blend weights: past the middle joint along the second axis, past the far joint along the third
+      const sJ = sstep((q2.tm + h) / (2 * h));
+      let sK;
+      if (arm) { const q3t = radial(ax3, x, y, z).tm; sK = sstep((q3t + h) / (2 * h)); }
+      else { const zr = z - P2[2], [lo, hi] = R.foot.ankleBlendMm; sK = (1 - sstep((zr - lo) / (hi - lo))) * sstep((q2.tm - 0.5 * ax2.L) / (0.3 * ax2.L)); }
+      const w1 = 1 - sJ, w2 = sJ * (1 - sK), w3 = sJ * sK;
+      // only the limb itself: a member mesh's vertex far from its limb's axis (the trunk end of a muscle such as
+      // latissimus dorsi, whose arm end is a member) is not moved (reachMm: full inside the first, none past the second)
+      const rhoB = w1 * q1.rho + (w2 + (arm ? w3 : 0)) * q2.rho;
+      const reach = 1 - sstep((rhoB - R.reachMm[0]) / (R.reachMm[1] - R.reachMm[0]));
+      if (!(reach > 0)) { out[i] = x; out[i + 1] = y; out[i + 2] = z; continue; }
+      if (w1 > 0) bulkInto(ax1, map1, U, q1, isBone, w1);
+      if (w2 > 0) {
+        const s = widenAt(q2.t) - 1;
+        D[0] += w2 * s * q2.rx; D[1] += w2 * s * q2.ry; D[2] += w2 * s * q2.rz;
+        bulkInto(ax2, map2, F, q2, isBone, w2);
+      }
+      if (w3 > 0) {
+        if (arm) {
+          const q3 = radial(ax3, x, y, z), H = R.hand, ramp = sstep(q3.t / H.rampTo);
+          const sw = F.end + (H.width - F.end) * ramp - 1;
+          const fade = 1 - sstep((q3.tm - ax3.L) / H.thickFadeMm);
+          const st = (F.end + (H.thick - F.end) * ramp - 1) * fade;
+          const cb = q3.rx * hb[0] + q3.ry * hb[1] + q3.rz * hb[2], cn = q3.rx * hn[0] + q3.ry * hn[1] + q3.rz * hn[2];
+          D[0] += w3 * (sw * cb * hb[0] + st * cn * hn[0]); D[1] += w3 * (sw * cb * hb[1] + st * cn * hn[1]); D[2] += w3 * (sw * cb * hb[2] + st * cn * hn[2]);
+        } else {
+          const Ft = R.foot, dx = x - P2[0], dy = y - P2[1], dz = z - P2[2];
+          const fx = dx * fwd[0] + dy * fwd[1], cl = dx * lat[0] + dy * lat[1];
+          const sw = Ft.width - 1, st = Ft.thick - 1, dzm = dz - midAt(fx);
+          D[0] += w3 * sw * cl * lat[0]; D[1] += w3 * sw * cl * lat[1]; D[2] += w3 * st * dzm;
+        }
+      }
+      D[0] *= reach; D[1] *= reach; D[2] *= reach;
+      out[i] = x + D[0]; out[i + 1] = y + D[1]; out[i + 2] = z + D[2];
+      const mm = Math.hypot(D[0], D[1], D[2]); if (mm > maxMm) maxMm = mm;
+    }
+    return maxMm;
+  }
+  return { apply, axes: [ax1, ax2, ax3] };
+}
+/** The neck field (pure): muscles move away from the cervical spine axis by NECK.bulk x along(t) x ang x (rho - r0). */
+export function bulkNeckField(cervicalBones = [], rule = BODY_BULK) {
+  const R = REFERENCE_JOINTS, N = rule.neck;
+  const a = R.cervicothoracic && R.cervicothoracic.point, b = R.atlanto_occipital && R.atlanto_occipital.point;
+  if (!a || !b) return null;
+  const ax = bulkAxis(a, b, 'r'), map = bulkBoneMap(ax, cervicalBones, rule);
+  const [ta, tb, tc, td] = N.along;
+  const along = t => (t <= ta || t >= td ? 0 : t < tb ? sstep((t - ta) / (tb - ta)) : t > tc ? sstep((td - t) / (td - tc)) : 1);
+  function apply(p, out = new Float32Array(p.length)) {
+    let maxMm = 0;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      const x = p[i], y = p[i + 1], z = p[i + 2];
+      const dx = x - a[0], dy = y - a[1], dz = z - a[2], tm = dx * ax.u[0] + dy * ax.u[1] + dz * ax.u[2];
+      const g = along(tm / ax.L);
+      out[i] = x; out[i + 1] = y; out[i + 2] = z;
+      if (!(g > 0)) continue;
+      const rx = dx - tm * ax.u[0], ry = dy - tm * ax.u[1], rz = dz - tm * ax.u[2], rho = Math.hypot(rx, ry, rz);
+      if (!(rho > 1e-6)) continue;
+      // theta from the front; both sides are "out" (90) here: the angle is folded about the midline
+      const cf = rx * ax.f[0] + ry * ax.f[1] + rz * ax.f[2], co = Math.abs(rx * ax.o[0] + ry * ax.o[1] + rz * ax.o[2]);
+      const th = Math.atan2(co, cf) / DEG;
+      let ang = 1; for (const [c, e, w] of N.lobes) ang += e * bulkRc(th - c, w);
+      ang *= 1 - N.front * bulkRc(th, 50);
+      const r0 = Math.max(0, map.at(tm, th));
+      // only the neck itself: the far ends of members (the omohyoid's belly on the shoulder blade, the trapezius on the
+      // shoulder, the platysma on the chest) stay
+      const reach = 1 - sstep((rho - N.reachMm[0]) / (N.reachMm[1] - N.reachMm[0]));
+      const dr = N.bulk * g * ang * reach * Math.max(0, rho - r0) / rho;
+      out[i] += dr * rx; out[i + 1] += dr * ry; out[i + 2] += dr * rz;
+      const mm = dr * rho; if (mm > maxMm) maxMm = mm;
+    }
+    return maxMm;
+  }
+  return { apply, axis: ax };
+}
+
+/**
+ * MUSCLE_THICKEN (BODY_BULK 3): a few muscles are thickened toward their own outside. Each vertex of the muscle's outer
+ * surface (its normal points away from a line under the muscle, the segment `centre` -> `toward`) moves along its
+ * normal by k x w x the muscle's own thickness there (the distance to the nearest vertex of its inner surface, at most
+ * maxThickMm), smoothed over the mesh; the inner surface does not move, so the muscle still lies on what it lay on, and
+ * thin edges and tendon ends stay thin. w falls off with `along` (a trapezoid over t, the place of the vertex on that
+ * line, in fractions of its length). Rows by exact id ('M' / '-l' ids are the left side, mirrored).
+ *  - the deltoid's three parts over the head of the upper arm bone: the shoulder cap;
+ *  - the descending trapezius over the root of the neck: the slope from the ear to the shoulder.
+ * (A first try measured the thickness along rays from one centre: rays that graze a sheet such as the trapezius going up
+ * the back of the neck crossed it twice and moved its upper part up to 116 mm. Measured along the normal now.)
+ */
+export const MUSCLE_THICKEN = Object.freeze({
+  maxThickMm: 24, cellMm: 8, smoothPasses: 8, outerFrom: 0.15, outerTo: 0.55,
+  rows: Object.freeze([
+    Object.freeze({ ids: Object.freeze(['FJ1467', 'FJ1468', 'FJ1513', 'FJ1467M', 'FJ1468M', 'FJ1513M']), what: 'deltoid', centre: 'glenohumeral', toward: 'elbow', towardShare: 0.45, k: 0.55, along: Object.freeze([-0.75, -0.3, 0.45, 0.95]) }),
+    Object.freeze({ ids: Object.freeze(['FJ1521', 'FJ1521M']), what: 'descending trapezius', centre: Object.freeze([-15, -65, 1410]), toward: Object.freeze([-150, -65, 1320]), towardShare: 1, k: 1.0, along: Object.freeze([-0.3, 0.05, 0.75, 1.05]), zRise: Object.freeze([1350, 1400]) })
+  ]),
+  basis: 'display choice (BODY_BULK): the shoulder cap and the slope of the upper trapezius drawn thicker toward their outside; not measured anatomy'
+});
+const thickenSideOf = id => (/M$/.test(id) || /-l$/.test(id) ? 'l' : 'r');
+function thickenPoint(spec, side) {
+  if (Array.isArray(spec)) return side === 'l' ? mirrorX(spec) : spec.slice();
+  const own = REFERENCE_JOINTS[`${side}_${spec}`], r = own || REFERENCE_JOINTS[`r_${spec}`];
+  if (!r || !r.point) return null;
+  return own ? r.point.slice() : side === 'l' ? mirrorX(r.point) : r.point.slice();
+}
+/** One muscle's positions thickened by MUSCLE_THICKEN `row` (pure; idx: its triangle indices; returns { q, maxMm }). */
+export function thickenMuscle(p, idx, row, side, rule = MUSCLE_THICKEN) {
+  const c = thickenPoint(row.centre, side), to0 = thickenPoint(row.toward, side);
+  if (!c || !to0 || !p || p.length < 9 || !idx || idx.length < 3) return { q: p, maxMm: 0 };
+  const to = add(c, scl(sub(to0, c), row.towardShare)), axv = sub(to, c), L = len(axv), u = scl(axv, 1 / L);
+  const [ta, tb, tc, td] = row.along;
+  const along = t => (t <= ta || t >= td ? 0 : t < tb ? sstep((t - ta) / (tb - ta)) : t > tc ? sstep((td - t) / (td - tc)) : 1);
+  const n = p.length / 3, nrm = vertexNormals(p, idx);
+  if (!nrm) return { q: p, maxMm: 0 };
+  // orient the normals outward (a closed mesh: their sum against the centroid is positive)
+  let cx = 0, cy = 0, cz = 0; for (let v = 0; v < n; v++) { cx += p[3 * v]; cy += p[3 * v + 1]; cz += p[3 * v + 2]; } cx /= n; cy /= n; cz /= n;
+  let sgn = 0; for (let v = 0; v < n; v++) sgn += nrm[3 * v] * (p[3 * v] - cx) + nrm[3 * v + 1] * (p[3 * v + 1] - cy) + nrm[3 * v + 2] * (p[3 * v + 2] - cz);
+  const so = sgn < 0 ? -1 : 1;
+  // outward of each vertex: away from the nearest point of the line c -> to; s = how much its normal points that way
+  const s = new Float32Array(n), w = new Float32Array(n);
+  for (let v = 0; v < n; v++) {
+    const x = p[3 * v] - c[0], y = p[3 * v + 1] - c[1], z = p[3 * v + 2] - c[2], t = x * u[0] + y * u[1] + z * u[2], tt = clamp(t, 0, L);
+    const ox = x - tt * u[0], oy = y - tt * u[1], oz = z - tt * u[2], ol = Math.hypot(ox, oy, oz) || 1;
+    s[v] = so * (nrm[3 * v] * ox + nrm[3 * v + 1] * oy + nrm[3 * v + 2] * oz) / ol;
+    w[v] = along(t / L) * (row.zRise ? sstep((p[3 * v + 2] - row.zRise[0]) / (row.zRise[1] - row.zRise[0])) : 1);
+  }
+  // the inner surface's vertices in a hash grid; an outer vertex's thickness = distance to the nearest of them
+  const cm = rule.cellMm, R = Math.ceil(rule.maxThickMm / cm), grid = new Map(), key = (a, b, d) => ((a + 1024) * 2048 + (b + 1024)) * 4096 + (d + 2048);
+  for (let v = 0; v < n; v++) if (s[v] < -rule.outerFrom) {
+    const k = key(Math.floor(p[3 * v] / cm), Math.floor(p[3 * v + 1] / cm), Math.floor(p[3 * v + 2] / cm));
+    let cell = grid.get(k); if (!cell) grid.set(k, cell = []); cell.push(v);
+  }
+  let amt = new Float32Array(n);
+  for (let v = 0; v < n; v++) {
+    const outer = sstep((s[v] - rule.outerFrom) / (rule.outerTo - rule.outerFrom));
+    if (!(outer > 0) || !(w[v] > 0)) continue;
+    const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2], a = Math.floor(x / cm), b = Math.floor(y / cm), d = Math.floor(z / cm);
+    let best = rule.maxThickMm * rule.maxThickMm, found = false;
+    for (let r = 0; r <= R; r++) { // shells of cells outward, stopping once nothing nearer can follow
+      for (let da = -r; da <= r; da++) for (let db = -r; db <= r; db++) for (let dd = -r; dd <= r; dd++) {
+        if (Math.max(Math.abs(da), Math.abs(db), Math.abs(dd)) !== r) continue;
+        const cell = grid.get(key(a + da, b + db, d + dd)); if (!cell) continue;
+        for (const j of cell) { const e = (p[3 * j] - x) ** 2 + (p[3 * j + 1] - y) ** 2 + (p[3 * j + 2] - z) ** 2; if (e < best) { best = e; found = true; } }
+      }
+      if (found && best <= (r * cm) * (r * cm)) break;
+    }
+    amt[v] = row.k * w[v] * outer * Math.sqrt(best);
+  }
+  // smooth the amounts over the mesh (neighbours through the triangles), so the new outer surface is as smooth as the old
+  const nbr = Array.from({ length: n }, () => []);
+  for (let t = 0; t + 2 < idx.length; t += 3) { const A = idx[t], B = idx[t + 1], C = idx[t + 2]; nbr[A].push(B, C); nbr[B].push(A, C); nbr[C].push(A, B); }
+  for (let pass = 0; pass < rule.smoothPasses; pass++) {
+    const next = new Float32Array(n);
+    for (let v = 0; v < n; v++) { if (!(s[v] > rule.outerFrom)) continue; let sum = amt[v], k = 1; for (const j of nbr[v]) if (s[j] > rule.outerFrom) { sum += amt[j]; k++; } next[v] = sum / k; }
+    amt = next;
+  }
+  const q = new Float32Array(p);
+  let maxMm = 0;
+  for (let v = 0; v < n; v++) {
+    const a = amt[v]; if (!(a > 0)) continue;
+    q[3 * v] += so * nrm[3 * v] * a; q[3 * v + 1] += so * nrm[3 * v + 1] * a; q[3 * v + 2] += so * nrm[3 * v + 2] * a;
+    if (a > maxMm) maxMm = a;
+  }
+  return { q, maxMm };
+}
+
+/**
+ * ABDOMEN_RELIEF (BODY_BULK 3, the owner: "Undeveloped muscles need work, such as the abdomen"): rectus abdominis
+ * thicker, in its segments. The packet's rectus abdominis already carries its tendinous intersections (shallower bands
+ * across it) and a midline groove; they read weakly because the muscle is thin. Here its thickness above its own deep
+ * surface (an elliptical tube round the trunk, CHEST_FLATTEN.axis, cells cellRad x cellMm) is multiplied by
+ * 1 + k x across, so the source's own segments (thick) grow more than its intersections (thin) and the relief is
+ * amplified where the anatomy puts it. across is 0 at the muscle's inner border (the midline groove, deepened further
+ * to midlineShare over midlineMm) and under the external oblique's flap along its outer border (outerKeepMm: the flap
+ * that RECTUS_SHEATH_OPENING keeps over the muscle's outer edge would otherwise be pierced). The deep side does not move.
+ * (Tried first and dropped: three imposed grooves at the textbook heights, the xiphoid level, the navel and halfway,
+ * segmentShare 1 / grooveShare 0.45: they did not lie on the packet's own intersections and drew a second, crossing
+ * set of bands. abdomenIntersections still gives those heights for the report.) Display choice; not measured anatomy.
+ */
+export const ABDOMEN_RELIEF = Object.freeze({
+  ids: Object.freeze(['zm-rectus-abdominis-r', 'zm-rectus-abdominis-l']), k: 0.65, innerRiseMm: 14, outerKeepMm: 15, outerRiseMm: 14, segmentShare: 0, grooveShare: 1, grooveMm: 6, midlineMm: 9, midlineShare: 0.6,
+  xiphoid: 'FJ3153', xiphoidBelowMm: 12, navelJoint: 'l3_l4', navelAboveMm: 10, cellRad: 0.04, cellMm: 5, fillPasses: 3, smoothPasses: 2,
+  basis: 'display choice (BODY_BULK): rectus abdominis drawn thicker, its own segments and midline groove amplified; not measured anatomy'
+});
+/** Heights (mm) of the tendinous intersections, top to bottom: [xiphoid level, halfway, navel]. */
+export function abdomenIntersections(meshesById, rule = ABDOMEN_RELIEF) {
+  const x = meshesById instanceof Map ? meshesById.get(rule.xiphoid) : null;
+  let zx = 1110;
+  if (x && x.positions) { zx = Infinity; for (let i = 2; i < x.positions.length; i += 3) if (x.positions[i] < zx) zx = x.positions[i]; zx -= rule.xiphoidBelowMm; }
+  const nj = REFERENCE_JOINTS[rule.navelJoint], zu = (nj && nj.point ? nj.point[2] : 977) + rule.navelAboveMm;
+  return [zx, (zx + zu) / 2, zu];
+}
+export function abdomenRelief(p, side, cuts, rule = ABDOMEN_RELIEF) {
+  if (!p || p.length < 9) return { q: p, maxMm: 0 };
+  const { yMm: yc, halfWidthMm: A, halfDepthMm: B } = CHEST_FLATTEN.axis, cT = rule.cellRad, cZ = rule.cellMm;
+  const n = p.length / 3, rad = new Float32Array(n), th = new Float32Array(n);
+  let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity, zTop = -Infinity, zBot = Infinity;
+  for (let v = 0; v < n; v++) {
+    const x = p[3 * v] / A, y = (p[3 * v + 1] - yc) / B, z = p[3 * v + 2];
+    rad[v] = Math.hypot(x, y); th[v] = Math.atan2(x, -y);
+    const a = Math.floor(th[v] / cT), b = Math.floor(z / cZ);
+    if (a < a0) a0 = a; if (a > a1) a1 = a; if (b < b0) b0 = b; if (b > b1) b1 = b;
+    if (z > zTop) zTop = z; if (z < zBot) zBot = z;
+  }
+  const pad = rule.fillPasses + 1; a0 -= pad; b0 -= pad;
+  const na = a1 - a0 + 1 + pad, nb = b1 - b0 + 1 + pad;
+  let deep = new Float32Array(na * nb).fill(Infinity);
+  for (let v = 0; v < n; v++) { const c = (Math.floor(th[v] / cT) - a0) * nb + (Math.floor(p[3 * v + 2] / cZ) - b0); if (rad[v] < deep[c]) deep[c] = rad[v]; }
+  for (let s = 0; s < rule.fillPasses; s++) { const next = deep.slice(); for (let a = 0; a < na; a++) for (let b = 0; b < nb; b++) { if (deep[a * nb + b] < Infinity) continue; let lo = Infinity; for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue; const w = deep[a2 * nb + b2]; if (w < lo) lo = w; } next[a * nb + b] = lo; } deep = next; }
+  for (let s = 0; s < rule.smoothPasses; s++) { const next = deep.slice(); for (let a = 0; a < na; a++) for (let b = 0; b < nb; b++) { if (!(deep[a * nb + b] < Infinity)) continue; let sum = 0, cnt = 0; for (let da = -2; da <= 2; da++) for (let db = -2; db <= 2; db++) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue; const w = deep[a2 * nb + b2]; if (w < Infinity) { sum += w; cnt++; } } next[a * nb + b] = sum / cnt; } deep = next; }
+  // the muscle's inner and outer border per 5 mm band (x: +x is the subject's left; the right muscle lies at -x)
+  const band = z => Math.floor(z / 5), inner = new Map(), outer = new Map();
+  for (let v = 0; v < n; v++) {
+    const k = band(p[3 * v + 2]), ax = Math.abs(p[3 * v]);
+    if (!(inner.get(k) <= ax)) inner.set(k, ax);
+    if (!(outer.get(k) >= ax)) outer.set(k, ax);
+  }
+  const near = (m, k) => { for (let d = 0; d < 400; d++) { if (m.has(k - d)) return m.get(k - d); if (m.has(k + d)) return m.get(k + d); } return 0; };
+  // the segments: from the top of the muscle to the first cut, between cuts, from the last cut to the bottom
+  const edges = [zTop, ...cuts.filter(z => z < zTop && z > zBot), zBot];
+  const q = new Float32Array(p);
+  let maxMm = 0;
+  for (let v = 0; v < n; v++) {
+    const x = p[3 * v], z = p[3 * v + 2];
+    const fa = th[v] / cT - 0.5 - a0, fb = z / cZ - 0.5 - b0, ia = Math.floor(fa), ib = Math.floor(fb), ta = fa - ia, tb = fb - ib;
+    let d = 0, ws = 0;
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const a2 = ia + i, b2 = ib + j; if (a2 < 0 || b2 < 0 || a2 >= na || b2 >= nb) continue; const val = deep[a2 * nb + b2]; if (!(val < Infinity)) continue; const wt = (i ? ta : 1 - ta) * (j ? tb : 1 - tb); d += wt * val; ws += wt; }
+    if (!(ws > 1e-6)) continue;
+    d /= ws;
+    const h = rad[v] - d;
+    if (!(h > 0)) continue;
+    // up-down: which segment, and where in it (0 at its borders, 1 in its middle)
+    let s = 0;
+    for (let e = 0; e + 1 < edges.length; e++) if (z <= edges[e] && z >= edges[e + 1]) { const u = (edges[e] - z) / (edges[e] - edges[e + 1]); s = Math.sin(Math.PI * u); break; }
+    // across: 0 at the inner and outer border, 1 between
+    // across: 0 at the inner border and under the external oblique's flap along the outer border (RECTUS_SHEATH_OPENING
+    // keeps its outer insetMm over the muscle: a thicker muscle there would come through it), 1 between
+    const k = band(z), xi = near(inner, k), xo = near(outer, k), ax = Math.abs(x);
+    const across = sstep((ax - xi) / rule.innerRiseMm) * sstep((xo - ax - rule.outerKeepMm) / rule.outerRiseMm);
+    let groove = 1;
+    if (rule.grooveShare < 1) for (const zc of cuts) groove = Math.min(groove, 1 - (1 - rule.grooveShare) * bulkRc(z - zc, rule.grooveMm * 1.6));
+    groove = Math.min(groove, 1 - (1 - rule.midlineShare) * (1 - sstep((Math.abs(x) - xi) / rule.midlineMm)));
+    const seg = 1 - rule.segmentShare + rule.segmentShare * Math.sqrt(s);
+    const m = (1 + rule.k * seg * across) * groove;
+    const r2 = d + h * m, f = r2 / rad[v];
+    const xx = p[3 * v], yy = p[3 * v + 1] - yc;
+    q[3 * v] = xx * f; q[3 * v + 1] = yc + yy * f;
+    const mm = Math.abs(Math.hypot(xx, yy) * (f - 1)); if (mm > maxMm) maxMm = mm;
+  }
+  return { q, maxMm };
+}
+
+/**
+ * DIGIT_PADS (18 November 2026, the owner: "fingers and toes should never be spiky like knives, but potentially even
+ * chunky"; 11 November: "No muscles should arbitrarily be pointy and stick out"). On this skinless body a finger or toe
+ * is bare bone with thin tendon strips; from the eyes the hands and feet read as claws. Each phalanx gets a rounded
+ * SLEEVE of soft tissue (in a body: the fibrous flexor sheath and its pulleys, the fat pads of the palm side, the pulp of
+ * the tip; drawn in the white tendon tone): a closed tube round the bone's own long axis (its principal axis), its
+ * cross-section an ellipse round the bone's widest section in each slice (`slices` along it) plus `palm` on the palm /
+ * sole side, `back` on the back and `side` to the sides, ending in rounded caps: the near cap at nearShare of the
+ * bone's length (so the knuckle between two sleeves still reads), the far cap past the bone's end (farMm; on a last
+ * phalanx tipMm, the blunt pulp of the tip). It is rigged to the phalanx's own segment (rig_hint), so it follows the
+ * bone through every finger and toe movement. Generated geometry for display (documented here; no licensed file is
+ * changed), on your body, the mirror body and the left game arm. Returns [{ id, name, segment, positions, indices }].
+ * bones: [{ id, name, segment, positions }]; distal: unit direction toward the tips; palmar: unit palm / sole direction.
+ */
+export const DIGIT_PADS = Object.freeze({
+  slices: 10, around: 18, capRings: 5, nearShare: 0.1, farMm: 1.5, tipMm: 4,
+  hand: Object.freeze({ palm: 4.2, back: 2.2, side: 3.2, tipPalm: 5.2 }),
+  foot: Object.freeze({ palm: 4.2, back: 2.4, side: 3.0, tipPalm: 5.0 }),
+  basis: 'generated display geometry (BODY_BULK digit pads): a rounded soft-tissue sleeve round each phalanx (sheath, pads and pulp), so fingers and toes are full and blunt; not a licensed mesh, not measured anatomy'
+});
+export function digitPadMeshes(bones, { distal, palmar, kind = 'hand' }, rule = DIGIT_PADS) {
+  const T = rule[kind] || rule.hand, out = [];
+  for (const b of bones) {
+    const p = b.positions;
+    if (!p || p.length < 30) continue;
+    const { c, e } = stackPrincipalAxis(p);
+    const u = dot(e, distal) < 0 ? scl(e, -1) : e;
+    let nv = sub(palmar, scl(u, dot(palmar, u)));
+    if (len(nv) < 1e-6) nv = sub(UP, scl(u, dot(UP, u)));
+    nv = norm(nv);
+    const sv = cross(u, nv);
+    let t0 = Infinity, t1 = -Infinity;
+    for (let i = 0; i < p.length; i += 3) { const t = (p[i] - c[0]) * u[0] + (p[i + 1] - c[1]) * u[1] + (p[i + 2] - c[2]) * u[2]; if (t < t0) t0 = t; if (t > t1) t1 = t; }
+    const L = t1 - t0, S = rule.slices;
+    if (!(L > 4)) continue;
+    // the bone's extent round its axis per slice: palm side, back, both sides (from the axis), and the section's centre
+    const ext = Array.from({ length: S }, () => ({ pa: 0, ba: 0, s1: 0, s2: 0 }));
+    for (let i = 0; i < p.length; i += 3) {
+      const x = p[i] - c[0], y = p[i + 1] - c[1], z = p[i + 2] - c[2], t = x * u[0] + y * u[1] + z * u[2];
+      const k = clamp(Math.floor(((t - t0) / L) * S), 0, S - 1), a = x * nv[0] + y * nv[1] + z * nv[2], s = x * sv[0] + y * sv[1] + z * sv[2], q = ext[k];
+      if (a > q.pa) q.pa = a; if (-a > q.ba) q.ba = -a; if (s > q.s1) q.s1 = s; if (-s > q.s2) q.s2 = -s;
+    }
+    // smooth the profile along the bone (heads and shafts blend; no ridge at a slice border)
+    const sm = key => { const v = ext.map(q => q[key]); return v.map((_, k) => { let s = 0, n = 0; for (let d = -1; d <= 1; d++) if (v[k + d] !== undefined) { s += v[k + d]; n++; } return s / n; }); };
+    const PA = sm('pa'), BA = sm('ba'), S1 = sm('s1'), S2 = sm('s2');
+    const last = /distal phalanx/i.test(b.name) || /_dp$/.test(b.segment);
+    const tA = t0 + rule.nearShare * L, tB = t1 + (last ? rule.tipMm : rule.farMm);
+    const at = t => { // the section (palm, back, side1, side2 half-axes) at t, from the bone's profile plus the soft tissue
+      const f = clamp(((t - t0) / L) * S - 0.5, 0, S - 1), k = Math.floor(f), w = f - k, k2 = Math.min(S - 1, k + 1);
+      const tipW = last ? sstep(((t - t0) / L - 0.45) / 0.45) : 0;
+      return [PA[k] + w * (PA[k2] - PA[k]) + T.palm + tipW * (T.tipPalm - T.palm), BA[k] + w * (BA[k2] - BA[k]) + T.back, S1[k] + w * (S1[k2] - S1[k]) + T.side, S2[k] + w * (S2[k2] - S2[k]) + T.side];
+    };
+    const N = rule.around, C = rule.capRings, rings = [];
+    // near cap (from a point to the full section), the body, far cap (back to a point): each ring = [t, scale]
+    const aNear = at(tA), capNear = Math.min(0.22 * L, 0.6 * Math.max(...aNear)), aFar = at(Math.min(tB, t1)), capFar = Math.min(0.3 * L, 0.85 * Math.max(...aFar));
+    for (let r = 0; r < C; r++) { const g = (r / C) * Math.PI / 2; rings.push([tA - capNear * Math.cos(g), Math.sin(g)]); }
+    const tb0 = tA, tb1 = tB - capFar;
+    for (let r = 0; r <= S; r++) rings.push([tb0 + (r / S) * (tb1 - tb0), 1]);
+    for (let r = 1; r < C; r++) { const g = (r / C) * Math.PI / 2; rings.push([tb1 + capFar * Math.sin(g), Math.cos(g)]); }
+    const pos = [], idx = [];
+    pos.push(...add(c, scl(u, tA - capNear))); // near pole
+    for (const [t, k] of rings.slice(1)) {
+      const [pa, ba, s1, s2] = at(clamp(t, t0, t1));
+      for (let j = 0; j < N; j++) {
+        const g = (j / N) * 2 * Math.PI, ca = Math.cos(g), sa = Math.sin(g);
+        const ra = (ca >= 0 ? pa : ba) * ca * k, rs = (sa >= 0 ? s1 : s2) * sa * k;
+        pos.push(c[0] + u[0] * t + nv[0] * ra + sv[0] * rs, c[1] + u[1] * t + nv[1] * ra + sv[1] * rs, c[2] + u[2] * t + nv[2] * ra + sv[2] * rs);
+      }
+    }
+    pos.push(...add(c, scl(u, tB))); // far pole
+    const nr = rings.length - 1, far = 1 + nr * N;
+    for (let j = 0; j < N; j++) idx.push(0, 1 + ((j + 1) % N), 1 + j);
+    for (let r = 0; r + 1 < nr; r++) for (let j = 0; j < N; j++) {
+      const a = 1 + r * N + j, b2 = 1 + r * N + ((j + 1) % N), c2 = 1 + (r + 1) * N + j, d2 = 1 + (r + 1) * N + ((j + 1) % N);
+      idx.push(a, b2, c2, b2, d2, c2);
+    }
+    for (let j = 0; j < N; j++) idx.push(far, 1 + (nr - 1) * N + j, 1 + (nr - 1) * N + ((j + 1) % N));
+    // outward winding (the normals must point out of the tube): flip if the first side triangle faces in
+    const P = (i) => [pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]];
+    const t3 = 3 * N, A = P(idx[t3]), B = P(idx[t3 + 1]), Cc = P(idx[t3 + 2]);
+    const fn = cross(sub(B, A), sub(Cc, A)), mid3 = scl(add(add(A, B), Cc), 1 / 3), axisPt = add(c, scl(u, dot(sub(mid3, c), u)));
+    if (dot(fn, sub(mid3, axisPt)) < 0) for (let i = 0; i < idx.length; i += 3) { const tmp = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = tmp; }
+    out.push({ id: `pad-${b.id}`, name: b.padName || `soft tissue round the ${b.name}`, segment: b.segment, positions: Float32Array.from(pos), indices: Uint32Array.from(idx) });
+  }
+  return out;
+}
+
+/** Which limb field a body entry belongs to: 'r_arm' | 'l_arm' | 'r_leg' | 'l_leg' | 'neck' | null. */
+function bulkMembership(e) {
+  if (e.kind === 'bone') {
+    const s = boneSegmentFor(e);
+    if (!s) return null;
+    if (BULK_ARM_SEGS.test(s)) return `${s[0]}_arm`;
+    if (BULK_LEG_SEGS.test(s)) return `${s[0]}_leg`;
+    return s === 'cervical' ? 'cervical-bone' : null;
+  }
+  if (e.kind !== 'muscle') return null;
+  const c = muscleCandidates(e);
+  if (!c) return null;
+  const arm = c.segments.find(s => BULK_ARM_SEGS.test(s)), leg = c.segments.find(s => BULK_LEG_SEGS.test(s));
+  if (arm) return `${arm[0]}_arm`;
+  if (leg) return `${leg[0]}_leg`;
+  if (c.segments.includes('cervical') || c.segments.includes('hyoid')) return 'neck';
+  return null;
+}
+
+/** BODY_BULK on the full body's rest meshes (see the comment above BODY_BULK). */
+export function bulkBody(entries, meshesById, rule = BODY_BULK) {
+  if (!(meshesById instanceof Map)) return { meshesById, report: null };
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const list = entryList(entries), groups = new Map();
+  const flatChest = new Set(CHEST_FLATTEN.rows.map(r => r.id)); // the chest stays as flattenChest made it (the owner: flat)
+  for (const e of list) {
+    if (flatChest.has(e.id)) continue;
+    const g = bulkMembership(e);
+    if (!g || !meshesById.get(e.id) || !meshesById.get(e.id).positions) continue;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(e);
+  }
+  const bonesOf = (g, re) => (groups.get(g) || []).filter(e => e.kind === 'bone' && re.test(boneSegmentFor(e) || '')).map(e => meshesById.get(e.id).positions);
+  const mirrorAll = arr => arr.map(p => { const q = new Float32Array(p); for (let i = 0; i < q.length; i += 3) q[i] = -q[i]; return q; });
+  const out = new Map(meshesById), report = { limbs: {}, neck: null, thicken: [], abdomen: null, pads: null, factors: null };
+  const fields = {};
+  for (const g of ['r_arm', 'l_arm', 'r_leg', 'l_leg']) {
+    const members = groups.get(g);
+    if (!members || !members.length) continue;
+    const kind = g.slice(2), side = g[0], chain = bulkLimbChain(kind, side);
+    if (!chain) continue;
+    let bones;
+    if (kind === 'arm') {
+      const src = side === 'l' && !bonesOf('l_arm', /_upperarm$/).length ? 'r_arm' : g, mir = src !== g;
+      const pick = re => (mir ? mirrorAll(bonesOf(src, re)) : bonesOf(src, re));
+      bones = { upper: pick(/_upperarm$/), fore: pick(/_(forearm|radius)$/) };
+    } else bones = { upper: bonesOf(g, /_thigh$/), fore: bonesOf(g, /_shank$/), foot: bonesOf(g, /_(foot|toes|hallux)$/) };
+    const field = bulkLimbField(chain, bones, rule);
+    fields[g] = field;
+    let maxMm = 0, n = 0;
+    for (const e of members) {
+      const m = out.get(e.id), q = new Float32Array(m.positions.length);
+      const mm = field.apply(m.positions, e.kind === 'bone', q);
+      out.set(e.id, { ...m, positions: q, displayShape: rule.basis });
+      if (mm > maxMm) maxMm = mm; n++;
+    }
+    report.limbs[g] = { meshes: n, maxMovedMm: Math.round(maxMm * 10) / 10 };
+  }
+  const neckMembers = groups.get('neck') || [];
+  if (neckMembers.length) {
+    const field = bulkNeckField((groups.get('cervical-bone') || []).map(e => meshesById.get(e.id).positions), rule);
+    if (field) {
+      let maxMm = 0;
+      for (const e of neckMembers) {
+        const m = out.get(e.id), q = new Float32Array(m.positions.length);
+        const mm = field.apply(m.positions, q);
+        out.set(e.id, { ...m, positions: q, displayShape: rule.basis });
+        if (mm > maxMm) maxMm = mm;
+      }
+      report.neck = { meshes: neckMembers.length, maxMovedMm: Math.round(maxMm * 10) / 10 };
+    }
+  }
+  for (const row of MUSCLE_THICKEN.rows) for (const id of row.ids) {
+    const m = out.get(id);
+    if (!m || !m.positions) continue;
+    const r = thickenMuscle(m.positions, m.indices, row, thickenSideOf(id));
+    out.set(id, { ...m, positions: r.q, displayShape: rule.basis });
+    report.thicken.push({ id, what: row.what, maxMovedMm: Math.round(r.maxMm * 10) / 10 });
+  }
+  {
+    const cuts = abdomenIntersections(meshesById);
+    let maxMm = 0, n = 0;
+    for (const id of ABDOMEN_RELIEF.ids) {
+      const m = out.get(id);
+      if (!m || !m.positions) continue;
+      const r = abdomenRelief(m.positions, thickenSideOf(id), cuts);
+      out.set(id, { ...m, positions: r.q, displayShape: ABDOMEN_RELIEF.basis });
+      if (r.maxMm > maxMm) maxMm = r.maxMm; n++;
+    }
+    report.abdomen = n ? { intersectionsMm: cuts.map(z => Math.round(z)), maxMovedMm: Math.round(maxMm * 10) / 10 } : null;
+  }
+  // DIGIT_PADS round every phalanx of the right hand and both feet (on the widened bones)
+  const raw = Array.isArray(entries) ? entries : entries && Array.isArray(entries.assets) ? entries.assets : [];
+  const rawById = new Map(raw.map(e => [e && (e.element_id || e.id), e]));
+  const padEntries = [];
+  for (const g of ['r_arm', 'r_leg', 'l_leg']) {
+    const f = fields[g];
+    if (!f) continue;
+    const arm = g.endsWith('arm'), ax3 = f.axes[2];
+    const fwd = arm ? ax3.u : norm([ax3.b[0] - ax3.a[0], ax3.b[1] - ax3.a[1], 0]);
+    const bones = (groups.get(g) || []).filter(e => e.kind === 'bone' && /phalanx/.test(e.name)).map(e => ({ id: e.id, name: e.name, segment: boneSegmentFor(e), positions: out.get(e.id).positions, padName: digitPadName(e.name) }));
+    // one mesh per finger (its sleeves skinned per vertex to its own phalanges, so the knuckles bend smoothly) and per
+    // foot one for the big toe and one for the four lesser toes (one rigid segment each in this rig): fewer draws
+    const merged = new Map();
+    for (const pad of digitPadMeshes(bones, { distal: fwd, palmar: arm ? ax3.f : DOWN, kind: arm ? 'hand' : 'foot' })) {
+      const key = arm ? pad.name : pad.segment;
+      if (!merged.has(key)) merged.set(key, { parts: [], segs: [], src: rawById.get(pad.id.slice(4)) || {} });
+      const m = merged.get(key); m.parts.push(pad); m.segs.push(pad.segment);
+    }
+    for (const [key, m] of merged) {
+      const id = `pad-${g[0]}-${key.replace(/[^a-z0-9]+/gi, '-')}`.toLowerCase();
+      if (out.has(id)) continue;
+      const nv = m.parts.reduce((t, q) => t + q.positions.length, 0), ni = m.parts.reduce((t, q) => t + q.indices.length, 0);
+      const P = new Float32Array(nv), I = new Uint32Array(ni);
+      let o = 0, oi = 0;
+      for (const q of m.parts) { P.set(q.positions, o); for (let k = 0; k < q.indices.length; k++) I[oi + k] = q.indices[k] + o / 3; o += q.positions.length; oi += q.indices.length; }
+      const order = BODY_SEGMENTS.filter(sg => m.segs.includes(sg)), name = arm ? key : m.parts.length > 2 ? `${g[0] === 'r' ? 'right' : 'left'} toe pads` : m.parts[0].name;
+      out.set(id, { positions: P, indices: I, displayShape: DIGIT_PADS.basis });
+      padEntries.push({ element_id: id, kind: 'muscle', tissue: 'muscle', name, label: name, requested_structure: name, region: m.src.region || null,
+        rig_hint: [order[0], order[order.length - 1]], laterality: m.src.laterality || null, vertices: P.length / 3, soft_tissue: true, display_generated: DIGIT_PADS.basis });
+    }
+  }
+  report.pads = { meshes: padEntries.length, vertices: padEntries.reduce((t, e) => t + e.vertices, 0) };
+  report.factors = bulkFactors(rule);
+  report.ms = Math.round(((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) * 10) / 10;
+  return { meshesById: out, entries: padEntries.length ? [...raw, ...padEntries] : entries, report };
+}
+/** 'right index finger pad' from 'distal phalanx of right index finger' (the digit pads' plain names). */
+/**
+ * MUSCLE_SWELL (18 November 2026, the owner: "and ensure naturalistic stacking deformation during muscle contraction";
+ * 11 November: the Body Worlds stack "so that deep muscles are clearly visible through and under slightly floating
+ * superficial ones"). A muscle that contracts shortens and its belly swells; what lies over it is lifted. The data for
+ * that, baked once per muscle (pure; the scene adds the displacement after its per-vertex skinning, along each vertex's
+ * posed normal, and the game drives the amounts):
+ *  - own[v] (mm at full swell): k x belly x thickness on the muscle's OUTER surface (its normal points away from the
+ *    nearest bone): belly = sin(pi t)^bellyPow along the muscle's own long axis (0 at both ends: tendons keep their size),
+ *    thickness = the distance to the nearest vertex of the muscle's inner surface (at most maxThickMm). The inner surface
+ *    does not move: the muscle swells outward, off what it lies on.
+ *  - under[v], underIdx[v]: the lift a vertex takes when the muscle UNDER it swells: a vertex of the inner surface takes
+ *    the largest own[] of another muscle's outer surface within underMm (signed so that it moves away from that
+ *    muscle), and each outer vertex the same as its paired inner vertex, so the whole overlying muscle rises with the
+ *    one beneath (the stack moves as a stack) instead of being pierced. unders lists the muscles underIdx refers to.
+ *  - anchors: the two segments that carry most of the muscle and a point on each (source mm), for its shortening.
+ * Only limb muscles and the belly wall (muscleSwellMembers). Display mechanics, simulated; not measured muscle shape.
+ */
+export const MUSCLE_SWELL = Object.freeze({ k: 0.42, bellyPow: 1.5, maxThickMm: 30, outerFrom: 0.15, outerTo: 0.5, cellMm: 8, underMm: 7, smoothPasses: 2,
+  activityFrom: 0.12, activitySpan: 0.6, perActivity: 0.7, perShortening: 2.5, min: -0.5, max: 1, easeS: 0.25, easeSReduced: 0.9, step: 1 / 32 });
+/** The amount (-0.5 .. 1) a muscle swells: activity above its resting level, plus its shortening (a lengthened muscle
+ * goes below 0: slimmer, flatter). activity 0..1 (the frame's display drive), shortening = 1 - length / start length. */
+export function muscleSwellTarget(activity, shortening, o = MUSCLE_SWELL) {
+  const a = clamp(((Number.isFinite(activity) ? activity : 0) - o.activityFrom) / o.activitySpan, 0, 1);
+  const s = Number.isFinite(shortening) ? shortening : 0;
+  return clamp(o.perActivity * a + o.perShortening * s, o.min, o.max);
+}
+/** The muscles that swell: limb muscles and rectus abdominis (not the digit pads; the obliques' broad sheets, 190 thousand
+ * vertices, would cost a second of loading for a swell no one sees). */
+function muscleSwellMember(info, entryName) {
+  if (!info || info.kind !== 'muscle') return false;
+  const c = info.candidates || [];
+  return c.some(s => BULK_ARM_SEGS.test(s) || BULK_LEG_SEGS.test(s)) || /\brectus abdominis\b/.test(String(entryName || ''));
+}
+/** Swell data for a list of muscles: muscles [{ id, positions, indices, axes: [[a, b], ...] (reference lines, mm: the
+ * outward direction of a vertex is away from the nearest point of them), anchors }]. Returns Map(id -> { own, under,
+ * underIdx, unders, anchors }). */
+export function muscleSwellData(muscles, o = MUSCLE_SWELL) {
+  const it = muscleSwellSteps(muscles, o);
+  for (;;) { const r = it.next(); if (r.done) return r.value; }
+}
+/** The same as a generator that yields after each muscle (the game runs it in short slices after the body is shown, so
+ * it adds nothing to the loading time and no long frame); returns the Map. */
+export function* muscleSwellSteps(muscles, o = MUSCLE_SWELL) {
+  const nearestOnAxes = (axes, x, y, z, out) => {
+    let best = Infinity;
+    for (const [A, B] of axes) {
+      const dx = B[0] - A[0], dy = B[1] - A[1], dz = B[2] - A[2], L2 = dx * dx + dy * dy + dz * dz || 1;
+      const t = clamp(((x - A[0]) * dx + (y - A[1]) * dy + (z - A[2]) * dz) / L2, 0, 1);
+      const px = A[0] + t * dx, py = A[1] + t * dy, pz = A[2] + t * dz, d = (x - px) ** 2 + (y - py) ** 2 + (z - pz) ** 2;
+      if (d < best) { best = d; out[0] = px; out[1] = py; out[2] = pz; }
+    }
+    return best < Infinity;
+  };
+  const per = [], tmp = [0, 0, 0];
+  for (const m of muscles) {
+    const p = m.positions, idx = m.indices, n = p ? p.length / 3 : 0;
+    if (n < 12 || !idx) continue;
+    const nrm = vertexNormals(p, idx);
+    if (!nrm) continue;
+    const sv = new Float32Array(n);
+    for (let v = 0; v < n; v++) {
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+      if (!nearestOnAxes(m.axes, x, y, z, tmp)) continue;
+      const rx = x - tmp[0], ry = y - tmp[1], rz = z - tmp[2], rl = Math.hypot(rx, ry, rz) || 1;
+      sv[v] = (nrm[3 * v] * rx + nrm[3 * v + 1] * ry + nrm[3 * v + 2] * rz) / rl;
+    }
+    // the mesh may be wound inward: then most of its surface faces the bone; turn the sign over
+    let sum = 0; for (let v = 0; v < n; v++) sum += sv[v];
+    const flip = sum < 0 ? -1 : 1;
+    if (flip < 0) for (let v = 0; v < n; v++) sv[v] = -sv[v];
+    const { c, e } = stackPrincipalAxis(p);
+    let t0 = Infinity, t1 = -Infinity; const tt = new Float32Array(n);
+    for (let v = 0; v < n; v++) { tt[v] = (p[3 * v] - c[0]) * e[0] + (p[3 * v + 1] - c[1]) * e[1] + (p[3 * v + 2] - c[2]) * e[2]; if (tt[v] < t0) t0 = tt[v]; if (tt[v] > t1) t1 = tt[v]; }
+    // inner-surface vertices in a local grid; outer vertex -> nearest inner vertex (thickness and pairing)
+    const cm = o.cellMm, R = Math.ceil(o.maxThickMm / cm);
+    // a dense grid over the muscle's box (head / next lists in typed arrays: much faster than a Map of cells)
+    let bx0 = Infinity, by0 = Infinity, bz0 = Infinity, bx1 = -Infinity, by1 = -Infinity, bz1 = -Infinity;
+    for (let v = 0; v < n; v++) { const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2]; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; if (z < bz0) bz0 = z; if (z > bz1) bz1 = z; }
+    const gx = Math.floor((bx1 - bx0) / cm) + 1, gy = Math.floor((by1 - by0) / cm) + 1, gz = Math.floor((bz1 - bz0) / cm) + 1;
+    const head = new Int32Array(gx * gy * gz).fill(-1), next = new Int32Array(n).fill(-1);
+    const cellOf = (x, y, z) => (Math.floor((x - bx0) / cm) * gy + Math.floor((y - by0) / cm)) * gz + Math.floor((z - bz0) / cm);
+    for (let v = 0; v < n; v++) if (sv[v] < -o.outerFrom) { const k = cellOf(p[3 * v], p[3 * v + 1], p[3 * v + 2]); next[v] = head[k]; head[k] = v; }
+    let own = new Float32Array(n); const pair = new Int32Array(n).fill(-1);
+    for (let v = 0; v < n; v++) {
+      const outer = sstep((sv[v] - o.outerFrom) / (o.outerTo - o.outerFrom));
+      if (!(outer > 0)) continue;
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2], a = Math.floor((x - bx0) / cm), b = Math.floor((y - by0) / cm), d = Math.floor((z - bz0) / cm);
+      let best = o.maxThickMm * o.maxThickMm, bj = -1;
+      // shells of cells outward; stop once the nearest found is nearer than the next shell can be
+      for (let r = 0; r <= R; r++) {
+        for (let da = -r; da <= r; da++) { const ia = a + da; if (ia < 0 || ia >= gx) continue;
+          for (let db = -r; db <= r; db++) { const ib = b + db; if (ib < 0 || ib >= gy) continue;
+            for (let dd = -r; dd <= r; dd++) {
+              if (Math.max(Math.abs(da), Math.abs(db), Math.abs(dd)) !== r) continue;
+              const id = d + dd; if (id < 0 || id >= gz) continue;
+              for (let j = head[(ia * gy + ib) * gz + id]; j >= 0; j = next[j]) { const q = (p[3 * j] - x) ** 2 + (p[3 * j + 1] - y) ** 2 + (p[3 * j + 2] - z) ** 2; if (q < best) { best = q; bj = j; } }
+            } } }
+        if (bj >= 0 && best <= (r * cm) * (r * cm)) break;
+      }
+      if (bj < 0) continue;
+      pair[v] = bj;
+      const u = (tt[v] - t0) / Math.max(1e-6, t1 - t0), belly = Math.pow(Math.max(0, Math.sin(Math.PI * u)), o.bellyPow);
+      own[v] = o.k * belly * outer * Math.sqrt(best) * flip; // signed along the mesh's own normal
+    }
+    // smooth over the triangles' edges (typed arrays: sums and counts), outer vertices only
+    for (let pass = 0; pass < o.smoothPasses; pass++) {
+      const sum = Float32Array.from(own), cnt = new Float32Array(n).fill(1);
+      for (let t = 0; t + 2 < idx.length; t += 3) for (let e = 0; e < 3; e++) {
+        const A = idx[t + e], B = idx[t + ((e + 1) % 3)];
+        if (sv[A] > o.outerFrom && sv[B] > o.outerFrom) { sum[A] += own[B]; cnt[A]++; sum[B] += own[A]; cnt[B]++; }
+      }
+      for (let v = 0; v < n; v++) own[v] = sv[v] > o.outerFrom ? sum[v] / cnt[v] : 0;
+    }
+    // anchors: the two segments carrying most of the muscle (by the caller's per-vertex segments, else none)
+    per.push({ m, n, sv, own, pair, flip });
+    yield per.length;
+  }
+  // the outer surfaces of all muscles in one grid; an inner vertex of another muscle within underMm takes the lift
+  const UC = o.underMm, eS = [], eV = [], eA = [];
+  per.forEach((q, slot) => { for (let v = 0; v < q.n; v += 3) { const amp = Math.abs(q.own[v]); if (amp > 0.3) { eS.push(slot); eV.push(v); eA.push(amp); } } });
+  let ux0 = Infinity, uy0 = Infinity, uz0 = Infinity, ux1 = -Infinity, uy1 = -Infinity, uz1 = -Infinity;
+  for (const q of per) { const p = q.m.positions; for (let i = 0; i < p.length; i += 3) { if (p[i] < ux0) ux0 = p[i]; if (p[i] > ux1) ux1 = p[i]; if (p[i + 1] < uy0) uy0 = p[i + 1]; if (p[i + 1] > uy1) uy1 = p[i + 1]; if (p[i + 2] < uz0) uz0 = p[i + 2]; if (p[i + 2] > uz1) uz1 = p[i + 2]; } }
+  const ugx = Math.floor((ux1 - ux0) / UC) + 3, ugy = Math.floor((uy1 - uy0) / UC) + 3, ugz = Math.floor((uz1 - uz0) / UC) + 3;
+  const uhead = new Int32Array(per.length ? ugx * ugy * ugz : 1).fill(-1), unext = new Int32Array(eS.length).fill(-1);
+  const ucell = (x, y, z) => ((Math.floor((x - ux0) / UC) + 1) * ugy + Math.floor((y - uy0) / UC) + 1) * ugz + Math.floor((z - uz0) / UC) + 1;
+  for (let e = 0; e < eS.length; e++) { const pp = per[eS[e]].m.positions, w = eV[e], k = ucell(pp[3 * w], pp[3 * w + 1], pp[3 * w + 2]); unext[e] = uhead[k]; uhead[k] = e; }
+  const out = new Map();
+  yield -1;
+  for (let slot = 0; slot < per.length; slot++) {
+    const q = per[slot], p = q.m.positions, n = q.n, under = new Float32Array(n), uIdx = new Uint8Array(n).fill(255), unders = [], slotOf = new Map();
+    for (let v = 0; v < n; v++) {
+      if (q.sv[v] > -o.outerFrom) continue; // inner vertices only (the outer ones follow their pair below)
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2], k0 = ucell(x, y, z);
+      let best = 0, bs = -1;
+      for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) for (let dc = -1; dc <= 1; dc++) {
+        for (let e = uhead[k0 + (da * ugy + db) * ugz + dc]; e >= 0; e = unext[e]) {
+          if (eS[e] === slot || !(eA[e] > best)) continue;
+          const w = eV[e], pp = per[eS[e]].m.positions, d2 = (pp[3 * w] - x) ** 2 + (pp[3 * w + 1] - y) ** 2 + (pp[3 * w + 2] - z) ** 2;
+          if (d2 <= UC * UC) { best = eA[e]; bs = eS[e]; }
+        }
+      }
+      if (bs < 0) continue;
+      let li = slotOf.get(bs);
+      if (li === undefined) { if (unders.length >= 254) continue; li = unders.length; unders.push(per[bs].m.id); slotOf.set(bs, li); }
+      // away from the muscle beneath: an inner vertex's normal points at it (sv < 0), so it moves against its normal
+      under[v] = best * (q.sv[v] < 0 ? -1 : 1) * q.flip; uIdx[v] = li;
+    }
+    for (let v = 0; v < n; v++) { const j = q.pair[v]; if (j >= 0 && uIdx[j] !== 255) { uIdx[v] = uIdx[j]; under[v] = Math.abs(under[j]) * q.flip; } }
+    out.set(q.m.id, { own: q.own, under, underIdx: uIdx, unders, anchors: q.m.anchors || null });
+    yield -2 - slot;
+  }
+  return out;
+}
+/** MUSCLE_SWELL data for the full body: every swelling muscle (muscleSwellMember) of the rig with its source mesh, the
+ * rig's bone clouds as the outward reference, anchors from the two segments of its blend that carry most of it. */
+export function bodySwellList(rig, meshesById, o = MUSCLE_SWELL) { // eslint-disable-line no-unused-vars
+  checkRig(rig);
+  const get = meshGetter(meshesById), list = [], chains = {};
+  for (const g of ['r_arm', 'l_arm', 'r_leg', 'l_leg']) { const c = bulkLimbChain(g.slice(2), g[0]); if (c) chains[g] = [[c.pts[0], c.pts[1]], [c.pts[1], c.pts[2]], [c.pts[2], c.pts[3]]]; }
+  const tube = [[[0, CHEST_FLATTEN.axis.yMm, 700], [0, CHEST_FLATTEN.axis.yMm, 1400]]];
+  for (const m of rig.muscles) {
+    const info = rig.meshSegment[m.id], mesh = get(m.id);
+    if (m.id.startsWith('pad-') || !muscleSwellMember(info, m.name) || !mesh || !mesh.positions || !mesh.indices) continue;
+    const c = info.candidates || [], arm = c.find(x => BULK_ARM_SEGS.test(x)), leg = c.find(x => BULK_LEG_SEGS.test(x));
+    const axes = arm ? chains[`${arm[0]}_arm`] : leg ? chains[`${leg[0]}_leg`] : tube;
+    if (!axes) continue;
+    // anchors: the muscle's two ends along its own long axis, each carried by the candidate segment whose bones lie
+    // nearest to it (two different segments, else the muscle crosses no joint and has no shortening)
+    let anchors = null;
+    {
+      const p = mesh.positions, { c: cc, e } = stackPrincipalAxis(p);
+      let lo = Infinity, hi = -Infinity, pl = null, ph = null;
+      for (let i = 0; i < p.length; i += 3) { const t = (p[i] - cc[0]) * e[0] + (p[i + 1] - cc[1]) * e[1] + (p[i + 2] - cc[2]) * e[2]; if (t < lo) { lo = t; pl = [p[i], p[i + 1], p[i + 2]]; } if (t > hi) { hi = t; ph = [p[i], p[i + 1], p[i + 2]]; } }
+      // (not for the four heads of the quadriceps: their lower end is the kneecap's tendon, which in this rig turns about
+      // the knee's pivot with the shin, so the straight distance would shorten as the knee bends, where the muscle, wrapped
+      // over the front of the knee, lengthens; they swell by their activity alone)
+      const ends = QUADRICEPS_RE.test(m.name) ? [] : c;
+      const nearestSeg = q => { let bs = null, bd = Infinity; for (const sg of ends) { const cl = rig._clouds && rig._clouds[sg]; if (!cl) continue; const d = nearestDistance(cl, q[0], q[1], q[2]); if (d < bd) { bd = d; bs = sg; } } return bs; };
+      const sl = pl && nearestSeg(pl), sh2 = ph && nearestSeg(ph);
+      if (sl && sh2 && sl !== sh2 && len(sub(pl, ph)) > 30) anchors = { segs: [sl, sh2], points: [pl, ph] };
+    }
+    list.push({ id: m.id, positions: mesh.positions, indices: mesh.indices, axes, anchors });
+  }
+  return list;
+}
+/** MUSCLE_SWELL data for the full body (bodySwellList + muscleSwellData). */
+export function bodySwellData(rig, meshesById, o = MUSCLE_SWELL) { return muscleSwellData(bodySwellList(rig, meshesById, o), o); }
+export function digitPadName(boneName) {
+  const m = /phalanx of (right|left) (.+)$/.exec(String(boneName || '').toLowerCase());
+  return m ? `${m[1]} ${m[2]} pad` : 'digit pad';
+}
+/** The factors in plain numbers (for the report, the notes and the lead). */
+export function bulkFactors(rule = BODY_BULK) {
+  const r2 = x => Math.round(x * 100) / 100;
+  return {
+    upperArmBulk: r2(rule.arm.upper.bulk), forearmBulk: r2(rule.arm.fore.bulk), forearmWiden: r2(rule.arm.fore.widen), wrist: r2(rule.arm.fore.end),
+    handWidth: r2(rule.arm.hand.width), handThickness: r2(rule.arm.hand.thick),
+    thighBulk: r2(rule.leg.upper.bulk), shinBulk: r2(rule.leg.fore.bulk), shinWiden: r2(rule.leg.fore.widen), ankle: r2(rule.leg.fore.end),
+    footWidth: r2(rule.leg.foot.width), footThickness: r2(rule.leg.foot.thick), neckBulk: r2(rule.neck.bulk),
+    deltoidThicken: r2(1 + MUSCLE_THICKEN.rows[0].k), trapeziusThicken: r2(1 + MUSCLE_THICKEN.rows[1].k), rectusAbdominis: r2(1 + ABDOMEN_RELIEF.k)
+  };
+}
+/**
+ * BODY_BULK on the left game arm's packet (ns-assets loadAssets().arm: Map(id -> { entry, mesh })): the same limb field
+ * as the body's left arm (bulkLimbChain('arm', 'l'), the bone maps from the packet's own left humerus, ulna and radius)
+ * and the deltoid's MUSCLE_THICKEN rows. roleOf(id) -> { kind: 'bone' | 'muscle', segment } (ns-assets SEGMENT_OF).
+ * Returns { arm: a new Map with new records for the changed meshes (indices kept), report }.
+ */
+export function bulkArmAssets(armMap, roleOf, rule = BODY_BULK) {
+  if (!(armMap instanceof Map) || typeof roleOf !== 'function') return { arm: armMap, report: null };
+  const chain = bulkLimbChain('arm', 'l');
+  if (!chain) return { arm: armMap, report: null };
+  const bones = { upper: [], fore: [] };
+  for (const [id, rec] of armMap) {
+    const role = roleOf(id), p = rec && rec.mesh && rec.mesh.positions;
+    if (!role || role.kind !== 'bone' || !p) continue;
+    if (role.segment === 'upperarm') bones.upper.push(p);
+    else if (role.segment === 'forearm' || role.segment === 'ulna') bones.fore.push(p);
+  }
+  const field = bulkLimbField(chain, bones, rule), out = new Map();
+  let maxMm = 0;
+  for (const [id, rec] of armMap) {
+    const role = roleOf(id), p = rec && rec.mesh && rec.mesh.positions;
+    if (!role || !p) { out.set(id, rec); continue; }
+    let q = new Float32Array(p.length);
+    const mm = field.apply(p, role.kind === 'bone', q);
+    if (mm > maxMm) maxMm = mm;
+    const row = role.kind === 'muscle' ? MUSCLE_THICKEN.rows.find(r => r.ids.includes(id)) : null;
+    if (row) q = thickenMuscle(q, rec.mesh.indices, row, 'l').q;
+    out.set(id, Object.freeze({ ...rec, mesh: Object.freeze({ ...rec.mesh, positions: q }) }));
+  }
+  // DIGIT_PADS round the left hand's phalanges (on the widened bones): { id, name, segment, positions, indices } for the
+  // left arm's muscle list (ns-app prepareSceneData skins them like the arm's other muscles)
+  const ax3 = field.axes[2], phal = [];
+  for (const [id, rec] of out) {
+    const role = roleOf(id);
+    if (role && role.kind === 'bone' && /phalanx/i.test(role.name || '')) phal.push({ id, name: String(role.name).toLowerCase(), segment: role.segment, positions: rec.mesh.positions, padName: digitPadName(role.name) });
+  }
+  // one mesh per digit (the arm skins each vertex to its nearest segments, so the knuckles bend smoothly)
+  const byDigit = new Map();
+  for (const pad of digitPadMeshes(phal, { distal: ax3.u, palmar: ax3.f, kind: 'hand' })) { if (!byDigit.has(pad.name)) byDigit.set(pad.name, []); byDigit.get(pad.name).push(pad); }
+  const pads = [...byDigit].map(([name, parts]) => {
+    const P = new Float32Array(parts.reduce((t, q) => t + q.positions.length, 0)), I = new Uint32Array(parts.reduce((t, q) => t + q.indices.length, 0));
+    let o = 0, oi = 0;
+    for (const q of parts) { P.set(q.positions, o); for (let k = 0; k < q.indices.length; k++) I[oi + k] = q.indices[k] + o / 3; o += q.positions.length; oi += q.indices.length; }
+    return { id: `pad-l-${name.replace(/[^a-z0-9]+/gi, '-')}`, name, segment: parts[0].segment, positions: P, indices: I };
+  });
+  return { arm: out, pads, report: { meshes: out.size, maxMovedMm: Math.round(maxMm * 10) / 10, pads: pads.length, factors: bulkFactors(rule) } };
 }
 
 /** R558 (builder AN): the plain sided name of a missing-muscles packet id ('right gracilis', 'left latissimus dorsi'),

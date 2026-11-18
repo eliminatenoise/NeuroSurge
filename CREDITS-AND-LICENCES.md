@@ -18,6 +18,8 @@ anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under thei
 | BodyParts3D 4.0 anatomy meshes | `packets/pov-demo-assets/meshes/`, `packets/pov-demo-assets-r2/meshes/`, `packets/bodyparts3d-fullbody-r1/meshes/`, `packets/missing-muscles-r1/meshes/` (`FJ*.obj`) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
 | Z-Anatomy face and chewing muscle meshes (round 5) | `packets/face-muscles-r1/meshes/` (`zf-*.obj`, 54 files) | CC BY-SA 4.0 (share-alike) | Z-Anatomy (built on BodyParts3D, DBCLS) |
 | BodyParts3D 4.0 cranium and eye meshes (R558) | `packets/bodyparts3d-head-r1/meshes/` (`FJ*.obj`, 10 files) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
+| BodyParts3D 4.0 cerebral artery meshes (18 November) | `packets/bodyparts3d-cerebral-arteries-r1/meshes/` (`FJ*.obj`, 80 files) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
+| Centre lines of 40 BodyParts3D 4.0 limb vessels (18 November; derived data) | `packets/bodyparts3d-body-vessels-r1/BODY-VESSEL-CENTRELINES.json` | CC BY 4.0 (derivative, as its source) | The Database Center for Life Science (DBCLS); derivation by NeuroSurge contributors |
 | Z-Anatomy back, belly and foot muscle meshes (R558) | `packets/missing-muscles-r1/meshes/` (`zm-*.obj`, 18 files) | CC BY-SA 4.0 (share-alike) | Z-Anatomy (built on BodyParts3D, DBCLS) |
 
 This is the round-5 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
@@ -87,6 +89,24 @@ the top of the NeuroSurge repository on GitHub.
     are listed with kind "bone" only because the game's rig poses bones and muscles, and are drawn with eye colours. The
     licence page was checked again on 2026-11-11 (CC BY 4.0 statement present). The source's right sclera has 12
     vertices on the left side that form zero-area points; kept as found (nothing is drawn there).
+  - **Cerebral arteries (18 November):** packet `packets/bodyparts3d-cerebral-arteries-r1` adds eighty more byte-exact
+    members of the same official archive: the cortical branches of the middle, anterior and posterior cerebral arteries
+    with a small circle of Willis, both sides (the left side's files are the atlas's own mirror copies, `FJ....M`),
+    fetched on 2026-11-18 by range requests and checked by ZIP CRC32, byte count, sha256 and header (packet
+    `ACQUISITION-RECORD.json`; licence page checked again the same day, CC BY 4.0 statement present). They are drawn on
+    the game's brain in their own coordinates (the same source frame), move with its simulated beat and wobble, swell a
+    little with the beat, are coloured, and are not drawn where a motor area of the game covers them. Three originals
+    (FJ1664, FJ1665, FJ1719) have blank name lines in their own headers; their names come from the archive's element
+    list. The files are unchanged. BodyParts3D 4.0 has no cerebral veins or dural sinuses: the veins and sinuses on the
+    brain are the game's own drawing (project code, CC0), laid along typical anatomy, not BodyParts3D data.
+  - **Vessels of the limbs (18 November):** packet `packets/bodyparts3d-body-vessels-r1` holds the CENTRE LINES and radii
+    of 40 named vessels of the legs and arms (the saphenous, femoral, popliteal, tibial, axillary, brachial, radial, ulnar,
+    cephalic, basilic and median veins and arteries and the dorsal venous network of the hand), computed by the project's
+    own tool from byte-exact members of the same official archive (fetched 2026-11-18, checked by ZIP CRC32, byte count
+    and sha256; each line names its source member and its sha256). The meshes themselves (24.6 MB) are not distributed.
+    This is a modification of the BodyParts3D data: a derivative, licensed CC BY 4.0 as its source. At run time the game
+    draws round tubes along these lines, fastens them to its drawn muscles and bones so they follow every pose, and
+    colours them.
   - **Mirror body:** a mirror-image copy of the whole body (bones and muscles) is drawn behind the brain. It copies the
     body's pose and colours.
   - When the palm is turned (double-tap Space), the upper arm also turns at the shoulder and the trunk follows a

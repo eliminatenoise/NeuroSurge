@@ -1,0 +1,20 @@
+BodyParts3D vessels of the limbs, centre lines (packet bodyparts3d-body-vessels-r1)
+
+Derived from BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+Official source: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+Archive: https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip (ETag "8848a5a-4dd48ec9df000", 142903898 bytes)
+Current primary licence: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html (checked 2026-11-18: "Last updated : 2025/02/27", CC BY 4.0 statement present)
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Contents: BODY-VESSEL-CENTRELINES.json (40 vessels, 3968 points; sha256 in SHA256SUMS.txt). Each vessel names its source member
+(element id, archive entry, bytes, sha256 of the byte-exact OBJ the line was computed from).
+
+Changes (CC BY 4.0 section 3(a)(1)(B)): the meshes are NOT included. From each, the project's own tool computed a centre line and a
+radius every 3 mm (method in the file's `derivation`). At run time the game draws round tubes along these lines, rivets them to its
+drawn muscles and bones, colours them, and leaves out the left arm's vessels on your own body. The derivative is licensed as its
+source, CC BY 4.0. The dataset authors (DBCLS) do not endorse NeuroSurge or NeuroTranslate 0.0. Do not attribute biological,
+clinical or functional validation to these lines or to the game.
+
+BodyParts3D official notice (quoted in the full-body packet's records): "There are still many concepts not represented in the data.
+There could be many ERRORS to be used as ANATOMICAL EDUCATION. Some parts were made from scratch by artists or distorted to fit into
+the environment." Geometry is a single reference body; it is not this player, any measured person, or a population average.

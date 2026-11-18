@@ -869,14 +869,19 @@ const muscleTone = (name, L, C, h) => {
 // chroma of every tone x MUSCLE_TONE_CHROMA (1.2; lightness and hue unchanged), so the banded comic shading keeps clean,
 // clearly coloured tissue instead of greying out. Smallest OKLab distance between two tones 0.040 -> 0.041 (the
 // neighbour separation of Message 18 is kept; the lightness steps carry most of it).
-export const MUSCLE_TONE_CHROMA = 1.2;
+// 18 November (owner: "make sure the brain and the body are noticeably different, or at least noticeably different
+// shades"; package VESSELS): skeletal muscle a little deeper and warmer than the pale pearl-rose cortex (ns-brain-ink
+// BRAIN_FLESH). Every tone: lightness -0.055, hue +4 deg (toward red-brown, still short of tan), chroma factor 1.2 ->
+// 1.28. Old (L, h): 0.630 28, 0.560 40, 0.595 17, 0.520 30, 0.705 33, 0.665 20. The steps between the tones are kept,
+// so the neighbour separation (Message 18) is as before.
+export const MUSCLE_TONE_CHROMA = 1.28;
 export const MUSCLE_TONES = freeze([
-  muscleTone('salmon rose', 0.630, 0.088 * MUSCLE_TONE_CHROMA, 28),
-  muscleTone('soft red-brown', 0.560, 0.076 * MUSCLE_TONE_CHROMA, 40),
-  muscleTone('muted rose', 0.595, 0.094 * MUSCLE_TONE_CHROMA, 17),
-  muscleTone('clay rose', 0.520, 0.074 * MUSCLE_TONE_CHROMA, 30),
-  muscleTone('light salmon', 0.705, 0.078 * MUSCLE_TONE_CHROMA, 33),
-  muscleTone('dusty rose', 0.665, 0.066 * MUSCLE_TONE_CHROMA, 20)
+  muscleTone('salmon rose', 0.575, 0.088 * MUSCLE_TONE_CHROMA, 32),
+  muscleTone('soft red-brown', 0.505, 0.076 * MUSCLE_TONE_CHROMA, 44),
+  muscleTone('muted rose', 0.540, 0.094 * MUSCLE_TONE_CHROMA, 21),
+  muscleTone('clay rose', 0.465, 0.074 * MUSCLE_TONE_CHROMA, 34),
+  muscleTone('light salmon', 0.650, 0.078 * MUSCLE_TONE_CHROMA, 37),
+  muscleTone('dusty rose', 0.610, 0.066 * MUSCLE_TONE_CHROMA, 24)
 ]);
 /** OKLab distance between two tones (0.1 = clearly different, 0.03 = just noticeable side by side). */
 export function muscleToneDistance(i, j) {

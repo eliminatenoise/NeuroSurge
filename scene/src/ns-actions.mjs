@@ -39,7 +39,7 @@
 import { DEG, clamp } from './ns-math.mjs';
 import { FIST_POSE_DEG, REST_HAND_POSE_DEG, PRONATION_STATES } from './ns-rig.mjs';
 import { DOUBLE_TAP_MS } from './ns-controls.mjs';
-import { createDance, observeDance, stepDance, stopDance, startTurnStep, startTurnHold, isDanceState, DANCE_LIMBS, DANCE_LIMB_IDS, DANCE_JOINT_IDS } from './ns-dance.mjs';
+import { createDance, observeDance, stepDance, stopDance, startTurnStep, startTurnHold, isDanceState, DANCE_LIMBS, DANCE_LIMB_IDS, DANCE_JOINT_IDS, shoulderTurnRange, shoulderElevationDeg } from './ns-dance.mjs';
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // R558 (Space dance): the game arm's palm turn in degrees (ns-rig: +80 palm down .. -80 palm up) for a rotation value
@@ -1645,7 +1645,11 @@ export function createActivity({
   }
   Object.freeze(LATCHING);
   for (const j of DANCE_BODY_JOINTS) if (!JOINT_IDS.includes(j)) fail('activity_option', `the body map binding lacks the dance joint ${j}`);
-  const danceStart = () => createDance({ l_forearm: PRONATION_DEG_AT_VALUE(rotValue(defaultRotation)), l_shoulder_rot: 0, ...Object.fromEntries(DANCE_BODY_JOINTS.map(j => [j, REST[j]])) });
+  // 18 November 2026, late (the whole arm turns over in the limb switch, ns-dance ARM_TURN): the game arm starts with its
+  // upper arm at the end of the side its palm starts on (outward with the palm up: the underside), in the explicit
+  // mode (armHumeral a number), the pair of the right arm's start posture; Reset body returns there.
+  const armHumeralStart = () => DANCE_LIMBS.leftArm[1][rotValue(defaultRotation) >= 0.5 ? 'open' : 'closed'];
+  const danceStart = () => createDance({ l_forearm: PRONATION_DEG_AT_VALUE(rotValue(defaultRotation)), l_shoulder_rot: armHumeralStart(), ...Object.fromEntries(DANCE_BODY_JOINTS.map(j => [j, REST[j]])) });
 
   // ---- state shape ----------------------------------------------------------------------------
   const noGrab = () => ({ active: false, startYaw: null, startPitch: null, originYaw: null, originPitch: null });
@@ -1703,7 +1707,7 @@ export function createActivity({
       armLatch: zeroMap(ACTION_IDS),          // game-arm actionId -> 0 | 1: latched on (see ARM_OPPOSITES)
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
       rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
-      armHumeral: null,        // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn
+      armHumeral: armHumeralStart(), // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn. 18 November 2026, late: explicit from the start (the underside end)
       armTurnSeen: null,       // R558: { forearmDeg, humeralDeg } the game arm actually showed last frame ('armTurn' event from ns-app)
       dance: danceStart(),     // R558 (Space dance): ns-dance state (per-limb direction, stroke, levels; history)
       danceRange: {},          // R558: jointId -> [lo, hi] degrees, the touch-free hip range of the current leg posture
@@ -2307,7 +2311,10 @@ export function createActivity({
     clampDanceRange(s);
     let d = observeDance(s.dance, danceAngles(s));
     if (d.mode !== null && !s.paused && h > 0) {
-      const r = stepDance(d, danceAngles(s), h, { ranges: s.danceRange });
+      // 18 November 2026, late: the right upper arm turns only as far as its elevation leaves room (ns-dance
+      // shoulderTurnRange, the combined-range rule of ns-body), so a raised arm is never turned past what is drawn.
+      const ranges = { ...s.danceRange, r_shoulder_rot: shoulderTurnRange(shoulderElevationDeg(s.bodyPos.r_shoulder_flex, s.bodyPos.r_shoulder_abd)) };
+      const r = stepDance(d, danceAngles(s), h, { ranges });
       d = r.dance;
       applyDanceAngles(s, r.angles);
     } else if (s.paused && (d.mode !== null || d.active)) { d = stopDance(d); s.spaceHeld = false; }
@@ -2369,7 +2376,7 @@ export function createActivity({
     s.relaxRemaining = 0;
     s.rotationState = defaultRotation;
     s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null };
-    s.armHumeral = null; // R558 (Space dance): back to the coupled palm turn (the dance history records the move)
+    s.armHumeral = armHumeralStart(); // 18 November 2026, late: back to the start side's upper-arm turn (was null: the coupled palm turn)
     // R558 (Message 40): Reset body also ends a limb turn under way; every limb is back at its start angle.
     if (s.dance.mode !== null || s.dance.active) s.dance = stopDance(s.dance);
     s.spaceHeld = false;

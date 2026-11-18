@@ -1,0 +1,23 @@
+BodyParts3D cerebral artery subset (packet bodyparts3d-cerebral-arteries-r1)
+
+BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+Official source: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+Archive: https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip (ETag "8848a5a-4dd48ec9df000", Last-Modified Wed, 22 May 2013 06:46:24 GMT, 142903898 bytes)
+Element list (names): https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_element_parts.txt
+Current primary licence: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html (page text checked 2026-11-18: "Last updated : 2025/02/27", Creative Commons Attribution 4.0 International statement present)
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Contents: 80 OBJ meshes, 9235433 bytes, 143910 triangles; hashes in SHA256SUMS.txt, per-file records (element id, name,
+territory, side, bounds) in CEREBRAL-ARTERIES-MESH-MANIFEST.json.
+
+Changes: selection only. Each OBJ is a byte-exact decompressed member of the official archive (verified ZIP CRC32, byte count and
+SHA-256). No centring, mirroring, renaming, re-meshing, unit conversion or header editing. At run time the game draws them on its
+brain in their own coordinates, moves them with the brain's simulated beat and wobble, swells them slightly with the beat, colours
+them, and does not draw them where a motor area of the game covers them; the files themselves are unchanged.
+Legacy OBJ comment headers (CC BY-SA 2.1 Japan) are retained as found; the current official archive licence is CC BY 4.0.
+The dataset authors (DBCLS) do not endorse NeuroSurge or NeuroTranslate 0.0. Do not attribute biological, clinical or functional
+validation to these meshes or to the game.
+
+BodyParts3D official notice (quoted in the full-body packet's records): "There are still many concepts not represented in the data.
+There could be many ERRORS to be used as ANATOMICAL EDUCATION. Some parts were made from scratch by artists or distorted to fit into
+the environment." Geometry is a single reference body; it is not this player, any measured person, or a population average.

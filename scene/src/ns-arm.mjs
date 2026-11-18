@@ -60,6 +60,7 @@ import {
   FIST_POSE_DEG, REST_HAND_POSE_DEG, DIGITS, PRONATION_RANGE_DEG, PRONATION_STATES
 } from './ns-rig.mjs';
 import { activityColor, activityShade, hexToLinear } from './ns-colors.mjs';
+import { shoulderTurnRange } from './ns-dance.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 
@@ -164,6 +165,42 @@ export const ARM_DEFAULTS = Object.freeze({
  * conservative.
  */
 export const HUMERAL_ROTATION_RANGE_DEG = Object.freeze([-70, 90]);
+/**
+ * 18 November 2026, late (the limb switch turns the whole arm over, ns-dance ARM_TURN; "make sure limbs can't be put
+ * into impossible positions"): the game arm's upper-arm turn range at the arm's present elevation, the pair of the right
+ * arm's rule (ns-body COMBINED_RANGE.shoulder, ns-dance shoulderTurnRange): HUMERAL_ROTATION_RANGE_DEG up to shoulder
+ * height, narrowing to +-30 with the arm straight up (the joint is close-packed there). The elevation is that of the
+ * shoulder -> hand line in the body frame (shoulderReport's convention: 0 = hanging straight down). Pure.
+ */
+export function humeralRangeAt(targetCam, shoulderCam, bodyToCamera = null) {
+  const d = sub(targetCam, shoulderCam), n = length(d);
+  if (!(n > 1e-9)) return HUMERAL_ROTATION_RANGE_DEG;
+  const uCam = scale(d, 1 / n), u = bodyToCamera ? transformDirection(rotationTranspose(bodyToCamera), uCam) : uCam;
+  const r = shoulderTurnRange(Math.acos(clamp(-u[1], -1, 1)) / DEG);
+  return [Math.max(HUMERAL_ROTATION_RANGE_DEG[0], r[0]), Math.min(HUMERAL_ROTATION_RANGE_DEG[1], r[1])];
+}
+/**
+ * 18 November 2026, late: how far the game arm's elbow may travel when its upper arm turns (metres, from where it lies
+ * with the arm unturned). The game arm keeps its hand where it is, so with the elbow bent its upper arm turns about the
+ * shoulder -> hand line and the elbow swings round that line (the right arm, nearly straight, turns about its own length
+ * and its elbow stays). With the start's bent elbow (about 66 degrees) the limb switch's full turn (ns-dance ARM_TURN,
+ * 100 degrees) would swing the elbow about 26 cm out from the thigh and lay the forearm across the legs; this keeps the
+ * turn to what moves the elbow at most this far, so the arm still lies along the thigh and its upper arm turns as far
+ * as that leaves room (about 40 degrees each way at the start's bend; the whole turn with the arm straight). A display
+ * choice, not a measured limit.
+ */
+export const ARM_TURN_ELBOW_TRAVEL_M = 0.12;
+/** The largest upper-arm turn (degrees each way from unturned) that keeps the elbow within ARM_TURN_ELBOW_TRAVEL_M,
+ * for the pose ctx at shoulder-to-hand-centre distance Dm (m): the elbow sits r = |upper arm| sin(angle between the
+ * upper arm and the shoulder -> hand line) from that line and moves 2 r sin(turn / 2). */
+function swivelTravelLimitDeg(ctx, Dm) {
+  const { base } = ctx, phi = elbowPhiFor(ctx, Dm);
+  const h = add(base.U, transformDirection(rotationAxisAngle(base.a, phi), ctx.G));
+  const lu = length(base.U), lh = length(h);
+  if (!(lu > 1e-9 && lh > 1e-9)) return 180;
+  const r = (length(cross(base.U, h)) / lh) * MM; // metres
+  return r > 1e-6 ? (2 * Math.asin(Math.min(1, ARM_TURN_ELBOW_TRAVEL_M / (2 * r)))) / DEG : 180;
+}
 
 /**
  * R558 (Space dance): options for a request whose rotation names the upper arm's turn EXPLICITLY, rotation.humeralDeg
@@ -883,7 +920,13 @@ function coupledPose(ctx, c, u, Dm) {
 function solveArmCore(ctx, target, ox, o) {
   const c = o.rotationCoupling, u = couplingU(c, ctx.J.forearm_pronation);
   const swivel = o.humeralSwivelDeg || 0; // R558 (Space dance): extra turn about the shoulder -> hand line
-  const total = psi => clamp(psi + swivel, HUMERAL_ROTATION_RANGE_DEG[0], HUMERAL_ROTATION_RANGE_DEG[1]);
+  // 18 November 2026, late: inside the range left at the arm's elevation (humeralRangeAt), not the fixed one
+  let hr = HUMERAL_ROTATION_RANGE_DEG;
+  if (swivel !== 0) {
+    const er = humeralRangeAt(target, ox.shoulderCam, o.bodyToCamera), lim = swivelTravelLimitDeg(ctx, length(sub(target, ox.shoulderCam)));
+    hr = [Math.max(er[0], -lim), Math.min(er[1], lim)]; // and only as far as keeps the elbow near where it lies
+  }
+  const total = psi => clamp(psi + swivel, hr[0], hr[1]);
   if (!(u > 0)) {
     if (swivel === 0) {
       const core = solveCore(ctx, target, ox.shoulderCam, ox.pole);

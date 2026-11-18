@@ -21,10 +21,12 @@
  * Since 17 November 2026 the far end of each limb LEADS and the near joint only FOLLOWS a little (see DANCE_LIMBS):
  *   leftArm   l_forearm       LEADS: the game arm's radius turn about the ulna (ns-arm forearm_pronation): open -80
  *                             palm up, closed +80 palm down (80 each way from thumb-up, the rig's own display range)
- *             l_shoulder_rot  follows: the game arm's upper-arm turn (ns-arm rotation.humeralDeg), DANCE_FOLLOW.shoulderDeg
- *                             for a whole stroke, from where it is, inside -70 .. +90
+ *             l_shoulder_rot  the game arm's upper-arm turn (ns-arm rotation.humeralDeg). Since 18 November 2026 (late)
+ *                             it has ends of its own (ARM_TURN.shoulder: outward on the underside, inward on the
+ *                             overside) and turns after the forearm in each stroke (phase); it no longer only follows
+ *                             14 degrees from where it is
  *   rightArm  r_pronation     LEADS: ns-body right forearm: open 0 (palm up, the anatomical source pose), closed 160
- *             r_shoulder_rot  follows likewise (ns-body right upper arm about its own long axis)
+ *             r_shoulder_rot  likewise (ns-body right upper arm about its own long axis), the same ends
  *   leftLeg   leg_turn_L      LEADS (18 November 2026): ns-body's leg turn, the foot first, then the shank, then the
  *                             thigh (LEG_TURN): open +70 (the foot's line 90 degrees outward), closed -110 (90 inward)
  *             hip_rot_L       listed as a follower that turns nothing (DANCE_FOLLOW.hipDeg 0): the hip's share of the
@@ -99,8 +101,9 @@ export const DANCE = Object.freeze({
  * outward (the underside view), closed -110 puts it 90 degrees inward (the overside view); the rig shares the turn
  * between the foot (first), the shank at the soft knee and the thigh in the hip, so the hip's following is inside
  * that joint and the dance's own hip follower turns nothing (hipDeg 0; it stays listed so the hip's history and
- * touch-free range keep working). */
-export const DANCE_FOLLOW = Object.freeze({ shoulderDeg: 14, hipDeg: 0 });
+ * touch-free range keep working).
+ * 18 November 2026, late: the shoulders are not followers any more (ARM_TURN below); `shoulderDeg` (14) is gone. */
+export const DANCE_FOLLOW = Object.freeze({ hipDeg: 0 });
 /** The leg turn's two ends in the limb switch (degrees of ns-body leg_turn; the foot's line rests 20 degrees outward at
  * 0). The owner, later on 18 November 2026: "Maybe let's make the foot turn 45 degrees and to have feet that are, you
  * know, completely flat when they're turned outward would be an extreme amount of flexibility. So just imagine a V
@@ -108,18 +111,64 @@ export const DANCE_FOLLOW = Object.freeze({ shoulderDeg: 14, hipDeg: 0 });
  * underside view) and 45 degrees inward (closed -65: an A, the overside view), not the 90 degrees either way of the same
  * morning (+70 / -110; the joint itself still reaches those ends). */
 export const LEG_TURN_ENDS = Object.freeze({ open: 25, closed: -65, restOutDeg: 20 });
+/* 18 November 2026, late (the owner: "with the upper limbs, there should be quite a dramatic change in which muscles are
+ * visible between the overside and underside. Because of the turnover or turn under of the limbs, including the
+ * forelimbs and upper limbs. That's the whole point of limb rotation."): the WHOLE ARM turns over, not the forearm
+ * alone. The upper arm is no longer a follower that turns 14 degrees from wherever it is: it has two ends of its own,
+ * ARM_TURN.shoulder, and goes to them with the forearm, so on the underside the front of the upper arm (biceps,
+ * brachialis) faces up with the palm, and on the overside its outer side and back (deltoid, triceps, brachioradialis)
+ * face up with the back of the hand. The turn stays graded and led by the far end: the forearm makes the bigger turn
+ * (160 degrees, palm up <-> palm down) and starts at once; the upper arm turns less (ARM_TURN.shoulder, inside the
+ * shoulder's own range and the combined-range rule's narrowing with the arm raised: ns-body COMBINED_RANGE.shoulder,
+ * mirrored here as SHOULDER_TURN_RANGE) and starts ARM_TURN.lag of the stroke later, finishing with it. Both ends sit
+ * inside commonly quoted active ranges (outward about 90, inward about 70; display choices, not measured motion).
+ *   shoulder  { open, closed }: degrees of the upper arm's turn about its own length (+ outward / external), the
+ *             underside and the overside end, the same for both arms (ns-body r_shoulder_rot; the game arm's
+ *             ns-arm rotation.humeralDeg)
+ *   lag       the share of a stroke the upper arm starts after the forearm (and the forearm ends before the upper arm):
+ *             the forearm turns over [0, 1 - lag] of the stroke, the upper arm over [lag, 1]
+ *   glow      the upper arm's rotators light at this share of their turning level (the forearm's turners at the whole
+ *             level): the turn is led by the far end in the activity shown too, and the large chest and back rotators
+ *             (pectoralis major, latissimus dorsi) do not outshine the forearm (a display choice) */
+export const ARM_TURN = Object.freeze({ shoulder: Object.freeze({ open: 35, closed: -65 }), lag: 0.3, glow: 0.6 });
 // (a follower that turns nothing takes its joint's own range as its nominal ends, so history and speeds stay finite)
 const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg ? deg / 2 : hi, closed: deg ? -deg / 2 : lo, follow: deg, lo, hi });
+// 18 November 2026, late: a joint with its own two ends that turns over part of each stroke: phase [start, end] of
+// the stroke (0..1). The forearm leads over [0, 1 - lag], the upper arm follows over [lag, 1].
+const armJoints = (fore, foreOpen, foreClosed, shoulder) => Object.freeze([
+  Object.freeze({ id: fore, open: foreOpen, closed: foreClosed, phase: Object.freeze([0, 1 - ARM_TURN.lag]) }),
+  Object.freeze({ id: shoulder, open: ARM_TURN.shoulder.open, closed: ARM_TURN.shoulder.closed, lo: -70, hi: 90, phase: Object.freeze([ARM_TURN.lag, 1]), glow: ARM_TURN.glow })
+]);
 export const DANCE_LIMBS = Object.freeze({
-  leftArm: Object.freeze([Object.freeze({ id: 'l_forearm', open: -80, closed: 80 }), follower('l_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
-  rightArm: Object.freeze([Object.freeze({ id: 'r_pronation', open: 0, closed: 160 }), follower('r_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
+  leftArm: armJoints('l_forearm', -80, 80, 'l_shoulder_rot'),
+  rightArm: armJoints('r_pronation', 0, 160, 'r_shoulder_rot'),
   leftLeg: Object.freeze([Object.freeze({ id: 'leg_turn_L', open: LEG_TURN_ENDS.open, closed: LEG_TURN_ENDS.closed }), follower('hip_rot_L', DANCE_FOLLOW.hipDeg, -40, 45)]),
   rightLeg: Object.freeze([Object.freeze({ id: 'leg_turn_R', open: LEG_TURN_ENDS.open, closed: LEG_TURN_ENDS.closed }), follower('hip_rot_R', DANCE_FOLLOW.hipDeg, -40, 45)])
 });
 export const DANCE_LIMB_IDS = Object.freeze(Object.keys(DANCE_LIMBS));
-/** The UNDERSIDE view (rule 6): every leading joint at its "open" end. The game starts here. */
-export const DANCE_UNDERSIDE = Object.freeze(Object.fromEntries(Object.keys(DANCE_LIMBS).map(l => [DANCE_LIMBS[l][0].id, DANCE_LIMBS[l][0].open])));
+/** The UNDERSIDE view (rule 6): every joint with ends of its own at its "open" end (the forearms and the upper arms,
+ * the leg turns; not the hips, which only follow). The game starts here. */
+export const DANCE_UNDERSIDE = Object.freeze(Object.fromEntries(DANCE_LIMB_IDS.flatMap(l => DANCE_LIMBS[l].filter(j => !isFinite(j.follow)).map(j => [j.id, j.open]))));
+/** The OVERSIDE view: the same joints at their "closed" ends. */
+export const DANCE_OVERSIDE = Object.freeze(Object.fromEntries(DANCE_LIMB_IDS.flatMap(l => DANCE_LIMBS[l].filter(j => !isFinite(j.follow)).map(j => [j.id, j.closed]))));
 export const DANCE_JOINT_IDS = Object.freeze(DANCE_LIMB_IDS.flatMap(l => DANCE_LIMBS[l].map(j => j.id)));
+/**
+ * 18 November 2026, late: the upper arm's turn range at a given elevation, mirrored from ns-body (BODY_JOINT_LIMITS
+ * r_shoulder_rot -70..90 and COMBINED_RANGE.shoulder.rotAtFullElevationDeg 30; a test keeps the two equal): the full
+ * range up to shoulder height, narrowing to +-30 with the arm straight up (the joint is close-packed there). elevDeg:
+ * the upper arm's angle from hanging along the trunk. Returns [lo, hi] degrees (+ outward).
+ */
+export const SHOULDER_TURN_RANGE = Object.freeze({ lo: -70, hi: 90, atFullElevationDeg: 30 });
+export function shoulderTurnRange(elevDeg) {
+  const R = SHOULDER_TURN_RANGE, u = clamp(((isNum(elevDeg) ? elevDeg : 0) - 90) / 90, 0, 1);
+  return [R.lo + (-R.atFullElevationDeg - R.lo) * u, R.hi + (R.atFullElevationDeg - R.hi) * u];
+}
+/** The right upper arm's elevation (degrees from hanging) for ns-body's sideways lift then forward swing (the same
+ * formula as ns-body shoulderCombinedRange, without its own clamps of the two angles). */
+export function shoulderElevationDeg(flexDeg, abdDeg) {
+  const D = Math.PI / 180, f = isNum(flexDeg) ? flexDeg : 0, a = isNum(abdDeg) ? abdDeg : 0;
+  return Math.acos(clamp(Math.cos(a * D) * Math.cos(f * D), -1, 1)) / D;
+}
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
@@ -213,7 +262,15 @@ function newStroke(l, angles, dir, ranges, strokeS, tempo = DANCE.tempo[l]) {
   const joints = DANCE_LIMBS[l], lead = joints[0], e0 = endsOf(lead, ranges);
   from[lead.id] = angles[lead.id];
   to[lead.id] = dir > 0 ? e0.open : e0.closed;
-  const frac = Math.abs(to[lead.id] - from[lead.id]) / Math.abs(lead.open - lead.closed);
+  let frac = Math.abs(to[lead.id] - from[lead.id]) / Math.abs(lead.open - lead.closed);
+  // 18 November 2026, late: a joint with ends of its own (the upper arm) counts too, so a limb whose forearm is
+  // already at the end but whose upper arm is not (a turn stopped during the upper arm's later part) still finishes.
+  for (let i = 1; i < joints.length; i++) {
+    const j = joints[i];
+    if (isNum(j.follow)) continue;
+    const e = endsOf(j, ranges), goal = dir > 0 ? e.open : e.closed;
+    frac = Math.max(frac, Math.abs(goal - angles[j.id]) / Math.abs(j.open - j.closed));
+  }
   if (!(frac > DANCE.endEps)) return null;
   for (let i = 1; i < joints.length; i++) {
     const j = joints[i];
@@ -304,11 +361,19 @@ export function stepDance(dance, angles, h, { ranges = null } = {}) {
       k.t = Math.min(k.T, k.t + dtq);
       left -= dtq;
       const q = k.t / k.T;
-      for (const j of DANCE_LIMBS[l]) out[j.id] = k.from[j.id] + (k.to[j.id] - k.from[j.id]) * ease(q);
-      // speed as a fraction of the range per second (the limb: the joint with the farthest to go; and each joint)
-      speed = (k.frac * easeRate(q)) / k.T;
-      // (a follower's small turn is shown fainter than the leader's: the wrist and the ankle are what the turn is about)
-      for (const j of DANCE_LIMBS[l]) jspeed[j.id] = (Math.abs(k.to[j.id] - k.from[j.id]) / Math.abs(j.open - j.closed)) * easeRate(q) / k.T * (isNum(j.follow) ? DANCE.followGlow : 1);
+      // 18 November 2026, late: each joint turns over its own phase of the stroke (the forearm first, the upper arm
+      // after it; a joint with no phase over the whole stroke), each with its own smooth start and stop.
+      speed = 0;
+      for (const j of DANCE_LIMBS[l]) {
+        const p0 = j.phase ? j.phase[0] : 0, span = j.phase ? j.phase[1] - j.phase[0] : 1;
+        const qj = clamp((q - p0) / span, 0, 1), inside = q > p0 && q < p0 + span;
+        out[j.id] = k.from[j.id] + (k.to[j.id] - k.from[j.id]) * ease(qj);
+        // speed as a fraction of the range per second (the limb: its fastest joint; and each joint)
+        const sj = inside ? (Math.abs(k.to[j.id] - k.from[j.id]) / Math.abs(j.open - j.closed)) * easeRate(qj) / (k.T * span) : 0;
+        speed = Math.max(speed, sj);
+        // (a follower's small turn is shown fainter than the leader's: the wrist and the ankle are what the turn is about)
+        jspeed[j.id] = sj * (isNum(j.follow) ? DANCE.followGlow : 1);
+      }
       if (k.t >= k.T - 1e-12) {
         s.stroke = null; s.dir = -s.dir;
         // A step makes one stroke per limb; the slow hold goes on with the next one.
@@ -318,7 +383,9 @@ export function stepDance(dance, angles, h, { ranges = null } = {}) {
       if (left <= 1e-12) break;
     }
     s.level = h > 0 ? clamp(speed / DANCE.glowFullSpeed, 0, 1) : s.level;
-    if (h > 0) for (const j of DANCE_LIMBS[l]) d.levels[j.id] = clamp(jspeed[j.id] / DANCE.glowFullSpeed, 0, 1);
+    // (18 November 2026, late: a joint's glow share, the upper arm's ARM_TURN.glow, scales its level after the clamp, so
+    // it holds in a quick switch too, where every turning joint's speed is past full)
+    if (h > 0) for (const j of DANCE_LIMBS[l]) d.levels[j.id] = clamp(jspeed[j.id] / DANCE.glowFullSpeed, 0, 1) * (isNum(j.glow) ? j.glow : 1);
     d.limbs[l] = s;
   }
   d.seen = { ...dance.seen };

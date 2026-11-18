@@ -1417,6 +1417,42 @@ After an independent check of section 91's view (it found the stomach a 50 px ba
 
 Not right, as a second check found: the dark shape at the neck's root reads as a black hole at the bottom of the picture and is not anatomy; far to a side and down the trunk shows opened from above; the stomach and pelvis are still a narrow band; the limbs are still thin and small; from outside (E) the brain is so large that the body is a small figure on it; the left hand keeps its place on the screen and rides up when the look turns; the mirror body is not nearer or larger and the brain's down arrow is not in the picture. The user has since described the view they want (a very wide but very flat picture, in which far things look near) and a new package rebuilds the projection on that; this section records the state published in the meantime.
 
+## 97. Bulkier limbs, wider far ends, chunky fingers and toes, a thicker neck, muscles that swell (18 November)
+
+The user: "Undeveloped muscles need work, such as the abdomen. And if we're going with such an extreme POV, point of view, perhaps we should go bulkier with the muscles, especially for the limbs. So indeed, more of a bodybuilder aesthetic."; "We actually want wider wrists, wider ankles, wider feet, wider hands, wider forearms, wider forelegs."; "Again, fingers and toes should never be spiky like knives, but potentially even chunky."; "Maybe you also need a thicker neck too."; "ensure naturalistic stacking deformation during muscle contraction."; "changing the proportions of your own body also changes that of the mirror body."
+
+All of it is done on the shapes at load, so your body, the mirror body and the left game arm get the same proportions. The model is deliberately moved away from the source body; the amounts are these.
+- Limb muscles move straight out from their bone in proportion to their height above it, most at the belly and nothing at the joints (upper arm by 0.42 of that height, with extra at the biceps and triceps; the deltoid cap 1.55 times its thickness).
+- The far ends are wider, bones included: forearm 1.15 rising to 1.17 at the wrist, hand 1.20 wide and 1.12 thick, shin 1.14 rising to 1.16 at the ankle, foot 1.16 wide and 1.06 thick. Joint centres are recomputed from the widened bones.
+- The neck muscles move out from the cervical spine, mostly at the back and sides; the descending trapezius is twice as thick.
+- Rectus abdominis is about 1.65 times thicker, so its segments stand out; the chest is left as flat as section 96 made it.
+- Every finger and toe has a closed, rounded sleeve of soft tissue round each bone with a blunt tip, in the white tendon tone, skinned so the knuckles bend. The crosshair names them as pads; those names are the only words added.
+- A muscle that is active and shortening fills out at its belly by up to about 0.4 of its thickness; what lies over it is lifted with it and a stretched muscle goes flatter.
+
+Not right or not done. The swell was not seen working in the game: the views are too small, and software pictures show it only subtly. The left game arm has no swell. A muscle's shortening is taken as the straight distance between its ends and is sometimes wrong in sign; the quadriceps swell by activity only. Parts lie 5 to 10 mm further inside each other where they already overlapped (an arm resting on a thigh, shins crossing), because the flesh is thicker and nothing stops limbs yet. The fingers read as full but sausage-like and white; palm and sole pads are not filled. The hip flexors, the obliques' slips and the serratus fingers were not worked on. The swell's bake causes some long frames in the first seconds. Proportions were compared against a reference physique by eye only. This package was merged and published before its independent check.
+
+## 98. Vessels that are anatomy, and a brain that is not the colour of muscle (18 November)
+
+The user: "And let's get the vascularity right, especially with the cerebral veins and etc. and for all other items as well."; "And make sure the brain and the body are noticeably different, or at least noticeably different shades."
+
+The brain's surface is now a pale, cool pearl-grey rose and the muscles a deeper, warmer red-brown: at the start view their lightness (L*) was 3.3 apart and is 13.9 apart.
+
+The rule-drawn vessel lines of section 89 are switched off. In their place:
+- Arteries on the brain from the anatomy source itself: 80 unchanged BodyParts3D files in a new packet (`packets/bodyparts3d-cerebral-arteries-r1`), the cortical branches of the middle, anterior and posterior cerebral arteries.
+- Veins and sinuses on the brain laid by hand along this brain's own landmarks, because BodyParts3D has none: the superior cerebral veins into the superior sagittal sinus, the central vein, the anastomotic veins of Trolard and Labbe, the superficial middle cerebral vein, the inferior cerebral veins. Their courses follow textbook descriptions (Rhoton; Gray's Anatomy) and are a typical arrangement, not this brain's own.
+- On both bodies, 30 named vessels of both legs and the right arm (great and small saphenous, femoral, popliteal, tibial arteries, dorsalis pedis; axillary, brachial, radial, ulnar, cephalic, basilic). Their courses are centre lines worked out once from the BodyParts3D meshes (`packets/bodyparts3d-body-vessels-r1`); they are drawn as thin tubes pinned to the nearest muscle and bone, so they follow every pose.
+No vessel is drawn over a visible motor area, and aiming is unchanged. Credits and licence entries for both packets are in `CREDITS-AND-LICENCES.md` and `ASSET-ATTRIBUTION-INDEX.md`.
+
+Not right or not done. The arteries are a saturated red and outline the brain at the start view; this may read as bloody rather than clinical (one colour value changes it). From the start view the veins at the back can read as rungs of a ladder. The left game arm and the neck have no vessels; there are no intercostal vessels and no tibial veins. At the end of a joint's range a body vessel still stretches into a straight bridge. Vessels have no outline, cannot be aimed at, and are not in the loading picture. This package was merged and published before its independent check.
+
+## 99. The limb switch turns the whole arm over (18 November)
+
+The user: "But again, with the upper limbs, there should be quite a dramatic change in which muscles are visible between the overside and underside. Because of the turnover or turn under of the limbs, including the forelimbs and upper limbs. That's the whole point of limb rotation."
+
+Before, the forearm turned 160 degrees and the upper arm only followed by 14. Now the upper arm has two ends of its own: 35 degrees outward on the underside and 65 degrees inward on the overside (the right arm; the game arm turns as far as keeps its elbow within 12 cm of where it lies, about 39 degrees inward at its start bend). The forearm turns over the first 70 % of a stroke and the upper arm over the last 70 %, so the hand leads. The game starts on the underside with both upper arms outward. Raised straight up, the upper arm's turn narrows by the combined-range rule. Seen from the eyes, the underside shows the palms, the forearm flexors and the front and inner side of the upper arm; the overside shows the backs of the hands, the forearm extensors and the outer side of the upper arm.
+
+Not right or not done. On the overside the right hand swings about 15 cm inward onto the right thigh, and with the elbow fully bent it goes into the chest: nothing stops limbs yet. The game arm starts with its elbow bent 66 degrees against 8 for the right arm and is not yet its exact pair. The muscle lists could not be read from the tip, because the look stops before the crosshair reaches the upper arms; they come from a depth estimate. On the legs the thigh shows the same muscles on the V and on the A (rectus femoris, sartorius and the vasti in nearly the same shares): at 45 degrees the leg turn does not change what is seen on the thigh. This package was merged and published before its independent check.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
