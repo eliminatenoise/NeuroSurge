@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-16",
+  "version": "experimental-2026-11-19-body-update-17",
   "experimental": true,
-  "source": "Body update 16. When the system requests reduced motion at launch, the loading layer shows stationary anatomy download progress and the five-second controls card clears without fading. See PREVIEW-NOTES.html for the update and remaining limits.",
+  "source": "Body update 17. Startup reports an anatomy loading failure and focuses Reload page. The release includes a loopback browser regression for a failed required anatomy file and recovery using the normal page.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -52,13 +52,13 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 55218,
-      "sha256": "310814ead47880860899c443df4c3bde13acae6a1ce0f2086f3456659db87b93"
+      "bytes": 55410,
+      "sha256": "51a698ae948ab3ecee72209f2df482c88c2450e77e1c36c7ade513384ac9c938"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 25698,
-      "sha256": "e48e39494bed09c9de999ddad6931785d1c1430888bbf9c27bc46168d8cad8c8"
+      "bytes": 26095,
+      "sha256": "209b7cf9060637c0807e1768e114976c1c9e91f730a7f88f768073be6ee3a5d2"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4030,
-      "sha256": "38fad59f7b5fba21db9228f39d034e2a83700291c0c4316d0f89ec6c16252e0a"
+      "sha256": "08b95dc2b6e3bb99d7a6a44f4f4a6fbc5d1d907313550330a2717d2257a92ebc"
     },
     {
       "path": "index.html",
@@ -3802,8 +3802,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 43078,
-      "sha256": "cd1dc03ea21f49d72513824df05e08f80e912d9fdbd739e22de4d4942fd4fc31"
+      "bytes": 44181,
+      "sha256": "ef507a0403bf9d457439913488ad22ab95092665b7ff7cdcc024c3a11c72b6ad"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3897,8 +3897,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 711813,
-      "sha256": "267e26dc761f2d2ac23aa898366b174e82da184d9808633fe771f82eca381982"
+      "bytes": 711920,
+      "sha256": "841cdc572b882ad4f9427cd33e5ce310f053f9ad747425d598285f497e2631da"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3922,8 +3922,8 @@
     },
     {
       "path": "scene/src/ns-assembly.mjs",
-      "bytes": 11997,
-      "sha256": "423ea25389d4eee559bbd1e9a879eeed76205f8e01d18e6576464d7daeac75b2"
+      "bytes": 12052,
+      "sha256": "45b5deadf442189843472660441684c3adc52291aba2b8691de24f7b236bb0c3"
     },
     {
       "path": "scene/src/ns-assets.mjs",
@@ -4082,8 +4082,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 135331,
-      "sha256": "52681895f785783500406596909c92dae625d9ce1e567cd44dc0b9fac2605bd2"
+      "bytes": 135517,
+      "sha256": "184b6d35082d65a8e74f4c47736ad1e432a4f98bd2e5472f91378fdcece6045b"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4139,6 +4139,11 @@
       "path": "tests/brain-live.test.mjs",
       "bytes": 20664,
       "sha256": "2d00173429ef66821403b649ca209f55a741388fa406b8d90c20d0f30ba82e5d"
+    },
+    {
+      "path": "tests/browser-startup.mjs",
+      "bytes": 5084,
+      "sha256": "fd670ff9f7515889ab81e069714bd007922622497324ed2e31383c137b384ed5"
     },
     {
       "path": "tests/bulk.test.mjs",

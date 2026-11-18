@@ -4316,7 +4316,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
 
   // R558 (genuine note R28): a picture of where the keys are, on the start page and the Esc page.
-  if (text.keyboard) buildKeyboardPicture(doc, card, text.keyboard);
+  const keyboard = text.keyboard ? buildKeyboardPicture(doc, card, text.keyboard) : null;
   // R558 (Messages 55 and 56: "a lot easier to use"): the Esc page opens with the SHORT steps and controls, the same
   // words as the start page, and this button swaps in the full words and back. Esc page only; a click on it never
   // resumes the game. A text without the two labels or the short lists keeps the full words (no button).
@@ -4526,6 +4526,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     show(resetHelp, mode === 'paused' && resetHelp.textContent !== '');
     show(form, mode === 'paused');
     show(detailRow, mode === 'paused' && canShorten);
+    if (keyboard) show(keyboard, mode !== 'error');
+    show(grid, mode !== 'error');
     show(unlocked, Boolean(s.lockFailed) && mode === 'paused');
     show(reload, mode === 'error');
     // R4-integrator (R4-load W8): while the body still streams in (introHideAtMs null) the 2 s timer has not started:

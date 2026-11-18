@@ -147,8 +147,8 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         } else localQueue.push({ kind, bytes: copy });
       } catch (err) { st.error = String(err && err.message || err); }
     },
-    /** Remove the static layer, or fade the animated picture out and release it. */
-    finish() {
+    /** Fade out the animated picture on success; remove it at once when loading fails or stops. */
+    finish({ immediate = false } = {}) {
       if (st.finished) return;
       st.finished = true;
       if (reducedMotion) {
@@ -163,7 +163,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         localQueue = [];
         if (canvas) { try { canvas.remove(); } catch { /* gone */ } canvas = null; }
       };
-      if (canvas && canvas.classList) { canvas.classList.add('ns-assembly-out'); win.setTimeout(end, 900); } else end();
+      if (!immediate && canvas && canvas.classList) { canvas.classList.add('ns-assembly-out'); win.setTimeout(end, 900); } else end();
     },
     state: () => ({ ...st, kinds: kinds.size })
   };

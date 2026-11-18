@@ -9,7 +9,7 @@
  */
 import * as THREE from '../../vendor/three.module.js';
 import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
-import { PAGE } from '../src/ns-text.mjs';
+import { PAGE, SHELL } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
 import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
@@ -95,8 +95,14 @@ const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
 // and the main controls are shown for the first five seconds. Only the ordinary boot case; the two test cases keep
 // their plain page.
 const assembly = mode === 'boot' ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
-if (mode === 'boot') { app.dataset.nsPhase = 'loading'; showControlsCard({ host: document.body }); }
-const endLoadingPicture = () => { app.dataset.nsPhase = 'playing'; if (assembly) assembly.finish(); };
+if (mode === 'boot') app.dataset.nsPhase = 'loading';
+const controlsCard = mode === 'boot' ? showControlsCard({ host: document.body }) : null;
+function finishLoading(phase) {
+  app.dataset.nsPhase = phase;
+  const immediate = phase !== 'playing';
+  if (immediate) controlsCard?.remove();
+  assembly?.finish({ immediate });
+}
 const observations = { mode, configurationSignature: CONFIGURED_R302_SIGNATURE, qa: false, placeholder: false,
   bodyFactoryCalls: 0, faceFactoryCalls: 0, bodyProgress: null, bodyProgressAtStop: null, ownedStreams: [], stopIssued: false, stopBefore: null,
   ready: null, firstView: null, firstReadyReadback: null, fatal: null, httpFailures: [], b03Prefix: null };
@@ -107,8 +113,31 @@ const copy = x => x == null ? null : JSON.parse(JSON.stringify(x));
 const requireCase = (condition, message) => { if (!condition) throw new Error('R302 case assertion: ' + message); };
 const messageOf = err => err && err.message ? err.message : String(err);
 function showFatal(message) {
-  const p = document.createElement('p'); p.className = 'ns-fatal'; p.setAttribute('role', 'alert');
-  p.textContent = message; hudRoot.appendChild(p);
+  const overlay = document.createElement('div');
+  overlay.className = 'ns-shell';
+  overlay.dataset.mode = 'error';
+  const card = document.createElement('div');
+  card.className = 'ns-shell-card';
+  const notice = document.createElement('p');
+  notice.className = 'ns-shell-notice';
+  notice.setAttribute('role', 'alert');
+  notice.textContent = PAGE.fatalPrefix + message;
+  const reload = document.createElement('button');
+  reload.className = 'ns-shell-secondary';
+  reload.type = 'button';
+  reload.textContent = SHELL.reload;
+  reload.addEventListener('click', () => window.location.reload());
+  card.append(notice, reload);
+  overlay.appendChild(card);
+  shellRoot.appendChild(overlay);
+  reload.focus({ preventScroll: true });
+}
+function failBoot(err) {
+  bootError = messageOf(err);
+  observations.fatal = bootError;
+  finishLoading('error');
+  if (!shellRoot.querySelector('.ns-shell[data-mode="error"]')) showFatal(bootError);
+  return { ok: false, error: bootError };
 }
 // SAME normal fetch/crypto interfaces: HTTP and actual served bytes are authoritative. No forged digest/model data.
 function refuseHttp(response, url, reader) {
@@ -241,7 +270,10 @@ function stop() {
     }
     observations.stopIssued = true; // snapshots above precede the ordinary stop; later callback records get afterStop:true
   }
-  scene.stop(); return copy(scene.status());
+  scene.stop();
+  const status = scene.status();
+  finishLoading(status.failed ? 'error' : 'stopped');
+  return copy(status);
 }
 const streamBody = ({ fetchText: ft, sha256Hex: sh, onProgress, expectedManifestSha256 }) => {
   observations.bodyFactoryCalls++;
@@ -271,14 +303,19 @@ try {
     movementMapUrl: app.dataset.movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes,
     placeholder: false, qa: false, storage, streamBody, streamFace, viewGraph });
   ready = scene.ready.then(r => {
-    observations.ready = copy(r); observations.firstReadyReadback = summarizeInspect(scene.inspect()); endLoadingPicture(); return r;
-  }, err => { endLoadingPicture(); throw err; });
+    const status = scene.status();
+    const phase = status.stopped && !status.failed ? 'stopped' : r.ok === true && status.phase === 'running' ? 'playing' : 'error';
+    finishLoading(phase);
+    observations.ready = copy(r);
+    observations.firstReadyReadback = summarizeInspect(scene.inspect());
+    return r;
+  }, failBoot);
   scene.firstView.then(r => { observations.firstView = copy(r); });
-  canvas.focus({ preventScroll: true });
 } catch (err) {
-  bootError = messageOf(err); observations.fatal = bootError; showFatal(PAGE.fatalPrefix + bootError);
-  endLoadingPicture();
-  ready = Promise.resolve({ ok: false, error: bootError });
+  ready = Promise.resolve(failBoot(err));
+}
+if (scene) {
+  try { canvas.focus({ preventScroll: true }); } catch { /* focus is a convenience */ }
 }
 function summarizeInspect(s) {
   if (!s) return null;

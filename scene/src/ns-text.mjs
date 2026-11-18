@@ -1645,6 +1645,7 @@ export function guideLine(step, total, text, nice = false) {
 
 /** Visible App error wording only. Raw status/shell/ready errors and their causes stay with ns-app. */
 export function appErrorLine(error, hint = null) {
+  if (error === 'ns:app_args: configured viewGraph requires completed source-qualified pelvis anchor') return 'The body anatomy could not finish loading. Reload the page to try again.';
   if (error === 'ns:app_args: configured viewGraph requires the complete validated54-record face packet') return 'The face anatomy could not finish loading. Reload the page to try again.';
   // R558: the whole-arm display refused every picture it was offered. hint 'narrow-window' (set by ns-app only when the
   // very first picture of an upright window was refused because no camera distance shows the whole arm): say what to
