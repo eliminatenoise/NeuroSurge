@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-21",
+  "version": "experimental-2026-11-19-body-update-22",
   "experimental": true,
-  "source": "Body update 21. The first prompt, Esc instructions and player notes explain how to select and move a body part.",
+  "source": "Body update 22. The status card, Esc page and guide show how to carry the brain and mirror body.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 229500,
-      "sha256": "601b9bdc1a9548f53caba4b4f3ef3b7da3cf5cc6fcc563f50dce8ddc54eb458f"
+      "bytes": 230161,
+      "sha256": "80f39f28a54da2a030dcd2ac02a9607969c4e1c53178b31c54649bd414ef64da"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9528,
-      "sha256": "a42e2c5e4bd5df2549912bc82d082ecc2940eae745d0eccda9fb8b073a6ad500"
+      "bytes": 9630,
+      "sha256": "a2fd755ece5377cfd1e48a9a8c19ad72c3c19b318199fcd6936d9806dbe12bb1"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 56427,
-      "sha256": "e24c8a215ae1b9a70aeea88309ef92f2c506f5649e970d05208040aa085e6e58"
+      "bytes": 56637,
+      "sha256": "c4e27bc80dfd40e5f6a7a378a3af87aa35de4fa00f63b39ad66d4d30ebd16dbd"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 27169,
-      "sha256": "5ffa148954e2e448859f0f6e643acdcb03c0b6c223e659b095227a6ca4ad6d7f"
+      "bytes": 27371,
+      "sha256": "bbdd331b405f37d799372541d1436e29923b247e1df02c5f901fe1403aa50a08"
     },
     {
       "path": "README.md",
-      "bytes": 15507,
-      "sha256": "f051aac535d842ab79f71cd7573111608af1d3abd463e5d70e94acab5c1c9378"
+      "bytes": 15727,
+      "sha256": "4edeb4a8505ccbae33da833366417a4b746aef7e8cc76e7441fb160c18e3f8cb"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "797eebc3ee7b4406724a4196e88c85d780c5165b4bdd26b742c5c5cac6b21f16"
+      "sha256": "256ff62233d334bb954f5172e15a6fa213bde4312b5bc959a6df4e6d1bfc846b"
     },
     {
       "path": "index.html",
@@ -4082,8 +4082,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 135094,
-      "sha256": "9afdf04786dc58cb5b20554281609e3ae1dce809fd6a3733c9736aaa51222501"
+      "bytes": 134795,
+      "sha256": "5c8c0e036332ca0acdbf5ae0709d3852f4038bc7b4e37f3561993fd1d9cfdc2d"
     },
     {
       "path": "scene/src/ns-vessels.mjs",

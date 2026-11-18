@@ -282,9 +282,9 @@ const STEP_TABLE = [
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
   intro: [part('Look at a motor area to see its movements. Click it or press a number from the list to move the body part. The arrow keys step to the next area. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
-  { head: 'Move other body parts.', parts: [part('Your other body parts respond through the brain, not W/A/S/D. Moving the mirror image does not command their muscles. ' +
+  { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. Hold a limb on the mirror body to move your matching limb. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
-    'W/S move it farther/closer, A/D left/right, and looking up or down carries it up or down (the mirror body stays on the ground). Let go of Space to leave it there. ' +
+    'move the pointer to carry it sideways, up or down. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
     'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
     'A held limb moves only as far as its joints allow, and the brain area that moves it lights up. Press on a limb and drag across it to turn it, like a dial. ' +
@@ -296,7 +296,7 @@ const STEP_TABLE = [
       'the other thing on the same line of sight (the body part in front of an area, the brain behind the mirror body, ' +
       'whatever is behind an arrow tip), hold Shift as you press: Shift + Space, Shift + click or Shift + drag. The line under ' +
       '“Looking at” says what each press will take.')],
-  intro: [part('Other body parts respond through the brain. Hold Space (or tap it) on the brain, the mirror body or one of your limbs to carry it: look or W/A/S/D. Hold Shift as you press to reach the other thing in line.')] },
+  intro: [part('Other body parts respond through the brain. Hold or tap Space to take hold. Move the pointer or press W/A/S/D to carry what you hold. Hold Shift as you press to reach the other thing in line.')] },
   // R5-text (D16, user R20 "I don't want them to be curved"): the round-4 "curved arrow" wording is gone in both forms.
   { head: 'Turn the brain.', parts: [
     part('Press on the brain and drag to turn it. Four solid arrow tips also sit round the motor strip, one at ' +
@@ -325,7 +325,7 @@ const STEP_TABLE = [
   // it round or tilt it (user Message 45: all four arrows orbit).
   { head: 'The mirror body.', need: 'mirror', parts: [part('In front of you sits a mirror image of your body, as in a ' +
     'real mirror, on the same ground. It copies everything your body does. Click its muscles. To carry it, hold Space ' +
-    'on it (or tap Space, and tap again to let go) and look or use W/A/S/D: it stays on the ground. Press on it and drag, ' +
+    'while aiming at its head or trunk. Move the pointer up to lift it, or down to lower it. Press on it and drag, ' +
     'or use its arrows, to turn it round or tilt it. Seen through the brain’s clear glass it is still the mirror ' +
     'body you take (hold Shift as you press to take the brain instead). Where it stands in front of a motor area, a ' +
     'press acts on that area and Space holds the brain: hold Shift as you press to take the mirror body.')],
@@ -337,7 +337,7 @@ const CONTROL_TABLE = [
   ['W / S', 'W moves the hand forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
-  ['Hold Space', 'on the brain, the mirror body or one of your limbs: hold it. Look up or down to carry it up or down (the mirror body stays on the ground); W farther, S closer, A/D sideways. Let go of Space to leave it there. Things stop where they would touch.'],
+  ['Hold Space', 'aim at the brain, the mirror body or a limb. Move the pointer sideways, up or down to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Things stop where they would touch.'],
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
@@ -366,7 +366,7 @@ const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
   'A / D': 'hand and held item left/right',
   'W / S': 'W farther, S closer; combine with A/D',
-  'Hold Space': 'hold the brain, mirror body or a limb; look or W/A/S/D to move it',
+  'Hold Space': 'hold the brain, mirror body or a limb. Move the pointer to carry it.',
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
@@ -587,7 +587,7 @@ export const HUD = deepFreeze({
     'Esc frees it.',
   hintShell: 'Look to aim. A/D move the hand left or right, W/S forward or back. Tap Space twice: all four limbs turn ' +
     'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movements. Click it or press a number to move its body part. Hold Space on ' +
-    'the brain, the mirror body or a limb to carry it: look or W/A/S/D. Let go to leave it there (or tap Space to take hold, and tap again to let go). Shift + a press reaches the other thing in line. Esc: controls and reset.',
+    'the brain, the mirror body or a limb. Move the pointer or press W/A/S/D to carry it. Let go to leave it there (or tap Space to take hold, and tap again to let go). Shift + a press reaches the other thing in line. Esc: controls and reset.',
   markers: 'Dots are rough control spots, not exact points in the brain. The coloured areas overlap.',
   drivesTitle: 'Strongest simulated muscle signals (unitless, 0–1)',
   gazePrefix: 'Looking at: ',
@@ -602,16 +602,16 @@ export const HUD = deepFreeze({
   gazeBetweenPrefix: 'Looking at (moves nothing): ',
   pulseNone: '',
   pulseResidual: 'Arm relaxing back to rest',
-  grabbing: 'Held with Space: look to carry; W farther, S closer, A/D sideways. Let go of Space to leave it there.',
+  grabbing: 'Move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. Let go of Space.',
   /** R558 (Message 40): while Space holds the brain or the mirror body (what: 'brain' | 'mirror'); kept: the hold was
    * taken with a tap (it stays after the tap, so a tap lets go), else it lasts while Space is down. */
-  holdingItem: (what, kept = false) => `Holding ${what === 'mirror' ? 'the mirror body' : 'the brain'}: look ` +
-    `${what === 'mirror' ? 'or W/A/S/D to carry it along the ground' : 'to carry it; W farther, S closer, A/D sideways'}. ` +
+  holdingItem: (what, kept = false) => `Holding ${what === 'mirror' ? 'the mirror body' : 'the brain'}. ` +
+    'Move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. ' +
     (kept ? 'Tap Space to let go.' : 'Let go of Space to leave it there.'),
   /** R558 (Messages 2, 12 and 40): while Space holds one of your own limbs (ns-grasp LIMB_IDS); kept as above. */
   holdingLimb: (limb, kept = false) => `Holding your ${({ rightArm: 'right hand', leftArm: 'left hand (W/A/S/D and your look move it, as always)', rightLeg: 'right foot', leftLeg: 'left foot' })[limb] || 'limb'}` +
     (limb === 'leftArm' ? (kept ? '. Tap Space to let go.' : '. Let go of Space when done.')
-      : `: look up or down to lift or lower it; W farther, S closer, A/D sideways. ${kept ? 'Tap Space to let go.' : 'Let go of Space to leave it there.'}`),
+      : `: move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. ${kept ? 'Tap Space to let go.' : 'Let go of Space to leave it there.'}`),
   /** R558 (Message 12): a move stopped where two of the three would touch (what: 'brain' | 'mirror' | 'body'). */
   contactStop: what => `${({ brain: 'The brain', mirror: 'The mirror body', body: 'Your body' })[what] || 'That'} stopped: your body, the brain and the mirror body stop where they would touch`,
   rotationPrefix: 'Left forearm: ',
@@ -1330,18 +1330,18 @@ export const MIRROR = deepFreeze({
   reset: SHELL.resetMirror,
   resetHelp: 'Puts the mirror body back where a mirror shows you.',
   simulated: 'Simulated: it shows the same made-up signals as your body (no real units). Nothing is read from it.',
-  escRow: 'Mirror body: hold Space on it (also through the brain’s clear glass) and look or use W/A/S/D to carry it along the ground; its arrows turn it or tilt it. In front of a motor area Space takes the brain, so hold Shift as you press Space; elsewhere Shift + Space takes the brain behind it.',
+  escRow: 'Hold Space on the mirror body’s head or trunk. Move the pointer up to lift it or down to lower it. Its arrows turn or tilt it. In front of a motor area Space takes the brain, so hold Shift as you press Space; elsewhere Shift + Space takes the brain behind it.',
   partSuffix: ' (mirror image)',
   /** The task's two short lines: what it is, and how to reach its arrows. */
   what: 'A mirror image of your body. It copies every move you make.',
-  reach: 'Space holds the mirror body; look or W/A/S/D carries it along the ground, and its arrows turn it or tilt it.',
+  reach: 'Hold Space on the head or trunk. Move the pointer to carry the mirror body. Its arrows turn or tilt it.',
   side: 'Like a real mirror: your left arm shows on the same side of the screen. Once you turn it round, you see it ' +
     'from behind.',
   turnedSeparate: 'You see the mirror body from another side. Reset mirror body puts it back.',
   rows: { shows: 'What it shows', side: 'Which side', turn: 'How to turn it' },
   rowShows: 'your pose, colours, lifted muscles and glow, at the same time',
   rowSide: 'like a real mirror, your left arm is on the same side',
-  rowTurn: 'Space and look/WASD carry it on the ground; side arrows turn it, top/bottom arrows tilt it'
+  rowTurn: 'Side arrows turn it. Top and bottom arrows tilt it.'
 });
 
 /** "Your left arm (mirror image)" for an ns-mirror part id; unknown parts read "Your body (mirror image)". */
@@ -1572,16 +1572,15 @@ export const GUIDE = deepFreeze({
     watchBody: 'Look at a purple leg area. Then look down at the body and press 1 or 2: watch the leg move.',
     // R5-text (D17): points out the brain-to-muscle glow; it needs a NEW switch-on while this line shows (ns-guide).
     glow: 'Look at a blue area. See its muscles glow in the same blue?',
-    // R558 (hunt 2): the brain is carried by the look AND by W/A/S/D while Space holds it (ns-guide counts both).
-    dragBrain: 'Hold Space on the brain, then look or use W/A/S/D to carry it. Let go of Space to leave it there.',
+    // The brain can be carried with the pointer or with W/A/S/D while Space holds it.
+    dragBrain: 'Hold Space on the brain. Move the pointer to carry it, then let go of Space to leave it there.',
     // R4-fix (review RP4): with the mouse captured the crosshair must look far from the brain to reach an arrow; a free
     // mouse (Esc twice) lets you click the arrows while you watch the brain. R5-text (D16): no "curved" (user R20).
     orbit: 'Press Esc twice for a free mouse. Then click or hold an arrow by the brain to turn the brain.',
     // R5-text (D18): E to the view from behind, and E again back to your own eyes.
     thirdPerson: 'Press E to see your own back. Press E again to go back.',
-    // R5-text (D19): the brain catches looks and clicks while it is in front of the mirror body's arrows.
-    // (shortened after the 1280x720 shot: 4 lines in the status card; now 82 characters)
-    mirror: 'Space carries the mirror body along the ground with look/WASD; its arrows turn or tilt it.'
+    // The mirror step completes when the player turns the body, by arrow or drag.
+    mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.'
   },
   partial: {
     moveHandNeedX: 'Good! Now try A or D to move it left or right.',
@@ -1609,10 +1608,10 @@ export const GUIDE = deepFreeze({
     otherPart: 'Look at another colour and click it',
     watchBody: 'Look at a leg area, then down, and press 1',
     glow: 'Look at a blue area again: its muscles glow',
-    dragBrain: 'Hold Space on the brain and move',
+    dragBrain: 'Hold Space on the brain and move the pointer',
     orbit: 'Press and drag the brain to turn it',
     thirdPerson: 'Press E',
-    mirror: 'Hold Space on the mirror body and move',
+    mirror: 'Click a green arrow by the mirror body',
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',
     byText: {

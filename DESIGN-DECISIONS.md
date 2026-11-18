@@ -1521,6 +1521,12 @@ The opening guide, the Esc instructions and parts of the preview notes still sai
 
 In the ordinary first-person preview in Chromium on AMD Vulkan, looking at Left wrist held the hand where it started. Pressing 1 bent the left wrist toward the palm. Pressing 2 returned it to rest. Pressing 2 again bent it back, and pressing 1 returned it to rest. These are movements of the game’s rig.
 
+## 108. Lift the mirror body with Space and the pointer (19 November)
+
+The status card said the mirror body had to stay on the ground. In the game, moving the pointer up while Space held the torso lifted the entire mirror body. Pressing W moved it farther while it stayed raised. Letting go left it there. The left fingers and thumb closed during the hold and returned to rest after release. The same Space and pointer gesture carried the brain.
+
+The status card, Esc page and guide now name the pointer motion. The last guide step asks for a turn of the mirror body, which is the action that finishes the step. The game’s pose and carry rules are the same.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
