@@ -72,8 +72,11 @@ test('digit pads: a closed rounded sleeve round each phalanx that reaches past i
   const pos = [];
   for (let k = 0; k <= 12; k++) { const z = -2 * k, r = 4 * (1 - k / 13); for (let a = 0; a < 8; a++) pos.push(r * Math.cos(a * Math.PI / 4), r * Math.sin(a * Math.PI / 4), z); }
   pos.push(0, 0, -26);
-  const pads = B.digitPadMeshes([{ id: 'X', name: 'distal phalanx of right index finger', segment: 'r_index_dp', positions: Float32Array.from(pos) }], { distal: [0, 0, -1], palmar: [0, -1, 0] });
+  const pads = B.digitPadMeshes([{ id: 'X', name: 'distal phalanx of right index finger', segment: 'r_index_dp', positions: Float32Array.from(pos) }], { distal: [0, 0, -1], palmar: [0, -1, 0] }, { ...B.DIGIT_PADS, on: true });
   assert.equal(pads.length, 1);
+  // 19 November 2026 (the owner: bony fingertips, thin shafts and thick ends): the game makes no sleeves any more
+  assert.equal(B.DIGIT_PADS.on, false);
+  assert.equal(B.digitPadMeshes([{ id: 'X', name: 'distal phalanx of right index finger', segment: 'r_index_dp', positions: Float32Array.from(pos) }], { distal: [0, 0, -1], palmar: [0, -1, 0] }).length, 0);
   const { positions: P, indices: I } = pads[0];
   // closed: every edge is shared by exactly two triangles
   const edges = new Map();
@@ -117,11 +120,8 @@ test('on the game body: the far ends of the limbs and the joints keep their plac
   assert.ok(moved('FJ1478') > 5, 'long head of the biceps');
   // the far ends are wider: the malleoli move apart
   assert.ok(moved('FJ3366', (x, y, z) => z < 20) > 2, 'the lateral malleolus moves out (wider ankle)');
-  // pads: one per finger and per toe group, rigged to their own digits
-  const pads = o.entries.filter(e => e && e.soft_tissue);
-  assert.equal(pads.length, 9);
-  const rig = body.buildBodyRig(o.entries, o.meshesById);
-  for (const e of pads) { const info = rig.meshSegment[e.element_id]; assert.ok(info && info.kind === 'muscle' && info.candidates.every(s => /_(thumb|index|middle|ring|little)_(pp|mp|dp)$|_toes$|_hallux$/.test(s)), `${e.name} follows its digit`); }
+  // 19 November 2026: no sleeves are made (DIGIT_PADS.on false): the finger and toe bones show
+  assert.equal(o.entries.filter(e => e && e.soft_tissue).length, 0);
   // the chest is left flat: pectoralis major is not changed by the bulk
   assert.equal(moved('FJ1464'), 0);
 });

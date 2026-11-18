@@ -1661,6 +1661,19 @@ The user: “when we click on a limb and go left and right, that gives us rotati
 
 Checked by the author in the browser: the right thigh raised to 110 degrees by a 200 px drag up, turned to the end of its range by a drag right, and lowered to its full extension by a drag down; the held brain turned by a drag while D went on moving it.
 
+## 126. A strip without its lines; every muscle its own shade; what has been tried stays marked; bony fingertips (19 November)
+
+The user: “the motor strip is just very, very hard to look at right now because it's so liney ... There has to be a better solution, an overhaul.” “Make sure every single muscle is differentiated from each other in shade, and that upon activation of any brain region or any body part, the shade changes. So everything gets marked out upon activation, so you can see what's still left ... to activate. And for the fingertips, make sure the fingertips are still bony, so they actually should be skinnier when they're away from the finger joints and chunkier towards the joints, and including the tip.”
+
+- **The strip.** Its inked relief lines are gone (the gyrus contour nearly, the sulcus and bank lines wholly), the seam between two areas of one body part is a hairline, the keys' bevels are barely there and the strip has no gloss: each area is one clean block of its own bright colour, and only the gaps between body parts stay dark.
+- **Every muscle its own shade.** On top of its tone a muscle takes one of nine lightness steps and a small warm or cool shift from its own name (`muscleOwnShadeInto` in `ns-colors.mjs`), the same on its left and right side, so two neighbours of one tone still differ.
+- **Tried or not.** A muscle that has been switched on (activity 0.5 or more; a look's faint tint does not count) keeps a darker resting shade for the rest of the session, and a motor area switched on earlier rests at under a third of its brightness (`VISITED`). What is still bright and saturated has not been tried.
+- **Fingers and toes.** The sleeves round the finger and toe bones are no longer made (`DIGIT_PADS.on` false): the bones show with their own shape, a thin shaft between a thick base and head and the tuft at the tip.
+
+- **Blacks, not greys.** The user: “Let's have much darker blacks instead of ugly grays.” The backdrop is about a third as bright again and neutral, the strip's in-between areas are near black instead of mid grey, the ink edge is nearly black, and a tried muscle is darker in its own hue rather than greyer.
+
+Not in this version, from the same notes: the chest still stands in front of the belly in the eye view (the user: “a smaller and much flatter chest ... and a more observable bottom torso”; three quick tries with posture and camera numbers each pushed the whole torso out of the picture, so it needs a change of the trunk's shape), and the leg turn still shows the front of the legs on both of its sides (the user: flexors on the underside, extensors on the overside).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

@@ -104,13 +104,17 @@ export const BRAIN_INK = Object.freeze({
   cover: Object.freeze({ depthMm: 30, latMm: 3, latFullMm: 1.5, cellMm: 3 }),
   cel: Object.freeze({ steps: Object.freeze([0.14, 0.38, 0.72]), levels: Object.freeze([0.3, 0.55, 0.8, 1.0]), soft: 0.035 }),
   area: Object.freeze({
-    contourCss: 1.05, contourAlpha: 0.8,
-    lipMm: 1.5, lipCss: 1.0, lipAlpha: 0.8, fundusMm: 7, fundusCss: 0.45, fundusAlpha: 0.55,
-    reliefMm: 1.5, reliefDark: 0.6, lightGamma: 0.6, aoMin: 0.6, specRelief: 2, crossMm: 1.6, crossFrom: 0.7, crossFull: 0.95,
-    floorDark: 0.15, floorFrom: 0.55, floorTo: 1.0, indirect: 0.6, solid: 0.96,
+    // 19 November 2026 (the owner: "the motor strip is just very, very hard to look at right now because it's so liney
+    // ... There has to be a better solution, an overhaul"): the strip's inked relief lines are gone (the gyrus contour
+    // 0.8 -> 0.15, the sulcus line 0.8 -> 0 and the finer bank line 0.55 -> 0) and its relief shading is gentler
+    // (reliefDark 0.6 -> 0.3, floorDark 0.15 -> 0), with no gloss: each area is one clean block of its own colour.
+    contourCss: 1.05, contourAlpha: 0.15,
+    lipMm: 1.5, lipCss: 1.0, lipAlpha: 0, fundusMm: 7, fundusCss: 0.45, fundusAlpha: 0,
+    reliefMm: 1.5, reliefDark: 0.3, lightGamma: 0.6, aoMin: 0.6, specRelief: 2, crossMm: 1.6, crossFrom: 0.7, crossFull: 0.95,
+    floorDark: 0, floorFrom: 0.55, floorTo: 1.0, indirect: 0.6, solid: 0.96,
     hatchPerS: 150, hatchCss: 0.42, hatchAlpha: 0, hatchFrom: 0.2, hatchFull: 0.06, denseFrom: 0.1, denseFull: 0.02,
     reliefHatch: 0.85, hatchMinSpacingCss: 4, glowFade: Object.freeze([0.3, 0.7]),
-    gloss: Object.freeze({ power: 20, sheen: 0.22, coreLo: 0.8, coreHi: 0.86, core: 0.28 })
+    gloss: Object.freeze({ power: 20, sheen: 0, coreLo: 0.8, coreHi: 0.86, core: 0 })
   }),
   glass: Object.freeze({
     contourCss: 0.75, contourAlpha: 0.7, rimCss: 1.4, rimLight: 0.3, rimAlpha: 0.12,
@@ -360,7 +364,9 @@ float nsCelBand( float x ) {
  *    strip. A glow that only shows a held posture (the scene's postureGlow) does not count as switched on.
  * Display choices; timings are UI choices, not physiology. */
 export const BRAIN_KEYS = Object.freeze({
-  bevelCss: 5, bevelShare: 0.3, bevelLight: 0.7, bevelDark: 0.55, bevelSpec: 0.28, hoverBevel: 1.5, pillowCss: 8, pillowShare: 0.4, pillowDark: 0.38,
+  // 19 November 2026 ("so liney"): a much softer bevel and pillow (0.7 / 0.55 / 0.28 and 0.38 before): a key is a flat
+  // block of colour with barely a rounded edge.
+  bevelCss: 5, bevelShare: 0.3, bevelLight: 0.18, bevelDark: 0.14, bevelSpec: 0, hoverBevel: 1.5, pillowCss: 8, pillowShare: 0.4, pillowDark: 0.1,
   pressS: 0.2, pressHoldS: 0.07, pressDark: 0.45, pressCss: 4, pressShare: 0.3,
   // 18 November (MAP): the lit key's frame in its own colour (frameWhite 0.3 -> 0.1): the white-hot frame turned the
   // whole lit key white under the bloom; the neon glow is saturated now.

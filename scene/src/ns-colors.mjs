@@ -576,10 +576,10 @@ export const AREA_CHUNK_SIZE = freeze({ leg: 4, trunk: 1, arm: 4, hand: 6, neck:
 export const AREA_RAMPS = freeze({
   rh: freeze({ leg: freeze([289, 310, 0.80, 0.44, 0.93]), trunk: freeze([170, 170, 0.70, 0.70, 0.93]), arm: freeze([235, 266, 0.82, 0.44, 0.93]),
     hand: freeze([199, 226, 0.88, 0.50, 0.93]), neck: freeze([334, 334, 0.76, 0.76, 0.93]), face: freeze([344, 328, 0.85, 0.50, 0.93]),
-    mouth: freeze([320, 312, 0.78, 0.52, 0.93]), scan: freeze([250, 250, 0.40, 0.40, 0.08]) }),
+    mouth: freeze([320, 312, 0.78, 0.52, 0.93]), scan: freeze([250, 250, 0.13, 0.13, 0.08]) }), // 19 November 2026 ("much darker blacks instead of ugly grays"): the in-between areas near black (L 0.40 before)
   lh: freeze({ leg: freeze([104, 87, 0.95, 0.74, 0.93]), trunk: freeze([140, 140, 0.80, 0.80, 0.93]), arm: freeze([65, 34, 0.86, 0.60, 0.93]),
     hand: freeze([92, 61, 0.94, 0.68, 0.93]), neck: freeze([15, 15, 0.78, 0.78, 0.93]), face: freeze([17, 30, 0.85, 0.56, 0.93]),
-    mouth: freeze([0, 354, 0.76, 0.50, 0.93]), scan: freeze([70, 70, 0.40, 0.40, 0.06]) })
+    mouth: freeze([0, 354, 0.76, 0.50, 0.93]), scan: freeze([70, 70, 0.13, 0.13, 0.06]) })
 });
 /** Family (the colour words of the on-screen text) of a chunk in a hemisphere. */
 const CHUNK_FAMILY = freeze({
@@ -1114,6 +1114,31 @@ export function muscleBaseInto(toneIndex, level, out = [0, 0, 0], look = MUSCLE_
   const k = level === 'deep' ? look.deepShade : level === 'intermediate' ? look.intermediateShade : 1;
   for (let i = 0; i < 3; i++) out[i] = t[i] * k;
   return out;
+}
+
+/** 19 November 2026 (the owner: "Make sure every single muscle is differentiated from each other in shade"). A muscle's
+ * OWN shade on top of its tone (pure): from its side-free key (so a left and a right muscle match), one of
+ * MUSCLE_OWN_SHADE.steps lightness steps over +-`light` and a small warm / cool shift (+-`warm` on green against
+ * blue), so that two muscles of the same tone still differ. Multiplies a linear RGB colour in place. */
+export const MUSCLE_OWN_SHADE = freeze({ steps: 9, light: 0.2, warm: 0.14 });
+export function muscleOwnShadeInto(key, rgb, o = MUSCLE_OWN_SHADE) {
+  const h = toneHash(`shade:${String(key)}`);
+  const f = 1 + o.light * (2 * ((h >>> 8) % o.steps) / (o.steps - 1) - 1), w = o.warm * (2 * ((h >>> 16) % 5) / 4 - 1);
+  rgb[0] *= f; rgb[1] *= f * (1 + w); rgb[2] *= f * (1 - w);
+  return rgb;
+}
+/** 19 November 2026 (the owner: "upon activation of any brain region or any body part, the shade changes. So
+ * everything gets marked out upon activation, so you can see what's still left ... to activate"). VISITED: a muscle
+ * or a motor area that has been switched on keeps a changed resting shade for the rest of the session: `value` of its
+ * colour, mixed `grey` of the way toward its own grey. What is still bright and saturated has not been tried yet.
+ * markLevel: the activity from which a muscle counts as switched on (a look's faint tint does not mark it). */
+// (later the same day, the owner: "Let's have much darker blacks instead of ugly grays": a visited muscle is DARKER in
+// its own hue, hardly greyer: value 0.5 -> 0.36, grey 0.45 -> 0.12; a visited area value 0.42 -> 0.3, lift 0.25 -> 0.12.)
+export const VISITED = freeze({ value: 0.36, grey: 0.12, areaValue: 0.3, areaLift: 0.12, markLevel: 0.5 });
+export function visitedShadeInto(rgb, o = VISITED) {
+  const g = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  for (let i = 0; i < 3; i++) rgb[i] = (rgb[i] + (g - rgb[i]) * o.grey) * o.value;
+  return rgb;
 }
 
 /** Emission scale of a glowing muscle for a glow colour (LINEAR RGB): 1 for most hues, up to 1 + glowYellowBoost for a

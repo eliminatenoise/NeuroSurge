@@ -61,10 +61,12 @@ export const ROOM = Object.freeze({
   // So not exactly pitch black, with the gradient changing as you go further or closer away"): the floor's pool of light
   // is the gradient (brightest under you, fading with distance) at about a third of its strength (0.020, 0.040, 0.042
   // before); no tile lines, no lamps, a wall that is nearly black.
-  pool: Object.freeze({ colour: Object.freeze([0.0065, 0.0105, 0.0125]), radiusM: 19, amb: 0.05 }),
+  // (later, the owner: "Let's have much darker blacks instead of ugly grays": about a third again, and neutral instead
+  // of blue-grey: 0.0065, 0.0105, 0.0125 before.)
+  pool: Object.freeze({ colour: Object.freeze([0.0028, 0.003, 0.0034]), radiusM: 19, amb: 0.05 }),
   // 19 November 2026 (eye comfort; the owner liked a plain dark background): the tile lines are barely there (dark 0.55 before).
   tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0 }),
-  wall: Object.freeze({ colour: Object.freeze([0.0016, 0.0028, 0.0034]), heightM: 30, lobes: 7, uneven: 0.16 }),
+  wall: Object.freeze({ colour: Object.freeze([0.0006, 0.0007, 0.0008]), heightM: 30, lobes: 7, uneven: 0.16 }),
   lamps: Object.freeze([Object.freeze([0.3, 4.9, 3.8, 1]), Object.freeze([-5, 9.3, 1.7, 0.75]), Object.freeze([-6.2, 5.1, 1.2, 0.6])]),
   lamp: Object.freeze({ colour: Object.freeze([0, 0, 0]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),
   gloss: Object.freeze({ f0: 0.05, wall: 0.7 }),

@@ -5526,6 +5526,11 @@ export function abdomenRelief(p, side, cuts, rule = ABDOMEN_RELIEF) {
  * bones: [{ id, name, segment, positions }]; distal: unit direction toward the tips; palmar: unit palm / sole direction.
  */
 export const DIGIT_PADS = Object.freeze({
+  // 19 November 2026 (the owner: "for the fingertips, make sure the fingertips are still bony, so they actually should
+  // be skinnier when they're away from the finger joints and chunkier towards the joints, and including the tip"):
+  // on: false = no sleeves are made; the finger and toe BONES show, with their own shape (a thin shaft between a thick
+  // base and head, and the tuft at the tip). The sleeves of 18 November made every digit one even sausage.
+  on: false,
   slices: 10, around: 18, capRings: 5, nearShare: 0.1, farMm: 1.5, tipMm: 4,
   hand: Object.freeze({ palm: 4.2, back: 2.2, side: 3.2, tipPalm: 5.2 }),
   foot: Object.freeze({ palm: 4.2, back: 2.4, side: 3.0, tipPalm: 5.0 }),
@@ -5533,6 +5538,7 @@ export const DIGIT_PADS = Object.freeze({
 });
 export function digitPadMeshes(bones, { distal, palmar, kind = 'hand' }, rule = DIGIT_PADS) {
   const T = rule[kind] || rule.hand, out = [];
+  if (rule.on === false) return out;
   for (const b of bones) {
     const p = b.positions;
     if (!p || p.length < 30) continue;

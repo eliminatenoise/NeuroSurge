@@ -1923,7 +1923,9 @@ export const REGION_BORDER = Object.freeze({
   // 1 CSS px across (0.5 each side) at 0.62 opacity, so neighbouring areas read as their own pieces without a heavy grid.
   // 17 November (keys): a clear dark GAP between neighbouring areas (0.5 px at 0.62 -> 1.1 px a side at 0.92), so each
   // area is a separate key (ns-brain-ink BRAIN_KEYS draws the bevel inside it).
-  seamColor: Object.freeze([0.0033, 0.0024, 0.0027]), seamAlpha: 0.92, seamPx: 1.1,
+  // 19 November 2026 (the owner: the strip is "so liney"): the seam between two areas of one body part is a hairline
+  // (1.1 px a side at 0.92 -> 0.45 px at 0.4): neighbours part by their colours; only the gaps between body parts stay dark.
+  seamColor: Object.freeze([0.0033, 0.0024, 0.0027]), seamAlpha: 0.4, seamPx: 0.45,
   /** Line between two body parts (or at a map gap): warm ivory, the left-arm side in the territory cyan. */
   // R558 BB: between body parts an ink line one step bolder than the seams (1.5 CSS px, 0.85), no glow; the left-arm
   // territory keeps its cyan identity line (leftArmAlpha, leftArmGlow).
@@ -1933,7 +1935,7 @@ export const REGION_BORDER = Object.freeze({
   // 18 November (MAP, visual chunking): the line between two CHUNKS (regionChunkKey: leg | trunk | arm | hand | neck |
   // face | mouth) is a wide dark gap (1.6 -> 3.2 px a side), twice and more the seam between keys of one chunk, so the
   // strip reads in groups of keys, like the W A S D pyramid apart from E and R on a keyboard.
-  territoryColor: Object.freeze([0.0033, 0.0024, 0.0027]), territoryAlpha: 0.95, territoryPx: 3.2, territoryGlow: 0,
+  territoryColor: Object.freeze([0.0033, 0.0024, 0.0027]), territoryAlpha: 0.9, territoryPx: 2.2, territoryGlow: 0,
   leftArmCyan: false, leftArmAlpha: 0.9, leftArmGlow: 0.35,
   /** Hovered / switched-on area: outlined from the inside (hover colour / the gold mark colour), half-width CSS px. */
   // 17 November (keys): the hovered key's frame is wider and brighter (1.8 -> 2.8 px, glow 0.55 -> 1); the gold mark
@@ -2247,10 +2249,13 @@ export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, h
     areaNeonInto(region.id, a, AREA_LOOK.areaRimGain * pg, o.rim);
     // 17 November (keys): a resting key is a calm, unlit key (restValue of its colour), so the lit one has room to be
     // brighter AND still its own colour.
-    const d = (1 - AREA_LOOK.areaDarken * k) * (Number.isFinite(AREA_LOOK.restValue) ? AREA_LOOK.restValue : 1);
+    // 19 November 2026 (VISITED): an area switched on earlier rests dimmer (areaValue of its colour, areaLift of its
+    // self-light), so the areas not tried yet are the bright ones; a lit area is as bright as ever.
+    const seen = activated ? NsColors.VISITED : null, sv = seen ? seen.areaValue + (1 - seen.areaValue) * k : 1;
+    const d = (1 - AREA_LOOK.areaDarken * k) * (Number.isFinite(AREA_LOOK.restValue) ? AREA_LOOK.restValue : 1) * sv;
     for (let i = 0; i < 3; i++) o.albedo[i] = o.tint[i] * d;
     // R558 (Message 22): the faint resting self-light of the area's own tint (AREA_LOOK.restLift), gone once it glows.
-    const lift = (Number.isFinite(AREA_LOOK.restLift) ? AREA_LOOK.restLift : 0) * (1 - k);
+    const lift = (Number.isFinite(AREA_LOOK.restLift) ? AREA_LOOK.restLift : 0) * (1 - k) * (seen ? seen.areaLift : 1);
     for (let i = 0; i < 3; i++) o.emission[i] += o.tint[i] * lift;
     o.glow = k;
   } else {
@@ -3763,7 +3768,8 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
 // this one patch: no specular light at all (matte), the lit colour stepped into `bands` flat tones with a soft join
 // (bandSoft, as a share of a band), and the dark edge drawn as an ink line (below inkAt of |N.V|, soft over inkSoft,
 // down to inkDark) inside the wider shade (edge, edgeWidth).
-export const PLAIN_LOOK = Object.freeze({ tendonMix: 0.92, edge: 0.55, edgeWidth: 0.5, matte: true, bands: 4, bandSoft: 0.12, bandTop: 1.15, inkAt: 0.2, inkSoft: 0.05, inkDark: 0.1 });
+// (later: "much darker blacks instead of ugly grays": the ink line nearly black, inkDark 0.1 -> 0.03, and a deeper edge shade 0.55 -> 0.42.)
+export const PLAIN_LOOK = Object.freeze({ tendonMix: 0.92, edge: 0.42, edgeWidth: 0.5, matte: true, bands: 4, bandSoft: 0.12, bandTop: 1.15, inkAt: 0.2, inkSoft: 0.05, inkDark: 0.03 });
 export function patchPlainShaders(vertexShader, fragmentShader, kind, boneLinear, o = PLAIN_LOOK) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || !Array.isArray(boneLinear)) return null;
   const OUT = ['#include <opaque_fragment>', '#include <output_fragment>'].find(h => fragmentShader.includes(h));
@@ -5904,7 +5910,8 @@ export function createScene({
     const t = muscleTones.byKey && muscleTones.byKey.has(key) ? muscleTones.byKey.get(key) : muscleToneFallback(key);
     // R558: the storey shade follows the full 226-muscle classification (ns-body bodyMuscleLayer: catalogue + the merged
     // supplement tables), not only the muscles the stack lifts, so every deeper muscle reads a little darker.
-    return muscleBaseInto(t, typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(id) : bodyStackLevel(id), out);
+    muscleBaseInto(t, typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(id) : bodyStackLevel(id), out);
+    return NsColors.muscleOwnShadeInto(key, out); // 19 November 2026: every muscle its own shade of its tone
   }
   const setMuscleBase = (mat, id) => { if (mat && mat.userData) mat.userData.nsMuscleBase = muscleBaseOf(id); return mat; };
   // ---- R5-scene (D19, R23): the mirror body (a reflected copy of your body and arm, behind the brain, facing you) -----
@@ -8301,7 +8308,12 @@ export function createScene({
     // no halo, and its RESTING red-brown surface (darkening it under a faint blue emission read as a grey, discoloured
     // muscle on the near arm, not as a highlight).
     // R558 (Message 18): the muscle's own tone and storey shade (setMuscleBase), else the shared fallback colour.
-    const base = mat.userData && mat.userData.nsMuscleBase ? mat.userData.nsMuscleBase : muscleBaseLinear;
+    let base = mat.userData && mat.userData.nsMuscleBase ? mat.userData.nsMuscleBase : muscleBaseLinear;
+    // 19 November 2026 (VISITED): a muscle that has been switched on keeps a dimmed, greyer resting shade
+    if (mat.userData) {
+      if (!hint && t >= NsColors.VISITED.markLevel && mat.userData.nsVisited !== true) { mat.userData.nsVisited = true; mat.userData.nsVisitedBase = NsColors.visitedShadeInto([base[0], base[1], base[2]]); }
+      if (mat.userData.nsVisited === true && mat.userData.nsVisitedBase) base = mat.userData.nsVisitedBase;
+    }
     // R558 (Message 22): the power-up charge. The resting albedo (for the part the energy front has not reached yet),
     // and the start: a muscle that begins to glow joins its area's start (powerUpJoin), so all three items run in step;
     // a hint glows calm (no charge, flash, pulse or ripple).

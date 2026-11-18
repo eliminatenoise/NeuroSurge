@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-34",
+  "version": "experimental-2026-11-19-body-update-35",
   "experimental": true,
-  "source": "Body update 34. Drag a limb to turn and bend it through its whole range; turn a held thing while carrying it.",
+  "source": "Body update 35. A strip without lines, every muscle its own shade, what has been tried stays marked, bony fingertips, darker blacks.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 253306,
-      "sha256": "a8c1e7931ac3af3bc4a9254337100f2f0589a74e36565ddf3f3a8e0bf94d594b"
+      "bytes": 255968,
+      "sha256": "7ae8c69a4a9eec07fb40127551fac1b41131af55798a2e32303f3da2098a09ca"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 32775,
-      "sha256": "31f98ce7becfc31a00a39579bf60d37e04c6fab0da177eea1416135506174f75"
+      "bytes": 33303,
+      "sha256": "d19b46bad025f0988dcd49ab7252d9dec2faa12bf3f0cd1ef5f34389bdc8efe3"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "b550ea654fed13abf934de44fb57afde08d199ad8ad62000a0c690b61ae61db4"
+      "sha256": "d8e7d92a3ca1ac0ef748fce5142ec1172468f8ce28adf5f014f78dbe5c390bc1"
     },
     {
       "path": "index.html",
@@ -3982,8 +3982,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 601901,
-      "sha256": "ab08f2d22a3833a68e2505d562f80fd4f3e5b3343d07510991cab07957303264"
+      "bytes": 602415,
+      "sha256": "375c931b55e751d811d83d96bb2ecdc774fea628f123498b315e4ffbc5dbca93"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -3992,8 +3992,8 @@
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 61303,
-      "sha256": "956bd795b01b0404fb84f401b507e5c6d3d633f02447f1230d1baa871eaa4b07"
+      "bytes": 61926,
+      "sha256": "902c8fae17f22545e3875d0325a0a36c3d04752cf6ec852ae22b0ff664a243ed"
     },
     {
       "path": "scene/src/ns-brain-live.mjs",
@@ -4017,8 +4017,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 98571,
-      "sha256": "6ba3cdc881defdf5fcfbc4b2820176467a3600d41d86a7001da4af3a63069de8"
+      "bytes": 100665,
+      "sha256": "ebf3ae37782ffcb6189b34a0d1c971b8501cdac362e82c5202deea2c2f091772"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4157,13 +4157,13 @@
     },
     {
       "path": "scene/src/ns-room.mjs",
-      "bytes": 27213,
-      "sha256": "532df877af17c72f62eab44e5959c594fc8914579c020a96893a7b1a69610351"
+      "bytes": 27383,
+      "sha256": "efebb64bbde0b34655485ee3e2d689d7a109c4dc62ea9549d0ff25594e9f0803"
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1082738,
-      "sha256": "4846f1385efd04f1fd57be3d5c4db8846259630cf3ffeef868aef142232f9df8"
+      "bytes": 1084043,
+      "sha256": "275b79757d3b7e0c4323371d159c6eea91ded05c3c3c2a5a193e0b5a3b76ac73"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4252,8 +4252,8 @@
     },
     {
       "path": "tests/bulk.test.mjs",
-      "bytes": 10164,
-      "sha256": "1f26a8dd6b5f12382f0c3dccc72e637b7e13829ba67966c4b1d9a4423101469a"
+      "bytes": 10253,
+      "sha256": "bbc2f575fd880335812e6a56d814d04430915d0dc845ea85c6d3cb3877143b09"
     },
     {
       "path": "tests/cancel-epoch.test.mjs",
@@ -4382,8 +4382,8 @@
     },
     {
       "path": "tests/plain-look.test.mjs",
-      "bytes": 2819,
-      "sha256": "eb95ab629d2890fa7165efaaacb41558e08415e2ce2cb1d74dd9c4ee9e5e4adb"
+      "bytes": 4329,
+      "sha256": "bed5c64af3e504372fd190a2f873685485e20ce06e6231378bd5ea0dacfb0c69"
     },
     {
       "path": "tests/pointer-release.test.mjs",
