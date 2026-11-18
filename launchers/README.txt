@@ -5,7 +5,8 @@ runs in your browser on your computer. You need a network connection and a
 modern browser with JavaScript and WebGL; no Node or Python installation.
 
 Preview: https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html
-Package: experimental-2026-11-12-body-update-5
+Original launcher edition: experimental-2026-11-12-body-update-5
+Game edition: see https://eliminatenoise.github.io/NeuroSurge/START.html
 
 Download the ZIP and extract it. Then open the file for your system:
   Windows: NeuroSurge-Windows.url
@@ -34,7 +35,8 @@ To remove the menu entry, delete brain2body-neurosurge.desktop from the printed
 location. Keep any backup you want, or delete it separately. Downloaded launcher
 files can be deleted normally.
 
-The shortcut opens the online preview at the same address as it changes. It
+The shortcut uses a fixed address. The game at that address updates
+independently of the launcher. It
 does not contain an offline game, trained model, neural recording or decoder.
 NeuroSurge uses simulated movement and colours. It does not decode neural
 recordings or demonstrate validated joint mechanics or clinical function.

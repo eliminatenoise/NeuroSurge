@@ -1,6 +1,7 @@
 {
   "project": "NeuroSurge",
   "version": "experimental-2026-11-12-body-update-5",
+  "version_scope": "Original desktop launcher edition. The game at the target address updates independently.",
   "kind": "online desktop URL launchers",
   "target": "https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html",
   "hashAlgorithm": "sha256",
@@ -12,8 +13,8 @@
     },
     {
       "name": "NeuroSurge-Launchers.zip",
-      "bytes": 4655,
-      "sha256": "2d6e7958778432ea45e887f9c18743b8c42321212cabf008c1d0faececb5ecb6"
+      "bytes": 4697,
+      "sha256": "debd48c7e03e5e9a2c53747509c9ad12015469ba5e7ac34b10f19909a9d6738d"
     },
     {
       "name": "NeuroSurge-Linux.desktop",
@@ -32,13 +33,13 @@
     },
     {
       "name": "README.txt",
-      "bytes": 2620,
-      "sha256": "4fa26191566dc5a5b6da4d45070ea777ff71e2612d1730af7d7c537c3e7a72b1"
+      "bytes": 2737,
+      "sha256": "ceb420f6452d1b2fca6b3db65fea5b6037eb6e31e22387800794de677d36ab47"
     },
     {
       "name": "SHA256SUMS",
       "bytes": 441,
-      "sha256": "a49691e23ef73e357db3944e828fbec3b4a974f42997db2a3f505fdd4515e854"
+      "sha256": "140495b7751861c51f3a4f6486724432008327a5fc21e654cba722c2f7b40d49"
     }
   ],
   "hash_coverage": {

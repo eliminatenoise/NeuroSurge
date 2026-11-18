@@ -37,8 +37,8 @@
     },
     {
       "path": "LAUNCHERS.md",
-      "bytes": 3129,
-      "sha256": "b624eea2801c6bdce7942977e18f9729b5175429f5693286f72f501c2ec79312"
+      "bytes": 3205,
+      "sha256": "df98d3f5b3538eab7fa1e4da7694be9b092823e277964959a9fcb74c16dd4057"
     },
     {
       "path": "LICENSE",
@@ -52,18 +52,18 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 55410,
-      "sha256": "51a698ae948ab3ecee72209f2df482c88c2450e77e1c36c7ade513384ac9c938"
+      "bytes": 55456,
+      "sha256": "0dca9b2a951336fd6c853ddadd5b6a0b5606a478a2dd325a4accf561692d1a73"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 26095,
-      "sha256": "209b7cf9060637c0807e1768e114976c1c9e91f730a7f88f768073be6ee3a5d2"
+      "bytes": 26509,
+      "sha256": "77de522581e73f0eb5e53de1812d8f77df7d5dd7ef7675fb76454b8cacc8b5ee"
     },
     {
       "path": "README.md",
-      "bytes": 14661,
-      "sha256": "ae50d8d408e5925fcb5e1507409e10a9f00eee10fc66a5e7e0c65949640627a1"
+      "bytes": 14820,
+      "sha256": "4607e2eef0b77359ac3bcedb1efb34cb876e35321d38a5c5940f7d0e5306a02c"
     },
     {
       "path": "START.html",
@@ -97,13 +97,13 @@
     },
     {
       "path": "launchers/MANIFEST.json",
-      "bytes": 3004,
-      "sha256": "d06edea5e02aca09d54f397f39f6b3d78d9e1250548243fc7225f67f35b3e716"
+      "bytes": 3115,
+      "sha256": "a657c86363d2ecfa6dcd1312d4e54d69b5934145993fd1239069f340f093e24c"
     },
     {
       "path": "launchers/NeuroSurge-Launchers.zip",
-      "bytes": 4655,
-      "sha256": "2d6e7958778432ea45e887f9c18743b8c42321212cabf008c1d0faececb5ecb6"
+      "bytes": 4697,
+      "sha256": "debd48c7e03e5e9a2c53747509c9ad12015469ba5e7ac34b10f19909a9d6738d"
     },
     {
       "path": "launchers/NeuroSurge-Linux.desktop",
@@ -122,13 +122,13 @@
     },
     {
       "path": "launchers/README.txt",
-      "bytes": 2620,
-      "sha256": "4fa26191566dc5a5b6da4d45070ea777ff71e2612d1730af7d7c537c3e7a72b1"
+      "bytes": 2737,
+      "sha256": "ceb420f6452d1b2fca6b3db65fea5b6037eb6e31e22387800794de677d36ab47"
     },
     {
       "path": "launchers/SHA256SUMS",
       "bytes": 441,
-      "sha256": "a49691e23ef73e357db3944e828fbec3b4a974f42997db2a3f505fdd4515e854"
+      "sha256": "140495b7751861c51f3a4f6486724432008327a5fc21e654cba722c2f7b40d49"
     },
     {
       "path": "packets/bodyparts3d-body-vessels-r1/ACQUISITION-RECORD.json",
