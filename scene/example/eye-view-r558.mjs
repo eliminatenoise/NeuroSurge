@@ -23,7 +23,12 @@ import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
 // down to 99 below: the collar bones lie inside its lower edge with both shoulders in the lower corners, and the
 // chest, stomach and pelvis above them. The price: things in the middle are drawn about a seventh smaller and the
 // corners are stretched more (120 was called absurd on 17 November; 116 stays under it).
-const EYE_FOV_Y_DEG = 116;
+// 18 November 2026, after a check (the chest filled the lower third of that picture, the stomach was a narrow band
+// and the limbs were thin): 116 -> 100. The camera now stands higher and further back (ns-camera EYE_DOLLY, with the
+// neck shade of ns-scene-three NECK_SHADE), where both shoulders, the collar bones, the chest, the stomach and the
+// pelvis fit inside 100 degrees; things in the middle of the picture are drawn about a third larger than at 116 and
+// the corners are stretched far less.
+const EYE_FOV_Y_DEG = 100;
 // 17 November 2026 (user: "what if we made the brain far lower so that the relevant body parts were always in view?";
 // "You will naturally be looking a little downwards and that is where the motor strip should naturally be"): the game
 // starts with the look a little below level, as someone leaning back on a sofa looks, and the brain starts there too,
@@ -78,7 +83,7 @@ const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
 // covers the canvas (ns-assembly: it gets a COPY of the bytes fetched below and changes nothing the game receives),
 // and the main controls are shown for the first five seconds. Only the ordinary boot case; the two test cases keep
 // their plain page.
-const assembly = mode === 'boot' ? startAssembly({ host: app }) : null;
+const assembly = mode === 'boot' ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
 if (mode === 'boot') { app.dataset.nsPhase = 'loading'; showControlsCard({ host: document.body }); }
 const endLoadingPicture = () => { app.dataset.nsPhase = 'playing'; if (assembly) assembly.finish(); };
 const observations = { mode, configurationSignature: CONFIGURED_R302_SIGNATURE, qa: false, placeholder: false,

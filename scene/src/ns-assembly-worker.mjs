@@ -37,7 +37,7 @@ self.onmessage = ev => {
   const m = ev.data || {};
   try {
     if (m.type === 'init') {
-      view = createAssemblyView({ THREE, canvas: m.canvas, width: m.width, height: m.height, pixelRatio: m.pixelRatio });
+      view = createAssemblyView({ THREE, canvas: m.canvas, width: m.width, height: m.height, pixelRatio: m.pixelRatio, room: m.room || null });
       running = true;
       self.postMessage({ type: 'ready' });
       raf(tick);

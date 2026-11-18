@@ -107,10 +107,30 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  * of that (the opening at the root of the neck comes into the picture from behind there). Every part is continuous,
  * so no look makes the picture jump. Display choices found on screenshots and on the posed body's landmarks; not a
  * measurement of anything.
+ * 18 November 2026, after a check (the chest filled the lower third of the picture as two slabs, the stomach was a
+ * 50 px band behind its far edge, and the crosshair could no longer be put on your own belly): the camera now stands
+ * 26 cm above the eyes along the head's up AND 14 cm back along the line of sight at the start look: from higher up
+ * the chest is a smaller, flatter plate, the stomach and pelvis show over its far edge, and both shoulders and the
+ * collar bones are inside a NARROWER view (100 degrees, was 116), so everything is drawn larger for its place. What
+ * made that possible is the neck shade (ns-scene-three NECK_SHADE): the place where your own neck leaves the chest
+ * is drawn as a dark shape, so a camera behind the collar bones no longer looks into the open rib cage. Below the
+ * start look the offsets follow byPitch (rows [look pitch, upM, backM], read in a straight line between the rows): looking
+ * further down the camera comes back to the line of sight and nearer the eye, so the crosshair reaches your own
+ * belly at the look's lower end. Above the start look both ease to 0 between upFromDeg and upFullDeg (at a level look
+ * the camera is the eye again).
+ * 18 November 2026, after a second check (far down, the camera 12 cm back on the line of sight stood behind the
+ * collar bones and looked into the neck shade from above: a black disc 480 px wide at 75 down, and, with the look
+ * also turned 60 degrees or more to a side, the trunk seen opened from above: a flap of back muscle and a loose
+ * stump beside the shade): the table's lower end is now 8 cm up and 0 back (at 75 down the camera stands over the
+ * eye, in front of the collar bones: the shade is out of the picture and the chest lies below it), and the ease for
+ * looks to a side runs from 50 to 100 degrees (was 95 to 155): looking 100 degrees or more to a side the camera is
+ * the eye, as before the camera was moved at all. Seen on pictures at 0 / 30 / 60 / 75 / 95 degrees to a side and
+ * 45 to 72 down: no opening, flap or stump.
  */
 export const EYE_DOLLY = Object.freeze({
-  backM: 0.01, upM: 0.12, headAboveLookDeg: 30, headLevelEndDeg: 40,
-  upFromDeg: -12, upFullDeg: 25, sideShare: 0, sideFromDeg: 100, sideFullDeg: 150
+  backM: 0.14, upM: 0.26, headAboveLookDeg: 30, headLevelEndDeg: 40,
+  byPitch: Object.freeze([[-75, 0.08, 0], [-41, 0.26, 0.14]].map(r => Object.freeze(r))),
+  upFromDeg: -38, upFullDeg: 18, sideShare: 0, sideFromDeg: 50, sideFullDeg: 100
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
  * forward): { backM along the line of sight, upM along the head's up direction, headPitch (radians: the head's own
@@ -120,7 +140,15 @@ export function eyeDolly(look, o = EYE_DOLLY) {
   const up = smooth(o.upFromDeg * DEG, o.upFullDeg * DEG, l.pitch);
   const side = smooth(o.sideFromDeg * DEG, o.sideFullDeg * DEG, Math.abs(wrapAngle(l.yaw)));
   const share = (1 - up) * (1 + (o.sideShare - 1) * side);
-  const backM = Math.max(0, o.backM * share), upM = Math.max(0, o.upM * share);
+  // below the start look the offsets follow byPitch rows [look pitch deg, upM, backM] (read between the rows; held at
+  // the ends); above the last row they are upM / backM
+  let up0 = o.upM, back0 = o.backM;
+  const T = o.byPitch, pdeg = l.pitch / DEG;
+  if (Array.isArray(T) && T.length && pdeg < T[T.length - 1][0]) {
+    if (pdeg <= T[0][0]) { up0 = T[0][1]; back0 = T[0][2]; }
+    else for (let i = 1; i < T.length; i++) if (pdeg <= T[i][0]) { const u = (pdeg - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); up0 = T[i - 1][1] + u * (T[i][1] - T[i - 1][1]); back0 = T[i - 1][2] + u * (T[i][2] - T[i - 1][2]); break; }
+  }
+  const backM = Math.max(0, back0 * share), upM = Math.max(0, up0 * share);
   // the head's pitch for this look (ns-app headPitchForLook with the posture's eye lowering)
   const e = o.headAboveLookDeg, end = o.headLevelEndDeg, pd = l.pitch / DEG;
   const hd = pd <= -e ? pd + e : pd >= end ? pd : (end * (pd + e)) / (end + e), h = hd * DEG;
@@ -220,7 +248,13 @@ export const THIRD_PERSON = Object.freeze({
   // whole body is seen three-quarter from behind, in its true proportions, with the whole motor strip beyond the
   // feet, and the crosshair opens on the bare brain between its arrows and the mirror body. A look 51 degrees to the
   // left still brings the side-on picture of the posture, 24 to the right the one from straight behind.)
-  followYawDeg: 24,
+  // (18 November 2026, after a check of the 24: from behind the right shoulder the lying body was seen end-on, its
+  // legs foreshortened to stumps that read as cut off, and the tip by the crosshair opened over them. 24 -> 66: the
+  // camera stands to the right and a little behind, so the whole body, head to feet, is seen three-quarter from the
+  // side in its true proportions, with the right half of the motor strip beyond the feet (the brain is twice the
+  // size it was when 75 cut it off) and the crosshair in the open beside the brain. A look 66 to the right brings
+  // the picture from straight behind with the whole strip.)
+  followYawDeg: 66,
   followBody: true,
   followPitchBiasDeg: 16,
   followMaxPitchDeg: 5,
@@ -232,7 +266,8 @@ export const THIRD_PERSON = Object.freeze({
   // the view (ns-scene-three setCameraPose viewFovYDeg). null = the eye view's angle.
   followFovYDeg: 60,
   // (third pass: 1.6 -> 1.9: with the trunk rising more steeply from the pelvis and the centre a little higher, the feet left the bottom of the picture at 1.6)
-  distanceM: 1.9,
+  // (18 November 2026: 1.9 -> 1.7 with followYawDeg 66: the body a little larger, feet still inside the picture)
+  distanceM: 1.7,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
   aimAtBrain: true,

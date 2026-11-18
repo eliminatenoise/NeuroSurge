@@ -23,8 +23,10 @@ test('from outside, the camera stands behind and to the right of the lying body 
   // looking along -z: +x is the player's right, +z is behind the eyes
   // (18 November 2026, fourth pass: the camera now stands behind the right shoulder, three-quarter from behind, so the
   // brain beyond the feet is in the picture; before, it stood beside the trunk and the brain was cut off)
-  assert.ok(p.position[0] > 0.5, `to the right (${p.position[0].toFixed(2)} m)`);
-  assert.ok(p.position[2] > 0.4 && p.position[2] < 2, `behind the head (${p.position[2].toFixed(2)} m)`);
+  // (18 November 2026, after a check: from behind the shoulder the lying body was seen end-on with its legs
+  // foreshortened to stumps; the camera now stands to the right and a little behind, three-quarter from the side)
+  assert.ok(p.position[0] > 1, `to the right (${p.position[0].toFixed(2)} m)`);
+  assert.ok(p.position[2] > 0.05 && p.position[2] < 1, `a little behind the head (${p.position[2].toFixed(2)} m)`);
   assert.ok(Math.abs(p.yaw - T.followYawDeg * DEG) < 1e-12, 'turned toward the body');
   assert.ok(Math.abs(p.pitch - (-34 + T.followPitchBiasDeg) * DEG) < 1e-12, 'lower than the look alone would put it: a side-on picture');
   // the camera looks straight through the orbit centre

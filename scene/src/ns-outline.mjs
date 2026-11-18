@@ -81,16 +81,40 @@
  *  renderOrder: the composite's place in the transparent list (first).
  *  R558 (user Message 49, "Maybe you've overdone it with the borderlands style?"): the lines are a little thinner
  *  (bold 2.4 -> 2.0, inner 1.2 -> 1.0, fine 0.8 -> 0.7 CSS px) and the lines INSIDE a figure lighter (silhouette
- *  0.94 -> 0.85, inner 0.8 -> 0.6, faint 0.7 -> 0.45); a line where one limb overlaps another keeps full strength. */
+ *  0.94 -> 0.85, inner 0.8 -> 0.6, faint 0.7 -> 0.45); a line where one limb overlaps another keeps full strength.
+ *  18 November (the owner: "telltale games art style rather than borderlands", "the difference ... can be somewhat
+ *  subtle"; earlier: "not so harsh that it hurts the viewer's eyes"): thinner and softer contours over the painted
+ *  bodies. bold 2.0 -> 1.6, inner 1.0 -> 0.9, fine 0.7 -> 0.6 CSS px; strong 1 -> 0.92, silhouette 0.85 -> 0.78, inner
+ *  0.6 -> 0.5, faint 0.45 -> 0.3; the ink a very dark warm brown (#14090a) instead of the near-black #0b0809, so a
+ *  line on red muscle reads as a deep shadow line, not as a pen. holeCss 2 -> 4: where two muscles lie in each other
+ *  (the lower belly, the hip) the specks of one showing through the other, up to 4 px across, no longer get rings of
+ *  ink (the owner, 18 November: "rough patchy small-poxy muscles"). thinShare 0.45 -> 0.3, thinFull 0.65 -> 0.75: the
+ *  line thins more at finger tips and tendon ends (it clotted into black dots there).
+ *  Second round, 18 November (checker: the hands on the thighs still had bold near-black loops round the fingers and
+ *  blobs at the finger tips): slimCm / slimWidth / slimAlpha. A bold line (an overlap or a silhouette) round a SLIM
+ *  piece keeps only slimWidth of its width and slimAlpha of its opacity. A piece is slim where, going from the line
+ *  into the piece, the background or a limb that does not join it is reached again within slimCm centimetres (a
+ *  finger, a tendon, a toe; not a forearm, a thigh or the trunk), or where, going the other way across what lies
+ *  beyond the line, the same limb is reached again within that distance (a slim gap: the thigh seen between the
+ *  bars of the hand's skeleton, the background between two fingers). Before, each finger carried the same bold line as a whole arm on both of its sides, and the
+ *  hand read as black loops. The overlap is still marked (11 November: "If limbs are overlapping, make sure their
+ *  clearly defined with outlines"), by a thin contour of even weight.
+ *  Depth preference (ns-flesh BODY_DEPTH_PREFERENCE): a body geometry may carry the attribute nsLift (metres per
+ *  vertex along the line of sight, negative = away from the eye); the ID pass then draws it, in depth only, that much
+ *  nearer or further, exactly as its material draws it in the main picture, so the lines follow what is seen.
+ *  stripColour: the ink of the motor strip's own line on the brain stays the near-black #0b0809 (the brain is not
+ *  restyled with the bodies; it used to read `colour`). */
 export const OUTLINE = Object.freeze({
-  colour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]),
-  boldCss: 2.0, innerCss: 1.0, fineCss: 0.7,
-  strong: 1, silhouette: 0.85, inner: 0.6, faint: 0.45,
+  colour: Object.freeze([0x14 / 255, 0x09 / 255, 0x0a / 255]),
+  boldCss: 1.6, innerCss: 0.9, fineCss: 0.6,
+  strong: 0.92, silhouette: 0.78, inner: 0.5, faint: 0.3,
   taperFullPxCm: 7, taperMin: 0.42,
   detailFromPxCm: 0.9, detailFullPxCm: 2.6,
   maxRadiusSs: 7,
-  stripCss: 2.0, stripAlpha: 0.95, holeCss: 2.0,
-  thinShare: 0.45, thinFrom: 0.25, thinFull: 0.65,
+  stripColour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]),
+  stripCss: 2.0, stripAlpha: 0.95, holeCss: 4.0,
+  thinShare: 0.3, thinFrom: 0.25, thinFull: 0.75,
+  slimCm: 2.4, slimWidth: 0.6, slimAlpha: 0.8,
   jumpAdjM: 0.012, jumpSameM: 0.022, jumpRel: 0.015, levelM: 0.0015,
   renderOrder: -1e6
 });
@@ -230,11 +254,14 @@ const ID_VS = `
 #include <common>
 #include <batching_pars_vertex>
 #include <logdepthbuf_pars_vertex>
+attribute float nsLift;
 flat varying vec3 vNsId;
 void main() {
 	#include <batching_vertex>
 	#include <begin_vertex>
 	#include <project_vertex>
+	// the depth preference of a few meshes (metres nearer the eye, negative = away, 0 for the rest; ns-flesh FLESH_DEPTH_LIFT_GLSL)
+	if ( nsLift != 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) gl_Position.z = ( projectionMatrix[ 3 ][ 2 ] / max( gl_Position.w - nsLift, 1e-4 ) - projectionMatrix[ 2 ][ 2 ] ) * gl_Position.w;
 	#include <logdepthbuf_vertex>
 	#ifdef USE_BATCHING_COLOR
 	vNsId = getBatchingColor( getIndirectIndex( gl_DrawID ) );
@@ -300,13 +327,15 @@ int groupOf( vec4 c ) { return int( c.r * 255.0 + 0.5 ); }
 int meshOf( vec4 c ) { return int( c.g * 255.0 + 0.5 ) * 256 + int( c.b * 255.0 + 0.5 ); } // 14 bits (flags removed)
 `;
 /* EDGE PASS (supersampled): the class of the boundary next to this sample, drawn on the nearer side (4 strong, 3
- * silhouette, 2 inner step, 1 parting; 0 none). Output: (class, mesh high, mesh low, group) / 255. */
+ * silhouette, 2 inner step, 1 parting; 0 none; + 8 = a bold line round a slim piece). Output: (class, mesh high, mesh
+ * low, group) / 255. */
 const EDGE_FS = COMMON_GLSL + `
 uniform sampler2D tAdj;
 uniform sampler2D tStrip; // the motor strip's coverage where it is in front of the bodies (r > 0.5)
 uniform vec4 uJump;   // jumpAdjM, jumpSameM, jumpRel, levelM
 uniform float uStripOn;
 uniform int uHole;    // probe reach in samples (OUTLINE.holeCss), 2 .. 8
+uniform vec2 uSlim;   // x: samples per centimetre at 1 m, y: the width under which a piece is slim (cm; 0 = off)
 // A speck or small hole next to this sample (OUTLINE.holeCss): walk on from the neighbour along the same step while the
 // samples stay in the foreign region (the background for gf == 0, else that one mesh); true when, within uHole samples,
 // the walk comes out on this sample's own limb group (or a limb joining it, OUTLINE_ADJACENT) at about its depth.
@@ -346,6 +375,7 @@ void main() {
 	float z = viewDist( texelFetch( tDepth, p, 0 ).r );
 	bool mirror = g >= 16;
 	int cls = 0;
+	ivec2 bo = ivec2( 0 );
 	for ( int i = 0; i < 8; i ++ ) {
 		ivec2 o = i == 0 ? ivec2( 1, 0 ) : i == 1 ? ivec2( - 1, 0 ) : i == 2 ? ivec2( 0, 1 ) : i == 3 ? ivec2( 0, - 1 ) :
 			i == 4 ? ivec2( 1, 1 ) : i == 5 ? ivec2( - 1, 1 ) : i == 6 ? ivec2( 1, - 1 ) : ivec2( - 1, - 1 );
@@ -374,9 +404,37 @@ void main() {
 				k = 1;
 			}
 		}
-		cls = max( cls, k );
+		if ( k > cls ) { cls = k; bo = o; }
 	}
 	if ( cls == 0 && ! stripEdge ) discard;
+	// A SLIM piece (OUTLINE.slimCm): going from a bold boundary into the piece, the background or a limb that does not
+	// join this one is reached again within the reach. Its bold line is drawn thin (the ink pass reads the flag, + 8).
+	if ( cls >= 3 && uSlim.y > 0.0 ) {
+		float reach = min( uSlim.x * uSlim.y / max( z, 1e-3 ), 96.0 );
+		if ( reach >= 3.0 ) {
+			bool slim = false;
+			for ( int k = 1; k <= 8; k ++ ) {
+				ivec2 r = p - ivec2( round( vec2( bo ) * ( reach * float( k ) / 8.0 ) ) );
+				if ( r.x < 0 || r.y < 0 || r.x >= uSize.x || r.y >= uSize.y ) break;
+				int gr = groupOf( texelFetch( tId, r, 0 ) );
+				if ( gr == 0 || ( gr != g && texelFetch( tAdj, ivec2( gr, g ), 0 ).r < 0.5 ) ) { slim = true; break; }
+			}
+			// ... or the other way: a slim GAP in this piece (the thigh seen between the bars of the hand, the background
+			// between two fingers): going out across the foreign region, this limb (or one joining it) is reached again
+			if ( ! slim ) {
+				int gf = groupOf( texelFetch( tId, clamp( p + bo, ivec2( 0 ), uSize - 1 ), 0 ) );
+				for ( int k = 1; k <= 8; k ++ ) {
+					ivec2 r = p + ivec2( round( vec2( bo ) * ( 1.0 + reach * float( k ) / 8.0 ) ) );
+					if ( r.x < 0 || r.y < 0 || r.x >= uSize.x || r.y >= uSize.y ) break;
+					int gr = groupOf( texelFetch( tId, r, 0 ) );
+					if ( gr == gf ) continue;
+					slim = gr != 0 && texelFetch( tAdj, ivec2( gr, g ), 0 ).r > 0.5;
+					break;
+				}
+			}
+			if ( slim ) cls += 8;
+		}
+	}
 	gl_FragColor = vec4( float( cls ) / 255.0, c.g + ( stripEdge ? 128.0 / 255.0 : 0.0 ), c.b, c.r );
 }`;
 /* INK PASS (drawing-buffer pixels). Each of the pixel's uSS x uSS samples takes the strongest line whose boundary sample
@@ -397,6 +455,7 @@ uniform vec2 uDetail; // inner / parting fade: start, full (CSS px per cm)
 uniform vec4 uAo;     // x: strength (0 = off), y: radius (m), z: bias (share of the radius), w: max radius (samples)
 uniform vec2 uProj;   // projection matrix [0][0], [1][1]
 uniform vec3 uThin;   // x: thin width share, y / z: one-sidedness of the boundary at which the full width starts / is reached
+uniform vec2 uSlimInk; // a bold line round a slim piece: x = share of the width, y = share of the opacity
 vec3 viewPos( ivec2 q, float dist ) {
 	vec2 ndc = ( vec2( q ) + 0.5 ) / vec2( uSize ) * 2.0 - 1.0;
 	return vec3( ndc.x * dist / uProj.x, ndc.y * dist / uProj.y, - dist );
@@ -475,6 +534,8 @@ void main() {
 			if ( e.x < 0 || e.y < 0 || e.x >= uSize.x || e.y >= uSize.y ) continue;
 			vec4 E = texelFetch( tEdge, e, 0 );
 			int cls = int( E.r * 255.0 + 0.5 );
+			bool slim = cls >= 8;
+			if ( slim ) cls -= 8;
 			int eg = int( E.g * 255.0 + 0.5 );
 			if ( eg >= 128 ) {
 				eg -= 128;
@@ -489,8 +550,9 @@ void main() {
 			int ge = int( E.a * 255.0 + 0.5 );
 			int me = eg * 256 + int( E.b * 255.0 + 0.5 );
 			bool bold = cls >= 3;
-			float w = bold ? wB : cls == 2 ? wI : wF;
+			float w = bold ? ( slim ? wB * uSlimInk.x : wB ) : cls == 2 ? wI : wF;
 			float a = cls == 4 ? uAlpha.x : cls == 3 ? uAlpha.y : cls == 2 ? uAlpha.z * detail : uAlpha.w * detail;
+			if ( slim ) a *= uSlimInk.y;
 			if ( a <= 0.0 ) continue;
 			for ( int i = 0; i < 4; i ++ ) {
 				if ( i >= n || gs[ i ] != ge || ( ! bold && ms[ i ] != me ) ) continue;
@@ -589,7 +651,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const edgeUni = {
     ...shared, tAdj: { value: adjTex }, tStrip: { value: stripTarget ? stripTarget.texture : null }, uStripOn: stripOn,
     uJump: { value: new THREE.Vector4(OUTLINE.jumpAdjM, OUTLINE.jumpSameM, OUTLINE.jumpRel, OUTLINE.levelM) },
-    uHole: { value: 2 }
+    uHole: { value: 2 }, uSlim: { value: new THREE.Vector2(9, OUTLINE.slimCm) }
   };
   const inkUni = {
     ...shared, tEdge: { value: edgeTarget ? edgeTarget.texture : null }, uSS: { value: 1 },
@@ -600,7 +662,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     uDetail: { value: new THREE.Vector2(OUTLINE.detailFromPxCm, OUTLINE.detailFullPxCm) },
     uAo: { value: new THREE.Vector4(0, OUTLINE_AO.radiusM, OUTLINE_AO.bias, OUTLINE_AO.maxRadiusPx) },
     uProj: { value: new THREE.Vector2(1, 1) },
-    uThin: { value: new THREE.Vector3(OUTLINE.thinShare, OUTLINE.thinFrom, OUTLINE.thinFull) }
+    uThin: { value: new THREE.Vector3(OUTLINE.thinShare, OUTLINE.thinFrom, OUTLINE.thinFull) },
+    uSlimInk: { value: new THREE.Vector2(OUTLINE.slimWidth, OUTLINE.slimAlpha) }
   };
   const screenMat = (fs, uniforms) => new THREE.ShaderMaterial({ uniforms, vertexShader: SCREEN_VS, fragmentShader: fs, depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false, fog: false });
   const edgeMat = screenMat(EDGE_FS, edgeUni), inkMat = screenMat(INK_FS, inkUni);
@@ -621,7 +684,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   composite.visible = false;
   // R558 BB: the strip's silhouette (the sulci that bound it, seen from above) drawn right after the motor areas.
   const stripCompMat = new THREE.ShaderMaterial({
-    uniforms: { tInk: compMat.uniforms.tInk, uColour: compMat.uniforms.uColour, uLive: { value: new THREE.Vector3(0, 0, 0) } }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
+    uniforms: { tInk: compMat.uniforms.tInk, uColour: { value: (c => new THREE.Vector3(c.r, c.g, c.b))(new THREE.Color().setRGB(...OUTLINE.stripColour, THREE.SRGBColorSpace)) }, uLive: { value: new THREE.Vector3(0, 0, 0) } }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending, depthTest: false, depthWrite: false, toneMapped: false, fog: false
   });
   const stripComposite = screenMesh(stripCompMat, 'ns-outline strip composite (ink silhouette of the motor strip; display only)');
@@ -689,9 +752,20 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     if (v !== level) { level = v; if (bufW > 0 && bufH > 0) sizeTargets(); }
     return ss;
   }
+  // The batch's copy of a body geometry: its positions and, where it has one, its depth preference (nsLift). A geometry
+  // without one gives zeros: a view of one shared block of zeros, exactly as long as its vertex count, so the batch
+  // copies it in one go (an empty attribute made the batch write its zeros vertex by vertex, which cost frames
+  // whenever a re-skinned geometry was written again).
+  let zeroLift = new Float32Array(4096);
   const positionOnly = g => {
     const w = new THREE.BufferGeometry();
     w.setAttribute('position', g.attributes.position);
+    const l = g.attributes.nsLift, n = g.attributes.position.count;
+    if (l && l.itemSize === 1 && l.count === n && !l.isInterleavedBufferAttribute) w.setAttribute('nsLift', l);
+    else {
+      if (zeroLift.length < n) zeroLift = new Float32Array(Math.ceil(n * 1.5));
+      w.setAttribute('nsLift', new THREE.BufferAttribute(zeroLift.subarray(0, n), 1));
+    }
     w.setIndex(g.index);
     return w;
   };
@@ -867,6 +941,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     const fov = Number.isFinite(camera.fov) ? camera.fov : 90;
     const pxcm = (bufH / pr) / (2 * Math.tan((fov * Math.PI) / 360)) / 100;
     if (inkUni.uTaper.value.x !== pxcm) { inkUni.uTaper.value.x = pxcm; changed = true; }
+    if (edgeUni.uSlim.value.x !== pxcm * pr * ss) { edgeUni.uSlim.value.x = pxcm * pr * ss; changed = true; } // supersampled samples per centimetre at 1 m
     if (changed || force || !composite.visible) {
       const prevTarget = renderer.getRenderTarget(), prevAlpha = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
       renderer.getClearColor(saveColour);

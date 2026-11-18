@@ -19,10 +19,16 @@ test('the camera rides above the eyes on the head, by an amount that eases out f
   assert.equal(E.headLevelEndDeg, NB.POSTURE_EYES.endAtHeadUpDeg);
   const s0 = at(0, -39);
   assert.ok(Math.abs(s0.upM - E.upM) < 1e-12 && s0.backM === E.backM, 'the full offset at the start look');
+  // below the start look the offsets follow the table: its last row is the start look's own offset, its first row
+  // (the look's lower end) brings the camera back to the line of sight and nearer the eye
+  const rows = E.byPitch, last = rows[rows.length - 1];
+  assert.ok(last[1] === E.upM && last[2] === E.backM && last[0] <= -39, 'the table ends in the start offsets');
+  for (const [p, u, b] of rows) { const d = at(0, p); assert.ok(Math.abs(d.upM - u) < 1e-12 && Math.abs(d.backM - b) < 1e-12, `table row at ${p}`); }
+  assert.ok(at(0, -75).backM === 0 && at(0, -75).upM <= 0.1 && at(0, -85).upM === rows[0][1], 'over the eye, not behind it, at the look\'s lower end; held below it');
   assert.ok(Math.abs(s0.headPitch / DEG + 9) < 1e-9, 'the head is bowed 9 degrees at a look of 39');
   // upM along the head's own up (for a bowed head it leans forward: forward is -z at yaw 0), less backM along the line of sight
   for (const pitch of [-39, -75]) {
-    const d = at(0, pitch), h = d.headPitch, g = NC.gazeDirection(0, pitch * DEG), want = [-E.backM * g[0], E.upM * Math.cos(h) - E.backM * g[1], E.upM * Math.sin(h) - E.backM * g[2]];
+    const d = at(0, pitch), h = d.headPitch, g = NC.gazeDirection(0, pitch * DEG), want = [-d.backM * g[0], d.upM * Math.cos(h) - d.backM * g[1], d.upM * Math.sin(h) - d.backM * g[2]];
     for (let k = 0; k < 3; k++) assert.ok(Math.abs(d.offset[k] - want[k]) < 1e-12, `offset at a look of ${pitch}`);
   }
   assert.ok(s0.offset[1] > 0.1 && Math.abs(s0.offset[0]) < 1e-12, 'mostly upward at the start look');
@@ -30,12 +36,16 @@ test('the camera rides above the eyes on the head, by an amount that eases out f
   for (const p of [E.upFullDeg, 85]) { const d = at(0, p); assert.ok(d.upM === 0 && d.backM === 0 && Math.hypot(...d.offset) === 0, 'at the eye when the look is up'); }
   for (const y of [E.sideFullDeg, -180]) { const d = at(y, -40); assert.ok(d.upM === 0 && Math.hypot(...d.offset) === 0, 'at the eye when the look is far round to a side'); }
   assert.ok(Math.abs(at(40, -40).upM - at(0, -40).upM) < 1e-12, 'unchanged for an ordinary look to a side');
+  // far to a side AND far down (a check found the trunk opened from above there): the camera is the eye again
+  for (const y of [100, -100, 120]) for (const p of [-72, -55, -41]) assert.equal(Math.hypot(...at(y, p).offset), 0, `at the eye at ${y}/${p}`);
+  assert.ok(Math.hypot(...at(75, -72).offset) < 0.5 * Math.hypot(...at(0, -72).offset), 'more than half way back to the eye at 75 degrees to a side');
   assert.ok(Math.abs(at(-50, -40).offset[1] - at(50, -40).offset[1]) < 1e-12 && Math.abs(at(-50, -40).offset[0] + at(50, -40).offset[0]) < 1e-12, 'mirrored to either side');
   assert.equal(back(0, -60), at(0, -60).backM);
-  // no jump: a quarter of a degree of look never moves the camera more than two millimetres
+  // no jump: a quarter of a degree of look never moves the camera more than three millimetres (18 November 2026: two
+  // before; the camera now stands up to 30 cm from the eye instead of 12, so it travels further for the same look)
   const step = (a, b) => Math.hypot(a.offset[0] - b.offset[0], a.offset[1] - b.offset[1], a.offset[2] - b.offset[2]);
-  for (let yaw = -180; yaw <= 180; yaw += 7.5) for (let pitch = -85; pitch < 85; pitch += 0.25) assert.ok(step(at(yaw, pitch), at(yaw, pitch + 0.25)) < 0.002, `pitch step at ${yaw}/${pitch}`);
-  for (let pitch = -80; pitch <= 80; pitch += 10) for (let yaw = -180; yaw < 180; yaw += 0.25) assert.ok(step(at(yaw, pitch), at(yaw + 0.25, pitch)) < 0.002, `yaw step at ${yaw}/${pitch}`);
+  for (let yaw = -180; yaw <= 180; yaw += 7.5) for (let pitch = -85; pitch < 85; pitch += 0.25) assert.ok(step(at(yaw, pitch), at(yaw, pitch + 0.25)) < 0.003, `pitch step at ${yaw}/${pitch}`);
+  for (let pitch = -80; pitch <= 80; pitch += 10) for (let yaw = -180; yaw < 180; yaw += 0.25) assert.ok(step(at(yaw, pitch), at(yaw + 0.25, pitch)) < 0.003, `yaw step at ${yaw}/${pitch}`);
 });
 function smooth01(t) { const x = Math.max(0, Math.min(1, t)); return x * x * (3 - 2 * x); }
 
@@ -43,7 +53,7 @@ test('only the camera moves: the eye stays the arm\'s parent point, and the cros
   const eye = [0.01, -0.03, -0.02];
   const frame = () => ({ position: eye, bodyToWorld: [0.001, 0, 0, 0, 0, 0, -0.001, 0, 0, 0.001, 0, 0, 0, 0, 0, 1], eyeBp: [0, -158, 1513] });
   const first = NC.createCameraState({ view: 'first' });
-  for (const [yaw, pitch] of [[0, -25], [30, -60], [-70, -10], [0, 10]]) {
+  for (const [yaw, pitch] of [[0, -25], [30, -60], [-70, -10], [0, -41]]) {
     const look = { yaw: yaw * DEG, pitch: pitch * DEG };
     const p = NC.cameraPose(first, { look, firstPersonFrame: frame });
     const dl = NC.eyeDolly(look), d = dl.backM, dir = NC.gazeDirection(look.yaw, look.pitch);

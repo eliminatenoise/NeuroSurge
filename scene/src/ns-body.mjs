@@ -93,7 +93,9 @@ export const BODY_JOINT_IDS = Object.freeze([
   // joints, BODY_JOINT_SHARES.pelvic_tilt), so the start posture can flatten and reverse the low back's hollow while
   // the rib-bearing spine stays straight. A posture term: no motor area moves it; trunk_flex still bends the whole
   // back from wherever this leaves it.
-  'pelvic_tilt'
+  'pelvic_tilt',
+  // 18 November 2026 (the leg turn, LEG_TURN): the whole leg's turn about its own length, led by the foot (+ = outward).
+  'leg_turn_L', 'leg_turn_R'
 ]);
 
 const lim = (lo, hi) => Object.freeze([lo, hi]);
@@ -146,8 +148,75 @@ export const BODY_JOINT_LIMITS = Object.freeze({
   // in the long-sitting start posture: internal about 35-45, external about 45 (same sources); internal 40 is used.
   // Cited from memory, not measured on this body. The Space dance may use less where the feet would touch
   // (hipRotationClearRange).
-  r_shoulder_rot: lim(-70, 90), hip_rot_L: lim(-40, 45), hip_rot_R: lim(-40, 45)
+  r_shoulder_rot: lim(-70, 90), hip_rot_L: lim(-40, 45), hip_rot_R: lim(-40, 45),
+  // 18 November 2026: the leg turn (LEG_TURN): 70 outward and 110 inward of where the foot rests, which puts the
+  // foot's own line 90 degrees out / 90 degrees in of straight ahead (this body's feet rest about 20 degrees toe-out).
+  leg_turn_L: lim(-110, 70), leg_turn_R: lim(-110, 70)
 });
+
+/**
+ * 18 November 2026 (the owner: "when we mean underside, overside for the legs, really, the ankles and the feet should
+ * be traveling the full 90 degrees either way"; earlier: "It's mainly the wrist and the ankle leading the movement, and
+ * any elbow or knee movement and minimal shoulder and hip movement follows from there"; "make sure limbs can't be put
+ * into impossible positions"). THE LEG TURN: one display joint per leg, leg_turn_L / leg_turn_R (degrees, positive =
+ * the toes turn outward), that turns the leg about its own length as a graded twist:
+ *   the FOOT turns first, under the ankle (the foot's turn in and out happens below the ankle bone, at the subtalar
+ *     and midtarsal joints: textbook; typical textbook range of the whole foot's adduction / abduction about 30 to 45
+ *     degrees inward and 15 to 25 outward, Kapandji; 40 and 15 here);
+ *   then the SHANK turns at the bent ("soft") knee (the knee has no axial turn when locked straight and about 30
+ *     degrees inward / 40 outward when bent: typical textbook range, Kapandji; 30 and 20 here, and the game's
+ *     straight knee is drawn slightly bent);
+ *   then the THIGH turns in the hip, inside the hip's own range (hip_rot limits and the combined-range rule; 40
+ *     inward, 35 outward here).
+ * At the ends the three add up to 110 inward and 70 outward. This reference body's feet rest about 20 degrees toe-out
+ * (the line from the ankle to the second toe's joint, read off the bones: 20.4 right, 19.5 left), so the foot's own
+ * line ends 90 degrees inward and 90 degrees outward of straight ahead. The inward end asks each joint for the whole
+ * of its textbook range at once, which is more than most people reach lying down: a display choice the owner asked
+ * for, not a measured range. `lead`: the fraction of the turn over which each part makes its share (the foot leads).
+ * With the foot's turn comes a little tipping of the sole (inward turn with inversion, outward with eversion: the
+ * foot's combined "supination / pronation", textbook), `solePerFootTurn` of the foot's share, inside ankle_inv's limits;
+ * and at the knee a few degrees of varus with the shank turned in and valgus with it turned out (`kneeSidePerShankTurn`;
+ * the owner: "joint varus/valgus during rotation").
+ * Toes: when both feet turn in, the forefeet reach toward each other; the thighs part by what keeps `toeGapMm` between
+ * them (at most `partMaxDeg` each) and come back as the feet turn out again (the owner: "as long as ... the toes and
+ * the front of the feet don't merge into each other"). `forefootReach`: the toe tips' distance from the ankle as a
+ * multiple of the ankle-to-ball distance.
+ */
+export const LEG_TURN = Object.freeze({
+  restToeOutDeg: 20,
+  out: Object.freeze({ deg: 70, foot: 15, shank: 20, thigh: 35 }),
+  in: Object.freeze({ deg: 110, foot: 40, shank: 30, thigh: 40 }),
+  lead: Object.freeze({ foot: Object.freeze([0, 0.6]), shank: Object.freeze([0.15, 0.85]), thigh: Object.freeze([0.3, 1]) }),
+  solePerFootTurn: 0.3, kneeSidePerShankTurn: 0.15,
+  toeGapMm: 25, partMaxDeg: 12, forefootReach: 1.6
+});
+const smooth01 = x => { const t = x <= 0 ? 0 : x >= 1 ? 1 : x; return t * t * (3 - 2 * t); };
+/** The three parts of a leg turn (LEG_TURN), degrees, signed like the turn (positive = outward): { foot, shank, thigh }.
+ * Each part rises smoothly over its own stretch of the turn; at the ends they add up to the turn itself. Pure. */
+export function legTurnShares(turnDeg, o = LEG_TURN) {
+  const t = Number.isFinite(turnDeg) ? clamp(turnDeg, -o.in.deg, o.out.deg) : 0;
+  if (!t) return { foot: 0, shank: 0, thigh: 0 };
+  const e = t > 0 ? o.out : o.in, u = Math.abs(t) / e.deg, sg = t > 0 ? 1 : -1;
+  const part = k => sg * e[k] * (k === 'foot' ? Math.sin(0.5 * Math.PI * clamp((u - o.lead.foot[0]) / (o.lead.foot[1] - o.lead.foot[0]), 0, 1)) : smooth01((u - o.lead[k][0]) / (o.lead[k][1] - o.lead[k][0])));
+  return { foot: part('foot'), shank: part('shank'), thigh: part('thigh') };
+}
+/**
+ * How far each thigh parts (degrees of extra abduction, the same for both) so that the forefeet of two feet turned
+ * inward keep LEG_TURN.toeGapMm between them. geo: { hipHalfMm, thighMm, shankMm, footMm (ankle to the ball) }.
+ * headingOut: each foot's own line against straight ahead, degrees, positive = outward. Legs at clearly different
+ * heights (a thigh lifted) do not meet: the need fades between 15 and 40 degrees of difference in hip flexion. Pure.
+ */
+export function legTurnPartDeg(geo, { headingOutL, headingOutR, abdL, abdR, kneeFlexL, kneeFlexR, hipFlexL = 0, hipFlexR = 0 }, o = LEG_TURN) {
+  const reach = h => (h < 0 ? geo.footMm * o.forefootReach * Math.sin(Math.min(90, -h) * DEG) : 0);
+  const rL = reach(headingOutL), rR = reach(headingOutR);
+  if (!(rL > 0) && !(rR > 0)) return 0;
+  const len = k => geo.thighMm + geo.shankMm * Math.max(0, Math.cos(Math.max(0, k) * DEG));
+  const lL = len(kneeFlexL), lR = len(kneeFlexR);
+  const between = 2 * geo.hipHalfMm + lL * Math.sin(abdL * DEG) + lR * Math.sin(abdR * DEG);
+  const need = (rL + rR + o.toeGapMm - between) * (1 - smooth01((Math.abs(hipFlexL - hipFlexR) - 15) / 25));
+  if (!(need > 0)) return 0;
+  return Math.min(o.partMaxDeg, (need / (lL * Math.cos(abdL * DEG) + lR * Math.cos(abdR * DEG))) / DEG);
+}
 
 /** Facial display ids (no joint, no mesh) and their full display amplitude. */
 export const FACE_DISPLAY_IDS = Object.freeze(['brow_raise', 'eye_close', 'lip_purse', 'smile', 'nose_wrinkle', 'upper_lip', 'lower_lip']);
@@ -199,6 +268,33 @@ const CARTILAGE_SEGMENTS = Object.freeze(['r', 'l'].flatMap(s => Array.from({ le
 // The base each shoulder girdle turns on (no bones of its own): the breastbone at the sternoclavicular joint and the
 // ribs under the shoulder blade, so the blade stays on the ribs when the upper back rounds or the trunk turns.
 const GIRDLE_BASES = Object.freeze(['r_gbase', 'l_gbase']);
+/**
+ * 18 November 2026 (user: "No muscles or joints should be ... detached, dislocated"; with the kneecap on its track,
+ * PATELLA_TRACK, the tendon above it has to come down the front of the thigh bone and round its end with it): the
+ * front thigh muscles' WRAP. The tissue of the four heads of the quadriceps within zoneMm above the knee pivot slides
+ * toward the knee as the knee bends, the lowest the whole way the kneecap goes and the highest not at all (a straight
+ * line between: every part is stretched by the same factor, 1.4 at a fully bent knee), first straight down the shaft
+ * and then round the end of the bone on the kneecap's own track. Four bone-less segments per side carry the frames of
+ * the tissue that starts heightsMm above the pivot; a vertex between two heights is blended between their frames
+ * (quadWrapWeights). The last height lies above where the turn begins at any knee angle, so between it and the top of
+ * the zone the blend is an exact slide along the shaft. Display mechanics on one reference body, not measured tendon
+ * excursion.
+ */
+export const QUAD_WRAP = Object.freeze({ zoneMm: 200, heightsMm: Object.freeze([15, 30, 45, 60]), easeMm: 12 });
+/**
+ * 18 November 2026 (the owner, 12 November: "the shoulder literally detaches ... and the socket rips open"; a check on
+ * 18 November: needles and a bare joint at the right shoulder). The muscles that run from the trunk and the shoulder
+ * blade to the upper arm (deltoid, the chest muscle, latissimus, the cuff) were blended straight between the blade's
+ * frame and the upper arm's. With the arm raised those two frames stand up to 150 degrees apart, and a straight blend
+ * of two frames that far apart pulls the middle of the muscle in toward the joint: the shoulder was drawn as a
+ * pinched, twisted cone. One bone-less segment, `segment`, turns about the shoulder's centre by HALF of the upper
+ * arm's turn against the blade; a vertex shared between another bone and the upper arm now goes other bone -> half
+ * way -> upper arm (its share of the upper arm, w, becomes 2w of the half-way frame below one half, and 2w - 1 of the
+ * upper arm above it), so no blend spans more than half the turn and the muscle wraps round the joint. Muscles that
+ * also cross the elbow keep their own rule. Display mechanics, not measured soft-tissue motion.
+ */
+export const ARM_WRAP = Object.freeze({ segment: 'r_armwrap' });
+const QUAD_SEGMENTS = Object.freeze(['r', 'l'].map(s => Object.freeze(QUAD_WRAP.heightsMm.map((_, k) => `${s}_quad${k + 1}`))));
 /* 18 November 2026, later (a check: "the right shoulder blade stands off the ribs ... shows as a thin pointed sliver";
  * the sweep's start posture: the blade 9 to 24 mm off the ribs, the muscles between blade and ribs up to 20 mm off): the
  * collar bone is its own piece, a STRUT between the breastbone and the shoulder blade, as in a real shoulder (it turns
@@ -272,7 +368,10 @@ export const BODY_JOINT_SHARES = Object.freeze({
   // 17 November 2026 (the range-of-motion sweep, tools/rom-sweep.mjs): tried 0.8 and 0.9 so that the kneecap would stay
   // nearer the shin at a fully bent knee (at 0.7 it ends 21 mm farther from the tibia than at the start). It then
   // left the thigh bone instead (0.8: 14 mm from the tibia and 13 from the femur; 0.9: 7 and 15). A rigid kneecap on
-  // a circle about the knee cannot follow both; 0.7 keeps it on the femur, which is what shows. Kept.
+  // a circle about the knee cannot follow both.
+  // 18 November 2026: with the bones loaded the kneecap no longer rides that circle: it follows its track
+  // (PATELLA_TRACK: it turns with the shin and sinks to stay on the thigh bone). This share is only the fallback for
+  // a rig whose knee bones are not loaded.
   patellaPerKneeFlex: 0.7,
   jawGlideMmPerDeg: 0.25
 });
@@ -287,13 +386,13 @@ export const SCAPULOHUMERAL = Object.freeze({ thresholdDeg: 30, ratio: 0.2 });
 export const BODY_SEGMENTS = Object.freeze([
   'pelvis', ...SPINE_STAGES.map(r => r[0]), 'sternum', ...RIB_SEGMENTS, ...CARTILAGE_SEGMENTS, ...GIRDLE_BASES,
   'cervical', 'skull', 'mandible', 'hyoid',
-  'r_girdle', 'r_clav', 'r_upperarm', 'r_forearm', 'r_radius', 'r_hand',
+  'r_girdle', 'r_clav', 'r_upperarm', ARM_WRAP.segment, 'r_forearm', 'r_radius', 'r_hand',
   'r_thumb_mc', 'r_thumb_pp', 'r_thumb_dp',
   'r_index_pp', 'r_index_mp', 'r_index_dp', 'r_middle_pp', 'r_middle_mp', 'r_middle_dp',
   'r_ring_pp', 'r_ring_mp', 'r_ring_dp', 'r_little_pp', 'r_little_mp', 'r_little_dp',
   'l_girdle', 'l_clav', 'l_upperarm',
-  'r_thigh', 'r_patella', 'r_shank', 'r_foot', 'r_toes', 'r_hallux',
-  'l_thigh', 'l_patella', 'l_shank', 'l_foot', 'l_toes', 'l_hallux'
+  'r_thigh', 'r_patella', ...QUAD_SEGMENTS[0], 'r_shank', 'r_foot', 'r_toes', 'r_hallux',
+  'l_thigh', 'l_patella', ...QUAD_SEGMENTS[1], 'l_shank', 'l_foot', 'l_toes', 'l_hallux'
 ]);
 
 const FINGERS = Object.freeze(['index', 'middle', 'ring', 'little']);
@@ -306,12 +405,13 @@ export const BODY_SEGMENT_PARENT = Object.freeze({
   sternum: 'thorax', ...Object.fromEntries(RIB_SEGMENTS.map(s => [s, vertebraSegment('thoracic', Number(s.slice(5)))])),
   ...Object.fromEntries(CARTILAGE_SEGMENTS.map(s => [s, 'sternum'])), r_gbase: 'sternum', l_gbase: 'sternum',
   cervical: 'thorax', skull: 'cervical', mandible: 'skull', hyoid: 'cervical',
-  r_girdle: 'r_gbase', r_clav: 'r_girdle', l_clav: 'l_girdle', r_upperarm: 'r_girdle', r_forearm: 'r_upperarm', r_radius: 'r_forearm', r_hand: 'r_radius',
+  r_girdle: 'r_gbase', r_clav: 'r_girdle', l_clav: 'l_girdle', r_upperarm: 'r_girdle', [ARM_WRAP.segment]: 'r_girdle', r_forearm: 'r_upperarm', r_radius: 'r_forearm', r_hand: 'r_radius',
   r_thumb_mc: 'r_hand', r_thumb_pp: 'r_thumb_mc', r_thumb_dp: 'r_thumb_pp',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, 'r_hand'], [`r_${f}_mp`, `r_${f}_pp`], [`r_${f}_dp`, `r_${f}_mp`]])),
   l_girdle: 'l_gbase', l_upperarm: 'l_girdle',
   r_thigh: 'pelvis', r_patella: 'r_thigh', r_shank: 'r_thigh', r_foot: 'r_shank', r_toes: 'r_foot', r_hallux: 'r_foot',
-  l_thigh: 'pelvis', l_patella: 'l_thigh', l_shank: 'l_thigh', l_foot: 'l_shank', l_toes: 'l_foot', l_hallux: 'l_foot'
+  l_thigh: 'pelvis', l_patella: 'l_thigh', l_shank: 'l_thigh', l_foot: 'l_shank', l_toes: 'l_foot', l_hallux: 'l_foot',
+  ...Object.fromEntries(QUAD_SEGMENTS[0].map(q => [q, 'r_thigh'])), ...Object.fromEntries(QUAD_SEGMENTS[1].map(q => [q, 'l_thigh']))
 });
 
 /** Segments with no bone in bodyparts3d-fullbody-r1: the left shoulder girdle and humerus belong to the left-arm rig
@@ -322,12 +422,13 @@ export const VIRTUAL_SEGMENTS = Object.freeze(['l_girdle', 'l_upperarm']);
 /** The rig joint that moves each non-root segment. */
 export const BODY_SEGMENT_JOINT = Object.freeze({
   ...Object.fromEntries(SPINE_STAGES), cervical: 'cervicothoracic', skull: 'atlanto_occipital', mandible: 'tmj',
-  hyoid: 'hyoid_fixed', r_girdle: 'r_sternoclavicular', r_upperarm: 'r_glenohumeral', r_forearm: 'r_elbow',
+  hyoid: 'hyoid_fixed', r_girdle: 'r_sternoclavicular', r_upperarm: 'r_glenohumeral', [ARM_WRAP.segment]: 'r_glenohumeral', r_forearm: 'r_elbow',
   r_radius: 'r_radioulnar', r_hand: 'r_wrist', r_thumb_mc: 'r_thumb_cmc', r_thumb_pp: 'r_thumb_mcp', r_thumb_dp: 'r_thumb_ip',
   ...Object.fromEntries(FINGERS.flatMap(f => [[`r_${f}_pp`, `r_${f}_mcp`], [`r_${f}_mp`, `r_${f}_pip`], [`r_${f}_dp`, `r_${f}_dip`]])),
   l_girdle: 'l_sternoclavicular_mirror', l_upperarm: 'l_glenohumeral_mirror',
   r_thigh: 'r_hip', r_patella: 'r_patellofemoral', r_shank: 'r_knee', r_foot: 'r_ankle', r_toes: 'r_mtp', r_hallux: 'r_hallux_mtp',
-  l_thigh: 'l_hip', l_patella: 'l_patellofemoral', l_shank: 'l_knee', l_foot: 'l_ankle', l_toes: 'l_mtp', l_hallux: 'l_hallux_mtp'
+  l_thigh: 'l_hip', l_patella: 'l_patellofemoral', l_shank: 'l_knee', l_foot: 'l_ankle', l_toes: 'l_mtp', l_hallux: 'l_hallux_mtp',
+  ...Object.fromEntries(QUAD_SEGMENTS[0].map(q => [q, 'r_patellofemoral'])), ...Object.fromEntries(QUAD_SEGMENTS[1].map(q => [q, 'l_patellofemoral']))
 });
 
 const SEG_INDEX = new Map(BODY_SEGMENTS.map((s, i) => [s, i]));
@@ -785,6 +886,25 @@ const MUSCLE_EXTRA_CANDIDATES = Object.freeze([
   ...[['FJ1521', 'descending part of right trapezius'], ['FJ1521M', 'descending part of left trapezius']].map(([id, name]) => Object.freeze({ id, name,
     segments: Object.freeze(['skull']), basis: 'the descending part of the trapezius arises from the superior nuchal line and the external occipital protuberance' }))
 ]);
+const QUADRICEPS_RE = /\b(rectus femoris|vastus (lateralis|medialis|intermedius))\b/;
+/**
+ * 18 November 2026 (user: "No muscles ... should be pointy ..., detached"; the range-of-motion sweep's new measure of
+ * stretched edges: in the belly wall, edges of under a millimetre were drawn up to 105 mm long as soon as the trunk
+ * was bent away from the source pose, a band of shards across the belly). Cause: the nearest-two-bones rule
+ * (continuousSkinWeights) keeps the two nearest candidates less the third, which is steady only where one bone is
+ * clearly the third. The belly wall lies 60 to 100 mm from every bone, and its candidates were every vertebra, rib
+ * and cartilage and the pelvis: wherever three of them were about equally far, neighbouring vertices took different
+ * pairs with very different shares, and those bones stand far apart there once the trunk bends (the seventh cartilage
+ * and the twelfth vertebra 57 mm, a rib and its own cartilage 25 mm, measured in the middle of the belly).
+ * The muscles of the belly wall are skinned as a WALL instead (wallSkinWeights): the wall hangs between the front of
+ * the rib cage, carried by ONE bone for every vertex (the breastbone), and the pelvis, shared smoothly by distance;
+ * only close to a rib or cartilage does a vertex go with that bone (its attachment), and only where the pelvis has no
+ * share. No vertebra is among their bones: these muscles are not attached to the vertebrae (the deep ones reach the
+ * lumbar ones only through a sheet of fascia). The price: the lowest slips, on the floating ribs 11 and 12 (which
+ * ride their vertebrae in this rig), follow the tenth rib, the breastbone and the pelvis; and away from the ribs the
+ * wall follows the breastbone, not the rib beside it, a few millimetres apart at the ends of the trunk's range.
+ */
+const WALL_SKIN = Object.freeze({ re: /\b(external oblique|internal abdominal oblique|transversus abdominis|rectus abdominis|pyramidalis)\b/, ribFullMm: 4, ribNoneMm: 22, pelvisFloor: 0.1 });
 /** 'l' / 'r' for a muscle entry that names its side ("left ...", "... of right ...", "....l", an id ending -l / -r), else null. */
 function muscleSideOf(entry) {
   const n = typeof entry.name === 'string' ? entry.name.toLowerCase() : '', id = typeof entry.id === 'string' ? entry.id.toLowerCase() : '';
@@ -810,6 +930,11 @@ function muscleCandidates(entry) {
   if (segs.includes('lumbar')) segs = [...segs, ...LUMBAR_GROUP];
   if (segs.includes('thorax')) segs = [...segs, ...THORAX_GROUP];
   segs = segs.filter(x => !GIRDLE_BASES.includes(x)); // a girdle base carries no bone: nothing is skinned to it
+  // 18 November 2026 (the range-of-motion sweep: the lower end of the front thigh muscle stood 32 mm off the shin at a
+  // bent knee): the four heads of the quadriceps end on the kneecap, and the kneecap's ligament to the shin is drawn
+  // as their lower end. The kneecap is not on the path from the thigh to the shin in the segment tree (it hangs from
+  // the thigh beside the shin), so it is added here: the tendon over the kneecap then goes with the kneecap.
+  if (QUADRICEPS_RE.test(entry.name)) for (const sd of ['r', 'l']) if (segs.includes(`${sd}_thigh`) && segs.includes(`${sd}_shank`)) segs = [...segs, `${sd}_patella`];
   // (later: the collar bone is its own segment, CLAVICLE_STRUTS: a muscle on a girdle may lie on its collar bone)
   if (segs.includes('r_girdle')) segs = [...segs, 'r_clav'];
   if (segs.includes('l_girdle')) segs = [...segs, 'l_clav'];
@@ -821,7 +946,10 @@ function muscleCandidates(entry) {
     const sd = muscleSideOf(entry);
     if (sd) { const other = new RegExp(`^${sd === 'l' ? 'r' : 'l'}_(rib|cc)\\d+$`); segs = segs.filter(x => !other.test(x)); }
   }
-  return { proximal: p, distal: d, segments: [...new Set(segs)] };
+  // 18 November 2026: the belly wall (WALL_SKIN): the pelvis, the breastbone, and its own side's ribs and cartilages
+  const wall = WALL_SKIN.re.test(entry.name) && segs.includes('pelvis') && segs.includes('sternum');
+  if (wall) { const spine = new Set(SPINE_STAGES.map(r => r[0])); segs = segs.filter(x => !spine.has(x)); }
+  return { proximal: p, distal: d, segments: [...new Set(segs)], ...(wall ? { skin: 'wall' } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1177,6 +1305,136 @@ function estimateJoints(bone, boneMesh, warn) {
   return J;
 }
 
+/**
+ * 18 November 2026 (user: "No muscles or joints should be ... detached, dislocated"; the range-of-motion sweep: at a
+ * fully bent knee the kneecap stood 21 mm farther from the shin, and the lower end of the front thigh muscle 32 mm):
+ * the kneecap's track. A kneecap is held to the shin by the patellar ligament, which does not stretch, and it slides
+ * down the groove at the front of the thigh bone and on between the two condyles as the knee bends. In this rig the
+ * shin is a plain hinge about the knee pivot, so a ligament of fixed length means: the kneecap turns about that pivot
+ * WITH the shin (perKneeFlex 1; before, 0.7 of the knee's angle about the same pivot, which is the usual figure for a
+ * real knee whose shin also rolls and glides, but here it pulled the ligament 25 mm long). And because the end of the
+ * thigh bone is not a circle about the pivot (the groove at the front stands some 12 mm farther out than the condyles
+ * underneath), the kneecap also SINKS toward the pivot by just as much as keeps it resting on the bone: `sink` is that
+ * distance in mm for every stepDeg of turn, found once from the bone meshes (patellaTrack). What is left over: the
+ * ligament is up to about 10 mm longer in mid range (the sink takes the kneecap's lower end away from the shin's
+ * tuberosity); it is drawn by the skinned lower end of the front thigh muscle, which bridges that. Display mechanics
+ * of one reference body, not a measured patellar track.
+ */
+export const PATELLA_TRACK = Object.freeze({ perKneeFlex: 1, stepDeg: 5, maxDeg: 150, reachMm: 60, sampleMm: 1.5, axialBinMm: 2, angleBinDeg: 3 });
+/** The kneecap's inward slide (mm) for every PATELLA_TRACK.stepDeg of its turn about the knee axis, so that it keeps
+ * the clearance from the thigh bone it has in the source pose. The thigh bone's outer surface is taken as a polar
+ * height map about the axis (the largest radius in each cell of position along the axis x angle about it); the
+ * kneecap's clearance at a turn is the least (radius of a kneecap vertex - height under it). Returns { dir, sink } or
+ * null when a mesh is missing. */
+function patellaTrack(point, axis, patella, femur, o = PATELLA_TRACK) {
+  if (!point || !axis || !patella || !femur || !femur.indices) return null;
+  const k = norm(axis), pp = patella, fp = femur.positions, fi = femur.indices;
+  let c = [0, 0, 0];
+  for (let i = 0; i < pp.length; i += 3) c = add(c, [pp[i], pp[i + 1], pp[i + 2]]);
+  c = sub(scl(c, 3 / pp.length), point);
+  const e1 = norm(sub(c, scl(k, dot(c, k)))), e2 = cross(k, e1);
+  const nA = Math.round(360 / o.angleBinDeg), nX = 2 * Math.ceil(o.reachMm / o.axialBinMm) + 1, x0 = (nX - 1) / 2;
+  const env = new Float32Array(nA * nX);
+  const put = (x, y, z) => {
+    const rx = x - point[0], ry = y - point[1], rz = z - point[2];
+    const ax = rx * k[0] + ry * k[1] + rz * k[2], a = rx * e1[0] + ry * e1[1] + rz * e1[2], b = rx * e2[0] + ry * e2[1] + rz * e2[2];
+    const xi = Math.round(ax / o.axialBinMm + x0);
+    if (xi < 0 || xi >= nX) return;
+    const ai = ((Math.round(Math.atan2(b, a) / DEG / o.angleBinDeg) % nA) + nA) % nA, r = Math.hypot(a, b);
+    if (r > env[xi * nA + ai]) env[xi * nA + ai] = r;
+  };
+  const reach2 = o.reachMm * o.reachMm;
+  for (let t = 0; t + 2 < fi.length; t += 3) {
+    const a = 3 * fi[t], b = 3 * fi[t + 1], d = 3 * fi[t + 2];
+    if ((fp[a] - point[0]) ** 2 + (fp[a + 1] - point[1]) ** 2 + (fp[a + 2] - point[2]) ** 2 > reach2) continue;
+    const e = Math.max(Math.hypot(fp[a] - fp[b], fp[a + 1] - fp[b + 1], fp[a + 2] - fp[b + 2]), Math.hypot(fp[b] - fp[d], fp[b + 1] - fp[d + 1], fp[b + 2] - fp[d + 2]), Math.hypot(fp[d] - fp[a], fp[d + 1] - fp[a + 1], fp[d + 2] - fp[a + 2]));
+    const n = Math.max(1, Math.ceil(e / o.sampleMm));
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) {
+      const u = i / n, v = j / n, w = 1 - u - v;
+      put(fp[a] * w + fp[b] * u + fp[d] * v, fp[a + 1] * w + fp[b + 1] * u + fp[d + 1] * v, fp[a + 2] * w + fp[b + 2] * u + fp[d + 2] * v);
+    }
+  }
+  const pv = [];
+  for (let i = 0; i < pp.length; i += 3) {
+    const rx = pp[i] - point[0], ry = pp[i + 1] - point[1], rz = pp[i + 2] - point[2];
+    const a = rx * e1[0] + ry * e1[1] + rz * e1[2], b = rx * e2[0] + ry * e2[1] + rz * e2[2];
+    pv.push((rx * k[0] + ry * k[1] + rz * k[2]) / o.axialBinMm + x0, Math.atan2(b, a) / DEG, Math.hypot(a, b));
+  }
+  const clear = th => {
+    let m = Infinity;
+    for (let i = 0; i < pv.length; i += 3) {
+      const xi = Math.round(pv[i]), ai = Math.round((pv[i + 1] + th) / o.angleBinDeg);
+      let h = 0;
+      for (let dx = -1; dx <= 1; dx++) for (let da = -1; da <= 1; da++) {
+        const x = xi + dx;
+        if (x < 0 || x >= nX) continue;
+        const r = env[x * nA + (((ai + da) % nA) + nA) % nA];
+        if (r > h) h = r;
+      }
+      if (pv[i + 2] - h < m) m = pv[i + 2] - h;
+    }
+    return m;
+  };
+  const c0 = clear(0), raw = [];
+  for (let th = 0; th <= o.maxDeg; th += o.stepDeg) raw.push(clear(th) - c0);
+  // a light 1-2-1 smoothing (the height map is in cells), the source pose kept exactly, and never outward
+  const sink = raw.map((v, i) => (i === 0 ? 0 : Math.max(0, i === raw.length - 1 ? v : 0.25 * raw[i - 1] + 0.5 * v + 0.25 * raw[i + 1])));
+  return { dir: e1, sink, radiusMm: Math.hypot(dot(c, e1), dot(c, e2)) };
+}
+/** A frame on the kneecap's track (thigh frame): turned `turnDeg` about the knee pivot and sunk toward it as the
+ * track says for that turn, after a slide of `slideMm` down the shaft (the front thigh muscles' wrap, QUAD_WRAP). */
+function patellaTrackMatrix(pf, turnDeg, slideMm = 0) {
+  const tr = pf.track, x = clamp(Math.abs(turnDeg) / PATELLA_TRACK.stepDeg, 0, tr.sink.length - 1), i = Math.min(tr.sink.length - 2, Math.floor(x));
+  const s = tr.sink[i] + (tr.sink[i + 1] - tr.sink[i]) * (x - i);
+  const t = slideMm && pf.wrap ? add(scl(tr.dir, -s), scl(pf.wrap.up, -slideMm)) : scl(tr.dir, -s);
+  return m4Mul(m4RotAbout(pf.axes.flex, turnDeg, pf.point), m4Trans(t));
+}
+/** The kneecap's local matrix (thigh frame) for a knee flexion in degrees: with a track, the turn with the shin and
+ * the inward slide; without one (bones not loaded), the older fixed share of the knee's angle. */
+function patellaMatrix(pf, kneeFlexDeg) {
+  if (!pf || !pf.axes || !pf.axes.flex || !kneeFlexDeg) return m4I();
+  if (!pf.track) return m4RotAbout(pf.axes.flex, BODY_JOINT_SHARES.patellaPerKneeFlex * kneeFlexDeg, pf.point);
+  return patellaTrackMatrix(pf, PATELLA_TRACK.perKneeFlex * kneeFlexDeg);
+}
+/** The local matrix (thigh frame) of the wrap segment for the tissue that starts `heightMm` above the knee pivot
+ * (QUAD_WRAP): it slides toward the knee by the kneecap's travel times (1 - height / zone), down the shaft while it is
+ * above the pivot's level and round the track from there. */
+function quadWrapMatrix(pf, kneeFlexDeg, heightMm) {
+  if (!pf || !pf.track || !pf.wrap || !kneeFlexDeg) return m4I();
+  const R = pf.track.radiusMm, travel = R * PATELLA_TRACK.perKneeFlex * kneeFlexDeg * DEG * (1 - heightMm / QUAD_WRAP.zoneMm);
+  const straight = Math.min(travel, heightMm);
+  return patellaTrackMatrix(pf, (travel - straight) / R / DEG, straight);
+}
+/**
+ * The front thigh muscles' wrap weights (QUAD_WRAP), written over the plain nearest-bone weights of a quadriceps head
+ * for its vertices below the top of the zone, by height above the knee pivot along the shaft: above the pivot's level
+ * blended between the kneecap, the wrap segments and the thigh; below it (the tissue round the kneecap and its ligament
+ * to the shin) between the kneecap and the shin by the plain inverse-square rule on those two bones, eased to the
+ * kneecap alone over the last `easeMm` under the pivot's level so that the two rules meet without a step. Above the
+ * zone the plain weights stay. A pure function of the position.
+ */
+function quadWrapWeights(rig, side, p, ia, ib, wa, idx) {
+  const pf = rig.pivots[`${side}_patellofemoral`], wr = pf && pf.wrap;
+  if (!wr || !pf.track) return;
+  const chain = [SEG_INDEX.get(`${side}_patella`), ...QUAD_SEGMENTS[side === 'r' ? 0 : 1].map(q => SEG_INDEX.get(q)), SEG_INDEX.get(`${side}_thigh`)];
+  const hs = [0, ...QUAD_WRAP.heightsMm, QUAD_WRAP.zoneMm], P = pf.point, up = wr.up, shank = SEG_INDEX.get(`${side}_shank`);
+  for (let v = 0, n = p.length / 3; v < n; v++) {
+    const h = (p[3 * v] - P[0]) * up[0] + (p[3 * v + 1] - P[1]) * up[1] + (p[3 * v + 2] - P[2]) * up[2];
+    if (h >= QUAD_WRAP.zoneMm) continue;
+    if (h <= 0) {
+      const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+      const dp = nnNearestD2(idx[`${side}_patella`], x, y, z), ds = idx[`${side}_shank`] ? nnNearestD2(idx[`${side}_shank`], x, y, z) : Infinity;
+      let w = dp < 1e-12 ? 1 : ds < 1e-12 ? 0 : (1 / dp) / (1 / dp + 1 / ds);
+      if (h > -QUAD_WRAP.easeMm) w += (1 - w) * (1 + h / QUAD_WRAP.easeMm);
+      ia[v] = chain[0]; ib[v] = shank; wa[v] = w;
+      continue;
+    }
+    let k = 0;
+    while (h >= hs[k + 1]) k++;
+    ia[v] = chain[k]; ib[v] = chain[k + 1]; wa[v] = 1 - (h - hs[k]) / (hs[k + 1] - hs[k]);
+  }
+}
+
 /** Coarse joint estimate between two boxes: per axis, the centre of their overlap or of the gap between them. */
 function boxJoint(childBox, parentBox) {
   const out = [];
@@ -1342,15 +1600,36 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       abd: orientAxis(null, dirTo(`${s}_hip`, kneeP, DOWN), s === 'r' ? RIGHTX : LEFTX)
     });
     const ankleP = P(`${s}_ankle`) || segC(`${s}_foot`);
-    setAxes(`${s}_knee`, { flex: orientAxis(J[`${s}_knee`] && J[`${s}_knee`].axis, dirTo(`${s}_knee`, ankleP, DOWN), POST) });
+    // 18 November 2026 (LEG_TURN): `rot` is the shank's own long axis (knee centre to ankle centre, pointing down the
+    // limb, turning like the hip's `rot`); `side` is the front-to-back axis through the knee, at right angles to the
+    // shank: a positive angle swings the foot out to its own side (valgus), a negative one inward (varus).
+    setAxes(`${s}_knee`, { flex: orientAxis(J[`${s}_knee`] && J[`${s}_knee`].axis, dirTo(`${s}_knee`, ankleP, DOWN), POST),
+      rot: dirTo(`${s}_knee`, ankleP, DOWN), side: orientAxis(null, dirTo(`${s}_knee`, ankleP, DOWN), s === 'r' ? RIGHTX : LEFTX) });
     if (J[`${s}_patellofemoral`]) J[`${s}_patellofemoral`].axes = J[`${s}_knee`] && J[`${s}_knee`].axes ? { flex: J[`${s}_knee`].axes.flex } : { flex: [1, 0, 0] };
+    // 18 November 2026: the kneecap's track on the thigh bone (PATELLA_TRACK), when both bones are loaded
+    if (J[`${s}_patellofemoral`]) {
+      const side = s === 'r' ? 'right' : 'left', tr = patellaTrack(J[`${s}_patellofemoral`].point, J[`${s}_patellofemoral`].axes.flex, bone(`${side} patella`), boneMesh(`${side} femur`));
+      if (tr) { J[`${s}_patellofemoral`].track = roundDeep(tr); J[`${s}_patellofemoral`].method = 'knee pivot; the kneecap turns with the shin about it and slides inward to stay on the thigh bone (PATELLA_TRACK)'; }
+      // the front thigh muscles' wrap (QUAD_WRAP): `up` runs up the shaft (knee pivot to hip centre, squared to the knee
+      // axis), `lowMm` is the height of the kneecap's lower end above the pivot (negative)
+      const pat = bone(`${side} patella`), hipP = P(`${s}_hip`);
+      if (tr && pat && hipP) {
+        const pf = J[`${s}_patellofemoral`], k = norm(pf.axes.flex), d = sub(hipP, pf.point), up = norm(sub(d, scl(k, dot(d, k))));
+        let low = Infinity;
+        for (let i = 0; i < pat.length; i += 3) low = Math.min(low, dot(sub([pat[i], pat[i + 1], pat[i + 2]], pf.point), up));
+        pf.wrap = { up: up.map(x => Math.round(x * 1e6) / 1e6), lowMm: Math.round(low * 1000) / 1000 };
+      }
+    }
     const mtpP = P(`${s}_mtp`) || segC(`${s}_toes`);
     // R558: `inv` is the foot's long axis (ankle centre to the lesser metatarsal heads); a positive angle turns the sole
     // toward the midline (inversion), a negative one away from it (eversion). One axis through the ankle centre stands
     // in for the combined subtalar and midtarsal joints (their real axis runs obliquely up and forward through the
     // talus): a display approximation, not a measured axis.
     const footLong = dirTo(`${s}_ankle`, mtpP, ANT);
-    setAxes(`${s}_ankle`, { dorsi: orientAxis(J[`${s}_ankle`] && J[`${s}_ankle`].axis, footLong, UP), inv: orientAxis(footLong, DOWN, s === 'r' ? LEFTX : RIGHTX) });
+    // 18 November 2026 (LEG_TURN): `turn` is the shank's long axis through the ankle centre: the foot turns in and out
+    // under the ankle about it (one line standing in for the subtalar and midtarsal joints, as `inv` does).
+    setAxes(`${s}_ankle`, { dorsi: orientAxis(J[`${s}_ankle`] && J[`${s}_ankle`].axis, footLong, UP), inv: orientAxis(footLong, DOWN, s === 'r' ? LEFTX : RIGHTX),
+      turn: J[`${s}_knee`] && J[`${s}_knee`].point && J[`${s}_ankle`] && J[`${s}_ankle`].point ? sub(J[`${s}_ankle`].point, J[`${s}_knee`].point) : DOWN });
     setAxes(`${s}_mtp`, { flex: orientAxis(J[`${s}_mtp`] && J[`${s}_mtp`].axis, dirTo(`${s}_mtp`, segC(`${s}_toes`), ANT), DOWN) });
     setAxes(`${s}_hallux_mtp`, { flex: orientAxis(J[`${s}_hallux_mtp`] && J[`${s}_hallux_mtp`].axis, dirTo(`${s}_hallux_mtp`, segC(`${s}_hallux`), ANT), DOWN) });
   }
@@ -1448,7 +1727,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     }
     const centroid = e.centroid || (p ? centroidOf(p) : null);
     meshSegment[e.id] = {
-      kind: 'muscle', segment: blend[0][0], blend, candidates: cand.segments, hint: Array.isArray(e.hint) ? [...e.hint] : e.hint,
+      kind: 'muscle', segment: blend[0][0], blend, candidates: cand.segments, ...(cand.skin ? { skin: cand.skin } : {}), hint: Array.isArray(e.hint) ? [...e.hint] : e.hint,
       restCentroid: centroid ? round3(centroid) : null, method,
       pose: fit[e.id] ? `least-squares rigid fit (Horn) to ${fit[e.id].i0.length} two-influence skinned sample vertices` : 'blended rigid matrix (weighted quaternion average)'
     };
@@ -1531,7 +1810,113 @@ function deepFreezeRig(v) {
 // Targets and posing
 
 /**
- * Clamp agreed joint targets (degrees) to BODY_JOINT_LIMITS. Accepts an object or Map. Missing ids are 0.
+ * 18 November 2026 (user: "Make sure clicking of the muscles does not result in impossible ranges of motions and
+ * dislocations"; "test all major ranges of motions for plausibility"): the COMBINED-RANGE RULE. BODY_JOINT_LIMITS
+ * bounds every joint angle on its own, so stacked movements could reach positions no body reaches (the arm raised 180
+ * AND lifted 135 sideways came out pointing down with the upper arm twisted half a turn). A joint's range in one
+ * direction is narrower when a neighbouring movement is already at its end; each row below narrows ONE end of ONE
+ * joint's range, in a straight line, as another angle goes from `from` to `to` (degrees), from the full limit to
+ * `least`. Every single movement of the body map still reaches its own full end. The directions are the ones the
+ * standard texts describe (Kapandji, The Physiology of the Joints; the AAOS joint-motion tables); where they give a
+ * figure it is quoted as a typical textbook range, and where they only describe the effect the amount is a display
+ * choice and says so. None of it is measured on this reference body or on the player.
+ *   knee by hip      the front thigh muscle crosses the hip and the knee: with the hip straight or extended the knee
+ *                    bends less. Typical textbook range (Kapandji): active knee flexion about 140 with the hip flexed,
+ *                    about 120 with the hip extended; here 135 (the rig's limit) falling to 120.
+ *   thigh by trunk   lifting the thigh ends when it meets the belly and chest (the textbook reason hip flexion stops
+ *                    near 120 with a bent knee: Kapandji). With the trunk already bent forward the two meet sooner:
+ *                    the lift has the full 120 up to 45 degrees of trunk bend and 75 at the trunk's full 90 (a
+ *                    display choice: at 80 + 110 the thigh lay over the chest with the knee at the chin and filled
+ *                    the view from the eyes). This also closes a place where a limb could hide the whole view.
+ *   hip turn-in      in deep hip flexion the neck of the thigh bone comes against the rim of the socket and inward
+ *                    turning is the first movement lost (textbook description; 40 -> 25 is a display choice).
+ *   hip turn-out, hip out   with the hip extended its ligaments are wound tight (the close-packed position): outward
+ *                    turning and abduction have less room (textbook description; 45 -> 25 and 45 -> 30 are display
+ *                    choices).
+ *   neck tilt        the neck's joints couple a side bend with a turn: with the head turned to its end the side bend
+ *                    has less room (textbook description; 45 -> 25 is a display choice). The neck's nod and turn are
+ *                    NOT narrowed against each other here: the look uses both to their ends, and the eye camera rides
+ *                    on the head.
+ *   trunk side bend  less room with the trunk turned to its end (as the neck; 35 -> 25, a display choice). The
+ *                    trunk's turn is NOT narrowed by its forward bend: the start posture holds the trunk far from
+ *                    upright, and "Turn trunk" has to reach its end from there.
+ *   wrist side bend  largest with the wrist straight and least when it is fully bent or bent back (Kapandji describes
+ *                    the side movement as minimal there; radial 20 -> 8, ulnar 30 -> 12 are display choices).
+ *   foot turn-in     with the foot pulled fully up the ankle bone is held tight in its mortise (close-packed):
+ *                    inversion has less room (textbook description; 35 -> 20 is a display choice).
+ *   finger spread    the knuckles' side ligaments are tight in flexion: fingers closed into a fist cannot be spread
+ *                    (textbook fact; 20 -> 5 here).
+ *   shoulder         see COMBINED_RANGE.shoulder.
+ * `by` is a joint id, or one of: trunkBend (trunk_flex + pelvic_tilt), wristBend (r_wrist_flex - r_wrist_ext),
+ * fingerCurl (the mean net flexion of the four fingers). `mag: true` uses the size of `by` whatever its sign.
+ */
+export const COMBINED_RANGE = Object.freeze({
+  rows: Object.freeze([
+    ...['L', 'R'].flatMap(S => [
+      { id: `knee_ext_${S}`, end: 0, least: -120, by: `hip_flex_${S}`, from: 45, to: 0 },
+      { id: `hip_flex_${S}`, end: 1, least: 75, by: 'trunkBend', from: 45, to: 90 },
+      { id: `hip_rot_${S}`, end: 0, least: -25, by: `hip_flex_${S}`, from: 90, to: 120 },
+      { id: `hip_rot_${S}`, end: 1, least: 25, by: `hip_flex_${S}`, from: 0, to: -30 },
+      { id: `hip_abd_${S}`, end: 1, least: 30, by: `hip_flex_${S}`, from: 0, to: -30 },
+      { id: `ankle_inv_${S}`, end: 1, least: 20, by: `ankle_dorsi_${S}`, from: 0, to: 20 }
+    ]),
+    { id: 'neck_side', end: 0, least: -25, by: 'neck_rot', mag: true, from: 40, to: 80 },
+    { id: 'neck_side', end: 1, least: 25, by: 'neck_rot', mag: true, from: 40, to: 80 },
+    { id: 'trunk_side', end: 0, least: -25, by: 'trunk_rot', mag: true, from: 20, to: 45 },
+    { id: 'trunk_side', end: 1, least: 25, by: 'trunk_rot', mag: true, from: 20, to: 45 },
+    { id: 'r_wrist_dev', end: 0, least: -12, by: 'wristBend', mag: true, from: 35, to: 70 },
+    { id: 'r_wrist_dev', end: 1, least: 8, by: 'wristBend', mag: true, from: 35, to: 70 },
+    { id: 'r_finger_spread', end: 1, least: 5, by: 'fingerCurl', from: 30, to: 90 }
+  ].map(r => Object.freeze(r))),
+  /**
+   * The right shoulder. The rig lifts the arm sideways first (r_shoulder_abd) and then swings it about the line
+   * through both shoulders (r_shoulder_flex), so the two angles are not independent:
+   *   - with the arm raised forward by f, the sideways lift has room up to 180 - f, plus `behindDeg` at shoulder
+   *     height (f = 90: the arm swung level out to the side and on behind the line of the shoulders; typical textbook
+   *     range for that horizontal extension 30 to 45 degrees, AAOS), and never less than `overheadTiltDeg` (an arm
+   *     raised straight up can still lean out a little). Raising wins: the sideways lift gives way.
+   *   - with the arm lifted sideways above shoulder height, swinging it BACK has less room, none at 180.
+   *   - turning the upper arm about its own length (r_shoulder_rot): full range up to shoulder height, narrowing to
+   *     `rotAtFullElevationDeg` each way with the arm straight up (near full elevation the joint is close-packed and
+   *     has little rotation left: textbook description; the amount is a display choice).
+   */
+  shoulder: Object.freeze({ behindDeg: 30, overheadTiltDeg: 15, rotAtFullElevationDeg: 30 })
+});
+const COMBINED_BY = Object.freeze({
+  // the trunk's whole forward bend against the pelvis: its own bend plus the pelvis rolled under (pelvic_tilt, the start
+  // posture's bend of the low back): a lifted thigh meets the trunk by that much sooner
+  trunkBend: a => a.trunk_flex + (a.pelvic_tilt || 0),
+  wristBend: a => a.r_wrist_flex - a.r_wrist_ext,
+  fingerCurl: a => a.r_grasp - a.r_open + (a.r_index_flex + a.r_middle_flex + a.r_ring_flex + a.r_little_flex) / 4
+});
+/** The range [lo, hi] of joint `id` under the combined-range rows, for the other angles in `applied` (pure). */
+export function combinedRange(id, applied) {
+  const L = BODY_JOINT_LIMITS[id];
+  let lo = L[0], hi = L[1];
+  for (const r of COMBINED_RANGE.rows) {
+    if (r.id !== id) continue;
+    let v = COMBINED_BY[r.by] ? COMBINED_BY[r.by](applied) : applied[r.by];
+    if (r.mag) v = Math.abs(v);
+    const u = clamp((v - r.from) / (r.to - r.from), 0, 1), lim = L[r.end] + (r.least - L[r.end]) * u;
+    if (r.end === 0) lo = Math.max(lo, lim); else hi = Math.min(hi, lim);
+  }
+  return [lo, hi];
+}
+/** The right shoulder's part of the combined-range rule (COMBINED_RANGE.shoulder): the largest sideways lift for a
+ * forward raise f, the furthest swing back for a sideways lift a, and the upper arm's turn range at that elevation. */
+export function shoulderCombinedRange(flexDeg, abdDeg, o = COMBINED_RANGE.shoulder) {
+  const L = BODY_JOINT_LIMITS, f = flexDeg;
+  const abdMax = f > 0 ? Math.min(L.r_shoulder_abd[1], Math.max(o.overheadTiltDeg, 180 - f + o.behindDeg * Math.sin(f * DEG) ** 2)) : L.r_shoulder_abd[1];
+  const a = Math.min(abdDeg, abdMax);
+  const flexMin = a > 90 ? L.r_shoulder_flex[0] * clamp((180 - a) / 90, 0, 1) : L.r_shoulder_flex[0];
+  const ff = Math.max(f, flexMin);
+  const elev = Math.acos(clamp(Math.cos(a * DEG) * Math.cos(ff * DEG), -1, 1)) / DEG, u = clamp((elev - 90) / 90, 0, 1);
+  return { abdMax, flexMin, rot: [L.r_shoulder_rot[0] + (-o.rotAtFullElevationDeg - L.r_shoulder_rot[0]) * u, L.r_shoulder_rot[1] + (o.rotAtFullElevationDeg - L.r_shoulder_rot[1]) * u] };
+}
+
+/**
+ * Clamp agreed joint targets (degrees) to BODY_JOINT_LIMITS and then to the combined-range rule (COMBINED_RANGE,
+ * HIP_KNEE_COUPLING). Accepts an object or Map. Missing ids are 0.
  * @returns { applied: { every BODY_JOINT_ID: deg }, clamped: [{ id, requested, applied }], ignored: [unknown ids],
  *   nonFinite: [ids whose value was not a finite number (treated as 0)] }
  */
@@ -1546,17 +1931,27 @@ export function clampBodyJointTargets(targets = {}) {
     if (c !== v) clamped.push({ id, requested: v, applied: c });
     applied[id] = c;
   }
+  const cut = (id, v) => {
+    if (v === applied[id]) return;
+    const prev = clamped.find(c => c.id === id);
+    if (prev) prev.applied = v; else clamped.push({ id, requested: applied[id], applied: v });
+    applied[id] = v;
+  };
+  // 18 November 2026: the combined-range rule (COMBINED_RANGE), in the rows' order (a row reads the angles as they are
+  // by then), reported like any other clamp.
+  for (const r of COMBINED_RANGE.rows) { const [lo, hi] = combinedRange(r.id, applied); cut(r.id, clamp(applied[r.id], lo, hi)); }
+  {
+    const sh = shoulderCombinedRange(applied.r_shoulder_flex, applied.r_shoulder_abd);
+    cut('r_shoulder_abd', Math.min(applied.r_shoulder_abd, sh.abdMax));
+    cut('r_shoulder_flex', Math.max(applied.r_shoulder_flex, sh.flexMin));
+    cut('r_shoulder_rot', clamp(applied.r_shoulder_rot, sh.rot[0], sh.rot[1]));
+  }
   // R558 (Message 2): the hip flexes less with a straight knee (HIP_KNEE_COUPLING); reported like any other clamp.
   const HK = HIP_KNEE_COUPLING;
   for (const S of ['L', 'R']) {
     const kneeFlex = Math.max(0, -applied[`knee_ext_${S}`]);
     const cap = HK.straightKneeMaxDeg + (HK.bentKneeMaxDeg - HK.straightKneeMaxDeg) * Math.min(1, kneeFlex / HK.fullAtKneeFlexDeg);
-    const id = `hip_flex_${S}`;
-    if (applied[id] > cap) {
-      const prev = clamped.find(c => c.id === id);
-      if (prev) prev.applied = cap; else clamped.push({ id, requested: applied[id], applied: cap });
-      applied[id] = cap;
-    }
+    cut(`hip_flex_${S}`, Math.min(applied[`hip_flex_${S}`], cap));
   }
   for (const k of Object.keys(src)) if (!BODY_JOINT_LIMITS[k]) ignored.push(k);
   return { applied, clamped, ignored, nonFinite };
@@ -1641,6 +2036,61 @@ function checkLimbTurn(t) {
   const R = one(t.hipRotDegR), L = one(t.hipRotDegL);
   return R === 0 && L === 0 ? null : { R, L };
 }
+/**
+ * 18 November 2026 (the owner: "introduce subtle, natural, physiological details during movements, such as joint
+ * varus/valgus during rotation"). Small coupled movements that come with a joint's own movement: display rules inside
+ * the pose (never targets), each a share of an angle that is already there, each clamped inside the joint's own
+ * limits and the combined-range rule, each exactly zero again when the movement is undone. Directions are textbook
+ * (Kapandji, The Physiology of the Joints); the amounts are display choices, small enough to be felt more than seen,
+ * and nothing is measured on this body.
+ *   kneeUnlockDeg / kneeUnlockOverDeg   the shank turns inward as the knee leaves full extension (the reverse of the
+ *                        "screw-home" turn that locks the straight knee; typical textbook amount 10 to 15 degrees
+ *                        over the last 20 to 30 of extension; 6 over 30 here)
+ *   ankleInvPerPlantar / ankleEvPerDorsi  pointing the foot comes with a little inversion, pulling it up with a little
+ *                        eversion (the ankle's oblique axis; 0.2 of the angle: at most 10 and 4 degrees)
+ *   wristUlnarPerFlex / wristRadialPerExt  the wrist drifts to the little-finger side as it bends and to the thumb side
+ *                        as it bends back (the "dart-thrower's" line; 0.1 of the angle: at most 8 and 7 degrees)
+ *   hipOutDeg / hipSpreadDeg over hipFrom .. hipTo   lifting the thigh high comes with a little outward turn and
+ *                        spread (the thigh bone's neck clearing the socket's rim; 6 and 3 degrees by full flexion)
+ * The knee's varus / valgus with the leg turn and the sole's tip with the foot's turn are in LEG_TURN.
+ */
+export const JOINT_COUPLINGS = Object.freeze({
+  kneeUnlockDeg: 6, kneeUnlockOverDeg: 30, ankleInvPerPlantar: 0.2, ankleEvPerDorsi: 0.2,
+  wristUlnarPerFlex: 0.1, wristRadialPerExt: 0.1, hipOutDeg: 6, hipSpreadDeg: 3, hipFrom: 60, hipTo: 120
+});
+/** The legs' turn as drawn (LEG_TURN, JOINT_COUPLINGS): per side { foot, shank, kneeSide, hipRot, abdExtra, headingOut }
+ * in degrees. hipRot is the thigh's whole turn (hip_rot plus the turn's thigh share plus the high-flexion coupling),
+ * kept inside the hip's range under the combined-range rule; abdExtra the thighs' parting plus the coupling. */
+export function legTurnState(rig, A) {
+  const out = {}, cp = JOINT_COUPLINGS;
+  for (const S of ['L', 'R']) {
+    const t = legTurnShares(A[`leg_turn_${S}`]), kneeFlex = Math.max(0, -A[`knee_ext_${S}`]), r = combinedRange(`hip_rot_${S}`, A), own = A[`hip_rot_${S}`];
+    const high = smooth01((A[`hip_flex_${S}`] - cp.hipFrom) / (cp.hipTo - cp.hipFrom));
+    const hipRot = clamp(own + t.thigh + cp.hipOutDeg * high, Math.min(r[0], own), Math.max(r[1], own));
+    const shank = t.shank - cp.kneeUnlockDeg * smooth01(kneeFlex / cp.kneeUnlockOverDeg);
+    out[S] = { foot: t.foot, shank, kneeSide: LEG_TURN.kneeSidePerShankTurn * t.shank, hipRot, abdExtra: Math.min(cp.hipSpreadDeg * high, Math.max(0, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`])),
+      headingOut: LEG_TURN.restToeOutDeg + hipRot + shank + t.foot };
+  }
+  if (out.L.headingOut < 0 || out.R.headingOut < 0) {
+    const g = legTurnGeometry(rig);
+    if (g) {
+      const part = legTurnPartDeg(g, { headingOutL: out.L.headingOut, headingOutR: out.R.headingOut, abdL: A.hip_abd_L + out.L.abdExtra, abdR: A.hip_abd_R + out.R.abdExtra,
+        kneeFlexL: -A.knee_ext_L, kneeFlexR: -A.knee_ext_R, hipFlexL: A.hip_flex_L, hipFlexR: A.hip_flex_R });
+      if (part > 0) for (const S of ['L', 'R']) out[S].abdExtra = Math.min(out[S].abdExtra + part, Math.max(out[S].abdExtra, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`]));
+    }
+  }
+  return out;
+}
+const LEG_GEO = new WeakMap();
+/** The leg lengths legTurnPartDeg needs, from the rig's joint centres (once per rig). */
+function legTurnGeometry(rig) {
+  if (LEG_GEO.has(rig)) return LEG_GEO.get(rig);
+  const J = rig.pivots, P = id => (J[id] && J[id].point ? J[id].point : null), d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const need = ['r_hip', 'l_hip', 'r_knee', 'l_knee', 'r_ankle', 'l_ankle', 'r_mtp', 'l_mtp'].map(P);
+  const g = need.every(Boolean) ? { hipHalfMm: d(need[0], need[1]) / 2, thighMm: (d(need[0], need[2]) + d(need[1], need[3])) / 2, shankMm: (d(need[2], need[4]) + d(need[3], need[5])) / 2, footMm: (d(need[4], need[6]) + d(need[5], need[7])) / 2 } : null;
+  LEG_GEO.set(rig, g);
+  return g;
+}
 function localMatrices(rig, A, limbTurn = null) {
   const J = rig.pivots, out = {};
   const rot = (jid, axis, deg) => (J[jid] && J[jid].axes[axis] && deg ? m4RotAbout(J[jid].axes[axis], deg, J[jid].point) : m4I());
@@ -1685,8 +2135,19 @@ function localMatrices(rig, A, limbTurn = null) {
     out.skull = m4Mul(m4Mul(skullTurn, rot('atlanto_occipital', 'flex', sh.neck_flex.atlanto_occipital * A.neck_flex - hf)), rot('atlanto_occipital', 'side', sh.neck_side.atlanto_occipital * A.neck_side));
   }
   const jawOpen = J.tmj && J.tmj.glideDir ? m4Mul(m4Trans(scl(J.tmj.glideDir, sh.jawGlideMmPerDeg * A.jaw_open)), rot('tmj', 'open', A.jaw_open)) : rot('tmj', 'open', A.jaw_open);
-  // R558: jaw side shift (jaw_side, mm; positive = chin toward the subject's LEFT) as a sideways glide of the mandible.
-  out.mandible = A.jaw_side ? m4Mul(m4Trans(scl(LEFTX, A.jaw_side)), jawOpen) : jawOpen;
+  // R558: jaw side shift (jaw_side, mm; positive = chin toward the subject's LEFT).
+  // 18 November 2026 (the range-of-motion sweep: "Shift the jaw" opened the jaw joint by 10 mm): it was a sideways
+  // glide of the whole jawbone, which carried BOTH joint heads 10 mm out of their sockets. A jaw shifts sideways by
+  // turning about the joint head of the side it goes to, which stays in its socket, while the other head slides
+  // forward and a little down its slope (the same slope the opening glide uses): the jawbone turns about the upright
+  // through that head until the chin is jaw_side mm to the side, and rolls by 0.4 of that angle so the travelling head
+  // goes down as it goes forward. Without the joint heads' places (bones not loaded) it is the old glide.
+  if (A.jaw_side && J.tmj && J.tmj.condyles && J.tmj.chin) {
+    // (the chin's sideways travel per radian of turn: its distance in front of the head, plus 0.4 of its depth below it for the roll)
+    const c = A.jaw_side > 0 ? J.tmj.condyles.left : J.tmj.condyles.right, reach = Math.max(20, Math.abs(J.tmj.chin[1] - c[1]) + 0.4 * Math.abs(c[2] - J.tmj.chin[2]));
+    const turn = A.jaw_side / reach / DEG;
+    out.mandible = m4Mul(m4Mul(m4RotAbout(POST, -0.4 * turn, c), m4RotAbout(UP, turn, c)), jawOpen);
+  } else out.mandible = A.jaw_side ? m4Mul(m4Trans(scl(LEFTX, A.jaw_side)), jawOpen) : jawOpen;
   // R558: the swallow lifts the hyoid bone (display amplitude hyoid_elev 0..20 -> 0..HYOID_LIFT.mm up and forward).
   out.hyoid = A.hyoid_elev ? m4Trans(scl(norm(HYOID_LIFT.dir), (HYOID_LIFT.mm * A.hyoid_elev) / FACE_FULL_DEG)) : m4I();
 
@@ -1722,14 +2183,22 @@ function localMatrices(rig, A, limbTurn = null) {
     // About that downward axis a positive angle turns the front of the arm toward the subject's right: outward
     // (external rotation) for this right arm. Its elevation, and so the shoulder-blade share above, do not change.
     if (A.r_shoulder_rot) out.r_upperarm = m4Mul(out.r_upperarm, m4RotAbout(norm(gh.restHumerusDir || DOWN), A.r_shoulder_rot, gh.point));
+    // 18 November 2026 (ARM_WRAP): the half-way frame, half of the upper arm's turn about the shoulder's centre
+    { const h = axisAngleOf(out.r_upperarm); out[ARM_WRAP.segment] = h.angle > 1e-9 ? m4RotAbout(h.axis, h.angle / 2, gh.point) : m4I(); }
   } else {
     out.r_girdle = m4I();
     out.r_upperarm = m4I();
+    out[ARM_WRAP.segment] = m4I();
   }
   out.r_forearm = rot('r_elbow', 'flex', A.r_elbow_flex);
   out.r_radius = rot('r_radioulnar', 'pron', A.r_pronation);
   // R558: radial / ulnar deviation first (rest frame), then flexion / extension, both about the capitate head.
-  out.r_hand = m4Mul(rot('r_wrist', 'flex', A.r_wrist_flex - A.r_wrist_ext), rot('r_wrist', 'dev', A.r_wrist_dev));
+  // 18 November 2026 (JOINT_COUPLINGS): the wrist drifts to the little-finger side as it bends and to the thumb side
+  // as it bends back, inside the side bend's own range at that bend (combinedRange).
+  {
+    const cp = JOINT_COUPLINGS, r = combinedRange('r_wrist_dev', A);
+    out.r_hand = m4Mul(rot('r_wrist', 'flex', A.r_wrist_flex - A.r_wrist_ext), rot('r_wrist', 'dev', clamp(A.r_wrist_dev - cp.wristUlnarPerFlex * A.r_wrist_flex + cp.wristRadialPerExt * A.r_wrist_ext, Math.min(r[0], A.r_wrist_dev), Math.max(r[1], A.r_wrist_dev))));
+  }
   // R558 (Messages 14 / 15): every digit has its own net angle: the whole-hand ids (r_grasp - r_open) plus the digit's
   // own id, so the right hand bends each finger and the thumb on its own, like the left game hand.
   const whole = A.r_grasp - A.r_open;
@@ -1755,19 +2224,32 @@ function localMatrices(rig, A, limbTurn = null) {
     if (roll && scR && scR.point) out.r_girdle = m4Mul(shoulderRollMatrix(roll, scR, -1), out.r_girdle);
     if (roll && scL && scL.point) out.l_girdle = shoulderRollMatrix(roll, scL, 1);
   }
+  // 18 November 2026 (LEG_TURN, JOINT_COUPLINGS): each leg's turn in its three parts, the thigh's total turn inside the
+  // hip's own range, and what the thighs part so that two feet turned inward do not meet.
+  const leg = legTurnState(rig, A);
   for (const [s, S] of [['r', 'R'], ['l', 'L']]) {
-    const kneeFlex = -A[`knee_ext_${S}`];
+    const kneeFlex = -A[`knee_ext_${S}`], lt = leg[S], cp = JOINT_COUPLINGS;
     // R558: hip rotation about the thigh's long axis first (in the rest frame), then hip abduction, then hip flexion.
-    const hipSwing = A[`hip_abd_${S}`] ? m4Mul(rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]), rot(`${s}_hip`, 'abd', A[`hip_abd_${S}`])) : rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
+    const abd = A[`hip_abd_${S}`] + lt.abdExtra;
+    const hipSwing = abd ? m4Mul(rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]), rot(`${s}_hip`, 'abd', abd)) : rot(`${s}_hip`, 'flex', A[`hip_flex_${S}`]);
     // R558 (Space dance): hip_rot_L / hip_rot_R are anatomical (positive = external, the toes turn outward). About the
     // thigh's downward long axis a positive angle turns the toes toward the subject's right, so the left side is negated.
     // The older limbTurn option (same axis, signed toward the subject's right) adds to it.
-    const hipTurn = (S === 'R' ? 1 : -1) * A[`hip_rot_${S}`] + (limbTurn && limbTurn[S] ? limbTurn[S] : 0);
+    const sg = S === 'R' ? 1 : -1;
+    const hipTurn = sg * lt.hipRot + (limbTurn && limbTurn[S] ? limbTurn[S] : 0);
     out[`${s}_thigh`] = hipTurn ? m4Mul(hipSwing, rot(`${s}_hip`, 'rot', hipTurn)) : hipSwing;
-    out[`${s}_patella`] = rot(`${s}_patellofemoral`, 'flex', sh.patellaPerKneeFlex * kneeFlex);
+    out[`${s}_patella`] = patellaMatrix(J[`${s}_patellofemoral`], kneeFlex);
+    QUAD_SEGMENTS[s === 'r' ? 0 : 1].forEach((q, k) => { out[q] = quadWrapMatrix(J[`${s}_patellofemoral`], kneeFlex, QUAD_WRAP.heightsMm[k]); });
+    // the shank: its own turn and its small sideways lean first (rest frame), then the knee's bend
     out[`${s}_shank`] = rot(`${s}_knee`, 'flex', kneeFlex);
+    if (lt.shank) out[`${s}_shank`] = m4Mul(out[`${s}_shank`], rot(`${s}_knee`, 'rot', sg * lt.shank));
+    if (lt.kneeSide) out[`${s}_shank`] = m4Mul(out[`${s}_shank`], rot(`${s}_knee`, 'side', lt.kneeSide));
     // R558: inversion / eversion first (rest frame), then dorsi / plantarflexion about the talocrural axis.
-    out[`${s}_foot`] = m4Mul(rot(`${s}_ankle`, 'dorsi', A[`ankle_dorsi_${S}`]), rot(`${s}_ankle`, 'inv', A[`ankle_inv_${S}`]));
+    // 18 November 2026: the foot's own turn (LEG_TURN) comes between them: the foot turns under the ankle bone, and the
+    // ankle's hinge stays with the shank. The sole tips a little with the turn and with pointing / pulling up the foot.
+    const L = BODY_JOINT_LIMITS[`ankle_inv_${S}`], inv0 = A[`ankle_inv_${S}`], dorsi = A[`ankle_dorsi_${S}`];
+    const inv = clamp(inv0 - LEG_TURN.solePerFootTurn * lt.foot + (dorsi < 0 ? -cp.ankleInvPerPlantar * dorsi : -cp.ankleEvPerDorsi * dorsi), Math.min(L[0], inv0), Math.max(L[1], inv0));
+    out[`${s}_foot`] = m4Mul(rot(`${s}_ankle`, 'dorsi', dorsi), lt.foot ? m4Mul(rot(`${s}_ankle`, 'turn', sg * lt.foot), rot(`${s}_ankle`, 'inv', inv)) : rot(`${s}_ankle`, 'inv', inv));
     out[`${s}_toes`] = rot(`${s}_mtp`, 'flex', A[`toe_flex_${S}`]);
     out[`${s}_hallux`] = rot(`${s}_hallux_mtp`, 'flex', A[`hallux_flex_${S}`]);
   }
@@ -2418,9 +2900,58 @@ const neckSkinnedMuscle = (info, id = null) => Boolean(info && info.kind === 'mu
  * it is the plain inverse-square rule. A pure function of the position (seam vertices agree).
  * @returns { a: Uint8Array, b: Uint8Array (BODY_SEGMENTS indexes), wa: Float64Array } or null
  */
-function continuousSkinWeights(rig, p, avail) {
+/**
+ * Two-influence weights of a belly-wall muscle (WALL_SKIN). With d the distance to the nearest of the muscle's ribs,
+ * cartilages and the breastbone, and the pelvis's raw share q = (1 / dPelvis^2) / (1 / d^2 + 1 / dPelvis^2):
+ *   q >= pelvisFloor  the vertex is shared between the breastbone and the pelvis, the pelvis taking
+ *                     (q - pelvisFloor) / (1 - pelvisFloor);
+ *   q <  pelvisFloor  between that nearest bone and the breastbone: the bone takes all within ribFullMm of it and
+ *                     nothing from ribNoneMm (smoothstep between), times (1 - q / pelvisFloor).
+ * The two cases meet with the breastbone alone, so the weights are continuous everywhere; where the nearest rib
+ * changes the vertex changes carrier for at most the rib's share there (ribs lie some 25 mm apart, so less than half).
+ * A pure function of the position.
+ */
+function wallSkinWeights(idx, segs, p, o = WALL_SKIN) {
+  const iP = segs.indexOf('pelvis'), iS = segs.indexOf('sternum');
+  if (iP < 0 || iS < 0) return null;
+  const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n);
+  const sP = SEG_INDEX.get('pelvis'), sS = SEG_INDEX.get('sternum'), span = o.ribNoneMm - o.ribFullMm;
+  let last = iS;
+  for (let v = 0; v < n; v++) {
+    const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
+    // the nearest chest bone: the previous vertex's first (neighbours mostly keep it), then only boxes that are nearer
+    let best = nnNearestD2(idx[segs[last]], x, y, z), who = last;
+    for (let k = 0; k < segs.length; k++) {
+      if (k === iP || k === last || nnBoxD2(idx[segs[k]].box, 0, x, y, z) >= best) continue;
+      const d2 = nnNearestD2(idx[segs[k]], x, y, z, best);
+      if (d2 < best || (d2 === best && k < who)) { best = d2; who = k; }
+    }
+    last = who;
+    const dP2 = nnNearestD2(idx.pelvis, x, y, z), uc = best > 1e-12 ? 1 / best : 1e12, up = dP2 > 1e-12 ? 1 / dP2 : 1e12, q = up / (uc + up);
+    if (q >= o.pelvisFloor) { ia[v] = sS; ib[v] = sP; wa[v] = 1 - (q - o.pelvisFloor) / (1 - o.pelvisFloor); continue; }
+    const t = clamp((Math.sqrt(best) - o.ribFullMm) / span, 0, 1), near = 1 - t * t * (3 - 2 * t);
+    ia[v] = SEG_INDEX.get(segs[who]); ib[v] = sS; wa[v] = who === iS ? 1 : near * (1 - q / o.pelvisFloor);
+  }
+  return { ia, ib, wa };
+}
+/**
+ * 18 November 2026 (the owner: "fix it when muscles essentially become detached"; a check: the count of poses with a
+ * muscle end over 8 mm off its bone had not moved). The ends that still left their bone at the hip are vertices of
+ * the short deep muscles that lie on the pelvis at the socket's rim AND against the ball of the thigh bone under
+ * them: the nearest-two rule gave the ball a share, and the ball turning in its socket dragged them off the pelvis by
+ * 10 to 17 mm. The ball of a hip carries nothing: muscle slides over it. Within `noneWithin` joint radii of the hip
+ * centre the thigh's share is zero, from `fullFrom` radii on it is the rule's own (the greater trochanter, where
+ * these muscles end on the thigh bone, is over two radii out), smooth in between; what the thigh gives up goes to
+ * the pelvis. (Tried first: sharper weights everywhere, the shares squared; the loose ends rose from 81 to 86 over
+ * 29 hip, shoulder and neck poses, because it handed such vertices to the ball even more firmly. Removed.)
+ */
+export const BALL_SKIN = Object.freeze({ noneWithin: 1.1, fullFrom: 1.6,
+  joints: Object.freeze([Object.freeze({ seg: 'r_thigh', parent: 'pelvis', joint: 'r_hip' }), Object.freeze({ seg: 'l_thigh', parent: 'pelvis', joint: 'l_hip' })]) });
+function continuousSkinWeights(rig, p, avail, skin = null) {
   const idx = cloudIndexes(rig._clouds || {}), segs = avail.filter(s => idx[s]);
   if (segs.length < 2) return null;
+  if (skin === 'wall') return wallSkinWeights(idx, segs, p);
+  const quadSide = segs.includes('r_patella') ? 'r' : segs.includes('l_patella') ? 'l' : null; // a head of the quadriceps (muscleCandidates)
   const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n), u = new Float64Array(segs.length);
   // 18 November 2026: a trunk muscle now has some fifty candidate bones (every vertebra, rib and cartilage). Only the
   // three nearest matter, so a candidate whose bounding box is farther than the third-nearest distance found so far is
@@ -2428,6 +2959,8 @@ function continuousSkinWeights(rig, p, avail) {
   // searched first (neighbouring vertices mostly keep the same bones), so most of the others are skipped at once. Ties
   // go to the earlier candidate, whatever the search order, so the result is still a pure function of the position.
   const prune = segs.length > 4, K = segs.length;
+  const balls = BALL_SKIN.joints.map(j => ({ k: segs.indexOf(j.seg), kp: segs.indexOf(j.parent), J: rig.pivots[j.joint] })).filter(q => q.k >= 0 && q.kp >= 0 && q.J && q.J.point && q.J.radius > 0)
+    .map(q => ({ k: q.k, kp: q.kp, c: q.J.point, r0: q.J.radius * BALL_SKIN.noneWithin, r1: q.J.radius * BALL_SKIN.fullFrom }));
   let p1 = -1, p2 = -1, p3 = -1;
   for (let v = 0; v < n; v++) {
     const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
@@ -2449,6 +2982,31 @@ function continuousSkinWeights(rig, p, avail) {
     p1 = k1; p2 = k2; p3 = k3;
     const u3 = k3 >= 0 ? u[k3] : 0, a = u[k1] - u3, b = u[k2] - u3, t = a + b;
     ia[v] = SEG_INDEX.get(segs[k1]); ib[v] = SEG_INDEX.get(segs[k2]); wa[v] = t > 0 ? a / t : 1;
+    // the ball of a hip carries nothing (BALL_SKIN): next to the joint's centre the thigh's share goes to the pelvis
+    for (const bj of balls) {
+      const isA = k1 === bj.k, isB = k2 === bj.k;
+      if (!isA && !isB) continue;
+      const keep = smooth01((Math.hypot(x - bj.c[0], y - bj.c[1], z - bj.c[2]) - bj.r0) / (bj.r1 - bj.r0));
+      if (keep >= 1) continue;
+      const other = isA ? k2 : k1;
+      if (other === bj.kp || other < 0) { wa[v] = isA ? wa[v] * keep : 1 - (1 - wa[v]) * keep; }
+      else if (isA && wa[v] >= 0.5) { // the thigh with a third bone: the pelvis takes the thigh's place as the ball is neared
+        if (keep <= 0) ia[v] = SEG_INDEX.get(segs[bj.kp]);
+      }
+    }
+  }
+  if (quadSide) quadWrapWeights(rig, quadSide, p, ia, ib, wa, idx);
+  // 18 November 2026 (ARM_WRAP): a share between another bone and the right upper arm goes through the half-way frame
+  if (segs.includes('r_upperarm')) {
+    const U = SEG_INDEX.get('r_upperarm'), W = SEG_INDEX.get(ARM_WRAP.segment), F = SEG_INDEX.get('r_forearm');
+    for (let v = 0; v < n; v++) {
+      const a = ia[v], b = ib[v];
+      if ((a === U) === (b === U) || a === F || b === F) continue;
+      const w = a === U ? wa[v] : 1 - wa[v], other = a === U ? b : a; // w: the upper arm's share
+      if (w <= 0) continue;
+      if (w < 0.5) { ia[v] = other; ib[v] = W; wa[v] = 1 - 2 * w; }
+      else { ia[v] = W; ib[v] = U; wa[v] = 2 - 2 * w; }
+    }
   }
   return { ia, ib, wa };
 }
@@ -2462,7 +3020,7 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   if (avail.length < 2) return null;
   if (neckSkinnedMuscle(info, meshId)) {
     // R558 (Message 32): the neck muscles' continuous weights (the bake uses the same: bakeSkinWeights).
-    const c = continuousSkinWeights(rig, p, avail);
+    const c = continuousSkinWeights(rig, p, avail, info.skin || null);
     if (!c) return null;
     const n = p.length / 3, w0 = new Float32Array(n), w1 = new Float32Array(n);
     for (let v = 0; v < n; v++) { w0[v] = c.wa[v]; w1[v] = 1 - c.wa[v]; }
@@ -2832,10 +3390,11 @@ export const BODY_POSTURES = deepFreezeRig({
   // (EXTENSION_SOFT_BEND). A display choice inside the joints' ranges, not a measured pose.
   // 18 November 2026 (the owner: "we start the game in an underside view of the limbs"; "minimal elbow and knee
   // flexion initially, although they must still look naturalistic, but yet be fully extended out"): the right palm up
-  // (r_pronation 0) and both soles at the limb turn's underside end (ankle_inv -15, ns-dance DANCE_UNDERSIDE), the
+  // (r_pronation 0) and both legs at the limb turn's underside end (leg_turn 25: the feet 45 degrees outward, a V;
+  // ns-dance LEG_TURN_ENDS, DANCE_UNDERSIDE), the
   // knees soft (6 degrees), the elbow 8. The legs 7 degrees apart each (12 in the eleventh upload; the owner: "they're
   // probably a little too wide at the moment, the ankles"): the feet still clear each other on the overside.
-  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, ankle_inv_L: -15, ankle_inv_R: -15, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
+  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, leg_turn_L: 25, leg_turn_R: 25, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -2959,6 +3518,17 @@ export function bodyPostureLimits(posture = DEFAULT_BODY_POSTURE) {
   for (const id of BODY_JOINT_IDS) {
     const L = BODY_JOINT_LIMITS[id], c = caps[id];
     out[id] = c ? Object.freeze([Math.max(L[0], c[0]), Math.min(L[1], c[1])]) : L;
+  }
+  // 18 November 2026: and no wider than the combined-range rule leaves at the posture's own angles (COMBINED_RANGE),
+  // so a single movement's goal is the end that is drawn: from a posture with the hips straight "Bend knee" goes to
+  // 120, and with the trunk bent forward "Lift thigh" goes as far as the trunk leaves room. (Before, the goal ran on
+  // to the single-joint limit while the drawn joint stopped, and the movement showed nothing over its last part.)
+  if (name) {
+    const A = clampBodyJointTargets(BODY_POSTURES[name]).applied;
+    for (const r of COMBINED_RANGE.rows) {
+      const [lo, hi] = combinedRange(r.id, A), o = out[r.id];
+      if (lo > o[0] || hi < o[1]) out[r.id] = Object.freeze([Math.max(lo, o[0]), Math.min(hi, o[1])]);
+    }
   }
   return Object.freeze(out);
 }
@@ -3320,7 +3890,7 @@ function bakeSkinWeights(rig, id, p, avail, near, useCache) {
   if (hit && hit.p === p && hit.avail === avail.join(',')) return hit;
   if (neckSkinnedMuscle(rig.meshSegment[id], id)) {
     // R558 (Message 32): the neck muscles' continuous weights, exactly as bodySkinWeights gives them to the scene's skin.
-    const c = continuousSkinWeights(rig, p, avail);
+    const c = continuousSkinWeights(rig, p, avail, rig.meshSegment[id].skin || null);
     if (c) { const out = { p, avail: avail.join(','), ia: c.ia, ib: c.ib, wa: c.wa, tf: null }; if (byId) byId.set(id, out); return out; }
   }
   const n = p.length / 3, ia = new Uint8Array(n), ib = new Uint8Array(n), wa = new Float64Array(n);
@@ -4120,12 +4690,17 @@ export const CHEST_FLATTEN = Object.freeze({
     ['FJ1447', 'Clavicular part of right pectoralis major'], ['FJ1464', 'Sternocostal part of right pectoralis major'], ['FJ1446', 'Abdominal part of right pectoralis major'],
     ['FJ1447M', 'Clavicular part of left pectoralis major'], ['FJ1464M', 'Sternocostal part of left pectoralis major'], ['FJ1446M', 'Abdominal part of left pectoralis major']
   ].map(([id, name]) => Object.freeze({ id, name }))),
-  thicknessShare: 0.4,
+  // (18 November 2026, the owner: "even if that means you're a little flat-chested"; a check: from the eyes the chest
+  // was still two slabs either side of the breastbone in a groove: 0.4 -> 0.25. Measured the same way as above: the
+  // sternocostal part is on average 11.5 mm deep where the source has 20.7 (0.56; at most 23 where the source has 42),
+  // the clavicular part 11.1 where it has 15.0, the abdominal part 2.5 where it has 6.5. The numbers in the note above
+  // are those of 0.4.)
+  thicknessShare: 0.25,
   axis: Object.freeze({ yMm: -105, halfWidthMm: 135, halfDepthMm: 105 }),
   cellRad: 0.05, cellMm: 6, fillPasses: 3, smoothCells: 2, smoothPasses: 3,
   fade: Object.freeze({ fromMm: 120, toMm: 158 }),
   hold: Object.freeze({ fromMm: 2, toMm: 14, bones: Object.freeze([['FJ3362', true], ['FJ3290', false], ['FJ3178', false]].map(r => Object.freeze(r))) }),
-  basis: 'display choice (the owner asked for a flat, sunken chest): pectoralis major drawn at about two thirds of the source model\'s depth, thinned toward its own rib-side surface; not measured anatomy'
+  basis: 'display choice (the owner asked for a flat, sunken chest): pectoralis major drawn at about half of the source model\'s depth, thinned toward its own rib-side surface; not measured anatomy'
 });
 export function flattenChest(meshesById, rule = CHEST_FLATTEN) {
   if (!(meshesById instanceof Map)) return { meshesById, report: null };

@@ -4,7 +4,7 @@
 /* The loading picture covers the game canvas until the game has drawn its first frame, then fades out over it. */
 .ns-assembly {
   position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
-  z-index: 8; background: #000; pointer-events: none; opacity: 1;
+  z-index: 8; background: #05070b; pointer-events: none; opacity: 1;
 }
 .ns-assembly.ns-assembly-out { opacity: 0; transition: opacity 0.8s ease; }
 

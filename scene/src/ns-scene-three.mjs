@@ -193,6 +193,10 @@ import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals,
 // 18 November (the living brain): the beat, the blooms round switched-on areas and the wobble when it is handled.
 import { BRAIN_LIVE, createBrainLive, stepBeat, stepBlooms, stepWobble, bloomOn, bloomOff, bloomPulse, bloomCentreOf, writeLiveUniforms, beatCentre, patchLiveVertex, liveFragmentHead } from './ns-brain-live.mjs';
 import { brainBeatClock } from './ns-assembly-core.mjs';
+// 18 November (the painted, wet look of the bodies): the tone curve, the fibre bundles and the wet highlight.
+import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, FLESH_DEPTH_LIFT_GLSL, FLESH_DEPTH_LIFT_PARS_GLSL, BODY_DEPTH_PREFERENCE, depthPreferenceAttr, depthPreferenceFootprint, fibreFrame } from './ns-flesh.mjs';
+// 18 November (the room): a dark operating theatre out of focus in place of the black void.
+import { ROOM, createRoom } from './ns-room.mjs';
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
 import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, BODY_SEGMENTS as BODY_SEGMENT_LIST } from './ns-body.mjs';
@@ -1370,6 +1374,27 @@ export function firstPersonShare(aheadM, amount, legs = false, o = FIRST_PERSON_
 /** Draw order of the R3 smooth translucent body layers: after every brain pass (glass up to 6), the torso depth pre-pass,
  * the torso colour, the face-layer depth pre-pass and colour (own scene), then the arm (transparent so its ghost window
  * can blend over the brain drawn before it). */
+/**
+ * 18 November 2026 (a check: looking down to either side showed a dark opening with ragged muscle ends at the root of
+ * the neck, and a camera behind the collar bones looked into the open rib cage from above: the first ribs as loops).
+ * In the eye view your own head and the neck near the eye are never drawn (FACE_LAYER.nearClearM), so the chest was
+ * open where the neck leaves it. NECK_SHADE closes that place with a plain dark shape in the background's own colour:
+ * an ellipsoid (centreMm, radiiMm; BodyParts3D mm in the start posture's own frame) that stands in the ring of the
+ * first ribs behind the breastbone's top, between the collar bones and the trapezius, and covers the stumps of the
+ * deep neck muscles and the lowest neck vertebrae that are still drawn there. It rides on the breastbone's top
+ * (hostId, the manubrium), is drawn only on your own body in the eye view (from outside the head and neck are there),
+ * is not on the mirror body, cannot be aimed at or grasped and carries no name. It reads as the shadow under your own
+ * chin. A display device, NOT anatomy; no licensed mesh is changed.
+ */
+/* 18 November 2026, after a second check (the plain background-coloured shape read as a hard-edged black hole cut
+ * through the chest): the shade is now drawn as a dark hollow with a soft edge: nearly black where you look straight
+ * into it (core) and rising to a dark, dull flesh tone toward its outline (rim; between rimFrom and 1 of
+ * 1 - |normal . view|), so its border against the collar bones and the muscles round it is a shadow's edge, not a
+ * cut-out's. Still one opaque shape (what lies behind it, the open root of the neck, must stay covered), still not
+ * anatomy. The camera no longer stands behind it for far-down looks (ns-camera EYE_DOLLY), so it is seen only as a
+ * low arc along the picture's lower edge between the collar bones. */
+export const NECK_SHADE = Object.freeze({ hostId: 'FJ3290', centreMm: Object.freeze([0, -100, 1356]), radiiMm: Object.freeze([92, 62, 88]),
+  core: 0x0b0607, rim: 0x4a2a27, rimFrom: 0.2 });
 export const BODY_ORDER = Object.freeze({ torsoDepth: 7, torso: 8, faceDepth: 1, face: 2, arm: 10 });
 
 /** Marker dot size, highlight scale and lift toward superior (source mm, before the giant display scale): ns-brain
@@ -3891,7 +3916,10 @@ export function hatchFrame(positions, { spacingMm = 3, bins = 16, minCount = 4 }
   return { attr, N, axis: a };
 }
 
-/** R558 (user Messages 25 to 29, Borderlands-style comic shading of the bodies; style guide of the build brief): the
+/** 18 November: the look this patch draws is now the PAINTED one of ns-flesh (fleshFibreGlsl before the lights,
+ * fleshLightGlsl after them); the numbered description below is the comic look it replaced, kept as the record. The
+ * hooks, the attribute name nsHatch (now the muscle's fibre frame) and the uniforms are unchanged.
+ * R558 (user Messages 25 to 29, Borderlands-style comic shading of the bodies; style guide of the build brief): the
  * COMIC patch (pure) for the lit MeshStandardMaterial of a muscle (kind 'muscle', composed after the muscle look and the
  * power-up) or a bone (kind 'bone'). It runs after the lights are summed (hook '#include <aomap_fragment>'), so it reads
  * the final lit colour of every other patch (tissue tones, crease, sheen, the outline pass's soft shading comes later
@@ -3935,7 +3963,7 @@ export function hatchFrame(positions, { spacingMm = 3, bins = 16, minCount = 4 }
  *  5. HDR (muscles with the power-up patch): while the HDR picture is on, the power-up peaks (gain nsPu.x above
  *     nsHdrBoost.y) brighten the emission by nsHdrBoost.x x the excess (HDR_BLOOM.muscleBoost), so the cores bloom.
  * Hooks: vertex '#include <begin_vertex>', fragment '#include <aomap_fragment>'. null when a hook is missing. */
-export const COMIC_HOOKS = Object.freeze({ vertex: '#include <begin_vertex>', light: '#include <aomap_fragment>' });
+export const COMIC_HOOKS = Object.freeze({ vertex: '#include <begin_vertex>', project: '#include <project_vertex>', normal: '#include <emissivemap_fragment>', lit: '#include <lights_fragment_end>', light: '#include <aomap_fragment>' });
 /* Anti-aliased coverage of the level lines of h (lines at integer h / 2^l), sp0 = pixels between neighbouring lines of
  * level 0, lf = log2(min spacing / sp0) = the level needed so lines are at least the minimum spacing apart, maxL the
  * coarsest level allowed, w the line width in pixels. Between two levels the in-between lines fade (the coarser
@@ -3951,77 +3979,23 @@ const COMIC_LINE_GLSL = `float nsLineCov( float h, float sp0, float lf, float ma
 export function patchComicShaders(vertexShader, fragmentShader, kind = 'muscle') {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const H = COMIC_HOOKS;
-  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.light) || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('reflectedLight')) return null;
+  if (!vertexShader.includes(H.vertex) || !vertexShader.includes(H.project) || !fragmentShader.includes(H.normal) || !fragmentShader.includes(H.lit) || !fragmentShader.includes(H.light) || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('reflectedLight')) return null;
   const muscle = kind === 'muscle';
   const tendon = muscle && fragmentShader.includes('varying float vNsTendon');
-  const vs = 'attribute vec4 nsHatch;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' +
-    vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsHatch = nsHatch;\n\tvNsObj = position;`);
+  const vs = 'attribute vec4 nsHatch;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' + FLESH_DEPTH_LIFT_PARS_GLSL +
+    vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsHatch = nsHatch;\n\tvNsObj = position;`).replace(H.project, `${H.project}\n\t${FLESH_DEPTH_LIFT_GLSL}`);
+  // 18 November (the owner: "telltale games art style rather than borderlands", "rough patchy small-poxy muscles"): the
+  // bands, the highlight sticker, the ink lines, the hatching and the bone stipple are gone; ns-flesh paints the tone
+  // curve, the fibre bundles (from the same hatch frame), the warm shadow, the soft rim and the wet highlight.
   const light = `${H.light}
-	{
-		const vec3 nsLw = vec3( 0.2126, 0.7152, 0.0722 );
-		vec3 nsDif = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
-		float nsAlb = max( dot( diffuseColor.rgb, nsLw ), 1e-4 );
-		float nsL = dot( nsDif, nsLw ) / nsAlb;
-		float nsCw = max( mix( nsCelBand.w, nsInkFar.z, smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) ), 0.75 * fwidth( nsL ) );
-		float nsB1 = smoothstep( nsCelBand.x - nsCw, nsCelBand.x + nsCw, nsL );
-		float nsB2 = smoothstep( nsCelBand.y - nsCw, nsCelBand.y + nsCw, nsL );
-		float nsB3 = smoothstep( nsCelBand.z - nsCw, nsCelBand.z + nsCw, nsL );
-		float nsTd = ${tendon ? 'clamp( vNsTendon, 0.0, 1.0 )' : muscle ? '0.0' : '1.0'};
-		float nsLv = mix( mix( mix( mix( nsCelLv.x, nsCelSpecAt.z, nsTd ), mix( nsCelLv.y, nsCelSpecAt.w, nsTd ), nsB1 ), nsCelLv.z, nsB2 ), mix( nsCelLv.w, nsCelSpecAt.y, nsTd ), nsB3 );
-		vec3 nsCol = nsL > 1e-3 ? nsDif * ( nsLv / nsL ) : diffuseColor.rgb * nsLv;
-		nsCol = mix( nsCol, vec3( dot( nsCol, nsLw ) ) * nsCelDeep.rgb, nsCelDeep.a * ( 1.0 - nsB1 ) );
-		vec3 nsN = normalize( normal ), nsV = normalize( vViewPosition );
-		float nsF = 1.0 - clamp( abs( dot( nsN, nsV ) ), 0.0, 1.0 );
-		float nsFw = max( fwidth( nsF ), 1e-4 );
-		float nsRimSide = smoothstep( -0.15, 0.45, dot( normalize( nsN.xy + vec2( 1e-5 ) ), nsCelRimDir.xy ) );
-		nsCol += diffuseColor.rgb * nsCelRimCol.rgb * ( nsCelRim.y * smoothstep( nsCelRim.x - nsFw, nsCelRim.x + nsFw, nsF ) * nsRimSide );
-		float nsGl = ${muscle ? 'smoothstep( 0.02, 0.2, max( emissive.r, max( emissive.g, emissive.b ) ) )' : '0.0'};
-		vec3 nsSp = reflectedLight.directSpecular;
-		float nsS = dot( nsSp, nsLw );
-		float nsSw = max( nsCelSpec.y, fwidth( nsS ) );
-		float nsSa = mix( nsCelSpec.x, nsCelSpecAt.x, nsTd );
-		float nsSk = nsSa * nsCelGloss.x;
-		float nsGk = 1.0 - smoothstep( nsCelGloss2.z, 2.0 * nsCelGloss2.z, length( fwidth( nsN ) ) );
-		float nsHi = smoothstep( nsSa - nsSw, nsSa + nsSw, nsS ) * mix( nsCelSpec.z, nsCelSpec.w, nsTd )
-			+ smoothstep( nsSk - nsSw, nsSk + nsSw, nsS ) * mix( nsCelGloss.y, nsCelGloss.z, nsTd );
-		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * ( nsHi * nsGk + min( nsS, nsCelGloss2.y ) * nsCelGloss2.x );
-		float nsInkA = 0.0;
-		vec2 nsQ = vNsHatch.xy;
-		float nsQq = dot( nsQ, nsQ );
-		vec2 nsDx = dFdx( nsQ ), nsDy = dFdy( nsQ ); // derivatives outside the branch below (defined in every lane)
-		${muscle ? '' : `vec3 nsSc = vNsObj / nsInkStip.x;
-		float nsSn = nsVNoise( nsSc );
-		float nsSf = max( fwidth( nsSn ), 1e-4 );
-		float nsCellPx = 1.0 / max( length( fwidth( nsSc ) ), 1e-5 );`}
-		if ( nsInkLine.w > 0.5 && vNsHatch.w > 0.5 && nsQq > 1e-6 ) {
-			float nsK = vNsHatch.w * 0.15915494;
-			float nsH = atan( nsQ.y, nsQ.x ) * nsK;
-			float nsHp = ( abs( nsQ.x * nsDx.y - nsQ.y * nsDx.x ) + abs( nsQ.x * nsDy.y - nsQ.y * nsDy.x ) ) / nsQq * nsK + 1e-5;
-			float nsSp0 = 1.0 / nsHp;
-			float nsLf = log2( nsInkLine.x / nsSp0 );
-			float nsLine = floor( nsH * 0.25 + 0.5 );
-			float nsStroke = fract( vNsHatch.z / nsInkStroke.x + fract( sin( nsLine * 12.9898 ) * 43758.5453 ) * 7.0 );
-			float nsDash = smoothstep( 0.0, nsInkStroke.y, nsStroke ) * ( 1.0 - smoothstep( 1.0 - nsInkStroke.z, 1.0, nsStroke ) );
-			float nsShadow = ( 1.0 - nsB2 ) * 0.5 + ( 1.0 - nsB1 ) * 0.5;
-			${muscle ? `float nsFib = nsLineCov( nsH, nsSp0, nsLf, 1.0, nsInkLine.y ) * mix( nsInkMix.x, 0.0, nsTd );
-			float nsTen = nsLineCov( nsH * 0.25, 4.0 * nsSp0, nsLf - 2.0, 0.0, nsInkLine.y ) * nsInkMix.w * nsTd;
-			nsInkA = max( nsFib, nsTen ) * nsDash;` : ''}
-			float nsHat = mix( nsLineCov( nsH, nsSp0, nsLf, 2.0, nsInkLine.z ), nsLineCov( nsH, nsSp0, nsLf - 1.0, 2.0, nsInkLine.z ), 1.0 - nsB1 );
-			nsInkA = max( nsInkA, nsHat * nsInkMix.y * nsShadow * mix( nsDash, 1.0, 0.5 ) );
-			${muscle ? '' : `float nsDot = smoothstep( nsInkStip.y - nsSf, nsInkStip.y + nsSf, nsSn ) * smoothstep( nsInkStip.z, 1.6 * nsInkStip.z, nsCellPx );
-			nsInkA = max( nsInkA, nsDot * nsInkMix.z * ( 0.6 + 0.8 * nsShadow ) );`}
-		}
-		nsInkA *= ( 1.0 - 0.85 * nsGl ) * ( 1.0 - smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) );
-		reflectedLight.directDiffuse = mix( nsCol, nsInk.rgb, nsInkA );
-		reflectedLight.indirectDiffuse = vec3( 0.0 );
-		reflectedLight.directSpecular = nsSpec * ( 1.0 - nsInkA );
-		reflectedLight.indirectSpecular *= ( 1.0 - nsInkA );
-	}${muscle && fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge') ? `
+	${fleshLightGlsl(kind, tendon)}${muscle && fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge') ? `
 	if ( nsCharge.z > 0.5 ) totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );` : ''}`;
-  const noise = (fragmentShader.includes('float nsVNoise(') ? '' : MUSCLE_FIBRE_NOISE_GLSL) + COMIC_LINE_GLSL;
+  const fibre = `${fleshFibreGlsl(kind, 'nsInkLine.w > 0.5')}
+	${H.normal}`;
+  const noise = fragmentShader.includes('float nsVNoise(') ? '' : MUSCLE_FIBRE_NOISE_GLSL;
   const fs = 'uniform vec4 nsCelBand;\nuniform vec4 nsCelLv;\nuniform vec4 nsCelDeep;\nuniform vec4 nsCelRim;\nuniform vec4 nsCelRimCol;\nuniform vec4 nsCelRimDir;\nuniform vec4 nsCelSpec;\nuniform vec4 nsCelSpecAt;\nuniform vec4 nsCelGloss;\nuniform vec4 nsCelGloss2;\n' +
     'uniform vec4 nsInk;\nuniform vec4 nsInkLine;\nuniform vec4 nsInkMix;\nuniform vec4 nsInkStroke;\nuniform vec4 nsInkStip;\nuniform vec4 nsHdrBoost;\nuniform vec4 nsInkFar;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' + noise +
-    fragmentShader.replace(H.light, light);
+    fragmentShader.replace(H.normal, fibre).replace(H.lit, `${H.lit}\n\t${fleshRestoreGlsl()}`).replace(H.light, light).replace('void main() {', `${muscle ? FLESH_FIBRE_FN_GLSL : ''}void main() {`);
   return { vertexShader: vs, fragmentShader: fs };
 }
 
@@ -4377,6 +4351,15 @@ export function createScene({
     const bg = clinicalBackground(THREE, canvas && canvas.ownerDocument);
     scene.background = bg ? keep(bg) : new THREE.Color(MATERIAL.background);
   }
+  // 18 November ("something should be done about the endless black space"): the room (ns-room), a dark operating
+  // theatre out of focus, drawn behind everything. The flat colour above stays as the clear colour under it.
+  const room = createRoom({ THREE, reducedMotion });
+  scene.add(room.group);
+  disposables.push(room);
+  const roomFrame = { dtMs: 0, beat: 0, active: 0, brain: null, brainShape: null, mirror: null, body: ROOM.bodyAt };
+  // the brain as the room sees it: the middle and the half sizes of its sample points (source mm, kept per set of
+  // samples), and from them each frame its place in the world and the matrix from the world into its own measure
+  const roomBrain = { src: null, c: [0, 0, 0], h: [1, 1, 1], at: [0, 0, 0, 0], shape: new Float32Array(9) }, roomMirror = [0, 0, 0, 0];
   const camera = new THREE.PerspectiveCamera(fovYDeg, 1, near, far);
   let eyeFovY = fovYDeg; // the eye view's own angle (the view from outside may use another: setCameraPose)
   camera.rotation.set(0, 0, 0, 'YXZ');
@@ -5101,6 +5084,7 @@ export function createScene({
   /** Body records { id, mesh, part, kind, material, face (bool: face layer), lastDrive }. */
   const body = [];
   const bodyById = new Map();
+  let neckShade = null; // NECK_SHADE
   const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }));
   // Torso see-through window (BODY_SEE_THROUGH): one vec4 uniform shared by the torso/neck materials drawn in place.
   // R3-scene: SMOOTH torso translucency (BODY_TRANSLUCENT) instead of the dithered window: transparent materials (alpha 1
@@ -5517,11 +5501,35 @@ export function createScene({
     if (geo.attributes.nsHatch) return geo.attributes.nsHatch;
     const n = geo.attributes.position.count;
     // No ink lines where lengthwise lines would run the wrong way (builder FA: the face's ring muscles, muscleFibreScale 0).
-    const h = positions && positions.length === 3 * n && !(kind === 'muscle' && muscleFibreScale(id) <= 0) ? hatchFrame(positions, { spacingMm: kind === 'bone' ? C.spacingMm.bone : C.spacingMm.muscle }) : null;
+    // 18 November: the attribute now carries the muscle's FIBRE FRAME (ns-flesh fibreFrame: across and along the muscle,
+    // in millimetres) for the painted fibre bundles; a bone carries zeros (it is drawn without lines or grain).
+    const h = kind === 'muscle' && positions && positions.length === 3 * n && muscleFibreScale(id) > 0 ? fibreFrame(positions, fibreAxis(positions, 1), { indices: geo.index ? geo.index.array : null }) : null;
     const a = new THREE.BufferAttribute(h ? h.attr : new Float32Array(4 * n), 4);
     geo.setAttribute('nsHatch', a);
     if (h) comic.hatchMeshes++;
     return a;
+  };
+  /** 18 November: the depth preference round rectus abdominis (ns-flesh BODY_DEPTH_PREFERENCE): the geometry of a
+   * sheet carries the metres per vertex (attribute nsLift), its material defines NS_DEPTH_LIFT and the comic patch's
+   * vertex text reads the attribute. The outline's ID pass reads the same attribute of the same geometry.
+   * depthPreferences(meshesById) works the attributes out once from the rest positions (before the meshes are made:
+   * a material's defines are part of what its class of muscles shares); depthLift gives a mesh its own. */
+  const depthPrefs = new Map();
+  const depthPreferences = byId => {
+    const P = BODY_DEPTH_PREFERENCE, t0 = nowMs();
+    const fp = depthPreferenceFootprint(P.muscles.map(id => byId(id)).filter(m => m && m.positions && m.positions.length >= 9).map(m => m.positions));
+    if (fp) for (const [id, ramp] of Object.entries(P.sheets)) {
+      const m = byId(id), a = m && m.positions ? depthPreferenceAttr(m.positions, fp, ramp) : null;
+      if (a) depthPrefs.set(id, a);
+    }
+    comic.depthPreferenceMs = Math.round(nowMs() - t0); comic.depthPreferenceMeshes = depthPrefs.size;
+  };
+  const depthLift = (geo, m, id) => {
+    const a = depthPrefs.get(id);
+    if (!a || !m || !geo || !geo.attributes || !geo.attributes.position || geo.attributes.position.count !== a.length) return false;
+    geo.setAttribute('nsLift', new THREE.BufferAttribute(a, 1));
+    m.defines = { ...(m.defines || {}), NS_DEPTH_LIFT: 1 };
+    return true;
   };
   for (const m of [boneMaterial, bodyBoneMaterial, torsoBoneMaterial, legBoneMaterial]) comicPatch(m, 'bone');
   // ---- R558 (Message 22): the POWER-UP CHARGE of an activation (ns-colors POWER_UP, patchPowerUpShaders) -------------
@@ -6928,6 +6936,7 @@ export function createScene({
       camState.headInPlace = headIn;
       faceStateKey = '';
       for (const b of body) if (b.inPlace) b.inPlace.visible = headIn;
+      if (neckShade) neckShade.visible = !headIn; // the head and neck are drawn in place from outside
     }
     camState.eyeDistM = camPose ? referenceOriginSet ? Math.hypot(camPose.position[0] - eyeRig.position.x, camPose.position[1] - eyeRig.position.y, camPose.position[2] - eyeRig.position.z) : Math.hypot(camPose.position[0], camPose.position[1], camPose.position[2]) : 0;
     camState.mode = camPose ? 'third' : 'first';
@@ -7697,12 +7706,16 @@ export function createScene({
   // uniforms and the shared clock): the same strike and flash, and at the peak the shell flares outward by
   // POWER_UP.haloBurst of its width, settling back with the flash.
   const HALO_PU = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\nuniform vec4 nsFibre;\nuniform vec2 nsSweep;\n' + powerUpGlsl('nsPowerUp') + '\n';
-  const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
+  // 18 November (third round): the shell of a belly sheet takes the sheet's own depth preference (ns-flesh
+  // BODY_DEPTH_PREFERENCE, the attribute nsLift of the host's geometry). Without it the shell's far side, which lies
+  // a few millimetres behind the sheet, came IN FRONT of the part of the sheet that is drawn further back in the
+  // depth buffer, and the additive glow lay over a lit belly in broad yellow and white bands.
+  const HALO_VS = 'uniform vec2 nsHaloShape;\n' + HALO_PU + FLESH_DEPTH_LIFT_PARS_GLSL + '#ifdef NS_FIBRE_REST\nattribute vec3 nsRest;\n#endif\nvarying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
     '  float flash = nsCharge.z > 0.5 ? nsPowerUpFlash( nsClock.x - nsCharge.x, nsCharge.y, nsClock.y ) : 0.0;\n' +
     `  vec3 p = position + normalize( normal ) * nsHaloShape.x * ( 1.0 + ${POWER_UP.haloBurst.toFixed(4)} * flash );\n` +
     '#ifdef NS_FIBRE_REST\n  vNsU = dot( nsRest, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#else\n  vNsU = dot( position, nsFibre.xyz ) * nsSweep.x + nsSweep.y;\n#endif\n' +
     '  vec4 mv = modelViewMatrix * vec4( p, 1.0 );\n' +
-    '  vNsN = normalize( normalMatrix * normal );\n  vNsV = - mv.xyz;\n  gl_Position = projectionMatrix * mv;\n}';
+    '  vNsN = normalize( normalMatrix * normal );\n  vNsV = - mv.xyz;\n  gl_Position = projectionMatrix * mv;\n' + FLESH_DEPTH_LIFT_GLSL + '\n}';
   const HALO_FS = 'uniform vec3 nsHaloColor;\nuniform vec2 nsHaloShape;\n' + HALO_PU + 'varying vec3 vNsN;\nvarying vec3 vNsV;\nvarying float vNsU;\nvoid main() {\n' +
     '  float f = clamp( abs( dot( normalize( vNsN ), normalize( vNsV ) ) ) * nsHaloShape.y, 0.0, 1.0 );\n  float a = f * f;\n' +
     '  vec4 pu = nsCharge.z > 0.5 ? nsPowerUp( nsClock.x - nsCharge.x, vNsU, nsCharge.y, nsClock.y ) : vec4( 1.0, 0.0, 1.0, 1.0 );\n' +
@@ -7726,6 +7739,7 @@ export function createScene({
       blending: THREE.AdditiveBlending, toneMapped: false
     }));
     if (mat.defines && Object.prototype.hasOwnProperty.call(mat.defines, 'NS_FIBRE_REST')) hm.defines = { NS_FIBRE_REST: '' };
+    if (mat.defines && mat.defines.NS_DEPTH_LIFT && host.geometry && host.geometry.attributes && host.geometry.attributes.nsLift) hm.defines = { ...(hm.defines || {}), NS_DEPTH_LIFT: 1 };
     const h = new THREE.Mesh(host.geometry, hm);
     h.name = `${host.name} (glow halo; display only)`;
     h.matrixAutoUpdate = false;
@@ -8363,6 +8377,7 @@ export function createScene({
     const nearMm = FACE_LAYER.nearClearM * 1000;
     const faceLo = [Infinity, Infinity, Infinity], faceHi = [-Infinity, -Infinity, -Infinity];
     let skipped = 0;
+    depthPreferences(id => meshOf(meshesById, id)); // 18 November: which bits of the belly's sheets go behind rectus abdominis
     for (const entry of list) {
       const id = entry && (entry.element_id || entry.id);
       const m = id ? meshOf(meshesById, id) : null;
@@ -8387,6 +8402,7 @@ export function createScene({
         material = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.muscleBase, roughness: MUSCLE_LOOK.roughness, metalness: 0 }));
         tendonAttr(geo); // R558 (Message 18): tendon ends, written by setBodyLift
         setMuscleBase(material, id);
+        depthLift(geo, material, id); // 18 November: the depth preference round rectus abdominis (ns-flesh BODY_DEPTH_PREFERENCE)
         material.userData.nsFibre = fibreUniform(geo.attributes.position.array, id);
         material.userData.nsSweep = sweepUniform(geo.attributes.position.array, material.userData.nsFibre); // R558 (Message 22)
         if (face) { material.transparent = true; material.opacity = FACE_LAYER.muscleOpacity; material.depthWrite = false; }
@@ -8424,6 +8440,7 @@ export function createScene({
       // R5-scene (D19): the mirror twin (same geometry and pose matrix, opaque, head and face in place).
       {
         const tm = kind === 'muscle' ? setMuscleBase(mirrorMuscleMaterial(), id) : eyePart ? eyeMaterial(eyePart, true) : mirrorBoneMaterial;
+        if (kind === 'muscle' && geo.attributes.nsLift) tm.defines = { ...(tm.defines || {}), NS_DEPTH_LIFT: 1 };
         if (kind === 'muscle') { tm.userData.nsFibre = material.userData.nsFibre; tm.userData.nsSweep = material.userData.nsSweep; }
         if (kind === 'muscle') shadeMuscle(tm, MUSCLE_REST_DRIVE);
         const tw = kind === 'muscle' ? haloHost(new THREE.Mesh(geo, tm), true) : new THREE.Mesh(geo, tm);
@@ -8463,6 +8480,22 @@ export function createScene({
       fastPick(rec.mesh); if (rec.mirror) fastPick(rec.mirror); if (rec.inPlace) fastPick(rec.inPlace); // R558: rigid body meshes
     }
     assignBodyMuscleTones(); // R558 (Message 18): neighbouring muscles get clearly different natural tones
+    // 18 November 2026 (NECK_SHADE): the dark shape that stands where your own neck goes up out of the chest.
+    if (!neckShade) {
+      const host = bodyById.get(NECK_SHADE.hostId);
+      if (host && !host.face) {
+        const c = NECK_SHADE.centreMm, r = NECK_SHADE.radiiMm;
+        neckShade = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 28, 18)), keep(new THREE.ShaderMaterial({ toneMapped: false,
+          uniforms: { uCore: { value: new THREE.Color(NECK_SHADE.core) }, uRim: { value: new THREE.Color(NECK_SHADE.rim) }, uFrom: { value: NECK_SHADE.rimFrom } },
+          vertexShader: 'varying vec3 vN; varying vec3 vV; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalMatrix * normal; vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
+          fragmentShader: 'uniform vec3 uCore; uniform vec3 uRim; uniform float uFrom; varying vec3 vN; varying vec3 vV; void main() { float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); float t = smoothstep(uFrom, 1.0, f); gl_FragColor = vec4(mix(uCore, uRim, t * t), 1.0);\n#include <colorspace_fragment>\n}' })));
+        neckShade.name = 'neck shade (display, not anatomy)';
+        neckShade.position.set(c[0], c[1], c[2]); neckShade.scale.set(r[0], r[1], r[2]); neckShade.updateMatrix(); neckShade.matrixAutoUpdate = false;
+        neckShade.raycast = () => {}; neckShade.renderOrder = BODY_ORDER.torso; neckShade.visible = !camState.headInPlace;
+        neckShade.userData = { nsNeckShade: true };
+        host.mesh.add(neckShade);
+      }
+    }
     // R5-integrate-core (D20): face-muscle packet meshes (R5-face ids zf-..., source_packet face-muscles-r1) are in the body.
     const facePacket = list.filter(e => e && (e.source_packet === 'face-muscles-r1' || e.packet === 'face-muscles-r1' || /^zf-/.test(String(e.element_id || e.id || '')))).length;
     if (facePacket > 0 && NS_TEXT.FACE_R5) {
@@ -8815,17 +8848,22 @@ export function createScene({
   /* R558 (ns-body R_FOREARM_TWIST): a record with a forearm twist is posed as a flat blend of at most three maps per
    * vertex: its bones' maps (slots 0..segments-1) and the twisted ulna table entries (slots segments..), each in this
    * mesh's frame; a twisted influence of weight w at fraction f takes the two entries around f (w (1 - fr), w fr). The
-   * slot's top bit says which of the vertex's two cached source points (qa / qb, na / nb) it poses. Made once per record. */
+   * slot's top bit says which of the vertex's two cached source points (qa / qb, na / nb) it poses. Made once per record.
+   * 18 November 2026: the slots are 16-bit. They were 8-bit with room for 127 maps; the spine that bends at every
+   * vertebra brought the rig to over 90 segments, 65 twist entries on top went past 127, the plan refused, and the
+   * game then drew EVERY muscle rigid (no per-vertex skinning at all: needles at the shoulder, straight finger tendons
+   * beside curled fingers). */
+  const SKIN_SLOT_B = 0x8000, SKIN_SLOT_MASK = 0x7fff;
   function twistPlanOf(rec) {
     if (rec.tp) return rec.tp;
     const n = rec.src.length / 3, NS = bodySkinSegs.length, K = (twistNow(rec).length / 16) - 1;
-    const slots = new Uint8Array(3 * n), w = new Float32Array(3 * n), { i0, i1, w0, w1, tf } = rec;
-    if (NS + K + 1 > 127) fail('scene_input', 'too many skin slots');
+    const slots = new Uint16Array(3 * n), w = new Float32Array(3 * n), { i0, i1, w0, w1, tf } = rec;
+    if (NS + K + 1 > SKIN_SLOT_MASK) fail('scene_input', 'too many skin slots');
     for (let v = 0; v < n; v++) {
       let m = 3 * v;
       const put = (seg, wt, useB) => {
         if (!(wt > 0)) return;
-        const hb = useB ? 128 : 0;
+        const hb = useB ? SKIN_SLOT_B : 0;
         if (seg === SKIN_RF && tf[v] > 0) {
           const x = Math.min(1, tf[v]) * K, k = x >= K ? K - 1 : Math.floor(x), fr = x - k;
           slots[m] = (NS + k) | hb; w[m++] = wt * (1 - fr);
@@ -8849,7 +8887,7 @@ export function createScene({
       for (let e = 0; e < 3; e++) {
         const wt = W[k + e];
         if (!(wt > 0)) continue;
-        const sl = S[k + e], o = 16 * (sl & 127), Q = sl & 128 ? qb : qa, Nn = sl & 128 ? nb : na;
+        const sl = S[k + e], o = 16 * (sl & SKIN_SLOT_MASK), Q = sl & SKIN_SLOT_B ? qb : qa, Nn = sl & SKIN_SLOT_B ? nb : na;
         const x = Q[k], y = Q[k + 1], z = Q[k + 2], a = Nn[k], b = Nn[k + 1], c = Nn[k + 2];
         px += wt * (CC[o] * x + CC[o + 4] * y + CC[o + 8] * z + CC[o + 12]);
         py += wt * (CC[o + 1] * x + CC[o + 5] * y + CC[o + 9] * z + CC[o + 13]);
@@ -12192,6 +12230,36 @@ export function createScene({
       } else farEyeVec.value.set(cx, cy, cz, farEyeView.K);
     } else farEyeVec.value.w = 0;
     stepBrainLive(dtMs);
+    { // the room's light: the beat, an area switched on, and the places the floor shadows lie under (ns-room)
+      const fr = roomFrame, mt = mirrorRoot.visible && mirror.transform ? mirror.transform.centre : null;
+      fr.dtMs = dtMs; fr.beat = brainLive.beat; fr.brain = brainTransformSet ? farEyeView.pw : null;
+      fr.brainShape = null;
+      if (brainTransformSet && brainSamples && brainSamples.length >= 3) {
+        const B = roomBrain, S = brainSamples, e = brainGroup.matrixWorld.elements;
+        if (B.src !== S) { // once per set of samples: the box round them
+          let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+          for (let i = 0; i < S.length; i += 3) { const x = S[i], y = S[i + 1], z = S[i + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+          B.src = S; B.c[0] = (x0 + x1) / 2; B.c[1] = (y0 + y1) / 2; B.c[2] = (z0 + z1) / 2; B.h[0] = Math.max((x1 - x0) / 2, 1e-6); B.h[1] = Math.max((y1 - y0) / 2, 1e-6); B.h[2] = Math.max((z1 - z0) / 2, 1e-6);
+        }
+        const c = B.c, h = B.h, at = B.at, N = B.shape;
+        at[0] = e[0] * c[0] + e[4] * c[1] + e[8] * c[2] + e[12]; at[1] = e[1] * c[0] + e[5] * c[1] + e[9] * c[2] + e[13]; at[2] = e[2] * c[0] + e[6] * c[1] + e[10] * c[2] + e[14];
+        // its widest level half-width (for the floor shadow), and world -> source -> half sizes (the inverse of the 3x3, row i over h[i])
+        at[3] = Math.max(h[0] * Math.hypot(e[0], e[2]), h[1] * Math.hypot(e[4], e[6]), h[2] * Math.hypot(e[8], e[10]));
+        const a00 = e[0], a10 = e[1], a20 = e[2], a01 = e[4], a11 = e[5], a21 = e[6], a02 = e[8], a12 = e[9], a22 = e[10];
+        const c00 = a11 * a22 - a12 * a21, c01 = a12 * a20 - a10 * a22, c02 = a10 * a21 - a11 * a20, det = a00 * c00 + a01 * c01 + a02 * c02;
+        if (Number.isFinite(at[0] + at[1] + at[2]) && at[3] > 0 && Math.abs(det) > 1e-30) {
+          const id = 1 / det;
+          // inverse rows: row 0 = [c00, a02 a21 - a01 a22, a01 a12 - a02 a11] / det, and so on; N is column-major
+          N[0] = c00 * id / h[0]; N[3] = (a02 * a21 - a01 * a22) * id / h[0]; N[6] = (a01 * a12 - a02 * a11) * id / h[0];
+          N[1] = c01 * id / h[1]; N[4] = (a00 * a22 - a02 * a20) * id / h[1]; N[7] = (a02 * a10 - a00 * a12) * id / h[1];
+          N[2] = c02 * id / h[2]; N[5] = (a01 * a20 - a00 * a21) * id / h[2]; N[8] = (a00 * a11 - a01 * a10) * id / h[2];
+          fr.brain = at; fr.brainShape = N;
+        }
+      }
+      if (mt) { roomMirror[0] = mt[0]; roomMirror[1] = mt[1]; roomMirror[2] = mt[2]; roomMirror[3] = mirror.body && mirror.body.radius > 0 ? mirror.body.radius * Math.abs(mirror.transform.scale || 1) : 0; fr.mirror = roomMirror; } else fr.mirror = null;
+      fr.active = brainLive.on > 0.75 ? 1 : 0; // a movement switched on (1), not an area that is only looked at (0.35)
+      room.update(fr);
+    }
     // Camera-range enforcement belongs to active held manipulation, not a released world-fixed object.
     if (mirror.carryHeldAtReconcile === true && mirror.worldCentre && mirrorRoot.visible) {
       const envelope = currentMirrorEnvelope();
@@ -12282,6 +12350,8 @@ export function createScene({
       glassRim,
       /** R558 BB2: the brain's comic ink as plain data: areaInk (the motor areas' patch, the strip relief and its load ms)
        * and glassFold (the glass's background fold-depth job: state, vertices, slices, work and wall ms). */
+      /** 18 November (ns-room): the room as plain numbers (where its light stands, this frame's gain, the three things). */
+      get room() { return room.state(); },
       get brainInk() {
         const { token, ...gf } = glassFold, L = brainLive, r3 = v => Math.round(v * 1000) / 1000;
         // 18 November (ns-brain-live): the living brain as plain numbers (this frame's beat, breath and swell share, the

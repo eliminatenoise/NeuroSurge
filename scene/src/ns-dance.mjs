@@ -25,10 +25,11 @@
  *                             for a whole stroke, from where it is, inside -70 .. +90
  *   rightArm  r_pronation     LEADS: ns-body right forearm: open 0 (palm up, the anatomical source pose), closed 160
  *             r_shoulder_rot  follows likewise (ns-body right upper arm about its own long axis)
- *   leftLeg   ankle_inv_L     LEADS: ns-body left foot about the ankle: open -15 (sole outward), closed +35 (sole inward)
- *             hip_rot_L       follows: the thigh about its long axis, DANCE_FOLLOW.hipDeg for a whole stroke, inside
- *                             -40 .. +45 and the feet clearance of the current leg posture (`ranges`)
- *   rightLeg  ankle_inv_R / hip_rot_R  likewise
+ *   leftLeg   leg_turn_L      LEADS (18 November 2026): ns-body's leg turn, the foot first, then the shank, then the
+ *                             thigh (LEG_TURN): open +70 (the foot's line 90 degrees outward), closed -110 (90 inward)
+ *             hip_rot_L       listed as a follower that turns nothing (DANCE_FOLLOW.hipDeg 0): the hip's share of the
+ *                             turn is inside leg_turn
+ *   rightLeg  leg_turn_R / hip_rot_R  likewise
  * A leader's ends are the joint's whole range as the game models it (ns-body BODY_JOINT_LIMITS, ns-rig
  * PRONATION_RANGE_DEG); a range passed in `ranges` can only narrow it.
  *
@@ -93,13 +94,27 @@ export const DANCE = Object.freeze({
  * the follower's own joint range). A follower's open / closed below are only its nominal ends for speeds and history.
  * Nothing else in the limb is moved by the turn (elbow and knee keep their bend).
  */
-export const DANCE_FOLLOW = Object.freeze({ shoulderDeg: 14, hipDeg: 10 });
-const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg / 2, closed: -deg / 2, follow: deg, lo, hi });
+/* 18 November 2026 (the owner: "the ankles and the feet should be traveling the full 90 degrees either way"): each leg's
+ * leader is now the leg's own turn (ns-body leg_turn_L / leg_turn_R, LEG_TURN): open +70 puts the foot's line 90 degrees
+ * outward (the underside view), closed -110 puts it 90 degrees inward (the overside view); the rig shares the turn
+ * between the foot (first), the shank at the soft knee and the thigh in the hip, so the hip's following is inside
+ * that joint and the dance's own hip follower turns nothing (hipDeg 0; it stays listed so the hip's history and
+ * touch-free range keep working). */
+export const DANCE_FOLLOW = Object.freeze({ shoulderDeg: 14, hipDeg: 0 });
+/** The leg turn's two ends in the limb switch (degrees of ns-body leg_turn; the foot's line rests 20 degrees outward at
+ * 0). The owner, later on 18 November 2026: "Maybe let's make the foot turn 45 degrees and to have feet that are, you
+ * know, completely flat when they're turned outward would be an extreme amount of flexibility. So just imagine a V
+ * followed by an A when they're turned inward." So the feet end 45 degrees outward (open +25: the two feet make a V, the
+ * underside view) and 45 degrees inward (closed -65: an A, the overside view), not the 90 degrees either way of the same
+ * morning (+70 / -110; the joint itself still reaches those ends). */
+export const LEG_TURN_ENDS = Object.freeze({ open: 25, closed: -65, restOutDeg: 20 });
+// (a follower that turns nothing takes its joint's own range as its nominal ends, so history and speeds stay finite)
+const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg ? deg / 2 : hi, closed: deg ? -deg / 2 : lo, follow: deg, lo, hi });
 export const DANCE_LIMBS = Object.freeze({
   leftArm: Object.freeze([Object.freeze({ id: 'l_forearm', open: -80, closed: 80 }), follower('l_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
   rightArm: Object.freeze([Object.freeze({ id: 'r_pronation', open: 0, closed: 160 }), follower('r_shoulder_rot', DANCE_FOLLOW.shoulderDeg, -70, 90)]),
-  leftLeg: Object.freeze([Object.freeze({ id: 'ankle_inv_L', open: -15, closed: 35 }), follower('hip_rot_L', DANCE_FOLLOW.hipDeg, -40, 45)]),
-  rightLeg: Object.freeze([Object.freeze({ id: 'ankle_inv_R', open: -15, closed: 35 }), follower('hip_rot_R', DANCE_FOLLOW.hipDeg, -40, 45)])
+  leftLeg: Object.freeze([Object.freeze({ id: 'leg_turn_L', open: LEG_TURN_ENDS.open, closed: LEG_TURN_ENDS.closed }), follower('hip_rot_L', DANCE_FOLLOW.hipDeg, -40, 45)]),
+  rightLeg: Object.freeze([Object.freeze({ id: 'leg_turn_R', open: LEG_TURN_ENDS.open, closed: LEG_TURN_ENDS.closed }), follower('hip_rot_R', DANCE_FOLLOW.hipDeg, -40, 45)])
 });
 export const DANCE_LIMB_IDS = Object.freeze(Object.keys(DANCE_LIMBS));
 /** The UNDERSIDE view (rule 6): every leading joint at its "open" end. The game starts here. */

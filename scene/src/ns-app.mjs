@@ -153,7 +153,13 @@ export const ROTATION_NOTE_SECONDS = 6;
 /** R10 put the hand target three quarters up the screen (NDC y = +0.5). R558 (limbs "straight out like a stick"): the
  * straight, level, forward left arm at the start look (ns-arm HAND_Y_NDC, -0.28). Passed to ns-arm fitHand /
  * depthForElbow as request.yNdc; the snapshot reports the ACHIEVED fit.yNdc. */
-export const HAND_Y_NDC = -0.28;
+/* 18 November 2026 (the owner: limbs "fully extended out", "minimal elbow ... flexion initially"; a check: the left
+ * arm lay as a ribbon along the chest with its hand behind the chest's far edge, nothing like the right arm stretched
+ * to the knee): -0.28 -> 0.12. With GAME_ARM_OPTIONS (depth 0.53 m, 0.14 left of the middle) the left hand starts at
+ * the arm's full reach beside the left knee, the matching pair of the right hand at the right knee (the right wrist
+ * lies 30 degrees below level from the eye, 11 above the 41-degree start look). The hand still follows the look at
+ * this height of the eye's view; from the raised camera it is drawn a little under and left of the crosshair. */
+export const HAND_Y_NDC = 0;
 /**
  * WASD wrist coordination (integration round 2, R8 "WASD give coordinated shoulder + elbow + wrist + hand movement"):
  * the reach keys move the hand anchor (A/D across, W/S in depth) and the IK moves shoulder and elbow; this adds a
@@ -186,7 +192,8 @@ export const HAND_Y_NDC = -0.28;
 // (about 38 degrees) at the same look, and back to 1.18 when released. Not changed here (the start pose is the lead's).
 // S pulls the hand in from there.
 // R558 (limbs straight forward): the hand also starts 0.17 left of the centre, straight ahead of the left shoulder.
-export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.35, xNdcStart: -0.17 });
+// 18 November 2026: depth 0.35 -> 0.53 m and x -0.17 -> -0.14: the left arm starts stretched out to the left knee (see HAND_Y_NDC).
+export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.5, xNdcStart: -0.17 });
 export const WASD_WRIST = Object.freeze({ depthRefM: GAME_ARM_OPTIONS.depthStart, degPerM: -60, xRefNdc: ARM_DEFAULTS.xNdcStart, degPerNdc: 12, maxDeg: 15 });
 /**
  * Trunk follow for wide looks (ns-arm bodyYawForLook). The integration widens U3a's right free range from 45 to 60 deg
@@ -8785,6 +8792,7 @@ export function start(params = {}) {
         glassRim: objects.glassRim || null,
         // R558 BB2: the brain ink's plain state (the strip relief, the glass fold-depth background job).
         brainInk: objects.brainInk || null,
+        room: objects.room || null, // 18 November (ns-room): the room behind everything
         counts: { bones: count(objects.bones), muscles: count(objects.muscles), glass: count(objects.glass), markers: count(objects.markers) },
         // Which body parts are in view (ns-scene-three bodyVisibility; the face layer is drawn in its own pass).
         bodyVisibility: (() => { try { return sceneFn('bodyVisibility') ? callScene('bodyVisibility') : null; } catch { return null; } })(),

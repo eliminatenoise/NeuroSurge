@@ -14,6 +14,8 @@
  * front of the body and looks at it like a mirror, with +z up.
  */
 
+import { ROOM, createRoomBackdrop, roomGain, roomBeatStep } from './ns-room.mjs';
+
 /** Kinds of part the picture knows, and their colour (sRGB hex). 'strip' is the precentral gyrus, where the game's
  * motor areas are drawn. */
 export const ASSEMBLY_KINDS = Object.freeze({
@@ -26,7 +28,11 @@ export const ASSEMBLY = Object.freeze({
   fovYDeg: 30, fill: 0.94,
   bodyCentre: Object.freeze([0, -40, 880]), bodyHalfWidth: 520, bottom: -140,
   brainCentre: Object.freeze([-0.5, -79.7, 1547.5]), brainScale: 6.0, brainTiltDeg: 48, brainAt: Object.freeze([0, -40, 2240]), top: 2700,
-  flyMm: 260, flyS: 0.75, flashS: 1.1, swayDeg: 24, swayS: 11, maxStartsPerFrame: 14
+  flyMm: 260, flyS: 0.75, flashS: 1.1, swayDeg: 24, swayS: 11, maxStartsPerFrame: 14,
+  // 18 November: behind the parts stands the game's own room (ns-room), seen exactly as the game's first picture sees
+  // it (the field of view and the downward look the game starts with; the launcher passes its own numbers, these are
+  // the same ones for a caller that passes none), so the backdrop does not jump when the game takes over.
+  room: Object.freeze({ fovYDeg: 100, pitchDeg: -41, eye: Object.freeze([0, 0.11, -0.04]), mirrorZ: -2.06 })
 });
 
 /** Reads the vertices and faces of a Wavefront OBJ from its bytes (ASCII). Returns { positions: Float32Array,
@@ -128,7 +134,7 @@ export function brainBeatClock(epochMs = Date.now(), o = BRAIN_BEAT) {
  * Returns { add(kind, parsed), setProgress(fraction, finishing), resize(width, height, pixelRatio), frame(nowMs),
  * dispose(), state() }. add() takes a parseObjBytes result; frame() draws one picture.
  */
-export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 1, options = ASSEMBLY }) {
+export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 1, options = ASSEMBLY, room = null }) {
   const o = options;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setClearColor(0x000000, 1);
@@ -137,6 +143,17 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(o.fovYDeg, 1, 200, 20000);
   camera.up.set(0, 0, 1);
+  // The room behind the parts, as the game's first picture shows it (see ASSEMBLY.room).
+  const roomRule = { ...(o.room || ASSEMBLY.room), ...(room && Number.isFinite(room.fovYDeg) && Number.isFinite(room.pitchDeg) ? { fovYDeg: room.fovYDeg, pitchDeg: room.pitchDeg } : {}) };
+  const roomView = { fovYDeg: roomRule.fovYDeg, aspect: 1, yawDeg: 0, pitchDeg: roomRule.pitchDeg, eye: roomRule.eye };
+  const backdrop = createRoomBackdrop({ THREE, fixed: true });
+  let roomBeat = 0;
+  {
+    // the floor shadows where the game's first picture has them: under the brain, the mirror body and your own body
+    const sh = backdrop.uniforms.uRoomShade.value, bx = ROOM.centre[0], bz = ROOM.centre[1];
+    sh[0].set(bx, bz, ROOM.shade.brain[0], ROOM.shade.brain[1]); sh[1].set(0, roomRule.mirrorZ, ROOM.shade.mirror[0], ROOM.shade.mirror[1]); sh[2].set(ROOM.bodyAt[0], ROOM.bodyAt[2], ROOM.shade.body[0], ROOM.shade.body[1]);
+  }
+  scene.add(backdrop.mesh);
   scene.add(new THREE.HemisphereLight(0xf2f4ff, 0x1a1418, 1.15));
   const key = new THREE.DirectionalLight(0xfff1e2, 2.4); key.position.set(-900, -2600, 2600); scene.add(key);
   const rim = new THREE.DirectionalLight(0x69b7ff, 1.5); rim.position.set(1400, 2200, 1500); scene.add(rim);
@@ -182,6 +199,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     camera.position.set(o.bodyCentre[0], o.bodyCentre[1] - dist, mid);
     camera.lookAt(o.bodyCentre[0], o.bodyCentre[1], mid);
     camera.updateProjectionMatrix();
+    roomView.aspect = aspect; backdrop.setFixedView(roomView);
     // bar: 36 % of the width, 3 px tall, 26 px above the bottom edge
     const bw = 0.36, bh = 3 / H, by = 26 / H;
     track.scale.set(bw, bh, 1); track.position.set(0.5 - bw / 2, by, 0);
@@ -244,6 +262,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     brainTilt.scale.setScalar(o.brainScale * (1 + BRAIN_BEAT.swell * pulse.beat + BRAIN_BEAT.breathSwell * pulse.breath));
     brainPivot.position.z = o.brainAt[2] + 6 * pulse.breath;
     base.strip.emissiveIntensity = 0.3 + (finishing ? 0.55 : 0.3) * pulse.beat;
+    roomBeat = roomBeatStep(roomBeat, pulse.beat, dt); // softened, as in the game
+    backdrop.uniforms.uRoom.value.z = roomGain(roomBeat, 0); // the room's light breathes with the beat, as in the game
     shown += (progress - shown) * Math.min(1, dt * 6);
     bar.scale.set(Math.max(0.0001, 0.36 * shown), 3 / H, 1);
     barMat.opacity = finishing ? 0.55 + 0.4 * (0.5 + 0.5 * Math.sin(t * 6)) : 0.95;
@@ -261,6 +281,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     for (const p of pending) p.geometry.dispose();
     for (const k of Object.keys(base)) base[k].dispose();
     quad.dispose(); track.material.dispose(); barMat.dispose();
+    backdrop.dispose();
     renderer.dispose();
   }
 

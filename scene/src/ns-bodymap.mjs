@@ -59,7 +59,9 @@ export const BODY_JOINT_IDS = Object.freeze([
   'hyoid_elev', 'nose_wrinkle', 'upper_lip', 'lower_lip',
   'r_wrist_dev', 'r_thumb_flex', 'r_thumb_opp', 'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
   // R558 (Space dance): rotation about the right humerus' and each femur's own long axis (+ = external).
-  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R'
+  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R',
+  // 18 November 2026: the whole leg's turn about its own length, led by the foot (ns-body LEG_TURN; + = outward).
+  'leg_turn_L', 'leg_turn_R'
 ]);
 
 /** Existing left-arm action ids (ns-actions ACTION_IDS, in map order) plus forearm rotation, plus (R558, Messages 14 /
@@ -139,7 +141,10 @@ export const JOINT_SEMANTICS = deepFreeze({
   // R558 (Space dance; no motor-map action names these yet: the dance turns them).
   r_shoulder_rot: sem('right shoulder external rotation (the front of the upper arm turns outward)', 'internal rotation (turns inward)', -70, 90, 'right'),
   hip_rot_L: sem('left hip external rotation (the toes turn outward)', 'internal rotation (the toes turn inward)', -40, 45, 'left'),
-  hip_rot_R: sem('right hip external rotation (the toes turn outward)', 'internal rotation (the toes turn inward)', -40, 45, 'right')
+  hip_rot_R: sem('right hip external rotation (the toes turn outward)', 'internal rotation (the toes turn inward)', -40, 45, 'right'),
+  // 18 November 2026 (ns-body LEG_TURN; no motor-map action names these: the Space double tap turns them).
+  leg_turn_L: sem('left leg turned outward about its own length, the foot leading (toes outward)', 'turned inward (toes inward)', -110, 70, 'left'),
+  leg_turn_R: sem('right leg turned outward about its own length, the foot leading (toes outward)', 'turned inward (toes inward)', -110, 70, 'right')
 });
 
 // ---------------------------------------------------------------------------------------------

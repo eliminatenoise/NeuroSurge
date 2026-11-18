@@ -851,7 +851,9 @@ export const BODY_JOINT_IDS = Object.freeze([
   'hyoid_elev', 'nose_wrinkle', 'upper_lip', 'lower_lip',
   'r_wrist_dev', 'r_thumb_flex', 'r_thumb_opp', 'r_index_flex', 'r_middle_flex', 'r_ring_flex', 'r_little_flex', 'r_finger_spread',
   // R558 (Space dance): the right upper arm's and both hips' rotation about their own long axes (+ = external).
-  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R'
+  'r_shoulder_rot', 'hip_rot_L', 'hip_rot_R',
+  // 18 November 2026: the whole leg's turn about its own length, led by the foot (ns-body LEG_TURN; + = outward).
+  'leg_turn_L', 'leg_turn_R'
 ]);
 /** R558 (Space dance): the body joints the dance turns (ns-dance DANCE_LIMBS minus the game arm's own two). */
 export const DANCE_BODY_JOINTS = Object.freeze(DANCE_JOINT_IDS.filter(j => j !== 'l_forearm' && j !== 'l_shoulder_rot'));
@@ -870,8 +872,9 @@ export const DANCE_AREAS = Object.freeze({
   l_forearm: Object.freeze(['rh_forearm']), l_shoulder_rot: Object.freeze(['rh_shoulder']),
   r_pronation: Object.freeze(['lh_forearm']), r_shoulder_rot: Object.freeze(['lh_shoulder']),
   hip_rot_L: Object.freeze(['rh_hip']), hip_rot_R: Object.freeze(['lh_hip']),
-  // 17 November 2026: the ankle leads the legs' turn (ns-dance DANCE_LIMBS); the map's own ankle areas.
-  ankle_inv_L: Object.freeze(['rh_ankle']), ankle_inv_R: Object.freeze(['lh_ankle'])
+  // 18 November 2026: the legs' turn is one joint per leg, led by the foot (ns-body LEG_TURN): the ankle's area first
+  // (it leads), then the knee's and the hip's (the shank and the thigh follow).
+  leg_turn_L: Object.freeze(['rh_ankle', 'rh_knee', 'rh_hip']), leg_turn_R: Object.freeze(['lh_ankle', 'lh_knee', 'lh_hip'])
 });
 export const DANCE_MUSCLES = deepFreeze({
   r_pronation: { open: ['right supinator', 'right biceps brachii'], closed: ['right pronator teres', 'right pronator quadratus'] },
@@ -883,10 +886,17 @@ export const DANCE_MUSCLES = deepFreeze({
     closed: ['left gluteus medius', 'left gluteus minimus', 'left tensor fasciae latae', 'left piriformis'] },
   hip_rot_R: { open: ['right gluteus maximus', 'right sartorius', 'right obturator internus', 'right obturator externus', 'right gemellus superior', 'right gemellus inferior', 'right quadratus femoris'],
     closed: ['right gluteus medius', 'right gluteus minimus', 'right tensor fasciae latae', 'right piriformis'] },
-  // The sole turns outward (open, eversion) / inward (closed, inversion): the muscle lists of the map's own
-  // "Turn sole outward" / "Turn sole inward" movements (ns-bodymap ankle_evert / ankle_invert).
-  ankle_inv_L: { open: ['left fibularis longus', 'left fibularis brevis', 'left fibularis tertius', 'left extensor digitorum longus'], closed: ['left tibialis posterior', 'left tibialis anterior'] },
-  ankle_inv_R: { open: ['right fibularis longus', 'right fibularis brevis', 'right fibularis tertius', 'right extensor digitorum longus'], closed: ['right tibialis posterior', 'right tibialis anterior'] }
+  // 18 November 2026: the leg turn (ns-body LEG_TURN), by the usual textbook roles, from the foot up. Outward (open):
+  // the foot's everters and abductors (the fibular muscles, extensor digitorum longus), the bent knee's outward turner
+  // (biceps femoris) and the hip's outward turners. Inward (closed): tibialis posterior and anterior at the foot, the
+  // bent knee's inward turners (popliteus, semitendinosus, semimembranosus, gracilis, sartorius) and the hip's inward
+  // turners (the front of gluteus medius and minimus, tensor fasciae latae).
+  ...Object.fromEntries([['L', 'left'], ['R', 'right']].map(([S, side]) => [`leg_turn_${S}`, {
+    open: [`${side} fibularis longus`, `${side} fibularis brevis`, `${side} fibularis tertius`, `${side} extensor digitorum longus`, `${side} biceps femoris`,
+      `${side} gluteus maximus`, `${side} obturator internus`, `${side} obturator externus`, `${side} gemellus superior`, `${side} gemellus inferior`, `${side} quadratus femoris`],
+    closed: [`${side} tibialis posterior`, `${side} tibialis anterior`, `${side} popliteus`, `${side} semitendinosus`, `${side} semimembranosus`, `${side} gracilis`, `${side} sartorius`,
+      `${side} gluteus medius`, `${side} gluteus minimus`, `${side} tensor fasciae latae`]
+  }]))
 });
 /** Gaze kinds: ns-brain classifyGaze's 'region' | 'glass' (brain, not a motor region) | 'empty', plus the legacy
  * focus-strip 'strip' (an event with only an arm actionId). */

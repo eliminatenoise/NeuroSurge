@@ -900,13 +900,17 @@ export function muscleToneDistance(i, j) {
 // spec.bellyAt, 0.045 then), so no muscle showed any highlight at all (the matte look of the pictures); now it peaks near 0.2
 // and is tighter (the normal within about 11 degrees of the mirror direction). tendonRoughnessDrop 0.2 -> 0.1: a
 // tendon part is then at roughness 0.32, glossier than the belly without a pin-point glint.
+// 18 November (painted, wet look; ns-flesh): a wetter surface (roughness 0.42 -> 0.36: a tighter, brighter highlight
+// that the fibre bundles break into streaks), a warmer light in the shade (scatterTint [1, 0.76, 0.68] -> [1, 0.62,
+// 0.52], strength 0.12 -> 0.16) and a deeper parting between neighbouring bellies (creaseStrength 0.3 -> 0.42, power
+// 2.8 -> 2.6), now that no band edge is there to fray.
 export const MUSCLE_LOOK = freeze({
   deepShade: 0.84, intermediateShade: 0.93,
-  roughness: 0.42,
+  roughness: 0.36,
   tendon: freeze(hexToLinear(0xe1e4e7)), tendonMix: 0.9, tendonRoughnessDrop: 0.1,
-  scatterTint: freeze([1.0, 0.76, 0.68]), scatterStrength: 0.12,
+  scatterTint: freeze([1.0, 0.62, 0.52]), scatterStrength: 0.16,
   sheenTint: freeze([1.0, 0.95, 0.92]), sheenGain: 0.85,
-  creaseStrength: 0.3, creasePower: 2.8, glowCreaseRelief: 1,
+  creaseStrength: 0.42, creasePower: 2.6, glowCreaseRelief: 1,
   /** Fibre striation: albedo +- fibreAmp and a bump of fibreBumpM metres, streaks about fibreMm wide (source mm) along
    * each muscle's long axis, changing along it over 1 / fibreAlong streak widths; fading out from fibreFadePx streaks
    * per pixel (gone at 2.5 x that), so it never shimmers on a far body. */
@@ -969,6 +973,10 @@ export const MUSCLE_LOOK = freeze({
  *    stipple: bone grain cells cellMm, dots above `at` of the noise, fading out under minCellPx per cell.
  *  - spacingMm: the spacing of the ink lines round a muscle and round a bone (hatchFrame).
  */
+// 18 November (the owner: "telltale games art style rather than borderlands"; "rough patchy small-poxy muscles"): the
+// bodies are now PAINTED (ns-flesh BODY_FLESH: one smooth tone curve, fibre bundles, a wet highlight). Of the numbers
+// below only rim.dir (the side the rim light comes from) is still read by the shader; the bands, the highlight shape,
+// the ink lines, the hatching and the bone stipple are no longer drawn. They are kept as the record of the comic look.
 export const BODY_CEL = freeze({
   bands: freeze([0.42, 0.74, 1.04]), soft: 0.05,
   levels: freeze([0.08, 0.34, 0.78, 1.1]), boneHigh: 0.9,

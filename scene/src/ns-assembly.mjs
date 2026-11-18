@@ -49,10 +49,11 @@ const idOfUrl = url => { const m = /([^/]+)\.obj(?:[?#].*)?$/i.exec(String(url))
 
 /**
  * Start the loading picture. host: the element that holds the game canvas; win / doc: the window and document.
+ * room: { fovYDeg, pitchDeg } = the game's first view, so the room behind the parts is the one the game then shows.
  * Returns { noteManifest(url, text), noteBytes(url, bytes), finish(), state() }; every method is safe to call at any
  * time and never throws.
  */
-export function startAssembly({ host, win = globalThis.window, doc = globalThis.document, workerUrl = new URL('./ns-assembly-worker.mjs', import.meta.url) } = {}) {
+export function startAssembly({ host, win = globalThis.window, doc = globalThis.document, workerUrl = new URL('./ns-assembly-worker.mjs', import.meta.url), room = null } = {}) {
   const kinds = new Map();
   const st = { mode: 'off', files: 0, error: null, finished: false, lastWorkerState: null, workerStates: [] };
   let canvas = null, worker = null, local = null, localQueue = [], raf = 0, lastBytesAt = 0;
@@ -66,7 +67,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
       const [THREE, core] = await Promise.all([import('../../vendor/three.module.js'), import('./ns-assembly-core.mjs')]);
       if (st.finished || !canvas) return;
       const s = size();
-      local = { view: core.createAssemblyView({ THREE, canvas, ...s }), parse: core.parseObjBytes };
+      local = { view: core.createAssemblyView({ THREE, canvas, ...s, room }), parse: core.parseObjBytes };
       st.mode = 'page';
       const tick = now => {
         if (!local) return;
@@ -93,7 +94,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         st.mode = 'worker';
         worker.onmessage = ev => { const m = ev.data || {}; if (m.type === 'error') st.error = m.message; else if (m.type === 'state') { st.lastWorkerState = m; st.workerStates.push([m.at, m.frames, m.parts]); } };
         worker.onerror = ev => { st.error = String(ev && ev.message || 'worker error'); };
-        post({ type: 'init', canvas: off, ...s }, [off]);
+        post({ type: 'init', canvas: off, ...s, room }, [off]);
       } catch (err) {
         // The canvas may already belong to the worker attempt: use a fresh one for the page picture.
         st.error = String(err && err.message || err); worker = null;
