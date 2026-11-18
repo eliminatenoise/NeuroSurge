@@ -70,7 +70,7 @@ export function pairTipRows(rows, actionOf) {
  * would do now; pick: the body part under the crosshair ({ name, kind }) or null; arrow: an arrow tip's words.
  * Returns { key, title, rows: [{ n, words, now, dim }], kind } or null when there is nothing to name.
  */
-export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '' } = {}) {
+export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '' } = {}) {
   if (area && typeof area === 'object') {
     const title = str(area.plainLabel) || str(area.shortLabel) || str(area.label) || str(area.id);
     const list = (Array.isArray(moves) ? moves : []).slice(0, TIP_MOVES_MAX);
@@ -83,6 +83,7 @@ export function quietTipModel({ area = null, moves = null, actionId = null, pick
     const groups = pairTipRows(list.map((m, i) => ({ id: m.id, i })), byId).map(g => g.map(r => r.i));
     const out = { kind: 'area', title, rows, groups, key: `a|${str(area.id)}|${rows.map(r => `${r.n}${r.now ? '*' : ''}${r.dim ? '-' : ''}`).join('')}|${groups.map(g => g.join('+')).join(',')}|${str(color)}` };
     if (str(color)) out.color = color;
+    if (hint) { out.hint = hint; out.key += `|${hint}`; }
     return out;
   }
   if (str(arrow)) return { kind: 'arrow', title: arrow, rows: [], key: `r|${arrow}` };
@@ -116,6 +117,8 @@ export function createQuietUi({ doc, root }) {
   tip.hidden = true;
   const tipTitle = el('div', 'ns-tip-title', tip);
   const tipRows = el('ol', 'ns-tip-rows', tip);
+  const tipHint = el('div', 'ns-tip-hint', tip);
+  tipHint.hidden = true;
   const prompt = el('div', 'ns-prompt', layer);
   prompt.setAttribute('role', 'status');
   prompt.hidden = true;
@@ -148,6 +151,8 @@ export function createQuietUi({ doc, root }) {
           });
         }
         tipRows.hidden = model.rows.length === 0;
+        tipHint.hidden = !model.hint;
+        tipHint.textContent = model.hint || '';
       }
       placeKey = '';
     }

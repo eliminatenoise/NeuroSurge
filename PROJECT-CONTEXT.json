@@ -1,9 +1,10 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-19-body-update-17",
+  "version": "experimental-2026-11-19-body-update-18",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
+  "keyboard_area_selection": "Arrow keys follow the motor strip. If an orbit arrow overlaps the selected area, the movement list stays with the area. A number key uses the list, Shift-click presses the area, and an ordinary click uses the orbit arrow. Some views still put arrows over parts of the strip.",
   "client_side": true,
   "signal_origin": "simulated, unitless brain and muscle activity values",
   "known_limits": "PREVIEW-NOTES.html",

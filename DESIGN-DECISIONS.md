@@ -1495,6 +1495,12 @@ Seven readers went through every note since 11 November against the game and lis
 
 Left from the list: the left shoulder area still has no movements; holding the mirror body's left arm swings the view; the right elbow knots when bent with the palm down; the sweep does not measure the left game arm; the first prompt and the Esc page still describe the old behaviour ("Look at a blue area ... watch your arm move", "You sit on an invisible flat ground") until the overlays package lands; performance and the face. Published before its independent check.
 
+## 104. Keep the keyboard's chosen area behind an orbit arrow (19 November)
+
+From the view over your shoulder, the keyboard could put the crosshair on the left toes and leave you looking at a mirror-body arrow. The movement list went blank. A number could still run the last area's movement.
+
+The step now keeps the motor area if the view's ray still hits the area it chose. The numbered list follows the step. Click to use the orbit arrow, or hold Shift and click to press the area behind it. Moving the pointer to look, pressing a mouse button or changing views ends that keyboard priority. The walk still follows the strip and stops at either end. Some views still put arrows over parts of the strip.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

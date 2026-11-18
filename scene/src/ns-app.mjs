@@ -2421,7 +2421,10 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // empty; it still stands for the mirror body where no area is behind it, and an arrow tip (drawn on top) still hides
     // what is behind it from the look. Shift reaches the body part in front instead (ns-app controlTargets).
     const bodySeen = Boolean(objectPick && (objectPick.target === 'mirror' || objectPick.bodyInFront === 'own' || objectPick.bodyInFront === 'mirror'));
-    if (objectPick && (objectPick.blocked === 'orbit-arrow' || (objectPick.target === 'mirror' && gaze.target !== 'region'))) gaze = { ...gaze, target: 'empty', kind: 'empty', actionId: null, regionId: null, u: null, isLeftArm: false, hemisphere: null, point: null };
+    // A keyboard step chooses an area, even behind an orbit tip. A fresh classifier match keeps that choice;
+    // the tip still owns ordinary pointer presses and Shift-click still reaches the area behind it.
+    const steppedArea = gaze.target === 'region' && gaze.regionId === inputs?.keyboardAimId;
+    if (objectPick && ((objectPick.blocked === 'orbit-arrow' && !steppedArea) || (objectPick.target === 'mirror' && gaze.target !== 'region'))) gaze = { ...gaze, target: 'empty', kind: 'empty', actionId: null, regionId: null, u: null, isLeftArm: false, hemisphere: null, point: null };
     else if (bodySeen && gaze.target === 'region') { /* the look reaches the area behind the body (lead decision above) */ }
     else if (objectPick && objectPick.target === 'brain' && gaze.target === 'empty') gaze = { ...gaze, target: 'glass', kind: 'glass' };
     // ... and the brain's bare glass behind your body or the mirror body is tagged the same way (the card then says which
@@ -7604,9 +7607,8 @@ export function start(params = {}) {
         }
         // R558 (Messages 55 and 56: easier to use; a learning tool): an area key (left / right arrow) turns the look to the
         // next motor area along the strip, in the key's direction on the screen (sim.areaStep; the walk is ns-app
-        // areaChain). The step is a look like any other: the area pulses at once, the card shows it, its number keys act
-        // on it, and a look left resting there takes its movement. Nothing is stepped while something is held (the look
-        // then carries it); a step waits while the view is still changing or a held neck / trunk movement is under way.
+        // areaChain). A step shows the area and its number keys. Nothing is stepped while something is held; a step
+        // waits while the view is still changing or a held neck / trunk movement is under way.
         const walkMarks = { lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null };
         if (live) {
           const gz = simState && simState.gaze ? simState.gaze : null;
@@ -7667,7 +7669,8 @@ export function start(params = {}) {
               if (headOffs) { const q = pitchRange(lookNow); cs = controlsApi.setPitchLimits(cs, { minDeg: q.minDeg, maxDeg: q.maxDeg, relative: true }); }
               cs = controlsApi.setLook(cs, lookNow);
               lookBlock = null; // the step is a new look, not a push against the limit learned before it
-              infoStepped = { id: reached, t: actNow && Number.isFinite(actNow.t) ? actNow.t : 0, seen: false };
+              infoStepped = { id: reached, t: actNow && Number.isFinite(actNow.t) ? actNow.t : 0, seen: false,
+                ...walkMarks, viewToggle: cam.toggles, inputEpoch: inputCancellation.count };
               areaWalk = areaWalkStep(areaWalk, { steppedId: reached, lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: walkMarks.buttonSeq });
               areaFreshPending = true;
               areaNote = null;
@@ -7860,6 +7863,8 @@ export function start(params = {}) {
         const ctl = live ? targetsAt(size.width / 2, size.height / 2) : null;
         ctlFrame = ctl;
         const objectPick = live && reachPick ? reachPick : frameObjectPick(ctl, live);
+        const keyboardAimId = live && infoStepped && infoStepped.lookMs === walkMarks.lookMs && infoStepped.buttonSeq === walkMarks.buttonSeq
+          && infoStepped.viewToggle === cam.toggles && infoStepped.inputEpoch === inputCancellation.count ? infoStepped.id : null;
         const stepInputs = {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
@@ -7882,6 +7887,7 @@ export function start(params = {}) {
           ...(wholeArmOption ? { wholeArmDisplayPlan, wholeArmActiveCamera: camPose } : {}),
           ...(!referenceGraph && camPose.firstPerson ? {} : { gazeRay: camPose.gazeRay, gazeLook: camPose.gazeLook }),
           ...(areaFreshPending ? { gazeFresh: true } : {}),
+          ...(keyboardAimId ? { keyboardAimId } : {}),
           ...(danceRange ? { danceRange } : {}), // R558 (Space dance): the touch-free hip range of the current leg posture
           ...(armTurnSeen ? { armTurn: armTurnSeen } : {}) // R558 (Space dance): the game arm's shown radius / upper-arm turn
         };
@@ -8687,12 +8693,15 @@ export function start(params = {}) {
                 armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
                 rotationState: typeof out.rotationState === 'string' ? out.rotationState : null });
               const areaCss = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) : ''; // 18 November (MAP)
-              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '' });
-              if (quietRest.settled) quietLast = { regionId: area.id, moves: areaMoves }; // what the number keys do (also after the look has left the area)
+              const overlap = lockedNow() && ctlFrame?.arrow && area.id === stepInputs?.keyboardAimId;
+              const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : '';
+              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '', hint });
+              if (quietRest.settled || area.id === stepInputs?.keyboardAimId) quietLast = { regionId: area.id, moves: areaMoves };
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
             } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
               color: crossRoute && mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(crossRoute.regionId) || '' : '' });
           }
+          if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', Boolean(tipModel?.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,

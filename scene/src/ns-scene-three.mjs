@@ -10740,13 +10740,18 @@ export function createScene({
     if (changed) { arrowSerial++; overlayDirty = true; }
     frameVis.lastMs = Math.round((nowMs() - t0) * 100) / 100;
   }
+  let keyboardAreaTip = false;
+  function setKeyboardAreaTip(shown) {
+    if (keyboardAreaTip !== shown) { keyboardAreaTip = shown; overlayDirty = true; }
+  }
   /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
   function layoutArrowTips(reserveRight, reserveBottom, topPx) {
     arrowBoxes();
     for (const [k, T] of Object.entries(arrowTips)) {
       const [target, d] = k.split(':');
       const set = arrowSets[target], box = set.shown ? set.boxes[d] : null;
-      const want = Boolean(box) && ((arrowHover && arrowHover.target === target && arrowHover.dir === d && !arrowHover.blocked) || (target === 'brain' && guideGoalAttr === 'orbit'));
+      const hovered = arrowHover && arrowHover.target === target && arrowHover.dir === d && !arrowHover.blocked;
+      const want = Boolean(box) && (hovered ? !keyboardAreaTip : target === 'brain' && guideGoalAttr === 'orbit');
       if (!want) { if (T.shown) { T.shown = false; T.el.hidden = true; } continue; }
       const e = NsArrows.COMPASS_SCREEN[d], gap = R5_SCENE.arrowCaptionPx;
       const w = Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
@@ -12964,7 +12969,7 @@ export function createScene({
     setBrainDistanceScale,
     // R5-scene (round 5: D16 arrows, D17 glow, D18 third person, D19 mirror body; round5/R5-scene-NOTES.md)
     pickArrows,
-    setArrowHover,
+    setArrowHover, setKeyboardAreaTip,
     arrowsState,
     cachedArrowsState,
     setGlowLinks,

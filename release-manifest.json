@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-17",
+  "version": "experimental-2026-11-19-body-update-18",
   "experimental": true,
-  "source": "Body update 17. Startup reports an anatomy loading failure and focuses Reload page. The release includes a loopback browser regression for a failed required anatomy file and recovery using the normal page.",
+  "source": "Body update 18. Keyboard-selected motor areas keep their movement list when an orbit arrow overlaps them.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 226201,
-      "sha256": "7c1620d0591dd867a81ebf4f589a31a65a9b907c4a80480fe98a8bfa1ec09d34"
+      "bytes": 226906,
+      "sha256": "5acbc6b5eec48a01c7dde74e504f5c139599ffd57608d9824800a843ac96d97e"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9368,
-      "sha256": "e0fd3a75d1820b5e9368293a58ee72750ece25b1ba02832852e7feee36613039"
+      "bytes": 9283,
+      "sha256": "09739636f5d0abc8eefba08674f9cbaa017ab5517e8fd0c9e82fbafc07209118"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 55456,
-      "sha256": "0dca9b2a951336fd6c853ddadd5b6a0b5606a478a2dd325a4accf561692d1a73"
+      "bytes": 55745,
+      "sha256": "c0dcb2937ebfda31664ece5c69a3046791c2bc16aa8acea379acce7f3a481280"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 26509,
-      "sha256": "77de522581e73f0eb5e53de1812d8f77df7d5dd7ef7675fb76454b8cacc8b5ee"
+      "bytes": 26816,
+      "sha256": "17ff35125681df251461e3a41d333fec2f1a9c9b7e6adba20e73a07a39741bc5"
     },
     {
       "path": "README.md",
-      "bytes": 14820,
-      "sha256": "4607e2eef0b77359ac3bcedb1efb34cb876e35321d38a5c5940f7d0e5306a02c"
+      "bytes": 14792,
+      "sha256": "82b799a0293ef82644f0865dba9bb4496237580c5d944fcce0fb01b72c8c693b"
     },
     {
       "path": "START.html",
-      "bytes": 4030,
-      "sha256": "08b95dc2b6e3bb99d7a6a44f4f4a6fbc5d1d907313550330a2717d2257a92ebc"
+      "bytes": 4029,
+      "sha256": "4cecd7cb425a0aec70ca19f0bb9877da53beba22224ec7fd48f25ea9de390356"
     },
     {
       "path": "index.html",
@@ -3887,8 +3887,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 7007,
-      "sha256": "24546a34da2a765c70b7d056aa695a6c4646260d47240a86d1e205014307fef4"
+      "bytes": 7074,
+      "sha256": "60fab9def1acb06b88605db5e455f7c55b85ee6637314ae6d2df6adb82d8a823"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3897,8 +3897,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 711920,
-      "sha256": "841cdc572b882ad4f9427cd33e5ce310f053f9ad747425d598285f497e2631da"
+      "bytes": 712798,
+      "sha256": "8cf418c2c26a699d209a551909fbed0b198aa297976b2f1adeba514f712d505e"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 9848,
-      "sha256": "b20c2b0c65e3f5eda116f3764dd82a111aa826375c34eca609f9e33f3fd2a145"
+      "bytes": 10077,
+      "sha256": "7f3c4e5a4ecb7e9143b9bf35fe39be78afba5d286e640302368209033854cba9"
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
@@ -4077,8 +4077,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1027239,
-      "sha256": "66f9d0f3ce6ca3a185f52f6d371d6f4f98f10d98213b33f5eb25b942ea1cd3cd"
+      "bytes": 1027463,
+      "sha256": "0c4c94cb6aa89eefbd403673fa95e24f290c5416e3a81407ea7aea9eae544541"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4139,6 +4139,11 @@
       "path": "tests/brain-live.test.mjs",
       "bytes": 20664,
       "sha256": "2d00173429ef66821403b649ca209f55a741388fa406b8d90c20d0f30ba82e5d"
+    },
+    {
+      "path": "tests/browser-keyboard-aim.mjs",
+      "bytes": 6951,
+      "sha256": "05f6e85222817ed37a62a09891a0c24541f4105bb6fa0609dea86cf89f94337f"
     },
     {
       "path": "tests/browser-startup.mjs",

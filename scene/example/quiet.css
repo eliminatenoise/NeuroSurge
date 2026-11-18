@@ -36,6 +36,7 @@
 .ns-tip[data-kind="muscle"] .ns-tip-title, .ns-tip[data-kind="bone"] .ns-tip-title, .ns-tip[data-kind="part"] .ns-tip-title { font-weight: 700; font-size: 13.5px; }
 .ns-tip-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 .ns-tip-rows[hidden] { display: none; }
+.ns-tip-hint { color: #cfdbe6; font-size: 12px; margin-top: 6px; }
 .ns-tip-row { display: flex; align-items: baseline; gap: 8px; color: #cfdbe6; font-weight: 600; font-size: 13px; }
 .ns-tip-key {
   flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px;
