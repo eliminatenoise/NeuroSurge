@@ -119,7 +119,14 @@ export const BODY_FLESH = freeze({
   wet: freeze({ gain: 4, max: 0.62, maxWhite: 0.5, glint: 0.34, glintLo: 0.1, glintHi: 0.3, partKeep: 0.35, glowKeep: 0.3 }),
   rim: freeze({ gain: 0.42, power: 3.4, colour: freeze([0.8, 0.9, 1.0]), white: 0.15, film: 0 }),
   glowForm: freeze({ lo: 1.3, hi: 1.0, max: 0.97, tint: 0.85, glowTint: 0.5, hueDeepen: 0.8 }),
-  bone: freeze({ mottle: 0.06, mottleMm: 18, warm: freeze([1.0, 0.94, 0.86]) })
+  bone: freeze({ mottle: 0.06, mottleMm: 18, warm: freeze([1.0, 0.94, 0.86]),
+    // 18 November 2026 (package DETAIL; the brief: "bone with its smooth shafts, rougher ends ..., cartilage caps on the
+    // joint surfaces in a bluish white"): from the per-vertex nsBoneEnd (ns-detail boneEndWeights; x cartilage, y end).
+    // cart = the cartilage cap's tint over the bone's ivory (a cool, slightly lighter pearly white), cartMottle = the share
+    // of the mottling left on it (hyaline cartilage is smooth), cartWet = its highlight's ceiling (wet and glassy: brighter
+    // than the bone's maxWhite); endMottle = the mottling's strength on the ends against the shaft, endGrain / endGrainMm =
+    // a faint finer grain there (thin cortex over spongy bone), never on the cap.
+    cart: freeze([0.8, 0.9, 1.1]), cartMottle: 0.25, cartWet: 0.62, endMottle: 1.7, endGrain: 0.035, endGrainMm: 3.5 })
 });
 
 /** How the fibre frame is packed into the four numbers a vertex carries (fibreFrame writes them, fleshFibreGlsl
@@ -473,9 +480,13 @@ export function fleshLightGlsl(kind = 'muscle', tendon = false, o = BODY_FLESH) 
 		// a little more colour in the flesh (not on the white tendon part)
 		nsCol = mix( vec3( dot( nsCol, nsLw ) ), nsCol, mix( ${f(M.chroma)}, 1.0, nsTd ) );
 		// a glowing muscle keeps its form and its fibres: the glow follows the shading a little
-		totalEmissiveRadiance *= mix( 1.0, mix( ${f(G.lo)}, ${f(G.hi)}, nsT ) * nsFsh, nsGl );` : `// bone: a faint large-scale mottling, warmer where it is darker (no dots)
+		totalEmissiveRadiance *= mix( 1.0, mix( ${f(G.lo)}, ${f(G.hi)}, nsT ) * nsFsh, nsGl );` : `// bone: a faint large-scale mottling, warmer where it is darker (no dots); stronger, with a faint finer grain, on the
+		// ends; a smooth, cool, pearly cartilage cap on a joint surface (nsBe: x cartilage, y end; ns-detail boneEndWeights)
+		vec2 nsBe = clamp( vNsBoneEnd, 0.0, 1.0 );
 		float nsBm = nsVNoise( vNsObj * ${f(1 / B.mottleMm)} ) * 0.65 + nsVNoise( vNsObj * ${f(2.7 / B.mottleMm)} + 7.3 ) * 0.35;
-		nsCol *= ( 1.0 + ${f(2 * B.mottle)} * ( nsBm - 0.5 ) ) * mix( ${v3(B.warm)}, vec3( 1.0 ), nsBm );`}
+		float nsBg = nsVNoise( vNsObj * ${f(1 / B.endGrainMm)} + 3.1 );
+		float nsBa = ${f(2 * B.mottle)} * mix( 1.0, ${f(B.endMottle)}, nsBe.y ) * mix( 1.0, ${f(B.cartMottle)}, nsBe.x );
+		nsCol *= ( 1.0 + nsBa * ( nsBm - 0.5 ) + ${f(2 * B.endGrain)} * nsBe.y * ( 1.0 - nsBe.x ) * ( nsBg - 0.5 ) ) * mix( mix( ${v3(B.warm)}, vec3( 1.0 ), nsBm ), ${v3(B.cart)}, nsBe.x );`}
 		vec3 nsN = normalize( normal ), nsV = normalize( vViewPosition );
 		float nsF = max( 1.0 - abs( dot( nsN, nsV ) ), 0.0 );
 		// a thin cool light on the silhouette on the rim light's side, in the tissue's own colour (never a grey veil)
@@ -487,6 +498,7 @@ export function fleshLightGlsl(kind = 'muscle', tendon = false, o = BODY_FLESH) 
 		vec3 nsSp = reflectedLight.directSpecular;
 		float nsS = dot( nsSp, nsLw );
 		float nsSmax = mix( ${f(S.max)}, ${f(S.maxWhite)}, nsTd );
+		${muscle ? '' : `nsSmax = mix( nsSmax, ${f(B.cartWet)}, nsBe.x );`}
 		float nsWet = ( nsSmax * ( 1.0 - exp( - nsS * ${f(S.gain)} / nsSmax ) ) + ${f(S.glint)} * smoothstep( ${f(S.glintLo)}, ${f(S.glintHi)}, nsS ) * mix( 1.0, 0.5, nsTd ) )${muscle ? ` * ( 1.0 - ${f(1 - S.partKeep)} * nsFlPart ) * mix( 1.0, ${f(S.glowKeep)}, nsGl )` : ''};
 		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * nsWet;
 		${muscle ? `// a glowing muscle stays in its area's colour ALL OVER: its highlight takes the glow's hue, and where the sum

@@ -17,17 +17,20 @@ test('the camera rides above the eyes on the head, by an amount that eases out f
   const E = NC.EYE_DOLLY, at = (yawDeg, pitchDeg) => NC.eyeDolly({ yaw: yawDeg * DEG, pitch: pitchDeg * DEG });
   assert.equal(E.headAboveLookDeg, NB.POSTURE_EYES.downDeg, 'the head is bowed less than the look by the posture\'s eye lowering');
   assert.equal(E.headLevelEndDeg, NB.POSTURE_EYES.endAtHeadUpDeg);
-  const s0 = at(0, -39);
-  assert.ok(Math.abs(s0.upM - E.upM) < 1e-12 && s0.backM === E.backM, 'the full offset at the start look');
+  // 18 November 2026, late (package FLAT): the start look is 52 down; the table's last row is it
+  const start = E.byPitch[E.byPitch.length - 1][0], s0 = at(0, start);
+  assert.ok(Math.abs(s0.upM - E.upM) < 1e-12 && Math.abs(s0.backM - E.backM) < 1e-12, 'the full offset at the start look');
   // below the start look the offsets follow the table: its last row is the start look's own offset, its first row
   // (the look's lower end) brings the camera back to the line of sight and nearer the eye
   const rows = E.byPitch, last = rows[rows.length - 1];
-  assert.ok(last[1] === E.upM && last[2] === E.backM && last[0] <= -39, 'the table ends in the start offsets');
+  assert.ok(last[1] === E.upM && last[2] === E.backM && last[0] <= -52, 'the table ends in the start offsets');
   for (const [p, u, b] of rows) { const d = at(0, p); assert.ok(Math.abs(d.upM - u) < 1e-12 && Math.abs(d.backM - b) < 1e-12, `table row at ${p}`); }
-  assert.ok(at(0, -75).backM === 0 && at(0, -75).upM <= 0.1 && at(0, -85).upM === rows[0][1], 'over the eye, not behind it, at the look\'s lower end; held below it');
-  assert.ok(Math.abs(s0.headPitch / DEG + 9) < 1e-9, 'the head is bowed 9 degrees at a look of 39');
+  // (package FLAT: at the look's lower end the camera is nearer the eye than at the start, and held below it; the neck
+  // is drawn there now, so it may stay a little behind the eye)
+  assert.ok(at(0, -75).backM < s0.backM && at(0, -75).upM <= 0.1 && at(0, -85).upM === rows[0][1], 'nearer the eye at the look\'s lower end; held below it');
+  assert.ok(Math.abs(s0.headPitch / DEG + 22) < 1e-9, 'the head is bowed 22 degrees at a look of 52');
   // upM along the head's own up (for a bowed head it leans forward: forward is -z at yaw 0), less backM along the line of sight
-  for (const pitch of [-39, -75]) {
+  for (const pitch of [-52, -75]) {
     const d = at(0, pitch), h = d.headPitch, g = NC.gazeDirection(0, pitch * DEG), want = [-d.backM * g[0], d.upM * Math.cos(h) - d.backM * g[1], d.upM * Math.sin(h) - d.backM * g[2]];
     for (let k = 0; k < 3; k++) assert.ok(Math.abs(d.offset[k] - want[k]) < 1e-12, `offset at a look of ${pitch}`);
   }

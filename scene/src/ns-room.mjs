@@ -64,7 +64,14 @@ export const ROOM = Object.freeze({
   lamp: Object.freeze({ colour: Object.freeze([0.19, 0.245, 0.25]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),
   gloss: Object.freeze({ f0: 0.05, wall: 0.7 }),
   aura: Object.freeze({ colour: Object.freeze([0.72, 0.96, 1]), brain: Object.freeze([0.012, 0.4, 1]), mirror: Object.freeze([0.02, 0.9, 0]), body: Object.freeze([0.02, 0.9, 0]), radii: Object.freeze([7, 0.85, 0.85]) }),
-  shade: Object.freeze({ brain: Object.freeze([8, 0.6]), brainK: 0.75, mirror: Object.freeze([4, 0.5]), body: Object.freeze([4, 0.5]) }),
+  shade: Object.freeze({ brain: Object.freeze([8, 0.6]), brainK: 0.75, mirror: Object.freeze([4, 0]), body: Object.freeze([4, 0]) }),
+  // 18 November 2026 (SMALL, audit S23; the owner, Note 10: "If we imagine an invisible ground, the mirror body should be
+  // touching the same ground"): seen from outside, both bodies hung high above a tiled floor that read as THEIR ground.
+  // Under each body (its place on the floor, from the halo rows the scene gives: so it follows the mirror body wherever
+  // it stands) the grout lines fade to `keep` within about `radiusM`, and the two bodies cast no floor shadow (shade
+  // depth 0; the brain keeps its own): the floor reads as a distant room, not as ground under them. radiusM is about
+  // the floor's own depth below the eyes (with 10 m the lines still showed 13 m out from the bodies in the view from E).
+  ground: Object.freeze({ radiusM: 13, keep: 0.12 }),
   live: Object.freeze({ beat: 0.3, beatS: 0.11, active: 0.4, inS: 0.25, outS: 1.2 }),
   ditherLsb: 0.75
 });
@@ -111,6 +118,9 @@ export function roomLight(eye, dir, st = {}, o = ROOM, footM = 0) {
     const cov = u => { const w = Math.max(footM, 1e-4); return Math.min(1, Math.max(0, (0.5 * G - dist(u)) / w + 0.5)) * Math.min(1, G / w); };
     let line = Math.max(cov(px), cov(pz));
     line += (2 * G / T - line) * smooth(0.25 * T, 0.7 * T, footM);
+    // S23: no ground lines under a body (aura rows 1 and 2: the mirror body and your body)
+    // (none for a thing the view point is in or at, i.e. your own body seen from your eyes; the halo has the same rule)
+    if (o.ground) for (let i = 1; i < 3; i++) { const A = aura[i]; if (!A || !(A[3] > 0)) continue; const qx = px + C[0] - A[0], qz = pz + C[1] - A[2], away = smooth(1.0, 1.8, Math.hypot(A[0] - eye[0], A[1] - eye[1], A[2] - eye[2]) / A[3]); line *= 1 - away * (1 - o.ground.keep) * Math.exp(-(qx * qx + qz * qz) / (o.ground.radiusM * o.ground.radiusM)); }
     const pool = (o.pool.amb + (1 - o.pool.amb) * Math.exp(-(px * px + pz * pz) / (o.pool.radiusM * o.pool.radiusM))) * gain * sh;
     add(o.pool.colour, pool * (1 - o.tile.dark * line));
     const fres = o.gloss.f0 + (1 - o.gloss.f0) * Math.pow(1 + Math.max(-1, Math.min(0, dy)), 5);
@@ -182,7 +192,7 @@ vec3 nsRoom( vec3 eye, vec3 dir ) {
 		float foot = max( w.x, w.y );
 		float line = max( nsRoomGrout( p.x, w.x ), nsRoomGrout( p.y, w.y ) );
 		line += ( ${f(2 * o.tile.groutM / o.tile.sizeM)} - line ) * smoothstep( ${f(0.25 * o.tile.sizeM)}, ${f(0.7 * o.tile.sizeM)}, foot );
-		float pool = ( ${f(o.pool.amb)} + ${f(1 - o.pool.amb)} * exp( - dot( p, p ) / ${f(o.pool.radiusM * o.pool.radiusM)} ) ) * gain * sh;
+${o.ground ? `		for ( int i = 1; i < 3; i ++ ) { vec2 q = p + C - uRoomAura[ i ].xz; float away = smoothstep( 1.0, 1.8, length( uRoomAuraN[ i ] * ( uRoomAura[ i ].xyz - eye ) ) ); line *= 1.0 - step( 0.5, uRoomAura[ i ].w ) * away * ${f(1 - o.ground.keep)} * exp( - dot( q, q ) / ${f(o.ground.radiusM * o.ground.radiusM)} ); }\n` : ''}		float pool = ( ${f(o.pool.amb)} + ${f(1 - o.pool.amb)} * exp( - dot( p, p ) / ${f(o.pool.radiusM * o.pool.radiusM)} ) ) * gain * sh;
 		col += ${v3(o.pool.colour)} * pool * ( 1.0 - ${f(o.tile.dark)} * line );
 		float fres = ${f(o.gloss.f0)} + ${f(1 - o.gloss.f0)} * pow( 1.0 + clamp( dir.y, -1.0, 0.0 ), 5.0 );
 		col += ${v3(o.wall.colour)} * ( fres * ${f(o.gloss.wall)} * nsRoomWall( ( tW - tF ) * - dir.y, ang, gain ) );

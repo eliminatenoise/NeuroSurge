@@ -645,6 +645,13 @@ export function createControls({
     if (!Number.isInteger(n) || n < 1 || n > 9) return state;
     return pushUi(state, { type: 'move', n }, timeMs);
   }
+  /** 18 November 2026 (SMALL, audit M3): a movement key came up: queue { type: 'moveUp', n } on the UI queue. The app
+   * ends a held key's movement there (ns-actions MOVE_HOLD: a short press is the whole movement, a hold stops where it
+   * is). Holds nothing down; never touches the game queue. */
+  function moveKeyUp(state, n, timeMs) {
+    if (!Number.isInteger(n) || n < 1 || n > 9) return state;
+    return pushUi(state, { type: 'moveUp', n }, timeMs);
+  }
 
   /** R558 (Messages 55 and 56): an area key (AREA_CODES): queue { type: 'area', dir } on the UI queue, a REQUEST to move
    * the look one motor area along the strip toward the screen's left (dir -1) or right (+1). The app finds that area
@@ -786,6 +793,7 @@ export function createControls({
     // R5-input
     toggleView,
     moveKey,
+    moveKeyUp,
     areaKey,
     setLook,
     setPitchLimits,
@@ -1323,6 +1331,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const code = e.code;
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (isReachCode(code)) { if (typeof controls.setReach === 'function') apply(s => controls.setReach(s, false)); return; }
+    // 18 Nov (SMALL, M3): a movement key's release (a held key's movement stops there)
+    const upN = moveKeyNumber(code);
+    if (upN > 0) { if (typeof controls.moveKeyUp === 'function') apply(s => controls.moveKeyUp(s, upN, eventTime(e))); return; }
     if (!isControlCode(code)) return;
     if (onPageControl(e)) return;
     e.preventDefault();

@@ -80,8 +80,15 @@ export const COMPASS_SCREEN = freeze({ forward: freeze([0, -1]), back: freeze([0
  * thickness of about 0.6 of the stroke width, a bevel a third of the thickness, 40 degrees of tilt), chosen by
  * viewing in the browser; no anatomy is implied.
  */
+// 18 November 2026 (SMALL, audit S17; the owner, Note 19: "Let's make the arrows 3d and slightly chunky, with their
+// vertex heads turning (further) away and their tail ends towards (closer)"): the mirror body's small tips showed about
+// 3 px of wall (thickness x sin(tilt) = 0.084 units of a 40 px tip at 1280x720) and read as flat chevrons. thickness
+// 0.13 -> 0.18 (about 0.86 of the stroke width), tiltDeg 40 -> 46, bevel 0.042 -> 0.05: the wall is 0.129 units (5.2 px
+// at 40 px, 6.5 px at 50 px, 9.3 px on the brain's 72 px tips) and the heads turn further away. One design for both sets,
+// so picking and placement (which read ARROW_DESIGN) stay exact: the silhouette and hit sizes barely change (at 50 px
+// the hit half-sizes go from 30.0 x 41.6 to 29.3 x 41.9 px: the larger tilt shortens what the thickness adds).
 export const ARROW_DESIGN = freeze({
-  shape: 'chevron-solid', depth: 0.46, halfSpan: 0.5, halfStroke: 0.105, thickness: 0.13, bevel: 0.042, tiltDeg: 40, eyeUnits: 2.6,
+  shape: 'chevron-solid', depth: 0.46, halfSpan: 0.5, halfStroke: 0.105, thickness: 0.18, bevel: 0.05, tiltDeg: 46, eyeUnits: 2.6,
   hitStrokePad: 0.07, hitFillShare: 0.55
 });
 
@@ -115,15 +122,21 @@ export const ARROW_LAYOUT = freeze({ marginPx: 8, pickPadPx: 8 });
 export const ARROW_LOOK = freeze({
   fill: 0xe9eef4, edge: 0x05070b, rim: 0xcfe0ff, hover: 0xfff1cf,
   opacity: 0.62, hoverOpacity: 0.92, blockedOpacity: 0.22, edgeOpacity: 0.82,
-  keyLight: freeze([-0.38, 0.56, 0.74]), ambient: 0.42, diffuse: 0.62, specular: 0.4, shininess: 40, rimLight: 0.3,
-  edgeDark: 0.75, edgeFacing: freeze([0.12, 0.6]), farDim: 0.66,
+  keyLight: freeze([-0.38, 0.56, 0.74]), ambient: 0.42, diffuse: 0.62, specular: 0.62, shininess: 90, rimLight: 0.34,
+  edgeDark: 0.55, edgeFacing: freeze([0.12, 0.6]), farDim: 0.66,
   hoverScale: 1.1, renderOrder: 100,
   // R558 BB (style guide, "the 3D arrows: cel bands and a black ink contour"): the key light in three tones (cel steps of
   // the wrapped N.L and their levels, soft half-width), a crisp highlight (the specular term's step lo .. hi), and a
   // near-black ink line (#0b0809) inkCss CSS px wide inside the V's own outline (the solid's silhouette seen face-on,
   // measured in the V's design plane), opacity inkAlpha; the walls (seen edge-on) are inked by wallInk.
-  celSteps: freeze([0.3, 0.68]), celLevels: freeze([0.3, 0.68, 1.0]), celSoft: 0.04, specCrisp: freeze([0.42, 0.52]),
-  ink: 0x0b0809, inkCss: 1.1, inkAlpha: 0.95, wallInk: 0.65
+  // 18 November 2026 (SMALL, audit S16; the owner, Note 18: "Arrows too."): the bodies moved to the painted, glossy look
+  // (ns-flesh) and the arrows kept the comic one. Now: the two cel steps are widened into one smooth light ramp (soft
+  // half-width 0.3 over steps at 0.3 / 0.6: the two overlap and leave no flat shoulder, so no bands), the highlight is a
+  // tight wet glint that fades smoothly (step 0.05 .. 0.6 of a shininess-90 lobe, brighter), and the contour is thin and
+  // even in the bodies' own ink (ns-outline OUTLINE.colour #14090a, innerCss 0.9 px, 0.8 opacity) with the walls only
+  // lightly inked (0.2). The colours that tell brain arrows from mirror arrows (ns-colors arrowLook) are unchanged.
+  celSteps: freeze([0.3, 0.6]), celLevels: freeze([0.25, 0.62, 1.0]), celSoft: 0.3, specCrisp: freeze([0.05, 0.6]),
+  ink: 0x14090a, inkCss: 0.9, inkAlpha: 0.8, wallInk: 0.2
 });
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-14",
+  "version": "experimental-2026-11-17-body-update-15",
   "experimental": true,
   "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
   "incomplete_acceptance": true,
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 217643,
-      "sha256": "b967bace9ed492b9458e8a20a0d992d6b042c2e08fef061b77346b627d02f081"
+      "bytes": 226201,
+      "sha256": "7c1620d0591dd867a81ebf4f589a31a65a9b907c4a80480fe98a8bfa1ec09d34"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9116,
-      "sha256": "7858939b235cd254a187605be790b6bf8765b7cf55f52c3b3c374b8ed59c1ed1"
+      "bytes": 9368,
+      "sha256": "e0fd3a75d1820b5e9368293a58ee72750ece25b1ba02832852e7feee36613039"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 53283,
-      "sha256": "8d03bab2728f17e45e0a36f354680396265d7d8e48c1d0fc2fb16d72f7f15f32"
+      "bytes": 54931,
+      "sha256": "e210ae4293fde3071c92df82b62807d7a39b77679ee2b0b1567039c598b7cddb"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 23631,
-      "sha256": "6fc980709c44485de1c8b32e821736ed164cd8c665201df7b736eb8ae4de5aab"
+      "bytes": 25168,
+      "sha256": "aec8520e01ed0bb479cf07e2872296fbe073012dcad7119ae9b834b31422ef4d"
     },
     {
       "path": "README.md",
-      "bytes": 14151,
-      "sha256": "0e29807b5e336a1630d1f5e1940946fb3129d1588e5e194e78ed2091c2b25e21"
+      "bytes": 14661,
+      "sha256": "ae50d8d408e5925fcb5e1507409e10a9f00eee10fc66a5e7e0c65949640627a1"
     },
     {
       "path": "START.html",
       "bytes": 3911,
-      "sha256": "8b0b93b87d6c5a5f79929de7890de36fdbbf4ec7df8294f4a2128d62045c30d0"
+      "sha256": "f3fa6b899bb2c93aa0d5b2e0fc1379775fe88dc7c859568a8110cbea79c53e3d"
     },
     {
       "path": "index.html",
@@ -3802,8 +3802,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 41798,
-      "sha256": "120dd6389cdc11c648e217c719e4d680e549e567da3793c7d23ad5c6d69277c7"
+      "bytes": 43078,
+      "sha256": "cd1dc03ea21f49d72513824df05e08f80e912d9fdbd739e22de4d4942fd4fc31"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3887,18 +3887,18 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 4369,
-      "sha256": "826c56518e463b4e4f123448d8593fca2e13b63a07119dcec431920035af6275"
+      "bytes": 7007,
+      "sha256": "24546a34da2a765c70b7d056aa695a6c4646260d47240a86d1e205014307fef4"
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 198344,
-      "sha256": "ec385291200fee3e914d9f1ad306b17e05752b0e1384bcbdce61c1150731fdec"
+      "bytes": 206593,
+      "sha256": "077d7c648f4b53102b092d5c73ecb46df99a9a3bc7079975b6d5490960b944c9"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 701597,
-      "sha256": "be470154d289ab0f5355f3d95258dca8142de256abbd7b57a4e382635b34e6ac"
+      "bytes": 711813,
+      "sha256": "267e26dc761f2d2ac23aa898366b174e82da184d9808633fe771f82eca381982"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3907,13 +3907,13 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 74314,
-      "sha256": "788630dd2f043da3cfdd3cc3a88983c36defaf8c79f641ad4f89676e46f9eda5"
+      "bytes": 75863,
+      "sha256": "762236fff533224a43f4a30f0a0506ce17b453c4af1f36fa8f8e664eb0cb9b7a"
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
-      "bytes": 18600,
-      "sha256": "34b0451eccb2773df395654e6bfff68b73e75851ee06ad909c9e3bb36518157c"
+      "bytes": 18717,
+      "sha256": "7103ba40cfad607c8af7f0da3ee3bee6ecb1ec205342e5060a770a64b9c9fcad"
     },
     {
       "path": "scene/src/ns-assembly-worker.mjs",
@@ -3937,18 +3937,18 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 589555,
-      "sha256": "9fed2d25913c1f8f377e7544a9fccba8f5d7eaef09f1f178094075690fba992c"
+      "bytes": 593882,
+      "sha256": "e22e7c407212ad808f0750d645a7ad61f2c1cce6033f56f7ef3d039c149832d2"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
-      "bytes": 229975,
-      "sha256": "6632b56256e1db988b3aebb468bf469017a09e17f6cbe602487ec46ea1889333"
+      "bytes": 230489,
+      "sha256": "9b107072d623d84de7a540729d67eefe12a71621d60e8a6eb8147de21ec554b7"
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 60983,
-      "sha256": "bbd2a98816f07047464d94a0bde34b4fbbe27c776573fe2e9a1af2589967d7a6"
+      "bytes": 61175,
+      "sha256": "ebc6d248e33a841db4362221872df8f4f210621a8b2283dc2e8aed0420fef6a5"
     },
     {
       "path": "scene/src/ns-brain-live.mjs",
@@ -3962,8 +3962,8 @@
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 64330,
-      "sha256": "146b6d500d9dc1d4532c1d4adfdda6dddba34b51793221cd5857e1c9ad001dcf"
+      "bytes": 68221,
+      "sha256": "e345a68fcf7d848181a7530720d6ae01eba49e449a56cc8b5517fe6e27d42e98"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -3972,13 +3972,13 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 88137,
-      "sha256": "9e016b359522cc704c76e43b5662d26b21673f6d5daccc3dc745474b2d3b65f8"
+      "bytes": 97637,
+      "sha256": "fa1ea1f82b8bb4d632905b723515eb0f7460250c0edd50610360d6a7fc03a0fc"
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 98894,
-      "sha256": "4fc3acf1c7524890591bb6379ff6f6bf7fa99cb70df97d05215a7c0f536ba270"
+      "bytes": 99629,
+      "sha256": "30523f32bffa36502d4d7d2ab9a5841882c385ca5f3bf5760eb517ee0e1ffd19"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -3986,9 +3986,14 @@
       "sha256": "199a4ee1dcd275a504f778cc2f00b7ac877cf8d8650208d9a4f2fd080e5b5b88"
     },
     {
+      "path": "scene/src/ns-detail.mjs",
+      "bytes": 14123,
+      "sha256": "a47e338de088afa53d5ace5d87536f7e2bcff72f56cd2f7970c07673bd3b76ce"
+    },
+    {
       "path": "scene/src/ns-flesh.mjs",
-      "bytes": 50899,
-      "sha256": "a10ba106a841a09afccd19c70f6dfde32aa8dcb062ee04b64a31209e743f48f5"
+      "bytes": 52263,
+      "sha256": "de2a030ed84ef0556e027d8c97d912cc5f410cbb8ab75175ef70c502ced0f733"
     },
     {
       "path": "scene/src/ns-grasp.mjs",
@@ -4006,14 +4011,19 @@
       "sha256": "f7e9fd1c231bdb4a776702867af6c90ebdf565c69637ff0b5a1a6074e69a02b9"
     },
     {
+      "path": "scene/src/ns-links.mjs",
+      "bytes": 6757,
+      "sha256": "e066cf3ba5f0cb9a543e377d9d47070d859210cecf79ecded02b65a0f70fb57e"
+    },
+    {
       "path": "scene/src/ns-math.mjs",
       "bytes": 15063,
       "sha256": "04bd03516ce716682f019f889fc0a2b16608fe2a27a3c61d95ee793888b3553d"
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 47043,
-      "sha256": "d667975efdb8ee31cba1225a57af8d1ac8629c98c5a5951694328626a50331af"
+      "bytes": 49211,
+      "sha256": "c2fea9aa60af2ba77759c03c70420c53b1bf88ac59c8f2f31a33d7911c1849af"
     },
     {
       "path": "scene/src/ns-move-glow.mjs",
@@ -4037,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 6010,
-      "sha256": "de8f0eaf4ad8625ca8fd5d70d1dc50b536d358348d529afaa92be5cf7908ed5e"
+      "bytes": 9848,
+      "sha256": "b20c2b0c65e3f5eda116f3764dd82a111aa826375c34eca609f9e33f3fd2a145"
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
@@ -4047,8 +4057,8 @@
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 34124,
-      "sha256": "a1e1ef3de8b8869174277df043bb86ac4cc8c52a8180450a678d0e16de33adce"
+      "bytes": 34316,
+      "sha256": "c4cd849b326c8a9914c220c47db18892f538ed4a88773ea5be17ba131efbae4b"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -4062,18 +4072,18 @@
     },
     {
       "path": "scene/src/ns-room.mjs",
-      "bytes": 24867,
-      "sha256": "a18ae4ea35e634c60d395fba9bda92be6d9c69f5e0893bc6215f798ad0bcf885"
+      "bytes": 26544,
+      "sha256": "44590cfe16f2585cca2f29510495ec9b38405b389de16e620ebea5b67b102056"
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1000650,
-      "sha256": "3e6570730c618a9796c6ae059809eb0c8e9ce5ce130aa9d69c0baf51a2d62bca"
+      "bytes": 1027239,
+      "sha256": "66f9d0f3ce6ca3a185f52f6d371d6f4f98f10d98213b33f5eb25b942ea1cd3cd"
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 135260,
-      "sha256": "c55de7f528b5501d3e20e2957ecd94fa3e739c8c5f606074512f69f690c2601c"
+      "bytes": 135331,
+      "sha256": "52681895f785783500406596909c92dae625d9ce1e567cd44dc0b9fac2605bd2"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4089,6 +4099,16 @@
       "path": "serve-local.mjs",
       "bytes": 13366,
       "sha256": "961f50c5be4c8993db667a38516feeb6bd0092861a513e0f36eaaec9b2435df1"
+    },
+    {
+      "path": "tests/activity-effect.test.mjs",
+      "bytes": 3441,
+      "sha256": "e83c92289c28abc7c4563ca428fa0f547989cc1a23434d094dc7ba59074bc31d"
+    },
+    {
+      "path": "tests/area-code.test.mjs",
+      "bytes": 6137,
+      "sha256": "93f1786905ac182c46acc51e4af713b9887701b85ee6b7717ad894e97c175ec4"
     },
     {
       "path": "tests/area-step.test.mjs",
@@ -4109,6 +4129,11 @@
       "path": "tests/behind-view.test.mjs",
       "bytes": 4555,
       "sha256": "69e6c3ca3447cd09adf032e1b3672235c6a68e5d32ce9e754b9dd1e32e19da55"
+    },
+    {
+      "path": "tests/body-lift.test.mjs",
+      "bytes": 2934,
+      "sha256": "b7321818bfb2672382094a0d0008824886790f32ab213d6131fa59b8b83c6002"
     },
     {
       "path": "tests/brain-live.test.mjs",
@@ -4141,9 +4166,24 @@
       "sha256": "7c6096638e72d59580dd0fe3139676c0acd3d681aa24b7c2a982a0b8344d80cf"
     },
     {
+      "path": "tests/detail-normals.test.mjs",
+      "bytes": 6195,
+      "sha256": "9bdfb61b9937055f52c8316ed54bf104e8fda711ee85686404d183b4c645d072"
+    },
+    {
+      "path": "tests/detail.test.mjs",
+      "bytes": 2467,
+      "sha256": "2b4e1b67bb0921e859d7360ba89b3e16bbdb37e3485e2034e310f24d42ab6d51"
+    },
+    {
       "path": "tests/eye-gaze.test.mjs",
       "bytes": 5277,
       "sha256": "94832ff69176a539afdd09e118285c679e32a5658ee5bb7b220ef27bb8c0d079"
+    },
+    {
+      "path": "tests/flat-view.test.mjs",
+      "bytes": 6112,
+      "sha256": "a6aad114d15fbd3b865e2277495bc9316bfb905d9e5446ea330afcf4411abc6f"
     },
     {
       "path": "tests/flesh.test.mjs",
@@ -4202,8 +4242,8 @@
     },
     {
       "path": "tests/own-front-view.test.mjs",
-      "bytes": 12285,
-      "sha256": "a49e3f3ebaf87bd2485a3593c77ee07acf78b3b79d642df256a62a614ac92fc0"
+      "bytes": 12623,
+      "sha256": "9c30aad7ba48611d689c2cd6a9b9ecc2cb145582db3b6f8c30919443968e23c8"
     },
     {
       "path": "tests/pointer-release.test.mjs",
@@ -4217,8 +4257,8 @@
     },
     {
       "path": "tests/quiet.test.mjs",
-      "bytes": 3152,
-      "sha256": "0cb2476eec66695b5fd11dcf5ed0240ce017d3768cdbb4641e9b0dd6186930ed"
+      "bytes": 4408,
+      "sha256": "4238d7ddd241c84d01f29cd83435325a347a6a9d8868ce40d7fcd1fd0f4c39c9"
     },
     {
       "path": "tests/room.test.mjs",
@@ -4227,13 +4267,18 @@
     },
     {
       "path": "tests/shader-safe.test.mjs",
-      "bytes": 11226,
-      "sha256": "0c36d6bdd099b58bf198a01759f21ce4344182408c81e3c224abcba765e4ba15"
+      "bytes": 11606,
+      "sha256": "634ec13db5739db1a78820252e263209c9de4b6bb1386d831c304828acd8f888"
     },
     {
       "path": "tests/shoulder-skin.test.mjs",
       "bytes": 15357,
       "sha256": "8212be6e1782ef4f7327538f09aa250a600513f08923322581335825fd518f0e"
+    },
+    {
+      "path": "tests/small-fixes.test.mjs",
+      "bytes": 10539,
+      "sha256": "2cf87bf8e0ac77ba63f19d83db7e6b7705dfe8cb30cd853603c0a855f17b533d"
     },
     {
       "path": "tests/space-gesture.test.mjs",
@@ -4242,8 +4287,8 @@
     },
     {
       "path": "tests/spine.test.mjs",
-      "bytes": 15947,
-      "sha256": "f84367b569ec69da10152d0a5c10df3e382ca709352fc0191381e3be279a5caf"
+      "bytes": 16089,
+      "sha256": "295a2f2e78d635bf3c4c44e4c78a0874eb1e3a548c2a9b1665ea28b577e9cb25"
     },
     {
       "path": "tests/vessels.test.mjs",

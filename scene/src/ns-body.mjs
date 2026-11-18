@@ -2002,7 +2002,11 @@ export const SHOULDER_ROLL = Object.freeze({ perTrunkFlex: 0.2, perPelvicTilt: 0
  * angles cancel), so the look's own arithmetic (ns-app headPoseForLook) still holds. A display coupling inside what a
  * neck does (forward head posture), not measured cervical kinematics.
  */
-export const HEAD_FORWARD = Object.freeze({ perTrunkFlex: 0.2, perPelvicTilt: 0.2, minDeg: 0, maxDeg: 20 }); // (perPelvicTilt: the slumped start posture carries the head 10 degrees forward)
+// (18 November 2026, late, package FLAT; the owner: "The neck looks a little funny, sort of like a giraffe neck":
+// perPelvicTilt 0.2 -> 0.08, so the slumped start posture carries the head 4.4 degrees forward instead of 11; the head
+// sits back over the shoulders and the neck no longer reaches forward as a long thin stalk on the mirror body and
+// from outside. The muscle-bulk package thickens the neck itself.)
+export const HEAD_FORWARD = Object.freeze({ perTrunkFlex: 0.2, perPelvicTilt: 0.08, minDeg: 0, maxDeg: 20 });
 export function headForwardDeg(trunkFlexDeg, o = HEAD_FORWARD, pelvicTiltDeg = 0) {
   return Number.isFinite(trunkFlexDeg) ? clamp(o.perTrunkFlex * trunkFlexDeg + (o.perPelvicTilt || 0) * (Number.isFinite(pelvicTiltDeg) ? pelvicTiltDeg : 0), o.minDeg, o.maxDeg) + 0 : 0;
 }
@@ -4399,6 +4403,12 @@ export const BODY_STACK_RULE = Object.freeze({
     ...[['FJ1452', 'Right external oblique'], ['FJ1452M', 'Left external oblique']].map(([id, name]) => Object.freeze({ id, name,
       smooth: Object.freeze({ innerMm: 50, outerMm: 85, cellMm: 4, reachMm: 24, blurMm: 10 }),
       basis: 'the atlas sculpts the segments of rectus abdominis into the front of this sheet (the anterior rectus sheath); that relief is drawn shaved down to a smooth surface within about 50 to 85 mm of the midline, so the sheath does not read as a rectus abdominis ("six-pack"); when the real rectus abdominis is loaded (missing-muscles-r1) the part of the sheet in front of it is not drawn at all (openRectusSheath: the sheath opened, as in a dissection)' })),
+    // 18 November 2026 (the owner: "some muscles have become detached and are sticking out, such as around the hips"):
+    // with the stack drawn again (shaveReliefPosed) the buttock's full 20 mm thigh gap, lifted radially from the thigh's
+    // axis, drew the gluteus maximus as a shell hanging off the hip, its lower border a flap under the buttock and its
+    // upper border a free edge with a dark gap under it (seen from below and from the side).
+    ...[['FJ1418', 'Right gluteus maximus'], ['FJ1418M', 'Left gluteus maximus']].map(([id, name]) => Object.freeze({ id, name, gapScale: 0.35, distShare: 1,
+      basis: 'a thick mass lying directly on gluteus medius, the deep hip rotators and the ischial tuberosity, which the reclined body rests on: a small lift that grows gradually across the muscle keeps the buttock one closed mass with a thin parting, not a shell standing off the hip' })),
     ...[['FJ1595', 'Right sternocleidomastoid'], ['FJ1573', 'Left sternocleidomastoid']].map(([id, name]) => Object.freeze({ id, name, region: 'neck',
       basis: 'neck muscle from the mastoid to the sternum and clavicle: the neck gap along its whole length, so its lower end does not stand off as a hood' }))
   ]),
@@ -6700,6 +6710,45 @@ function stackShaveRelief(p, weight, { cellMm = 4, reachMm = 24, blurMm = 10 } =
   return maxMm;
 }
 
+/**
+ * 18 November 2026 (the owner: "some muscles have become detached and are sticking out, such as around the hips. This
+ * needs to be fixed for all muscles"). stackShaveRelief reads "how far forward" as -y, which holds in the SOURCE frame
+ * (the atlas body stands upright) and held in the drawn frame while the start posture sat upright. Since the reclined
+ * start posture (trunk 68, later 80 degrees, the pelvis rolled under 55) it read the lying belly as a relief of tens of
+ * millimetres and pushed the lower front of the external oblique, over the hip, up to 97 mm along -y. The scene refuses
+ * any lift past the stack rule's cap (scene_input), so from then on the WHOLE Body Worlds stack was off in the game
+ * (no muscle lifted; the tendon-white ends only on the muscles registered before the oblique).
+ * Now the relief is shaved where the rule was written for it: on the lifted SOURCE sheet q (the upright atlas frame; the
+ * fill of about a millimetre is left out of the heights), and each vertex's shave s (backward, +y there) is carried
+ * into the drawn frame along that vertex's own posed backward direction (the bake's blended frame of its two bones, or
+ * its rigid rest frame). Same rule, same numbers; only the frame it is measured in. Display choice on licensed anatomy.
+ * Changes `out` (drawn positions) in place and returns the largest shave in mm.
+ */
+function shaveReliefPosed(rig, baked, id, p, q, out, weight, S, skinned) {
+  const src = Float32Array.from(q && q.length === p.length ? q : p), n = src.length / 3, y0 = new Float32Array(n);
+  for (let v = 0; v < n; v++) y0[v] = src[3 * v + 1];
+  const maxMm = stackShaveRelief(src, weight, S);
+  if (!(maxMm > 0)) return maxMm;
+  const info = rig.meshSegment[id], B = baked._internal;
+  let w = null, rest = null;
+  if (skinned.has(id)) {
+    const clouds = rig._clouds || {}, avail = (info.candidates || []).filter(s => clouds[s]);
+    let near = null;
+    w = bakeSkinWeights(rig, id, p, avail, (segs, x, y, z) => (near || (near = nearestSearch(clouds, 'index')))(segs, x, y, z), true);
+  } else rest = bakedRestMatrix(rig, baked, id);
+  for (let v = 0; v < n; v++) {
+    const s = src[3 * v + 1] - y0[v];
+    if (!(s > 0)) continue;
+    let dx, dy, dz; // the posed image of the source +y direction (column 1 of the frame)
+    if (w) { const a = B.mats[w.ia[v]], b = B.mats[w.ib[v]], wa = w.wa[v], wb = 1 - wa; dx = wa * a[4] + wb * b[4]; dy = wa * a[5] + wb * b[5]; dz = wa * a[6] + wb * b[6]; }
+    else if (rest) { dx = rest[4]; dy = rest[5]; dz = rest[6]; }
+    else { dx = 0; dy = 1; dz = 0; }
+    const l = Math.hypot(dx, dy, dz) || 1;
+    out[3 * v] += s * dx / l; out[3 * v + 1] += s * dy / l; out[3 * v + 2] += s * dz / l;
+  }
+  return maxMm;
+}
+
 /** Segment -> axis chain of the body rig ('girdle' rides with whatever else the muscle is on). */
 function stackSegmentChain(segment) {
   if (/_girdle$/.test(segment)) return 'girdle';
@@ -6877,7 +6926,9 @@ export function bodyWorldsLayers(rig, baked = null, { meshesById = null, extraBo
           const dm = Math.abs((p[3 * v] - M.point[0]) * M.normal[0] + (p[3 * v + 1] - M.point[1]) * M.normal[1] + (p[3 * v + 2] - M.point[2]) * M.normal[2]);
           w[v] = (aD && aD.length === w.length ? sstep(aD[v] / BODY_STACK_RULE.fill.endRampMm) : 1) * (1 - sstep((dm - S.innerMm) / (S.outerMm - S.innerMm)));
         }
-        byId[f.id].reliefShavedMm = Math.round(stackShaveRelief(out, w, S) * 10) / 10;
+        // (two packages repaired the same fault, the shave reading "forward" in the drawn frame of the slumped posture: the
+        // detail package's shaveReliefPosed is kept; the small-fixes package's inline version of the same repair was dropped)
+        byId[f.id].reliefShavedMm = Math.round((baked ? shaveReliefPosed(rig, baked, f.id, p, lift.lifted.get(f.id), out, w, S, skinned) : stackShaveRelief(out, w, S)) * 10) / 10;
       }
       positions.set(f.id, out);
       filled.push(f.id);

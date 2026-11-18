@@ -169,7 +169,9 @@ test('a rounded back carries the head forward without changing where it points',
   assert.equal(body.headForwardDeg(0), 0);
   assert.equal(body.headForwardDeg(-25), 0);
   const hfNow = body.headForwardDeg(rest.trunk_flex, body.HEAD_FORWARD, rest.pelvic_tilt || 0); // (later: the pelvis roll counts too)
-  assert.ok(hfNow >= 8 && hfNow <= body.HEAD_FORWARD.maxDeg);
+  // (18 November 2026, late: the owner found the neck "like a giraffe neck": the start posture now carries the head
+  // only a few degrees forward, was 8 or more)
+  assert.ok(hfNow >= 2 && hfNow <= 6);
   const rotOf = S => { const T = S.thorax, K = S.skull, o = []; for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) o.push(T[4 * r] * K[4 * c] + T[4 * r + 1] * K[4 * c + 1] + T[4 * r + 2] * K[4 * c + 2]); return o; };
   const inChest = (S, p) => { const T = S.thorax, d = [p[0] - T[12], p[1] - T[13], p[2] - T[14]]; return [d[0] * T[0] + d[1] * T[1] + d[2] * T[2], d[0] * T[4] + d[1] * T[5] + d[2] * T[6], d[0] * T[8] + d[1] * T[9] + d[2] * T[10]]; };
   for (const neck of [{ neck_flex: 20, neck_rot: 30 }, { neck_flex: -30, neck_rot: -60 }, { neck_flex: 45 }]) {

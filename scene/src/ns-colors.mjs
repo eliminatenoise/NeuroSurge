@@ -534,75 +534,99 @@ const area = (family, color, glow) => {
 };
 
 /** The 54 motor areas (ns-bodymap region ids, both hemispheres) -> { family, color, glow (sRGB 0xRRGGBB), css, glowCss,
- * colorLinear, glowLinear }.
- * 17 November (owner: "The brain area looks awful ... far more colorful areas"): a new, SATURATED table. The families
- * are the ones the on-screen words name (blues for the left arm, oranges for the right arm, purples for the left leg,
- * yellows for the right leg, greens for the trunk, pinks for the face and neck, grey for the in-between areas that
- * move nothing), and the two halves are built alike, area for area: each colour is OKLCH (lightness, hue) at 95 % of
- * the largest chroma sRGB can show there, and along the strip a light shade of one hue alternates with a deep shade of
- * another hue of the family (cyan / royal blue / sky / azure ..., peach / vermilion / amber / orange ..., pink /
- * magenta / orchid / raspberry ...), so no two neighbours look alike. Measured (OKLab distance, 0.1 = clearly
- * different): every strip neighbour pair >= 0.159 (the old table: 0.052 under colour-blind simulation, and its resting
- * tints 0.048); the same area of the two halves >= 0.077 apart (the face pinks are the closest pairs; the limbs are far
- * apart, blue against orange, purple against yellow). `glow` is the same hue as bright as sRGB shows it. The earlier
- * dichromat simulation was NOT re-run on this table: neighbours differ strongly in lightness, which every colour vision
- * keeps, but two areas far apart on the strip can look alike to a dichromat, as before. */
-export const AREA_COLORS = freeze({
-  rh_toes: area('leftLeg', 0xba93fb, 0xc29fff),
-  rh_ankle: area('leftLeg', 0x6017dd, 0x805aff),
-  rh_knee: area('leftLeg', 0xe453fa, 0xeb6aff),
-  rh_hip: area('leftLeg', 0x8717ce, 0xb865ff),
-  rh_scan_superior: area('scan', 0x5e646a, 0xecf5ff),
-  rh_trunk: area('trunk', 0x26cb64, 0x77ff9b),
-  rh_shoulder: area('leftArm', 0x30ecf0, 0x5efcff),
-  rh_elbow: area('leftArm', 0x0c58e9, 0x387bff),
-  rh_forearm: area('leftArm', 0x59cdfc, 0x6ed4ff),
-  rh_wrist: area('leftArm', 0x1989e5, 0x51a9ff),
-  rh_hand: area('leftArm', 0x32f6e4, 0x57ffed),
-  rh_little: area('leftArm', 0x3619f0, 0x454dff),
-  rh_ring: area('leftArm', 0x58bbfb, 0x6dc4ff),
-  rh_middle: area('leftArm', 0x1374e1, 0x4c9aff),
-  rh_index: area('leftArm', 0x4dedfd, 0x65f0ff),
-  rh_thumb: area('leftArm', 0x2b3ff7, 0x3b5dff),
-  rh_neck: area('faceNeck', 0xfc88dd, 0xff95e2),
-  rh_scan_middle: area('scan', 0x53595f, 0xebf4ff),
-  rh_brow: area('faceNeck', 0xc21bc3, 0xff73fd),
-  rh_eyelid: area('faceNeck', 0xfdaaf1, 0xffb4f4),
-  rh_nose: area('faceNeck', 0xd028fa, 0xd950ff),
-  rh_lower_face: area('faceNeck', 0xb71579, 0xff63b7),
-  rh_lips: area('faceNeck', 0xfb60f3, 0xff76f6),
-  rh_jaw: area('faceNeck', 0xab18bf, 0xeb6eff),
-  rh_tongue: area('faceNeck', 0xfc97d8, 0xffa1dc),
-  rh_throat: area('faceNeck', 0x931082, 0xff6de5),
-  rh_scan_inferior: area('scan', 0x484e54, 0xe9f4ff),
-  lh_toes: area('rightLeg', 0xfef559, 0xfff764),
-  lh_ankle: area('rightLeg', 0xedb425, 0xffca56),
-  lh_knee: area('rightLeg', 0xf6fe32, 0xf7ff59),
-  lh_hip: area('rightLeg', 0xc4a11f, 0xffdd72),
-  lh_scan_superior: area('scan', 0x68625c, 0xfff6ec),
-  lh_trunk: area('trunk', 0x92e629, 0xacff57),
-  lh_shoulder: area('rightArm', 0xfc9157, 0xff9c68),
-  lh_elbow: area('rightArm', 0xea4016, 0xff6645),
-  lh_forearm: area('rightArm', 0xfdbc70, 0xffc580),
-  lh_wrist: area('rightArm', 0xf16a1b, 0xff8346),
-  lh_hand: area('rightArm', 0xfdc769, 0xffcd77),
-  lh_little: area('rightArm', 0xc54312, 0xff845e),
-  lh_ring: area('rightArm', 0xfcb364, 0xffbb74),
-  lh_middle: area('rightArm', 0xed5f19, 0xff7c46),
-  lh_index: area('rightArm', 0xfdc26d, 0xffca7f),
-  lh_thumb: area('rightArm', 0xd24113, 0xff7853),
-  lh_neck: area('faceNeck', 0xfc95a2, 0xffa0ac),
-  lh_scan_middle: area('scan', 0x5c5751, 0xfff5ea),
-  lh_brow: area('faceNeck', 0xdf1b3f, 0xff5a66),
-  lh_eyelid: area('faceNeck', 0xfdb3c0, 0xffbcc7),
-  lh_nose: area('faceNeck', 0xf8207b, 0xff4788),
-  lh_lower_face: area('faceNeck', 0xb61437, 0xff6271),
-  lh_lips: area('faceNeck', 0xfb7c9b, 0xff8ba6),
-  lh_jaw: area('faceNeck', 0xce1850, 0xff6280),
-  lh_tongue: area('faceNeck', 0xfca0a8, 0xffa9b0),
-  lh_throat: area('faceNeck', 0xa21139, 0xff657d),
-  lh_scan_inferior: area('scan', 0x514c46, 0xfff5e9),
+ * colorLinear, glowLinear, chunk, chunkIndex, chunkSize }.
+ * 18 November (owner: "redo the entire corresponding color coding of the motor strip and its corresponding areas from
+ * scratch to make it look as good as possible"; "a visual chunking principle for easy learning ... that chunking
+ * principle applies throughout"): the colour CODE, designed as a system and generated from three rules (the 17 November
+ * table alternated a light shade of one hue with a deep shade of another along the strip, which read as a rainbow in the
+ * right-arm half and as stripes the eye could not follow; both arm labels wore one cyan pill):
+ *  1 hemisphere register: every area of the brain's RIGHT half (it moves your LEFT side) is COOL (violet, sea green,
+ *    blue, cyan, orchid, purple), every area of the LEFT half WARM (yellow, lime, orange, amber, coral, raspberry). The
+ *    warm-cool axis is the blue-yellow axis that red-green colour blindness keeps, and it shows the CROSSING at a
+ *    glance: the cool keys lie on one side of the picture and light up muscles on the other side of your body.
+ *  2 chunks: each body region is a chunk with its own hue family (AREA_CHUNKS): leg | trunk | arm | hand | neck | face |
+ *    mouth, and the grey in-between areas; the hand is a sub-chunk of the arm (its family shifted toward cyan / amber),
+ *    the mouth a sub-chunk of the face. The strip draws a wide dark gap at every chunk border (ns-scene-three
+ *    regionChunkKey / REGION_BORDER territoryPx). The family words on screen stay true: blues for the left arm, oranges
+ *    for the right arm, purples for the left leg, yellows for the right leg, greens for the trunk, pinks for the face.
+ *  3 order: inside a chunk the areas step from LIGHT at the body's middle to DEEP at the far end (hip -> toes, shoulder
+ *    -> wrist, hand -> thumb in strip order, brow -> jaw), with a small hue drift, so the eye follows the chunk, and a
+ *    deep key meets a light key where two chunks meet (wrist | hand, thumb | neck).
+ * Each colour is OKLCH (lightness, chroma, hue) from AREA_RAMPS at `share` of the largest chroma sRGB can show there;
+ * `glow` is the most saturated colour of the same hue (made vivid below). Measured (OKLab distance, 0.1 = clearly
+ * different; Machado 2009 simulation at full severity): neighbours inside a chunk >= 0.055 (protanopia 0.043,
+ * deuteranopia 0.051), across a chunk border >= 0.147 (0.066 / 0.083), the same area of the two halves >= 0.053.
+ * Display choices: the colour says WHICH area, the brightness HOW MUCH simulated, unitless activity. */
+/** Chunk of each strip key (both hemispheres; the left hemisphere's digits are r_hand ... in ns-bodymap): [chunk, index
+ * from the body's middle outward]. */
+export const AREA_CHUNKS = freeze({
+  hip: freeze(['leg', 0]), knee: freeze(['leg', 1]), ankle: freeze(['leg', 2]), toes: freeze(['leg', 3]),
+  trunk: freeze(['trunk', 0]),
+  shoulder: freeze(['arm', 0]), elbow: freeze(['arm', 1]), forearm: freeze(['arm', 2]), wrist: freeze(['arm', 3]),
+  hand: freeze(['hand', 0]), little: freeze(['hand', 1]), ring: freeze(['hand', 2]), middle: freeze(['hand', 3]), index: freeze(['hand', 4]), thumb: freeze(['hand', 5]),
+  neck: freeze(['neck', 0]),
+  brow: freeze(['face', 0]), eyelid: freeze(['face', 1]), nose: freeze(['face', 2]), lower_face: freeze(['face', 3]), lips: freeze(['face', 4]), jaw: freeze(['face', 5]),
+  tongue: freeze(['mouth', 0]), throat: freeze(['mouth', 1]),
+  scan_superior: freeze(['scan', 0]), scan_middle: freeze(['scan', 0]), scan_inferior: freeze(['scan', 0])
 });
+/** Areas per chunk. */
+export const AREA_CHUNK_SIZE = freeze({ leg: 4, trunk: 1, arm: 4, hand: 6, neck: 1, face: 6, mouth: 2, scan: 1 });
+/** Per hemisphere code and chunk: [hue at the light end, hue at the deep end (OKLCH degrees), lightness light, lightness
+ * deep, share of the largest sRGB chroma]. rh = the brain's right half (your LEFT side, cool), lh = left half (warm). */
+export const AREA_RAMPS = freeze({
+  rh: freeze({ leg: freeze([289, 310, 0.80, 0.44, 0.93]), trunk: freeze([170, 170, 0.70, 0.70, 0.93]), arm: freeze([235, 266, 0.82, 0.44, 0.93]),
+    hand: freeze([199, 226, 0.88, 0.50, 0.93]), neck: freeze([334, 334, 0.76, 0.76, 0.93]), face: freeze([344, 328, 0.85, 0.50, 0.93]),
+    mouth: freeze([320, 312, 0.78, 0.52, 0.93]), scan: freeze([250, 250, 0.40, 0.40, 0.08]) }),
+  lh: freeze({ leg: freeze([104, 87, 0.95, 0.74, 0.93]), trunk: freeze([140, 140, 0.80, 0.80, 0.93]), arm: freeze([65, 34, 0.86, 0.60, 0.93]),
+    hand: freeze([92, 61, 0.94, 0.68, 0.93]), neck: freeze([15, 15, 0.78, 0.78, 0.93]), face: freeze([17, 30, 0.85, 0.56, 0.93]),
+    mouth: freeze([0, 354, 0.76, 0.50, 0.93]), scan: freeze([70, 70, 0.40, 0.40, 0.06]) })
+});
+/** Family (the colour words of the on-screen text) of a chunk in a hemisphere. */
+const CHUNK_FAMILY = freeze({
+  rh: freeze({ leg: 'leftLeg', trunk: 'trunk', arm: 'leftArm', hand: 'leftArm', neck: 'faceNeck', face: 'faceNeck', mouth: 'faceNeck', scan: 'scan' }),
+  lh: freeze({ leg: 'rightLeg', trunk: 'trunk', arm: 'rightArm', hand: 'rightArm', neck: 'faceNeck', face: 'faceNeck', mouth: 'faceNeck', scan: 'scan' })
+});
+/** Strip keys in ns-bodymap order (both hemispheres share it). */
+export const AREA_STRIP_KEYS = freeze(['toes', 'ankle', 'knee', 'hip', 'scan_superior', 'trunk', 'shoulder', 'elbow', 'forearm', 'wrist', 'hand',
+  'little', 'ring', 'middle', 'index', 'thumb', 'neck', 'scan_middle', 'brow', 'eyelid', 'nose', 'lower_face', 'lips', 'jaw', 'tongue', 'throat', 'scan_inferior']);
+const codeOkToLin = (L, C, h) => {
+  const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+};
+const codeInGamut = c => c[0] >= -1e-6 && c[0] <= 1 + 1e-6 && c[1] >= -1e-6 && c[1] <= 1 + 1e-6 && c[2] >= -1e-6 && c[2] <= 1 + 1e-6;
+/** Largest chroma sRGB shows at OKLCH lightness L and hue h (bisection). Pure. */
+export function oklchMaxChroma(L, h) {
+  let lo = 0, hi = 0.4;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (codeInGamut(codeOkToLin(L, m, h))) lo = m; else hi = m; }
+  return lo;
+}
+const codeHex = lin => hexOfSrgb(lin.map(x => linearToSrgb(clamp01(x))));
+/** The identity and glow colours (sRGB 0xRRGGBB) of strip key `key` in hemisphere code `h` ('rh' | 'lh') from the
+ * three rules (AREA_RAMPS). { color, glow, family, chunk, chunkIndex, chunkSize, oklch: [L, C, hue] } or null. Pure. */
+export function areaCodeColour(h, key) {
+  const ch = AREA_CHUNKS[key], R = AREA_RAMPS[h];
+  if (!ch || !R) return null;
+  const [chunk, i] = ch, n = AREA_CHUNK_SIZE[chunk], t = n > 1 ? i / (n - 1) : 0.5;
+  const [h0, h1, L0, L1, share] = R[chunk];
+  const hue = h0 + (h1 - h0) * t, L = L0 + (L1 - L0) * t, C = share * oklchMaxChroma(L, hue);
+  // the glow: the most saturated colour of this hue (the chroma cusp over lightness, 0.2 .. 0.98 in 0.01 steps)
+  // (the in-between areas, which move nothing, glow a near-white of their faint tint instead)
+  let gL = L, gC = 0;
+  if (chunk === 'scan') { gL = 0.96; gC = 0.02; }
+  else for (let l = 0.2; l <= 0.981; l += 0.01) { const c = oklchMaxChroma(l, hue); if (c > gC) { gC = c; gL = l; } }
+  return { color: codeHex(codeOkToLin(L, C, hue)), glow: codeHex(codeOkToLin(gL, chunk === 'scan' ? gC : gC * 0.98, hue)), family: CHUNK_FAMILY[h][chunk], chunk, chunkIndex: i, chunkSize: n, oklch: [L, C, hue] };
+}
+const codeArea = (h, key) => {
+  const c = areaCodeColour(h, key), rec = area(c.family, c.color, c.glow);
+  return freeze({ ...rec, chunk: c.chunk, chunkIndex: c.chunkIndex, chunkSize: c.chunkSize });
+};
+const codeTable = () => {
+  const out = {};
+  for (const h of ['rh', 'lh']) for (const k of AREA_STRIP_KEYS) out[`${h}_${k}`] = codeArea(h, k);
+  return out;
+};
+export const AREA_COLORS = freeze(codeTable());
 
 /** Hue families in legend order: { key, regions (strip order, right hemisphere first) }. */
 export const AREA_FAMILIES = freeze(['leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'trunk', 'faceNeck', 'scan'].map(key =>
@@ -653,8 +677,12 @@ export const AREA_LOOK = freeze({
   // activation glow takes over), like a backlit teaching panel: the warm families no longer sink to brown and olive on
   // the side away from the key light. Small enough that a lit area still stands far above it (areaGain 1.35).
   restLift: 0.06, restValue: 0.72,
-  areaDarken: 0.7, areaGain: 2.4, areaNeon: 1.8, areaRimGain: 1.0,
-  muscleGain: 0.3, muscleAlbedo: 0.5, muscleRimGain: 1.0, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
+  // 18 November (MAP, "a NEON GLOW: bright, saturated"): the lit key burned to white in the pictures (gain 2.4 above
+  // display white with the bloom, and the white-hot frame): areaGain 2.4 -> 1.8 with areaNeon 1.8 -> 2.4 keeps an orange
+  // key orange and a blue key blue while still above white (the bloom halo stays); the muscles' glow was hard to see on
+  // the bodies: muscleGain 0.3 -> 0.42 and a stronger rim (1.0 -> 1.35), below the 0.55 that clipped a belly flat.
+  areaDarken: 0.7, areaGain: 1.8, areaNeon: 2.4, areaRimGain: 1.0,
+  muscleGain: 0.42, muscleAlbedo: 0.5, muscleRimGain: 1.35, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
 });
 
 const NO_AREA = null;
@@ -1198,7 +1226,66 @@ export function powerUpEnvelope(ageS, u = 0.5, { calm = false, reduced = false }
   if (reduced) { const r = smoothstep(0, p.reducedRampS, a); return { gain: r, white: 0, sat: 1, albedo: r, flash: 0 }; }
   const flash = powerUpFlash(a, {}, p);
   const on = a < p.strikeS ? a / p.strikeS : 1;
-  return { gain: on * (1 + p.flashGain * flash), white: p.flashWhite * flash, sat: 1, albedo: p.strikeAlbedo + (1 - p.strikeAlbedo) * on, flash };
+  // 18 November (MAP): the neon blink (powerUpBlink) scales the light; the surface colour stays (albedo).
+  return { gain: on * (1 + p.flashGain * flash) * powerUpBlink(a), white: p.flashWhite * flash, sat: 1, albedo: p.strikeAlbedo + (1 - p.strikeAlbedo) * on, flash };
+}
+
+// 18 November (MAP; owner: "let's introduce a neon glowing blinking effect, shuddering effect upon activity and
+// corresponding activity"): the BLINK of a switched-on area. Like a neon tube striking, then a living flicker, in the
+// area's colour and in step on all three places (the strip key, the muscles on your body, the same muscles on the
+// mirror body) and on the link between them: they share one start time per area (the power-up start), and this rule is
+// a function of the time since that start only. The CPU (the links) and the shaders use the same numbers.
+//  - strike: the light comes on, goes nearly out, on, dips, on: three pulses in the first quarter second
+//    (BLINK.strike: [until s, level] steps), then the flash settles (POWER_UP.flashTau);
+//  - flicker (from flickerFromS while the area stays lit): cells of cellS seconds; a cell dips the light by its share
+//    in BLINK.dips (mostly 0, a few dips in an irregular 24-cell pattern: about two short dips a second).
+// Photosensitivity: three strike pulses in a quarter second, then at most about two shallow dips (40 % or less) a second;
+// a re-click restarts the strike no sooner than POWER_UP.rechargeS. Under prefers-reduced-motion there is no blink: a
+// steady glow (powerUpEnvelope's reduced ramp). Opposing-action hints are calm (no blink). Display choices.
+export const BLINK = freeze({
+  strike: freeze([freeze([0.07, 1]), freeze([0.115, 0.12]), freeze([0.19, 1]), freeze([0.235, 0.3])]),
+  flickerFromS: 0.5, cellS: 0.06,
+  dips: freeze([0, 0, 0, 0.4, 0.15, 0, 0, 0, 0, 0, 0, 0.3, 0, 0, 0, 0, 0, 0.4, 0.2, 0, 0, 0, 0, 0])
+});
+/** Blink level (0..1, multiplies the glow) at ageS seconds after the area's start (BLINK). 1 when calm or reduced. Pure. */
+export function powerUpBlink(ageS, { calm = false, reduced = false } = {}, b = BLINK) {
+  if (calm || reduced) return 1;
+  const a = Number.isFinite(ageS) ? Math.max(0, ageS) : 1e3;
+  for (const [until, level] of b.strike) if (a < until) return level;
+  if (a < b.flickerFromS) return 1;
+  const k = Math.floor((a - b.flickerFromS) / b.cellS) % b.dips.length;
+  return 1 - b.dips[k];
+}
+/** GLSL of powerUpBlink: `float <name>( float age )` (the caller skips it when calm or reduced). */
+export function powerUpBlinkGlsl(name = 'nsPowerUpBlink', b = BLINK) {
+  const f = glslFloat;
+  const steps = b.strike.map(([u, l]) => `if ( a < ${f(u)} ) return ${f(l)};`).join(' ');
+  return `const float ${name}Dips[ ${b.dips.length} ] = float[ ${b.dips.length} ]( ${b.dips.map(f).join(', ')} );\n` +
+    `float ${name}( float age ) { float a = max( age, 0.0 ); ${steps} if ( a < ${f(b.flickerFromS)} ) return 1.0; ` +
+    `int k = int( mod( floor( ( a - ${f(b.flickerFromS)} ) / ${f(b.cellS)} ), ${f(b.dips.length)} ) ); return 1.0 - ${name}Dips[ k ]; }`;
+}
+
+// 18 November (MAP): the SHUDDER of the tissue of a switched-on area (the muscles it drives on both bodies, and its key
+// on the strip): a fine fast quiver while the area is on, a short stronger shake at the moment it switches on, nothing
+// once it goes off. Drawn in the vertex shader (no joint or bone moves; picking, aiming and the camera are untouched),
+// in CSS pixels on the screen so a near and a far body quiver alike: a muscle moves along its own normal (its outline
+// trembles), a key as a whole in the screen plane. Strength = finePx + kickPx x exp(-age / kickTauS), times the glow
+// strength (0..1). Two sines (hz1, hz2) with a phase per point (spatial, per metre) make it irregular. Kept small (the
+// ink outlines are drawn from the still meshes, so a larger shake would part the tissue from its line). None under
+// prefers-reduced-motion. Display choices.
+export const SHUDDER = freeze({ finePx: 0.75, kickPx: 2.2, kickTauS: 0.16, hz1: 21, hz2: 29, spatial: 260, keyScale: 0.8 });
+/** GLSL: `vec3 <name>( vec3 worldPos, float age, float strength, float pxToM )` -> a weight w (x = along the normal for a
+ * muscle; y, z = the screen-plane offset for a key), all in metres. */
+export function shudderGlsl(name = 'nsShudder', o = SHUDDER) {
+  const f = glslFloat, tau = 6.283185307;
+  return `vec3 ${name}( vec3 wp, float age, float strength, float pxToM ) {\n` +
+    `  float amp = strength * ( ${f(o.finePx)} + ${f(o.kickPx)} * exp( - max( age, 0.0 ) / ${f(o.kickTauS)} ) ) * pxToM;\n` +
+    `  float ph = dot( wp, vec3( ${f(o.spatial)}, ${f(o.spatial * 0.83)}, ${f(o.spatial * 0.71)} ) );\n` +
+    `  float t = age;\n` +
+    `  float n = 0.62 * sin( ${f(tau * o.hz1)} * t + ph ) + 0.38 * sin( ${f(tau * o.hz2)} * t + 1.7 * ph );\n` +
+    `  float kx = 0.62 * sin( ${f(tau * o.hz1)} * t + 1.3 ) + 0.38 * sin( ${f(tau * o.hz2)} * t + 4.1 );\n` +
+    `  float ky = 0.62 * sin( ${f(tau * o.hz1 * 1.11)} * t + 2.9 ) + 0.38 * sin( ${f(tau * o.hz2 * 0.93)} * t + 0.4 );\n` +
+    `  return vec3( n, kx * ${f(o.keyScale)}, ky * ${f(o.keyScale)} ) * amp;\n}`;
 }
 /** GLSL of the neon flash: `vec4 <name>( float age, float u, float calm, float reduced )` -> (gain, white, sat, albedo),
  * the same rule as powerUpEnvelope, and `float <name>Flash( float age, float calm, float reduced )` (powerUpFlash). */
@@ -1206,6 +1293,7 @@ export function powerUpGlsl(name = 'nsPowerUp', p = POWER_UP) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('ns:colors_glsl: name must be a GLSL identifier');
   const f = glslFloat;
   return [
+    powerUpBlinkGlsl(`${name}Blink`), // 18 November (MAP): the neon blink
     `float ${name}Flash( float age, float calm, float reduced ) { if ( calm > 0.5 || reduced > 0.5 ) return 0.0; float a = max( age, 0.0 ); return a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : exp( -( a - ${f(p.strikeS)} ) / ${f(p.flashTau)} ); }`,
     `vec4 ${name}( float age, float u, float calm, float reduced ) {`,
     '  if ( calm > 0.5 ) return vec4( 1.0, 0.0, 1.0, 1.0 );',
@@ -1213,7 +1301,7 @@ export function powerUpGlsl(name = 'nsPowerUp', p = POWER_UP) {
     `  if ( reduced > 0.5 ) { float r = smoothstep( 0.0, ${f(p.reducedRampS)}, a ); return vec4( r, 0.0, 1.0, r ); }`,
     `  float flash = ${name}Flash( a, 0.0, 0.0 );`,
     `  float on = a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : 1.0;`,
-    `  return vec4( on * ( 1.0 + ${f(p.flashGain)} * flash ), ${f(p.flashWhite)} * flash, 1.0, ${f(p.strikeAlbedo)} + ${f(1 - p.strikeAlbedo)} * on );`,
+    `  return vec4( on * ( 1.0 + ${f(p.flashGain)} * flash ) * ${name}Blink( a ), ${f(p.flashWhite)} * flash, 1.0, ${f(p.strikeAlbedo)} + ${f(1 - p.strikeAlbedo)} * on );`,
     '}'
   ].join('\n');
 }

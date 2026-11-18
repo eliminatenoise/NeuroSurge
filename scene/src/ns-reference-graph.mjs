@@ -27,7 +27,9 @@ export function referenceOptions(options, pitchLimitRad = 80 * DEG) {
   const reference = options.reference === undefined ? 'eye' : options.reference;
   if (!['eye', 'posterior-brain-bound'].includes(reference)) fail('unsupported source reference selector');
   const fovYDeg = options.fovYDeg === undefined ? 110 : options.fovYDeg;
-  if (!(Number.isFinite(fovYDeg) && fovYDeg >= 70 && fovYDeg <= 120)) fail('base FOV must remain inside existing source70..120degree bounds');
+  // 18 November 2026, late (package FLAT): the eye view is a longer lens from further back (ns-camera EYE_DOLLY; the
+  // launcher's 50 degrees), so the lower bound is 30 (was 70); the upper bound is unchanged.
+  if (!(Number.isFinite(fovYDeg) && fovYDeg >= 30 && fovYDeg <= 120)) fail('base FOV must remain inside 30..120 degrees');
   return Object.freeze({ reference, fovYDeg, initialLook: angles(options.initialLook, Math.min(80 * DEG, pitchLimitRad), 'initialLook'), initialBrainPlacement: angles(options.initialBrainPlacement, 75 * DEG, 'initialBrainPlacement') });
 }
 /** Call only after normal Assets hash/schema/parser validation. Selectors derive coordinates, never accept a guessed BP point. */

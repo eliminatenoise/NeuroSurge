@@ -39,3 +39,19 @@ test('every guide goal and every alternative sentence has a short line', () => {
   assert.equal(quietPromptText({ visible: false, goalId: 'moveHand' }, GUIDE.short), '');
   assert.equal(quietPromptText(null, GUIDE.short), '');
 });
+
+test('18 November (MAP): opposite movements share one line of the tip; the tip wears the area colour it is given', () => {
+  const elbow = BODY_MOTOR_MAP.regions.find(r => r.id === 'lh_elbow');
+  const moves = elbow.actions.map((a, i) => ({ n: i + 1, id: a.id, label: a.plainLabel || a.label }));
+  const t = quietTipModel({ area: elbow, moves, color: '#ff8800' });
+  assert.deepEqual(t.groups, [[0, 1]], 'bend and straighten pair up');
+  assert.equal(t.color, '#ff8800');
+  const neck = BODY_MOTOR_MAP.regions.find(r => r.id === 'lh_neck');
+  const nm = neck.actions.map((a, i) => ({ n: i + 1, id: a.id, label: a.plainLabel || a.label }));
+  assert.deepEqual(quietTipModel({ area: neck, moves: nm }).groups, [[0, 1], [2], [3]], 'bend forward / tilt back; turn and tilt alone');
+  const leftHand = BODY_MOTOR_MAP.regions.find(r => r.id === 'rh_hand');
+  const hm = leftHand.actions.map((a, i) => ({ n: i + 1, id: a.armActionId || a.id, label: a.plainLabel || a.label }));
+  const g = quietTipModel({ area: leftHand, moves: hm }).groups;
+  assert.ok(g.some(x => x.length === 2), 'the game arm\'s hand pairs by its arm action names');
+  assert.equal(quietTipModel({ pick: { name: 'left deltoid', kind: 'muscle' }, color: '#00aaff' }).color, '#00aaff');
+});

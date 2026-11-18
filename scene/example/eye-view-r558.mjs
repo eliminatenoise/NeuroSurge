@@ -28,7 +28,13 @@ import { startAssembly, showControlsCard } from '../src/ns-assembly.mjs';
 // neck shade of ns-scene-three NECK_SHADE), where both shoulders, the collar bones, the chest, the stomach and the
 // pelvis fit inside 100 degrees; things in the middle of the picture are drawn about a third larger than at 116 and
 // the corners are stretched far less.
-const EYE_FOV_Y_DEG = 100;
+// 18 November 2026, late (the owner: "a very wide field of view, but a very narrow depth of field ... things that are far
+// away look extremely close to us"; "a much larger set of four limbs, and perhaps that involves dialing down the field
+// of view"): 100 -> 54. The camera stands further back behind the eye (ns-camera EYE_DOLLY: 30 cm back on the line of
+// sight, 10 cm up along the head), so this longer lens flattens depth: your shins, feet, the mirror body and the brain
+// are drawn far larger for their distance and your chest smaller. Measured at the start, 1600x900 (middle widths):
+// thigh 65 -> 144 px, shin 25 -> 55, right upper arm 61 -> 118, forearm 42 -> 86. Across, the picture is 85 degrees.
+const EYE_FOV_Y_DEG = 54;
 // 17 November 2026 (user: "what if we made the brain far lower so that the relevant body parts were always in view?";
 // "You will naturally be looking a little downwards and that is where the motor strip should naturally be"): the game
 // starts with the look a little below level, as someone leaning back on a sofa looks, and the brain starts there too,
@@ -60,7 +66,12 @@ const EYE_FOV_Y_DEG = 100;
 // the pointer); at 25 it starts in the open between the mirror body's legs, about 120 px under the leg areas at
 // 1600x900. It does NOT start on the strip: at any look that still shows your chest, your own legs and feet and the
 // mirror body lie under the crosshair, and the strip cannot stand in front of them without hiding them.
-const START_LOOK_PITCH_DEG = -41, BRAIN_START_PITCH_DEG = -41;
+// 18 November 2026, late (package FLAT): 41 -> 52 degrees below level. In the slumped posture the front of the trunk
+// faces 49 degrees above level, so a look 41 degrees down runs parallel to it and a longer lens from further back sees
+// the chest hide the belly and pelvis. At 52 the line of sight crosses the trunk's front at about 17 degrees: the
+// whole front, shoulders to pelvis, is seen at once, the legs run up the picture to the feet under its top edge, and
+// the crosshair starts on the strip between the knees. The brain is placed on the same look.
+const START_LOOK_PITCH_DEG = -52, BRAIN_START_PITCH_DEG = -52;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);

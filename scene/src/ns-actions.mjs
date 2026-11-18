@@ -514,6 +514,28 @@ export const GAZE_RESTART_DEADBAND_DEG = 0.31;
 export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS: 0.3 });
 
 /**
+ * 18 November 2026 (the lead's decision on audit S4; the owner, Note 59: "if you highlight any part of the brand, you
+ * see what it does ... the brain turns into a control panel essentially"): a LOOK only ARMS a motor area. The look's
+ * pulse lights the area's key at full, shows the movement's muscles at `muscleLevel` only (a hint, not a contraction)
+ * and moves nothing: no latch after latchS (the rest now only marks the area as taken for the card and the number keys,
+ * lookTaken), no forearm turn and no relax for the pulse's second. A click, a number key or a tap on a muscle PRESSES
+ * it, as before. Reading the tip no longer moves the body. This replaces Message 1's look-jerk of the head and neck
+ * areas (the lead chose the control panel for every area). `on: false` (createActivity({ lookArms })) brings back the
+ * old rule. A rule of this game, nothing measured.
+ */
+export const LOOK_ARMS = Object.freeze({ on: true, muscleLevel: 0.22 });
+
+/**
+ * 18 November 2026 (SMALL, audit M3; the owner, Note 47: "And the limbs should be manipulatable to any position by brain
+ * activation"): a number key held down drives its movement PROGRESSIVELY: the joints' goals run toward the movement's
+ * end at rateDegS while the key is held, and the part stops where it is when the key comes up ('muscle' event with
+ * progressive: true, then 'muscleRelease' { tap: false }). A short press (the app's tapMs) is still the whole movement
+ * ({ tap: true } completes it). The stage rule is the same as a press's (a joint held on the other side is brought back
+ * first). A click or a tap on a muscle is always the whole movement. A rule of this game, not a measured speed.
+ */
+export const MOVE_HOLD = Object.freeze({ rateDegS: 90, tapMs: 220 });
+
+/**
  * Display (cortex colour) envelope defaults, seconds. UI timing choices, not physiological latencies:
  *   riseTau     fast first-order rise (63% at 35 ms, 94% at 100 ms) toward full display while a command is active;
  *   fadeSeconds smoothstep fade inside the last 0.25 s of a timed command, reaching exactly 0 at its deadline (R558,
@@ -599,7 +621,13 @@ const union = (a, b) => 1 - (1 - a) * (1 - b);
 export const JOINT_LATCH = Object.freeze({
   omega: 50, zeta: 0.35, restitution: 0.4, reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
-  armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22
+  armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22,
+  // 18 November 2026 (SMALL, audit S3; the owner: "a lot easier to use and play and more intuitive"): for the stage
+  // rule (opposedJoints), a latched goal within nearRestDeg of the start angle, and within nearRestShare of the joint's
+  // largest move from it, counts as AT the start. The start posture has the knees at -6 and "Straighten" ends at 0:
+  // that 6 degrees cannot be seen, yet "Bend" then only brought the knee back to -6 and a second press bent it. Larger
+  // moves still need their opposite first (Message 6); a small joint (a lip, 10 degrees) keeps its own small margin.
+  nearRestDeg: 10, nearRestShare: 0.1
 });
 
 /** R558 (issue hunt 2: "Raise right arm up" held together with "Swing right arm out to the side" left the arm out to the
@@ -1556,8 +1584,11 @@ export function createActivity({
   defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg, initialBrainPlacement = null,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
   resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL,
-  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau
+  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau, lookArms = LOOK_ARMS
 } = {}) {
+  // 18 November 2026 (S4): a look arms, a click / number key presses (LOOK_ARMS).
+  const armOnly = !(lookArms && lookArms.on === false);
+  const armLevel = lookArms && isFiniteNumber(lookArms.muscleLevel) ? clamp(lookArms.muscleLevel, 0, 1) : LOOK_ARMS.muscleLevel;
   const replaceClickS = gazeDwell && isFiniteNumber(gazeDwell.replaceClickS) && gazeDwell.replaceClickS >= 0 ? gazeDwell.replaceClickS : GAZE_DWELL.replaceClickS;
   const markS = gazeDwell && isFiniteNumber(gazeDwell.markS) && gazeDwell.markS >= 0 ? gazeDwell.markS : GAZE_DWELL.markS;
   const latchS = gazeDwell && isFiniteNumber(gazeDwell.latchS) && gazeDwell.latchS >= 0 ? gazeDwell.latchS : GAZE_DWELL.latchS;
@@ -1644,6 +1675,15 @@ export function createActivity({
     if (DANCE_BODY_JOINTS.includes(j)) LATCHING[j] = true;
   }
   Object.freeze(LATCHING);
+  // 18 Nov (S3, JOINT_LATCH.nearRestDeg / nearRestShare): how far from its start angle a latched goal may be and still
+  // count as at the start for the stage rule (opposedJoints).
+  const NEAR_REST = {};
+  for (const j of JOINT_IDS) {
+    let span = 0;
+    for (const k of BODY_KEYS) if (hasOwn(ENDS.get(k), j)) span = Math.max(span, Math.abs(ENDS.get(k)[j] - REST[j]));
+    NEAR_REST[j] = Math.max(JOINT_LATCH.restEpsDeg, Math.min(JOINT_LATCH.nearRestDeg, JOINT_LATCH.nearRestShare * span));
+  }
+  Object.freeze(NEAR_REST);
   for (const j of DANCE_BODY_JOINTS) if (!JOINT_IDS.includes(j)) fail('activity_option', `the body map binding lacks the dance joint ${j}`);
   // 18 November 2026, late (the whole arm turns over in the limb switch, ns-dance ARM_TURN): the game arm starts with its
   // upper arm at the end of the side its palm starts on (outward with the palm up: the underside), in the explicit
@@ -1694,10 +1734,12 @@ export function createActivity({
       regionActivity: zeroMap(REGION_IDS),    // DISPLAY per region: own pulse + left-arm key channels (derived)
       activatedRegions: {},                   // regionId -> count of clicks + looks held >= markS (until reset)
       pulseClick: false,                      // R3-fix M3: the running pulse was started (or last re-started) by a click
-      pendingGaze: null,                      // R3-fix M3: { area, since } a new area waiting to replace a click pulse
+      pulseLook: false,                       // 18 Nov (S4): the running pulse is a LOOK's (it arms: LOOK_ARMS)
+      pendingGaze: null,                     // R3-fix M3: { area, since } a new area waiting to replace a click pulse
       markPending: null,                      // R3-fix M5: { area, regionId, since } a look that marks after markS
       latchPending: null,                     // R558: { area, hit, since } a look that moves its joints after latchS
       lookTaken: null,                        // R558: { regionId, n } the area whose movement a look's rest took last; n counts them
+      progress: null,                         // 18 Nov (M3): { key, targets: { jointId: deg } } a held number key's movement
       bodyDrive: zeroMap(BODY_KEYS),          // body POSE drive (smoothed, eases)
       bodyDisplay: zeroMap(BODY_KEYS),        // body DISPLAY envelope (crisp; for muscle colour)
       bodyJointTargets: restMap(),            // jointId -> absolute degrees (derived: the joint positions, bodyPos)
@@ -1781,10 +1823,13 @@ export function createActivity({
       && unitMap(s.regionDisplay, REGION_IDS) && unitMap(s.regionActivity, REGION_IDS)
       && isCounts(s.activatedRegions)
       && (s.pulseClick === undefined || typeof s.pulseClick === 'boolean')
+      && (s.pulseLook === undefined || typeof s.pulseLook === 'boolean')
       && (s.pendingGaze === undefined || s.pendingGaze === null || (isPlainObject(s.pendingGaze) && typeof s.pendingGaze.area === 'string' && nonNegative(s.pendingGaze.since)))
       && (s.markPending === undefined || s.markPending === null || (isPlainObject(s.markPending) && typeof s.markPending.area === 'string' && regionOrNull(s.markPending.regionId) && nonNegative(s.markPending.since)))
       && (s.latchPending === undefined || s.latchPending === null || (isPlainObject(s.latchPending) && typeof s.latchPending.area === 'string' && isPlainObject(s.latchPending.hit) && nonNegative(s.latchPending.since)))
       && (s.lookTaken === undefined || s.lookTaken === null || (isPlainObject(s.lookTaken) && regionOrNull(s.lookTaken.regionId) && nonNegative(s.lookTaken.n)))
+      && (s.progress === undefined || s.progress === null || (isPlainObject(s.progress) && BODY_KEYS.includes(s.progress.key) && isPlainObject(s.progress.targets)
+        && Object.entries(s.progress.targets).every(([j, v]) => JOINT_IDS.includes(j) && isFiniteNumber(v))))
       && unitMap(s.bodyDrive, BODY_KEYS) && unitMap(s.bodyDisplay, BODY_KEYS)
       && finiteMap(s.bodyJointTargets, JOINT_IDS)
       && (s.bodyGoal === undefined || finiteMap(s.bodyGoal, JOINT_IDS))
@@ -1848,10 +1893,12 @@ export function createActivity({
       regionActivity: pick(s.regionActivity, REGION_IDS),
       activatedRegions: { ...s.activatedRegions },
       pulseClick: s.pulseClick === true,
+      pulseLook: s.pulseLook === true,
       pendingGaze: s.pendingGaze ? { ...s.pendingGaze } : null,
       markPending: s.markPending ? { ...s.markPending } : null,
       latchPending: s.latchPending ? { ...s.latchPending, hit: { ...s.latchPending.hit } } : null,
       lookTaken: s.lookTaken ? { regionId: s.lookTaken.regionId, n: s.lookTaken.n } : null,
+      progress: s.progress ? { key: s.progress.key, targets: { ...s.progress.targets } } : null,
       bodyDrive: pick(s.bodyDrive, BODY_KEYS),
       bodyDisplay: pick(s.bodyDisplay, BODY_KEYS),
       bodyJointTargets: pick(s.bodyJointTargets, JOINT_IDS),
@@ -1888,7 +1935,7 @@ export function createActivity({
   /** Commanded arm targets at time offset `at` (seconds) into this step. */
   function commandTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
-    if (s.pulseAction !== null && at < s.pulseRemaining) T[s.pulseAction] = 1;
+    if (s.pulseAction !== null && at < s.pulseRemaining) T[s.pulseAction] = armOnly && s.pulseLook ? armLevel : 1; // S4: a look's hint
     if (s.graspHold) T.grasp_close = 1; // R558 (Message 48): the Space grip shows its hand area and finger benders
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining) T.relax_release = 1;
@@ -1903,7 +1950,7 @@ export function createActivity({
     const T = zeroMap(ACTION_IDS);
     for (const id of ACTION_IDS) if (s.armLatch[id] > 0) T[id] = 1;
     if (at < s.openRemaining) T.open_hand = 1;
-    if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining)) T.relax_release = 1;
+    if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining && !(armOnly && s.pulseLook))) T.relax_release = 1;
     if (s.graspHold) { for (const id of SPACE_COMPETING) T[id] = 0; T.grasp_close = 1; }
     return T;
   }
@@ -1916,7 +1963,8 @@ export function createActivity({
     let n = 0;
     for (const j of Object.keys(ends)) {
       if (!LATCHING[j]) continue;
-      const at = sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
+      // S3: a goal that cannot be told from the start angle counts as at the start (NEAR_REST)
+      const at = Math.abs(goalOf[j] - REST[j]) <= NEAR_REST[j] ? 0 : sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
       if (at !== 0 && side !== 0 && side !== at) { n += 1; if (into) into.push(j); }
     }
     return n;
@@ -1941,6 +1989,26 @@ export function createActivity({
       s.bodyGoal[j] = ends[j];
       // R558 (JOINT_CONFLICTS): the later of two held movements of one shoulder wins its direction
       if (side !== 0 && hasOwn(JOINT_CONFLICTS, j)) for (const k of JOINT_CONFLICTS[j]) if (hasOwn(s.bodyGoal, k) && !hasOwn(ends, k)) s.bodyGoal[k] = REST[k];
+    }
+  }
+
+  /** 18 Nov (M3, MOVE_HOLD): the joint goals a press of body action `key` would set now (latchBodyAction on a copy). */
+  function latchTargetsOf(s, key) {
+    const fake = { bodyGoal: { ...s.bodyGoal } };
+    latchBodyAction(fake, key);
+    const t = {};
+    for (const j of Object.keys(fake.bodyGoal)) if (fake.bodyGoal[j] !== s.bodyGoal[j]) t[j] = fake.bodyGoal[j];
+    return t;
+  }
+  /** 18 Nov (M3): end a held key's movement: `complete` (a tap) sets the whole movement; otherwise the part stops where
+   * it is now (goal = position, no speed left). */
+  function finishProgress(s, complete) {
+    const P = s.progress;
+    s.progress = null;
+    if (!P) return;
+    for (const [j, v] of Object.entries(P.targets)) {
+      if (complete) s.bodyGoal[j] = v;
+      else { const q = limitJoint(j, s.bodyPos[j]) + 0; s.bodyGoal[j] = q; s.bodyPos[j] = q; s.bodyVel[j] = 0; }
     }
   }
 
@@ -1994,6 +2062,7 @@ export function createActivity({
 
   function cancelPulse(s) {
     s.pulseClick = false;
+    s.pulseLook = false;
     s.pulseAction = null;
     s.pulseRegion = null;
     s.pulseBody = null;
@@ -2019,7 +2088,7 @@ export function createActivity({
     s.lookTaken = { regionId: typeof hit.regionId === 'string' ? hit.regionId : null, n: (s.lookTaken && Number.isFinite(s.lookTaken.n) ? s.lookTaken.n : 0) + 1 };
   }
 
-  function startPulse(s, hit, source, at, collect, area = null) {
+  function startPulse(s, hit, source, at, collect, area = null, fromLook = false, progressive = false) {
     // R558 (Message 48): while the Space grip holds the hand closed, an action that needs the same fingers does not
     // start (its area would light while nothing moved). Returns false; the count is kept for the shell.
     if (s.graspHold && hit.armAction !== null && SPACE_COMPETING.includes(hit.armAction)) {
@@ -2027,6 +2096,7 @@ export function createActivity({
       s.lastSuppressed = { actionId: hit.armAction, source, t: s.t };
       return false;
     }
+    if (s.progress && source === 'click') finishProgress(s, false); // 18 Nov (M3): a new press stops a held one where it is
     s.pulseAction = hit.armAction;
     s.pulseRegion = hit.regionId;
     s.pulseBody = hit.bodyKey;
@@ -2037,14 +2107,23 @@ export function createActivity({
     s.lastTriggerSource = source;
     // A look-movement restart of a clicked area stays a click pulse (it is the same deliberate choice).
     s.pulseClick = source === 'click' || (source === 'moved' && s.pulseClick === true);
+    // 18 Nov (S4): a look's pulse (a look-movement restart keeps what the pulse was; a held limb's restart is no look).
+    const look = source === 'gaze' || source === 'dwell';
+    s.pulseLook = look || (source === 'moved' && fromLook === true && s.pulseLook === true);
     // R558 latch: a deliberate activation (not the restart of the same area by a small look movement) moves its
     // joints to stay, or brings a latched joint back (stage rules above). A click (or a look that already dwelt to
     // replace a click) commits at once; a look onto a new area commits once the gaze has stayed there latchS.
     // A look-movement restart ('moved', the same area) keeps a pending look: its dwell is still running.
+    // 18 Nov (S4, LOOK_ARMS): a look commits nothing; its rest only arms the area (lookTaken, in step).
     if (source !== 'moved') {
       s.latchPending = null;
       if (source === 'gaze' && latchS > 0 && typeof area === 'string') s.latchPending = { area, hit: { ...hit }, since: s.t };
-      else commitLatch(s, hit);
+      else if (progressive && source === 'click' && hit.bodyKey !== null && hit.bodyKey !== undefined) {
+        // 18 Nov (M3, MOVE_HOLD): a held number key: the goals run toward the press's targets (integrate)
+        const t = latchTargetsOf(s, hit.bodyKey);
+        s.progress = Object.keys(t).length ? { key: hit.bodyKey, targets: t } : null;
+      } else if (!(look && armOnly)) commitLatch(s, hit);
+      else if (source === 'gaze') tookByLook(s, hit); // no rest time asked: armed at once
     }
     // Persistent marks count deliberate activations: a click at once, a look only once the gaze has stayed on the area
     // for markS (R3-fix M5; applyGaze adds it), never the look-movement restarts within an area.
@@ -2052,7 +2131,9 @@ export function createActivity({
     if (collect) {
       collect({
         actionId: hit.armAction !== null ? hit.armAction : hit.actionId, regionId: hit.regionId,
-        bodyActionId: hit.bodyKey !== null ? hit.actionId : null, rotation: hit.rotation, source, at
+        bodyActionId: hit.bodyKey !== null ? hit.actionId : null, rotation: hit.rotation, source, at,
+        // 18 Nov (S4): a look's pulse only arms the area (it moves nothing); the guide can tell it from a press
+        ...(armOnly && s.pulseLook ? { armed: true } : {})
       });
     }
     return true;
@@ -2126,7 +2207,8 @@ export function createActivity({
     // the gaze has stayed on it for replaceClickS (R3-fix M3); the look's persistent mark waits for markS (M5).
     const startLook = source => {
       const started = startPulse(s, g.hit, source, at, collect, g.area);
-      if (started && g.hit.regionId !== null) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
+      // 18 Nov (S4): an armed look switched nothing on, so it leaves no "switched on" mark (a press does)
+      if (started && g.hit.regionId !== null && !armOnly) s.markPending = { area: g.area, regionId: g.hit.regionId, since: s.t };
       if (started && source === 'dwell') tookByLook(s, g.hit); // the look had rested there already: taken at once
       s.pendingGaze = null;
     };
@@ -2154,7 +2236,7 @@ export function createActivity({
         moved = ev.moved === true; // legacy per-frame boolean from the caller
       }
       if (moved) {
-        startPulse(s, g.hit, 'moved', at, collect);
+        startPulse(s, g.hit, 'moved', at, collect, null, true);
         setAnchor(s);
       }
     }
@@ -2359,6 +2441,7 @@ export function createActivity({
     s.pendingGaze = null;
     s.markPending = null;
     s.latchPending = null;
+    s.progress = null; // 18 Nov (M3)
     cancelPulse(s);
     for (const k of BODY_KEYS) { s.bodyDrive[k] = 0; s.bodyDisplay[k] = 0; }
     // R558 latch: Reset is the other way back: every joint at its start angle at once, nothing latched.
@@ -2417,7 +2500,17 @@ export function createActivity({
         const hit = ev.regionOnly === true || r.actions.length === 0
           ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
           : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
-        if (hit !== null) startPulse(s, hit, 'click', at, collect);
+        if (hit !== null) startPulse(s, hit, 'click', at, collect, null, false, ev.progressive === true);
+        return;
+      }
+      case 'muscleRelease': {
+        // 18 Nov (M3, MOVE_HOLD): the number key of a progressive press came up: { regionId, actionId, tap }. A tap
+        // completes the movement; a hold leaves the part where it is. Nothing happens unless that movement is running.
+        if (!s.progress) return;
+        const r = binding.regions.get(ev.regionId);
+        if (!r || r.actions.length === 0) return;
+        const hit = resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
+        if (hit && hit.bodyKey === s.progress.key) finishProgress(s, ev.tap === true);
         return;
       }
       case 'space':
@@ -2531,6 +2624,8 @@ export function createActivity({
    * down and advance the clock. */
   function integrate(s, h) {
     if (!(h > 0)) return;
+    // 18 Nov (M3): while a held number key drives its movement, its area and muscles stay lit
+    if (s.progress && s.pulseBody === s.progress.key && s.pulseRemaining < pulseSeconds) s.pulseRemaining = pulseSeconds;
     const cuts = [s.pulseRemaining, s.openRemaining, s.relaxRemaining, s.rotation.remaining]
       .filter(b => b > 0 && b < h)
       .sort((a, b) => a - b);
@@ -2553,20 +2648,32 @@ export function createActivity({
       for (const id of KEY_DISPLAY_IDS) s.keyDisplay[id] = envelope(s.keyDisplay[id], keyTarget(s, id, b0), seg, keyCeiling(s, id, b0, b1));
       const pulseOn = b0 < s.pulseRemaining;
       const pc = pulseOn ? fadeCeiling(s.pulseRemaining - b1) : 1;
+      // 18 Nov (S4, LOOK_ARMS): a look's pulse lights its key at full, its muscles at the hint level, and moves nothing.
+      const armed = armOnly && s.pulseLook === true;
       for (const r of REGION_IDS) {
         const on = pulseOn && s.pulseRegion === r;
         s.regionDisplay[r] = envelope(s.regionDisplay[r], on ? 1 : 0, seg, on ? pc : 1);
       }
       for (const k of BODY_KEYS) {
         const on = pulseOn && s.pulseBody === k;
-        s.bodyDrive[k] = approach(s.bodyDrive[k], on ? 1 : 0, seg, riseTau, decayTau);
-        s.bodyDisplay[k] = envelope(s.bodyDisplay[k], on ? 1 : 0, seg, on ? pc : 1);
+        s.bodyDrive[k] = approach(s.bodyDrive[k], on && !armed ? 1 : 0, seg, riseTau, decayTau);
+        s.bodyDisplay[k] = envelope(s.bodyDisplay[k], on ? (armed ? armLevel : 1) : 0, seg, on ? pc : 1);
       }
       // R558 latch: every body joint jerks to its goal (the JOINT_LATCH spring, exact per segment) and stays there.
       // A momentary joint's goal is its action's end angle only while that action's pulse runs. A joint stopped by
       // its anatomical limit rebounds off it with `restitution` of its speed (0: it stops dead there), so nothing
       // ever passes a limit.
-      const momentary = pulseOn && s.pulseBody !== null ? (ENDS.get(s.pulseBody) || null) : null;
+      // 18 Nov (M3, MOVE_HOLD): a held number key's goals run toward their targets at rateDegS
+      if (s.progress) {
+        const T = s.progress.targets, stepDeg = MOVE_HOLD.rateDegS * seg;
+        let left = 0;
+        for (const j of Object.keys(T)) {
+          const g = s.bodyGoal[j], d = T[j] - g;
+          if (Math.abs(d) <= stepDeg) s.bodyGoal[j] = T[j]; else { s.bodyGoal[j] = g + Math.sign(d) * stepDeg; left++; }
+        }
+        if (!left) s.progress = null;
+      }
+      const momentary = pulseOn && !armed && s.pulseBody !== null ? (ENDS.get(s.pulseBody) || null) : null;
       for (const j of JOINT_IDS) {
         const goal = LATCHING[j] ? s.bodyGoal[j] : momentary !== null && hasOwn(momentary, j) ? momentary[j] : REST[j];
         if (s.bodyPos[j] === goal && s.bodyVel[j] === 0) continue;
@@ -2582,9 +2689,9 @@ export function createActivity({
         const pul = pulseOn && s.pulseRotation === c;
         s.rotationKeyDisplay[c] = envelope(s.rotationKeyDisplay[c], key ? 1 : 0, seg, key ? rc : 1);
         const ceil = key || pul ? Math.max(key ? rc : 0, pul ? pc : 0) : 1;
-        s.rotationDisplay[c] = envelope(s.rotationDisplay[c], key || pul ? 1 : 0, seg, ceil);
+        s.rotationDisplay[c] = envelope(s.rotationDisplay[c], key ? 1 : pul ? (armed ? armLevel : 1) : 0, seg, ceil);
       }
-      const goal = pulseOn && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
+      const goal = pulseOn && !armed && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
         : isFiniteNumber(s.rotation.hold) ? s.rotation.hold : rotValue(s.rotationState);
       // R3-arm: critically damped ease (smooth start, ~0.30 s settle with the default poseTau); see stepRotationEase.
       const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
@@ -2605,10 +2712,11 @@ export function createActivity({
     // R558 (latch): a look's movement once the gaze has stayed on that area for latchS (GAZE_DWELL). Nothing moves
     // behind the pause page or while the brain is held: a pending look is dropped then.
     if (s.latchPending && (s.paused || s.brainGrab.active)) s.latchPending = null;
+    if (s.progress && s.paused) finishProgress(s, false); // 18 Nov (M3): behind the pause page a held key stops
     if (s.latchPending && s.gazeArea === s.latchPending.area && s.t + h - s.latchPending.since >= latchS - SNAP) {
       const hit = s.latchPending.hit;
       s.latchPending = null;
-      commitLatch(s, hit);
+      if (!armOnly) commitLatch(s, hit); // 18 Nov (S4, LOOK_ARMS): the rest arms the area; a press moves it
       tookByLook(s, hit);
     }
     s.openRemaining = countdown(s.openRemaining, h);

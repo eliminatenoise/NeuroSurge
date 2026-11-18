@@ -141,11 +141,13 @@ test('the one-material-per-class rewrite moves a muscle\'s seven values from uni
     }
     assert.ok(p.vertexShader.startsWith(`attribute mat4 nsS${set}A;\nattribute vec4 nsS${set}B;\nattribute vec4 nsS${set}C;\n`));
     for (let i = 0; i < 6; i++) for (const s of [p.vertexShader, p.fragmentShader]) assert.equal(count(s, `flat varying vec4 vNsS${i};`), 1);
-    assert.ok(p.vertexShader.includes(`void main() {\n\tvNsS0 = nsS${set}A[ 0 ]; vNsS1 = nsS${set}A[ 1 ]; vNsS2 = nsS${set}A[ 2 ]; vNsS3 = nsS${set}A[ 3 ]; vNsS4 = nsS${set}B; vNsS5 = nsS${set}C;\n`));
+    // 18 November (MAP): the shudder (patchShudderVertex) reads the charge in the vertex shader too: the same row fills it.
+    assert.ok(c.v.includes('uniform vec4 nsCharge;') && c.v.includes('nsShudder('), 'the chain carries the shudder');
+    assert.ok(p.vertexShader.includes(`void main() {\n\tvNsS0 = nsS${set}A[ 0 ]; vNsS1 = nsS${set}A[ 1 ]; vNsS2 = nsS${set}A[ 2 ]; vNsS3 = nsS${set}A[ 3 ]; vNsS4 = nsS${set}B; vNsS5 = nsS${set}C; nsCharge = nsS${set}A[ 3 ];\n`));
     assert.ok(p.fragmentShader.includes('void main() {\n\tdiffuse = vNsS0.rgb; emissive = vNsS1.rgb; nsSweep = vec2( vNsS0.a, vNsS1.a ); nsGlowRim = vNsS2; nsCharge = vNsS3; nsChargeRest = vNsS4.rgb; nsFibre = vNsS5;\n'));
     for (const other of 'omp') if (other !== set) assert.ok(!p.vertexShader.includes(`nsS${other}A`));
     // take the added lines away again: the vertex shader is the chain's, the fragment shader differs only in the seven declarations
-    assert.equal(p.vertexShader.split('\n').filter(l => !/vNsS[0-5]|nsS[a-z][ABC]/.test(l)).join('\n'), c.v);
+    assert.equal(p.vertexShader.split('\n').filter(l => !/vNsS[0-5]|nsS[a-z][ABC]/.test(l)).join('\n').replace('\nvec4 nsCharge;', '\nuniform vec4 nsCharge;').replace(/^vec4 nsCharge;/, 'uniform vec4 nsCharge;'), c.v);
     assert.equal(p.fragmentShader.split('\n').filter(l => !/vNsS[0-5]/.test(l)).join('\n'), MUSCLE_SHARE.uniforms.reduce((s, d) => s.replace(`uniform ${d};`, `${d};`), c.f));
     assert.ok(!(p.vertexShader + p.fragmentShader).includes('undefined') && !(p.vertexShader + p.fragmentShader).includes('NaN'));
     // refusals

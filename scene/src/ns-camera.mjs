@@ -127,10 +127,28 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  * the eye, as before the camera was moved at all. Seen on pictures at 0 / 30 / 60 / 75 / 95 degrees to a side and
  * 45 to 72 down: no opening, flap or stump.
  */
+/* 18 November 2026, late (the owner: "a very wide field of view, but a very narrow depth of field. So things that are
+ * far away look extremely close to us ... a very wide view, but a very flat view as well"; "a much larger set of four
+ * limbs, and perhaps that involves dialing down the field of view to some extent"; "all of the torso has to be
+ * visible at once"): the eye view is now a LONGER LENS FROM FURTHER BACK. The camera stands backM behind the eye on
+ * the line of sight (and upM above it along the head's up) and the lens is narrower (the launcher's field of view,
+ * 100 -> 54 degrees), so what is near (chest, shoulders) is drawn smaller for its place and what is far (shins, feet,
+ * the mirror body, the brain) larger: depth is flattened. Why not further back with a still longer lens: in the
+ * slumped posture the front of the trunk faces 49 degrees above level, so a look 41 degrees down runs PARALLEL to it;
+ * from far back every ray runs along it and the chest hides the belly and pelvis (see the notes of this package). The
+ * start look is therefore steeper (52 degrees down: the line of sight crosses the trunk's front at about 17 degrees),
+ * which lets the camera stand back and the lens narrow while the whole torso stays in the picture.
+ *  - zRefM: how the lens follows the camera when the camera comes back to the eye (looking up, far to a side, far
+ *    down): the view's angle widens so that things zRefM in front of the eye keep their size (a dolly zoom: nothing
+ *    near jumps), null = the angle stays the launcher's. The view's angle is the launcher's at the start look.
+ *  - nearBehindEyeM: the near plane stands this far behind the eye's own plane (never nearer the camera than
+ *    FIRST_PERSON.nearM), so nothing between the camera and the back of your own head is drawn.
+ * Display choices, judged on pictures. */
 export const EYE_DOLLY = Object.freeze({
-  backM: 0.14, upM: 0.26, headAboveLookDeg: 30, headLevelEndDeg: 40,
-  byPitch: Object.freeze([[-75, 0.08, 0], [-41, 0.26, 0.14]].map(r => Object.freeze(r))),
-  upFromDeg: -38, upFullDeg: 18, sideShare: 0, sideFromDeg: 50, sideFullDeg: 100
+  backM: 0.3, upM: 0.1, headAboveLookDeg: 30, headLevelEndDeg: 40,
+  byPitch: Object.freeze([[-75, 0.06, 0.12], [-52, 0.1, 0.3]].map(r => Object.freeze(r))),
+  upFromDeg: -45, upFullDeg: 18, sideShare: 0, sideFromDeg: 50, sideFullDeg: 100,
+  zRefM: null, nearBehindEyeM: 0.1
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
  * forward): { backM along the line of sight, upM along the head's up direction, headPitch (radians: the head's own
@@ -155,7 +173,23 @@ export function eyeDolly(look, o = EYE_DOLLY) {
   const g = gazeDirection(l.yaw, l.pitch), sy = Math.sin(l.yaw), cy = Math.cos(l.yaw), sh = Math.sin(h), ch = Math.cos(h);
   // head up = (sin yaw sin h, cos h, cos yaw sin h) (cameraRotation's up column for the head's own pitch)
   const offset = [upM * sy * sh - backM * g[0], upM * ch - backM * g[1], upM * cy * sh - backM * g[2]];
-  return { backM, upM, headPitch: h, offset };
+  return { backM, upM, headPitch: h, offset, ...eyeFlatLens(offset, g, o) };
+}
+/** 18 November 2026, late (EYE_DOLLY zRefM / nearBehindEyeM): for a camera offset from the eye and the line of sight g:
+ * depthBackM (how far the camera stands behind the eye's own plane), fovScale (multiplies tan(view angle / 2): 1 at
+ * the start look; with zRefM, larger as the camera comes nearer the eye, so things zRefM ahead of the eye keep their
+ * size) and nearM (the near plane: nearBehindEyeM behind the eye's plane, at least FIRST_PERSON.nearM). Pure. */
+function eyeFlatLens(offset, g, o) {
+  const depthBackM = Math.max(0, -(offset[0] * g[0] + offset[1] * g[1] + offset[2] * g[2]));
+  let fovScale = 1;
+  if (isNum(o.zRefM) && o.zRefM > 0 && Array.isArray(o.byPitch) && o.byPitch.length) {
+    // the start look's own depth: the last table row, straight ahead (yaw 0)
+    const r = o.byPitch[o.byPitch.length - 1], p0 = r[0] * DEG, h0 = (r[0] + o.headAboveLookDeg) * DEG;
+    const start = r[2] + r[1] * Math.sin(Math.max(0, h0 - p0));
+    fovScale = (o.zRefM + start) / (o.zRefM + depthBackM);
+  }
+  const nearM = isNum(o.nearBehindEyeM) ? Math.max(FIRST_PERSON.nearM, depthBackM - o.nearBehindEyeM) : FIRST_PERSON.nearM;
+  return { depthBackM, fovScale, nearM };
 }
 /** How far back (m) the camera stands (eyeDolly's backM). */
 export function eyeDollyBackM(look, o = EYE_DOLLY) { return eyeDolly(look, o).backM; }
@@ -254,7 +288,10 @@ export const THIRD_PERSON = Object.freeze({
   // side in its true proportions, with the right half of the motor strip beyond the feet (the brain is twice the
   // size it was when 75 cut it off) and the crosshair in the open beside the brain. A look 66 to the right brings
   // the picture from straight behind with the whole strip.)
-  followYawDeg: 66,
+  // (18 November 2026, late, package FLAT: 66 -> 50 with distanceM 1.7 -> 1.9 and followFovYDeg 60 -> 66. With the
+  // brain now beyond and below the feet, at 66 only the right half of the strip was in the picture; at 50 the whole
+  // strip, both halves, is in it beside the body, which is still seen from the side in its true proportions.)
+  followYawDeg: 50,
   followBody: true,
   followPitchBiasDeg: 16,
   followMaxPitchDeg: 5,
@@ -264,10 +301,10 @@ export const THIRD_PERSON = Object.freeze({
   // away a small shape in the middle of the picture and stretches whatever nears an edge; at 60 degrees and 1.6 m
   // the lying body fills about half the picture's width and keeps its proportions. The scene eases the angle with
   // the view (ns-scene-three setCameraPose viewFovYDeg). null = the eye view's angle.
-  followFovYDeg: 60,
+  followFovYDeg: 66,
   // (third pass: 1.6 -> 1.9: with the trunk rising more steeply from the pelvis and the centre a little higher, the feet left the bottom of the picture at 1.6)
   // (18 November 2026: 1.9 -> 1.7 with followYawDeg 66: the body a little larger, feet still inside the picture)
-  distanceM: 1.7,
+  distanceM: 1.9,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
   aimAtBrain: true,
@@ -679,9 +716,10 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
       view: s.view, progress: s.progress, blend: 0, firstPerson: s.view === 'first', thirdPerson: false, moving: s.progress !== target,
       position: reference ? firstCam.slice() : [0, 0, 0], yaw: fp.yaw, pitch: fp.pitch, direction: dir,
       bodyLook: fp, gazeLook: fp, gazeRay: { origin: reference ? firstCam.slice() : [0, 0, 0], dir },
-      silentGaze, headInPlace: 0, faceGhost: 1, overBrainSeeThrough: 1, farExtraM: dollyOn ? len(sub(firstCam, firstOrigin)) : 0, nearM: FIRST_PERSON.nearM,
+      silentGaze, headInPlace: 0, faceGhost: 1, overBrainSeeThrough: 1, farExtraM: dollyOn ? len(sub(firstCam, firstOrigin)) : 0, nearM: dolly ? dolly.nearM : FIRST_PERSON.nearM,
       orbitCentre: null, boom: null,
-      ...(dollyOn ? { armParentPosition: firstOrigin.slice(), eyeDollyM: dollyM, eyeRaiseM: raiseM } : {})
+      ...(dollyOn ? { armParentPosition: firstOrigin.slice(), eyeDollyM: dollyM, eyeRaiseM: raiseM } : {}),
+      ...(dolly ? { fovScale: dolly.fovScale } : {}) // 18 November 2026, late (EYE_DOLLY zRefM): the eye view's lens for this look
     });
   }
   const follow = r.followHead === true && !driveA;
@@ -716,7 +754,10 @@ export function cameraPose(state, { look = null, bodyLook = null, thirdLook = nu
     view: s.view, progress: s.progress, blend, firstPerson: false, thirdPerson: blend >= 1, moving: s.progress !== target,
     position, yaw, pitch, direction: dir,
     bodyLook: fp, gazeLook: { yaw, pitch }, gazeRay: { origin: position.slice(), dir },
-    silentGaze, headInPlace, faceGhost: 1 - blend, overBrainSeeThrough: 1 - blend, farExtraM: fromEye, nearM: FIRST_PERSON.nearM,
+    silentGaze, headInPlace, faceGhost: 1 - blend, overBrainSeeThrough: 1 - blend, farExtraM: fromEye,
+    // 18 November 2026, late: the eye view's near plane eases out with the view (no flash of the back of your head)
+    nearM: dolly ? FIRST_PERSON.nearM + (1 - blend) * (dolly.nearM - FIRST_PERSON.nearM) : FIRST_PERSON.nearM,
+    ...(dolly ? { fovScale: 1 + (1 - blend) * (dolly.fovScale - 1) } : {}),
     orbitCentre: centre, boom: { distance: tp.distance, pushed: tp.pushed, blocked: tp.blocked },
     viewFovYDeg: overBody && isNum(r.followFovYDeg) && r.followFovYDeg > 0 ? r.followFovYDeg : null
   });

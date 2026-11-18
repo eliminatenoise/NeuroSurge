@@ -519,7 +519,7 @@ const CONTENT = {
         agonists: sided(c.S, 'biceps femoris', 'semitendinosus', 'semimembranosus', 'popliteus'),
         antagonists: sided(c.S, 'rectus femoris', 'vastus lateralis', 'vastus medialis', 'vastus intermedius'),
         stabilizers: sided(c.S, 'gastrocnemius', 'plantaris'),
-        note: 'From the long-sitting start the thigh stays level and the shank swings down and back under it, all the way to 135 degrees. No ground is modelled under the legs.' },
+        note: 'From the reclined start the thigh stays level and the shank swings down and back under it, all the way to 135 degrees. No ground is modelled under the legs.' },
       { id: `${c.code}_knee_extend`, label: `Straighten ${c.S} knee`, joints: { [`knee_ext_${c.J}`]: 0 },
         agonists: sided(c.S, 'rectus femoris', 'vastus lateralis', 'vastus medialis', 'vastus intermedius'),
         antagonists: sided(c.S, 'biceps femoris', 'semitendinosus', 'semimembranosus'),
@@ -547,7 +547,7 @@ const CONTENT = {
       { id: `${c.code}_hip_extend`, label: `Swing ${c.S} thigh down and back (hip extension)`, joints: { [`hip_flex_${c.J}`]: -20 },
         agonists: sided(c.S, 'gluteus maximus', 'biceps femoris', 'semitendinosus', 'semimembranosus'),
         antagonists: sided(c.S, 'iliacus', 'psoas major'),
-        note: 'From the long-sitting start the thigh swings down past the line of the trunk and on to 20 degrees behind it, as when standing up and pushing the leg back (commonly quoted range up to 30). No ground is modelled under the legs.' },
+        note: 'From the reclined start the thigh swings down past the line of the trunk and on to 20 degrees behind it, as when standing up and pushing the leg back (commonly quoted range up to 30). No ground is modelled under the legs.' },
       // R558 (builder AN): with the hip bent 90 degrees (long sitting), piriformis swings the thigh out as well (its
       // action reverses from outward turning to abduction when the hip is bent past about 60 degrees; standard anatomy).
       { id: `${c.code}_hip_abduct`, label: `Swing ${c.S} thigh out (hip abduction)`, joints: { [`hip_abd_${c.J}`]: 45 },
@@ -682,7 +682,7 @@ const CONTENT = {
         agonists: ['right pronator teres', 'right pronator quadratus'], antagonists: ['right supinator', 'right biceps brachii'] },
       { id: 'lh_r_supinate', label: 'Turn right palm up (supination)', joints: { r_pronation: 0 },
         agonists: ['right supinator', 'right biceps brachii'], antagonists: ['right pronator teres', 'right pronator quadratus'],
-        note: 'At the start pose the right arm points straight forward with the palm down (pronated), so this turns the palm up; after that, turning the palm down brings it back.' }
+        note: 'This turns the right palm up (supination); turning the palm down brings it back.' }
     ],
     explanation: 'Forearm-rotation area for the RIGHT arm, between the elbow and wrist areas of the left hemisphere. Crossed corticospinal fibres reach the cervical motor neurons of the forearm rotators. The game simulates turning the right palm down (pronator teres and quadratus) or up (supinator and biceps brachii). Forearm rotation shares overlapping fields with the wrist and elbow (Meier 2008), so this spot is a game placement, not a measured point.',
     citationKeys: ['MEIER2008', 'UAMS_UPPER']
@@ -724,7 +724,7 @@ const CONTENT = {
     citationKeys: ['MEIER2008', 'MASSE2017', 'UAMS_UPPER']
   }),
   hand: () => ({
-    label: 'Left hand', shortLabel: 'L hand', effector: 'whole hand (left): grasp, release, open, spread, together', bodySide: 'left', medialSurface: false, isLeftArm: true,
+    label: 'Left hand', shortLabel: 'L hand', effector: 'whole hand (left): grasp, open, spread, together', bodySide: 'left', medialSurface: false, isLeftArm: true,
     displayGroup: 'left_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
     actions: [
       leftArm('grasp_close', 'Grasp / close left hand', ['FDS', 'FDP', 'FPB', 'FPL', 'OP', 'ADP'], ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['ECRL', 'ECRB', 'ECU', 'LUM', 'DI', 'PI'],
@@ -733,15 +733,18 @@ const CONTENT = {
           '0.008 (unitless). The factor is a display convention, not a measured grip law, EMG or force. Real power grip can ' +
           'co-activate the extensors: Motawar 2012 recorded extensor digitorum activity during maximal isometric power grip (right ' +
           'hand, right-handed adults; map-delta D07). This virtual left-hand display is an illustrative extrapolation.'),
-      leftArm('relax_release', 'Relax / release left grasp', [], ['FDS', 'FDP', 'FPB', 'FPL', 'ED', 'EI', 'EDM', 'EPB', 'EPL'], [],
-        null, null, 'Release lowers flexor and extensor drive; it is not active extension and not cortical silence (Motawar 2012).'),
+      // 18 November 2026 (SMALL, audit S18; the owner, Note 15: "Ensure anatomical symmetry across systems except where
+      // inappropriate"): "Relax / release left grasp" is no longer one of the hand area's movements, so both hands list
+      // the same four (close, open, spread, together). Release lowers flexor and extensor drive; it is not active
+      // extension and not cortical silence (Motawar 2012), and "Open" already brings a closed hand back first (the
+      // latch rule). The game arm's relax_release itself stays (the grip's own release uses it).
       leftArm('open_hand', 'Open left hand', ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['FDS', 'FDP', 'FPB', 'FPL'], ['LUM', 'DI', 'PI'],
         null, null, 'Opening on release is a game convention; natural release can be passive.'),
       leftArm('spread_fingers', 'Spread left fingers', ['DI', 'ADM'], ['PI'], ['ED', 'LUM']),
       // R558 (Messages 14 / 15 / 6): the anatomical opposite of spreading (palmar interossei), as on the right hand.
       leftArm('fingers_together', 'Bring left fingers together', ['PI'], ['DI', 'ADM'], [])
     ],
-    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, release, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so releasing Space into an open hand is a game convention.',
+    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so releasing Space into an open hand is a game convention.',
     citationKeys: ['HUBER2020', 'MOTAWAR2012', 'ARBUCKLE2020', 'VANDUINEN2008', 'LEMON2008', 'YOUSRY1997', 'DEO2026', 'UAMS_UPPER']
   }),
   little: () => ({
@@ -1178,7 +1181,7 @@ const FACE_MOVES_PLAIN = 'Nothing you can see: the game only keeps a number.';
 const FACE_COLOUR_PLAIN = 'Only the colour changes: the face itself does not move in the game.';
 const SCAN_MOVES_PLAIN = 'Nothing: it only lights up and gets marked.';
 const SCAN_CAVEAT_PLAIN = 'Any real job here, such as planning or posture, is not simulated.';
-const LOOK_RIGHT = ' (it starts straight out in front of you)';
+const LOOK_RIGHT = ' (it starts beside your right thigh)'; // 18 Nov (SMALL, S19): the reclined start posture
 
 /** Region plain fields, keyed like CONTENT. Every plainLead is one sentence; every plainCaveat is <= 110 characters. */
 const PLAIN_REGION = {
@@ -1259,7 +1262,7 @@ const PLAIN_REGION = {
   hand: c => ({
     plainLabel: 'Left hand',
     plainLead: `This spot in ${half(c)} tells your left hand to close or open.`,
-    plainMoves: 'Closes, relaxes, opens or spreads your left hand, or brings the fingers together.',
+    plainMoves: 'Closes, opens or spreads your left hand, or brings the fingers together.',
     plainCaveat: 'Grip areas overlap and differ between people.'
   }),
   little: c => ({
@@ -1560,7 +1563,7 @@ const PLAIN_DETAIL = {
   knee: c => ({
     detail: `This is the knee area for your ${c.S} leg. It sits near the top edge of ${BRAIN_HALF(c)}, between the ` +
       `foot and hip areas (dorsal margin). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} bends the ${c.S} knee ` +
-      '(hamstrings) or straightens it (quadriceps). You sit with your legs straight out in front, so your knee starts straight. The knee sits in one of the rings of the foot zone (concentric), and it overlaps the ankle and ' +
+      '(hamstrings) or straightens it (quadriceps). Your legs lie straight out in front, so your knee starts nearly straight. The knee sits in one of the rings of the foot zone (concentric), and it overlaps the ankle and ' +
       'hip areas.'
   }),
   hip: c => ({
@@ -1608,7 +1611,7 @@ const PLAIN_DETAIL = {
       'corticospinal fibres dominate). Muscles near the body also get weaker signals from the same side (same-side ' +
       `input to proximal muscles; Bawa 2004). In the game, ${SIM_SIGNAL} raises the right arm up (front deltoid, ` +
       'pectoralis major, coracobrachialis) or swings it down and back, and swings it out to the side (middle deltoid, supraspinatus) or back in to the front. ' +
-      'The arm starts straight out in front of you. The areas for the upper and lower arm overlap (proximal and distal arm representations; Devanne 2006). Brain ' +
+      'The arm starts beside your right thigh. The areas for the upper and lower arm overlap (proximal and distal arm representations; Devanne 2006). Brain ' +
       'stimulation rarely moves the shoulder on its own (in isolation; Gordon 2023).'
   }),
   elbow: c => (c.H === 'right' ? {
@@ -1727,7 +1730,7 @@ const PLAIN_DETAIL = {
       'reach the nerve cells for the hand (crossed corticospinal fibres, hand motor neurons). Some link straight to those ' +
       `nerve cells (direct cortico-motoneuronal connections; Lemon 2008). In the game, ${SIM_SIGNAL} closes the right hand ` +
       'into a fist or opens it, and spreads the fingers (dorsal interossei, abductor digiti minimi) or brings them ' +
-      'together (palmar interossei); the hand starts straight out in front of you. Studies of the right hand in the brain’s left half find ' +
+      'together (palmar interossei); the hand starts beside your right thigh. Studies of the right hand in the brain’s left half find ' +
       'overlapping finger patterns (Arbuckle 2020). Even the top of the hand knob responds to the whole body (the hand ' +
       'knob crown carries whole-body tuning; Willett 2020).'
   }),
@@ -1933,6 +1936,9 @@ const NECK_CHOICE_PLAIN = 'This is a game choice: each half of the brain turns t
 // R558 (notes of 11 November 2026, "start with the limbs fully straight out", then "out straight forward" and "like a
 // stick"): the body sits on an invisible ground with every limb straight forward (ns-body BODY_POSTURES.open), so the
 // knees and the right elbow start straight and the right palm faces down.
+// 18 November 2026 (SMALL, audit S19): the body now lies back as on a sofa (BODY_POSTURES.open); the words that still
+// said "long sitting", "you sit with your legs straight out" or "the arm starts straight out in front" are reworded,
+// and the palm notes no longer say which way the palm starts (the limb switch and the start turn numbers decide it).
 const PLAIN_NOTE = {
   // R558 (Messages 47 and 48): no ground under the legs; the knee bends all the way with the thigh level.
   knee_flex: () => 'Your thigh stays where it is and your lower leg swings down and back under it, all the way. ' +
@@ -1947,14 +1953,13 @@ const PLAIN_NOTE = {
     'movement-map muscles.',
   supination: () => 'The biceps turns the palm up strongly, mainly when the elbow is bent (biceps brachii is a powerful ' +
     'supinator mainly when the elbow is flexed; UAMS).',
-  r_supinate: () => 'Your right arm starts straight forward with the palm down, so this turns the palm up. Turning the palm down ' +
-    'brings it back.',
+  r_supinate: () => 'This turns your right palm up. Turning the palm down brings it back.',
   ankle_invert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
   ankle_evert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
   hip_flex: () => 'With a straight knee, the muscles at the back of the thigh would stop the lift early (hamstrings), so the ' +
     'game shows your knee bending as the thigh rises. The lift stops at 110 degrees, where the stiff 3D thigh and belly ' +
     'shapes would start to pass into each other (rigid meshes; about 120 with a bent knee in real life).',
-  hip_extend: () => 'From sitting, your thigh swings down past the line of your trunk and a little behind it, as when you ' +
+  hip_extend: () => 'From the start, your thigh swings down past the line of your trunk and a little behind it, as when you ' +
     'stand up and push a leg back. The game has no ground under your legs.',
   hip_adduct: () => 'It stops with your legs side by side (the source pose, knees nearly touching). Going the full 30 degrees ' +
     '(adduction) would push one leg into the other.',

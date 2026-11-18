@@ -113,8 +113,9 @@ export const HONESTY = deepFreeze({
     id: 'face-layer',
     plain: 'Through your own eyes you cannot see your face, head, neck or back. Look at the mirror body to see them: ' +
       'it copies yours. Or press E to see yourself from behind.',
-    more: 'The ordinary view is taken from between your eyes, so your own head is behind the picture. You sit ' +
-      'on an invisible flat ground with every limb straight forward: both arms reach forward, your legs lie straight ' +
+    // 18 November 2026 (SMALL, audit S19): the body lies back as on a sofa, its arms along its thighs.
+    more: 'The ordinary view is taken from between your eyes, so your own head is behind the picture. You lie ' +
+      'back as on a sofa: your arms rest beside your thighs, your legs lie straight ' +
       'out in front of you, side by side, and your chest is below you. The mirror body shows the same face, chewing, neck and trunk muscles, and ' +
       'the view from behind (E) shows your whole body with the head in place.'
   },

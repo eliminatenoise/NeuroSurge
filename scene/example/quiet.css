@@ -70,3 +70,37 @@
 .ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-notes,
 .ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-pad ul { display: none; }
 .ns-shell[data-mode="paused"][data-words="short"] .ns-shell-heading { margin-top: 6px; }
+
+/* 18 November (MAP): the brain's group labels wear their CHUNK's colour (ns-scene-three regionLabelChunkCss sets
+   --ns-chunk), the same on both halves: a light see-through pill with a rim and a dot of the colour, and the words in a
+   pale tint of it, so "Right arm" is orange like its keys and "Left arm" blue like its keys. */
+.ns-region-label.ns-chunk-label, .ns-region-label.ns-region-label-arm.ns-chunk-label {
+  color: color-mix(in oklab, var(--ns-chunk) 45%, #ffffff);
+  background: rgba(6, 8, 12, 0.5);
+  border: 1.5px solid color-mix(in oklab, var(--ns-chunk) 80%, transparent);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 2px #05070b;
+}
+.ns-region-label.ns-chunk-label::before {
+  content: ""; display: inline-block; width: 0.62em; height: 0.62em; margin-right: 0.4em; border-radius: 50%;
+  background: var(--ns-chunk); box-shadow: 0 0 6px var(--ns-chunk); vertical-align: 0.02em;
+}
+.ns-region-label.ns-chunk-label[data-hover="true"], .ns-region-label.ns-region-label-arm.ns-chunk-label[data-hover="true"] {
+  color: #ffffff; border-color: var(--ns-chunk); background: color-mix(in oklab, var(--ns-chunk) 38%, rgba(6, 8, 12, 0.7));
+}
+
+/* 18 November (MAP): the tip as a key's legend. Opposite movements share one line ("1 Bend <-> 2 Straighten"), the
+   marked one and the ones already at their end as before; the title wears the area's colour (a dot and the rim). */
+.ns-tip-move { display: inline-flex; align-items: baseline; gap: 8px; }
+.ns-tip-pair { gap: 6px; flex-wrap: wrap; }
+.ns-tip-swap { flex: none; align-self: center; width: 16px; height: 8px; margin: 0 1px; opacity: 0.7;
+  background: no-repeat center / 16px 8px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 8'%3E%3Cpath d='M1 4h14M4 1 1 4l3 3M12 1l3 3-3 3' fill='none' stroke='%23cfdbe6' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.ns-tip-move.ns-tip-now { color: #fff; }
+.ns-tip-move.ns-tip-now .ns-tip-key { border-color: #7fe3ff; background: #12394a; }
+.ns-tip-move.ns-tip-dim { opacity: 0.5; }
+.ns-tip[data-colored="true"] { border-color: color-mix(in oklab, var(--ns-tip-color) 75%, transparent); }
+.ns-tip[data-colored="true"] .ns-tip-title::before {
+  content: ""; display: inline-block; width: 0.6em; height: 0.6em; margin-right: 0.45em; border-radius: 50%;
+  background: var(--ns-tip-color); box-shadow: 0 0 7px var(--ns-tip-color); vertical-align: 0.04em;
+}
+.ns-tip[data-colored="true"][data-kind="area"] .ns-tip-move.ns-tip-now .ns-tip-key { border-color: var(--ns-tip-color); background: color-mix(in oklab, var(--ns-tip-color) 30%, #10161d); }

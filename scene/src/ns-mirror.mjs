@@ -83,6 +83,21 @@ export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, max
  */
 export const MIRROR_REFLECTION = Object.freeze({ clearanceM: 0.05, matrixTolerance: 1e-9 });
 
+/**
+ * 18 November 2026, late (package FLAT; the owner: "We want the body to be much closer. I mean the mirror body to be
+ * much closer to our own"; "maybe because the mirror body is so far away, we have to introduce a magnification
+ * factor"). The eye view is now a long lens looking 52 degrees down, so the literal reflection beyond your feet is
+ * drawn large (about 600 px tall at 1600x900) but almost all of it ABOVE the picture: its head is at your eye level
+ * while you look down your own body. The mirror body is therefore placed as a NEAR VIEW of the reflection
+ * (mirrorReflectionPlacement view): the same mirror image (the same pose, left and right as in a mirror, det < 0),
+ * drawn magnifyBy times the reflection's size about its own centre and standing dropM lower (and nearerM toward you
+ * along the ground), so at the start it stands upright in the open middle of the picture just beyond your feet, over
+ * the hollow of the motor strip, the whole figure in view. Everything that uses the mirror body's place and size
+ * (picking, its arrows and their frame, contact, carrying and turning it, the view from outside) uses this placement:
+ * it is the mirror body's place. Display choices, judged on pictures; not a measurement.
+ */
+export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.68, dropM: 1.0, nearerM: 0 });
+
 /** The rest-pose fallback body box (world m, seated BodyParts3D body at the default eye) used only when the integrator
  * passes no measured bounds: centre, half extents along body right / up / forward. Replaced by bodyBoundsFromPoints. */
 export const MIRROR_FALLBACK_BODY = Object.freeze({
@@ -280,7 +295,7 @@ export function matrixMaxDiff(a, b) {
  *   toward = from the image toward you, horizontal; up = world up), facingYawDeg 0, reflectAxis, bodyCentre, body,
  *   reach ({ centre, radiusM } or null) }.
  */
-export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearanceM = MIRROR_REFLECTION.clearanceM, reach = null } = {}) {
+export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearanceM = MIRROR_REFLECTION.clearanceM, reach = null, view = null } = {}) {
   if (!body || !isVec3(body.centre) || !(Array.isArray(body.half) || ArrayBuffer.isView(body.half))) fail('input', 'body must be a bodyBoundsFromPoints result of the posed body');
   const e = vec3(eye, 'eye');
   const f0 = body.forward ? vec3(body.forward, 'body.forward') : [0, 0, -1];
@@ -295,8 +310,16 @@ export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearan
   if (!(fore > 0)) fail('input', 'the posed body must reach in front of the eye');
   const d = fore + clearanceM;
   const offset = dot(e, n) + d;
-  const matrix = pureReflectionMatrix(n, offset);
-  const centre = transformPoint(matrix, c0);
+  const pure = pureReflectionMatrix(n, offset);
+  let matrix = pure, centre = transformPoint(pure, c0), k = 1;
+  // 18 November 2026, late (MIRROR_NEAR): the near view of the reflection: magnified about its own centre, lower and
+  // nearer; the start / reset matrix is then T(centre) k R T(-bodyCentre), exactly what mirrorTransform builds at rest.
+  if (view !== null && view !== undefined) {
+    k = Number.isFinite(view.magnifyBy) && view.magnifyBy > 0 ? view.magnifyBy : 1;
+    const dropM = Number.isFinite(view.dropM) ? view.dropM : 0, nearerM = Number.isFinite(view.nearerM) ? view.nearerM : 0;
+    centre = [centre[0] - n[0] * nearerM, centre[1] - dropM, centre[2] - n[2] * nearerM];
+    matrix = multiply(translation(centre), multiply(uniformScale(k), multiply(reflectionMatrix(n), translation(scale(c0, -1)))));
+  }
   const toward = scale(n, -1).map(v => v + 0);
   const right = normalize(cross(UP, toward)).map(v => v + 0);
   let reachS = null;
@@ -308,7 +331,8 @@ export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearan
   return freeze({
     kind: 'ns-mirror-placement', rule: 'literal-reflection',
     plane: freeze({ normal: freeze(n), offsetM: offset, pointM: freeze(add(e, scale(n, d))), eyeM: freeze(e), distanceM: d, foremostM: fore, boxForemostM: boxFore, clearanceM }),
-    matrix: freeze(Array.from(matrix)), centre: freeze(centre), distanceM: length(sub(centre, e)), scale: 1,
+    matrix: freeze(Array.from(matrix)), centre: freeze(centre), distanceM: length(sub(centre, e)), scale: k,
+    pureMatrix: freeze(Array.from(pure)), view: view ? freeze({ ...view }) : null,
     toward: freeze(toward), right: freeze(right), up: UP, facingYawDeg: 0, reflectAxis: freeze(n), bodyCentre: freeze(c0), body,
     reach: reachS
   });

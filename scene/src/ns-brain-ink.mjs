@@ -362,7 +362,9 @@ float nsCelBand( float x ) {
 export const BRAIN_KEYS = Object.freeze({
   bevelCss: 5, bevelShare: 0.3, bevelLight: 0.7, bevelDark: 0.55, bevelSpec: 0.28, hoverBevel: 1.5, pillowCss: 8, pillowShare: 0.4, pillowDark: 0.38,
   pressS: 0.2, pressHoldS: 0.07, pressDark: 0.45, pressCss: 4, pressShare: 0.3,
-  frameCss: 2.2, frameShare: 0.12, frameGain: 2.0, frameWhite: 0.3, pulse: 0.22, pulseHz: 1.1,
+  // 18 November (MAP): the lit key's frame in its own colour (frameWhite 0.3 -> 0.1): the white-hot frame turned the
+  // whole lit key white under the bloom; the neon glow is saturated now.
+  frameCss: 2.2, frameShare: 0.12, frameGain: 2.0, frameWhite: 0.1, pulse: 0.22, pulseHz: 1.1,
   ringHz: 0.9, ringW: 0.16, ringGain: 1.1, ringSpan: 1.5, ringReliefMm: 9,
   focusDim: 0.5, focusInS: 0.12, focusOutS: 0.45
 });

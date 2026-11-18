@@ -1453,6 +1453,48 @@ Before, the forearm turned 160 degrees and the upper arm only followed by 14. No
 
 Not right or not done. On the overside the right hand swings about 15 cm inward onto the right thigh, and with the elbow fully bent it goes into the chest: nothing stops limbs yet. The game arm starts with its elbow bent 66 degrees against 8 for the right arm and is not yet its exact pair. The muscle lists could not be read from the tip, because the look stops before the crosshair reaches the upper arms; they come from a depth estimate. On the legs the thigh shows the same muscles on the V and on the A (rectus femoris, sartorius and the vasti in nearly the same shares): at 45 degrees the leg turn does not change what is seen on the thigh. This package was merged and published before its independent check.
 
+## 100. A flatter view through a longer lens (18 November)
+
+The user: "What we want is a very wide field of view, but a very narrow depth of field. So things that are far away look extremely close to us, but things we can still see a very wide pan, side to side ... a very wide view, but a very flat view as well, where things that are very far away still are very close within reach, despite being far away. That's the visual illusion that we're going for."; "we essentially want a much larger set of four limbs, and perhaps that involves dialing down the field of view to some extent."
+
+The eye view is now taken from 0.30 m back on the line of sight and 0.10 m up, through a lens of 54 degrees (it was 100), with the look starting 52 degrees down. Far things shrink much less than before: at the start, on a 1600 by 900 picture, a thigh measures 143 px across (65 before), a shin 56 (25), the right upper arm 117 (61). The whole torso is in the picture, both shoulder caps in the lower corners; the legs run up over the middle of the strip and the crosshair starts on the strip between the knees. Your own neck muscles and vertebrae are drawn in place of the black plug at the neck's root. The mirror body stands above your feet, 313 px tall (223 before), and stays in the picture with the crosshair on the outermost area of either side. Every arrow can be reached: a covered arrow slides to a free place on its side, and the brain's down arrow is visible and works. From outside (E) the whole strip is in the picture beside the body. The left arm starts along the left thigh. The head sits back over the shoulders (carried 4 degrees forward, not 11).
+
+What this is and is not. It is a longer lens from further back, which flattens depth; the wide sweep from side to side comes from turning the look, not from the lens. A true dolly-zoom option is built and switched off. The camera is not at the eyes.
+
+Not right or not done. Looking around was measured at 13 frames a second against 22 before, cause not found. A dark soft patch remains at the bottom centre where the neck leaves the chest. The collar bones and shoulder caps are partly cut by the bottom edge. The mirror body is drawn at 0.68 of a true reflection's size and 1.0 m lower: it is larger on screen only because the lens enlarges far things, it is not magnified as asked, and it no longer stands on the same ground as your body (earlier notes asked for an exact reflection on the same ground). The brain's side arrows sit outside the brain on the backdrop. The game arm still follows the look on the screen and rides up when you look up. Reduced motion and the first prompt with the crosshair already on the strip were not checked. Published before its independent check.
+
+## 101. A colour code from scratch, links between an area and its part, and what activity looks like (18 November)
+
+The user: "Let's essentially redo the entire corresponding color coding of the motor strip and its corresponding areas from scratch ... And the wiring or clarity or indications in between the items, such that things are as easy to understand and as obvious as possible."; "let's introduce a neon glowing blinking effect, shuddering effect upon activity and corresponding activity".
+
+The colours follow three rules. Every key in the brain's right half, which moves your left side, is a cool colour, and every key in the left half is warm. Each body chunk has its own family: leg, trunk, arm, hand, neck, face, mouth. Inside a chunk the keys step from light to deep. A wide dark gap separates chunks on the strip and a thin seam separates keys inside one. Group labels wear their chunk's colour and match on both halves.
+
+Links. While the look rests on an area, a soft line in its colour runs from the key to the part it moves, on the mirror body and on your own body where it is in the picture, and those muscles get a thin rim of the colour. A line from a key crosses the brain's midline to the part on the other side, with a small bright knot at the crossing: that crossing is how the picture says that each half moves the opposite side. With the crosshair on a muscle of either body, the area that moves it shows, with a line from its key.
+
+Activity. When an area switches on, its key, its muscles on both bodies and its line blink together like a neon tube striking (three pulses in the first quarter second, then a shallow flicker), and the active tissue shudders: a fine quiver with a short kick at the start, drawn in the vertex stage, with no change to joints, camera or aiming. With reduced motion the glow is steady.
+
+Not right or not done. Areas hidden behind your legs have no marker. During the first flash the key's centre still reads whitish. The muscles an area drives are often on the far side of the limb from the eyes, so the flash on your own body is hard to see. The shudder is under a pixel plus a short kick and could not be judged in still pictures. Inside a chunk neighbouring keys differ little in lightness; under simulated protanopia the right half's face keys look as blue as its arm keys. The body parts carry no colour at rest. Published before its independent check.
+
+## 102. Detail: the layered stack again, smoother shading, cartilage (18 November)
+
+The user: "notice some muscles have become detached and are sticking out, such as around the hips. This needs to be fixed for all muscles, and everything should be in as much detail as possible without destabilizing the game".
+
+A second fault that had gone unnoticed: the layered stack of muscles (outer muscles floating slightly over deep ones, asked for on 11 November) had been silently off since the reclined posture of 17 November. The rule that smooths the belly sheet's relief read "forward" in the drawn frame, pushed the oblique muscles past the cap, and the game refused the lift for the whole body. It is drawn again; outer muscles float 4 to 20 mm and anchored muscle ends turn tendon-white. Round the hips, gluteus maximus no longer hangs off as a shell with a flap under the buttock. Shading normals of the coarse meshes are evened out at load (real creases kept, no vertex moved), so highlights no longer break at triangle edges. Joint surfaces carry bluish-white, glossier cartilage caps, and the costal cartilages are bluish white.
+
+Not right or not done. The shoulder girdle and back are not fixed: serratus anterior, latissimus, rhomboid major, the ascending trapezius and sternocleidomastoid are torn or stretched in the start posture. Gluteus maximus still shows a jagged free edge from below. Finer geometry was tried and taken out: it added hundreds of thousands of triangles and seconds of loading for no visible gain. Not done: tendon glisten, pearly aponeuroses, smooth joins of tendon and bone, nails. The cartilage caps are a geometric estimate. Published before its independent check.
+
+## 103. Small fixes from an audit of every earlier note (18 November)
+
+The user: "and go over the previous messages as well. Regarding the small fixes and small improvements."
+
+Seven readers went through every note since 11 November against the game and listed 26 small, 9 medium and 2 large things still open. Done from that list so far:
+- Looking at a motor area no longer moves the body: the look arms the key (it lights, the tip and the hint show); a click or a number key does the movement. This is the author's decision on a point the audit raised; before, resting the look for a moment pressed the key, so reading the tip moved the body.
+- Number keys act on the area the look rested on, also after the look has passed other areas on its way down.
+- The first press of a movement does it (a joint a few degrees off its start no longer swallows the press). Holding a number key moves the limb part-way and it stops there when the key is let go.
+- A Space grip lights both hand areas alike. A brain held away from its middle moves with the pointer instead of swinging the view. Dragging a forearm that is already fully turned carries the turn into the upper arm. An arrow's words show once. Arrows are glossier and chunkier.
+
+Left from the list: the left shoulder area still has no movements; holding the mirror body's left arm swings the view; the right elbow knots when bent with the palm down; the sweep does not measure the left game arm; the first prompt and the Esc page still describe the old behaviour ("Look at a blue area ... watch your arm move", "You sit on an invisible flat ground") until the overlays package lands; performance and the face. Published before its independent check.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

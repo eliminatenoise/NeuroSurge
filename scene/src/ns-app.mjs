@@ -88,6 +88,8 @@ import * as NsBrain from './ns-brain.mjs';
 import * as NT from './ns-text.mjs';
 import * as NG from './ns-guide.mjs';
 import { createQuietUi, quietTipModel, quietPromptText } from './ns-quiet.mjs';
+// 18 November (MAP): the links between an area and its body part (looked at; named from a muscle).
+import { hoverLink, reverseLink } from './ns-links.mjs';
 import * as NM from './ns-mirror.mjs';
 // Round 5 (R5-integrate-core, stage 1): the third-person camera (R5-camera, D18), the 3D compass-arrow input (R5-input,
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
@@ -160,7 +162,13 @@ export const ROTATION_NOTE_SECONDS = 6;
  * the arm's full reach beside the left knee, the matching pair of the right hand at the right knee (the right wrist
  * lies 30 degrees below level from the eye, 11 above the 41-degree start look). The hand still follows the look at
  * this height of the eye's view; from the raised camera it is drawn a little under and left of the crosshair. */
-export const HAND_Y_NDC = 0;
+export const HAND_Y_NDC = 0.5;
+/* 18 November 2026, late (package FLAT: the eye view's lens is now 54 degrees and the look starts 52 down, see the
+ * launcher): the arm fit's screen numbers are read in that narrower view, where 0 / -0.17 put the left hand across the
+ * middle of the strip under the crosshair. HAND_Y_NDC 0 -> 0.5 with GAME_ARM_OPTIONS x -0.17 -> -0.35 and depth
+ * 0.5 -> 0.55 m put it at the left knee, the arm stretched along the left thigh as the pair of the right arm. (Tried:
+ * fitting the arm in a separate 100-degree view with the old numbers: the same place, but the frame rate fell from
+ * about 60 to about 22 frames per second on this machine; cause not found, not kept.) */
 /**
  * WASD wrist coordination (integration round 2, R8 "WASD give coordinated shoulder + elbow + wrist + hand movement"):
  * the reach keys move the hand anchor (A/D across, W/S in depth) and the IK moves shoulder and elbow; this adds a
@@ -194,7 +202,8 @@ export const HAND_Y_NDC = 0;
 // S pulls the hand in from there.
 // R558 (limbs straight forward): the hand also starts 0.17 left of the centre, straight ahead of the left shoulder.
 // 18 November 2026: depth 0.35 -> 0.53 m and x -0.17 -> -0.14: the left arm starts stretched out to the left knee (see HAND_Y_NDC).
-export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.5, xNdcStart: -0.17 });
+// 18 November 2026, late (package FLAT): depth 0.5 -> 0.55 m, x -0.17 -> -0.35 in the 54-degree view (see HAND_Y_NDC).
+export const GAME_ARM_OPTIONS = Object.freeze({ depthStart: 0.55, xNdcStart: -0.35 });
 export const WASD_WRIST = Object.freeze({ depthRefM: GAME_ARM_OPTIONS.depthStart, degPerM: -60, xRefNdc: ARM_DEFAULTS.xNdcStart, degPerNdc: 12, maxDeg: 15 });
 /**
  * Trunk follow for wide looks (ns-arm bodyYawForLook). The integration widens U3a's right free range from 45 to 60 deg
@@ -1198,8 +1207,9 @@ export function normalizeGaze(g, bodyMap = null) {
  * Space gestures, ns-controls SPACE_GESTURE; 'space' is the legacy raw key event, accepted and ignored by the activity),
  * the app's own 'muscle' tap, 'limbPose' for a held or turned own limb and 'grip' (Message 48: the left hand closes
  * while the Space gesture holds or keeps a grasp; the frame loop sends it when that starts or ends)). */
-export const CONTROL_EVENT_TYPES = Object.freeze(['space', 'grasp', 'grip', 'turn', 'click', 'muscle', 'limbPose']);
-const CONTROL_EVENT_HELP = 'control events are { type: "grasp", down, target? }, { type: "grip", on }, { type: "turn", phase }, { type: "click" }, { type: "muscle", regionId }, { type: "limbPose", joints } or the legacy { type: "space", down }';
+// 18 Nov (SMALL, M3): 'muscleRelease' ends a held number key's movement (ns-actions MOVE_HOLD).
+export const CONTROL_EVENT_TYPES = Object.freeze(['space', 'grasp', 'grip', 'turn', 'click', 'muscle', 'muscleRelease', 'limbPose']);
+const CONTROL_EVENT_HELP = 'control events are { type: "grasp", down, target? }, { type: "grip", on }, { type: "turn", phase }, { type: "click" }, { type: "muscle", regionId }, { type: "muscleRelease", regionId, actionId, tap }, { type: "limbPose", joints } or the legacy { type: "space", down }';
 /** R558 (Message 40): the events that turn the limbs (and with them the game arm's palm turn), which the whole-arm
  * display must know before it picks a camera: the limb turn ('turn') and the legacy raw Space event. */
 const isTurnEvent = ev => Boolean(ev) && (ev.type === 'turn' || ev.type === 'space');
@@ -4772,6 +4782,7 @@ export function start(params = {}) {
   let quietUi = null;
   try { quietUi = createQuietUi({ doc, root: hudRoot }); } catch { quietUi = null; }
   let quietRoot = null, quietLast = null;
+  let quietRest = null; // 18 Nov (S2): infoSettleStep state for the number keys' area (quietLast)
   const isPlaceholder = placeholder === true;
   const qaEnabled = qa === true;
   const useShell = Boolean(shellRoot);
@@ -4881,6 +4892,7 @@ export function start(params = {}) {
    * the strip (lh_hand) and the body map's own "Close right hand" muscles (lh_r_grasp) at GRIP_BOTH.level, on your
    * body and the mirror body. A display of the game's grip rule, not measured activity. */
   const GRIP_BOTH = Object.freeze({ perS: 7, closeDeg: 90, level: 0.95, regionId: 'lh_hand', actionId: 'lh_r_grasp' });
+  const GRIP_HELD_IDS = Object.freeze([GRIP_AREA_ID, GRIP_BOTH.regionId]); // 18 Nov (S7): both hands' areas while a grip holds
   let rightGrip = 0;
   /**
    * R17 (owner, 17 November: "you've got to get the small details right, such as when you're moving the cursor around.
@@ -4972,6 +4984,15 @@ export function start(params = {}) {
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
   // (the activity holds it, so Reset body puts it back).
   let limbGrasp = null, dragLimb = null, dragLimbSeg = null, dragLimbVia = null, leftDial = 0;
+  // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
+  // dimension"): the point of the brain the crosshair took it at, in the brain's own frame (null: not held that way).
+  let brainHoldLocal = null;
+  const brainPointLocal = p => {
+    const T = current && current.out && current.out.brainTransform;
+    if (!Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite) || !T || !T.matrix) return null;
+    try { return NsCollide.apply(NsCollide.affineInverse(T.matrix), p[0], p[1], p[2]); } catch { return null; }
+  };
+  const brainPointWorld = (q, T) => (q && T && T.matrix ? NsCollide.apply(T.matrix, q[0], q[1], q[2]) : null);
   const contact = { stops: 0, last: null, untilMs: 0, bodyBlocked: null, lastStart: null, skipGuards: 0 };
   let collisionReportFn = null; // R558: set once the scene is up (inspect({ collision: true }))
   // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
@@ -4982,6 +5003,10 @@ export function start(params = {}) {
   // movement with that number in the list the information card shows (infoModel.moves); owned and cancelled like E.
   const moveRequests = [];
   const MOVE_REQUEST_LIMIT = 8;
+  // 18 November 2026 (SMALL, audit M3; Note 47): number keys that came up, and per number the movement its press started
+  // ({ regionId, actionId, downMs }): a short press is the whole movement, a held key stops it where it is (MOVE_HOLD).
+  const moveUpRequests = [];
+  const moveHeld = new Map();
   // The movement the last number key chose (infoChosenStep keeps or drops it): the card goes on explaining it.
   let infoChosen = null;
   // When the look takes over the card (infoSettleStep): the area under the look, since when, and the areas only crossed.
@@ -6059,6 +6084,8 @@ export function start(params = {}) {
         toggleView: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleView === 'function' ? base.toggleView(s, t) : s),
         // R558 (Messages 55 and 56): the number keys (ns-controls MOVE_CODES) only while playing; the frame loop decides.
         moveKey: (s, n, t) => (shellIsPlaying(shellState) && typeof base.moveKey === 'function' ? base.moveKey(s, n, t) : s),
+        // 18 Nov (SMALL, M3): a number key's release always passes (it only ends a held key's movement)
+        moveKeyUp: (s, n, t) => (typeof base.moveKeyUp === 'function' ? base.moveKeyUp(s, n, t) : s),
         // R558 (Messages 55 and 56): the area keys step the look only while playing (elsewhere the arrows scroll the page).
         areaKey: (s, d, t) => (shellIsPlaying(shellState) && typeof base.areaKey === 'function' ? base.areaKey(s, d, t) : s),
         pointerMove: (s, dx, dy, t) => {
@@ -6437,6 +6464,8 @@ export function start(params = {}) {
       let muscleTapNote = null; // { text, untilT } the plain line about the last tapped muscle (simulated seconds)
       const rotationSeen = { state: null, until: -Infinity }; // R558: the forearm line shows only around a change
       let crossPick = null; // R558 (hunt 2): the muscle under the crosshair (what is seen there: controlTargets' front)
+      // 18 November (MAP): that muscle's own record and the area that moves it (the reverse link: "what controls this?")
+      let crossSeen = null, crossRoute = null, crossRouteKey = '';
       // ---- R558 (user Messages 33 and 34): what each control acts on (controlTargets) ---------------------------------
       /** Everything along the ray through CSS (x, y) as the controls see it: { arrow (the usable arrow tip there, drawn
        * on top: ns-controls resolveArrowHit), front, behind (controlTargets), mirror (the scene's carry data for the
@@ -6751,7 +6780,23 @@ export function start(params = {}) {
         const L = limbLimits()[dial.joint] || (mods.body.BODY_JOINT_LIMITS && mods.body.BODY_JOINT_LIMITS[dial.joint]) || [-180, 180];
         const cur = Number.isFinite(held) ? held : Number.isFinite(bodyPosed[dial.joint]) ? bodyPosed[dial.joint] : 0;
         const next = clamp(cur + dial.sign * deg, L[0], L[1]);
-        if (next === cur) return;
+        // 18 November 2026 (SMALL, audit S9; Note 46: "if you use the cursor, you can manipulate the internal, external
+        // rotation"): the part of a forearm turn its range cannot take goes on into the upper arm's turn (upperDial), as
+        // a real arm turns on from the shoulder once the forearm is fully palm up (or down). Before, the drag did nothing.
+        const spill = !upper && c.upperDial ? deg - (next - cur) / dial.sign : 0;
+        if (next === cur && !(Math.abs(spill) > 1e-6)) return;
+        if (Math.abs(spill) > 1e-6) {
+          const U = c.upperDial, heldU = simState && simState.activity && simState.activity.bodyJointTargets ? simState.activity.bodyJointTargets[U.joint] : undefined;
+          const LU = limbLimits()[U.joint] || (mods.body.BODY_JOINT_LIMITS && mods.body.BODY_JOINT_LIMITS[U.joint]) || [-180, 180];
+          const curU = Number.isFinite(heldU) ? heldU : Number.isFinite(bodyPosed[U.joint]) ? bodyPosed[U.joint] : 0, nextU = clamp(curU + U.sign * spill, LU[0], LU[1]);
+          if (next === cur && nextU === curU) return;
+          if (nextU !== curU) {
+            const areaU = next === cur ? areaFor(U.joint, Math.sign(nextU - curU)) : true;
+            applyLimbJoints(next === cur ? { [U.joint]: nextU } : { [dial.joint]: next, [U.joint]: nextU }, out);
+            if (!areaU && U.area) lightArea(U.area, out);
+            return;
+          }
+        }
         const area = areaFor(dial.joint, Math.sign(next - cur));
         applyLimbJoints({ [dial.joint]: next }, out);
         if (!area && dial.area) lightArea(dial.area, out); // no body-map action moves this joint: light its area
@@ -7311,6 +7356,7 @@ export function start(params = {}) {
           if (ev && ev.type === 'view') viewRequests += 1;
           // R558 (Messages 55 and 56): a number key asks for a numbered movement (decided below, once the frame is live).
           else if (ev && ev.type === 'move' && Number.isInteger(ev.n) && moveRequests.length < MOVE_REQUEST_LIMIT) moveRequests.push(ev.n);
+          else if (ev && ev.type === 'moveUp' && Number.isInteger(ev.n) && moveUpRequests.length < MOVE_REQUEST_LIMIT) moveUpRequests.push(ev.n); // 18 Nov (M3)
           // R558 (Messages 55 and 56): an area key asks for a step of the look along the strip (done below, before the frame).
           else if (ev && ev.type === 'area' && (ev.dir === 1 || ev.dir === -1) && areaRequests.length < AREA_REQUEST_LIMIT) areaRequests.push({ dir: ev.dir, t: now });
         }
@@ -7413,6 +7459,8 @@ export function start(params = {}) {
         // a tap on a muscle of that movement ('muscle': the area's ordinary pulse), so nothing new is claimed about the
         // brain. What you see is what the keys do: no list on the card (or the information hidden with R) = no effect.
         const movesThisFrame = live ? moveRequests.splice(0) : [];
+        const upsThisFrame = moveUpRequests.splice(0); // 18 Nov (M3)
+        if (!live) moveHeld.clear();
         // For the "Try this" guide (ns-guide 'moveKey'): which numbers did a movement, whether it could still move (the
         // card's own "already there" flag) and whether the look was on the brain. Handed over only when the frame is applied.
         const moveGuideEvents = [];
@@ -7427,7 +7475,9 @@ export function start(params = {}) {
           for (const n of movesThisFrame) {
             const mv = movesFrom.moves[n - 1];
             if (mv && typeof mv.id === 'string') {
-              add.push({ type: 'muscle', regionId: movesFrom.regionId, actionId: mv.id, regionOnly: false, at: timing.dt });
+              // 18 Nov (M3): progressive: held, the movement runs on while the key is down (MOVE_HOLD)
+              add.push({ type: 'muscle', regionId: movesFrom.regionId, actionId: mv.id, regionOnly: false, progressive: true, at: timing.dt });
+              moveHeld.set(n, { regionId: movesFrom.regionId, actionId: mv.id, downMs: now });
               infoChosen = { regionId: movesFrom.regionId, actionId: mv.id, gazePick: undefined };
               moveGuideEvents.push({ type: 'moveKey', n, moved: mv.atEnd !== true, onBrain: gazeOnBrain(simState.gaze) });
               // What the press did when it was not the movement itself, from the card's own marks as they were shown.
@@ -7437,6 +7487,17 @@ export function start(params = {}) {
           }
           if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
         }
+        // 18 Nov (M3): a number key came up: a short press completes its movement, a longer one leaves the part there.
+        if (live && upsThisFrame.length) {
+          const rel = [];
+          for (const n of upsThisFrame) {
+            const h = moveHeld.get(n);
+            if (!h) continue;
+            moveHeld.delete(n);
+            rel.push({ type: 'muscleRelease', regionId: h.regionId, actionId: h.actionId, tap: now - h.downMs < NsActions.MOVE_HOLD.tapMs, at: timing.dt });
+          }
+          if (rel.length) timing = { ...timing, events: [...timing.events, ...rel] };
+        }
         // R558 (Messages 2, 12 and 40): a Space grasp (a hold or a tap; ns-controls SPACE_GESTURE) takes hold of what is
         // under the crosshair: one of your own limbs, the brain or the mirror body (what is seen there; itemAt). Each press
         // is labelled with its target for the activity (brain grab) and the carry (brain / mirror); an own limb is held
@@ -7445,14 +7506,15 @@ export function start(params = {}) {
         if (live && timing.events.some(e => e && e.type === 'grasp')) {
           timing = { ...timing, events: timing.events.map(e => {
             if (!e || e.type !== 'grasp') return e;
-            if (e.down !== true) { limbGrasp = null; return e; }
+            if (e.down !== true) { limbGrasp = null; brainHoldLocal = null; return e; }
             const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y, e.behind === true) : null;
             if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null); else limbGrasp = null;
+            brainHoldLocal = it && it.target === 'brain' ? brainPointLocal(it.pick && it.pick.pointWorldM) : null; // SMALL S8
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
         }
-        if (!live) limbGrasp = null;
+        if (!live) { limbGrasp = null; brainHoldLocal = null; }
         // R558 (Message 48: "you can't see the grasping action at all"): the left hand grips for as long as Space holds
         // or keeps a grasp (ns-controls SPACE_GESTURE grasp 'held' | 'kept'), whatever is under the crosshair, and opens
         // when the grasp lets go. The activity's graspHold is kept in step with the gesture here, every frame, by a
@@ -7499,7 +7561,10 @@ export function start(params = {}) {
             if (limbGrasp && limbGrasp.limb !== 'leftArm') limbMovePx = mv;
             else if (oc && oc.held && eye) {
               const bt = current.out && current.out.brainTransform;
-              const centre = oc.target === 'mirror' && oc.mirror ? oc.mirror.centreWorldM : oc.target === 'brain' && bt && Array.isArray(bt.pivotWorld) ? bt.pivotWorld : null;
+              // 18 Nov (SMALL, S8): a held brain is carried by the point the crosshair took it at (brainHoldLocal, moved
+              // with the brain), not by its pivot, which for a brain this large often lies outside the carry's band.
+              const held = oc.target === 'brain' ? brainPointWorld(brainHoldLocal, bt) : null;
+              const centre = oc.target === 'mirror' && oc.mirror ? oc.mirror.centreWorldM : held ? held : oc.target === 'brain' && bt && Array.isArray(bt.pivotWorld) ? bt.pivotWorld : null;
               if (centre) {
                 const q = ReferenceGraph.carryPointer({ centre, eye, look: lk, dxPx: mv.dx, dyPx: mv.dy, viewHeightPx: size.height, fovYDeg: sim.fovFor(aspect), lookRadPerPx: controlsApi.sensitivityRadPerPx,
                   heightM: oc.target === 'mirror' ? ReferenceGraph.CARRY_VIEW.mirrorHeightM : null });
@@ -8110,13 +8175,16 @@ export function start(params = {}) {
         const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && simState.activity && simState.activity.graspHold === true));
         // 18 November (the living brain): the grip of a Space grasp is not a movement switched on from the brain; while it
         // holds, the tissue round its hand area only flushes faintly (no bloom, no ring).
-        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_AREA_ID : null);
+        // 18 Nov (SMALL, S7): both hands grip, so both hand areas are held (the right hand's is GRIP_BOTH's).
+        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_HELD_IDS : null);
         // The left shoulder's rows to draw: the reach keys' and the look's (the arm follows the look).
         const reachShown = reachRowsShown(out.reachShow, headGlow ? headGlow.reach : null);
         if (sceneFn('setSettledRegions')) {
           const settled = [];
           if (headGlow) {
-            for (const [rid, v] of Object.entries(headGlow.regions)) if (!(out.regionActivity && out.regionActivity[rid] >= v)) settled.push(rid);
+            // 18 Nov (SMALL, S7; Note 17 "clear fluorescent glow correspondence"): the right hand's share of a Space grip
+            // is a grip like the left hand's, not a held posture: its key lights as the left hand's does.
+            for (const [rid, v] of Object.entries(headGlow.regions)) if (!(out.regionActivity && out.regionActivity[rid] >= v) && !(rid === GRIP_BOTH.regionId && rightGrip > 0)) settled.push(rid);
             // R558 (hunt 3): a muscle's power-up start is keyed on its COLOUR area. The head-row muscles get the area their
             // row lights as owner through colour-only glow links (headGlowLinks), but those are set after the body is
             // shaded, so a muscle that begins to glow before it ever had an owner is first shaded on the fallback area of
@@ -8143,7 +8211,7 @@ export function start(params = {}) {
         scene.highlightMarker(out.gaze.actionId);
         let regionActivityShown = out.regionActivity;
         if (headGlow && regionActivityShown) {
-          for (const [rid, v] of Object.entries(headGlow.regions)) if (hasOwn(regionActivityShown, rid) && !(regionActivityShown[rid] >= v)) {
+          for (const [rid, v] of Object.entries(headGlow.regions)) if ((hasOwn(regionActivityShown, rid) || rid === GRIP_BOTH.regionId) && !(regionActivityShown[rid] >= v)) {
             if (regionActivityShown === out.regionActivity) regionActivityShown = { ...out.regionActivity };
             regionActivityShown[rid] = v;
           }
@@ -8157,8 +8225,14 @@ export function start(params = {}) {
         }
         // R558 (Message 6): faint hints on the areas whose action would bring a held joint back (agonist / antagonist).
         // R558 (Message 2): each hint glows faintly in its own area's colour (ns-colors areaGlowColor), like its muscles.
-        if (sceneFn('setRegionHints')) callScene('setRegionHints', out.latch && Array.isArray(out.latch.hints)
-          ? out.latch.hints.map(h => (h && mods.colors && typeof mods.colors.areaGlowColor === 'function' && mods.colors.areaGlowColor(h.regionId) ? { ...h, color: mods.colors.areaGlowColor(h.regionId) } : h)) : []);
+        if (sceneFn('setRegionHints')) {
+          const hintList = out.latch && Array.isArray(out.latch.hints)
+            ? out.latch.hints.map(h => (h && mods.colors && typeof mods.colors.areaGlowColor === 'function' && mods.colors.areaGlowColor(h.regionId) ? { ...h, color: mods.colors.areaGlowColor(h.regionId) } : h)) : [];
+          // 18 November (MAP, the reverse: "what controls this?"): the crosshair on a muscle shows the area that moves it.
+          if (crossRoute && typeof crossRoute.regionId === 'string') hintList.push({ regionId: crossRoute.regionId, actionId: crossRoute.regionOnly ? null : crossRoute.actionId,
+            color: mods.colors && typeof mods.colors.areaGlowColor === 'function' ? mods.colors.areaGlowColor(crossRoute.regionId) : null });
+          callScene('setRegionHints', hintList);
+        }
         if (bodyRig && mods.body && typeof mods.body.poseBody === 'function' && sceneFn('updateBody')) {
           // Pose only when the joint targets change; recolour whenever the muscle drives change (quantised), so a
           // drive change with unchanged targets is still shown (U2b wiring item 3).
@@ -8392,9 +8466,24 @@ export function start(params = {}) {
           const headLinks = headGlowLinks(headGlow);
           // R558 (Message 50): one link per held reach key, from the left shoulder area to that key's shoulder muscles (the
           // left-arm meshes by name, the chest and back meshes by id): they take the area's colour and a line joins them.
+          // 18 November (MAP, "calm: links appear for what is looked at or active"): only a held reach KEY draws its line;
+          // the arm following the look (headGlow.reach, every glance) colours its shoulder muscles without a line (the
+          // mirror body's line is no longer hidden behind the glass, and the line to your own body is drawn now too).
+          const keyReach = Array.isArray(out.reachShow) ? out.reachShow : [];
           const reachLinks = Array.isArray(reachShown) ? reachShown.map(r => ({ key: `reach:${r.dir}`, regionId: REACH_MUSCLES.areaId, level: r.level,
-            armMuscleNames: r.arm, armMuscleKeys: [], bodyMeshIds: r.body.length ? danceBodyDrives({ key: `reach:${r.dir}`, muscles: r.body }) : {} })) : [];
-          const extraLinks = hintLinks.length || danceLinks.length || headLinks.length || reachLinks.length ? [...hintLinks, ...danceLinks, ...headLinks, ...reachLinks] : null;
+            armMuscleNames: r.arm, armMuscleKeys: [], bodyMeshIds: r.body.length ? danceBodyDrives({ key: `reach:${r.dir}`, muscles: r.body }) : {},
+            line: keyReach.some(q => q && q.dir === r.dir) })) : [];
+          // 18 November (MAP): the soft link of the area the look rests on (to the part it moves, on both bodies), and the
+          // reverse link from the area that moves the muscle under the crosshair to that muscle (ns-links).
+          const mapLinks = [];
+          if (out.gaze && out.gaze.target === 'region' && typeof out.gaze.regionId === 'string') {
+            const gr = regionById(bodyMap, out.gaze.regionId);
+            const hl = gr ? hoverLink(gr, { actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, lit: links.some(l => l.regionId === gr.id) }) : null;
+            if (hl) for (const l of glowLinksForScene([hl], { bodyDrives: link => actionBodyDrives(link.actionId) })) mapLinks.push(l);
+          }
+          const rl = crossSeen && crossRoute ? reverseLink(crossSeen, crossRoute) : null;
+          if (rl) mapLinks.push(rl);
+          const extraLinks = hintLinks.length || danceLinks.length || headLinks.length || reachLinks.length || mapLinks.length ? [...hintLinks, ...danceLinks, ...headLinks, ...reachLinks, ...mapLinks] : null;
           callScene('setGlowLinks', extraLinks ? [...links, ...extraLinks] : links);
           glowWired = true;
         } else { glowWired = false; glowData = null; if (sceneFn('setGlowLinks')) callScene('setGlowLinks', headGlowLinks(headGlow)); }
@@ -8443,6 +8532,9 @@ export function start(params = {}) {
         const seen = live && ctlFrame && !ctlFrame.arrow && ctlFrame.seen && ctlFrame.seen.item !== 'brain' ? ctlFrame.seen.rec : null;
         // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
         crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
+        // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
+        { const rk = crossPick && seen.kind === 'muscle' ? `${seen.source}|${seen.id}|${seen.name}` : '';
+          if (rk !== crossRouteKey) { crossRouteKey = rk; crossSeen = rk ? seen : null; try { crossRoute = rk ? muscleRoute(seen) : null; } catch { crossRoute = null; } } }
         // Lead decision (refines Messages 33 and 34): on a motor area the look reaches through a body part, that part is
         // named ("..., behind your right forearm"): the body part SEEN there, nearer than the brain entry on the ray.
         const brainOnRay = ctlFrame ? [ctlFrame.front, ctlFrame.behind].find(e => e && e.item === 'brain') : null;
@@ -8578,6 +8670,13 @@ export function start(params = {}) {
           if (quietOn && live) {
             const areaId = onArea && typeof out.gaze.regionId === 'string' ? out.gaze.regionId : null;
             const area = areaId ? regionById(bodyMap, areaId) : null;
+            // 18 November 2026 (SMALL, audit S2): the number keys' area (quietLast) changes only to an area the look has
+            // RESTED on (INFO_SETTLE.restS, as the card) or clicked; the tip itself still follows the look at once. A look
+            // going down from "Left knee" to the leg crosses the left ankle's key, and 1 then pulled the foot up.
+            const actQ = simState && simState.activity ? simState.activity : null;
+            quietRest = infoSettleStep(quietRest, { regionId: area ? area.id : null, t: actQ && Number.isFinite(actQ.t) ? actQ.t : 0,
+              keptId: quietLast ? quietLast.regionId : null,
+              clickedId: actQ && actQ.pulseClick === true && out.pulse && typeof out.pulse.regionId === 'string' ? out.pulse.regionId : null });
             if (area) {
               const leftArm = out.gaze.isLeftArm === true;
               const act = simState && simState.activity ? simState.activity : null;
@@ -8585,9 +8684,12 @@ export function start(params = {}) {
                 back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
                 armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
                 rotationState: typeof out.rotationState === 'string' ? out.rotationState : null });
-              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves });
-              quietLast = { regionId: area.id, moves: areaMoves }; // what the number keys do (also after the look has left the area)
-            } else tipModel = quietTipModel({ pick: crossPick, arrow: arrowTip });
+              const areaCss = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) : ''; // 18 November (MAP)
+              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '' });
+              if (quietRest.settled) quietLast = { regionId: area.id, moves: areaMoves }; // what the number keys do (also after the look has left the area)
+            // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
+            } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
+              color: crossRoute && mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(crossRoute.regionId) || '' : '' });
           }
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
@@ -8886,6 +8988,8 @@ export function start(params = {}) {
       // R558 (Message 6): what the activity holds, the opposite-action hints and the brain's hint meshes (plain data
       // the app and the scene already hold); the verified per-region looks only on request (cached per brain view).
       latch: current.out && current.out.latch ? current.out.latch : null,
+      // 18 Nov (S2): the area the number keys act on with the cards off (the area last rested on), and its settle state
+      quietKeys: { regionId: quietLast ? quietLast.regionId : null, rest: quietRest ? plainCopy(quietRest) : null },
       bodyJointTargets: current.out && current.out.bodyJointTargets ? current.out.bodyJointTargets : null,
       // R558 (HEAD_LOOK): the head pose of the last drawn frame (plain data the app holds) and the refusal counters.
       head: headLookOn ? { shown: headShown, heldOffsets: headPrevNow, limits: headLimits,
@@ -9068,6 +9172,7 @@ export function start(params = {}) {
       const moveN = moveKeyNumber(code);
       if (moveN) {
         if (down && typeof controlsApi.moveKey === 'function') cs = controlsApi.moveKey(cs, moveN, qaTime());
+        else if (!down && typeof controlsApi.moveKeyUp === 'function') cs = controlsApi.moveKeyUp(cs, moveN, qaTime()); // 18 Nov (M3)
         return plainCopy(cs.keys);
       }
       const areaDir = areaKeyDir(code);
