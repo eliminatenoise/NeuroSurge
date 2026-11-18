@@ -18,11 +18,13 @@ test('past the head\'s end the eyes turn: the look reaches 180 degrees each way 
   for (const yawDeg of [-180, -150, -121, -60, 0, 60, 121, 150, 180]) {
     const h = headPoseForLook({ yaw: yawDeg * DEG, pitch: 0 }, null, L);
     assert.ok(Math.abs(h.joints.neck_rot) <= L.neckRotDeg + 1e-9 && Math.abs(h.twistDeg) <= L.twistDeg + 1e-9, 'the neck and chest stay inside their ranges');
-    assert.ok(Math.abs(h.eyeYawDeg) <= L.eyeYawDeg + 1e-9);
+    // 19 November 2026: a look no longer turns the chest; the eyes take the chest's share of the turn as well
+    assert.equal(h.twistDeg, 0, 'a look does not turn the chest');
+    assert.ok(Math.abs(h.eyeYawDeg) <= L.eyeYawDeg + L.twistDeg + 1e-9);
     assert.ok(Math.abs(h.joints.neck_rot + h.twistDeg + h.eyeYawDeg - yawDeg) < 1e-6, 'neck + chest + eyes make the whole look');
     const d = ((h.look.yaw / DEG - yawDeg + 540) % 360) - 180;
     assert.ok(Math.abs(d) < 1e-6, `the camera looks where the look points (${yawDeg})`);
-    if (Math.abs(yawDeg) <= L.neckRotDeg + L.twistDeg) assert.equal(h.eyeYawDeg, 0, 'the eyes stay straight while the head can still turn');
+    if (Math.abs(yawDeg) <= L.neckRotDeg) assert.equal(h.eyeYawDeg, 0, 'the eyes stay straight while the head can still turn');
   }
   assert.ok(L.maxDownDeg >= 85 && L.maxDownDeg < 90 && L.maxUpDeg >= 80 && L.maxUpDeg < 90, 'nearly straight down and up, never exactly');
 });

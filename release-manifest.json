@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-28",
+  "version": "experimental-2026-11-19-body-update-29",
   "experimental": true,
-  "source": "Body update 28. Mesh packs (19 MB in place of 167 MB), a plain loading bar with a percentage, the brain higher and a free look.",
+  "source": "Body update 29. A look no longer bends the trunk; no hitches while looking to the right.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 243714,
-      "sha256": "7ac02d12e91d59ef1713f737218e99e6bae411d12bcd2b63fade39de7e30b493"
+      "bytes": 245355,
+      "sha256": "89bfa804e9ed2903d9fc4e0768e1f53d6c2792aae5a2ad5e4d0489f6c5ce8869"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 31104,
-      "sha256": "52a7ce3380603ff97c6b2038fe413bed91e33d6a2bfba217e73c55ecb2b34460"
+      "bytes": 31532,
+      "sha256": "b5301c0d306c3d5e2367b9418516123e9c3a74d786719ef3c1e51fff0a3a19af"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "7c04082e559eded9d227175477032a4720bdd85c75efbd3b38bdcb7415d42fa7"
+      "sha256": "f30930d1d33df95f03a7a9b813e79595bf3b7b59c5c894c7e106035c42fb797d"
     },
     {
       "path": "index.html",
@@ -3942,13 +3942,13 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 752370,
-      "sha256": "25403477882a63f57cc8a2941f91c578bee0a5aec7f46e54b857677af9e9a60c"
+      "bytes": 753116,
+      "sha256": "0b852ddbf0f6568464c1c8983634a0a7d028b44cf0779242a7efebdb988ba043"
     },
     {
       "path": "scene/src/ns-arm.mjs",
-      "bytes": 147629,
-      "sha256": "3f3ccea94f9a937824470fd24279e3b0287ecb01e10d257ece451a5383733c3e"
+      "bytes": 148187,
+      "sha256": "c8301788596a3f9ca74f8791de6b91d9178c25710982f737d3a3090614f668da"
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
@@ -4297,8 +4297,8 @@
     },
     {
       "path": "tests/eye-gaze.test.mjs",
-      "bytes": 7079,
-      "sha256": "9dac178c5a9a9477a315a5154d9232de10d5c7e6f35d154473eb39167f08b351"
+      "bytes": 7227,
+      "sha256": "050fda448a93d36027c28a1a2609ce5d6bf732826b2ddeaf89b3d519bcbae06d"
     },
     {
       "path": "tests/fake-doc.mjs",
@@ -4322,8 +4322,8 @@
     },
     {
       "path": "tests/head-hold.test.mjs",
-      "bytes": 16277,
-      "sha256": "aa12ad54336afdcb7fce6d1fd3c64bfa47108eace91bd96097e70c8984db2b8e"
+      "bytes": 16341,
+      "sha256": "04130034f2ed4302159b1b59c119b4f18a5fcff82fbffb72913b756fa019e696"
     },
     {
       "path": "tests/hold-move.test.mjs",
@@ -4352,8 +4352,8 @@
     },
     {
       "path": "tests/look-range.test.mjs",
-      "bytes": 2176,
-      "sha256": "cc310096746b343ea60f0e3c0a2f741e91eaaba548311e85599c83169d1dfa9a"
+      "bytes": 2354,
+      "sha256": "b99246813f75b88cf9a4b525ed2056fb972f47cf15748c4afa9a2f732cac285a"
     },
     {
       "path": "tests/look-taken.test.mjs",

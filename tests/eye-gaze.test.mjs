@@ -15,7 +15,9 @@ const look = (y, p) => ({ yaw: y * DEG, pitch: p * DEG });
 
 test('without a posture the eyes are not lowered: the look is the head, as before', () => {
   assert.equal(app.HEAD_LOOK.eyeDownDeg, 0);
-  for (const p of [-60, -20, 0, 30, 70]) {
+  // 19 November 2026: inside the neck's own range (45 either way); past it the eyes carry the view on, since a look no
+  // longer bends the trunk
+  for (const p of [-40, -20, 0, 30, 45]) {
     assert.equal(app.headPitchForLook(p, app.HEAD_LOOK), p);
     assert.equal(app.eyeDownForHead(p, app.HEAD_LOOK), 0);
     const h = app.headPoseForLook(look(0, p));

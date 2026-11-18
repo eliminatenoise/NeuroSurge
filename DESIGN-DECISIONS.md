@@ -1608,6 +1608,17 @@ The user: “Both the brain and mirror body are far too low. The brain should ac
 
 This withdraws the strip below the ankles of section 92. The game starts with the look 24 degrees below level (it was 52): the whole motor strip stands clear above your hands and feet, the mirror body directly under it between your hands, your own body below. The look goes all the way up, down and round; where the neck and trunk stop the eyes carry on, and nothing holds the look after the brain or the mirror body has been moved. While Space holds a thing the pointer still turns the head and the held thing goes with the look. The camera keeps one distance behind the eyes at every look, so nothing changes size in a turn. From outside (E) the camera stands straight behind the head. Built by one helper, whose work on carrying with W / A / S / D continues; the author looked at the start picture, far looks and the view from outside in the merged game.
 
+## 119. A look turns the head and the eyes, not the trunk; no last-resort search for the hand (19 November)
+
+The user: “when you look up and down, the pelvis pops out”; “Performance and reliability should be our number one priority.”
+
+Two things made looking around the most expensive thing in the game, and one of them was new in body update 28.
+
+- **The trunk.** A look past the neck's range bent and turned the trunk. That re-posed the whole body, re-fitted the left arm and ran the contact tests on every frame of the look, and it is what moved the belly and pelvis under a look down the body. Now a look turns the head on the neck (70 degrees to a side, 45 up and down) and the eyes carry the view on from there (`LOOK_BENDS_TRUNK = false` in `ns-app.mjs`). A trunk bend held by its own motor area is drawn as before.
+- **The hand's last-resort search.** With the camera of section 118 standing back at every look, a look 45 degrees or more to the right left the left hand no place in the picture, and the arm's fit then searched for one by posing the hand up to several hundred times in a frame: 12 ms a frame, with hitches of 100 ms. That search is off (`LAST_RESORT_SEARCH = false` in `ns-arm.mjs`): the hand reaches as far as it can toward where it was asked and may leave the picture.
+
+In the author's headless test browser (two runs) the main thread's work per frame while looking down and up fell from about 13 ms to 6 to 8 ms, and while looking around from about 23 ms (with the hitches) to about 10 ms; all four test cases (still, looking around, looking down and up, the limb turn) now hold 60 frames a second there.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

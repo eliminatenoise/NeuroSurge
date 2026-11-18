@@ -48,7 +48,8 @@ check('a held trunk bend leaves the head, and with it the view, where the look p
       near(got.look.pitch, base.look.pitch, 1e-9, `pitch at look ${y}/${p}, held ${h}`);
       near(got.joints.neck_rot, base.joints.neck_rot, 1e-9, 'neck turn');
       near(got.twistDeg, base.twistDeg, 1e-9, 'chest turn');
-      near(got.joints.neck_flex + got.bendDeg, base.joints.neck_flex + base.bendDeg, 1e-9, 'neck bend plus trunk bend');
+      // 19 November 2026: a look no longer bends the trunk; where the neck cannot take up a held bend the eyes do
+      // (the view, checked above, stays put; the head itself may point elsewhere).
       assert.ok(got.rollDeg < 1e-4, `the head stays upright (${got.rollDeg})`);
       n += 1;
     }
@@ -72,20 +73,20 @@ check('the trunk is drawn at its held bend while the neck can take up the differ
   near(down.joints.neck_flex, -30, 1e-9, 'neck');
 });
 
-check('past the neck\'s range the trunk gives way from its held bend, and the view still does not move', () => {
-  // Looking up 20 with the trunk held 60 forward: the neck is fully back (45), so the trunk can only bend 25.
+check('past the neck\'s range the trunk stays at its held bend and the eyes take the rest: the view still does not move', () => {
+  // 19 November 2026 (a look no longer bends the trunk). Looking up 20 with the trunk held 60 forward: the neck is
+  // fully back (45) and the trunk stays at 60; the eyes look up the remaining 35.
   const base = headPoseForLook(look(0, 20), null, L);
   const got = headPoseForLook(look(0, 20), { trunk_flex: 60 }, L);
   near(got.joints.neck_flex, -L.neckExtDeg, 1e-9, 'neck at the end of its range');
-  near(got.bendDeg, 25, 1e-9, 'trunk bend drawn');
+  near(got.bendDeg, 60, 1e-9, 'trunk bend drawn');
   near(got.heldTrunkDeg, 60, 1e-9, 'held bend asked for');
-  assert.ok(got.bendDeg < got.heldTrunkDeg);
   near(got.look.pitch, base.look.pitch, 1e-9, 'pitch');
   near(got.look.yaw, base.look.yaw, 1e-9, 'yaw');
-  // The other way: looking down 60 with the trunk held back 25: the neck is fully forward (45), the trunk bends 15 forward.
+  // The other way: looking down 60 with the trunk held back 25: the neck is fully forward (45), the trunk stays back.
   const lean = headPoseForLook(look(0, -60), { trunk_flex: -25 }, L);
   near(lean.joints.neck_flex, L.neckFlexDeg, 1e-9, 'neck at the end of its range');
-  near(lean.bendDeg, 15, 1e-9, 'trunk bend drawn');
+  near(lean.bendDeg, -25, 1e-9, 'trunk bend drawn');
 });
 
 check('a held bend beyond the trunk\'s range is taken as the end of the range', () => {
@@ -95,14 +96,13 @@ check('a held bend beyond the trunk\'s range is taken as the end of the range', 
   near(lean.heldTrunkDeg, -headBendLimit(0, -1, L), 1e-9, 'held back');
 });
 
-check('without a held bend the neck bends first and the trunk takes the rest, as before', () => {
+check('without a held bend the neck bends and the trunk does not: a look never bends the trunk', () => {
   for (const y of YAWS) for (const p of pitchesFor(y)) {
     const got = headPoseForLook(look(y, p), null, L);
-    const psi = got.bendDirDeg, f = -p;
-    const neck = clamp(f, -L.neckExtDeg, L.neckFlexDeg);
-    const bend = clamp(f - neck, -headBendLimit(psi, -1, L), headBendLimit(psi, 1, L));
-    near(got.joints.neck_flex, neck, 1e-9, `neck at look ${y}/${p}`);
-    near(got.bendDeg, bend, 1e-9, `trunk at look ${y}/${p}`);
+    const f = -p;
+    near(got.joints.neck_flex, clamp(f, -L.neckExtDeg, L.neckFlexDeg), 1e-9, `neck at look ${y}/${p}`);
+    near(got.bendDeg, 0, 1e-9, `trunk at look ${y}/${p}`);
+    near(got.twistDeg, 0, 1e-9, `chest at look ${y}/${p}`);
     near(got.heldTrunkDeg, 0, 1e-12, 'no held bend');
   }
 });

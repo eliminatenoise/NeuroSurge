@@ -227,6 +227,11 @@ export const RANGE_PRONATION_LEVELS = Object.freeze([-80, -40, 0, 40, 80]);
 export const WRIST_CLAMP_STEP_DEG = 5;
 /** Steps of the last-resort anchor search (per target) when a pose fits nowhere at the requested anchor. */
 const X_SEARCH_STEPS = 20;
+/** 19 November 2026 (performance first): false = when a look leaves the hand no place in the picture (a look well to
+ * the right of the left hand), the fit no longer searches for one. That last-resort search posed the hand up to
+ * several hundred times in a frame (12 ms a frame and hitches of 100 ms while the look moved); the hand now simply
+ * reaches as far as it can toward where it was asked and may leave the picture. */
+export const LAST_RESORT_SEARCH = false;
 
 export const ELBOW_MAX_DEG = 145;
 /** The shoulder-to-wrist distance never exceeds this fraction of upper arm + forearm length (no locked elbow). */
@@ -2000,7 +2005,7 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
       // Not expected: the pose fits at no depth and no wrist angle here. Last resort, flagged: move toward the range
       // centre, then the screen centre.
       anchor = 'pose_exceeds_envelope';
-      const found = searchX(x, [0.5 * (range.xMin + range.xMax), 0]);
+      const found = LAST_RESORT_SEARCH ? searchX(x, [0.5 * (range.xMin + range.xMax), 0]) : null;
       if (found) { x = found.x; r = found.r; }
     }
     win = r.win;
@@ -2011,8 +2016,8 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
     // wrist clamp), else move to the nearest anchor (toward the screen centre first, then the other side) where it does.
     anchor = 'look_unsatisfiable';
     x = clamp(xNdc, -vbox.l, vbox.r);
-    let r = fitWithWrist(x);
-    if (r.d === null) {
+    let r = LAST_RESORT_SEARCH ? fitWithWrist(x) : fitAtX(P, x);
+    if (r.d === null && LAST_RESORT_SEARCH) {
       const found = searchX(x, [0, x <= 0 ? vbox.r : -vbox.l]);
       if (found) { x = found.x; r = found.r; }
     }

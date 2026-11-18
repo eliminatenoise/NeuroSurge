@@ -376,15 +376,21 @@ export function headBendLimit(dirDeg, sign, L = HEAD_LOOK) {
  * direction shared between the two trunk joints, the chest turn about the trunk's long axis, the neck turn, then the
  * neck's nod about the head's turned side-to-side axis; so it equals the posed skull's direction.
  */
+/** 19 November 2026 (the owner: "when you look up and down, the pelvis pops out"; "Performance and reliability should
+ * be our number one priority"): false = a look turns the head on the neck and the eyes carry the view on; it no longer
+ * turns the chest or bends the trunk. The trunk bend re-posed the whole body, re-fitted the arm and ran the contact
+ * tests on every frame of a look, and it moved the belly and pelvis under a look down the body. A trunk bend held by
+ * its own motor area is drawn as before. */
+export const LOOK_BENDS_TRUNK = false;
 export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('app_input', 'head look needs finite { yaw, pitch } radians');
   // (18 November 2026: lp is the HEAD's pitch for this look; the eyes take the rest, HEAD_LOOK eyeDownDeg)
   const ly = look.yaw / DEG, lp = headPitchForLook(look.pitch / DEG, L);
   const n = headOffset(offsets, 'neck_rot') + ly;
   const neckRot = clamp(n, -L.neckRotDeg, L.neckRotDeg);
-  const twist = clamp(n - neckRot, -L.twistDeg, L.twistDeg);
+  const twist = LOOK_BENDS_TRUNK ? clamp(n - neckRot, -L.twistDeg, L.twistDeg) : 0;
   // What the head, neck and chest cannot turn, the eyes do (HEAD_LOOK eyeYawDeg): the camera turns in the head.
-  const eyeMax = Number.isFinite(L.eyeYawDeg) && L.eyeYawDeg > 0 ? L.eyeYawDeg : 0;
+  const eyeMax = (Number.isFinite(L.eyeYawDeg) && L.eyeYawDeg > 0 ? L.eyeYawDeg : 0) + (LOOK_BENDS_TRUNK ? 0 : L.twistDeg); // the eyes take the chest's share too
   const eyeYaw = clamp(n - neckRot - twist, -eyeMax, eyeMax);
   const psiDeg = twist + neckRot;
   const down = headBendLimit(psiDeg, 1, L), up = headBendLimit(psiDeg, -1, L);
@@ -394,7 +400,7 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   // the head keeps the direction the look and the held neck angle give it. Past the neck's range the trunk gives
   // way from its held bend, exactly as an ordinary steep look bends it.
   let neckFlex = clamp(f - held, -L.neckExtDeg, L.neckFlexDeg);
-  let bend = clamp(f - neckFlex, -up, down);
+  let bend = LOOK_BENDS_TRUNK ? clamp(f - neckFlex, -up, down) : held; // the trunk stays at its held bend; the eyes take the rest
   // While a held offset springs the sum may pass the camera's limits for a moment: the neck gives way first.
   if (neckFlex + bend > L.maxDownDeg) { neckFlex = Math.max(-L.neckExtDeg, L.maxDownDeg - bend); bend = Math.min(bend, L.maxDownDeg - neckFlex); }
   if (neckFlex + bend < -L.maxUpDeg) { neckFlex = Math.min(L.neckFlexDeg, -L.maxUpDeg - bend); bend = Math.max(bend, -L.maxUpDeg - neckFlex); }
