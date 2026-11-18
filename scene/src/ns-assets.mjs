@@ -675,6 +675,11 @@ function asBytes(raw) {
  * served file that differs from the pinned bytes in any way (for example an added byte-order mark, which a browser's
  * response.text() would silently strip before the text path sees it).
  */
+/** The vertex count a manifest's `vertices` is compared with: the mesh's own, or, for a coarse mesh of a verified
+ * pack, its source file's (recorded by the pack; kept here per mesh). */
+const sourceVertexCount = new WeakMap();
+const countedVertices = mesh => (sourceVertexCount.has(mesh) ? sourceVertexCount.get(mesh) : mesh.positions.length / 3);
+
 async function readVerified(entry, io) {
   const id = entry.element_id;
   if (typeof io.readBytes === 'function') {
@@ -687,6 +692,9 @@ async function readVerified(entry, io) {
     if (isPackedMesh(raw)) {
       if (raw.sourceBytes !== entry.bytes) fail('asset_bytes', `${id}: packed from a file of ${raw.sourceBytes} bytes, manifest says ${entry.bytes}`);
       if (typeof raw.sourceSha256 !== 'string' || raw.sourceSha256 !== entry.sha256) fail('asset_hash', `${id}: sha256 of the packed source file does not match the manifest`);
+      // a coarse mesh (a documented derivative, ns-pack) has fewer vertices than its source file; the manifest's count is
+      // compared with the SOURCE file's count the pack records
+      if (Number.isSafeInteger(raw.sourceVertices)) sourceVertexCount.set(raw.mesh, raw.sourceVertices);
       return { text: null, bytes: raw.sourceBytes, mesh: raw.mesh };
     }
     const u8 = asBytes(raw);
@@ -724,7 +732,7 @@ function checkParsed(set, entry, mesh) {
   const id = entry.element_id;
   const p = mesh && mesh.positions;
   if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
-  const n = p.length / 3;
+  const n = countedVertices(mesh);
   if (typeof entry.vertices === 'number' && n !== entry.vertices) fail('asset_vertices', `${id}: parsed ${n} vertices, manifest says ${entry.vertices}`);
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < p.length; i += 3) {
@@ -1081,7 +1089,8 @@ async function verifyFullbody(entry, io, parse, beforeParse) {
   const mesh = await parseVerified(parse, text, bytes, packed);
   const p = mesh && mesh.positions;
   if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
-  if (typeof entry.vertices === 'number' && p.length / 3 !== entry.vertices) fail('asset_vertices', `${id}: parsed ${p.length / 3} vertices, manifest says ${entry.vertices}`);
+  const counted = countedVertices(mesh);
+  if (typeof entry.vertices === 'number' && counted !== entry.vertices) fail('asset_vertices', `${id}: parsed ${counted} vertices, manifest says ${entry.vertices}`);
   let sx = 0;
   for (let i = 0; i < p.length; i += 3) { if (!Number.isFinite(p[i]) || !Number.isFinite(p[i + 1]) || !Number.isFinite(p[i + 2])) fail('asset_parse', `${id}: non-finite vertex`); sx += p[i]; }
   checkSide(id, entry.laterality, sx / (p.length / 3), 'parsed centroid');
@@ -1567,7 +1576,8 @@ function packetVerifier(sp, box, deny = null) {
     const p = mesh && mesh.positions;
     if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
     const n = p.length / 3;
-    if (typeof entry.vertices === 'number' && n !== entry.vertices) fail('asset_vertices', `${id}: parsed ${n} vertices, manifest says ${entry.vertices}`);
+    const counted = countedVertices(mesh);
+    if (typeof entry.vertices === 'number' && counted !== entry.vertices) fail('asset_vertices', `${id}: parsed ${counted} vertices, manifest says ${entry.vertices}`);
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     let sx = 0;
     for (let i = 0; i < p.length; i += 3) {

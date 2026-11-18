@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-30",
+  "version": "experimental-2026-11-19-body-update-31",
   "experimental": true,
-  "source": "Body update 30. The anconeus at the back of the right elbow follows a deep bend with fewer sharp creases.",
+  "source": "Body update 31. Coarser meshes (3.2 MB), a dark edge on every limb, pale fingertips and toes, one fast carry.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 246599,
-      "sha256": "c9eb9a1574ba9a7fcd188c31df51dd1078eb9fe83c761da45c9b7b84c53e3623"
+      "bytes": 249551,
+      "sha256": "5e75a9c264c51e7f34e6e144562d15d742c0894ada0f36b54590a4c53cfc2311"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 31884,
-      "sha256": "16c9d3e83f89830df22fbf55f59ad96de6ed9dfed14f8f262e1d11cc34dd32b2"
+      "bytes": 32098,
+      "sha256": "adaf075d8d2010e5eb26af0eac607c48823d7c84e4696d23181a9aca7f9bee66"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "b4b53cb17d7e6c3ef8ab6a35a07f2320839c4767c0f708a6c002bfa4a3c668ec"
+      "sha256": "dde819be65b2202527f4e63522e90e649e8233cec60993e440553d501347ce91"
     },
     {
       "path": "index.html",
@@ -3772,43 +3772,38 @@
     },
     {
       "path": "packs/PACK-INDEX.json",
-      "bytes": 37372,
-      "sha256": "b607874f9989d88911ae0c1e35bc4bf4f59e2dc433fd5002aebd9545850457d3"
+      "bytes": 32657,
+      "sha256": "e9c719df50aff6fbcc060e3b634c15b8d25527e3ee34dda60e783de26ae6ffdb"
     },
     {
       "path": "packs/README.md",
-      "bytes": 2423,
-      "sha256": "1d7d1e72682b6664c65789c764e99c5b2ae72f375cc5ab6d9db77dd22de05686"
+      "bytes": 4813,
+      "sha256": "19a06adda6baef06d47e5264834b67c2392617b4be069840f11b05ecf4ac7284"
     },
     {
       "path": "packs/arm-brain.nspack",
-      "bytes": 3699029,
-      "sha256": "7c6ec95163e1cee92e7fdd916c3ad6187850ba44a0c0d973b2821994f50fc45f"
-    },
-    {
-      "path": "packs/cerebral-arteries.nspack",
-      "bytes": 888724,
-      "sha256": "721c19d09a6e5e3fefcdd744c52d218eaf3cd640970cbe861873a8c7361502ab"
+      "bytes": 522757,
+      "sha256": "7f0aa7c09c739a8175fa4b1b95692663589a803678a57b6e91f83a629b831888"
     },
     {
       "path": "packs/face-muscles.nspack",
-      "bytes": 725349,
-      "sha256": "ff3ebf9f2f50f6acd41894af1c9f8c71a27bc2867ca1dc8c2ebe44bad9d8118e"
+      "bytes": 112684,
+      "sha256": "f48c98c2663df69773bfbbbc258863767cac8588ea729c7d2c24e0fcd4103432"
     },
     {
       "path": "packs/fullbody.nspack",
-      "bytes": 8622783,
-      "sha256": "f219e08332123f0410d4286816e2f4050ffb70fdde0f4584d228375f6ea47cce"
+      "bytes": 1513312,
+      "sha256": "a761ae86a726ac2e1c5d01ed3b51d66eeca3eaa53499a6b7f1ec5a27f41141e7"
     },
     {
       "path": "packs/head.nspack",
-      "bytes": 994914,
-      "sha256": "705ff54f97bf8beb8a14615e450a1e37d9cc67f993de96bd9963086f38b2c756"
+      "bytes": 51890,
+      "sha256": "3db536cbe45ba9918b87abf312043ef55b9eb8089e4e97ff5f2e0a880e69c5cf"
     },
     {
       "path": "packs/missing-muscles.nspack",
-      "bytes": 4947626,
-      "sha256": "123269b248b20a90f8c8c7a54625c58bd631d9bd441ab60e947f2f4eb2974f9b"
+      "bytes": 1017060,
+      "sha256": "961e00db6a1a647288855e884dfe12d9c223167add55757ed50e8d168bf5fd05"
     },
     {
       "path": "scene/example/assembly.css",
@@ -3942,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 753116,
-      "sha256": "0b852ddbf0f6568464c1c8983634a0a7d028b44cf0779242a7efebdb988ba043"
+      "bytes": 752228,
+      "sha256": "0233d3ba277963f5020b58479750894edfc99195193ef1cfaf0e3f9b4ea8b27d"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3977,8 +3972,8 @@
     },
     {
       "path": "scene/src/ns-assets.mjs",
-      "bytes": 122877,
-      "sha256": "f937e26b1566c9af76e7096c07150f50af340bab5424d0bbdc0b9b9c5e4b9add"
+      "bytes": 123616,
+      "sha256": "5785e617e66225e05371bf148437823c8a5e437d10449f907ff08c3e7b380f06"
     },
     {
       "path": "scene/src/ns-body-arm-bridge.mjs",
@@ -4012,8 +4007,8 @@
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 70010,
-      "sha256": "890b67de7c46c38ed9c475ba441c9250e22be73dd1d9bda73fcc7b5d6b67c806"
+      "bytes": 70598,
+      "sha256": "b4d5d4138fb006240410394cfcdf67cab41a3ee30ae1e2264be4358359f8521d"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -4042,8 +4037,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 99629,
-      "sha256": "30523f32bffa36502d4d7d2ab9a5841882c385ca5f3bf5760eb517ee0e1ffd19"
+      "bytes": 97709,
+      "sha256": "ff9a271d9d87f856c459b65273708d0b9b4260dcacdad3453d1c414c99be86c0"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4122,8 +4117,8 @@
     },
     {
       "path": "scene/src/ns-pack.mjs",
-      "bytes": 13771,
-      "sha256": "d9478a869797a3e25767f3923aadda94cf063ac2e02d7857957237adb5d6a0eb"
+      "bytes": 15011,
+      "sha256": "49e89ec7fae9a13c4052dd877f751c88c232953066e8c49859b12fdf4ed85d05"
     },
     {
       "path": "scene/src/ns-perf.mjs",
@@ -4147,8 +4142,8 @@
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 34316,
-      "sha256": "c4cd849b326c8a9914c220c47db18892f538ed4a88773ea5be17ba131efbae4b"
+      "bytes": 31519,
+      "sha256": "8b731f60608bd945f53a528883abf6c833cc34c1a75827d888ecab46f1dfd06e"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -4167,8 +4162,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1078187,
-      "sha256": "4d0db02dd9b70ae8675f588712b2628e0f4520f107245c1879d56ff07aff7774"
+      "bytes": 1081214,
+      "sha256": "1a7a2d6ce49ad5cebc9ac50dcd64eedcf2d01bbf92738d9a7e4e4d2c41e56c01"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4327,8 +4322,8 @@
     },
     {
       "path": "tests/hold-move.test.mjs",
-      "bytes": 13271,
-      "sha256": "0f3f4134c4ab3ec5d6e11fa09bbbf999ca81b3b446d4c08de59523c1caacec14"
+      "bytes": 14117,
+      "sha256": "b6b17fea375652f11bc4374c81d15a05f4c4bfe08c286897502314a22e537317"
     },
     {
       "path": "tests/info-settle.test.mjs",
@@ -4377,13 +4372,18 @@
     },
     {
       "path": "tests/pack.test.mjs",
-      "bytes": 10690,
-      "sha256": "c4421b23e58a45604d8af78f0e870417fea2cfd8f6eaaf73f6e2ea131076bb43"
+      "bytes": 19285,
+      "sha256": "b3da0f673c6aac8cb21981661853f11f16a7748ea83214c5ae6e9959270756e2"
     },
     {
       "path": "tests/perf.test.mjs",
       "bytes": 2192,
       "sha256": "6c0a6542091caed78a33a5ff5a44229fae884c6d1615ec0a85a7c7f152245143"
+    },
+    {
+      "path": "tests/plain-look.test.mjs",
+      "bytes": 2215,
+      "sha256": "dcf56e281d904687d49d6d9695d312cde6e60c6ac6930955b8439fed5b158f87"
     },
     {
       "path": "tests/pointer-release.test.mjs",
@@ -4447,8 +4447,8 @@
     },
     {
       "path": "tools/build-mesh-packs.mjs",
-      "bytes": 7249,
-      "sha256": "917339a6d46fcb2d55300eadf1f442c3d205ab7bddaa65b83ab598622291505e"
+      "bytes": 10173,
+      "sha256": "24120e497e2642ca9b38b735e36182a83d9636d33a1301af3de4bb565da75c87"
     },
     {
       "path": "tools/load-body.mjs",
@@ -4459,6 +4459,11 @@
       "path": "tools/rom-sweep.mjs",
       "bytes": 46684,
       "sha256": "22ff0378d59c09c34b94ac7823ab83697fcf1a0750c066150e0429bff00d38f9"
+    },
+    {
+      "path": "tools/simplify-mesh.mjs",
+      "bytes": 24042,
+      "sha256": "a594f68a54c8802918db6d7743878b290ab4bfd4e4d1aabe720d50638b25d777"
     },
     {
       "path": "vendor/LICENSE",

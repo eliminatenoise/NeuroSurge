@@ -332,15 +332,9 @@ export function createControls({
    * the press reached behind (REACH_CODES: Shift was held at the press). */
   const noDrag = () => ({ target: null, dx: 0, dy: 0, travel: 0, turning: false, behind: false });
   const dragOf = state => (state && state.drag && typeof state.drag === 'object' ? state.drag : noDrag());
-  /** R17 (owner, 17 November: "trackpad drag to move items essentially within the XY dimension ... one of the main issues
-   * is when you grasp cursor, you're not actually moving things"): while the game says a Space grasp HOLDS a movable item
-   * (setCarry: the brain, the mirror body or one of your limbs), pointer movement does not turn the look: it waits in
-   * carry.dx / dy (CSS px, as moved) for the game (takeCarry), which moves the held item left / right / up / down by it. */
-  const noCarry = () => ({ on: false, dx: 0, dy: 0 });
-  const carryOf = state => (state && state.carry && typeof state.carry === 'object' && typeof state.carry.on === 'boolean' ? state.carry : noCarry());
   const initialState = () => ({
     keys: releasedKeys(), yaw: 0, pitch: 0, lookMs: null, events: [], ui: [], look: { sensitivity, invertY },
-    pitchLimits: null, viewSeq: 0, pointer: null, button: releasedButton(), drag: noDrag(), carry: noCarry(), reach: false, space: noSpaceGesture()
+    pitchLimits: null, viewSeq: 0, pointer: null, button: releasedButton(), drag: noDrag(), reach: false, space: noSpaceGesture()
   });
   /** R5-input: the pitch range and the button of a state (older states without them read the defaults). */
   const limitsOf = state => {
@@ -508,14 +502,13 @@ export function createControls({
     const held = Boolean(b && b.down === true);
     const sp = spaceOf(state);
     const spaceBusy = sp.role !== null || sp.grasp !== 'none' || sp.turn !== 'none' || sp.tapMs !== null;
-    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || spaceBusy || held || dragOf(state).target !== null || state.reach === true || carryOf(state).on)) return state;
+    if (!(k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.Space || spaceBusy || held || dragOf(state).target !== null || state.reach === true)) return state;
     let events = state.events;
     if (sp.grasp !== 'none') events = [...events, stamp({ type: 'grasp', down: false, safety: true }, timeMs)];
     if (sp.turn !== 'none') events = [...events, stamp({ type: 'turn', phase: 'stop', safety: true }, timeMs)];
     const next = { ...state, keys: releasedKeys(), events, reach: false, space: { ...noSpaceGesture(), holding: sp.holding, turning: sp.turning, sentTurn: sp.sentTurn } };
     if (held) next.button = { ...b, down: false, upMs: Number.isFinite(timeMs) ? timeMs : b.upMs };
     if (dragOf(state).target !== null) next.drag = noDrag(); // R558: a pause, blur or lost pointer ends a drag at once
-    if (carryOf(state).on) next.carry = noCarry(); // R17: nothing is held any more, so the pointer turns the look again
     return next;
   }
 
@@ -549,24 +542,6 @@ export function createControls({
   }
   /** R558: { target, turning } of the gesture now ({ target: null } when none). */
   function dragState(state) { const d = dragOf(state); return { target: d.target, turning: d.turning }; }
-
-  /** R17: the game's answer about what a grasp holds: on true = it holds an item the pointer moves (so pointer movement
-   * is gathered for takeCarry instead of turning the look); false = nothing such is held (movement not yet taken is
-   * dropped). Returns the same state when nothing changes. */
-  function setCarry(state, on) {
-    const c = carryOf(state), v = on === true;
-    if (c.on === v && state.carry === c) return state;
-    return { ...state, carry: v ? { on: true, dx: c.on ? c.dx : 0, dy: c.on ? c.dy : 0 } : noCarry() };
-  }
-  /** R17: the game takes the pointer movement gathered while it holds an item: { state, move: { dx, dy } | null }
-   * (CSS px since the last call; null while nothing is held or the pointer has not moved). */
-  function takeCarry(state) {
-    const c = carryOf(state);
-    if (!c.on || (c.dx === 0 && c.dy === 0)) return { state, move: null };
-    return { state: { ...state, carry: { on: true, dx: 0, dy: 0 } }, move: { dx: c.dx, dy: c.dy } };
-  }
-  /** R17: { on } of the hold-and-move mode now. */
-  function carryState(state) { return { on: carryOf(state).on }; }
 
   /** Append one UI event (copy-on-write; a state without `ui` gets one). Bounded by UI_QUEUE_LIMIT (see there). */
   function pushUi(state, ev, timeMs) {
@@ -616,12 +591,11 @@ export function createControls({
    * Non-finite deltas are ignored. Yaw is not wrapped or clamped.
    * R5-input: the pitch range is state.pitchLimits when set (setPitchLimits, e.g. the third-person range), else
    * +/- pitchLimit.
-   * R17: while the game holds a movable item (setCarry) the movement is gathered for takeCarry and the look stays. */
+   * 19 November 2026 (the owner: "The head should not be locked. The POV, perspective of view, should not be locked."):
+   * the pointer turns the look in every state, also while a grasp holds something (R17's hold-and-move mode, in which
+   * the movement was kept for the held item and the look stood still, is withdrawn). */
   function pointerMove(state, dx, dy, timeMs) {
     if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return state;
-    // R17: while a grasp holds a movable item the movement is the item's (takeCarry), never a look.
-    const held = carryOf(state);
-    if (held.on) return { ...state, carry: { on: true, dx: held.dx + dx, dy: held.dy + dy } };
     const { radPerPx, invertY: inv } = lookOptions(state);
     const lim = limitsOf(state);
     const yaw = state.yaw - dx * radPerPx;
@@ -807,7 +781,6 @@ export function createControls({
     // R558 (R31): press-and-drag on the brain or the mirror body
     dragStart, dragMove, dragEnd, takeDrag, dragState,
     // R17: hold-and-move (a grasp that holds an item takes the pointer movement)
-    setCarry, takeCarry, carryState,
     // R558 (Messages 33 and 34): the reach-behind key
     setReach,
     // R558 (Message 40): the Space gestures (SPACE_GESTURE)
@@ -1471,8 +1444,9 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       apply(s => controls.dragMove(s, mx, my));
       return;
     }
-    // R17: with a free pointer (no capture) a held item still follows the pointer, button or not.
-    const carrying = typeof controls.carryState === 'function' && controls.carryState(getState()).on === true;
+    // With a free pointer (no capture) a held item still follows the pointer, button or not: the pointer turns the
+    // look, and the look carries what the grasp holds (19 November 2026; before, the movement went to the item alone).
+    const sp = getState().space, carrying = Boolean(sp && sp.holding === true);
     if (!dragging && !carrying) return;
     let dx = e.movementX, dy = e.movementY;
     const client = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;

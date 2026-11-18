@@ -3747,6 +3747,34 @@ export function patchGlowRimShaders(vertexShader, fragmentShader) {
   return { vertexShader, fragmentShader: 'uniform vec4 nsGlowRim;\n' + fragmentShader.slice(0, f) + body + fragmentShader.slice(f) };
 }
 
+/** 19 November 2026 (the plain look; the owner: "There should be clear outline / contrast between limbs so that they
+ * don't merge and mush into each other, and surely there should be still exposed white bone, such as for fingertips
+ * and toes"). The plain look's one small patch (pure; returns null when a hook is missing, and the material then
+ * stays a plain standard material):
+ *  - kind 'muscle': the per-vertex tendon value (attribute nsTendon: 0 over a belly, 1 on an end attached to bone, 0.85
+ *    all over the sleeves round the finger and toe bones) turns the surface toward bone white by PLAIN_LOOK.tendonMix,
+ *    so tendon ends, fingertips and toes are pale again;
+ *  - both kinds: the lit colour falls to PLAIN_LOOK.edge of itself toward the silhouette (where the surface turns
+ *    away from the eye, inside PLAIN_LOOK.edgeWidth of |N.V|), so every limb and muscle has a dark edge of its own
+ *    and two overlapping limbs part without an outline pass.
+ * boneLinear: the bone colour, linear RGB. */
+export const PLAIN_LOOK = Object.freeze({ tendonMix: 0.92, edge: 0.3, edgeWidth: 0.5 });
+export function patchPlainShaders(vertexShader, fragmentShader, kind, boneLinear, o = PLAIN_LOOK) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || !Array.isArray(boneLinear)) return null;
+  const OUT = ['#include <opaque_fragment>', '#include <output_fragment>'].find(h => fragmentShader.includes(h));
+  const COL = '#include <color_fragment>', BEG = '#include <begin_vertex>';
+  if (!OUT || !fragmentShader.includes('vViewPosition') || fragmentShader.includes('nsPlainEdge')) return null;
+  const f = v => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+  let vs = vertexShader, fs = fragmentShader;
+  if (kind === 'muscle') {
+    if (!vs.includes(BEG) || !fs.includes(COL) || vs.includes('vNsTendon')) return null;
+    vs = 'attribute float nsTendon;\nvarying float vNsTendon;\n' + vs.replace(BEG, `${BEG}\n\tvNsTendon = nsTendon;`);
+    fs = 'varying float vNsTendon;\n' + fs.replace(COL, `${COL}\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, vec3( ${boneLinear.map(f).join(', ')} ), clamp( vNsTendon, 0.0, 1.0 ) * ${f(o.tendonMix)} );`);
+  }
+  fs = fs.replace(OUT, `\tfloat nsPlainEdge = smoothstep( 0.0, ${f(o.edgeWidth)}, abs( dot( normalize( normal ), normalize( vViewPosition ) ) ) );\n\toutgoingLight *= mix( ${f(o.edge)}, 1.0, nsPlainEdge );\n${OUT}`);
+  return { vertexShader: vs, fragmentShader: fs };
+}
+
 /** R558 (user Message 18): the muscle LOOK shader patch (pure). Per vertex the attribute nsTendon (0 over the belly, 1 on
  * an end attached to bone) becomes the varying vNsTendon. Per fragment:
  *  - the albedo turns toward the tendon white nsMuscleTendon.rgb by vNsTendon x nsMuscleTendon.a (half as much on a
@@ -5651,8 +5679,18 @@ export function createScene({
     return { value: a ? new THREE.Vector4(a[0], a[1], a[2], 1 / MUSCLE_LOOK.fibreMm) : new THREE.Vector4(0, 0, 1, 0) };
   };
   const noFibre = { value: new THREE.Vector4(0, 0, 1, 0) };
+  const plainLook = { applied: null, materials: 0 };
+  const plainBone = hexToLinear(MATERIAL.bone);
+  const plainPatch = (m, kind) => {
+    plainLook.materials++;
+    return composePatch(m, `ns-plain-${kind}`, shader => {
+      const p = patchPlainShaders(shader.vertexShader, shader.fragmentShader, kind, plainBone);
+      plainLook.applied = p !== null && plainLook.applied !== false;
+      if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
+    });
+  };
   const muscleLookPatch = m => {
-    if (SIMPLE_LOOK) return m;
+    if (SIMPLE_LOOK) return plainPatch(m, 'muscle');
     muscleLook.materials++;
     return composePatch(m, 'ns-muscle-look-r558', shader => {
       const p = patchMuscleLookShaders(shader.vertexShader, shader.fragmentShader);
@@ -5693,7 +5731,7 @@ export function createScene({
     nsInkFar: { value: new THREE.Vector4(C.line.farFromM, C.line.farToM, C.farSoft, 0) } // z: band half-width on a far figure
   };
   const comicPatch = (m, kind) => {
-    if (SIMPLE_LOOK) return m;
+    if (SIMPLE_LOOK) return kind === 'bone' ? plainPatch(m, 'bone') : m;
     comic.materials++;
     return composePatch(m, `ns-comic-r558-${kind}`, shader => {
       const p = patchComicShaders(shader.vertexShader, shader.fragmentShader, kind);

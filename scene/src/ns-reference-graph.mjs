@@ -128,59 +128,19 @@ export function offsetBrainState(state, view, actualTransform, movementWorld) {
  * distance) against Message 12 ("moved to and around each other"); straight ahead it can still be brought up to your
  * body, where the stop-at-contact rule holds it. */
 export const MIRROR_CARRY = Object.freeze({ maxSideDeg: 35 });
-/** R17 (display choices, not anatomy): a held item moved with the pointer stays inside this part of the view: its
- * centre within sideDeg of straight ahead (the wide view stretches things farther out, MIRROR_CARRY) and within
- * upDeg / downDeg of the look's own height; the centre is never taken higher or lower than maxElevationDeg from level
- * (no carry over the top of your head). Pushing on past the edge turns the look instead, which carries the item on. */
-export const CARRY_VIEW = Object.freeze({ sideDeg: 35, upDeg: 40, downDeg: 40, maxElevationDeg: 75,
-  // The mirror body's centre stays between this far below and above the eye (m): about a body length under where it
-  // starts (it starts 0.36 m below the eye) and two above. Without it a long push down left it metres under your feet.
-  mirrorHeightM: Object.freeze([-1.6, 2.2]) });
 /**
- * R17 (owner, 17 November: "trackpad drag to move items essentially within the XY dimension ... when you grasp cursor,
- * you're not actually moving things"). Pure. One frame's pointer movement (dxPx right, dyPx down, CSS px) of a held
- * item whose hold point is `centre` (world m), seen from `eye` with the camera look { yaw, pitch }:
- *   shiftM     [right, up] metres in the level frame of the look's turn: the item moves across the view by the pointer's
- *              own movement (a pixel of pointer is a pixel of item at the middle of the view: distance * 2 tan(fov / 2) /
- *              view height per px), as far as the CARRY_VIEW part of the view allows;
- *   lookDelta  { yaw, pitch } radians: the rest of the movement turns the look (lookRadPerPx per px, the look's own
- *              rate), which carries the held item on, so the item never leaves the view and can be taken anywhere.
- * An item already outside that part of the view may come back in freely and is never pushed farther out.
- * heightM [lowest, highest] (m, the hold point's height relative to the eye; null = no limit): the item is not moved
- * past it, and a push against it does not turn the look either (the look would carry the item on past the limit).
- */
-export function carryPointer({ centre, eye, look, dxPx = 0, dyPx = 0, viewHeightPx, fovYDeg, lookRadPerPx, view = CARRY_VIEW, heightM = null } = {}) {
-  const c = vec(centre, 'held item hold point'), o = vec(eye, 'camera origin');
-  if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('finite camera look required');
-  if (!(Number.isFinite(viewHeightPx) && viewHeightPx > 0 && Number.isFinite(fovYDeg) && fovYDeg > 0 && fovYDeg < 180 && Number.isFinite(lookRadPerPx) && lookRadPerPx >= 0)) fail('view height, field of view and look rate required');
-  if (!Number.isFinite(dxPx) || !Number.isFinite(dyPx)) fail('finite pointer movement required');
-  const d = transformDirection(rigidInverse(lookRotation(look.yaw, 0)), c.map((v, i) => v - o[i]));
-  const x = d[0], y = d[1], depth = Math.max(1e-3, -d[2]), dist = Math.max(1e-3, Math.hypot(d[0], d[1], d[2]));
-  const mPerPx = dist * 2 * Math.tan(fovYDeg * DEG / 2) / viewHeightPx;
-  const out = { shiftM: [0, 0], lookDelta: { yaw: 0, pitch: 0 }, mPerPx };
-  // Sideways: within sideDeg of straight ahead.
-  if (dxPx !== 0) {
-    const want = dxPx * mPerPx, edge = depth * Math.tan(view.sideDeg * DEG), dir = Math.sign(want);
-    const room = Math.max(0, edge - dir * x), take = dir * Math.min(Math.abs(want), room);
-    out.shiftM[0] = take;
-    out.lookDelta.yaw = -dir * (Math.abs(want) - Math.abs(take)) / mPerPx * lookRadPerPx + 0; // + yaw is a turn to the left (+ 0: never -0)
-  }
-  // Up / down: within upDeg / downDeg of the look's own height, and never past maxElevationDeg from level.
-  if (dyPx !== 0) {
-    const want = -dyPx * mPerPx, dir = Math.sign(want), level = Math.max(1e-3, Math.hypot(x, depth));
-    const cap = view.maxElevationDeg * DEG;
-    const edgeEl = dir > 0 ? Math.min(cap, look.pitch + view.upDeg * DEG) : Math.max(-cap, look.pitch - view.downDeg * DEG);
-    const viewRoom = Math.max(0, dir * (level * Math.tan(edgeEl) - y));
-    const band = Array.isArray(heightM) && heightM.length === 2 && heightM.every(Number.isFinite) ? Math.max(0, dir > 0 ? heightM[1] - y : y - heightM[0]) : Infinity;
-    const take = dir * Math.min(Math.abs(want), viewRoom, band);
-    out.shiftM[1] = take;
-    // At the height limit the push is simply held; at the edge of the view its rest turns the look.
-    out.lookDelta.pitch = band <= viewRoom ? 0 : dir * (Math.abs(want) - Math.abs(take)) / mPerPx * lookRadPerPx + 0; // + pitch is a look up
-  }
-  return out;
-}
+ * 19 November 2026 (the owner: "XZ plane with grasp WASD should be consistent between the mirror body and the brain
+ * should move much faster."). How W / A / S / D move a held thing, the brain and the mirror body alike:
+ *  ratePerS  the speed is this share of the thing's own level distance from you per second, so both cross the
+ *            picture at the same pace whatever their distance: A / D swing it about 40 degrees of bearing a second,
+ *            W / S change its distance by that share a second (a held brain comes from its start place to your feet
+ *            in about a second and a half; the mirror body crosses its range in about one);
+ *  easeS     the speed eases in and out over about this long (no jerk at the press, no dead stop at the release);
+ *  minDistM  the distance the speed is counted from when the thing is nearer than this.
+ * Before, the brain moved 1 m a second at 7.5 m (it crawled) and the mirror body 1 m a second at 2 m. Display choices. */
+export const CARRY_KEYS = Object.freeze({ ratePerS: 0.7, easeS: 0.1, minDistM: 0.8 });
 export function initialObjectCarry() {
-  return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], mirror: null, diagnostic: null };
+  return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], keyVel: [0, 0], mirror: null, diagnostic: null };
 }
 export function offsetMirrorCarry(state, movementWorld) {
   const delta = vec(movementWorld, 'post-pose mirror placement delta');
@@ -206,14 +166,14 @@ export function shiftMirrorCarry(state, movementWorld) {
 }
 export function clearObjectCarry(state) {
   const s = state || initialObjectCarry();
-  return { ...s, held: false, target: null, lastPick: null,
+  return { ...s, held: false, target: null, lastPick: null, keyVel: [0, 0],
     mirror: s.mirror ? { ...s.mirror, anchor: null } : null,
     diagnostic: { status: 'released-by-safety', target: null } };
 }
 /** Pure event/placement reducer only: no activity/FK/IK/clock/scene work.
  * The pick event has the SAME ordering as the existing activity gaze event: first at equal timestamps.
  * Keys use only their held-time coverage times the App's existing poseDt/wallDt ratio. */
-export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0, axes = { x: 0, z: 0 }, wallDt = 0, poseDt = 0, shiftM = null,
+export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0, axes = { x: 0, z: 0 }, wallDt = 0, poseDt = 0,
   origin, look, brainView, brainTransform, brainCentre, brainTranslation, brainFrame, referenceOrigin, viewport, constrainBrainMovement = null } = {}) {
   const prior = previous || initialObjectCarry(), o = vec(origin, 'active camera origin');
   if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('finite active carry look required');
@@ -221,11 +181,6 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   const axis = [Number(axes.x), Number(axes.z)];
   if (!axis.every(Number.isFinite)) fail('finite carry axes required');
   const axisNorm = Math.hypot(...axis); if (axisNorm > 1) { axis[0] /= axisNorm; axis[1] /= axisNorm; }
-  // R17 (owner, 17 November: grasp + pointer moves the held item "within the XY dimension"; "the mirror body, up and
-  // down, you need to be able to move up and down"): shiftM [right, up] (metres, in the level frame of the look's turn)
-  // is this frame's pointer movement of the held item (the app's carryPointer); null / zeros = none.
-  const shift = shiftM == null ? [0, 0] : [Number(shiftM[0]), Number(shiftM[1])];
-  if (!shift.every(Number.isFinite)) fail('finite carry pointer shift (metres) required');
   const cameraRotation = lookRotation(look.yaw, look.pitch), k = carry(brainView, brainTransform), invK = rigidInverse(k);
   let held = prior.held === true, target = held ? prior.target : null, lastPick = prior.lastPick;
   let keys = vec(prior.brainKeyOffset, 'persistent brain key offset');
@@ -244,7 +199,11 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   // it out as far again); the app's stop-at-contact rule (ns-collide, after the step) keeps it from touching your body
   // or the mirror body and out of your left hand's reach. The earlier budget (the 1 m clearance) kept the brain out of
   // reach by design, which Message 12 overturns.
-  const centreNow = Array.isArray(brainCentre) || ArrayBuffer.isView(brainCentre) ? Math.hypot(...Array.from(brainCentre).map((v, i) => v - o[i])) : 0;
+  // 19 November 2026: the budget is the distance of the brain's OWN place (without the key offset), not of where the
+  // keys have brought it. Counted from where it is now, the budget shrank as S pulled the brain in, and the brain
+  // stopped half way to you (offset = start distance - distance <= distance).
+  const ownPlace = Array.isArray(brainCentre) || ArrayBuffer.isView(brainCentre) ? Array.from(brainCentre).map((v, i) => v - previousKeysWorld[i] - o[i]) : null;
+  const centreNow = ownPlace ? Math.hypot(...ownPlace) : 0;
   const keyBudgetM = Math.max(clearance, Number.isFinite(centreNow) ? centreNow : 0); // finite workspace
   const bounds = { brainKeyFarOffsetM: keyBudgetM, originalMinBrainDistanceM: minimum, originalReachM: reach, originalClearanceM: clearance, cameraReferenceShiftM: cameraShift, initialReferenceOriginM: reference, baselineClearanceLowerBoundM: minimum - cameraShift, unchangedRequiredMinimumM: reach + clearance, clearanceStatus: 'near bound checked against actual transformed source sample balls; global scalar is context only' };
   let heldPoseS = 0, clamped = false, selected = null, brainClearance = null, refused = null;
@@ -252,8 +211,9 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   let carryOrigin = prior.lastOrigin ? vec(prior.lastOrigin, 'previous active camera origin') : o.slice();
   // R17 (owner, 17 November: "When it comes to the mirror body, up and down, you need to be able to move up and down";
   // this overturns the R558 rule that a carried mirror body never leaves the ground): a held mirror body follows the
-  // whole look about the eye (its turn AND its up / down), exactly as the held brain does, and the pointer shift moves
-  // it up and down as well as sideways. W/A/S/D still move it level (X and Z), whatever its height.
+  // whole look about the eye (its turn AND its up / down), exactly as the held brain does. W/A/S/D still move it level
+  // (X and Z), whatever its height. (19 November 2026: the pointer's own shift of a held item is withdrawn; the pointer
+  // turns the look, and the look carries the item.)
   const mirrorRotation = a => multiply(lookRotation(carryLook.yaw, carryLook.pitch), rigidInverse(lookRotation(a.startLook.yaw, a.startLook.pitch)));
   const groundRotation = lookRotation(look.yaw, 0);
   const followMirror = () => {
@@ -261,18 +221,30 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
     const d = mirrorRotation(mirror.anchor), q = transformDirection(d, mirror.anchor.pivotWorld.map((v, i) => v - mirror.anchor.origin[i]));
     mirror.centreWorldM = [carryOrigin[0] + q[0], carryOrigin[1] + q[1], carryOrigin[2] + q[2]];
   };
+  let keyVel = Array.isArray(prior.keyVel) && prior.keyVel.length === 2 && prior.keyVel.every(Number.isFinite) ? prior.keyVel.slice() : [0, 0];
   const hold = seconds => {
     if (!held || !target || !(seconds > 0)) return;
     const dt = wallDt > 0 ? seconds * poseDt / wallDt : 0; heldPoseS += dt;
     if (!(dt > 0)) return;
-    const speed = target === 'mirror' && mirror ? Math.max(clearance, mirror.radiusM / 2) : clearance;
+    // CARRY_KEYS: one rule for the brain and the mirror body. The speed follows the held thing's level distance from
+    // you (the same pace across the picture for both) and eases toward the keys' direction.
+    const at = target === 'mirror' && mirror ? mirror.centreWorldM : Array.from(brainCentre).map((v, i) => v + brainMovementWorld[i]);
+    const dist = Math.max(CARRY_KEYS.minDistM, Math.hypot(at[0] - o[0], at[2] - o[2]));
+    const k = 1 - Math.exp(-dt / CARRY_KEYS.easeS), v0 = keyVel.slice();
+    keyVel = [keyVel[0] + (axis[0] - keyVel[0]) * k, keyVel[1] + (axis[1] - keyVel[1]) * k];
+    if (axisNorm === 0 && Math.hypot(keyVel[0], keyVel[1]) < 0.02) keyVel = [0, 0];
+    // the eased speed's mean over this step (exact for the exponential ease), so a long frame moves as far as short ones
+    const mean = i => axis[i] + (v0[i] - axis[i]) * (CARRY_KEYS.easeS / dt) * k;
+    const mx = mean(0), mz = mean(1);
+    if (mx === 0 && mz === 0) return;
+    const step = CARRY_KEYS.ratePerS * dist * dt;
     // R558 (Message 2: W/S forward / back, A/D left / right, "not up and down as grasped cursor does that"): both held
     // items move in the LEVEL ground frame (the look's turn only); looking up / down carries them up / down. (The brain
     // used the camera frame, pitch included, so S on a brain seen from below moved it down onto your body.)
-    moveHeld(transformDirection(groundRotation, [axis[0] * speed * dt, 0, -axis[1] * speed * dt]), axisNorm > 0);
+    moveHeld(transformDirection(groundRotation, [mx * step, 0, -mz * step]), true);
   };
   /** Move the held item by a world delta (m). keyed: a W/A/S/D move (the mirror body's near / far / sideways key limits
-   * apply and its height stays); a pointer shift is free (the app keeps the item inside the view, carryPointer). */
+   * apply and its height stays). */
   const moveHeld = (delta, keyed) => {
     if (target === 'brain') {
       const localDelta = transformDirection(invK, delta), next = keys.map((v, i) => v + localDelta[i]);
@@ -361,23 +333,22 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
           anchor: { origin: carryOrigin.slice(), pivotWorld: point.slice(), startLook: { ...carryLook } } };
       }
       held = true; target = want; selected = target;
-    } else if (!ev.down) { held = false; target = null; if (mirror) mirror.anchor = null; }
+    } else if (!ev.down) { held = false; target = null; keyVel = [0, 0]; if (mirror) mirror.anchor = null; }
   }
   hold(wallDt - cursor);
-  // R17: this frame's pointer movement of the held item, in the level frame: right and UP (never depth).
-  if (held && target && (shift[0] !== 0 || shift[1] !== 0)) moveHeld(transformDirection(groundRotation, [shift[0], shift[1], 0]), false);
   if (keys.some(x => x !== 0) && !brainClearance) {
     if (typeof constrainBrainMovement !== 'function') fail('retained brain offset needs current source clearance');
     brainClearance = constrainBrainMovement([0, 0, 0], brainMovementWorld).diagnostic;
   }
   const base = vec(brainCentre, 'current brain centre').map((v, i) => v - transformDirection(k, vec(prior.brainKeyOffset, 'previous brain key offset'))[i]);
   const baseDistance = Math.hypot(...base.map((v, i) => v - o[i]));
-  const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, graspRefused: refused, normalizedAxes: axis.slice(), pointerShiftM: shift.slice(), heldPoseS,
+  const diagnostic = { kind: 'bounded-object-carry-r22-r1', held, target, selectedThisFrame: selected, graspRefused: refused, normalizedAxes: axis.slice(), heldPoseS,
     brainLimits: { ...bounds, centreNearM: Math.max(0, baseDistance - keyBudgetM), centreFarM: baseDistance + keyBudgetM },
     mirrorLimits: mirror ? { ...mirror.bounds } : null, brainClearance, clamped,
     timing: 'Original grasp (Space)/pick timestamps and held coverage; keys use the same current-camera frame snapshot as the arm, mirror mouse-anchor follows the gaze event; no second activity/time advance',
     scope: 'Engineering limits/source clearance only; actual source/current-pose/native/wholebody/normalmechanics qualification remains open' };
-  return { state: { held, target, lastPick, lastLook: { ...look }, lastOrigin: o.slice(), brainKeyOffset: keys, mirror, diagnostic }, brainMovementWorld, mirrorWorldCentre: mirror ? mirror.centreWorldM.slice() : null, diagnostic };
+  if (!held) keyVel = [0, 0];
+  return { state: { held, target, lastPick, lastLook: { ...look }, lastOrigin: o.slice(), brainKeyOffset: keys, keyVel, mirror, diagnostic }, brainMovementWorld, mirrorWorldCentre: mirror ? mirror.centreWorldM.slice() : null, diagnostic };
 }
 
 export function translateBrainRecord(record, state, initialOrigin) {

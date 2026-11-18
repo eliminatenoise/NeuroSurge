@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { encodePack, decodePack, PACK_INDEX_FORMAT } from '../scene/src/ns-pack.mjs';
 import { parseObjFast } from '../scene/src/ns-assets.mjs';
+import { simplifyMesh, reorderForPack, measureDeviation } from './simplify-mesh.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha256 = b => createHash('sha256').update(b).digest('hex');
@@ -33,58 +34,89 @@ export const PACKS = Object.freeze([
   { name: 'face-muscles', packets: ['face-muscles-r1'], stage: 'start',
     licence: 'Z-Anatomy, CC BY-SA 4.0 (this pack is an adaptation under the same licence); see packets/face-muscles-r1/ATTRIBUTION-AND-LICENCES.txt' },
   { name: 'missing-muscles', packets: ['missing-muscles-r1'], stage: 'start',
-    licence: 'Per file, as its source: BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0 (93 files) and Z-Anatomy, CC BY-SA 4.0 (18 files; adaptations under the same licence); see packets/missing-muscles-r1/ATTRIBUTION-AND-LICENCES.txt' },
-  { name: 'cerebral-arteries', packets: ['bodyparts3d-cerebral-arteries-r1'], stage: 'late',
-    licence: 'BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0; see packets/bodyparts3d-cerebral-arteries-r1/ATTRIBUTION-AND-LICENCES.txt' }
+    licence: 'Per file, as its source: BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0 (93 files) and Z-Anatomy, CC BY-SA 4.0 (18 files; adaptations under the same licence); see packets/missing-muscles-r1/ATTRIBUTION-AND-LICENCES.txt' }
 ]);
 
-export function buildPack(spec, { rootDir = root } = {}) {
+/** How the coarse meshes are made (tools/simplify-mesh.mjs): no vertex of a source mesh lies further than maxDevMm
+ * from the coarse surface, no edge made is longer than maxEdgeMm, and the kept vertices are rounded to 1/roundPerMm mm. */
+export const COARSE = Object.freeze({ maxDevMm: 0.5, maxEdgeMm: 10, roundPerMm: 100 });
+
+/** The coarse mesh of a parsed source mesh, in the parser's shape, and its record. */
+export function coarseMesh(mesh, rule = COARSE) {
+  const s = simplifyMesh(mesh.positions, mesh.indices, { maxDevMm: rule.maxDevMm, maxEdgeMm: rule.maxEdgeMm });
+  const r = reorderForPack(s.positions, s.indices);
+  // the kept vertices (source vertices) to the nearest 1/roundPerMm mm; the deviation below is measured after this
+  const p = r.positions;
+  for (let i = 0; i < p.length; i++) p[i] = Math.round(p[i] * rule.roundPerMm) / rule.roundPerMm;
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { const v = p[i + k]; if (v < min[k]) min[k] = v; if (v > max[k]) max[k] = v; }
+  const dev = measureDeviation(mesh.positions, p, r.indices);
+  if (!(dev.maxMm <= rule.maxDevMm + 2 / rule.roundPerMm)) throw new Error(`coarse mesh strays ${dev.maxMm} mm from its source`);
+  const tris = r.indices.length / 3;
+  return { mesh: { positions: p, indices: r.indices, vertexCount: p.length / 3, faceCount: tris, polygonCount: tris, bounds: { min, max }, comments: mesh.comments },
+    derived: { how: 'half-edge collapse, measured deviation bound (tools/simplify-mesh.mjs)', maxDevMm: rule.maxDevMm, maxEdgeMm: rule.maxEdgeMm, roundPerMm: rule.roundPerMm,
+      sourceVertices: mesh.positions.length / 3, sourceTriangles: mesh.indices.length / 3, deviationMm: Math.round(dev.maxMm * 1000) / 1000 } };
+}
+
+export function buildPack(spec, { rootDir = root, detail = 'coarse', rule = COARSE } = {}) {
   const entries = [];
+  let sourceVertices = 0, sourceTriangles = 0;
   for (const packet of spec.packets) {
     const dir = path.join(rootDir, 'packets', packet, 'meshes');
     for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.obj')).sort()) {
       const bytes = fs.readFileSync(path.join(dir, file));
       const mesh = parseObjFast(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes), { knownUtf8Bytes: bytes.length });
-      entries.push({ key: `${packet}/meshes/${file}`, sourceBytes: bytes.length, sourceSha256: sha256(bytes), mesh });
+      sourceVertices += mesh.positions.length / 3; sourceTriangles += mesh.indices.length / 3;
+      const e = { key: `${packet}/meshes/${file}`, sourceBytes: bytes.length, sourceSha256: sha256(bytes), mesh };
+      if (detail === 'coarse') Object.assign(e, coarseMesh(mesh, rule));
+      entries.push(e);
     }
   }
   const raw = encodePack({ name: spec.name, licence: spec.licence, entries });
-  // The proof of losslessness, at build time: what comes back out is what the parser gave.
+  // The proof, at build time: what comes back out is what went in (for an exact pack: what the parser gave).
   const back = decodePack(raw);
   assert.equal(back.meshes.size, entries.length);
   for (const e of entries) {
     const b = back.meshes.get(e.key);
     assert.ok(b && b.sourceSha256 === e.sourceSha256 && b.sourceBytes === e.sourceBytes, `${e.key}: record`);
-    assert.deepStrictEqual(b.mesh, e.mesh, `${e.key}: decoded mesh differs from the parsed source file`);
+    assert.deepStrictEqual(b.mesh, e.mesh, `${e.key}: decoded mesh differs from the mesh packed`);
   }
   const gz = zlib.gzipSync(raw, { level: 9, memLevel: 9 });
   gz[9] = 255; // the "operating system" byte of the gzip header: fixed, so every machine writes the same bytes
   let vertices = 0, triangles = 0, sourceBytes = 0;
   for (const e of entries) { vertices += e.mesh.positions.length / 3; triangles += e.mesh.indices.length / 3; sourceBytes += e.sourceBytes; }
-  return { gz, raw, record: { name: spec.name, file: `${spec.name}.nspack`, stage: spec.stage, packets: [...spec.packets], licence: spec.licence,
-    bytes: gz.length, sha256: sha256(gz), rawBytes: raw.length, files: entries.length, vertices, triangles, sourceBytes,
+  return { gz, raw, record: { name: spec.name, file: `${spec.name}.nspack`, stage: spec.stage, detail, packets: [...spec.packets], licence: spec.licence,
+    bytes: gz.length, sha256: sha256(gz), rawBytes: raw.length, files: entries.length, vertices, triangles, sourceVertices, sourceTriangles, sourceBytes,
     keys: entries.map(e => e.key) } };
 }
 
-export function buildAll(opts) {
-  const built = PACKS.map(s => buildPack(s, opts));
-  const index = { format: PACK_INDEX_FORMAT,
-    note: 'Lossless compact copies of what the game reads from the source packets (scene/src/ns-pack.mjs; made by tools/build-mesh-packs.mjs). The source packets, their manifests, hashes and licence records are unchanged; each pack keeps the licence of its sources.',
+export function buildAll({ detail = 'coarse', rule = COARSE, ...opts } = {}) {
+  const built = PACKS.map(s => buildPack(s, { ...opts, detail, rule }));
+  const index = { format: PACK_INDEX_FORMAT, detail,
+    note: detail === 'coarse'
+      ? 'Coarser copies of the source packets\' meshes, made by tools/build-mesh-packs.mjs with tools/simplify-mesh.mjs: documented derivatives (packs/README.md). The source packets, their manifests, hashes and licence records are unchanged; each pack keeps the licence of its sources.'
+      : 'Lossless compact copies of what the game reads from the source packets (scene/src/ns-pack.mjs; made by tools/build-mesh-packs.mjs --exact). The source packets, their manifests, hashes and licence records are unchanged; each pack keeps the licence of its sources.',
+    ...(detail === 'coarse' ? { rule } : {}),
     packs: built.map(b => b.record) };
   return { built, indexText: JSON.stringify(index, null, 1) + '\n' };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const check = process.argv.includes('--check');
-  const { built, indexText } = buildAll();
-  const dir = path.join(root, 'packs');
+  // --exact: lossless packs (every mesh exactly as parsed), for comparison; --out DIR: write somewhere else (the pin in
+  // the game's code is only written for the default folder)
+  const exact = process.argv.includes('--exact');
+  const outAt = process.argv.indexOf('--out');
+  const { built, indexText } = buildAll({ detail: exact ? 'exact' : 'coarse' });
+  const dir = outAt > 0 ? path.resolve(process.argv[outAt + 1]) : path.join(root, 'packs');
+  const pinning = outAt < 0;
   let differs = false;
   if (!check) fs.mkdirSync(dir, { recursive: true });
   for (const b of built) {
     const p = path.join(dir, b.record.file);
     if (check) { if (!fs.existsSync(p) || sha256(fs.readFileSync(p)) !== b.record.sha256) { differs = true; console.log('DIFFERS', b.record.file); } }
     else fs.writeFileSync(p, b.gz);
-    console.log(`${b.record.file.padEnd(26)} ${String(b.record.files).padStart(4)} files  ${(b.record.sourceBytes / 1e6).toFixed(1).padStart(6)} MB of OBJ -> ${(b.record.bytes / 1e6).toFixed(2).padStart(6)} MB  (${b.record.vertices} vertices, ${b.record.triangles} triangles)`);
+    console.log(`${b.record.file.padEnd(26)} ${String(b.record.files).padStart(4)} files  ${(b.record.sourceBytes / 1e6).toFixed(1).padStart(6)} MB of OBJ -> ${(b.record.bytes / 1e6).toFixed(2).padStart(6)} MB  (${b.record.vertices} vertices, ${b.record.triangles} of ${b.record.sourceTriangles} triangles)`);
   }
   const ip = path.join(dir, 'PACK-INDEX.json');
   if (check) { if (!fs.existsSync(ip) || fs.readFileSync(ip, 'utf8') !== indexText) { differs = true; console.log('DIFFERS PACK-INDEX.json'); } }
@@ -96,7 +128,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const code = fs.readFileSync(codePath, 'utf8');
   const pinRe = /(export const PACK_INDEX_SHA256 = ')[0-9a-f]{64}(';)/;
   if (!pinRe.test(code)) { console.error('ns-pack.mjs has no PACK_INDEX_SHA256 line'); process.exit(1); }
-  if (check) { if (!code.includes(`PACK_INDEX_SHA256 = '${pin}'`)) { differs = true; console.log('DIFFERS the pin in scene/src/ns-pack.mjs'); } }
+  if (!pinning) { /* a side build: the game's pin is left alone */ }
+  else if (check) { if (!code.includes(`PACK_INDEX_SHA256 = '${pin}'`)) { differs = true; console.log('DIFFERS the pin in scene/src/ns-pack.mjs'); } }
   else if (!code.includes(`PACK_INDEX_SHA256 = '${pin}'`)) fs.writeFileSync(codePath, code.replace(pinRe, `$1${pin}$2`));
   if (check && differs) process.exit(1);
 }

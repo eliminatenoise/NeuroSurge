@@ -157,11 +157,16 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  *    eyes turn on, and the camera turns where it stands instead of swinging round in front of your face.
  * Inside both the camera stands straight behind the eye on the line of sight, as at the start. Everything is
  * continuous, so no look makes the picture jump, and nothing changes its size on screen because of the turn alone.
+ * nearBehindEyeM 0.1 -> 0: the near plane stands AT the eye's own plane. With it 10 cm behind, the top of your own neck
+ * (drawn in place since 18 November) was cut through by that plane: a dark hollow at the bottom of the start picture,
+ * and ragged stumps of neck muscle standing up into the picture when the head was turned past about 80 degrees. At
+ * the eye's plane the part of the neck above it is not drawn at all, and what remains is its root between the collar
+ * bones. (Further forward, 8 cm in front of the eye, the plane cut the chest and the shoulder open instead: seen.)
  * Display choices, judged on pictures. */
 export const EYE_DOLLY = Object.freeze({
   backM: 0.3, upM: 0.1, headAboveLookDeg: 30, headLevelEndDeg: 40,
   standPitchMaxDeg: -25, standYawMaxDeg: 110,
-  zRefM: null, nearBehindEyeM: 0.1
+  zRefM: null, nearBehindEyeM: 0
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
  * forward): { backM along the stand-off line, upM along the head's up direction, headPitch (radians: the head's own

@@ -26,7 +26,7 @@
 export const PACK_FORMAT = 'ns-mesh-pack-1';
 /** The SHA-256 of packs/PACK-INDEX.json as committed (tools/build-mesh-packs.mjs writes this line; tests/pack.test.mjs
  * checks it). The index is refused, and the game reads the source files instead, when its bytes do not match. */
-export const PACK_INDEX_SHA256 = 'b607874f9989d88911ae0c1e35bc4bf4f59e2dc433fd5002aebd9545850457d3';
+export const PACK_INDEX_SHA256 = 'e9c719df50aff6fbcc060e3b634c15b8d25527e3ee34dda60e783de26ae6ffdb';
 export const PACK_DEFAULTS = Object.freeze({ indexUrl: '../../packs/PACK-INDEX.json', base: '../../packs/' });
 export const PACK_INDEX_FORMAT = 'ns-mesh-pack-index-1';
 const MAGIC = [0x4e, 0x53, 0x50, 0x4b, 0x31, 0x0a]; // "NSPK1\n"
@@ -105,17 +105,24 @@ export function encodePack({ name, licence = null, entries }) {
       for (const i of exceptions) { body.varint(i - pe); pe = i; one[0] = p[i]; body.bytes(oneBytes); }
     }
     const mid = body.done().length;
-    // Triangles: the first corner as a difference to the first corner of the triangle before, the other two as
-    // differences to the first. A file whose index list is not whole triangles is written corner by corner.
-    const tri = ix.length % 3 === 0;
-    if (tri) {
+    // Triangles. Where every corner is either a vertex met before or the very next new one (a coarse mesh is written
+    // in that order: tools/simplify-mesh reorderForPack), each corner is how far back it lies from the next new
+    // vertex ('hwm': 0 = the next new one). Otherwise: the first corner as a difference to the first corner of the
+    // triangle before, the other two as differences to the first. A file whose index list is not whole triangles is
+    // written corner by corner.
+    let inOrder = ix.length > 0;
+    for (let i = 0, hwm = 0; i < ix.length && inOrder; i++) { if (ix[i] > hwm) inOrder = false; else if (ix[i] === hwm) hwm++; }
+    const tri = inOrder ? 'hwm' : ix.length % 3 === 0;
+    if (tri === 'hwm') { for (let i = 0, hwm = 0; i < ix.length; i++) { body.varint(hwm - ix[i]); if (ix[i] === hwm) hwm++; } }
+    else if (tri) {
       let pa = 0;
       for (let i = 0; i < ix.length; i += 3) { const a = ix[i]; body.varint(zig(a - pa)); body.varint(zig(ix[i + 1] - a)); body.varint(zig(ix[i + 2] - a)); pa = a; }
     } else { let prev = 0; for (let i = 0; i < ix.length; i++) { body.varint(zig(ix[i] - prev)); prev = ix[i]; } }
     const end = body.done().length;
     meta.push({ key: e.key, sourceBytes: e.sourceBytes, sourceSha256: e.sourceSha256, scale, vertices: p.length / 3, indices: ix.length, tri,
       posBytes: mid - start, idxBytes: end - mid, vertexCount: m.vertexCount, faceCount: m.faceCount, polygonCount: m.polygonCount,
-      bounds: m.bounds ? { min: Array.from(m.bounds.min), max: Array.from(m.bounds.max) } : null, comments: Array.isArray(m.comments) ? m.comments : null });
+      bounds: m.bounds ? { min: Array.from(m.bounds.min), max: Array.from(m.bounds.max) } : null, comments: Array.isArray(m.comments) ? m.comments : null,
+      ...(e.derived ? { derived: e.derived } : {}) });
   }
   const header = new TextEncoder().encode(JSON.stringify({ format: PACK_FORMAT, name, licence, meshes: meta }));
   const data = body.done();
@@ -183,13 +190,14 @@ export function decodePack(bytes) {
     const indices = new Uint32Array(ni);
     const end2 = end1 + m.idxBytes;
     const next = () => { let u = 0, f = 1, b; do { b = u8[i++]; u += (b & 127) * f; f *= 128; } while (b & 128); return unzig(u); };
-    if (m.tri) { let pa = 0; for (let k = 0; k < ni; k += 3) { const a = pa + next(); indices[k] = a; indices[k + 1] = a + next(); indices[k + 2] = a + next(); pa = a; } }
+    if (m.tri === 'hwm') { for (let k = 0, hwm = 0; k < ni; k++) { let u = 0, f = 1, b; do { b = u8[i++]; u += (b & 127) * f; f *= 128; } while (b & 128); if (u > hwm) fail(`${m.key}: bad index`); indices[k] = hwm - u; if (u === 0) hwm++; } }
+    else if (m.tri) { let pa = 0; for (let k = 0; k < ni; k += 3) { const a = pa + next(); indices[k] = a; indices[k + 1] = a + next(); indices[k + 2] = a + next(); pa = a; } }
     else { let prev = 0; for (let k = 0; k < ni; k++) { prev += next(); indices[k] = prev; } }
     if (i !== end2) fail(`${m.key}: index data length`);
     at = end2;
     const mesh = { positions, indices, vertexCount: m.vertexCount, faceCount: m.faceCount, polygonCount: m.polygonCount,
       bounds: m.bounds ? { min: m.bounds.min, max: m.bounds.max } : undefined, comments: m.comments === null ? undefined : m.comments };
-    meshes.set(m.key, { key: m.key, sourceBytes: m.sourceBytes, sourceSha256: m.sourceSha256, mesh });
+    meshes.set(m.key, { key: m.key, sourceBytes: m.sourceBytes, sourceSha256: m.sourceSha256, mesh, ...(m.derived ? { derived: m.derived } : {}) });
   }
   if (at !== u8.length) fail('trailing bytes');
   return { name: header.name, licence: header.licence || null, meshes };
@@ -199,7 +207,10 @@ const PACKED = Symbol('ns.packedMesh');
 /** A mesh from a verified pack, in the form a game reader may return instead of a file's bytes: ns-assets readVerified
  * then compares the recorded byte count and SHA-256 of the source file with its manifest's and uses the mesh. */
 export function packedMesh(record) {
-  return Object.freeze({ [PACKED]: true, sourceBytes: record.sourceBytes, sourceSha256: record.sourceSha256, mesh: record.mesh });
+  // a coarse mesh (record.derived) also carries its source file's vertex count, which is what a manifest records
+  const d = record.derived || null;
+  return Object.freeze({ [PACKED]: true, sourceBytes: record.sourceBytes, sourceSha256: record.sourceSha256, mesh: record.mesh,
+    derived: d, sourceVertices: d && Number.isSafeInteger(d.sourceVertices) ? d.sourceVertices : null });
 }
 export const isPackedMesh = x => Boolean(x && typeof x === 'object' && x[PACKED] === true);
 
@@ -213,7 +224,7 @@ export function validatePackIndex(index) {
     if (p.file !== `${p.name}.nspack`) fail(`${p.name}: bad file name`);
     if (!/^[0-9a-f]{64}$/.test(p.sha256) || !Number.isSafeInteger(p.bytes) || p.bytes < 1 || p.bytes > 256e6) fail(`${p.name}: bad hash or size`);
     if (!Array.isArray(p.keys) || p.keys.length !== p.files || p.keys.some(k => typeof k !== 'string')) fail(`${p.name}: bad key list`);
-    return { name: p.name, file: p.file, stage: p.stage === 'late' ? 'late' : 'start', bytes: p.bytes, sha256: p.sha256, files: p.files, keys: p.keys };
+    return { name: p.name, file: p.file, stage: p.stage === 'late' ? 'late' : 'start', bytes: p.bytes, sha256: p.sha256, files: p.files, keys: p.keys, detail: p.detail === 'coarse' ? 'coarse' : 'exact' };
   });
 }
 

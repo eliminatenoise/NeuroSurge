@@ -1625,6 +1625,24 @@ The anconeus runs from the outer knob of the humerus to the upper back of the ul
 
 At 145 degrees of elbow flexion and 160 degrees of forearm turn from palm up, 11 severe edge stretches become 4 in this muscle. Severe means more than triple the source edge length and more than 2 mm of growth. Triangles below a quarter of their source area drop from 14 to 2. The rest of the right arm still has 93 severe stretches in the same sample. Switched poses are tests of the game rig. Ultrasound measures living fascicles, which are different from the edges of the atlas surface. [Stevens et al. (2014)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4292751/).
 
+## 121. Coarser meshes: 3.2 MB and about a quarter of the triangles (19 November)
+
+The user: “Game should not take long to load at all. Minutes are a liability. Perhaps game is way too big at the moment leading to performance problems.” “We want the game to be as light load on the machine as possible.”
+
+The packs of section 117 now hold coarser copies of the source meshes: 652,084 triangles in place of 2,395,434 (27 %), 3.2 MB in five files in place of 19 MB (and of 157 MB of OBJ text). `packs/README.md` states how a coarse mesh is made (`tools/simplify-mesh.mjs`): vertices are removed one at a time by sliding each onto a neighbour, so every kept vertex is a vertex of the source file; a removal is refused when it would change how the surface is connected, turn a triangle over, make an edge longer than 10 mm, or leave any source vertex more than 0.5 mm from the coarse surface (measured, not estimated). The source packets, their hashes and licence records are untouched; the tests measure every pack against its sources on every run. The cerebral arteries are no longer packed or loaded (section 114).
+
+On the author's computer the game is now ready about 4 to 5 seconds after the page opens (about 10 before), and a frame draws about 1.1 million triangles (4.6 million on the morning of 19 November).
+
+## 122. A dark edge on every limb, and pale fingertips and toes again (19 November)
+
+The user: “There should be clear outline / contrast between limbs so that they don't merge and mush into each other, and surely there should be still exposed white bone, such as for fingertips and toes.”
+
+The plain look of section 114 gets one small shader patch (`patchPlainShaders` in `ns-scene-three.mjs`), with no extra pass. The lit colour of every muscle and bone falls to about a third toward its silhouette, where the surface turns away from the eye, so each limb and muscle has a dark edge of its own and two overlapping limbs part. And the per-vertex tendon value the meshes already carry turns a surface toward bone white: tendon ends, and the sleeves round the finger and toe bones, are pale again (the plain look had drawn them in the muscles' red).
+
+## 123. One fast carry for the brain and the mirror body; a cleaner start picture (19 November)
+
+The user: “XZ plane with grasp WASD should be consistent between the mirror body and the brain should move much faster.” While Space holds the brain or the mirror body, W / S carry it away and nearer and A / D sideways by one rule and much faster than before, and the look goes on turning the head and view, with the held thing going with it (section 118). The older hold-and-move mode, in which the pointer moved the held thing and the view stood still, is removed. Also from the same helper: no dark hollow at the bottom of the start picture and no ragged neck stumps when the head is turned far; the left hand starts beside the left knee at the height of the right hand.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

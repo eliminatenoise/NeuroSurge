@@ -1,76 +1,39 @@
-/** Hold-and-move (owner, 17 November: "trackpad drag to move items essentially within the XY dimension, whilst WASD
- * moves things in the XZ dimension ... when you grasp cursor, you're not actually moving things. When it comes to the
- * mirror body, up and down, you need to be able to move up and down").
- * Pure software state only: the controls reducer (a held item takes the pointer movement, the look stays), the split
- * of that movement into an item move and a look turn at the edge of the comfortable view, and the carry reducer (the
- * held mirror body and brain move right / left and UP / DOWN by the pointer, level with W/A/S/D). No browser, no
- * pixels, no timing, nothing biological.
+/** Holding a thing (19 November 2026; the owner: "for XY movement in the XY plane with grasp cursor control, movement
+ * should continue with head movement as well as item movement, just like it usually does. The head should not be
+ * locked. The POV, perspective of view, should not be locked." and "XZ plane with grasp WASD should be consistent
+ * between the mirror body and the brain should move much faster.").
+ * This file used to test the hold-and-move mode of 17 November, in which the pointer moved the held thing across the
+ * view and the look stood still (the controls' setCarry / takeCarry and ns-reference-graph carryPointer). That mode is
+ * withdrawn and its code removed. What is tested now: the pointer turns the look in every state; a held mirror body
+ * turns with the look about the eye at its own distance and stays where it is let go; W / A / S / D move a held brain
+ * and a held mirror body by one rule, at the same pace across the picture, eased in and out.
+ * Pure software state only. No browser, no pixels, nothing biological.
  * Run: node --test tests/hold-move.test.mjs
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createControls } from '../scene/src/ns-controls.mjs';
-import { carryPointer, stepObjectCarry, initialObjectCarry, CARRY_VIEW } from '../scene/src/ns-reference-graph.mjs';
+import * as RG from '../scene/src/ns-reference-graph.mjs';
+const { stepObjectCarry, initialObjectCarry, CARRY_KEYS } = RG;
 
 const DEG = Math.PI / 180;
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 
-test('a held item takes the pointer movement and the look stays; letting go gives the look back', () => {
+test('the pointer turns the look in every state: nothing in the controls can take it away', () => {
   const c = createControls();
   let s = c.initialState();
+  assert.equal(c.setCarry, undefined); assert.equal(c.takeCarry, undefined); assert.equal(c.carryState, undefined);
+  assert.equal(RG.carryPointer, undefined); assert.equal(RG.CARRY_VIEW, undefined);
   s = c.pointerMove(s, 40, -20, 1);
-  const look = { yaw: s.yaw, pitch: s.pitch };
-  assert.ok(look.yaw !== 0 && look.pitch !== 0, 'with nothing held the pointer turns the look');
-  assert.equal(c.takeCarry(s).move, null);
-
-  s = c.setCarry(s, true);
-  assert.equal(c.carryState(s).on, true);
-  s = c.pointerMove(s, 30, 10, 2);
-  s = c.pointerMove(s, -5, 15, 3);
-  assert.deepEqual({ yaw: s.yaw, pitch: s.pitch }, look, 'the look does not move while an item is held');
-  let r = c.takeCarry(s);
-  assert.deepEqual(r.move, { dx: 25, dy: 25 });
-  s = r.state;
-  assert.equal(c.takeCarry(s).move, null, 'movement is handed over once');
-  assert.equal(c.setCarry(s, true), s, 'saying it again changes nothing');
-
-  s = c.pointerMove(s, 7, 7, 4);
-  s = c.setCarry(s, false);
-  assert.equal(c.takeCarry(s).move, null, 'movement not taken before the release is dropped');
-  s = c.pointerMove(s, 10, 0, 5);
-  assert.ok(s.yaw !== look.yaw, 'after the release the pointer turns the look again');
-});
-
-test('a safety release (blur) ends the hold-and-move mode', () => {
-  const c = createControls();
-  let s = c.setCarry(c.initialState(), true);
-  s = c.pointerMove(s, 12, 3, 1);
-  s = c.blur(s, 2);
-  assert.equal(c.carryState(s).on, false);
-  assert.equal(c.takeCarry(s).move, null);
-});
-
-test('carryPointer: inside the comfortable view the item moves a pixel per pixel and the look stays', () => {
-  const q = carryPointer({ centre: [0, 0, -2], eye: [0, 0, 0], look: { yaw: 0, pitch: 0 }, dxPx: 100, dyPx: -50, viewHeightPx: 900, fovYDeg: 110, lookRadPerPx: 0.0025 });
-  const mPerPx = 2 * 2 * Math.tan(55 * DEG) / 900;
-  assert.ok(near(q.shiftM[0], 100 * mPerPx) && near(q.shiftM[1], 50 * mPerPx), 'right and UP by the pointer, at the item distance');
-  assert.deepEqual(q.lookDelta, { yaw: 0, pitch: 0 });
-});
-
-test('carryPointer: past the edge of the comfortable view the rest of the movement turns the look', () => {
-  const edge = 2 * Math.tan(CARRY_VIEW.sideDeg * DEG);
-  const start = edge - 0.1;
-  const q = carryPointer({ centre: [start, 0, -2], eye: [0, 0, 0], look: { yaw: 0, pitch: 0 }, dxPx: 200, dyPx: 0, viewHeightPx: 900, fovYDeg: 110, lookRadPerPx: 0.0025 });
-  assert.ok(near(q.shiftM[0], 0.1, 1e-9), 'only the room left is taken as a move');
-  assert.ok(q.lookDelta.yaw < 0, 'the rest turns the look to the right (yaw falls)');
-  const leftPx = 200 - 0.1 / q.mPerPx;
-  assert.ok(near(q.lookDelta.yaw, -leftPx * 0.0025, 1e-9));
-  // Coming back in is free, also from outside.
-  const back = carryPointer({ centre: [edge + 0.5, 0, -2], eye: [0, 0, 0], look: { yaw: 0, pitch: 0 }, dxPx: -30, dyPx: 0, viewHeightPx: 900, fovYDeg: 110, lookRadPerPx: 0.0025 });
-  assert.ok(back.shiftM[0] < 0 && back.lookDelta.yaw === 0);
-  // Up: the look's own height plus upDeg, never past maxElevationDeg.
-  const up = carryPointer({ centre: [0, 2 * Math.tan(CARRY_VIEW.upDeg * DEG), -2], eye: [0, 0, 0], look: { yaw: 0, pitch: 0 }, dxPx: 0, dyPx: -40, viewHeightPx: 900, fovYDeg: 110, lookRadPerPx: 0.0025 });
-  assert.ok(near(up.shiftM[1], 0, 1e-9) && up.lookDelta.pitch > 0, 'at the top edge an upward push looks up');
+  const a = { yaw: s.yaw, pitch: s.pitch };
+  assert.ok(a.yaw !== 0 && a.pitch !== 0);
+  // while Space holds a grasp (the game says so through noteSpace) the same movement turns the look by the same amount
+  s = c.noteSpace(s, { holding: true, turning: false });
+  s = c.pointerMove(s, 40, -20, 2);
+  assert.ok(near(s.yaw, 2 * a.yaw) && near(s.pitch, 2 * a.pitch), 'held or not, the look turns alike');
+  s = c.noteSpace(s, { holding: false, turning: false });
+  s = c.pointerMove(s, 40, -20, 3);
+  assert.ok(near(s.yaw, 3 * a.yaw), 'and after the release');
 });
 
 // A minimal frame for the carry reducer: the brain 6 m ahead, the mirror body 1.6 m ahead, camera at the origin.
@@ -78,50 +41,92 @@ const carryInputs = (over = {}) => ({
   pick: { target: 'mirror', centreWorldM: [0, -0.35, -1.6], radiusM: 0.7, mirrorEnvelope: { radiusM: 0.7 } },
   events: [], gazeAt: 0, axes: { x: 0, z: 0 }, wallDt: 0.016, poseDt: 0.016,
   origin: [0, 0, 0], look: { yaw: 0, pitch: 0 }, brainView: { offset: { yaw: 0, pitch: 0 } }, brainTransform: null,
-  brainCentre: [0, 4, -6], brainTranslation: [0, 0, 0], brainFrame: { clearanceM: 1, minBrainDistanceM: 5, reachM: 1 }, referenceOrigin: [0, 0, 0],
-  viewport: { aspect: 16 / 9, fovYDeg: 110, nearM: 0.05 },
+  brainCentre: [0, 0, -6], brainTranslation: [0, 0, 0], brainFrame: { clearanceM: 1, minBrainDistanceM: 5, reachM: 1 }, referenceOrigin: [0, 0, 0],
+  viewport: { aspect: 16 / 9, fovYDeg: 54, nearM: 0.05 },
   constrainBrainMovement: m => ({ movement: m.slice(), diagnostic: { acceptedFraction: 1 } }), ...over
 });
+const grab = target => {
+  const pick = target === 'brain' ? { target: 'brain' } : carryInputs().pick;
+  let r = stepObjectCarry(initialObjectCarry(), carryInputs({ pick }));
+  r = stepObjectCarry(r.state, carryInputs({ pick, events: [{ type: 'grasp', down: true, target, at: 0 }] }));
+  assert.equal(r.state.held, true); assert.equal(r.state.target, target);
+  return { r, pick };
+};
 
-test('a held mirror body is lifted and lowered by the pointer shift and stays level under W/A/S/D', () => {
-  let r = stepObjectCarry(initialObjectCarry(), carryInputs());
-  r = stepObjectCarry(r.state, carryInputs({ events: [{ type: 'grasp', down: true, target: 'mirror', at: 0 }] }));
-  assert.equal(r.state.held, true);
-  assert.equal(r.state.target, 'mirror');
-  const c0 = r.mirrorWorldCentre.slice();
-  r = stepObjectCarry(r.state, carryInputs({ shiftM: [0.2, 0.5] }));
-  assert.ok(near(r.mirrorWorldCentre[0], c0[0] + 0.2) && near(r.mirrorWorldCentre[1], c0[1] + 0.5) && near(r.mirrorWorldCentre[2], c0[2]), 'right and UP, same depth');
-  r = stepObjectCarry(r.state, carryInputs({ shiftM: [0, -1.2] }));
-  assert.ok(r.mirrorWorldCentre[1] < c0[1], 'and down below where it started');
-  const lifted = r.mirrorWorldCentre.slice();
-  r = stepObjectCarry(r.state, carryInputs({ axes: { x: 0, z: 1 } }));
-  assert.ok(near(r.mirrorWorldCentre[1], lifted[1]) && r.mirrorWorldCentre[2] < lifted[2], 'W: farther, same height');
-  r = stepObjectCarry(r.state, carryInputs({ axes: { x: 1, z: 0 } }));
-  assert.ok(r.mirrorWorldCentre[0] > lifted[0] && near(r.mirrorWorldCentre[1], lifted[1]), 'D: to the right, same height');
-  // Let go: it stays where it was put (no ground pulls it back).
-  const put = r.mirrorWorldCentre.slice();
-  r = stepObjectCarry(r.state, carryInputs({ events: [{ type: 'grasp', down: false, at: 0 }] }));
-  assert.equal(r.state.held, false);
-  assert.deepEqual(r.mirrorWorldCentre, put);
-  r = stepObjectCarry(r.state, carryInputs({ shiftM: [1, 1] }));
-  assert.deepEqual(r.mirrorWorldCentre, put, 'a shift with nothing held moves nothing');
-});
-
-test('a held mirror body follows the look up and down as well as round (the look carries it past the edge)', () => {
-  let r = stepObjectCarry(initialObjectCarry(), carryInputs());
-  r = stepObjectCarry(r.state, carryInputs({ events: [{ type: 'grasp', down: true, target: 'mirror', at: 0 }] }));
+test('a held mirror body turns with the look, up and down as well as round, at its own distance, and stays where it is let go', () => {
+  let { r } = grab('mirror');
   const d0 = Math.hypot(...r.mirrorWorldCentre);
-  r = stepObjectCarry(r.state, carryInputs({ look: { yaw: 0, pitch: 20 * DEG } }));
-  assert.ok(r.mirrorWorldCentre[1] > -0.35 + 0.3, 'a look up lifts it');
+  r = stepObjectCarry(r.state, carryInputs({ look: { yaw: 0, pitch: 60 * DEG } }));
+  assert.ok(r.mirrorWorldCentre[1] > 1, 'a look up lifts it');
   assert.ok(near(Math.hypot(...r.mirrorWorldCentre), d0, 1e-9), 'at the same distance from the eye');
+  r = stepObjectCarry(r.state, carryInputs({ look: { yaw: 90 * DEG, pitch: 60 * DEG } }));
+  assert.ok(r.mirrorWorldCentre[0] < -0.5 && near(Math.hypot(...r.mirrorWorldCentre), d0, 1e-9), 'a turn to the left carries it to the left');
+  const put = r.mirrorWorldCentre.slice();
+  r = stepObjectCarry(r.state, carryInputs({ look: { yaw: 90 * DEG, pitch: 60 * DEG }, events: [{ type: 'grasp', down: false, at: 0 }] }));
+  assert.equal(r.state.held, false);
+  r = stepObjectCarry(r.state, carryInputs({ look: { yaw: 0, pitch: -30 * DEG } }));
+  assert.deepEqual(r.mirrorWorldCentre, put, 'let go, it stays there whatever the look does next');
 });
 
-test('a held brain moves right / left and up / down by the pointer shift', () => {
-  let r = stepObjectCarry(initialObjectCarry(), carryInputs({ pick: { target: 'brain' } }));
-  r = stepObjectCarry(r.state, carryInputs({ pick: { target: 'brain' }, events: [{ type: 'grasp', down: true, target: 'brain', at: 0 }] }));
-  assert.equal(r.state.target, 'brain');
-  r = stepObjectCarry(r.state, carryInputs({ pick: { target: 'brain' }, shiftM: [0.4, -0.3] }));
-  assert.ok(near(r.brainMovementWorld[0], 0.4) && near(r.brainMovementWorld[1], -0.3) && near(r.brainMovementWorld[2], 0), 'x and y only: never depth');
+test('W / A / S / D move a held brain and a held mirror body by one rule: the same pace across the picture', () => {
+  // half a second of a key, in 16 ms frames; the bearing each has swung and the share its distance has changed by
+  const run = (target, axes) => {
+    let { r, pick } = grab(target);
+    const at = () => (target === 'mirror' ? r.mirrorWorldCentre.slice() : [0, 0, -6].map((v, i) => v + moved[i]));
+    const moved = [0, 0, 0];
+    for (let i = 0; i < 31; i++) {
+      r = stepObjectCarry(r.state, carryInputs({ pick, axes, brainCentre: [0, 0, -6].map((v, k) => v + moved[k]), brainTranslation: moved.slice() }));
+      r.brainMovementWorld.forEach((v, k) => { moved[k] += v; });
+    }
+    const c = at();
+    return { bearingDeg: Math.atan2(c[0], -c[2]) / DEG, depth: -c[2], height: c[1], vel: r.state.keyVel };
+  };
+  const bD = run('brain', { x: 1, z: 0 }), mD = run('mirror', { x: 1, z: 0 });
+  assert.ok(bD.bearingDeg > 12 && mD.bearingDeg > 12, `D swings both to the right (${bD.bearingDeg.toFixed(1)} / ${mD.bearingDeg.toFixed(1)} degrees in half a second)`);
+  assert.ok(Math.abs(bD.bearingDeg - mD.bearingDeg) < 1.5, 'by the same angle, though one is 6 m away and the other 1.6');
+  const bA = run('brain', { x: -1, z: 0 }), mA = run('mirror', { x: -1, z: 0 });
+  assert.ok(near(bA.bearingDeg, -bD.bearingDeg, 1e-6) && near(mA.bearingDeg, -mD.bearingDeg, 1e-6), 'A is its mirror image');
+  const bW = run('brain', { x: 0, z: 1 }), mW = run('mirror', { x: 0, z: 1 }), bS = run('brain', { x: 0, z: -1 }), mS = run('mirror', { x: 0, z: -1 });
+  assert.ok(bW.depth > 6 && mW.depth > 1.6 && bS.depth < 6 && mS.depth < 1.6, 'W farther, S nearer, for both');
+  assert.ok(Math.abs(bW.depth / 6 - mW.depth / 1.6) < 0.03, `W: the same share of their distance (${(bW.depth / 6).toFixed(3)} / ${(mW.depth / 1.6).toFixed(3)})`);
+  assert.ok(near(mW.height, -0.35) && near(bW.height, 0), 'level: the height stays');
+  // much faster than the 1 m a second of before: the brain covers over 1.5 m in that half second
+  assert.ok(bW.depth - 6 > 1.5, `the brain went ${(bW.depth - 6).toFixed(2)} m`);
+});
+
+test('the key speed eases in and out, and a release of the grasp stops it at once', () => {
+  let { r, pick } = grab('brain');
+  const speeds = [];
+  for (let i = 0; i < 20; i++) { r = stepObjectCarry(r.state, carryInputs({ pick, axes: { x: 0, z: 1 } })); speeds.push(Math.hypot(...r.brainMovementWorld)); }
+  assert.ok(speeds[0] > 0 && speeds[0] < 0.2 * speeds[19], 'the first frame is a small part of the full step');
+  for (let i = 1; i < 20; i++) assert.ok(speeds[i] >= speeds[i - 1] - 1e-12, 'rising, never jumping back');
+  assert.ok(near(r.state.keyVel[1], 1, 0.05), 'full speed within a third of a second');
+  // keys up: it runs on a little and comes to rest
+  const out = [];
+  for (let i = 0; i < 40; i++) { r = stepObjectCarry(r.state, carryInputs({ pick })); out.push(Math.hypot(...r.brainMovementWorld)); }
+  assert.ok(out[0] > 0 && out[0] < speeds[19] && out[39] === 0, 'eases out to a stop');
+  assert.deepEqual(r.state.keyVel, [0, 0]);
+  // a long frame moves as far as the short frames it replaces (the eased speed is integrated, not sampled)
+  const dist = n => { let q = grab('brain'), m = 0; for (let i = 0; i < n; i++) { q.r = stepObjectCarry(q.r.state, carryInputs({ pick: q.pick, axes: { x: 0, z: 1 }, wallDt: 0.32 / n, poseDt: 0.32 / n })); m += q.r.brainMovementWorld[2]; } return -m; };
+  assert.ok(Math.abs(dist(4) - dist(20)) < 0.02 * dist(20), `${dist(4).toFixed(3)} m in 4 frames, ${dist(20).toFixed(3)} m in 20`);
+  // letting go while a key is down: nothing moves after it
+  let q = grab('brain');
+  for (let i = 0; i < 10; i++) q.r = stepObjectCarry(q.r.state, carryInputs({ pick: q.pick, axes: { x: 1, z: 0 } }));
+  q.r = stepObjectCarry(q.r.state, carryInputs({ pick: q.pick, axes: { x: 1, z: 0 }, events: [{ type: 'grasp', down: false, at: 0 }] }));
+  assert.deepEqual(q.r.state.keyVel, [0, 0]);
+  q.r = stepObjectCarry(q.r.state, carryInputs({ pick: q.pick, axes: { x: 1, z: 0 } }));
+  assert.deepEqual(q.r.brainMovementWorld, [0, 0, 0]);
+});
+
+test('S can bring a held brain nearer than half its start distance (the key budget is counted from its own place)', () => {
+  let { r, pick } = grab('brain');
+  const moved = [0, 0, 0];
+  for (let i = 0; i < 200; i++) {
+    r = stepObjectCarry(r.state, carryInputs({ pick, axes: { x: 0, z: -1 }, brainCentre: [0, 0, -6].map((v, k) => v + moved[k]), brainTranslation: moved.slice() }));
+    r.brainMovementWorld.forEach((v, k) => { moved[k] += v; });
+  }
+  assert.ok(6 - moved[2] < 2, `the brain came to ${(6 - moved[2]).toFixed(2)} m (before, it stopped at 3 m: half way)`);
+  assert.ok(CARRY_KEYS.ratePerS > 0.3 && CARRY_KEYS.easeS > 0 && CARRY_KEYS.easeS <= 0.2);
 });
 
 // ---- the glow of the player's own movements (ns-move-glow) -------------------------------------------------------------
@@ -180,39 +185,29 @@ function page({ locked }) {
     move: (movementX, movementY, buttons = 0) => doc.emit('mousemove', { target: canvas, clientX: 100, clientY: 100, buttons, movementX, movementY }) };
 }
 
-test('page binding: with the mouse captured, movement goes to the held item and not to the look', () => {
+test('page binding: with the mouse captured, the pointer turns the look while something is held, exactly as when nothing is', () => {
   const p = page({ locked: true });
   try {
     p.move(20, 0);
     const yaw = p.state.yaw;
     assert.ok(yaw !== 0);
-    p.state = p.controls.setCarry(p.state, true);
+    p.state = p.controls.noteSpace(p.state, { holding: true, turning: false });
     p.move(15, -5); p.move(5, -5);
-    assert.equal(p.state.yaw, yaw);
-    assert.deepEqual(p.controls.takeCarry(p.state).move, { dx: 20, dy: -10 });
+    assert.ok(near(p.state.yaw, 2 * yaw) && p.state.pitch > 0, 'the look turned on by the same rate');
   } finally { p.unbind(); }
 });
 
-test('page binding: with a free pointer (no capture, no button) a held item still follows the pointer', () => {
+test('page binding: with a free pointer (no capture, no button) the look follows the pointer only while something is held', () => {
   const p = page({ locked: false });
   try {
     p.move(30, 10);
     assert.equal(p.state.yaw, 0, 'a free pointer with nothing held and no button turns nothing');
-    assert.equal(p.controls.takeCarry(p.state).move, null);
-    p.state = p.controls.setCarry(p.state, true);
+    p.state = p.controls.noteSpace(p.state, { holding: true, turning: false });
     p.move(30, 10);
-    assert.equal(p.state.yaw, 0);
-    assert.deepEqual(p.controls.takeCarry(p.state).move, { dx: 30, dy: 10 });
+    assert.ok(p.state.yaw < 0 && p.state.pitch < 0, 'held: the pointer turns the look, and the look carries the held thing');
+    p.state = p.controls.noteSpace(p.state, { holding: false, turning: false });
+    const yaw = p.state.yaw;
+    p.move(30, 10);
+    assert.equal(p.state.yaw, yaw, 'let go: a free pointer turns nothing again');
   } finally { p.unbind(); }
-});
-
-test('carryPointer: a height limit holds the item and does not turn the look instead', () => {
-  const base = { eye: [0, 0, 0], look: { yaw: 0, pitch: 0 }, dxPx: 0, viewHeightPx: 900, fovYDeg: 110, lookRadPerPx: 0.0025, heightM: [-1.6, 2.2] };
-  const down = carryPointer({ ...base, centre: [0, -1.5, -3], dyPx: 200 });
-  assert.ok(Math.abs(down.shiftM[1] + 0.1) < 1e-9, 'only the 0.1 m left above the lowest height is taken');
-  assert.equal(down.lookDelta.pitch, 0, 'and the look does not carry it lower');
-  const free = carryPointer({ ...base, centre: [0, -1.5, -3], dyPx: -50 });
-  assert.ok(free.shiftM[1] > 0, 'back up is free');
-  const noLimit = carryPointer({ ...base, heightM: null, centre: [0, -1.5, -3], dyPx: 200 });
-  assert.ok(noLimit.shiftM[1] < -0.1, 'with no limit the same push goes on down');
 });

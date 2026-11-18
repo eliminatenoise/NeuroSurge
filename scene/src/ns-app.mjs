@@ -171,11 +171,12 @@ export const ROTATION_NOTE_SECONDS = 6;
  * the arm's full reach beside the left knee, the matching pair of the right hand at the right knee (the right wrist
  * lies 30 degrees below level from the eye, 11 above the 41-degree start look). The hand still follows the look at
  * this height of the eye's view; from the raised camera it is drawn a little under and left of the crosshair. */
-/* 19 November 2026 (package VIEW: the look now starts 24 degrees down, not 52): 0.5 -> -0.35. The hand's place is given
- * in the eye view's picture, so with the look higher the same number held the left hand in the air above the thigh
- * (from outside, an arm raised off the body). At -0.35 it lies along the left thigh again with the hand by the knee,
- * the pair of the right arm; GAME_ARM_OPTIONS is unchanged. */
-export const HAND_Y_NDC = -0.35;
+/* 19 November 2026 (package VIEW: the look now starts 24 degrees down, not 52): 0.5 -> -0.12. The hand's place is given
+ * in the eye view's picture, so with the look higher the same number held the left hand high in the air (from
+ * outside, an arm raised off the body). At -0.12 the left hand is beside the left knee at the height of the right
+ * hand, its pair (seen from the eyes and from outside). Lower numbers (-0.35 to -0.55) all put it in one place under
+ * the knee, lower than the right hand. GAME_ARM_OPTIONS is unchanged. */
+export const HAND_Y_NDC = -0.12;
 /* 18 November 2026, late (package FLAT: the eye view's lens is now 54 degrees and the look starts 52 down, see the
  * launcher): the arm fit's screen numbers are read in that narrower view, where 0 / -0.17 put the left hand across the
  * middle of the strip under the crosshair. HAND_Y_NDC 0 -> 0.5 with GAME_ARM_OPTIONS x -0.17 -> -0.35 and depth
@@ -2556,7 +2557,6 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       : objectPick && brainRawOut.transform ? ReferenceGraph.advanceBrainState(state.objectBrainReference || ReferenceGraph.initialBrainState([0, 0, 0]), viewOut, carryOrigin, brainRawOut.transform) : null;
     let brainOut = nextReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRawOut, nextReferenceBrain, initialBrainOrigin || [0, 0, 0]) : (viewOut === view ? brain : brainRawOut);
     const carried = nextReferenceBrain && objectPick ? ReferenceGraph.stepObjectCarry(state.objectCarry, { pick: objectPick, events: evs, gazeAt: Math.min(gazeAt, wall), axes: keyAxes, wallDt: wall, poseDt: h,
-      shiftM: inputs && Array.isArray(inputs.carryShiftM) ? inputs.carryShiftM : null, // R17: the pointer's move of the held item
       origin: carryOrigin, look: gl, brainView: viewOut, brainTransform: brainRawOut.transform, brainCentre: brainOut.transform.pivotWorld, brainTranslation: nextReferenceBrain.translation, brainFrame, referenceOrigin: initialBrainOrigin || [0, 0, 0], viewport: { aspect, fovYDeg: fov, nearM: CAMERA.near },
       // R558 (user Message 12: "moved to and around each other but not through"): the old certified rule kept every brain
       // point outside reach + clearance (2 m) of the eye, so the brain could never be brought up to your body. It is
@@ -5065,9 +5065,6 @@ export function start(params = {}) {
   const VIEW_HELD_NOTE_MS = 3500;
   let viewHeldUntilMs = 0;
   let lastGoodCam = null, viewKeptUntilMs = 0, carryDrag = null; // R558: the camera state of the last drawn frame; a refused change of view (E) is undone to it
-  // R17 (hold-and-move): this frame's pointer movement (px) for a held own limb (stepLimbGrasp). (Movement taken by a
-  // frame that is then skipped is dropped: a few px, and the look it may have turned is not replayed.)
-  let limbMovePx = null;
   // R558 (user Messages 2 and 12): the own limb held with Space ({ limb, targetMm, lastPitch } or null), the limb a
   // press-and-drag turns and the body segment the press was on, the left arm's dial build-up, and the stop-at-contact
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
@@ -5455,7 +5452,7 @@ export function start(params = {}) {
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
     limbGrasp = null; dragLimb = null; dragLimbSeg = null; dragLimbVia = null; leftDial = 0;
     seedNext = true;
-    carryRawEvents.length = 0; carryDrag = null; limbMovePx = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
+    carryRawEvents.length = 0; carryDrag = null; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
     arrowInput = { ...initialArrowInput(), seq }; arrowEvents = []; arrowHoverKey = null;
     try { callScene('setArrowHover', null); } catch { /* highlight only */ }
@@ -6858,10 +6855,9 @@ export function start(params = {}) {
         // the invisible ground) went with the leg ground model.
         limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch, via }; // via 'mirror' (R17): taken on the mirror body
       }
-      /** One frame of a held limb: the pointer moves its end left / right and up / down across the view (R17, owner 17
-       * November: X and Y; limbMovePx, a pixel of pointer is about a pixel of limb end), W/A/S/D move it level (X and Z:
-       * A / D sideways, W farther, S nearer), a look up / down (when the look itself moves) carries it up / down, and the
-       * joint solve keeps every joint in range.
+      /** One frame of a held limb: the look carries its end with it, left / right and up / down (19 November 2026: the
+       * pointer always turns the look, and the held limb's end stays under the crosshair), W/A/S/D move it level (X and
+       * Z: A / D sideways, W farther, S nearer), and the joint solve keeps every joint in range.
        * R17 (owner: "if you ... target, grasp, or click specific limbs [of the mirror body], then you're controlling those
        * limbs such as you would your own"): a limb taken on the MIRROR body (g.via 'mirror') is your own limb, and every
        * direction is the one seen on the mirror body: the wanted movement of the limb's mirror image is taken back
@@ -6882,9 +6878,7 @@ export function start(params = {}) {
         if (g.via === 'mirror' && sceneFn('mirrorMatrices')) { try { const mm = callScene('mirrorMatrices'); M = mm && mm.drawn ? mm.drawn : null; } catch { M = null; } }
         const seen = M ? NsCollide.apply(M, endW[0], endW[1], endW[2]) : endW; // the point the player looks at and moves
         const dist = Math.hypot(seen[0] - eye[0], seen[1] - eye[1], seen[2] - eye[2]);
-        const px = limbMovePx, mPerPx = px && appliedSize ? dist * 2 * Math.tan(sim.fovFor(appliedSize.width / appliedSize.height) * DEG / 2) / appliedSize.height : 0;
-        const mx = px ? px.dx * mPerPx : 0, my = px ? -px.dy * mPerPx : 0;
-        let dw = [0, 1, 2].map(i => right[i] * (keys.x * sp + mx - dist * Math.cos(look.pitch) * dYaw) + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch + my : 0));
+        let dw = [0, 1, 2].map(i => right[i] * (keys.x * sp - dist * Math.cos(look.pitch) * dYaw) + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch : 0));
         if (dw.every(v => v === 0)) return;
         if (M) { const Mi = NsCollide.affineInverse(M); dw = [0, 1, 2].map(i => Mi[i] * dw[0] + Mi[4 + i] * dw[1] + Mi[8 + i] * dw[2]); }
         const lead = 15; // mm: how far the target may run ahead of the limb's end
@@ -7956,8 +7950,6 @@ export function start(params = {}) {
         if (!live) carryDrag = null;
         // 19 November 2026: the pointer no longer moves a held thing while the view stands still (R17, withdrawn: see
         // noteSpace below). The look turns as always and carries what is held; nothing is shifted across the view here.
-        const carryShiftM = null;
-        limbMovePx = null;
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
           if (now >= lookBlock.untilMs) lookBlock = null;
@@ -8252,7 +8244,6 @@ export function start(params = {}) {
           ...((limbGrasp && limbGrasp.limb !== 'leftArm') || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || timing.events.some(e => e && e.type === 'grasp' && e.down === true && (e.target === 'brain' || e.target === 'mirror')) ? { armAxes: { x: 0, z: 0 } } : {}),
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true,
-          ...(carryShiftM ? { carryShiftM } : {}), // R17: the pointer's move of the held brain / mirror body (right, up; m)
           // R558 (HEAD_LOOK): a held neck / trunk action that swings the view is not the player looking somewhere: the
           // area the crosshair lands on is recorded silently (no activation without the player's own look or click).
           // R558 (Messages 2 and 12): likewise while Space holds the mirror body or one of your limbs (not the left arm, which
@@ -9231,7 +9222,6 @@ export function start(params = {}) {
           // pointer moved the held thing and the view stood still, is withdrawn). A held brain or mirror body turns
           // with the look about your eyes at its own distance (ns-reference-graph stepObjectCarry), a held limb's end
           // follows it (stepLimbGrasp), so the held thing stays under the crosshair and is still there when you let go.
-          if (typeof controlsApi.setCarry === 'function') cs = controlsApi.setCarry(cs, false);
         }
         current = { sim, data, state: simState, controls: cs, out };
         if (wholeArmOption && out.wholeArmFraming) {
