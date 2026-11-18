@@ -26,7 +26,10 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   const inspect = () => page.evaluate(() => {
-    const s = window.__nsQA.inspect();
+    const s = window.__nsQA.inspect({ arrowTrace: true });
+    const compasses = s.arrowTrace.value;
+    const mirrorBack = compasses.mirror.dirs.back;
+    const brainForward = compasses.brain.dirs.forward.retainedDraw;
     const tip = document.querySelector('.ns-tip');
     const gl = document.querySelector('#ns-canvas').getContext('webgl2');
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
@@ -36,6 +39,8 @@ try {
       tip: tip.getClientRects().length ? { kind: tip.dataset.kind, text: tip.innerText } : null, quietArea: s.quietKeys.regionId,
       status: document.querySelector('#ns-app').innerText.split('\n').find(line => line.startsWith('Looking at')),
       joints: s.latch.joints, trigger: s.state.trigger, orbit: s.scene.mirror?.orbit,
+      overlapTip: mirrorBack.retainedDraw, overlapClick: mirrorBack.clickPx, overlapAnchor: mirrorBack.nominal?.originWorldM,
+      clearTip: brainForward,
       renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null,
     };
   });
@@ -75,6 +80,11 @@ try {
     const covered = await step('ArrowRight');
     assert.equal(covered.step.from, firstLeft.area);
     assert.equal(covered.input.arrow, true, 'the regression path must include an actual orbit tip');
+    assert.equal(covered.overlapTip.rootVisible, true);
+    assert.equal(covered.overlapTip.boxOverlapsMotorArea, true);
+    assert.ok(covered.overlapTip.opacityScale > 0 && covered.overlapTip.opacityScale < 0.5);
+    assert.equal(covered.clearTip.rootVisible, true);
+    assert.equal(covered.clearTip.opacityScale, 1);
     assert.match(covered.tip.text, /Click follows the arrow\. Shift-click presses this area\./);
     assert.match(covered.status, /Looking at \(motor area\)/);
     assert.equal(covered.joints.length, 0, 'looking with a key leaves the joints at rest');
@@ -119,6 +129,23 @@ try {
   assert.equal(returned.healthy, true);
   assert.doesNotMatch(returned.tip?.text || '', /Shift-click presses this area/);
   console.log(JSON.stringify({ case: 'cards show selected area, plain click turns mirror and E returns', ...arrow, withCards, after: withClick, returned }));
+
+  await aim();
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.pointerLockElement && window.__nsQA.inspect().shell.mode === 'paused', null, { polling: 80 });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.pointerLockElement && window.__nsQA.inspect().shell.mode === 'playing', null, { polling: 80 });
+  const freePointer = await inspect();
+  await page.mouse.move(...freePointer.overlapClick);
+  const hovered = await nextFrames(freePointer.frames);
+  assert.equal(hovered.input.arrow, true);
+  assert.equal(hovered.overlapTip.opacityScale, freePointer.overlapTip.opacityScale);
+  assert.deepEqual(hovered.orbit, freePointer.orbit, 'hovering leaves the mirror still');
+  await page.mouse.click(...freePointer.overlapClick);
+  await page.waitForFunction(pitch => window.__nsQA.inspect().scene.mirror?.orbit?.pitchDeg !== pitch, hovered.orbit.pitchDeg, { polling: 80 });
+  const withPointer = await inspect();
+  assert.equal(withPointer.trigger.seq, hovered.trigger.seq);
+  console.log(JSON.stringify({ case: 'free pointer clicks a faded tip at its drawn position', freePointer, hovered, after: withPointer }));
   assert.deepEqual(errors, []);
 } finally {
   if (browser) await browser.close();

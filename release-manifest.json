@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-18",
+  "version": "experimental-2026-11-19-body-update-19",
   "experimental": true,
-  "source": "Body update 18. Keyboard-selected motor areas keep their movement list when an orbit arrow overlaps them.",
+  "source": "Body update 19. Orbit arrows fade over the motor strip and retain their click targets.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 226906,
-      "sha256": "5acbc6b5eec48a01c7dde74e504f5c139599ffd57608d9824800a843ac96d97e"
+      "bytes": 228079,
+      "sha256": "f5bb6c90959e5c3bbf8f49937975e6e5ac8eccd59519ffff8b3b3214404680ab"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,28 +47,28 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9283,
-      "sha256": "09739636f5d0abc8eefba08674f9cbaa017ab5517e8fd0c9e82fbafc07209118"
+      "bytes": 9301,
+      "sha256": "ee817e8efc31580dd08d938e6e46c6a7b82d2c76956582d291a9ecd51b8f7e3b"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 55745,
-      "sha256": "c0dcb2937ebfda31664ece5c69a3046791c2bc16aa8acea379acce7f3a481280"
+      "bytes": 55998,
+      "sha256": "1a39d9d1b112dd528f052f7f0ff46f0816c227daeb63afe0af27c1450bc3bb8e"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 26816,
-      "sha256": "17ff35125681df251461e3a41d333fec2f1a9c9b7e6adba20e73a07a39741bc5"
+      "bytes": 26980,
+      "sha256": "9d80bba58b94a07ec6bf649c87fe386a9cb816f2e83b3474310758e93fd82184"
     },
     {
       "path": "README.md",
-      "bytes": 14792,
-      "sha256": "82b799a0293ef82644f0865dba9bb4496237580c5d944fcce0fb01b72c8c693b"
+      "bytes": 15083,
+      "sha256": "18b48a7abe242f017bc847dc4f88a2afef6a38668afadf186c93c478260983a3"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "4cecd7cb425a0aec70ca19f0bb9877da53beba22224ec7fd48f25ea9de390356"
+      "sha256": "7833c51013e63ccb599c7da0de240419f0cc8c097056077cb5085a6841768784"
     },
     {
       "path": "index.html",
@@ -3907,8 +3907,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 75863,
-      "sha256": "762236fff533224a43f4a30f0a0506ce17b453c4af1f36fa8f8e664eb0cb9b7a"
+      "bytes": 76358,
+      "sha256": "f21079cb8261eaefdcd6f047cd04bc26269837a5a2632fc2bf65eddc5180e9cf"
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
@@ -4077,8 +4077,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1027463,
-      "sha256": "0c4c94cb6aa89eefbd403673fa95e24f290c5416e3a81407ea7aea9eae544541"
+      "bytes": 1027584,
+      "sha256": "902a0a50ae50cea706a54207705374c621d358dba0881437b2e3f5dc4a8076c1"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4142,8 +4142,8 @@
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 6951,
-      "sha256": "05f6e85222817ed37a62a09891a0c24541f4105bb6fa0609dea86cf89f94337f"
+      "bytes": 8792,
+      "sha256": "73e781a59913f5d4aa9891e329560b307badbbecc2249368e791de11c0d9213e"
     },
     {
       "path": "tests/browser-startup.mjs",

@@ -110,7 +110,8 @@ export const ARROW_LAYOUT = freeze({ marginPx: 8, pickPadPx: 8 });
  * (bevels, walls) lean toward, `rim` the soft rim light, `hover` the warm white mixed in under the crosshair / pointer.
  * opacity: how solid a tip's face is at rest ("translucent but clearly visible"), hoverOpacity under the pointer,
  * blockedOpacity for a tip that is under the look but cannot be used now, edgeOpacity the least opacity of its
- * turned-away faces. Light (in the view: x right, y up, z toward the viewer, so every tip is lit the same way wherever it
+ * turned-away faces. overlapOpacityScale softens the whole tip, including its ink, where it crosses the motor strip.
+ * Light (in the view: x right, y up, z toward the viewer, so every tip is lit the same way wherever it
  * is on screen): keyLight the direction toward the key light (upper left, in front), ambient + diffuse x (wrapped
  * n.l), specular / shininess its highlight, rimLight the rim's strength; edgeDark how far a face seen edge-on goes toward
  * `edge`, edgeFacing the range of n.v (cosine of the angle to the sight line) over which faces go from edge-on to face-on;
@@ -121,7 +122,7 @@ export const ARROW_LAYOUT = freeze({ marginPx: 8, pickPadPx: 8 });
  */
 export const ARROW_LOOK = freeze({
   fill: 0xe9eef4, edge: 0x05070b, rim: 0xcfe0ff, hover: 0xfff1cf,
-  opacity: 0.62, hoverOpacity: 0.92, blockedOpacity: 0.22, edgeOpacity: 0.82,
+  opacity: 0.62, hoverOpacity: 0.92, blockedOpacity: 0.22, edgeOpacity: 0.82, overlapOpacityScale: 0.34,
   keyLight: freeze([-0.38, 0.56, 0.74]), ambient: 0.42, diffuse: 0.62, specular: 0.62, shininess: 90, rimLight: 0.34,
   edgeDark: 0.55, edgeFacing: freeze([0.12, 0.6]), farDim: 0.66,
   hoverScale: 1.1, renderOrder: 100,
@@ -923,6 +924,7 @@ uniform vec3 uHoverCol;
 uniform float uHover;
 uniform float uAttn;
 uniform float uBlocked;
+uniform float uOpacityScale; // fades all layers of ink and light together over the motor strip
 uniform vec4 uO;     // opacity of a face at rest, under the pointer, when blocked; least opacity of turned-away faces
 uniform vec3 uKey;   // toward the key light (view: x right, y up, z toward the viewer)
 uniform vec4 uLight; // ambient, diffuse, specular, shininess
@@ -977,7 +979,7 @@ void main() {
   ink = max( ink, uInk.w * edgeOn ) * mix( 1.0, 0.45, uBlocked );
   lit = mix( lit, uInkC, ink );
   a = max( a, ink * uInk.y * mix( 1.0, 0.5, uBlocked ) );
-  gl_FragColor = vec4(lit, clamp(a, 0.0, 1.0));
+  gl_FragColor = vec4(lit, clamp(a, 0.0, 1.0) * uOpacityScale);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -1041,7 +1043,7 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
         uLight: { value: new THREE.Vector4(num(L.ambient, 0.42), num(L.diffuse, 0.62), num(L.specular, 0.4), Math.max(1, num(L.shininess, 40))) },
         uEdgeL: { value: new THREE.Vector4(num(L.rimLight, 0.3), clamp(num(L.edgeDark, 0.7), 0, 1), num(facing[0], 0.12), Math.max(num(facing[0], 0.12) + 0.01, num(facing[1], 0.6))) },
         uDepth: { value: new THREE.Vector3(g.depthRange[0], g.depthRange[1], clamp(num(L.farDim, 0.75), 0, 1)) },
-        uHover: { value: 0 }, uAttn: { value: 0 }, uBlocked: { value: 0 },
+        uHover: { value: 0 }, uAttn: { value: 0 }, uBlocked: { value: 0 }, uOpacityScale: { value: 1 },
         uPlane: { value: new THREE.Vector4(Math.cos(tr), Math.sin(tr), solid.shift[0], solid.shift[1]) },
         uHex: { value: hex.map(q => new THREE.Vector2(q[0], q[1])) },
         uCel: { value: new THREE.Vector4(cs[0], cs[1], Math.max(0, num(L.celSoft, 0.04)), sc[0]) },
@@ -1090,6 +1092,10 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
         arrows[d].mesh.scale.setScalar(on && !hoverBlocked ? L.hoverScale : 1);
       }
       return hovered;
+    },
+    /** Soften a tip over the motor strip without moving, shrinking or disabling it. */
+    setMotorOverlap(dir, overlaps) {
+      arrows[dir].material.uniforms.uOpacityScale.value = overlaps ? L.overlapOpacityScale : 1;
     },
     /** A soft extra glow on all four (0..1), e.g. while the "Try this" goal asks for an orbit. */
     setAttention(x) { const v = clamp(Number(x) || 0, 0, 1); for (const d of COMPASS_DIRS) arrows[d].material.uniforms.uAttn.value = v; return v; },

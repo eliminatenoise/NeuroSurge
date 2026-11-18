@@ -1,10 +1,11 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-19-body-update-18",
+  "version": "experimental-2026-11-19-body-update-19",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
-  "keyboard_area_selection": "Arrow keys follow the motor strip. If an orbit arrow overlaps the selected area, the movement list stays with the area. A number key uses the list, Shift-click presses the area, and an ordinary click uses the orbit arrow. Some views still put arrows over parts of the strip.",
+  "keyboard_area_selection": "Arrow keys follow the motor strip. If an orbit arrow overlaps the selected area, the movement list stays with the area. A number key uses the list, Shift-click presses the area, and an ordinary click uses the orbit arrow.",
+  "compass_visibility": "The arrows fade when they cross the projected motor strip. They keep their 3D shape and their click targets. This reduces obstruction in the tested views. Some arrows still cross the strip.",
   "client_side": true,
   "signal_origin": "simulated, unitless brain and muscle activity values",
   "known_limits": "PREVIEW-NOTES.html",

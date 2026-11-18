@@ -1501,6 +1501,14 @@ From the view over your shoulder, the keyboard could put the crosshair on the le
 
 The step now keeps the motor area if the view's ray still hits the area it chose. The numbered list follows the step. Click to use the orbit arrow, or hold Shift and click to press the area behind it. Moving the pointer to look, pressing a mouse button or changing views ends that keyboard priority. The walk still follows the strip and stops at either end. Some views still put arrows over parts of the strip.
 
+## 105. See the strip through the orbit arrows (19 November)
+
+From outside, the green arrow that tilts the mirror body can cross the left toes and hide the seam along the area. The arrows keep their places around each object as you look. Where their outlines cross the strip in the picture, the fill and the ink fade together, so the seam shows through. The same part of the arrow takes the click. Away from the strip the arrow keeps its usual shading.
+
+At 1600 by 900 in Chromium on AMD Vulkan, the hovered arrow over the left toes was visibly fainter. At 1280 by 800 with reduced motion, the four affected mirror tips in the outside view changed the sampled pixels about a third as much as before. The comparison used the same camera and a copy with clear arrows as a pixel reference. The 74 keyboard steps matched the previous build, covering 47 areas and both ends of the walk. Click, Shift-click and the number key still take their separate paths.
+
+The overlap check uses the outline's screen box, so a tip can fade a little before its stroke reaches the strip. A tip may still cross an area. The two window sizes and one desktop browser cover only part of the game.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

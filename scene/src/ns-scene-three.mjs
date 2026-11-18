@@ -9683,7 +9683,7 @@ export function createScene({
   // so this keeps the "never over a motor area" rule for HUD lines with a margin instead of a per-cell fill.
   const motorCover = { key: new Float64Array(35), valid: false, xy: null, n: 0 };
   const motorCoverPadPx = 8;
-  function motorCoversRect(rect) {
+  function motorCoversRect(rect, paddingPx = motorCoverPadPx) {
     if (!rect || !(cssW > 0 && cssH > 0)) return false;
     const P = motorSamplePoints();
     if (!P) return brainCoversRect(rect);
@@ -9705,7 +9705,7 @@ export function createScene({
       }
       motorCover.n = n; motorCover.valid = true;
     }
-    const xy = motorCover.xy, x0 = rect.x0 - motorCoverPadPx, x1 = rect.x1 + motorCoverPadPx, y0 = rect.y0 - motorCoverPadPx, y1 = rect.y1 + motorCoverPadPx;
+    const xy = motorCover.xy, x0 = rect.x0 - paddingPx, x1 = rect.x1 + paddingPx, y0 = rect.y0 - paddingPx, y1 = rect.y1 + paddingPx;
     for (let i = 0; i < motorCover.n; i += 2) if (xy[i] >= x0 && xy[i] <= x1 && xy[i + 1] >= y0 && xy[i + 1] <= y1) return true;
     return false;
   }
@@ -10313,12 +10313,24 @@ export function createScene({
     }
     // A normal pick can replan before the render/overlay pass. Refresh the SAME boxes/panel mask before it uses them.
     // No recursion: arrowScreenLayout -> arrowBoxes, and neither calls updateArrows. Unchanged cache inputs do no work.
-    // R558: the brain's own matrix is part of the key, so a turned brain re-checks its arrows against the motor areas.
+    // Include the brain pose so turning it rechecks both compasses against the motor strip.
     const be = brainGroup.matrixWorld.elements;
-    const maskKey = `${arrowCameraKey(cam)}|${arrowSerial}|${B.shown},${M.shown}|${arrowPanelObsKey}|${be[0]},${be[1]},${be[2]},${be[5]},${be[6]},${be[10]},${be[12]},${be[13]},${be[14]}`;
+    const motorVisible = regionMode && brainTransformSet && brainGroup.visible;
+    const maskKey = `${faceCamKey}|${arrowSerial}|${B.shown},${M.shown}|${arrowPanelObsKey}|${motorVisible}|${be.join(',')}`;
     if (maskKey !== arrowScreenMaskKey) {
-      arrowScreenMaskKey = maskKey; arrowMaskCameraKey = arrowCameraKey(cam);
+      arrowScreenMaskKey = maskKey; arrowMaskCameraKey = faceCamKey;
       if (B.shown) arrowScreenLayout(); else { underPanel.brain.clear(); arrowBoxes(); }
+      for (const set of [B, M]) {
+        if (!set.rig) continue;
+        for (const dir of ARROW_DIRS) {
+          const box = set.shown ? set.boxes[dir] : null;
+          // Allow for the larger hover silhouette once, so pointing at the tip leaves the mask stable.
+          const hoverPad = box ? (NsArrows.ARROW_LOOK.hoverScale - 1) * Math.max(box.x1 - box.x0, box.y1 - box.y0) : 0;
+          const overlaps = Boolean(motorVisible && box && motorCoversRect(box, hoverPad));
+          if (overlaps) overMotorNow[set.target].add(dir); else overMotorNow[set.target].delete(dir);
+          set.rig.setMotorOverlap(dir, overlaps);
+        }
+      }
     }
   }
   /** Screen boxes (ns-arrows3d arrowScreenBox) and a click point (the point of the V, on the drawn stroke) of every shown arrow, for the
@@ -10422,11 +10434,6 @@ export function createScene({
     let any = false;
     for (const d of ARROW_DIRS) {
       const b = B.boxes[d], c = B.clicks[d];
-      // R558 (Message 7): a tip keeps its place on its frame and is drawn on top; its overlap with the motor areas as
-      // drawn now is only recorded for the readback (a translucent tip over a motor area still shows the area).
-      let overMotor = false;
-      if (b && regionMode) { try { overMotor = motorCoversRect({ x0: b.x0 + motorCoverPadPx, y0: b.y0 + motorCoverPadPx, x1: b.x1 - motorCoverPadPx, y1: b.y1 - motorCoverPadPx }); } catch { overMotor = false; } }
-      if (overMotor) overMotorNow.brain.add(d); else overMotorNow.brain.delete(d);
       const under = Boolean(b) && infoRects.some(r => b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0);
       if (under) underPanel.brain.add(d); else underPanel.brain.delete(d);
       const root = B.rig && B.rig.arrows[d] ? B.rig.arrows[d].root : null;
@@ -10438,7 +10445,7 @@ export function createScene({
     return any ? out : null;
   }
   const underPanel = { brain: new Set() }; // R5-integrate-core: brain arrows hidden under the information panel this frame
-  const overMotorNow = { brain: new Set() }; // R558: brain arrows whose box overlaps a motor area now (drawn under it)
+  const overMotorNow = { brain: new Set(), mirror: new Set() }; // Tips near the motor strip in the current projection.
 
   /* ---- R558 (hunt 2): tips behind your own body; sets whose target is mostly hidden or off screen (FRAME_VIS) ------ */
   // Your own body for the FRAME_VIS sight lines: the sphere cover the stop-at-contact rule already keeps of every drawn
@@ -10842,7 +10849,8 @@ export function createScene({
             matrix: vec(f.matrix), depthMode: f.depthMode, distanceM: f.distance,
             headBaseWorldM: h ? vec(h.baseWorldM) : null, headTipWorldM: h ? vec(h.tipWorldM) : null } : null,
           retainedDraw: draw ? { rootVisible: draw.root.visible, meshVisible: draw.mesh.visible, hiddenUnderPanel: set.target === 'brain' ? underPanel.brain.has(d) : false,
-            boxOverlapsMotorArea: set.target === 'brain' ? overMotorNow.brain.has(d) : false,
+            boxOverlapsMotorArea: overMotorNow[set.target].has(d),
+            opacityScale: draw.material.uniforms.uOpacityScale.value,
             meshScale: [draw.mesh.scale.x, draw.mesh.scale.y, draw.mesh.scale.z] } : null,
           boxPx: box ? { ...box } : null, clickPx: vec(click),
           layout: a ? { onScreen: a.onScreen, blocked: a.blocked, overOutline: a.overOutline, slidPx: a.slidPx, edge: a.edge === true } : null }];
