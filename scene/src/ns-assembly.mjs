@@ -8,6 +8,7 @@
  * the picture gets a COPY of the bytes the game fetched and never changes what the game receives. finish() fades the
  * picture out over the running game. Where a worker canvas is not available the same picture is drawn on the page
  * (it then pauses while the page is busy); where even that fails there is no picture and the game loads as before.
+ * With reduced motion the loading layer shows a stationary download progress bar instead of drawing the parts.
  *
  * A loading picture only: it verifies nothing and the game reads nothing from it.
  */
@@ -57,6 +58,9 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   const kinds = new Map();
   const st = { mode: 'off', files: 0, error: null, finished: false, lastWorkerState: null, workerStates: [] };
   let canvas = null, worker = null, local = null, localQueue = [], raf = 0, lastBytesAt = 0;
+  let staticOverlay = null, staticProgress = null;
+  let reducedMotion = false;
+  try { reducedMotion = win.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true; } catch { /* older browser */ }
   const size = () => ({ width: Math.max(1, win.innerWidth || 1), height: Math.max(1, win.innerHeight || 1), pixelRatio: Math.min(1.5, win.devicePixelRatio || 1) });
   const post = (m, transfer) => { if (worker) { try { worker.postMessage(m, transfer || []); } catch (err) { st.error = String(err && err.message || err); } } };
   const onResize = () => { const s = size(); if (worker) post({ type: 'resize', ...s }); else if (local) local.view.resize(s.width, s.height, s.pixelRatio); };
@@ -82,37 +86,57 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   }
 
   try {
-    canvas = doc.createElement('canvas');
-    canvas.className = 'ns-assembly';
-    canvas.setAttribute('aria-hidden', 'true');
-    host.appendChild(canvas);
-    const s = size();
-    if (typeof canvas.transferControlToOffscreen === 'function' && typeof win.Worker === 'function') {
-      try {
-        const off = canvas.transferControlToOffscreen();
-        worker = new win.Worker(workerUrl, { type: 'module' });
-        st.mode = 'worker';
-        worker.onmessage = ev => { const m = ev.data || {}; if (m.type === 'error') st.error = m.message; else if (m.type === 'state') { st.lastWorkerState = m; st.workerStates.push([m.at, m.frames, m.parts]); } };
-        worker.onerror = ev => { st.error = String(ev && ev.message || 'worker error'); };
-        post({ type: 'init', canvas: off, ...s, room }, [off]);
-      } catch (err) {
-        // The canvas may already belong to the worker attempt: use a fresh one for the page picture.
-        st.error = String(err && err.message || err); worker = null;
-        try { canvas.remove(); } catch { /* gone */ }
-        canvas = doc.createElement('canvas'); canvas.className = 'ns-assembly'; canvas.setAttribute('aria-hidden', 'true'); host.appendChild(canvas);
-        startLocal();
-      }
-    } else startLocal();
-    win.addEventListener('resize', onResize);
+    if (reducedMotion) {
+      staticOverlay = doc.createElement('div');
+      staticOverlay.className = 'ns-assembly ns-assembly-static';
+      const label = doc.createElement('p');
+      label.textContent = 'Loading anatomy';
+      staticProgress = doc.createElement('progress');
+      staticProgress.setAttribute('aria-label', 'Anatomy files downloaded');
+      staticProgress.max = ASSEMBLY_EXPECTED_FILES;
+      staticProgress.value = 0;
+      staticOverlay.append(label, staticProgress);
+      host.appendChild(staticOverlay);
+      st.mode = 'static';
+    } else {
+      canvas = doc.createElement('canvas');
+      canvas.className = 'ns-assembly';
+      canvas.setAttribute('aria-hidden', 'true');
+      host.appendChild(canvas);
+      const s = size();
+      if (typeof canvas.transferControlToOffscreen === 'function' && typeof win.Worker === 'function') {
+        try {
+          const off = canvas.transferControlToOffscreen();
+          worker = new win.Worker(workerUrl, { type: 'module' });
+          st.mode = 'worker';
+          worker.onmessage = ev => { const m = ev.data || {}; if (m.type === 'error') st.error = m.message; else if (m.type === 'state') { st.lastWorkerState = m; st.workerStates.push([m.at, m.frames, m.parts]); } };
+          worker.onerror = ev => { st.error = String(ev && ev.message || 'worker error'); };
+          post({ type: 'init', canvas: off, ...s, room }, [off]);
+        } catch (err) {
+          // The canvas may already belong to the worker attempt: use a fresh one for the page picture.
+          st.error = String(err && err.message || err); worker = null;
+          try { canvas.remove(); } catch { /* gone */ }
+          canvas = doc.createElement('canvas'); canvas.className = 'ns-assembly'; canvas.setAttribute('aria-hidden', 'true'); host.appendChild(canvas);
+          startLocal();
+        }
+      } else startLocal();
+      win.addEventListener('resize', onResize);
+    }
   } catch (err) { st.error = String(err && err.message || err); st.mode = 'off'; }
 
   return {
     noteManifest(url, text) {
+      if (reducedMotion) return;
       try { for (const [id, k] of assemblyKindsOfManifest(JSON.parse(text))) kinds.set(id, k); } catch { /* not a manifest this picture knows */ }
     },
     noteBytes(url, bytes) {
       try {
         if (st.finished || st.mode === 'off' || !bytes || !/\.obj(?:[?#].*)?$/i.test(String(url))) return;
+        if (st.mode === 'static') {
+          st.files++;
+          staticProgress.value = Math.min(st.files, ASSEMBLY_EXPECTED_FILES);
+          return;
+        }
         const id = idOfUrl(url), kind = (id && kinds.get(id)) || assemblyKindOfUrl(url);
         st.files++;
         lastBytesAt = win.performance.now();
@@ -123,10 +147,15 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         } else localQueue.push({ kind, bytes: copy });
       } catch (err) { st.error = String(err && err.message || err); }
     },
-    /** Fade the picture out over the game and release it. */
+    /** Remove the static layer, or fade the animated picture out and release it. */
     finish() {
       if (st.finished) return;
       st.finished = true;
+      if (reducedMotion) {
+        try { staticOverlay?.remove(); } catch { /* gone */ }
+        staticOverlay = staticProgress = null;
+        return;
+      }
       try { win.removeEventListener('resize', onResize); } catch { /* not bound */ }
       const end = () => {
         if (worker) { post({ type: 'stop' }); const w = worker; worker = null; win.setTimeout(() => { try { w.terminate(); } catch { /* gone */ } }, 200); }

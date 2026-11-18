@@ -1,13 +1,111 @@
 /** The loading picture (ns-assembly): its small OBJ reader and the part kinds it takes from the packet manifests.
- * Pure software checks; no browser, no worker, no picture. The loading picture verifies nothing itself: the game's
- * own loader still checks every file. */
+ * Software checks with a small DOM/worker fixture for the display controller. The game's own loader
+ * still checks every file. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseObjBytes, meshNormalsAndCentre, brainBeat, BRAIN_BEAT } from '../scene/src/ns-assembly-core.mjs';
-import { assemblyKindOf, assemblyKindsOfManifest, assemblyKindOfUrl, ASSEMBLY_EXPECTED_FILES } from '../scene/src/ns-assembly.mjs';
+import { assemblyKindOf, assemblyKindsOfManifest, assemblyKindOfUrl, ASSEMBLY_EXPECTED_FILES, startAssembly } from '../scene/src/ns-assembly.mjs';
 
 const bytes = s => new TextEncoder().encode(s);
+
+function assemblyFixture(reducedMotion) {
+  const created = [], workers = [], timers = [];
+  class Element {
+    constructor(tag) {
+      this.tag = tag;
+      this.children = [];
+      this.attributes = new Map();
+      this.classList = new Set();
+      if (tag === 'canvas') this.transferControlToOffscreen = () => new ArrayBuffer(0);
+    }
+    append(...children) { for (const child of children) this.appendChild(child); }
+    appendChild(child) { child.parent = this; this.children.push(child); }
+    setAttribute(name, value) { this.attributes.set(name, value); }
+    remove() { this.parent.children = this.parent.children.filter(child => child !== this); }
+  }
+  const host = new Element('main');
+  const doc = { createElement(tag) { created.push(tag); return new Element(tag); } };
+  const win = {
+    matchMedia(query) {
+      assert.equal(query, '(prefers-reduced-motion: reduce)');
+      return { matches: reducedMotion };
+    },
+    innerWidth: 1024,
+    innerHeight: 768,
+    performance: { now: () => 1 },
+    addEventListener() {},
+    removeEventListener() {},
+    setTimeout(callback, delay) { timers.push({ callback, delay }); },
+    Worker: class {
+      messages = [];
+      constructor() { workers.push(this); }
+      postMessage(message, transfer) { this.messages.push(structuredClone(message, { transfer })); }
+      terminate() { this.terminated = true; }
+    },
+  };
+  return { host, doc, win, created, workers, timers };
+}
+
+test('reduced motion shows stationary download progress and removes it synchronously when startup settles', () => {
+  const { host, doc, win, created, workers, timers } = assemblyFixture(true);
+  const assembly = startAssembly({ host, doc, win });
+  assert.deepEqual(created, ['div', 'p', 'progress']);
+  assert.equal(workers.length, 0);
+  assert.equal(assembly.state().mode, 'static');
+  const [overlay] = host.children;
+  const [label, progress] = overlay.children;
+  assert.equal(label.textContent, 'Loading anatomy');
+  assert.equal(progress.attributes.get('aria-label'), 'Anatomy files downloaded');
+  assert.equal(progress.max, ASSEMBLY_EXPECTED_FILES);
+  assert.equal(progress.value, 0);
+  const obj = bytes('test');
+  obj.slice = () => assert.fail('stationary progress does not copy the game bytes');
+  assembly.noteManifest('MANIFEST.json', '{"assets":[{"element_id":"bone","kind":"bone"}]}');
+  assembly.noteBytes('MANIFEST.json', obj);
+  assembly.noteBytes('bone.obj', null);
+  assert.equal(progress.value, 0);
+  assembly.noteBytes('bone.OBJ?v=1', obj);
+  assert.equal(progress.value, 1);
+  assert.equal(assembly.state().kinds, 0);
+  assert.equal(assembly.state().error, null);
+  for (let i = 0; i < ASSEMBLY_EXPECTED_FILES; i++) assembly.noteBytes('part.obj', obj);
+  assert.equal(progress.value, ASSEMBLY_EXPECTED_FILES);
+  assert.equal(host.children.length, 1, 'all downloads arriving does not remove the layer');
+  assembly.finish();
+  assembly.finish();
+  assembly.noteBytes('late.obj', obj);
+  assert.equal(host.children.length, 0);
+  assert.equal(assembly.state().finished, true);
+  assert.equal(assembly.state().files, ASSEMBLY_EXPECTED_FILES + 1);
+  assert.equal(timers.length, 0);
+});
+
+test('the default loading picture still sends a copy to the worker and cleans up after its fade', () => {
+  const { host, doc, win, workers, timers } = assemblyFixture(false);
+  const assembly = startAssembly({ host, doc, win });
+  assert.equal(assembly.state().mode, 'worker');
+  assert.equal(host.children[0].tag, 'canvas');
+  assert.equal(host.children[0].attributes.get('aria-hidden'), 'true');
+  assert.equal(workers.length, 1);
+  const [worker] = workers;
+  assert.equal(worker.messages[0].type, 'init');
+  const obj = bytes('test');
+  assembly.noteManifest('MANIFEST.json', '{"assets":[{"element_id":"bone","kind":"bone"}]}');
+  assembly.noteBytes('bone.obj', obj);
+  assert.deepEqual(worker.messages.slice(1).map(message => message.type), ['obj', 'progress']);
+  assert.equal(worker.messages[1].kind, 'bone');
+  assert.deepEqual(new Uint8Array(worker.messages[1].bytes), obj);
+  assert.equal(obj.byteLength, 4, 'transfer leaves the game bytes attached');
+  assembly.finish();
+  assert.ok(host.children[0].classList.has('ns-assembly-out'));
+  assert.equal(timers[0].delay, 900);
+  timers[0].callback();
+  assert.equal(host.children.length, 0);
+  assert.equal(worker.messages.at(-1).type, 'stop');
+  timers[1].callback();
+  assert.equal(worker.terminated, true);
+});
 
 test('the OBJ reader takes vertices and faces, fans polygons and skips everything else', () => {
   const m = parseObjBytes(bytes('# note\nv 0 0 0\nv 1.5 0 0\nv 1.5 2e0 0\nv 0 -2.25 1E-1\nvn 0 0 1\nf 1//1 2//1 3//1\nf 1/1/1 2/2/1 3/3/1 4/4/1\ng x\n'));
