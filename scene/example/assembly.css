@@ -7,6 +7,13 @@
   z-index: 8; background: #05070b; pointer-events: none; opacity: 1;
 }
 .ns-assembly.ns-assembly-out { opacity: 0; transition: opacity 0.8s ease; }
+.ns-assembly-static {
+  display: grid; place-content: center; justify-items: center; gap: 0.75rem;
+  box-sizing: border-box; padding: 1rem; text-align: center;
+  color: #eaf3fb; font: 600 1rem/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-assembly-static p { margin: 0; }
+.ns-assembly-static progress { width: min(12rem, 85vw); accent-color: #7fe3ff; }
 
 /* While files load: no start page, no HUD words; an error still shows its page. */
 .ns-app[data-ns-phase="loading"] .ns-shell[data-mode="loading"] { display: none; }
@@ -75,5 +82,7 @@
   @keyframes ns-pad-move { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(44px, -22px); } }
 }
 @media (prefers-reduced-motion: reduce) {
+  .ns-assembly.ns-assembly-out, .preview-note { transition: none; }
+  .ns-keys { animation: ns-keys-out 0s step-end var(--ns-keys-ms) forwards; }
   .ns-pad-finger, .ns-pad-click { animation: none; }
 }

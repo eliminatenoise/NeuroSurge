@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-17-body-update-15",
+  "version": "experimental-2026-11-19-body-update-16",
   "experimental": true,
-  "source": "Body update (R558), ninth upload, published at the user's standing instruction to upload each version, before independent review. Since the eighth upload: a range-of-motion sweep (tools/rom-sweep.mjs) that poses every movement of the body map with the game's own rig and measures muscle ends and joint openings, and its results in the notes. No change to the game itself. See PROJECT-CONTEXT.json and DESIGN-DECISIONS.md section 87.",
+  "source": "Body update 16. When the system requests reduced motion at launch, the loading layer shows stationary anatomy download progress and the five-second controls card clears without fading. See PREVIEW-NOTES.html for the update and remaining limits.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -52,13 +52,13 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 54931,
-      "sha256": "e210ae4293fde3071c92df82b62807d7a39b77679ee2b0b1567039c598b7cddb"
+      "bytes": 55157,
+      "sha256": "c1cf72bfd4c771dba056c0f5612c263ec8224f60dcb3d179a4f959d4e41d55f6"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 25168,
-      "sha256": "aec8520e01ed0bb479cf07e2872296fbe073012dcad7119ae9b834b31422ef4d"
+      "bytes": 25485,
+      "sha256": "6c9437d0638be56966ad4215b3cf5eab3cdd908515573d5702edc3481c1c0d7b"
     },
     {
       "path": "README.md",
@@ -67,8 +67,8 @@
     },
     {
       "path": "START.html",
-      "bytes": 3911,
-      "sha256": "f3fa6b899bb2c93aa0d5b2e0fc1379775fe88dc7c859568a8110cbea79c53e3d"
+      "bytes": 4030,
+      "sha256": "38fad59f7b5fba21db9228f39d034e2a83700291c0c4316d0f89ec6c16252e0a"
     },
     {
       "path": "index.html",
@@ -3772,8 +3772,8 @@
     },
     {
       "path": "scene/example/assembly.css",
-      "bytes": 4766,
-      "sha256": "27d53ded7cea54c3e286c3bedc73ce327559e44724a26beaf0df5ea75f15086f"
+      "bytes": 5286,
+      "sha256": "b4a6bfaf83a6a060c99e9e3843c6bcf58d7c7a6adeb38127c6fec2563bef6718"
     },
     {
       "path": "scene/example/configured-r281.css",
@@ -3922,8 +3922,8 @@
     },
     {
       "path": "scene/src/ns-assembly.mjs",
-      "bytes": 10676,
-      "sha256": "5c3697160e851e134e57a9ca87355023d47c94dad67d7b5a05819c0ebd196b7a"
+      "bytes": 11997,
+      "sha256": "423ea25389d4eee559bbd1e9a879eeed76205f8e01d18e6576464d7daeac75b2"
     },
     {
       "path": "scene/src/ns-assets.mjs",
@@ -4122,8 +4122,8 @@
     },
     {
       "path": "tests/assembly.test.mjs",
-      "bytes": 4946,
-      "sha256": "dfc9265093ead7e02b13fdedd7f17dc8c610735672cba8c4a76a1b63f065fa7b"
+      "bytes": 9365,
+      "sha256": "39d7eda3514e9e618626c433e4fad70ec52dbba10ea122f5d88a0b19c09554cb"
     },
     {
       "path": "tests/behind-view.test.mjs",
