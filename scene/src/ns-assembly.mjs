@@ -123,7 +123,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
       const tick = now => {
         if (!local) return;
         const t0 = win.performance.now();
-        while (localQueue.length && win.performance.now() - t0 < 4) { const q = localQueue.shift(); try { local.view.add(q.kind, local.parse(q.bytes), q.place); } catch { /* left out */ } }
+        while (localQueue.length && win.performance.now() - t0 < 4) { const q = localQueue.shift(); try { local.view.add(q.kind, q.mesh || local.parse(q.bytes), q.place); } catch { /* left out */ } }
         local.view.setProgress(st.files / ASSEMBLY_EXPECTED_FILES, st.files > 0.9 * ASSEMBLY_EXPECTED_FILES && now - lastBytesAt > 900);
         try { local.view.frame(now); } catch (err) { st.error = String(err && err.message || err); local = null; return; }
         raf = win.requestAnimationFrame(tick);
@@ -206,6 +206,23 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
           post({ type: 'obj', kind, place, bytes: copy.buffer }, [copy.buffer]);
           post({ type: 'progress', fraction: st.files / ASSEMBLY_EXPECTED_FILES });
         } else localQueue.push({ kind, place, bytes: copy });
+      } catch (err) { st.error = String(err && err.message || err); }
+    },
+    /** 19 November 2026 (mesh packs, ns-pack): a mesh the game took from a verified pack: drawn like a fetched file
+     * (the picture gets a copy of its positions and triangles; nothing changes for the game). */
+    noteMesh(url, mesh) {
+      try {
+        if (st.finished || st.mode === 'off' || !mesh || !mesh.positions || !mesh.indices) return;
+        if (st.mode === 'static') { st.files++; staticProgress.value = Math.min(st.files, ASSEMBLY_EXPECTED_FILES); return; }
+        const id = idOfUrl(url), known = id ? kinds.get(id) : null, kind = known ? known.kind : assemblyKindOfUrl(url);
+        const place = known ? { id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer } : null;
+        if (kind !== 'vessel') st.files++;
+        lastBytesAt = win.performance.now();
+        const positions = mesh.positions.slice(), indices = mesh.indices.slice();
+        if (worker) {
+          post({ type: 'mesh', kind, place, positions: positions.buffer, indices: indices.buffer }, [positions.buffer, indices.buffer]);
+          post({ type: 'progress', fraction: st.files / ASSEMBLY_EXPECTED_FILES });
+        } else localQueue.push({ kind, place, mesh: { positions, indices } });
       } catch (err) { st.error = String(err && err.message || err); }
     },
     /** A mesh file the game read as text (the cerebral arteries): drawn like the others (a copy; nothing changes for

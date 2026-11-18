@@ -5,6 +5,7 @@
  *
  * Messages in:  { type: 'init', canvas, width, height, pixelRatio, room, reducedMotion, expectReadyS } |
  *               { type: 'obj', kind, place ({ track, tier, frac, name, groups, layer } or null), bytes (ArrayBuffer) } |
+ *               { type: 'mesh', kind, place, positions (ArrayBuffer of floats), indices (ArrayBuffer of 32-bit) } |
  *               { type: 'progress', fraction } | { type: 'resize', width, height, pixelRatio } |
  *               { type: 'known', counts } (a manifest's parts per tier) |
  *               { type: 'hurry' } (the game is ready: the parts still held come in quickly) | { type: 'stop' }
@@ -28,7 +29,7 @@ function tick(now) {
   const t0 = performance.now();
   while (queue.length && performance.now() - t0 < 6) {
     const q = queue.shift();
-    try { view.add(q.kind, parseObjBytes(new Uint8Array(q.bytes)), q.place); } catch { /* a part this picture cannot read is left out */ }
+    try { view.add(q.kind, q.mesh || parseObjBytes(new Uint8Array(q.bytes)), q.place); } catch { /* a part this picture cannot read is left out */ }
   }
   // "Finishing": nearly every file is in and none has come for a moment, so the page is now building the body.
   view.setProgress(fraction, fraction > 0.9 && queue.length === 0 && performance.now() - lastObjAt > 900);
@@ -48,6 +49,9 @@ self.onmessage = ev => {
       raf(tick);
     } else if (m.type === 'obj') {
       if (running) { queue.push({ kind: m.kind, place: m.place || null, bytes: m.bytes }); lastObjAt = performance.now(); }
+    } else if (m.type === 'mesh') {
+      // 19 November 2026: a mesh from a verified pack (already positions and triangles; a copy)
+      if (running) { queue.push({ kind: m.kind, place: m.place || null, mesh: { positions: new Float32Array(m.positions), indices: new Uint32Array(m.indices) } }); lastObjAt = performance.now(); }
     } else if (m.type === 'known') {
       if (view) view.know(m.counts);
     } else if (m.type === 'hurry') {

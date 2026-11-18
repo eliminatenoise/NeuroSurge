@@ -1,7 +1,7 @@
 /** The diagonal downward gaze of 18 November 2026 (user: "you are gazing diagonally downwards. You should be able to
  * see your own shoulders and stomach/abs"): the eyes are lowered in the head while the head is level or bowed, and
- * come back up as the head tips back; and the corner of the look up and far round to the right is closed (the left
- * game arm cannot follow there). Pure arithmetic of ns-app's look functions; what the picture then shows was judged
+ * come back up as the head tips back. 19 November 2026 (the owner: "The camera view should be free to move wherever it
+ * wants"): the view goes on past the head's own range, the eyes doing the rest, and no corner of it is closed. Pure arithmetic of ns-app's look functions; what the picture then shows was judged
  * in screenshots, not here. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,20 +50,41 @@ test('the game starts with the pelvis and legs level and the gaze diagonally dow
   // (18 November 2026, later: the start posture bends the neck 40 of its 50 degrees, as the owner asked; the look adds a few)
   assert.ok(rest.neck_flex + h.joints.neck_flex <= body.BODY_JOINT_LIMITS.neck_flex[1], 'the neck stays inside its range');
   // the look still reaches well below the start and up to the camera's own stop
+  // (19 November 2026: the HEAD stops where it stopped; the view itself goes on to its own limits, see the next test)
   const r = app.headLookRange(null, L, look(0, -36));
-  assert.ok(r.pitchMinDeg <= -55 && r.pitchMinDeg > -88, `down to ${r.pitchMinDeg}`);
-  assert.ok(r.pitchMaxDeg >= 84, `up to ${r.pitchMaxDeg}`);
+  assert.ok(r.headMinDeg <= -55 && r.headMinDeg > -88, `the head down to ${r.headMinDeg}`);
+  assert.ok(r.headMaxDeg >= 84, `the head up to ${r.headMaxDeg}`);
 });
 
-test('up and far round to the right the look is closed off, and nowhere else', () => {
-  const C = app.HEAD_FAR_RIGHT_UP, up = y => app.headLookRange(null, L, look(y, 0)).pitchMaxDeg;
-  assert.ok(up(0) >= 84 && up(C.fromYawDeg) >= 84 && up(180) >= 84 && up(150) >= 84);
-  assert.ok(Math.abs(up(C.endYawDeg) - C.maxUpDeg) < 1e-9);
-  // (third pass: the limit comes down between fromYawDeg and endYawDeg and stays at maxUpDeg from there to straight behind)
-  const mid = (C.fromYawDeg + C.endYawDeg) / 2;
-  assert.ok(up(mid) < up(C.fromYawDeg) && up(mid) > up(C.endYawDeg), 'the limit comes down gradually');
-  assert.ok(Math.abs(up(-180) - C.maxUpDeg) < 1e-9 && Math.abs(up(-170) - C.maxUpDeg) < 1e-9, 'closed all the way to straight behind');
-  assert.equal(app.headLookRange(null, app.HEAD_LOOK, look(-110, 0)).pitchMaxDeg, app.headLookRange(null, app.HEAD_LOOK, look(110, 0)).pitchMaxDeg, 'not without a posture: left and right alike');
+test('the view is free: all the way down, up and round, the eyes going on where the head stops', () => {
+  // 19 November 2026 (the owner: "The camera view should be free to move wherever it wants."; "The head should not be
+  // locked."). This replaces the test of the corner that was closed up and far round to the right (HEAD_FAR_RIGHT_UP).
+  assert.equal(app.HEAD_FAR_RIGHT_UP, undefined);
+  for (const y of [0, 60, -60, 140, -140, -155, 180, -180]) {
+    const r = app.headLookRange(null, L, look(y, 0));
+    assert.equal(r.pitchMinDeg, -L.viewDownDeg, `turned ${y}: down to the view's own limit`);
+    assert.equal(r.pitchMaxDeg, L.viewUpDeg, `turned ${y}: up to the view's own limit`);
+    assert.ok(r.yawMinDeg <= -170 && r.yawMaxDeg >= 170, 'round to behind on both sides');
+  }
+  // inside the head's range the eyes add nothing and the camera looks where the controls look
+  const mid = app.headPoseForLook(look(20, -40), null, L);
+  assert.equal(mid.eyePitchDeg, 0);
+  assert.ok(Math.abs(mid.look.pitch / DEG + 40) < 1e-9);
+  // past it the head, neck and trunk stay at their ends and the camera still looks where the controls look
+  const r0 = app.headLookRange(null, L, look(0, 0));
+  const end = app.headPoseForLook(look(0, r0.headMinDeg), null, L), down = app.headPoseForLook(look(0, -88), null, L);
+  assert.ok(Math.abs(down.look.pitch / DEG + 88) < 1e-9, 'the view reaches 88 degrees down');
+  assert.ok(down.eyePitchDeg < -5, `the eyes do the rest (${down.eyePitchDeg.toFixed(1)})`);
+  assert.ok(Math.abs(down.joints.neck_flex - end.joints.neck_flex) < 1e-9 && Math.abs(down.bendDeg - end.bendDeg) < 1e-9, 'the neck and trunk bend no further than before');
+  assert.ok(Math.abs(down.headLook.pitch - end.headLook.pitch) < 1e-9, 'the head itself stops where it stopped');
+  const up = app.headPoseForLook(look(-170, 88), null, L);
+  assert.ok(Math.abs(up.look.pitch / DEG - 88) < 1e-9 && Math.abs(up.look.yaw / DEG + 170) < 1e-9, 'up and far round to the right is open');
+  // no jump anywhere along the way
+  let prev = null;
+  for (let p = -88; p <= 88; p += 0.5) { const h = app.headPoseForLook(look(0, p), null, L).look.pitch / DEG; if (prev !== null) assert.ok(Math.abs(h - prev - 0.5) < 1e-6, `at ${p}`); prev = h; }
+  // a held neck movement still moves the view (the eyes do not undo it)
+  const heldNeck = app.headPoseForLook(look(0, -20), { neck_flex: 8, neck_rot: 0, trunk_flex: 0 }, L);
+  assert.ok(heldNeck.look.pitch / DEG < -27 && heldNeck.eyePitchDeg === 0, 'the head jerks the view with it');
 });
 
 test('the held trunk turn, trunk side bend and neck side bend are handed on to whoever places the eye', () => {

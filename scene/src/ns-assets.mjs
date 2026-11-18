@@ -38,6 +38,7 @@
 import { parseObj, OBJ_LIMITS, MAX_COMMENTS } from './ns-obj.mjs';
 import { sub, dot, length, scale, reject } from './ns-math.mjs';
 import { CAP_FRACTION, SHOULDER_CAP_MM, ELBOW_CAP_MM } from './ns-rig.mjs';
+import { isPackedMesh } from './ns-pack.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -679,6 +680,15 @@ async function readVerified(entry, io) {
   if (typeof io.readBytes === 'function') {
     let raw;
     try { raw = await io.readBytes(entry.path, entry); } catch (err) { fail('asset_read', `${id}: ${err && err.message ? err.message : String(err)}`); }
+    // 19 November 2026 (mesh packs, ns-pack): a reader may return the mesh of a verified pack instead of the file's
+    // bytes. The pack records the byte count and the SHA-256 of the source file each mesh was made from; both are
+    // compared with this manifest entry exactly as the served bytes would be, and the mesh is what parseObjFast gives
+    // for that file (tests/pack.test.mjs compares every one).
+    if (isPackedMesh(raw)) {
+      if (raw.sourceBytes !== entry.bytes) fail('asset_bytes', `${id}: packed from a file of ${raw.sourceBytes} bytes, manifest says ${entry.bytes}`);
+      if (typeof raw.sourceSha256 !== 'string' || raw.sourceSha256 !== entry.sha256) fail('asset_hash', `${id}: sha256 of the packed source file does not match the manifest`);
+      return { text: null, bytes: raw.sourceBytes, mesh: raw.mesh };
+    }
     const u8 = asBytes(raw);
     if (!u8) fail('asset_read', `${id}: readBytes must return an ArrayBuffer or a typed array`);
     if (u8.byteLength !== entry.bytes) fail('asset_bytes', `${id}: ${u8.byteLength} bytes, manifest says ${entry.bytes}`);
@@ -697,7 +707,8 @@ async function readVerified(entry, io) {
 }
 
 /** Parse verified text with the injected parser (parseObjFast reuses the verified byte count for its maxBytes limit). */
-function parseVerified(parse, text, bytes) {
+function parseVerified(parse, text, bytes, packed = null) {
+  if (packed) return packed; // the mesh of a verified pack (readVerified): already what the parser gives
   return parse === parseObjFast ? parseObjFast(text, { knownUtf8Bytes: bytes }) : parse(text);
 }
 
@@ -759,8 +770,8 @@ export async function loadAssets({ manifest, readText, sha256Hex, readBytes = nu
   if (!left.arm) setDone('arm');
   for (const { set, entry } of list) {
     // Byte count, then sha256, then (only then) parse: readVerified. R3-perf: the fast parser reuses the verified byte count.
-    const { text, bytes } = await readVerified(entry, io);
-    const mesh = await parseVerified(parse, text, bytes);
+    const { text, bytes, mesh: packed } = await readVerified(entry, io);
+    const mesh = await parseVerified(parse, text, bytes, packed);
     checkParsed(set, entry, mesh);
     (set === 'arm' ? arm : brain).set(entry.element_id, Object.freeze({ entry, mesh }));
     if (--left[set] === 0) setDone(set);
@@ -1065,9 +1076,9 @@ export function fullbodyLoadPlan(entries, { priorityIds, bulkOrder = 'bytes' } =
  * parsed centroid). `beforeParse` (optional, async) runs between the checks and the parse: the time-slicing point. */
 async function verifyFullbody(entry, io, parse, beforeParse) {
   const id = entry.element_id;
-  const { text, bytes } = await readVerified(entry, io);
+  const { text, bytes, mesh: packed } = await readVerified(entry, io);
   if (beforeParse) await beforeParse();
-  const mesh = await parseVerified(parse, text, bytes);
+  const mesh = await parseVerified(parse, text, bytes, packed);
   const p = mesh && mesh.positions;
   if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
   if (typeof entry.vertices === 'number' && p.length / 3 !== entry.vertices) fail('asset_vertices', `${id}: parsed ${p.length / 3} vertices, manifest says ${entry.vertices}`);
@@ -1550,9 +1561,9 @@ function denyCheck(deny, what, id, where) {
 function packetVerifier(sp, box, deny = null) {
   return async (entry, io, parse, beforeParse) => {
     const id = entry.element_id;
-    const { text, bytes } = await readVerified(entry, io);
+    const { text, bytes, mesh: packed } = await readVerified(entry, io);
     if (beforeParse) await beforeParse();
-    const mesh = await parseVerified(parse, text, bytes);
+    const mesh = await parseVerified(parse, text, bytes, packed);
     const p = mesh && mesh.positions;
     if (!p || typeof p.length !== 'number' || p.length === 0 || p.length % 3 !== 0) fail('asset_parse', `${id}: parser returned no vertex positions`);
     const n = p.length / 3;

@@ -12,8 +12,11 @@ import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
 import { PAGE, SHELL } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
-import { startAssembly } from '../src/ns-assembly.mjs';
+import { startAssembly, ASSEMBLY_EXPECTED_FILES } from '../src/ns-assembly.mjs';
 import { showControlsCard } from '../src/ns-controls-card.mjs';
+import { createLoadBar, createLoadWatch, showLoadFailure } from '../src/ns-load-progress.mjs';
+import { startPackLoader, readAll } from '../src/ns-pack-loader.mjs';
+import { packKeyOfUrl } from '../src/ns-pack.mjs';
 
 // 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
 // Including everything from the neck down"): 108 degrees up and down (about 136 across at 16:9), between the 90 of
@@ -72,7 +75,20 @@ const EYE_FOV_Y_DEG = 54;
 // the chest hide the belly and pelvis. At 52 the line of sight crosses the trunk's front at about 17 degrees: the
 // whole front, shoulders to pelvis, is seen at once, the legs run up the picture to the feet under its top edge, and
 // the crosshair starts on the strip between the knees. The brain is placed on the same look.
-const START_LOOK_PITCH_DEG = -52, BRAIN_START_PITCH_DEG = -52;
+// 19 November 2026 (the owner: "Both the brain and mirror body are far too low. The brain should actually be a lot
+// higher, I was wrong about that before."; this withdraws "the motor strip, the middle bit, to be below our ankles" of
+// 18 November). The look now starts 24 degrees below level (it was 52) and the brain stands 13 degrees below level,
+// straight ahead and ABOVE your feet: the whole motor strip is in the upper part of the picture, clear of your hands
+// and feet, the mirror body stands directly under it between your hands (ns-mirror MIRROR_NEAR), and your own body
+// lies below: hands, legs, pelvis, belly and chest. Nothing of yours covers the strip any more. The price, stated
+// plainly: with the long lens (54 degrees) the picture cannot hold the strip, the mirror body and the whole of your
+// body one above the other, so the tops of your shoulders and the collar bones are now just under the lower edge at
+// the start (a look a few degrees down brings them in), and the crosshair starts on the mirror body's neck, about
+// 80 px under the leg areas, not on the strip itself. Tried and seen (the pictures are listed in the package notes):
+// 30 down (whole torso, but the strip's top cut and the mirror body wedged between your knees), 15 and 20 down (the
+// cleanest stack, but no torso at all), the mirror body in the strip's hollow (too small to read) and beside the
+// legs (it stood inside your own arm), a wider lens (the open root of the neck came into the lower edge).
+const START_LOOK_PITCH_DEG = -24, BRAIN_START_PITCH_DEG = -13;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);
@@ -98,11 +114,41 @@ const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
 const assembly = mode === 'boot' ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
 if (mode === 'boot') app.dataset.nsPhase = 'loading';
 const controlsCard = mode === 'boot' ? showControlsCard({ host: document.body }) : null;
-function finishLoading(phase) {
+// 19 November 2026 (the owner: "it just stays on the loading page forever. There should be a loading progress bar"):
+// one bar with a percentage for the whole wait (ns-load-progress), and a watchdog: when nothing has advanced for 20 s,
+// or loading fails, a panel says so with a "Try again" button. Only the ordinary boot case.
+let barStorage = null;
+try { barStorage = window.localStorage; } catch { barStorage = null; }
+const loadBar = mode === 'boot' ? createLoadBar({ host: document.body, storage: barStorage }) : null;
+let loadFailure = null;
+const loadWatch = loadBar ? createLoadWatch({ lastAdvance: () => loadBar.model.lastAdvance(),
+  onStall: () => { if (loadFailure) return; loadBar.freeze('stalled'); loadFailure = showLoadFailure({ host: document.body, kind: 'stalled' }); },
+  onResume: () => { if (loadFailure) { loadFailure.remove(); loadFailure = null; } loadBar.thaw(); } }) : null;
+// 19 November 2026 (the owner: "Game should not take long to load at all. Minutes are a liability"): the anatomy comes
+// as six mesh packs (19 MB, fetched and decoded in a worker) instead of 691 OBJ text files (166 MB); see ns-pack.
+// A file a pack cannot give is fetched as before. Only the ordinary boot case; the two test cases read the files.
+const loadCount = { fetched: 0, served: 0 };
+const onPackProgress = (files, of) => { if (loadBar) loadBar.set('files', (files + loadCount.fetched) / Math.max(1, of || ASSEMBLY_EXPECTED_FILES)); };
+// early-load.mjs (first on the page) has usually started the packs already, while this script's own files travelled.
+const early = mode === 'boot' && window.__nsEarly && window.__nsEarly.loader ? window.__nsEarly : null;
+if (early) early.listen(onPackProgress);
+const packs = mode !== 'boot' ? null : early ? early.loader : startPackLoader({ onProgress: onPackProgress });
+if (mode !== 'boot') { try { document.querySelector('.ns-load.ns-load-early')?.remove(); } catch { /* none */ } }
+/** One more mesh file has been handed to the game (from a pack or fetched): the bar's "checking" step. */
+function noteServed() {
+  loadCount.served++;
+  if (loadBar) loadBar.set('check', loadCount.served / ASSEMBLY_EXPECTED_FILES);
+}
+function finishLoading(phase, error = null) {
   app.dataset.nsPhase = phase;
   const immediate = phase !== 'playing';
   if (immediate) controlsCard?.remove();
   assembly?.finish({ immediate });
+  loadWatch?.stop();
+  if (!loadBar) return;
+  if (phase === 'playing') { if (loadFailure) { loadFailure.remove(); loadFailure = null; } loadBar.finish(); }
+  else if (phase === 'error') { loadBar.freeze('failed'); if (loadFailure) loadFailure.remove(); loadFailure = showLoadFailure({ host: document.body, kind: 'failed', detail: firstFetchError || error || '' }); }
+  else loadBar.remove();
 }
 const observations = { mode, configurationSignature: CONFIGURED_R302_SIGNATURE, qa: false, placeholder: false,
   bodyFactoryCalls: 0, faceFactoryCalls: 0, bodyProgress: null, bodyProgressAtStop: null, ownedStreams: [], stopIssued: false, stopBefore: null,
@@ -136,7 +182,7 @@ function showFatal(message) {
 function failBoot(err) {
   bootError = messageOf(err);
   observations.fatal = bootError;
-  finishLoading('error');
+  finishLoading('error', bootError);
   if (!shellRoot.querySelector('.ns-shell[data-mode="error"]')) showFatal(bootError);
   return { ok: false, error: bootError };
 }
@@ -146,18 +192,42 @@ function refuseHttp(response, url, reader) {
   observations.httpFailures.push({ url: String(url), reader, status: response.status, statusText: response.statusText, message });
   throw new Error(message); // same real HTTP refusal, with its actual response status retained; no forged response
 }
+// 19 November 2026 (no dead ends): a request that brings no answer, or whose body brings no byte, for FETCH_STALL_MS
+// is given up with a plain error instead of waiting for ever (fetch itself has no time limit).
+const FETCH_STALL_MS = 20000;
+let firstFetchError = null; // the first request that failed, in plain words, for the failure panel's small print
+const isObjUrl = url => /\.obj(?:[?#].*)?$/i.test(String(url));
+async function fetchAll(url, reader) {
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  let response;
+  const first = setTimeout(() => { try { ac && ac.abort(); } catch { /* gone */ } }, FETCH_STALL_MS);
+  try { response = await fetch(url, { credentials: 'same-origin', ...(ac ? { signal: ac.signal } : {}) }); }
+  catch (err) { const e = new Error(ac && ac.signal.aborted ? `No answer for ${FETCH_STALL_MS / 1000} s from ${url}` : `${messageOf(err)} (${url})`); if (!firstFetchError) firstFetchError = e.message; throw e; }
+  finally { clearTimeout(first); }
+  if (!response.ok) { if (!firstFetchError) firstFetchError = `HTTP ${response.status} for ${url}`; refuseHttp(response, url, reader); }
+  try { return await readAll(response, { onBytes: () => {}, stallMs: FETCH_STALL_MS, setTimer: (f, ms) => setTimeout(f, ms), clearTimer: t => clearTimeout(t), abort: () => ac && ac.abort() }); }
+  catch (err) { const e = new Error(`${messageOf(err)} (${url})`); if (!firstFetchError) firstFetchError = e.message; throw e; }
+}
 async function fetchText(url) {
-  const response = await fetch(url, { credentials: 'same-origin' });
-  if (!response.ok) refuseHttp(response, url, 'text');
-  const text = await response.text();
+  // the same text response.text() gives: UTF-8, a leading byte-order mark dropped, bad bytes replaced
+  const text = new TextDecoder().decode(await fetchAll(url, 'text'));
   if (assembly && /MANIFEST\.json(?:[?#].*)?$/i.test(String(url))) assembly.noteManifest(url, text);
-  else if (assembly && /\.obj(?:[?#].*)?$/i.test(String(url))) assembly.noteText(url, text); // 18 Nov 2026: the cerebral arteries come as text
+  else if (assembly && isObjUrl(url)) assembly.noteText(url, text); // 18 Nov 2026: the cerebral arteries come as text
   return text;
 }
+/** A mesh of a verified pack for this file, or null (then the file itself is fetched). */
+async function fetchPacked(url) {
+  const key = packs ? packKeyOfUrl(url) : null;
+  const packed = key ? await packs.get(key) : null;
+  if (packed && assembly) assembly.noteMesh(url, packed.mesh);
+  return packed;
+}
 async function fetchBytes(url) {
-  const response = await fetch(url, { credentials: 'same-origin' });
-  if (!response.ok) refuseHttp(response, url, 'bytes');
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const obj = isObjUrl(url);
+  const packed = obj ? await fetchPacked(url) : null;
+  if (packed) { noteServed(); return packed; }
+  const bytes = await fetchAll(url, 'bytes');
+  if (obj) { loadCount.fetched++; noteServed(); }
   if (assembly) assembly.noteBytes(url, bytes);
   return bytes;
 }
@@ -303,11 +373,12 @@ try {
   scene = start({ THREE, canvas, hudRoot, shellRoot, manifestUrl: app.dataset.manifestUrl,
     packetBases: { 'pov-demo-assets': app.dataset.packetPovDemoAssets, 'pov-demo-assets-r2': app.dataset.packetPovDemoAssetsR2 },
     movementMapUrl: app.dataset.movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes,
-    placeholder: false, qa: false, storage, streamBody, streamFace, viewGraph });
+    placeholder: false, qa: false, storage, streamBody, streamFace, viewGraph,
+    ...(mode === 'boot' ? { fetchPacked, onLoadStep: (id, what) => { if (!loadBar) return; if (what === 'done') loadBar.done(id); else loadBar.begin(id); } } : {}) });
   ready = scene.ready.then(r => {
     const status = scene.status();
     const phase = status.stopped && !status.failed ? 'stopped' : r.ok === true && status.phase === 'running' ? 'playing' : 'error';
-    finishLoading(phase);
+    finishLoading(phase, r && r.ok !== true ? r.error || status.error || null : null);
     observations.ready = copy(r);
     observations.firstReadyReadback = summarizeInspect(scene.inspect());
     return r;
@@ -499,7 +570,7 @@ export async function runDeclaredCase() {
   return { status: 'real-missing-face-configured-fatal-and-friendly-DOM-observed', evidence: readback(),
     limitation: 'Requires an actual HTTP404 from this fixed absent URL. This is a negative source/loader case, not anatomy or normal GPU cleanup proof' };
 }
-window.__nsQA = Object.freeze({ assembly: () => assembly ? assembly.state() : null, ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
+window.__nsQA = Object.freeze({ assembly: () => assembly ? assembly.state() : null, loading: () => ({ bar: loadBar ? loadBar.state() : null, packs: packs ? packs.state() : null, count: { ...loadCount }, failure: Boolean(loadFailure) }), ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
 window.__nsLoadingR302 = Object.freeze({ mode, configurationSignature: CONFIGURED_R302_SIGNATURE, ready,
   readback, runDeclaredCase, assertConfiguredBoot, stop, stopAfterConfiguredReady, assertStoppedUnchanged });
 window.addEventListener('pagehide', () => stop()); // finite caller never auto-restarts a completed/stopped App

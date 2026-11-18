@@ -144,35 +144,41 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  *  - nearBehindEyeM: the near plane stands this far behind the eye's own plane (never nearer the camera than
  *    FIRST_PERSON.nearM), so nothing between the camera and the back of your own head is drawn.
  * Display choices, judged on pictures. */
+/* 19 November 2026 (the owner: "there's a problem whenever you look to the far side of any screen, everything gets
+ * super magnified and is unusable"; "The camera view should be free to move wherever it wants"). Until now the camera
+ * came back to the eye when the look turned past 50 degrees to a side or rose toward level, and nearer the eye for
+ * steep downward looks (the byPitch table, upFromDeg / upFullDeg, sideFromDeg / sideFullDeg). At the eye the same long
+ * lens draws your own arm and shoulder, which lie a hand's breadth away, across the whole picture. Now the stand-off
+ * is ONE distance at every look: backM behind the eye and upM above it. What keeps the camera out of your own neck
+ * and back is where the stand-off points, not its length:
+ *  - standPitchMaxDeg: for looks above this the camera stays where that look puts it (behind and above the head) and
+ *    only turns there, so a level or upward look never lowers it into the trunk;
+ *  - standYawMaxDeg: the stand-off follows the HEAD's turn (the neck's and the chest's together); past it only the
+ *    eyes turn on, and the camera turns where it stands instead of swinging round in front of your face.
+ * Inside both the camera stands straight behind the eye on the line of sight, as at the start. Everything is
+ * continuous, so no look makes the picture jump, and nothing changes its size on screen because of the turn alone.
+ * Display choices, judged on pictures. */
 export const EYE_DOLLY = Object.freeze({
   backM: 0.3, upM: 0.1, headAboveLookDeg: 30, headLevelEndDeg: 40,
-  byPitch: Object.freeze([[-75, 0.06, 0.12], [-52, 0.1, 0.3]].map(r => Object.freeze(r))),
-  upFromDeg: -45, upFullDeg: 18, sideShare: 0, sideFromDeg: 50, sideFullDeg: 100,
+  standPitchMaxDeg: -25, standYawMaxDeg: 110,
   zRefM: null, nearBehindEyeM: 0.1
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
- * forward): { backM along the line of sight, upM along the head's up direction, headPitch (radians: the head's own
- * pitch for this look), offset [x, y, z] (world metres: the whole displacement from the eye) }. Pure; continuous. */
+ * forward): { backM along the stand-off line, upM along the head's up direction, headPitch (radians: the head's own
+ * pitch for the stand-off's look), offset [x, y, z] (world metres: the whole displacement from the eye) }. Pure;
+ * continuous. */
 export function eyeDolly(look, o = EYE_DOLLY) {
   const l = lookOf(look, 'look');
-  const up = smooth(o.upFromDeg * DEG, o.upFullDeg * DEG, l.pitch);
-  const side = smooth(o.sideFromDeg * DEG, o.sideFullDeg * DEG, Math.abs(wrapAngle(l.yaw)));
-  const share = (1 - up) * (1 + (o.sideShare - 1) * side);
-  // below the start look the offsets follow byPitch rows [look pitch deg, upM, backM] (read between the rows; held at
-  // the ends); above the last row they are upM / backM
-  let up0 = o.upM, back0 = o.backM;
-  const T = o.byPitch, pdeg = l.pitch / DEG;
-  if (Array.isArray(T) && T.length && pdeg < T[T.length - 1][0]) {
-    if (pdeg <= T[0][0]) { up0 = T[0][1]; back0 = T[0][2]; }
-    else for (let i = 1; i < T.length; i++) if (pdeg <= T[i][0]) { const u = (pdeg - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); up0 = T[i - 1][1] + u * (T[i][1] - T[i - 1][1]); back0 = T[i - 1][2] + u * (T[i][2] - T[i - 1][2]); break; }
-  }
-  const backM = Math.max(0, back0 * share), upM = Math.max(0, up0 * share);
-  // the head's pitch for this look (ns-app headPitchForLook with the posture's eye lowering)
-  const e = o.headAboveLookDeg, end = o.headLevelEndDeg, pd = l.pitch / DEG;
+  const backM = Math.max(0, o.backM), upM = Math.max(0, o.upM);
+  // the look the stand-off is taken for: the look itself, held at standPitchMaxDeg and at +-standYawMaxDeg
+  const pMax = isNum(o.standPitchMaxDeg) ? o.standPitchMaxDeg * DEG : Math.PI / 2, yMax = isNum(o.standYawMaxDeg) ? o.standYawMaxDeg * DEG : Math.PI;
+  const sp = Math.min(l.pitch, pMax), syaw = Math.max(-yMax, Math.min(yMax, l.yaw)); // (the yaw as given, not wrapped: the look ends at straight behind on either side and must not jump there)
+  // the head's pitch for that look (ns-app headPitchForLook with the posture's eye lowering)
+  const e = o.headAboveLookDeg, end = o.headLevelEndDeg, pd = sp / DEG;
   const hd = pd <= -e ? pd + e : pd >= end ? pd : (end * (pd + e)) / (end + e), h = hd * DEG;
-  const g = gazeDirection(l.yaw, l.pitch), sy = Math.sin(l.yaw), cy = Math.cos(l.yaw), sh = Math.sin(h), ch = Math.cos(h);
+  const g = gazeDirection(l.yaw, l.pitch), b = gazeDirection(syaw, sp), sy = Math.sin(syaw), cy = Math.cos(syaw), sh = Math.sin(h), ch = Math.cos(h);
   // head up = (sin yaw sin h, cos h, cos yaw sin h) (cameraRotation's up column for the head's own pitch)
-  const offset = [upM * sy * sh - backM * g[0], upM * ch - backM * g[1], upM * cy * sh - backM * g[2]];
+  const offset = [upM * sy * sh - backM * b[0], upM * ch - backM * b[1], upM * cy * sh - backM * b[2]];
   return { backM, upM, headPitch: h, offset, ...eyeFlatLens(offset, g, o) };
 }
 /** 18 November 2026, late (EYE_DOLLY zRefM / nearBehindEyeM): for a camera offset from the eye and the line of sight g:
@@ -182,10 +188,9 @@ export function eyeDolly(look, o = EYE_DOLLY) {
 function eyeFlatLens(offset, g, o) {
   const depthBackM = Math.max(0, -(offset[0] * g[0] + offset[1] * g[1] + offset[2] * g[2]));
   let fovScale = 1;
-  if (isNum(o.zRefM) && o.zRefM > 0 && Array.isArray(o.byPitch) && o.byPitch.length) {
-    // the start look's own depth: the last table row, straight ahead (yaw 0)
-    const r = o.byPitch[o.byPitch.length - 1], p0 = r[0] * DEG, h0 = (r[0] + o.headAboveLookDeg) * DEG;
-    const start = r[2] + r[1] * Math.sin(Math.max(0, h0 - p0));
+  if (isNum(o.zRefM) && o.zRefM > 0) {
+    // the depth while the camera stands straight behind the eye (any look inside the stand-off's range)
+    const start = o.backM + o.upM * Math.sin(Math.min(o.headAboveLookDeg, 90) * DEG);
     fovScale = (o.zRefM + start) / (o.zRefM + depthBackM);
   }
   const nearM = isNum(o.nearBehindEyeM) ? Math.max(FIRST_PERSON.nearM, depthBackM - o.nearBehindEyeM) : FIRST_PERSON.nearM;
@@ -291,9 +296,17 @@ export const THIRD_PERSON = Object.freeze({
   // (18 November 2026, late, package FLAT: 66 -> 50 with distanceM 1.7 -> 1.9 and followFovYDeg 60 -> 66. With the
   // brain now beyond and below the feet, at 66 only the right half of the strip was in the picture; at 50 the whole
   // strip, both halves, is in it beside the body, which is still seen from the side in its true proportions.)
-  followYawDeg: 50,
+  // (19 November 2026, the owner: "For third-person view, the head should not be shifted to the right, such that when
+  // you make it neutral, the head is always tilted to the right. It's extremely disturbing. It should just start off in
+  // the middle." The head was never turned: the CAMERA stood 50 degrees round to the right, so the body lay slanted
+  // across the picture with its head to one side. 50 -> 0: the camera stands straight behind the head, on the body's
+  // midline, and higher (followPitchBiasDeg 16 -> -20: it looks down along the lying body instead of across it, so
+  // the legs are not hidden behind the trunk) and nearer (distanceM 1.9 -> 1.4). At a neutral look the head is at the
+  // bottom middle of the picture, the body runs straight up the middle to the feet, and the mirror body and the
+  // brain stand beyond them. A look to a side still carries the camera round the body by the same angle.)
+  followYawDeg: 0,
   followBody: true,
-  followPitchBiasDeg: 16,
+  followPitchBiasDeg: -20,
   followMaxPitchDeg: 5,
   followYawMinDeg: -130,
   followYawMaxDeg: 130,
@@ -304,7 +317,7 @@ export const THIRD_PERSON = Object.freeze({
   followFovYDeg: 66,
   // (third pass: 1.6 -> 1.9: with the trunk rising more steeply from the pelvis and the centre a little higher, the feet left the bottom of the picture at 1.6)
   // (18 November 2026: 1.9 -> 1.7 with followYawDeg 66: the body a little larger, feet still inside the picture)
-  distanceM: 1.9,
+  distanceM: 1.4,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
   aimAtBrain: true,

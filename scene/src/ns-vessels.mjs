@@ -59,6 +59,8 @@ export const ARTERY_TERRITORIES = Object.freeze({
   pca: 'posterior cerebral artery: P1, P2 and the occipital and temporal cortical branches',
   base: 'posterior communicating, basilar and superior cerebellar arteries (the back of the circle of Willis)'
 });
+import { isPackedMesh } from './ns-pack.mjs';
+
 const HEX64 = /^[0-9a-f]{64}$/;
 const ID_RE = /^FJ\d{4}M?$/;
 const PATH_RE = /^meshes\/FJ\d{4}M?\.obj$/;
@@ -93,7 +95,8 @@ export function validateArteryManifest(m) {
  * any refusal rejects. Returns { entries, meshes: [{ id, name, territory, side, positions, indices }], bytes, ms }.
  */
 export async function loadCerebralArteries({ fetchText, sha256Hex, parse, manifestUrl = CEREBRAL_ARTERIES_DEFAULTS.manifestUrl,
-  packetBase = CEREBRAL_ARTERIES_DEFAULTS.packetBase, expectedManifestSha256 = CEREBRAL_ARTERIES_DEFAULTS.manifestSha256, yieldFn = null, now = () => Date.now() } = {}) {
+  packetBase = CEREBRAL_ARTERIES_DEFAULTS.packetBase, expectedManifestSha256 = CEREBRAL_ARTERIES_DEFAULTS.manifestSha256, yieldFn = null, now = () => Date.now(),
+  fetchPacked = null } = {}) {
   if (typeof fetchText !== 'function' || typeof sha256Hex !== 'function' || typeof parse !== 'function') fail('vessel_args', 'fetchText, sha256Hex and parse must be injected');
   const t0 = now();
   const mtext = await fetchText(manifestUrl);
@@ -104,10 +107,19 @@ export async function loadCerebralArteries({ fetchText, sha256Hex, parse, manife
   const meshes = [];
   let bytes = 0;
   for (const e of entries) {
-    const text = await fetchText(base + e.path);
-    const sha = await sha256Hex(text);
-    if (sha !== e.sha256) fail('vessel_file', `${e.id}: sha256 does not match the manifest`);
-    const g = parse(text);
+    // 19 November 2026 (mesh packs, ns-pack): fetchPacked(url) may give the mesh of a verified pack (or null). Its
+    // recorded source byte count and SHA-256 are compared with the manifest's as the file's own would be.
+    const packed = typeof fetchPacked === 'function' ? await fetchPacked(base + e.path) : null;
+    let g;
+    if (isPackedMesh(packed)) {
+      if (packed.sourceSha256 !== e.sha256 || packed.sourceBytes !== e.bytes) fail('vessel_file', `${e.id}: the packed source file does not match the manifest`);
+      g = packed.mesh;
+    } else {
+      const text = await fetchText(base + e.path);
+      const sha = await sha256Hex(text);
+      if (sha !== e.sha256) fail('vessel_file', `${e.id}: sha256 does not match the manifest`);
+      g = parse(text);
+    }
     if (!g || !g.positions || !g.indices || g.positions.length !== 3 * e.vertices) fail('vessel_file', `${e.id}: vertex count does not match the manifest`);
     const p = g.positions;
     for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) {

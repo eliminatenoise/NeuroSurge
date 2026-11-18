@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-27",
+  "version": "experimental-2026-11-19-body-update-28",
   "experimental": true,
-  "source": "Body update 27. Overlays in spaced groups, plain movement lists, reading on at the start, a playable tutorial, a coarser mirror body.",
+  "source": "Body update 28. Mesh packs (19 MB in place of 167 MB), a plain loading bar with a percentage, the brain higher and a free look.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 240222,
-      "sha256": "b1848fb1a9fd7331f16c65a36b1e6725f8cf17e76cbc73af7cf320215eac73ef"
+      "bytes": 243714,
+      "sha256": "7ac02d12e91d59ef1713f737218e99e6bae411d12bcd2b63fade39de7e30b493"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 30633,
-      "sha256": "4d90fd30615959d1c680fba2c862ae7b3c85596ce30152a30db53467912ee2ed"
+      "bytes": 31104,
+      "sha256": "52a7ce3380603ff97c6b2038fe413bed91e33d6a2bfba217e73c55ecb2b34460"
     },
     {
       "path": "README.md",
@@ -68,7 +68,7 @@
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "95ff8f7ebed419d0912a9f9ee053f8f652fbebb9eb6d050893cf3ff3f3367c9a"
+      "sha256": "7c04082e559eded9d227175477032a4720bdd85c75efbd3b38bdcb7415d42fa7"
     },
     {
       "path": "index.html",
@@ -3771,9 +3771,49 @@
       "sha256": "3b327f7169609c03540967f7f8ceba810afda27a427cb5f16ea6641ef429837a"
     },
     {
+      "path": "packs/PACK-INDEX.json",
+      "bytes": 37372,
+      "sha256": "b607874f9989d88911ae0c1e35bc4bf4f59e2dc433fd5002aebd9545850457d3"
+    },
+    {
+      "path": "packs/README.md",
+      "bytes": 2423,
+      "sha256": "1d7d1e72682b6664c65789c764e99c5b2ae72f375cc5ab6d9db77dd22de05686"
+    },
+    {
+      "path": "packs/arm-brain.nspack",
+      "bytes": 3699029,
+      "sha256": "7c6ec95163e1cee92e7fdd916c3ad6187850ba44a0c0d973b2821994f50fc45f"
+    },
+    {
+      "path": "packs/cerebral-arteries.nspack",
+      "bytes": 888724,
+      "sha256": "721c19d09a6e5e3fefcdd744c52d218eaf3cd640970cbe861873a8c7361502ab"
+    },
+    {
+      "path": "packs/face-muscles.nspack",
+      "bytes": 725349,
+      "sha256": "ff3ebf9f2f50f6acd41894af1c9f8c71a27bc2867ca1dc8c2ebe44bad9d8118e"
+    },
+    {
+      "path": "packs/fullbody.nspack",
+      "bytes": 8622783,
+      "sha256": "f219e08332123f0410d4286816e2f4050ffb70fdde0f4584d228375f6ea47cce"
+    },
+    {
+      "path": "packs/head.nspack",
+      "bytes": 994914,
+      "sha256": "705ff54f97bf8beb8a14615e450a1e37d9cc67f993de96bd9963086f38b2c756"
+    },
+    {
+      "path": "packs/missing-muscles.nspack",
+      "bytes": 4947626,
+      "sha256": "123269b248b20a90f8c8c7a54625c58bd631d9bd441ab60e947f2f4eb2974f9b"
+    },
+    {
       "path": "scene/example/assembly.css",
-      "bytes": 5711,
-      "sha256": "21db3f6b46e629498228848de2c6efcbd7db3b52db87cc4249dfcac87cd52945"
+      "bytes": 9670,
+      "sha256": "f3df97173e79056ffb72c6444dc862d7439e61205893498f32989aa02f68f032"
     },
     {
       "path": "scene/example/configured-r281.css",
@@ -3801,9 +3841,14 @@
       "sha256": "38e98def26a0058fb86ff59bd2f6b1b23d828009ae63a9ee4eddabdc4abd91c8"
     },
     {
+      "path": "scene/example/early-load.mjs",
+      "bytes": 1245,
+      "sha256": "169af01fdf173be50648d0db3dc13034e32d559abf252204731878e90525ba46"
+    },
+    {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 44371,
-      "sha256": "e42c090503a194626fcd028c17137dc3fc0f952296de9ccfb2f21f35f6bbc9bb"
+      "bytes": 50904,
+      "sha256": "95f614c5c062ff99a2a7f151d6c8f6164184b259aed481dac6fa80b8aea10ed5"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3882,8 +3927,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 1684,
-      "sha256": "0e1cdf081e8812bb91bcba1700246b0a7395cb752ccd1ac200a1796ed5a9308e"
+      "bytes": 2280,
+      "sha256": "e0fdce2dd3858a2aab05b2ae26f1944575a6a0fd1aa073bcc80fd08b081322c3"
     },
     {
       "path": "scene/example/quiet.css",
@@ -3897,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 750671,
-      "sha256": "6620a82f313269ab58562672a0b1530cf82700cf77af0d5fa3f9d62d97d685c7"
+      "bytes": 752370,
+      "sha256": "25403477882a63f57cc8a2941f91c578bee0a5aec7f46e54b857677af9e9a60c"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3912,8 +3957,8 @@
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
-      "bytes": 34805,
-      "sha256": "3b024eab3e4129d292f2b5da05c1facd46ec01ba15c225b3d2b49379967217dd"
+      "bytes": 35069,
+      "sha256": "49ad94a7edc0c64248ad11eba4a9884c63f4bfcd653701446cae031a12f72506"
     },
     {
       "path": "scene/src/ns-assembly-order.mjs",
@@ -3922,18 +3967,18 @@
     },
     {
       "path": "scene/src/ns-assembly-worker.mjs",
-      "bytes": 4112,
-      "sha256": "1d24cfc67fdbe93cc2c2fa43740a956800de1939cd32ef579dd4095270564044"
+      "bytes": 4569,
+      "sha256": "8cce4cfed707f3e19eedf20acd5e420ba98b03c1f436b7d78362a97f3f17e811"
     },
     {
       "path": "scene/src/ns-assembly.mjs",
-      "bytes": 18560,
-      "sha256": "fb6261acca9079cb27d38e45e38c21f2261cb4d60b86cc55b4fcea6688558d29"
+      "bytes": 19898,
+      "sha256": "808511a0433079e4ac8e5b7770b7c8b6fd5d7d5a78e6290ce549158bd204907f"
     },
     {
       "path": "scene/src/ns-assets.mjs",
-      "bytes": 121799,
-      "sha256": "cc028bae4cac5799dffb1518db3613f00fa7b0d4e1fb9a6a1f85db3107ab99b2"
+      "bytes": 122877,
+      "sha256": "f937e26b1566c9af76e7096c07150f50af340bab5424d0bbdc0b9b9c5e4b9add"
     },
     {
       "path": "scene/src/ns-body-arm-bridge.mjs",
@@ -3967,8 +4012,8 @@
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 68221,
-      "sha256": "e345a68fcf7d848181a7530720d6ae01eba49e449a56cc8b5517fe6e27d42e98"
+      "bytes": 70010,
+      "sha256": "890b67de7c46c38ed9c475ba441c9250e22be73dd1d9bda73fcc7b5d6b67c806"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -4036,14 +4081,19 @@
       "sha256": "e066cf3ba5f0cb9a543e377d9d47070d859210cecf79ecded02b65a0f70fb57e"
     },
     {
+      "path": "scene/src/ns-load-progress.mjs",
+      "bytes": 15990,
+      "sha256": "4a5c468aadb66951ec7d6ba31cc147bfcebe647dc19dc9e7c9eb71d2f02290fa"
+    },
+    {
       "path": "scene/src/ns-math.mjs",
       "bytes": 15063,
       "sha256": "04bd03516ce716682f019f889fc0a2b16608fe2a27a3c61d95ee793888b3553d"
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 49211,
-      "sha256": "c2fea9aa60af2ba77759c03c70420c53b1bf88ac59c8f2f31a33d7911c1849af"
+      "bytes": 49793,
+      "sha256": "6fed017d9a6ee5ddcff0a96c60866b1b2dea8e60d00994008828d63775420e6b"
     },
     {
       "path": "scene/src/ns-move-glow.mjs",
@@ -4059,6 +4109,21 @@
       "path": "scene/src/ns-outline.mjs",
       "bytes": 79622,
       "sha256": "ed553103bac9cfd1d442417e2bf3fe1d438020b6000d039d533f03949da4cee0"
+    },
+    {
+      "path": "scene/src/ns-pack-loader.mjs",
+      "bytes": 11740,
+      "sha256": "233c41950c5f19e42963d4be3555cb77aae969963719963e20c1545eb766f948"
+    },
+    {
+      "path": "scene/src/ns-pack-worker.mjs",
+      "bytes": 971,
+      "sha256": "45a8c1fa29085ead0494dba56ab286c5e9b7f4cbc37dd1d3bba2cc97c4770338"
+    },
+    {
+      "path": "scene/src/ns-pack.mjs",
+      "bytes": 13771,
+      "sha256": "d9478a869797a3e25767f3923aadda94cf063ac2e02d7857957237adb5d6a0eb"
     },
     {
       "path": "scene/src/ns-perf.mjs",
@@ -4117,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-vessels.mjs",
-      "bytes": 48273,
-      "sha256": "b787571660a3fc910ac1a590943a9aa64df50178c6a68737d3536066f16c6121"
+      "bytes": 48910,
+      "sha256": "88f4ccf6b3dd7cf678ccbc3bc5eb800a0793828eca7fb11922f2ea40b39c991e"
     },
     {
       "path": "scene/src/ns-whole-arm-display.mjs",
@@ -4162,8 +4227,8 @@
     },
     {
       "path": "tests/behind-view.test.mjs",
-      "bytes": 4555,
-      "sha256": "69e6c3ca3447cd09adf032e1b3672235c6a68e5d32ce9e754b9dd1e32e19da55"
+      "bytes": 4367,
+      "sha256": "527e5c59939f7ce78481ed29a4e2a2aff3b491cf89195ad67105627958243b45"
     },
     {
       "path": "tests/body-lift.test.mjs",
@@ -4232,8 +4297,8 @@
     },
     {
       "path": "tests/eye-gaze.test.mjs",
-      "bytes": 5277,
-      "sha256": "94832ff69176a539afdd09e118285c679e32a5658ee5bb7b220ef27bb8c0d079"
+      "bytes": 7079,
+      "sha256": "9dac178c5a9a9477a315a5154d9232de10d5c7e6f35d154473eb39167f08b351"
     },
     {
       "path": "tests/fake-doc.mjs",
@@ -4242,8 +4307,8 @@
     },
     {
       "path": "tests/flat-view.test.mjs",
-      "bytes": 6112,
-      "sha256": "a6aad114d15fbd3b865e2277495bc9316bfb905d9e5446ea330afcf4411abc6f"
+      "bytes": 9146,
+      "sha256": "5081e65c149534996c8e561fc07d086ac2d8a734784750b2f017fa5ab11eb314"
     },
     {
       "path": "tests/flesh.test.mjs",
@@ -4281,6 +4346,11 @@
       "sha256": "f83d21154d0d1f00cece18b6f7f223cb8c782f60aa2b1618de0a22fc8e354061"
     },
     {
+      "path": "tests/load-progress.test.mjs",
+      "bytes": 4533,
+      "sha256": "fec519ee89741fe6fb2edcb8ab8580abb9b4f6b84ee8c0c72fdbcdefd09f8955"
+    },
+    {
       "path": "tests/look-range.test.mjs",
       "bytes": 2176,
       "sha256": "cc310096746b343ea60f0e3c0a2f741e91eaaba548311e85599c83169d1dfa9a"
@@ -4302,8 +4372,13 @@
     },
     {
       "path": "tests/own-front-view.test.mjs",
-      "bytes": 12623,
-      "sha256": "9c30aad7ba48611d689c2cd6a9b9ecc2cb145582db3b6f8c30919443968e23c8"
+      "bytes": 11247,
+      "sha256": "889fabf9c671a338694d3c9a30ecd8b898295bbfa2f94045d9c4e3f36f2be72a"
+    },
+    {
+      "path": "tests/pack.test.mjs",
+      "bytes": 10690,
+      "sha256": "c4421b23e58a45604d8af78f0e870417fea2cfd8f6eaaf73f6e2ea131076bb43"
     },
     {
       "path": "tests/perf.test.mjs",
@@ -4369,6 +4444,11 @@
       "path": "tests/vessels.test.mjs",
       "bytes": 11378,
       "sha256": "9a47838b912fd62526868b9aa9e2fe6a7d055b160c370e4aeee261d3bfecc426"
+    },
+    {
+      "path": "tools/build-mesh-packs.mjs",
+      "bytes": 7249,
+      "sha256": "917339a6d46fcb2d55300eadf1f442c3d205ab7bddaa65b83ab598622291505e"
     },
     {
       "path": "tools/load-body.mjs",

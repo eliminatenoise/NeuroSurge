@@ -171,7 +171,11 @@ export const ROTATION_NOTE_SECONDS = 6;
  * the arm's full reach beside the left knee, the matching pair of the right hand at the right knee (the right wrist
  * lies 30 degrees below level from the eye, 11 above the 41-degree start look). The hand still follows the look at
  * this height of the eye's view; from the raised camera it is drawn a little under and left of the crosshair. */
-export const HAND_Y_NDC = 0.5;
+/* 19 November 2026 (package VIEW: the look now starts 24 degrees down, not 52): 0.5 -> -0.35. The hand's place is given
+ * in the eye view's picture, so with the look higher the same number held the left hand in the air above the thigh
+ * (from outside, an arm raised off the body). At -0.35 it lies along the left thigh again with the hand by the knee,
+ * the pair of the right arm; GAME_ARM_OPTIONS is unchanged. */
+export const HAND_Y_NDC = -0.35;
 /* 18 November 2026, late (package FLAT: the eye view's lens is now 54 degrees and the look starts 52 down, see the
  * launcher): the arm fit's screen numbers are read in that narrower view, where 0 / -0.17 put the left hand across the
  * middle of the strip under the crosshair. HAND_Y_NDC 0 -> 0.5 with GAME_ARM_OPTIONS x -0.17 -> -0.35 and depth
@@ -291,20 +295,16 @@ export function neckFlexEyeShiftMm(pitch, o = NECK_FLEX) {
  * seen from further off and both shoulders come into the lower corners of the picture. 0 here (the pure functions'
  * default); the reclined posture's value comes from ns-body POSTURE_EYES through headLookLimits. A display choice
  * inside what eyes do (they lower some 40 degrees), not a measured gaze. */
-export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 88, maxUpDeg: 85, eyeYawDeg: 60, eyeDownDeg: 0, eyeDownEndDeg: 40 });
-/* 18 November 2026 (a check: looking up AND all the way round to the right showed torn muscle sheets and bare bone
- * from inside; the base build had the same at 60 and 85 degrees up). What is seen there is the LEFT game arm: the
- * hand is held in front of the camera wherever it looks, and for a look straight behind over the right shoulder and
- * upward the left arm would have to pass through the head, so the camera ends up inside its shoulder. That corner of
- * the look is closed: past fromYawDeg to the right the look's upper limit comes down in a straight line to maxUpDeg
- * at endYawDeg (the eyes are then turned 60 degrees to the side, where real eyes do not look far up either). Checked
- * in screenshots: at 180 degrees right the view is clean up to 30 degrees and torn from 45. Used by headLookRange
- * when the limits carry it (headLookLimits with a start posture). A display limit of this arm rig. */
-/* Third pass (a check: the torn views were still there along the first limit and inside it, at 160 / 45, 165 / 58,
- * 170 / 48 and 175 / 39 degrees right / up): the corner is closed from further out and all the way across: the limit
- * comes down between 140 and 155 degrees right, and from there round to straight behind it is 30. Viewed again at
- * 150 / 48, 155, 160, 170 and 180 / 30. */
-export const HEAD_FAR_RIGHT_UP = Object.freeze({ fromYawDeg: -140, endYawDeg: -155, maxUpDeg: 30 });
+/* 19 November 2026 (the owner: "After I move the brain up, the camera view to locked down. The camera view should be
+ * free to move wherever it wants."; "The head should not be locked. The POV, perspective of view, should not be
+ * locked."): the VIEW no longer ends where the neck and trunk end. viewDownDeg / viewUpDeg are the view's own range
+ * (just off straight down and straight up, so the picture never flips); what the neck and the trunk cannot bend, the
+ * eyes do (headPoseForLook eyePitchDeg), exactly as they already turn the rest of the way round (eyeYawDeg). The head,
+ * neck and trunk still stop where they stopped, so their areas and muscles light up as far as they really move and no
+ * further. From the reclined posture the head reaches 45 degrees down and the eyes carry the view on to 88. The corner
+ * that was closed up and far round to the right (HEAD_FAR_RIGHT_UP) is open again: the camera no longer stands at
+ * the eye there (ns-camera EYE_DOLLY), so the left arm's shoulder is not in front of it. Display choices. */
+export const HEAD_LOOK = Object.freeze({ neckRotDeg: 70, neckFlexDeg: 45, neckExtDeg: 45, twistDeg: 40, trunkFlexDeg: 60, trunkExtDeg: 25, trunkSideDeg: 30, maxDownDeg: 88, maxUpDeg: 85, eyeYawDeg: 60, eyeDownDeg: 0, eyeDownEndDeg: 40, viewDownDeg: 88, viewUpDeg: 88 });
 /** How far (degrees) the eyes are lowered in the head for a head pitch (degrees, + = up; pure): eyeDownDeg at level
  * and below, falling linearly to 0 at eyeDownEndDeg of upward tilt. */
 export function eyeDownForHead(headPitchDeg, L = HEAD_LOOK) {
@@ -350,7 +350,7 @@ export function headLookLimits(body = null, base = HEAD_LOOK, rest = null) {
   const eyeDown = E && Number.isFinite(E.downDeg) && E.downDeg > 0 ? E.downDeg : base.eyeDownDeg || 0;
   const eyeEnd = E && Number.isFinite(E.endAtHeadUpDeg) && E.endAtHeadUpDeg > 0 ? E.endAtHeadUpDeg : base.eyeDownEndDeg;
   return Object.freeze({ ...base, neckRotDeg: nr, neckFlexDeg: nf[1], neckExtDeg: -nf[0], trunkFlexDeg: tf[1], trunkExtDeg: -tf[0], twistDeg: tw, trunkSideDeg: ts,
-    eyeDownDeg: eyeDown, eyeDownEndDeg: eyeEnd, ...(rest ? { farRightUp: HEAD_FAR_RIGHT_UP } : {}),
+    eyeDownDeg: eyeDown, eyeDownEndDeg: eyeEnd,
     maxUpDeg: Math.min(base.maxUpDeg, -nf[0] - tf[0]), maxDownDeg: Math.min(base.maxDownDeg - eyeDown, nf[1] + tf[1]) });
 }
 const headOffset = (o, k) => (o && Number.isFinite(o[k]) ? o[k] : 0);
@@ -398,6 +398,9 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   // While a held offset springs the sum may pass the camera's limits for a moment: the neck gives way first.
   if (neckFlex + bend > L.maxDownDeg) { neckFlex = Math.max(-L.neckExtDeg, L.maxDownDeg - bend); bend = Math.min(bend, L.maxDownDeg - neckFlex); }
   if (neckFlex + bend < -L.maxUpDeg) { neckFlex = Math.min(L.neckFlexDeg, -L.maxUpDeg - bend); bend = Math.max(bend, -L.maxUpDeg - neckFlex); }
+  // 19 November 2026: what the neck and trunk cannot bend, the eyes do (HEAD_LOOK viewDownDeg / viewUpDeg): the view
+  // goes on past the head's end (+ = the eyes look up from where the head leaves them).
+  const eyeOver = neckFlex + bend - f;
   // The rig's chain as rotation matrices in world axes (x right, y up, z back): flexion by a = Rx(-a), a turn by b to
   // the left = Ry(b), the bend toward the head's direction c = Ry(c) Rx(-a) Ry(-c), half at each trunk joint.
   const Rx = a => { const c = Math.cos(a * DEG), s = Math.sin(a * DEG); return [1, 0, 0, 0, c, s, 0, -s, c]; }; // column-major 3x3
@@ -413,8 +416,11 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   // look: where the camera looks = the head's own direction, turned further by the eyes when the head is at its end
   // (headLook: the head's direction alone, for whoever draws or lights the head).
   const eyeDown = eyeDownForHead(pitch / DEG, L);
+  const viewDown = Number.isFinite(L.viewDownDeg) ? L.viewDownDeg : null, viewUp = Number.isFinite(L.viewUpDeg) ? L.viewUpDeg : null;
+  const headView = pitch / DEG - eyeDown; // where the camera looks with the eyes only lowered in the head
+  const eyePitch = viewDown === null || viewUp === null || Math.abs(eyeOver) < 1e-9 ? 0 : clamp(headView + eyeOver, Math.min(headView, -viewDown), Math.max(headView, viewUp)) - headView;
   return { joints: { neck_rot: neckRot + 0, neck_flex: neckFlex + 0, trunk_flex: 0 }, twistDeg: twist + 0, bendDeg: bend + 0, bendDirDeg: psiDeg + 0,
-    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch: pitch - eyeDown * DEG }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, eyeDownDeg: eyeDown + 0, rollDeg,
+    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch: (headView + eyePitch) * DEG }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
     // 18 November 2026 (a check: any trunk turn or side bend tore the chest open in the eye view): the held trunk turn,
     // trunk side bend and neck side bend are handed on as they are, so whoever places the eye (the camera) and the left
     // shoulder root on the posed head and chest places them on the body AS DRAWN. Before, the eye stayed where a head
@@ -440,14 +446,12 @@ export function headLookRange(goalOffsets = null, L = HEAD_LOOK, look = null) {
   const fMin = Math.max(-L.neckExtDeg - up, -L.maxUpDeg), fMax = Math.min(L.neckFlexDeg + down, L.maxDownDeg);
   // (18 November 2026: the head's range, given as the look's: the eyes are lowered in the head, HEAD_LOOK eyeDownDeg)
   const lookOf = h => h - eyeDownForHead(h, L);
-  let pitchMaxDeg = lookOf(nf - fMin);
-  // the corner up and far round to the right is closed (HEAD_FAR_RIGHT_UP)
-  const C = L.farRightUp;
-  if (C && look && Number.isFinite(look.yaw) && look.yaw / DEG < C.fromYawDeg) {
-    const k = clamp((C.fromYawDeg - look.yaw / DEG) / (C.fromYawDeg - C.endYawDeg), 0, 1);
-    pitchMaxDeg = Math.min(pitchMaxDeg, Math.max(lookOf(nf - fMax), 85 + k * (C.maxUpDeg - 85)));
-  }
-  return { yawMinDeg, yawMaxDeg, pitchMinDeg: lookOf(nf - fMax), pitchMaxDeg };
+  // 19 November 2026 (HEAD_LOOK viewDownDeg / viewUpDeg): past the head's own ends the eyes carry the view on to the
+  // view's limits; headMinDeg / headMaxDeg are where the head itself stops (the look's range before that day).
+  const headMinDeg = lookOf(nf - fMax), headMaxDeg = lookOf(nf - fMin);
+  const moreDown = Number.isFinite(L.viewDownDeg) ? Math.max(0, L.viewDownDeg + lookOf(-fMax)) : 0;
+  const moreUp = Number.isFinite(L.viewUpDeg) ? Math.max(0, L.viewUpDeg - lookOf(-fMin)) : 0;
+  return { yawMinDeg, yawMaxDeg, pitchMinDeg: headMinDeg - moreDown, pitchMaxDeg: headMaxDeg + moreUp, headMinDeg, headMaxDeg };
 }
 /** R558 (Messages 55 and 56: easier to use; a learning tool): the neck joint of a held neck movement that was just
  * taken and moves the view, or null (pure). prev / next: the held goal offsets of two frames ({ neck_rot, neck_flex },
@@ -1850,7 +1854,9 @@ export const BRAIN_RAISE_NDC = 0.2;
  * all of it inside the picture (viewed at 1600x900 and 1280x720). */
 /* 18 November 2026, the owner ("a slightly wider and larger motor strip, which will probably also mean a larger
  * brain"): 0.33 -> 0.5: the strip is about 800 px across at 1600x900 (640 in the ninth upload, 400 in the tenth). */
-export const BRAIN_START_MOTOR_FRAC = 0.5;
+/* 19 November 2026 (the brain a lot higher, package VIEW): 0.5 -> 0.46: the strip is about 700 px across at 1600x900,
+ * the largest at which all of it, face areas included, stands above your hands and feet inside the picture. */
+export const BRAIN_START_MOTOR_FRAC = 0.46;
 /**
  * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
  * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
@@ -1878,7 +1884,12 @@ export const BRAIN_START_MOTOR_FRAC = 0.5;
  * side of your legs, and the mirror body stands in the hollow between them, above your feet. Your legs and feet lie
  * in front of the strip and hide parts of it. The mirror-body rule above (mirrorFrameTopFrac, clearPx) is kept for
  * whoever passes startNdc: null. A display choice with no anatomical meaning. */
-export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0, startNdc: -0.11 });
+/* 19 November 2026 (the owner: "Both the brain and mirror body are far too low. The brain should actually be a lot
+ * higher, I was wrong about that before."): the brain stands ahead of you and above your feet again (the launcher's
+ * placement: 13 degrees below level), and startNdc -0.11 -> -0.18 is where the strip's lowest part lies in the
+ * picture of THAT placement; in the start picture (the look 24 degrees down) it comes out a little above the middle,
+ * just over your fingertips, with the mirror body's head directly under it. */
+export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0, startNdc: -0.18 });
 /** The lowest height of the view the motor strip may reach at the start (normalised device units, +1 = the top edge),
  * or null when there is no floor (no size, or a window narrower than rule.minAspect). Pure. */
 export function brainFloorNdc(size, { rule = BRAIN_FLOOR } = {}) {
@@ -4744,7 +4755,8 @@ export function start(params = {}) {
     THREE, canvas, hudRoot, manifestUrl, packetBases, movementMapUrl, fetchText, sha256Hex, placeholder = false,
     expectedSha256 = PINNED_SHA256, activityOptions = {}, controlsOptions = {}, armOptions = {},
     shellRoot = null, storage = null, qa = false, resizeDebounce = RESIZE_DEBOUNCE, optionalModules = null, loadBody = null, streamBody = null,
-    fetchBytes = null, sha256HexBytes = null, streamFace = null, viewGraph = null, wholeArmDisplay = null
+    fetchBytes = null, sha256HexBytes = null, streamFace = null, viewGraph = null, wholeArmDisplay = null,
+    fetchPacked = null, onLoadStep = null // 19 November 2026 (package LOAD): meshes from a verified pack (ns-pack); the loading bar's steps
   } = params || {};
   const wholeArmOption = WholeArmDisplay.wholeArmDisplayOptions(wholeArmDisplay);
   let wholeArmLastRefusal = null, wholeArmLastCommitted = null, wholeArmAttempt = null, wholeArmAttemptSerial = 0;
@@ -5837,6 +5849,20 @@ export function start(params = {}) {
     if (typeof view.setTimeout === 'function') view.setTimeout(resolve, 0);
     else resolve();
   });
+  // 19 November 2026 (package LOAD: a loading bar for the whole wait). loadStep(id, 'begin' | 'done') tells the
+  // launcher which step of building the game starts or has ended (ns-load-progress LOAD_STEPS). barFrame() then gives
+  // the page one picture, so the bar is drawn (and its transition handed to the compositor) before the step's work
+  // takes the thread. Only before the first frame and only with a launcher that listens: once the frame loop runs
+  // nothing here waits, so no frame can fall between the parts of a body being installed.
+  const loadStep = (id, what = 'begin') => { if (typeof onLoadStep === 'function') { try { onLoadStep(id, what); } catch { /* a bar only */ } } };
+  const barFrame = () => new Promise(resolve => {
+    if (typeof onLoadStep !== 'function' || frames > 0 || typeof view.setTimeout !== 'function') { resolve(); return; }
+    let settled = false;
+    const go = () => { if (!settled) { settled = true; view.setTimeout(resolve, 0); } };
+    // a picture, or 60 ms without one (a hidden tab gets no pictures and must still load)
+    if (typeof view.requestAnimationFrame === 'function') view.requestAnimationFrame(go);
+    view.setTimeout(go, 60);
+  });
 
   /** Info overlay (R14): build the model for the current gaze and hand it to the scene's panel, the HUD's, or the
    * shell fallback panel, only when its subject or displayed activity changes. */
@@ -5942,7 +5968,9 @@ export function start(params = {}) {
         try { const o = mods.body.bulkArmAssets(inputs.assets.arm, id => SEGMENT_OF[id] || null); inputs.assets = { ...inputs.assets, arm: o.arm, armPads: o.pads || null }; armBulked = o.report; } catch (err) { armBulked = { error: errorText(err) }; }
       }
       setStatus('Getting the arm and brain ready…');
+      loadStep('brain');
       await yieldToPaint();
+      await barFrame();
       if (stopped) return { ok: false, error: 'stopped' };
 
       const bodyMap = bodyMapOf(mods.bodyMap);
@@ -5987,9 +6015,10 @@ export function start(params = {}) {
       // and sinuses join the brain once the files are in; the first frame does not wait. A refusal shows the veins only.
       if (PLAIN_GAME.vessels && !isPlaceholder && sceneFn('setBrainVessels')) {
         const vesselsIn = arteries => { if (!stopped && !failed) { try { callScene('setBrainVessels', { arteries }); } catch (err) { console.warn('ns: brain vessels not drawn:', errorText(err)); } } };
-        loadCerebralArteries({ fetchText, sha256Hex, parse: parseObjFast, yieldFn: yieldToPaint })
+        loadCerebralArteries({ fetchText, sha256Hex, parse: parseObjFast, yieldFn: yieldToPaint, fetchPacked })
           .then(r => vesselsIn(r.meshes), err => { console.warn('ns: cerebral arteries not shown:', errorText(err)); vesselsIn([]); });
       }
+      loadStep('brain', 'done');
       const legendStops = legendStopsFromColors(mods.colors);
       const staticHud = () => hudStatic({ binding: inputs.binding, data, placeholder: isPlaceholder, shell: useShell, legendStops, bodyNote: [bodyNote, faceNote, headNote, musclesNote].filter(Boolean).join(' '), faceMuscles: faceLoaded, extraMuscles: musclesLoaded });
       hud.render(staticHud());
@@ -6391,7 +6420,9 @@ export function start(params = {}) {
           }
           if (stopped || failed) return;
           setStatus('Getting the body ready…');
+          loadStep('check', 'done'); loadStep('rig');
           await yieldToPaint();
+          await barFrame();
           if (stopped || failed) return;
           let rig;
           inputsB = withBulk(inputsB); // package BULK
@@ -6411,29 +6442,46 @@ export function start(params = {}) {
               rig = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById);
             }
           }
+          loadStep('rig', 'done');
           let baked = null;
           if (typeof mods.body.bakeBodyPosture === 'function') {
             setStatus('Posing the body…');
+            loadStep('pose');
             await yieldToPaint();
+            await barFrame();
             if (stopped || failed) return;
             baked = mods.body.bakeBodyPosture(rig, inputsB.meshesById, { posture: mods.body.DEFAULT_BODY_POSTURE });
           }
           if (stopped || failed) return;
           // R558: the stack is found before the body is handed over, so the body first appears already lifted.
+          loadStep('pose', 'done'); loadStep('layers');
           await yieldToPaint();
+          await barFrame();
           if (stopped || failed) return;
           const layers = layersFor(rig, baked, inputsB.meshesById);
           const bodyToWorld = anatomy ? armAttachment(anatomy, { yaw: 0, pitch: 0 }).bodyToWorld : null;
           const drawMeshes = baked ? baked.meshesById : inputsB.meshesById;
+          // (package LOAD) one picture for the loading bar between the parts of the hand-over; barFrame() waits only
+          // before the first frame, when no frame loop can see the body half installed
+          loadStep('layers', 'done'); loadStep('body');
+          await barFrame();
+          if (stopped || failed) return;
           installBody(inputsB.entries, drawMeshes, bodyToWorld, rig);
           bodyBaked = baked;
           bodyRig = rig;
           muscleMapCheck = checkActionMuscles(rig);
           bodyLayers = layers;
+          loadStep('body', 'done'); loadStep('lift');
+          await barFrame();
+          if (stopped || failed) return;
           installBodyLift();
+          loadStep('lift', 'done'); loadStep('skin');
+          await barFrame();
+          if (stopped || failed) return;
           installHandSkin(inputsB.meshesById);
           if (PLAIN_GAME.selfContact) installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
           if (PLAIN_GAME.swell) startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
+          loadStep('skin', 'done'); loadStep('first');
           // 18 November (package VESSELS): the named vessels of the limbs, riveted to this body's drawn muscles and bones
           if (PLAIN_GAME.vessels && sceneFn('setBodyVessels')) {
             const src = inputsB;
@@ -6816,6 +6864,9 @@ export function start(params = {}) {
         const g = limbGrasp;
         if (!g) return;
         const dPitch = cs.pitch - g.lastPitch; g.lastPitch = cs.pitch;
+        // 19 November 2026: the held limb's end follows the look's turn as well as its up / down (the pointer always
+        // turns the look now), so it stays under the crosshair.
+        const dYaw = Number.isFinite(g.lastYaw) ? cs.yaw - g.lastYaw : 0; g.lastYaw = cs.yaw;
         if (g.limb === 'leftArm' || !g.targetMm || !canSolveLimbs() || !camPose) return;
         const B = camBodyToWorld, keys = controlsApi.axes(cs), look = camPose.gazeLook || { yaw: cs.yaw, pitch: cs.pitch };
         const fwd = [-Math.sin(look.yaw), 0, -Math.cos(look.yaw)], right = [Math.cos(look.yaw), 0, -Math.sin(look.yaw)];
@@ -6827,7 +6878,7 @@ export function start(params = {}) {
         const dist = Math.hypot(seen[0] - eye[0], seen[1] - eye[1], seen[2] - eye[2]);
         const px = limbMovePx, mPerPx = px && appliedSize ? dist * 2 * Math.tan(sim.fovFor(appliedSize.width / appliedSize.height) * DEG / 2) / appliedSize.height : 0;
         const mx = px ? px.dx * mPerPx : 0, my = px ? -px.dy * mPerPx : 0;
-        let dw = [0, 1, 2].map(i => right[i] * (keys.x * sp + mx) + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch + my : 0));
+        let dw = [0, 1, 2].map(i => right[i] * (keys.x * sp + mx - dist * Math.cos(look.pitch) * dYaw) + fwd[i] * keys.z * sp + (i === 1 ? dist * dPitch + my : 0));
         if (dw.every(v => v === 0)) return;
         if (M) { const Mi = NsCollide.affineInverse(M); dw = [0, 1, 2].map(i => Mi[i] * dw[0] + Mi[4 + i] * dw[1] + Mi[8 + i] * dw[2]); }
         const lead = 15; // mm: how far the target may run ahead of the limb's end
@@ -7897,39 +7948,10 @@ export function start(params = {}) {
         // boundary, never an unstamped substitute for an original release. Ordinary pause already cancels synchronously.
         if (!live && carryRawEvents.length) cancelPendingGameplay('frozen-pending-input');
         if (!live) carryDrag = null;
-        // R17 (owner, 17 November: "trackpad drag to move items essentially within the XY dimension ... one of the main
-        // issues is when you grasp cursor, you're not actually moving things. When it comes to the mirror body, up and
-        // down, you need to be able to move up and down"): while a grasp holds the brain, the mirror body or one of your
-        // limbs (not the left arm, whose reach IS the look), the pointer's movement is the held item's, not the look's
-        // (ns-controls setCarry / takeCarry). The item crosses the view left / right / up / down with the pointer while
-        // the view stays where it is; only a push past the comfortable part of the view (ns-reference-graph CARRY_VIEW)
-        // turns the look, which then carries the item on (carryPointer). W/A/S/D stay level: X and Z.
-        let carryShiftM = null;
+        // 19 November 2026: the pointer no longer moves a held thing while the view stands still (R17, withdrawn: see
+        // noteSpace below). The look turns as always and carries what is held; nothing is shifted across the view here.
+        const carryShiftM = null;
         limbMovePx = null;
-        if (live && typeof controlsApi.takeCarry === 'function') {
-          const r = controlsApi.takeCarry(cs); cs = r.state;
-          let mv = r.move;
-          if (mv) {
-            const k = typeof controlsApi.lookOptions === 'function' ? controlsApi.lookOptions(cs).sensitivity : 1;
-            mv = { dx: mv.dx * k, dy: mv.dy * k };
-            const oc = simState && simState.objectCarry, eye = camPose && camPose.position && camPose.position.length === 3 ? camPose.position : null;
-            const lk = camPose && camPose.gazeLook ? camPose.gazeLook : { yaw: cs.yaw, pitch: cs.pitch };
-            if (limbGrasp && limbGrasp.limb !== 'leftArm') limbMovePx = mv;
-            else if (oc && oc.held && eye) {
-              const bt = current.out && current.out.brainTransform;
-              // 18 Nov (SMALL, S8): a held brain is carried by the point the crosshair took it at (brainHoldLocal, moved
-              // with the brain), not by its pivot, which for a brain this large often lies outside the carry's band.
-              const held = oc.target === 'brain' ? brainPointWorld(brainHoldLocal, bt) : null;
-              const centre = oc.target === 'mirror' && oc.mirror ? oc.mirror.centreWorldM : held ? held : oc.target === 'brain' && bt && Array.isArray(bt.pivotWorld) ? bt.pivotWorld : null;
-              if (centre) {
-                const q = ReferenceGraph.carryPointer({ centre, eye, look: lk, dxPx: mv.dx, dyPx: mv.dy, viewHeightPx: size.height, fovYDeg: sim.fovFor(aspect), lookRadPerPx: controlsApi.sensitivityRadPerPx,
-                  heightM: oc.target === 'mirror' ? ReferenceGraph.CARRY_VIEW.mirrorHeightM : null });
-                carryShiftM = q.shiftM;
-                if (q.lookDelta.yaw !== 0 || q.lookDelta.pitch !== 0) cs = controlsApi.setLook(cs, { yaw: cs.yaw + q.lookDelta.yaw, pitch: cs.pitch + q.lookDelta.pitch });
-              }
-            }
-          }
-        }
         // R558: a learned look limit is applied before the first attempt, so pushing against it costs no refused attempt.
         if (live && lookBlock) {
           if (now >= lookBlock.untilMs) lookBlock = null;
@@ -8037,32 +8059,24 @@ export function start(params = {}) {
         // drawn (per direction first, learned for a moment like any held look); when a held trunk bend would, it stops at
         // the share that stays clear (the activity holds it there), so the camera, which rides on the head, and the drawn
         // body stay together. Nothing is tested while the head options do not change (an ordinary look).
+        // 19 November 2026 (the owner: "After I move the brain up, the camera view to locked down. The camera view should
+        // be free to move wherever it wants."): the LOOK is no longer held here. It was held whenever the head it asks for
+        // would bring your body, or your body's mirror image, nearer to the brain or the mirror body than the clearance; a
+        // brain carried up against the mirror body made every look do that (the mirror image moves with your trunk), so
+        // the view stood still until the brain was moved away again. Now only a held trunk bend that is still under way
+        // stops, at the share that stays clear, and only when the look by itself is clear.
         if (live && headLookOn && headDrawn) {
           const offsNow = headOffs ? headOffs.now : null, asked = { yaw: cs.yaw, pitch: cs.pitch };
-          if (!headMoveClear(headPoseForLook(asked, offsNow, headLimits))) {
-            const good = lastGoodLook || asked, tries = [];
-            if (asked.yaw !== good.yaw && asked.pitch !== good.pitch) tries.push({ yaw: asked.yaw, pitch: good.pitch }, { yaw: good.yaw, pitch: asked.pitch });
-            if (asked.yaw !== good.yaw || asked.pitch !== good.pitch) tries.push(good);
-            let held = null;
-            for (const L of tries) if (headMoveClear(headPoseForLook(L, offsNow, headLimits))) { held = L; break; }
-            if (held) {
-              cs = controlsApi.setLook(cs, held);
-              const yawSign = Math.sign(asked.yaw - held.yaw), pitchSign = Math.sign(asked.pitch - held.pitch);
-              if (yawSign !== 0 || pitchSign !== 0) lookBlock = { yawSign, yaw: held.yaw, pitchSign, pitch: held.pitch, untilMs: now + DISPLAY_RECOVERY.lookBlockMs };
-              contact.lookHeld = (contact.lookHeld || 0) + 1;
-              noteContact('look', now);
-            } else {
-              cs = controlsApi.setLook(cs, good);
-              const a = headDrawn.heldTrunkDeg, b = offsNow ? offsNow.trunk_flex : a;
-              if (Number.isFinite(a) && Number.isFinite(b) && a !== b && typeof sim.activity.step === 'function') {
-                // The held trunk bend is what collides: stop it at the share that stays clear (bisection).
-                const clearAt = k => headMoveClear(headPoseForLook(good, { ...offsNow, trunk_flex: a + (b - a) * k }, headLimits));
-                let lo = 0, hi = 1;
-                for (let i = 0; i < NsCollide.COLLIDE.bisectSteps; i++) { const mid = (lo + hi) / 2; if (clearAt(mid)) lo = mid; else hi = mid; }
-                simState = { ...simState, activity: sim.activity.step(simState.activity, [{ type: 'limbPose', joints: { trunk_flex: a + (b - a) * lo } }], 0) };
-                headOffs = headOffsetsOf(simState);
-                contact.trunkStopped = (contact.trunkStopped || 0) + 1;
-              }
+          const a = headDrawn.heldTrunkDeg, b = offsNow ? offsNow.trunk_flex : a;
+          if (Number.isFinite(a) && Number.isFinite(b) && a !== b && typeof sim.activity.step === 'function') {
+            const clearAt = k => headMoveClear(headPoseForLook(asked, { ...offsNow, trunk_flex: a + (b - a) * k }, headLimits));
+            if (!clearAt(1) && clearAt(0)) {
+              // The held trunk bend is what collides: stop it at the share that stays clear (bisection).
+              let lo = 0, hi = 1;
+              for (let i = 0; i < NsCollide.COLLIDE.bisectSteps; i++) { const mid = (lo + hi) / 2; if (clearAt(mid)) lo = mid; else hi = mid; }
+              simState = { ...simState, activity: sim.activity.step(simState.activity, [{ type: 'limbPose', joints: { trunk_flex: a + (b - a) * lo } }], 0) };
+              headOffs = headOffsetsOf(simState);
+              contact.trunkStopped = (contact.trunkStopped || 0) + 1;
               noteContact('body', now);
             }
           }
@@ -9205,12 +9219,13 @@ export function start(params = {}) {
               || Boolean(act && act.brainGrab && act.brainGrab.active),
             turning: Boolean(act && act.dance && act.dance.mode)
           });
-          // R17: from now on the pointer moves what is held (the brain, the mirror body, an own limb other than the left
-          // arm) instead of turning the look; with nothing such held it turns the look again.
-          if (typeof controlsApi.setCarry === 'function') {
-            cs = controlsApi.setCarry(cs, Boolean((limbGrasp && limbGrasp.limb !== 'leftArm')
-              || (simState && simState.objectCarry && simState.objectCarry.held && (simState.objectCarry.target === 'brain' || simState.objectCarry.target === 'mirror'))));
-          }
+          // 19 November 2026 (the owner: "movement should continue with head movement as well as item movement, just
+          // like it usually does. The head should not be locked. The POV, perspective of view, should not be locked."):
+          // the pointer ALWAYS turns the look, also while something is held (R17's hold-and-move mode, where the
+          // pointer moved the held thing and the view stood still, is withdrawn). A held brain or mirror body turns
+          // with the look about your eyes at its own distance (ns-reference-graph stepObjectCarry), a held limb's end
+          // follows it (stepLimbGrasp), so the held thing stays under the crosshair and is still there when you let go.
+          if (typeof controlsApi.setCarry === 'function') cs = controlsApi.setCarry(cs, false);
         }
         current = { sim, data, state: simState, controls: cs, out };
         if (wholeArmOption && out.wholeArmFraming) {

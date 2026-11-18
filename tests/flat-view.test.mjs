@@ -12,12 +12,16 @@ const DEG = Math.PI / 180;
 const launcher = readFileSync(new URL('../scene/example/eye-view-r558.mjs', import.meta.url), 'utf8');
 const num = name => Number(new RegExp(`const ${name} = (-?[\\d.]+)`).exec(launcher)[1]);
 
-test('the launcher\'s lens is longer and its look steeper, and the camera table starts at that look', () => {
+test('the launcher\'s lens is the long one and its look starts a little below level, toward the strip', () => {
+  // 19 November 2026 (the owner: "Both the brain and mirror body are far too low. The brain should actually be a lot
+  // higher"): this test asked for a start look between 48 and 60 degrees down and a camera table starting there; both
+  // are withdrawn. The look starts shallower and the brain stands above it in the picture.
   const fov = num('EYE_FOV_Y_DEG'), pitch = num('START_LOOK_PITCH_DEG');
+  const brain = Number(/BRAIN_START_PITCH_DEG = (-?[\d.]+)/.exec(launcher)[1]);
   assert.ok(fov >= 40 && fov <= 70, `a longer lens than the 100 degrees before (${fov})`);
-  assert.ok(pitch <= -48 && pitch >= -60, `the look starts steeper than 41 down (${pitch})`);
-  const rows = NC.EYE_DOLLY.byPitch;
-  assert.equal(rows[rows.length - 1][0], pitch, 'the camera table\'s last row is the start look');
+  assert.ok(pitch <= -15 && pitch >= -35, `the look starts a little downward, not steeply (${pitch})`);
+  assert.ok(brain > pitch && brain >= -20, `the brain stands above the start look, near level (${brain})`);
+  assert.ok(pitch <= NC.EYE_DOLLY.standPitchMaxDeg + 1e-9 || Math.abs(pitch - NC.EYE_DOLLY.standPitchMaxDeg) < 2, 'at the start the camera stands (almost) straight behind the eye on the line of sight');
 });
 
 test('at the start look the camera stands behind the eye\'s own plane and the near plane is just behind the eye', () => {
@@ -29,16 +33,40 @@ test('at the start look the camera stands behind the eye\'s own plane and the ne
   const g = NC.gazeDirection(0, pitch * DEG), along = -(d.offset[0] * g[0] + d.offset[1] * g[1] + d.offset[2] * g[2]);
   assert.ok(Math.abs(along - d.depthBackM) < 1e-12);
   assert.equal(d.fovScale, 1, 'the launcher\'s own angle at the start look');
-  // with the look up the camera is the eye again and the near plane is the scene's own
-  const up = NC.eyeDolly({ yaw: 0, pitch: 40 * DEG });
-  assert.equal(up.depthBackM, 0); assert.equal(up.nearM, NC.FIRST_PERSON.nearM);
 });
 
-test('with zRefM the lens widens as the camera comes back to the eye, so things zRefM ahead keep their size', () => {
-  const E = { ...NC.EYE_DOLLY, zRefM: 0.5 }, start = E.byPitch[E.byPitch.length - 1][0];
-  const s = NC.eyeDolly({ yaw: 0, pitch: start * DEG }, E), u = NC.eyeDolly({ yaw: 0, pitch: 40 * DEG }, E);
-  assert.ok(Math.abs(s.fovScale - 1) < 1e-12, 'the launcher\'s angle at the start look');
-  assert.ok(Math.abs(u.fovScale - (0.5 + s.depthBackM) / 0.5) < 1e-12, 'a dolly zoom about zRefM');
+test('the camera keeps ONE stand-off at every look: nothing is magnified by a turn', () => {
+  // 19 November 2026 (the owner: "whenever you look to the far side of any screen, everything gets super magnified and
+  // is unusable"). Before, the camera came back to the eye for side, level and upward looks (this file tested that a
+  // look 40 degrees up put it AT the eye); at the eye the long lens draws your own arm across the whole picture.
+  const E = NC.EYE_DOLLY, len = v => Math.hypot(v[0], v[1], v[2]);
+  const d0 = len(NC.eyeDolly({ yaw: 0, pitch: num('START_LOOK_PITCH_DEG') * DEG }).offset);
+  assert.ok(Math.abs(d0 - Math.hypot(E.backM, E.upM * Math.cos(E.headAboveLookDeg * DEG)) ) < 0.06 && d0 > 0.28);
+  for (let yaw = -180; yaw <= 180; yaw += 15) for (let pitch = -88; pitch <= 88; pitch += 11) {
+    const d = NC.eyeDolly({ yaw: yaw * DEG, pitch: pitch * DEG });
+    assert.ok(Math.abs(len(d.offset) - d0) < 0.03, `look ${yaw}/${pitch}: ${len(d.offset).toFixed(3)} m from the eye, ${d0.toFixed(3)} at the start`);
+    assert.equal(d.fovScale, 1, 'and the lens does not change');
+    assert.ok(d.offset[1] > 0.05, `look ${yaw}/${pitch}: the camera stays above the eye, never down in the neck or the back`);
+  }
+  // inside the stand-off's range the camera is straight behind the eye on the line of sight (plus upM along the head)
+  const a = NC.eyeDolly({ yaw: 40 * DEG, pitch: -50 * DEG }), g = NC.gazeDirection(40 * DEG, -50 * DEG);
+  assert.ok(-(a.offset[0] * g[0] + a.offset[1] * g[1] + a.offset[2] * g[2]) > E.backM - 1e-9);
+  // past it the camera stays put and only turns: upward ...
+  const u1 = NC.eyeDolly({ yaw: 0, pitch: 0 }), u2 = NC.eyeDolly({ yaw: 0, pitch: 80 * DEG });
+  for (let k = 0; k < 3; k++) assert.ok(Math.abs(u1.offset[k] - u2.offset[k]) < 1e-12);
+  // ... and round past the head's own turn
+  const s1 = NC.eyeDolly({ yaw: E.standYawMaxDeg * DEG, pitch: -30 * DEG }), s2 = NC.eyeDolly({ yaw: 180 * DEG, pitch: -30 * DEG });
+  for (let k = 0; k < 3; k++) assert.ok(Math.abs(s1.offset[k] - s2.offset[k]) < 1e-12);
+  // continuous everywhere: a quarter degree of look moves the camera by under 3 mm
+  for (let p = -88; p < 88; p += 0.25) { const x = NC.eyeDolly({ yaw: 0.3, pitch: p * DEG }).offset, y = NC.eyeDolly({ yaw: 0.3, pitch: (p + 0.25) * DEG }).offset; assert.ok(len([x[0] - y[0], x[1] - y[1], x[2] - y[2]]) < 0.003, `pitch ${p}`); }
+  for (let w = -180; w < 179.9; w += 0.25) { const x = NC.eyeDolly({ yaw: w * DEG, pitch: -0.5 }).offset, y = NC.eyeDolly({ yaw: (w + 0.25) * DEG, pitch: -0.5 }).offset; assert.ok(len([x[0] - y[0], x[1] - y[1], x[2] - y[2]]) < 0.003, `yaw ${w}`); }
+});
+
+test('with zRefM the lens widens as the camera comes off the line of sight, so things zRefM ahead keep their size', () => {
+  const E = { ...NC.EYE_DOLLY, zRefM: 0.5 };
+  const s = NC.eyeDolly({ yaw: 0, pitch: -50 * DEG }, E), u = NC.eyeDolly({ yaw: 0, pitch: 40 * DEG }, E);
+  assert.ok(Math.abs(s.fovScale - 1) < 1e-9, 'the launcher\'s angle while the camera stands straight behind the eye');
+  assert.ok(u.fovScale > 1 && Math.abs(u.fovScale - (0.5 + s.depthBackM) / (0.5 + u.depthBackM)) < 1e-9, 'a dolly zoom about zRefM');
   // continuous: a quarter degree of look changes the lens by less than half a percent
   for (let p = -85; p < 85; p += 0.25) {
     const a = NC.eyeDolly({ yaw: 0, pitch: p * DEG }, E).fovScale, b = NC.eyeDolly({ yaw: 0, pitch: (p + 0.25) * DEG }, E).fovScale;

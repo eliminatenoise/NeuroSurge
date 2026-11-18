@@ -15,6 +15,56 @@
 .ns-assembly-static p { margin: 0; }
 .ns-assembly-static progress { width: min(12rem, 85vw); accent-color: #7fe3ff; }
 
+/* 19 November 2026: the loading bar (ns-load-progress). One clear bar with its percentage, for the whole wait: the
+   download and every step of building the game. White on near-black; the fill and the number move as transitions of
+   `transform`, which the browser plays even while the page is busy building. */
+.ns-load {
+  position: fixed; left: 50%; bottom: clamp(28px, 9vh, 96px); transform: translateX(-50%); z-index: 10;
+  width: min(560px, 78vw); pointer-events: none; opacity: 1; box-sizing: border-box;
+  padding: 16px 20px 18px; border-radius: 14px; background: rgba(5, 7, 11, 0.86); border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff; font: 700 clamp(18px, 2.2vw, 26px)/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.02em;
+  text-shadow: 0 1px 6px #000, 0 0 2px #000;
+}
+.ns-load.ns-load-out { opacity: 0; transition: opacity 0.6s ease 0.15s; }
+.ns-load-text { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5em; }
+.ns-load-pct { display: inline-block; height: 1em; overflow: hidden; text-align: right; font-variant-numeric: tabular-nums; }
+.ns-load-pct-column { display: block; will-change: transform; }
+.ns-load-pct-line { display: block; height: 1em; line-height: 1em; white-space: nowrap; }
+.ns-load-track {
+  height: 16px; border-radius: 8px; overflow: hidden; background: #0b0f14; border: 2px solid #fff; box-sizing: border-box;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+.ns-load-fill { width: 100%; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0.004); will-change: transform; }
+/* Before any script is in, the bar on the page itself creeps a little by a plain CSS animation (not under reduced
+   motion, where it waits at its start); the script then takes over from wherever it stands. */
+.ns-load-early .ns-load-fill { animation: ns-load-early 6s cubic-bezier(0.2, 0.6, 0.3, 1) forwards; }
+@keyframes ns-load-early { from { transform: scaleX(0.004); } to { transform: scaleX(0.05); } }
+/* The fill and the number are moved by Web Animations (ns-load-progress), which also run under reduced motion, where
+   neurosurge.css stops every CSS transition: a progress bar that grows is the information itself, not decoration. */
+.ns-load.ns-load-stopped .ns-load-fill { background: #ffb347; }
+/* The failure panel: loading failed or stopped; plain words and one button. */
+.ns-load-fail {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; box-sizing: border-box;
+  width: min(440px, 86vw); padding: 26px 28px 22px; border-radius: 16px; text-align: center;
+  background: #0b0f14; border: 2px solid #fff; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.8);
+  color: #fff; font: 600 17px/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-load-fail p { margin: 0 0 10px; }
+.ns-load-fail-title { font-size: 22px; font-weight: 800; }
+.ns-load-fail-hint { color: #d5dee8; font-weight: 500; }
+.ns-load-fail-again {
+  margin: 8px 0 6px; padding: 12px 30px; border-radius: 10px; border: 0; cursor: pointer;
+  background: #fff; color: #05070b; font: 800 18px/1 system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.ns-load-fail-again:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 3px; }
+.ns-load-fail-detail { margin: 10px 0 0 !important; color: #9fb0c0; font: 400 12px/1.35 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+/* While the failure panel is up the game's own error page stays behind it (one message, one button). */
+body:has(.ns-load-fail) .ns-shell[data-mode="error"], body:has(.ns-load-fail) .ns-keys { display: none; }
+body:has(.ns-load-fail) .ns-hud-root { visibility: hidden; }
+/* The stationary reduced-motion layer keeps its own small progress element for assistive technology; the bar above is
+   the one that is seen. */
+body:has(.ns-load) .ns-assembly-static p, body:has(.ns-load) .ns-assembly-static progress { visibility: hidden; }
+
 /* While files load: no start page, no HUD words; an error still shows its page. */
 .ns-app[data-ns-phase="loading"] .ns-shell[data-mode="loading"] { display: none; }
 .ns-app[data-ns-phase="loading"] .ns-hud-root,

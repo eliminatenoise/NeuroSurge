@@ -25,6 +25,12 @@
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
 </main>
+<!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->
+<div class="ns-load ns-load-early" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <div class="ns-load-text"><span class="ns-load-word">Loading</span><span class="ns-load-pct" aria-hidden="true"><span class="ns-load-pct-column"><span class="ns-load-pct-line">0 %</span></span></span></div>
+  <div class="ns-load-track"><div class="ns-load-fill"></div></div>
+</div>
+<script type="module" src="./early-load.mjs"></script>
 <script type="module" src="./eye-view-r558.mjs"></script>
 </body>
 </html>

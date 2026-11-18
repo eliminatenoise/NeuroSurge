@@ -96,7 +96,12 @@ export const MIRROR_REFLECTION = Object.freeze({ clearanceM: 0.05, matrixToleran
  * (picking, its arrows and their frame, contact, carrying and turning it, the view from outside) uses this placement:
  * it is the mirror body's place. Display choices, judged on pictures; not a measurement.
  */
-export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.68, dropM: 1.0, nearerM: 0 });
+/* 19 November 2026 (the owner: "Both the brain and mirror body are far too low."; package VIEW): with the look starting
+ * 24 degrees down and the brain above your feet, the mirror body stands directly under the motor strip, between your
+ * hands: magnifyBy 0.68 -> 0.95 (almost the reflection's own size: about 290 px tall at 1600x900, where 0.68 would be
+ * 200) and dropM 1.0 -> 0.9. It is not higher than that because the strip's leg areas are directly above its head and
+ * your knees directly below its feet; in the picture it is now in the middle, where the look starts. */
+export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.95, dropM: 0.9, nearerM: 0 });
 
 /** The rest-pose fallback body box (world m, seated BodyParts3D body at the default eye) used only when the integrator
  * passes no measured bounds: centre, half extents along body right / up / forward. Replaced by bodyBoundsFromPoints. */

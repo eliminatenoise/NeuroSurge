@@ -1590,6 +1590,24 @@ Built by one helper and looked at by the author in its pictures and in the merge
 
 The mirror body, a figure about 300 px tall, cost 2.0 of a frame's 4.6 million triangles. It is drawn again from index-only copies of its meshes with 5 mm cells: 0.58 million. Brought very near, thin sheets of the face and neck can show small holes.
 
+## 117. A wait of seconds, not minutes: mesh packs and a plain loading bar (19 November)
+
+The user: “The game is currently broken as it just stays on the loading page forever. There should be a loading progress bar as well”; “Game should not take long to load at all. Minutes are a liability”; “the loading bar should be much more obvious, and it shouldn't fully load the whole bar until the game's ready to go.”
+
+Measured first: before it was ready the game fetched 667 OBJ text files, 166.9 MB, in 721 requests. At 20 Mbit/s that is over a minute of download alone, at 10 Mbit/s over two: the user's “minutes” and “forever”.
+
+- **Mesh packs.** The game now loads six files, 19 MB for what it waits for, from `packs/` (`tools/build-mesh-packs.mjs`, format in `scene/src/ns-pack.mjs`). A pack is a lossless compact copy of what the game reads from each OBJ file: for every file the decoded mesh is bit for bit what the parser reads from the source. Each mesh records the size and SHA-256 of its source file and the game checks both against its pinned manifests, as it did for a fetched file. The source packets, their hashes and licence records stay unchanged; a pack keeps the licence of its sources. If a pack is missing or cannot be read, that packet's OBJ files are fetched as before.
+- **The bar.** A large bar with a word and a percentage is on the page before any script arrives. It covers the whole wait, the download and then every build step, keeps moving while a step holds the page's thread, and reaches 100 % only as the game appears.
+- **No dead ends.** Every request has a 20 s limit without an answer or a byte; when nothing has advanced for 20 s the page says so with a “Try again” button, and a failed load names the first request that failed.
+
+On the author's computer, with files from the local disk, the game is ready in about 10 s as before: that time is the page building the bodies, which the packs do not change. Coarser meshes and a shorter build are the next steps. Built by one helper; its independent check has not finished.
+
+## 118. The brain a lot higher, and a look that is never held (19 November)
+
+The user: “Both the brain and mirror body are far too low. The brain should actually be a lot higher, I was wrong about that before.” “After I move the brain up, the camera view to locked down. The camera view should be free to move wherever it wants.” “The head should not be locked.” “whenever you look to the far side of any screen, everything gets super magnified and is unusable.” “For third-person view, the head should not be shifted to the right.”
+
+This withdraws the strip below the ankles of section 92. The game starts with the look 24 degrees below level (it was 52): the whole motor strip stands clear above your hands and feet, the mirror body directly under it between your hands, your own body below. The look goes all the way up, down and round; where the neck and trunk stop the eyes carry on, and nothing holds the look after the brain or the mirror body has been moved. While Space holds a thing the pointer still turns the head and the held thing goes with the look. The camera keeps one distance behind the eyes at every look, so nothing changes size in a turn. From outside (E) the camera stands straight behind the head. Built by one helper, whose work on carrying with W / A / S / D continues; the author looked at the start picture, far looks and the view from outside in the merged game.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

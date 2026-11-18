@@ -12,23 +12,22 @@ const DEG = Math.PI / 180;
 const third = NC.createCameraState({ view: 'third' }), first = NC.createCameraState({ view: 'first' });
 const pose = (state, yawDeg, pitchDeg) => NC.cameraPose(state, { look: { yaw: yawDeg * DEG, pitch: pitchDeg * DEG } });
 
-test('from outside, the camera stands behind and to the right of the lying body and looks through a point over its middle', () => {
+test('from outside, the camera stands straight behind the head on the body\'s midline and looks down along the body', () => {
+  // 19 November 2026 (the owner: "For third-person view, the head should not be shifted to the right ... It should just
+  // start off in the middle."): this test asked for a camera 15 to 90 degrees round to one side; that is withdrawn.
   const T = NC.THIRD_PERSON;
   assert.equal(T.followHead, true);
   assert.equal(T.followBody, true);
-  assert.ok(T.followYawDeg > 15 && T.followYawDeg < 90, 'from behind and to one side, not square on');
+  assert.equal(T.followYawDeg, 0, 'square on from behind: the head is in the middle at a neutral look');
   assert.ok(T.followOffsetM[2] < 0, 'the centre lies ahead of the eyes: over the body');
-  const p = pose(third, 0, -34);
+  const p = pose(third, 0, -24);
   assert.ok(p.thirdPerson && !p.firstPerson);
   // looking along -z: +x is the player's right, +z is behind the eyes
-  // (18 November 2026, fourth pass: the camera now stands behind the right shoulder, three-quarter from behind, so the
-  // brain beyond the feet is in the picture; before, it stood beside the trunk and the brain was cut off)
-  // (18 November 2026, after a check: from behind the shoulder the lying body was seen end-on with its legs
-  // foreshortened to stumps; the camera now stands to the right and a little behind, three-quarter from the side)
-  assert.ok(p.position[0] > 1, `to the right (${p.position[0].toFixed(2)} m)`);
-  assert.ok(p.position[2] > 0.05 && p.position[2] < 1, `a little behind the head (${p.position[2].toFixed(2)} m)`);
-  assert.ok(Math.abs(p.yaw - T.followYawDeg * DEG) < 1e-12, 'turned toward the body');
-  assert.ok(Math.abs(p.pitch - (-34 + T.followPitchBiasDeg) * DEG) < 1e-12, 'lower than the look alone would put it: a side-on picture');
+  assert.ok(Math.abs(p.position[0]) < 1e-9, `on the midline (${p.position[0].toFixed(3)} m)`);
+  assert.ok(p.position[2] > 0.3, `behind the head (${p.position[2].toFixed(2)} m)`);
+  assert.ok(p.position[1] > 0.5, `above it (${p.position[1].toFixed(2)} m)`);
+  assert.ok(Math.abs(p.yaw) < 1e-12, 'facing the way the body faces');
+  assert.ok(Math.abs(p.pitch - (-24 + T.followPitchBiasDeg) * DEG) < 1e-12 && p.pitch < -35 * DEG, 'looking down along the lying body, not across it');
   // the camera looks straight through the orbit centre
   const c = p.orbitCentre, d = p.direction, v = [c[0] - p.position[0], c[1] - p.position[1], c[2] - p.position[2]], l = Math.hypot(...v);
   assert.ok(Math.abs(v[0] / l - d[0]) < 1e-9 && Math.abs(v[1] / l - d[1]) < 1e-9 && Math.abs(v[2] / l - d[2]) < 1e-9);
@@ -48,8 +47,8 @@ test('from outside, the body stays in the middle of the picture wherever the loo
     assert.ok(p.pitch <= T.followMaxPitchDeg * DEG + 1e-12, 'never far under the body');
     assert.ok(p.yaw >= T.followYawMinDeg * DEG - 1e-12 && p.yaw <= T.followYawMaxDeg * DEG + 1e-12, 'never round to the brain beyond the feet');
   }
-  // a look 75 degrees to the right brings the camera straight behind the head, looking along the body
-  const b = pose(third, -T.followYawDeg, -10);
+  // at a neutral turn the camera is straight behind the head, looking along the body
+  const b = pose(third, 0, -10);
   assert.ok(Math.abs(b.yaw) < 1e-12 && b.position[2] > c0[2] + 1 && Math.abs(b.position[0] - c0[0]) < 1e-9);
 });
 
