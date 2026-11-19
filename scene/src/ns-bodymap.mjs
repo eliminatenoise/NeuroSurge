@@ -603,8 +603,8 @@ const CONTENT = {
     label: 'Left shoulder', shortLabel: 'L shoulder', effector: 'shoulder (left arm)', bodySide: 'left', medialSurface: false, isLeftArm: true,
     displayGroup: 'left_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
     actions: [],
-    noActionReason: 'The left shoulder follows the camera look and W/A/S/D (the reach lane); it has no separate gaze action, so looking here only lights and marks the region.',
-    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is carried by your look and by W/A/S/D, so looking here lights and marks the region without adding a separate movement. Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the anatomical mesh collection does not establish muscle recruitment. Shoulder activity here is simulated, not measured.',
+    noActionReason: 'The left shoulder is moved by W/A/S/D and by the look while the left arm is the chosen limb (key 1); it has no separate gaze action, so looking here only lights and marks the region.',
+    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is moved by W/A/S/D and carried by your look while the left arm is the chosen limb, so looking here lights and marks the region without adding a separate movement. Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the anatomical mesh collection does not establish muscle recruitment. Shoulder activity here is simulated, not measured.',
     citationKeys: ['GORDON2023', 'BAWA2004', 'DEVANNE2006', 'UAMS_UPPER']
   } : {
     label: 'Right shoulder', shortLabel: 'R shoulder', effector: 'shoulder (right arm)', bodySide: 'right', medialSurface: false,

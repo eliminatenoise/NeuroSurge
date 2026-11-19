@@ -31,7 +31,7 @@ export const LIMB_IDS = Object.freeze(['rightArm', 'leftArm', 'rightLeg', 'leftL
  */
 export const LIMB_CHAIN = Object.freeze({
   rightArm: Object.freeze({ joints: Object.freeze(['r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex']), root: 'r_glenohumeral', rootSeg: 'r_upperarm',
-    bend: 'r_elbow_flex', bendSign: 1, bendPivot: 'r_elbow', endSeg: 'r_hand', endCentreOf: 'r_hand', side: 'right',
+    bend: 'r_elbow_flex', bendSign: 1, bendPivot: 'r_elbow', endSeg: 'r_hand', endCentreOf: 'r_hand', framePivot: 'r_wrist', side: 'right',
     dial: Object.freeze({ joint: 'r_pronation', sign: -1, area: 'lh_forearm' }), upperDial: Object.freeze({ joint: 'r_shoulder_rot', sign: 1, area: 'lh_shoulder' }) }),
   rightLeg: Object.freeze({ joints: Object.freeze(['hip_flex_R', 'hip_abd_R', 'knee_ext_R']), root: 'r_hip', rootSeg: 'r_thigh',
     bend: 'knee_ext_R', bendSign: -1, bendPivot: 'r_knee', endSeg: 'r_shank', endPivot: 'r_ankle', side: 'right',
@@ -62,6 +62,19 @@ export const LIMB_GRASP = Object.freeze({
  * all six iterations on every frame).
  */
 export const LIMB_TRACK = Object.freeze({ ...LIMB_GRASP, solveIters: 2, minGain: 0.05 });
+/**
+ * 19 November 2026 (the chosen limb held by the view, ns-app LIMB_KEYS.view.hold). The tracking solve with the damping
+ * in proportion to the limb's lever arm (lambdaShare x the distance root -> end, in place of the fixed lambdaMm): with
+ * the fixed 8 a folded arm, its hand 11 cm from the shoulder, turned about a twentieth of what a frame asked for and
+ * the hand sank instead of going out level; in proportion the turn is the same share of the asked one at every bend.
+ */
+export const LIMB_HOLD_TRACK = Object.freeze({ ...LIMB_TRACK, lambdaShare: 0.006, lambdaMinMm: 0.5, reuseDeg: 6 });
+/** The same with one step a frame: for the frames on which the limb is already following (the solve of the frame
+ * before ended close to its target), where one step with the remembered columns is enough. */
+export const LIMB_HOLD_FOLLOW = Object.freeze({ ...LIMB_HOLD_TRACK, solveIters: 1 });
+/** And for a limb that waits at the end of its range while the view goes on: one step with the columns it has (keepColumns:
+ * they are not found afresh because a step did not close in; at a joint's end no columns would). */
+export const LIMB_HOLD_WAIT = Object.freeze({ ...LIMB_HOLD_FOLLOW, keepColumns: true, reuseDeg: 12 });
 
 /**
  * 19 November 2026 (a check: "a few ordinary looks tear the shoulder ... a controlled arm stays inside poses that draw
@@ -71,7 +84,11 @@ export const LIMB_TRACK = Object.freeze({ ...LIMB_GRASP, solveIters: 2, minGain:
  * as stretched sheets and the hand passes the view point. A movement switched on from the brain still has the whole
  * range. Display choice, found on pictures.
  */
-export const LIMB_HOLD_LIMITS = Object.freeze({ r_shoulder_abd: Object.freeze([0, 80]), r_shoulder_flex: Object.freeze([-25, 105]) });
+/* 19 November 2026, later (the owner: "there's problems with some limbs, such as the right arm having a full range of
+ * motion, especially when you go left all the way and it's unable to cross the body"; "We want full range of motion on
+ * all axes"): no caps any more. The keys and the look move every limb through the body's own ranges (ns-body
+ * BODY_JOINT_LIMITS and the combined-range rule); the caps were sideways lift 0 to 80 and forward raise -25 to 105. */
+export const LIMB_HOLD_LIMITS = Object.freeze({});
 /** limits with LIMB_HOLD_LIMITS applied for the pose `now` ({ jointId: degrees }): each capped joint keeps the side of
  * its cap it is already beyond (a joint a brain movement took past the cap is not snapped back; it can only come in).
  * Pure; returns `limits` itself when no cap applies to this limb. */
@@ -176,14 +193,26 @@ export function lookAwayDeg(a, b) {
  * together; with the arm straight forward and the end lifted it folded the elbow a little every frame until the hand
  * was at the face, so the bend is now left to the distance alone.) Returns { joints: { id: deg } (the limb's three joints), endMm (where the end now is), errorMm, iterations }.
  */
-export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, opts = LIMB_GRASP }) {
+export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, opts = LIMB_GRASP, project = null, memo = null, startSegments = null }) {
   const c = LIMB_CHAIN[limb];
   if (!c) throw new Error(`ns:grasp: unknown solved limb ${JSON.stringify(limb)}`);
   if (!targetMm || targetMm.length !== 3 || !targetMm.every(Number.isFinite)) throw new Error('ns:grasp: targetMm must be finite mm');
   const lim = id => (limits && limits[id] ? limits[id] : [-180, 180]);
-  const q = { ...targets };
+  let q = { ...targets };
   for (const id of c.joints) q[id] = clamp(Number.isFinite(q[id]) ? q[id] : 0, lim(id)[0], lim(id)[1]);
-  let seg = segmentsFor(q);
+  // project (19 November 2026): the rule that brings a whole set of targets inside the ranges that depend on each other
+  // (ns-body clampBodyJointTargets' combined-range rule), applied to the limb's joints after every change, so the
+  // angles returned are the angles drawn. (Without it the solve could hold an angle the drawn pose refuses, an arm
+  // across the body with no forward raise, and then worked from a pose that was not on screen.)
+  const fit = () => { if (typeof project !== 'function') return; const p = project(q); if (p) for (const id of c.joints) if (Number.isFinite(p[id])) q[id] = p[id]; };
+  // startSegments (19 November 2026): the posed segments of `targets` when the caller has them already (one pose of the
+  // whole body saved); used only while the start angles are untouched by the limits and the rule above.
+  const q0 = c.joints.map(id => q[id]);
+  fit();
+  let seg = startSegments && c.joints.every((id, i) => q[id] === q0[i] && q[id] === targets[id]) ? startSegments : segmentsFor(q);
+  // folded: the target is nearer the root than the limb can bring its end with the bend at its end (the caller may
+  // then leave the limb alone instead of letting the folded limb swing round its root).
+  let folded = false;
   // The bend, from the distance root -> target.
   {
     const root = limbPoint(rig, seg, limb, 'root'), bend = limbPoint(rig, seg, limb, 'bend'), end = limbPoint(rig, seg, limb, 'end');
@@ -194,37 +223,48 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
     // the inner angle by b), so the distance the limb has now asks for exactly the bend it has now (no drift).
     const innerNow = angleAt(clamp(len(sub(end, root)), Math.abs(L1 - L2) + 1e-6, L1 + L2 - 1e-6));
     const inner = angleAt(D);
-    const want = clamp(q[c.bend] + c.bendSign * (innerNow - inner), lim(c.bend)[0], lim(c.bend)[1]);
-    if (Math.abs(want - q[c.bend]) > 0.05) { q[c.bend] = want; seg = segmentsFor(q); }
+    const raw = q[c.bend] + c.bendSign * (innerNow - inner);
+    const want = clamp(raw, lim(c.bend)[0], lim(c.bend)[1]);
+    if (Math.abs(want - q[c.bend]) > 0.05) { q[c.bend] = want; fit(); seg = segmentsFor(q); }
+    folded = c.bendSign * (raw - q[c.bend]) > 1; // (asked for more bend than the joint, or the combined-range rule, gives)
   }
   // Then the two root joints point the limb at the target (the bend stays as the distance asks: pulling the end in bends
   // the elbow / knee, moving it up or sideways swings the whole limb at the shoulder / hip, as a person would).
   const rootJoints = c.joints.filter(id => id !== c.bend);
   let end = limbPoint(rig, seg, limb, 'end'), it = 0;
   let lastErr = Infinity;
+  const lambda = Number.isFinite(opts.lambdaShare) ? Math.max(Number.isFinite(opts.lambdaMinMm) ? opts.lambdaMinMm : 0.5, opts.lambdaShare * len(sub(end, limbPoint(rig, seg, limb, 'root')))) : opts.lambdaMm;
   for (; it < opts.solveIters; it++) {
     const e = sub(targetMm, end), err = len(e);
     if (err <= opts.tolMm) break;
     if (Number.isFinite(opts.minGain) && lastErr - err < opts.minGain * lastErr) break; // (LIMB_TRACK: no longer getting nearer)
     lastErr = err;
-    const J = rootJoints.map(id => {
+    // memo (19 November 2026; a caller that solves the same limb frame after frame): the two columns found last are used
+    // again while the limb's joints are within opts.reuseDeg of where they were found and the last step made with them
+    // still closed in on the target. Each column costs one pose of the whole body, so this halves a tracking solve.
+    const reuse = memo && memo.limb === limb && memo.J && !memo.stale && Number.isFinite(opts.reuseDeg)
+      && c.joints.every(id => Math.abs(q[id] - memo.at[id]) <= opts.reuseDeg);
+    const J = reuse ? memo.J : rootJoints.map(id => {
       const h = q[id] + opts.probeDeg <= lim(id)[1] ? opts.probeDeg : -opts.probeDeg;
       const p = limbPoint(rig, segmentsFor({ ...q, [id]: q[id] + h }), limb, 'end');
       return sub(p, end).map(v => v / h);
     });
-    const dq = dlsStep(J, e, opts.lambdaMm);
+    if (memo && !reuse) { memo.limb = limb; memo.J = J; memo.at = {}; for (const id of c.joints) memo.at[id] = q[id]; memo.stale = false; memo.made = (memo.made || 0) + 1; }
+    const dq = dlsStep(J, e, lambda);
     let moved = false;
-    rootJoints.forEach((id, i) => {
-      const v = clamp(q[id] + clamp(dq[i], -opts.stepCapDeg, opts.stepCapDeg), lim(id)[0], lim(id)[1]);
-      if (v !== q[id]) { q[id] = v; moved = true; }
-    });
+    const before = rootJoints.map(id => q[id]);
+    rootJoints.forEach((id, i) => { q[id] = clamp(q[id] + clamp(dq[i], -opts.stepCapDeg, opts.stepCapDeg), lim(id)[0], lim(id)[1]); });
+    fit();
+    rootJoints.forEach((id, i) => { if (q[id] !== before[i]) moved = true; });
     if (!moved) break;
     seg = segmentsFor(q);
     end = limbPoint(rig, seg, limb, 'end');
+    // (columns used again that no longer close in: found afresh at the next step)
+    if (memo && reuse && opts.keepColumns !== true && len(sub(targetMm, end)) > 0.7 * err) memo.stale = true;
   }
   const joints = {};
   for (const id of c.joints) joints[id] = q[id];
-  return { joints, endMm: end, errorMm: len(sub(targetMm, end)), iterations: it };
+  return { joints, endMm: end, errorMm: len(sub(targetMm, end)), iterations: it, folded };
 }
 
 /**

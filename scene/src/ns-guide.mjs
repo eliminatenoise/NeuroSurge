@@ -76,14 +76,16 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
 /**
  * 19 November 2026 (EASE; the owner: "there should be a playable tutorial to learn how to use the game, as it's not very
  * clear at all, and to master the controls quickly"). The TUTORIAL is this same guide with its own short list, played
- * in the game itself: eight steps, each asking for ONE action and moving on the moment the player does it.
+ * in the game itself: nine steps, each asking for ONE action and moving on the moment the player does it.
  *   lookStrip    look at a motor area of the strip                         event { type: 'look', regionId }
  *   pressArea    click it: the part jerks again, harder                    'activate' by a click that moves something
+ *   chooseLimb   2, 3 or 4 (or a double click): another limb is chosen       { type: 'limbChoice', n } (n 2 to 4: 1, the left
+ *                                                                          arm, is the one the game starts on)
+ *   moveHand     W A S D: the chosen limb's hand or foot                   as before ('move' / 'key', both axes)
  *   dragLimb     press on a limb and drag it: sideways turns it, up and     { type: 'limbDrag', deg } (the limb was turned
  *                down bends and straightens it                             or bent by at least limbDragMinDeg in one drag)
  *   dragBrain    Space on the brain, carry it, let go                      as before ('grab', 'carry')
  *   orbit        press and drag the brain to turn it                       as before ('orbit')
- *   moveHand     W A S D: the left arm                                     as before ('move' / 'key', both axes)
  *   thirdPerson  E: the view from outside, E again to come back            as before ('view'; feature thirdPerson)
  *   readInfo     R: the reading levels                                     { type: 'read' }
  * A tutorial is STRICT: only the step that shows can be done (createGuide({ tutorial: true }) sets strict), so the
@@ -94,10 +96,13 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
 // (19 November 2026, later the same day: the owner took the numbered lists away, "The number overview is very confusing
 // and creates feedback delay", so the step that held a number key gave way to the limb drag. 'holdPart' stays a known
 // id, so progress saved with it still loads.)
-export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'dragLimb', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
+// (19 November 2026, later again: the owner's limb keys, "you can now switch between which of the four limbs you want
+// to control ... 1 ... 2 ... 3 ... 4": the choice of the limb and the keys that move it come right after the first
+// press, before the drags: 'chooseLimb' is new, 'moveHand' moved up.)
+export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'chooseLimb', 'moveHand', 'dragLimb', 'dragBrain', 'orbit', 'thirdPerson', 'readInfo']);
 /** Every goal id the guide knows: the older guide's twelve and the tutorial's own. */
 export const GUIDE_KNOWN_GOAL_IDS = Object.freeze([...new Set(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror', 'holdPart', ...TUTORIAL_GOAL_IDS])]);
-/** The tutorial's steps for a build: the eight, less a step whose feature the build lacks (pure). */
+/** The tutorial's steps for a build: the nine, less a step whose feature the build lacks (pure). */
 export function tutorialGoalIds(features = null) {
   const f = features && typeof features === 'object' ? features : {};
   return Object.freeze(TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson' || f.thirdPerson === true));
@@ -228,6 +233,8 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
       case 'look': if (typeof ev.regionId === 'string' && ev.regionId) mark('lookStrip'); break;
       case 'moveHold': if (isNum(ev.heldS) && ev.heldS >= (isNum(o.holdMinS) ? o.holdMinS : GUIDE_OPTIONS.holdMinS)) mark('holdPart'); break;
       case 'limbDrag': if (isNum(ev.deg) && ev.deg >= (isNum(o.limbDragMinDeg) ? o.limbDragMinDeg : GUIDE_OPTIONS.limbDragMinDeg)) mark('dragLimb'); break;
+      // (another limb chosen: 2, 3 or 4, a double click, a click on the limb; choosing 1 again, the limb the game starts on, is not it)
+      case 'limbChoice': if (isNum(ev.n) && ev.n >= 2 && ev.n <= 4) mark('chooseLimb'); break;
       case 'read': mark('readInfo'); break;
       case 'skip': { const c = cur(); if (c && !(s || state).done[c]) { w().done[c] = true; skipped = true; } break; }
       case 'glow': {

@@ -58,7 +58,7 @@
  * virtual control inputs, not real stimulation or decoding. The motor map is representative; regions overlap and
  * vary between people. The rig, pivots and compartment directions are geometric approximations.
  */
-import { DEG, clamp, transformPoint } from './ns-math.mjs';
+import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
@@ -70,7 +70,7 @@ import { loadCerebralArteries, loadBodyVessels, bindBodyVessels, BODY_VESSEL_SKI
 import {
   ARM_DEFAULTS, REACH_STATE_MAX_DEPTH, ELBOW_MAX_DEG, FOREARM_SUPPORT_KEY, fitHand, stepReach, reachStart, depthForElbow,
   armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg,
-  handViewLimitsNdc
+  handViewLimitsNdc, fitHandAt, FREE_HAND, freeHandPole
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
 import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS, reachMuscleShow, REACH_MUSCLES } from './ns-actions.mjs';
@@ -117,6 +117,10 @@ import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performan
  * contraction swell (baked after loading and stepped every frame) and the limb-contact model (built at load for a
  * rule that is switched off). Their code stays; set one back to true to bring it in again. */
 export const PLAIN_GAME = Object.freeze({ vessels: false, swell: false, selfContact: false });
+/** 19 November 2026 (the owner: "We want full range of motion on all axes"): true = your own limbs pass through the
+ * brain and the mirror body, as those two pass through you while they are carried (ns-reference-graph CARRY_THROUGH).
+ * false = the earlier stop at contact (guardBodyPose). */
+export const LIMBS_PASS_ITEMS = true;
 /** 19 November 2026: false = no numbered lists of movements on screen (the tip and the short card); see the tip's code. */
 export const NUMBER_LISTS = false;
 /** 19 November 2026 (the owner: "You can now switch between which of the four limbs you want to control ... your left
@@ -146,8 +150,150 @@ export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftAr
   // stay within the frame"): its hand or foot comes to the middle of the picture left to right and to frameUp of the
   // way up it (0.5 = the middle), over about turnS (at once under reduced motion). Only when a limb is CHOSEN; the
   // pointer takes the look back at any moment. Not for the left arm, whose hand already keeps its place in the view.
-  // (frameUp 0.6 -> 0.75 the same day: the owner, "the wrist/ankle being 3/4 up the height of the frame")
-  view: Object.freeze({ on: true, frameUp: 0.75, turnS: 0.12, doneDeg: 0.4, maxS: 0.9 }) });
+  // 19 November 2026, later (the owner: "that becomes the main limb you're controlling with all the control keys and the
+  // camera view ... just like you do for your left arm currently with shoulder control ... with the wrist staying in
+  // the same view, which is roughly 3/4 up ... but you can move left and right in relation to the frame"; and: "the
+  // camera control view with shoulder/hip extension/flexion ... and the wrist/ankle being 3/4 up the height of the
+  // frame and staying there"). THE CHOSEN LIMB IS HELD BY THE VIEW (hold):
+  //   lookCarries  the pointer turns the look and the chosen limb's end goes with it, keeping its place in the picture:
+  //                looking up raises the arm at the shoulder or the leg at the hip, looking down lowers it, as far as
+  //                the joints go (where they end the limb waits and the view goes on; it is picked up again when the
+  //                view comes back). false: the pointer never moves a limb (only the keys do).
+  //   the keys     W / S move the end away from you / toward you, A / D to the left / right, level, at speedMps; the
+  //                view then FOLLOWS the wrist or ankle so that it stays frameUp of the way up the picture (over about
+  //                followS), and turns sideways only when the end would pass `band` of the half width.
+  //   leadM        how far the asked place may run ahead of the limb's end while a key pushes against a joint's end
+  //                (levelM: how far above or below the end it may stay while the limb catches up to its level).
+  //   waitMm, waitShare   where the look carries the place further than the joints let a leg or the right arm follow,
+  //                the limb WAITS: the pose the solve found is not taken when it still ends more than waitMm from the
+  //                place AND closed less than (1 - waitShare) of the gap AND did not go at least waitShare as far as
+  //                the place went this frame, the place's own way. (Without this the solve took the nearest pose it
+  //                could reach: a look far to one side swung the leg up beside the head, out of the picture.)
+  // The left arm (its own rig) is held the same way through the free hand (ns-arm FREE_HAND). Nothing is carried while
+  // Space holds the brain or the mirror body, during a press-and-drag, or in the view from behind (E).
+  view: Object.freeze({ on: true, frameUp: 0.75, turnS: 0.16, doneDeg: 0.4, maxS: 1.2,
+    hold: true, lookCarries: true, followS: 0.12, band: 0.55, speedMps: 0.6, leadM: 0.02, levelM: 0.12, waitMm: 40, waitShare: 0.5 }) });
+/** 19 November 2026 (LIMB_KEYS.view.hold): balls that fill the trunk, neck and head of the drawn body, for the one test
+ * that keeps a hand's middle out of them (ns-app handKeepOut). Each: the segment that carries it, its middle in that
+ * segment's rest frame (BodyParts3D mm: +x the body's left, +y back, +z up) and its radius (m). Laid along the middle
+ * of the chest, belly and pelvis with one more to each side of the chest; sized a little inside the drawn surface, so
+ * a hand can still lie ON the chest. A display rule, not an anatomical model. */
+export const TRUNK_KEEP_OUT = Object.freeze([
+  { seg: 'skull', at: [0, -120, 1532], r: 0.1 }, { seg: 'cervical', at: [0, -90, 1428], r: 0.06 },
+  { seg: 't3', at: [0, -110, 1330], r: 0.105 }, { seg: 't3', at: [75, -100, 1320], r: 0.085 }, { seg: 't3', at: [-75, -100, 1320], r: 0.085 },
+  { seg: 't6', at: [0, -115, 1250], r: 0.115 }, { seg: 't6', at: [80, -100, 1245], r: 0.095 }, { seg: 't6', at: [-80, -100, 1245], r: 0.095 },
+  { seg: 't9', at: [0, -115, 1170], r: 0.115 }, { seg: 't9', at: [80, -95, 1165], r: 0.095 }, { seg: 't9', at: [-80, -95, 1165], r: 0.095 },
+  { seg: 't12', at: [0, -105, 1090], r: 0.115 }, { seg: 'l2', at: [0, -100, 1010], r: 0.11 }, { seg: 'pelvis', at: [0, -80, 930], r: 0.125 }
+].map(b => Object.freeze({ ...b, at: Object.freeze(b.at) })));
+/** The column a hand's middle is kept out of in the eye view (ns-app handKeepOut): ns-scene-three EYE_COLLAR's box, the
+ * part of your own body that view does not draw, with a hand's half width added all round (breastbone frame, mm). */
+export const HEAD_COLUMN = Object.freeze({ xMm: Object.freeze([-215, 215]), yMm: Object.freeze([-325, 135]), zFromMm: 1330 });
+/**
+ * 19 November 2026 (the owner: "we have to work on limbs, pushing limbs out of the way ... whatever limb you're using
+ * at the time, if they collide into other limbs, they'll push them out of the way rather than going through them";
+ * "to put them back in place, of course, you've got to grasp them and move them"). LIMB_PUSH, the gentle rebuild of
+ * the limb contact that was switched off (ns-contact, SELF_CONTACT_ON: a reach key threw the legs into poses with no
+ * way back, and its model cost frame time). The rule now:
+ *   - only the CHOSEN limb pushes, and only on a frame on which it moved;
+ *   - each limb is two rods with a thickness (shoulder or hip to elbow or knee, and on to the hand or ankle; radiusM);
+ *   - where the moving limb comes nearer to another limb than their thicknesses allow, the other limb's end is moved
+ *     straight away from it by the overlap, at most maxStepM a frame (so it gives way at a walking pace and can never
+ *     jump), through the same joint solve as everything else (inside the joints' ranges, the combined-range rule
+ *     applied). A limb that cannot give way any further is passed through: nothing is blocked and nothing is thrown;
+ *   - only an overlap that is GROWING is pushed (limbs that already lie against each other at the start, an arm
+ *     along its thigh, stay as they are);
+ *   - the pushed limb stays where it was pushed (its joints are held like every moved limb's) until it is chosen and
+ *     moved back.
+ * Cost: a dozen rod-to-rod distances a frame while the chosen limb moves, and one short solve per limb being pushed.
+ * A display rule: rods, not the drawn surfaces.
+ */
+export const LIMB_PUSH = Object.freeze({ on: true, maxStepM: 0.012, slackM: 0.003, handBeyondM: 0.07,
+  radiusM: Object.freeze({ arm: Object.freeze([0.05, 0.04]), leg: Object.freeze([0.082, 0.056]) }) });
+/** The nearest points of two straight rods p1-q1 and p2-q2 (3-vectors): { d (distance), c1, c2 (the points), t (0..1
+ * along the second rod) }. Pure. */
+export function rodsNearest(p1, q1, p2, q2) {
+  const d1 = [q1[0] - p1[0], q1[1] - p1[1], q1[2] - p1[2]], d2 = [q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]], r = [p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]];
+  const a = d1[0] * d1[0] + d1[1] * d1[1] + d1[2] * d1[2], e = d2[0] * d2[0] + d2[1] * d2[1] + d2[2] * d2[2], f = d2[0] * r[0] + d2[1] * r[1] + d2[2] * r[2];
+  let sA, t;
+  if (a <= 1e-12 && e <= 1e-12) { sA = 0; t = 0; }
+  else if (a <= 1e-12) { sA = 0; t = Math.min(1, Math.max(0, f / e)); }
+  else {
+    const c = d1[0] * r[0] + d1[1] * r[1] + d1[2] * r[2];
+    if (e <= 1e-12) { t = 0; sA = Math.min(1, Math.max(0, -c / a)); }
+    else {
+      const b = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2], den = a * e - b * b;
+      sA = den > 1e-12 ? Math.min(1, Math.max(0, (b * f - c * e) / den)) : 0;
+      t = (b * sA + f) / e;
+      if (t < 0) { t = 0; sA = Math.min(1, Math.max(0, -c / a)); } else if (t > 1) { t = 1; sA = Math.min(1, Math.max(0, (b - c) / a)); }
+    }
+  }
+  const c1 = [p1[0] + d1[0] * sA, p1[1] + d1[1] * sA, p1[2] + d1[2] * sA], c2 = [p2[0] + d2[0] * t, p2[1] + d2[1] * t, p2[2] + d2[2] * t];
+  return { d: Math.hypot(c1[0] - c2[0], c1[1] - c2[1], c1[2] - c2[2]), c1, c2, t };
+}
+/**
+ * 19 November 2026 (the owner: "when we move to external rotation, the flexors of the body highlight. And when we move
+ * to internal rotation, the extensors of the body highlight. Or you can put in other words, the underside and the
+ * overside for both the upper body and lower body"). TURN_SIDES: while the limb turn (the double tap of Space) brings
+ * the limbs to their UNDERSIDE the flexors of all four limbs light, and to their OVERSIDE the extensors: at `level`
+ * through the turn, then held for holdS and faded over fadeS (under reduced motion: held, then gone). The muscles are
+ * the body map's own movers of these movements (turnSideMuscles): the side of each limb that faces you then. In the
+ * arm: elbow, wrist and finger flexors / extensors; in the leg the back (knee flexors, calf, toe flexors) / the front
+ * (knee extensors, shin and toe extensors). A display of which muscles lie on that side; no activity is claimed.
+ */
+export const TURN_SIDES = Object.freeze({ on: true, level: 0.62, holdS: 0.9, fadeS: 0.7,
+  under: /(?:^|_)(?:elbow_flex(?:ion)?|wrist_flex(?:ion)?|grasp(?:_close)?|knee_flex|ankle_plantarflex|toes_curl|big_toe_curl)$/,
+  over: /(?:^|_)(?:elbow_exten(?:d|sion)|wrist_ext(?:ension)?|open(?:_hand)?|knee_extend|ankle_dorsiflex|toes_lift|big_toe_lift)$/ });
+/** The muscles of one side of the limb turn from a body map: { body: [muscle names of your body's own rig], arm: [the
+ * left game arm's action ids, whose own movers light] } for side 'under' | 'over'. Pure. */
+export function turnSideMuscles(bodyMap, side, o = TURN_SIDES) {
+  const re = side === 'under' ? o.under : o.over, body = [], arm = [];
+  for (const r of (bodyMap && Array.isArray(bodyMap.regions) ? bodyMap.regions : [])) for (const a of (r && Array.isArray(r.actions) ? r.actions : [])) {
+    if (!a || typeof a.id !== 'string' || !re.test(a.id)) continue;
+    if (r.isLeftArm === true) { if (typeof a.armActionId === 'string' && !arm.includes(a.armActionId)) arm.push(a.armActionId); }
+    else for (const m of (Array.isArray(a.agonists) ? a.agonists : [])) if (!body.includes(m)) body.push(m);
+  }
+  return { body, arm };
+}
+/** The level of the turn's side light `sinceS` seconds after the turn ended (TURN_SIDES): full for holdS, then down to
+ * 0 over fadeS (reduced: no fade, full to the end of both). Pure. */
+export function turnSideLevel(sinceS, reduced = false, o = TURN_SIDES) {
+  if (!(sinceS >= 0)) return o.level;
+  if (sinceS <= o.holdS) return o.level;
+  if (reduced) return sinceS <= o.holdS + o.fadeS ? o.level : 0;
+  return o.level * Math.max(0, 1 - (sinceS - o.holdS) / o.fadeS);
+}
+/**
+ * 19 November 2026 (the owner: "as we look down, the fingers close and the toes close more and more. And as we look up,
+ * they expand ... for all fingers and toes at once, collectively"): how far the look's pitch (degrees, up positive)
+ * closes ({ close } 0..1) or opens ({ open } 0..1) the fingers and toes: closing from downFromDeg to downToDeg,
+ * opening from upFromDeg to upToDeg, eased at both ends. Pure. (GRIP_FEET.look has the numbers; the toes, the right
+ * hand and, through the arm's own pose, the left hand all use this.)
+ */
+export function digitsForLook(pitchDeg, K) {
+  const sm = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+  if (!K || K.on === false || !Number.isFinite(pitchDeg)) return { close: 0, open: 0 };
+  return { close: sm((pitchDeg - K.downFromDeg) / (K.downToDeg - K.downFromDeg)), open: sm((pitchDeg - K.upFromDeg) / (K.upToDeg - K.upFromDeg)) };
+}
+/** 19 November 2026 (a visible answer for every control): how strongly each control lights its part (0..1 of
+ * ns-scene-three PART_GLOW): the hand or foot a key is moving, a hand that is closed, a limb a drag is turning; steady:
+ * the chosen limb's mark under reduced motion (held, not faded). Display choices. */
+export const CONTROL_GLOW = Object.freeze({ keys: 0.9, hand: 1, drag: 0.6, steady: 0.7, lowerShare: 0.6 });
+/** Where a world point stands in a camera's picture: { x, y } (NDC: -1..1 across and up), depth (m along the view) and
+ * dist (m from the camera). pose: { position, yaw, pitch } (the camera's own convention). Pure. */
+export function viewFrameOf(pose, point, fovYDeg, aspect) {
+  const sy = Math.sin(pose.yaw), cy = Math.cos(pose.yaw), sp = Math.sin(pose.pitch), cp = Math.cos(pose.pitch);
+  const vx = point[0] - pose.position[0], vy = point[1] - pose.position[1], vz = point[2] - pose.position[2];
+  const depth = -sy * cp * vx + sp * vy - cy * cp * vz, rx = cy * vx - sy * vz, up = sy * sp * vx + cp * vy + cy * sp * vz;
+  const t = Math.tan((fovYDeg * DEG) / 2);
+  return { x: depth > 1e-9 ? rx / (depth * t * aspect) : NaN, y: depth > 1e-9 ? up / (depth * t) : NaN, depth, dist: Math.hypot(vx, vy, vz) };
+}
+/** The world point that stands at picture place (x, y) at `dist` metres from the camera (viewFrameOf's inverse). Pure. */
+export function viewFramePoint(pose, place, fovYDeg, aspect) {
+  const sy = Math.sin(pose.yaw), cy = Math.cos(pose.yaw), sp = Math.sin(pose.pitch), cp = Math.cos(pose.pitch);
+  const t = Math.tan((fovYDeg * DEG) / 2), a = place.x * t * aspect, b = place.y * t;
+  const dx = -sy * cp + cy * a + sy * sp * b, dy = sp + cp * b, dz = -cy * cp - sy * a + cy * sp * b, n = Math.hypot(dx, dy, dz) || 1, k = place.dist / n;
+  return [pose.position[0] + dx * k, pose.position[1] + dy * k, pose.position[2] + dz * k];
+}
 /** The look (yaw, pitch in radians; the camera's own convention: yaw = atan2(-x, -z), pitch up positive) that puts the
  * world point `at` in the middle of the picture left to right and `frameUp` of the way up it, seen from `eye` with a
  * vertical field of view of fovYDeg. Pure. */
@@ -158,6 +304,16 @@ export function lookFramingPoint(eye, at, fovYDeg, frameUp = 0.5) {
   // a point that is to stand above the picture's middle needs the look BELOW it by the angle of that height
   const up = Math.atan((2 * frameUp - 1) * Math.tan((fovYDeg * DEG) / 2));
   return { yaw, pitch: toPoint - up };
+}
+/** A unit direction turned toward another by at most maxRad (the shorter way round). Pure. */
+export function turnToward(a, b, maxRad) {
+  const d = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])), th = Math.acos(d);
+  if (!(th > maxRad) || !(maxRad >= 0)) return b;
+  const s = Math.sin(th);
+  if (!(s > 1e-6)) return b; // (opposite directions: no shorter way; take the new one)
+  const t = maxRad / th, ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
+  const v = [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb], n = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / n, v[1] / n, v[2] / n];
 }
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
@@ -2207,6 +2363,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   // (no body rig, or a caller with no head) it is the earlier rule: the NECK_FLEX eye shift and the trunk yaw.
   // Returns { attachment, eyeShift (BodyParts3D mm of the eye from its start place) }.
   const headCache = { key: '', frame: null }, eyeCache = { key: '', frame: null };
+  /** The left hand's pose the look asks for (inputs.handLook): 'close' = the fist by the share f, 'open' = opened and
+   * spread by f (ns-actions composePose of the hand's own movements). */
+  const lookPoseFor = (kind, f) => composePose(kind === 'close' ? { grasp_close: f } : { open_hand: f, spread_fingers: f * 0.8 }).joints;
   function headAttachment(look, head = null) {
     const j = head && head.joints, cy = head && head.carry, key = j ? `${j.neck_rot}|${j.neck_flex}|${j.trunk_flex}|${head.twistDeg}|${head.bendDeg}|${head.bendDirDeg}|${cy ? cy.trunk_rot + '|' + cy.trunk_side + '|' + cy.neck_side : ''}` : '';
     // headFrame returns null while the body rig is not there (it streams in after the first frames).
@@ -2669,6 +2828,16 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         muscleIn[h.armActionId] = h.level;
       }
     }
+    // 19 November 2026 (TURN_SIDES): inputs.armDisplay { armActionId: level } lights the game arm's own movers of those
+    // movements at that level (display only, like a hint's muscles: never a pose input, never the strip).
+    if (inputs && inputs.armDisplay && typeof inputs.armDisplay === 'object') {
+      const base = muscleIn;
+      for (const [id, lv] of Object.entries(inputs.armDisplay)) {
+        if (!binding.actions.has(id) || !(lv > 0) || muscleIn[id] >= lv) continue;
+        if (muscleIn === base) muscleIn = { ...muscleIn };
+        muscleIn[id] = Math.min(1, lv);
+      }
+    }
     const actionMuscle = muscleDrives(binding, muscleIn);
     const armReach = typeof activity.reachOutputs === 'function' ? activity.reachOutputs(a) : null;
     // R558 (Message 50): the shoulder muscles of each held reach key (ns-actions REACH_MUSCLES), at the key's display
@@ -2722,13 +2891,53 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // start inside their A/D range, so every key moves the hand from the start pose).
     const keyed = Boolean(axes) && (Number(axes.x) !== 0 || Number(axes.z) !== 0);
     const reachIn = state.reachTouched === true ? state.reach : { ...state.reach, xNdc: reachStartXFor(aspect) };
-    const base = stepReach(reachIn, axes, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
+    // 19 November 2026 (ns-arm FREE_HAND; the owner: "We want full range of motion on all axes"): inputs.hand.free asks
+    // for the hand at a place beside the shoulder instead of a place in the picture. The place is kept in state.hand
+    // ({ rel: metres beside the shoulder in the chest's axes, side: the elbow's side }); it starts at FREE_HAND.startBodyM,
+    // is moved level by the keys (W away along the look's heading, S back, A / D sideways) or set from
+    // inputs.hand.targetWorld (a world point: the frame loop's limb control), and never depends on the look.
+    const freeIn = !displayPlan && att && inputs && inputs.hand && inputs.hand.free === true ? inputs.hand : null;
+    const hand0 = freeIn ? (state.hand && Array.isArray(state.hand.rel) ? state.hand : { rel: FREE_HAND.startBodyM.slice(), side: null }) : null;
+    let handWant = null;
+    if (freeIn) {
+      const Bt = rotationTranspose(att.bodyToCamera), W2C = displayedAttachment.worldToCamera;
+      const restCam = att.shoulderCam.map((v, i) => v - transformDirection(att.bodyToCamera, att.girdleShiftM)[i]);
+      const tw = freeIn.targetWorld;
+      if (Array.isArray(tw) && tw.length === 3 && tw.every(Number.isFinite)) {
+        const c = transformPoint(W2C, tw);
+        handWant = transformDirection(Bt, [c[0] - restCam[0], c[1] - restCam[1], c[2] - restCam[2]]);
+      } else {
+        const sp = FREE_HAND.speedMps * h, ax = axes ? Number(axes.x) || 0 : 0, az = axes ? Number(axes.z) || 0 : 0;
+        const sy = Math.sin(gl.yaw), cy = Math.cos(gl.yaw);
+        const dW = [cy * ax * sp - sy * az * sp, 0, -sy * ax * sp - cy * az * sp]; // right * A/D + forward * W/S (level)
+        // (moveWorld: a move given in the world, metres: the hand pushed out of another limb's way, LIMB_PUSH)
+        const mw = freeIn.moveWorld;
+        if (Array.isArray(mw) && mw.length === 3 && mw.every(Number.isFinite)) { dW[0] += mw[0]; dW[1] += mw[1]; dW[2] += mw[2]; }
+        const dB = dW.some(v => v !== 0) ? transformDirection(Bt, transformDirection(W2C, dW)) : [0, 0, 0];
+        handWant = hand0.rel.map((v, i) => v + dB[i]);
+      }
+    }
+    const base = freeIn ? reachIn : stepReach(reachIn, axes, h, state.reachTouched === true && lim ? { ...armOptions, ...lim } : armOptions);
     // WASD wrist coordination: the wrist moves with the reach state together with shoulder and elbow. Round 3 (R3-arm):
     // ns-arm wasdWristDeg (WASD_WRIST_SYNERGY; the sideways term follows the forearm turn); `wristReach` is the on/off
     // switch (WASD_WRIST / wristReachDeg stay exported for the round-2 tests).
-    const wristDeg = wristReach ? wasdWristDeg(base, rotationReq) : 0;
-    const pose = wristDeg !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex)
+    // (the free hand: the wrist's share comes from the shoulder-to-hand distance, FREE_HAND.wrist)
+    const wristDeg = !wristReach ? 0 : freeIn ? clamp(FREE_HAND.wrist.degPerM * (Math.hypot(handWant[0], handWant[1], handWant[2]) - FREE_HAND.wrist.refM), -FREE_HAND.wrist.maxDeg, FREE_HAND.wrist.maxDeg) + 0 : wasdWristDeg(base, rotationReq);
+    let pose = wristDeg !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex)
       ? { ...pose0, joints: { ...pose0.joints, wrist_flex: pose0.joints.wrist_flex + wristDeg } } : pose0;
+    // 19 November 2026 (the owner: "as we look down, the fingers close ... as we look up, they expand ... for all fingers
+    // and toes at once"): inputs.handLook { close, open } (0..1) closes the left hand's fingers toward the fist, or
+    // opens and spreads them, on top of what the hand is doing (a finger already bent further stays; a grip wins).
+    // Drawn only: no drive, no muscle light, nothing latched.
+    {
+      const hl = inputs && inputs.handLook, c = hl && hl.close > 0 ? Math.min(1, hl.close) : 0, op = hl && hl.open > 0 ? Math.min(1, hl.open) : 0;
+      if ((c > 0 || op > 0) && pose.joints) {
+        const J = { ...pose.joints };
+        if (c > 0) { const P = lookPoseFor('close', c); for (const k of Object.keys(P)) if (/_flex$|_opp$/.test(k) && k !== 'wrist_flex' && Number.isFinite(J[k]) && P[k] > J[k]) J[k] = P[k]; }
+        else if (!(drives.grasp_close > 0.05)) { const P = lookPoseFor('open', op); for (const k of Object.keys(P)) if (k !== 'wrist_flex' && Number.isFinite(J[k]) && (/_abd$/.test(k) ? P[k] > J[k] : /_flex$/.test(k) ? P[k] < J[k] : false)) J[k] = P[k]; }
+        pose = { ...pose, joints: J };
+      }
+    }
     // 19 November 2026 (HAND_REST): for looks above the start look the hand rests low instead of rising over the strip
     const handAt = referenceGraph && !wholeArmOption ? handRestNdc(pitch, referenceGraph.initialLook.pitch, Math.tan(fov * DEG / 2), handYNdc) : null;
     const handY = handAt ? handAt.yNdc : handYNdc, handXAdd = handAt ? handAt.xAddNdc : 0;
@@ -2736,8 +2945,32 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const q = { xNdc: base.xNdc + handXAdd, yNdc: handY, depth: d, joints: pose.joints, rotation: rotationReq };
       return displayPlan ? WholeArmDisplay.requestForDisplayPlan(displayPlan, q) : q;
     };
-    let fit = fitHand(rig, boxes, request(base.depth), viewport, armOpts);
-    let elbow = null;
+    let fit, elbow = null, handNext = state.hand === undefined ? undefined : state.hand, handMoved = null;
+    if (freeIn) {
+      // The elbow's side: the place's own (ns-arm freeHandPole), across the shoulder -> hand line, swung toward at a
+      // limited rate from the side it had, so the elbow never snaps round as the hand passes under the shoulder.
+      const hLen = Math.hypot(handWant[0], handWant[1], handWant[2]) || 1, hd = handWant.map(v => v / hLen);
+      const across = v => { const d = v[0] * hd[0] + v[1] * hd[1] + v[2] * hd[2]; const q = [v[0] - d * hd[0], v[1] - d * hd[1], v[2] - d * hd[2]], n = Math.hypot(q[0], q[1], q[2]); return n > 0.12 ? q.map(x => x / n) : null; };
+      const prevSide = hand0.side ? across(hand0.side) : null;
+      const wantSide = across(freeHandPole(handWant)) || prevSide || across([0, -1, 0]) || across([-1, 0, 0]);
+      const side = prevSide ? turnToward(prevSide, wantSide, FREE_HAND.swivelDegPerS * DEG * h) : wantSide;
+      fit = fitHandAt(rig, boxes, { handBodyM: handWant, joints: pose.joints, rotation: rotationReq, elbowDeltaDeg: pose.elbowDeltaDeg, elbowSideBodyM: side, stayBodyM: hand0.rel }, viewport, armOpts);
+      if (fit.elbow) {
+        const baseRad = fit.elbow.baseRad, wanted = baseRad + pose.elbowDeltaDeg * DEG, actualRad = fit.solution.elbowFlexRad;
+        elbow = { commandDeg: pose.elbowDeltaDeg, baseDeg: baseRad / DEG, targetDeg: fit.elbow.targetRad / DEG, actualDeg: actualRad / DEG, achievedDeg: (actualRad - baseRad) / DEG,
+          limited: Math.abs(actualRad - wanted) / DEG > ELBOW_LIMIT_TOL_DEG };
+      }
+      // The place asked never runs far ahead of where the hand is (a joint at its end, a place out of reach): the
+      // other way then answers at once. (Not while a motor area holds the elbow elsewhere along the line.)
+      let rel = fit.clamped.inner ? hand0.rel : fit.clamped.shoulder ? fit.askedBodyM : handWant;
+      if (!fit.elbow && !fit.clamped.inner) {
+        const got = fit.handBodyM, off = rel.map((v, i) => v - got[i]), n = Math.hypot(off[0], off[1], off[2]);
+        if (n > FREE_HAND.leadM) rel = got.map((v, i) => v + off[i] * FREE_HAND.leadM / n);
+      }
+      handMoved = rel.map((v, i) => v - hand0.rel[i]);
+      handNext = { rel, side };
+    } else {
+    fit = fitHand(rig, boxes, request(base.depth), viewport, armOpts);
     if (pose.elbowDeltaDeg !== 0) {
       // Explicit signed elbow target relative to the reach solution; the hand stays on its screen ray, so the depth
       // follows; the whole-hand fit may limit the movement, which is reported (achieved vs commanded).
@@ -2755,6 +2988,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         achievedDeg: (actualRad - baseRad) / DEG,
         limited: Math.abs(actualRad - wanted) / DEG > ELBOW_LIMIT_TOL_DEG
       };
+    }
     }
     let appliedArmMatrices = null, wholeArmFraming = null;
     if (displayPlan) {
@@ -2792,17 +3026,25 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // R3-arm: the 0.06 s key-level ramp is carried across frames (carryReachRamp); without it the ramp is inert.
     const reachFit = displayPlan ? WholeArmDisplay.canonicalReachFit(displayPlan, fit, base) : fit;
     // (HAND_REST: the keys' own x is kept without the look's slide to the left, so looking back down brings the hand back)
-    const reach = carryReachRamp(nextReach(base, handXAdd ? { ...reachFit, xNdc: reachFit.xNdc - handXAdd } : reachFit, armOptions, Boolean(axes && Number(axes.z))), base);
-    const reachRates = h > 0 ? { depth: (reach.depth - reachIn.depth) / h, x: (reach.xNdc - reachIn.xNdc) / h } : { depth: 0, x: 0 };
+    // (the free hand keeps the old reach state untouched; its own place is state.hand)
+    const reach = freeIn ? reachIn : carryReachRamp(nextReach(base, handXAdd ? { ...reachFit, xNdc: reachFit.xNdc - handXAdd } : reachFit, armOptions, Boolean(axes && Number(axes.z))), base);
+    // (the free hand: how fast the hand really went, as the shoulder's display reads it: metres a second, and the
+    // sideways share on the old picture scale)
+    const handSpeed = freeIn && h > 0 && handMoved ? Math.hypot(handMoved[0], handMoved[1], handMoved[2]) / h : 0;
+    const reachRates = freeIn ? { depth: handSpeed, x: handSpeed * (0.9 / 0.35) }
+      : h > 0 ? { depth: (reach.depth - reachIn.depth) / h, x: (reach.xNdc - reachIn.xNdc) / h } : { depth: 0, x: 0 };
     // R4-fix (review RP3): a held key that moves the hand nothing (it is at the edge of what keeps the whole hand on
     // screen) is said in plain words after REACH_BLOCKED.seconds, instead of only lighting the muscles.
     // Net movement since the hold (or the last counted move) began, in the key's direction.
     const ax = keyed ? Math.sign(Number(axes.x) || 0) : 0, az = keyed ? Math.sign(Number(axes.z) || 0) : 0;
     const sig = `${ax},${az}`;
-    let hold = keyed ? (state.reachHold && state.reachHold.sig === sig ? state.reachHold : { sig, x0: reachFit.xNdc, d0: reachFit.depth }) : null;
-    const movedX = Boolean(hold) && ax !== 0 && ax * (reachFit.xNdc - hold.x0) >= REACH_BLOCKED.xNdc;
-    const movedZ = Boolean(hold) && az !== 0 && az * (reachFit.depth - hold.d0) >= REACH_BLOCKED.depthM;
-    if (hold && (movedX || movedZ)) hold = { sig, x0: reachFit.xNdc, d0: reachFit.depth };
+    // (the free hand: x0 / d0 hold the path the hand has gone since the hold began, in metres)
+    const pathNow = freeIn ? (state.reachHold && state.reachHold.sig === sig && Number.isFinite(state.reachHold.path) ? state.reachHold.path : 0) + handSpeed * h : 0;
+    let hold = keyed ? (state.reachHold && state.reachHold.sig === sig ? state.reachHold : { sig, x0: freeIn ? 0 : reachFit.xNdc, d0: freeIn ? 0 : reachFit.depth }) : null;
+    if (hold && freeIn) hold = { ...hold, path: pathNow };
+    const movedX = Boolean(hold) && ax !== 0 && (freeIn ? pathNow - hold.x0 >= REACH_BLOCKED.depthM : ax * (reachFit.xNdc - hold.x0) >= REACH_BLOCKED.xNdc);
+    const movedZ = Boolean(hold) && az !== 0 && (freeIn ? pathNow - hold.d0 >= REACH_BLOCKED.depthM : az * (reachFit.depth - hold.d0) >= REACH_BLOCKED.depthM);
+    if (hold && (movedX || movedZ)) hold = freeIn ? { sig, x0: pathNow, d0: pathNow, path: pathNow } : { sig, x0: reachFit.xNdc, d0: reachFit.depth };
     const prevHold = state.reachHold && state.reachHold.sig === sig ? state.reachBlockedS || 0 : 0;
     const reachBlockedS = !keyed || movedX || movedZ ? 0 : prevHold + wall;
     const elbowRad = fit.solution.elbowFlexRad;
@@ -2827,7 +3069,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       t: state.t + wall,
       poseT: (Number.isFinite(state.poseT) ? state.poseT : 0) + h,
       reach,
-      reachTouched: state.reachTouched === true || keyed,
+      ...(handNext !== undefined ? { hand: handNext } : {}),
+      reachTouched: state.reachTouched === true || (keyed && !freeIn),
       reachBlockedS,
       reachHold: hold,
       activity: a,
@@ -2851,7 +3094,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       trigger,
       fit: {
         xNdc: reachFit.xNdc, yNdc: Number.isFinite(reachFit.yNdc) ? reachFit.yNdc : null, depth: reachFit.depth, fallback: reachFit.fallback, anchor: reachFit.anchor,
-        limits: reachFit.xLimits && reachFit.depthLimits ? { xRange: { xMin: reachFit.xLimits.xMin, xMax: reachFit.xLimits.xMax }, depthRange: depthRangeFor(reachFit, base, elbow) } : null
+        limits: !freeIn && reachFit.xLimits && reachFit.depthLimits ? { xRange: { xMin: reachFit.xLimits.xMin, xMax: reachFit.xLimits.xMax }, depthRange: depthRangeFor(reachFit, base, elbow) } : null
       },
       brainFrame,
       view: viewOut,
@@ -2907,6 +3150,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     }
     return {
       ...state, objectCarry: ReferenceGraph.clearObjectCarry(state.objectCarry), activity: a, ...(referenceGraph ? { referenceBrain: { ...state.referenceBrain, anchor: null }, view: nextBrainView(state.view, { yaw: g ? g.yaw : 0, pitch: g ? g.pitch : 0, act: a }) } : {}), reach: reachStart(armOptions), reachTouched: false, reachBlockedS: 0, reachHold: null, reachRates: { depth: 0, x: 0 }, elbowRad: null, elbowRate: 0,
+      ...(state.hand !== undefined ? { hand: null } : {}), // (the free hand goes back to its start place)
       rotation: initialRotation(), pron: pronationStart('pronated'), activated: {}, trigger: { ...state.trigger, at: null }
     };
   }
@@ -5243,7 +5487,23 @@ export function start(params = {}) {
   // and until when, and the double click's own records (the last click's time, the press under way).
   let limbChoice = 1, limbChoiceDir = 1, limbFlash = null, limbFlashFromMs = NaN, limbFlashPending = false;
   let limbView = null; // LIMB_KEYS.view: the turn of the view to a newly chosen limb ({ limb, fromMs, last: the look it set })
+  // 19 November 2026 (LIMB_KEYS.view.hold): the chosen limb's end as the view holds it: { limb, world: the place asked
+  // for (world m), x / y / dist: where that place stands in the picture, ok: those three are usable, lookMs: the
+  // pointer's last look time when they were taken, joints: the limb's joint angles as last left by the hold (a body
+  // limb; a change made by anything else lets the hold take the limb up again where it then is) }. null: taken up
+  // afresh on the next frame. holdMoved: the body limb the hold moved this frame (for the moving-joint glow).
+  let controlGlowKey = ''; // (CONTROL_GLOW: what was last asked of the scene)
+  // LIMB_PUSH: each pair's overlap as it was left last frame (only growth is pushed), the left hand's push to hand to
+  // the next step, where the chosen limb's end was last frame, the pushed limbs' solve notes and the counters.
+  const limbPush = { pen: new Map(), handMove: null, endPrev: null, endOf: null, memo: {}, pushes: 0, last: null };
+  // TURN_SIDES: the side the limb turn last brought up ('under' | 'over'), whether the turn is still under way, when it
+  // ended, and the two muscle lists (made once from the body map).
+  const turnSide = { side: 'under', active: false, endedMs: -1e9, lists: null, seen: false };
+  /** TURN_SIDES: the side light's level now (0: none). */
+  const turnSideNow = now => (!TURN_SIDES.on || !turnSide.seen ? 0 : turnSide.active ? TURN_SIDES.level : turnSideLevel((now - turnSide.endedMs) / 1000, prefersReducedMotion()));
+  let limbHold = null, holdMoved = null, holdInfo = null, holdLegUntilMs = 0; // (holdLegUntilMs: a leg was moved by the hold until about now)
   let lastClickMs = -1e9, pressAtMs = NaN, pressSecond = false, pressStepped = false, pressNextMs = NaN, prevButtonDown = false, limbHud = null;
+  let clickChoiceBefore = 0; // (the limb chosen before the last single click: a double click steps from it)
   /** The limb the look carries: one Space holds, or (LIMB_CLICK.followsLook only) the one a click controls. */
   const carriedLimb = () => (limbGrasp && (limbGrasp.latched !== true || NsGrasp.LIMB_CLICK.followsLook === true) ? limbGrasp : null);
   // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
@@ -5258,6 +5518,7 @@ export function start(params = {}) {
   const contact = { stops: 0, last: null, untilMs: 0, bodyBlocked: null, lastStart: null, skipGuards: 0 };
   let collisionReportFn = null; // R558: set once the scene is up (inspect({ collision: true }))
   let selfContactReportFn = null; // 18 November 2026 (package CONTACT): inspect({ contact: true })
+  let limbReportFn = null; // 19 November 2026 (LIMB_KEYS): inspect().limbs
   // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
   let controlTargetsShown = null;
   const orbitQueue = [];
@@ -5847,10 +6108,12 @@ export function start(params = {}) {
     if (!sim || !simState) return false;
     cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
-    limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null;
+    limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too (19 November: a limb taken by a click is let go as well)
+    limbHold = null; // (the hold takes the chosen limb up again at its start place)
+    limbPush.pen.clear(); limbPush.handMove = null; limbPush.endPrev = null;
     // Reset returns W/A/S/D to the left arm, so the choice display and double-click order start there too.
     limbChoice = 1; limbChoiceDir = 1;
-    limbFlash = null; limbFlashFromMs = NaN; limbFlashPending = false;
+    limbFlash = null; limbFlashFromMs = NaN; limbFlashPending = false; limbView = null;
     try { callScene('setLimbFlash', null); } catch { /* a mark only */ }
     // 18 November 2026 (package CONTACT): every pushed joint went back with the activity; no recoil or push carries on
     if (selfContact && selfContact.model) { selfContact.recoil = null; selfContact.pushedLast = null; selfContact.B0 = null; selfContact.B0of = null; selfContact.lastOut = null; selfContact.lastBase = null; selfContact.prevAct = null; selfContact.touching = new Set(); contact.selfBlocked = false; }
@@ -6947,7 +7210,7 @@ export function start(params = {}) {
         if (!entry) return null;
         if (entry.item === 'own') {
           const limb = limbOfPick(entry.rec);
-          return limb ? { target: 'limb', limb, segment: segOfPick(entry.rec) } : null;
+          return limb ? { target: 'limb', limb, segment: segOfPick(entry.rec) || (typeof entry.rec.segment === 'string' ? entry.rec.segment : '') } : null;
         }
         // R17: a limb of the mirror body is YOUR limb (seen in the mirror: via 'mirror'); its trunk, neck and head are
         // the whole mirror body.
@@ -7027,11 +7290,14 @@ export function start(params = {}) {
        * each of its joints that moved this frame feeds its channel with its speed, and lights the body map's own area
        * and action for that joint and direction (areaFor), on top of the pulse of the joint that moved most. */
       function feedLimbMove(out, dt, dragLimb) {
-        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : dragLimb && dragLimb !== 'leftArm' ? dragLimb : latchKeys ? latchKeys.limb : null;
+        // (the view's hold: the chosen leg or right arm, on the frames on which the keys or the look moved it)
+        const other = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : dragLimb && dragLimb !== 'leftArm' ? dragLimb : latchKeys ? latchKeys.limb : null;
+        const viaHold = !other && limbHold && limbHold.limb !== 'leftArm';
+        const limb = other || (viaHold ? limbHold.limb : null);
         const c = limb ? NsGrasp.LIMB_CHAIN[limb] : null, J = out && out.bodyJointTargets;
         if (!c || !J || !(dt > 0)) { movePrev.limb = null; return; }
         const ids = c.upperDial ? [...c.joints, c.dial.joint, c.upperDial.joint] : [...c.joints, c.dial.joint];
-        if (movePrev.limb === limb && movePrev.joints) {
+        if (movePrev.limb === limb && movePrev.joints && (!viaHold || holdMoved === limb)) {
           for (let i = 0; i < ids.length; i++) {
             const id = ids[i], v = J[id], p = movePrev.joints[i];
             if (!Number.isFinite(v) || !Number.isFinite(p) || Math.abs(v - p) < 1e-3) continue;
@@ -7094,13 +7360,16 @@ export function start(params = {}) {
       }
       /** LIMB_KEYS: choose limb n (1 to 4): it becomes the one the keys move, the number view marks it and the whole
        * limb lights for a moment (also when it is chosen again: the answer to the key is always seen). */
-      function chooseLimb(n) {
+      function chooseLimb(n, { turn = true } = {}) {
         if (!LIMB_KEYS.on || !(n >= 1 && n <= LIMB_KEYS.order.length)) return;
         limbChoice = n;
         const limb = LIMB_KEYS.order[n - 1];
         setLimbLatch(limb === 'leftArm' ? null : limb);
         limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
-        limbView = LIMB_KEYS.view.on && limb !== 'leftArm' ? { limb, fromMs: NaN, last: null } : null;
+        // (turn false: chosen by a press-and-drag on it; the limb is under the crosshair already and the view stays)
+        limbView = turn && LIMB_KEYS.view.on && (limb !== 'leftArm' || HOLD.hold) ? { limb, fromMs: NaN, last: null } : null;
+        limbHold = null; // (the hold takes the new limb up where it is)
+        guideAsyncEvents.push({ type: 'limbChoice', n }); // (the tutorial's step for the limb keys)
         drawLimbHud();
       }
       /** A double click's step: on to the next limb, turning round at either end (1, 2, 3, 4, 3, 2, 1 ...). */
@@ -7161,13 +7430,38 @@ export function start(params = {}) {
        * scene draws it (setLimbFlash) on your body and on the mirror body; a body limb's root, bend and end are read
        * from the posed rig here, the left arm's from its own bones in the scene. */
       function stepLimbFlash(now) {
-        if (!limbFlash || !Number.isFinite(limbFlashFromMs) || !sceneFn('setLimbFlash')) return;
-        const age = (now - limbFlashFromMs) / 1000, T = LIMB_KEYS.flashS;
-        if (!(age < T)) { limbFlash = null; try { callScene('setLimbFlash', null); } catch { /* a mark only */ } return; }
-        const level = age < T / 2 ? 1 : Math.max(0, 1 - (age - T / 2) / (T / 2));
-        let ptsMm = null;
-        if (limbFlash !== 'leftArm' && canSolveLimbs()) { try { const segs = segmentsFor(bodyPosed); ptsMm = ['root', 'bend', 'end'].map(w => NsGrasp.limbPoint(bodyRig, segs, limbFlash, w)); } catch { ptsMm = null; } }
-        try { callScene('setLimbFlash', { limb: limbFlash, level, ptsMm }); } catch { /* a mark only */ }
+        let flashLevel = 0;
+        if (limbFlash && Number.isFinite(limbFlashFromMs) && sceneFn('setLimbFlash')) {
+          const age = (now - limbFlashFromMs) / 1000, T = LIMB_KEYS.flashS;
+          if (!(age < T)) { limbFlash = null; try { callScene('setLimbFlash', null); } catch { /* a mark only */ } }
+          else {
+            // (under reduced motion the mark is steady for its time and then goes: nothing fades or flashes)
+            const level = prefersReducedMotion() ? CONTROL_GLOW.steady : age < T / 2 ? 1 : Math.max(0, 1 - (age - T / 2) / (T / 2));
+            flashLevel = level;
+            let ptsMm = null;
+            if (limbFlash !== 'leftArm' && canSolveLimbs()) { try { const segs = segsNow(); ptsMm = ['root', 'bend', 'end'].map(w => NsGrasp.limbPoint(bodyRig, segs, limbFlash, w)); } catch { ptsMm = null; } }
+            try { callScene('setLimbFlash', { limb: limbFlash, level, ptsMm }); } catch { /* a mark only */ }
+          }
+        }
+        // 19 November 2026 (the owner: "we should have this obvious highlight feature for basically all the controls, so
+        // it's clear what they do"): CONTROL_GLOW, what lights for each control (ns-scene-three PART_GLOW lights the
+        // limb's own muscles, on your body and on the mirror body):
+        //   1 to 4, the double click, a click or Space on a limb   the whole chosen limb, for flashS (above)
+        //   W / A / S / D                                          the hand or foot of the chosen limb, while a key is down
+        //   Space                                                  the left hand, while it is closed
+        //   the mouse or trackpad button                           the right hand, while it is down
+        //   a press-and-drag (and the roll) on a limb              that whole limb, while the drag lasts
+        if (!sceneFn('setPartGlows')) return;
+        const G = CONTROL_GLOW, glows = [];
+        if (limbFlash && flashLevel > 0) glows.push({ limb: limbFlash, part: 'all', level: flashLevel });
+        const ax = controlsApi.axes(cs), keyed = Boolean(ax && (ax.x || ax.z)) && !holdBusy();
+        // (a hand or foot has few muscles of its own: the forearm or shank, where its movers lie, lights with it)
+        if (keyed) glows.push({ limb: chosenLimb(), part: 'end', level: G.keys }, { limb: chosenLimb(), part: 'lower', level: G.keys * G.lowerShare });
+        if (simState.activity && simState.activity.graspHold === true) glows.push({ limb: 'leftArm', part: 'end', level: G.hand }, { limb: 'leftArm', part: 'lower', level: G.hand * G.lowerShare });
+        if (cs.button && cs.button.down === true) glows.push({ limb: 'rightArm', part: 'end', level: G.hand }, { limb: 'rightArm', part: 'lower', level: G.hand * G.lowerShare });
+        if (cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb) glows.push({ limb: cs.drag.binding.limb, part: 'all', level: G.drag });
+        const key = glows.map(g => `${g.limb}:${g.part}:${Math.round(g.level * 24)}`).join('|');
+        if (key !== controlGlowKey) { controlGlowKey = key; try { callScene('setPartGlows', glows); } catch { /* a mark only */ } }
       }
       /** LIMB_KEYS.view: one frame of the view's turn to the chosen limb. Ends when it has arrived, after maxS, or the
        * moment the player's own pointer has moved the look (the look is theirs). */
@@ -7176,9 +7470,10 @@ export function start(params = {}) {
         if (!lv) return;
         if (!Number.isFinite(lv.fromMs)) lv.fromMs = now;
         if (lv.last && (Math.abs(cs.yaw - lv.last.yaw) > 1e-9 || Math.abs(cs.pitch - lv.last.pitch) > 1e-9)) { limbView = null; return; } // the pointer moved
-        if ((now - lv.fromMs) / 1000 > V.maxS || !camPose || !camBodyToWorld || !canSolveLimbs() || !(cam.view === 'first' && cam.progress === 0)) { limbView = null; return; }
+        if ((now - lv.fromMs) / 1000 > V.maxS || !camPose || !camBodyToWorld || !(cam.view === 'first' && cam.progress === 0)) { limbView = null; return; }
         let want = null;
-        try { want = lookFramingPoint(camPose.position, transformPoint(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segmentsFor(bodyPosed), lv.limb, 'end')), simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : 54, V.frameUp); } catch { want = null; }
+        // (the wrist or the ankle comes to the middle left to right and frameUp of the way up the picture)
+        try { const pts = limbEnds(lv.limb); want = pts ? lookFramingPoint(camPose.position, pts.frame, simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : 54, V.frameUp) : null; } catch { want = null; }
         if (!want) { limbView = null; return; }
         let dy = want.yaw - cs.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         const dp = want.pitch - cs.pitch;
@@ -7187,11 +7482,337 @@ export function start(params = {}) {
         try { cs = controlsApi.setLook(cs, { yaw: cs.yaw + dy * k, pitch: cs.pitch + dp * k }); } catch { limbView = null; return; }
         lv.last = { yaw: cs.yaw, pitch: cs.pitch };
       }
+      /* ---- 19 November 2026: the chosen limb held by the view (LIMB_KEYS.view.hold) --------------------------------- */
+      const HOLD = LIMB_KEYS.view;
+      const holdMemo = {}; // (the solve's own notes from frame to frame: ns-grasp solveLimb memo)
+      const chosenLimb = () => LIMB_KEYS.order[limbChoice - 1];
+      const holdFov = () => (simState && simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : FOV_Y_DEG);
+      const holdAspect = () => (appliedSize && appliedSize.height > 0 ? appliedSize.width / appliedSize.height : 16 / 9);
+      const firstPersonNow = () => Boolean(cam && cam.view === 'first' && cam.progress === 0);
+      /** Nothing is carried or moved by the hold while Space holds the brain or the mirror body or a press-and-drag is
+       * under way (the keys then move the held thing; the drag turns what was pressed). */
+      const holdBusy = () => Boolean((simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active)
+        || (cs.drag && cs.drag.target !== null && cs.drag.target !== undefined));
+      /** The chosen limb's points in the world (m): end (the point the solve moves: the hand's middle, the ankle), frame
+       * (the point the view keeps in place: the wrist, the ankle), root (the shoulder or hip joint), and for a body limb
+       * endMm (drawn mm). o: the frame's output to read the left arm from (default: the last drawn one). null: not ready. */
+      function limbEnds(limb, o = current.out) {
+        if (limb === 'leftArm') {
+          const sol = o && o.fit && o.fit.solution, C = o && o.attachment && o.attachment.cameraToWorld;
+          if (!sol || !C || !Array.isArray(sol.handCentreCam) || !Array.isArray(sol.wristCam)) return null;
+          const w = q => NsCollide.apply(C, q[0], q[1], q[2]);
+          return { end: w(sol.handCentreCam), frame: w(sol.wristCam), root: w(sol.shoulderCam), endMm: null };
+        }
+        const c = NsGrasp.LIMB_CHAIN[limb];
+        if (!c || !canSolveLimbs()) return null;
+        try {
+          const segs = segsNow(), endMm = NsGrasp.limbPoint(bodyRig, segs, limb, 'end');
+          const wr = c.framePivot && bodyRig.pivots[c.framePivot] && bodyRig.pivots[c.framePivot].point && segs[c.endSeg] ? NsCollide.apply(segs[c.endSeg], ...bodyRig.pivots[c.framePivot].point) : endMm;
+          return { end: worldOf(camBodyToWorld, endMm), frame: worldOf(camBodyToWorld, wr), root: worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segs, limb, 'root')), endMm };
+        } catch { return null; }
+      }
+      /** The posed segments of the drawn body, made once for a pose (the hold asks for them several times a frame). */
+      let segsMemo = { posed: null, head: null, segs: null };
+      function segsNow() {
+        if (segsMemo.posed !== bodyPosed || segsMemo.head !== headShown || !segsMemo.segs) segsMemo = { posed: bodyPosed, head: headShown, segs: segmentsFor(bodyPosed) };
+        return segsMemo.segs;
+      }
+      /** A hand's asked place kept out of the trunk, neck and head (world m): a place inside one of the TRUNK_KEEP_OUT
+       * balls is moved straight out to its surface, so a hand pulled toward you comes to rest on the chest, belly or
+       * face instead of sinking into it. Only the hand's middle is tested (cheap); nothing else stops. */
+      function handKeepOut(T) {
+        if (!canSolveLimbs()) return T;
+        let segs; try { segs = segsNow(); } catch { return T; }
+        let out = T;
+        for (let pass = 0; pass < 2; pass++) {
+          for (const b of TRUNK_KEEP_OUT) {
+            const M = segs[b.seg];
+            if (!M) continue;
+            const c = worldOf(camBodyToWorld, NsCollide.apply(M, b.at[0], b.at[1], b.at[2]));
+            const dx = out[0] - c[0], dy = out[1] - c[1], dz = out[2] - c[2], d = Math.hypot(dx, dy, dz);
+            if (d >= b.r) continue;
+            if (out === T) out = T.slice();
+            if (d > 1e-6) { const k = b.r / d; out[0] = c[0] + dx * k; out[1] = c[1] + dy * k; out[2] = c[2] + dz * k; }
+            else out[1] = c[1] + b.r;
+          }
+        }
+        // In the eye view the column over your collar is not drawn (ns-scene-three EYE_COLLAR: the place of your own
+        // neck and head, which the camera stands in and behind). A hand whose middle went into it was drawn cut open,
+        // so there it is kept beside the column (or in front of it, whichever is nearer): the hand goes up beside the
+        // head, not through it. From outside (E) the head is drawn and nothing is kept out.
+        if (firstPersonNow() && segs.sternum) {
+          const S = segs.sternum, Bi = NsCollide.affineInverse(camBodyToWorld), Si = NsCollide.affineInverse(S);
+          const mm = NsCollide.apply(Si, ...NsCollide.apply(Bi, out[0], out[1], out[2])), C = HEAD_COLUMN;
+          if (mm[2] > C.zFromMm && mm[0] > C.xMm[0] && mm[0] < C.xMm[1] && mm[1] > C.yMm[0] && mm[1] < C.yMm[1]) {
+            const toSide = mm[0] >= 0 ? C.xMm[1] - mm[0] : mm[0] - C.xMm[0], toFront = mm[1] - C.yMm[0], toFloor = mm[2] - C.zFromMm;
+            const q = mm.slice();
+            if (toFloor <= toSide && toFloor <= toFront) q[2] = C.zFromMm; else if (toSide <= toFront) q[0] = mm[0] >= 0 ? C.xMm[1] : C.xMm[0]; else q[1] = C.yMm[0];
+            out = worldOf(camBodyToWorld, NsCollide.apply(S, q[0], q[1], q[2]));
+          }
+        }
+        return out;
+      }
+      /** The camera a controls look would give this frame (as the frame's own attempt builds it): { position, yaw, pitch }. */
+      function poseForCtl(c) {
+        try {
+          const offs = headLookOn ? headOffsetsOf(simState) : null;
+          const head = headLookOn ? headPoseForLook(c, offs ? offs.now : null, headLimits) : null;
+          const pose = NC.cameraPose(cam, { firstPersonFrame: head ? fp => sim.referenceFrameForLook(fp, head) : sim.referenceFrameForLook,
+            look: head ? head.look : c, bodyToWorld: camBodyToWorld && anatomy ? camBodyToWorld : null, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, avoid: null });
+          return pose && Array.isArray(pose.position) ? pose : null;
+        } catch { return null; }
+      }
+      /** The hold's place in the picture taken again from its world place, for camera pose `pose`. */
+      function holdReframe(pose, root = null) {
+        const h = limbHold;
+        if (!h || !pose) return;
+        const f = viewFrameOf(pose, h.world, holdFov(), holdAspect());
+        h.ok = f.depth > 0.03 && Number.isFinite(f.x) && Number.isFinite(f.y) && Math.abs(f.x) < 4 && Math.abs(f.y) < 4;
+        h.x = f.x; h.y = f.y; h.dist = f.dist; h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch;
+        // which side of the limb's ball the place is on along the line of sight: beyond the line's nearest point to the
+        // shoulder or hip (far) or before it (kept as it was when the place is right at that point)
+        if (root && f.dist > 1e-6) {
+          const o = pose.position, w = h.world, near = ((root[0] - o[0]) * (w[0] - o[0]) + (root[1] - o[1]) * (w[1] - o[1]) + (root[2] - o[2]) * (w[2] - o[2])) / f.dist;
+          if (Math.abs(f.dist - near) > 0.03) h.far = f.dist > near;
+        }
+      }
+      /** Whether the pointer has turned the look since the hold's place in the picture was taken, and may carry the limb. */
+      const holdCarries = () => Boolean(limbHold && limbHold.ok && HOLD.lookCarries && firstPersonNow() && !limbView && !holdBusy()
+        && (cs.lookMs === undefined ? null : cs.lookMs) !== limbHold.lookMs);
+      /** The place asked of the chosen limb's end this frame (world m), from the hold: carried by the look when the
+       * pointer turned it, then moved level by the keys (axes; W away along the view's heading, A / D across it).
+       * Changes nothing (the frame's attempt may ask more than once). null: no hold yet. */
+      function holdTarget(pose, dt, axes) {
+        const h = limbHold;
+        if (!h || !pose) return null;
+        const arm = h.limb === 'leftArm' || h.limb === 'rightArm';
+        let T = h.world.slice();
+        if (holdCarries()) {
+          // The pointer turned the look: the end keeps its place in the picture. It goes to where the line of sight
+          // through that place meets the ball the end can move on with its bend unchanged (the ball round the shoulder or
+          // hip, as far out as the end is now), so a look up or down turns the limb at the shoulder or hip and leaves
+          // the elbow or knee as it is. Where that line passes the ball by, the limb reaches for its nearest point.
+          const pts = limbEnds(h.limb), far = viewFramePoint(pose, { x: h.x, y: h.y, dist: 1 }, holdFov(), holdAspect());
+          const o = pose.position, d = [far[0] - o[0], far[1] - o[1], far[2] - o[2]];
+          if (pts) {
+            const r = pts.root, e = pts.end, rho = Number.isFinite(h.rho) && h.rho > 0.02 ? h.rho : Math.hypot(e[0] - r[0], e[1] - r[1], e[2] - r[2]);
+            const oc = [o[0] - r[0], o[1] - r[1], o[2] - r[2]], b = oc[0] * d[0] + oc[1] * d[1] + oc[2] * d[2], cc = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - rho * rho, disc = b * b - cc;
+            if (disc >= 0) {
+              // (the line crosses the ball twice: the hold keeps the side it is on, the far one or the near one, so a
+              // limb that waited at the edge of its range is picked up again on the side it left)
+              const q = Math.sqrt(disc), t1 = -b - q, t2 = -b + q, t = h.far === false && t1 > 0.05 ? t1 : Math.max(0.05, t2);
+              T = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+            } else {
+              // (the line passes the ball by: the limb points at the line's nearest point, its bend unchanged)
+              const t = Math.max(0.05, -b), v = [o[0] + d[0] * t - r[0], o[1] + d[1] * t - r[1], o[2] + d[2] * t - r[2]], n = Math.hypot(v[0], v[1], v[2]) || 1;
+              T = [r[0] + v[0] * rho / n, r[1] + v[1] * rho / n, r[2] + v[2] * rho / n];
+            }
+          } else T = viewFramePoint(pose, h, holdFov(), holdAspect());
+        }
+        if (arm) T = handKeepOut(T); // (carried by the look into the trunk: it slides over the surface)
+        const ax = axes ? Number(axes.x) || 0 : 0, az = axes ? Number(axes.z) || 0 : 0;
+        if ((ax !== 0 || az !== 0) && !holdBusy()) {
+          const yaw = pose.gazeLook && Number.isFinite(pose.gazeLook.yaw) ? pose.gazeLook.yaw : pose.yaw, sp = HOLD.speedMps * (dt > 0 ? Math.min(dt, MAX_FRAME_DT) : 0);
+          const sy = Math.sin(yaw), cy = Math.cos(yaw);
+          const K = [T[0] + cy * ax * sp - sy * az * sp, T[1], T[2] - sy * ax * sp - cy * az * sp];
+          // (a key that would push the hand into the trunk moves nothing: the hand stops at the body, it does not slide round it)
+          if (!arm || handKeepOut(K) === K) T = K;
+        }
+        return T;
+      }
+      /** The view follows the limb while the keys move it: the look eases so that the wrist or ankle stands frameUp of
+       * the way up the picture, and turns sideways only as far as keeps it inside `band` (at once under reduced motion). */
+      function followLimbView(frameW, dt) {
+        const f = viewFrameOf(camPose, frameW, holdFov(), holdAspect()), t = Math.tan(holdFov() * DEG / 2), a = holdAspect();
+        let dPitch = 0, dYaw = 0;
+        if (f.depth > 0.03 && Number.isFinite(f.y)) {
+          dPitch = Math.atan(f.y * t) - Math.atan((2 * HOLD.frameUp - 1) * t);
+          if (Math.abs(f.x) > HOLD.band) dYaw = -Math.sign(f.x) * (Math.atan(Math.abs(f.x) * t * a) - Math.atan(HOLD.band * t * a));
+        } else {
+          const want = lookFramingPoint(camPose.position, frameW, holdFov(), HOLD.frameUp); // behind the view: turn to it
+          if (!want) return;
+          dYaw = want.yaw - cs.yaw; dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw)); dPitch = want.pitch - cs.pitch;
+        }
+        if (Math.abs(dPitch) < 0.05 * DEG && Math.abs(dYaw) < 0.05 * DEG) return;
+        const k = prefersReducedMotion() ? 1 : 1 - Math.exp(-Math.max(0, dt) / HOLD.followS);
+        try { cs = controlsApi.setLook(cs, { yaw: cs.yaw + dYaw * k, pitch: cs.pitch + dPitch * k }); } catch { return; }
+        // (the limb's place stays where it is in the room: its place in the picture is taken again for the turned view)
+        holdReframe(poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }) || camPose);
+      }
+      /** One frame of the hold, after the simulation step. usedTarget: the place the step was asked for (the left arm);
+       * axes: the keys as the step used them. */
+      function stepLimbHold(dt, out, usedTarget, axes) {
+        holdMoved = null;
+        if (!LIMB_KEYS.on || !HOLD.hold || !camPose || !camBodyToWorld) { limbHold = null; return; }
+        const limb = chosenLimb(), pts = limbEnds(limb, out);
+        if (!pts) { limbHold = null; return; }
+        const busy = holdBusy(), c = NsGrasp.LIMB_CHAIN[limb] || null;
+        const ax = !busy && axes ? Number(axes.x) || 0 : 0, az = !busy && axes ? Number(axes.z) || 0 : 0, keyed = ax !== 0 || az !== 0;
+        const J = out && out.bodyJointTargets;
+        // Taken up afresh: a new limb, a drag on it, or its joints changed by anything but the hold (a movement switched
+        // on from the brain, the limb turn, Reset body): the hold then starts from where the limb's end is now.
+        const dragged = Boolean(cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb === limb);
+        const others = Boolean(c && limbHold && limbHold.joints && J && c.joints.some(id => Math.abs((Number.isFinite(J[id]) ? J[id] : 0) - limbHold.joints[id]) > 0.02));
+        if (!limbHold || limbHold.limb !== limb || dragged || others) {
+          limbHold = { limb, world: pts.end.slice(), x: 0, y: 0, dist: 0, ok: false, lookMs: null, joints: null, far: true,
+            rho: Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) };
+          holdReframe(camPose, pts.root);
+        }
+        const h = limbHold;
+        // (whether the look carries the end this frame: asked before anything of the hold is changed, as holdTarget asked)
+        const carried = holdCarries();
+        let T = null, held = false;
+        if (limb === 'leftArm') {
+          // the step was asked for usedTarget and the hand is where it could go (a key that pushed inside the folded
+          // arm's reach moved nothing: ns-arm fitHandAt clamped.inner)
+          T = Array.isArray(usedTarget) ? usedTarget.slice() : h.world.slice();
+          if (keyed && out.fit && out.fit.clamped && out.fit.clamped.inner) T = h.world.slice();
+        } else if (c) {
+          T = holdTarget(camPose, dt, { x: ax, z: az }) || h.world.slice();
+          // While the drawn pose is held back at contact (guardBodyPose), the place asked stays near the drawn end.
+          if (contact.bodyBlocked || contact.selfBlocked) {
+            const off = T.map((v, i) => v - pts.end[i]), n = Math.hypot(off[0], off[1], off[2]);
+            if (n > HOLD.leadM) { T = pts.end.map((v, i) => v + off[i] * HOLD.leadM / n); held = true; }
+          }
+          const gap = Math.hypot(T[0] - pts.end[0], T[1] - pts.end[1], T[2] - pts.end[2]);
+          if (gap > 0.0015 && !(h.stuck && !keyed && Math.hypot(T[0] - h.stuck[0], T[1] - h.stuck[1], T[2] - h.stuck[2]) < 0.001)) {
+            const Bi = NsCollide.affineInverse(camBodyToWorld), wantMm = NsCollide.apply(Bi, T[0], T[1], T[2]);
+            // The solve works on the activity's own angles and poses them AS DRAWN (a straight elbow or knee is drawn a
+            // little bent, a high thigh bends its knee: ns-body softExtensionAngles, passiveKneeAngles), so the end it
+            // finds is the end on screen. (Solved on the drawn angles alone, a straightened knee came out 10 degrees
+            // short on screen and the foot lay 7 cm under where the keys had put it.)
+            const start = { ...bodyPosed };
+            if (J) for (const id of c.joints) if (Number.isFinite(J[id])) start[id] = J[id];
+            const asDrawn = q => { let t = q; if (typeof mods.body.passiveKneeAngles === 'function') t = mods.body.passiveKneeAngles(t); if (typeof mods.body.softExtensionAngles === 'function') t = mods.body.softExtensionAngles(t); return segmentsFor(t); };
+            // (one step a frame while the limb is following closely; the drawn pose's own segments serve as the start
+            // when the activity's angles are the drawn ones)
+            const close = Number.isFinite(h.lastErrMm) && h.lastErrMm < 12 && gap < 0.06;
+            const drawnStart = c.joints.every(id => !Number.isFinite(J && J[id]) || Math.abs(start[id] - J[id]) < 1e-9) && h.joints && c.joints.every(id => Math.abs((J && Number.isFinite(J[id]) ? J[id] : 0) - h.joints[id]) < 1e-9);
+            const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb, targetMm: wantMm, limits: NsGrasp.holdLimits(limbLimits(), limb, bodyPosed), opts: close ? NsGrasp.LIMB_HOLD_FOLLOW : !keyed && ((h.waitFrames || 0) > 2 || h.lastErrMm > 40) ? NsGrasp.LIMB_HOLD_WAIT : NsGrasp.LIMB_HOLD_TRACK,
+              project: typeof mods.body.clampBodyJointTargets === 'function' ? t => mods.body.clampBodyJointTargets(t).applied : null, memo: holdMemo, startSegments: drawnStart ? segsNow() : null });
+            h.lastErrMm = r.errorMm;
+            // A place nearer the hip or shoulder than the fully bent limb can bring its end: nothing moves (the folded limb
+            // would otherwise swing round its root, a heel pulled in going on under the hip), and a key stops there.
+            const inner = r.folded === true && r.errorMm > HOLD.leadM * 1000 + 2;
+            // The look carried the place beyond what the joints allow: the limb waits where it is (HOLD.waitMm).
+            // Not when the limb still FOLLOWS: its end went at least waitShare as far as the place did this frame, the
+            // place's own way (a leg at the end of its sideways range still goes down with a look that goes down).
+            let beyond = false;
+            if (!keyed && r.errorMm > HOLD.waitMm && r.errorMm > gap * 1000 * HOLD.waitShare) {
+              const ne = worldOf(camBodyToWorld, r.endMm), a = [T[0] - h.world[0], T[1] - h.world[1], T[2] - h.world[2]];
+              const aa = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+              beyond = !(aa > 1e-10 && (ne[0] - pts.end[0]) * a[0] + (ne[1] - pts.end[1]) * a[1] + (ne[2] - pts.end[2]) * a[2] >= HOLD.waitShare * aa);
+            }
+            const changed = inner || beyond ? false : applyLimbJoints(r.joints, out);
+            h.waitFrames = changed ? 0 : (h.waitFrames || 0) + 1; // (frames in a row on which the limb could not follow)
+            if (changed) { holdMoved = limb; if (limb !== 'rightArm') holdLegUntilMs = clockMs() + 250; }
+            // (the tutorial's W A S D step counts a leg or the right arm moved by the keys as it counts the left hand)
+            if (changed && keyed) { if (ax !== 0) guideAsyncEvents.push({ type: 'move', axis: 'x' }); if (az !== 0) guideAsyncEvents.push({ type: 'move', axis: 'z' }); }
+            // (a place the limb cannot reach is remembered, so a still view does not ask the solve again every frame)
+            h.stuck = changed ? null : T.slice();
+            holdInfo = { limb, errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints, inner, beyond };
+            if (inner) { if (keyed) T = h.world.slice(); }
+            else if (!beyond) pts.end = worldOf(camBodyToWorld, r.endMm);
+          }
+          const Jn = out && out.bodyJointTargets;
+          h.joints = {}; for (const id of c.joints) h.joints[id] = Jn && Number.isFinite(Jn[id]) ? Jn[id] : 0;
+        }
+        if (!T) return;
+        // A key never winds the place asked up beyond where the limb can go: the other key then answers at once. The
+        // keys move the end LEVEL, so the place keeps its own height (the limb's end is not let drag it up or down
+        // while it catches up) unless that height is far out of the limb's reach.
+        if (keyed) {
+          const ox = T[0] - pts.end[0], oz = T[2] - pts.end[2], n = Math.hypot(ox, oz), oy = T[1] - pts.end[1];
+          T = [n > HOLD.leadM ? pts.end[0] + ox * HOLD.leadM / n : T[0], Math.abs(oy) > HOLD.levelM ? pts.end[1] + Math.sign(oy) * HOLD.levelM : T[1], n > HOLD.leadM ? pts.end[2] + oz * HOLD.leadM / n : T[2]];
+        }
+        h.world = T;
+        // (the keys set how far out the end is, and so the bend the look then leaves alone)
+        if (keyed) h.rho = Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]);
+        // While the look alone carries the end, its place in the picture is the one it had (also where the limb cannot
+        // follow: it waits at the end of its range and is picked up again when the view comes back). Anything else
+        // (a key, the hold taken up afresh, a turn of the view that was not the pointer's) takes the place again.
+        // (a frame on which the look did not change at all keeps it too)
+        if ((carried || (cs.yaw === h.lookYaw && cs.pitch === h.lookPitch)) && !keyed && !held) { h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch; }
+        else holdReframe(camPose, pts.root);
+        if (keyed && firstPersonNow() && !limbView) followLimbView(pts.frame, dt);
+      }
+      /** LIMB_PUSH: a limb's two rods in the world: { root, bend, end, tip (the lower rod's far end: a hand's length past
+       * an arm's end), r: [upper, lower] }. null: not ready. */
+      function limbRods(limb, out) {
+        const arm = limb === 'leftArm' || limb === 'rightArm', R = LIMB_PUSH.radiusM[arm ? 'arm' : 'leg'];
+        let root, bend, end;
+        if (limb === 'leftArm') {
+          const sol = out && out.fit && out.fit.solution, C = out && out.attachment && out.attachment.cameraToWorld;
+          if (!sol || !C || !Array.isArray(sol.elbowCam)) return null;
+          const w = q => NsCollide.apply(C, q[0], q[1], q[2]);
+          root = w(sol.shoulderCam); bend = w(sol.elbowCam); end = w(sol.handCentreCam);
+        } else {
+          if (!canSolveLimbs()) return null;
+          const segs = segsNow();
+          root = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segs, limb, 'root')); bend = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segs, limb, 'bend')); end = worldOf(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segs, limb, 'end'));
+        }
+        let tip = end;
+        if (arm) { const v = [end[0] - bend[0], end[1] - bend[1], end[2] - bend[2]], n = Math.hypot(v[0], v[1], v[2]) || 1, k = LIMB_PUSH.handBeyondM / n; tip = [end[0] + v[0] * k, end[1] + v[1] * k, end[2] + v[2] * k]; }
+        return { root, bend, end, tip, r: R };
+      }
+      /** LIMB_PUSH: one frame. The chosen limb, when it moved this frame, pushes the other three out of its way. */
+      function stepLimbPush(out) {
+        const P = limbPush;
+        if (!LIMB_PUSH.on || !LIMB_KEYS.on || !HOLD.hold || !camBodyToWorld) { P.pen.clear(); P.endPrev = null; return; }
+        const mover = chosenLimb(), A = limbRods(mover, out);
+        if (!A) { P.endPrev = null; return; }
+        const moved = P.endOf === mover && P.endPrev ? Math.hypot(A.end[0] - P.endPrev[0], A.end[1] - P.endPrev[1], A.end[2] - P.endPrev[2]) > 0.0004 : false;
+        const dir = P.endOf === mover && P.endPrev ? [A.end[0] - P.endPrev[0], A.end[1] - P.endPrev[1], A.end[2] - P.endPrev[2]] : [0, 0, 0];
+        P.endPrev = A.end; P.endOf = mover;
+        if (!moved || holdBusy()) return;
+        const rodsA = [[A.root, A.bend, A.r[0]], [A.bend, A.tip, A.r[1]]];
+        for (const other of LIMB_KEYS.order) {
+          if (other === mover) continue;
+          const B = limbRods(other, out);
+          if (!B) continue;
+          const rodsB = [[B.root, B.bend, B.r[0], 0], [B.bend, B.tip, B.r[1], 1]];
+          let best = null;
+          for (const a of rodsA) for (const b of rodsB) {
+            const q = rodsNearest(a[0], a[1], b[0], b[1]), pen = a[2] + b[2] - q.d;
+            if (pen > LIMB_PUSH.slackM && (!best || pen > best.pen)) best = { pen, q, lower: b[3] === 1 };
+          }
+          const key = `${mover}>${other}`, was = P.pen.get(key) || 0;
+          if (!best) { if (was) P.pen.delete(key); continue; }
+          // only the growth of the overlap is pushed away (what already lay together stays), at most maxStepM a frame
+          const grow = best.pen - was;
+          if (!(grow > 0.0005)) { P.pen.set(key, Math.max(best.pen, 0)); continue; }
+          const step = Math.min(grow, LIMB_PUSH.maxStepM);
+          let n = [best.q.c2[0] - best.q.c1[0], best.q.c2[1] - best.q.c1[1], best.q.c2[2] - best.q.c1[2]], nl = Math.hypot(n[0], n[1], n[2]);
+          if (!(nl > 1e-5)) { n = dir; nl = Math.hypot(n[0], n[1], n[2]); } // (the rods cross: away along the mover's own way)
+          if (!(nl > 1e-6)) { P.pen.set(key, best.pen); continue; }
+          // the END moves by more than the place of contact does: the nearer the contact is to the root, the more
+          const lever = best.lower ? 1 / Math.max(0.45, 0.5 + 0.5 * best.q.t) : 1 / Math.max(0.3, 0.5 * best.q.t);
+          const mv = Math.min(step * lever, LIMB_PUSH.maxStepM * 2.5), d = [n[0] / nl * mv, n[1] / nl * mv, n[2] / nl * mv];
+          let gave = false;
+          if (other === 'leftArm') { P.handMove = P.handMove ? [P.handMove[0] + d[0], P.handMove[1] + d[1], P.handMove[2] + d[2]] : d; gave = true; }
+          else {
+            const c = NsGrasp.LIMB_CHAIN[other], Jx = out && out.bodyJointTargets, Bi = NsCollide.affineInverse(camBodyToWorld);
+            const wantMm = NsCollide.apply(Bi, B.end[0] + d[0], B.end[1] + d[1], B.end[2] + d[2]);
+            const start = { ...bodyPosed };
+            if (Jx) for (const id of c.joints) if (Number.isFinite(Jx[id])) start[id] = Jx[id];
+            const asDrawn = q => { let t = q; if (typeof mods.body.passiveKneeAngles === 'function') t = mods.body.passiveKneeAngles(t); if (typeof mods.body.softExtensionAngles === 'function') t = mods.body.softExtensionAngles(t); return segmentsFor(t); };
+            const memo = P.memo[other] || (P.memo[other] = {});
+            try {
+              const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb: other, targetMm: wantMm, limits: limbLimits(), opts: NsGrasp.LIMB_HOLD_FOLLOW,
+                project: typeof mods.body.clampBodyJointTargets === 'function' ? t => mods.body.clampBodyJointTargets(t).applied : null, memo });
+              gave = !r.folded && applyLimbJoints(r.joints, out);
+            } catch { gave = false; }
+          }
+          // (what could not be pushed away is remembered as overlap that is there: it is not asked for again every frame)
+          P.pen.set(key, gave ? Math.max(0, best.pen - step) : best.pen);
+          if (gave) { P.pushes++; P.last = { mover, other, overlapMm: Math.round(best.pen * 1000), stepMm: Math.round(mv * 1000) }; }
+        }
+      }
       /** One frame of the controlled limb (LIMB_CLICK, the look free): the keys move its end through a grasp that lives
        * only while a key is down (its target starts where the limb's end is drawn, so a drag or a movement switched on
        * from the brain in between is kept), and looking away ends the control. */
       function stepLimbLatch(dt, out) {
-        if (!limbLatch || NsGrasp.LIMB_CLICK.followsLook === true) { latchKeys = null; return; }
+        if (!limbLatch || NsGrasp.LIMB_CLICK.followsLook === true || (LIMB_KEYS.on && HOLD.hold)) { latchKeys = null; return; } // (the hold moves the chosen limb now)
         const look = { yaw: cs.yaw, pitch: cs.pitch };
         const keys = controlsApi.axes(cs), keyed = Boolean(keys && (keys.x || keys.z));
         const busy = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
@@ -7262,6 +7883,23 @@ export function start(params = {}) {
         const { limb, segment } = drag.binding;
         const up = -drag.dy; // pointer up = bend
         if (limb === 'leftArm') {
+          const hd = simState && simState.hand && Array.isArray(simState.hand.rel) ? simState.hand : null;
+          if (hd) {
+            // The free hand (ns-arm FREE_HAND): a press on the upper arm raises / lowers the whole arm at the shoulder
+            // (the hand swings about the line through both shoulders, up = forward and up); anywhere below it the hand
+            // comes in toward the shoulder (up: the elbow bends) or goes out (down), through the elbow's whole range.
+            const r = hd.rel, d = Math.hypot(r[0], r[1], r[2]) || 1e-6;
+            let next;
+            if (segment === 'upperarm' || segment === 'l_upperarm') {
+              const a = up * LIMB_DRAG.flexDegPerPx * DEG, c = Math.cos(a), sn = Math.sin(a);
+              next = [r[0], r[1] * c - r[2] * sn, r[2] * c + r[1] * sn]; // about the chest's left-right axis
+            } else {
+              const k = Math.max(0.12, d - up * LIMB_DRAG.reachMPerPx) / d;
+              next = [r[0] * k, r[1] * k, r[2] * k];
+            }
+            simState = { ...simState, hand: { ...hd, rel: next } };
+            return;
+          }
           const r = simState && simState.reach;
           if (r && Number.isFinite(r.depth)) simState = { ...simState, reach: { ...r, depth: Math.max(0.05, r.depth - up * LIMB_DRAG.reachMPerPx) } };
           return;
@@ -7742,6 +8380,11 @@ export function start(params = {}) {
         return { gapOf, gapsOf, solidWorseAt };
       }
       function guardBodyPose(prevTargets, targets, now) {
+        // 19 November 2026 (LIMBS_PASS_ITEMS; the owner: "We want full range of motion on all axes"; of the brain and the
+        // mirror body: "through ourselves and through anything"): your limbs no longer stop at the brain or the mirror
+        // body. The mirror body now stands toe to toe with you, and with the stop a leg could not be brought inward at
+        // all: its foot was held at the mirror image's foot from the first degree.
+        if (LIMBS_PASS_ITEMS) { contact.bodyBlocked = null; return { targets }; }
         if (!prevTargets || typeof mods.body.poseBodySegments !== 'function') return { targets };
         const prev = withCameraJoints(prevTargets, targets);
         const h0 = headOptsOf(headDrawn || headShown), h1 = headOptsOf(headShown);
@@ -8121,6 +8764,31 @@ export function start(params = {}) {
           tables: (() => { try { return sceneFn('collisionStats') ? callScene('collisionStats') : null; } catch { return null; } })(),
           scope: 'sphere covers of drawn meshes (ns-collide); a game rule, not tissue contact' };
       }
+      // 19 November 2026 (LIMB_KEYS): the four limbs for checks: where each one's end, wrist or ankle and root are (world
+      // m), where the wrist or ankle stands in the picture (share of the picture's height from the bottom, 0..1; x in
+      // NDC), the chosen limb and the view's hold on it. Plain numbers, read from what is drawn.
+      limbReportFn = () => {
+        const r3 = v => (Array.isArray(v) ? v.map(x => Math.round(x * 1000) / 1000) : null);
+        const ends = {};
+        for (const limb of LIMB_KEYS.order) {
+          const pts = limbEnds(limb);
+          if (!pts) { ends[limb] = null; continue; }
+          const f = camPose ? viewFrameOf(camPose, pts.frame, holdFov(), holdAspect()) : null;
+          ends[limb] = { end: r3(pts.end), frame: r3(pts.frame), root: r3(pts.root), reachM: Math.round(Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) * 1000) / 1000,
+            inPicture: f && f.depth > 0 ? { x: Math.round(f.x * 1000) / 1000, up: Math.round((f.y + 1) / 2 * 1000) / 1000 } : null };
+        }
+        const hd = simState && simState.hand && Array.isArray(simState.hand.rel) ? simState.hand : null, fit = current.out && current.out.fit;
+        return { chosen: limbChoice, limb: chosenLimb(), turning: Boolean(limbView), firstPerson: firstPersonNow(), ends,
+          hold: limbHold ? { limb: limbHold.limb, world: r3(limbHold.world), x: limbHold.x, y: limbHold.y, dist: limbHold.dist, ok: limbHold.ok, stuck: Boolean(limbHold.stuck) } : null,
+          lastSolve: holdInfo, blocked: contact.bodyBlocked ? (contact.last || true) : null,
+          push: { pushes: limbPush.pushes, last: limbPush.last, pairs: [...limbPush.pen].map(([k, v]) => [k, Math.round(v * 1000)]) },
+          leftHand: hd ? { besideShoulderM: r3(hd.rel), elbowDeg: fit && fit.solution ? Math.round(fit.solution.elbowFlexRad / DEG * 10) / 10 : null,
+            shoulder: fit && fit.shoulder ? { elevationDeg: Math.round(fit.shoulder.elevationDeg * 10) / 10, planeDeg: Math.round(fit.shoulder.planeDeg * 10) / 10 } : null,
+            free: Boolean(fit && fit.free), clamped: fit ? fit.clamped : null,
+            // the chest's own axes in the world (its right, its up, out of its back): the frame besideShoulderM is given in
+            chestAxesWorld: (() => { const a = current.out && current.out.attachment; if (!a || !a.bodyToCamera || !a.cameraToWorld) return null;
+              return [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e => r3(transformDirection(a.cameraToWorld, transformDirection(a.bodyToCamera, e)))); })() } : null };
+      };
       collisionReportFn = collisionReport;
       selfContactReportFn = selfContactReport; // 18 November 2026 (package CONTACT)
 
@@ -8261,7 +8929,7 @@ export function start(params = {}) {
         }
         if (limbFlashPending) { limbFlashPending = false; limbFlashFromMs = now; }
         if (LIMB_KEYS.on && live && limbView) stepLimbView(now, timing.dt);
-        let reachPick = null;
+        let reachPick = null, dropClicks = false;
         if (live && timing.events.some(e => e && e.type === 'click')) {
           const first = timing.events.find(e => e && e.type === 'click');
           tapped = muscleTap(Boolean(first && first.behind === true));
@@ -8272,8 +8940,13 @@ export function start(params = {}) {
           // 19 November 2026 (LIMB_KEYS): the second of two quick clicks steps the chosen limb on (unless its press was
           // held and has stepped already) and is not also a click on a limb.
           const doubled = LIMB_KEYS.on && first && first.behind !== true && (pressStepped || now - lastClickMs <= LIMB_KEYS.doubleClickMs);
-          if (doubled) { if (!pressStepped) stepLimbChoice(); pressStepped = false; lastClickMs = -1e9; }
-          else if (first) lastClickMs = now;
+          // 19 November 2026, later (how a single and a double click are told apart with no wait on the single one): the
+          // FIRST click acts at once, as every click does. The SECOND one, when it follows within doubleClickMs, is the
+          // double click and does nothing but step the chosen limb: it presses no area, taps no muscle and chooses no
+          // limb, so nothing under the crosshair is pressed twice. And it steps from the limb that was chosen BEFORE the
+          // first click (a first click that landed on a limb chose that limb; the step is not counted from there).
+          if (doubled) { if (!pressStepped) { if (clickChoiceBefore >= 1) limbChoice = clickChoiceBefore; stepLimbChoice(); } pressStepped = false; lastClickMs = -1e9; clickChoiceBefore = 0; tapped = null; dropClicks = true; }
+          else if (first) { lastClickMs = now; clickChoiceBefore = limbChoice; }
           if (!doubled && first && first.behind !== true && appliedSize && !(simState.objectCarry && simState.objectCarry.held)) {
             if (clickTakesLimb(pressXY().x, pressXY().y) && tapped && tapped.event) tapped = { ...tapped, event: { ...tapped.event, actionId: null, regionOnly: true } };
           }
@@ -8285,6 +8958,8 @@ export function start(params = {}) {
             timing = { ...timing, events: timing.events.map(e => (!used && e && e.type === 'click' ? ((used = true), tapped.event ? { ...tapped.event, at: e.at } : null) : e)).filter(Boolean) };
           }
           if (reachPick) timing = { ...timing, gazeAt: 0 };
+          // (the double click's second click goes no further: the activity never sees it)
+          if (dropClicks) timing = { ...timing, events: timing.events.filter(e => !(e && e.type === 'click')) };
         }
         // R558 (Messages 55 and 56: "a lot easier to use and play and more intuitive"; "a learning tool for people learning
         // motor neuroanatomy"): a number key does the movement with that number in the list the information card shows
@@ -8354,8 +9029,11 @@ export function start(params = {}) {
             const aim = appliedSize && !e.graspPick ? e.aim || pressPoint() : null;
             const it = e.graspPick ? e.graspPick.picked : aim ? itemAt(aim.x, aim.y, e.behind === true) : null;
             limbGrasp = null; // (a limb a click controls gives way to what Space takes; it is taken up again below when Space lets go)
-            if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null);
-            brainHoldLocal = e.graspPick ? e.graspPick.brainAnchor : it?.target === 'brain' ? brainPointLocal(it.pick.pointWorldM) : null;
+            // 19 November 2026 (LIMB_KEYS.view.hold): Space on one of your limbs chooses it; the view already holds the
+            // chosen limb, so there is no second hold on top of it.
+            if (it && it.target === 'limb' && LIMB_KEYS.on && HOLD.hold) { const n = LIMB_KEYS.order.indexOf(it.limb) + 1; if (n >= 1 && n !== limbChoice) chooseLimb(n); }
+            else if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null);
+            brainHoldLocal = e.graspPick ? e.graspPick.brainAnchor : it?.target === 'brain' ? brainPointLocal(it.pick && it.pick.pointWorldM) : null; // SMALL S8
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
@@ -8669,11 +9347,23 @@ export function start(params = {}) {
         const keyboardAimId = live && infoStepped && infoStepped.lookMs === walkMarks.lookMs && infoStepped.buttonSeq === walkMarks.buttonSeq
           && infoStepped.viewToggle === cam.toggles && infoStepped.inputEpoch === inputCancellation.count ? infoStepped.id : null;
         frameTimer.mark('pick');
+        // TURN_SIDES: the side the limb turn is bringing up (from the last drawn frame's turn) and its light now
+        const turnSideArm = (() => {
+          const lv = turnSideNow(now);
+          if (!(lv > 0) || !turnSide.lists) return null;
+          const o = {}; for (const id of turnSide.lists[turnSide.side].arm) o[id] = lv;
+          return o;
+        })();
+        // (the hold's place for the left hand this frame; the keys as this attempt uses them)
+        const holdAxes = live ? frameAxes : { x: 0, z: 0 };
+        // (not while Space holds something or a drag is under way: the hand then keeps its own place, which a drag on the
+        // left arm moves directly)
+        const holdHand = live && LIMB_KEYS.on && HOLD.hold && chosenLimb() === 'leftArm' && limbHold && limbHold.limb === 'leftArm' && !holdBusy() ? holdTarget(camPose, timing.dt, holdAxes) : null;
         const stepInputs = {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
           // IS the reach), W/A/S/D move it and not the left hand.
-          ...((limbGrasp && limbGrasp.limb !== 'leftArm') || limbLatch || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
+          ...((limbGrasp && limbGrasp.limb !== 'leftArm') || limbLatch || (LIMB_KEYS.on && HOLD.hold && cs.drag && cs.drag.target) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || timing.events.some(e => e && e.type === 'grasp' && e.down === true && (e.target === 'brain' || e.target === 'mirror')) ? { armAxes: { x: 0, z: 0 } } : {}),
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true,
           // R558 (HEAD_LOOK): a held neck / trunk action that swings the view is not the player looking somewhere: the
@@ -8692,12 +9382,20 @@ export function start(params = {}) {
           ...(areaFreshPending ? { gazeFresh: true } : {}),
           ...(keyboardAimId ? { keyboardAimId } : {}),
           ...(danceRange ? { danceRange } : {}), // R558 (Space dance): the touch-free hip range of the current leg posture
-          ...(armTurnSeen ? { armTurn: armTurnSeen } : {}) // R558 (Space dance): the game arm's shown radius / upper-arm turn
+          ...(armTurnSeen ? { armTurn: armTurnSeen } : {}), // R558 (Space dance): the game arm's shown radius / upper-arm turn
+          // 19 November 2026 (ns-arm FREE_HAND): the left hand keeps its place beside the shoulder; while the left arm is
+          // the chosen limb the hold gives its place (carried by the look, moved by the keys)
+          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}) } } : {}),
+          // 19 November 2026: the left hand's fingers close as the look goes down and open as it goes up (GRIP_FEET.look,
+          // the left hand's share of the owner's Message 173), and the limb turn's side lights the game arm's flexors
+          // or extensors (TURN_SIDES)
+          ...(GRIP_FEET.on && GRIP_FEET.look.on && live ? { handLook: (() => { const d = digitsForLook(cs.pitch / DEG, GRIP_FEET.look); return { close: d.close * GRIP_FEET.look.handShare, open: d.open }; })() } : {}),
+          ...(turnSideArm ? { armDisplay: turnSideArm } : {})
         };
         const prevSim = simState;
         const step = wholeArmOption ? captureWholeArm(() => sim.stepFrame(simState, stepInputs, timing.dt)) : sim.stepFrame(simState, stepInputs, timing.dt);
         frameTimer.mark('sim');
-        return { timing, look, ctlLook, head, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step };
+        return { timing, look, ctlLook, head, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step, holdAxes };
         };
         // R558 recovery driver. Everything an attempt may touch before the step is restored from this snapshot.
         const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice() };
@@ -8893,10 +9591,24 @@ export function start(params = {}) {
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
           stepLimbLatch(timing.dt, out);
+          stepLimbHold(timing.dt, out, stepInputs.hand && stepInputs.hand.targetWorld ? stepInputs.hand.targetWorld : null, attempted.holdAxes);
+          if (stepInputs.hand && stepInputs.hand.moveWorld) limbPush.handMove = null; // (the step took the hand's push)
+          stepLimbPush(out);
           stepLimbFlash(now);
+          // TURN_SIDES: which side the limb turn is bringing up, and when it ended
+          if (TURN_SIDES.on && out.dance && out.dance.limbs) {
+            if (!turnSide.lists && bodyMap) turnSide.lists = { under: turnSideMuscles(bodyMap, 'under'), over: turnSideMuscles(bodyMap, 'over') };
+            if (out.dance.active) {
+              let open = 0, n = 0;
+              for (const l of Object.values(out.dance.limbs)) { n++; if (l && l.dir > 0) open++; }
+              turnSide.side = open * 2 >= n ? 'under' : 'over'; turnSide.active = true; turnSide.seen = true;
+            } else if (turnSide.active) { turnSide.active = false; turnSide.endedMs = now; }
+          }
           let limbDragged = false;
           for (const dragTurn of dragTurns) {
             if (dragTurn.target !== 'limb' || !dragTurn.binding) continue;
+            // (the limb a drag turns or bends becomes the chosen one: it is the limb you are using)
+            if (LIMB_KEYS.on) { const n = LIMB_KEYS.order.indexOf(dragTurn.binding.limb) + 1; if (n >= 1 && n !== limbChoice) chooseLimb(n, { turn: false }); }
             applyLimbDial(dragTurn, out);
             turningLimb = dragTurn.binding.limb;
             // the tutorial's limb step: how far this one drag has turned and bent the limb (reported once it is enough)
@@ -9097,9 +9809,7 @@ export function start(params = {}) {
           // 19 November 2026 (GRIP_FEET): the toes and foot of a gripping hand's side curl with it, and the look's
           // pitch closes all the toes and the right hand's fingers (down) or opens them (up).
           if (GRIP_FEET.on) {
-            const sm = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
-            const K = GRIP_FEET.look, pd = cs.pitch / DEG;
-            const down = K.on ? sm((pd - K.downFromDeg) / (K.downToDeg - K.downFromDeg)) : 0, up = K.on ? sm((pd - K.upFromDeg) / (K.upToDeg - K.upFromDeg)) : 0;
+            const K = GRIP_FEET.look, dg = digitsForLook(cs.pitch / DEG, K), down = dg.close, up = dg.open;
             const num = j => (Number.isFinite(targets[j]) ? targets[j] : 0);
             for (const [S, grip] of [['L', leftGrip], ['R', rightGrip]]) {
               const close = Math.max(grip, down);
@@ -9151,7 +9861,11 @@ export function start(params = {}) {
             let changed = false;
             if (legKey !== danceLegKey) {
               danceLegPending += 1;
-              if (legKey === danceLegLast || danceLegPending >= DANCE_RANGE_EVERY_FRAMES) {
+              // (19 November 2026: while the view's hold is moving a leg, a single frame without a change is not "settled":
+              // the pointer's events and the frames do not line up, and the 4 ms range was taken on every other frame)
+              // (and while it moves one the range, 4 ms of work, is taken every third of a second, not ten times a second:
+              // it bounds the limb turn, which is not what is moving the leg)
+              if ((legKey === danceLegLast && !(now < holdLegUntilMs)) || danceLegPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
                 danceLegKey = legKey;
                 danceLegPending = 0;
                 try { danceRangeNow = mods.body.hipRotationClearRange(bodyRig, targets); } catch { danceRangeNow = null; }
@@ -9170,12 +9884,18 @@ export function start(params = {}) {
                 // R558 (performance, hunt 2 code #5): while you hold a leg with Space its goal changes on every frame, so the
                 // goal's range is then taken every DANCE_RANGE_EVERY_FRAMES frames like the posture's own, and at once again
                 // when the leg is let go (or when no leg is held).
-                const legHeld = Boolean((limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg')) || (latchKeys && latchKeys.limb !== 'rightArm')); // (or moved by the keys after a click)
+                const legHeld = Boolean((limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg')) || (latchKeys && latchKeys.limb !== 'rightArm') // (or moved by the keys after a click)
+                  || now < holdLegUntilMs); // (or by the view's hold, 19 November 2026)
                 danceGoalPending += 1;
-                if (!legHeld || danceGoalPending >= DANCE_RANGE_EVERY_FRAMES) {
+                if (!legHeld || danceGoalPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
                   danceGoalKey = goalKey; danceGoalPending = 0;
                   if (goalKey === legKey && danceLegKey === legKey) danceRangeGoal = danceRangeNow;
-                  else { try { danceRangeGoal = mods.body.hipRotationClearRange(bodyRig, goal); } catch { danceRangeGoal = null; } }
+                  else {
+                    try { danceRangeGoal = mods.body.hipRotationClearRange(bodyRig, goal); } catch { danceRangeGoal = null; }
+                    // (19 November 2026: a leg the hold moves has its goal where it is, so this one range is the posture's
+                    // own as well: it is not taken a second time a few frames later)
+                    if (goalKey === legKey) { danceRangeNow = danceRangeGoal; danceLegKey = legKey; danceLegPending = 0; }
+                  }
                   changed = true;
                 }
               } else danceGoalPending = 0;
@@ -9262,7 +9982,10 @@ export function start(params = {}) {
           // R558 (Message 50): the reach keys' chest and back muscles (pectoralis major, latissimus dorsi are body meshes).
           const reachRows = Array.isArray(reachShown) ? reachShown.filter(r => r.body.length)
             .map(r => ({ actionId: null, level: r.level, agonists: r.body, antagonists: [], stabilizers: [] })) : [];
-          const extraRows = hintRows.length || danceRows.length || headRows.length || reachRows.length ? [...hintRows, ...danceRows, ...headRows, ...reachRows] : null;
+          // 19 November 2026 (TURN_SIDES): the flexors (underside) or extensors (overside) the limb turn brings to face you
+          const sideLv = turnSideNow(now);
+          const sideRows = sideLv > 0 && turnSide.lists && turnSide.lists[turnSide.side].body.length ? [{ actionId: null, level: sideLv, agonists: turnSide.lists[turnSide.side].body, antagonists: [], stabilizers: [] }] : [];
+          const extraRows = hintRows.length || danceRows.length || headRows.length || reachRows.length || sideRows.length ? [...hintRows, ...danceRows, ...headRows, ...reachRows, ...sideRows] : null;
           let drives = typeof mods.body.bodyMuscleDrives === 'function' ? mods.body.bodyMuscleDrives(extraRows ? [...active, ...extraRows] : active, { rig: bodyRig }) : null;
           if (drives && out.rotationMuscles && typeof mods.body.rotationBodyDrives === 'function') {
             let rot = null;
@@ -9950,6 +10673,7 @@ export function start(params = {}) {
       // 19 November 2026: the joint angles as DRAWN (the activity's own plus the display rules added to the pose: the
       // head's look, a grip's toes, the look's fingers and toes, soft extension), for checks
       bodyDrawnJoints: (() => { try { return bodyPosed ? { ...bodyPosed } : null; } catch { return null; } })(),
+      limbs: (() => { try { return limbReportFn ? limbReportFn() : null; } catch (err) { return { error: errorText(err) }; } })(),
       // R558 (HEAD_LOOK): the head pose of the last drawn frame (plain data the app holds) and the refusal counters.
       head: headLookOn ? { shown: headShown, heldOffsets: headPrevNow, limits: headLimits,
         recovery: { refusedAttempts: displayRecovery.refusedAttempts, recoveredFrames: displayRecovery.recoveredFrames, skippedFrames: displayRecovery.skippedFrames,

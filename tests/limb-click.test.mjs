@@ -57,22 +57,22 @@ test('the player is told which limb and what moves it, in a few words', () => {
   for (const limb of ['rightArm', 'rightLeg', 'leftLeg']) {
     const t = TIP.limbTaken(limb);
     assert.match(t.title, /^(Right|Left) (arm|leg)$/);
-    assert.equal(t.hint, 'W A S D move it');
-    assert.match(HUD.controllingLimb(limb), /W\/A\/S\/D move your (right|left) (hand|foot)\. Look away/);
+    // (later on 19 November the chosen limb also goes with the look and is never let go: the words follow)
+    assert.equal(t.hint, 'W A S D and your look move it');
+    assert.match(HUD.controllingLimb(limb), /W\/A\/S\/D move your (right|left) (hand|foot)\. Look up or down/);
   }
 });
-test('a held or controlled right arm is solved inside the shoulder range that draws whole', async () => {
+// 19 November 2026, later: this test said that a held or controlled right arm is solved inside a cap (sideways lift 0 to
+// 80, forward raise -25 to 105) "that draws whole". The owner has since withdrawn that: "there's problems with some
+// limbs, such as the right arm having a full range of motion, especially when you go left all the way and it's unable
+// to cross the body"; "We want full range of motion on all axes". The caps are gone; the body's own ranges rule.
+test('a held or controlled limb is solved in the body\'s own ranges: no caps of its own any more', async () => {
   const { holdLimits, LIMB_HOLD_LIMITS } = await import('../scene/src/ns-grasp.mjs');
-  const body = { r_shoulder_abd: [0, 180], r_shoulder_flex: [-60, 180], r_elbow_flex: [0, 145], hip_flex_L: [-30, 120] };
-  const L = holdLimits(body, 'rightArm', { r_shoulder_abd: 8, r_shoulder_flex: 37 });
-  assert.deepEqual(L.r_shoulder_abd, [0, LIMB_HOLD_LIMITS.r_shoulder_abd[1]]);
-  assert.deepEqual(L.r_shoulder_flex, LIMB_HOLD_LIMITS.r_shoulder_flex.slice());
-  assert.ok(L.r_shoulder_abd[1] <= 90 && L.r_shoulder_flex[1] <= 120, 'never to the arm straight up beside the head');
-  assert.deepEqual(L.r_elbow_flex, [0, 145], 'the elbow keeps its whole range');
-  assert.deepEqual(body.r_shoulder_abd, [0, 180], 'the body limits themselves are untouched');
-  // an arm a brain movement lifted past the cap is not snapped back: it can only come in
-  const far = holdLimits(body, 'rightArm', { r_shoulder_abd: 135, r_shoulder_flex: 37 });
-  assert.deepEqual(far.r_shoulder_abd, [0, 135]);
-  // legs have no cap
+  assert.deepEqual(Object.keys(LIMB_HOLD_LIMITS), [], 'no joint is capped for a held limb');
+  const body = { r_shoulder_abd: [-45, 180], r_shoulder_flex: [-60, 180], r_elbow_flex: [0, 145], hip_flex_L: [-30, 120] };
+  assert.equal(holdLimits(body, 'rightArm', { r_shoulder_abd: 8, r_shoulder_flex: 37 }), body, 'the body limits are used as they are');
   assert.equal(holdLimits(body, 'leftLeg', {}), body);
+  // (the rule itself still works for a cap handed in: a joint already beyond a cap keeps the side it is on)
+  const capped = holdLimits(body, 'rightArm', { r_shoulder_abd: 135, r_shoulder_flex: 37 }, { r_shoulder_abd: [0, 80] });
+  assert.deepEqual(capped.r_shoulder_abd, [0, 135]);
 });

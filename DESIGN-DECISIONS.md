@@ -1811,6 +1811,83 @@ Seen in a picture of the mirror body's head at the start (1600 × 1000 at pixel 
 
 Not done: the same offset for the head of your own body seen from outside (E); the neck's thin muscles still show some speckle.
 
+## 139. The view holds the chosen limb; every limb moves through its whole range; every control lights what it moves (19 November)
+
+The user: “that becomes the main limb you're controlling with all the control keys and the camera view ... just like you do for your left arm currently with shoulder control ... with the wrist staying in the same view, which is roughly 3/4 up”; “Any limited range of motion that's unnatural needs to be fixed”; “the wrist/ankle being 3/4 up the height of the frame and staying there basically”; “the right arm ... when you go left all the way and it's unable to cross the body”. Built by the limbs package on top of section 134.
+
+**One rule for all four limbs** (`LIMB_KEYS.view` in `ns-app.mjs`, `hold: true`).
+- The look carries the chosen limb. Its hand or foot keeps its place in the picture: it goes to where the line of sight through that place meets the ball its end can move on with the elbow or knee left as it is (the ball round the shoulder or hip). So a look up or down is flexion and extension at the shoulder or hip, and a look to a side swings the limb out or across. Where the joints end the limb waits; its place in the picture is remembered and it is picked up again when the look comes back. `lookCarries: false` turns this half off (the pointer then never moves a limb).
+- W / S move the end away from you / toward you and A / D left / right, level, at 0.6 m/s. The view follows so that the wrist or ankle stays 0.75 of the way up the picture (eased over 0.12 s, at once under reduced motion); it turns sideways only when the end would pass 0.55 of the half width.
+- Choosing a limb (1 to 4, the double click, a click or Space on a limb) turns the view to it for all four limbs, the left arm too. A limb taken by a press-and-drag becomes the chosen one without a turn of the view.
+- Nothing is carried while Space holds the brain or the mirror body, during a press-and-drag, or in the view from behind (E). In the E view the keys still move the chosen limb.
+- The start is unchanged: the look starts on the brain and the hold takes the left arm up where it lies (its wrist about 40 % up the picture). The first key or number brings the 0.75 framing. At 0.75 the middle of the picture lies about 14 degrees under the wrist, on your own lap, and the brain is out of the picture; starting there would hide the brain from a newcomer.
+
+**The left arm is free of its window** (`FREE_HAND`, `fitHandAt` in `ns-arm.mjs`). It keeps its own rig and its closed-form two-bone solve. In the game the hand is no longer asked for at a place in the picture: it is asked for at a place beside the shoulder in the chest's own axes (`state.hand.rel`, metres), so nothing in its reach reads the look or the window. `fitHand`, the window fit, stays in the file for the pure tests.
+- Range, as display rules after textbook figures (not measured on anyone): elbow 0 to 145 degrees; the direction shoulder to hand may rise 180 degrees forward or sideways, cross the body to 135 degrees of plane, and go behind the side line by 60 degrees with the arm down, 40 at shoulder height and 0 straight up. A bent elbow opens the reach across the body further (the hand to the other shoulder), never the reach behind.
+- The elbow's side: down and out for a forward reach, out overhead, back when the arm hangs or reaches back. It swings at most 240 degrees a second, so the elbow does not snap round when the hand passes under the shoulder.
+- The shoulder girdle rises with the arm's own elevation and comes forward as the hand crosses the body; it no longer reads the look.
+
+**The other three limbs.**
+- `LIMB_HOLD_LIMITS` is empty. It held the right shoulder to 0 to 80 degrees sideways and -25 to 105 forward so that held poses drew whole.
+- The right arm crosses the body: `r_shoulder_abd` is -45 to 180 (was 0 to 180), and `COMBINED_RANGE.shoulder` gives that room with the forward raise: none with the arm at the side (the trunk is there), all of it at shoulder height, none again from 135 degrees of raise up (`acrossEndDeg`), where the arm would pass through the place of the head. The rig file is rebuilt.
+- `solveLimb` (`ns-grasp.mjs`) takes three optional things: `project` (the combined-range rule applied inside the solve, so the angles returned are the angles drawn), damping in proportion to the lever arm (`LIMB_HOLD_TRACK.lambdaShare`; with the fixed value a folded arm turned a twentieth of what a frame asked and the hand sank), and `folded` in its result (the place asked is nearer the root than the folded limb reaches: nothing moves, so a heel pulled in stops at the buttock instead of the folded leg swinging on under the hip). The solve poses the limb as it is drawn (soft extension, the passive knee); solved on the plain angles a straightened knee came out 10 degrees short on screen.
+- `LIMBS_PASS_ITEMS`: your limbs no longer stop at the brain or the mirror body. With the mirror body toe to toe the right leg could not be brought inward at all.
+- A hand does not sink into your own trunk (`TRUNK_KEEP_OUT`, 14 balls along chest, belly, pelvis, neck and head; `HEAD_COLUMN` in the eye view). A key that would push it in moves nothing; a look that would carry it in slides it over the surface.
+- Legs moved by the hold cost less: the hip's clear range for the limb turn is taken every third interval while a leg moves and once for posture and goal together.
+
+**Every control lights what it moves.**
+- The chosen limb's mark is the limb itself: its muscles glow and take a warm rim for 1.1 s on your body and on the mirror body (`PART_GLOW`, `setPartGlows` in `ns-scene-three.mjs`), steady under reduced motion. The band of section 134 is no longer drawn.
+- `CONTROL_GLOW`: W / A / S / D light the hand or foot and, less, the forearm or shin while a key is down; Space lights the left hand as it closes; the mouse button lights the right hand; a press-and-drag lights the whole limb it turns.
+- A keyed or carried leg or right arm lights the motor area and the muscles of every joint that moved, as a held limb did.
+- The second click of a double click only steps the limb. It no longer presses the area under the look a second time.
+
+**Small things from the same notes.**
+- The limb turn lights the flexors as the underside comes up and the extensors as the overside does (`TURN_SIDES`): held 0.9 s after the turn and faded over 0.7 s (under reduced motion held for both and then off, with no fade). Which muscles count is a word list over the muscle names, a display choice.
+- The left hand closes as the look goes down and opens as it goes up, with the toes and the right hand (`digitsForLook`).
+- The arm's overside is turned 10 degrees less far in at the shoulder (`ARM_TURN.shoulder.closed` -15).
+- Limbs push limbs gently (`LIMB_PUSH`): each limb is two rods; where the chosen limb's rod meets another limb's, the other limb's end is moved aside by at most 12 mm a frame. A limb that cannot give way is passed through.
+
+**The tutorial** has nine steps. The new third step asks for 2, 3 or 4, or a double click; the W A S D step counts a leg or the right arm.
+
+**What the limbs reach.** Read off the game on the test machine (1600 × 900, each key held 2.5 s, each limb from a fresh start). These are the simulation's own display values; nothing here was measured on a body.
+
+| limb | travel of the end: sideways / up-down / forward-back (m) | S, toward you | W, away | A, left | D, right |
+| --- | --- | --- | --- | --- | --- |
+| left arm | 0.72 / 0.01 / 0.75 | elbow 134, hand at the chest | elbow 0 | raised 95 to the side, 37 behind the side line | across, 100 of plane |
+| left leg | 0.99 / 0.01 / 0.42 | hip 45, knee 120 | knee 0 | 44 out | 30 in |
+| right leg | 0.98 / 0.01 / 0.42 | hip 46, knee 120 | knee 0 | 30 in | 45 out |
+| right arm | 0.73 / 0.04 / 0.45 | elbow 145, 44 behind | elbow 0 | 31 across the midline | 60 behind, 65 out |
+
+Carried by the look alone: up, the left arm rises to 140 degrees (154 with S), a hip to 101, the right arm to 138 (166 with D); down, the left hand comes beside the hip, a hip goes 30 back and the right arm hangs; far to a side, the left arm goes from 38 behind the side line to 141 across, a leg waits at 45 out or 30 in, and the right arm goes from 44 across to 58 out. After a double tap of Space the travel is the same within a few centimetres. While a key moves a limb its wrist or ankle stays 0.73 to 0.77 up the picture, except with a hand pulled in to the chest: the look is then at its lower end, 88 degrees down, and the wrist stands 0.36 to 0.61 up.
+
+- Where the look carries the place beyond the joints, the limb waits (`waitMm`, `waitShare`). Without that rule a look far to one side raised the thigh instead of waiting, and the leg swung up beside the head.
+
+Frame rate on the test machine, quiet: the timed frame table reads 60 / 59 / 59 / 60 (still, look, look up and down, limb turn) against 60 / 59 / 60 / 60 for the build before; keys held 60 / 60 / 59 / 59 for limbs 1 to 4; the look carrying the limb 60 / 58 / 57 / 55.
+
+**Not done, or not right.**
+- **Not a first-person picture when a limb is framed.** With the wrist or ankle 0.75 up, the look is 50 to 59 degrees down. The eye view's camera stands half a metre behind the eye and above the head, at one distance for every look (`EYE_DOLLY` in `ns-camera.mjs`), so at that look it sees your own shoulders and collar bones from above, with the cap that closes the root of the neck as a red disc at the lower edge. The build of section 134 draws the same picture after 1 to 4. An earlier rule brought the camera to the eye for steep downward looks; it went when the stand-off became one distance, after far side looks magnified everything. Left as it is here: it is a decision on the camera, with its own test (`tests/flat-view.test.mjs`), not on the limbs.
+- **The roll gesture** (two keys at once roll the held thing) is not built.
+- No arrow or trail shows which way a key moves the limb; the answer is the glow, the lit area with its beam, and the view following.
+- The start card of controls is unchanged (its four chunks were asked for as they are); 1 to 4 are shown by the number chips in the game.
+- While you look at the brain the chosen limb is carried up in front of the strip. `lookCarries` is the switch.
+- The game does not start framed at 0.75 (see above).
+- On a limb at full stretch W does little, and a level move sideways bends the elbow or knee because the end stays level. With a hip at its back end (30 degrees) W and S move the foot 6 cm.
+- With the right arm fully across, the front of the right shoulder shows a creased, jagged patch.
+- The look carrying a leg or the right arm runs at 55 to 58 frames a second on the test machine.
+- Legs can go below where a floor would be (hip 30 degrees back); there is no floor.
+- A pushed limb that cannot give way is passed through.
+- The glow on a hand or foot alone is faint against the bone colour.
+- The right arm on the overside still reads a little turned in.
+
+## 140. Looking down at your own body, you look out of your own eyes (19 November)
+
+The user: “a proper first person view.” The limb work (section 139) holds the chosen limb's hand or foot three quarters of the way up the picture, which puts the look 50 to 60 degrees below level. From the eye camera's stand-off, half a metre behind and above the head at every look (set this morning so that a turn to the side magnifies nothing), that was a view of your own shoulders and collar from above with the neck's cap at the lower edge: not out of your eyes.
+
+- **The stand-off closes as the look goes down** (`EYE_DOLLY` `downFromDeg` 27, `downToDeg` 60, `downShare` 0.12 in `ns-camera.mjs`). At the start look and above, and to every side, the camera stands where it stood. From 27 degrees below level it comes forward, eased, and from 60 degrees down it stands at 12 % of the stand-off: 6 cm behind the eye. Looking down your body you see your chest, belly and legs from your own eyes.
+- **The price.** The camera travels about 2 cm for each degree of look in that range (up to 8 mm a quarter of a degree; elsewhere the bound stays 3 mm). The morning's rule “one stand-off at every look” now holds from the start look upward; three tests that pinned it everywhere are restated.
+
+Seen in pictures at 1600 × 900: the start picture is unchanged; with a leg chosen and pulled in, the view is down the chest and belly to the thighs. Still not right: between about 30 and 50 degrees down the camera is part of the way and your collar and the neck's cap are still in the lower edge of the picture; straight down (88 degrees) the picture is your own upper chest and ribs from very near; and the chest fills the lower half of every downward look, which the user has asked to be smaller and flatter.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

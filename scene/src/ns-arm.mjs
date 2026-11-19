@@ -2090,6 +2090,201 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
   };
 }
 
+/* ------------------------------------------------------------------ the free hand (19 November 2026) */
+
+/**
+ * 19 November 2026 (the owner: "We want the hands and the feet to move far more forward and far more back, covering a
+ * great distance"; "arm movement range of motion can be limited when looking up whilst in internal rotation ... Any
+ * limited range of motion that's unnatural needs to be fixed ... We want full range of motion on all axes"). THE FREE
+ * HAND: the left hand is asked for at a PLACE BESIDE THE SHOULDER (metres from the shoulder joint's rest place, in the
+ * chest's own axes: +x the body's right, +y up the chest, +z out of the back), not at a place in the picture. Nothing
+ * here reads the look, the window or what fits in the view, so the hand goes wherever the arm's joints let it and
+ * stays there when the view turns (fitHand's window rule keeps the hand at one height of the picture and inside it,
+ * which left the hand 0.1 m of travel at some looks). The joints' own ranges are the only limits:
+ *   the elbow         0 to ELBOW_MAX_DEG, as everywhere in this file;
+ *   the shoulder      as the direction from the shoulder to the hand: `elevation` (0 = hanging straight down, 90 =
+ *                     level, 180 = straight up) and `plane` (0 = out to the side, 90 = straight forward, more = across
+ *                     the body, negative = behind the line of the shoulders). Raising forward and sideways: the whole
+ *                     180 (AAOS: flexion 180, abduction 180). Across the body: to acrossDeg (45 degrees past straight
+ *                     forward: AAOS horizontal flexion 135 from the side line). Behind: the `behind` table, the furthest
+ *                     plane behind the side line at each elevation (AAOS: extension 60 with the arm down; horizontal
+ *                     extension about 40 at shoulder height; nothing behind with the arm straight up). Below
+ *                     freeBelowDeg the arm hangs beside the trunk and every plane is allowed. These bound a STRAIGHT
+ *                     arm; with the elbow bent the hand comes round in front of and beside the body by the elbow, so
+ *                     the bound fades out between bentFrom and bentTo of the arm's full length.
+ * Typical textbook ranges of a healthy adult, used as display rules; nothing is measured on this arm or the player.
+ *   startBodyM   where the hand starts: stretched out beside the left knee, the mirror image of where the right hand
+ *                lies in the start posture (read off the drawn body: the direction of the right hand's middle from its
+ *                shoulder, mirrored and turned into the left chest axes), at the distance that leaves this arm's elbow
+ *                as softly bent as the right one is drawn (about 14 degrees; the two rigs measure the hand's middle at
+ *                different points of the hand, so the same distance would bend this elbow 32 degrees, and the limb
+ *                turn then swung that bent elbow far out to the side).
+ *   speedMps     how fast W / A / S / D move it; leadM: how far the asked place may run ahead of where the hand is.
+ *   poleHang     the elbow's side when the arm hangs or reaches back (the point of the elbow to the back); swivelDegPerS:
+ *                how fast the elbow's side may swing round the shoulder -> hand line (a change of side is a turn, never
+ *                a snap).
+ *   acrossFullM  the shoulder blade is drawn forward (REACH_GIRDLE's shift) as the hand goes this far to the body's
+ *                right of the shoulder.
+ *   wrist        the wrist's small share of a reach (as WASD_WRIST_SYNERGY: bent back a little at full reach, bent
+ *                forward a little with the hand pulled in), from the shoulder-to-hand distance.
+ */
+export const FREE_HAND = Object.freeze({
+  startBodyM: Object.freeze([-0.245, -0.341, -0.373]),
+  speedMps: 0.6, leadM: 0.02,
+  freeBelowDeg: 35, acrossDeg: 135,
+  behind: Object.freeze([[35, -120], [60, -90], [90, -40], [180, 0]].map(p => Object.freeze(p))),
+  bentFrom: 0.55, bentTo: 0.9,
+  poleHang: Object.freeze(normalize([-0.3, -0.25, 0.92])), hangFromCos: 0.45, hangToCos: 0.85, swivelDegPerS: 240,
+  acrossFullM: 0.3,
+  wrist: Object.freeze({ refM: 0.42, degPerM: -40, maxDeg: 12 })
+});
+
+/** The shoulder's direction angles of a place beside it (chest axes, FREE_HAND): { elevationDeg, planeDeg, distM }. */
+export function freeHandAngles(handBodyM) {
+  const d = Math.hypot(handBodyM[0], handBodyM[1], handBodyM[2]);
+  if (!(d > 1e-9)) return { elevationDeg: 0, planeDeg: 90, distM: 0 };
+  return { elevationDeg: Math.acos(clamp(-handBodyM[1] / d, -1, 1)) / DEG, planeDeg: Math.atan2(-handBodyM[2], -handBodyM[0]) / DEG, distM: d };
+}
+/** The furthest plane behind the side line at an elevation (FREE_HAND.behind, straight lines between its rows). */
+function behindPlaneAt(elevDeg, rows) {
+  if (elevDeg <= rows[0][0]) return rows[0][1];
+  for (let i = 1; i < rows.length; i++) if (elevDeg <= rows[i][0]) { const a = rows[i - 1], b = rows[i]; return a[1] + (b[1] - a[1]) * (elevDeg - a[0]) / (b[0] - a[0]); }
+  return rows[rows.length - 1][1];
+}
+/**
+ * A place beside the shoulder brought inside the shoulder's range (FREE_HAND): its plane is turned back to the nearer
+ * end of the range at its own elevation and distance. reachM: the arm's full length (the bound fades with a bent
+ * elbow). Returns { handBodyM, clamped }. Pure.
+ */
+export function freeHandInRange(handBodyM, reachM, o = FREE_HAND) {
+  const a = freeHandAngles(handBodyM);
+  if (!(a.distM > 1e-9) || a.elevationDeg <= o.freeBelowDeg) return { handBodyM, clamped: false };
+  const t = smoothstep((a.distM / Math.max(1e-6, reachM) - o.bentFrom) / (o.bentTo - o.bentFrom));
+  // (the range opens to the whole circle as the elevation comes down to freeBelowDeg, and as the elbow bends)
+  const near = smoothstep((a.elevationDeg - o.freeBelowDeg) / 15);
+  // (only the reach ACROSS the body opens with a bent elbow, and only as far as the line of the shoulders: the hand
+  // never goes round behind the body past the `behind` table, bent or straight)
+  const hi = 180 + (o.acrossDeg - 180) * t * near, lo = behindPlaneAt(a.elevationDeg, o.behind);
+  const p = a.planeDeg;
+  if (p <= hi && p >= lo) return { handBodyM, clamped: false };
+  // outside: the nearer end, going round the circle
+  const dHi = p > hi ? p - hi : p + 360 - hi, dLo = p < lo ? lo - p : lo + 360 - p;
+  const q = (dHi <= dLo ? hi : lo) * DEG, s = Math.sin(a.elevationDeg * DEG) * a.distM;
+  return { handBodyM: [-Math.cos(q) * s, handBodyM[1], -Math.sin(q) * s], clamped: true };
+}
+/** The elbow's side for a hand place (a direction in the chest's axes): down and out for a reach forward, out to the
+ * side overhead (as armAttachment blends them), and back when the arm hangs or reaches behind (FREE_HAND.poleHang). */
+export function freeHandPole(handBodyM, o = FREE_HAND) {
+  const a = freeHandAngles(handBodyM);
+  const pw = smoothstep((a.elevationDeg - POLE_OVERHEAD_ELEVATION_DEG[0]) / (POLE_OVERHEAD_ELEVATION_DEG[1] - POLE_OVERHEAD_ELEVATION_DEG[0]));
+  const c = a.distM > 1e-9 ? -handBodyM[1] / a.distM : 1, back = a.distM > 1e-9 ? Math.max(0, handBodyM[2] / a.distM) : 0;
+  const hw = Math.max(smoothstep((c - o.hangFromCos) / (o.hangToCos - o.hangFromCos)), smoothstep(back / 0.5));
+  const base = add(scale(BODY_POLE_DIR, 1 - pw), scale(BODY_POLE_DIR_OVERHEAD, pw));
+  return normalize(add(scale(base, 1 - hw), scale(o.poleHang, hw)));
+}
+
+/**
+ * The arm with its hand centre at a place beside the shoulder (FREE_HAND; no screen rule).
+ * request: { handBodyM [x, y, z], joints, rotation? (as fitHand), elbowDeltaDeg? (a motor area's signed elbow command:
+ *   the hand goes along the shoulder -> hand line to where the elbow has that much more or less bend), elbowSideBodyM?
+ *   (the elbow's side to use, a direction in the chest's axes; default freeHandPole of the place) }.
+ * options: as fitHand (the attachment gives the shoulder and the chest's axes; its look-dependent shoulder lift is
+ *   taken out and the lift of the arm's own elevation is used instead).
+ * Returns what fitHand returns, as far as it has a meaning without a window (xNdc / yNdc / depth are where the hand
+ * centre is seen from the eye, or null behind it; anchor 'free'; no range, wide-open limits), plus handBodyM (where the
+ * hand centre is now), askedBodyM (the place asked, inside the shoulder's range), reachM (the arm's length in this
+ * pose), elbow ({ baseRad, targetRad } when elbowDeltaDeg was given) and elbowSideBodyM.
+ */
+export function fitHandAt(rig, boxes, request, viewport, options = {}) {
+  const { handBodyM, joints = {}, rotation, elbowDeltaDeg = 0, elbowSideBodyM = null, stayBodyM = null } = request || {};
+  const hb = vec3(handBodyM, 'request.handBodyM');
+  const o0 = mergeOptions(swivelOptions({ ...(options || {}), reachGirdle: false }, rotation));
+  const { aspect, fovYDeg = o0.fovYDeg } = viewport || {};
+  const tanHalf = tanHalfFov(aspect, fovYDeg);
+  const B = o0.bodyToCamera, Bt = B ? rotationTranspose(B) : null;
+  const toCam = v => (B ? transformDirection(B, v) : [v[0], v[1], v[2]]), toBody = v => (Bt ? transformDirection(Bt, v) : [v[0], v[1], v[2]]);
+  const att = options && options.attachment ? options.attachment : null;
+  const lookLift = att && att.girdleShiftM && att.girdleShiftM.length === 3 ? att.girdleShiftM : [0, 0, 0];
+  const restCam = sub(o0.shoulderCam, toCam(lookLift)); // the shoulder joint's rest place: the origin of handBodyM
+  const J0 = normalizeJoints(jointsWithRotation(joints, rotation));
+  const ctx0 = poseContext(rig, J0);
+  const reachM = ctx0.empty ? 0 : ctx0.dMaxM;
+  const G = GIRDLE_ELEVATION, dMin0 = ctx0.empty ? 0 : ctx0.dMinM;
+  /** A place inside the shoulder's range, with the shoulder girdle it asks for: raised with the arm's own elevation,
+   * drawn forward as the hand crosses the body. (The hand keeps its place by the REST shoulder: the girdle's own move
+   * does not carry it.) */
+  const placed = at => {
+    const ranged = freeHandInRange(at, reachM), rel = ranged.handBodyM, ang = freeHandAngles(rel);
+    const gw = smoothstep((ang.elevationDeg - G.elevationStartDeg) / (G.elevationFullDeg - G.elevationStartDeg));
+    const cw = rel[2] < 0 ? smoothstep(rel[0] / FREE_HAND.acrossFullM) : 0;
+    const shiftBody = add(scale(G.shiftAtFullM, gw), scale(REACH_GIRDLE.shiftAtFullM, cw));
+    let relS = sub(rel, shiftBody), D = length(relS);
+    if (!(D > 1e-6)) { relS = [0, -1e-3, 0]; D = 1e-3; }
+    return { ranged, rel, gw, cw, shiftBody, relS, D };
+  };
+  let P = placed(hb), inner = false;
+  // A place nearer the shoulder than the fully bent elbow can bring the hand: the hand stays where it was (stayBodyM)
+  // instead of swinging round the shoulder at arm's fold.
+  if (stayBodyM && P.D < dMin0 - 1e-6) { const Q = placed(vec3(stayBodyM, 'request.stayBodyM')); if (Q.D >= P.D) { P = Q; inner = true; } }
+  const ranged = P.ranged, gw = P.gw, cw = P.cw, shiftBody = P.shiftBody;
+  let rel = P.rel, relS = P.relS, D = P.D;
+  const shoulderCam = add(restCam, toCam(shiftBody));
+  let elbow = null;
+  if (elbowDeltaDeg !== 0 && Number.isFinite(elbowDeltaDeg) && !ctx0.empty) {
+    const baseRad = elbowPhiFor(ctx0, D), lo = Math.max(0, ctx0.phiLimF, ctx0.cG.phi0), hi = Math.min(ELBOW_MAX, ctx0.cG.phi0 + Math.PI);
+    const targetRad = clamp(baseRad + elbowDeltaDeg * DEG, lo, hi), Dn = chainDist(ctx0.cG, targetRad) * MM;
+    relS = scale(relS, Dn / D); D = Dn; rel = add(relS, shiftBody);
+    elbow = { baseRad, targetRad };
+  }
+  const side = elbowSideBodyM ? vec3(elbowSideBodyM, 'request.elbowSideBodyM') : freeHandPole(rel);
+  const o = { ...o0, shoulderCam, pole: add(shoulderCam, toCam(side)) };
+  const targetCam = add(shoulderCam, toCam(relS));
+  const core = solveArmCore(ctx0, targetCam, o, o);
+  const matrices = forwardKinematics(rig, { shoulderMatrix: core.SM, elbowFlexRad: core.phi, joints: core.ctx.J });
+  if (B) matrices.set('chest', chestMatrix(B, core.shoulderCam, rig.pivots.shoulder));
+  const elbowCam = transformPoint(matrices.get('upperarm'), rig.pivots.elbow);
+  const handCentreCam = transformPoint(matrices.get('hand'), rig.handCentre);
+  const solution = {
+    shoulderMatrix: core.SM, elbowFlexRad: core.phi, matrices, handCentreCam,
+    wristCam: transformPoint(matrices.get('forearm'), rig.pivots.wrist), elbowCam, shoulderCam: core.shoulderCam.slice(),
+    reachable: core.reachable, iterations: 1, targetCam, coupling: couplingReport(o, core, targetCam, elbowCam)
+  };
+  const J = core.ctx.J;
+  // where the hand is seen from the eye (null behind it); the box corners in front of the eye
+  const seen = handCentreCam[2] < -1e-6 ? projectToNdc(handCentreCam, tanHalf, aspect) : null;
+  const cornersNdc = [];
+  for (const { seg, carrier, box } of checkedBoxes(boxes)) {
+    const M = matrices.get(carrier);
+    for (const c of box) {
+      const q = transformPoint(M, c);
+      if (!(q[2] < -1e-6)) continue;
+      const n = projectToNdc(q, tanHalf, aspect);
+      cornersNdc.push({ segment: seg, x: n.x, y: n.y, depth: n.depth });
+    }
+  }
+  let handNdc = null;
+  try { handNdc = seen ? handScreenBounds(rig, solution, J, { aspect, fovYDeg }) : null; } catch { handNdc = null; }
+  const girdleShift = sub(shiftBody, lookLift); // what the body's shoulder blade adds to the attachment's own lift
+  const dMin = ctx0.empty ? 0 : ctx0.dMinM;
+  return {
+    free: true,
+    xNdc: seen ? seen.x : null, yNdc: seen ? seen.y : null, depth: seen ? seen.depth : null,
+    joints: J, solution, cornersNdc,
+    clamped: { x: false, depth: !core.reachable, wrist: false, shoulder: ranged.clamped, inner },
+    wristCommandDeg: J0.wrist_flex, anchor: 'free', fallback: null, range: null,
+    xLimits: { xMin: -1, xMax: 1 }, depthLimits: { minDepth: o.minDepth, maxDepth: REACH_STATE_MAX_DEPTH },
+    reach: { minDepth: dMin, maxDepth: reachM, empty: ctx0.empty }, envelopeReach: { minDepth: dMin, maxDepth: reachM, empty: ctx0.empty },
+    window: { near: dMin, far: reachM },
+    handNdc,
+    girdle: { weight: Math.max(gw, cw), shiftBodyM: girdleShift, shiftCam: toCam(girdleShift) },
+    coupling: solution.coupling,
+    shoulder: shoulderReport(solution, B),
+    clearance: eyeClearance(solution),
+    reachState: null,
+    handBodyM: toBody(sub(handCentreCam, restCam)), askedBodyM: rel, reachM, elbow, elbowSideBodyM: side
+  };
+}
+
 /**
  * Explicit signed elbow target (browser-findings repair R2, item 5): the depth along the camera ray through
  * (xNdc, yNdc) at which the closed-form arm solution has elbow flexion `elbowFlexRad`. Closed form: elbow angle ->

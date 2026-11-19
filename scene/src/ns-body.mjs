@@ -116,7 +116,11 @@ const lim = (lo, hi) => Object.freeze([lo, hi]);
  *     50, extension 60, rotation 80 each way (AMA), side bend 45 each way (AAOS / AMA); jaw opening 30 deg of
  *     mandibular rotation (with the 0.25 mm/deg forward glide about 40 mm between the incisors, a usual adult
  *     maximum), jaw side shift 10 mm each way (a usual adult lateral excursion);
- *   right shoulder flexion 180, extension 60, abduction 180 (AAOS); elbow flexion 145 (between AAOS 150 and AMA 140;
+ *   right shoulder flexion 180, extension 60, abduction 180 (AAOS); 19 November 2026 (the owner: the right arm is
+ *     "unable to cross the body, the torso"): the sideways angle also goes 45 the other way, ACROSS the body (AAOS
+ *     horizontal flexion 135 from the side line = 45 past straight forward), as far as the forward raise leaves room
+ *     in front of the chest (COMBINED_RANGE.shoulder: none with the arm hanging at the side, where the trunk is in the
+ *     way); elbow flexion 145 (between AAOS 150 and AMA 140;
  *     the forearm mesh meets the biceps mesh there); pronation 80 + supination 80 = 160 (AAOS); wrist flexion 80,
  *     extension 70, radial deviation 20, ulnar deviation 30 (AAOS); digits: see BODY_JOINT_SHARES (finger MCP 90 /
  *     PIP 105 / DIP 85, MCP hyperextension 30; thumb CMC opposition 40, MCP 50, IP 80, IP hyperextension 20; finger
@@ -134,7 +138,7 @@ export const BODY_JOINT_LIMITS = Object.freeze({
   toe_flex_L: lim(-40, 40), toe_flex_R: lim(-40, 40),
   trunk_flex: lim(-25, 90), pelvic_tilt: lim(0, 60), neck_flex: lim(-60, 50), neck_rot: lim(-80, 80), jaw_open: lim(0, 30),
   brow_raise: lim(-20, 20), eye_close: lim(-20, 20), lip_purse: lim(-20, 20), smile: lim(-20, 20),
-  r_shoulder_flex: lim(-60, 180), r_shoulder_abd: lim(0, 180), r_elbow_flex: lim(0, 145),
+  r_shoulder_flex: lim(-60, 180), r_shoulder_abd: lim(-45, 180), r_elbow_flex: lim(0, 145),
   r_wrist_flex: lim(0, 80), r_wrist_ext: lim(0, 70), r_grasp: lim(0, 90), r_open: lim(0, 30), r_pronation: lim(0, 160),
   ankle_inv_L: lim(-15, 35), ankle_inv_R: lim(-15, 35), hallux_flex_L: lim(-70, 45), hallux_flex_R: lim(-70, 45),
   trunk_side: lim(-35, 35), trunk_rot: lim(-45, 45), neck_side: lim(-45, 45), jaw_side: lim(-10, 10),
@@ -1956,7 +1960,13 @@ export const COMBINED_RANGE = Object.freeze({
    *     `rotAtFullElevationDeg` each way with the arm straight up (near full elevation the joint is close-packed and
    *     has little rotation left: textbook description; the amount is a display choice).
    */
-  shoulder: Object.freeze({ behindDeg: 30, overheadTiltDeg: 15, rotAtFullElevationDeg: 30 })
+  // 19 November 2026: acrossDeg, the sideways angle the other way (the arm brought ACROSS the body, r_shoulder_abd below
+  // 0). The arm crosses in front of the chest, so the room for it grows with the forward raise: none with the arm at the
+  // side (the trunk is there), all of it at shoulder height (acrossDeg x the sine of the raise), and none again from
+  // acrossEndDeg of raise on: above that the arm goes up BESIDE the head (the head is in the way; in the eye view the
+  // place of your own head is not drawn, and an arm laid over it was cut open). besideHeadDeg: a lean outward that can
+  // be asked of the fully raised arm on top of that (0: none; the arm may point straight up).
+  shoulder: Object.freeze({ behindDeg: 30, overheadTiltDeg: 15, rotAtFullElevationDeg: 30, acrossDeg: 45, acrossEndDeg: 135, besideHeadDeg: 0 })
 });
 const COMBINED_BY = Object.freeze({
   // the trunk's whole forward bend against the pelvis: its own bend plus the pelvis rolled under (pelvic_tilt, the start
@@ -1983,11 +1993,15 @@ export function combinedRange(id, applied) {
 export function shoulderCombinedRange(flexDeg, abdDeg, o = COMBINED_RANGE.shoulder) {
   const L = BODY_JOINT_LIMITS, f = flexDeg;
   const abdMax = f > 0 ? Math.min(L.r_shoulder_abd[1], Math.max(o.overheadTiltDeg, 180 - f + o.behindDeg * Math.sin(f * DEG) ** 2)) : L.r_shoulder_abd[1];
-  const a = Math.min(abdDeg, abdMax);
+  const across = Number.isFinite(o.acrossDeg) ? o.acrossDeg : 0, out = Number.isFinite(o.besideHeadDeg) ? o.besideHeadDeg : 0;
+  const k = clamp((f - o.acrossEndDeg) / 30, 0, 1);
+  const abdMin = Math.max(L.r_shoulder_abd[0], f <= 0 ? 0 : f <= 90 ? -across * Math.sin(f * DEG)
+    : f < o.acrossEndDeg ? -across * Math.cos(((f - 90) / (o.acrossEndDeg - 90)) * 90 * DEG) : out * k * k * (3 - 2 * k)) + 0;
+  const a = Math.max(abdMin, Math.min(abdDeg, abdMax));
   const flexMin = a > 90 ? L.r_shoulder_flex[0] * clamp((180 - a) / 90, 0, 1) : L.r_shoulder_flex[0];
   const ff = Math.max(f, flexMin);
   const elev = Math.acos(clamp(Math.cos(a * DEG) * Math.cos(ff * DEG), -1, 1)) / DEG, u = clamp((elev - 90) / 90, 0, 1);
-  return { abdMax, flexMin, rot: [L.r_shoulder_rot[0] + (-o.rotAtFullElevationDeg - L.r_shoulder_rot[0]) * u, L.r_shoulder_rot[1] + (o.rotAtFullElevationDeg - L.r_shoulder_rot[1]) * u] };
+  return { abdMax, abdMin, flexMin, rot: [L.r_shoulder_rot[0] + (-o.rotAtFullElevationDeg - L.r_shoulder_rot[0]) * u, L.r_shoulder_rot[1] + (o.rotAtFullElevationDeg - L.r_shoulder_rot[1]) * u] };
 }
 
 /**
@@ -2018,7 +2032,7 @@ export function clampBodyJointTargets(targets = {}) {
   for (const r of COMBINED_RANGE.rows) { const [lo, hi] = combinedRange(r.id, applied); cut(r.id, clamp(applied[r.id], lo, hi)); }
   {
     const sh = shoulderCombinedRange(applied.r_shoulder_flex, applied.r_shoulder_abd);
-    cut('r_shoulder_abd', Math.min(applied.r_shoulder_abd, sh.abdMax));
+    cut('r_shoulder_abd', Math.max(sh.abdMin, Math.min(applied.r_shoulder_abd, sh.abdMax)));
     cut('r_shoulder_flex', Math.max(applied.r_shoulder_flex, sh.flexMin));
     cut('r_shoulder_rot', clamp(applied.r_shoulder_rot, sh.rot[0], sh.rot[1]));
   }

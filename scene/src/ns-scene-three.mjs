@@ -3016,7 +3016,28 @@ export const BRAIN_EYE_TURN = Object.freeze({ gain: 0.7, maxDeg: 38, yawSign: 1,
  * its peak light and how much of what is behind it covers, and its half widths (m) at the root, the bend and the end of
  * an arm and of a leg. Display choices. */
 export const LIMB_FLASH = Object.freeze({ colour: Object.freeze([1, 0.86, 0.42]), alpha: 0.6, veil: 0.3, liftShare: 1.25,
-  halfM: Object.freeze({ arm: Object.freeze([0.075, 0.06, 0.05]), leg: Object.freeze([0.12, 0.09, 0.065]) }) });
+  halfM: Object.freeze({ arm: Object.freeze([0.075, 0.06, 0.05]), leg: Object.freeze([0.12, 0.09, 0.065]) }),
+  // 19 November 2026, later (the owner: "let's have the whole limb highlight ... we should have this obvious highlight
+  // feature for basically all the controls"): the limb ITSELF lights (PART_GLOW below). bandAlpha: the share of the
+  // earlier band of light that is still drawn over it (0: none; beside a lit limb the band read as a flat strip of
+  // glass standing in the air).
+  bandAlpha: 0 });
+/** 19 November 2026 (a visible answer for every control). PART_GLOW: muscles of one of your limbs lit in the limb mark's
+ * own colour (LIMB_FLASH.colour), on your body and on the mirror body: the whole limb when it is chosen, its hand or
+ * foot while a key moves it or a hand closes, the whole limb while a press-and-drag turns it. Each lit muscle gets
+ * `glow` x level of that colour added to its own light and a rim of `rim` x level; `steps`: the level is taken in this
+ * many steps, so the muscles are shaded again only when it has visibly changed. A mark of the game's controls; it says
+ * nothing about activity (an active muscle keeps its own area's colour under it). */
+export const PART_GLOW = Object.freeze({ glow: 0.12, rim: 0.55, rimPower: 2.2, steps: 12 });
+/** The limb and the part of it (upper / lower / end) an outline group belongs to, or null (trunk, head). Pure. */
+export function limbPartOfOutlineGroup(g) {
+  const G = OUTLINE_GROUPS;
+  const part = g === G.lUpper || g === G.rUpper || g === G.lThigh || g === G.rThigh ? 'upper' : g === G.lFore || g === G.rFore || g === G.lShank || g === G.rShank ? 'lower'
+    : g === G.lHand || g === G.rHand || g === G.lFoot || g === G.rFoot ? 'end' : null;
+  if (!part) return null;
+  const limb = g === G.lUpper || g === G.lFore || g === G.lHand ? 'leftArm' : g === G.rUpper || g === G.rFore || g === G.rHand ? 'rightArm' : g === G.lThigh || g === G.lShank || g === G.lFoot ? 'leftLeg' : 'rightLeg';
+  return { limb, part };
+}
 /** 19 November 2026 (the light beam): the most sample points kept of one key of the strip, and of one muscle. */
 export const BEAM_KEY_POINTS = 64, BEAM_MUSCLE_POINTS = 48;
 export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
@@ -5253,6 +5274,7 @@ export function createScene({
 
   const bones = [];
   const muscles = [];
+  const partGlow = { want: {}, applied: '' }; // (PART_GLOW's state: see setPartGlows)
   const glass = [];
   const glassDepth = [];
   const glassXray = [];
@@ -6560,11 +6582,13 @@ export function createScene({
         }
         const g = outlineGroupForShares(sum) || OUTLINE_GROUPS.lFore;
         outline.register(mesh, { group: g }); outline.register(tw, { group: g, mirror: true });
+        m.limbPart = limbPartOfOutlineGroup(g); // (PART_GLOW)
       }
       // One weld cache per muscle: its lifted and blended rest copies move the same vertices, so the vertices that
       // share a position in the rest mesh are treated as one point in every copy (their normals stay shared).
       const weld = { groups: null };
       muscles.push({
+        limbPart: m.limbPart || null,
         mesh, mat, key: m.muscleKey === undefined ? null : m.muscleKey, rest: m.positions, weld,
         restNormals: computeNormals(m.positions, m.indices, undefined, weld), weights: m.weights, pos, nor, posAttr, norAttr, lastT: NaN,
         mirror: tw, centre: null, centreFor: null,
@@ -8707,13 +8731,16 @@ export function createScene({
       if (g) for (let i = 0; i < 3; i++) muscleShade.albedo[i] += (g[i] * AREA_LOOK.muscleAlbedo - muscleShade.albedo[i]) * k;
     }
     mat.color.setRGB(muscleShade.albedo[0], muscleShade.albedo[1], muscleShade.albedo[2]);
-    mat.emissive.setRGB(muscleShade.emission[0], muscleShade.emission[1], muscleShade.emission[2]);
+    // 19 November 2026 (PART_GLOW): a muscle of a marked limb takes the mark's light on top of its own
+    const pg = mat.userData && mat.userData.nsPartGlow > 0 ? mat.userData.nsPartGlow : 0, PC = LIMB_FLASH.colour, pgE = PART_GLOW.glow * pg;
+    mat.emissive.setRGB(muscleShade.emission[0] + PC[0] * pgE, muscleShade.emission[1] + PC[1] * pgE, muscleShade.emission[2] + PC[2] * pgE);
     const u = mat.userData && mat.userData.nsGlowRim;
     if (u && hint) {
       const g = rcG ? rcG.glowLinear : null, H = MUSCLE_HINT_LOOK;
       if (g && k > 0) u.value.set((g[0] + (1 - g[0]) * H.rimWhite) * H.rimGain, (g[1] + (1 - g[1]) * H.rimWhite) * H.rimGain, (g[2] + (1 - g[2]) * H.rimWhite) * H.rimGain, H.rimPower);
       else u.value.set(0, 0, 0, H.rimPower);
     } else if (u) { areaGlowInto(areaId, t, AREA_LOOK.muscleRimGain * hk, muscleRim); u.value.set(muscleRim[0], muscleRim[1], muscleRim[2], Number.isFinite(AREA_LOOK.muscleRimPower) ? AREA_LOOK.muscleRimPower : GLOW_K.rimPower); }
+    if (u && pg > 0) { const r = PART_GLOW.rim * pg; u.value.set(Math.max(u.value.x, PC[0] * r), Math.max(u.value.y, PC[1] * r), Math.max(u.value.z, PC[2] * r), Math.min(u.value.w, PART_GLOW.rimPower)); }
     const ud = mat.userData;
     if (ud && ud.nsHaloHost) {
       if (k > 0 && !hint) {
@@ -9528,6 +9555,7 @@ export function createScene({
       // R558 (Message 20): outline codes (a coarse group from the part and side until setOutlineSegments brings the rig's).
       {
         const g = outlineGroupForPart(part, rec.side);
+        rec.limbPart = limbPartOfOutlineGroup(g); // (PART_GLOW; setOutlineSegments brings the rig's finer answer)
         if (!face) outline.register(rec.mesh, { group: g });
         if (rec.mirror) outline.register(rec.mirror, { group: g, mirror: true });
         if (rec.inPlace) outline.register(rec.inPlace, { group: g });
@@ -9783,6 +9811,7 @@ export function createScene({
       if (!info) continue;
       const g = outlineGroupForBlend(info.blend, info.segment);
       if (!(g > 0)) continue;
+      b.limbPart = limbPartOfOutlineGroup(g); partGlow.applied = null; // (PART_GLOW: the lit set is made again)
       if (!b.face) outline.setGroup(b.mesh, g);
       if (b.mirror) outline.setGroup(b.mirror, g);
       if (b.inPlace) outline.setGroup(b.inPlace, g);
@@ -12452,12 +12481,14 @@ export function createScene({
         if (b.mirror) musclePickIndex.set(b.mirror, { ...rec, source: 'mirror' });
       }
       for (const b of bones) {
-        const rec = { part: 'arm', kind: 'bone', id: b.sourceElementId, name: clean(b.mesh.name), side: -1, bodyPart: 'leftArm', armKey: null };
+        // (segment: 'upperarm' for the upper arm, so a press-and-drag there moves the shoulder; 19 November 2026)
+        const rec = { part: 'arm', kind: 'bone', id: b.sourceElementId, name: clean(b.mesh.name), side: -1, bodyPart: 'leftArm', armKey: null, segment: b.segment === 'upperarm' ? 'upperarm' : 'forearm' };
         musclePickIndex.set(b.mesh, { ...rec, source: 'own' });
         if (b.mirror) musclePickIndex.set(b.mirror, { ...rec, source: 'mirror' });
       }
       for (const m of muscles) {
-        const rec = { part: 'arm', kind: 'muscle', id: m.id, name: clean(m.mesh.name), side: -1, bodyPart: 'leftArm', armKey: m.key };
+        const rec = { part: 'arm', kind: 'muscle', id: m.id, name: clean(m.mesh.name), side: -1, bodyPart: 'leftArm', armKey: m.key,
+          segment: /deltoid|biceps brachii|triceps|brachialis|coracobrachialis|teres|spinatus|subscapularis/i.test(String(m.mesh.name || '')) && !/brachioradialis/i.test(String(m.mesh.name || '')) ? 'upperarm' : 'forearm' };
         musclePickIndex.set(m.mesh, { ...rec, source: 'own' });
         if (m.mirror) musclePickIndex.set(m.mirror, { ...rec, source: 'mirror' });
       }
@@ -13124,6 +13155,44 @@ export function createScene({
   // body and on the mirror body, in LIMB_FLASH.colour. A mark of the game's controls; it says nothing about activity.
   const limbFlashState = { limb: null, level: 0, ptsMm: null };
   const flashP = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  /* ---- 19 November 2026: PART_GLOW, the muscles of a limb (or of its hand or foot) lit as a control's answer ---- */
+  // partGlow.want: { 'limb:part': level } as last asked (part 'all' | 'upper' | 'lower' | 'end'); applied: its key as last
+  // shaded. The lit muscles are shaded again only when a level has changed by a step.
+  /** Ask for the lit parts: a list of { limb, part ('all' | 'upper' | 'lower' | 'end'), level 0..1 } (null or [] = none).
+   * Levels of the same limb and part take the larger. Returns the number of entries kept. */
+  function setPartGlows(list) {
+    const want = {};
+    if (Array.isArray(list)) for (const q of list) {
+      if (!q || typeof q.limb !== 'string' || !(q.level > 0)) continue;
+      const k = `${q.limb}:${q.part === 'upper' || q.part === 'lower' || q.part === 'end' ? q.part : 'all'}`;
+      const v = Math.round(Math.min(1, q.level) * PART_GLOW.steps) / PART_GLOW.steps;
+      if (v > 0 && !(want[k] >= v)) want[k] = v;
+    }
+    partGlow.want = want;
+    return Object.keys(want).length;
+  }
+  /** Shade the muscles whose mark changed (called once a frame from updateGlow). */
+  function applyPartGlows() {
+    const W = partGlow.want, key = JSON.stringify(W);
+    if (key === partGlow.applied) return;
+    partGlow.applied = key;
+    const levelOf = lp => (lp ? Math.max(W[`${lp.limb}:all`] || 0, W[`${lp.limb}:${lp.part}`] || 0) : 0);
+    const put = (mat, v) => { if (!mat || !mat.userData) return false; const was = mat.userData.nsPartGlow || 0; if (was === v) return false; mat.userData.nsPartGlow = v; return true; };
+    for (const b of body) {
+      if (b.kind !== 'muscle' || !b.limbPart) continue;
+      const v = levelOf(b.limbPart);
+      let ch = put(b.material, v);
+      if (b.mirror) ch = put(shadeMatOf(b.mirror), v) || ch;
+      if (b.inPlace) ch = put(shadeMatOf(b.inPlace), v) || ch;
+      if (ch) shadeBodyMuscle(b);
+    }
+    for (const m of muscles) {
+      const v = levelOf(m.limbPart || { limb: 'leftArm', part: 'lower' });
+      let ch = put(m.mat, v);
+      if (m.mirror) ch = put(shadeMatOf(m.mirror), v) || ch;
+      if (ch) shadeArmMuscle(m);
+    }
+  }
   function setLimbFlash(spec) {
     if (!spec || typeof spec.limb !== 'string' || !(spec.level > 0)) { limbFlashState.limb = null; limbFlashState.level = 0; limbFlashState.ptsMm = null; return false; }
     limbFlashState.limb = spec.limb; limbFlashState.level = Math.min(1, spec.level);
@@ -13165,8 +13234,8 @@ export function createScene({
   }
   function emitLimbFlash(mirrorOn) {
     const F = limbFlashState;
-    if (!F.limb || !(F.level > 0)) return;
-    const W = LIMB_FLASH.halfM[F.limb === 'leftArm' || F.limb === 'rightArm' ? 'arm' : 'leg'], a = LIMB_FLASH.alpha * F.level;
+    if (!F.limb || !(F.level > 0) || !(LIMB_FLASH.bandAlpha > 0)) return;
+    const W = LIMB_FLASH.halfM[F.limb === 'leftArm' || F.limb === 'rightArm' ? 'arm' : 'leg'], a = LIMB_FLASH.alpha * LIMB_FLASH.bandAlpha * F.level;
     const put = (toWorld, buf) => {
       for (let i = 0; i < 3; i++) { const q = toWorld(i); if (!q) return; flashP[i][0] = q.x; flashP[i][1] = q.y; flashP[i][2] = q.z; }
       emitFlashBand(buf, flashP[0], flashP[1], W[0], W[1], a);
@@ -13320,6 +13389,7 @@ export function createScene({
         emitRibbon(glowOwn, a, b, lv, areaPhase, env * (GLOW_LINK.own === true ? LINKS.ownAlpha : 1), regionId);
       }
     }
+    applyPartGlows();
     if (limbFlashState.limb) { const mOn = mirrorRoot.visible && mirror.transform !== null; if (mOn) { mirrorRoot.updateWorldMatrix(true, false); mirrorBodyGroup.updateWorldMatrix(false, false); mirrorArmGroup.updateWorldMatrix(false, false); } emitLimbFlash(mOn); }
     finishRibbons(glowOwn);
     finishRibbons(glowMirror);
@@ -14324,7 +14394,7 @@ export function createScene({
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
     setMirror: setMirrorView,
     mirrorState,
-    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem, setLimbFlash,
+    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem, setLimbFlash, setPartGlows,
     collisionItems, collisionStats, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,

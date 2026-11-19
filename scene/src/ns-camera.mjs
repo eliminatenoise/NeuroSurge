@@ -171,9 +171,15 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  * the lower part of the start picture under the strip (the launcher has the layout). nearBehindEyeM 0 -> null: the
  * near plane is the scene's own again and cuts nothing; your head and neck are left out above the collar by the
  * scene (ns-scene-three EYE_COLLAR: a box that is not drawn and a plain cap), the same from every look. */
+/* 19 November 2026, later (the owner: "a proper first person view"; a check: with the chosen limb's hand or foot held
+ * three quarters up the picture the look is 50 to 60 degrees down, and from half a metre behind and above the head
+ * that was a view of your own shoulders and collar from above, not out of your eyes). The stand-off now closes as the
+ * look goes down: whole to downFromDeg below level, downShare of it from downToDeg, eased between. Looking down at
+ * your own body you look out of your own eyes; at the start look and above nothing changes. */
 export const EYE_DOLLY = Object.freeze({
   backM: 0.5, upM: 0.14, headAboveLookDeg: 30, headLevelEndDeg: 40,
   standPitchMaxDeg: -25, standYawMaxDeg: 110,
+  downFromDeg: 27, downToDeg: 60, downShare: 0.12,
   zRefM: null, nearBehindEyeM: null
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
@@ -182,7 +188,11 @@ export const EYE_DOLLY = Object.freeze({
  * continuous. */
 export function eyeDolly(look, o = EYE_DOLLY) {
   const l = lookOf(look, 'look');
-  const backM = Math.max(0, o.backM), upM = Math.max(0, o.upM);
+  // (the stand-off closes for a look down: EYE_DOLLY downFromDeg / downToDeg / downShare)
+  const dn = isNum(o.downFromDeg) && isNum(o.downToDeg) && isNum(o.downShare) && o.downToDeg > o.downFromDeg
+    ? Math.min(1, Math.max(0, (-l.pitch / DEG - o.downFromDeg) / (o.downToDeg - o.downFromDeg))) : 0;
+  const closeK = 1 - (1 - (isNum(o.downShare) ? o.downShare : 1)) * (dn * dn * (3 - 2 * dn));
+  const backM = Math.max(0, o.backM) * closeK, upM = Math.max(0, o.upM) * closeK;
   // the look the stand-off is taken for: the look itself, held at standPitchMaxDeg and at +-standYawMaxDeg
   const pMax = isNum(o.standPitchMaxDeg) ? o.standPitchMaxDeg * DEG : Math.PI / 2, yMax = isNum(o.standYawMaxDeg) ? o.standYawMaxDeg * DEG : Math.PI;
   const sp = Math.min(l.pitch, pMax), syaw = Math.max(-yMax, Math.min(yMax, l.yaw)); // (the yaw as given, not wrapped: the look ends at straight behind on either side and must not jump there)

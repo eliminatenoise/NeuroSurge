@@ -47,14 +47,19 @@ test('the camera keeps ONE stand-off at every look: nothing is magnified by a tu
   const E = NC.EYE_DOLLY, len = v => Math.hypot(v[0], v[1], v[2]);
   const d0 = len(NC.eyeDolly({ yaw: 0, pitch: num('START_LOOK_PITCH_DEG') * DEG }).offset);
   assert.ok(Math.abs(d0 - Math.hypot(E.backM, E.upM * Math.cos(E.headAboveLookDeg * DEG)) ) < 0.08 && d0 > 0.28);
+  // 19 November 2026, later (the owner: "a proper first person view"): that one stand-off holds from the start look
+  // upward and to every side. BELOW the start look it closes (EYE_DOLLY downFromDeg .. downToDeg): looking down at your
+  // own body you look out of your own eyes, not down on your shoulders from behind your head.
   for (let yaw = -180; yaw <= 180; yaw += 15) for (let pitch = -88; pitch <= 88; pitch += 11) {
     const d = NC.eyeDolly({ yaw: yaw * DEG, pitch: pitch * DEG });
-    assert.ok(Math.abs(len(d.offset) - d0) < 0.03, `look ${yaw}/${pitch}: ${len(d.offset).toFixed(3)} m from the eye, ${d0.toFixed(3)} at the start`);
+    if (pitch >= -E.downFromDeg) assert.ok(Math.abs(len(d.offset) - d0) < 0.03, `look ${yaw}/${pitch}: ${len(d.offset).toFixed(3)} m from the eye, ${d0.toFixed(3)} at the start`);
+    else if (pitch <= -E.downToDeg) assert.ok(len(d.offset) < 0.2 * d0, `look ${yaw}/${pitch}: at the eye (${len(d.offset).toFixed(3)} m)`);
+    else assert.ok(len(d.offset) <= d0 + 0.03, `look ${yaw}/${pitch}: closing`);
     assert.equal(d.fovScale, 1, 'and the lens does not change');
-    assert.ok(d.offset[1] > 0.05, `look ${yaw}/${pitch}: the camera stays above the eye, never down in the neck or the back`);
+    assert.ok(d.offset[1] > (pitch >= -E.downFromDeg ? 0.05 : 0), `look ${yaw}/${pitch}: the camera stays above the eye, never down in the neck or the back`);
   }
   // inside the stand-off's range the camera is straight behind the eye on the line of sight (plus upM along the head)
-  const a = NC.eyeDolly({ yaw: 40 * DEG, pitch: -50 * DEG }), g = NC.gazeDirection(40 * DEG, -50 * DEG);
+  const a = NC.eyeDolly({ yaw: 40 * DEG, pitch: -25 * DEG }), g = NC.gazeDirection(40 * DEG, -25 * DEG); // (-50 before the stand-off closed below the start look)
   assert.ok(-(a.offset[0] * g[0] + a.offset[1] * g[1] + a.offset[2] * g[2]) > E.backM - 1e-9);
   // past it the camera stays put and only turns: upward ...
   const u1 = NC.eyeDolly({ yaw: 0, pitch: 0 }), u2 = NC.eyeDolly({ yaw: 0, pitch: 80 * DEG });
@@ -63,12 +68,12 @@ test('the camera keeps ONE stand-off at every look: nothing is magnified by a tu
   const s1 = NC.eyeDolly({ yaw: E.standYawMaxDeg * DEG, pitch: -30 * DEG }), s2 = NC.eyeDolly({ yaw: 180 * DEG, pitch: -30 * DEG });
   for (let k = 0; k < 3; k++) assert.ok(Math.abs(s1.offset[k] - s2.offset[k]) < 1e-12);
   // continuous everywhere: a quarter degree of look moves the camera by under 3 mm
-  for (let p = -88; p < 88; p += 0.25) { const x = NC.eyeDolly({ yaw: 0.3, pitch: p * DEG }).offset, y = NC.eyeDolly({ yaw: 0.3, pitch: (p + 0.25) * DEG }).offset; assert.ok(len([x[0] - y[0], x[1] - y[1], x[2] - y[2]]) < 0.003, `pitch ${p}`); }
+  for (let p = -88; p < 88; p += 0.25) { const x = NC.eyeDolly({ yaw: 0.3, pitch: p * DEG }).offset, y = NC.eyeDolly({ yaw: 0.3, pitch: (p + 0.25) * DEG }).offset; assert.ok(len([x[0] - y[0], x[1] - y[1], x[2] - y[2]]) < (p < -E.downFromDeg + 0.25 && p > -E.downToDeg - 0.25 ? 0.008 : 0.003), `pitch ${p}`); } // (up to 8 mm a quarter degree where the stand-off closes for a look down)
   for (let w = -180; w < 179.9; w += 0.25) { const x = NC.eyeDolly({ yaw: w * DEG, pitch: -0.5 }).offset, y = NC.eyeDolly({ yaw: (w + 0.25) * DEG, pitch: -0.5 }).offset; assert.ok(len([x[0] - y[0], x[1] - y[1], x[2] - y[2]]) < 0.003, `yaw ${w}`); }
 });
 
 test('with zRefM the lens widens as the camera comes off the line of sight, so things zRefM ahead keep their size', () => {
-  const E = { ...NC.EYE_DOLLY, zRefM: 0.5 };
+  const E = { ...NC.EYE_DOLLY, zRefM: 0.5, downShare: 1 }; // (the lens rule is tested on the whole stand-off: no closing for a look down)
   const s = NC.eyeDolly({ yaw: 0, pitch: -50 * DEG }, E), u = NC.eyeDolly({ yaw: 0, pitch: 40 * DEG }, E);
   assert.ok(Math.abs(s.fovScale - 1) < 1e-9, 'the launcher\'s angle while the camera stands straight behind the eye');
   assert.ok(u.fovScale > 1 && Math.abs(u.fovScale - (0.5 + s.depthBackM) / (0.5 + u.depthBackM)) < 1e-9, 'a dolly zoom about zRefM');

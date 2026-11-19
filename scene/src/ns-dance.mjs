@@ -137,7 +137,10 @@ export const LEG_TURN_ENDS = Object.freeze({ open: 25, closed: -65, restOutDeg: 
 // inward (65 before). The forearm still turns the palm right over (160 degrees); with the upper arm turning 60 degrees
 // in all instead of 100 the slightly bent elbow no longer swings the forearm far out to the side and back (which read
 // as the elbow going varus and valgus).
-export const ARM_TURN = Object.freeze({ shoulder: Object.freeze({ open: 35, closed: -25 }), lag: 0.3, glow: 0.6 });
+// 19 November 2026, later (a look at both arms on the overside, from the eyes and from outside): at 25 inward the right
+// hand still swung in over the thigh and its elbow stood out, while the left hand (which keeps its place while its arm
+// turns) lay beside the thigh: 25 -> 15. The upper arm now turns 50 degrees in all; the palm still turns right over.
+export const ARM_TURN = Object.freeze({ shoulder: Object.freeze({ open: 35, closed: -15 }), lag: 0.3, glow: 0.6 });
 // (a follower that turns nothing takes its joint's own range as its nominal ends, so history and speeds stay finite)
 const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg ? deg / 2 : hi, closed: deg ? -deg / 2 : lo, follow: deg, lo, hi });
 // 18 November 2026, late: a joint with its own two ends that turns over part of each stroke: phase [start, end] of
