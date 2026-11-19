@@ -6925,7 +6925,9 @@ export function start(params = {}) {
        * at the press): the other item on the line of sight (the body part in front of that area, the item behind what
        * is seen, or what is behind an arrow tip). A press on your trunk, neck or head holds nothing. */
       function itemAt(x, y, behind = false) {
-        const T = targetsAt(x, y);
+        return itemFromTargets(targetsAt(x, y), behind);
+      }
+      function itemFromTargets(T, behind = false) {
         const { entry } = pressEntry(T, behind);
         if (!entry) return null;
         if (entry.item === 'own') {
@@ -8334,7 +8336,8 @@ export function start(params = {}) {
           timing = { ...timing, events: timing.events.map(e => {
             if (!e || e.type !== 'grasp') return e;
             if (e.down !== true) { limbGrasp = null; brainHoldLocal = null; return e; }
-            const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y, e.behind === true) : null;
+            const aim = appliedSize ? e.aim || pressPoint() : null;
+            const it = aim ? itemAt(aim.x, aim.y, e.behind === true) : null;
             limbGrasp = null; // (a limb a click controls gives way to what Space takes; it is taken up again below when Space lets go)
             if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null);
             brainHoldLocal = it && it.target === 'brain' ? brainPointLocal(it.pick && it.pick.pointWorldM) : null; // SMALL S8
@@ -9592,7 +9595,10 @@ export function start(params = {}) {
             if (reachBody && !arrowTip) tipModel = quietTipModel({ pick: reachBody.rec });
             const carried = simState.objectCarry;
             const held = NT.TIP.holding(spaceLimb || (carried?.held ? carried.target : null), spaceGrasp === 'kept');
+            const aimed = freePointer && !holdingNow ? itemFromTargets(hudT, cs.reach === true) : null;
+            const aimLine = NT.TIP.spaceAim(aimed?.limb || aimed?.target, cs.reach === true);
             if (held) tipModel = quietTipModel({ held });
+            else if (aimLine) tipModel = quietTipModel({ pick: { name: aimLine, kind: 'aim' } });
             // 19 November 2026 (limbLatch): while a click controls a limb the tip says which and what moves it, but only
             // where the crosshair is on that limb or on nothing: a motor area, an arrow and any other body part keep
             // their own tip (a check: the area's name and numbers were hidden for as long as a limb was controlled).

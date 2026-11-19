@@ -432,7 +432,10 @@ export function createControls({
     const keys = { ...state.keys, [code]: true };
     if (code !== 'Space') return { ...state, keys };
     const r = spacePress(spaceOf(state), timeMs, Boolean(opts && opts.behind === true));
-    return { ...state, keys, space: r.space, events: r.out.length ? [...state.events, ...r.out.map(ev => stamp(ev, timeMs))] : state.events };
+    const p = opts?.pointer;
+    const aim = p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x, y: p.y } : null;
+    const events = r.out.map(ev => stamp(aim && ev.type === 'grasp' && ev.down === true ? { ...ev, aim } : ev, timeMs));
+    return { ...state, keys, space: r.space, events: events.length ? [...state.events, ...events] : state.events };
   }
 
   /** R558 (Messages 33 and 34): the reach-behind key (REACH_CODES, Shift) is held (on true) or not. Only the HUD reads
@@ -1294,9 +1297,10 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     e.preventDefault();
     if (e.repeat === true) return;
     const at = eventTime(e);
-    // R558 (Messages 33 and 34): Shift + F holds the item behind the one in front.
+    // A free-pointer Space press takes its aim with it. Auto-capture may clear the pointer before the frame reads it.
     const beforeKey = getState();
-    apply(s => controls.keyDown(s, code, at, { behind: reachOf(e) }));
+    const pointer = code === 'Space' && !isLocked() ? beforeKey.pointer : null;
+    apply(s => controls.keyDown(s, code, at, { behind: reachOf(e), pointer }));
     // 19 November 2026 (the owner: "After I move the brain up, the camera view [is] locked down"; a check: with the
     // pointer not captured the look followed the pointer only WHILE Space held something). One rule in every state:
     // a Space press the game accepted captures the pointer, exactly as a click on the picture does (a key press is a

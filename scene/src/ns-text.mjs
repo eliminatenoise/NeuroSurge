@@ -286,7 +286,7 @@ const STEP_TABLE = [
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
   intro: [part('Rest your look on a motor area and its movement happens at once. Click to do it again. The arrow keys step to the next area. A movement stays until you switch on the opposite one (its area glows faintly) or press Reset body.')] },
   { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
-    'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
+    'You can also take hold of things: aim your crosshair or free pointer at the brain, the mirror body or one of your own limbs and hold Space. While Space is held, ' +
     'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
     'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
@@ -1698,6 +1698,10 @@ const HELD_TARGET_WORDS = Object.freeze({
 export const BRAIN_PARTS = deepFreeze({ eyeball: 'Eyeball', nerve: 'Optic nerve' });
 export const TIP = deepFreeze({
   teach: 'Click, or press a number',
+  spaceAim(target, behind) {
+    const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;
+    return name ? `${behind ? 'Shift + Space' : 'Space'} holds ${name}` : '';
+  },
   holding(target, kept) {
     const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;
     return name ? { title: `Holding ${name}`, hint: kept ? 'Tap Space to let go.' : 'Let go of Space.' } : null;

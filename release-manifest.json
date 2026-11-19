@@ -47,8 +47,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 10122,
-      "sha256": "96959d4b53952fd0ca6dee5c88a0c7e2ae37f9b054c5c19630da20c23e22c250"
+      "bytes": 10157,
+      "sha256": "52dd1e0a3ec3cf8e252e1c87dafd8bc12dd75c370ba9df3fbfa6a598a914a530"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 796037,
-      "sha256": "9b02d088addacd08f8d71049ab23dda42888038dff523d4cff4dc8b5d2f65164"
+      "bytes": 796457,
+      "sha256": "9d1c40e01e74dd34b0d04a0f6c4a74a93dacf15534c9106caeb2f086cfabe9e5"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 98055,
-      "sha256": "a5d0898146d2ce178f9052ef72c4aa35d60575492c0b6acce2b6b8e5dd97d9f2"
+      "bytes": 98397,
+      "sha256": "4598aef2a7a90e6f8a0f192709e601d8c7d014f30ccdbc0c70adbd175c4a679a"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4187,8 +4187,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 141633,
-      "sha256": "7c9c861abde8c260f8a4ae2f2425bceb00e0073c666a458e9c0ad4b3e093c873"
+      "bytes": 141855,
+      "sha256": "4f77628ff83d85796ef103f3b67d262c2ff4ff1f525c547da05564cf0a25cb66"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4284,6 +4284,11 @@
       "path": "tests/browser-player-focus.mjs",
       "bytes": 9099,
       "sha256": "1d4a8e9184a03d0638478b4ddef43bcd38ccbdb15480c6093a893f12103c9161"
+    },
+    {
+      "path": "tests/browser-space-aim.mjs",
+      "bytes": 7348,
+      "sha256": "1b0ed7be630586fb97791c5616ad4eecc70f66ea644863b047ac1c74e43c6f74"
     },
     {
       "path": "tests/browser-startup.mjs",
