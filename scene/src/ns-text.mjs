@@ -665,6 +665,7 @@ export const HUD = deepFreeze({
   /** R558 (Messages 55 and 56): the area keys (left / right arrow). Shown for a few seconds when a press found no
    * further area that way, and when it was pressed while something is held (a step is a look; a held thing follows the look). */
   areaEnd: 'No more motor areas that way from here. Press the other arrow key, or turn the brain to bring more areas into view.',
+  areaUnreachable: 'Could not aim at another area from here. Turn the brain or try the other arrow key.',
   areaWhileHolding: 'Let go of what you hold first, then press the arrow key.',
   /** R558 (Messages 6, 55 and 56): what a number key (n) just did when it was not the movement itself. moveStill: the
    * part was already there. moveBack: the part was held on the other side of its start, so this press brought it back

@@ -60,6 +60,7 @@ try {
       tip: tip.getClientRects().length ? { kind: tip.dataset.kind, text: tip.innerText } : null, quietArea: s.quietKeys.regionId,
       status: document.querySelector('#ns-hud .ns-slot-gaze').innerText,
       trigger: s.state.trigger, orbit: s.scene.mirror?.orbit, mirrorCentre: s.scene.mirror?.centre,
+      mirrorBox: s.scene.mirror?.onScreen?.box,
       thumbOpposition: s.state.activity.drive.thumb_opposition,
       rightArm: ['r_elbow_flex', 'r_shoulder_flex', 'r_shoulder_abd'].map(joint => s.bodyJointTargets[joint]),
       mirrorHover: compasses.mirror.hovered,
@@ -75,11 +76,14 @@ try {
   async function step(key) {
     const before = await inspect();
     await page.keyboard.press(key);
-    const after = await nextFrames(before.frames);
-    assert.ok(after.step?.to, `${key} should select a strip area`);
+    await page.waitForFunction(seq => window.__nsQA.inspect().areaStep?.seq > seq,
+      before.step?.seq || 0, { polling: 20, timeout: 5_000 });
+    const after = await inspect();
+    assert.ok(after.step?.to, `${key} did not select an area: ${JSON.stringify(after.step)}`);
     assert.equal(after.area, after.step.to);
     assert.equal(after.tip.kind, 'area');
     assert.equal(after.quietArea, after.area);
+    assert.equal(after.input.front, `brain:area:${after.area}`);
     return after;
   }
   async function openPreview() {
@@ -102,6 +106,65 @@ try {
     return initial;
   }
 
+  async function releasePointer() {
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.pointerLockElement && window.__nsQA.inspect().shell.mode === 'paused');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.pointerLockElement && window.__nsQA.inspect().shell.mode === 'playing');
+  }
+
+  async function pointAtMirror() {
+    const box = (await inspect()).mirrorBox;
+    assert.ok(box?.every(Number.isFinite), 'the current mirror body projects into the view');
+    const [x0, y0, x1, y1] = box;
+    for (const row of [0.35, 0.2, 0.5, 0.65]) for (const col of [0.5, 0.38, 0.62]) {
+      const x = x0 + col * (x1 - x0);
+      const y = y0 + row * (y1 - y0);
+      if (x <= 0 || x >= width || y <= 0 || y >= height) continue;
+      const before = (await inspect()).frames;
+      await page.mouse.move(x, y);
+      const pointed = await nextFrames(before, 3);
+      if (pointed.input.at !== 'pointer' || !pointed.input.front?.startsWith('mirror:') || pointed.input.arrow) continue;
+      const stable = await nextFrames(pointed.frames, 4);
+      if (stable.input.at === 'pointer' && stable.input.front?.startsWith('mirror:') && !stable.input.arrow) return [x, y];
+    }
+    assert.fail('no visible mirror-body surface inside its current projected bounds');
+  }
+
+  async function waitForMirror() {
+    try {
+      await page.waitForFunction(() => {
+        const carry = window.__nsQA.inspect().state.objectCarry;
+        return carry?.held && carry.target === 'mirror';
+      }, null, { timeout: 5_000 });
+    } catch (error) {
+      const info = await page.evaluate(() => {
+        const state = window.__nsQA.inspect();
+        return { focus: document.activeElement.outerHTML.slice(0, 200), controls: state.controls, carry: state.state.objectCarry, picked: state.controlTargets };
+      });
+      console.log(JSON.stringify({ case: 'visible mirror hold failed', info }));
+      throw error;
+    }
+  }
+
+  async function moveMirror(dx, dy, returnPoint = null) {
+    await releasePointer();
+    const [x, y] = await pointAtMirror();
+    const before = await inspect();
+    await page.keyboard.down('Space');
+    await waitForMirror();
+    await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, { timeout: 5_000 });
+    await page.mouse.move(x + dx, y + dy);
+    await nextFrames(before.frames, 8);
+    await page.waitForTimeout(300); // Past the tap-to-keep threshold.
+    await page.keyboard.up('Space');
+    await page.waitForFunction(() => !window.__nsQA.inspect().state.objectCarry.held);
+    const displaced = await inspect();
+    assert.notDeepEqual(displaced.mirrorCentre, before.mirrorCentre);
+    await page.mouse.move(...(returnPoint || [x, y]));
+    return nextFrames(displaced.frames, 8);
+  }
+
   async function aim() {
     const initial = await openPreview();
     await page.mouse.click(width / 2, height / 2);
@@ -119,25 +182,13 @@ try {
     const third = await inspect();
     assert.equal(third.step.to, firstLeft.area);
 
-    // Position the mirror by the normal carry controls so the forward tip covers
-    // a motor area that does not move the camera when it activates.
-    await page.keyboard.down('Space');
-    await page.waitForFunction(() => {
-      const carry = window.__nsQA.inspect().state.objectCarry;
-      return carry?.held && carry.target === 'mirror';
-    });
-    await page.mouse.move(width / 2 + 50, height / 2 - 50);
-    await nextFrames(third.frames, 8);
-    await page.waitForTimeout(300); // Past the tap-to-keep threshold so releasing drops the mirror.
-    await page.keyboard.up('Space');
-    await page.waitForFunction(() => !window.__nsQA.inspect().state.objectCarry.held);
-    assert.notDeepEqual((await inspect()).mirrorCentre, third.mirrorCentre);
-    await page.mouse.move(width / 2, height / 2);
+    // Lift the visible mirror body, then find a motor area whose movement leaves the camera steady.
+    await moveMirror(50, -50, [width / 2, height / 2]);
 
-    let covered = await step('ArrowRight');
+    let covered = await step('ArrowLeft');
     for (let i = 0; i < 20 && covered.area !== 'rh_thumb'; i++) {
       const previous = covered.area;
-      covered = await step('ArrowRight');
+      covered = await step('ArrowLeft');
       assert.equal(covered.step.from, previous);
     }
     assert.equal(covered.area, 'rh_thumb', 'the real outside-view strip walk reaches the left thumb area');
@@ -147,6 +198,24 @@ try {
       rest => window.__nsQA.inspect().state.activity.drive.thumb_opposition > rest,
       initial.thumbOpposition, { polling: 80, timeout: 5_000 });
     covered = await inspect();
+    // Move the drawn forward tip toward the same crosshair. A pointer carry restores the previous look on release.
+    // Each correction uses part of the measured screen error because the camera moves with the look during a carry.
+    for (let n = 0; n < 4 && (!covered.input.arrow || covered.mirrorHover !== 'forward'); n++) {
+      assert.ok(covered.overlapClick?.every(Number.isFinite));
+      const dx = Math.round((width / 2 - covered.overlapClick[0]) * 0.42);
+      const dy = Math.round((height / 2 - covered.overlapClick[1]) * 0.42);
+      covered = await moveMirror(dx, dy);
+    }
+    assert.equal(covered.mirrorHover, 'forward', 'the carried mirror tip reaches the actual thumb ray');
+    // Pointer movement releases keyboard aim. Step away from the area now under the compass tip and then back to it.
+    if (covered.area !== 'rh_thumb') {
+      const adjacent = await step('ArrowRight');
+      assert.equal(adjacent.step.from, 'rh_thumb');
+      assert.equal(adjacent.area, 'rh_index');
+      covered = await step('ArrowLeft');
+      assert.equal(covered.step.from, adjacent.area);
+    }
+    assert.equal(covered.area, 'rh_thumb');
     assert.equal(covered.input.arrow, true, 'the regression path must include an actual orbit tip');
     assert.equal(covered.mirrorHover, 'forward');
     assert.equal(covered.input.front, 'brain:area:rh_thumb');
@@ -261,7 +330,10 @@ try {
 
     const shifted = await aim();
     await page.keyboard.down('Shift');
-    await page.mouse.click(width / 2, height / 2);
+    await page.waitForFunction(() => window.__nsQA.inspect().controlTargets.reach);
+    // While captured, mouse.click(x, y) first moves the pointer and therefore the player's look.
+    await page.mouse.down();
+    await page.mouse.up();
     await page.keyboard.up('Shift');
     const withShift = await waitForPress(shifted.covered, shifted.covered.trigger.actionId);
     assert.deepEqual(withShift.orbit, shifted.covered.orbit);
@@ -276,7 +348,8 @@ try {
     assert.ok(withCards.status.includes(arrow.covered.tip.text.split('\n')[0]));
     assert.ok(await page.locator('#ns-hud .ns-slot-gaze').isVisible(), 'the expanded HUD shows the selected area');
     assert.equal(withCards.tip, null);
-    await page.mouse.click(width / 2, height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
     const withClick = await orbitForward(arrow.covered);
     assert.doesNotMatch(withClick.tip?.text || '', /Shift-click presses this area/);
     await page.keyboard.press('e');

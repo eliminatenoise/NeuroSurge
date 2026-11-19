@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 796457,
-      "sha256": "9d1c40e01e74dd34b0d04a0f6c4a74a93dacf15534c9106caeb2f086cfabe9e5"
+      "bytes": 798722,
+      "sha256": "da2c5a1af86625aa836cd6c469bfd3f4b7a6965ecbe4d6693ae15c026c0364d7"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4187,8 +4187,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 141855,
-      "sha256": "4f77628ff83d85796ef103f3b67d262c2ff4ff1f525c547da05564cf0a25cb66"
+      "bytes": 141961,
+      "sha256": "789fa4e38afb9d5662d5d5f018462aa0c5c19640c2b98ef7707ee92315594a9a"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4267,8 +4267,8 @@
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 17319,
-      "sha256": "dac5370fc72b58f8fa423190a0ee5e0025d0606135de109d25def7b4703869ba"
+      "bytes": 21087,
+      "sha256": "3fdfbbf2d1c8e0ddb4467a4b0c77baf865029a0c9b3be8878812fc9198882c03"
     },
     {
       "path": "tests/browser-limb-controls.mjs",

@@ -5288,7 +5288,8 @@ export function start(params = {}) {
   // The area the walk goes on from while the player has not moved the look or clicked (areaWalkStep): a latched neck or
   // trunk movement may have carried the crosshair off it.
   let areaWalk = null;
-  let areaNote = null; // { key: 'areaEnd' | 'areaWhileHolding', untilMs }: the status card says why a key did nothing
+  let drawnWalkMarks = null;
+  let areaNote = null; // The status card explains why the last arrow did nothing.
   // R558 (Messages 55 and 56): what a number key just did when it was not the movement itself: { key: 'moveStill' (it
   // was already there) | 'moveBack' (it only brought the part back), n, untilMs }. The status card says so for a while.
   let moveNote = null;
@@ -6393,7 +6394,19 @@ export function start(params = {}) {
       const gated = Object.freeze({
         ...base,
         // R558 (Messages 33 and 34): the options (o.behind: the press reached behind, Shift held; also on a Space grasp, Message 40) are passed on.
-        keyDown: (s, code, t, o) => (shellIsPlaying(shellState) ? base.keyDown(s, code, t, o) : s),
+        keyDown: (s, code, t, o) => {
+          if (!shellIsPlaying(shellState)) return s;
+          const next = base.keyDown(s, code, t, o);
+          if (code !== 'Space' || !appliedSize || next.events.length === s.events.length) return next;
+          const event = next.events.at(-1);
+          if (event.type !== 'grasp' || event.down !== true) return next;
+          // Resolve a new grasp against the picture the player actually pressed on. The next frame can
+          // change the camera, and pointer capture can discard the free pointer before it reads the queue.
+          const aim = event.aim || pressPoint();
+          const picked = itemAt(aim.x, aim.y, event.behind === true);
+          const brainAnchor = picked?.target === 'brain' ? brainPointLocal(picked.pick.pointWorldM) : null;
+          return { ...next, events: [...next.events.slice(0, -1), { ...event, graspPick: { picked, brainAnchor } }] };
+        },
         // A press behind an overlay is not recorded either (an arrow consumer must not see it after the resume).
         buttonDown: (s, t, o) => (shellIsPlaying(shellState) ? base.buttonDown(s, t, o) : s),
         click: (s, t, o) => (shellIsPlaying(shellState) ? base.click(s, t, o) : s),
@@ -6846,7 +6859,9 @@ export function start(params = {}) {
         // 18 November 2026 (SEE): the limbs the scene finds locked away (their ghosts are drawn filled).
         let locked = null; try { locked = sceneFn('ghostLocked') ? callScene('ghostLocked') : null; } catch { locked = null; }
         const t = controlTargets(L.layers, { ...(atCross && raw && typeof raw.target === 'string' ? { lookArea: raw.target === 'region' } : {}), ghost: locked });
-        return { arrow: usableArrowHitAt(x, y), front: t.front, behind: t.behind, seen: t.seen, hidden: t.hidden, ghost: t.ghost, atCross, mirror: L.mirror || null, mirrorEnvelope: L.mirror ? L.mirror.mirrorEnvelope : null };
+        // The mesh supplies the hit position. The classifier names the selected area, including on shared triangles.
+        const front = atCross && raw?.target === 'region' && t.front?.kind === 'area' ? { ...t.front, regionId: raw.regionId } : t.front;
+        return { arrow: usableArrowHitAt(x, y), front, behind: t.behind, seen: t.seen, hidden: t.hidden, ghost: t.ghost, atCross, mirror: L.mirror || null, mirrorEnvelope: L.mirror ? L.mirror.mirrorEnvelope : null };
       }
       /** The entry a press acts on: by default controlTargets' front (the motor area the look names, else what is seen;
        * an arrow tip in front of everything is the tip itself: { arrow }); reaching behind (Shift held at the press), the
@@ -8336,11 +8351,11 @@ export function start(params = {}) {
           timing = { ...timing, events: timing.events.map(e => {
             if (!e || e.type !== 'grasp') return e;
             if (e.down !== true) { limbGrasp = null; brainHoldLocal = null; return e; }
-            const aim = appliedSize ? e.aim || pressPoint() : null;
-            const it = aim ? itemAt(aim.x, aim.y, e.behind === true) : null;
+            const aim = appliedSize && !e.graspPick ? e.aim || pressPoint() : null;
+            const it = e.graspPick ? e.graspPick.picked : aim ? itemAt(aim.x, aim.y, e.behind === true) : null;
             limbGrasp = null; // (a limb a click controls gives way to what Space takes; it is taken up again below when Space lets go)
             if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null);
-            brainHoldLocal = it && it.target === 'brain' ? brainPointLocal(it.pick && it.pick.pointWorldM) : null; // SMALL S8
+            brainHoldLocal = e.graspPick ? e.graspPick.brainAnchor : it?.target === 'brain' ? brainPointLocal(it.pick.pointWorldM) : null;
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
@@ -8399,10 +8414,8 @@ export function start(params = {}) {
         // areaChain). A step shows the area and its number keys. Nothing is stepped while something is held; a step
         // waits while the view is still changing or a held neck / trunk movement is under way.
         const walkMarks = { lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null };
-        if (live) {
-          const gz = simState && simState.gaze ? simState.gaze : null;
-          areaWalk = areaWalkStep(areaWalk, { gazeId: gz && gz.target === 'region' && typeof gz.regionId === 'string' ? gz.regionId : null, ...walkMarks });
-        }
+        const lookIsDrawn = drawnWalkMarks?.lookMs === walkMarks.lookMs && drawnWalkMarks?.buttonSeq === walkMarks.buttonSeq;
+        let steppedTo = null;
         if (live && areaRequests.length) {
           const reqs = areaRequests.splice(0).filter(q => now - q.t >= 0 && now - q.t < AREA_REQUEST_KEEP_MS);
           const actNow = simState && simState.activity ? simState.activity : null;
@@ -8413,7 +8426,7 @@ export function start(params = {}) {
           const able = Boolean(referenceGraph && !wholeArmOption && sim && sim.regionMode && typeof sim.areaStep === 'function');
           if (!reqs.length || !able) { /* nothing to do, or this build has no areas to step through */ }
           else if (holding) areaNote = { key: 'areaWhileHolding', untilMs: now + VIEW_HELD_NOTE_MS };
-          else if (cam.progress !== (cam.view === 'third' ? 1 : 0) || (headOffs && headOffs.moving)) areaRequests.push(...reqs);
+          else if (!lookIsDrawn || cam.progress !== (cam.view === 'third' ? 1 : 0) || (headOffs && headOffs.moving)) areaRequests.push(...reqs);
           else {
             const stepT0 = perf ? perf.now() : NaN;
             let keepOutRead = false, keepOut = null;
@@ -8444,7 +8457,7 @@ export function start(params = {}) {
             // The walk goes on from the area it was on (areaWalk), also when a latched neck or trunk movement has since
             // carried the crosshair off it; sim.areaStep's own start rule covers a look the player has moved.
             let lookNow = { yaw: cs.yaw, pitch: cs.pitch }, startId = areaWalk ? areaWalk.id : null, reached = null, ended = false;
-            const record = { from: null, to: null, end: false, passed: [], tests: 0, rays: 0, ms: null };
+            const record = { seq: (areaStepLast?.seq || 0) + 1, from: null, to: null, end: false, passed: [], tests: 0, rays: 0, ms: null };
             for (const q of reqs) {
               let res = null;
               try { res = sim.areaStep(simState, { dir: q.dir, fromId, startId, look: lookNow, rayForLook: rayForCtl, clampLook: limitLook }); } catch { res = null; }
@@ -8460,10 +8473,10 @@ export function start(params = {}) {
               lookBlock = null; // the step is a new look, not a push against the limit learned before it
               infoStepped = { id: reached, t: actNow && Number.isFinite(actNow.t) ? actNow.t : 0, seen: false,
                 ...walkMarks, viewToggle: cam.toggles, inputEpoch: inputCancellation.count };
-              areaWalk = areaWalkStep(areaWalk, { steppedId: reached, lookMs: cs.lookMs === undefined ? null : cs.lookMs, buttonSeq: walkMarks.buttonSeq });
+              steppedTo = reached;
               areaFreshPending = true;
               areaNote = null;
-            } else if (ended) areaNote = { key: 'areaEnd', untilMs: now + VIEW_HELD_NOTE_MS };
+            } else areaNote = { key: ended ? 'areaEnd' : 'areaUnreachable', untilMs: now + VIEW_HELD_NOTE_MS };
             record.to = reached; record.end = ended;
             record.ms = perf ? Math.round((perf.now() - stepT0) * 100) / 100 : null;
             areaStepLast = record;
@@ -8915,9 +8928,13 @@ export function start(params = {}) {
         // ns-camera pose (handed over only when it changes; null = first person, the round-4 camera bit for bit).
         scene.setView(look.yaw, look.pitch);
         if (referenceGraph && out.referenceFrame && (!camPose.firstPerson || wholeArmOption)) callScene('setEyePosition', out.referenceFrame.position);
+        let cameraDrawChanged = false;
         if (sceneFn('setCameraPose')) {
           const ck = camPose.firstPerson && !referenceGraph ? 'first' : `${camPose.position.join(',')}|${camPose.yaw}|${camPose.pitch}|${camPose.blend}|${camPose.headInPlace}`;
-          if (ck !== camSceneKey) { camSceneKey = ck; callScene('setCameraPose', camPose.firstPerson && !referenceGraph ? null : wholeArmOption ? { ...camPose, armParentPosition: out.referenceFrame.position } : camPose); }
+          if (ck !== camSceneKey) {
+            camSceneKey = ck; cameraDrawChanged = true;
+            callScene('setCameraPose', camPose.firstPerson && !referenceGraph ? null : wholeArmOption ? { ...camPose, armParentPosition: out.referenceFrame.position } : camPose);
+          }
         }
         // The body (and the face layer) on the same eye and trunk yaw as the arm attachment.
         if (out.attachment && sceneFn('setBodyFrame')) {
@@ -9401,6 +9418,12 @@ export function start(params = {}) {
           arrowTip = typeof T === 'string' ? T : '';
         }
         const onArea = out.gaze && out.gaze.target === 'region';
+        if (live && cameraDrawChanged && (stepInputs?.keyboardAimId || camAtFrameStart.progress !== cam.progress)) {
+          // The earlier pick describes the preceding picture. Bind the target and the overlap hint to
+          // the camera and geometry just applied, including the last frame of a view transition.
+          ctlFrame = targetsAt(size.width / 2, size.height / 2);
+          pickHold.ctl = ctlFrame;
+        }
         // R558 (hunt 3, kept): on ANY arrow tip, muted ones included, no muscle behind it is named (ctlFrame.arrow: the tip
         // is in front; a click there is not a muscle tap).
         // 18 November 2026 (SEE): a locked-away limb's ghost at the crosshair is what is aimed at: the tip names that part.
@@ -9444,7 +9467,8 @@ export function start(params = {}) {
         // R558: a change of view that could not be drawn was undone; say so and what to do.
         if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         if (now < viewHeldUntilMs && NT.HUD.viewWhileHolding) model.note = [NT.HUD.viewWhileHolding, model.note].filter(Boolean).join(' \u00b7 ');
-        if (areaNote && now < areaNote.untilMs && NT.HUD[areaNote.key]) model.note = [NT.HUD[areaNote.key], model.note].filter(Boolean).join(' \u00b7 ');
+        const areaFeedback = areaNote && now < areaNote.untilMs ? NT.HUD[areaNote.key] : '';
+        if (areaFeedback) model.note = [areaFeedback, model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (Messages 55 and 56): a number key that moved nothing, or only brought the part back, says so (unless the
         // "Try this" line is saying the same thing just now).
         if (moveNote && now >= moveNote.untilMs) moveNote = null;
@@ -9598,6 +9622,7 @@ export function start(params = {}) {
             const aimed = freePointer && !holdingNow ? itemFromTargets(hudT, cs.reach === true) : null;
             const aimLine = NT.TIP.spaceAim(aimed?.limb || aimed?.target, cs.reach === true);
             if (held) tipModel = quietTipModel({ held });
+            else if (!onArea && areaFeedback && areaNote?.key === 'areaUnreachable') tipModel = quietTipModel({ pick: { name: areaFeedback, kind: 'area-note' } });
             else if (aimLine) tipModel = quietTipModel({ pick: { name: aimLine, kind: 'aim' } });
             // 19 November 2026 (limbLatch): while a click controls a limb the tip says which and what moves it, but only
             // where the crosshair is on that limb or on nothing: a motor area, an arrow and any other body part keep
@@ -9674,6 +9699,14 @@ export function start(params = {}) {
             captureWholeArm(() => callScene('releaseCameraProjectionPlan'));
           } catch (err) { return postStepRefused(err); }
         } else scene.render(live && fixed !== true ? { frameStartMs: now } : { live: false });
+        if (live) {
+          // Only use a gaze for the look that was drawn. A compass tip blocks activation but does not erase the
+          // underlying landmark from the arrow-key walk. A head movement alone does not replace the last step.
+          const gaze = simState.gaze?.target === 'region' ? simState.gaze : simState.rawGaze;
+          const gazeId = gaze?.target === 'region' ? gaze.regionId : null;
+          areaWalk = areaWalkStep(areaWalk, { gazeId, steppedId: steppedTo, ...walkMarks });
+          drawnWalkMarks = walkMarks;
+        }
         frameTimer.mark('other'); frameTimer.add('draw', scene.lastRenderMs || 0, 'other'); frameTimer.add('outline', scene.lastOutlineMs || 0, 'draw'); frameTimer.end();
         displayRecovery.skipStreak = 0; displayRecovery.rescued = false;
         // Review fix: the look this frame actually drew (a frozen frame draws the stored look, not the controls' one).
