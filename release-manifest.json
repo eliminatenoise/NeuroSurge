@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 98397,
-      "sha256": "4598aef2a7a90e6f8a0f192709e601d8c7d014f30ccdbc0c70adbd175c4a679a"
+      "bytes": 98732,
+      "sha256": "712aa16ce0a1b015c14a06281cadd8aa261e320dfff20b00922d85ce5e271887"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4447,8 +4447,8 @@
     },
     {
       "path": "tests/pointer-release.test.mjs",
-      "bytes": 14168,
-      "sha256": "b1446b1befe56c4e085df2b954d8540e3ff2e21acf3ce8766724552cbe361e5b"
+      "bytes": 15412,
+      "sha256": "76becb1c5962a00030c73eacddf3bdb5f2ce7d4c4a31f3c2c3f9ed5f73a54dee"
     },
     {
       "path": "tests/quality-controller.test.mjs",

@@ -1131,10 +1131,12 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const after = reduce(before);
     if (after !== before) setState(after);
   };
+  const heldAreaKeys = new Set();
   // Every safety release (blur, visibility, Esc, Ctrl / Meta chords, pointer-lock changes) and the app's own epoch
   // cancellation end the binding's private gesture flags too (a drag-to-look, an arrow hold, an item press-drag), so a
   // stale flag can never make the next press a turn or swallow its click.
   const cancelBoundInput = (at, discardQueued = false) => {
+    heldAreaKeys.clear();
     clearPointerFlags();
     apply(s => controls.blur(discardQueued ? { ...s, events: [], ui: [] } : s, at));
   };
@@ -1275,14 +1277,19 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       // R558 (Messages 55 and 56): an area key (left / right arrow) asks for the next motor area along the strip. Not in
       // a text field or on a page control, and never with Alt (browser history). The key is taken from the page only
       // when the request was accepted (while playing: the app's own gate), so on the start and Esc pages the arrows
-      // still scroll. A held key repeats, at most one step per AREA_KEY_REPEAT_MS.
+      // still scroll. An accepted press repeats within the same hold; a repeat after a safety release must wait for
+      // a fresh press, even if the player kept holding the key while the game was unfocused or paused.
       if (e.altKey || typeof controls.areaKey !== 'function') return;
       const at = eventTime(e);
-      if (e.repeat === true && Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
+      if (e.repeat === true) {
+        if (!heldAreaKeys.has(code)) return;
+        if (Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
+      }
       const before = getState();
       const after = controls.areaKey(before, areaDir, at);
       if (after === before) return;
       e.preventDefault();
+      heldAreaKeys.add(code);
       lastAreaKeyMs = at;
       setState(after);
       return;
@@ -1310,6 +1317,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   });
   on(view, 'keyup', e => {
     const code = e.code;
+    if (heldAreaKeys.delete(code)) return;
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (isReachCode(code)) { if (typeof controls.setReach === 'function') apply(s => controls.setReach(s, false)); return; }
     // 18 Nov (SMALL, M3): a movement key's release (a held key's movement stops there)

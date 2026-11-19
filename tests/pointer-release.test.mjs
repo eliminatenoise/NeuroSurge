@@ -292,6 +292,28 @@ for (const kind of [...ITEMS, 'arrow', 'look']) {
   });
 }
 
+for (const boundary of ['keyup', 'blur', 'visibility', 'escape', 'unlock', 'epoch']) {
+  check(`${boundary}: a previous arrow hold cannot start a new movement`, () => {
+    withFixture({ locked: true }, f => {
+      const right = { code: 'ArrowRight', target: f.canvas };
+      assert.equal(f.view.emit('keydown', { ...right, repeat: true }).prevented, false);
+      assert.equal(f.view.emit('keydown', right).prevented, true);
+      // A held direction still consumes its own repeats within the throttle interval.
+      assert.equal(f.view.emit('keydown', { ...right, repeat: true }).prevented, true);
+      assert.equal(f.view.emit('keydown', { ...right, code: 'ArrowLeft', repeat: true }).prevented, false);
+      if (boundary === 'keyup') f.view.emit('keyup', right);
+      else if (boundary === 'epoch') f.unbind.cancelInput(performance.now(), { discardQueued: true });
+      else f.cancel(boundary);
+      const before = f.state;
+      assert.equal(f.view.emit('keydown', { ...right, repeat: true }).prevented, false);
+      assert.equal(f.state, before);
+      assert.equal(f.view.emit('keydown', right).prevented, true);
+      assert.equal(f.state.ui.at(-1).type, 'area');
+      assert.equal(f.state.ui.at(-1).dir, 1);
+    });
+  });
+}
+
 const failed = results.filter(result => !result.passed);
 process.stdout.write(JSON.stringify({ suite: 'pointer-release', module: target.href, cases: results.length, failed: failed.length,
   results, scope: 'Public controls software state only; simulated in-process records. No browser, pixel-timing or biological validation.' }, null, 2) + '\n');
