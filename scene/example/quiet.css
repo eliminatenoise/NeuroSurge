@@ -282,3 +282,12 @@
 /* 19 November 2026 (the owner: "The number overview is very confusing"): no numbered list of movements on the card;
    the look does the movement and the card says what the area does. */
 .ns-app .ns-infopanel .ns-infopanel-moves, .ns-app .ns-infopanel .ns-infopanel-moves-heading { display: none !important; }
+
+/* 19 November 2026 (ns-app LIMB_KEYS): the number view. Four numbers with their limbs in one group at the bottom
+   middle of the picture, clear of the cards and the tip; the chosen limb is the bright one. */
+.ns-limbs { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(4, 7, 11, 0.82); border: 1px solid rgba(255, 255, 255, 0.16); pointer-events: none; z-index: 6; white-space: nowrap; }
+.ns-limbs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 8px; color: #9fb0c0; font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; border: 1px solid transparent; }
+.ns-limbs-key { display: inline-block; min-width: 20px; padding: 2px 0; text-align: center; border-radius: 5px; background: #1a2430; border: 1px solid #5a6a7a; color: #dfe9f3; font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ns-limbs-chip[data-on="true"] { color: #10161d; background: #ffd66b; border-color: #fff0b8; }
+.ns-limbs-chip[data-on="true"] .ns-limbs-key { background: #10161d; border-color: #10161d; color: #ffd66b; }
+@media (max-width: 720px) { .ns-limbs-name { display: none; } }

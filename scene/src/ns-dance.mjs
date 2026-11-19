@@ -66,8 +66,8 @@
 
 /** Tuning (display choices; see the rule above).
  *  stepStrokeS / slowStrokeS  seconds for a full end-to-end stroke: a double tap's quick switch (0.4 s for every limb;
- *                             it was 1.0 s before 18 November 2026) / the slow turn of a double tap held (2.6 s at
- *                             tempo 1)
+ *                             it was 1.0 s before 18 November 2026) / the slow turn of a double tap held (1.0 s at
+ *                             tempo 1; 2.6 s before 19 November 2026)
  *  tempo                      per-limb speed factors; ratios chosen so no two limbs stay in step (not coordinated)
  *  endEps                     a limb within this fraction of its range of the end it is heading for turns round
  *  moveEpsDeg                 a joint change smaller than this (degrees) is not counted as a movement (history)
@@ -75,7 +75,9 @@
  *  followGlow                 a follower joint's share of that level (its turn is small and only accompanies the leader) */
 export const DANCE = Object.freeze({
   stepStrokeS: 0.4,
-  slowStrokeS: 2.6,
+  // 19 November 2026 (the owner: "it's far too slow. It needs to be quite a bit faster than that, but not as fast as would
+  // happen when you just double tap the spacebar and switch suddenly"): 2.6 s -> 1.0 s a stroke (the sudden switch is 0.4 s).
+  slowStrokeS: 1.0,
   tempo: Object.freeze({ leftArm: 1.0, rightArm: 1.27, leftLeg: 0.86, rightLeg: 1.13 }),
   endEps: 0.004,
   moveEpsDeg: 0.05,

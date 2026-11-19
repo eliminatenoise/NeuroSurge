@@ -333,8 +333,8 @@ const STEP_TABLE = [
 ];
 const CONTROL_TABLE = [
   ['Mouse / trackpad', 'turn your head and neck to look around (past their reach your chest turns and your trunk bends; your left hand stays in view)'],
-  ['A / D', 'move the left hand left/right; while Space holds something, move that instead'],
-  ['W / S', 'W moves the hand forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
+  ['A / D', 'move the chosen limb\'s hand or foot left/right (the left arm at the start; keys 1 to 4 choose); while Space holds something, move that instead'],
+  ['W / S', 'W moves the chosen limb\'s hand or foot forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
   ['Hold Space', 'aim at the brain, the mirror body or a limb. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Nothing stops a carried thing: it goes through you and through anything.'],
@@ -345,7 +345,9 @@ const CONTROL_TABLE = [
   // and repeats that process with each further click").
   ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
-  ['1 to 9', 'the movements of the area you look at, in their order (the game no longer lists them); hold the key and the part moves only while you hold.'],
+  // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
+  ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice, and the whole limb lights up when it changes.'],
+  ['Double click', 'steps the choice on to the next limb: 1, 2, 3, 4, then back 3, 2, 1. Keep the second click held and it goes on stepping slowly.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
@@ -373,7 +375,8 @@ const INTRO_CONTROL_WORDS = {
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
   'Look / Click': 'look at an area: the part moves. Click: again.',
-  '1 to 9': 'an area\'s movements in order; hold to go part-way',
+  '1 to 4': 'choose the limb W A S D move',
+  'Double click': 'the next limb; hold to keep stepping',
   '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
   'Press and drag': 'turn the brain or mirror body; turn or bend a limb',
@@ -508,7 +511,7 @@ export const SHELL = deepFreeze({
       Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
       ArrowLeft: '←', ArrowRight: '→' },
     // R558 (Messages 55 and 56): written once at the end of the number row (ns-app KEYBOARD_PICTURE_ROWS note).
-    numWords: 'Number keys 1 to 9 (the row below): the movements of the area you look at, in order',
+    numWords: 'Number keys 1 to 4 (the row below): choose the limb the keys move (left arm, left leg, right leg, right arm)',
     // R558 (Message 40): the three Space gestures, in short words on the key.
     spaceWords: 'hold or tap: take hold · tap twice: turn · tap twice and hold: keep turning slowly',
     // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number

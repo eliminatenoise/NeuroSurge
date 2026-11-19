@@ -118,6 +118,29 @@ import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performan
 export const PLAIN_GAME = Object.freeze({ vessels: false, swell: false, selfContact: false });
 /** 19 November 2026: false = no numbered lists of movements on screen (the tip and the short card); see the tip's code. */
 export const NUMBER_LISTS = false;
+/** 19 November 2026 (the owner: "You can now switch between which of the four limbs you want to control ... your left
+ * arm using 1, your left leg using 2, your right leg using 3, your right arm using 4 ... double clicking will shift you
+ * from left to right, and when you get all the way to right, then right to left ... there should be a number view
+ * that's active ... you start off on 1"; "if you do double click and then hold, it will slowly shift between 1, 2, 3,
+ * 4, 4, 3, 2, 1"; "let's have the whole limb highlight when we're switching between them").
+ *   order          the limb of keys 1 to 4, left to right across the body
+ *   doubleClickMs  two clicks this close together are a double click: the choice steps on (1, 2, 3, 4, 3, 2, 1 ...)
+ *   holdStartS / holdStepS  a double click HELD steps on after holdStartS and then every holdStepS while it is down
+ *   flashS         how long the whole chosen limb stays lit after a change (it fades over the second half)
+ * The chosen limb is the one W / A / S / D move (the left arm by its own rig; the others through ns-grasp's solver,
+ * the view package's limbLatch). One limb is always chosen: E, looking away and a click on nothing no longer end it.
+ * The number keys' older meaning (the movements of the area looked at) is gone. */
+/** The double click's next choice (pure): from limb n (1..count) one step in direction dir (+1 / -1), turning round at
+ * either end: 1, 2, 3, 4, 3, 2, 1, 2 ... Returns [next, dir]. */
+export function nextLimbChoice(n, dir, count = 4) {
+  const N = Math.max(1, Math.floor(count)), cur = Math.min(N, Math.max(1, Math.round(Number.isFinite(n) ? n : 1)));
+  let d = dir < 0 ? -1 : 1;
+  if (N === 1) return [1, d];
+  if (cur + d > N || cur + d < 1) d = -d;
+  return [cur + d, d];
+}
+export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftArm', 'leftLeg', 'rightLeg', 'rightArm']),
+  names: Object.freeze(['Left arm', 'Left leg', 'Right leg', 'Right arm']), doubleClickMs: 340, holdStartS: 0.45, holdStepS: 0.7, flashS: 1.1 });
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -4764,7 +4787,7 @@ export const QA_METHODS = Object.freeze(['setLook', 'key', 'click', 'step', 'pau
  *  orbit clicks reach start() through createScene({ onOrbit }), a 'ns-orbit' CustomEvent ({ detail: { dir } }) on the
  *      document, or setOrbitHandler(fn). */
 export const SCENE_HOOKS = Object.freeze(['setBrainTransform', 'updateRegions', 'setFaceView', 'setInfo', 'setBody', 'updateBody',
-  'bodyVisibility', 'orbitArrowAt', 'hoverOrbitArrow', 'setOrbitHandler', 'setMirrorView', 'mirrorState', 'setGlowLinks', 'glowLinkState']);
+  'bodyVisibility', 'orbitArrowAt', 'hoverOrbitArrow', 'setOrbitHandler', 'setMirrorView', 'mirrorState', 'setGlowLinks', 'glowLinkState', 'setLimbFlash']);
 
 /** Legend stops (CSS colours) from an ns-colors module, or null to keep LEGEND_STOPS. R558 (user Message 2): with the
  * per-area colours the bar shows the GLOW STRENGTH (glowStrengthLegendStops, at least 9 stops), else the older ramp. */
@@ -5134,6 +5157,10 @@ export function start(params = {}) {
   // focus does not end it. (LIMB_CLICK.followsLook true: the earlier build; limbGrasp then holds the limb with
   // latched: true and the look carries it.)
   let limbLatch = null, latchKeys = null, latchLook = null;
+  // 19 November 2026 (LIMB_KEYS): the chosen limb (1 to 4), the way a double click steps (+1 / -1), the limb to light
+  // and until when, and the double click's own records (the last click's time, the press under way).
+  let limbChoice = 1, limbChoiceDir = 1, limbFlash = null, limbFlashFromMs = NaN, limbFlashPending = false;
+  let lastClickMs = -1e9, pressAtMs = NaN, pressSecond = false, pressStepped = false, pressNextMs = NaN, prevButtonDown = false, limbHud = null;
   /** The limb the look carries: one Space holds, or (LIMB_CLICK.followsLook only) the one a click controls. */
   const carriedLimb = () => (limbGrasp && (limbGrasp.latched !== true || NsGrasp.LIMB_CLICK.followsLook === true) ? limbGrasp : null);
   // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
@@ -6959,6 +6986,46 @@ export function start(params = {}) {
         latchLook = next ? { yaw: cs.yaw, pitch: cs.pitch } : null;
         relatchLimb();
       }
+      /** LIMB_KEYS: choose limb n (1 to 4): it becomes the one the keys move, the number view marks it and the whole
+       * limb lights for a moment (also when it is chosen again: the answer to the key is always seen). */
+      function chooseLimb(n) {
+        if (!LIMB_KEYS.on || !(n >= 1 && n <= LIMB_KEYS.order.length)) return;
+        limbChoice = n;
+        const limb = LIMB_KEYS.order[n - 1];
+        setLimbLatch(limb === 'leftArm' ? null : limb);
+        limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
+        drawLimbHud();
+      }
+      /** A double click's step: on to the next limb, turning round at either end (1, 2, 3, 4, 3, 2, 1 ...). */
+      function stepLimbChoice() {
+        const [n, d] = nextLimbChoice(limbChoice, limbChoiceDir, LIMB_KEYS.order.length);
+        limbChoiceDir = d;
+        chooseLimb(n);
+      }
+      /** The number view: four numbers with their limbs, the chosen one marked (made once; text only on a change). */
+      function drawLimbHud() {
+        if (!LIMB_KEYS.on || !doc || !hudRoot) return;
+        if (!limbHud) {
+          try {
+            const box = doc.createElement('div');
+            box.className = 'ns-limbs';
+            box.setAttribute('role', 'group');
+            box.setAttribute('aria-label', 'Which limb the keys move. Press 1, 2, 3 or 4, or double click.');
+            const chips = LIMB_KEYS.names.map((name, i) => {
+              const c = doc.createElement('span'); c.className = 'ns-limbs-chip';
+              const k = doc.createElement('kbd'); k.className = 'ns-limbs-key'; k.textContent = String(i + 1);
+              const t = doc.createElement('span'); t.className = 'ns-limbs-name'; t.textContent = name;
+              c.appendChild(k); c.appendChild(t); box.appendChild(c);
+              return c;
+            });
+            hudRoot.appendChild(box);
+            limbHud = { box, chips, shown: 0 };
+          } catch { limbHud = null; return; }
+        }
+        if (limbHud.shown === limbChoice) return;
+        limbHud.chips.forEach((c, i) => { const on = i + 1 === limbChoice; c.setAttribute('data-on', on ? 'true' : 'false'); if (on) c.setAttribute('aria-current', 'true'); else c.removeAttribute('aria-current'); });
+        limbHud.shown = limbChoice;
+      }
       /** A plain click at CSS (x, y): what it means for the controlled limb (ns-grasp limbLatchAfter). Returns true when
        * the click was on one of your own limbs other than the left arm (it took that limb or let go of it). */
       function clickTakesLimb(x, y) {
@@ -6968,8 +7035,22 @@ export function start(params = {}) {
           if (!entry || (entry.item === 'brain' && entry.kind !== 'area')) ev.nothing = true; // open space, bare brain
           else if (entry.item === 'own') { const limb = limbOfPick(entry.rec); if (limb) ev.limb = limb; }
         }
+        // LIMB_KEYS: a click on one of your limbs chooses it (and never lets go: one limb is always chosen)
+        if (LIMB_KEYS.on) { if (ev.limb) { const n = LIMB_KEYS.order.indexOf(ev.limb) + 1; if (n >= 1 && n !== limbChoice) chooseLimb(n); } return Boolean(ev.limb && ev.limb !== 'leftArm'); }
         setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, ev));
         return Boolean(ev.limb && ev.limb !== 'leftArm');
+      }
+      /** LIMB_KEYS: the whole chosen limb is lit for flashS after a change (full for the first half, then fading). The
+       * scene draws it (setLimbFlash) on your body and on the mirror body; a body limb's root, bend and end are read
+       * from the posed rig here, the left arm's from its own bones in the scene. */
+      function stepLimbFlash(now) {
+        if (!limbFlash || !Number.isFinite(limbFlashFromMs) || !sceneFn('setLimbFlash')) return;
+        const age = (now - limbFlashFromMs) / 1000, T = LIMB_KEYS.flashS;
+        if (!(age < T)) { limbFlash = null; try { callScene('setLimbFlash', null); } catch { /* a mark only */ } return; }
+        const level = age < T / 2 ? 1 : Math.max(0, 1 - (age - T / 2) / (T / 2));
+        let ptsMm = null;
+        if (limbFlash !== 'leftArm' && canSolveLimbs()) { try { const segs = segmentsFor(bodyPosed); ptsMm = ['root', 'bend', 'end'].map(w => NsGrasp.limbPoint(bodyRig, segs, limbFlash, w)); } catch { ptsMm = null; } }
+        try { callScene('setLimbFlash', { limb: limbFlash, level, ptsMm }); } catch { /* a mark only */ }
       }
       /** One frame of the controlled limb (LIMB_CLICK, the look free): the keys move its end through a grasp that lives
        * only while a key is down (its target starts where the limb's end is drawn, so a drag or a movement switched on
@@ -6981,7 +7062,7 @@ export function start(params = {}) {
         const busy = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
         const dragged = Boolean(cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb === limbLatch);
         if (keyed || dragged || busy || !latchLook) latchLook = look; // moved now (or waiting behind a Space hold): counted from here
-        else { setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'look', awayDeg: NsGrasp.lookAwayDeg(latchLook, look) })); if (!limbLatch) return; }
+        else if (!LIMB_KEYS.on) { setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'look', awayDeg: NsGrasp.lookAwayDeg(latchLook, look) })); if (!limbLatch) return; }
         if (!keyed || busy || !canSolveLimbs()) { latchKeys = null; return; }
         if (!latchKeys || latchKeys.limb !== limbLatch) latchKeys = { limb: limbLatch, targetMm: NsGrasp.limbPoint(bodyRig, segmentsFor(bodyPosed), limbLatch, 'end'), keysOnly: true, via: null };
         stepLimbGrasp(dt, out, latchKeys);
@@ -8016,7 +8097,7 @@ export function start(params = {}) {
             if (!r.changed) { if (grabbing) viewHeldUntilMs = now + VIEW_HELD_NOTE_MS; continue; }
             cam = r.state; togglesThisFrame++;
             // 19 November 2026 (limbLatch: "until we change the camera view"): a limb taken by a click is let go here.
-            setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'view' }));
+            if (!LIMB_KEYS.on) setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'view' }));
             // R558 (followHead): one look in both views, so the pitch range does not change with E either.
             cs = controlsApi.setPitchLimits(cs, !wholeArmOption && cam.view === 'third' && NC.THIRD_PERSON.followHead !== true ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
             cs = controlsApi.setLook(cs, r.controlsLook);
@@ -8034,6 +8115,16 @@ export function start(params = {}) {
         // finds it. Since the lead decision refining Messages 33 and 34 the look already reaches an area behind a body, so
         // this is left for the rarer cases (Shift on an arrow tip over an area; an area the scene meshes see behind a body
         // where the look's classifier did not name one).
+        // 19 November 2026 (LIMB_KEYS): a double click HELD goes on stepping through the limbs, slowly, for as long as
+        // the button is down (the press that follows a click within doubleClickMs; not while that press drags).
+        if (LIMB_KEYS.on && live) {
+          drawLimbHud(); // (made on the first live frame; a no-op while the choice stands)
+          const down = Boolean(cs.button && cs.button.down);
+          if (down && !prevButtonDown) { pressAtMs = now; pressSecond = now - lastClickMs <= LIMB_KEYS.doubleClickMs; pressStepped = false; pressNextMs = now + LIMB_KEYS.holdStartS * 1000; }
+          if (down && pressSecond && now >= pressNextMs && !(cs.drag && cs.drag.turning === true)) { stepLimbChoice(); pressStepped = true; pressNextMs = now + LIMB_KEYS.holdStepS * 1000; }
+          prevButtonDown = down;
+        }
+        if (limbFlashPending) { limbFlashPending = false; limbFlashFromMs = now; }
         let reachPick = null;
         if (live && timing.events.some(e => e && e.type === 'click')) {
           const first = timing.events.find(e => e && e.type === 'click');
@@ -8042,7 +8133,12 @@ export function start(params = {}) {
           // view"): a plain click on one of your own limbs takes control of it, or lets go of it when it was the
           // controlled one; a click on nothing lets go (limbLatch; ns-grasp LIMB_CLICK). The click still names the
           // muscle and lights its area, but starts no movement of its own: the limb is now moved by the keys or a drag.
-          if (first && first.behind !== true && appliedSize && !(simState.objectCarry && simState.objectCarry.held)) {
+          // 19 November 2026 (LIMB_KEYS): the second of two quick clicks steps the chosen limb on (unless its press was
+          // held and has stepped already) and is not also a click on a limb.
+          const doubled = LIMB_KEYS.on && first && first.behind !== true && (pressStepped || now - lastClickMs <= LIMB_KEYS.doubleClickMs);
+          if (doubled) { if (!pressStepped) stepLimbChoice(); pressStepped = false; lastClickMs = -1e9; }
+          else if (first) lastClickMs = now;
+          if (!doubled && first && first.behind !== true && appliedSize && !(simState.objectCarry && simState.objectCarry.held)) {
             if (clickTakesLimb(pressXY().x, pressXY().y) && tapped && tapped.event) tapped = { ...tapped, event: { ...tapped.event, actionId: null, regionOnly: true } };
           }
           if (tapped && tapped.reachArea) { reachPick = tapped.pick; tapped = null; }
@@ -8072,6 +8168,8 @@ export function start(params = {}) {
         // the area the tip lists, the numbers are the tip's (at once, as with the cards off); with the look elsewhere
         // they are the card's list, which is the one on screen then.
         let movesFrom = null;
+        // 19 November 2026 (LIMB_KEYS): 1 to 4 choose the limb the keys move; the numbers no longer do an area's movements.
+        if (LIMB_KEYS.on) { for (const n of movesThisFrame) if (n >= 1 && n <= LIMB_KEYS.order.length) chooseLimb(n); movesThisFrame.length = 0; upsThisFrame.length = 0; }
         if (movesThisFrame.length) {
           const readNow = infoReadState();
           const tipList = quietLast && Array.isArray(quietLast.moves) ? quietLast : null;
@@ -8660,6 +8758,7 @@ export function start(params = {}) {
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
           stepLimbLatch(timing.dt, out);
+          stepLimbFlash(now);
           let limbDragged = false;
           for (const dragTurn of dragTurns) {
             if (dragTurn.target !== 'limb' || !dragTurn.binding) continue;

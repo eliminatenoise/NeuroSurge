@@ -3000,6 +3000,11 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * samplePoints of the region's vertices, projected with the live camera, covers less than areaFrac of the view
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
+/** 19 November 2026 (ns-app LIMB_KEYS): the band of light that marks the chosen limb for a moment: its colour (linear),
+ * its peak light and how much of what is behind it covers, and its half widths (m) at the root, the bend and the end of
+ * an arm and of a leg. Display choices. */
+export const LIMB_FLASH = Object.freeze({ colour: Object.freeze([1, 0.86, 0.42]), alpha: 0.6, veil: 0.3, liftShare: 1.25,
+  halfM: Object.freeze({ arm: Object.freeze([0.075, 0.06, 0.05]), leg: Object.freeze([0.12, 0.09, 0.065]) }) });
 /** 19 November 2026 (the light beam): the most sample points kept of one key of the strip, and of one muscle. */
 export const BEAM_KEY_POINTS = 64, BEAM_MUSCLE_POINTS = 48;
 export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
@@ -13034,6 +13039,76 @@ export function createScene({
     }
     return reached;
   }
+  /* ---- 19 November 2026: the chosen limb lit whole for a moment (ns-app LIMB_KEYS) -------------------------------- */
+  // The owner: "let's have the whole limb highlight when we're switching between them, just so it's obvious". Drawn
+  // with the light beams' own strips (no new pass): one soft band of light along the limb, root to bend to end, on your
+  // body and on the mirror body, in LIMB_FLASH.colour. A mark of the game's controls; it says nothing about activity.
+  const limbFlashState = { limb: null, level: 0, ptsMm: null };
+  const flashP = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  function setLimbFlash(spec) {
+    if (!spec || typeof spec.limb !== 'string' || !(spec.level > 0)) { limbFlashState.limb = null; limbFlashState.level = 0; limbFlashState.ptsMm = null; return false; }
+    limbFlashState.limb = spec.limb; limbFlashState.level = Math.min(1, spec.level);
+    limbFlashState.ptsMm = Array.isArray(spec.ptsMm) && spec.ptsMm.length === 3 ? spec.ptsMm : null;
+    return true;
+  }
+  /** One band of light from P0 to P1 (world), half widths w0 and w1 (m), into buf. */
+  function emitFlashBand(buf, P0, P1, w0, w1, alpha) {
+    if (buf.n >= LIGHT_BEAM.maxBeams) return false;
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    let dx = P1[0] - P0[0], dy = P1[1] - P0[1], dz = P1[2] - P0[2];
+    const L = Math.hypot(dx, dy, dz);
+    if (!(L > 1e-4)) return false;
+    dx /= L; dy /= L; dz /= L;
+    const vx = (P0[0] + P1[0]) / 2 - cx, vy = (P0[1] + P1[1]) / 2 - cy, vz = (P0[2] + P1[2]) / 2 - cz;
+    let sx = dy * vz - dz * vy, sy = dz * vx - dx * vz, sz = dx * vy - dy * vx;
+    const sL = Math.hypot(sx, sy, sz);
+    if (!(sL > 1e-9)) return false;
+    sx /= sL; sy /= sL; sz /= sL;
+    const nS = LIGHT_BEAM.segments, AC = LIGHT_BEAM.across, nA = AC.length, o = buf.n * beamVerts, C = LIMB_FLASH.colour;
+    for (let i = 0; i <= nS; i++) {
+      const s = i / nS, t = -0.08 + 1.16 * s; // a little past both ends, so two bands join over the joint
+      const hw = w0 + (w1 - w0) * Math.min(1, Math.max(0, t));
+      let px0 = P0[0] + dx * L * t, py0 = P0[1] + dy * L * t, pz0 = P0[2] + dz * L * t;
+      let d = Math.hypot(px0 - cx, py0 - cy, pz0 - cz);
+      // the band lies along the limb's middle line, inside the limb: it is drawn that far nearer the eye (the limb's own
+      // half width and a little more), in front of the limb's surface instead of hidden by it
+      const lift = Math.min(d * 0.6, hw * LIMB_FLASH.liftShare);
+      if (d > 1e-6) { px0 += (cx - px0) / d * lift; py0 += (cy - py0) / d * lift; pz0 += (cz - pz0) / d * lift; d -= lift; }
+      const along = d < GLOW_LINK.nearClipM ? 0 : Math.min(1, s / 0.12, (1 - s) / 0.12) * alpha;
+      for (let j = 0; j < nA; j++) {
+        const r = AC[j], v = o + i * nA + j, x = Math.abs(r), li = Math.max(0, Math.min(1, Math.pow(1 - x * x, 0.8) * along));
+        buf.pos[3 * v] = px0 + sx * r * hw; buf.pos[3 * v + 1] = py0 + sy * r * hw; buf.pos[3 * v + 2] = pz0 + sz * r * hw;
+        buf.col[4 * v] = C[0] * li; buf.col[4 * v + 1] = C[1] * li; buf.col[4 * v + 2] = C[2] * li; buf.col[4 * v + 3] = LIMB_FLASH.veil * li;
+      }
+    }
+    buf.n++;
+    return true;
+  }
+  function emitLimbFlash(mirrorOn) {
+    const F = limbFlashState;
+    if (!F.limb || !(F.level > 0)) return;
+    const W = LIMB_FLASH.halfM[F.limb === 'leftArm' || F.limb === 'rightArm' ? 'arm' : 'leg'], a = LIMB_FLASH.alpha * F.level;
+    const put = (toWorld, buf) => {
+      for (let i = 0; i < 3; i++) { const q = toWorld(i); if (!q) return; flashP[i][0] = q.x; flashP[i][1] = q.y; flashP[i][2] = q.z; }
+      emitFlashBand(buf, flashP[0], flashP[1], W[0], W[1], a);
+      emitFlashBand(buf, flashP[1], flashP[2], W[1], W[2], a);
+    };
+    if (F.limb === 'leftArm') {
+      // the game arm: the middles of its upper arm, forearm and hand bones as posed
+      const segs = ['upperarm', 'forearm', 'hand'], recs = segs.map(sg => bones.find(b => b.segment === sg) || null);
+      for (const r of recs) if (r && !r.mesh.geometry.boundingSphere) r.mesh.geometry.computeBoundingSphere();
+      if (recs.some(r => !r || !r.mesh.geometry.boundingSphere)) return;
+      armGroup.updateMatrixWorld(true);
+      // (the upper arm's band starts at the bone's upper end: its middle pushed back by its own radius toward the shoulder)
+      put(i => pv.copy(recs[i].mesh.geometry.boundingSphere.center).applyMatrix4(recs[i].mesh.matrix).applyMatrix4(armGroup.matrixWorld), beamOwn);
+      if (mirrorOn) put(i => pv.copy(recs[i].mesh.geometry.boundingSphere.center).applyMatrix4(recs[i].mesh.matrix).applyMatrix4(armGroup.matrix).applyMatrix4(mirrorArmGroup.matrixWorld), beamMirror);
+      return;
+    }
+    if (!F.ptsMm) return;
+    const P = F.ptsMm;
+    put(i => pv.set(P[i][0], P[i][1], P[i][2]).applyMatrix4(bodyGroup.matrixWorld), beamOwn);
+    if (mirrorOn) put(i => pv.set(P[i][0], P[i][1], P[i][2]).applyMatrix4(mirrorBodyGroup.matrixWorld), beamMirror);
+  }
   // R558: the rims of active areas and driven muscles are set with their colours (applyRegionStyle, shadeMuscle).
   /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
   let glowHull = null, glowFlag = '';
@@ -13166,6 +13241,7 @@ export function createScene({
         emitRibbon(glowOwn, a, b, lv, areaPhase, env * (GLOW_LINK.own === true ? LINKS.ownAlpha : 1), regionId);
       }
     }
+    if (limbFlashState.limb) { const mOn = mirrorRoot.visible && mirror.transform !== null; if (mOn) { mirrorRoot.updateWorldMatrix(true, false); mirrorBodyGroup.updateWorldMatrix(false, false); mirrorArmGroup.updateWorldMatrix(false, false); } emitLimbFlash(mOn); }
     finishRibbons(glowOwn);
     finishRibbons(glowMirror);
     finishRibbons(beamOwn);
@@ -14161,7 +14237,7 @@ export function createScene({
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
     setMirror: setMirrorView,
     mirrorState,
-    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem,
+    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem, setLimbFlash,
     collisionItems, collisionStats, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,

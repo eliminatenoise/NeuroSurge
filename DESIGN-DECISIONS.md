@@ -1744,6 +1744,21 @@ Merged from the view lane, built and checked by helpers: a click on one of your 
 
 Not done from the notes of this day: the brain turned half a turn with eyeballs and their nerves (in work); the limb keys 1 to 4, the double click, the number view, a highlight for every control, the whole natural range for every limb and the faster slow turn; the roll gesture; longer limbs and the two bodies more level; a smaller, flatter chest.
 
+## 134. Keys 1 to 4 choose the limb; a double click steps on; the chosen limb lights up; a faster slow turn (19 November)
+
+The user: “You can now switch between which of the four limbs you want to control ... your left arm using 1, your left leg using 2, your right leg using 3, your right arm using 4 ... that becomes the main limb you're controlling with all the control keys ... double clicking will shift you from left to right, and when you get all the way to right, then right to left ... there should be a number view that's active ... you start off on 1.” “if you do double click and then hold, it will slowly shift between 1, 2, 3, 4, 4, 3, 2, 1.” “let's have the whole limb highlight when we're switching between them, just so it's obvious.” And of the limb turn of a held double tap of Space: “it's far too slow. It needs to be quite a bit faster than that, but not as fast as would happen when you just double tap the spacebar.”
+
+A first build, by the lead, on top of the view package's click-a-limb control:
+
+- **The choice** (`LIMB_KEYS` in `ns-app.mjs`). Keys 1 to 4 choose the left arm, left leg, right leg or right arm; the game starts on 1. W/A/S/D move the chosen limb's hand or foot: the left arm by its own rig as before, the other three through the solver of `ns-grasp.mjs`. One limb is always chosen: E, looking away and a click on nothing no longer end it. A click on one of your limbs chooses it.
+- **The numbers' older meaning is gone.** They no longer do the movements of the area looked at (those lists left the screen this morning).
+- **Double click.** The second of two clicks within 340 ms steps the choice on: 1, 2, 3, 4, 3, 2, 1 (`nextLimbChoice`). Held, it steps again after 0.45 s and then every 0.7 s while the button is down and the pointer has not started a drag.
+- **The number view.** Four chips at the bottom middle of the picture, each a key cap and the limb's name, the chosen one in yellow.
+- **The highlight.** For 1.1 s after a change the whole limb carries a band of warm light on your body and on the mirror body (`setLimbFlash`, `LIMB_FLASH` in `ns-scene-three.mjs`), drawn with the light beams' own strips: no new pass. The band lies along the limb's middle line, lifted toward the eye by a little more than the limb's half width so the limb does not hide it. It marks a control; it says nothing about activity.
+- **The slow turn** is 1.0 s a stroke (2.6 s before); the sudden switch of a plain double tap stays 0.4 s.
+
+Not in this build, from the same notes: the view does not yet turn to the chosen limb or keep its end at one height in the frame; the left arm still moves inside its window of the view, so its range still depends on the look (the user: “Any limited range of motion that's unnatural needs to be fixed”); hands and feet do not yet travel “far more forward and far more back”; the other controls have no new highlight of their own; the roll gesture is not built. The band is a flat overlay and looks it.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

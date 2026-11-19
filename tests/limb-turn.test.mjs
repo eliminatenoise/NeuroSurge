@@ -136,7 +136,11 @@ test('a double tap held goes on slowly between the two sides', () => {
   for (let t = 0; t < 12; t += 1 / 60) { d = observeDance(d, a); const s2 = stepDance(d, a, 1 / 60); d = s2.dance; a = s2.angles; lo = Math.min(lo, a.r_pronation); hi = Math.max(hi, a.r_pronation); const dir = Math.sign(a.r_pronation - last); if (dir && lastDir && dir !== lastDir) turns++; if (dir) lastDir = dir; last = a.r_pronation; }
   assert.equal(d.mode, 'hold');
   assert.ok(lo < 1 && hi > 159, 'the right forearm reaches both sides');
-  assert.ok(turns >= 2 && turns <= 8, `it turns round slowly (${turns} turns in 12 s)`);
+  // 19 November 2026 (the owner: the slow turn was "far too slow ... quite a bit faster ... but not as fast as" the sudden
+  // switch): a stroke is now 1.0 s (2.6 s before), still well over the 0.4 s of a plain double tap
+  assert.ok(DANCE.slowStrokeS >= 2 * DANCE.stepStrokeS && DANCE.slowStrokeS <= 1.5, 'between the sudden switch and the old slow turn');
+  const most = Math.ceil(12 / (DANCE.slowStrokeS / DANCE.tempo.rightArm)) + 2;
+  assert.ok(turns >= 2 && turns <= most, `it turns round steadily (${turns} turns in 12 s, at most ${most})`);
 });
 
 test('the forearm leads and the upper arm follows within each stroke; a stroke stopped late still finishes', () => {

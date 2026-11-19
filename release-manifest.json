@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-39",
+  "version": "experimental-2026-11-19-body-update-40",
   "experimental": true,
-  "source": "Body update 39. Cones of light from a movement's key to each muscle it drives; lit areas almost white; a glossy brain; carried things pass through everything; a click takes control of a limb.",
+  "source": "Body update 40. Keys 1 to 4 choose the limb the keys move; a double click steps on; a number view; the chosen limb lights up; a faster slow limb turn.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 269777,
-      "sha256": "3a916defc6e9cbcb398ffedbe896164aa3f5a2d344ad6499a7fa64c1d254346a"
+      "bytes": 272773,
+      "sha256": "4ffcbb6b21123a8de4cf1fec78eb714b93cef39df7067d4be88e9ca4943295ed"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9081,
-      "sha256": "83592a5aac55d6ddcfdf3fe9b40e349122c5e93df6ab3628f292336309e74873"
+      "bytes": 9429,
+      "sha256": "20c1e8e5971a3721434ef874e9f57c00e2f6a5cf57fc0726886a4468710f102f"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 59929,
-      "sha256": "1bdbea2973277dacf303d48737226d7859d98fef6b60427a3bfa9140accd72bb"
+      "bytes": 60331,
+      "sha256": "6bb38f245f57fec4ee0445a0c1ced11f8ec0311e10ee442c03bac42358806210"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 35838,
-      "sha256": "be877cee3ee1aebd6fd7a57ae72441eac690fb9861d26f8e4f7cce3936a5fbb4"
+      "bytes": 36453,
+      "sha256": "1cf679f3cff8815a799ed768c5f090076fa1eef389a1625ebf7c698b511c5aaf"
     },
     {
       "path": "README.md",
-      "bytes": 18437,
-      "sha256": "8fac36508133dafce0f3b90e77ee091004263762972e2ea11d149c900e0e3f3a"
+      "bytes": 18722,
+      "sha256": "b925d0a978b043f64a408358ce516ca18e6857ec6f77369d995069b04fe21fb4"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "4bd28d765153f4fe7818aea9ee8a7c29ebef6f6b645462e7484660e3840b31c7"
+      "sha256": "4770f78e81167b8f9689e10af1951d24409af3bfa72a0c2ca62ea88705ac6786"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "34f2a7cee79c3739aa253bddf17c797011e40c40d64253ebd7cc286a1eef2b29"
+      "sha256": "f1ffb05af1cd164fddef6f041abb39b5b65ea41dd15ae2b84890796a45de7aa8"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3932,8 +3932,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 24080,
-      "sha256": "5f4cb3a1e577df260e20465336f1df81f9d04de57844fe18dc33ca669354883a"
+      "bytes": 25341,
+      "sha256": "2b95782706123f68f197e4e80bf712ab0fd21ae49ff16c3f67db5885b77e3d7d"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 774273,
-      "sha256": "6c71e9fbbf539f925e6a7d6cdb9c3959334df0b10177bd6044add47295dced53"
+      "bytes": 782336,
+      "sha256": "2fa6dac61ba0bdfc2f3ada2461bd40e40633477e320bec1aac046bc72b7edcf0"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-dance.mjs",
-      "bytes": 29342,
-      "sha256": "199a4ee1dcd275a504f778cc2f00b7ac877cf8d8650208d9a4f2fd080e5b5b88"
+      "bytes": 29624,
+      "sha256": "b90bcc7dbd324f23e7b01d2833d4d29ef42874d972c06df91df8f3161e52767e"
     },
     {
       "path": "scene/src/ns-detail.mjs",
@@ -4172,8 +4172,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1120063,
-      "sha256": "98f31e0b523cdcf0d0ddcd2a29bc6df95be9adec91f746e2714f3eb528e0ad34"
+      "bytes": 1125823,
+      "sha256": "8cc362fc531c723895541eeb1b4076c009a1f24f8a7a5d275c37e6a05093436e"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 139809,
-      "sha256": "398271c0756e2dbe48a32917c07f37c94a29a2fd804fd19d3b274b8ebfe1162f"
+      "bytes": 140272,
+      "sha256": "d097b2af69e19d25c78f03857971302d9b019801142bbb6d33e2e6f425210e7d"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4356,9 +4356,14 @@
       "sha256": "98fb14733bca0d25e55e306fb515a4d4c19e665f84cf31761abdffbc8007ea87"
     },
     {
+      "path": "tests/limb-keys.test.mjs",
+      "bytes": 2083,
+      "sha256": "3f56fe14f9c4a1aac05da6e944bf2fb61e9f1cee80d91fd0813fdba14239101b"
+    },
+    {
       "path": "tests/limb-turn.test.mjs",
-      "bytes": 19433,
-      "sha256": "f83d21154d0d1f00cece18b6f7f223cb8c782f60aa2b1618de0a22fc8e354061"
+      "bytes": 19894,
+      "sha256": "343ea3fff167d723da45bde20c0697135be05b041edd2c02ed6b01b6aa6d1961"
     },
     {
       "path": "tests/load-guard.test.mjs",
