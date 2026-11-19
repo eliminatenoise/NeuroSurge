@@ -447,9 +447,7 @@ export const SHELL = deepFreeze({
   // R4-integrator (R4-load W8): while the rest of the body still streams in, the 2 s timer has not started yet.
   introNoteLoading: 'This page closes by itself 2 seconds after your body has loaded. Click to start now. Press Esc to ' +
     'see it again.',
-  // R4-polish (R4-player 2.5): Esc goes back too, but the browser then needs one click before the mouse is locked.
-  pausedNote: 'Resume takes you back to the game and locks the mouse again. Esc also takes you back: then click once ' +
-    'to look around.',
+  pausedNote: 'Press Esc or activate Resume with the keyboard to keep the pointer free. Click Resume to capture it.',
   play: 'Start now',
   resume: 'Resume (Esc)',
   resetBody: 'Reset body',
@@ -497,7 +495,7 @@ export const SHELL = deepFreeze({
   // rows, [what you do, what it does]. Settings is the last group.
   menu: [
     { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look; your chosen limb follows'], ['Click', 'press the area you look at'],
-      ['← →', 'the next area']] },
+      ['← →', 'aim at the next motor area']] },
     { id: 'move', title: 'Move', picture: 'wasd', rows: [
       ['1 / 2', 'choose left arm / left leg'],
       ['3 / 4', 'choose right leg / right arm'],
@@ -506,10 +504,11 @@ export const SHELL = deepFreeze({
       // 19 November 2026 (ns-app LIMB_KEYS.view: the view holds the chosen limb)
       note: 'Double click steps to the next limb. In the eye view, 1 to 4 turn your view to the limb, and the limb ' +
         'then goes with your view: look up to raise it, down to lower it. W A S D move its hand or foot.' },
-    { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Hold', 'take what you look at'],
-      ['Move', 'carry it'], ['Drag', 'turn it'], ['Tap twice', 'your limbs turn'], ['Shift', 'reach the thing behind']] },
-    { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'the view from behind'],
-      ['R', 'information: short, more, off'], ['Esc', 'this page']] }
+    { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hold to grasp, tap to toggle'],
+      ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
+      ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },
+    { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'switch eye and outside views'],
+      ['R', 'information: short, more, off'], ['Esc', 'pause for controls and settings']] }
   ],
   sensitivity: 'Look speed',
   invertY: 'Flip up and down (invert Y)',

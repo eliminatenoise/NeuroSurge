@@ -4910,6 +4910,11 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     if (kind === 'detail-toggle') { if (detailToggle && !detailRow.hidden) setFullWords(!fullWords); return; }
     if (closest(e.target, '[data-ns-noplay]')) return;
     if (play.disabled) return;
+    if (kind === 'play' && e.detail === 0 && typeof onPlayUnlocked === 'function') {
+      // Native keyboard and assistive activation leave the pointer free, just like Escape.
+      call(onPlayUnlocked);
+      return;
+    }
     if (mode === 'intro' || kind === 'play') { call(onPlay); return; }
     // Esc page: only the backdrop (outside the card) resumes; reading or selecting text on the card does not.
     if (mode === 'paused' && !closest(e.target, '[data-ns-card]')) call(onPlay);

@@ -47,8 +47,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 11616,
-      "sha256": "3197121ed943657f97f1c6b189ac393c3e0b99f0d9179fe31a203fba806d0615"
+      "bytes": 11738,
+      "sha256": "ea2cf66a31c74727fbbea4230b8bdb0699d0610d0dbe43e9c0f145874874bc21"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -3902,8 +3902,8 @@
     },
     {
       "path": "scene/example/loading-r302.css",
-      "bytes": 19072,
-      "sha256": "7454b68adef997a34adb7cfc664893bb2ddcb72cb129af8492d73aecf86694c6"
+      "bytes": 19053,
+      "sha256": "b6ae03bd9f845182d73570360e337bf3da00f67a658adf971fb95f35dca23060"
     },
     {
       "path": "scene/example/loading-r302.html",
@@ -3922,18 +3922,18 @@
     },
     {
       "path": "scene/example/preview.css",
-      "bytes": 1049,
-      "sha256": "8a0fa33aaf9ef3998fab3f6d0c0ffec2b607a18599de3cab5a3619145cb04983"
+      "bytes": 1129,
+      "sha256": "fd4e686c4a58d126f9e4d2c6437ba20c2e23458f8ca2ecdec71e3242ea576b95"
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 2478,
-      "sha256": "10130377a18a55e032e86859e91e509f6afb8237933d8dbafa346cd1e7273dfd"
+      "bytes": 2606,
+      "sha256": "43f3cdda636ee919ff2b120c23810fb30bc63734e255a6c4d6093f6ae907a3df"
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 25525,
-      "sha256": "fb98fda537928be194899a06ab1277dd32d34c91d1e46f43ab44b0bb9d402f8d"
+      "bytes": 26759,
+      "sha256": "04ff47c7f91a6378a42eeedaf429e89b7f0317c338fc44fdada19b122f023858"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 863759,
-      "sha256": "9e4d4a0e1ca052e86276cc52c4cda88d31a3c2efd4daf3cde10a86b5dd713570"
+      "bytes": 863984,
+      "sha256": "cbd5f4e10687c5875f31955cb76c618e84f428d1236366e0e36154976c7ce9f8"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4042,8 +4042,8 @@
     },
     {
       "path": "scene/src/ns-controls-card.mjs",
-      "bytes": 4857,
-      "sha256": "6ad28d7824b3765295d163a990e4396e672215572370c73a5cac5e6256de95eb"
+      "bytes": 5042,
+      "sha256": "9792fee38455c898664e00d7ac958431439ac3ad225f5442ed4d74b4d4b139d5"
     },
     {
       "path": "scene/src/ns-controls.mjs",
@@ -4187,8 +4187,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 143920,
-      "sha256": "5602fa1d0b64390ced7fff29879144e65b111fe0f1702353613597bebb93a1c6"
+      "bytes": 143879,
+      "sha256": "2982061dcc52cf6c76bc7216cef35a23d26bc70831197aafc28a994efa2a9def"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4267,13 +4267,13 @@
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 21087,
-      "sha256": "3fdfbbf2d1c8e0ddb4467a4b0c77baf865029a0c9b3be8878812fc9198882c03"
+      "bytes": 20832,
+      "sha256": "d3fb237539f42dc496c4b5114ac3e41242a771a12f868f7f93695d45d6a35cc0"
     },
     {
       "path": "tests/browser-limb-controls.mjs",
-      "bytes": 6774,
-      "sha256": "b0ba66648a808862ee9199797d569f20f0fb9bff61d59e1ae2e584ce3bba8ffd"
+      "bytes": 7399,
+      "sha256": "313e720fa242df667e2655829339d50903de5ddf8e7b611b3a352cf7c34a3e32"
     },
     {
       "path": "tests/browser-limb-touch.mjs",
@@ -4281,9 +4281,14 @@
       "sha256": "e31334c63afc1f613092bf2b57343d9a541f81f7445a02b646698db38e8d07a1"
     },
     {
+      "path": "tests/browser-play-settings.mjs",
+      "bytes": 13468,
+      "sha256": "d9a28f993a106e3b5e5a98c8396bfe757007cf0d89f3682b6e7151ffb876448e"
+    },
+    {
       "path": "tests/browser-player-focus.mjs",
-      "bytes": 9099,
-      "sha256": "1d4a8e9184a03d0638478b4ddef43bcd38ccbdb15480c6093a893f12103c9161"
+      "bytes": 9139,
+      "sha256": "6584466f37c164d05e4c5f2249351fe8b04066a667ca79fc9ac378789ce0017b"
     },
     {
       "path": "tests/browser-space-aim.mjs",

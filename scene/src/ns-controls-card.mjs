@@ -15,6 +15,7 @@
 
 /** How long the card stays (ms). */
 export const CONTROLS_CARD_MS = 5000;
+const CONTROLS_HELP = 'Esc for controls and settings';
 
 /** The card's chunks, in reading order (pure; the test and the Esc page read the same grouping). keys: rows of key
  * names, top to bottom; words: one short word for the chunk, or one per key (same order as the keys read left to
@@ -35,7 +36,7 @@ export function controlsCardLabel(chunks = CONTROLS_CARD_CHUNKS) {
     if (c.words.length === keys.length) keys.forEach((k, i) => parts.push(`${k} ${c.words[i]}`));
     else parts.push(`${keys.join(' ')} ${c.words[0]}`);
   }
-  return `Main controls: ${parts.join('; ')}.`;
+  return `Main controls: ${parts.join('; ')}. ${CONTROLS_HELP}.`;
 }
 
 /** Draw the card into `host` for `ms`. Returns the element (null when the document cannot build it). */
@@ -74,6 +75,8 @@ export function showControlsCard({ host, doc = globalThis.document, ms = CONTROL
       }
       if (!perKey) el('span', 'ns-ctl-word', chunk, c.words[0]);
     }
+    const help = el('p', 'ns-ctl-help', keysSide, CONTROLS_HELP);
+    help.setAttribute('aria-hidden', 'true');
     card.addEventListener('animationend', ev => { if (ev.animationName === 'ns-keys-out') { try { card.remove(); } catch { /* gone */ } } });
     return card;
   } catch { return null; }

@@ -240,7 +240,7 @@
 .ns-shell-setgroup { min-width: 0; }
 .ns-shell-setgroup .ns-shell-setting:first-child { margin-top: 2px; }
 .ns-shell-setgroup .ns-shell-select { flex: 1 1 auto; max-width: 100%; min-width: 0; }
-.ns-shell-setgroup .ns-shell-setting:not(.ns-shell-check):not(.ns-shell-guide) > .ns-shell-setting-label { white-space: nowrap; }
+.ns-shell-setgroup .ns-shell-setting:has(> .ns-shell-range) > .ns-shell-setting-label { white-space: nowrap; }
 .ns-shell-setting { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
 .ns-shell-range { flex: 1; min-width: 80px; accent-color: var(--ns-accent, #ffe066); }
 .ns-shell-out { min-width: 3.4em; font-variant-numeric: tabular-nums; }

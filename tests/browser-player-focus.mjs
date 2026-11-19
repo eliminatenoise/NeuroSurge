@@ -92,7 +92,7 @@ try {
   assert.match(checks.pauseLimbControls, /W S\s+move it forward or back/);
   assert.match(checks.pauseLimbControls, /A D\s+move it left or right/);
   assert.match(checks.pauseLimbControls, /Click limb\s+choose it/);
-  assert.match(checks.pauseLimbControls, /2–4 turn the camera.*Move the mouse or trackpad/s);
+  assert.match(checks.pauseLimbControls, /In the eye view, 1 to 4 turn your view to the limb.*look up to raise it, down to lower it/s);
   assert.doesNotMatch(await menu.innerText(), /a movement, by its number|look away ends/i);
   await screenshot('pause-limb-controls');
   await shell.locator('.ns-shell-heading').click();

@@ -50,6 +50,7 @@ try {
     return {
       frames: s.frames, healthy: s.phase === 'running' && s.features.bodyRig && !s.placeholder && !s.qa,
       reduced: motion, camera: s.camera.pose, reach: s.state.reach.depth,
+      leftEnd: s.limbs.ends.leftArm.end,
       right: joints.map(joint => s.bodyJointTargets[joint]), key: s.controls.keys.KeyW,
       renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null
     };
@@ -74,11 +75,21 @@ try {
   }
 
   async function moveLeftArm(before) {
-    await page.keyboard.down('w');
-    await page.waitForFunction(depth => {
+    // Body46 starts the hand near full reach. Make room before testing W.
+    await page.keyboard.down('s');
+    await page.waitForFunction(end => {
       const s = window.__nsQA.inspect();
-      return s.controls.keys.KeyW && s.state.reach.depth > depth + 0.01;
-    }, before.reach, poll);
+      return s.controls.keys.KeyS && s.limbs.ends.leftArm.end[2] > end[2] + 0.03;
+    }, before.leftEnd, poll);
+    await page.keyboard.up('s');
+    await advance((await inspect()).frames);
+    const drawnNearer = await inspect();
+    await page.keyboard.down('w');
+    await page.waitForFunction(end => {
+      const s = window.__nsQA.inspect();
+      return s.controls.keys.KeyW && s.limbs.limb === 'leftArm' &&
+        s.limbs.ends.leftArm.end[2] < end[2] - 0.01;
+    }, drawnNearer.leftEnd, poll);
     const moved = await inspect();
     await page.keyboard.up('w');
     assert.deepEqual(moved.right, before.right);
@@ -132,8 +143,10 @@ try {
   assert.deepEqual([reset.camera.yaw, reset.camera.pitch], [start.camera.yaw, start.camera.pitch]);
   assert.deepEqual(reset.right, start.right);
   assert.equal(reset.reach, start.reach);
+  assert.deepEqual(reset.leftEnd, start.leftEnd);
   const leftAfterReset = await moveLeftArm(reset);
-  assert.deepEqual([leftAfterReset.camera.yaw, leftAfterReset.camera.pitch], [start.camera.yaw, start.camera.pitch]);
+  assert.equal(leftAfterReset.camera.firstPerson, true);
+  assert.notDeepEqual([leftAfterReset.camera.yaw, leftAfterReset.camera.pitch], [reset.camera.yaw, reset.camera.pitch]);
 
   if (raw) {
     assert.ok(assets.refusedPackIndexes > 0 && assets.rawMeshes > 0);

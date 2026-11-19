@@ -240,7 +240,7 @@ try {
     await selected('1', 'Left arm').waitFor();
     const framed = [];
     for (const [key, name, limb] of [
-      ['2', 'Left leg', 'leftLeg'], ['3', 'Right leg', 'rightLeg'], ['4', 'Right arm', 'rightArm']
+      ['2', 'Left leg', 'leftLeg'], ['3', 'Right leg', 'rightLeg'], ['4', 'Right arm', 'rightArm'], ['1', 'Left arm', 'leftArm']
     ]) {
       const before = await inspect();
       await page.keyboard.press(key);
@@ -261,12 +261,6 @@ try {
       if (reduced) assert.ok(correction < 0.05, 'reduced motion must make the main turn immediately');
       framed.push({ key, before: before.look, early: early.look, settled: settled.look, hit: settled.input.front });
     }
-    const right = await inspect();
-    await page.keyboard.press('1');
-    await selected('1', 'Left arm').waitFor({ timeout: 5_000 });
-    const left = await nextFrames(right.frames);
-    assert.deepEqual(left.look, right.look, 'the left arm already moves within the view');
-
     await page.mouse.click(width / 2, height / 2);
     await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
     await page.keyboard.press('2');
@@ -300,8 +294,8 @@ try {
   }
 
   async function checkStrip() {
-    // Keep limb selection in the outside view for this overlap check. In the
-    // eye view, selecting 2–4 can turn the camera away from the motor strip.
+    // Keep limb selection in the outside view so the eye-view framing turn
+    // does not move the camera away from the overlap on the motor strip.
     const selection = await aim();
     if (process.env.NS_SCREENSHOT) await page.screenshot({ path: process.env.NS_SCREENSHOT });
     await selected('1', 'Left arm').waitFor();

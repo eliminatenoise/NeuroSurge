@@ -6,3 +6,5 @@
 /* R558 (issue hunt 2: in a portrait window the note, fixed in the bottom-left corner above everything, covered the text
    of the Esc page): while the start or Esc page shows, its card ends above the note (the card scrolls inside). */
 @media (max-aspect-ratio: 999/1000){.ns-shell:not([hidden]){padding-bottom:76px}}
+
+.ns-canvas:focus-visible { outline: 2px solid #7cc4ff; outline-offset: -4px; }
