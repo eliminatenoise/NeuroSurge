@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1133779,
-      "sha256": "da44bed2326cd5bd9991f40b946442e66b95edc385eb028cc4d486c687a72709"
+      "bytes": 1133764,
+      "sha256": "e0ff1658fe64041826cee38d929b948ff0f444d1287860c32bbf72bc61809b83"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4254,6 +4254,11 @@
       "path": "tests/brain-turn.test.mjs",
       "bytes": 20168,
       "sha256": "c8431718e310e94c9002b687a328f0b339808cd73f2233256236fb8a2e466fed"
+    },
+    {
+      "path": "tests/browser-brain-eyes.mjs",
+      "bytes": 6006,
+      "sha256": "7d44ba1e8e1bc931b7074f3c76f049c5a5efc9b588a9f65472ae5985ff7a7960"
     },
     {
       "path": "tests/browser-camera-resize.mjs",

@@ -6909,7 +6909,8 @@ export function createScene({
    * picture of "which way you are looking", not eye anatomy. Written only when the look has changed. */
   function updateBrainEyes() {
     if (!brainEyes.on || !brainEyes.balls.length) return;
-    const yaw = camPose ? camPose.yaw : firstPose ? firstPose.yaw : lookYaw, pitch = camPose ? camPose.pitch : firstPose ? firstPose.pitch : lookPitch;
+    // setView follows the player's look in both views. The outside camera has its own tilt.
+    const yaw = lookYaw, pitch = lookPitch;
     if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
     if (brainEyes.look0 === null) brainEyes.look0 = { yaw, pitch };
     const T = BRAIN_EYE_TURN, lim = T.maxDeg * DEG;
