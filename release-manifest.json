@@ -4248,7 +4248,7 @@
     {
       "path": "tests/browser-camera-resize.mjs",
       "bytes": 6697,
-      "sha256": "e766f6ef7cc8901bb5456b3c3b21d6a3b86ee26271f3a9b99b0bc70b3b732a83"
+      "sha256": "a51adbd31de820edb43b04aaeeb03bb49bb70c4bc0d24fee3c39ae101e44ed57"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",

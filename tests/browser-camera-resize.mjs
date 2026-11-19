@@ -88,7 +88,7 @@ try {
   await resume();
   const outside = await camera();
   assert.equal(outside.quality, 'low');
-  assert.equal(outside.fov, 66);
+  assert.equal(outside.fov, 78);
   assert.ok(outside.pickPoint, 'the outside view shows the mirror tilt arrow');
 
   // A display-scale change grows the drawing buffer without changing CSS dimensions or the camera pose.
@@ -120,7 +120,7 @@ try {
     return c.width === 1440 && c.height === 810;
   }, null, { polling: 80 });
   const resized = await camera();
-  assert.equal(resized.fov, 66, 'window resize keeps the outside lens');
+  assert.equal(resized.fov, 78, 'window resize keeps the outside lens');
 
   await pause();
   await quality.selectOption('high');
@@ -128,7 +128,7 @@ try {
   const high = await camera();
   assert.equal(high.quality, 'high');
   assert.ok(high.bufferWidth > resized.bufferWidth, 'the setting actually grows the drawing buffer');
-  assert.equal(high.fov, 66, 'picture quality keeps the outside lens');
+  assert.equal(high.fov, 78, 'picture quality keeps the outside lens');
 
   const eye = await switchView(true);
   assert.equal(eye.fov, 54, 'E restores the eye lens');
