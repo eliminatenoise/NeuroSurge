@@ -278,3 +278,7 @@
 /* 19 November 2026 (EASE, audit S24): at the full reading level the bottom-left cards stood on the one-line
    "Simulated activity" note. Both cards stand 20 px higher there; the note keeps its place. */
 .ns-app[data-ns-read="more"] .ns-hud .ns-panel-info, .ns-app[data-ns-read="more"] .ns-hud .ns-panel-legend { transform: translateY(-20px); }
+
+/* 19 November 2026 (the owner: "The number overview is very confusing"): no numbered list of movements on the card;
+   the look does the movement and the card says what the area does. */
+.ns-app .ns-infopanel .ns-infopanel-moves, .ns-app .ns-infopanel .ns-infopanel-moves-heading { display: none !important; }

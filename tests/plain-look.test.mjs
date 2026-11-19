@@ -7,7 +7,8 @@ import { patchPlainShaders, PLAIN_LOOK, SIMPLE_LOOK } from '../scene/src/ns-scen
 
 const lib = THREE.ShaderLib.standard, BONE = [0.8, 0.74, 0.58];
 
-test('the plain look is the look the game runs', () => { assert.equal(SIMPLE_LOOK, true); });
+// 19 November 2026, later: the owner asked for the painted comic look back; the plain look stays as a switch
+test('the game runs the painted comic look; the plain look is a switch', () => { assert.equal(SIMPLE_LOOK, false); });
 
 test('a muscle gets the pale tendon mix and the dark edge; a bone only the edge', () => {
   const m = patchPlainShaders(lib.vertexShader, lib.fragmentShader, 'muscle', BONE);

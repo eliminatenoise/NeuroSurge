@@ -21,6 +21,9 @@ anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under thei
 | BodyParts3D 4.0 cerebral artery meshes (18 November) | `packets/bodyparts3d-cerebral-arteries-r1/meshes/` (`FJ*.obj`, 80 files) | CC BY 4.0 | The Database Center for Life Science (DBCLS) |
 | Centre lines of 40 BodyParts3D 4.0 limb vessels (18 November; derived data) | `packets/bodyparts3d-body-vessels-r1/BODY-VESSEL-CENTRELINES.json` | CC BY 4.0 (derivative, as its source) | The Database Center for Life Science (DBCLS); derivation by NeuroSurge contributors |
 | Z-Anatomy back, belly and foot muscle meshes (R558) | `packets/missing-muscles-r1/meshes/` (`zm-*.obj`, 18 files) | CC BY-SA 4.0 (share-alike) | Z-Anatomy (built on BodyParts3D, DBCLS) |
+| Simplified copies of the meshes above, which are what the game draws (19 November; adaptations made by NeuroSurge contributors, see section 1a) | `packs/arm-brain.nspack`, `packs/fullbody.nspack`, `packs/head.nspack`, `packs/missing-muscles.nspack` (its 93 BodyParts3D files) | CC BY 4.0 (adaptations, as their sources) | The Database Center for Life Science (DBCLS); simplification by NeuroSurge contributors |
+| The same for the Z-Anatomy meshes (19 November; adaptations, see section 1a) | `packs/face-muscles.nspack`, `packs/missing-muscles.nspack` (its 18 Z-Anatomy files) | CC BY-SA 4.0 (share-alike; an adaptation of a CC BY-SA 4.0 work stays CC BY-SA 4.0) | Z-Anatomy (built on BodyParts3D, DBCLS); simplification by NeuroSurge contributors |
+| Body rig data derived from the BodyParts3D and Z-Anatomy meshes (19 November; joint pivots, axes and which bone each muscle follows; no mesh geometry) | `packs/BODY-RIG.json` | CC BY 4.0 and, for the rows of Z-Anatomy muscles, CC BY-SA 4.0 (derived data, as its sources) | DBCLS; Z-Anatomy; derivation by NeuroSurge contributors |
 
 This is the round-5 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
 every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
@@ -44,13 +47,17 @@ the top of the NeuroSurge repository on GitHub.
 - The OBJ files themselves are unmodified. Each one is a byte-exact member of the official archive, verified by its
   ZIP CRC32, byte count and SHA-256. Nothing was centred, mirrored, renamed, re-meshed, unit-converted or
   header-edited.
+- **Since 19 November 2026 the game does not draw those OBJ files directly. It draws simplified copies of them, made
+  beforehand and shipped in `packs/`** (section 1a). The copies are adaptations: fewer triangles, coordinates rounded
+  to 0.01 mm. The OBJ files stay in the distribution unchanged and are what the game falls back to when a pack cannot
+  be used.
 - At run time the bones are moved rigidly, the muscles are bent to follow them (a geometry-only skinning of each
   muscle's vertices to the nearby bones, with no muscle volume or contraction model), and colours showing the
   simulated activity are added. This happens only in the browser's memory; the OBJ files are not changed.
-- On Picture quality Low, simplified copies of the meshes are drawn (the game's own words). The Auto setting also
-  switches to these copies when a computer draws very slowly. The copies are made in the browser's memory by merging
+- On Picture quality Low, still simpler copies of the meshes are drawn (the game's own words). The Auto setting also
+  switches to these copies when a computer draws very slowly. They are made in the browser's memory by merging
   nearby points of the brain-glass and body meshes (vertex clustering); the OBJ files are not changed. On High, and
-  on Auto at full quality, the meshes are drawn as they are.
+  on Auto at full quality, the meshes of the packs (section 1a) are drawn as they are.
 - New in round 5, changed in R558 (the game's own words: "The outer muscles are lifted out a little, like in a Body
   Worlds exhibit. That lets you see the deeper muscles under them. Their ends stay on the bones. Every muscle is drawn a
   little fuller."; and a mirror-image copy of the body is drawn behind the brain):
@@ -192,6 +199,45 @@ Recorded limitations (from the packet's own records):
   cartilage, 6 of 1538 vertices across the midline band) and FJ1595 (right sternocleidomastoid, 56 of 6642 vertices
   across the midline band).
 
+## 1a. Simplified copies of the meshes (packs/), 19 November 2026
+
+What the game loads and draws is not the OBJ files of the packets but `packs/`: five pack files and one small rig
+file, 4.8 MB together instead of 157 MB. They are **adaptations** of the BodyParts3D and Z-Anatomy meshes, made by
+NeuroSurge contributors with `tools/build-mesh-packs.mjs` and `tools/simplify-mesh.mjs`; `packs/README.md` has the
+full account and the numbers per pack.
+
+**Changes made (CC BY 4.0 and CC BY-SA 4.0 section 3(a)(1)(B)):**
+- Fewer triangles: 878 440 instead of the 2 395 434 of the 611 source files (36.7 %). Vertices are removed one at a
+  time by sliding each onto a neighbour. Every vertex that is kept is a vertex of the source file; no vertex is moved.
+  A removal is refused when it would change how the surface is connected, turn a triangle over, move an open rim, or
+  leave any vertex of the source file further from the simplified surface than 0.5 mm (0.4 mm for the 14 belly and
+  chest muscles the game reshapes, 0.3 mm for the brain; less for a small thin muscle, so that every closed mesh
+  keeps at least 93 % of its volume); that distance is measured for every source vertex.
+- Vertices that the source file repeats at exactly the same position are joined, and the kept coordinates are rounded
+  to 0.01 mm (a few are left as they are where the rounding would flatten a triangle).
+- 78 meshes are kept exactly as their source files: the 32 bones of the left game arm, the two precentral gyri, the
+  two lacrimal bones and the 42 finger and toe bones.
+- Only vertex positions and triangles are kept (which is all the game ever read from the OBJ files). The comment
+  lines of each OBJ file, including the legacy licence notice of the BodyParts3D files, are carried in the pack with
+  the mesh.
+- `packs/BODY-RIG.json` holds no mesh. It is data derived from the source meshes by the game's own code: where each
+  joint pivots, about which axes, and which bone each muscle follows.
+
+**Licences of the copies.** Each pack holds the files of its own source packet or packets and keeps their licence:
+`arm-brain`, `fullbody`, `head` and the 93 BodyParts3D files of `missing-muscles` are adaptations of BodyParts3D,
+© The Database Center for Life Science, licensed under CC BY 4.0, with the attribution and links of section 1.
+`face-muscles` and the 18 Z-Anatomy files of `missing-muscles` are adaptations of Z-Anatomy meshes and **stay under
+CC BY-SA 4.0 (share-alike)**, with the required credit of sections 2 and 2a. If you share these packs, or changed
+versions of them, share them under the same licences with the same credits and a note of what you changed. The
+NeuroSurge code that makes and reads the packs is CC0 and is not relicensed by them. Neither DBCLS nor Z-Anatomy
+endorses NeuroSurge or these simplified copies.
+
+**How the copies are tied to their sources.** Inside a pack every mesh records the size and SHA-256 of the OBJ file
+it was made from, and the game compares both with its pinned manifests before it uses the mesh, as it does for a
+fetched OBJ file. `packs/PACK-INDEX.json` lists each pack's size and SHA-256, and its own SHA-256 is fixed in the
+game's code. The project's tests rebuild the packs from the source packets and compare them with the shipped ones.
+The source packets, their manifests, hash lists, acquisition records and licence files are unchanged.
+
 ## 2. Face and chewing muscles (packets/face-muscles-r1)
 
 Round 5 adds 54 mesh files (27 facial-expression and chewing muscles, left and right) taken from **Z-Anatomy**, the
@@ -244,6 +290,10 @@ chewing muscles (except the platysma), so these meshes come from Z-Anatomy. They
   BodyParts3D meshes, they are also drawn as simplified copies on Picture quality Low, and the surfaces facing the
   inside of the head are drawn in a plain dark colour. All of this happens only in the browser's memory; the shipped
   OBJ files are the converted files described above.
+- Since 19 November 2026 the game draws simplified copies of these 54 meshes, made beforehand and shipped as
+  `packs/face-muscles.nspack` (section 1a: fewer triangles, every kept vertex a vertex of the converted file, the
+  surface within 0.5 mm of it, coordinates rounded to 0.01 mm). That pack is an adaptation of these meshes and is
+  under CC BY-SA 4.0 like them.
 
 **These 54 mesh files stay under CC BY-SA 4.0 (share-alike) wherever they go; the NeuroSurge code is CC0 and is not
 relicensed by them.** If you share changed versions of these meshes, share them under CC BY-SA 4.0 too, with the credit
@@ -314,6 +364,10 @@ little like the other muscles (Body Worlds display), follow their nearest bones,
 the obliques' tendon sheets in front of rectus abdominis (part of the BodyParts3D external oblique mesh and of the
 Z-Anatomy internal oblique and transversus abdominis meshes) are not drawn, as if the rectus sheath were opened in a
 dissection; the external oblique's strip between the two recti (the linea alba) stays. The game's "Sources and rights" text adds the Z-Anatomy credit when these files are loaded.
+
+Since 19 November 2026 the game draws simplified copies of this packet's 111 meshes, made beforehand and shipped as
+`packs/missing-muscles.nspack` (section 1a). The copies of the 18 Z-Anatomy files in that pack are adaptations under
+CC BY-SA 4.0; the copies of the 93 BodyParts3D files are adaptations under CC BY 4.0.
 
 Shipped with the packet:
 - `packets/missing-muscles-r1/ATTRIBUTION-AND-LICENCES.txt`: credits, licences, changes.

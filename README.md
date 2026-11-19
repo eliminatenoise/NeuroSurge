@@ -2,7 +2,9 @@
 
 [Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/). [Download a Windows, macOS or Linux launcher](https://eliminatenoise.github.io/NeuroSurge/START.html).
 
-Look at a motor area to select it. Click or choose a numbered movement to see the body part move. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
+Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
+
+Body update 38 goes back to the early comic look, flat and matte, with a pinker brain on a blacker background. Rest your look on a coloured area of the brain: the part is driven hard to its end, rebounds, and eases back a little. Click to drive it in again. Press on an arm or a leg and drag to turn and bend it.
 
 Body update 37 helps you move between the game and its instructions with the keyboard. Press **R** for more information, then Tab to **Sources and rights** and press **Space** to open it. On the **Esc** page, Tab stays in the instructions even after you click the heading.
 

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { partPickName } from '../scene/src/ns-scene-three.mjs';
-import { createActivity, GAZE_DWELL, LOOK_ARMS } from '../scene/src/ns-actions.mjs';
+import { createActivity, GAZE_DWELL, LOOK_ARMS, JOINT_LATCH } from '../scene/src/ns-actions.mjs';
 
 const H = 1 / 60;
 const look = (regionId, actionId) => ({ type: 'gaze', kind: 'region', regionId, actionId, at: 0 });
@@ -18,8 +18,10 @@ function started(opts) {
 function frames(A, s0, n, ev) { let s = s0; const marks = []; for (let i = 0; i < n; i++) { const r = A.stepGated(s, ev ? [ev()] : [], H); s = r.state; marks.push(...r.marks); } return { s, marks }; }
 
 test('S4: a look that rests on a motor area only arms it: the key lights, the muscles show a hint, nothing moves', () => {
-  assert.equal(LOOK_ARMS.on, true);
-  const { A, s } = started();
+  // 19 November 2026: the owner went back to activation by the look (LOOK_ARMS.on false); the arming rule stays as an
+  // option of the activity and is tested as such here.
+  assert.equal(LOOK_ARMS.on, false);
+  const { A, s } = started({ lookArms: { ...LOOK_ARMS, on: true } });
   const knee0 = s.bodyGoal.knee_ext_L;
   const { s: s1, marks } = frames(A, s, Math.ceil((GAZE_DWELL.latchS + 0.5) / H), () => look('rh_knee', 'rh_knee_flex'));
   assert.equal(s1.bodyGoal.knee_ext_L, knee0, 'the rest of a look latched nothing');
@@ -40,14 +42,14 @@ test('S4: a look that rests on a motor area only arms it: the key lights, the mu
 });
 
 test('S4: a number key (the same event as a muscle tap) presses the area too', () => {
-  const { A, s } = started();
+  const { A, s } = started({ lookArms: { ...LOOK_ARMS, on: true } });
   const s1 = frames(A, s, 30, () => look('rh_knee', 'rh_knee_flex')).s;
   const s2 = frames(A, A.step(s1, [{ type: 'muscle', regionId: 'rh_knee', actionId: 'rh_knee_flex', regionOnly: false, at: 0 }], H), 30).s;
   assert.equal(s2.bodyGoal.knee_ext_L, -135);
 });
 
 test('S4: a look on the left forearm turn area does not turn the forearm for its second', () => {
-  const { A, s } = started();
+  const { A, s } = started({ lookArms: { ...LOOK_ARMS, on: true } });
   const r0 = s.rotation.value;
   const s1 = frames(A, s, 50, () => look('rh_forearm', s.rotationState === 'supinated' ? 'pronation' : 'supination')).s;
   assert.equal(s1.rotation.value, r0, 'the forearm did not turn');
@@ -136,4 +138,48 @@ test('M3: a held number key moves the part only while it is held; a short press 
   const C = createControls();
   const q = C.drainUiEvents(C.moveKeyUp(C.moveKey(C.state, 3, 0), 3, 10));
   assert.deepEqual(q.map(e => e.type + e.n), ['move3', 'moveUp3']);
+});
+
+// 19 November 2026 (the owner: "go back to activation simply by cursor highlight"; "it activates heavily relaxes slightly
+// and repeats that process with each further click")
+test('by default a look that rests on a motor area switches it on: it drives hard to the end, eases back a little, and a further press drives it in again', () => {
+  const { A, s } = started();
+  const J = JOINT_LATCH, travel = -135 - s.bodyPos.knee_ext_L, eased = -135 - J.relax * travel; // the knee's travel from its start angle
+  // the look's rest latches the movement; a quarter second on, the knee has been at (or past) its end angle
+  let st = frames(A, s, Math.ceil(GAZE_DWELL.latchS / H) + 1, () => look('rh_knee', 'rh_knee_flex')).s, furthest = 0;
+  assert.equal(st.bodyGoal.knee_ext_L, -135, 'the look bent the knee');
+  for (let i = 0; i < Math.ceil(J.driveS / H); i++) { st = A.stepGated(st, [], H).state; furthest = Math.min(furthest, st.bodyPos.knee_ext_L); }
+  assert.ok(furthest <= -135, `driven all the way to its end (${furthest.toFixed(1)})`);
+  // then it eases back a little and waits there
+  const settled = frames(A, st, 300).s;
+  assert.equal(settled.bodyGoal.knee_ext_L, -135, 'still held');
+  assert.ok(Math.abs(settled.bodyPos.knee_ext_L - eased) < 0.5, `eased back to ${eased.toFixed(1)} (${settled.bodyPos.knee_ext_L.toFixed(1)})`);
+  assert.ok(Math.abs(eased - -135) > 10 && Math.abs(eased - -135) < 0.3 * Math.abs(travel), 'a little, not most of the way');
+  // a further press of the same movement: no jump in the picture, and it is driven to its end again
+  let again = A.step(settled, [{ type: 'muscle', regionId: 'rh_knee', actionId: 'rh_knee_flex', regionOnly: false, at: 0 }], H);
+  assert.equal(again.bodyGoal.knee_ext_L, -135, 'the goal stays');
+  assert.ok(again.bodyPos.knee_ext_L < settled.bodyPos.knee_ext_L && again.bodyVel.knee_ext_L !== 0, `it is knocked toward its end, not thrown back (${again.bodyPos.knee_ext_L.toFixed(1)} from ${settled.bodyPos.knee_ext_L.toFixed(1)})`);
+  furthest = 0;
+  for (let i = 0; i < Math.ceil(J.driveS / H); i++) { again = A.stepGated(again, [], H).state; furthest = Math.min(furthest, again.bodyPos.knee_ext_L); }
+  assert.ok(furthest <= -135, `in again, all the way (${furthest.toFixed(1)})`);
+  const back = frames(A, again, 300).s;
+  assert.ok(Math.abs(back.bodyPos.knee_ext_L - eased) < 0.5, 'and eased back again');
+});
+
+test('a movement with little travel still shows: straightening a nearly straight knee kicks against its end', () => {
+  // the game's start posture has the knees 6 degrees bent, and the knee's range ends at straight
+  const { A, s } = started({ bodyRest: { knee_ext_L: -6, knee_ext_R: -6 }, bodyJointLimits: { knee_ext_L: [-135, 0], knee_ext_R: [-135, 0] } });
+  let st = frames(A, s, Math.ceil(GAZE_DWELL.latchS / H) + 1, () => look('rh_knee', 'rh_knee_extend')).s, far = 0;
+  const start = s.bodyPos.knee_ext_L;
+  assert.equal(st.bodyGoal.knee_ext_L, 0);
+  for (let i = 0; i < 30; i++) { st = A.stepGated(st, [], H).state; far = Math.max(far, Math.abs(st.bodyPos.knee_ext_L - 0)); }
+  assert.ok(far > 8, `the knee swings ${far.toFixed(1)} degrees about its end, where its own travel is ${Math.abs(start)}`);
+  const settled = frames(A, st, 300).s;
+  assert.ok(settled.bodyPos.knee_ext_L <= 0 && settled.bodyPos.knee_ext_L >= Math.min(start, 0), `and waits on its own side (${settled.bodyPos.knee_ext_L.toFixed(1)})`);
+});
+
+test('under reduced motion a press neither kicks nor eases back: the joint goes to its end and stays', () => {
+  const { A, s } = started({ jointSpring: JOINT_LATCH.reducedMotion });
+  const st = frames(A, frames(A, s, Math.ceil(GAZE_DWELL.latchS / H) + 1, () => look('rh_knee', 'rh_knee_flex')).s, 400).s;
+  assert.ok(Math.abs(st.bodyPos.knee_ext_L - -135) < 0.5, `at its end (${st.bodyPos.knee_ext_L})`);
 });

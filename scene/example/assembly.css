@@ -15,6 +15,15 @@
 .ns-assembly-static p { margin: 0; }
 .ns-assembly-static progress { width: min(12rem, 85vw); accent-color: #7fe3ff; }
 
+/* 19 November 2026, late: no separate loading picture any more (eye-view-r558 LOADING_PICTURE). While the game loads,
+   the page shows the game's own dark backdrop (the tones of the room the game draws: nearly black, a little lighter
+   low in the middle) with the loading bar; the game's canvas is held back and then fades in over that same backdrop,
+   so loading and playing are one picture. (Under reduced motion neurosurge.css stops the fade: the game is there at
+   once.) */
+.ns-app { background: radial-gradient(120% 95% at 50% 64%, #1b2124 0%, #14191c 45%, #0f1316 78%); }
+.ns-app[data-ns-phase="loading"] .ns-canvas { opacity: 0; }
+.ns-app[data-ns-phase="playing"] .ns-canvas { transition: opacity 0.45s ease-out; }
+
 /* 19 November 2026: the loading bar (ns-load-progress). One clear bar with its percentage, for the whole wait: the
    download and every step of building the game. White on near-black; the fill and the number move as transitions of
    `transform`, which the browser plays even while the page is busy building. */
@@ -41,7 +50,7 @@
 @keyframes ns-load-early { from { transform: scaleX(0.004); } to { transform: scaleX(0.05); } }
 /* The fill and the number are moved by Web Animations (ns-load-progress), which also run under reduced motion, where
    neurosurge.css stops every CSS transition: a progress bar that grows is the information itself, not decoration. */
-.ns-load.ns-load-stopped .ns-load-fill { background: #ffb347; }
+.ns-load.ns-load-stopped .ns-load-fill { background: #ffb347; animation-play-state: paused; }
 /* The failure panel: loading failed or stopped; plain words and one button. */
 .ns-load-fail {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; box-sizing: border-box;
@@ -130,6 +139,8 @@ body:has(.ns-load) .ns-assembly-static p, body:has(.ns-load) .ns-assembly-static
   .ns-pad-plate { width: 120px; height: 84px; }
   .ns-pad-finger { left: 18px; top: 46px; width: 16px; height: 16px; }
   @keyframes ns-pad-move { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(44px, -22px); } }
+  /* the loading bar stands in the middle of the picture here, clear of the two panels along the bottom */
+  .ns-load { bottom: auto; top: 38%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ns-assembly.ns-assembly-out, .preview-note { transition: none; }

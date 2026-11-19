@@ -116,6 +116,8 @@ import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performan
  * contraction swell (baked after loading and stepped every frame) and the limb-contact model (built at load for a
  * rule that is switched off). Their code stays; set one back to true to bring it in again. */
 export const PLAIN_GAME = Object.freeze({ vessels: false, swell: false, selfContact: false });
+/** 19 November 2026: false = no numbered lists of movements on screen (the tip and the short card); see the tip's code. */
+export const NUMBER_LISTS = false;
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -425,9 +427,23 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   const eyeDown = eyeDownForHead(pitch / DEG, L);
   const viewDown = Number.isFinite(L.viewDownDeg) ? L.viewDownDeg : null, viewUp = Number.isFinite(L.viewUpDeg) ? L.viewUpDeg : null;
   const headView = pitch / DEG - eyeDown; // where the camera looks with the eyes only lowered in the head
-  const eyePitch = viewDown === null || viewUp === null || Math.abs(eyeOver) < 1e-9 ? 0 : clamp(headView + eyeOver, Math.min(headView, -viewDown), Math.max(headView, viewUp)) - headView;
+  let eyePitch = viewDown === null || viewUp === null || Math.abs(eyeOver) < 1e-9 ? 0 : clamp(headView + eyeOver, Math.min(headView, -viewDown), Math.max(headView, viewUp)) - headView;
+  let eyeYawOut = eyeYaw, lookOut = { yaw: yaw + eyeYaw * DEG, pitch: (headView + eyePitch) * DEG };
+  // 19 November 2026 (looking at a motor area switches it on again, and the neck area's jerk of 100 degrees threw the
+  // whole view up into empty space): the VIEW is the look alone. A neck or trunk movement held by its motor area moves
+  // the head and the body under it (the mirror body shows it), and the eyes take up the difference, so the picture
+  // stays where the pointer left it. (Before, a held neck angle was added to the look.)
+  if (!LOOK_BENDS_TRUNK && viewDown !== null && viewUp !== null) {
+    const wantPitch = clamp(look.pitch / DEG, -viewDown, viewUp);
+    let dy = look.yaw / DEG - yaw / DEG; dy = ((dy + 180) % 360 + 360) % 360 - 180;
+    eyeYawOut = dy; eyePitch = wantPitch - headView;
+    lookOut = { yaw: look.yaw, pitch: wantPitch * DEG };
+  }
   return { joints: { neck_rot: neckRot + 0, neck_flex: neckFlex + 0, trunk_flex: 0 }, twistDeg: twist + 0, bendDeg: bend + 0, bendDirDeg: psiDeg + 0,
-    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: { yaw: yaw + eyeYaw * DEG, pitch: (headView + eyePitch) * DEG }, headLook: { yaw, pitch }, eyeYawDeg: eyeYaw + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
+    // eyeJoints: the neck of the look ALONE (no neck angle held by a motor area): where the camera's eye stands, so a
+    // neck area's jerk moves the drawn head but not the place the picture is taken from (19 November 2026)
+    eyeJoints: { neck_rot: clamp(ly, -L.neckRotDeg, L.neckRotDeg) + 0, neck_flex: clamp(-lp - held, -L.neckExtDeg, L.neckFlexDeg) + 0, trunk_flex: 0 },
+    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: lookOut, headLook: { yaw, pitch }, eyeYawDeg: eyeYawOut + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
     // 18 November 2026 (a check: any trunk turn or side bend tore the chest open in the eye view): the held trunk turn,
     // trunk side bend and neck side bend are handed on as they are, so whoever places the eye (the camera) and the left
     // shoulder root on the posed head and chest places them on the body AS DRAWN. Before, the eye stayed where a head
@@ -2091,18 +2107,28 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   // chest's, while the drawn body frame stays where it is (the pose turns and bends, not the frame). Without them
   // (no body rig, or a caller with no head) it is the earlier rule: the NECK_FLEX eye shift and the trunk yaw.
   // Returns { attachment, eyeShift (BodyParts3D mm of the eye from its start place) }.
-  const headCache = { key: '', frame: null };
+  const headCache = { key: '', frame: null }, eyeCache = { key: '', frame: null };
   function headAttachment(look, head = null) {
     const j = head && head.joints, cy = head && head.carry, key = j ? `${j.neck_rot}|${j.neck_flex}|${j.trunk_flex}|${head.twistDeg}|${head.bendDeg}|${head.bendDirDeg}|${cy ? cy.trunk_rot + '|' + cy.trunk_side + '|' + cy.neck_side : ''}` : '';
     // headFrame returns null while the body rig is not there (it streams in after the first frames).
     if (j && headFrame && fitAnatomy && headCache.key !== key) { headCache.frame = headFrame(head) || null; headCache.key = headCache.frame ? key : ''; }
     if (j && headFrame && fitAnatomy && headCache.frame && headCache.key === key) {
       const fr = headCache.frame, e0 = fitAnatomy.eyeBp, s0 = fitAnatomy.shoulderBp;
+      // 19 November 2026: the eye is the eye of the look-only head (head.eyeJoints), so a neck movement held by a motor
+      // area moves the drawn head without moving the camera
+      let frEye = fr;
+      const je = !LOOK_BENDS_TRUNK && head.eyeJoints ? head.eyeJoints : null;
+      const sideHeld = cy && Number.isFinite(cy.neck_side) && cy.neck_side !== 0;
+      if (je && (je.neck_rot !== j.neck_rot || je.neck_flex !== j.neck_flex || sideHeld)) {
+        const keyE = `${je.neck_rot}|${je.neck_flex}|${key}`;
+        if (eyeCache.key !== keyE) { eyeCache.frame = headFrame({ ...head, joints: je, carry: cy ? { ...cy, neck_side: 0 } : cy }) || null; eyeCache.key = eyeCache.frame ? keyE : ''; }
+        if (eyeCache.frame) frEye = eyeCache.frame;
+      }
       const pt = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
       // 18 November 2026: the left shoulder girdle hangs from the breastbone and rolls forward with a bent back
       // (ns-body SHOULDER_ROLL); the game arm's shoulder root and its body axes are that girdle's frame (fr.l_girdle),
       // as the right arm's are. (Before: the one rigid chest, fr.thorax, which is now the first thoracic vertebra.)
-      const T = fr.l_girdle || fr.thorax, eye = pt(fr.skull, e0), sh = pt(T, s0);
+      const T = fr.l_girdle || fr.thorax, eye = pt(frEye.skull, e0), sh = pt(T, s0);
       // BodyParts3D axes -> world axes: x -> -x, y -> +z, z -> +y (ns-math bpToWorldAxes); R_world = A R_bp A^T.
       const w = v => [-v[0], v[2], v[1]];
       const c0 = w([-T[0], -T[1], -T[2]]), c1 = w([T[8], T[9], T[10]]), c2 = w([T[4], T[5], T[6]]);
@@ -4764,7 +4790,8 @@ export function start(params = {}) {
     expectedSha256 = PINNED_SHA256, activityOptions = {}, controlsOptions = {}, armOptions = {},
     shellRoot = null, storage = null, qa = false, resizeDebounce = RESIZE_DEBOUNCE, optionalModules = null, loadBody = null, streamBody = null,
     fetchBytes = null, sha256HexBytes = null, streamFace = null, viewGraph = null, wholeArmDisplay = null,
-    fetchPacked = null, onLoadStep = null // 19 November 2026 (package LOAD): meshes from a verified pack (ns-pack); the loading bar's steps
+    fetchPacked = null, onLoadStep = null, // 19 November 2026 (package LOAD): meshes from a verified pack (ns-pack); the loading bar's steps
+    prebuiltRig = null // () => Promise<rig file | null>: the body rig made beforehand from the SOURCE meshes (packs/BODY-RIG.json; ns-body bodyRigFromFile)
   } = params || {};
   const wholeArmOption = WholeArmDisplay.wholeArmDisplayOptions(wholeArmDisplay);
   let wholeArmLastRefusal = null, wholeArmLastCommitted = null, wholeArmAttempt = null, wholeArmAttemptSerial = 0;
@@ -5072,6 +5099,7 @@ export function start(params = {}) {
   // record (what stopped last and when, for the HUD and inspect()). A limb's dial turn is the body's own rotation joint
   // (the activity holds it, so Reset body puts it back).
   let limbGrasp = null, leftDialBinding = null, leftDial = 0;
+  let limbDragOf = null, limbDragDeg = 0, limbDragTold = false; // the tutorial's limb step (one report per drag)
   // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
   // dimension"): the point of the brain the crosshair took it at, in the brain's own frame (null: not held that way).
   let brainHoldLocal = null;
@@ -5348,6 +5376,7 @@ export function start(params = {}) {
   /** R558 (Messages 14 / 15): after the body (and its lift) is in the scene, register the right-hand muscles for
    * per-vertex skinning (ns-body handSkinRecords -> scene setBodySkin), so each finger's tendons follow that finger. On
    * any error the hand stays rigid (as before) and handSkinNote says why (inspect().features.handSkin). */
+  let bodyRigFrom = null;
   let handSkinReady = false, handSkinNote = null, skinSegmentsLast = null, skinPosedThisFrame = false;
   let skinElbowFlexLast = 0;
   function installHandSkin(sourceMeshes) {
@@ -6430,9 +6459,24 @@ export function start(params = {}) {
           await yieldToPaint();
           await barFrame();
           if (stopped || failed) return;
-          let rig;
+          let rig = null;
           inputsB = withBulk(inputsB); // package BULK
-          try { rig = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById); } catch (err) {
+          // 19 November 2026 (package LOAD): the game draws coarser meshes (packs/README.md). The joints' pivots are
+          // estimated from where the bones' vertices lie, so they are taken from the rig made beforehand from the SOURCE
+          // meshes (packs/BODY-RIG.json, ns-body bodyRigFromFile), with the bone each muscle rides; the file is refused unless
+          // it is this code's rig for exactly these meshes, and then the whole rig is estimated here from the meshes loaded.
+          bodyRigFrom = 'meshes';
+          if (typeof prebuiltRig === 'function' && typeof mods.body.bodyRigFromFile === 'function') {
+            try {
+              const file = await prebuiltRig();
+              if (stopped || failed) return;
+              if (file) {
+                const made = mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById, { prebuilt: mods.body.bodyRigFromFile(file, inputsB.entries) });
+                if (mods.body.bodyRigMatchesFile(made, file)) { rig = made; bodyRigFrom = 'file'; } else bodyRigFrom = 'meshes (the rig built does not match the rig file)';
+              }
+            } catch (err) { if (stopped || failed) return; rig = null; bodyRigFrom = `meshes (${errorText(err)})`; }
+          }
+          try { rig = rig || mods.body.buildBodyRig(inputsB.entries, inputsB.meshesById); } catch (err) {
             if (inputsB === withBulk(b)) throw err;
             // a packet the rig refuses: first without the extra muscles, then without the face and head (shown in the notes),
             // never no body
@@ -6488,6 +6532,10 @@ export function start(params = {}) {
           if (PLAIN_GAME.selfContact) installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
           if (PLAIN_GAME.swell) startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
           loadStep('skin', 'done'); loadStep('first');
+          // (package LOAD) one picture here too, so the bar is already moving when the first frame's own work (the pick
+          // tree, the reach, the first draw) takes the thread; without it the bar stood still for that whole step
+          await barFrame();
+          if (stopped || failed) return;
           // 18 November (package VESSELS): the named vessels of the limbs, riveted to this body's drawn muscles and bones
           if (PLAIN_GAME.vessels && sceneFn('setBodyVessels')) {
             const src = inputsB;
@@ -8501,11 +8549,18 @@ export function start(params = {}) {
           guardBrain(prevSim, out, now);
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
+          let limbDragged = false;
           for (const dragTurn of dragTurns) {
             if (dragTurn.target !== 'limb' || !dragTurn.binding) continue;
             applyLimbDial(dragTurn, out);
             turningLimb = dragTurn.binding.limb;
+            // the tutorial's limb step: how far this one drag has turned and bent the limb (reported once it is enough)
+            limbDragged = true;
+            if (dragTurn.binding.limb !== limbDragOf) { limbDragOf = dragTurn.binding.limb; limbDragDeg = 0; limbDragTold = false; }
+            limbDragDeg += Math.abs(dragTurn.dx || 0) * LIMB_DRAG.turnDegPerPx + Math.abs(dragTurn.dy || 0) * LIMB_DRAG.flexDegPerPx;
+            if (!limbDragTold && limbDragDeg >= NG.GUIDE_OPTIONS.limbDragMinDeg) { limbDragTold = true; guideAsyncEvents.push({ type: 'limbDrag', deg: limbDragDeg }); }
           }
+          if (!limbDragged && limbDragOf !== null && !(cs.button && cs.button.down)) { limbDragOf = null; limbDragDeg = 0; limbDragTold = false; }
         }
         // R4-text (D7): the "Try this" guide follows real events of this frame (one pure call; never blocks play).
         // R5-integrate-core (R5-text W2): the E goal hears the view changes (third when the switch starts, first when it ends).
@@ -9164,8 +9219,13 @@ export function start(params = {}) {
                 rotationState: typeof out.rotationState === 'string' ? out.rotationState : null });
               const areaCss = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) : ''; // 18 November (MAP)
               const overlap = lockedNow() && ctlFrame?.arrow && area.id === stepInputs?.keyboardAimId;
-              const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : '';
-              tipModel = quietTipModel({ area, actionId: typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId, moves: areaMoves, color: areaCss || '', hint, teach: !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });
+              // 19 November 2026 (the owner: "go back to activation simply by cursor highlight. The number overview is very
+              // confusing and creates feedback delay"): the tip names the area and the ONE movement the look does there (no
+              // numbered list); number keys still do the area's other movements for whoever knows them.
+              const tipAction = typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId;
+              const tipNow = Array.isArray(areaMoves) ? areaMoves.find(m => m && m.id === tipAction) || areaMoves.find(m => m && m.current) || null : null;
+              const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : NUMBER_LISTS ? '' : tipNow && typeof tipNow.label === 'string' ? tipNow.label : '';
+              tipModel = quietTipModel({ area, actionId: tipAction, moves: NUMBER_LISTS ? areaMoves : [], color: areaCss || '', hint, teach: NUMBER_LISTS && !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });
               if (quietRest.settled || area.id === stepInputs?.keyboardAimId) quietLast = { regionId: area.id, moves: areaMoves };
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
             } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
@@ -9369,6 +9429,7 @@ export function start(params = {}) {
       muscleMapCheck,
       // R558: whether the right hand's muscles follow each finger (per-vertex skin), and why not when they do not.
       handSkin: { ready: handSkinReady, note: handSkinNote },
+      bodyRigFrom, // the rig's pivots and muscle rows: 'file' (packs/BODY-RIG.json, made from the source meshes) | 'meshes' (estimated here from the meshes loaded)
       brainMode: sim ? (sim.regionMode ? 'region' : 'legacy') : null,
       armAttachment: sim ? (sim.anatomy ? 'anatomical (ns-arm armAttachment)' : 'camera-fixed fallback') : null,
       eye: eyeNote,
@@ -9542,6 +9603,7 @@ export function start(params = {}) {
       })() : undefined,
       ...(foregroundRequested ? { foregroundTrace: retainedForeground } : {}),
       ...(arrowRequested ? { arrowTrace: retainedArrows } : {}),
+      ...(options && options.bodyRig === true ? { bodyRig } : {}), // checks only: the rig in use (plain data)
       // R5-integrate-core (D18): the camera view and pose (orbit centre for exact third-person aiming), in both modes.
       camera: (() => { try { return NC.cameraSnapshot(cam, camPose); } catch { return null; } })(),
       data: sceneDataSummary(current.data, { meshes: Boolean(options && options.meshes === true) }),

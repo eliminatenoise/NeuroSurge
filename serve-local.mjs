@@ -60,7 +60,7 @@ export const SECURITY_HEADERS = Object.freeze({
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Resource-Policy': 'same-origin',
   'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), serial=(), bluetooth=()',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), serial=()',
   'Cache-Control': 'no-cache'
 });
 

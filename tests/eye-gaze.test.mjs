@@ -84,9 +84,16 @@ test('the view is free: all the way down, up and round, the eyes going on where 
   // no jump anywhere along the way
   let prev = null;
   for (let p = -88; p <= 88; p += 0.5) { const h = app.headPoseForLook(look(0, p), null, L).look.pitch / DEG; if (prev !== null) assert.ok(Math.abs(h - prev - 0.5) < 1e-6, `at ${p}`); prev = h; }
-  // a held neck movement still moves the view (the eyes do not undo it)
+  // 19 November 2026: a held neck movement moves the head, not the view (the eyes take up the difference): the picture
+  // stays where the pointer left it when a neck area jerks the head
+  const freeNeck = app.headPoseForLook(look(0, -20), null, L);
   const heldNeck = app.headPoseForLook(look(0, -20), { neck_flex: 8, neck_rot: 0, trunk_flex: 0 }, L);
-  assert.ok(heldNeck.look.pitch / DEG < -27 && heldNeck.eyePitchDeg === 0, 'the head jerks the view with it');
+  assert.ok(Math.abs(heldNeck.look.pitch - freeNeck.look.pitch) < 1e-12 && Math.abs(heldNeck.look.yaw - freeNeck.look.yaw) < 1e-12, 'the view stays where the look put it');
+  assert.ok(Math.abs(heldNeck.joints.neck_flex - freeNeck.joints.neck_flex - 8) < 1e-9, 'the head moves by the held angle');
+  assert.ok(Math.abs(heldNeck.headLook.pitch / DEG - heldNeck.eyeDownDeg + heldNeck.eyePitchDeg + 20) < 1e-9 && heldNeck.eyePitchDeg > freeNeck.eyePitchDeg + 5, 'the eyes take up the difference');
+  assert.deepEqual(heldNeck.eyeJoints, freeNeck.eyeJoints, 'the place the picture is taken from is the look-only head');
+  const turnedNeck = app.headPoseForLook(look(10, -20), { neck_flex: 0, neck_rot: 30, trunk_flex: 0 }, L);
+  assert.ok(Math.abs(turnedNeck.look.yaw / DEG - 10) < 1e-9 && Math.abs(turnedNeck.joints.neck_rot - 40) < 1e-9, 'a held turn turns the head, not the view');
 });
 
 test('the held trunk turn, trunk side bend and neck side bend are handed on to whoever places the eye', () => {

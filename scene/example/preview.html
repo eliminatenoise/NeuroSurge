@@ -30,7 +30,9 @@
   <div class="ns-load-text"><span class="ns-load-word">Loading</span><span class="ns-load-pct" aria-hidden="true"><span class="ns-load-pct-column"><span class="ns-load-pct-line">0 %</span></span></span></div>
   <div class="ns-load-track"><div class="ns-load-fill"></div></div>
 </div>
+<!-- First, and needing no other file: the guard that says so, with "Try again", when loading fails or stops. -->
+<script type="module" async src="../src/ns-load-guard.mjs"></script>
 <script type="module" src="./early-load.mjs"></script>
-<script type="module" src="./eye-view-r558.mjs"></script>
+<script type="module" src="./eye-view-r558.mjs" data-ns-needed></script>
 </body>
 </html>

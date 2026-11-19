@@ -8,13 +8,14 @@
  * Original P1F90 evidence remains historical; every new runtime/pixel/native gate is UNRUN. No QA setters or new APIs.
  */
 import * as THREE from '../../vendor/three.module.js';
-import { start, startFullBodyStream, startFaceStream } from '../src/ns-app.mjs';
+import { start, startFullBodyStream, startFaceStream, BRAIN_START_MOTOR_FRAC } from '../src/ns-app.mjs';
 import { PAGE, SHELL } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
 import { startAssembly, ASSEMBLY_EXPECTED_FILES } from '../src/ns-assembly.mjs';
 import { showControlsCard } from '../src/ns-controls-card.mjs';
-import { createLoadBar, createLoadWatch, showLoadFailure } from '../src/ns-load-progress.mjs';
+import { createLoadBar } from '../src/ns-load-progress.mjs';
+import { installLoadGuard } from '../src/ns-load-guard.mjs';
 import { startPackLoader, readAll } from '../src/ns-pack-loader.mjs';
 import { packKeyOfUrl } from '../src/ns-pack.mjs';
 
@@ -107,28 +108,39 @@ const canvas = document.getElementById('ns-canvas');
 const hudRoot = document.getElementById('ns-hud');
 const shellRoot = document.getElementById('ns-shell-root');
 const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
-// 17 November 2026: no start page and no loading page. While the files load, a picture of the parts coming together
-// covers the canvas (ns-assembly: it gets a COPY of the bytes fetched below and changes nothing the game receives),
-// and the main controls are shown for the first five seconds. Only the ordinary boot case; the two test cases keep
-// their plain page.
-const assembly = mode === 'boot' ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
+// 17 November 2026: no start page and no loading page; the main controls are shown for the first five seconds.
+// 19 November 2026, late: the separate loading picture (ns-assembly: a worker drew the arriving meshes inside out, in
+// an arrangement of its own, and cross-faded into the game) is switched off. The owner: "perhaps the it should be the
+// actual game models loading not loading page models"; "Performance and reliability should be our number one priority.
+// even if that means extreme simplicity and streamlining". A check found what the picture really was in a load of a
+// few seconds: a brain in one corner and two skeletons with a few muscle slivers, for two or three seconds, then half
+// a second of two different arrangements on top of each other. The game's own scene cannot yet be drawn part by part
+// (its camera and every placement need the finished rig, and the body is installed in one piece), so the honest
+// simple choice is taken: the game's own dark backdrop (assembly.css) with the loading bar, then the game itself,
+// faded in. It also frees a worker, a second graphics context and a copy of every mesh during the build.
+// LOADING_PICTURE = true brings the worker picture back as it was.
+const LOADING_PICTURE = false;
+const assembly = mode === 'boot' && LOADING_PICTURE ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
 if (mode === 'boot') app.dataset.nsPhase = 'loading';
 const controlsCard = mode === 'boot' ? showControlsCard({ host: document.body }) : null;
 // 19 November 2026 (the owner: "it just stays on the loading page forever. There should be a loading progress bar"):
-// one bar with a percentage for the whole wait (ns-load-progress), and a watchdog: when nothing has advanced for 20 s,
-// or loading fails, a panel says so with a "Try again" button. Only the ordinary boot case.
+// one bar with a percentage for the whole wait (ns-load-progress), and a guard (ns-load-guard, the page's first script,
+// which needs no other file): when nothing has advanced for 20 s, a script cannot be had, or loading fails, a panel
+// says so with a "Try again" button. Only the ordinary boot case.
 let barStorage = null;
 try { barStorage = window.localStorage; } catch { barStorage = null; }
-const loadBar = mode === 'boot' ? createLoadBar({ host: document.body, storage: barStorage }) : null;
-let loadFailure = null;
-const loadWatch = loadBar ? createLoadWatch({ lastAdvance: () => loadBar.model.lastAdvance(),
-  onStall: () => { if (loadFailure) return; loadBar.freeze('stalled'); loadFailure = showLoadFailure({ host: document.body, kind: 'stalled' }); },
-  onResume: () => { if (loadFailure) { loadFailure.remove(); loadFailure = null; } loadBar.thaw(); } }) : null;
+// (early-load.mjs, first on the page, has usually made the bar already and has been moving it with the packs' bytes)
+const earlyBar = mode === 'boot' && window.__nsEarly && window.__nsEarly.bar ? window.__nsEarly.bar : null;
+const loadBar = mode !== 'boot' ? null : earlyBar || createLoadBar({ host: document.body, storage: barStorage });
+if (earlyBar) { window.__nsEarly.launched = true; earlyBar.pageLoaded(); }
+const guard = mode === 'boot' ? installLoadGuard() : null;
+if (guard) guard.attach({ bar: loadBar, lastAdvance: () => loadBar.model.lastAdvance() });
 // 19 November 2026 (the owner: "Game should not take long to load at all. Minutes are a liability"): the anatomy comes
 // as six mesh packs (19 MB, fetched and decoded in a worker) instead of 691 OBJ text files (166 MB); see ns-pack.
 // A file a pack cannot give is fetched as before. Only the ordinary boot case; the two test cases read the files.
 const loadCount = { fetched: 0, served: 0 };
-const onPackProgress = (files, of) => { if (loadBar) loadBar.set('files', (files + loadCount.fetched) / Math.max(1, of || ASSEMBLY_EXPECTED_FILES)); };
+// (the 'files' step ends when the last file is in: every pack whole, or the last file handed to the game)
+const onPackProgress = (files, of) => { if (!loadBar) return; const f = (files + loadCount.fetched) / Math.max(1, of || ASSEMBLY_EXPECTED_FILES); loadBar.set('files', f); if (f >= 1) loadBar.done('files'); };
 // early-load.mjs (first on the page) has usually started the packs already, while this script's own files travelled.
 const early = mode === 'boot' && window.__nsEarly && window.__nsEarly.loader ? window.__nsEarly : null;
 if (early) early.listen(onPackProgress);
@@ -137,18 +149,19 @@ if (mode !== 'boot') { try { document.querySelector('.ns-load.ns-load-early')?.r
 /** One more mesh file has been handed to the game (from a pack or fetched): the bar's "checking" step. */
 function noteServed() {
   loadCount.served++;
-  if (loadBar) loadBar.set('check', loadCount.served / ASSEMBLY_EXPECTED_FILES);
+  if (!loadBar) return;
+  loadBar.set('check', loadCount.served / ASSEMBLY_EXPECTED_FILES);
+  if (loadCount.served >= ASSEMBLY_EXPECTED_FILES) loadBar.done('files');
 }
 function finishLoading(phase, error = null) {
   app.dataset.nsPhase = phase;
   const immediate = phase !== 'playing';
   if (immediate) controlsCard?.remove();
   assembly?.finish({ immediate });
-  loadWatch?.stop();
   if (!loadBar) return;
-  if (phase === 'playing') { if (loadFailure) { loadFailure.remove(); loadFailure = null; } loadBar.finish(); }
-  else if (phase === 'error') { loadBar.freeze('failed'); if (loadFailure) loadFailure.remove(); loadFailure = showLoadFailure({ host: document.body, kind: 'failed', detail: firstFetchError || error || '' }); }
-  else loadBar.remove();
+  if (phase === 'playing') { guard.finish(); loadBar.finish(); }
+  else if (phase === 'error') guard.fail(firstFetchError || error || '');
+  else { guard.finish(); loadBar.remove(); }
 }
 const observations = { mode, configurationSignature: CONFIGURED_R302_SIGNATURE, qa: false, placeholder: false,
   bodyFactoryCalls: 0, faceFactoryCalls: 0, bodyProgress: null, bodyProgressAtStop: null, ownedStreams: [], stopIssued: false, stopBefore: null,
@@ -374,7 +387,7 @@ try {
     packetBases: { 'pov-demo-assets': app.dataset.packetPovDemoAssets, 'pov-demo-assets-r2': app.dataset.packetPovDemoAssetsR2 },
     movementMapUrl: app.dataset.movementMapUrl, fetchText, sha256Hex, fetchBytes, sha256HexBytes,
     placeholder: false, qa: false, storage, streamBody, streamFace, viewGraph,
-    ...(mode === 'boot' ? { fetchPacked, onLoadStep: (id, what) => { if (!loadBar) return; if (what === 'done') loadBar.done(id); else loadBar.begin(id); } } : {}) });
+    ...(mode === 'boot' ? { fetchPacked, prebuiltRig: () => (packs ? packs.rig() : Promise.resolve(null)), onLoadStep: (id, what) => { if (!loadBar) return; if (what === 'done') { if (id === 'check') loadBar.done('files'); loadBar.done(id); } else loadBar.begin(id); } } : {}) });
   ready = scene.ready.then(r => {
     const status = scene.status();
     const phase = status.stopped && !status.failed ? 'stopped' : r.ok === true && status.phase === 'running' ? 'playing' : 'error';
@@ -433,17 +446,18 @@ export async function assertConfiguredBoot() {
   requireCase(s.camera && s.camera.pose && s.camera.pose.firstPerson === true && s.camera.pose.thirdPerson === false, 'actual camera must use configured FIRST-person route');
   requireCase(g.fovYDeg === EYE_FOV_Y_DEG && g.initialLook.yaw === 0 && g.initialLook.pitch === START_LOOK_PITCH_DEG * DEG, 'actual constructor graph must resolve the declared R558 eye-view inputs');
   requireCase(observations.firstReadyReadback.simulationViewport && observations.firstReadyReadback.simulationViewport.fovYDeg === EYE_FOV_Y_DEG, 'declared landscape reproduction must use actual simulation FOV90, not posthoc projection');
-  requireCase(g.initialBrainPlacement.yaw === 0 && g.initialBrainPlacement.pitch === 0, 'explicit initialBrainPlacement must resolve the declared R558 eye-view inputs');
+  requireCase(g.initialBrainPlacement.yaw === 0 && g.initialBrainPlacement.pitch === BRAIN_START_PITCH_DEG * DEG, 'explicit initialBrainPlacement must resolve the declared R558 eye-view inputs');
   // R558 (the motor strip fills the view). The earlier start layout (the strip 0.82 of the free width beside a right-hand
   // info column) is overturned; this is the equally strict check of the new one, read from the frame the App itself
   // holds: the contain fit of the strip's true shape in the whole view, no motor area cut off by a screen edge, and
   // where the window's width limits the fit the two outer motor areas end within 2 % of the view width from the edges
   // (a very wide window is limited by its height instead and must then fill that).
   const fit = s.state.brainFrame && s.state.brainFrame.beltFit, bx = fit && fit.beltBoxNdc;
-  requireCase(fit && fit.fit === 'motor' && fit.motorFrac === 1 && bx && [bx.x0, bx.x1, bx.y0, bx.y1].every(Number.isFinite), 'start framing must be the motor-strip fit that fills the view');
+  // 19 November 2026: the strip no longer fills the view. It is drawn at the app's own share of the view
+  // (BRAIN_START_MOTOR_FRAC) and higher, so the mirror body and your own body show under it; the check is that share
+  // and that no motor area is cut off.
+  requireCase(fit && fit.fit === 'motor' && fit.motorFrac === BRAIN_START_MOTOR_FRAC && bx && [bx.x0, bx.x1, bx.y0, bx.y1].every(Number.isFinite), 'start framing must be the motor-strip fit at the app\'s own share of the view');
   requireCase(bx.x0 >= -1 && bx.x1 <= 1 && bx.y0 >= -1 && bx.y1 <= 1 && bx.x1 > bx.x0 && bx.y1 > bx.y0, 'no motor area may be cut off by a screen edge at the start');
-  const sideGaps = [(bx.x0 + 1) / 2, (1 - bx.x1) / 2], endGaps = [(bx.y0 + 1) / 2, (1 - bx.y1) / 2];
-  requireCase(fit.limiting === 'height' ? Math.min(...endGaps) <= 0.02 : sideGaps.every(v => v <= 0.02), 'the motor strip must fill the view: side gaps of at most 2 % of the width, or the full height in a very wide window');
   // R558 (user Message 7): every turn arrow is a V tip at the middle of a side of its target's frame: the motor strip's
   // horizontal 16:9 frame and the mirror body's vertical 9:16 frame. No earlier launcher check pinned the ribbon arrows
   // or the compass rose; this is the strict check of the new placement, read from the plan the App itself holds (its
@@ -454,6 +468,7 @@ export async function assertConfiguredBoot() {
   // at the start look.
   const arrowTrace = scene.inspect({ arrowTrace: true }).arrowTrace, arrows = arrowTrace && arrowTrace.value;
   requireCase(arrows && arrows.brain && arrows.brain.shown === true, 'the brain turn arrows must be shown at the start');
+  const shownTips = {};
   const checkArrowFrame = (set, aspect, name) => {
     const f = set.frame, tol = 0.15;
     requireCase(f && f.aspect === aspect && Array.isArray(f.fittedPx) && Array.isArray(f.targetBoxPx) && f.spots, name + ' arrows must be planned on their frame');
@@ -462,6 +477,9 @@ export async function assertConfiguredBoot() {
     requireCase(Math.abs(x0 + x1 - bx0 - bx1) <= 2 * tol && Math.abs(y0 + y1 - by0 - by1) <= 2 * tol && (Math.abs(x1 - x0 - bx1 + bx0) <= 2 * tol || Math.abs(y1 - y0 - by1 + by0) <= 2 * tol), name + ' frame must be the smallest rectangle of its aspect round the target, centred on it');
     for (const d of ['forward', 'back', 'left', 'right']) {
       const sp = f.spots[d], tip = set.dirs && set.dirs[d], b = tip && tip.boxPx, along = d === 'forward' || d === 'back' ? 0 : 1;
+      // 19 November 2026: the brain stands higher, so the side of its frame that lies off the screen has no tip drawn
+      if (sp && !b) { shownTips[name] = (shownTips[name] || 0); continue; }
+      shownTips[name] = (shownTips[name] || 0) + 1;
       requireCase(sp && b && Math.abs(sp.atPx[along] - sp.midPx[along]) <= tol, name + ' ' + d + ' tip must sit on the centre line of its frame side');
       requireCase(b.x0 >= 0 && b.y0 >= 0 && b.x1 <= window.innerWidth && b.y1 <= window.innerHeight, name + ' ' + d + ' tip must lie wholly on screen');
       requireCase(sp.overlap === false, name + ' ' + d + ' tip must not overlap another tip or the crosshair box');
@@ -470,12 +488,16 @@ export async function assertConfiguredBoot() {
     }
   };
   checkArrowFrame(arrows.brain, 16 / 9, 'brain');
-  if (arrows.mirror && arrows.mirror.shown === true) checkArrowFrame(arrows.mirror, 9 / 16, 'mirror body');
+  requireCase(shownTips.brain >= 3, 'at least three of the brain\'s four turn arrows must be drawn at the start');
+  // 19 November 2026: the mirror body stands under the strip and is moved as a whole (drag, or Space and carry); its
+  // arrows are no longer part of the start picture's contract, so only their presence is read here.
+  requireCase(!arrows.mirror || typeof arrows.mirror.shown === 'boolean', 'the mirror body\'s arrows must report whether they are shown');
   requireCase(g.referenceBp.length === 3 && g.originalEyeBp.length === 3 && g.referenceBp.every(Number.isFinite) && g.originalEyeBp.every(Number.isFinite) && g.referenceBp.every((v, i) => v === g.originalEyeBp[i]), 'eye selector must retain the exact validated source eye coordinates; this is a display reference, not measured normal eye anatomy');
   const initialPose = observations.firstReadyReadback.camera && observations.firstReadyReadback.camera.pose;
-  requireCase(initialPose && initialPose.firstPerson === true && initialPose.thirdPerson === false && initialPose.position.length === 3 && initialPose.position.every(Number.isFinite) && initialPose.position.every(v => v === 0), 'declared eye/yaw0/pitch0 source construction must retain a zero-origin FIRST-person snapshot; not measured eye anatomy');
-  // Match the existing cameraSnapshot six-decimal representation, not a new numerical tolerance.
-  requireCase(initialPose.yaw === 0 && initialPose.pitch === 0, 'first-frame reported look must equal the declared initial look in the existing snapshot format');
+  // 19 November 2026: the eye stands back from the source eye point and the start look is the app's own (the brain
+  // higher, the body in view); the first frame must still be the first-person route with finite numbers.
+  requireCase(initialPose && initialPose.firstPerson === true && initialPose.thirdPerson === false && initialPose.position.length === 3 && initialPose.position.every(Number.isFinite), 'the first frame must be a FIRST-person snapshot with a finite eye position; not measured eye anatomy');
+  requireCase(Number.isFinite(initialPose.yaw) && Number.isFinite(initialPose.pitch) && Math.abs(initialPose.yaw) < 1e-6, 'the first-frame look must be finite and straight ahead');
   requireCase(observations.bodyFactoryCalls === 1 && observations.faceFactoryCalls === 1, 'one real factory/job per normal body and face stage');
   // R558 (user: "The mirror body should literally be a 1:1 perpendicular perfect reflection ... from the exact same
   // reflection angle at the beginning until manipulated"). The earlier start placement (a scaled, turned copy fitted
@@ -495,8 +517,14 @@ export async function assertConfiguredBoot() {
   requireCase((rf.drawnForemostM === null || rf.drawnForemostM === undefined || rf.foremostM >= rf.drawnForemostM - 1e-9) && (rf.reachForemostM === null || rf.reachForemostM === undefined || rf.foremostM >= rf.reachForemostM - 1e-9), 'the mirror plane must stand in front of the posed body and of everything it can reach');
   const pure = [1 - 2 * rn[0] * rn[0], -2 * rn[0] * rn[1], -2 * rn[0] * rn[2], 0, -2 * rn[0] * rn[1], 1 - 2 * rn[1] * rn[1], -2 * rn[1] * rn[2], 0,
     -2 * rn[0] * rn[2], -2 * rn[1] * rn[2], 1 - 2 * rn[2] * rn[2], 0, 2 * rc * rn[0], 2 * rc * rn[1], 2 * rc * rn[2], 1];
-  requireCase(pure.every((v, i) => Math.abs(v - mx[i]) <= 1e-9), 'the start mirror matrix must equal the pure plane reflection to 1e-9 in every entry');
-  requireCase(observations.firstReadyReadback.shell.mode === 'intro' && observations.firstReadyReadback.shell.introShown === true && Number.isFinite(observations.firstReadyReadback.shell.introHideAtMs), 'first ready must expose the ordinary timed intro; actual readable2000ms/pixels require native observation');
+  // 19 November 2026 (the owner: "make the two bodies more level"; the mirror body higher and under the strip): the
+  // start matrix is the plane reflection followed by the app's own placement, so it is no longer the pure reflection
+  // entry for entry. It must still be a mirror image (its 3 x 3 part has a negative determinant) of unchanged size.
+  const det3 = mx[0] * (mx[5] * mx[10] - mx[6] * mx[9]) - mx[4] * (mx[1] * mx[10] - mx[2] * mx[9]) + mx[8] * (mx[1] * mx[6] - mx[2] * mx[5]);
+  requireCase(pure.every(Number.isFinite) && det3 < 0 && Math.abs(Math.abs(det3) - 1) < 0.5, 'the start mirror matrix must be a mirror image of about the body\'s own size');
+  // 19 November 2026: the game starts playing at once (the controls card shows over it for a few seconds); the timed
+  // intro page is gone.
+  requireCase(typeof observations.firstReadyReadback.shell.mode === 'string' && observations.firstReadyReadback.shell.mode !== 'error', 'first ready must not be the error page');
   return { status: 'configured-first-frame-observed', evidence: readback(), limitation: 'Root binding/source route, not measured pelvis mechanics, full-arm/motor pixels or whole-game acceptance' };
 }
 async function settledOwnedAssets() {
@@ -570,7 +598,8 @@ export async function runDeclaredCase() {
   return { status: 'real-missing-face-configured-fatal-and-friendly-DOM-observed', evidence: readback(),
     limitation: 'Requires an actual HTTP404 from this fixed absent URL. This is a negative source/loader case, not anatomy or normal GPU cleanup proof' };
 }
-window.__nsQA = Object.freeze({ assembly: () => assembly ? assembly.state() : null, loading: () => ({ bar: loadBar ? loadBar.state() : null, packs: packs ? packs.state() : null, count: { ...loadCount }, failure: Boolean(loadFailure) }), ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
+window.__nsQA = Object.freeze({ assembly: () => assembly ? assembly.state() : null, loading: () => ({ bar: loadBar ? loadBar.state() : null, packs: packs ? packs.state() : null, count: { ...loadCount }, failure: Boolean(guard && guard.state().panel), guard: guard ? guard.state() : null }), ready, get firstView() { return scene ? scene.firstView : Promise.resolve({ ok: false, error: bootError }); }, inspect: options => scene ? scene.inspect(options) : null });
 window.__nsLoadingR302 = Object.freeze({ mode, configurationSignature: CONFIGURED_R302_SIGNATURE, ready,
   readback, runDeclaredCase, assertConfiguredBoot, stop, stopAfterConfiguredReady, assertStoppedUnchanged });
+if (guard) guard.takenOver(); // from here this launcher reports its own failures (failBoot -> finishLoading)
 window.addEventListener('pagehide', () => stop()); // finite caller never auto-restarts a completed/stopped App

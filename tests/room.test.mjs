@@ -59,7 +59,8 @@ test('it stays a dark picture: nothing but the lamp heads is brighter than a dar
   // behind you, level: the curtain's upper part is within a few steps of the old background colour 0x05070b
   const far = roomLight(EYE, dirOf(180, 25)).colour.map(srgbOf).map(v => Math.round(v * 255));
   assert.ok(far[0] <= 8 && far[1] <= 11 && far[2] <= 15, `dark above the horizon behind you: ${far}`);
-  assert.deepEqual(ROOM.black.map(srgbOf).map(v => Math.round(v * 255)), [5, 7, 11]);
+  // 19 November 2026 (the owner: "much darker blacks instead of ugly grays"): darker than the old 0x05070b, and neutral
+  assert.deepEqual(ROOM.black.map(srgbOf).map(v => Math.round(v * 255)), [3, 3, 4]);
 });
 
 test('the pool of light is under the brain and falls away; the grout is darker than the tile; shadows darken the floor', () => {

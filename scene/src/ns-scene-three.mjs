@@ -657,7 +657,14 @@ export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererNam
  * loading picture draws its models: plain smooth-shaded standard materials. The comic bands, painted fibres, wet
  * highlights and ink (muscleLookPatch, comicPatch), the ink outline pass, the hidden-limb ghost pass and the HDR bloom
  * are not applied and not run. The older look's code stays behind this one switch. */
-export const SIMPLE_LOOK = true;
+// 19 November 2026, later (the owner, after body update 35: "Muscles and bones look awful. Extremely low quality. Can we
+// please go back to the art style before the overhaul a while ago. Back when it was borderlands-telltale"): false
+// again. The bodies are drawn in the painted comic look of 18 November (smooth painted shading with fibre bundles,
+// tendon ends, ink outlines) with what was asked for since: a satin surface with little gloss, a steady light with
+// no blink or shudder, a near-black backdrop, no vessels. The plain look's code stays behind the switch.
+export const SIMPLE_LOOK = false;
+/** 'cel': the early comic look (BODY_CEL_EARLY, patchComicShadersCel); 'painted': the look of 18 November (BODY_FLESH). */
+export const BODY_STYLE = 'cel';
 export const QUALITY_LEVELS = Object.freeze([
   Object.freeze({ name: 'full', scale: 1, lite: false, lod: null }),
   Object.freeze({ name: 'scale-0.75', scale: 0.75, lite: false, lod: null }),
@@ -4122,6 +4129,112 @@ const COMIC_LINE_GLSL = `float nsLineCov( float h, float sp0, float lf, float ma
 	return c * ( 1.0 - smoothstep( maxL, maxL + 0.6, lf ) );
 }
 `;
+/** 19 November 2026: the comic look's shader patch as it stood before the bodies were painted on 18 November (the
+ * early cel look: tone bands, hatching, stipple, rim, ink), restored at the owner's wish (BODY_STYLE 'cel'). Same
+ * uniforms as patchComicShaders; the attribute nsHatch carries the hatch frame of hatchFrame() here. */
+export const COMIC_HOOKS_CEL = Object.freeze({ vertex: '#include <begin_vertex>', light: '#include <aomap_fragment>' });
+export function patchComicShadersCel(vertexShader, fragmentShader, kind = 'muscle') {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  const H = COMIC_HOOKS_CEL;
+  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.light) || !fragmentShader.includes('vViewPosition') || !fragmentShader.includes('reflectedLight')) return null;
+  const muscle = kind === 'muscle';
+  const tendon = muscle && fragmentShader.includes('varying float vNsTendon');
+  const vs = 'attribute vec4 nsHatch;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' +
+    vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsHatch = nsHatch;\n\tvNsObj = position;`);
+  const light = `${H.light}
+	{
+		const vec3 nsLw = vec3( 0.2126, 0.7152, 0.0722 );
+		vec3 nsDif = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
+		float nsAlb = max( dot( diffuseColor.rgb, nsLw ), 1e-4 );
+		float nsL = dot( nsDif, nsLw ) / nsAlb;
+		float nsCw = max( mix( nsCelBand.w, nsInkFar.z, smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) ), 0.75 * fwidth( nsL ) );
+		float nsB1 = smoothstep( nsCelBand.x - nsCw, nsCelBand.x + nsCw, nsL );
+		float nsB2 = smoothstep( nsCelBand.y - nsCw, nsCelBand.y + nsCw, nsL );
+		float nsB3 = smoothstep( nsCelBand.z - nsCw, nsCelBand.z + nsCw, nsL );
+		float nsTd = ${tendon ? 'clamp( vNsTendon, 0.0, 1.0 )' : muscle ? '0.0' : '1.0'};
+		float nsLv = mix( mix( mix( mix( nsCelLv.x, nsCelSpecAt.z, nsTd ), mix( nsCelLv.y, nsCelSpecAt.w, nsTd ), nsB1 ), nsCelLv.z, nsB2 ), mix( nsCelLv.w, nsCelSpecAt.y, nsTd ), nsB3 );
+		vec3 nsCol = nsL > 1e-3 ? nsDif * ( nsLv / nsL ) : diffuseColor.rgb * nsLv;
+		nsCol = mix( nsCol, vec3( dot( nsCol, nsLw ) ) * nsCelDeep.rgb, nsCelDeep.a * ( 1.0 - nsB1 ) );
+		vec3 nsN = normalize( normal ), nsV = normalize( vViewPosition );
+		float nsF = 1.0 - clamp( abs( dot( nsN, nsV ) ), 0.0, 1.0 );
+		float nsFw = max( fwidth( nsF ), 1e-4 );
+		float nsRimSide = smoothstep( -0.15, 0.45, dot( normalize( nsN.xy + vec2( 1e-5 ) ), nsCelRimDir.xy ) );
+		nsCol += diffuseColor.rgb * nsCelRimCol.rgb * ( nsCelRim.y * smoothstep( nsCelRim.x - nsFw, nsCelRim.x + nsFw, nsF ) * nsRimSide );
+		float nsGl = ${muscle ? 'smoothstep( 0.02, 0.2, max( emissive.r, max( emissive.g, emissive.b ) ) )' : '0.0'};
+		vec3 nsSp = reflectedLight.directSpecular;
+		float nsS = dot( nsSp, nsLw );
+		float nsSw = max( nsCelSpec.y, fwidth( nsS ) );
+		float nsSa = mix( nsCelSpec.x, nsCelSpecAt.x, nsTd );
+		float nsSk = nsSa * nsCelGloss.x;
+		float nsGk = 1.0 - smoothstep( nsCelGloss2.z, 2.0 * nsCelGloss2.z, length( fwidth( nsN ) ) );
+		float nsHi = smoothstep( nsSa - nsSw, nsSa + nsSw, nsS ) * mix( nsCelSpec.z, nsCelSpec.w, nsTd )
+			+ smoothstep( nsSk - nsSw, nsSk + nsSw, nsS ) * mix( nsCelGloss.y, nsCelGloss.z, nsTd );
+		vec3 nsSpec = ( nsS > 1e-5 ? nsSp / nsS : vec3( 1.0 ) ) * ( nsHi * nsGk + min( nsS, nsCelGloss2.y ) * nsCelGloss2.x );
+		float nsInkA = 0.0;
+		vec2 nsQ = vNsHatch.xy;
+		float nsQq = dot( nsQ, nsQ );
+		vec2 nsDx = dFdx( nsQ ), nsDy = dFdy( nsQ ); // derivatives outside the branch below (defined in every lane)
+		${muscle ? '' : `vec3 nsSc = vNsObj / nsInkStip.x;
+		float nsSn = nsVNoise( nsSc );
+		float nsSf = max( fwidth( nsSn ), 1e-4 );
+		float nsCellPx = 1.0 / max( length( fwidth( nsSc ) ), 1e-5 );`}
+		if ( nsInkLine.w > 0.5 && vNsHatch.w > 0.5 && nsQq > 1e-6 ) {
+			float nsK = vNsHatch.w * 0.15915494;
+			float nsH = atan( nsQ.y, nsQ.x ) * nsK;
+			float nsHp = ( abs( nsQ.x * nsDx.y - nsQ.y * nsDx.x ) + abs( nsQ.x * nsDy.y - nsQ.y * nsDy.x ) ) / nsQq * nsK + 1e-5;
+			float nsSp0 = 1.0 / nsHp;
+			float nsLf = log2( nsInkLine.x / nsSp0 );
+			float nsLine = floor( nsH * 0.25 + 0.5 );
+			float nsStroke = fract( vNsHatch.z / nsInkStroke.x + fract( sin( nsLine * 12.9898 ) * 43758.5453 ) * 7.0 );
+			float nsDash = smoothstep( 0.0, nsInkStroke.y, nsStroke ) * ( 1.0 - smoothstep( 1.0 - nsInkStroke.z, 1.0, nsStroke ) );
+			float nsShadow = ( 1.0 - nsB2 ) * 0.5 + ( 1.0 - nsB1 ) * 0.5;
+			${muscle ? `float nsFib = nsLineCov( nsH, nsSp0, nsLf, 1.0, nsInkLine.y ) * mix( nsInkMix.x, 0.0, nsTd );
+			float nsTen = nsLineCov( nsH * 0.25, 4.0 * nsSp0, nsLf - 2.0, 0.0, nsInkLine.y ) * nsInkMix.w * nsTd;
+			nsInkA = max( nsFib, nsTen ) * nsDash;` : ''}
+			float nsHat = mix( nsLineCov( nsH, nsSp0, nsLf, 2.0, nsInkLine.z ), nsLineCov( nsH, nsSp0, nsLf - 1.0, 2.0, nsInkLine.z ), 1.0 - nsB1 );
+			nsInkA = max( nsInkA, nsHat * nsInkMix.y * nsShadow * mix( nsDash, 1.0, 0.5 ) );
+			${muscle ? '' : `float nsDot = smoothstep( nsInkStip.y - nsSf, nsInkStip.y + nsSf, nsSn ) * smoothstep( nsInkStip.z, 1.6 * nsInkStip.z, nsCellPx );
+			nsInkA = max( nsInkA, nsDot * nsInkMix.z * ( 0.6 + 0.8 * nsShadow ) );`}
+		}
+		nsInkA *= ( 1.0 - 0.85 * nsGl ) * ( 1.0 - smoothstep( nsInkFar.x, nsInkFar.y, length( vViewPosition ) ) );
+		reflectedLight.directDiffuse = mix( nsCol, nsInk.rgb, nsInkA );
+		reflectedLight.indirectDiffuse = vec3( 0.0 );
+		reflectedLight.directSpecular = nsSpec * ( 1.0 - nsInkA );
+		reflectedLight.indirectSpecular *= ( 1.0 - nsInkA );
+	}${muscle && fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge') ? `
+	if ( nsCharge.z > 0.5 ) totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );` : ''}`;
+  const noise = (fragmentShader.includes('float nsVNoise(') ? '' : MUSCLE_FIBRE_NOISE_GLSL) + COMIC_LINE_GLSL;
+  const fs = 'uniform vec4 nsCelBand;\nuniform vec4 nsCelLv;\nuniform vec4 nsCelDeep;\nuniform vec4 nsCelRim;\nuniform vec4 nsCelRimCol;\nuniform vec4 nsCelRimDir;\nuniform vec4 nsCelSpec;\nuniform vec4 nsCelSpecAt;\nuniform vec4 nsCelGloss;\nuniform vec4 nsCelGloss2;\n' +
+    'uniform vec4 nsInk;\nuniform vec4 nsInkLine;\nuniform vec4 nsInkMix;\nuniform vec4 nsInkStroke;\nuniform vec4 nsInkStip;\nuniform vec4 nsHdrBoost;\nuniform vec4 nsInkFar;\nvarying vec4 vNsHatch;\nvarying vec3 vNsObj;\n' + noise +
+    fragmentShader.replace(H.light, light);
+  return { vertexShader: vs, fragmentShader: fs };
+}
+
+/** R558 (Message 18): per-vertex tendon weight of a muscle from its stack display geometry (pure). rest / full: the
+ * drawn positions without and with the full stack display (ns-body: lift plus fill, both ZERO on the vertices the stack
+ * rule anchors on bone, ramping up over the belly). d = |full - rest| per vertex, ref = its 75th percentile (the belly's
+ * displacement); anchored = 1 - smoothstep(0, share x ref, d): 1 on an anchored vertex, falling to 0 a few millimetres in.
+ * Anchored alone is not a tendon: the stack also anchors a belly that LIES on bone along its length (tibialis anterior
+ * on the tibia, the lower gluteus maximus over the ischium, the deltoid over the humerus), and those bellies turned
+ * grey-white over half their length. So the weight is anchored x endness, where endness says "this is where the
+ * muscle narrows into its tendon or ends": along the mesh's long axis (fibreAxis; s = position scaled to -1..1 between
+ * its endPercentile and 1 - endPercentile values) the mesh is cut into `bins` slices, each slice's spread across the
+ * axis (rms distance from the slice centre) is compared with the widest slice; a slice narrower than thinFrom .. thinTo
+ * of it counts as tendon (a fusiform belly narrowing into a cord, a fan converging on its insertion), away from the
+ * middle of the muscle (gateFrom .. gateTo of |s|); and the very tips (tipFrom .. tipTo of |s|) always count (every
+ * muscle ends on its attachment, even a broad one such as a midline origin). A broad, long sheet (widest slice spread
+ * / length from sheetFrom .. sheetTo and length from sheetLenFrom .. sheetLenTo mm: the trapezius parts, the external
+ * oblique, the gluteus maximus, the pectoralis major) counts as end everywhere it is anchored, since a sheet attaches
+ * through aponeuroses along whole borders (a midline origin, the rectus sheath), not only at the tips of its long
+ * axis; the thickness test below then keeps only its thin, aponeurotic parts. Last, where `indices` are given, the
+ * weight is kept only where the muscle is THIN (tendonThickness: the depth to the opposite surface of the same mesh,
+ * full below thinMm, none from thickMm): a tendon or aponeurosis is a cord or sheet a few millimetres thick, a belly is
+ * not, so a thick belly the stack anchors as a whole end cap (the lower gluteus maximus) stays muscle-coloured.
+ * Then smoothed over the surface
+ * (smoothPasses neighbour means over `indices`, when given). A geometric estimate from the anchor rule and the mesh
+ * shape, not a dissection record of where tendon tissue begins. Returns Float32Array(vertexCount) (all 0 when nothing
+ * moved). */
+
 export function patchComicShaders(vertexShader, fragmentShader, kind = 'muscle') {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const H = COMIC_HOOKS;
@@ -5729,7 +5842,7 @@ export function createScene({
   // Composed LAST on each muscle material (after the muscle look and the power-up) and on every bone material, so all
   // three items (your body, the left game arm, the mirror body, the in-place head) show the same bands, rim, highlight
   // shapes and ink. The ink is off at the coarse quality levels (comic.inkOn, QUALITY_LEVELS with a lod).
-  const C = BODY_CEL, inkLin = hexToLinear(C.ink);
+  const C = BODY_STYLE === 'cel' ? NsColors.BODY_CEL_EARLY : BODY_CEL, inkLin = hexToLinear(C.ink);
   const comic = { applied: null, materials: 0, inkOn: true, hatchMeshes: 0 };
   const comicUniforms = {
     nsCelBand: { value: new THREE.Vector4(C.bands[0], C.bands[1], C.bands[2], C.soft) },
@@ -5754,7 +5867,7 @@ export function createScene({
     if (SIMPLE_LOOK) return kind === 'bone' ? plainPatch(m, 'bone') : m;
     comic.materials++;
     return composePatch(m, `ns-comic-r558-${kind}`, shader => {
-      const p = patchComicShaders(shader.vertexShader, shader.fragmentShader, kind);
+      const p = (BODY_STYLE === 'cel' ? patchComicShadersCel : patchComicShaders)(shader.vertexShader, shader.fragmentShader, kind);
       comic.applied = p !== null && comic.applied !== false;
       if (!p) return;
       shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
@@ -5770,7 +5883,9 @@ export function createScene({
     // No ink lines where lengthwise lines would run the wrong way (builder FA: the face's ring muscles, muscleFibreScale 0).
     // 18 November: the attribute now carries the muscle's FIBRE FRAME (ns-flesh fibreFrame: across and along the muscle,
     // in millimetres) for the painted fibre bundles; a bone carries zeros (it is drawn without lines or grain).
-    const h = kind === 'muscle' && positions && positions.length === 3 * n && muscleFibreScale(id) > 0 ? fibreFrame(positions, fibreAxis(positions, 1), { indices: geo.index ? geo.index.array : null }) : null;
+    const h = BODY_STYLE === 'cel'
+      ? (positions && positions.length === 3 * n && !(kind === 'muscle' && muscleFibreScale(id) <= 0) ? hatchFrame(positions, { spacingMm: kind === 'bone' ? C.spacingMm.bone : C.spacingMm.muscle }) : null)
+      : kind === 'muscle' && positions && positions.length === 3 * n && muscleFibreScale(id) > 0 ? fibreFrame(positions, fibreAxis(positions, 1), { indices: geo.index ? geo.index.array : null }) : null;
     const a = new THREE.BufferAttribute(h ? h.attr : new Float32Array(4 * n), 4);
     geo.setAttribute('nsHatch', a);
     if (h) comic.hatchMeshes++;

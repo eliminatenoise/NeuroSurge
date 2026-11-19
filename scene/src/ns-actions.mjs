@@ -523,7 +523,10 @@ export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS
  * areas (the lead chose the control panel for every area). `on: false` (createActivity({ lookArms })) brings back the
  * old rule. A rule of this game, nothing measured.
  */
-export const LOOK_ARMS = Object.freeze({ on: true, muscleLevel: 0.22 });
+// 19 November 2026 (the owner: "Let's also go back to activation simply by cursor highlight. The number overview is
+// very confusing and creates feedback delay"): on: false again: a look that rests on a motor area switches it on at
+// once; a click while it is highlighted does it again (JOINT_LATCH driveS / relax / kick).
+export const LOOK_ARMS = Object.freeze({ on: false, muscleLevel: 0.22 });
 
 /**
  * 18 November 2026 (SMALL, audit M3; the owner, Note 47: "And the limbs should be manipulatable to any position by brain
@@ -619,7 +622,29 @@ const union = (a, b) => 1 - (1 - a) * (1 - b);
  * A display rule of this game. Nothing here is a measured movement speed, force or nerve signal.
  */
 export const JOINT_LATCH = Object.freeze({
-  omega: 50, zeta: 0.35, restitution: 0.4, reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
+  // 19 November 2026 (the owner: "as exaggerated and obvious as possible within reason ... imagine an extremely intense
+  // electroshock that causes a fierce contraction with acceleration and inertia. As if moving something heavy"; and
+  // "it activates heavily relaxes slightly and repeats that process with each further click"): a slower, heavier
+  // spring with far less damping (omega 50 -> 21, zeta 0.35 -> 0.26) and a harder rebound off the end stop (0.4 -> 0.55):
+  // the part gathers speed over several frames, slams into its end, is thrown back a good part of the way and swings
+  // in again two or three times before it holds.
+  // The owner's own order of events is "activates heavily, relaxes slightly, and repeats that process with each
+  // further click": so after the slam the part eases back a little and waits there, and the next click drives it in
+  // again. (The first version of this threw the part BACK on a further click, a jump in the picture, the wrong way
+  // round.)
+  //   driveS       seconds a press drives the joint at its full end angle before it eases off
+  //   relax        how far it then eases back, as a share of the swing (and never more than relaxMaxShare of the
+  //                joint's own travel from its start angle, so a small movement stays on its own side)
+  //   relaxOmega   the ease back: a critically damped spring of this frequency (soft, no wobble)
+  //   kick         a press that finds the joint already near its end (a further click, or a movement with little
+  //                travel such as straightening a knee that is nearly straight) gives it this speed toward the end,
+  //                as kick x swing x omega degrees a second: it slams into the end stop and is thrown back off it
+  //   minSwingDeg  the swing a small movement is given for the kick and the ease (a knee 6 degrees from straight
+  //                would otherwise show nothing at all), and never more than minSwingRangeShare of the joint's whole
+  //                range; nearShare: "already near its end" is within this share of the swing from the goal
+  // Under reduced motion none of this happens (the reducedMotion spring has no kick, relax or rebound).
+  omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.55, relax: 0.16, relaxMaxShare: 0.8, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
+  reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
   armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22,
   // 18 November 2026 (SMALL, audit S3; the owner: "a lot easier to use and play and more intuitive"): for the stage
@@ -672,6 +697,11 @@ const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_uln
 const HAND_LATCH_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension',
   'thumb_opposition', 'thumb_reposition']);
+
+/** JOINT_LATCH driveS / relax: the per-joint notes of a state (jointId -> [goal, ease back, drive seconds left]). */
+const jerkMapOk = m => m !== null && typeof m === 'object' && !Array.isArray(m)
+  && Object.values(m).every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
+const copyJerkMap = m => { const o = {}; if (m && typeof m === 'object') for (const k of Object.keys(m)) if (Array.isArray(m[k]) && m[k].length === 3 && m[k].every(Number.isFinite)) o[k] = m[k].slice(); return o; };
 
 /**
  * One exact step of a damped spring toward `goal`: x = pos - goal obeys x'' + 2 zeta omega x' + omega^2 x = 0
@@ -1641,6 +1671,7 @@ export function createActivity({
   }
   if (!(isFiniteNumber(armPoseTau) && armPoseTau > 0)) fail('activity_option', 'armPoseTau must be a positive number of seconds');
   const springOmega = jointSpring.omega, springZeta = jointSpring.zeta, springBounce = jointSpring.restitution === undefined ? 0 : jointSpring.restitution;
+  const relaxOmega = Number.isFinite(jointSpring.relaxOmega) && jointSpring.relaxOmega > 0 ? jointSpring.relaxOmega : jointSpring.omega;
   const limitJoint = (j, v) => (limitsBody && hasOwn(limitsBody, j) ? clamp(v, limitsBody[j][0], limitsBody[j][1]) : v);
   // Start angle of every joint (the start posture; 0 where none is given), inside the limits.
   const REST = {};
@@ -1746,6 +1777,7 @@ export function createActivity({
       bodyGoal: restMap(),                    // jointId -> degrees: where the joint is latched (start angle = not latched)
       bodyPos: restMap(),                     // jointId -> degrees: where the joint is now (jerks to its goal)
       bodyVel: zeroMap(JOINT_IDS),            // jointId -> degrees/s
+      bodyJerk: {},                           // jointId -> [goal, ease back (degrees), drive seconds left]: JOINT_LATCH driveS / relax
       armLatch: zeroMap(ACTION_IDS),          // game-arm actionId -> 0 | 1: latched on (see ARM_OPPOSITES)
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
       rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
@@ -1835,6 +1867,7 @@ export function createActivity({
       && (s.bodyGoal === undefined || finiteMap(s.bodyGoal, JOINT_IDS))
       && (s.bodyPos === undefined || finiteMap(s.bodyPos, JOINT_IDS))
       && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
+      && (s.bodyJerk === undefined || jerkMapOk(s.bodyJerk))
       && (s.armLatch === undefined || unitMap(s.armLatch, ACTION_IDS))
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
@@ -1906,6 +1939,7 @@ export function createActivity({
       bodyGoal: s.bodyGoal === undefined ? restMap() : pick(s.bodyGoal, JOINT_IDS),
       bodyPos: s.bodyPos === undefined ? restMap() : pick(s.bodyPos, JOINT_IDS),
       bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
+      bodyJerk: copyJerkMap(s.bodyJerk),
       armLatch: s.armLatch === undefined ? zeroMap(ACTION_IDS) : pick(s.armLatch, ACTION_IDS),
       rotationState: s.rotationState,
       rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null },
@@ -1989,6 +2023,27 @@ export function createActivity({
       s.bodyGoal[j] = ends[j];
       // R558 (JOINT_CONFLICTS): the later of two held movements of one shoulder wins its direction
       if (side !== 0 && hasOwn(JOINT_CONFLICTS, j)) for (const k of JOINT_CONFLICTS[j]) if (hasOwn(s.bodyGoal, k) && !hasOwn(ends, k)) s.bodyGoal[k] = REST[k];
+    }
+    // 19 November 2026 (JOINT_LATCH driveS / relax / kick): every press drives the action's joints hard to their end
+    // angles, where they are held for driveS and then ease back a little; a press that finds a joint already near its
+    // end (a further click, or a movement with little travel) kicks it toward the end, so it slams in again. Not
+    // under reduced motion, and not on a state without positions (latchTargetsOf's copy).
+    const J = jointSpring, relax = Number.isFinite(J.relax) ? J.relax : 0, kick = Number.isFinite(J.kick) ? J.kick : 0;
+    if ((relax > 0 || kick > 0) && s.bodyPos && s.bodyVel) {
+      const minSwing = Number.isFinite(J.minSwingDeg) ? J.minSwingDeg : 0, driveS = Number.isFinite(J.driveS) ? J.driveS : 0;
+      const maxShare = Number.isFinite(J.relaxMaxShare) ? J.relaxMaxShare : 1, nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0;
+      if (!s.bodyJerk) s.bodyJerk = {};
+      for (const j of Object.keys(ends)) {
+        if (!LATCHING[j] || s.bodyGoal[j] !== ends[j] || !Number.isFinite(s.bodyPos[j])) continue;
+        const goal = ends[j], travel = goal - REST[j], left = goal - s.bodyPos[j];
+        const dir = Math.abs(travel) > JOINT_LATCH.restEpsDeg ? Math.sign(travel) : Math.abs(left) > JOINT_LATCH.restEpsDeg ? Math.sign(left) : 0;
+        if (dir === 0) continue; // the action only wants this joint at its start angle
+        // (a small joint is not given a swing larger than most of its own range: a lip would rattle between its ends)
+        const range = limitsBody && hasOwn(limitsBody, j) ? Math.abs(limitsBody[j][1] - limitsBody[j][0]) : Infinity;
+        const swing = Math.max(Math.abs(travel), Math.min(minSwing, JOINT_LATCH.minSwingRangeShare * range));
+        if (kick > 0 && Math.abs(left) < nearShare * swing) s.bodyVel[j] = dir * kick * swing * springOmega + 0;
+        s.bodyJerk[j] = [goal, dir * Math.min(relax * swing, maxShare * Math.abs(travel)), driveS];
+      }
     }
   }
 
@@ -2448,6 +2503,7 @@ export function createActivity({
     s.bodyGoal = restMap();
     s.bodyPos = restMap();
     s.bodyVel = zeroMap(JOINT_IDS);
+    s.bodyJerk = {};
     s.armLatch = zeroMap(ACTION_IDS);
     for (const r of REGION_IDS) s.regionDisplay[r] = 0;
     for (const id of ACTION_IDS) {
@@ -2675,9 +2731,19 @@ export function createActivity({
       }
       const momentary = pulseOn && !armed && s.pulseBody !== null ? (ENDS.get(s.pulseBody) || null) : null;
       for (const j of JOINT_IDS) {
-        const goal = LATCHING[j] ? s.bodyGoal[j] : momentary !== null && hasOwn(momentary, j) ? momentary[j] : REST[j];
+        const held = LATCHING[j] ? s.bodyGoal[j] : momentary !== null && hasOwn(momentary, j) ? momentary[j] : REST[j];
+        // 19 November 2026 (JOINT_LATCH driveS / relax): a pressed joint is driven at its end angle for driveS, then
+        // eases back a little and waits there. The note belongs to one goal: anything else that moves the goal (the
+        // way back, a drag, a held key, Reset) ends it.
+        let goal = held, om = springOmega, ze = springZeta;
+        const jk = s.bodyJerk ? s.bodyJerk[j] : undefined;
+        if (jk) {
+          if (!LATCHING[j] || jk[0] !== held) delete s.bodyJerk[j];
+          else if (jk[2] > 0) jk[2] = Math.max(0, jk[2] - seg);
+          else { goal = held - jk[1]; om = relaxOmega; ze = 1; }
+        }
         if (s.bodyPos[j] === goal && s.bodyVel[j] === 0) continue;
-        const [p, v] = stepJointSpring(s.bodyPos[j], s.bodyVel[j], goal, seg, springOmega, springZeta);
+        const [p, v] = stepJointSpring(s.bodyPos[j], s.bodyVel[j], goal, seg, om, ze);
         const q = limitJoint(j, p);
         s.bodyPos[j] = q + 0;
         s.bodyVel[j] = q === p ? v : (springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) + 0;

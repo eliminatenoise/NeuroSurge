@@ -12,9 +12,9 @@ import zlib from 'node:zlib';
 import { createHash, webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { encodePack, decodePack, packScaleOf, packKeyOfUrl, packedMesh, isPackedMesh, validatePackIndex, PACK_INDEX_SHA256 } from '../scene/src/ns-pack.mjs';
-import { runPackJob } from '../scene/src/ns-pack-loader.mjs';
+import { runPackJob, startPackLoader } from '../scene/src/ns-pack-loader.mjs';
 import { parseObjFast, streamFullbodyAssets } from '../scene/src/ns-assets.mjs';
-import { buildAll, buildPack, PACKS, COARSE } from '../tools/build-mesh-packs.mjs';
+import { buildAll, buildPack, coarseKinds, flatTriangle, PACKS, COARSE } from '../tools/build-mesh-packs.mjs';
 import { simplifyMesh, weldExact, meshTopology, measureDeviation, reorderForPack } from '../tools/simplify-mesh.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,8 +37,9 @@ test('the committed pack index is the pinned one, and every pack file matches it
   assert.deepEqual(index.rule, COARSE);
 });
 
-test('the packs are what the tool builds from the source packets today (nothing was edited by hand; the build is repeatable)', () => {
-  const { built, indexText } = buildAll();
+test('the packs and the rig file are what the tool builds from the source packets today (nothing was edited by hand; the build is repeatable)', async () => {
+  const { built, indexText, rigText } = await buildAll();
+  assert.equal(rigText, fs.readFileSync(path.join(root, 'packs', 'BODY-RIG.json'), 'utf8'), 'packs/BODY-RIG.json is not the rig this code builds from the source meshes: run node tools/build-mesh-packs.mjs');
   assert.equal(indexText, indexBytes.toString('utf8'));
   for (const b of built) assert.equal(b.record.sha256, packs.find(p => p.name === b.record.name).sha256);
 });
@@ -51,26 +52,33 @@ test('every coarse mesh records its source file (size, hash, vertex count), and 
   add('face-muscles-r1', 'packets/face-muscles-r1/FACE-MESH-MANIFEST.json');
   add('bodyparts3d-head-r1', 'packets/bodyparts3d-head-r1/HEAD-MESH-MANIFEST.json');
   add('missing-muscles-r1', 'packets/missing-muscles-r1/MISSING-MUSCLES-MESH-MANIFEST.json');
-  let files = 0, named = 0;
+  let files = 0, named = 0, exact = 0;
+  const kinds = coarseKinds();
   for (const p of packs) {
     assert.deepEqual([...decoded.get(p.name).meshes.keys()], p.keys);
     for (const [key, rec] of decoded.get(p.name).meshes) {
       const { src, mesh } = parseSource(key);
       assert.equal(rec.sourceBytes, src.length, key);
       assert.equal(rec.sourceSha256, sha256(src), key);
-      assert.equal(rec.derived.sourceVertices, mesh.positions.length / 3, key);
-      assert.equal(rec.derived.sourceTriangles, mesh.indices.length / 3, key);
+      const kind = kinds.get(key.split('/').pop().replace('.obj', '')) || 'body';
+      if (kind === 'source') { assert.equal(rec.derived, undefined, key); assert.deepStrictEqual(rec.mesh, mesh, `${key}: a mesh kept as its source must be exactly what the parser reads`); exact++; }
+      else {
+        assert.equal(rec.derived.kind, kind, key);
+        assert.equal(rec.derived.sourceVertices, mesh.positions.length / 3, key);
+        assert.equal(rec.derived.sourceTriangles, mesh.indices.length / 3, key);
+      }
       assert.deepEqual(rec.mesh.comments, mesh.comments, `${key}: the file's own comment lines (its licence notice) travel with the mesh`);
-      if (pinned.has(key)) { assert.equal(rec.sourceSha256, pinned.get(key)[0], key); if (Number.isFinite(pinned.get(key)[1])) assert.equal(rec.derived.sourceVertices, pinned.get(key)[1], key); named++; }
+      if (pinned.has(key)) { assert.equal(rec.sourceSha256, pinned.get(key)[0], key); if (Number.isFinite(pinned.get(key)[1])) assert.equal(rec.derived ? rec.derived.sourceVertices : rec.mesh.positions.length / 3, pinned.get(key)[1], key); named++; }
       files++;
     }
   }
   assert.equal(files, 611);
+  assert.equal(exact, 78, 'kept exactly as their source: the 32 bones of the game arm, the two precentral gyri, the two lacrimal bones, the 42 finger and toe bones');
   assert.ok(named >= 600, `only ${named} packed files are named by a manifest`);
 });
 
 test('coarse meshes: every kept vertex is a source vertex (to 0.01 mm), no source vertex is further than the bound from the surface, the connections are the same, no triangle is turned over', () => {
-  let srcTris = 0, tris = 0, worst = 0, against = 0, againstSource = 0;
+  let srcTris = 0, tris = 0, worst = 0, against = 0, againstSource = 0, leastVolume = 1, flatAll = 0;
   const key3 = (P, i) => `${Math.round(P[i] * 100)},${Math.round(P[i + 1] * 100)},${Math.round(P[i + 2] * 100)}`;
   // Six times the volume a closed mesh encloses (signed: it changes sign if the surface is turned inside out).
   const volume6 = (P, I) => { let v = 0; for (let i = 0; i < I.length; i += 3) { const a = 3 * I[i], b = 3 * I[i + 1], c = 3 * I[i + 2]; v += P[a] * (P[b + 1] * P[c + 2] - P[b + 2] * P[c + 1]) - P[a + 1] * (P[b] * P[c + 2] - P[b + 2] * P[c]) + P[a + 2] * (P[b] * P[c + 1] - P[b + 1] * P[c]); } return v; };
@@ -92,13 +100,17 @@ test('coarse meshes: every kept vertex is a source vertex (to 0.01 mm), no sourc
     for (const [key, rec] of decoded.get(p.name).meshes) {
       const { mesh: src } = parseSource(key), m = rec.mesh;
       srcTris += src.indices.length / 3; tris += m.indices.length / 3;
+      if (!rec.derived) continue; // kept exactly as its source (checked above)
       // kept vertices are source vertices, rounded
       const have = new Set();
       for (let i = 0; i < src.positions.length; i += 3) have.add(`${Math.round(src.positions[i] * 100)},${Math.round(src.positions[i + 1] * 100)},${Math.round(src.positions[i + 2] * 100)}`);
       for (let i = 0; i < m.positions.length; i += 3) assert.ok(have.has(`${Math.round(m.positions[i] * 100)},${Math.round(m.positions[i + 1] * 100)},${Math.round(m.positions[i + 2] * 100)}`), `${key}: vertex ${i / 3} is not a source vertex`);
       // measured here, independently of the build: every source vertex against the coarse surface
       const dev = measureDeviation(src.positions, m.positions, m.indices);
-      assert.ok(dev.maxMm <= COARSE.maxDevMm + 0.02, `${key}: a source vertex lies ${dev.maxMm} mm from the coarse surface`);
+      // (the kind's limit, or a smaller one where the kind's limit cost the mesh too much of its bulk)
+      const bound = rec.derived.maxDevMm;
+      assert.ok(bound > 0 && bound <= COARSE.kinds[rec.derived.kind].maxDevMm, key);
+      assert.ok(dev.maxMm <= bound + 0.02, `${key}: a source vertex lies ${dev.maxMm} mm from the coarse surface`);
       assert.ok(Math.abs(dev.maxMm - rec.derived.deviationMm) < 0.002, `${key}: recorded deviation`);
       if (dev.maxMm > worst) worst = dev.maxMm;
       // the same connections as the source (its exactly repeated vertices joined): pieces, Euler number, closedness
@@ -111,8 +123,19 @@ test('coarse meshes: every kept vertex is a source vertex (to 0.01 mm), no sourc
       // not turned inside out: a closed mesh encloses a volume of the same sign and nearly the same size
       if (a.rimEdges === 0 && a.crowdedEdges === 0) {
         const v0 = volume6(w.positions, w.indices), v1 = volume6(m.positions, m.indices);
-        if (Math.abs(v0) > 6 * 200) { assert.ok(v0 * v1 > 0, `${key}: turned inside out`); assert.ok(Math.abs(v1 / v0 - 1) < 0.25, `${key}: volume ${v1 / v0}`); }
+        if (Math.abs(v0) > 6 * COARSE.volumeFromMm3) {
+          assert.ok(v0 * v1 > 0, `${key}: turned inside out`);
+          // the bulk is kept: a thin muscle is not allowed to lose a quarter of itself to a limit meant for thick ones
+          assert.ok(Math.abs(v1 / v0 - 1) <= 1 - COARSE.volumeKeep + 0.005, `${key}: volume ${v1 / v0}`);
+          if (v1 / v0 < leastVolume) leastVolume = v1 / v0;
+        }
       }
+      // no triangle without area that the source file does not have itself (rounding made 506 of them once)
+      let flat = 0, flatSource = 0;
+      for (let i = 0; i < m.indices.length; i += 3) if (flatTriangle(m.positions, m.indices[i], m.indices[i + 1], m.indices[i + 2])) flat++;
+      for (let i = 0; i < w.indices.length; i += 3) if (flatTriangle(w.positions, w.indices[i], w.indices[i + 1], w.indices[i + 2])) flatSource++;
+      assert.ok(flat <= flatSource, `${key}: ${flat} triangles without area, the source has ${flatSource}`);
+      flatAll += flat;
       // no triangle turned over: counted against the source surface's vertex normals (see facingAgainst)
       const nrm = new Float32Array(w.positions.length), at = new Map();
       for (let i = 0; i < w.indices.length; i += 3) {
@@ -126,8 +149,10 @@ test('coarse meshes: every kept vertex is a source vertex (to 0.01 mm), no sourc
     }
   }
   assert.ok(against < 0.003 * tris && against <= 1.5 * againstSource + 50, `${against} of ${tris} coarse triangles face against the source surface at all three corners (the source's own thin edges: ${againstSource})`);
-  assert.ok(tris < 0.3 * srcTris, `${tris} of ${srcTris} triangles`);
-  assert.ok(worst <= COARSE.maxDevMm + 0.02);
+  assert.ok(tris < 0.38 * srcTris, `${tris} of ${srcTris} triangles`);
+  assert.ok(worst <= 0.52);
+  assert.ok(leastVolume >= COARSE.volumeKeep - 0.005, `a closed mesh keeps ${leastVolume} of its volume`);
+  assert.ok(flatAll <= 10, `${flatAll} triangles without area in all`);
 });
 
 test('the simplifier on a known shape: a flat sheet loses its inner vertices, keeps its rim and its bump, and nothing strays', () => {
@@ -192,8 +217,8 @@ test('the game\'s loaders take a packed mesh only when its recorded source size,
   const wrongSize = await streamFullbodyAssets({ manifest, readBytes: read(r => ({ ...r, sourceBytes: r.sourceBytes + 1 })), sha256HexBytes: never, allOrNothing: true, autoStart: true, priorityIds: [] }).done;
   assert.ok(wrongSize.failed.every(f => f.code === 'asset_bytes'));
   // a coarse mesh that claims another source vertex count than the manifest records is refused
-  const wrongCount = await streamFullbodyAssets({ manifest, readBytes: read(r => ({ ...r, mesh: { ...r.mesh }, derived: { ...r.derived, sourceVertices: r.derived.sourceVertices + 1 } })), sha256HexBytes: never, allOrNothing: true, autoStart: true, priorityIds: [] }).done;
-  assert.ok(wrongCount.failed.length > 0 && wrongCount.failed.every(f => f.code === 'asset_vertices'));
+  const wrongCount = await streamFullbodyAssets({ manifest, readBytes: read(r => (r.derived ? { ...r, mesh: { ...r.mesh }, derived: { ...r.derived, sourceVertices: r.derived.sourceVertices + 1 } } : r)), sha256HexBytes: never, allOrNothing: true, autoStart: true, priorityIds: [] }).done;
+  assert.ok(wrongCount.failed.length >= 200 && wrongCount.failed.every(f => f.code === 'asset_vertices'), 'every coarse mesh of the pack is refused');
   assert.equal(isPackedMesh({ sourceSha256: 'x', mesh: {} }), false, 'only ns-pack packedMesh() makes one');
 });
 
@@ -205,13 +230,18 @@ test('file URLs map to pack keys', () => {
 });
 
 // The loader job against the committed packs, with a fetch that reads the repository.
-function jobIo({ tamper = null, hang = null } = {}) {
-  const fetch = async url => {
+function jobIo({ tamper = null, hang = null, missing = null, once = false, seen = [] } = {}) {
+  const asked = new Map();
+  const fetch = async (url, init = {}) => {
     const name = String(url).split('/').pop();
-    if (hang && `${name}!` === hang) return new Promise(() => {}); // the answer never even begins
-    if (hang && name === hang) return { ok: true, status: 200, body: { getReader: () => ({ read: () => new Promise(() => {}), cancel: async () => {} }) } };
+    const n = (asked.get(name) || 0) + 1; asked.set(name, n);
+    seen.push([name, init.cache || 'default']);
+    const bad = !once || n === 1; // once: only the first request for a file goes wrong
+    if (bad && hang && `${name}!` === hang) return new Promise(() => {}); // the answer never even begins
+    if (bad && hang && name === hang) return { ok: true, status: 200, body: { getReader: () => ({ read: () => new Promise(() => {}), cancel: async () => {} }) } };
+    if (bad && missing && name === missing) return new Response('no', { status: 404 });
     let bytes = new Uint8Array(fs.readFileSync(path.join(root, 'packs', name)));
-    if (tamper && name === tamper) { bytes = bytes.slice(); bytes[bytes.length >> 1] ^= 1; }
+    if (bad && tamper && name === tamper) { bytes = bytes.slice(); bytes[bytes.length >> 1] ^= 1; }
     return new Response(bytes, { status: 200 });
   };
   return { fetch, subtle: webcrypto.subtle, DecompressionStream, Response, Blob, AbortController, setTimeout, clearTimeout };
@@ -244,5 +274,69 @@ test('a pack whose bytes were changed, a pack that stops coming, one that never 
   assert.equal(b2.filter(m => m.type === 'pack').length, packs.length - 1);
   const c = [];
   await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: jobIo(), emit: m => c.push(m), expectedIndexSha256: '0'.repeat(64) });
-  assert.deepEqual(c.map(m => m.type), ['index-failed', 'done']);
+  assert.deepEqual(c.map(m => m.type), ['again', 'index-failed', 'done']);
+});
+
+test('a first request that goes wrong is made once more, past the browser\'s cache, before anything is given up', async () => {
+  // a copy left in the cache by an earlier version of the game (wrong bytes), a 404: each is asked for again and the
+  // second answer is used
+  for (const io of [{ tamper: 'PACK-INDEX.json' }, { tamper: 'fullbody.nspack' }, { missing: 'head.nspack' }, { missing: 'BODY-RIG.json' }, { tamper: 'BODY-RIG.json' }]) {
+    const seen = [], msgs = [];
+    await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: jobIo({ ...io, once: true, seen }), emit: m => msgs.push(m), stallMs: 60 });
+    const file = io.tamper || io.missing;
+    assert.deepEqual(seen.filter(x => x[0] === file).map(x => x[1]), ['default', 'reload'], `${file}: asked twice, the second time past the cache`);
+    assert.equal(msgs.filter(m => m.type === 'again').length, 1);
+    assert.equal(msgs.filter(m => m.type === 'pack').length, packs.length, `${file}: every pack is used`);
+    assert.equal(msgs.filter(m => m.type === 'rig').length, 1);
+    assert.equal(msgs.filter(m => /failed/.test(m.type)).length, 0);
+  }
+  // a file that is wrong both times is asked for twice and no more
+  const seen = [], msgs = [];
+  await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: jobIo({ missing: 'BODY-RIG.json', seen }), emit: m => msgs.push(m), stallMs: 60 });
+  assert.equal(seen.filter(x => x[0] === 'BODY-RIG.json').length, 2);
+  assert.match(msgs.find(m => m.type === 'rig-failed').error, /HTTP 404/);
+  // a request given up for being silent is NOT asked for again (a second wait would double the time before the files
+  // are read the old way)
+  for (const hang of ['head.nspack!', 'face-muscles.nspack']) {
+    const seen2 = [], msgs2 = [];
+    await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: jobIo({ hang, once: true, seen: seen2 }), emit: m => msgs2.push(m), stallMs: 60 });
+    assert.equal(seen2.filter(x => x[0] === hang.replace('!', '')).length, 1);
+    assert.equal(msgs2.filter(m => m.type === 'pack-failed').length, 1);
+  }
+});
+
+test('without the rig file the body\'s coarse meshes are not handed out (the game then reads the source files); the arm and brain still are', async () => {
+  const run = async io => {
+    const win = { location: { href: 'http://x/scene/example/preview.html' }, fetch: io.fetch, crypto: { subtle: webcrypto.subtle }, DecompressionStream, Response, Blob, AbortController, setTimeout, clearTimeout };
+    let last = null;
+    const loader = startPackLoader({ win, useWorker: false, moduleUrl: 'http://x/scene/src/ns-pack-loader.mjs', indexUrl: '../../packs/PACK-INDEX.json', base: '../../packs/', onProgress: (files, of) => { last = [files, of]; } });
+    const rig = await loader.rig();
+    const body = await loader.get(packs.find(p => p.name === 'fullbody').keys[0]);
+    const arm = await loader.get(packs.find(p => p.name === 'arm-brain').keys[0]);
+    await new Promise(r => setTimeout(r, 300));
+    return { rig, body, arm, last, st: loader.state() };
+  };
+  const ok = await run(jobIo());
+  assert.ok(ok.rig && ok.body && ok.arm);
+  assert.equal(ok.last[0], 611);
+  const none = await run(jobIo({ missing: 'BODY-RIG.json' }));
+  assert.equal(none.rig, null);
+  assert.equal(none.body, null, 'no coarse body mesh without the rig made from its source');
+  assert.ok(none.arm, 'the arm and brain pack does not depend on the body rig');
+  assert.equal(none.st.withoutRig, 1);
+  assert.equal(none.last[0], 142, 'the bar counts only the files the packs will really give');
+});
+
+test('a pack worker that never says a word (its script never arrives) is given up and the packs are read on the page', async () => {
+  let terminated = 0;
+  class SilentWorker { postMessage() {} terminate() { terminated++; } }
+  const io = jobIo();
+  const win = { location: { href: 'http://x/scene/example/preview.html' }, Worker: SilentWorker, fetch: io.fetch, crypto: { subtle: webcrypto.subtle }, DecompressionStream, Response, Blob, AbortController, setTimeout, clearTimeout };
+  const loader = startPackLoader({ win, moduleUrl: 'http://x/scene/src/ns-pack-loader.mjs', indexUrl: '../../packs/PACK-INDEX.json', base: '../../packs/', helloMs: 40 });
+  assert.equal(loader.state().mode, 'worker');
+  const mesh = await loader.get(packs.find(p => p.name === 'arm-brain').keys[0]);
+  assert.ok(mesh, 'the mesh comes from the pack all the same');
+  assert.equal(terminated, 1);
+  assert.equal(loader.state().mode, 'page');
+  assert.match(loader.state().errors[0], /worker: no word/);
 });

@@ -1457,7 +1457,8 @@ function boxJoint(childBox, parentBox) {
  *   estimate from the entry bounds; muscles without geometry are weighted from their entry centroid and box corners.
  *   Call buildBodyRig again when more meshes are loaded.
  * @param options { muscleSamples (vertices per muscle for the weights, default 400), fitSamples (vertices per muscle kept
- *   for the per-pose rigid fit, default 96) }
+ *   for the per-pose rigid fit, default 96), prebuilt (bodyRigFromFile: a rig made beforehand from the source
+ *   meshes; its pivots and muscle rows are used in place of the ones estimated from the meshes given) }
  * @returns frozen rig { kind: 'ns-body-rig', version, segments, pivots, meshSegment, muscles, warnings, limits }
  */
 export function buildBodyRig(entries, meshesById = null, options = {}) {
@@ -1637,6 +1638,14 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
   for (const r of Object.values(J)) if (!r.axes) r.axes = {};
 
   // Segment records.
+  // 19 November 2026 (package LOAD): a rig made beforehand from the SOURCE meshes (bodyRigFromFile). Its pivots take
+  // the place of the ones estimated above from the meshes given here, and below each muscle takes its row (the bone it
+  // rides) from it; the sample clouds and fits still come from the meshes given.
+  const pre = options.prebuilt && typeof options.prebuilt === 'object' && options.prebuilt.pivots && options.prebuilt.meshSegment ? options.prebuilt : null;
+  if (pre) {
+    for (const k of Object.keys(J)) delete J[k];
+    for (const k of Object.keys(pre.pivots)) { J[k] = JSON.parse(JSON.stringify(pre.pivots[k])); restoreNegativeZeros(J[k], pre.pivots[k]); }
+  }
   const segments = {};
   for (const s of BODY_SEGMENTS) {
     segments[s] = {
@@ -1726,6 +1735,16 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
       blend = blend.map(([s, w]) => [s, Math.round((w / tot) * 1e4) / 1e4]);
     }
     const centroid = e.centroid || (p ? centroidOf(p) : null);
+    if (pre && pre.meshSegment[e.id] && pre.meshSegment[e.id].kind === 'muscle' && segments[pre.meshSegment[e.id].segment]) {
+      // the row of the rig made from the source meshes (which bone the muscle rides, by what shares)
+      const row = JSON.parse(JSON.stringify(pre.meshSegment[e.id]));
+      restoreNegativeZeros(row, pre.meshSegment[e.id]);
+      meshSegment[e.id] = row;
+      segments[row.segment].muscleIds.push(e.id);
+      const aliases = e.extraPacket ? [...new Set([...e.names, ...muscleAliases(e.name, e.centroid)])] : muscleAliases(e.name, e.centroid);
+      muscles.push({ id: e.id, name: e.name, aliases, side: e.laterality });
+      continue;
+    }
     meshSegment[e.id] = {
       kind: 'muscle', segment: blend[0][0], blend, candidates: cand.segments, ...(cand.skin ? { skin: cand.skin } : {}), hint: Array.isArray(e.hint) ? [...e.hint] : e.hint,
       restCentroid: centroid ? round3(centroid) : null, method,
@@ -1740,7 +1759,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
 
   const rig = {
     kind: 'ns-body-rig',
-    version: 'ns-body-r1 (U3b-body, 2026-11-08)',
+    version: BODY_RIG_VERSION,
     frame: 'BodyParts3D 4.0 whole-body frame, millimetres (+x subject LEFT, +y POSTERIOR, +z SUPERIOR); matrices map rest -> posed',
     segmentOrder: BODY_SEGMENTS,
     segments,
@@ -1749,7 +1768,7 @@ export function buildBodyRig(entries, meshesById = null, options = {}) {
     muscles,
     limits: BODY_JOINT_LIMITS,
     excludedGenital,
-    warnings,
+    warnings: pre && Array.isArray(pre.warnings) ? [...pre.warnings] : warnings,
     caveats: [
       'One reference body from an educational dataset (BodyParts3D warns of errors and artist-made parts); not the player or a population average.',
       'Joint pivots are geometric estimates (sphere/circle fits, contact patches, malleolus tips), not measured joint centres; the trunk bends at every joint from the sacrum to the first thoracic vertebra by fixed shares, the neck at two cervical/cranial stages; the ribs and the breastbone are a fitted linkage, not measured rib motion.',
@@ -1796,6 +1815,63 @@ function twoNearestResult(a, da, b, db) {
   const qa = da * da, qb = db * db, t = qa + qb;
   const wa = t > 1e-12 ? qb / t : 0.5;
   return { a, wa, b, wb: 1 - wa };
+}
+
+const BODY_RIG_VERSION = 'ns-body-r1 (U3b-body, 2026-11-08)';
+export const BODY_RIG_FILE_FORMAT = 'ns-body-rig-file-1';
+
+/** A rig as it is written to a file (19 November 2026, package LOAD): { format, rig (its data as JSON),
+ * negativeZeros (the paths of its numbers that are negative zero: JSON has none) }. Pure. */
+export function bodyRigToFile(rig) {
+  checkRig(rig);
+  const negativeZeros = [];
+  const walk = (v, p) => { if (typeof v === 'number') { if (Object.is(v, -0)) negativeZeros.push(p); } else if (v && typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], p ? `${p}.${k}` : k); };
+  walk(rig, '');
+  return { format: BODY_RIG_FILE_FORMAT, rig: JSON.parse(JSON.stringify(rig)), negativeZeros };
+}
+
+/**
+ * The rig of a file made by bodyRigToFile, for buildBodyRig(entries, meshes, { prebuilt }).
+ * Why: the game draws coarser meshes (packs/README.md), and the rig is estimated from where the meshes' vertices lie
+ * (the joints' pivots and axes from centroids, contact patches and sphere fits of the bones; the bone a muscle rides
+ * from an average over its vertices). A rig estimated from the coarse meshes has pivots a few millimetres elsewhere
+ * and some forty muscles on another bone. So tools/build-mesh-packs.mjs builds the rig from the SOURCE meshes, exactly
+ * as the page prepares them, and writes it to packs/BODY-RIG.json; the game builds its rig from the meshes it has with
+ * that rig's pivots and muscle rows (buildBodyRig), and checks the result against the file (bodyRigMatchesFile).
+ * Refused (throws ns:body_rig) unless the file is of this code's rig version, holds this code's joint limits and
+ * segment table, and was made for exactly the meshes of `entries` (genital anatomy excluded as buildBodyRig does).
+ */
+export function bodyRigFromFile(file, entries) {
+  if (!file || file.format !== BODY_RIG_FILE_FORMAT || !file.rig || file.rig.kind !== 'ns-body-rig' || !file.rig.pivots || !file.rig.meshSegment) throw new Error('ns:body_rig: not a rig file');
+  const r = file.rig;
+  if (r.version !== BODY_RIG_VERSION) throw new Error('ns:body_rig: the rig file is of another rig version');
+  if (JSON.stringify(r.limits) !== JSON.stringify(BODY_JOINT_LIMITS) || JSON.stringify(r.segmentOrder) !== JSON.stringify(BODY_SEGMENTS)) throw new Error('ns:body_rig: the rig file was made with other joint limits or segments (run tools/build-mesh-packs.mjs)');
+  const want = new Set();
+  for (const e of entryList(entries)) if (!e.denyTerms.length) want.add(e.id);
+  const have = Object.keys(r.meshSegment);
+  if (have.length !== want.size || !have.every(id => want.has(id))) throw new Error('ns:body_rig: the rig file is for another set of meshes');
+  const rig = JSON.parse(JSON.stringify(r));
+  for (const p of Array.isArray(file.negativeZeros) ? file.negativeZeros : []) {
+    const keys = String(p).split('.');
+    let o = rig;
+    for (let i = 0; i + 1 < keys.length && o; i++) o = o[keys[i]];
+    if (o && o[keys[keys.length - 1]] === 0) o[keys[keys.length - 1]] = -0;
+  }
+  return rig;
+}
+
+/** Is `rig` (built with { prebuilt }) the rig of the file, datum for datum? (Its sample clouds, which are not in the
+ * file, come from the meshes it was built with.) */
+export function bodyRigMatchesFile(rig, file) {
+  try { return JSON.stringify(rig) === JSON.stringify(file.rig); } catch { return false; }
+}
+
+/** JSON has no negative zero: copy the sign of the zeros of `from` onto the same places of `to`. */
+function restoreNegativeZeros(to, from) {
+  if (!to || typeof to !== 'object' || !from || typeof from !== 'object') return;
+  for (const k of Object.keys(from)) {
+    if (typeof from[k] === 'number') { if (Object.is(from[k], -0) && to[k] === 0) to[k] = -0; } else restoreNegativeZeros(to[k], from[k]);
+  }
 }
 
 function deepFreezeRig(v) {

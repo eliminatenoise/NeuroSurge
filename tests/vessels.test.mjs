@@ -113,12 +113,13 @@ test('no procedural vessel lines remain in the cortex, and the cortex is lighter
   const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   const crown = lum(BRAIN_FLESH.crown.map(srgbToLinear));
   for (const t of MUSCLE_TONES) {
-    assert.ok(crown > 1.8 * lum(t.linear), `${t.name}: cortex ${crown.toFixed(3)} vs ${lum(t.linear).toFixed(3)}`);
+    assert.ok(crown > 1.4 * lum(t.linear), `${t.name}: cortex ${crown.toFixed(3)} vs ${lum(t.linear).toFixed(3)}`);
     assert.ok(t.oklch[2] >= 20 && t.oklch[2] <= 45, `${t.name} hue`); // warm red-brown, not purple, not tan
   }
-  // the cortex is nearly grey (a pale rose), the muscles clearly coloured
+  // 19 November 2026 (the owner: "the brain should be a little more pinkish, fleshy"): a soft flesh pink, still far
+  // paler than the muscles
   const [r, g, b] = BRAIN_FLESH.crown;
-  assert.ok(Math.max(r, g, b) - Math.min(r, g, b) < 0.08);
+  assert.ok(r > g && r > b && Math.max(r, g, b) - Math.min(r, g, b) > 0.1 && Math.max(r, g, b) - Math.min(r, g, b) < 0.3);
 });
 
 // ---- the bodies' vessels (centre lines riveted to the drawn muscles and bones)

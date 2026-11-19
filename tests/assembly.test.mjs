@@ -311,7 +311,12 @@ test('knowing about when the game will be ready, the layers are paced to keep bu
   assert.ok(paced.body > 17 && paced.body < 24 - ASSEMBLY_ORDER.endsBeforeS.body + 0.5, `the body's last layer starts by ${paced.body} s`);
   assert.ok(paced.brain > 13 && paced.brain < 24 - ASSEMBLY_ORDER.endsBeforeS.brain + 0.5, `the brain's last layer starts by ${paced.brain} s`);
   assert.ok(nondecreasing(paced.rows, 'body') && nondecreasing(paced.rows, 'brain'));
-  assert.ok(Math.abs(quick.body - plain.body) < 0.05, 'a time sooner than the default pace never hurries it');
+  // 19 November 2026 (the game now loads in a few seconds: the picture must be whole before the game takes over; the
+  // earlier rule here was "a time sooner than the default pace never hurries it"): a short load quickens the pace, so
+  // the last layers start inside it, in order; never quicker than minStretch.
+  assert.ok(quick.body < 3 && quick.brain < 3 && quick.body < plain.body, `a 3 s load: the body's last layer starts by ${quick.body} s, the brain's by ${quick.brain} s`);
+  assert.ok(nondecreasing(quick.rows, 'body') && nondecreasing(quick.rows, 'brain'));
+  assert.ok(run(0.3).body >= plain.body * ASSEMBLY_ORDER.minStretch - 0.3, 'never quicker than minStretch');
   // Never stretched more than maxStretch: with a far time the body still ends within maxStretch x the default.
   assert.ok(run(400).body <= plain.body * ASSEMBLY_ORDER.maxStretch + 1);
 });

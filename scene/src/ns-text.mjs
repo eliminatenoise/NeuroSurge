@@ -281,7 +281,7 @@ const STEP_TABLE = [
     part('A movement stays where it went: the body part does not drift back by itself. To bring it back, switch on ' +
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
       'Holding a movement until the opposite one is a rule of this game, not something measured.')],
-  intro: [part('Look at a motor area to see its movements. Click it or press a number from the list to move the body part. The arrow keys step to the next area. A movement stays until you switch on the opposite area (it glows faintly) or press Reset body.')] },
+  intro: [part('Rest your look on a motor area and its movement happens at once. Click to do it again. The arrow keys step to the next area. A movement stays until you switch on the opposite one (its area glows faintly) or press Reset body.')] },
   { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
     'You can also take hold of things: hold Space while the crosshair is on the brain, the mirror body or one of your own limbs. While Space is held, ' +
     'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
@@ -341,14 +341,16 @@ const CONTROL_TABLE = [
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
-  ['Look / Click', 'look at a motor area to see its movements. Click it to do the highlighted movement.'],
+  // 19 November 2026 (the owner: "go back to activation simply by cursor highlight"; "activates heavily relaxes slightly
+  // and repeats that process with each further click").
+  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
-  ['1 to 9', 'do the movement beside that number in the tip or the information card; hold the key and the part moves only while you hold. The list stays with the last area you selected.'],
+  ['1 to 9', 'the movements of the area you look at, in their order (the game no longer lists them); hold the key and the part moves only while you hold.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
   ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it'],
-  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag across it to turn it about its length, like a dial (inside its range).'],
+  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag sideways to turn it about its length, up to bend it and down to straighten it, as far as you drag (inside its range).'],
   // R558 (Messages 33 and 34): one reach-behind gesture for every control (ns-controls REACH_CODES).
   ['Shift + press', 'hold Shift as you click, press Space or press and drag: the press acts on the other thing on the same line of sight (the body part in front of a motor area, the brain behind the mirror body, what is behind an arrow tip). Without Shift a press acts on what the “Looking at” card names: a motor area even behind a body, otherwise what you see (the brain’s glass is clear).'],
   // R5-text (D16): no "curved" (the user's R20).
@@ -370,11 +372,11 @@ const INTRO_CONTROL_WORDS = {
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
-  'Look / Click': 'look to see the movements. Click to move the part.',
-  '1 to 9': 'the movement beside that number; hold to go part-way',
+  'Look / Click': 'look at an area: the part moves. Click: again.',
+  '1 to 9': 'an area\'s movements in order; hold to go part-way',
   '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
-  'Press and drag': 'turn the brain, the mirror body or a limb',
+  'Press and drag': 'turn the brain or mirror body; turn or bend a limb',
   'Shift + press': 'with a click, Space or a drag: reach the other thing in line',
   'Orbit arrows': 'turn the brain in place',
   'Mirror body arrows': 'turn or tilt the mirror body',
@@ -504,7 +506,7 @@ export const SHELL = deepFreeze({
       Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
       ArrowLeft: '←', ArrowRight: '→' },
     // R558 (Messages 55 and 56): written once at the end of the number row (ns-app KEYBOARD_PICTURE_ROWS note).
-    numWords: 'Number keys 1 to 9 (the row below): do the movement with that number in the tip or card',
+    numWords: 'Number keys 1 to 9 (the row below): the movements of the area you look at, in order',
     // R558 (Message 40): the three Space gestures, in short words on the key.
     spaceWords: 'hold or tap: take hold · tap twice: turn · tap twice and hold: keep turning slowly',
     // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number
@@ -1452,7 +1454,7 @@ export const FACE_CREDIT = deepFreeze({
   source: 'Z-Anatomy open source 3D atlas of anatomy (built on BodyParts3D)',
   licence: 'CC BY-SA 4.0',
   url: 'https://creativecommons.org/licenses/by-sa/4.0/',
-  changes: 'only the face and chewing muscles were taken, converted and moved to fit this body; parts of the scalp muscles are drawn lifted onto the skull',
+  changes: 'only the face and chewing muscles were taken, converted and moved to fit this body; the game draws simplified copies of them with fewer triangles; parts of the scalp muscles are drawn lifted onto the skull',
   required: '"Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"; "BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan".'
 });
 
@@ -1465,7 +1467,7 @@ export const MISSING_MUSCLES_CREDIT = deepFreeze({
   source: 'Z-Anatomy open source 3D atlas of anatomy (built on BodyParts3D)',
   licence: 'CC BY-SA 4.0',
   url: 'https://creativecommons.org/licenses/by-sa/4.0/',
-  changes: 'only latissimus dorsi, rectus abdominis, the internal oblique, transversus abdominis, quadratus lumborum, longus colli, extensor digitorum brevis and flexor hallucis brevis were taken, converted and moved to fit this body',
+  changes: 'only latissimus dorsi, rectus abdominis, the internal oblique, transversus abdominis, quadratus lumborum, longus colli, extensor digitorum brevis and flexor hallucis brevis were taken, converted and moved to fit this body; the game draws simplified copies of them with fewer triangles',
   required: '"Z-Anatomy - The open source atlas of anatomy - CC-BY-SA 4.0"; "BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan".'
 });
 
@@ -1599,9 +1601,10 @@ export const GUIDE = deepFreeze({
     mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.',
     // 19 November 2026 (the tutorial, ns-guide TUTORIAL_GOAL_IDS): the steps the older guide did not have. A look only
     // arms an area; a click or its number presses it; a number key held runs the movement for as long as it is held.
-    lookStrip: 'Look at a coloured area on the brain: the tip beside the crosshair names it and lists its movements.',
-    pressArea: 'Click the area. The part it names moves: watch it on your body or on the mirror body.',
+    lookStrip: 'Look at a coloured area on the brain: the part it names moves at once, on your body and on the mirror body.',
+    pressArea: 'Click the area. The part jerks again, harder: each click repeats it.',
     holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
+    dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it.',
     readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
   },
   partial: {
@@ -1635,9 +1638,10 @@ export const GUIDE = deepFreeze({
     thirdPerson: 'Press E: the view from outside',
     mirror: 'Click a green arrow by the mirror body',
     // 19 November (the tutorial): one short line per step, each ONE action
-    lookStrip: 'Look at a coloured area on the brain',
-    pressArea: 'Click it. Watch that part move',
+    lookStrip: 'Look at a colour on the brain: a part moves',
+    pressArea: 'Click it: it jerks again, harder',
     holdPart: 'Hold down 1 or 2. Let go to stop',
+    dragLimb: 'Press on an arm or leg and drag it',
     readInfo: 'Press R for more to read',
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',

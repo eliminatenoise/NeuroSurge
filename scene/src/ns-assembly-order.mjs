@@ -49,7 +49,10 @@ export const ASSEMBLY_ORDER = Object.freeze({
   // time on this computer), each tier's hold and wave are stretched by up to maxStretch so the track ends about
   // `endsBeforeS` before then: the body allows for the mirror body's beat and the last flight, the brain for the strip's
   // areas lighting.
-  maxStretch: 4, endsBeforeS: Object.freeze({ body: 2, brain: 4.5 })
+  maxStretch: 4, endsBeforeS: Object.freeze({ body: 2, brain: 4.5 }),
+  // 19 November 2026: the game now loads in a few seconds (mesh packs), less than the default pace needs. So the pace
+  // may also be quickened, down to minStretch, and a short load leaves at most endShare of itself after the last layer.
+  minStretch: 0.2, endShare: 0.12
 });
 
 // Landmarks of the atlas body (BodyParts3D millimetres: +x the body's left, +y its back, +z up), from the manifests'
@@ -192,7 +195,8 @@ export function createAssemblyRelease({ counts = ASSEMBLY_TIER_COUNTS, order = A
         tr.waveS0 = nowS;
         // The pace of this tier: stretched so the rest of the track ends endsBeforeS before the expected ready time.
         let rest = 0; for (let k = c; k < tr.n; k++) rest += o.holdS[k];
-        tr.stretch = expectS === null || !(rest > 0) ? 1 : Math.min(order.maxStretch, Math.max(1, (expectS - order.endsBeforeS[tr.name] - nowS) / rest));
+        const lo = Number.isFinite(order.minStretch) ? order.minStretch : 1, endS = expectS === null ? 0 : Math.min(order.endsBeforeS[tr.name], (Number.isFinite(order.endShare) ? order.endShare : 1) * expectS);
+        tr.stretch = expectS === null || !(rest > 0) ? 1 : Math.min(order.maxStretch, Math.max(lo, (expectS - endS - nowS) / rest));
       }
       const h = hurried ? order.hurry : tr.stretch;
       const age = tr.waveS0 === null ? 0 : nowS - tr.waveS0;

@@ -78,9 +78,9 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
  * clear at all, and to master the controls quickly"). The TUTORIAL is this same guide with its own short list, played
  * in the game itself: eight steps, each asking for ONE action and moving on the moment the player does it.
  *   lookStrip    look at a motor area of the strip                         event { type: 'look', regionId }
- *   pressArea    click it (or press its number): a part moves              'activate' that moves something / 'armMoved'
- *   holdPart     hold a number key: the part moves while it is held and    { type: 'moveHold', heldS } (the key came up
- *                stops part-way when it comes up                           after at least holdMinS; a tap is not a hold)
+ *   pressArea    click it: the part jerks again, harder                    'activate' by a click that moves something
+ *   dragLimb     press on a limb and drag it: sideways turns it, up and     { type: 'limbDrag', deg } (the limb was turned
+ *                down bends and straightens it                             or bent by at least limbDragMinDeg in one drag)
  *   dragBrain    Space on the brain, carry it, let go                      as before ('grab', 'carry')
  *   orbit        press and drag the brain to turn it                       as before ('orbit')
  *   moveHand     W A S D: the left arm                                     as before ('move' / 'key', both axes)
@@ -91,9 +91,12 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
  * ns-app). The Esc page hides it, shows it and starts it again, as it did the guide. Saved under the same key with
  * v: 2 and tutorial: true; progress saved by the older guide (v: 1) starts the tutorial from its first step.
  */
-export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'holdPart', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
+// (19 November 2026, later the same day: the owner took the numbered lists away, "The number overview is very confusing
+// and creates feedback delay", so the step that held a number key gave way to the limb drag. 'holdPart' stays a known
+// id, so progress saved with it still loads.)
+export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'dragLimb', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
 /** Every goal id the guide knows: the older guide's twelve and the tutorial's own. */
-export const GUIDE_KNOWN_GOAL_IDS = Object.freeze([...new Set(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror', ...TUTORIAL_GOAL_IDS])]);
+export const GUIDE_KNOWN_GOAL_IDS = Object.freeze([...new Set(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror', 'holdPart', ...TUTORIAL_GOAL_IDS])]);
 /** The tutorial's steps for a build: the eight, less a step whose feature the build lacks (pure). */
 export function tutorialGoalIds(features = null) {
   const f = features && typeof features === 'object' ? features : {};
@@ -131,8 +134,8 @@ export function guideGoalIds(features = null, goals = null) {
 // thirdMinS 1.0: the view from behind was on long enough to see the back (the camera eases in over 0.4 s).
 // R558 (hunt 2): carryMinM 0.2: the held brain carried at least 20 cm by W/A/S/D also counts as moved (dragBrain).
 // 19 November (the tutorial): holdMinS 0.25: a number key held at least this long is a hold, not a tap (ns-actions
-// MOVE_HOLD.tapMs is 0.22 s).
-export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0, holdMinS: 0.25 });
+// MOVE_HOLD.tapMs is 0.22 s). limbDragMinDeg 12: a limb dragged this far (turn plus bend) was really moved, not nudged.
+export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0, holdMinS: 0.25, limbDragMinDeg: 12 });
 
 /** localStorage key suggested for guideToStorage (separate from the settings key, so old settings stay valid). */
 export const GUIDE_STORAGE_KEY = 'neurosurge.guide.v1';
@@ -209,19 +212,22 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         const armGlow = cur() === 'glow' && ev.kind !== 'integration' && (ev.isLeftArm === true || ev.isLeftArm === false);
         // R558 (hunt 2): awaitMove (guideEventsFromFrame): the left arm's own 'armMoved' event completes the goal instead,
         // once the arm really moves (a glance that does not dwell, or an action already held, moves nothing).
-        // 19 November (the tutorial's pressArea): a look only ARMS an area (ns-actions LOOK_ARMS) and moves nothing,
-        // so only a press (a click, a number key, a tap on a muscle: source 'click') finishes "click it: watch it move".
+        // 19 November (the tutorial's pressArea): only a press (a click, a tap on a muscle: source 'click') finishes
+        // "click it"; the look's own switch-on (source 'gaze' or 'dwell') does not.
         const pressed = ev.source !== 'gaze' && ev.source !== 'dwell';
-        if (ev.isLeftArm === true) { if (ev.moves !== false && ev.awaitMove !== true) { mark('leftArmArea'); if (pressed) mark('pressArea'); } }
+        // (A look now switches an area on by itself, so the left arm's own 'armMoved' no longer proves a click: a
+        // click on a left-arm area that moves something finishes pressArea here, whether or not the arm has started.)
+        if (ev.isLeftArm === true) { if (ev.moves !== false) { if (ev.awaitMove !== true) mark('leftArmArea'); if (pressed) mark('pressArea'); } }
         else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) { mark('otherPart'); if (pressed) mark('pressArea'); }
         if (armGlow) w().glowPending = { at: t, regionId: typeof ev.regionId === 'string' ? ev.regionId : null };
         break;
       }
-      case 'armMoved': mark('leftArmArea'); mark('pressArea'); break;
+      case 'armMoved': mark('leftArmArea'); break;
       // 19 November (the tutorial): the look is on a motor area; a number key was held and came up; R was pressed; the
       // step that shows was skipped.
       case 'look': if (typeof ev.regionId === 'string' && ev.regionId) mark('lookStrip'); break;
       case 'moveHold': if (isNum(ev.heldS) && ev.heldS >= (isNum(o.holdMinS) ? o.holdMinS : GUIDE_OPTIONS.holdMinS)) mark('holdPart'); break;
+      case 'limbDrag': if (isNum(ev.deg) && ev.deg >= (isNum(o.limbDragMinDeg) ? o.limbDragMinDeg : GUIDE_OPTIONS.limbDragMinDeg)) mark('dragLimb'); break;
       case 'read': mark('readInfo'); break;
       case 'skip': { const c = cur(); if (c && !(s || state).done[c]) { w().done[c] = true; skipped = true; } break; }
       case 'glow': {

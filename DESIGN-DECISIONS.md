@@ -1680,6 +1680,46 @@ A quick flick could leave the mirror body right where it started. When the point
 
 In Chromium on AMD Vulkan, a 100-pixel drag between frames turned the mirror body by 30 degrees, the same as when the drag straddled two frames. Shift took the brain behind the mirror body. A drag up from the left foot bent the left knee, and the mirror body turned while D carried it sideways.
 
+## 128. Back to the early comic look, with little gloss; a pinker brain; blacker blacks (19 November)
+
+The user, of the plain look of updates 26 to 35: “Muscles and bones look awful. Extremely low quality. Can we please go back to the art style before the overhaul a while ago. Back when it was borderlands-telltale.” Then: “Yes, more of the early Borderlands look without very much gloss at all.” And: “surely the brain should be a little more pinkish, fleshy.”
+
+- **The look.** The body is drawn by the comic shader the game had before the painted look of 18 November: flat tone bands, a hatch in the shade, ink outlines (`BODY_STYLE` is `'cel'`; the shader is `patchComicShadersCel`, the old function word for word). The plain look is off (`SIMPLE_LOOK` false) and stays in the code as an option. The gloss of that early look is nearly gone (`BODY_CEL_EARLY`: the glint core is zero and the highlight strength 0.02 on a muscle belly, 0.05 on tendon and bone), because the user asked for it and because gloss was what made neighbouring muscles run together.
+- **Kept from the plain look**, because the user asked for each: every muscle has its own shade, a muscle or area that has been switched on rests darker, the finger and toe bones are bare, the strip has no ink lines, vessels and swelling stay off.
+- **Tones.** The six salmon and rose muscle tones of 18 November are back under the per-muscle shades.
+- **The brain** is pinker: crown `[0.93, 0.74, 0.73]`, grooves `[0.6, 0.33, 0.36]`, still matte.
+- **Black.** The darkest the room gets is now nearly black and neutral (`ROOM.black` 0.0008, 0.0009, 0.0011; it was the blue-black 0x05070b), and the lit air round the brain and the bodies is halved. What is left of the gradient is the floor's pool of light, brightest under you.
+
+Measured on this machine (Chromium, AMD Vulkan, 1600 × 900, each case 3 s): standing still 60 frames a second, looking around 59, down and up 60, slow limb turn 58 to 60. The outlines and the hidden-limb ghost are drawn again; they cost about 1 ms a frame.
+
+## 129. A look switches an area on; a press drives hard, eases back a little, and repeats (19 November)
+
+The user: “Let's also go back to activation simply by cursor highlight. The number overview is very confusing and creates feedback delay. Let's make it activates heavily relaxes slightly and repeats that process with each further click from highlight.” And: “we want the movements from the neural correlates to be as exaggerated and obvious as possible within reason, such that they're still realistic. But imagine an extremely intense electroshock that causes a fierce contraction with acceleration and inertia. As if moving something heavy.”
+
+- **Look.** Resting the look on a motor area does its movement (`LOOK_ARMS.on` false; the arming rule of 18 November stays as an option of the activity and is still tested). The tip names the area and the one movement under the look; the numbered lists are gone from the tip and the card (`NUMBER_LISTS` false). The number keys still work for whoever knows them, and the Esc page says so in one row.
+- **The jerk.** `JOINT_LATCH`: a slower, heavier spring with far less damping (omega 50 → 21, zeta 0.35 → 0.26) and a harder rebound off the joint's end (0.4 → 0.55). The part gathers speed over four or five frames, hits its end, is thrown back about a quarter of its travel and swings in again two or three times.
+- **Drive, ease, repeat.** A press holds the joint at its full end angle for 0.55 s (`driveS`), then the joint eases back by 16 % of its swing on a soft, critically damped spring (`relax`, `relaxOmega`) and waits there. A further click drives it in again: a joint that is already near its end is given a speed toward it (`kick` × swing × omega), so it slams into the end and rebounds. The first version of this threw the part back on a click, a jump in the picture and the wrong way round; it is gone.
+- **Small movements show.** Straightening a knee that starts 6 degrees from straight moved nothing anyone could see. A movement with little travel is given a swing of up to 70 degrees for the kick and the ease (`minSwingDeg`, never more than 0.6 of the joint's range, so a lip does not rattle between its ends): the knee is knocked straight and rebounds about 14 degrees.
+- **Reduced motion** has none of it: no kick, no ease back, no rebound.
+- **Head movements do not move the view.** With look activation back, the neck area threw the view about. The view is now the look alone (`headPoseForLook`): a neck or trunk movement held by its area moves the drawn head and the mirror body, and the eyes take up the difference; the place the picture is taken from is the head of the look alone (`eyeJoints`).
+- **Tutorial.** The step that held a number key gave way to “press on an arm or leg and drag it” (`dragLimb`, done when one drag has turned and bent a limb by 12 degrees); the first two steps read “Look at a colour on the brain: a part moves” and “Click it: it jerks again, harder”. A click, not the arm moving under a look, finishes the second step.
+
+These are display rules of this game. The spring, the rebound and the kick are not measured movement speeds, forces or nerve signals, and nothing here says how a muscle answers a real stimulus.
+
+Not done from the same notes: the left arm (its own rig) still eases into its movements without the heavy jerk; “hands and feet far more forward and far more back”, “limbs longer”, “the two bodies more level”, the brain turned to face the player with eyeballs and their nerves, and the smaller, flatter chest are open.
+
+## 130. Loading: finer coarse meshes by kind, the rig from the source meshes, and no dead ends (19 November)
+
+The loading lane's second half, merged here.
+
+- **Coarse meshes by kind.** The brain is kept finer (every source point within 0.3 mm of the coarse surface), the meshes the game reshapes within 0.4 mm, the rest within 0.5 mm; the game arm's bones, the motor strip and the finger and toe bones are the source meshes. Small thin muscles keep their bulk (every closed mesh at least 93 % of its volume). 878 440 triangles in place of 2 395 434; 4.57 MB of packs.
+- **The rig comes from the source meshes.** Built from coarse meshes, 53 joint centres moved by more than 1 mm and 40 muscles rode another bone. `packs/BODY-RIG.json` is built offline from the source meshes and the game checks its rig against it; a test fails when the body code changes and the file is not rebuilt (`node tools/build-mesh-packs.mjs`).
+- **No dead ends.** A guard that needs no other file is the page's first script: a missing or silent script, pack or mesh ends in a panel with “Try again”, and a pack that fails is asked for once more past the browser's cache before the game falls back to the source files.
+- **The bar** is on the page before any script arrives, moves from the first moment with the packs' bytes, and says “Waiting” after five silent seconds.
+- **The loading picture is off** (`LOADING_PICTURE` false): with a load of about four seconds there was no time to read it (switching it off did not change the load time). The user asked for the game's own models, innards first, as the loading picture; the game has no organ meshes, and building the real scene piece by piece needs the finished rig first. That request is open.
+
+Measured on this machine from the local server, cache off: ready in 3.7 to 4.0 s (9.3 s from the source files).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

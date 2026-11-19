@@ -9,13 +9,28 @@
  * asks for, or to null when that file must be read the old way (no pack, a pack that failed, an unknown file); the
  * launcher then fetches the OBJ file itself, so a missing or refused pack only makes loading slower, never wrong.
  *
- * Nothing here waits for ever: a pack whose download brings no byte for STALL_MS is given up (and its files are read
- * the old way).
+ * Nothing here waits for ever: a request (the index, a pack, the rig file) that brings no answer for PACK_ANSWER_MS,
+ * or no further byte for PACK_STALL_MS, is given up and its files are read the old way. Those two limits are long on
+ * purpose. Giving a pack up costs tens of megabytes of OBJ files, and on a slow line a pack's answer can be many
+ * seconds in coming only because the game's scripts are ahead of it in the queue (tried with 4 s and 6 s on a
+ * 2 Mbit/s line: three packs that were merely waiting their turn were dropped and the load took minutes).
+ * A request that fails QUICKLY (an error answer, a broken connection, the wrong bytes) is asked for once more, past
+ * the browser's cache, so a copy left over from an earlier version of the game is replaced, not taken for a failure.
+ *
+ * The body rig file goes with the coarse meshes of the body (packs/README.md "The rig file"). If it cannot be had,
+ * the body's meshes are NOT taken from the packs: get() gives null for them, the launcher reads the source OBJ files
+ * and the game estimates the rig from those, which gives the right rig (slow, but not a quietly different body).
  */
-import { decodePack, validatePackIndex, packedMesh, PACK_INDEX_SHA256, PACK_DEFAULTS } from './ns-pack.mjs';
+import { decodePack, validatePackIndex, packIndexRig, packedMesh, PACK_INDEX_SHA256, PACK_DEFAULTS } from './ns-pack.mjs';
 
-export const PACK_STALL_MS = 15000;
+export const PACK_ANSWER_MS = 15000; // a request's answer must begin within this
+export const PACK_STALL_MS = 15000;  // ... and then no pause between bytes may last this long
 export const PACK_PARALLEL = 3;
+/** The worker must say hello within this, or the same job is run on the page (a worker script that never arrives
+ * would otherwise leave every mesh waiting for ever). */
+export const PACK_WORKER_HELLO_MS = 8000;
+/** The packs whose meshes the body rig is made of (so they are used only together with the rig file). */
+export const PACK_NEEDS_RIG = Object.freeze(['fullbody', 'head', 'face-muscles', 'missing-muscles']);
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
 const text = err => String(err && err.message ? err.message : err);
@@ -52,39 +67,61 @@ export async function readAll(response, { onBytes, stallMs, setTimer, clearTimer
  * The job. io: { fetch, subtle, DecompressionStream, Response, Blob, AbortController, setTimeout, clearTimeout }.
  * emit(message, transfer): { type: 'index', packs: [{ name, stage, bytes, files, keys }], startBytes } |
  * { type: 'bytes', name, got (bytes of that pack so far) } | { type: 'pack', name, meshes: [{ key, sourceBytes,
- * sourceSha256, mesh }] } | { type: 'pack-failed', name, error } | { type: 'index-failed', error } | { type: 'done' }.
+ * sourceSha256, mesh }] } | { type: 'pack-failed', name, error } | { type: 'index-failed', error } |
+ * { type: 'rig', file } | { type: 'rig-failed', error } (the body rig file, ns-body bodyRigFromFile) |
+ * { type: 'again', what, error } (a first request failed and is made once more) | { type: 'done' }.
  * Never throws.
  */
-export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, io, emit, stallMs = PACK_STALL_MS, parallel = PACK_PARALLEL }) {
-  let packs;
-  // a request whose answer does not even begin within stallMs is given up too
-  const answered = (promise, abort) => new Promise((resolve, reject) => {
-    const timer = io.setTimeout(() => { reject(new Error(`no answer for ${Math.round(stallMs / 1000)} s`)); try { abort(); } catch { /* gone */ } }, stallMs);
-    promise.then(v => { io.clearTimeout(timer); resolve(v); }, e => { io.clearTimeout(timer); reject(e); });
-  });
+export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, io, emit, stallMs = PACK_STALL_MS, answerMs = Math.min(PACK_ANSWER_MS, stallMs), parallel = PACK_PARALLEL }) {
+  let packs, rigFile = null;
+  // One request, whole and checked: the answer must begin within waitMs, no pause between bytes may last stallMs, and
+  // the bytes must have the expected length and SHA-256 (where given). Throws otherwise.
+  const whole = async (url, { bytes = null, sha256 = null, onBytes = () => {}, waitMs, cache }) => {
+    const ac = typeof io.AbortController === 'function' ? new io.AbortController() : null;
+    const abort = () => { try { if (ac) ac.abort(); } catch { /* gone */ } };
+    const r = await new Promise((resolve, reject) => {
+      const timer = io.setTimeout(() => { reject(Object.assign(new Error(`no answer for ${Math.round(waitMs / 100) / 10} s`), { slow: true })); abort(); }, waitMs);
+      Promise.resolve().then(() => io.fetch(url, { credentials: 'same-origin', ...(cache ? { cache } : {}), ...(ac ? { signal: ac.signal } : {}) }))
+        .then(v => { io.clearTimeout(timer); resolve(v); }, e => { io.clearTimeout(timer); reject(e); });
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    let got;
+    try { got = await readAll(r, { stallMs, setTimer: io.setTimeout, clearTimer: io.clearTimeout, abort, onBytes }); }
+    catch (err) { throw /^no data for/.test(text(err)) ? Object.assign(err, { slow: true }) : err; }
+    if (bytes !== null && got.length !== bytes) throw new Error(`${got.length} bytes, the index says ${bytes}`);
+    if (sha256 !== null && hex(await io.subtle.digest('SHA-256', got)) !== sha256) throw new Error('sha256 does not match');
+    return got;
+  };
+  // ... and once more, past the browser's cache, when the first request fails quickly (not when it was given up for
+  // being silent: a second wait would only double the time before the files are read the old way)
+  const twice = async (what, url, opts) => {
+    try { return await whole(url, { ...opts, waitMs: answerMs }); }
+    catch (err) {
+      if (err && err.slow) throw err;
+      emit({ type: 'again', what, error: text(err) });
+      if (typeof opts.onAgain === 'function') opts.onAgain();
+      return whole(url, { ...opts, waitMs: answerMs, cache: 'reload' });
+    }
+  };
   try {
     if (typeof io.DecompressionStream !== 'function' || !io.subtle) throw new Error('this browser cannot inflate packs');
-    const r = await answered(io.fetch(indexUrl, { credentials: 'same-origin' }), () => {});
-    if (!r.ok) throw new Error(`HTTP ${r.status} for the pack index`);
-    const bytes = new Uint8Array(await r.arrayBuffer());
-    if (hex(await io.subtle.digest('SHA-256', bytes)) !== expectedIndexSha256) throw new Error('the pack index is not the pinned one');
-    packs = validatePackIndex(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
+    let bytes;
+    try { bytes = await twice('index', indexUrl, { sha256: expectedIndexSha256 }); }
+    catch (err) { throw new Error(/sha256/.test(text(err)) ? 'the pack index is not the pinned one' : `${text(err)} for the pack index`); }
+    const index = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    packs = validatePackIndex(index);
+    rigFile = packIndexRig(index);
   } catch (err) { emit({ type: 'index-failed', error: text(err) }); emit({ type: 'done' }); return; }
   const startBytes = packs.filter(p => p.stage === 'start').reduce((a, p) => a + p.bytes, 0);
   emit({ type: 'index', packs: packs.map(p => ({ name: p.name, stage: p.stage, bytes: p.bytes, files: p.files, keys: p.keys })), startBytes });
   const one = async p => {
     let got = 0, lastSent = 0;
     try {
-      const ac = typeof io.AbortController === 'function' ? new io.AbortController() : null;
-      const r = await answered(io.fetch(base + p.file, { credentials: 'same-origin', ...(ac ? { signal: ac.signal } : {}) }), () => ac && ac.abort());
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const gz = await readAll(r, { stallMs, setTimer: io.setTimeout, clearTimer: io.clearTimeout, abort: () => ac && ac.abort(),
+      const gz = await twice(p.name, base + p.file, { bytes: p.bytes, sha256: p.sha256, onAgain: () => { got = 0; lastSent = 0; },
         onBytes: n => {
           got += n;
           if (got - lastSent > 65536 || got >= p.bytes) { lastSent = got; emit({ type: 'bytes', name: p.name, got }); }
         } });
-      if (gz.length !== p.bytes) throw new Error(`${gz.length} bytes, the index says ${p.bytes}`);
-      if (hex(await io.subtle.digest('SHA-256', gz)) !== p.sha256) throw new Error('sha256 does not match the pack index');
       const raw = new Uint8Array(await new io.Response(new io.Blob([gz]).stream().pipeThrough(new io.DecompressionStream('gzip'))).arrayBuffer());
       const decoded = decodePack(raw);
       const meshes = [], transfer = [];
@@ -95,13 +132,21 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
       }
       emit({ type: 'pack', name: p.name, meshes }, transfer);
     } catch (err) {
-      emit({ type: 'pack-failed', name: p.name, error: text(err) });
+      emit({ type: 'pack-failed', name: p.name, error: /sha256/.test(text(err)) ? 'sha256 does not match the pack index' : text(err) });
     }
   };
+  // the body rig made from the source meshes (a small JSON file; its bytes must match the index too)
+  const rigJob = (async () => {
+    if (!rigFile) { emit({ type: 'rig-failed', error: 'the index names no rig file' }); return; }
+    try {
+      const bytes = await twice('rig', base + rigFile.file, { bytes: rigFile.bytes, sha256: rigFile.sha256 });
+      emit({ type: 'rig', file: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) });
+    } catch (err) { emit({ type: 'rig-failed', error: /sha256|bytes, the index/.test(text(err)) ? 'the rig file does not match the pack index' : text(err) }); }
+  })();
   const queue = [...packs.filter(p => p.stage === 'start'), ...packs.filter(p => p.stage !== 'start')];
   let next = 0;
   const lane = async () => { while (next < queue.length) await one(queue[next++]); };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(parallel, queue.length)) }, lane));
+  await Promise.all([rigJob, ...Array.from({ length: Math.max(1, Math.min(parallel, queue.length)) }, lane)]);
   emit({ type: 'done' });
 }
 
@@ -112,16 +157,20 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
  * has arrived or failed. Never throws.
  */
 export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, moduleUrl = import.meta.url,
-  workerUrl = new URL('./ns-pack-worker.mjs', import.meta.url), onProgress = null, onSettled = null, useWorker = true } = {}) {
-  const st = { mode: 'off', index: 'pending', packs: {}, files: 0, of: null, served: 0, missed: 0, again: 0, errors: [] };
+  workerUrl = new URL('./ns-pack-worker.mjs', import.meta.url), onProgress = null, onSettled = null, useWorker = true, helloMs = PACK_WORKER_HELLO_MS } = {}) {
+  const st = { mode: 'off', index: 'pending', packs: {}, rig: 'pending', files: 0, of: null, served: 0, missed: 0, again: 0, asked2: [], withoutRig: 0, errors: [] };
   const abs = u => { try { return new URL(u, new URL(moduleUrl, win.location.href)).href; } catch { return String(u); } };
+  let resolveRig;
+  const rigP = new Promise(r => { resolveRig = r; }); // the rig file's content | null
   let resolveIndex;
   const indexP = new Promise(r => { resolveIndex = r; });   // Map(key -> pack name) | null
   const packP = new Map(), packResolve = new Map();          // name -> Promise<Map(key -> record) | null>
   let worker = null, startLeft = 0, settled = false;
   const tell = () => {
     let files = 0, of = 0;
-    for (const p of Object.values(st.packs)) { if (p.stage !== 'start') continue; of += p.files; if (p.status !== 'failed') files += p.files * Math.min(1, p.got / p.bytes); }
+    // (a pack that failed counts none of its files, and neither does a body pack once the rig file is known to be
+    // missing: the page then reads those files one by one and counts them itself)
+    for (const [name, p] of Object.entries(st.packs)) { if (p.stage !== 'start') continue; of += p.files; if (p.status !== 'failed' && !(st.rig === 'failed' && PACK_NEEDS_RIG.includes(name))) files += p.files * Math.min(1, p.got / p.bytes); }
     st.files = Math.round(files * 10) / 10; st.of = of;
     if (typeof onProgress === 'function') { try { onProgress(files, of); } catch { /* advisory */ } }
   };
@@ -142,6 +191,12 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
     } else if (m.type === 'index-failed') {
       st.index = 'failed'; st.errors.push(`index: ${m.error}`);
       resolveIndex(null); startLeft = 0; settle();
+    } else if (m.type === 'rig') {
+      st.rig = 'ok'; resolveRig(m.file);
+    } else if (m.type === 'rig-failed') {
+      st.rig = 'failed'; st.errors.push(`rig: ${m.error}`); resolveRig(null); tell();
+    } else if (m.type === 'again') {
+      st.asked2.push(`${m.what}: ${m.error}`);
     } else if (m.type === 'bytes') {
       const rec = st.packs[m.name];
       if (rec) { rec.got = m.got; tell(); }
@@ -155,23 +210,33 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
     } else if (m.type === 'done') {
       for (const [name, res] of packResolve) { if (st.packs[name].status === 'loading') { st.packs[name].status = 'failed'; res(null); } }
       startLeft = 0; settle();
+      if (st.rig === 'pending') { st.rig = 'failed'; resolveRig(null); tell(); }
       if (worker) { try { worker.terminate(); } catch { /* gone */ } worker = null; }
     }
   };
   const fallBack = why => { if (st.index === 'pending') onMessage({ type: 'index-failed', error: why }); else st.errors.push(why); onMessage({ type: 'done' }); };
+  const onPage = () => {
+    st.mode = 'page';
+    runPackJob({ indexUrl: abs(indexUrl), base: abs(base), emit: m => onMessage(m),
+      io: { fetch: win.fetch.bind(win), subtle: win.crypto && win.crypto.subtle, DecompressionStream: win.DecompressionStream, Response: win.Response, Blob: win.Blob,
+        AbortController: win.AbortController, setTimeout: win.setTimeout.bind(win), clearTimeout: win.clearTimeout.bind(win) } });
+  };
   try {
     if (useWorker && typeof win.Worker === 'function') {
       worker = new win.Worker(workerUrl, { type: 'module' });
       st.mode = 'worker';
-      worker.onmessage = ev => onMessage(ev.data);
-      worker.onerror = ev => { fallBack(`worker: ${text(ev && ev.message || 'error')}`); };
+      // a worker whose script never arrives says nothing, not even an error: after helloMs the job runs on the page
+      let hello = false;
+      const noHello = win.setTimeout(() => {
+        if (hello || !worker) return;
+        st.errors.push(`worker: no word for ${Math.round(helloMs / 1000)} s; the packs are read on the page`);
+        try { worker.terminate(); } catch { /* gone */ } worker = null;
+        try { onPage(); } catch (err) { st.mode = 'off'; fallBack(text(err)); }
+      }, helloMs);
+      worker.onmessage = ev => { if (!hello) { hello = true; try { win.clearTimeout(noHello); } catch { /* gone */ } } onMessage(ev.data); };
+      worker.onerror = ev => { hello = true; try { win.clearTimeout(noHello); } catch { /* gone */ } fallBack(`worker: ${text(ev && ev.message || 'error')}`); };
       worker.postMessage({ type: 'start', indexUrl: abs(indexUrl), base: abs(base) });
-    } else {
-      st.mode = 'page';
-      runPackJob({ indexUrl: abs(indexUrl), base: abs(base), emit: m => onMessage(m),
-        io: { fetch: win.fetch.bind(win), subtle: win.crypto && win.crypto.subtle, DecompressionStream: win.DecompressionStream, Response: win.Response, Blob: win.Blob,
-          AbortController: win.AbortController, setTimeout: win.setTimeout.bind(win), clearTimeout: win.clearTimeout.bind(win) } });
-    }
+    } else onPage();
   } catch (err) { st.mode = 'off'; fallBack(text(err)); }
   return {
     /** The packed mesh for `<packet>/meshes/<file>.obj`, once; null = read the file itself. */
@@ -179,6 +244,8 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
       const where = await indexP;
       const name = where && where.get(key);
       if (!name) { st.missed++; return null; }
+      // the body's coarse meshes only together with the rig made from their sources (see the head of this file)
+      if (PACK_NEEDS_RIG.includes(name) && (await rigP) === null) { st.withoutRig++; return null; }
       const pack = await packP.get(name);
       const rec = pack && pack.get(key);
       if (!rec) { if (pack) st.again++; else st.missed++; return null; }
@@ -186,6 +253,8 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
       st.served++;
       return packedMesh(rec);
     },
+    /** The body rig file (made from the source meshes), or null when it cannot be had. */
+    rig: () => rigP,
     state: () => JSON.parse(JSON.stringify(st)),
     stop() { if (worker) { try { worker.terminate(); } catch { /* gone */ } worker = null; } }
   };

@@ -906,16 +906,16 @@ const muscleTone = (name, L, C, h) => {
 // 1.28. Old (L, h): 0.630 28, 0.560 40, 0.595 17, 0.520 30, 0.705 33, 0.665 20. The steps between the tones are kept,
 // so the neighbour separation (Message 18) is as before.
 export const MUSCLE_TONE_CHROMA = 1.28;
-// 19 November 2026 (the owner: "everything should look a lot more like the loading screen models"): the muscles take the
-// loading picture's reds (ns-assembly-core ASSEMBLY_KINDS.muscle 0xb2343c and its three layer reds), in six steps of
-// lightness so neighbours still part. Before: six pale salmon / rose / clay tones (L 0.465 to 0.650, chroma about 0.1).
+// 19 November 2026, later (the owner: "go back to the art style before the overhaul ... borderlands-telltale"): the six
+// tones of 18 November again (for a few hours that day the muscles took the loading picture's reds: L 0.41 to 0.585,
+// chroma about 0.15, hue 19 to 24).
 export const MUSCLE_TONES = freeze([
-  muscleTone('red', 0.500, 0.160, 22),
-  muscleTone('deep red', 0.410, 0.132, 20),
-  muscleTone('outer red', 0.545, 0.165, 23),
-  muscleTone('dark red', 0.450, 0.146, 21),
-  muscleTone('light red', 0.585, 0.152, 24),
-  muscleTone('mid red', 0.475, 0.156, 20.5)
+  muscleTone('salmon rose', 0.575, 0.088 * MUSCLE_TONE_CHROMA, 32),
+  muscleTone('soft red-brown', 0.505, 0.076 * MUSCLE_TONE_CHROMA, 44),
+  muscleTone('muted rose', 0.540, 0.094 * MUSCLE_TONE_CHROMA, 21),
+  muscleTone('clay rose', 0.465, 0.074 * MUSCLE_TONE_CHROMA, 34),
+  muscleTone('light salmon', 0.650, 0.078 * MUSCLE_TONE_CHROMA, 37),
+  muscleTone('dusty rose', 0.610, 0.066 * MUSCLE_TONE_CHROMA, 24)
 ]);
 /** OKLab distance between two tones (0.1 = clearly different, 0.03 = just noticeable side by side). */
 export function muscleToneDistance(i, j) {
@@ -1016,6 +1016,43 @@ export const MUSCLE_LOOK = freeze({
 // bodies are now PAINTED (ns-flesh BODY_FLESH: one smooth tone curve, fibre bundles, a wet highlight). Of the numbers
 // below only rim.dir (the side the rim light comes from) is still read by the shader; the bands, the highlight shape,
 // the ink lines, the hatching and the bone stipple are no longer drawn. They are kept as the record of the comic look.
+/** 19 November 2026 (the owner: "go back to the art style before the overhaul ... borderlands-telltale"; "Yes, more of
+ * the early Borderlands look without very much gloss at all"). The comic look's numbers as they stood before the bodies
+ * were painted on 18 November (flat tone bands, hatching in the shadow bands, stipple, a rim light, ink), with the
+ * highlight shapes turned almost off. ns-scene-three BODY_STYLE 'cel' draws the bodies with these and the shader of
+ * that time (patchComicShadersCel). */
+export const BODY_CEL_EARLY = freeze({
+  bands: freeze([0.42, 0.74, 1.04]), soft: 0.05,
+  levels: freeze([0.08, 0.34, 0.78, 1.1]), boneHigh: 0.9,
+  // R558 checker (Message 30, "The bone tips probably shouldn't be so spikey"): the deep and mid tones of BONE and of the
+  // white TENDON parts. At the muscles' 0.08 / 0.34 every fingertip and toe tip turned away from the head-mounted key
+  // light went near-black, so a thin white digit ended in a dark hooked point: the claws and talons of the pictures (own
+  // right hand, left game hand, the mirror body's hands). White tissue keeps a light grey shadow instead (sRGB about
+  // 0.51 and 0.67 on the ivory bone, below its 0.78 light and 0.84 highlight tones), so a bone end reads as a rounded
+  // ivory end; muscles keep their near-black deep band (Message 27).
+  boneLevels: freeze([0.3, 0.54]),
+  // R558 checker (Message 18 "never splotchy", style guide: the mirror body at its start distance "must stay clean, never
+  // dirty"): the half-width of the band steps on a FAR figure (from line.farFromM to line.farToM it widens from `soft`
+  // to farSoft). On the mirror body at its start distance (trunk 1.6 to 1.9 m) the light factor of the bumpy lifted
+  // belly and flanks wanders around the deep / mid threshold, and the narrow 0.05 step turned that into near-black
+  // streaks and blotches all over its trunk: the dirty look, measured with the ink switched off (it was the bands, not
+  // the ink). 0.16 keeps the tonal steps there but as soft shading; your own body (within 0.99 m) keeps the crisp bands.
+  farSoft: 0.16,
+  deepTint: freeze([0.9, 0.95, 1.07]), deepDesat: 0.55,
+  rim: freeze({ at: 0.55, gain: 1.0, colour: freeze([0.8, 0.9, 1.0]), dir: freeze([-0.45, 0.89]) }),
+  // spec: GGX peaks under the key measured from the materials: muscle belly (roughness 0.6) about 0.06, tendon part
+  // (0.4) about 0.3, bone (boneRoughness 0.5) about 0.13. A first try (one step at 0.05, gain 1.25 on bone) turned
+  // every bone face toward the headlight into a white patch that bloomed (the pelvis seen from the eyes).
+  // (19 November 2026, "without very much gloss at all": belly 0.14 -> 0.02, tendonBone 0.26 -> 0.05, and no gloss core.)
+  spec: freeze({ bellyAt: 0.05, tendonBoneAt: 0.1, soft: 0.012, belly: 0.02, tendonBone: 0.05 }),
+  gloss: freeze({ coreMul: 0, coreBelly: 0, coreTendonBone: 0, smooth: 0.55, smoothMax: 0.3, speckRad: 0.1 }),
+  ink: 0x0b0809,
+  line: freeze({ minSpacingPx: 4.5, fibrePx: 0.55, hatchPx: 0.8, farFromM: 1.0, farToM: 1.35 }),
+  mix: freeze({ fibre: 0.2, hatch: 0.5, stipple: 0.2, tendon: 0.18 }),
+  stroke: freeze({ mm: 22, inShare: 0.1, outShare: 0.16 }),
+  stipple: freeze({ cellMm: 2.0, at: 0.8, minCellPx: 1.8 }),
+  spacingMm: freeze({ muscle: 3.2, bone: 3.0 })
+});
 export const BODY_CEL = freeze({
   bands: freeze([0.42, 0.74, 1.04]), soft: 0.05,
   levels: freeze([0.08, 0.34, 0.78, 1.1]), boneHigh: 0.9,

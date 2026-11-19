@@ -26,7 +26,7 @@
 export const PACK_FORMAT = 'ns-mesh-pack-1';
 /** The SHA-256 of packs/PACK-INDEX.json as committed (tools/build-mesh-packs.mjs writes this line; tests/pack.test.mjs
  * checks it). The index is refused, and the game reads the source files instead, when its bytes do not match. */
-export const PACK_INDEX_SHA256 = 'e9c719df50aff6fbcc060e3b634c15b8d25527e3ee34dda60e783de26ae6ffdb';
+export const PACK_INDEX_SHA256 = '6c1ecd272e677bc359f426d7aae06cbb4c3e70e57b493f7601d2688ca0020c07';
 export const PACK_DEFAULTS = Object.freeze({ indexUrl: '../../packs/PACK-INDEX.json', base: '../../packs/' });
 export const PACK_INDEX_FORMAT = 'ns-mesh-pack-index-1';
 const MAGIC = [0x4e, 0x53, 0x50, 0x4b, 0x31, 0x0a]; // "NSPK1\n"
@@ -226,6 +226,13 @@ export function validatePackIndex(index) {
     if (!Array.isArray(p.keys) || p.keys.length !== p.files || p.keys.some(k => typeof k !== 'string')) fail(`${p.name}: bad key list`);
     return { name: p.name, file: p.file, stage: p.stage === 'late' ? 'late' : 'start', bytes: p.bytes, sha256: p.sha256, files: p.files, keys: p.keys, detail: p.detail === 'coarse' ? 'coarse' : 'exact' };
   });
+}
+
+/** The body rig file an index names ({ file, bytes, sha256 }), or null (pure; see ns-body bodyRigFromFile). */
+export function packIndexRig(index) {
+  const r = index && index.rig;
+  if (!r || typeof r.file !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.json$/.test(r.file) || !/^[0-9a-f]{64}$/.test(r.sha256) || !Number.isSafeInteger(r.bytes) || r.bytes < 1 || r.bytes > 8e6) return null;
+  return { file: r.file, bytes: r.bytes, sha256: r.sha256 };
 }
 
 /** The pack key of a file URL the game asks for (`<packet>/meshes/<file>.obj`), or null (pure). */

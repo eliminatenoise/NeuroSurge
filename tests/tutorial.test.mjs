@@ -14,7 +14,7 @@ const fresh = () => NG.createGuide({ now: 0, features: F, tutorial: true });
 const EVENTS = {
   lookStrip: [{ type: 'look', regionId: 'rh_elbow' }],
   pressArea: [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'click' }],
-  holdPart: [{ type: 'moveHold', heldS: 0.6 }],
+  dragLimb: [{ type: 'limbDrag', deg: 30 }],
   dragBrain: [{ type: 'grab', on: true }, { type: 'grab', on: false, dragRad: 0.3 }],
   orbit: [{ type: 'orbit' }],
   moveHand: [{ type: 'move', axis: 'x' }, { type: 'move', axis: 'z' }],
@@ -23,7 +23,7 @@ const EVENTS = {
 };
 
 test('the tutorial is eight steps in the order a newcomer needs them, each with one short line', () => {
-  assert.deepEqual([...NG.TUTORIAL_GOAL_IDS], ['lookStrip', 'pressArea', 'holdPart', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
+  assert.deepEqual([...NG.TUTORIAL_GOAL_IDS], ['lookStrip', 'pressArea', 'dragLimb', 'dragBrain', 'orbit', 'moveHand', 'thirdPerson', 'readInfo']);
   const g = fresh();
   assert.deepEqual(g.goals, [...NG.TUTORIAL_GOAL_IDS]);
   assert.equal(g.tutorial, true);
@@ -33,7 +33,9 @@ test('the tutorial is eight steps in the order a newcomer needs them, each with 
     assert.ok(typeof GUIDE.short[id] === 'string' && GUIDE.short[id].length > 0 && GUIDE.short[id].length <= 48, `one short line for ${id}`);
     assert.ok(typeof GUIDE.goals[id] === 'string' && GUIDE.goals[id].length > 10, `full line for ${id}`);
   }
-  assert.doesNotMatch(Object.values(GUIDE.short).filter(v => typeof v === 'string').join(' '), /look at .* to move|looking moves/i, 'a look only arms an area');
+  // later on 19 November the owner took the numbered lists away and a look switches an area on again: the tutorial's
+  // own lines name no number key
+  for (const id of NG.TUTORIAL_GOAL_IDS) assert.doesNotMatch(GUIDE.short[id] + ' ' + GUIDE.goals[id], /\b1 or 2\b|number/i, `${id} names no number key`);
   assert.deepEqual([...NG.tutorialGoalIds({})], NG.TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson'), 'a build without the outside view has no step for it');
 });
 
@@ -56,9 +58,9 @@ test('each step is done by its own action, in order, and the count goes 1/8 ... 
   assert.equal(NG.guideView(g, t + 60).visible, false, 'it stays quiet after the last step');
 });
 
-test('strict: an action of a later step does not jump the tutorial ahead; a tap is not a hold; a look alone presses nothing', () => {
+test('strict: an action of a later step does not jump the tutorial ahead; a nudge is not a drag; a look alone presses nothing', () => {
   let g = fresh();
-  g = NG.guideStep(g, [...EVENTS.orbit, ...EVENTS.readInfo, ...EVENTS.moveHand, ...EVENTS.holdPart], 1);
+  g = NG.guideStep(g, [...EVENTS.orbit, ...EVENTS.readInfo, ...EVENTS.moveHand, ...EVENTS.dragLimb], 1);
   assert.equal(NG.goalsDone(g), 0);
   assert.equal(NG.currentGoal(g), 'lookStrip');
   g = NG.guideStep(g, EVENTS.lookStrip, 2);
@@ -70,10 +72,12 @@ test('strict: an action of a later step does not jump the tutorial ahead; a tap 
   g = NG.guideStep(g, [{ type: 'activate', regionId: 'lh_scan_superior', isLeftArm: false, kind: 'integration', moves: false, source: 'click' }], 4);
   assert.equal(NG.currentGoal(g), 'pressArea', 'an area that moves nothing does not finish "watch it move"');
   g = NG.guideStep(g, [{ type: 'armMoved', ids: ['elbow_flexion'] }], 5);
-  assert.equal(NG.currentGoal(g), 'holdPart', 'the left arm really moving finishes it');
-  g = NG.guideStep(g, [{ type: 'moveHold', heldS: 0.1 }], 6);
-  assert.equal(NG.currentGoal(g), 'holdPart', 'a tap is not a hold');
-  g = NG.guideStep(g, [{ type: 'moveHold', heldS: NG.GUIDE_OPTIONS.holdMinS }], 7);
+  assert.equal(NG.currentGoal(g), 'pressArea', 'the left arm moving under a look is not a click');
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'rh_elbow', isLeftArm: true, kind: 'effector', moves: true, awaitMove: true, source: 'click' }], 5.5);
+  assert.equal(NG.currentGoal(g), 'dragLimb', 'a click on a left-arm area finishes it');
+  g = NG.guideStep(g, [{ type: 'limbDrag', deg: 3 }], 6);
+  assert.equal(NG.currentGoal(g), 'dragLimb', 'a nudge is not a drag');
+  g = NG.guideStep(g, [{ type: 'limbDrag', deg: NG.GUIDE_OPTIONS.limbDragMinDeg }], 7);
   assert.equal(NG.currentGoal(g), 'dragBrain');
 });
 
@@ -107,7 +111,7 @@ test('what the tutorial saves comes back; what the older guide saved starts the 
   const saved = JSON.stringify(NG.guideToStorage(g));
   assert.deepEqual(JSON.parse(saved), { v: 2, tutorial: true, hidden: false, done: ['lookStrip', 'pressArea'] });
   const back = NG.guideFromStorage(saved, 5, { features: F, tutorial: true });
-  assert.equal(NG.currentGoal(back), 'holdPart');
+  assert.equal(NG.currentGoal(back), 'dragLimb');
   const old = JSON.stringify({ v: 1, hidden: true, done: ['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror'] });
   const fromOld = NG.guideFromStorage(old, 5, { features: F, tutorial: true });
   assert.equal(NG.currentGoal(fromOld), 'lookStrip');

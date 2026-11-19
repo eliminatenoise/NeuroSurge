@@ -630,7 +630,9 @@ export function glassInkUniformValues(o = BRAIN_INK) {
  * not red), rim [1, 0.82, 0.8] -> [0.92, 0.9, 0.96] (a pearly film). Measured at the start view (fixed patches,
  * CIE L* of the mean colour): brain 46.7 / muscle 43.5 before, see the vessels notes for after. */
 export const BRAIN_FLESH = Object.freeze({
-  crown: Object.freeze([0.9, 0.85, 0.86]), groove: Object.freeze([0.56, 0.4, 0.46]), grooveCurve: 0.8,
+  // 19 November 2026 (the owner: "surely the brain should be a little more pinkish, fleshy"): crown 0.9, 0.85, 0.86 ->
+  // a soft flesh pink, the grooves a deeper rose (0.56, 0.4, 0.46 before).
+  crown: Object.freeze([0.93, 0.74, 0.73]), groove: Object.freeze([0.6, 0.33, 0.36]), grooveCurve: 0.8,
   mottle: 0.18, mottleMm: 11, mottleFineMm: 3.2, mottleWarm: Object.freeze([1.0, 0.95, 0.96]), bumpMm: 0.5, bumpFadePx: 5,
   key: 1.0, wrap: 0.35, fill: 0.2, aoMin: 0.22,
   scatter: 0.22, scatterTint: Object.freeze([0.95, 0.62, 0.7]),

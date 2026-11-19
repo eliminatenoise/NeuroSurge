@@ -25,9 +25,10 @@ function tick(now) {
   // About 30 pictures a second are plenty for a loading picture, and leave the processor to the loading itself.
   if (now - lastDraw < 30) { raf(tick); return; }
   lastDraw = now;
-  // Read at most ~6 ms of files per picture, so the picture stays smooth while files pour in.
-  const t0 = performance.now();
-  while (queue.length && performance.now() - t0 < 6) {
+  // Read at most ~6 ms of files per picture, so the picture stays smooth while files pour in; 14 ms while many wait
+  // (19 November 2026: a pack hands over hundreds of meshes at once, and the whole load is now a few seconds).
+  const t0 = performance.now(), budget = queue.length > 40 ? 14 : 6;
+  while (queue.length && performance.now() - t0 < budget) {
     const q = queue.shift();
     try { view.add(q.kind, q.mesh || parseObjBytes(new Uint8Array(q.bytes)), q.place); } catch { /* a part this picture cannot read is left out */ }
   }

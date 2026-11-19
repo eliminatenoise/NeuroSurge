@@ -403,7 +403,10 @@ export const LICENCE_LINKS = Object.freeze({
 // R4-fix (review SL4-6): Picture quality Low (and Auto at its cheapest levels) draws vertex-clustered, simplified copies
 // of the glass-brain and full-body meshes at run time; say so, like the muscle bending.
 // R558 (builder AN): the opened rectus sheath (ns-body openRectusSheath) leaves part of a BodyParts3D mesh undrawn; say so.
-export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, simplified copies of the meshes are drawn. Where rectus abdominis is shown, the part of the external oblique\'s tendon sheet in front of it is not drawn (the strip between the two recti stays). The OBJ files themselves are unmodified.';
+// 19 November 2026 (package LOAD): at every picture quality the game now draws the simplified copies of packs/ (made
+// beforehand by tools/build-mesh-packs.mjs: fewer triangles, every kept point a point of the source file, the surface
+// within 0.5 mm, rounded to 0.01 mm; packs/README.md); the OBJ files are fetched only when a pack cannot be used.
+export const ATTRIBUTION_CHANGES = 'Changes: a subset of meshes was selected. The game draws simplified copies of most meshes, made beforehand with fewer triangles (every kept point is a point of the original and the surface stays within 0.5 mm of it; coordinates rounded to 0.01 mm). At run time the bones are moved rigidly, the muscles are bent to follow them, and colours are added. On Picture quality Low, still simpler copies are drawn. Where rectus abdominis is shown, the part of the external oblique\'s tendon sheet in front of it is not drawn (the strip between the two recti stays). The OBJ files themselves are unmodified.';
 
 export const ATTRIBUTION = `${ATTRIBUTION_TEXT}. Licence: CC BY 4.0 (${LICENCE_LINKS.licence}); DBCLS licence page ${LICENCE_LINKS.licencePage}; source ${LICENCE_LINKS.source}. ${ATTRIBUTION_CHANGES} The OBJ comment headers retain the legacy CC BY-SA 2.1 Japan notice; the current official archive licence is CC BY 4.0. No endorsement by the database authors is implied.`;
 

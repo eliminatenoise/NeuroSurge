@@ -115,24 +115,19 @@ check('the look range does not shift with a held trunk bend', () => {
   }
 });
 
-check('a held neck movement still moves the head and the view, and shifts the look range', () => {
-  // "Tilt head back" (the neck held 45 back) with the look level: the view goes up 45.
+check('a held neck movement moves the head, and the view stays on the look', () => {
+  // 19 November 2026: "Tilt head back" (the neck held 45 back) with the look level: the head goes back 45, the eyes
+  // look 45 down in the head, and the view stays level.
   const up = headPoseForLook(look(0, 0), { neck_flex: -45 }, L);
-  near(up.look.pitch / DEG, 45, 1e-9, 'pitch');
+  near(up.look.pitch / DEG, 0, 1e-9, 'pitch');
   near(up.joints.neck_flex, -45, 1e-9, 'neck');
-  // "Turn head to the left" (the neck held 70 left): the view turns 70 to the left.
+  near(up.headLook.pitch / DEG, 45, 1e-9, 'the head itself');
+  // "Turn head to the left" (the neck held 70 left): the head turns, the view does not.
   const left = headPoseForLook(look(0, 0), { neck_rot: 70 }, L);
-  near(left.look.yaw / DEG, 70, 1e-9, 'yaw');
-  const base = headLookRange(null, L, look(0, 0));
-  const tilted = headLookRange({ neck_flex: -45 }, L, look(0, 0));
-  near(tilted.pitchMinDeg, base.pitchMinDeg - 45, 1e-9, 'lowest look');
-  near(tilted.pitchMaxDeg, base.pitchMaxDeg - 45, 1e-9, 'highest look');
-  const turned = headLookRange({ neck_rot: 70 }, L, look(0, 0));
-  near(turned.yawMinDeg, base.yawMinDeg - 70, 1e-9, 'right end');
-  near(turned.yawMaxDeg, base.yawMaxDeg - 70, 1e-9, 'left end');
-  // A held neck movement and a held trunk bend together: the view is the neck's alone.
+  near(left.look.yaw / DEG, 0, 1e-9, 'yaw');
+  near(left.joints.neck_rot, 70, 1e-9, 'neck turn');
   const both = headPoseForLook(look(0, 0), { neck_flex: -20, trunk_flex: -25 }, L);
-  near(both.look.pitch / DEG, 20, 1e-9, 'pitch with both held');
+  near(both.look.pitch / DEG, 0, 1e-9, 'pitch with both held');
   near(both.bendDeg, -25, 1e-9, 'trunk with both held');
 });
 

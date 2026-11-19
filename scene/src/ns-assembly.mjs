@@ -25,6 +25,8 @@ import { bodyMuscleLayer } from './ns-body.mjs';
  * loading them, one at a time, after it is ready. */
 export const ASSEMBLY_EXPECTED_FILES = 611;
 export const CONTROLS_CARD_MS = 5000;
+/** About how long a first load takes (ms from the page's start), for the picture's pace before any load was timed. */
+export const ASSEMBLY_FIRST_LOAD_MS = 5000;
 /** The browser-storage key of the last load's time (ms from the page's start to the game being ready). */
 export const ASSEMBLY_LOAD_KEY = 'neurosurge.loading.readyMs';
 
@@ -103,7 +105,8 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   let lastLoadMs = null;
   try { const v = Number(win.localStorage && win.localStorage.getItem(ASSEMBLY_LOAD_KEY)); lastLoadMs = Number.isFinite(v) && v > 1000 && v < 600000 ? v : null; } catch { lastLoadMs = null; }
   const startedAtMs = (() => { try { return win.performance.now(); } catch { return 0; } })();
-  const expectReadyS = lastLoadMs === null ? null : (lastLoadMs - startedAtMs) / 1000;
+  // 19 November 2026: with no earlier load to go by, about the time a load takes now (ASSEMBLY_FIRST_LOAD_MS)
+  const expectReadyS = ((lastLoadMs === null ? ASSEMBLY_FIRST_LOAD_MS : lastLoadMs) - startedAtMs) / 1000;
   const st = { mode: 'off', files: 0, error: null, finished: false, lastWorkerState: null, workerStates: [], reducedMotion, lastLoadMs };
   let canvas = null, worker = null, local = null, localQueue = [], raf = 0, lastBytesAt = 0;
   let staticOverlay = null, staticProgress = null;

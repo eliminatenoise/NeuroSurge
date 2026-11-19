@@ -56,7 +56,10 @@
 export const ROOM = Object.freeze({
   floorY: -13, ceilY: 16, wallR: 260,
   centre: Object.freeze([0, -7.5]), bodyAt: Object.freeze([-0.04, -0.23, -0.53]),
-  black: Object.freeze([0.0015, 0.0021, 0.0033]),
+  // 19 November 2026 (the owner: "Let's have much darker blacks instead of ugly grays"): the darkest the room gets is
+  // now nearly black and neutral (0.0015, 0.0021, 0.0033 before: the old blue-black 0x05070b), and the lit air round
+  // the brain and the bodies is halved (0.012 and 0.02 before), so what is left of the gradient is the floor's pool.
+  black: Object.freeze([0.0008, 0.0009, 0.0011]),
   // 19 November 2026 (the owner: "Let's go back to far more black of a background, but with a little bit of a gradient.
   // So not exactly pitch black, with the gradient changing as you go further or closer away"): the floor's pool of light
   // is the gradient (brightest under you, fading with distance) at about a third of its strength (0.020, 0.040, 0.042
@@ -70,7 +73,7 @@ export const ROOM = Object.freeze({
   lamps: Object.freeze([Object.freeze([0.3, 4.9, 3.8, 1]), Object.freeze([-5, 9.3, 1.7, 0.75]), Object.freeze([-6.2, 5.1, 1.2, 0.6])]),
   lamp: Object.freeze({ colour: Object.freeze([0, 0, 0]), core: 0.7, coreR: 0.5, disc: 0.3, discIn: 0.45, discOut: 1.25, halo: 0.07, haloR: 2.2 }),
   gloss: Object.freeze({ f0: 0.05, wall: 0.7 }),
-  aura: Object.freeze({ colour: Object.freeze([0.72, 0.96, 1]), brain: Object.freeze([0.012, 0.4, 1]), mirror: Object.freeze([0.02, 0.9, 0]), body: Object.freeze([0.02, 0.9, 0]), radii: Object.freeze([7, 0.85, 0.85]) }),
+  aura: Object.freeze({ colour: Object.freeze([0.72, 0.96, 1]), brain: Object.freeze([0.006, 0.4, 1]), mirror: Object.freeze([0.01, 0.9, 0]), body: Object.freeze([0.01, 0.9, 0]), radii: Object.freeze([7, 0.85, 0.85]) }),
   shade: Object.freeze({ brain: Object.freeze([8, 0.6]), brainK: 0.75, mirror: Object.freeze([4, 0]), body: Object.freeze([4, 0]) }),
   // 18 November 2026 (SMALL, audit S23; the owner, Note 10: "If we imagine an invisible ground, the mirror body should be
   // touching the same ground"): seen from outside, both bodies hung high above a tiled floor that read as THEIR ground.

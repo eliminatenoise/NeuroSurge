@@ -3,9 +3,33 @@
  "detail": "coarse",
  "note": "Coarser copies of the source packets' meshes, made by tools/build-mesh-packs.mjs with tools/simplify-mesh.mjs: documented derivatives (packs/README.md). The source packets, their manifests, hashes and licence records are unchanged; each pack keeps the licence of its sources.",
  "rule": {
-  "maxDevMm": 0.5,
-  "maxEdgeMm": 10,
-  "roundPerMm": 100
+  "roundPerMm": 100,
+  "volumeKeep": 0.93,
+  "volumeFromMm3": 5,
+  "kinds": {
+   "body": {
+    "maxDevMm": 0.5,
+    "maxEdgeMm": 10
+   },
+   "bone": {
+    "maxDevMm": 0.5,
+    "maxEdgeMm": 10
+   },
+   "brain": {
+    "maxDevMm": 0.3,
+    "maxEdgeMm": 5
+   },
+   "cut": {
+    "maxDevMm": 0.4,
+    "maxEdgeMm": 5
+   }
+  }
+ },
+ "rig": {
+  "file": "BODY-RIG.json",
+  "bytes": 223982,
+  "sha256": "47fefbff24747ff0783cab78017731d039aa6fb042d571c19ea25d0f88ac5ac5",
+  "note": "The body rig (joint pivots and axes, which bone each muscle rides), estimated by tools/page-body.mjs from the SOURCE meshes exactly as the page prepares them; the game builds its rig from the coarser meshes with these pivots and muscle rows and checks the result against this file (ns-body bodyRigFromFile, bodyRigMatchesFile)."
  },
  "packs": [
   {
@@ -18,12 +42,12 @@
     "pov-demo-assets-r2"
    ],
    "licence": "BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0; see CREDITS-AND-LICENCES.md and ASSET-ATTRIBUTION-INDEX.md",
-   "bytes": 522757,
-   "sha256": "7f0aa7c09c739a8175fa4b1b95692663589a803678a57b6e91f83a629b831888",
-   "rawBytes": 856686,
+   "bytes": 1114192,
+   "sha256": "a4023bf059485da5d5b8946a21ee2ae12c9531a74db322d4fb86edb11d020691",
+   "rawBytes": 1580346,
    "files": 142,
-   "vertices": 53458,
-   "triangles": 105516,
+   "vertices": 101245,
+   "triangles": 197198,
    "sourceVertices": 286866,
    "sourceTriangles": 463238,
    "sourceBytes": 32589187,
@@ -181,12 +205,12 @@
     "bodyparts3d-fullbody-r1"
    ],
    "licence": "BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0; see packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt",
-   "bytes": 1513312,
-   "sha256": "a761ae86a726ac2e1c5d01ed3b51d66eeca3eaa53499a6b7f1ec5a27f41141e7",
-   "rawBytes": 2359344,
+   "bytes": 1902701,
+   "sha256": "e96cd2a692604439a7e89f3397b6aa0e92ba56b54a00f8ffed87ad3e68638b49",
+   "rawBytes": 2843397,
    "files": 294,
-   "vertices": 154082,
-   "triangles": 305100,
+   "vertices": 188539,
+   "triangles": 370126,
    "sourceVertices": 670753,
    "sourceTriangles": 1081946,
    "sourceBytes": 77421719,
@@ -496,12 +520,12 @@
     "bodyparts3d-head-r1"
    ],
    "licence": "BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0; see packets/bodyparts3d-head-r1/ATTRIBUTION-AND-LICENCES.txt",
-   "bytes": 51890,
-   "sha256": "3db536cbe45ba9918b87abf312043ef55b9eb8089e4e97ff5f2e0a880e69c5cf",
-   "rawBytes": 78832,
+   "bytes": 54599,
+   "sha256": "1bd00b81f35dba3c2c2b17c87c004940e1a69b5abefd7b63be259bf7f822a133",
+   "rawBytes": 82388,
    "files": 10,
-   "vertices": 5047,
-   "triangles": 10054,
+   "vertices": 5282,
+   "triangles": 10524,
    "sourceVertices": 74357,
    "sourceTriangles": 135582,
    "sourceBytes": 9366305,
@@ -527,12 +551,12 @@
     "face-muscles-r1"
    ],
    "licence": "Z-Anatomy, CC BY-SA 4.0 (this pack is an adaptation under the same licence); see packets/face-muscles-r1/ATTRIBUTION-AND-LICENCES.txt",
-   "bytes": 112684,
-   "sha256": "f48c98c2663df69773bfbbbc258863767cac8588ea729c7d2c24e0fcd4103432",
-   "rawBytes": 255489,
+   "bytes": 117415,
+   "sha256": "7b8411bab47de555b98482cac3e3043ed83513131da7d809e05e62c325d7b1b1",
+   "rawBytes": 262991,
    "files": 54,
-   "vertices": 10863,
-   "triangles": 21734,
+   "vertices": 11412,
+   "triangles": 22832,
    "sourceVertices": 52942,
    "sourceTriangles": 105892,
    "sourceBytes": 3289409,
@@ -602,12 +626,12 @@
     "missing-muscles-r1"
    ],
    "licence": "Per file, as its source: BodyParts3D, (c) The Database Center for Life Science, CC BY 4.0 (93 files) and Z-Anatomy, CC BY-SA 4.0 (18 files; adaptations under the same licence); see packets/missing-muscles-r1/ATTRIBUTION-AND-LICENCES.txt",
-   "bytes": 1017060,
-   "sha256": "961e00db6a1a647288855e884dfe12d9c223167add55757ed50e8d168bf5fd05",
-   "rawBytes": 1511023,
+   "bytes": 1383914,
+   "sha256": "2e89e505ad85e316f38b5e6dea9ffd4526f7a078aea5c2b0e54db6184897f55f",
+   "rawBytes": 1991074,
    "files": 111,
-   "vertices": 103000,
-   "triangles": 209680,
+   "vertices": 137040,
+   "triangles": 277760,
    "sourceVertices": 393594,
    "sourceTriangles": 608776,
    "sourceBytes": 36303140,
