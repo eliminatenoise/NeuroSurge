@@ -4424,6 +4424,53 @@ export const TENDON_FROM_STACK = Object.freeze({
   sheetFrom: 0.08, sheetTo: 0.12, sheetLenFrom: 110, sheetLenTo: 160,
   thinMm: 4, thickMm: 9, cellMm: 3, stepMm: 1.5
 });
+/** 20 November 2026 (the owner: "Finger/toe tendons should be there and white-ish"). The long finger and toe muscles'
+ * meshes (BodyParts3D) run on as their tendons right to the fingertips and toe tips, but the stack rule above left
+ * those parts muscle-coloured: they lie free of bone, so they are not "anchored". So, for the muscles named here, the
+ * part beyond the wrist or the ankle is tendon by its PLACE, and drawn in the same pearly tendon white:
+ *   arm: the long finger and thumb muscles; tendon where the rest position lies below the wrist (BodyParts3D atlas mm,
+ *        +z up, the atlas standing with the arms down): full below fullZ, none above noneZ (the wrist joint's centre
+ *        is at z 800 in the body rig);
+ *   leg: the long toe muscles; full below fullZ, none above noneZ (the ankle joint's centre is at z -14; their bellies
+ *        end some 10 to 15 cm above it, where the tendons begin);
+ *   foot: the short toe muscles on the foot; tendon where the rest position lies forward of the toes' joints with
+ *        the foot (the metatarsophalangeal joints at y -165; forward is -y): full forward of fullY, none behind noneY.
+ * The largest of this and the stack's own estimate is kept. Names are matched without the side. A display rule from
+ * the joints' places, not a dissection record of where each tendon begins. */
+export const DIGIT_TENDONS = Object.freeze({
+  arm: Object.freeze({ names: Object.freeze(['flexor digitorum superficialis', 'flexor digitorum profundus', 'extensor digitorum', 'extensor indicis', 'extensor digiti minimi',
+    'flexor pollicis longus', 'extensor pollicis longus', 'extensor pollicis brevis', 'abductor pollicis longus']), fullZ: 815, noneZ: 860 }),
+  leg: Object.freeze({ names: Object.freeze(['extensor digitorum longus', 'extensor hallucis longus', 'flexor digitorum longus', 'flexor hallucis longus']), fullZ: 95, noneZ: 150 }),
+  foot: Object.freeze({ names: Object.freeze(['extensor digitorum brevis', 'extensor hallucis brevis', 'flexor digitorum brevis', 'abductor hallucis', 'flexor hallucis brevis']), fullY: -172, noneY: -150 }),
+  // hand: the small muscles of the palm whose tendons run along the fingers (the atlas draws each set as one mesh);
+  // tendon below the knuckles (the third metacarpal's head ends at z 721)
+  hand: Object.freeze({ match: /\b(lumbricals|interossei) of (left |right )?hand\b/, fullZ: 712, noneZ: 735 })
+});
+/** DIGIT_TENDONS: which rule a muscle's name takes ('arm', 'leg', 'foot', 'hand') or null. Pure. */
+export function digitTendonKind(name, o = DIGIT_TENDONS) {
+  if (o.hand && o.hand.match.test(String(name || '').toLowerCase())) return 'hand';
+  const n = ' ' + String(name || '').toLowerCase().replace(/[._]/g, ' ').replace(/\b(left|right|l|r)\b/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  for (const k of ['arm', 'leg', 'foot']) for (const w of o[k].names) {
+    const i = n.indexOf(' ' + w);
+    // (whole words, and not a longer name: 'extensor digitorum' is not 'extensor digitorum longus' or 'brevis')
+    if (i >= 0 && /^\s*$/.test(n.slice(i + 1 + w.length).replace(/^\s*(muscle)?/, ''))) return k;
+  }
+  return null;
+}
+/** DIGIT_TENDONS: raises the tendon weights `w` (in place) of a muscle of kind `kind` from its rest positions (atlas
+ * mm). Returns how many vertices it raised. Pure. */
+export function digitTendonWeights(kind, rest, w, o = DIGIT_TENDONS) {
+  const r = kind && o[kind];
+  if (!r || !rest || !w) return 0;
+  const n = Math.min(w.length, Math.floor(rest.length / 3));
+  const ramp = (x, full, none) => { const t = Math.min(1, Math.max(0, (x - full) / (none - full))); return 1 - t * t * (3 - 2 * t); };
+  let raised = 0;
+  for (let v = 0; v < n; v++) {
+    const t = kind === 'foot' ? ramp(rest[3 * v + 1], r.fullY, r.noneY) : ramp(rest[3 * v + 2], r.fullZ, r.noneZ);
+    if (t > w[v]) { w[v] = t; raised++; }
+  }
+  return raised;
+}
 /** The endness of tendonFromStack per vertex (pure; Float32Array(vertexCount), or null for a degenerate mesh). */
 export function tendonEndness(rest, o = TENDON_FROM_STACK) {
   const n = Math.floor(rest.length / 3);
@@ -6202,6 +6249,8 @@ export function createScene({
     // R558 (builder FA): the face muscles keep little or none of the estimate (ns-colors FACE_MUSCLE_LOOK).
     const k = muscleTendonScale(id);
     if (k !== 1) for (let i = 0; i < a.array.length; i++) a.array[i] *= k;
+    // 20 November 2026 (DIGIT_TENDONS): the finger and toe tendons, white by their place beyond the wrist or ankle
+    if (id) { const dk = digitTendonKind(muscleSourceNameOf(id)); if (dk) muscleLook.digitTendons = (muscleLook.digitTendons || 0) + (digitTendonWeights(dk, rest, a.array) > 0 ? 1 : 0); }
     a.needsUpdate = true;
     muscleLook.tendonMeshes = (muscleLook.tendonMeshes || 0) + 1;
     muscleLook.tendonMs = (muscleLook.tendonMs || 0) + (nowMs() - t0);
@@ -6212,7 +6261,8 @@ export function createScene({
   const muscleTones = { byKey: null, contacts: 0, worst: null, keys: 0 };
   // R558 (builder AN): a missing-muscles packet id has no catalogue source name; its packet row name ('right gracilis')
   // stands in, so its two sides share one tone like every catalogue pair.
-  const muscleToneKeyOf = id => muscleToneKey(id, typeof id === 'string' ? regionalLayerQualification(id).sourceName || bodyPacketMuscleName(id) : null);
+  const muscleSourceNameOf = id => (typeof id === 'string' ? regionalLayerQualification(id).sourceName || bodyPacketMuscleName(id) : null);
+  const muscleToneKeyOf = id => muscleToneKey(id, muscleSourceNameOf(id));
   /** Resting base colour (linear) of the muscle with element id `id`: its tone and storey (ns-colors muscleBaseInto). */
   function muscleBaseOf(id, out = [0, 0, 0]) {
     if (typeof id !== 'string' || !id) return muscleBaseInto(0, null, out);
@@ -6716,8 +6766,8 @@ export function createScene({
         m.lifted = L; m.liftExtent = ext; changed = true;
         // R558 (Message 18): tendon white on the anchored ends (the same rule as the body; 0 without stack geometry).
         const tg = m.mesh.userData.nsFullGeometry || m.mesh.geometry;
-        if (L) writeTendon(tg, m.restBase, L);
-        else if (!softTissueGeos.has(tg)) { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); ta.needsUpdate = true; } }
+        if (L) writeTendon(tg, m.restBase, L, m.id);
+        else if (!softTissueGeos.has(tg)) { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); const dk = m.id ? digitTendonKind(muscleSourceNameOf(m.id)) : null; if (dk) digitTendonWeights(dk, m.restBase, ta.array); ta.needsUpdate = true; } }
       }
       if (!m.lifted) {
         if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices, undefined, m.weld); changed = true; }
@@ -13699,7 +13749,7 @@ export function createScene({
       // R558 (Messages 25 to 30): the comic look (patch state, materials, meshes with an ink frame, ink on) and the
       // phalanges drawn from their rounded display copy.
       comic: { shader: comic.applied, materials: comic.materials, hatchMeshes: comic.hatchMeshes, inkOn: comic.inkOn, boneTips: boneTips.meshes, hdr: hdr.state() },
-      muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
+      muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, digitTendons: muscleLook.digitTendons || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
         toneKeys: muscleTones.keys, toneContacts: muscleTones.contacts, toneWorst: muscleTones.worst, toneMs: muscleTones.ms === undefined ? null : muscleTones.ms } };
   }
 

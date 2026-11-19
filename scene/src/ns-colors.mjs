@@ -914,13 +914,15 @@ export const MUSCLE_TONE_CHROMA = 1.28;
 // 19 November 2026, later (the owner: "go back to the art style before the overhaul ... borderlands-telltale"): the six
 // tones of 18 November again (for a few hours that day the muscles took the loading picture's reds: L 0.41 to 0.585,
 // chroma about 0.15, hue 19 to 24).
+// 20 November 2026 (the owner: "Muscles probably a little too light now"): half of the 0.07 lift of 19 November is
+// taken back (each tone 0.035 darker), and the shade bands below come down a little (BODY_CEL_EARLY.levels).
 export const MUSCLE_TONES = freeze([
-  muscleTone('salmon rose', 0.645, 0.088 * MUSCLE_TONE_CHROMA, 32),
-  muscleTone('soft red-brown', 0.575, 0.076 * MUSCLE_TONE_CHROMA, 44),
-  muscleTone('muted rose', 0.610, 0.094 * MUSCLE_TONE_CHROMA, 21),
-  muscleTone('clay rose', 0.535, 0.074 * MUSCLE_TONE_CHROMA, 34),
-  muscleTone('light salmon', 0.720, 0.078 * MUSCLE_TONE_CHROMA, 37),
-  muscleTone('dusty rose', 0.680, 0.066 * MUSCLE_TONE_CHROMA, 24)
+  muscleTone('salmon rose', 0.610, 0.088 * MUSCLE_TONE_CHROMA, 32),
+  muscleTone('soft red-brown', 0.540, 0.076 * MUSCLE_TONE_CHROMA, 44),
+  muscleTone('muted rose', 0.575, 0.094 * MUSCLE_TONE_CHROMA, 21),
+  muscleTone('clay rose', 0.500, 0.074 * MUSCLE_TONE_CHROMA, 34),
+  muscleTone('light salmon', 0.685, 0.078 * MUSCLE_TONE_CHROMA, 37),
+  muscleTone('dusty rose', 0.645, 0.066 * MUSCLE_TONE_CHROMA, 24)
 ]);
 /** OKLab distance between two tones (0.1 = clearly different, 0.03 = just noticeable side by side). */
 export function muscleToneDistance(i, j) {
@@ -1031,7 +1033,9 @@ export const BODY_CEL_EARLY = freeze({
   // 19 November 2026 (the owner: "The muscle color tone is far too dark initially"): the two shade bands are lifted
   // (0.08 and 0.34 before: the side of a muscle away from the light was nearly black) and the six tones are 0.07
   // lighter (MUSCLE_TONES), so a resting muscle is a clear salmon with a soft shade, not a dark red-brown.
-  levels: freeze([0.3, 0.56, 0.84, 1.1]), boneHigh: 0.9,
+  // (20 November 2026, "a little too light": 0.3 / 0.56 / 0.84 -> 0.24 / 0.49 / 0.82; the shade side stays well clear
+  // of the nearly black 0.08 that was "far too dark")
+  levels: freeze([0.24, 0.49, 0.82, 1.1]), boneHigh: 0.9,
   // R558 checker (Message 30, "The bone tips probably shouldn't be so spikey"): the deep and mid tones of BONE and of the
   // white TENDON parts. At the muscles' 0.08 / 0.34 every fingertip and toe tip turned away from the head-mounted key
   // light went near-black, so a thin white digit ended in a dark hooked point: the claws and talons of the pictures (own

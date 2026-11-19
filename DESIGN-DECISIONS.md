@@ -2039,6 +2039,14 @@ Seen in pictures taken while one late pack was held back so that the loading pic
 
 Found and not fixed: on a slow connection the loading picture shows no parts for most of the load. At 600 kB/s, measured: the picture's worker is started only when the launcher's own scripts are in (about 12 s), the worker's scripts then arrive at about 18 s, and its copy of Three.js at about 27 s, out of a load of about 45 s. The local server sends `Cache-Control: no-cache` without validators, so the worker downloads Three.js a second time here; a host that lets the browser keep files (GitHub Pages does, for ten minutes) would serve it from the cache, and the picture would start at about 18 s. Starting the picture earlier needs it to be fed from the early loader (`early-load.mjs`) before the launcher's scripts are in; not done.
 
+## 153. White finger and toe tendons; muscles a step darker (20 November)
+
+The user: “Finger/toe tendons should be there and white-ish.” And: “Muscles probably a little too light now.”
+
+**The tendons were there, in muscle colour.** The atlas's long finger and toe muscles run on as their tendons right to the fingertips and toe tips (the deep finger flexor reaches z 666 mm, the fingertip's last bone ends at 653), and so do the small muscles of the palm and the short toe muscles. The game draws a muscle's tendon parts in a pearly white where its stack rule finds them anchored on bone (`TENDON_FROM_STACK`), and the tendons along the fingers and toes lie free of bone, so they stayed orange-red. Now (`DIGIT_TENDONS`, `digitTendonKind`, `digitTendonWeights` in `ns-scene-three.mjs`) the parts of those muscles beyond the wrist or the ankle are tendon by their place: the long finger and thumb muscles below the wrist (full below z 815 mm of the atlas, none above 860; the wrist joint is at 800), the long toe muscles below the ankle's level (full below 95, none above 150; their bellies end above that), the short toe muscles and the big toe's short muscles forward of the toes' joints with the foot, and the lumbricals and interossei below the knuckles. The higher of this and the stack's own estimate is kept, so nothing that was white turns red. Seen on pictures of both hands and both feet at the start: the strands along the fingers are pale now, the bellies in the forearm and on the sole keep their colour. A display rule from the joints' places, not a dissection record of where each tendon begins; tested on the game's own body (`tests/digit-tendons.test.mjs`).
+
+**Muscles a step darker.** Half of the lift of section 141 is taken back: each of the six muscle tones 0.035 darker (it was 0.07 lighter), and the cel look's two shade bands 0.24 and 0.49 (0.3 and 0.56 since section 141; 0.08 and 0.34 before it, which was “far too dark”).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

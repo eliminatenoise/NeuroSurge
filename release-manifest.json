@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-54",
+  "version": "experimental-2026-11-20-body-update-55",
   "experimental": true,
-  "source": "Body update 54. In the loading picture the eyes fly in last and join the brain.",
+  "source": "Body update 55. White finger and toe tendons; muscles a step darker.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 331272,
-      "sha256": "3f3e4399a7956b480e8e36b7e193c0b27f0070824cca83140124a8dd0512e5ad"
+      "bytes": 333233,
+      "sha256": "4f3fb8b23e92eb683c1c58d9476ede86fe623c12dfc1ed3e0dd569268d615b1c"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65295,
-      "sha256": "b1ddda84519340e67ba88a6a513fa045312d13d3019e5aea23d89f83e4ce8e12"
+      "bytes": 65435,
+      "sha256": "f4e233d80ff360c2809089807d80d5fe7fee9d43c9effa2509b54d6adbfe6593"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 46159,
-      "sha256": "2d44a32099bc0a3b6b18715ead80516135e5792c2721780f2f932b781d68036b"
+      "bytes": 46449,
+      "sha256": "0e1f9008b4ceb4a60cea991fdba87e82f41149f3a7db97a7b6a9b0009368eca3"
     },
     {
       "path": "README.md",
-      "bytes": 22094,
-      "sha256": "fb6f2e0c65d133edb8f89cc6cef889c7933ef211dc2ebbe7a632e0c1cb55ccaf"
+      "bytes": 22205,
+      "sha256": "9861e5604881e789676af56b7fcb3f5fb5d5fa0d527bee7709c303bbb7b05a03"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "061a89bd0c918eaeadb90e7fedee64a80f5e6c0a5f501f8a141b33afecdd9d17"
+      "sha256": "e9a4670736acf21bc9900d312875aa406c3f3ed0cf4061e14498199d0eba3c77"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "10b1a2b33fb52ab9546484b49d998b60bbd129f95a98478e986a74fd7d36abd3"
+      "sha256": "82e58d2adf6fc06302c660a9b5fbcf0f340953c51900e8db1cc9943b1f762d48"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -4032,8 +4032,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 104893,
-      "sha256": "e210bcb2cc2072ca45341d40168a92b25a0ff271a550ab86eea2e608e03b278f"
+      "bytes": 105294,
+      "sha256": "25f83c9293de47755719c33078a84dfd381abb4652ad4585ed7165ab9f2b1c3c"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1162558,
-      "sha256": "726b9347b13409c72171f79af2fc739755b4367182f13bc88cb95f8437320204"
+      "bytes": 1166974,
+      "sha256": "fcf66f76e29da22ed8942d5006625d4b687736cd6ae9bf5e4ccafec04083c14e"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4369,6 +4369,11 @@
       "path": "tests/detail.test.mjs",
       "bytes": 2467,
       "sha256": "2b4e1b67bb0921e859d7360ba89b3e16bbdb37e3485e2034e310f24d42ab6d51"
+    },
+    {
+      "path": "tests/digit-tendons.test.mjs",
+      "bytes": 3760,
+      "sha256": "fa858a2d11eea4472b1eae5fdf3bccabfe3aa895a794c08f10c891325744f385"
     },
     {
       "path": "tests/eye-gaze.test.mjs",
