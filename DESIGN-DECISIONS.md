@@ -2027,6 +2027,18 @@ Not right, or not done:
 - In a 4:3 window the crosshair starts on the chiasm seen through the gap, so the tip “Optic nerve” is on screen before the player has done anything.
 - From outside (E) the gap ends in a dark notch between the two back ends of the brain, and the mirror body's head is not in the gap there (the rule is for the picture you start in).
 
+## 152. The eyes come together and join the brain in the loading picture (20 November)
+
+The user (19 November): “And this also means on the loading page, you'll also see the eyes come together and connect to the brain.”
+
+The loading picture (`ns-assembly-core.mjs`) builds your body, the mirror body and a larger brain as their files arrive. Once the brain's strip has lit (or could not be lit), the two eyeballs and the optic nerves now come in last (`ASSEMBLY_EYES`): the eyeballs fly in from far apart, in front of and below the brain, and close on their places while the nerves come up under the brain to meet them; each flashes as it lands, like every other part. They are built by the game's own builders (`buildEyeballs`, `buildNerves` in `ns-brain-eyes.mjs`), so they are the same illustration the game draws. The loading picture's brain is also drawn with its two halves apart, as the game draws it (section 151), so the eyeballs, which follow their halves, sit where the game puts them. Under reduced motion the loading picture has no parts at all (a still progress bar), as before.
+
+The brief for this work said the loading picture's brain was still the old way round. It was not: it is seen from in front, with its front toward the viewer and the strip as an arch, which is how the game's brain stands since it was turned (section 136). Nothing was turned.
+
+Seen in pictures taken while one late pack was held back so that the loading picture kept running: the eyeballs flying in from either side and the nerves appearing, and the two joined under the brain a second and a half later.
+
+Found and not fixed: on a slow connection the loading picture shows no parts for most of the load. At 600 kB/s, measured: the picture's worker is started only when the launcher's own scripts are in (about 12 s), the worker's scripts then arrive at about 18 s, and its copy of Three.js at about 27 s, out of a load of about 45 s. The local server sends `Cache-Control: no-cache` without validators, so the worker downloads Three.js a second time here; a host that lets the browser keep files (GitHub Pages does, for ten minutes) would serve it from the cache, and the picture would start at about 18 s. Starting the picture earlier needs it to be fed from the early loader (`early-load.mjs`) before the launcher's scripts are in; not done.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

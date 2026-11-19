@@ -16,6 +16,21 @@
 
 import { ROOM, createRoomBackdrop, roomGain, roomBeatStep } from './ns-room.mjs';
 import { ASSEMBLY_ORDER, ASSEMBLY_TIERS, assemblyDepth, createAssemblyRelease } from './ns-assembly-order.mjs';
+import { HEMI_GAP, hemisphereSideOf, partedPositions } from './ns-brain-part.mjs';
+import { buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
+
+/** 20 November 2026 (the owner, 19 November: "this also means on the loading page, you'll also see the eyes come
+ * together and connect to the brain"). Once the brain's strip has lit (or could not be lit), the two eyeballs and their
+ * optic nerves, built by the game's own builders (ns-brain-eyes buildEyeballs / buildNerves, the same illustration the
+ * game draws), come in last: the eyeballs fly in from far apart, in front of the brain and below it, and close on
+ * their places while the nerves come up under the brain to meet them; each flashes as it lands, like every other part.
+ *   delayS     after the strip has lit;
+ *   eyeFromMm  where each eyeball starts, from its place (brain mm: sideways outward, forward toward the viewer, up);
+ *   eyeFlyS    how long the eyeballs fly (the other parts fly ASSEMBLY.flyS);
+ *   nerveFromMm / nerveLagS  the nerves' start (from below) and how long after the eyeballs they set off.
+ * Under reduced motion they appear in place. The brain's two halves are drawn HEMI_GAP.eachMm apart here too, as in the
+ * game (ns-brain-part), so the eyeballs, which follow their halves, sit where the game puts them. A picture only. */
+export const ASSEMBLY_EYES = Object.freeze({ delayS: 0.35, eyeFromMm: Object.freeze([95, -120, -45]), eyeFlyS: 1.25, nerveFromMm: Object.freeze([0, -10, -28]), nerveLagS: 0.45 });
 
 /** Kinds of part the picture knows, and their colour (sRGB hex). 'strip' is the precentral gyrus, where the game's
  * motor areas are drawn; 'vessel' the cerebral arteries on the brain. */
@@ -281,6 +296,14 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     g.setIndex(new THREE.BufferAttribute(parsed.indices, 1));
     let d = place && place.track && Number.isInteger(place.tier) ? place : null;
     if (!d) d = assemblyDepth({ kind: k, name: place && place.name, groups: place && place.groups, layer: place && place.layer, centre });
+    // (a part of a cerebral half is drawn HEMI_GAP.eachMm away from the midline, as the game draws it: ASSEMBLY_EYES)
+    if (d && d.track === 'brain' && (k === 'brain' || k === 'strip')) {
+      const side = hemisphereSideOf({ name: place && place.name, positions: parsed.positions });
+      if (side) {
+        g.setAttribute('position', new THREE.BufferAttribute(partedPositions(parsed.positions, side, HEMI_GAP.eachMm), 3));
+        centre[0] += side * HEMI_GAP.eachMm;
+      }
+    }
     if (!d) { g.dispose(); return; }
     release.arrive({ kind: k, track: d.track, tier: d.tier, frac: d.frac, geometry: g, centre, tris: parsed.indices.length / 3, id: place && place.id, name: place && place.name });
   }
@@ -415,6 +438,41 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     if (sweep >= 1 + STRIP_LIGHT.edge) stripState.done = true;
   }
 
+  /** ASSEMBLY_EYES: the eyeballs and the nerves come in once the strip has lit. */
+  const eyesState = { status: 'waiting', startS: null, error: null };
+  const eyeMats = [];
+  function stepEyes(t) {
+    if (eyesState.status !== 'waiting' || disposed) return;
+    const stripIn = stripState.parts.length === 2 && !stripState.parts.some(sp => moving.some(m => m.mesh === sp.mesh));
+    if (!(hurried || (stripIn && (stripState.done || stripState.status === 'failed')))) return;
+    if (eyesState.startS === null) { eyesState.startS = t + (hurried ? 0 : ASSEMBLY_EYES.delayS); return; }
+    if (t < eyesState.startS) return;
+    eyesState.status = 'flying';
+    try {
+      const E = buildEyeballs(), N = buildNerves(), O = ASSEMBLY_EYES;
+      const nv = E.positions.length / 6, ni = E.indices.length / 2;
+      const geoOf = (P, Nn, C, I) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(Nn, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setIndex(new THREE.BufferAttribute(I, 1)); return g; };
+      const centreOf = P => { let x = 0, y = 0, z = 0; const n = P.length / 3; for (let i = 0; i < P.length; i += 3) { x += P[i]; y += P[i + 1]; z += P[i + 2]; } return [x / n, y / n, z / n]; };
+      const launch = (geo, rough, c, dir, at, flyS) => {
+        const base = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: 0.02 });
+        const mat = base.clone(); eyeMats.push(base, mat);
+        const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false;
+        brain.add(mesh);
+        const d = still ? [0, 0, 0] : dir;
+        // (its own flight time: moving[] scales the time by flyS / ASSEMBLY.flyS; `own` keeps it out of the merging)
+        moving.push({ mesh, kind: 'eye', t: at, dir: d, c, rest: 0, restColor: new THREE.Color(0x000000), base, keep: false, own: true, flyS: hurried ? flyS * 0.5 : flyS });
+        parts++; triangles += geo.getIndex().count / 3; byKind.eye = (byKind.eye || 0) + 1;
+      };
+      for (let e = 0; e < 2; e++) {
+        const P = E.positions.slice(3 * nv * e, 3 * nv * (e + 1)), Nn = E.normals.slice(3 * nv * e, 3 * nv * (e + 1)), C = E.colors.slice(3 * nv * e, 3 * nv * (e + 1));
+        const I = new Uint32Array(ni); for (let k = 0; k < ni; k++) I[k] = E.indices[ni * e + k] - nv * e;
+        const c = centreOf(P), side = c[0] >= 0 ? 1 : -1; // (+x is the left eye's side)
+        launch(geoOf(P, Nn, C, I), 0.18, c, [side * O.eyeFromMm[0], O.eyeFromMm[1], O.eyeFromMm[2]], t, O.eyeFlyS);
+      }
+      launch(geoOf(N.positions, N.normals, N.colors, N.indices), 0.4, centreOf(N.positions), O.nerveFromMm.slice(), t + (still ? 0 : O.nerveLagS), O.eyeFlyS - O.nerveLagS);
+    } catch (err) { eyesState.status = 'failed'; eyesState.error = String(err && err.message || err); }
+  }
+
   function frame(nowMs) {
     if (disposed) return;
     if (t0 === null) t0 = nowMs;
@@ -424,7 +482,10 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     for (let k = 0; k < (hurried ? 4 : 1) * o.maxStartsPerFrame && mirrorDue.length && (hurried || mirrorDue[0].at <= t); k++) { const m = mirrorDue.shift(); start(m.p, t, m); }
     const flyS = hurried ? o.flyS * 0.5 : o.flyS;
     for (let k = moving.length - 1; k >= 0; k--) {
-      const m = moving[k], u = (t - m.t) / flyS, e = easeOut(u), f = Math.max(0, 1 - (t - m.t) / o.flashS);
+      const m = moving[k];
+      if (t < m.t) { m.mesh.visible = false; continue; } // (set off later: the nerves after the eyeballs)
+      m.mesh.visible = true;
+      const fS = m.flyS || flyS, u = (t - m.t) / fS, e = easeOut(u), f = Math.max(0, 1 - Math.max(0, t - m.t - Math.max(0, fS - flyS)) / o.flashS);
       // It grows about its own centre while it flies in (18 November 2026: it grew about the atlas' origin at the feet,
       // so every part came up from far below, a brain part from metres away).
       const sc = still ? 1 : 0.55 + 0.45 * e, shrink = 1 - sc;
@@ -437,7 +498,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
         const old = m.mesh.material;
         if (old === stripLit) { /* lit already */ } else if (!m.keep) { m.mesh.material = m.base; old.dispose(); } else { old.emissive.setHex(0x000000); old.emissiveIntensity = 0; }
         moving.splice(k, 1);
-        if (m.kind !== 'strip') settled.push({ mesh: m.mesh, keep: m.keep, base: m.base });
+        if (m.kind !== 'strip' && !m.own) settled.push({ mesh: m.mesh, keep: m.keep, base: m.base });
+        if (m.own && eyesState.status === 'flying' && !moving.some(x => x.own)) eyesState.status = 'joined';
       }
     }
     if (!hurried && settled.length && (t - lastMergeS >= MERGE.everyS && settled.length >= MERGE.minParts || (!moving.length && !pending.length && !mirrorDue.length))) { lastMergeS = t; mergeSettled(); }
@@ -451,6 +513,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     base.strip.emissiveIntensity = still ? 0.45 : 0.3 + (finishing ? 0.55 : 0.3) * pulse.beat;
     stripLit.emissiveIntensity = still ? 0.32 : 0.22 + (finishing ? 0.4 : 0.22) * pulse.beat;
     stepStrip(t);
+    stepEyes(t);
     roomBeat = roomBeatStep(roomBeat, pulse.beat, dt, still); // softened, as in the game
     backdrop.uniforms.uRoom.value.z = roomGain(roomBeat, 0, ROOM, still); // the room's light breathes with the beat, as in the game
     shown += (progress - shown) * Math.min(1, dt * 6);
@@ -474,6 +537,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     for (const k of Object.keys(base)) base[k].dispose();
     for (const m of tierBase.values()) m.dispose();
     stripLit.dispose();
+    for (const m of eyeMats) m.dispose();
     for (const m of shadeMaterial.values()) m.dispose();
     quad.dispose(); track.material.dispose(); barMat.dispose();
     backdrop.dispose();
@@ -492,7 +556,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
       return { parts, mirrored, triangles, pending: pending.length, moving: moving.length, progress, finishing, width: W, height: H, frames, byKind: { ...byKind },
         t: Math.round(lastT * 1000) / 1000, still, hurried, expectS: r.expectS, renderMs: Math.round(renderMs * 100) / 100, batches, single: moving.length + settled.length,
         order: { body: { tier: r.body.tier, stretch: r.body.stretch, held: r.body.held, started: r.body.started }, brain: { tier: r.brain.tier, stretch: r.brain.stretch, held: r.brain.held, started: r.brain.started } },
-        strip: { status: stripState.status, lit: stripState.done, ms: stripState.ms, error: stripState.error } };
+        strip: { status: stripState.status, lit: stripState.done, ms: stripState.ms, error: stripState.error },
+        eyes: { status: eyesState.status, error: eyesState.error } };
     },
     /** [time s, track, tier] of each part's start, in order (at most 2048), for checks. */
     starts: () => startLog.slice()

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-53",
+  "version": "experimental-2026-11-20-body-update-54",
   "experimental": true,
-  "source": "Body update 53. The strip stands either side of the mirror body's head; the optic nerves read as nerves.",
+  "source": "Body update 54. In the loading picture the eyes fly in last and join the brain.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 328930,
-      "sha256": "a2996b8b2f3fd24d7a27d5103182728923e6724594212bb315041e87cdf01643"
+      "bytes": 331272,
+      "sha256": "3f3e4399a7956b480e8e36b7e193c0b27f0070824cca83140124a8dd0512e5ad"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65150,
-      "sha256": "ae9a6bfffeb162fa3039d5487f2715dfa935d043d47645781553a159ff54fd14"
+      "bytes": 65295,
+      "sha256": "b1ddda84519340e67ba88a6a513fa045312d13d3019e5aea23d89f83e4ce8e12"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 45716,
-      "sha256": "34dff136ee25f6d1edd5279d3533fdd8c1f10cc9ba070fb47adeeddd6fa293bd"
+      "bytes": 46159,
+      "sha256": "2d44a32099bc0a3b6b18715ead80516135e5792c2721780f2f932b781d68036b"
     },
     {
       "path": "README.md",
-      "bytes": 21978,
-      "sha256": "011f433b8f062ecc0786c3ae65a115f159cf5bd3ff79c9a634dfe6831197232c"
+      "bytes": 22094,
+      "sha256": "fb6f2e0c65d133edb8f89cc6cef889c7933ef211dc2ebbe7a632e0c1cb55ccaf"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "10950d7fde1837b6923056d720e84a986d42a86497a336436733a354d98f9e63"
+      "sha256": "061a89bd0c918eaeadb90e7fedee64a80f5e6c0a5f501f8a141b33afecdd9d17"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "98eef264f9efb2d2277f71cc3a165a06193b3a9e83e7646586b3fb184980b859"
+      "sha256": "10b1a2b33fb52ab9546484b49d998b60bbd129f95a98478e986a74fd7d36abd3"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3957,8 +3957,8 @@
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
-      "bytes": 35071,
-      "sha256": "e7687bf830fed73a1e6c6e8d7df740abf0f588ad0561988f565db0f42366d5dd"
+      "bytes": 40400,
+      "sha256": "2ce8d96f663b65bb5cfea8105eed752428c98a62b4bf458a7a5c251e73a0e263"
     },
     {
       "path": "scene/src/ns-assembly-order.mjs",
