@@ -39,10 +39,13 @@ test('the quick hip range is the exact one, posture after posture', () => {
 });
 
 test('the quick hip range is several times quicker than posing the whole body for each angle', () => {
-  const run = (opts, n) => { const t0 = process.hrtime.bigint(); for (let i = 0; i < n; i++) body.hipRotationClearRange(rig, rest, opts); return Number(process.hrtime.bigint() - t0) / 1e6 / n; };
-  run({}, 3); run({ exact: true }, 2); // (warm)
-  const quick = run({}, 12), exact = run({ exact: true }, 6);
-  assert.ok(quick * 2 < exact, `quick ${quick.toFixed(2)} ms, exact ${exact.toFixed(2)} ms`);
+  // (the fastest of several interleaved runs of each: the test suite runs files side by side, and a single timing of
+  // each was once slowed by the others enough to fail; the fastest run is what the code itself costs)
+  const once = opts => { const t0 = process.hrtime.bigint(); body.hipRotationClearRange(rig, rest, opts); return Number(process.hrtime.bigint() - t0) / 1e6; };
+  once({}); once({ exact: true }); // (warm)
+  let quick = Infinity, exact = Infinity;
+  for (let i = 0; i < 9; i++) { quick = Math.min(quick, once({})); exact = Math.min(exact, once({ exact: true })); }
+  assert.ok(quick * 2 < exact, `quick ${quick.toFixed(2)} ms, exact ${exact.toFixed(2)} ms (fastest of 9 each)`);
 });
 
 test('the nearest distance between two point sets on a grid is the one a search over every pair finds', () => {

@@ -2525,6 +2525,12 @@ export const BRAIN_VIEW_R4 = freezeR2({ fit: 'belt', tiltDeg: 0, perspectiveK: 6
  * frameBrain(seg, { ...BRAIN_VIEW_R3 }). */
 export const BRAIN_VIEW_R3 = freezeR2({ tiltDeg: 35, perspectiveK: 1, pictureAxis: 'centre', frontCropMax: 0.12, spinDeg: 0 });
 
+/* 19 November 2026 (the owner: "let's center the motor strip on either side of the head of the mirror body. So maybe
+ * we'll keep a bigger gap between the hemispheres."): the game draws the two halves of the brain a little apart. That
+ * is done once on the loaded meshes, before this module sees them (ns-brain-part HEMI_GAP, applied in ns-app), so
+ * everything here (the areas, the framing, the picker, the outline) works on the parted brain and needs no rule of
+ * its own for the gap. */
+
 /** The round-2 strips framing defaults (frameBrain framing 'strips'): tilt 25 deg, both strips fill 0.85 (0.78 below
  * aspect 1.45) of the view, strips' top plane at 6 m. Kept for comparison and for callers that ask for it. */
 export const BRAIN_VIEW_R2 = freezeR2({ tiltDeg: 25, fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6 });

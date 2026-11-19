@@ -92,6 +92,7 @@ import { createQuietUi, quietTipModel, quietPromptText, quietPromptCount, tipTea
 import { hoverLink, reverseLink } from './ns-links.mjs';
 import * as NM from './ns-mirror.mjs';
 import { BRAIN_EYES, eyeKeepPoints } from './ns-brain-eyes.mjs'; // 19 November 2026: the eyeballs at the brain's front
+import { HEMI_GAP, hemisphereSideOf, partedPositions } from './ns-brain-part.mjs'; // 19 November 2026: the two halves of the brain drawn apart
 // Round 5 (R5-integrate-core, stage 1): the third-person camera (R5-camera, D18), the 3D compass-arrow input (R5-input,
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
@@ -1251,6 +1252,21 @@ export function prepareSceneData({ binding, assets = null, placeholder = false, 
  * body map's own action positions (ns-brain placeRegionMarkers), for region mode; null keeps the legacy dots.
  * @returns {{ segmentation: object | null, brainBounds: { min, max } | null, reason: string | null, markers: object[] | null }}
  */
+/** 19 November 2026 (the owner: "maybe we'll keep a bigger gap between the hemispheres"): the loaded brain meshes with
+ * the two halves drawn apart (ns-brain-part HEMI_GAP: each cerebral half moved eachMm away from the midline; the parts
+ * of the middle stay). A new Map of new frozen records { entry, mesh } in the same order; the loaded records and their
+ * arrays are not changed (the loading picture reads the same arrays). The same Map when nothing moves. Pure. */
+export function partedBrainAssets(brain, { eachMm = HEMI_GAP.eachMm } = {}) {
+  if (!(brain instanceof Map) || !(eachMm > 0)) return brain;
+  const out = new Map();
+  for (const [id, rec] of brain) {
+    const name = rec && rec.entry && typeof rec.entry.embedded_source_name === 'string' ? rec.entry.embedded_source_name : id;
+    const side = rec && rec.mesh && rec.mesh.positions ? hemisphereSideOf({ name, positions: rec.mesh.positions }) : 0;
+    out.set(id, side ? Object.freeze({ ...rec, mesh: Object.freeze({ ...rec.mesh, positions: partedPositions(rec.mesh.positions, side, eachMm) }) }) : rec);
+  }
+  return out;
+}
+
 export function prepareBrainSegmentation({ assets = null, bodyMap = null, brainModule = NsBrain } = {}) {
   const map = bodyMapOf(bodyMap);
   const none = reason => ({ segmentation: null, brainBounds: null, reason, markers: null });
@@ -2196,15 +2212,29 @@ export const BRAIN_RAISE_NDC = 0.2;
  * (BRAIN_FLOOR.startNdc), so on a 16:9 window the height decides: the strip comes out about 780 px across at 1600x900
  * (0.49 of the width; it was about 860 px of which the outer face areas were above the top edge) and about 850 px at
  * 1600x1000 (0.53). ALL of it is now inside the picture, face areas included. */
-export const BRAIN_START_MOTOR_FRAC = 0.58;
+/* 19 November 2026, later still (the owner: "let's center the motor strip on either side of the head of the mirror
+ * body. So maybe we'll keep a bigger gap between the hemispheres."): 0.58 -> 0.64. The two halves of the brain are
+ * drawn 12 mm further apart (ns-brain-part HEMI_GAP), and this share is of the strip WITH that gap, so where the
+ * window's width decides the size (4:3 and upright windows) each half keeps the size it had. On a 16:9 window the
+ * height still decides (BRAIN_START, BRAIN_FLOOR): the strip is about 757 px across at 1600x900 (0.47 of the width),
+ * 90 px of which are the gap, and about 840 px at 1600x1000. */
+export const BRAIN_START_MOTOR_FRAC = 0.64;
 /** 19 November 2026 (the brain turned half a turn): the start framing of the n-shaped strip, in the picture of the
  * brain's own placement (normalised device units, +1 = that picture's top edge; the brain is placed 13 degrees below
  * level while the look starts 25.5 degrees down and the camera stands back from the eye, so these are not screen
  * heights: they were set on pictures).
  *  topAimNdc  where the middle of the strip's box is aimed: above anything the box can reach, so the box ends against
- *             its ceiling and the leg areas, at the top of the n, are as high as they may go;
- *  ceilNdc    that ceiling: with 0.6 the top of the strip is about 15 px under the top edge of the start picture at
- *             1600x900 and at 1600x1000;
+ *             its ceiling (brainStartCeilNdc);
+ *  headUpDeg, legShare  the ceiling's rule since the halves are drawn apart (the owner: "let's center the motor strip
+ *             on either side of the head of the mirror body ... almost hair coming out of either side of the mirror
+ *             body's head"): the mirror body's head stands IN THE GAP between the two inner ends of the strip (the
+ *             leg areas, at the top of the n), level with their middle, and the two halves run outward and down from
+ *             it. headUpDeg is where that head is in the start picture, as an angle above the brain's own direction
+ *             seen from the eye; legShare is how far the middle of the leg areas lies below the strip's top, as a
+ *             share of the strip's height. Both were read off the start picture at 1600x900 (head centre y 130 of
+ *             900; leg areas 0.30 of the strip's height). The mirror body is the literal reflection, toe to toe with
+ *             you, and the look is the launcher's: neither is moved for this, the brain is. (Until this rule the
+ *             ceiling was a fixed 0.6: the strip's top 15 px under the top edge and the head under the leg areas.)
  *  keepEyes   false. true asks the framing to keep the two eyeballs at the brain's front (ns-brain-eyes) in the start
  *             picture as well (ns-brain frameBrain motorKeepPoints): the whole brain from the top of the strip to the
  *             eyeballs is 1.2 times as tall as the strip is wide, so the brain then has to be drawn far smaller (the
@@ -2212,7 +2242,18 @@ export const BRAIN_START_MOTOR_FRAC = 0.58;
  *             -0.36; tried and seen, see the package notes), and with the mirror body toe to toe with you its legs
  *             stand in front of the eyeballs. With false the brain's front, and so the eyeballs, are BEHIND YOUR OWN
  *             BODY in the start picture: they are seen from outside (E) and whenever the brain is lifted or carried. */
-export const BRAIN_START = Object.freeze({ topAimNdc: 0.85, ceilNdc: 0.6, keepEyes: false });
+export const BRAIN_START = Object.freeze({ topAimNdc: 0.85, headUpDeg: 10.4, legShare: 0.15, keepEyes: false });
+/** The highest the top of the strip may stand at the start (the framing's ceiling; normalised device units of the
+ * brain's own placement picture, +1 = its top edge): the height at which the middle of the leg areas is level with the
+ * mirror body's head. stripHeightNdc null: the strip is as tall as the room between the floor and this ceiling (the
+ * height decides its size, as on a 16:9 window; 0.49 there). stripHeightNdc given: the strip's own height where the
+ * window's width decides its size (it is then shorter than that room, and its top comes down to the head). Pure. */
+export function brainStartCeilNdc({ fovYDeg, floorNdc = BRAIN_FLOOR.startNdc, stripHeightNdc = null, rule = BRAIN_START } = {}) {
+  if (!(fovYDeg > 0 && fovYDeg < 180)) fail('app_args', 'brainStartCeilNdc needs the vertical field of view in degrees');
+  const head = Math.tan(rule.headUpDeg * DEG) / Math.tan(fovYDeg * DEG / 2);
+  const c = stripHeightNdc === null ? (head - rule.legShare * floorNdc) / (1 - rule.legShare) : head + rule.legShare * stripHeightNdc;
+  return Math.round(c * 1e4) / 1e4;
+}
 /** The points the start framing would keep in the picture with the strip (BRAIN_START.keepEyes): the two eyeballs. */
 const BRAIN_START_KEEP = eyeKeepPoints();
 /**
@@ -2533,9 +2574,19 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
           const usable = brainUsableNdc(px);
           if (usable) fo.usableNdc = usable;
         }
+        // 19 November 2026, later still: the ceiling is where the middle of the leg areas is level with the mirror body's
+        // head, which stands in the gap between the two halves (BRAIN_START, brainStartCeilNdc).
         // (never above the usable top: an upright window keeps its status card's room there)
-        if (turned && px) fo.motorCeilNdc = fo.usableNdc ? Math.min(BRAIN_START.ceilNdc, fo.usableNdc.y1) : BRAIN_START.ceilNdc;
+        const top = fo.usableNdc ? fo.usableNdc.y1 : Infinity;
+        if (turned && px) fo.motorCeilNdc = Math.min(brainStartCeilNdc({ fovYDeg: fov, floorNdc: floor }), top);
         brainFrame = NsBrain.frameBrain(segmentation, fo);
+        // where the window's width decides the strip's size the strip is shorter than the room under that ceiling: its
+        // top comes down until the leg areas are level with the head again (one more framing, only when the view changes)
+        const fitted = turned && px && brainFrame.beltFit && brainFrame.beltFit.limiting !== 'height' ? brainFrame.beltFit.beltBoxNdc : null;
+        if (fitted) {
+          const lower = Math.min(brainStartCeilNdc({ fovYDeg: fov, floorNdc: floor, stripHeightNdc: fitted.y1 - fitted.y0 }), top);
+          if (lower < fo.motorCeilNdc - 1e-4) { fo.motorCeilNdc = lower; brainFrame = NsBrain.frameBrain(segmentation, fo); }
+        }
       }
       reframed = true;
     }
@@ -6543,6 +6594,9 @@ export function start(params = {}) {
       if (!isPlaceholder && inputs.assets && inputs.assets.arm instanceof Map && mods.body && typeof mods.body.bulkArmAssets === 'function') {
         try { const o = mods.body.bulkArmAssets(inputs.assets.arm, id => SEGMENT_OF[id] || null); inputs.assets = { ...inputs.assets, arm: o.arm, armPads: o.pads || null }; armBulked = o.report; } catch (err) { armBulked = { error: errorText(err) }; }
       }
+      // 19 November 2026: the two halves of the brain are drawn apart (ns-brain-part HEMI_GAP), here, once, before anything
+      // is built from the brain's meshes, so what is drawn, picked, labelled and framed is one and the same brain.
+      if (!isPlaceholder && inputs.assets && inputs.assets.brain instanceof Map) inputs.assets = { ...inputs.assets, brain: partedBrainAssets(inputs.assets.brain) };
       setStatus('Getting the arm and brain ready…');
       loadStep('brain');
       await yieldToPaint();

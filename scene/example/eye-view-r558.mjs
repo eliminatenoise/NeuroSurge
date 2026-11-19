@@ -110,6 +110,15 @@ const EYE_FOV_Y_DEG = 54;
 // with you, sitting inside the n's arch (ns-mirror MIRROR_NEAR). The brain's front with its two eyeballs
 // (ns-brain-eyes) is then behind your own body in this picture; ns-app BRAIN_START.keepEyes says why and what the
 // other choice costs.
+// 19 November 2026, later still (the owner: "let's center the motor strip on either side of the head of the mirror
+// body. So maybe we'll keep a bigger gap between the hemispheres. So it looks like almost hair coming out of either side
+// of the mirror body's head."). The look and the brain's placement are again unchanged, and so is the mirror body (the
+// literal reflection, toe to toe: the owner asked for that the same day). What changed is in the modules: the two
+// halves of the brain are drawn 12 mm further apart (ns-brain-part HEMI_GAP), and the strip's top no longer stands
+// just under the top edge: it stands where the middle of the two leg areas, the inner ends of the n, is level with the
+// mirror body's head (ns-app BRAIN_START, brainStartCeilNdc), so the head is IN THE GAP and the two halves run outward
+// and down from either side of it. The floor (your own fingertips) did not move, so the brain is drawn 0.88 of the
+// size it had on a 16:9 window. assertConfiguredBoot below states the new rule.
 const START_LOOK_PITCH_DEG = -25.5, BRAIN_START_PITCH_DEG = -13;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
@@ -555,6 +564,22 @@ export async function assertConfiguredBoot() {
   const det3 = mx[0] * (mx[5] * mx[10] - mx[6] * mx[9]) - mx[4] * (mx[1] * mx[10] - mx[2] * mx[9]) + mx[8] * (mx[1] * mx[6] - mx[2] * mx[5]);
   // (its drawn size is the app's own choice for the start picture: between a fifth of the body's size and one and a half times it)
   requireCase(pure.every(Number.isFinite) && det3 < 0 && Math.cbrt(-det3) > 0.2 && Math.cbrt(-det3) < 1.5, 'the start mirror matrix must be a mirror image of the body, between a fifth and one and a half times its size');
+  // 19 November 2026, later (the owner: "let's center the motor strip on either side of the head of the mirror body. So
+  // maybe we'll keep a bigger gap between the hemispheres. So it looks like almost hair coming out of either side of the
+  // mirror body's head."). A NEW rule of the start picture, in a landscape window (an upright one plans its arrows in
+  // another view, so the strip's box read here is not its place on screen): the mirror body stands on the middle of
+  // the strip, the top of its head lies within the height of the strip's two inner ends (the leg areas, the upper 0.3
+  // of the n; until now the strip's top was pinned 15 px under the top edge and the head stood under those ends), and
+  // hardly any of the mirror body is behind a motor colour (its head stands in the gap between the two halves, which
+  // are drawn 12 mm further apart: ns-brain-part). The strip's box is the one the brain's arrow frame was planned on,
+  // which in a landscape window is the player's own opening view.
+  if (window.innerWidth >= window.innerHeight) {
+    const sb = arrows.brain.frame && arrows.brain.frame.targetBoxPx, mb = mr.onScreen && mr.onScreen.box;
+    requireCase(Array.isArray(sb) && sb.length === 4 && sb.every(Number.isFinite) && Array.isArray(mb) && mb.length === 4 && mb.every(Number.isFinite), 'the strip\'s and the mirror body\'s places on screen must be readable at the start');
+    requireCase(Math.abs((mb[0] + mb[2]) / 2 - (sb[0] + sb[2]) / 2) <= 0.02 * window.innerWidth, 'the mirror body must stand on the middle of the strip, between its two halves');
+    requireCase(mb[1] > sb[1] && mb[1] < sb[1] + 0.3 * (sb[3] - sb[1]), 'the top of the mirror body\'s head must lie within the height of the strip\'s two inner ends (the leg areas)');
+    requireCase(Number.isFinite(mr.onScreen.behindMotor) && mr.onScreen.behindMotor <= 0.025, 'the mirror body\'s head must stand in the gap between the two halves, not behind the motor colours');
+  }
   // 19 November 2026: the game starts playing at once (the controls card shows over it for a few seconds); the timed
   // intro page is gone.
   requireCase(typeof observations.firstReadyReadback.shell.mode === 'string' && observations.firstReadyReadback.shell.mode !== 'error', 'first ready must not be the error page');
