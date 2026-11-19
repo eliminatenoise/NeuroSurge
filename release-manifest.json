@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-41",
+  "version": "experimental-2026-11-19-body-update-42",
   "experimental": true,
-  "source": "Body update 41. The view turns to a newly chosen limb.",
+  "source": "Body update 42. Toes that grip with the hands; fingers and toes that close as you look down; a smaller inward arm turn.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 273234,
-      "sha256": "8014f3a7f283dcec1877dac36f84d959aa8adb95d3c729e4dc75659b668d54fa"
+      "bytes": 275616,
+      "sha256": "1d2942fb28b6986e55cd5118d90a0b9b1abd5952fd7df91363975dd8b40e3052"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 60544,
-      "sha256": "a4fbf46b4e439728c1ad6800d16b578c21b34b23429d9b4cfacaff0aa36eb962"
+      "bytes": 60859,
+      "sha256": "e4e7ebcac709f6c5a010d681bde37e052a87d4943da2ce5be4831a4dff49b4a2"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 36767,
-      "sha256": "929634fc68c6a48ef66b6518182b8cd622bd43eb8fa0c71f0fbcd512b713d272"
+      "bytes": 37250,
+      "sha256": "aeb8ee9dc0b04a6a727d44410dff14f4d8c64f6eb86a49b16ab3acac9738cf93"
     },
     {
       "path": "README.md",
-      "bytes": 18904,
-      "sha256": "3a2e10ddd23b9a809021c52a938644bd0ca4c3efc56ad97c3846ed2f686a00b7"
+      "bytes": 19090,
+      "sha256": "d079a83922ae4812ee2583be8fb1eadc7b8cfc352c7558d9d928529fc3a46a54"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "1147da31272410b33bbbb1c347d470f0b35b5963640fd7a4c3422b15b1afc4f0"
+      "sha256": "eb8f924727d9604caca470e366ab10d8c275ba503511133bf3c1c75d51015567"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "ea5d90cf7c8cea2faa306aca462dacf576e8134c70381291e9b9cfb1cdd86a32"
+      "sha256": "957c9976ccaccc8c4c547b5aff4247e245f90110073d5f90a5bbcab8793f3f38"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 785579,
-      "sha256": "d4a7c8d3b4f8960703780588cbe4b068a472d1ec9911e75edfe0382457abbfaa"
+      "bytes": 789108,
+      "sha256": "4181568ad77903a4b5817af126f63344650687a8b194db9cb6aeb06d295501a3"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-dance.mjs",
-      "bytes": 29624,
-      "sha256": "b90bcc7dbd324f23e7b01d2833d4d29ef42874d972c06df91df8f3161e52767e"
+      "bytes": 30144,
+      "sha256": "3b2d326f8431d075211f91e2f0a26be78c28385eb8b7a7f8d12673e9090fcc76"
     },
     {
       "path": "scene/src/ns-detail.mjs",
@@ -4362,8 +4362,8 @@
     },
     {
       "path": "tests/limb-turn.test.mjs",
-      "bytes": 19894,
-      "sha256": "343ea3fff167d723da45bde20c0697135be05b041edd2c02ed6b01b6aa6d1961"
+      "bytes": 20276,
+      "sha256": "5549951d30788b100ba4720ae3221673241edc60a996596cee97943d66a021e2"
     },
     {
       "path": "tests/load-guard.test.mjs",

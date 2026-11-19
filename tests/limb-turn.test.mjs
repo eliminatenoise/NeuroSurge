@@ -37,7 +37,9 @@ test('each limb is led by its forearm or its leg turn; the upper arm turns over 
       assert.ok(up.open > 0 && up.closed < 0, 'outward on the underside (with the palm up), inward on the overside');
       assert.ok(up.open <= SHOULDER_TURN_RANGE.hi && up.closed >= SHOULDER_TURN_RANGE.lo, 'inside the shoulder\'s own turn range');
       const upTurn = up.open - up.closed, foreTurn = Math.abs(fore.open - fore.closed);
-      assert.ok(upTurn >= 80, `a turn of the upper arm large enough to show other muscles (${upTurn} degrees)`);
+      // 19 November 2026 (the owner: "You probably overdid it with the internal or medial rotation with the arms"): 60
+      // degrees in all (35 outward to 25 inward; 100 before), still enough to show the other side of the upper arm
+      assert.ok(upTurn >= 50 && upTurn <= 70, `a turn of the upper arm large enough to show other muscles, without winding the arm in (${upTurn} degrees)`);
       assert.ok(upTurn < foreTurn, 'graded: the forearm turns more than the upper arm');
       assert.ok(fore.phase[0] === 0 && up.phase[0] > 0 && fore.phase[1] < 1 && up.phase[1] === 1, 'the forearm starts first, the upper arm finishes last');
     } else {
@@ -203,7 +205,8 @@ test('the activity starts on the underside with both upper arms outward; a switc
   const B = createActivity({ bodyRest: { ...rest, r_shoulder_flex: 180, r_shoulder_abd: 0 } });
   let u = B.step(B.state, [], 2.5);
   u = B.step(u, [{ type: 'turn', phase: 'step' }], 0.02); u = B.step(u, [], 1.0);
-  assert.ok(Math.abs(B.danceView(u).angles.r_shoulder_rot - -30) < 1e-6, `raised arm on the overside: ${B.danceView(u).angles.r_shoulder_rot}`);
+  // (the raised arm's range is -30..30; the overside end is now -25, inside it)
+  assert.ok(Math.abs(B.danceView(u).angles.r_shoulder_rot - Math.max(-30, SH.closed)) < 1e-6, `raised arm on the overside: ${B.danceView(u).angles.r_shoulder_rot}`);
   u = B.step(u, [{ type: 'turn', phase: 'step' }], 0.02); u = B.step(u, [], 1.0);
   assert.ok(Math.abs(B.danceView(u).angles.r_shoulder_rot - 30) < 1e-6, `raised arm back on the underside: ${B.danceView(u).angles.r_shoulder_rot}`);
 });

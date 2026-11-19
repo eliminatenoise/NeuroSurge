@@ -1761,6 +1761,19 @@ A first build, by the lead, on top of the view package's click-a-limb control:
 
 Not in this build, from the same notes: the view does not yet keep the limb's end at one height in the frame while the keys move it; the left arm still moves inside its window of the view, so its range still depends on the look (the user: “Any limited range of motion that's unnatural needs to be fixed”); hands and feet do not yet travel “far more forward and far more back”; the other controls have no new highlight of their own; the roll gesture is not built. The band is a flat overlay and looks it.
 
+## 135. Toes that grip with the hands, fingers and toes that close as you look down, and a smaller inward arm turn (19 November)
+
+The user: “small details like when we grasp our left hand, our left toes and foot also grasp and flex, and same with the right.” “as we look down, the fingers close and the toes close more and more. And as we look up, they expand, for whether it's underside or overside ... for all fingers and toes at once, collectively.” “You probably overdid it with the internal or medial rotation with the arms.” “probably less elbow varus / valgus for external / internal rotation.”
+
+- **Toes with the grip** (`GRIP_FEET` in `ns-app.mjs`). While Space closes the left hand the left foot's small toes curl 40 degrees, its big toe 45, and the foot points 14 degrees, by the grip's own eased share; a held click does the same on the right.
+- **The look closes and opens them.** From 8 to 75 degrees of look below level all the toes curl, more and more, and the right hand closes to 85 % of a fist; from 8 to 60 degrees above level the toes lift (25 and 30 degrees) and the right hand opens and spreads. The same on either side of the limb turn. The left hand, which has its own rig, does not follow the look yet.
+- These are added to the drawn pose only. Nothing is latched, the activity's own joint angles do not change, and they are gone with the grip or the look. `inspect().bodyDrawnJoints` shows the angles as drawn.
+- **The arm turn.** The overside end of the upper arm's turn is 25 degrees inward (`ARM_TURN.shoulder.closed`; 65 before), so the upper arm turns 60 degrees between the two sides instead of 100 and the forearm no longer swings far out and back about the slightly bent elbow, which read as the elbow going varus and valgus. The forearm still turns the palm right over.
+
+Measured in the game (drawn angles): at the start look, 25 degrees down, the toes are curled 7 degrees and the right hand closed 13; looking fully down 40, 45 and 77; looking up -25, -30 and the hand open 25; Space held: left toes 40, left ankle -14.
+
+Not done from the same notes: the flexors lighting up when the limbs arrive at the underside and the extensors at the overside; the mirror body toe to toe with you and level (with the brain's new start picture, in work); limbs pushing limbs out of the way (the model of 18 November is still switched off).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

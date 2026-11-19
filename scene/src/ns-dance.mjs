@@ -132,7 +132,12 @@ export const LEG_TURN_ENDS = Object.freeze({ open: 25, closed: -65, restOutDeg: 
  *   glow      the upper arm's rotators light at this share of their turning level (the forearm's turners at the whole
  *             level): the turn is led by the far end in the activity shown too, and the large chest and back rotators
  *             (pectoralis major, latissimus dorsi) do not outshine the forearm (a display choice) */
-export const ARM_TURN = Object.freeze({ shoulder: Object.freeze({ open: 35, closed: -65 }), lag: 0.3, glow: 0.6 });
+// 19 November 2026 (the owner: "You probably overdid it with the internal or medial rotation with the arms"; "probably
+// less elbow varus / valgus for external / internal rotation"): the overside end of the upper arm's turn is 25 degrees
+// inward (65 before). The forearm still turns the palm right over (160 degrees); with the upper arm turning 60 degrees
+// in all instead of 100 the slightly bent elbow no longer swings the forearm far out to the side and back (which read
+// as the elbow going varus and valgus).
+export const ARM_TURN = Object.freeze({ shoulder: Object.freeze({ open: 35, closed: -25 }), lag: 0.3, glow: 0.6 });
 // (a follower that turns nothing takes its joint's own range as its nominal ends, so history and speeds stay finite)
 const follower = (id, deg, lo, hi) => Object.freeze({ id, open: deg ? deg / 2 : hi, closed: deg ? -deg / 2 : lo, follow: deg, lo, hi });
 // 18 November 2026, late: a joint with its own two ends that turns over part of each stroke: phase [start, end] of

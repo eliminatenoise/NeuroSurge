@@ -5076,6 +5076,20 @@ export function start(params = {}) {
   const GRIP_HELD_IDS = Object.freeze([GRIP_AREA_ID, GRIP_BOTH.regionId]); // 18 Nov (S7): both hands' areas while a grip holds
   let rightGrip = 0;
   /**
+   * 19 November 2026 (the owner: "small details like when we grasp our left hand, our left toes and foot also grasp
+   * and flex, and same with the right"; "as we look down, the fingers close and the toes close more and more. And as
+   * we look up, they expand ... for all fingers and toes at once, collectively"). Display rules added to the drawn
+   * pose (never targets of the activity: nothing is latched, and they are gone when the grip or the look is):
+   *   toeDeg / halluxDeg / ankleDeg  with a hand's grip (Space: the left; a click: the right) the small toes and the
+   *        big toe of the same foot curl and the foot points a little, by the grip's own eased share
+   *   look  the look's pitch closes ALL the toes and the right hand's fingers from downFromDeg to downToDeg (handShare
+   *        of a full fist at the bottom) and opens them from upFromDeg to upToDeg (toes lifted, fingers opened and
+   *        spread). The left hand (the game arm, its own rig) does not follow the look yet.
+   */
+  const GRIP_FEET = Object.freeze({ on: true, toeDeg: 40, halluxDeg: 45, ankleDeg: -14,
+    look: Object.freeze({ on: true, downFromDeg: -8, downToDeg: -75, upFromDeg: 8, upToDeg: 60, handShare: 0.85, toeLiftDeg: -25, halluxLiftDeg: -30, openDeg: 25, spreadDeg: 18 }) });
+  let leftGrip = 0; // the left hand's grip (Space), eased like rightGrip
+  /**
    * R17 (owner, 17 November: "you've got to get the small details right, such as when you're moving the cursor around.
    * That's naturally going to activate muscles of the shoulder, etc., muscles of the neck, etc."): every movement the
    * player causes lights what does it, in step with the movement (ns-move-glow: each moving joint feeds a channel with
@@ -5092,6 +5106,7 @@ export function start(params = {}) {
   function moveGlow(base, dt, gripOn) {
     const h = dt > 0 ? Math.min(dt, 0.1) : 0;
     rightGrip = gripOn ? Math.min(1, rightGrip + GRIP_BOTH.perS * h) : Math.max(0, rightGrip - GRIP_BOTH.perS * h);
+    { const lOn = Boolean(simState && simState.activity && simState.activity.graspHold === true); leftGrip = lOn ? Math.min(1, leftGrip + GRIP_BOTH.perS * h) : Math.max(0, leftGrip - GRIP_BOTH.perS * h); }
     moveCh.step(dt);
     if (!(rightGrip > 0) && moveCh.size === 0) return base;
     const g = { regions: base ? { ...base.regions } : {}, rows: base ? base.rows.slice() : [], reach: null };
@@ -8992,6 +9007,22 @@ export function start(params = {}) {
           if (headShown) Object.assign(targets, headAbsJoints(headShown.joints));
           // R17: both hands close on a grasp: the right hand's whole-hand closure follows the Space grip (GRIP_BOTH).
           if (rightGrip > 0) targets.r_grasp = Math.max(Number.isFinite(targets.r_grasp) ? targets.r_grasp : 0, GRIP_BOTH.closeDeg * rightGrip);
+          // 19 November 2026 (GRIP_FEET): the toes and foot of a gripping hand's side curl with it, and the look's
+          // pitch closes all the toes and the right hand's fingers (down) or opens them (up).
+          if (GRIP_FEET.on) {
+            const sm = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+            const K = GRIP_FEET.look, pd = cs.pitch / DEG;
+            const down = K.on ? sm((pd - K.downFromDeg) / (K.downToDeg - K.downFromDeg)) : 0, up = K.on ? sm((pd - K.upFromDeg) / (K.upToDeg - K.upFromDeg)) : 0;
+            const num = j => (Number.isFinite(targets[j]) ? targets[j] : 0);
+            for (const [S, grip] of [['L', leftGrip], ['R', rightGrip]]) {
+              const close = Math.max(grip, down);
+              if (close > 0) { targets[`toe_flex_${S}`] = Math.max(num(`toe_flex_${S}`), GRIP_FEET.toeDeg * close); targets[`hallux_flex_${S}`] = Math.max(num(`hallux_flex_${S}`), GRIP_FEET.halluxDeg * close); }
+              else if (up > 0) { targets[`toe_flex_${S}`] = Math.min(num(`toe_flex_${S}`), K.toeLiftDeg * up); targets[`hallux_flex_${S}`] = Math.min(num(`hallux_flex_${S}`), K.halluxLiftDeg * up); }
+              if (grip > 0) targets[`ankle_dorsi_${S}`] = Math.max(-50, num(`ankle_dorsi_${S}`) + GRIP_FEET.ankleDeg * grip);
+            }
+            if (down > 0) targets.r_grasp = Math.max(num('r_grasp'), GRIP_BOTH.closeDeg * K.handShare * down);
+            else if (up > 0 && !(rightGrip > 0)) { targets.r_open = Math.max(num('r_open'), K.openDeg * up); targets.r_finger_spread = Math.max(num('r_finger_spread'), K.spreadDeg * up); }
+          }
           // R558 (Messages 47 and 48: every leg movement achievable and plain to see): a thigh lifted past the
           // straight-knee limit is drawn with the knee giving way (ns-body passiveKneeAngles). No ground stops a leg: a knee
           // bends all the way and a hip extends below level (the earlier heel-on-the-ground model is retired).
@@ -9806,6 +9837,9 @@ export function start(params = {}) {
       // 18 Nov (S2): the area the number keys act on with the cards off (the area last rested on), and its settle state
       quietKeys: { regionId: quietLast ? quietLast.regionId : null, rest: quietRest ? plainCopy(quietRest) : null },
       bodyJointTargets: current.out && current.out.bodyJointTargets ? current.out.bodyJointTargets : null,
+      // 19 November 2026: the joint angles as DRAWN (the activity's own plus the display rules added to the pose: the
+      // head's look, a grip's toes, the look's fingers and toes, soft extension), for checks
+      bodyDrawnJoints: (() => { try { return bodyPosed ? { ...bodyPosed } : null; } catch { return null; } })(),
       // R558 (HEAD_LOOK): the head pose of the last drawn frame (plain data the app holds) and the refusal counters.
       head: headLookOn ? { shown: headShown, heldOffsets: headPrevNow, limits: headLimits,
         recovery: { refusedAttempts: displayRecovery.refusedAttempts, recoveredFrames: displayRecovery.recoveredFrames, skippedFrames: displayRecovery.skippedFrames,
