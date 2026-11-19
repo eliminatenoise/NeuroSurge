@@ -1,5 +1,6 @@
 // Run with Node and Playwright. Use NS_PLAYWRIGHT_MODULE and NS_CHROMIUM for an existing local installation.
 // Uses an owned loopback server and the regular game URL. On Linux, NS_ANGLE=vulkan selects an installed Vulkan driver.
+// NS_RAW=1 refuses the pack index, then verifies recovery through the OBJ route.
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
@@ -8,7 +9,8 @@ import { createHandler, HOST } from '../serve-local.mjs';
 
 const { chromium } = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
-const asset = '/packets/bodyparts3d-fullbody-r1/meshes/FJ3265.obj';
+const asset = '/inputs/FULLBODY-MESH-MANIFEST.json';
+const raw = process.env.NS_RAW === '1';
 const allowedHosts = new Set();
 const serve = createHandler({ root, allowedHosts });
 let rejectAsset = true;
@@ -25,7 +27,7 @@ server.listen(0, HOST);
 await once(server, 'listening');
 const host = `${HOST}:${server.address().port}`;
 allowedHosts.add(host);
-const url = `http://${host}/scene/example/preview.html`;
+const url = `http://${host}/`;
 const timeout = 60_000;
 const angle = process.env.NS_ANGLE;
 let browser;
@@ -41,6 +43,18 @@ try {
   page.setDefaultTimeout(timeout);
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
+  let refusedPackIndexes = 0;
+  if (raw) await page.route('**/packs/PACK-INDEX.json', route => {
+    refusedPackIndexes++;
+    return route.abort();
+  });
+  const recoveryAssets = { meshPacks: 0, rawMeshes: 0 };
+  page.on('response', response => {
+    if (rejectAsset || !response.ok()) return;
+    const file = new URL(response.url()).pathname;
+    if (file.endsWith('.nspack')) recoveryAssets.meshPacks++;
+    if (file.endsWith('.obj')) recoveryAssets.rawMeshes++;
+  });
   const inspect = () => page.evaluate(async () => {
     const app = window.__nsQA;
     const ready = await app.ready;
@@ -57,8 +71,10 @@ try {
   });
 
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  const reload = page.getByRole('button', { name: 'Reload page' });
-  await reload.waitFor();
+  await page.waitForURL('**/scene/example/preview.html');
+  const alert = page.getByRole('alert').filter({ hasText: 'Loading did not finish.' });
+  const retry = alert.getByRole('button', { name: 'Try again', exact: true });
+  await retry.waitFor();
   const failure = await inspect();
   console.log(JSON.stringify({ chromium: browser.version(), failure, failedRequests }));
   assert.equal(failedRequests, 1);
@@ -68,27 +84,33 @@ try {
   assert.equal(failure.ready.ok, false);
   assert.equal(failure.firstView.ok, false);
   assert.equal(failure.frames, 0);
-  assert.ok(await page.getByText('The body anatomy could not finish loading.', { exact: false }).first().isVisible());
+  assert.equal(failure.bodyRig, false);
+  assert.equal(failure.placeholder, false);
+  assert.equal(failure.qa, false);
+  assert.match(await alert.innerText(), /HTTP 404 for .*FULLBODY-MESH-MANIFEST\.json/);
   assert.equal(await page.locator('.ns-assembly, .ns-keys').count(), 0);
-  assert.deepEqual(await page.getByRole('dialog').getByRole('button').allTextContents(), ['Reload page']);
+  assert.deepEqual(await alert.getByRole('button').allTextContents(), ['Try again']);
+  assert.equal(await page.getByRole('button', { name: 'Reload page', exact: true }).isVisible(), false);
   assert.equal(await page.locator('.ns-shell .ns-kbd').isVisible(), false);
   assert.equal(await page.locator('.ns-shell .ns-shell-grid').isVisible(), false);
+  assert.equal(await retry.evaluate(button => document.activeElement === button), true);
   await page.keyboard.press('Escape');
   assert.equal((await inspect()).shell, 'error');
-  assert.equal(await reload.evaluate(button => document.activeElement === button), true);
+  assert.equal(await retry.evaluate(button => document.activeElement === button), true);
 
-  // Restore the ordinary server route and activate the real Reload page button with the keyboard.
+  // Restore the required asset and let Enter activate the focused recovery button.
+  const refusedBeforeRetry = refusedPackIndexes;
   rejectAsset = false;
-  const restored = page.waitForResponse(response => response.url() === new URL(asset, url).href && response.ok());
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout }),
+  const [navigation, restored] = await Promise.all([
+    page.waitForEvent('framenavigated', { predicate: frame => frame === page.mainFrame() }),
+    page.waitForResponse(response => response.url() === new URL(asset, url).href && response.ok()),
     page.keyboard.press('Enter'),
   ]);
-  const restoredResponse = await restored;
-  console.log(JSON.stringify({ reloadNavigation: true, restoredStatus: restoredResponse.status() }));
+  assert.equal(new URL(navigation.url()).pathname, '/scene/example/preview.html');
+  assert.equal(restored.status(), 200);
   await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app').dataset.nsPhase));
   const recovered = await inspect();
-  console.log(JSON.stringify({ recovered, restoredStatus: restoredResponse.status(), errors }));
+  console.log(JSON.stringify({ recovered, restoredStatus: restored.status(), refusedPackIndexes, recoveryAssets, errors }));
   assert.equal(recovered.phase, 'playing');
   assert.equal(recovered.runtime, 'running');
   assert.equal(recovered.shell, 'playing');
@@ -98,7 +120,16 @@ try {
   assert.equal(recovered.bodyRig, true);
   assert.equal(recovered.placeholder, false);
   assert.equal(recovered.qa, false);
+  assert.equal(await alert.count(), 0);
   assert.equal(failedRequests, 1);
+  if (raw) {
+    assert.ok(refusedBeforeRetry > 0 && refusedPackIndexes > refusedBeforeRetry);
+    assert.equal(recoveryAssets.meshPacks, 0);
+    assert.ok(recoveryAssets.rawMeshes > 0);
+  } else {
+    assert.ok(recoveryAssets.meshPacks > 0);
+    assert.equal(recoveryAssets.rawMeshes, 0);
+  }
   assert.deepEqual(errors, []);
 } finally {
   if (browser) await browser.close();

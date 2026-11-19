@@ -4262,8 +4262,8 @@
     },
     {
       "path": "tests/browser-startup.mjs",
-      "bytes": 5084,
-      "sha256": "fd670ff9f7515889ab81e069714bd007922622497324ed2e31383c137b384ed5"
+      "bytes": 6465,
+      "sha256": "b57b0c2c9eb0060d8b02968ec843c0584a41cf6409cfd433a4295490dccae143"
     },
     {
       "path": "tests/bulk.test.mjs",
