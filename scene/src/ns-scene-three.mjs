@@ -667,13 +667,20 @@ export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererNam
 export const SIMPLE_LOOK = false;
 /** 'cel': the early comic look (BODY_CEL_EARLY, patchComicShadersCel); 'painted': the look of 18 November (BODY_FLESH). */
 export const BODY_STYLE = 'cel';
+// 19 November 2026 (the owner: "Resolution for the body and the mirror body are far, far too low. They need to be far,
+// far higher. And far, far cleaner and far, far clearer ... sharp and not blurry or extremely pixelated. Or rough or
+// patchy"). On a slow frame the automatic controller used to halve the picture's resolution and then swap the bodies
+// for copies clustered at 4 to 7 mm: blurred, blocky and patchy, on exactly the high-density screens that are slow to
+// fill. The steps are now gentle and none of them touches the meshes: the picture never goes under 0.6 of the screen's
+// own pixels (it was 0.4) and the bodies always keep their full meshes. A slow machine gets a slower frame, not a
+// rough body. (Before: 1, 0.75, 0.5, 0.5 lite, 0.5 lite with 2.5 / 4 mm copies, 0.4 lite with 4 / 7 / 2.5 mm copies.)
 export const QUALITY_LEVELS = Object.freeze([
   Object.freeze({ name: 'full', scale: 1, lite: false, lod: null }),
-  Object.freeze({ name: 'scale-0.75', scale: 0.75, lite: false, lod: null }),
-  Object.freeze({ name: 'scale-0.5', scale: 0.5, lite: false, lod: null }),
-  Object.freeze({ name: 'lite-0.5', scale: 0.5, lite: true, lod: null }),
-  Object.freeze({ name: 'lod-0.5', scale: 0.5, lite: true, lod: Object.freeze({ glassMm: 2.5, bodyMm: 4 }) }),
-  Object.freeze({ name: 'lod-0.4', scale: 0.4, lite: true, lod: Object.freeze({ glassMm: 4, bodyMm: 7, armMm: 2.5 }) })
+  Object.freeze({ name: 'scale-0.9', scale: 0.9, lite: false, lod: null }),
+  Object.freeze({ name: 'scale-0.8', scale: 0.8, lite: false, lod: null }),
+  Object.freeze({ name: 'scale-0.7', scale: 0.7, lite: false, lod: null }),
+  Object.freeze({ name: 'lite-0.7', scale: 0.7, lite: true, lod: null }),
+  Object.freeze({ name: 'lite-0.6', scale: 0.6, lite: true, lod: null })
 ]);
 /* LOD cells (source mm): 2.5 mm glass = 314 k -> 93 k triangles, about 5 px at the 0.5 render scale; 4 mm glass = 52 k.
  * The body is 0.4-1.5 m from the eye, where 4-7 mm is 1-3 px. Measured in round4/R4-scene-NOTES.md. */
@@ -1458,7 +1465,10 @@ export const EYE_COLLAR = Object.freeze({
   // of the breastbone and the inner ends of the collar bones. Now lower and smaller: radii 90 x 76 x 44 -> 78 x 66 x 22
   // and its centre 16 mm higher, so its top is 6 mm lower: it lies below the collar bones, whose inner ends and the
   // top of the breastbone show again. No opening at looks all round, seen on pictures.)
-  cap: Object.freeze({ centreMm: Object.freeze([0, -72, 1358]), radiiMm: Object.freeze([78, 66, 22]), color: 0xa5323a, roughness: 0.62 }) });
+  // 19 November 2026, later (the owner: "get rid of the red plate where the head used to be. If we're not going to have
+  // a head, let's just have bones then"): on false: the cap is not drawn. The root of the neck is open and shows the
+  // bones under it (the top of the rib cage and the spine).
+  cap: Object.freeze({ on: false, centreMm: Object.freeze([0, -72, 1358]), radiiMm: Object.freeze([78, 66, 22]), color: 0xa5323a, roughness: 0.62 }) });
 export const BODY_ORDER = Object.freeze({ torsoDepth: 7, torso: 8, faceDepth: 1, face: 2, arm: 10 });
 
 /** Marker dot size, highlight scale and lift toward superior (source mm, before the giant display scale): ns-brain
@@ -3607,7 +3617,10 @@ export function infoPanelContent(model) {
 // 19 November 2026 (performance first): the mirror body is a figure about 300 px tall that cost 2.0 of the frame's 4.6
 // million triangles. It is drawn again from index-only copies, with 5 mm cells (about a pixel at its usual distance):
 // 0.58 million. Brought very near, thin face and neck sheets can show small holes (the reason full meshes were chosen).
-export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 5, mirrorQualityLodFrom: 4, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
+// (19 November 2026, the same note: no quality level makes the mirror body coarser any more (mirrorQualityLodFrom
+// past the last level). Its own copy stays at 5 mm cells: drawn from the full meshes, or from a 3 mm copy, looking
+// around fell from 59 to 47 to 49 frames a second on the lead's machine. Making it finer without that cost is open.)
+export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 5, mirrorQualityLodFrom: 99, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -5555,7 +5568,7 @@ export function createScene({
       for (let i = 0; i < collar.planes.length; i++) collar.planes[i].set(collar.planes[i].normal.set(0, 1, 0), 1e9);
     }
     collar.on = on;
-    if (collar.cap) collar.cap.visible = on;
+    if (collar.cap) collar.cap.visible = on && EYE_COLLAR.cap.on !== false;
   }
   let eyeNeckOn = false; // EYE_NECK: the neck's in-place twins are shown in the eye view
   /** EYE_NECK: the neck's in-place twins are drawn while the head is in place (third person) or while the camera

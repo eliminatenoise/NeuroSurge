@@ -511,7 +511,10 @@ export const GAZE_RESTART_DEADBAND_DEG = 0.31;
  *                 area this long; the area's glow still starts at once. With the strip filling the view the crosshair
  *                 crosses many areas while the player looks around, and each would otherwise move and hold its joints.
  *                 A click moves at once. */
-export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS: 0.3 });
+// 19 November 2026 (the owner: "highlighting specific areas of the brain with our cursor just by running over, those
+// body parts not activating ... They have to activate at least once"): latchS 0.3 -> 0.07: an area the look runs over
+// does its movement almost at once; it no longer needs a third of a second of rest.
+export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS: 0.07 });
 
 /**
  * 18 November 2026 (the lead's decision on audit S4; the owner, Note 59: "if you highlight any part of the brand, you
@@ -643,7 +646,10 @@ export const JOINT_LATCH = Object.freeze({
   //                would otherwise show nothing at all), and never more than minSwingRangeShare of the joint's whole
   //                range; nearShare: "already near its end" is within this share of the swing from the goal
   // Under reduced motion none of this happens (the reducedMotion spring has no kick, relax or rebound).
-  omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.55, relax: 0.16, relaxMaxShare: 0.8, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
+  // (later the same day, the owner: "the neck moves and then returns, and then same for all the body parts. They move
+  // and then return. But they don't have to return fully, just partially ... They jerk one way and then they partially
+  // return back": the part is held at its end for 0.3 s (0.55 before) and comes back half of its swing (0.16 before).)
+  omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.3, relax: 0.5, relaxMaxShare: 0.8, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
   reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
   armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22,

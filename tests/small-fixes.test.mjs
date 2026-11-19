@@ -37,7 +37,9 @@ test('S4: a look that rests on a motor area only arms it: the key lights, the mu
   // a click presses it: the knee bends at once and stays
   const pressed = frames(A, A.step(s1, [{ type: 'click', at: 0 }], H), 30).s;
   assert.equal(pressed.bodyGoal.knee_ext_L, -135);
-  assert.ok(pressed.bodyPos.knee_ext_L < -120, `knee ${pressed.bodyPos.knee_ext_L}`);
+  // (19 November, later: half a second after the press the knee has been at its end and has come back about half of its
+  // swing, JOINT_LATCH.relax; it is held, bent, well past half way)
+  assert.ok(pressed.bodyPos.knee_ext_L < -60, `knee ${pressed.bodyPos.knee_ext_L}`);
   assert.equal(pressed.activatedRegions.rh_knee, 1);
 });
 
@@ -154,7 +156,7 @@ test('by default a look that rests on a motor area switches it on: it drives har
   const settled = frames(A, st, 300).s;
   assert.equal(settled.bodyGoal.knee_ext_L, -135, 'still held');
   assert.ok(Math.abs(settled.bodyPos.knee_ext_L - eased) < 0.5, `eased back to ${eased.toFixed(1)} (${settled.bodyPos.knee_ext_L.toFixed(1)})`);
-  assert.ok(Math.abs(eased - -135) > 10 && Math.abs(eased - -135) < 0.3 * Math.abs(travel), 'a little, not most of the way');
+  assert.ok(Math.abs(eased - -135) > 10 && Math.abs(eased - -135) < 0.6 * Math.abs(travel), 'part of the way back (about half), not all of it');
   // a further press of the same movement: no jump in the picture, and it is driven to its end again
   let again = A.step(settled, [{ type: 'muscle', regionId: 'rh_knee', actionId: 'rh_knee_flex', regionOnly: false, at: 0 }], H);
   assert.equal(again.bodyGoal.knee_ext_L, -135, 'the goal stays');

@@ -691,6 +691,13 @@ export function headLookRange(goalOffsets = null, L = HEAD_LOOK, look = null) {
   const headMinDeg = lookOf(nf - fMax), headMaxDeg = lookOf(nf - fMin);
   const moreDown = Number.isFinite(L.viewDownDeg) ? Math.max(0, L.viewDownDeg + lookOf(-fMax)) : 0;
   const moreUp = Number.isFinite(L.viewUpDeg) ? Math.max(0, L.viewUpDeg - lookOf(-fMin)) : 0;
+  // 19 November 2026 (the owner: "the camera view getting locked to a downward angle, especially when the neck is
+  // activated from the brain ... so the camera view is always flexible"): the view is the look alone (headPoseForLook),
+  // so its range no longer moves with a neck angle held by a motor area. Before, a held neck movement shifted the whole
+  // range by its own angle and the look was pinned inside what was left.
+  if (!LOOK_BENDS_TRUNK && Number.isFinite(L.viewDownDeg) && Number.isFinite(L.viewUpDeg)) {
+    return { yawMinDeg: -turn - eye, yawMaxDeg: turn + eye, pitchMinDeg: -L.viewDownDeg, pitchMaxDeg: L.viewUpDeg, headMinDeg, headMaxDeg };
+  }
   return { yawMinDeg, yawMaxDeg, pitchMinDeg: headMinDeg - moreDown, pitchMaxDeg: headMaxDeg + moreUp, headMinDeg, headMaxDeg };
 }
 /** R558 (Messages 55 and 56: easier to use; a learning tool): the neck joint of a held neck movement that was just

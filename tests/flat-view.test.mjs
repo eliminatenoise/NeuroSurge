@@ -53,7 +53,7 @@ test('the camera keeps ONE stand-off at every look: nothing is magnified by a tu
   for (let yaw = -180; yaw <= 180; yaw += 15) for (let pitch = -88; pitch <= 88; pitch += 11) {
     const d = NC.eyeDolly({ yaw: yaw * DEG, pitch: pitch * DEG });
     if (pitch >= -E.downFromDeg) assert.ok(Math.abs(len(d.offset) - d0) < 0.03, `look ${yaw}/${pitch}: ${len(d.offset).toFixed(3)} m from the eye, ${d0.toFixed(3)} at the start`);
-    else if (pitch <= -E.downToDeg) assert.ok(len(d.offset) < 0.2 * d0, `look ${yaw}/${pitch}: at the eye (${len(d.offset).toFixed(3)} m)`);
+    else if (pitch <= -E.downToDeg) assert.ok(len(d.offset) < (E.downShare + 0.12) * d0 && len(d.offset) > (E.downShare - 0.12) * d0, `look ${yaw}/${pitch}: closed to its share (${len(d.offset).toFixed(3)} m of ${d0.toFixed(3)})`);
     else assert.ok(len(d.offset) <= d0 + 0.03, `look ${yaw}/${pitch}: closing`);
     assert.equal(d.fovScale, 1, 'and the lens does not change');
     assert.ok(d.offset[1] > (pitch >= -E.downFromDeg ? 0.05 : 0), `look ${yaw}/${pitch}: the camera stays above the eye, never down in the neck or the back`);

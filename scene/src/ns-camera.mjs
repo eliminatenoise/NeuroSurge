@@ -179,7 +179,13 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
 export const EYE_DOLLY = Object.freeze({
   backM: 0.5, upM: 0.14, headAboveLookDeg: 30, headLevelEndDeg: 40,
   standPitchMaxDeg: -25, standYawMaxDeg: 110,
-  downFromDeg: 27, downToDeg: 60, downShare: 0.12,
+  // (the owner, on seeing it: "I like the zoom, pan ... dolly effect, but you've definitely gone overkill with it. It's
+  // too extreme": the stand-off now closes to 0.55 of itself, not 0.12, and over a longer stretch of look, 27 to 75
+  // degrees down: about a quarter of the travel, and under half a centimetre for each degree of look)
+  // (and then: "there should essentially be no zoom effect when moving ... the camera view up and down ... There can be
+  // some ... zoom effects when we're doing WASD": downShare 1 = the look's pitch moves the camera no nearer at all; the
+  // stand-off is one length at every look again. A zoom tied to the keys is not built; the rule stays here for it.)
+  downFromDeg: 27, downToDeg: 75, downShare: 1,
   zRefM: null, nearBehindEyeM: null
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own

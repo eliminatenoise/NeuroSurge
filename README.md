@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 47 keeps the picture sharp on slower computers, lightens the muscles and shows bones where your head was. Run your look over a coloured area: the part jerks at once and comes half way back. Click to do it again.
+
 Body update 46 gives every limb its whole reach. Choose a limb with **1** to **4**: your view holds its hand or foot while **W/A/S/D** or your look move it, the right arm can cross your body, and limbs push each other gently. Look down and you see your own body from your own eyes.
 
 Body update 45 repairs the mirror body's head: whole eyes, and face muscles that cover the skull.

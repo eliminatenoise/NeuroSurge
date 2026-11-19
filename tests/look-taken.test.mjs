@@ -71,9 +71,11 @@ check('the area is recorded in the very frame the look\'s rest takes its movemen
 
 check('a look that leaves before the rest time records nothing', () => {
   const { A, s } = started();
-  const states = rest(A, s, 8);
-  assert.equal(states[7].lookTaken, null);
-  let t = A.step(states[7], [away()], H);
+  // (19 November 2026: the rest time is 0.07 s now, so "before the rest time" is the first few frames)
+  const nBefore = Math.max(1, Math.floor(GAZE_DWELL.latchS / H) - 1);
+  const states = rest(A, s, nBefore);
+  assert.equal(states[nBefore - 1].lookTaken, null);
+  let t = A.step(states[nBefore - 1], [away()], H);
   for (let i = 0; i < 40; i++) t = A.step(t, [away()], H);
   assert.equal(t.lookTaken, null);
 });

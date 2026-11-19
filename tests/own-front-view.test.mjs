@@ -26,7 +26,7 @@ test('the camera rides above and behind the eyes on the head, by the same amount
     const d = at(y, p);
     assert.ok(d.upM === E.upM && d.backM === E.backM, `the full offset at ${y}/${p}`);
   }
-  for (const [y, p] of [[0, -62], [0, -75], [-180, -72]]) {
+  for (const [y, p] of [[0, -76], [0, -85], [-180, -80]]) {
     const d = at(y, p);
     assert.ok(Math.abs(d.backM - E.backM * E.downShare) < 1e-12 && Math.abs(d.upM - E.upM * E.downShare) < 1e-12, `the closed offset at ${y}/${p}`);
   }

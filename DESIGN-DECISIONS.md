@@ -1888,6 +1888,22 @@ The user: “a proper first person view.” The limb work (section 139) holds th
 
 Seen in pictures at 1600 × 900: the start picture is unchanged; with a leg chosen and pulled in, the view is down the chest and belly to the thighs. Still not right: between about 30 and 50 degrees down the camera is part of the way and your collar and the neck's cap are still in the lower edge of the picture; straight down (88 degrees) the picture is your own upper chest and ribs from very near; and the chest fills the lower half of every downward look, which the user has asked to be smaller and flatter.
 
+## 141. Bones where the head was; sharper pictures on slow machines; a look that is never pinned; areas that answer a passing look; a jerk that comes half way back (19 November)
+
+The user's notes of the evening, in their words: “get rid of the red plate where the head used to be. If we're not going to have a head, let's just have bones then.” “Resolution for the body and the mirror body are far, far too low ... sharp and not blurry or extremely pixelated. Or rough or patchy.” “The muscle color tone is far too dark initially.” “problems with the camera view getting locked to a downward angle, especially when the neck is activated from the brain.” “highlighting specific areas of the brain with our cursor just by running over, those body parts not activating ... They have to activate at least once.” “They jerk one way and then they partially return back.” “I like the zoom ... dolly effect, but you've definitely gone overkill with it.” Then: “there should essentially be no zoom effect when moving ... the camera view up and down.”
+
+- **The neck's cap is gone** (`EYE_COLLAR.cap.on` false). The root of the neck is open and shows the top of the rib cage, the spine and the collar bones.
+- **Resolution.** The cause was the automatic quality controller: on slow frames it halved the picture's resolution and then swapped the bodies for copies clustered at 4 to 7 mm. Its steps are now 1, 0.9, 0.8, 0.7, then 0.7 and 0.6 without the outline passes, and none of them touches a mesh (`QUALITY_LEVELS`). A slow machine gets a slower frame, not a rough body. The mirror body's own copy is unchanged (5 mm cells): drawn from the full meshes, or from a 3 mm copy, looking around fell from 59 to between 47 and 49 frames a second here, so that is open.
+- **Lighter muscles.** The two shade bands of the comic look are lifted (0.08 and 0.34 to 0.3 and 0.56) and the six muscle tones are 0.07 lighter.
+- **The look is never pinned** (`headLookRange`). The view is the look alone since this morning, but its range still moved with a neck angle held by the neck area, and the look was kept inside what was left. The range is now the view's own, whatever the neck holds.
+- **A passing look switches an area on** (`GAZE_DWELL.latchS` 0.3 s to 0.07 s).
+- **Jerk and come half way back** (`JOINT_LATCH` driveS 0.3, relax 0.5): the part is driven to its end, held there for 0.3 s and comes back half of its swing; each click does it again.
+- **No zoom with the look.** The camera's closing on the eye for a look down (section 140) is switched off again (`EYE_DOLLY.downShare` 1): the stand-off is one length at every look. The price is section 140's fault back: with a limb framed, the look is steep and the picture is your own shoulders from above. A zoom tied to W/A/S/D, which the user allows, is not built.
+
+Frame table after these, four runs: standing still 60; looking around 45, 49, 59 and 59; looking down and up 50 to 57; limb turn 55 to 60. The two looking cases are slower and less steady than this morning's 59 and 60. Now that a passing look switches areas on, a sweep of the look across the strip sets parts jerking, and that work is in every such frame; the cause was not traced further.
+
+Not done from the same notes: organs inside the opened chest and a clean, smooth end for the neck's muscles; the light-blue glass outline for everything that is hidden behind something; W and S moving a limb's end along the straight line between its proximal and distal joints with A and D as pure abduction and adduction; extreme neck movements from the look showing on the mirror body.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
