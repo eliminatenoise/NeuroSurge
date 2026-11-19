@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-48",
+  "version": "experimental-2026-11-19-body-update-48-movement-lens-fix",
   "experimental": true,
-  "source": "Body update 48. A slight punch-in while a movement is switched on; no other zoom or dolly.",
+  "source": "Body update 48 movement lens fix. Both views briefly tighten the lens for modeled movement. Highlight-only pulses keep the lens steady.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 302406,
-      "sha256": "9c60dbcb5af7cb9e23bd9a7be37bb23569c1610031b5eda11b665dccd3a5778d"
+      "bytes": 302772,
+      "sha256": "4d028282ee5ba9e8e03d35bb6bd0bf95b86cd8142ff2f8792911ee918bee3d78"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 62891,
-      "sha256": "80797d5e3a6644c81055950ca5e9aa59a02ce117376352317f64fbaf2e7053a4"
+      "bytes": 62924,
+      "sha256": "beb5f92b32b7f4980d17e5292128a7c6439b4a2319d8782c73a8aeae3c1291bd"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 40690,
-      "sha256": "39ea8e53749c62fdc4863064788d60f3a7e9b529e6a4214539add46e90e8499d"
+      "bytes": 40944,
+      "sha256": "b88da22817989b91033de86d9b60700905b6e0f593b04e4a55ab3e95e8648efb"
     },
     {
       "path": "README.md",
-      "bytes": 20329,
-      "sha256": "501cabcafe9b51cad67ddd311ebffa07f59d7446bf33a1173cfeddbc07dfdec5"
+      "bytes": 20460,
+      "sha256": "e4f246dab5916b2efc325f3ec33209d3e58270f8b0eb2a38e1717d24b1cde4cd"
     },
     {
       "path": "START.html",
-      "bytes": 4029,
-      "sha256": "ed744b3d9e0536d6bf6fa38536c694e33e345fe0273621b4b9a88036d945688d"
+      "bytes": 4047,
+      "sha256": "c939bdd7fee27d7b2f9ee221304774040f67df59418cc8b84b054214659c58dc"
     },
     {
       "path": "index.html",
-      "bytes": 1000,
-      "sha256": "588810087f166c6ba09dfb26a23f55ee196813997c741b3167dc8043c655d99f"
+      "bytes": 1018,
+      "sha256": "2feb32d68a36d3860191d0ed01061adad60495aa53837a89c8013cf4bd204ed5"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 865584,
-      "sha256": "341a30ef635405b71c403bec7edd2569ff897cb8e43d69005d194a48fb2f6425"
+      "bytes": 865969,
+      "sha256": "56df5d2fffb042aa1d4990b0186d2b6d9e7ab51374c4b8e911c1385ed3d5573c"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1140628,
-      "sha256": "c90bf9100843a5af7395e80712ef69992842a0144f8e417113dfb7ccc7d19af0"
+      "bytes": 1140774,
+      "sha256": "39514bf5c0df910f03333de3db2c3a003ba3ddc2723b963d7520028e80b3b6ca"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4289,6 +4289,11 @@
       "path": "tests/browser-player-focus.mjs",
       "bytes": 9139,
       "sha256": "6584466f37c164d05e4c5f2249351fe8b04066a667ca79fc9ac378789ce0017b"
+    },
+    {
+      "path": "tests/browser-punch-in.mjs",
+      "bytes": 12184,
+      "sha256": "4168776dfe5b4cb822661071baed8d6de146a371cd650c968e1005a144d89e47"
     },
     {
       "path": "tests/browser-space-aim.mjs",

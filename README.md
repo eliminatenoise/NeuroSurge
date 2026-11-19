@@ -4,7 +4,7 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
-Body update 48 adds a slight punch-in when a movement switches on, and takes every other zoom and dolly away.
+When a movement switches on, the picture briefly punches in. The effect works in both views when an activation moves the model. A marker can light up while the lens holds steady. Your system’s reduced-motion setting keeps the lens steady.
 
 Body update 47 keeps the picture sharp on slower computers, lightens the muscles and shows bones where your head was. Run your look over a coloured area: the part jerks at once and comes half way back. Click to do it again.
 

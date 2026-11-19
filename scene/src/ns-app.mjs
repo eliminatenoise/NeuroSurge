@@ -5400,19 +5400,23 @@ export function start(params = {}) {
    * 19 November 2026 (the owner: "let's get rid of all zoom, pan, dolly effects and just have slight punch-in effects.
    * And punch out as soon as activation stops"). While a movement is being switched on (the first holdS of its pulse:
    * the drive of JOINT_LATCH) the lens is `amount` tighter, eased in over inS and out over outS; nothing else moves
-   * the camera's lens or place by itself. Not under reduced motion. The picture only: aiming and rays keep the
-   * unpunched lens (the crosshair is the centre either way).
+   * the camera's lens or place by itself. Not under reduced motion. The scene applies the pulse to the active lens
+   * after blending the eye and outside views. The centre ray stays fixed.
    */
   const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
   let punchNow = 0;
-  function punchLens(pose, dt) {
-    if (!PUNCH_IN.on || !pose) return pose;
-    const a = simState && simState.activity ? simState.activity : null;
-    const active = Boolean(a && a.pulseRemaining > 0 && Number.isFinite(a.t) && Number.isFinite(a.lastTriggerAt) && a.t - a.lastTriggerAt < PUNCH_IN.holdS && a.pulseLook !== undefined);
-    const want = active && !prefersReducedMotion() ? PUNCH_IN.amount : 0, h = dt > 0 ? Math.min(dt, 0.1) : 0;
+  let pausedPunchSeq = null;
+  function stepPunchLens(dt) {
+    if (!PUNCH_IN.on) return;
+    const a = simState?.activity;
+    // A region can light up without asking the model to move.
+    const movement = a && (a.pulseAction != null || a.pulseBody != null || a.pulseRotation != null);
+    const active = Boolean(movement && a.pulseSeq !== pausedPunchSeq && a.pulseRemaining > 0
+      && Number.isFinite(a.t) && Number.isFinite(a.lastTriggerAt) && a.t - a.lastTriggerAt < PUNCH_IN.holdS);
+    if ((active || punchNow > 0) && prefersReducedMotion()) { punchNow = 0; return; }
+    const want = active ? PUNCH_IN.amount : 0, h = dt > 0 ? Math.min(dt, 0.1) : 0;
     punchNow += (want - punchNow) * (1 - Math.exp(-h / (want > punchNow ? PUNCH_IN.inS : PUNCH_IN.outS)));
-    if (punchNow < 1e-4) { punchNow = 0; return pose; }
-    return { ...pose, fovScale: (Number.isFinite(pose.fovScale) && pose.fovScale > 0 ? pose.fovScale : 1) * (1 - punchNow) };
+    if (punchNow < 1e-4) punchNow = 0;
   }
   /**
    * R17 (owner, 17 November: "you've got to get the small details right, such as when you're moving the cursor around.
@@ -5986,7 +5990,13 @@ export function start(params = {}) {
     // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
-    if (before.mode === 'playing' && after.mode !== 'playing') cancelPendingGameplay('leave-playing');
+    if (before.mode === 'playing' && after.mode !== 'playing') {
+      // The pause freezes the simulated pulse. End its lens effect and wait for a fresh activation.
+      pausedPunchSeq = simState?.activity?.pulseSeq ?? null;
+      if (punchNow > 0) renderRequested = true;
+      punchNow = 0;
+      cancelPendingGameplay('leave-playing');
+    }
     if (before.mode === 'playing' && after.mode !== 'playing' && quietUi && typeof quietUi.hideTip === 'function') quietUi.hideTip(); // (no tip under the Esc page)
     if (after.mode === 'playing' && before.mode !== 'playing') {
       // Commands or gesture flags acquired behind an overlay cannot enter the new playing epoch.
@@ -9673,10 +9683,11 @@ export function start(params = {}) {
         let cameraDrawChanged = false;
         if (sceneFn('setCameraPose')) {
           // 19 November 2026 (PUNCH_IN): a slight punch-in of the lens while an activation runs, out as soon as it stops
-          const punched = punchLens(camPose, timing.dt);
+          stepPunchLens(timing.dt);
           const ck = camPose.firstPerson && !referenceGraph ? 'first' : `${camPose.position.join(',')}|${camPose.yaw}|${camPose.pitch}|${camPose.blend}|${camPose.headInPlace}|${punchNow.toFixed(4)}`;
           if (ck !== camSceneKey) {
             camSceneKey = ck; cameraDrawChanged = true;
+            const punched = { ...camPose, pulseFovScale: 1 - punchNow };
             callScene('setCameraPose', camPose.firstPerson && !referenceGraph ? null : wholeArmOption ? { ...punched, armParentPosition: out.referenceFrame.position } : punched);
           }
         }

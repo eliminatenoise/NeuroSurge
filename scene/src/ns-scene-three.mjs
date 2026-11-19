@@ -7901,9 +7901,10 @@ export function createScene({
    * first-person pose carries fovScale (multiplies tan(eye view angle / 2); 1 at the start look) and nearM (the near
    * plane, just behind the eye's own plane, so nothing between the camera and the back of your head is drawn). Both
    * are optional; without them the eye view is the launcher's angle and the scene's own near plane, as before. */
-  function flatLensOf(pose) {
+  function lensOf(pose) {
     const out = {};
     if (Number.isFinite(pose.fovScale) && pose.fovScale > 0) out.fovScale = pose.fovScale;
+    if (Number.isFinite(pose.pulseFovScale) && pose.pulseFovScale > 0) out.pulseFovScale = pose.pulseFovScale;
     if (Number.isFinite(pose.nearM) && pose.nearM > 0) out.nearM = pose.nearM;
     return out;
   }
@@ -7913,9 +7914,12 @@ export function createScene({
   }
   /** Resize supplies the base eye angle. The active lens keeps the current look and outside-view blend. */
   function activeLensFov() {
-    const eyeFov = flatLensFov(camPose || firstPose);
-    if (!camPose || camPose.fov === null || cameraProjectionPlan?.phase === 'locked') return eyeFov;
-    return eyeFov + fin01(camPose.blend) * (camPose.fov - eyeFov);
+    const pose = camPose || firstPose;
+    const eyeFov = flatLensFov(pose);
+    if (cameraProjectionPlan?.phase === 'locked') return eyeFov;
+    const fov = camPose && camPose.fov !== null ? eyeFov + fin01(camPose.blend) * (camPose.fov - eyeFov) : eyeFov;
+    const scale = pose?.pulseFovScale ?? 1;
+    return scale === 1 ? fov : (2 * Math.atan(Math.tan((fov * DEG) / 2) * scale)) / DEG;
   }
   function setCameraPose(pose = null) {
     if (pose && pose.projectionPlanning) {
@@ -7930,7 +7934,7 @@ export function createScene({
     if (first) {
       if (pose !== null && pose !== undefined && Object.prototype.hasOwnProperty.call(pose, 'position')) {
         if (!pose.position || pose.position.length !== 3 || !Array.from(pose.position).every(Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) fail('scene_input', 'first-person pose needs finite world position/radians');
-        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, ...flatLensOf(pose) }; // 18 November 2026, late: + the eye view's lens
+        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, ...lensOf(pose) };
         const eyeLook = pose.bodyLook && Number.isFinite(pose.bodyLook.yaw) && Number.isFinite(pose.bodyLook.pitch) ? pose.bodyLook : firstPose;
         if (lookYaw !== eyeLook.yaw || lookPitch !== eyeLook.pitch) setView(eyeLook.yaw, eyeLook.pitch);
         // R378 opt-in: physical arm-parent frame is separate from the engineering rendering camera.
@@ -7947,7 +7951,7 @@ export function createScene({
       }
       camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1,
         fov: Number.isFinite(pose.viewFovYDeg) && pose.viewFovYDeg > 0 && pose.viewFovYDeg < 179 ? pose.viewFovYDeg : null }; // 18 November 2026: the outside view's own angle (ns-camera followFovYDeg)
-      Object.assign(camPose, flatLensOf(pose)); // 18 November 2026, late: the eye view's lens, eased out with the view
+      Object.assign(camPose, lensOf(pose));
       const far0 = Math.hypot(p[0], p[1], p[2]) >= 0.35 ? 1 : 0;
       camMul.headInPlace = Number.isFinite(pose.headInPlace) ? fin01(pose.headInPlace) : far0;
       camMul.faceGhost = Number.isFinite(pose.faceGhost) ? fin01(pose.faceGhost) : 1 - far0;
