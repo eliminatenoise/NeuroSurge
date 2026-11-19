@@ -1720,6 +1720,30 @@ The loading lane's second half, merged here.
 
 Measured on this machine from the local server, cache off: ready in 3.7 to 4.0 s (9.3 s from the source files).
 
+## 131. Cones of light between a movement's key and its muscles (19 November)
+
+The user: “Instead of making the corresponding connection a curved light beam, let's make it a direct sort of conical light stream beam, almost angelic in nature, and like the light beam of the Isaac Newton glass triangle prism from one to many light beam, but I guess the corresponding color ... make it direct and make it match the relevant surface area of both brain and muscle. So that's the shape of the cone.” “like a sort of halo ... or in any UFO movie where there's a massive light beam.” “Ensure it's precise to its correlates.” “Of course, the beam should be focused and not touch any irrelevant areas.” “It's basically an Iron Man pulse going both ways, but fitting those areas.” And, on seeing the first build: “way too bright at the moment, and there should be some transparency involved so that you can still see which muscle is being activated and which brain part is being activated.”
+
+- **One to many.** The single curved line from an area to the middle of a muscle group is gone. From the part of the area that does the movement (its key) a straight cone of light goes to each muscle that movement drives, up to ten a body, on the mirror body and, where the muscle is in the picture, on your own (`LIGHT_BEAM` in `ns-links.mjs`; `emitBeam`, `emitAreaBeams` in `ns-scene-three.mjs`).
+- **Precise ends.** The key is found with the picker's own rule (`regionActionAt`, asked for every vertex of the area when the brain is built), so the beam of “Bend right knee” leaves the part of the knee area that a look takes for that movement. Its width at the brain is the width of that key as seen across the beam, and at the body the width of that muscle, both measured each frame from sample points of the key and of the muscle's own mesh in its present pose. The beam is drawn at 85 % of those widths and fades to nothing at its edge, so its light stays inside both. It starts at the middle of the key (light laid over the whole key spilled onto the areas beside it).
+- **Light.** The area's colour with a whiter middle, a faint brighter edge, fine streaks that drift slowly, and a brighter band that runs from the brain to the muscle while a second one comes back. It is see-through: the first build was about twice as bright and hid the limb it pointed at. Light alone does not show on the pale brain, so the beam also covers 30 % of its own light's worth of what is behind it; on black that reads as light, on the brain as a tint. Beams of one movement share their light where they leave the key together and stay shared where their muscles lie side by side.
+- **Calm.** No beam from the grip's area while Space carries the brain or the mirror body (it stood across the picture for the whole carry). No streaks or running bands under reduced motion.
+- **Cost.** Two meshes of at most 48 beams each, written on the processor only while a link shows; no new screen pass. The frame table is unchanged (60 / 59 / 60 / 60).
+
+The beam is a picture of this game's own rule “this key drives these muscles”. It is not a nerve, a recording or a measured pathway, and its width says nothing about how much cortex or muscle is involved.
+
+## 132. Lit areas almost white; a glossy brain; carried things pass through everything (19 November)
+
+- **White.** The user: “let's make brain activation almost bright white.” A lit area's light is 80 % white (`AREA_LOOK.areaWhite`) with its gain lowered from 1.8 to 1.3, because white carries all three channels and at 1.8 its bloom hid the key's shape and its neighbours.
+- **A brain like food.** The user: “let's make the rest of the brain look a little yummy, like food. So it's actually okay for the brain to be a little glossy and slimy.” The cortex has its wet sheen and glint back, a little stronger and broader than on 18 November (`BRAIN_FLESH` sheen 0.34 at power 16, glint 0.6, grooves 0.75 drier). The body and the strip's keys stay matte.
+- **Through anything.** The user: “we can move both the mirror body and the brain into ourselves. And basically through ourselves and through anything.” `CARRY_THROUGH` in `ns-reference-graph.mjs`: the brain's key range is twice its start distance (to you, through you and as far again behind), the mirror body has no near limit and can be taken at any distance, and the stop-at-contact guards of the brain and the mirror body are off. This withdraws the rule of 11 November that things stop where they would touch. The collision code stays in place behind the constant.
+
+## 133. The view package's second half (19 November)
+
+Merged from the view lane, built and checked by helpers: a click on one of your limbs (right arm, right leg, left leg) takes control of it, and W/A/S/D then move its end while the look stays free (`LIMB_CLICK` in `ns-grasp.mjs`); the mirror body stands in the hollow of the motor strip at the start; the outside view (E) stands nearer; the root of the neck is closed by a small cap, so a look straight down no longer shows the inside of the neck; a Space hold captures the pointer. The user has since described new limb controls (keys 1 to 4 and a double click choose the limb): the click rule is the base for those and will be replaced by them.
+
+Not done from the notes of this day: the brain turned half a turn with eyeballs and their nerves (in work); the limb keys 1 to 4, the double click, the number view, a highlight for every control, the whole natural range for every limb and the faster slow turn; the roll gesture; longer limbs and the two bodies more level; a smaller, flatter chest.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

@@ -981,7 +981,10 @@ export const GLOW_LINKS = Object.freeze({ minLevel: 0.02 });
 export const GLOW_LINK_LABEL = 'The glow shows which brain area drives which muscles in this game. It is a picture, not a nerve: ' +
   'real signals go from the brain down the spinal cord and along nerves to the muscles. All activity here is simulated.';
 /** Brain drag limit: |pitch offset| of the dragged brain placement (degrees). Yaw wraps freely. */
-export const BRAIN_GRAB = Object.freeze({ pitchLimitDeg: 75 });
+/* 19 November 2026 (a check: a held brain stopped following the look about 72 degrees up while the view went on to 88,
+ * so on letting go you were no longer looking at where you held it): 75 -> 88, the view's own limit (ns-app HEAD_LOOK
+ * viewUpDeg / viewDownDeg). */
+export const BRAIN_GRAB = Object.freeze({ pitchLimitDeg: 88 });
 /** Double-tap window in seconds (press to press), from ns-controls DOUBLE_TAP_MS. */
 export const DOUBLE_TAP_SECONDS = DOUBLE_TAP_MS / 1000;
 /**

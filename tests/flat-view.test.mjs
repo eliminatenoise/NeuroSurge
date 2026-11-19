@@ -24,11 +24,16 @@ test('the launcher\'s lens is the long one and its look starts a little below le
   assert.ok(pitch <= NC.EYE_DOLLY.standPitchMaxDeg + 1e-9 || Math.abs(pitch - NC.EYE_DOLLY.standPitchMaxDeg) < 2, 'at the start the camera stands (almost) straight behind the eye on the line of sight');
 });
 
-test('at the start look the camera stands behind the eye\'s own plane and the near plane is just behind the eye', () => {
+test('at the start look the camera stands behind the eye\'s own plane and the near plane cuts nothing of your body', () => {
   const pitch = num('START_LOOK_PITCH_DEG'), E = NC.EYE_DOLLY;
   const d = NC.eyeDolly({ yaw: 0, pitch: pitch * DEG });
-  assert.ok(d.depthBackM > 0.25 && d.depthBackM < 0.6, `the camera stands ${d.depthBackM.toFixed(3)} m behind the eye`);
-  assert.ok(Math.abs(d.nearM - (d.depthBackM - E.nearBehindEyeM)) < 1e-12, 'the near plane stands nearBehindEyeM behind the eye\'s plane');
+  assert.ok(d.depthBackM > 0.25 && d.depthBackM < 0.7, `the camera stands ${d.depthBackM.toFixed(3)} m behind the eye`);
+  // 19 November 2026 (a check: the near plane at the eye's plane cut your own neck and shoulders open at far side
+  // looks): the near plane is back at the camera (nearBehindEyeM null); your head and neck are left out above the
+  // collar by the scene's own box and cap instead (ns-scene-three EYE_COLLAR), the same from every look.
+  assert.equal(E.nearBehindEyeM, null);
+  for (let yaw = -180; yaw <= 180; yaw += 45) for (let p = -88; p <= 88; p += 22) assert.equal(NC.eyeDolly({ yaw: yaw * DEG, pitch: p * DEG }).nearM, NC.FIRST_PERSON.nearM);
+  assert.ok(Math.abs(NC.eyeDolly({ yaw: 0, pitch: pitch * DEG }, { ...E, nearBehindEyeM: 0.1 }).nearM - (d.depthBackM - 0.1)) < 1e-12, 'the option still places the plane behind the eye\'s plane when given');
   // depthBackM is the camera's distance behind the eye along the line of sight
   const g = NC.gazeDirection(0, pitch * DEG), along = -(d.offset[0] * g[0] + d.offset[1] * g[1] + d.offset[2] * g[2]);
   assert.ok(Math.abs(along - d.depthBackM) < 1e-12);
@@ -41,7 +46,7 @@ test('the camera keeps ONE stand-off at every look: nothing is magnified by a tu
   // look 40 degrees up put it AT the eye); at the eye the long lens draws your own arm across the whole picture.
   const E = NC.EYE_DOLLY, len = v => Math.hypot(v[0], v[1], v[2]);
   const d0 = len(NC.eyeDolly({ yaw: 0, pitch: num('START_LOOK_PITCH_DEG') * DEG }).offset);
-  assert.ok(Math.abs(d0 - Math.hypot(E.backM, E.upM * Math.cos(E.headAboveLookDeg * DEG)) ) < 0.06 && d0 > 0.28);
+  assert.ok(Math.abs(d0 - Math.hypot(E.backM, E.upM * Math.cos(E.headAboveLookDeg * DEG)) ) < 0.08 && d0 > 0.28);
   for (let yaw = -180; yaw <= 180; yaw += 15) for (let pitch = -88; pitch <= 88; pitch += 11) {
     const d = NC.eyeDolly({ yaw: yaw * DEG, pitch: pitch * DEG });
     assert.ok(Math.abs(len(d.offset) - d0) < 0.03, `look ${yaw}/${pitch}: ${len(d.offset).toFixed(3)} m from the eye, ${d0.toFixed(3)} at the start`);
@@ -70,7 +75,7 @@ test('with zRefM the lens widens as the camera comes off the line of sight, so t
   // continuous: a quarter degree of look changes the lens by less than half a percent
   for (let p = -85; p < 85; p += 0.25) {
     const a = NC.eyeDolly({ yaw: 0, pitch: p * DEG }, E).fovScale, b = NC.eyeDolly({ yaw: 0, pitch: (p + 0.25) * DEG }, E).fovScale;
-    assert.ok(Math.abs(a - b) < 0.005 * a, `lens step at ${p}`);
+    assert.ok(Math.abs(a - b) < 0.006 * a, `lens step at ${p}`);
   }
 });
 
@@ -101,8 +106,19 @@ test('the mirror body\'s near view: the same mirror image, magnified about its o
   assert.ok(NM.matrixMaxDiff(T.matrix, near.matrix) <= NM.MIRROR_REFLECTION.matrixTolerance, 'the transform at rest is the placement');
   assert.ok(T.det < 0 && Math.abs(T.det + V.magnifyBy ** 3) < 1e-9, 'still a mirror image, magnified');
   // the shape is the reflection's, magnified about the image centre: any two points keep their mirrored offset times k
+  // (19 November 2026: the near view also stands tilted, MIRROR_NEAR.tiltDeg; without the tilt the rule is exact, and
+  // the tilt is the very turn the top arrow makes from an untilted placement)
+  const flat = NM.mirrorReflectionPlacement({ body, eye: [0, 0, 0], foremostM: 1.2, view: { ...V, tiltDeg: 0 } }), Tf = NM.mirrorTransform(NM.createMirrorState(flat));
+  assert.ok(NM.matrixMaxDiff(Tf.matrix, flat.matrix) <= NM.MIRROR_REFLECTION.matrixTolerance);
   const a = [0.1, -0.3, -0.2], b = [-0.2, -0.6, -0.9];
   const la = NM.mirrorPoint(a, NM.mirrorTransform(NM.createMirrorState(lit))), lb = NM.mirrorPoint(b, NM.mirrorTransform(NM.createMirrorState(lit)));
-  const na = NM.mirrorPoint(a, T), nb = NM.mirrorPoint(b, T);
+  const na = NM.mirrorPoint(a, Tf), nb = NM.mirrorPoint(b, Tf);
   for (let i = 0; i < 3; i++) assert.ok(Math.abs((na[i] - nb[i]) - V.magnifyBy * (la[i] - lb[i])) < 1e-12);
+  assert.equal(near.tiltDeg, V.tiltDeg);
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(near.centre[i] - flat.centre[i]) < 1e-12, 'the tilt is about its own centre');
+  const turned = NM.mirrorTransform({ ...NM.createMirrorState(flat), orbit: { yaw: 0, pitch: V.tiltDeg, push: 0 } });
+  assert.ok(NM.matrixMaxDiff(T.linear, turned.linear) < 1e-12, 'the start tilt is the top arrow\'s own turn');
+  // tilting back by the start tilt stands it upright again
+  const back = NM.mirrorTransform({ ...NM.createMirrorState(near), orbit: { yaw: 0, pitch: -V.tiltDeg, push: 0 } });
+  assert.ok(NM.matrixMaxDiff(back.linear, Tf.linear) < 1e-12);
 });

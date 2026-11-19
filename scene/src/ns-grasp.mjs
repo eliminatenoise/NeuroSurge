@@ -53,6 +53,43 @@ export const LIMB_GRASP = Object.freeze({
   rollDegPerPx: 0.4
 });
 
+/**
+ * 19 November 2026 (a check: looking round with a limb held ran at 48 to 55 frames a second; the solve was 4 to 5 ms
+ * of every frame). The solve's options for a limb that FOLLOWS a moving target frame after frame (ns-app
+ * stepLimbGrasp): each iteration poses the whole body three times, the target moves only a few mm a frame, and the
+ * next frame goes on from where this one ended, so two iterations a frame track it; minGain ends the frame's solve as
+ * soon as an iteration no longer brings the end 5% nearer (a target out of reach or a joint at its limit used to burn
+ * all six iterations on every frame).
+ */
+export const LIMB_TRACK = Object.freeze({ ...LIMB_GRASP, solveIters: 2, minGain: 0.05 });
+
+/**
+ * 19 November 2026 (a check: "a few ordinary looks tear the shoulder ... a controlled arm stays inside poses that draw
+ * whole"). The range a HELD or CONTROLLED limb's joints are solved in (Space, a click and the keys; degrees), inside
+ * the body's own limits. The right shoulder only: carried by the look or the keys its solve ran to the ends of the
+ * anatomical range (sideways lift 180, the arm straight up beside the head), where the upper arm's muscles are drawn
+ * as stretched sheets and the hand passes the view point. A movement switched on from the brain still has the whole
+ * range. Display choice, found on pictures.
+ */
+export const LIMB_HOLD_LIMITS = Object.freeze({ r_shoulder_abd: Object.freeze([0, 80]), r_shoulder_flex: Object.freeze([-25, 105]) });
+/** limits with LIMB_HOLD_LIMITS applied for the pose `now` ({ jointId: degrees }): each capped joint keeps the side of
+ * its cap it is already beyond (a joint a brain movement took past the cap is not snapped back; it can only come in).
+ * Pure; returns `limits` itself when no cap applies to this limb. */
+export function holdLimits(limits, limb, now, caps = LIMB_HOLD_LIMITS) {
+  const c = LIMB_CHAIN[limb];
+  if (!c || !limits || !caps) return limits;
+  let out = limits;
+  for (const id of c.joints) {
+    const cap = caps[id], L = limits[id];
+    if (!cap || !L) continue;
+    const v = now && Number.isFinite(now[id]) ? now[id] : null;
+    const lo = Math.max(L[0], v === null ? cap[0] : Math.min(cap[0], v)), hi = Math.min(L[1], v === null ? cap[1] : Math.max(cap[1], v));
+    if (out === limits) out = { ...limits };
+    out[id] = [lo, hi];
+  }
+  return out;
+}
+
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = a => Math.hypot(a[0], a[1], a[2]);
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
@@ -83,6 +120,53 @@ function dlsStep(J, e, lambda) {
   return J.map(c => c[0] * y[0] + c[1] * y[1] + c[2] * y[2]);
 }
 
+/**
+ * 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view").
+ * LIMB_CLICK is how that sentence is read. A plain click on one of your own limbs makes it the CONTROLLED limb:
+ * W / A / S / D then move its end (level: A / D sideways, W farther, S nearer) instead of the left arm, and a
+ * press-and-drag on it turns and bends it as always. The look stays free and does NOT carry the limb (followsLook
+ * false): a check found that a limb which follows every look ends up under the crosshair, in front of the motor
+ * strip and the mirror body, with no way to look at the brain without moving it.
+ * "Until we change the camera view" is read both ways the owner uses those words: control ends when the view is
+ * changed with E, AND when the look has turned lookAwayDeg away from where the limb was clicked or last moved (the
+ * limb has left the middle of the picture: you are looking at something else). It also ends with a click on the same
+ * limb again, a click on nothing (open space or bare brain), a click on another limb (that one is taken) and Reset
+ * body.
+ *   followsLook  true: the earlier reading (the limb's end follows the look as while Space holds it; only E, a click
+ *                and Reset end it). Kept behind this switch for the lead's decision; lookAwayDeg is not used then.
+ *   lookAwayDeg  null: looking away never ends it (only E and clicks do).
+ */
+export const LIMB_CLICK = Object.freeze({ followsLook: false, lookAwayDeg: 24 });
+
+/**
+ * Which own limb a click controls after an event. latch: the limb controlled now ('rightArm' | 'rightLeg' |
+ * 'leftLeg') or null. Events:
+ *   { type: 'click', limb }           a plain click on own limb `limb`: it is taken; the controlled limb itself: let go;
+ *                                     'leftArm' (the game arm, which the keys move anyway): no limb is controlled
+ *   { type: 'click', nothing: true }  a plain click on nothing (open space, bare brain): let go
+ *   { type: 'click' }                 a click on anything else (a motor area, an arrow, the mirror body): no change
+ *   { type: 'view' }                  the view was changed (E)
+ *   { type: 'look', awayDeg }         how far the look has turned from where the limb was clicked or last moved
+ *   { type: 'reset' }                 Reset body
+ * Anything else (Space pressed or let go, a pause, a lost focus) leaves it as it is. Pure.
+ */
+export function limbLatchAfter(latch, ev, rule = LIMB_CLICK) {
+  const cur = typeof latch === 'string' && latch !== 'leftArm' && LIMB_CHAIN[latch] ? latch : null;
+  if (!ev || typeof ev !== 'object') return cur;
+  if (ev.type === 'view' || ev.type === 'reset') return null;
+  if (ev.type === 'look') return cur && rule && rule.followsLook !== true && Number.isFinite(rule.lookAwayDeg) && Number.isFinite(ev.awayDeg) && ev.awayDeg > rule.lookAwayDeg ? null : cur;
+  if (ev.type === 'click') {
+    if (ev.nothing === true || ev.limb === 'leftArm') return null;
+    if (typeof ev.limb === 'string' && LIMB_CHAIN[ev.limb]) return ev.limb === cur ? null : ev.limb;
+  }
+  return cur;
+}
+/** The angle (degrees) between two looks ({ yaw, pitch } in radians). Pure. */
+export function lookAwayDeg(a, b) {
+  if (!a || !b) return 0;
+  const d = Math.sin(a.pitch) * Math.sin(b.pitch) + Math.cos(a.pitch) * Math.cos(b.pitch) * Math.cos(a.yaw - b.yaw);
+  return Math.acos(Math.max(-1, Math.min(1, d))) * 180 / Math.PI;
+}
 /**
  * Joint angles that bring the limb's end to targetMm (drawn mm), each inside limits[id] = [lo, hi] (degrees).
  * segmentsFor(targets) -> the posed segments for a full targets object (ns-body poseBodySegments with the drawn
@@ -117,9 +201,12 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
   // the elbow / knee, moving it up or sideways swings the whole limb at the shoulder / hip, as a person would).
   const rootJoints = c.joints.filter(id => id !== c.bend);
   let end = limbPoint(rig, seg, limb, 'end'), it = 0;
+  let lastErr = Infinity;
   for (; it < opts.solveIters; it++) {
-    const e = sub(targetMm, end);
-    if (len(e) <= opts.tolMm) break;
+    const e = sub(targetMm, end), err = len(e);
+    if (err <= opts.tolMm) break;
+    if (Number.isFinite(opts.minGain) && lastErr - err < opts.minGain * lastErr) break; // (LIMB_TRACK: no longer getting nearer)
+    lastErr = err;
     const J = rootJoints.map(id => {
       const h = q[id] + opts.probeDeg <= lim(id)[1] ? opts.probeDeg : -opts.probeDeg;
       const p = limbPoint(rig, segmentsFor({ ...q, [id]: q[id] + h }), limb, 'end');

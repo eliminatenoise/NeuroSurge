@@ -2496,7 +2496,7 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
 export const BRAIN_VIEW = freezeR2({
   tiltDeg: 0, orbitStepDeg: 15, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 30,
   fill: 0.85, compactFill: 0.78, compactAspect: 1.45, aimDistance: 6,
-  reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 75,
+  reachM: 1.0, clearanceM: 1.0, grabPitchLimitDeg: 88, // (19 November 2026: 75 -> 88, with ns-actions BRAIN_GRAB)
   framing: 'brain', facing: true, heightFill: 0.96, comfortDeg: 40,
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,

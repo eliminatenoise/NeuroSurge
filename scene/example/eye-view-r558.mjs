@@ -89,7 +89,18 @@ const EYE_FOV_Y_DEG = 54;
 // 30 down (whole torso, but the strip's top cut and the mirror body wedged between your knees), 15 and 20 down (the
 // cleanest stack, but no torso at all), the mirror body in the strip's hollow (too small to read) and beside the
 // legs (it stood inside your own arm), a wider lens (the open root of the neck came into the lower edge).
-const START_LOOK_PITCH_DEG = -24, BRAIN_START_PITCH_DEG = -13;
+// 19 November 2026, after a check (the strip's top areas were cut by the top edge at 16:9; the mirror body stood between
+// your own thighs with the crosshair on its neck, so a muscle name was on screen before the player had done anything;
+// with the crosshair on the strip's outermost areas the mirror body was out of the picture; the tops of the shoulders
+// were cut). The layout now: the mirror body stands IN THE HOLLOW of the strip's U, in front of the brain's midline
+// and tilted toward you (ns-mirror MIRROR_NEAR), so it is in the picture with every strip area and is covered by
+// nothing; the strip is a little smaller (ns-app BRAIN_START_MOTOR_FRAC 0.43) and all of it is inside the picture at
+// 16:9; the look starts 25.5 degrees down, on the bare brain just under the strip and its lower arrow; and the camera
+// stands further back (ns-camera EYE_DOLLY 0.5 m), so your whole front, both shoulders included, lies in the lower
+// part of the picture (your neck ends in a plain cap at the collar: ns-scene-three EYE_COLLAR). The price: your own
+// limbs are drawn about a sixth smaller than on 18 November, and the mirror body is about 235 px tall at 1600x900
+// (it was 290 between your knees).
+const START_LOOK_PITCH_DEG = -25.5, BRAIN_START_PITCH_DEG = -13;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.
 export const CONFIGURED_R302_SIGNATURE = JSON.stringify(viewGraph);
@@ -521,7 +532,8 @@ export async function assertConfiguredBoot() {
   // start matrix is the plane reflection followed by the app's own placement, so it is no longer the pure reflection
   // entry for entry. It must still be a mirror image (its 3 x 3 part has a negative determinant) of unchanged size.
   const det3 = mx[0] * (mx[5] * mx[10] - mx[6] * mx[9]) - mx[4] * (mx[1] * mx[10] - mx[2] * mx[9]) + mx[8] * (mx[1] * mx[6] - mx[2] * mx[5]);
-  requireCase(pure.every(Number.isFinite) && det3 < 0 && Math.abs(Math.abs(det3) - 1) < 0.5, 'the start mirror matrix must be a mirror image of about the body\'s own size');
+  // (its drawn size is the app's own choice for the start picture: between a fifth of the body's size and one and a half times it)
+  requireCase(pure.every(Number.isFinite) && det3 < 0 && Math.cbrt(-det3) > 0.2 && Math.cbrt(-det3) < 1.5, 'the start mirror matrix must be a mirror image of the body, between a fifth and one and a half times its size');
   // 19 November 2026: the game starts playing at once (the controls card shows over it for a few seconds); the timed
   // intro page is gone.
   requireCase(typeof observations.firstReadyReadback.shell.mode === 'string' && observations.firstReadyReadback.shell.mode !== 'error', 'first ready must not be the error page');

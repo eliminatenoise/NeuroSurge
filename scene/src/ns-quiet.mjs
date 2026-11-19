@@ -162,7 +162,7 @@ export function createQuietUi({ doc, root }) {
   promptSkip.setAttribute('aria-hidden', 'true');
   promptSkip.hidden = true;
   let tipKey = null, promptText = '', countText = '', skipText = '', placeKey = '', shown = true;
-  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true } = {}) {
+  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
     const key = model ? model.key : null;
@@ -201,7 +201,9 @@ export function createQuietUi({ doc, root }) {
     }
     if (model) {
       // Below and to the right of the point; flipped to the other side near the right or bottom edge.
-      const right = x > width * 0.72, low = y > height * 0.7;
+      // 19 November 2026 (side 'left'): the tip of an area on the brain's left half opens to the LEFT of the point,
+      // away from the mirror body, which stands in the hollow between the strip's two halves (it used to cover it).
+      const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
       const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}`;
       if (pk !== placeKey) {
         placeKey = pk;
@@ -216,5 +218,8 @@ export function createQuietUi({ doc, root }) {
     if (c !== countText) { countText = c; promptCount.textContent = c; promptCount.hidden = c === ''; }
     if (k !== skipText) { skipText = k; promptSkip.textContent = k; promptSkip.hidden = k === ''; }
   }
-  return { update, dispose() { try { layer.remove(); } catch { /* gone */ } } };
+  /** The tip goes away until the next update (the game was left for the Esc page: no frame, so no update, comes while
+   * it shows, and the tip of the moment stayed drawn under the page). */
+  function hideTip() { tipKey = null; placeKey = ''; tip.hidden = true; }
+  return { update, hideTip, dispose() { try { layer.remove(); } catch { /* gone */ } } };
 }

@@ -139,6 +139,15 @@ export const MIRROR_CARRY = Object.freeze({ maxSideDeg: 35 });
  *  minDistM  the distance the speed is counted from when the thing is nearer than this.
  * Before, the brain moved 1 m a second at 7.5 m (it crawled) and the mirror body 1 m a second at 2 m. Display choices. */
 export const CARRY_KEYS = Object.freeze({ ratePerS: 0.7, easeS: 0.1, minDistM: 0.8 });
+/**
+ * 19 November 2026 (the owner: "let's also change it such that we can move both the mirror body and the brain into
+ * ourselves. And basically through ourselves and through anything."). true: a carried brain or mirror body is stopped
+ * by nothing. The brain's key range is twice its start distance (to you, through you and as far again behind); the
+ * mirror body's near limit is gone (its W / S range runs from farM in front to farM behind) and a press takes hold of
+ * it at any distance, also when it stands in you. The app's stop-at-contact guards are switched off with the same
+ * constant (ns-app guardMirror / guardBrain). false: the rules of before (Message 12: things stop where they touch).
+ */
+export const CARRY_THROUGH = true;
 export function initialObjectCarry() {
   return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], keyVel: [0, 0], mirror: null, diagnostic: null };
 }
@@ -204,7 +213,7 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
   // stopped half way to you (offset = start distance - distance <= distance).
   const ownPlace = Array.isArray(brainCentre) || ArrayBuffer.isView(brainCentre) ? Array.from(brainCentre).map((v, i) => v - previousKeysWorld[i] - o[i]) : null;
   const centreNow = ownPlace ? Math.hypot(...ownPlace) : 0;
-  const keyBudgetM = Math.max(clearance, Number.isFinite(centreNow) ? centreNow : 0); // finite workspace
+  const keyBudgetM = (CARRY_THROUGH ? 2 : 1) * Math.max(clearance, Number.isFinite(centreNow) ? centreNow : 0); // finite workspace
   const bounds = { brainKeyFarOffsetM: keyBudgetM, originalMinBrainDistanceM: minimum, originalReachM: reach, originalClearanceM: clearance, cameraReferenceShiftM: cameraShift, initialReferenceOriginM: reference, baselineClearanceLowerBoundM: minimum - cameraShift, unchangedRequiredMinimumM: reach + clearance, clearanceStatus: 'near bound checked against actual transformed source sample balls; global scalar is context only' };
   let heldPoseS = 0, clamped = false, selected = null, brainClearance = null, refused = null;
   let carryLook = prior.lastLook ? { ...prior.lastLook } : { ...look };
@@ -247,6 +256,17 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
    * apply and its height stays). */
   const moveHeld = (delta, keyed) => {
     if (target === 'brain') {
+      // 19 November 2026 (a check: A or D carried a held brain 45 to 53 degrees to the side, out of the picture, while
+      // the mirror body stopped at 35): the keys' sideways limit is the mirror body's own (MIRROR_CARRY.maxSideDeg of
+      // straight ahead of the look, as an angle; a brain already farther out is not pulled in, it only goes no farther).
+      if (keyed && (Array.isArray(brainCentre) || ArrayBuffer.isView(brainCentre))) {
+        const gi = rigidInverse(groundRotation), now = Array.from(brainCentre).map((v, i) => v + brainMovementWorld[i] - o[i]);
+        const lb = transformDirection(gi, now), ln = transformDirection(gi, now.map((v, i) => v + delta[i]));
+        const depthB = Math.max(0.5, -lb[2]), depthN = Math.max(0.5, -ln[2]);
+        const maxX = depthN * Math.max(Math.tan(MIRROR_CARRY.maxSideDeg * DEG), Math.abs(lb[0]) / depthB);
+        const cx = Math.max(-maxX, Math.min(maxX, ln[0]));
+        if (cx !== ln[0]) { ln[0] = cx; clamped = true; const w = transformDirection(groundRotation, ln); delta = w.map((v, i) => v - now[i]); }
+      }
       const localDelta = transformDirection(invK, delta), next = keys.map((v, i) => v + localDelta[i]);
       const n = Math.hypot(...next); if (n > keyBudgetM) { next.forEach((v, i) => { next[i] = n > 0 ? v * keyBudgetM / n : 0; }); clamped = true; }
       if (typeof constrainBrainMovement !== 'function') fail('current whole-brain source clearance constraint unavailable');
@@ -265,14 +285,17 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
         // R17: a lifted mirror body keeps its level depth (the far cap never pulls it in because of its height).
         const depthNow = -transformDirection(rigidInverse(groundRotation), before.map((v, i) => v - o[i]))[2];
         const far = Math.max(Math.sqrt(Math.max(0, b.farM * b.farM - local[1] * local[1])), depthNow);
-        const wantedDepth = depth; depth = Math.max(b.nearM, Math.min(Math.max(b.nearM, far), depth));
+        const nearLimit = CARRY_THROUGH ? -Math.max(b.nearM, far) : b.nearM; // through you and as far again behind
+        const wantedDepth = depth; depth = Math.max(nearLimit, Math.min(Math.max(b.nearM, far), depth));
         // Sideways: inside the view, and within MIRROR_CARRY.maxSideDeg of straight ahead (or no farther out than now).
         // R558 (hunt 3): "no farther out" is an ANGLE (sideways over depth), not a sideways distance: kept as a distance,
         // S (pulling it in) let the angle grow to the edge of the view. The depth before is floored at nearM.
         const lb = transformDirection(rigidInverse(groundRotation), before.map((v, i) => v - o[i]));
         const xBefore = lb[0], depthBefore = Math.max(b.nearM, -lb[2]);
         const tan = Math.tan(viewport.fovYDeg * DEG / 2), side = Math.tan(MIRROR_CARRY.maxSideDeg * DEG);
-        const maxX = Math.min(depth * tan * viewport.aspect, depth * Math.max(side, Math.abs(xBefore) / depthBefore));
+        // (CARRY_THROUGH: near you and behind you the sideways room is that of the near limit's distance, not nothing)
+        const depthX = CARRY_THROUGH ? Math.max(b.nearM, Math.abs(depth)) : depth;
+        const maxX = Math.min(depthX * tan * viewport.aspect, depthX * Math.max(side, Math.abs(xBefore) / depthBefore));
         const wantedX = local[0]; local[0] = Math.max(-maxX, Math.min(maxX, local[0])); local[2] = -depth;
         const world = transformDirection(groundRotation, local); next.splice(0, 3, ...world.map((v, i) => v + o[i]));
         next[1] = before[1];
@@ -328,7 +351,7 @@ export function stepObjectCarry(previous, { pick = null, events = [], gazeAt = 0
         const nearM = radius + cameraNear, farM = Math.max(depth + 2 * radius, nearM + 2 * radius);
         // A carry never starts inside its geometry-derived near limit; such a press holds nothing (it used to stop the
         // frame, and every following frame, until the display rescue reset the game).
-        if (!(Number.isFinite(depth) && depth >= nearM && Number.isFinite(farM))) { refused = 'picked mirror is inside its geometry-derived near limit'; continue; }
+        if (!(Number.isFinite(depth) && (CARRY_THROUGH || depth >= nearM) && Number.isFinite(farM))) { refused = 'picked mirror is inside its geometry-derived near limit'; continue; }
         mirror = { centreWorldM: point, radiusM: radius, bounds: mirror ? { ...mirror.bounds, nearM: Math.max(mirror.bounds.nearM, nearM), farM: Math.max(mirror.bounds.farM, farM) } : { nearM, farM, basis: 'source mirror bounding radius plus actual near plane; far extends one source object diameter' },
           anchor: { origin: carryOrigin.slice(), pivotWorld: point.slice(), startLook: { ...carryLook } } };
       }

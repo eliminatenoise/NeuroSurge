@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-38",
+  "version": "experimental-2026-11-19-body-update-39",
   "experimental": true,
-  "source": "Body update 38. The early comic look with little gloss, a pinker brain, blacker blacks; a look switches an area on; a press drives hard, eases back and repeats; finer mesh packs and a loading guard.",
+  "source": "Body update 39. Cones of light from a movement's key to each muscle it drives; lit areas almost white; a glossy brain; carried things pass through everything; a click takes control of a limb.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 264139,
-      "sha256": "d30b6621687d5e2ad41f26f697645797f2ffe14b8e78e4e5f2551bb604a559e3"
+      "bytes": 269777,
+      "sha256": "3a916defc6e9cbcb398ffedbe896164aa3f5a2d344ad6499a7fa64c1d254346a"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9046,
-      "sha256": "3cd24bfa39576043030366a30010d19a89bbbfb54ab40a3b3aaae5c585f98f85"
+      "bytes": 9081,
+      "sha256": "83592a5aac55d6ddcfdf3fe9b40e349122c5e93df6ab3628f292336309e74873"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 59501,
-      "sha256": "21ed9be382eff46f80f4f387ecb8dd7c52113cd3fe689162a468ada747954e66"
+      "bytes": 59929,
+      "sha256": "1bdbea2973277dacf303d48737226d7859d98fef6b60427a3bfa9140accd72bb"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 34757,
-      "sha256": "c72533fc7e55fcafe73bef2cd27a3682ce7e8b905a6a8b51a479a51c01c4b86d"
+      "bytes": 35838,
+      "sha256": "be877cee3ee1aebd6fd7a57ae72441eac690fb9861d26f8e4f7cce3936a5fbb4"
     },
     {
       "path": "README.md",
-      "bytes": 18039,
-      "sha256": "0f935a111484ec5ed50c7a6707f878ed09561c5f393fd50ab569438406246a32"
+      "bytes": 18437,
+      "sha256": "8fac36508133dafce0f3b90e77ee091004263762972e2ea11d149c900e0e3f3a"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "cdedc86db1752c1c4263cb35be14ccdf6a5725b3d1c9aaae8a11350118a2ad56"
+      "sha256": "4bd28d765153f4fe7818aea9ee8a7c29ebef6f6b645462e7484660e3840b31c7"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "dae5ac01b1d71e185de0448f6399f7359a58a58ad4126dcf220a113e33cf5268"
+      "sha256": "34f2a7cee79c3739aa253bddf17c797011e40c40d64253ebd7cc286a1eef2b29"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3847,8 +3847,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 53620,
-      "sha256": "230a7aa931f0ac3d33c33e602b72d41c242ed9ad51d92afba2ca4ff3e80c4faf"
+      "bytes": 55013,
+      "sha256": "7eb4cb24e490cf428a6501b85e2d7fe2e5e53d0f7c769c9b6963d69e9a3f0ffb"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3937,13 +3937,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 212749,
-      "sha256": "15e09f2122788874d0be5b623804d96f054d9932b47fe54b0fa58cbc6c78648f"
+      "bytes": 213020,
+      "sha256": "b750a23c4f2316f545044350060de2a8d4741970b71ece1889e55fbc464e44a1"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 761543,
-      "sha256": "de86f64763c7eda28731c01b27dbf730a26f3b60fac2da1f4eb7a8e3d0166eef"
+      "bytes": 774273,
+      "sha256": "6c71e9fbbf539f925e6a7d6cdb9c3959334df0b10177bd6044add47295dced53"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3957,8 +3957,8 @@
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
-      "bytes": 35069,
-      "sha256": "49ad94a7edc0c64248ad11eba4a9884c63f4bfcd653701446cae031a12f72506"
+      "bytes": 35071,
+      "sha256": "e7687bf830fed73a1e6c6e8d7df740abf0f588ad0561988f565db0f42366d5dd"
     },
     {
       "path": "scene/src/ns-assembly-order.mjs",
@@ -3997,8 +3997,8 @@
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 62123,
-      "sha256": "c42632d0e79ea91b92f24a6c53eb081263b6cc7c02eab128e52b0d2cf419eef2"
+      "bytes": 62438,
+      "sha256": "805e6121473bb055eb62994ce6aaffa64a66853bb633ab44365f2a3117c744bb"
     },
     {
       "path": "scene/src/ns-brain-live.mjs",
@@ -4007,13 +4007,13 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 257310,
-      "sha256": "3a24a6cfb0a2bbcf0f1b028823a16f8286ca009c5c6f4b522f95db5d9d394095"
+      "bytes": 257370,
+      "sha256": "6bfbe812fff058ae042feea8049c8593771b9ff2b81cf4577f8f36e85d747fce"
     },
     {
       "path": "scene/src/ns-camera.mjs",
-      "bytes": 70598,
-      "sha256": "b4d5d4138fb006240410394cfcdf67cab41a3ee30ae1e2264be4358359f8521d"
+      "bytes": 73046,
+      "sha256": "ac8fceb06e94b011c522559e708c028ad9f31890280e101692d6c1aa32c25cb1"
     },
     {
       "path": "scene/src/ns-collide.mjs",
@@ -4022,8 +4022,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 104014,
-      "sha256": "b3397814045534039a7f2fdc6e94cdbf17da13f7bd2ebf83728686c51815a39e"
+      "bytes": 104555,
+      "sha256": "3b5781342cc4fc1c7b153a089f5963ce15acf389effb2cca6fc5b34597b356a6"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4042,8 +4042,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 96810,
-      "sha256": "75a190571fd1c05ab56cb18841cf586d025ea980316ef91ebf03fcab1ea3bb32"
+      "bytes": 98055,
+      "sha256": "a5d0898146d2ce178f9052ef72c4aa35d60575492c0b6acce2b6b8e5dd97d9f2"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4062,8 +4062,8 @@
     },
     {
       "path": "scene/src/ns-grasp.mjs",
-      "bytes": 12686,
-      "sha256": "411526861171fe5d7718a58684244567e1f007f567363e8f20db5912a69ac85d"
+      "bytes": 18684,
+      "sha256": "a97be9a0f6bb3cea5e73d411c83e4d6d5c15d2f8c842676b0a4a945e292cff0d"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -4077,8 +4077,8 @@
     },
     {
       "path": "scene/src/ns-links.mjs",
-      "bytes": 6757,
-      "sha256": "e066cf3ba5f0cb9a543e377d9d47070d859210cecf79ecded02b65a0f70fb57e"
+      "bytes": 15335,
+      "sha256": "c00a1e535d4109afe537ac36e08e7c3374e8fd12f43393ac7887abb5d62ecfb4"
     },
     {
       "path": "scene/src/ns-load-guard.mjs",
@@ -4097,8 +4097,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 49793,
-      "sha256": "6fed017d9a6ee5ddcff0a96c60866b1b2dea8e60d00994008828d63775420e6b"
+      "bytes": 53159,
+      "sha256": "7497cf85ff9c22979fcc6fd99feeb285f1a86c2c85dd571f4d94fbd5530a6de5"
     },
     {
       "path": "scene/src/ns-move-glow.mjs",
@@ -4142,8 +4142,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 13218,
-      "sha256": "358b8449380b428d332c9ef7db72495bb68e6b8e37c8c64377bf749b8b0924e0"
+      "bytes": 13781,
+      "sha256": "14a31f87cb61652d53595946706eafca994b41d7f84293fb980ed04159ae2583"
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
@@ -4152,8 +4152,8 @@
     },
     {
       "path": "scene/src/ns-reference-graph.mjs",
-      "bytes": 31519,
-      "sha256": "8b731f60608bd945f53a528883abf6c833cc34c1a75827d888ecab46f1dfd06e"
+      "bytes": 33715,
+      "sha256": "19a5813ba9dd23c1d9dff36ef37e4f275cd7a87f6d847a5ae7ee180676abeee7"
     },
     {
       "path": "scene/src/ns-regional-layers.mjs",
@@ -4172,8 +4172,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1094195,
-      "sha256": "48666c60dca92b51445f52e21b8b613040245a5db979fb617f167c45b8e9b99d"
+      "bytes": 1120063,
+      "sha256": "98f31e0b523cdcf0d0ddcd2a29bc6df95be9adec91f746e2714f3eb528e0ad34"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 138759,
-      "sha256": "d573f24a39f2137808aa352daa04b4ba617c5f1ab95ac1950dc280d45cf9b73b"
+      "bytes": 139809,
+      "sha256": "398271c0756e2dbe48a32917c07f37c94a29a2fd804fd19d3b274b8ebfe1162f"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4317,8 +4317,8 @@
     },
     {
       "path": "tests/flat-view.test.mjs",
-      "bytes": 9146,
-      "sha256": "5081e65c149534996c8e561fc07d086ac2d8a734784750b2f017fa5ab11eb314"
+      "bytes": 10868,
+      "sha256": "22b94ed1aafbd5e30d73566d1719598c5b89443809791c24f715775fb77fb7d3"
     },
     {
       "path": "tests/flesh.test.mjs",
@@ -4349,6 +4349,11 @@
       "path": "tests/joints.test.mjs",
       "bytes": 35464,
       "sha256": "31a10f8d8bbf35fab56f0a3a9f661acae1a99f8dfa0ec801793a12429c68447c"
+    },
+    {
+      "path": "tests/limb-click.test.mjs",
+      "bytes": 5598,
+      "sha256": "98fb14733bca0d25e55e306fb515a4d4c19e665f84cf31761abdffbc8007ea87"
     },
     {
       "path": "tests/limb-turn.test.mjs",
@@ -4459,6 +4464,11 @@
       "path": "tests/spine.test.mjs",
       "bytes": 16089,
       "sha256": "295a2f2e78d635bf3c4c44e4c78a0874eb1e3a548c2a9b1665ea28b577e9cb25"
+    },
+    {
+      "path": "tests/start-layout.test.mjs",
+      "bytes": 7891,
+      "sha256": "135d26ad590ea534d6d955f319febf5af35dff1b80e64c0ccb1dc62e04750bb5"
     },
     {
       "path": "tests/tutorial.test.mjs",

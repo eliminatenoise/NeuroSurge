@@ -684,7 +684,11 @@ export const AREA_LOOK = freeze({
   // display white with the bloom, and the white-hot frame): areaGain 2.4 -> 1.8 with areaNeon 1.8 -> 2.4 keeps an orange
   // key orange and a blue key blue while still above white (the bloom halo stays); the muscles' glow was hard to see on
   // the bodies: muscleGain 0.3 -> 0.42 and a stronger rim (1.0 -> 1.35), below the 0.55 that clipped a belly flat.
-  areaDarken: 0.7, areaGain: 1.8, areaNeon: 2.4, areaRimGain: 1.0,
+  // 19 November 2026 (the owner: "let's make brain activation almost bright white"): areaWhite: the share of white in a
+  // lit area's light (0 = its own neon colour alone, as before); at 0.8 a lit key is white-hot with a breath of its hue.
+  // (areaGain 1.8 -> 1.3 with it: white light carries all three channels, and at 1.8 its bloom hid the key's own shape
+  // and its neighbours)
+  areaDarken: 0.7, areaGain: 1.3, areaNeon: 2.4, areaWhite: 0.8, areaRimGain: 1.0,
   muscleGain: 0.42, muscleAlbedo: 0.5, muscleRimGain: 1.35, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
 });
 
@@ -773,7 +777,8 @@ export function areaNeonInto(regionId, v, gain, out, look = AREA_LOOK, glow = GL
   const k = glowIntensity(v, glow);
   const p = Number.isFinite(look.areaNeon) && look.areaNeon > 0 ? look.areaNeon : 1, s = k * (Number.isFinite(gain) ? gain : 1);
   const hi = Math.max(c[0], c[1], c[2]) || 1;
-  for (let i = 0; i < 3; i++) out[i] = Math.pow(Math.max(0, c[i] / hi), p) * s;
+  const w = Number.isFinite(look.areaWhite) ? Math.min(1, Math.max(0, look.areaWhite)) : 0; // 19 November: almost white
+  for (let i = 0; i < 3; i++) out[i] = (Math.pow(Math.max(0, c[i] / hi), p) * (1 - w) + w) * s;
   return k;
 }
 

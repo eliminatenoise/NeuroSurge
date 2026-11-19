@@ -71,7 +71,14 @@ export const MIRROR_VIEW = Object.freeze({ arrowGapFrac: 0.06, arrowSizeFrac: 0.
  * the camera pose). It is a view slide only: it is not part of the orbit, is not saved, does not count towards the
  * push limit and is 0 in the first-person view, where the literal reflection holds exactly.
  */
-export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, maxM: 4 });
+/* 19 November 2026 (a check: in the outside view the mirror body was 90 px tall at 1600x900, the lead's 230): in the eye
+ * view it stands small in the hollow of the motor strip (MIRROR_NEAR), which is right for a picture taken from your
+ * eyes; from outside, where the camera stands behind and above you, that place is far away and over the strip's leg
+ * areas. So from outside it is drawn magnifyBy times larger about its own centre (0.46 x 1.8 = 0.83 of the
+ * reflection's own size) and dropM lower, between the strip and your feet, eased with the camera's own blend
+ * (state.viewOutside 0 to 1). A view change only, like the slide: not saved, not part of the orbit. A mirror body that
+ * has been carried keeps the place it was put (no drop), and only its size changes with the view. */
+export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, maxM: 4, magnifyBy: 1.8, dropM: 0.6 });
 
 /**
  * R558: the literal reflection (display choices; the numbers measured at run time are reported by the scene).
@@ -101,7 +108,15 @@ export const MIRROR_REFLECTION = Object.freeze({ clearanceM: 0.05, matrixToleran
  * hands: magnifyBy 0.68 -> 0.95 (almost the reflection's own size: about 290 px tall at 1600x900, where 0.68 would be
  * 200) and dropM 1.0 -> 0.9. It is not higher than that because the strip's leg areas are directly above its head and
  * your knees directly below its feet; in the picture it is now in the middle, where the look starts. */
-export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.95, dropM: 0.9, nearerM: 0 });
+/* 19 November 2026, after a check (the owner said BOTH were far too low and only the brain had gone up; the mirror body
+ * stood between your own thighs with the crosshair on its neck, and it was out of the picture when the crosshair was
+ * on the strip's outermost areas): the mirror body now stands IN THE HOLLOW of the motor strip's U, in front of the
+ * brain's midline: dropM 0.9 -> -0.3 (0.3 m ABOVE the reflection's own height), magnifyBy 0.95 -> 0.48 (about 235 px
+ * tall at 1600x900: the hollow is no taller) and tiltDeg 22: so far up you would look at a lying body from its feet,
+ * so it stands tilted, its top toward you, as the top arrow tilts it, and is seen from the front as it was when it
+ * stood low. The tilt arrows start from there (ns-mirror mirrorTransform). It is in the picture with every strip
+ * area, clear of your own limbs, and nothing covers it. */
+export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.46, dropM: -0.33, nearerM: 0, tiltDeg: 22 });
 
 /** The rest-pose fallback body box (world m, seated BodyParts3D body at the default eye) used only when the integrator
  * passes no measured bounds: centre, half extents along body right / up / forward. Replaced by bodyBoundsFromPoints. */
@@ -327,6 +342,14 @@ export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearan
   }
   const toward = scale(n, -1).map(v => v + 0);
   const right = normalize(cross(UP, toward)).map(v => v + 0);
+  // 19 November 2026 (MIRROR_NEAR tiltDeg): the near view may stand tilted, its top toward you, about its own centre
+  // (the same turn the top arrow makes); the start / reset matrix is then exactly what mirrorTransform builds at rest.
+  const tiltDeg = view && Number.isFinite(view.tiltDeg) ? clamp(view.tiltDeg, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg) : 0;
+  if (tiltDeg !== 0) {
+    const B = basis4(right, UP, toward);
+    const lin = multiply(B, multiply(mirrorOrbitLocal(0, tiltDeg), multiply(transpose3(B), multiply(uniformScale(k), reflectionMatrix(n)))));
+    matrix = multiply(translation(centre), multiply(lin, translation(scale(c0, -1))));
+  }
   let reachS = null;
   if (reach !== null && reach !== undefined) {
     const rc = vec3(reach.centre, 'reach.centre');
@@ -337,7 +360,7 @@ export function mirrorReflectionPlacement({ body, eye, foremostM = null, clearan
     kind: 'ns-mirror-placement', rule: 'literal-reflection',
     plane: freeze({ normal: freeze(n), offsetM: offset, pointM: freeze(add(e, scale(n, d))), eyeM: freeze(e), distanceM: d, foremostM: fore, boxForemostM: boxFore, clearanceM }),
     matrix: freeze(Array.from(matrix)), centre: freeze(centre), distanceM: length(sub(centre, e)), scale: k,
-    pureMatrix: freeze(Array.from(pure)), view: view ? freeze({ ...view }) : null,
+    pureMatrix: freeze(Array.from(pure)), view: view ? freeze({ ...view }) : null, tiltDeg,
     toward: freeze(toward), right: freeze(right), up: UP, facingYawDeg: 0, reflectAxis: freeze(n), bodyCentre: freeze(c0), body,
     reach: reachS
   });
@@ -518,12 +541,17 @@ export function mirrorTransform(state) {
   const p = state.placement;
   if (!p) fail('state', 'the mirror has no placement yet (placeMirror after the body is measured)');
   const B = basis4(p.right, p.up, p.toward);
-  const pitch = clamp(Number.isFinite(state.orbit.pitch) ? state.orbit.pitch : 0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
+  // (19 November 2026: the placement's own start tilt, MIRROR_NEAR tiltDeg, is where the tilt arrows start from)
+  const tilt0 = Number.isFinite(p.tiltDeg) ? p.tiltDeg : 0;
+  const pitch = clamp((Number.isFinite(state.orbit.pitch) ? state.orbit.pitch : 0) + tilt0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
   const O = mirrorOrbitLocal(state.orbit.yaw, pitch);
   const F = rotY(p.facingYawDeg * DEG);
-  const lin = multiply(B, multiply(O, multiply(transpose3(B), multiply(F, multiply(uniformScale(p.scale), reflectionMatrix(p.reflectAxis))))));
+  // Outside view (MIRROR_OUTSIDE magnifyBy / dropM; state.viewOutside 0 to 1, the camera's own blend): larger and lower.
+  const vo = clamp(Number.isFinite(state.viewOutside) ? state.viewOutside : 0, 0, 1);
+  const viewScale = 1 + ((Number.isFinite(MIRROR_OUTSIDE.magnifyBy) ? MIRROR_OUTSIDE.magnifyBy : 1) - 1) * vo, viewDropM = p.worldCentre ? 0 : (Number.isFinite(MIRROR_OUTSIDE.dropM) ? MIRROR_OUTSIDE.dropM : 0) * vo; // (a carried body stays where it was put)
+  const lin = multiply(B, multiply(O, multiply(transpose3(B), multiply(F, multiply(uniformScale(p.scale * viewScale), reflectionMatrix(p.reflectAxis))))));
   const matrix = multiply(translation(p.centre), multiply(lin, translation(scale(p.bodyCentre, -1))));
-  const carryCentre = p.worldCentre ? vec3(p.worldCentre, 'persistent mirror world centre') : [p.centre[0], p.centre[1], p.centre[2]];
+  const carryCentre = p.worldCentre ? vec3(p.worldCentre, 'persistent mirror world centre') : [p.centre[0], p.centre[1] - viewDropM, p.centre[2]];
   for (let i = 0; i < 3; i++) matrix[12 + i] += carryCentre[i] - p.centre[i];
   // Push: along the ground (horizontal), away from the eye the plane was set from; never vertical.
   const push = clamp(Number.isFinite(state.orbit.push) ? state.orbit.push : 0, 0, MIRROR_ORBIT.push.maxM);
@@ -533,16 +561,17 @@ export function mirrorTransform(state) {
   // Outside view (MIRROR_OUTSIDE): the same slide, as far as the camera has backed away from your body.
   const viewAwayM = Number.isFinite(state.viewAwayM) && state.viewAwayM > 0 ? Math.min(state.viewAwayM, MIRROR_OUTSIDE.maxM) : 0;
   // A tilted body stands back by the extra reach of its box toward you (0 while it is upright).
-  const tiltAwayM = MIRROR_ORBIT.tiltClear && pitch !== 0 ? mirrorTiltAwayM(p, state.orbit.yaw, pitch) : 0;
+  // (with a start tilt, both stand-back rules count from the start: 0 at rest, so the rest matrix is the placement's)
+  const tiltAwayM = MIRROR_ORBIT.tiltClear && pitch !== tilt0 ? Math.max(0, mirrorTiltAwayM(p, state.orbit.yaw, pitch) - (tilt0 !== 0 ? mirrorTiltAwayM(p, 0, tilt0) : 0)) : 0;
   // Turned or tilted, it also stands back so the image of your left hand's reach stays behind the mirror plane.
-  const reachAwayM = MIRROR_ORBIT.reachClear && p.reach ? mirrorReachAwayM(p, state.orbit.yaw, pitch) : 0;
+  const reachAwayM = MIRROR_ORBIT.reachClear && p.reach ? Math.max(0, mirrorReachAwayM(p, state.orbit.yaw, pitch) - (tilt0 !== 0 ? mirrorReachAwayM(p, 0, tilt0) : 0)) : 0;
   const standBackM = Math.max(tiltAwayM, reachAwayM);
   const pushV = scale(away, push + viewAwayM + standBackM);
   for (let i = 0; i < 3; i++) matrix[12 + i] += pushV[i];
   const centre = add(carryCentre, pushV);
   const inverse = invertAffine(matrix);
   return freeze({
-    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, viewAwayM, tiltAwayM, reachAwayM, standBackM, scale: p.scale,
+    kind: 'ns-mirror-transform', matrix, inverse, linear: lin, det: det3(matrix), centre, carryCentre, push, viewAwayM, viewScale, viewDropM, tiltAwayM, reachAwayM, standBackM, scale: p.scale * viewScale,
     frame: freeze({ right: p.right, up: p.up, toward: p.toward }), orbit: state.orbit, placement: p
   });
 }

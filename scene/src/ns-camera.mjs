@@ -102,6 +102,8 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  * picture of your own chest and collar stays the same however far down you look. The crosshair's line is no longer
  * the eye's own line but one parallel to it; aiming uses the camera, as the picture does. backM (along the line of
  * sight) is kept as a second knob and is 0.
+ * (What follows, down to the note of 19 November, is how it was until then: the eases toward the eye and the byPitch
+ * table are gone; EYE_DOLLY below has the rule that replaced them.)
  * While the look rises from upFromDeg to upFullDeg both ease to 0 (the camera would otherwise sink into your own neck
  * and back when you look up), and while it turns from sideFromDeg to sideFullDeg to either side they ease to sideShare
  * of that (the opening at the root of the neck comes into the picture from behind there). Every part is continuous,
@@ -163,10 +165,16 @@ export const FIRST_PERSON = Object.freeze({ position: Object.freeze([0, 0, 0]), 
  * the eye's plane the part of the neck above it is not drawn at all, and what remains is its root between the collar
  * bones. (Further forward, 8 cm in front of the eye, the plane cut the chest and the shoulder open instead: seen.)
  * Display choices, judged on pictures. */
+/* 19 November 2026, after a check ("the whole torso visible at the start" was not met: the shoulders were cut by the
+ * lower edge; and at far side looks the near plane, which stood at the eye's own plane, cut your neck and shoulder
+ * open): backM 0.3 -> 0.5 and upM 0.1 -> 0.14: from further back your whole front, both shoulders included, is inside
+ * the lower part of the start picture under the strip (the launcher has the layout). nearBehindEyeM 0 -> null: the
+ * near plane is the scene's own again and cuts nothing; your head and neck are left out above the collar by the
+ * scene (ns-scene-three EYE_COLLAR: a box that is not drawn and a plain cap), the same from every look. */
 export const EYE_DOLLY = Object.freeze({
-  backM: 0.3, upM: 0.1, headAboveLookDeg: 30, headLevelEndDeg: 40,
+  backM: 0.5, upM: 0.14, headAboveLookDeg: 30, headLevelEndDeg: 40,
   standPitchMaxDeg: -25, standYawMaxDeg: 110,
-  zRefM: null, nearBehindEyeM: 0
+  zRefM: null, nearBehindEyeM: null
 });
 /** Where the first-person camera stands from the eye for a look { yaw, pitch } (radians; yaw from the body's own
  * forward): { backM along the stand-off line, upM along the head's up direction, headPitch (radians: the head's own
@@ -286,7 +294,21 @@ export const THIRD_PERSON = Object.freeze({
   centreFromEyeMm: Object.freeze([0, 60, 190]),
   // (third pass, a check: from straight behind the head the crosshair rested on the player's own skull and a bone name
   // came up: the centre is now 12 cm above the eye, not 5, so the line of sight clears the head from behind; 18 cm cut the feet off at the bottom of the picture)
-  followOffsetM: Object.freeze([0, 0.12, -0.48]),
+  // (19 November 2026, after a check: straight behind at 1.4 m the camera, your body, the mirror body and the brain
+  // stood in one line: the face areas were above the picture, and a look up put your skull and shoulders in front of
+  // the mirror body and the strip. The camera now aims at a point 1 m ahead of your eyes over your legs (it was 0.48)
+  // from 2.8 m (distanceM, it was 1.4) and about as high as before (followPitchBiasDeg -19): the whole strip is at the
+  // top, the mirror body just under it, and your whole body below them, head on the midline, none hiding another;
+  // the crosshair opens on the empty space between the mirror body and your feet. After the lead's larger strip
+  // (ns-app BRAIN_START_MOTOR_FRAC 0.58) the same day: the aim point 0.5 m above the eyes (it was 0.2), distanceM 3.0 and
+  // followFovYDeg 66 -> 74, so the whole of the larger strip is still in the picture.)
+  // (19 November 2026, later, after a second check: from 3.0 m your body was 210 px tall at 1600x900 and the mirror body
+  // 90, half of what they were, with the lower third of the picture empty. The camera now stands 1.65 m from an aim
+  // point 0.85 m ahead of and 0.3 m above your eyes, a little flatter (followPitchBiasDeg -19 -> -14) and wider
+  // (followFovYDeg 78): the whole strip is still at the top, your body is about 380 px tall and reaches the lower
+  // edge, and the mirror body, which is drawn larger and lower from outside (ns-mirror MIRROR_OUTSIDE magnifyBy /
+  // dropM), stands about 230 px tall between the strip and your feet.)
+  followOffsetM: Object.freeze([0, 0.3, -0.85]),
   // (fourth pass, 18 November 2026: 75 -> 24. Side-on, the brain beyond the feet was cut off at the right edge, so no
   // area could be switched on from outside. From 24 degrees round, the camera stands behind your right shoulder: the
   // whole body is seen three-quarter from behind, in its true proportions, with the whole motor strip beyond the
@@ -311,7 +333,7 @@ export const THIRD_PERSON = Object.freeze({
   // brain stand beyond them. A look to a side still carries the camera round the body by the same angle.)
   followYawDeg: 0,
   followBody: true,
-  followPitchBiasDeg: -20,
+  followPitchBiasDeg: -14,
   followMaxPitchDeg: 5,
   followYawMinDeg: -130,
   followYawMaxDeg: 130,
@@ -319,10 +341,10 @@ export const THIRD_PERSON = Object.freeze({
   // away a small shape in the middle of the picture and stretches whatever nears an edge; at 60 degrees and 1.6 m
   // the lying body fills about half the picture's width and keeps its proportions. The scene eases the angle with
   // the view (ns-scene-three setCameraPose viewFovYDeg). null = the eye view's angle.
-  followFovYDeg: 66,
+  followFovYDeg: 78,
   // (third pass: 1.6 -> 1.9: with the trunk rising more steeply from the pelvis and the centre a little higher, the feet left the bottom of the picture at 1.6)
   // (18 November 2026: 1.9 -> 1.7 with followYawDeg 66: the body a little larger, feet still inside the picture)
-  distanceM: 1.4,
+  distanceM: 1.65,
   defaultPitchDeg: -18,
   aimPitchBiasDeg: -16,
   aimAtBrain: true,

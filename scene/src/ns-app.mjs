@@ -179,6 +179,26 @@ export const ROTATION_NOTE_SECONDS = 6;
  * hand, its pair (seen from the eyes and from outside). Lower numbers (-0.35 to -0.55) all put it in one place under
  * the knee, lower than the right hand. GAME_ARM_OPTIONS is unchanged. */
 export const HAND_Y_NDC = -0.12;
+/* 19 November 2026 (a check: "Your own left hand now stands in front of the motor strip whenever you look at the
+ * strip's upper or right-hand areas"). The strip stands ABOVE the start look now, and a hand that keeps its place in
+ * the picture rises over it with every look up. HAND_REST: for looks above the start look the hand stays where it
+ * was, low beside the knee (the same height in the room: its place in the picture sinks as the look rises), and once
+ * it reaches the lower edge of the picture (lowNdc) it follows along that edge, drawn out to the left corner (xUpNdc,
+ * reached between slideFromDeg and slideFullDeg of look above the start), where no part of the strip is while the
+ * crosshair is on the strip. At and below the start look nothing changes (HAND_Y_NDC, the keys' own x). A and D still
+ * move it from there. Pure: handRestNdc. Display choices, judged on pictures. */
+export const HAND_REST = Object.freeze({ lowNdc: -0.9, xUpNdc: -0.72, slideFromDeg: 6, slideFullDeg: 20 });
+/** Where the hand's centre is asked to be in the eye view's picture for a look: { yNdc, xAddNdc }. pitchRad /
+ * startPitchRad: the look and the start look (radians, up positive); tanHalf: tan of half the view's angle; yNdc0: the
+ * hand's height at and below the start look (HAND_Y_NDC); xNdc0: the keys' own x at the start (GAME_ARM_OPTIONS). Pure. */
+export function handRestNdc(pitchRad, startPitchRad, tanHalf, yNdc0 = HAND_Y_NDC, xNdc0 = GAME_ARM_OPTIONS.xNdcStart, o = HAND_REST) {
+  const up = pitchRad - startPitchRad;
+  if (!(up > 0) || !(tanHalf > 0)) return { yNdc: yNdc0, xAddNdc: 0 };
+  const a = Math.atan(yNdc0 * tanHalf) - up; // the hand's angle above the line of sight, held where it was in the room
+  const y = a <= -Math.PI / 2 + 1e-3 ? -Infinity : Math.tan(a) / tanHalf;
+  const d = up * 180 / Math.PI, t = Math.min(1, Math.max(0, (d - o.slideFromDeg) / (o.slideFullDeg - o.slideFromDeg))), k = t * t * (3 - 2 * t);
+  return { yNdc: Math.max(o.lowNdc, y), xAddNdc: k * Math.min(0, o.xUpNdc - xNdc0) };
+}
 /* 18 November 2026, late (package FLAT: the eye view's lens is now 54 degrees and the look starts 52 down, see the
  * launcher): the arm fit's screen numbers are read in that narrower view, where 0 / -0.17 put the left hand across the
  * middle of the strip under the crosshair. HAND_Y_NDC 0 -> 0.5 with GAME_ARM_OPTIONS x -0.17 -> -0.35 and depth
@@ -2619,8 +2639,11 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const wristDeg = wristReach ? wasdWristDeg(base, rotationReq) : 0;
     const pose = wristDeg !== 0 && pose0.joints && Number.isFinite(pose0.joints.wrist_flex)
       ? { ...pose0, joints: { ...pose0.joints, wrist_flex: pose0.joints.wrist_flex + wristDeg } } : pose0;
+    // 19 November 2026 (HAND_REST): for looks above the start look the hand rests low instead of rising over the strip
+    const handAt = referenceGraph && !wholeArmOption ? handRestNdc(pitch, referenceGraph.initialLook.pitch, Math.tan(fov * DEG / 2), handYNdc) : null;
+    const handY = handAt ? handAt.yNdc : handYNdc, handXAdd = handAt ? handAt.xAddNdc : 0;
     const request = d => {
-      const q = { xNdc: base.xNdc, yNdc: handYNdc, depth: d, joints: pose.joints, rotation: rotationReq };
+      const q = { xNdc: base.xNdc + handXAdd, yNdc: handY, depth: d, joints: pose.joints, rotation: rotationReq };
       return displayPlan ? WholeArmDisplay.requestForDisplayPlan(displayPlan, q) : q;
     };
     let fit = fitHand(rig, boxes, request(base.depth), viewport, armOpts);
@@ -2631,7 +2654,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const baseRad = fit.solution.elbowFlexRad;
       const wanted = baseRad + pose.elbowDeltaDeg * DEG;
       const targetRad = clamp(wanted, 0, elbowMaxRad);
-      const req = depthForElbow(rig, { xNdc: fit.xNdc, yNdc: handYNdc, elbowFlexRad: targetRad, joints: pose.joints, rotation: rotationReq, aspect, fovYDeg: fov }, armOpts);
+      const req = depthForElbow(rig, { xNdc: fit.xNdc, yNdc: handY, elbowFlexRad: targetRad, joints: pose.joints, rotation: rotationReq, aspect, fovYDeg: fov }, armOpts);
       fit = fitHand(rig, boxes, displayPlan && displayPlan.actualCamera ? { ...request(base.depth), depth: req.depth } : request(req.depth), viewport, armOpts);
       const actualRad = fit.solution.elbowFlexRad;
       elbow = {
@@ -2678,7 +2701,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     }
     // R3-arm: the 0.06 s key-level ramp is carried across frames (carryReachRamp); without it the ramp is inert.
     const reachFit = displayPlan ? WholeArmDisplay.canonicalReachFit(displayPlan, fit, base) : fit;
-    const reach = carryReachRamp(nextReach(base, reachFit, armOptions, Boolean(axes && Number(axes.z))), base);
+    // (HAND_REST: the keys' own x is kept without the look's slide to the left, so looking back down brings the hand back)
+    const reach = carryReachRamp(nextReach(base, handXAdd ? { ...reachFit, xNdc: reachFit.xNdc - handXAdd } : reachFit, armOptions, Boolean(axes && Number(axes.z))), base);
     const reachRates = h > 0 ? { depth: (reach.depth - reachIn.depth) / h, x: (reach.xNdc - reachIn.xNdc) / h } : { depth: 0, x: 0 };
     // R4-fix (review RP3): a held key that moves the hand nothing (it is at the edge of what keeps the whole hand on
     // screen) is said in plain words after REACH_BLOCKED.seconds, instead of only lighting the muscles.
@@ -5100,6 +5124,18 @@ export function start(params = {}) {
   // (the activity holds it, so Reset body puts it back).
   let limbGrasp = null, leftDialBinding = null, leftDial = 0;
   let limbDragOf = null, limbDragDeg = 0, limbDragTold = false; // the tutorial's limb step (one report per drag)
+  // 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view"):
+  // the own limb a CLICK took control of ('rightArm' | 'rightLeg' | 'leftLeg'), or null (ns-grasp LIMB_CLICK has the
+  // reading and limbLatchAfter the rule). While it is set, W / A / S / D move that limb's end instead of the left arm
+  // (latchKeys: the key grasp, alive only while a key is down, so no solve runs on a frame with no key), a
+  // press-and-drag still turns whatever is pressed, and the look is free. latchLook: the look when the limb was
+  // clicked or last moved; control ends when the look has turned LIMB_CLICK.lookAwayDeg from it, when the view is
+  // changed (E), with a click on the same limb, on nothing or on another limb, and with Reset body. A pause or a lost
+  // focus does not end it. (LIMB_CLICK.followsLook true: the earlier build; limbGrasp then holds the limb with
+  // latched: true and the look carries it.)
+  let limbLatch = null, latchKeys = null, latchLook = null;
+  /** The limb the look carries: one Space holds, or (LIMB_CLICK.followsLook only) the one a click controls. */
+  const carriedLimb = () => (limbGrasp && (limbGrasp.latched !== true || NsGrasp.LIMB_CLICK.followsLook === true) ? limbGrasp : null);
   // 18 November 2026 (SMALL, audit S8; the owner, Note 57: "trackpad drag to move items essentially within the XY
   // dimension"): the point of the brain the crosshair took it at, in the brain's own frame (null: not held that way).
   let brainHoldLocal = null;
@@ -5115,6 +5151,7 @@ export function start(params = {}) {
   // R558 (Messages 33 and 34): what the controls act on at the crosshair as last shown (plain data for inspect()).
   let controlTargetsShown = null;
   const orbitQueue = [];
+  let viewAfterRelease = 0; // 19 November: frames an E press may still wait for the Space hold it ended to be over
   let viewRequests = 0; // E presses waiting for the frame loop; also owned by synchronous pause/lifecycle cancellation
   // R558 (Messages 55 and 56): number-key presses (1 to 9) waiting for the frame loop, oldest first. Each asks for the
   // movement with that number in the list the information card shows (infoModel.moves); owned and cancelled like E.
@@ -5548,6 +5585,7 @@ export function start(params = {}) {
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
     if (before.mode === 'playing' && after.mode !== 'playing') cancelPendingGameplay('leave-playing');
+    if (before.mode === 'playing' && after.mode !== 'playing' && quietUi && typeof quietUi.hideTip === 'function') quietUi.hideTip(); // (no tip under the Esc page)
     if (after.mode === 'playing' && before.mode !== 'playing') {
       // Commands or gesture flags acquired behind an overlay cannot enter the new playing epoch.
       cancelPendingGameplay('enter-playing');
@@ -5697,7 +5735,7 @@ export function start(params = {}) {
     if (!sim || !simState) return false;
     cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
-    limbGrasp = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too
+    limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too (19 November: a limb taken by a click is let go as well)
     // 18 November 2026 (package CONTACT): every pushed joint went back with the activity; no recoil or push carries on
     if (selfContact && selfContact.model) { selfContact.recoil = null; selfContact.pushedLast = null; selfContact.B0 = null; selfContact.B0of = null; selfContact.lastOut = null; selfContact.lastBase = null; selfContact.prevAct = null; selfContact.touching = new Set(); contact.selfBlocked = false; }
     // R558 (HEAD_LOOK; user, Message 6: "they need to be activated back into previous position or the whole thing
@@ -6282,7 +6320,9 @@ export function start(params = {}) {
           // button is down; W / A / S / D go on carrying it meanwhile. (Before, a press during a hold did nothing.)
           const carried = simState && simState.objectCarry && simState.objectCarry.held ? simState.objectCarry.target : null;
           if (carried === 'brain' || carried === 'mirror') return carried;
-          if (spaceHolds || limbGrasp || carried) return null;
+          // (19 November, a check: a limb a click controls does not stop a drag: the brain, the mirror body and any limb
+          // still turn under a press-and-drag, and only a press with no travel is a click.)
+          if (spaceHolds || carriedLimb() || carried) return null;
           const px = x === null ? appliedSize.width / 2 : x, py = y === null ? appliedSize.height / 2 : y;
           const it = itemAt(px, py, behind === true);
           return it?.target === 'limb' ? it : it?.target || null;
@@ -6854,7 +6894,7 @@ export function start(params = {}) {
        * each of its joints that moved this frame feeds its channel with its speed, and lights the body map's own area
        * and action for that joint and direction (areaFor), on top of the pulse of the joint that moved most. */
       function feedLimbMove(out, dt, dragLimb) {
-        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : dragLimb === 'leftArm' ? null : dragLimb;
+        const limb = limbGrasp && limbGrasp.limb !== 'leftArm' ? limbGrasp.limb : dragLimb && dragLimb !== 'leftArm' ? dragLimb : latchKeys ? latchKeys.limb : null;
         const c = limb ? NsGrasp.LIMB_CHAIN[limb] : null, J = out && out.bodyJointTargets;
         if (!c || !J || !(dt > 0)) { movePrev.limb = null; return; }
         const ids = c.upperDial ? [...c.joints, c.dial.joint, c.upperDial.joint] : [...c.joints, c.dial.joint];
@@ -6905,6 +6945,47 @@ export function start(params = {}) {
         // the invisible ground) went with the leg ground model.
         limbGrasp = { limb, targetMm: NsGrasp.limbPoint(bodyRig, seg, limb, 'end'), lastPitch: cs.pitch, via }; // via 'mirror' (R17): taken on the mirror body
       }
+      /** LIMB_CLICK.followsLook only: take up the limb a click took control of, when nothing else is held. */
+      function relatchLimb() {
+        if (!limbLatch || limbGrasp || NsGrasp.LIMB_CLICK.followsLook !== true) return;
+        beginLimbGrasp(limbLatch, null);
+        if (limbGrasp) { limbGrasp.latched = true; limbGrasp.lastYaw = cs.yaw; }
+      }
+      /** The controlled limb becomes `next` (null: none). */
+      function setLimbLatch(next) {
+        if (next === limbLatch) return;
+        limbLatch = next; latchKeys = null;
+        if (limbGrasp && limbGrasp.latched) limbGrasp = null; // (a limb Space holds stays held)
+        latchLook = next ? { yaw: cs.yaw, pitch: cs.pitch } : null;
+        relatchLimb();
+      }
+      /** A plain click at CSS (x, y): what it means for the controlled limb (ns-grasp limbLatchAfter). Returns true when
+       * the click was on one of your own limbs other than the left arm (it took that limb or let go of it). */
+      function clickTakesLimb(x, y) {
+        const { entry, arrow } = pressEntry(targetsAt(x, y), false);
+        const ev = { type: 'click' };
+        if (!arrow) {
+          if (!entry || (entry.item === 'brain' && entry.kind !== 'area')) ev.nothing = true; // open space, bare brain
+          else if (entry.item === 'own') { const limb = limbOfPick(entry.rec); if (limb) ev.limb = limb; }
+        }
+        setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, ev));
+        return Boolean(ev.limb && ev.limb !== 'leftArm');
+      }
+      /** One frame of the controlled limb (LIMB_CLICK, the look free): the keys move its end through a grasp that lives
+       * only while a key is down (its target starts where the limb's end is drawn, so a drag or a movement switched on
+       * from the brain in between is kept), and looking away ends the control. */
+      function stepLimbLatch(dt, out) {
+        if (!limbLatch || NsGrasp.LIMB_CLICK.followsLook === true) { latchKeys = null; return; }
+        const look = { yaw: cs.yaw, pitch: cs.pitch };
+        const keys = controlsApi.axes(cs), keyed = Boolean(keys && (keys.x || keys.z));
+        const busy = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        const dragged = Boolean(cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb === limbLatch);
+        if (keyed || dragged || busy || !latchLook) latchLook = look; // moved now (or waiting behind a Space hold): counted from here
+        else { setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'look', awayDeg: NsGrasp.lookAwayDeg(latchLook, look) })); if (!limbLatch) return; }
+        if (!keyed || busy || !canSolveLimbs()) { latchKeys = null; return; }
+        if (!latchKeys || latchKeys.limb !== limbLatch) latchKeys = { limb: limbLatch, targetMm: NsGrasp.limbPoint(bodyRig, segmentsFor(bodyPosed), limbLatch, 'end'), keysOnly: true, via: null };
+        stepLimbGrasp(dt, out, latchKeys);
+      }
       /** One frame of a held limb: the look carries its end with it, left / right and up / down (19 November 2026: the
        * pointer always turns the look, and the held limb's end stays under the crosshair), W/A/S/D move it level (X and
        * Z: A / D sideways, W farther, S nearer), and the joint solve keeps every joint in range.
@@ -6912,13 +6993,13 @@ export function start(params = {}) {
        * limbs such as you would your own"): a limb taken on the MIRROR body (g.via 'mirror') is your own limb, and every
        * direction is the one seen on the mirror body: the wanted movement of the limb's mirror image is taken back
        * through the mirror body's own matrix to the movement of your limb that shows it. */
-      function stepLimbGrasp(dt, out) {
-        const g = limbGrasp;
+      function stepLimbGrasp(dt, out, g = limbGrasp) {
         if (!g) return;
-        const dPitch = cs.pitch - g.lastPitch; g.lastPitch = cs.pitch;
+        // (keysOnly: the limb a click controls; the look does not carry it, ns-grasp LIMB_CLICK)
+        const dPitch = g.keysOnly ? 0 : cs.pitch - g.lastPitch; g.lastPitch = cs.pitch;
         // 19 November 2026: the held limb's end follows the look's turn as well as its up / down (the pointer always
         // turns the look now), so it stays under the crosshair.
-        const dYaw = Number.isFinite(g.lastYaw) ? cs.yaw - g.lastYaw : 0; g.lastYaw = cs.yaw;
+        const dYaw = !g.keysOnly && Number.isFinite(g.lastYaw) ? cs.yaw - g.lastYaw : 0; g.lastYaw = cs.yaw;
         if (g.limb === 'leftArm' || !g.targetMm || !canSolveLimbs() || !camPose) return;
         const B = camBodyToWorld, keys = controlsApi.axes(cs), look = camPose.gazeLook || { yaw: cs.yaw, pitch: cs.pitch };
         const fwd = [-Math.sin(look.yaw), 0, -Math.cos(look.yaw)], right = [Math.cos(look.yaw), 0, -Math.sin(look.yaw)];
@@ -6943,7 +7024,8 @@ export function start(params = {}) {
         const Bi = NsCollide.affineInverse(B);
         const dm = [0, 1, 2].map(i => Bi[i] * dw[0] + Bi[4 + i] * dw[1] + Bi[8 + i] * dw[2]);
         const want = g.targetMm.map((v, i) => v + dm[i]);
-        const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor, targets: bodyPosed, limb: g.limb, targetMm: want, limits: limbLimits() });
+        // (opts: the per-frame tracking solve, ns-grasp LIMB_TRACK: the target moves a few mm a frame and the next frame goes on from here)
+        const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor, targets: bodyPosed, limb: g.limb, targetMm: want, limits: NsGrasp.holdLimits(limbLimits(), g.limb, bodyPosed), opts: NsGrasp.LIMB_TRACK });
         g.lastSolve = { want: want.map(v => Math.round(v)), end: r.endMm.map(v => Math.round(v)), errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints };
         // The target never runs far ahead of what the limb can reach (out of reach, or a joint at its limit).
         const off = want.map((v, i) => v - r.endMm[i]), offLen = Math.hypot(...off);
@@ -7122,6 +7204,8 @@ export function start(params = {}) {
         let mm; try { mm = callScene('mirrorMatrices'); } catch { return; }
         const keep = drawn => { mirrorDrawn = drawn; mirrorViewDrawn = mirrorView; };
         if (!mm || !mm.pipeline) { keep(null); return; }
+        // 19 November 2026 (ns-reference-graph CARRY_THROUGH; the owner: "through ourselves and through anything"): nothing stops it
+        if (ReferenceGraph.CARRY_THROUGH === true) { keep(mm.drawn); return; }
         if (contact.skipGuards > 0 || !mirrorDrawn || sameMatrix(mm.drawn, mirrorDrawn)) { keep(mm.drawn); return; }
         const items = collideItems();
         if (!items || !items.own) { keep(mm.drawn); return; }
@@ -7205,6 +7289,8 @@ export function start(params = {}) {
       function guardBrain(prevSim, out, now) {
         const T = out && out.brainTransform;
         if (!T || !T.matrix || typeof sim.blendBrainStep !== 'function') return;
+        // 19 November 2026 (CARRY_THROUGH): nothing stops the brain either
+        if (ReferenceGraph.CARRY_THROUGH === true) { brainDrawn = Float64Array.from(T.matrix); return; }
         // Cheap first: nothing to check while the brain has not moved (or right after a reset, which puts everything back
         // where it started, clear of each other).
         if (contact.skipGuards > 0 || !brainDrawn || sameMatrix(brainDrawn, T.matrix)) { brainDrawn = Float64Array.from(T.matrix); return; }
@@ -7560,7 +7646,7 @@ export function start(params = {}) {
             // a leg is not held by the game arm (which cannot give way here): lifting a thigh the arm lies along goes on
             if (still === 'leftArm' && model.limb[mover] !== 'rightArm') continue;
             movers.add(model.limb[mover]);
-            if (NsContact.PUSH_JOINTS[still] && !(limbGrasp && limbGrasp.limb === still)) pushLimbs.add(still); else hold = true;
+            if (NsContact.PUSH_JOINTS[still] && !(limbGrasp && limbGrasp.limb === still) && !(latchKeys && latchKeys.limb === still)) pushLimbs.add(still); else hold = true;
             done.flash.push(c); // a contact that pushes or stops something is marked where it happens
           }
           const moverIds = [];
@@ -7815,7 +7901,7 @@ export function start(params = {}) {
           // Your left game arm's own bones (part 'arm') against the mirror body and the brain (it is kept out of them through
           // its reach sphere, reachItem).
           ...(() => { const arm = items.own ? NsCollide.item(items.own.entries.filter(e => e.tag && e.tag.part === 'arm')) : null; return arm && arm.entries.length ? { armMirrorM: g(arm, items.mirror), armBrainM: g(arm, items.brain) } : {}; })(),
-          stops: contact.stops, lastStop: contact.last, lastBrain: contact.lastBrain || null, bodyBlocked: Boolean(contact.bodyBlocked), limbGrasp: limbGrasp ? { limb: limbGrasp.limb, via: limbGrasp.via || null, targetMm: limbGrasp.targetMm, lastSolve: limbGrasp.lastSolve || null } : null,
+          stops: contact.stops, lastStop: contact.last, lastBrain: contact.lastBrain || null, bodyBlocked: Boolean(contact.bodyBlocked), limbLatch, limbGrasp: limbGrasp ? { limb: limbGrasp.limb, via: limbGrasp.via || null, latched: limbGrasp.latched === true, targetMm: limbGrasp.targetMm, lastSolve: limbGrasp.lastSolve || null } : null,
           tables: (() => { try { return sceneFn('collisionStats') ? callScene('collisionStats') : null; } catch { return null; } })(),
           scope: 'sphere covers of drawn meshes (ns-collide); a game rule, not tissue contact' };
       }
@@ -7910,14 +7996,27 @@ export function start(params = {}) {
         const camAtFrameStart = cam;
         const yawAtFrameStart = cs.yaw, pitchAtFrameStart = cs.pitch; // (two numbers: no per-frame object)
         let togglesThisFrame = 0;
+        // 19 November 2026 (a check: "E does nothing while Space holds something"): E now lets go of what Space holds
+        // (the thing stays where it is, as after any release) and changes the view as soon as the hold has ended (the
+        // release is an ordinary input and takes a frame or two). viewAfterRelease counts the frames it may still wait.
+        const grabbingNow = () => Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
+        if (!live) viewAfterRelease = 0;
+        else if (viewAfterRelease > 0) {
+          if (!grabbingNow()) { viewAfterRelease = 0; if (viewRequests < 1) viewRequests = 1; }
+          else { viewAfterRelease--; viewRequests = 0; }
+        } else if (viewRequests > 0 && grabbingNow() && typeof controlsApi.blur === 'function') {
+          cs = controlsApi.blur(cs, now); viewAfterRelease = 12; viewRequests = 0;
+        }
         if (live && viewRequests > 0) {
-          const grabbing = Boolean(simState && ((simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active) || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)));
+          const grabbing = grabbingNow();
           const aim = current.out && current.out.brainTransform && Array.isArray(current.out.brainTransform.pivotWorld) ? current.out.brainTransform.pivotWorld : null;
           for (; viewRequests > 0; viewRequests--) {
             const toggleFrame = referenceGraph ? sim.referenceFrameForLook(cam.view === 'third' && cam.fpLook ? cam.fpLook : lastHeadPose ? lastHeadPose.look : { yaw: cs.yaw, pitch: cs.pitch }, lastHeadPose) : null;
             const r = NC.toggleView(cam, { look: { yaw: cs.yaw, pitch: cs.pitch }, bodyToWorld: toggleFrame ? toggleFrame.bodyToWorld : camBodyToWorld, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, aimAt: aim, blocked: grabbing, geometryFraming: Boolean(wholeArmOption) });
             if (!r.changed) { if (grabbing) viewHeldUntilMs = now + VIEW_HELD_NOTE_MS; continue; }
             cam = r.state; togglesThisFrame++;
+            // 19 November 2026 (limbLatch: "until we change the camera view"): a limb taken by a click is let go here.
+            setLimbLatch(NsGrasp.limbLatchAfter(limbLatch, { type: 'view' }));
             // R558 (followHead): one look in both views, so the pitch range does not change with E either.
             cs = controlsApi.setPitchLimits(cs, !wholeArmOption && cam.view === 'third' && NC.THIRD_PERSON.followHead !== true ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
             cs = controlsApi.setLook(cs, r.controlsLook);
@@ -7939,6 +8038,13 @@ export function start(params = {}) {
         if (live && timing.events.some(e => e && e.type === 'click')) {
           const first = timing.events.find(e => e && e.type === 'click');
           tapped = muscleTap(Boolean(first && first.behind === true));
+          // 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera
+          // view"): a plain click on one of your own limbs takes control of it, or lets go of it when it was the
+          // controlled one; a click on nothing lets go (limbLatch; ns-grasp LIMB_CLICK). The click still names the
+          // muscle and lights its area, but starts no movement of its own: the limb is now moved by the keys or a drag.
+          if (first && first.behind !== true && appliedSize && !(simState.objectCarry && simState.objectCarry.held)) {
+            if (clickTakesLimb(pressXY().x, pressXY().y) && tapped && tapped.event) tapped = { ...tapped, event: { ...tapped.event, actionId: null, regionOnly: true } };
+          }
           if (tapped && tapped.reachArea) { reachPick = tapped.pick; tapped = null; }
           // A reach-behind click with nothing behind acts on nothing (it never falls back to the item in front).
           else if (!tapped && first && first.behind === true) tapped = { event: null, text: '' };
@@ -8012,13 +8118,17 @@ export function start(params = {}) {
             if (!e || e.type !== 'grasp') return e;
             if (e.down !== true) { limbGrasp = null; brainHoldLocal = null; return e; }
             const it = appliedSize ? itemAt(pressPoint().x, pressPoint().y, e.behind === true) : null;
-            if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null); else limbGrasp = null;
+            limbGrasp = null; // (a limb a click controls gives way to what Space takes; it is taken up again below when Space lets go)
+            if (it && it.target === 'limb') beginLimbGrasp(it.limb, it.via || null);
             brainHoldLocal = it && it.target === 'brain' ? brainPointLocal(it.pick && it.pick.pointWorldM) : null; // SMALL S8
             // R558 (hunt 2 code #4): the label is what is held, by the carry and by the activity alike (null: nothing).
             return { ...e, target: it ? it.target : null, ...(it && it.pick ? { pick: it.pick } : {}) };
           }) };
         }
         if (!live) { limbGrasp = null; brainHoldLocal = null; }
+        // LIMB_CLICK.followsLook only: the limb a click took control of is held whenever Space holds nothing.
+        else if (limbLatch && NsGrasp.LIMB_CLICK.followsLook === true && !limbGrasp && !(cs.space && cs.space.grasp !== 'none') && !(simState.objectCarry && simState.objectCarry.held)
+          && !(simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active)) relatchLimb();
         // R558 (Message 48: "you can't see the grasping action at all"): the left hand grips for as long as Space holds
         // or keeps a grasp (ns-controls SPACE_GESTURE grasp 'held' | 'kept'), whatever is under the crosshair, and opens
         // when the grasp lets go. The activity's graspHold is kept in step with the gesture here, every frame, by a
@@ -8076,7 +8186,7 @@ export function start(params = {}) {
         if (live && areaRequests.length) {
           const reqs = areaRequests.splice(0).filter(q => now - q.t >= 0 && now - q.t < AREA_REQUEST_KEEP_MS);
           const actNow = simState && simState.activity ? simState.activity : null;
-          const holding = Boolean(limbGrasp || (actNow && actNow.brainGrab && actNow.brainGrab.active)
+          const holding = Boolean(carriedLimb() || (actNow && actNow.brainGrab && actNow.brainGrab.active)
             || (simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || (cs.space && (cs.space.grasp === 'held' || cs.space.grasp === 'kept')) || (cs.button && cs.button.down)
             || (cs.drag && cs.drag.target !== null && cs.drag.target !== undefined)); // (cs.drag is always an object: no drag is target null)
@@ -8330,7 +8440,7 @@ export function start(params = {}) {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
           // IS the reach), W/A/S/D move it and not the left hand.
-          ...((limbGrasp && limbGrasp.limb !== 'leftArm') || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
+          ...((limbGrasp && limbGrasp.limb !== 'leftArm') || limbLatch || (simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
             || timing.events.some(e => e && e.type === 'grasp' && e.down === true && (e.target === 'brain' || e.target === 'mirror')) ? { armAxes: { x: 0, z: 0 } } : {}),
           gazeAt: timing.gazeAt, orbit: orbitDirs, arrow: null, glassHit: brainHit === true,
           // R558 (HEAD_LOOK): a held neck / trunk action that swings the view is not the player looking somewhere: the
@@ -8340,7 +8450,7 @@ export function start(params = {}) {
           // held brain, whose gaze the activity records silently); after the release only a NEW area under the crosshair acts.
           // R558 (Messages 33 and 34): the look's one frame on the area behind, for a reach-behind click, is silent too: the
           // click switches the area on, the look itself starts nothing there.
-          silentGaze: seedNext === true || objectPick === reachPick || camPose.silentGaze === true || Boolean(headOffs && headOffs.moving) || Boolean(limbGrasp && limbGrasp.limb !== 'leftArm')
+          silentGaze: seedNext === true || objectPick === reachPick || camPose.silentGaze === true || Boolean(headOffs && headOffs.moving) || Boolean(carriedLimb() && limbGrasp.limb !== 'leftArm')
             || Boolean(simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target === 'mirror'),
           ...(head ? { head } : {}),
           brainCentreNdc: brainCentreForPanel(size), viewportPx: { width: size.width, height: size.height },
@@ -8549,6 +8659,7 @@ export function start(params = {}) {
           guardBrain(prevSim, out, now);
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
+          stepLimbLatch(timing.dt, out);
           let limbDragged = false;
           for (const dragTurn of dragTurns) {
             if (dragTurn.target !== 'limb' || !dragTurn.binding) continue;
@@ -8805,7 +8916,7 @@ export function start(params = {}) {
                 // R558 (performance, hunt 2 code #5): while you hold a leg with Space its goal changes on every frame, so the
                 // goal's range is then taken every DANCE_RANGE_EVERY_FRAMES frames like the posture's own, and at once again
                 // when the leg is let go (or when no leg is held).
-                const legHeld = Boolean(limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg'));
+                const legHeld = Boolean((limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg')) || (latchKeys && latchKeys.limb !== 'rightArm')); // (or moved by the keys after a click)
                 danceGoalPending += 1;
                 if (!legHeld || danceGoalPending >= DANCE_RANGE_EVERY_FRAMES) {
                   danceGoalKey = goalKey; danceGoalPending = 0;
@@ -8971,7 +9082,11 @@ export function start(params = {}) {
         // scene adapter resolves each existing action to its catalog/mesh targets; no new motor map or signal is added.
         if (sceneFn('setGlowLinks') && sim.regionMode && typeof sim.activity.glowLinks === 'function') {
           glowData = sim.activity.glowLinks(simState.activity, { movement: inputs.binding });
-          const links = glowLinksForScene(glowData.links, { bodyDrives: link => actionBodyDrives(link.actionId) });
+          let links = glowLinksForScene(glowData.links, { bodyDrives: link => actionBodyDrives(link.actionId) });
+          // 19 November 2026 (the light beams): while Space carries the brain or the mirror body, the grip's own area
+          // keeps its colour on the hand but sends no beam: it stood across the picture for the whole carry, a wall of
+          // light once the brain was near.
+          if (simState.objectCarry && simState.objectCarry.held === true && links.some(l => GRIP_HELD_IDS.includes(l.regionId))) links = links.map(l => (GRIP_HELD_IDS.includes(l.regionId) ? { ...l, line: false } : l));
           // R558 (Message 2 + 6): the opposing actions' faint hints light their muscles too (ns-app hint rows); passed as
           // `hint` links so those muscles take their area's colour (no line is drawn for a hint).
           const hints = out.latch && Array.isArray(out.latch.hints) ? out.latch.hints.filter(h => h && typeof h.regionId === 'string' && h.level > 0) : [];
@@ -9055,6 +9170,7 @@ export function start(params = {}) {
         const seenOrGhost = ctlFrame ? ctlFrame.ghost || ctlFrame.seen : null;
         const seen = live && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item !== 'brain' ? seenOrGhost.rec : null;
         // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
+        const crossLimb = seen && seen.source === 'own' ? limbOfRec(seen) : null; // the own limb under the crosshair
         crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
         // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
         { const rk = crossPick && seen.kind === 'muscle' ? `${seen.source}|${seen.id}|${seen.name}` : '';
@@ -9067,7 +9183,7 @@ export function start(params = {}) {
           ? NT.inFrontName({ where: inFrontPick.item, segment: inFrontPick.item === 'own' ? segOfPick(inFrontPick.rec) : '', limb: inFrontPick.item === 'own' ? limbOfPick(inFrontPick.rec) : null }) : '';
         // 18 November 2026 (SEE): while Shift is held (and nothing is held), the body part Shift reaches here gets a line all
         // round its limb in the limb's colour (the scene's ghost pass), and the tip names it (below).
-        const reachHolding = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        const reachHolding = Boolean(carriedLimb() || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
         const reachE = live && cs && cs.reach === true && !reachHolding && ctlFrame && !ctlFrame.arrow ? pressEntry(ctlFrame, true).entry : null;
         const reachBody = reachE && (reachE.item === 'own' || reachE.item === 'mirror') && reachE.rec ? reachE : null;
         if (sceneFn('setGhostFocus')) { try { callScene('setGhostFocus', reachBody ? seeLimbOfGroup(reachBody.rec.group) : 0); } catch { /* display aid */ } }
@@ -9107,8 +9223,11 @@ export function start(params = {}) {
           model.note = [line, model.note].filter(Boolean).join(' \u00b7 ');
         }
         // R558 (Messages 2, 12 and 40): what Space holds (and how to let go), and a plain word when a move stopped at contact.
-        if (limbGrasp && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(limbGrasp.limb, spaceGrasp === 'kept'), model.space].filter(Boolean).join(' \u00b7 ');
-        if (limbGrasp && model.crosshairHold === 'empty') model.crosshairHold = 'item';
+        const spaceLimb = limbGrasp && limbGrasp.latched !== true ? limbGrasp.limb : null; // the limb Space holds
+        if (spaceLimb && NT.HUD.holdingLimb) model.space = [NT.HUD.holdingLimb(spaceLimb, spaceGrasp === 'kept'), model.space].filter(Boolean).join(' \u00b7 ');
+        else if (limbLatch && NT.HUD.controllingLimb) model.space = [NT.HUD.controllingLimb(limbLatch), model.space].filter(Boolean).join(' \u00b7 ');
+        // (19 November: the ring round the crosshair also shows for as long as a click controls a limb)
+        if ((spaceLimb && model.crosshairHold === 'empty') || (limbLatch && model.crosshairHold !== 'item')) model.crosshairHold = 'item';
         if (now < contact.untilMs && NT.HUD.contactStop) model.note = [NT.HUD.contactStop(contact.last), model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (R31): what the last tapped muscle switched on, in plain words, for a few seconds.
         if (muscleTapNote && simState.t < muscleTapNote.untilT) model.note = [muscleTapNote.text, model.note].filter(Boolean).join(' \u00b7 ');
@@ -9116,7 +9235,7 @@ export function start(params = {}) {
         if (displayRecovery.reachLimited && out.reachBlocked !== true && HUD_TEXT.reachBlocked) model.note = [HUD_TEXT.reachBlocked, model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (Messages 33 and 34): first under "Looking at": what F and a drag take here, and how to reach the item behind
         // (hold Shift as you press); while Shift is held, what the press will reach. Not while something is held.
-        const holdingNow = Boolean(limbGrasp || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        const holdingNow = Boolean(carriedLimb() || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
         // With a free mouse the presses act under the pointer, so the line describes what is under the pointer.
         const freePointer = live && !lockedNow() && cs.pointer && Number.isFinite(cs.pointer.x) && Number.isFinite(cs.pointer.y);
         const hudT = freePointer ? targetsAt(cs.pointer.x, cs.pointer.y) : ctlFrame;
@@ -9234,12 +9353,18 @@ export function start(params = {}) {
             // body part Shift reaches (the leg in front of the area looked at, the limb hidden behind the part seen).
             if (reachBody && !arrowTip) tipModel = quietTipModel({ pick: reachBody.rec });
             const carried = simState.objectCarry;
-            const held = NT.TIP.holding(limbGrasp?.limb || (carried?.held ? carried.target : null), spaceGrasp === 'kept');
+            const held = NT.TIP.holding(spaceLimb || (carried?.held ? carried.target : null), spaceGrasp === 'kept');
             if (held) tipModel = quietTipModel({ held });
+            // 19 November 2026 (limbLatch): while a click controls a limb the tip says which and what moves it, but only
+            // where the crosshair is on that limb or on nothing: a motor area, an arrow and any other body part keep
+            // their own tip (a check: the area's name and numbers were hidden for as long as a limb was controlled).
+            else if (limbLatch && NT.TIP.limbTaken && !arrowTip && (!tipModel || (tipModel.kind !== 'area' && tipModel.kind !== 'arrow' && crossLimb === limbLatch)))
+              tipModel = quietTipModel({ held: NT.TIP.limbTaken(limbLatch) });
           }
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', tipModel?.kind === 'area' && Boolean(tipModel.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
-          quietUi.update({ show: quietOn, tip: tipModel, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+          const tipArea = tipModel && tipModel.kind === 'area' && onArea && typeof out.gaze.regionId === 'string' ? regionById(bodyMap, out.gaze.regionId) : null;
+          quietUi.update({ show: quietOn, tip: tipModel, side: tipArea && tipArea.hemisphere === 'left' ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,
             width: size.width, height: size.height });
@@ -9325,7 +9450,7 @@ export function start(params = {}) {
         if (live && typeof controlsApi.noteSpace === 'function') {
           const act = simState && simState.activity;
           cs = controlsApi.noteSpace(cs, {
-            holding: Boolean(limbGrasp) || Boolean(simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
+            holding: Boolean(limbGrasp && !limbGrasp.latched) || Boolean(simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target)
               || Boolean(act && act.brainGrab && act.brainGrab.active),
             turning: Boolean(act && act.dance && act.dance.mode)
           });

@@ -288,7 +288,7 @@ const STEP_TABLE = [
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
     'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
     'A held limb moves only as far as its joints allow, and the brain area that moves it lights up. Press on a limb and drag across it to turn it, like a dial. ' +
-    'Your body, the brain and the mirror body can be moved right up to each other; a move stops where they would touch.'),
+    'The brain and the mirror body can be carried anywhere: up to you, into you and through you, and through each other.'),
     // R558 (Messages 33 and 34): every control acts on what you see; Shift reaches the item behind it.
     part('Space, a click and a drag act on what the “Looking at” card names. A motor area counts even with your body or the ' +
       'mirror body in front of it: a click switches it on, Space holds the brain. Elsewhere it is what you see at the crosshair; ' +
@@ -337,7 +337,7 @@ const CONTROL_TABLE = [
   ['W / S', 'W moves the hand forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
-  ['Hold Space', 'aim at the brain, the mirror body or a limb. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Things stop where they would touch.'],
+  ['Hold Space', 'aim at the brain, the mirror body or a limb. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Nothing stops a carried thing: it goes through you and through anything.'],
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
@@ -485,8 +485,10 @@ export const SHELL = deepFreeze({
   menu: [
     { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look around'], ['Click', 'press the area you look at'],
       ['1 2 3', 'a movement, by its number'], ['← →', 'the next area']] },
-    { id: 'move', title: 'Move', picture: 'wasd', rows: [['W S', 'farther, nearer'], ['A D', 'left, right']],
-      note: 'Your left hand, or what Space holds.' },
+    // 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view")
+    { id: 'move', title: 'Move', picture: 'wasd', rows: [['W S', 'farther, nearer'], ['A D', 'left, right'],
+      ['Click limb', 'W A S D move it; look away ends']],
+      note: 'Your left hand, a limb you clicked, or what Space holds.' },
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Hold', 'take what you look at'],
       ['Move', 'carry it'], ['Drag', 'turn it'], ['Tap twice', 'your limbs turn'], ['Shift', 'reach the thing behind']] },
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'the view from behind'],
@@ -601,7 +603,7 @@ export const HUD = deepFreeze({
   // are unchanged.
   limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
   hint: 'Move to look. W/S reach forward or back; A/D move left or right. Hold Space on the brain, the mirror body or one of ' +
-    'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); things stop where they would touch. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area to see its movements. Click it or press a number to move its body part. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
+    'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); a carried thing goes through you and through anything. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area to see its movements. Click it or press a number to move its body part. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
     'Esc frees it.',
   hintShell: 'Look to aim. A/D move the hand left or right, W/S forward or back. Tap Space twice: all four limbs turn ' +
     'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movements. Click it or press a number to move its body part. Hold Space on ' +
@@ -630,6 +632,9 @@ export const HUD = deepFreeze({
   holdingLimb: (limb, kept = false) => `Holding your ${({ rightArm: 'right hand', leftArm: 'left hand (W/A/S/D and your look move it, as always)', rightLeg: 'right foot', leftLeg: 'left foot' })[limb] || 'limb'}` +
     (limb === 'leftArm' ? (kept ? '. Tap Space to let go.' : '. Let go of Space when done.')
       : `: move the pointer sideways, up or down. W moves it farther, S nearer, and A/D sideways. ${kept ? 'Tap Space to let go.' : 'Let go of Space to leave it there.'}`),
+  /** 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view"):
+   * while a limb taken by a click is controlled. */
+  controllingLimb: limb => `W/A/S/D move your ${({ rightArm: 'right hand', rightLeg: 'right foot', leftLeg: 'left foot' })[limb] || 'limb'}. Look away, or click it again, to let go.`,
   /** R558 (Message 12): a move stopped where two of the three would touch (what: 'brain' | 'mirror' | 'body'). */
   contactStop: what => `${({ brain: 'The brain', mirror: 'The mirror body', body: 'Your body' })[what] || 'That'} stopped: your body, the brain and the mirror body stop where they would touch`,
   rotationPrefix: 'Left forearm: ',
@@ -1680,6 +1685,10 @@ export const TIP = deepFreeze({
     const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;
     return name ? { title: `Holding ${name}`, hint: kept ? 'Tap Space to let go.' : 'Let go of Space.' } : null;
   },
+  /** 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view"):
+   * the tip by the crosshair while a clicked limb is controlled ({ title, hint }, drawn like the Space hold's tip).
+   * Letting go needs no words: looking away does it. */
+  limbTaken: limb => ({ title: ({ rightArm: 'Right arm', rightLeg: 'Right leg', leftLeg: 'Left leg' })[limb] || 'Limb', hint: 'W A S D move it' }),
 });
 
 /** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";

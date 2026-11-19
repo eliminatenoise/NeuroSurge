@@ -177,7 +177,7 @@ import {
   shudderGlsl, powerUpEnvelope, powerUpBlink
 } from './ns-colors.mjs';
 // 18 November (MAP): the links between an area and its body part (looked at, switched on, named from a muscle).
-import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight } from './ns-links.mjs';
+import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight, LIGHT_BEAM, beamAcross, beamAlong, beamHalfWidth, extentAlong, beamShare, beamShareAt } from './ns-links.mjs';
 
 import * as NsText from './ns-text.mjs';
 // R5-scene: the fluorescent glow variant of the shared ramp (R5-access; feature-detected: glowColor / glowIntensity / GLOW).
@@ -1430,8 +1430,33 @@ export const NECK_SHADE = Object.freeze({ hostId: 'FJ3290', centreMm: Object.fre
  * shadow (shade: an ellipsoid riding on the top neck vertebra, hostId, in its rest frame: centreMm / radiiMm; nearly
  * black where you look straight into it and fading to clear toward its outline from softFrom, so it has no edge).
  * NECK_SHADE's dark shape on the breastbone is no longer made. A display device; no licensed mesh is changed. */
-export const EYE_NECK = Object.freeze({ minCameraM: 0.06,
+/* 19 November 2026: minCameraM 0.06 -> null: the neck is not drawn in the eye view any more (see EYE_COLLAR below). */
+export const EYE_NECK = Object.freeze({ minCameraM: null,
   shade: Object.freeze({ hostId: 'FJ3176', centreMm: Object.freeze([0, -100, 1478]), radiiMm: Object.freeze([70, 66, 42]), core: 0x0b0607, softFrom: 0.05 }) });
+/* 19 November 2026 (a check: at far side looks and looking far down, the near plane cut your own neck and shoulder
+ * open: bright cut faces, a neck muscle lit from inside, ragged ends; with the neck left out, the ribs and spine showed
+ * through the opening and the upper trapezius stood up as a torn sheet). EYE_COLLAR ends your own body cleanly at the
+ * collar in the eye view, the same from every look:
+ *  - the neck's in-place twins are not drawn in the eye view any more (EYE_NECK.minCameraM null), and the near plane
+ *    is back at the camera (ns-camera EYE_DOLLY.nearBehindEyeM null), so it cuts nothing: the shoulders are whole at
+ *    every look;
+ *  - box: everything of your own body inside this box is not drawn in the eye view (Three's local clipping planes with
+ *    clipIntersection on the own-body materials): the column over the collar where the neck and the head would be, so
+ *    the parts of the trunk's muscles that run up to the skull (the descending trapezius) end at one level plane
+ *    instead of at their own ragged attachments. BodyParts3D mm in the source frame of the 'sternum' segment (the
+ *    breastbone, which the box rides on): x left / right, y front (negative) / back, zFromMm upward without end;
+ *  - cap: a low smooth dome in the muscles' own colour and finish that closes the root of the neck between the collar
+ *    bones and the trapezius (an ellipsoid riding on the same segment; centreMm / radiiMm). It covers the cut and the open
+ *    rib cage under it. It is on your own body in the eye view only (from outside the neck and head are drawn in
+ *    place), is not on the mirror body, cannot be aimed at or held and has no name.
+ * A display device, NOT anatomy; no licensed mesh is changed. Judged on pictures at looks all round. */
+export const EYE_COLLAR = Object.freeze({
+  box: Object.freeze({ xMm: Object.freeze([-150, 150]), yMm: Object.freeze([-260, 70]), zFromMm: 1374 }),
+  // (19 November 2026, after a second check: the cap was a plain ball a fifth of the picture wide that covered the top
+  // of the breastbone and the inner ends of the collar bones. Now lower and smaller: radii 90 x 76 x 44 -> 78 x 66 x 22
+  // and its centre 16 mm higher, so its top is 6 mm lower: it lies below the collar bones, whose inner ends and the
+  // top of the breastbone show again. No opening at looks all round, seen on pictures.)
+  cap: Object.freeze({ centreMm: Object.freeze([0, -72, 1358]), radiiMm: Object.freeze([78, 66, 22]), color: 0xa5323a, roughness: 0.62 }) });
 export const BODY_ORDER = Object.freeze({ torsoDepth: 7, torso: 8, faceDepth: 1, face: 2, arm: 10 });
 
 /** Marker dot size, highlight scale and lift toward superior (source mm, before the giant display scale): ns-brain
@@ -2975,6 +3000,8 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * samplePoints of the region's vertices, projected with the live camera, covers less than areaFrac of the view
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
+/** 19 November 2026 (the light beam): the most sample points kept of one key of the strip, and of one muscle. */
+export const BEAM_KEY_POINTS = 64, BEAM_MUSCLE_POINTS = 48;
 export const SMALL_MARK = Object.freeze({ areaFrac: 0.0026, sizePx: 12, samplePoints: 160, everyFrames: 6 });
 /** R4-fix (RP1): opacity of a required label drawn where it overlaps something (display choice). */
 export const LABEL_FADED_OPACITY = 0.4;
@@ -3679,6 +3706,7 @@ export function normaliseGlowLinks(links) {
     const body = asMap(l.bodyMeshIds), colorBody = l.colorMeshIds ? asMap(l.colorMeshIds) : body;
     // R558 (Space dance): line false = a colour-only link (its muscles take the area's colour; no line is drawn).
     out.push({ key: typeof l.key === 'string' && l.key ? l.key : l.regionId, regionId: l.regionId, level, hint: l.hint === true, line: l.line !== false, body, colorBody, armKeys: asMap(l.armMuscleKeys),
+      actionId: typeof l.actionId === 'string' && l.actionId ? l.actionId : null, // 19 November 2026: the movement, for the light beam's end on the strip (its key)
       hover: l.hover === true, reverse: l.reverse === true, // 18 November (MAP): a looked-at area's soft link / a link named from a muscle
       armNames: Array.isArray(l.armMuscleNames) ? l.armMuscleNames.filter(s => typeof s === 'string' && s).map(s => s.toLowerCase()) : [] });
   }
@@ -3698,7 +3726,7 @@ export function glowLinksForScene(links, { bodyDrives = null } = {}) {
     const level = Number.isFinite(l.level) ? l.level : 0;
     if (l.isLeftArm) {
       const names = [...(Array.isArray(l.meshNames) ? l.meshNames : []), ...(Array.isArray(l.muscles) ? l.muscles : [])];
-      out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, hover: l.hover === true, armMuscleKeys: Array.isArray(l.catalog) ? l.catalog : [], armMuscleNames: names });
+      out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, hover: l.hover === true, actionId: typeof l.actionId === 'string' ? l.actionId : null, armMuscleKeys: Array.isArray(l.catalog) ? l.catalog : [], armMuscleNames: names });
       continue;
     }
     let ids = {};
@@ -3712,7 +3740,7 @@ export function glowLinksForScene(links, { bodyDrives = null } = {}) {
       // antagonists' 0.08 display floor (below the glow onset anyway).
       if (v >= 0.2 * top) color[id] = v / (top || 1);
     }
-    out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, hover: l.hover === true, bodyMeshIds: keep, colorMeshIds: color });
+    out.push({ key: l.key || l.regionId, regionId: l.regionId, level, hint: l.hint === true, hover: l.hover === true, actionId: typeof l.actionId === 'string' ? l.actionId : null, bodyMeshIds: keep, colorMeshIds: color });
   }
   return out;
 }
@@ -5443,12 +5471,57 @@ export function createScene({
   const body = [];
   const bodyById = new Map();
   let neckShade = null; // NECK_SHADE
+  // EYE_COLLAR: the five planes of the box (world space, set each frame from the host bone), the cap and its state
+  const collar = { planes: null, rest: null, cap: null, capRest: null, seg: -1, local: null, world: null, inv: null, on: false, materials: 0, sweepAt: 0 };
+  /** EYE_COLLAR: give every own-body material the box's planes (once each; the sweep is repeated now and then because
+   * muscles change to their class material after they are made). Mirror-body materials are separate and untouched. */
+  function collarMaterials() {
+    if (!collar.planes) return;
+    const take = m => { if (!m || m.userData.nsCollar) return; m.userData.nsCollar = true; m.clippingPlanes = collar.planes; m.clipIntersection = true; m.needsUpdate = true; collar.materials++; };
+    for (const b of body) {
+      if (b.face) continue; // the head and face twins are drawn only from outside, where the box is parked
+      const mm = b.mesh && b.mesh.material;
+      if (Array.isArray(mm)) mm.forEach(take); else take(mm);
+    }
+  }
+  /** EYE_COLLAR: whether a point of your own body (world metres) is one the eye view does not show: inside the box
+   * (not drawn) or inside the cap (covered by it). False while the box is parked. */
+  function collarHides(x, y, z) {
+    if (!collar.on || !collar.inv) return false;
+    const e = collar.inv.elements, B = EYE_COLLAR.box, C = EYE_COLLAR.cap;
+    const px = e[0] * x + e[4] * y + e[8] * z + e[12], py = e[1] * x + e[5] * y + e[9] * z + e[13], pz = e[2] * x + e[6] * y + e[10] * z + e[14];
+    if (pz > B.zFromMm && px > B.xMm[0] && px < B.xMm[1] && py > B.yMm[0] && py < B.yMm[1]) return true;
+    const ux = (px - C.centreMm[0]) / C.radiiMm[0], uy = (py - C.centreMm[1]) / C.radiiMm[1], uz = (pz - C.centreMm[2]) / C.radiiMm[2];
+    return ux * ux + uy * uy + uz * uz < 1;
+  }
+  /** EYE_COLLAR: place the box and the cap for the frame about to be drawn. on: the eye view (the head not in place). */
+  function applyCollar(on) {
+    if (!collar.planes) return;
+    // the breastbone's own frame as drawn now (source mm -> drawn mm in the body's frame): the posed segment, or the
+    // baked start posture before the first pose arrives
+    const S = on ? (bodySkinSegs && collar.seg >= 0 ? bodySkinSegs[collar.seg] : bodySkinBaked ? bodySkinBaked.get('sternum') : null) : null;
+    if (on && !S) on = false;
+    if (on) {
+      if (collar.seg < 0 && bodySkinBaked) collar.seg = [...bodySkinBaked.keys()].indexOf('sternum');
+      collar.local.fromArray(S);
+      collar.cap.matrix.multiplyMatrices(collar.local, collar.capRest); collar.cap.matrixWorldNeedsUpdate = true;
+      collar.world.multiplyMatrices(bodyGroup.matrixWorld, collar.local);
+      collar.inv.copy(collar.world).invert();
+      for (let i = 0; i < collar.planes.length; i++) collar.planes[i].copy(collar.rest[i]).applyMatrix4(collar.world);
+      if (++collar.sweepAt >= 45) { collar.sweepAt = 0; collarMaterials(); }
+    } else if (collar.on) {
+      // parked: no point lies on the cut side of the level plane, so nothing is clipped
+      for (let i = 0; i < collar.planes.length; i++) collar.planes[i].set(collar.planes[i].normal.set(0, 1, 0), 1e9);
+    }
+    collar.on = on;
+    if (collar.cap) collar.cap.visible = on;
+  }
   let eyeNeckOn = false; // EYE_NECK: the neck's in-place twins are shown in the eye view
   /** EYE_NECK: the neck's in-place twins are drawn while the head is in place (third person) or while the camera
    * stands at least minCameraM from the eye (the eye view's camera behind the eye). Acts only on a change. */
   function applyEyeNeck(headIn) {
     const p = activePosition(), e = eyeRig.position;
-    const on = headIn || Math.hypot(p[0] - e.x, p[1] - e.y, p[2] - e.z) >= EYE_NECK.minCameraM;
+    const on = headIn || (EYE_NECK.minCameraM !== null && Math.hypot(p[0] - e.x, p[1] - e.y, p[2] - e.z) >= EYE_NECK.minCameraM);
     if (on === eyeNeckOn) return;
     eyeNeckOn = on;
     for (const b of body) if (b.inPlace && b.inPlace.userData.anatomicalPart === 'neck') b.inPlace.visible = headIn || on;
@@ -6307,6 +6380,52 @@ export function createScene({
   // 18 November (MAP): the mirror body's links are drawn after the glass too (depth-tested like yours): drawn before it,
   // the glass and the areas covered them and the line from a key to the mirror body could not be seen at all.
   const glowMirror = makeRibbonMesh('ns-glow links (brain area -> the mirror body)', BODY_ORDER.arm + 2.5);
+
+  // 19 November 2026 (ns-links LIGHT_BEAM): the light beams, one buffer for your body and one for the mirror body, in
+  // the ribbons' places in the drawing order. A beam is a camera-facing strip of LIGHT_BEAM.segments by the samples of
+  // LIGHT_BEAM.across; its points and colours are written by emitBeam each frame a link shows.
+  const beamVerts = (LIGHT_BEAM.segments + 1) * LIGHT_BEAM.across.length;
+  const beamIdxPer = LIGHT_BEAM.segments * (LIGHT_BEAM.across.length - 1) * 6;
+  function makeBeamMesh(name, order) {
+    const cap = LIGHT_BEAM.maxBeams * beamVerts;
+    const pos = new Float32Array(3 * cap), col = new Float32Array(4 * cap);
+    const idx = new Uint32Array(LIGHT_BEAM.maxBeams * beamIdxPer);
+    const A = LIGHT_BEAM.across.length;
+    let k = 0;
+    for (let r = 0; r < LIGHT_BEAM.maxBeams; r++) {
+      const o = r * beamVerts;
+      for (let i = 0; i < LIGHT_BEAM.segments; i++) for (let j = 0; j + 1 < A; j++) {
+        const a = o + i * A + j, b = a + 1, c = a + A, d = c + 1;
+        idx[k++] = a; idx[k++] = c; idx[k++] = b; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+      }
+    }
+    const g = keep(new THREE.BufferGeometry());
+    const pa = new THREE.BufferAttribute(pos, 3), ca = new THREE.BufferAttribute(col, 4);
+    if (THREE.DynamicDrawUsage !== undefined && typeof pa.setUsage === 'function') { pa.setUsage(THREE.DynamicDrawUsage); ca.setUsage(THREE.DynamicDrawUsage); }
+    g.setAttribute('position', pa);
+    g.setAttribute('color', ca);
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.setDrawRange(0, 0);
+    // The colours are written already multiplied by their light, and the alpha is the share of the background the
+    // beam covers (LIGHT_BEAM.veil): result = colour + (1 - alpha) x what is behind. Alpha 0 is pure added light.
+    const params = { vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false };
+    if (THREE.CustomBlending !== undefined && THREE.OneFactor !== undefined && THREE.OneMinusSrcAlphaFactor !== undefined) {
+      params.blending = THREE.CustomBlending; params.blendSrc = THREE.OneFactor; params.blendDst = THREE.OneMinusSrcAlphaFactor;
+      if (THREE.AddEquation !== undefined) params.blendEquation = THREE.AddEquation;
+    } else if (THREE.AdditiveBlending !== undefined) params.blending = THREE.AdditiveBlending;
+    const m = keep(new THREE.MeshBasicMaterial(params));
+    const mesh = new THREE.Mesh(g, m);
+    mesh.name = name;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = order;
+    mesh.matrixAutoUpdate = false;
+    mesh.visible = false;
+    mesh.userData.nsGlow = { target: order > BODY_ORDER.arm + 2.2 ? 'mirror' : 'player', regionId: null, regionIds: [], muscles: [], intensity: 0, beam: true };
+    scene.add(mesh);
+    return { mesh, pos, col, pa, ca, n: 0, verts: beamVerts, idxPer: beamIdxPer };
+  }
+  const beamOwn = makeBeamMesh('ns-light beams (motor area -> your muscles; a picture of the simulation, not a nerve)', BODY_ORDER.arm + 2);
+  const beamMirror = makeBeamMesh('ns-light beams (motor area -> the mirror body)', BODY_ORDER.arm + 2.5);
 
   const onLost = e => { if (e && typeof e.preventDefault === 'function') e.preventDefault(); lost = true; };
   const onRestored = () => {
@@ -7196,6 +7315,44 @@ export function createScene({
         rec.markPts = n >= 3 ? Float32Array.from(pts) : null;
         rec.markCentre = n >= 1 ? c : null;
       }
+      // 19 November 2026 (the light beam; the owner: "match the relevant surface area of both brain and muscle";
+      // "Ensure it's precise to its correlates"): the part of this area that does each of its movements (its KEY: the
+      // picker's own rule, ns-brain regionActionAt, asked for each of the area's vertices), as up to BEAM_KEY_POINTS
+      // sample points and their mean, under the movement's id (and its game-arm id). A beam of that movement starts
+      // on exactly these points.
+      {
+        const byAct = new Map();
+        if (typeof NsBrain.regionActionAt === 'function' && Array.isArray(r.actions) && r.actions.length) {
+          for (const pi of r.partIndices || []) {
+            const part = seg.parts[pi];
+            if (!part || !(part.faceCount > 0)) continue;
+            const nv = part.positions.length / 3, U = part.u && part.u.length === nv ? part.u : null, S2 = part.s && part.s.length === nv ? part.s : U;
+            if (!U && !S2) continue;
+            for (let v = 0; v < nv; v++) {
+              let act = null;
+              try { act = NsBrain.regionActionAt(r, U ? U[v] : NaN, S2 ? S2[v] : NaN); } catch { act = null; }
+              if (!act || typeof act.id !== 'string') continue;
+              let list = byAct.get(act.id);
+              if (!list) { list = { act, pts: [] }; byAct.set(act.id, list); }
+              list.pts.push(part.positions[3 * v], part.positions[3 * v + 1], part.positions[3 * v + 2]);
+            }
+          }
+        }
+        rec.keys = new Map();
+        for (const { act, pts: all } of byAct.values()) {
+          const total = all.length / 3;
+          if (total < 3) continue;
+          const stride = Math.max(1, Math.ceil(total / BEAM_KEY_POINTS)), kp = [];
+          for (let i = 0; i < total; i += stride) kp.push(all[3 * i], all[3 * i + 1], all[3 * i + 2]);
+          const kn = kp.length / 3, kc = [0, 0, 0];
+          for (let i = 0; i < kp.length; i += 3) { kc[0] += kp[i] / kn; kc[1] += kp[i + 1] / kn; kc[2] += kp[i + 2] / kn; }
+          const key = { pts: Float32Array.from(kp), n: kn, centre: kc, points: total };
+          rec.keys.set(act.id, key);
+          if (typeof act.armActionId === 'string' && act.armActionId) rec.keys.set(act.armActionId, key);
+        }
+        // the whole area, for a link that names no movement of it
+        rec.wholeKey = rec.markPts && rec.markCentre ? { pts: rec.markPts, n: rec.markPts.length / 3, centre: rec.markCentre, points: rec.markPts.length / 3 } : null;
+      }
       // 18 November (ns-brain-live): where this area's bloom sits: on the visible face of its key (bloomCentreOf), one
       // per hemisphere. The grey in-between areas have no movement of their own: they do not bloom.
       {
@@ -7685,7 +7842,8 @@ export function createScene({
     }
     // R558 (Message 52): in the outside view the mirror body backs away from your body as far as the camera does.
     const viewAwayM = camPose ? outsideMirrorAwayM(camPose.position) : 0; // 18 November 2026, late (audit S20)
-    if (Math.abs(viewAwayM - mirror.viewAwayM) > 1e-4) { mirror.viewAwayM = viewAwayM; if (mirror.transform) applyMirror(); }
+    const viewOutside = camPose ? camPose.blend : 0; // 19 November 2026: larger and lower from outside (ns-mirror MIRROR_OUTSIDE magnifyBy / dropM)
+    if (Math.abs(viewAwayM - mirror.viewAwayM) > 1e-4 || Math.abs(viewOutside - (mirror.viewOutside || 0)) > 1e-4) { mirror.viewAwayM = viewAwayM; mirror.viewOutside = viewOutside; if (mirror.transform) applyMirror(); }
     applyCamera();
     updateCameraRange();
     if (cameraProjectionPlan && cameraProjectionPlan.phase === 'planning') {
@@ -8051,7 +8209,7 @@ export function createScene({
         for (const mesh of region.depthMeshes) tag(mesh, 'brain-region-depth', null, false, null, region.id);
         for (const mesh of region.fillMeshes || []) tag(mesh, 'brain-region-fill', null, false, null, region.id);
       }
-      tag(glowOwn.mesh, 'own-glow-link'); tag(glowMirror.mesh, 'mirror-glow-link');
+      tag(glowOwn.mesh, 'own-glow-link'); tag(glowMirror.mesh, 'mirror-glow-link'); tag(beamOwn.mesh, 'own-glow-link'); tag(beamMirror.mesh, 'mirror-glow-link');
       for (const target of ['brain', 'mirror']) {
         const rig = arrowSets[target] && arrowSets[target].rig;
         if (rig && rig.arrows) for (const dir of ARROW_DIRS) if (rig.arrows[dir]) tag(rig.arrows[dir].mesh, `${target}-orbit-arrow-${dir}`);
@@ -9304,6 +9462,27 @@ export function createScene({
     // 18 November 2026, late (EYE_NECK): the soft shadow where your own neck meets the skull that is not drawn; it rides
     // on the top neck vertebra's in-place twin, so it is drawn only when the neck is; from outside, where the head is
     // drawn in place, it is hidden (applyCamera).
+    // 19 November 2026 (EYE_COLLAR): the box's planes and the cap, on the breastbone's top.
+    if (!collar.planes) {
+      const B = EYE_COLLAR.box, C = EYE_COLLAR.cap;
+      if (typeof THREE.Plane === 'function' && typeof THREE.Matrix4 === 'function') {
+        const P = (nx, ny, nz, c) => new THREE.Plane(new THREE.Vector3(nx, ny, nz), c);
+        // a point is cut when it is on the negative side of ALL five (clipIntersection): inside the box
+        collar.rest = [P(0, 0, -1, B.zFromMm), P(1, 0, 0, -B.xMm[1]), P(-1, 0, 0, B.xMm[0]), P(0, 1, 0, -B.yMm[1]), P(0, -1, 0, B.yMm[0])];
+        collar.planes = collar.rest.map(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e9));
+        collar.local = new THREE.Matrix4(); collar.world = new THREE.Matrix4(); collar.inv = new THREE.Matrix4();
+        renderer.localClippingEnabled = true;
+        const cap = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 40, 24)), keep(new THREE.MeshStandardMaterial({ color: C.color, roughness: C.roughness, metalness: 0 })));
+        cap.name = 'collar cap (display, not anatomy)';
+        cap.position.set(C.centreMm[0], C.centreMm[1], C.centreMm[2]); cap.scale.set(C.radiiMm[0], C.radiiMm[1], C.radiiMm[2]); cap.updateMatrix(); cap.matrixAutoUpdate = false;
+        collar.capRest = cap.matrix.clone();
+        cap.raycast = () => {}; cap.renderOrder = BODY_ORDER.torso; cap.visible = false;
+        cap.userData = { nsCollarCap: true };
+        bodyGroup.add(cap);
+        collar.cap = cap;
+        collarMaterials();
+      }
+    }
     if (!neckShade) {
       const host = bodyById.get(EYE_NECK.shade.hostId), S = EYE_NECK.shade;
       if (host && host.inPlace) {
@@ -10224,6 +10403,7 @@ export function createScene({
   /** R558 (FIRST_PERSON_BODY): how much of a point of your own body (world metres) the last set frame draws, 0..1
    * (1 when the rule is off). legs: the point belongs to a leg (the legs' own plane). */
   function firstPersonShareAt(x, y, z, legs) {
+    if (collarHides(x, y, z)) return 0; // 19 November 2026 (EYE_COLLAR): not drawn there, or under the cap
     const fp = firstPersonUniform.value;
     if (!(fp.w > 0)) return 1;
     const v = camera.matrixWorldInverse.elements, n = firstPersonAxisUniform.value;
@@ -11902,8 +12082,8 @@ export function createScene({
     let T = null;
     try {
       if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
-      else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.external, viewAwayM: mirror.viewAwayM }));
-      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }), viewAwayM: mirror.viewAwayM }));
+      else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.external, viewAwayM: mirror.viewAwayM, viewOutside: mirror.viewOutside || 0 }));
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }), viewAwayM: mirror.viewAwayM, viewOutside: mirror.viewOutside || 0 }));
     } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
     if (!T || !T.matrix || T.matrix.length !== 16) return false;
     // R558 (Message 12): the stop-at-contact correction (setMirrorCorrection) rides on top of the placement.
@@ -12676,15 +12856,183 @@ export function createScene({
     return true;
   }
   function finishRibbons(buf) {
+    const idxPer = buf.idxPer || glowIdxPer, verts = buf.verts || glowVerts; // (a beam buffer carries its own layout)
     buf.mesh.visible = buf.n > 0;
-    buf.mesh.geometry.setDrawRange(0, buf.n * glowIdxPer);
+    buf.mesh.geometry.setDrawRange(0, buf.n * idxPer);
     if (buf.n > 0) {
-      const nv = buf.n * glowVerts;
+      const nv = buf.n * verts;
       for (const [attr, size] of [[buf.pa, 3], [buf.ca, 4]]) {
         if (typeof attr.clearUpdateRanges === 'function' && typeof attr.addUpdateRange === 'function') { attr.clearUpdateRanges(); attr.addUpdateRange(0, nv * size); }
         attr.needsUpdate = true;
       }
     }
+  }
+  /* ---- 19 November 2026: the light beam (ns-links LIGHT_BEAM) --------------------------------------------------- */
+  // Scratch (made once): the world points of the key and of one muscle, the beam's axes, a matrix.
+  const beamKeyW = new Float64Array(3 * BEAM_KEY_POINTS), beamMusW = new Float64Array(3 * (BEAM_MUSCLE_POINTS + 2));
+  const beamA = [0, 0, 0], beamB = [0, 0, 0], beamDir = [0, 0, 0], beamSide = [0, 0, 0], beamExt = { lo: 0, hi: 0 };
+  const beamM = new THREE.Matrix4();
+  const beamS = new Float64Array(LIGHT_BEAM.segments + 1);
+  /** Up to BEAM_MUSCLE_POINTS of a body muscle's own vertices, in its mesh's coordinates (made once per muscle). */
+  function beamBodyPts(b) {
+    if (b.beamPts !== undefined) return b.beamPts;
+    b.beamPts = null;
+    const at = b.mesh && b.mesh.geometry ? b.mesh.geometry.getAttribute('position') : null;
+    if (!at || !(at.count >= 3)) return null;
+    const stride = Math.max(1, Math.ceil(at.count / BEAM_MUSCLE_POINTS)), out = [];
+    for (let i = 0; i < at.count; i += stride) out.push(at.getX(i), at.getY(i), at.getZ(i));
+    b.beamPts = Float32Array.from(out);
+    return b.beamPts;
+  }
+  /** World points of a body muscle (own body or its mirror twin's place) into beamMusW; returns their number and
+   * writes their mean to `centre`. */
+  function beamBodyWorld(b, group, centre) {
+    const P = beamBodyPts(b);
+    if (!P) return 0;
+    beamM.multiplyMatrices(group.matrixWorld, b.mesh.matrix);
+    const n = P.length / 3;
+    let x = 0, y = 0, z = 0;
+    for (let i = 0; i < n; i++) {
+      pv.set(P[3 * i], P[3 * i + 1], P[3 * i + 2]).applyMatrix4(beamM);
+      beamMusW[3 * i] = pv.x; beamMusW[3 * i + 1] = pv.y; beamMusW[3 * i + 2] = pv.z; x += pv.x; y += pv.y; z += pv.z;
+    }
+    centre[0] = x / n; centre[1] = y / n; centre[2] = z / n;
+    return n;
+  }
+  /** World points of a muscle of the left arm (posed sparse vertices), on your arm or on the mirror body's. */
+  function beamArmWorld(m, toMirror, centre) {
+    armSkinSubset(m);
+    const p = m.pos, n = p.length / 3, s0 = m.subStep > 0 ? m.subStep : Math.max(1, Math.floor(n / 400));
+    const step = s0 * Math.max(1, Math.ceil(n / s0 / BEAM_MUSCLE_POINTS));
+    let k = 0, x = 0, y = 0, z = 0;
+    for (let v = 0; v < n && k < BEAM_MUSCLE_POINTS; v += step, k++) {
+      pv.set(p[3 * v], p[3 * v + 1], p[3 * v + 2]);
+      if (toMirror) pv.applyMatrix4(armGroup.matrix).applyMatrix4(mirrorArmGroup.matrixWorld); else pv.applyMatrix4(armGroup.matrixWorld);
+      beamMusW[3 * k] = pv.x; beamMusW[3 * k + 1] = pv.y; beamMusW[3 * k + 2] = pv.z; x += pv.x; y += pv.y; z += pv.z;
+    }
+    if (!k) return 0;
+    centre[0] = x / k; centre[1] = y / k; centre[2] = z / k;
+    return k;
+  }
+  /** World points of a key of the strip into beamKeyW; their mean to beamA. */
+  function beamKeyWorld(key) {
+    const n = Math.min(BEAM_KEY_POINTS, key.n), P = key.pts, stride = Math.max(1, Math.floor(key.n / n));
+    let k = 0, x = 0, y = 0, z = 0;
+    for (let i = 0; i < key.n && k < n; i += stride, k++) {
+      pv.set(P[3 * i], P[3 * i + 1], P[3 * i + 2]).applyMatrix4(brainGroup.matrixWorld);
+      beamKeyW[3 * k] = pv.x; beamKeyW[3 * k + 1] = pv.y; beamKeyW[3 * k + 2] = pv.z; x += pv.x; y += pv.y; z += pv.z;
+    }
+    if (k) { beamA[0] = x / k; beamA[1] = y / k; beamA[2] = z / k; }
+    return k;
+  }
+  /** One cone of light from the key (beamKeyW, nk points, mean beamA) to the muscle (beamMusW, nm points, mean B) into
+   * buf: straight, facing the eye, as wide at each end as the key and the muscle are seen across it, and lying over
+   * both. level: the link's level; phase: the running band (NaN: none); tS: the rays' clock (NaN: still). */
+  function emitBeam(buf, nk, nm, B, level, phase, alphaMul, regionId, tS, share = 1) {
+    if (buf.n >= LIGHT_BEAM.maxBeams || nk < 1 || nm < 1) return false;
+    const rc = regionId ? areaRecord(regionId) : null;
+    const st = glowStyle(level), hue = rc ? rc.glowLinear : st.halo, k = st.intensity * alphaMul;
+    if (!(k > 0)) return false;
+    const A = beamA, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    let dx = B[0] - A[0], dy = B[1] - A[1], dz = B[2] - A[2];
+    const L = Math.hypot(dx, dy, dz);
+    if (!(L > 1e-4)) return false;
+    dx /= L; dy /= L; dz /= L;
+    beamDir[0] = dx; beamDir[1] = dy; beamDir[2] = dz;
+    // sideways: across the beam as seen from the eye (at the beam's middle)
+    const vx = (A[0] + B[0]) / 2 - cx, vy = (A[1] + B[1]) / 2 - cy, vz = (A[2] + B[2]) / 2 - cz;
+    let sx = dy * vz - dz * vy, sy = dz * vx - dx * vz, sz = dx * vy - dy * vx;
+    const sL = Math.hypot(sx, sy, sz);
+    if (!(sL > 1e-9)) return false; // the beam points straight at the eye
+    sx /= sL; sy /= sL; sz /= sL;
+    beamSide[0] = sx; beamSide[1] = sy; beamSide[2] = sz;
+    // the key and the muscle, measured along the beam and across it
+    let e = extentAlong(beamKeyW, nk, A, beamDir, beamExt); const aHi = e.hi;
+    e = extentAlong(beamKeyW, nk, A, beamSide, beamExt); const aMid = (e.lo + e.hi) / 2, hwA = Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2);
+    e = extentAlong(beamMusW, nm, B, beamDir, beamExt); const bLo = e.lo, bHi = e.hi;
+    e = extentAlong(beamMusW, nm, B, beamSide, beamExt); const bMid = (e.lo + e.hi) / 2, hwB = Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2);
+    // along the beam from the key (t0) to the far edge of the muscle (t1), measured from A
+    // (from the MIDDLE of the key: light laid over the whole key spilled onto the areas beside it, and the lit key is
+    // bright by itself)
+    const t0 = 0, tA = Math.max(L * 0.02, Math.min(aHi, L * 0.4)), tB = Math.max(L + bLo, L * 0.6), t1 = L + bHi, Lt = t1 - t0;
+    if (!(Lt > 1e-4)) return false;
+    const sA = (tA - t0) / Lt, sB = (tB - t0) / Lt;
+    // samples: three steps over the key, three over the muscle, the rest between them
+    const nS = LIGHT_BEAM.segments, capN = 3;
+    for (let i = 0; i <= nS; i++) beamS[i] = i <= capN ? sA * i / capN : i >= nS - capN ? sB + (1 - sB) * (i - (nS - capN)) / capN : sA + (sB - sA) * (i - capN) / (nS - 2 * capN);
+    const AC = LIGHT_BEAM.across, nA = AC.length, o = buf.n * beamVerts;
+    const hull = glowHull, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
+    for (let i = 0; i <= nS; i++) {
+      const s = beamS[i], t = t0 + s * Lt;
+      const f = s <= sA ? 0 : s >= sB ? 1 : (s - sA) / Math.max(1e-9, sB - sA);
+      const off = aMid + (bMid - aMid) * f, hw = beamHalfWidth(s, sA, sB, hwA, hwB);
+      const px0 = A[0] + dx * t + sx * off, py0 = A[1] + dy * t + sy * off, pz0 = A[2] + dz * t + sz * off;
+      const d = Math.hypot(px0 - cx, py0 - cy, pz0 - cz);
+      let along = d < GLOW_LINK.nearClipM ? 0 : beamAlong(s, sA, sB, phase) * k * beamShareAt(share, f);
+      if (along > 0 && hull) {
+        pv.set(px0, py0, pz0).applyMatrix4(vi);
+        if (pv.z < -camera.near) { pv.applyMatrix4(pm); if (hullSignedDistance(hull, (pv.x + 1) * 0.5 * cssW, (1 - pv.y) * 0.5 * cssH) <= 0) { along *= LIGHT_BEAM.overBrain; glowState.overSamples++; } }
+      }
+      for (let j = 0; j < nA; j++) {
+        const r = AC[j], v = o + i * nA + j, ac = beamAcross(r, tS);
+        buf.pos[3 * v] = px0 + sx * r * hw; buf.pos[3 * v + 1] = py0 + sy * r * hw; buf.pos[3 * v + 2] = pz0 + sz * r * hw;
+        const w = ac.white, li = Math.max(0, Math.min(1, ac.light * along));
+        buf.col[4 * v] = (hue[0] + (1 - hue[0]) * w) * li; buf.col[4 * v + 1] = (hue[1] + (1 - hue[1]) * w) * li; buf.col[4 * v + 2] = (hue[2] + (1 - hue[2]) * w) * li;
+        buf.col[4 * v + 3] = LIGHT_BEAM.veil * li;
+      }
+    }
+    buf.n++;
+    glowState.beamLast = { halfAtKeyM: hwA, halfAtMuscleM: hwB, lengthM: L, keyPoints: nk, musclePoints: nm }; // QA: the last cone's measures
+    return true;
+  }
+  /** The beams of one lit (or looked-at) area: for each of its links, from the key of the link's movement to each
+   * muscle that link drives, on the mirror body and (where the muscle is in the picture) on your own. Returns the
+   * number of muscles reached. */
+  const beamTargets = [];
+  function emitAreaBeams(regionId, e, env, phase, mirrorOn, tS) {
+    const rec = e.rec;
+    let reached = 0;
+    brainGroup.updateMatrixWorld(true);
+    for (const link of e.links) {
+      const key = (link.actionId && rec.keys && rec.keys.get(link.actionId)) || rec.wholeKey;
+      if (!key) continue;
+      const nk = beamKeyWorld(key);
+      if (!nk) continue;
+      // the muscles of this link, heaviest drive first
+      beamTargets.length = 0;
+      for (const bid in link.body) { const b = bodyById.get(bid); if (b && b.kind === 'muscle') beamTargets.push({ w: link.body[bid], b, m: null }); }
+      const armKeys = link.armKeys, armNames = link.armNames;
+      if (armNames.length || Object.keys(armKeys).length) {
+        armGroup.updateMatrixWorld(true);
+        for (const m of muscles) {
+          const nm = m.lname !== undefined ? m.lname : String(m.mesh.name || '').toLowerCase();
+          const w = m.key !== null && armKeys[m.key] !== undefined ? armKeys[m.key] : armNames.some(q => nm.includes(q)) ? 1 : 0;
+          if (w > 0) beamTargets.push({ w, b: null, m });
+        }
+      }
+      if (!beamTargets.length) continue;
+      beamTargets.sort((p, q) => q.w - p.w);
+      if (beamTargets.length > LIGHT_BEAM.maxPerArea) beamTargets.length = LIGHT_BEAM.maxPerArea;
+      const share = beamShare(beamTargets.length), lv = link.level;
+      const aBase = env * (link.hover ? LIGHT_BEAM.hoverAlpha / Math.max(1e-6, LINKS.hoverAlpha) : 1);
+      for (const tg of beamTargets) {
+        reached++;
+        // the mirror body
+        if (mirrorOn && (tg.m || tg.b.mirror)) {
+          const n = tg.m ? beamArmWorld(tg.m, true, beamB) : beamBodyWorld(tg.b, mirrorBodyGroup, beamB);
+          if (n) emitBeam(beamMirror, nk, n, beamB, lv, phase, aBase * GLOW_LINK.mirrorAlpha, regionId, tS, share);
+        }
+        // your own body: only a muscle the view draws, in the picture and not right at the eye
+        if (GLOW_LINK.own === true || (GLOW_LINK.own === 'no-mirror' && !mirrorOn)) {
+          const n = tg.m ? beamArmWorld(tg.m, false, beamB) : beamBodyWorld(tg.b, bodyGroup, beamB);
+          if (!n) continue;
+          if (tg.b && !(tg.b.face ? camState.headInPlace : firstPersonShareAt(beamB[0], beamB[1], beamB[2], tg.b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom)) continue;
+          if (Math.hypot(beamB[0] - camera.position.x, beamB[1] - camera.position.y, beamB[2] - camera.position.z) < GLOW_LINK.minTargetM || !inPicture(beamB)) continue;
+          emitBeam(beamOwn, nk, n, beamB, lv, phase, aBase * LIGHT_BEAM.ownAlpha, regionId, tS, share);
+        }
+      }
+    }
+    return reached;
   }
   // R558: the rims of active areas and driven muscles are set with their colours (applyRegionStyle, shadeMuscle).
   /** Per frame: eased link levels (ns-colors stepGlow), the rims of the linked areas and muscles, and the ribbons. */
@@ -12709,7 +13057,8 @@ export function createScene({
     // glowLinks), so a second, wall-clock smoothing here would make the glow lag behind the area (and differ between
     // live play and QA step frames). A link that leaves the list is gone at once (it is below GLOW_LINK.minLevel then).
     glowState.eased.clear();
-    glowOwn.n = 0; glowMirror.n = 0;
+    glowOwn.n = 0; glowMirror.n = 0; beamOwn.n = 0; beamMirror.n = 0;
+    const beamT = reducedMotion ? NaN : nowMs() / 1000; // the rays' clock (still under reduced motion)
     let rimMuscles = 0, rimAreas = 0, topLevel = 0, topRegion = null;
     const regionIds = [], targets = [];
     const phase = reducedMotion ? NaN : ((nowMs() / 1000) / GLOW_LINK.pulseS) % 1; // no travelling pulse under reduced motion
@@ -12753,6 +13102,9 @@ export function createScene({
       const puAge = powerUpNow() - powerUpArea(regionId).t0;
       const areaPhase = reducedMotion ? NaN : linkPulsePhase(puAge, { hover: e.hover, pulseS: GLOW_LINK.pulseS });
       env *= e.hover ? LINKS.hoverAlpha : powerUpBlink(puAge, { reduced: reducedMotion });
+      // 19 November 2026 (ns-links LIGHT_BEAM): cones of light, one from the movement's key to each muscle it drives,
+      // in place of the one curved line to the middle of a muscle group.
+      if (LIGHT_BEAM.on) { rimMuscles += emitAreaBeams(regionId, e, env, areaPhase, mirrorOn, beamT); continue; }
       pv.set(rec.markCentre[0], rec.markCentre[1], rec.markCentre[2]).applyMatrix4(brainGroup.matrixWorld);
       const a = [pv.x, pv.y, pv.z];
       // targets -> groups (part + side), weighted centres in the player's world. R558 (FIRST_PERSON_BODY): only muscles of
@@ -12816,10 +13168,12 @@ export function createScene({
     }
     finishRibbons(glowOwn);
     finishRibbons(glowMirror);
-    for (const b of [glowOwn, glowMirror]) { const g = b.mesh.userData.nsGlow; g.regionId = b.n ? topRegion : null; g.regionIds = b.n ? regionIds.slice() : []; g.muscles = b.n ? [...new Set(targets)] : []; g.intensity = b.n ? Math.round(glowStyle(topLevel).intensity * 1000) / 1000 : 0; }
-    glowState.ribbons = glowOwn.n; glowState.mirrorRibbons = glowMirror.n; glowState.rimMuscles = rimMuscles; glowState.rimAreas = rimAreas;
+    finishRibbons(beamOwn);
+    finishRibbons(beamMirror);
+    for (const b of LIGHT_BEAM.on ? [beamOwn, beamMirror] : [glowOwn, glowMirror]) { const g = b.mesh.userData.nsGlow; g.regionId = b.n ? topRegion : null; g.regionIds = b.n ? regionIds.slice() : []; g.muscles = b.n ? [...new Set(targets)] : []; g.intensity = b.n ? Math.round(glowStyle(topLevel).intensity * 1000) / 1000 : 0; }
+    glowState.ribbons = glowOwn.n + beamOwn.n; glowState.mirrorRibbons = glowMirror.n + beamMirror.n; glowState.rimMuscles = rimMuscles; glowState.rimAreas = rimAreas;
     // R5-access A7: a page flag while any link shows (the HUD text gets its darker backdrop, proposed-glow-text.css).
-    const flag = glowOwn.n + glowMirror.n > 0 ? 'on' : 'off';
+    const flag = glowOwn.n + glowMirror.n + beamOwn.n + beamMirror.n > 0 ? 'on' : 'off';
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
     glowState.cpuMs = nowMs() - t0;
   }
@@ -12828,7 +13182,7 @@ export function createScene({
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
       cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials, muscleShare: muscleShareState(Boolean(opts && opts.audit === true)),
-      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode,
+      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null } : null,
       // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
       powerUp: { shader: powerUp.applied, materials: powerUp.materials, starts: powerUp.starts, settledStarts: powerUp.settledStarts, recharges: powerUp.recharges, clockS: Math.round(powerUpClock.value.x * 1000) / 1000, lastStartS: powerUp.lastStart === null ? null : Math.round(powerUp.lastStart * 1000) / 1000, lastStartArea: powerUp.lastStartArea, reduced: powerUpClock.value.y > 0.5 },
       // R558 (Message 18): the muscle look (patch state, tendon meshes written, tone assignment summary).
@@ -13584,6 +13938,7 @@ export function createScene({
       if (!(envelope.minCameraDepthM >= camera.near && envelope.maxCameraDepthM <= camera.far)) fail('scene_input', 'current full mirror geometry violates camera range; ordinary pose remains unresolved');
     }
     checkCameraProjectionPlan();
+    applyCollar(!camState.headInPlace); // 19 November 2026 (EYE_COLLAR): the clean end at the collar while your own head is not drawn
     // R558 (Message 20): the outline ID pass of this frame's body meshes (the composite in `scene` reads it). The soft
     // depth shading (ns-outline OUTLINE_AO) is drawn only at the full quality level; the lines at every level.
     // R558 BB (Message 28): the lines' supersampling follows the quality level too (ns-outline OUTLINE_AA).
@@ -13690,7 +14045,7 @@ export function createScene({
     objects: {
       renderer, scene, camera, armGroup, brainGroup, bones, muscles, glass, glassDepth, markers, get strip() { return strip; },
       /** R5-scene: the eye (the arm hangs on it), the mirror body groups, the 3D arrow sets and the two glow-link meshes. */
-      eyeRig, mirrorRoot, mirrorBodyGroup, mirrorArmGroup, arrowSets, glowMeshes: { own: glowOwn.mesh, mirror: glowMirror.mesh },
+      eyeRig, mirrorRoot, mirrorBodyGroup, mirrorArmGroup, arrowSets, glowMeshes: LIGHT_BEAM.on ? { own: beamOwn.mesh, mirror: beamMirror.mesh } : { own: glowOwn.mesh, mirror: glowMirror.mesh },
       get mirror() { return mirror; },
       glassXray,
       materials: { bone: boneMaterial, glass: glassMaterial, glassDepth: glassDepthMaterial, glassXray: glassXrayMaterial },

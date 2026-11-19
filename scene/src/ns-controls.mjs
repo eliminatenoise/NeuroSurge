@@ -1200,6 +1200,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     lockFallback = true;
     call(onLockError);
   };
+  let lockAfterArrow = false; // 19 November 2026: a free-pointer arrow press asks for the capture at its release
   const requestLock = () => {
     if (typeof target.requestPointerLock !== 'function') return false;
     lockPending = true;
@@ -1294,7 +1295,14 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (e.repeat === true) return;
     const at = eventTime(e);
     // R558 (Messages 33 and 34): Shift + F holds the item behind the one in front.
+    const beforeKey = getState();
     apply(s => controls.keyDown(s, code, at, { behind: reachOf(e) }));
+    // 19 November 2026 (the owner: "After I move the brain up, the camera view [is] locked down"; a check: with the
+    // pointer not captured the look followed the pointer only WHILE Space held something). One rule in every state:
+    // a Space press the game accepted captures the pointer, exactly as a click on the picture does (a key press is a
+    // user activation), so the look goes on following the pointer after the release. A browser that refuses the
+    // capture keeps the free pointer and its drag-to-look.
+    if (code === 'Space' && getState() !== beforeKey && !isLocked() && !lockFallback && !lockPending) requestLock();
   });
   on(view, 'keyup', e => {
     const code = e.code;
@@ -1367,7 +1375,11 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       arrowPress = true;
       dragging = false;
+      const beforeArrow = getState();
       apply(s => controls.buttonDown(s, at, { via: 'pointer', x: local.x, y: local.y }));
+      // 19 November 2026: a press on an arrow captures the pointer too, once the press is over (asked for at the
+      // release, so the arrow press itself is not cut short by the capture). armed only when the game took the press.
+      lockAfterArrow = getState() !== beforeArrow;
       return;
     }
     if (hasButtons) apply(s => controls.buttonDown(s, at, { via: 'pointer', x: local ? local.x : null, y: local ? local.y : null, behind }));
@@ -1390,6 +1402,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   });
   on(view, 'mouseup', e => {
     if (!(Number.isFinite(e.buttons) && e.buttons !== 0)) {
+      if (lockAfterArrow) { lockAfterArrow = false; if (arrowPress && !isLocked() && !lockFallback && !lockPending) requestLock(); }
       dragging = false;
       arrowPress = false;
       const at = eventTime(e);

@@ -55,7 +55,7 @@ export const ASSEMBLY = Object.freeze({
   // it (the field of view and the downward look the game starts with; the launcher passes its own numbers, these are
   // the same ones for a caller that passes none), so the backdrop does not jump when the game takes over.
   // (18 November 2026, late: the game's first view is now 54 degrees, 52 down: the launcher's numbers, package FLAT)
-  room: Object.freeze({ fovYDeg: 54, pitchDeg: -24, eye: Object.freeze([0, 0.11, -0.04]), mirrorZ: -2.06 })
+  room: Object.freeze({ fovYDeg: 54, pitchDeg: -25.5, eye: Object.freeze([0, 0.11, -0.04]), mirrorZ: -2.06 })
 });
 
 /** Reads the vertices and faces of a Wavefront OBJ from its bytes (ASCII). Returns { positions: Float32Array,
