@@ -1995,6 +1995,17 @@ At 640 by 450, the grey up arrow could land above the top of the picture after y
 
 When the outside camera settles, the game checks each arrow's full picking and hover area in that view. A clear tip keeps its place. An obstructed tip moves to a free world position at its original depth, on its side of the object. The mirror body's visible edge guides the search for its arrows. The game uses the resulting 3D frame for drawing and picking. The frames stay in the world as you look around or tilt the mirror body back upright. Carrying an object still lets you choose its place.
 
+## 150. A wheel turn can no longer throw you out of the game (19 November)
+
+Found by the author's own hunt for faults (the user's standing word of 11 November: look for them and fix them), with sessions of random input: keys, clicks, drags and wheel turns for a minute or so each, checked for script errors, numbers that are not numbers, a camera that is not finite, and a game that is no longer there.
+
+One session ended on a blank page. The browser had gone back in its history, to the page before the game, and everything in the game was gone. It took three inputs: Shift held, a move of the pointer, one turn of the wheel. In Chromium on Linux a wheel turn with Shift held that the page does not use is the browser's “back”; the game asks you to hold Shift (to reach the thing behind another), and it used the wheel for nothing. On other systems a sideways two-finger swipe on a trackpad does the same.
+
+- The page now takes every wheel event (`wheelStays` in `ns-app.mjs`, a listener on the window) except one that scrolls a panel of the game's own that can still scroll that way, without Shift. The Esc page still scrolls with the wheel; checked. Ctrl or Command with the wheel, the browser's own zoom, is left to the browser.
+- `overscroll-behavior: none` on the page (`neurosurge.css`), so a swipe past the page's edge is not a browser gesture.
+
+Two of the first seven sessions left the game this way; in one the same gesture the other way brought the game back, started afresh. After the change the three inputs were replayed with and without Space and W held, and both of those sessions were run again: the game stays. Eleven sessions of 50 to 75 seconds in all, four of them after the change, found no script error and no bad number. Not tried: a real trackpad, a mouse with a tilting wheel, other browsers, macOS.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

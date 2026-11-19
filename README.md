@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 52: a wheel turn or trackpad swipe with **Shift** held can no longer send your browser back to the page before the game.
+
 Body update 51: whatever is hidden behind something shows through it as a light-blue glass outline: a hand under your body, the mirror body behind your leg, a body behind the brain. The loose dark lines over the open neck are gone.
 
 Body update 50: **W** and **S** move the chosen limb's hand or foot straight out from the shoulder or hip and straight back in; **A** and **D** swing the whole limb to your left or right without changing its bend.

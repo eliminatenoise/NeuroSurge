@@ -325,6 +325,27 @@ export function lookFramingPoint(eye, at, fovYDeg, frameUp = 0.5) {
   const up = Math.atan((2 * frameUp - 1) * Math.tan((fovYDeg * DEG) / 2));
   return { yaw, pitch: toPoint - up };
 }
+/** Whether a wheel event is kept from the browser (true: the page takes it; see start()'s wheel listener). False when
+ * an element of the game's own under the pointer can scroll further the way the wheel turns, up or down, and Shift
+ * is not held (Shift turns the wheel sideways, and a sideways turn nothing uses is the browser's "back"); and false
+ * with Ctrl or the Command key, which is the browser's own zoom and stays the player's.
+ * `win` supplies getComputedStyle. Pure apart from reading the elements. */
+export function wheelStays(e, win = null) {
+  if (!e) return true;
+  if (e.ctrlKey || e.metaKey) return false;
+  if (e.shiftKey) return true;
+  const dy = Number(e.deltaY) || 0, dx = Number(e.deltaX) || 0;
+  if (dy === 0 || Math.abs(dx) > Math.abs(dy)) return true;
+  const styleOf = win && typeof win.getComputedStyle === 'function' ? n => win.getComputedStyle(n) : null;
+  for (let n = e.target; n && n.nodeType === 1 && n.parentElement; n = n.parentElement) {
+    const room = n.scrollHeight - n.clientHeight;
+    if (!(room > 1)) continue;
+    const ov = styleOf ? String(styleOf(n).overflowY) : 'auto';
+    if (!/(auto|scroll)/.test(ov)) continue;
+    if (dy > 0 ? n.scrollTop < room - 0.5 : n.scrollTop > 0.5) return false; // (it scrolls this panel)
+  }
+  return true;
+}
 /** LIMB_KEYS.view.keys 'limb': where the keys move a limb's end to. place: the end's asked place; root: the shoulder
  * or hip (both world m); bodyRight: the unit direction to the body's right in the world; ax: +1 D, -1 A; az: +1 W,
  * -1 S; stepM: the way gone this frame (m). W / S: along the line from the root through the place (never nearer the
@@ -6302,6 +6323,13 @@ export function start(params = {}) {
     obj.addEventListener(type, fn, opts);
     pageListeners.push([obj, type, fn, opts]);
   };
+  // 19 November 2026 (found with random input). THE WHEEL NEVER LEAVES THE GAME. The game has no use for the wheel, and
+  // a wheel turn the page does not use goes to the browser: in Chromium on Linux a turn with Shift held goes BACK in
+  // the browser's history (measured: Shift, a pointer move, one wheel turn, and the game was gone to the page before
+  // it, with everything in it; Shift is a key the game asks you to hold), and elsewhere a sideways two-finger swipe
+  // does the same. So a wheel event is taken by the page (preventDefault) unless it scrolls a panel of the game's own
+  // that can still scroll that way (the Esc page, an information card), without Shift. wheelStays is the rule.
+  listen(view, 'wheel', e => { if (wheelStays(e, view)) e.preventDefault(); }, { passive: false, capture: true });
   // R4-fix (review RP10): More detail opened with the mouse (free-mouse play) also scrolls into the panel's view
   // (`toggle` does not bubble, so the listener captures).
   listen(doc, 'toggle', e => {

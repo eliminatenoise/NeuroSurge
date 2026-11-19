@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-51-outside-compass-fix",
+  "version": "experimental-2026-11-19-body-update-52",
   "experimental": true,
-  "source": "Body update 51. Whatever is hidden behind something shows through it as light-blue glass; no loose lines over the open neck. Outside-view orbit controls for the brain and mirror body.",
+  "source": "Body update 52. A wheel turn with Shift held can no longer send the browser back out of the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 321482,
-      "sha256": "1d4596b237da533080c98f1d93b1e3494f9f5c467deb35ee3e2fb646b64b3c44"
+      "bytes": 323313,
+      "sha256": "3391178a97f427fab6ffcdf1b591b12debdd7516a34245f20a7bdbba724eb29c"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 64644,
-      "sha256": "18e6713e5b617906253e64597cdc519ea17d4679f75ee8a049ea694bf80d5dd5"
+      "bytes": 64837,
+      "sha256": "9d4e3d664f59c8d5681b9d27b4f19ed816924f87fa2da41f3d358ff7d4cef1f1"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 44323,
-      "sha256": "9b4dc2bb73e7c7ffe0ffa1a76058d2080f95f2c6319df851d15262336d12b34e"
+      "bytes": 44749,
+      "sha256": "e95357260f85622134908d5c844f570c17eca95a1da555353ec7e16578faae31"
     },
     {
       "path": "README.md",
-      "bytes": 21560,
-      "sha256": "b1ccdff259b1fb78614b159cc44fc5eb77fd852affd0baaf1a0aef6cb86a2816"
+      "bytes": 21694,
+      "sha256": "0afbd16262576ed1e43344334ccf82416c812f113e80c8a44e8f0278b8ce7590"
     },
     {
       "path": "START.html",
-      "bytes": 4049,
-      "sha256": "7b8eef43abecd96be3c6f0af2147cadcfd8c91e8c7a99d4c81c8192174c506ce"
+      "bytes": 4029,
+      "sha256": "ae1ce4057c95dc6e5c83201e0d53d415f57e0deb4c2e6b8fa4419c8f966022ac"
     },
     {
       "path": "index.html",
-      "bytes": 1020,
-      "sha256": "cb91686be7b33938a6982b0d602eae0618e7c2d612b3bff46e81a39bba20b9a3"
+      "bytes": 1000,
+      "sha256": "a0ab6b6daf3972032719a87f9eacab86b7b84c4084b20ec603b0e09aa87eaa48"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3917,8 +3917,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 53635,
-      "sha256": "436167eb0231ddcfce2cad98c0cd62fe944bb6d82c569ec955e751c2701279ac"
+      "bytes": 53780,
+      "sha256": "b2d6e941a6009596567dcdb4e8d0c57e18181a53e8e4d0ed57408ed9da273a89"
     },
     {
       "path": "scene/example/preview.css",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 876880,
-      "sha256": "c06b9813ab541c738dfd95d5d6d494cb71fd259fa621ba519a25b3856f4d431e"
+      "bytes": 878996,
+      "sha256": "a3b262ab60478487f579464361b810e99d336d4cc1605baac6842ed7276f1b5d"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4554,6 +4554,11 @@
       "path": "tests/vessels.test.mjs",
       "bytes": 11512,
       "sha256": "d0a39968efe31a0265fea3d601ca1dbf845cd3f74c761b3f40c398bc5b180089"
+    },
+    {
+      "path": "tests/wheel-stays.test.mjs",
+      "bytes": 2874,
+      "sha256": "3d9891aeb798bd0101c3de469de6b880a45a5aa93f7a0ae7e267d8e2cea1db3a"
     },
     {
       "path": "tools/build-mesh-packs.mjs",

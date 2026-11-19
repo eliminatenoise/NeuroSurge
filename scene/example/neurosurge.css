@@ -56,6 +56,8 @@ html, body {
   color: var(--ns-fg);
   font-family: var(--ns-font);
   overflow: hidden;
+  /* 19 November 2026: a swipe or wheel turn past the page's edge must not take the browser back out of the game */
+  overscroll-behavior: none;
 }
 
 .ns-app {
