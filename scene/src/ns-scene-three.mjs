@@ -1275,7 +1275,7 @@ export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Bo
     // R558 (hunt 2): the groove share of the rim is a uniform (nsRimGroove), so the held cue can leave the sulci out
     // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
     // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
-    fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
+    fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nuniform vec3 nsPickTint;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
       'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + (flesh ? liveFragmentHead() : '') + GLASS_VARYINGS +
       // 17 November: the shell is shaded as living cortex (ns-brain-ink cortexFleshGlsl) instead of inked glass; `flesh`
       // false gives the glass back (glassInkGlsl), for the engineering pages.
@@ -3002,6 +3002,14 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * samplePoints of the region's vertices, projected with the live camera, covers less than areaFrac of the view
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
+/** 19 November 2026 (the owner: "have the whole brain light up slightly, faintly, with whatever color area is being
+ * picked"): level: the light added to the whole cortex, as a share of the picked area's glow colour, when an area is
+ * looked at or switched on; easeS: how quickly it comes and goes. Faint by design: the keys stay the bright things. */
+export const BRAIN_PICK_TINT = Object.freeze({ level: 0.06, easeS: 0.18 });
+/** 19 November 2026: how the brain's eyeballs follow the player's look (updateBrainEyes): the share of the look's turn
+ * they take, the most they turn either way (degrees), and the signs that make them turn the way the look goes as seen
+ * on the screen (the brain is turned to face the player, so its own left is the screen's right). Display choices. */
+export const BRAIN_EYE_TURN = Object.freeze({ gain: 0.7, maxDeg: 38, yawSign: 1, pitchSign: -1 });
 /** 19 November 2026 (ns-app LIMB_KEYS): the band of light that marks the chosen limb for a moment: its colour (linear),
  * its peak light and how much of what is behind it covers, and its half widths (m) at the root, the bend and the end of
  * an arm and of a leg. Display choices. */
@@ -4983,6 +4991,8 @@ export function createScene({
   const farEyeView = { rot: null, pw: null, K: 1, axis: null, axis0: null };
   // R4-scene: the shell's rim uniforms are kept, so the held-brain cue (HELD_CUE) can change them per frame.
   const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower }, nsRimGroove: { value: GLASS_READ.rimGroove } };
+  // 19 November 2026: the whole cortex's faint light in the picked area's colour (linear colour x level; updateGlow)
+  const brainPickTint = { value: new THREE.Vector3(0, 0, 0) };
   const heldCue = { target: 0, amount: 0 };
   // R4-scene: the left-arm rim (LEFT_ARM_RIM) uniforms and state ({ applied: null until a left-arm region compiles }).
   const leftArmRimUniforms = { color: { value: new THREE.Color(REGION_RENDER.territoryLine) }, params: { value: new THREE.Vector3(LEFT_ARM_RIM.mix, LEFT_ARM_RIM.alpha, LEFT_ARM_RIM.glow) } };
@@ -4992,7 +5002,7 @@ export function createScene({
     m.forceSinglePass = true; // r150+: DoubleSide transparent in one pass
     m.onBeforeCompile = shader => {
       const patched = read ? patchGlassReadShaders(shader.vertexShader, shader.fragmentShader) : patchGlassShaders(shader.vertexShader, shader.fragmentShader);
-      if (read) { glassRead.applied = patched !== null; if (patched) { shader.uniforms.nsRead = glassReadUniform; shader.uniforms.nsClear = glassClearUniform; shader.uniforms.nsRimGroove = shellRimUniforms.nsRimGroove; Object.assign(shader.uniforms, glassInkUniforms); } }
+      if (read) { glassRead.applied = patched !== null; if (patched) { shader.uniforms.nsRead = glassReadUniform; shader.uniforms.nsClear = glassClearUniform; shader.uniforms.nsPickTint = brainPickTint; shader.uniforms.nsRimGroove = shellRimUniforms.nsRimGroove; Object.assign(shader.uniforms, glassInkUniforms); } }
       glassRim[key] = patched !== null;
       glassRim.applied = glassRim.shell !== false && glassRim.xray !== false && (glassRim.shell === true || glassRim.xray === true);
       if (patched === null) return;
@@ -6859,7 +6869,7 @@ export function createScene({
    * under the far-eye squash (rigidPatch: otherwise the squash would flatten their shading to two discs) and the living
    * brain's small movement. They are not motor areas: the picker reports them as the brain's bare surface with the
    * part's name (controlLayersAt `part`), so Space on an eyeball takes the brain and the tip names it. */
-  const brainEyes = { on: false, meshes: [], triangles: 0 };
+  const brainEyes = { on: false, meshes: [], triangles: 0, balls: [], look0: null, ty: 0, tp: 0 };
   function buildBrainEyes(still) {
     if (!BRAIN_EYES.on) return;
     const make = (data, roughness, part, name) => {
@@ -6875,8 +6885,37 @@ export function createScene({
       brainEyes.meshes.push(mesh); brainEyes.triangles += data.triangles;
     };
     make(buildNerves(), BRAIN_EYES.nerveRoughness, 'nerve', 'optic nerves, chiasm and tracts (illustration)');
-    make(buildEyeballs(), BRAIN_EYES.eyeRoughness, 'eyeball', 'eyeballs (illustration)');
+    // 19 November 2026 (the owner: "when we move our head around, the eyes also move ... The eyes attached to the brain
+    // ... whatever direction our head points in, the mirror eyes move also"): each eyeball is its own mesh about its own
+    // centre, so it can turn with the player's look (updateBrainEyes). The two halves of buildEyeballs' buffers are the
+    // two eyes (left first), each with the same number of vertices and triangles.
+    const E = buildEyeballs(), nv = E.positions.length / 6, ni = E.indices.length / 2;
+    [E.centres.left, E.centres.right].forEach((c, k) => {
+      const pos = new Float32Array(3 * nv), idx = new Uint16Array(ni);
+      for (let i = 0; i < nv; i++) for (let a = 0; a < 3; a++) pos[3 * i + a] = E.positions[3 * (k * nv + i) + a] - c[a];
+      for (let i = 0; i < ni; i++) idx[i] = E.indices[k * ni + i] - k * nv;
+      make({ positions: pos, indices: idx, normals: E.normals.slice(3 * k * nv, 3 * (k + 1) * nv), colors: E.colors.slice(3 * k * nv, 3 * (k + 1) * nv), triangles: ni / 3 },
+        BRAIN_EYES.eyeRoughness, 'eyeball', `${k === 0 ? 'left' : 'right'} eyeball (illustration)`);
+      const mesh = brainEyes.meshes[brainEyes.meshes.length - 1];
+      mesh.position.set(c[0], c[1], c[2]); mesh.updateMatrix();
+      brainEyes.balls.push(mesh);
+    });
     brainEyes.on = true;
+  }
+  /** The brain's eyeballs turn with the player's look: by BRAIN_EYE_TURN.gain of the look's turn from where it started,
+   * at most maxDeg either way, about the brain's own up axis (left and right) and its side axis (up and down). A
+   * picture of "which way you are looking", not eye anatomy. Written only when the look has changed. */
+  function updateBrainEyes() {
+    if (!brainEyes.on || !brainEyes.balls.length) return;
+    const yaw = camPose ? camPose.yaw : firstPose ? firstPose.yaw : lookYaw, pitch = camPose ? camPose.pitch : firstPose ? firstPose.pitch : lookPitch;
+    if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
+    if (brainEyes.look0 === null) brainEyes.look0 = { yaw, pitch };
+    const T = BRAIN_EYE_TURN, lim = T.maxDeg * DEG;
+    let dy = yaw - brainEyes.look0.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    const ty = Math.max(-lim, Math.min(lim, T.gain * dy)) * T.yawSign, tp = Math.max(-lim, Math.min(lim, T.gain * (pitch - brainEyes.look0.pitch))) * T.pitchSign;
+    if (Math.abs(ty - brainEyes.ty) < 0.003 && Math.abs(tp - brainEyes.tp) < 0.003) return;
+    brainEyes.ty = ty; brainEyes.tp = tp;
+    for (const m of brainEyes.balls) { m.rotation.set(tp, 0, ty, 'ZXY'); m.updateMatrix(); }
   }
 
   function setBrain({ glass: glassListIn = [], focus, markers: markerList = [], segmentation: seg = null } = {}) {
@@ -13284,6 +13323,13 @@ export function createScene({
     // R5-access A7: a page flag while any link shows (the HUD text gets its darker backdrop, proposed-glow-text.css).
     const flag = glowOwn.n + glowMirror.n + beamOwn.n + beamMirror.n > 0 ? 'on' : 'off';
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
+    // 19 November 2026 (BRAIN_PICK_TINT): the whole brain takes a faint light of the picked area's colour, eased.
+    {
+      const rcT = topRegion ? areaRecord(topRegion) : null, want = rcT ? BRAIN_PICK_TINT.level * Math.min(1, topLevel / 0.6) : 0;
+      const k = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, dtMs) / (BRAIN_PICK_TINT.easeS * 1000)), v = brainPickTint.value;
+      const c = rcT ? rcT.glowLinear : null;
+      v.set(v.x + ((c ? c[0] * want : 0) - v.x) * k, v.y + ((c ? c[1] * want : 0) - v.y) * k, v.z + ((c ? c[2] * want : 0) - v.z) * k);
+    }
     glowState.cpuMs = nowMs() - t0;
   }
   /** QA: the glow state. { audit: true } adds the audit of the muscles that share a material (muscleShareState). */
@@ -13988,6 +14034,7 @@ export function createScene({
       }
     }
     // R5-scene (D17): glow links and rims for this frame (cheap; glowLinkState().cpuMs).
+    updateBrainEyes();
     updateGlow(dtMs);
     syncMuscleShade(); // R558 (performance): this frame's muscle colours and glows into the class materials' value rows
     if (bodyGpu.on) bodyGpuAliasSync(); // 18 November 2026 (performance): the identity skins follow their vertex arrays

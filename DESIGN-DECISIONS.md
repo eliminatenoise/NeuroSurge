@@ -1787,6 +1787,18 @@ The user: “it would be much better from a control standpoint, ease of use stan
 
 These are display choices judged on pictures. The eyeballs say nothing about vision, and the game still simulates every signal.
 
+## 137. Eyeballs that follow your look, a brain that takes the picked colour, the loading picture back, controls shown for the whole load (19 November)
+
+The user: “when we move our head around, the eyes also move ... The eyes attached to the brain, of course. And they move in accordance to our head direction. Even if that isn't necessarily accurate.” “can we also please have the whole brain light up slightly, faintly, with whatever color area is being picked?” “Currently, I can't see the models being built on the loading page, which they should be there, and the controls switch off halfway through. And the controls should stay visible the entire time while loading.” “the wrist/ankle being 3/4 up the height of the frame.”
+
+- **The brain's eyeballs turn with your look** (`updateBrainEyes`, `BRAIN_EYE_TURN` in `ns-scene-three.mjs`). Each eyeball is now its own mesh about its own centre. It turns by 0.7 of the look's turn from where the look started, at most 38 degrees either way, meant as a mirror would: look down and they look down (seen in pictures); look left and they should look to the left of the screen (the sign is set by reasoning: no picture confirmed it, because a look far enough to show it carries the eyeballs out of the frame). Written only when the look has changed. A picture of which way you are looking; not eye anatomy.
+- **The whole brain takes the picked colour, faintly** (`BRAIN_PICK_TINT`). While an area is looked at or switched on the cortex gets 6 % of that area's glow colour added, a little more on its lit side, eased in and out over about a fifth of a second. One uniform in the cortex shader; no new pass.
+- **The loading picture is back on** (`LOADING_PICTURE` true in the launcher). On a fast line it is short. It does not yet show the eyeballs joining the brain, which the user also asked for.
+- **The controls card stays for the whole load.** It no longer fades after five seconds whatever happens: it stays until the game is ready, then fades 1.5 s later, or later still so that it has been up for at least five seconds in all.
+- **The chosen limb's end stands three quarters of the way up the frame** when the view turns to it (`LIMB_KEYS.view.frameUp` 0.75; 0.6 this morning). The view still turns once and does not yet hold the limb there while the keys move it.
+
+Not done from the same notes: the strip centred on either side of the mirror body's head “like hair”, with a wider gap between the halves; the patchy muscles of the mirror body's head; its eyes; more detail on the optic nerves; the eyeballs in the loading picture; the right arm crossing the body.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

@@ -140,10 +140,13 @@ const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
 // simple choice is taken: the game's own dark backdrop (assembly.css) with the loading bar, then the game itself,
 // faded in. It also frees a worker, a second graphics context and a copy of every mesh during the build.
 // LOADING_PICTURE = true brings the worker picture back as it was.
-const LOADING_PICTURE = false;
+// 19 November 2026, later (the owner: "Currently, I can't see the models being built on the loading page, which they
+// should be there"): the picture is back on. It is short on a fast line; the owner wants it there.
+const LOADING_PICTURE = true;
 const assembly = mode === 'boot' && LOADING_PICTURE ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
 if (mode === 'boot') app.dataset.nsPhase = 'loading';
 const controlsCard = mode === 'boot' ? showControlsCard({ host: document.body }) : null;
+const controlsCardAt = performance.now();
 // 19 November 2026 (the owner: "it just stays on the loading page forever. There should be a loading progress bar"):
 // one bar with a percentage for the whole wait (ns-load-progress), and a guard (ns-load-guard, the page's first script,
 // which needs no other file): when nothing has advanced for 20 s, a script cannot be had, or loading fails, a panel
@@ -178,6 +181,8 @@ function finishLoading(phase, error = null) {
   app.dataset.nsPhase = phase;
   const immediate = phase !== 'playing';
   if (immediate) controlsCard?.remove();
+  // the controls stay up for the whole load; once the game is ready they go, after at least five seconds in all
+  else if (controlsCard) { try { controlsCard.style.setProperty('--ns-keys-ms', `${Math.round(Math.max(1500, 5000 - (performance.now() - controlsCardAt)))}ms`); controlsCard.classList.add('ns-keys-leave'); } catch { /* a card only */ } }
   assembly?.finish({ immediate });
   if (!loadBar) return;
   if (phase === 'playing') { guard.finish(); loadBar.finish(); }

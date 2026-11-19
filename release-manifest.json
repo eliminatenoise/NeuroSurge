@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-43",
+  "version": "experimental-2026-11-19-body-update-44",
   "experimental": true,
-  "source": "Body update 43. The brain turned half a turn to face you, with eyeballs and optic nerves; the mirror body toe to toe.",
+  "source": "Body update 44. The brain's eyeballs turn with the look; the brain takes a faint tint of the picked area; the loading picture is back; the controls stay for the whole load.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 280744,
-      "sha256": "e6ad636286cf1d6e3fa36476a366a08340123b5926ca1aad2bfe7e9dad58735b"
+      "bytes": 283381,
+      "sha256": "4268293df46f2aedf2e182b60ae2cd1b853489f797be7a1e6c6918ee176df292"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 10058,
-      "sha256": "184a020d0e53175f5661402df27da4fe93cdaa4967f31a6080d78e0ef46922bd"
+      "bytes": 10122,
+      "sha256": "96959d4b53952fd0ca6dee5c88a0c7e2ae37f9b054c5c19630da20c23e22c250"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 61331,
-      "sha256": "aa09dc704614383e02abfc93323e3e1b286eb437dae041765e583aedc59beb55"
+      "bytes": 61611,
+      "sha256": "964d5a312696dfcbe662e107de4fe0f06f5ca8e87174268e2351c3d53aa0e6c2"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 38016,
-      "sha256": "8c6cc5bca9466a245fa90ae0da61e3f478d410ca3f8f896927a9af276caa483a"
+      "bytes": 38697,
+      "sha256": "67e07472397fc16412f155243a121c98fe8b60c240d47ddcb4cc107786e2eb22"
     },
     {
       "path": "README.md",
-      "bytes": 19368,
-      "sha256": "3e938be49f2a54b5e37e872057fd2fa851f59e6f24743c4ad40b9cb5aac1c4b4"
+      "bytes": 19611,
+      "sha256": "c636ada640ffe0370bc61dce313848e5fc86c565bc74b98605b3b9dbdb02f3db"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "a4533c111ae3bf275c9ab15afa4abdb5f9831042e9521999fd1bcf84f7104097"
+      "sha256": "457e0b52f980180c1aae566ea85e2725069f2c68809b73b73fff58d6c449bc62"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "0b1a969c5a6a672f916114a7cba7068a723e7568611cf5d6a3335d6d41cb5c48"
+      "sha256": "2d30a520ebd9e62b821a74fdc9ad221bf3fddd55b9d24d0fb121c43cef71d6c7"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3812,8 +3812,8 @@
     },
     {
       "path": "scene/example/assembly.css",
-      "bytes": 10575,
-      "sha256": "b61b0408491e5ea2d37b25603da5ead7f0dfde3b44e2080baf06b8cc5312eabb"
+      "bytes": 10920,
+      "sha256": "feced62f0eca34eccd61b7b4649f955b0d56a962ae68ddadabecf6c6ba50b58c"
     },
     {
       "path": "scene/example/configured-r281.css",
@@ -3847,8 +3847,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 56083,
-      "sha256": "e77e8aa07524aec3149ccc4eea9b3d4e5bef238662d021c67e597f435fc56c89"
+      "bytes": 56693,
+      "sha256": "3963468f8869d1257ef58741667c1c4803cf607b4313a4e700b40cfea00d687a"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 795929,
-      "sha256": "0bcdd23437aaf2186be3598734863e1504966526cd9182cfaa081a02ad896f25"
+      "bytes": 796037,
+      "sha256": "9b02d088addacd08f8d71049ab23dda42888038dff523d4cff4dc8b5d2f65164"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4002,8 +4002,8 @@
     },
     {
       "path": "scene/src/ns-brain-ink.mjs",
-      "bytes": 62438,
-      "sha256": "805e6121473bb055eb62994ce6aaffa64a66853bb633ab44365f2a3117c744bb"
+      "bytes": 62827,
+      "sha256": "78c2905f967fbd3b00c4607ca529967f85d70c19ed3a223252bae0024a8a60e9"
     },
     {
       "path": "scene/src/ns-brain-live.mjs",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1128891,
-      "sha256": "7e991728f572172868ee7037edef8a40acde51a0294065f2922d30e8ecd0c52c"
+      "bytes": 1133120,
+      "sha256": "f72992b06472b86353b79fc1885e451a9ae40fb9dfb9074d54c829a426d84891"
     },
     {
       "path": "scene/src/ns-see.mjs",

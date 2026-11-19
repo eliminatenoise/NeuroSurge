@@ -82,15 +82,18 @@ body:has(.ns-load) .ns-assembly-static p, body:has(.ns-load) .ns-assembly-static
 .preview-note { transition: opacity 0.6s ease; }
 
 /* The main controls: W A S D, E, R, Space, and the trackpad with its click, in two panels either side of the middle
-   of the picture. Shown for --ns-keys-ms, then it fades by itself (an opacity animation: it runs on time even while
-   the page is busy). */
+   of the picture. 19 November 2026 (the owner: "the controls switch off halfway through. And the controls should stay
+   visible the entire time while loading"): it stays for as long as the game loads. When the game is ready the
+   launcher adds ns-keys-leave, and the card fades --ns-keys-ms later (the launcher sets that so the card has been up
+   for at least five seconds in all). */
 .ns-keys {
-  --ns-keys-ms: 5000ms;
+  --ns-keys-ms: 1500ms;
   position: fixed; inset: 0; z-index: 9; pointer-events: none; box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(16px, 7vw, 150px);
   color: #eaf3fb; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; letter-spacing: 0.02em;
-  animation: ns-keys-in 0.35s ease-out both, ns-keys-out 0.7s ease-in var(--ns-keys-ms) forwards;
+  animation: ns-keys-in 0.35s ease-out both;
 }
+.ns-keys.ns-keys-leave { animation: ns-keys-out 0.7s ease-in var(--ns-keys-ms) forwards; }
 @keyframes ns-keys-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ns-keys-out { to { opacity: 0; visibility: hidden; } }
 .ns-keys-panel {
@@ -144,11 +147,12 @@ body:has(.ns-load) .ns-assembly-static p, body:has(.ns-load) .ns-assembly-static
 }
 @media (prefers-reduced-motion: reduce) {
   .ns-assembly.ns-assembly-out, .preview-note { transition: none; }
-  .ns-keys { animation: ns-keys-out 0s step-end var(--ns-keys-ms) forwards; }
+  .ns-keys { animation: none; }
+  .ns-keys.ns-keys-leave { animation: ns-keys-out 0s step-end var(--ns-keys-ms) forwards; }
   .ns-pad-finger, .ns-pad-click { animation: none; }
   /* 18 November 2026: neurosurge.css stops every animation under reduced motion, so the card's fade never ran and the
      card stayed over the game for good. Here it goes at once after --ns-keys-ms, without fading (its animationend
      still removes it). */
   @keyframes ns-keys-out { from, to { opacity: 0; visibility: hidden; } }
-  .ns-keys { animation: ns-keys-out 1ms step-end var(--ns-keys-ms) forwards !important; }
+  .ns-keys.ns-keys-leave { animation: ns-keys-out 1ms step-end var(--ns-keys-ms) forwards !important; }
 }

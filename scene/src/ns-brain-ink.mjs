@@ -760,6 +760,10 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE) {
 	nsCol += vec3( nsWet * ( 1.0 - ${f(o.wetGroove)} * nsG ) );
 	float nsRimF = pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - nsRimGroove * nsG );
 	nsCol += ${lin(o.rim)} * ( nsRimF * nsRimOpacity * ${f(o.rimGain)} );
+	// 19 November 2026 (the owner: "can we also please have the whole brain light up slightly, faintly, with whatever
+	// color area is being picked"): the whole cortex takes a faint light of the picked area's colour (nsPickTint: that
+	// colour times its level, set by the scene; black when nothing is picked), a little more on the lit side.
+	nsCol += nsPickTint * ( 0.55 + 0.45 * nsDif );
 	// The tissue round a switched-on key takes the key's HUE and keeps its own light and shade (its brightness x the
 	// key's colour): the folds, the vessels and the wet highlights stay, so it reads as flushed tissue, not as a wash.
 	// Where the surface is seen edge-on the colour is held back (it smeared into a long pale stain there).

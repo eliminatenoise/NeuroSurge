@@ -146,7 +146,8 @@ export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftAr
   // stay within the frame"): its hand or foot comes to the middle of the picture left to right and to frameUp of the
   // way up it (0.5 = the middle), over about turnS (at once under reduced motion). Only when a limb is CHOSEN; the
   // pointer takes the look back at any moment. Not for the left arm, whose hand already keeps its place in the view.
-  view: Object.freeze({ on: true, frameUp: 0.6, turnS: 0.12, doneDeg: 0.4, maxS: 0.9 }) });
+  // (frameUp 0.6 -> 0.75 the same day: the owner, "the wrist/ankle being 3/4 up the height of the frame")
+  view: Object.freeze({ on: true, frameUp: 0.75, turnS: 0.12, doneDeg: 0.4, maxS: 0.9 }) });
 /** The look (yaw, pitch in radians; the camera's own convention: yaw = atan2(-x, -z), pitch up positive) that puts the
  * world point `at` in the middle of the picture left to right and `frameUp` of the way up it, seen from `eye` with a
  * vertical field of view of fovYDeg. Pure. */
