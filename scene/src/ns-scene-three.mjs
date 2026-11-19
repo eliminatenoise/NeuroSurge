@@ -11502,16 +11502,22 @@ export function createScene({
     // looks the same everywhere in the wide view). A tip fixed in the world and seen from the side, e.g. when the player
     // turns to look at a tip near the edge of the wide view, would be a thin sliver. Redone only when the camera or the plan
     // changed (eight small matrices); picks and screen boxes use these same frames.
+    const outsideAnchors = outsideCompassAnchors(B, M, cam, hudObs);
     const faceCamKey = arrowCameraKey(cam);
     for (const set of [B, M]) {
       if (!set.shown || !set.plan || !set.plan.anchors) continue;
       // 18 November 2026, late (audit M9): the mirror body's tips slide with it in the outside view (viewAwayM), so they
       // stay round it; a turn or a tilt still moves no tip (the stand-back and push are left out, as before).
-      const slide = set === M ? mirrorSlideVec() : null;
-      const fk = `${faceCamKey}|${set.serial}|${slide ? slide.join(',') : ''}`;
+      const restingCamera = outsideAnchors && cam.position.every((v, axis) => v === outsideCompass.view.position[axis]);
+      const slide = set === M ? (restingCamera ? outsideCompass.slide : mirrorSlideVec()) : null;
+      const fk = `${faceCamKey}|${set.serial}|${slide ? slide.join(',') : ''}|${outsideCompass?.revision ?? ''}`;
       if (fk === set.faceKey) continue;
       set.faceKey = fk;
-      const anchors = slide ? Object.fromEntries(ARROW_DIRS.map(d => [d, set.plan.anchors[d] ? [set.plan.anchors[d][0] + slide[0], set.plan.anchors[d][1] + slide[1], set.plan.anchors[d][2] + slide[2]] : null])) : set.plan.anchors;
+      const base = outsideAnchors?.[set.target] || set.plan.anchors;
+      const anchors = slide ? Object.fromEntries(ARROW_DIRS.map(dir => {
+        const a = base[dir];
+        return [dir, a && a.map((v, axis) => v + slide[axis])];
+      })) : base;
       try { set.frames = NsArrows.facingArrowFrames(anchors, { cam, sizePx: set.plan.sizes.sizePx, nearM: camera.near }); } catch (err) { arrowRigError = String((err && err.message) || err); }
       set.rig.setFrames(set.frames);
       applyTipOcclusion(set); // check fix: re-facing the tips to a moved camera must not show an occluded mirror tip again
@@ -11891,6 +11897,93 @@ export function createScene({
     plan.frames = NsArrows.facingArrowFrames(plan.anchors, { cam, sizePx });
     set.nominalHeads.forward = nominalArrowHeads(plan.frames).forward;
     set.frameRecord.openingUp = { x: best[0], y: best[1] };
+  }
+  // Looking around should move the compass across the picture. Only fit obstructed tips when the outside view
+  // settles or its ordinary target frames change. Leave deliberate carry placement to the player.
+  // Retain world anchors for drawing and picking. A return to upright remeasures the mirror's body surface;
+  // it must not alter the compass while the viewport and placement are the same.
+  let outsideCompass = null;
+  function outsideCompassAnchors(brain, mirrorSet, cam, obstacles) {
+    const carried = mirror.worldCentre || Math.abs(arrowRef.yaw - referenceAngles.yaw) > 1e-6
+      || Math.abs(arrowRef.pitch - referenceAngles.pitch) > 1e-6;
+    if (!camPose || camPose.blend < 1 || carried) { outsideCompass = null; return null; }
+    if (!outsideCompass) outsideCompass = { view: { yaw: cam.yaw, pitch: cam.pitch, position: cam.position.slice() } };
+    const fovYDeg = planLensFov();
+    const key = `${cssW}x${cssH}|${fovYDeg}|${compassBrainSourceRevision}|${brain.planningTarget?.centreWorldM}|${Boolean(brain.plan)},${Boolean(mirrorSet.plan)}`;
+    // A resize can deliver the two normal frames on successive ticks. Admit those revisions until the
+    // player turns the mirror, then keep its world frame through the body's return-to-upright measurement.
+    const revision = `${brain.serial}|${mirrorSet.serial}`;
+    const orbit = `${mirror.orbit.yaw}|${mirror.orbit.pitch}`;
+    if (outsideCompass.key !== key) outsideCompass.turned = false;
+    else {
+      if (outsideCompass.orbit !== orbit) outsideCompass.turned = true;
+      if (outsideCompass.revision === revision || outsideCompass.turned) return outsideCompass.anchors;
+    }
+    outsideCompass.revision = revision;
+    outsideCompass.orbit = orbit;
+    const ref = { ...outsideCompass.view, width: cssW, height: cssH, fovYDeg };
+    const motor = motorRestGrid(ref);
+    const slide = mirrorSlideVec();
+    const margin = NsArrows.ARROW_LAYOUT.marginPx;
+    const occupied = obstacles.slice(), tips = [];
+    const prompt = doc?.querySelector?.('.ns-prompt:not([hidden])')?.getBoundingClientRect();
+    if (prompt?.width > 0 && prompt.height > 0) occupied.push({ x0: prompt.left, y0: prompt.top, x1: prompt.right, y1: prompt.bottom });
+    for (const set of [brain, mirrorSet]) {
+      if (!set.plan) continue;
+      for (const dir of ARROW_DIRS) {
+        let anchor = set.plan.anchors[dir];
+        if (!anchor) continue;
+        if (set === mirrorSet && slide) anchor = anchor.map((v, i) => v + slide[i]);
+        const pos = NsArrows.projectWorldPx(anchor, ref);
+        const [box] = NsArrows.anchorBoxesPx({ [dir]: anchor }, { cam: ref, sizePx: set.plan.sizes.sizePx });
+        if (box) tips.push({ set, dir, anchor, pos, box, fixed: false });
+      }
+    }
+    const overlaps = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    const clear = box => box.x0 >= margin && box.y0 >= margin && box.x1 <= cssW - margin && box.y1 <= cssH - margin
+      && !occupied.some(rect => overlaps(box, rect)) && !motor?.hits(box);
+    // Reserve valid tips before a moved tip claims a neighbouring control's original place.
+    for (const tip of tips) {
+      if (clear(tip.box)) { occupied.push(tip.box); tip.fixed = true; }
+    }
+    const mirrorPoints = mirrorRoot.visible ? mirrorSamplesWorld() : null;
+    const mirrorBox = mirrorPoints && NsArrows.screenBoxOf(NsArrows.projectPointsPx(mirrorPoints, null, ref).xy);
+    const oppositeDir = { forward: 'back', back: 'forward', left: 'right', right: 'left' };
+    const anchors = { brain: { ...brain.plan?.anchors }, mirror: { ...mirrorSet.plan?.anchors } };
+    for (const tip of tips) {
+      if (tip.fixed) continue;
+      const { pos, box, anchor, set, dir } = tip;
+      const opposite = tips.find(t => t.set === set && t.dir === oppositeDir[dir]);
+      const [sx, sy] = NsArrows.COMPASS_SCREEN[dir];
+      // When the mirror has moved back for E, its old eye-view tip can lie on a distant part of the brain.
+      // Start the search at the corresponding edge of the displayed body.
+      const x0 = set === mirrorSet && mirrorBox ? (mirrorBox.x0 + mirrorBox.x1 + sx * (mirrorBox.x1 - mirrorBox.x0)) / 2 : pos.x;
+      const y0 = set === mirrorSet && mirrorBox ? (mirrorBox.y0 + mirrorBox.y1 + sy * (mirrorBox.y1 - mirrorBox.y0)) / 2 : pos.y;
+      let best = null, cost = Infinity;
+      function consider(dx, dy) {
+        const x = x0 + dx, y = y0 + dy, distance = Math.hypot(dx, dy);
+        if (distance >= cost || opposite && sx * (x - opposite.pos.x) + sy * (y - opposite.pos.y) < 0) return;
+        const moved = { x0: box.x0 + x - pos.x, x1: box.x1 + x - pos.x, y0: box.y0 + y - pos.y, y1: box.y1 + y - pos.y };
+        if (clear(moved)) { best = { x, y, box: moved }; cost = distance; }
+      }
+      // Search successive square perimeters, stopping once no further point could be nearer.
+      const step = RESCUE_TIP.stepPx;
+      consider(0, 0);
+      for (let r = step; r <= RESCUE_TIP.maxSteps * step && r < cost; r += step) {
+        for (let v = -r; v <= r; v += step) {
+          consider(v, -r); consider(v, r);
+          if (Math.abs(v) < r) { consider(-r, v); consider(r, v); }
+        }
+      }
+      if (!best) { occupied.push(box); continue; }
+      const point = NsArrows.frameAnchorFn(ref, anchor)(best.x, best.y);
+      anchors[set.target][dir] = set === mirrorSet && slide ? point.map((v, axis) => v - slide[axis]) : point;
+      occupied.push(best.box);
+    }
+    outsideCompass.key = key;
+    outsideCompass.anchors = anchors;
+    outsideCompass.slide = slide;
+    return anchors;
   }
   /** 18 November 2026, late (audit M9): the outside-view slide of the mirror body as a world vector (null when none):
    * along the ground, away from the eye the mirror plane was set from (ns-mirror mirrorTransform's own direction). */

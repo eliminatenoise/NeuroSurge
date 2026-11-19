@@ -87,7 +87,18 @@ try {
     const a = window.__nsQA.inspect().state.activity;
     return a.t > (a.lastTriggerAt ?? 0) + 1.25;
   }, null, { polling: 60, timeout: 9000 });
-  const repeatSelectedRegion = () => page.mouse.click(800, 450, { modifiers: ['Shift'] });
+  // A captured click stays on the crosshair. Hold the real Shift key only to press through an orbit tip.
+  async function repeatSelectedRegion() {
+    const overTip = await page.evaluate(() => window.__nsQA.inspect().controlTargets.arrow);
+    if (overTip) await page.keyboard.down('Shift');
+    try {
+      if (overTip) await page.waitForFunction(() => window.__nsQA.inspect().controlTargets.reach);
+      await page.mouse.down();
+      await page.mouse.up();
+    } finally {
+      if (overTip) await page.keyboard.up('Shift');
+    }
+  }
 
   async function sampleView(name, key) {
     const before = await page.evaluate(() => {

@@ -1989,6 +1989,12 @@ In the eye view your own body ends at the collar: a box over it is not drawn (`E
 
 The launcher's start check (`?case=boot`, `assertConfiguredBoot` in `eye-view-r558.mjs`) required every arrow tip of the brain to sit on the centre line of its frame side. Section 143 (the other maintainer's) plans the tips in the player's own opening view so that all of them start inside the picture and clear of the motor colours; a tip may then slide along its side, and the check failed from that change on (the left and right tips stand 68 px above the middle of their sides at 1600 by 900). It went unnoticed in two uploads because the lead read only the first 240 characters of the check's output. The check now accepts a tip on the centre line of its side or on the side itself, and passes.
 
+## 149. Separate places for the arrows seen from behind
+
+At 640 by 450, the grey up arrow could land above the top of the picture after you pressed E. In a wide window, the green up arrow sat on the motor strip. A change of window shape could also put a green stroke across a grey one. The opening eye view already had its own correction.
+
+When the outside camera settles, the game checks each arrow's full picking and hover area in that view. A clear tip keeps its place. An obstructed tip moves to a free world position at its original depth, on its side of the object. The mirror body's visible edge guides the search for its arrows. The game uses the resulting 3D frame for drawing and picking. The frames stay in the world as you look around or tilt the mirror body back upright. Carrying an object still lets you choose its place.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

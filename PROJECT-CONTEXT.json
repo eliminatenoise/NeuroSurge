@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-19-body-update-51",
+  "version": "experimental-2026-11-19-body-update-51-outside-compass-fix",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -67,5 +67,6 @@
     "full_game_pass": false
   },
   "opening_brain_compass": "In the opening landscape view, the brain’s upward orbit arrow starts inside the picture. The world anchors follow the existing carry placement after a move. Controls turn the simulated brain without moving the camera.",
+  "outside_compasses": "When E settles, the green and grey 3D orbit tips keep separate pick areas. Obstructed tips also clear the projected motor strip in the tested entry views. Looking around or moving an object can later bring world controls into alignment.",
   "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body."
 }

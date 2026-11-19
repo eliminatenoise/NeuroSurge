@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-51",
+  "version": "experimental-2026-11-19-body-update-51-outside-compass-fix",
   "experimental": true,
-  "source": "Body update 51. Whatever is hidden behind something shows through it as light-blue glass; no loose lines over the open neck.",
+  "source": "Body update 51. Whatever is hidden behind something shows through it as light-blue glass; no loose lines over the open neck. Outside-view orbit controls for the brain and mirror body.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 320644,
-      "sha256": "084127546ed9b71b90bed6caba003b135acaf1ce37822e4b00adca4fc0a3ed75"
+      "bytes": 321482,
+      "sha256": "1d4596b237da533080c98f1d93b1e3494f9f5c467deb35ee3e2fb646b64b3c44"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12481,
-      "sha256": "bbb4b37dfed0b45f8d4b67c75deae4e377954179c35d66c0d37d2337fd69736f"
+      "bytes": 12590,
+      "sha256": "b905f996d6bd587d3f02ca2d2def2f283659775910dd8dec21fcf578d291935a"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 64372,
-      "sha256": "1963c781eba3de418e0daeed70cff4752d508648b5805456f16ef4233f480730"
+      "bytes": 64644,
+      "sha256": "18e6713e5b617906253e64597cdc519ea17d4679f75ee8a049ea694bf80d5dd5"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 44040,
-      "sha256": "7aee0140739bcc4057d1eefb0051c5a255217c815101b6e8fc17e5a5d1967436"
+      "bytes": 44323,
+      "sha256": "9b4dc2bb73e7c7ffe0ffa1a76058d2080f95f2c6319df851d15262336d12b34e"
     },
     {
       "path": "README.md",
-      "bytes": 21451,
-      "sha256": "ef5777f880dc1910047446bc18cc6c85f4d0f7dfc88e428afa031d17c8928251"
+      "bytes": 21560,
+      "sha256": "b1ccdff259b1fb78614b159cc44fc5eb77fd852affd0baaf1a0aef6cb86a2816"
     },
     {
       "path": "START.html",
-      "bytes": 4029,
-      "sha256": "ab317724ad5ebdc6341b54154122ec5363c48f1b6cc8c6402910a5638b473854"
+      "bytes": 4049,
+      "sha256": "7b8eef43abecd96be3c6f0af2147cadcfd8c91e8c7a99d4c81c8192174c506ce"
     },
     {
       "path": "index.html",
-      "bytes": 1000,
-      "sha256": "1fef1e2d45a372954d8e3b896b0264f3f356dc747e08c980aa196bb733696f92"
+      "bytes": 1020,
+      "sha256": "cb91686be7b33938a6982b0d602eae0618e7c2d612b3bff46e81a39bba20b9a3"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1156695,
-      "sha256": "87c2988cd9d39cc161d8a976d11756e3031326893b2cb47ac61785ca35a2a2fd"
+      "bytes": 1162558,
+      "sha256": "726b9347b13409c72171f79af2fc739755b4367182f13bc88cb95f8437320204"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4291,6 +4291,11 @@
       "sha256": "29d2c14095a0920dccfdee6f2b976b8cbce4a54c4b1e5884dba93ee99b9a24ec"
     },
     {
+      "path": "tests/browser-outside-compass.mjs",
+      "bytes": 12976,
+      "sha256": "6bdc0dc94c0ad30a0629efef490561598927f72668f3b5018b74c81d1649a3c8"
+    },
+    {
       "path": "tests/browser-play-settings.mjs",
       "bytes": 13468,
       "sha256": "d9a28f993a106e3b5e5a98c8396bfe757007cf0d89f3682b6e7151ffb876448e"
@@ -4302,8 +4307,8 @@
     },
     {
       "path": "tests/browser-punch-in.mjs",
-      "bytes": 12184,
-      "sha256": "4168776dfe5b4cb822661071baed8d6de146a371cd650c968e1005a144d89e47"
+      "bytes": 12633,
+      "sha256": "a558fa6659499f768f6d163a8c66ffe1d79716445fbe1ab2b519bec16aa7efde"
     },
     {
       "path": "tests/browser-space-aim.mjs",
