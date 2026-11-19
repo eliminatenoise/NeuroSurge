@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 41 turns your view to the limb you choose with **2**, **3** or **4**, so its foot or hand is in the middle of the picture. Move the pointer and the view is yours again.
+
 Body update 40 lets you choose a limb. Press **1**, **2**, **3** or **4** for your left arm, left leg, right leg or right arm, then move it with **W/A/S/D**. The numbers at the bottom of the screen show your choice and the whole limb lights up. Double click to step to the next limb.
 
 Body update 39 joins each movement to its muscles with light. Rest your look on a coloured area: a see-through cone runs from that part of the area to every muscle it moves, with a pulse going both ways, and the area glows almost white. Hold **Space** on the brain or the mirror body and carry it anywhere, through you and through anything. Click one of your limbs, then move it with **W/A/S/D**.

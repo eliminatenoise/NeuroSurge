@@ -58,7 +58,7 @@
  * virtual control inputs, not real stimulation or decoding. The motor map is representative; regions overlap and
  * vary between people. The rig, pivots and compartment directions are geometric approximations.
  */
-import { DEG, clamp } from './ns-math.mjs';
+import { DEG, clamp, transformPoint } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
@@ -140,7 +140,23 @@ export function nextLimbChoice(n, dir, count = 4) {
   return [cur + d, d];
 }
 export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftArm', 'leftLeg', 'rightLeg', 'rightArm']),
-  names: Object.freeze(['Left arm', 'Left leg', 'Right leg', 'Right arm']), doubleClickMs: 340, holdStartS: 0.45, holdStepS: 0.7, flashS: 1.1 });
+  names: Object.freeze(['Left arm', 'Left leg', 'Right leg', 'Right arm']), doubleClickMs: 340, holdStartS: 0.45, holdStepS: 0.7, flashS: 1.1,
+  // The view turns to the chosen limb ("the camera view will shift accordingly so that those become centered and they
+  // stay within the frame"): its hand or foot comes to the middle of the picture left to right and to frameUp of the
+  // way up it (0.5 = the middle), over about turnS (at once under reduced motion). Only when a limb is CHOSEN; the
+  // pointer takes the look back at any moment. Not for the left arm, whose hand already keeps its place in the view.
+  view: Object.freeze({ on: true, frameUp: 0.6, turnS: 0.12, doneDeg: 0.4, maxS: 0.9 }) });
+/** The look (yaw, pitch in radians; the camera's own convention: yaw = atan2(-x, -z), pitch up positive) that puts the
+ * world point `at` in the middle of the picture left to right and `frameUp` of the way up it, seen from `eye` with a
+ * vertical field of view of fovYDeg. Pure. */
+export function lookFramingPoint(eye, at, fovYDeg, frameUp = 0.5) {
+  const dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2], n = Math.hypot(dx, dy, dz);
+  if (!(n > 1e-6)) return null;
+  const yaw = Math.atan2(-dx, -dz), toPoint = Math.asin(Math.max(-1, Math.min(1, dy / n)));
+  // a point that is to stand above the picture's middle needs the look BELOW it by the angle of that height
+  const up = Math.atan((2 * frameUp - 1) * Math.tan((fovYDeg * DEG) / 2));
+  return { yaw, pitch: toPoint - up };
+}
 const fail =(code, message) => { throw new Error(`ns:${code}: ${message}`); };
 const errorText = err => (err && typeof err.message === 'string' ? err.message : String(err));
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -5160,6 +5176,7 @@ export function start(params = {}) {
   // 19 November 2026 (LIMB_KEYS): the chosen limb (1 to 4), the way a double click steps (+1 / -1), the limb to light
   // and until when, and the double click's own records (the last click's time, the press under way).
   let limbChoice = 1, limbChoiceDir = 1, limbFlash = null, limbFlashFromMs = NaN, limbFlashPending = false;
+  let limbView = null; // LIMB_KEYS.view: the turn of the view to a newly chosen limb ({ limb, fromMs, last: the look it set })
   let lastClickMs = -1e9, pressAtMs = NaN, pressSecond = false, pressStepped = false, pressNextMs = NaN, prevButtonDown = false, limbHud = null;
   /** The limb the look carries: one Space holds, or (LIMB_CLICK.followsLook only) the one a click controls. */
   const carriedLimb = () => (limbGrasp && (limbGrasp.latched !== true || NsGrasp.LIMB_CLICK.followsLook === true) ? limbGrasp : null);
@@ -6994,6 +7011,7 @@ export function start(params = {}) {
         const limb = LIMB_KEYS.order[n - 1];
         setLimbLatch(limb === 'leftArm' ? null : limb);
         limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
+        limbView = LIMB_KEYS.view.on && limb !== 'leftArm' ? { limb, fromMs: NaN, last: null } : null;
         drawLimbHud();
       }
       /** A double click's step: on to the next limb, turning round at either end (1, 2, 3, 4, 3, 2, 1 ...). */
@@ -7051,6 +7069,24 @@ export function start(params = {}) {
         let ptsMm = null;
         if (limbFlash !== 'leftArm' && canSolveLimbs()) { try { const segs = segmentsFor(bodyPosed); ptsMm = ['root', 'bend', 'end'].map(w => NsGrasp.limbPoint(bodyRig, segs, limbFlash, w)); } catch { ptsMm = null; } }
         try { callScene('setLimbFlash', { limb: limbFlash, level, ptsMm }); } catch { /* a mark only */ }
+      }
+      /** LIMB_KEYS.view: one frame of the view's turn to the chosen limb. Ends when it has arrived, after maxS, or the
+       * moment the player's own pointer has moved the look (the look is theirs). */
+      function stepLimbView(now, dt) {
+        const V = LIMB_KEYS.view, lv = limbView;
+        if (!lv) return;
+        if (!Number.isFinite(lv.fromMs)) lv.fromMs = now;
+        if (lv.last && (Math.abs(cs.yaw - lv.last.yaw) > 1e-9 || Math.abs(cs.pitch - lv.last.pitch) > 1e-9)) { limbView = null; return; } // the pointer moved
+        if ((now - lv.fromMs) / 1000 > V.maxS || !camPose || !camBodyToWorld || !canSolveLimbs() || !(cam.view === 'first' && cam.progress === 0)) { limbView = null; return; }
+        let want = null;
+        try { want = lookFramingPoint(camPose.position, transformPoint(camBodyToWorld, NsGrasp.limbPoint(bodyRig, segmentsFor(bodyPosed), lv.limb, 'end')), simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : 54, V.frameUp); } catch { want = null; }
+        if (!want) { limbView = null; return; }
+        let dy = want.yaw - cs.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        const dp = want.pitch - cs.pitch;
+        const k = prefersReducedMotion() ? 1 : 1 - Math.exp(-Math.max(0, dt) / V.turnS);
+        if (Math.hypot(dy, dp) < V.doneDeg * DEG) { limbView = null; return; }
+        try { cs = controlsApi.setLook(cs, { yaw: cs.yaw + dy * k, pitch: cs.pitch + dp * k }); } catch { limbView = null; return; }
+        lv.last = { yaw: cs.yaw, pitch: cs.pitch };
       }
       /** One frame of the controlled limb (LIMB_CLICK, the look free): the keys move its end through a grasp that lives
        * only while a key is down (its target starts where the limb's end is drawn, so a drag or a movement switched on
@@ -8125,6 +8161,7 @@ export function start(params = {}) {
           prevButtonDown = down;
         }
         if (limbFlashPending) { limbFlashPending = false; limbFlashFromMs = now; }
+        if (LIMB_KEYS.on && live && limbView) stepLimbView(now, timing.dt);
         let reachPick = null;
         if (live && timing.events.some(e => e && e.type === 'click')) {
           const first = timing.events.find(e => e && e.type === 'click');

@@ -30,3 +30,20 @@ test('a held double click steps slowly: slower than a double click can be repeat
   assert.ok(LIMB_KEYS.holdStartS * 1000 > LIMB_KEYS.doubleClickMs, 'the hold begins after the double click itself is over');
   assert.ok(LIMB_KEYS.flashS >= LIMB_KEYS.holdStepS, 'each limb is still lit when the next step comes');
 });
+
+test('the view turns so the chosen limb\'s end is in the middle left to right and a little above the middle', async () => {
+  const { lookFramingPoint } = await import('../scene/src/ns-app.mjs');
+  const DEG = Math.PI / 180, eye = [0, 1, 0];
+  // straight ahead (the camera looks along -z), level: yaw 0; at frameUp 0.5 the look is on the point itself
+  const mid = lookFramingPoint(eye, [0, 1, -2], 54, 0.5);
+  assert.ok(Math.abs(mid.yaw) < 1e-12 && Math.abs(mid.pitch) < 1e-12);
+  // a point to the left (-x) needs a turn to the left (positive yaw in the camera's convention)
+  const left = lookFramingPoint(eye, [-2, 1, -2], 54, 0.5);
+  assert.ok(Math.abs(left.yaw - 45 * DEG) < 1e-9);
+  // frameUp 0.6: the point stands above the middle, so the look is below it, by the angle of a tenth of the picture
+  const up = lookFramingPoint(eye, [0, 1, -2], 54, LIMB_KEYS.view.frameUp);
+  const want = -Math.atan((2 * LIMB_KEYS.view.frameUp - 1) * Math.tan(27 * DEG));
+  assert.ok(Math.abs(up.pitch - want) < 1e-12 && up.pitch < 0);
+  assert.equal(lookFramingPoint(eye, eye, 54, 0.5), null, 'no look toward the eye itself');
+  assert.ok(LIMB_KEYS.view.frameUp > 0.5 && LIMB_KEYS.view.frameUp < 0.8);
+});

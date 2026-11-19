@@ -1757,7 +1757,9 @@ A first build, by the lead, on top of the view package's click-a-limb control:
 - **The highlight.** For 1.1 s after a change the whole limb carries a band of warm light on your body and on the mirror body (`setLimbFlash`, `LIMB_FLASH` in `ns-scene-three.mjs`), drawn with the light beams' own strips: no new pass. The band lies along the limb's middle line, lifted toward the eye by a little more than the limb's half width so the limb does not hide it. It marks a control; it says nothing about activity.
 - **The slow turn** is 1.0 s a stroke (2.6 s before); the sudden switch of a plain double tap stays 0.4 s.
 
-Not in this build, from the same notes: the view does not yet turn to the chosen limb or keep its end at one height in the frame; the left arm still moves inside its window of the view, so its range still depends on the look (the user: “Any limited range of motion that's unnatural needs to be fixed”); hands and feet do not yet travel “far more forward and far more back”; the other controls have no new highlight of their own; the roll gesture is not built. The band is a flat overlay and looks it.
+- **The view turns to the chosen limb** (added an hour later, `LIMB_KEYS.view`, `lookFramingPoint`). When a leg or the right arm is chosen the look eases over about a third of a second (at once under reduced motion) so that its foot or hand stands in the middle of the picture left to right and 0.6 of the way up it. The pointer takes the look back the moment it moves. The left arm's hand already keeps its place in the view, so choosing it turns nothing.
+
+Not in this build, from the same notes: the view does not yet keep the limb's end at one height in the frame while the keys move it; the left arm still moves inside its window of the view, so its range still depends on the look (the user: “Any limited range of motion that's unnatural needs to be fixed”); hands and feet do not yet travel “far more forward and far more back”; the other controls have no new highlight of their own; the roll gesture is not built. The band is a flat overlay and looks it.
 
 ## What is left, and whose it is
 

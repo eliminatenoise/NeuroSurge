@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-40",
+  "version": "experimental-2026-11-19-body-update-41",
   "experimental": true,
-  "source": "Body update 40. Keys 1 to 4 choose the limb the keys move; a double click steps on; a number view; the chosen limb lights up; a faster slow limb turn.",
+  "source": "Body update 41. The view turns to a newly chosen limb.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 272773,
-      "sha256": "4ffcbb6b21123a8de4cf1fec78eb714b93cef39df7067d4be88e9ca4943295ed"
+      "bytes": 273234,
+      "sha256": "8014f3a7f283dcec1877dac36f84d959aa8adb95d3c729e4dc75659b668d54fa"
     },
     {
       "path": "LAUNCHERS.md",
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 60331,
-      "sha256": "6bb38f245f57fec4ee0445a0c1ced11f8ec0311e10ee442c03bac42358806210"
+      "bytes": 60544,
+      "sha256": "a4fbf46b4e439728c1ad6800d16b578c21b34b23429d9b4cfacaff0aa36eb962"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 36453,
-      "sha256": "1cf679f3cff8815a799ed768c5f090076fa1eef389a1625ebf7c698b511c5aaf"
+      "bytes": 36767,
+      "sha256": "929634fc68c6a48ef66b6518182b8cd622bd43eb8fa0c71f0fbcd512b713d272"
     },
     {
       "path": "README.md",
-      "bytes": 18722,
-      "sha256": "b925d0a978b043f64a408358ce516ca18e6857ec6f77369d995069b04fe21fb4"
+      "bytes": 18904,
+      "sha256": "3a2e10ddd23b9a809021c52a938644bd0ca4c3efc56ad97c3846ed2f686a00b7"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "4770f78e81167b8f9689e10af1951d24409af3bfa72a0c2ca62ea88705ac6786"
+      "sha256": "1147da31272410b33bbbb1c347d470f0b35b5963640fd7a4c3422b15b1afc4f0"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "f1ffb05af1cd164fddef6f041abb39b5b65ea41dd15ae2b84890796a45de7aa8"
+      "sha256": "ea5d90cf7c8cea2faa306aca462dacf576e8134c70381291e9b9cfb1cdd86a32"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 782336,
-      "sha256": "2fa6dac61ba0bdfc2f3ada2461bd40e40633477e320bec1aac046bc72b7edcf0"
+      "bytes": 785579,
+      "sha256": "d4a7c8d3b4f8960703780588cbe4b068a472d1ec9911e75edfe0382457abbfaa"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4357,8 +4357,8 @@
     },
     {
       "path": "tests/limb-keys.test.mjs",
-      "bytes": 2083,
-      "sha256": "3f56fe14f9c4a1aac05da6e944bf2fb61e9f1cee80d91fd0813fdba14239101b"
+      "bytes": 3283,
+      "sha256": "7d9fa45d1c5025d132864c96048004c45a121185756a5bcc6364c0693f60be29"
     },
     {
       "path": "tests/limb-turn.test.mjs",
