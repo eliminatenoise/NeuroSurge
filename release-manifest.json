@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 789108,
-      "sha256": "4181568ad77903a4b5817af126f63344650687a8b194db9cb6aeb06d295501a3"
+      "bytes": 789328,
+      "sha256": "a8cf76554fa163656854978a87eb5b1f34cbdfbc4870e24854d32c66b375d5bc"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4254,6 +4254,11 @@
       "path": "tests/browser-keyboard-aim.mjs",
       "bytes": 8910,
       "sha256": "b7c93675417c3b0927fbcf4d91cd6c4953a49293791220770dbfdbcda1a13059"
+    },
+    {
+      "path": "tests/browser-limb-controls.mjs",
+      "bytes": 6774,
+      "sha256": "b0ba66648a808862ee9199797d569f20f0fb9bff61d59e1ae2e584ce3bba8ffd"
     },
     {
       "path": "tests/browser-player-focus.mjs",

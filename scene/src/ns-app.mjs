@@ -5577,7 +5577,7 @@ export function start(params = {}) {
     // Gaze is processed before an equal-time Space-up. End its old carry anchors now, without a model step.
     simState = cancelCarryLatches(simState);
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
-    limbGrasp = null; leftDialBinding = null; leftDial = 0;
+    limbGrasp = null; limbView = null; leftDialBinding = null; leftDial = 0;
     seedNext = true;
     carryRawEvents.length = 0; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
@@ -5794,7 +5794,11 @@ export function start(params = {}) {
     if (!sim || !simState) return false;
     cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
-    limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too (19 November: a limb taken by a click is let go as well)
+    limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null;
+    // Reset returns W/A/S/D to the left arm, so the choice display and double-click order start there too.
+    limbChoice = 1; limbChoiceDir = 1;
+    limbFlash = null; limbFlashFromMs = NaN; limbFlashPending = false;
+    try { callScene('setLimbFlash', null); } catch { /* a mark only */ }
     // 18 November 2026 (package CONTACT): every pushed joint went back with the activity; no recoil or push carries on
     if (selfContact && selfContact.model) { selfContact.recoil = null; selfContact.pushedLast = null; selfContact.B0 = null; selfContact.B0of = null; selfContact.lastOut = null; selfContact.lastBase = null; selfContact.prevAct = null; selfContact.touching = new Set(); contact.selfBlocked = false; }
     // R558 (HEAD_LOOK; user, Message 6: "they need to be activated back into previous position or the whole thing
