@@ -70,3 +70,27 @@ test('the brain\'s roll turns it about its own centre and the line of sight; 0 c
   assert.ok(c.restMatrix !== c.matrix, 'the rest placement leaves the roll out');
   assert.deepEqual(Array.from(c.restMatrix), Array.from(a.matrix));
 });
+
+// 20 November 2026 (review of the circling gesture): once rolled, a drag or an arrow still turns the item the way the
+// pointer or the arrow shows on screen. Checked here on the brain's own transform (ns-brain brainViewTransform): the
+// surface point nearest the eye moves the way the drag went, at any roll.
+test('after a roll a drag still moves the near surface the way the pointer goes', async () => {
+  const B = await import('../scene/src/ns-brain.mjs');
+  const { rollOrbitRequests, DRAG_TURN_DIRS } = await import('../scene/src/ns-app.mjs');
+  assert.deepEqual(rollOrbitRequests('left', 3, 0), [{ dir: 'left', stepDeg: 3 }], 'no roll: the request as it was');
+  const f = { kind: 'ns-brain-frame', tiltDeg: -13, orbitYawLimitDeg: 60, orbitPitchLimitDeg: 60, grabPitchLimitDeg: 60, k: 0.004, pivot: [0, -80, 1550], pivotWorld: [0, 0.3, -1.5], spinDeg: 180 };
+  const at = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+  const scr = w => [w[0] / -w[2], -w[1] / -w[2]]; // screen x right, y down (camera at the origin looking down -z)
+  const m0 = B.brainViewTransform({ frame: f }).matrix;
+  // a source point on the near side: the pivot moved 60 mm toward the eye in source space (found from the rest matrix)
+  const toEye = [-f.pivotWorld[0], -f.pivotWorld[1], -f.pivotWorld[2]], n = Math.hypot(...toEye);
+  const src = [0, 1, 2].map(i => f.pivot[i] + [m0[i * 4], m0[i * 4 + 1], m0[i * 4 + 2]].reduce((s, v, j) => s + v * toEye[j] / n, 0) * 0.06 / (f.k * f.k));
+  for (const roll of [0, 45, 90, 160, -90]) for (const [drag, axis, sign] of [['right', 0, 1], ['left', 0, -1], ['down', 1, 1], ['up', 1, -1]]) {
+    let orbit = { yaw: 0, pitch: 0 };
+    for (const q of rollOrbitRequests(DRAG_TURN_DIRS.brain[drag], 3, roll)) orbit = B.orbitStepView(orbit, q.dir, { orbitStepDeg: q.stepDeg });
+    const p0 = scr(at(B.brainViewTransform({ frame: f, orbitRoll: roll }).matrix, src));
+    const p1 = scr(at(B.brainViewTransform({ frame: f, orbitRoll: roll, orbitYaw: orbit.yaw, orbitPitch: orbit.pitch }).matrix, src));
+    const d = [p1[0] - p0[0], p1[1] - p0[1]];
+    assert.ok(Math.sign(d[axis]) === sign && Math.abs(d[axis]) > 3 * Math.abs(d[1 - axis]), `roll ${roll}, drag ${drag}: ${d}`);
+  }
+});

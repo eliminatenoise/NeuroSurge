@@ -2833,7 +2833,7 @@ export function bodyHeadFrame(rig, jointTargetsDeg = {}, options = {}) {
  * touch-free equal turns), gapMm (bone gap with both hips at 0 when it is below boneGapMm, else null), limitedBy: { internal, external } ('feet' | 'range') }.
  * A posture whose feet are already closer than boneGapMm keeps them at least as far apart as they are.
  */
-export const FEET_CLEARANCE = Object.freeze({ boneGapMm: 20, scanSteps: 12, bisectSteps: 6 });
+export const FEET_CLEARANCE = Object.freeze({ boneGapMm: 20, scanSteps: 12, bisectSteps: 6, linearMm: 0.5 }); // (linearMm: how far the quick hip-turn rotation may be off the pose, 20 Nov)
 const legCloudCache = new WeakMap();
 function legClouds(rig) {
   let c = legCloudCache.get(rig);
@@ -3000,12 +3000,27 @@ export function hipRotationClearRange(rig, targets = {}, options = {}) {
     }
   }
   const othersSame = a => { for (const id in a) if (id !== 'hip_rot_L' && id !== 'hip_rot_R' && a[id] !== a0[id]) return false; return true; };
+  const quickAt = a => [rotatedPoints(l0, m4RotAbout(turn.l.axis, turn.l.deg * (a.hip_rot_L - a0.hip_rot_L) / turn.dl, turn.l.point)),
+    rotatedPoints(r0, m4RotAbout(turn.r.axis, turn.r.deg * (a.hip_rot_R - a0.hip_rot_R) / turn.dr, turn.r.point))];
+  // 20 November 2026 (review): the leg's turn is not always even with the hip turn (the leg turn, leg_turn, makes it
+  // uneven when it is away from its rest), so the quick rotation is also checked at half the probe's turn and at a turn
+  // the other way; where either is more than linearMm off the pose itself, every turn is posed in full as before.
+  if (turn) {
+    const maxOff = (p, q) => { let m = 0; for (let i = 0; i < p.length; i++) { const e = Math.abs(p[i] - q[i]); if (e > m) m = e; } return m; };
+    const d1 = turn.dl > 0 ? Math.min(16, hi0) : Math.max(-16, lo0), probes = [d1 / 2, d1 > 0 ? Math.max(-16, lo0) : Math.min(16, hi0)];
+    for (const deg of probes) {
+      if (!turn || !(Math.abs(deg) >= 1)) continue;
+      const a = appliedAt(deg);
+      if (!othersSame(a)) continue;
+      const [pl, pr] = pointsOf(a), [ql, qr] = quickAt(a);
+      if (maxOff(pl, ql) > o.linearMm || maxOff(pr, qr) > o.linearMm) turn = null;
+    }
+  }
   const pointsAt = deg => {
     if (deg === 0) return [l0, r0];
     const a = appliedAt(deg);
     if (!turn || !othersSame(a)) return pointsOf(a);
-    return [rotatedPoints(l0, m4RotAbout(turn.l.axis, turn.l.deg * (a.hip_rot_L - a0.hip_rot_L) / turn.dl, turn.l.point)),
-      rotatedPoints(r0, m4RotAbout(turn.r.axis, turn.r.deg * (a.hip_rot_R - a0.hip_rot_R) / turn.dr, turn.r.point))];
+    return quickAt(a);
   };
   const near0 = pointSetsNear(l0, r0, o.boneGapMm), gap0 = near0 === Infinity ? null : near0;
   const need = gap0 === null ? o.boneGapMm : Math.min(o.boneGapMm, gap0);

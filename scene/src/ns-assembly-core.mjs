@@ -300,8 +300,11 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     if (d && d.track === 'brain' && (k === 'brain' || k === 'strip')) {
       const side = hemisphereSideOf({ name: place && place.name, positions: parsed.positions });
       if (side) {
-        g.setAttribute('position', new THREE.BufferAttribute(partedPositions(parsed.positions, side, HEMI_GAP.eachMm), 3));
-        centre[0] += side * HEMI_GAP.eachMm;
+        const parted = partedPositions(parsed.positions, side, HEMI_GAP.eachMm);
+        g.setAttribute('position', new THREE.BufferAttribute(parted, 3));
+        // (20 November 2026: the centre from the parted points themselves, since the step need not be the same for
+        // every point of a half: ns-brain-part may ease it toward the back of the brain)
+        if (parted !== parsed.positions) { let x0 = Infinity, x1 = -Infinity; for (let i = 0; i < parted.length; i += 3) { if (parted[i] < x0) x0 = parted[i]; if (parted[i] > x1) x1 = parted[i]; } centre[0] = (x0 + x1) / 2; }
       }
     }
     if (!d) { g.dispose(); return; }
@@ -457,6 +460,9 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
         const base = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: 0.02 });
         const mat = base.clone(); eyeMats.push(base, mat);
         const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false;
+        // (hidden until the next frame's flight step places it: it was added after this frame's flight step, so it was
+        // drawn once at its final place before flying in; 20 Nov review)
+        mesh.visible = false;
         brain.add(mesh);
         const d = still ? [0, 0, 0] : dir;
         // (its own flight time: moving[] scales the time by flyS / ASSEMBLY.flyS; `own` keeps it out of the merging)
@@ -551,6 +557,17 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     hurry() { hurried = true; release.hurry(); },
     /** A manifest has come: its parts per tier (ns-assembly-order know()). */
     know(counts) { release.know(counts); },
+    /** 20 November 2026: the game's first view ({ fovYDeg, pitchDeg }), when the launcher takes the picture over (the
+     * picture may have started before it, with ASSEMBLY.room): the room behind the parts as the game will show it. */
+    setRoom(r) {
+      if (disposed || !r || !Number.isFinite(r.fovYDeg) || !Number.isFinite(r.pitchDeg)) return;
+      if (roomView.fovYDeg === r.fovYDeg && roomView.pitchDeg === r.pitchDeg) return;
+      roomView.fovYDeg = r.fovYDeg; roomView.pitchDeg = r.pitchDeg; backdrop.setFixedView(roomView);
+    },
+    /** Files are still coming (a pack's bytes), though none has arrived just now (ns-assembly-order alive()). */
+    alive() { release.alive(); },
+    /** How many parts have set off so far (your body's and the brain's; not the mirror body's copies). */
+    started: () => parts,
     state: () => {
       const r = release.state();
       return { parts, mirrored, triangles, pending: pending.length, moving: moving.length, progress, finishing, width: W, height: H, frames, byKind: { ...byKind },

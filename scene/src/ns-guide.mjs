@@ -451,19 +451,23 @@ export function handLatched(a) {
  * elbow, ns-app state.elbowRad). Display choice: 2 degrees. */
 export const ARM_STRAIGHT_ELBOW_RAD = 2 * Math.PI / 180;
 /** R558 (hunt 2): false when a game-arm action (ns-actions ACTION_IDS id) would move nothing on the arm as it is now:
- * it is already latched on (ns-actions armLatch: it stays until its opposite), or it straightens an elbow that is
- * already straight (full reach) with no bend held. arm: { armLatch, elbowRad } of the activity state BEFORE the pulse;
- * missing fields count as "moves" (the old behaviour). */
+ * it is already latched on with no jerk to repeat (ns-actions armLatch / armJerk: see below), or it straightens an
+ * elbow that is already straight (full reach) with no bend held. arm: { armLatch, elbowRad, armJerk } of the activity
+ * state BEFORE the pulse; missing fields count as "moves" (the old behaviour). */
 /** 19 November 2026 (EASE, audit S14): the game arm has no sideways wrist joint, so these two movements of the left
  * wrist move nothing (ns-actions DISPLAY_ONLY_ARM_IDS, kept equal by hand); the tip and the card dim them like a
  * movement already at its end. A stopgap until the game arm's wrist bends sideways. */
 export const ARM_ACTIONS_MOVE_NOTHING = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+// 20 November 2026 (ns-actions jerkArm: the left arm's movements jerk to their end and come part of the way back, and
+// each further press does it again): a movement already latched on moves again when the arm holds a jerk note for it
+// (arm.armJerk[id], the activity's own); with none (reduced motion: nothing jerks, the movement stays at its end) it
+// still moves nothing. A straighten of an elbow already straight moves nothing either way.
 export function armActionMoves(armActionId, arm = null) {
   if (typeof armActionId === 'string' && ARM_ACTIONS_MOVE_NOTHING.includes(armActionId)) return false;
   if (typeof armActionId !== 'string' || !arm || typeof arm !== 'object') return true;
   const l = arm.armLatch && typeof arm.armLatch === 'object' ? arm.armLatch : null;
-  if (l && l[armActionId] > 0) return false;
   if (armActionId === 'elbow_extension' && !(l && l.elbow_flexion > 0) && isNum(arm.elbowRad) && arm.elbowRad < ARM_STRAIGHT_ELBOW_RAD) return false;
+  if (l && l[armActionId] > 0) return Boolean(arm.armJerk && typeof arm.armJerk === 'object' && Array.isArray(arm.armJerk[armActionId]));
   return true;
 }
 
@@ -545,7 +549,8 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const pa = prev && prev.activity && typeof prev.activity === 'object' ? prev.activity : null;
   // R558: Space makes no fist (it grasps and turns the limbs); a relax pulse moves the hand when a hand action is latched.
   const ctx = pa ? { handHeld: handLatched(pa), rotationState: typeof pa.rotationState === 'string' ? pa.rotationState : prev.rotation && prev.rotation.rotation,
-    armLatch: pa.armLatch && typeof pa.armLatch === 'object' ? pa.armLatch : null, elbowRad: num(prev.elbowRad) } : null;
+    armLatch: pa.armLatch && typeof pa.armLatch === 'object' ? pa.armLatch : null, elbowRad: num(prev.elbowRad),
+    armJerk: pa.armJerk && typeof pa.armJerk === 'object' ? pa.armJerk : null } : null;
   for (const m of out && Array.isArray(out.marks) ? out.marks : []) { const e = activationEvent(m, bodyMap, ctx); if (e) add(e); }
   const ax = inputs && inputs.axes && typeof inputs.axes === 'object' ? inputs.axes : null;
   // R4-fix (review RP3): a held W/A/S/D counts only when the hand really moved this frame (the shown hand: the fit's

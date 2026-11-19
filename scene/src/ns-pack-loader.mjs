@@ -25,7 +25,12 @@ import { decodePack, validatePackIndex, packIndexRig, packedMesh, PACK_INDEX_SHA
 
 export const PACK_ANSWER_MS = 15000; // a request's answer must begin within this
 export const PACK_STALL_MS = 15000;  // ... and then no pause between bytes may last this long
+/** At most this many packs on the line at once (they come one after another; a pack that has gone quiet for
+ * PACK_QUIET_MS no longer holds the next one back, but still counts here until it is whole or given up). */
 export const PACK_PARALLEL = 3;
+export const PACK_QUIET_MS = 2000;
+/** The next pack is asked for when the one before has less than this many seconds of bytes left at its rate. */
+export const PACK_LEAD_S = 0.3;
 /** The worker must say hello within this, or the same job is run on the page (a worker script that never arrives
  * would otherwise leave every mesh waiting for ever). */
 export const PACK_WORKER_HELLO_MS = 8000;
@@ -72,7 +77,7 @@ export async function readAll(response, { onBytes, stallMs, setTimer, clearTimer
  * { type: 'again', what, error } (a first request failed and is made once more) | { type: 'done' }.
  * Never throws.
  */
-export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, io, emit, stallMs = PACK_STALL_MS, answerMs = Math.min(PACK_ANSWER_MS, stallMs), parallel = PACK_PARALLEL }) {
+export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, io, emit, stallMs = PACK_STALL_MS, answerMs = Math.min(PACK_ANSWER_MS, stallMs), parallel = PACK_PARALLEL, quietMs = PACK_QUIET_MS }) {
   let packs, rigFile = null;
   // One request, whole and checked: the answer must begin within waitMs, no pause between bytes may last stallMs, and
   // the bytes must have the expected length and SHA-256 (where given). Throws otherwise.
@@ -114,14 +119,19 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
   } catch (err) { emit({ type: 'index-failed', error: text(err) }); emit({ type: 'done' }); return; }
   const startBytes = packs.filter(p => p.stage === 'start').reduce((a, p) => a + p.bytes, 0);
   emit({ type: 'index', packs: packs.map(p => ({ name: p.name, stage: p.stage, bytes: p.bytes, files: p.files, keys: p.keys })), startBytes });
-  const one = async p => {
+  // (onByte: every chunk of this pack; onWhole: its bytes are all in, or it failed; it is then inflated and decoded)
+  const one = async (p, { onByte = null, onWhole = null } = {}) => {
     let got = 0, lastSent = 0;
     try {
-      const gz = await twice(p.name, base + p.file, { bytes: p.bytes, sha256: p.sha256, onAgain: () => { got = 0; lastSent = 0; },
-        onBytes: n => {
-          got += n;
-          if (got - lastSent > 65536 || got >= p.bytes) { lastSent = got; emit({ type: 'bytes', name: p.name, got }); }
-        } });
+      let gz;
+      try {
+        gz = await twice(p.name, base + p.file, { bytes: p.bytes, sha256: p.sha256, onAgain: () => { got = 0; lastSent = 0; },
+          onBytes: n => {
+            got += n;
+            if (onByte) onByte(got, p.bytes);
+            if (got - lastSent > 65536 || got >= p.bytes) { lastSent = got; emit({ type: 'bytes', name: p.name, got }); }
+          } });
+      } finally { if (onWhole) onWhole(); }
       const raw = new Uint8Array(await new io.Response(new io.Blob([gz]).stream().pipeThrough(new io.DecompressionStream('gzip'))).arrayBuffer());
       const decoded = decodePack(raw);
       const meshes = [], transfer = [];
@@ -135,29 +145,65 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
       emit({ type: 'pack-failed', name: p.name, error: /sha256/.test(text(err)) ? 'sha256 does not match the pack index' : text(err) });
     }
   };
+  const queue = [...packs.filter(p => p.stage === 'start'), ...packs.filter(p => p.stage !== 'start')];
   // the body rig made from the source meshes (a small JSON file; its bytes must match the index too)
-  const rigJob = (async () => {
+  const startRig = async () => {
     if (!rigFile) { emit({ type: 'rig-failed', error: 'the index names no rig file' }); return; }
     try {
       const bytes = await twice('rig', base + rigFile.file, { bytes: rigFile.bytes, sha256: rigFile.sha256 });
       emit({ type: 'rig', file: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) });
     } catch (err) { emit({ type: 'rig-failed', error: /sha256|bytes, the index/.test(text(err)) ? 'the rig file does not match the pack index' : text(err) }); }
-  })();
-  const queue = [...packs.filter(p => p.stage === 'start'), ...packs.filter(p => p.stage !== 'start')];
-  let next = 0;
-  const lane = async () => { while (next < queue.length) await one(queue[next++]); };
-  await Promise.all([rigJob, ...Array.from({ length: Math.max(1, Math.min(parallel, queue.length)) }, lane)]);
+  };
+  // 20 November 2026: the packs come ONE AFTER ANOTHER, in the index's order (the arm and the brain, the body, the head,
+  // the face, the missing muscles: the order the game builds them in, and the loading picture begins with the brain from
+  // its core). On a slow line the packs share the line with each other and with the game's scripts; three at once made
+  // the first whole only after about 3.3 MB of packs (measured at 600 kB/s from a host that compresses the scripts, as
+  // GitHub Pages does: the head pack at 7.4 s, the arm and brain at 9.2 s, the body at 12.5 s). The next pack starts the
+  // moment the last byte of the one before is in (that one is inflated and decoded meanwhile), or as soon as the one
+  // before has brought no byte for PACK_QUIET_MS, so a pack that stalls does not hold the others back for the whole time
+  // it is given; at most `parallel` are on the line at once. The rig file comes with the second pack. The total to
+  // download is the same. The next pack is asked for a little BEFORE the last byte of the one before is due (when, at
+  // the rate it is coming, less than PACK_LEAD_S of it is left), so the line does not stand idle for a request's round
+  // trip between packs (measured: one after another without that lead, the last pack came 0.3 s later than three at
+  // once, four round trips of idle line).
+  const jobs = [];
+  let rigJob = null, downloading = 0, wake = null;
+  for (let i = 0; i < queue.length; i++) {
+    while (downloading >= Math.max(1, parallel)) await new Promise(r => { wake = r; });
+    downloading++;
+    let open = true, lastByte = Date.now(), release = null, firstAt = null, firstGot = 0;
+    const opened = new Promise(r => { release = r; });
+    const free = () => { if (open) { open = false; release(); } };
+    const watch = () => { if (!open) return; if (Date.now() - lastByte >= quietMs) free(); else io.setTimeout(watch, Math.min(500, quietMs)); };
+    io.setTimeout(watch, Math.min(500, quietMs));
+    jobs.push(one(queue[i], { onByte: (got, total) => {
+      const now = Date.now(); lastByte = now;
+      if (firstAt === null) { firstAt = now; firstGot = got; return; }
+      const dt = (now - firstAt) / 1000;
+      if (dt >= 0.2 && total - got <= ((got - firstGot) / dt) * PACK_LEAD_S) free();
+    },
+      onWhole: () => { free(); downloading--; if (wake) { const w = wake; wake = null; w(); } } }));
+    await opened;
+    if (i === 0) rigJob = startRig();
+  }
+  if (!rigJob) rigJob = startRig();
+  await Promise.all([...jobs, rigJob]);
   emit({ type: 'done' });
 }
 
 /**
- * Page side. Returns { get(key) -> Promise<packed mesh | null>, state(), stop() }. onProgress(files, of) tells how
- * many of the start packs' files have come so far (a pack counts its files by the share of its bytes received; a
- * failed pack counts none: the page then reads those files one by one); onSettled() is called once every start pack
- * has arrived or failed. Never throws.
+ * Page side. Returns { get(key) -> Promise<packed mesh | null>, onPack(fn), state(), stop() }. onProgress(files, of)
+ * tells how many of the start packs' files have come so far (a pack counts its files by the share of its bytes
+ * received; a failed pack counts none: the page then reads those files one by one); onSettled() is called once every
+ * start pack has arrived or failed. Never throws.
+ * onPack(fn) (20 November 2026, the loading picture: ns-assembly notePack): fn(name, [{ key, mesh }]) is called with
+ * the meshes of every pack the moment it arrives, before the game is given any of them (and at once with those of
+ * packs that came before fn was set). fn must not change the meshes: they are the game's (the picture copies them).
  */
 export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, moduleUrl = import.meta.url,
   workerUrl = new URL('./ns-pack-worker.mjs', import.meta.url), onProgress = null, onSettled = null, useWorker = true, helloMs = PACK_WORKER_HELLO_MS } = {}) {
+  const packWatchers = [], arrived = []; // onPack listeners; the packs that came so far, [name, records] (for a late listener)
+  const tellPack = (name, records, fns = packWatchers) => { for (const fn of fns) { try { fn(name, records); } catch { /* the picture only */ } } };
   const st = { mode: 'off', index: 'pending', packs: {}, rig: 'pending', files: 0, of: null, served: 0, missed: 0, again: 0, asked2: [], withoutRig: 0, errors: [] };
   const abs = u => { try { return new URL(u, new URL(moduleUrl, win.location.href)).href; } catch { return String(u); } };
   let resolveRig;
@@ -203,7 +249,14 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
     } else if (m.type === 'pack' || m.type === 'pack-failed') {
       const rec = st.packs[m.name], res = packResolve.get(m.name);
       if (!rec || !res) return;
-      if (m.type === 'pack') { rec.status = 'ok'; rec.got = rec.bytes; res(new Map(m.meshes.map(x => [x.key, x]))); }
+      if (m.type === 'pack') {
+        rec.status = 'ok'; rec.got = rec.bytes;
+        const map = new Map(m.meshes.map(x => [x.key, x]));
+        // the loading picture first, synchronously, before any get() waiting for this pack goes on (a picture only: it
+        // shows a body pack's meshes even if the rig file is then missing and the game reads the source files instead)
+        if (packWatchers.length) tellPack(m.name, m.meshes); else arrived.push([m.name, m.meshes, map]);
+        res(map);
+      }
       else { rec.status = 'failed'; rec.error = m.error; st.errors.push(`${m.name}: ${m.error}`); res(null); }
       tell();
       if (rec.stage === 'start') { startLeft--; settle(); }
@@ -250,12 +303,21 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
       const rec = pack && pack.get(key);
       if (!rec) { if (pack) st.again++; else st.missed++; return null; }
       pack.delete(key); // each mesh is handed out once (the game owns it from here); a second request reads the file
+      if (pack.size === 0) { const i = arrived.findIndex(a => a[2] === pack); if (i >= 0) arrived.splice(i, 1); } // nothing left to show late
       st.served++;
       return packedMesh(rec);
     },
     /** The body rig file (made from the source meshes), or null when it cannot be had. */
     rig: () => rigP,
+    /** See the head of startPackLoader: fn(name, [{ key, mesh }]) for every pack as it arrives. The first listener is
+     * also given, at once, the meshes of packs that came before it that the game has not taken yet (a mesh the game
+     * has taken may already have been changed by it; the launcher shows those itself as it hands them over). */
+    onPack(fn) {
+      if (typeof fn !== 'function') return;
+      packWatchers.push(fn);
+      if (packWatchers.length === 1) for (const [name, records, map] of arrived.splice(0)) tellPack(name, records.filter(x => map.has(x.key)), [fn]);
+    },
     state: () => JSON.parse(JSON.stringify(st)),
-    stop() { if (worker) { try { worker.terminate(); } catch { /* gone */ } worker = null; } }
+    stop() { arrived.length = 0; if (worker) { try { worker.terminate(); } catch { /* gone */ } worker = null; } }
   };
 }

@@ -720,8 +720,9 @@ export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 
 
 /** GLSL appended to the shell's read patch in place of the glass ink (ns-scene-three patchGlassReadShaders; nsN, nsV,
  * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
- * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. Pure. */
-export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE) {
+ * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. hooks.albedo: GLSL run once the tissue's
+ * colour nsAlb is made and before it is lit (20 November 2026: ns-brain-gap's inner parts and cut faces). Pure. */
+export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE, hooks = {}) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
   const B = live.bloom, P = live.beat;
   return `
@@ -731,6 +732,7 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE) {
 	vec3 nsAlb = mix( ${lin(o.crown)}, ${lin(o.groove)}, pow( nsG, ${f(o.grooveCurve)} ) );
 	nsAlb *= mix( vec3( 1.0 ), ${v3(o.mottleWarm)}, nsMot ) * ( 1.0 + ${f(o.mottle)} * ( nsMot - 0.5 ) );
 	${o.vessel ? cortexVesselGlsl(o.vessel) : ''}
+	${(hooks && hooks.albedo) || ''}
 	// the living brain (ns-brain-live): the tissue flushes a little with every beat, and rosy round an area that is on
 	${liveBloomGlsl('vNsObj')}
 	nsAlb *= vec3( 1.0 + ${f(P.flush)} * nsLive.y, 1.0 - ${f(0.6 * P.flush)} * nsLive.y, 1.0 - ${f(0.5 * P.flush)} * nsLive.y );

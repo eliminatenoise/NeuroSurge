@@ -16,14 +16,31 @@
  * place in the inside-out order (ns-assembly-order assemblyDepth: its track, tier and place in the tier) is read here
  * from the manifests the game fetches, with the game's own layer of each muscle (ns-body bodyMuscleLayer), and sent
  * with the bytes; the worker holds each part back until its tier comes up.
+ *
+ * 20 November 2026 (the owner, 19 November: "Currently, I can't see the models being built on the loading page, which
+ * they should be there"; measured: on a slow line the picture started only once the launcher's own scripts were in,
+ * about 4 MB, and drew its first part a second or two before the game was ready). The picture is now started by the
+ * page's first small script (early-load.mjs, through a dynamic import, so its first work is not held up) and fed from
+ * the packs as they arrive (notePack), before the game has fetched a manifest: the place of every mesh the game waits
+ * for is in a table made beforehand (ns-assembly-parts, tools/build-assembly-parts.mjs), so the picture needs neither
+ * the manifests nor ns-body (600 kB) to begin. The launcher then takes the SAME picture over (startAssembly with
+ * shared: true returns it) and goes on feeding it as before; a mesh it hands over that the picture has already drawn
+ * is not drawn twice (each file is drawn once, by its packet and file name), and a mesh the table does not know is
+ * drawn from the launcher's manifests as before. The game's own layer of each muscle (ns-body bodyMuscleLayer) is
+ * handed in by the launcher (useMuscleLayer) for manifests the table does not cover.
  */
 import { assemblyDepth, ASSEMBLY_TIERS } from './ns-assembly-order.mjs';
-import { bodyMuscleLayer } from './ns-body.mjs';
+import { ASSEMBLY_PARTS } from './ns-assembly-parts.mjs';
+import { packKeyOfUrl } from './ns-pack.mjs';
 
 /** Files the game loads before it is ready (arm and brain 142, body 294, face 54, head 10, more muscles 111): only the
  * length of the progress bar depends on it. The cerebral arteries (80) are drawn but not counted: the game goes on
  * loading them, one at a time, after it is ready. */
 export const ASSEMBLY_EXPECTED_FILES = 611;
+/** The loading picture on or off (the history of this switch is in eye-view-r558.mjs). It lives here since
+ * 20 November 2026 because the page's first small script (early-load.mjs) starts the picture now, before the launcher
+ * is in; false = the game's dark backdrop with the loading bar only. */
+export const LOADING_PICTURE = true;
 export const CONTROLS_CARD_MS = 5000;
 /** About how long a first load takes (ms from the page's start), for the picture's pace before any load was timed. */
 export const ASSEMBLY_FIRST_LOAD_MS = 5000;
@@ -87,16 +104,76 @@ export function assemblyPartsOfManifest(manifest, muscleLayer) {
   return out;
 }
 
+/** The manifests of the files the game waits for, in the order the game reads them (paths from the repository's root):
+ * tools/build-assembly-parts.mjs makes the picture's table of parts (ns-assembly-parts) from these. */
+export const ASSEMBLY_PART_MANIFESTS = Object.freeze(['inputs/MESH-MANIFEST.json', 'inputs/FULLBODY-MESH-MANIFEST.json',
+  'packets/bodyparts3d-head-r1/HEAD-MESH-MANIFEST.json', 'packets/face-muscles-r1/FACE-MESH-MANIFEST.json',
+  'packets/missing-muscles-r1/MISSING-MUSCLES-MESH-MANIFEST.json']);
+/** frac is kept to this many decimals in the table (its order inside a tier; a tie closer than this is a tie). */
+const FRAC_DIGITS = 4;
+const roundFrac = f => (Number.isFinite(f) ? Math.round(f * 10 ** FRAC_DIGITS) / 10 ** FRAC_DIGITS : f);
+
+/** A manifest's parts as rows of the table (pure): [[packet, [file id, kind, tier, frac, name?]], ...], in manifest
+ * order. The packet is the entry's source_packet (else the manifest's packet); the file id is the file's name without
+ * .obj (the game's files are named by element id); name is given for a part of the brain only (it says which half). */
+export function assemblyPartsRowsOfManifest(manifest, muscleLayer) {
+  const out = [];
+  if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.assets)) return out;
+  for (const e of manifest.assets) {
+    if (!e || typeof e.element_id !== 'string' || typeof e.path !== 'string') continue;
+    const p = assemblyPartOf(e, muscleLayer), file = idOfUrl(e.path), packet = String(e.source_packet || manifest.packet || '');
+    if (!p || !p.track || !file || !packet) continue;
+    const row = [file, p.kind, p.tier, roundFrac(p.frac)];
+    if (p.track === 'brain') row.push(p.name);
+    out.push([packet, row]);
+  }
+  return out;
+}
+
+/** The table (ns-assembly-parts: packet -> rows) as file key (`<packet>/meshes/<file>.obj`, the pack's key) -> the part
+ * as assemblyPartOf gives it ({ id, kind, name, groups, layer, track, tier, frac }; groups and layer are not kept,
+ * they only matter for a part without a tier). Pure. */
+export function assemblyPartsTable(table = ASSEMBLY_PARTS) {
+  const out = new Map();
+  if (!table || typeof table !== 'object') return out;
+  for (const [packet, rows] of Object.entries(table)) {
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) {
+      if (!Array.isArray(r) || typeof r[0] !== 'string') continue;
+      const [id, kind, tier, frac, name = ''] = r, track = kind === 'brain' || kind === 'strip' || kind === 'vessel' ? 'brain' : 'body';
+      if (!Number.isInteger(tier) || !ASSEMBLY_TIERS[track] || tier < 0 || tier >= ASSEMBLY_TIERS[track].length) continue;
+      out.set(`${packet}/meshes/${id}.obj`, Object.freeze({ id, kind, name: String(name), groups: [], layer: 'unclassified', track, tier, frac: Number(frac) }));
+    }
+  }
+  return out;
+}
+
 const idOfUrl = url => { const m = /([^/]+)\.obj(?:[?#].*)?$/i.exec(String(url)); return m ? m[1] : null; };
+/** The key a file is drawn under: the pack's key (`<packet>/meshes/<file>.obj`) for a file of a packet (a pack's own
+ * key is already one), else its address. */
+const keyOfUrl = url => packKeyOfUrl(url) || String(url);
+/** The picture the page's first script started, which the launcher takes over (startAssembly shared: true). */
+let sharedPicture = null;
 
 /**
  * Start the loading picture. host: the element that holds the game canvas; win / doc: the window and document.
- * room: { fovYDeg, pitchDeg } = the game's first view, so the room behind the parts is the one the game then shows.
- * Returns { noteManifest(url, text), noteBytes(url, bytes), noteText(url, text), finish(), state() }; every method is
- * safe to call at any time and never throws.
+ * room: { fovYDeg, pitchDeg } = the game's first view, so the room behind the parts is the one the game then shows
+ * (without it, the same numbers in ns-assembly-core ASSEMBLY.room). parts: the table of parts (assemblyPartsTable).
+ * shared: true = the one picture of the page: a second call with shared: true returns the picture the first one
+ * started (the page's first script starts it, the launcher takes it over), with its room set to the new `room`.
+ * Returns { noteManifest(url, text), noteBytes(url, bytes), noteMesh(url, mesh), noteText(url, text),
+ * notePack(records), useMuscleLayer(fn), setRoom(room), finish(), state() }; every method is safe to call at any time
+ * and never throws.
  */
-export function startAssembly({ host, win = globalThis.window, doc = globalThis.document, workerUrl = new URL('./ns-assembly-worker.mjs', import.meta.url), room = null } = {}) {
+export function startAssembly({ host, win = globalThis.window, doc = globalThis.document, workerUrl = new URL('./ns-assembly-worker.mjs', import.meta.url), room = null, parts = null, shared = false } = {}) {
+  if (shared && sharedPicture && !sharedPicture.state().finished) { if (room) sharedPicture.setRoom(room); return sharedPicture; }
   const kinds = new Map();
+  // 20 November 2026: where each mesh the game waits for goes, known beforehand (ns-assembly-parts), by file key
+  const table = parts instanceof Map ? parts : assemblyPartsTable();
+  const drawn = new Set(); // the keys of the files already handed to the picture: each is drawn once
+  let fed = false; // fed from a pack loader already (feedFrom)
+  let lastAliveMs = -1e9; // stillComing()
+  let muscleLayer = () => 'unclassified'; // the game's own layer of a muscle, once the launcher hands it in
   // 18 November 2026: under prefers-reduced-motion the parts appear in place (no flying in, no turning, no beat).
   let reducedMotion = false;
   try { reducedMotion = Boolean(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch { reducedMotion = false; }
@@ -104,10 +181,12 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   // the picture can pace its layers to keep building through the whole load (ns-assembly-order expect()).
   let lastLoadMs = null;
   try { const v = Number(win.localStorage && win.localStorage.getItem(ASSEMBLY_LOAD_KEY)); lastLoadMs = Number.isFinite(v) && v > 1000 && v < 600000 ? v : null; } catch { lastLoadMs = null; }
-  const startedAtMs = (() => { try { return win.performance.now(); } catch { return 0; } })();
+  const nowMs = () => { try { return win.performance.now(); } catch { return 0; } };
+  const startedAtMs = nowMs();
   // 19 November 2026: with no earlier load to go by, about the time a load takes now (ASSEMBLY_FIRST_LOAD_MS)
   const expectReadyS = ((lastLoadMs === null ? ASSEMBLY_FIRST_LOAD_MS : lastLoadMs) - startedAtMs) / 1000;
-  const st = { mode: 'off', files: 0, error: null, finished: false, lastWorkerState: null, workerStates: [], reducedMotion, lastLoadMs };
+  const st = { mode: 'off', files: 0, error: null, finished: false, lastWorkerState: null, workerStates: [], reducedMotion, lastLoadMs,
+    startedAtMs: Math.round(startedAtMs), firstPartMs: null, early: 0, again: 0 };
   let canvas = null, worker = null, local = null, localQueue = [], raf = 0, lastBytesAt = 0;
   let staticOverlay = null, staticProgress = null;
   const size = () => ({ width: Math.max(1, win.innerWidth || 1), height: Math.max(1, win.innerHeight || 1), pixelRatio: Math.min(1.5, win.devicePixelRatio || 1) });
@@ -122,6 +201,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
       const s = size();
       local = { view: core.createAssemblyView({ THREE, canvas, ...s, room, reducedMotion, expectReadyS: expectReadyS === null ? null : expectReadyS - (win.performance.now() - startedAtMs) / 1000 }), parse: core.parseObjBytes };
       while (knownQueue.length) local.view.know(knownQueue.shift());
+      if (room) local.view.setRoom(room);
       st.mode = 'page';
       const tick = now => {
         if (!local) return;
@@ -129,6 +209,7 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         while (localQueue.length && win.performance.now() - t0 < 4) { const q = localQueue.shift(); try { local.view.add(q.kind, q.mesh || local.parse(q.bytes), q.place); } catch { /* left out */ } }
         local.view.setProgress(st.files / ASSEMBLY_EXPECTED_FILES, st.files > 0.9 * ASSEMBLY_EXPECTED_FILES && now - lastBytesAt > 900);
         try { local.view.frame(now); } catch (err) { st.error = String(err && err.message || err); local = null; return; }
+        if (st.firstPartMs === null && local.view.started() > 0) st.firstPartMs = Math.round(win.performance.now());
         raf = win.requestAnimationFrame(tick);
       };
       raf = win.requestAnimationFrame(tick);
@@ -159,7 +240,14 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
           const off = canvas.transferControlToOffscreen();
           worker = new win.Worker(workerUrl, { type: 'module' });
           st.mode = 'worker';
-          worker.onmessage = ev => { const m = ev.data || {}; if (m.type === 'error') st.error = m.message; else if (m.type === 'state') { st.lastWorkerState = m; st.workerStates.push([m.at, m.frames, m.parts]); } else if (m.type === 'starts') st.starts = m.starts; };
+          worker.onmessage = ev => {
+            const m = ev.data || {};
+            if (m.type === 'error') st.error = m.message;
+            else if (m.type === 'state') { st.lastWorkerState = m; st.workerStates.push([m.at, m.frames, m.parts]); }
+            else if (m.type === 'first') { if (st.firstPartMs === null) st.firstPartMs = Math.round(nowMs()); }
+            else if (m.type === 'ready') st.workerReadyMs = Math.round(nowMs());
+            else if (m.type === 'starts') st.starts = m.starts;
+          };
           worker.onerror = ev => { st.error = String(ev && ev.message || 'worker error'); };
           post({ type: 'init', canvas: off, ...s, room, reducedMotion, expectReadyS }, [off]);
         } catch (err) {
@@ -175,17 +263,47 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   } catch (err) { st.error = String(err && err.message || err); st.mode = 'off'; }
 
   const knownQueue = []; // per-tier counts of manifests that came before the picture could take them
+  const know = counts => { if (worker) post({ type: 'known', counts }); else if (local) local.view.know(counts); else knownQueue.push(counts); };
+  // 20 November 2026: every part of the table is known from the start (its counts per tier), so the tiers wait for
+  // exactly the files the game waits for, from the first pack on; the launcher's manifests then add nothing they name.
+  if (!reducedMotion && table.size) {
+    const counts = { body: ASSEMBLY_TIERS.body.map(() => 0), brain: ASSEMBLY_TIERS.brain.map(() => 0) };
+    for (const p of table.values()) { kinds.set(p.id, p); counts[p.track][p.tier]++; }
+    know(counts);
+  }
   const noteManifest = (url, text) => {
     if (reducedMotion) return; // the stationary progress bar draws no parts
     try {
       const counts = { body: ASSEMBLY_TIERS.body.map(() => 0), brain: ASSEMBLY_TIERS.brain.map(() => 0) };
       let any = false;
-      for (const [id, p] of assemblyPartsOfManifest(JSON.parse(text), bodyMuscleLayer)) { if (kinds.has(id)) continue; kinds.set(id, p); if (p.track) { counts[p.track][p.tier]++; any = true; } }
+      for (const [id, p] of assemblyPartsOfManifest(JSON.parse(text), muscleLayer)) { if (kinds.has(id)) continue; kinds.set(id, p); if (p.track) { counts[p.track][p.tier]++; any = true; } }
       if (!any) return;
-      if (worker) post({ type: 'known', counts }); else if (local) local.view.know(counts); else knownQueue.push(counts);
+      know(counts);
     } catch { /* not a manifest this picture knows */ }
   };
-  return {
+  /** Where a file goes: from the table by its key, else from a manifest by its id, else null (placed by its vertices). */
+  const placeOf = (key, url) => {
+    const id = idOfUrl(url), known = table.get(key) || (id ? kinds.get(id) : null);
+    return { kind: known ? known.kind : assemblyKindOfUrl(url), place: known ? { id: known.id || id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer } : null };
+  };
+  /** Hand one mesh (positions and triangles; copies are made here) to the picture; batch: collect instead of posting. */
+  const handMesh = (url, mesh, batch = null) => {
+    const key = keyOfUrl(url);
+    if (drawn.has(key)) { st.again++; return false; }
+    drawn.add(key);
+    if (st.mode === 'static') { st.files++; staticProgress.value = Math.min(st.files, ASSEMBLY_EXPECTED_FILES); return true; }
+    const { kind, place } = placeOf(key, url);
+    if (kind !== 'vessel') st.files++;
+    lastBytesAt = nowMs();
+    const positions = mesh.positions.slice(), indices = mesh.indices.slice();
+    if (batch) batch.push({ kind, place, positions, indices });
+    else if (worker) {
+      post({ type: 'mesh', kind, place, positions: positions.buffer, indices: indices.buffer }, [positions.buffer, indices.buffer]);
+      post({ type: 'progress', fraction: st.files / ASSEMBLY_EXPECTED_FILES });
+    } else localQueue.push({ kind, place, mesh: { positions, indices } });
+    return true;
+  };
+  const picture = {
     noteManifest,
     noteBytes(url, bytes) {
       try {
@@ -193,17 +311,19 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
         // as bytes), so they were never read here and their parts had no layer; read them as text too.
         if (!st.finished && st.mode !== 'off' && bytes && /MANIFEST\.json(?:[?#].*)?$/i.test(String(url))) { noteManifest(url, new TextDecoder().decode(bytes)); return; }
         if (st.finished || st.mode === 'off' || !bytes || !/\.obj(?:[?#].*)?$/i.test(String(url))) return;
+        const key = keyOfUrl(url);
+        if (drawn.has(key)) { st.again++; return; }
+        drawn.add(key);
         if (st.mode === 'static') {
           st.files++;
           staticProgress.value = Math.min(st.files, ASSEMBLY_EXPECTED_FILES);
           return;
         }
-        const id = idOfUrl(url), known = id ? kinds.get(id) : null, kind = known ? known.kind : assemblyKindOfUrl(url);
         // Its place in the inside-out order (track, tier, place in the tier); without one the worker places it by its
         // own vertices.
-        const place = known ? { id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer } : null;
+        const { kind, place } = placeOf(key, url);
         if (kind !== 'vessel') st.files++; // the bar counts what the game waits for (ASSEMBLY_EXPECTED_FILES)
-        lastBytesAt = win.performance.now();
+        lastBytesAt = nowMs();
         const copy = bytes.slice(); // the game keeps its own bytes untouched
         if (worker) {
           post({ type: 'obj', kind, place, bytes: copy.buffer }, [copy.buffer]);
@@ -212,20 +332,33 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
       } catch (err) { st.error = String(err && err.message || err); }
     },
     /** 19 November 2026 (mesh packs, ns-pack): a mesh the game took from a verified pack: drawn like a fetched file
-     * (the picture gets a copy of its positions and triangles; nothing changes for the game). */
+     * (the picture gets a copy of its positions and triangles; nothing changes for the game). A mesh the picture has
+     * already drawn from its pack (notePack) is not drawn again. */
     noteMesh(url, mesh) {
       try {
         if (st.finished || st.mode === 'off' || !mesh || !mesh.positions || !mesh.indices) return;
-        if (st.mode === 'static') { st.files++; staticProgress.value = Math.min(st.files, ASSEMBLY_EXPECTED_FILES); return; }
-        const id = idOfUrl(url), known = id ? kinds.get(id) : null, kind = known ? known.kind : assemblyKindOfUrl(url);
-        const place = known ? { id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer } : null;
-        if (kind !== 'vessel') st.files++;
-        lastBytesAt = win.performance.now();
-        const positions = mesh.positions.slice(), indices = mesh.indices.slice();
-        if (worker) {
-          post({ type: 'mesh', kind, place, positions: positions.buffer, indices: indices.buffer }, [positions.buffer, indices.buffer]);
+        handMesh(url, mesh);
+      } catch (err) { st.error = String(err && err.message || err); }
+    },
+    /** 20 November 2026: the meshes of a pack that has just arrived ([{ key, mesh }], ns-pack-loader), before the game
+     * asks for them: each mesh the table places is drawn now (a copy; the game's own arrays are untouched); one it does
+     * not know is left for the launcher, which hands it over with its manifest when the game takes it. */
+    notePack(records) {
+      try {
+        if (st.finished || st.mode === 'off' || !Array.isArray(records)) return;
+        const t0 = nowMs();
+        const batch = st.mode === 'worker' ? [] : null;
+        for (const r of records) {
+          if (!r || typeof r.key !== 'string' || !r.mesh || !r.mesh.positions || !r.mesh.indices || !table.has(r.key)) continue;
+          if (handMesh(r.key, r.mesh, batch)) st.early++;
+        }
+        if (batch && batch.length) {
+          const transfer = [];
+          for (const b of batch) { transfer.push(b.positions.buffer, b.indices.buffer); b.positions = b.positions.buffer; b.indices = b.indices.buffer; }
+          post({ type: 'meshes', list: batch }, transfer);
           post({ type: 'progress', fraction: st.files / ASSEMBLY_EXPECTED_FILES });
-        } else localQueue.push({ kind, place, mesh: { positions, indices } });
+        }
+        st.packMs = Math.round((st.packMs || 0) + nowMs() - t0); // the page's own time spent on it (copies), for checks
       } catch (err) { st.error = String(err && err.message || err); }
     },
     /** A mesh file the game read as text (the cerebral arteries): drawn like the others (a copy; nothing changes for
@@ -233,12 +366,37 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
     noteText(url, text) {
       try { if (typeof text === 'string' && !st.finished && st.mode !== 'off') this.noteBytes(url, new TextEncoder().encode(text)); } catch (err) { st.error = String(err && err.message || err); }
     },
+    /** Files are still coming (a pack's bytes are arriving): a tier of the picture does not take the wait between two
+     * packs for a stalled fetch (ns-assembly-order alive()). At most four times a second. */
+    stillComing() {
+      if (st.finished || reducedMotion) return;
+      const t = nowMs();
+      if (t - lastAliveMs < 250) return;
+      lastAliveMs = t;
+      if (worker) post({ type: 'alive' }); else if (local) { try { local.view.alive(); } catch { /* a picture only */ } }
+    },
+    /** Be fed from a pack loader (ns-pack-loader onPack): the meshes of each pack as it arrives (once per picture,
+     * whoever asks: the page's first script, then the launcher with the same loader). */
+    feedFrom(loader) {
+      if (fed || !loader || typeof loader.onPack !== 'function') return;
+      fed = true;
+      try { loader.onPack((name, records) => picture.notePack(records)); } catch (err) { st.error = String(err && err.message || err); }
+    },
+    /** The game's own layer of each muscle (ns-body bodyMuscleLayer), for a manifest the table does not cover. */
+    useMuscleLayer(fn) { if (typeof fn === 'function') muscleLayer = id => { try { return fn(id); } catch { return 'unclassified'; } }; },
+    /** The game's first view ({ fovYDeg, pitchDeg }): the room behind the parts is seen as the game will show it. */
+    setRoom(r) {
+      if (!r || !Number.isFinite(r.fovYDeg) || !Number.isFinite(r.pitchDeg)) return;
+      room = { fovYDeg: r.fovYDeg, pitchDeg: r.pitchDeg };
+      if (worker) post({ type: 'room', room }); else if (local) { try { local.view.setRoom(room); } catch { /* a picture only */ } }
+    },
     /** Fade the picture out over the game and release it; remove it at once when loading fails or stops (immediate).
      * The parts still held back come in quickly, in order, while the picture fades, so the hand-over shows the whole
      * body and brain. */
     finish({ immediate = false } = {}) {
       if (st.finished) return;
       st.finished = true;
+      if (sharedPicture === picture) sharedPicture = null;
       if (reducedMotion) {
         try { staticOverlay?.remove(); } catch { /* gone */ }
         staticOverlay = staticProgress = null;
@@ -255,8 +413,10 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
       };
       if (!immediate && canvas && canvas.classList) { canvas.classList.add('ns-assembly-out'); win.setTimeout(end, 900); } else end();
     },
-    state: () => ({ ...st, kinds: kinds.size, placed: [...kinds.values()].filter(p => p.tier !== null).length })
+    state: () => ({ ...st, kinds: kinds.size, placed: [...kinds.values()].filter(p => p.tier !== null).length, drawn: drawn.size, table: table.size })
   };
+  if (shared) sharedPicture = picture;
+  return picture;
 }
 
 /** The main controls, drawn for the first CONTROLS_CARD_MS of the page (it fades by itself: a CSS animation, so it

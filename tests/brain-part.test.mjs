@@ -12,7 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { HEMI_GAP, hemisphereSideOf, partedPositions } from '../scene/src/ns-brain-part.mjs';
+import { HEMI_GAP, hemisphereSideOf, partedPositions, backShareAt } from '../scene/src/ns-brain-part.mjs';
 import * as NB from '../scene/src/ns-brain.mjs';
 import { BODY_MOTOR_MAP } from '../scene/src/ns-bodymap.mjs';
 import { partedBrainAssets } from '../scene/src/ns-app.mjs';
@@ -70,19 +70,47 @@ test('a mesh without a side in its name goes by where its points lie; one across
 });
 
 test('parting copies: the loaded array is never written, and nothing is copied when nothing moves', () => {
-  const p = Float32Array.from([1, 2, 3, 4, 5, 6]);
+  // (points in front of the back of the motor strip, where a half takes its whole step: atlas y < HEMI_GAP.back.fullToYMm)
+  const p = Float32Array.from([1, -80, 3, 4, -50, 6]);
   const out = partedPositions(p, 1);
   assert.notEqual(out, p);
   assert.ok(out instanceof Float32Array);
-  assert.deepEqual([...out], [7, 2, 3, 10, 5, 6]);
-  assert.deepEqual([...p], [1, 2, 3, 4, 5, 6]);
-  assert.deepEqual([...partedPositions(p, -1, 2.5)], [-1.5, 2, 3, 1.5, 5, 6]);
+  assert.deepEqual([...out], [7, -80, 3, 10, -50, 6]);
+  assert.deepEqual([...p], [1, -80, 3, 4, -50, 6]);
+  assert.deepEqual([...partedPositions(p, -1, 2.5)], [-1.5, -80, 3, 1.5, -50, 6]);
   assert.equal(partedPositions(p, 0), p);
   assert.equal(partedPositions(p, 1, 0), p);
 });
 
+test('20 November 2026: the gap closes toward the back of the brain, so it does not end in an open notch behind the cerebellum', () => {
+  const { fullToYMm, noneFromYMm } = HEMI_GAP.back;
+  // the whole step in front of the strip's back edge (the precentral gyri end at atlas y -39), none at the occipital poles
+  assert.ok(fullToYMm >= -39 && noneFromYMm <= 10 && noneFromYMm > fullToYMm);
+  assert.equal(backShareAt(-100), 1);
+  assert.equal(backShareAt(fullToYMm), 1);
+  assert.equal(backShareAt(noneFromYMm), 0);
+  assert.equal(backShareAt(10), 0);
+  // smooth and falling all the way
+  let last = 1;
+  for (let y = fullToYMm; y <= noneFromYMm; y += 0.5) { const s = backShareAt(y); assert.ok(s <= last + 1e-12 && s >= 0 && s <= 1); last = s; }
+  assert.ok(Math.abs(backShareAt((fullToYMm + noneFromYMm) / 2) - 0.5) < 1e-9);
+  assert.equal(backShareAt(5, null), 1, 'no back rule: the whole step everywhere');
+  const p = Float32Array.from([2, -60, 0, 2, -20, 0, 2, 8, 0]);
+  const q = partedPositions(p, 1);
+  assert.equal(q[0], 2 + HEMI_GAP.eachMm);
+  assert.ok(q[3] > 2 && q[3] < 2 + HEMI_GAP.eachMm);
+  assert.equal(q[6], 2, 'at the occipital pole a half lies where the atlas has it');
+  assert.deepEqual([...partedPositions(p, 1, HEMI_GAP.eachMm, null)].filter((_, i) => i % 3 === 0), [8, 8, 8]);
+  // on the atlas brain: the two occipital lobes' inner faces are as close as in the atlas, the strips 14 mm apart
+  const atlas = atlasBrain(), of = id => atlas.find(m => m.id === id);
+  const backGap = (L, R) => { let l = Infinity, r = -Infinity; for (let i = 0; i < L.length; i += 3) if (L[i + 1] > 0) l = Math.min(l, L[i]); for (let i = 0; i < R.length; i += 3) if (R[i + 1] > 0) r = Math.max(r, R[i]); return l - r; };
+  const atlasGap = backGap(of('FJ1791').positions, of('FJ1792').positions);
+  const drawnGap = backGap(partedPositions(of('FJ1791').positions, 1), partedPositions(of('FJ1792').positions, -1));
+  assert.ok(Math.abs(drawnGap - atlasGap) < 1e-3, `behind y 0 the occipital lobes are ${drawnGap.toFixed(2)} mm apart, as in the atlas (${atlasGap.toFixed(2)})`);
+});
+
 test('the game\'s loader hands on a parted copy of the brain: same order, same records for the middle, the files\' arrays untouched', () => {
-  const mk = (name, x) => Object.freeze({ entry: Object.freeze({ embedded_source_name: name }), mesh: Object.freeze({ positions: Float32Array.from([x, 1, 2]), indices: Uint32Array.from([0, 0, 0]) }) });
+  const mk = (name, x) => Object.freeze({ entry: Object.freeze({ embedded_source_name: name }), mesh: Object.freeze({ positions: Float32Array.from([x, -70, 2]), indices: Uint32Array.from([0, 0, 0]) }) });
   const loaded = new Map([['FJ1', mk('Right precentral gyrus', -5)], ['FJ2', mk('Pons', 4)], ['FJ3', mk('Left precentral gyrus', 5)]]);
   const out = partedBrainAssets(loaded);
   assert.notEqual(out, loaded);

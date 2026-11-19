@@ -38,6 +38,17 @@ test('the quick hip range is the exact one, posture after posture', () => {
   assert.ok(limited >= 3, `some of the cases are limited by the feet (${limited}), so the search itself is compared`);
 });
 
+// 20 November 2026 (review): the dance moves the leg turn (leg_turn) between +25 and -65, and away from its rest the
+// leg's turn is not even with the hip turn; the quick way then poses every turn in full and gives the exact range.
+test('with the leg turn away from its rest the quick range is still the exact one', () => {
+  for (const legTurn of [-65, -30, 0, 25]) for (const abd of [-5, 0, 10]) {
+    const t = body.clampBodyJointTargets({ ...rest, hip_abd_L: abd, hip_abd_R: abd, leg_turn_L: legTurn, leg_turn_R: legTurn }).applied;
+    const quick = body.hipRotationClearRange(rig, t), exact = body.hipRotationClearRange(rig, t, { exact: true });
+    assert.ok(Math.abs(quick.internalDeg - exact.internalDeg) <= 0.1 + 1e-9 && Math.abs(quick.externalDeg - exact.externalDeg) <= 0.1 + 1e-9,
+      `leg turn ${legTurn}, abduction ${abd}: quick ${quick.internalDeg} / ${quick.externalDeg}, exact ${exact.internalDeg} / ${exact.externalDeg}`);
+  }
+});
+
 test('the quick hip range is several times quicker than posing the whole body for each angle', () => {
   // (the fastest of several interleaved runs of each: the test suite runs files side by side, and a single timing of
   // each was once slowed by the others enough to fail; the fastest run is what the code itself costs)

@@ -135,5 +135,7 @@ test('the loading picture sees the room as the game first sees it', () => {
   const fov = Number(/const EYE_FOV_Y_DEG = (-?[\d.]+)/.exec(src)[1]), pitch = Number(/const START_LOOK_PITCH_DEG = (-?[\d.]+)/.exec(src)[1]);
   assert.equal(ASSEMBLY.room.fovYDeg, fov);
   assert.equal(ASSEMBLY.room.pitchDeg, pitch);
-  assert.ok(/startAssembly\(\{ host: app, room: \{ fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG \} \}\)/.test(src));
+  // (20 November 2026: the page's first script starts the picture with ASSEMBLY.room, before the launcher is in; the
+  // launcher then takes the same picture over with its own numbers, shared: true, which these lines keep equal)
+  assert.ok(/startAssembly\(\{ host: app, room: \{ fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG \}, shared: true \}\)/.test(src));
 });

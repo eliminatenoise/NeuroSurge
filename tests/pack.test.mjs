@@ -342,3 +342,42 @@ test('a pack worker that never says a word (its script never arrives) is given u
   assert.equal(loader.state().mode, 'page');
   assert.match(loader.state().errors[0], /worker: no word/);
 });
+
+// 20 November 2026: the packs come one after another in the index's order (the arm and the brain first), so on a slow
+// line the first is whole after its own bytes, not after three packs' worth; the next starts when the last byte of the
+// one before is in, or once that one has gone quiet; the rig file comes with the second.
+test('the packs come one after another; the next starts when the last byte of the one before is in, or when that one goes quiet', async () => {
+  const run = async ({ chunkMs, hangFirst = false }) => {
+    const log = [], t0 = Date.now(), base = jobIo();
+    const fetch = async (url, init) => {
+      const name = String(url).split('/').pop();
+      log.push(['ask', name, Date.now() - t0]);
+      if (!name.endsWith('.nspack')) return base.fetch(url, init);
+      if (hangFirst && name === packs[0].file) return new Promise(() => {});
+      // each pack's bytes come in 6 slow pieces
+      const bytes = new Uint8Array(fs.readFileSync(path.join(root, 'packs', name))), piece = Math.ceil(bytes.length / 6);
+      let i = 0;
+      const body = new ReadableStream({ async pull(c) { await new Promise(r => setTimeout(r, chunkMs)); if (i * piece >= bytes.length) { log.push(['whole', name, Date.now() - t0]); c.close(); return; } c.enqueue(bytes.slice(i * piece, (i + 1) * piece)); i++; } });
+      return new Response(body, { status: 200 });
+    };
+    const msgs = [];
+    await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: { ...base, fetch }, emit: m => msgs.push(m), stallMs: 300, answerMs: 300, quietMs: 150 });
+    const at = (kind, name) => { const r = log.find(x => x[0] === kind && x[1] === name); return r ? r[2] : null; };
+    return { log, msgs, at };
+  };
+  const slow = await run({ chunkMs: 15 });
+  for (let k = 1; k < packs.length; k++) assert.ok(slow.at('ask', packs[k].file) >= slow.at('whole', packs[k - 1].file), `${packs[k].name} is asked for after the last byte of ${packs[k - 1].name}`);
+  assert.ok(slow.at('ask', 'BODY-RIG.json') >= slow.at('whole', packs[0].file), 'the rig file comes with the second pack');
+  assert.equal(slow.msgs.filter(m => m.type === 'pack').length, packs.length, 'every pack arrives');
+  assert.equal(slow.msgs.filter(m => m.type === 'rig').length, 1);
+  // a pack that takes a while: the next is asked for a little before its last byte is due (no idle line between them)
+  const long = await run({ chunkMs: 90 });
+  const ask1 = long.at('ask', packs[1].file), whole0 = long.at('whole', packs[0].file);
+  assert.ok(ask1 < whole0 && ask1 > whole0 - 450, `the second pack is asked for shortly before the first is whole (${ask1} ms, ${whole0} ms)`);
+  // a first pack that never answers does not hold the rest back for its whole time
+  const hung = await run({ chunkMs: 5, hangFirst: true });
+  const second = hung.at('ask', packs[1].file);
+  assert.ok(second >= 140 && second < 290, `the next pack starts once the first has been quiet (${second} ms)`);
+  assert.deepEqual(hung.msgs.filter(m => m.type === 'pack-failed').map(m => m.name), [packs[0].name]);
+  assert.equal(hung.msgs.filter(m => m.type === 'pack').length, packs.length - 1);
+});

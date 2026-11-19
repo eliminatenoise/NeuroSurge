@@ -64,6 +64,30 @@ export const SECURITY_HEADERS = Object.freeze({
   'Cache-Control': 'no-cache'
 });
 
+/** 20 November 2026: validators, so that the browser may keep a copy and ask again with If-None-Match /
+ * If-Modified-Since, and an unchanged file costs a "304 Not Modified" instead of the whole file. Cache-Control stays
+ * no-cache (every use asks again, so an edited file is never stale), as before. Until now there were no validators, so a
+ * second request for the same file (the page and a worker both import three.module.js) downloaded it twice. The tag is
+ * the file's size and modification time (no hashing: the server stays as cheap as before). */
+export function etagFor(stat) {
+  return `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+}
+
+/** Is the client's copy still good? (If-None-Match wins over If-Modified-Since, as HTTP says.) */
+export function notModified(headers, stat) {
+  const inm = headers && headers['if-none-match'];
+  if (typeof inm === 'string' && inm.length) {
+    const tag = etagFor(stat), weak = t => t.trim().replace(/^W\//, '');
+    return inm.split(',').some(t => t.trim() === '*' || weak(t) === weak(tag));
+  }
+  const ims = headers && headers['if-modified-since'];
+  if (typeof ims === 'string' && ims.length) {
+    const since = Date.parse(ims);
+    return Number.isFinite(since) && Math.floor(stat.mtimeMs / 1000) * 1000 <= since;
+  }
+  return false;
+}
+
 export function contentTypeFor(filePath) {
   const base = path.basename(filePath);
   if (TEXT_NAMES.has(base)) return 'text/plain; charset=utf-8';
@@ -134,7 +158,9 @@ export function createHandler({ root, allowedHosts = null, log = () => {} }) {
         real = indexReal; st = indexStat; fsPath = index;
       }
       if (!st.isFile()) { send(res, 404, 'Not found'); return done(404); }
-      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': contentTypeFor(real), 'Content-Length': st.size });
+      const validators = { ETag: etagFor(st), 'Last-Modified': new Date(Math.floor(st.mtimeMs / 1000) * 1000).toUTCString() };
+      if (notModified(req.headers, st)) { res.writeHead(304, { ...SECURITY_HEADERS, ...validators }); res.end(); return done(304); }
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': contentTypeFor(real), 'Content-Length': st.size, ...validators });
       if (req.method === 'HEAD') { res.end(); return done(200); }
       await new Promise((resolve, reject) => {
         const stream = fs.createReadStream(real);

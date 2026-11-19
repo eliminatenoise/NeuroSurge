@@ -124,6 +124,15 @@ export const PLAIN_GAME = Object.freeze({ vessels: false, swell: false, selfCont
 export const LIMBS_PASS_ITEMS = true;
 /** 19 November 2026: false = no numbered lists of movements on screen (the tip and the short card); see the tip's code. */
 export const NUMBER_LISTS = false;
+/** 20 November 2026 (package LAYOUT). The start look rests in the gap between the brain's halves, under the mirror
+ * body, where the optic chiasm shows through: in a near-square window (1280 x 1024, measured) the crosshair started on
+ * a nerve and the tip "Optic nerve" was on screen before the player had done anything; in a 4:3 window it started a few
+ * pixels from it. The chiasm's place on screen follows the brain's framing, which the owner's layout wishes fix (the
+ * mirror body's head in the gap, the strip whole, the start look), so moving it out of the crosshair's way for every
+ * window shape is not possible without breaking one of them. Instead: until the look has moved lookDeg from the start
+ * look (or the view leaves the eye), nothing under the crosshair is named: no body part, eyeball or nerve. A motor
+ * area still is (the look acts there; the start look rests on none). on false: named from the start, as before. */
+export const QUIET_START = Object.freeze({ on: true, lookDeg: 1 });
 /** 19 November 2026 (the owner: "You can now switch between which of the four limbs you want to control ... your left
  * arm using 1, your left leg using 2, your right leg using 3, your right arm using 4 ... double clicking will shift you
  * from left to right, and when you get all the way to right, then right to left ... there should be a number view
@@ -364,6 +373,11 @@ export function limbKeyMove(place, root, bodyRight, ax, az, stepM, minM = 0.02) 
       // (no further than straight along the body's right or left: the swing ends where the limb points that way)
       const left = Math.atan2(tn, ax > 0 ? d : -d), ang = Math.min(stepM / r, left), c = Math.cos(ang), sn = Math.sin(ang) * Math.sign(ax) / tn;
       u = [u[0] * c + t[0] * sn, u[1] * c + t[1] * sn, u[2] * c + t[2] * sn];
+    } else if (ax * d < 0) {
+      // (20 Nov review: the limb points straight along the other side, where the swing toward this side has no one way
+      // round: it swings out through the front of the body, so A undoes a D that ended there and the other way round)
+      const f = [bodyRight[2], 0, -bodyRight[0]], fn = Math.hypot(f[0], f[1], f[2]); // (world up x bodyRight: the body's front)
+      if (fn > 1e-6) { const ang = stepM / r, c = Math.cos(ang), sn = Math.sin(ang) / fn; u = [u[0] * c + f[0] * sn, u[1] * c + f[1] * sn, u[2] * c + f[2] * sn]; }
     }
   }
   const len = az ? Math.max(Math.min(minM, r), r + Math.sign(az) * stepM) : r;
@@ -1833,7 +1847,8 @@ export function infoRegionAction(region, { actionId = null, u = null, pulse = nu
  * R558 (latch): true when a body-map action would move nothing now. A body movement: the activity's own answer
  * (`still`: ns-actions latchView still, the keys "areaId/movementId" of the movements whose joints are already where
  * the movement puts them, the start posture included), for the area `regionId`. A game-arm movement: from the arm's
- * own state (ns-guide armActionMoves: already latched on, or a straighten of an elbow already straight); a forearm
+ * own state (ns-guide armActionMoves: already latched on with no jerk to repeat, as under reduced motion, or a
+ * straighten of an elbow already straight; since 20 November a held movement jerks again on a press); a forearm
  * turn from the palm's state (`rotationState`). Pure; false when the state needed is not given.
  */
 export function infoActionAtEnd(a, { leftArm = false, regionId = null, still = null, armState = null, rotationState = null } = {}) {
@@ -2388,6 +2403,24 @@ export const DRAG_TURN_DIRS = Object.freeze({
   // top toward you ('forward', its top arrow), drag up tilts its top away ('back', its bottom arrow).
   mirror: Object.freeze({ right: 'left', left: 'right', down: 'forward', up: 'back' })
 });
+/** 20 November 2026 (review of CIRCLE_ROLL): once a circle has rolled the brain or the mirror body, a drag or an arrow
+ * still turns it the way the pointer or the arrow shows on screen. The request's screen direction (read through
+ * DRAG_TURN_DIRS) is turned back by the roll (positive clockwise as the player sees it; y down) and split into the
+ * item's own left / right and forward / back steps. stepDeg null is the arrow's whole step (defaultStepDeg). Returns 0 to
+ * 2 requests { dir, stepDeg }; with no roll the request comes back as it was. Pure. */
+export function rollOrbitRequests(dir, stepDeg, rollDeg, dirs = DRAG_TURN_DIRS.brain, defaultStepDeg = 15) {
+  const roll = Number.isFinite(rollDeg) ? rollDeg : 0;
+  if (Math.abs(roll) < 1e-9) return [{ dir, stepDeg }];
+  const screen = ['right', 'left', 'down', 'up'].find(k => dirs[k] === dir);
+  if (!screen) return [{ dir, stepDeg }];
+  const step = Number.isFinite(stepDeg) && stepDeg > 0 ? stepDeg : defaultStepDeg;
+  const vx = screen === 'right' ? 1 : screen === 'left' ? -1 : 0, vy = screen === 'down' ? 1 : screen === 'up' ? -1 : 0;
+  const t = roll * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+  const ux = vx * c + vy * s, uy = -vx * s + vy * c, out = [];
+  if (Math.abs(ux) > 1e-6) out.push({ dir: ux > 0 ? dirs.right : dirs.left, stepDeg: Math.abs(ux) * step });
+  if (Math.abs(uy) > 1e-6) out.push({ dir: uy > 0 ? dirs.down : dirs.up, stepDeg: Math.abs(uy) * step });
+  return out;
+}
 /** R558: for a tapped muscle that no map action lists as a mover, the motor-map region of its body part (by the body
  * rig's segment). The area of that body part lights; no movement is made up for the muscle. */
 export const MUSCLE_TAP_SEGMENT_REGION = Object.freeze({
@@ -2895,7 +2928,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const previousReference = referenceGraph ? state.referenceBrain : state.objectBrainReference || null;
     const pickReferenceBrain = previousReference && brainRaw.transform ? ReferenceGraph.advanceBrainState(previousReference, view, camRay ? camRay.origin : [0, 0, 0], brainRaw.transform) : null;
     const brain = pickReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRaw, pickReferenceBrain, initialBrainOrigin || [0, 0, 0]) : brainRaw;
-    const viewKey = `${view.orbit.yaw}|${view.orbit.pitch}|${view.offset.yaw}|${view.offset.pitch}${camKey}${pickReferenceBrain ? '|worldPivot:' + pickReferenceBrain.pivotWorld.join(',') : ''}`;
+    // (20 Nov review: the circle's roll turns the brain under a still look, so the roll is part of the key.)
+    const viewKey = `${view.orbit.yaw}|${view.orbit.pitch}|${view.offset.yaw}|${view.offset.pitch}|roll:${brainRollDeg}${camKey}${pickReferenceBrain ? '|worldPivot:' + pickReferenceBrain.pivotWorld.join(',') : ''}`;
 
     // Gaze: pure focus-strip / region test in source mm (camera at the world origin; the arm never occludes the ray).
     // Legacy mode only knows the arm band: a scene raycast hit on the brain (inputs.glassHit, ns-scene-three
@@ -5575,7 +5609,31 @@ export function start(params = {}) {
   const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
   let punchNow = 0;
   let pausedPunchSeq = null;
-  let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg }, or null
+  let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg, undone, from }, or null
+  // (CIRCLE_ROLL helpers, 20 Nov review) the dragged item's orbit now, its roll now, and the steps that take its orbit
+  // back to `from` (the turn really applied, so a turn the limits clamped is not over-undone).
+  const dragOrbitNow = target => {
+    const o = target === 'brain' ? (simState && simState.view && simState.view.orbit) : (mirrorWired && mirrorView ? mirrorView.orbit : null);
+    return o && Number.isFinite(o.yaw) && Number.isFinite(o.pitch) ? { yaw: o.yaw, pitch: o.pitch } : null;
+  };
+  const dragRollNow = target => {
+    if (target === 'brain') return sim && typeof sim.brainRoll === 'function' ? sim.brainRoll() : 0;
+    return mirrorWired && mirrorView && mirrorView.orbit && Number.isFinite(mirrorView.orbit.roll) ? mirrorView.orbit.roll : 0;
+  };
+  const dragOrbitBack = (target, from) => {
+    const now = dragOrbitNow(target);
+    if (!from || !now) return [];
+    const out = [];
+    // which named step raises the orbit's yaw and pitch (the brain's view orbit follows ns-brain's signs, see ORBIT_SIGN)
+    const probe = target === 'brain' ? orbitStepAny({ yaw: 0, pitch: 0 }, 'right', 1) : NM.MIRROR_ORBIT_DIRECTIONS.right;
+    const probeP = target === 'brain' ? orbitStepAny({ yaw: 0, pitch: 0 }, 'forward', 1) : NM.MIRROR_ORBIT_DIRECTIONS.forward;
+    const ys = Math.sign(probe.yaw) || 1, ps = Math.sign(probeP.pitch) || 1;
+    let dy = from.yaw - now.yaw; if (target === 'mirror') dy = ((dy % 360) + 540) % 360 - 180;
+    const dp = from.pitch - now.pitch;
+    if (Math.abs(dy) > 1e-9) out.push({ dir: dy * ys > 0 ? 'right' : 'left', stepDeg: Math.abs(dy) });
+    if (Math.abs(dp) > 1e-9) out.push({ dir: dp * ps > 0 ? 'forward' : 'back', stepDeg: Math.abs(dp) });
+    return out;
+  };
   function stepPunchLens(dt) {
     if (!PUNCH_IN.on) return;
     const a = simState?.activity;
@@ -6572,7 +6630,7 @@ export function start(params = {}) {
       // The movements that would only bring a part back now (ns-actions latchView back): "first press brings it back".
       back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
       // R558 (hunt 2): the game arm's own state, for its "already there" (ns-guide armActionMoves)
-      armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad } : null,
+      armState: simState && simState.activity ? { armLatch: simState.activity.armLatch || null, elbowRad: simState.elbowRad, armJerk: simState.activity.armJerk || null } : null,
       reach: Array.isArray(out.reachShow) ? out.reachShow : null,
       // R558 (Message 48): the grip of a Space grasp, what the grasp holds and how it is held (for "how to let go")
       grip: out.grip === 'close' || out.grip === 'open' ? {
@@ -7326,6 +7384,7 @@ export function start(params = {}) {
       const rotationSeen = { state: null, until: -Infinity }; // R558: the forearm line shows only around a change
       let crossPick = null; // R558 (hunt 2): the muscle under the crosshair (what is seen there: controlTargets' front)
       let crossBrainPart = null; // 19 November 2026: 'eyeball' | 'nerve' when the crosshair is on one at the brain's front
+      let quietStart = true; // 20 November 2026 (QUIET_START): nothing named at the crosshair until the look first moves
       // 18 November (MAP): that muscle's own record and the area that moves it (the reverse link: "what controls this?")
       let crossSeen = null, crossRoute = null, crossRouteKey = '';
       // ---- R558 (user Messages 33 and 34): what each control acts on (controlTargets) ---------------------------------
@@ -7852,7 +7911,11 @@ export function start(params = {}) {
             // h.keyLen: stepLimbHold), so W and S stay on ONE line however the limb's end lags or misses it. (Taken
             // from the end's own place each frame, the line drifted with the solve's error: the right hand came in 37
             // degrees off the line it started on.)
-            const from = h.keyU && !holdCarries() ? [pe ? pe.root[0] + h.keyU[0] * h.keyLen : T[0], pe ? pe.root[1] + h.keyU[1] * h.keyLen : T[1], pe ? pe.root[2] + h.keyU[2] * h.keyLen : T[2]] : T;
+            // (20 Nov review: the first keyed frame starts from where the limb's end IS, not from a place the look carried
+            // out of its reach, so W reaches out along the limb's own line instead of folding it toward that place)
+            const carriedNow = holdCarries();
+            const from = h.keyU && !carriedNow ? [pe ? pe.root[0] + h.keyU[0] * h.keyLen : T[0], pe ? pe.root[1] + h.keyU[1] * h.keyLen : T[1], pe ? pe.root[2] + h.keyU[2] * h.keyLen : T[2]]
+              : !h.keyU && !carriedNow && pe ? pe.end.slice() : T;
             if (pe && rn > 1e-6) K = limbKeyMove(from, pe.root, [rt[0] / rn, rt[1] / rn, rt[2] / rn], ax, az, sp);
           }
           if (!K) K = [T[0] + cy * ax * sp - sy * az * sp, T[1], T[2] - sy * ax * sp - cy * az * sp];
@@ -7974,7 +8037,8 @@ export function start(params = {}) {
           // place stays on its line and is not pulled toward the end (that made the line drift by the solve's error).
           const r = pts.root, v = [T[0] - r[0], T[1] - r[1], T[2] - r[2]], len0 = Math.hypot(v[0], v[1], v[2]);
           if (len0 > 1e-4) {
-            let u = ax === 0 && h.keyU ? h.keyU : [v[0] / len0, v[1] / len0, v[2] / len0], len = len0;
+            // (20 Nov review: while the look carries the place, W / S go along the carried place's own direction)
+            let u = ax === 0 && h.keyU && !carried ? h.keyU : [v[0] / len0, v[1] / len0, v[2] / len0], len = len0;
             const e = [pts.end[0] - r[0], pts.end[1] - r[1], pts.end[2] - r[2]], en = Math.hypot(e[0], e[1], e[2]);
             if (en > 1e-4) {
               const eh = [e[0] / en, e[1] / en, e[2] / en], dot = Math.max(-1, Math.min(1, u[0] * eh[0] + u[1] * eh[1] + u[2] * eh[2]));
@@ -9545,7 +9609,9 @@ export function start(params = {}) {
         for (const dragTurn of dragTurns) {
           if (dragTurn.target === 'limb') continue;
           if (CIRCLE_ROLL.on) {
-            if (!circleRoll || circleRoll.target !== dragTurn.target) circleRoll = { target: dragTurn.target, st: null, rolledDeg: 0, yawDeg: 0, pitchDeg: 0, undone: false };
+            // (the orbit at the drag's start is kept: the take-back returns to it, so a turn the limits clamped is not
+            // over-undone; 20 Nov review)
+            if (!circleRoll || circleRoll.target !== dragTurn.target) circleRoll = { target: dragTurn.target, st: null, rolledDeg: 0, undone: false, from: dragOrbitNow(dragTurn.target) };
             const r = circleRollStep(circleRoll.st, dragTurn.dx, dragTurn.dy);
             circleRoll.st = r.state;
             if (r.rolling) {
@@ -9553,11 +9619,7 @@ export function start(params = {}) {
                 // (the circle turned the thing left, right, up and down while it was being drawn, before it counted as a
                 // circle: that turn is taken back now, once, through the same steps, so the circle only rolls it)
                 circleRoll.undone = true;
-                const uy = -circleRoll.yawDeg, up = -circleRoll.pitchDeg, D = DRAG_TURN_DIRS[dragTurn.target];
-                const undo = [];
-                if (uy) undo.push({ dir: uy > 0 ? D.right : D.left, stepDeg: Math.abs(uy) });
-                if (up) undo.push({ dir: up > 0 ? D.down : D.up, stepDeg: Math.abs(up) });
-                for (const q of undo) { if (dragTurn.target === 'brain') orbitDirs.push(q); else if (dragTurn.target === 'mirror') applyMirrorRequest(q); }
+                for (const q of dragOrbitBack(dragTurn.target, circleRoll.from)) { if (dragTurn.target === 'brain') orbitDirs.push(q); else if (dragTurn.target === 'mirror') applyMirrorRequest(q); }
               }
               if (r.rollDeg) {
                 circleRoll.rolledDeg += r.rollDeg;
@@ -9569,11 +9631,12 @@ export function start(params = {}) {
           }
           // R558 (R31): turn the dragged item about its own centre by the px dragged. The near surface follows the
           // pointer. The brain uses its ordinary orbit steps (and limits); the mirror body its own orbit.
+          // (20 Nov review: after a circle has rolled the item, the drag is turned back by the roll: rollOrbitRequests)
           const yawDeg = dragTurn.dx * DRAG_TURN.degPerPx, pitchDeg = dragTurn.dy * DRAG_TURN.degPerPx;
-          if (circleRoll && circleRoll.target === dragTurn.target) { circleRoll.yawDeg += yawDeg; circleRoll.pitchDeg += pitchDeg; } // (CIRCLE_ROLL: kept to take back)
+          const D = DRAG_TURN_DIRS[dragTurn.target], rollNow = dragRollNow(dragTurn.target);
           const steps = [];
-          if (yawDeg !== 0) steps.push({ dir: yawDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].right : DRAG_TURN_DIRS[dragTurn.target].left, stepDeg: Math.abs(yawDeg) });
-          if (pitchDeg !== 0) steps.push({ dir: pitchDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].down : DRAG_TURN_DIRS[dragTurn.target].up, stepDeg: Math.abs(pitchDeg) });
+          if (yawDeg !== 0) steps.push(...rollOrbitRequests(yawDeg > 0 ? D.right : D.left, Math.abs(yawDeg), rollNow, D));
+          if (pitchDeg !== 0) steps.push(...rollOrbitRequests(pitchDeg > 0 ? D.down : D.up, Math.abs(pitchDeg), rollNow, D));
           for (const q of steps) {
             if (dragTurn.target === 'brain') orbitDirs.push(q);
             else if (dragTurn.target === 'mirror' && applyMirrorRequest(q)) mirrorGuideEvents.push({ type: 'mirrorOrbit', dir: q.dir, hold: false, t: simState.t });
@@ -9609,8 +9672,17 @@ export function start(params = {}) {
           arrowInput = ar.state;
           arrowEvents = ar.events;
           for (const o of ar.orbit) {
-            if (o.target === 'brain') orbitDirs.push(o.stepDeg === null ? o.dir : { dir: o.dir, stepDeg: o.stepDeg });
-            else if (o.target === 'mirror' && applyMirrorRequest(o)) mirrorGuideEvents.push({ type: 'mirrorOrbit', dir: o.dir, hold: o.hold, t: simState.t });
+            // (20 Nov review: an arrow turns the item the way it shows on screen, also after a circle has rolled it)
+            const rollNow = dragRollNow(o.target);
+            if (o.target === 'brain') {
+              if (!rollNow) orbitDirs.push(o.stepDeg === null ? o.dir : { dir: o.dir, stepDeg: o.stepDeg });
+              else orbitDirs.push(...rollOrbitRequests(o.dir, o.stepDeg, rollNow, DRAG_TURN_DIRS.brain, ORBIT_FALLBACK.stepDeg));
+            } else if (o.target === 'mirror') {
+              const qs = rollNow ? rollOrbitRequests(o.dir, o.stepDeg, rollNow, DRAG_TURN_DIRS.mirror, NM.MIRROR_ORBIT.stepDeg).map(q => ({ ...o, ...q })) : [o];
+              let moved = false;
+              for (const q of qs) moved = applyMirrorRequest(q) || moved;
+              if (moved) mirrorGuideEvents.push({ type: 'mirrorOrbit', dir: o.dir, hold: o.hold, t: simState.t });
+            }
           }
           for (const e of ar.events) if (e.target === 'mirror' && (e.type === 'arrowBlocked' || (e.type === 'arrowCovered' && e.by))) {
             mirrorGuideEvents.push({ type: 'mirrorBlocked', t: simState.t });
@@ -9694,9 +9766,13 @@ export function start(params = {}) {
         return { timing, look, ctlLook, head, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step, holdAxes };
         };
         // R558 recovery driver. Everything an attempt may touch before the step is restored from this snapshot.
-        const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice() };
+        const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice(),
+          circleRoll: circleRoll ? { ...circleRoll } : null, brainRoll: sim && typeof sim.brainRoll === 'function' ? sim.brainRoll() : 0 };
         const restoreAttempt = () => {
           cs = snap.cs; cam = snap.cam; simState = snap.simState; arrowInput = snap.arrowInput; seedNext = snap.seedNext; camPose = snap.camPose;
+          // (20 Nov review: the circle's state and the brain's roll go back too, so a retry takes the circle back again)
+          circleRoll = snap.circleRoll ? { ...snap.circleRoll } : null;
+          if (sim && typeof sim.brainRoll === 'function' && sim.brainRoll() !== snap.brainRoll) sim.rollBrain(snap.brainRoll - sim.brainRoll());
           orbitQueue.length = 0; orbitQueue.push(...snap.orbitQueue);
           if (arrowHoverKey !== snap.arrowHoverKey) { arrowHoverKey = null; } // re-sent by the next attempt
           if (mirrorView !== snap.mirrorView) { mirrorView = snap.mirrorView; applyMirrorView(); }
@@ -10468,10 +10544,16 @@ export function start(params = {}) {
         const seen = live && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item !== 'brain' ? seenOrGhost.rec : null;
         // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
         const crossLimb = seen && seen.source === 'own' ? limbOfRec(seen) : null; // the own limb under the crosshair
-        crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
+        // 20 November 2026 (QUIET_START): until the look first leaves the start look, no body part, eyeball or nerve under
+        // the crosshair is named (a motor area still is: the look acts there).
+        if (quietStart && QUIET_START.on) {
+          const home = referenceGraph && referenceGraph.initialLook ? referenceGraph.initialLook : null;
+          if (!home || !cs || !Number.isFinite(cs.yaw) || !Number.isFinite(cs.pitch) || Math.hypot(cs.yaw - home.yaw, cs.pitch - home.pitch) > QUIET_START.lookDeg * DEG || cam.view !== 'first') quietStart = false;
+        } else quietStart = false;
+        crossPick = !live || onArea || arrowTip || !seen || quietStart ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
         // 19 November 2026: an eyeball or a nerve at the brain's front (scene controlLayersAt `part`) is named in the tip
         // and nothing more: it is the brain's bare surface to every control (Space there takes the brain).
-        crossBrainPart = live && !onArea && !arrowTip && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item === 'brain' && typeof seenOrGhost.part === 'string' ? seenOrGhost.part : null;
+        crossBrainPart = live && !quietStart && !onArea && !arrowTip && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item === 'brain' && typeof seenOrGhost.part === 'string' ? seenOrGhost.part : null;
         // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
         { const rk = crossPick && seen.kind === 'muscle' ? `${seen.source}|${seen.id}|${seen.name}` : '';
           if (rk !== crossRouteKey) { crossRouteKey = rk; crossSeen = rk ? seen : null; try { crossRoute = rk ? muscleRoute(seen) : null; } catch { crossRoute = null; } } }
@@ -10635,7 +10717,7 @@ export function start(params = {}) {
               const act = simState && simState.activity ? simState.activity : null;
               const areaMoves = infoMoves(area, { leftArm, still: out.latch && Array.isArray(out.latch.still) ? out.latch.still : null,
                 back: out.latch && Array.isArray(out.latch.back) ? out.latch.back : null,
-                armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad } : null,
+                armState: act ? { armLatch: act.armLatch || null, elbowRad: simState.elbowRad, armJerk: act.armJerk || null } : null,
                 rotationState: typeof out.rotationState === 'string' ? out.rotationState : null });
               const areaCss = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) : ''; // 18 November (MAP)
               const overlap = lockedNow() && ctlFrame?.arrow && area.id === stepInputs?.keyboardAimId;
@@ -10958,6 +11040,7 @@ export function start(params = {}) {
         // R558 BB2: the brain ink's plain state (the strip relief, the glass fold-depth background job).
         brainInk: objects.brainInk || null,
         room: objects.room || null, // 18 November (ns-room): the room behind everything
+        organs: objects.organs || null, // 20 November 2026 (ns-organs): the organs in the chest (illustrations)
         counts: { bones: count(objects.bones), muscles: count(objects.muscles), glass: count(objects.glass), markers: count(objects.markers) },
         // Which body parts are in view (ns-scene-three bodyVisibility; the face layer is drawn in its own pass).
         bodyVisibility: (() => { try { return sceneFn('bodyVisibility') ? callScene('bodyVisibility') : null; } catch { return null; } })(),
@@ -10965,6 +11048,8 @@ export function start(params = {}) {
         // R558 (Message 20): the outline pass as the scene holds it (batch size, the last ID pass's draw calls and CPU ms).
         outline: (() => { try { return sceneFn('outlineState') ? callScene('outlineState') : null; } catch { return null; } })(),
         ghost: (() => { try { return sceneFn('ghostState') ? callScene('ghostState') : null; } catch { return null; } })(), // 18 November 2026 (SEE)
+        // 20 November 2026 (LAYOUT): inspect({ labels: true }) adds the strip's group labels as last placed (their anchors too).
+        labels: options && options.labels === true ? (() => { try { const s = sceneFn('sceneState') ? callScene('sceneState') : null; return s && s.labels ? plainCopy({ list: s.labels, obstacles: s.labelObstacles || null, bodies: s.labelBodies || null, armShapes: s.armShapes || null }) : null; } catch { return null; } })() : undefined,
         // R558: the picture-quality controller as the scene holds it (level, last change, last held down-step).
         quality: (() => { try { return sceneFn('qualityState') ? callScene('qualityState') : null; } catch { return null; } })()
       };

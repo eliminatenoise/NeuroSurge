@@ -1635,7 +1635,7 @@ export const GUIDE = deepFreeze({
     holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
     dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it.',
     // 19 November 2026 (the owner's limb keys): the step that teaches the choice of the limb
-    chooseLimb: 'Press 2, 3 or 4 to choose another limb, or double click to step to the next one. It lights up, your view turns to it, and it then goes with your view. 1 is your left arm.',
+    chooseLimb: 'Press 2, 3 or 4 to choose another limb, or double click to step to the next one. It lights up and then goes with your view. 1 is your left arm.',
     readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
   },
   partial: {
@@ -1707,8 +1707,12 @@ const HELD_TARGET_WORDS = Object.freeze({
   rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot',
 });
 /** 19 November 2026: the names the tip gives the two eyeballs and their nerves at the brain's front (ns-brain-eyes: an
- * illustration that shows which way the brain faces; they are not motor areas and do nothing). */
-export const BRAIN_PARTS = deepFreeze({ eyeball: 'Eyeball', nerve: 'Optic nerve' });
+ * illustration that shows which way the brain faces; they are not motor areas and do nothing). 20 November 2026 (GAP):
+ * and the inner parts seen through the opening between the brain's halves (ns-brain-gap brainGapPartKey); they are not
+ * motor areas either. */
+export const BRAIN_PARTS = deepFreeze({ eyeball: 'Eyeball', nerve: 'Optic nerve',
+  whiteMatter: 'White matter', lateralVentricle: 'Lateral ventricle', thirdVentricle: 'Third ventricle', fourthVentricle: 'Fourth ventricle',
+  aqueduct: 'Cerebral aqueduct', internalCapsule: 'Internal capsule', hippocampus: 'Hippocampus', pineal: 'Pineal body', habenula: 'Habenula' });
 export const TIP = deepFreeze({
   teach: 'Click, or press a number',
   spaceAim(target, behind) {

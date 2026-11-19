@@ -12,7 +12,8 @@ import { start, startFullBodyStream, startFaceStream, BRAIN_START_MOTOR_FRAC } f
 import { PAGE, SHELL } from '../src/ns-text.mjs';
 import { DEG } from '../src/ns-math.mjs';
 import { R5_BIGBRAIN } from '../src/ns-scene-three.mjs';
-import { startAssembly, ASSEMBLY_EXPECTED_FILES } from '../src/ns-assembly.mjs';
+import { startAssembly, ASSEMBLY_EXPECTED_FILES, LOADING_PICTURE } from '../src/ns-assembly.mjs';
+import { bodyMuscleLayer } from '../src/ns-body.mjs';
 import { showControlsCard } from '../src/ns-controls-card.mjs';
 import { createLoadBar } from '../src/ns-load-progress.mjs';
 import { installLoadGuard } from '../src/ns-load-guard.mjs';
@@ -151,11 +152,17 @@ const ownedBodyJobs = [], ownedFaceJobs = [], ownedStreamBindings = [];
 // LOADING_PICTURE = true brings the worker picture back as it was.
 // 19 November 2026, later (the owner: "Currently, I can't see the models being built on the loading page, which they
 // should be there"): the picture is back on. It is short on a fast line; the owner wants it there.
-const LOADING_PICTURE = true;
-const assembly = mode === 'boot' && LOADING_PICTURE ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG } }) : null;
+// 20 November 2026: the switch is LOADING_PICTURE in ns-assembly.mjs (the page's first small script, early-load.mjs,
+// starts the picture and the controls card now, at the start of the load, and feeds the picture from the packs as they
+// arrive; on a slow line both used to wait for this launcher's own scripts). This launcher takes the same picture and
+// the same card over (shared: true), tells the picture the game's first view and the game's own layer of each muscle,
+// and goes on feeding it what it fetches; a mesh the picture has already drawn is not drawn twice.
+const earlyStart = mode === 'boot' && window.__nsEarly ? window.__nsEarly : null;
+const assembly = mode === 'boot' && LOADING_PICTURE ? startAssembly({ host: app, room: { fovYDeg: EYE_FOV_Y_DEG, pitchDeg: START_LOOK_PITCH_DEG }, shared: true }) : null;
+if (assembly) assembly.useMuscleLayer(bodyMuscleLayer);
 if (mode === 'boot') app.dataset.nsPhase = 'loading';
-const controlsCard = mode === 'boot' ? showControlsCard({ host: document.body }) : null;
-const controlsCardAt = performance.now();
+const controlsCard = mode === 'boot' ? (earlyStart && earlyStart.controlsCard) || showControlsCard({ host: document.body }) : null;
+const controlsCardAt = earlyStart && earlyStart.controlsCard && Number.isFinite(earlyStart.controlsCardAt) ? earlyStart.controlsCardAt : performance.now();
 // 19 November 2026 (the owner: "it just stays on the loading page forever. There should be a loading progress bar"):
 // one bar with a percentage for the whole wait (ns-load-progress), and a guard (ns-load-guard, the page's first script,
 // which needs no other file): when nothing has advanced for 20 s, a script cannot be had, or loading fails, a panel
@@ -178,6 +185,7 @@ const onPackProgress = (files, of) => { if (!loadBar) return; const f = (files +
 const early = mode === 'boot' && window.__nsEarly && window.__nsEarly.loader ? window.__nsEarly : null;
 if (early) early.listen(onPackProgress);
 const packs = mode !== 'boot' ? null : early ? early.loader : startPackLoader({ onProgress: onPackProgress });
+if (assembly) assembly.feedFrom(packs); // (once per picture: early-load.mjs has usually done it already)
 if (mode !== 'boot') { try { document.querySelector('.ns-load.ns-load-early')?.remove(); } catch { /* none */ } }
 /** One more mesh file has been handed to the game (from a pack or fetched): the bar's "checking" step. */
 function noteServed() {

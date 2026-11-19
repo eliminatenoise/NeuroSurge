@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 57: look through the gap between the brain's halves into its inner parts; the loading picture and the controls appear at once, also on a slow connection; a heart, lungs and great vessels inside the opened chest; the left arm jerks and comes back like every other part; and after a circle has turned the brain or the mirror body, a drag still turns it the way you drag.
+
 Body update 56: press on the brain or the mirror body and drag round in a big circle, and it turns clockwise or anticlockwise, the way you circle.
 
 Body update 55: the tendons along your fingers and toes are white, and the muscles are a little darker again.

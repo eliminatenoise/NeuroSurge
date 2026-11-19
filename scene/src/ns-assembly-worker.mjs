@@ -6,16 +6,20 @@
  * Messages in:  { type: 'init', canvas, width, height, pixelRatio, room, reducedMotion, expectReadyS } |
  *               { type: 'obj', kind, place ({ track, tier, frac, name, groups, layer } or null), bytes (ArrayBuffer) } |
  *               { type: 'mesh', kind, place, positions (ArrayBuffer of floats), indices (ArrayBuffer of 32-bit) } |
+ *               { type: 'meshes', list: [{ kind, place, positions, indices }, ...] } (a whole pack, 20 November 2026) |
+ *               { type: 'room', room: { fovYDeg, pitchDeg } } (the game's first view, from the launcher) |
+ *               { type: 'alive' } (files are still coming: a pack's bytes) |
  *               { type: 'progress', fraction } | { type: 'resize', width, height, pixelRatio } |
  *               { type: 'known', counts } (a manifest's parts per tier) |
  *               { type: 'hurry' } (the game is ready: the parts still held come in quickly) | { type: 'stop' }
- * Messages out: { type: 'ready' } | { type: 'error', message } | { type: 'state', ... } (once a second) |
+ * Messages out: { type: 'ready' } | { type: 'first' } (the first part has set off) | { type: 'error', message } |
+ *               { type: 'state', ... } (once a second) |
  *               { type: 'starts', starts: [[time s, track, tier], ...], at } (once, at the hurry)
  */
 import * as THREE from '../../vendor/three.module.js';
 import { createAssemblyView, parseObjBytes } from './ns-assembly-core.mjs';
 
-let view = null, running = false, lastState = 0, fraction = 0, lastObjAt = 0, lastDraw = 0;
+let view = null, running = false, lastState = 0, fraction = 0, lastObjAt = 0, lastDraw = 0, firstSent = false;
 const queue = [];
 
 const raf = typeof self.requestAnimationFrame === 'function' ? cb => self.requestAnimationFrame(cb) : cb => setTimeout(() => cb(performance.now()), 16);
@@ -35,6 +39,8 @@ function tick(now) {
   // "Finishing": nearly every file is in and none has come for a moment, so the page is now building the body.
   view.setProgress(fraction, fraction > 0.9 && queue.length === 0 && performance.now() - lastObjAt > 900);
   try { view.frame(now); } catch (err) { running = false; self.postMessage({ type: 'error', message: String(err && err.message || err) }); return; }
+  // (once: the first part has set off, so the page can tell when the picture began to build)
+  if (!firstSent && view.started() > 0) { firstSent = true; self.postMessage({ type: 'first' }); }
   if (now - lastState > 1000) { lastState = now; self.postMessage({ type: 'state', ...view.state(), queued: queue.length, at: Math.round(performance.now()) }); }
   raf(tick);
 }
@@ -53,6 +59,13 @@ self.onmessage = ev => {
     } else if (m.type === 'mesh') {
       // 19 November 2026: a mesh from a verified pack (already positions and triangles; a copy)
       if (running) { queue.push({ kind: m.kind, place: m.place || null, mesh: { positions: new Float32Array(m.positions), indices: new Uint32Array(m.indices) } }); lastObjAt = performance.now(); }
+    } else if (m.type === 'meshes') {
+      // 20 November 2026: the meshes of a whole pack at once, as it arrives (copies)
+      if (running && Array.isArray(m.list)) { for (const x of m.list) queue.push({ kind: x.kind, place: x.place || null, mesh: { positions: new Float32Array(x.positions), indices: new Uint32Array(x.indices) } }); lastObjAt = performance.now(); }
+    } else if (m.type === 'alive') {
+      if (view) view.alive();
+    } else if (m.type === 'room') {
+      if (view) view.setRoom(m.room);
     } else if (m.type === 'known') {
       if (view) view.know(m.counts);
     } else if (m.type === 'hurry') {

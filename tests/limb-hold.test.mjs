@@ -67,6 +67,12 @@ test('W and S move a limb\'s end along the line from its root; A and D swing it 
   const [dEnd, nEnd] = dirOf(p);
   assert.ok(near(dEnd[0], 1, 1e-6) && near(nEnd, r, 1e-9));
   assert.deepEqual(limbKeyMove(p, root, right, 1, 0, 0.05).map(x => Math.round(x * 1e9)), p.map(x => Math.round(x * 1e9)), 'and stays there');
+  // (20 Nov review) A then swings it back from there, out through the front of the body (the body faces -z here)
+  const exact = [root[0] + r, root[1], root[2]], back = limbKeyMove(exact, root, right, -1, 0, 0.05), [dBack, nBack] = dirOf(back);
+  assert.ok(near(nBack, r, 1e-12) && dBack[0] < 1 - 1e-6, 'A moves a limb pointing straight to the right');
+  assert.ok(back[2] < exact[2], 'through the front');
+  let q2 = back; for (let i = 0; i < 5; i++) q2 = limbKeyMove(q2, root, right, -1, 0, 0.05);
+  assert.ok(dirOf(q2)[0][0] < dBack[0], 'and goes on toward the left');
   // both keys at once: the swing and the reach together
   const [dB, nB] = dirOf(limbKeyMove(place, root, right, 1, 1, 0.05));
   assert.ok(near(nB, r + 0.05, 1e-12) && dB[0] > u[0]);

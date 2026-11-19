@@ -181,8 +181,14 @@ function actionTarget(joints, { elbowFlexDeg = 0, releaseOf = [], synergy = [] }
 
 /** Signed elbow-angle change (degrees, + = flexion) commanded by a full elbow_flexion / elbow_extension drive,
  * relative to the elbow angle of the current W/S/A/D reach solution. ns-app turns it into an explicit elbow target
- * (the hand stays on its screen ray, so the depth follows); clamps and reach limits are reported, never hidden. */
-export const ELBOW_ACTION_DEG = 30;
+ * (the hand stays on its screen ray, so the depth follows); clamps and reach limits are reported, never hidden.
+ * 20 November 2026 (the left arm's movements now jerk and come half way back, JOINT_LATCH; the owner, Message 154: "as
+ * exaggerated and obvious as possible within reason"): 30 -> 90. With 30 the elbow's jerk was 15 degrees, mostly along
+ * the line of sight (the hand comes in toward the shoulder, which is beside the eye): the hand moved 2.4 % of the
+ * picture, where the right elbow's jerk moves the right hand 31 %. With 90 the hand travels about 15 % of the picture
+ * and waits 45 degrees more bent than its place gives (30 before this change). The elbow still stops at its own limits
+ * (ns-arm ELBOW_MAX / fitHandAt), so a hand already brought in near the shoulder bends only as far as the elbow goes. */
+export const ELBOW_ACTION_DEG = 90;
 
 // relax_release targets the declared passive rest on the HAND joints only. The movement map says the
 // wrist/elbow must "maintain supported pose without new forced motion", so the wrist is not driven
@@ -649,6 +655,12 @@ export const JOINT_LATCH = Object.freeze({
   // (later the same day, the owner: "the neck moves and then returns, and then same for all the body parts. They move
   // and then return. But they don't have to return fully, just partially ... They jerk one way and then they partially
   // return back": the part is held at its end for 0.3 s (0.55 before) and comes back half of its swing (0.16 before).)
+  // 20 November 2026 (the same words, for the LEFT arm: its strip movements eased into place and stayed there): the game
+  // arm's latched movements use these very numbers on their pose drive (0 = the hand's neutral pose, 1 = the movement's
+  // end): the drive is thrown to 1 by this spring and rebounds off it with `restitution`, is held there for driveS, then
+  // eases back `relax` of the way (never more than relaxMaxShare) with relaxOmega and waits; a further press kicks it in
+  // again (kick, nearShare). armPoseTau now only eases what is not a press: the way back to neutral after the opposite
+  // movement, the Space grip, the hand opening after it. (createActivity armJerk, latchArmAction, integrate.)
   omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.3, relax: 0.5, relaxMaxShare: 0.8, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
   reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
@@ -708,6 +720,10 @@ const HAND_LATCH_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_finger
 const jerkMapOk = m => m !== null && typeof m === 'object' && !Array.isArray(m)
   && Object.values(m).every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
 const copyJerkMap = m => { const o = {}; if (m && typeof m === 'object') for (const k of Object.keys(m)) if (Array.isArray(m[k]) && m[k].length === 3 && m[k].every(Number.isFinite)) o[k] = m[k].slice(); return o; };
+/** 20 November 2026 (JOINT_LATCH, the left arm): the game arm's per-action notes of a state (actionId -> [ease back as a
+ * share of the movement (0..1), drive seconds left (>= 0), the pose drive's speed (movements per second)]). */
+const armJerkOk = m => m !== null && typeof m === 'object' && !Array.isArray(m)
+  && Object.entries(m).every(([k, v]) => ACTION_IDS.includes(k) && Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= 1 && v[1] >= 0);
 
 /**
  * One exact step of a damped spring toward `goal`: x = pos - goal obeys x'' + 2 zeta omega x' + omega^2 x = 0
@@ -1788,6 +1804,7 @@ export function createActivity({
       bodyVel: zeroMap(JOINT_IDS),            // jointId -> degrees/s
       bodyJerk: {},                           // jointId -> [goal, ease back (degrees), drive seconds left]: JOINT_LATCH driveS / relax
       armLatch: zeroMap(ACTION_IDS),          // game-arm actionId -> 0 | 1: latched on (see ARM_OPPOSITES)
+      armJerk: {},                            // game-arm actionId -> [ease back share, drive seconds left, drive speed /s]: JOINT_LATCH on the left arm
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
       rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
       armHumeral: armHumeralStart(), // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn. 18 November 2026, late: explicit from the start (the underside end)
@@ -1878,6 +1895,7 @@ export function createActivity({
       && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
       && (s.bodyJerk === undefined || jerkMapOk(s.bodyJerk))
       && (s.armLatch === undefined || unitMap(s.armLatch, ACTION_IDS))
+      && (s.armJerk === undefined || armJerkOk(s.armJerk))
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
       && (s.rotation.speed === undefined || isFiniteNumber(s.rotation.speed))
@@ -1950,6 +1968,7 @@ export function createActivity({
       bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
       bodyJerk: copyJerkMap(s.bodyJerk),
       armLatch: s.armLatch === undefined ? zeroMap(ACTION_IDS) : pick(s.armLatch, ACTION_IDS),
+      armJerk: copyJerkMap(s.armJerk), // (a state from before the arm's jerk has none: every latch is then simply held)
       rotationState: s.rotationState,
       rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null },
       // R558 (Space dance): a state from before the dance starts with none (start angles, no history).
@@ -1991,7 +2010,9 @@ export function createActivity({
    * look/click pulse alone lights its area (commandTargets) but does not hold a pose; the latch does. */
   function poseTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
-    for (const id of ACTION_IDS) if (s.armLatch[id] > 0) T[id] = 1;
+    // (20 November 2026, JOINT_LATCH on the left arm: a pressed movement is driven to its end for driveS, then held
+    // `relax` of the way back; its note in armJerk says which; a latch without a note is held at its end)
+    for (const id of ACTION_IDS) if (s.armLatch[id] > 0) { const n = s.armJerk ? s.armJerk[id] : undefined; T[id] = n !== undefined && !(n[1] > 0) ? 1 - n[0] : 1; }
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining && !(armOnly && s.pulseLook))) T.relax_release = 1;
     if (s.graspHold) { for (const id of SPACE_COMPETING) T[id] = 0; T.grasp_close = 1; }
@@ -2079,11 +2100,34 @@ export function createActivity({
   /** Stage rule of a deliberate GAME-ARM activation (ARM_OPPOSITES): the opposing action of a latched one lets it go
    * (back to the neutral pose); otherwise the action latches on. relax_release lets go of every hand action. */
   function latchArmAction(s, id) {
-    if (id === 'relax_release') { for (const h of HAND_LATCH_IDS) s.armLatch[h] = 0; return; }
+    if (id === 'relax_release') { for (const h of HAND_LATCH_IDS) { s.armLatch[h] = 0; if (s.armJerk) delete s.armJerk[h]; } return; }
     if (DISPLAY_ONLY_ARM_IDS.includes(id)) return; // R558: moves nothing on the game arm, so nothing is held
     const opp = armOpposedLatch(id, s.armLatch);
-    if (opp !== null) s.armLatch[opp] = 0;
-    else s.armLatch[id] = 1;
+    if (opp !== null) { s.armLatch[opp] = 0; if (s.armJerk) delete s.armJerk[opp]; return; } // the way back: as before (armPoseTau)
+    s.armLatch[id] = 1;
+    jerkArm(s, id);
+  }
+
+  /** 20 November 2026 (the owner, of every part: "They move and then return. But they don't have to return fully, just
+   * partially ... They jerk one way and then they partially return back"; the left arm's own rig had only eased into a
+   * latched movement and stayed): a press of a latched game-arm movement, the first one or a further one, drives its
+   * pose drive to the movement's end with the body's JOINT_LATCH spring, holds it there for driveS and then eases it
+   * back the body's share of the way (relax, at most relaxMaxShare), where it waits; a press that finds the drive near
+   * the end (within nearShare: a further click during the hold) kicks it in, as the body's kick. Nothing under reduced
+   * motion (that spring has no relax or kick: the movement eases to its end and stays, as before), nothing on a state
+   * without drives. While the Space grip holds the fingers the note waits (integrate), so a movement latched on always
+   * has its note when the jerk is on: ns-guide armActionMoves reads that as "a press moves it again". A display rule of
+   * this game, nothing measured. */
+  function jerkArm(s, id) {
+    const J = jointSpring, relax = Number.isFinite(J.relax) ? J.relax : 0, kick = Number.isFinite(J.kick) ? J.kick : 0;
+    if (!(relax > 0 || kick > 0) || !s.drive || !Number.isFinite(s.drive[id])) return;
+    if (!s.armJerk) s.armJerk = {};
+    const share = clamp(Math.min(relax, Number.isFinite(J.relaxMaxShare) ? J.relaxMaxShare : 1), 0, 1);
+    const nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0, driveS = Number.isFinite(J.driveS) ? Math.max(0, J.driveS) : 0;
+    const prev = s.armJerk[id];
+    // (the movement's whole travel is one drive unit, so its swing is 1: the body's kick x swing x omega)
+    const speed = kick > 0 && 1 - s.drive[id] < nearShare ? kick * springOmega : prev ? prev[2] : 0;
+    s.armJerk[id] = [share + 0, driveS + 0, speed + 0];
   }
 
   /** Smoothstep fade of a timed command with `remaining` seconds left: 1 before the fade window, exactly 0 at 0. */
@@ -2514,6 +2558,7 @@ export function createActivity({
     s.bodyVel = zeroMap(JOINT_IDS);
     s.bodyJerk = {};
     s.armLatch = zeroMap(ACTION_IDS);
+    s.armJerk = {};
     for (const r of REGION_IDS) s.regionDisplay[r] = 0;
     for (const id of ACTION_IDS) {
       s.drive[id] = 0;
@@ -2706,7 +2751,29 @@ export function createActivity({
       for (const id of ACTION_IDS) {
         // R558 latch: the POSE drive jerks to the latched pose targets (armPoseTau both ways) and stays; the DISPLAY
         // below keeps following the timed commands (a pulse lights its area for a second).
-        s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
+        // 20 November 2026 (jerkArm): a pressed movement's drive follows the body's spring instead: driven to the end
+        // (1) and thrown back off it with `restitution` of its speed, held for driveS, then eased back its share with
+        // the critically damped relaxOmega. The note belongs to its latch: a let-go or Reset ends it, and the drive then
+        // eases as before. While the Space grip holds those fingers the grip wins them as before (the drive eases with
+        // armPoseTau) and the note waits, without speed: when the grip lets go they ease back to where they were held.
+        let jn = s.armJerk[id];
+        if (jn !== undefined && !(s.armLatch[id] > 0)) { delete s.armJerk[id]; jn = undefined; }
+        if (jn !== undefined && s.graspHold && (id === 'grasp_close' || SPACE_COMPETING.includes(id))) {
+          if (jn[1] > 0) jn[1] = Math.max(0, jn[1] - seg) + 0;
+          jn[2] = 0;
+          s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
+        } else if (jn !== undefined) {
+          let goal = 1, om = springOmega, ze = springZeta;
+          if (jn[1] > 0) jn[1] = Math.max(0, jn[1] - seg) + 0;
+          else { goal = 1 - jn[0]; om = relaxOmega; ze = 1; }
+          if (!(s.drive[id] === goal && jn[2] === 0)) {
+            // (stepped in hundredths of the movement, so the spring's snap, JOINT_LATCH.snapDeg, is 0.02 of a hundredth)
+            const [p, v] = stepJointSpring(s.drive[id] * 100, jn[2] * 100, goal * 100, seg, om, ze);
+            const q = clamp(p, 0, 100);
+            s.drive[id] = q / 100 + 0;
+            jn[2] = (q === p ? v : springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) / 100 + 0;
+          }
+        } else s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
         const lvl = approach(s.display[id], T[id], seg, displayRiseTau, displayDecayTau);
         s.display[id] = Math.min(lvl, displayCeiling(s, id, b0, b1));
       }

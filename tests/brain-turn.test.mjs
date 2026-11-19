@@ -402,5 +402,9 @@ test('they are named, and nothing more: no motor area, no words about what they 
   assert.deepEqual([...E.parts], ['eyeball', 'nerve']);
   assert.equal(NT.BRAIN_PARTS.eyeball, 'Eyeball');
   assert.equal(NT.BRAIN_PARTS.nerve, 'Optic nerve');
-  assert.deepEqual(Object.keys(NT.BRAIN_PARTS), ['eyeball', 'nerve']);
+  // 20 November 2026 (the owner: "Through the gap, you should be able to peak into the brain's inner structures"): the
+  // same list also names the inner parts seen through the opening between the halves (ns-brain-gap), and nothing more:
+  // bare names, two or three words, no words about what they do.
+  assert.deepEqual(Object.keys(NT.BRAIN_PARTS).slice(0, 2), ['eyeball', 'nerve']);
+  for (const [k, v] of Object.entries(NT.BRAIN_PARTS)) assert.ok(/^[A-Z][a-z]+( [a-z]+){0,2}$/.test(v), `${k}: ${v}`);
 });

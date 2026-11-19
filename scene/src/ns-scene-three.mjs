@@ -206,6 +206,9 @@ import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, 
 import { ROOM, createRoom } from './ns-room.mjs';
 // 19 November 2026: the two eyeballs and their nerves at the brain's front (an illustration of the brain's facing).
 import { BRAIN_EYES, buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
+// 20 November 2026: the organs in the opened chest (illustrations placed by proportion, not traced anatomy).
+import { ORGANS, buildOrgans } from './ns-organs.mjs';
+import { BRAIN_GAP, brainGapKind, gapCutKind, brainGapCut, brainGapOpen, brainGapPartKey, brainGapAttribute, brainGapGlsl, brainGapAlbedoGlsl, brainGapShellVertex, patchGapDepthShaders, brainGapUniformValue } from './ns-brain-gap.mjs'; // 20 November 2026 (GAP)
 import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a movement reads the same on the card as in the tip
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
@@ -1298,13 +1301,18 @@ const glassReadGlsl = (rimGroove = GLASS_READ.rimGroove, light = GLASS_READ.ligh
 /** R3-scene glass patch (pure): patchGlassShaders plus the crown / groove terms. Needs a float vertex attribute `nsSulc`
  * (a geometry without it reads 0 = crown, i.e. the plain rim look) and uniforms nsRimOpacity, nsRimPower and nsRead
  * (vec4: crownOpacity, crownBright, grooveLight, grooveAlpha). null when a hook is missing (plain glass is drawn). */
-export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Boolean(BRAIN_FLESH) } = {}) {
+export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Boolean(BRAIN_FLESH), gap = BRAIN_GAP.on } = {}) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const v = vertexShader.indexOf(GLASS_VERTEX_HOOK);
   const hook = GLASS_FRAGMENT_HOOKS.find(h => fragmentShader.includes(h));
   if (v < 0 || !hook || !fragmentShader.includes('outgoingLight')) return null;
   const ve = v + GLASS_VERTEX_HOOK.length, f = fragmentShader.indexOf(hook);
-  return {
+  // 20 November 2026 (ns-brain-gap; the owner: "Through the gap, you should be able to peak into the brain's inner
+  // structures"): each half's cortex is cut away next to the gap (the depth pre-pass leaves out the same fragments) and
+  // the inner parts and the cortex's cut are drawn in atlas colours. Needs the nsGap attribute; a geometry without it
+  // reads 0 (never cut, flesh).
+  const G = gap ? brainGapGlsl() : null;
+  const out = {
     // 17 November (fleshy cortex): vNsObj = the atlas position (source mm), for the tissue mottling of cortexFleshGlsl.
     vertexShader: 'attribute float nsSulc;\nvarying float vNsSulc;\nattribute float nsNear;\nvarying float vNsNear;\nvarying vec3 vNsObj;\n' + GLASS_VARYINGS + vertexShader.slice(0, ve) + '\n' + GLASS_VERTEX_GLSL + '\n' + GLASS_SULC_VERTEX + '\nvNsNear = nsNear;\nvNsObj = position;' +
       // 18 November (ns-brain-live): where a bloom swells the tissue, the surface leans away from its middle (only in a
@@ -1317,8 +1325,12 @@ export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Bo
       'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + (flesh ? liveFragmentHead() : '') + GLASS_VARYINGS +
       // 17 November: the shell is shaded as living cortex (ns-brain-ink cortexFleshGlsl) instead of inked glass; `flesh`
       // false gives the glass back (glassInkGlsl), for the engineering pages.
-      fragmentShader.slice(0, f) + glassReadGlsl(null) + '\n' + (flesh ? cortexFleshGlsl(GLASS_READ.lightDir) : glassInkGlsl(GLASS_READ.lightDir)) + '\n' + fragmentShader.slice(f)
+      fragmentShader.slice(0, f) + (G ? 'if ( nsGapIn( vNsObj, vNsGap ) > 0.5 ) discard;\n' : '') + glassReadGlsl(null) + '\n' +
+      (flesh ? cortexFleshGlsl(GLASS_READ.lightDir, undefined, undefined, { albedo: G ? brainGapAlbedoGlsl() : '' }) : glassInkGlsl(GLASS_READ.lightDir)) + '\n' + fragmentShader.slice(f)
   };
+  if (!G) return out;
+  const vs = brainGapShellVertex(out.vertexShader);
+  return vs ? { vertexShader: vs, fragmentShader: G.fragmentDecl + 'varying vec3 vNsCapN;\n' + G.head + out.fragmentShader } : patchGlassReadShaders(vertexShader, fragmentShader, { flesh, gap: false });
 }
 
 /** R3-scene smooth see-through (replaces the dithered ghost windows; display only). One alpha patch for MeshStandardMaterial
@@ -1499,7 +1511,16 @@ export const EYE_COLLAR = Object.freeze({
   // 19 November 2026, later (the owner: "get rid of the red plate where the head used to be. If we're not going to have
   // a head, let's just have bones then"): on false: the cap is not drawn. The root of the neck is open and shows the
   // bones under it (the top of the rib cage and the spine).
-  cap: Object.freeze({ on: false, centreMm: Object.freeze([0, -72, 1358]), radiiMm: Object.freeze([78, 66, 22]), color: 0xa5323a, roughness: 0.62 }) });
+  cap: Object.freeze({ on: false, centreMm: Object.freeze([0, -72, 1358]), radiiMm: Object.freeze([78, 66, 22]), color: 0xa5323a, roughness: 0.62 }),
+  // 20 November 2026 (the owner: "make sure the occluding muscles, neck muscles are gone, and the transition between is
+  // smooth. So you don't just have, part of a muscle ripped off and detached"). hide: a muscle or bone of your own body
+  // with at least shareFrom of its vertices inside the box is not drawn at all in the eye view (it is gone, not cut):
+  // the neck's own muscles that reach down to the collar (the posterior scalenes, semispinalis cervicis, the left
+  // levator scapulae), the upper fibres of the trapezius (71 % of them are in the box; what the box left was a torn
+  // strip along the top of each shoulder) and the two lowest neck vertebrae (cut slivers). Measured once from the drawn
+  // rest vertices in the breastbone's baked frame (collarCuts). What the box still cuts is 2 to 5 % of four muscles and
+  // of the first thoracic vertebra: their tops, at the back. From outside (the head in place) everything is drawn.
+  hide: Object.freeze({ shareFrom: 0.2 }) });
 export const BODY_ORDER = Object.freeze({ torsoDepth: 7, torso: 8, faceDepth: 1, face: 2, arm: 10 });
 
 /** Marker dot size, highlight scale and lift toward superior (source mm, before the giant display scale): ns-brain
@@ -2912,7 +2933,11 @@ export function placeOrbitArrows(hull, {
  * gapPx between boxes, ring offsets tried around each anchor (ringSteps rings; requiredRingSteps for required labels).
  * R558: the caps are even numbers because labels show in twins (one on each half of the brain): 8 = all four twins
  * (arms, legs, face and neck, belly and back), 6 = the first three (was 5 / 4, which left one half a label short). */
-export const LABEL_LAYOUT = Object.freeze({ maxShown: 8, maxShownCompact: 6, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15 });
+/* 20 November 2026 (package LAYOUT): ringFrac: the rings are tried in steps of this share of a ring, out to the same
+ * distance as before. With whole rings (a label's half width sideways, its height up or down) a label that touched
+ * the mirror body's head by a few pixels had to jump a whole half width away, onto the next label's place, and the
+ * labels after it went further still (in an upright window "Left leg" ended up on the arm areas). */
+export const LABEL_LAYOUT = Object.freeze({ maxShown: 8, maxShownCompact: 6, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15, ringFrac: 0.5 });
 
 /**
  * Label declutter (pure). items: [{ id, x, y (anchor, CSS px), w, h, priority (higher first), required }]; a label whose
@@ -2968,7 +2993,9 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
     const rings = live.reduce((a, i) => Math.min(a, maxRingsOf(items[i])), required ? rules.requiredRingSteps : rules.ringSteps);
     const dy = live.reduce((a, i) => Math.max(a, items[i].h), 0) + g, dx = live.reduce((a, i) => Math.max(a, items[i].w), 0) / 2 + g;
     const cands = [[0, 0]];
-    for (let k = 1; k <= rings; k++) cands.push([0, -k * dy], [0, k * dy], [-k * dx, 0], [k * dx, 0], [-k * dx, -k * dy], [k * dx, -k * dy], [-k * dx, k * dy], [k * dx, k * dy]);
+    const fr = Number.isFinite(rules.ringFrac) && rules.ringFrac > 0 && rules.ringFrac <= 1 ? rules.ringFrac : 1;
+    const steps = Math.round(rings / fr), sx = dx * fr, sy = dy * fr;
+    for (let k = 1; k <= steps; k++) cands.push([0, -k * sy], [0, k * sy], [-k * sx, 0], [k * sx, 0], [-k * sx, -k * sy], [k * sx, -k * sy], [-k * sx, k * sy], [k * sx, k * sy]);
     // Twins move by the same offset mirrored: the sideways part points away from the midline for both or toward it for both.
     let s0 = 1;
     if (live.length === 2) {
@@ -3102,6 +3129,10 @@ export const R3_SCENE_CSS = [
 ].join('\n');
 /** Label priority by group (higher shows first; the left-arm label is always shown). */
 export const REGION_LABEL_PRIORITY = Object.freeze({ leftArm: 100, arm: 60, leg: 50, face: 40, trunk: 10, other: 0 });
+/** 20 November 2026 (package LAYOUT): label groups that may move at most this many rings from their anchor (others:
+ * LABEL_LAYOUT.ringSteps). The trunk's areas are two thin bands; a "Belly and back" label two rings away lay on the arm
+ * areas and named the wrong colour. */
+export const LABEL_NEAR = Object.freeze({ trunk: 1 });
 /** Plain on-brain label { main, sub } for a label group { key, hemisphere } (pure; null for groups without a label). */
 export function regionLabelDisplay(group) {
   if (!group) return null;
@@ -3664,6 +3695,14 @@ export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 5, mirrorQualityLodFrom
  * cell is under it by that share, so a body carried slowly through a step does not swap back and forth. The copies
  * are index-only and cached (mirrorIndexLod), built a few a frame the first time a cell is wanted; a swap is a
  * pointer per mesh. Your own body is always drawn from its full meshes. on false: R5_SCENE.mirrorLodFullMm, as before. */
+/** 20 November 2026 (found by a scripted hunt: holding the mirror body with Space and pulling it into you with S stopped
+ * the game, "bounded strict current mirror near-plane check failed"). The owner (19 November): "let's also change it
+ * such that we can move both the mirror body and the brain into ourselves. And basically through ourselves and through
+ * anything" (ns-reference-graph CARRY_THROUGH). A held mirror body was still pushed back in front of the camera's near
+ * plane each frame (reconcileMirrorCarry), and once four pushes could not clear it (the body all round the camera) the
+ * scene refused the frame and the game stopped. true: a held mirror body is not pushed back and may cross the near
+ * plane, as a released one already could; the camera then sees into it, as it passes through you. false: as before. */
+export const MIRROR_PASS_THROUGH = true;
 export const MIRROR_DETAIL = Object.freeze({ on: true, cellsMm: Object.freeze([0, 2.5, 5]), maxCellPx: 1.3, hysteresis: 0.12 });
 /** MIRROR_DETAIL: the cell (source mm; 0 = full meshes) for a body of which one source mm is pxPerMm drawn pixels;
  * `current` is the cell in use (null = none yet). Pure. */
@@ -5143,6 +5182,10 @@ export function createScene({
   const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower }, nsRimGroove: { value: GLASS_READ.rimGroove } };
   // 19 November 2026: the whole cortex's faint light in the picked area's colour (linear colour x level; updateGlow)
   const brainPickTint = { value: new THREE.Vector3(0, 0, 0) };
+  // 20 November 2026 (GAP, ns-brain-gap): the cut that opens each half next to the gap, shared by the shell and its
+  // depth pre-pass (cutMm, fromY, toY, on).
+  const brainGapUniform = { value: new THREE.Vector4(...brainGapUniformValue()) };
+  const brainGapState = { on: BRAIN_GAP.on, depth: null, pieces: { cut: 0, coloured: 0, flesh: 0 } };
   const heldCue = { target: 0, amount: 0 };
   // R4-scene: the left-arm rim (LEFT_ARM_RIM) uniforms and state ({ applied: null until a left-arm region compiles }).
   const leftArmRimUniforms = { color: { value: new THREE.Color(REGION_RENDER.territoryLine) }, params: { value: new THREE.Vector3(LEFT_ARM_RIM.mix, LEFT_ARM_RIM.alpha, LEFT_ARM_RIM.glow) } };
@@ -5152,7 +5195,7 @@ export function createScene({
     m.forceSinglePass = true; // r150+: DoubleSide transparent in one pass
     m.onBeforeCompile = shader => {
       const patched = read ? patchGlassReadShaders(shader.vertexShader, shader.fragmentShader) : patchGlassShaders(shader.vertexShader, shader.fragmentShader);
-      if (read) { glassRead.applied = patched !== null; if (patched) { shader.uniforms.nsRead = glassReadUniform; shader.uniforms.nsClear = glassClearUniform; shader.uniforms.nsPickTint = brainPickTint; shader.uniforms.nsRimGroove = shellRimUniforms.nsRimGroove; Object.assign(shader.uniforms, glassInkUniforms); } }
+      if (read) { glassRead.applied = patched !== null; if (patched) { shader.uniforms.nsRead = glassReadUniform; shader.uniforms.nsClear = glassClearUniform; shader.uniforms.nsPickTint = brainPickTint; shader.uniforms.nsRimGroove = shellRimUniforms.nsRimGroove; shader.uniforms.nsGapCut = brainGapUniform; Object.assign(shader.uniforms, glassInkUniforms); } }
       glassRim[key] = patched !== null;
       glassRim.applied = glassRim.shell !== false && glassRim.xray !== false && (glassRim.shell === true || glassRim.xray === true);
       if (patched === null) return;
@@ -5191,6 +5234,17 @@ export function createScene({
   }));
   glassDepthMaterial.forceSinglePass = true;
   livePlain(glassDepthMaterial, 'ns-live-glass-depth');
+  if (BRAIN_GAP.on) {
+    // 20 November 2026 (GAP): the pre-pass leaves out what the shell leaves out, so the cut opens the surface.
+    glassDepthMaterial.onBeforeCompile = shader => {
+      liveCompile(shader);
+      const p = patchGapDepthShaders(shader.vertexShader, shader.fragmentShader);
+      brainGapState.depth = p !== null;
+      if (!p) return;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; shader.uniforms.nsGapCut = brainGapUniform;
+    };
+    glassDepthMaterial.customProgramCacheKey = () => 'ns-live-glass-depth-gap';
+  }
   // U2b-scene: muscle base colour (linear) for the shared ns-colors shading rule; muscleHot is kept for compatibility.
   const muscleBaseLinear = hexToLinear(MATERIAL.muscleBase);
   const muscleHot = new THREE.Color(MATERIAL.muscleHot);
@@ -5434,6 +5488,8 @@ export function createScene({
     }
     const attrs = { position: new THREE.BufferAttribute(P, 3), normal: new THREE.BufferAttribute(N, 3), nsSulc: new THREE.BufferAttribute(S, 1) };
     if (E) attrs.nsNear = new THREE.BufferAttribute(E, 1);
+    // 20 November 2026 (GAP): each vertex's half and kind (ns-brain-gap), for the cut next to the gap
+    if (BRAIN_GAP.on) attrs.nsGap = new THREE.BufferAttribute(brainGapAttribute(glass.map(m => ({ count: m.geometry.attributes.position.count, ...(m.userData.nsGap || { side: 0, kind: 0 }) }))), 2);
     const make = index => {
       const g = keep(new THREE.BufferGeometry());
       for (const name of Object.keys(attrs)) g.setAttribute(name, attrs[name]);
@@ -5640,7 +5696,8 @@ export function createScene({
   const bodyById = new Map();
   let neckShade = null; // NECK_SHADE
   // EYE_COLLAR: the five planes of the box (world space, set each frame from the host bone), the cap and its state
-  const collar = { planes: null, rest: null, cap: null, capRest: null, seg: -1, local: null, world: null, inv: null, on: false, materials: 0, sweepAt: 0 };
+  const collar = { planes: null, rest: null, cap: null, capRest: null, seg: -1, local: null, world: null, inv: null, on: false, materials: 0, sweepAt: 0,
+    cuts: null, hide: null, hidden: null }; // (20 November 2026: EYE_COLLAR.hide: the meshes the box cuts, those it hides, whether they are hidden)
   /** EYE_COLLAR: give every own-body material the box's planes (once each; the sweep is repeated now and then because
    * muscles change to their class material after they are made). Mirror-body materials are separate and untouched. */
   function collarMaterials() {
@@ -5662,6 +5719,26 @@ export function createScene({
     const ux = (px - C.centreMm[0]) / C.radiiMm[0], uy = (py - C.centreMm[1]) / C.radiiMm[1], uz = (pz - C.centreMm[2]) / C.radiiMm[2];
     return ux * ux + uy * uy + uz * uz < 1;
   }
+  /** EYE_COLLAR: the own-body meshes the box cuts, measured once from their drawn rest vertices in the breastbone's
+   * baked frame: [{ b, share (of the vertices inside the box), n }]. */
+  function collarCuts() {
+    if (collar.cuts || !bodySkinBaked || !bodySkinBaked.get('sternum')) return collar.cuts;
+    const M = new THREE.Matrix4().fromArray(bodySkinBaked.get('sternum')).invert(), e = M.elements, B = EYE_COLLAR.box, out = [];
+    for (const b of body) {
+      if (b.face) continue;
+      const g = b.mesh.userData.nsFullGeometry || b.mesh.geometry, P = g && g.attributes && g.attributes.position ? g.attributes.position.array : null;
+      if (!P) continue;
+      let inside = 0;
+      for (let i = 0; i < P.length; i += 3) {
+        const x = P[i], y = P[i + 1], z = P[i + 2];
+        const px = e[0] * x + e[4] * y + e[8] * z + e[12], py = e[1] * x + e[5] * y + e[9] * z + e[13], pz = e[2] * x + e[6] * y + e[10] * z + e[14];
+        if (pz > B.zFromMm && px > B.xMm[0] && px < B.xMm[1] && py > B.yMm[0] && py < B.yMm[1]) inside++;
+      }
+      if (inside > 0) out.push({ b, share: inside / (P.length / 3), n: P.length / 3 });
+    }
+    collar.cuts = out;
+    return out;
+  }
   /** EYE_COLLAR: place the box and the cap for the frame about to be drawn. on: the eye view (the head not in place). */
   function applyCollar(on) {
     if (!collar.planes) return;
@@ -5669,6 +5746,16 @@ export function createScene({
     // baked start posture before the first pose arrives
     const S = on ? (bodySkinSegs && collar.seg >= 0 ? bodySkinSegs[collar.seg] : bodySkinBaked ? bodySkinBaked.get('sternum') : null) : null;
     if (on && !S) on = false;
+    // 20 November 2026 (EYE_COLLAR.hide): the meshes that are mostly in the box are not drawn while it is on (once the
+    // cuts are measured; until then nothing is hidden)
+    if (collar.hidden !== on) {
+      const cuts = collarCuts();
+      if (cuts) {
+        if (!collar.hide) collar.hide = cuts.filter(c => c.share >= EYE_COLLAR.hide.shareFrom).map(c => c.b);
+        for (const b of collar.hide) b.mesh.visible = !on;
+        collar.hidden = on;
+      }
+    }
     if (on) {
       if (collar.seg < 0 && bodySkinBaked) collar.seg = [...bodySkinBaked.keys()].indexOf('sternum');
       collar.local.fromArray(S);
@@ -5695,6 +5782,75 @@ export function createScene({
     eyeNeckOn = on;
     for (const b of body) if (b.inPlace && b.inPlace.userData.anatomicalPart === 'neck') b.inPlace.visible = headIn || on;
   }
+  /* 20 November 2026 (the owner: "it's nice to have a view within the body and the rib cage. Perhaps put some organs in
+   * there for fun"). ORGANS (ns-organs): a heart, two lungs, the great vessels and the windpipe inside the rib cage of
+   * BOTH bodies. They are illustrations placed by proportion, not traced anatomy and not part of the game's signal: no
+   * motor area, activity, link, collision or aim (raycast off); they are not in the picking lists or the see-through
+   * glass's things (the outline pass draws their ink with the trunk's code, so a lung behind a rib is the trunk behind
+   * itself). Two meshes per body (the heart alone, for its beat), the geometry shared by your body and the mirror body,
+   * in source mm riding on the host segment: their matrix is that segment's pose (written only when it changed; nothing
+   * else per frame) and the heart's swell is one uniform from the living brain's beat (none under reduced motion). */
+  const organs = { made: false, own: [], mirror: [], seg: -1, key: new Float64Array(16).fill(NaN), poses: 0, triangles: 0, parts: null,
+    beat: { value: new Float32Array(4) } };
+  function makeOrgans() {
+    organs.made = true;
+    const data = buildOrgans();
+    organs.triangles = data.triangles; organs.parts = data.parts;
+    organs.seg = bodySkinBaked ? [...bodySkinBaked.keys()].indexOf(ORGANS.host) : -1;
+    organs.beat.value.set([data.heart.centre[0], data.heart.centre[1], data.heart.centre[2], 0]);
+    const make = (d, name, part, beat) => {
+      const geo = indexedGeometry(d.positions, d.indices);
+      geo.setAttribute('normal', new THREE.BufferAttribute(d.normals, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(d.colors, 3));
+      hatchAttr(geo, null, 'muscle'); // zeros: the comic look's bands and rim, no ink lines on them
+      if (typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
+      const mat = keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: ORGANS.roughness, metalness: 0 }));
+      if (beat) composePatch(mat, 'ns-organ-beat', shader => {
+        if (!shader.vertexShader.includes('#include <begin_vertex>')) return;
+        shader.uniforms.nsOrganBeat = organs.beat;
+        shader.vertexShader = 'uniform vec4 nsOrganBeat;\n' + shader.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\n\ttransformed = nsOrganBeat.xyz + ( transformed - nsOrganBeat.xyz ) * ( 1.0 + nsOrganBeat.w );');
+      });
+      comicPatch(mat, 'muscle');
+      for (const [list, group, mirrorTwin] of [[organs.own, bodyGroup, false], [organs.mirror, mirrorBodyGroup, true]]) {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.name = `${mirrorTwin ? 'mirror image: ' : ''}${name} (illustration, not anatomy data)`;
+        mesh.matrixAutoUpdate = false; mesh.visible = false; mesh.raycast = () => {};
+        mesh.renderOrder = BODY_ORDER.torso;
+        mesh.userData = { nsOrgan: part };
+        group.add(mesh); list.push(mesh);
+        outline.register(mesh, { group: OUTLINE_GROUPS.trunk, mirror: mirrorTwin });
+      }
+    };
+    make(data.tissue, 'lungs, great vessels and windpipe', 'lungs', false);
+    make(data.heart, 'heart', 'heart', true);
+  }
+  /** ORGANS: their pose for the frame about to be drawn (the host segment's, from the pose or the baked posture before
+   * the first pose) and the heart's swell. */
+  function applyOrgans() {
+    if (!ORGANS.on) return;
+    if (!organs.made) { if (!bodySkinBaked || !body.length) return; makeOrgans(); }
+    const S = bodySkinSegs && organs.seg >= 0 ? bodySkinSegs[organs.seg] : bodySkinBaked ? bodySkinBaked.get(ORGANS.host) : null;
+    if (S && S.length === 16) {
+      const K = organs.key;
+      let same = true;
+      for (let i = 0; i < 16; i++) if (K[i] !== S[i]) { same = false; K[i] = S[i]; }
+      if (!same) {
+        for (const m of organs.own) { m.matrix.fromArray(S); m.matrixWorldNeedsUpdate = true; m.visible = true; }
+        for (const m of organs.mirror) { m.matrix.fromArray(S); m.matrixWorldNeedsUpdate = true; m.visible = true; }
+        organs.poses++;
+      }
+    }
+    organs.beat.value[3] = reducedMotion ? 0 : ORGANS.beatSwell * brainLive.beat;
+  }
+  /** ORGANS as plain numbers (QA): built, host, triangles by part, meshes and how many are shown, poses written, the
+   * heart's swell this frame. */
+  const organsState = () => ({ on: ORGANS.on, made: organs.made, host: ORGANS.host, triangles: organs.triangles, parts: organs.parts ? { ...organs.parts } : null,
+    meshes: organs.own.length + organs.mirror.length, shown: organs.own.filter(m => m.visible).length + organs.mirror.filter(m => m.visible).length,
+    poses: organs.poses, swell: Math.round(organs.beat.value[3] * 1e4) / 1e4, reducedMotion,
+    // EYE_COLLAR.hide (the neck's end in the eye view): the meshes not drawn there, the others the box still cuts (share
+    // of their vertices inside it), and whether the hidden ones are hidden now
+    neck: { hidden: (collar.hide || []).map(b => b.id), cut: (collar.cuts || []).filter(c => c.share < EYE_COLLAR.hide.shareFrom).map(c => `${c.b.id} ${Math.round(c.share * 100)}%`), on: collar.hidden === true } });
   const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }));
   // Torso see-through window (BODY_SEE_THROUGH): one vec4 uniform shared by the torso/neck materials drawn in place.
   // R3-scene: SMOOTH torso translucency (BODY_TRANSLUCENT) instead of the dithered window: transparent materials (alpha 1
@@ -6249,8 +6405,11 @@ export function createScene({
     // R558 (builder FA): the face muscles keep little or none of the estimate (ns-colors FACE_MUSCLE_LOOK).
     const k = muscleTendonScale(id);
     if (k !== 1) for (let i = 0; i < a.array.length; i++) a.array[i] *= k;
-    // 20 November 2026 (DIGIT_TENDONS): the finger and toe tendons, white by their place beyond the wrist or ankle
-    if (id) { const dk = digitTendonKind(muscleSourceNameOf(id)); if (dk) muscleLook.digitTendons = (muscleLook.digitTendons || 0) + (digitTendonWeights(dk, rest, a.array) > 0 ? 1 : 0); }
+    // 20 November 2026 (DIGIT_TENDONS): the finger and toe tendons, white by their place beyond the wrist or ankle. The
+    // rule's places are the atlas's standing pose: the body's own muscles take their SOURCE positions from their skin
+    // record (`rest` here is the array baked into the start posture, where the hands and feet stand elsewhere; found by
+    // a review); before the record exists the skin record's creation applies the rule (digitTendonsFromSkin).
+    if (id) digitTendonsFor(id, a, rest);
     a.needsUpdate = true;
     muscleLook.tendonMeshes = (muscleLook.tendonMeshes || 0) + 1;
     muscleLook.tendonMs = (muscleLook.tendonMs || 0) + (nowMs() - t0);
@@ -6262,6 +6421,17 @@ export function createScene({
   // R558 (builder AN): a missing-muscles packet id has no catalogue source name; its packet row name ('right gracilis')
   // stands in, so its two sides share one tone like every catalogue pair.
   const muscleSourceNameOf = id => (typeof id === 'string' ? regionalLayerQualification(id).sourceName || bodyPacketMuscleName(id) : null);
+  /** DIGIT_TENDONS for muscle `id` into tendon attribute `a`: from the body skin record's source positions when there is
+   * one, else from `fallback` (the left game arm's rest positions are its source positions). Returns whether it ran. */
+  function digitTendonsFor(id, a, fallback = null) {
+    const dk = digitTendonKind(muscleSourceNameOf(id));
+    if (!dk || !a) return false;
+    // (a muscle of your own body or the mirror body waits for its skin record; the game arm's muscles are not in bodyById)
+    const rec = bodySkin.get(id), src = rec && rec.src && rec.src.length === a.array.length * 3 ? rec.src : (bodyById.has(id) ? null : fallback);
+    if (!src || src.length !== a.array.length * 3) return false;
+    if (digitTendonWeights(dk, src, a.array) > 0) { muscleLook.digitTendons = (muscleLook.digitTendons || 0) + 1; a.needsUpdate = true; }
+    return true;
+  }
   const muscleToneKeyOf = id => muscleToneKey(id, muscleSourceNameOf(id));
   /** Resting base colour (linear) of the muscle with element id `id`: its tone and storey (ns-colors muscleBaseInto). */
   function muscleBaseOf(id, out = [0, 0, 0]) {
@@ -6767,7 +6937,7 @@ export function createScene({
         // R558 (Message 18): tendon white on the anchored ends (the same rule as the body; 0 without stack geometry).
         const tg = m.mesh.userData.nsFullGeometry || m.mesh.geometry;
         if (L) writeTendon(tg, m.restBase, L, m.id);
-        else if (!softTissueGeos.has(tg)) { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); const dk = m.id ? digitTendonKind(muscleSourceNameOf(m.id)) : null; if (dk) digitTendonWeights(dk, m.restBase, ta.array); ta.needsUpdate = true; } }
+        else if (!softTissueGeos.has(tg)) { const ta = tendonAttr(tg); if (ta) { ta.array.fill(0); if (m.id) digitTendonsFor(m.id, ta, m.restBase); ta.needsUpdate = true; } }
       }
       if (!m.lifted) {
         if (m.rest !== m.restBase) { m.rest = m.restBase; m.restNormals = computeNormals(m.restBase, m.indices, undefined, m.weld); changed = true; }
@@ -7145,6 +7315,9 @@ export function createScene({
       const mesh = still(new THREE.Mesh(geo, glassMaterial));
       mesh.name = String(g.name || 'brain glass');
       mesh.userData.nsXray = xraySet.has(gi);
+      // 20 November 2026 (GAP): its half and kind (ns-brain-gap): cut open next to the gap, drawn in an atlas colour
+      mesh.userData.nsGap = BRAIN_GAP.on ? brainGapKind({ name: mesh.name, positions: g.positions }) : { side: 0, kind: 0 };
+      { const k = mesh.userData.nsGap; brainGapState.pieces[k.side && gapCutKind(k.kind) ? 'cut' : k.kind >= 2 ? 'coloured' : 'flesh']++; }
       mesh.renderOrder = RENDER_ORDER.glass;
       brainGroup.add(mesh);
       glass.push(mesh);
@@ -7697,7 +7870,10 @@ export function createScene({
         const w = strong ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.55) + 2 * F.padXPx : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
         const h = strong ? F.leftArmPx * 1.25 + F.subPx * 1.25 + 2 * F.padYPx : F.otherPx * 1.3 + 2 * F.padYPx;
         labelBoxes.push({ x: 0, y: 0, w: Math.ceil(w), h: Math.ceil(h), skip: true });
-        labelItems.push({ id: `${g.hemisphere}:${g.key}`, x: NaN, y: NaN, w: Math.ceil(w), h: Math.ceil(h), priority: REGION_LABEL_PRIORITY[g.key] || 0, required: g.isLeftArm, text: disp.main, pair: g.pair || null, mirror: 0 });
+        // (20 November 2026, LAYOUT: "Belly and back" names two thin bands between the leg and the arm areas; moved a
+        // whole ring sideways it sat on the arm areas, so it stays within one ring of them or is not shown: LABEL_NEAR)
+        labelItems.push({ id: `${g.hemisphere}:${g.key}`, x: NaN, y: NaN, w: Math.ceil(w), h: Math.ceil(h), priority: REGION_LABEL_PRIORITY[g.key] || 0, required: g.isLeftArm, text: disp.main, pair: g.pair || null, mirror: 0,
+          ...(Number.isFinite(LABEL_NEAR[g.key]) ? { maxRings: LABEL_NEAR[g.key] } : {}) });
       }
     }
   }
@@ -10071,6 +10247,8 @@ export function createScene({
         anconeusDeepDelta: r.anconeusDeepDelta || null, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
         rest: lift ? lift.rest : new Float32Array(pos.array), restN: lift ? null : new Float32Array(nor.array), skinned: false };
       if (!lift) pos.array = new Float32Array(rec.rest); // one drawn buffer per muscle (attribute object kept; see the lift)
+      // (DIGIT_TENDONS from the source positions, now that the record has them; digitTendonsFor)
+      { const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry, ta = full && !softTissueGeos.has(full) ? tendonAttr(full) : null; if (ta) digitTendonsFor(id, ta); }
       // The fingers and the hand move up to about a hand length against the mesh's rigid frame: grow the shared bounding
       // sphere once so culling stays right at every pose.
       if (!geo.boundingSphere && typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
@@ -10887,6 +11065,99 @@ export function createScene({
     bodyBoxCache = { own, mirror: mir }; bodyBoxKey = key;
     return bodyBoxCache;
   }
+  /* 20 November 2026 (package LAYOUT; the owner's standing wish for the strip's labels: sparse, and never over a body).
+   * The labels kept clear of your left arm only, by shapes ns-app works out from the arm's fit as seen FROM THE EYE
+   * (armAvoidShapes). Since the eye view's camera stands half a metre behind and above the eye (ns-camera EYE_DOLLY)
+   * those shapes lie far from the arm as drawn: at 1280 x 720 they covered the face areas of the brain's left half, so
+   * "Face and neck" could not sit on its own areas and moved into the hollow of the strip, over the mirror body's arms,
+   * where "Belly and back" already sat (the mirror body was no obstacle at all). bodyLabelBoxes: what the two bodies
+   * cover on screen as drawn NOW, as boxes the labels keep clear of: every bone of your body (your left arm's too) and
+   * of the mirror body (arm included), projected with the camera as it draws, padded by fleshM of flesh round the bone
+   * (as px at the bone's nearest depth), gathered on a grid of cellPx cells and handed on as runs of cells (a few dozen
+   * boxes, not hundreds). Bones only: they are rigid meshes posed on the processor every frame, so the boxes follow the
+   * bodies (the muscles' skins are made on the graphics card). Left out: what the eye view does not draw of your own
+   * body (above the collar, EYE_COLLAR), bones nearer the camera than nearM, and a bone box larger than maxShare of the
+   * view (a rib seen from close by). Made again when the camera, a pose or the mirror body changes, at most every
+   * everyFrames drawn frames while that goes on. An outline for placing words, not a silhouette. */
+  const LABEL_BODY = Object.freeze({ cellPx: 4, fleshM: 0.025, nearM: 0.3, maxShare: 0.5, everyFrames: 4 });
+  let labelBodyOut = null, labelBodyKey = '', labelBodyAt = -1e9, labelBodyGrid = null, labelBodyCols = 0, labelBodyRows = 0;
+  const labelBodyBox = new THREE.Box3(), labelBodyStats = { bones: 0, cells: 0, boxes: 0, ms: 0 };
+  function bodyLabelBoxes() {
+    if (!(cssW > 0 && cssH > 0) || !body.length) return null;
+    const key = `${arrowCameraKey(arrowCam())}|${mirror.serial}|${bodyPoseSerial}|${armPoseSerial}|${mirrorRoot.visible}|${collar.on}`;
+    if (labelBodyOut && key === labelBodyKey) return labelBodyOut;
+    // (a camera still moving: the boxes of a few frames ago, and the labels are laid out again next frame, so that the
+    // boxes of the place where the camera comes to rest are made)
+    if (labelBodyOut && frameVis.tick - labelBodyAt < LABEL_BODY.everyFrames) { overlayDirty = true; return labelBodyOut; }
+    const t0 = nowMs();
+    labelBodyAt = frameVis.tick; labelBodyKey = key;
+    const L = LABEL_BODY, cell = L.cellPx, cols = Math.ceil(cssW / cell), rows = Math.ceil(cssH / cell);
+    if (!labelBodyGrid || cols !== labelBodyCols || rows !== labelBodyRows) { labelBodyGrid = new Uint8Array(cols * rows); labelBodyCols = cols; labelBodyRows = rows; }
+    const G = labelBodyGrid; G.fill(0);
+    camera.updateMatrixWorld(true);
+    const v = camera.matrixWorldInverse.elements, p = camera.projectionMatrix.elements;
+    const focal = 0.5 * cssH * p[5]; // px per (metre / metre of depth)
+    let nBones = 0;
+    const mark = (mesh, own) => {
+      const geo = mesh && (mesh.userData.nsFullGeometry || mesh.geometry);
+      if (!geo || !geo.attributes || !geo.attributes.position) return;
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const b = geo.boundingBox, e = mesh.matrixWorld.elements;
+      if (own && collar.on) {
+        const cx = (b.min.x + b.max.x) / 2, cy = (b.min.y + b.max.y) / 2, cz = (b.min.z + b.max.z) / 2;
+        if (collarHides(e[0] * cx + e[4] * cy + e[8] * cz + e[12], e[1] * cx + e[5] * cy + e[9] * cz + e[13], e[2] * cx + e[6] * cy + e[10] * cz + e[14])) return;
+      }
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, dMin = Infinity;
+      for (let k = 0; k < 8; k++) {
+        const lx = k & 1 ? b.max.x : b.min.x, ly = k & 2 ? b.max.y : b.min.y, lz = k & 4 ? b.max.z : b.min.z;
+        const wx = e[0] * lx + e[4] * ly + e[8] * lz + e[12], wy = e[1] * lx + e[5] * ly + e[9] * lz + e[13], wz = e[2] * lx + e[6] * ly + e[10] * lz + e[14];
+        const cx = v[0] * wx + v[4] * wy + v[8] * wz + v[12], cy = v[1] * wx + v[5] * wy + v[9] * wz + v[13], cz = v[2] * wx + v[6] * wy + v[10] * wz + v[14];
+        const d = -cz;
+        if (!(d > L.nearM)) return;
+        const sx = (p[0] * cx + p[8] * cz) / d, sy = (p[5] * cy + p[9] * cz) / d; // NDC (perspective: w = -z)
+        const x = (sx + 1) * 0.5 * cssW, y = (1 - sy) * 0.5 * cssH;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (d < dMin) dMin = d;
+      }
+      if (x1 - x0 > L.maxShare * cssW || y1 - y0 > L.maxShare * cssH) return;
+      const pad = (L.fleshM * focal) / dMin;
+      const c0 = Math.max(0, Math.floor((x0 - pad) / cell)), c1 = Math.min(cols - 1, Math.floor((x1 + pad) / cell));
+      const r0 = Math.max(0, Math.floor((y0 - pad) / cell)), r1 = Math.min(rows - 1, Math.floor((y1 + pad) / cell));
+      if (c1 < c0 || r1 < r0) return;
+      nBones++;
+      for (let r = r0; r <= r1; r++) G.fill(1, r * cols + c0, r * cols + c1 + 1);
+    };
+    for (const rec of body) {
+      if (rec.kind !== 'bone') continue;
+      // (your own head's bones are drawn only from outside, by their in-place twins; the mirror body's head always)
+      if (rec.mesh && rec.mesh.visible && !rec.face) mark(rec.mesh, true);
+      else if (rec.inPlace && rec.inPlace.visible) mark(rec.inPlace, true);
+      if (rec.mirror && mirrorRoot.visible && rec.mirror.visible) mark(rec.mirror, false);
+    }
+    for (const rec of bones) {
+      if (rec.mesh && rec.mesh.visible && armGroup.visible) mark(rec.mesh, true);
+      if (rec.mirror && mirrorRoot.visible && rec.mirror.visible) mark(rec.mirror, false);
+    }
+    // runs of marked cells, a run that continues the same run of the row above lengthens its box
+    const out = labelBodyOut || [];
+    out.length = 0;
+    let open = new Map(), next = new Map(), cells = 0;
+    for (let r = 0; r < rows; r++) {
+      next.clear();
+      for (let c = 0; c < cols; c++) {
+        if (!G[r * cols + c]) continue;
+        let c1 = c; while (c1 + 1 < cols && G[r * cols + c1 + 1]) c1++;
+        cells += c1 - c + 1;
+        const k = c * 65536 + c1, prev = open.get(k);
+        if (prev) { prev.y1 = Math.min(cssH, (r + 1) * cell); next.set(k, prev); }
+        else { const q = { x0: c * cell, y0: r * cell, x1: Math.min(cssW, (c1 + 1) * cell), y1: Math.min(cssH, (r + 1) * cell), body: true }; out.push(q); next.set(k, q); }
+        c = c1;
+      }
+      const t = open; open = next; next = t;
+    }
+    labelBodyOut = out;
+    labelBodyStats.bones = nBones; labelBodyStats.cells = cells; labelBodyStats.boxes = out.length; labelBodyStats.ms = Math.round((nowMs() - t0) * 1000) / 1000;
+    return out;
+  }
   /** R4-integrator (D7): does the brain's outline as drawn NOW (convex hull of its outline support points projected
    * with the live camera, CSS px) overlap rect { x0, y0, x1, y1 } (CSS px)? false before the brain is placed or when it
    * is behind the camera. Cached per camera / brain matrix and rect. */
@@ -11505,10 +11776,16 @@ export function createScene({
       // reset does.
       const c = mirror.transform.carryCentre || mirror.transform.centre;
       const openingLandscape = cssW >= cssH && !camPose && !mirror.worldCentre;
-      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}|${openingLandscape}`;
+      // 20 November 2026 (package LAYOUT): in an upright window the mirror body's tips are planned in the view the player
+      // starts in (the opening look, 25.5 degrees down), not in the brain's placement direction (13 degrees down). Planned
+      // there, they came out about 170 px off in the picture the player gets: the left and right tips lay over the face
+      // areas of the strip and were drawn faint (the motor-colour rule only sees the real view). In a landscape window
+      // the older plan stays, with its own correction of the up tip (fitOpeningMirrorUp, DESIGN-DECISIONS section 146).
+      const openingPortrait = cssW < cssH && !camPose && !mirror.worldCentre;
+      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}|${openingLandscape}|${openingPortrait}`;
       if ((key !== M.key || M.samplesRef !== mirror.samples) && (!arrowHeld || !M.key)) { // (not while an item is held: setHeldItem)
         M.key = key; M.samplesRef = mirror.samples;
-        const start = { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
+        const start = openingPortrait ? { yaw: referenceLook.yaw, pitch: referenceLook.pitch } : { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
         let look = start;
         const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: refAt(start) });
         if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
@@ -12370,11 +12647,16 @@ export function createScene({
       scope: 'Union of full-source and current live position-buffer bounds, including deformed muscles and distinct body LOD arrays; cached by each buffer/version. Conservative corners; native/GPU/normalmechanics unqualified.' };
   }
   /** Normal post-pose object-placement reconciliation only: never move the camera, body, arm or a released object. */
-  function reconcileMirrorCarry({ held = false, farM = null } = {}) {
+  function reconcileMirrorCarry({ held = false, farM = null, passThrough = MIRROR_PASS_THROUGH } = {}) {
     const manipulating = Boolean(held);
-    mirror.carryHeldAtReconcile = manipulating; // App supplies this normal frame's actual held-target state before render.
+    // (20 November 2026, MIRROR_PASS_THROUGH: a held mirror body that passes through you is not pushed back, and the
+    // render-time camera-range check below is not made for it: it may cross the near plane as a released one may)
+    mirror.carryHeldAtReconcile = manipulating && !passThrough; // App supplies this normal frame's actual held-target state before render.
     if (!mirror.worldCentre || !mirrorRoot.visible) return { status: 'not-carried', movementWorldM: [0, 0, 0], envelope: null };
     const before = mirror.worldCentre.slice(); let envelope = currentMirrorEnvelope();
+    if (manipulating && passThrough) return { status: 'held-pass-through', movementWorldM: [0, 0, 0], worldCentreM: before, envelope,
+      viewClip: { near: envelope.minCameraDepthM < camera.near, far: envelope.maxCameraDepthM > camera.far },
+      scope: 'A held mirror body passes through the player (MIRROR_PASS_THROUGH): placement unchanged; camera clipping permitted.' };
     // A released object is world-fixed and may cross the view's near/far planes as the user looks away.
     // Still compute the full finite geometry envelope; clipping alone is not physical contact or failed manipulation.
     if (!manipulating) return { status: 'released-world-fixed', movementWorldM: [0, 0, 0], worldCentreM: before, envelope,
@@ -12825,6 +13107,34 @@ export function createScene({
     }
     return musclePickIndex;
   }
+  // 20 November 2026 (GAP, ns-brain-gap): what is picked is what is drawn. A hit on a half's cortex inside the cut is not
+  // seen: the ray goes on to that piece's next hit outside the cut (its inside, drawn as its cut face) or to the next
+  // piece. An inner part seen in the opening (or a part of the middle such as the third ventricle) is named in the tip.
+  const gapLocal = new THREE.Vector3(), gapPoint = [0, 0, 0], gapInverse = new THREE.Matrix4();
+  // (the brain group's inverse is taken once per pick, in brainGapHits, after controlLayersAt has updated its matrix)
+  const gapLocalOf = h => { gapLocal.copy(h.point).applyMatrix4(gapInverse); gapPoint[0] = gapLocal.x; gapPoint[1] = gapLocal.y; gapPoint[2] = gapLocal.z; return gapPoint; };
+  const gapCutHit = h => { const k = h.object && h.object.userData && h.object.userData.nsGap; return Boolean(k && k.side && gapCutKind(k.kind) && brainGapCut(gapLocalOf(h), k)); };
+  function brainGapHits(hits) {
+    if (!BRAIN_GAP.on || !brainGapUniform.value.w) return hits;
+    gapInverse.copy(brainGroup.matrixWorld).invert();
+    if (!hits.some(gapCutHit)) return hits;
+    const out = [];
+    for (const h of hits) {
+      if (!gapCutHit(h)) { out.push(h); continue; }
+      const all = [];
+      THREE.Mesh.prototype.raycast.call(h.object, raycaster, all);
+      all.sort((a, b) => a.distance - b.distance);
+      const next = all.find(a => a.distance > h.distance + 1e-6 && !gapCutHit(a));
+      if (next) out.push(next);
+    }
+    return out.sort((a, b) => a.distance - b.distance);
+  }
+  function brainGapPartAt(h) {
+    const u = h.object && h.object.userData, k = u && u.nsGap;
+    if (!BRAIN_GAP.on || !brainGapUniform.value.w || !k || k.kind < 2) return null;
+    const key = u.nsGapPart !== undefined ? u.nsGapPart : (u.nsGapPart = brainGapPartKey(h.object.name));
+    return key && (!k.side || brainGapOpen(gapLocalOf(h)) > 0.5) ? key : null;
+  }
   function controlLayersAt(x, y) {
     if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
     const index = bodyPickIndex();
@@ -12840,7 +13150,7 @@ export function createScene({
     for (const o of index.keys()) if (shown(o)) targets.push(o);
     const brainOn = brainGroup.visible;
     if (brainOn) for (const o of rayTargets || glass) if (shown(o)) targets.push(o);
-    const hits = raycaster.intersectObjects(targets, false);
+    const hits = brainGapHits(raycaster.intersectObjects(targets, false));
     // R558 (FIRST_PERSON_BODY): a part of your own body that the ordinary view does not draw is not seen; the ray goes on
     // to whatever is drawn behind it.
     const hiddenOwn = h => { const r = index.get(h.object); return Boolean(r) && r.source === 'own' && r.part === 'body' && firstPersonShareAt(h.point.x, h.point.y, h.point.z, r.bodyPart === 'legs') < FIRST_PERSON_BODY.pickFrom; };
@@ -12874,7 +13184,7 @@ export function createScene({
       const u = h.object.userData || {}, regionId = typeof u.regionId === 'string' ? u.regionId : null;
       const area = regionId !== null || Boolean(!regionMode && strip && h.object === strip.mesh);
       // (19 November 2026: an eyeball or a nerve at the brain's front is the brain's bare surface with a name, `part`)
-      const brainPart = typeof u.nsBrainPart === 'string' ? u.nsBrainPart : null;
+      const brainPart = typeof u.nsBrainPart === 'string' ? u.nsBrainPart : brainGapPartAt(h);
       layers.push(brainPart ? { item: 'brain', kind: 'glass', distance: h.distance, point: h.point.toArray(), regionId: null, part: brainPart }
         : { item: 'brain', kind: area ? 'area' : 'glass', distance: h.distance, point: h.point.toArray(), regionId });
     }
@@ -13471,7 +13781,7 @@ export function createScene({
         if (GLOW_LINK.own === true || (GLOW_LINK.own === 'no-mirror' && !mirrorOn)) {
           const n = tg.m ? beamArmWorld(tg.m, false, beamB) : beamBodyWorld(tg.b, bodyGroup, beamB);
           if (!n) continue;
-          if (tg.b && !(tg.b.face ? camState.headInPlace : firstPersonShareAt(beamB[0], beamB[1], beamB[2], tg.b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom)) continue;
+          if (tg.b && (!tg.b.mesh.visible || !(tg.b.face ? camState.headInPlace : firstPersonShareAt(beamB[0], beamB[1], beamB[2], tg.b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom))) continue; // (20 November 2026: a mesh the eye view does not draw, EYE_COLLAR.hide, gets no beam)
           if (Math.hypot(beamB[0] - camera.position.x, beamB[1] - camera.position.y, beamB[2] - camera.position.z) < GLOW_LINK.minTargetM || !inPicture(beamB)) continue;
           emitBeam(beamOwn, nk, n, beamB, lv, phase, aBase * LIGHT_BEAM.ownAlpha, regionId, tS, share);
         }
@@ -13678,7 +13988,7 @@ export function createScene({
           if (!gs) continue;
           rimMuscles++;
           pv.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(bodyGroup.matrixWorld);
-          const drawn = b.face ? camState.headInPlace : firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom;
+          const drawn = b.face ? camState.headInPlace : b.mesh.visible && firstPersonShareAt(pv.x, pv.y, pv.z, b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom; // (20 November 2026: and not hidden by EYE_COLLAR.hide)
           let mp = null;
           if (mirrorOn && b.mirror) { glowMirrorPoint.copy(gs.center).applyMatrix4(b.mesh.matrix).applyMatrix4(mirrorBodyGroup.matrixWorld); mp = [glowMirrorPoint.x, glowMirrorPoint.y, glowMirrorPoint.z]; }
           addT(`${b.anatomicalPart}:${b.side}`, w, [pv.x, pv.y, pv.z], drawn, mp);
@@ -13868,7 +14178,12 @@ export function createScene({
         const p = arrowLayout[d];
         if (p && p.box) obst.push({ x0: p.box.x0 - 4, y0: p.box.y0 - 4, x1: p.box.x1 + 4, y1: p.box.y1 + 4 });
       }
-      for (const r of labelAvoidPx().boxes) obst.push(r);
+      // 20 November 2026 (LAYOUT): both bodies as drawn now (bodyLabelBoxes), in place of the arm shapes worked out from
+      // the eye (labelAvoidPx), which since the camera stands behind the eye lie away from the arm; those are used only
+      // while the bodies' boxes cannot be made.
+      const bodyBoxes = bodyLabelBoxes();
+      if (bodyBoxes) for (const r of bodyBoxes) obst.push(r);
+      else for (const r of labelAvoidPx().boxes) obst.push(r);
       // R4-fix (F2): the small-area switched-on rings stay visible (labels keep clear of them).
       for (const d of markDots.values()) if (d.shown && Number.isFinite(d.px) && Number.isFinite(d.py)) { const R = SMALL_MARK.sizePx / 2 + 3; obst.push({ x0: d.px - R, y0: d.py - R, x1: d.px + R, y1: d.py + R }); }
       const compact = cssW / cssH < 1 || cssW < 900;
@@ -14518,6 +14833,7 @@ export function createScene({
     }
     checkCameraProjectionPlan();
     applyCollar(!camState.headInPlace); // 19 November 2026 (EYE_COLLAR): the clean end at the collar while your own head is not drawn
+    applyOrgans(); // 20 November 2026 (ORGANS): the organs' pose (when the trunk moved) and the heart's swell
     // R558 (Message 20): the outline ID pass of this frame's body meshes (the composite in `scene` reads it). The soft
     // depth shading (ns-outline OUTLINE_AO) is drawn only at the full quality level; the lines at every level.
     // R558 BB (Message 28): the lines' supersampling follows the quality level too (ns-outline OUTLINE_AA).
@@ -14634,6 +14950,8 @@ export function createScene({
        * and glassFold (the glass's background fold-depth job: state, vertices, slices, work and wall ms). */
       /** 18 November (ns-room): the room as plain numbers (where its light stands, this frame's gain, the three things). */
       get room() { return room.state(); },
+      /** 20 November 2026 (ORGANS): the organs in the chest (illustrations) as plain numbers. */
+      get organs() { return organsState(); },
       get brainInk() {
         const { token, ...gf } = glassFold, L = brainLive, r3 = v => Math.round(v * 1000) / 1000;
         // 18 November (ns-brain-live): the living brain as plain numbers (this frame's beat, breath and swell share, the
@@ -14777,6 +15095,7 @@ export function createScene({
         stripRelief: { ...stripRelief },
         overBrain: { amount: overBrain.amount, mode: overBrain.mode || 'off' },
         glassRead: { ...glassRead },
+        brainGap: { ...brainGapState, pieces: { ...brainGapState.pieces }, cut: Array.from(brainGapUniform.value.toArray()) }, // 20 November 2026 (GAP)
         // R4-scene: quality (D8), camera range, the brain distance factor (QA hook) and the player's arm shapes as the scene
         // last received them (viewport fractions).
         quality: qualityState(), census: lastCensus,
@@ -14792,9 +15111,13 @@ export function createScene({
         armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
         arrowHover: hoverDir, mirrorArrowHover: arrowHover && arrowHover.target === 'mirror' && !arrowHover.blocked ? arrowHover.dir : null, brainBoundsPx: arrowsShown ? { ...brainBoundsPx } : null,
         markDots: [...markDots].map(([id, d]) => ({ id, shown: d.shown, small: d.small, areaPx: d.area, left: d.x, top: d.y })),
-        labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null })),
+        labels: labelEls.map((L, i) => ({ text: L.group.text, display: L.display ? `${L.display.main}${L.display.sub ? ` / ${L.display.sub}` : ''}` : null, shown: L.last.shown, left: L.last.left, top: L.last.top, w: labelBoxes[i] ? labelBoxes[i].w : null, h: labelBoxes[i] ? labelBoxes[i].h : null, faded: L.last.faded === true, side: labelItems[i] && labelItems[i].side ? { ...labelItems[i].side } : null,
+          anchorPx: labelItems[i] && Number.isFinite(labelItems[i].x) && Number.isFinite(labelItems[i].y) ? [Math.round(labelItems[i].x), Math.round(labelItems[i].y)] : null })),
+        labelObstacles: labelObstacles.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v))), // 20 November 2026 (LAYOUT): as at the last label layout
+        labelBodies: { ...labelBodyStats },
         info: info ? { shown: !info.panel.hidden } : null,
         body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, lift: bodyLiftInfo ? { ...bodyLiftInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
+        organs: organsState(), // 20 November 2026 (ORGANS)
         face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
       };
     }

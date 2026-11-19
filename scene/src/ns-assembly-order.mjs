@@ -149,7 +149,7 @@ export const ASSEMBLY_TIER_COUNTS = Object.freeze({
 /**
  * The release rule: arrived parts are held and released tier by tier on each track (see the module comment).
  * counts: expected parts per tier ({ body: [...], brain: [...] }); order: timing (ASSEMBLY_ORDER).
- * Returns { arrive(part), due(nowS, out), hurry(), expect(tS), know(counts), state() }:
+ * Returns { arrive(part), due(nowS, out), hurry(), alive(), expect(tS), know(counts), state() }:
  *   arrive(part): part = { track, tier, frac, ... } (anything else is carried along); a part with a tier outside the
  *     table goes to the last tier.
  *   due(nowS, out = []): pushes onto `out` the parts to start now, in order, and returns it.
@@ -164,7 +164,7 @@ export const ASSEMBLY_TIER_COUNTS = Object.freeze({
  * Pure but for the time the caller passes.
  */
 export function createAssemblyRelease({ counts = ASSEMBLY_TIER_COUNTS, order = ASSEMBLY_ORDER } = {}) {
-  let hurried = false, arrivals = 0, seenArrivals = 0, lastArrivalS = null, expectS = null;
+  let hurried = false, arrivals = 0, seenArrivals = 0, lastArrivalS = null, expectS = null, news = false;
   const tracks = {};
   for (const name of Object.keys(ASSEMBLY_TIERS)) {
     const n = ASSEMBLY_TIERS[name].length;
@@ -221,11 +221,15 @@ export function createAssemblyRelease({ counts = ASSEMBLY_TIER_COUNTS, order = A
   return {
     arrive,
     due(nowS, out = []) {
-      if (arrivals !== seenArrivals) { seenArrivals = arrivals; lastArrivalS = nowS; } // files are still coming
+      if (arrivals !== seenArrivals || news) { seenArrivals = arrivals; news = false; lastArrivalS = nowS; } // files are still coming
       for (const tr of Object.values(tracks)) stepTrack(tr, nowS, out);
       return out;
     },
     hurry() { hurried = true; },
+    /** 20 November 2026: files are still coming even though none has arrived just now (the bytes of a pack: a pack
+     * brings all its files at once, and on a slow line the next one can be many seconds away), so a tier does not take
+     * the pause for a stalled fetch and stop waiting for its files (seen: the left arm's muscles drawn before the spine). */
+    alive() { news = true; },
     /** The parts of a manifest that has come, counted per tier ({ body: [...], brain: [...] }): from the first call on,
      * a tier no longer waits for files of manifests that have not come (packets the game asks for later). */
     know(counts) {

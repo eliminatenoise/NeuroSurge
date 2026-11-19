@@ -80,7 +80,10 @@ test('reduced motion shows stationary download progress and removes it synchrono
   assert.equal(progress.value, 1);
   assert.equal(assembly.state().kinds, 0);
   assert.equal(assembly.state().error, null);
-  for (let i = 0; i < ASSEMBLY_EXPECTED_FILES; i++) assembly.noteBytes('part.obj', obj);
+  // (20 November 2026: each file counts once, by its name; the same file handed over again is not counted again)
+  assembly.noteBytes('bone.OBJ?v=1', obj);
+  assert.equal(progress.value, 1);
+  for (let i = 0; i < ASSEMBLY_EXPECTED_FILES; i++) assembly.noteBytes(`part${i}.obj`, obj);
   assert.equal(progress.value, ASSEMBLY_EXPECTED_FILES);
   assert.equal(host.children.length, 1, 'all downloads arriving does not remove the layer');
   assembly.finish();
@@ -94,7 +97,8 @@ test('reduced motion shows stationary download progress and removes it synchrono
 
 test('the default loading picture still sends a copy to the worker and cleans up after its fade', () => {
   const { host, doc, win, workers, timers } = assemblyFixture(false);
-  const assembly = startAssembly({ host, doc, win });
+  // (no table of parts here: 20 November 2026, the table's counts would be the first message after init)
+  const assembly = startAssembly({ host, doc, win, parts: new Map() });
   assert.equal(assembly.state().mode, 'worker');
   assert.equal(host.children[0].tag, 'canvas');
   assert.equal(host.children[0].attributes.get('aria-hidden'), 'true');
@@ -339,4 +343,27 @@ test('a packet the game asks for last does not hold the whole body back: its par
   assert.ok(loose('rib') < 2, `the rib does not wait for the head packet (${loose('rib')} s)`);
   assert.ok(Math.abs(loose('skullTop') - 12) < 0.05, 'the late skull top comes in as it arrives');
   assert.ok(strict('rib') >= 5, 'without know(), the tier waits until the fetch stalls');
+});
+
+// 20 November 2026: a pack brings all its files at once; on a slow line the next pack can be many seconds away. Its bytes
+// arriving are news (alive()), so a tier keeps waiting for its own files instead of taking the wait for a stalled fetch
+// (seen before this: the left arm's muscles, from the first pack, drawn before the spine, from the second).
+test('while a pack\'s bytes are coming, a tier keeps waiting for its own files; when nothing comes at all it stops waiting', () => {
+  const counts = { body: [2, 1, 0, 0, 0, 0, 0, 0, 0, 1], brain: ASSEMBLY_TIERS.brain.map(() => 0) };
+  const p = (id, tier, at) => ({ id, track: 'body', tier, frac: 0, at });
+  const run = bytesUntil => {
+    const rel = createAssemblyRelease({ counts });
+    const queue = [p('L1', 0, 0), p('armMuscle', 9, 0.1), p('rib', 1, 0.2), p('spineTop', 0, 9)], rows = [];
+    for (let f = 0; f <= 14 * 30; f++) {
+      const t = f / 30;
+      while (queue.length && queue[0].at <= t) rel.arrive(queue.shift());
+      queue.sort((a, b) => a.at - b.at);
+      if (t < bytesUntil && f % 15 === 0) rel.alive(); // a pack's bytes, twice a second
+      for (const q of rel.due(t, [])) rows.push([t, q.id]);
+    }
+    return id => rows.find(r => r[1] === id)[0];
+  };
+  const coming = run(9), silent = run(0);
+  assert.ok(coming('rib') >= 9 && coming('armMuscle') >= coming('rib'), `the next pack's bytes keep the order (rib at ${coming('rib')} s)`);
+  assert.ok(silent('rib') < 6, `with nothing coming the tier stops waiting after stallS (rib at ${silent('rib')} s)`);
 });

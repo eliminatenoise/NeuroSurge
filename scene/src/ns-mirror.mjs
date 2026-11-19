@@ -479,7 +479,14 @@ export function reflectionMatrix(n) {
 }
 const rotX = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[5] = c; m[6] = s; m[9] = -s; m[10] = c; return m; };
 const rotY = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[0] = c; m[2] = -s; m[8] = s; m[10] = c; return m; };
-const rotZ = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[0] = c; m[1] = s; m[4] = -s; m[5] = c; return m; };
+/** Right-handed turn by `a` (radians) about the unit axis u (Rodrigues), as a 4x4 with no translation. */
+const rotAxis = (u, a) => {
+  const c = Math.cos(a), s = Math.sin(a), t = 1 - c, [x, y, z] = u, m = identity();
+  m[0] = t * x * x + c; m[4] = t * x * y - s * z; m[8] = t * x * z + s * y;
+  m[1] = t * x * y + s * z; m[5] = t * y * y + c; m[9] = t * y * z - s * x;
+  m[2] = t * x * z - s * y; m[6] = t * y * z + s * x; m[10] = t * z * z + c;
+  return m;
+};
 const basis4 = (x, y, z) => { const m = identity(); m[0] = x[0]; m[1] = x[1]; m[2] = x[2]; m[4] = y[0]; m[5] = y[1]; m[6] = y[2]; m[8] = z[0]; m[9] = z[1]; m[10] = z[2]; return m; };
 const transpose3 = m => { const r = identity(); r[0] = m[0]; r[4] = m[1]; r[8] = m[2]; r[1] = m[4]; r[5] = m[5]; r[9] = m[6]; r[2] = m[8]; r[6] = m[9]; r[10] = m[10]; return r; };
 
@@ -566,14 +573,24 @@ export function mirrorTransform(state) {
   // (19 November 2026: the placement's own start tilt, MIRROR_NEAR tiltDeg, is where the tilt arrows start from)
   const tilt0 = Number.isFinite(p.tiltDeg) ? p.tiltDeg : 0;
   const pitch = clamp((Number.isFinite(state.orbit.pitch) ? state.orbit.pitch : 0) + tilt0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
-  // (20 November 2026: the roll, about the view frame's z axis toward the eye; positive clockwise as the player sees it)
+  // (20 November 2026: the roll, positive clockwise as the player sees it. It turns the body about the line from the eye
+  // the plane was set from to the body's centre, after the yaw and the tilt: the view looks down on the mirror body, so a
+  // roll about the level 'toward' axis swung the rolled body up into the air; review of the same day.)
   const roll = Number.isFinite(state.orbit.roll) ? state.orbit.roll : 0;
-  const O = roll ? multiply(rotZ(-roll * DEG), mirrorOrbitLocal(state.orbit.yaw, pitch)) : mirrorOrbitLocal(state.orbit.yaw, pitch);
+  const O = mirrorOrbitLocal(state.orbit.yaw, pitch);
+  let rollM = null;
+  if (roll) {
+    const c0 = p.worldCentre ? p.worldCentre : p.centre;
+    let ax = p.plane && p.plane.eyeM ? sub(p.plane.eyeM, c0) : p.toward;
+    ax = Math.hypot(ax[0], ax[1], ax[2]) > 1e-9 ? normalize(ax) : p.toward;
+    rollM = rotAxis(ax, -roll * DEG);
+  }
   const F = rotY(p.facingYawDeg * DEG);
   // Outside view (MIRROR_OUTSIDE magnifyBy / dropM; state.viewOutside 0 to 1, the camera's own blend): larger and lower.
   const vo = clamp(Number.isFinite(state.viewOutside) ? state.viewOutside : 0, 0, 1);
   const viewScale = 1 + ((Number.isFinite(MIRROR_OUTSIDE.magnifyBy) ? MIRROR_OUTSIDE.magnifyBy : 1) - 1) * vo, viewDropM = p.worldCentre ? 0 : (Number.isFinite(MIRROR_OUTSIDE.dropM) ? MIRROR_OUTSIDE.dropM : 0) * vo; // (a carried body stays where it was put)
-  const lin = multiply(B, multiply(O, multiply(transpose3(B), multiply(F, multiply(uniformScale(p.scale * viewScale), reflectionMatrix(p.reflectAxis))))));
+  const lin0 = multiply(B, multiply(O, multiply(transpose3(B), multiply(F, multiply(uniformScale(p.scale * viewScale), reflectionMatrix(p.reflectAxis))))));
+  const lin = rollM ? multiply(rollM, lin0) : lin0;
   const matrix = multiply(translation(p.centre), multiply(lin, translation(scale(p.bodyCentre, -1))));
   const carryCentre = p.worldCentre ? vec3(p.worldCentre, 'persistent mirror world centre') : [p.centre[0], p.centre[1] - viewDropM, p.centre[2]];
   for (let i = 0; i < 3; i++) matrix[12 + i] += carryCentre[i] - p.centre[i];
