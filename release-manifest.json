@@ -4252,8 +4252,8 @@
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 8910,
-      "sha256": "b7c93675417c3b0927fbcf4d91cd6c4953a49293791220770dbfdbcda1a13059"
+      "bytes": 17319,
+      "sha256": "dac5370fc72b58f8fa423190a0ee5e0025d0606135de109d25def7b4703869ba"
     },
     {
       "path": "tests/browser-limb-controls.mjs",
