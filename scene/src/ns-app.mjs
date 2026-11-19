@@ -5397,6 +5397,24 @@ export function start(params = {}) {
     look: Object.freeze({ on: true, downFromDeg: -8, downToDeg: -75, upFromDeg: 8, upToDeg: 60, handShare: 0.85, toeLiftDeg: -25, halluxLiftDeg: -30, openDeg: 25, spreadDeg: 18 }) });
   let leftGrip = 0; // the left hand's grip (Space), eased like rightGrip
   /**
+   * 19 November 2026 (the owner: "let's get rid of all zoom, pan, dolly effects and just have slight punch-in effects.
+   * And punch out as soon as activation stops"). While a movement is being switched on (the first holdS of its pulse:
+   * the drive of JOINT_LATCH) the lens is `amount` tighter, eased in over inS and out over outS; nothing else moves
+   * the camera's lens or place by itself. Not under reduced motion. The picture only: aiming and rays keep the
+   * unpunched lens (the crosshair is the centre either way).
+   */
+  const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
+  let punchNow = 0;
+  function punchLens(pose, dt) {
+    if (!PUNCH_IN.on || !pose) return pose;
+    const a = simState && simState.activity ? simState.activity : null;
+    const active = Boolean(a && a.pulseRemaining > 0 && Number.isFinite(a.t) && Number.isFinite(a.lastTriggerAt) && a.t - a.lastTriggerAt < PUNCH_IN.holdS && a.pulseLook !== undefined);
+    const want = active && !prefersReducedMotion() ? PUNCH_IN.amount : 0, h = dt > 0 ? Math.min(dt, 0.1) : 0;
+    punchNow += (want - punchNow) * (1 - Math.exp(-h / (want > punchNow ? PUNCH_IN.inS : PUNCH_IN.outS)));
+    if (punchNow < 1e-4) { punchNow = 0; return pose; }
+    return { ...pose, fovScale: (Number.isFinite(pose.fovScale) && pose.fovScale > 0 ? pose.fovScale : 1) * (1 - punchNow) };
+  }
+  /**
    * R17 (owner, 17 November: "you've got to get the small details right, such as when you're moving the cursor around.
    * That's naturally going to activate muscles of the shoulder, etc., muscles of the neck, etc."): every movement the
    * player causes lights what does it, in step with the movement (ns-move-glow: each moving joint feeds a channel with
@@ -9654,10 +9672,12 @@ export function start(params = {}) {
         if (referenceGraph && out.referenceFrame && (!camPose.firstPerson || wholeArmOption)) callScene('setEyePosition', out.referenceFrame.position);
         let cameraDrawChanged = false;
         if (sceneFn('setCameraPose')) {
-          const ck = camPose.firstPerson && !referenceGraph ? 'first' : `${camPose.position.join(',')}|${camPose.yaw}|${camPose.pitch}|${camPose.blend}|${camPose.headInPlace}`;
+          // 19 November 2026 (PUNCH_IN): a slight punch-in of the lens while an activation runs, out as soon as it stops
+          const punched = punchLens(camPose, timing.dt);
+          const ck = camPose.firstPerson && !referenceGraph ? 'first' : `${camPose.position.join(',')}|${camPose.yaw}|${camPose.pitch}|${camPose.blend}|${camPose.headInPlace}|${punchNow.toFixed(4)}`;
           if (ck !== camSceneKey) {
             camSceneKey = ck; cameraDrawChanged = true;
-            callScene('setCameraPose', camPose.firstPerson && !referenceGraph ? null : wholeArmOption ? { ...camPose, armParentPosition: out.referenceFrame.position } : camPose);
+            callScene('setCameraPose', camPose.firstPerson && !referenceGraph ? null : wholeArmOption ? { ...punched, armParentPosition: out.referenceFrame.position } : punched);
           }
         }
         // The body (and the face layer) on the same eye and trunk yaw as the arm attachment.

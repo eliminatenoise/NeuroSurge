@@ -1904,6 +1904,14 @@ Frame table after these, four runs: standing still 60; looking around 45, 49, 59
 
 Not done from the same notes: organs inside the opened chest and a clean, smooth end for the neck's muscles; the light-blue glass outline for everything that is hidden behind something; W and S moving a limb's end along the straight line between its proximal and distal joints with A and D as pure abduction and adduction; extreme neck movements from the look showing on the mirror body.
 
+## 142. A slight punch-in while a movement is switched on (19 November)
+
+The user: “Maybe let's get rid of all zoom, pan, dolly effects and just have slight punch-in effects. And punch out as soon as activation stops.”
+
+`PUNCH_IN` in `ns-app.mjs`: for the first 0.3 s of a movement being switched on (the time its joints are driven, `JOINT_LATCH.driveS`) the lens is 4 % tighter, eased in over about 0.05 s and out over about 0.1 s. Nothing else moves the camera's lens or place by itself: the look-down dolly is off (section 141). Not under reduced motion. Aiming keeps the unpunched lens; the crosshair is the centre either way. Seen in a pair of pictures taken at rest and 0.16 s after a click: the brain's outline stands about 8 px further out at 1000 px width, and is back a second later.
+
+The view's turn to a newly chosen limb and its hold on that limb's hand or foot (sections 134 and 139) are left as they are: the user asked for those by name the same day. If “all pan effects” was meant to include them, they are one switch each (`LIMB_KEYS.view`).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
