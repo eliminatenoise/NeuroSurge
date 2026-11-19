@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-36",
+  "version": "experimental-2026-11-19-body-update-37",
   "experimental": true,
-  "source": "Body update 36. Quick drags keep their full movement when the mouse button is released between frames.",
+  "source": "Body update 37. Focused page controls get their native keys and Tab stays inside the pause instructions.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -52,28 +52,28 @@
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 58807,
-      "sha256": "d6dcdfae063f8881f859ebc57e7a60fd1fc5b651faf3415076d04ea86c4dd7b5"
+      "bytes": 59032,
+      "sha256": "2495819f24ae39404bcc904ff38a883119b0572607e395456e323834128efa07"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 33558,
-      "sha256": "a9f53fe0b94c6052cffe6b7307e681c613c27faa9d8645930e685bbdf980cdef"
+      "bytes": 33742,
+      "sha256": "8187b864113521451ecedbc4feccbcbdd918d25ec7318c4125df76801cd177cf"
     },
     {
       "path": "README.md",
-      "bytes": 17454,
-      "sha256": "fd727155ba98336c8a2ce0761a9d85588b41afdaa13c30843779d987780b97a7"
+      "bytes": 17728,
+      "sha256": "2f05c9e8d45ff72cddf4857e0d570faa4c698e54b0c10562e2d1c332c46eddfb"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "90324978c4150e360df9ade29d61d0ffe8f0f0686181c90f27a2d9d308ea5119"
+      "sha256": "d7bf9779c68e21ebc50d3416ff0066e5f318c32c69925dcaad6e45b8393d17d5"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "7c22dd9544ddb45ba9fb036f1579e418af8390a22530453ba9d4f5d62e0d08c5"
+      "sha256": "730658247e2bd42df5278ef337fa05c46d7bf099700eec62e314da86845c1e0d"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3937,8 +3937,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 755927,
-      "sha256": "56bbf9cf6fe9cf7631e7fa658fa971f2e14fc0a80007fc1c3c5bbb1f4e9c27ec"
+      "bytes": 755808,
+      "sha256": "1782e44edfaef6e9457ba7d0539efde6be199441ed72dc8b45fa4798fbb378a6"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4037,8 +4037,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 98081,
-      "sha256": "2ccb0df8942e524e1d3e85d1fabde628801c796a18b99b1b7ccbb3d3e876d258"
+      "bytes": 96810,
+      "sha256": "75a190571fd1c05ab56cb18841cf586d025ea980316ef91ebf03fcab1ea3bb32"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4244,6 +4244,11 @@
       "path": "tests/browser-keyboard-aim.mjs",
       "bytes": 8910,
       "sha256": "b7c93675417c3b0927fbcf4d91cd6c4953a49293791220770dbfdbcda1a13059"
+    },
+    {
+      "path": "tests/browser-player-focus.mjs",
+      "bytes": 7518,
+      "sha256": "5be00caabfb0fdce1875db3d38269102eb708261d91c8c9a11c8a7ba3a1aba48"
     },
     {
       "path": "tests/browser-startup.mjs",

@@ -988,16 +988,9 @@ export function stepArrowInput(prev, frame = {}, hold = ARROW_HOLD) {
   return { state: s, events, orbit, consumed };
 }
 
-/** True for an element that takes typed text (input other than buttons/checkboxes/ranges, textarea, select,
- * contenteditable): keys typed there are not game keys. */
-function isTextEntry(el) {
-  if (!el || typeof el !== 'object') return false;
-  if (el.isContentEditable === true) return true;
-  const tag = typeof el.tagName === 'string' ? el.tagName.toUpperCase() : '';
-  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
-  if (tag !== 'INPUT') return false;
-  const type = typeof el.type === 'string' ? el.type.toLowerCase() : 'text';
-  return !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'color', 'file', 'image'].includes(type);
+/** The pause dialog and live HUD both contain native controls with their own keyboard behavior. */
+function isPageControl(el) {
+  return Boolean(el?.isContentEditable || el?.closest?.('button, input, select, textarea, summary, a[href]'));
 }
 
 /** The UI_COMMANDS entry named by the nearest data-ns-ui attribute from `el` up to (and including) `root`, else null. */
@@ -1013,8 +1006,8 @@ function uiCommandOf(el, root) {
 /**
  * Browser binding (used only by ns-app). `target` is the canvas; its ownerDocument and that
  * document's defaultView receive the keyboard, focus and pointer-lock listeners.
- *   - keydown/keyup by event.code; preventDefault for the five control keys; keyboard auto-repeat (event.repeat) is
- *     ignored, so a key released by a safety rule stays released until it is pressed again.
+ *   - keydown/keyup by event.code. Native controls and text fields keep their keyboard defaults. Game key releases
+ *     still clear held input after a focus change. Keyboard auto-repeat (event.repeat) is ignored for held keys.
  *   - Chord safety: a keydown with Ctrl or Meta held, or a press/release of Ctrl/Meta itself, RELEASES EVERY KEY
  *     (queuing one space-up if Space was held) and is left to the browser. keyup is always applied.
  *   - window blur, document visibilitychange, a genuine pointer-lock loss and any notification that does not end
@@ -1042,10 +1035,9 @@ function uiCommandOf(el, root) {
  *     OR your own button handlers for a given button, never both (one click would then act twice).
  *   - R4-arm: the information key (DETAIL_CODE, R) without Ctrl/Meta/Alt and not auto-repeat calls
  *     controls.toggleDetail (when present) and, when that reducer accepted it (returned a new state: a gating reducer
- *     can refuse it outside play), options.onDetail({ timeMs }). It is prevented (no page find-as-you-type) and ignored
- *     while a text field has focus. It releases nothing and is not an activation click.
+ *     can refuse it outside play), options.onDetail({ timeMs }). Game focus owns and prevents the shortcut.
  *   - R5-input: the view key (VIEW_CODE, E) works like the More detail key: without Ctrl/Meta/Alt, not auto-repeat, not
- *     in a text field and not on a start / Esc page control, it calls controls.toggleView and, when that reducer
+ *     on a native control or text field, it calls controls.toggleView and, when that reducer
  *     accepted it, options.onView({ timeMs }). Prevented; releases nothing; not a click.
  *   - R5-input: every press on the canvas also records controls.buttonDown (via 'crosshair' while captured, 'pointer'
  *     otherwise, with the canvas-local pointer), every full release controls.buttonUp, and every safety release lets the
@@ -1222,13 +1214,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     return true;
   };
 
-  // R4-access (D9): a key pressed on a control of the start / Esc page (button, checkbox, slider, menu, link) belongs to
-  // that control: the game neither handles nor prevents it, so Space and Enter press the focused button and Space ticks
-  // the checkbox. Play is paused while that page is open; the orbit arrows (outside the page) are not affected.
-  const onPageControl = e => {
-    const t = e && e.target;
-    return !!(t && typeof t.closest === 'function' && t.closest('.ns-shell') && t.closest('button, input, select, textarea, summary, a[href]'));
-  };
   let lastAreaKeyMs = NaN; // the time of the last accepted area key (AREA_KEY_REPEAT_MS)
   on(view, 'keydown', e => {
     const code = e.code;
@@ -1245,9 +1230,10 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (typeof controls.escape === 'function') apply(s => controls.escape(s, at));
       return;
     }
+    if (isPageControl(e.target)) return;
     if (code === DETAIL_CODE) {
-      // The information key (R). Not inside a text field (a typed "r" stays a letter there).
-      if (e.altKey || isTextEntry(e.target)) return;
+      // The information key (R). Leave Alt chords to the browser.
+      if (e.altKey) return;
       e.preventDefault();
       if (e.repeat === true || typeof controls.toggleDetail !== 'function') return;
       const at = eventTime(e);
@@ -1258,7 +1244,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     }
     if (code === VIEW_CODE) {
       // R5-input (R22): first person <-> third person. Not in a text field or on a page control (the page keeps it).
-      if (e.altKey || isTextEntry(e.target) || onPageControl(e)) return;
+      if (e.altKey) return;
       e.preventDefault();
       if (e.repeat === true || typeof controls.toggleView !== 'function') return;
       const at = eventTime(e);
@@ -1271,7 +1257,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (moveN > 0) {
       // R558 (Messages 55 and 56): a movement key (1..9) asks for the n-th movement the information card lists. Not in
       // a text field or on a page control, and never with Alt (browser menus).
-      if (e.altKey || isTextEntry(e.target) || onPageControl(e)) return;
+      if (e.altKey) return;
       e.preventDefault();
       if (e.repeat === true || typeof controls.moveKey !== 'function') return;
       const at = eventTime(e);
@@ -1286,7 +1272,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       // a text field or on a page control, and never with Alt (browser history). The key is taken from the page only
       // when the request was accepted (while playing: the app's own gate), so on the start and Esc pages the arrows
       // still scroll. A held key repeats, at most one step per AREA_KEY_REPEAT_MS.
-      if (e.altKey || isTextEntry(e.target) || onPageControl(e) || typeof controls.areaKey !== 'function') return;
+      if (e.altKey || typeof controls.areaKey !== 'function') return;
       const at = eventTime(e);
       if (e.repeat === true && Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
       const before = getState();
@@ -1304,7 +1290,6 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       return;
     }
     if (!isControlCode(code)) return;
-    if (onPageControl(e)) return;
     e.preventDefault();
     if (e.repeat === true) return;
     const at = eventTime(e);
@@ -1319,8 +1304,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const upN = moveKeyNumber(code);
     if (upN > 0) { if (typeof controls.moveKeyUp === 'function') apply(s => controls.moveKeyUp(s, upN, eventTime(e))); return; }
     if (!isControlCode(code)) return;
-    if (onPageControl(e)) return;
-    e.preventDefault();
+    if (!isPageControl(e.target)) e.preventDefault();
     const at = eventTime(e);
     apply(s => controls.keyUp(s, code, at));
   });

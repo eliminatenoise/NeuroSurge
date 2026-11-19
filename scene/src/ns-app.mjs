@@ -4530,10 +4530,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     call(onSettings, current, false);
   });
   on(sens, 'change', () => call(onSettings, current, true));
-  // R4-access (D9): while the page is open, Tab and Shift+Tab stay inside the card (aria-modal dialog): they wrap from
-  // the last control to the first and back, so focus never lands on the game view or the panel links behind it.
-  on(overlay, 'keydown', e => {
-    if (!e || e.key !== 'Tab' || overlay.hidden) return;
+  // Clicking the heading or card text can leave focus on the body, outside the overlay's event path.
+  on(doc, 'keydown', e => {
+    if (e.key !== 'Tab' || e.defaultPrevented || overlay.hidden) return;
     const list = [...card.querySelectorAll('button, input, select, textarea, summary, a[href], [tabindex]:not([tabindex="-1"])')]
       .filter(x => !x.hidden && !x.disabled && typeof x.getClientRects === 'function' && x.getClientRects().length > 0);
     if (!list.length) return;

@@ -4,6 +4,8 @@
 
 Look at a motor area to select it. Click or choose a numbered movement to see the body part move. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 37 helps you move between the game and its instructions with the keyboard. Press **R** for more information, then Tab to **Sources and rights** and press **Space** to open it. On the **Esc** page, Tab stays in the instructions even after you click the heading.
+
 Body update 36 keeps the whole drag. Give the mirror body a quick flick. It turns as far as you moved the pointer, even if you let go before the next frame. Hold **Space** and drag to turn it while **W/A/S/D** carry it.
 
 Body update 35 makes the motor strip easier to read. Try one movement and look back at its area. The area and the muscles you switched on stay a shade darker at rest, so you can see what’s left to try.
