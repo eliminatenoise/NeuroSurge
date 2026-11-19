@@ -100,6 +100,16 @@ const EYE_FOV_Y_DEG = 54;
 // part of the picture (your neck ends in a plain cap at the collar: ns-scene-three EYE_COLLAR). The price: your own
 // limbs are drawn about a sixth smaller than on 18 November, and the mirror body is about 235 px tall at 1600x900
 // (it was 290 between your knees).
+// 19 November 2026, later (the owner: "invert the brain altogether so that the motor strip changed direction ... include
+// eyeballs with nerves connected to the brain"; "turning it 180 degrees, such that the U becomes an inverted U, almost
+// an N. Lowercase n"; "let's have the mirror body so close that the toes are almost touching and they're level"). The
+// look and the brain's placement are unchanged (25.5 and 13 degrees below level). What changed is in the modules:
+// the brain is drawn turned half a turn (ns-brain BRAIN_VIEW.spinDeg 180: front down, the brain's right half on the
+// left, the strip an n with the leg areas at its top), the n's top is pinned under the top edge and its lower ends
+// stay above your toes (ns-app BRAIN_START, BRAIN_FLOOR), and the mirror body is the literal reflection, toe to toe
+// with you, sitting inside the n's arch (ns-mirror MIRROR_NEAR). The brain's front with its two eyeballs
+// (ns-brain-eyes) is then behind your own body in this picture; ns-app BRAIN_START.keepEyes says why and what the
+// other choice costs.
 const START_LOOK_PITCH_DEG = -25.5, BRAIN_START_PITCH_DEG = -13;
 const viewGraph = Object.freeze({ reference: 'eye', initialLook: Object.freeze({ yaw: 0, pitch: START_LOOK_PITCH_DEG * DEG }), fovYDeg: EYE_FOV_Y_DEG, initialBrainPlacement: Object.freeze({ yaw: 0, pitch: BRAIN_START_PITCH_DEG * DEG }) });
 // Fixed explicit constructor placement above; no raw coordinate or query overrides.

@@ -201,8 +201,9 @@ export function createQuietUi({ doc, root }) {
     }
     if (model) {
       // Below and to the right of the point; flipped to the other side near the right or bottom edge.
-      // 19 November 2026 (side 'left'): the tip of an area on the brain's left half opens to the LEFT of the point,
-      // away from the mirror body, which stands in the hollow between the strip's two halves (it used to cover it).
+      // 19 November 2026 (side 'left'): the tip of an area on the LEFT half of the picture opens to the LEFT of the point,
+      // away from the mirror body, which stands between the strip's two halves (it used to cover it). (Since the brain
+      // was turned half a turn the left half of the picture is the brain's right half; the caller says which.)
       const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
       const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}`;
       if (pk !== placeKey) {

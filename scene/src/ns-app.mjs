@@ -91,6 +91,7 @@ import { createQuietUi, quietTipModel, quietPromptText, quietPromptCount, tipTea
 // 18 November (MAP): the links between an area and its body part (looked at; named from a muscle).
 import { hoverLink, reverseLink } from './ns-links.mjs';
 import * as NM from './ns-mirror.mjs';
+import { BRAIN_EYES, eyeKeepPoints } from './ns-brain-eyes.mjs'; // 19 November 2026: the eyeballs at the brain's front
 // Round 5 (R5-integrate-core, stage 1): the third-person camera (R5-camera, D18), the 3D compass-arrow input (R5-input,
 // D16), the face-muscle packet stream (R5-load / R5-face, D20) and the coupled palm turn's body follow (R5-pronation, R27).
 import * as NC from './ns-camera.mjs';
@@ -1086,6 +1087,14 @@ export function gazeAnglesToward(point) {
  * midline, so the walk is: the LEFT hemisphere from its lowest area up to its toes, then the RIGHT hemisphere from its
  * toes down to its lowest area. At the starting view that reads from the screen's left to its right. Pure: region ids
  * in walk order; entries without an id, an order or a hemisphere are left out. */
+/* 19 November 2026 (the brain turned half a turn, ns-brain BRAIN_VIEW.spinDeg 180: its right half is on the LEFT of the
+ * picture): this order is unchanged. Which way the walk runs ON THE SCREEN is decided at each step from where the two
+ * hemispheres are drawn (areaStep `side`), so the left arrow key still steps to the area on the left of the screen:
+ * with the brain turned, from the left side of your face at the lower left end of the strip's n, up to the toes at the
+ * top middle, and down the other side. (Checked in the browser; reversing this list as well turned the keys round.) */
+/** Whether the brain is drawn with its front down (the half turn): then the left half of the picture is the brain's
+ * right half. For the few display rules that speak of a side of the picture. */
+export const BRAIN_FRONT_DOWN = Boolean(NsBrain.BRAIN_VIEW && Math.abs(NsBrain.BRAIN_VIEW.spinDeg) > 90);
 export function areaChain(regions) {
   const list = Array.isArray(regions) ? regions.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.order) && (r.hemisphere === 'left' || r.hemisphere === 'right')) : [];
   const side = h => list.filter(r => r.hemisphere === h).sort((a, b) => a.order - b.order).map(r => r.id);
@@ -1941,7 +1950,31 @@ export const BRAIN_RAISE_NDC = 0.2;
 /* 19 November 2026, later (the owner: "we have to make the [motor] strip far more obvious, probably a good deal larger and
  * far brighter and more colorful"): 0.46 -> 0.58: the strip is about 930 px across at 1600x900. Its outermost (face)
  * areas now start above the top edge; a look upward brings them in. */
+/* 19 November 2026, later (the brain turned half a turn; the mirror body toe to toe with you): 0.58 is now the LARGEST
+ * share the strip may take. The strip is an n whose top (the leg areas) is pinned just under the top edge of the
+ * picture (BRAIN_START.ceilNdc) and whose lower ends (the face areas) must stay above your own toes and left hand
+ * (BRAIN_FLOOR.startNdc), so on a 16:9 window the height decides: the strip comes out about 780 px across at 1600x900
+ * (0.49 of the width; it was about 860 px of which the outer face areas were above the top edge) and about 850 px at
+ * 1600x1000 (0.53). ALL of it is now inside the picture, face areas included. */
 export const BRAIN_START_MOTOR_FRAC = 0.58;
+/** 19 November 2026 (the brain turned half a turn): the start framing of the n-shaped strip, in the picture of the
+ * brain's own placement (normalised device units, +1 = that picture's top edge; the brain is placed 13 degrees below
+ * level while the look starts 25.5 degrees down and the camera stands back from the eye, so these are not screen
+ * heights: they were set on pictures).
+ *  topAimNdc  where the middle of the strip's box is aimed: above anything the box can reach, so the box ends against
+ *             its ceiling and the leg areas, at the top of the n, are as high as they may go;
+ *  ceilNdc    that ceiling: with 0.6 the top of the strip is about 15 px under the top edge of the start picture at
+ *             1600x900 and at 1600x1000;
+ *  keepEyes   false. true asks the framing to keep the two eyeballs at the brain's front (ns-brain-eyes) in the start
+ *             picture as well (ns-brain frameBrain motorKeepPoints): the whole brain from the top of the strip to the
+ *             eyeballs is 1.2 times as tall as the strip is wide, so the brain then has to be drawn far smaller (the
+ *             strip about 480 px across at 1600x900 with the look starting 12 degrees down and BRAIN_FLOOR.startNdc
+ *             -0.36; tried and seen, see the package notes), and with the mirror body toe to toe with you its legs
+ *             stand in front of the eyeballs. With false the brain's front, and so the eyeballs, are BEHIND YOUR OWN
+ *             BODY in the start picture: they are seen from outside (E) and whenever the brain is lifted or carried. */
+export const BRAIN_START = Object.freeze({ topAimNdc: 0.85, ceilNdc: 0.6, keepEyes: false });
+/** The points the start framing would keep in the picture with the strip (BRAIN_START.keepEyes): the two eyeballs. */
+const BRAIN_START_KEEP = eyeKeepPoints();
 /**
  * R558 (user Messages 55 / 56, 12 Nov: "a lot easier to use and play and more intuitive", "a learning tool for people
  * learning motor neuroanatomy"): the brain sits ABOVE the mirror body instead of behind its head. At the start the
@@ -1974,7 +2007,13 @@ export const BRAIN_START_MOTOR_FRAC = 0.58;
  * placement: 13 degrees below level), and startNdc -0.11 -> -0.18 is where the strip's lowest part lies in the
  * picture of THAT placement; in the start picture (the look 24 degrees down) it comes out a little above the middle,
  * just over your fingertips, with the mirror body's head directly under it. */
-export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0, startNdc: -0.18 });
+/* 19 November 2026, later (the brain turned half a turn): the strip is an n, so its LOWEST part is now its two outer
+ * ends (the face areas), not its middle, and the brain's front hangs below them. startNdc -0.18 -> -0.375 is the
+ * lowest those ends may reach in the picture of the brain's placement: in the start picture they end about 10 px above
+ * your own toes and the fingertips of your left hand (about y 440 of 900). The strip's top is pinned under the top
+ * edge (BRAIN_START), and where the strip at BRAIN_START_MOTOR_FRAC would be taller than the room between the two,
+ * the whole brain is drawn smaller (ns-brain frameBrain: limiting 'height'). */
+export const BRAIN_FLOOR = Object.freeze({ mirrorFrameTopFrac: 0.4447, clearPx: 8, minAspect: 0, startNdc: -0.375 });
 /** The lowest height of the view the motor strip may reach at the start (normalised device units, +1 = the top edge),
  * or null when there is no floor (no size, or a window narrower than rule.minAspect). Pure. */
 export function brainFloorNdc(size, { rule = BRAIN_FLOOR } = {}) {
@@ -2233,15 +2272,26 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
         // R558 (Messages 55 / 56): once the pixel size is known the band instead rests on brainFloorNdc, just above the mirror
         // body's top arrow tip, so the leg and foot areas are in the open and still the nearest areas to the middle of
         // the view. The floor is a pure function of the pixel size, which the re-frame test above already covers.
+        // 19 November 2026 (the brain turned half a turn; the owner: "the U becomes an inverted U, almost an N"): the strip
+        // is now an n with the leg areas at its top, and the brain's front with the two eyeballs hangs below it. The
+        // strip's top goes up to its ceiling just under the top edge (BRAIN_START), and its lower ends stay above the
+        // floor, which is now the height of your own toes in the start picture; where the strip at its share of the width
+        // would be too tall for that, the whole brain is drawn smaller. BRAIN_START.keepEyes would keep the eyeballs
+        // above that floor too (see there for why it is off).
         const floor = px ? brainFloorNdc(px) : null;
-        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, floor === null ? BRAIN_RAISE_NDC : floor], motorFrac: BRAIN_START_MOTOR_FRAC };
+        const turned = NsBrain.BRAIN_VIEW && Math.abs(NsBrain.BRAIN_VIEW.spinDeg) > 90;
+        const fo = { aspect, fovYDeg: fov, centreNdc: centre, motorCentreNdc: [0, turned ? BRAIN_START.topAimNdc : floor === null ? BRAIN_RAISE_NDC : floor], motorFrac: BRAIN_START_MOTOR_FRAC };
         if (floor !== null) fo.motorFloorNdc = floor;
+        if (turned && BRAIN_EYES.on && BRAIN_START.keepEyes) fo.motorKeepPoints = BRAIN_START_KEEP;
+
         if (brainBounds) fo.brainBounds = brainBounds;
         if (px) {
           fo.viewportPx = px;
           const usable = brainUsableNdc(px);
           if (usable) fo.usableNdc = usable;
         }
+        // (never above the usable top: an upright window keeps its status card's room there)
+        if (turned && px) fo.motorCeilNdc = fo.usableNdc ? Math.min(BRAIN_START.ceilNdc, fo.usableNdc.y1) : BRAIN_START.ceilNdc;
         brainFrame = NsBrain.frameBrain(segmentation, fo);
       }
       reframed = true;
@@ -6776,6 +6826,7 @@ export function start(params = {}) {
       let muscleTapNote = null; // { text, untilT } the plain line about the last tapped muscle (simulated seconds)
       const rotationSeen = { state: null, until: -Infinity }; // R558: the forearm line shows only around a change
       let crossPick = null; // R558 (hunt 2): the muscle under the crosshair (what is seen there: controlTargets' front)
+      let crossBrainPart = null; // 19 November 2026: 'eyeball' | 'nerve' when the crosshair is on one at the brain's front
       // 18 November (MAP): that muscle's own record and the area that moves it (the reverse link: "what controls this?")
       let crossSeen = null, crossRoute = null, crossRouteKey = '';
       // ---- R558 (user Messages 33 and 34): what each control acts on (controlTargets) ---------------------------------
@@ -9354,6 +9405,9 @@ export function start(params = {}) {
         // holdable stays false: the controls line below names what Space holds (no second "hold Space" on the same card).
         const crossLimb = seen && seen.source === 'own' ? limbOfRec(seen) : null; // the own limb under the crosshair
         crossPick = !live || onArea || arrowTip || !seen ? null : { source: seen.source, kind: seen.kind, name: seen.name, bodyPart: seen.bodyPart, holdable: false };
+        // 19 November 2026: an eyeball or a nerve at the brain's front (scene controlLayersAt `part`) is named in the tip
+        // and nothing more: it is the brain's bare surface to every control (Space there takes the brain).
+        crossBrainPart = live && !onArea && !arrowTip && ctlFrame && !ctlFrame.arrow && seenOrGhost && seenOrGhost.item === 'brain' && typeof seenOrGhost.part === 'string' ? seenOrGhost.part : null;
         // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
         { const rk = crossPick && seen.kind === 'muscle' ? `${seen.source}|${seen.id}|${seen.name}` : '';
           if (rk !== crossRouteKey) { crossRouteKey = rk; crossSeen = rk ? seen : null; try { crossRoute = rk ? muscleRoute(seen) : null; } catch { crossRoute = null; } } }
@@ -9529,7 +9583,8 @@ export function start(params = {}) {
               tipModel = quietTipModel({ area, actionId: tipAction, moves: NUMBER_LISTS ? areaMoves : [], color: areaCss || '', hint, teach: NUMBER_LISTS && !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });
               if (quietRest.settled || area.id === stepInputs?.keyboardAimId) quietLast = { regionId: area.id, moves: areaMoves };
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
-            } else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
+            } else if (!crossPick && crossBrainPart && NT.BRAIN_PARTS && NT.BRAIN_PARTS[crossBrainPart]) tipModel = quietTipModel({ pick: { name: NT.BRAIN_PARTS[crossBrainPart], kind: 'part' } });
+            else tipModel = quietTipModel({ pick: crossPick, arrow: '', // 18 November (MAP): a muscle's tip wears the colour of the area that moves it
               color: crossRoute && mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(crossRoute.regionId) || '' : '' });
             // 18 November 2026 (SEE, brief: "Shift takes the leg - make that visible"): while Shift is held the tip names the
             // body part Shift reaches (the leg in front of the area looked at, the limb hidden behind the part seen).
@@ -9546,7 +9601,7 @@ export function start(params = {}) {
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', tipModel?.kind === 'area' && Boolean(tipModel.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           const tipArea = tipModel && tipModel.kind === 'area' && onArea && typeof out.gaze.regionId === 'string' ? regionById(bodyMap, out.gaze.regionId) : null;
-          quietUi.update({ show: quietOn, tip: tipModel, side: tipArea && tipArea.hemisphere === 'left' ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+          quietUi.update({ show: quietOn, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,
             width: size.width, height: size.height });

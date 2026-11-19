@@ -204,6 +204,8 @@ import { brainBeatClock } from './ns-assembly-core.mjs';
 import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, FLESH_DEPTH_LIFT_GLSL, FLESH_DEPTH_LIFT_PARS_GLSL, BODY_DEPTH_PREFERENCE, depthPreferenceAttr, depthPreferenceFootprint, fibreFrame } from './ns-flesh.mjs';
 // 18 November (the room): a dark operating theatre out of focus in place of the black void.
 import { ROOM, createRoom } from './ns-room.mjs';
+// 19 November 2026: the two eyeballs and their nerves at the brain's front (an illustration of the brain's facing).
+import { BRAIN_EYES, buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
 import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a movement reads the same on the card as in the tip
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
@@ -6850,6 +6852,33 @@ export function createScene({
    * U2b-scene REGION MODE: with `segmentation` (ns-brain segmentMotorStrips of both hemispheres) every body-map region
    * is drawn (buildRegions), glass entries whose id is a segmented strip mesh are replaced by the segmentation's
    * unassigned strip triangles (drawn as glass) and the legacy focus strip is not drawn (`focus` is then optional). */
+  /** 19 November 2026 (the owner: "to make clear the direction of the body, let's also include eyeballs with nerves
+   * connected to the brain"; "the eyeballs will be at the bottom"): the two eyeballs and the nerves of ns-brain-eyes,
+   * as two lit meshes in the brain's own group (atlas mm, like every brain mesh), so the brain's placement, its turns
+   * and a carry move them with it and nothing is computed for them each frame. They take the brain's rigid normals
+   * under the far-eye squash (rigidPatch: otherwise the squash would flatten their shading to two discs) and the living
+   * brain's small movement. They are not motor areas: the picker reports them as the brain's bare surface with the
+   * part's name (controlLayersAt `part`), so Space on an eyeball takes the brain and the tip names it. */
+  const brainEyes = { on: false, meshes: [], triangles: 0 };
+  function buildBrainEyes(still) {
+    if (!BRAIN_EYES.on) return;
+    const make = (data, roughness, part, name) => {
+      const geo = indexedGeometry(data.positions, data.indices);
+      geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+      const mat = keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness: 0 }));
+      rigidPatch(mat);
+      composePatch(mat, 'ns-live-r18', shader => { liveCompile(shader); });
+      const mesh = still(new THREE.Mesh(geo, mat));
+      mesh.name = name; mesh.userData.nsBrainPart = part;
+      brainGroup.add(mesh);
+      brainEyes.meshes.push(mesh); brainEyes.triangles += data.triangles;
+    };
+    make(buildNerves(), BRAIN_EYES.nerveRoughness, 'nerve', 'optic nerves, chiasm and tracts (illustration)');
+    make(buildEyeballs(), BRAIN_EYES.eyeRoughness, 'eyeball', 'eyeballs (illustration)');
+    brainEyes.on = true;
+  }
+
   function setBrain({ glass: glassListIn = [], focus, markers: markerList = [], segmentation: seg = null } = {}) {
     if (brainSet) fail('scene_state', 'setBrain may be called once');
     brainSet = true;
@@ -6960,7 +6989,8 @@ export function createScene({
     // R558 BB2 (target 2): the glass's own sulci from the atlas, computed in short background slices (glassFold).
     startGlassFold(glassListIn);
     buildMarkers(markerList, still);
-    rayTargets = regionMode ? [...glass, ...regionMeshes] : [...glass, strip.mesh]; // HUD-only raycast targets, built once
+    buildBrainEyes(still);
+    rayTargets = regionMode ? [...glass, ...regionMeshes, ...brainEyes.meshes] : [...glass, strip.mesh, ...brainEyes.meshes]; // HUD-only raycast targets, built once
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
     brainSamples = sampleBrain(glassList, regionMode ? seg.strips : (focus ? [focus] : []));
     glassRead.sulcMs = Math.round(nowMs() - t0);
@@ -12436,7 +12466,10 @@ export function createScene({
       seen.add(h.object);
       const u = h.object.userData || {}, regionId = typeof u.regionId === 'string' ? u.regionId : null;
       const area = regionId !== null || Boolean(!regionMode && strip && h.object === strip.mesh);
-      layers.push({ item: 'brain', kind: area ? 'area' : 'glass', distance: h.distance, point: h.point.toArray(), regionId });
+      // (19 November 2026: an eyeball or a nerve at the brain's front is the brain's bare surface with a name, `part`)
+      const brainPart = typeof u.nsBrainPart === 'string' ? u.nsBrainPart : null;
+      layers.push(brainPart ? { item: 'brain', kind: 'glass', distance: h.distance, point: h.point.toArray(), regionId: null, part: brainPart }
+        : { item: 'brain', kind: area ? 'area' : 'glass', distance: h.distance, point: h.point.toArray(), regionId });
     }
     if (brainOn && regionMode && brainTransformSet && !layers.some(l => l.item === 'brain') && brainCoversRect({ x0: x - 0.5, y0: y - 0.5, x1: x + 0.5, y1: y + 0.5 })) {
       // Inside the brain's drawn outline where the ray meets none of its surfaces (a concavity): the brain still catches
@@ -14418,7 +14451,13 @@ export function essentialNoticeRect({ width, height } = {}, text = HUD_LIMITS_SH
 /** R4-polish: an orientation label moves to a better clear place after this many placeOrientation calls in a row. */
 export const ORIENT_UPGRADE_FRAMES = 12;
 export const ORIENTATION_EDGE = Object.freeze({ topGapPx: 6, bottomPx: 46, nudgePx: 24, nudgeSteps: 20, axisNudgeSteps: 4 });
-export const ORIENTATION_ALIGN = Object.freeze({
+/* 19 November 2026 (ns-brain BRAIN_VIEW.spinDeg 180: the brain's right half is on the left of the picture and its front
+ * at the bottom): each label still extends AWAY from the brain, so with the turn the right-half label extends to the
+ * left, the left-half label to the right, the front label downward and the back label upward. */
+const ORIENT_FRONT_DOWN = Boolean(NsBrain.BRAIN_VIEW && Math.abs(NsBrain.BRAIN_VIEW.spinDeg) > 90);
+export const ORIENTATION_ALIGN = Object.freeze(ORIENT_FRONT_DOWN ? {
+  right: Object.freeze([1, 0.5]), left: Object.freeze([0, 0.5]), anterior: Object.freeze([0.5, 0]), posterior: Object.freeze([0.5, 1])
+} : {
   right: Object.freeze([0, 0.5]), left: Object.freeze([1, 0.5]), anterior: Object.freeze([0.5, 1]), posterior: Object.freeze([0.5, 0])
 });
 

@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 43 turns the brain round to face you. The motor strip is now an arch with the areas for your left side on the left and your right side on the right. Two eyeballs hang from the front of the brain: press **E** to see them. The mirror body stands toe to toe with you.
+
 Body update 42 adds small details. Hold **Space** and the toes of your left foot curl with your left hand. Look down and all your toes and your right hand close; look up and they open.
 
 Body update 41 turns your view to the limb you choose with **2**, **3** or **4**, so its foot or hand is in the middle of the picture. Move the pointer and the view is yours again.

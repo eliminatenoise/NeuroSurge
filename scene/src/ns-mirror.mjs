@@ -78,7 +78,11 @@ export const MIRROR_VIEW = Object.freeze({ arrowGapFrac: 0.06, arrowSizeFrac: 0.
  * reflection's own size) and dropM lower, between the strip and your feet, eased with the camera's own blend
  * (state.viewOutside 0 to 1). A view change only, like the slide: not saved, not part of the orbit. A mirror body that
  * has been carried keeps the place it was put (no drop), and only its size changes with the view. */
-export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, maxM: 4, magnifyBy: 1.8, dropM: 0.6 });
+/* 19 November 2026, later (the owner: "let's have the mirror body so close that the toes are almost touching and they're
+ * level, of course."): in the eye view the mirror body is the literal reflection again, at your own size (MIRROR_NEAR),
+ * so from outside it is no longer drawn larger or lower: magnifyBy 1.8 -> 1 and dropM 0.6 -> 0 (1.8 times your size
+ * would stand across your own legs). The slide away with the camera (awayM, the owner's note of 12 November) stays. */
+export const MIRROR_OUTSIDE = Object.freeze({ awayM: THIRD_PERSON.distanceM, maxM: 4, magnifyBy: 1, dropM: 0 });
 
 /**
  * R558: the literal reflection (display choices; the numbers measured at run time are reported by the scene).
@@ -116,7 +120,16 @@ export const MIRROR_REFLECTION = Object.freeze({ clearanceM: 0.05, matrixToleran
  * so it stands tilted, its top toward you, as the top arrow tilts it, and is seen from the front as it was when it
  * stood low. The tilt arrows start from there (ns-mirror mirrorTransform). It is in the picture with every strip
  * area, clear of your own limbs, and nothing covers it. */
-export const MIRROR_NEAR = Object.freeze({ magnifyBy: 0.46, dropM: -0.33, nearerM: 0, tiltDeg: 22 });
+/* 19 November 2026, later (the owner: "let's have the mirror body so close that the toes are almost touching and they're
+ * level, of course."; and earlier that day: "make the two bodies more level, your body and the mirror body"). The mirror
+ * body is the LITERAL REFLECTION again: your own size (magnifyBy 0.46 -> 1), on your own level (dropM -0.33 -> 0), not
+ * tilted (tiltDeg 22 -> 0). The mirror plane stands MIRROR_REFLECTION.clearanceM (5 cm) beyond your toes, so its toes
+ * are 10 cm from yours. It sits facing you as your own image, about 345 px tall at 1600x900 from its head to its toes.
+ * Since the same day the brain is turned half a turn (ns-brain BRAIN_VIEW.spinDeg): its motor strip is an n, an arch,
+ * and the mirror body sits INSIDE that arch in the picture, its head just under the leg areas at the top of the n and
+ * its toes on yours, in front of the brain's bare front half; it covers no arm or face area. (The hollow placement of
+ * the morning, small and raised, is withdrawn by the owner's note.) */
+export const MIRROR_NEAR = Object.freeze({ magnifyBy: 1, dropM: 0, nearerM: 0, tiltDeg: 0 });
 
 /** The rest-pose fallback body box (world m, seated BodyParts3D body at the default eye) used only when the integrator
  * passes no measured bounds: centre, half extents along body right / up / forward. Replaced by bodyBoundsFromPoints. */

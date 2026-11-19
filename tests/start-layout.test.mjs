@@ -1,6 +1,6 @@
-/** The start layout of 19 November 2026 (after a check of package VIEW): the mirror body in the hollow of the motor
- * strip, the left hand resting low for looks above the start look, and your own body ending cleanly at the collar in
- * the eye view. Pure numbers and rules only. No browser, no pixels (the pictures are in the package notes), nothing
+/** The start layout of 19 November 2026: the mirror body toe to toe with you at your own size (the owner's later note
+ * of that day; it stood in the hollow of the motor strip for a few hours), the left hand resting low for looks above
+ * the start look, and your own body ending cleanly at the collar in the eye view. Pure numbers and rules only. No browser, no pixels (the pictures are in the package notes), nothing
  * biological.
  * Run: node --test tests/start-layout.test.mjs
  */
@@ -39,20 +39,31 @@ test('for looks above the start look the hand stays where it was in the room, th
   assert.ok(Math.abs(HAND_REST.lowNdc) < 0.96 && Math.abs(HAND_REST.xUpNdc) < 0.96, 'inside the arm fit\'s own screen margins');
 });
 
-test('the mirror body stands above the reflection\'s height, smaller, and tilted toward you; the tilt arrows start from there', () => {
+// 19 November 2026, later (the owner: "let's have the mirror body so close that the toes are almost touching and they're
+// level, of course."). This test used to pin the mirror body in the hollow of the strip: 0.3 m above the reflection's
+// own height, at 0.46 of its size, tilted 22 degrees toward you. The owner has withdrawn that: the mirror body is the
+// literal reflection again, at your own size, on your own level, its toes a hand's breadth from yours.
+test('the mirror body is the literal reflection: your own size, level with you, toe to toe', () => {
   const V = NM.MIRROR_NEAR;
-  assert.ok(V.dropM < 0, 'higher than the literal reflection (it was 0.9 m lower)');
-  assert.ok(V.magnifyBy > 0.3 && V.magnifyBy < 0.7);
-  assert.ok(V.tiltDeg >= 10 && V.tiltDeg <= 35);
+  assert.equal(V.magnifyBy, 1, 'your own size');
+  assert.equal(V.dropM, 0, 'level with you');
+  assert.equal(V.nearerM, 0);
+  assert.equal(V.tiltDeg, 0, 'not tilted');
+  assert.ok(NM.MIRROR_REFLECTION.clearanceM > 0 && NM.MIRROR_REFLECTION.clearanceM <= 0.08, 'the mirror plane stands a few centimetres beyond your toes');
   const body = Object.freeze({ centre: Object.freeze([0, -0.5, -0.4]), half: Object.freeze([0.3, 0.4, 0.75]), forward: Object.freeze([0, 0, -1]), right: Object.freeze([1, 0, 0]), radius: 0.9, height: 0.8 });
   const p = NM.mirrorReflectionPlacement({ body, eye: [0, 0, 0], foremostM: 1.2, view: V });
+  // the placement IS the plane reflection, entry for entry
+  assert.ok(NM.matrixMaxDiff(p.matrix, p.pureMatrix) <= NM.MIRROR_REFLECTION.matrixTolerance);
+  assert.equal(p.scale, 1);
   const rest = NM.mirrorTransform(NM.createMirrorState(p));
   assert.equal(rest.orbit.pitch, 0, 'no arrow has been pressed at the start');
   assert.ok(NM.matrixMaxDiff(rest.matrix, p.matrix) <= NM.MIRROR_REFLECTION.matrixTolerance);
-  assert.equal(rest.standBackM, 0, 'the start tilt does not push it away');
-  // the top of the body leans toward the eye: the image of a point above the body's centre is nearer than the centre
-  const top = NM.mirrorPoint([0, 0.3, -0.4], rest), mid = NM.mirrorPoint([0, -0.5, -0.4], rest);
-  assert.ok(Math.hypot(top[0], top[2]) < Math.hypot(mid[0], mid[2]));
+  assert.equal(rest.standBackM, 0);
+  assert.ok(rest.det < 0, 'a mirror image');
+  // toe to toe: your foremost point (1.2 m ahead) and its image are twice the plane's clearance apart, at the same height
+  const toe = [0.1, -0.9, -1.2], image = NM.mirrorPoint(toe, rest);
+  assert.ok(Math.abs(image[0] - toe[0]) < 1e-9 && Math.abs(image[1] - toe[1]) < 1e-9, 'the same height and side: level');
+  assert.ok(Math.abs((toe[2] - image[2]) - 2 * NM.MIRROR_REFLECTION.clearanceM) < 1e-9, 'the toes almost touch');
   // Reset puts it back there
   const turned = NM.mirrorTransform(NM.resetMirror({ ...NM.createMirrorState(p), orbit: { yaw: 40, pitch: -30, push: 0 } }));
   assert.ok(NM.matrixMaxDiff(turned.matrix, p.matrix) <= NM.MIRROR_REFLECTION.matrixTolerance);
@@ -82,24 +93,28 @@ test('the outside view stands straight behind, near enough for a large body and 
   assert.ok(T.followFovYDeg >= 66 && T.followFovYDeg <= 80);
 });
 
-test('from outside the mirror body is drawn larger and lower, and a carried one keeps its place', async () => {
+// 19 November 2026, later: this test used to want the mirror body 1.8 times larger and 0.6 m lower from outside (it
+// stood small in the strip's hollow in the eye view). With the mirror body at your own size and level in the eye view
+// that would make it 1.8 times your size and under the ground, so from outside it is now the same body: same size,
+// same height. (It still slides away with the camera, ns-mirror MIRROR_OUTSIDE awayM, as the owner asked on 12 November.)
+test('from outside the mirror body keeps its size and its height, and a carried one keeps its place', async () => {
   const M = await import('../scene/src/ns-mirror.mjs');
-  assert.ok(M.MIRROR_OUTSIDE.magnifyBy > 1.4 && M.MIRROR_NEAR.magnifyBy * M.MIRROR_OUTSIDE.magnifyBy <= 1, 'larger, never larger than the reflection itself');
-  assert.ok(M.MIRROR_OUTSIDE.dropM > 0.3 && M.MIRROR_OUTSIDE.dropM < 1);
+  assert.equal(M.MIRROR_OUTSIDE.magnifyBy, 1, 'your own size from outside too');
+  assert.equal(M.MIRROR_OUTSIDE.dropM, 0, 'level from outside too');
+  assert.ok(M.MIRROR_OUTSIDE.awayM > 0 && M.MIRROR_OUTSIDE.maxM >= M.MIRROR_OUTSIDE.awayM);
   const body = { centre: [0, -0.6, -0.5], half: [0.3, 0.5, 0.7] };
   const placement = M.mirrorReflectionPlacement({ body, eye: [0, 0, 0], foremostM: 1.24, view: M.MIRROR_NEAR });
   const s0 = M.placeMirror(M.createMirrorState(), placement);
   const eye = M.mirrorTransform(s0), half = M.mirrorTransform({ ...s0, viewOutside: 0.5 }), out = M.mirrorTransform({ ...s0, viewOutside: 1 });
   assert.equal(eye.scale, placement.scale);
-  assert.deepEqual(Array.from(eye.matrix), Array.from(M.mirrorTransform({ ...s0, viewOutside: 0 }).matrix), 'the eye view is untouched');
-  assert.ok(Math.abs(out.scale - placement.scale * M.MIRROR_OUTSIDE.magnifyBy) < 1e-12);
-  assert.ok(Math.abs((eye.centre[1] - out.centre[1]) - M.MIRROR_OUTSIDE.dropM) < 1e-12, 'lower by dropM');
-  assert.ok(Math.abs(eye.centre[0] - out.centre[0]) < 1e-12 && Math.abs(eye.centre[2] - out.centre[2]) < 1e-12, 'not moved along the ground');
-  assert.ok(half.scale > eye.scale && half.scale < out.scale && half.centre[1] < eye.centre[1] && half.centre[1] > out.centre[1], 'eased with the view');
+  for (const t of [half, out]) {
+    assert.equal(t.scale, placement.scale);
+    assert.deepEqual(Array.from(t.matrix), Array.from(eye.matrix), 'the view alone changes nothing');
+  }
   assert.ok(out.det < 0, 'still a mirror image');
   // carried: it stays where it was put, in both views
   const carried = { ...s0, placement: Object.freeze({ ...placement, worldCentre: [0.4, -0.2, -1.8] }) };
   const cOut = M.mirrorTransform({ ...carried, viewOutside: 1 });
   assert.deepEqual(Array.from(cOut.centre), [0.4, -0.2, -1.8]);
-  assert.ok(cOut.scale > placement.scale);
+  assert.equal(cOut.scale, placement.scale);
 });

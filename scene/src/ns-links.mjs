@@ -12,7 +12,12 @@
  *  - REVERSE: with the crosshair on a muscle of your body or of the mirror body, the area that moves it shows: its key
  *    gets the soft hint band, and a soft link runs from that key to the muscle ("what controls this?").
  *  - CROSSING: each half of the brain mainly moves the opposite side of the body. Where a link crosses the brain's
- *    midline it carries a small bright knot (crossKnot), so the crossing is one of the first things a new player sees.
+ *    midline it carries a small bright knot (crossKnot). 19 November 2026: the brain is now drawn turned half a turn
+ *    (ns-brain BRAIN_VIEW.spinDeg 180: its right half on the LEFT of the picture, over your left side), so an area
+ *    and the limb it moves are on the SAME side of the picture and a link to them no longer crosses the midline: the
+ *    rule is unchanged (it is measured in the brain's own frame) and simply finds no crossing. The crossing itself is
+ *    the same as ever (the brain's right half still moves your left side) and is now said in words: the area's card
+ *    ("This spot in your brain's right half tells your left ...") and the Esc page (ns-text, "The glass brain").
  * Calm at rest: no line is drawn unless an area is looked at, switched on, or named from a muscle. A picture of the
  * game's simulated, unitless signal; not a nerve, a recording or a measured pathway.
  *

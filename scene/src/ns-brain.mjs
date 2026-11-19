@@ -2501,17 +2501,29 @@ export const BRAIN_VIEW = freezeR2({
   arrowGapFrac: 0.035, arrowSizePx: 44, refHeightPx: 720, topReservePx: 26, centreShare: 0.8, arrowsOnScreen: false,
   fit: 'motor', beltFrac: 0.62, frontCropMax: 0.03, beltCentreShare: 0.4,
   motorFrac: 0.475, motorEdgeDeg: 80, motorMarginPx: 6, motorSideFrac: 0.015, motorCentreNdc: freezeR2([0, 0]),
-  motorFloorNdc: null, perspectiveK: 20, pictureAxis: 'view'
+  motorFloorNdc: null, perspectiveK: 20, pictureAxis: 'view', spinDeg: 180
 });
+/* 19 November 2026 (the owner: "it would be much better from a control standpoint, ease of use standpoint, and learning
+ * standpoint if we were to invert the brain altogether so that the motor strip changed direction"; "turning it 180
+ * degrees, such that the U becomes an inverted U, almost an N. Lowercase n, that is"; "the eyeballs will be at the
+ * bottom"). spinDeg is a turn of the drawn brain about the axis from its top toward the player, applied before the
+ * tilt and the orbit. 180 (the game): the brain's FRONT is toward the BOTTOM of the picture and its RIGHT half is on
+ * the LEFT of the picture, as on someone who faces you. The right half moves the left side of the body, so the areas
+ * for your left arm and leg are on your left, over your own left arm, and the strip is an n: the leg areas at the top
+ * in the middle, the face areas at the lower ends. 0: the earlier picture (front at the top, the brain's right on the
+ * right, the strip a U). Nothing inside the brain changes: the same meshes, areas and picking, turned as one; the
+ * crossing is the same (each half still moves the other side of the body). The top of the brain still faces the
+ * player. The tilt, the orbit and the carry are turns in the picture's own axes and are untouched: the arrow at the top
+ * of the brain still brings the far (upper) side toward you, which is now the brain's BACK (ns-text says so). */
 /** R558: the framing of the preceding preview (near eye, 10 degree forward tilt), for comparison:
  * frameBrain(seg, { ...BRAIN_VIEW_R5 }). */
-export const BRAIN_VIEW_R5 = freezeR2({ tiltDeg: 10, perspectiveK: 1, pictureAxis: 'centre' });
+export const BRAIN_VIEW_R5 = freezeR2({ tiltDeg: 10, perspectiveK: 1, pictureAxis: 'centre', spinDeg: 0 });
 /** R5-bigbrain: the round-4 framing (belt-first fit, both brain ends visible), for comparison and tests:
  * frameBrain(seg, { ...BRAIN_VIEW_R4 }). */
-export const BRAIN_VIEW_R4 = freezeR2({ fit: 'belt', tiltDeg: 0, perspectiveK: 6, pictureAxis: 'centre', frontCropMax: 0.03, beltFrac: 0.62, beltCentreShare: 0.4 });
+export const BRAIN_VIEW_R4 = freezeR2({ fit: 'belt', tiltDeg: 0, perspectiveK: 6, pictureAxis: 'centre', frontCropMax: 0.03, beltFrac: 0.62, beltCentreShare: 0.4, spinDeg: 0 });
 /** R4-view: the round-3 framing defaults (tilt 35, no perspective change, 12 % front crop), for comparison and tests:
  * frameBrain(seg, { ...BRAIN_VIEW_R3 }). */
-export const BRAIN_VIEW_R3 = freezeR2({ tiltDeg: 35, perspectiveK: 1, pictureAxis: 'centre', frontCropMax: 0.12 });
+export const BRAIN_VIEW_R3 = freezeR2({ tiltDeg: 35, perspectiveK: 1, pictureAxis: 'centre', frontCropMax: 0.12, spinDeg: 0 });
 
 /** The round-2 strips framing defaults (frameBrain framing 'strips'): tilt 25 deg, both strips fill 0.85 (0.78 below
  * aspect 1.45) of the view, strips' top plane at 6 m. Kept for comparison and for callers that ask for it. */
@@ -2556,10 +2568,22 @@ function mul3(a, b) {
 const ap3 = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
 const apT3 = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
 
+/** DISPLAY turned half a turn about the axis toward the camera (BRAIN_VIEW spinDeg 180): the identity, exactly. Subject
+ * LEFT -> screen right, anterior -> DOWN, superior -> toward the camera. */
+const DISPLAY3_TURNED = m3([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+const rotZ3 = a => { const c = Math.cos(a), s = Math.sin(a); return m3([c, s, 0, -s, c, 0, 0, 0, 1]); };
+/** DISPLAY after the spin about the axis toward the camera (degrees): exact for 0 and 180. */
+function displayForSpin(spinDeg) {
+  if (!spinDeg) return DISPLAY3;
+  if (spinDeg === 180 || spinDeg === -180) return DISPLAY3_TURNED;
+  return mul3(rotZ3(spinDeg * DEG), DISPLAY3);
+}
+const spinOf = frame => (frame && Number.isFinite(frame.spinDeg) ? frame.spinDeg : 0);
 /** Brain-local rotation (source difference vector -> world direction, no scale) for an orbit/tilt: Ry(-orbitYaw) .
- * Rx(tilt + orbitPitch) . DISPLAY (subject right -> screen right, anterior -> up, superior -> toward the camera). */
-function localRotation(tiltDeg, orbitYawDeg, orbitPitchDeg) {
-  return mul3(rotY3(-orbitYawDeg * DEG), mul3(rotX3((tiltDeg + orbitPitchDeg) * DEG), DISPLAY3));
+ * Rx(tilt + orbitPitch) . Rz(spin) . DISPLAY (DISPLAY: subject right -> screen right, anterior -> up, superior -> toward
+ * the camera; with spin 180: subject left -> screen right, anterior -> down, superior -> toward the camera). */
+function localRotation(tiltDeg, orbitYawDeg, orbitPitchDeg, spinDeg = 0) {
+  return mul3(rotY3(-orbitYawDeg * DEG), mul3(rotX3((tiltDeg + orbitPitchDeg) * DEG), displayForSpin(spinDeg)));
 }
 
 /** R4-view (D5): largest accepted perspectiveK (frameBrain option / BRAIN_VIEW.perspectiveK). */
@@ -2676,7 +2700,7 @@ export function constrainBrainTranslation({ frame, transform, translation, armOr
     scope: 'Existing source coverage at actual orbit/carry and anatomical origin; not muscle/normalmechanics/GPU/clinical qualification' } };
 }
 
-function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, squash = null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM }) {
+function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing, squash = null, tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM, spinDeg = 0 }) {
   const samples = [];
   let basis, eMm;
   if (grid && grid.kind === 'ns-brain-grid') {
@@ -2721,7 +2745,7 @@ function brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld
   const S3 = new Float64Array(3 * samples.length);
   samples.forEach((q, i) => { S3[3 * i] = q[0]; S3[3 * i + 1] = q[1]; S3[3 * i + 2] = q[2]; });
   for (let iy = 0; iy < NY; iy++) for (let ip = 0; ip < NP; ip++) {
-    const L = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch);
+    const L = localRotation(tiltDeg, -orbitYawLimitDeg + iy * dYaw, -orbitPitchLimitDeg + ip * dPitch, spinDeg);
     const Q = facing ? mul3(facing, L) : L;
     if (!squash) {
       // camera position in pivot-centred brain mm: c = -Q^T pivotWorld / k; distance (mm) to each sample = |q - c|
@@ -3107,9 +3131,12 @@ function frameWholeBrain(strips, {
   frontCropMax = BRAIN_VIEW.frontCropMax, beltCentreShare = BRAIN_VIEW.beltCentreShare, perspectiveK = BRAIN_VIEW.perspectiveK,
   backCropMax = BRAIN_VIEW.backCropMax || 0, motorFrac = BRAIN_VIEW.motorFrac, motorEdgeDeg = BRAIN_VIEW.motorEdgeDeg,
   motorMarginPx = BRAIN_VIEW.motorMarginPx, motorSideFrac = BRAIN_VIEW.motorSideFrac, motorCentreNdc = BRAIN_VIEW.motorCentreNdc,
-  motorFloorNdc = BRAIN_VIEW.motorFloorNdc, pictureAxis = BRAIN_VIEW.pictureAxis
+  motorFloorNdc = BRAIN_VIEW.motorFloorNdc, pictureAxis = BRAIN_VIEW.pictureAxis, spinDeg = BRAIN_VIEW.spinDeg,
+  motorKeepPoints = null, motorCeilNdc = null
 } = {}) {
   if (pictureAxis !== 'view' && pictureAxis !== 'centre') throw new Error(`ns:brain_frame: pictureAxis must be 'view' or 'centre' (got ${pictureAxis})`);
+  if (!(Number.isFinite(spinDeg) && Math.abs(spinDeg) <= 180)) throw new Error('ns:brain_frame: spinDeg must be finite within [-180, 180]');
+  if (motorCeilNdc !== null && !(Number.isFinite(motorCeilNdc) && motorCeilNdc > -0.5 && motorCeilNdc <= 1.5)) throw new Error('ns:brain_frame: motorCeilNdc must be null or inside (-0.5, 1.5]');
   if (!(Number.isFinite(backCropMax) && backCropMax >= 0 && backCropMax < 0.5)) throw new Error('ns:brain_frame: backCropMax must be in [0, 0.5)');
   if (!(Number.isFinite(perspectiveK) && perspectiveK >= 1 && perspectiveK <= PERSPECTIVE_K_MAX)) throw new Error(`ns:brain_frame: perspectiveK must be in [1, ${PERSPECTIVE_K_MAX}]`);
   if (fit !== 'belt' && fit !== 'brain' && fit !== 'motor') throw new Error(`ns:brain_frame: fit must be 'motor', 'belt' or 'brain' (got ${fit})`);
@@ -3172,9 +3199,14 @@ function frameWholeBrain(strips, {
     ax0 = U.x0 + 0.1 * (U.x1 - U.x0); ax1 = U.x1 - 0.1 * (U.x1 - U.x0); ay0 = U.y0 + 0.1 * (U.y1 - U.y0); ay1 = U.y1 - 0.1 * (U.y1 - U.y0);
   }
   // Brain-local (pivot-centred, tilted) outline and belt points.
-  const L0 = localRotation(tiltDeg, 0, 0);
+  const L0 = localRotation(tiltDeg, 0, 0, spinDeg);
   const toL = pts => { const out = new Float64Array(pts.length); for (let i = 0; i < pts.length; i += 3) { const q = ap3(L0, [pts[i] - pv[0], pts[i + 1] - pv[1], pts[i + 2] - pv[2]]); out[i] = q[0]; out[i + 1] = q[1]; out[i + 2] = q[2]; } return out; };
   const P = toL(outline.points), Bt = toL(beltPts);
+  // 19 November 2026 (fit 'motor', motorKeepPoints): points of things that hang on the brain outside the motor belt and
+  // must be in the start picture with it (the two eyeballs at the brain's front; flat xyz, source mm). The belt's box
+  // still gives the width; the box of the belt AND these points gives the height that has to fit between the floor and
+  // the top margin, and what rests on them.
+  const Kp = motorKeepPoints && motorKeepPoints.length >= 3 ? toL(checkPositions(motorKeepPoints, 'motorKeepPoints')) : null;
   let rMax = 0;
   for (let i = 0; i < P.length; i += 3) rMax = Math.max(rMax, Math.hypot(P[i], P[i + 1], P[i + 2]));
   if (!(rMax > 0)) throw new Error('ns:brain_frame: the brain outline has no extent');
@@ -3267,7 +3299,10 @@ function frameWholeBrain(strips, {
     // side; in portrait above the bottom band) and within the lateral look limit; its centre is as near
     // motorCentreNdc as that allows.
     // R558 (Messages 55 / 56): with motorFloorNdc the belt also stays above that height (see BRAIN_VIEW).
-    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly1 = U.y1 - myN;
+    // 19 November 2026 (motorCeilNdc): the height the belt's top (and the kept points) may reach, in place of the usable
+    // top less the margin. It may pass 1 a little: this picture is the one seen from the eye, and a camera that stands
+    // back from the eye (ns-camera EYE_DOLLY) draws it smaller, so a top just over 1 here is still under the top edge there.
+    const lx0 = Math.max(-edgeX, U.x0 + mxN), lx1 = Math.min(edgeX, U.x1 - mxN), ly1 = motorCeilNdc === null ? U.y1 - myN : motorCeilNdc;
     const ly0 = motorFloorNdc === null ? U.y0 + myN : Math.max(U.y0 + myN, motorFloorNdc);
     if (!(lx1 - lx0 > 0.1 && ly1 - ly0 > 0.05)) return false;
     // R5-bigbrain: with the squash (perspectiveK) the brain is thin along the line of sight, so it may span a wider
@@ -3278,27 +3313,32 @@ function frameWholeBrain(strips, {
     for (let it = 0; it < 16 * iterations; it++) {
       const dir = dirFor(px, py), F = rotFor(dir);
       const bb = projBox(Bt, s, dir, F);
+      const kb = Kp ? projBox(Kp, s, dir, F) : null, uy0 = kb ? Math.min(bb.y0, kb.y0) : bb.y0, uy1 = kb ? Math.max(bb.y1, kb.y1) : bb.y1;
       inW = Math.max(1e-9, Math.min(U.x1, bb.x1) - Math.max(U.x0, bb.x0));
-      const wid = bb.x1 - bb.x0, hgt = bb.y1 - bb.y0;
+      const wid = bb.x1 - bb.x0, hgt = uy1 - uy0;
       const rB = target / inW, rX = (lx1 - lx0) / wid, rY = (ly1 - ly0) / hgt;
       const r = Math.min(rB, rX, rY);
       why = r === rB ? 'belt' : r === rX ? (lx1 < edgeX - 1e-9 || lx0 > -edgeX + 1e-9 ? 'usable' : 'edge') : 'height';
       let dx = cxT - (bb.x0 + bb.x1) / 2, dy = cyT - (bb.y0 + bb.y1) / 2;
       if (bb.x1 + dx > lx1) dx -= bb.x1 + dx - lx1; // the whole belt inside the usable width and the look limit
       if (bb.x0 + dx < lx0) dx += lx0 - (bb.x0 + dx);
-      if (bb.y1 + dy > ly1) dy -= bb.y1 + dy - ly1; // the belt's whole height stays inside the usable height
-      if (bb.y0 + dy < ly0) dy += ly0 - (bb.y0 + dy);
+      if (uy1 + dy > ly1) dy -= uy1 + dy - ly1; // the belt's whole height (and the kept points) stays inside the usable height
+      if (uy0 + dy < ly0) dy += ly0 - (uy0 + dy);
       if (Math.abs(r - 1) < 1e-7 && Math.abs(dx) < 1e-7 && Math.abs(dy) < 1e-7) { converged = true; break; }
       s = Math.min(sMaxM, s * Math.pow(r, 0.8)); px += 0.8 * dx; py += 0.8 * dy;
     }
     if (!converged) return false;
     const dir = dirFor(px, py), F = rotFor(dir), o = projBox(P, s, dir, F), bb = projBox(Bt, s, dir, F);
     if (!(o.minDepth > 0.1)) return false; // every brain point well in front of the eye (else the whole-brain fit)
+    const kbEnd = Kp ? projBox(Kp, s, dir, F) : null;
     motorInfo = {
-      fit: 'motor', motorFrac, motorEdgeDeg, motorMarginPx, motorCentreNdc: [cxT, cyT], motorFloorNdc, limiting: why,
+      keepBoxNdc: kbEnd ? { x0: kbEnd.x0, x1: kbEnd.x1, y0: kbEnd.y0, y1: kbEnd.y1 } : null,
+      fit: 'motor', motorFrac, motorEdgeDeg, motorMarginPx, motorCentreNdc: [cxT, cyT], motorFloorNdc, motorCeilNdc, limiting: why,
       beltInUsableNdc: Math.min(U.x1, bb.x1) - Math.max(U.x0, bb.x0), beltCentreNdc: [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2],
       beltBoxNdc: { x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 },
-      endsOffNdc: { front: o.y1 - U.y1, back: U.y0 - o.y0, left: U.x0 - o.x0, right: o.x1 - U.x1 }
+      // (front / back are the brain's own ends: with the half turn, spinDeg 180, its front is at the bottom of the picture)
+      endsOffNdc: Math.abs(spinDeg) > 90 ? { front: U.y0 - o.y0, back: o.y1 - U.y1, left: U.x0 - o.x0, right: o.x1 - U.x1 }
+        : { front: o.y1 - U.y1, back: U.y0 - o.y0, left: U.x0 - o.x0, right: o.x1 - U.x1 }
     };
     return true;
   };
@@ -3307,7 +3347,7 @@ function frameWholeBrain(strips, {
   for (let round = 0; !beltFit && round < 6; round++) {
     solve();
     const dirR = dirFor(px, py), FR = facRot(dirR);
-    const probe = { kind: 'ns-brain-frame', k: s, pivot: pv, pivotWorld: dirR, tiltDeg, facing: FR ? { rotation: Array.from(FR) } : null, perspectiveK, squashAxis: flat ? VIEW_AXIS : null, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg };
+    const probe = { kind: 'ns-brain-frame', k: s, pivot: pv, pivotWorld: dirR, tiltDeg, spinDeg, facing: FR ? { rotation: Array.from(FR) } : null, perspectiveK, squashAxis: flat ? VIEW_AXIS : null, orbitYawLimitDeg, orbitPitchLimitDeg, grabPitchLimitDeg };
     const sil = brainSilhouette(null, brainViewTransform({ frame: probe }), { aspect, fovYDeg, points: outline.points });
     const an = arrowAnchors(sil, { gapFrac: arrowGapFrac, sizePx: arrowSizePx, viewportPx: { width: hPx * aspect, height: hPx } });
     const hx = an.radiusNdc / aspect, hy = an.radiusNdc;
@@ -3325,11 +3365,11 @@ function frameWholeBrain(strips, {
   const bb = projBox(Bt, s, dir, F);
   const dist = aimDistance / b.near; // the nearest brain point at the default view is aimDistance away
   let k = s * dist, pivotWorld = dir.map(x => x * dist);
-  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: facRot(dir), squash: squashFor(dir), tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM });
+  const cl = brainClearance({ grid, brainBounds, box, list, count, pv, k, pivotWorld, facing: facRot(dir), squash: squashFor(dir), tiltDeg, orbitYawLimitDeg, orbitPitchLimitDeg, reachM, clearanceM, spinDeg });
   k *= cl.scaleUp; pivotWorld = pivotWorld.map(x => x * cl.scaleUp);
   const fa = facing && !flat ? facingToward(dir) : null;
   const frame = {
-    kind: 'ns-brain-frame', framing: 'brain', k, aimDistance: aimDistance * cl.scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg,
+    kind: 'ns-brain-frame', framing: 'brain', k, aimDistance: aimDistance * cl.scaleUp, pivot: freezeR2(pv), pivotWorld: freezeR2(pivotWorld), tiltDeg, spinDeg,
     facing: fa ? freezeR2({ yawDeg: fa.yaw / DEG, pitchDeg: fa.pitch / DEG, rotation: freezeR2(Array.from(fa.rotation)) }) : null,
     fill: Math.max((bb.x1 - bb.x0) / 2, (bb.y1 - bb.y0) / 2), limiting,
     ndcBounds: freezeR2({ x0: bb.x0, x1: bb.x1, y0: bb.y0, y1: bb.y1 }), silhouetteNdc: freezeR2({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 }),
@@ -3390,7 +3430,8 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   const gp = clampAbs(grabPitch, frame.grabPitchLimitDeg * DEG);
   const clamped = oy !== orbitYaw || op !== orbitPitch || gp !== grabPitch;
   const carry = mul3(rotY3(grabYaw), rotX3(gp));
-  const L = localRotation(tilt, oy, op);
+  const spin = spinOf(frame);
+  const L = localRotation(tilt, oy, op, spin);
   const F = frame.facing && frame.facing.rotation ? frame.facing.rotation : null;
   const Q = mul3(carry, F ? mul3(F, L) : L);
   const C = ap3(carry, frame.pivotWorld);
@@ -3414,7 +3455,7 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   // from this, so they are right again after a new frame (a resized window) even while the brain is turned.
   let restMatrix = matrix;
   if (oy !== 0 || op !== 0) {
-    const L0 = localRotation(tilt, 0, 0);
+    const L0 = localRotation(tilt, 0, 0, spin);
     const Lin0 = (S0 ? mul3(carry, mul3(S0, mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L0))) : mul3(carry, F ? mul3(F, L0) : L0)).map(x => x * k);
     const tq0 = ap3(Lin0, pv);
     restMatrix = new Float64Array(16);
@@ -3437,7 +3478,7 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   const axis0 = u0 ? [u0[0] / nu, u0[1] / nu, u0[2] / nu] : [p0[0] / np, p0[1] / np, p0[2] / np];
   const axisNow = u0 ? ap3(carry, axis0) : [C[0] / n0, C[1] / n0, C[2] / n0];
   return {
-    kind: 'ns-brain-view', matrix, restMatrix, inverse, rotation: Q, linear: Lin, linearInverse: LinInv, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt,
+    kind: 'ns-brain-view', matrix, restMatrix, inverse, rotation: Q, linear: Lin, linearInverse: LinInv, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt, spinDeg: spin,
     perspectiveK: K, squashAxis: freezeR2(axisNow), squashAxis0: freezeR2(axis0), pictureAxis: u0 ? 'view' : 'centre',
     orbitYaw: oy, orbitPitch: op, grabYaw, grabPitch: gp, clamped, axes
   };

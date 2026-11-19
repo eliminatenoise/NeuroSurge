@@ -241,13 +241,19 @@ const STEP_TABLE = [
       'do the muscles it moves, on your body and on the mirror body. Brighter means stronger.'),
     // R558 (Message 56: a learning tool for motor neuroanatomy): what the band is and which side each half moves, in
     // the words of HONESTY.crown and HONESTY.leftArmRightHalf (the Esc limits say both in full).
-    part('The coloured band across the brain is the motor strip, drawn as a simplified map. Each half of the brain ' +
-      'mainly moves the opposite side of your body: your left arm and leg are on the brain’s right half.'),
+    // 19 November 2026 (the brain turned half a turn): THE place that says which way the brain faces and that the
+    // crossing is unchanged. The brain's front is at the bottom, so its right half is on your left, over your left side.
+    part('The coloured band across the brain is the motor strip, drawn as a simplified map. You see the brain from ' +
+      'above, turned to face you: its front, where the two eyeballs hang, is at the bottom, so the brain’s right half is ' +
+      'on your left. The crossing is the usual one: each half of the brain mainly moves the opposite side of your body. ' +
+      'So the areas on your left, in the brain’s right half, move your left arm and leg, and the areas on your right ' +
+      'move your right arm and leg.'),
     // R5-text (D17): the brain-to-muscle glow, with its honesty in brackets (the Esc limits say it in full).
     part('For a moment a soft line in the same colour joins a newly switched-on area to its muscles (a picture, not a ' +
       'nerve).', 'glow')],
-  intro: [part('The coloured band across the brain is the motor strip (a simplified map). Each half of the brain mainly ' +
-    'moves the opposite side of your body. Each motor area has its own colour: switched on, it and its muscles glow in that colour.'),
+  intro: [part('The coloured band across the brain is the motor strip (a simplified map). The brain faces you (its eyeballs ' +
+    'are at the bottom), so its right half is on your left. Each half of the brain mainly moves the opposite side of your ' +
+    'body: the areas on your left move your left side. Each motor area has its own colour: switched on, it and its muscles glow in that colour.'),
     part('A soft line in that colour joins them for a moment (a picture, not a nerve).', 'glow')] },
   // R558 (Message 56): the order of the body along the strip comes first (ns-bodymap order 0 to 26: toes, ankle, knee,
   // hip, trunk, shoulder, elbow, forearm, wrist, hand, little finger to thumb, neck, forehead to jaw, tongue, throat),
@@ -598,7 +604,7 @@ export const HUD = deepFreeze({
   // R4-text: two short sentences (Flesch 67.8 -> 80.8); the pinned "not real stimulation or decoding" is unchanged.
   control: 'Your looks and keys are just game controls (virtual inputs). They are not real stimulation or decoding',
   simulated: 'All numbers are made up by the game (simulated). They go from 0 to 1 and have no real units (unitless)',
-  view: 'Seen from above, not mirrored: front at the top, your right on the right',
+  view: 'Seen from above, not mirrored, turned to face you: front at the bottom, the brain’s right half on your left',
   rights: 'Anatomy: BodyParts3D © DBCLS, CC BY 4.0',
   placeholderRights: 'Stand-in shapes: no BodyParts3D anatomy shown',
   // R4-text: "a rough map" (Flesch 68.8 -> 72.3, 118 characters); the pinned opening and the four core honesty items
@@ -1210,18 +1216,22 @@ export function regionGroupLabel(key, hemisphere) {
 
 /** R/L and front/back labels on the brain (ns-app ORIENTATION_TEXT). Already plain; the anatomical word stays in
  * brackets because the movement-map display contract asks for anterior/posterior labels. */
+/* 19 November 2026 (the brain turned half a turn, ns-brain BRAIN_VIEW.spinDeg 180): the keys are still the brain's own
+ * sides and ends. Its right half is now on the LEFT of the picture and its front at the BOTTOM, so the labels name the
+ * brain's half (an arrow pointing away from the half it names would mislead) and the front / back arrows are turned. */
 export const ORIENTATION = deepFreeze({
-  right: 'Your right →', left: '← Your left', anterior: '↑ Front (anterior)', posterior: 'Back (posterior) ↓'
+  right: 'Brain’s right half', left: 'Brain’s left half', anterior: 'Front (anterior) ↓', posterior: '↑ Back (posterior)'
 });
-export const ORIENTATION_SHORT = deepFreeze({ right: 'Right →', left: '← Left' });
+export const ORIENTATION_SHORT = deepFreeze({ right: 'Right half', left: 'Left half' });
 
 /** Orbit arrows (ns-scene-three ORBIT_ARROWS tip/label): short hover captions start with "Orbit". R558 (hunt 2): the
  * camera stays at your eyes, so what you see is the brain turning about its own centre; it stays where it is. */
 export const ORBIT = deepFreeze({
-  tip: { forward: 'Orbit: show its front', back: 'Orbit: show its back', left: 'Orbit: show the left side', right: 'Orbit: show the right side' },
+  // (19 November 2026: the brain's front is at the bottom, so the upper arrow, 'forward', now brings its BACK round)
+  tip: { forward: 'Orbit: show its back', back: 'Orbit: show its front', left: 'Orbit: show the side on your left', right: 'Orbit: show the side on your right' },
   label: {
-    forward: 'Orbit the brain about its own centre so more of its front faces you. It turns in place.',
-    back: 'Orbit the brain about its own centre so more of its back faces you. It turns in place.',
+    forward: 'Orbit the brain about its own centre so more of its back faces you. It turns in place.',
+    back: 'Orbit the brain about its own centre so more of its front faces you. It turns in place.',
     left: 'Orbit the brain about its own centre so more of the side on your left faces you. It turns in place.',
     right: 'Orbit the brain about its own centre so more of the side on your right faces you. It turns in place.'
   },
@@ -1299,8 +1309,10 @@ export const VIEW = deepFreeze({
   lookNote: 'Move the mouse to turn your head: the camera follows behind it.'
 });
 
-/** The 3D compass arrows (D16, user R20): four arrows round the brain (top = toward the front, bottom = toward the back,
- * left, right) and four smaller ones round the mirror body. tip = the short hover caption; label = the accessible name
+/** The 3D compass arrows (D16, user R20): four arrows round the brain (top, bottom, left, right) and four smaller ones
+ * round the mirror body. 19 November 2026: the brain is turned half a turn (its front at the bottom of the picture), so
+ * the TOP arrow, whose id is still 'forward', now shows more of the brain's BACK and the bottom arrow ('back') more of
+ * its FRONT: an arrow still brings round the side it stands on, and the words say which side that is. tip = the short hover caption; label = the accessible name
  * (aria-label / title), which also says what a click and a hold do. Mirror arrows: the top / bottom tips tilt it (a
  * view from above / below), the side tips turn it round. The round-4 ORBIT captions stay for the HUD buttons until
  * ns-scene-three retires them.
@@ -1308,10 +1320,10 @@ export const VIEW = deepFreeze({
  * is) and shows more of the side the arrow points to; the same turn as a press-and-drag on the brain. */
 export const ARROWS = deepFreeze({
   brain: {
-    tip: { forward: 'Turn the brain: show more of its front', back: 'Turn the brain: show more of its back', left: 'Turn the brain: show more of the left side', right: 'Turn the brain: show more of the right side' },
+    tip: { forward: 'Turn the brain: show more of its back', back: 'Turn the brain: show more of its front', left: 'Turn the brain: show more of the side on your left', right: 'Turn the brain: show more of the side on your right' },
     label: {
-      forward: 'Turn the brain about its own centre so more of its front faces you. Click for a small turn. Hold to keep turning. It turns in place.',
-      back: 'Turn the brain about its own centre so more of its back faces you. Click for a small turn. Hold to keep turning. It turns in place.',
+      forward: 'Turn the brain about its own centre so more of its back faces you. Click for a small turn. Hold to keep turning. It turns in place.',
+      back: 'Turn the brain about its own centre so more of its front faces you. Click for a small turn. Hold to keep turning. It turns in place.',
       left: 'Turn the brain about its own centre so more of the side on your left faces you. Click for a small turn. Hold to keep turning. It turns in place.',
       right: 'Turn the brain about its own centre so more of the side on your right faces you. Click for a small turn. Hold to keep turning. It turns in place.'
     }
@@ -1681,6 +1693,9 @@ const HELD_TARGET_WORDS = Object.freeze({
   brain: 'the brain', mirror: 'the mirror body',
   rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot',
 });
+/** 19 November 2026: the names the tip gives the two eyeballs and their nerves at the brain's front (ns-brain-eyes: an
+ * illustration that shows which way the brain faces; they are not motor areas and do nothing). */
+export const BRAIN_PARTS = deepFreeze({ eyeball: 'Eyeball', nerve: 'Optic nerve' });
 export const TIP = deepFreeze({
   teach: 'Click, or press a number',
   holding(target, kept) {
@@ -1794,7 +1809,7 @@ export function plainStrings() {
     ['triggerLine(gaze)', triggerLine(4, 'gaze', 'Close left hand')],
     ['gazeMuscleLine(own)', gazeMuscleLine({ where: 'own', name: 'right biceps brachii', holdable: true })],
     ['gazeMuscleLine(mirror)', gazeMuscleLine({ where: 'mirror', name: 'left rectus femoris', part: MIRROR_PART_NAMES.legs })],
-    ['gazeLine(arrow)', gazeLine('arrow', 'Turn the brain: show more of its front')],
+    ['gazeLine(arrow)', gazeLine('arrow', 'Turn the brain: show more of its back')],
     ['rotationLine', rotationLine('supinated')], ['elbowLine', elbowLine({ commandDeg: 40, achievedDeg: 31, limited: true })],
     ['activityLine', activityLine(0.8)], ['activationsLine', activationsLine(2)], ['moreCaveatsLine', moreCaveatsLine(2)],
     ['LEFT_ARM_LABEL', LEFT_ARM_LABEL], ['guideLine', guideLine(2, 7, GUIDE.goals.moveHand)],
