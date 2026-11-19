@@ -8,7 +8,7 @@ Body update 50: **W** and **S** move the chosen limb's hand or foot straight out
 
 Body update 49: your view no longer tilts by itself to hold a hand or foot at a set height; it turns only when the limb you are moving would leave the picture. The stutter when a movement switched on is fixed. The mirror body is drawn from finer meshes whenever it is large on your screen, and a slow computer now gives up two decorative light effects before any sharpness.
 
-In a wide window, the brain’s grey up arrow now starts inside the picture. Click either grey vertical arrow to tilt the brain.
+In a wide window, the green up arrow starts in view and can sit to one side of the mirror body’s head. Click the green arrows to turn or tilt the mirror body. The grey arrows turn the brain.
 
 When a movement switches on, the picture briefly punches in. The effect works in both views when an activation moves the model. A marker can light up while the lens holds steady. Your system’s reduced-motion setting keeps the lens steady.
 

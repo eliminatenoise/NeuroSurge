@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-19-body-update-50",
+  "version": "experimental-2026-11-19-body-update-50-mirror-compass-fix",
   "status": "experimental preview",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
@@ -66,5 +66,6 @@
     "scope": "Earlier developer checks used scripted mouse and key input in one desktop Chromium, with screenshots, frame-interval counts and profiles, plus one hundred and eighty-nine scripted node tests of the input rules, the picture-quality controller, the number keys, the guide order, the card's settle rule, the arrow-key steps, the words that name an area, the head and trunk rules, the card taking an area in the frame its movement is taken, the skin of the left shoulder, the mirror body's turn and tilt, shader text that must not give a value that is not a number, the loading picture’s file reader and part kinds, the tip beside the crosshair, the limb turn led by wrists and ankles, the collision items, holding and moving with the pointer, the look’s range, the living brain’s rules, the curved spine, the lowered eyes, the view from outside, the picture of the player’s own front, the quick switch of the limbs, the painted look’s rules, the joints (kneecap, combined ranges, leg turn, couplings), the room, the bulk rule and the vessels. Earlier parts were also read and checked by other instances of the same model that wrote them; the changes since the second upload were checked by their author alone. Two packages of 18 November were tested by a separate instance of the same model using its own scripted pictures, and were fixed before merging. Body update 17 adds an independent startup check in desktop Chromium 155 on AMD Vulkan. An induced anatomy download failure brought up the focused Reload page button, and Enter recovered the first rendered frame with reduced motion both disabled and enabled after the file was restored. Full-game reduced-motion behaviour, Firefox, Safari, touch, phones and screen readers remain unchecked.",
     "full_game_pass": false
   },
-  "opening_brain_compass": "In the opening landscape view, the brain’s upward orbit arrow starts inside the picture. The world anchors follow the existing carry placement after a move. Controls turn the simulated brain without moving the camera."
+  "opening_brain_compass": "In the opening landscape view, the brain’s upward orbit arrow starts inside the picture. The world anchors follow the existing carry placement after a move. Controls turn the simulated brain without moving the camera.",
+  "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body."
 }

@@ -1953,6 +1953,10 @@ While keys are held, the place asked of the end is kept as a direction from the 
 
 Measured on the game's own numbers, each limb alone from the start: both legs and the left arm stay within 0.1 degrees of their line through S then W and come back within 1 to 7 mm of where they began; A and D leave their reach unchanged to within 2 mm. The right arm, whose joints for this are only two at the shoulder and the elbow, cannot fold along its line exactly: its hand is up to 13 degrees off the line when half folded and more when folded right in, but it returns to the line (0.1 degrees) when it is let out again. Both keys together were tried and not measured beyond “the limb swings and reaches at once”.
 
+## 146. The mirror body’s up arrow in the opening picture
+
+The green up arrow could start above the picture. The usual mirror frame uses an older reference look. Planning from the opening look alone brought the arrow in over a coloured motor area. When the usual arrow starts too high, the game picks a clear spot by the top of the mirror body in the opening view. The green arrow keeps its size and shape. It sits to the side where the motor strip fills the space above the head. The other green arrows keep their places. A tap tilts the mirror body one step.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

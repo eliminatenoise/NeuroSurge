@@ -11417,7 +11417,8 @@ export function createScene({
       // key leaves the orbit out, so an arrow tap (a turn or a tilt) neither re-plans nor moves the tips; a carry or a
       // reset does.
       const c = mirror.transform.carryCentre || mirror.transform.centre;
-      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}`;
+      const openingLandscape = cssW >= cssH && !camPose && !mirror.worldCentre;
+      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}|${openingLandscape}`;
       if ((key !== M.key || M.samplesRef !== mirror.samples) && (!arrowHeld || !M.key)) { // (not while an item is held: setHeldItem)
         M.key = key; M.samplesRef = mirror.samples;
         const start = { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
@@ -11445,6 +11446,10 @@ export function createScene({
           { target: 'mirror body', refLook: { yaw: look.yaw, pitch: look.pitch }, startLook: look === start, cutToView: keep });
         if (M.plan) rescueTips(M, M.plan, { cam: refCam, centre: Array.from(c), sizePx: mSize, blocked: mBlocked, bounds: U, avoid, // 18 November 2026, late
           looseBlocked: tipBlocker({ cam: refCam, centre: Array.from(c), sizePx: mSize, grid: showB ? motorRestGrid(refCam) : null, ownBody: false }) });
+        if (M.plan && look === start && openingLandscape) {
+          const openingCam = { ...refCam, ...referenceLook, position: refAt(referenceLook) };
+          fitOpeningMirrorUp(M, B.plan, openingCam, U, keepOut.concat(crossBox ? [crossBox] : []), showB);
+        }
         if (M.plan) M.plan.visAnchors = frameVisAnchors(M.plan, refCam, Array.from(c)); // check fix: the frame FRAME_VIS samples
         M.frames = M.plan ? M.plan.frames : null;
         M.serial = (M.serial || 0) + 1;
@@ -11805,6 +11810,50 @@ export function createScene({
     }
     if (moved) plan.frames = NsArrows.facingArrowFrames(plan.anchors, { cam, sizePx });
     set.rescued = moved;
+  }
+  /** The narrower opening view can put the mirror's upper chevron above the screen. Keep the other three tips on
+   * their frame, and give the upper tip a world anchor above or beside the head, in a clear part of the opening view.
+   * This uses the base lens and runs only when the ordinary frame is built. */
+  function fitOpeningMirrorUp(set, brainPlan, cam, bounds, avoid, brainVisible) {
+    const plan = set.plan, sizePx = plan.sizes.sizePx;
+    const { halfAlongPx, halfAcrossPx } = NsArrows.arrowHitHalfPx(sizePx);
+    const margin = NsArrows.ARROW_LAYOUT.marginPx;
+    const old = NsArrows.projectWorldPx(plan.anchors.forward, cam);
+    if (old.depth > camera.near && old.y - halfAlongPx >= margin) return;
+    const target = mirrorBoxPx(cam);
+    if (!target) return;
+
+    const otherTips = { ...plan.anchors, forward: null };
+    const occupied = [...avoid, target, ...NsArrows.anchorBoxesPx(otherTips, { cam, sizePx })];
+    if (brainPlan) occupied.push(...NsArrows.anchorBoxesPx(brainPlan.anchors, { cam, sizePx: brainPlan.sizes.sizePx }));
+    // The tutorial panel shares this part of the picture on small windows.
+    const prompt = doc?.querySelector?.('.ns-prompt:not([hidden])')?.getBoundingClientRect();
+    if (prompt?.width > 0 && prompt.height > 0) occupied.push({ x0: prompt.left, y0: prompt.top, x1: prompt.right, y1: prompt.bottom });
+
+    const centre = set.planningTarget.centreWorldM;
+    const blocked = tipBlocker({ cam, centre, sizePx, grid: brainVisible ? motorRestGrid(cam) : null });
+    const mid = (target.x0 + target.x1) / 2, top = target.y0 - halfAlongPx;
+    const reach = 2 * (target.x1 - target.x0), step = RESCUE_TIP.stepPx;
+    let best = null, cost = Infinity;
+    for (let y = margin + halfAlongPx; y <= Math.min(bounds.y1 - halfAlongPx, target.y0 + halfAlongPx); y += step) {
+      for (let dx = 0; dx <= reach; dx += step) {
+        const distance = Math.hypot(dx, y - top);
+        if (distance >= cost) break;
+        for (const x of dx ? [mid + dx, mid - dx] : [mid]) {
+          const x0 = x - halfAcrossPx, x1 = x + halfAcrossPx, y0 = y - halfAlongPx, y1 = y + halfAlongPx;
+          if (x0 < bounds.x0 || x1 > bounds.x1 || occupied.some(box => x0 < box.x1 && x1 > box.x0 && y0 < box.y1 && y1 > box.y0)
+              || blocked('forward', x, y)) continue;
+          best = [x, y]; cost = distance; break;
+        }
+      }
+    }
+    if (!best) return;
+    const place = NsArrows.frameAnchorFn(cam, centre);
+    if (!place) return;
+    plan.anchors.forward = place(...best);
+    plan.frames = NsArrows.facingArrowFrames(plan.anchors, { cam, sizePx });
+    set.nominalHeads.forward = nominalArrowHeads(plan.frames).forward;
+    set.frameRecord.openingUp = { x: best[0], y: best[1] };
   }
   /** 18 November 2026, late (audit M9): the outside-view slide of the mirror body as a world vector (null when none):
    * along the ground, away from the eye the mirror plane was set from (ns-mirror mirrorTransform's own direction). */

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-50",
+  "version": "experimental-2026-11-19-body-update-50-mirror-compass-fix",
   "experimental": true,
-  "source": "Body update 50. W and S move the chosen limb's end along the line from its shoulder or hip; A and D swing the limb sideways with its bend unchanged.",
+  "source": "Body update 50. W and S move the chosen limb's end along the line from its shoulder or hip; A and D swing the limb sideways with its bend unchanged. Opening compass repair for the mirror body.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 312097,
-      "sha256": "59d7064cf47167c5739bc171e0bfc8dc8321e93d0fba4f7c59b08696ceb272cd"
+      "bytes": 312661,
+      "sha256": "062b7edac2435a942bade876ef00e2432a56d098dc1d780cd824a99564071dd6"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12018,
-      "sha256": "745278a64a040cb5ab4785368fd550c213abee3066b76e0c43337b0699e3946f"
+      "bytes": 12089,
+      "sha256": "edbbcd270e7350388e25b415808f63c2ee89c02ea5ebb5b64155fad2a744d1a8"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 63803,
-      "sha256": "c88d3df405d2696c2ea03760f07bcb6bb43d682c9b4b7f3db0c8142d37db5248"
+      "bytes": 64070,
+      "sha256": "e68c5e72bb3770166a5dfed140e40c437f7c95d7a6b4a94991a6c356c668d625"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 42552,
-      "sha256": "cfb0b67dbeab9404552ae268c253a9607dbe1472d2574c82eeaa5b2e5879110f"
+      "bytes": 42856,
+      "sha256": "1a5cd2ed5c698311338637efa74eb71e87371deed5766205cc964b434166d2b2"
     },
     {
       "path": "README.md",
-      "bytes": 21154,
-      "sha256": "ed07a8cd54a4406b4882b4796a08f0ca10a6752f2b83af4073a9fbb7a119ca40"
+      "bytes": 21218,
+      "sha256": "24739084711f1cd189a52db4673400a3cb03548476855f0ebdca56454b65265e"
     },
     {
       "path": "START.html",
-      "bytes": 4029,
-      "sha256": "4896866f0711bcc69e109c830755281653f0a5145e154001b9b1c49d8dfbe5a4"
+      "bytes": 4048,
+      "sha256": "10941744575621fa5f69792ff23693898d10c2260f35228a196480c33ab11cc1"
     },
     {
       "path": "index.html",
-      "bytes": 1000,
-      "sha256": "95b3db7ac12508c06b06a8380bbf32fd5701e64684c86b19bdac5a6f5578fcf3"
+      "bytes": 1019,
+      "sha256": "fd2a50bc5ddbdd053a18975401f53ed0535d6829aef225105aba6471cb2e4bd6"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1149578,
-      "sha256": "2029d81bc23c7c6d38e9659d83f0fe2298c712b4f4b72e890617da583249a1f4"
+      "bytes": 1152690,
+      "sha256": "9d8059a9365598d788b39c1aa1d0ed6a3483936af053d5b5e80cb05bb7de3717"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4284,6 +4284,11 @@
       "path": "tests/browser-limb-touch.mjs",
       "bytes": 6682,
       "sha256": "e31334c63afc1f613092bf2b57343d9a541f81f7445a02b646698db38e8d07a1"
+    },
+    {
+      "path": "tests/browser-mirror-compass.mjs",
+      "bytes": 11910,
+      "sha256": "29d2c14095a0920dccfdee6f2b976b8cbce4a54c4b1e5884dba93ee99b9a24ec"
     },
     {
       "path": "tests/browser-play-settings.mjs",
