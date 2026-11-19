@@ -228,11 +228,11 @@ const STEP_TABLE = [
   // that is the limb the game starts on)
   { head: 'Your left arm.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
     'your left arm, left leg, right leg or right arm (or double click to step to the next one; you can also click or tap ' +
-    'its name at the bottom of the game while the pointer is free). The limb lights up and your view turns to it. ' +
+    'its name at the bottom of the game while the pointer is free). The limb lights up. ' +
     'The chosen limb goes with your view: its wrist or ankle keeps its place in the picture, so looking up raises the ' +
-    'arm at the shoulder or the leg at the hip, and looking down lowers it, as far as the joints go. W, A, S and D move ' +
-    'its hand or foot away from you, toward you, left and right, and the view follows so the wrist or ankle stays three ' +
-    'quarters of the way up the picture.'),
+    'arm at the shoulder or the leg at the hip, and looking down lowers it, as far as the joints go. W reaches its ' +
+    'hand or foot straight out from the shoulder or hip and S draws it straight back in. A and D swing the whole limb ' +
+    'to your left or right without changing its bend. Your view turns only when the hand or foot would leave the picture.'),
     // R558 (Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
     // slowly"; it replaces the Space dance of Message 2).
     part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
@@ -355,7 +355,7 @@ const CONTROL_TABLE = [
   ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
   // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
-  ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice, the whole limb lights up and your view turns to it.'],
+  ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice and the whole limb lights up. Your view turns only if its hand or foot is outside the picture.'],
   ['Double click', 'steps the choice on to the next limb: 1, 2, 3, 4, then back 3, 2, 1. Keep the second click held and it goes on stepping slowly. The second click presses nothing else.'],
   ['Look', 'the chosen limb goes with your view: its wrist or ankle keeps its place in the picture. Look up and the arm rises at the shoulder or the leg at the hip; look down and it lowers; look to a side and it swings that way. Where its joints end it waits for your view to come back.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
@@ -502,8 +502,8 @@ export const SHELL = deepFreeze({
       ['Click limb', 'choose it'],
       ['W S', 'move it forward or back'], ['A D', 'move it left or right']],
       // 19 November 2026 (ns-app LIMB_KEYS.view: the view holds the chosen limb)
-      note: 'Double click steps to the next limb. In the eye view, 1 to 4 turn your view to the limb, and the limb ' +
-        'then goes with your view: look up to raise it, down to lower it. W A S D move its hand or foot.' },
+      note: 'Double click steps to the next limb. The chosen limb goes with your view: look up to raise it, down to ' +
+        'lower it. W and S move its hand or foot straight out and back in; A and D swing the limb left and right.' },
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hold to grasp, tap to toggle'],
       ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
       ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },

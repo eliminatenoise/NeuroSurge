@@ -1940,6 +1940,19 @@ Frame rates on the lead's machine at 1600 by 900, before and after: standing sti
 
 Not measured: a slow graphics card. The lead's machine is not one, so the large buffer stands in for it. Supersampling the picture on a plain screen was tried on pictures (double resolution, scaled down) and left out: at four times the pixels the bodies were only slightly smoother.
 
+## 145. W and S move a limb along its own line; A and D swing it sideways (19 November)
+
+The user: “when we're doing WS or SW controls, we want the limbs to move in a straight line from between proximal and distal joints, so wrist and shoulder and ankle and hip. They're moving in a straight line, and they're not rotating internally or externally while moving. They're just moving in a straight line. We only introduce some rotation if we're combining key functions, I suppose, like forward and back whilst doing left and right at the very same time. Whilst A and D functions, left and right functions, are really moving between medial and lateral, so abduction, adduction.”
+
+Until now the keys moved the chosen limb's hand or foot level over the ground: W away from the view, S toward it, A and D across it, whichever way the limb pointed. Now (`LIMB_KEYS.view.keys` is `'limb'`, `limbKeyMove` in `ns-app.mjs`):
+- **W and S** move the end along the straight line from the shoulder or hip through it: W out, S in. Only the elbow or knee and the shoulder's or hip's own flexion change.
+- **A and D** swing the whole limb about the shoulder or hip toward your left or right, with its bend unchanged. The swing ends where the limb points straight to that side.
+- The limb's own turn (inward or outward) is not one of the joints the keys move, with either key pair or both together; the double tap of Space turns it, as before.
+
+While keys are held, the place asked of the end is kept as a direction from the root and a length along it, not as a free point. A first version took the line afresh from the end's own place each frame, and the line drifted by whatever the joint solve missed: the right hand came in 37 degrees off the line it started on and went back out 27 degrees off.
+
+Measured on the game's own numbers, each limb alone from the start: both legs and the left arm stay within 0.1 degrees of their line through S then W and come back within 1 to 7 mm of where they began; A and D leave their reach unchanged to within 2 mm. The right arm, whose joints for this are only two at the shoulder and the elbow, cannot fold along its line exactly: its hand is up to 13 degrees off the line when half folded and more when folded right in, but it returns to the line (0.1 degrees) when it is let out again. Both keys together were tried and not measured beyond “the limb swings and reaches at once”.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

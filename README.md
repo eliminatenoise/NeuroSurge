@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 50: **W** and **S** move the chosen limb's hand or foot straight out from the shoulder or hip and straight back in; **A** and **D** swing the whole limb to your left or right without changing its bend.
+
 Body update 49: your view no longer tilts by itself to hold a hand or foot at a set height; it turns only when the limb you are moving would leave the picture. The stutter when a movement switched on is fixed. The mirror body is drawn from finer meshes whenever it is large on your screen, and a slow computer now gives up two decorative light effects before any sharpness.
 
 In a wide window, the brain’s grey up arrow now starts inside the picture. Click either grey vertical arrow to tilt the brain.

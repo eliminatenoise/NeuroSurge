@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-49",
+  "version": "experimental-2026-11-19-body-update-50",
   "experimental": true,
-  "source": "Body update 49. The chosen limb has no set height in the picture; the stutter on activation is fixed; the mirror body's meshes follow its size on screen; resolution is the last thing a slow machine gives up.",
+  "source": "Body update 50. W and S move the chosen limb's end along the line from its shoulder or hip; A and D swing the limb sideways with its bend unchanged.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 309685,
-      "sha256": "d17521fc3ac13e496fcabf658326c35fab1fa92631d9cfacbd4b466a6248b5a6"
+      "bytes": 312097,
+      "sha256": "59d7064cf47167c5739bc171e0bfc8dc8321e93d0fba4f7c59b08696ceb272cd"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 11745,
-      "sha256": "259ad273b63cd6fa4e1b8b71021011fc9a72158f7d1c6b80238df873560c7525"
+      "bytes": 12018,
+      "sha256": "745278a64a040cb5ab4785368fd550c213abee3066b76e0c43337b0699e3946f"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 63575,
-      "sha256": "272449c7c1148efeacb17de61d4dfec3d25232020881873263e7322898b12287"
+      "bytes": 63803,
+      "sha256": "c88d3df405d2696c2ea03760f07bcb6bb43d682c9b4b7f3db0c8142d37db5248"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 42268,
-      "sha256": "b097b178225445d4fcddddeae6cfca47dad04d5da53af708923181fda3b58bbe"
+      "bytes": 42552,
+      "sha256": "cfb0b67dbeab9404552ae268c253a9607dbe1472d2574c82eeaa5b2e5879110f"
     },
     {
       "path": "README.md",
-      "bytes": 20939,
-      "sha256": "e6cf43410a56c30f199939942d0689ff8e8b965ed403ee9eeb89045c12bfe6d4"
+      "bytes": 21154,
+      "sha256": "ed07a8cd54a4406b4882b4796a08f0ca10a6752f2b83af4073a9fbb7a119ca40"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "023b2dc4e83e9d63096e2e249b2222247bdd4dc3ece7492d2c877a9a90a59ce4"
+      "sha256": "4896866f0711bcc69e109c830755281653f0a5145e154001b9b1c49d8dfbe5a4"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "ed14da8a628807f8987f0afa9970b93011257040f1939cb3775a9c43233873f9"
+      "sha256": "95b3db7ac12508c06b06a8380bbf32fd5701e64684c86b19bdac5a6f5578fcf3"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 870866,
-      "sha256": "bd151ecba389ecd9ba5be77fd1c77117201ee347a33d978efb529a4439109ca9"
+      "bytes": 876880,
+      "sha256": "c06b9813ab541c738dfd95d5d6d494cb71fd259fa621ba519a25b3856f4d431e"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4187,8 +4187,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 143879,
-      "sha256": "2982061dcc52cf6c76bc7216cef35a23d26bc70831197aafc28a994efa2a9def"
+      "bytes": 143979,
+      "sha256": "cc6a883ae1e6d8b675d398965e854cfd22c97a4f5055e47e13b629909d1cc820"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4412,8 +4412,8 @@
     },
     {
       "path": "tests/limb-hold.test.mjs",
-      "bytes": 15518,
-      "sha256": "3e6e04b36665b47a40c1940772ee4186a64f01786aeb25f7f1592d7343ac6cfb"
+      "bytes": 18048,
+      "sha256": "ab53fe91387266e9fcd95c5448d6846d59c2853cfe681f9b99b581f9c79f2426"
     },
     {
       "path": "tests/limb-keys.test.mjs",

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
+const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward, limbKeyMove } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
 const { FREE_HAND, freeHandAngles, freeHandInRange, freeHandPole } = await import(path.join(repo, 'scene/src/ns-arm.mjs'));
 const G = await import(path.join(repo, 'scene/src/ns-grasp.mjs'));
 const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
@@ -36,6 +36,43 @@ test('the view holds the chosen limb: the look carries it, the keys move it far,
   // where the look carries the place beyond the joints the limb waits (it does not take the nearest pose it can reach)
   assert.ok(V.waitMm >= 20 && V.waitMm <= 80 && V.waitShare > 0 && V.waitShare < 1);
   assert.equal(LIMBS_PASS_ITEMS, true, 'the brain and the mirror body do not stop a limb');
+});
+
+// 19 November 2026 (the owner: "when we're doing WS ... we want the limbs to move in a straight line from between
+// proximal and distal joints ... Whilst A and D ... are really moving between medial and lateral, so abduction,
+// adduction").
+test('W and S move a limb\'s end along the line from its root; A and D swing it round the root with its reach unchanged', () => {
+  assert.equal(LIMB_KEYS.view.keys, 'limb');
+  const root = [0.2, 1.2, 0.1], right = [1, 0, 0], place = [0.3, 0.9, -0.4];
+  const v = place.map((x, i) => x - root[i]), r = Math.hypot(...v), u = v.map(x => x / r);
+  const dirOf = p => { const w = p.map((x, i) => x - root[i]), n = Math.hypot(...w); return [w.map(x => x / n), n]; };
+  // W: further out on the same line; S: back in on the same line
+  for (const az of [1, -1]) {
+    const [d, n] = dirOf(limbKeyMove(place, root, right, 0, az, 0.05));
+    assert.ok(near(n, r + az * 0.05, 1e-12) && d.every((x, i) => near(x, u[i], 1e-12)), 'the same direction, 5 cm further or nearer');
+  }
+  // S never brings the end through the root
+  const [dIn, nIn] = dirOf(limbKeyMove(place, root, right, 0, -1, 5));
+  assert.ok(nIn > 0 && nIn <= 0.02 + 1e-12 && dIn.every((x, i) => near(x, u[i], 1e-9)));
+  // D: toward the body's right, A: toward its left, by 5 cm of arc, at the same distance from the root
+  for (const ax of [1, -1]) {
+    const q = limbKeyMove(place, root, right, ax, 0, 0.05), [d, n] = dirOf(q);
+    assert.ok(near(n, r, 1e-12), 'the reach is unchanged');
+    assert.ok(near(Math.acos(d[0] * u[0] + d[1] * u[1] + d[2] * u[2]), 0.05 / r, 1e-9), 'an arc of 5 cm');
+    assert.ok(Math.sign(q[0] - place[0]) === ax, 'D to the right, A to the left');
+  }
+  // the swing ends where the limb points straight along the body's right (it does not go on over the top)
+  let p = place.slice();
+  for (let i = 0; i < 400; i++) p = limbKeyMove(p, root, right, 1, 0, 0.05);
+  const [dEnd, nEnd] = dirOf(p);
+  assert.ok(near(dEnd[0], 1, 1e-6) && near(nEnd, r, 1e-9));
+  assert.deepEqual(limbKeyMove(p, root, right, 1, 0, 0.05).map(x => Math.round(x * 1e9)), p.map(x => Math.round(x * 1e9)), 'and stays there');
+  // both keys at once: the swing and the reach together
+  const [dB, nB] = dirOf(limbKeyMove(place, root, right, 1, 1, 0.05));
+  assert.ok(near(nB, r + 0.05, 1e-12) && dB[0] > u[0]);
+  // no step, or a place on the root itself: nothing moves
+  assert.deepEqual(limbKeyMove(place, root, right, 1, 1, 0), place);
+  assert.deepEqual(limbKeyMove(root, root, right, 1, 1, 0.05), root);
 });
 
 test('a place in the picture and a point in the room are each other\'s inverse', () => {

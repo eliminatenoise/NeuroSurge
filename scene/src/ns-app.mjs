@@ -182,7 +182,16 @@ export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftAr
   // when it is there already (at the start look all four ends are: choosing a limb there moves nothing but the
   // limb's highlight). It is no longer brought to the middle left to right either: that turned the view half away
   // from your body for an arm held out to the side. The look itself is the pointer's.
-  view: Object.freeze({ on: true, frameUp: null, bandUp: 0.6, turnS: 0.16, doneDeg: 0.4, maxS: 1.2,
+  // 19 November 2026, later still (the owner: "when we're doing WS or SW controls, we want the limbs to move in a
+  // straight line from between proximal and distal joints, so wrist and shoulder and ankle and hip ... they're not
+  // rotating internally or externally while moving ... We only introduce some rotation if we're combining key
+  // functions ... Whilst A and D functions ... are really moving between medial and lateral, so abduction,
+  // adduction"). keys 'limb': W and S move the end straight along the line from the shoulder or hip through it (W out,
+  // S in: only the bend and the joint's own flexion change), and A and D swing the limb to your left or right about
+  // the shoulder or hip with its bend unchanged (limbKeyMove). Until now ('level') the keys moved the end level over
+  // the ground, away from and toward the VIEW and across it, whatever way the limb pointed. The limb's own turn
+  // (internal / external) is never among the hold's joints, with either rule.
+  view: Object.freeze({ on: true, frameUp: null, bandUp: 0.6, turnS: 0.16, doneDeg: 0.4, maxS: 1.2, keys: 'limb',
     hold: true, lookCarries: true, followS: 0.12, band: 0.55, speedMps: 0.6, leadM: 0.02, levelM: 0.12, waitMm: 40, waitShare: 0.5 }) });
 /** 19 November 2026 (LIMB_KEYS.view.hold): balls that fill the trunk, neck and head of the drawn body, for the one test
  * that keeps a hand's middle out of them (ns-app handKeepOut). Each: the segment that carries it, its middle in that
@@ -315,6 +324,28 @@ export function lookFramingPoint(eye, at, fovYDeg, frameUp = 0.5) {
   // a point that is to stand above the picture's middle needs the look BELOW it by the angle of that height
   const up = Math.atan((2 * frameUp - 1) * Math.tan((fovYDeg * DEG) / 2));
   return { yaw, pitch: toPoint - up };
+}
+/** LIMB_KEYS.view.keys 'limb': where the keys move a limb's end to. place: the end's asked place; root: the shoulder
+ * or hip (both world m); bodyRight: the unit direction to the body's right in the world; ax: +1 D, -1 A; az: +1 W,
+ * -1 S; stepM: the way gone this frame (m). W / S: along the line from the root through the place (never nearer the
+ * root than minM). A / D: round the root on the ball the place is on, toward the body's right / left, by stepM of
+ * arc; nothing when the limb already points straight along that direction. Both at once: the swing, then the reach.
+ * Pure; returns a new [x, y, z]. */
+export function limbKeyMove(place, root, bodyRight, ax, az, stepM, minM = 0.02) {
+  const v = [place[0] - root[0], place[1] - root[1], place[2] - root[2]], r = Math.hypot(v[0], v[1], v[2]);
+  if (!(r > 1e-4) || !(stepM > 0)) return [place[0], place[1], place[2]];
+  let u = [v[0] / r, v[1] / r, v[2] / r];
+  if (ax) {
+    const d = bodyRight[0] * u[0] + bodyRight[1] * u[1] + bodyRight[2] * u[2];
+    const t = [bodyRight[0] - d * u[0], bodyRight[1] - d * u[1], bodyRight[2] - d * u[2]], tn = Math.hypot(t[0], t[1], t[2]);
+    if (tn > 1e-3) {
+      // (no further than straight along the body's right or left: the swing ends where the limb points that way)
+      const left = Math.atan2(tn, ax > 0 ? d : -d), ang = Math.min(stepM / r, left), c = Math.cos(ang), sn = Math.sin(ang) * Math.sign(ax) / tn;
+      u = [u[0] * c + t[0] * sn, u[1] * c + t[1] * sn, u[2] * c + t[2] * sn];
+    }
+  }
+  const len = az ? Math.max(Math.min(minM, r), r + Math.sign(az) * stepM) : r;
+  return [root[0] + u[0] * len, root[1] + u[1] * len, root[2] + u[2] * len];
 }
 /** LIMB_KEYS.view (bandUp): the smallest turn of the look { dYaw, dPitch } (radians, added to the look) that brings a
  * picture place f = { x, y } (viewFrameOf: -1 .. 1 across and up the picture) inside `band` of the half width and
@@ -7687,7 +7718,19 @@ export function start(params = {}) {
         if ((ax !== 0 || az !== 0) && !holdBusy()) {
           const yaw = pose.gazeLook && Number.isFinite(pose.gazeLook.yaw) ? pose.gazeLook.yaw : pose.yaw, sp = HOLD.speedMps * (dt > 0 ? Math.min(dt, MAX_FRAME_DT) : 0);
           const sy = Math.sin(yaw), cy = Math.cos(yaw);
-          const K = [T[0] + cy * ax * sp - sy * az * sp, T[1], T[2] - sy * ax * sp - cy * az * sp];
+          // (keys 'limb': along the limb's own line and round its root; otherwise level, by the view's heading)
+          let K = null;
+          if (HOLD.keys === 'limb' && camBodyToWorld) {
+            const pe = limbEnds(h.limb), o0 = worldOf(camBodyToWorld, [0, 0, 0]), o1 = worldOf(camBodyToWorld, [-1000, 0, 0]); // (the body's +x is its left)
+            const rt = [o1[0] - o0[0], o1[1] - o0[1], o1[2] - o0[2]], rn = Math.hypot(rt[0], rt[1], rt[2]);
+            // While the keys are held the place is kept as a direction from the root and a length along it (h.keyU,
+            // h.keyLen: stepLimbHold), so W and S stay on ONE line however the limb's end lags or misses it. (Taken
+            // from the end's own place each frame, the line drifted with the solve's error: the right hand came in 37
+            // degrees off the line it started on.)
+            const from = h.keyU && !holdCarries() ? [pe ? pe.root[0] + h.keyU[0] * h.keyLen : T[0], pe ? pe.root[1] + h.keyU[1] * h.keyLen : T[1], pe ? pe.root[2] + h.keyU[2] * h.keyLen : T[2]] : T;
+            if (pe && rn > 1e-6) K = limbKeyMove(from, pe.root, [rt[0] / rn, rt[1] / rn, rt[2] / rn], ax, az, sp);
+          }
+          if (!K) K = [T[0] + cy * ax * sp - sy * az * sp, T[1], T[2] - sy * ax * sp - cy * az * sp];
           // (a key that would push the hand into the trunk moves nothing: the hand stops at the body, it does not slide round it)
           if (!arm || handKeepOut(K) === K) T = K;
         }
@@ -7798,10 +7841,35 @@ export function start(params = {}) {
         // A key never winds the place asked up beyond where the limb can go: the other key then answers at once. The
         // keys move the end LEVEL, so the place keeps its own height (the limb's end is not let drag it up or down
         // while it catches up) unless that height is far out of the limb's reach.
-        if (keyed) {
+        if (keyed && HOLD.keys === 'limb') {
+          // The keys move the end along the limb's line and round its root (limbKeyMove), so the place is kept as a
+          // direction from the root and a length. Neither is wound up beyond where the limb can go: the length stays
+          // within leadM of the end's own way out along that direction, and, while A or D swings the limb, the direction
+          // within leadM of arc of the end's own. With W or S alone the direction is the one the keys began with: the
+          // place stays on its line and is not pulled toward the end (that made the line drift by the solve's error).
+          const r = pts.root, v = [T[0] - r[0], T[1] - r[1], T[2] - r[2]], len0 = Math.hypot(v[0], v[1], v[2]);
+          if (len0 > 1e-4) {
+            let u = ax === 0 && h.keyU ? h.keyU : [v[0] / len0, v[1] / len0, v[2] / len0], len = len0;
+            const e = [pts.end[0] - r[0], pts.end[1] - r[1], pts.end[2] - r[2]], en = Math.hypot(e[0], e[1], e[2]);
+            if (en > 1e-4) {
+              const eh = [e[0] / en, e[1] / en, e[2] / en], dot = Math.max(-1, Math.min(1, u[0] * eh[0] + u[1] * eh[1] + u[2] * eh[2]));
+              const th = Math.acos(dot), most = HOLD.leadM / Math.max(0.05, len);
+              if (ax !== 0 && th > most) { // (the direction, turned back toward the end's own until it is within the lead)
+                const k = most / th, sn = Math.sin(th) || 1, a = Math.sin((1 - k) * th) / sn, b = Math.sin(k * th) / sn;
+                u = [eh[0] * a + u[0] * b, eh[1] * a + u[1] * b, eh[2] * a + u[2] * b];
+                const un = Math.hypot(u[0], u[1], u[2]) || 1; u = [u[0] / un, u[1] / un, u[2] / un];
+              }
+              const out = e[0] * u[0] + e[1] * u[1] + e[2] * u[2]; // (how far out the end is along the place's direction)
+              len = Math.max(out - HOLD.leadM, Math.min(out + HOLD.leadM, len));
+            }
+            T = [r[0] + u[0] * len, r[1] + u[1] * len, r[2] + u[2] * len];
+            h.keyU = u; h.keyLen = len;
+          }
+        } else if (keyed) {
           const ox = T[0] - pts.end[0], oz = T[2] - pts.end[2], n = Math.hypot(ox, oz), oy = T[1] - pts.end[1];
           T = [n > HOLD.leadM ? pts.end[0] + ox * HOLD.leadM / n : T[0], Math.abs(oy) > HOLD.levelM ? pts.end[1] + Math.sign(oy) * HOLD.levelM : T[1], n > HOLD.leadM ? pts.end[2] + oz * HOLD.leadM / n : T[2]];
         }
+        if (!keyed) { h.keyU = null; h.keyLen = 0; } // (the keys' line ends with the keys)
         h.world = T;
         // (the keys set how far out the end is, and so the bend the look then leaves alone)
         if (keyed) h.rho = Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]);
