@@ -1799,6 +1799,18 @@ The user: “when we move our head around, the eyes also move ... The eyes attac
 
 Not done from the same notes: the strip centred on either side of the mirror body's head “like hair”, with a wider gap between the halves; the patchy muscles of the mirror body's head; its eyes; more detail on the optic nerves; the eyeballs in the loading picture; the right arm crossing the body.
 
+## 138. The head: whole eyes and face muscles that cover the skull (19 November)
+
+The user: “let's fix the mirror body's head because the muscles are very patchy at the moment and smallpoxy. And let's fix the eyes of the mirror body. And of course, that also means your own body to some extent.”
+
+- **Cause.** The coarse meshes. The face's 54 muscles are sheets a millimetre or two thick lying on the skull, and the head's eyes are three thin shells one inside the other (sclera, iris, lens). Their coarse copies dipped under the bone in patches, and one eye came out as a dark hole and the other as a grey ball.
+- **The face muscles and the eyes are their source files again** (`coarseKinds` in `tools/build-mesh-packs.mjs`): 138 meshes are now kept exactly as the source, 78 before. The download grows from 4.6 to 5.7 MB and the scene from 878 thousand to 1.05 million triangles.
+- **A depth offset for the face muscles of the mirror body** (`FACE_MUSCLE_OFFSET`): even as source meshes the frontalis let specks of the coarse skull through. They are drawn a hair nearer the eye than they lie; nothing moves.
+
+Seen in a picture of the mirror body's head at the start (1600 × 1000 at pixel ratio 2): both eyes whole with iris and pupil, the forehead covered by its two muscle bellies. The frame table is unchanged (60 / 59 / 60 / 60) and the game is ready about 0.3 s later (4.2 s here).
+
+Not done: the same offset for the head of your own body seen from outside (E); the neck's thin muscles still show some speckle.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

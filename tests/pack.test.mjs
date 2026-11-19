@@ -33,7 +33,8 @@ test('the committed pack index is the pinned one, and every pack file matches it
     assert.equal(sha256(b), p.sha256, p.file);
   }
   assert.equal(packs.reduce((a, p) => a + p.files, 0), 611, 'the files the game waits for');
-  assert.ok(packs.reduce((a, p) => a + p.bytes, 0) < 5e6, 'the whole download of anatomy stays under 5 MB');
+  // (19 November 2026: 5.7 MB with the face's 54 muscles and the head's eyes kept as their source files; 4.6 MB before)
+  assert.ok(packs.reduce((a, p) => a + p.bytes, 0) < 6e6, 'the whole download of anatomy stays under 6 MB');
   assert.deepEqual(index.rule, COARSE);
 });
 
@@ -73,7 +74,7 @@ test('every coarse mesh records its source file (size, hash, vertex count), and 
     }
   }
   assert.equal(files, 611);
-  assert.equal(exact, 78, 'kept exactly as their source: the 32 bones of the game arm, the two precentral gyri, the two lacrimal bones, the 42 finger and toe bones');
+  assert.equal(exact, 138, 'kept exactly as their source: the 32 bones of the game arm, the two precentral gyri, the two lacrimal bones, the 42 finger and toe bones, and (19 November) the 54 face muscles and the 6 parts of the head\'s two eyes');
   assert.ok(named >= 600, `only ${named} packed files are named by a manifest`);
 });
 
@@ -149,7 +150,8 @@ test('coarse meshes: every kept vertex is a source vertex (to 0.01 mm), no sourc
     }
   }
   assert.ok(against < 0.003 * tris && against <= 1.5 * againstSource + 50, `${against} of ${tris} coarse triangles face against the source surface at all three corners (the source's own thin edges: ${againstSource})`);
-  assert.ok(tris < 0.38 * srcTris, `${tris} of ${srcTris} triangles`);
+  // (0.38 before the face muscles and the head's eyes stayed as their source: 1 048 620 of 2 395 434 now, 43.8 %)
+  assert.ok(tris < 0.45 * srcTris, `${tris} of ${srcTris} triangles`);
   assert.ok(worst <= 0.52);
   assert.ok(leastVolume >= COARSE.volumeKeep - 0.005, `a closed mesh keeps ${leastVolume} of its volume`);
   assert.ok(flatAll <= 10, `${flatAll} triangles without area in all`);

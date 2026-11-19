@@ -3002,6 +3002,8 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
  * samplePoints of the region's vertices, projected with the live camera, covers less than areaFrac of the view
  * (1280x720: 2396 px²; there the medial toes measure 1720, the jaw 1452, the elbow 3386); re-measured every everyFrames
  * frames. Display choices (harness/run-R4-fix-6-shots markDots). */
+/** 19 November 2026: the depth offset that keeps the thin face muscles in front of the skull they lie on. */
+export const FACE_MUSCLE_OFFSET = Object.freeze({ factor: -2, units: -12 });
 /** 19 November 2026 (the owner: "have the whole brain light up slightly, faintly, with whatever color area is being
  * picked"): level: the light added to the whole cortex, as a share of the picked area's glow colour, when an area is
  * looked at or switched on; easeS: how quickly it comes and goes. Faint by design: the keys stay the bright things. */
@@ -9495,6 +9497,10 @@ export function createScene({
         if (kind === 'muscle' && geo.attributes.nsLift) tm.defines = { ...(tm.defines || {}), NS_DEPTH_LIFT: 1 };
         if (kind === 'muscle') { tm.userData.nsFibre = material.userData.nsFibre; tm.userData.nsSweep = material.userData.nsSweep; }
         if (kind === 'muscle') shadeMuscle(tm, MUSCLE_REST_DRIVE);
+        // 19 November 2026 (the owner: the mirror body's head "very patchy ... and smallpoxy"): the face's muscles are
+        // sheets lying on the skull, and the bone showed through them in specks. They are drawn a hair nearer the eye
+        // than they lie (a depth offset only; nothing moves).
+        if (kind === 'muscle' && face) { tm.polygonOffset = true; tm.polygonOffsetFactor = FACE_MUSCLE_OFFSET.factor; tm.polygonOffsetUnits = FACE_MUSCLE_OFFSET.units; }
         const tw = kind === 'muscle' ? haloHost(new THREE.Mesh(geo, tm), true) : new THREE.Mesh(geo, tm);
         tw.name = `mirror image: ${bodyMeshName(entry, id)}`;
         tw.matrixAutoUpdate = false;

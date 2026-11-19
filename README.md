@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 45 repairs the mirror body's head: whole eyes, and face muscles that cover the skull.
+
 Body update 44 makes the brain answer you. Its eyeballs turn with your look, and the whole brain takes a faint tint of the area you look at. While the game loads you watch it being put together, with the controls on screen until it is ready.
 
 Body update 43 turns the brain round to face you. The motor strip is now an arch with the areas for your left side on the left and your right side on the right. Two eyeballs hang from the front of the brain: press **E** to see them. The mirror body stands toe to toe with you.

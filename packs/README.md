@@ -1,14 +1,14 @@
 # Mesh packs
 
-What the game loads instead of 611 OBJ text files (157 MB): five packs and one small rig file, **4.8 MB** together.
-The packs hold **coarser copies** of the source meshes: 878 440 triangles instead of 2 395 434 (36.7 %).
+What the game loads instead of 611 OBJ text files (157 MB): five packs and one small rig file, **6.0 MB** together.
+The packs hold **coarser copies** of the source meshes: 1 048 620 triangles instead of 2 395 434 (43.8 %). Since 19 November 2026 the 54 face muscles and the six parts of the head's two eyes are kept as their source files: their coarse copies dipped under the skull in patches and broke the eyes' nested shells.
 
 | pack | source packet(s) | files | triangles in the sources | triangles in the pack | size |
 | --- | --- | --- | --- | --- | --- |
 | `arm-brain.nspack` | `pov-demo-assets`, `pov-demo-assets-r2` | 142 | 463238 | 197198 | 1.11 MB |
 | `fullbody.nspack` | `bodyparts3d-fullbody-r1` | 294 | 1081946 | 370126 | 1.90 MB |
-| `head.nspack` | `bodyparts3d-head-r1` | 10 | 135582 | 10524 | 0.05 MB |
-| `face-muscles.nspack` | `face-muscles-r1` | 54 | 105892 | 22832 | 0.12 MB |
+| `head.nspack` | `bodyparts3d-head-r1` | 10 | 135582 | 97644 | 0.61 MB |
+| `face-muscles.nspack` | `face-muscles-r1` | 54 | 105892 | 105892 | 0.73 MB |
 | `missing-muscles.nspack` | `missing-muscles-r1` | 111 | 608776 | 277760 | 1.38 MB |
 | `BODY-RIG.json` | (all of the above; see "The rig file") | | | | 0.22 MB (about 25 kB compressed by the host) |
 
@@ -58,7 +58,7 @@ Five kinds of mesh, by what the game does with them (`COARSE` in `tools/build-me
 | bone | the body's bones except the finger and toe bones, the cranium and eyes (139) | 0.5 mm | 10 mm | about 20 %, the cranium's plates 7 % |
 | brain | the brain except the two precentral gyri (57) | 0.3 mm | 5 mm | 30 % |
 | cut | 14 meshes the game itself reshapes in cells of 5 to 6 mm: the obliques and transversus (the opened rectus sheath), rectus abdominis (the belly's midline), pectoralis major (the flattened chest) | 0.4 mm | 5 mm | 36 to 71 % |
-| source | 78 meshes kept **exactly as the source file** (nothing joined, removed or rounded): the 32 bones of the left game arm (its joints are estimated from their vertices: on a coarse capitate the fitted wrist centre moved 17 mm), the two precentral gyri (the motor areas are laid out on their vertices), the two lacrimal bones (the eye point is taken from their vertices), the 42 finger and toe bones (the game draws them from a rounded copy it makes from their own vertices; on coarse bones the fingers came out thin and knobbly) | 0 | | 100 % |
+| source | 138 meshes kept **exactly as the source file** (78 until 19 November 2026; since then also the 54 face muscles and the six parts of the head's two eyes) (nothing joined, removed or rounded): the 32 bones of the left game arm (its joints are estimated from their vertices: on a coarse capitate the fitted wrist centre moved 17 mm), the two precentral gyri (the motor areas are laid out on their vertices), the two lacrimal bones (the eye point is taken from their vertices), the 42 finger and toe bones (the game draws them from a rounded copy it makes from their own vertices; on coarse bones the fingers came out thin and knobbly) | 0 | | 100 % |
 
 So the silhouettes, the muscles' ends where they attach and the bones' joint surfaces are all within 0.5 mm of the
 source (about half a pixel in the game's view), and small parts keep more of their triangles than large smooth ones.

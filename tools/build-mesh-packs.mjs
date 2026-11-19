@@ -75,6 +75,10 @@ export function coarseKinds({ rootDir = root } = {}) {
   }
   for (const f of ['inputs/FULLBODY-MESH-MANIFEST.json', 'packets/bodyparts3d-head-r1/HEAD-MESH-MANIFEST.json']) {
     for (const a of JSON.parse(fs.readFileSync(path.join(rootDir, f), 'utf8')).assets) {
+      // 19 November 2026 (the owner: "let's fix the eyes of the mirror body ... that also means your own body"): the
+      // head's eyes are three thin shells one inside the other (sclera, iris, lens); made coarse, one eye came out as a
+      // dark hole and the other as a grey ball. They stay as their source files.
+      if (a.tissue === 'eye') { kinds.set(a.element_id, 'source'); continue; }
       if (!(a.kind === 'bone' || a.tissue === 'bone')) continue;
       // the finger and toe bones are drawn from a rounded copy the game makes from their own vertices (ns-scene-three
       // boneTipDisplay): on coarse bones the fingers came out thin and knobbly, so they stay as their source files
@@ -82,6 +86,10 @@ export function coarseKinds({ rootDir = root } = {}) {
       kinds.set(a.element_id, /phalan/i.test(name) ? 'source' : 'bone');
     }
   }
+  // 19 November 2026 (the owner: "the mirror body's head ... the muscles are very patchy at the moment and smallpoxy"):
+  // the face's muscles are sheets a millimetre or two thick lying on the skull; their coarse copies dipped under the
+  // bone in patches. All 54 stay as their source files (about a megabyte more to download).
+  for (const a of JSON.parse(fs.readFileSync(path.join(rootDir, 'packets', 'face-muscles-r1', 'FACE-MESH-MANIFEST.json'), 'utf8')).assets || []) if (a && typeof a.element_id === 'string') kinds.set(a.element_id, 'source');
   for (const id of fullbodyEyeIds(JSON.parse(fs.readFileSync(path.join(rootDir, 'inputs', 'FULLBODY-MESH-MANIFEST.json'), 'utf8')).assets)) kinds.set(id, 'source');
   for (const r of RECTUS_SHEATH_OPENING.rows) { kinds.set(r.sheath, 'cut'); kinds.set(r.rectus, 'cut'); }
   kinds.set(BELLY_MIDLINE.right, 'cut'); kinds.set(BELLY_MIDLINE.left, 'cut');
