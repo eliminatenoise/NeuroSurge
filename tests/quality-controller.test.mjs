@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stepQuality, qualityStart, QUALITY_AUTO, QUALITY_LEVELS } from '../scene/src/ns-scene-three.mjs';
+import { stepQuality, qualityStart, frameStat, QUALITY_AUTO, QUALITY_LEVELS } from '../scene/src/ns-scene-three.mjs';
 
 /** Feed `frames` equal frame times; returns the last state and every level change seen, in order. */
 function run(state, frames, ms, busyMs = NaN, seen = []) {
@@ -32,13 +32,38 @@ function untilChange(state, ms, busyMs = NaN, max = 2000) {
 }
 const name = s => QUALITY_LEVELS[s.level].name;
 
+// 19 November 2026, later: the levels' order changed (the owner: the bodies "high resolution, yet not destabilize
+// performance"): the first cheaper level drops the two decorative passes at FULL resolution ('lite-1'); the
+// resolution goes only after that. The cases below are restated for that order.
+test('the resolution is the last thing given up', () => {
+  assert.deepEqual(QUALITY_LEVELS.map(l => l.name), ['full', 'lite-1', 'lite-0.9', 'lite-0.8', 'lite-0.7', 'lite-0.6']);
+  assert.ok(QUALITY_LEVELS[0].scale === 1 && QUALITY_LEVELS[1].scale === 1 && QUALITY_LEVELS[1].lite === true, 'the first step down keeps every pixel');
+  for (let i = 2; i < QUALITY_LEVELS.length; i++) assert.ok(QUALITY_LEVELS[i].scale < QUALITY_LEVELS[i - 1].scale && QUALITY_LEVELS[i].lite === true);
+});
+
+test('frames that are every second one late count as slow; one hitch among steady frames does not', () => {
+  // the measure: a mean with each sample held to twice the median
+  assert.ok(Math.abs(frameStat([16.7, 16.7, 16.7, 200, 16.7, 16.7, 16.7]) - (6 * 16.7 + 33.4) / 7) < 1e-9);
+  assert.ok(frameStat([16.7, 33.3, 16.7, 33.3, 16.7, 33.3, 16.7]) > QUALITY_AUTO.slowMs, 'about 40 frames a second: slow, though its median is one refresh');
+  assert.ok(frameStat([16.7, 16.7, 16.7, 200, 16.7, 16.7, 16.7]) < QUALITY_AUTO.slowMs);
+  assert.ok(Number.isNaN(frameStat([])));
+  // a renderer that misses every second refresh leaves the full level (it stayed on it before: the median was 16.7 ms)
+  let s = qualityStart('auto');
+  for (let i = 0; i < 200 && s.changes === 0; i++) s = stepQuality(s, i % 2 ? 33.3 : 16.7, QUALITY_AUTO, QUALITY_LEVELS, 5);
+  assert.equal(name(s), 'lite-1');
+  // steady frames with a hitch every second leave it alone
+  s = qualityStart('auto');
+  for (let i = 0; i < 600; i++) s = stepQuality(s, i % 60 === 30 ? 180 : 16.7, QUALITY_AUTO, QUALITY_LEVELS, 5);
+  assert.equal(s.changes, 0);
+});
+
 test('a step that makes the frames faster is kept', () => {
   let s = untilChange(qualityStart('auto'), 33.3, 5);
-  assert.equal(name(s), 'scale-0.9');
+  assert.equal(name(s), 'lite-1');
   assert.equal(s.lastChange.why, 'slow');
   assert.ok(s.probe, 'the step is being measured');
   ({ s } = run(s, 60, 16.7, 5));
-  assert.equal(name(s), 'scale-0.9');
+  assert.equal(name(s), 'lite-1');
   assert.equal(s.probe, null);
   assert.equal(s.changes, 1);
 });
@@ -48,8 +73,8 @@ test('steps that do not help are undone, and the level is then held', () => {
   let s = qualityStart('auto');
   ({ s } = run(s, 400, 33.3, NaN, seen)); // 13 s of slow frames whatever the picture
   assert.deepEqual(seen.map(c => [QUALITY_LEVELS[c.from].name, QUALITY_LEVELS[c.to].name, c.why]), [
-    // (19 November 2026: the levels are gentler and none swaps the meshes: a resolution step, then the lite step, then back)
-    ['full', 'scale-0.9', 'slow'], ['scale-0.9', 'lite-0.7', 'slow'], ['lite-0.7', 'full', 'no-gain']
+    // (19 November 2026: the levels are gentler and none swaps the meshes: the lite step, then a resolution step, then back)
+    ['full', 'lite-1', 'slow'], ['lite-1', 'lite-0.9', 'slow'], ['lite-0.9', 'full', 'no-gain']
   ]);
   assert.equal(name(s), 'full');
   assert.deepEqual(s.blockedUntil, {}, 'no level stays blocked by steps that were undone');
@@ -60,7 +85,7 @@ test('steps that do not help are undone, and the level is then held', () => {
   // the hold ends after 20 s; the same answer again doubles it
   const again = [];
   ({ s } = run(s, 900, 33.3, NaN, again));
-  assert.equal(again.length, 3, 'one more try after the hold (a resolution step, the lite step, and back)');
+  assert.equal(again.length, 3, 'one more try after the hold (the lite step, a resolution step, and back)');
   assert.equal(again[0].why, 'slow');
   assert.ok(again[0].atMs >= backAt + QUALITY_AUTO.noGainHoldMs);
   assert.equal(again[again.length - 1].why, 'no-gain');
@@ -78,15 +103,14 @@ test('slow frames that are the game\'s own work leave the picture alone', () => 
   assert.equal(s.lastHold.busyShare, 0.72);
 });
 
-test('a renderer limited by triangles still reaches the simpler meshes', () => {
+test('very slow frames go down several levels at once, and on to the last while they stay slow', () => {
   const seen = [];
   let s = untilChange(qualityStart('auto'), 300, 20);
-  assert.equal(name(s), 'scale-0.7', 'very slow frames jump three levels');
-  s = untilChange(s, 300, 20); // render scale and the x-ray pass did not help
-  assert.equal(name(s), 'lite-0.7');
-  ({ s } = run(s, 12, 120, 20, seen)); // simpler meshes did
-  assert.equal(name(s), 'lite-0.7');
-  s = untilChange(s, 120, 20); // still slow: the last level
+  assert.equal(name(s), 'lite-0.8', 'very slow frames jump three levels');
+  ({ s } = run(s, 12, 120, 20, seen)); // that helped (300 ms -> 120 ms): kept
+  assert.equal(name(s), 'lite-0.8');
+  assert.equal(s.probe, null);
+  s = untilChange(s, 120, 20); // still slow: two more levels, the last
   assert.equal(name(s), 'lite-0.6');
   ({ s } = run(s, 40, 100, 20, seen));
   assert.equal(name(s), 'lite-0.6');
@@ -97,7 +121,7 @@ test('meshes are not swapped for frames that are only just slow', () => {
   const seen = [];
   let s = qualityStart('auto');
   ({ s } = run(s, 400, 26, NaN, seen));
-  assert.deepEqual(seen.map(c => [QUALITY_LEVELS[c.to].name, c.why]), [['scale-0.9', 'slow'], ['lite-0.7', 'slow'], ['full', 'no-gain']]);
+  assert.deepEqual(seen.map(c => [QUALITY_LEVELS[c.to].name, c.why]), [['lite-1', 'slow'], ['lite-0.9', 'slow'], ['full', 'no-gain']]);
   // and no level swaps the meshes at all any more (the owner: the bodies were "rough or patchy")
   assert.ok(QUALITY_LEVELS.every(l => l.lod === null) && Math.min(...QUALITY_LEVELS.map(l => l.scale)) >= 0.6);
 });

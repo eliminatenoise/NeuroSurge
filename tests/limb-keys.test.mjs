@@ -31,8 +31,10 @@ test('a held double click steps slowly: slower than a double click can be repeat
   assert.ok(LIMB_KEYS.flashS >= LIMB_KEYS.holdStepS, 'each limb is still lit when the next step comes');
 });
 
-test('the view turns so the chosen limb\'s end is in the middle left to right and a little above the middle', async () => {
-  const { lookFramingPoint } = await import('../scene/src/ns-app.mjs');
+// 19 November 2026, later still: restated. The end had a set height in the picture (three quarters up); the owner:
+// "Disregard that rule". The view now only keeps the end inside the picture (LIMB_KEYS.view.bandUp).
+test('the view turns only as far as keeps the chosen limb\'s end in the picture', async () => {
+  const { lookFramingPoint, keepInFrameTurn, viewFrameOf } = await import('../scene/src/ns-app.mjs');
   const DEG = Math.PI / 180, eye = [0, 1, 0];
   // straight ahead (the camera looks along -z), level: yaw 0; at frameUp 0.5 the look is on the point itself
   const mid = lookFramingPoint(eye, [0, 1, -2], 54, 0.5);
@@ -40,10 +42,27 @@ test('the view turns so the chosen limb\'s end is in the middle left to right an
   // a point to the left (-x) needs a turn to the left (positive yaw in the camera's convention)
   const left = lookFramingPoint(eye, [-2, 1, -2], 54, 0.5);
   assert.ok(Math.abs(left.yaw - 45 * DEG) < 1e-9);
-  // frameUp 0.6: the point stands above the middle, so the look is below it, by the angle of a tenth of the picture
-  const up = lookFramingPoint(eye, [0, 1, -2], 54, LIMB_KEYS.view.frameUp);
-  const want = -Math.atan((2 * LIMB_KEYS.view.frameUp - 1) * Math.tan(27 * DEG));
+  // a set height (0.6): the point stands above the middle, so the look is below it, by the angle of a tenth of the picture
+  const up = lookFramingPoint(eye, [0, 1, -2], 54, 0.6);
+  const want = -Math.atan((2 * 0.6 - 1) * Math.tan(27 * DEG));
   assert.ok(Math.abs(up.pitch - want) < 1e-12 && up.pitch < 0);
   assert.equal(lookFramingPoint(eye, eye, 54, 0.5), null, 'no look toward the eye itself');
-  assert.ok(LIMB_KEYS.view.frameUp > 0.5 && LIMB_KEYS.view.frameUp < 0.8);
+  // no set height any more: only a band the end is kept inside
+  const V = LIMB_KEYS.view;
+  assert.equal(V.frameUp, null, 'the owner: "Disregard that rule" (the wrist or ankle three quarters up the picture)');
+  assert.ok(V.bandUp >= 0.4 && V.bandUp <= 0.85 && V.band > 0.3 && V.band < 0.9);
+  // an end inside the picture's band moves the view not at all
+  assert.deepEqual(keepInFrameTurn({ x: 0.2, y: -0.5 }, 54, 16 / 9, V.band, V.bandUp), { dYaw: 0, dPitch: 0 });
+  // an end under the band: the look goes DOWN exactly as far as brings it to the band's lower edge, and not sideways
+  const pose = { position: [0, 1, 0], yaw: 0.2, pitch: -0.3 }, P = [-0.1, -0.2, -0.9];
+  const f = viewFrameOf(pose, P, 54, 16 / 9), k = keepInFrameTurn(f, 54, 16 / 9, V.band, V.bandUp);
+  assert.ok(f.y < -V.bandUp && Math.abs(f.x) < V.band && k.dPitch < 0 && k.dYaw === 0);
+  const g = viewFrameOf({ ...pose, pitch: pose.pitch + k.dPitch }, P, 54, 16 / 9);
+  assert.ok(Math.abs(g.y + V.bandUp) < 0.02, `the end comes to the band's edge (${g.y})`);
+  // an end over the band: the look goes up; one far to the right: the look turns right (negative yaw) to the band's edge
+  assert.ok(keepInFrameTurn({ x: 0, y: 0.9 }, 54, 16 / 9, V.band, V.bandUp).dPitch > 0);
+  const side = keepInFrameTurn({ x: 0.9, y: 0 }, 54, 16 / 9, V.band, V.bandUp);
+  assert.ok(side.dYaw < 0 && side.dPitch === 0);
+  // a place that is not in the picture at all (behind the view) asks for no turn here (the caller turns to it)
+  assert.deepEqual(keepInFrameTurn({ x: NaN, y: NaN }, 54, 16 / 9, V.band, V.bandUp), { dYaw: 0, dPitch: 0 });
 });

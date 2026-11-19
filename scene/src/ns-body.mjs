@@ -2898,13 +2898,73 @@ function pointSetsApart(a, b, d) {
   }
   return true;
 }
-function minPointDistance(a, b) {
-  let best = Infinity;
-  for (let i = 0; i < a.length; i += 3) for (let j = 0; j < b.length; j += 3) {
-    const ex = a[i] - b[j], ey = a[i + 1] - b[j + 1], ez = a[i + 2] - b[j + 2], q = ex * ex + ey * ey + ez * ez;
-    if (q < best) best = q;
+/** Points [x, y, z, ...] moved by a matrix (a new Float64Array). */
+function rotatedPoints(pts, m) {
+  const out = new Float64Array(pts.length);
+  for (let i = 0; i < pts.length; i += 3) {
+    const x = pts[i], y = pts[i + 1], z = pts[i + 2];
+    out[i] = m[0] * x + m[4] * y + m[8] * z + m[12]; out[i + 1] = m[1] * x + m[5] * y + m[9] * z + m[13]; out[i + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
   }
-  return Math.sqrt(best);
+  return out;
+}
+/** hipRotationClearRange: the one rotation that takes the given segments from pose world0 to pose world1, as { axis
+ * (unit), deg, point (on the axis) }, or null when they did not move as one rigid piece about a line (each segment's
+ * own move is compared with the first's, the move must have no slide along its axis, and the rotation rebuilt from
+ * axis, angle and point must give the move back: all to 1e-6). Pure. */
+function hipTurnRotation(segs, world0, world1) {
+  let E = null;
+  for (const seg of segs) {
+    const a = world0[seg], b = world1[seg];
+    if (!a || !b) return null;
+    const e = m4Mul(b, m4RigidInv(a));
+    if (!E) E = e; else for (let i = 0; i < 16; i++) if (Math.abs(e[i] - E[i]) > 1e-6) return null;
+  }
+  if (!E) return null;
+  const cosT = Math.max(-1, Math.min(1, (E[0] + E[5] + E[10] - 1) / 2)), th = Math.acos(cosT), sn = Math.sin(th);
+  if (!(th > 1e-3) || !(sn > 1e-3)) return null;
+  const u = [(E[6] - E[9]) / (2 * sn), (E[8] - E[2]) / (2 * sn), (E[1] - E[4]) / (2 * sn)];
+  const t = [E[12], E[13], E[14]];
+  if (Math.abs(t[0] * u[0] + t[1] * u[1] + t[2] * u[2]) > 1e-6) return null; // (a slide along the axis: not a turn about a line)
+  // the point of the axis nearest the origin: c = (t + cot(th / 2) (u x t)) / 2
+  const ct = 1 / Math.tan(th / 2), ux = [u[1] * t[2] - u[2] * t[1], u[2] * t[0] - u[0] * t[2], u[0] * t[1] - u[1] * t[0]];
+  const point = [(t[0] + ct * ux[0]) / 2, (t[1] + ct * ux[1]) / 2, (t[2] + ct * ux[2]) / 2], deg = th / DEG;
+  const back = m4RotAbout(u, deg, point);
+  for (let i = 0; i < 16; i++) if (Math.abs(back[i] - E[i]) > 1e-6) return null;
+  return { axis: u, deg, point };
+}
+/** The least distance between a point of a and a point of b when it is under d; Infinity when the sets are at least d
+ * apart. Exact: a pair nearer than d lies in the same or in neighbouring cells of a grid of cell d, which is all that
+ * is searched (pointSetsApart's own grid, without its early exit).
+ * 19 November 2026 (performance): this replaces a search over every pair of points (two leg clouds: about 3 ms each
+ * time the feet were nearer than boneGapMm, taken on every frame of a leg movement switched on from the brain). */
+export function pointSetsNear(a, b, d) {
+  const A = boxOf(a), B = boxOf(b);
+  let gap2 = 0;
+  for (let c = 0; c < 3; c++) { const g = Math.max(0, A[c] - B[c + 3], B[c] - A[c + 3]); gap2 += g * g; }
+  const d2 = d * d;
+  if (gap2 >= d2) return Infinity;
+  const cell = d, hash = (i, j, k) => (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(k, 83492791)) | 0, grid = new Map();
+  for (let i = 0; i < b.length; i += 3) {
+    if (b[i] < A[0] - d || b[i] > A[3] + d || b[i + 1] < A[1] - d || b[i + 1] > A[4] + d || b[i + 2] < A[2] - d || b[i + 2] > A[5] + d) continue;
+    const kk = hash(Math.floor(b[i] / cell), Math.floor(b[i + 1] / cell), Math.floor(b[i + 2] / cell));
+    const list = grid.get(kk);
+    if (list) list.push(i); else grid.set(kk, [i]);
+  }
+  if (grid.size === 0) return Infinity;
+  let best = d2;
+  for (let i = 0; i < a.length; i += 3) {
+    if (a[i] < B[0] - d || a[i] > B[3] + d || a[i + 1] < B[1] - d || a[i + 1] > B[4] + d || a[i + 2] < B[2] - d || a[i + 2] > B[5] + d) continue;
+    const cx = Math.floor(a[i] / cell), cy = Math.floor(a[i + 1] / cell), cz = Math.floor(a[i + 2] / cell);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const list = grid.get(hash(cx + dx, cy + dy, cz + dz));
+      if (!list) continue;
+      for (const j of list) {
+        const ex = a[i] - b[j], ey = a[i + 1] - b[j + 1], ez = a[i + 2] - b[j + 2], q = ex * ex + ey * ey + ez * ez;
+        if (q < best) best = q;
+      }
+    }
+  }
+  return best < d2 ? Math.sqrt(best) : Infinity;
 }
 export function hipRotationClearRange(rig, targets = {}, options = {}) {
   checkRig(rig);
@@ -2916,13 +2976,38 @@ export function hipRotationClearRange(rig, targets = {}, options = {}) {
   const full = { hip_rot_L: [LL[0], LL[1]], hip_rot_R: [LR[0], LR[1]], internalDeg: -lo0, externalDeg: hi0, gapMm: null, limitedBy: { internal: 'range', external: 'range' } };
   if (!clouds.l.length || !clouds.r.length) return full;
   const base = { ...(targets instanceof Map ? Object.fromEntries(targets) : targets || {}) };
+  const appliedAt = deg => clampBodyJointTargets({ ...base, hip_rot_L: deg, hip_rot_R: deg }).applied;
+  const pointsOf = applied => { const { world } = worldSegments(rig, applied, {}); return [posedLegPoints(clouds.l, world), posedLegPoints(clouds.r, world)]; };
+  // 19 November 2026 (performance). The search below asks for the legs' points at up to 36 hip turns, and each used to
+  // pose the WHOLE body afresh (about 26 ms for one range, measured, taken several times a second while a leg moves:
+  // a frame late every tenth of a second). A hip turn alone moves a leg's shank, foot and toes as ONE rigid piece
+  // about one fixed line in the room, by an angle that goes evenly with the turn the clamp lets through. So the body
+  // is posed twice (at 0 and at a probe turn), the line and the angle are read from the two, and every other turn is
+  // that rotation of the points at 0, by the share of the probe's turn that the clamp applies for it. Checked on each
+  // call (hipTurnRotation: the three segments move as one, about a line, and the rotation rebuilt from the line gives
+  // the probe pose back) and for each turn (the clamp changed nothing but the two hip turns); where either does not
+  // hold, the whole body is posed for that turn as before (options.exact true asks for that throughout, for the test
+  // that compares the two).
+  const a0 = appliedAt(0), world0 = worldSegments(rig, a0, {}).world, l0 = posedLegPoints(clouds.l, world0), r0 = posedLegPoints(clouds.r, world0);
+  let turn = null;
+  if (o.exact !== true) {
+    const d1 = hi0 >= 4 ? Math.min(16, hi0) : lo0 <= -4 ? Math.max(-16, lo0) : 0, a1 = d1 ? appliedAt(d1) : null;
+    const dl = a1 ? a1.hip_rot_L - a0.hip_rot_L : 0, dr = a1 ? a1.hip_rot_R - a0.hip_rot_R : 0;
+    if (a1 && Math.abs(dl) > 1 && Math.abs(dr) > 1) {
+      const world1 = worldSegments(rig, a1, {}).world;
+      const tl = hipTurnRotation(clouds.l.map(x => x.seg), world0, world1), tr = hipTurnRotation(clouds.r.map(x => x.seg), world0, world1);
+      if (tl && tr) turn = { l: tl, r: tr, dl, dr };
+    }
+  }
+  const othersSame = a => { for (const id in a) if (id !== 'hip_rot_L' && id !== 'hip_rot_R' && a[id] !== a0[id]) return false; return true; };
   const pointsAt = deg => {
-    const { world } = worldSegments(rig, clampBodyJointTargets({ ...base, hip_rot_L: deg, hip_rot_R: deg }).applied, {});
-    return [posedLegPoints(clouds.l, world), posedLegPoints(clouds.r, world)];
+    if (deg === 0) return [l0, r0];
+    const a = appliedAt(deg);
+    if (!turn || !othersSame(a)) return pointsOf(a);
+    return [rotatedPoints(l0, m4RotAbout(turn.l.axis, turn.l.deg * (a.hip_rot_L - a0.hip_rot_L) / turn.dl, turn.l.point)),
+      rotatedPoints(r0, m4RotAbout(turn.r.axis, turn.r.deg * (a.hip_rot_R - a0.hip_rot_R) / turn.dr, turn.r.point))];
   };
-  const [l0, r0] = pointsAt(0);
-  // The exact rest gap only matters when the feet are already closer than boneGapMm (then they may not come closer).
-  const gap0 = pointSetsApart(l0, r0, o.boneGapMm) ? null : minPointDistance(l0, r0);
+  const near0 = pointSetsNear(l0, r0, o.boneGapMm), gap0 = near0 === Infinity ? null : near0;
   const need = gap0 === null ? o.boneGapMm : Math.min(o.boneGapMm, gap0);
   const clearAt = deg => { const [l, r] = pointsAt(deg); return pointSetsApart(l, r, need); };
   const furthest = (sign, maxDeg) => {

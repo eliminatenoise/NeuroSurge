@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-48-brain-compass-fix",
+  "version": "experimental-2026-11-19-body-update-49",
   "experimental": true,
-  "source": "Body update 48 brain compass fix. The upward brain orbit arrow starts inside the landscape eye view. Includes the movement-only lens effect.",
+  "source": "Body update 49. The chosen limb has no set height in the picture; the stutter on activation is fixed; the mirror body's meshes follow its size on screen; resolution is the last thing a slow machine gives up.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 303429,
-      "sha256": "3144c0957079aae1a33a951c7b631a4dafe76d0fd25bdd984f4c5e5629517456"
+      "bytes": 309685,
+      "sha256": "d17521fc3ac13e496fcabf658326c35fab1fa92631d9cfacbd4b466a6248b5a6"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 11738,
-      "sha256": "ea2cf66a31c74727fbbea4230b8bdb0699d0610d0dbe43e9c0f145874874bc21"
+      "bytes": 11745,
+      "sha256": "259ad273b63cd6fa4e1b8b71021011fc9a72158f7d1c6b80238df873560c7525"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 63126,
-      "sha256": "26b1819cbe70f7923c35a450abf8b2c64dad7cf282637c8a3a35bbf1a6c4cfc8"
+      "bytes": 63575,
+      "sha256": "272449c7c1148efeacb17de61d4dfec3d25232020881873263e7322898b12287"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 41194,
-      "sha256": "ca8c2c56defa72ee8e0b5a343b37c1cc032c5acf0feabbbfa2ccade94cd5f181"
+      "bytes": 42268,
+      "sha256": "b097b178225445d4fcddddeae6cfca47dad04d5da53af708923181fda3b58bbe"
     },
     {
       "path": "README.md",
-      "bytes": 20564,
-      "sha256": "66df4ace9d0fc0c703fcbc47ebe40fe7c6255abf63a9ab631882c0fc4b39dfee"
+      "bytes": 20939,
+      "sha256": "e6cf43410a56c30f199939942d0689ff8e8b965ed403ee9eeb89045c12bfe6d4"
     },
     {
       "path": "START.html",
-      "bytes": 4047,
-      "sha256": "05b85b79b38932b9966e68f8ad4e1213d832a9c940468530df2965ee5f9a39af"
+      "bytes": 4029,
+      "sha256": "023b2dc4e83e9d63096e2e249b2222247bdd4dc3ece7492d2c877a9a90a59ce4"
     },
     {
       "path": "index.html",
-      "bytes": 1018,
-      "sha256": "9b4e320f68676db400af289f92330aae45b8136841dfb55cb3d5d86b90dd6818"
+      "bytes": 1000,
+      "sha256": "ed14da8a628807f8987f0afa9970b93011257040f1939cb3775a9c43233873f9"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 865997,
-      "sha256": "9c8203111087ad4aae52e1c0d018a31cc2a61aa18eeac914f605467759b776ab"
+      "bytes": 870866,
+      "sha256": "bd151ecba389ecd9ba5be77fd1c77117201ee347a33d978efb529a4439109ca9"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-body.mjs",
-      "bytes": 609365,
-      "sha256": "991df6234a64fa0931a79583b882d521a35523c6db0ee1bb8c1717bc3c3fec70"
+      "bytes": 615463,
+      "sha256": "2ae5e1fa9d1467a6bc253dd394ffc6744f194b8bbcd3bd95e3c5ae1afeeeb63f"
     },
     {
       "path": "scene/src/ns-bodymap.mjs",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1141839,
-      "sha256": "886735c15aa38ecf6bed8adee509e57696e3e59fbbd699c46f3bce2473aa1a3b"
+      "bytes": 1149578,
+      "sha256": "2029d81bc23c7c6d38e9659d83f0fe2298c712b4f4b72e890617da583249a1f4"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4381,6 +4381,11 @@
       "sha256": "2f6c9d45d8bf145e5a4617007e64a79a4552cb47e2212a07b0d716123fb2526b"
     },
     {
+      "path": "tests/hip-range.test.mjs",
+      "bytes": 4152,
+      "sha256": "2cff3129a8ee5c57a3ddd8f230d8148e19e9ebf07148c18ee93d9477aa4a4b69"
+    },
+    {
       "path": "tests/hold-move.test.mjs",
       "bytes": 14117,
       "sha256": "b6b17fea375652f11bc4374c81d15a05f4c4bfe08c286897502314a22e537317"
@@ -4407,13 +4412,13 @@
     },
     {
       "path": "tests/limb-hold.test.mjs",
-      "bytes": 15171,
-      "sha256": "2cac45d6079fb8425282242a36edf1e74409893beed0ae79e4dd864f7bc63ba0"
+      "bytes": 15518,
+      "sha256": "3e6e04b36665b47a40c1940772ee4186a64f01786aeb25f7f1592d7343ac6cfb"
     },
     {
       "path": "tests/limb-keys.test.mjs",
-      "bytes": 3283,
-      "sha256": "7d9fa45d1c5025d132864c96048004c45a121185756a5bcc6364c0693f60be29"
+      "bytes": 4997,
+      "sha256": "c4013bd247f0a3df0c5395999a18dbe6a37d4dd7233522039ff0428651cc748f"
     },
     {
       "path": "tests/limb-turn.test.mjs",
@@ -4477,8 +4482,8 @@
     },
     {
       "path": "tests/quality-controller.test.mjs",
-      "bytes": 5374,
-      "sha256": "ba05c7f016692fb569ea6d83d3028497db7956b7d38e17ea51b9e8b320abbc25"
+      "bytes": 7250,
+      "sha256": "cde1a813a91ae62026ca3ce0d304b21c4de06c3c4df8bb9a682252347e6f79f3"
     },
     {
       "path": "tests/quiet.test.mjs",

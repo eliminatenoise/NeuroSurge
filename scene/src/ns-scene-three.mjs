@@ -333,7 +333,9 @@ export const LIGHT = Object.freeze({
  * the picture is unchanged. */
 export const HDR_BLOOM = Object.freeze({
   threshold: 1.1, knee: 0.3, strength: 0.45, upGain: 0.7, levels: 5, crossFrom: 2.0, crossK: 0.25,
-  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 3, msaaSamples: 4, ditherLsb: 0.6, safeMax: 64
+  // (offFromLevel 3 -> 1, 19 November 2026: the bloom goes with the x-ray pass at the first cheaper level, before any
+  // resolution does: QUALITY_LEVELS has the measurement)
+  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 1, msaaSamples: 4, ditherLsb: 0.6, safeMax: 64
 });
 
 /** The HDR target, the bloom chain and the composite (THREE injected). Returns { begin(), end(), setSize(w, h),
@@ -674,11 +676,20 @@ export const BODY_STYLE = 'cel';
 // fill. The steps are now gentle and none of them touches the meshes: the picture never goes under 0.6 of the screen's
 // own pixels (it was 0.4) and the bodies always keep their full meshes. A slow machine gets a slower frame, not a
 // rough body. (Before: 1, 0.75, 0.5, 0.5 lite, 0.5 lite with 2.5 / 4 mm copies, 0.4 lite with 4 / 7 / 2.5 mm copies.)
+// 19 November 2026, later (the owner: "find a way for ... the bodies to be high resolution, yet not destabilize
+// performance"). THE PICTURE'S RESOLUTION IS THE LAST THING GIVEN UP, NOT THE FIRST. The first cheaper level used to
+// be a resolution step, which blurs the bodies; the two passes that only decorate (the glass x-ray of the deep brain
+// and the bloom of light above white, with the half-float target it needs) went last. Measured on a drawing buffer
+// too large for the lead's graphics card (5120 x 2880, 24.1 ms a frame): without the x-ray 21.8 ms, without the bloom
+// as well under 16.7 ms: a third of the frame, as much as going down to about 0.8 of the resolution would save, for
+// no loss of sharpness (the glows end at white instead of spreading; every colour at or under white is the same
+// pixel for pixel). So the first step down now drops those two at FULL resolution ('lite-1'), and only then does
+// the resolution go, by tenths, never under 0.6. (Before: 1, 0.9, 0.8, 0.7, 0.7 lite, 0.6 lite.)
 export const QUALITY_LEVELS = Object.freeze([
   Object.freeze({ name: 'full', scale: 1, lite: false, lod: null }),
-  Object.freeze({ name: 'scale-0.9', scale: 0.9, lite: false, lod: null }),
-  Object.freeze({ name: 'scale-0.8', scale: 0.8, lite: false, lod: null }),
-  Object.freeze({ name: 'scale-0.7', scale: 0.7, lite: false, lod: null }),
+  Object.freeze({ name: 'lite-1', scale: 1, lite: true, lod: null }),
+  Object.freeze({ name: 'lite-0.9', scale: 0.9, lite: true, lod: null }),
+  Object.freeze({ name: 'lite-0.8', scale: 0.8, lite: true, lod: null }),
   Object.freeze({ name: 'lite-0.7', scale: 0.7, lite: true, lod: null }),
   Object.freeze({ name: 'lite-0.6', scale: 0.6, lite: true, lod: null })
 ]);
@@ -709,7 +720,14 @@ export const QUALITY_LEVELS = Object.freeze([
  *        for noGainHoldMs (x 2, 3 ... each time it happens again, at most noGainHoldMaxMs). A step that does help
  *        clears that count. */
 export const QUALITY_AUTO = Object.freeze({
-  slowMs: 1000 / 40, fastMs: 1000 / 55, jumpMs: 1000 / 12, window: 7, gapMs: 1000,
+  // 19 November 2026, later (performance that holds steady): slowMs 1000 / 40 -> 1000 / 45, and "slow" and "fast" are
+  // judged on frameStat (the window's mean with each sample held to twice its median) instead of the bare median. A
+  // renderer that misses every second or third screen refresh draws at about 40 frames a second, yet the median of
+  // its frame times is one refresh, 16.7 ms: the controller called that fine and never left the full level (measured
+  // on a 5120 x 2880 buffer: 40 to 43 frames a second, level 'full' throughout, median 14 to 17 ms). One hitch among
+  // steady frames still moves nothing (it counts as twice the median at most: six frames of 16.7 ms and one of
+  // 200 ms give 19 ms).
+  slowMs: 1000 / 45, fastMs: 1000 / 55, jumpMs: 1000 / 12, window: 7, gapMs: 1000,
   downHoldMs: 700, downMinFrames: 4, upHoldMs: 6000, upMinFrames: 90, rememberMs: 30000, settleFrames: 2,
   lodDownMeanMs: 1000 / 36,
   busyShare: 0.6, probeFrames: 30, probeMs: 1000, probeMinFrames: 4, gainMin: 0.1, noGainHoldMs: 20000, noGainHoldMaxMs: 300000
@@ -722,6 +740,16 @@ export function qualityStart(mode = 'auto', levels = QUALITY_LEVELS) {
 }
 
 const medianOf = a => { const s = a.slice().sort((x, y) => x - y); const n = s.length; return n ? (n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
+/** The controller's measure of a window of frame times (ms): their mean, with each one held to twice the window's
+ * median, so a single hitch hardly moves it and frames that are every second one late do. NaN for none. Pure. */
+export function frameStat(samples) {
+  const n = samples ? samples.length : 0;
+  if (!n) return NaN;
+  const cap = 2 * medianOf(samples);
+  let sum = 0;
+  for (const v of samples) sum += Math.min(v, cap);
+  return sum / n;
+}
 
 /** Pure controller step: state (qualityStart) + one frame interval (ms) -> the next state (a new object). 'high' and
  * 'low' never change level. See QUALITY_AUTO for the rules. `busyMs` (optional) is the main-thread work of that frame.
@@ -759,7 +787,10 @@ export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALIT
     if (!(p.n >= o.probeFrames || (p.sum >= o.probeMs && p.n >= o.probeMinFrames))) return next;
     const afterMs = p.sum / p.n;
     if (afterMs <= p.beforeMs * (1 - o.gainMin)) { next.probe = null; delete next.noGainN[p.anchor]; delete next.noGain[p.anchor]; return next; }
-    const kind = l => `${Boolean(levels[l].lite)}|${levels[l].lod ? 1 : 0}`;
+    // (a level's kind: with or without the decorative passes, at full or at reduced resolution, with or without simpler
+    // meshes. 19 November 2026: the resolution is part of it, now that the lite step comes before the resolution steps:
+    // when dropping the passes did not help, a resolution step is still tried before the first level comes back.)
+    const kind = l => `${Boolean(levels[l].lite)}|${levels[l].scale < 1 ? 1 : 0}|${levels[l].lod ? 1 : 0}`;
     let cand = next.level + 1;
     while (cand <= last && kind(cand) === kind(next.level)) cand += 1;
     if (cand <= last && (lodKey(cand) === lodKey(next.level) || afterMs > o.lodDownMeanMs)) {
@@ -777,7 +808,7 @@ export function stepQuality(state, frameMs, opts = QUALITY_AUTO, levels = QUALIT
     return next;
   }
   if (next.samples.length < Math.min(3, o.window)) return next;
-  const med = medianOf(next.samples);
+  const med = frameStat(next.samples); // (the window's measure: QUALITY_AUTO slowMs has why it is not the bare median)
   if (med > o.slowMs) {
     next.slowFor += frameMs; next.slowN += 1; next.fastFor = 0; next.fastN = 0;
     if (Number.isFinite(busyMs) && busyMs >= 0) { next.slowBusy = (next.slowBusy || 0) + Math.min(busyMs, frameMs); next.slowBusyFor = (next.slowBusyFor || 0) + frameMs; }
@@ -3621,6 +3652,30 @@ export function infoPanelContent(model) {
 // past the last level). Its own copy stays at 5 mm cells: drawn from the full meshes, or from a 3 mm copy, looking
 // around fell from 59 to 47 to 49 frames a second on the lead's machine. Making it finer without that cost is open.)
 export const R5_SCENE = Object.freeze({ mirrorLodFullMm: 5, mirrorQualityLodFrom: 99, mirrorLodBodyMm: 3, mirrorLodSliceMs: 4, headInPlaceFrom: 0.5, mirrorPointsPerMesh: 24, arrowCaptionPx: 8 });
+/** 19 November 2026, later (the owner: "find a way for ... the bodies to be high resolution, yet not destabilize
+ * performance"). THE MIRROR BODY'S MESHES FOLLOW ITS SIZE ON THE SCREEN. One copy for every case was wrong both ways:
+ * the 5 mm copy is a pixel at the usual distance on a plain screen, but two pixels on a double-density screen and
+ * many when the body is carried near (rough edges, small holes in thin sheets); the full meshes are right when it is
+ * near, and at the usual distance they are two million triangles smaller than a pixel each, which cost a sixth of
+ * the frame rate and showed nothing. So the copy is chosen from what one source millimetre measures in the DRAWN
+ * picture (the drawing buffer's own pixels, so the screen's density and the quality level's render scale count):
+ * the coarsest of cellsMm (0 = the full meshes) whose cell is at most maxCellPx there. `hysteresis`: a copy is left
+ * for a finer one only when its cell passes maxCellPx by that share, and for a coarser one only when the coarser
+ * cell is under it by that share, so a body carried slowly through a step does not swap back and forth. The copies
+ * are index-only and cached (mirrorIndexLod), built a few a frame the first time a cell is wanted; a swap is a
+ * pointer per mesh. Your own body is always drawn from its full meshes. on false: R5_SCENE.mirrorLodFullMm, as before. */
+export const MIRROR_DETAIL = Object.freeze({ on: true, cellsMm: Object.freeze([0, 2.5, 5]), maxCellPx: 1.3, hysteresis: 0.12 });
+/** MIRROR_DETAIL: the cell (source mm; 0 = full meshes) for a body of which one source mm is pxPerMm drawn pixels;
+ * `current` is the cell in use (null = none yet). Pure. */
+export function mirrorDetailCell(pxPerMm, current = null, o = MIRROR_DETAIL) {
+  const cells = o.cellsMm, coarsest = cells[cells.length - 1];
+  if (!(pxPerMm > 0) || !Number.isFinite(pxPerMm)) return current !== null && cells.includes(current) ? current : coarsest;
+  const pick = k => { let best = cells[0]; for (const c of cells) if (c > best && c * pxPerMm <= o.maxCellPx * k) best = c; return best; };
+  if (current === null || !cells.includes(current)) return pick(1);
+  if (current * pxPerMm > o.maxCellPx * (1 + o.hysteresis)) return pick(1); // clearly too coarse now: the finer one that fits
+  const coarser = pick(1 - o.hysteresis);
+  return coarser > current ? coarser : current;
+}
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -7916,14 +7971,29 @@ export function createScene({
     const k = p && Number.isFinite(p.fovScale) ? p.fovScale : 1;
     return k === 1 ? eyeFovY : (2 * Math.atan(Math.tan((eyeFovY * DEG) / 2) * k)) / DEG;
   }
-  /** Resize supplies the base eye angle. The active lens keeps the current look and outside-view blend. */
-  function activeLensFov() {
+  /** Resize supplies the base eye angle. The lens for the current look and outside-view blend, without the pulse. */
+  function baseLensFov() {
     const pose = camPose || firstPose;
     const eyeFov = flatLensFov(pose);
     if (cameraProjectionPlan?.phase === 'locked') return eyeFov;
-    const fov = camPose && camPose.fov !== null ? eyeFov + fin01(camPose.blend) * (camPose.fov - eyeFov) : eyeFov;
-    const scale = pose?.pulseFovScale ?? 1;
+    return camPose && camPose.fov !== null ? eyeFov + fin01(camPose.blend) * (camPose.fov - eyeFov) : eyeFov;
+  }
+  /** The active lens: the base lens with the short pulse of a modeled movement (pose.pulseFovScale; ns-app PUNCH_IN). */
+  function activeLensFov() {
+    const fov = baseLensFov();
+    if (cameraProjectionPlan?.phase === 'locked') return fov;
+    const scale = (camPose || firstPose)?.pulseFovScale ?? 1;
     return scale === 1 ? fov : (2 * Math.atan(Math.tan((fov * DEG) / 2) * scale)) / DEG;
+  }
+  /** 19 November 2026 (performance). The lens the arrows are PLANNED for: the active lens without the pulse. The pulse
+   * changes camera.fov on every frame of its third of a second, and the arrows' plans were keyed on camera.fov: each
+   * of those frames planned the brain's and the mirror body's frames again (the motor areas' whole screen grid: about
+   * 10 ms of script a frame, measured; a look that passed over the strip ran at 30 frames a second instead of 60). A
+   * plan is made in a reference view and does not depend on the pulse, which is a short change of the drawn lens
+   * only. camera.fov itself whenever no pulse is under way. */
+  function planLensFov() {
+    const p = camPose || firstPose;
+    return p && Number.isFinite(p.pulseFovScale) && p.pulseFovScale !== 1 ? baseLensFov() : camera.fov;
   }
   function setCameraPose(pose = null) {
     if (pose && pose.projectionPlanning) {
@@ -11281,7 +11351,8 @@ export function createScene({
     // itself (from the eye the brain's lower tips were planned where your own body hides them in the real picture).
     const refAt = look => { if (!referenceOriginSet) return Array.from(eye); const o = eyeDolly(look).offset; return [eye[0] + o[0], eye[1] + o[1], eye[2] + o[2]]; };
     const U = tipBounds();
-    const view = `${cssW}x${cssH}|${camera.fov}|${eye[0]},${eye[1]},${eye[2]}|${U.x0},${U.y0},${U.x1},${U.y1}`;
+    const planFov = planLensFov(); // (the lens without the punch-in: a plan is not made again for a punch)
+    const view = `${cssW}x${cssH}|${planFov}|${eye[0]},${eye[1]},${eye[2]}|${U.x0},${U.y0},${U.x1},${U.y1}`;
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (mirrorSamplesSeen !== mirror.samples) { mirrorSamplesSeen = mirror.samples; mirrorSamplesRev++; }
     const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
@@ -11300,7 +11371,7 @@ export function createScene({
       // R558 (performance): nor is a frame planned again while an item is held (setHeldItem): once it is let go
       if (key !== B.key && (r || !B.frames) && (!arrowHeld || !B.key)) {
         B.key = key;
-        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: brainLook.yaw, pitch: brainLook.pitch, position: refAt(brainLook) };
+        const refCam = { width: cssW, height: cssH, fovYDeg: planFov, yaw: brainLook.yaw, pitch: brainLook.pitch, position: refAt(brainLook) };
         const bSize = NsArrows.arrowTipSizePx(cam, 'brain');
         // R558 (issue hunt 2, portrait: the brain's bottom tip lay across the mirror body's chest): the brain's tips keep off
         // the mirror body's box (padded by a mirror tip, so the mirror's own tips keep their room) and off places your own
@@ -11351,12 +11422,12 @@ export function createScene({
         M.key = key; M.samplesRef = mirror.samples;
         const start = { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
         let look = start;
-        const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: start.yaw, pitch: start.pitch, position: refAt(start) });
+        const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: refAt(start) });
         if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
           const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
           look = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
         }
-        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: refAt(look) };
+        const refCam = { width: cssW, height: cssH, fovYDeg: planFov, yaw: look.yaw, pitch: look.pitch, position: refAt(look) };
         // the brain's tips come first: mirror tips that would overlap one move, as a pair, to the nearest clear place
         // (ns-arrows3d frameArrowSpots)
         const avoid = (B.plan && B.plan.anchors ? NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }) : []).concat(crossBox ? [crossBox] : []);
@@ -12372,7 +12443,7 @@ export function createScene({
         reach: Pl.reach ? { centreM: Pl.reach.centre.slice(), radiusM: Pl.reach.radiusM } : null, // R558 (Message 45): the reach sphere a turned body stands back for
         pureMatrix: Pl.matrix.slice(), atRest: rest, restMaxDiff: rest ? restDiff : null, tolerance: NsMirror.MIRROR_REFLECTION.matrixTolerance, planeSerial: mirror.planeSerial, measured: mirror.measured } : null,
       body: mirror.body ? { heightM: Math.round(mirror.body.height * 1000) / 1000, radiusM: Math.round(mirror.body.radius * 1000) / 1000, points: mirror.body.count } : null,
-      lodCellMm: mirror.lod || 0, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount, brainNearM: behindGlass.nearM }, onScreen: null, check: null };
+      lodCellMm: mirror.lod || 0, detailPxPerMm: Number.isFinite(mirrorDetailPx) ? Math.round(mirrorDetailPx * 1000) / 1000 : null, lodPending: mirrorLodPending, lodBuildMs: Number.isFinite(mirror.lodBuildMs) ? Math.round(mirror.lodBuildMs) : 0, behindGlass: { applied: behindGlass.applied, amount: behindGlass.amount, brainNearM: behindGlass.nearM }, onScreen: null, check: null };
     // The vertex-level check reads real vertices (25 to 50 ms after a look change): only on an explicit request
     // (ns-app inspect({ mirrorCheck: true })), never in an ordinary state read, so a QA loop does not slow the game.
     if (opts && opts.check === true) { try { out.check = mirrorBodyCheck(); } catch (err) { out.check = { error: String((err && err.message) || err) }; } }
@@ -13888,9 +13959,25 @@ export function createScene({
    * ready its twin draws the full mesh. */
   const mirrorLodOf = new Map(); // full geometry -> Map(cell -> index-only geometry)
   let mirrorLodWant = 0, mirrorLodPending = 0;
+  let mirrorDetailNow = null, mirrorDetailPx = NaN; // (MIRROR_DETAIL: the cell in use for the body's size on screen, and that size)
   function mirrorLodCell() {
-    const L = QUALITY_LEVELS[qState.level];
-    return qState.level >= R5_SCENE.mirrorQualityLodFrom ? Math.max(R5_SCENE.mirrorLodBodyMm, L.lod ? L.lod.bodyMm : 0) : Math.max(R5_SCENE.mirrorLodFullMm || 0, L.lod ? L.lod.bodyMm : 0);
+    const L = QUALITY_LEVELS[qState.level], lod = L.lod ? L.lod.bodyMm : 0;
+    if (qState.level >= R5_SCENE.mirrorQualityLodFrom) return Math.max(R5_SCENE.mirrorLodBodyMm, lod);
+    return Math.max(MIRROR_DETAIL.on && mirrorDetailNow !== null ? mirrorDetailNow : R5_SCENE.mirrorLodFullMm || 0, lod);
+  }
+  /** MIRROR_DETAIL, once a drawn frame: what one source millimetre of the mirror body measures in the drawing buffer
+   * (at the body's middle, for the camera as it stands), and the copy that goes with it. */
+  function stepMirrorDetail() {
+    if (!MIRROR_DETAIL.on || !mirror.transform || !body.length) return;
+    let tw = null;
+    for (const b of body) if (b.mirror) { tw = b.mirror; break; }
+    if (!tw) return;
+    const e = tw.matrixWorld.elements, perMm = Math.hypot(e[0], e[1], e[2]), c = mirror.transform.centre;
+    const dist = Math.max(0.2, Math.hypot(camera.position.x - c[0], camera.position.y - c[1], camera.position.z - c[2]));
+    const bufH = canvas && canvas.height > 0 ? canvas.height : cssH;
+    mirrorDetailPx = perMm * bufH / (2 * Math.tan((camera.fov * DEG) / 2) * dist);
+    const cell = mirrorDetailCell(mirrorDetailPx, mirrorDetailNow);
+    if (cell !== mirrorDetailNow) { mirrorDetailNow = cell; if ((mirror.lod || 0) !== mirrorLodCell()) applyMirrorLod(); }
   }
   function mirrorIndexLod(full, cell, build) {
     let byCell = mirrorLodOf.get(full);
@@ -14092,7 +14179,7 @@ export function createScene({
     // R5-scene (D19): the mirror body is measured from the first posed body, then shown behind the brain; its LOD copies
     // are built a few at a time.
     if (body.length && !mirror.ready) computeMirrorBody();
-    if (mirrorRoot.visible) stepMirrorLod();
+    if (mirrorRoot.visible) { stepMirrorDetail(); stepMirrorLod(); }
     stepPickTrees(); // R558: pick trees a few per frame, ahead of the first pick that needs them
     {
       const showMirror = mirror.enabled && mirror.ready && mirror.transform !== null;

@@ -171,7 +171,18 @@ export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftAr
   //                could reach: a look far to one side swung the leg up beside the head, out of the picture.)
   // The left arm (its own rig) is held the same way through the free hand (ns-arm FREE_HAND). Nothing is carried while
   // Space holds the brain or the mirror body, during a press-and-drag, or in the view from behind (E).
-  view: Object.freeze({ on: true, frameUp: 0.75, turnS: 0.16, doneDeg: 0.4, maxS: 1.2,
+  // 19 November 2026, later still (the owner: "Perhaps the problem with the zoom in, zoom out ... [when] we look up and
+  // down is the 3/4 height rule. Disregard that rule"). THE END HAS NO SET HEIGHT IN THE PICTURE ANY MORE (frameUp
+  // null). Holding it three quarters up meant the view pitched 50 to 60 degrees down by itself whenever a limb was
+  // chosen and went on pitching while the keys moved it; the eye view's camera stands half a metre behind the eye on
+  // the line of sight (ns-camera EYE_DOLLY), so each of those pitches swung it up over the head and back: a move of
+  // the camera nobody had asked for (and the owner, just before: "get rid of all zoom, pan, dolly effects"). Now the
+  // view turns only to KEEP THE END IN THE PICTURE: when a limb is chosen, and while the keys move it, the look turns
+  // only as far as brings the end inside `band` of the half width and `bandUp` of the half height, and not at all
+  // when it is there already (at the start look all four ends are: choosing a limb there moves nothing but the
+  // limb's highlight). It is no longer brought to the middle left to right either: that turned the view half away
+  // from your body for an arm held out to the side. The look itself is the pointer's.
+  view: Object.freeze({ on: true, frameUp: null, bandUp: 0.6, turnS: 0.16, doneDeg: 0.4, maxS: 1.2,
     hold: true, lookCarries: true, followS: 0.12, band: 0.55, speedMps: 0.6, leadM: 0.02, levelM: 0.12, waitMm: 40, waitShare: 0.5 }) });
 /** 19 November 2026 (LIMB_KEYS.view.hold): balls that fill the trunk, neck and head of the drawn body, for the one test
  * that keeps a hand's middle out of them (ns-app handKeepOut). Each: the segment that carries it, its middle in that
@@ -304,6 +315,19 @@ export function lookFramingPoint(eye, at, fovYDeg, frameUp = 0.5) {
   // a point that is to stand above the picture's middle needs the look BELOW it by the angle of that height
   const up = Math.atan((2 * frameUp - 1) * Math.tan((fovYDeg * DEG) / 2));
   return { yaw, pitch: toPoint - up };
+}
+/** LIMB_KEYS.view (bandUp): the smallest turn of the look { dYaw, dPitch } (radians, added to the look) that brings a
+ * picture place f = { x, y } (viewFrameOf: -1 .. 1 across and up the picture) inside `band` of the half width and
+ * `bandUp` of the half height; { 0, 0 } when it is inside already. Pure; exact for one axis at a time and near enough
+ * for both (the caller eases toward it frame by frame). */
+export function keepInFrameTurn(f, fovYDeg, aspect, band, bandUp) {
+  const t = Math.tan((fovYDeg * DEG) / 2);
+  let dYaw = 0, dPitch = 0;
+  if (!f || !Number.isFinite(f.x) || !Number.isFinite(f.y)) return { dYaw, dPitch };
+  const bx = Math.max(0, Number(band) || 0), by = Math.max(0, Number(bandUp) || 0);
+  if (Math.abs(f.x) > bx) dYaw = -Math.sign(f.x) * (Math.atan(Math.abs(f.x) * t * aspect) - Math.atan(bx * t * aspect));
+  if (Math.abs(f.y) > by) dPitch = Math.sign(f.y) * (Math.atan(Math.abs(f.y) * t) - Math.atan(by * t));
+  return { dYaw, dPitch };
 }
 /** A unit direction turned toward another by at most maxRad (the shorter way round). Pure. */
 export function turnToward(a, b, maxRad) {
@@ -5598,6 +5622,8 @@ export function start(params = {}) {
   // R558 (Space dance): the touch-free hip range of the current leg posture (ns-body hipRotationClearRange) and its key.
   let danceLegKey = null, danceLegLast = null, danceLegPending = 0, danceRange = null, armTurnSeen = null;
   let danceRangeNow = null, danceRangeGoal = null, danceGoalKey = null, danceGoalPending = 0; // check fix: the current posture's and the goal posture's ranges
+  let danceGoalLast = null, danceGoalRun = 0; // (the goal's key on the last frame, and for how many frames running it has changed)
+  let danceFrame = 0, danceRangeAt = -1e9; // (frames counted here, and the frame a range was last taken on)
   let bodyRestAngles = null; // R558: the start posture's own angles, once
   // R558 (issue hunt 2: "Lean trunk back" named only muscles the packet does not have, so nothing glowed): at load, every
   // body-map action (not the left arm, whose muscles the movement map drives) is matched against the rig's drawn
@@ -7511,12 +7537,19 @@ export function start(params = {}) {
         if (!Number.isFinite(lv.fromMs)) lv.fromMs = now;
         if (lv.last && (Math.abs(cs.yaw - lv.last.yaw) > 1e-9 || Math.abs(cs.pitch - lv.last.pitch) > 1e-9)) { limbView = null; return; } // the pointer moved
         if ((now - lv.fromMs) / 1000 > V.maxS || !camPose || !camBodyToWorld || !(cam.view === 'first' && cam.progress === 0)) { limbView = null; return; }
-        let want = null;
-        // (the wrist or the ankle comes to the middle left to right and frameUp of the way up the picture)
-        try { const pts = limbEnds(lv.limb); want = pts ? lookFramingPoint(camPose.position, pts.frame, simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : 54, V.frameUp) : null; } catch { want = null; }
-        if (!want) { limbView = null; return; }
-        let dy = want.yaw - cs.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        const dp = want.pitch - cs.pitch;
+        let dy = NaN, dp = NaN;
+        // (the look turns only as far as brings the wrist or the ankle inside the picture's band, sideways and up and
+        // down. With a set height, frameUp, it comes to the middle and to that height as it used to.)
+        try {
+          const pts = limbEnds(lv.limb), fov = simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : 54;
+          const f = pts && !Number.isFinite(V.frameUp) ? viewFrameOf(camPose, pts.frame, fov, holdAspect()) : null;
+          if (f && f.depth > 0.03 && Number.isFinite(f.x) && Number.isFinite(f.y)) { const k = keepInFrameTurn(f, fov, holdAspect(), V.band, V.bandUp); dy = k.dYaw; dp = k.dPitch; }
+          else if (pts) { // (a set height, or the end is behind the view: turn to it)
+            const want = lookFramingPoint(camPose.position, pts.frame, fov, Number.isFinite(V.frameUp) ? V.frameUp : 0.5);
+            if (want) { dy = want.yaw - cs.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); dp = want.pitch - cs.pitch; }
+          }
+        } catch { dy = NaN; }
+        if (!Number.isFinite(dy) || !Number.isFinite(dp)) { limbView = null; return; }
         const k = prefersReducedMotion() ? 1 : 1 - Math.exp(-Math.max(0, dt) / V.turnS);
         if (Math.hypot(dy, dp) < V.doneDeg * DEG) { limbView = null; return; }
         try { cs = controlsApi.setLook(cs, { yaw: cs.yaw + dy * k, pitch: cs.pitch + dp * k }); } catch { limbView = null; return; }
@@ -7660,16 +7693,20 @@ export function start(params = {}) {
         }
         return T;
       }
-      /** The view follows the limb while the keys move it: the look eases so that the wrist or ankle stands frameUp of
-       * the way up the picture, and turns sideways only as far as keeps it inside `band` (at once under reduced motion). */
+      /** The view follows the limb while the keys move it, only as far as keeps the wrist or ankle in the picture: inside
+       * `band` sideways and `bandUp` up and down (eased; at once under reduced motion). With a set height, frameUp, the
+       * look eases so that the end stands that far up the picture, as it used to. */
       function followLimbView(frameW, dt) {
         const f = viewFrameOf(camPose, frameW, holdFov(), holdAspect()), t = Math.tan(holdFov() * DEG / 2), a = holdAspect();
+        const setUp = Number.isFinite(HOLD.frameUp);
         let dPitch = 0, dYaw = 0;
         if (f.depth > 0.03 && Number.isFinite(f.y)) {
-          dPitch = Math.atan(f.y * t) - Math.atan((2 * HOLD.frameUp - 1) * t);
-          if (Math.abs(f.x) > HOLD.band) dYaw = -Math.sign(f.x) * (Math.atan(Math.abs(f.x) * t * a) - Math.atan(HOLD.band * t * a));
+          if (setUp) {
+            dPitch = Math.atan(f.y * t) - Math.atan((2 * HOLD.frameUp - 1) * t);
+            if (Math.abs(f.x) > HOLD.band) dYaw = -Math.sign(f.x) * (Math.atan(Math.abs(f.x) * t * a) - Math.atan(HOLD.band * t * a));
+          } else ({ dYaw, dPitch } = keepInFrameTurn(f, holdFov(), a, HOLD.band, HOLD.bandUp));
         } else {
-          const want = lookFramingPoint(camPose.position, frameW, holdFov(), HOLD.frameUp); // behind the view: turn to it
+          const want = lookFramingPoint(camPose.position, frameW, holdFov(), setUp ? HOLD.frameUp : 0.5); // behind the view: turn to it
           if (!want) return;
           dYaw = want.yaw - cs.yaw; dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw)); dPitch = want.pitch - cs.pitch;
         }
@@ -9902,15 +9939,21 @@ export function start(params = {}) {
             const legKeyOf = t => DANCE_LEG_JOINTS.map(j => Math.round((Number.isFinite(t[j]) ? t[j] : 0) * 2)).join(',');
             const legKey = legKeyOf(targets);
             let changed = false;
+            // 19 November 2026 (performance): no range is taken within DANCE_RANGE_EVERY_FRAMES frames of the last one.
+            // A leg that moves slowly crosses half a degree every few frames and stands "settled" between the steps, so
+            // its range was taken at every step (a slow way back after a jerk: one range on almost every frame). The
+            // first change after a quiet spell is still taken at once.
+            danceFrame += 1;
+            const rangeFree = danceFrame - danceRangeAt >= DANCE_RANGE_EVERY_FRAMES;
             if (legKey !== danceLegKey) {
               danceLegPending += 1;
               // (19 November 2026: while the view's hold is moving a leg, a single frame without a change is not "settled":
               // the pointer's events and the frames do not line up, and the 4 ms range was taken on every other frame)
               // (and while it moves one the range, 4 ms of work, is taken every third of a second, not ten times a second:
               // it bounds the limb turn, which is not what is moving the leg)
-              if ((legKey === danceLegLast && !(now < holdLegUntilMs)) || danceLegPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
+              if ((rangeFree && legKey === danceLegLast && !(now < holdLegUntilMs)) || danceLegPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
                 danceLegKey = legKey;
-                danceLegPending = 0;
+                danceLegPending = 0; danceRangeAt = danceFrame;
                 try { danceRangeNow = mods.body.hipRotationClearRange(bodyRig, targets); } catch { danceRangeNow = null; }
                 changed = true;
               }
@@ -9923,15 +9966,24 @@ export function start(params = {}) {
               if (typeof mods.body.passiveKneeAngles === 'function') goal = mods.body.passiveKneeAngles(goal);
               if (typeof mods.body.softExtensionAngles === 'function') goal = mods.body.softExtensionAngles(goal);
               const goalKey = legKeyOf(goal);
+              // 19 November 2026 (performance): a goal that changes frame after frame is MOVING (the spring of a movement
+              // switched on from the brain: its jerk and its way part of the way back change the leg's goal on every
+              // frame for about a second). Its range was taken on each of those frames, 4 ms of script each (measured: a
+              // quarter of the script's time while a look passed over the leg areas). A moving goal is now taken like a
+              // held leg, every DANCE_RANGE_EVERY_FRAMES frames; the first change is still taken at once, and the goal
+              // it comes to rest on within those few frames.
+              danceGoalRun = goalKey !== danceGoalLast ? danceGoalRun + 1 : 0;
+              danceGoalLast = goalKey;
               if (goalKey !== danceGoalKey) {
                 // R558 (performance, hunt 2 code #5): while you hold a leg with Space its goal changes on every frame, so the
                 // goal's range is then taken every DANCE_RANGE_EVERY_FRAMES frames like the posture's own, and at once again
                 // when the leg is let go (or when no leg is held).
                 const legHeld = Boolean((limbGrasp && (limbGrasp.limb === 'rightLeg' || limbGrasp.limb === 'leftLeg')) || (latchKeys && latchKeys.limb !== 'rightArm') // (or moved by the keys after a click)
-                  || now < holdLegUntilMs); // (or by the view's hold, 19 November 2026)
+                  || now < holdLegUntilMs // (or by the view's hold, 19 November 2026)
+                  || danceGoalRun >= 2); // (or its goal is moving by itself)
                 danceGoalPending += 1;
-                if (!legHeld || danceGoalPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
-                  danceGoalKey = goalKey; danceGoalPending = 0;
+                if ((!legHeld && rangeFree) || danceGoalPending >= (now < holdLegUntilMs ? DANCE_RANGE_EVERY_FRAMES * 3 : DANCE_RANGE_EVERY_FRAMES)) {
+                  danceGoalKey = goalKey; danceGoalPending = 0; danceRangeAt = danceFrame;
                   if (goalKey === legKey && danceLegKey === legKey) danceRangeGoal = danceRangeNow;
                   else {
                     try { danceRangeGoal = mods.body.hipRotationClearRange(bodyRig, goal); } catch { danceRangeGoal = null; }

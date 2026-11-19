@@ -22,11 +22,14 @@ const near = (a, b, e = 1e-9) => Math.abs(a - b) <= e;
 /** A place beside the shoulder from its direction angles (ns-arm's convention) and distance. */
 const place = (elevDeg, planeDeg, d) => [-Math.cos(planeDeg * DEG) * Math.sin(elevDeg * DEG) * d, -Math.cos(elevDeg * DEG) * d, -Math.sin(planeDeg * DEG) * Math.sin(elevDeg * DEG) * d];
 
-test('the view holds the chosen limb: three quarters up, the look carries it, the keys move it far', () => {
+// (19 November 2026, later still: the set height, three quarters up the picture, is gone at the owner's word:
+// "Disregard that rule". The look still carries the limb and the keys still move it.)
+test('the view holds the chosen limb: the look carries it, the keys move it far, and it has no set height in the picture', () => {
   const V = LIMB_KEYS.view;
   assert.equal(V.hold, true);
   assert.equal(V.lookCarries, true, 'the pointer moves the chosen limb with the view (the owner: "controlling with all the control keys and the camera view")');
-  assert.equal(V.frameUp, 0.75, 'the owner: "roughly 3/4 up ... of the height of the frame"');
+  assert.equal(V.frameUp, null, 'the owner, later: "Perhaps the problem ... is the 3/4 height rule. Disregard that rule"');
+  assert.ok(V.bandUp > 0.3 && V.bandUp < 0.9, 'the end may move up and down in the picture before the view turns');
   assert.ok(V.band > 0.3 && V.band < 0.9, 'the end may move left and right in the picture before the view turns');
   assert.ok(V.speedMps >= 0.5, 'far more forward and far more back: at least half a metre a second');
   assert.ok(V.leadM > 0 && V.leadM <= 0.05 && V.levelM >= V.leadM);
@@ -41,7 +44,7 @@ test('a place in the picture and a point in the room are each other\'s inverse',
   for (let i = 0; i < 3; i++) assert.ok(near(back[i], P[i], 1e-12));
   assert.ok(f.depth > 0 && f.dist >= f.depth);
   // the look that frames a point at three quarters of the height puts it at NDC y 0.5 and in the middle
-  const l = lookFramingPoint(pose.position, P, 54, LIMB_KEYS.view.frameUp);
+  const l = lookFramingPoint(pose.position, P, 54, 0.75);
   const g = viewFrameOf({ position: pose.position, yaw: l.yaw, pitch: l.pitch }, P, 54, 16 / 9);
   assert.ok(near(g.x, 0, 1e-12) && near(g.y, 0.5, 1e-12));
   // a point behind the camera has no place in the picture
