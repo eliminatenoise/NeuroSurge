@@ -1720,11 +1720,46 @@ export function nextBrainView(prev, { yaw, pitch, onBrain = false, graspEvents =
  * grabPitch (rad) }) when it exists AND a frameBrain result is given (region mode), else null (legacy mode: the brain
  * stays where frameFocus placed it). `params` (with the units) is always returned.
  */
-export function brainTransformFor(view, frame = null, brainModule = NsBrain) {
-  const params = { orbitYaw: view.orbit.yaw, orbitPitch: view.orbit.pitch, grabYaw: view.offset.yaw, grabPitch: view.offset.pitch, orbitUnits: 'deg', grabUnits: 'rad' };
+export function brainTransformFor(view, frame = null, brainModule = NsBrain, rollDeg = 0) {
+  const roll = Number.isFinite(rollDeg) ? rollDeg : 0; // (20 November 2026: CIRCLE_ROLL, the brain's roll in degrees)
+  const params = { orbitYaw: view.orbit.yaw, orbitPitch: view.orbit.pitch, orbitRoll: roll, grabYaw: view.offset.yaw, grabPitch: view.offset.pitch, orbitUnits: 'deg', grabUnits: 'rad' };
   const fn = brainModule && typeof brainModule.brainViewTransform === 'function' ? brainModule.brainViewTransform : null;
   const ok = fn && frame && frame.kind === 'ns-brain-frame';
-  return { params, transform: ok ? fn({ frame, orbitYaw: params.orbitYaw, orbitPitch: params.orbitPitch, grabYaw: params.grabYaw, grabPitch: params.grabPitch }) : null };
+  return { params, transform: ok ? fn({ frame, orbitYaw: params.orbitYaw, orbitPitch: params.orbitPitch, ...(roll ? { orbitRoll: roll } : {}), grabYaw: params.grabYaw, grabPitch: params.grabPitch }) : null };
+}
+/** 20 November 2026 (the owner: "if we click and then use two fingers on our trackpad, or if we make a great big circling
+ * motion, clockwise or anti-clockwise on our trackpad or mouse whilst clicking, instead of going straight up and down
+ * and left and right, instead of orbiting ... we can turn it clockwise or anti-clockwise, any object basically, any
+ * item"). A press-and-drag on the brain or the mirror body that goes round in a circle turns the thing clockwise or
+ * anticlockwise as you see it (a roll about the line from your eye), instead of turning it left and right and tilting
+ * it. The drag's direction is followed sample by sample (samples shorter than minStepPx are joined to the next); the
+ * drag counts as a circle once it has turned startDeg the same way (the turns one way at least `steady` of all its
+ * turning) over at least minPathPx of path, and from then on, until the press ends, every further turn of its
+ * direction rolls the thing by `gain` of that turn (a whole circle of the pointer = 360 x gain degrees) and the drag
+ * no longer turns it left, right, up or down. A turn of more than maxTurnDeg between two samples is a change of mind,
+ * not a circle, and starts the count again. The two-finger turn on a trackpad is not something a web page is told
+ * about (except in Safari), so it is not used. Display choices. */
+export const CIRCLE_ROLL = Object.freeze({ on: true, minStepPx: 3, startDeg: 300, steady: 0.75, minPathPx: 140, gain: 0.5, maxTurnDeg: 100 });
+/** CIRCLE_ROLL: one drag sample (dx, dy: CSS px, y down) for the gesture state `st` (null at a drag's start). Returns
+ * { state, rollDeg (degrees to roll now, positive clockwise on screen), rolling }. Pure. */
+export function circleRollStep(st, dx, dy, o = CIRCLE_ROLL) {
+  const s = st ? { ...st } : { heading: null, turned: 0, absTurned: 0, path: 0, rolling: false, carry: [0, 0] };
+  let rollDeg = 0;
+  const x = (Number(dx) || 0) + s.carry[0], y = (Number(dy) || 0) + s.carry[1], len = Math.hypot(x, y);
+  if (!(len >= o.minStepPx)) { s.carry = [x, y]; return { state: s, rollDeg, rolling: s.rolling }; }
+  s.carry = [0, 0];
+  const h = Math.atan2(y, x) / DEG;
+  if (s.heading !== null) {
+    const dh = ((h - s.heading) % 360 + 540) % 360 - 180;
+    if (Math.abs(dh) > o.maxTurnDeg) { if (!s.rolling) { s.turned = 0; s.absTurned = 0; s.path = 0; } }
+    else if (s.rolling) rollDeg = dh * o.gain;
+    else {
+      s.turned += dh; s.absTurned += Math.abs(dh); s.path += len;
+      if (Math.abs(s.turned) >= o.startDeg && s.path >= o.minPathPx && Math.abs(s.turned) >= o.steady * s.absTurned) s.rolling = true;
+    }
+  }
+  s.heading = h;
+  return { state: s, rollDeg, rolling: s.rolling };
 }
 
 /** FALLBACK pronation/supination (used only while ns-actions has no rotationState): two Space presses within
@@ -2448,6 +2483,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   minHorizontalFovDeg = MIN_HORIZONTAL_FOV_DEG, bodyMap = null, handYNdc = HAND_Y_NDC, classifyView = null, segmentation = null,
   brainBounds = null, anatomy = null, wristReach = WASD_WRIST, trunkFreeDeg = TRUNK_FREE_DEG, neckFlex = NECK_FLEX, pronationEaseS = PRONATION_EASE_S, referenceGraph = null,
   wholeArmDisplay = null, wholeArmSupport = null, headFrame = null, headLimits = HEAD_LOOK } = {}) {
+  let brainRollDeg = 0; // 20 November 2026 (CIRCLE_ROLL): the brain's roll about the line of sight, degrees (clockwise +)
   if (!rig || rig.kind !== 'ns-rig') fail('app_args', 'rig from deriveRig is required');
   if (!(boxes instanceof Map)) fail('app_args', 'boxes from segmentBoxes are required');
   if (!strip || !strip.focus || !strip.focus.positions || !strip.focus.indices || !strip.focus.u || !Array.isArray(strip.markers)) {
@@ -2597,7 +2633,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (!regionMode || !state.referenceBrain) return { brainTransform: null, mirrorWorldCentre: null };
     const { brainFrame } = brainFramingForViewport(state, viewport);
     const view = nextBrainView(state.view, { yaw: cameraPose.gazeLook.yaw, pitch: cameraPose.gazeLook.pitch, act: preview });
-    const raw = brainTransformFor(view, brainFrame);
+    const raw = brainTransformFor(view, brainFrame, NsBrain, brainRollDeg);
     let next = ReferenceGraph.advanceBrainState(copyJson(state.referenceBrain), view, cameraPose.position, raw.transform);
     let brain = ReferenceGraph.translateBrainRecord(raw, next, initialBrainOrigin);
     const prior = state.objectCarry;
@@ -2855,7 +2891,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     const view = nextBrainView(state.view, {
       yaw: gl.yaw, pitch: gl.pitch, onBrain: gazeOnBrain(state.gaze), graspEvents: evs, orbitDirs: owns.orbit ? [] : orbitDirs, act: actIn
     });
-    const brainRaw = brainTransformFor(view, regionMode ? brainFrame : null);
+    const brainRaw = brainTransformFor(view, regionMode ? brainFrame : null, NsBrain, brainRollDeg);
     const previousReference = referenceGraph ? state.referenceBrain : state.objectBrainReference || null;
     const pickReferenceBrain = previousReference && brainRaw.transform ? ReferenceGraph.advanceBrainState(previousReference, view, camRay ? camRay.origin : [0, 0, 0], brainRaw.transform) : null;
     const brain = pickReferenceBrain ? ReferenceGraph.translateBrainRecord(brainRaw, pickReferenceBrain, initialBrainOrigin || [0, 0, 0]) : brainRaw;
@@ -2993,7 +3029,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // Brain view to DRAW (and keep): after the step, so an activity-owned carry follows this frame's look (a tight
     // drag); in fallback mode it equals the picking view.
     const viewOut = owns.grab || owns.orbit ? nextBrainView(view, { yaw: gl.yaw, pitch: gl.pitch, act: a }) : view;
-    const brainRawOut = viewOut === view ? brainRaw : brainTransformFor(viewOut, regionMode ? brainFrame : null);
+    const brainRawOut = viewOut === view ? brainRaw : brainTransformFor(viewOut, regionMode ? brainFrame : null, NsBrain, brainRollDeg);
     const carryOrigin = camRay ? camRay.origin : [0, 0, 0];
     let nextReferenceBrain = referenceGraph ? ReferenceGraph.advanceBrainState(state.referenceBrain, viewOut, carryOrigin, brainRawOut.transform)
       : objectPick && brainRawOut.transform ? ReferenceGraph.advanceBrainState(state.objectBrainReference || ReferenceGraph.initialBrainState([0, 0, 0]), viewOut, carryOrigin, brainRawOut.transform) : null;
@@ -3304,6 +3340,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
    * refusal the activity is left unchanged) and the next gaze is silent. */
   function resetBrainView(state) {
     if (!state || !state.activity) fail('app_state', 'state must come from initialState/stepFrame');
+    brainRollDeg = 0; // (CIRCLE_ROLL: the roll goes back too)
     let a = state.activity;
     if (a.orbit && a.brainPlacement && a.brainGrab) {
       const next = { ...a, orbit: { yaw: 0, pitch: 0 }, brainPlacement: { ...initialActivity.brainPlacement }, brainGrab: { ...a.brainGrab, active: false } };
@@ -3323,7 +3360,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   const TARGET_MARGIN_RAD = 0.006;
   function regionTargets(state) {
     if (!regionMode || !state || !state.view || !state.brainFrame) return null;
-    const rawTargetBrain = brainTransformFor(state.view, state.brainFrame);
+    const rawTargetBrain = brainTransformFor(state.view, state.brainFrame, NsBrain, brainRollDeg);
     const { transform } = referenceGraph ? ReferenceGraph.translateBrainRecord(rawTargetBrain, state.referenceBrain, initialBrainOrigin) : rawTargetBrain;
     // R558 (HEAD_LOOK): the eye of the posed head for that look (no held offsets: a QA aiming aid).
     const originForLook = (yaw, pitch) => referenceGraph ? referenceFrameForLook({ yaw, pitch }, headFrame ? headPoseForLook({ yaw, pitch }, null, headLimits) : null).position : [0, 0, 0];
@@ -3441,7 +3478,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
   function areaStep(state, { dir, fromId = null, startId = null, look, rayForLook, clampLook } = {}) {
     if (!regionMode || !areaIds.length || !state || !state.view || !state.brainFrame) return null;
     if ((dir !== 1 && dir !== -1) || !look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch) || typeof rayForLook !== 'function') return null;
-    const rawBrain = brainTransformFor(state.view, state.brainFrame);
+    const rawBrain = brainTransformFor(state.view, state.brainFrame, NsBrain, brainRollDeg);
     const { transform } = referenceGraph ? ReferenceGraph.translateBrainRecord(rawBrain, state.referenceBrain, initialBrainOrigin) : rawBrain;
     if (!transform) return null;
     const A = AREA_STEP, limit = typeof clampLook === 'function' ? clampLook : c => c;
@@ -3640,7 +3677,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     }
     const look = next.gaze ? { yaw: next.gaze.yaw, pitch: next.gaze.pitch } : { yaw: 0, pitch: 0 };
     const view = nextBrainView(next.view, { yaw: look.yaw, pitch: look.pitch, act: a });
-    const raw = brainTransformFor(view, regionMode ? next.brainFrame : null);
+    const raw = brainTransformFor(view, regionMode ? next.brainFrame : null, NsBrain, brainRollDeg);
     const carriedKeys = prev.objectCarry && next.objectCarry && Array.isArray(prev.objectCarry.brainKeyOffset) && Array.isArray(next.objectCarry.brainKeyOffset)
       ? { ...next.objectCarry, brainKeyOffset: next.objectCarry.brainKeyOffset.map((v, i) => mix(prev.objectCarry.brainKeyOffset[i], v)) } : next.objectCarry;
     let refState = null, record = raw;
@@ -3656,7 +3693,12 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     return { state, brainTransform: record.transform, brainParams: record.params, brainView: view };
   }
 
-  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, setPaused, regionTargets, retreatReach, setReachStartX, blendBrainStep, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
+  /** CIRCLE_ROLL: turn the brain by deltaDeg about the line of sight (clockwise +); returns the roll now. */
+  function rollBrain(deltaDeg) {
+    if (Number.isFinite(deltaDeg) && deltaDeg !== 0) brainRollDeg = ((brainRollDeg + deltaDeg) % 360 + 540) % 360 - 180;
+    return brainRollDeg;
+  }
+  return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, rollBrain, brainRoll: () => brainRollDeg, setPaused, regionTargets, retreatReach, setReachStartX, blendBrainStep, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
     bodyMap: map, regionMode, anatomy, armEnvelope, areaStep, areaIds });
 }
 
@@ -5533,6 +5575,7 @@ export function start(params = {}) {
   const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
   let punchNow = 0;
   let pausedPunchSeq = null;
+  let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg }, or null
   function stepPunchLens(dt) {
     if (!PUNCH_IN.on) return;
     const a = simState?.activity;
@@ -9497,11 +9540,37 @@ export function start(params = {}) {
         const mirrorGuideEvents = [];
         arrowEvents = [];
         if (live) orbitDirs = orbitQueue.splice(0);
+        // 20 November 2026 (CIRCLE_ROLL): a drag that goes round in a circle rolls the brain or the mirror body instead
+        if (!(cs.drag && cs.drag.target && cs.drag.target !== 'limb') && !dragTurns.some(d => d.target !== 'limb')) circleRoll = null;
         for (const dragTurn of dragTurns) {
           if (dragTurn.target === 'limb') continue;
+          if (CIRCLE_ROLL.on) {
+            if (!circleRoll || circleRoll.target !== dragTurn.target) circleRoll = { target: dragTurn.target, st: null, rolledDeg: 0, yawDeg: 0, pitchDeg: 0, undone: false };
+            const r = circleRollStep(circleRoll.st, dragTurn.dx, dragTurn.dy);
+            circleRoll.st = r.state;
+            if (r.rolling) {
+              if (!circleRoll.undone) {
+                // (the circle turned the thing left, right, up and down while it was being drawn, before it counted as a
+                // circle: that turn is taken back now, once, through the same steps, so the circle only rolls it)
+                circleRoll.undone = true;
+                const uy = -circleRoll.yawDeg, up = -circleRoll.pitchDeg, D = DRAG_TURN_DIRS[dragTurn.target];
+                const undo = [];
+                if (uy) undo.push({ dir: uy > 0 ? D.right : D.left, stepDeg: Math.abs(uy) });
+                if (up) undo.push({ dir: up > 0 ? D.down : D.up, stepDeg: Math.abs(up) });
+                for (const q of undo) { if (dragTurn.target === 'brain') orbitDirs.push(q); else if (dragTurn.target === 'mirror') applyMirrorRequest(q); }
+              }
+              if (r.rollDeg) {
+                circleRoll.rolledDeg += r.rollDeg;
+                if (dragTurn.target === 'brain') sim.rollBrain(r.rollDeg);
+                else if (dragTurn.target === 'mirror' && mirrorWired) { mirrorView = Object.freeze({ ...mirrorView, hold: null, orbit: NM.mirrorOrbitRoll(mirrorView.orbit, r.rollDeg) }); applyMirrorView(); }
+              }
+              continue; // (a circle: no turn left, right, up or down from this drag)
+            }
+          }
           // R558 (R31): turn the dragged item about its own centre by the px dragged. The near surface follows the
           // pointer. The brain uses its ordinary orbit steps (and limits); the mirror body its own orbit.
           const yawDeg = dragTurn.dx * DRAG_TURN.degPerPx, pitchDeg = dragTurn.dy * DRAG_TURN.degPerPx;
+          if (circleRoll && circleRoll.target === dragTurn.target) { circleRoll.yawDeg += yawDeg; circleRoll.pitchDeg += pitchDeg; } // (CIRCLE_ROLL: kept to take back)
           const steps = [];
           if (yawDeg !== 0) steps.push({ dir: yawDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].right : DRAG_TURN_DIRS[dragTurn.target].left, stepDeg: Math.abs(yawDeg) });
           if (pitchDeg !== 0) steps.push({ dir: pitchDeg > 0 ? DRAG_TURN_DIRS[dragTurn.target].down : DRAG_TURN_DIRS[dragTurn.target].up, stepDeg: Math.abs(pitchDeg) });
@@ -10818,7 +10887,7 @@ export function start(params = {}) {
       brainModeNote,
       // R5-integrate-core: which round-5 parts are wired in this build (stage 1) and the face packet's outcome.
       round5: { thirdPerson: Boolean(sceneFn('setCameraPose')), compassArrows: Boolean(sceneFn('pickArrows')), bodyWorlds: Boolean(bodyLayers),
-        mirror: mirrorWired && Boolean(bodyRig), mirrorOrbit: plainCopy(mirrorView.orbit), glow: glowWired,
+        mirror: mirrorWired && Boolean(bodyRig), mirrorOrbit: plainCopy(mirrorView.orbit), brainRoll: sim && typeof sim.brainRoll === "function" ? sim.brainRoll() : 0, glow: glowWired,
         glowLabel: glowData ? glowData.label : null, glowRendered: plainCopy(glowRendered),
         glowEndpointVisibility: 'UNVERIFIED: frozen renderer exposes ribbon counts, not per-end onScreen evidence',
         guideFeatures: { ...guideFeatures }, faceMuscles: faceLoaded, faceNote: faceNote || null, headPacket: { loaded: headLoaded, note: headNote || null, conform: headConform }, missingMuscles: { loaded: musclesLoaded, note: musclesNote || null, sheathOpened: plainCopy(sheathOpened) }, chestFlattened: plainCopy(chestFlattened), bellyClosed: plainCopy(bellyClosed), bodyBulk: plainCopy({ body: bodyBulked, arm: armBulked, swell: swellState }),

@@ -2565,6 +2565,11 @@ export function carryFromGrab({ baseYaw = 0, basePitch = 0, startYaw, startPitch
 const m3 = (a) => Float64Array.from(a);
 const rotX3 = a => { const c = Math.cos(a), s = Math.sin(a); return m3([1, 0, 0, 0, c, s, 0, -s, c]); };
 const rotY3 = a => { const c = Math.cos(a), s = Math.sin(a); return m3([c, 0, -s, 0, 1, 0, s, 0, c]); };
+/** Rotation by angle a (radians, right hand) about the axis v (any length), column-major 3x3. */
+const rotAbout3 = (v, a) => {
+  const n = Math.hypot(v[0], v[1], v[2]) || 1, x = v[0] / n, y = v[1] / n, z = v[2] / n, c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+  return m3([c + x * x * t, y * x * t + z * s, z * x * t - y * s, x * y * t - z * s, c + y * y * t, z * y * t + x * s, x * z * t + y * s, y * z * t - x * s, c + z * z * t]);
+};
 const DISPLAY3 = m3([-1, 0, 0, 0, -1, 0, 0, 0, 1]);
 function mul3(a, b) {
   const c = new Float64Array(9);
@@ -3427,9 +3432,9 @@ function frameWholeBrain(strips, {
  *   orbitYaw, orbitPitch, grabYaw, grabPitch, clamped,
  *   axes: { anterior, superior, subjectRight } (world unit vectors of the DRAWN anatomical axes) }.
  */
-export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYaw = 0, grabPitch = 0, tiltDeg = null } = {}) {
+export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, orbitRoll = 0, grabYaw = 0, grabPitch = 0, tiltDeg = null } = {}) {
   if (!frame || frame.kind !== 'ns-brain-frame') throw new Error('ns:brain_view: frame (a frameBrain result) is required');
-  for (const [key, x] of Object.entries({ orbitYaw, orbitPitch, grabYaw, grabPitch })) if (!Number.isFinite(x)) throw new Error(`ns:brain_view: ${key} must be finite`);
+  for (const [key, x] of Object.entries({ orbitYaw, orbitPitch, orbitRoll, grabYaw, grabPitch })) if (!Number.isFinite(x)) throw new Error(`ns:brain_view: ${key} must be finite`);
   const tilt = tiltDeg === null ? frame.tiltDeg : tiltDeg;
   if (!Number.isFinite(tilt)) throw new Error('ns:brain_view: tiltDeg must be finite');
   const oy = clampAbs(orbitYaw, frame.orbitYawLimitDeg), op = clampAbs(orbitPitch, frame.orbitPitchLimitDeg);
@@ -3437,18 +3442,27 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   const clamped = oy !== orbitYaw || op !== orbitPitch || gp !== grabPitch;
   const carry = mul3(rotY3(grabYaw), rotX3(gp));
   const spin = spinOf(frame);
-  const L = localRotation(tilt, oy, op, spin);
+  const K = Number.isFinite(frame.perspectiveK) && frame.perspectiveK > 0 ? frame.perspectiveK : 1;
+  const u0 = frame.squashAxis && frame.squashAxis.length === 3 && Array.prototype.every.call(frame.squashAxis, Number.isFinite) ? frame.squashAxis : null;
+  // 20 November 2026 (orbitRoll, the owner: "a great big circling motion, clockwise or anti-clockwise ... we can turn it
+  // clockwise or anti-clockwise"): a turn about the default line of sight (the squash axis, or the line from the eye to
+  // the brain's centre), DEGREES, positive clockwise as the player sees it. It is applied after the orbit and before the
+  // squash and the carry, so it turns the brain in the picture about its own centre; it commutes with the squash (the
+  // same axis). 0 gives the transform as before bit for bit.
+  const rl = orbitRoll ? ((orbitRoll % 360) + 540) % 360 - 180 : 0;
+  const Rr = rl ? rotAbout3(u0 || frame.pivotWorld, rl * DEG) : null;
+  const L0r = localRotation(tilt, oy, op, spin);
   const F = frame.facing && frame.facing.rotation ? frame.facing.rotation : null;
-  const Q = mul3(carry, F ? mul3(F, L) : L);
+  const FL = F ? mul3(F, L0r) : L0r, L = L0r;
+  const Q = mul3(carry, Rr ? mul3(Rr, FL) : FL);
   const C = ap3(carry, frame.pivotWorld);
   const k = frame.k, pv = frame.pivot;
   // R4-view (D5): perspectiveK > 1 squashes the brain along the default line of sight (frame.pivotWorld, before the
   // carry) about its centre, so the eye sees it as an eye K times farther away would through a K times zoom.
   // R558: a frame with squashAxis (pictureAxis 'view') squashes along that fixed axis of the default look instead.
-  const K = Number.isFinite(frame.perspectiveK) && frame.perspectiveK > 0 ? frame.perspectiveK : 1;
-  const u0 = frame.squashAxis && frame.squashAxis.length === 3 && Array.prototype.every.call(frame.squashAxis, Number.isFinite) ? frame.squashAxis : null;
   const S0 = K === 1 ? null : squashAlong(u0 || frame.pivotWorld, K);
-  const Lin = (S0 ? mul3(carry, mul3(S0, mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L))) : Q).map(x => x * k); // world from source (m per mm)
+  const FLr = Rr ? mul3(Rr, mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L)) : mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L);
+  const Lin = (S0 ? mul3(carry, mul3(S0, FLr)) : Q).map(x => x * k); // world from source (m per mm)
   const LinInv = S0 ? inv3(Lin) : m3([Q[0] / k, Q[3] / k, Q[6] / k, Q[1] / k, Q[4] / k, Q[7] / k, Q[2] / k, Q[5] / k, Q[8] / k]);
   const tq = ap3(Lin, pv);
   const matrix = new Float64Array(16);
@@ -3460,7 +3474,7 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   // not turned. Things placed round the brain that must stay put while it is turned (the orbit arrows) are measured
   // from this, so they are right again after a new frame (a resized window) even while the brain is turned.
   let restMatrix = matrix;
-  if (oy !== 0 || op !== 0) {
+  if (oy !== 0 || op !== 0 || rl !== 0) {
     const L0 = localRotation(tilt, 0, 0, spin);
     const Lin0 = (S0 ? mul3(carry, mul3(S0, mul3(F || m3([1, 0, 0, 0, 1, 0, 0, 0, 1]), L0))) : mul3(carry, F ? mul3(F, L0) : L0)).map(x => x * k);
     const tq0 = ap3(Lin0, pv);
@@ -3486,7 +3500,7 @@ export function brainViewTransform({ frame, orbitYaw = 0, orbitPitch = 0, grabYa
   return {
     kind: 'ns-brain-view', matrix, restMatrix, inverse, rotation: Q, linear: Lin, linearInverse: LinInv, k, pivot: pv, pivotWorld: freezeR2(C), tiltDeg: tilt, spinDeg: spin,
     perspectiveK: K, squashAxis: freezeR2(axisNow), squashAxis0: freezeR2(axis0), pictureAxis: u0 ? 'view' : 'centre',
-    orbitYaw: oy, orbitPitch: op, grabYaw, grabPitch: gp, clamped, axes
+    orbitYaw: oy, orbitPitch: op, orbitRoll: rl, grabYaw, grabPitch: gp, clamped, axes
   };
 }
 

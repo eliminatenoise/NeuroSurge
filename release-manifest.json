@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-55",
+  "version": "experimental-2026-11-20-body-update-56",
   "experimental": true,
-  "source": "Body update 55. White finger and toe tendons; muscles a step darker.",
+  "source": "Body update 56. A circle drawn while pressing turns the brain or the mirror body clockwise or anticlockwise.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 333233,
-      "sha256": "4f3fb8b23e92eb683c1c58d9476ede86fe623c12dfc1ed3e0dd569268d615b1c"
+      "bytes": 335461,
+      "sha256": "d29dc066d4c2f2a0725b87595ad815a904a3a0f360df62c97bb7520972cfc970"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12590,
-      "sha256": "b905f996d6bd587d3f02ca2d2def2f283659775910dd8dec21fcf578d291935a"
+      "bytes": 12875,
+      "sha256": "80c26ff98eb290a1bc3ff14ca9090cdbdff024840ec310630e33e7a2e600db0d"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65435,
-      "sha256": "f4e233d80ff360c2809089807d80d5fe7fee9d43c9effa2509b54d6adbfe6593"
+      "bytes": 65604,
+      "sha256": "a79d6eb557bd639523f6b11ea5199baaf1578c3655181cd3314b4522131d25b0"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 46449,
-      "sha256": "0e1f9008b4ceb4a60cea991fdba87e82f41149f3a7db97a7b6a9b0009368eca3"
+      "bytes": 46853,
+      "sha256": "9cc4dc733f990360df8716d9656d82b23d377e450325a861a922372f14f766d7"
     },
     {
       "path": "README.md",
-      "bytes": 22205,
-      "sha256": "9861e5604881e789676af56b7fcb3f5fb5d5fa0d527bee7709c303bbb7b05a03"
+      "bytes": 22353,
+      "sha256": "18a9e15a5454d510dda4c7f6f498589037eb972b6119d7df5cffb9ff9d08e792"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "e9a4670736acf21bc9900d312875aa406c3f3ed0cf4061e14498199d0eba3c77"
+      "sha256": "b4514b3aec012d6e5d393f123e7991e5ad42ad16bb97997b609ee94c44024e8f"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "82e58d2adf6fc06302c660a9b5fbcf0f340953c51900e8db1cc9943b1f762d48"
+      "sha256": "9e4cb63a935a95bbdbe0373866b3b87699e2cd460dab84804dad13fcf2781bfb"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 884298,
-      "sha256": "0542e8a28de1a0d4e8403ea482cad04073f5731c9cafd65b39d942079832cf57"
+      "bytes": 890121,
+      "sha256": "8d42823de802c9ba63720d7e9004b9387e85b8ca5d6ef5caddf676fb0557f609"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4017,8 +4017,8 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 262210,
-      "sha256": "4debbc36ef2125342387722c2c8fbc2a760512c2d8d7a0478a1729378188908d"
+      "bytes": 263520,
+      "sha256": "0dd2eee10607cb28b001fd21b031839b03c2d1d2eeaa39632abfb1483876330e"
     },
     {
       "path": "scene/src/ns-camera.mjs",
@@ -4107,8 +4107,8 @@
     },
     {
       "path": "scene/src/ns-mirror.mjs",
-      "bytes": 54659,
-      "sha256": "65070f0120ab355fb60dd7897cb547644bbdabdd39c2c29e45867e9a6f6a376b"
+      "bytes": 55905,
+      "sha256": "6a0f55846896d310ce4a6a8d91a10c2880fa04a17f3935a13167b610a5d46af2"
     },
     {
       "path": "scene/src/ns-move-glow.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1166974,
-      "sha256": "fcf66f76e29da22ed8942d5006625d4b687736cd6ae9bf5e4ccafec04083c14e"
+      "bytes": 1167330,
+      "sha256": "122b55d7af513b0e3a5df48d5ef746982fd6b1d4a112813bfade40f997b3624a"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4349,6 +4349,11 @@
       "path": "tests/chunking.test.mjs",
       "bytes": 7094,
       "sha256": "f29de422cec25766f7d1ec10056c6b5b0fb6f2d0efb1a4ad63e300d8a22a7cca"
+    },
+    {
+      "path": "tests/circle-roll.test.mjs",
+      "bytes": 4954,
+      "sha256": "4c2a30d5685b87408e799c93d6c48a6d597645610173839dc0ef55103b073a5b"
     },
     {
       "path": "tests/collide.test.mjs",

@@ -2047,6 +2047,16 @@ The user: “Finger/toe tendons should be there and white-ish.” And: “Muscle
 
 **Muscles a step darker.** Half of the lift of section 141 is taken back: each of the six muscle tones 0.035 darker (it was 0.07 lighter), and the cel look's two shade bands 0.24 and 0.49 (0.3 and 0.56 since section 141; 0.08 and 0.34 before it, which was “far too dark”).
 
+## 154. A circle drawn while pressing turns the brain or the mirror body clockwise or anticlockwise (20 November)
+
+The user (19 November): “And if we click and then use two fingers on our trackpad, or if we make a great big circling motion, clockwise or anti-clockwise on our trackpad or mouse whilst clicking, instead of going straight up and down and left and right, instead of orbiting and shifting forward or backwards in a particular direction, we can turn it clockwise or anti-clockwise, any object basically, any item.”
+
+The brain and the mirror body could be turned left and right and tilted; they could not be turned in the picture's own plane. Both now have a roll: a turn about the line from your eye, positive clockwise as you see it (`orbitRoll` in `ns-brain.mjs` brainViewTransform, applied after the orbit and before the squash and the carry; `roll` in the mirror body's orbit, `mirrorOrbitRoll` in `ns-mirror.mjs`, applied about the view's own axis after the yaw and the tilt). Everything drawn on them, aimed at on them and labelled on them follows, since all of it is built from their transforms. Reset brain view puts both back.
+
+The gesture (`CIRCLE_ROLL`, `circleRollStep` in `ns-app.mjs`): press on the brain or the mirror body and drag round in a circle. The drag's direction is followed sample by sample; once it has turned 300 degrees the same way over at least 140 px, it counts as a circle. From then on, until you let go, each further turn of the drag's direction rolls the thing by half of it (a whole circle of the pointer turns it half a turn), and the drag no longer turns it left, right, up or down. What the first 300 degrees of the circle turned it left, right, up and down is taken back at that moment. A straight drag, a zigzag, an S and a circle a few pixels across do not count. Seen on pictures: two clockwise circles on the brain turn its strip upside down with its labels; two on the mirror body stand it on its head.
+
+Not done: the two-finger turn on a trackpad. A web page is not told about it (Safari alone reports it), so only the circle drawn with one finger or the mouse is used. Limbs are not rolled by the gesture (a press and drag on a limb turns and bends it as before).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

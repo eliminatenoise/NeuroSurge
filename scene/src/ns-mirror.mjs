@@ -410,7 +410,15 @@ export function mirrorOrbitStep(orbit, dir, { stepDeg = MIRROR_ORBIT.stepDeg, pi
   const yaw = orbit && Number.isFinite(orbit.yaw) ? orbit.yaw : 0, pitch = orbit && Number.isFinite(orbit.pitch) ? orbit.pitch : 0;
   const p0 = orbit && Number.isFinite(orbit.push) ? orbit.push : 0;
   return freeze({ yaw: wrapDeg(yaw + s.yaw * stepDeg), pitch: clamp(pitch + s.pitch * stepDeg, -pitchLimitDeg, pitchLimitDeg) + 0,
-    push: clamp(p0 + s.push * stepDeg * push.perDegM, 0, push.maxM) + 0 });
+    push: clamp(p0 + s.push * stepDeg * push.perDegM, 0, push.maxM) + 0, ...(orbit && Number.isFinite(orbit.roll) && orbit.roll !== 0 ? { roll: orbit.roll } : {}) });
+}
+/** 20 November 2026 (the owner's circling gesture): the orbit with its roll turned by deltaDeg (positive clockwise as the
+ * player sees the mirror body; kept in -180 .. 180). The roll turns the body about the line toward the eye, after the
+ * yaw and the tilt (mirrorTransform). Pure. */
+export function mirrorOrbitRoll(orbit, deltaDeg) {
+  if (!Number.isFinite(deltaDeg)) fail('input', 'deltaDeg must be finite');
+  const r0 = orbit && Number.isFinite(orbit.roll) ? orbit.roll : 0, r = ((r0 + deltaDeg) % 360 + 540) % 360 - 180;
+  return freeze({ yaw: orbit && Number.isFinite(orbit.yaw) ? orbit.yaw : 0, pitch: orbit && Number.isFinite(orbit.pitch) ? orbit.pitch : 0, push: orbit && Number.isFinite(orbit.push) ? orbit.push : 0, roll: r + 0 });
 }
 
 /**
@@ -471,6 +479,7 @@ export function reflectionMatrix(n) {
 }
 const rotX = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[5] = c; m[6] = s; m[9] = -s; m[10] = c; return m; };
 const rotY = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[0] = c; m[2] = -s; m[8] = s; m[10] = c; return m; };
+const rotZ = a => { const c = Math.cos(a), s = Math.sin(a), m = identity(); m[0] = c; m[1] = s; m[4] = -s; m[5] = c; return m; };
 const basis4 = (x, y, z) => { const m = identity(); m[0] = x[0]; m[1] = x[1]; m[2] = x[2]; m[4] = y[0]; m[5] = y[1]; m[6] = y[2]; m[8] = z[0]; m[9] = z[1]; m[10] = z[2]; return m; };
 const transpose3 = m => { const r = identity(); r[0] = m[0]; r[4] = m[1]; r[8] = m[2]; r[1] = m[4]; r[5] = m[5]; r[9] = m[6]; r[2] = m[8]; r[6] = m[9]; r[10] = m[10]; return r; };
 
@@ -557,7 +566,9 @@ export function mirrorTransform(state) {
   // (19 November 2026: the placement's own start tilt, MIRROR_NEAR tiltDeg, is where the tilt arrows start from)
   const tilt0 = Number.isFinite(p.tiltDeg) ? p.tiltDeg : 0;
   const pitch = clamp((Number.isFinite(state.orbit.pitch) ? state.orbit.pitch : 0) + tilt0, -MIRROR_ORBIT.pitchLimitDeg, MIRROR_ORBIT.pitchLimitDeg);
-  const O = mirrorOrbitLocal(state.orbit.yaw, pitch);
+  // (20 November 2026: the roll, about the view frame's z axis toward the eye; positive clockwise as the player sees it)
+  const roll = Number.isFinite(state.orbit.roll) ? state.orbit.roll : 0;
+  const O = roll ? multiply(rotZ(-roll * DEG), mirrorOrbitLocal(state.orbit.yaw, pitch)) : mirrorOrbitLocal(state.orbit.yaw, pitch);
   const F = rotY(p.facingYawDeg * DEG);
   // Outside view (MIRROR_OUTSIDE magnifyBy / dropM; state.viewOutside 0 to 1, the camera's own blend): larger and lower.
   const vo = clamp(Number.isFinite(state.viewOutside) ? state.viewOutside : 0, 0, 1);

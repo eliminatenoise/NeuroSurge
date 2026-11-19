@@ -11963,7 +11963,7 @@ export function createScene({
     // A resize can deliver the two normal frames on successive ticks. Admit those revisions until the
     // player turns the mirror, then keep its world frame through the body's return-to-upright measurement.
     const revision = `${brain.serial}|${mirrorSet.serial}`;
-    const orbit = `${mirror.orbit.yaw}|${mirror.orbit.pitch}`;
+    const orbit = `${mirror.orbit.yaw}|${mirror.orbit.pitch}|${mirror.orbit.roll || 0}`;
     if (outsideCompass.key !== key) outsideCompass.turned = false;
     else {
       if (outsideCompass.orbit !== orbit) outsideCompass.turned = true;
@@ -12521,7 +12521,7 @@ export function createScene({
     try {
       if (mirror.external && mirror.external.kind === 'ns-mirror-transform') T = mirror.external;
       else if (mirror.external && mirror.external.kind === 'ns-mirror-state' && mirror.external.placement) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.external, viewAwayM: mirror.viewAwayM, viewOutside: mirror.viewOutside || 0 }));
-      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push }), viewAwayM: mirror.viewAwayM, viewOutside: mirror.viewOutside || 0 }));
+      else if (mirror.state) T = NsMirror.mirrorTransform(Object.freeze({ ...mirror.state, placement: mirrorPlacementNow(), orbit: Object.freeze({ yaw: mirror.orbit.yaw, pitch: mirror.orbit.pitch, push: mirror.orbit.push, roll: mirror.orbit.roll || 0 }), viewAwayM: mirror.viewAwayM, viewOutside: mirror.viewOutside || 0 }));
     } catch (err) { mirror.error = String((err && err.message) || err); T = null; }
     if (!T || !T.matrix || T.matrix.length !== 16) return false;
     // R558 (Message 12): the stop-at-contact correction (setMirrorCorrection) rides on top of the placement.
@@ -12540,7 +12540,7 @@ export function createScene({
   }
   /** R558: true when the mirror body is untouched (no turn, no push, not carried, no handed state): it must then be the
    * literal reflection, exactly. */
-  const mirrorAtRest = () => !mirror.external && !mirror.worldCentre && !mirror.correction && mirror.orbit.yaw === 0 && mirror.orbit.pitch === 0 && mirror.orbit.push === 0;
+  const mirrorAtRest = () => !mirror.external && !mirror.worldCentre && !mirror.correction && mirror.orbit.yaw === 0 && mirror.orbit.pitch === 0 && mirror.orbit.push === 0 && !mirror.orbit.roll;
   /** Mirror sample points in the world (the body sample through the mirror matrix). */
   function mirrorSamplesWorld() {
     const S = mirror.samples, M = mirror.transform && mirror.transform.matrix;
@@ -12573,7 +12573,8 @@ export function createScene({
       mirror.worldCentre = p === null ? null : Array.from(p);
     }
     const pitchLimit = NsMirror.MIRROR_ORBIT.pitchLimitDeg;
-    const orbitOf = o => ({ yaw: o && Number.isFinite(o.yaw) ? o.yaw : 0, pitch: o && Number.isFinite(o.pitch) ? Math.max(-pitchLimit, Math.min(pitchLimit, o.pitch)) + 0 : 0, push: o && Number.isFinite(o.push) ? Math.max(0, Math.min(NsMirror.MIRROR_ORBIT.push.maxM, o.push)) : 0 });
+    // (20 November 2026: + roll, the circling gesture's turn about the line toward the eye; ns-mirror mirrorOrbitRoll)
+    const orbitOf = o => ({ yaw: o && Number.isFinite(o.yaw) ? o.yaw : 0, pitch: o && Number.isFinite(o.pitch) ? Math.max(-pitchLimit, Math.min(pitchLimit, o.pitch)) + 0 : 0, push: o && Number.isFinite(o.push) ? Math.max(0, Math.min(NsMirror.MIRROR_ORBIT.push.maxM, o.push)) : 0, roll: o && Number.isFinite(o.roll) ? o.roll : 0 });
     if (v === null) { mirror.external = null; mirror.worldCentre = null; mirror.orbit = orbitOf(null); }
     else if (v && (v.kind === 'ns-mirror-transform' || v.kind === 'ns-mirror-state')) {
       if (v.kind === 'ns-mirror-state' && !v.placement) { mirror.external = null; mirror.orbit = orbitOf(v.orbit); }
@@ -12583,7 +12584,8 @@ export function createScene({
       const yaw = Number.isFinite(o.yaw) ? o.yaw : Number.isFinite(o.yawDeg) ? o.yawDeg : null;
       const push = Number.isFinite(o.push) ? o.push : Number.isFinite(o.pushM) ? o.pushM : null;
       const pitch = Number.isFinite(o.pitch) ? o.pitch : Number.isFinite(o.pitchDeg) ? o.pitchDeg : null;
-      if (yaw !== null || push !== null || pitch !== null) { mirror.external = null; mirror.orbit = orbitOf({ yaw: yaw !== null ? yaw : mirror.orbit.yaw, pitch: pitch !== null ? pitch : mirror.orbit.pitch, push: push !== null ? push : mirror.orbit.push }); }
+      const roll = Number.isFinite(o.roll) ? o.roll : null;
+      if (yaw !== null || push !== null || pitch !== null || roll !== null) { mirror.external = null; mirror.orbit = orbitOf({ yaw: yaw !== null ? yaw : mirror.orbit.yaw, pitch: pitch !== null ? pitch : mirror.orbit.pitch, push: push !== null ? push : mirror.orbit.push, roll: roll !== null ? roll : 0 }); }
       if (typeof v.visible === 'boolean') mirror.enabled = v.visible;
     } else fail('scene_input', 'setMirrorView needs an ns-mirror state / transform, an orbit object or null');
     // A reset (moved -> rest): measure the posed body again and set the plane from it at the next frame.
