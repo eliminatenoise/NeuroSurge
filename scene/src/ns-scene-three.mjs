@@ -6385,6 +6385,7 @@ export function createScene({
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
   let camPose = null, firstPose = null;
   let referenceOrigin = [0, 0, 0], referenceOriginSet = false, referenceCarry = null, referenceAngles = { yaw: 0, pitch: 0 };
+  let referenceLook = referenceAngles;
   const activePosition = () => camPose ? camPose.position.slice() : firstPose ? firstPose.position.slice() : [0, 0, 0];
   const brainReferenceOrigin = () => lastBrainTransform && lastBrainTransform.referenceTranslation ? lastBrainTransform.referenceTranslation.slice() : [0, 0, 0];
   const camState = { mode: 'first', headInPlace: false, eyeDistM: 0 };
@@ -7855,14 +7856,17 @@ export function createScene({
     mirrorArmGroup.matrix.copy(eyeRig.matrix); mirrorArmGroup.matrixWorldNeedsUpdate = true;
     overlayDirty = true;
   }
-  function setReferenceOrigin(position, initialPlacement = { yaw: 0, pitch: 0 }) {
+  function setReferenceOrigin(position, initialPlacement = { yaw: 0, pitch: 0 }, initialLook = initialPlacement) {
     if (brainDistK !== 1) fail('scene_input', 'configured reference graph cannot use the legacy origin-zero distance-scale hook');
     if (!position || position.length !== 3 || !Array.from(position).every(Number.isFinite)) fail('scene_input', 'reference origin needs finite world metres');
     if (referenceOriginSet && referenceOrigin.some((v, i) => v !== position[i])) fail('scene_input', 'reference origin is constructor-owned');
     if (!initialPlacement || !Number.isFinite(initialPlacement.yaw) || !Number.isFinite(initialPlacement.pitch)) fail('scene_input', 'initial brain carry needs finite radians');
+    if (!initialLook || !Number.isFinite(initialLook.yaw) || !Number.isFinite(initialLook.pitch)) fail('scene_input', 'initial view needs finite radians');
     const K = NsMath.lookRotation(initialPlacement.yaw, initialPlacement.pitch);
     if (referenceCarry && Array.from(K).some((v, i) => v !== referenceCarry[i])) fail('scene_input', 'initial brain carry is constructor-owned');
+    if (referenceOriginSet && (initialLook.yaw !== referenceLook.yaw || initialLook.pitch !== referenceLook.pitch)) fail('scene_input', 'initial view is constructor-owned');
     referenceOrigin = Array.from(position); referenceCarry = Array.from(K); referenceAngles = { yaw: initialPlacement.yaw, pitch: initialPlacement.pitch }; referenceOriginSet = true;
+    referenceLook = { yaw: initialLook.yaw, pitch: initialLook.pitch };
   }
   function setView(yaw, pitch) {
     eyeRig.rotation.set(pitch, yaw, 0, 'YXZ');
@@ -11283,13 +11287,20 @@ export function createScene({
     const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
     if (showB) {
       const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]], r = brainRestElements;
+      // In landscape, the narrower opening lens could put the brain's upper tip above the player's picture even
+      // though the whole motor strip was visible. Use the player's opening look for the default landscape plan.
+      // Portrait has a wider opening lens and keeps the existing framing; a carried brain uses its own direction.
+      const defaultLandscape = cssW >= cssH && Math.abs(arrowRef.yaw - referenceAngles.yaw) < 1e-6
+        && Math.abs(arrowRef.pitch - referenceAngles.pitch) < 1e-6;
+      const brainLook = defaultLandscape
+        ? referenceLook : arrowRef;
       // R558 (hunt 2): the mirror body's place is part of the key: the brain's tips keep off the mirror body's box.
-      const key = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${arrowRef.yaw},${arrowRef.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|${mirrorPlace}|own${body.length}`;
+      const key = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${brainLook.yaw},${brainLook.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|${mirrorPlace}|own${body.length}`;
       // (a turned brain whose transform carries no rest matrix keeps its frame: a frame is never fitted to a turned brain)
       // R558 (performance): nor is a frame planned again while an item is held (setHeldItem): once it is let go
       if (key !== B.key && (r || !B.frames) && (!arrowHeld || !B.key)) {
         B.key = key;
-        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: arrowRef.yaw, pitch: arrowRef.pitch, position: refAt(arrowRef) };
+        const refCam = { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: brainLook.yaw, pitch: brainLook.pitch, position: refAt(brainLook) };
         const bSize = NsArrows.arrowTipSizePx(cam, 'brain');
         // R558 (issue hunt 2, portrait: the brain's bottom tip lay across the mirror body's chest): the brain's tips keep off
         // the mirror body's box (padded by a mirror tip, so the mirror's own tips keep their room) and off places your own
@@ -11317,7 +11328,7 @@ export function createScene({
         const bBlocked = tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad, grid: motorRestGrid(refCam) });
         B.plan = planFrame(B, { box: motorRestBoxPx(refCam), aspect: NsArrows.FRAME_ASPECT.brain, bounds: U, cam: refCam, centre: Array.from(centre), sizePx: bSize,
           avoid: bAvoid.length ? bAvoid : null, keepOut, rules: BRAIN_TIP_RULES, blocked: bBlocked },
-          { target: 'motor strip at rest', refLook: { yaw: arrowRef.yaw, pitch: arrowRef.pitch } });
+          { target: 'motor strip at rest', refLook: { yaw: brainLook.yaw, pitch: brainLook.pitch } });
         if (B.plan) rescueTips(B, B.plan, { cam: refCam, centre: Array.from(centre), sizePx: bSize, blocked: bBlocked, bounds: U, avoid: bAvoid, // 18 November 2026, late
           looseBlocked: tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad, grid: motorRestGrid(refCam), ownBody: false }) });
         if (B.plan) B.plan.visAnchors = frameVisAnchors(B.plan, refCam, Array.from(centre)); // check fix: the frame FRAME_VIS samples

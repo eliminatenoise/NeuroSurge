@@ -6686,7 +6686,7 @@ export function start(params = {}) {
         camBodyToWorld = initialFrame.bodyToWorld;
         callScene('setBodyFrame', initialFrame.bodyToWorld, anatomy.eyeBp);
         callScene('setEyePosition', initialFrame.position);
-        callScene('setReferenceOrigin', sim.initialBrainOrigin, referenceGraph.initialBrainPlacement);
+        callScene('setReferenceOrigin', sim.initialBrainOrigin, referenceGraph.initialBrainPlacement, referenceGraph.initialLook);
       }
       if (sim.regionMode) hud.render({ regionNote: REGION_MODE_NOTE });
       const base = graphControls || createControls(controlsOptions);

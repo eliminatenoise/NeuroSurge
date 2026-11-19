@@ -1912,6 +1912,12 @@ The user: “Maybe let's get rid of all zoom, pan, dolly effects and just have s
 
 The view's turn to a newly chosen limb and its hold on that limb's hand or foot (sections 134 and 139) are left as they are: the user asked for those by name the same day. If “all pan effects” was meant to include them, they are one switch each (`LIMB_KEYS.view`).
 
+## 143. The brain's up arrow in the opening picture
+
+The brain points higher than the player's opening look. In a wide window, planning its compass from the brain's direction placed the up arrow above the player's picture. At the resting landscape placement, the compass now takes its world positions from the player's opening view. The brain keeps those positions during a turn. Carry the brain to a new place and its compass follows the existing carry rule. The portrait layout still uses its wider opening lens and its previous compass plan.
+
+At 1600 × 900 the motor strip spans about 49% of the opening view. Section 59's 42% is a measurement from an earlier layout. The larger arch and the later framing in section 136 still apply.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -1937,7 +1943,6 @@ The view's turn to a newly chosen limb and its hold on that limb's hand or foot 
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
 - Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
-- The strip spans 42 % of the width of the view, not the 50 % of Message 43 (59).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
