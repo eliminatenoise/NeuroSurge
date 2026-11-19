@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 140272,
-      "sha256": "d097b2af69e19d25c78f03857971302d9b019801142bbb6d33e2e6f425210e7d"
+      "bytes": 139617,
+      "sha256": "214e7bd0e967b9f92b505a8334ebefeec0878773c5bfc78b24dc2e29da346c3e"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4262,8 +4262,8 @@
     },
     {
       "path": "tests/browser-player-focus.mjs",
-      "bytes": 7518,
-      "sha256": "5be00caabfb0fdce1875db3d38269102eb708261d91c8c9a11c8a7ba3a1aba48"
+      "bytes": 9099,
+      "sha256": "1d4a8e9184a03d0638478b4ddef43bcd38ccbdb15480c6093a893f12103c9161"
     },
     {
       "path": "tests/browser-startup.mjs",

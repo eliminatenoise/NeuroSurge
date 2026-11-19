@@ -225,14 +225,14 @@ const STEP_TABLE = [
     'so the head and neck turn, and past their reach the chest turns and the trunk bends.')],
   intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
   { head: 'Your left arm.', parts: [part('Your left arm reaches forward toward where you look, like your right arm. When you look ' +
-    'around, the arm comes along and the hand keeps its place in the view. It is your LEFT arm: W, A, S and D move the ' +
-    'hand.'),
+    'around, the arm comes along and the hand keeps its place in the view. W, A, S and D move this hand at the start. ' +
+    'Press 1, 2, 3 or 4 to choose your left arm, left leg, right leg or right arm.'),
     // R558 (Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
     // slowly"; it replaces the Space dance of Message 2).
     part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
       'both hips turn inward or outward. Each limb goes its own way: it carries on in the direction it last turned. Tap ' +
       'twice and hold, and they keep turning, slowly. Let go and every limb stays where it is.')],
-  intro: [part('Your whole left arm is in view: W, A, S and D move its hand. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
+  intro: [part('Your whole left arm is in view. At first, W, A, S and D move its hand. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
   { head: 'The glass brain.', parts: [
     // R558 (user Message 2): every motor area has its own colour, and its muscles glow in the same colour.
     part('A giant glass brain floats in front of you. Its motor areas are the parts that send movement ' +
@@ -263,20 +263,16 @@ const STEP_TABLE = [
   intro: [part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder ' +
     'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
     'Greens: belly and back. Pinks: face and neck.')] },
-  { head: 'Switch areas on.', parts: [part('Look at a motor area to see its movements. Click it to do the highlighted movement. ' +
+  { head: 'Switch areas on.', parts: [part('Rest your look on a motor area to move its body part. Click to repeat the movement. ' +
     'Its simulated glow lasts about a second. Click a muscle on either body to switch on its motor area. ' +
     'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
     'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
-    // R558 (Messages 55 and 56): the numbered movement list on the information card, and the number keys.
-    part('The tip beside the crosshair and the information card list every movement of the area you look at, each ' +
-      'beside a key cap with a number. A click does the filled one; press a number key to do exactly that movement, or hold it to move the part only part of the way. The list stays for the last area you looked at, so you can look at ' +
-      'your body or the mirror body and press the numbers to watch each movement.'),
     // R558 (Messages 55 and 56): the area keys (ns-controls AREA_CODES; ns-app areaStep).
     part('The motor areas are small and lie side by side. The left and right arrow keys step your look along them, ' +
       'one area for each press, so you can visit every area in turn: from the face areas at one side, up over the ' +
       'top of the brain where the leg areas are, and down the other side. The look lands on the next area you can ' +
-      'see on that side. Press a number to choose a movement.'),
+      'see on that side.'),
     // R558 (Message 6): held movements and the opposite-area hint.
     part('A movement stays where it went: the body part does not drift back by itself. To bring it back, switch on ' +
       'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
@@ -483,15 +479,16 @@ export const SHELL = deepFreeze({
   // each other"; "It's not clear what the numbers do and it just adds to confusion on the menu"). The Esc page is a
   // FEW titled groups with wide gutters, not one long list: each group is one picture of its keys (ns-app
   // buildShellMenu: pad = the trackpad, wasd = the pyramid, space, keys = the key caps named) and at most five short
-  // rows, [what you do, what it does]. Settings is the last group. The number keys are no longer a row of nine keys
-  // with a sentence: one row here says a number does the movement beside it, as the tip shows it.
+  // rows, [what you do, what it does]. Settings is the last group.
   menu: [
     { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look around'], ['Click', 'press the area you look at'],
-      ['1 2 3', 'a movement, by its number'], ['← →', 'the next area']] },
-    // 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera view")
-    { id: 'move', title: 'Move', picture: 'wasd', rows: [['W S', 'farther, nearer'], ['A D', 'left, right'],
-      ['Click limb', 'W A S D move it; look away ends']],
-      note: 'Your left hand, a limb you clicked, or what Space holds.' },
+      ['← →', 'the next area']] },
+    { id: 'move', title: 'Move', picture: 'wasd', rows: [
+      ['1 / 2', 'choose left arm / left leg'],
+      ['3 / 4', 'choose right leg / right arm'],
+      ['Click limb', 'choose it'],
+      ['W S', 'move it forward or back'], ['A D', 'move it left or right']],
+      note: 'In the eye view, 2–4 turn the camera toward your chosen limb. Move the mouse or trackpad to look around again.' },
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Hold', 'take what you look at'],
       ['Move', 'carry it'], ['Drag', 'turn it'], ['Tap twice', 'your limbs turn'], ['Shift', 'reach the thing behind']] },
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'the view from behind'],

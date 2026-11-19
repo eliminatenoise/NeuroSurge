@@ -28,7 +28,7 @@ try {
   page.setDefaultTimeout(60_000);
   page.on('pageerror', error => report.errors.push(String(error)));
   const screenshot = async name => {
-    if (process.env.NS_SCREENSHOTS) await page.screenshot({ path: join(process.env.NS_SCREENSHOTS, name + '.png') });
+    if (process.env.NS_SCREENSHOTS) await page.screenshot({ path: join(process.env.NS_SCREENSHOTS, name + '.png'), animations: 'disabled' });
   };
   page.on('response', response => {
     if (!response.ok()) return;
@@ -84,6 +84,17 @@ try {
   await page.keyboard.press('Escape');
   await waitShell('paused');
   checks.pauseFocus = await read();
+  const menu = shell.locator('.ns-menu');
+  assert.ok(await menu.isVisible(), 'Esc shows the control groups');
+  checks.pauseLimbControls = await menu.locator('.ns-menu-move').innerText();
+  assert.match(checks.pauseLimbControls, /1 \/ 2\s+choose left arm \/ left leg/);
+  assert.match(checks.pauseLimbControls, /3 \/ 4\s+choose right leg \/ right arm/);
+  assert.match(checks.pauseLimbControls, /W S\s+move it forward or back/);
+  assert.match(checks.pauseLimbControls, /A D\s+move it left or right/);
+  assert.match(checks.pauseLimbControls, /Click limb\s+choose it/);
+  assert.match(checks.pauseLimbControls, /2–4 turn the camera.*Move the mouse or trackpad/s);
+  assert.doesNotMatch(await menu.innerText(), /a movement, by its number|look away ends/i);
+  await screenshot('pause-limb-controls');
   await shell.locator('.ns-shell-heading').click();
   checks.headingClick = await read();
   await page.keyboard.press('Shift+Tab');
@@ -94,6 +105,15 @@ try {
   await shell.locator('.ns-shell-heading').click();
   await page.keyboard.press('Tab');
   checks.forwardAfterHeading = await read();
+  await shell.getByRole('button', { name: 'Show the full instructions' }).click();
+  const instructions = shell.locator('.ns-shell-instructions');
+  assert.ok(await instructions.isVisible());
+  checks.fullLimbControls = await instructions.locator('li').filter({ hasText: 'Press 1, 2, 3 or 4' }).innerText();
+  assert.match(checks.fullLimbControls, /left arm, left leg, right leg or right arm/);
+  const fullInstructions = await instructions.innerText();
+  assert.match(fullInstructions, /Rest your look on a motor area to move its body part. Click to repeat the movement./);
+  assert.doesNotMatch(fullInstructions, /press a number (?:key|to choose)|press the numbers/i);
+  await shell.getByRole('button', { name: 'Show the short instructions' }).click();
   await page.keyboard.press('Escape');
   await waitShell('playing');
   checks.resumed = await read();
