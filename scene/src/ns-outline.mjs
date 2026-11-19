@@ -254,12 +254,14 @@ const ID_VS = `
 #include <common>
 #include <batching_pars_vertex>
 #include <logdepthbuf_pars_vertex>
+#include <clipping_planes_pars_vertex>
 attribute float nsLift;
 flat varying vec3 vNsId;
 void main() {
 	#include <batching_vertex>
 	#include <begin_vertex>
 	#include <project_vertex>
+	#include <clipping_planes_vertex>
 	// the depth preference of a few meshes (metres nearer the eye, negative = away, 0 for the rest; ns-flesh FLESH_DEPTH_LIFT_GLSL)
 	if ( nsLift != 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) gl_Position.z = ( projectionMatrix[ 3 ][ 2 ] / max( gl_Position.w - nsLift, 1e-4 ) - projectionMatrix[ 2 ][ 2 ] ) * gl_Position.w;
 	#include <logdepthbuf_vertex>
@@ -272,6 +274,12 @@ void main() {
 /** 18 November 2026 (SEE, ns-see): the ID pass's vertex shader, for the hidden-limb pass that draws the same batch again
  * (same instances, matrices, depth preference and code). */
 export const OUTLINE_ID_VS = ID_VS;
+/* 19 November 2026 (the owner: "make sure the occluding muscles, neck muscles are gone, and the transition between is
+ * smooth. So you don't just have, part of a muscle ripped off and detached"). The three ID vertex shaders and ID_FS
+ * carry Three's clipping-plane chunks: the scene gives the pass the box that ends your own body at the collar in the
+ * eye view (ns-scene-three EYE_COLLAR; setClip below), so the pieces of neck and shoulder muscle the picture does not
+ * draw are not in the ID picture either. Until now they were, and their outlines were inked over the open neck as
+ * loose dark lines. Without planes the chunks compile to nothing. */
 /* 18 November 2026 (performance): the ID pass of a mesh skinned on the graphics card (the left game arm's muscles,
  * ns-scene-three armSkinPrepare): Three's own skin chunks on the rest positions (attribute nsSkinRest), the code as a
  * uniform (one proxy draw per mesh; the batch's copy of the vertices would have to be skinned on the processor). */
@@ -279,6 +287,7 @@ const SKIN_ID_VS = `
 #include <common>
 #include <skinning_pars_vertex>
 #include <logdepthbuf_pars_vertex>
+#include <clipping_planes_pars_vertex>
 #ifdef USE_SKINNING
 attribute vec3 nsSkinRest;
 #endif
@@ -292,6 +301,7 @@ void main() {
 	#endif
 	#include <skinning_vertex>
 	#include <project_vertex>
+	#include <clipping_planes_vertex>
 	#include <logdepthbuf_vertex>
 	vNsId = nsId;
 }`;
@@ -302,6 +312,7 @@ const SKIN_BATCH_VS = `
 #include <common>
 #include <batching_pars_vertex>
 #include <logdepthbuf_pars_vertex>
+#include <clipping_planes_pars_vertex>
 uniform highp sampler2D nsBoneTex;
 uniform float nsHalf;
 attribute float nsLift;
@@ -325,6 +336,7 @@ void main() {
 	vec3 transformed = ( nsSkinP.y * ( nsBone( nsIa ) * nsS4 + nsRa * nsD4 ) + nsWb * ( nsBone( nsIb ) * nsS4 + nsRb * nsD4 ) ).xyz;
 	if ( nsSkinD.w != 0.0 ) transformed += normalize( ( nsSkinP.y * ( nsRa * vec4( nsSkinN.xyz, 0.0 ) ) + nsWb * ( nsRb * vec4( nsSkinN.xyz, 0.0 ) ) ).xyz ) * nsSkinD.w;
 	#include <project_vertex>
+	#include <clipping_planes_vertex>
 	if ( nsLift != 0.0 && projectionMatrix[ 3 ][ 3 ] == 0.0 ) gl_Position.z = ( projectionMatrix[ 3 ][ 2 ] / max( gl_Position.w - nsLift, 1e-4 ) - projectionMatrix[ 2 ][ 2 ] ) * gl_Position.w;
 	#include <logdepthbuf_vertex>
 	#ifdef USE_BATCHING_COLOR
@@ -339,7 +351,16 @@ export const OUTLINE_SKIN_ID_VS = SKIN_ID_VS, OUTLINE_SKIN_BATCH_VS = SKIN_BATCH
 const ID_FS = `
 flat varying vec3 vNsId;
 #include <logdepthbuf_pars_fragment>
+#include <clipping_planes_pars_fragment>
 void main() {
+	#if NUM_CLIPPING_PLANES > 0
+	// only your own trunk and head (groups 1 and 2): they are what ends at the collar. A limb is never cut here (your
+	// hand in front of your face is drawn, and so is its line).
+	float nsGrp = floor( vNsId.r * 255.0 + 0.5 );
+	if ( nsGrp == 1.0 || nsGrp == 2.0 ) {
+		#include <clipping_planes_fragment>
+	}
+	#endif
 	#include <logdepthbuf_fragment>
 	float gb = floor( vNsId.g * 255.0 + 0.5 );
 	bool flip = gb >= 128.0;
@@ -697,16 +718,16 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const idScene = new THREE.Scene();
   idScene.name = 'ns-outline ID pass (one batch of the drawn body meshes)';
   idScene.matrixWorldAutoUpdate = false;
-  const idMat = new THREE.ShaderMaterial({ vertexShader: ID_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  const idMat = new THREE.ShaderMaterial({ vertexShader: ID_VS, fragmentShader: ID_FS, clipping: true, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
   // 18 November 2026 (performance): meshes skinned on the graphics card are drawn into the ID target by proxies (one
   // draw each, after the batch) that share their geometry, skeleton and bind matrices (SKIN_ID_VS).
   const skinScene = new THREE.Scene();
   skinScene.name = 'ns-outline ID pass (meshes skinned on the graphics card)';
   skinScene.matrixWorldAutoUpdate = false;
-  const skinIdMat = new THREE.ShaderMaterial({ uniforms: { nsId: { value: new THREE.Vector3() } }, vertexShader: SKIN_ID_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  const skinIdMat = new THREE.ShaderMaterial({ uniforms: { nsId: { value: new THREE.Vector3() } }, vertexShader: SKIN_ID_VS, fragmentShader: ID_FS, clipping: true, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
   let skinShown = 0;
   // 18 November 2026 (performance): the body's muscles skinned on the graphics card, in a batch of their own (sbBuild)
-  const skinBatchMat = new THREE.ShaderMaterial({ uniforms: { nsBoneTex: { value: null }, nsHalf: { value: 128 } }, vertexShader: SKIN_BATCH_VS, fragmentShader: ID_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  const skinBatchMat = new THREE.ShaderMaterial({ uniforms: { nsBoneTex: { value: null }, nsHalf: { value: 128 } }, vertexShader: SKIN_BATCH_VS, fragmentShader: ID_FS, clipping: true, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
   const sb = { batch: null, geoms: new Map(), dirty: false, members: 0, rebuilds: 0 };
   const isBodyGpu = s => s.isSkinnedMesh === true && Boolean(s.skeleton) && s.skeleton.nsBody === true && Boolean(s.userData && s.userData.nsBodyGpu && s.userData.nsBodyGpu.gpuSrc);
   const depthTexture = ok ? new THREE.DepthTexture(1, 1) : null;
@@ -1195,6 +1216,13 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   function setStripLive(x, y, share) { stripCompMat.uniforms.uLive.value.set(Number.isFinite(x) ? x : 0, Number.isFinite(y) ? y : 0, Number.isFinite(share) ? share : 0); }
   /** Depth shading (OUTLINE_AO) on or off; the scene turns it on only at the full quality level. */
   function setOcclusion(v) { const n = v === true; if (n !== occOn) force = true; occOn = n; return occOn; }
+  /** The planes of a box that is NOT drawn (world space, Three's local clipping with clipIntersection: a point on the
+   * cut side of every plane is dropped), or null: the ID pass leaves out what the main picture leaves out
+   * (ns-scene-three EYE_COLLAR). The planes are the scene's own objects; it moves them, and asks for a redraw. */
+  function setClip(planes) {
+    for (const m of [idMat, skinIdMat, skinBatchMat]) { m.clippingPlanes = planes && planes.length ? planes : null; m.clipIntersection = true; m.needsUpdate = true; }
+    invalidate();
+  }
   function setEnabled(v) {
     on = v !== false && ok;
     if (!on) composite.visible = false;
@@ -1225,5 +1253,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * body), 0 when not registered. */
   function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
   function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
-  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get supersample() { return ss; } };
+  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get supersample() { return ss; } };
 }

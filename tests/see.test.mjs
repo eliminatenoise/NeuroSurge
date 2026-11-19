@@ -1,10 +1,11 @@
-/** A limb hidden behind another limb stays visible and can be aimed at (ns-see; ns-app controlTargets). Pure checks on
- * supplied ray layers; nothing is drawn, so these cannot show what the graphics card draws — only that the picking uses
- * the same rule as the ghost pass and takes what the player aims at. */
+/** Whatever is hidden behind something shows through it as light-blue glass, and a limb hidden behind another limb can be
+ * aimed at (ns-see; ns-app controlTargets). Pure checks on supplied codes and ray layers; nothing is drawn, so these
+ * cannot show what the graphics card draws: only that the drawing rule says what the owner asked for, that the picking
+ * still takes what the player aims at, and that the new ghosts take nothing from it. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SEE, SEE_LIMBS, seeLimbOfGroup, seeLimbKey, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeLockedAway, seeLimbColours } from '../scene/src/ns-see.mjs';
-import { OUTLINE_GROUPS as G, OUTLINE_MIRROR_OFFSET as M } from '../scene/src/ns-outline.mjs';
+import { SEE, SEE_LIMBS, SEE_THINGS, seeLimbOfGroup, seeLimbKey, seeThingOfGroup, seeBodyOfThing, seeAreaCode, seeShows, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeLockedAway, seeFillTargets, seeGlassColours, SEE_JOIN_MASKS } from '../scene/src/ns-see.mjs';
+import { OUTLINE_GROUPS as G, OUTLINE_MIRROR_OFFSET as M, OUTLINE_ADJACENT } from '../scene/src/ns-outline.mjs';
 import { controlTargets } from '../scene/src/ns-app.mjs';
 
 const own = (group, distance, name = 'x') => ({ item: 'own', kind: 'muscle', distance, point: [0, 0, 0], rec: { source: 'own', part: 'body', name, group } });
@@ -29,7 +30,90 @@ test('each outline group belongs to one limb (or none), on either body', () => {
   assert.deepEqual(SEE_LIMBS, ['leftArm', 'rightArm', 'leftLeg', 'rightLeg']);
 });
 
-test('a ghost is another limb of the same body, not joined to the part in front', () => {
+// 19 November 2026 (the owner: "Whenever anything is occluded behind something, we want to see it through as well with a
+// highlighted outline, light bluish glass thing"): the DRAWING rule is wider than limbs now. The next test (the picking
+// rule) used to be the drawing rule as well ("only the limbs get ghosts", "only within one body", "nothing through the
+// brain"); it still pins the picking, on purpose, and the tests after it pin the new drawing rule.
+test('every part of a body is a thing: its limb, or its trunk with the neck and head', () => {
+  assert.equal(seeThingOfGroup(G.lHand), 1);
+  assert.equal(seeThingOfGroup(G.rShank), 4);
+  assert.equal(seeThingOfGroup(G.trunk), SEE_THINGS.ownTrunk);
+  assert.equal(seeThingOfGroup(G.head), SEE_THINGS.ownTrunk, 'the head is one piece with the trunk');
+  assert.equal(seeThingOfGroup(G.trunk + M), SEE_THINGS.mirrorTrunk);
+  assert.equal(seeThingOfGroup(G.lFoot + M), 7);
+  assert.equal(seeThingOfGroup(0), 0);
+  assert.equal(seeThingOfGroup(15), 0, 'no such group');
+  assert.equal(seeThingOfGroup(99), 0);
+  assert.equal(seeBodyOfThing(3), 1);
+  assert.equal(seeBodyOfThing(SEE_THINGS.ownTrunk), 1);
+  assert.equal(seeBodyOfThing(6), 2);
+  assert.equal(seeBodyOfThing(SEE_THINGS.mirrorTrunk), 2);
+  assert.equal(seeBodyOfThing(SEE_THINGS.brain), 0);
+  assert.equal(seeAreaCode(0), SEE_THINGS.area);
+  assert.equal(seeAreaCode(500), SEE_THINGS.maxCode, 'never past the last code');
+  assert.ok(SEE_THINGS.maxCode < 128, 'a code fits the byte the pass writes it in');
+});
+
+const g = group => ({ group }), th = thing => ({ thing });
+test('the drawing rule within a body: limbs as before, and the trunk behind a forearm, hand, shank or foot', () => {
+  assert.equal(seeShows(g(G.rFore), g(G.lHand)), true, 'a hand under the other forearm');
+  assert.equal(seeShows(g(G.trunk), g(G.lHand)), true, 'a hand under the body');
+  assert.equal(seeShows(g(G.rThigh), g(G.lFoot)), true, 'a foot behind a thigh');
+  assert.equal(seeShows(g(G.lShank), g(G.trunk)), true, 'the trunk behind a raised knee (the shank)');
+  assert.equal(seeShows(g(G.rHand), g(G.head)), true, 'the head behind a hand');
+  assert.equal(seeShows(g(G.lHand), g(G.lFore)), false, 'a thing never shows through itself');
+  assert.equal(seeShows(g(G.trunk), g(G.head)), false, 'the trunk and head are one piece');
+  assert.equal(seeShows(g(G.trunk), g(G.lThigh)), false, 'a thigh going into the hip is not hidden');
+  assert.equal(seeShows(g(G.lThigh), g(G.trunk)), false, 'nor the trunk behind the root of its own limb');
+  assert.equal(seeShows(g(G.rUpper), g(G.trunk)), false);
+  assert.equal(seeShows(g(G.lShank + M), g(G.trunk + M)), true, 'the same on the mirror body');
+  assert.equal(seeShows(g(G.lShank), g(G.trunk), { trunk: false, across: true, brain: true }), false, 'the rule can be switched off by itself');
+  assert.equal(seeShows(g(G.trunk), g(G.lHand), { trunk: false, across: false, brain: false }), true, 'the limbs do not depend on it');
+  assert.equal(seeShows(g(0), g(G.lHand)), false);
+  assert.equal(seeShows(null, null), false);
+});
+
+test('the table the graphics card reads for "joined at a joint" says what the drawing rule says', () => {
+  assert.equal(SEE_JOIN_MASKS.length, M);
+  const joined = (a, b) => ((SEE_JOIN_MASKS[a] >> b) & 1) === 1;
+  const groups = Object.values(G);
+  for (const a of groups) for (const b of groups) {
+    const adjacent = a === b || OUTLINE_ADJACENT.some(([x, y]) => (G[x] === a && G[y] === b) || (G[x] === b && G[y] === a));
+    assert.equal(joined(a, b), adjacent, `groups ${a} and ${b}`);
+    // two different things of one body show through each other exactly when they are not joined (limbs; and a trunk behind a limb)
+    if (seeThingOfGroup(a) !== seeThingOfGroup(b)) assert.equal(seeShows(g(a), g(b)), !adjacent, `front ${a}, behind ${b}`);
+  }
+  assert.equal(SEE_JOIN_MASKS[0], 0);
+  assert.ok(Math.max(...groups) < M && M <= 31, 'a bit per group fits an int');
+});
+
+test('the drawing rule across the two bodies: either shows through the other', () => {
+  assert.equal(seeShows(g(G.trunk + M), g(G.lHand)), true, 'your hand behind the mirror body');
+  assert.equal(seeShows(g(G.rShank), g(G.lFoot + M)), true, 'the mirror body behind your leg');
+  assert.equal(seeShows(g(G.rThigh), g(G.trunk + M)), true, 'its trunk too');
+  assert.equal(seeShows(g(G.trunk), g(G.lThigh + M)), true, 'a joint joins nothing across two bodies');
+  assert.equal(seeShows(g(G.rShank), g(G.lFoot + M), { trunk: true, across: false, brain: true }), false, 'switched off by itself');
+});
+
+test('the drawing rule and the brain: bodies through the brain, the brain through bodies, the eyeballs through the brain', () => {
+  const B = SEE_THINGS;
+  assert.equal(seeShows(th(B.brain), g(G.lHand)), true, 'your hand behind the brain');
+  assert.equal(seeShows(th(B.brain), g(G.trunk + M)), true, 'the mirror body behind the brain');
+  assert.equal(seeShows(th(seeAreaCode(3)), g(G.rFoot)), true, 'a foot behind the motor strip');
+  assert.equal(seeShows(g(G.rThigh), th(B.brain)), true, 'the brain behind your leg');
+  assert.equal(seeShows(g(G.rThigh), th(seeAreaCode(0))), true, 'a group of motor areas behind your knee');
+  assert.equal(seeShows(g(G.trunk + M), th(B.eyes)), true, 'an eyeball behind the mirror body');
+  assert.equal(seeShows(th(B.brain), th(B.eyes)), true, 'the eyeballs and nerves behind the brain\'s own surface');
+  assert.equal(seeShows(th(seeAreaCode(1)), th(B.eyes)), true);
+  assert.equal(seeShows(th(B.eyes), th(B.brain)), false, 'not the brain behind its own eyeball');
+  assert.equal(seeShows(th(B.brain), th(seeAreaCode(0))), false, 'not an area behind the brain\'s own surface');
+  assert.equal(seeShows(th(B.brain), th(B.brain)), false, 'one fold of the brain behind another');
+  assert.equal(seeShows(th(B.eyes), th(B.eyes)), false);
+  assert.equal(seeShows(th(B.brain), g(G.lHand), { trunk: true, across: true, brain: false }), false, 'switched off by itself');
+  assert.equal(seeShows(g(G.rThigh), th(B.brain), { trunk: true, across: true, brain: false }), false);
+});
+
+test('the picking rule: a hidden limb of the same body, not joined to the part in front (unchanged)', () => {
   assert.equal(seeGhostEligible(G.rFore, G.lHand), true, 'a hand under the other forearm');
   assert.equal(seeGhostEligible(G.rThigh, G.lFoot), true, 'a foot behind the other thigh');
   assert.equal(seeGhostEligible(G.trunk, G.lHand), true, 'a hand behind the trunk');
@@ -88,6 +172,72 @@ test('a limb is locked away while it is hidden and hardly seen anywhere, with no
   assert.equal(seeLockedAway(null).length, 9);
 });
 
+test('the trunks can be asked the same question as the limbs (hidden and hardly seen), without changing the limbs\' answer', () => {
+  const s = new Array(SEE_THINGS.count).fill(0), h = new Array(SEE_THINGS.count).fill(0);
+  s[3] = 2; h[3] = 30; s[SEE_THINGS.mirrorTrunk] = 1; h[SEE_THINGS.mirrorTrunk] = 25; s[SEE_THINGS.ownTrunk] = 90; h[SEE_THINGS.ownTrunk] = 20;
+  const limbs = seeLockedAway({ seen: s, hidden: h });
+  assert.equal(limbs.length, 9, 'the picking asks about the limbs only');
+  assert.equal(limbs[3], true);
+  const all = seeLockedAway({ seen: s, hidden: h }, null, SEE, SEE_THINGS.mirrorTrunk);
+  assert.equal(all.length, SEE_THINGS.mirrorTrunk + 1);
+  assert.equal(all[3], true);
+  assert.equal(all[SEE_THINGS.mirrorTrunk], true, 'the mirror body\'s trunk behind the brain');
+  assert.equal(all[SEE_THINGS.ownTrunk], false, 'your trunk mostly shows');
+});
+
+test('the fill of each thing: a limb light or strong, a trunk only as far as it is hidden, the brain\'s surface never', () => {
+  const B = SEE_THINGS, census = (seen, hidden) => { const s = new Array(B.count).fill(0), h = new Array(B.count).fill(0); s[B.ownTrunk] = seen; h[B.ownTrunk] = hidden; s[B.brain] = 300; h[B.brain] = 200; return { seen: s, hidden: h }; };
+  const none = seeFillTargets(null, null);
+  assert.equal(none.length, B.count);
+  for (let c = 1; c <= 8; c++) assert.equal(none[c], SEE.fillLow, 'a limb always has its light fill');
+  assert.equal(none[B.ownTrunk], 0, 'no census yet: a trunk has none');
+  assert.equal(none[B.brain], 0);
+  assert.equal(none[B.eyes], SEE.fillEyes);
+  assert.equal(none[B.area], SEE.fillArea);
+  const locked = new Array(B.mirrorTrunk + 1).fill(false); locked[2] = true;
+  assert.equal(seeFillTargets(null, locked)[2], SEE.fillAlpha, 'hidden and hardly seen: strong');
+  assert.equal(seeFillTargets(null, locked)[1], SEE.fillLow);
+  assert.equal(seeFillTargets(census(95, 5))[B.ownTrunk], 0, 'a trunk that mostly shows: lines only');
+  const part = seeFillTargets(census(70, 30))[B.ownTrunk], more = seeFillTargets(census(60, 40))[B.ownTrunk];
+  assert.ok(part > 0 && part < SEE.fillTrunk, 'partly hidden: part of the fill');
+  assert.ok(more > part, 'more hidden, more fill (smoothly: a share that wanders does not switch it on and off)');
+  assert.equal(seeFillTargets(census(40, 60))[B.ownTrunk], SEE.fillTrunk);
+  const trunkLocked = new Array(B.mirrorTrunk + 1).fill(false); trunkLocked[B.ownTrunk] = true;
+  assert.equal(seeFillTargets(census(5, 95), trunkLocked)[B.ownTrunk], SEE.fillAlpha, 'hidden and hardly seen: like such a limb');
+  assert.equal(seeFillTargets(census(5, 95), trunkLocked)[B.brain], 0, 'the brain\'s surface is behind almost everything: never a fill');
+  for (const v of seeFillTargets(census(5, 95), trunkLocked)) assert.ok(v >= 0 && v <= SEE.fillAlpha);
+});
+
+test('controlTargets: the new ghosts take nothing: a trunk, the other body or the brain behind what is seen is never the default', () => {
+  const every = new Array(9).fill(true); // (even if every limb counted as locked away)
+  // the trunk behind your raised shank: drawn as a ghost, but the shank stays the target and Shift goes on to the brain
+  const shank = own(G.lShank, 0.6, 'left shank'), trunk = own(G.trunk, 0.9, 'chest'), far = glass(6);
+  const t = controlTargets([shank, trunk, far], { ghost: every });
+  assert.equal(t.front, shank);
+  assert.equal(t.ghost, null);
+  assert.equal(t.hidden, null, 'a trunk is not a hidden limb');
+  assert.equal(t.behind, far);
+  // the mirror body's leg behind your leg: your leg is the target; Shift reaches the other item (the mirror body)
+  const leg = own(G.rShank, 0.7, 'right shank'), mleg = mir(G.lShank + M, 2.4);
+  const u = controlTargets([leg, mleg, far], { ghost: every });
+  assert.equal(u.front, leg);
+  assert.equal(u.ghost, null);
+  assert.equal(u.behind, mleg);
+  // your hand behind the brain's surface: the brain is what is seen and taken; the ghost through it is not
+  const hand = own(G.lHand, 1.2, 'left hand'), near = glass(0.8);
+  const v = controlTargets([near, hand], { ghost: every });
+  assert.equal(v.front, hand, 'clear glass in front of a body part was always see-through for the controls (unchanged)');
+  assert.equal(v.ghost, null);
+  // a motor area the look names behind your knee, with the trunk and another limb behind the knee too: the area stays
+  const knee = own(G.rThigh, 0.9, 'right thigh'), foot = own(G.lFoot, 1.0, 'left foot'), a = area(7);
+  const w = controlTargets([knee, trunk, foot, a], { lookArea: true, ghost: new Array(9).fill(false) });
+  assert.equal(w.front.kind, 'area');
+  assert.equal(w.front.item, 'brain');
+  assert.equal(w.behind, knee, 'Shift takes the knee in front of the area');
+  const x = controlTargets([knee, trunk, foot, a], { lookArea: true, ghost: every });
+  assert.equal(x.front.kind, 'area', 'even a locked-away limb behind the knee does not take the area\'s place');
+});
+
 test('controlTargets: a filled ghost is the default target and Shift reaches the part in front', () => {
   const fore = own(G.rFore, 0.8, 'right forearm'), hand = own(G.lHand, 0.86, 'left hand'), behindGlass = glass(6);
   const L = [fore, hand, behindGlass];
@@ -122,17 +272,17 @@ test('controlTargets: behind a motor area the area stays the default; Shift take
   assert.equal(u.behind, leg, 'the leg in front of the strip: Shift takes the leg');
 });
 
-test('the ghost colours are the strip families, light enough to read, below the bloom', () => {
-  const c = seeLimbColours();
-  assert.equal(c.length, 9);
-  for (let i = 1; i <= 8; i++) {
-    assert.ok(Math.max(...c[i]) <= SEE.colourLift + 1e-9, 'no channel above the lift');
-    assert.ok(Math.max(...c[i]) > 0.5, 'not dark');
+// 19 November 2026: this test used to pin one colour per limb (the strip families: blue left arm, orange right arm,
+// purple left leg, yellow right leg). The owner has since asked for ONE look ("That sort of bluish transparent outline is
+// great. We actually want that for everything now ... light bluish glass thing"), so it now pins that look instead.
+test('every ghost has the one light-blue glass look, light enough to read, below the bloom', () => {
+  const { line, fill } = seeGlassColours();
+  for (const c of [line, fill]) {
+    assert.equal(c.length, 3);
+    assert.ok(Math.max(...c) <= 0.8 + 1e-9, 'no channel above 0.8 (the bloom starts above it)');
+    assert.ok(Math.max(...c) > 0.5, 'not dark');
+    assert.ok(c[2] > c[1] && c[1] > c[0], 'blue over green over red: a light blue');
   }
-  assert.deepEqual(c[1], c[5], 'the mirror body uses your colours');
-  const [, lArm, rArm, lLeg, rLeg] = c;
-  assert.ok(lArm[2] > lArm[0], 'left arm: blue');
-  assert.ok(rArm[0] > rArm[2], 'right arm: orange');
-  assert.ok(lLeg[2] > lLeg[1], 'left leg: purple');
-  assert.ok(rLeg[0] > rLeg[2] && rLeg[1] > rLeg[2], 'right leg: yellow');
+  assert.ok(fill[0] > line[0], 'the fill is paler than the line');
+  assert.deepEqual(seeGlassColours().line, [...SEE.glass.line], 'a copy of SEE.glass each time');
 });

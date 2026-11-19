@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-19-body-update-50-mirror-compass-fix",
+  "version": "experimental-2026-11-19-body-update-51",
   "experimental": true,
-  "source": "Body update 50. W and S move the chosen limb's end along the line from its shoulder or hip; A and D swing the limb sideways with its bend unchanged. Opening compass repair for the mirror body.",
+  "source": "Body update 51. Whatever is hidden behind something shows through it as light-blue glass; no loose lines over the open neck.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 312661,
-      "sha256": "062b7edac2435a942bade876ef00e2432a56d098dc1d780cd824a99564071dd6"
+      "bytes": 320644,
+      "sha256": "084127546ed9b71b90bed6caba003b135acaf1ce37822e4b00adca4fc0a3ed75"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12089,
-      "sha256": "edbbcd270e7350388e25b415808f63c2ee89c02ea5ebb5b64155fad2a744d1a8"
+      "bytes": 12481,
+      "sha256": "bbb4b37dfed0b45f8d4b67c75deae4e377954179c35d66c0d37d2337fd69736f"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 64070,
-      "sha256": "e68c5e72bb3770166a5dfed140e40c437f7c95d7a6b4a94991a6c356c668d625"
+      "bytes": 64372,
+      "sha256": "1963c781eba3de418e0daeed70cff4752d508648b5805456f16ef4233f480730"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 42856,
-      "sha256": "1a5cd2ed5c698311338637efa74eb71e87371deed5766205cc964b434166d2b2"
+      "bytes": 44040,
+      "sha256": "7aee0140739bcc4057d1eefb0051c5a255217c815101b6e8fc17e5a5d1967436"
     },
     {
       "path": "README.md",
-      "bytes": 21218,
-      "sha256": "24739084711f1cd189a52db4673400a3cb03548476855f0ebdca56454b65265e"
+      "bytes": 21451,
+      "sha256": "ef5777f880dc1910047446bc18cc6c85f4d0f7dfc88e428afa031d17c8928251"
     },
     {
       "path": "START.html",
-      "bytes": 4048,
-      "sha256": "10941744575621fa5f69792ff23693898d10c2260f35228a196480c33ab11cc1"
+      "bytes": 4029,
+      "sha256": "ab317724ad5ebdc6341b54154122ec5363c48f1b6cc8c6402910a5638b473854"
     },
     {
       "path": "index.html",
-      "bytes": 1019,
-      "sha256": "fd2a50bc5ddbdd053a18975401f53ed0535d6829aef225105aba6471cb2e4bd6"
+      "bytes": 1000,
+      "sha256": "1fef1e2d45a372954d8e3b896b0264f3f356dc747e08c980aa196bb733696f92"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3847,8 +3847,8 @@
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 56693,
-      "sha256": "3963468f8869d1257ef58741667c1c4803cf607b4313a4e700b40cfea00d687a"
+      "bytes": 57378,
+      "sha256": "ccfbf38d1a73237e98ceb4a314c0ee174ec26414b6a4fba11d311f3f5d9a2c83"
     },
     {
       "path": "scene/example/framing-b-r356.html",
@@ -4117,8 +4117,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 79622,
-      "sha256": "ed553103bac9cfd1d442417e2bf3fe1d438020b6000d039d533f03949da4cee0"
+      "bytes": 81501,
+      "sha256": "8d24d6f0f305b03b4f7e93de6834c9331e275988691b7fe106de5ec0841f5129"
     },
     {
       "path": "scene/src/ns-pack-loader.mjs",
@@ -4177,13 +4177,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1152690,
-      "sha256": "9d8059a9365598d788b39c1aa1d0ed6a3483936af053d5b5e80cb05bb7de3717"
+      "bytes": 1156695,
+      "sha256": "87c2988cd9d39cc161d8a976d11756e3031326893b2cb47ac61785ca35a2a2fd"
     },
     {
       "path": "scene/src/ns-see.mjs",
-      "bytes": 36950,
-      "sha256": "88e7e289a6c528c3aea48b4a697ca4c517f089a8031f04d304a228e4c1e66cef"
+      "bytes": 77245,
+      "sha256": "be7223b876e81e1a7fa26f7dc6e1f79402c94aeb69f07cbc4fe4ce11a5b81826"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4507,8 +4507,8 @@
     },
     {
       "path": "tests/see.test.mjs",
-      "bytes": 8782,
-      "sha256": "09bf15d4bdc6bec88c16c5cd768f659e7c8392f6b74a7eacade7ac72de5a172e"
+      "bytes": 20335,
+      "sha256": "8e6317de3ece26e94a566509c0183b4328ae9230dbbd6333a0850178e437678c"
     },
     {
       "path": "tests/shader-safe.test.mjs",

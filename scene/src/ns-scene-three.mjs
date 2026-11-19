@@ -192,7 +192,7 @@ import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
 import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 // R558 (Message 20): outlines where limbs and bodies overlap (an ID pass of the body meshes and a screen-space line pass).
 import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
-import { createGhostPass } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front
+import { createGhostPass, seeAreaCode } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front; 19 November: everything hidden
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
 import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
@@ -4836,8 +4836,13 @@ export function createScene({
   scene.add(outline.stripComposite);
   disposables.push({ dispose: () => outline.dispose() });
   // 18 November 2026 (SEE, ns-see): a limb covered by another limb or the trunk is drawn over it as a ghost (its line and a
-  // soft fill in its own colour, stronger when the limb is locked away), right after the outline's ink.
+  // soft fill, stronger when the limb is locked away).
+  // 19 November 2026 (the owner: "Whenever anything is occluded behind something, we want to see it through as well with
+  // a highlighted outline, light bluish glass thing"): every hidden thing is a ghost now, the brain's included, and a
+  // body part behind the brain shows through the brain. So the ghosts are drawn AFTER the brain's surface (RENDER_ORDER
+  // glass) and the bodies' own late passes (BODY_ORDER torso, arm), and still under the links, beams and arrows.
   const ghost = createGhostPass({ THREE, renderer, outline, reducedMotion });
+  if (ghost.afterBrain) ghost.composite.renderOrder = BODY_ORDER.arm + 1; // (with the brain's rule off: right after the outline's ink, as before)
   scene.add(ghost.composite);
   disposables.push({ dispose: () => ghost.dispose() });
   // R558 (Message 25): the HDR picture and its bloom (HDR_BLOOM); off on a software renderer. Its target is always
@@ -5072,6 +5077,13 @@ export function createScene({
     const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
     outline.stripMaterial.onBeforeCompile = shader => { liveCompile(shader, u); };
     outline.stripMaterial.customProgramCacheKey = () => 'ns-live-outline-strip';
+  }
+  // 19 November 2026 (SEE): the hidden-things pass's own picture of the brain follows the wobble and the blooms the same
+  // way (it is kept between frames too; ghost.touchBrain() has it drawn again while they move).
+  for (const m of ghost.brainMaterials) {
+    const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
+    m.onBeforeCompile = shader => { liveCompile(shader, u); };
+    m.customProgramCacheKey = () => 'ns-live-see';
   }
   /** A material with no other shader patch joins the living brain. */
   const livePlain = (m, key = 'ns-live-plain') => { m.onBeforeCompile = shader => { liveCompile(shader); }; m.customProgramCacheKey = () => key; return m; };
@@ -5622,6 +5634,7 @@ export function createScene({
       // parked: no point lies on the cut side of the level plane, so nothing is clipped
       for (let i = 0; i < collar.planes.length; i++) collar.planes[i].set(collar.planes[i].normal.set(0, 1, 0), 1e9);
     }
+    if (collar.on !== on && typeof outline.invalidate === 'function') outline.invalidate(); // (the ID picture is cut by the same box)
     collar.on = on;
     if (collar.cap) collar.cap.visible = on && EYE_COLLAR.cap.on !== false;
   }
@@ -6542,6 +6555,7 @@ export function createScene({
     lost = false;
     lastMatrices = null; // re-skin and recolour on the next frame
     outline.invalidate(); // R558 (Message 20): the ID target's pixels are gone with the context
+    ghost.touchBrain(); // 19 November 2026 (SEE): and the brain's picture
     armAppliedReady = false; // R173: a replacement arm has no retained applied pose yet.
     lastStripDrives = null;
     for (const m of muscles) m.lastT = NaN;
@@ -6965,6 +6979,7 @@ export function createScene({
    * brain's small movement. They are not motor areas: the picker reports them as the brain's bare surface with the
    * part's name (controlLayersAt `part`), so Space on an eyeball takes the brain and the tip names it. */
   const brainEyes = { on: false, meshes: [], triangles: 0, balls: [], look0: null, ty: 0, tp: 0 };
+  let seeAreas = null, seeAreaCodes = null; // 19 November 2026 (SEE): every motor area in one geometry with its ghost code per vertex, and each area's code (buildRegions)
   function buildBrainEyes(still) {
     if (!BRAIN_EYES.on) return;
     const make = (data, roughness, part, name) => {
@@ -7125,6 +7140,10 @@ export function createScene({
     startGlassFold(glassListIn);
     buildMarkers(markerList, still);
     buildBrainEyes(still);
+    // 19 November 2026 (SEE, ns-see): the brain's things for the hidden-things pass: its surface (the merged glass, one
+    // draw), its motor areas (one draw, a code per vertex) and the eyeballs with their nerves.
+    ghost.setBrain({ group: brainGroup, surface: glassAll.shell, areas: seeAreas, parts: brainEyes.meshes,
+      areaOwners: regionBorder.applied !== false && borderShared.nsOwnTex.value ? { texture: borderShared.nsOwnTex.value, texels: REGION_BORDER.texels, codes: seeAreaCodes } : null });
     rayTargets = regionMode ? [...glass, ...regionMeshes, ...brainEyes.meshes] : [...glass, strip.mesh, ...brainEyes.meshes]; // HUD-only raycast targets, built once
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
     brainSamples = sampleBrain(glassList, regionMode ? seg.strips : (focus ? [focus] : []));
@@ -7550,18 +7569,34 @@ export function createScene({
       for (const m of regionMeshes) { nv += m.geometry.attributes.position.count; ni += m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count; }
       if (nv > 0 && nv < 65536 * 64) {
         const P = new Float32Array(3 * nv), I = new Uint32Array(ni);
+        // 19 November 2026 (SEE): each vertex also carries its area's ghost code (ns-see seeAreaCode of the area's place
+        // in the order the areas were built), so the hidden-things pass draws every area in one draw from this geometry.
+        // The areas are decided per fragment (REGION_BORDER: the strip coordinate nsS and the owner table's row nsRow),
+        // so those two go along as nsOwn (row -1 where a mesh has none: its triangles then stand for their own area).
+        // One code per GROUP of areas (regionChunkKey, the groups the strip's labels name; each hemisphere its own):
+        // a hidden piece of the strip then shows those groups' outlines, not a contour line for every area.
+        const C = new Float32Array(nv), O = new Float32Array(2 * nv), codeOf = new Map(), groupCode = new Map();
+        const ownerCodes = seg.regions.map(r => { const k = `${regionChunkKey(r)}|${r && r.id ? String(r.id).slice(0, 2) : ''}`; if (!groupCode.has(k)) groupCode.set(k, seeAreaCode(groupCode.size)); return groupCode.get(k); });
         let ov = 0, oi = 0;
         for (const m of regionMeshes) {
           const a = m.geometry.attributes.position, ix = m.geometry.index;
           P.set(a.array.subarray(0, 3 * a.count), 3 * ov);
           if (ix) for (let i = 0; i < ix.count; i++) I[oi + i] = ix.array[i] + ov;
           else for (let i = 0; i < a.count; i++) I[oi + i] = i + ov;
+          const rid = m.userData.regionId;
+          if (!codeOf.has(rid)) codeOf.set(rid, ownerCodes[Math.max(0, seg.regions.findIndex(r => r && r.id === rid))]);
+          C.fill(codeOf.get(rid), ov, ov + a.count);
+          const S = m.geometry.attributes.nsS, R = m.geometry.attributes.nsRow, has = Boolean(border && S && R && S.count === a.count && R.count === a.count);
+          for (let i = 0; i < a.count; i++) { O[2 * (ov + i)] = has ? S.array[i] : 0; O[2 * (ov + i) + 1] = has ? R.array[2 * i] : -1; }
           ov += a.count; oi += ix ? ix.count : a.count;
         }
         const g = keep(new THREE.BufferGeometry());
         g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+        g.setAttribute('nsCode', new THREE.BufferAttribute(C, 1));
+        g.setAttribute('nsOwn', new THREE.BufferAttribute(O, 2));
         g.setIndex(new THREE.BufferAttribute(I, 1));
         g.computeBoundingSphere();
+        seeAreas = g; seeAreaCodes = ownerCodes;
         areaInk.stripSilhouette = outline.setStrip(g, brainGroup);
       }
     }
@@ -9672,6 +9707,8 @@ export function createScene({
         collar.planes = collar.rest.map(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e9));
         collar.local = new THREE.Matrix4(); collar.world = new THREE.Matrix4(); collar.inv = new THREE.Matrix4();
         renderer.localClippingEnabled = true;
+        // (the outline's ID picture leaves out what the box leaves out of the picture: no loose lines over the open neck)
+        if (typeof outline.setClip === 'function') outline.setClip(collar.planes);
         const cap = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 40, 24)), keep(new THREE.MeshStandardMaterial({ color: C.color, roughness: C.roughness, metalness: 0 })));
         cap.name = 'collar cap (display, not anatomy)';
         cap.position.set(C.centreMm[0], C.centreMm[1], C.centreMm[2]); cap.scale.set(C.radiiMm[0], C.radiiMm[1], C.radiiMm[2]); cap.updateMatrix(); cap.matrixAutoUpdate = false;
@@ -14144,7 +14181,7 @@ export function createScene({
     // the beat, which is put on as a scale about the brain centre's place on the screen when the picture is drawn.
     liveNoBeat[3] = liveValues.live[3];
     const moving = brainLive.wobbling || (brainLive.bloomMoving && !reducedMotion);
-    if (moving || liveStats.moved) outline.invalidate();
+    if (moving || liveStats.moved) { outline.invalidate(); ghost.touchBrain(); } // (19 November 2026: and the hidden-things pass's picture of the brain)
     liveStats.moved = moving;
     if (T && T.matrix && outline.setStripLive) {
       const m = T.matrix; // where the swell's fixed point is on the screen

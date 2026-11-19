@@ -506,7 +506,13 @@ export async function assertConfiguredBoot() {
       // 19 November 2026: the brain stands higher, so the side of its frame that lies off the screen has no tip drawn
       if (sp && !b) { shownTips[name] = (shownTips[name] || 0); continue; }
       shownTips[name] = (shownTips[name] || 0) + 1;
-      requireCase(sp && b && Math.abs(sp.atPx[along] - sp.midPx[along]) <= tol, name + ' ' + d + ' tip must sit on the centre line of its frame side');
+      // 19 November 2026, later: restated. Since the compass rule of DESIGN-DECISIONS section 143 the brain's tips are
+      // planned in the player's own opening view, so that every one of them starts inside the picture and clear of the
+      // motor colours; a tip may then also slide ALONG its side (at 1600 by 900 the left and right tips stand 68 px above
+      // the middle of their sides). Until then a tip could only move along the centre line of its side, and this check
+      // failed from that change on. Now: on the centre line of its side, or on the side itself.
+      const across = 1 - along;
+      requireCase(sp && b && (Math.abs(sp.atPx[along] - sp.midPx[along]) <= tol || Math.abs(sp.atPx[across] - sp.midPx[across]) <= tol), name + ' ' + d + ' tip must sit on the centre line of its frame side or on that side');
       requireCase(b.x0 >= 0 && b.y0 >= 0 && b.x1 <= window.innerWidth && b.y1 <= window.innerHeight, name + ' ' + d + ' tip must lie wholly on screen');
       requireCase(sp.overlap === false, name + ' ' + d + ' tip must not overlap another tip or the crosshair box');
       const ck = R5_BIGBRAIN.crosshairKeepPx, cx = window.innerWidth / 2, cy = window.innerHeight / 2;
