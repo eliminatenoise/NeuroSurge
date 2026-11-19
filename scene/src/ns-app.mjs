@@ -5651,6 +5651,7 @@ export function start(params = {}) {
       lastMs = null; // the first live frame after a frozen period has dt 0
       try { canvas.focus({ preventScroll: true }); } catch { /* focus is a convenience */ }
     }
+    if (limbHud) limbHud.box.inert = !shellIsPlaying(after) || after.contextLost;
     if (shell) shell.render(after);
   }
 
@@ -7039,7 +7040,7 @@ export function start(params = {}) {
         limbChoiceDir = d;
         chooseLimb(n);
       }
-      /** The number view: four numbers with their limbs, the chosen one marked (made once; text only on a change). */
+      /** The HUD selects the same limbs as the number keys. */
       function drawLimbHud() {
         if (!LIMB_KEYS.on || !doc || !hudRoot) return;
         if (!limbHud) {
@@ -7047,12 +7048,22 @@ export function start(params = {}) {
             const box = doc.createElement('div');
             box.className = 'ns-limbs';
             box.setAttribute('role', 'group');
-            box.setAttribute('aria-label', 'Which limb the keys move. Press 1, 2, 3 or 4, or double click.');
+            box.setAttribute('aria-label', 'Which limb the keys move');
+            box.inert = !shellIsPlaying(shellState) || shellState.contextLost;
             const chips = LIMB_KEYS.names.map((name, i) => {
-              const c = doc.createElement('span'); c.className = 'ns-limbs-chip';
+              const c = doc.createElement('button');
+              c.type = 'button';
+              c.className = 'ns-limbs-chip';
+              c.setAttribute('aria-label', name);
+              c.setAttribute('aria-keyshortcuts', String(i + 1));
               const k = doc.createElement('kbd'); k.className = 'ns-limbs-key'; k.textContent = String(i + 1);
               const t = doc.createElement('span'); t.className = 'ns-limbs-name'; t.textContent = name;
               c.appendChild(k); c.appendChild(t); box.appendChild(c);
+              listen(c, 'click', e => {
+                if (box.inert || failed || stopped || !cs || !controlsApi) return;
+                cs = controlsApi.moveKey(cs, i + 1, clockMs());
+                if (e.detail > 0) canvas.focus({ preventScroll: true });
+              });
               return c;
             });
             hudRoot.appendChild(box);

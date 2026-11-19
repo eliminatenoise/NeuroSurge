@@ -136,7 +136,7 @@
 .ns-ctl-acts dd { margin: 0; color: #ffe9a8; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-size: 15px; align-self: center; }
 @media (max-width: 1400px), (max-height: 760px) { .ns-keys.ns-ctl { --ns-k: 44px; --ns-out: 28px; font-size: 15px; } .ns-ctl .ns-key { font-size: 18px; } .ns-ctl .ns-pad-plate { width: 160px; height: 100px; } }
 @media (max-width: 900px), (max-aspect-ratio: 1/1) {
-  .ns-keys.ns-ctl { --ns-k: 32px; --ns-out: 18px; padding: 0 8px 44px; gap: 18px; font-size: 12px; }
+  .ns-keys.ns-ctl { --ns-k: 32px; --ns-out: 18px; padding: 0 8px 100px; gap: 18px; font-size: 12px; }
   .ns-ctl-chunk { padding: 9px 10px 7px; gap: 6px; border-radius: 12px; }
   .ns-ctl .ns-key { font-size: 14px; } .ns-ctl-word, .ns-ctl-acts dd { font-size: 11px; }
   .ns-ctl .ns-pad-plate { width: 104px; height: 66px; }
@@ -283,11 +283,15 @@
    the look does the movement and the card says what the area does. */
 .ns-app .ns-infopanel .ns-infopanel-moves, .ns-app .ns-infopanel .ns-infopanel-moves-heading { display: none !important; }
 
-/* 19 November 2026 (ns-app LIMB_KEYS): the number view. Four numbers with their limbs in one group at the bottom
-   middle of the picture, clear of the cards and the tip; the chosen limb is the bright one. */
+/* Number shortcuts and limb buttons share one row. The chosen limb is the bright one. */
 .ns-limbs { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(4, 7, 11, 0.82); border: 1px solid rgba(255, 255, 255, 0.16); pointer-events: none; z-index: 6; white-space: nowrap; }
-.ns-limbs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 8px; color: #9fb0c0; font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; border: 1px solid transparent; }
-.ns-limbs-key { display: inline-block; min-width: 20px; padding: 2px 0; text-align: center; border-radius: 5px; background: #1a2430; border: 1px solid #5a6a7a; color: #dfe9f3; font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ns-limbs-chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 8px; color: #9fb0c0; font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; background: transparent; border: 1px solid transparent; pointer-events: auto; cursor: pointer; touch-action: manipulation; }
+.ns-limbs-chip:focus-visible { outline: 2px solid #7cc4ff; outline-offset: 2px; }
+.ns-limbs-key { display: inline-block; min-width: 20px; padding: 2px 0; text-align: center; border-radius: 5px; background: #1a2430; border: 1px solid #5a6a7a; color: #dfe9f3; font: inherit; font-weight: 700; }
 .ns-limbs-chip[data-on="true"] { color: #10161d; background: #ffd66b; border-color: #fff0b8; }
 .ns-limbs-chip[data-on="true"] .ns-limbs-key { background: #10161d; border-color: #10161d; color: #ffd66b; }
-@media (max-width: 720px) { .ns-limbs-name { display: none; } }
+@media (pointer: coarse) { .ns-limbs-chip { min-width: 44px; min-height: 44px; } }
+@media (max-width: 440px) {
+  .ns-limbs { gap: 4px; }
+  .ns-limbs-chip { flex-direction: column; gap: 2px; padding: 3px 5px; }
+}

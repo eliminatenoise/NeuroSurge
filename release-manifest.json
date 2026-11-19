@@ -47,8 +47,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 9429,
-      "sha256": "20c1e8e5971a3721434ef874e9f57c00e2f6a5cf57fc0726886a4468710f102f"
+      "bytes": 9446,
+      "sha256": "453c7975d09d170369c1cd2b520cae6d4c329f9f1e7558612d32d5b8342397c8"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -3932,8 +3932,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 25341,
-      "sha256": "2b95782706123f68f197e4e80bf712ab0fd21ae49ff16c3f67db5885b77e3d7d"
+      "bytes": 25525,
+      "sha256": "fb98fda537928be194899a06ab1277dd32d34c91d1e46f43ab44b0bb9d402f8d"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3942,8 +3942,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 789328,
-      "sha256": "a8cf76554fa163656854978a87eb5b1f34cbdfbc4870e24854d32c66b375d5bc"
+      "bytes": 789839,
+      "sha256": "812eff6d337a70100eb2a1898e3c49453542ec534eb35a72d613aaad42be4b2e"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 139617,
-      "sha256": "214e7bd0e967b9f92b505a8334ebefeec0878773c5bfc78b24dc2e29da346c3e"
+      "bytes": 139805,
+      "sha256": "b4ea5760e65f4d104deb4152641cbb781fb34a4ac3d2f0fc12de58c22c0dc8d5"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4259,6 +4259,11 @@
       "path": "tests/browser-limb-controls.mjs",
       "bytes": 6774,
       "sha256": "b0ba66648a808862ee9199797d569f20f0fb9bff61d59e1ae2e584ce3bba8ffd"
+    },
+    {
+      "path": "tests/browser-limb-touch.mjs",
+      "bytes": 6682,
+      "sha256": "e31334c63afc1f613092bf2b57343d9a541f81f7445a02b646698db38e8d07a1"
     },
     {
       "path": "tests/browser-player-focus.mjs",

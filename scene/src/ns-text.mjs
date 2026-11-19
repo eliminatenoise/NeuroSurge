@@ -226,7 +226,8 @@ const STEP_TABLE = [
   intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
   { head: 'Your left arm.', parts: [part('Your left arm reaches forward toward where you look, like your right arm. When you look ' +
     'around, the arm comes along and the hand keeps its place in the view. W, A, S and D move this hand at the start. ' +
-    'Press 1, 2, 3 or 4 to choose your left arm, left leg, right leg or right arm.'),
+    'Press 1, 2, 3 or 4 to choose your left arm, left leg, right leg or right arm. You can also click or tap its ' +
+    'name at the bottom of the game while the pointer is free.'),
     // R558 (Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
     // slowly"; it replaces the Space dance of Message 2).
     part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
@@ -488,7 +489,8 @@ export const SHELL = deepFreeze({
       ['3 / 4', 'choose right leg / right arm'],
       ['Click limb', 'choose it'],
       ['W S', 'move it forward or back'], ['A D', 'move it left or right']],
-      note: 'In the eye view, 2–4 turn the camera toward your chosen limb. Move the mouse or trackpad to look around again.' },
+      note: 'Click or tap a limb name at the bottom of the game while the pointer is free. In the eye view, 2–4 ' +
+        'turn the camera toward your chosen limb. Move the mouse or trackpad to look around again.' },
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Hold', 'take what you look at'],
       ['Move', 'carry it'], ['Drag', 'turn it'], ['Tap twice', 'your limbs turn'], ['Shift', 'reach the thing behind']] },
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'the view from behind'],
