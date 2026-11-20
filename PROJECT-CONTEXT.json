@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "draft-2026-11-20-body-61-position-forecasts",
+  "version": "draft-2026-11-20-body-61-shared-model",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
@@ -101,5 +101,12 @@
   "one_second_wrist_forecast": {
     "scope": "Public coefficients with invented or user-entered four-position histories, six prior-word indicators, a separate optional subsequent measurement and aggregate study results.",
     "study_commit": "d32fd9f57c706fb52ad11c6a10239166e5b25088"
+  },
+  "shared_movement_transformer": {
+    "model_source": "https://github.com/eliminatenoise/NeuroTranslation/tree/1cc81b20a14b81aebfb1f47d13d75b8d79c6e6ce/models/shared-motion",
+    "checkpoint_sha256": "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
+    "controls": "M → Shared model",
+    "scope": "Same past-motion encoder for a wrist or rat position history, with domain-specific final readout. Scalar straight-line displacement in cm, not a direction or a biological control command.",
+    "prespecified_transfer_passed": false
   }
 }

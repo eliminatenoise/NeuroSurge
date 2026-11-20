@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "draft-2026-11-20-body-61-position-forecasts",
+  "version": "draft-2026-11-20-body-61-shared-model",
   "experimental": true,
-  "source": "Body Update 61 from b929025 and the accepted 508f3f6 camera merge. The draft also includes the real 72-unit W-track model from 0f3b3ab and public instructor-word wrist model from d32fd9f.",
+  "source": "Current Body Update 61 from b929025, camera ownership fixes, standalone fitted wrist and W-track forecasts, and the jointly trained movement Transformer (1cc81b20a14b81aebfb1f47d13d75b8d79c6e6ce).",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 40355,
-      "sha256": "e1f5154862b0795c23f84eaca343bfdb1536ffc833d6f355e5e23532e04c7c7a"
+      "bytes": 40920,
+      "sha256": "4fce4d8da3366083fdd7b121d55553cd6a7fabdd64ebaf7914c5a39895867bbe"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,8 +52,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 15645,
-      "sha256": "d34ba0f9395e74ea3798b78b197198e0ea8f16e35067cb075489928dfddc8c42"
+      "bytes": 16086,
+      "sha256": "e89bde1abe609d7ee7dadaeb4d55114b461592eb6bc351c0fde6958ddaf00c99"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,18 +62,18 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 55251,
-      "sha256": "e8a6ae62f04b38d85a9e268e9fcac09450e3f3a89b699b712bcfa94e41b802e0"
+      "bytes": 55803,
+      "sha256": "0666c5c29b960e78393a631751d14f7de034b8a070d406f392eaba342d75faec"
     },
     {
       "path": "README.md",
-      "bytes": 25565,
-      "sha256": "ff83e7cdadb713f39a1b32d30226dcc9173974a03c2dcc5a63d1676beb4beab5"
+      "bytes": 26007,
+      "sha256": "0f8253ed5a2ba1476855763141b70afeb4850ba549b735671e78f2bdbcaa240c"
     },
     {
       "path": "START.html",
-      "bytes": 4092,
-      "sha256": "923e674976657d8012a770e3360ed5294d08fd1b281936d128c5bcf5f1a3f206"
+      "bytes": 4086,
+      "sha256": "df4bccd3d17a3a27a21f20cf2ad6b832096cbdebd01a0af871169f00aa421f58"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -137,8 +137,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 1055,
-      "sha256": "68c2bf9bee0b2387da271c6f0114152fa1eb4af16cc3502fd2b14e3ccdbda1ef"
+      "bytes": 1049,
+      "sha256": "9690a07ed619be9c553e082c43147b40e29eec9f3d67b5ad8ae6723b3924df7f"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3887,8 +3887,8 @@
     },
     {
       "path": "scene/example/activity-map.css",
-      "bytes": 8810,
-      "sha256": "5cce63ed7c4042a7f598c00bd14edfa2f68c5a20da7ae5c3c92d5139eafd62a7"
+      "bytes": 9050,
+      "sha256": "07da29bdb80bb43bce15ba30044a07d25c0f068cb87a1dce61198fd3f452bd8b"
     },
     {
       "path": "scene/example/assembly.css",
@@ -4007,8 +4007,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 15196,
-      "sha256": "1919da9eb9aecf22a8a24114319efbf8e913a5372e5aaa4590ea97920ac679c3"
+      "bytes": 15455,
+      "sha256": "2cdff2aa651fbc0b04c8d348df00dceb3bb7e3858409e4d57e9947f0b3238a78"
     },
     {
       "path": "scene/example/quiet.css",
@@ -4022,8 +4022,8 @@
     },
     {
       "path": "scene/src/activity/map.mjs",
-      "bytes": 15744,
-      "sha256": "bd5ff9a931831b2a37cfe1bf0339b2dc6b10aefb485e285fe1e3ae40041b770d"
+      "bytes": 16426,
+      "sha256": "300b8ee3563183818cf0bb849a3dd60e9c38805e0d14abceff01e092c71f392d"
     },
     {
       "path": "scene/src/activity/paired-input.mjs",
@@ -4094,6 +4094,51 @@
       "path": "scene/src/activity/replay.mjs",
       "bytes": 3658,
       "sha256": "77a012fcb6f36487b1f21b327264ee2511374c9d6cc05891d100152af9a90e8b"
+    },
+    {
+      "path": "scene/src/activity/shared-motion-panel.mjs",
+      "bytes": 2281,
+      "sha256": "67ca9f6db020320caaeb284c1d3d34c28e97b26323a790ae3567f07d9eabf756"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/CC0-1.0.txt",
+      "bytes": 7048,
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/CDLA-Permissive-2.0.txt",
+      "bytes": 2354,
+      "sha256": "4531a67d443284d93ffed0803df5b10634aff21c3d77e381f2d48af01d875868"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/DATA-CREDITS.md",
+      "bytes": 3151,
+      "sha256": "aabfb0ea49ca23ec2eb55eb41dcf0c08ab22fafaa9cb26c698800f950a1ec286"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/NOTICE.md",
+      "bytes": 2755,
+      "sha256": "2419e25016e8efeac9b41629379019e2141ff73c5784dac94b52494f0999d7a2"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/document.mjs",
+      "bytes": 32039,
+      "sha256": "dbe1ef590f1ba20214f26d188f83434581655eb7221e0153ce17c251ff128def"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/index.html",
+      "bytes": 82078,
+      "sha256": "1c8eaed7b3f1a595fd202b968993da9eee66845938063746bbb369b054e8e258"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/panel.js",
+      "bytes": 12446,
+      "sha256": "2df319ab9c2d7e877053b124fa38c9f019b5d4a22b8b8711bf5f8fba9d459a53"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/shared-motion.js",
+      "bytes": 38729,
+      "sha256": "06728d0d083240f9f653087d2131fc0cbac51a33b11a393e6a6921f3e14a4518"
     },
     {
       "path": "scene/src/activity/spatial-panel.mjs",
@@ -4781,6 +4826,11 @@
       "sha256": "c194e387479c45e5e82d41286b13cbf76c816b197e5e4d3cfed079608ac31d41"
     },
     {
+      "path": "tests/browser-shared-motion.mjs",
+      "bytes": 9474,
+      "sha256": "35ae84e525226bb4f57ce932f83e958d62c404e0df70ba6bd4da6c5c5f882f97"
+    },
+    {
       "path": "tests/browser-space-aim.mjs",
       "bytes": 7348,
       "sha256": "1b0ed7be630586fb97791c5616ad4eecc70f66ea644863b047ac1c74e43c6f74"
@@ -5139,6 +5189,11 @@
       "path": "tools/load-body.mjs",
       "bytes": 3530,
       "sha256": "63e3557507e2e3ed53b3f5cb3acc08c4aa7baf97e4842264c7bfee938fc9e81a"
+    },
+    {
+      "path": "tools/pack-shared-motion.py",
+      "bytes": 2421,
+      "sha256": "366311ee53f3b38b19a181a9f11b4369f3df9bbc727decaa038c82ec71d26a98"
     },
     {
       "path": "tools/page-body.mjs",
