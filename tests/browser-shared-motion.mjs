@@ -50,6 +50,26 @@ async function angleValues(view, modes, table='angle-values', references=angleRe
   return values;
 }
 
+async function checkTableText(view) {
+  const problems = await view.locator('.angle-table th,.angle-table td').evaluateAll(cells => {
+    const errors = [];
+    for (const cell of cells) {
+      const bounds = cell.getBoundingClientRect();
+      const text = cell.firstChild;
+      for (const match of text.textContent.matchAll(/\S+/g)) {
+        const range = cell.ownerDocument.createRange();
+        range.setStart(text, match.index);
+        range.setEnd(text, match.index + match[0].length);
+        const rectangles = [...range.getClientRects()];
+        if (rectangles.length !== 1 || rectangles[0].left < bounds.left - 0.5 || rectangles[0].right > bounds.right + 0.5)
+          errors.push({table:cell.closest('table').id, word:match[0], frame:cell.ownerDocument.defaultView.innerWidth});
+      }
+    }
+    return errors;
+  });
+  assert.deepEqual(problems, []);
+}
+
 async function compare(view) {
   const data = {};
   for (const [domain, refs] of Object.entries(expected)) {
@@ -232,11 +252,21 @@ try {
   });
   const paused = await state();
   assert.equal(paused.mode, 'paused');
-  for (const width of [1280, 390, 320]) {
+  await frame.locator('#source-select').selectOption('invented');
+  await frame.locator('#angular-results').waitFor();
+  for (const width of [1280, 390, 375, 320]) {
     await game.setViewportSize({width, height:820});
     assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), 'Outer width ' + width);
     assert.ok(await frameWindow.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Angle table width ' + width);
+    await checkTableText(frame);
   }
+  // This is the pane width before the outer game's compact margins were reduced.
+  // Keep the actual embedded tables readable when a nested pane has only 251px.
+  const iframe = game.locator('#ns-act-shared iframe');
+  await iframe.evaluate(el => { el.style.boxSizing = 'content-box'; el.style.width = '251px'; });
+  assert.equal(await frameWindow.evaluate(() => innerWidth), 251);
+  await checkTableText(frame);
+  await iframe.evaluate(el => { el.style.removeProperty('width'); el.style.removeProperty('box-sizing'); });
   await frame.locator('#source-select').focus();
   await game.keyboard.press('Home');
   await game.keyboard.press('ArrowDown');
@@ -301,6 +331,7 @@ try {
   await offline.locator('#results').waitFor();
   const compareFile = await compare(offline);
   assert.deepEqual(compareFile, compareGame);
+  await checkTableText(offline);
   await checkCustomAngles(offline, offline.keyboard);
   assert.ok(fileRequests.every(url => url.startsWith('file:') || url.startsWith('data:')));
   assert.deepEqual(policyViolations, []);
@@ -308,7 +339,7 @@ try {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({gameUrl, browser:browser.version(), viewerSha256:sha(original),
     spatialCheckpointSha256:spatialModel, movementCheckpointSha256:movementModel,
-    game:compareGame, offline:compareFile, widths:[1280,390,320],
+    game:compareGame, offline:compareFile, widths:[1280,390,375,320], narrowFrameWidth:251,
     preTabLoads:0, modelAssetRequests:panelRequests.map(r => r.url.split('/').pop()),
     cspViolations:policyViolations, deviceCalls:mediaCalls, externalRequests:0,
     rejectedMalformedInput:true, rejectedFutureAndMissingMeasurements:true, rejectedCorruptScriptAndRecovered:true,

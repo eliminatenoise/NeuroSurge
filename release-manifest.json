@@ -3887,8 +3887,8 @@
     },
     {
       "path": "scene/example/activity-map.css",
-      "bytes": 9050,
-      "sha256": "07da29bdb80bb43bce15ba30044a07d25c0f068cb87a1dce61198fd3f452bd8b"
+      "bytes": 9213,
+      "sha256": "92ba5a3a4391688dbfbe08b132eeb52d39b90925b1ed05bed00f8e0e3a7a532d"
     },
     {
       "path": "scene/example/assembly.css",
@@ -4122,8 +4122,8 @@
     },
     {
       "path": "scene/src/activity/shared-motion/document.mjs",
-      "bytes": 44175,
-      "sha256": "9fb1369d599482aa948f5b183df653ecd4c2b7deb3bb629ae2b844c56401f227"
+      "bytes": 44404,
+      "sha256": "aaf00efcdd9d9c79bc2a8a5b84582d58536d8ce0159a31b7fe0394cee869b093"
     },
     {
       "path": "scene/src/activity/shared-motion/forearm-example.json",
@@ -4837,8 +4837,8 @@
     },
     {
       "path": "tests/browser-shared-motion.mjs",
-      "bytes": 17486,
-      "sha256": "5b6debe479a39fdfd1288da804efaa0da8d6626017e72005bfbfb00e85930325"
+      "bytes": 19099,
+      "sha256": "61bc6e54ce0da30c89da837dc8f5ba15ead2d09543882c3ef2b295fb2863b5a4"
     },
     {
       "path": "tests/browser-space-aim.mjs",
@@ -5202,8 +5202,8 @@
     },
     {
       "path": "tools/pack-shared-motion.py",
-      "bytes": 2722,
-      "sha256": "c8ae39c4105248d5181276aac5430019b617b72d49743dda745fbf7b9218550c"
+      "bytes": 3062,
+      "sha256": "d4aa92e9c8ce450d1eb528d3da80f118eb140f9c4c23b244785e7cccc5368ece"
     },
     {
       "path": "tools/page-body.mjs",

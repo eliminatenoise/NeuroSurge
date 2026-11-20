@@ -37,6 +37,15 @@ def pack():
     # same-origin external scripts and keeps connect-src 'none', including during inference.
     replacements = {
         "script-src 'unsafe-inline'": "script-src 'self'",
+        # A narrow game frame includes another set of margins outside the viewer.
+        "</style>": """@media(max-width:319px) {
+  main {width:100%}
+  .experiment {padding-inline:.25rem}
+  .angle-table {table-layout:auto}
+  .angle-table th:first-child {width:auto}
+  .angle-table th,.angle-table td {padding-inline:.12rem}
+}
+</style>""",
         '<a class="save" href="" download=': '<a class="save" href="@@ASSETS@@/index.html" download=',
         'rel="noreferrer"': 'target="_blank" rel="noopener noreferrer"',
     }
