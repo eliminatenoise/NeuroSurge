@@ -103,7 +103,10 @@
  *  vertex along the line of sight, negative = away from the eye); the ID pass then draws it, in depth only, that much
  *  nearer or further, exactly as its material draws it in the main picture, so the lines follow what is seen.
  *  stripColour: the ink of the motor strip's own line on the brain stays the near-black #0b0809 (the brain is not
- *  restyled with the bodies; it used to read `colour`). */
+ *  restyled with the bodies; it used to read `colour`).
+ *  brainCss / brainAlpha (20 November 2026, the owner, Message 207: "And everything should get clear outlines."): the
+ *  brain's own outline and the outline of its eyeballs and nerves, drawn like the strip's line (inside the brain where
+ *  it meets the background, a body behind it or the eyes, in stripColour). Off (0) unless setInk turns it on. */
 export const OUTLINE = Object.freeze({
   colour: Object.freeze([0x14 / 255, 0x09 / 255, 0x0a / 255]),
   boldCss: 1.6, innerCss: 0.9, fineCss: 0.6,
@@ -113,6 +116,7 @@ export const OUTLINE = Object.freeze({
   maxRadiusSs: 7,
   stripColour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]),
   stripCss: 2.0, stripAlpha: 0.95, holeCss: 4.0,
+  brainCss: 1.3, brainAlpha: 0,
   thinShare: 0.3, thinFrom: 0.25, thinFull: 0.75,
   slimCm: 2.4, slimWidth: 0.6, slimAlpha: 0.8,
   jumpAdjM: 0.012, jumpSameM: 0.022, jumpRel: 0.015, levelM: 0.0015,
@@ -279,7 +283,10 @@ export const OUTLINE_ID_VS = ID_VS;
  * carry Three's clipping-plane chunks: the scene gives the pass the box that ends your own body at the collar in the
  * eye view (ns-scene-three EYE_COLLAR; setClip below), so the pieces of neck and shoulder muscle the picture does not
  * draw are not in the ID picture either. Until now they were, and their outlines were inked over the open neck as
- * loose dark lines. Without planes the chunks compile to nothing. */
+ * loose dark lines. Without planes the chunks compile to nothing.
+ * 20 November 2026, evening: the box no longer cuts anything (ns-scene-three EYE_COLLAR.cut false: it cut your own raised
+ * right arm away while this pass kept its lines), so the scene hands no planes here; what it hides it hides whole, and a
+ * hidden mesh is not in the ID picture either. setClip stays for EYE_COLLAR.cut true. */
 /* 18 November 2026 (performance): the ID pass of a mesh skinned on the graphics card (the left game arm's muscles,
  * ns-scene-three armSkinPrepare): Three's own skin chunks on the rest positions (attribute nsSkinRest), the code as a
  * uniform (one proxy draw per mesh; the batch's copy of the vertices would have to be skinned on the processor). */
@@ -415,11 +422,12 @@ int groupOf( vec4 c ) { return int( c.r * 255.0 + 0.5 ); }
 int meshOf( vec4 c ) { return int( c.g * 255.0 + 0.5 ) * 256 + int( c.b * 255.0 + 0.5 ); } // 14 bits (flags removed)
 `;
 /* EDGE PASS (supersampled): the class of the boundary next to this sample, drawn on the nearer side (4 strong, 3
- * silhouette, 2 inner step, 1 parting; 0 none; + 8 = a bold line round a slim piece). Output: (class, mesh high, mesh
- * low, group) / 255. */
+ * silhouette, 2 inner step, 1 parting; 0 none; + 8 = a bold line round a slim piece; + 16 = the brain's outline, + 32
+ * the outline of its eyes and nerves, 20 November 2026). Output: (class + flags, mesh high (+ 128 = the strip's
+ * outline), mesh low, group) / 255. */
 const EDGE_FS = COMMON_GLSL + `
 uniform sampler2D tAdj;
-uniform sampler2D tStrip; // the motor strip's coverage where it is in front of the bodies (r > 0.5)
+uniform sampler2D tStrip; // coverage where in front of the bodies: r the motor strip, g the brain, b its eyes and nerves
 uniform vec4 uJump;   // jumpAdjM, jumpSameM, jumpRel, levelM
 uniform float uStripOn;
 uniform int uHole;    // probe reach in samples (OUTLINE.holeCss), 2 .. 8
@@ -445,18 +453,31 @@ void main() {
 	vec4 c = texelFetch( tId, p, 0 );
 	int g = groupOf( c );
 	// The strip's silhouette: a covered sample next to an uncovered one that shows no body (background or glass).
-	bool stripEdge = false;
-	if ( uStripOn > 0.5 && texelFetch( tStrip, p, 0 ).r > 0.5 ) {
-		for ( int i = 0; i < 8; i ++ ) {
-			ivec2 o = i == 0 ? ivec2( 1, 0 ) : i == 1 ? ivec2( - 1, 0 ) : i == 2 ? ivec2( 0, 1 ) : i == 3 ? ivec2( 0, - 1 ) :
-				i == 4 ? ivec2( 1, 1 ) : i == 5 ? ivec2( - 1, 1 ) : i == 6 ? ivec2( 1, - 1 ) : ivec2( - 1, - 1 );
-			ivec2 q = clamp( p + o, ivec2( 0 ), uSize - 1 );
-			if ( texelFetch( tStrip, q, 0 ).r < 0.5 && groupOf( texelFetch( tId, q, 0 ) ) == 0 ) { stripEdge = true; break; }
+	// 20 November 2026 (Message 207): the same for the brain (g) and its eyes and nerves (b); beyond the line lies the
+	// background or the glass, or a body when this sample has a body behind the brain too (a brain over a body). The
+	// brain's line is not drawn where the eyes lie beyond it (they get their own line).
+	bool stripEdge = false, brainEdge = false, eyeEdge = false;
+	if ( uStripOn > 0.5 ) {
+		vec4 cv = texelFetch( tStrip, p, 0 );
+		bool sC = cv.r > 0.5, bC = cv.g > 0.5, eC = cv.b > 0.5;
+		if ( sC || bC || eC ) {
+			for ( int i = 0; i < 8; i ++ ) {
+				ivec2 o = i == 0 ? ivec2( 1, 0 ) : i == 1 ? ivec2( - 1, 0 ) : i == 2 ? ivec2( 0, 1 ) : i == 3 ? ivec2( 0, - 1 ) :
+					i == 4 ? ivec2( 1, 1 ) : i == 5 ? ivec2( - 1, 1 ) : i == 6 ? ivec2( 1, - 1 ) : ivec2( - 1, - 1 );
+				ivec2 q = clamp( p + o, ivec2( 0 ), uSize - 1 );
+				vec4 cq = texelFetch( tStrip, q, 0 );
+				int gq = groupOf( texelFetch( tId, q, 0 ) );
+				bool open = gq == 0 || g != 0;
+				if ( sC && cq.r < 0.5 && gq == 0 ) stripEdge = true;
+				if ( bC && cq.g < 0.5 && cq.b < 0.5 && open ) brainEdge = true;
+				if ( eC && cq.b < 0.5 && open ) eyeEdge = true;
+			}
 		}
 	}
+	int flags = ( brainEdge ? 16 : 0 ) + ( eyeEdge ? 32 : 0 );
 	if ( g == 0 ) {
-		if ( ! stripEdge ) discard;
-		gl_FragColor = vec4( 0.0, 128.0 / 255.0, 0.0, 0.0 );
+		if ( ! stripEdge && flags == 0 ) discard;
+		gl_FragColor = vec4( float( flags ) / 255.0, stripEdge ? 128.0 / 255.0 : 0.0, 0.0, 0.0 );
 		return;
 	}
 	int m = meshOf( c );
@@ -494,7 +515,7 @@ void main() {
 		}
 		if ( k > cls ) { cls = k; bo = o; }
 	}
-	if ( cls == 0 && ! stripEdge ) discard;
+	if ( cls == 0 && ! stripEdge && flags == 0 ) discard;
 	// A SLIM piece (OUTLINE.slimCm): going from a bold boundary into the piece, the background or a limb that does not
 	// join this one is reached again within the reach. Its bold line is drawn thin (the ink pass reads the flag, + 8).
 	if ( cls >= 3 && uSlim.y > 0.0 ) {
@@ -523,18 +544,20 @@ void main() {
 			if ( slim ) cls += 8;
 		}
 	}
-	gl_FragColor = vec4( float( cls ) / 255.0, c.g + ( stripEdge ? 128.0 / 255.0 : 0.0 ), c.b, c.r );
+	gl_FragColor = vec4( float( cls + flags ) / 255.0, c.g + ( stripEdge ? 128.0 / 255.0 : 0.0 ), c.b, c.r );
 }`;
 /* INK PASS (drawing-buffer pixels). Each of the pixel's uSS x uSS samples takes the strongest line whose boundary sample
  * (edge pass) lies within the line's width: coverage clamp( width - r, 0, 1 ) for a boundary sample r samples away (it
  * sits half a sample from the boundary, so this is a one-sample soft edge). Bold lines (strong, silhouette) spread over
  * their limb group, inner and parting lines over their own mesh. The pixel's ink is the MEAN over its samples (smooth
  * coverage). Widths taper with the on-screen size of a centimetre; inner and parting lines fade on small figures.
- * Optional soft ambient occlusion (uAo.x > 0) from the same depths. Output: r = ink, g = occlusion x strength. */
+ * Optional soft ambient occlusion (uAo.x > 0) from the same depths. Output: r = ink, g = occlusion x strength, b = the
+ * strip's line, a = the line of the brain and of its eyes and nerves (20 November 2026). */
 const INK_FS = COMMON_GLSL + `
 uniform sampler2D tEdge;
 uniform sampler2D tStrip;
 uniform vec4 uStrip;  // x: strip line width (CSS px), y: its opacity, z: on
+uniform vec4 uBrain;  // x: the brain's line width (CSS px), y: its opacity (0 = none)
 uniform int uSS;
 uniform vec4 uWidth;  // bold, inner, fine (CSS px), w: supersampled px per CSS px
 uniform vec4 uAlpha;  // strong, silhouette, inner, parting
@@ -583,12 +606,16 @@ void main() {
 	ivec2 o = ivec2( gl_FragCoord.xy );
 	ivec2 b = o * uSS;
 	int n = uSS * uSS;
-	int gs[ 4 ]; int ms[ 4 ]; ivec2 ps[ 4 ]; bool st[ 4 ];
-	float zMin = 1e9; int body = 0; int first = -1; int strip = 0;
+	int gs[ 4 ]; int ms[ 4 ]; ivec2 ps[ 4 ]; bool st[ 4 ]; bool bc[ 4 ]; bool ec[ 4 ]; float bb[ 4 ];
+	float zMin = 1e9; int body = 0; int first = -1; int strip = 0; int cov = 0;
 	for ( int i = 0; i < 4; i ++ ) {
-		gs[ i ] = 0; ms[ i ] = 0; ps[ i ] = b + ivec2( i - 2 * ( i / 2 ), i / 2 ); st[ i ] = false;
+		gs[ i ] = 0; ms[ i ] = 0; ps[ i ] = b + ivec2( i - 2 * ( i / 2 ), i / 2 ); st[ i ] = false; bc[ i ] = false; ec[ i ] = false; bb[ i ] = 0.0;
 		if ( i >= n ) continue;
-		if ( uStrip.z > 0.5 && texelFetch( tStrip, min( ps[ i ], uSize - 1 ), 0 ).r > 0.5 ) { st[ i ] = true; strip ++; }
+		if ( uStrip.z > 0.5 ) {
+			vec4 cv = texelFetch( tStrip, min( ps[ i ], uSize - 1 ), 0 );
+			if ( cv.r > 0.5 ) { st[ i ] = true; strip ++; }
+			if ( uBrain.y > 0.0 ) { bc[ i ] = cv.g > 0.5; ec[ i ] = cv.b > 0.5; if ( bc[ i ] || ec[ i ] ) cov ++; }
+		}
 		vec4 c = texelFetch( tId, min( ps[ i ], uSize - 1 ), 0 );
 		gs[ i ] = groupOf( c ); ms[ i ] = meshOf( c );
 		if ( gs[ i ] == 0 ) continue;
@@ -596,14 +623,14 @@ void main() {
 		if ( zi < zMin ) { zMin = zi; first = i; }
 		body ++;
 	}
-	if ( body == 0 && strip == 0 ) discard;
+	if ( body == 0 && strip == 0 && cov == 0 ) discard;
 	float pxcm = body > 0 ? uTaper.x / max( zMin, 1e-3 ) : 1e3;
 	float taper = clamp( sqrt( pxcm / uTaper.y ), uTaper.z, 1.0 );
 	float detail = smoothstep( uDetail.x, uDetail.y, pxcm );
 	float k = uWidth.w;
 	float wB = uWidth.x * taper * k, wI = uWidth.y * taper * k, wF = uWidth.z * taper * k;
-	float wS = uStrip.x * k;
-	int R = int( ceil( max( body > 0 ? wB : 0.0, strip > 0 ? wS : 0.0 ) ) );
+	float wS = uStrip.x * k, wR = uBrain.x * k;
+	int R = int( ceil( max( max( body > 0 ? wB : 0.0, strip > 0 ? wS : 0.0 ), cov > 0 ? wR : 0.0 ) ) );
 	R = R < 1 ? 1 : R > int( uTaper.w ) ? int( uTaper.w ) : R;
 	float sb0 = 0.0, sb1 = 0.0, sb2 = 0.0, sb3 = 0.0;
 	// Per sample: the ink at full width, the ink at the thin width, and the directions to the bold boundary samples
@@ -622,8 +649,17 @@ void main() {
 			if ( e.x < 0 || e.y < 0 || e.x >= uSize.x || e.y >= uSize.y ) continue;
 			vec4 E = texelFetch( tEdge, e, 0 );
 			int cls = int( E.r * 255.0 + 0.5 );
+			int fl = cls & 48;
+			cls = cls & 15;
 			bool slim = cls >= 8;
 			if ( slim ) cls -= 8;
+			if ( fl != 0 ) {
+				// the brain's outline (16) over the brain's samples, its eyes' and nerves' outline (32) over theirs
+				for ( int i = 0; i < 4; i ++ ) {
+					if ( i >= n || ! ( ( ( fl & 16 ) != 0 && bc[ i ] ) || ( ( fl & 32 ) != 0 && ec[ i ] ) ) ) continue;
+					bb[ i ] = max( bb[ i ], uBrain.y * clamp( wR - length( vec2( ps[ i ] - e ) ), 0.0, 1.0 ) );
+				}
+			}
 			int eg = int( E.g * 255.0 + 0.5 );
 			if ( eg >= 128 ) {
 				eg -= 128;
@@ -662,20 +698,25 @@ void main() {
 	float occ = 0.0;
 	if ( uAo.x > 0.0 && first >= 0 && body > 0 ) occ = uAo.x * occlusion( ps[ first ], zMin ) * float( body ) / float( n );
 	float sInk = ( sb0 + sb1 + sb2 + sb3 ) / float( n );
-	if ( ink <= 0.002 && occ <= 0.002 && sInk <= 0.002 ) discard;
-	gl_FragColor = vec4( ink, occ, sInk, 1.0 );
+	float bInk = ( bb[ 0 ] + bb[ 1 ] + bb[ 2 ] + bb[ 3 ] ) / float( n );
+	if ( ink <= 0.002 && occ <= 0.002 && sInk <= 0.002 && bInk <= 0.002 ) discard;
+	gl_FragColor = vec4( ink, occ, sInk, bInk );
 }`;
-/* STRIP COMPOSITE (main scene, right after the motor areas): the strip's silhouette ink (ink target b). */
+/* STRIP COMPOSITE (main scene, right after the motor areas): the strip's silhouette ink (ink target b). 20 November 2026:
+ * the same shader with uChannel 1 is the BRAIN COMPOSITE, drawn after the glass: the brain's own outline and its eyes'
+ * (ink target a), the same near-black, with the same beat. */
 const STRIP_COMPOSITE_FS = `
 precision highp float;
 uniform sampler2D tInk;
 uniform vec3 uColour; // linear
 uniform vec3 uLive; // the living brain's beat: xy the brain centre on the screen (buffer px), z the share it has grown
+uniform float uChannel; // 0: the strip's line (b), 1: the brain's and its eyes' (a)
 void main() {
 	// the ink picture is kept between frames, so it is drawn of the brain at rest; the beat's swell about the brain's
 	// centre is put on here (the same scale about the centre's place on the screen)
 	vec2 p = uLive.xy + ( gl_FragCoord.xy - uLive.xy ) / ( 1.0 + uLive.z );
-	float a = texelFetch( tInk, ivec2( p ), 0 ).b;
+	vec4 k = texelFetch( tInk, ivec2( p ), 0 );
+	float a = uChannel > 0.5 ? k.a : k.b;
 	if ( a <= 0.003 ) discard;
 	gl_FragColor = vec4( linearToOutputTexel( vec4( uColour, 1.0 ) ).rgb * a, a );
 }`;
@@ -755,6 +796,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const inkUni = {
     ...shared, tEdge: { value: edgeTarget ? edgeTarget.texture : null }, uSS: { value: 1 },
     tStrip: edgeUni.tStrip, uStrip: { value: new THREE.Vector4(OUTLINE.stripCss, OUTLINE.stripAlpha, 0, 0) },
+    uBrain: { value: new THREE.Vector4(OUTLINE.brainCss, OUTLINE.brainAlpha, 0, 0) },
     uWidth: { value: new THREE.Vector4(OUTLINE.boldCss, OUTLINE.innerCss, OUTLINE.fineCss, 1) },
     uAlpha: { value: new THREE.Vector4(OUTLINE.strong, OUTLINE.silhouette, OUTLINE.inner, OUTLINE.faint) },
     uTaper: { value: new THREE.Vector4(4.5, OUTLINE.taperFullPxCm, OUTLINE.taperMin, OUTLINE.maxRadiusSs) },
@@ -786,12 +828,27 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     uniforms: { tInk: compMat.uniforms.tInk, uColour: { value: (c => new THREE.Vector3(c.r, c.g, c.b))(new THREE.Color().setRGB(...OUTLINE.stripColour, THREE.SRGBColorSpace)) }, uLive: { value: new THREE.Vector3(0, 0, 0) } }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending, depthTest: false, depthWrite: false, toneMapped: false, fog: false
   });
+  stripCompMat.uniforms.uChannel = { value: 0 };
   const stripComposite = screenMesh(stripCompMat, 'ns-outline strip composite (ink silhouette of the motor strip; display only)');
   stripComposite.visible = false;
+  // 20 November 2026 (Message 207): the brain's outline and its eyes', laid on AFTER the glass (the scene sets its
+  // renderOrder; the glass would cover it otherwise), with the strip's colour and beat
+  const brainCompMat = new THREE.ShaderMaterial({
+    uniforms: { tInk: compMat.uniforms.tInk, uColour: stripCompMat.uniforms.uColour, uLive: stripCompMat.uniforms.uLive, uChannel: { value: 1 } }, vertexShader: SCREEN_VS, fragmentShader: STRIP_COMPOSITE_FS,
+    transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending, depthTest: false, depthWrite: false, toneMapped: false, fog: false
+  });
+  const brainComposite = screenMesh(brainCompMat, 'ns-outline brain composite (ink outline of the brain and its eyes; display only)');
+  brainComposite.visible = false;
   const stripScene = new THREE.Scene();
   stripScene.matrixWorldAutoUpdate = false;
-  const stripMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false });
+  // 20 November 2026 (Message 207): the coverage picture holds three things, one per channel, combined by MAX (none
+  // writes depth): r the strip, g the brain's surface, b its eyes and nerves.
+  const covMat = colour => new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
+  const stripMat = covMat(0xff0000);
   const strip = { mesh: null, source: null, m: new Float64Array(16).fill(NaN), shown: false };
+  const brainMat = covMat(0x00ff00), brainPartMat = covMat(0x0000ff);
+  const brain = { group: null, surface: null, parts: [], shown: false, key: new Float64Array(0) };
 
   const reg = [];            // { src, group, mirror, serial, iid, gid, show, flip, dbl, m: Float64Array(16) }
   const bySource = new Map();
@@ -809,6 +866,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const camKey = new Float64Array(32);
   const stats = { sources: 0, drawn: 0, draws: 0, ms: 0, frames: 0, skipped: 0, rebuilds: 0, vertexCapacity: 0, indexCapacity: 0, geometries: 0, copiedVertices: 0 };
   const saveColour = new THREE.Color(), tmpColour = new THREE.Color();
+  const localTmp = new THREE.Matrix4();
   const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const colourOf = r => {
     const g = r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0), n = r.serial;
@@ -988,13 +1046,17 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
         if (e) {
           done.add(e);
           if (r.gid !== e.gid) { batch.setGeometryIdAt(r.iid, e.gid); r.gid = e.gid; batch._visibilityChanged = true; changed = true; }
-          const w = s.matrixWorld.elements, k = r.m;
+          // (20 November 2026: a mesh whose material moves its vertices by one affine map, the heart's beat, gives that
+          // map as userData.nsOutlineLocal, a Matrix4 in its own frame, so its lines follow what is drawn)
+          const Lm = s.userData && s.userData.nsOutlineLocal && s.userData.nsOutlineLocal.isMatrix4 ? s.userData.nsOutlineLocal : null;
+          const M = Lm ? localTmp.multiplyMatrices(s.matrixWorld, Lm) : s.matrixWorld;
+          const w = M.elements, k = r.m;
           let moved = false;
           for (let i = 0; i < 16; i++) if (k[i] !== w[i]) { moved = true; break; }
           if (moved) {
             for (let i = 0; i < 16; i++) k[i] = w[i];
-            batch.setMatrixAt(r.iid, s.matrixWorld);
-            const flip = s.matrixWorld.determinant() < 0, dbl = m.side === THREE.DoubleSide;
+            batch.setMatrixAt(r.iid, M);
+            const flip = M.determinant() < 0, dbl = m.side === THREE.DoubleSide;
             if (flip !== r.flip || dbl !== r.dbl) { r.flip = flip; r.dbl = dbl; batch.setColorAt(r.iid, colourOf(r)); }
             changed = true;
           }
@@ -1118,6 +1180,31 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     if (show !== r.sshow) { r.sshow = show; sb.batch.setVisibleAt(r.sid, show); changed = true; }
     return { skinned: true, shown: show, changed };
   }
+  // 20 November 2026 (QA only, globalThis.__nsOutlineGpu === true): the graphics card's time of the line passes (the
+  // coverage picture, the edge and the ink passes; not the ID pass, which the hidden-limb glass needs anyway, nor the
+  // three screen composites), by EXT_disjoint_timer_query_webgl2, one query in flight; state().gpu sums them.
+  const gpuT = { ext: undefined, pending: null, sum: 0, n: 0, last: null };
+  const glOf = () => (typeof renderer.getContext === 'function' ? renderer.getContext() : null);
+  function gpuPoll() {
+    const q = gpuT.pending, gl = glOf();
+    if (!q || !gl) return;
+    try {
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) return;
+      const disjoint = gl.getParameter(gpuT.ext.GPU_DISJOINT_EXT), ns = gl.getQueryParameter(q, gl.QUERY_RESULT);
+      if (!disjoint) { gpuT.last = ns / 1e6; gpuT.sum += gpuT.last; gpuT.n++; }
+      gl.deleteQuery(q);
+    } catch { /* timing is optional */ }
+    gpuT.pending = null;
+  }
+  function gpuBegin() {
+    if (globalThis.__nsOutlineGpu !== true || gpuT.pending) return null;
+    const gl = glOf();
+    if (!gl) return null;
+    if (gpuT.ext === undefined) { try { gpuT.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') || null; } catch { gpuT.ext = null; } }
+    if (!gpuT.ext) return null;
+    try { const q = gl.createQuery(); gl.beginQuery(gpuT.ext.TIME_ELAPSED_EXT, q); return q; } catch { return null; }
+  }
+  function gpuEnd(q) { if (!q) return; try { glOf().endQuery(gpuT.ext.TIME_ELAPSED_EXT); gpuT.pending = q; } catch { gpuT.pending = null; } }
   /** The ID pass for the frame about to be drawn. Returns true when the composite will draw. */
   const passTo = (rt, sceneIn, camera) => {
     renderer.setRenderTarget(rt);
@@ -1149,9 +1236,38 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
         if (moved) { strip.mesh.matrixWorld.copy(src.matrixWorld); changed = true; }
       }
     }
-    stripOn.value = strip.mesh && strip.shown ? 1 : 0;
+    if (strip.mesh) strip.mesh.visible = strip.shown;
+    // 20 November 2026 (Message 207): the brain's surface and its eyes and nerves, for their outline: the group's matrix,
+    // the surface's geometry (its level of detail), each part's matrix and visibility.
+    let brainShown = false;
+    if (brain.group && inkUni.uBrain.value.y > 0) {
+      const G = brain.group;
+      brainShown = G.visible !== false && Boolean(G.parent) && drawnChain(G, scene) !== false;
+      if (brainShown) {
+        const k = brain.key, gm = G.matrixWorld.elements;
+        for (let i = 0; i < 16; i++) if (k[i] !== gm[i]) { k[i] = gm[i]; changed = true; }
+        if (brain.surface) {
+          const s = brain.surface, v = s.src.visible !== false;
+          if (s.pic.visible !== v) { s.pic.visible = v; changed = true; }
+          if (s.pic.geometry !== s.src.geometry) { s.pic.geometry = s.src.geometry; changed = true; }
+          s.pic.matrixWorld.copy(G.matrixWorld);
+        }
+        brain.parts.forEach((p, n) => {
+          const v = p.src.visible !== false;
+          if (p.pic.visible !== v) { p.pic.visible = v; changed = true; }
+          const e = p.src.matrixWorld.elements, at = 16 + 16 * n;
+          let moved = false;
+          for (let i = 0; i < 16; i++) if (k[at + i] !== e[i]) { k[at + i] = e[i]; moved = true; }
+          if (moved) { p.pic.matrixWorld.copy(p.src.matrixWorld); changed = true; }
+        });
+      }
+    }
+    if (brainShown !== brain.shown) { brain.shown = brainShown; changed = true; }
+    for (const p of brain.parts) if (!brainShown) p.pic.visible = false;
+    if (brain.surface && !brainShown) brain.surface.pic.visible = false;
+    stripOn.value = (strip.mesh && strip.shown) || brainShown ? 1 : 0;
     inkUni.uStrip.value.z = stripOn.value;
-    if (stats.drawn === 0 && !stripOn.value) { composite.visible = false; stripComposite.visible = false; idLive = false; stats.ms = now() - t0; return false; }
+    if (stats.drawn === 0 && !stripOn.value) { composite.visible = false; stripComposite.visible = false; brainComposite.visible = false; idLive = false; stats.ms = now() - t0; return false; }
     // Uniforms of the edge and ink passes (cheap; set every frame so a skipped frame keeps them right).
     shared.uView.value.set(1, camera.near, camera.far, camera.isOrthographicCamera ? 0 : 1);
     const P = camera.projectionMatrix.elements;
@@ -1180,9 +1296,11 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       if (inkOff) {
         // 20 November 2026 (setInk): nothing to draw; the ID picture above still feeds the hidden-limb glass (afterId)
         renderer.setRenderTarget(prevTarget); renderer.setClearColor(saveColour, prevAlpha); renderer.autoClear = prevAuto;
-        force = false; stats.frames++; composite.visible = false; stripComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0;
+        force = false; stats.frames++; composite.visible = false; stripComposite.visible = false; brainComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0;
         return false;
       }
+      gpuPoll();
+      const tq = gpuBegin();
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
         renderer.setRenderTarget(stripTarget);
@@ -1193,16 +1311,18 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       }
       passTo(edgeTarget, edgeScene, camera);
       passTo(inkTarget, inkScene, camera);
+      gpuEnd(tq);
       renderer.setRenderTarget(prevTarget);
       renderer.setClearColor(saveColour, prevAlpha);
       renderer.autoClear = prevAuto;
       force = false;
       stats.frames++;
     } else stats.skipped++;
-    if (inkOff) { composite.visible = false; stripComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0; return false; }
+    if (inkOff) { composite.visible = false; stripComposite.visible = false; brainComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0; return false; }
     composite.visible = stats.drawn > 0;
     idLive = composite.visible;
-    stripComposite.visible = stripOn.value > 0;
+    stripComposite.visible = Boolean(strip.mesh && strip.shown);
+    brainComposite.visible = brain.shown;
     stats.ms = now() - t0;
     return true;
   }
@@ -1220,17 +1340,51 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     force = true;
     return Boolean(strip.mesh);
   }
+  /** 20 November 2026 (Message 207): the brain for its own outline. { group, surface, parts }: group the Object3D whose
+   * world matrix and visibility the surface follows (the brain group), surface a mesh whose CURRENT geometry is drawn
+   * (the merged glass; it may change with the level of detail), parts meshes drawn with their own world matrices (the
+   * eyeballs and the nerves). null removes it. brainMaterials (returned below) can take the scene's vertex rule. */
+  function setBrain(o) {
+    const parts = [brain.surface, ...brain.parts].filter(Boolean);
+    for (const p of parts) stripScene.remove(p.pic);
+    Object.assign(brain, { group: null, surface: null, parts: [], shown: false, key: new Float64Array(0) });
+    force = true;
+    if (!ok || !o || !o.group || !o.group.matrixWorld) return false;
+    const proxy = (geometry, material, name) => {
+      const m = new THREE.Mesh(geometry, material);
+      m.name = name; m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false; m.raycast = () => {};
+      stripScene.add(m);
+      return m;
+    };
+    brain.group = o.group;
+    if (o.surface && o.surface.isMesh && o.surface.geometry) brain.surface = { src: o.surface, pic: proxy(o.surface.geometry, brainMat, 'ns-outline brain coverage') };
+    for (const src of Array.isArray(o.parts) ? o.parts : []) if (src && src.isMesh && src.geometry) brain.parts.push({ src, pic: proxy(src.geometry, brainPartMat, `ns-outline brain part coverage: ${src.name}`) });
+    brain.key = new Float64Array(16 * (1 + brain.parts.length)).fill(NaN);
+    return true;
+  }
   function invalidate() { force = true; }
   /** 20 November 2026 (the raw look, ns-raw-look): the lines' opacities [strong, silhouette, inner, faint] (OUTLINE's by
    * default), the motor strip's line opacity and (optional) its width in CSS pixels. All zero: the edge and ink passes
    * are not run and nothing is laid over the picture (the ID pass still runs for the hidden-limb glass). Returns whether
-   * any line is drawn. */
-  function setInk(alphas = null, stripAlpha = null, stripCss = null) {
+   * any line is drawn.
+   * more (20 November 2026, Message 207), each optional: widths [bold, inner, fine] CSS px (OUTLINE.boldCss ...), colour
+   * the bodies' ink (sRGB 0..1, OUTLINE.colour), taperMin (OUTLINE.taperMin), brainAlpha / brainCss the brain's own
+   * outline and its eyes' (OUTLINE.brainAlpha, brainCss; drawn in stripColour). */
+  function setInk(alphas = null, stripAlpha = null, stripCss = null, more = null) {
     if (Array.isArray(alphas) && alphas.length === 4 && alphas.every(Number.isFinite)) inkUni.uAlpha.value.set(alphas[0], alphas[1], alphas[2], alphas[3]);
     if (Number.isFinite(stripAlpha)) inkUni.uStrip.value.y = stripAlpha;
     if (Number.isFinite(stripCss) && stripCss > 0) inkUni.uStrip.value.x = stripCss;
+    const o = more && typeof more === 'object' ? more : {};
+    if (Array.isArray(o.widths) && o.widths.length === 3 && o.widths.every(w => Number.isFinite(w) && w > 0)) inkUni.uWidth.value.set(o.widths[0], o.widths[1], o.widths[2], inkUni.uWidth.value.w);
+    if (Array.isArray(o.colour) && o.colour.length === 3 && o.colour.every(Number.isFinite)) {
+      const c = new THREE.Color().setRGB(o.colour[0], o.colour[1], o.colour[2], THREE.SRGBColorSpace);
+      compMat.uniforms.uColour.value.set(c.r, c.g, c.b);
+    }
+    if (Number.isFinite(o.taperMin) && o.taperMin > 0 && o.taperMin <= 1) inkUni.uTaper.value.z = o.taperMin;
+    if (Number.isFinite(o.brainAlpha) && o.brainAlpha >= 0) inkUni.uBrain.value.y = o.brainAlpha;
+    if (Number.isFinite(o.brainCss) && o.brainCss > 0) inkUni.uBrain.value.x = o.brainCss;
     const a = inkUni.uAlpha.value;
-    inkOff = !(a.x > 0 || a.y > 0 || a.z > 0 || a.w > 0 || inkUni.uStrip.value.y > 0);
+    inkOff = !(a.x > 0 || a.y > 0 || a.z > 0 || a.w > 0 || inkUni.uStrip.value.y > 0 || inkUni.uBrain.value.y > 0);
     force = true;
     return !inkOff;
   }
@@ -1260,14 +1414,15 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       vertexCapacity: stats.vertexCapacity, indexCapacity: stats.indexCapacity, copiedVertices: stats.copiedVertices,
       multiDraw: Boolean(renderer.extensions && typeof renderer.extensions.has === 'function' && renderer.extensions.has('WEBGL_multi_draw')),
       buffer: [bufW, bufH], supersample: ss, idTarget: [ssW, ssH], widthPx: Math.round(outlineWidthPx(pr) * 1000) / 1000,
-      strip: Boolean(strip.mesh), stripShown: strip.shown, skinnedProxies: skinShown, skinBatch: { members: sb.members, rebuilds: sb.rebuilds } };
+      strip: Boolean(strip.mesh), stripShown: strip.shown, brain: Boolean(brain.group), brainShown: brain.shown, brainAlpha: inkUni.uBrain.value.y, gpu: { sumMs: Math.round(gpuT.sum * 1000) / 1000, n: gpuT.n, lastMs: gpuT.last === null ? null : Math.round(gpuT.last * 1000) / 1000, timer: gpuT.ext === undefined ? null : Boolean(gpuT.ext) }, skinnedProxies: skinShown, skinBatch: { members: sb.members, rebuilds: sb.rebuilds } };
   }
   function dispose() {
     if (batch) { batch.dispose(); batch = null; }
     skinIdMat.dispose(); // 18 November 2026: the skinned proxies share their sources' geometry (not disposed here)
     if (sb.batch) { sb.batch.dispose(); sb.batch = null; } skinBatchMat.dispose();
     for (const t of [target, edgeTarget, inkTarget, stripTarget]) if (t) t.dispose();
-    stripMat.dispose(); stripCompMat.dispose(); if (strip.mesh && strip.mesh.geometry) strip.mesh.geometry.dispose();
+    stripMat.dispose(); stripCompMat.dispose(); brainCompMat.dispose(); if (strip.mesh && strip.mesh.geometry) strip.mesh.geometry.dispose();
+    brainMat.dispose(); brainPartMat.dispose(); // (the brain's proxies share the scene's geometry: not disposed here)
     if (depthTexture) depthTexture.dispose();
     adjTex.dispose(); quadGeo.dispose(); compMat.dispose(); idMat.dispose(); edgeMat.dispose(); inkMat.dispose();
     reg.length = 0; bySource.clear(); geoms.clear();
@@ -1278,5 +1433,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * body), 0 when not registered. */
   function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
   function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
-  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
+  return { composite, stripComposite, brainComposite, stripMaterial: stripMat, brainMaterials: [brainMat, brainPartMat], setBrain, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
 }

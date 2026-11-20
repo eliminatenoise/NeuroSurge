@@ -4,7 +4,7 @@
  * still takes what the player aims at, and that the new ghosts take nothing from it. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SEE, SEE_LIMBS, SEE_THINGS, seeLimbOfGroup, seeLimbKey, seeThingOfGroup, seeBodyOfThing, seeAreaCode, seeShows, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeDrawnEntry, seeLockedAway, seeFillTargets, seeGlassColours, SEE_JOIN_MASKS } from '../scene/src/ns-see.mjs';
+import { SEE, SEE_LIMBS, SEE_THINGS, seeLimbOfGroup, seeLimbKey, seeThingOfGroup, seeBodyOfThing, seeAreaCode, seeShows, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeDrawnEntry, seeLockedAway, seeFillTargets, seeFillOver, seeGlassColours, SEE_JOIN_MASKS } from '../scene/src/ns-see.mjs';
 import { OUTLINE_GROUPS as G, OUTLINE_MIRROR_OFFSET as M, OUTLINE_ADJACENT } from '../scene/src/ns-outline.mjs';
 import { controlTargets } from '../scene/src/ns-app.mjs';
 
@@ -95,16 +95,22 @@ test('the drawing rule across the two bodies: either shows through the other', (
   assert.equal(seeShows(g(G.rShank), g(G.lFoot + M), { trunk: true, across: false, brain: true }), false, 'switched off by itself');
 });
 
-test('the drawing rule and the brain: bodies through the brain, the brain through bodies, the eyeballs through the brain', () => {
+// 20 November 2026, evening (the owner: "And I'm not sure how important it is to have transparency outline effects for
+// the eyes and their nerve cords"): the eyeballs and nerves are never a ghost (SEE.eyesGlass false). This test used to
+// want an eyeball behind the mirror body, behind the brain's surface and behind an area shown through them.
+test('the drawing rule and the brain: bodies through the brain, the brain through bodies; the eyeballs and nerves never', () => {
+  assert.equal(SEE.eyesGlass, false);
   const B = SEE_THINGS;
   assert.equal(seeShows(th(B.brain), g(G.lHand)), true, 'your hand behind the brain');
   assert.equal(seeShows(th(B.brain), g(G.trunk + M)), true, 'the mirror body behind the brain');
   assert.equal(seeShows(th(seeAreaCode(3)), g(G.rFoot)), true, 'a foot behind the motor strip');
   assert.equal(seeShows(g(G.rThigh), th(B.brain)), true, 'the brain behind your leg');
   assert.equal(seeShows(g(G.rThigh), th(seeAreaCode(0))), true, 'a group of motor areas behind your knee');
-  assert.equal(seeShows(g(G.trunk + M), th(B.eyes)), true, 'an eyeball behind the mirror body');
-  assert.equal(seeShows(th(B.brain), th(B.eyes)), true, 'the eyeballs and nerves behind the brain\'s own surface');
-  assert.equal(seeShows(th(seeAreaCode(1)), th(B.eyes)), true);
+  assert.equal(seeShows(g(G.trunk + M), th(B.eyes)), false, 'no eyeball behind the mirror body');
+  assert.equal(seeShows(g(G.rThigh), th(B.eyes)), false, 'no eyeball or nerve behind your leg (the opening picture\'s X and circles)');
+  assert.equal(seeShows(th(B.brain), th(B.eyes)), false, 'no eyeballs and nerves behind the brain\'s own surface');
+  assert.equal(seeShows(th(seeAreaCode(1)), th(B.eyes)), false);
+  assert.equal(seeShows(th(B.eyes), g(G.trunk + M)), true, 'a body part behind an eyeball still shows through it');
   assert.equal(seeShows(th(B.eyes), th(B.brain)), false, 'not the brain behind its own eyeball');
   assert.equal(seeShows(th(B.brain), th(seeAreaCode(0))), false, 'not an area behind the brain\'s own surface');
   assert.equal(seeShows(th(B.brain), th(B.brain)), false, 'one fold of the brain behind another');
@@ -183,11 +189,13 @@ test('the ghost drawn on a ray: the nearest thing behind the front that the draw
   const mt = mir(G.trunk + M, 1.6), mf = mir(G.lFore + M, 1.75);
   assert.equal(seeDrawnEntry([glass(1.0), mt, mf]), mt);
   assert.equal(seeDrawnEntry([glass(1.0), mir(G.trunk + M, 1.005), mf]), mf, 'a part touching the glass is within the gap');
-  // an eyeball behind the brain's surface; nothing for the brain's 'outline' entry (no surface)
+  // an eyeball behind the brain's surface is not a ghost (20 November 2026, SEE.eyesGlass): passed, as on the graphics
+  // card; nothing for the brain's 'outline' entry (no surface)
   const eye = { item: 'brain', kind: 'glass', distance: 1.3, point: [0, 0, 0], regionId: null, part: 'eyeball' };
-  assert.equal(seeDrawnEntry([glass(1.0), eye]), eye);
+  assert.equal(seeDrawnEntry([glass(1.0), eye]), null);
+  assert.equal(seeDrawnEntry([glass(1.0), eye, mt]), mt, 'the body part behind it is drawn');
   assert.equal(seeDrawnEntry([{ item: 'brain', kind: 'outline', distance: 0.5, point: [0, 0, 0], regionId: null }, shank, pelvis]), pelvis);
-  assert.equal(seeShows({ thing: B.brain }, { thing: B.eyes }), true);
+  assert.equal(seeShows({ thing: B.brain }, { thing: B.eyes }), false);
   assert.equal(seeDrawnEntry([]), null);
   assert.equal(seeDrawnEntry(null), null);
 });
@@ -351,4 +359,23 @@ test('every ghost has the one light-blue glass look, light enough to read, below
   }
   assert.ok(fill[0] > line[0], 'the fill is paler than the line');
   assert.deepEqual(seeGlassColours().line, [...SEE.glass.line], 'a copy of SEE.glass each time');
+});
+
+// 20 November 2026, evening (the owner: "ensure, especially with the right arm, that muscles do not become transparent
+// under certain angles ... That shouldn't be happening"; the lead: where a body part is in front the glass draws only its
+// lines). The ink pass asks the same per sample (INK_FS fillOver).
+test('a ghost is filled only where the brain is in front; over a body part (either body, the game arm) it is lines alone', () => {
+  const B = SEE_THINGS;
+  for (const c of [B.brain, B.eyes, seeAreaCode(0), seeAreaCode(7), B.maxCode]) assert.equal(seeFillOver(c), true, `the brain's thing ${c} in front: filled`);
+  for (let c = 1; c <= B.mirrorTrunk; c++) {
+    assert.equal(seeFillOver(c), false, `body thing ${c} in front: lines only`);
+    assert.equal(seeFillOver(c + 128), false, `a limb's root (${c} + 128) in front: lines only`);
+  }
+  assert.equal(seeFillOver(0), false, 'nothing in front: nothing to fill');
+  assert.equal(seeFillOver(null), false);
+  // every body part is one of those things: your limbs and trunk (the game arm draws in the left arm's groups) and the
+  // mirror body's
+  for (const grp of Object.values(G)) { assert.equal(seeFillOver(seeThingOfGroup(grp)), false); assert.equal(seeFillOver(seeThingOfGroup(grp + M)), false); }
+  // the fill strengths themselves are unchanged (they still apply where the brain is in front: a body behind the brain)
+  assert.equal(SEE.fillAlpha, 0.42); assert.equal(SEE.fillLow, 0.16);
 });

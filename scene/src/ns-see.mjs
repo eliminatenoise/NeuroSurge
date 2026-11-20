@@ -30,9 +30,9 @@
  *    forearm, hand, shank or foot in front of it (SEE.rules.trunk);
  *  - ACROSS THE BODIES your limb or trunk shows through the mirror body and the mirror body through you
  *    (SEE.rules.across);
- *  - THE BRAIN (SEE.rules.brain): a body part behind the brain shows through it; the brain's surface, a group of motor
- *    areas or an eyeball behind a body part shows through that part; an eyeball or nerve behind the brain's own surface shows
- *    through it. Per sample only ONE hidden thing is drawn: the nearest one behind what is seen there. Things that are
+ *  - THE BRAIN (SEE.rules.brain): a body part behind the brain shows through it; the brain's surface or a group of motor
+ *    areas behind a body part shows through that part (the eyeballs and nerves never do since 20 November 2026,
+ *    SEE.eyesGlass, nor behind the brain's own surface; they still cover what is behind them). Per sample only ONE hidden thing is drawn: the nearest one behind what is seen there. Things that are
  *    not ghosts on the way (the same thing again, a joined root) are passed through: a hand pushed under the body shows
  *    through the thigh AND the pelvis in front of it.
  *  - a hidden sliver narrower than SEE.minWidthCm gets nothing (a tendon behind a thigh; and whatever lies behind a
@@ -51,8 +51,15 @@
  * as it is hidden (none while most of it shows), and the strong one when it too is hidden and hardly seen: a whole
  * body behind the brain is then one glass figure. The brain's surface gets none (it is behind almost everything; a
  * fill would tint every body in front of it). A group of motor areas and an eyeball get a faint one.
+ * 20 November 2026, evening (the owner: "ensure, especially with the right arm, that muscles do not become transparent
+ * under certain angles ... That shouldn't be happening"): a fill is drawn only where the BRAIN (its surface, an area, an
+ * eyeball) is the thing in front (seeFillOver). Where a body part is in front (yours, the mirror body's, the game arm),
+ * the ghost is its lines alone, so a muscle in front never reads as see-through: the strip's areas behind a raised arm
+ * washed it light blue, and a thigh locked away behind the folded right arm laid its strong fill over the forearm. The
+ * fill strengths below are unchanged; a whole body behind the brain is still one glass figure.
  *
- * WHICH PART THE CROSSHAIR TAKES (ns-app controlTargets): the strongly filled ghost of a LOCKED-AWAY LIMB, where a
+ * WHICH PART THE CROSSHAIR TAKES (ns-app controlTargets): the ghost of a LOCKED-AWAY LIMB (strongly filled where the
+ * brain is in front of it, its line alone where a body part is: 20 November 2026), where a
  * part of its own body covers it (seeHiddenEntry, seeTakesGhost) AND that ghost is the one drawn there (seeDrawnEntry,
  * 20 November 2026: one hidden thing is drawn per pixel, so where a trunk, the other body or the brain is drawn between
  * the part in front and the hidden limb, or the brain is in front, the crosshair keeps what is seen); everywhere else
@@ -95,7 +102,8 @@ import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLI
  *  LOCKED AWAY (per limb, from the census: a grid of censusCells cells across the picture, each noting which things are
  *  seen and which hidden in it, from censusGrid x censusGrid samples of the cell): a limb hidden in at least lockCells
  *  cells whose seen share (seen / (seen + hidden) cells) is under lockOn; it stays locked until the share rises over lockOff (no flicker near the threshold). Its ghost is
- *  filled at fillAlpha and the crosshair takes it; every other limb ghost gets the light fillLow and leaves the part in
+ *  filled at fillAlpha (where the brain is in front; a body part in front shows its line alone, seeFillOver) and the
+ *  crosshair takes it; every other limb ghost gets the light fillLow and leaves the part in
  *  front to the crosshair (Shift reaches it). The fill strength eases over fillEaseS (at once under reduced motion).
  *  (First tried, per pixel: fill where the hidden part looked "closed" within 9 to 13 cm round the pixel. The fill came
  *  out patchy: a jagged diamond-shaped hole in the middle of a leg hidden behind the other thigh, `under-fix.png`, and a
@@ -111,14 +119,20 @@ import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLI
  *  asked "is the brain nearer here, and which of its things": half the size costs a quarter of the filling).
  *  minWidthCm: a hidden part narrower than this (its narrowest width through the pixel, in the world, at the hidden
  *  thing's own distance) gets no ghost: a finger tip or a tendon tucked behind a thigh is noise, the limb shows beside it.
- *  focusCss: the line round the limb that Shift would take (while Shift is held). */
+ *  focusCss: the line round the limb that Shift would take (while Shift is held).
+ *  eyesGlass (20 November 2026, evening; the owner: "And I'm not sure how important it is to have transparency outline
+ *  effects for the eyes and their nerve cords"): false: the eyeballs, the optic nerves with their sheaths and the
+ *  chiasm are never a ghost (no line, no fill: behind a body part, behind the brain's surface, anywhere). They still
+ *  cover what lies behind them, and a body part behind an eyeball still shows through it. Before, the X of the nerves
+ *  and the two circles of the eyeballs, which lie behind your own body at the start, were outlined in every opening
+ *  picture (section 147's own "not right" list). */
 export const SEE = Object.freeze({
   gapM: 0.012, gapRel: 0.01,
   lineCss: 2.0, lineAlpha: 1, keyCss: 1.0, keyAlpha: 0.55, taperMin: 0.75,
   fillAlpha: 0.42, fillLow: 0.16, fillEaseS: 0.15, minWidthCm: 3,
   fillTrunk: 0.16, partFrom: 0.15, partFull: 0.5, fillArea: 0.2, fillEyes: 0.12, brainStep: 2,
   censusCells: 48, censusGrid: 8, lockCells: 2, lockOn: 0.35, lockOff: 0.5,
-  focusCss: 3.0,
+  focusCss: 3.0, eyesGlass: false,
   glass: Object.freeze({ line: Object.freeze([0.14, 0.53, 0.8]), fill: Object.freeze([0.24, 0.57, 0.8]) }),
   rules: Object.freeze({ trunk: true, across: true, brain: true })
 });
@@ -182,6 +196,7 @@ export function seeShows(front, behind, rules = SEE.rules) {
   const gOf = x => (x && Number.isInteger(x.group) ? x.group : 0), tOf = x => (x && Number.isInteger(x.thing) ? x.thing : seeThingOfGroup(gOf(x)));
   const tf = tOf(front), tb = tOf(behind);
   if (!(tf > 0 && tb > 0) || tf === tb) return false;                       // nothing, or a thing behind itself
+  if (tb === T.eyes && SEE.eyesGlass === false) return false;                // the eyeballs and nerves are never a ghost
   const bf = seeBodyOfThing(tf), bb = seeBodyOfThing(tb);
   if (bf === 0 || bb === 0) {
     if (!rules.brain) return false;
@@ -192,6 +207,14 @@ export function seeShows(front, behind, rules = SEE.rules) {
   if (tb >= T.ownTrunk && !rules.trunk) return false;                       // the trunk behind one of its own limbs
   const off = bodyOfGroup(gOf(front)) === 2 ? OUTLINE_MIRROR_OFFSET : 0, a = gOf(front) - off, b = gOf(behind) - off;
   return !ADJ.has(`${Math.min(a, b)}:${Math.max(a, b)}`);                    // not joined at a joint
+}
+/** THE FILL'S PLACE (pure; INK_FS applies the same per sample, nsFillOver): whether a ghost's fill may be drawn where
+ * `front` is the thing in front (a ghost code as nsFrontAt gives it: 1..10 a body part, + 128 a limb's root; 11 and up
+ * one of the brain's things; 0 nothing). Only the brain's things: over a body part a ghost is its lines alone (20
+ * November 2026, owner Message 198: a muscle in front must never read as see-through). */
+export function seeFillOver(front) {
+  const f = Number.isInteger(front) ? (front >= 128 ? front - 128 : front) : 0;
+  return f >= T.brain && f <= T.maxCode;
 }
 /** THE PICKING RULE (unchanged on 19 November 2026): whether a part of outline group `behind`, lying behind a part of
  * group `front` (by more than the gap), is a hidden LIMB the controls can reach: the same body, another piece (the
@@ -457,6 +480,7 @@ void main() {
 	vec4 bp = nsBrainAt( p );
 	int bc = int( bp.a * 255.0 + 0.5 );
 	if ( bc == 0 ) discard;
+	${SEE.eyesGlass === false ? `if ( bc == ${T.eyes} ) discard; // the eyeballs and nerves are never a ghost (SEE.eyesGlass)` : ''}
 	float db = nsUnpack( bp.rgb );
 	float zf = nsViewDist( texelFetch( tDepth, p, 0 ).r, uView ), zb = nsViewDist( db, uView );
 	if ( zb < zf + nsGap( zf ) ) discard;
@@ -490,7 +514,8 @@ void main() {
  *  r: the line's coverage (a sample within the line's width of the hidden part's own outline, `rimOf`), or of the FOCUS
  *     line (uFocus, a limb's ghost code; 0 = none: a line round everything of that limb, seen or hidden), averaged over
  *     the samples;
- *  g: the ghost's coverage of the pixel, times `keep` (0 where the hidden part is a sliver narrower than uThin: its
+ *  g: the ghost's coverage of the pixel where it may be filled (the brain's thing in front, fillOver: 20 November
+ *     2026, never over a body part), times `keep` (0 where the hidden part is a sliver narrower than uThin: its
  *     narrowest width through the pixel, from 8 walks out to where it stops);
  *  b: the ghost code; a: 0.5 + half the dark keyline's coverage (0.5 and above: something is written here).
  * Most ghost pixels lie well inside their ghost: a ring of 8 probes round the pixel finds that out. A thing that gets
@@ -514,6 +539,8 @@ uniform float uFill[ ${T.count} ]; // each thing's fill strength now (0: lines o
 ${FRONT_GLSL}
 int ghostAt( ivec2 q ) { return int( texelFetch( tGhost, q, 0 ).r * 255.0 + 0.5 ); }
 bool inside( ivec2 q ) { return q.x >= 0 && q.y >= 0 && q.x < uSize.x && q.y < uSize.y; }
+// a ghost's fill only where the brain's thing is in front, never over a body part (seeFillOver; Message 198)
+bool fillOver( ivec2 q ) { int f = nsFrontAt( q ); if ( f >= 128 ) f -= 128; return f >= ${T.brain}; }
 bool brainIs( ivec2 q ) { return int( nsBrainAt( q ).a * 255.0 + 0.5 ) == ${T.brain}; }
 // which of two hidden things that meet carries the line: a limb, an area or an eyeball before a trunk, a trunk before
 // the brain's surface; of two alike, the higher code
@@ -525,7 +552,11 @@ int rankOf( int c ) { return c == ${T.brain} ? 1 : ( c == ${T.ownTrunk} || c == 
 // without being a ghost: no line across the joint.
 bool rimOf( ivec2 q, int h, int c ) {
 	if ( h > 0 ) { int rc = rankOf( c ), rn = rankOf( h ); if ( rc < rn || ( rc == rn && c < h ) ) return false; }
-	if ( c >= ${T.brain} ) return int( nsBrainAt( q ).a * 255.0 + 0.5 ) != c;
+	if ( c >= ${T.brain} ) {
+		int bq = int( nsBrainAt( q ).a * 255.0 + 0.5 );
+		${SEE.eyesGlass === false ? `if ( bq == ${T.eyes} ) return false; // (an eyeball or nerve in front of it: no edge of the thing there; SEE.eyesGlass)` : ''}
+		return bq != c;
+	}
 	int gq = nsGroupOf( texelFetch( tId, q, 0 ) );
 	int f = nsThingOf( gq );
 	if ( f == c ) return false;
@@ -570,7 +601,7 @@ void main() {
 	ivec2 b = ivec2( gl_FragCoord.xy ) * uSS;
 	int n = uSS * uSS;
 	int cs[ 4 ]; float zs[ 4 ];
-	int code = 0; ivec2 s0 = b; int cnt = 0, fcnt = 0; bool one = true;
+	int code = 0; ivec2 s0 = b; int cnt = 0, fcnt = 0, bcnt = 0; bool one = true;
 	float zNear = 1e9;
 	for ( int i = 0; i < 4; i ++ ) {
 		cs[ i ] = 0; zs[ i ] = 1.0;
@@ -579,7 +610,10 @@ void main() {
 		vec4 t = texelFetch( tGhost, s, 0 );
 		int c = int( t.r * 255.0 + 0.5 );
 		cs[ i ] = c; zs[ i ] = nsByteDist( t.b );
-		if ( c > 0 ) { cnt ++; if ( code == 0 ) { code = c; s0 = s; } else if ( c != code ) one = false; zNear = min( zNear, zs[ i ] ); }
+		if ( c > 0 ) {
+			cnt ++; if ( code == 0 ) { code = c; s0 = s; } else if ( c != code ) one = false; zNear = min( zNear, zs[ i ] );
+			if ( uFill[ min( c, ${T.area} ) ] > 0.0 && fillOver( s ) ) bcnt ++; // (asked only of a thing that has a fill now)
+		}
 	}
 	float line = 0.0, fline = 0.0, key = 0.0, fkey = 0.0;
 	#ifdef NS_FOCUS
@@ -609,12 +643,13 @@ void main() {
 	// the widths taper with the on-screen size of a centimetre at the hidden thing's distance (as the outline's lines do)
 	float taper0 = clamp( sqrt( uLine.z * uCssPerSample / max( zNear, 1e-3 ) / uLine.w ), uTaperMin, 1.0 );
 	float reach0 = ceil( uLine.x * taper0 + uKey * taper0 ) + 3.0;
-	// A thing that gets no fill is left at once when no line can be near: four probes far enough out that a straight
-	// edge within the line's reach would cross one. The brain's surface is a ghost under EVERY body in front of it, and
+	// A thing that gets no fill here (none now, or a body part in front at each of its samples) is left at once when no
+	// line can be near: four probes far enough out that a straight edge within the line's reach would cross one. The
+	// brain's surface is a ghost under EVERY body in front of it, and
 	// its line can only lie where the brain's own picture ends (rimOf), so its probes ask that picture: a pixel next to
 	// a body's edge, with the brain going on all round, is left too. Another thing's probes ask the ghost picture.
 	bool deep = cnt == n && one;
-	if ( one && fcnt == 0 && uFill[ min( code, ${T.area} ) ] <= 0.0 ) {
+	if ( one && fcnt == 0 && ( uFill[ min( code, ${T.area} ) ] <= 0.0 || bcnt == 0 ) ) {
 		int far = int( ceil( 1.45 * reach0 ) );
 		ivec2 qa = s0 + ivec2( far, 0 ), qb = s0 - ivec2( far, 0 ), qc = s0 + ivec2( 0, far ), qd = s0 - ivec2( 0, far );
 		if ( inside( qa ) && inside( qb ) && inside( qc ) && inside( qd ) ) {
@@ -685,7 +720,7 @@ void main() {
 		}
 	}
 	float gl = line * keep, gk = max( key * keep, fkey );
-	float fill = float( cnt ) / float( n ) * keep;
+	float fill = float( bcnt ) / float( n ) * keep;
 	if ( max( gl, fline ) <= 0.0 && fill <= 0.0 && gk <= 0.0 ) discard;
 	int outCode = code != 0 ? code : uFocus;
 	gl_FragColor = vec4( max( gl, fline ) / float( n ), fill, float( outCode ) / 255.0, 0.5 + 0.5 * gk / float( n ) );
@@ -999,7 +1034,7 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     let moved = brain.stale;
     for (let i = 0; i < 16; i++) { if (k[i] !== a[i]) { k[i] = a[i]; moved = true; } if (k[16 + i] !== b[i]) { k[16 + i] = b[i]; moved = true; } if (k[32 + i] !== gm[i]) { k[32 + i] = gm[i]; moved = true; } }
     brain.parts.forEach((p, n) => { const e = p.src.matrixWorld.elements, at = 48 + 16 * n; for (let i = 0; i < 16; i++) if (k[at + i] !== e[i]) { k[at + i] = e[i]; moved = true; } });
-    for (const p of brain.parts) { const v = p.src.visible !== false; if (p.pic.visible !== v) { p.pic.visible = v; moved = true; } p.ghost.visible = v; }
+    for (const p of brain.parts) { const v = p.src.visible !== false; if (p.pic.visible !== v) { p.pic.visible = v; moved = true; } p.ghost.visible = v && SEE.eyesGlass !== false; }
     if (brain.surface) { const v = brain.surface.src.visible !== false && visibleChain(brain.surface.src); if (brain.surface.pic.visible !== v) { brain.surface.pic.visible = v; moved = true; } }
     if (!moved) { brain.shown = true; return true; }
     if (brain.surface) { const s = brain.surface; if (s.pic.geometry !== s.src.geometry) s.pic.geometry = s.src.geometry; s.pic.matrixWorld.copy(brain.group.matrixWorld); }

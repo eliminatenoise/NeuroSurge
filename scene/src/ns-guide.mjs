@@ -25,8 +25,9 @@
 //   { type: 'flip' }                             a double tap of Space (R558, Message 40: every limb turns once).
 //   { type: 'grab', on: true }                    the brain was grabbed (a Space hold or tap on the brain).
 //   { type: 'grab', on: false, dragRad }          the brain was let go after a drag of dragRad radians (look angle).
-//   { type: 'armMoved', ids }                     R558 (hunt 2): the game arm really moved (a latch or the forearm turn
-//        changed); completes leftArmArea. guideEventsFromFrame then marks left-arm 'activate' events awaitMove: true.
+//   { type: 'armMoved', ids }                     R558 (hunt 2): the game arm really moved (a contraction of a left-arm
+//        movement or the forearm turn started; 20 November 2026, Message 206: it was a latch); completes leftArmArea.
+//        guideEventsFromFrame then marks left-arm 'activate' events awaitMove: true.
 //   { type: 'carry', m }                          R558 (hunt 2): while Space holds the brain, W/A/S/D carried it m metres this
 //        frame (its key offset). dragBrain completes on a release after dragMinRad of look carry OR carryMinM of keys.
 //   { type: 'orbit', dir?, hold? }                an orbit arrow turned the view (click step or hold).
@@ -82,7 +83,9 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
  *                                                                          2026: no longer the bare 'look' at an area,
  *                                                                          which a look while Space holds the brain gave
  *                                                                          although looks are silent then)
- *   pressArea    click it: the part jerks again, harder                    'activate' by a click that moves something
+ *   pressArea    click it: the part contracts again                        'activate' by a click that moves something
+ *                (20 November 2026, Message 206: every switch-on contracts and returns, so a click does it again; the
+ *                step said "jerks again, harder" while a movement was held part way)
  *   chooseLimb   2, 3 or 4 (or a double click): another limb is chosen       { type: 'limbChoice', n } (n 2 to 4: 1, the left
  *                                                                          arm, is the one the game starts on)
  *   moveHand     W A S D: the chosen limb's hand or foot                   as before ('move' / 'key', both axes)
@@ -447,44 +450,43 @@ function regionIndex(bodyMap) {
   return idx;
 }
 
-/** R558: the hand actions a relax pulse lets go of (ns-actions HAND_LATCH_IDS, kept equal by hand). */
-const RELAXABLE_HAND_ACTIONS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension']);
-/** True when an activity state holds a latched hand action (armLatch), i.e. "Relax left grip" would move the hand. */
+/** R558: the hand actions a relax press sends back (ns-actions HAND_ACTION_IDS, kept equal by hand). */
+const RELAXABLE_HAND_ACTIONS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
+  'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension', 'thumb_opposition', 'thumb_reposition']);
+/** True when "Relax left grip" would move the hand: a hand movement is contracting (ns-actions armJerk, its time still
+ * running). 20 November 2026 (Message 206): nothing is held any more, so a relax press on a resting hand moves nothing;
+ * (it was: a latched hand action, armLatch). */
 export function handLatched(a) {
-  const l = a && a.armLatch && typeof a.armLatch === 'object' ? a.armLatch : null;
-  return Boolean(l && RELAXABLE_HAND_ACTIONS.some(id => l[id] > 0));
+  const n = a && a.armJerk && typeof a.armJerk === 'object' ? a.armJerk : null;
+  return Boolean(n && RELAXABLE_HAND_ACTIONS.some(id => Array.isArray(n[id]) && n[id][0] > 0));
 }
 
 /** R558 (hunt 2): the game arm's elbow counts as straight below this flexion (radians; the reach solution's shown
  * elbow, ns-app state.elbowRad). Display choice: 2 degrees. */
 export const ARM_STRAIGHT_ELBOW_RAD = 2 * Math.PI / 180;
 /** R558 (hunt 2): false when a game-arm action (ns-actions ACTION_IDS id) would move nothing on the arm as it is now:
- * it is already latched on with no jerk to repeat (ns-actions armLatch / armJerk: see below), or it straightens an
- * elbow that is already straight (full reach) with no bend held. arm: { armLatch, elbowRad, armJerk } of the activity
- * state BEFORE the pulse; missing fields count as "moves" (the old behaviour). */
+ * it straightens an elbow that is already straight (full reach) with no bend under way, or the game arm has no joint for
+ * it (ARM_ACTIONS_MOVE_NOTHING). arm: { elbowRad, armJerk } of the activity state BEFORE the pulse; missing fields count
+ * as "moves". 20 November 2026 (Message 206): every press contracts and returns, so nothing else is "already there"
+ * (it was: a movement latched on with no jerk to repeat, armLatch). */
 /** 19 November 2026 (EASE, audit S14): the game arm has no sideways wrist joint, so these two movements of the left
  * wrist move nothing (ns-actions DISPLAY_ONLY_ARM_IDS, kept equal by hand); the tip and the card dim them like a
  * movement already at its end. A stopgap until the game arm's wrist bends sideways. */
 export const ARM_ACTIONS_MOVE_NOTHING = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
-// 20 November 2026 (ns-actions jerkArm: the left arm's movements jerk to their end and come part of the way back, and
-// each further press does it again): a movement already latched on moves again when the arm holds a jerk note for it
-// (arm.armJerk[id], the activity's own); with none (reduced motion: nothing jerks, the movement stays at its end) it
-// still moves nothing. A straighten of an elbow already straight moves nothing either way.
 export function armActionMoves(armActionId, arm = null) {
   if (typeof armActionId === 'string' && ARM_ACTIONS_MOVE_NOTHING.includes(armActionId)) return false;
   if (typeof armActionId !== 'string' || !arm || typeof arm !== 'object') return true;
-  const l = arm.armLatch && typeof arm.armLatch === 'object' ? arm.armLatch : null;
-  if (armActionId === 'elbow_extension' && !(l && l.elbow_flexion > 0) && isNum(arm.elbowRad) && arm.elbowRad < ARM_STRAIGHT_ELBOW_RAD) return false;
-  if (l && l[armActionId] > 0) return Boolean(arm.armJerk && typeof arm.armJerk === 'object' && Array.isArray(arm.armJerk[armActionId]));
+  const bend = arm.armJerk && typeof arm.armJerk === 'object' && Array.isArray(arm.armJerk.elbow_flexion);
+  if (armActionId === 'elbow_extension' && !bend && isNum(arm.elbowRad) && arm.elbowRad < ARM_STRAIGHT_ELBOW_RAD) return false;
   return true;
 }
 
 /** One activation report (ns-actions stepGated marks: { actionId, regionId, source }) as a guide 'activate' event.
- * ctx (optional, R4-fix reviews F3 / SL4-4 / RP6): { handHeld, rotationState, armLatch, elbowRad } of the frame BEFORE
- * the pulse, so an area whose pulse moves nothing you can see does not complete a "watch it move" goal: "Relax left
- * grip" on a hand with no latched hand action (R558: handHeld; Space no longer makes a fist), a forearm turn toward the
- * way the palm already faces, a game-arm action already held or an elbow already straight (R558, hunt 2:
- * armActionMoves), and every area whose plain movement row says "Nothing". */
+ * ctx (optional, R4-fix reviews F3 / SL4-4 / RP6): { handHeld, rotationState, armJerk, elbowRad, arm } of the frame
+ * BEFORE the pulse, so an area whose pulse moves nothing you can see does not complete a "watch it move" goal: "Relax
+ * left grip" on a hand with no hand movement under way (R558: handHeld; Space no longer makes a fist), a forearm turn
+ * toward the way the palm already faces, an elbow already straight or a movement the game arm has no joint for (R558,
+ * hunt 2: armActionMoves), and every area whose plain movement row says "Nothing". */
 export function activationEvent(mark, bodyMap = null, ctx = null) {
   if (!mark || typeof mark !== 'object') return null;
   const idx = regionIndex(bodyMap);
@@ -509,11 +511,12 @@ export function activationEvent(mark, bodyMap = null, ctx = null) {
     const arm = act && typeof act.armActionId === 'string' ? act.armActionId : mark.actionId;
     if (arm === 'relax_release' && ctx.handHeld !== true) moves = false;
     if ((arm === 'pronation' && ctx.rotationState === 'pronated') || (arm === 'supination' && ctx.rotationState === 'supinated')) moves = false;
-    if (r.isLeftArm === true && ctx.armLatch && !armActionMoves(arm, ctx)) moves = false;
+    if (r.isLeftArm === true && ctx.arm === true && !armActionMoves(arm, ctx)) moves = false;
   }
-  // R558 (hunt 2): with the arm's own state known (ctx.armLatch), a left-arm switch-on waits for the arm to move
-  // (guideEventsFromFrame 'armMoved': the latch commits after the look has rested GAZE_DWELL.latchS, or at once on a click).
-  const awaitMove = r.isLeftArm === true && Boolean(ctx && ctx.armLatch);
+  // R558 (hunt 2): with the arm's own state known (ctx.arm), a left-arm switch-on waits for the arm to move
+  // (guideEventsFromFrame 'armMoved': the contraction starts after the look has rested GAZE_DWELL.latchS, or at once on
+  // a click).
+  const awaitMove = r.isLeftArm === true && Boolean(ctx && ctx.arm === true);
   return { type: 'activate', regionId: r.id, isLeftArm: r.isLeftArm === true, kind, moves, source: mark.source || null, ...(awaitMove ? { awaitMove: true } : {}) };
 }
 
@@ -555,9 +558,10 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const t = num(next.t);
   const add = e => ev.push(t === null ? e : { ...e, t });
   const pa = prev && prev.activity && typeof prev.activity === 'object' ? prev.activity : null;
-  // R558: Space makes no fist (it grasps and turns the limbs); a relax pulse moves the hand when a hand action is latched.
+  // R558: Space makes no fist (it grasps and turns the limbs); a relax pulse moves the hand when a hand movement is under
+  // way. (arm: the activity has the arm's own state, its contraction notes: 20 November 2026, Message 206.)
   const ctx = pa ? { handHeld: handLatched(pa), rotationState: typeof pa.rotationState === 'string' ? pa.rotationState : prev.rotation && prev.rotation.rotation,
-    armLatch: pa.armLatch && typeof pa.armLatch === 'object' ? pa.armLatch : null, elbowRad: num(prev.elbowRad),
+    arm: Boolean(pa.armJerk && typeof pa.armJerk === 'object'), elbowRad: num(prev.elbowRad),
     armJerk: pa.armJerk && typeof pa.armJerk === 'object' ? pa.armJerk : null } : null;
   for (const m of out && Array.isArray(out.marks) ? out.marks : []) { const e = activationEvent(m, bodyMap, ctx); if (e) add(e); }
   const ax = inputs && inputs.axes && typeof inputs.axes === 'object' ? inputs.axes : null;
@@ -577,14 +581,16 @@ export function guideEventsFromFrame({ prev = null, next = null, out = null, inp
   const a0 = prev.activity && typeof prev.activity === 'object' ? prev.activity : {};
   const a1 = next.activity && typeof next.activity === 'object' ? next.activity : {};
   if (typeof a0.spaceHeld === 'boolean' && typeof a1.spaceHeld === 'boolean' && a0.spaceHeld !== a1.spaceHeld) add({ type: 'fist', on: a1.spaceHeld });
-  // R558 (hunt 2): the game arm really moved because of a left-arm area: a latch turned on or off while that area's
-  // pulse runs (ns-actions armLatch; the commit comes at a click, or once the look has rested; Reset body is not a
-  // pulse; a straighten on an elbow already straight moves nothing), or the forearm turn changed by a forearm pulse.
-  if (a0.armLatch && a1.armLatch && typeof a0.armLatch === 'object' && typeof a1.armLatch === 'object') {
-    const straight = isNum(prev.elbowRad) && prev.elbowRad < ARM_STRAIGHT_ELBOW_RAD;
-    const changed = typeof a1.pulseAction === 'string' ? Object.keys(a1.armLatch).filter(k => (a0.armLatch[k] > 0) !== (a1.armLatch[k] > 0) && !(k === 'elbow_extension' && a1.armLatch[k] > 0 && straight)) : [];
-    const turned = typeof a1.pulseRotation === 'string' && typeof a0.rotationState === 'string' && typeof a1.rotationState === 'string' && a0.rotationState !== a1.rotationState;
-    if (changed.length || turned) add({ type: 'armMoved', ids: turned ? [...changed, 'rotation'] : changed });
+  // R558 (hunt 2): the game arm really moved because of a left-arm area: 20 November 2026 (Message 206): a contraction
+  // of a left-arm movement started (ns-actions moveSeq / lastMove; it starts at a click, or once the look has rested;
+  // Reset body starts none; a straighten on an elbow already straight, or a movement the game arm has no joint for,
+  // moves nothing), or a forearm turn toward the other side than the palm faces.
+  if (num(a0.moveSeq) !== null && num(a1.moveSeq) !== null && a1.moveSeq > a0.moveSeq && a1.lastMove && typeof a1.lastMove === 'object') {
+    const m = a1.lastMove;
+    const armId = typeof m.armAction === 'string' && armActionMoves(m.armAction, { elbowRad: prev.elbowRad, armJerk: a0.armJerk }) ? m.armAction : null;
+    const rs = typeof a0.rotationState === 'string' ? a0.rotationState : null;
+    const turned = typeof m.rotation === 'string' && !(m.rotation === 'pronation' && rs === 'pronated') && !(m.rotation === 'supination' && rs === 'supinated');
+    if (armId || turned) add({ type: 'armMoved', ids: turned ? (armId ? [armId, 'rotation'] : ['rotation']) : [armId] });
   }
   if (num(a0.rotationSeq) !== null && num(a1.rotationSeq) !== null) { if (a1.rotationSeq > a0.rotationSeq) add({ type: 'flip' }); }
   else if (prev.rotation && next.rotation && num(prev.rotation.flips) !== null && num(next.rotation.flips) !== null && next.rotation.flips > prev.rotation.flips) add({ type: 'flip' });

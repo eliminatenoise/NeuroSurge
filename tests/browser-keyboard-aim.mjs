@@ -199,10 +199,19 @@ try {
     // Lift the visible mirror body, then find a motor area whose movement leaves the camera steady.
     await moveMirror(50, -50, [width / 2, height / 2]);
 
-    let covered = await step('ArrowLeft');
+    // 20 November 2026 (ns-app areaWalkCardId): the look is now off the brain, so the walk goes on from the card's area,
+    // the area stepped to before the carry (the left end of the walk on the screen). This walk used to go LEFT: it
+    // pressed its key 8 frames after the carry, while the Space grip's card (the left hand's area) was still shown
+    // for 0.6 s after Space let go, and walked on from the hand's area. On a busy machine 8 frames outlast that window,
+    // the walk started at its own end and the key found nothing ("tests 0"). The grip card no longer counts as a place
+    // looked at, so the walk starts where it was on any machine, and goes RIGHT to the thumb area (as before the carry
+    // was added here). On the way it lands on the neck area, whose movement moves the head for about 1.6 s: the next
+    // key waits until the head is still (ns-app AREA_REQUEST_KEEP_MS; it used to be dropped after 1 s).
+    let covered = await step('ArrowRight');
+    assert.equal(covered.step.from, firstLeft.area, 'after the carry the walk goes on from the area stepped to before it');
     for (let i = 0; i < 20 && covered.area !== 'rh_thumb'; i++) {
       const previous = covered.area;
-      covered = await step('ArrowLeft');
+      covered = await step('ArrowRight');
       assert.equal(covered.step.from, previous);
     }
     assert.equal(covered.area, 'rh_thumb', 'the real outside-view strip walk reaches the left thumb area');
@@ -228,6 +237,13 @@ try {
       assert.equal(adjacent.area, 'rh_index');
       covered = await step('ArrowLeft');
       assert.equal(covered.step.from, adjacent.area);
+      // 20 November 2026: read the tip's hover from the next frames, not from the step's own frame. A frame finds the
+      // tip under the crosshair (arrowHitAt, for the hover) before it applies the camera of that frame's look, and the
+      // outside view's camera turns with the look, so the hover follows a step one frame later; controlTargets is picked
+      // again after the camera. Recorded frame by frame on a busy machine: the step back to the thumb area at frame 337
+      // with input.arrow true and the hover still null, the hover 'forward' from frame 338 on (and on the step away,
+      // frame 333, the hover still 'forward'). This test read the step's own frame when the machine was busy.
+      covered = await nextFrames(covered.frames, 2);
     }
     assert.equal(covered.area, 'rh_thumb');
     assert.equal(covered.input.arrow, true, 'the regression path must include an actual orbit tip');

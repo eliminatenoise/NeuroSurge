@@ -62,9 +62,11 @@ test('it stays a dark picture: nothing but the lamp heads is brighter than a dar
   const black = ROOM.black.map(srgbOf).map(v => Math.round(v * 255));
   assert.ok(far.every((v, i) => v >= black[i] && v <= black[i] + 4), `dark above the horizon behind you: ${far} (darkest ${black})`);
   if (RAW_LOOK.on) {
-    // 20 November 2026 (the owner, Messages 195 / 196: the reference pictures' look for everything): the room is their
-    // near-black RGB 18, 18, 22, its darkest a little under it so the faint pool of light lands there (ns-raw-look)
-    assert.deepEqual(black, [15, 15, 19]);
+    // 20 November 2026 (the owner, Messages 195 / 196: the reference pictures' look for everything): the room was their
+    // near-black RGB 18, 18, 22, its darkest a little under it so the faint pool of light landed there (ns-raw-look).
+    // Later (Message 206: "let's make the background more of a black abyss, but still with a gradient"): its darkest is
+    // a black abyss, RGB 4, 4, 5, and the pool of light (RAW_LOOK.roomPool) is the gradient left over it
+    assert.deepEqual(black, [4, 4, 5]);
   } else {
     // 19 November 2026 (the owner: "much darker blacks instead of ugly grays"): darker than the old 0x05070b, and neutral
     assert.deepEqual(black, [3, 3, 4]);

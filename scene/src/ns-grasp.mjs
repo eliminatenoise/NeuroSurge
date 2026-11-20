@@ -75,6 +75,10 @@ export const LIMB_HOLD_FOLLOW = Object.freeze({ ...LIMB_HOLD_TRACK, solveIters: 
 /** And for a limb that waits at the end of its range while the view goes on: one step with the columns it has (keepColumns:
  * they are not found afresh because a step did not close in; at a joint's end no columns would). */
 export const LIMB_HOLD_WAIT = Object.freeze({ ...LIMB_HOLD_FOLLOW, keepColumns: true, reuseDeg: 12 });
+/** 20 November 2026, evening (LIMBFREE): the one longer solve that asks whether a waiting limb can reach the place its
+ * look has come to rest on (ns-app stepLimbHold: rejoin). Up to ten steps of at most stepCapDeg each, from where the
+ * limb is; run once per place at rest, not every frame. */
+export const LIMB_HOLD_REACH = Object.freeze({ ...LIMB_HOLD_TRACK, solveIters: 10, minGain: 0.01 });
 
 /**
  * 19 November 2026 (a check: "a few ordinary looks tear the shoulder ... a controlled arm stays inside poses that draw
@@ -245,8 +249,24 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
     const reuse = memo && memo.limb === limb && memo.J && !memo.stale && Number.isFinite(opts.reuseDeg)
       && c.joints.every(id => Math.abs(q[id] - memo.at[id]) <= opts.reuseDeg);
     const J = reuse ? memo.J : rootJoints.map(id => {
-      const h = q[id] + opts.probeDeg <= lim(id)[1] ? opts.probeDeg : -opts.probeDeg;
-      const p = limbPoint(rig, segmentsFor({ ...q, [id]: q[id] + h }), limb, 'end');
+      // 20 November 2026 (LIMBFREE; the owner: "The limb should never get stuck"): a probe that the combined-range rule
+      // cuts back (project) went into a range the pose does not take: its column came out zero, or worse, it showed a
+      // drawn coupling's move the step could never make (a thigh past 100 degrees bends its drawn knee instead), and the
+      // step then never used that joint, or pushed it the wrong way: A could not bring a leg back in from the end of its
+      // sideways range, and a thigh lifted to its end could not be lowered again. Such a probe is made the other way.
+      // (A drawn coupling can also leave a few degrees at a range's end that move nothing: the probe then goes on, up to
+      // 8 times as far, inward.)
+      const at = hh => {
+        if (q[id] + hh < lim(id)[0] || q[id] + hh > lim(id)[1]) return null;
+        const qq = { ...q, [id]: q[id] + hh };
+        if (typeof project === 'function') { const pp = project(qq); if (pp && Number.isFinite(pp[id]) && Math.abs(pp[id] - qq[id]) > 1e-6) return null; }
+        const pk = limbPoint(rig, segmentsFor(qq), limb, 'end');
+        return len(sub(pk, end)) >= 1e-4 ? pk : null;
+      };
+      const h0 = q[id] + opts.probeDeg <= lim(id)[1] ? opts.probeDeg : -opts.probeDeg;
+      let h = h0, p = at(h0);
+      if (!p) for (const k of [-1, -4, 4, -8, 8]) { const pk = at(h0 * k); if (pk) { h = h0 * k; p = pk; break; } }
+      if (!p) { h = h0; p = limbPoint(rig, segmentsFor({ ...q, [id]: q[id] + h0 }), limb, 'end'); }
       return sub(p, end).map(v => v / h);
     });
     if (memo && !reuse) { memo.limb = limb; memo.J = J; memo.at = {}; for (const id of c.joints) memo.at[id] = q[id]; memo.stale = false; memo.made = (memo.made || 0) + 1; }
@@ -292,10 +312,19 @@ export function rollDeg({ axisWorld, viewDirWorld, rightWorld, upWorld, dx, dy, 
  * Which motor-map area moves a joint which way: { [jointId]: { '1': { regionId, actionId }, '-1': {...} } } from the
  * body map's region actions (an action's end angle above the joint's start angle moves it the +1 way). Actions that
  * move a single joint are preferred.
+ * 20 November 2026 (BODYMAP; the owner, Message 205: "That goes both ways for when you're moving the body and the brain
+ * area is activating"): an action whose end IS the joint's start angle moves it nowhere from the start, but when that
+ * end is also the joint's end stop (limits[id], degrees: "Turn right palm up" with the palm up, "Bring right fingers
+ * together") it is the movement toward that stop, so it is the area and action of that direction (a drag that turns the
+ * right palm up lit only the forearm area, not "Turn right palm up").
  */
-export function jointAreaIndex(bodyMap, restDeg = {}) {
+export function jointAreaIndex(bodyMap, restDeg = {}, limits = null) {
   const out = {};
   const regions = bodyMap && Array.isArray(bodyMap.regions) ? bodyMap.regions : [];
+  const stopSide = (id, end) => {
+    const L = limits && Array.isArray(limits[id]) ? limits[id] : null;
+    return !L ? null : Math.abs(end - L[1]) < 0.5 ? '1' : Math.abs(end - L[0]) < 0.5 ? '-1' : null;
+  };
   for (const single of [true, false]) {
     for (const r of regions) {
       for (const a of (r && Array.isArray(r.actions) ? r.actions : [])) {
@@ -303,8 +332,9 @@ export function jointAreaIndex(bodyMap, restDeg = {}) {
         if (!j.length || (single && j.length !== 1)) continue;
         for (const id of j) {
           const end = a.joints[id], rest = Number.isFinite(restDeg[id]) ? restDeg[id] : 0;
-          if (!Number.isFinite(end) || Math.abs(end - rest) < 0.5) continue;
-          const side = end > rest ? '1' : '-1';
+          if (!Number.isFinite(end)) continue;
+          const side = Math.abs(end - rest) >= 0.5 ? (end > rest ? '1' : '-1') : stopSide(id, end);
+          if (!side) continue;
           out[id] = out[id] || {};
           if (!out[id][side]) out[id][side] = { regionId: r.id, actionId: a.id };
         }

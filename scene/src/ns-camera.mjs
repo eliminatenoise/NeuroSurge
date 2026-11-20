@@ -934,6 +934,28 @@ function handRayBoom(reference, ray, bodyToWorld, eyeBp, avoid, r) {
   return { centre, backDirection, exitDepthM, radiusM, maximumRadiusM, checked };
 }
 
+/**
+ * 20 November 2026 (ns-app NECK_VIEW; the owner: "certainly in first person view and all other views, neck movement is
+ * exaggerated, so you can see it's moving"): a settled eye-view pose (cameraPose, first person, progress 0) turned to
+ * `look` { yaw, pitch } (radians) and rolled by rollRad about its own line of sight, as the head would carry it. The
+ * camera stays about the same eye (pose.armParentPosition, the eye; or the camera itself when it stands at the eye) and
+ * stands where EYE_DOLLY puts it for that look, exactly as cameraPose does for an ordinary look, so the turn changes
+ * nothing's size; the crosshair ray, the camera's own look and the lens follow. bodyLook (the look the body, the
+ * shoulder and the left hand use) is kept: the body does not turn with it. Any other pose comes back unchanged. Pure.
+ */
+export function turnEyeView(pose, look, rollRad = 0) {
+  if (!pose || pose.firstPerson !== true || pose.progress !== 0 || !isLook(look)) return pose;
+  const eye = isVec3(pose.armParentPosition) ? pose.armParentPosition : isVec3(pose.position) ? pose.position : null;
+  if (!eye) return pose;
+  const atEye = !isVec3(pose.armParentPosition);
+  const dolly = atEye ? null : eyeDolly(look);
+  const position = dolly ? [eye[0] + dolly.offset[0], eye[1] + dolly.offset[1], eye[2] + dolly.offset[2]] : eye.slice();
+  const dir = gazeDirection(look.yaw, look.pitch), l = { yaw: look.yaw, pitch: look.pitch };
+  return Object.freeze({ ...pose, position, yaw: l.yaw, pitch: l.pitch, direction: dir, gazeLook: l, gazeRay: { origin: position.slice(), dir },
+    roll: isNum(rollRad) ? rollRad : 0,
+    ...(dolly ? { farExtraM: len(sub(position, eye)), nearM: dolly.nearM, fovScale: dolly.fovScale, eyeDollyM: dolly.backM, eyeRaiseM: dolly.upM } : {}) });
+}
+
 /* ------------------------------------------------------------------ rays and projection for any camera position */
 
 /**

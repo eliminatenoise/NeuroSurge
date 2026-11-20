@@ -154,6 +154,27 @@ check('the walk goes on from the area it was on while the player has not moved t
   assert.equal(areaWalkStep(first, { gazeId: null }), first);
 });
 
+check('with the look off the brain the walk goes on from the card\'s area, never from the Space grip\'s card', () => {
+  // 20 November 2026 (KEYSTEP): after a Space carry the card is the grip card (the left hand's area) while the hands
+  // close and for 0.6 s after Space lets go; a key pressed in that window walked on from the hand's area, a later one
+  // from the area looked at before. Seen in a browser test that pressed its key 8 frames after the carry: it passed at
+  // 60 frames a second and failed on a busy machine ("tests 0": the walk started at its own end).
+  const looked = { mode: 'region', viewed: 'last', source: 'bodymap', regionId: 'rh_scan_inferior' };
+  const grip = { mode: 'region', viewed: 'now', source: 'grasp', regionId: 'rh_hand' };
+  assert.equal(app.areaWalkCardId(looked, looked), 'rh_scan_inferior');
+  assert.equal(app.areaWalkCardId(grip, looked), 'rh_scan_inferior', 'the grip card gives way to the card that comes back');
+  assert.equal(app.areaWalkCardId(grip, null), null, 'no area looked at yet: the step takes the area nearest the crosshair');
+  assert.equal(app.areaWalkCardId(grip, grip), null);
+  // Any other area card is the walk's start as before (a reach card, a card switched on now, the card of a step).
+  assert.equal(app.areaWalkCardId({ mode: 'region', viewed: 'now', source: 'reach', regionId: 'rh_shoulder' }, looked), 'rh_shoulder');
+  assert.equal(app.areaWalkCardId({ mode: 'muscle', regionId: 'rh_knee' }, looked), null);
+  assert.equal(app.areaWalkCardId(null, looked), null);
+  assert.equal(app.areaWalkCardId({ mode: 'region', regionId: '' }), null);
+  // The same keys now walk the same way whenever they come: from the area looked at, left (+1 here) is the walk's end.
+  assert.deepEqual(areaStepCandidates(chain, app.areaWalkCardId(grip, looked), 1), []);
+  assert.equal(areaStepCandidates(chain, app.areaWalkCardId(grip, looked), -1)[0], 'rh_throat');
+});
+
 const failed = results.filter(r => !r.passed);
 process.stdout.write(JSON.stringify({
   suite: 'area-step',

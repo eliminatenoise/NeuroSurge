@@ -56,6 +56,9 @@
  * its centre; they are controls, not anatomy, and say nothing about real brains.
  */
 
+// 20 November 2026 (Message 207): the raw look's one ink rule for every outline (pure module, no Three.js)
+import { RAW_LOOK } from './ns-raw-look.mjs';
+
 const DEG = Math.PI / 180;
 const freeze = o => Object.freeze(o);
 
@@ -143,8 +146,14 @@ export const ARROW_LOOK = freeze({
   // own colours; the scene passes the raw look's light and no highlight, rim, dark edge or ink with it (ARROW_LOOK_RAW).
   raw: false, rawAmbient: 0.25, rawDirect: 0.75, rawGamma: 2.2
 });
-/** The arrows' fields that the raw look changes (merged over ARROW_LOOK and the set's colours by the scene). */
-export const ARROW_LOOK_RAW = freeze({ raw: true, keyLight: freeze([0.4, 0.6, 0.7]), specular: 0, rimLight: 0, edgeDark: 0, inkAlpha: 0, wallInk: 0 });
+/** The arrows' fields that the raw look changes (merged over ARROW_LOOK and the set's colours by the scene).
+ * 20 November 2026 (the owner, Message 207: "And everything should get clear outlines."): the tips' contour follows the
+ * raw look's ONE ink rule for every outline (ns-raw-look RAW_LOOK.ink: the same near-black, width and opacity as the
+ * bodies', the strip's and the brain's lines), inside the V's outline; the walls (seen edge-on) are inked lightly (wallInk 0.25: at 0.5 a
+ * wall seen edge-on read as a black slab).
+ * (Before, the raw look set inkAlpha and wallInk to 0 but kept inkCss: the shader mixes the ink colour into the face
+ * before the opacity is applied, so a dark contour was still drawn, by accident. Now it is drawn on purpose.) */
+export const ARROW_LOOK_RAW = freeze({ raw: true, keyLight: freeze([0.4, 0.6, 0.7]), specular: 0, rimLight: 0, edgeDark: 0, ink: RAW_LOOK.ink.hex, inkCss: RAW_LOOK.ink.css, inkAlpha: RAW_LOOK.ink.alpha, wallInk: 0.25 });
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 const isNum = Number.isFinite;

@@ -24,7 +24,17 @@
  *  - room: the room's darkest light, a little under the tool's background RGB [18, 18, 22] in linear light, so that with
  *    the room's own faint pool of light on the floor (ns-room ROOM.pool, the owner's "little bit of a gradient") the
  *    picture measures about 18, 18, 22 above and 22, 24, 27 under the bodies.
+ *    (20 November 2026, the owner, Message 206: "let's make the background more of a black abyss, but still with a
+ *    gradient": the darkest light is near black, RGB about 4, 4, 5, and the floor's pool of light (roomPool) a little
+ *    stronger than the old one, so the picture still falls off from about 15 under the bodies to black at the edges.)
  *  - bone: the tool's ivory, RGB [232, 224, 205].
+ *  - ink (20 November 2026, the owner, Message 207: "And everything should get clear outlines."): ONE rule for every
+ *    outline in this look: the bodies' silhouettes and the lines where one limb or body lies over another (the game arm
+ *    and the organs too; ns-outline through ns-scene-three RAW_OUTLINE), the motor strip's contour, the brain's outline
+ *    and its eyes' and nerves', and the 3D arrows' contour (ns-arrows3d ARROW_LOOK_RAW): one near-black colour (sRGB
+ *    0..1; hex the same), one width css (CSS px on a near thing), one opacity alpha. The line of a depth step inside a
+ *    limb is lighter and thinner (innerCss, innerAlpha); a far body (the mirror body) keeps at least farShare of the
+ *    width, so its limbs stay outlined. Before Message 207 the look drew no line at all except the strip's contour.
  * The activation light (a lit muscle and its area almost white), the beams, the control glows, the light-blue glass for
  * hidden things and every HTML card are signals drawn over the scene and are not changed by this look.
  *
@@ -36,8 +46,9 @@ export const RAW_LOOK = Object.freeze({
   light: Object.freeze([0.4, 0.6, 0.7]),
   ambient: 0.25, direct: 0.75, back: 0.6, gamma: 2.2,
   flat: false,
-  room: Object.freeze([0.0047, 0.0047, 0.0064]),
-  bone: 0xe8e0cd
+  room: Object.freeze([0.0011, 0.0011, 0.0015]), roomPool: Object.freeze([0.0045, 0.0048, 0.0056]),
+  bone: 0xe8e0cd,
+  ink: Object.freeze({ colour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]), hex: 0x0b0809, css: 1.4, alpha: 0.95, innerCss: 0.9, innerAlpha: 0.6, farShare: 0.6 })
 });
 
 const f = v => (Number.isInteger(v) ? v.toFixed(1) : String(v));
@@ -72,8 +83,15 @@ export function rawShadeGlsl(name = 'nsRawK', normalExpr = 'normal', viewPosExpr
  *  - right after '#include <aomap_fragment>' the reflected light becomes the albedo (diffuseColor, after every colour
  *    patch: the muscle's tone, its tendon white, the activation's white) x the raw shade, with no specular, so every
  *    patch that works on the emission (the activation glow) or on the final colour and alpha (behind the glass, the
- *    see-through windows) works as before.
- * Returns { vertexShader, fragmentShader } or null when a hook is missing (the material then keeps its own light). */
+ *    see-through windows) works as before;
+ *  - (20 November 2026, a review of Body update 59; the owner, Message 203: "let's make the activation area as bright
+ *    as possible") a muscle with the power-up patch (its shader has `vec4 nsPu =` and `uniform vec4 nsCharge`) keeps the
+ *    HDR boost of its power-up flash that the comic patches carried: while the HDR picture is on, the peaks (gain nsPu.x
+ *    above nsHdrBoost.y) brighten the emission by nsHdrBoost.x x the excess, so the cores bloom (without it the flash
+ *    was about 1.8 times dimmer in the raw look). The uniform nsHdrBoost is declared here; the scene binds it
+ *    (hdrBoost: true in the result).
+ * Returns { vertexShader, fragmentShader, hdrBoost } or null when a hook is missing (the material then keeps its own
+ * light). */
 export const RAW_HOOKS = Object.freeze({
   ao: '#include <aomap_fragment>', normal: '#include <normal_fragment_begin>',
   lights: Object.freeze(['#include <lights_fragment_begin>', '#include <lights_fragment_maps>', '#include <lights_fragment_end>'])
@@ -85,6 +103,7 @@ export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK) {
   if (!fragmentShader.includes(RAW_HOOKS.ao) || !fragmentShader.includes(RAW_HOOKS.normal) || !fragmentShader.includes('reflectedLight') ||
     fragmentShader.includes('nsRawK')) return null;
   let fs = fragmentShader;
+  const hdrBoost = fragmentShader.includes('vec4 nsPu =') && fragmentShader.includes('uniform vec4 nsCharge');
   for (const h of RAW_HOOKS.lights) fs = fs.split(h).join('');
   fs = fs.replace(RAW_HOOKS.ao, `${RAW_HOOKS.ao}
 	{
@@ -93,6 +112,8 @@ export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK) {
 		reflectedLight.indirectDiffuse = vec3( 0.0 );
 		reflectedLight.directSpecular = vec3( 0.0 );
 		reflectedLight.indirectSpecular = vec3( 0.0 );
-	}`);
-  return { vertexShader, fragmentShader: fs };
+	}${hdrBoost ? `
+	if ( nsCharge.z > 0.5 ) totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );` : ''}`);
+  if (hdrBoost && !/uniform\s+vec4\s+nsHdrBoost\s*;/.test(fs)) fs = 'uniform vec4 nsHdrBoost;\n' + fs;
+  return { vertexShader, fragmentShader: fs, hdrBoost };
 }
