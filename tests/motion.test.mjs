@@ -184,3 +184,31 @@ test('the left shoulder area\'s swing contracts and returns like every other mov
   assert.equal(last(run).drive.shoulder_flexion, 0, 'and back');
   assert.equal(composePose(last(run).drive).shoulderLiftDeg, undefined, 'the arm is back on the place the look and keys give it');
 });
+
+test('a tracked left arm supersedes its shoulder and elbow contractions until manual control resumes', () => {
+  const { A, s } = started();
+  const placement = {type:'limbPose', joints:{}, trackedLeftUpperArm:true, at:H};
+  const regions = {
+    rh_shoulder:['shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction'],
+    rh_elbow:['elbow_flexion','elbow_extension']
+  };
+  for (const [region, actions] of Object.entries(regions)) {
+    for (const id of actions) {
+      const events = [press(region,id),press('rh_wrist','wrist_flexion'),press('lh_elbow','lh_r_elbow_flex')];
+      let tracked = A.step(s,[...events,placement],H), manual = A.step(s,events,H);
+      for (let frame=1; frame<12; frame++) {
+        tracked = A.step(tracked,[placement],H);
+        manual = A.step(manual,[],H);
+      }
+      assert.ok(manual.drive[id] > .5);
+      assert.equal(tracked.drive[id],0);
+      assert.equal(tracked.armJerk[id],undefined);
+      assert.equal(tracked.drive.wrist_flexion,manual.drive.wrist_flexion);
+      assert.equal(tracked.bodyPos.r_elbow_flex,manual.bodyPos.r_elbow_flex);
+      for (let frame=0; frame<30; frame++) tracked = A.step(tracked,[],H);
+      assert.equal(tracked.drive[id],0);
+      const next = A.step(tracked,[press(region,id)],H);
+      assert.ok(last(frames(A,next,5)).drive[id] > .5);
+    }
+  }
+});
