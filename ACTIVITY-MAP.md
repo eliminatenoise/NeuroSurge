@@ -6,6 +6,10 @@ Run `node serve-local.mjs`, follow its loopback address and press **M**. The map
 
 Press **F**, type “press the button” and choose **Find hand recording**. **M → Hand search** opens the same view. The models compare your words with five intervals from one printer task. Select a time to inspect the 26 tracked joints. Unknown words, tied ranks and missing hand measurements are shown explicitly. The timing comparison uses the description, duration, progress through the recording and tracking coverage; it does not use hand coordinates. Keeping typed searches separate from avatar movement lets you compare the guesses before deciding what to play. [Evidence and source data](https://github.com/eliminatenoise/NeuroTranslation/tree/fde458e21b4885e4bddd7614ed2c326374c87253/benchmarks/hand-language-retrieval)
 
+## Forecast one second after an instruction
+
+In **M → Hand search**, open **Forecast how far the wrist moves after an instruction**. Four earlier positions define a wrist path in centimetres. Choose the retained words and compare the fitted estimates with simply repeating the previous one-second displacement. The default examples are invented; you can enter your own positions. An optional later reading is used only when you choose to compare distances. The study’s held-out aggregate is available separately. [Open the small standalone calculator](https://eliminatenoise.github.io/NeuroTranslation/hand-search/forecast.html) · [Source and fitted models](https://github.com/eliminatenoise/NeuroTranslation/tree/d32fd9f57c706fb52ad11c6a10239166e5b25088/benchmarks/preceding-instructions)
+
 ## Watch a whole body move through the lab
 
 Open **Whole-body motion** in the M map. Choose an arm lift (02_06), a forward jump (13_11) or a hop on the left foot (132_23). Press **Play movement**, or move the time slider one frame at a time with the arrow keys. **Turn** and **Tilt** rotate the view. You can also drag the picture. **Recenter view** restores the starting angle and the fixed lab camera.

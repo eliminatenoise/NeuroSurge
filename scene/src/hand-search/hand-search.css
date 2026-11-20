@@ -25,3 +25,12 @@
 
 .hand-search .handReplay .hr-caption{display:none}
 .hand-search [data-hand-browse]{display:block;margin:1rem 0 .5rem}
+
+.wrist-future {padding:.65rem .75rem;border:1px solid #607b83;border-radius:.35rem}
+.wrist-future label {display:block;margin:.4rem 0}
+.wrist-future textarea,.wrist-future input[type=number],.wrist-future input[type=text]{display:block;box-sizing:border-box;margin:.12rem 0 .45rem;max-width:100%;padding:.3rem .45rem;color:#18252a;background:#f5f7f7;font:inherit}
+.wrist-future textarea{width:100%;font-family:ui-monospace,monospace}
+.wrist-future fieldset{border:1px solid #607b83;margin:.75rem 0;padding:.35rem .55rem}
+.wrist-future [data-fw-words]{display:flex;flex-wrap:wrap;gap:.4rem .7rem}
+.wrist-future [data-fw-words] label{white-space:nowrap}
+.wrist-future summary{cursor:pointer}
