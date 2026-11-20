@@ -1,0 +1,411 @@
+{
+  "checkpoints": {
+    "spatial": "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
+    "movement": "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458"
+  },
+  "config": {
+    "format": 1,
+    "width": 24,
+    "heads": 4,
+    "feedforward": 48,
+    "layers": 1,
+    "domains": [
+      "wrist",
+      "rat"
+    ],
+    "angular": {
+      "format": 1,
+      "domain": "wrist_angle",
+      "units": "degrees",
+      "axes": [
+        "extension",
+        "radial_deviation"
+      ],
+      "modes": [
+        "motion",
+        "emg",
+        "full"
+      ],
+      "horizon_ticks": 128,
+      "clock_hz": 512,
+      "base_sha256": "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
+      "protocol_sha256": "049f4ccb5d6fbdb447262e66501e108e96f5a59df949ecd95f12c8c5a8acc910",
+      "array_manifest_sha256": "beaf658491c6d402a63876cdf883b563ce65cad028383ce6bcdba485a844c7f9",
+      "forearm_residual": {
+        "format": 1,
+        "arms": [
+          "motion",
+          "emg"
+        ],
+        "base_mode": "motion",
+        "plan": {
+          "PROTOCOL.md": "405641c20e33e2ca3c1cb036b7fd473e9b0b5395f483633d4981616cb42749e1",
+          "PROTOCOL-ADDENDUM.md": "be1e0e3104ec0b7be89cc70f7e6ed9b2462cca817fc75293ccfcb47d5f15216b"
+        }
+      }
+    }
+  },
+  "groups": {
+    "spatial": {
+      "bytes": 20936,
+      "sha256": "950b480e52f5ae6fd880f2cb6636b697c8d22e8fefe55d3400c8500018779750",
+      "tensors": [
+        {
+          "name": "blocks.0.attention_norm.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.attention_norm.weight",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.attention_out.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.attention_out.weight",
+          "shape": [
+            24,
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_in.bias",
+          "shape": [
+            48
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_in.weight",
+          "shape": [
+            48,
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_norm.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_norm.weight",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_out.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.ff_out.weight",
+          "shape": [
+            24,
+            48
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.qkv.bias",
+          "shape": [
+            72
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "blocks.0.qkv.weight",
+          "shape": [
+            72,
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "last_norm.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "last_norm.weight",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "position",
+          "shape": [
+            4,
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "project.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "project.weight",
+          "shape": [
+            24,
+            6
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "readout.bias",
+          "shape": [
+            2
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "readout.weight",
+          "shape": [
+            2,
+            24
+          ],
+          "dtype": "<f4"
+        }
+      ]
+    },
+    "stats": {
+      "bytes": 288,
+      "sha256": "e4cae5e619eefce250ba2ee22e46a81756b75b56d800aebf90eaf5d5d9293639",
+      "tensors": [
+        {
+          "name": "angular.stats.anchor_center",
+          "shape": [
+            2
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.stats.anchor_scale",
+          "shape": [
+            2
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.stats.bins_center",
+          "shape": [
+            14
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.stats.bins_scale",
+          "shape": [
+            14
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.stats.residual_center",
+          "shape": [
+            2
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.stats.residual_scale",
+          "shape": [
+            2
+          ],
+          "dtype": "<f8"
+        }
+      ]
+    },
+    "motion": {
+      "bytes": 6440,
+      "sha256": "1d2ab5e66dfe1d499202fba4adf5b91313c6fc31b933ca35265a8fe48b43ed48",
+      "tensors": [
+        {
+          "name": "angular.motion.project.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.motion.project.weight",
+          "shape": [
+            24,
+            64
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.motion.readout.bias",
+          "shape": [
+            2
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.motion.readout.weight",
+          "shape": [
+            2,
+            24
+          ],
+          "dtype": "<f4"
+        }
+      ]
+    },
+    "emg": {
+      "bytes": 6440,
+      "sha256": "dab55a70dcf39e3ba79dbbc26131ea95311dad6bce49a896dfd47e19265ced79",
+      "tensors": [
+        {
+          "name": "angular.emg.project.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.emg.project.weight",
+          "shape": [
+            24,
+            64
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.emg.readout.bias",
+          "shape": [
+            2
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.emg.readout.weight",
+          "shape": [
+            2,
+            24
+          ],
+          "dtype": "<f4"
+        }
+      ]
+    },
+    "full": {
+      "bytes": 6440,
+      "sha256": "37a3a28712f844ee3bc729ce7693a32f9bf1e082d0b94e5b023b446b7e65b6a5",
+      "tensors": [
+        {
+          "name": "angular.full.project.bias",
+          "shape": [
+            24
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.full.project.weight",
+          "shape": [
+            24,
+            64
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.full.readout.bias",
+          "shape": [
+            2
+          ],
+          "dtype": "<f4"
+        },
+        {
+          "name": "angular.full.readout.weight",
+          "shape": [
+            2,
+            24
+          ],
+          "dtype": "<f4"
+        }
+      ]
+    },
+    "residual.motion": {
+      "bytes": 1248,
+      "sha256": "b05f7c52bb459b72cefc2c395e7e07dcac23d037f4f21bff2b2eaebe5790e8c4",
+      "tensors": [
+        {
+          "name": "angular.residual.motion.center",
+          "shape": [
+            36
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.residual.motion.coef",
+          "shape": [
+            42,
+            2
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.residual.motion.scale",
+          "shape": [
+            36
+          ],
+          "dtype": "<f8"
+        }
+      ]
+    },
+    "residual.emg": {
+      "bytes": 3296,
+      "sha256": "ac3eb8a6b5d62e78a558f9f7c95c859fc30548801a84a6c49c57bc88e830ab50",
+      "tensors": [
+        {
+          "name": "angular.residual.emg.center",
+          "shape": [
+            100
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.residual.emg.coef",
+          "shape": [
+            106,
+            2
+          ],
+          "dtype": "<f8"
+        },
+        {
+          "name": "angular.residual.emg.scale",
+          "shape": [
+            100
+          ],
+          "dtype": "<f8"
+        }
+      ]
+    }
+  },
+  "pythonPredictorSha256": "53fd7619217ef0a4e288698f5a9a59ac5d7da86a53f81797e3f496b84204a14a",
+  "pythonCorrectionSha256": "753ce7469f3f9d956dd461763af4ff10415606b62cf3f451897a1c9eeb46031b",
+  "encoding": "Original little-endian IEEE 754 bytes, C order, sorted tensor names per group."
+}

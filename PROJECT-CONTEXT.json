@@ -1,9 +1,9 @@
 {
   "name": "NeuroSurge",
-  "version": "experimental-2026-11-20-body-update-61",
-  "status": "experimental preview",
+  "version": "draft-2026-11-20-body-61-forearm-corrections",
+  "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
-  "model_scope": "Separate model under development; no trained decoder is supplied or validated by this game.",
+  "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
   "keyboard_focus": "Focused page controls receive their native keys. Tab and Shift+Tab keep navigation in the Esc instructions. Esc resumes play and returns focus to the game view.",
   "keyboard_area_selection": "Arrow keys follow the motor strip. If an orbit arrow overlaps the selected area, the movement list stays with the area. A number key uses the list, Shift-click presses the area, and an ordinary click uses the orbit arrow.",
   "compass_visibility": "The arrows fade when they cross the projected motor strip. They keep their 3D shape and their click targets. This reduces obstruction in the tested views. Some arrows still cross the strip.",
@@ -14,7 +14,7 @@
   "right_anconeus_shallow_bend": "An adjustment to rendering weights smooths the right anconeus in the first part of elbow flexion. The adjustment ends at 67 degrees, before the distorted deep bend. Joint targets and geometry outside that range retain their earlier behavior.",
   "carry_control_help": "While Space holds the brain or mirror body, turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Space closes the left hand. The mouse button closes the right hand. Press and drag to turn a held brain or mirror body while the keys carry it.",
   "client_side": true,
-  "signal_origin": "simulated, unitless brain and muscle activity values",
+  "signal_origin": "Avatar activity colours use simulated, unitless values. Activity map replay contains eight recorded scalp EEG potentials, eight right-forearm EMG contacts, four software differences and two wrist encoder angles on one stored clock. Spinal and sensory paths are schematic.",
   "known_limits": "PREVIEW-NOTES.html",
   "neural_decoder_validated": false,
   "normal_mechanics_validated": false,
@@ -59,7 +59,7 @@
     "Joint mechanics, whole-body coupling, motor-area registration and timing remain simplified and unvalidated. The body order along the strip is a simplified textbook order."
   ],
   "launcher_scope": "Online URL launchers for Windows, macOS and Linux. Formats checked; native Windows/macOS use unverified. Prior Linux installation/launch does not prove execution of this updated target.",
-  "publication_status": "Experimental preview. Since 12 November 2026 each finished version is uploaded at the user's direct instruction, before the project's independent review. Check the displayed online version before assuming it matches these files.",
+  "publication_status": "Draft integration of the recorded movement, language search and selected camera controls with the game lead’s published Body Update 61. The normal public game remains under the lead’s release process.",
   "startup_reduced_motion": "When the system requests reduced motion at launch, the loading layer shows stationary anatomy download progress and the five-second controls card clears without fading. Software checks cover the startup display controller. A Chromium startup check showed a stationary progress bar with reduced motion enabled and the animated canvas with the default preference. In independent Chromium 155 tests on AMD Vulkan, a required anatomy file failed to load. The loading display cleared and pressing Enter on the focused Reload page button reached the first rendered frame once the file was restored, with reduced motion both disabled and enabled. Full gameplay under reduced motion and screen-reader use remain unchecked.",
   "startup_failure": "A failed startup settles the game in an error state, clears its loading display and focuses Reload page. In one Chromium 155 test on AMD Vulkan, a required anatomy file returned HTTP 404 and the game reached its first rendered frame after the file was restored and the page was reloaded with Enter. A separate run with software WebGL exceeded the 60-second recovery check.",
   "browser_verification": {
@@ -68,5 +68,48 @@
   },
   "opening_brain_compass": "In the opening landscape view, the brain’s upward orbit arrow starts inside the picture. The world anchors follow the existing carry placement after a move. Controls turn the simulated brain without moving the camera.",
   "outside_compasses": "When E settles, the green and grey 3D orbit tips keep separate pick areas. Obstructed tips also clear the projected motor strip in the tested entry views. Looking around or moving an object can later bring world controls into alignment.",
-  "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body."
+  "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body.",
+  "local_movement_controls": "F accepts named movements of either hand, wrist, elbow or knee. On-device speech, where supported, fills the same editable field. C uses a local pose estimator to move the virtual right shoulder and elbow. Camera angle estimates and simulated display joint angles are distinct.",
+  "recorded_whole_body": {
+    "source": "Carnegie Mellon Graphics Lab Motion Capture Database",
+    "trials": [
+      "02_06",
+      "13_11",
+      "132_23"
+    ],
+    "positions_per_frame": 41,
+    "lab_units": "mm",
+    "source_rate_hz": 120,
+    "display_rate_hz": 30,
+    "shorthand_scope": "F opens named recorded actions using an explicit replay request."
+  },
+  "recorded_hand_search": {
+    "source": "HoloAssist R031-12July-SmallPrinter",
+    "scope": "Post-hoc caption retrieval across five training intervals; 26 headset-estimated right-hand joints. Free text ranks existing intervals on device.",
+    "game_controls": [
+      "F then Find hand recording",
+      "M then Hand search"
+    ],
+    "model_source": "fde458e21b4885e4bddd7614ed2c326374c87253"
+  },
+  "recorded_rat_forecast": {
+    "source": "Shin and Jadhav, Single Day W-Track Learning, v0.240511.0307",
+    "view": "M → Rat brain activity",
+    "scope": "Three time-selected training trips in the same rat run. Two fitted ridge calculations use five earlier positions, with or without counts in four time bins from 41 prefrontal and 31 CA1 units.",
+    "model_commit": "0f3b3ab02e812a3f242c139c682fde57caa0df5e"
+  },
+  "one_second_wrist_forecast": {
+    "scope": "Public coefficients with invented or user-entered four-position histories, six prior-word indicators, a separate optional subsequent measurement and aggregate study results.",
+    "study_commit": "d32fd9f57c706fb52ad11c6a10239166e5b25088"
+  },
+  "shared_movement_transformer": {
+    "model_source": "https://github.com/eliminatenoise/NeuroTranslation/tree/c8dfb5e641a4832a965f83469b3c38a601bfdb99/models/neurotranslate-0.0",
+    "checkpoint_sha256": "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458",
+    "controls": "M → Shared model",
+    "scope": "Two spatial distance forecasts (cm), three direct forecasts of right-wrist angles (degrees), and two corrections to the movement-only wrist forecast. Both corrections use earlier angles. One also uses four forearm signals. The included wrist-angle examples are invented.",
+    "prespecified_transfer_passed": false,
+    "spatial_checkpoint_sha256": "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
+    "angular_study": "Across six previously studied people the motion-only correction scored 4.175° and the correction with forearm signals scored 4.054°. The earlier wrist-specific model scored 3.549°. Matched random temporal weights had lower error in all three direct comparisons. The final all-six fits have no new-person accuracy estimate.",
+    "extended_checkpoint_sha256": "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458"
+  }
 }

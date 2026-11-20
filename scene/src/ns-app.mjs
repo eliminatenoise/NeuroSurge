@@ -60,6 +60,9 @@
  */
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
+import { bindActionChat } from './ns-action-chat.mjs';
+import { bindActivityMap } from './activity/map.mjs';
+import { createCameraCapture } from './camera.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
@@ -3274,7 +3277,11 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const Bt = rotationTranspose(att.bodyToCamera), W2C = displayedAttachment.worldToCamera;
       const restCam = att.shoulderCam.map((v, i) => v - transformDirection(att.bodyToCamera, att.girdleShiftM)[i]);
       const tw = freeIn.targetWorld;
-      if (Array.isArray(tw) && tw.length === 3 && tw.every(Number.isFinite)) {
+      if (freeIn.cameraArm) {
+        // The observed wrist gives a bearing in the avatar's lateral plane.
+        // The native elbow fit sets reach from the avatar's own arm lengths.
+        handWant = freeIn.cameraArm.bearing.map(unit => unit * (rig.upperLength + rig.foreLength) / 1000);
+      } else if (Array.isArray(tw) && tw.length === 3 && tw.every(Number.isFinite)) {
         const c = transformPoint(W2C, tw);
         handWant = transformDirection(Bt, [c[0] - restCam[0], c[1] - restCam[1], c[2] - restCam[2]]);
       } else {
@@ -3323,24 +3330,27 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       // forward, -x out to the left); the kept place itself (state.hand) is not turned, so the arm comes back to it as
       // the movement eases off. Without a shoulder movement nothing here changes (swing is null).
       const swing = shoulderSwing(pose.shoulderLiftDeg, pose.shoulderOutDeg);
-      const handAsk = swing ? swing.turn(handWant) : handWant;
+      // Camera bearings already use the body frame. Manual hand positions use
+      // the pre-shoulder frame and need the game's shoulder rotation.
+      const handAsk = swing && !freeIn.cameraArm ? swing.turn(handWant) : handWant;
       // The elbow's side: the place's own (ns-arm freeHandPole), across the shoulder -> hand line, swung toward at a
       // limited rate from the side it had, so the elbow never snaps round as the hand passes under the shoulder.
       const hLen = Math.hypot(handAsk[0], handAsk[1], handAsk[2]) || 1, hd = handAsk.map(v => v / hLen);
       const across = v => { const d = v[0] * hd[0] + v[1] * hd[1] + v[2] * hd[2]; const q = [v[0] - d * hd[0], v[1] - d * hd[1], v[2] - d * hd[2]], n = Math.hypot(q[0], q[1], q[2]); return n > 0.12 ? q.map(x => x / n) : null; };
       const prevSide = hand0.side ? across(hand0.side) : null;
-      const wantSide = across(freeHandPole(handAsk)) || prevSide || across([0, -1, 0]) || across([-1, 0, 0]);
+      const wantSide = (freeIn.cameraArm && across(freeIn.cameraArm.upper)) || across(freeHandPole(handAsk)) || prevSide || across([0, -1, 0]) || across([-1, 0, 0]);
       const side = prevSide ? turnToward(prevSide, wantSide, FREE_HAND.swivelDegPerS * DEG * h) : wantSide;
-      fit = fitHandAt(rig, boxes, { handBodyM: handAsk, joints: pose.joints, rotation: rotationReq, elbowDeltaDeg: pose.elbowDeltaDeg, elbowSideBodyM: side, stayBodyM: swing ? swing.turn(hand0.rel) : hand0.rel }, viewport, armOpts);
+      fit = fitHandAt(rig, boxes, { handBodyM: handAsk, joints: pose.joints, rotation: rotationReq, elbowDeltaDeg: pose.elbowDeltaDeg, elbowFlexDeg: freeIn.cameraArm?.elbowDeg, elbowSideBodyM: side, stayBodyM: swing ? swing.turn(hand0.rel) : hand0.rel }, viewport, armOpts);
       if (fit.elbow) {
-        const baseRad = fit.elbow.baseRad, wanted = baseRad + pose.elbowDeltaDeg * DEG, actualRad = fit.solution.elbowFlexRad;
-        elbow = { commandDeg: pose.elbowDeltaDeg, baseDeg: baseRad / DEG, targetDeg: fit.elbow.targetRad / DEG, actualDeg: actualRad / DEG, achievedDeg: (actualRad - baseRad) / DEG,
+        const baseRad = fit.elbow.baseRad, wanted = freeIn.cameraArm ? freeIn.cameraArm.elbowDeg * DEG : baseRad + pose.elbowDeltaDeg * DEG, actualRad = fit.solution.elbowFlexRad;
+        elbow = { commandDeg: (wanted - baseRad) / DEG, baseDeg: baseRad / DEG, targetDeg: fit.elbow.targetRad / DEG, actualDeg: actualRad / DEG, achievedDeg: (actualRad - baseRad) / DEG,
           limited: Math.abs(actualRad - wanted) / DEG > ELBOW_LIMIT_TOL_DEG };
       }
       // The place asked never runs far ahead of where the hand is (a joint at its end, a place out of reach): the
       // other way then answers at once. (Not while a motor area holds the elbow elsewhere along the line.)
       // (BODYMAP: with a shoulder movement on, the fit's places are turned back into the kept place's frame.)
       let rel = fit.clamped.inner ? hand0.rel : fit.clamped.shoulder ? (swing ? swing.back(fit.askedBodyM) : fit.askedBodyM) : handWant;
+      if (freeIn.cameraArm) rel = swing ? swing.back(fit.handBodyM) : fit.handBodyM;
       if (!fit.elbow && !fit.clamped.inner) {
         const got = swing ? swing.back(fit.handBodyM) : fit.handBodyM, off = rel.map((v, i) => v - got[i]), n = Math.hypot(off[0], off[1], off[2]);
         if (n > FREE_HAND.leadM) rel = got.map((v, i) => v + off[i] * FREE_HAND.leadM / n);
@@ -5680,6 +5690,7 @@ export function start(params = {}) {
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
+  let motionCamera = null, pendingCameraPose = null, trackedCameraLimb = null, trackedLeftArm = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
   const frameTimer = createFrameTimer(); // 18 November 2026 (performance): frame time by part (ns-perf; inspect().perf)
   /* 19 November 2026 (performance): what is under the crosshair (targetsAt: a ray against every drawn mesh, 2 to 6 ms)
@@ -6526,6 +6537,7 @@ export function start(params = {}) {
     // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
+    if (motionCamera?.active && (after.mode !== 'playing' || after.contextLost)) motionCamera.stop();
     if (before.mode === 'playing' && after.mode !== 'playing') {
       // The pause freezes the simulated pulse. End its lens effect and wait for a fresh activation.
       pausedPunchSeq = simState?.activity?.pulseSeq ?? null;
@@ -6542,6 +6554,9 @@ export function start(params = {}) {
     }
     if (limbHud) limbHud.box.inert = !shellIsPlaying(after) || after.contextLost;
     if (shell) shell.render(after);
+    if (chatOpen) chatOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (cameraOpen) cameraOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (activityOpen) activityOpen.disabled = !shellIsPlaying(after) || after.contextLost;
   }
 
   /** Start / resume from the overlay click (a user gesture): leave the overlay at once and request pointer capture;
@@ -6782,6 +6797,65 @@ export function start(params = {}) {
     obj.addEventListener(type, fn, opts);
     pageListeners.push([obj, type, fn, opts]);
   };
+  const activityDialog = doc.getElementById?.('ns-activity-map');
+  const activityOpen = doc.getElementById?.('ns-activity-open');
+  const chatDialog = doc.getElementById?.('ns-action-chat');
+  const chatOpen = doc.getElementById?.('ns-chat-open');
+  const cameraOpen = doc.getElementById?.('ns-camera-open');
+  const gameReady = () => phase === 'running' && !stopped && !failed && !shellState.contextLost;
+  if (cameraOpen) {
+    motionCamera = createCameraCapture({
+      host: doc.body,
+      returnFocus() { if (gameReady() && shellIsPlaying(shellState)) canvas.focus({preventScroll: true}); },
+      onPose(pose, limb) {
+        // Replace a stale sample, including on tracking loss. Keep the last
+        // visible pose until another camera sample or game movement changes it.
+        pendingCameraPose = gameReady() && shellIsPlaying(shellState) ? pose : null;
+        trackedCameraLimb = pendingCameraPose ? limb : null;
+        // Pose events for the joint controller are consumed once per camera
+        // sample. The left-arm solver needs its target on every render frame
+        // until a new sample, loss, stop or change of selected limb replaces it.
+        trackedLeftArm = pendingCameraPose?.leftArm ?? null;
+      }
+    });
+    const toggleCamera = () => {
+      if (gameReady() && shellIsPlaying(shellState)) {
+        motionCamera.toggle();
+        canvas.focus({preventScroll: true});
+      }
+    };
+    listen(cameraOpen, 'click', toggleCamera);
+    listen(view, 'keydown', e => {
+      if (e.code !== 'KeyC' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey ||
+          e.target?.isContentEditable || e.target?.closest?.('input, textarea, select, button, a[href], dialog[open]') ||
+          !gameReady() || !shellIsPlaying(shellState)) return;
+      e.preventDefault();
+      toggleCamera();
+    }, true);
+  }
+  const dialogControls = {
+    canvas,
+    canOpen: () => gameReady() && shellIsPlaying(shellState),
+    pause() {
+      dispatch({ type: 'pause' });
+      exitLock();
+    },
+    resume(action) {
+      if (!gameReady() || shellState.mode !== 'paused') return;
+      // Consume any queued lock-loss observation while the shell is still paused.
+      if (shellState.locked && !lockedNow()) observePointerLock(clockMs());
+      dispatch({ type: 'playUnlocked' });
+      if (action) carryRawEvents.push({ ...action, timeMs: clockMs() });
+    },
+    getBodyMap: () => bodyMapOf(mods.bodyMap)
+  };
+  const disposeChat = chatDialog && chatOpen ? bindActionChat({
+    ...dialogControls, dialog: chatDialog, trigger: chatOpen
+  }) : null;
+  const disposeActivity = activityDialog && activityOpen ? bindActivityMap({
+    ...dialogControls, dialog: activityDialog, trigger: activityOpen,
+    getCurrentRegion: () => simState?.gaze?.regionId || simState?.rawGaze?.regionId
+  }) : null;
   // 19 November 2026 (found with random input). THE WHEEL NEVER LEAVES THE GAME. The game has no use for the wheel, and
   // a wheel turn the page does not use goes to the browser: in Chromium on Linux a turn with Shift held goes BACK in
   // the browser's history (measured: Shift, a pointer move, one wheel turn, and the game was gone to the page before
@@ -6832,6 +6906,9 @@ export function start(params = {}) {
     raf = 0;
     if (unbind) { unbind(); unbind = null; }
     if (!stopped) {
+      disposeActivity?.();
+      disposeChat?.();
+      motionCamera?.dispose();
       exitLock();
       // R558: stopped before any picture, in an upright window, because no camera distance shows the whole arm: that
       // is a window too narrow for the arm, and the message says to make it wider. Any other stop keeps its own words.
@@ -7962,6 +8039,7 @@ export function start(params = {}) {
         if (!LIMB_KEYS.on || !(n >= 1 && n <= LIMB_KEYS.order.length)) return;
         limbChoice = n;
         const limb = LIMB_KEYS.order[n - 1];
+        motionCamera?.choose(limb);
         setLimbLatch(limb === 'leftArm' ? null : limb);
         limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
         // (turn false: chosen by a press-and-drag on it; the limb is under the crosshair already and the view stays)
@@ -8291,6 +8369,10 @@ export function start(params = {}) {
         if (!pts) { limbHold = null; return; }
         const busy = holdBusy(), c = NsGrasp.LIMB_CHAIN[limb] || null;
         const ax = !busy && axes ? Number(axes.x) || 0 : 0, az = !busy && axes ? Number(axes.z) || 0 : 0, keyed = ax !== 0 || az !== 0;
+        // The view normally holds the selected hand or foot at its previous point.
+        // A tracked limb supplies its own pose. Returning to manual control takes
+        // the hold up from the freshly drawn point. Deliberate key input still runs.
+        if (limb === trackedCameraLimb && !keyed) { limbHold = null; return; }
         const J = out && out.bodyJointTargets;
         // Taken up afresh: a new limb, a drag on it, or its joints changed by anything but the hold (a movement switched
         // on from the brain, the limb turn, Reset body): the hold then starts from where the limb's end is now.
@@ -9795,6 +9877,13 @@ export function start(params = {}) {
           if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
         }
         // 18 Nov (M3): a number key came up: a short press completes its movement, a longer one leaves the part there.
+        const cameraPoseSample = live ? pendingCameraPose : null;
+        pendingCameraPose = null;
+        if (cameraPoseSample?.joints || (live && trackedLeftArm)) {
+          const placement = { type: 'limbPose', joints: cameraPoseSample?.joints || {}, at: timing.dt,
+            trackedLeftUpperArm: Boolean(live && trackedLeftArm) };
+          timing = { ...timing, events: [...timing.events, placement] };
+        }
         if (live && upsThisFrame.length) {
           const rel = [];
           for (const n of upsThisFrame) {
@@ -10234,7 +10323,7 @@ export function start(params = {}) {
           ...(armTurnSeen ? { armTurn: armTurnSeen } : {}), // R558 (Space dance): the game arm's shown radius / upper-arm turn
           // 19 November 2026 (ns-arm FREE_HAND): the left hand keeps its place beside the shoulder; while the left arm is
           // the chosen limb the hold gives its place (carried by the look, moved by the keys)
-          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}) } } : {}),
+          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, cameraArm: live ? trackedLeftArm : null, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}) } } : {}),
           // 19 November 2026: the left hand's fingers close as the look goes down and open as it goes up (GRIP_FEET.look,
           // the left hand's share of the owner's Message 173), and the limb turn's side lights the game arm's flexors
           // or extensors (TURN_SIDES)
@@ -10444,7 +10533,7 @@ export function start(params = {}) {
           if (contact.skipGuards > 0) contact.skipGuards--;
           stepLimbGrasp(timing.dt, out);
           stepLimbLatch(timing.dt, out);
-          stepLimbHold(timing.dt, out, stepInputs.hand && stepInputs.hand.targetWorld ? stepInputs.hand.targetWorld : null, attempted.holdAxes);
+          stepLimbHold(timing.dt, out, stepInputs.hand?.targetWorld ?? null, attempted.holdAxes);
           if (stepInputs.hand && stepInputs.hand.moveWorld) limbPush.handMove = null; // (the step took the hand's push)
           stepLimbPush(out);
           stepLimbFlash(now);
@@ -11377,6 +11466,9 @@ export function start(params = {}) {
     if (stopped) return;
     clearNativeEscape();
     stopped = true;
+    disposeActivity?.();
+    disposeChat?.();
+    motionCamera?.dispose();
     cancelPendingGameplay('stop');
     cancelOwnedStreams();
     phase = failed ? 'error' : 'stopped';

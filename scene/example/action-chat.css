@@ -1,0 +1,18 @@
+.ns-chat-open { background:transparent; color:#b8e5ff; border:0; padding:0; text-decoration:underline; font:inherit; cursor:pointer }
+.ns-action-chat { position:fixed; inset:auto 0 max(1.25rem, 6vh); margin:auto; box-sizing:border-box; width:min(31rem, calc(100vw - 2rem)); max-height:80dvh; overflow:auto; background:#101820; color:#edf3f8; border:1px solid #728393; border-radius:.75rem; padding:1rem 1.2rem; font:1rem/1.4 system-ui,sans-serif; box-shadow:0 12px 48px #0009 }
+.ns-action-chat::backdrop { background:#03080e40 }
+.ns-action-chat label { font-weight:700; font-size:1.2rem }
+.ns-action-chat p { margin:.4rem 0 .75rem }
+.ns-action-chat input { box-sizing:border-box; display:block; width:100%; font:inherit; padding:.65rem; border:1px solid #8897a6; border-radius:.3rem; background:#fff; color:#132230 }
+.ns-action-chat menu { display:flex; flex-wrap:wrap; gap:.55rem; padding:0; margin:.75rem 0 0 }
+.ns-action-chat button { font:inherit; padding:.4rem .75rem; color:inherit; background:#243746; border:1px solid #7493a8; border-radius:.35rem; cursor:pointer }
+.ns-action-chat button[type=submit] { color:#10202a; background:#b8e5ff; font-weight:650 }
+.ns-action-chat button:disabled { opacity:.55; cursor:default }
+.ns-action-chat :focus-visible, .ns-chat-open:focus-visible { outline:3px solid #4db8ff; outline-offset:2px }
+.ns-action-chat [role=status]:empty { display:none }
+.ns-action-chat [role=status] { margin:.65rem 0 0; font-size:.9rem }
+body:has(.ns-action-chat[open]) #ns-shell-root { visibility:hidden }
+@media (prefers-reduced-motion: no-preference) {
+  .ns-action-chat[open] { animation: ns-chat-rise .15s ease-out }
+  @keyframes ns-chat-rise { from { opacity:0; transform:translateY(.8rem) } to { opacity:1; transform:translateY(0) } }
+}

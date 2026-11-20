@@ -786,3 +786,5 @@ Added on 18 November 2026 (package VESSELS): DERIVED data, CC BY 4.0 as its sour
 | File | BodyParts3D ID | Structure (embedded source name) | Concept | Group |
 | --- | --- | --- | --- | --- |
 | FJ1466M.obj | FJ1466M | Abductor digiti minimi of left hand | FMA37397 | left_upper_limb_muscle |
+
+The whole-body marker recordings in `assets/spatial-motion/` come from the Carnegie Mellon Graphics Lab Motion Capture Database, trials 02_06, 13_11 and 132_23. Funding came from NSF EIA-0196217. The database permits copying, modification and redistribution. The three trial files record the original source hashes. The project code licence applies separately. [Data use terms](http://mocap.cs.cmu.edu/faqs.php) · [Local credits](CREDITS-AND-LICENCES.md)

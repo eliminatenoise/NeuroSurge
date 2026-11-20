@@ -2195,7 +2195,8 @@ export function freeHandPole(handBodyM, o = FREE_HAND) {
 /**
  * The arm with its hand centre at a place beside the shoulder (FREE_HAND; no screen rule).
  * request: { handBodyM [x, y, z], joints, rotation? (as fitHand), elbowDeltaDeg? (a motor area's signed elbow command:
- *   the hand goes along the shoulder -> hand line to where the elbow has that much more or less bend), elbowSideBodyM?
+ *   the hand goes along the shoulder -> hand line to where the elbow has that much more or less bend), elbowFlexDeg?
+ *   (an absolute camera target, constrained by the same game-arm fit), elbowSideBodyM?
  *   (the elbow's side to use, a direction in the chest's axes; default freeHandPole of the place) }.
  * options: as fitHand (the attachment gives the shoulder and the chest's axes; its look-dependent shoulder lift is
  *   taken out and the lift of the arm's own elevation is used instead).
@@ -2205,7 +2206,7 @@ export function freeHandPole(handBodyM, o = FREE_HAND) {
  * pose), elbow ({ baseRad, targetRad } when elbowDeltaDeg was given) and elbowSideBodyM.
  */
 export function fitHandAt(rig, boxes, request, viewport, options = {}) {
-  const { handBodyM, joints = {}, rotation, elbowDeltaDeg = 0, elbowSideBodyM = null, stayBodyM = null } = request || {};
+  const { handBodyM, joints = {}, rotation, elbowDeltaDeg = 0, elbowFlexDeg, elbowSideBodyM = null, stayBodyM = null } = request || {};
   const hb = vec3(handBodyM, 'request.handBodyM');
   const o0 = mergeOptions(swivelOptions({ ...(options || {}), reachGirdle: false }, rotation));
   const { aspect, fovYDeg = o0.fovYDeg } = viewport || {};
@@ -2239,9 +2240,10 @@ export function fitHandAt(rig, boxes, request, viewport, options = {}) {
   let rel = P.rel, relS = P.relS, D = P.D;
   const shoulderCam = add(restCam, toCam(shiftBody));
   let elbow = null;
-  if (elbowDeltaDeg !== 0 && Number.isFinite(elbowDeltaDeg) && !ctx0.empty) {
+  if ((Number.isFinite(elbowFlexDeg) || (elbowDeltaDeg !== 0 && Number.isFinite(elbowDeltaDeg))) && !ctx0.empty) {
     const baseRad = elbowPhiFor(ctx0, D), lo = Math.max(0, ctx0.phiLimF, ctx0.cG.phi0), hi = Math.min(ELBOW_MAX, ctx0.cG.phi0 + Math.PI);
-    const targetRad = clamp(baseRad + elbowDeltaDeg * DEG, lo, hi), Dn = chainDist(ctx0.cG, targetRad) * MM;
+    const requested = Number.isFinite(elbowFlexDeg) ? elbowFlexDeg * DEG : baseRad + elbowDeltaDeg * DEG;
+    const targetRad = clamp(requested, lo, hi), Dn = chainDist(ctx0.cG, targetRad) * MM;
     relS = scale(relS, Dn / D); D = Dn; rel = add(relS, shiftBody);
     elbow = { baseRad, targetRad };
   }

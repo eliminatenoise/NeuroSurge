@@ -1,0 +1,511 @@
+{
+  "schema": "holoassist-hand-query-v1",
+  "recordingId": "R031-12July-SmallPrinter",
+  "segmentIds": [
+    "R031-12July-SmallPrinter:4",
+    "R031-12July-SmallPrinter:68",
+    "R031-12July-SmallPrinter:25",
+    "R031-12July-SmallPrinter:42",
+    "R031-12July-SmallPrinter:55"
+  ],
+  "textLimit": 32,
+  "heads": 4,
+  "terms": [
+    "student",
+    "the",
+    "gopro",
+    "dslr",
+    "turns",
+    "of",
+    "nintendo",
+    "on",
+    "switch",
+    "card",
+    "changes",
+    "from",
+    "off",
+    "their",
+    "lens",
+    "sd",
+    "grip",
+    "attaches",
+    "battery",
+    "into",
+    "to",
+    "removes",
+    "handheld",
+    "inserts",
+    "printer",
+    "coffee",
+    "detaches",
+    "joy",
+    "tray",
+    "a",
+    "in",
+    "paper",
+    "capsule",
+    "container",
+    "cover",
+    "assembles",
+    "button",
+    "cons",
+    "kickstand",
+    "loads",
+    "machine",
+    "stack",
+    "strap",
+    "camera",
+    "comfort",
+    "empties",
+    "for",
+    "inspects",
+    "onto",
+    "opens",
+    "water",
+    "closes",
+    "con",
+    "cup",
+    "disassembles",
+    "drip",
+    "game",
+    "mounts",
+    "presses",
+    "adds",
+    "an",
+    "and",
+    "brews",
+    "by",
+    "cartridge",
+    "controller",
+    "copies",
+    "door",
+    "exchanges",
+    "fills",
+    "flipping",
+    "floating",
+    "hand",
+    "ink",
+    "install",
+    "lifts",
+    "mount",
+    "peg",
+    "regularly",
+    "slot",
+    "yellow",
+    "adapter",
+    "again",
+    "arm",
+    "at",
+    "back",
+    "behind",
+    "black",
+    "box",
+    "capsules",
+    "cartridges",
+    "controllers",
+    "desk",
+    "front",
+    "gate",
+    "gogro's",
+    "gopro's",
+    "green",
+    "insert",
+    "its",
+    "joycons",
+    "makes",
+    "mode",
+    "page",
+    "pours",
+    "power",
+    "printer's",
+    "puts",
+    "shift",
+    "stands",
+    "strip",
+    "test",
+    "tripod",
+    "with"
+  ],
+  "methods": {
+    "ridge": {
+      "width": 64,
+      "candidates": "gallery.geometry"
+    },
+    "attention": {
+      "width": 32,
+      "candidates": "gallery.attention"
+    },
+    "chance": {},
+    "task": {},
+    "duration": {
+      "width": 1,
+      "candidates": "gallery.duration"
+    },
+    "context": {
+      "width": 1,
+      "candidates": "gallery.context"
+    },
+    "mask": {
+      "width": 384,
+      "candidates": "gallery.mask"
+    },
+    "joint": {
+      "width": 386
+    },
+    "wrongRidge": {
+      "width": 64,
+      "candidates": "gallery.geometry"
+    },
+    "wrongAttention": {
+      "width": 32,
+      "candidates": "gallery.wrongAttention"
+    },
+    "length": {
+      "width": 64,
+      "candidates": "gallery.geometry",
+      "center": 2.1692819595336914,
+      "scale": 0.23435147106647491
+    }
+  },
+  "tensors": [
+    {
+      "name": "idf",
+      "shape": [
+        116
+      ]
+    },
+    {
+      "name": "gallery.geometry",
+      "shape": [
+        5,
+        64
+      ]
+    },
+    {
+      "name": "gallery.duration",
+      "shape": [
+        5,
+        1
+      ]
+    },
+    {
+      "name": "gallery.context",
+      "shape": [
+        5,
+        1
+      ]
+    },
+    {
+      "name": "gallery.mask",
+      "shape": [
+        5,
+        384
+      ]
+    },
+    {
+      "name": "ridge.coeff",
+      "shape": [
+        117,
+        64
+      ]
+    },
+    {
+      "name": "wrongRidge.coeff",
+      "shape": [
+        117,
+        64
+      ]
+    },
+    {
+      "name": "length.coeff",
+      "shape": [
+        2,
+        64
+      ]
+    },
+    {
+      "name": "duration.coeff",
+      "shape": [
+        117,
+        1
+      ]
+    },
+    {
+      "name": "context.coeff",
+      "shape": [
+        117,
+        1
+      ]
+    },
+    {
+      "name": "mask.coeff",
+      "shape": [
+        117,
+        384
+      ]
+    },
+    {
+      "name": "joint.coeff",
+      "shape": [
+        117,
+        386
+      ]
+    },
+    {
+      "name": "gallery.attention",
+      "shape": [
+        5,
+        32
+      ]
+    },
+    {
+      "name": "attention.word.weight",
+      "shape": [
+        116,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.positions",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.self_attn.in_proj_weight",
+      "shape": [
+        96,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.self_attn.in_proj_bias",
+      "shape": [
+        96
+      ]
+    },
+    {
+      "name": "attention.text.block.self_attn.out_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.self_attn.out_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.linear1.weight",
+      "shape": [
+        64,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.linear1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "name": "attention.text.block.linear2.weight",
+      "shape": [
+        32,
+        64
+      ]
+    },
+    {
+      "name": "attention.text.block.linear2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.block.norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.norm.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.norm.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "attention.text.projection.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "attention.text.projection.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "gallery.wrongAttention",
+      "shape": [
+        5,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.word.weight",
+      "shape": [
+        116,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.positions",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.self_attn.in_proj_weight",
+      "shape": [
+        96,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.self_attn.in_proj_bias",
+      "shape": [
+        96
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.self_attn.out_proj.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.self_attn.out_proj.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.linear1.weight",
+      "shape": [
+        64,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.linear1.bias",
+      "shape": [
+        64
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.linear2.weight",
+      "shape": [
+        32,
+        64
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.linear2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.norm1.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.norm1.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.norm2.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.block.norm2.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.norm.weight",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.norm.bias",
+      "shape": [
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.projection.weight",
+      "shape": [
+        32,
+        32
+      ]
+    },
+    {
+      "name": "wrongAttention.text.projection.bias",
+      "shape": [
+        32
+      ]
+    }
+  ],
+  "source": {
+    "dataset": "HoloAssist",
+    "role": "training demonstration",
+    "rights": "CDLA-Permissive-2.0.txt",
+    "fitSealSHA256": "8b1d2495f030e09f6e63c9e14f4b50bba79d968d9bd8e0c6b41ba72449b717f1",
+    "gallerySHA256": {
+      "gallery.json": "5f4ae6fbf5c6607fa23c844ae373a0ae1a298f61313d9e84bb17c31cfe7859e8",
+      "gallery.npz": "df5b1c7aba9472c70dcb1891acf1c0094edb127359b324efaf80e86248da3d8a"
+    }
+  },
+  "byteLength": 547656,
+  "sha256": "7dad9221277317d7bdbc7caf2bc22e7baa395608dd6775b7d1b96d0a55c57ac0"
+}

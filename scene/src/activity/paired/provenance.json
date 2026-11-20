@@ -1,0 +1,26 @@
+{
+  "browser_format": "All 81 original tensors per mode, key-sorted, contiguous little-endian IEEE float32",
+  "browser_weight_sha256": {
+    "emg": "efbf3ac24a890d896898dc1f54e6ecfffdf1de14479f3e1dda89d538b05f203b",
+    "full": "11b98a0e6bb2b0bf85eb1e5d255638bf83227a4302de90711f513b6bfb681acd",
+    "motion": "564638ed6c3ad41422960b03b0af7036d723c26d7be855123ed790ee34493dc2"
+  },
+  "bytes_per_mode": 82208,
+  "release_manifest_sha256": "ad99f03d12db630792bc83e3934481230e837cee393694c6edf768a4c025a954",
+  "tensor_index_and_normalizers_sha256": "2271d58722ae33ea4e839c02e27dc6d862236c47d2ee4366257f1f475eb316b2",
+  "upstream_git_commit": "117ffa001fb10086854ae4ec4d365c7c2121786f",
+  "upstream_sha256": {
+    "LICENSE": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "NOTICE.md": "f077c62b18943911a31f498340445ad06f549b647070fe74da27483e1e2c7276",
+    "aligned_forecast.py": "2fcc5d7f168853a6af8e1e28aa41753a3e3425a92b05aba8f28e871205454770",
+    "broader_learner.py": "cfba32415fb8deb982feb463e83da33e7a3b4d0afa088ad2c9be43b8667e171b",
+    "model-sources.json": "65333bfa17a8f0e1bd1baf248ed65efa8b3b7a468ccb5120304cd9100883563f",
+    "normalizers.json": "9f7c68a4520e86f1ced06b5c5172cb71ce440233fe2b12ce7ab6920031fdc292",
+    "predict.py": "d1ed42315b23ee4683f518a316cf6b199e28b6bf6c4fc66490c76c8dcb87c2c5",
+    "protocol.json": "5d9b6692ec3819933fd35bc5bbd2e47be12a8d789e7fc619720c56f626f6c2a9",
+    "study_model.py": "f92512672e8a8dd0ea92bb1b9f4af40454c7a85b54ee2d2dd9607ff65bdcd9af",
+    "weights/emg.npz": "c853ea8a7ce44a2ead210fbae362ca938c160c890ed65dea7521ccbf1271396e",
+    "weights/full.npz": "13430427eba9d5140942d8649a9c3360600ad13a48b92c083caa572606310830",
+    "weights/motion.npz": "34204e530608bbdd20cfc1f51d61c9967d2a04cf9f055b7a64f75fe1335cbadd"
+  }
+}

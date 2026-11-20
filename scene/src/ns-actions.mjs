@@ -2711,6 +2711,15 @@ export function createActivity({
         // contracts nothing ('moved').
         if (s.paused) return;
         if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPose needs joints { jointId: degrees }');
+        // The tracked shoulder and elbow take the arm's position, just as a
+        // placed body joint below takes its position from that joint's spring.
+        // A contraction triggered under the camera must not replay on release.
+        if (ev.trackedLeftUpperArm === true) {
+          for (const id of ['shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction', 'elbow_flexion', 'elbow_extension']) {
+            if (s.armJerk) delete s.armJerk[id];
+            s.drive[id] = 0;
+          }
+        }
         for (const [j, deg] of Object.entries(ev.joints)) {
           if (!JOINT_IDS.includes(j)) fail('activity_event', `limbPose joint ${JSON.stringify(j)} is not a body joint`);
           if (!isFiniteNumber(deg)) fail('activity_event', `limbPose joint ${j} needs finite degrees`);

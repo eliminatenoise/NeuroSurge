@@ -436,3 +436,21 @@ neural-to-muscle decoder.
 - The reference images used by independent reviewers (section 1.1) are not included.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
 - Development tests, test harnesses and acquisition evidence are not part of the player distribution.
+
+## Rat brain activity
+
+The separate **Rat brain activity** view uses Justin Shin and Shantanu Jadhav’s *Single Day W-Track Learning* (2024). The excerpts, spike counts, example inputs, fitted weights and data-derived forecasts carry CC BY 4.0. NeuroSurge embeds the Interoceptomics viewer and its unchanged recording and weights. The game adds a tab, source links and a colour theme. [Recording, changes and methods](scene/src/activity/wtrack/NOTICE.md) · [Versioned dataset](https://doi.org/10.48324/dandi.000978/0.240511.0307) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+## Recorded wrist activity map
+
+The eight scalp EEG and eight forearm EMG contact excerpts, their four same-site differences, the encoder angles and associated forecast-input features in `inputs/activity/wrist-pointing.json` derive from the CC BY 4.0 *EEG-EMG-WristMotion Dataset*, v3, by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. The accompanying model runner is the project-authored NeuroTranslation wrist temporal R1 release under CC0. The attribution, precise source, transformations and licence links are in [Activity map](ACTIVITY-MAP.md).
+
+The wrist transformers, example windows and Python reference calculations use the EEG-EMG-WristMotion Dataset v3, deposited by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz under CC BY 4.0. The game repacks the three published fits into browser-readable files and computes predictions locally. Original code is dedicated under CC0. [Model source and rights](scene/src/activity/paired/NOTICE.md) · [Recording credit and changes](ACTIVITY-MAP.md#data-and-rights)
+
+### Whole-body optical recordings
+
+The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217. The Carnegie Mellon Graphics Lab allows its motion capture data to be copied, modified and redistributed. The three excerpts in `assets/spatial-motion/` retain those terms. Each excerpt includes every fourth recorded sample, naming the original trial and frame and rounding lab coordinates to 0.1 mm. [CMU data use terms](http://mocap.cs.cmu.edu/faqs.php) · [Capture methods](http://mocap.cs.cmu.edu/info.php)
+
+The hand search uses one HoloAssist right-hand training recording and its observer descriptions, released by Xin Wang, Taein Kwon and colleagues under CDLA-Permissive-2.0. The projected hand frames and action intervals carry the original data licence. The project dedicates its original code and frozen fitted weights to CC0. [Data agreement](assets/hand-search/CDLA-Permissive-2.0.txt) · [Original research and extraction credit](assets/hand-search/hand-source-credits.html) · [Query source and rights](scene/src/hand-search/MODEL-NOTICE.md)
+
+The **Shared model** viewer includes NeuroTranslate’s spatial weights and fitted comparisons. The recorded rat trip comes from Justin Shin and Shantanu Jadhav’s *Single Day W-Track Learning* (CC BY 4.0). Wrist training positions come from HoloAssist (CDLA Permissive 2.0). The angular study used Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz’s *EEG-EMG-WristMotion Dataset*, version 3 (CC BY 4.0), to fit forecasts from encoder angles, forearm EMG and scalp EEG. NeuroTranslation fitted the two corrections to the movement-only forecast using the earlier angles, with or without the four forearm muscle signals. The distributed coefficients and scales use all six participants and carry the WristMotion attribution and CC BY 4.0 terms. Both public angle examples use invented measurements. NeuroTranslation’s original code, documentation and invented inputs carry CC0 1.0. [Model credits, licences and changes](scene/src/activity/shared-motion/NOTICE.md) · [Spatial data credits](scene/src/activity/shared-motion/DATA-CREDITS.md)
