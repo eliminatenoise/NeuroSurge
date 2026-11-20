@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "draft-2026-11-20-body-61-three-domain",
+  "version": "draft-2026-11-20-body-61-forearm-corrections",
   "experimental": true,
-  "source": "Body Update 61 with the merged camera fixes and unified source-checked viewer for movement distance and paired wrist angles (NeuroTranslation CPU c60c12e3355b5d2ba3a50364a7f6d294ec59f48e reference).",
+  "source": "Body Update 61 with the merged camera fixes and the shared viewer for wrist and rat displacement, direct wrist-angle forecasts and two fitted wrist-angle corrections (NeuroTranslation CPU c8dfb5e641a4832a965f83469b3c38a601bfdb99).",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 41120,
-      "sha256": "63fa769e9390ccb189bb8999cc3dddad95265b57b27e08b85c7821f12d2585f7"
+      "bytes": 41409,
+      "sha256": "c59bee7c38d62bce5b42206427b54d4e193cc21027d8adb58d811f6428d56975"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,8 +52,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 16213,
-      "sha256": "01bc533c0479ec2ee6c6844011e9f5c57506f9a47d69fc081f7e991045dc6a62"
+      "bytes": 16590,
+      "sha256": "094a9683a83e1323501d1d11fb575a26f23006fd27e6e506ac6d203ca0ad961d"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,18 +62,18 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 56199,
-      "sha256": "017ae2a92c2cd556f9db9935cc68dfa78a2044796ee36b25b1e27eb87346ca74"
+      "bytes": 56451,
+      "sha256": "29ccc93f5e545556ecacb8b2f6bdceb88a92aac0160af8a4945717173916ae18"
     },
     {
       "path": "README.md",
-      "bytes": 25982,
-      "sha256": "501daa5dbe83ec50b8c97681c288bf0d7cbd80df4ec946e54bbb802f3e3d6d7a"
+      "bytes": 26258,
+      "sha256": "4185e138b459c23c1710dd0e69dc7fb98d519f092280ffbf4d9974f345260b2f"
     },
     {
       "path": "START.html",
-      "bytes": 4086,
-      "sha256": "abfe0584a0c14f48414af6484b2e981c878d5ed1e8f2a9c981cfcae999cf7147"
+      "bytes": 4093,
+      "sha256": "eeab6833632b30866452da105e6ee343d9e0c18123a92c900ceef1a669da2e8e"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -137,8 +137,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 1049,
-      "sha256": "b928b6b47d288ecdba3ed62619b8e1c1b911afbda5220f0f78c8c7b4f42ed38c"
+      "bytes": 1056,
+      "sha256": "b4b056bba7ad0d22de7cb9ff344630eccb50073f492897a02f11ad7fdafc69de"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -4117,33 +4117,38 @@
     },
     {
       "path": "scene/src/activity/shared-motion/NOTICE.md",
-      "bytes": 2873,
-      "sha256": "c7b56b030a40867d70f9691c5ddd4524f77a2b6410e85355d0a80f1a32194c55"
+      "bytes": 3567,
+      "sha256": "97b59379fbe58458b6cf50ec297425b084249f23ce742dba40c70524582fe601"
     },
     {
       "path": "scene/src/activity/shared-motion/document.mjs",
-      "bytes": 40950,
-      "sha256": "e64f896033a3fd3855636cb88dad51c2d2732f0e2805b15dfcaf04a873f29c29"
+      "bytes": 44175,
+      "sha256": "9fb1369d599482aa948f5b183df653ecd4c2b7deb3bb629ae2b844c56401f227"
+    },
+    {
+      "path": "scene/src/activity/shared-motion/forearm-example.json",
+      "bytes": 2038,
+      "sha256": "0192be59f5ad3738ec836468ba2ebc9796f9d8f64afcc54e717f8d432ed6e05d"
     },
     {
       "path": "scene/src/activity/shared-motion/index.html",
-      "bytes": 129942,
-      "sha256": "ae01be6cb100a0ea6032bf1c9b3f077911539cb6c8136fc9dd4caae55dc03b48"
+      "bytes": 143059,
+      "sha256": "d25e15f73a4f0f3e70f61045f6dfe68275b8d8b5367987faa6b48a6bb737110f"
     },
     {
       "path": "scene/src/activity/shared-motion/model.json",
-      "bytes": 7268,
-      "sha256": "0c83830ac3eee8cadf3f7b5ddf461a78466230217b54760989f11c764e4bbae8"
+      "bytes": 8963,
+      "sha256": "72b1a66af42798befcfa1ea0757f0916925e36069ff5f93df161b02311e6d056"
     },
     {
       "path": "scene/src/activity/shared-motion/panel.js",
-      "bytes": 18787,
-      "sha256": "8d80c3dfd2050bee43ffe6d43733db8c96f493e784584cf91f26f9f37350b687"
+      "bytes": 20195,
+      "sha256": "fe453835742cf9c0200cede572322487b595f7b219a4fe2da4296d52298ba325"
     },
     {
       "path": "scene/src/activity/shared-motion/shared-motion.js",
-      "bytes": 71649,
-      "sha256": "889dc52d36058497925836162d612373320afe865b7b1735bda09dd7781f490a"
+      "bytes": 80247,
+      "sha256": "529d37c72208cbb699197839a160fe34360a9ee3339b8417b7d908df0a8e1b0c"
     },
     {
       "path": "scene/src/activity/spatial-panel.mjs",
@@ -4832,8 +4837,8 @@
     },
     {
       "path": "tests/browser-shared-motion.mjs",
-      "bytes": 14699,
-      "sha256": "12282a57f23442b968d0631503aca74501591ba8e13d1314d2f9877c81813735"
+      "bytes": 17486,
+      "sha256": "5b6debe479a39fdfd1288da804efaa0da8d6626017e72005bfbfb00e85930325"
     },
     {
       "path": "tests/browser-space-aim.mjs",
@@ -5198,7 +5203,7 @@
     {
       "path": "tools/pack-shared-motion.py",
       "bytes": 2722,
-      "sha256": "b18a14aab21b2addf089aa331b7a3ea052dce2dd2f8f171941de4f1339e111bd"
+      "sha256": "c8ae39c4105248d5181276aac5430019b617b72d49743dda745fbf7b9218550c"
     },
     {
       "path": "tools/page-body.mjs",

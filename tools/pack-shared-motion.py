@@ -9,10 +9,10 @@ import sys
 ASSETS = Path(__file__).resolve().parents[1] / "scene/src/activity/shared-motion"
 CHECKPOINTS = (
     "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
-    "8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6",
+    "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458",
 )
-RUNTIME = "889dc52d36058497925836162d612373320afe865b7b1735bda09dd7781f490a"
-VIEWER = "ae01be6cb100a0ea6032bf1c9b3f077911539cb6c8136fc9dd4caae55dc03b48"
+RUNTIME = "529d37c72208cbb699197839a160fe34360a9ee3339b8417b7d908df0a8e1b0c"
+VIEWER = "d25e15f73a4f0f3e70f61045f6dfe68275b8d8b5367987faa6b48a6bb737110f"
 
 def pack():
     source = (ASSETS / "index.html").read_bytes()

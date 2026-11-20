@@ -2,9 +2,11 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {once} from 'node:events';
-import {readFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {createServer} from 'node:http';
-import {fileURLToPath} from 'node:url';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {createHandler, HOST} from '../serve-local.mjs';
 
 const {chromium} = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
@@ -13,7 +15,7 @@ const assets = new URL('scene/src/activity/shared-motion/', root);
 const sha = data => createHash('sha256').update(data).digest('hex');
 const original = await readFile(new URL('index.html', assets));
 const spatialModel = '9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179';
-const movementModel = '8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6';
+const movementModel = 'da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458';
 // Sealed Python checkpoint and two train-fitted controls, shared-motion-view/oracle.json.
 const expected = {
   rat: {joint:5.321433981169306, recent:6.83246026675585, ridge:5.564297659343093},
@@ -25,18 +27,24 @@ const angleReferences = {
   emg:[8.426623456138092, -1.1867418591785994],
   full:[7.4641121080537545, 0.09766020148509469]
 };
+// Frozen predict.py at c8dfb5e, on each public invented history using
+// forecast_angles(..., mode, forearm_residual=mode) and the matching channel width.
+const corrected = {
+  invented: {motion:[15.55631119514808, -4.257036405152111], emg:[13.764528909470156, -4.0945854467517755]},
+  forearm: {motion:[19.418809157745024, -2.1684628140631355], emg:[18.969935360733352, -2.0580431854206322]}
+};
 
-async function angleValues(view, modes) {
+async function angleValues(view, modes, table='angle-values', references=angleReferences) {
   await view.locator('#angular-results').waitFor();
   const values = {};
-  const rows = view.locator('#angle-values tbody tr');
+  const rows = view.locator('#' + table + ' tbody tr');
   assert.equal(await rows.count(), modes.length);
   for (const [i,mode] of modes.entries()) {
     const row = rows.nth(i);
     assert.equal(await row.getAttribute('data-mode'), mode);
     const angles = await row.locator('td[data-deg]').evaluateAll(cells => cells.map(c => Number(c.dataset.deg)));
     assert.equal(angles.length, 2);
-    angles.forEach((angle, axis) => assert.ok(Math.abs(angle - angleReferences[mode][axis]) < 1e-10));
+    angles.forEach((angle, axis) => assert.ok(Math.abs(angle - references[mode][axis]) < 1e-10, table + ' ' + mode));
     values[mode] = angles;
   }
   return values;
@@ -72,11 +80,16 @@ async function compare(view) {
   assert.match(await view.locator('#distance-study').innerText(), /neither domain passed the transfer test/i);
   await view.locator('#history-select').selectOption('wrist_angle');
   data.angle = await angleValues(view, Object.keys(angleReferences));
+  data.corrected = await angleValues(view, ['motion','emg'], 'correction-values', corrected.invented);
   assert.match(await view.locator('#status').innerText(), /invented/);
   assert.match(await view.locator('#angle-values thead').innerText(), /Extension \(°\).*Radial deviation \(°\)/s);
   assert.match(await view.locator('#angle-values tbody').innerText(), /Movement \+ forearm EMG \+ scalp EEG/);
   assert.match(await view.locator('#angle-bench').innerText(), /3\.549/);
   assert.equal(await view.locator('#results').isVisible(), false);
+  await view.locator('#source-select').selectOption('forearm');
+  data.forearmExample = await angleValues(view, ['motion','emg'], 'correction-values', corrected.forearm);
+  assert.equal(await view.locator('#angle-values tbody tr').count(), 2);
+  assert.match(await view.locator('#source-line').innerText(), /invented/i);
   return data;
 }
 
@@ -94,13 +107,18 @@ async function checkCustomAngles(view, keyboard) {
     await keyboard.press('Enter');
     const modes = Object.keys(angleReferences);
     await angleValues(view, modes.slice(0, modes.indexOf(mode) + 1));
+    const corrections = mode === 'motion' ? ['motion'] : ['motion','emg'];
+    await angleValues(view, corrections, 'correction-values', corrected.invented);
   }
   for (const [label,edit] of [
     ['future bin', r => r.binEndTicks[15]++],
     ['future target', r => {r.targetDeg = [0,0];}],
     ['missing bin', r => r.bins.pop()],
     ['missing channel', r => r.bins[0].pop()],
-    ['missing anchor', r => {delete r.anchorDeg;}]
+    ['missing anchor', r => {delete r.anchorDeg;}],
+    ['duplicate correction selectors', r => {r.forearmResidual = null; r.forearm_residual = null;}],
+    ['correction for incompatible channels', r => {r.forearmResidual = 'emg';}],
+    ['non-numeric forearm voltage', r => {r.bins[0][2] = '3';}]
   ]) {
     const bad = structuredClone(sample);
     edit(bad);
@@ -108,11 +126,26 @@ async function checkCustomAngles(view, keyboard) {
     await run.click();
     assert.equal(await view.locator('#angular-results').isVisible(), false, label);
     assert.equal(await view.locator('#angle-values [data-deg]').count(), 0, label);
-    assert.ok((await view.locator('#status').innerText()).length > 10, label);
+    assert.equal(await view.locator('#correction-values [data-deg]').count(), 0, label);
+    const message = await view.locator('#status').innerText();
+    assert.ok(message.length > 10, label);
+    if (label === 'non-numeric forearm voltage') {
+      // The form must display the same type error returned by its loaded scorer.
+      const error = await input.evaluate(async el => {
+        try {
+          await el.ownerDocument.defaultView.SharedMotion.forecastMovement(JSON.parse(el.value));
+        } catch (e) {
+          return {name:e.name, message:e.message};
+        }
+      });
+      assert.deepEqual(error, {name:'TypeError', message});
+      assert.match(message, /finite channels/);
+    }
   }
   await input.fill(JSON.stringify(sample));
   await run.click();
   await angleValues(view, Object.keys(angleReferences));
+  await angleValues(view, ['motion','emg'], 'correction-values', corrected.invented);
 }
 
 const allowedHosts = new Set();
@@ -121,6 +154,7 @@ await once(server, 'listening');
 const host = HOST + ':' + server.address().port;
 const origin = 'http://' + host;
 allowedHosts.add(host);
+const downloadDir = await mkdtemp(join(tmpdir(),'neurosurge-shared-'));
 let browser;
 try {
   const args = ['--disable-background-networking'];
@@ -203,6 +237,11 @@ try {
     assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), 'Outer width ' + width);
     assert.ok(await frameWindow.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Angle table width ' + width);
   }
+  await frame.locator('#source-select').focus();
+  await game.keyboard.press('Home');
+  await game.keyboard.press('ArrowDown');
+  assert.equal(await frame.locator('#source-select').inputValue(), 'forearm');
+  await angleValues(frame, ['motion','emg'], 'correction-values', corrected.forearm);
   await checkCustomAngles(frame, game.keyboard);
   assert.ok(await frameWindow.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Custom angle panel at 320px');
   await frame.locator('#history-select').selectOption('wrist');
@@ -219,7 +258,9 @@ try {
   const downloadStarted = game.waitForEvent('download');
   await frame.getByRole('link', {name:'Save offline copy'}).click();
   const download = await downloadStarted;
-  assert.equal(sha(await readFile(await download.path())), sha(original));
+  const savedViewer = join(downloadDir,'Wrist and rat forecasts.html');
+  await download.saveAs(savedViewer);
+  assert.equal(sha(await readFile(savedViewer)), sha(original));
   await frame.locator('#rows').focus();
   await game.keyboard.press('Escape');
   await dialog.waitFor({state:'hidden'});
@@ -251,14 +292,16 @@ try {
   assert.ok(requests.every(r => r.url.startsWith(origin + '/') || r.url.startsWith('data:')));
 
   const offline = await context.newPage();
+  await offline.setViewportSize({width:320,height:820});
   const fileRequests = [];
   offline.on('pageerror', e => errors.push(String(e)));
   offline.on('request', r => fileRequests.push(r.url()));
   await context.setOffline(true);
-  await offline.goto(new URL('index.html', assets).href);
+  await offline.goto(pathToFileURL(savedViewer).href);
   await offline.locator('#results').waitFor();
   const compareFile = await compare(offline);
   assert.deepEqual(compareFile, compareGame);
+  await checkCustomAngles(offline, offline.keyboard);
   assert.ok(fileRequests.every(url => url.startsWith('file:') || url.startsWith('data:')));
   assert.deepEqual(policyViolations, []);
   assert.deepEqual(mediaCalls, []);
@@ -269,8 +312,10 @@ try {
     preTabLoads:0, modelAssetRequests:panelRequests.map(r => r.url.split('/').pop()),
     cspViolations:policyViolations, deviceCalls:mediaCalls, externalRequests:0,
     rejectedMalformedInput:true, rejectedFutureAndMissingMeasurements:true, rejectedCorruptScriptAndRecovered:true,
-    recoveredMissingPanelScript:true, keyboardAt320:true, focusAndPauseRestored:true, resumedCameraControl:true}));
+    recoveredMissingPanelScript:true, savedFileReopened:true, rejectedMalformedCorrectionInputs:true,
+    keyboardAt320:true, focusAndPauseRestored:true, resumedCameraControl:true}));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));
+  await rm(downloadDir,{recursive:true,force:true});
 }

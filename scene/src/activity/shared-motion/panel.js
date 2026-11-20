@@ -36,8 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const angleTable = byId("angle-bench").tBodies[0];
     for (const [key, label] of [
       ...angleModes.map(({id,label}) => ["pretrained."+id, label]),
-      ["prior_motion_cnn","Earlier wrist-specific convolutional network"],
-      ["prior_emg_corrected_cnn","Earlier network + forearm correction"],
+      ["corrected.motion","Shared movement forecast + motion-only correction"],
+      ["corrected.emg","Shared movement forecast + motion and forearm correction"],
+      ["prior_motion_cnn","Wrist-specific convolutional network"],
+      ["prior_emg_corrected_cnn","Wrist-specific network + forearm correction"],
       ["persistence","Repeat the cutoff angles"]
     ]) {
       const row = angleTable.insertRow();
@@ -125,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
     revision++;
     byId("angular-results").hidden = true;
     byId("angle-values").tBodies[0].replaceChildren();
+    byId("correction-values").tBodies[0].replaceChildren();
     byId("angle-timing").textContent = byId("angle-interpretation").textContent = "";
     byId("results").hidden = true;
     byId("joint").textContent = byId("recent").textContent = byId("ridge").textContent = "—";
@@ -174,33 +177,42 @@ document.addEventListener("DOMContentLoaded", () => {
     const highest = angleModes.findIndex(entry => entry.id === record.mode);
     if (highest < 0) throw new Error("Choose motion, emg or full for the available measurements.");
     // Validate the source as supplied, including its exact width, clocks and allowed keys.
-    // Only then form lower-channel comparisons from that same admitted history.
+    // Only then form comparisons from that same admitted history.
     const complete = await SharedMotion.forecastMovement(record);
-    const results = [];
-    for (const mode of angleModes.slice(0, highest+1)) {
-      if (token !== revision) return;
-      const result = mode.id === record.mode ? complete : await SharedMotion.forecastMovement({
-        ...record, mode:mode.id, bins:record.bins.map(row => row.slice(0, mode.width))
-      });
-      if (result.unit !== "deg" || result.domain !== "wrist_angle") throw new Error("The angle model returned incompatible units.");
-      results.push([mode,result]);
-    }
     if (token !== revision) return;
-    const body = byId("angle-values").tBodies[0];
-    for (const [mode,result] of results) {
-      const tr = body.insertRow(); tr.dataset.mode = mode.id;
+    const {forearmResidual, forearm_residual, ...window} = record;
+    const requestedCorrection = forearmResidual ?? forearm_residual ?? null;
+    const available = angleModes.slice(0, highest + 1);
+    const direct = available.map(mode => ({mode, correction:null, table:"angle-values"}));
+    const adjusted = available.filter(mode => mode.id !== "full")
+      .map(mode => ({mode, correction:mode.id, table:"correction-values"}));
+    const results = await Promise.all([...direct, ...adjusted].map(async forecast => {
+      const {mode, correction} = forecast;
+      const result = mode.id === record.mode && correction === requestedCorrection ? complete
+        : await SharedMotion.forecastMovement({
+          ...window, mode:mode.id, bins:record.bins.map(row => row.slice(0,mode.width)), forearmResidual:correction
+        });
+      if (result.unit !== "deg" || result.domain !== "wrist_angle" || result.targetTick !== complete.targetTick) {
+        throw new Error("The angle model returned incompatible units or timing.");
+      }
+      return {...forecast, result};
+    }));
+    if (token !== revision) return;
+    for (const {mode, table, result} of results) {
+      const tr = byId(table).tBodies[0].insertRow(); tr.dataset.mode = mode.id;
       const th = element("th",mode.label); th.scope = "row"; tr.append(th);
       for (const v of result.angleDeg) {
         const cell = tr.insertCell(); cell.dataset.deg = String(v); cell.textContent = format(v);
       }
     }
     const [x,y] = record.anchorDeg;
-    byId("angle-timing").textContent = "At cutoff: " + format(x) + "° extension and " + format(y) +
-      "° radial deviation. Each forecast uses the same 16 bins and cue slot, ending at tick " +
-      record.cutoffTick + ", to estimate both angles at tick " + complete.targetTick + " (128 stored ticks later).";
-    byId("angle-interpretation").textContent = (highest < 2 ?
-      "Only the models supported by the supplied channels are shown. " : "") +
-      "The table compares estimates. This input supplies no measured future angle.";
+    byId("angle-timing").textContent = "At tick " + record.cutoffTick + " the wrist was at " + format(x) + "° extension and " + format(y) +
+      "° radial deviation. Each forecast uses the same 16 bins and cue slot to estimate both angles at tick " +
+      complete.targetTick + ", a quarter second later (128 ticks at 512 Hz).";
+    const outsideRange = results.some(({result}) => result.angleDeg.some(angle => Math.abs(angle) > 180));
+    byId("angle-interpretation").textContent = (outsideRange ? "A forecast here falls outside the −180° to 180° range accepted for measured wrist angles. " : "") +
+      (highest === 0 ? "Add the four measured forearm channels to compare the two corrections. " : "") +
+      "This input supplies no measured future angle.";
     byId("angular-results").hidden = false;
     byId("status").textContent = isCustom() && !anglePractice ? "Forecasts from your input. Source and clock alignment are unverified." : "Forecasts from invented wrist measurements.";
   }
@@ -250,6 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function selectDomain() {
     source.replaceChildren(new Option("Invented example","invented"));
+    if (currentDomain() === "wrist_angle") source.add(new Option("Invented forearm example","forearm"));
     if (currentDomain() === "rat") source.add(new Option("Recorded maze trip","recorded"));
     source.add(new Option("Enter my own measurements","custom"));
     selectInput();
@@ -262,6 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const custom = isCustom();
     const angular = domain === "wrist_angle";
     const recorded = source.value === "recorded";
+    const forearm = source.value === "forearm";
     byId("custom").hidden = angular || !custom;
     byId("angular-custom").hidden = !angular || !custom;
     byId("angle-study").hidden = !angular;
@@ -270,12 +284,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ? "Enter a history from one trial or recording that you have permission to use. The source clock and units must match this task."
       : recorded
         ? "Recorded camera positions from rat JS14. This is the first eligible training window, two seconds into W-track trip 55."
-        : angular ? "An invented half-second of wrist angles and electrode measurements. All three forecasts use the same history."
+        : forearm ? "An invented half-second from the forearm correction example. It contains wrist angles and four forearm channels. No person supplied these measurements."
+        : angular ? "Invented wrist angles, forearm muscle activity and scalp voltages. All five forecasts use the same half-second."
           : domain === "rat" ? "Invented positions on a two-dimensional maze. There is no measured future endpoint."
             : "Invented right-wrist movement in three dimensions. There is no measured future endpoint.";
     if (!custom) {
       try {
-        if (angular) await compareAngles(data.angleExample,token);
+        if (angular) await compareAngles(forearm ? data.forearmExample : data.angleExample,token);
         else {
           const intervals = domain === "rat" && !recorded ? data.inventedRat : data.examples[domain].intervals;
           await showForecast(domain,intervals,recorded,token);
@@ -345,13 +360,13 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const encoded = new TextEncoder().encode(byId("data").textContent);
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",encoded)), v => v.toString(16).padStart(2,"0")).join("");
-      if (hash !== "941b862badbda9c3cdcccf50cf4353caf3b48b933c8256860672c2430e50e1e1") throw new Error("The examples and study comparisons failed their SHA-256 check.");
+      if (hash !== "58ccd72b91444f45a8f7e0bb2bc44621c6c0d0db3fcb0fe53452b42d06b2fd76") throw new Error("The examples and study comparisons failed their SHA-256 check.");
       data = JSON.parse(byId("data").textContent);
       model = await SharedMotion.loadSharedMotion();
       if (model.checkpointSha256 !== "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179") {
         throw new Error("The checkpoint differs from the one used for these comparisons.");
       }
-      if (model.movementCheckpointSha256 !== "8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6") {
+      if (model.movementCheckpointSha256 !== "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458") {
         throw new Error("The wrist-angle checkpoint differs from the studied model.");
       }
       studyTable();

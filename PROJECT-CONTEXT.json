@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "draft-2026-11-20-body-61-three-domain",
+  "version": "draft-2026-11-20-body-61-forearm-corrections",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
@@ -103,13 +103,13 @@
     "study_commit": "d32fd9f57c706fb52ad11c6a10239166e5b25088"
   },
   "shared_movement_transformer": {
-    "model_source": "https://github.com/eliminatenoise/NeuroTranslation/tree/c60c12e3355b5d2ba3a50364a7f6d294ec59f48e/models/neurotranslate-0.0",
-    "checkpoint_sha256": "8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6",
+    "model_source": "https://github.com/eliminatenoise/NeuroTranslation/tree/c8dfb5e641a4832a965f83469b3c38a601bfdb99/models/neurotranslate-0.0",
+    "checkpoint_sha256": "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458",
     "controls": "M → Shared model",
-    "scope": "One shared temporal encoder, two spatial distance readouts in cm and an optional two-axis wrist-angle path in degrees. Wrist-angle examples are invented or entered by the reader.",
+    "scope": "Two spatial distance forecasts (cm), three direct forecasts of right-wrist angles (degrees), and two corrections to the movement-only wrist forecast. Both corrections use earlier angles. One also uses four forearm signals. The included wrist-angle examples are invented.",
     "prespecified_transfer_passed": false,
     "spatial_checkpoint_sha256": "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
-    "angular_study": "Six previously studied people. The earlier forearm-corrected wrist-specific model had lower error. Matched random temporal weights had lower error in all three comparisons.",
-    "extended_checkpoint_sha256": "8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6"
+    "angular_study": "Across six previously studied people the motion-only correction scored 4.175° and the correction with forearm signals scored 4.054°. The earlier wrist-specific model scored 3.549°. Matched random temporal weights had lower error in all three direct comparisons. The final all-six fits have no new-person accuracy estimate.",
+    "extended_checkpoint_sha256": "da243393b7a6f72558365a30f7361e45ef7af680538a7fb5a927e930d91b3458"
   }
 }
