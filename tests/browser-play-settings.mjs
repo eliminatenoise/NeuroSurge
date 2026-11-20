@@ -157,7 +157,10 @@ try {
   if (await starter.count()) assert.equal(await starter.evaluate(el => getComputedStyle(el).visibility), 'hidden');
   const menu = shell.locator('.ns-menu');
   assert.match(await menu.locator('.ns-menu-look').innerText(), /← →\s+aim at the next motor area/);
-  assert.match(await menu.locator('.ns-menu-hold').innerText(), /Space\s+hold to grasp, tap to toggle/);
+  // Restated 20 November 2026 (the owner: "now right-click shouldn't lead to any grasping function. Let's just make
+  // spacebar grasping for all of the limbs at once"): the Space row says that the hands and the feet grip. Was
+  // /Space\s+hold to grasp, tap to toggle/.
+  assert.match(await menu.locator('.ns-menu-hold').innerText(), /Space\s+hands and feet grip; tap toggles/);
   assert.match(await menu.locator('.ns-menu-view').innerText(), /E\s+switch eye and outside views/);
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.ns-shell')).opacity === '1');
   await screenshot('pause');

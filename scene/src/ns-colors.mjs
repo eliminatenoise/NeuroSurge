@@ -688,7 +688,9 @@ export const AREA_LOOK = freeze({
   // lit area's light (0 = its own neon colour alone, as before); at 0.8 a lit key is white-hot with a breath of its hue.
   // (areaGain 1.8 -> 1.3 with it: white light carries all three channels, and at 1.8 its bloom hid the key's own shape
   // and its neighbours)
-  areaDarken: 0.7, areaGain: 1.3, areaNeon: 2.4, areaWhite: 0.8, areaRimGain: 1.0,
+  // (20 November 2026, evening, the owner, Message 203: "And let's make the activation area as bright as possible": the
+  // lit key's light pure white (areaWhite 0.8 -> 1) at more than twice the strength (areaGain 1.3 -> 3), its rim too)
+  areaDarken: 0.7, areaGain: 3, areaNeon: 2.4, areaWhite: 1, areaRimGain: 2,
   muscleGain: 0.42, muscleAlbedo: 0.5, muscleRimGain: 1.35, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
 });
 
@@ -1165,6 +1167,165 @@ export function muscleBaseInto(toneIndex, level, out = [0, 0, 0], look = MUSCLE_
   return out;
 }
 
+/** 20 November 2026 (the owner, Message 195: "The new look aesthetic you've provided in the recent most images is good.
+ * Apply it. But you need more clear contrast and differentiation between muscle groups"). In the raw look (ns-raw-look)
+ * the muscles are coloured by GROUP, the groups a student learns, each group one TONE of ONE rose red: the reference
+ * pictures' muscle colour (RGB 196, 92, 88 = OKLCH 0.602 0.134 24) at eight steps of lightness, the hue held at 22 to
+ * 24 degrees and the chroma at 0.115 to 0.135 (a judge panel on the first version: its hue steps toward pink, mauve and
+ * peach read as a candy colour code, not as one rose red; under one light the lightness step is what parts the groups
+ * anyway). 'rose' is the reference colour itself. The tones are given out so that groups that lie side by side are at
+ * least 0.15 apart in lightness wherever the views show their meeting: the upper arm's flexors (pale) against its
+ * extensors (dark) with the shoulder between them in the reference rose; the forearm's flexors (darkest) against its
+ * extensors (rose); the chest (darkest) against the shoulder and the pale abdominal wall; the thigh's front (rose)
+ * against its pale inner side and its darkest back, the hip and buttock a step down from the front; the shin's front
+ * (pale), its outer side (darkest) and the calf (deep). The upper arm's flexors are not the thigh's front tone (they lie
+ * side by side in the start picture), nor is the abdominal wall. The back is two steps lighter than the upper arm's
+ * extensors. Groups that never touch may share a tone. Within a group each muscle varies only slightly
+ * (MUSCLE_GROUP_LOOK.vary), and the deep storeys are a little darker as before (muscleBaseInto). No line is drawn
+ * between groups: the tone alone tells them apart. A display rule for teaching, not a property of the tissue; signals
+ * stay simulated. OKLCH [lightness, chroma, hue in degrees]; linear RGB and sRGB hex are derived. */
+export const MUSCLE_GROUP_TONES = freeze({
+  pale: muscleTone('pale', 0.76, 0.12, 22),
+  light: muscleTone('light', 0.71, 0.125, 23),
+  soft: muscleTone('soft', 0.66, 0.13, 23),
+  rose: muscleTone('rose', 0.602, 0.134, 24),
+  deep: muscleTone('deep', 0.56, 0.135, 24),
+  dusk: muscleTone('dusk', 0.51, 0.13, 23),
+  dark: muscleTone('dark', 0.46, 0.125, 22),
+  darkest: muscleTone('darkest', 0.41, 0.115, 22),
+  reference: muscleTone('reference', 0.602, 0.134, 24)
+});
+/** The muscle groups (first match wins; tested on the catalogue name in lower case with the side words taken out) and
+ * the tone each draws. A muscle no rule names draws the reference tone. */
+export const MUSCLE_GROUPS = freeze([
+  freeze({ id: 'face', tone: 'soft', test: /frontalis|occipitalis|temporoparietalis|temporalis|masseter|pterygoid|orbicularis|zygomaticus|levator labii|levator anguli|nasolabialis|depressor|mentalis|nasalis|procerus|risorius|corrugator|buc+inator|levator palpebrae/ }),
+  freeze({ id: 'neck', tone: 'deep', test: /sternocleidomastoid|scalenus|longus colli|longus capitis|hyoid|digastric|platysma|levator scapulae|sternothyroid|rectus capitis/ }),
+  freeze({ id: 'forearmExtensors', tone: 'rose', test: /brachioradialis|extensor carpi|extensor digitorum(?!\s+(longus|brevis))|extensor digiti minimi|extensor indicis|extensor pollicis|abductor pollicis longus|supinator/ }),
+  freeze({ id: 'forearmFlexors', tone: 'darkest', test: /pronator|flexor carpi|palmaris longus|flexor digitorum (superficialis|profundus)|flexor pollicis longus/ }),
+  freeze({ id: 'hand', tone: 'pale', test: /\bhand\b|pollicis brevis|opponens pollicis|adductor pollicis|palmaris brevis/ }),
+  freeze({ id: 'upperArmFlexors', tone: 'pale', test: /biceps brachii|brachialis/ }),
+  freeze({ id: 'upperArmExtensors', tone: 'dark', test: /triceps|anconeus/ }),
+  freeze({ id: 'shoulder', tone: 'rose', test: /deltoid|supraspinatus|infraspinatus|teres (major|minor)|subscapularis/ }),
+  freeze({ id: 'chest', tone: 'darkest', test: /pectoralis|serratus anterior|subclavius/ }),
+  freeze({ id: 'abdominalWall', tone: 'pale', test: /rectus abdominis|oblique|transversus abdominis|pyramidalis/ }),
+  freeze({ id: 'back', tone: 'light', test: /trapezius|latissimus|rhomboid|erector|iliocostalis|longissimus|spinalis|splenius|multifidus|rotatores|serratus posterior|quadratus lumborum|interspinal|intertransvers/ }),
+  freeze({ id: 'hipAndButtock', tone: 'dusk', test: /glute|tensor fasciae|piriformis|gemellus|obturator|quadratus femoris|iliacus|psoas/ }),
+  freeze({ id: 'thighFront', tone: 'rose', test: /rectus femoris|vastus|sartorius|articularis genus/ }),
+  freeze({ id: 'thighInner', tone: 'pale', test: /adductor (longus|brevis|magnus|minimus)|gracilis|pectineus/ }),
+  freeze({ id: 'thighBack', tone: 'darkest', test: /biceps femoris|semitendinosus|semimembranosus/ }),
+  freeze({ id: 'shinFront', tone: 'pale', test: /tibialis anterior|extensor digitorum longus|extensor hallucis longus|(fibularis|peroneus) tertius/ }),
+  freeze({ id: 'shinSide', tone: 'darkest', test: /fibularis|peroneus/ }),
+  freeze({ id: 'calf', tone: 'deep', test: /gastrocnemius|soleus|plantaris|popliteus|tibialis posterior|flexor digitorum longus|flexor hallucis longus/ }),
+  freeze({ id: 'foot', tone: 'dark', test: /extensor digitorum brevis|extensor hallucis brevis|flexor digitorum brevis|hallucis|digiti minimi|quadratus plantae|lumbrical|interossei|\bfoot\b/ })
+]);
+/** vary: each muscle's own lightness within its group, one of `steps` steps over +- vary (linear light), from its
+ * side-free key (so a left and a right muscle match); used only until the muscles' contacts are known (MUSCLE_STEP). */
+export const MUSCLE_GROUP_LOOK = freeze({ vary: 0.07, steps: 5 });
+/** 20 November 2026 (the owner, Message 202: "each muscle group, bundle, spindle, fiber, whatever you want to call it,
+ * activation group, should have its own sort of shading system, such that muscles next to each other can be obviously
+ * told apart, and you don't mix them up as one amorphous group"). On top of its group's tone each muscle takes one of
+ * `steps` lightness steps (OKLCH lightness + step x stepL), given out like the colours of a map: from the muscles that
+ * touch in the drawn body (ns-scene-three assignBodyMuscleTones: shared cells of the rest meshes, weighted by how much
+ * they share), each muscle takes the step that keeps it furthest from its touching neighbours: at least sameGoal from a
+ * neighbour of its own group (so the quadriceps' four heads, the forearm's flexors, the pectoral's parts read as
+ * separate muscles) and otherGoal from a neighbour of another group (so a step never brings two groups together: a
+ * muscle at a group's border steps away from the group beside it). Greedy, the most-connected muscle first, then
+ * refined until nothing improves; deterministic. The hue and the chroma stay the group's: still one rose red. */
+// (A contact counts by how much the two meshes share and by how much of both is seen: `seen` per storey, so a deep
+// muscle under two others does not take the steps the outer ones need.)
+// (stepH: with each step the hue turns that many degrees too, toward rose for a darker step and toward warm red for a
+// lighter one, so two neighbours differ a little in colour as well as in lightness; the tones' hue 22-24 stays within
+// 16-32.)
+export const MUSCLE_STEP = freeze({ stepL: 0.08, stepH: 4, steps: freeze([-1, 0, 1]), sameGoal: 0.08, otherGoal: 0.15, minContact: 4, refinePasses: 16, minL: 0.35, maxL: 0.82,
+  seen: freeze({ outer: 1, intermediate: 0.6, deep: 0.2 }) });
+/** Steps for the muscles (pure, deterministic). keys: side-free muscle keys; contacts: Map key -> Map(neighbour key ->
+ * shared cells); groupOf(key): the key's group; toneL(group): the group tone's OKLCH lightness. Returns Map key -> step
+ * (one of o.steps), and on the map .worst { same, other }: the smallest lightness gap left between two touching
+ * muscles (contacts of at least minContact cells) of the same group and of different groups. */
+export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STEP, layerOf = null) {
+  const list = [...new Set(keys)].map(String);
+  const G = new Map(list.map(k => [k, groupOf(k)])), L0 = new Map(list.map(k => [k, toneL(G.get(k))]));
+  const seen = k => { const l = typeof layerOf === 'function' ? layerOf(k) : null; return o.seen && Number.isFinite(o.seen[l]) ? o.seen[l] : 1; };
+  const nbCache = new Map();
+  const nb = k => {
+    let r = nbCache.get(k);
+    if (!r) { r = [...((contacts && contacts.get(k)) || new Map())].filter(([n, w]) => n !== k && w >= o.minContact && L0.has(n)).map(([n, w]) => [n, w * Math.min(seen(k), seen(n))]); nbCache.set(k, r); }
+    return r;
+  };
+  const deg = new Map(list.map(k => [k, nb(k).reduce((s, [, w]) => s + w, 0)]));
+  list.sort((a, b) => deg.get(b) - deg.get(a) || (a < b ? -1 : a > b ? 1 : 0));
+  const step = new Map();
+  const Lof = (k, st) => L0.get(k) + st * o.stepL;
+  const costOf = (k, st) => {
+    let c = 0;
+    for (const [n, w] of nb(k)) {
+      if (!step.has(n)) continue;
+      const goal = G.get(n) === G.get(k) ? o.sameGoal : o.otherGoal;
+      c += Math.sqrt(w) * Math.max(0, goal - Math.abs(Lof(k, st) - Lof(n, step.get(n)))) ** 2;
+    }
+    return c;
+  };
+  for (const k of list) {
+    let best = 0, bestCost = Infinity;
+    const rot = toneHash(`step:${k}`) % o.steps.length;
+    for (let r = 0; r < o.steps.length; r++) {
+      const st = o.steps[(rot + r) % o.steps.length], c = costOf(k, st);
+      if (c < bestCost - 1e-12) { bestCost = c; best = st; }
+    }
+    step.set(k, best);
+  }
+  for (let pass = 0; pass < o.refinePasses; pass++) {
+    let changed = 0;
+    for (const k of list) {
+      const cur = step.get(k); let best = cur, bestCost = costOf(k, cur);
+      for (const st of o.steps) { if (st === cur) continue; const c = costOf(k, st); if (c < bestCost - 1e-9) { bestCost = c; best = st; } }
+      if (best !== cur) { step.set(k, best); changed++; }
+    }
+    if (!changed) break;
+  }
+  let same = Infinity, other = Infinity;
+  const short = [];
+  for (const k of list) for (const [n, w] of nb(k)) {
+    if (n < k) continue;
+    const d = Math.abs(Lof(k, step.get(k)) - Lof(n, step.get(n))), sg = G.get(n) === G.get(k);
+    if (sg) same = Math.min(same, d); else other = Math.min(other, d);
+    if (d < (sg ? o.sameGoal : o.otherGoal) - 1e-9) short.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]);
+  }
+  short.sort((a, b) => b[2] - a[2]);
+  step.worst = { same: Number.isFinite(same) ? Math.round(same * 1000) / 1000 : null, other: Number.isFinite(other) ? Math.round(other * 1000) / 1000 : null,
+    short: short.length, heaviestShort: short.slice(0, 12) };
+  return step;
+}
+/** The group of a muscle from its catalogue name (null or unknown: 'other'). Pure. */
+export function muscleGroupOf(sourceName) {
+  if (typeof sourceName !== 'string' || !sourceName.trim()) return 'other';
+  const n = sourceName.toLowerCase().replace(/\b(right|left)\b/g, ' ').replace(/[._\s-][rl]\s*$/, '').replace(/\s+/g, ' ').trim();
+  for (const g of MUSCLE_GROUPS) if (g.test.test(n)) return g.id;
+  return 'other';
+}
+/** The tone record of a group. Pure. */
+export function muscleGroupTone(group) {
+  const g = MUSCLE_GROUPS.find(x => x.id === group);
+  return MUSCLE_GROUP_TONES[g ? g.tone : 'reference'];
+}
+/** Resting base colour (LINEAR RGB) of a muscle in the raw look: its group's tone, its own small step of lightness
+ * (from `key`, its side-free tone key) and its storey shade (as muscleBaseInto). `out` reused. Pure. */
+export function muscleGroupBaseInto(group, key, level, out = [0, 0, 0], o = MUSCLE_GROUP_LOOK, look = MUSCLE_LOOK, step = null, so = MUSCLE_STEP) {
+  const tone = muscleGroupTone(group);
+  let t = tone.linear, v = 1;
+  if (Number.isFinite(step)) {
+    // (Message 202: the muscle's own lightness step among its touching neighbours, assignMuscleSteps)
+    const [L, C, h] = tone.oklch;
+    t = okLchToLinear(Math.min(so.maxL, Math.max(so.minL, L + step * so.stepL)), C, h + step * (so.stepH || 0));
+  } else {
+    const hh = toneHash(`group:${String(key)}`);
+    v = o.steps > 1 ? 1 + o.vary * (2 * (hh % o.steps) / (o.steps - 1) - 1) : 1;
+  }
+  const k = (level === 'deep' ? look.deepShade : level === 'intermediate' ? look.intermediateShade : 1) * v;
+  for (let i = 0; i < 3; i++) out[i] = t[i] * k;
+  return out;
+}
+
 /** 19 November 2026 (the owner: "Make sure every single muscle is differentiated from each other in shade"). A muscle's
  * OWN shade on top of its tone (pure): from its side-free key (so a left and a right muscle match), one of
  * MUSCLE_OWN_SHADE.steps lightness steps over +-`light` and a small warm / cool shift (+-`warm` on green against
@@ -1187,6 +1348,23 @@ export const VISITED = freeze({ value: 0.36, grey: 0.12, areaValue: 0.3, areaLif
 export function visitedShadeInto(rgb, o = VISITED) {
   const g = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
   for (let i = 0; i < 3; i++) rgb[i] = (rgb[i] + (g - rgb[i]) * o.grey) * o.value;
+  return rgb;
+}
+
+/** 20 November 2026 (the raw look; a judge panel: the darkening above turned the group tones brown and made a used
+ * muscle read as another group). In the raw look a muscle that has been switched on keeps its hue and chroma and only
+ * its OKLab lightness goes down, by `lightness` (milder than VISITED.value, so the group's own step still shows for
+ * the rest of the session). Multiplies a LINEAR RGB colour in place. Pure. */
+export const VISITED_RAW = freeze({ lightness: 0.86 });
+export function visitedLightnessInto(rgb, o = VISITED_RAW) {
+  const [r, g, b] = rgb;
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const q = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * q) * o.lightness;
+  const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * q, B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * q;
+  const out = okLchToLinear(L, Math.hypot(A, B), Math.atan2(B, A) * 180 / Math.PI);
+  rgb[0] = out[0]; rgb[1] = out[1]; rgb[2] = out[2];
   return rgb;
 }
 

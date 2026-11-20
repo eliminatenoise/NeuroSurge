@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ROOM, roomLight, srgbOf, roomGlsl, roomRayMatrix, roomGain, roomBeatStep, roomActiveStep, ROOM_ORDER } from '../scene/src/ns-room.mjs';
 import { ASSEMBLY } from '../scene/src/ns-assembly-core.mjs';
+import { RAW_LOOK } from '../scene/src/ns-raw-look.mjs'; // 20 November 2026: the raw look's room
 
 const DEG = Math.PI / 180;
 const dirOf = (yawDeg, pitchDeg) => [-Math.sin(yawDeg * DEG) * Math.cos(pitchDeg * DEG), Math.sin(pitchDeg * DEG), -Math.cos(yawDeg * DEG) * Math.cos(pitchDeg * DEG)];
@@ -56,11 +57,18 @@ test('it stays a dark picture: nothing but the lamp heads is brighter than a dar
   }
   assert.ok(maxLow < 0.28, `the floor and the wall stay under about a quarter of white (${maxLow.toFixed(3)})`);
   assert.ok(maxAll < 0.6, `even the lamp heads stay well under white (${maxAll.toFixed(3)})`);
-  // behind you, level: the curtain's upper part is within a few steps of the old background colour 0x05070b
+  // behind you, level: the curtain's upper part is within a few steps of the room's darkest colour
   const far = roomLight(EYE, dirOf(180, 25)).colour.map(srgbOf).map(v => Math.round(v * 255));
-  assert.ok(far[0] <= 8 && far[1] <= 11 && far[2] <= 15, `dark above the horizon behind you: ${far}`);
-  // 19 November 2026 (the owner: "much darker blacks instead of ugly grays"): darker than the old 0x05070b, and neutral
-  assert.deepEqual(ROOM.black.map(srgbOf).map(v => Math.round(v * 255)), [3, 3, 4]);
+  const black = ROOM.black.map(srgbOf).map(v => Math.round(v * 255));
+  assert.ok(far.every((v, i) => v >= black[i] && v <= black[i] + 4), `dark above the horizon behind you: ${far} (darkest ${black})`);
+  if (RAW_LOOK.on) {
+    // 20 November 2026 (the owner, Messages 195 / 196: the reference pictures' look for everything): the room is their
+    // near-black RGB 18, 18, 22, its darkest a little under it so the faint pool of light lands there (ns-raw-look)
+    assert.deepEqual(black, [15, 15, 19]);
+  } else {
+    // 19 November 2026 (the owner: "much darker blacks instead of ugly grays"): darker than the old 0x05070b, and neutral
+    assert.deepEqual(black, [3, 3, 4]);
+  }
 });
 
 test('the pool of light is under the brain and falls away; the grout is darker than the tile; shadows darken the floor', () => {

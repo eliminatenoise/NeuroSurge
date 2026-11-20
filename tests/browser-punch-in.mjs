@@ -204,16 +204,22 @@ try {
     assert.ok(assets.packed);
     assert.equal(assets.raw, 0);
   }
+  // 20 November 2026, evening (the owner, Message 197: "Let's get rid of all zoom and punch-in effects, as they're really
+  // confusing"): the brief lens punch is gone (ns-app PUNCH_IN.on false). Restated: the lens stays the same through every
+  // press, in both views, with or without reduced motion. (Before: 0.958 to 0.975 at the peak without reduced motion.)
   for (const { name, scaleAtPeak } of report.views) {
-    if (reduced) assert.ok(Math.abs(scaleAtPeak - 1) < 0.001, name + ' respects reduced motion');
-    else assert.ok(scaleAtPeak >= 0.958 && scaleAtPeak <= 0.975, name + ' receives the brief lens punch');
+    assert.ok(Math.abs(scaleAtPeak - 1) < 0.001, name + (reduced ? ' respects reduced motion' : ' keeps the lens steady (no punch-in)'));
   }
 
   if (!reduced) {
     const rest = report.views[1].before.render.fov;
+    const seq0 = await page.evaluate(() => window.__nsQA.inspect().state.activity.pulseSeq);
+    await page.evaluate(() => window.readPunchFrames(true));
     await repeatSelectedRegion();
-    await page.waitForFunction(fov => window.readPunchFrames().last.fov < fov - 0.1, rest,
+    // (restated as above: the repeated movement runs, and no frame of it draws a tighter lens)
+    await page.waitForFunction(seq => window.__nsQA.inspect().state.activity.pulseSeq > seq && window.readPunchFrames().drawn >= 10, seq0,
       { polling: 20, timeout: 5000 });
+    assert.equal(await page.evaluate(() => window.readPunchFrames().low.fov), rest, 'a repeated movement keeps the lens steady');
     const active = await page.evaluate(() => window.__nsQA.inspect().state.activity.pulseSeq);
     await page.keyboard.press('Escape');
     await page.waitForFunction(fov => window.__nsQA.inspect().shell.mode === 'paused'

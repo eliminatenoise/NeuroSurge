@@ -141,9 +141,9 @@ export const HONESTY = deepFreeze({
   // R5-text (D17, user R21): the glow is a picture of the game's area-to-muscle link, never a nerve path.
   glow: {
     id: 'glow-not-nerve',
-    plain: 'The shared colour and the short line between a brain area and its muscles are only a picture. They show ' +
+    plain: 'The shared colour and the cone of light between a brain area and its muscles are only a picture. They show ' +
       'which muscles that area drives in this game. The colours are a code for the game, not a measurement, and the ' +
-      'line is not a nerve. Real signals travel from the brain down the spinal cord and along nerves to the muscles. ' +
+      'light is not a nerve. Real signals travel from the brain down the spinal cord and along nerves to the muscles. ' +
       'For the head and face, they leave from the base of the brain.',
     more: 'The area colours and the glow link display the simulated area-to-muscle mapping, not a pathway or a light ' +
       'signal (the glow only looks like light-activated tissue): real corticospinal signals reach spinal motor neurons ' +
@@ -241,7 +241,7 @@ const STEP_TABLE = [
     part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
       'both hips turn inward or outward. Each limb goes its own way: it carries on in the direction it last turned. Tap ' +
       'twice and hold, and they keep turning, slowly. Let go and every limb stays where it is.')],
-  intro: [part('Keys 1 to 4 choose a limb; it goes with your view, and W, A, S and D move its hand or foot. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
+  intro: [part('Keys 1 to 4 choose a limb; in the eye view it goes with your view, and W, A, S and D move its hand or foot. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
   { head: 'The glass brain.', parts: [
     // R558 (user Message 2): every motor area has its own colour, and its muscles glow in the same colour.
     part('A giant glass brain floats in front of you. Its motor areas are the parts that send movement ' +
@@ -262,7 +262,7 @@ const STEP_TABLE = [
   intro: [part('The coloured band across the brain is the motor strip (a simplified map). The brain faces you (its eyeballs ' +
     'are at the bottom), so its right half is on your left. Each half of the brain mainly moves the opposite side of your ' +
     'body: the areas on your left move your left side. Each motor area has its own colour: switched on, it and its muscles glow in that colour.'),
-    part('A soft line in that colour joins them for a moment (a picture, not a nerve).', 'glow')] },
+    part('A cone of light in that colour joins them (a picture, not a nerve).', 'glow')] },
   // R558 (Message 56): the order of the body along the strip comes first (ns-bodymap order 0 to 26: toes, ankle, knee,
   // hip, trunk, shoulder, elbow, forearm, wrist, hand, little finger to thumb, neck, forehead to jaw, tongue, throat),
   // then the colour families. The order is the game's simplified map (HONESTY.notExact, HONESTY.overlapVary).
@@ -297,6 +297,7 @@ const STEP_TABLE = [
     'You can also take hold of things: aim your crosshair or free pointer at the brain, the mirror body or one of your own limbs and hold Space. While Space is held, ' +
     'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
     'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
+    'While Space holds, both your hands close and the toes of both feet curl; a click never closes a hand. ' +
     'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
     'Space on one of your limbs chooses that limb. A limb moves only as far as its joints allow, and the brain area that moves it lights up. Press on a limb and drag: sideways turns it, up and down bends and straightens it. ' +
     'The limb you are moving pushes your other limbs out of its way; a pushed limb stays where it was pushed until you choose it and move it back. ' +
@@ -351,13 +352,15 @@ const CONTROL_TABLE = [
   ['W / S', 'W moves the chosen limb\'s hand or foot forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
-  ['Hold Space', 'aim at the brain or the mirror body. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Nothing stops a carried thing: it goes through you and through anything. Space on one of your limbs chooses that limb. Your left hand closes while Space is down.'],
+  // 20 November 2026, evening (the owner, Message 204: "Let's just make spacebar grasping for all of the limbs at once"):
+  // Space closes both hands and curls the toes of both feet; a click closes nothing (ns-app SPACE_GRIP).
+  ['Hold Space', 'aim at the brain or the mirror body. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Nothing stops a carried thing: it goes through you and through anything. Space on one of your limbs chooses that limb. While Space is down, both hands close and the toes of both feet curl.'],
   ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
   ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
   // 19 November 2026 (the owner: "go back to activation simply by cursor highlight"; "activates heavily relaxes slightly
   // and repeats that process with each further click").
-  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again.'],
+  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again. A click never closes a hand: only Space grips.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
   // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
   ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice and the whole limb lights up. Your view turns only if its hand or foot is outside the picture.'],
@@ -388,14 +391,14 @@ const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
   'A / D': 'hand and held item left/right',
   'W / S': 'W farther, S closer; combine with A/D',
-  'Hold Space': 'hold the brain or mirror body; turn your view to carry it',
+  'Hold Space': 'hands and feet grip; hold the brain or mirror body, look to carry it',
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
   'Double-tap and hold': 'the limbs keep turning, slowly',
   'Look / Click': 'look at an area: the part moves. Click: again.',
   '1 to 4': 'choose the limb W A S D move',
   'Double click': 'the next limb; hold to keep stepping',
-  Look: 'the chosen limb goes with your view',
+  Look: 'in the eye view the chosen limb goes with your view',
   '← / →': 'arrow keys: step your look to the next motor area',
   'Click a muscle': 'switch on its brain area',
   'Press and drag': 'turn the brain or mirror body; turn or bend a limb',
@@ -514,7 +517,8 @@ export const SHELL = deepFreeze({
       // limb (ns-app holdCarries).
       note: 'Double click steps to the next limb. In the eye view the chosen limb goes with your view: look up to raise ' +
         'it, down to lower it. W and S move its hand or foot straight out and back in; A and D swing the limb left and right.' },
-    { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hold to grasp, tap to toggle'],
+    // (20 November 2026, evening, Message 204: Space grips with all four limbs at once; a click grips nothing)
+    { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hands and feet grip; tap toggles'],
       ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
       ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'switch eye and outside views'],
@@ -540,7 +544,7 @@ export const SHELL = deepFreeze({
     // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number
     // row do; the full words are in the Controls list.
     lineMove: 'W, A, S, D move the hand or foot of the limb you chose (1 to 4), or the thing Space holds. The chosen limb goes with your view. Hold Shift as you click, press Space or drag to reach the other thing in line with the crosshair.',
-    lineSpace: 'Space takes hold of the brain, the mirror body or a limb: hold it, or tap once (tap again to let go). Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
+    lineSpace: 'Space takes hold of the brain, the mirror body or a limb: hold it, or tap once (tap again to let go). While it holds, both hands close and the toes curl. Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
     padTitle: 'Trackpad or mouse',
     padMove: 'Move: turn your head to look around.',
     padClick: 'Click a motor area: its body part moves. Click a muscle: its motor area switches on.',
@@ -1154,34 +1158,38 @@ export function reachInfoCard(reach) {
  * left hand's area), the movement and the muscles: the prime movers of ns-bodymap grasp_close and open_hand, with the
  * wrist extensors that steady the wrist in a grip (its listed synergists). The closed hand is a SIGN of the grasp:
  * the game carries a held item, the fingers do not touch it (said in the caveat). Levels are simulated and unitless.
+ * 20 November 2026, evening (the owner, Message 204: "Let's just make spacebar grasping for all of the limbs at once"):
+ * the grip closes BOTH hands and curls the toes of both feet (ns-app SPACE_GRIP), so the card names the four strip
+ * parts, the toe benders with the finger benders, and both sides of the brain; a click closes nothing.
  */
 export const GRASP_INFO = deepFreeze({
-  tag: INFO.leftArmTag,
+  tag: 'Hand and toe motor areas (both halves of the brain)',
   rows: REACH_INFO.rows,
-  area: 'Left hand',
+  area: 'Left hand, right hand, left toes, right toes',
   simulated: REACH_INFO.simulated,
   close: {
-    title: 'Left hand: grip',
+    title: 'Hands and feet: grip',
     keyHeld: 'Space (held down)',
     keyKept: 'Space (tapped once)',
-    movement: 'The fingers and thumb curl closed into a grip (finger and thumb flexion)',
+    movement: 'Both hands curl closed into a grip and the toes of both feet curl (finger, thumb and toe flexion)',
     muscles: 'finger benders in the forearm (flexor digitorum superficialis and profundus), long thumb bender (flexor pollicis longus), ' +
-      'thumb muscles of the palm (flexor pollicis brevis, opponens pollicis, adductor pollicis). The wrist extensors hold the wrist steady',
-    caveat: 'Game rule: the closed hand is a sign of the grasp. The game carries what is held; the fingers do not touch it.'
+      'thumb muscles of the palm (flexor pollicis brevis, opponens pollicis, adductor pollicis); toe benders (flexor digitorum longus ' +
+      'and brevis, flexor hallucis longus and brevis). The wrist extensors hold the wrists steady',
+    caveat: 'Game rule: the closed hands and curled toes are a sign of the grasp. The game carries what is held; nothing touches it.'
   },
   open: {
-    title: 'Left hand: let go',
+    title: 'Hands and feet: let go',
     key: 'Space (let go)',
-    movement: 'The fingers and thumb straighten and the hand opens (finger and thumb extension)',
+    movement: 'The fingers and thumbs straighten and the hands open (finger and thumb extension); the toes uncurl',
     muscles: 'finger straighteners on the back of the forearm (extensor digitorum, extensor indicis, extensor digiti minimi), ' +
       'thumb straighteners (extensor pollicis longus and brevis)',
-    caveat: 'Game rule: the hand opens when it lets go. A real hand can also let go just by relaxing.'
+    caveat: 'Game rule: the hands open when they let go. A real hand can also let go just by relaxing.'
   },
   holding: { brain: 'the brain', mirror: 'the mirror body', rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot' },
   leadHeld: 'Let go of Space to release it.',
   leadKept: 'Tap Space again to let go.',
   leadNothingHeld: 'Nothing is held: put the crosshair on the brain, the mirror body or one of your limbs, then press Space.',
-  leadNothingKept: 'Tap Space again to open the hand.'
+  leadNothingKept: 'Tap Space again to open the hands.'
 });
 
 /** PURE: the information card for the grip of a Space grasp. grip = { phase: 'close' | 'open', holding: 'brain' |
@@ -1629,8 +1637,9 @@ export const GUIDE = deepFreeze({
     watchBody: 'Look at a purple leg area. Then look down at the body and press 1 or 2: watch the leg move.',
     // R5-text (D17): points out the brain-to-muscle glow; it needs a NEW switch-on while this line shows (ns-guide).
     glow: 'Look at a blue area. See its muscles glow in the same blue?',
-    // The brain can be carried with the pointer or with W/A/S/D while Space holds it.
-    dragBrain: 'Hold Space on the brain. Turn your view to carry it, then let go of Space.',
+    // The brain can be carried with the pointer or with W/A/S/D while Space holds it. (20 November 2026, evening,
+    // Message 204: Space grips with both hands and both feet; the line says so, since the step is where Space is taught.)
+    dragBrain: 'Hold Space on the brain: both hands and feet grip. Turn your view to carry it, then let go.',
     // R4-fix (review RP4): with the mouse captured the crosshair must look far from the brain to reach an arrow; a free
     // mouse (Esc twice) lets you click the arrows while you watch the brain. R5-text (D16): no "curved" (user R20).
     orbit: 'Press Esc twice for a free mouse. Then click or hold an arrow by the brain to turn the brain.',

@@ -19,6 +19,7 @@ import { ASSEMBLY_ORDER, ASSEMBLY_TIERS, assemblyDepth, createAssemblyRelease } 
 import { HEMI_GAP, hemisphereSideOf, partedPositions } from './ns-brain-part.mjs';
 import { buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
 import { BODY_SHAPE, limbLengthField, trunkShapeField } from './ns-body-shape.mjs';
+import { RAW_LOOK, patchRawShaders } from './ns-raw-look.mjs';
 
 /** 20 November 2026 (the owner: "Let's make the limbs longer", "a smaller and much flatter chest essentially, and a more
  * observable bottom torso"). The game draws its body with longer limbs and a flatter chest (ns-body-shape BODY_SHAPE, on
@@ -70,6 +71,32 @@ export const ASSEMBLY_EYES = Object.freeze({ delayS: 0.35, eyeFromMm: Object.fre
 export const ASSEMBLY_KINDS = Object.freeze({
   bone: 0xe8dfc8, muscle: 0xb2343c, eye: 0xf4f1ea, brain: 0xe0a39c, strip: 0xff4f9a, vessel: 0xa3161d
 });
+
+/** 20 November 2026 (the owner, Message 196: "New look for everything not just body"): in the raw look (ns-raw-look
+ * RAW_LOOK.on) the picture's models are drawn in the game's raw light (patchRawShaders, no tone curve) and its bodies in
+ * the game's raw colours: the ivory bone and the reference pictures' rose red (RGB 196, 92, 88) for the outer muscles,
+ * a step darker for each deeper storey as before; the cortex in the game's own crown pink (ns-brain-ink BRAIN_FLESH).
+ * sRGB hex by kind or tier name; anything not listed keeps its colour below. (The picture knows no muscle's name, so it
+ * shows the storeys, not the game's muscle groups.) */
+export const ASSEMBLY_RAW_COLOURS = Object.freeze({
+  bone: 0xe8e0cd, muscle: 0xc45c58, 'deep muscles': 0x9e4744, 'intermediate muscles': 0xb1514e, 'outer muscles': 0xc45c58,
+  brain: 0xedbdba, 'outer cortex': 0xedbdba, 'inner cortex': 0xe2aeab
+});
+const RAW = RAW_LOOK.on === true;
+const rawHex = (key, hex) => (RAW && ASSEMBLY_RAW_COLOURS[key] !== undefined ? ASSEMBLY_RAW_COLOURS[key] : hex);
+/** The raw look's light on a loading-picture material (composed after its own patch; a clone needs it again: three.js
+ * does not copy onBeforeCompile). Nothing when the raw look is off. */
+function rawMaterial(m) {
+  if (!RAW || !m) return m;
+  const prev = m.onBeforeCompile, key = `${typeof m.customProgramCacheKey === 'function' ? m.customProgramCacheKey() : ''}|ns-raw`;
+  m.onBeforeCompile = function (shader, renderer) {
+    if (typeof prev === 'function') prev.call(this, shader, renderer);
+    const p = patchRawShaders(shader.vertexShader, shader.fragmentShader);
+    if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
 
 /** 18 November 2026 (inside out): a colour for each layer, so the layers read as layers while they come in: the deep
  * muscles a darker red than the outer ones; inside the brain, the ventricles in the pale blue of their fluid, the deep
@@ -210,7 +237,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   const still = reducedMotion === true; // prefers-reduced-motion: parts appear in place; no turning, no beat
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setClearColor(0x000000, 1);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = RAW ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; // 20 November 2026: the raw look has no tone curve
   renderer.toneMappingExposure = 1.15;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(o.camera.fovYDeg, 1, 200, 20000);
@@ -244,18 +271,18 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
 
   const base = {};
   for (const k of Object.keys(ASSEMBLY_KINDS)) {
-    base[k] = new THREE.MeshStandardMaterial({ color: ASSEMBLY_KINDS[k], roughness: k === 'bone' || k === 'eye' ? 0.5 : 0.42, metalness: 0.02,
-      emissive: k === 'strip' ? 0xff2f86 : 0x000000, emissiveIntensity: k === 'strip' ? 0.35 : 0 });
+    base[k] = rawMaterial(new THREE.MeshStandardMaterial({ color: rawHex(k, ASSEMBLY_KINDS[k]), roughness: k === 'bone' || k === 'eye' ? 0.5 : 0.42, metalness: 0.02,
+      emissive: k === 'strip' ? 0xff2f86 : 0x000000, emissiveIntensity: k === 'strip' ? 0.35 : 0 }));
   }
   // One resting material per layer (ASSEMBLY_TIER_COLOURS); the strip keeps its own (its light beats).
   const tierBase = new Map();
   const restMaterial = (kind, track, tier) => {
     const name = track && Number.isInteger(tier) ? ASSEMBLY_TIERS[track][tier] : null;
-    const hex = name && ASSEMBLY_TIER_COLOURS[track] ? ASSEMBLY_TIER_COLOURS[track][name] : undefined;
+    const hex = name && ASSEMBLY_TIER_COLOURS[track] ? rawHex(name, ASSEMBLY_TIER_COLOURS[track][name]) : undefined;
     if (kind === 'strip' || hex === undefined) return base[kind];
     const key = `${kind}:${track}:${tier}`;
     let m = tierBase.get(key);
-    if (!m) { m = base[kind].clone(); m.color.setHex(hex); if (name === 'ventricles') { m.roughness = 0.25; } tierBase.set(key, m); }
+    if (!m) { m = rawMaterial(base[kind].clone()); m.color.setHex(hex); if (name === 'ventricles') { m.roughness = 0.25; } tierBase.set(key, m); }
     return m;
   };
   // 18 November 2026 (PKG-LOAD: the brain is built "out to the cortex and the motor strip ... then the strip's areas
@@ -267,6 +294,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   const STRIP_LIGHT = { sweepS: 2.6, edge: 0.06, delayS: 0.5 };
   const stripLit = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.42, metalness: 0.02, emissive: 0xffffff, emissiveIntensity: 0.3 });
   stripLit.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;'); };
+  stripLit.customProgramCacheKey = () => 'ns-assembly-strip-lit';
+  rawMaterial(stripLit);
   const stripState = { parts: [], status: 'waiting', startS: null, done: false, ms: null, error: null };
   const PINK_LINEAR = new THREE.Color(0xff4f9a); // the strip's own colour (THREE converts the hex to linear light)
   const flash = { bone: new THREE.Color(0x9fdcff), eye: new THREE.Color(0x9fdcff), muscle: new THREE.Color(0xff7a5c), brain: new THREE.Color(0xffb3c8), strip: new THREE.Color(0xff5fb0), vessel: new THREE.Color(0xff6a5c) };
@@ -352,7 +381,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   function start(p, nowS, copy = null) {
     const inBrain = p.track === 'brain';
     const rest = restMaterial(p.kind, p.track, p.tier);
-    const mat = rest.clone();
+    const mat = rawMaterial(rest.clone());
     const jitter = copy ? copy.jitter : p.kind === 'muscle' ? [(Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.07] : null;
     if (jitter) mat.color.offsetHSL(jitter[0], 0, jitter[1]);
     const mesh = new THREE.Mesh(p.geometry, mat);
@@ -414,7 +443,7 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
       if (C) merged.setAttribute('color', new THREE.BufferAttribute(C, 3));
       merged.setIndex(new THREE.BufferAttribute(I, 1));
       let mat = g.base;
-      if (g.keep) { mat = shadeMaterial.get(g.base); if (!mat) { mat = g.base.clone(); mat.color.setHex(0xffffff); mat.vertexColors = true; shadeMaterial.set(g.base, mat); } }
+      if (g.keep) { mat = shadeMaterial.get(g.base); if (!mat) { mat = rawMaterial(g.base.clone()); mat.color.setHex(0xffffff); mat.vertexColors = true; shadeMaterial.set(g.base, mat); } }
       const mesh = new THREE.Mesh(merged, mat);
       mesh.frustumCulled = false;
       g.parent.add(mesh);
@@ -494,8 +523,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
       const geoOf = (P, Nn, C, I) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(Nn, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setIndex(new THREE.BufferAttribute(I, 1)); return g; };
       const centreOf = P => { let x = 0, y = 0, z = 0; const n = P.length / 3; for (let i = 0; i < P.length; i += 3) { x += P[i]; y += P[i + 1]; z += P[i + 2]; } return [x / n, y / n, z / n]; };
       const launch = (geo, rough, c, dir, at, flyS) => {
-        const base = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: 0.02 });
-        const mat = base.clone(); eyeMats.push(base, mat);
+        const base = rawMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: 0.02 }));
+        const mat = rawMaterial(base.clone()); eyeMats.push(base, mat);
         const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false;
         // (hidden until the next frame's flight step places it: it was added after this frame's flight step, so it was
         // drawn once at its final place before flying in; 20 Nov review)

@@ -1,0 +1,98 @@
+/** NeuroSurge: THE RAW LOOK (20 November 2026).
+ *
+ * The owner, Message 195: "The new look aesthetic you've provided in the recent most images is good. Apply it. But you
+ * need more clear contrast and differentiation between muscle groups." Message 196: "New look for everything not just
+ * body." (and: "Will raw render look improve performance?")
+ *
+ * "The recent most images" were close-ups drawn OFFLINE by a measuring tool, not by the game: muscle one flat rose red,
+ * bone ivory, the room near-black, ONE light from up and to the side in front of the viewer, every surface shaded
+ * 0.25 + 0.75 x |N.L| (matte, both sides alike, no gloss), back faces at 0.6 of that, and nothing drawn on top: no
+ * outline, no ink, no tone bands, no hatching, no rim light. This module is that look as the game draws it:
+ *  - RAW_LOOK.on is the ONE switch. true: the bodies, the brain, its strip, the inner parts, the organs, the eyeballs
+ *    and nerves, the 3D arrows, the room and the loading picture's models are drawn in this light; false: the early
+ *    comic (cel) look of 19 November comes back everywhere (ns-scene-three BODY_STYLE follows this switch).
+ *  - light: the light's direction in VIEW space (x to the right of the picture, y up, z toward the viewer), as the tool
+ *    took it: 0.4 right + 0.6 up + 0.7 toward the viewer. It moves with the view, like the tool's, so every picture is lit
+ *    the same way whichever way you look.
+ *  - ambient / direct: the shade is ambient + direct x |N.L| (two-sided: a surface turned away from the light is lit as
+ *    much as one turned toward it, as in the tool). back: a back face (the inside of a mesh seen through an opening)
+ *    is drawn at this share. gamma: the tool multiplied the sRGB colour by the shade; the game lights in linear light, so
+ *    the shade is raised to this power first (2.2 ~ the sRGB curve), and a resting colour facing the light is exactly its
+ *    sRGB value, the deepest shade 0.25 of it, as in the pictures.
+ *  - flat: false = the meshes' smooth normals (the owner, Message 184: bodies "sharp and not blurry or ... rough or
+ *    patchy"); true = one normal per triangle like the tool (faceted).
+ *  - room: the room's darkest light, a little under the tool's background RGB [18, 18, 22] in linear light, so that with
+ *    the room's own faint pool of light on the floor (ns-room ROOM.pool, the owner's "little bit of a gradient") the
+ *    picture measures about 18, 18, 22 above and 22, 24, 27 under the bodies.
+ *  - bone: the tool's ivory, RGB [232, 224, 205].
+ * The activation light (a lit muscle and its area almost white), the beams, the control glows, the light-blue glass for
+ * hidden things and every HTML card are signals drawn over the scene and are not changed by this look.
+ *
+ * Pure: no imports of Three.js, no DOM; the patches work on shader text.
+ */
+
+export const RAW_LOOK = Object.freeze({
+  on: true,
+  light: Object.freeze([0.4, 0.6, 0.7]),
+  ambient: 0.25, direct: 0.75, back: 0.6, gamma: 2.2,
+  flat: false,
+  room: Object.freeze([0.0047, 0.0047, 0.0064]),
+  bone: 0xe8e0cd
+});
+
+const f = v => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+
+/** The light's unit direction (view space). Pure. */
+export function rawLightDir(o = RAW_LOOK) {
+  const l = o.light, n = Math.hypot(l[0], l[1], l[2]) || 1;
+  return [l[0] / n, l[1] / n, l[2] / n];
+}
+
+/** The shade of a surface with unit normal n (view space): ambient + direct x |N.L|, x back on a back face; and the
+ * factor the game multiplies a LINEAR colour by (the shade to the power gamma). Pure (for tests and checks). */
+export function rawShade(n, front = true, o = RAW_LOOK) {
+  const L = rawLightDir(o);
+  const k = (o.ambient + o.direct * Math.abs(n[0] * L[0] + n[1] * L[1] + n[2] * L[2])) * (front ? 1 : o.back);
+  return { shade: k, linear: Math.pow(k, o.gamma) };
+}
+
+/** GLSL that declares `float <name>` = the linear factor of the raw light for the fragment, from the view-space normal
+ * expression `normalExpr` (or, with o.flat, the triangle's own normal from the derivatives of `viewPosExpr`). Pure. */
+export function rawShadeGlsl(name = 'nsRawK', normalExpr = 'normal', viewPosExpr = 'vViewPosition', o = RAW_LOOK) {
+  const L = rawLightDir(o);
+  const n = o.flat ? `normalize( cross( dFdx( ${viewPosExpr} ), dFdy( ${viewPosExpr} ) ) )` : `normalize( ${normalExpr} )`;
+  return `float ${name} = max( ( ${f(o.ambient)} + ${f(o.direct)} * abs( dot( ${n}, vec3( ${L.map(f).join(', ')} ) ) ) ) * ( gl_FrontFacing ? 1.0 : ${f(o.back)} ), 0.0 );\n` +
+    `\t${name} = pow( ${name}, ${f(o.gamma)} );`;
+}
+
+/** The raw look's patch for a three.js lit material (MeshStandardMaterial / MeshPhysicalMaterial / MeshLambertMaterial
+ * / MeshPhongMaterial, r170), pure on the shader text. Compose it LAST (after every other patch of the material):
+ *  - the scene's lights are not computed at all (the three light includes are taken out: cheaper than the comic look's
+ *    light loop with its bands, ink and highlight shapes);
+ *  - right after '#include <aomap_fragment>' the reflected light becomes the albedo (diffuseColor, after every colour
+ *    patch: the muscle's tone, its tendon white, the activation's white) x the raw shade, with no specular, so every
+ *    patch that works on the emission (the activation glow) or on the final colour and alpha (behind the glass, the
+ *    see-through windows) works as before.
+ * Returns { vertexShader, fragmentShader } or null when a hook is missing (the material then keeps its own light). */
+export const RAW_HOOKS = Object.freeze({
+  ao: '#include <aomap_fragment>', normal: '#include <normal_fragment_begin>',
+  lights: Object.freeze(['#include <lights_fragment_begin>', '#include <lights_fragment_maps>', '#include <lights_fragment_end>'])
+});
+export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
+  // (vViewPosition, needed only for flat normals, is declared in the lights' own pars chunk of the lambert and phong
+  // shaders, so it is not in their text before the includes are resolved)
+  if (!fragmentShader.includes(RAW_HOOKS.ao) || !fragmentShader.includes(RAW_HOOKS.normal) || !fragmentShader.includes('reflectedLight') ||
+    fragmentShader.includes('nsRawK')) return null;
+  let fs = fragmentShader;
+  for (const h of RAW_HOOKS.lights) fs = fs.split(h).join('');
+  fs = fs.replace(RAW_HOOKS.ao, `${RAW_HOOKS.ao}
+	{
+		${rawShadeGlsl('nsRawK', 'normal', 'vViewPosition', o)}
+		reflectedLight.directDiffuse = diffuseColor.rgb * nsRawK;
+		reflectedLight.indirectDiffuse = vec3( 0.0 );
+		reflectedLight.directSpecular = vec3( 0.0 );
+		reflectedLight.indirectSpecular = vec3( 0.0 );
+	}`);
+  return { vertexShader, fragmentShader: fs };
+}

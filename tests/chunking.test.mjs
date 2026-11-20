@@ -20,8 +20,10 @@ test('the five-second controls card is four chunks: the W A S D pyramid, the E R
   assert.deepEqual(keys, ['W', 'A', 'S', 'D', 'E', 'R', 'Space']);
   for (const k of all(card, e => e.tagName === 'KBD')) { let p = k.parentNode; while (p && !hasClass(p, 'ns-ctl-chunk')) p = p.parentNode; assert.ok(p, `${k.textContent} sits inside a chunk`); }
   const words = all(card, e => hasClass(e, 'ns-ctl-word')).map(e => e.textContent);
-  assert.deepEqual(words, ['move', 'view', 'info', 'hold'], 'one short word with each chunk (one per key for the pair)');
-  assert.match(controlsCardLabel(), /W A S D move; E view; R info; Space hold; trackpad: move to look, click to press, drag to turn\./);
+  // 20 November 2026 (the owner: "Let's just make spacebar grasping for all of the limbs at once"): Space's word is
+  // 'grip' (it was 'hold'); a click presses.
+  assert.deepEqual(words, ['move', 'view', 'info', 'grip'], 'one short word with each chunk (one per key for the pair)');
+  assert.match(controlsCardLabel(), /W A S D move; E view; R info; Space grip; trackpad: move to look, click to press, drag to turn\./);
   assert.equal(showControlsCard({ host: null, doc: null }), null, 'no document: no card, no throw');
 });
 

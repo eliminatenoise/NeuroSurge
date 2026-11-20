@@ -800,6 +800,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   let headroom = 1.15, overflow = false; // batch space: 15 % spare; each time it overflows (LOD copies arriving) +40 %, at most 2x
   let on = enabled !== false && ok;
   let occOn = false;
+  let inkOff = false; // 20 November 2026 (setInk): no line of any class and no strip line: the edge and ink passes are not run
+  let idLive = false; // the ID picture holds this frame's bodies (the hidden-limb glass reads it even with no ink drawn)
   let afterId = null; // 18 November 2026 (SEE): setAfterId(fn), the hidden-limb pass (ns-see createGhostPass)
   let clipPlanes = null; // setClip's planes, handed to afterId (ctx.clip) so the hidden-things pass cuts the same (20 November 2026)
   let bufW = 0, bufH = 0, pr = 1, ss = 1, level = 0, ssW = 0, ssH = 0;
@@ -1123,11 +1125,11 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   };
   /** The ID, edge and ink passes for the frame about to be drawn. Returns true when the composite will draw. */
   function render(scene, camera) {
-    if (!on || !target || bufW < 2 || bufH < 2 || !reg.length) { composite.visible = false; return false; }
+    if (!on || !target || bufW < 2 || bufH < 2 || !reg.length) { composite.visible = false; idLive = false; return false; }
     const t0 = now();
     if (scene.matrixWorldAutoUpdate !== false) scene.updateMatrixWorld();
     if (rebuild) build();
-    if (!batch) { composite.visible = false; return false; }
+    if (!batch) { composite.visible = false; idLive = false; return false; }
     let changed = sync(scene);
     if (rebuild) { build(); changed = sync(scene) || true; }
     // The camera: view and projection.
@@ -1149,7 +1151,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     }
     stripOn.value = strip.mesh && strip.shown ? 1 : 0;
     inkUni.uStrip.value.z = stripOn.value;
-    if (stats.drawn === 0 && !stripOn.value) { composite.visible = false; stripComposite.visible = false; stats.ms = now() - t0; return false; }
+    if (stats.drawn === 0 && !stripOn.value) { composite.visible = false; stripComposite.visible = false; idLive = false; stats.ms = now() - t0; return false; }
     // Uniforms of the edge and ink passes (cheap; set every frame so a skipped frame keeps them right).
     shared.uView.value.set(1, camera.near, camera.far, camera.isOrthographicCamera ? 0 : 1);
     const P = camera.projectionMatrix.elements;
@@ -1164,7 +1166,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     const pxcm = (bufH / pr) / (2 * Math.tan((fov * Math.PI) / 360)) / 100;
     if (inkUni.uTaper.value.x !== pxcm) { inkUni.uTaper.value.x = pxcm; changed = true; }
     if (edgeUni.uSlim.value.x !== pxcm * pr * ss) { edgeUni.uSlim.value.x = pxcm * pr * ss; changed = true; } // supersampled samples per centimetre at 1 m
-    if (changed || force || !composite.visible) {
+    if (changed || force || (!inkOff && !composite.visible)) {
       const prevTarget = renderer.getRenderTarget(), prevAlpha = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
       renderer.getClearColor(saveColour);
       renderer.setClearColor(0x000000, 0);
@@ -1175,6 +1177,12 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       if (skinShown > 0) { renderer.autoClear = false; renderer.render(skinScene, camera); renderer.autoClear = true; stats.draws += skinShown; } // 18 November 2026
       // 18 November 2026 (SEE, ns-see): the hidden-limb pass reads this frame's ID picture (only when it was redrawn).
       if (afterId) { try { afterId({ renderer, idScene, batch, skinBatch: sb.batch, skinBatchUniforms: skinBatchMat.uniforms, skinScene: skinShown > 0 ? skinScene : null, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x, clip: clipPlanes }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
+      if (inkOff) {
+        // 20 November 2026 (setInk): nothing to draw; the ID picture above still feeds the hidden-limb glass (afterId)
+        renderer.setRenderTarget(prevTarget); renderer.setClearColor(saveColour, prevAlpha); renderer.autoClear = prevAuto;
+        force = false; stats.frames++; composite.visible = false; stripComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0;
+        return false;
+      }
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
         renderer.setRenderTarget(stripTarget);
@@ -1191,7 +1199,9 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       force = false;
       stats.frames++;
     } else stats.skipped++;
+    if (inkOff) { composite.visible = false; stripComposite.visible = false; idLive = stats.drawn > 0; stats.ms = now() - t0; return false; }
     composite.visible = stats.drawn > 0;
+    idLive = composite.visible;
     stripComposite.visible = stripOn.value > 0;
     stats.ms = now() - t0;
     return true;
@@ -1211,6 +1221,19 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     return Boolean(strip.mesh);
   }
   function invalidate() { force = true; }
+  /** 20 November 2026 (the raw look, ns-raw-look): the lines' opacities [strong, silhouette, inner, faint] (OUTLINE's by
+   * default), the motor strip's line opacity and (optional) its width in CSS pixels. All zero: the edge and ink passes
+   * are not run and nothing is laid over the picture (the ID pass still runs for the hidden-limb glass). Returns whether
+   * any line is drawn. */
+  function setInk(alphas = null, stripAlpha = null, stripCss = null) {
+    if (Array.isArray(alphas) && alphas.length === 4 && alphas.every(Number.isFinite)) inkUni.uAlpha.value.set(alphas[0], alphas[1], alphas[2], alphas[3]);
+    if (Number.isFinite(stripAlpha)) inkUni.uStrip.value.y = stripAlpha;
+    if (Number.isFinite(stripCss) && stripCss > 0) inkUni.uStrip.value.x = stripCss;
+    const a = inkUni.uAlpha.value;
+    inkOff = !(a.x > 0 || a.y > 0 || a.z > 0 || a.w > 0 || inkUni.uStrip.value.y > 0);
+    force = true;
+    return !inkOff;
+  }
   /** The living brain (ns-brain-live): the beat's swell is put on the strip's ink when it is drawn (a scale by 1 + share
    * about (x, y), the brain centre's place in buffer pixels). stripMaterial (returned below) can take the scene's
    * vertex rule for what the kept picture itself must follow (the wobble, the blooms); call invalidate() while they move. */
@@ -1227,12 +1250,12 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   }
   function setEnabled(v) {
     on = v !== false && ok;
-    if (!on) composite.visible = false;
+    if (!on) { composite.visible = false; idLive = false; }
     force = true;
     return on;
   }
   function state() {
-    return { supported: ok, enabled: on, occlusion: occOn, sources: stats.sources, drawn: stats.drawn, idDraws: stats.draws, cpuMs: Math.round(stats.ms * 100) / 100,
+    return { supported: ok, enabled: on, inkOff, occlusion: occOn, sources: stats.sources, drawn: stats.drawn, idDraws: stats.draws, cpuMs: Math.round(stats.ms * 100) / 100,
       idFrames: stats.frames, skippedFrames: stats.skipped, rebuilds: stats.rebuilds, lastRebuildMs: Math.round((stats.rebuildMs || 0) * 10) / 10, geometries: stats.geometries,
       vertexCapacity: stats.vertexCapacity, indexCapacity: stats.indexCapacity, copiedVertices: stats.copiedVertices,
       multiDraw: Boolean(renderer.extensions && typeof renderer.extensions.has === 'function' && renderer.extensions.has('WEBGL_multi_draw')),
@@ -1255,5 +1278,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * body), 0 when not registered. */
   function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
   function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
-  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get supersample() { return ss; } };
+  return { composite, stripComposite, stripMaterial: stripMat, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
 }

@@ -342,6 +342,26 @@ export function digitsForLook(pitchDeg, K) {
  * ns-scene-three PART_GLOW): the hand or foot a key is moving, a hand that is closed, a limb a drag is turning; steady:
  * the chosen limb's mark under reduced motion (held, not faded). Display choices. */
 export const CONTROL_GLOW = Object.freeze({ keys: 0.9, hand: 1, drag: 0.6, steady: 0.7, lowerShare: 0.6 });
+/**
+ * 20 November 2026, evening (the owner, Message 204: "now right-click shouldn't lead to any grasping function. Let's
+ * just make spacebar grasping for all of the limbs at once. Because ... it's confusing if right hand is grasping whilst
+ * you're clicking, activating specific brain areas, and you can't see what movement is being isolated"; it replaces
+ * Message 141, "the spacebar only grasps the left hand, whilst clicking grasps the right hand"). SPACE_GRIP: the limbs
+ * the Space grip closes, all four at once, for as long as Space holds or keeps a grasp (the activity's graspHold): the
+ * left game arm's hand through the activity (grasp_close), the body's right hand (GRIP_BOTH) and the toes and feet of
+ * both legs (GRIP_FEET) through the drawn pose. Each one's hand or foot lights (spaceGripGlows) and so do the hand and
+ * toe areas of the strip (GRIP_BOTH.areas). A mouse or trackpad button, left or right, closes no hand and curls no toe.
+ * Display rules of the game, not measured activity.
+ */
+export const SPACE_GRIP = Object.freeze({ limbs: Object.freeze(['leftArm', 'rightArm', 'leftLeg', 'rightLeg']) });
+/** The control glows of the Space grip (level 0..1 of CONTROL_GLOW.hand): the hand or foot of every SPACE_GRIP limb,
+ * with its forearm or shank at lowerShare (a hand or foot has few muscles of its own). [] when there is no grip. Pure. */
+export function spaceGripGlows(level, G = CONTROL_GLOW, limbs = SPACE_GRIP.limbs) {
+  if (!(level > 0)) return [];
+  const v = Math.min(1, level), out = [];
+  for (const limb of limbs) out.push({ limb, part: 'end', level: G.hand * v }, { limb, part: 'lower', level: G.hand * G.lowerShare * v });
+  return out;
+}
 /** Where a world point stands in a camera's picture: { x, y } (NDC: -1..1 across and up), depth (m along the view) and
  * dist (m from the camera). pose: { position, yaw, pitch } (the camera's own convention). Pure. */
 export function viewFrameOf(pose, point, fovYDeg, aspect) {
@@ -2127,15 +2147,15 @@ export function infoOverlayModel({ gaze = null, binding = null, bodyMap = null, 
       bodyPart: 'Left arm', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
       activity: top, activations: 0, card: reachCard };
   }
-  // R558 (Messages 48 and 56): the grip of a Space grasp shows its own card (key, strip part = left hand, movement,
-  // muscles; ns-text graspInfoCard) while the hand closes and while it opens again, unless another area under the
-  // crosshair is itself switched on.
+  // R558 (Messages 48 and 56): the grip of a Space grasp shows its own card (key, strip parts, movement, muscles; ns-text
+  // graspInfoCard) while the hands close and while they open again, unless another area under the crosshair is itself
+  // switched on. (20 November 2026, evening, Message 204: both hands and both feet's toes, SPACE_GRIP.)
   const gripCard = live !== false && grip && (grip.phase === 'close' || grip.phase === 'open') && typeof NT.graspInfoCard === 'function'
     && !(onArea && g.regionId !== GRIP_AREA_ID && levelOf(g.regionId) > INFO_LIVE.gazeKeeps) ? NT.graspInfoCard(grip) : null;
   if (gripCard) {
     return { ...common, ...blank, key: `grasp|${gripCard.key}`, mode: 'region', viewed: 'now', source: 'grasp', title: gripCard.title,
       technicalTitle: gripCard.title, tag: gripCard.tag, region: null, regionId: GRIP_AREA_ID, actionId: null, hemisphere: 'right',
-      bodyPart: 'Left hand', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
+      bodyPart: 'Hands and feet', agonists: [], antagonists: [], plain: '', pathway: '', known: '', explanation: '', caveats: [], citations: [],
       activity: levelOf(GRIP_AREA_ID), activations: 0, card: gripCard };
   }
   if (!onArea) {
@@ -5676,24 +5696,34 @@ export function start(params = {}) {
    * grasp the RIGHT hand closes too. rightGrip is its eased share (0 open .. 1 closed, GRIP_BOTH.perS per second); the
    * body pose takes it as the right hand's whole-hand closure (r_grasp), and moveGlow lights the right hand's area on
    * the strip (lh_hand) and the body map's own "Close right hand" muscles (lh_r_grasp) at GRIP_BOTH.level, on your
-   * body and the mirror body. A display of the game's grip rule, not measured activity. */
-  const GRIP_BOTH = Object.freeze({ perS: 7, closeDeg: 90, level: 0.95, regionId: 'lh_hand', actionId: 'lh_r_grasp' });
+   * body and the mirror body. A display of the game's grip rule, not measured activity.
+   * 20 November 2026, evening (Message 204, SPACE_GRIP): the Space grip again, never a click, and all four limbs: the
+   * toes of both feet curl with the hands (GRIP_FEET), so the toe areas (`feet`: each one's curl movements, the big toe
+   * and the small toes) light with them at the same level; `areas` is every strip area the grip lights besides the
+   * left hand's (which the activity lights through grasp_close). Colour-only, like the right hand's: no beam. */
+  const GRIP_BOTH = Object.freeze({ perS: 7, closeDeg: 90, level: 0.95, regionId: 'lh_hand', actionId: 'lh_r_grasp',
+    feet: Object.freeze([Object.freeze({ regionId: 'rh_toes', actionIds: Object.freeze(['rh_toes_curl', 'rh_big_toe_curl']) }),
+      Object.freeze({ regionId: 'lh_toes', actionIds: Object.freeze(['lh_toes_curl', 'lh_big_toe_curl']) })]) });
+  const GRIP_LIT_IDS = Object.freeze([GRIP_BOTH.regionId, ...GRIP_BOTH.feet.map(f => f.regionId)]);
   const GRIP_HELD_IDS = Object.freeze([GRIP_AREA_ID, GRIP_BOTH.regionId]); // 18 Nov (S7): both hands' areas while a grip holds
-  let rightGrip = 0;
+  // (20 November 2026, evening) every strip area of the Space grip: both hands' and both feet's toes
+  const GRIP_ALL_IDS = Object.freeze([GRIP_AREA_ID, ...GRIP_LIT_IDS]);
+  let rightGrip = 0; // the eased share of the Space grip (0 open .. 1 closed): the right hand, the toes and the feet
   /**
    * 19 November 2026 (the owner: "small details like when we grasp our left hand, our left toes and foot also grasp
    * and flex, and same with the right"; "as we look down, the fingers close and the toes close more and more. And as
    * we look up, they expand ... for all fingers and toes at once, collectively"). Display rules added to the drawn
    * pose (never targets of the activity: nothing is latched, and they are gone when the grip or the look is):
-   *   toeDeg / halluxDeg / ankleDeg  with a hand's grip (Space: the left; a click: the right) the small toes and the
-   *        big toe of the same foot curl and the foot points a little, by the grip's own eased share
+   *   toeDeg / halluxDeg / ankleDeg  with a hand's grip the small toes and the big toe of the same foot curl and the
+   *        foot points a little, by the grip's own eased share (20 November 2026, evening, Message 204: Space closes
+   *        both hands at once, so both feet curl together; a click closes neither)
    *   look  the look's pitch closes ALL the toes and the right hand's fingers from downFromDeg to downToDeg (handShare
    *        of a full fist at the bottom) and opens them from upFromDeg to upToDeg (toes lifted, fingers opened and
    *        spread). The left hand (the game arm, its own rig) does not follow the look yet.
    */
   const GRIP_FEET = Object.freeze({ on: true, toeDeg: 40, halluxDeg: 45, ankleDeg: -14,
     look: Object.freeze({ on: true, downFromDeg: -8, downToDeg: -75, upFromDeg: 8, upToDeg: 60, handShare: 0.85, toeLiftDeg: -25, halluxLiftDeg: -30, openDeg: 25, spreadDeg: 18 }) });
-  let leftGrip = 0; // the left hand's grip (Space), eased like rightGrip
+  let leftGrip = 0; // the left side's share of the Space grip: the same as rightGrip since Message 204 (all four limbs at once)
   /**
    * 19 November 2026 (the owner: "let's get rid of all zoom, pan, dolly effects and just have slight punch-in effects.
    * And punch out as soon as activation stops"). While a movement is being switched on (the first holdS of its pulse:
@@ -5701,7 +5731,9 @@ export function start(params = {}) {
    * the camera's lens or place by itself. Not under reduced motion. The scene applies the pulse to the active lens
    * after blending the eye and outside views. The centre ray stays fixed.
    */
-  const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
+  // 20 November 2026, evening (the owner, Message 197: "Let's get rid of all zoom and punch-in effects, as they're really
+  // confusing"): off. The lens stays the same at every press; the code stays for the switch.
+  const PUNCH_IN = Object.freeze({ on: false, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
   let punchNow = 0;
   let pausedPunchSeq = null;
   let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg, undone, from, chunk }, or null
@@ -5765,12 +5797,13 @@ export function start(params = {}) {
   const movePrev = { has: false, rot: 0, flex: 0, twist: 0, sag: 0, yaw: 0, pitch: 0, limb: null, joints: null };
   const moveFeed = (key, speedDegS, row, soft) => moveCh.feed(key, speedDegS, row, soft);
   /** The frame's display glow: the head / trunk posture glow (headActivity) plus what the player's own movement adds
-   * (R17: the moving joints' channels, and the right hand's share of a Space grasp). { regions, rows, reach } (reach:
-   * left-shoulder rows in ns-actions reachMuscleShow's shape, or null). Returns `base` itself when nothing is added. */
+   * (R17: the moving joints' channels, and the right hand's and the toes' share of a Space grasp). { regions, rows, reach }
+   * (reach: left-shoulder rows in ns-actions reachMuscleShow's shape, or null). Returns `base` itself when nothing is
+   * added. gripOn: the Space grip holds (SPACE_GRIP; never the mouse or trackpad button). */
   function moveGlow(base, dt, gripOn) {
     const h = dt > 0 ? Math.min(dt, 0.1) : 0;
     rightGrip = gripOn ? Math.min(1, rightGrip + GRIP_BOTH.perS * h) : Math.max(0, rightGrip - GRIP_BOTH.perS * h);
-    { const lOn = Boolean(simState && simState.activity && simState.activity.graspHold === true); leftGrip = lOn ? Math.min(1, leftGrip + GRIP_BOTH.perS * h) : Math.max(0, leftGrip - GRIP_BOTH.perS * h); }
+    leftGrip = rightGrip; // (Message 204) one grip for all four limbs: both feet curl together
     moveCh.step(dt);
     if (!(rightGrip > 0) && moveCh.size === 0) return base;
     const g = { regions: base ? { ...base.regions } : {}, rows: base ? base.rows.slice() : [], reach: null };
@@ -5779,6 +5812,10 @@ export function start(params = {}) {
       const v = GRIP_BOTH.level * rightGrip;
       put(GRIP_BOTH.regionId, v);
       g.rows.push({ actionId: GRIP_BOTH.actionId, level: v, regionId: GRIP_BOTH.regionId });
+      for (const f of GRIP_BOTH.feet) {
+        put(f.regionId, v);
+        for (const actionId of f.actionIds) g.rows.push({ actionId, level: v, regionId: f.regionId });
+      }
     }
     moveCh.each((key, lv, r) => {
       if (!r) return;
@@ -7850,17 +7887,16 @@ export function start(params = {}) {
         // limb's own muscles, on your body and on the mirror body):
         //   1 to 4, the double click, a click or Space on a limb   the whole chosen limb, for flashS (above)
         //   W / A / S / D                                          the hand or foot of the chosen limb, while a key is down
-        //   Space                                                  the left hand, while it is closed
-        //   the mouse or trackpad button                           the right hand, while it is down
+        //   Space                                                  both hands and both feet, while they are closed
         //   a press-and-drag (and the roll) on a limb              that whole limb, while the drag lasts
+        // (20 November 2026, evening, Message 204: the mouse or trackpad button lights no hand; it closes none.)
         if (!sceneFn('setPartGlows')) return;
         const G = CONTROL_GLOW, glows = [];
         if (limbFlash && flashLevel > 0) glows.push({ limb: limbFlash, part: 'all', level: flashLevel });
         const ax = controlsApi.axes(cs), keyed = Boolean(ax && (ax.x || ax.z)) && !holdBusy();
         // (a hand or foot has few muscles of its own: the forearm or shank, where its movers lie, lights with it)
         if (keyed) glows.push({ limb: chosenLimb(), part: 'end', level: G.keys }, { limb: chosenLimb(), part: 'lower', level: G.keys * G.lowerShare });
-        if (simState.activity && simState.activity.graspHold === true) glows.push({ limb: 'leftArm', part: 'end', level: G.hand }, { limb: 'leftArm', part: 'lower', level: G.hand * G.lowerShare });
-        if (cs.button && cs.button.down === true) glows.push({ limb: 'rightArm', part: 'end', level: G.hand }, { limb: 'rightArm', part: 'lower', level: G.hand * G.lowerShare });
+        if (simState.activity && simState.activity.graspHold === true) glows.push(...spaceGripGlows(1, G));
         if (cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb) glows.push({ limb: cs.drag.binding.limb, part: 'all', level: G.drag });
         const key = glows.map(g => `${g.limb}:${g.part}:${Math.round(g.level * 24)}`).join('|');
         if (key !== controlGlowKey) { controlGlowKey = key; try { callScene('setPartGlows', glows); } catch { /* a mark only */ } }
@@ -8265,7 +8301,10 @@ export function start(params = {}) {
           const P = NC.eyeClearOfRods(pose.position, pose.armParentPosition, pose.direction, rods);
           if (P !== pose.position) want = [P[0] - pose.position[0], P[1] - pose.position[1], P[2] - pose.position[2]];
         }
-        const o = eyeClearOff, goal = want || [0, 0, 0];
+        // (20 Nov review: while the view changes to or from outside (E) no move is worked out; the move is then HELD, and
+        // the change of view alone fades it (share below), so the camera neither slides back into the arm on the way out
+        // nor arrives inside it on the way back, where the move used to start again from nothing)
+        const o = eyeClearOff, goal = want || (pose && !pose.firstPerson ? o : [0, 0, 0]);
         const k = prefersReducedMotion() || !(dt > 0) ? 1 : 1 - Math.exp(-Math.min(dt, MAX_FRAME_DT) / EYE_CLEAR_EASE_S);
         const n = [o[0] + (goal[0] - o[0]) * k, o[1] + (goal[1] - o[1]) * k, o[2] + (goal[2] - o[2]) * k];
         eyeClearOff = Math.hypot(n[0], n[1], n[2]) < 1e-5 && !want ? EYE_CLEAR_NONE : n;
@@ -10311,13 +10350,16 @@ export function start(params = {}) {
           feedHeadMove(headShown, timing.dt);
           feedLimbMove(out, timing.dt, turningLimb);
         }
-        // 19 November 2026 (the owner: "the spacebar only grasps the left hand, whilst clicking grasps the right hand"):
-        // the right hand closes while the mouse or trackpad button is down (it closed with a Space hold before).
-        const headGlow = moveGlow(headActivity(headShown), timing.dt, Boolean(live && cs && cs.button && cs.button.down === true));
+        // 20 November 2026, evening (the owner, Message 204: "right-click shouldn't lead to any grasping function. Let's
+        // just make spacebar grasping for all of the limbs at once"; it replaces Message 141's click for the right hand):
+        // the right hand, the toes and the feet close with the Space grip, as the left hand does (SPACE_GRIP). The mouse
+        // or trackpad button, left or right, closes nothing.
+        const gripHeld = Boolean(live && simState.activity && simState.activity.graspHold === true);
+        const headGlow = moveGlow(headActivity(headShown), timing.dt, gripHeld);
         // 18 November (the living brain): the grip of a Space grasp is not a movement switched on from the brain; while it
-        // holds, the tissue round its hand area only flushes faintly (no bloom, no ring).
-        // 18 Nov (SMALL, S7): both hands grip, so both hand areas are held (the right hand's is GRIP_BOTH's).
-        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', simState.activity && simState.activity.graspHold === true ? GRIP_AREA_ID : null); // Space: the left hand's area only
+        // holds, the tissue round its areas only flushes faintly (no bloom, no ring).
+        // 18 Nov (SMALL, S7): both hands grip, so both hand areas are held; since Message 204 the toe areas as well.
+        if (sceneFn('setBrainLiveHeld')) callScene('setBrainLiveHeld', gripHeld ? GRIP_ALL_IDS : null);
         // The left shoulder's rows to draw: the reach keys' and the look's (the arm follows the look).
         const reachShown = reachRowsShown(out.reachShow, headGlow ? headGlow.reach : null);
         if (sceneFn('setSettledRegions')) {
@@ -10325,7 +10367,7 @@ export function start(params = {}) {
           if (headGlow) {
             // 18 Nov (SMALL, S7; Note 17 "clear fluorescent glow correspondence"): the right hand's share of a Space grip
             // is a grip like the left hand's, not a held posture: its key lights as the left hand's does.
-            for (const [rid, v] of Object.entries(headGlow.regions)) if (!(out.regionActivity && out.regionActivity[rid] >= v) && !(rid === GRIP_BOTH.regionId && rightGrip > 0)) settled.push(rid);
+            for (const [rid, v] of Object.entries(headGlow.regions)) if (!(out.regionActivity && out.regionActivity[rid] >= v) && !(GRIP_LIT_IDS.includes(rid) && rightGrip > 0)) settled.push(rid);
             // R558 (hunt 3): a muscle's power-up start is keyed on its COLOUR area. The head-row muscles get the area their
             // row lights as owner through colour-only glow links (headGlowLinks), but those are set after the body is
             // shaded, so a muscle that begins to glow before it ever had an owner is first shaded on the fallback area of
@@ -10352,7 +10394,7 @@ export function start(params = {}) {
         scene.highlightMarker(out.gaze.actionId);
         let regionActivityShown = out.regionActivity;
         if (headGlow && regionActivityShown) {
-          for (const [rid, v] of Object.entries(headGlow.regions)) if ((hasOwn(regionActivityShown, rid) || rid === GRIP_BOTH.regionId) && !(regionActivityShown[rid] >= v)) {
+          for (const [rid, v] of Object.entries(headGlow.regions)) if ((hasOwn(regionActivityShown, rid) || GRIP_LIT_IDS.includes(rid)) && !(regionActivityShown[rid] >= v)) {
             if (regionActivityShown === out.regionActivity) regionActivityShown = { ...out.regionActivity };
             regionActivityShown[rid] = v;
           }

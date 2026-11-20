@@ -330,3 +330,20 @@ test('the marks of the controls: the limb itself lights, by part, and every outl
   assert.equal(S.LIMB_FLASH.bandAlpha, 0);
   for (const k of ['keys', 'hand', 'drag', 'steady']) assert.ok(CONTROL_GLOW[k] > 0.3 && CONTROL_GLOW[k] <= 1, k);
 });
+
+// 20 November 2026, evening (the owner: "now right-click shouldn't lead to any grasping function. Let's just make
+// spacebar grasping for all of the limbs at once"): the Space grip closes and lights all four limbs; nothing else does.
+test('the Space grip is all four limbs at once, each hand and foot lit with its forearm or shank', async () => {
+  const { CONTROL_GLOW, SPACE_GRIP, spaceGripGlows } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
+  assert.deepEqual([...SPACE_GRIP.limbs].sort(), [...LIMB_KEYS.order].sort(), 'every limb the number keys know grips');
+  const g = spaceGripGlows(1);
+  for (const limb of LIMB_KEYS.order) {
+    assert.deepEqual(g.filter(x => x.limb === limb).map(x => [x.part, x.level]), [['end', CONTROL_GLOW.hand], ['lower', CONTROL_GLOW.hand * CONTROL_GLOW.lowerShare]], limb);
+  }
+  assert.equal(g.length, 8);
+  // no grip, no glow; a share lights in proportion and never past full
+  assert.deepEqual(spaceGripGlows(0), []);
+  assert.deepEqual(spaceGripGlows(NaN), []);
+  assert.ok(spaceGripGlows(0.5).every(x => Math.abs(x.level - (x.part === 'end' ? 0.5 : 0.5 * CONTROL_GLOW.lowerShare) * CONTROL_GLOW.hand) < 1e-12));
+  assert.ok(spaceGripGlows(3).every(x => x.level <= CONTROL_GLOW.hand));
+});

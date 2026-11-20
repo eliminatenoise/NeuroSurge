@@ -1153,7 +1153,9 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     // mostly hidden on the last frame that moved): the ink left that ghost's inside out, so it is drawn again now
     // (20 November 2026, from a code review: the trunk stayed hollow until something moved).
     if (!inkStale) for (let c = 1; c < T.count; c++) if (inkZero[c] && fillA[c] > 0) { inkStale = true; break; }
-    composite.visible = on && drawn && outline.composite.visible === true && (covered || focus > 0);
+    // (20 November 2026: with the raw look's lines off the outline draws no composite, but its ID picture is still this
+    // frame's: idLive)
+    composite.visible = on && drawn && (outline.composite.visible === true || outline.idLive === true) && (covered || focus > 0);
     if (!composite.visible || !last) return;
     if (focus !== focusDrawn || inkStale) {
       const prevAuto = renderer.autoClear, prevAlpha = renderer.getClearAlpha(), c = new THREE.Color();

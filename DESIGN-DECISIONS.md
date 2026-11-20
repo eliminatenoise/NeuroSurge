@@ -2458,6 +2458,187 @@ Not done: the rest of the full instructions was not checked word by word against
 still calls the beam from a switched-on area a “soft line”. `README.md` (its opening paragraph) and
 `PREVIEW-NOTES.html` still say that the chest turns and the trunk bends with a look.
 
+## 168. The raw look on everything, each muscle group in its own tone of one rose red, touching muscles apart (20 November)
+
+The owner, Message 195: "The new look aesthetic you've provided in the recent most images is good. Apply it. But you
+need more clear contrast and differentiation between muscle groups." Message 196: "New look for everything not just
+body." (and the question "Will raw render look improve performance?"). Then Message 199: "Let's make the brain black
+areas where there's no mapped activity, just transparent." Message 202: "And each muscle group, bundle, spindle, fiber,
+whatever you want to call it, activation group, should have its own sort of shading system, such that muscles next to
+each other can be obviously told apart, and you don't mix them up as one amorphous group." Three variants were built
+and compared by a judge panel; this one (tones by group) was kept, with the panel's corrections below.
+
+"The recent most images" were close-ups drawn offline by a measuring tool, not by the game: one light from up and to
+the side in front of the viewer, every surface shaded 0.25 + 0.75 x |N.L| (matte, both sides alike), back faces at 0.6
+of that, rose-red muscle (RGB 196, 92, 88), ivory bone (232, 224, 205), a near-black room (18, 18, 22), and nothing drawn
+on top: no outline, no ink, no tone bands, no hatching, no rim light.
+
+**The game now draws in that light.** The bodies (your own, the mirror body, the left game arm, the head in the view
+from outside), the brain and its motor strip, the parts seen through the gap between the halves, the organs, the
+eyeballs and optic nerves, the 3D arrows and the loading picture's models take the same one light (`RAW_LOOK`,
+`patchRawShaders` in `ns-raw-look.mjs`): the scene's own lights are not computed for them at all, their colour is
+multiplied by the raw shade and nothing is glossy. The light turns with the view, as in the pictures, so every look is
+lit the same way. The meshes keep their smooth normals: the faceting of the pictures came from the tool's one normal per
+triangle, and on the game's meshes it reads as the "rough or patchy" surface of Message 184 (both were drawn and
+compared; `RAW_LOOK.flat` gives the faceted one). The bones are the pictures' ivory, the room their near-black (a
+little under it, so the faint pool of light on the floor lands on it). The brain keeps a fleshy pink of its own
+(Message 153), lighter and pinker than the muscles; the gloss and slime of Message 163 give way to this later note, and
+its pale rim now only shows while you hold it (the held cue). The strip's areas keep their colours and are drawn in the
+same light, without ink lines, hatching or dark sulcal floors inside them; a switched-on area is pure white with its
+glow (Message 203). The arrows keep their colours, without highlight, rim or ink.
+
+**The comic look is a switch away.** `RAW_LOOK.on` false brings the early comic look of 19 November back everywhere
+(`BODY_STYLE` follows it); none of its code was removed.
+
+**Each muscle group is one step of one rose red.** The groups a student learns (shoulder, chest, upper arm's flexors and
+extensors, forearm's flexors and extensors, hand, neck, face, abdominal wall, back, hip and buttock, the thigh's front,
+inner side and back, the shin's front and outer side, the calf, the foot) each draw one tone (`MUSCLE_GROUPS`,
+`MUSCLE_GROUP_TONES`, `muscleGroupOf` in `ns-colors.mjs`): the pictures' rose (OKLCH 0.60, 0.134, hue 24) at eight steps
+of lightness from 0.41 to 0.76, the hue held at 22 to 24 degrees and the chroma at 0.115 to 0.135 ('rose', the
+reference itself, is the thigh's front and the shoulder). The first version turned the hue as well (coral, pink, wine,
+maroon); the judges found the body a candy colour code (hue spread 12 degrees, half of the pixels leaning to magenta)
+and a used muscle turning brown, so the hue is now one: on the held mirror body's torso the muscle pixels measure hue
+21.9 on average with a spread of 5 degrees and none leaning to magenta (the comic look: 27 and 11). Groups that lie side
+by side are 0.15 or more apart in lightness: the upper arm's flexors pale against its dark extensors, the shoulder in
+the reference rose between them; the forearm's flexors darkest against its rose extensors; the chest darkest against
+the shoulder and the pale abdominal wall; the thigh's front rose against its pale inner side and darkest back, the hip a
+step down; the shin's front pale, its outer side darkest, the calf deep. The upper arm is not the tone of the thigh it
+lies beside in the start picture; the back is two steps lighter than the upper arm's extensors. Every one of the 292
+muscles of the body and the left arm's muscles has its group by its name.
+
+**Touching muscles are told apart.** On top of its group's tone each muscle takes one of three lightness steps (-0.08,
+0, +0.08, with a 4-degree turn of hue: `MUSCLE_STEP`, `assignMuscleSteps`), given out like the colours of a map from the
+muscles that touch in the drawn body (`assignBodyMuscleTones`, once at load: shared cells of the rest meshes, weighted by
+how much of both is seen): a muscle takes the step furthest from its touching neighbours of the same group (the
+quadriceps' heads, the forearm's flexors, the pectoral's parts), and a muscle at a group's border steps away from the
+group beside it, so the steps never bring two groups together. Groups still read as families; the muscles inside them
+read as muscles. No line is drawn between them. A display rule for teaching; nothing is measured.
+
+**A used muscle keeps its group.** A muscle that has been switched on (section 126's mark) now only darkens: its OKLab
+lightness x 0.86, hue and chroma kept (`VISITED_RAW`, `visitedLightnessInto`). The faint, wide part of the tendon white
+(a sheet's thin border, which laid a grey haze over the pectoral) is cut (`RAW_TENDON_CUT`); the tendon ends on bone and
+the white finger and toe tendons stay.
+
+**Lines.** The outline pass draws no line on the bodies and no depth shading over them (`RAW_OUTLINE`, `setInk` in
+`ns-outline.mjs`; the pictures with and without the strong line between limbs, Message 138, were compared: the tones
+part the limbs). The motor strip keeps a thin dark contour (1.4 CSS px), so its pale bands do not melt into the pink
+brain. The outline's ID picture is still drawn when something moves, because the light-blue glass that shows what is
+hidden (`ns-see.mjs`) reads it. The activation light, the beams, the control glows, the limb flash and every card are
+signals drawn over the scene and are unchanged.
+
+**No black bands on the strip.** The strip's inter-effector areas (SCAN), where no movement is mapped, were drawn near
+black. They are pieces of the brain's own surface (the strip's meshes are not in the brain's shell, so leaving them out
+would open a hole into the dark), so they are now drawn as the brain is: the cortex's crown colour, opaque, in the same
+light, with no key bevel, press frame or dark gap of their own, and the strip's contour leaves them out
+(`SCAN_AS_BRAIN`, `isScanArea` in `ns-scene-three.mjs`). Looking there still names them ("Move nothing").
+
+**Performance.** At 1600 by 900 the frame table is the same as the comic look's: every case at 59 to 60 frames a second,
+the time the script spends drawing the same within the noise between runs. On a drawing buffer too large for the test
+machine's graphics card (5120 by 2880, picture quality fixed at High), where the card's work decides the frame rate, the
+look itself is cheaper: with no line at all it ran still 45, looking round 40.5, up and down 46, the limb turn 43.6
+frames a second against 42.5, 32.4, 36.4 and 33.6 for the comic look on the same build. The strip's contour, which the
+judges asked back, runs the outline pass's line passes again whenever the view moves and costs about 15 % there
+(looking round 34, up and down 40, the limb turn 39), so the shipped look is about level with the comic look on a
+slow or high-density screen and the same on a fast one. `RAW_OUTLINE.strip` 0 takes the contour and its cost away.
+
+Not right, or not done:
+- The loading picture knows no muscle's name, so its bodies are drawn in the one rose red of the pictures with a step
+  darker for each deeper storey, not in the game's group tones or steps.
+- The map colouring leaves some touching pairs on the same step where three or four muscles all touch (about 90 of the
+  contacts, nearly all where a deep muscle lies under an outer one, but also the rectus femoris against the sartorius
+  near the hip); and the darkest steps go nearly black on the shaded side.
+- A muscle held in a posture glows faintly in its area's colour (the activity, not the used mark): on the darkest
+  tones an orange glow reads tan, as it does on the comic look's salmon.
+- The inner parts seen through the brain's gap keep their own darkening toward their outline (section 155).
+
+## 169. Five small faults from a review of update 58 (20 November)
+
+A review of the packages of sections 165 to 167 and the lead's last fixes found five faults; each was shown on the code
+(and the label one in a test) and is fixed:
+- While the view changed to or from outside (E), the camera's step aside from your raised arm (section 166) faded out on
+  its own clock before the change of view had moved the camera, and on the way back started again from nothing, so for a
+  few frames the camera passed through the arm. The step is now held while the view changes and faded by the change of
+  view alone.
+- A label that must be shown was hidden whenever its best-scoring place touched a card's words by a sliver, although a
+  place on the picture alone had been found. The best place clear of words is now taken first (`tests/hud-layout`).
+- The labels' 0.4 s hold after the crosshair's tip goes was counted from the last time the tip was seen, which a resting
+  look could leave seconds back; it is now counted from when the tip is first found gone.
+- The short words of the Esc page still called the beam "a soft line ... for a moment" and the honesty line "the short
+  line"; both now say a cone of light. The short limb words now say "in the eye view" too.
+- The preview notes said both that the eyes stay fixed in the head and that they turn further; the first is gone.
+
+## 170. No punch-in (20 November)
+
+The user: "Let's get rid of all zoom and punch-in effects, as they're really confusing."
+
+The movement lens of section 142 (a press tightened the picture by 4 % for 0.3 s and let it out again, `PUNCH_IN` in
+`ns-app.mjs`, drawn through `pulseFovScale` in `ns-scene-three.mjs`) is switched off (`PUNCH_IN.on` false; the code stays
+for the switch). The lens is now the same at every press, in both views, with or without reduced motion. The other
+maintainer's browser test of the punch (`tests/browser-punch-in.mjs`) is restated with a dated note: the lens stays at
+rest through every press and through a repeated movement (it checked 0.958 to 0.975 at the peak before); everything
+else it checks is unchanged.
+
+The other camera effects were already off: the look's dolly (`EYE_DOLLY.downShare` 1, section 141), the mirror body's
+magnification from outside (`MIRROR_OUTSIDE.magnifyBy` 1). What remains that can read as a zoom: below the start look the
+eye view's camera, which stands half a metre behind and above the eye, swings round the eye as you look further down,
+so the mirror body is drawn up to about 23 % larger at a look straight down (section 144 left it; it is the camera's
+place, not a lens). Taking that away needs the camera at the eye itself or fixed in place; both were tried before and
+both had faults (sections 139 and 140); the user is asked.
+
+Also: the pack loader's timing test (`tests/pack.test.mjs`) took the next pack's start within a 150 ms window, which
+the timers under the full parallel test run sometimes missed (302 ms against 290); its stalled-pack case now runs with
+the job's times three times as long.
+
+## 173. Thinner, fainter light beams (20 November)
+
+The user: "let's have the corresponding pulses be a lot thinner and a lot less opaque. As right now they're obstructing
+the view."
+
+The cones of light from a strip area to its muscles (`LIGHT_BEAM` in `ns-links.mjs`, section 131) are now about
+40 % as bright (alpha 0.12 to 0.05, core 0.1 to 0.04, rim 0.04 to 0.015, white 0.45 to 0.3), cover a third as much of
+what is behind them (veil 0.3 to 0.1), and are narrower: 0.4 of the key's and the muscle's width instead of 0.85, and
+never more than 5 cm across at either end (`maxHalfM`; the left hand area's beam was 0.32 m half-wide at its key). Seen
+in a picture of Space closing the left hand: the beam is a thin cyan line through which the brain, the strip and the arm
+show; the area it starts from and the hand it ends on still read.
+
+**The lit area as bright as possible.** The user, the same evening: "And let's make the activation area as bright as
+possible." A switched-on area's light is now pure white (`AREA_LOOK.areaWhite` 0.8 to 1) at more than twice the strength
+(`areaGain` 1.3 to 3, its rim 1 to 2). In the pictures the lit part was already at display white, so the change shows
+mostly as a stronger glow round it where the bloom runs (the full quality level); the earlier worry that a strong glow
+hides the area's shape and its neighbours (section 132) gives way to the user's word.
+
+## 174. Space grips with all four limbs; a click never grips (20 November)
+
+The user: "Also, now right-click shouldn't lead to any grasping function. Let's just make spacebar grasping for all of
+the limbs at once. Because it gets confusing if right hand is grasping and you're trying to see what movement is being,
+it's confusing if right hand is grasping whilst you're clicking, activating specific brain areas, and you can't see what
+movement is being isolated." This replaces the rule of section 124 (from Message 141: "the spacebar only grasps the left
+hand, whilst clicking grasps the right hand").
+
+- **A click grips nothing.** The mouse or trackpad button, left or right, no longer closes the right hand, curls the
+  right foot's toes, lights the right hand's area or its finger benders, or lights the right hand with its control glow.
+  A click does only what it did besides: it presses the area under the crosshair (the movement again, harder), taps a
+  muscle, presses an arrow, chooses a limb, and with a drag turns or bends. So a click on an area now shows that area's
+  own movement and nothing else.
+- **Space grips with all four limbs** (`SPACE_GRIP` in `ns-app.mjs`). For as long as Space holds or keeps a grasp,
+  whatever is under the crosshair, both hands close and the toes of both feet curl, with the feet pointing a little:
+  the left game arm's hand through the activity's grip as before (section 81's rule for both hands is back), the right
+  hand through `GRIP_BOTH`, the toes and feet through `GRIP_FEET`, all on one eased share, so they close and open
+  together. The control glows (`spaceGripGlows`, `CONTROL_GLOW.hand`) light all four hands and feet, with the forearms and
+  shins, on your body and on the mirror body. On the strip both hand areas and both toe areas light (the toe areas with
+  their curl movements, colour only and no beam, like the right hand's), and all four show the small bloom of a held
+  grip on the living brain (section 89's fifth of a bloom), not the full bloom of a switched-on area
+  (`setBrainLiveHeld`; before, only the left hand's area had it). Carrying, the hold of a limb by Space, the tap that keeps a hold and the double tap that turns all limbs are
+  unchanged.
+- **The words.** The controls card shown while the game loads (Space: "grip", was "hold"; a click: "press"), the
+  controls list (Esc page and start page), the Esc page's Space row ("hands and feet grip; tap toggles"), the keyboard
+  picture's Space line, the full instructions, the grip's information card (now "Hands and feet: grip", its strip parts
+  the four areas, the toe benders with the finger benders) and the player guide say that Space closes both hands and
+  curls the toes, and that a click never closes a hand. The tutorial taught no click grip (its click step presses an
+  area); its carry step's full line now says that both hands and feet grip. The other maintainer's browser test of the
+  Esc page's Space row (`tests/browser-play-settings.mjs`) is restated with a dated note quoting the user, and so is the
+  card's word in `tests/chunking.test.mjs`.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

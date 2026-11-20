@@ -98,3 +98,21 @@ test('a required brain label with no clear place is never forced onto the HUD\'s
   [r] = declutterLabels([{ ...item, x: 205 }], { width: 400, height: 400, obstacles: [words, body] });
   assert.ok(r.shown && r.x - 50 >= 200 - 2, `label at ${r.x}`);
 });
+
+// 20 November 2026 (review of section 165): a required label with no clear place is hidden only where every place it
+// has touches words; the best place on the picture alone is taken before one that touches words by a sliver.
+test('a required label takes a place on the picture rather than vanish beside a card\'s edge', async () => {
+  const { declutterLabels, LABEL_WORDS_WEIGHT } = await import('../scene/src/ns-scene-three.mjs');
+  const item = { id: 'r:arm', x: 200, y: 200, w: 100, h: 30, priority: 9, required: true, text: 'Left arm' };
+  const pic = [{ x0: 0, y0: 0, x1: 800, y1: 180 }, { x0: 0, y0: 220, x1: 800, y1: 600 }, { x0: 0, y0: 180, x1: 140, y1: 220 }, { x0: 260, y0: 180, x1: 800, y1: 220 }];
+  const card = { x0: 0, y0: 100, x1: 149, y1: 300, words: true, weight: LABEL_WORDS_WEIGHT };
+  const [r] = declutterLabels([item], { width: 800, height: 600, obstacles: [...pic, card] });
+  assert.equal(r.shown, true, 'shown, on the picture');
+  const overlap = (b, o) => Math.max(0, Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0)) * Math.max(0, Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0));
+  const box = r.box || (Number.isFinite(r.x) ? { x0: r.x, y0: r.y, x1: r.x + item.w, y1: r.y + item.h } : null);
+  if (box) assert.equal(overlap(box, card), 0, 'not on the card\'s words');
+  // where only words are left, it is not shown
+  const all = { x0: 0, y0: 0, x1: 800, y1: 600, words: true, weight: LABEL_WORDS_WEIGHT };
+  const [r2] = declutterLabels([item], { width: 800, height: 600, obstacles: [all] });
+  assert.equal(r2.shown, false);
+});

@@ -57,6 +57,7 @@
  */
 
 import { BRAIN_LIVE, liveBloomGlsl } from './ns-brain-live.mjs';
+import { RAW_LOOK, rawLightDir, rawShadeGlsl } from './ns-raw-look.mjs';
 
 /** Display choices (see the BB and BB2 reports for what was tried).
  *  ink: near-black #0b0809 as drawn (sRGB), the style guide's ink, shared with ns-outline OUTLINE.colour.
@@ -389,7 +390,14 @@ export const BRAIN_KEYS = Object.freeze({
  * Returns { vertexShader, fragmentShader, cel, keys, clock } or null when a hook is missing (keys / clock: whether the
  * key look and its timed parts were added, BRAIN_KEYS; they need the per-area uniform nsKey).
  */
-export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = null) {
+// 20 November 2026 (the owner, Message 196: "New look for everything not just body"; the strip's areas "keep their colours
+// (they are the game's information) but are drawn in the same matte light"): with `raw` (ns-raw-look RAW_LOOK, the
+// default while its switch is on) the areas' lit colour is their own colour x the raw look's light (no cel bands of the
+// key light, no gloss); areaInkUniformValues(..., raw) turns the ink lines, the hatching and the dark sulcal floors off.
+// The glow, the hover light, the keys' press, frame, pulse and ring are signals and stay.
+// (20 November 2026: a material that defines NS_PLAIN_AREA, the strip's inter-effector areas drawn as the brain, gets
+// none of the keys' bevel, press, frame, pulse or ring)
+export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = null, raw = RAW_LOOK.on ? RAW_LOOK : null) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   if (!vertexShader.includes(AREA_VERTEX_HOOK)) return null;
   if (!fragmentShader.includes(AREA_OPAQUE_HOOK) || !fragmentShader.includes('varying float vNsCav') || !fragmentShader.includes('varying float vNsS') ||
@@ -401,7 +409,7 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
   const clock = keys && fragmentShader.includes('uniform vec4 nsClock');
   const K = BRAIN_KEYS, kf = glslFloat;
   let cel = false;
-  if (typeof lightsChunk === 'string' && lightsChunk.includes(AREA_LIGHT_LINE) && fs.includes(AREA_LIGHTS_INCLUDE) && fs.includes(AREA_LIGHTS_BEGIN)) {
+  if (!raw && typeof lightsChunk === 'string' && lightsChunk.includes(AREA_LIGHT_LINE) && fs.includes(AREA_LIGHTS_INCLUDE) && fs.includes(AREA_LIGHTS_BEGIN)) {
     const banded = lightsChunk.replace(AREA_LIGHT_LINE,
       'float dotNL = nsCelBand( pow( saturate( dot( geometryNormal, directLight.direction ) ), nsARel.z ) * nsRelK );\n' +
       '\t{ float nsLum = dot( directLight.color, vec3( 0.2126, 0.7152, 0.0722 ) ); nsDirect += dotNL * nsLum; nsDirectW += nsLum; }');
@@ -460,9 +468,11 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
 		float nsGe = max( 0.5 * ( nsAGloss.w - nsAGloss.z ), fwidth( nsGp ) );
 		float nsGm = 0.5 * ( nsAGloss.z + nsAGloss.w );
 		float nsGloss = ( nsAGloss.y * nsGp + nsAGloss2.x * smoothstep( nsGm - nsGe, nsGm + nsGe, nsGp ) ) * pow( nsRelK, nsARel3.x );
-		vec3 nsRefl = min( outgoingLight - totalEmissiveRadiance + vec3( nsGloss ), vec3( 1.0 ) );
+		${raw ? `${rawShadeGlsl('nsRawK', 'normal', 'vViewPosition', raw)}
+		vec3 nsRefl = min( diffuseColor.rgb * nsRawK, vec3( 1.0 ) );` : 'vec3 nsRefl = min( outgoingLight - totalEmissiveRadiance + vec3( nsGloss ), vec3( 1.0 ) );'}
 		vec3 nsEmit = totalEmissiveRadiance;
 		float nsKfr = 0.0;
+		#ifndef NS_PLAIN_AREA
 		${keys ? `// the keys (BRAIN_KEYS): bevel, press, and the lit key's frame, pulse and ring
 		float nsKlo = nsKLo >= 1.0 ? nsDLo : 1e6, nsKhi = nsKHi >= 1.0 ? nsDHi : 1e6;
 		float nsKedge = min( nsKlo, nsKhi );
@@ -495,14 +505,17 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
 			}` : ''}
 			nsEmit = nsEmit * ( nsKmove + ${kf(K.ringGain)} * nsKring ) + nsKc * ( ${kf(K.frameGain)} * nsKey.w * nsKfr * nsKmove );
 		}` : ''}
+		#endif
 		outgoingLight = nsEmit * mix( 1.0, nsFloor * nsAo, nsGlowK ) + nsRefl * nsFloor;
 		float nsLine = max( nsCont * nsAInk.y, max( nsLip * nsAInk2.x, nsFun * nsARel2.w ) * nsGlowK ) * ( 1.0 - nsKfr );
 		float nsInkA = max( nsLine, nsHat );
 		outgoingLight = mix( outgoingLight, nsInkC.rgb, nsInkA );
+		#ifndef NS_PLAIN_AREA
 		${keys ? `{ // the press: a dark frame closes in from the key's borders
 			float nsKin = min( ${kf(K.pressCss)}, ${kf(K.pressShare)} * nsKw ) * nsKpress;
 			outgoingLight = mix( outgoingLight, nsInkC.rgb, min( 1.0, 3.0 * nsKpress ) * ( 1.0 - smoothstep( nsKin - 0.7, nsKin + 0.7, nsKedge ) ) );
 		}` : ''}
+		#endif
 		// solid (BB2): more solid than the material alpha, so the bands are not washed out by the black behind the strip
 		diffuseColor.a = 1.0 - ( 1.0 - diffuseColor.a ) * ( 1.0 - nsARel.w );
 		diffuseColor.a = max( diffuseColor.a, nsLine * 0.9 );
@@ -516,8 +529,10 @@ export function patchAreaInkShaders(vertexShader, fragmentShader, lightsChunk = 
 
 /** Uniform values (plain arrays) of the motor-area ink patch for BRAIN_INK. keyDir: the key light's direction in view
  * space (any length; the scene passes its camera-attached key light). Pure. */
-export function areaInkUniformValues(o = BRAIN_INK, keyDir = [0.6, 1.5, 1.8]) {
-  const a = o.area, g = a.gloss;
+export function areaInkUniformValues(o = BRAIN_INK, keyDir = [0.6, 1.5, 1.8], raw = RAW_LOOK.on) {
+  const a0 = o.area, g = a0.gloss;
+  // 20 November 2026 (the raw look): no contour, sulcus, fundus or hatch ink and no darkened sulcal floor
+  const a = raw ? { ...a0, contourAlpha: 0, lipAlpha: 0, hatchAlpha: 0, fundusAlpha: 0, floorDark: 0, reliefHatch: 0 } : a0;
   const kl = Math.hypot(keyDir[0], keyDir[1], keyDir[2]) || 1;
   return {
     nsAKey: [keyDir[0] / kl, keyDir[1] / kl, keyDir[2] / kl, 0],
@@ -648,6 +663,25 @@ export const BRAIN_FLESH = Object.freeze({
   // lines below drew vessels that followed no anatomy and would now stand beside the real ones.
   vessel: null
 });
+/** 20 November 2026 (the owner, Message 196: "New look for everything not just body"): the cortex in the RAW look
+ * (ns-raw-look): the same fleshy pink of its own (Message 153; the crown and groove colours above are kept, so the folds
+ * still read by their colour), lit by the raw look's one light (ambient + direct x |N.L|, nothing else), with no wet
+ * sheen or glint (Message 163's gloss and slime give way to this later note), no fold darkening laid over the light
+ * (raw.ao 0), no tissue scatter, no mottling and no bump (a clean surface like the reference pictures). The pale rim is
+ * drawn only as the held-brain cue (the rim's opacity above its resting MATERIAL.glassRimOpacity, `raw.rimFrom`, times
+ * raw.rimGain): a control's feedback, not a look. The beat's flush, the blooms round a lit key and the faint tint of the
+ * picked area's colour stay (signals). */
+export const BRAIN_FLESH_RAW = Object.freeze({
+  ...BRAIN_FLESH,
+  // the crown and the grooves a little lighter and pinker than BRAIN_FLESH's (0.93, 0.74, 0.73 and 0.6, 0.33, 0.36): the
+  // raw light gives a surface facing the viewer 0.76 of its colour (the old key and fill about 1.0), and the brain read
+  // as a dull mauve; this keeps it the fleshy pink of Message 153, still paler and pinker than the muscles' reds
+  crown: Object.freeze([0.98, 0.79, 0.78]), groove: Object.freeze([0.7, 0.42, 0.45]),
+  mottle: 0, bumpMm: 0, scatter: 0, sheen: 0, glint: 0, rimGain: 0,
+  raw: Object.freeze({ ao: 0, rimFrom: 0.34, rimGain: 2.4 })
+});
+/** The cortex look in force: BRAIN_FLESH_RAW under the raw look's switch (RAW_LOOK.on), else BRAIN_FLESH. */
+export const BRAIN_FLESH_LOOK = RAW_LOOK.on ? BRAIN_FLESH_RAW : BRAIN_FLESH;
 /** The procedural vessel lines of 18 November (cortexVesselGlsl's parameters), kept for reference; BRAIN_FLESH.vessel is
  * null since the anatomical vessels (ns-vessels) replaced them. */
 export const PROCEDURAL_VESSELS = Object.freeze({
@@ -722,9 +756,38 @@ export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 
  * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
  * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. hooks.albedo: GLSL run once the tissue's
  * colour nsAlb is made and before it is lit (20 November 2026: ns-brain-gap's inner parts and cut faces). Pure. */
-export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE, hooks = {}) {
+export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, hooks = {}) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
   const B = live.bloom, P = live.beat;
+  const R = o.raw || null, RL = R ? rawLightDir(RAW_LOOK) : null;
+  // 20 November 2026 (BRAIN_FLESH_RAW): the raw look's light in place of the key light, wrap, fill, fold shade and scatter
+  const lightGlsl = R ? `vec3 nsLk = vec3( ${RL.map(f).join(', ')} );
+	float nsDif = abs( dot( nsN, nsLk ) );
+	float nsAo = mix( 1.0, ${f(o.aoMin)}, nsG * ${f(R.ao)} );
+	vec3 nsCol = nsAlb * pow( max( ${f(RAW_LOOK.ambient)} + ${f(RAW_LOOK.direct)} * nsDif, 0.0 ), ${f(RAW_LOOK.gamma)} ) * nsAo;`
+    : `vec3 nsLk = normalize( vec3( ${light.map(f).join(', ')} ) );
+	float nsDif = clamp( ( dot( nsN, nsLk ) + ${f(o.wrap)} ) / ${f(1 + o.wrap)}, 0.0, 1.0 );
+	float nsAo = mix( 1.0, ${f(o.aoMin)}, nsG );
+	vec3 nsCol = nsAlb * ( ${f(o.key)} * nsDif + ${f(o.fill)} ) * nsAo;
+	nsCol += nsAlb * ${v3(o.scatterTint)} * ( ${f(o.scatter)} * ( 1.0 - nsDif ) * nsAo );`;
+  const wetGlsl = R ? '' : `// the wet highlights slide over the folds with the beat and the breath (the light of the highlights leans a little)
+	vec3 nsLs = normalize( nsLk + vec3( ${f(P.slide)} * nsLive.y + ${f(P.breathSlide)} * nsLive.z, ${f(-0.6 * P.slide)} * nsLive.y + ${f(0.5 * P.breathSlide)} * nsLive.z, 0.0 ) );
+	float nsNH = max( dot( nsN, normalize( nsLs + nsV ) ), 0.0 );
+	float nsGl = pow( nsNH, ${f(o.glintPower)} );
+	float nsGe = max( ${f(0.5 * (o.glintHi - o.glintLo))}, fwidth( nsGl ) );
+	float nsWet = ${f(o.sheen)} * pow( nsNH, ${f(o.sheenPower)} ) + ${f(o.glint)} * smoothstep( ${f(0.5 * (o.glintLo + o.glintHi))} - nsGe, ${f(0.5 * (o.glintLo + o.glintHi))} + nsGe, nsGl );
+	nsCol += vec3( nsWet * ( 1.0 - ${f(o.wetGroove)} * nsG ) );`;
+  const rimGlsl = R ? `nsCol += ${lin(o.rim)} * ( nsRimF * max( nsRimOpacity - ${f(R.rimFrom)}, 0.0 ) * ${f(R.rimGain)} );`
+    : `nsCol += ${lin(o.rim)} * ( nsRimF * nsRimOpacity * ${f(o.rimGain)} );`;
+  const bumpGlsl = o.bumpMm > 0 ? `{
+		vec3 nsSx = dFdx( - vNsView ), nsSy = dFdy( - vNsView );
+		vec3 nsR1 = cross( nsSy, nsN ), nsR2 = cross( nsN, nsSx );
+		float nsDet = dot( nsSx, nsR1 );
+		float nsBf = 1.0 - smoothstep( ${f(1 / o.bumpFadePx)}, ${f(2.5 / o.bumpFadePx)}, length( fwidth( vNsObj * ${f(1 / o.mottleFineMm)} ) ) );
+		float nsBh = nsMot * ${f(o.bumpMm)} * nsBf * length( nsSx ) / max( length( dFdx( vNsObj ) ), 1e-6 );
+		vec3 nsGrad = sign( nsDet ) * ( dFdx( nsBh ) * nsR1 + dFdy( nsBh ) * nsR2 );
+		nsN = normalize( abs( nsDet ) * nsN - nsGrad );
+	}` : '';
   return `
 {
 	float nsClr = 1.0 - nsClear * clamp( vNsNear, 0.0, 1.0 );
@@ -739,29 +802,12 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH, live = BRAIN_LIVE, hooks
 	nsAlb = mix( nsAlb, nsAlb * ${v3(B.flushTint)}, ${f(B.flush)} * nsLvF );
 	// a slight unevenness of the surface from the same mottling (a derivative bump of the normal: the wet highlights
 	// break up like on moist tissue); it fades out where the fine mottling would be under bumpFadePx pixels across
-	{
-		vec3 nsSx = dFdx( - vNsView ), nsSy = dFdy( - vNsView );
-		vec3 nsR1 = cross( nsSy, nsN ), nsR2 = cross( nsN, nsSx );
-		float nsDet = dot( nsSx, nsR1 );
-		float nsBf = 1.0 - smoothstep( ${f(1 / o.bumpFadePx)}, ${f(2.5 / o.bumpFadePx)}, length( fwidth( vNsObj * ${f(1 / o.mottleFineMm)} ) ) );
-		float nsBh = nsMot * ${f(o.bumpMm)} * nsBf * length( nsSx ) / max( length( dFdx( vNsObj ) ), 1e-6 );
-		vec3 nsGrad = sign( nsDet ) * ( dFdx( nsBh ) * nsR1 + dFdy( nsBh ) * nsR2 );
-		nsN = normalize( abs( nsDet ) * nsN - nsGrad );
-	}
-	vec3 nsLk = normalize( vec3( ${light.map(f).join(', ')} ) );
-	float nsDif = clamp( ( dot( nsN, nsLk ) + ${f(o.wrap)} ) / ${f(1 + o.wrap)}, 0.0, 1.0 );
-	float nsAo = mix( 1.0, ${f(o.aoMin)}, nsG );
-	vec3 nsCol = nsAlb * ( ${f(o.key)} * nsDif + ${f(o.fill)} ) * nsAo;
-	nsCol += nsAlb * ${v3(o.scatterTint)} * ( ${f(o.scatter)} * ( 1.0 - nsDif ) * nsAo );
-	// the wet highlights slide over the folds with the beat and the breath (the light of the highlights leans a little)
-	vec3 nsLs = normalize( nsLk + vec3( ${f(P.slide)} * nsLive.y + ${f(P.breathSlide)} * nsLive.z, ${f(-0.6 * P.slide)} * nsLive.y + ${f(0.5 * P.breathSlide)} * nsLive.z, 0.0 ) );
-	float nsNH = max( dot( nsN, normalize( nsLs + nsV ) ), 0.0 );
-	float nsGl = pow( nsNH, ${f(o.glintPower)} );
-	float nsGe = max( ${f(0.5 * (o.glintHi - o.glintLo))}, fwidth( nsGl ) );
-	float nsWet = ${f(o.sheen)} * pow( nsNH, ${f(o.sheenPower)} ) + ${f(o.glint)} * smoothstep( ${f(0.5 * (o.glintLo + o.glintHi))} - nsGe, ${f(0.5 * (o.glintLo + o.glintHi))} + nsGe, nsGl );
-	nsCol += vec3( nsWet * ( 1.0 - ${f(o.wetGroove)} * nsG ) );
+	// (none in the raw look: bumpMm 0)
+	${bumpGlsl}
+	${lightGlsl}
+	${wetGlsl}
 	float nsRimF = pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - nsRimGroove * nsG );
-	nsCol += ${lin(o.rim)} * ( nsRimF * nsRimOpacity * ${f(o.rimGain)} );
+	${rimGlsl}
 	// 19 November 2026 (the owner: "can we also please have the whole brain light up slightly, faintly, with whatever
 	// color area is being picked"): the whole cortex takes a faint light of the picked area's colour (nsPickTint: that
 	// colour times its level, set by the scene; black when nothing is picked), a little more on the lit side.

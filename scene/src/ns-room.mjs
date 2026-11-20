@@ -23,6 +23,7 @@
  *
  * Under prefers-reduced-motion the light does not change at all (no beat, no answer to a movement).
  */
+import { RAW_LOOK } from './ns-raw-look.mjs';
 
 /** Display choices (metres in the game's world: +y up, the eye near the origin, the look starts along -z).
  *  floorY / ceilY: the floor's and the lamp plane's height; wallR: the wall's radius about the light's axis (far: its
@@ -59,7 +60,9 @@ export const ROOM = Object.freeze({
   // 19 November 2026 (the owner: "Let's have much darker blacks instead of ugly grays"): the darkest the room gets is
   // now nearly black and neutral (0.0015, 0.0021, 0.0033 before: the old blue-black 0x05070b), and the lit air round
   // the brain and the bodies is halved (0.012 and 0.02 before), so what is left of the gradient is the floor's pool.
-  black: Object.freeze([0.0008, 0.0009, 0.0011]),
+  // 20 November 2026 (the owner, Messages 195 / 196: the look of the reference pictures "for everything"): in the raw
+  // look (ns-raw-look RAW_LOOK.on) the darkest light is the pictures' near-black, RGB 18, 18, 22 (RAW_LOOK.room).
+  black: RAW_LOOK.on ? RAW_LOOK.room : Object.freeze([0.0008, 0.0009, 0.0011]),
   // 19 November 2026 (the owner: "Let's go back to far more black of a background, but with a little bit of a gradient.
   // So not exactly pitch black, with the gradient changing as you go further or closer away"): the floor's pool of light
   // is the gradient (brightest under you, fading with distance) at about a third of its strength (0.020, 0.040, 0.042

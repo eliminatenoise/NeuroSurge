@@ -153,9 +153,13 @@ export const LIGHT_BEAM = freeze({
   // (the owner, on seeing it: "way too bright at the moment, and there should be some transparency involved so that
   // you can still see which muscle is being activated and which brain part is being activated": about half the light
   // of the first build, a thinner veil, and little of it over the key and the muscle themselves)
-  alpha: 0.12, coreAlpha: 0.1, coreWidth: 0.12, rimAlpha: 0.04, white: 0.45, capLevel: 0.12, veil: 0.3,
+  // (20 November 2026, evening, the owner, Message 198: "let's have the corresponding pulses be a lot thinner and a lot
+  // less opaque. As right now they're obstructing the view": about 40 % of the light and a third of the veil, and the
+  // cone narrower: tight 0.85 -> 0.4 of the key's and the muscle's width, and never more than maxHalfM across at
+  // either end (a wide area's beam was half a metre and more wide at its key))
+  alpha: 0.05, coreAlpha: 0.04, coreWidth: 0.12, rimAlpha: 0.015, white: 0.3, capLevel: 0.12, veil: 0.1, maxHalfM: 0.05,
   rays: freeze({ amp: 0.2, lanes: freeze([freeze([2.6, 0.07, 0.3]), freeze([4.3, -0.05, 2.1]), freeze([1.4, 0.03, 4.4])]) }),
-  pulseAmp: 0.42, pulseWidth: 0.09, pulseBoth: true, minHalfM: 0.003, tight: 0.85, overBrain: 0.7, hoverAlpha: 0.75, ownAlpha: 0.8, manyPower: 0.8, manyFrom: 0.1, manyTo: 0.7, manyRise: 2,
+  pulseAmp: 0.42, pulseWidth: 0.09, pulseBoth: true, minHalfM: 0.002, tight: 0.4, overBrain: 0.7, hoverAlpha: 0.75, ownAlpha: 0.8, manyPower: 0.8, manyFrom: 0.1, manyTo: 0.7, manyRise: 2,
   // 20 November 2026 (browser hunt: with the brain carried behind you, Space drew the hand area's beam from the corner
   // of the picture, a quarter of the screen wide): a beam is drawn only while the middle of its key on the strip is in
   // front of the eye and within keyInView of the picture's half size from its middle (1 = the picture's edge). A

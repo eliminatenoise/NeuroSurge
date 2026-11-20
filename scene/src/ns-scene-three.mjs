@@ -195,7 +195,7 @@ import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, out
 import { createGhostPass, seeAreaCode } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front; 19 November: everything hidden
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
-import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
+import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, BRAIN_FLESH_LOOK, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
 
 // 18 November (the living brain): the beat, the blooms round switched-on areas and the wobble when it is handled.
 import { BRAIN_LIVE, createBrainLive, stepBeat, stepBlooms, stepWobble, bloomOn, bloomOff, bloomPulse, bloomCentreOf, writeLiveUniforms, beatCentre, patchLiveVertex, liveFragmentHead } from './ns-brain-live.mjs';
@@ -219,6 +219,8 @@ import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, VEIN_COURSES, bra
 import { hemisphereSideOf, partedPositions, partedOnBrain, partedBridging } from './ns-brain-part.mjs'; // 20 November 2026: the vessels follow the parted halves
 // 18 November 2026 (package DETAIL): smoother shading normals of the decimated body meshes (ns-detail smoothNormalField).
 import { smoothNormalField, boneEndWeights } from './ns-detail.mjs';
+// 20 November 2026 (the owner, Messages 195 / 196): the raw look, one matte light on everything (ns-raw-look RAW_LOOK).
+import { RAW_LOOK, patchRawShaders } from './ns-raw-look.mjs';
 // R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
 // not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
 const STACK_FILL_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.fill.mm)) + 0.01;
@@ -672,8 +674,22 @@ export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererNam
 // tendon ends, ink outlines) with what was asked for since: a satin surface with little gloss, a steady light with
 // no blink or shudder, a near-black backdrop, no vessels. The plain look's code stays behind the switch.
 export const SIMPLE_LOOK = false;
-/** 'cel': the early comic look (BODY_CEL_EARLY, patchComicShadersCel); 'painted': the look of 18 November (BODY_FLESH). */
-export const BODY_STYLE = 'cel';
+/** 'cel': the early comic look (BODY_CEL_EARLY, patchComicShadersCel); 'painted': the look of 18 November (BODY_FLESH).
+ * 20 November 2026 (the owner, Message 195: "The new look aesthetic you've provided in the recent most images is good.
+ * Apply it"; Message 196: "New look for everything not just body"): 'raw', one matte light and nothing drawn on top
+ * (ns-raw-look RAW_LOOK, patchRawShaders), with each muscle GROUP in its own tone (ns-colors MUSCLE_GROUP_TONES). It
+ * follows the one switch RAW_LOOK.on: false brings the early comic look back ('cel') everywhere. */
+export const BODY_STYLE = RAW_LOOK.on ? 'raw' : 'cel';
+/** 20 November 2026 (the raw look): the ink lines of the outline pass (ns-outline setInk: opacities of the strong line
+ * between limbs and bodies, the silhouette, the inner depth step and the parting between muscles; and the motor strip's
+ * line, its opacity and width in CSS pixels). The reference pictures have no line at all, so the bodies get none and no
+ * depth shading either (occlusion off). The motor strip keeps a thin dark contour (a judge panel: without it the pale
+ * bands of the strip's areas melted into the pink brain; it is the game's map, not a look): `strip`, `stripCss`. */
+export const RAW_OUTLINE = Object.freeze({ alpha: Object.freeze([0, 0, 0, 0]), strip: 0.9, stripCss: 1.4, occlusion: false });
+/** 20 November 2026 (the raw look): the tendon white's weight cut (patchMuscleLookShaders tendonCut). */
+export const RAW_TENDON_CUT = Object.freeze([0.55, 0.9]);
+/** The bones' colour: the raw look's ivory (the reference pictures' RGB 232, 224, 205), else MATERIAL.bone. */
+export const BONE_COLOUR = BODY_STYLE === 'raw' ? RAW_LOOK.bone : MATERIAL.bone;
 // 19 November 2026 (the owner: "Resolution for the body and the mirror body are far, far too low. They need to be far,
 // far higher. And far, far cleaner and far, far clearer ... sharp and not blurry or extremely pixelated. Or rough or
 // patchy"). On a slow frame the automatic controller used to halve the picture's resolution and then swap the bodies
@@ -2336,6 +2352,13 @@ export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, h
   if (!o.rim) o.rim = [0, 0, 0];
   const n = Number.isFinite(activatedCount) ? activatedCount : 0;
   const activated = n >= 1;
+  if (SCAN_AS_BRAIN && isScanArea(region)) {
+    // 20 November 2026 (the owner, Message 199): an inter-effector area, where no movement is mapped, is drawn as the
+    // brain itself (its crown colour, opaque, no light of its own), not as a black band. It still answers the look.
+    for (let i = 0; i < 3; i++) { o.tint[i] = SCAN_BRAIN_LINEAR[i]; o.albedo[i] = SCAN_BRAIN_LINEAR[i]; o.emission[i] = 0; o.rim[i] = 0; }
+    o.opacity = 1; o.glow = 0; o.activated = activated;
+    return o;
+  }
   if (areaRecord(region.id)) {
     // R558 (Message 2, optogenetic look): every area has its OWN colour (ns-colors AREA_COLORS). At rest a calm tint of
     // it over the R32 tissue pink; switched on, a little more of it; active, the area emits its glow colour (strength =
@@ -2391,6 +2414,19 @@ export function boundaryEdges(indices, vertexCount) {
   return Uint32Array.from(out);
 }
 
+/** 20 November 2026 (the owner, Message 199: "Let's make the brain black areas where there's no mapped activity, just
+ * transparent"): the strip's inter-effector areas (SCAN, chunk 'scan'; the game moves nothing there) were drawn near
+ * black. They are pieces of the brain's own surface (the strip meshes are not in the brain's shell), so leaving them out
+ * would open a hole into the dark: with SCAN_AS_BRAIN they are drawn as the brain is, in the cortex's crown colour
+ * (ns-brain-ink BRAIN_FLESH_LOOK), opaque and without a light of their own, and the strip's dark contour (ns-outline
+ * setStrip) leaves them out, so the brain reads as one surface between the coloured areas. */
+export const SCAN_AS_BRAIN = true;
+const SCAN_BRAIN_LINEAR = Object.freeze(BRAIN_FLESH_LOOK.crown.map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)));
+/** Whether a body-map region is one of the strip's inter-effector (SCAN) areas. Pure. */
+export function isScanArea(region) {
+  const rec = region && typeof region.id === 'string' ? areaRecord(region.id) : null;
+  return rec ? rec.chunk === 'scan' : regionGroupKey(region) === 'scan';
+}
 /** Label group of a body-map region: 'leftArm' | 'arm' | 'leg' | 'trunk' | 'face' | 'scan' | 'other'. */
 export function regionGroupKey(region) {
   if (!region) return 'other';
@@ -3019,7 +3055,7 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
     // taken by obstacles, is handled as before (hidden, or a required pair forced and faded at its best level place).
     const twinY0 = live.length === 2 ? (items[live[0]].y + items[live[1]].y) / 2 : null;
     const twinH0 = live.length === 2 ? Math.max(items[live[0]].h, items[live[1]].h) : null;
-    let pick = null, bestBad = null, levelFits = false;
+    let pick = null, bestBad = null, bestDry = null, levelFits = false;
     for (const level of twinY0 !== null ? [true, false] : [false]) {
       if (pick || (!level && levelFits)) break;
       const twinY = level ? twinY0 : null, twinH = level ? twinH0 : null;
@@ -3053,10 +3089,13 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
         if (level) levelFits = true;
         if (bad === 0) { pick = boxes; break; }
         if (!bestBad || bad < bestBad.bad) bestBad = { boxes, bad };
+        // (20 Nov review: the best place that touches no words is kept too, so a forced label is hidden only where every
+        // place it has touches words)
+        if ((!bestDry || bad < bestDry.bad) && !boxes.some(q => obstacles.some(o => o && o.words && overlap(q.b, o) > 0))) bestDry = { boxes, bad };
       }
     }
     let forced = false;
-    if (!pick && required && bestBad) { pick = bestBad.boxes; forced = true; }
+    if (!pick && required && (bestDry || bestBad)) { pick = (bestDry || bestBad).boxes; forced = true; }
     // 20 November 2026 (package HUD: "nothing that matters may cover anything else"): a forced label is not laid over
     // the HUD's words (an obstacle flagged `words`); it is left out instead.
     if (forced && pick.some(q => obstacles.some(o => o && o.words && overlap(q.b, o) > 0))) pick = null;
@@ -4053,7 +4092,12 @@ export const MUSCLE_LOOK_HOOKS = Object.freeze({
   vertex: '#include <begin_vertex>', color: '#include <color_fragment>', roughness: '#include <roughnessmap_fragment>',
   normal: '#include <emissivemap_fragment>', light: '#include <aomap_fragment>'
 });
-export function patchMuscleLookShaders(vertexShader, fragmentShader) {
+// 20 November 2026 (the raw look; a judge panel: on the darker group tones the tendon white laid a grey-pink haze over
+// the pectoral toward the breastbone): `tendonCut` [lo, hi] (or null: as before) takes the tendon weight through
+// smoothstep(lo, hi): the faint, wide part of the estimate (a sheet's thin aponeurotic border, weights well under hi)
+// stays muscle-coloured, the true ends on bone, the finger and toe tendons (DIGIT_TENDONS, weight 1) and the digit
+// sleeves (0.85) stay white.
+export function patchMuscleLookShaders(vertexShader, fragmentShader, tendonCut = null) {
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   const H = MUSCLE_LOOK_HOOKS;
   if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.color) || !fragmentShader.includes(H.roughness) || !fragmentShader.includes(H.normal) || !fragmentShader.includes(H.light)
@@ -4062,7 +4106,7 @@ export function patchMuscleLookShaders(vertexShader, fragmentShader) {
     vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsTendon = nsTendon;\n#ifdef NS_FIBRE_REST\n\tvNsFib = nsRest;\n#else\n\tvNsFib = position;\n#endif`);
   const color = `${H.color}
 	float nsMGlow = smoothstep( 0.02, 0.2, max( emissive.r, max( emissive.g, emissive.b ) ) );
-	float nsMTd = clamp( vNsTendon, 0.0, 1.0 ) * nsMuscleTendon.a * ( 1.0 - 0.5 * nsMGlow );
+	float nsMTd = ${Array.isArray(tendonCut) ? `smoothstep( ${glslFloat(tendonCut[0])}, ${glslFloat(tendonCut[1])}, vNsTendon )` : 'clamp( vNsTendon, 0.0, 1.0 )'} * nsMuscleTendon.a * ( 1.0 - 0.5 * nsMGlow );
 	nsMTd *= 1.0 - smoothstep( ${glslFloat(MUSCLE_TENDON_FADE.fullM)}, ${glslFloat(MUSCLE_TENDON_FADE.noneM)}, length( fwidth( vViewPosition ) ) );
 	float nsFh = 0.0;
 	if ( nsFibre.w > 0.0 && nsMuscleFibre.x > 0.0 ) {
@@ -4952,7 +4996,7 @@ export function createScene({
   const scene = new THREE.Scene();
   { // R558 (Message 22; Message 24 put space black back: MATERIAL.backgroundGradient null): a gradient texture if one is set, else the flat colour
     const bg = clinicalBackground(THREE, canvas && canvas.ownerDocument);
-    scene.background = bg ? keep(bg) : new THREE.Color(MATERIAL.background);
+    scene.background = bg ? keep(bg) : new THREE.Color(BODY_STYLE === 'raw' ? 0x121216 : MATERIAL.background); // 20 November 2026: the raw look's near-black
   }
   // 18 November ("something should be done about the endless black space"): the room (ns-room), a dark operating
   // theatre out of focus, drawn behind everything. The flat colour above stays as the clear colour under it.
@@ -4974,6 +5018,7 @@ export function createScene({
   // R558 (Message 20, ns-outline): body meshes register below (setArm, setBody); the composite draws first of the
   // transparent list, so glass, areas, glow and arrows are blended over the lines as over the bodies.
   const outline = createOutlinePass({ THREE, renderer, enabled: !SIMPLE_LOOK });
+  if (BODY_STYLE === 'raw' && typeof outline.setInk === 'function') outline.setInk(RAW_OUTLINE.alpha, RAW_OUTLINE.strip, RAW_OUTLINE.stripCss); // 20 November 2026
   scene.add(outline.composite);
   // R558 BB: the motor strip's ink silhouette, after the areas and before the glass (RENDER_ORDER.regionLine + 0.05).
   outline.stripComposite.renderOrder = RENDER_ORDER.regionLine + 0.05;
@@ -5079,7 +5124,7 @@ export function createScene({
     list.push(t);
     return t;
   };
-  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })));
+  const boneMaterial = ghostPatch(keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 })));
   // Strip shader state: applied is null until the strip program compiles, then whether every hook was found.
   const stripShader = { applied: null, shimmer: shimmer === 'auto' ? !reducedMotion : Boolean(shimmer), reducedMotion };
   // Glass (RENDER_ORDER 4..6). Unlit MeshBasicMaterial passes with the glassAlpha rim patch; `glassRim.applied` is
@@ -5680,6 +5725,8 @@ export function createScene({
   function regionBorderPatch(material, r, regionIndex) {
     const B = REGION_BORDER, left = r.isLeftArm === true && B.leftArmCyan !== false;
     const terr = left ? [borderLeftArmColor.r, borderLeftArmColor.g, borderLeftArmColor.b, B.leftArmAlpha] : [...B.territoryColor, B.territoryAlpha];
+    // (20 November 2026, SCAN_AS_BRAIN: no dark gap on the brain-coloured side; the coloured area beside it keeps its own)
+    if (SCAN_AS_BRAIN && isScanArea(r)) terr[3] = 0;
     const u = {
       nsRegionId: { value: regionIndex }, nsTerr: { value: new THREE.Vector4(terr[0], terr[1], terr[2], terr[3]) }, nsTerrGlow: { value: left ? B.leftArmGlow : B.territoryGlow },
       nsHi: { value: new THREE.Vector4(0, 0, 0, 0) }, nsHint: { value: new THREE.Vector4(0, 0, 0, 0) }, nsHintColor: { value: new THREE.Vector3(0, 0, 0) }
@@ -5909,7 +5956,7 @@ export function createScene({
     // EYE_COLLAR.hide (the neck's end in the eye view): the meshes not drawn there, the others the box still cuts (share
     // of their vertices inside it), and whether the hidden ones are hidden now
     neck: { hidden: (collar.hide || []).map(b => b.id), cut: (collar.cuts || []).filter(c => c.share < EYE_COLLAR.hide.shareFrom).map(c => `${c.b.id} ${Math.round(c.share * 100)}%`), on: collar.hidden === true } });
-  const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }));
+  const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 }));
   // Torso see-through window (BODY_SEE_THROUGH): one vec4 uniform shared by the torso/neck materials drawn in place.
   // R3-scene: SMOOTH torso translucency (BODY_TRANSLUCENT) instead of the dithered window: transparent materials (alpha 1
   // until the player looks down), drawn after the brain (BODY_ORDER.torso), and a depth pre-pass twin per torso mesh that is
@@ -5937,7 +5984,7 @@ export function createScene({
     m.customProgramCacheKey = () => 'ns-torso-see-r3';
     return m;
   };
-  const torsoBoneMaterial = torsoPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })));
+  const torsoBoneMaterial = torsoPatch(keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 })));
   // R3-fix (M4): body over the brain's outline is drawn see-through (BODY_OVER_BRAIN). Composes with torsoPatch.
   const overBrainUniform = { value: new Float32Array([0, BODY_OVER_BRAIN.alpha, 0, 0]) };
   const overBrainWinUniform = { value: new Float32Array([0, 0, 1, 1]) };
@@ -5979,7 +6026,7 @@ export function createScene({
   overBrainPatch(torsoBoneMaterial);
   overBrainPatch(bodyBoneMaterial);
   // R558 (FIRST_PERSON_BODY): the leg bones take the legs' own plane, so they need their own material.
-  const legBoneMaterial = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 })), true);
+  const legBoneMaterial = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 })), true);
   let bodySet = false;
   // Face layer: its own scene drawn as a second pass (ghost: main camera, depth-tested against the main frame; inset:
   // an inset camera in a scissored viewport). The meshes are the same posed geometry as the body.
@@ -5993,7 +6040,7 @@ export function createScene({
   faceGroup.name = 'ns-face layer (ghost / inset; displaced view, never around the camera)';
   faceGroup.matrixAutoUpdate = false;
   faceScene.add(faceGroup);
-  const faceBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0, transparent: true, opacity: FACE_LAYER.boneOpacity, depthWrite: false }));
+  const faceBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0, transparent: true, opacity: FACE_LAYER.boneOpacity, depthWrite: false }));
   const faceDepthMaterial = keep(new THREE.MeshBasicMaterial({
     colorWrite: false, depthWrite: true, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
   }));
@@ -6040,7 +6087,9 @@ export function createScene({
       // means (pickArrows). They are translucent, so what lies under them still shows through. (Message 19) Each is a lit
       // solid chevron; its rim light takes the set's rim colour.
       const c = typeof NsColors.arrowLook === 'function' ? NsColors.arrowLook(kind) : null;
-      const look = { ...NsArrows.ARROW_LOOK, ...(c ? { fill: c.tip, edge: c.outlineColor, hover: c.hover, rim: c.rim } : {}), renderOrder: ARROW_RENDER_ORDER[kind] };
+      const look = { ...NsArrows.ARROW_LOOK, ...(c ? { fill: c.tip, edge: c.outlineColor, hover: c.hover, rim: c.rim } : {}), renderOrder: ARROW_RENDER_ORDER[kind],
+        // 20 November 2026 (Message 196): the raw look's light on the tips, their own colours kept
+        ...(BODY_STYLE === 'raw' && NsArrows.ARROW_LOOK_RAW ? { ...NsArrows.ARROW_LOOK_RAW, keyLight: RAW_LOOK.light, rawAmbient: RAW_LOOK.ambient, rawDirect: RAW_LOOK.direct, rawGamma: RAW_LOOK.gamma } : {}) };
       const rig = NsArrows.createArrowRig(THREE, { kind, look });
       rig.group.visible = false;
       scene.add(rig.group);
@@ -6179,7 +6228,8 @@ export function createScene({
   // One small addition to the lit colour of the area materials (see REGION_RENDER.tissue*). It reads the material's own
   // final albedo, so an area shown in the activity colours scatters in those colours and the brain-to-muscle colour
   // match is kept; nothing is added to the emission, the depth or the alpha.
-  const tissue = { applied: null, uniforms: { nsTissue: { value: new THREE.Vector4(REGION_RENDER.tissueTint[0], REGION_RENDER.tissueTint[1], REGION_RENDER.tissueTint[2], REGION_RENDER.tissueStrength) }, nsTissueShape: { value: new THREE.Vector2(REGION_RENDER.tissueFloor, REGION_RENDER.tissuePower) } } };
+  // (20 November 2026: none in the raw look, strength 0: the areas take only its one light)
+  const tissue = { applied: null, uniforms: { nsTissue: { value: new THREE.Vector4(REGION_RENDER.tissueTint[0], REGION_RENDER.tissueTint[1], REGION_RENDER.tissueTint[2], BODY_STYLE === 'raw' ? 0 : REGION_RENDER.tissueStrength) }, nsTissueShape: { value: new THREE.Vector2(REGION_RENDER.tissueFloor, REGION_RENDER.tissuePower) } } };
   const TISSUE_HOOK = '#include <opaque_fragment>';
   const tissuePatch = m => composePatch(m, 'ns-tissue-r558', shader => {
     if (typeof shader.fragmentShader !== 'string' || !shader.fragmentShader.includes(TISSUE_HOOK) || !shader.fragmentShader.includes('vViewPosition')) { tissue.applied = false; return; }
@@ -6268,6 +6318,20 @@ export function createScene({
     return { value: a ? new THREE.Vector4(a[0], a[1], a[2], 1 / MUSCLE_LOOK.fibreMm) : new THREE.Vector4(0, 0, 1, 0) };
   };
   const noFibre = { value: new THREE.Vector4(0, 0, 1, 0) };
+  // ---- 20 November 2026 (the owner, Messages 195 / 196): the RAW look (ns-raw-look patchRawShaders) ---------------------
+  // One matte light from up and to the side in front of the viewer, the same on everything it is composed on; composed
+  // LAST on a material (in comicPatch's place on the bodies), so every colour, glow and alpha patch before it still works.
+  const rawLook = { applied: null, materials: 0, kinds: {} };
+  const rawPatch = (m, kind = 'other') => {
+    if (BODY_STYLE !== 'raw' || !m || (m.userData && m.userData.nsRaw)) return m;
+    rawLook.materials++; rawLook.kinds[kind] = (rawLook.kinds[kind] || 0) + 1;
+    if (m.userData) m.userData.nsRaw = true;
+    return composePatch(m, 'ns-raw', shader => {
+      const p = patchRawShaders(shader.vertexShader, shader.fragmentShader);
+      rawLook.applied = p !== null && rawLook.applied !== false;
+      if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
+    });
+  };
   const plainLook = { applied: null, materials: 0 };
   const plainBone = hexToLinear(MATERIAL.bone);
   const plainPatch = (m, kind) => {
@@ -6282,7 +6346,7 @@ export function createScene({
     if (SIMPLE_LOOK) return plainPatch(m, 'muscle');
     muscleLook.materials++;
     return composePatch(m, 'ns-muscle-look-r558', shader => {
-      const p = patchMuscleLookShaders(shader.vertexShader, shader.fragmentShader);
+      const p = patchMuscleLookShaders(shader.vertexShader, shader.fragmentShader, BODY_STYLE === 'raw' ? RAW_TENDON_CUT : null);
       muscleLook.applied = p !== null && muscleLook.applied !== false;
       if (!p) return;
       shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
@@ -6321,6 +6385,7 @@ export function createScene({
   };
   const comicPatch = (m, kind) => {
     if (SIMPLE_LOOK) return kind === 'bone' ? plainPatch(m, 'bone') : m;
+    if (BODY_STYLE === 'raw') return rawPatch(m, kind); // 20 November 2026: the raw look in place of the comic one
     comic.materials++;
     return composePatch(m, `ns-comic-r558-${kind}`, shader => {
       const p = (BODY_STYLE === 'cel' ? patchComicShadersCel : patchComicShaders)(shader.vertexShader, shader.fragmentShader, kind);
@@ -6334,6 +6399,7 @@ export function createScene({
    * degenerate mesh, so the attribute is always bound (never a stale GL default). */
   const hatchAttr = (geo, positions, kind, id = null) => {
     if (!geo || !geo.attributes || !geo.attributes.position) return null;
+    if (BODY_STYLE === 'raw') return null; // 20 November 2026: the raw look draws no ink lines (no frame to work out at load)
     if (geo.attributes.nsHatch) return geo.attributes.nsHatch;
     const n = geo.attributes.position.count;
     // No ink lines where lengthwise lines would run the wrong way (builder FA: the face's ring muscles, muscleFibreScale 0).
@@ -6498,6 +6564,11 @@ export function createScene({
   function muscleBaseOf(id, out = [0, 0, 0]) {
     if (typeof id !== 'string' || !id) return muscleBaseInto(0, null, out);
     const key = muscleToneKeyOf(id);
+    // 20 November 2026 (the owner: "more clear contrast and differentiation between muscle groups"): in the raw look a
+    // muscle draws its GROUP's tone (ns-colors MUSCLE_GROUPS / MUSCLE_GROUP_TONES) with a small step of its own.
+    // (Message 202: and its own lightness step among the muscles it touches, muscleTones.steps)
+    if (BODY_STYLE === 'raw') return NsColors.muscleGroupBaseInto(NsColors.muscleGroupOf(muscleSourceNameOf(id)), key, typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(id) : bodyStackLevel(id), out,
+      undefined, undefined, muscleTones.steps && muscleTones.steps.has(key) ? muscleTones.steps.get(key) : null);
     const t = muscleTones.byKey && muscleTones.byKey.has(key) ? muscleTones.byKey.get(key) : muscleToneFallback(key);
     // R558: the storey shade follows the full 226-muscle classification (ns-body bodyMuscleLayer: catalogue + the merged
     // supplement tables), not only the muscles the stack lifts, so every deeper muscle reads a little darker.
@@ -6533,7 +6604,7 @@ export function createScene({
     shader.fragmentShader = p.fragmentShader;
     shader.uniforms.nsBg = bgUniform; shader.uniforms.nsBgWin = bgWinUniform;
   });
-  const mirrorBoneMaterial = comicPatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: MATERIAL.bone, roughness: MATERIAL.boneRoughness, metalness: 0 }))), 'bone');
+  const mirrorBoneMaterial = comicPatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 }))), 'bone');
   // R558 (user Message 20, builder FA): the eyes of the completed head (tissue 'eye': sclera, iris, lens) get their own
   // materials (ns-colors EYE_LOOK), never the ivory bone; one per part for your body in place and one for the mirror
   // (behind-glass patched like every mirror material). The face-layer copy keeps the face bone material (not drawn).
@@ -6545,6 +6616,7 @@ export function createScene({
       const look = EYE_LOOK[part];
       m = keep(new THREE.MeshStandardMaterial({ color: look.hex, roughness: look.roughness, metalness: 0 }));
       if (mirrorTwin) behindGlassPatch(m); else overBrainPatch(m); // as the bone materials of each body
+      rawPatch(m, 'eye'); // 20 November 2026 (the raw look; nothing when it is off)
       eyeMaterials.set(key, m);
     }
     return m;
@@ -7270,6 +7342,7 @@ export function createScene({
       const mat = keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness: 0 }));
       rigidPatch(mat);
       composePatch(mat, 'ns-live-r18', shader => { liveCompile(shader); });
+      rawPatch(mat, 'brain-eye'); // 20 November 2026 (Message 196: "New look for everything")
       const mesh = still(new THREE.Mesh(geo, mat));
       mesh.name = name; mesh.userData.nsBrainPart = part;
       brainGroup.add(mesh);
@@ -7458,7 +7531,7 @@ export function createScene({
       brainVessels.programs++;
     };
     m.customProgramCacheKey = () => key;
-    return m;
+    return rawPatch(m, 'vessel'); // 20 November 2026 (the raw look)
   }
   function setBrainVessels({ arteries = [] } = {}) {
     if (!brainSet) fail('scene_state', 'setBrainVessels needs setBrain first');
@@ -7554,8 +7627,8 @@ export function createScene({
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       geo.setIndex(new THREE.BufferAttribute(bodyTubeIndex(B, sides), 1));
-      const own = overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 })));
-      const mir = behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 })));
+      const own = rawPatch(overBrainPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 }))), 'vessel');
+      const mir = rawPatch(behindGlassPatch(keep(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...colour, THREE.SRGBColorSpace), roughness: look.roughness, metalness: 0 }))), 'vessel');
       const mesh = new THREE.Mesh(keep(geo), own), twin = new THREE.Mesh(geo, mir);
       for (const m of [mesh, twin]) { m.matrixAutoUpdate = false; m.frustumCulled = false; m.renderOrder = BODY_ORDER.torso; }
       mesh.name = `body ${look === ARTERY_LOOK ? 'arteries' : 'veins'} (BodyParts3D centre lines, riveted to the drawn body)`;
@@ -7737,6 +7810,7 @@ export function createScene({
         polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1
       }));
       material.forceSinglePass = true;
+      if (SCAN_AS_BRAIN && isScanArea(r)) material.defines = { ...(material.defines || {}), NS_PLAIN_AREA: 1 }; // 20 November 2026: drawn as the brain
       if (border) regionBorderPatch(material, r, border.index.get(r));
       if (r.isLeftArm && leftBorder && leftBorder.length) {
         material.onBeforeCompile = shader => {
@@ -7907,7 +7981,25 @@ export function createScene({
         g.setIndex(new THREE.BufferAttribute(I, 1));
         g.computeBoundingSphere();
         seeAreas = g; seeAreaCodes = ownerCodes;
-        areaInk.stripSilhouette = outline.setStrip(g, brainGroup);
+        // (20 November 2026, SCAN_AS_BRAIN: the strip's contour leaves the inter-effector areas out: they are drawn as
+        // the brain, so a dark line round them would outline nothing)
+        let gs = g;
+        if (SCAN_AS_BRAIN) {
+          const keepI = [];
+          let ov2 = 0, oi2 = 0;
+          for (const m of regionMeshes) {
+            const a = m.geometry.attributes.position, cnt = m.geometry.index ? m.geometry.index.count : a.count;
+            if (!isScanArea({ id: m.userData.regionId })) for (let i = 0; i < cnt; i++) keepI.push(I[oi2 + i]);
+            ov2 += a.count; oi2 += cnt;
+          }
+          if (keepI.length && keepI.length < I.length) {
+            gs = keep(new THREE.BufferGeometry());
+            gs.setAttribute('position', g.attributes.position);
+            gs.setIndex(new THREE.BufferAttribute(Uint32Array.from(keepI), 1));
+            gs.computeBoundingSphere();
+          }
+        }
+        areaInk.stripSilhouette = outline.setStrip(gs, brainGroup);
       }
     }
     // R558: the label twins mirror in the middle of the motor strip's own width (see regionLabelGroups); once, at build.
@@ -9128,7 +9220,8 @@ export function createScene({
     let base = mat.userData && mat.userData.nsMuscleBase ? mat.userData.nsMuscleBase : muscleBaseLinear;
     // 19 November 2026 (VISITED): a muscle that has been switched on keeps a dimmed, greyer resting shade
     if (mat.userData) {
-      if (!hint && t >= NsColors.VISITED.markLevel && mat.userData.nsVisited !== true) { mat.userData.nsVisited = true; mat.userData.nsVisitedBase = NsColors.visitedShadeInto([base[0], base[1], base[2]]); }
+      // (20 November 2026, the raw look: only its lightness goes down, so it keeps its group's tone: visitedLightnessInto)
+      if (!hint && t >= NsColors.VISITED.markLevel && mat.userData.nsVisited !== true) { mat.userData.nsVisited = true; mat.userData.nsVisitedBase = (BODY_STYLE === 'raw' ? NsColors.visitedLightnessInto : NsColors.visitedShadeInto)([base[0], base[1], base[2]]); }
       if (mat.userData.nsVisited === true && mat.userData.nsVisitedBase) base = mat.userData.nsVisitedBase;
     }
     // R558 (Message 22): the power-up charge. The resting albedo (for the part the energy front has not reached yet),
@@ -9856,6 +9949,17 @@ export function createScene({
     const add = (a, b, w) => { let m = contacts.get(a); if (!m) contacts.set(a, (m = new Map())); m.set(b, (m.get(b) || 0) + w); };
     for (const [pk, w] of pairs) { const [a, b] = pk.split('\u0000'); add(a, b, w); add(b, a, w); }
     muscleTones.byKey = assignMuscleTones(keys, contacts);
+    if (BODY_STYLE === 'raw') {
+      // 20 November 2026 (the owner, Message 202): touching muscles take different lightness steps of their group's tone
+      const groupOfKey = new Map(), layerOfKey = new Map();
+      recs.forEach((b, i) => {
+        if (groupOfKey.has(keys[i])) return;
+        groupOfKey.set(keys[i], NsColors.muscleGroupOf(muscleSourceNameOf(b.id)));
+        layerOfKey.set(keys[i], typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(b.id) : bodyStackLevel(b.id));
+      });
+      muscleTones.steps = NsColors.assignMuscleSteps(keys, contacts, k => groupOfKey.get(k) || 'other', g => NsColors.muscleGroupTone(g).oklch[0], undefined, k => layerOfKey.get(k));
+      muscleTones.stepWorst = muscleTones.steps.worst;
+    }
     let worst = Infinity, worstPair = null;
     for (const [pk, w] of pairs) {
       if (w < 4) continue; // a real contact, not a corner touch
@@ -10026,7 +10130,7 @@ export function createScene({
         renderer.localClippingEnabled = true;
         // (the outline's ID picture leaves out what the box leaves out of the picture: no loose lines over the open neck)
         if (typeof outline.setClip === 'function') outline.setClip(collar.planes);
-        const cap = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 40, 24)), keep(new THREE.MeshStandardMaterial({ color: C.color, roughness: C.roughness, metalness: 0 })));
+        const cap = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 40, 24)), rawPatch(keep(new THREE.MeshStandardMaterial({ color: C.color, roughness: C.roughness, metalness: 0 })), 'cap'));
         cap.name = 'collar cap (display, not anatomy)';
         cap.position.set(C.centreMm[0], C.centreMm[1], C.centreMm[2]); cap.scale.set(C.radiiMm[0], C.radiiMm[1], C.radiiMm[2]); cap.updateMatrix(); cap.matrixAutoUpdate = false;
         collar.capRest = cap.matrix.clone();
@@ -11509,10 +11613,14 @@ export function createScene({
       const tr = shownQ(tipEl) ? tipEl.getBoundingClientRect() : null;
       if (tr && tr.width > 0 && tr.height > 0) {
         tipZone = { x0: tr.left - o.left, y0: tr.top - o.top, x1: tr.right - o.left, y1: tr.bottom - o.top, quiet: true };
-        tipZoneUntil = tNow + TIP_ZONE.holdMs; tipZoneHeld = false;
+        tipZoneUntil = Infinity; tipZoneHeld = false; // (shown: the hold starts when the tip is first found gone)
         hudRectCache.push(tipZone);
-      } else if (tipZone && tNow < tipZoneUntil) { hudRectCache.push(tipZone); tipZoneHeld = true; }
-      else { tipZone = null; tipZoneHeld = false; }
+      } else if (tipZone && (tipZoneUntil === Infinity || tNow < tipZoneUntil)) {
+        // (20 Nov review: the 0.4 s hold is counted from the first read that finds the tip gone; it was counted from the
+        // last read that saw it, which a look resting on one area could leave seconds in the past)
+        if (tipZoneUntil === Infinity) tipZoneUntil = tNow + TIP_ZONE.holdMs;
+        hudRectCache.push(tipZone); tipZoneHeld = true;
+      } else { tipZone = null; tipZoneHeld = false; }
       // 20 November 2026 (package HUD): the limits line at the top as drawn (two lines in a narrow window, where the
       // labels' fixed 26 px top let "Left arm" lie on its second line); labels only, like the quiet layer.
       for (const e of parent.querySelectorAll('.ns-hud > .ns-essential')) {
@@ -13938,9 +14046,9 @@ export function createScene({
     beamSide[0] = sx; beamSide[1] = sy; beamSide[2] = sz;
     // the key and the muscle, measured along the beam and across it
     let e = extentAlong(beamKeyW, nk, A, beamDir, beamExt); const aHi = e.hi;
-    e = extentAlong(beamKeyW, nk, A, beamSide, beamExt); const aMid = (e.lo + e.hi) / 2, hwA = Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2);
+    e = extentAlong(beamKeyW, nk, A, beamSide, beamExt); const aMid = (e.lo + e.hi) / 2, hwA = Math.min(LIGHT_BEAM.maxHalfM || Infinity, Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2));
     e = extentAlong(beamMusW, nm, B, beamDir, beamExt); const bLo = e.lo, bHi = e.hi;
-    e = extentAlong(beamMusW, nm, B, beamSide, beamExt); const bMid = (e.lo + e.hi) / 2, hwB = Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2);
+    e = extentAlong(beamMusW, nm, B, beamSide, beamExt); const bMid = (e.lo + e.hi) / 2, hwB = Math.min(LIGHT_BEAM.maxHalfM || Infinity, Math.max(LIGHT_BEAM.minHalfM, LIGHT_BEAM.tight * (e.hi - e.lo) / 2));
     // along the beam from the key (t0) to the far edge of the muscle (t1), measured from A
     // (from the MIDDLE of the key: light laid over the whole key spilled onto the areas beside it, and the lit key is
     // bright by itself)
@@ -14295,6 +14403,8 @@ export function createScene({
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
       cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials, muscleShare: muscleShareState(Boolean(opts && opts.audit === true)),
       halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null, keyHidden: glowState.keyHidden || 0 } : null,
+      // (20 November 2026, evening) the control marks asked for now (PART_GLOW: { 'limb:part': level }), for checks
+      partGlows: { ...partGlow.want },
       // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
       powerUp: { shader: powerUp.applied, materials: powerUp.materials, starts: powerUp.starts, settledStarts: powerUp.settledStarts, recharges: powerUp.recharges, clockS: Math.round(powerUpClock.value.x * 1000) / 1000, lastStartS: powerUp.lastStart === null ? null : Math.round(powerUp.lastStart * 1000) / 1000, lastStartArea: powerUp.lastStartArea, reduced: powerUpClock.value.y > 0.5 },
       // R558 (Message 18): the muscle look (patch state, tendon meshes written, tone assignment summary).
@@ -14302,7 +14412,8 @@ export function createScene({
       // phalanges drawn from their rounded display copy.
       comic: { shader: comic.applied, materials: comic.materials, hatchMeshes: comic.hatchMeshes, inkOn: comic.inkOn, boneTips: boneTips.meshes, hdr: hdr.state() },
       muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, digitTendons: muscleLook.digitTendons || 0, digitTendonBody: muscleLook.digitTendonBody || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
-        toneKeys: muscleTones.keys, toneContacts: muscleTones.contacts, toneWorst: muscleTones.worst, toneMs: muscleTones.ms === undefined ? null : muscleTones.ms } };
+        toneKeys: muscleTones.keys, toneContacts: muscleTones.contacts, toneWorst: muscleTones.worst, toneMs: muscleTones.ms === undefined ? null : muscleTones.ms,
+        stepWorst: muscleTones.stepWorst || null, steps: muscleTones.steps ? [...muscleTones.steps.values()].reduce((o, v) => { o[v] = (o[v] || 0) + 1; return o; }, {}) : null } };
   }
 
   /** Per-frame DOM overlay: orbit arrows, region group labels, face label / inset frame. Style writes only on change. */
@@ -15078,7 +15189,7 @@ export function createScene({
     // R558 (Message 20): the outline ID pass of this frame's body meshes (the composite in `scene` reads it). The soft
     // depth shading (ns-outline OUTLINE_AO) is drawn only at the full quality level; the lines at every level.
     // R558 BB (Message 28): the lines' supersampling follows the quality level too (ns-outline OUTLINE_AA).
-    outline.setOcclusion(qState.level === 0);
+    outline.setOcclusion(qState.level === 0 && !(BODY_STYLE === 'raw' && RAW_OUTLINE.occlusion === false)); // (none on the raw look's bodies)
     outline.setQuality(qState.level);
     // R558 (performance, P3): the scene's world matrices are brought up to date ONCE for the frame, here, instead of by
     // the outline pass and again by the main render (each of which updated the whole graph when it found the scene's

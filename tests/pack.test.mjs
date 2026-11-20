@@ -347,7 +347,7 @@ test('a pack worker that never says a word (its script never arrives) is given u
 // line the first is whole after its own bytes, not after three packs' worth; the next starts when the last byte of the
 // one before is in, or once that one has gone quiet; the rig file comes with the second.
 test('the packs come one after another; the next starts when the last byte of the one before is in, or when that one goes quiet', async () => {
-  const run = async ({ chunkMs, hangFirst = false }) => {
+  const run = async ({ chunkMs, hangFirst = false, k = 1 }) => {
     const log = [], t0 = Date.now(), base = jobIo();
     const fetch = async (url, init) => {
       const name = String(url).split('/').pop();
@@ -361,7 +361,7 @@ test('the packs come one after another; the next starts when the last byte of th
       return new Response(body, { status: 200 });
     };
     const msgs = [];
-    await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: { ...base, fetch }, emit: m => msgs.push(m), stallMs: 300, answerMs: 300, quietMs: 150 });
+    await runPackJob({ indexUrl: 'x/PACK-INDEX.json', base: 'x/', io: { ...base, fetch }, emit: m => msgs.push(m), stallMs: 300 * k, answerMs: 300 * k, quietMs: 150 * k });
     const at = (kind, name) => { const r = log.find(x => x[0] === kind && x[1] === name); return r ? r[2] : null; };
     return { log, msgs, at };
   };
@@ -375,9 +375,11 @@ test('the packs come one after another; the next starts when the last byte of th
   const ask1 = long.at('ask', packs[1].file), whole0 = long.at('whole', packs[0].file);
   assert.ok(ask1 < whole0 && ask1 > whole0 - 450, `the second pack is asked for shortly before the first is whole (${ask1} ms, ${whole0} ms)`);
   // a first pack that never answers does not hold the rest back for its whole time
-  const hung = await run({ chunkMs: 5, hangFirst: true });
+  // (the job's times three times as long here: under the full parallel test run the timers fire late, and the window
+  // between the quiet time and the stall time must be wide against that; it once read 302 ms against a 290 ms limit)
+  const hung = await run({ chunkMs: 5, hangFirst: true, k: 3 });
   const second = hung.at('ask', packs[1].file);
-  assert.ok(second >= 140 && second < 290, `the next pack starts once the first has been quiet (${second} ms)`);
+  assert.ok(second >= 3 * 140 && second < 3 * 290, `the next pack starts once the first has been quiet, before it would count as stalled (${second} ms)`);
   assert.deepEqual(hung.msgs.filter(m => m.type === 'pack-failed').map(m => m.name), [packs[0].name]);
   assert.equal(hung.msgs.filter(m => m.type === 'pack').length, packs.length - 1);
 });

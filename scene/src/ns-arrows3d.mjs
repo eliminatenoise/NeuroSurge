@@ -137,8 +137,14 @@ export const ARROW_LOOK = freeze({
   // even in the bodies' own ink (ns-outline OUTLINE.colour #14090a, innerCss 0.9 px, 0.8 opacity) with the walls only
   // lightly inked (0.2). The colours that tell brain arrows from mirror arrows (ns-colors arrowLook) are unchanged.
   celSteps: freeze([0.3, 0.6]), celLevels: freeze([0.25, 0.62, 1.0]), celSoft: 0.3, specCrisp: freeze([0.05, 0.6]),
-  ink: 0x14090a, inkCss: 0.9, inkAlpha: 0.8, wallInk: 0.2
+  ink: 0x14090a, inkCss: 0.9, inkAlpha: 0.8, wallInk: 0.2,
+  // 20 November 2026 (the owner, Message 196: "New look for everything not just body"): raw true lights the tips with
+  // the raw look's one matte light (ns-raw-look: rawAmbient + rawDirect x |N.L| of keyLight, raised to rawGamma) in their
+  // own colours; the scene passes the raw look's light and no highlight, rim, dark edge or ink with it (ARROW_LOOK_RAW).
+  raw: false, rawAmbient: 0.25, rawDirect: 0.75, rawGamma: 2.2
 });
+/** The arrows' fields that the raw look changes (merged over ARROW_LOOK and the set's colours by the scene). */
+export const ARROW_LOOK_RAW = freeze({ raw: true, keyLight: freeze([0.4, 0.6, 0.7]), specular: 0, rimLight: 0, edgeDark: 0, inkAlpha: 0, wallInk: 0 });
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 const isNum = Number.isFinite;
@@ -935,6 +941,7 @@ uniform vec4 uCel;   // two steps of the wrapped N.L, soft half-width, crisp hig
 uniform vec4 uCelL;  // three tone levels, crisp highlight step end
 uniform vec4 uInk;   // ink line width (CSS px), opacity, pixel ratio, wall ink
 uniform vec3 uInkC;
+uniform vec4 uRaw;   // 20 November 2026 (the raw look): on, ambient, direct, gamma (the light is uKey)
 varying vec3 vN;
 varying float vDepth;
 varying vec2 vUZ;
@@ -962,7 +969,7 @@ void main() {
   float wrap = clamp((nl + 0.35) / 1.35, 0.0, 1.0);
   // depth cue: the near open ends full bright, the far point a little dimmer
   float far = clamp((vDepth - uDepth.x) / max(uDepth.y - uDepth.x, 1e-4), 0.0, 1.0);
-  vec3 lit = c * (uLight.x + uLight.y * celBand(wrap)) * mix(1.0, uDepth.z, far);
+  vec3 lit = uRaw.x > 0.5 ? c * pow(max(uRaw.y + uRaw.z * abs(nl), 0.0), uRaw.w) : c * (uLight.x + uLight.y * celBand(wrap)) * mix(1.0, uDepth.z, far);
   vec3 h = normalize(uKey + vec3(0.0, 0.0, 1.0));
   lit += uLight.z * smoothstep(uCel.w, uCelL.w, pow(max(dot(n, h), 0.0), uLight.w)) * mix(vec3(1.0), c, 0.3);
   lit = mix(lit, uEdge, uEdgeL.y * edgeOn);
@@ -1048,7 +1055,8 @@ export function createArrowRig(THREE, { kind = 'brain', design = ARROW_DESIGN, l
         uHex: { value: hex.map(q => new THREE.Vector2(q[0], q[1])) },
         uCel: { value: new THREE.Vector4(cs[0], cs[1], Math.max(0, num(L.celSoft, 0.04)), sc[0]) },
         uCelL: { value: new THREE.Vector4(cl[0], cl[1], cl[2], Math.max(sc[0] + 1e-3, sc[1])) },
-        uInk: inkPr, uInkC: { value: col(L.ink !== undefined ? L.ink : ARROW_LOOK.ink) }
+        uInk: inkPr, uInkC: { value: col(L.ink !== undefined ? L.ink : ARROW_LOOK.ink) },
+        uRaw: { value: new THREE.Vector4(L.raw ? 1 : 0, num(L.rawAmbient, 0.25), num(L.rawDirect, 0.75), num(L.rawGamma, 2.2)) }
       }
     });
     materials.push(material);

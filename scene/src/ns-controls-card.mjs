@@ -7,7 +7,8 @@
  * inside them (scene/example/quiet.css, .ns-ctl-*):
  *   1. W over A S D, a pyramid: move
  *   2. E and R, a pair set apart from the pyramid: view, info
- *   3. Space on its own: hold
+ *   3. Space on its own: grip (20 November 2026, evening, Message 204: Space grips with both hands and both feet and
+ *      takes hold; a click never grips, it presses)
  *   4. the trackpad with its three actions: move = look, click = press, drag = turn
  * The words name game controls only. DOM by createElement and textContent (the page's content security policy needs
  * nothing new). The card fades by itself after its time (a CSS animation on .ns-keys, assembly.css: it goes on time
@@ -23,7 +24,7 @@ const CONTROLS_HELP = 'Esc for controls and settings';
 export const CONTROLS_CARD_CHUNKS = Object.freeze([
   Object.freeze({ id: 'wasd', keys: Object.freeze([Object.freeze(['W']), Object.freeze(['A', 'S', 'D'])]), words: Object.freeze(['move']) }),
   Object.freeze({ id: 'er', keys: Object.freeze([Object.freeze(['E', 'R'])]), words: Object.freeze(['view', 'info']) }),
-  Object.freeze({ id: 'space', keys: Object.freeze([Object.freeze(['Space'])]), words: Object.freeze(['hold']) }),
+  Object.freeze({ id: 'space', keys: Object.freeze([Object.freeze(['Space'])]), words: Object.freeze(['grip']) }),
   Object.freeze({ id: 'pad', acts: Object.freeze([Object.freeze(['Move', 'look']), Object.freeze(['Click', 'press']), Object.freeze(['Drag', 'turn'])]) })
 ]);
 
