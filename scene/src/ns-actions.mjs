@@ -1677,7 +1677,9 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * gaze is recorded silently) and release leaves the brain where it is. { type: 'grip', on }: the left hand closes while
  * Space holds or keeps a grasp (graspHold; the hand area and the finger benders light) and opens when it lets go
  * (R558, Message 48). { type: 'limbPose', joints, regionId?, actionId? }
- * sets held own-limb joints at once (they stay, like a latch) and lights that area.
+ * sets held own-limb joints at once (they stay, like a latch) and lights that area. { type: 'contractStop', joints }
+ * stops a contraction still under way at those angles for the rest of its time (then it returns as usual; a joint not
+ * contracting is left alone; 20 November 2026, night: the trunk's contact stop in ns-app).
  *
  * Contract, then return (20 November 2026, the owner's Message 206; JOINT_LATCH). A deliberate activation (a look that
  * rests on a new area for latchS, a click, a muscle tap; not the restart of the same area by a small look movement)
@@ -2725,6 +2727,27 @@ export function createActivity({
             ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
             : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId }).hit;
           if (hit !== null && (s.pulseRegion !== hit.regionId || s.pulseBody !== hit.bodyKey || s.pulseRemaining < pulseSeconds / 2)) startPulse(s, hit, 'moved', at, collect);
+        }
+        return;
+      }
+      case 'contractStop': {
+        // 20 November 2026, night (review of updates 60 and 61, R2; the owner's Message 206: "no permanent movements"):
+        // { joints: { jointId: degrees } } (absolute degrees). A contraction of these joints still under way STOPS at this
+        // angle, because the part would otherwise run into something (ns-app: a trunk bend that would bring your head
+        // into the brain or the mirror body). The joint is set there and held there for the rest of the contraction's
+        // time (still lit, as the contraction is), then returns to its place like any contraction. Its place (bodyGoal)
+        // is not touched: the stop was a limbPose before, which is the player placing the limb, so a stopped trunk bend
+        // stayed bent for good. A joint with no contraction under way is left alone: a return is never stopped, so the
+        // part always gets back to where it was.
+        if (s.paused) return;
+        if (!isPlainObject(ev.joints)) fail('activity_event', 'contractStop needs joints { jointId: degrees }');
+        for (const [j, deg] of Object.entries(ev.joints)) {
+          if (!JOINT_IDS.includes(j)) fail('activity_event', `contractStop joint ${JSON.stringify(j)} is not a body joint`);
+          if (!isFiniteNumber(deg)) fail('activity_event', `contractStop joint ${j} needs finite degrees`);
+          const jk = s.bodyJerk ? s.bodyJerk[j] : undefined;
+          if (jk === undefined || !(jk[1] > 0)) continue;
+          const v = limitJoint(j, deg) + 0;
+          jk[0] = v; s.bodyPos[j] = v; s.bodyVel[j] = 0;
         }
         return;
       }

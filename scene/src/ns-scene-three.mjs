@@ -5977,6 +5977,7 @@ export function createScene({
     organs.triangles = data.triangles; organs.parts = data.parts;
     organs.seg = bodySkinBaked ? [...bodySkinBaked.keys()].indexOf(ORGANS.host) : -1;
     organs.beat.value.set([data.heart.centre[0], data.heart.centre[1], data.heart.centre[2], 0]);
+    organs.local = new THREE.Matrix4(); organs.localK = 1; // the heart's swell for its outline (applyOrgans; identity until the first beat)
     const make = (d, name, part, beat) => {
       const geo = indexedGeometry(d.positions, d.indices);
       geo.setAttribute('normal', new THREE.BufferAttribute(d.normals, 3));
@@ -5996,7 +5997,7 @@ export function createScene({
         mesh.name = `${mirrorTwin ? 'mirror image: ' : ''}${name} (illustration, not anatomy data)`;
         mesh.matrixAutoUpdate = false; mesh.visible = false; mesh.raycast = () => {};
         mesh.renderOrder = BODY_ORDER.torso;
-        mesh.userData = { nsOrgan: part };
+        mesh.userData = beat ? { nsOrgan: part, nsOutlineLocal: organs.local } : { nsOrgan: part };
         group.add(mesh); list.push(mesh);
         outline.register(mesh, { group: OUTLINE_GROUPS.trunk, mirror: mirrorTwin });
       }
@@ -6021,14 +6022,12 @@ export function createScene({
       }
     }
     organs.beat.value[3] = reducedMotion ? 0 : ORGANS.beatSwell * brainLive.beat;
-    // 20 November 2026 (Message 207): the outline pass draws the heart with the same swell (ns-outline nsOutlineLocal),
-    // so its line beats with it instead of standing at the resting size
-    { const b = organs.beat.value, k = 1 + b[3], L = organs.local || (organs.local = new THREE.Matrix4());
-      if (organs.localK !== k) {
-        organs.localK = k;
-        L.set(k, 0, 0, b[0] * (1 - k), 0, k, 0, b[1] * (1 - k), 0, 0, k, b[2] * (1 - k), 0, 0, 0, 1);
-        for (const m of [...organs.own, ...organs.mirror]) if (m.userData && m.userData.nsOrgan === 'heart') m.userData.nsOutlineLocal = L;
-      } }
+    // 20 November 2026 (Message 207): the outline pass draws the heart with the same swell (ns-outline nsOutlineLocal,
+    // the one matrix both hearts were given in makeOrgans), so its line beats with it instead of standing at the
+    // resting size. (A review of Body updates 60 and 61: the beat alone no longer makes the outline draw; it takes the
+    // swell of whichever frame it draws, so a still view stays still. Nothing is allocated here.)
+    { const b = organs.beat.value, k = 1 + b[3], L = organs.local;
+      if (L && organs.localK !== k) { organs.localK = k; L.set(k, 0, 0, b[0] * (1 - k), 0, k, 0, b[1] * (1 - k), 0, 0, k, b[2] * (1 - k), 0, 0, 0, 1); } }
   }
   /** ORGANS as plain numbers (QA): built, host, triangles by part, meshes and how many are shown, poses written, the
    * heart's swell this frame. */
@@ -10636,8 +10635,12 @@ export function createScene({
   function faceDraw(fr) {
     const sk = fr.sk;
     if (sk) {
-      if (sk.gpu && bodyGpu.on) { sk.liftFor = NaN; bodyGpuLift(sk); if (sk.skinned) bodyGpuCpu(sk); return; }
+      // (both skins start again from the moved face: the graphics card's offset (liftFor) and the processor copy's cache
+      // (cacheAt). 20 November 2026, from a review of Body updates 60 and 61: the graphics card's branch left the cache,
+      // so the picks, the mirror envelope and the triangle query saw the lips at rest during a lip movement, and a lift
+      // change during one baked that face into the cache until the next lift change. inspect: faceMoves.cpuOff.)
       sk.cacheAt = NaN;
+      if (sk.gpu && bodyGpu.on) { sk.liftFor = NaN; bodyGpuLift(sk); if (sk.skinned) bodyGpuCpu(sk); return; }
       if (sk.skinned) { skinOne(sk); return; }
       skinBase(sk, fr.pos.array, fr.nor.array);
     } else {
@@ -10699,8 +10702,23 @@ export function createScene({
       const a = fr.L ? fr.L.applied || 0 : 0, base = fr.L ? (a <= 0 ? fr.L.rest : a >= 1 ? fr.L.full : null) : fr.baseP, P = fr.pos.array;
       if (base) for (let i = 0; i < P.length; i++) { const d = Math.abs(P[i] - base[i]); if (d > restOff) restOff = d; }
     }
+    // (cpuOff, 20 November 2026, from a review of Body updates 60 and 61: the largest difference, mm, between the face a
+    // muscle skinned to the jaw is drawn with on the graphics card (its lift offset nsSkinD) and the face its processor
+    // copy is posed from (skinCache's qa, turned back into the drawn frame by the bake's rigid segment map): what the
+    // picks, the mirror envelope and the triangle query see. 0 = they see the face as it is drawn.)
+    let cpuOff = 0;
+    for (const fr of faceMove.recs.values()) {
+      const sk = fr.sk;
+      if (!sk || !sk.gpu || !bodyGpu.on || !sk.skinned || !sk.qa || sk.tf || !skinBakedInv || !sk.gpuAttrs) continue;
+      const D = sk.gpuAttrs.nsSkinD.array, q = sk.qa, s = sk.src, i0 = sk.i0;
+      for (let v = 0, k = 0, d = 0; k < q.length; v++, k += 3, d += 4) {
+        const B = skinBakedInv[i0[v]], x = q[k] - s[k], y = q[k + 1] - s[k + 1], z = q[k + 2] - s[k + 2];
+        const e = Math.hypot(B[0] * x + B[1] * y + B[2] * z - D[d], B[4] * x + B[5] * y + B[6] * z - D[d + 1], B[8] * x + B[9] * y + B[10] * z - D[d + 2]);
+        if (e > cpuOff) cpuOff = e;
+      }
+    }
     return { on: Boolean(faceMove.rig), note: faceMove.note, meshes: faceMove.recs.size, entries: faceMove.entries, buildMs: faceMove.buildMs, key: faceMove.key,
-      drawn: [...faceMove.recs.values()].filter(fr => fr.drawn).length, writes: faceMove.writes, lastMs: faceMove.ms, restOff, maxMm: faceMove.rig ? { ...faceMove.rig.maxMm } : null };
+      drawn: [...faceMove.recs.values()].filter(fr => fr.drawn).length, writes: faceMove.writes, lastMs: faceMove.ms, restOff, cpuOff: Math.round(cpuOff * 1000) / 1000, maxMm: faceMove.rig ? { ...faceMove.rig.maxMm } : null };
   };
   function setBodySkin(records, bakedSegments) {
     if (!(records instanceof Map) || !(bakedSegments instanceof Map)) fail('scene_input', 'setBodySkin needs Map records and the baked segment matrices');

@@ -3235,6 +3235,95 @@ throttling stepped as at full quality. The other twelve browser tests, `?case=bo
 Limit. A key still waits for the head and the view, up to 4 s; a held key queues at most two steps, which can then go
 at once when the head is still. The arrow tip's hover still trails a step (and any look) by one frame.
 
+## 181. Every movement from the brain returns, unlit; a limb that rejoins its place glides (20 November)
+
+The user: "when you tap any area of the brain, you activate any area, it will contract, then return to its previous
+place. But in returning to its previous place, you won't see corresponding activity and muscle activation. It will just
+return." (Message 206) and "The limb should never get stuck." (207). A review of updates 60 and 61 (each finding
+confirmed by two further readers) found five places where sections 177 and 178 did not hold. Each was shown first, then
+fixed, then shown fixed.
+
+**What changed.**
+1. The neck no longer lights while the trunk moves. The neck's own glow reads the look's share of the head
+   (`lookShareOf`), so that a trunk movement from the brain lights nothing of its own on its way back. That share was the
+   eye's neck bend plus the held trunk bend, which is the look alone only while the neck takes up the whole trunk bend.
+   The bowed start posture leaves the neck 10 degrees of forward bend, so at any look more than about 40 degrees down
+   (the start look included) the share followed the trunk: "Bend trunk forward" switched on while looking down at your
+   belly lit both neck areas and the neck's extensors at about 0.85 through its whole return (and 0.9 while it
+   contracted, although the drawn neck did not move); "Lean trunk back" did the same at the start look. The share is now
+   the look's own neck bend with no held angle at all (`lookNeckFlexDeg` from `headPoseForLook`); with nothing held it
+   is what it was, so the head still lights as the look turns it.
+2. A trunk bend stopped at the brain or the mirror body returns. A forward bend that would bring your head into the
+   brain or the mirror body stops at the share that stays clear (section 42). The stop was written as a
+   `limbPose`, which since section 177 is the player placing the limb, so the trunk stayed bent for good and later
+   movements returned to that bend; only Reset body brought it upright. Its angle was also counted from the start
+   posture but taken as absolute, so the trunk was left 5 degrees further forward than the clear share. Now the stop is
+   an activity event of its own (`contractStop`; `trunkContactStop` in `ns-app.mjs`): the trunk is held at the clear
+   share, at its absolute angle, for the rest of its contraction (lit, as the contraction is), then returns to its place
+   like every movement. Only a contraction is stopped: a return is never held, so the trunk always gets back.
+3. The left arm comes back after a shoulder swing. The left shoulder area's four swings (section 175) turn the place
+   the hand is asked for about the shoulder; the hand's kept place is not turned, so the arm comes back to it. But on
+   every frame on which the swung place left the shoulder's range, the range-clamped swung place, turned back, was
+   written into the kept place, and the error built up over the contraction: with the left hand held well across the
+   body or behind and another limb chosen (the left hand then keeps its place), the arm ended 0.1 to 0.5 m from where it
+   had been and stayed there. Now a swing never moves the kept place (`freeHandKeptPlace`): without a key it is kept
+   exactly; a key still moves it, kept inside the shoulder's range on its own. Without a swing the rule is the one it was.
+4. A limb that rejoins its place glides all the way (section 178, item 6). The speed limit of a rejoin (`rejoinMps`,
+   1.2 m/s) was applied only on frames whose solve stayed well short of the place; the frame whose solve came near took
+   its whole answer at once, so a leg left lifted by the look came back at 20 mm a frame and then jumped 380 mm and
+   321 mm in its last two frames, and a short rejoin went in one frame. The limit now applies on every frame of a rejoin
+   (`rejoinShare`), and the rejoin ends only on a frame whose whole move is within it.
+5. A limb resting a little short of its place is not solved again on every frame. At a range end the keys leave the
+   place up to 20 mm beyond the limb's reach. The quarter-second reach test of item 6 in section 178 is only for a limb
+   waiting beyond its reach, but its rule ran for this limb on every still frame (about 0.03 ms each: work, not frame
+   rate). Now only a limb more than 40 mm short of its place is tried again (`holdRejoinDue`).
+
+**Shown before and after.** Node checks with the game's own rules (`tests/return-rules.test.mjs`, ten cases, keeps them)
+and the game in the browser (1600 by 900), the lead branch against this one:
+- Looking 66 degrees down and clicking your own left rectus abdominis ("Bend trunk forward"): the neck areas as drawn
+  went from 0.22 (the look's own level that far down) to 0.90 in the contraction and 0.87 in the return (27 of its 64
+  frames, about half a second, above 0.22) before; they stay at 0.22 throughout now.
+- The brain carried in close with S for 1.1 s, then "Bend trunk forward": before, the trunk stopped and its place became
+  0 degrees (the start posture is -5) for good; now it stops at -4.4, holds there for its contraction and returns, unlit,
+  to -5, its place never changing.
+- The left hand held across the body (D for 2.5 s with the left arm chosen), the left leg chosen, "Raise left arm
+  forward" switched on from the left shoulder area: before, the kept place and the drawn hand ended 145 mm away; now
+  0.0 mm (three runs). Offline, with the arm's own fit, the six held places and four swings of the review moved the kept
+  place up to 486 mm before and not at all now.
+- The left leg carried 1.43 m up by the look, the look brought back in three quick moves: before, frames of 20 to 53 mm
+  and then 380 mm and 321 mm (12.8 and 11.4 m/s by the browser's frame clock); now 33 to 46 mm frames all the way (1.0
+  to 1.6 m/s by the browser's clock; the limit uses the game's own frame time), the last two 27 mm and 3 mm.
+- The right arm driven by W or A to its end and let go: the old rule (this build with only that line put back) solved on
+  123 of 123 and 124 of 124 still frames; now on 0 of 124 (`qa().limbs.holdFrames.solves`, new for checks).
+Also: 481 unit tests, `?case=boot`, the 13 browser tests (all but `outside-compass`), and the frame table on a busy
+machine (load 13 to 15), this branch 60.1 / 59.1 / 60.1 / 59.4 and 60.0 / 59.9 / 60.0 / 60.0, the lead branch
+60.0 / 59.7 / 59.4 / 58.9 and 60.0 / 60.0 / 59.4 / 60.0.
+
+**Not done or left.**
+- The trunk's contact stop still acts one frame late: it compares the head as drawn last frame with the activity's
+  angle now, so the frame on which the trunk passes the clear share is drawn past it (seen: one frame at 5.8 degrees,
+  then held at -4.4). Unchanged from before; fixing it means testing after the step within the frame.
+- A trunk return is never stopped: if you move the brain into the head's way during the 0.4 s of a contraction, the
+  head passes through it on the way back.
+- A push from the chosen limb (`LIMB_PUSH`, section 139) during a swing still moves the left hand's kept place: the
+  pushed limb stays where it was pushed, by that rule. Seen twice when the look carried the chosen leg into the swung
+  hand (17 and 19 mm).
+- The look's own neck glow at a steep look down (0.22, the neck at its forward end) is unchanged.
+
+## 182. A still view is idle again; the face and the eyeballs agree with what is drawn (20 November)
+
+From a review of updates 60 and 61 (each fault confirmed by two skeptics, each shown before and after its fix):
+- Since section 176 the heart's outline followed its 3 % beat, and that counted as a change of the picture, so the
+  outline's passes and the whole light-blue glass pass ran on every frame even with the view and the bodies still. A
+  change of the heart's beat alone no longer counts; on every frame that redraws the outline the heart's line takes that
+  frame's swell. Measured, the graphics card's time per still frame: 6.6 to 2.6 ms at 1600 by 900; 11.3-13.9 to
+  9.8-10.0 ms at 1600 by 1000 with a pixel ratio of 2; 29.7 to 21.1 ms at 5120 by 2880 (31 to 43 frames a second). On a
+  still frame the heart's line keeps the last redrawn swell (the heart is inside the rib cage and not seen in play).
+- A lip movement (section 179) on the face muscles skinned on the graphics card never reached their processor copy, so the
+  crosshair and the mirror body's measures saw the face at rest (up to 11 mm off); now they see it as drawn.
+- With the eyes no longer glass (section 172), the processor and the graphics card disagreed about which hidden thing is
+  drawn where an eyeball lies between a body part and the brain's surface; the crosshair now takes what is drawn there.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-61",
+  "version": "experimental-2026-11-21-body-update-62",
   "experimental": true,
-  "source": "Body update 61. The motor strip as blocks over a black abyss, a darker room, every strip movement within reach, a clear outline on everything.",
+  "source": "Body update 62. Fixes from a review: returns unlit, a stopped trunk bend comes back, the left arm comes back, limbs glide, a still view idle again.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 480877,
-      "sha256": "cced54da441b9fbeeab9102653688c2791564abaa2138857011d42c1a96395a1"
+      "bytes": 489574,
+      "sha256": "6a99bd2a4e7288671d1df5420acd57bc2fbb8746eb63f9fa782480fd59aab83d"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,23 +57,23 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 53051,
-      "sha256": "a4db01cd899a3df30e5c14dd63a52e70b5c95a885358491fa24218723b6bc03f"
+      "bytes": 53800,
+      "sha256": "6c29672a90a3289b824c91955e7cb1623bb83296e9be17aaad643101311791e0"
     },
     {
       "path": "README.md",
-      "bytes": 23763,
-      "sha256": "087b70b1072630db0739b18bd485fc945b173a937c6a0a90f369382f23e81657"
+      "bytes": 24025,
+      "sha256": "024a2a535673d802d9946abd56a45fcb2459d6498d144ac7d42df3ffad5edb29"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "ce42f9b8acc3a181694ada1164f014f76e05f974814348de412f3dcaf1ce2ab0"
+      "sha256": "58a24d066125c52cbf2b4a97d72d1dd6c96a117518b5375684be410d1d08c135"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "ce94693eba4cded90b464e84f8a6a107c466705219d0e844549a06ce2c265844"
+      "sha256": "25310bff57fed0105789cbfb99154d949f95793121ca03dbc83d6357ccf10483"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3857,13 +3857,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 224615,
-      "sha256": "d7debab6081a873fe9b4ce003e428e2ee729ed8595366ed871fbc43931443e01"
+      "bytes": 226473,
+      "sha256": "d785aa635eb5a02cb264e651b2a70f0d155f82e4f9c007d68b6aab396ba46c2d"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 941903,
-      "sha256": "5d78660332a190df17a902f649f0265e439bac80f02d2f43bfd42d064ae4dc8a"
+      "bytes": 950499,
+      "sha256": "84edd03fb3375ac726abee160a5a12ce4b865d5c38c5ff2f7f7adb2a74d7205f"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4067,8 +4067,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 95200,
-      "sha256": "a4f5eee00daa858018d3e5dea590962d55d4e3916d6980ba825bf77e67c48544"
+      "bytes": 96131,
+      "sha256": "b4c7241e3c650c52ba12daf17d3309d8b342f053f4950bfd09126a716ca33e3c"
     },
     {
       "path": "scene/src/ns-pack-loader.mjs",
@@ -4132,13 +4132,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1255731,
-      "sha256": "f6482597c78e3a6407f092abeeb745a9b20b7a4651c8eaef28530dcb98e0f2ca"
+      "bytes": 1257647,
+      "sha256": "4443dbd4250eb6caa644a376b221fc9d11611fd26a12b473ade557050e567fd9"
     },
     {
       "path": "scene/src/ns-see.mjs",
-      "bytes": 85859,
-      "sha256": "d334af6ab1176c38e5563e3e4ef311bd8fe2811e0fb6e24f87d6216c86313953"
+      "bytes": 86589,
+      "sha256": "3c6ffa22a95c4119caac7f74d50dba9ba8b01d2a1f4cf8ebadf8bae37ab5f9b2"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4496,6 +4496,11 @@
       "sha256": "da6b9fe17469dc34e8f8eb8d95a88c0b556cfee4ec84161252e0907cd7bec417"
     },
     {
+      "path": "tests/outline-idle.test.mjs",
+      "bytes": 5291,
+      "sha256": "94252ad2f7a313f240da660d78d9ecab4cb1a8968d86b5d92e2782c1c0586726"
+    },
+    {
       "path": "tests/outside-reach.test.mjs",
       "bytes": 2811,
       "sha256": "27361766eaaf1fd6fc3f612e3af8bab3d9d0135cc0a73fb23efac54f97c8ae49"
@@ -4541,6 +4546,11 @@
       "sha256": "84d2994c989ecae2e8e932cf45f7be4bf7ccbc5fd1974e865cb3ee3e98e24305"
     },
     {
+      "path": "tests/return-rules.test.mjs",
+      "bytes": 16041,
+      "sha256": "d93089414bcd440c3dadc6068fc056c3f288cedcecf8bab0d9e8bba3e709f955"
+    },
+    {
       "path": "tests/rig-file.test.mjs",
       "bytes": 4165,
       "sha256": "ca94deaf789d67160b085e3a29f4597aa25d6220ce02f0914e0728881bfb95fd"
@@ -4557,8 +4567,8 @@
     },
     {
       "path": "tests/see.test.mjs",
-      "bytes": 27582,
-      "sha256": "8944d2e909cfb136d349f342ba6b3ff16fd286250e7f6f584261a0128cc1f46a"
+      "bytes": 30188,
+      "sha256": "451eb4e61b847b4d4e5b57b6e1ae7b8828439b920b02069ab776d5e870729fae"
     },
     {
       "path": "tests/serve-local.test.mjs",

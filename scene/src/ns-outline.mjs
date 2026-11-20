@@ -867,7 +867,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const stats = { sources: 0, drawn: 0, draws: 0, ms: 0, frames: 0, skipped: 0, rebuilds: 0, vertexCapacity: 0, indexCapacity: 0, geometries: 0, copiedVertices: 0 };
   const saveColour = new THREE.Color(), tmpColour = new THREE.Color();
   const localTmp = new THREE.Matrix4();
-  const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const locals = []; // the shown records with a userData.nsOutlineLocal map this frame (sync); their matrices are written when the passes are drawn
+  const now =() => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const colourOf = r => {
     const g = r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0), n = r.serial;
     const hi = ((n >> 8) & 63) | (r.flip ? 128 : 0) | (r.dbl ? 64 : 0);
@@ -998,6 +999,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   function sync(scene) {
     let changed = false;
     chain.clear();
+    locals.length = 0;
     let drawn = 0, copied = 0;
     const done = new Set();
     skinShown = 0;
@@ -1047,14 +1049,20 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
           done.add(e);
           if (r.gid !== e.gid) { batch.setGeometryIdAt(r.iid, e.gid); r.gid = e.gid; batch._visibilityChanged = true; changed = true; }
           // (20 November 2026: a mesh whose material moves its vertices by one affine map, the heart's beat, gives that
-          // map as userData.nsOutlineLocal, a Matrix4 in its own frame, so its lines follow what is drawn)
+          // map as userData.nsOutlineLocal, a Matrix4 in its own frame, so its lines follow what is drawn. The map is
+          // put on whenever the passes are drawn (render, `locals`), but a change of the map alone is no change: the
+          // heart beats on every frame, and following it drew the ID, edge and ink passes and the hidden-things pass
+          // on every frame of a still view (a review of Body updates 60 and 61). Between two drawn frames the line
+          // keeps the swell it was drawn with, at most 3 % of the heart.)
           const Lm = s.userData && s.userData.nsOutlineLocal && s.userData.nsOutlineLocal.isMatrix4 ? s.userData.nsOutlineLocal : null;
-          const M = Lm ? localTmp.multiplyMatrices(s.matrixWorld, Lm) : s.matrixWorld;
-          const w = M.elements, k = r.m;
+          r.local = Lm;
+          if (Lm) locals.push(r);
+          const w = s.matrixWorld.elements, k = r.m;
           let moved = false;
           for (let i = 0; i < 16; i++) if (k[i] !== w[i]) { moved = true; break; }
           if (moved) {
             for (let i = 0; i < 16; i++) k[i] = w[i];
+            const M = Lm ? localTmp.multiplyMatrices(s.matrixWorld, Lm) : s.matrixWorld;
             batch.setMatrixAt(r.iid, M);
             const flip = M.determinant() < 0, dbl = m.side === THREE.DoubleSide;
             if (flip !== r.flip || dbl !== r.dbl) { r.flip = flip; r.dbl = dbl; batch.setColorAt(r.iid, colourOf(r)); }
@@ -1287,6 +1295,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       renderer.getClearColor(saveColour);
       renderer.setClearColor(0x000000, 0);
       renderer.autoClear = true;
+      // the meshes with a map of their own (the heart's beat) as they are drawn on this frame (sync: `locals`)
+      for (const r of locals) if (r.iid >= 0 && r.local) batch.setMatrixAt(r.iid, localTmp.multiplyMatrices(r.src.matrixWorld, r.local));
       passTo(target, idScene, camera);
       const info = renderer.info && renderer.info.render;
       stats.draws = info ? info.calls : 0;

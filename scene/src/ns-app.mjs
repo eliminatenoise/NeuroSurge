@@ -70,7 +70,7 @@ import { loadCerebralArteries, loadBodyVessels, bindBodyVessels, BODY_VESSEL_SKI
 import {
   ARM_DEFAULTS, REACH_STATE_MAX_DEPTH, ELBOW_MAX_DEG, FOREARM_SUPPORT_KEY, fitHand, stepReach, reachStart, depthForElbow,
   armAnatomy, armAttachment, bodyYawForLook, pronationStart, pronationTarget, stepPronation, carryReachRamp, wasdWristDeg,
-  handViewLimitsNdc, fitHandAt, FREE_HAND, freeHandPole
+  handViewLimitsNdc, fitHandAt, FREE_HAND, freeHandPole, freeHandInRange
 } from './ns-arm.mjs';
 import { PLACEHOLDER_LABEL, buildPlaceholderArm } from './ns-placeholder.mjs';
 import { bindMovementMap, composePose, muscleDrives, createActivity, eventOffset, ACTION_IDS, reachMuscleShow, REACH_MUSCLES } from './ns-actions.mjs';
@@ -250,6 +250,36 @@ export function keyMoveCut(m, way, most = LIMB_KEYS.view.keyMost, offDeg = LIMB_
   let k = ml > most * wl ? (most * wl) / ml : 1;
   if (c < Math.cos(offDeg * DEG) && Number.isFinite(latFar)) { const lat = ml * Math.sqrt(Math.max(0, 1 - c * c)); if (lat * k > latFar * wl) k = (latFar * wl) / lat; }
   return k;
+}
+/** LIMB_KEYS.view rejoinEveryMs: whether a place the limb waits for may be tried for reach again (pure). h: the hold's
+ * memory ({ probed: the place last tried, probeMs: when }); T: the place now (world m); nowMs: the clock. True unless
+ * that place was tried already (within 2 mm) or a try was made less than rejoinEveryMs ago. */
+export function holdProbeDue(h, T, nowMs, V = LIMB_KEYS.view) {
+  const p = h ? h.probed : null;
+  if (p && Math.hypot(T[0] - p[0], T[1] - p[1], T[2] - p[2]) < 0.002) return false;
+  return !(nowMs - (h && Number.isFinite(h.probeMs) ? h.probeMs : -1e9) < V.rejoinEveryMs);
+}
+/** Whether a still limb's hold must solve again this frame although its place is the one it could not reach last frame
+ * (pure; the hold's stuck skip, h.stuck). Yes while it rejoins its place (h.chase), and for a limb WAITING beyond its
+ * reach (the last solve left it more than waitMm short: h.lastErrMm) whose place may be tried for reach (holdProbeDue).
+ * 20 November 2026, night (review of updates 60 and 61, R5): a limb resting a little short of its place (up to waitMm,
+ * as at a range end where the keys leave the place leadM out) is never tried for reach, so the try's memory stayed
+ * empty and this was true on every frame: the solve ran every frame for as long as the limb rested there. Now such a
+ * limb is skipped after one unchanged frame, as before LIMBFREE. */
+export function holdRejoinDue(h, T, keyed, nowMs, V = LIMB_KEYS.view) {
+  if (keyed || !h) return false;
+  if (h.chase) return true;
+  return h.lastErrMm > V.waitMm && holdProbeDue(h, T, nowMs, V);
+}
+/** LIMB_KEYS.view rejoinMps: the share (0..1] of a rejoin frame's move `moveM` (metres the limb's end would go) that is
+ * taken, so the end goes at most rejoinMps x dt (dt capped at maxDt) this frame (pure). 1 when the move is within it.
+ * 20 November 2026, night (review of updates 60 and 61, R4): applied on EVERY frame of a rejoin. It was applied only on
+ * frames whose solve stayed more than waitMm and more than waitShare of the gap short of the place, so the frame whose
+ * solve came within those skipped it and took the whole answer: a rejoin went at 20 mm a frame and then jumped 380 mm
+ * and 344 mm in two frames (21 to 23 m/s), and a short rejoin (a 419 mm gap) went in one frame. */
+export function rejoinShare(moveM, dt, V = LIMB_KEYS.view, maxDt = MAX_FRAME_DT) {
+  const most = V.rejoinMps * (dt > 0 ? Math.min(dt, maxDt) : 0);
+  return most > 0 && moveM > most ? most / moveM : 1;
 }
 /** 19 November 2026 (LIMB_KEYS.view.hold): balls that fill the trunk, neck and head of the drawn body, for the one test
  * that keeps a hand's middle out of them (ns-app handKeepOut). Each: the segment that carries it, its middle in that
@@ -838,6 +868,9 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
     // eyeJoints: the neck of the look ALONE (no neck angle held by a motor area): where the camera's eye stands, so a
     // neck area's jerk moves the drawn head but not the place the picture is taken from (19 November 2026)
     eyeJoints: { neck_rot: clamp(ly, -L.neckRotDeg, L.neckRotDeg) + 0, neck_flex: clamp(-lp - held, -L.neckExtDeg, L.neckFlexDeg) + 0, trunk_flex: 0 },
+    // lookNeckFlexDeg: the neck's bend of the look ALONE, with no held angle at all (neither the neck's nor the trunk's;
+    // lookShareOf). eyeJoints.neck_flex takes up a held trunk bend, so once its clamp is reached it follows the trunk.
+    lookNeckFlexDeg: clamp(-lp, -L.neckExtDeg, L.neckFlexDeg) + 0,
     trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: lookOut, headLook: { yaw, pitch }, eyeYawDeg: eyeYawOut + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
     // 18 November 2026 (a check: any trunk turn or side bend tore the chest open in the eye view): the held trunk turn,
     // trunk side bend and neck side bend are handed on as they are, so whoever places the eye (the camera) and the left
@@ -845,6 +878,48 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
     // over an unturned trunk would be while the drawn rib cage swung away under it, and the camera looked into the
     // shoulder from inside. The camera's direction is still the look's alone.
     carry: { trunk_rot: headOffset(offsets, 'trunk_rot'), trunk_side: headOffset(offsets, 'trunk_side'), neck_side: headOffset(offsets, 'neck_side') } };
+}
+/** 20 November 2026 (the owner, Message 206: "in returning to its previous place, you won't see corresponding activity
+ * and muscle activation. It will just return"): the neck and trunk angles that the LOOK alone gives this frame, from a
+ * headPoseForLook result (pure). The trunk bend is all the activity's while the look never bends the trunk
+ * (LOOK_BENDS_TRUNK false). The head's glow and the glow of the player's own movement read only these, so a neck or trunk
+ * movement switched on from the brain lights nothing of its own, neither while it contracts nor on its way back (it lit
+ * the neck areas in proportion to the head's turn, and its return lit the opposite neck area by its speed), while the
+ * head that turns with the look still lights as before. { rot, flex, sag, side, twist } in degrees.
+ * 20 November 2026, night (review of updates 60 and 61, R1): the neck's bend is lookNeckFlexDeg, the look's with no held
+ * angle at all. It was eyeJoints.neck_flex plus the held trunk bend, which is the look alone only while the neck's range
+ * takes up the whole trunk bend; past the neck's end (10 degrees forward from the bowed start posture: any look more than
+ * about 40 degrees down, the start look included; 100 back) it followed the trunk, so a trunk movement from the brain fed
+ * the neck's own glow (neck:up at about 0.85 while "Bend trunk forward" returned at a look down at your belly). */
+export function lookShareOf(head) {
+  const j = head.joints || {}, e = head.eyeJoints, held = Number.isFinite(head.heldTrunkDeg) ? head.heldTrunkDeg : 0;
+  const rot = e && Number.isFinite(e.neck_rot) ? e.neck_rot : j.neck_rot || 0;
+  const flex = Number.isFinite(head.lookNeckFlexDeg) ? head.lookNeckFlexDeg : e && Number.isFinite(e.neck_flex) ? e.neck_flex + held : j.neck_flex || 0;
+  const tb = LOOK_BENDS_TRUNK ? (Number.isFinite(head.trunkDeg) ? head.trunkDeg : j.trunk_flex || 0) - held : 0;
+  const dir = Number.isFinite(head.bendDirDeg) ? head.bendDirDeg * DEG : 0;
+  return { rot, flex, sag: tb * Math.cos(dir), side: tb * Math.sin(dir), twist: LOOK_BENDS_TRUNK && Number.isFinite(head.twistDeg) ? head.twistDeg : 0 };
+}
+/** The trunk bend's contact stop (pure; the frame loop's test before each frame, R558 Message 12). a: the held trunk
+ * bend drawn last frame, b: the activity's this frame (degrees from the start posture, headOffsetsOf); restTrunkDeg: the
+ * start posture's own trunk_flex (absolute degrees); contracting: the trunk's contraction is under way (ns-actions
+ * bodyJerk, its time still running); clearAt(k): the head is clear of the brain and the mirror body with the held bend
+ * at share k of the way from a to b; steps: bisection steps. Returns null (nothing to stop) or { share, deg, event }:
+ * the clear share, the absolute angle and the activity event that stops the contraction there.
+ * 20 November 2026, night (review of updates 60 and 61, R2; the owner's Message 206: "no permanent movements"):
+ *  - the stop is a 'contractStop' event: the trunk is held at the clear share for the rest of its contraction, then
+ *    returns to its place like every movement from the brain. It was a 'limbPose', which since section 177 is the player
+ *    placing the limb, so a stopped "Bend trunk forward" stayed bent for good and only Reset body brought it upright;
+ *  - only a contraction stops: a return is never held (the part always gets back to where it was; Message 207, "the
+ *    limb should never get stuck");
+ *  - the angle is absolute: a and b are counted from the start posture, and the activity takes the rig's own degrees
+ *    (the stopped trunk was left restTrunkDeg, 5 degrees, further forward than the clear share). */
+export function trunkContactStop(a, b, restTrunkDeg, contracting, clearAt, steps) {
+  if (!contracting || !Number.isFinite(a) || !Number.isFinite(b) || a === b || typeof clearAt !== 'function') return null;
+  if (clearAt(1) || !clearAt(0)) return null; // the bend is clear, or the head was not clear before it (not the bend's fault)
+  let lo = 0, hi = 1;
+  for (let i = 0; i < steps; i++) { const mid = (lo + hi) / 2; if (clearAt(mid)) lo = mid; else hi = mid; }
+  const deg = (Number.isFinite(restTrunkDeg) ? restTrunkDeg : 0) + a + (b - a) * lo;
+  return { share: lo, deg, event: { type: 'contractStop', joints: { trunk_flex: deg } } };
 }
 /** The controls' look range (degrees) that headPoseForLook uses without loss for held goal offsets (pure): the yaw the
  * neck and chest can still turn, and, for the head's turn this look gives (from `look`, the controls' current look),
@@ -3339,12 +3414,8 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       }
       // The place asked never runs far ahead of where the hand is (a joint at its end, a place out of reach): the
       // other way then answers at once. (Not while a motor area holds the elbow elsewhere along the line.)
-      // (BODYMAP: with a shoulder movement on, the fit's places are turned back into the kept place's frame.)
-      let rel = fit.clamped.inner ? hand0.rel : fit.clamped.shoulder ? (swing ? swing.back(fit.askedBodyM) : fit.askedBodyM) : handWant;
-      if (!fit.elbow && !fit.clamped.inner) {
-        const got = swing ? swing.back(fit.handBodyM) : fit.handBodyM, off = rel.map((v, i) => v - got[i]), n = Math.hypot(off[0], off[1], off[2]);
-        if (n > FREE_HAND.leadM) rel = got.map((v, i) => v + off[i] * FREE_HAND.leadM / n);
-      }
+      // (20 November 2026, night, R3 / R10: a shoulder movement never moves the kept place: freeHandKeptPlace)
+      const rel = freeHandKeptPlace(fit, hand0.rel, handWant, swing);
       handMoved = rel.map((v, i) => v - hand0.rel[i]);
       handNext = { rel, side };
     } else {
@@ -5486,6 +5557,40 @@ export function shoulderSwing(liftDeg, outDeg) {
   const out = (v, s) => [v[0] * cb + s * v[1] * sb, -s * v[0] * sb + v[1] * cb, v[2]];
   return Object.freeze({ turn: v => out(lift(v, 1), 1), back: v => lift(out(v, -1), -1) });
 }
+/**
+ * The free hand's next kept place beside the shoulder (state.hand.rel; pure). fit: ns-arm fitHandAt's answer for this
+ * frame (clamped.inner / clamped.shoulder, askedBodyM, handBodyM, reachM, elbow), keptM: the kept place, wantM: the place
+ * the keys (or the limb hold's target) ask for, swing: shoulderSwing's turn of this frame, or null.
+ *  - Without a shoulder swing (as before): a place nearer than the folded arm keeps the kept place; a place outside the
+ *    shoulder's range is kept at the range's end (the keys never wind the place up past it); and the place never runs
+ *    more than leadM ahead of where the hand is (a joint at its end, a place out of reach), so the other way answers
+ *    at once.
+ *  - 20 November 2026, night (review of updates 60 and 61, R3 / R10; sections 175 and 177, the owner's Message 206: "no
+ *    permanent movements"): WITH a shoulder swing (the left shoulder area's movements) the swing is a contraction that
+ *    returns, so it never moves the kept place: without a key move the place is kept exactly; a key move is kept inside
+ *    the shoulder's range on its own (unswung), and, while the swung place is inside the range (so the hand differs from
+ *    it only by the arm's reach or a joint's end), is refused when it would take the place further ahead of the hand
+ *    (turned back by the swing) than leadM and further than it was. Before, every frame on which the swung place
+ *    left the shoulder's range (or the arm's reach) wrote the range-clamped swung place, turned back, into the kept
+ *    place, and the error built up over the contraction: a hand held across the body ended 0.28 to 0.49 m from where
+ *    the player had put it, and the arm never came back.
+ */
+export function freeHandKeptPlace(fit, keptM, wantM, swing = null, leadM = FREE_HAND.leadM) {
+  if (fit.clamped.inner) return keptM;
+  const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+  if (swing) {
+    if (wantM.every((v, i) => v === keptM[i])) return keptM;
+    const ranged = freeHandInRange(wantM, fit.reachM).handBodyM;
+    if (!fit.elbow && !fit.clamped.shoulder) { const got = swing.back(fit.handBodyM), n = dist(ranged, got); if (n > leadM && n > dist(keptM, got)) return keptM; }
+    return ranged;
+  }
+  let rel = fit.clamped.shoulder ? fit.askedBodyM : wantM;
+  if (!fit.elbow) {
+    const got = fit.handBodyM, off = rel.map((v, i) => v - got[i]), n = Math.hypot(off[0], off[1], off[2]);
+    if (n > leadM) rel = got.map((v, i) => v + off[i] * leadM / n);
+  }
+  return rel;
+}
 
 /* ------------------------------------------------------------------ bootstrap */
 
@@ -5735,22 +5840,8 @@ export function start(params = {}) {
   // the body, which bends the trunk: the belly was lit in its area's colour from the first frame, on both bodies, with
   // nothing pressed). headActBase: the first head state seen.
   let headActBase = null;
-  /** 20 November 2026 (the owner, Message 206: "in returning to its previous place, you won't see corresponding activity
-   * and muscle activation. It will just return"): the neck and trunk angles that the LOOK alone gives this frame
-   * (headPoseForLook: eyeJoints is the neck of the look without the activity's neck angle; the trunk bend is all the
-   * activity's while the look never bends the trunk, LOOK_BENDS_TRUNK false). The head's glow and the glow of the
-   * player's own movement read only these, so a neck or trunk movement switched on from the brain lights nothing of
-   * its own on its way back (it lit the neck areas in proportion to the head's turn, and its return lit the opposite
-   * neck area by its speed), while the head that turns with the look still lights as before. { rot, flex, sag, side,
-   * twist } in degrees. */
-  function lookShareOf(head) {
-    const j = head.joints, e = head.eyeJoints, held = Number.isFinite(head.heldTrunkDeg) ? head.heldTrunkDeg : 0;
-    const rot = e && Number.isFinite(e.neck_rot) ? e.neck_rot : j.neck_rot || 0;
-    const flex = e && Number.isFinite(e.neck_flex) ? e.neck_flex + held : j.neck_flex || 0;
-    const tb = LOOK_BENDS_TRUNK ? (Number.isFinite(head.trunkDeg) ? head.trunkDeg : j.trunk_flex || 0) - held : 0;
-    const dir = Number.isFinite(head.bendDirDeg) ? head.bendDirDeg * DEG : 0;
-    return { rot, flex, sag: tb * Math.cos(dir), side: tb * Math.sin(dir), twist: LOOK_BENDS_TRUNK && Number.isFinite(head.twistDeg) ? head.twistDeg : 0 };
-  }
+  // (lookShareOf, the look's own share of the head that headActivity and feedHeadMove read, is pure and lives at module
+  // level after headPoseForLook.)
   function headActivity(head) {
     if (!head || !head.joints) return null;
     const L = headLimits, k = HEAD_GLOW.level, regions = {}, rows = [];
@@ -8327,9 +8418,11 @@ export function start(params = {}) {
           const gap = Math.hypot(T[0] - pts.end[0], T[1] - pts.end[1], T[2] - pts.end[2]);
           holdDbg.frames = (holdDbg.frames || 0) + 1; if (!(gap > 0.0015)) holdDbg.near = (holdDbg.near || 0) + 1;
           // (20 Nov, evening: a waiting limb whose place has not yet been tried for reach, or one rejoining its place, is solved
-          // even when the place is the one it could not reach last frame)
-          const rejoinDue = !keyed && (h.chase || (!(h.probed && Math.hypot(T[0] - h.probed[0], T[1] - h.probed[1], T[2] - h.probed[2]) < 0.002) && !(clockMs() - (h.probeMs || -1e9) < HOLD.rejoinEveryMs)));
+          // even when the place is the one it could not reach last frame; night, R5: only a limb that waits beyond its
+          // reach, holdRejoinDue)
+          const rejoinDue = holdRejoinDue(h, T, keyed, clockMs(), HOLD);
           if (gap > 0.0015 && !(h.stuck && !keyed && !rejoinDue && Math.hypot(T[0] - h.stuck[0], T[1] - h.stuck[1], T[2] - h.stuck[2]) < 0.001)) {
+            holdDbg.solves = (holdDbg.solves || 0) + 1; // (for checks, qa().limbs.holdFrames.solves: frames the hold solved on)
             const Bi = NsCollide.affineInverse(camBodyToWorld), wantMm = NsCollide.apply(Bi, T[0], T[1], T[2]);
             // The solve works on the activity's own angles and poses them AS DRAWN (a straight elbow or knee is drawn a
             // little bent, a high thigh bends its knee: ns-body softExtensionAngles, passiveKneeAngles), so the end it
@@ -8404,7 +8497,7 @@ export function start(params = {}) {
               if (beyond) {
                 const progress = gap * 1000 - r.errorMm;
                 if (h.chase && progress > 1) beyond = false;
-                else if (!h.chase && aa < 1e-6 && !(h.probed && Math.hypot(T[0] - h.probed[0], T[1] - h.probed[1], T[2] - h.probed[2]) < 0.002) && !(clockMs() - (h.probeMs || -1e9) < HOLD.rejoinEveryMs)) {
+                else if (!h.chase && aa < 1e-6 && holdProbeDue(h, T, clockMs(), HOLD)) {
                   // (at most one such solve every rejoinEveryMs: a look that drifts slowly beyond the limb's reach does not pay
                   // for one every frame)
                   h.probed = T.slice(); h.probeMs = clockMs();
@@ -8413,20 +8506,24 @@ export function start(params = {}) {
                   if (pr.errorMm < HOLD.waitMm) { h.chase = true; beyond = !(progress > 1); }
                 } else h.chase = false;
               }
-              if (!beyond && h.chase) {
-                // (rejoining: never faster than rejoinMps)
-                const most = HOLD.rejoinMps * (dt > 0 ? Math.min(dt, MAX_FRAME_DT) : 0), mv = Math.hypot(ne[0] - pts.end[0], ne[1] - pts.end[1], ne[2] - pts.end[2]);
-                if (most > 0 && mv > most) {
-                  const k = most / mv, q = { ...start };
-                  for (const id of c.joints) q[id] = start[id] + (r.joints[id] - start[id]) * k;
-                  const qp = project ? project(q) : q, joints = {};
-                  for (const id of c.joints) joints[id] = qp[id];
-                  const endMm = NsGrasp.limbPoint(bodyRig, asDrawn({ ...start, ...joints }), limb, 'end');
-                  r = { ...r, joints, endMm, errorMm: Math.hypot(wantMm[0] - endMm[0], wantMm[1] - endMm[1], wantMm[2] - endMm[2]) };
-                }
+            }
+            // (rejoining: never faster than rejoinMps, on every frame of the rejoin; night, R4: rejoinShare. It was cut only
+            // inside the test above, so the frame whose solve came near the place took the whole answer at once.)
+            let rejoinCut = false;
+            if (!keyed && !beyond && h.chase) {
+              const ne = worldOf(camBodyToWorld, r.endMm), k = rejoinShare(Math.hypot(ne[0] - pts.end[0], ne[1] - pts.end[1], ne[2] - pts.end[2]), dt, HOLD);
+              if (k < 1) {
+                const q = { ...start };
+                for (const id of c.joints) q[id] = start[id] + (r.joints[id] - start[id]) * k;
+                const qp = project ? project(q) : q, joints = {};
+                for (const id of c.joints) joints[id] = qp[id];
+                const endMm = NsGrasp.limbPoint(bodyRig, asDrawn({ ...start, ...joints }), limb, 'end');
+                r = { ...r, joints, endMm, errorMm: Math.hypot(wantMm[0] - endMm[0], wantMm[1] - endMm[1], wantMm[2] - endMm[2]) };
+                rejoinCut = true;
               }
             }
-            if (!beyond && r.errorMm <= HOLD.waitMm) h.chase = false; // (rejoined)
+            // (rejoined: once a frame's whole answer is within the speed and leaves the end within waitMm of its place)
+            if (!beyond && !rejoinCut && r.errorMm <= HOLD.waitMm) h.chase = false;
             const changed = inner || beyond || offWay ? false : applyLimbJoints(r.joints, out);
             h.waitFrames = changed ? 0 : (h.waitFrames || 0) + 1; // (frames in a row on which the limb could not follow)
             if (changed) { holdMoved = limb; if (limb !== 'rightArm') holdLegUntilMs = clockMs() + 250; }
@@ -9563,7 +9660,7 @@ export function start(params = {}) {
         return { chosen: limbChoice, limb: chosenLimb(), turning: Boolean(limbView), firstPerson: firstPersonNow(), ends,
           hold: limbHold ? { limb: limbHold.limb, world: r3(limbHold.world), x: limbHold.x, y: limbHold.y, dist: limbHold.dist, ok: limbHold.ok, stuck: Boolean(limbHold.stuck),
             keyU: r3(limbHold.keyU || null), keyLen: Math.round((limbHold.keyLen || 0) * 1000) / 1000, waitFrames: limbHold.waitFrames || 0 } : null,
-          lastSolve: holdInfo, holdFrames: { frames: holdDbg.frames || 0, near: holdDbg.near || 0 }, blocked: contact.bodyBlocked ? (contact.last || true) : null,
+          lastSolve: holdInfo, holdFrames: { frames: holdDbg.frames || 0, near: holdDbg.near || 0, solves: holdDbg.solves || 0 }, blocked: contact.bodyBlocked ? (contact.last || true) : null,
           push: { pushes: limbPush.pushes, last: limbPush.last, pairs: [...limbPush.pen].map(([k, v]) => [k, Math.round(v * 1000)]) },
           leftHand: hd ? { besideShoulderM: r3(hd.rel), elbowDeg: fit && fit.solution ? Math.round(fit.solution.elbowFlexRad / DEG * 10) / 10 : null,
             shoulder: fit && fit.shoulder ? { elevationDeg: Math.round(fit.shoulder.elevationDeg * 10) / 10, planeDeg: Math.round(fit.shoulder.planeDeg * 10) / 10 } : null,
@@ -9968,16 +10065,19 @@ export function start(params = {}) {
         // brain carried up against the mirror body made every look do that (the mirror image moves with your trunk), so
         // the view stood still until the brain was moved away again. Now only a held trunk bend that is still under way
         // stops, at the share that stays clear, and only when the look by itself is clear.
+        // 20 November 2026, night (R2; Message 206): only a trunk CONTRACTION stops, and it stops for the rest of its
+        // contraction, then returns to its place (trunkContactStop: a 'contractStop', no longer a 'limbPose').
         if (live && headLookOn && headDrawn) {
           const offsNow = headOffs ? headOffs.now : null, asked = { yaw: cs.yaw, pitch: cs.pitch };
           const a = headDrawn.heldTrunkDeg, b = offsNow ? offsNow.trunk_flex : a;
-          if (Number.isFinite(a) && Number.isFinite(b) && a !== b && typeof sim.activity.step === 'function') {
+          const jk = simState.activity && simState.activity.bodyJerk ? simState.activity.bodyJerk.trunk_flex : undefined;
+          const contracting = Array.isArray(jk) && jk[1] > 0;
+          if (contracting && Number.isFinite(a) && Number.isFinite(b) && a !== b && typeof sim.activity.step === 'function') {
             const clearAt = k => headMoveClear(headPoseForLook(asked, { ...offsNow, trunk_flex: a + (b - a) * k }, headLimits));
-            if (!clearAt(1) && clearAt(0)) {
-              // The held trunk bend is what collides: stop it at the share that stays clear (bisection).
-              let lo = 0, hi = 1;
-              for (let i = 0; i < NsCollide.COLLIDE.bisectSteps; i++) { const mid = (lo + hi) / 2; if (clearAt(mid)) lo = mid; else hi = mid; }
-              simState = { ...simState, activity: sim.activity.step(simState.activity, [{ type: 'limbPose', joints: { trunk_flex: a + (b - a) * lo } }], 0) };
+            const stop = trunkContactStop(a, b, headRest ? headRest.trunk_flex : 0, contracting, clearAt, NsCollide.COLLIDE.bisectSteps);
+            if (stop) {
+              // The held trunk bend is what collides: it stops at the share that stays clear (bisection).
+              simState = { ...simState, activity: sim.activity.step(simState.activity, [stop.event], 0) };
               headOffs = headOffsetsOf(simState);
               contact.trunkStopped = (contact.trunkStopped || 0) + 1;
               noteContact('body', now);

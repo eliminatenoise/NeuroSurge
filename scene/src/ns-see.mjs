@@ -253,7 +253,12 @@ export function seeHiddenEntry(layers, o = SEE) {
  * the brain's rule is off), and the ghost is the NEAREST entry behind the front, past the gap, that the drawing rule
  * shows against it (seeShows). One hidden thing per pixel: a trunk, the other body or the brain lying between the part
  * in front and a hidden limb is what is drawn there (legs crossed: the pelvis behind the shank, not the other thigh
- * behind the pelvis), and with the brain in front the ghost is the body part nearest behind it. */
+ * behind the pelvis), and with the brain in front the ghost is the body part nearest behind it.
+ * The brain's picture holds ONE of its surface and small parts per pixel, the nearest (drawBrain; its areas are drawn
+ * over it): the brain's surface behind an eyeball, a nerve or a nearer fold of itself is not in it, so it is passed
+ * (20 November 2026, from a review of Body updates 60 and 61: with an eyeball between your hand and the brain's surface,
+ * the graphics card drew the locked-away thigh behind them, as the eyeballs are never a ghost, while this rule named the
+ * surface, so the crosshair refused the thigh whose glass was drawn there). */
 export function seeDrawnEntry(layers, o = SEE, rules = o.rules) {
   if (!Array.isArray(layers)) return null;
   const R = rules || SEE.rules;
@@ -263,10 +268,11 @@ export function seeDrawnEntry(layers, o = SEE, rules = o.rules) {
     if (R.brain && l.item === 'brain' && (l.kind === 'glass' || l.kind === 'area')) return { thing: l.kind === 'area' ? T.area : l.part === 'eyeball' || l.part === 'nerve' ? T.eyes : T.brain };
     return null;
   };
-  let front = null, ft = null;
+  let front = null, ft = null, glassMet = false;
   for (const l of layers) {
     const t = thingOf(l);
     if (!t) continue;
+    if (t.thing === T.brain || t.thing === T.eyes) { if (glassMet && t.thing === T.brain) continue; glassMet = true; } // (the brain's picture: see above)
     if (!front) { front = l; ft = t; continue; }
     if (l.distance < front.distance + o.gapM + o.gapRel * front.distance) continue;
     if (seeShows(ft, t, R)) return l;
