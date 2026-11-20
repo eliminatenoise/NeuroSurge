@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "local-2026-11-20-body-59-activity-map",
+  "version": "local-2026-11-20-body-59-sensor-map",
   "experimental": true,
-  "source": "Local review branch based on PR 2 at c35d7877f1e3aca996809c36f384a889f9bae571. Adds a measured wrist replay, a frozen wrist-angle model and schematic pathways for selectable game movements.",
+  "source": "Local review branch based on PR 2 at c35d7877f1e3aca996809c36f384a889f9bae571. Adds an eight-electrode scalp view, four right-forearm EMG sites and a wrist-angle trajectory on one recorded trial, a frozen wrist-angle model and schematic pathways for selectable game movements.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -22,8 +22,8 @@
     },
     {
       "path": "ACTIVITY-MAP.md",
-      "bytes": 8185,
-      "sha256": "b095c9ca7afc8e3e01aa306b09556f01efbb33f5572721a16e2b36bb0184b66c"
+      "bytes": 11167,
+      "sha256": "3473e497610fc89ac121963909c56f9ee5ec5bdddfd1c94b3aa252f099c40010"
     },
     {
       "path": "ASSET-ATTRIBUTION-INDEX.md",
@@ -32,8 +32,8 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 38076,
-      "sha256": "fa8ec21ba8e1f1dc9a492ca7d44c2f424f80525447150b86255cff716327f18d"
+      "bytes": 38165,
+      "sha256": "70e80d51b02d0ed6231acf81e630b6a912aa0c4d0c89796427f9f0e4be50674b"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,33 +52,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 14106,
-      "sha256": "0ea4f172163a9fa781cb68f0a0eae55fbfd2b03f6437028beab8b121caabc4ae"
+      "bytes": 14261,
+      "sha256": "95ee40ea7cea4cd114c16831c8420eedad515f53a15a4cdad26129a10e3c4a50"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65878,
-      "sha256": "fbdd99fe41c149e5bdb0cce571dd6c6c44ba1a8173cec8548d5d89a72ce20f2a"
+      "bytes": 65912,
+      "sha256": "00e902bb9014d91739411d8cbbee14254dc45b15cf556c6e1b6a3fb176f37cc0"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 51524,
-      "sha256": "00cc7560aead9bbcfd94aa9a4d7433032e7685a4ef387d04f7756f11744f857b"
+      "bytes": 51571,
+      "sha256": "d1817ce5c67593721c6e359dcbe3b3aa72094a548cc6928aac5e86d7ec96f55e"
     },
     {
       "path": "README.md",
-      "bytes": 24134,
-      "sha256": "586e2b809bb95e5f19f961c8e347c7f097e00a50e9b60f96581aee48a3c620c9"
+      "bytes": 24199,
+      "sha256": "512d4feea4b74b27b43c4ac19a639a1b8c96acf08d037c5fca06ef0bfeb9bde6"
     },
     {
       "path": "START.html",
-      "bytes": 4086,
-      "sha256": "cc51c39f68471265a8b95fa50ad4b59d09c7f0a151b31465d1bfc37e9c78d551"
+      "bytes": 4084,
+      "sha256": "c2ed01c5c0bd8e48602b0e79addf807d36114894504eaba6b4c8c3cbc84321f6"
     },
     {
       "path": "index.html",
-      "bytes": 1049,
-      "sha256": "22482353efdc1b3e675c29c677ce3f03883b093882c3025a6fefc090d5cc6738"
+      "bytes": 1047,
+      "sha256": "7505ec4d42f5bf7c8ab68a09839f9ec333c2006c66e3afe85914afc8b250c94a"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -97,8 +97,8 @@
     },
     {
       "path": "inputs/activity/wrist-pointing.json",
-      "bytes": 80741,
-      "sha256": "e50331490f2f2f33208e89c9a5f2679f08349c1030b9e5d2424e6bce955db59d"
+      "bytes": 167992,
+      "sha256": "578184a108d7682c37a4f409ce4cd7535b33d203007f39ca0f5d28831ffde41f"
     },
     {
       "path": "launchers/Install-NeuroSurge-Linux.sh",
@@ -3827,8 +3827,8 @@
     },
     {
       "path": "scene/example/activity-map.css",
-      "bytes": 4136,
-      "sha256": "e9265c78180138e802905272b5d0ecb5a1c77baa6ed56e52573669c7d1fe869d"
+      "bytes": 6256,
+      "sha256": "c8db79b1b202e6edbeeb83957343c16348fb16a48379f53af31d81ad8ca3364a"
     },
     {
       "path": "scene/example/assembly.css",
@@ -3947,8 +3947,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 9500,
-      "sha256": "45d9f5961fe0c29f31cf685b869cab73a7bba2cd738d98b7b0f72af0225841dd"
+      "bytes": 12185,
+      "sha256": "26bb150f2bc8181b9c6e0fefaeb9d42dd51ee6a21eb74b83b0891180424a2f59"
     },
     {
       "path": "scene/example/quiet.css",
@@ -3957,13 +3957,13 @@
     },
     {
       "path": "scene/src/activity/map.mjs",
-      "bytes": 10280,
-      "sha256": "f46151d712d0cf6b3811dc5107051384f259dd72159e9d61414763c70cb56858"
+      "bytes": 13534,
+      "sha256": "a887b66baf32b9d1681349219c947b1a1bd83779a762f095b4e40b596c16f7e6"
     },
     {
       "path": "scene/src/activity/replay.mjs",
-      "bytes": 2217,
-      "sha256": "9be64343fe23a8f7e154be02b7cfb909f91b11d6e5f9e482f25c63e88e94f5fa"
+      "bytes": 3658,
+      "sha256": "77a012fcb6f36487b1f21b327264ee2511374c9d6cc05891d100152af9a90e8b"
     },
     {
       "path": "scene/src/activity/temporal-r1.js",
@@ -4372,8 +4372,8 @@
     },
     {
       "path": "tests/activity-map.test.mjs",
-      "bytes": 1697,
-      "sha256": "7fb2157c5e5f839a931de85c4e88fb4eba5cf9e3b126c723ce595c324b92ad6c"
+      "bytes": 5231,
+      "sha256": "28080506c18f38b8f93f07d775b103e10a4d8a9333cc9bc62179d1e1055845a9"
     },
     {
       "path": "tests/area-code.test.mjs",
@@ -4457,8 +4457,8 @@
     },
     {
       "path": "tests/browser-activity-map.mjs",
-      "bytes": 6266,
-      "sha256": "28a7f319d5b4c441a162024d4f05f281390c2010ebaf78f44f0347da2f935fbc"
+      "bytes": 8159,
+      "sha256": "bc62b2b388ce94960a5a257c1a0e38a23d6184ef5f26731a147604df5aaf8a55"
     },
     {
       "path": "tests/browser-brain-compass.mjs",
@@ -4817,8 +4817,8 @@
     },
     {
       "path": "tools/extract-wrist-activity.py",
-      "bytes": 3651,
-      "sha256": "ed1576b45264cdccb4b2c5c098174fa0ef2e880b73c37650144b31bef3dd0168"
+      "bytes": 4867,
+      "sha256": "9fca3588e94cc7558cb45a83734a3ceb819926ad87c04d7fb51e343e376e179d"
     },
     {
       "path": "tools/load-body.mjs",

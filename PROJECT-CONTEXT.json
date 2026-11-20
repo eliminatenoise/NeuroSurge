@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "local-2026-11-20-body-59-activity-map",
+  "version": "local-2026-11-20-body-59-sensor-map",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the published wrist pointing temporal R1 forecasts on one offline development trial. Manual game movements and camera pose control have separate inputs.",
@@ -14,7 +14,7 @@
   "right_anconeus_shallow_bend": "An adjustment to rendering weights smooths the right anconeus in the first part of elbow flexion. The adjustment ends at 67 degrees, before the distorted deep bend. Joint targets and geometry outside that range retain their earlier behavior.",
   "carry_control_help": "While Space holds the brain or mirror body, turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Space closes the left hand. The mouse button closes the right hand. Press and drag to turn a held brain or mirror body while the keys carry it.",
   "client_side": true,
-  "signal_origin": "Avatar activity colours use simulated, unitless values. Activity map replay contains recorded scalp C3, a surface forearm EMG pair and right wrist encoder angles on one stored clock. Spinal and sensory paths are schematic.",
+  "signal_origin": "Avatar activity colours use simulated, unitless values. Activity map replay contains eight recorded scalp EEG potentials, eight right-forearm EMG contacts, four software differences and two wrist encoder angles on one stored clock. Spinal and sensory paths are schematic.",
   "known_limits": "PREVIEW-NOTES.html",
   "neural_decoder_validated": false,
   "normal_mechanics_validated": false,

@@ -14,6 +14,8 @@ PREFIX = "wrist-recorded-trial-converter-v1/"
 FILES = ("archive_features.py", "archive_source.py", "convert.py", "features.py",
          "DEVELOPMENT-ARCHIVE-PINS.json", "wrist-recorded-development-sha256.txt", "SOURCE-PINS.json")
 STEM = "sub-41/eeg/sub-41_task-WristPointingTask_run-03_eeg.edf"
+CHANNELS = "sub-41/eeg/sub-41_task-WristPointingTask_channels.tsv"
+POSITIONS = "sub-41/eeg/sub-41_electrodes.tsv"
 
 
 def sha(path):
@@ -30,9 +32,9 @@ def make(archive, converter, output):
                 (work / name).write_bytes(release.read(PREFIX + name))
         sys.path.insert(0, folder)
         from archive_source import read_block
-        from archive_features import decode_edf
+        from archive_features import EEG, EMG, decode_edf, read_dictionary
 
-        eeg, angle, valid, markers, pin = read_block(archive, block_number=1)
+        _, angle, valid, markers, pin = read_block(archive, block_number=1)
         cue = int(markers[1][0])
         end = int(markers[2][0])
         first, last = cue - 256, min(cue + 1280, end)
@@ -41,25 +43,38 @@ def make(archive, converter, output):
             raise ValueError("Clip coverage or encoder validity changed.")
         with zipfile.ZipFile(archive) as recording:
             signal, _ = decode_edf(recording.read(STEM))
-        # Both electrodes belong to the same right forearm. Widen before subtraction.
-        emg = signal[window, 12].astype("int32") - signal[window, 13].astype("int32")
+            channels = read_dictionary(recording, CHANNELS)
+            positions = read_dictionary(recording, POSITIONS)
+            metadata_hashes = {name: hashlib.sha256(recording.read(name)).hexdigest()
+                               for name in (CHANNELS, POSITIONS)}
+        if [c["name"] for c in channels] != list(EEG + EMG) or any(c["status"] != "good" for c in channels):
+            raise ValueError("Electrode identity or acquisition quality label changed.")
+        if [c["name"] for c in positions] != [*EEG, "REF", "GND"] or any(
+                c[k] != "n/a" for c in positions for k in ("x", "y", "z")):
+            raise ValueError("The source montage no longer matches this schematic.")
+        # A 1:1 EDF scale was validated by decode_edf. Widen before differencing.
+        samples = signal[window, :16].astype("int32")
+        series = {f"scalp{label}_uV": samples[:,i].tolist() for i,label in enumerate(EEG)}
+        series.update({f"forearm{label}_uV": samples[:,i].tolist() for i,label in enumerate(EMG, 8)})
+        for i in range(0, len(EMG), 2):
+            left, right = EMG[i:i+2]
+            series[f"forearm{left}minus{right}_uV"] = (samples[:,8+i] - samples[:,9+i]).tolist()
+        series["wristExtension_deg"] = angle[window, 0].tolist()
+        series["wristRadialDeviation_deg"] = angle[window, 1].tolist()
         packet = work / "packet.json"
         subprocess.run([sys.executable, "-B", str(work / "convert.py"), "make-archive",
                         "--archive", str(archive), "--block", "1", "--trial", "1",
                         "--output", str(packet)], check=True)
         record = {
-            "format": "neurosurge-wrist-replay-v1", "subject": "sub-41", "run": "03", "trial": 1,
+            "format": "neurosurge-wrist-replay-v2", "subject": "sub-41", "run": "03", "trial": 1,
             "task": "right wrist visual pointing", "sourceDoi": "10.6084/m9.figshare.29666735.v3",
             "sourceFileId": 62570998, "archiveSha256": ARCHIVE, "members": pin,
             "sourceSampleRateHz": 512, "encoderUpdateRateHz": 100,
             "cueSourceRow": cue, "firstSourceRow": first, "lastSourceRow": last,
             "cueChannel": "TrialInitMovStam", "targetCodeAtCue": int(signal[cue, 19]),
-            "series": {
-                "scalpC3_uV": eeg[window, 0].astype(int).tolist(),
-                "forearmM3LminusM3R_uV": emg.tolist(),
-                "wristExtension_deg": angle[window, 0].tolist(),
-                "wristRadialDeviation_deg": angle[window, 1].tolist()
-            },
+            "montage": {"scalp": list(EEG), "rightForearm": list(EMG),
+                        "participantCoordinates": None, "sourceMetadataSha256": metadata_hashes},
+            "series": series,
             "forecastInput": json.loads(packet.read_bytes()),
         }
         output.write_text(json.dumps(record, separators=(",", ":"), allow_nan=False) + "\n")

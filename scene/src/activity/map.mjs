@@ -1,4 +1,5 @@
-import { TRACES, cueSeconds, loadClip, loadForecast, tracePath } from './replay.mjs';
+import { SCALP, FOREARM, SCALP_TRACES, FOREARM_TRACES, TRACES, EEG_LIMIT_UV, cueSeconds,
+  loadClip, loadForecast, scalpColour, wristPoint, tracePath } from './replay.mjs';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const angle = n => n.toFixed(1) + '°';
@@ -17,29 +18,83 @@ function svg(parent, tag, attrs) {
   return el;
 }
 
-function makePlots(host, clip) {
-  return TRACES.map(trace => {
+function voltageLimit(trace, values) {
+  if (SCALP_TRACES.includes(trace)) return EEG_LIMIT_UV;
+  return Math.max(10, 10 * Math.ceil(Math.max(...values.map(Math.abs)) / 10));
+}
+
+function makePlot(host, clip, initialTrace) {
+  const row = append(host, 'div');
+  row.className = 'activity-trace';
+  const header = append(row, 'div');
+  header.className = 'activity-trace-head';
+  const label = append(header, 'span');
+  const output = append(header, 'output');
+  output.setAttribute('aria-live', 'off');
+  const plot = svg(row, 'svg', { viewBox:'0 0 600 46', preserveAspectRatio:'none', 'aria-hidden':'true' });
+  svg(plot, 'line', { x1:0, y1:23, x2:600, y2:23, stroke:'#3d4d59' });
+  const cueX = 600 * (clip.cueSourceRow - clip.firstSourceRow) / (clip.lastSourceRow - clip.firstSourceRow);
+  svg(plot, 'line', { x1:cueX, x2:cueX, y1:0, y2:46, stroke:'#cba75a', 'stroke-dasharray':'2 3' });
+  const path = svg(plot, 'path', {'stroke-width':1});
+  const cursor = svg(plot, 'line', { x1:0, x2:0, y1:0, y2:46, class:'activity-cursor' });
+  function select(trace) {
     const values = clip.series[trace.key];
     // The two angle axes deliberately share a scale. A small movement cannot
     // fill its own plot and appear as large as a 50-degree wrist flexion.
-    const limit = trace.angle ? 60 : Math.max(10, 10 * Math.ceil(Math.max(...values.map(Math.abs)) / 10));
-    const row = append(host, 'div');
-    row.className = 'activity-trace';
-    const header = append(row, 'div');
-    header.className = 'activity-trace-head';
-    const label = append(header, 'span', trace.label);
+    const limit = trace.angle ? 60 : voltageLimit(trace, values);
+    label.textContent = trace.label;
     append(label, 'small', '±' + limit + ' ' + trace.unit);
-    const output = append(header, 'output');
-    output.setAttribute('aria-live', 'off');
     output.setAttribute('aria-label', trace.label);
-    const plot = svg(row, 'svg', { viewBox:'0 0 600 46', preserveAspectRatio:'none', 'aria-hidden':'true' });
-    svg(plot, 'line', { x1:0, y1:23, x2:600, y2:23, stroke:'#3d4d59' });
-    const cueX = 600 * (clip.cueSourceRow - clip.firstSourceRow) / (values.length - 1);
-    svg(plot, 'line', { x1:cueX, x2:cueX, y1:0, y2:46, stroke:'#cba75a', 'stroke-dasharray':'2 3' });
-    svg(plot, 'path', { d:tracePath(values, limit), stroke:trace.color, 'stroke-width':1 });
-    const cursor = svg(plot, 'line', { x1:0, x2:0, y1:0, y2:46, class:'activity-cursor' });
-    return { trace, values, cursor, output };
+    path.setAttribute('d', tracePath(values, limit));
+    path.setAttribute('stroke', trace.color);
+    return {trace, values, cursor, output, select};
+  }
+  return select(initialTrace);
+}
+
+function bindInstruments(q, clip) {
+  const head = q('[data-scalp]'), forearm = q('[data-pairs]'), plane = q('[data-wrist-plane]');
+  const angles = q('[data-plane-angles]');
+  const sites = SCALP.map(([id, x, y]) => {
+    const group = svg(head, 'g', {'data-site':id, 'aria-hidden':'true'});
+    const circle = svg(group, 'circle', {cx:x, cy:y, r:9});
+    svg(group, 'text', {x, y:y-14, class:'site-name'}).textContent = id;
+    const readout = svg(group, 'text', {x, y:y+22, class:'site-voltage'});
+    return {id, circle, readout, values:clip.series['scalp' + id + '_uV']};
   });
+  const pairs = FOREARM.map(([id, muscle]) => {
+    const card = append(forearm, 'div');
+    append(card, 'small', id + 'L − ' + id + 'R');
+    append(card, 'span', muscle);
+    const readout = append(card, 'output');
+    readout.setAttribute('aria-live', 'off');
+    readout.setAttribute('aria-label', muscle + ' pair difference');
+    return {readout, values:clip.series['forearm' + id + 'Lminus' + id + 'R_uV']};
+  });
+  const {wristExtension_deg:extensions, wristRadialDeviation_deg:deviations} = clip.series;
+  const path = [];
+  for (let i = 0; i < extensions.length; i++) {
+    if (i && extensions[i] === extensions[i-1] && deviations[i] === deviations[i-1]) continue;
+    const [x,y] = wristPoint(extensions[i], deviations[i]);
+    path.push((i ? 'L' : 'M') + x.toFixed(3) + ',' + y.toFixed(3));
+  }
+  svg(plane, 'path', {d:path.join(' '), fill:'none', stroke:'#86c5d6', 'stroke-width':2.5});
+  const ring = svg(plane, 'circle', {r:4, fill:'#14232e', stroke:'#ffdd91', 'stroke-width':2});
+  function update(i) {
+    const readings = [];
+    for (const {id, circle, readout, values} of sites) {
+      const v = values[i];
+      circle.setAttribute('fill', scalpColour(v));
+      readout.textContent = (v > 0 ? '+' : '') + v;
+      readings.push(id + ' ' + v);
+    }
+    head.setAttribute('aria-label', 'Scalp voltages in microvolts. ' + readings.join(', '));
+    for (const {readout, values} of pairs) readout.textContent = values[i] + ' µV';
+    const [x, y] = wristPoint(extensions[i], deviations[i]);
+    ring.setAttribute('cx', x); ring.setAttribute('cy', y);
+    angles.textContent = extensions[i].toFixed(2) + '° extension · ' + deviations[i].toFixed(2) + '° radial';
+  }
+  return update;
 }
 
 function routeWording(region, action) {
@@ -61,6 +116,8 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
   const play = q('[data-play]'), model = q('[data-model]'), target = q('[data-target]');
   const regions = q('[data-region]'), actions = q('[data-action]');
+  const scalpChoice = q('[data-scalp-select]'), forearmChoice = q('[data-emg-select]');
+  let updateInstruments;
   let clip, clipRequest, plots = [], forecast, modelRequested = false, index = 0;
   let frame = 0, startTime = 0, startIndex = 0, disposed = false;
   let choices = [];
@@ -80,6 +137,7 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     q('[data-clock]').textContent = (t > 0 ? '+' : '') + t.toFixed(3) + ' s';
     seek.setAttribute('aria-valuetext', t.toFixed(3) + ' seconds from the cue');
     const x = 600 * i / Number(seek.max);
+    updateInstruments(i);
     for (const {trace, values, cursor, output} of plots) {
       cursor.setAttribute('transform', 'translate(' + x.toFixed(2) + ')');
       output.textContent = values[i].toFixed(trace.angle ? 1 : 0) + ' ' + trace.unit;
@@ -149,7 +207,16 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     try {
       clip = await clipRequest;
       if (disposed) return;
-      plots = makePlots(q('[data-traces]'), clip);
+      plots = TRACES.map(t => makePlot(q('[data-traces]'), clip, t));
+      for (const [i, select, traces] of [[0, scalpChoice, SCALP_TRACES], [1, forearmChoice, FOREARM_TRACES]]) {
+        for (const t of traces) select.add(new Option(t.label.split(' · ')[1], t.key));
+        select.value = plots[i].trace.key;
+        on(select, 'change', () => {
+          plots[i] = plots[i].select(traces[select.selectedIndex]);
+          showSample(index);
+        });
+      }
+      updateInstruments = bindInstruments(q, clip);
       seek.max = clip.lastSourceRow - clip.firstSourceRow;
       q('[data-replay]').hidden = false;
       q('[data-clip-status]').textContent = '';

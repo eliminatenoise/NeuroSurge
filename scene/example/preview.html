@@ -52,12 +52,6 @@
     <p class="activity-kicker">NEUROHANDLER · DEXTERITY</p>
     <h2>A right wrist points to a target</h2>
     <p>The participant saw a target on a screen. Its visual go marker sets time zero. Our description is “bend the right wrist toward the palm.” The encoder moved from 2.6° of extension at the cue to 49.3° of flexion 2.5 seconds later.</p>
-    <div class="activity-anatomy" aria-label="Schematic of the right wrist pathways">
-      <div class="activity-direction">Motor commands · efferent <span aria-hidden="true">→</span></div>
-      <div class="activity-nodes"><span><strong>Brain</strong><small>Scalp EEG</small></span><i aria-hidden="true">⇄</i><span><strong>Spinal cord</strong><small>Unmeasured</small></span><i aria-hidden="true">⇄</i><span><strong>Forearm &amp; wrist</strong><small>EMG · encoder</small></span></div>
-      <div class="activity-direction sensory"><span aria-hidden="true">←</span> Sensory return · afferent</div>
-      <p>Arrows sketch travel toward the muscles and back toward the brain. Neither nerve traffic nor spinal firing was recorded.</p>
-    </div>
     <p class="activity-status" data-clip-status role="status">Opening the recording…</p>
     <div data-replay hidden>
       <div class="activity-transport">
@@ -65,9 +59,32 @@
         <label>Time from cue <input type="range" data-seek min="0" max="1536" step="1"></label>
         <output data-clock aria-live="off"></output>
       </div>
+      <div class="activity-instruments">
+        <figure class="activity-instrument">
+          <figcaption>Scalp electrodes <small>Top view · nose at the top</small></figcaption>
+          <svg data-scalp viewBox="0 0 300 218" role="img" aria-label="Eight recorded scalp voltages in microvolts">
+            <ellipse cx="150" cy="110" rx="120" ry="92" fill="#152632" stroke="#7993a3" stroke-width="1.5"/>
+            <path d="M138 18 L150 4 L162 18 M29 99 Q18 110 29 122 M271 99 Q282 110 271 122" fill="none" stroke="#7993a3" stroke-width="2"/>
+            <g class="diagram-direction"><text x="17" y="90">L</text><text x="283" y="90">R</text></g>
+          </svg>
+          <div class="activity-colour-key" aria-label="EEG colour scale from minus 60 to plus 60 microvolts"><i aria-hidden="true"></i><span>−60 µV</span><span>0</span><span>+60 µV</span></div>
+        </figure>
+        <figure class="activity-instrument">
+          <figcaption>Wrist-angle trajectory <small>Right wrist · encoder</small></figcaption>
+          <svg data-wrist-plane viewBox="0 0 252 226" role="img" aria-label="Observed trajectory in two joint angles. Ring shows the selected time.">
+            <path d="M39 23 H213 V197 H39 Z M39 110 H213 M126 23 V197" fill="none" stroke="#536b79" stroke-width="1"/>
+            <g class="diagram-direction"><text x="126" y="16">+60° radial</text><text x="126" y="214">−60° ulnar</text><text x="73" y="100">−60° flexion</text><text x="177" y="100">+60° extension</text></g>
+          </svg>
+          <div class="angle-pair" data-plane-angles aria-live="off"></div>
+        </figure>
+      </div>
+      <p class="activity-note">Each scalp dot gives the voltage relative to the right earlobe, in µV. The dots follow standard cap positions. The space between them has no measurement. The ring marks the current time on the full wrist-angle trajectory.</p>
+      <h3 class="activity-forearm-title">Right forearm <small>Difference across each electrode pair</small></h3>
+      <div class="activity-pairs" data-pairs></div>
+      <div class="activity-choices activity-trace-choices"><label>Scalp trace <select data-scalp-select></select></label><label>Forearm trace <select data-emg-select></select></label></div>
       <div class="activity-traces" data-traces aria-label="Aligned recorded signals"></div>
       <div class="activity-times" aria-hidden="true"><span>−0.50 s</span><span>+2.50 s</span></div>
-      <p class="activity-note">Scalp voltage at C3, a surface electrode pair over the right flexor carpi radialis, and two angles from the wrist encoder. Negative extension means flexion. The dotted line marks the go cue. EMG measures electrical activity; muscle force and sensory nerve firing were unmeasured.</p>
+      <p class="activity-note">L and R in the EMG labels identify the two contacts over one right-forearm muscle site. Choose either contact or their signed difference. The dotted line in the traces marks the go cue. Movement artifacts and signals from nearby muscles can contribute to the voltages.</p>
       <details data-model><summary>Compare a 250 ms forecast with the encoder</summary>
         <p>The wrist model uses the preceding half-second of recordings. Each forecast stops 250 ms short of its target. Each input choice averages its three independently seeded fits.</p>
         <p data-model-status role="status"></p>
@@ -78,9 +95,18 @@
         </div>
       </details>
     </div>
+    <details><summary>Motor and sensory pathways of the right wrist</summary>
+    <div class="activity-anatomy" aria-label="Schematic of the right wrist pathways">
+      <div class="activity-direction">Motor commands · efferent <span aria-hidden="true">→</span></div>
+      <div class="activity-nodes"><span><strong>Brain</strong><small>Scalp EEG</small></span><i aria-hidden="true">⇄</i><span><strong>Spinal cord</strong><small>Unmeasured</small></span><i aria-hidden="true">⇄</i><span><strong>Forearm &amp; wrist</strong><small>EMG · encoder</small></span></div>
+      <div class="activity-direction sensory"><span aria-hidden="true">←</span> Sensory return · afferent</div>
+      <p>These anatomical arrows sketch travel toward the muscles and back toward the brain. Neither nerve traffic nor spinal firing was recorded.</p>
+    </div>
+    </details>
     <details><summary>Where the recording comes from</summary>
-      <p>WristMotion v3 · sub-41 · run 03 · first pointing trial. All four traces use the same stored 512 Hz clock. The encoder updates at 100 Hz; physical timing offsets between instruments remain unknown. The plotted interval runs from 0.50 s before the visual go marker through 2.50 s after it. These are offline readings of a human right wrist.</p>
-      <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt subtracts the two forearm electrodes and converts the device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
+      <p>WristMotion v3 · sub-41 · run 03 · first pointing trial. All 16 voltage channels share the stored 512 Hz clock. The encoder updates at 100 Hz. Physical timing offsets between instruments remain unknown. The plotted interval runs from 0.50 s before the visual go marker through 2.50 s after it.</p>
+      <p>The EEG cap used AFz as ground. The study reports an elbow reference for EMG. The acquisition used a 0.1–200 Hz band-pass and a 60 Hz notch. The display uses the stored voltages with no additional filtering. The recording gives no individual scalp coordinates or trial-specific noise estimate. Muscle force, spinal activity and nerve firing were unmeasured.</p>
+      <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt selects one trial, subtracts each forearm contact pair, and converts device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </details>
   </section>
   <section id="ns-act-game" aria-label="Simulated game pathways" hidden>
