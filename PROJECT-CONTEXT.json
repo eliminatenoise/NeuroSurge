@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "local-2026-11-20-body-59-whole-body-motion",
+  "version": "local-2026-11-20-body-59-language-and-hand",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
@@ -82,5 +82,14 @@
     "source_rate_hz": 120,
     "display_rate_hz": 30,
     "shorthand_scope": "F opens named recorded actions using an explicit replay request."
+  },
+  "recorded_hand_search": {
+    "source": "HoloAssist R031-12July-SmallPrinter",
+    "scope": "Post-hoc caption retrieval across five training intervals; 26 headset-estimated right-hand joints. Free text ranks existing intervals on device.",
+    "game_controls": [
+      "F then Find hand recording",
+      "M then Hand search"
+    ],
+    "model_source": "fde458e21b4885e4bddd7614ed2c326374c87253"
   }
 }

@@ -1,0 +1,16 @@
+.handReplay{--hr-ink:#112e32;--hr-muted:#4b6568;--hr-line:#c7d7d6;box-sizing:border-box;color:var(--hr-ink);background:#f4f8f7;border:1px solid var(--hr-line);border-radius:12px;padding:clamp(12px,2.1vw,24px);font:15px/1.45 system-ui,sans-serif;min-width:0;color-scheme:light}
+.handReplay *{box-sizing:border-box}.handReplay [hidden]{display:none!important}
+.handReplay label{font-weight:600;color:var(--hr-ink)}
+.handReplay button,.handReplay select{font:inherit;max-width:100%;color:var(--hr-ink);background:#fff;border:1px solid #98b0b1;border-radius:6px;min-height:36px;padding:5px 9px;line-height:1.35}
+.handReplay button{cursor:pointer;font-weight:600}.handReplay button:disabled{cursor:default;opacity:.5}
+.handReplay :focus-visible{outline:3px solid #168e90;outline-offset:2px}
+.handReplay select{display:block;width:100%;margin-top:3px}.handReplay .hr-pick{display:block}
+.handReplay .hr-caption{margin:.65rem 0 .8rem;font-weight:500}
+.handReplay .hr-stage{position:relative;border:1px solid #2b4d50;border-radius:8px;overflow:hidden;background:#0d2429}
+.handReplay canvas{display:block;width:100%;height:clamp(220px,34vh,365px);touch-action:none;cursor:grab}.handReplay canvas:active{cursor:grabbing}
+.handReplay .hr-empty{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:88%;color:#e6f2ed;text-align:center;pointer-events:none;font-weight:600}
+.handReplay .hr-clock{display:flex;align-items:center;gap:12px;margin:.8rem 0}.handReplay .hr-clock button{background:#174a4b;color:white;border-color:#174a4b;min-width:58px}.handReplay .hr-clock label{display:block;flex:1;min-width:0}.handReplay .hr-clock output{font-variant-numeric:tabular-nums;font-weight:650;float:right}
+.handReplay .hr-clock input{display:block;width:100%;margin:7px 0;accent-color:#007b78}
+.handReplay .hr-inspect,.handReplay .hr-view{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.handReplay .hr-inspect{padding:.7rem 0;border-top:1px solid var(--hr-line);border-bottom:1px solid var(--hr-line);gap:5px 18px}.handReplay .hr-inspect label{min-width:140px}.handReplay .hr-joint{min-width:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.handReplay .hr-joint strong,.handReplay .hr-joint span{display:block}.handReplay .hr-joint strong{white-space:pre-wrap}.handReplay .hr-joint span{font-size:13px;color:var(--hr-muted)}
+.handReplay .hr-view{margin-top:10px}.handReplay .hr-view button{min-width:36px}.handReplay .hr-view label{font-weight:500}.handReplay .hr-view input{accent-color:#007b78}
+.handReplay .hr-status,.handReplay .hr-instruction{font-size:13px;color:var(--hr-muted);margin:.4rem 0 0;line-height:1.45;overflow-wrap:anywhere}

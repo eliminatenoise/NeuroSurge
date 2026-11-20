@@ -107,6 +107,12 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
 
   function submit(event) {
     event.preventDefault();
+    if (event.submitter?.hasAttribute('data-find-hand')) {
+      const text = field.value.trim();
+      dismiss();
+      dialog.ownerDocument.dispatchEvent(new win.CustomEvent('ns-open-hand-search', {bubbles:true, detail:{text}}));
+      return;
+    }
     const clipId = resolveReplay(field.value);
     if (clipId) {
       dismiss();
@@ -115,7 +121,7 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
     }
     const action = resolveAction(field.value, getBodyMap());
     if (!action) {
-      message.textContent = 'Try one movement with a side, such as “Bend my right knee”.';
+      message.textContent = 'Try one movement with a side, such as “Bend my right knee”, or choose Find hand recording.';
       field.focus();
       return;
     }

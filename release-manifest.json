@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "local-2026-11-20-body-59-whole-body-motion",
+  "version": "local-2026-11-20-body-59-language-and-hand",
   "experimental": true,
-  "source": "NeuroSurge draft PR 2 at 2c278dff35630aa5740e632bc04a1e2cc5ea6a5a; four projected camera controls and three CMU whole-body recordings opened from M or by an F replay command.",
+  "source": "NeuroSurge draft PR 2 at c31894acce37b73662ef5e795a2c5393c2d6ac84 and NeuroTranslation hand-language study at fde458e21b4885e4bddd7614ed2c326374c87253. F and M access a local fitted-language search and tracked right-hand recording.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -22,8 +22,8 @@
     },
     {
       "path": "ACTIVITY-MAP.md",
-      "bytes": 14033,
-      "sha256": "5cf4bc8999c7dddbe98151828c5bdcc30ef82170c8c44f082f5c049193e45355"
+      "bytes": 14799,
+      "sha256": "a26bed9e8b943f27c8c40d728e382f952bc1a2fe78f8428d39cf6d6a887c1eba"
     },
     {
       "path": "ASSET-ATTRIBUTION-INDEX.md",
@@ -32,8 +32,8 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 39215,
-      "sha256": "5cb17ced64ce6858109be1ff7b9b7f0398eb510ee61641e7cfc41d2042955927"
+      "bytes": 39761,
+      "sha256": "24c9e32cfa343cef60f33fd6f5264b3aed763f8946942f22ef81587456855bbf"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,8 +52,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 14996,
-      "sha256": "7edabb903e67cc6093c59eea6c550ce16295266d1f63990796fff57d107c0c43"
+      "bytes": 15156,
+      "sha256": "637c4ff034249f42299ae7e1a96666eae0f865c6d2ebf5cee3b8192e98011803"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,18 +62,53 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 52044,
-      "sha256": "0272a053477612db272a3c95941b1870d40f17005e6b1ce04f3840fcc19b3ab0"
+      "bytes": 52447,
+      "sha256": "b19778ad259c992a633edfef72e5206c1d213be6cff43fb7e0ead31420831c81"
     },
     {
       "path": "README.md",
-      "bytes": 24476,
-      "sha256": "9be7c35ca5a3bc522527f9ac124691947327a5ecb37ade7b3f2bf46e1953216d"
+      "bytes": 24629,
+      "sha256": "234403c51cb292abc0e24034683cceb6daa4d1669ea4aa92196dbcaa4d927826"
     },
     {
       "path": "START.html",
       "bytes": 4091,
-      "sha256": "c577c3a4c9ce4ddca92f32dc72294aa3972b0114f5d55826b5521f97f34bacbf"
+      "sha256": "8f39b617f964a4f890db3f33e815610357194e4fa5fa4258041056285e8d7f44"
+    },
+    {
+      "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
+      "bytes": 2354,
+      "sha256": "4531a67d443284d93ffed0803df5b10634aff21c3d77e381f2d48af01d875868"
+    },
+    {
+      "path": "assets/hand-search/asset-index.json",
+      "bytes": 344,
+      "sha256": "2aaf48fa3f5163f233e13ffd1b8387b81e39c005381fd51122120d851fee4784"
+    },
+    {
+      "path": "assets/hand-search/catalogue.json",
+      "bytes": 3977,
+      "sha256": "ad7b5e0a497f7660798965d30cd5af2e2c1725aa6da61a6dc667c6afce3157eb"
+    },
+    {
+      "path": "assets/hand-search/hand-query.bin",
+      "bytes": 547656,
+      "sha256": "7dad9221277317d7bdbc7caf2bc22e7baa395608dd6775b7d1b96d0a55c57ac0"
+    },
+    {
+      "path": "assets/hand-search/hand-query.json",
+      "bytes": 8387,
+      "sha256": "f6a80d6794c7720000b605147550fee36c7833f304b9137076104c2e23c5d914"
+    },
+    {
+      "path": "assets/hand-search/hand-recording.json",
+      "bytes": 2387415,
+      "sha256": "5667cf3b8d793c88416b2b9d7b248c8e2ddc60af288808366911801b3e54eb04"
+    },
+    {
+      "path": "assets/hand-search/hand-source-credits.html",
+      "bytes": 3173,
+      "sha256": "1973671d8c9221afe24d311cc2df9f3eec6f4f7826e1af913cd0cef0dccbb261"
     },
     {
       "path": "assets/spatial-motion/02_06.json",
@@ -98,7 +133,7 @@
     {
       "path": "index.html",
       "bytes": 1054,
-      "sha256": "34457080d3106bb24b2dde8ccc4dbfb2dadfe2b818cc9ce2f9d1d78dcec92407"
+      "sha256": "562de4e565a43e2d04e17610432cd79e7dfc074c9a163d55567b115d80b075d5"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3967,8 +4002,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 12977,
-      "sha256": "0a11a78f51992e90c5a0b8105fa5afb2961d6d79c7fd03a1115b53842d0d9273"
+      "bytes": 13507,
+      "sha256": "3777654a325c557c140b0656c8675fc604faafb488e56402295ee1f040834e2f"
     },
     {
       "path": "scene/example/quiet.css",
@@ -3982,8 +4017,8 @@
     },
     {
       "path": "scene/src/activity/map.mjs",
-      "bytes": 12963,
-      "sha256": "2a103c78ceb1058ec8ffb8a0344cb8094dd25e3b846f037516097fb159740ba5"
+      "bytes": 13954,
+      "sha256": "27e1d0c2883c752e9d881be79f6de5c44ff3ba5aff55e8510fc144f75c6e0567"
     },
     {
       "path": "scene/src/activity/paired-input.mjs",
@@ -4176,9 +4211,49 @@
       "sha256": "3821ea9b1f7fb8c549ef2a064ef5c85750bf375c545a49fd6eea0df44a95f1f4"
     },
     {
+      "path": "scene/src/hand-search/CDLA-Permissive-2.0.txt",
+      "bytes": 2354,
+      "sha256": "4531a67d443284d93ffed0803df5b10634aff21c3d77e381f2d48af01d875868"
+    },
+    {
+      "path": "scene/src/hand-search/LICENSE",
+      "bytes": 7048,
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "path": "scene/src/hand-search/MODEL-NOTICE.md",
+      "bytes": 1562,
+      "sha256": "f4e4c71b58efe6bd362d0130dbdd9978997e9f1166626b19e02a533936431329"
+    },
+    {
+      "path": "scene/src/hand-search/hand-query.mjs",
+      "bytes": 12884,
+      "sha256": "2e1b80b45fb23b18991eb2c00ffa2729c1f66d10913d54f9f11472c2b9b40889"
+    },
+    {
+      "path": "scene/src/hand-search/hand-replay.css",
+      "bytes": 2668,
+      "sha256": "e5bf479fd7d6d65ebc7e43b3e643dc5e6ce46476d5b112a0f205358c75d4b275"
+    },
+    {
+      "path": "scene/src/hand-search/hand-replay.js",
+      "bytes": 15884,
+      "sha256": "688ef7a580c7fd34c427bb3722fa390ab05a5b688089891a33c8f1d730e177a7"
+    },
+    {
+      "path": "scene/src/hand-search/hand-search.css",
+      "bytes": 2339,
+      "sha256": "53c868a3d33b94f46a51b983a08ce1dc053e6309c0b9800bde22e38ac5bbc927"
+    },
+    {
+      "path": "scene/src/hand-search/hand-search.mjs",
+      "bytes": 12286,
+      "sha256": "d38a339ae6fdd56c7437ce51d8e12d993bb7cb638ab3cf15fe4a55e96bb3f1fe"
+    },
+    {
       "path": "scene/src/ns-action-chat.mjs",
-      "bytes": 7208,
-      "sha256": "c03c5802c34a6a94d17c2c4d27819798fdd0fafd67cca6f299e40e8da62f9a94"
+      "bytes": 7491,
+      "sha256": "69678477f148e9b959e2d5cba9fafba7710d13e0916de68be24c6f06133b75e0"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -4596,6 +4671,11 @@
       "sha256": "a51adbd31de820edb43b04aaeeb03bb49bb70c4bc0d24fee3c39ae101e44ed57"
     },
     {
+      "path": "tests/browser-hand-search.mjs",
+      "bytes": 3325,
+      "sha256": "61d1ece04eb6985c3e249bc5ce9b7404c9817a2403cbfc5b258ee83d8c956666"
+    },
+    {
       "path": "tests/browser-keyboard-aim.mjs",
       "bytes": 25409,
       "sha256": "696284eb9d23366ec5e821a365788af33284cae9b3ca962845e07a326fb34f37"
@@ -4729,6 +4809,11 @@
       "path": "tests/guide-order.test.mjs",
       "bytes": 8343,
       "sha256": "8b655356181d7914e3db3bd49da05ab789029f5d238305cb6f4bf72db9c56465"
+    },
+    {
+      "path": "tests/hand-query.test.mjs",
+      "bytes": 2274,
+      "sha256": "f2b1a45a3d17fec154a3ecbfecb24219b8158c8903000670787aca223337dc0d"
     },
     {
       "path": "tests/head-hold.test.mjs",

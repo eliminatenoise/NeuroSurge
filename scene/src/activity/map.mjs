@@ -115,7 +115,8 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const q = selector => dialog.querySelector(selector);
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
   const spatial = q('#ns-act-spatial'), play = q('[data-play]');
-  let spatialPanel, spatialLoad, tabVersion = 0;
+  const hand = q('#ns-act-hand');
+  let spatialPanel, spatialLoad, handPanel, handLoad, tabVersion = 0;
   const regions = q('[data-region]'), actions = q('[data-action]');
   const scalpChoice = q('[data-scalp-select]'), forearmChoice = q('[data-emg-select]');
   let updateInstruments;
@@ -233,24 +234,40 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     }
   }
 
-  function setTab(mode, clipId) {
+  async function openHand(query, version) {
+    try {
+      handLoad ??= import('../hand-search/hand-search.mjs');
+      const module = await handLoad;
+      if (disposed || !dialog.open || version !== tabVersion) return;
+      handPanel ??= module.mountHandSearch(hand, {baseUrl:new URL('../../../assets/hand-search/',import.meta.url)});
+      await handPanel.show(query);
+    } catch {
+      handLoad = null;
+      if (!disposed && version === tabVersion) hand.querySelector('[role=status]').textContent = 'Hand search could not open. Reopen this view to try again.';
+    }
+  }
+
+  function setTab(mode, selection) {
     tabVersion++;
     spatialPanel?.hide();
+    handPanel?.hide();
     stop();
     recording.hidden = mode !== 'recording';
     game.hidden = mode !== 'game';
     spatial.hidden = mode !== 'spatial';
+    hand.hidden = mode !== 'hand';
     for (const b of dialog.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', String(b.dataset.tab === mode));
     if (!recording.hidden) showRecording();
-    if (!spatial.hidden) openSpatial(clipId,tabVersion);
+    if (!spatial.hidden) openSpatial(selection,tabVersion);
+    if (!hand.hidden) openHand(selection,tabVersion);
   }
 
-  function open(mode = 'recording', clipId) {
+  function open(mode = 'recording', selection) {
     if (dialog.open || !canOpen()) return;
     populateRegions();
     pause();
     dialog.showModal();
-    setTab(mode,clipId);
+    setTab(mode,selection);
     q('[data-close]').focus();
   }
 
@@ -259,6 +276,7 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     stop();
     tabVersion++;
     spatialPanel?.hide();
+    handPanel?.hide();
     dialog.close();
     if (returnFocus) {
       resume(action);
@@ -267,6 +285,11 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   }
 
   on(trigger, 'click', () => open());
+  on(doc, 'ns-open-hand-search', e => {
+    if (typeof e.detail?.text !== 'string') return;
+    if (dialog.open) setTab('hand',e.detail.text);
+    else open('hand',e.detail.text);
+  });
   on(doc, 'ns-open-spatial-replay', e => {
     const id = e.detail?.clipId;
     if (typeof id !== 'string') return;
@@ -293,5 +316,5 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   on(q('[data-move]'), 'click', () => close({ type:'muscle', regionId:regions.value, actionId:actions.value }));
   on(doc, 'visibilitychange', () => { if (doc.hidden) stop(); });
   on(win, 'blur', stop);
-  return () => { disposed = true; close(null, false); spatialPanel?.dispose(); events.abort(); };
+  return () => { disposed = true; close(null, false); spatialPanel?.dispose(); handPanel?.dispose(); events.abort(); };
 }
