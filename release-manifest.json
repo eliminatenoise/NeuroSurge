@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-60",
+  "version": "experimental-2026-11-20-body-update-61",
   "experimental": true,
-  "source": "Body update 60. No permanent movements, a clear movement for every area both ways, the face moves, nothing cut away or see-through, limbs never stuck, a natural neck.",
+  "source": "Body update 61. The motor strip as blocks over a black abyss, a darker room, every strip movement within reach, a clear outline on everything.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 469304,
-      "sha256": "e7b9d88eff1cf48c67ca148b3870267c631b48b8bee000b39530acee26582dc6"
+      "bytes": 480690,
+      "sha256": "a96e4d2b16552ef915574343c8884f574ee178d700dcdabead04a429d4858e75"
     },
     {
       "path": "LAUNCHERS.md",
@@ -57,23 +57,23 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 52447,
-      "sha256": "6aee0c73db025ba97a4ef886e745fc4789118082559a72d8c728ecfd928ff781"
+      "bytes": 53051,
+      "sha256": "a4db01cd899a3df30e5c14dd63a52e70b5c95a885358491fa24218723b6bc03f"
     },
     {
       "path": "README.md",
-      "bytes": 23570,
-      "sha256": "114bb8e7fd491be4e3f0679f30e322fc6a74fafe5f930e95ecda1ebcf38fd74a"
+      "bytes": 23763,
+      "sha256": "087b70b1072630db0739b18bd485fc945b173a937c6a0a90f369382f23e81657"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "305eeb186b7490a023b51c6eef8ff9d293fbb99dfa2406ec99c41c344a8e2576"
+      "sha256": "ce42f9b8acc3a181694ada1164f014f76e05f974814348de412f3dcaf1ce2ab0"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "5ec4123f45a498f659c48a65ceb6f467497eefa0c0cd5c5cf1e34cd5e7238f5d"
+      "sha256": "ce94693eba4cded90b464e84f8a6a107c466705219d0e844549a06ce2c265844"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3952,8 +3952,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 77355,
-      "sha256": "287cd795152245352de0be0e59c6b312604eb335ad0add045714093c6b721fea"
+      "bytes": 78230,
+      "sha256": "f1c45aa079f11a67d8dccaa5c94d026d1d0743dc3bd183c354621a6673109112"
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
@@ -4032,8 +4032,8 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 263723,
-      "sha256": "6f6ce2aeb3a6c2141385049a7cc5eee1a259d08c7552d4aa50e7f763aec10700"
+      "bytes": 269304,
+      "sha256": "b6473885ed226716d880b253f024381e5dd391dff7e26b00e22fe8ebc29377bf"
     },
     {
       "path": "scene/src/ns-camera.mjs",
@@ -4047,8 +4047,8 @@
     },
     {
       "path": "scene/src/ns-colors.mjs",
-      "bytes": 119062,
-      "sha256": "1a3f52ef4970a84a9e4993ce8d0b71f0e636355069057d265b27343042dea3c2"
+      "bytes": 122694,
+      "sha256": "8e887d1a0c9d728b034921607a1f8bdca19cc09945575c32a17fa6bd88a818a0"
     },
     {
       "path": "scene/src/ns-contact-fx.mjs",
@@ -4147,8 +4147,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 83949,
-      "sha256": "1a4069ce906d061f7d4b9904b6c6b4121ebb9864ae864078fb6e312a3405dd65"
+      "bytes": 95200,
+      "sha256": "a4f5eee00daa858018d3e5dea590962d55d4e3916d6980ba825bf77e67c48544"
     },
     {
       "path": "scene/src/ns-pack-loader.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-raw-look.mjs",
-      "bytes": 6789,
-      "sha256": "31a7ebda626df1989091b1e7ff78e874c8d80e908c3813238af353e63d51e8dc"
+      "bytes": 9194,
+      "sha256": "8830a4ed0c1b60df5d426b4f37237ed68a426b883219d9f5b8060eec48582513"
     },
     {
       "path": "scene/src/ns-raybvh.mjs",
@@ -4207,13 +4207,13 @@
     },
     {
       "path": "scene/src/ns-room.mjs",
-      "bytes": 28048,
-      "sha256": "4b5d8f86d39327029a38c786e3392ddda9973fed1769fbaa0fb7a58d75b3b898"
+      "bytes": 28229,
+      "sha256": "6bae0e708dc9dbacf30c701ad82686eda3f03942ad56292c78d6029e1294beba"
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1250105,
-      "sha256": "ad14a3357555e83e67f6c7d882b3b74ce2b83940d30e4745324e281b9870e471"
+      "bytes": 1255731,
+      "sha256": "f6482597c78e3a6407f092abeeb745a9b20b7a4651c8eaef28530dcb98e0f2ca"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4617,8 +4617,8 @@
     },
     {
       "path": "tests/raw-look.test.mjs",
-      "bytes": 17017,
-      "sha256": "b8cb3cff2eb910774e3a665c450f710a7c70eb68edff5188a2aededfb46726a4"
+      "bytes": 19970,
+      "sha256": "84d2994c989ecae2e8e932cf45f7be4bf7ccbc5fd1974e865cb3ee3e98e24305"
     },
     {
       "path": "tests/rig-file.test.mjs",
@@ -4627,8 +4627,8 @@
     },
     {
       "path": "tests/room.test.mjs",
-      "bytes": 10419,
-      "sha256": "1b10a1b8659b29c60d073e68fef1cb242f2054301f43ea88f2fdfb4bb2a2079f"
+      "bytes": 10646,
+      "sha256": "8dc53c764ec16e1cb012e169870655bfa89eaec51f7ef36b8807eb1173640034"
     },
     {
       "path": "tests/see-pass.test.mjs",
@@ -4674,6 +4674,11 @@
       "path": "tests/start-layout.test.mjs",
       "bytes": 8898,
       "sha256": "68693d22b9b2faa05b95a24008184e213544e95c4f8a8abe9c381d4b415786d8"
+    },
+    {
+      "path": "tests/strip-blocks.test.mjs",
+      "bytes": 7995,
+      "sha256": "8f1e0becfc50cb90397f3a4484694b3e2e71a4ecf60c26ff84a7f66d505f9828"
     },
     {
       "path": "tests/tutorial.test.mjs",

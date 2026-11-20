@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from '../vendor/three.module.js';
 import { RAW_LOOK, RAW_HOOKS, rawShade, rawLightDir, rawShadeGlsl, patchRawShaders } from '../scene/src/ns-raw-look.mjs';
-import { MUSCLE_GROUPS, MUSCLE_GROUP_TONES, MUSCLE_GROUP_LOOK, muscleGroupOf, muscleGroupTone, muscleGroupBaseInto, muscleToneKey, VISITED_RAW, visitedLightnessInto, MUSCLE_STEP, assignMuscleSteps } from '../scene/src/ns-colors.mjs';
+import { MUSCLE_GROUPS, MUSCLE_GROUP_TONES, MUSCLE_GROUP_LOOK, muscleGroupOf, muscleGroupTone, muscleGroupBaseInto, muscleToneKey, VISITED_RAW, visitedLightnessInto, MUSCLE_STEP, assignMuscleSteps, drawnMuscleLightness, linearOkL } from '../scene/src/ns-colors.mjs';
 import { regionalLayerQualification } from '../scene/src/ns-regional-layers.mjs';
 import { bodyPacketMuscleName } from '../scene/src/ns-body.mjs';
 import { BODY_STYLE, BONE_COLOUR, RAW_OUTLINE, RAW_TENDON_CUT, patchMuscleLookShaders, SCAN_AS_BRAIN, isScanArea, regionDisplayStyle } from '../scene/src/ns-scene-three.mjs';
@@ -54,6 +54,17 @@ test('the raw patch on three.js shaders: no scene light computed, the albedo tim
     assert.equal(p.vertexShader, S.vertexShader);
   }
   assert.equal(patchRawShaders('void main() {}', 'void main() {}'), null, 'no hooks: the material keeps its own light');
+  // a review of Body update 59 (Message 203: the activation as bright as possible): a muscle with the power-up patch
+  // keeps the HDR boost of its flash, which the comic patches carried
+  const S = THREE.ShaderLib.standard;
+  const mus = S.fragmentShader.replace('void main() {', 'uniform vec4 nsCharge;\nvoid main() {\n\tvec4 nsPu = vec4( 0.0 );');
+  const pm = patchRawShaders(S.vertexShader, mus);
+  assert.equal(pm.hdrBoost, true);
+  assert.ok(pm.fragmentShader.includes('totalEmissiveRadiance *= 1.0 + nsHdrBoost.x * max( nsPu.x - nsHdrBoost.y, 0.0 );'));
+  assert.equal((pm.fragmentShader.match(/uniform vec4 nsHdrBoost;/g) || []).length, 1, 'declared once');
+  assert.ok(pm.fragmentShader.indexOf('nsHdrBoost.x') > pm.fragmentShader.indexOf(RAW_HOOKS.ao), 'after the emission is complete');
+  const plain = patchRawShaders(S.vertexShader, S.fragmentShader);
+  assert.equal(plain.hdrBoost, false); assert.ok(!plain.fragmentShader.includes('nsHdrBoost'), 'none on a material without the power-up');
 });
 
 test('the raw shade in GLSL is the same rule, with the power of a number never below zero', () => {
@@ -71,8 +82,13 @@ test('one switch: RAW_LOOK.on picks the raw look for the bodies, the bone, the r
   assert.equal(BONE_COLOUR, 0xe8e0cd, "the reference pictures' ivory, RGB 232, 224, 205");
   assert.deepEqual(ROOM.black, RAW_LOOK.room);
   assert.equal(BRAIN_FLESH_LOOK, BRAIN_FLESH_RAW);
-  assert.ok(RAW_OUTLINE.alpha.every(a => a === 0), 'no ink line on the bodies');
-  assert.ok(RAW_OUTLINE.strip > 0 && RAW_OUTLINE.stripCss > 0 && RAW_OUTLINE.stripCss <= 2, 'a thin dark contour on the motor strip only');
+  // Message 207 ("And everything should get clear outlines."): the bodies' strong line and silhouette, a lighter inner
+  // step, no parting between touching muscles (their tones tell them apart); the strip's and the brain's line; all thin
+  assert.ok(RAW_OUTLINE.alpha[0] >= 0.9 && RAW_OUTLINE.alpha[1] >= 0.85 && RAW_OUTLINE.alpha[2] > 0 && RAW_OUTLINE.alpha[2] < RAW_OUTLINE.alpha[1] && RAW_OUTLINE.alpha[3] === 0, 'clear lines on the bodies');
+  assert.ok(RAW_OUTLINE.widthsCss[0] <= 2 && RAW_OUTLINE.widthsCss[1] < RAW_OUTLINE.widthsCss[0] && RAW_OUTLINE.taperMin >= 0.5, 'thin, even, and kept on the far body');
+  assert.ok(RAW_OUTLINE.colour.every(v => v < 0.06), 'near-black ink');
+  assert.ok(RAW_OUTLINE.strip > 0 && RAW_OUTLINE.stripCss > 0 && RAW_OUTLINE.stripCss <= 2, 'a thin dark contour on the motor strip');
+  assert.ok(RAW_OUTLINE.brain > 0 && RAW_OUTLINE.brainCss > 0 && RAW_OUTLINE.brainCss <= 2, "the brain's own outline and its eyes'");
   assert.equal(RAW_OUTLINE.occlusion, false, 'no depth shading laid over the bodies');
   // the cortex: the raw light, no wet sheen or glint, the rim only as the held cue
   const c = cortexFleshGlsl([0.6, 1.5, 1.8]);
@@ -82,7 +98,9 @@ test('one switch: RAW_LOOK.on picks the raw look for the bodies, the bone, the r
   // the strip's areas: no ink lines, hatching or dark floors; the arrows: no highlight, rim, edge or ink
   const u = areaInkUniformValues(BRAIN_INK, [0.6, 1.5, 1.8]);
   assert.equal(u.nsAInk[1], 0); assert.equal(u.nsAInk2[0], 0); assert.equal(u.nsAInk2[3], 0); assert.equal(u.nsARel2[3], 0); assert.equal(u.nsAFold[0], 0);
-  assert.ok(ARROW_LOOK_RAW.raw === true && ARROW_LOOK_RAW.specular === 0 && ARROW_LOOK_RAW.inkAlpha === 0 && ARROW_LOOK_RAW.wallInk === 0 && ARROW_LOOK_RAW.rimLight === 0);
+  assert.ok(ARROW_LOOK_RAW.raw === true && ARROW_LOOK_RAW.specular === 0 && ARROW_LOOK_RAW.rimLight === 0 && ARROW_LOOK_RAW.edgeDark === 0);
+  // Message 207: the tips keep a clear contour in the outlines' own ink
+  assert.ok(ARROW_LOOK_RAW.inkAlpha >= 0.9 && ARROW_LOOK_RAW.wallInk > 0 && ARROW_LOOK_RAW.inkCss > 0 && ARROW_LOOK_RAW.inkCss <= 2);
 });
 
 // every muscle the game draws: the body's (packs/BODY-RIG.json) and the left game arm's (inputs/MESH-MANIFEST.json)
@@ -185,21 +203,30 @@ test('touching muscles take different lightness steps of their group (Message 20
   const st = assignMuscleSteps(['vastus lateralis', 'rectus femoris', 'vastus medialis', 'gracilis'], c, group, L);
   const q = ['vastus lateralis', 'rectus femoris', 'vastus medialis'].map(k => st.get(k));
   assert.equal(new Set(q).size, 3, `the three heads all differ: ${q}`);
-  assert.ok(st.worst.same >= MUSCLE_STEP.stepL - 1e-9, 'touching muscles of one group differ by a step at least');
-  const lm = L('thighFront') + st.get('vastus medialis') * MUSCLE_STEP.stepL, lg = L('thighInner') + st.get('gracilis') * MUSCLE_STEP.stepL;
+  // (a review of Body update 59: the gaps are those of the lightness DRAWN, drawnMuscleLightness, not tone L + step x stepL)
+  const dl = k => drawnMuscleLightness(group(k), null, st.get(k));
+  assert.ok(st.worst.same >= 0.06, `touching muscles of one group are drawn clearly apart (${st.worst.same})`);
+  const lm = dl('vastus medialis'), lg = dl('gracilis');
   assert.ok(Math.abs(lm - lg) >= 0.15 - 1e-9, `the border muscle keeps the groups apart (${lm.toFixed(3)} / ${lg.toFixed(3)})`);
+  assert.equal(st.worst.contacts, 4); assert.equal(st.gaps.length, 4);
+  // the drawn lightness is the lightness of the colour drawn: the clamp at maxL and the storey shade included
+  const top = drawnMuscleLightness('upperArmFlexors', null, 1), at0 = drawnMuscleLightness('upperArmFlexors', null, 0);
+  assert.ok(top - at0 < MUSCLE_STEP.stepL - 0.01, `a step past maxL is short (${(top - at0).toFixed(3)})`);
+  assert.ok(Math.abs(drawnMuscleLightness('thighFront', 'deep', 0) - linearOkL(muscleGroupBaseInto('thighFront', 'x', 'deep', [0, 0, 0], undefined, undefined, 0))) < 1e-12);
+  assert.ok(drawnMuscleLightness('thighFront', 'deep', 0) < drawnMuscleLightness('thighFront', 'outer', 0) - 0.02, 'a deep muscle is drawn darker');
+  assert.ok(Math.abs(linearOkL(MUSCLE_GROUP_TONES.rose.linear) - MUSCLE_GROUP_TONES.rose.oklch[0]) < 0.002, 'linearOkL inverts the tone record');
   // the step moves the lightness only by step x stepL and turns the hue a little; deterministic
   const a = muscleGroupBaseInto('thighFront', 'k', 'outer', [0, 0, 0], undefined, undefined, 1), b = muscleGroupBaseInto('thighFront', 'k', 'outer', [0, 0, 0], undefined, undefined, -1);
   assert.ok(a[0] > b[0] && a[1] > b[1], 'a lighter step is lighter');
   assert.deepEqual([...assignMuscleSteps(['vastus lateralis', 'rectus femoris', 'vastus medialis', 'gracilis'], c, group, L).entries()], [...st.entries()]);
 });
 
-test("the strip's inter-effector areas, where no movement is mapped, are drawn as the brain, not black (Message 199)", () => {
-  assert.equal(SCAN_AS_BRAIN, true);
+test("the strip's inter-effector areas, where no movement is mapped, are a black abyss again (Message 206, after 199)", () => {
+  // Message 199 had them drawn as the brain; Message 206: "let's go back to making the non-active parts of the motor
+  // strip a black abyss"
+  assert.equal(SCAN_AS_BRAIN, false);
   assert.ok(isScanArea({ id: 'rh_scan_middle' }) && isScanArea({ id: 'lh_scan_superior' }) && !isScanArea({ id: 'lh_shoulder' }));
   const o = regionDisplayStyle({ id: 'rh_scan_middle' }, { activity: 0, hovered: true });
-  assert.equal(o.opacity, 1, 'opaque: nothing dark shows through');
-  assert.deepEqual(o.emission, [0, 0, 0], 'no light of its own');
-  const lum = o.albedo[0] * 0.2126 + o.albedo[1] * 0.7152 + o.albedo[2] * 0.0722;
-  assert.ok(lum > 0.3 && o.albedo[0] > o.albedo[2], `the cortex's own pink (${o.albedo.map(v => v.toFixed(2))})`);
+  const lum = c => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+  assert.ok(lum(o.albedo) < 0.01 && lum(o.emission) < 0.01, `near-black, no light of its own (${o.albedo.map(v => v.toFixed(4))})`);
 });

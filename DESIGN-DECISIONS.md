@@ -2485,7 +2485,8 @@ little under it, so the faint pool of light on the floor lands on it). The brain
 (Message 153), lighter and pinker than the muscles; the gloss and slime of Message 163 give way to this later note, and
 its pale rim now only shows while you hold it (the held cue). The strip's areas keep their colours and are drawn in the
 same light, without ink lines, hatching or dark sulcal floors inside them; a switched-on area is pure white with its
-glow (Message 203). The arrows keep their colours, without highlight, rim or ink.
+glow (Message 203). The arrows keep their colours, without highlight or rim. (Their ink was meant to be off; the
+shader still drew it, a review fault: since Message 207 it is drawn on purpose, section 176.)
 
 **The comic look is a switch away.** `RAW_LOOK.on` false brings the early comic look of 19 November back everywhere
 (`BODY_STYLE` follows it); none of its code was removed.
@@ -2512,21 +2513,23 @@ muscles that touch in the drawn body (`assignBodyMuscleTones`, once at load: sha
 how much of both is seen): a muscle takes the step furthest from its touching neighbours of the same group (the
 quadriceps' heads, the forearm's flexors, the pectoral's parts), and a muscle at a group's border steps away from the
 group beside it, so the steps never bring two groups together. Groups still read as families; the muscles inside them
-read as muscles. No line is drawn between them. A display rule for teaching; nothing is measured.
+read as muscles. No line is drawn between them. A display rule for teaching; nothing is measured. (A review of Body
+update 59: the optimiser compared a model lightness, not the one drawn; since section 176 it compares the drawn one.)
 
 **A used muscle keeps its group.** A muscle that has been switched on (section 126's mark) now only darkens: its OKLab
 lightness x 0.86, hue and chroma kept (`VISITED_RAW`, `visitedLightnessInto`). The faint, wide part of the tendon white
 (a sheet's thin border, which laid a grey haze over the pectoral) is cut (`RAW_TENDON_CUT`); the tendon ends on bone and
 the white finger and toe tendons stay.
 
-**Lines.** The outline pass draws no line on the bodies and no depth shading over them (`RAW_OUTLINE`, `setInk` in
+**Lines.** (Message 207 put clear outlines on everything: section 176.) The outline pass drew no line on the bodies and no depth shading over them (`RAW_OUTLINE`, `setInk` in
 `ns-outline.mjs`; the pictures with and without the strong line between limbs, Message 138, were compared: the tones
 part the limbs). The motor strip keeps a thin dark contour (1.4 CSS px), so its pale bands do not melt into the pink
 brain. The outline's ID picture is still drawn when something moves, because the light-blue glass that shows what is
 hidden (`ns-see.mjs`) reads it. The activation light, the beams, the control glows, the limb flash and every card are
-signals drawn over the scene and are unchanged.
+signals drawn over the scene and are unchanged. (A review of Body update 59: the HDR boost of a muscle's power-up
+flash lived only in the comic patches and was lost here; section 176 puts it back.)
 
-**No black bands on the strip.** The strip's inter-effector areas (SCAN), where no movement is mapped, were drawn near
+**No black bands on the strip.** (Message 206 made them a black abyss again: section 176.) The strip's inter-effector areas (SCAN), where no movement is mapped, were drawn near
 black. They are pieces of the brain's own surface (the strip's meshes are not in the brain's shell, so leaving them out
 would open a hole into the dark), so they are now drawn as the brain is: the cortex's crown colour, opaque, in the same
 light, with no key bevel, press frame or dark gap of their own, and the strip's contour leaves them out
@@ -2842,6 +2845,116 @@ already is still move nothing; with no permanent movements (Message 206) nothing
 so they need a rule of their own in how an activation runs (a short twitch off the end stop and back, for example) or
 another movement. The two hemispheres' trunk, neck-bend, face, jaw and swallow areas move the same parts the same way
 (midline muscles get input from both halves); they are not neighbours on the strip.
+
+## 176. The strip as separate blocks over a black abyss, the toes turned up to face you, and clear outlines on everything (20 November)
+
+The owner, Message 206: "And perhaps let's go back to making the non-active parts of the motor strip a black abyss,
+and let's make the background more of a black abyss, but still with a gradient. And let's actually make the motor
+strip completely segmented, so it's a bunch of slice blocks with a little bit of gap in between." Message 207: "And
+everything should get clear outlines." With them, the BODYMAP audit (section 175) found the toe areas of both halves
+on the brain's inner wall, facing the gap between the halves: in some 6 000 looks from the start view one spot of one
+toe movement was hit, so all eight were effectively dead (Message 204: "make sure there's clear movement for each
+brain activation area").
+
+**A black abyss.** The strip's inter-effector areas, where no movement is mapped, are near-black again (`SCAN_AS_BRAIN`
+false; Message 199 had them drawn as the brain, section 168). The room's darkest light is RGB about 4, 4, 5
+(`RAW_LOOK.room`) with a stronger pool of light on the floor (`RAW_LOOK.roomPool`), so the picture still falls off: at
+the start view the corners measure 12 to 13 (they were 20 to 21) and under the bodies about 21 (25); from outside the
+corners 4 to 5 (15 to 16). The light-blue glass, the beams and the white lit area read as before.
+
+**Blocks with a gap.** Every motor area is a block of its own. Where two areas meet along the strip, the strip's own
+shader (`REGION_SLICE`, in the area pass of `ns-scene-three.mjs`) draws a gap of the abyss's black, matte, with no
+glow: 0.001 of the strip coordinate a side and never under 1.0 CSS px a side, so a far strip keeps its blocks; the
+gaps are anti-aliased like the old seams. The colours, the pure-white lit area (Message 203), the labels, the key
+tips and the parts seen through the gap between the halves are unchanged. The picker reads the same gap
+(`classifyRegionGaze` `sliceHalfS`): a look into it takes no area ('glass', via 'gap'), so the area taken is the
+block drawn. The gap is a little wider in the picture than for the picker only from far away (at most about a pixel a
+side, where the 1 px minimum is wider than 0.001 of the strip). It was 0.003 at first: the gap comes out of the first
+and the last movement's share of an area, and the hip's six movements (section 175) have shares of 0.0036, so its
+first movement kept a sixth of its share and was never hit in a scan of the start view; at 0.001 every movement is.
+The blocks need no line of their own: the black gap is their outline. The strip's outer contour (1.4 CSS px) stays.
+
+**The toes turned up over the top edge.** `MEDIAL_TURN` (`ns-brain.mjs`): the medial wall is now only the strip's
+medial end (the toes, their first movement), and the first stretch of the crest continues the toe block, so the toe
+block runs from the depth of the inner wall over its top edge onto the crest, where it faces you, and the rest of the
+strip follows in the same order (toes, ankle, knee, hip, the in-between area, the trunk). The map from the along-gyrus
+coordinate to the strip coordinate (`crestStripS`): the crest's first 0.006 of along-gyrus v (about 300 mm2 a
+hemisphere next to the top edge) is the toes' core, all four movements in it; the rest of the crest up to the trunk
+follows on a power curve (exponent 0.53) chosen so that the trunk's border stays exactly where it was. So nothing from
+the trunk on moves, and the label "Belly and back" keeps its place (with exponent 0.45 the trunk grew toward the legs
+and its label was hidden at the start view). Areas on the atlas brain, right / left half: toes 313 / 282 mm2 on the crest
+(and the inner wall), ankle 349 / 365, knee 250 / 239, hip 232 / 264 (before: toes 5 / 8 on the crest, ankle 797 / 766
+with the upper inner wall, knee 386 / 392, hip 266 / 289). A scan of the start view (one look every unit over the leg
+blocks, 3 315 looks) now hits every leg movement of both halves: curl the big toe 132 / 142 looks, lift it 12 / 12, curl
+the small toes 18 / 16, lift them 11 / 9; the fewest are hip flex 8 / 6 and ankle up 6 / 10. A coarser scan of the
+whole strip hits 140 of the 142 movements; the two it does not are the left forearm's turns, which have no sub-band
+of their own (they are reached another way). The position stays schematic, as the toes' text says ("the strip's
+medial edge stands in for the medial wall"). `MEDIAL_TURN.on` false brings the old layout back.
+
+**One ink for every outline.** `RAW_LOOK.ink` (`ns-raw-look.mjs`): one near-black (#0b0809), one width (1.4 CSS px on a
+near thing), one opacity (0.95) for every outline of the raw look; a depth step inside a limb is lighter and thinner
+(0.9 px at 0.6); a far body keeps at least 0.6 of the width, so the mirror body's limbs stay outlined.
+- Both bodies, the game arm and the organs: the outline pass (`ns-outline.mjs`) draws again the strong line where one
+  limb or body lies over another and the silhouette of each body against the room or the brain, so limbs never merge,
+  with its old rules against specks (no ring round a small hole, thin lines round slim pieces such as fingers, the
+  line tapering at tips) and its supersampled, anti-aliased coverage. No line between touching muscles (the pass can
+  draw one; not tried over the tones in this round): the group tones and the steps between touching muscles (Message
+  202) part them.
+- The brain and its eyeballs: `setBrain` draws the brain's surface and the eyeballs into the outline pass's coverage
+  picture beside the strip (one channel each, combined by MAX, tested against the bodies' depth, following the living
+  brain's wobble and blooms); the edge pass marks their outlines and the ink pass draws them like the strip's, and a
+  composite of their own lays them on right after the glass (drawn with the strip's line, the opaque cortex covered
+  them), with the beat's swell. A body in front of the brain keeps its own line; where the brain lies over a body, the
+  brain's line is drawn. The optic nerves get no line: a few pixels thick, the 1.4 px line a side covered them whole.
+- The 3D arrows: the same ink, inside the V's outline; their walls lightly (0.25).
+- The strip's blocks: their gaps (above).
+- The lines follow what is drawn: the face's movements (section 179; checked on the mirror body held near, the same
+  view at rest and during a contraction: the head's line follows the pursed lips, because a rigid face muscle's buffer
+  is written and copied into the ID picture, and one skinned to the jaw carries its movement in the lift offset the ID
+  skin batch reads), the heart's beat (its material scales it about its centre by up to 3 %; the ID pass now draws it
+  with the same scale, `nsOutlineLocal`, where its line stood at the resting size), the living brain's wobble and
+  blooms (the coverage materials take the brain's vertex rule) and the eyeballs' turn (their own matrices).
+
+**Cost.** The frame rate on the test machine was too noisy to show the outlines' cost (the machine's load average was
+9 to 28 while the other packages ran; the same build's fill-limited runs varied by up to a half). So the graphics card's
+own time of the line passes was measured (`globalThis.__nsOutlineGpu`, a timer query; the ID pass is not counted, the
+hidden-limb glass needs it anyway), at 5120 by 2880 with quality High: with the strip's contour only (the look as
+shipped) 4.1 to 4.4 ms each time the view moves; with the bodies' lines too 4.25 to 4.6; with the brain's and the
+eyeballs' too 4.4 to 5.7 (looking round 5.4 to 5.6). So the new lines cost about 0.2 ms for the bodies (their pixels
+were already searched for the strip's line) and about 1 ms for the brain, whose every pixel is searched for a nearby
+edge, at that size; at 1600 by 900 a tenth of that. The gaps are a few instructions in the area shader.
+Frame table at 1600 by 900, back to back with the lead's server (4e7dfbb), frames a second for still / looking round /
+up and down / the limb turn, two runs each: this build 59.8 / 37.2 / 40.1 / 46.0 and 59.9 / 49.5 / 54.7 / 59.4, the
+lead 58.7 / 33.5 / 39.6 / 39.4 and 56.0 / 30.4 / 33.5 / 38.1 (the machine was loaded; no case was slower here;
+measured before FACE was merged).
+
+**Three faults from a review of Body update 59 (section 168's look), fixed here.**
+- The arrows: the raw look set their ink's opacity to 0 but kept its width, and the arrow shader mixes the ink colour
+  into the face by coverage before the opacity is applied, so a dark contour was drawn by accident. It is now drawn on
+  purpose, by the one ink rule above (`ARROW_LOOK_RAW` takes `RAW_LOOK.ink`).
+- The power-up flash: the HDR boost of a muscle's flash (the emission brightened by the excess of its peak over
+  `HDR_BLOOM.muscleFrom`) lived only in the comic patches, which the raw look replaces, so the flash was about 1.8 times
+  dimmer and might not bloom. `patchRawShaders` now carries it for a muscle with the power-up patch (Message 203: the
+  activation as bright as possible).
+- The steps between touching muscles: the optimiser compared a model lightness (the tone's plus step x 0.08), but the
+  drawn colour is clamped to 0.35 .. 0.82, clipped to the gamut and darkened by its storey, so many contacts it counted
+  as told apart were drawn nearly equal (the review: brachialis against the long head of biceps 0.003, adductor magnus
+  against longus 0.003). It now compares the lightness drawn (`drawnMuscleLightness`, the same function as the colour),
+  and each refining pass also tries moving both ends of a touching pair. On the game's body (522 counted contacts):
+  pairs drawn nearly equal (a gap under 0.03) 44 -> 36, pairs short of their goal 215 -> 201, those two pairs 0.046 each.
+
+Not right, or not done:
+- At the start view the gaps are about 2 px: they read as thin black lines between the blocks rather than gaps; from
+  close they open up. They cannot be wider in the strip coordinate without taking the edge movements' shares (above).
+- The big toe's curl takes most of the toe block as seen from the start view (the inner wall is all of it), the other
+  three toe movements a strip next to it; the ankle's "pull the foot up" and the hip's "lift" are the narrowest leg
+  movements (6 to 10 looks in the scan).
+- Touching muscles still drawn nearly equal: 36 contacts, the heaviest the internal oblique against the transversus
+  (mostly hidden under it) and the lateral gastrocnemius against the soleus; three steps cannot part every cluster
+  where four or more muscles touch.
+- The optic nerves have no outline of their own; the brain's line is not drawn where an eyeball lies just beyond it.
+- The cost was measured with a timer on the graphics card, not as frame rate (above); the three screen composites are
+  not in it.
 
 ## 177. No permanent movements: every activation contracts, then simply returns (20 November)
 

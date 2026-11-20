@@ -69,7 +69,8 @@ export const ROOM = Object.freeze({
   // before); no tile lines, no lamps, a wall that is nearly black.
   // (later, the owner: "Let's have much darker blacks instead of ugly grays": about a third again, and neutral instead
   // of blue-grey: 0.0065, 0.0105, 0.0125 before.)
-  pool: Object.freeze({ colour: Object.freeze([0.0028, 0.003, 0.0034]), radiusM: 19, amb: 0.05 }),
+  // (20 November 2026, Message 206: in the raw look the pool is RAW_LOOK.roomPool, the gradient left over a near-black room)
+  pool: Object.freeze({ colour: RAW_LOOK.on && RAW_LOOK.roomPool ? RAW_LOOK.roomPool : Object.freeze([0.0028, 0.003, 0.0034]), radiusM: 19, amb: 0.05 }),
   // 19 November 2026 (eye comfort; the owner liked a plain dark background): the tile lines are barely there (dark 0.55 before).
   tile: Object.freeze({ sizeM: 3, groutM: 0.07, dark: 0 }),
   wall: Object.freeze({ colour: Object.freeze([0.0006, 0.0007, 0.0008]), heightM: 30, lobes: 7, uneven: 0.16 }),

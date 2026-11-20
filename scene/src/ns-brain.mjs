@@ -1349,7 +1349,13 @@ export const MEDIAL_WALL = freezeR2({ bandMm: 4.5, minFacing: 0.5, motorMarginMm
  * left-arm region (action uCentre). R558 (strip audit round 2): both hysteresis widths were 0.01 / 0.004 in the old |x|
  * fraction (about 0.6 / 0.25 mm of |x|); one unit of v is about 2.7 times longer on the gyrus (about 0.006 v per mm along
  * it on FJ1801 / FJ1800), so they are 0.004 / 0.0015 now, the same distances on the brain as before. */
-export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.004, hysteresisActionU: 0.0015 });
+// sliceHalfS (20 November 2026, the owner, Message 206: the strip "completely segmented, so it's a bunch of slice blocks
+// with a little bit of gap in between"): the half-width (strip coordinate) of the gap the renderer draws where two
+// areas meet (ns-scene-three REGION_SLICE); a gaze point inside it takes no area (classifyRegionGaze: 'glass'). 0.001: the
+// gap is cut out of the first and the last movement's share of an area (regionActionAt splits the core), and the
+// narrowest shares are 0.0036 (the hip's six movements); at 0.003 the first hip movement kept a sixth of its share and
+// was not hit once in a scan of the start view. The picture's gap is never under REGION_SLICE.minCss a side.
+export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.004, hysteresisActionU: 0.0015, sliceHalfS: 0.001 });
 
 /** Every left-arm action id the body map may reference via armActionId (the 12 MARKERS actions plus forearm rotation,
  * plus the R558 game-defined left-hand actions of ns-actions EXTRA_ARM_ACTION_IDS). */
@@ -1593,6 +1599,43 @@ export const ALONG_GYRUS = freezeR2({ tipMm: 3, tol: 1e-8, maxIter: 4000, minCot
  * toes back on the medial wall (5 to 8 mm2 left on the crest, from 824). The medial-wall rule (the toes' place) is
  * unchanged. Display layout, not a measured border. */
 export const CREST_COMPRESS = freezeR2({ crestFloor: 0.0279, crestTop: 0.135, gamma: 0.56 });
+/** 20 November 2026 (the owner, Message 204: "make sure there's clear movement for each brain activation area"; the
+ * lead's BODYMAP audit: the toe areas of both halves lay on the medial wall, facing the gap between the halves, and in
+ * some 6 000 looks from the start view one spot of one toe movement was hit): the medial end of the strip is TURNED UP
+ * OVER THE TOP EDGE. The toe block now runs from the depth of the medial wall over its dorsal margin onto the crest of the
+ * convexity, where it faces the player, and the rest of the strip follows in the same order (toes, ankle, knee, hip ...).
+ *  sTop: the medial wall's strip coordinate runs from the medial regions' start (0, the toes' medial end) at its
+ *  deepest point to sTop at its dorsal margin (was the medial regions' end, 0.0663, with the ankle on the upper 58 % of
+ *  the wall). 0: the whole medial wall is the medial end itself (the toes, their first movement), so all four toe
+ *  movements (the four quarters of the toes' core, regionActionAt) lie on the crest, where they can be aimed at. (Tried:
+ *  sTop 0.01395, half of the toes' core on the wall; the deepest movement, curl the big toe, was then still never hit
+ *  from the start view.)
+ *  crestV / gamma: on the primary convexity strip, the along-gyrus v from 0 (the dorsal margin) to crestV is mapped
+ *  linearly to sTop .. crestFloor (the toe block), and v from crestV to crestTop by a power curve (exponent gamma, in
+ *  place of CREST_COMPRESS.gamma) to crestFloor .. crestTop (ankle, knee, hip, the superior in-between area and the
+ *  trunk's start, in their order). From crestTop on (the trunk and everything lateral of it) nothing moves. The
+ *  harmonic v is pinned to 0 on the whole medial wall, so the crest next to the margin holds much area in little v:
+ *  crestV 0.006 gives the toes about 300 mm2 of crest per hemisphere (each of its four movements 40 to 120), and gamma
+ *  0.53 puts the trunk's border (s 0.11655) at the same v as before (0.0963), so the trunk and everything lateral of it
+ *  is exactly where it was (and its label keeps its place), while ankle, knee and hip share the rest (atlas, right / left
+ *  hemisphere: ankle 349 / 365, knee 250 / 239, hip 232 / 264 mm2; before: toes 5 / 8 on the crest, ankle 797 / 766 with
+ *  the upper medial wall, knee 386 / 392, hip 266 / 289). (Tried: crestV 0.024 with the old gamma, toes about 730 mm2
+ *  against ankle 160 and knee 150; gamma 0.45, the trunk grew toward the legs by about 50 mm2 and its label "Belly and
+ *  back" lost its place at the start view and was hidden.) on: false = the layout
+ *  before (toes on the medial wall only). Display layout, not a measured border (the map's text says so: the strip's
+ *  medial edge stands in for the medial wall). */
+export const MEDIAL_TURN = freezeR2({ on: true, sTop: 0, crestV: 0.006, gamma: 0.53 });
+/** The strip coordinate of a primary convexity vertex from its along-gyrus v (CREST_COMPRESS, and MEDIAL_TURN when it
+ * is given and on): v at or above crestTop is kept; below it, with the turn, v 0 .. crestV goes linearly to sTop ..
+ * crestFloor and v crestV .. crestTop by the turn's power curve to crestFloor .. crestTop; without it, v 0 .. crestTop
+ * by CREST_COMPRESS's power curve. Monotone and continuous. */
+export function crestStripS(v, turn = MEDIAL_TURN) {
+  const { crestFloor: f0, crestTop: f1 } = CREST_COMPRESS;
+  if (!(v < f1)) return v;
+  const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0;
+  const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
+  return t && v < x0 ? t.sTop + (f0 - t.sTop) * (Math.max(0, v) / x0) : f0 + (f1 - f0) * Math.pow(Math.max(0, v - x0) / (f1 - x0), g0);
+}
 
 /**
  * Along-gyrus coordinate per vertex (see ALONG_GYRUS). positions / indices: one closed strip mesh (source mm).
@@ -1735,8 +1778,11 @@ export function alongGyrusCoordinate(positions, indices, medialVertex, { tipMm =
  */
 export function segmentMotorStrips(strips, bodyMap, {
   gapTolU = SEGMENT_DEFAULTS.gapTolU, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU,
-  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true, alongGyrus = ALONG_GYRUS
+  medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true, alongGyrus = ALONG_GYRUS,
+  medialTurn = MEDIAL_TURN
 } = {}) {
+  const turn = medialTurn && medialTurn.on === true && medialTurn.crestV > 0 && medialTurn.crestV < CREST_COMPRESS.crestTop &&
+    medialTurn.sTop >= 0 && medialTurn.sTop < CREST_COMPRESS.crestFloor ? medialTurn : null;
   const v = validateBodyMotorMap(bodyMap);
   const extraWarnings = [];
   if (!v.ok) throw new Error(`ns:brain_bodymap: ${v.errors.join('; ')}`);
@@ -1795,7 +1841,7 @@ export function segmentMotorStrips(strips, bodyMap, {
       if (!medialV.some(x => x)) for (let i = 0; i < n; i++) if (Math.abs(pos[3 * i]) - H.lo < medialWall.bandMm) medialV[i] = 1; // no medial-facing triangle: the medial band
       const g = alongGyrusCoordinate(pos, idx, i => medialV[i] === 1, alongGyrus);
       vu = g.v;
-      { const { crestFloor: f0, crestTop: f1, gamma: g0 } = CREST_COMPRESS; for (let i = 0; i < n; i++) if (vu[i] < f1) vu[i] = f0 + (f1 - f0) * Math.pow(vu[i] / f1, g0); }
+      for (let i = 0; i < n; i++) vu[i] = crestStripS(vu[i], turn); // (MEDIAL_TURN: the crest continues the toe block from the medial wall's top)
       coordinate = freezeR2({ kind: 'along-gyrus', iterations: g.iterations, residual: g.residual, vertices: g.vertices, pinnedMedial: g.pinnedMedial, pinnedTip: g.pinnedTip, islands: g.islands });
     } else {
       vu = new Float32Array(n);
@@ -1836,6 +1882,8 @@ export function segmentMotorStrips(strips, bodyMap, {
     H.medial = count >= medialWall.minMedialTriangles && zTop > zBottom
       ? { zTop, zBottom, yLo, yHi, triangleCount: count, sLo: mr.length ? Math.min(...mr.map(r => r.extent[0])) : null, sHi: mr.length ? Math.max(...mr.map(r => r.extent[1])) : null }
       : null;
+    // MEDIAL_TURN: the medial wall ends at sTop at its dorsal margin (the toes), the crest continues from there
+    if (H.medial && turn && H.medial.sLo !== null) H.medial.sHi = Math.max(H.medial.sLo, Math.min(H.medial.sHi, turn.sTop));
   }
   const medialS = (H, z) => {
     const md = H.medial;
@@ -1962,7 +2010,7 @@ export function segmentMotorStrips(strips, bodyMap, {
   }
   const seg = {
     kind: 'ns-motor-segmentation', version: 1, mapVersion: v.version, caveats: v.caveats, citations: v.citations, warnings: freezeR2([...v.warnings, ...extraWarnings]),
-    options: freezeR2({ gapTolU, hysteresisU, hysteresisActionU }),
+    options: freezeR2({ gapTolU, hysteresisU, hysteresisActionU, medialTurn: turn ? freezeR2({ sTop: turn.sTop, crestV: turn.crestV }) : null }),
     regions: outRegions, regionById: new Map(outRegions.map(r => [r.id, r])),
     hemispheres: freezeR2(hemispheres), parts, unassigned, strips: stripTables, coverage: freezeR2(coverage),
     glassGrid: glassMeshes ? buildBrainHitGrid(glassMeshes, { voxelMm: glassVoxelMm }) : null,
@@ -2270,12 +2318,13 @@ function regionResult(kind, extra) {
  * the along-gyrus v on a primary strip), s (the assignment coordinate: u on the convexity, medial depth on the medial
  * wall), surface ('convexity' | 'medial'), meshId,
  * point (source mm), t (mm along the ray), overlaps (ids of other applicable regions whose extents also contain s:
- * representations overlap), via ('dot' | 'strip' | 'grid'), label, bodySide, effector }.
+ * representations overlap), via ('dot' | 'strip' | 'grid' | 'gap': 20 November 2026, in a gap between two blocks, kind 'glass'), label, bodySide, effector }.
  */
 export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
   activeRegionId = null, activeActionId = null, markers = null,
   hysteresisU = seg && seg.options ? seg.options.hysteresisU : SEGMENT_DEFAULTS.hysteresisU,
-  hysteresisActionU = seg && seg.options ? seg.options.hysteresisActionU : SEGMENT_DEFAULTS.hysteresisActionU
+  hysteresisActionU = seg && seg.options ? seg.options.hysteresisActionU : SEGMENT_DEFAULTS.hysteresisActionU,
+  sliceHalfS = SEGMENT_DEFAULTS.sliceHalfS
 } = {}) {
   if (!isSegmentation(seg)) throw new Error('ns:brain_segment: a segmentMotorStrips result is required');
   const o = vec3(rayOriginSrc, 'rayOrigin'), d0 = vec3(rayDirSrc, 'rayDir');
@@ -2331,6 +2380,11 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
     // a point in a map gap keeps its triangle's assignment, as drawn.
     const pointList = owners ? (medialRule ? owners.medial : owners.all) : null;
     const pointOwner = pointList ? regionOwnerAt(pointList, s, seg.options.gapTolU) : null;
+    // 20 November 2026 (Message 206): the gap the renderer draws between two blocks takes no area
+    if (pointOwner && sliceHalfS > 0) {
+      const a = regionOwnerAt(pointList, s - sliceHalfS, seg.options.gapTolU), b = regionOwnerAt(pointList, s + sliceHalfS, seg.options.gapTolU);
+      if ((a && a !== pointOwner) || (b && b !== pointOwner)) return regionResult('glass', { hemisphere: S.hemisphere, u, s, surface, meshId: S.id, point, t: best.t, via: 'gap' });
+    }
     let ri = pointOwner && Number.isInteger(pointOwner.index) ? pointOwner.index : S.triRegion[k];
     if (activeRegionId !== null && owners) {
       const active = seg.regionById.get(activeRegionId);

@@ -684,10 +684,23 @@ export const SIMPLE_LOOK = false;
 export const BODY_STYLE = RAW_LOOK.on ? 'raw' : 'cel';
 /** 20 November 2026 (the raw look): the ink lines of the outline pass (ns-outline setInk: opacities of the strong line
  * between limbs and bodies, the silhouette, the inner depth step and the parting between muscles; and the motor strip's
- * line, its opacity and width in CSS pixels). The reference pictures have no line at all, so the bodies get none and no
- * depth shading either (occlusion off). The motor strip keeps a thin dark contour (a judge panel: without it the pale
- * bands of the strip's areas melted into the pink brain; it is the game's map, not a look): `strip`, `stripCss`. */
-export const RAW_OUTLINE = Object.freeze({ alpha: Object.freeze([0, 0, 0, 0]), strip: 0.9, stripCss: 1.4, occlusion: false });
+ * line, its opacity and width in CSS pixels). The reference pictures have no line at all, so at first the bodies got
+ * none, and no depth shading either (occlusion off, kept). The motor strip keeps a thin dark contour (a judge panel:
+ * without it the pale bands of the strip's areas melted into the pink brain; it is the game's map, not a look): `strip`,
+ * `stripCss`.
+ * Later (the owner, Message 207: "And everything should get clear outlines."): the bodies, the game arm and
+ * the organs get the outline pass's lines again, all by the raw look's ONE ink rule (ns-raw-look RAW_LOOK.ink: one
+ * near-black, one width, one opacity, the same for the strip's contour, the brain's outline and the arrows): the strong
+ * line where one limb or body lies over another and the silhouette of each body against the room or the brain at the
+ * ink's width and opacity, the line of a depth step inside a limb lighter and thinner (innerAlpha, innerCss); no
+ * parting between touching muscles (faint 0: the group tones and the steps between touching muscles, Message 202, tell
+ * them apart). widthsCss: bold, inner, fine in CSS pixels on a near body; taperMin: a far body (the mirror body) keeps at
+ * least this share of the width, so its limbs stay outlined. The brain's own outline and its eyes' and nerves' (brain,
+ * brainCss) are drawn like the strip's line. The strip's blocks need no line of their own: the black gap between them
+ * (REGION_SLICE) is their outline. */
+const RAW_INK = RAW_LOOK.ink;
+export const RAW_OUTLINE = Object.freeze({ alpha: Object.freeze([RAW_INK.alpha, RAW_INK.alpha, RAW_INK.innerAlpha, 0]), strip: RAW_INK.alpha, stripCss: RAW_INK.css, occlusion: false,
+  widthsCss: Object.freeze([RAW_INK.css, RAW_INK.innerCss, 0.6]), colour: RAW_INK.colour, taperMin: RAW_INK.farShare, brain: RAW_INK.alpha, brainCss: RAW_INK.css });
 /** 20 November 2026 (the raw look): the tendon white's weight cut (patchMuscleLookShaders tendonCut). */
 export const RAW_TENDON_CUT = Object.freeze([0.55, 0.9]);
 /** The bones' colour: the raw look's ivory (the reference pictures' RGB 232, 224, 205), else MATERIAL.bone. */
@@ -2047,6 +2060,15 @@ export const REGION_OUTLINE = Object.freeze({ iterations: 2, liftMm: 0.8, minCha
  * part, a light line between body parts (cyan on the left-arm side), and the hovered / switched-on area outlined from
  * the inside. The opposing-action hint (REGION_HINT) is the hinted sub-band of s, soft-edged, in the same pass.
  * Display choices (colours, widths); the area extents are the body map's. */
+/** 20 November 2026 (the owner, Message 206: "let's actually make the motor strip completely segmented, so it's a bunch
+ * of slice blocks with a little bit of gap in between"): every motor area is a separate block. Where two areas meet
+ * along the strip (a seam inside a body part or the gap between body parts) a GAP of the abyss's black is drawn, halfS
+ * of the strip coordinate on each side (the same on the picker: ns-brain classifyRegionGaze `sliceHalfS`, so a look into
+ * a gap takes no area), never narrower than minCss CSS pixels a side so a far strip keeps its blocks (at the start view
+ * that minimum is about the strip width of halfS; from further away the picture's gap is wider than the picker's, by
+ * at most a pixel a side). on: false = the old seams. colour: linear, matte (the gap carries no light of its own and no
+ * glow). The gap is the blocks' outline (Message 207): no other line is drawn round a block. */
+export const REGION_SLICE = Object.freeze({ on: true, halfS: NsBrain.SEGMENT_DEFAULTS.sliceHalfS, minCss: 1.0, colour: Object.freeze([0.0012, 0.0011, 0.0013]) });
 export const REGION_BORDER = Object.freeze({
   /** Owner lookup resolution (texels over s 0..1; every run of the body map is wider than 0.02). */
   texels: 2048,
@@ -2217,8 +2239,11 @@ export function patchRegionBorderShaders(vertexShader, fragmentShader) {
     '\tbool nsMine = abs( nsOwner - nsRegionId ) < 0.5;',
     '\tif ( ! nsMine && ! ( vNsRow.y < 0.5 && nsOwner < - 0.5 ) ) discard;',
     '\tfloat nsDLo = ( nsSv - nsLo ) / nsFw, nsDHi = ( nsHiS - nsSv ) / nsFw;', // CSS px to each end of the run
-    '\tfloat nsSeamCov = 0.0, nsTerrCov = 0.0, nsHiCov = 0.0, nsHintAmt = 0.0;',
+    '\tfloat nsSeamCov = 0.0, nsTerrCov = 0.0, nsHiCov = 0.0, nsHintAmt = 0.0, nsGapCov = 0.0;',
     '\tif ( nsMine ) {',
+    // 20 November 2026 (REGION_SLICE): the gap between two blocks, halfS of s a side (in CSS px: halfS / s per px), at
+    // least minCss
+    '\t\tif ( nsSlice.w > 0.5 ) { float nsGw = max( nsSlice.x / nsFw, nsSlice.y ); nsGapCov = max( nsKLo >= 1.0 ? nsCov( nsDLo, nsGw, nsAA ) : 0.0, nsKHi >= 1.0 ? nsCov( nsDHi, nsGw, nsAA ) : 0.0 ); }',
     '\t\tnsSeamCov = max( nsKLo == 1.0 ? nsCov( nsDLo, nsLineW.x, nsAA ) : 0.0, nsKHi == 1.0 ? nsCov( nsDHi, nsLineW.x, nsAA ) : 0.0 );',
     '\t\tnsTerrCov = max( nsKLo >= 2.0 ? nsCov( nsDLo, nsLineW.y, nsAA ) : 0.0, nsKHi >= 2.0 ? nsCov( nsDHi, nsLineW.y, nsAA ) : 0.0 );',
     '\t\tif ( nsHi.a > 0.0 ) nsHiCov = max( nsKLo >= 1.0 ? nsCov( nsDLo, nsHi.a, nsAA ) : 0.0, nsKHi >= 1.0 ? nsCov( nsDHi, nsHi.a, nsAA ) : 0.0 );',
@@ -2230,15 +2255,17 @@ export function patchRegionBorderShaders(vertexShader, fragmentShader) {
     '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsSeam.rgb, nsSeamCov * nsSeam.a );',
     '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsTerr.rgb, nsTerrCov * nsTerr.a );',
     '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsHi.rgb, nsHiCov );',
-    '\tdiffuseColor.a = max( max( diffuseColor.a + nsHintAmt * nsHint.w, nsHiCov ), max( nsSeamCov * nsSeam.a, nsTerrCov * nsTerr.a ) );'
+    '\tdiffuseColor.a = max( max( diffuseColor.a + nsHintAmt * nsHint.w, nsHiCov ), max( nsSeamCov * nsSeam.a, nsTerrCov * nsTerr.a ) );',
+    '\tdiffuseColor.rgb = mix( diffuseColor.rgb, nsGapCol, nsGapCov ); diffuseColor.a = max( diffuseColor.a, nsGapCov );'
   ].join('\n');
   const emissive = [
     '\ttotalEmissiveRadiance *= 1.0 - 0.75 * max( nsSeamCov * nsSeam.a, nsTerrCov * nsTerr.a );',
     '\ttotalEmissiveRadiance += nsTerr.rgb * ( nsTerrCov * nsTerr.a * nsTerrGlow );',
     '\ttotalEmissiveRadiance = mix( totalEmissiveRadiance, nsHi.rgb * nsBorderAA.z, nsHiCov );',
-    '\ttotalEmissiveRadiance += nsHintColor * nsHintAmt;'
+    '\ttotalEmissiveRadiance += nsHintColor * nsHintAmt;',
+    '\ttotalEmissiveRadiance *= 1.0 - nsGapCov;'
   ].join('\n');
-  const head = 'uniform sampler2D nsOwnTex;\nuniform vec2 nsOwnInfo;\nuniform float nsRegionId;\nuniform vec4 nsSeam;\nuniform vec4 nsTerr;\nuniform float nsTerrGlow;\n' +
+  const head = 'uniform sampler2D nsOwnTex;\nuniform vec2 nsOwnInfo;\nuniform float nsRegionId;\nuniform vec4 nsSeam;\nuniform vec4 nsTerr;\nuniform float nsTerrGlow;\nuniform vec4 nsSlice;\nuniform vec3 nsGapCol;\n' +
     'uniform vec4 nsLineW;\nuniform vec4 nsHi;\nuniform vec4 nsHint;\nuniform vec3 nsHintColor;\nuniform vec4 nsBorderAA;\nvarying float vNsS;\nvarying vec2 vNsRow;\nvarying float vNsCav;\n' +
     'float nsCov( float d, float w, float aa ) { return 1.0 - smoothstep( w - aa, w + aa, d ); }\n';
   return {
@@ -2437,7 +2464,10 @@ export function boundaryEdges(indices, vertexCount) {
  * would open a hole into the dark: with SCAN_AS_BRAIN they are drawn as the brain is, in the cortex's crown colour
  * (ns-brain-ink BRAIN_FLESH_LOOK), opaque and without a light of their own, and the strip's dark contour (ns-outline
  * setStrip) leaves them out, so the brain reads as one surface between the coloured areas. */
-export const SCAN_AS_BRAIN = true;
+// (20 November 2026, later, the owner, Message 206: "perhaps let's go back to making the non-active parts of the motor
+// strip a black abyss": false again. The inter-effector areas are drawn in their own near-black, matte, so the coloured
+// areas stand out; and with REGION_SLICE every area is a block with a gap of the same black round it.)
+export const SCAN_AS_BRAIN = false;
 const SCAN_BRAIN_LINEAR = Object.freeze(BRAIN_FLESH_LOOK.crown.map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)));
 /** Whether a body-map region is one of the strip's inter-effector (SCAN) areas. Pure. */
 export function isScanArea(region) {
@@ -5019,7 +5049,7 @@ export function createScene({
   const scene = new THREE.Scene();
   { // R558 (Message 22; Message 24 put space black back: MATERIAL.backgroundGradient null): a gradient texture if one is set, else the flat colour
     const bg = clinicalBackground(THREE, canvas && canvas.ownerDocument);
-    scene.background = bg ? keep(bg) : new THREE.Color(BODY_STYLE === 'raw' ? 0x121216 : MATERIAL.background); // 20 November 2026: the raw look's near-black
+    scene.background = bg ? keep(bg) : new THREE.Color(BODY_STYLE === 'raw' ? 0x040405 : MATERIAL.background); // 20 November 2026: the raw look's near-black (Message 206: an abyss)
   }
   // 18 November ("something should be done about the endless black space"): the room (ns-room), a dark operating
   // theatre out of focus, drawn behind everything. The flat colour above stays as the clear colour under it.
@@ -5041,11 +5071,13 @@ export function createScene({
   // R558 (Message 20, ns-outline): body meshes register below (setArm, setBody); the composite draws first of the
   // transparent list, so glass, areas, glow and arrows are blended over the lines as over the bodies.
   const outline = createOutlinePass({ THREE, renderer, enabled: !SIMPLE_LOOK });
-  if (BODY_STYLE === 'raw' && typeof outline.setInk === 'function') outline.setInk(RAW_OUTLINE.alpha, RAW_OUTLINE.strip, RAW_OUTLINE.stripCss); // 20 November 2026
+  if (BODY_STYLE === 'raw' && typeof outline.setInk === 'function') outline.setInk(RAW_OUTLINE.alpha, RAW_OUTLINE.strip, RAW_OUTLINE.stripCss, { widths: RAW_OUTLINE.widthsCss, colour: RAW_OUTLINE.colour, taperMin: RAW_OUTLINE.taperMin, brainAlpha: RAW_OUTLINE.brain, brainCss: RAW_OUTLINE.brainCss }); // 20 November 2026
   scene.add(outline.composite);
   // R558 BB: the motor strip's ink silhouette, after the areas and before the glass (RENDER_ORDER.regionLine + 0.05).
   outline.stripComposite.renderOrder = RENDER_ORDER.regionLine + 0.05;
   scene.add(outline.stripComposite);
+  // 20 November 2026 (Message 207): the brain's own outline and its eyes', right after the glass
+  if (outline.brainComposite) { outline.brainComposite.renderOrder = RENDER_ORDER.glass + 0.05; scene.add(outline.brainComposite); }
   disposables.push({ dispose: () => outline.dispose() });
   // 18 November 2026 (SEE, ns-see): a limb covered by another limb or the trunk is drawn over it as a ghost (its line and a
   // soft fill, stronger when the limb is locked away).
@@ -5289,6 +5321,12 @@ export function createScene({
     const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
     outline.stripMaterial.onBeforeCompile = shader => { liveCompile(shader, u); };
     outline.stripMaterial.customProgramCacheKey = () => 'ns-live-outline-strip';
+  }
+  // 20 November 2026 (Message 207): and its picture of the brain and its eyes (the brain's own outline)
+  for (const m of outline.brainMaterials || []) {
+    const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
+    m.onBeforeCompile = shader => { liveCompile(shader, u); };
+    m.customProgramCacheKey = () => 'ns-live-outline-brain';
   }
   // 19 November 2026 (SEE): the hidden-things pass's own picture of the brain follows the wobble and the blooms the same
   // way (it is kept between frames too; ghost.touchBrain() has it drawn again while they move).
@@ -5672,7 +5710,10 @@ export function createScene({
     nsOwnTex: { value: null }, nsOwnInfo: { value: new THREE.Vector2(REGION_BORDER.texels, 0) },
     nsSeam: { value: new THREE.Vector4(REGION_BORDER.seamColor[0], REGION_BORDER.seamColor[1], REGION_BORDER.seamColor[2], REGION_BORDER.seamAlpha) },
     nsLineW: { value: new THREE.Vector4(REGION_BORDER.seamPx, REGION_BORDER.territoryPx, 0, 1) },
-    nsBorderAA: { value: new THREE.Vector4(REGION_BORDER.aaPx, REGION_BORDER.hintSoftPx, REGION_BORDER.highlightGlow, REGION_BORDER.cavity) }
+    nsBorderAA: { value: new THREE.Vector4(REGION_BORDER.aaPx, REGION_BORDER.hintSoftPx, REGION_BORDER.highlightGlow, REGION_BORDER.cavity) },
+    // 20 November 2026 (REGION_SLICE): the gaps between the blocks
+    nsSlice: { value: new THREE.Vector4(REGION_SLICE.halfS, REGION_SLICE.minCss, 0, REGION_SLICE.on ? 1 : 0) },
+    nsGapCol: { value: new THREE.Vector3(REGION_SLICE.colour[0], REGION_SLICE.colour[1], REGION_SLICE.colour[2]) }
   };
   const borderHoverColor = new THREE.Color(REGION_RENDER.hoverLine), borderMarkColor = new THREE.Color(REGION_RENDER.activatedLine);
   const borderLeftArmColor = new THREE.Color(REGION_RENDER.territoryLine);
@@ -5980,6 +6021,14 @@ export function createScene({
       }
     }
     organs.beat.value[3] = reducedMotion ? 0 : ORGANS.beatSwell * brainLive.beat;
+    // 20 November 2026 (Message 207): the outline pass draws the heart with the same swell (ns-outline nsOutlineLocal),
+    // so its line beats with it instead of standing at the resting size
+    { const b = organs.beat.value, k = 1 + b[3], L = organs.local || (organs.local = new THREE.Matrix4());
+      if (organs.localK !== k) {
+        organs.localK = k;
+        L.set(k, 0, 0, b[0] * (1 - k), 0, k, 0, b[1] * (1 - k), 0, 0, k, b[2] * (1 - k), 0, 0, 0, 1);
+        for (const m of [...organs.own, ...organs.mirror]) if (m.userData && m.userData.nsOrgan === 'heart') m.userData.nsOutlineLocal = L;
+      } }
   }
   /** ORGANS as plain numbers (QA): built, host, triangles by part, meshes and how many are shown, poses written, the
    * heart's swell this frame. */
@@ -6410,6 +6459,7 @@ export function createScene({
       const p = patchRawShaders(shader.vertexShader, shader.fragmentShader);
       rawLook.applied = p !== null && rawLook.applied !== false;
       if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
+      if (p && p.hdrBoost) { shader.uniforms.nsHdrBoost = comicUniforms.nsHdrBoost; rawLook.hdrBoost = (rawLook.hdrBoost || 0) + 1; } // the power-up flash's HDR boost (set in render)
     });
   };
   const plainLook = { applied: null, materials: 0 };
@@ -7581,6 +7631,9 @@ export function createScene({
     // draw), its motor areas (one draw, a code per vertex) and the eyeballs with their nerves.
     ghost.setBrain({ group: brainGroup, surface: glassAll.shell, areas: seeAreas, parts: brainEyes.meshes,
       areaOwners: regionBorder.applied !== false && borderShared.nsOwnTex.value ? { texture: borderShared.nsOwnTex.value, texels: REGION_BORDER.texels, codes: seeAreaCodes } : null });
+    // 20 November 2026 (Message 207): the same surface and the eyeballs for the brain's own outline (ns-outline setBrain).
+    // (Not the optic nerves: a few pixels thick, the line of 1.4 px a side covered them whole and drew them black.)
+    if (typeof outline.setBrain === 'function') outline.setBrain({ group: brainGroup, surface: glassAll.shell, parts: brainEyes.balls });
     rayTargets = regionMode ? [...glass, ...regionMeshes, ...brainEyes.meshes] : [...glass, strip.mesh, ...brainEyes.meshes]; // HUD-only raycast targets, built once
     for (const m of rayTargets) fastPick(m); // R558: rigid under the brain group
     brainSamples = sampleBrain(glassList, regionMode ? seg.strips : (focus ? [focus] : []));

@@ -1238,14 +1238,37 @@ export const MUSCLE_GROUP_LOOK = freeze({ vary: 0.07, steps: 5 });
 // 16-32.)
 export const MUSCLE_STEP = freeze({ stepL: 0.08, stepH: 4, steps: freeze([-1, 0, 1]), sameGoal: 0.08, otherGoal: 0.15, minContact: 4, refinePasses: 16, minL: 0.35, maxL: 0.82,
   seen: freeze({ outer: 1, intermediate: 0.6, deep: 0.2 }) });
+/** The OKLab lightness of a LINEAR RGB colour. Pure. */
+export function linearOkL(rgb) {
+  const [r, g, b] = rgb;
+  const l = Math.cbrt(Math.max(0, 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b));
+  const m = Math.cbrt(Math.max(0, 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b));
+  const s = Math.cbrt(Math.max(0, 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b));
+  return 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+}
+/** The OKLab lightness a muscle is DRAWN with at rest in the raw look: of muscleGroupBaseInto's colour for its group,
+ * storey and step (the clamp to [minL, maxL], the gamut and the storey shade included). Pure. */
+export function drawnMuscleLightness(group, level, step, so = MUSCLE_STEP) {
+  return linearOkL(muscleGroupBaseInto(group, 'k', level, [0, 0, 0], undefined, undefined, Number.isFinite(step) ? step : 0, so));
+}
 /** Steps for the muscles (pure, deterministic). keys: side-free muscle keys; contacts: Map key -> Map(neighbour key ->
- * shared cells); groupOf(key): the key's group; toneL(group): the group tone's OKLCH lightness. Returns Map key -> step
- * (one of o.steps), and on the map .worst { same, other }: the smallest lightness gap left between two touching
- * muscles (contacts of at least minContact cells) of the same group and of different groups. */
-export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STEP, layerOf = null) {
+ * shared cells); groupOf(key): the key's group; toneL(group): the group tone's OKLCH lightness (now only which keys take
+ * part: a key whose toneL is not a number is left out). layerOf(key): its storey. Returns Map key -> step (one of
+ * o.steps), and on the map .worst { same, other, short, heaviestShort, contacts, nearlyEqual }: the smallest lightness gap left between two touching muscles
+ * (contacts of at least minContact cells) of the same group and of different groups.
+ * 20 November 2026 (a review of Body update 59): the lightness the optimiser compares is the lightness DRAWN
+ * (drawnMuscleLightness: muscleGroupBaseInto's clamp, gamut and storey shade), not the model tone L + step x stepL:
+ * with the model, 89 of the 456 contacts it counted as told apart were drawn nearly equal (brachialis against the long
+ * head of biceps 0.003, adductor magnus against longus 0.003). `lightOf(key, step)` may replace it (tests). Each refine
+ * pass also tries moving both ends of a touching pair together (a single move can be stuck). On the game's body (522
+ * counted contacts): touching muscles drawn nearly equal (gap under 0.03) 44 -> 36, contacts short of their goal
+ * 215 -> 201 (most of them 0.05 to 0.08 apart: the clamp at maxL and the storey shade), the two pairs above 0.046.
+ * .gaps lists every counted contact [key, key, weight, drawn gap]. */
+export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STEP, layerOf = null, lightOf = null) {
   const list = [...new Set(keys)].map(String);
-  const G = new Map(list.map(k => [k, groupOf(k)])), L0 = new Map(list.map(k => [k, toneL(G.get(k))]));
-  const seen = k => { const l = typeof layerOf === 'function' ? layerOf(k) : null; return o.seen && Number.isFinite(o.seen[l]) ? o.seen[l] : 1; };
+  const G = new Map(list.map(k => [k, groupOf(k)])), L0 = new Map(list.filter(k => Number.isFinite(toneL(G.get(k)))).map(k => [k, toneL(G.get(k))]));
+  const layer = k => (typeof layerOf === 'function' ? layerOf(k) : null);
+  const seen = k => { const l = layer(k); return o.seen && Number.isFinite(o.seen[l]) ? o.seen[l] : 1; };
   const nbCache = new Map();
   const nb = k => {
     let r = nbCache.get(k);
@@ -1255,7 +1278,13 @@ export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STE
   const deg = new Map(list.map(k => [k, nb(k).reduce((s, [, w]) => s + w, 0)]));
   list.sort((a, b) => deg.get(b) - deg.get(a) || (a < b ? -1 : a > b ? 1 : 0));
   const step = new Map();
-  const Lof = (k, st) => L0.get(k) + st * o.stepL;
+  const lCache = new Map();
+  const Lof = (k, st) => {
+    const ck = `${k}\u0000${st}`;
+    let v = lCache.get(ck);
+    if (v === undefined) { v = typeof lightOf === 'function' ? lightOf(k, st) : drawnMuscleLightness(G.get(k), layer(k), st, o); lCache.set(ck, v); }
+    return v;
+  };
   const costOf = (k, st) => {
     let c = 0;
     for (const [n, w] of nb(k)) {
@@ -1274,6 +1303,11 @@ export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STE
     }
     step.set(k, best);
   }
+  // (pairs: the touching pairs, heaviest first; a move of one muscle alone can be stuck where moving both ends of a
+  // contact together is better, so each pass tries those too)
+  const pairs = [];
+  for (const k of list) for (const [n, w] of nb(k)) if (k < n) pairs.push([k, n, w]);
+  pairs.sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
   for (let pass = 0; pass < o.refinePasses; pass++) {
     let changed = 0;
     for (const k of list) {
@@ -1281,19 +1315,34 @@ export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STE
       for (const st of o.steps) { if (st === cur) continue; const c = costOf(k, st); if (c < bestCost - 1e-9) { bestCost = c; best = st; } }
       if (best !== cur) { step.set(k, best); changed++; }
     }
+    for (const [k, n] of pairs) {
+      const ck = step.get(k), cn = step.get(n);
+      const base = costOf(k, ck) + costOf(n, cn);
+      let best = null, bestCost = base - 1e-9;
+      for (const a of o.steps) for (const b of o.steps) {
+        if (a === ck && b === cn) continue;
+        step.set(k, a); step.set(n, b);
+        const c = costOf(k, a) + costOf(n, b);
+        step.set(k, ck); step.set(n, cn);
+        if (c < bestCost) { bestCost = c; best = [a, b]; }
+      }
+      if (best) { step.set(k, best[0]); step.set(n, best[1]); changed++; }
+    }
     if (!changed) break;
   }
-  let same = Infinity, other = Infinity;
-  const short = [];
+  let same = Infinity, other = Infinity, contactsN = 0, nearlyEqual = 0;
+  const short = [], near = [], gaps = [];
   for (const k of list) for (const [n, w] of nb(k)) {
     if (n < k) continue;
     const d = Math.abs(Lof(k, step.get(k)) - Lof(n, step.get(n))), sg = G.get(n) === G.get(k);
+    contactsN++; gaps.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]); if (d < 0.03) { nearlyEqual++; near.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]); }
     if (sg) same = Math.min(same, d); else other = Math.min(other, d);
     if (d < (sg ? o.sameGoal : o.otherGoal) - 1e-9) short.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]);
   }
   short.sort((a, b) => b[2] - a[2]);
+  step.gaps = gaps; // every counted contact: [key, key, weight, drawn lightness gap]
   step.worst = { same: Number.isFinite(same) ? Math.round(same * 1000) / 1000 : null, other: Number.isFinite(other) ? Math.round(other * 1000) / 1000 : null,
-    short: short.length, heaviestShort: short.slice(0, 12) };
+    short: short.length, heaviestShort: short.slice(0, 12), contacts: contactsN, nearlyEqual, heaviestNearlyEqual: near.sort((a, b) => b[2] - a[2]).slice(0, 12) };
   return step;
 }
 /** The group of a muscle from its catalogue name (null or unknown: 'other'). Pure. */
