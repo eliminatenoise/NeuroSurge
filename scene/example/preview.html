@@ -12,9 +12,10 @@
 <link rel="stylesheet" href="./assembly.css">
 <link rel="stylesheet" href="./quiet.css">
 <link rel="stylesheet" href="./action-chat.css">
+<link rel="stylesheet" href="./activity-map.css">
 </head>
 <body>
-<aside class="preview-note" aria-label="Preview status">Simulated activity · experimental preview · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">notes and credits</a> · <button type="button" class="ns-chat-open" id="ns-chat-open" aria-haspopup="dialog" disabled>F · Move by words</button> · <button type="button" class="ns-chat-open" id="ns-camera-open" disabled>C · Use camera</button></aside>
+<aside class="preview-note" aria-label="Preview status">Simulated activity · experimental preview · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">notes and credits</a> · <button type="button" class="ns-chat-open" id="ns-chat-open" aria-haspopup="dialog" disabled>F · Move by words</button> · <button type="button" class="ns-chat-open" id="ns-camera-open" disabled>C · Use camera</button> · <button type="button" class="ns-chat-open" id="ns-activity-open" aria-haspopup="dialog" disabled>M · Activity map</button></aside>
 <main id="ns-app" class="ns-app" data-ns-read="read"
       data-manifest-url="../../inputs/MESH-MANIFEST.json"
       data-packet-pov-demo-assets="../../packets/pov-demo-assets/"
@@ -23,7 +24,7 @@
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."
           aria-describedby="ns-game-keys"></canvas>
-  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of the right arm. Press Escape for controls and settings.</p>
+  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of the right arm. Press M for the activity map. Press Escape for controls and settings.</p>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
@@ -40,6 +41,57 @@
     </menu>
     <p role="status"></p>
   </form>
+</dialog>
+<dialog id="ns-activity-map" class="activity-map" aria-labelledby="ns-activity-title">
+  <header class="activity-head"><h1 id="ns-activity-title">Activity map</h1><button type="button" data-close autofocus>Back to game</button></header>
+  <div class="activity-switch" role="group" aria-label="Map view">
+    <button type="button" data-tab="recording" aria-pressed="true" aria-controls="ns-act-recording">Recorded wrist</button>
+    <button type="button" data-tab="game" aria-pressed="false" aria-controls="ns-act-game">Game pathways</button>
+  </div>
+  <section id="ns-act-recording" aria-label="Recorded right wrist">
+    <p class="activity-kicker">NEUROHANDLER · DEXTERITY</p>
+    <h2>A right wrist points to a target</h2>
+    <p>The participant saw a target on a screen. Its visual go marker sets time zero. Our description is “bend the right wrist toward the palm.” The encoder moved from 2.6° of extension at the cue to 49.3° of flexion 2.5 seconds later.</p>
+    <div class="activity-anatomy" aria-label="Schematic of the right wrist pathways">
+      <div class="activity-direction">Motor commands · efferent <span aria-hidden="true">→</span></div>
+      <div class="activity-nodes"><span><strong>Brain</strong><small>Scalp EEG</small></span><i aria-hidden="true">⇄</i><span><strong>Spinal cord</strong><small>Unmeasured</small></span><i aria-hidden="true">⇄</i><span><strong>Forearm &amp; wrist</strong><small>EMG · encoder</small></span></div>
+      <div class="activity-direction sensory"><span aria-hidden="true">←</span> Sensory return · afferent</div>
+      <p>Arrows sketch travel toward the muscles and back toward the brain. Neither nerve traffic nor spinal firing was recorded.</p>
+    </div>
+    <p class="activity-status" data-clip-status role="status">Opening the recording…</p>
+    <div data-replay hidden>
+      <div class="activity-transport">
+        <button type="button" data-play>Play recording</button>
+        <label>Time from cue <input type="range" data-seek min="0" max="1536" step="1"></label>
+        <output data-clock aria-live="off"></output>
+      </div>
+      <div class="activity-traces" data-traces aria-label="Aligned recorded signals"></div>
+      <div class="activity-times" aria-hidden="true"><span>−0.50 s</span><span>+2.50 s</span></div>
+      <p class="activity-note">Scalp voltage at C3, a surface electrode pair over the right flexor carpi radialis, and two angles from the wrist encoder. Negative extension means flexion. The dotted line marks the go cue. EMG measures electrical activity; muscle force and sensory nerve firing were unmeasured.</p>
+      <details data-model><summary>Compare a 250 ms forecast with the encoder</summary>
+        <p>The wrist model uses the preceding half-second of recordings. Each forecast stops 250 ms short of its target. Each input choice averages its three independently seeded fits.</p>
+        <p data-model-status role="status"></p>
+        <div data-comparison hidden>
+          <label>Forecast target <select data-target></select></label>
+          <table><caption>Angles at the selected target, in degrees</caption><thead><tr><th scope="col">Source</th><th scope="col">Extension</th><th scope="col">Radial deviation</th></tr></thead><tbody data-forecast-table></tbody></table>
+          <p class="activity-note">The hold forecast repeats the last encoder reading. The fitted forecasts use cue time with wrist history, then with scalp EEG added. This single development trial illustrates their errors. It cannot establish accuracy on other people or tasks.</p>
+        </div>
+      </details>
+    </div>
+    <details><summary>Where the recording comes from</summary>
+      <p>WristMotion v3 · sub-41 · run 03 · first pointing trial. All four traces use the same stored 512 Hz clock. The encoder updates at 100 Hz; physical timing offsets between instruments remain unknown. The plotted interval runs from 0.50 s before the visual go marker through 2.50 s after it. These are offline readings of a human right wrist.</p>
+      <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt subtracts the two forearm electrodes and converts the device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
+    </details>
+  </section>
+  <section id="ns-act-game" aria-label="Simulated game pathways" hidden>
+    <h2>Trace a virtual movement</h2>
+    <p>Choose a motor-strip region and a movement from the playable body. The arrows show anatomical direction schematically. Signal strength, travel time and sensory activity along these routes were unmeasured.</p>
+    <div class="activity-choices"><label>Body region <select data-region></select></label><label>Movement <select data-action></select></label></div>
+    <div class="activity-route"><strong>Motor · efferent</strong><p data-motor></p></div>
+    <div class="activity-route sensory"><strong>Sensory · afferent</strong><p data-sensory></p></div>
+    <p data-muscles></p><button type="button" data-move>Try this movement in the game</button>
+    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C estimates right shoulder and elbow angles from a camera. The recording and forecast cover a single wrist task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
+  </section>
 </dialog>
 <!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->
 <div class="ns-load ns-load-early" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">

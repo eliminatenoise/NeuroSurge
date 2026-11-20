@@ -1,0 +1,49 @@
+.activity-map { box-sizing:border-box; width:min(45rem,calc(100vw - 1.25rem)); max-height:90dvh; overflow:auto; overscroll-behavior:contain; padding:clamp(.85rem,3vw,1.7rem); color:#e5edf4; background:#101922; border:1px solid #708494; border-radius:.8rem; font:1rem/1.45 system-ui,sans-serif; color-scheme:dark }
+.activity-map::backdrop { background:#071016b8 }
+.activity-map [hidden] { display:none!important }
+body:has(.activity-map[open]) #ns-shell-root { visibility:hidden }
+.activity-head,.activity-switch,.activity-choices,.activity-transport { display:flex; align-items:center; flex-wrap:wrap; gap:.7rem }
+.activity-head { justify-content:space-between }
+.activity-head h1 { margin:0; font-size:1.3rem }
+.activity-switch { margin:1rem 0 1.25rem; gap:.3rem }
+.activity-map h2 { font-size:clamp(1.3rem,4vw,1.85rem); line-height:1.15; margin:.45rem 0 }
+.activity-map p { margin:.65rem 0 }
+.activity-map .activity-kicker { color:#9bd4c7; font-size:.71rem; font-weight:700; letter-spacing:.11em }
+.activity-map button,.activity-map select { font:inherit; font-size:.9rem; color:inherit; background:#192938; border:1px solid #607789; border-radius:.35rem; padding:.38rem .6rem; cursor:pointer }
+.activity-switch [aria-pressed=true],.activity-map [data-play],.activity-map [data-move] { background:#bce9dd; color:#132c25; border-color:#bce9dd }
+.activity-map :focus-visible { outline:3px solid #f1d66b; outline-offset:2px }
+.activity-map [data-replay] { margin-top:1rem }
+.activity-transport label { flex:1; display:flex; flex-direction:column; color:#bbcad6; font-size:.78rem; min-width:8rem }
+.activity-transport input { accent-color:#abdecf; width:100%; margin:0; min-height:1.6rem }
+.activity-transport output, .activity-trace output,.activity-map td { font-variant-numeric:tabular-nums }
+.activity-traces { margin-top:.7rem }
+.activity-trace { padding:.3rem .55rem; background:#0b141b; border-bottom:1px solid #2d3d49 }
+.activity-trace-head,.activity-times { display:flex; justify-content:space-between; gap:.5rem; align-items:center; font-size:.81rem }
+.activity-trace-head small { color:#b8c6d2; font-size:.73rem; margin-left:.5rem }
+.activity-trace svg { width:100%; height:2.4rem; display:block; overflow:visible }
+.activity-trace svg line,.activity-trace path { vector-effect:non-scaling-stroke; fill:none }
+.activity-cursor { stroke:#fff; stroke-width:1.5 }
+.activity-times,.activity-map .activity-note { color:#c1ccd6; font-size:.83rem }
+.activity-map details { margin:1rem 0 .2rem; border-top:1px solid #3c4e5d; padding-top:.7rem }
+.activity-map summary { cursor:pointer; font-weight:650; color:#bde5ff }
+.activity-map table { border-collapse:collapse; width:100%; margin:.75rem 0; font-size:.87rem }
+.activity-map th,.activity-map td { text-align:right; padding:.34rem; border-bottom:1px solid #3c4e5d }
+.activity-map th:first-child,.activity-map caption { text-align:left }
+.activity-map caption { padding:.25rem 0 }
+.activity-map a { color:#bde5ff }
+.activity-choices { align-items:flex-start; margin:.8rem 0 }
+.activity-choices label { display:grid; gap:.2rem; font-size:.85rem; max-width:100% }
+.activity-choices select { max-width:100% }
+.activity-route { border-left:3px solid #efa568; padding:.3rem .8rem; margin:.65rem 0; background:#18232d }
+.activity-route.sensory { border-color:#82c6ee }
+.activity-route p { margin:.2rem 0 }
+.activity-status:empty { display:none }
+.activity-anatomy { margin:1rem 0; padding:.65rem .8rem; border:1px solid #3c4e5d; border-radius:.45rem }
+.activity-nodes { display:grid; grid-template-columns:1fr auto 1fr auto 1fr; align-items:center; gap:.25rem; margin:.25rem 0 }
+.activity-nodes > span { background:#1b2b36; padding:.4rem; text-align:center; border-radius:.25rem }
+.activity-nodes strong,.activity-nodes small { display:block; font-size:.82rem }
+.activity-nodes small,.activity-anatomy p { font-size:.73rem; color:#c1ccd6 }
+.activity-nodes i { font-style:normal; color:#aebdc7 }
+.activity-direction { text-align:right; font-size:.75rem; color:#f6b985; font-weight:650 }
+.activity-direction.sensory { text-align:left; color:#92cfff }
+.activity-anatomy p { margin:.5rem 0 0 }

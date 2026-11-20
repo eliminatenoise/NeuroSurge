@@ -436,3 +436,7 @@ neural-to-muscle decoder.
 - The reference images used by independent reviewers (section 1.1) are not included.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
 - Development tests, test harnesses and acquisition evidence are not part of the player distribution.
+
+## Recorded wrist activity map
+
+The four trace excerpts and associated forecast-input features in `inputs/activity/wrist-pointing.json` derive from the CC BY 4.0 *EEG-EMG-WristMotion Dataset*, v3, by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. The accompanying model runner is the project-authored NeuroTranslation wrist temporal R1 release under CC0. The attribution, precise source, transformations and licence links are in [Activity map](ACTIVITY-MAP.md).

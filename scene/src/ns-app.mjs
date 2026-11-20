@@ -61,6 +61,7 @@
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
 import { bindActionChat } from './ns-action-chat.mjs';
+import { bindActivityMap } from './activity/map.mjs';
 import { createCameraCapture } from './camera.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
@@ -6394,6 +6395,7 @@ export function start(params = {}) {
     if (shell) shell.render(after);
     if (chatOpen) chatOpen.disabled = !shellIsPlaying(after) || after.contextLost;
     if (cameraOpen) cameraOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (activityOpen) activityOpen.disabled = !shellIsPlaying(after) || after.contextLost;
   }
 
   /** Start / resume from the overlay click (a user gesture): leave the overlay at once and request pointer capture;
@@ -6633,6 +6635,8 @@ export function start(params = {}) {
     obj.addEventListener(type, fn, opts);
     pageListeners.push([obj, type, fn, opts]);
   };
+  const activityDialog = doc.getElementById?.('ns-activity-map');
+  const activityOpen = doc.getElementById?.('ns-activity-open');
   const chatDialog = doc.getElementById?.('ns-action-chat');
   const chatOpen = doc.getElementById?.('ns-chat-open');
   const cameraOpen = doc.getElementById?.('ns-camera-open');
@@ -6658,8 +6662,8 @@ export function start(params = {}) {
       toggleCamera();
     }, true);
   }
-  const disposeChat = chatDialog && chatOpen ? bindActionChat({
-    dialog: chatDialog, trigger: chatOpen, canvas,
+  const dialogControls = {
+    canvas,
     canOpen: () => gameReady() && shellIsPlaying(shellState),
     pause() {
       dispatch({ type: 'pause' });
@@ -6673,6 +6677,13 @@ export function start(params = {}) {
       if (action) carryRawEvents.push({ ...action, timeMs: clockMs() });
     },
     getBodyMap: () => bodyMapOf(mods.bodyMap)
+  };
+  const disposeChat = chatDialog && chatOpen ? bindActionChat({
+    ...dialogControls, dialog: chatDialog, trigger: chatOpen
+  }) : null;
+  const disposeActivity = activityDialog && activityOpen ? bindActivityMap({
+    ...dialogControls, dialog: activityDialog, trigger: activityOpen,
+    getCurrentRegion: () => simState?.gaze?.regionId || simState?.rawGaze?.regionId
   }) : null;
   // 19 November 2026 (found with random input). THE WHEEL NEVER LEAVES THE GAME. The game has no use for the wheel, and
   // a wheel turn the page does not use goes to the browser: in Chromium on Linux a turn with Shift held goes BACK in
@@ -6724,6 +6735,7 @@ export function start(params = {}) {
     raf = 0;
     if (unbind) { unbind(); unbind = null; }
     if (!stopped) {
+      disposeActivity?.();
       disposeChat?.();
       motionCamera?.dispose();
       exitLock();
@@ -11211,6 +11223,7 @@ export function start(params = {}) {
     if (stopped) return;
     clearNativeEscape();
     stopped = true;
+    disposeActivity?.();
     disposeChat?.();
     motionCamera?.dispose();
     cancelPendingGameplay('stop');
