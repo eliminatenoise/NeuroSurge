@@ -4262,8 +4262,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 946545,
-      "sha256": "8cca1d97b8b47032a30792fc09e120e259cbe2ad9d0296054be225f827ce0a1d"
+      "bytes": 946869,
+      "sha256": "af6747f16bf1865a083bc875b57a1d4dc61fffd0621c6490585659f9ac8cc8cd"
     },
     {
       "path": "scene/src/ns-arm.mjs",

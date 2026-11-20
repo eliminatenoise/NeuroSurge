@@ -5690,7 +5690,7 @@ export function start(params = {}) {
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
-  let motionCamera = null, pendingCameraPose = null, trackedCameraLimb = null;
+  let motionCamera = null, pendingCameraPose = null, trackedCameraLimb = null, trackedLeftArm = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
   const frameTimer = createFrameTimer(); // 18 November 2026 (performance): frame time by part (ns-perf; inspect().perf)
   /* 19 November 2026 (performance): what is under the crosshair (targetsAt: a ray against every drawn mesh, 2 to 6 ms)
@@ -6812,6 +6812,10 @@ export function start(params = {}) {
         // visible pose until another camera sample or game movement changes it.
         pendingCameraPose = gameReady() && shellIsPlaying(shellState) ? pose : null;
         trackedCameraLimb = pendingCameraPose ? limb : null;
+        // Pose events for the joint controller are consumed once per camera
+        // sample. The left-arm solver needs its target on every render frame
+        // until a new sample, loss, stop or change of selected limb replaces it.
+        trackedLeftArm = pendingCameraPose?.leftArm ?? null;
       }
     });
     const toggleCamera = () => {
@@ -10317,7 +10321,7 @@ export function start(params = {}) {
           ...(armTurnSeen ? { armTurn: armTurnSeen } : {}), // R558 (Space dance): the game arm's shown radius / upper-arm turn
           // 19 November 2026 (ns-arm FREE_HAND): the left hand keeps its place beside the shoulder; while the left arm is
           // the chosen limb the hold gives its place (carried by the look, moved by the keys)
-          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, cameraArm: cameraPoseSample?.leftArm, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}) } } : {}),
+          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, cameraArm: live ? trackedLeftArm : null, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}) } } : {}),
           // 19 November 2026: the left hand's fingers close as the look goes down and open as it goes up (GRIP_FEET.look,
           // the left hand's share of the owner's Message 173), and the limb turn's side lights the game arm's flexors
           // or extensors (TURN_SIDES)
