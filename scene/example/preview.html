@@ -11,9 +11,10 @@
 <link rel="stylesheet" href="./preview.css">
 <link rel="stylesheet" href="./assembly.css">
 <link rel="stylesheet" href="./quiet.css">
+<link rel="stylesheet" href="./action-chat.css">
 </head>
 <body>
-<aside class="preview-note" aria-label="Preview status">Simulated activity · experimental preview · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">notes and credits</a></aside>
+<aside class="preview-note" aria-label="Preview status">Simulated activity · experimental preview · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">notes and credits</a> · <button type="button" class="ns-chat-open" id="ns-chat-open" aria-haspopup="dialog" disabled>F · Move by words</button> · <button type="button" class="ns-chat-open" id="ns-camera-open" disabled>C · Use camera</button></aside>
 <main id="ns-app" class="ns-app" data-ns-read="read"
       data-manifest-url="../../inputs/MESH-MANIFEST.json"
       data-packet-pov-demo-assets="../../packets/pov-demo-assets/"
@@ -22,11 +23,24 @@
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."
           aria-describedby="ns-game-keys"></canvas>
-  <p id="ns-game-keys" class="ns-sr-only">Press Escape for controls and settings.</p>
+  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of the right arm. Press Escape for controls and settings.</p>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
 </main>
+<dialog id="ns-action-chat" class="ns-action-chat" aria-labelledby="ns-chat-label" aria-describedby="ns-chat-help">
+  <form>
+    <label for="ns-chat-input" id="ns-chat-label">Move the body</label>
+    <p id="ns-chat-help">Bend or straighten either wrist, elbow or knee. Open or close a hand, or spread your fingers. Name the side.</p>
+    <input id="ns-chat-input" placeholder="Bend my right elbow" maxlength="160" autocomplete="off" autofocus>
+    <menu>
+      <button type="submit">Move</button>
+      <button type="button" data-speak>Use voice</button>
+      <button type="button" data-close>Cancel</button>
+    </menu>
+    <p role="status"></p>
+  </form>
+</dialog>
 <!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->
 <div class="ns-load ns-load-early" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
   <div class="ns-load-text"><span class="ns-load-word">Loading</span><span class="ns-load-pct" aria-hidden="true"><span class="ns-load-pct-column"><span class="ns-load-pct-line">0 %</span></span></span></div>

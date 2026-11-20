@@ -1,5 +1,7 @@
 # NeuroSurge
 
+**Local movement preview.** Run `node serve-local.mjs` in this folder and open the address it prints. Press F and type “Bend my right elbow”, or choose **Use voice** for on-device dictation where supported. Press C and allow the camera to try moving the avatar’s right arm with yours. These controls use the game’s movement map and a camera pose estimator. See the [player guide](PLAYER-GUIDE.md). The public links below open the separately published edition.
+
 [Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/). [Download a Windows, macOS or Linux launcher](https://eliminatenoise.github.io/NeuroSurge/START.html).
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.

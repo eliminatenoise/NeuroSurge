@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-20-body-update-59",
+  "version": "local-2026-11-20-body-59-actions-camera",
   "experimental": true,
-  "source": "Body update 59. A new look on everything, each muscle group in its own shade, a white-hot lit area, thinner beams, no punch-in, Space grips with all four limbs.",
+  "source": "Private working preview based on public Body update 59 (2de13841bd432e57c1e3d3d2e875c56d5f9652ad). F types or dictates a named game movement. C estimates right-arm pose on-device.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -47,8 +47,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12938,
-      "sha256": "8a650ebf5ee914d82c6e68997b94b7172f3d7f79855c3ee244bbea6102c15a88"
+      "bytes": 13699,
+      "sha256": "ebf4e2f491b87c0af8411d85af4ab05f08938b0bd403125ce031a305c64adf1c"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -57,13 +57,13 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 51049,
-      "sha256": "9c6ad711851e97c42961c97c5df6e0031548d4a3fb677c55ef591b590861e13a"
+      "bytes": 51273,
+      "sha256": "b4209d9d6b6ec4e6349436cddd3843af26e5200dbad386f0de7af3316e2063b6"
     },
     {
       "path": "README.md",
-      "bytes": 23243,
-      "sha256": "75717d1bf536f598e3ec766ce94563483eabd74d9680eb8cd038f1ca6fd190c5"
+      "bytes": 23712,
+      "sha256": "cf86185a84d2016d4e23fcbeeac950ec7400cc8c25e83dcd8c121cbac77f1251"
     },
     {
       "path": "START.html",
@@ -3811,6 +3811,11 @@
       "sha256": "2e89e505ad85e316f38b5e6dea9ffd4526f7a078aea5c2b0e54db6184897f55f"
     },
     {
+      "path": "scene/example/action-chat.css",
+      "bytes": 1767,
+      "sha256": "fc4da23321f0bf09f046eecd88cd4a086834308764d1ffea4ef80e0ed04f2566"
+    },
+    {
       "path": "scene/example/assembly.css",
       "bytes": 10920,
       "sha256": "feced62f0eca34eccd61b7b4649f955b0d56a962ae68ddadabecf6c6ba50b58c"
@@ -3927,13 +3932,103 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 2606,
-      "sha256": "43f3cdda636ee919ff2b120c23810fb30bc63734e255a6c4d6093f6ae907a3df"
+      "bytes": 3618,
+      "sha256": "bfff7db68769a8e90d29c7fe9771c733d70a98c68fe8bad144d5eb0a7a3eb5ca"
     },
     {
       "path": "scene/example/quiet.css",
       "bytes": 31177,
       "sha256": "61c70480dde577b9704e293cd2104d1af3692e6c9d3a5ab619e607b137390764"
+    },
+    {
+      "path": "scene/src/camera.mjs",
+      "bytes": 7441,
+      "sha256": "375477c3d3c1ea738eac12aa188b5925572ee80331c8c1ed44c12f5c20acee41"
+    },
+    {
+      "path": "scene/src/camera/README.md",
+      "bytes": 4601,
+      "sha256": "8958aab33dad52e9700725112bb54e2ecdd8e9e45ebae9be8cc61cc6d6f24edd"
+    },
+    {
+      "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
+      "bytes": 952,
+      "sha256": "18d40925e8d1a03af8817b2e63e716cbb6900caae1619bc8ccf9772e572de2a5"
+    },
+    {
+      "path": "scene/src/camera/pose-worker.js",
+      "bytes": 1336,
+      "sha256": "b7f5f88ea2d0e03b3af48182008275b5666f7d7490521dc09589c912dcf8caeb"
+    },
+    {
+      "path": "scene/src/camera/right-arm.mjs",
+      "bytes": 1791,
+      "sha256": "22449ae768ed2df13e5a33f373982e2b5fab08e41338359049a923b9657095d7"
+    },
+    {
+      "path": "scene/src/camera/tests/arm-down.jpg",
+      "bytes": 7410,
+      "sha256": "911374dfe7d6de052d19d41df51fb46e0215f22050d9526351df6d5d8d926a10"
+    },
+    {
+      "path": "scene/src/camera/tests/arm-up.jpg",
+      "bytes": 7833,
+      "sha256": "76cd9fb4fb8115fb5fc042d59b664f9494a99b82ae3966776f1665f4268b3512"
+    },
+    {
+      "path": "scene/src/camera/tests/browser.mjs",
+      "bytes": 8731,
+      "sha256": "104d17e08189751d2a98f6edbde87b9053de7d2ee21628b610b6e00df5cb6897"
+    },
+    {
+      "path": "scene/src/camera/tests/elbow-bent.jpg",
+      "bytes": 8173,
+      "sha256": "4b5c5d42c6a964052deb51ae67840c3c06809c076ef3e132d5e07cd729cebdec"
+    },
+    {
+      "path": "scene/src/camera/tests/rig.test.mjs",
+      "bytes": 1319,
+      "sha256": "d96261dd84a3f3e654c97b67c3c878f00d88892ed84cd9c5f7b219c5da644ecc"
+    },
+    {
+      "path": "scene/src/camera/vendor/LICENSE",
+      "bytes": 12331,
+      "sha256": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8"
+    },
+    {
+      "path": "scene/src/camera/vendor/pose_landmarker_lite.task",
+      "bytes": 5777746,
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+    },
+    {
+      "path": "scene/src/camera/vendor/vision_bundle.mjs",
+      "bytes": 137735,
+      "sha256": "40f4123dfcd75cfa58add046919cc6f52fde66f009ff582997c09ba54c6ba27c"
+    },
+    {
+      "path": "scene/src/camera/vendor/wasm/vision_wasm_internal.js",
+      "bytes": 204284,
+      "sha256": "4a97e2520ba506c680ecd6ba6acfb146888afa0e2746d57f205352bc6ebb82eb"
+    },
+    {
+      "path": "scene/src/camera/vendor/wasm/vision_wasm_internal.wasm",
+      "bytes": 9574032,
+      "sha256": "f00ec4731faa23b3e714d00e88d4d10e2df5c0a427d3a2b4ae6e3526fdd14ef7"
+    },
+    {
+      "path": "scene/src/camera/vendor/wasm/vision_wasm_nosimd_internal.js",
+      "bytes": 204137,
+      "sha256": "927def7b465c51b86e4b3060f93646aca4e27121f4b8fc0483786e407ea9cf1f"
+    },
+    {
+      "path": "scene/src/camera/vendor/wasm/vision_wasm_nosimd_internal.wasm",
+      "bytes": 9448638,
+      "sha256": "3821ea9b1f7fb8c549ef2a064ef5c85750bf375c545a49fd6eea0df44a95f1f4"
+    },
+    {
+      "path": "scene/src/ns-action-chat.mjs",
+      "bytes": 6306,
+      "sha256": "48bad2687687537d751950413eb2f8aee5b4dfb190b36c9d14fe54b20b0b9a0a"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3942,8 +4037,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 920514,
-      "sha256": "aa8f552856d15265587c3e5e5463db140232b1b995eb88fe4e46af94ddf73fc3"
+      "bytes": 923136,
+      "sha256": "0806610b40cbe9c085fe46211782a8c0883acedb239d23813348d054097a88f5"
     },
     {
       "path": "scene/src/ns-arm.mjs",
@@ -4232,8 +4327,13 @@
     },
     {
       "path": "serve-local.mjs",
-      "bytes": 14950,
-      "sha256": "a34e4e134b8ef53f02ee307360cd2131a14e608576c17f3a17a52b0d5e9e2b2f"
+      "bytes": 15747,
+      "sha256": "ad9f0915395b1be18abeacb40b2113147e0f27f89b7763088866c7a2693dfed4"
+    },
+    {
+      "path": "tests/action-chat.test.mjs",
+      "bytes": 1257,
+      "sha256": "ce7e81d2e4a67384187875d65c4269c0da2e75a4ac1c853f570e0a2369c17921"
     },
     {
       "path": "tests/activity-effect.test.mjs",
@@ -4314,6 +4414,11 @@
       "path": "tests/brain-turn.test.mjs",
       "bytes": 29606,
       "sha256": "091d8c8e2cb178b92c880be57e00647ca41150f32cf29434a1d2056dca65e6b2"
+    },
+    {
+      "path": "tests/browser-action-chat.mjs",
+      "bytes": 5794,
+      "sha256": "5a40b18af9db82239410cbfad2d9153a6078d76d8bd99bf75ef880bc29621cd5"
     },
     {
       "path": "tests/browser-brain-compass.mjs",

@@ -60,6 +60,8 @@
  */
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
+import { bindActionChat } from './ns-action-chat.mjs';
+import { createCameraCapture } from './camera.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
@@ -5603,6 +5605,7 @@ export function start(params = {}) {
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
+  let motionCamera = null, pendingCameraPose = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
   const frameTimer = createFrameTimer(); // 18 November 2026 (performance): frame time by part (ns-perf; inspect().perf)
   /* 19 November 2026 (performance): what is under the crosshair (targetsAt: a ray against every drawn mesh, 2 to 6 ms)
@@ -6372,6 +6375,7 @@ export function start(params = {}) {
     // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
+    if (motionCamera?.active && (after.mode !== 'playing' || after.contextLost)) motionCamera.stop();
     if (before.mode === 'playing' && after.mode !== 'playing') {
       // The pause freezes the simulated pulse. End its lens effect and wait for a fresh activation.
       pausedPunchSeq = simState?.activity?.pulseSeq ?? null;
@@ -6388,6 +6392,8 @@ export function start(params = {}) {
     }
     if (limbHud) limbHud.box.inert = !shellIsPlaying(after) || after.contextLost;
     if (shell) shell.render(after);
+    if (chatOpen) chatOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (cameraOpen) cameraOpen.disabled = !shellIsPlaying(after) || after.contextLost;
   }
 
   /** Start / resume from the overlay click (a user gesture): leave the overlay at once and request pointer capture;
@@ -6627,6 +6633,47 @@ export function start(params = {}) {
     obj.addEventListener(type, fn, opts);
     pageListeners.push([obj, type, fn, opts]);
   };
+  const chatDialog = doc.getElementById?.('ns-action-chat');
+  const chatOpen = doc.getElementById?.('ns-chat-open');
+  const cameraOpen = doc.getElementById?.('ns-camera-open');
+  const gameReady = () => phase === 'running' && !stopped && !failed && !shellState.contextLost;
+  if (cameraOpen) {
+    motionCamera = createCameraCapture({
+      host: doc.body,
+      onArmPose({ joints }) {
+        // Replace a stale sample, including on tracking loss. Keep the last
+        // visible pose until another camera sample or game movement changes it.
+        pendingCameraPose = gameReady() && shellIsPlaying(shellState) ? joints : null;
+      }
+    });
+    const toggleCamera = () => {
+      if (gameReady() && shellIsPlaying(shellState)) motionCamera.toggle();
+    };
+    listen(cameraOpen, 'click', toggleCamera);
+    listen(view, 'keydown', e => {
+      if (e.code !== 'KeyC' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey ||
+          e.target?.isContentEditable || e.target?.closest?.('input, textarea, select, button, a[href], dialog[open]') ||
+          !gameReady() || !shellIsPlaying(shellState)) return;
+      e.preventDefault();
+      toggleCamera();
+    }, true);
+  }
+  const disposeChat = chatDialog && chatOpen ? bindActionChat({
+    dialog: chatDialog, trigger: chatOpen, canvas,
+    canOpen: () => gameReady() && shellIsPlaying(shellState),
+    pause() {
+      dispatch({ type: 'pause' });
+      exitLock();
+    },
+    resume(action) {
+      if (!gameReady() || shellState.mode !== 'paused') return;
+      // Consume any queued lock-loss observation while the shell is still paused.
+      if (shellState.locked && !lockedNow()) observePointerLock(clockMs());
+      dispatch({ type: 'playUnlocked' });
+      if (action) carryRawEvents.push({ ...action, timeMs: clockMs() });
+    },
+    getBodyMap: () => bodyMapOf(mods.bodyMap)
+  }) : null;
   // 19 November 2026 (found with random input). THE WHEEL NEVER LEAVES THE GAME. The game has no use for the wheel, and
   // a wheel turn the page does not use goes to the browser: in Chromium on Linux a turn with Shift held goes BACK in
   // the browser's history (measured: Shift, a pointer move, one wheel turn, and the game was gone to the page before
@@ -6677,6 +6724,8 @@ export function start(params = {}) {
     raf = 0;
     if (unbind) { unbind(); unbind = null; }
     if (!stopped) {
+      disposeChat?.();
+      motionCamera?.dispose();
       exitLock();
       // R558: stopped before any picture, in an upright window, because no camera distance shows the whole arm: that
       // is a window too narrow for the arm, and the message says to make it wider. Any other stop keeps its own words.
@@ -9574,6 +9623,10 @@ export function start(params = {}) {
           if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
         }
         // 18 Nov (M3): a number key came up: a short press completes its movement, a longer one leaves the part there.
+        if (live && pendingCameraPose) {
+          timing = { ...timing, events: [...timing.events, { type: 'limbPose', joints: pendingCameraPose, at: timing.dt }] };
+          pendingCameraPose = null;
+        }
         if (live && upsThisFrame.length) {
           const rel = [];
           for (const n of upsThisFrame) {
@@ -11158,6 +11211,8 @@ export function start(params = {}) {
     if (stopped) return;
     clearNativeEscape();
     stopped = true;
+    disposeChat?.();
+    motionCamera?.dispose();
     cancelPendingGameplay('stop');
     cancelOwnedStreams();
     phase = failed ? 'error' : 'stopped';
