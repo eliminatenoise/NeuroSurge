@@ -73,7 +73,9 @@ export const LEFT_ARM_ACTION_IDS = Object.freeze([
   'pronation', 'supination',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension',
   'little_flexion', 'little_extension', 'thumb_opposition', 'thumb_reposition',
-  'wrist_radial_deviation', 'wrist_ulnar_deviation'
+  'wrist_radial_deviation', 'wrist_ulnar_deviation',
+  // 20 November 2026 (BODYMAP): the left shoulder's four swings of the whole arm (ns-actions SHOULDER_ACTION_DEG).
+  'shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction'
 ]);
 
 const sem = (positive, negative, lo, hi, side, unit = 'deg') => ({ unit, positive, negative, suggestedRange: [lo, hi], side });
@@ -82,8 +84,8 @@ const sem = (positive, negative, lo, hi, side, unit = 'deg') => ({ unit, positiv
  * The joint-value convention this map assumes (for ns-body / ns-actions to reconcile with BODY_JOINT_LIMITS).
  * Every value is a signed angle in degrees from the BodyParts3D SOURCE POSE, which is the standard anatomical position
  * (standing upright, arms at the sides, palms facing forward). Positive = the direction the id names. A target of 0
- * returns the joint to the source pose. R558 (latch): an action's joint value is the ABSOLUTE end angle at which the
- * joint is left (it stays there until the opposing action or a reset brings it back), chosen as the largest angle the
+ * returns the joint to the source pose. R558: an action's joint value is the ABSOLUTE end angle its contraction drives the
+ * joint to (20 November 2026, Message 206: then it returns to where it was; it was held there), chosen as the largest angle the
  * rig's own limit allows inside normal adult range of motion. The four facial ids are not joint rotations: their values are nominal display
  * degrees, 0 (rest) .. 20 (full display amplitude), and ns-body should normalise them by that range.
  * suggestedRange is a game-safe range inside normal adult range of motion; the rig's own limits take precedence.
@@ -154,8 +156,9 @@ export const JOINT_SEMANTICS = deepFreeze({
 // BodyParts3D 4.0 has no facial-expression or chewing muscles, so until round 5 the face areas only kept a number.
 // R5-face downloads them into packets/face-muscles-r1/ (CC BY-SA 4.0, share-alike; the game code stays CC0). The face
 // regions' text below has two forms: status 'pending' (the round-4 text, byte-identical: nothing on the face moves or
-// changes colour) and status 'loaded' (the face muscles light up in the shared colours; the face shape does not change;
-// clenching colours the chewing muscles; the tongue muscles are still missing).
+// changes colour) and status 'loaded' (the face muscles light up in the shared colours; since 20 November 2026 they also
+// move the face, ns-face-move: an exaggerated display of each movement; clenching colours the chewing muscles; the
+// tongue muscles are still missing).
 //
 // TODO(R5-face / integrator): when packets/face-muscles-r1 is registered to the skull frame AND loaded on both bodies,
 //   1. set status to 'loaded';
@@ -553,12 +556,27 @@ const CONTENT = {
       { id: `${c.code}_hip_abduct`, label: `Swing ${c.S} thigh out (hip abduction)`, joints: { [`hip_abd_${c.J}`]: 45 },
         agonists: sided(c.S, 'gluteus medius', 'gluteus minimus', 'tensor fasciae latae', 'piriformis'),
         antagonists: sided(c.S, 'adductor magnus', 'adductor longus', 'adductor brevis') },
-      { id: `${c.code}_hip_adduct`, label: `Swing ${c.S} thigh in (hip adduction)`, joints: { [`hip_abd_${c.J}`]: 0 },
+      // 20 November 2026 (BODYMAP): jerkStop: this end is a stop for the contraction, which must not overshoot past it
+      // (the jerk's kick threw the thigh 23 degrees on, into the other leg; ns-actions hands the flag on with the action
+      // for the code that runs an activation).
+      { id: `${c.code}_hip_adduct`, label: `Swing ${c.S} thigh in (hip adduction)`, joints: { [`hip_abd_${c.J}`]: 0 }, jerkStop: true,
         agonists: sided(c.S, 'adductor magnus', 'adductor longus', 'adductor brevis', 'gracilis', 'pectineus'),
         antagonists: sided(c.S, 'gluteus medius', 'gluteus minimus'),
-        note: 'Stops with the legs side by side (the source pose, knees nearly touching): the full 30 degrees of adduction would take the leg into the other leg.' }
+        note: 'Stops with the legs side by side (the source pose, knees nearly touching): the full 30 degrees of adduction would take the leg into the other leg.' },
+      // 20 November 2026 (BODYMAP; the owner, Message 204: "as many activation spots and encoded movements as possible"):
+      // the thigh's turn about its own length (hip_rot, until now turned only by a drag on the leg and the Space double
+      // tap) gets its own two spots: outward to 45 and inward to 40 (AAOS, measured with the hip bent as in long
+      // sitting: ns-body BODY_JOINT_LIMITS). The deep outward turners (piriformis, the obturators, the gemelli,
+      // quadratus femoris) with gluteus maximus; the inward turners are the front parts of the small gluteals with
+      // tensor fasciae latae.
+      { id: `${c.code}_hip_turn_out`, label: `Turn ${c.S} thigh outward (external rotation)`, joints: { [`hip_rot_${c.J}`]: 45 },
+        agonists: sided(c.S, 'gluteus maximus', 'piriformis', 'obturator internus', 'gemellus superior', 'gemellus inferior', 'quadratus femoris', 'obturator externus'),
+        antagonists: sided(c.S, 'gluteus minimus', 'tensor fasciae latae') },
+      { id: `${c.code}_hip_turn_in`, label: `Turn ${c.S} thigh inward (internal rotation)`, joints: { [`hip_rot_${c.J}`]: -40 },
+        agonists: sided(c.S, 'gluteus minimus', 'gluteus medius', 'tensor fasciae latae'),
+        antagonists: sided(c.S, 'piriformis', 'obturator internus', 'quadratus femoris') }
     ],
-    explanation: `Hip area for the ${c.S} leg, at the outer ring of the foot zone where it meets trunk territory. ${LEG_PATHWAY(c)} The game simulates lifting the ${c.S} thigh (iliopsoas, rectus femoris and sartorius) or swinging it down and back (gluteus maximus and hamstrings), and swinging it out (gluteus medius and minimus) or back in (the adductors). Proximal leg muscles also take part in posture and balance, which this game does not model.`,
+    explanation: `Hip area for the ${c.S} leg, at the outer ring of the foot zone where it meets trunk territory. ${LEG_PATHWAY(c)} The game simulates lifting the ${c.S} thigh (iliopsoas, rectus femoris and sartorius) or swinging it down and back (gluteus maximus and hamstrings), swinging it out (gluteus medius and minimus) or back in (the adductors), and turning it outward (the deep hip rotators with gluteus maximus) or inward (gluteus minimus and tensor fasciae latae). Proximal leg muscles also take part in posture and balance, which this game does not model.`,
     citationKeys: ['PENFIELD1937', 'GORDON2023', 'UAMS_LOWER']
   }),
   scan_superior: c => ({
@@ -602,9 +620,22 @@ const CONTENT = {
   shoulder: c => (c.H === 'right' ? {
     label: 'Left shoulder', shortLabel: 'L shoulder', effector: 'shoulder (left arm)', bodySide: 'left', medialSurface: false, isLeftArm: true,
     displayGroup: 'left_arm', pathway: 'corticospinal', laterality: 'contralateral_predominant',
-    actions: [],
-    noActionReason: 'The left shoulder is moved by W/A/S/D and by the look while the left arm is the chosen limb (key 1); it has no separate gaze action, so looking here only lights and marks the region.',
-    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is moved by W/A/S/D and carried by your look while the left arm is the chosen limb, so looking here lights and marks the region without adding a separate movement. Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the anatomical mesh collection does not establish muscle recruitment. Shoulder activity here is simulated, not measured.',
+    // 20 November 2026 (BODYMAP; the owner, Message 204: "make sure there's clear movement for each brain activation
+    // area"): this area used to move nothing (the look and W/A/S/D carry the left arm). Its four movements now swing the
+    // whole left arm at the shoulder, on top of where the look and the keys hold the hand (ns-actions
+    // SHOULDER_ACTION_DEG), with the same muscles the reach keys light (ns-actions REACH_MUSCLES), as the right shoulder's
+    // four do on the right arm.
+    actions: [
+      leftArm('shoulder_flexion', 'Raise left arm forward', [], [], [],
+        ['clavicular part of left deltoid', 'left coracobrachialis', 'clavicular part of left pectoralis major'], ['spinal part of left deltoid', 'left teres major', 'left latissimus dorsi']),
+      leftArm('shoulder_extension', 'Swing left arm down and back', [], [], [],
+        ['spinal part of left deltoid', 'left teres major', 'left latissimus dorsi'], ['clavicular part of left deltoid', 'left coracobrachialis']),
+      leftArm('shoulder_abduction', 'Swing left arm out to the side', [], [], [],
+        ['acromial part of left deltoid', 'spinal part of left deltoid', 'left infraspinatus', 'left teres minor'], ['left pectoralis major', 'left latissimus dorsi']),
+      leftArm('shoulder_adduction', 'Swing left arm in across the body', [], [], [],
+        ['clavicular part of left deltoid', 'left coracobrachialis', 'left pectoralis major'], ['acromial part of left deltoid'])
+    ],
+    explanation: 'Shoulder area for the LEFT arm, at the medial edge of the arm and hand zone of the right hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles such as the deltoid (Bawa 2004). In NeuroSurge the left shoulder is also moved by W/A/S/D and carried by your look while the left arm is the chosen limb; this area swings the whole left arm at the shoulder from there: forward and up (front deltoid, coracobrachialis), down and back (back deltoid, teres major, latissimus dorsi), out to the side (middle and back deltoid, infraspinatus, teres minor) or in across the body (front deltoid, coracobrachialis, pectoralis major). Stimulation rarely evokes isolated shoulder movement (Gordon 2023), and the anatomical mesh collection does not establish muscle recruitment. Shoulder activity here is simulated, not measured.',
     citationKeys: ['GORDON2023', 'BAWA2004', 'DEVANNE2006', 'UAMS_UPPER']
   } : {
     label: 'Right shoulder', shortLabel: 'R shoulder', effector: 'shoulder (right arm)', bodySide: 'right', medialSurface: false,
@@ -634,9 +665,21 @@ const CONTENT = {
       { id: 'lh_r_shoulder_add', label: 'Swing right arm in to the front', joints: { r_shoulder_abd: 0 },
         agonists: ['right pectoralis major', 'right latissimus dorsi', 'right teres major', 'right subscapularis'],
         antagonists: ['acromial part of right deltoid', 'right supraspinatus'],
-        stabilizers: ['right serratus anterior', 'right pectoralis minor'] }
+        stabilizers: ['right serratus anterior', 'right pectoralis minor'] },
+      // 20 November 2026 (BODYMAP; the owner, Message 204: "as many activation spots and encoded movements as possible"):
+      // the upper arm's turn about its own length (r_shoulder_rot, until now turned only by a drag on the upper arm and
+      // the Space double tap; the start posture holds it 35 outward) gets its own two spots: outward to 90 (AAOS external
+      // rotation: ns-body BODY_JOINT_LIMITS) and inward to 40 (of the 70 the joint has: with the arm stretched along the
+      // body, tools/rom-sweep.mjs found the forearm 32 mm inside the thigh at 70, none at 40; and the owner, Message 160:
+      // "You probably overdid it with the internal or medial rotation with the arms").
+      { id: 'lh_r_shoulder_out', label: 'Turn right arm outward (external rotation)', joints: { r_shoulder_rot: 90 },
+        agonists: ['right infraspinatus', 'right teres minor', 'spinal part of right deltoid'],
+        antagonists: ['right subscapularis', 'right pectoralis major', 'right teres major'] },
+      { id: 'lh_r_shoulder_in', label: 'Turn right arm inward (internal rotation)', joints: { r_shoulder_rot: -40 },
+        agonists: ['right subscapularis', 'right pectoralis major', 'right latissimus dorsi', 'right teres major', 'clavicular part of right deltoid'],
+        antagonists: ['right infraspinatus', 'right teres minor'] }
     ],
-    explanation: 'Shoulder area for the RIGHT arm, at the medial edge of the arm and hand zone of the left hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles (Bawa 2004). The game simulates raising the right arm up (front deltoid, pectoralis major, coracobrachialis) or swinging it down and back, and swinging it out to the side (middle deltoid, supraspinatus) or back in to the front; the arm starts straight forward, in front of you. Proximal and distal arm representations overlap (Devanne 2006), and stimulation rarely moves the shoulder in isolation (Gordon 2023).',
+    explanation: 'Shoulder area for the RIGHT arm, at the medial edge of the arm and hand zone of the left hemisphere. Crossed corticospinal fibres dominate, with weaker same-side input to proximal muscles (Bawa 2004). The game simulates raising the right arm up (front deltoid, pectoralis major, coracobrachialis) or swinging it down and back, swinging it out to the side (middle deltoid, supraspinatus) or back in to the front, and turning it outward (infraspinatus, teres minor) or inward (subscapularis, pectoralis major) about its own length; the arm starts stretched out along your body. Proximal and distal arm representations overlap (Devanne 2006), and stimulation rarely moves the shoulder in isolation (Gordon 2023).',
     citationKeys: ['GORDON2023', 'BAWA2004', 'DEVANNE2006', 'UAMS_UPPER']
   }),
   elbow: c => (c.H === 'right' ? {
@@ -682,7 +725,7 @@ const CONTENT = {
         agonists: ['right pronator teres', 'right pronator quadratus'], antagonists: ['right supinator', 'right biceps brachii'] },
       { id: 'lh_r_supinate', label: 'Turn right palm up (supination)', joints: { r_pronation: 0 },
         agonists: ['right supinator', 'right biceps brachii'], antagonists: ['right pronator teres', 'right pronator quadratus'],
-        note: 'This turns the right palm up (supination); turning the palm down brings it back.' }
+        note: 'This turns the right palm up (supination), then it turns back to where it was.' }
     ],
     explanation: 'Forearm-rotation area for the RIGHT arm, between the elbow and wrist areas of the left hemisphere. Crossed corticospinal fibres reach the cervical motor neurons of the forearm rotators. The game simulates turning the right palm down (pronator teres and quadratus) or up (supinator and biceps brachii). Forearm rotation shares overlapping fields with the wrist and elbow (Meier 2008), so this spot is a game placement, not a measured point.',
     citationKeys: ['MEIER2008', 'UAMS_UPPER']
@@ -944,7 +987,7 @@ const CONTENT = {
         antagonists: ['frontal belly of left occipitofrontalis', 'frontal belly of right occipitofrontalis'] }
     ],
     explanation: `Brow area of the ${c.H} hemisphere, where the frontal belly of occipitofrontalis raises the eyebrows and corrugator supercilii with procerus lowers and draws them together (a frown). Corticobulbar fibres reach the facial nucleus, and the upper face is supplied from both hemispheres, which is why a cortical stroke usually spares the forehead (monkey tract tracing: Morecraft 2001). ${c.face
-      ? `BodyParts3D 4.0 has no facial-expression muscles; ${FACE_PACKET_NAME} adds them, so the game colours the frontal belly of occipitofrontalis (or the frown muscles) on both sides with the simulated display level, and the face shape does not change.`
+      ? `BodyParts3D 4.0 has no facial-expression muscles; ${FACE_PACKET_NAME} adds them, so the game colours the frontal belly of occipitofrontalis (or the frown muscles) on both sides with the simulated display level, and moves them (the brows go up, or come down and together in a frown; a game rule, exaggerated so it shows).`
       : 'BodyParts3D 4.0 has no facial-expression muscles, so the game only records a simulated display level here: nothing on the face layer moves or changes colour.'} Eyebrow raising co-activated the inter-effector regions in fMRI (Gordon 2023), so this small area is a schematic placement.`,
     citationKeys: faceCites(c, ['MORECRAFT2001', 'GORDON2023', 'PENFIELD1937', 'UAMS_HEADNECK'])
   }),
@@ -961,7 +1004,7 @@ const CONTENT = {
         note: 'Levator palpebrae superioris lights (it lies inside the eye socket, behind the eyelid muscles); it is supplied by the oculomotor nerve, a separate pathway, and the eyelids themselves are not modelled.' }
     ],
     explanation: `Eyelid area of the ${c.H} hemisphere, where orbicularis oculi closes the eyes. Corticobulbar input to the upper face comes from both hemispheres (Morecraft 2001, in monkeys). ${c.face
-      ? `BodyParts3D 4.0 has no orbicularis oculi; ${FACE_PACKET_NAME} adds it, so the game colours it on both sides with the simulated display level, and the eyelids do not move.`
+      ? `BodyParts3D 4.0 has no orbicularis oculi; ${FACE_PACKET_NAME} adds it, so the game colours it on both sides with the simulated display level, and its eyelid part slides over the eyeballs to shut the eyes (a game rule, exaggerated so it shows).`
       : 'BodyParts3D 4.0 has no orbicularis oculi or other facial-expression muscle, so the game only records a simulated display level here: nothing on the face layer moves or changes colour.'} Eye opening (levator palpebrae superioris, oculomotor nerve) and blink reflexes are separate circuits that are not simulated, and Gordon 2023 lists eyelid movement among those most preferred at an inter-effector centre.`,
     citationKeys: faceCites(c, ['MORECRAFT2001', 'GORDON2023', 'PENFIELD1937', 'UAMS_HEADNECK'])
   }),
@@ -978,7 +1021,7 @@ const CONTENT = {
         antagonists: ['transverse part of left nasalis', 'transverse part of right nasalis'] }
     ],
     explanation: `Nose area of the ${c.H} hemisphere, inside the face zone between the eyelid and mouth-corner areas. The nose muscles are facial-expression muscles supplied by the facial nucleus through corticobulbar fibres. Levator labii superioris alaeque nasi and the transverse part of nasalis wrinkle the nose; the alar part of nasalis and depressor septi nasi flare the nostrils. ${c.face
-      ? `BodyParts3D 4.0 has none of these muscles; ${FACE_PACKET_NAME} adds them (nasalis as one piece per side), so the game colours them with the simulated display level, and the nose does not change shape.`
+      ? `BodyParts3D 4.0 has none of these muscles; ${FACE_PACKET_NAME} adds them (nasalis as one piece per side), so the game colours them with the simulated display level, and moves them (the side of the nose bunches up, or the nostril wings pull out; a game rule, exaggerated so it shows).`
       : 'BodyParts3D 4.0 has none of these muscles, so the game only records a simulated display level here: nothing on the face layer moves or changes colour.'} The face zone is one representative row here; the nose has no separately measured spot on this strip.`,
     citationKeys: faceCites(c, ['PENFIELD1937', 'MORECRAFT2001', 'UAMS_HEADNECK'])
   }),
@@ -990,7 +1033,7 @@ const CONTENT = {
         agonists: sided(c.S, 'zygomaticus major', 'levator anguli oris', 'risorius'),
         antagonists: sided(c.S, 'depressor anguli oris'), lateralBias: c.S,
         note: c.face
-          ? `${FACE_PACKET_NAME_CAP} adds these muscles: the smile is a simulated display level shown as colour on the ${c.S} cheek muscles, and the face shape does not move (the ${c.S} side receives most of this hemisphere's drive).`
+          ? `${FACE_PACKET_NAME_CAP} adds these muscles: the smile is a simulated display level shown as colour on the ${c.S} cheek muscles, and the ${c.S} mouth corner moves up, out and back (the other a little; a game rule, exaggerated so it shows; the ${c.S} side receives most of this hemisphere's drive).`
           : `BodyParts3D 4.0 has no mesh for these muscles: the smile is a simulated display level only, and nothing moves or is coloured (the ${c.S} side would receive most of this hemisphere's drive).` },
       // R558 (Messages 14 / 6): the smile's opposite: depressor anguli oris (with platysma) pulls the corner down.
       { id: `${c.code}_mouth_down`, label: 'Pull mouth corner down', joints: { smile: -15 },
@@ -998,7 +1041,7 @@ const CONTENT = {
         antagonists: sided(c.S, 'zygomaticus major', 'levator anguli oris'), lateralBias: c.S }
     ],
     explanation: `Lower-face area of the ${c.H} hemisphere, where zygomaticus major and levator anguli oris lift the corner of the mouth and depressor anguli oris (with platysma) pulls it down. Corticobulbar fibres to the lower face are mainly crossed (Morecraft 2001, in monkeys), so the ${c.S} mouth corner gets most of this hemisphere's drive. ${c.face
-      ? `BodyParts3D 4.0 has none of these facial-expression muscles; ${FACE_PACKET_NAME} adds them, so the game colours them on the ${c.S} side with the simulated display level, and the face shape does not change.`
+      ? `BodyParts3D 4.0 has none of these facial-expression muscles; ${FACE_PACKET_NAME} adds them, so the game colours them on the ${c.S} side with the simulated display level, and the ${c.S} mouth corner moves (up and back, or down; the other a little; a game rule, exaggerated so it shows).`
       : 'BodyParts3D 4.0 has none of these facial-expression muscles, so the game only records a simulated display level here: nothing on the face layer moves or changes colour.'} Only voluntary smiling is described; emotional smiling also uses separate pathways.`,
     citationKeys: faceCites(c, ['MORECRAFT2001', 'PENFIELD1937', 'UAMS_HEADNECK'])
   }),
@@ -1021,7 +1064,7 @@ const CONTENT = {
         agonists: [...both('depressor labii inferioris'), ...both('platysma')], antagonists: both('mentalis'), lateralBias: c.S }
     ],
     explanation: `Lip area of the ${c.H} hemisphere, where orbicularis oris purses the lips, risorius and buccinator stretch them wide, levator labii superioris and zygomaticus minor lift the upper lip, and mentalis pushes the lower lip up while depressor labii inferioris pulls it down. Corticobulbar fibres reach the facial nucleus, with a crossed predominance for the lower face (Morecraft 2001). ${c.face
-      ? `BodyParts3D 4.0 has no orbicularis oris mesh; ${FACE_PACKET_NAME} adds it and the other lip muscles, so the game colours them with the simulated display level, and the lips do not move.`
+      ? `BodyParts3D 4.0 has no orbicularis oris mesh; ${FACE_PACKET_NAME} adds it and the other lip muscles, so the game colours them with the simulated display level, and moves the lips (pursed, stretched, the upper lip lifted, the lower lip pushed up or pulled down; a game rule, exaggerated so it shows).`
       : 'BodyParts3D 4.0 has no orbicularis oris mesh, so the game only records a simulated display level here: nothing on the face layer moves or changes colour.'} Lip movement is a classic landmark of fMRI motor somatotopy (Lotze 2000), and speech uses this area together with the jaw, tongue and larynx.`,
     citationKeys: faceCites(c, ['LOTZE2000', 'MORECRAFT2001', 'PENFIELD1937', 'UAMS_HEADNECK'])
   }),
@@ -1125,7 +1168,8 @@ export const CATALOG_NAMES = Object.freeze({
  * without its qualifier. Keyed by CONTENT key; c = ctxFor(hemisphere). */
 const NO_FACE_MUSCLES = 'No facial-expression muscles exist in the dataset: nothing here moves or changes colour.';
 // R5-text: with the face-muscle packet loaded.
-const FACE_COLOUR_ONLY = 'The face muscles show the simulated level as colour only: the face shape does not change.';
+// 20 November 2026 (FACE; the owner, Message 204): the face muscles move the face now (ns-face-move).
+const FACE_COLOUR_ONLY = 'The face moves by a game rule, exaggerated so you can see it: a picture of the movement, not a measured one.';
 const SCAN_CAVEAT = 'Moves nothing in the game: any real role (planning, posture) is not simulated.';
 const REGION_CAVEATS = {
   toes: () => 'A schematic spot: the real toe area lies on the brain\u2019s inner (medial) wall; the big toe shares it.',
@@ -1134,9 +1178,7 @@ const REGION_CAVEATS = {
   hip: () => 'Hip muscles also serve posture and balance, which are not modelled.',
   scan_superior: () => SCAN_CAVEAT,
   trunk: () => 'Few trunk measurements exist; breathing and posture are not modelled.',
-  shoulder: c => (c.H === 'right'
-    ? 'Your look and W/A/S/D carry the left shoulder, so looking here adds no separate movement.'
-    : 'Arm areas overlap, and stimulation rarely moves the shoulder on its own.'),
+  shoulder: () => 'Arm areas overlap, and stimulation rarely moves the shoulder on its own.',
   elbow: () => 'The bend and straighten spots are representative, not separately measured centres.',
   forearm: () => 'No separate published spot for turning the palm exists: this is a game placement.',
   wrist: c => (c.H === 'right'
@@ -1177,8 +1219,9 @@ const REGION_CAVEATS = {
 const half = c => `your brain’s ${c.H} half`;
 const NO_FACE_MESH_PLAIN = 'The 3D body has no face muscles for this, so nothing moves or changes colour.';
 const FACE_MOVES_PLAIN = 'Nothing you can see: the game only keeps a number.';
-// R5-text: with the face-muscle packet loaded. Moves still start with "Nothing" (ns-guide: no "watch it move" credit).
-const FACE_COLOUR_PLAIN = 'Only the colour changes: the face itself does not move in the game.';
+// R5-text: with the face-muscle packet loaded. 20 November 2026 (FACE): the face moves now, so the plain rows no longer
+// start with "Nothing" (ns-guide: a face area's switch-on counts as a movement you can see).
+const FACE_COLOUR_PLAIN = 'The game moves the face more than a real face would, so you can see it on the mirror body.';
 const SCAN_MOVES_PLAIN = 'Nothing: it only lights up and gets marked.';
 const SCAN_CAVEAT_PLAIN = 'Any real job here, such as planning or posture, is not simulated.';
 const LOOK_RIGHT = ' (it starts beside your right thigh)'; // 18 Nov (SMALL, S19): the reclined start posture
@@ -1205,8 +1248,8 @@ const PLAIN_REGION = {
   }),
   hip: c => ({
     plainLabel: `${c.Sc} hip`,
-    plainLead: `This spot in ${half(c)} tells your ${c.S} thigh to lift, swing down and back, or swing out or in.`,
-    plainMoves: `Lifts your ${c.S} thigh (the knee bends as it rises) or swings it down and back, or swings it out to the side or back in.`,
+    plainLead: `This spot in ${half(c)} tells your ${c.S} thigh to lift, swing down and back, swing out or in, or turn.`,
+    plainMoves: `Lifts your ${c.S} thigh (the knee bends as it rises) or swings it down and back, swings it out to the side or back in, or turns it outward or inward.`,
     plainCaveat: 'Hip muscles also help with balance and posture, which the game does not show.'
   }),
   scan_superior: () => ({
@@ -1223,13 +1266,13 @@ const PLAIN_REGION = {
   }),
   shoulder: c => (c.H === 'right' ? {
     plainLabel: 'Left shoulder',
-    plainLead: `This spot in ${half(c)} helps move your left shoulder.`,
-    plainMoves: 'Nothing extra: your look and the W/A/S/D keys already move the left shoulder.',
-    plainCaveat: 'Your look and W/A/S/D already move the left shoulder. Looking here adds no extra movement.'
+    plainLead: `This spot in ${half(c)} tells your left shoulder to move the arm.`,
+    plainMoves: 'Swings your whole left arm forward and up, down and back, out to the side or in across your body, from where your look and the keys hold it.',
+    plainCaveat: 'Arm spots overlap. In studies, this spot rarely moves the shoulder on its own.'
   } : {
     plainLabel: 'Right shoulder',
     plainLead: `This spot in ${half(c)} tells your right shoulder to move the arm.`,
-    plainMoves: `Raises your right arm up or swings it down, and swings it out to the side or back in${LOOK_RIGHT}.`,
+    plainMoves: `Raises your right arm up or swings it down, swings it out to the side or back in, or turns it outward or inward${LOOK_RIGHT}.`,
     plainCaveat: 'Arm spots overlap. In studies, this spot rarely moves the shoulder on its own.'
   }),
   elbow: c => ({
@@ -1346,31 +1389,31 @@ const PLAIN_REGION = {
   brow: c => ({
     plainLabel: 'Eyebrows',
     plainLead: `This spot in ${half(c)} tells both eyebrows to rise or to frown.`,
-    plainMoves: c.face ? 'Nothing moves, but your forehead muscle or your frown muscles light up.' : FACE_MOVES_PLAIN,
+    plainMoves: c.face ? 'Both eyebrows go up and the forehead bunches, or the inner eyebrows pull down and together (a frown).' : FACE_MOVES_PLAIN,
     plainCaveat: c.face ? FACE_COLOUR_PLAIN : NO_FACE_MESH_PLAIN
   }),
   eyelid: c => ({
     plainLabel: 'Eyelids',
     plainLead: `This spot in ${half(c)} tells both eyes to close or to open wide.`,
-    plainMoves: c.face ? 'Nothing moves, but the ring muscles around your eyes light up when they close.' : FACE_MOVES_PLAIN,
+    plainMoves: c.face ? 'The eyelids slide down over the eyes until they are shut, or the upper lids go up and the eyes open wide.' : FACE_MOVES_PLAIN,
     plainCaveat: c.face ? FACE_COLOUR_PLAIN : NO_FACE_MESH_PLAIN
   }),
   nose: c => ({
     plainLabel: 'Nose',
     plainLead: `This spot in ${half(c)} tells your nose to wrinkle or your nostrils to flare.`,
-    plainMoves: c.face ? 'Nothing moves, but the small nose muscles light up.' : FACE_MOVES_PLAIN,
+    plainMoves: c.face ? 'The side of the nose bunches up, or the nostrils pull wide.' : FACE_MOVES_PLAIN,
     plainCaveat: c.face ? FACE_COLOUR_PLAIN : NO_FACE_MESH_PLAIN
   }),
   lower_face: c => ({
     plainLabel: `Smile, ${c.S} side`,
     plainLead: `This spot in ${half(c)} tells your mouth corner to lift or drop, mostly on the ${c.S}.`,
-    plainMoves: c.face ? `Nothing moves, but the smile muscles, or the muscles that pull the mouth corner down, light up on your ${c.S} side.` : FACE_MOVES_PLAIN,
+    plainMoves: c.face ? `Your ${c.S} mouth corner goes up, out and back (a smile), or down; the other corner moves a little.` : FACE_MOVES_PLAIN,
     plainCaveat: c.face ? FACE_COLOUR_PLAIN : NO_FACE_MESH_PLAIN
   }),
   lips: c => ({
     plainLabel: 'Lips',
     plainLead: `This spot in ${half(c)} tells your lips to purse, stretch, lift or drop.`,
-    plainMoves: c.face ? 'Nothing moves, but the muscles around your mouth light up.' : FACE_MOVES_PLAIN,
+    plainMoves: c.face ? 'The lips purse forward, stretch wide, or the upper lip lifts, the lower lip pushes up or drops.' : FACE_MOVES_PLAIN,
     plainCaveat: c.face ? FACE_COLOUR_PLAIN : NO_FACE_MESH_PLAIN
   }),
   jaw: c => ({
@@ -1422,6 +1465,8 @@ const PLAIN_ACTION = {
   hip_extend: c => ({ plainLabel: `Swing ${c.S} thigh down and back`, pull: 'buttock muscle and back-of-thigh muscles', relax: 'deep hip muscles' }),
   hip_abduct: c => ({ plainLabel: `Swing ${c.S} thigh out`, pull: 'side buttock muscles (and one at the side of the hip)', relax: 'inner thigh muscles' }),
   hip_adduct: c => ({ plainLabel: `Swing ${c.S} thigh in`, pull: 'inner thigh muscles', relax: 'side buttock muscles' }),
+  hip_turn_out: c => ({ plainLabel: `Turn ${c.S} thigh outward`, pull: 'the buttock muscle and the small deep hip turners behind the hip', relax: 'small side buttock muscles and one at the side of the hip' }),
+  hip_turn_in: c => ({ plainLabel: `Turn ${c.S} thigh inward`, pull: 'small side buttock muscles and one at the side of the hip', relax: 'small deep hip turners behind the hip' }),
   trunk_flex: () => ({ plainLabel: 'Bend forward', pull: 'belly muscles on both sides', relax: 'back muscles along the spine' }),
   trunk_extend: () => ({ plainLabel: 'Lean back', pull: 'back muscles along the spine and in the low back', relax: 'belly muscles on both sides' }),
   trunk_side: c => ({ plainLabel: `Bend to the ${c.S}`, pull: `belly and back muscles on your ${c.S} side`, relax: `belly and back muscles on your ${c.So} side` }),
@@ -1430,6 +1475,12 @@ const PLAIN_ACTION = {
   r_shoulder_extend: () => ({ plainLabel: 'Swing right arm down and back', pull: 'back shoulder, back and upper-arm muscles', relax: 'front shoulder, chest and upper-arm muscles' }),
   r_shoulder_abd: () => ({ plainLabel: 'Swing right arm out to the side', pull: 'top and back shoulder muscles (including two on the shoulder blade)', relax: 'chest and back muscles that pull the arm in' }),
   r_shoulder_add: () => ({ plainLabel: 'Swing right arm in to the front', pull: 'chest and back muscles that pull the arm in (and one under the shoulder blade)', relax: 'top shoulder muscles' }),
+  shoulder_flexion: () => ({ plainLabel: 'Raise left arm forward', pull: 'front shoulder and upper-arm muscles, and the top of the chest muscle', relax: 'back shoulder and back muscles' }),
+  shoulder_extension: () => ({ plainLabel: 'Swing left arm down and back', pull: 'back shoulder and back muscles', relax: 'front shoulder and upper-arm muscles' }),
+  shoulder_abduction: () => ({ plainLabel: 'Swing left arm out to the side', pull: 'top and back shoulder muscles (including two on the shoulder blade)', relax: 'chest and back muscles that pull the arm in' }),
+  shoulder_adduction: () => ({ plainLabel: 'Swing left arm in across the body', pull: 'front shoulder, upper-arm and chest muscles', relax: 'the top shoulder muscle' }),
+  r_shoulder_out: () => ({ plainLabel: 'Turn right arm outward', pull: 'muscles on the back of the shoulder blade and the back shoulder muscle', relax: 'the muscle under the shoulder blade and chest muscles' }),
+  r_shoulder_in: () => ({ plainLabel: 'Turn right arm inward', pull: 'the muscle under the shoulder blade, chest, back and front shoulder muscles', relax: 'muscles on the back of the shoulder blade' }),
   elbow_flexion: () => ({ plainLabel: 'Bend left elbow', pull: 'muscles at the front of the arm (biceps and others)', relax: 'muscles at the back of the arm (triceps)' }),
   elbow_extension: () => ({ plainLabel: 'Straighten left elbow', pull: 'muscles at the back of the arm (triceps)', relax: 'muscles at the front of the arm (biceps and others)' }),
   r_elbow_flex: () => ({ plainLabel: 'Bend right elbow', pull: 'muscles at the front of the arm (biceps and others)', relax: 'muscles at the back of the arm (triceps)' }),
@@ -1570,7 +1621,8 @@ const PLAIN_DETAIL = {
     detail: `This is the hip area for your ${c.S} leg, in ${BRAIN_HALF(c)}. It sits in the outer ring of the foot zone, where it meets the ` +
       `area for the trunk (trunk territory). ${LEG_PATH_PLAIN(c)} In the game, ${SIM_SIGNAL} lifts the ${c.S} thigh ` +
       '(iliopsoas, rectus femoris and sartorius) or swings it down and back (gluteus maximus and hamstrings). It can also swing ' +
-      'the thigh out to the side (gluteus medius and minimus) or back in (the adductors). Muscles near the top of the leg ' +
+      'the thigh out to the side (gluteus medius and minimus) or back in (the adductors), and turn it outward (the deep hip ' +
+      'rotators with gluteus maximus) or inward (gluteus minimus and tensor fasciae latae). Muscles near the top of the leg ' +
       '(proximal leg muscles) also help with posture and balance. The game does not model that.'
   }),
   scan_superior: c => ({
@@ -1600,18 +1652,19 @@ const PLAIN_DETAIL = {
       'brain’s right half (medial edge, right hemisphere). Most of its signals cross to the other side (crossed ' +
       'corticospinal fibres dominate). Muscles near the body, such as the shoulder cap muscle, also get weaker signals ' +
       'from the same side (same-side input to proximal muscles such as the deltoid; Bawa 2004). In NeuroSurge, your look ' +
-      'and the W/A/S/D keys already move the left shoulder. So looking here lights up and marks the area, but it adds no ' +
-      'separate movement. Brain stimulation rarely moves the shoulder on its own (isolated shoulder movement; Gordon ' +
-      '2023). Anatomical meshes do not establish which muscles join a movement (muscle recruitment). The activity shown here is simulated, not measured.',
-    noAction: 'Your look and the W/A/S/D keys move the left shoulder (the reach lane). It has no separate look action ' +
-      '(gaze action), so looking here only lights up and marks the area.'
+      'and the W/A/S/D keys also move the left shoulder. From there this area swings the whole left arm at the shoulder: ' +
+      'forward and up (front deltoid, coracobrachialis), down and back (back deltoid, teres major, latissimus dorsi), out ' +
+      'to the side (middle and back deltoid, infraspinatus, teres minor) or in across the body (front deltoid, ' +
+      'coracobrachialis, pectoralis major). Brain stimulation rarely moves the shoulder on its own (isolated shoulder movement; Gordon ' +
+      '2023). Anatomical meshes do not establish which muscles join a movement (muscle recruitment). The activity shown here is simulated, not measured.'
   } : {
     detail: 'This is the shoulder area for your RIGHT arm. It sits at the inner edge of the arm and hand zone in the ' +
       'brain’s left half (medial edge, left hemisphere). Most of its signals cross to the other side (crossed ' +
       'corticospinal fibres dominate). Muscles near the body also get weaker signals from the same side (same-side ' +
       `input to proximal muscles; Bawa 2004). In the game, ${SIM_SIGNAL} raises the right arm up (front deltoid, ` +
-      'pectoralis major, coracobrachialis) or swings it down and back, and swings it out to the side (middle deltoid, supraspinatus) or back in to the front. ' +
-      'The arm starts beside your right thigh. The areas for the upper and lower arm overlap (proximal and distal arm representations; Devanne 2006). Brain ' +
+      'pectoralis major, coracobrachialis) or swings it down and back, swings it out to the side (middle deltoid, supraspinatus) or back in to the front, ' +
+      'and turns it outward (infraspinatus, teres minor) or inward (subscapularis, pectoralis major) about its own length. ' +
+      'The arm starts stretched out along your body. The areas for the upper and lower arm overlap (proximal and distal arm representations; Devanne 2006). Brain ' +
       'stimulation rarely moves the shoulder on its own (in isolation; Gordon 2023).'
   }),
   elbow: c => (c.H === 'right' ? {
@@ -1819,7 +1872,8 @@ const PLAIN_DETAIL = {
       'why a stroke on the brain’s surface usually spares the forehead (cortical stroke; monkey tract tracing: Morecraft ' +
       '2001). The 3D body has no face muscles for expressions (BodyParts3D 4.0 has no facial-expression muscles). ' +
       `${c.face ? `${FACE_SET_PLAIN} So the game colours the forehead muscle (or the frown muscles) on both sides with ` +
-        'the made-up level (frontal belly of occipitofrontalis; simulated display level). The face shape does not change.' : NO_FACE_LEVEL} ` +
+        'the made-up level (frontal belly of occipitofrontalis; simulated display level), and moves them: the brows go up ' +
+        'and the forehead bunches, or the inner brows come down and together (a game rule, exaggerated so it shows).' : NO_FACE_LEVEL} ` +
       'In brain scans, raising the eyebrows also switched on the in-between areas (fMRI; co-activated ' +
       'the inter-effector regions; Gordon 2023). So this small area is a simplified placement (schematic).'
   }),
@@ -1828,8 +1882,9 @@ const PLAIN_DETAIL = {
       '(orbicularis oculi). Signals to the upper face come from both halves of the brain (corticobulbar input from both ' +
       'hemispheres; Morecraft 2001, in monkeys). ' + (c.face
       ? `The 3D body has no ring muscle around the eye (BodyParts3D 4.0 has no orbicularis oculi). ${FACE_SET_PLAIN} So the ` +
-        'game colours the ring muscles around both eyes with the made-up level (simulated display level). The eyelids do ' +
-        'not move. '
+        'game colours the ring muscles around both eyes with the made-up level (simulated display level), and the eyelid ' +
+        'part of each ring slides down over the eyeball until the eye is shut (or the upper lid goes up for a wide-open ' +
+        'eye): a game rule, exaggerated so it shows. '
       : 'The 3D body has no ring muscle around the eye and no other face muscles ' +
         `for expressions (BodyParts3D 4.0 has no orbicularis oculi or other facial-expression muscle). ${NO_FACE_LEVEL} `) +
       'Opening the eyes (levator palpebrae superioris, oculomotor nerve) and blinking (blink reflexes) use separate ' +
@@ -1844,8 +1899,8 @@ const PLAIN_DETAIL = {
       'superioris alaeque nasi, transverse part of nasalis). The wing part of the nose muscle and a small muscle under ' +
       'the nose tip flare the nostrils (alar part of nasalis, depressor septi nasi). ' + (c.face
       ? `The 3D body has none of these muscles (BodyParts3D 4.0). ${FACE_SET_PLAIN} The nose muscle is one piece per side ` +
-        '(nasalis). So the game colours them with the made-up level (simulated display level), and the nose does not ' +
-        'change shape. '
+        '(nasalis). So the game colours them with the made-up level (simulated display level), and moves them: the side ' +
+        'of the nose bunches up, or the nostril wings pull out (a game rule, exaggerated so it shows). '
       : `The 3D body has none of these muscles (BodyParts3D 4.0). ${NO_FACE_LEVEL} `) +
       'The face zone is one simplified row here (representative); the nose has no separately measured spot on this strip.'
   }),
@@ -1856,7 +1911,8 @@ const PLAIN_DETAIL = {
       `fibres are mainly crossed; Morecraft 2001, in monkeys). So the ${c.S} mouth corner gets most of the signal from ` +
       'this half (this hemisphere’s drive). The 3D body has none of these face muscles (BodyParts3D 4.0 has none of these ' +
       `facial-expression muscles). ${c.face ? `${FACE_SET_PLAIN} So the game colours them on the ${c.S} side with the made-up ` +
-        'level (simulated display level). The face shape does not change.' : NO_FACE_LEVEL} This only covers smiling on purpose (voluntary smiling). A smile from ` +
+        `level (simulated display level), and the ${c.S} mouth corner goes up, out and back toward the cheekbone, or down ` +
+        'toward the jaw; the other corner moves a little (a game rule, exaggerated so it shows).' : NO_FACE_LEVEL} This only covers smiling on purpose (voluntary smiling). A smile from ` +
       'feelings also uses other pathways (emotional smiling, separate pathways).'
   }),
   lips: c => ({
@@ -1867,7 +1923,8 @@ const PLAIN_DETAIL = {
       'nucleus). For the lower face, most of them cross over (crossed predominance; Morecraft 2001). The 3D body has no ' +
       `shape for the ring muscle around the mouth (BodyParts3D 4.0 has no orbicularis oris mesh). ${c.face ? `${FACE_SET_PLAIN} ` +
         'So the game colours the ring muscle around the mouth, and the other lip muscles, with the made-up level ' +
-        '(simulated display level). The lips do not move.' : NO_FACE_LEVEL} ` +
+        '(simulated display level), and moves the lips: pursed forward, stretched wide, the upper lip lifted, the lower ' +
+        'lip pushed up and out or pulled down (a game rule, exaggerated so it shows).' : NO_FACE_LEVEL} ` +
       'Moving the lips is a classic landmark in brain-scan body maps (fMRI motor somatotopy; Lotze 2000). Speech uses ' +
       'this area together with the jaw, the tongue and the voice box (larynx).'
   }),
@@ -1953,7 +2010,7 @@ const PLAIN_NOTE = {
     'movement-map muscles.',
   supination: () => 'The biceps turns the palm up strongly, mainly when the elbow is bent (biceps brachii is a powerful ' +
     'supinator mainly when the elbow is flexed; UAMS).',
-  r_supinate: () => 'This turns your right palm up. Turning the palm down brings it back.',
+  r_supinate: () => 'This turns your right palm up, then it turns back. With the palm already up, it strikes its stop and you see a short twitch.',
   ankle_invert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
   ankle_evert: () => 'One turning line through the ankle stands in for the joints below it (subtalar and midtarsal).',
   hip_flex: () => 'With a straight knee, the muscles at the back of the thigh would stop the lift early (hamstrings), so the ' +
@@ -1991,8 +2048,8 @@ const PLAIN_NOTE = {
     'nerve (the oculomotor nerve, a separate pathway).',
   smile: c => (c.face
     ? 'These muscles come from an extra set of 3D face muscles (the face-muscle packet, face-muscles-r1). The smile is ' +
-      `only a made-up level (a simulated display level), shown as colour on the ${c.S} cheek muscles. The face shape does ` +
-      `not move. The ${c.S} side gets most of the signal from this half (this hemisphere’s drive).`
+      `only a made-up level (a simulated display level), shown as colour on the ${c.S} cheek muscles; the ${c.S} mouth ` +
+      `corner moves, the other a little (a game rule). The ${c.S} side gets most of the signal from this half (this hemisphere’s drive).`
     : 'The 3D body has no shape for these muscles (BodyParts3D 4.0 has no mesh for them). The smile is only a ' +
       `made-up level (a simulated display level), and nothing moves or is coloured. The ${c.S} side would get most of the ` +
       'signal from this half (this hemisphere’s drive).'),
@@ -2029,6 +2086,7 @@ function buildRegions({ faceLoaded = false } = {}) {
         if (a.stabilizers && a.stabilizers.length) full.stabilizers = [...a.stabilizers];
         if (a.catalogRoles) full.catalogRoles = a.catalogRoles;
         if (a.lateralBias) full.lateralBias = a.lateralBias;
+        if (a.jerkStop === true) full.jerkStop = true; // (BODYMAP: ns-actions does not throw the jerk past this end)
         if (a.note) full.note = a.note;
         const plainA = PLAIN_ACTION[plainActionKey(a.id)];
         if (!plainA) throw new Error(`ns:bodymap_plain: no plain text for action ${a.id}`);

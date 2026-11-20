@@ -1355,7 +1355,9 @@ export const SEGMENT_DEFAULTS = freezeR2({ gapTolU: 0.03, hysteresisU: 0.004, hy
  * plus the R558 game-defined left-hand actions of ns-actions EXTRA_ARM_ACTION_IDS). */
 export const LEFT_ARM_ACTION_IDS = freezeR2([...MARKERS.map(m => m.actionId), 'pronation', 'supination',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion',
-  'little_extension', 'thumb_opposition', 'thumb_reposition', 'wrist_radial_deviation', 'wrist_ulnar_deviation']);
+  'little_extension', 'thumb_opposition', 'thumb_reposition', 'wrist_radial_deviation', 'wrist_ulnar_deviation',
+  // 20 November 2026 (BODYMAP): the left shoulder's four swings of the whole arm (ns-actions SHOULDER_ACTION_DEG)
+  'shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction']);
 const MARKER_U = new Map(MARKERS.map(m => [m.actionId, m.u]));
 
 const HEMIS = freezeR2(['right', 'left']);

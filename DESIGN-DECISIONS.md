@@ -2589,6 +2589,148 @@ Also: the pack loader's timing test (`tests/pack.test.mjs`) took the next pack's
 the timers under the full parallel test run sometimes missed (302 ms against 290); its stalled-pack case now runs with
 the job's times three times as long.
 
+## 171. A neck without a scarf; neck movements you can see from the eyes (20 November)
+
+The user: "Let's ensure that the human neck looks natural. Right now it looks like there's a scarf around the neck. And
+let's ensure, certainly in first person view and all other views, neck movement is exaggerated, so you can see it's
+moving up and down, left and right, extension, flexion, etc." Still standing: "the camera view getting locked to a
+downward angle, especially when the neck is activated from the brain ... so the camera view is always flexible" (185)
+and no zoom or punch-in (197).
+
+**The scarf was the platysma.** It is the thin sheet in the skin of the neck that runs from the lower jaw over the collar
+bones onto the upper chest. In the source model it is one smooth sheet. The start posture bends the neck forward 40 of
+its 50 degrees, so the chin comes down toward the chest and the front of the neck is a third of its height. The sheet is
+carried by the jaw at its top and by the chest at its foot, so it folded into a crumpled band along the jaw and a
+thicker one round the root of the neck, in a lighter tone than the muscles round it. This was seen on the mirror body,
+on your own body from outside, and in pictures of the page's body baked in the start posture. With the neck straight (a
+check only) it is smooth again. A sheet pressed to a third of its height has to fold whatever its skin weights are, and
+a sheet with its middle cut out would be a torn sheet. So both bodies are now drawn without the platysma (`NECK_SHEET`
+and `leaveOutNeckSheet` in `ns-body.mjs`, used by `installBody` in `ns-app.mjs`), as in an anatomical figure with the
+skin taken off. The neck now shows the two sternocleidomastoids running down to the breastbone and the strap muscles
+between them. The platysma stays in the rig, the posture bake, the skin records and the movement map. The scene is given
+no triangle of it, so it has no record, no mirror twin, no pick and no beam end. Not changed: the neck's thickness
+(section 97), the thicker descending trapezius, and the start posture.
+
+**Neck movements from the strip move the eye view** (`NECK_VIEW` and `neckViewStep` in `ns-app.mjs`, `turnEyeView` in
+`ns-camera.mjs`). Since section 130 a neck movement moved only the drawn head, so in the eye view, where you cannot see
+your own neck, nothing moved. Measured before this change, at the neck area's look: turning drove the drawn neck from
+16.8 to 80 degrees and back to 56.8, a side tilt from 0 to 45 and back to 18, and tilting back from 30.7 to −45 and back
+to −19.3. The camera did not move by a hundredth of a degree in any of them. Now the eye view swings with the movement:
+- the jerk throws the view the same way as the head. A turn turns it left or right, a bend forward tips it down,
+  tilting back tips it up, and tilting to a side rolls the picture. Each is a share of the neck's own movement: 0.4 of
+  a turn, 1.5 times a bend forward, 0.3 of a tilt back and 0.5 of a side tilt, at most 36 degrees (24 for the roll).
+  The whole 80-degree turn would throw the picture off the brain, while a bend forward has only 10 degrees left in the
+  bowed start posture, so it is shown larger than it is;
+- the movement's partial return brings the view part of the way back with the head;
+- once the neck has been still for 0.35 s (longer than the jerk's hold at the end), the view eases back to where the
+  pointer points over 0.5 s, and ends there exactly. The drawn head keeps its held angle, and the mirror body and the
+  outside view show it. So the view is never left turned. The pointer's own range is not touched: during the swing the
+  pointer moves the view as always, and afterwards the view is the pointer's own, reaching 88 up and 88 down with the
+  neck held either way (checked);
+- only the camera turns. It turns about the eye, exactly as for an ordinary look, so nothing grows or shrinks (no zoom).
+  The body, the left hand and a limb's hold keep the pointer's look. The crosshair passing over the strip during the
+  swing switches nothing on, because the gaze is silent meanwhile. The view does not swing from outside (E), while the
+  view changes, or under reduced motion. Reset does not swing it.
+
+Measured after this change (start view, 1600 by 900, the neck area's look and a click): turning left 0 → 80 → 40, view
++32 → +16 → 0 by about 2 s; a click 40 → 80 → 40, view +16 → 0 in about 1 s; turning right the same mirrored (−32.4 at
+the click's peak); a bend forward (the head's 10 degrees), view down 15 and back, with the jerk's rebound visible as a
+shudder; tilting back, view up 15 on a click (30 on the first press, since the head goes from the posture to its end);
+a side tilt rolls the picture about 22 degrees, then 9, then none. Seen on pictures through each movement.
+
+**Tilting the head back reaches the neck's own end.** The head's pose still applied the camera's old limits (85 degrees
+up from the start posture) to the drawn head, from when the camera rode on the head. The view is the look alone now, so
+those limits only cut the drawn head short: "Tilt head back" stopped at −45, where the neck's own end is −60. They now
+apply only while the camera rides the head (`LOOK_BENDS_TRUNK`, false). The look's head reaches at most 88 up as well
+(85 before), still inside the neck's range. Every other neck movement already went to its joint's end (turn 80, side
+tilt 45, bend forward 50).
+
+These are display rules of this game. The swing, its shares and its times are not measured head or eye movements.
+
+Not right or not done:
+- The cards for the mouth's corner and the lower lip still name the platysma among the muscles that pull, and it is no
+  longer drawn. Their other muscles still light up.
+- In the start posture the front of the neck is still short: the chin is low over the chest. Between the strap muscles a
+  pale strip of the neck's vertebrae shows where a windpipe and larynx would be, because the model has neither in the
+  neck.
+- From outside (E) the neck areas cannot be aimed at (the outside look stops 19 degrees up), and a click there does not
+  repeat a neck movement. A neck movement is seen from outside only if E is pressed right after it. Looking at the neck
+  areas, the outside camera puts your own head at the picture's lower left corner, mostly hidden by the limb bar.
+- The mirror body's head goes to the joints' ends, but in the start view it is about 30 pixels tall: a bend forward of
+  10 degrees cannot be seen on it.
+- Pressing E during a swing (within about 2 s of a neck movement) drops the swing at once: a jump of up to 36 degrees.
+- While the view swings and eases back (about 1 to 2 s per press), an area the crosshair rests on is not switched on
+  until the swing ends.
+- During a roll the labels and the arrows turn with the picture (seen), and picks go through the crosshair, which a roll
+  does not move. Only a pick with a free pointer (pointer not captured) would be off by the roll, for that second.
+
+## 172. No muscle disappears or turns see-through: the collar box cuts nothing, the glass is lines only over a body, no halo; the eyes are never glass (20 November)
+
+The user: "ensure, especially with the right arm, that muscles do not become transparent under certain angles, because
+in previous versions, if you hold the arm up in certain angles, muscles will disappear and turn transparent. That
+shouldn't be happening."
+
+The cause. The box that ends your own body at the collar in the eye view (sections 148 and 158, `EYE_COLLAR` in
+`ns-scene-three.mjs`) cut with clipping planes, and the planes were on every material of your own body; the muscles of a
+class share one material, so every muscle was in it, the arm's too. Whatever came into the column over the collar was
+cut away. With the right arm chosen and carried up over the head, a look to the right left two finger tips of the hand
+and nothing of the forearm; a look straight down with the arm out cut the deltoid and the front of the shoulder open,
+their insides showing; the arm's own deltoid and rotator cuff and the trunk muscles that a raised arm carries along (the
+pectoralis major, latissimus dorsi, serratus anterior, the collar bone and the shoulder blade) went into the box the same
+way. The outline's picture and the glass cut only the trunk and the head, so the cut arm kept its ink lines and its
+glass over a hole: muscles that disappear and turn transparent. The left arm is the game arm, drawn with its own
+materials and never cut: hence "especially with the right arm". No leg reached the box at any look tried.
+
+The change. `EYE_COLLAR.cut` is false: the box cuts nothing, in the picture, the outline's picture and the glass. The
+neck's meshes mostly inside it are still not drawn in the eye view (`hide`, section 158), so the head and neck are not
+drawn and no torn muscle shows. What the box cut besides is now drawn whole, to its own attachments at the root of the
+neck: the top few per cent of the trapezius's transverse part, rhomboid minor, serratus posterior superior and the first
+thoracic vertebra, and at the start posture also the first ribs, the next two vertebrae and the tops of a few deep back
+muscles (the trapezius's top edge now ends in a point at the spine instead of a level cut; pictures at looks all round).
+A rule by part or outline group was tried and does not do: the arm's own deltoid and rotator cuff and the pectoralis are
+in the trunk's outline group (they ride on the collar bone, the shoulder blade and the ribs). Also: the cap's volume counted as covering your body even with the cap not drawn (section
+148's "red plate", off since then), so the top of the breastbone and the inner ends of the collar bones took no aim and
+hid no label or beam; they count as seen now, and a hidden neck mesh still hides nothing.
+
+Checked. A scripted sweep (the right arm stepped through its range with the look and W/A/S/D, 194 steps, the drawing
+read after every step): the arm lay partly in the box at 181 steps and in the picture there at 83;
+cut at none, and no muscle of either body dropped by the culling. Not causes: the culling with stale bounds of skinned
+muscles (none of 389 muscles of both bodies dropped while on screen in four sequences), the camera's near plane after
+section 166, the see-through over the brain (off since `OWN_BODY_SOLID`).
+
+**The glass over a body part: lines only.** The glass of section 147 made a muscle in front look see-through too: with
+the right arm raised in front of the strip, the areas behind it were outlined on it with a light-blue fill (0.2), and
+with the arm folded over the right thigh the thigh counted as locked away (34 % of it seen, under the 35 % of the rule)
+and its strong fill (0.42) lay over the forearm, which read as blue glass; a leg behind the other thigh washed that thigh
+the same way. The user's word wins over the fill: wherever a body part is in front (yours, the mirror body's, the game
+arm), a hidden thing is shown by its light-blue line alone (`seeFillOver` in `ns-see.mjs`; the ink pass asks the same
+for each sample, `fillOver`); where the brain is in front the fill stays, so a body behind the brain is still one glass
+figure (seen with the brain pulled in front of the mirror body). The fill strengths, the locked-away rule and what the
+crosshair takes are unchanged; a locked-away limb is now marked by its line. Its line reads clearly on dark muscle; on
+pale muscle and tendon it is thinner to the eye than the old fill was.
+
+**The eyeballs and their nerves are never glass.** The user, a little later: "And I'm not sure how important it is to
+have transparency outline effects for the eyes and their nerve cords." The eyeballs, the optic nerves with their sheaths
+and the chiasm are no longer a ghost anywhere (`SEE.eyesGlass` false): not behind a body part, not behind the brain's own
+surface. The two circles and the X they drew under your body in every opening picture (section 147's own "not right"
+list) are gone. They still cover what lies behind them, and a body part behind an eyeball still shows through it; every
+other hidden thing keeps its glass.
+
+**A lit muscle stays solid.** Another case of a muscle that read as translucent: with the mirror body held near and the
+look turning the head, the turning neck muscles, lit at the look's low glow (`HEAD_GLOW` in `ns-app.mjs`), showed as a
+translucent magenta strap down the side of the neck. The muscle itself was opaque; the cause was its glow halo
+(`MUSCLE_HALO`, from the first "optogenetic glow"): an additive copy of the muscle pushed 12 mm out along its normals on
+the mirror body (3 mm on yours), drawn wherever its back faces lay in front of something, so the shells of neighbouring
+lit muscles lay over each other and over the muscles beside and under them. `MUSCLE_HALO.on` is false: a lit muscle
+shows its glow on itself, solid (its colour, its light and its rim, as before). Seen side by side: the strap is matte
+muscle now; a muscle lit from the strip looks almost the same as before (the halo was faint there).
+
+QA only: `inspect().scene.organs.neck.draw` while `globalThis.__nsLimbDraw` is true: per part of your body the meshes,
+the posed vertices in the box, those cut, and the meshes the culling drops although on screen. A browser test,
+`tests/browser-arm-collar.mjs` (about 20 s), carries the right arm up over the head, round and down, reads that after
+each of 75 steps, and fails if anything of your body is cut or culled while on screen, or if the arm never went into the
+box (it went in at 54 steps, in the picture at 11, in three runs alike; with the old cut it fails at once).
+
 ## 173. Thinner, fainter light beams (20 November)
 
 The user: "let's have the corresponding pulses be a lot thinner and a lot less opaque. As right now they're obstructing
@@ -2639,6 +2781,347 @@ hand, whilst clicking grasps the right hand").
   Esc page's Space row (`tests/browser-play-settings.mjs`) is restated with a dated note quoting the user, and so is the
   card's word in `tests/chunking.test.mjs`.
 
+## 175. A clear movement for every motor area, both ways (20 November)
+
+The user: "make sure there's clear movement for each brain activation area. And you can clearly identify what type of
+movement it is for each area. And make sure that the movement is as precise as possible with as many activation spots
+and encoded movements as possible without game destabilisation." And: "That goes both ways for when you're moving the
+body and the brain area is activating. But again, without game destabilization." (The same evening the user asked for
+no permanent movements: an activation contracts and returns, Message 206; how an activation runs is another change.
+Here each movement is judged by its contraction.)
+
+**The audit.** Every area's every movement was switched on from the start posture, in the game's own model (the joints'
+angles at the jerk's peak, and how far the moved bones travel in millimetres, with the game's rig) and in the browser
+(how far the moved bones travel on screen at 1600 by 900, on your body and on the mirror body; only the bones that
+movement moves are counted, so the hand and toes that the look's pitch closes and opens are not taken for movement).
+The map had 132 movements in 45 of its 54 areas. Found:
+- The left shoulder area moved nothing (the look and W/A/S/D carry the left arm). Nor do the three in-between areas of
+  each half and the tongue area (no tongue in the body).
+- The face areas (brows, eyelids, nose, mouth corners, lips: 22 movements) show only colour: no face mesh changes
+  shape. Only the jaw (opening 30 degrees, the chin travels about 5 cm) and the swallow (the throat bone 15 mm) move.
+- Seven movements end where the part already is, at its end stop, and so move nothing from the start posture: clench
+  the jaw, lower the throat bone, turn the right palm up, bring the right fingers together (each half's), and the left
+  hand's "bring fingers together"; the left wrist's two sideways bends move nothing on the game arm (it has one wrist
+  axis). Small ones: straighten a knee (6 degrees from the start), straighten the right elbow (8), swing the right arm
+  in (5), bend the head forward (10: the start posture holds the neck at 40 of its 50).
+- Nothing could move the right upper arm or either thigh about its own length from the strip, though a drag and the
+  limb turn do.
+- The reverse: a drag that turned the right palm up lit only the forearm area, not its movement; turning the upper arm
+  or a thigh by drag lit only the shoulder or hip area; a turn of the trunk lit both trunk areas without a movement.
+- From the start look the toe areas (each half's four movements) cannot be looked at: they lie on the brain's inner
+  wall, facing the gap between the halves. One spot of the right half's "Lift big toe" was found in some 6 000 looks.
+- "Swing thigh in" was thrown past its end (the legs side by side) 23 degrees on, into the other leg.
+
+**What changed (what each area moves).**
+- The left shoulder area has four movements, as the right shoulder's: raise the left arm forward, swing it down and
+  back, out to the side, in across the body. They swing the whole game arm at the shoulder (`SHOULDER_ACTION_DEG` in
+  `ns-actions.mjs`: 60, 45, 50 and 35 degrees) on top of where the look and the keys hold the hand (`shoulderSwing` in
+  `ns-app.mjs` turns the free hand's place about the shoulder for the fit; the kept place is not turned, so the arm
+  comes back to it). They light the reach keys' own shoulder muscles. In the browser the left hand travels about 90 to
+  390 pixels at a press. A tap on the shoulder cap or the rotator cuff now does the matching movement.
+- New spots on the strip, in the areas' own shares: "Turn right arm outward / inward" (the upper arm about its own
+  length, 90 and 40 degrees: at 70 inward the range-of-motion sweep found the forearm 32 mm inside the thigh) and each
+  half's "Turn thigh outward / inward" (45 and 40 degrees), with their muscles by the atlas's names. The map has 142
+  movements in 46 areas.
+- The left hand's "Bring fingers together" now presses the fingers together (to -5 degrees, the joints' own stop).
+- "Swing thigh in" carries its end as a stop for the contraction (`jerkStop`, handed on with the action), for the code
+  that runs an activation.
+- Both ways: an action that ends at the joint's start angle and end stop is the movement toward that stop
+  (`jointAreaIndex` in `ns-grasp.mjs` takes the joints' limits), so a drag that turns the right palm up lights "Turn
+  right palm up". Turning the upper arm or a thigh lights the new turns. A trunk turn lights its own (crossed) area and
+  movement, as the neck's turn does. The left arm swung by the look or the keys lights the marker of the left shoulder
+  movement it makes. A test walks every joint and direction of the legs and the right arm (the keys, a drag, both
+  dials) and finds its own area and movement on its own side (`tests/bodymap-moves.test.mjs`).
+- Checks only: `inspect({ bonePx: true })` gives every bone's place and the camera, for measuring travel on screen.
+
+**Not changed, and why.** The face areas still show colour only (the face meshes have no movement, and the mirror
+body's face is about 40 pixels tall at the start: a lift of a few millimetres would be under two pixels). The in-between
+areas still move nothing (the map's own reason: stimulation there moves no single part). The toe areas stay on the
+inner wall (moving them is a change to the strip's layout on the brain). The seven movements that end where the part
+already is still move nothing; with no permanent movements (Message 206) nothing is ever held for them to bring back,
+so they need a rule of their own in how an activation runs (a short twitch off the end stop and back, for example) or
+another movement. The two hemispheres' trunk, neck-bend, face, jaw and swallow areas move the same parts the same way
+(midline muscles get input from both halves); they are not neighbours on the strip.
+
+## 177. No permanent movements: every activation contracts, then simply returns (20 November)
+
+The user: "I think it's better actually if there are no permanent movements. ... And what I mean by no permanent
+movements is that when you tap any area of the brain, you activate any area, it will contract, then return to its
+previous place. But in returning to its previous place, you won't see corresponding activity and muscle activation. It
+will just return." This replaces Message 185's "They don't have to return fully, just partially" (section 141, and
+section 159 for the left arm) and the latch the game has had since 11 November: a movement switched on from the brain
+was driven to its end, eased back half way and held there until the opposite movement or Reset body.
+
+**Contract, then return** (`JOINT_LATCH`, `contractBody`, `contractArm` and `integrate` in `ns-actions.mjs`). Every way
+of switching a movement on (a look that rests on an area, a click, a muscle tap, the arrow keys' step, and a number key
+in the code that still accepts one) now does the same two things:
+- **the contraction**: for 0.4 seconds from the press the part is driven to the movement's end by the same spring as
+  before (the electroshock of Message 154): it slams into the end at about 0.1 s, is thrown back off it, slams in again at
+  about 0.25 s and has a moment there. The hold used to be 0.3 s; at 0.3 the return began right on the second slam, so
+  the lit muscles could hardly be read;
+- **the return**: then it goes back, on a soft spring with no wobble, to where it was just before the press, and stays.
+  "Where it was" is the part's place: the start posture, or wherever the player put it with W/A/S/D, a drag, a Space
+  carry or the limb turn (those place a limb and keep it: that is the player moving the body, not the brain). A
+  further press during the contraction or the return drives the part again from wherever it is, so repeated clicks give
+  repeated contractions and returns.
+
+The left arm does the same on its pose drive (0 the hand's neutral pose, 1 the movement's end), so it returns to the
+place the look and the keys give the hand; the left shoulder area's four swings (section 175) too. The forearm-turn
+areas turn the forearm for the contraction and it turns back to the side the palm was on (only the double tap of Space
+changes that side). Under reduced motion the part goes out and back on gentle springs with no bounce (0.45 s out).
+
+**Nothing lit on the way back.** The area, its muscles, the cone of light and the activity's display level of a movement
+are lit for exactly the contraction and fade out over its last 0.08 s, so they are dark from the first frame of the
+return (`pulseMove`, `lightFadeS`). No antagonist lights up for a return. Three things made light without a press and
+were changed so a return shows nothing:
+- a look that only passes over an area (leaves it before the 0.07 s that switches it on) moved nothing, yet its area
+  stayed lit for a second: its light now ends when the look leaves (`dropPendingLook`);
+- a small look movement within an area relit it for another second: it now starts nothing on an area with a movement
+  (its light is its contraction; a click does it again);
+- the glow of the head and of the player's own movement (section 82; `headActivity` and `feedHeadMove` in
+  `ns-app.mjs`) read the head's whole angle, so a neck movement's return lit the neck areas, and its speed lit the
+  opposite neck area. They now read the look's own share only (`lookShareOf`). Measured in the browser: "Turn head to the
+  left" 0 → 80 → back to 0 in about 1.2 s, with every area at its resting level (the look's own 0.05 on the neck area)
+  from the first frame of the return.
+
+**What went with the latch.** The stage rule (an opposing movement first brought a held part back, "first press
+brings it back" on the card, `infoActionBack`, `latchView().back`, the number key's "brought the part back" line), the
+faint hints on the opposing areas and their muscles (`latchView().hints`, the hint rows and links), "already there" for
+a body movement (`latchView().still`: a press always moves now), the status line that a held neck movement had turned
+the head and which key brought it back (`headGoalTaken`, `headBackKey`), and the held-key movement of a number key
+(`MOVE_HOLD`: a held key is an ordinary press). `latchView` is replaced by `motionView` (what is contracting and what is
+on its way back), and `inspect()` shows it as `motion`, with `areasShown` (the area levels drawn). The right shoulder's
+rule that the later of its two planes wins (`JOINT_CONFLICTS`) now holds at the peak of a contraction: from a raised
+arm, "Swing right arm out to the side" is out to the side at its peak, and both joints then return to where they were.
+The used-muscle mark (Message 143) stays. "Already there" stays only where the left arm cannot move: a straighten of a
+straight elbow, and its two sideways wrist bends.
+
+**Two findings of the BODYMAP audit (section 175).**
+- *No part is thrown past its movement's end.* The spring overshot an end in the middle of a joint's range by about
+  40 % ("Swing thigh in" threw the thigh 23 degrees past its end into the other leg; "Turn right arm inward" reached -70
+  where the forearm meets the thigh). A movement's end is now a stop for its contraction, as a joint's own limit is: the
+  part slams into it and rebounds, and never passes it. That honours the map's `jerkStop` on "Swing thigh in", and every
+  end now has it. Checked for all 114 body movements from the start posture: none passes its end, all return to the
+  start posture, none lights anything on the way back (`tests/motion.test.mjs`).
+- *A movement that ends where the part already is* (clench the jaw, relax the throat, turn the right palm up, bring
+  the right fingers together, each on both halves) showed nothing at all under contract-and-return, against Message 204's
+  "clear movement for each brain activation area". Its contraction now strikes the joint's stop: the part is thrown into
+  it and rebounds half of the joint's range off it (at most 38 degrees), then is drawn back onto it, a short twitch
+  (measured: the jaw opens 12 degrees and shuts, the right palm turns 30 degrees and back, the right fingers spread 8, the
+  throat bone moves 8). Only when the whole movement would otherwise show nothing ("Purse the lips" also wants the upper
+  lip at its start: the lip does not twitch). Not under reduced motion, where these show their light only.
+
+**The words.** The Esc page (the "Switch areas on" step and the Look / Click row), the information card, the tutorial's
+second step ("Click it: it moves again"), the plain notes of "Turn right palm up" and the player guide say that a
+movement from the brain contracts and goes back by itself, and no longer that it stays until its opposite.
+
+Frames looked at in the browser (start view, 1600 by 900, the right elbow's "Bend" and the left elbow's "Bend", a click
+after the look's own switch-on had returned): the area white and the mirror body's and your own arm moving during the
+0.4 s, the area back to its colour, no beam and no lit muscle from the first frame of the return, the arm back at its
+place about 1.2 s after the press. These are display rules of this game; the times and springs are not measured
+movements.
+
+Not right or not done:
+- The left wrist's two sideways bends still move nothing: the game arm has no sideways wrist joint, and a twitch on
+  another axis would show the wrong movement.
+- A movement is lit for 0.4 s instead of a second; a quick reader may find the lit muscles harder to catch, and the
+  beam, thin since section 173, is on screen only that long.
+- The return is not shown as activity, but the status line's "Arm relaxing back to rest" (the left arm's pulse line,
+  for players who open it) still names it.
+- The chosen limb follows the look (section 139): looking around during a contraction of that limb ends the contraction
+  of its joints at once (the look places the limb, as a drag does).
+- The other maintainer's `tests/browser-keyboard-aim.mjs` fails at times at its third step ("ArrowLeft did not select an
+  area", from the inferior end of the strip): seen on this branch (6 of 11 runs) and on the integration branch without this
+  change (4 of 9 runs, the same failure). The walk then goes on from the area the information card shows, the end of the
+  walk; when the test passes, the card had taken another area on the free pointer's way to the mirror body. Since a
+  look that only crosses an area no longer lights it, the card may take one less often. The test was not changed here.
+- Frame table on a busy machine (other browsers running), this branch and the integration branch in turns: still
+  60.1 / 60.0 / 59.3 / 60.0, looking around 48.9 / 42.2 / 37.6 / 38.3, up and down 50.0 / 39.7 / 41.3 / 39.8, limb turn
+  39.7 / 39.7 / 39.0 / 37.5: no slower than the integration branch, but not the quiet machine's 60.
+
+## 178. A limb never gets stuck (20 November)
+
+The user: "And there are ranges of motions where the limbs get stuck. The limb should never get stuck." Still standing:
+"Any limited range of motion that's unnatural needs to be fixed ... We want full range of motion on all axes" (162);
+W / S along the line between the shoulder or hip and the hand or foot, A / D round that joint (186); a hand stops at your
+own trunk; no limb thrown about (section 166).
+
+**How the cases were found.** A script plays one limb hard: keys singly, in pairs and held for seconds, the look
+carrying the limb far, keys while the look moves, the limb turn, Space, another limb moved into it, keys in the view from
+outside, Reset body. After every step it asks whether some key still moves the limb: the key opposite to the last one
+first, then the others, each held 0.3 s (a key that moves nothing leaves the pose as it was, so a failed probe tries all
+four from one pose). A second script carries each limb far in eight directions with the look and brings the look back.
+Offline, the hold's own rule was run from 343 poses of the right arm and 329 of each leg on a grid through the ranges
+the keys' solve works in, each key held for 8 frames. Every case was then built on purpose and its cause found in code.
+
+**What trapped a limb, and what changed.**
+1. A key whose move was refused (it went too far off the keys' line, or into the folded limb) put the hold's place back
+   to its last place. That could be a place the look had carried out of reach; the keys' line then latched onto it and
+   every later frame was refused too. Seen with the right arm raised straight up by the look: S and A moved nothing.
+   Now a refused frame puts the place on the limb's end.
+2. A move more than 60 degrees off the keys' way always waited (section 166). Where the joints cannot keep to the line
+   at all, that left one key or none: the right arm straight up beside the head (it may not cross over the head, so S
+   could not draw it in and A could not bring it back), a straight leg lifted high and out, a straight arm pointing
+   back. On the offline grid 3 arm poses and 5 of each leg had no key that moved the limb, and 13 and 16 to 18 had one.
+   Now a move 60 to 85 degrees off is taken too, but slowly: its part across the keys' way at most half the keys' own
+   way a frame (`keyFarDeg`, `keyLatFar` in `LIMB_KEYS.view`; `keyMoveCut`). The end curls the way the joints let it;
+   across the chest S now draws the right hand in at about a third of the keys' speed instead of waiting. Only a move
+   that goes nowhere the keys' way, or backward, still waits. A move under a twentieth of the keys' way is taken
+   whatever its direction (joints passing through angles the drawn pose does not show must not be held there).
+3. The limb solve felt each joint with a small turn. At the end of a range the combined-range rule takes (a thigh
+   lifted sideways to 30 degrees while stretched back; a thigh past 100 degrees with a straight knee, where the drawn
+   knee bends instead) that turn showed no move, or a move the step could never make, and the step left the joint out
+   or pushed it the wrong way: A could not bring a leg back in from its sideways end, and a thigh lifted to its end
+   could not be lowered. A turn the rule cuts back is now made the other way (`solveLimb` in `ns-grasp.mjs`).
+4. The thighs' parting at high hip flexion (`legTurnState` in `ns-body.mjs`) was cut off at the hip's sideways limit, so
+   over its last two degrees the drawn leg did not move at all. It now gives way smoothly (`spreadIn`): never past the
+   limit, the same size away from it, and the drawn lift rises with the angle all the way.
+5. A hand inside the trunk's keep-out or the head column was refused every key, because every place near it was inside
+   too. A hand gets in from the view from outside (nothing is kept out there), by folding at the shoulder, or with the
+   solve lagging its place. Now only a key that takes it deeper in is refused, and the right arm's own end after a step
+   is checked the same way. The head column also ran up for ever and is as wide as the shoulders, so a right arm raised
+   straight up had its hand "in your head" half a metre above it; it now ends a hand's half width above the head
+   (`HEAD_COLUMN.zToMm` 1700).
+6. A limb the look had carried to the end of its range was picked up again only when its place passed within 40 mm of
+   it. A quick look back swept the place past it between two frames and stopped far away, and the limb stayed where it
+   was (a leg left lifted with the look back at the start). Now, once the place has come to rest, one longer solve
+   (`LIMB_HOLD_REACH`, at most every quarter second) asks whether the joints reach it; a place they reach is rejoined
+   frame by frame at up to 1.2 m/s (`rejoinMps`) while each frame brings the end nearer.
+
+The rules that are there for a reason stay: a hand stops at your trunk and head (it no longer gets caught inside them);
+W / S keep to the line and A / D to the root wherever the joints allow it; a key never throws a limb (never faster than
+1.25 times the keys, sideways at most half the keys' way when far off the line); a limb waits where the look carries its
+place beyond the joints.
+
+**Measured** (`limbfree-work` scenarios, 1600 by 900, this branch against the integration branch at the same time):
+- the eight stuck poses built on purpose (right arm up beside the head from the side and from the front; right and
+  left leg lifted and swung to their sideways end; each arm across the face in the outside view; right arm folded at
+  the shoulder; the raised right arm folded by S): 3 of 8 free before, 8 of 8 after (the way back moves the end at least
+  15 mm in 0.4 s and at least two keys move it). Before, the lifted left leg answered no key at all (5, 1, 2, 0 mm).
+- the look carrying each limb 420 px in eight directions and back: before, 21 of the 29 cases that ran in the script's
+  time came back with the look (the legs stayed lifted after a look up, the right arm stayed up); after, 32 of 32.
+- random play: before, 489 steps, 2 limbs stuck (the left arm folded in front of the face, no key moving it in 1.2 s;
+  the right arm straight up, one key only); after, 517 steps, none, and none in the 1 726 random steps on this branch
+  since item 6.
+- offline grid: no pose with fewer than two keys that move the limb (corners of a range, a joint at its end on two axes,
+  leave two). A test keeps this (`tests/limb-hold.test.mjs`).
+
+**Not done or left.**
+- A move far off the keys' line is slow by design: across the chest S brings the right hand in at about a third of the
+  keys' speed, with a sideways drift; with the arm straight up S bends the elbow and the hand comes down behind or
+  beside the head, not straight down the arm's line. The upper arm's own turn would let the hand keep to the line, but
+  it belongs to the limb turn (the underside / overside) and was not given to the keys.
+- A hand coming down onto your head in the eye view stops at the column's top, 1.7 m up in the body's frame; with the
+  head not drawn there, it stops in the air above the view.
+- A limb rejoining its place takes up to about a second and a half for a full swing (1.2 m/s).
+- Twice in early random play the left arm (its own rig) was stuck folded near the shoulder; one of the two came before
+  item 5. Neither could be rebuilt on purpose, and in about 2 000 later random steps of the left arm it did not come
+  back. Its cause was not pinned down.
+- `tests/browser-keyboard-aim.mjs` failed in every run here, on this branch (8 of 8) and on the integration branch it
+  was made from (7 of 7), with the failure section 177 describes ("ArrowLeft did not select an area"; once on this
+  branch at its mirror-arrow step instead). The other twelve browser tests (all but `outside-compass`) pass.
+- Frame table on a quiet machine, this branch then the integration branch: 60.1 / 59.9 / 60.3 / 60.0 and
+  59.9 / 60.4 / 60.0 / 60.0. The new work runs only on frames of the keys (two cheap keep-out tests) and, at most every
+  quarter second, for a waiting limb whose place has come to rest.
+
+## 179. Face movements you can see (20 November)
+
+The user: "make sure there's clear movement for each brain activation area. And you can clearly identify what type of
+movement it is for each area." (Message 204; earlier, Message 154: movements "as exaggerated and obvious as possible
+within reason".) Section 175 found that the face areas' 26 movements (brows, eyelids, nose, mouth corners, lips, on
+both halves) only changed the colour of the face muscles: no part of the face moved.
+
+**What the player sees now.** Each face movement moves the face's muscles, the way that movement pulls them, on your
+own head (seen from outside) and on the mirror body:
+- "Raise both eyebrows": the forehead muscle shortens toward its top edge; the brows and the upper ring of the eye
+  muscle go up (13 mm at full strength, coming forward over the brow ridge) and the forehead bunches into ridges.
+- "Frown": the inner brows come down (10 mm) and together (8.5 mm); the frown muscles bunch between the brows.
+- "Close both eyes": the eyelid part of the ring muscle slides down over each eyeball (a turn about the eyeball's
+  centre) until the lids meet a third of the way up the opening; the outer ring squeezes in. "Open both eyes wide":
+  the upper lids slide up (6.5 mm), the lower lids down.
+- "Wrinkle the nose": the side of the nose bunches up (8 mm), with the nostril wing and the upper lip beside it.
+  "Flare the nostrils": the wings pull out (8.5 mm), the septum down.
+- "Lift mouth corner (smile)": the corner goes up, out and back toward the cheekbone (13, 8 and 4 mm), the cheek
+  rises, the smile muscle bulges. Each half's area moves mainly the corner on the OTHER side, as the map says (the other
+  corner gets 30 %), so the two halves' smile areas are mirror images. "Pull mouth corner down": the corner goes down
+  (13 mm), the same way one-sided.
+- "Purse the lips": the lips gather (a third narrower) and push forward (8 mm). "Stretch the lips wide": the corners
+  go straight out (9.5 mm) and back, the lips thin. "Lift the upper lip" (9 mm, the teeth show); "Push the lower lip
+  up (pout)": the lower lip and the chin go up and out (7 and 10 mm); "Pull the lower lip down" (9 mm).
+A contracting muscle also thickens (its belly stands out). The parts a muscle pulls (lips, brows, eyelids) move with
+it, fading with distance, so neighbouring muscles stay together. The amounts are exaggerated on purpose so that they
+read on the mirror body; they are a picture of each movement, not measured soft-tissue motion. The cards of these
+areas now say what moves (and no longer that the face does not move).
+
+**How.** The face's display joints (brow_raise, eye_close, nose_wrinkle, smile, lip_purse, upper_lip, lower_lip) were
+already driven by the activity like every other joint, so the face follows each activation's contraction and return
+exactly as the joints do (how an activation runs is not changed here). `ns-face-move.mjs` works out, once when the body
+is installed, a head frame from the face's own meshes (across the eyes, chin to forehead), landmarks (the mouth
+corners, the lips' line, each eye's opening and the eyeballs' centres, the brows, each muscle's ends) and, for 15
+shapes, the vertices each moves with their displacement and normal change at full strength (about 67 000 entries).
+Each pose hands the scene the shapes' strengths (|joint| / 20, each side of 0 its own shape; `faceShapeWeights`); the
+scene writes the moved positions and normals into the face muscles' shared buffers only while they change
+(`setFaceShape`; a muscle skinned between the skull and the jaw takes them through `skinBase`, so the jaw still carries
+it). With every strength at 0 every buffer holds exactly its resting contents. `inspect().scene.faceMoves`,
+`features.faceMove`.
+
+**Checks.** `tests/face-move.test.mjs`: every shape moves the face 6 to 17 mm at its largest, no NaN, the face at rest
+is exactly its rest, the strength is linear, each shape moves its part the right way (the eye's opening closes to under
+1.5 mm, a smile lifts its own corner and leaves the other), every two shapes' movements differ, and at most 40
+triangles (of some 58 000 over 0.15 mm^2) turn over at a shape's peak. In the browser, with section 177's contraction
+and return: a face movement's strength rises to 0.75 in about 0.15 s, holds, and goes back to nothing, and the face's
+buffers are then exactly their resting contents again (`restOff` 0); drawing a moving face took up to about 1 ms of a
+frame (`lastMs`). Pictures of every face movement during its contraction on the mirror body held near, switched on
+from its area by a look.
+
+**Not right yet.** The mirror body's face is small at the start distance (about 40 pixels tall); the movements are
+plain on the mirror body held near, small at the start and from the outside view's distance (each lasts about half a
+second). Working the shapes out takes about 0.1 to 0.3 s of the loading's last steps. Some movements fold a few thin triangles at
+their peak (the eyelids' rims, where the lips meet). Your own face is not drawn in the eye view (unchanged). If the
+outline pass is switched back on for the body, the lips' outline will not follow the face (it draws the skinned
+muscles from their source positions).
+
+## 180. The arrow keys walk the same way whenever they are pressed: after Space, and during a neck movement (20 November)
+
+The finding. The other maintainer's `tests/browser-keyboard-aim.mjs` failed on a busy machine at its first arrow key
+after carrying the mirror body in the outside view ("ArrowLeft did not select an area", from the inferior end of the
+strip, no area tried), and passed on a quiet one. Traced frame by frame, the cause is not the machine's speed as such
+(nor the picture quality, a pick buffer or the brain's place: the step classifies on the brain's own geometry):
+
+- With the look off the brain, a key goes on from the area the information card shows (`areaStep`). For
+  0.6 s after Space lets go (the hands opening) the card is the grip card, whose area is the left hand's. A key pressed
+  in that window walked on from the hand's area; a later one from the area looked at before the carry, here the
+  inferior end of the strip, where the left key has nothing further. The test pressed its key 8 frames after the carry:
+  inside the window at 60 frames a second, outside it on a busy machine. Pressed 0 ms and 1500 ms after the carry on
+  the same machine, the old build gave the hand's area and the end, every time. (Section 177's reading, that the card
+  took another area on the free pointer's way to the mirror body, did not hold: the card's area in passing runs was the
+  grip card's.)
+- A key pressed while a neck or trunk movement moves the head waits until the head is still (the camera rides on it).
+  A step onto the neck area starts that area's movement, which takes about 1.6 s with its return; a waiting key ran out
+  after 1 s and was dropped without a word, so the next key of a walk across the neck area did nothing.
+
+The change.
+- The grip card no longer counts as a place looked at for the walk (`areaWalkCardId` in `ns-app.mjs`): the walk goes on
+  from the card that comes back when the hands are open, however soon the key comes.
+- A waiting key is kept 4 s (`AREA_REQUEST_KEEP_MS`, was 1 s), and in the eye view it also waits while the view still
+  swings with a neck movement (`NECK_VIEW`): the step's look is worked out without the swing, so a step during it slid
+  across the next areas as the swing came back.
+
+The test, restated with dated notes and its assertions kept: after the carry the walk starts from the area stepped to
+before it (a new check) and goes right to the thumb area, as it did before the carry was added to it, passing the neck
+area; the arrow tip's hover is read from the frames after the last step, because the frame finds the tip under the
+crosshair before it applies the camera of the stepped look, so in the outside view the hover follows a step one frame
+later (seen frame by frame; the test had read the step's own frame on a busy machine).
+
+Checked. `tests/area-step.test.mjs` (a new case). The browser test 32 times on a busy machine (up to ten at once, load
+average up to 31) and 4 times more under CPU throttling (3 times slower): all passed; the integration branch without
+this change, 1 of 4 failed in the same hour. The arrow keys at the lowest picture quality ('Low') under
+throttling stepped as at full quality. The other twelve browser tests, `?case=boot`, the frame table (60.0 / 60.2 /
+60.1 / 59.9).
+
+Limit. A key still waits for the head and the view, up to 4 s; a held key queues at most two steps, which can then go
+at once when the head is still. The arrow tip's hover still trails a step (and any look) by one frame.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -2665,7 +3148,6 @@ hand, whilst clicking grasps the right hand").
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
 - Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
-- Lowering the left arm from the strip (Message 48). The left shoulder area has no movements of its own (61).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
 - Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
 - From the notes of 17 and 18 November, not done yet: limbs that do not look small in the start picture, with bulkier muscles, wider far ends of the limbs and chunky fingers and toes; a thicker neck; the mirror body magnified and nearer; a down arrow for the brain that is always reachable; vessels laid out as anatomy and a brain plainly different in shade from muscle; a neon blinking, shuddering effect on activity; muscles that swell as they contract; the colour code of the strip and the body redone from scratch with visible links between an area and its part; grouping ("chunking") of every overlay; a pass over all earlier notes for small fixes; collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.

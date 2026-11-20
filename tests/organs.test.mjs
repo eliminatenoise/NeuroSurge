@@ -128,7 +128,13 @@ test('every organ is inside the rib cage of the page body, under the eye view\'s
   assert.ok(out / checked < 0.03 && worst < 12, `${out} of ${checked} vertices beyond the inner wall, at most ${worst.toFixed(1)} mm`);
 });
 
-test('the eye view leaves out what the collar box would cut to a torn stub, and cuts only the tops of a few back muscles', async () => {
+// 20 November 2026, evening (the owner: "ensure, especially with the right arm, that muscles do not become transparent
+// under certain angles, because in previous versions, if you hold the arm up in certain angles, muscles will disappear
+// and turn transparent"): the box no longer cuts anything (EYE_COLLAR.cut false). It cut whatever came into it, your
+// raised right arm and the trunk muscles that go with it included; the few back muscles and the vertebra measured here
+// as lying partly in it are drawn whole. This test used to say the box "cuts only the tops of a few back muscles".
+test('the eye view leaves out what the collar box would cut to a torn stub, and the box cuts nothing: the tops of a few back muscles in it are drawn whole', async () => {
+  assert.equal(EYE_COLLAR.cut, false, 'the collar box cuts nothing (a raised arm in it was cut away)');
   const src = await loadPageBody(root);
   const B = await import('../scene/src/ns-body.mjs');
   const baked = B.bakeBodyPosture(src.rig, src.meshesById, { posture: B.DEFAULT_BODY_POSTURE });
@@ -146,10 +152,10 @@ test('the eye view leaves out what the collar box would cut to a torn stub, and 
   // the upper trapezius and the neck's own muscles reaching the collar are gone, not cut (the scene leaves out those it
   // draws: the ones near the eye are face-layer meshes and never drawn in the eye view anyway)
   for (const id of ['FJ1521', 'FJ1521M', 'FJ1539', 'FJ1539M', 'FJ1594', 'FJ1572', 'FJ1532M']) assert.ok(hide.includes(id), `${id} is left out`);
-  // the trunk's own back muscles and the first thoracic vertebra stay, cut only at their tops: 5 to 13 % of the vertices
-  // of these source meshes (2 to 5 % of the coarser meshes the game draws, measured in the browser: inspect().scene.organs
-  // .neck). The muscles the box cuts more and does not hide are neck muscles near the eye: face-layer meshes, which the
-  // eye view never draws.
+  // the trunk's own back muscles and the first thoracic vertebra stay, only their tops in the box: 5 to 13 % of the
+  // vertices of these source meshes (2 to 5 % of the coarser meshes the game draws, measured in the browser:
+  // inspect().scene.organs.neck), drawn whole since 20 November 2026 (evening). The muscles more in the box and not hidden
+  // are neck muscles near the eye: face-layer meshes, which the eye view never draws.
   const cutShare = new Map(cut);
   for (const id of ['FJ1554', 'FJ1554M', 'FJ1537', 'FJ1537M', 'FJ1542', 'FJ1542M', 'FJ3158']) {
     assert.ok(!hide.includes(id), `${id} stays`);

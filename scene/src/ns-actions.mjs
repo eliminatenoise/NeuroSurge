@@ -84,7 +84,11 @@ export const EXTRA_ARM_ACTION_IDS = Object.freeze([
   // lumbricals bend the little finger, as a tap on the right lumbricals does (left-right symmetry, Message 15).
   'fingers_together', 'little_flexion', 'little_extension', 'ring_flexion', 'ring_extension',
   'middle_flexion', 'middle_extension', 'thumb_opposition', 'thumb_reposition',
-  'wrist_radial_deviation', 'wrist_ulnar_deviation'
+  'wrist_radial_deviation', 'wrist_ulnar_deviation',
+  // 20 November 2026 (BODYMAP; the owner, Message 204: "make sure there's clear movement for each brain activation
+  // area"): the left shoulder area moved nothing (the look and W/A/S/D carry the left arm). Its four movements swing the
+  // whole left arm at the shoulder on top of where the look and the keys hold it (SHOULDER_ACTION_DEG).
+  'shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction'
 ]);
 /** Every game-arm action id: the movement map's 12, then EXTRA_ARM_ACTION_IDS. */
 export const ACTION_IDS = Object.freeze([...MOVEMENT_MAP_ACTION_IDS, ...EXTRA_ARM_ACTION_IDS]);
@@ -105,7 +109,13 @@ export const EXTRA_ARM_ACTIONS = deepFreeze({
   thumb_opposition: { label: 'Turn thumb across the palm (opposition)', roles: roles(['OP', 'FPB'], ['EPL']) },
   thumb_reposition: { label: 'Move thumb out from the palm', roles: roles(['EPB', 'EPL'], ['OP', 'FPB']) },
   wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation; display only on the game arm)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
-  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation; display only on the game arm)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) }
+  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation; display only on the game arm)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) },
+  // (BODYMAP: the shoulder's muscles have no movement-map key; they are lit by name, ns-bodymap's agonist lists, which
+  // are the reach keys' own lists, REACH_MUSCLES)
+  shoulder_flexion: { label: 'Raise arm forward (shoulder flexion)', roles: roles([]) },
+  shoulder_extension: { label: 'Swing arm down and back (shoulder extension)', roles: roles([]) },
+  shoulder_abduction: { label: 'Swing arm out to the side (shoulder abduction)', roles: roles([]) },
+  shoulder_adduction: { label: 'Swing arm in across the body (shoulder adduction)', roles: roles([]) }
 });
 
 const DIGITS = Object.freeze(['index', 'middle', 'ring', 'little']);
@@ -175,9 +185,23 @@ function digitFlex(digits, mcp, pip, dip) {
   return out;
 }
 
-function actionTarget(joints, { elbowFlexDeg = 0, releaseOf = [], synergy = [] } = {}) {
-  return deepFreeze({ joints: { ...joints }, elbowFlexDeg, releaseOf: [...releaseOf], synergy: [...synergy] });
+function actionTarget(joints, { elbowFlexDeg = 0, shoulderLiftDeg = 0, shoulderOutDeg = 0, releaseOf = [], synergy = [] } = {}) {
+  const t = { joints: { ...joints }, elbowFlexDeg, releaseOf: [...releaseOf], synergy: [...synergy] };
+  if (shoulderLiftDeg) t.shoulderLiftDeg = shoulderLiftDeg;
+  if (shoulderOutDeg) t.shoulderOutDeg = shoulderOutDeg;
+  return deepFreeze(t);
 }
+
+/**
+ * 20 November 2026 (BODYMAP; the owner, Message 204: "make sure there's clear movement for each brain activation area",
+ * and Message 154: "as exaggerated and obvious as possible within reason"): how far a full drive of the left shoulder's
+ * movements swings the whole left arm at the shoulder (degrees), on top of where the look and the keys hold the hand:
+ * lift = forward and up (flexion; negative: down and back, extension), out = out to the left side (abduction;
+ * negative: in across the body, adduction). ns-app turns the free hand's place about the shoulder by these (the hand's
+ * own place, kept by the keys, is not changed: when the movement eases off the arm comes back to it); the shoulder's
+ * range (ns-arm freeHandInRange) still bounds where the hand can go. A display rule of this game, nothing measured.
+ */
+export const SHOULDER_ACTION_DEG = Object.freeze({ lift: 60, drop: 45, out: 50, across: 35 });
 
 /** Signed elbow-angle change (degrees, + = flexion) commanded by a full elbow_flexion / elbow_extension drive,
  * relative to the elbow angle of the current W/S/A/D reach solution. ns-app turns it into an explicit elbow target
@@ -229,7 +253,9 @@ export const ACTION_TARGETS = Object.freeze({
   thumb_mcp_flexion: actionTarget({ thumb_mcp_flex: 50 }),
   thumb_mcp_extension: actionTarget({ thumb_mcp_flex: -10 }),
   // R558 (Messages 14 / 15): the game-defined left-hand actions (EXTRA_ARM_ACTIONS), at the same joint limits.
-  fingers_together: actionTarget({ index_mcp_abd: 0, ring_mcp_abd: 0, little_mcp_abd: 0 }),
+  // 20 November 2026 (BODYMAP): to the joints' own stop, -5 (the fingers pressed together); at 0, the relaxed hand's
+  // own place, "Bring left fingers together" moved nothing from the start.
+  fingers_together: actionTarget({ index_mcp_abd: -5, ring_mcp_abd: -5, little_mcp_abd: -5 }),
   middle_flexion: actionTarget(digitFlex(['middle'], 90, 105, 75)),
   middle_extension: actionTarget(digitFlex(['middle'], -10, 0, 0)),
   ring_flexion: actionTarget(digitFlex(['ring'], 90, 105, 75)),
@@ -240,7 +266,12 @@ export const ACTION_TARGETS = Object.freeze({
   thumb_reposition: actionTarget({ thumb_cmc_opp: 0 }),
   // The game arm's hand fit has one wrist axis (flexion / extension): the sideways bends colour their muscles only.
   wrist_radial_deviation: actionTarget({}),
-  wrist_ulnar_deviation: actionTarget({})
+  wrist_ulnar_deviation: actionTarget({}),
+  // BODYMAP: the whole arm swung at the shoulder (SHOULDER_ACTION_DEG; no hand joint).
+  shoulder_flexion: actionTarget({}, { shoulderLiftDeg: SHOULDER_ACTION_DEG.lift }),
+  shoulder_extension: actionTarget({}, { shoulderLiftDeg: -SHOULDER_ACTION_DEG.drop }),
+  shoulder_abduction: actionTarget({}, { shoulderOutDeg: SHOULDER_ACTION_DEG.out }),
+  shoulder_adduction: actionTarget({}, { shoulderOutDeg: -SHOULDER_ACTION_DEG.across })
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -438,12 +469,18 @@ export function composePose(drives = {}, { targets = ACTION_TARGETS, rest: restP
     joints[j] = clamp(v, lim[0], lim[1]);
   }
 
-  let elbowDeltaDeg = 0;
+  let elbowDeltaDeg = 0, shoulderLiftDeg = 0, shoulderOutDeg = 0;
   for (const id of ids) {
     const delta = targets[id].elbowFlexDeg;
     if (delta) elbowDeltaDeg += d[id] * delta;
+    // (BODYMAP: the left shoulder's swing, SHOULDER_ACTION_DEG; present in the result only when not 0)
+    if (targets[id].shoulderLiftDeg) shoulderLiftDeg += d[id] * targets[id].shoulderLiftDeg;
+    if (targets[id].shoulderOutDeg) shoulderOutDeg += d[id] * targets[id].shoulderOutDeg;
   }
-  return { joints, elbowDeltaDeg: elbowDeltaDeg + 0 };
+  const out = { joints, elbowDeltaDeg: elbowDeltaDeg + 0 };
+  if (shoulderLiftDeg) out.shoulderLiftDeg = shoulderLiftDeg + 0;
+  if (shoulderOutDeg) out.shoulderOutDeg = shoulderOutDeg + 0;
+  return out;
 }
 
 const MUSCLE_BASELINE = 0.08;
@@ -513,10 +550,10 @@ export const GAZE_RESTART_DEADBAND_DEG = 0.31;
  *                 part ... it slightly changes shade"), but for a look only after the gaze has stayed on the area this
  *                 long, so ordinary looking around does not mark every area gold. The 1 s look activation itself is
  *                 unchanged (it still starts the moment the crosshair reaches a new area).
- *  latchS         R558 (latch): a LOOK moves body parts (and holds them there) only once the gaze has stayed on the
- *                 area this long; the area's glow still starts at once. With the strip filling the view the crosshair
- *                 crosses many areas while the player looks around, and each would otherwise move and hold its joints.
- *                 A click moves at once. */
+ *  latchS         R558: a LOOK moves body parts only once the gaze has stayed on the area this long; the area's glow
+ *                 still starts at once. With the strip filling the view the crosshair crosses many areas while the
+ *                 player looks around, and each would otherwise move its joints. A click moves at once.
+ *                 (20 November 2026, Message 206: a look that leaves before this moved nothing, so its glow ends then.) */
 // 19 November 2026 (the owner: "highlighting specific areas of the brain with our cursor just by running over, those
 // body parts not activating ... They have to activate at least once"): latchS 0.3 -> 0.07: an area the look runs over
 // does its movement almost at once; it no longer needs a third of a second of rest.
@@ -534,7 +571,7 @@ export const GAZE_DWELL = Object.freeze({ replaceClickS: 0.3, markS: 0.5, latchS
  */
 // 19 November 2026 (the owner: "Let's also go back to activation simply by cursor highlight. The number overview is
 // very confusing and creates feedback delay"): on: false again: a look that rests on a motor area switches it on at
-// once; a click while it is highlighted does it again (JOINT_LATCH driveS / relax / kick).
+// once; a click while it is highlighted does it again (JOINT_LATCH: since Message 206 it contracts and returns).
 export const LOOK_ARMS = Object.freeze({ on: false, muscleLevel: 0.22 });
 
 /**
@@ -544,6 +581,10 @@ export const LOOK_ARMS = Object.freeze({ on: false, muscleLevel: 0.22 });
  * progressive: true, then 'muscleRelease' { tap: false }). A short press (the app's tapMs) is still the whole movement
  * ({ tap: true } completes it). The stage rule is the same as a press's (a joint held on the other side is brought back
  * first). A click or a tap on a muscle is always the whole movement. A rule of this game, not a measured speed.
+ * 20 November 2026 (Message 206: "no permanent movements"): withdrawn. A press from a number key ('muscle' with
+ * progressive: true) is an ordinary press now: the part contracts and returns, whatever the key does after; the
+ * 'muscleRelease' event is accepted and changes nothing. (The number keys choose limbs since 19 November, LIMB_KEYS in
+ * ns-app, so no key sends these in play.) tapMs stays for the shell's own count of a short press.
  */
 export const MOVE_HOLD = Object.freeze({ rateDegS: 90, tapMs: 220 });
 
@@ -606,10 +647,11 @@ const angleOrNull = v => v === null || isFiniteNumber(v);
 const union = (a, b) => 1 - (1 - a) * (1 - b);
 
 /**
- * R558 latch (the user's note of 11 Nov 2026: a limb does not come back by itself after a muscle or brain activation;
- * it has to be activated back by the opposing action, or everything reset; the opposing brain area and muscle are
- * faintly lit as the way back).
- *   omega, zeta        the jerk of a body joint to its latched angle: an under-damped spring (natural frequency in
+ * The jerk of a movement switched on from the brain. (History: R558 latch, the user's note of 11 Nov 2026: a limb did
+ * not come back by itself after a muscle or brain activation; it had to be activated back by the opposing action, or
+ * everything reset. WITHDRAWN on 20 November 2026 by Message 206: every activation contracts, then returns; see the
+ * dated note inside.)
+ *   omega, zeta        the jerk of a body joint to its movement's end: an under-damped spring (natural frequency in
  *                      rad/s, damping ratio) solved exactly per step, so the joint snaps there with one small recoil.
  *   restitution        R558 (user, Message 1: "when we look to any motor area of the brain, we are looking for a
  *                      violent jerking movement, not a graceful shift"): almost every latched goal IS the end of the
@@ -619,8 +661,8 @@ const union = (a, b) => 1 - (1 - a) * (1 - b);
  *   reducedMotion      the same for prefers-reduced-motion: slower, without recoil or rebound.
  *   snapDeg, snapDegS  within these of the goal (degrees, degrees/s) the joint is exactly at its goal.
  *   restEpsDeg         an angle within this of the start angle counts as "at the start position".
- *   armPoseTau         seconds: the game arm's jerk into and out of a latched action (reducedArmPoseTau likewise).
- *   hintLevel          the faint display level (0..1) of an opposing "this brings it back" area and muscle.
+ *   armPoseTau         seconds: the game arm's ease of what is not a press (the Space grip, the hand opening after it, a
+ *                      relax pulse; reducedArmPoseTau likewise).
  * R558 tuning (the lead's brief L; this very step function at 60 frames a second): omega 26 / zeta 0.55 / no rebound
  * took 6 frames (0.10 s) for a 70 degree turn to its end stop (5, 19, 34, 49, 61, 70) and stopped dead: a quick but
  * smooth swing. omega 50 / zeta 0.35 / restitution 0.4 takes 3 frames (19, 55, 70) and recoils about 5 degrees off the
@@ -637,10 +679,10 @@ export const JOINT_LATCH = Object.freeze({
   // spring with far less damping (omega 50 -> 21, zeta 0.35 -> 0.26) and a harder rebound off the end stop (0.4 -> 0.55):
   // the part gathers speed over several frames, slams into its end, is thrown back a good part of the way and swings
   // in again two or three times before it holds.
-  // The owner's own order of events is "activates heavily, relaxes slightly, and repeats that process with each
-  // further click": so after the slam the part eases back a little and waits there, and the next click drives it in
-  // again. (The first version of this threw the part BACK on a further click, a jump in the picture, the wrong way
-  // round.)
+  // (History, withdrawn by Message 206 below: the owner's order of events was "activates heavily, relaxes slightly,
+  // and repeats that process with each further click": so after the slam the part eased back a little and waited
+  // there, and the next click drove it in again. The first version of this threw the part BACK on a further click, a
+  // jump in the picture, the wrong way round. The numbers of that time:)
   //   driveS       seconds a press drives the joint at its full end angle before it eases off
   //   relax        how far it then eases back, as a share of the swing (and never more than relaxMaxShare of the
   //                joint's own travel from its start angle, so a small movement stays on its own side)
@@ -661,16 +703,45 @@ export const JOINT_LATCH = Object.freeze({
   // eases back `relax` of the way (never more than relaxMaxShare) with relaxOmega and waits; a further press kicks it in
   // again (kick, nearShare). armPoseTau now only eases what is not a press: the way back to neutral after the opposite
   // movement, the Space grip, the hand opening after it. (createActivity armJerk, latchArmAction, integrate.)
-  omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.3, relax: 0.5, relaxMaxShare: 0.8, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
-  reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0 }),
+  // 20 November 2026, evening (the owner, Message 206: "I think it's better actually if there are no permanent
+  // movements ... when you tap any area of the brain, you activate any area, it will contract, then return to its
+  // previous place. But in returning to its previous place, you won't see corresponding activity and muscle activation.
+  // It will just return." It replaces Message 185's "they don't have to return fully, just partially" and the latch of
+  // 11 November): NOTHING IS HELD by the brain any more. (The name JOINT_LATCH is kept so callers need not change.)
+  //   driveS       the CONTRACTION: seconds from the press during which the part is driven to the movement's end by the
+  //                jerk spring above (omega, zeta, restitution: as before, the electroshock of Message 154). The area,
+  //                its muscles, the beam and the activity's display of the movement are lit for exactly this long.
+  //   lightFadeS   the light of a contraction fades out over its last lightFadeS and is exactly 0 when the return begins
+  //   relaxOmega   the RETURN: a critically damped spring of this frequency (soft, no wobble, no activity shown) back to
+  //                where the part was just before the press (the start posture, or wherever the player put it with the
+  //                keys, a drag, a Space carry or the limb turn), where it stays.
+  //   kick, minSwingDeg, minSwingRangeShare, nearShare   unchanged: a press that finds the part already at (or near) the
+  //                movement's end (a further click during the contraction, or a movement with little travel such as
+  //                straightening a knee that is nearly straight) throws it into the end stop, so it still shows.
+  //   The movement's end is a STOP for its contraction (the BODYMAP audit, same evening: the jerk spring overshot an end
+  //                in the middle of a joint's range by about 40 %, "Swing thigh in" threw the thigh 23 degrees past its
+  //                end into the other leg and "Turn right arm inward" reached -70 where the forearm meets the thigh;
+  //                Message 204 asks for movements "as precise as possible"): the part slams into the end and rebounds
+  //                off it with `restitution`, as at a joint's own limit, and never passes it. (The map's jerkStop flag on
+  //                "Swing thigh in" asks for exactly this; every end now has it.)
+  //   stopBounceShare, stopBounceMaxDeg   a movement that ends at a joint's own stop where the part already is (at the
+  //                start: clench the jaw, lower the throat bone, right palm up, right fingers together, each on both
+  //                halves) would show nothing under contract-and-return (Message 204: "make sure there's clear
+  //                movement for each brain activation area"). Its contraction strikes the stop: the part is thrown into
+  //                it and rebounds this share of the joint's range off it (never more than stopBounceMaxDeg), then is
+  //                drawn back onto the stop: a visible twitch against the stop (measured at 60 frames a second: the
+  //                jaw about 12 degrees, the right palm 30, the right fingers' spread 8, the throat bone 8). Only when
+  //                the whole movement would show nothing. Not under reduced motion.
+  // 0.4 s (the old hold was 0.3 s): the part slams into its end at about 0.1 s, is thrown back, slams in again at about
+  // 0.25 s and has a moment at the end before it returns, so the lit muscles can be read. Under reduced motion
+  // (reducedMotion) the part goes out and back on critically damped springs: no kick, no rebound, no bounce.
+  omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.4, lightFadeS: 0.08, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
+  stopBounceShare: 0.5, stopBounceMaxDeg: 38,
+  reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0, driveS: 0.45, lightFadeS: 0.08, relaxOmega: 9 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
-  armPoseTau: 0.022, reducedArmPoseTau: 0.12, hintLevel: 0.22,
-  // 18 November 2026 (SMALL, audit S3; the owner: "a lot easier to use and play and more intuitive"): for the stage
-  // rule (opposedJoints), a latched goal within nearRestDeg of the start angle, and within nearRestShare of the joint's
-  // largest move from it, counts as AT the start. The start posture has the knees at -6 and "Straighten" ends at 0:
-  // that 6 degrees cannot be seen, yet "Bend" then only brought the knee back to -6 and a second press bent it. Larger
-  // moves still need their opposite first (Message 6); a small joint (a lip, 10 degrees) keeps its own small margin.
-  nearRestDeg: 10, nearRestShare: 0.1
+  armPoseTau: 0.022, reducedArmPoseTau: 0.12
+  // (Message 206: gone with the latch: relax / relaxMaxShare (the part way back), hintLevel (the faint opposing hint),
+  // nearRestDeg / nearRestShare (the stage rule's "counts as at the start"))
 });
 
 /** R558 (issue hunt 2: "Raise right arm up" held together with "Swing right arm out to the side" left the arm out to the
@@ -680,14 +751,18 @@ export const JOINT_LATCH = Object.freeze({
  * label stays true: raise up -> straight up beside the head; then out to the side -> straight out to the side at
  * shoulder height (flexion back to the start's 90, forward); then raise up again -> up (out to the side back to 0).
  * Bringing a joint back with its own opposite action does not touch the other plane. A rule of this game, chosen so
- * every held label stays true; not a measured coupling of the shoulder joints. */
+ * every held label stays true; not a measured coupling of the shoulder joints.
+ * 20 November 2026 (Message 206: nothing is held): the same rule at the peak of a contraction: a contraction of one
+ * plane takes the other plane's joint to its start angle for the same time (so "out to the side" is out to the side
+ * even from a raised arm), and both then return to where they were. */
 export const JOINT_CONFLICTS = Object.freeze({
   r_shoulder_flex: Object.freeze(['r_shoulder_abd']),
   r_shoulder_abd: Object.freeze(['r_shoulder_flex'])
 });
 
-/** The opposing (antagonist) game-arm action of each latching arm action: activating it while the other is latched
- * brings the joint back. relax_release lets go of every latched hand action and never latches itself. */
+/** The opposing (antagonist) game-arm action of each arm action. 20 November 2026 (Message 206: nothing is held): a
+ * contraction of one sends a contraction of its opposite that is still under way straight into its return (the two
+ * never pull at once); a relax press does that for every hand movement. */
 export const ARM_OPPOSITES = Object.freeze({
   grasp_close: 'open_hand', open_hand: 'grasp_close',
   wrist_flexion: 'wrist_extension', wrist_extension: 'wrist_flexion',
@@ -699,31 +774,29 @@ export const ARM_OPPOSITES = Object.freeze({
   middle_flexion: 'middle_extension', middle_extension: 'middle_flexion',
   ring_flexion: 'ring_extension', ring_extension: 'ring_flexion',
   little_flexion: 'little_extension', little_extension: 'little_flexion',
-  thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition'
-  // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm, so there is nothing to hold: they pulse.
+  thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition',
+  // BODYMAP: the left shoulder's swings
+  shoulder_flexion: 'shoulder_extension', shoulder_extension: 'shoulder_flexion',
+  shoulder_abduction: 'shoulder_adduction', shoulder_adduction: 'shoulder_abduction'
+  // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm (it has no sideways wrist joint): they light only.
 });
-/** The stage rule of a deliberate game-arm activation, as one question: the latched action that an activation of `id`
- * would let go INSTEAD of latching `id` on (its opposite in ARM_OPPOSITES, when that one is latched), or null when
- * `id` would latch on. armLatch: actionId -> 0 | 1. latchArmAction and the information card (ns-app infoActionBack)
- * both ask here. */
-export function armOpposedLatch(id, armLatch) {
-  const opp = typeof id === 'string' && hasOwn(ARM_OPPOSITES, id) ? ARM_OPPOSITES[id] : null;
-  return opp !== null && opp !== 'relax_release' && armLatch && armLatch[opp] > 0 ? opp : null;
-}
-/** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they pulse and never latch. */
+/** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they light and move nothing. */
 const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
-const HAND_LATCH_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
+/** The hand's own movements (a relax press sends every one of them under way into its return). */
+const HAND_ACTION_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension',
   'thumb_opposition', 'thumb_reposition']);
 
-/** JOINT_LATCH driveS / relax: the per-joint notes of a state (jointId -> [goal, ease back, drive seconds left]). */
+/** 20 November 2026 (Message 206): the contraction notes of a state's body joints (jointId -> [the movement's end angle
+ * (degrees), contraction seconds left (>= 0; 0 = on the way back), the side the end is a stop from (-1, 0 none, +1: the
+ * joint may not pass the end going that way)]). A joint without a note is at, or springs to, its place (bodyGoal). */
 const jerkMapOk = m => m !== null && typeof m === 'object' && !Array.isArray(m)
-  && Object.values(m).every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
-const copyJerkMap = m => { const o = {}; if (m && typeof m === 'object') for (const k of Object.keys(m)) if (Array.isArray(m[k]) && m[k].length === 3 && m[k].every(Number.isFinite)) o[k] = m[k].slice(); return o; };
-/** 20 November 2026 (JOINT_LATCH, the left arm): the game arm's per-action notes of a state (actionId -> [ease back as a
- * share of the movement (0..1), drive seconds left (>= 0), the pose drive's speed (movements per second)]). */
+  && Object.values(m).every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) && v[1] >= 0 && (v[2] === -1 || v[2] === 0 || v[2] === 1));
+const copyJerkMap = (m, n) => { const o = {}; if (m && typeof m === 'object') for (const k of Object.keys(m)) if (Array.isArray(m[k]) && m[k].length === n && m[k].every(Number.isFinite)) o[k] = m[k].slice(); return o; };
+/** 20 November 2026 (Message 206): the game arm's contraction notes (actionId -> [contraction seconds left (>= 0; 0 = on
+ * the way back), the pose drive's speed (movements per second)]). */
 const armJerkOk = m => m !== null && typeof m === 'object' && !Array.isArray(m)
-  && Object.entries(m).every(([k, v]) => ACTION_IDS.includes(k) && Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) && v[0] >= 0 && v[0] <= 1 && v[1] >= 0);
+  && Object.entries(m).every(([k, v]) => ACTION_IDS.includes(k) && Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] >= 0);
 
 /**
  * One exact step of a damped spring toward `goal`: x = pos - goal obeys x'' + 2 zeta omega x' + omega^2 x = 0
@@ -1162,7 +1235,8 @@ const BODY_SIDES = Object.freeze(['left', 'right', 'midline']);
 const ARM_ACTION_CHANNEL = Object.freeze({
   elbow_flexion: 'elbow', elbow_extension: 'elbow', wrist_flexion: 'wrist', wrist_extension: 'wrist',
   wrist_radial_deviation: 'wrist', wrist_ulnar_deviation: 'wrist',
-  pronation: 'forearm', supination: 'forearm'
+  pronation: 'forearm', supination: 'forearm',
+  shoulder_flexion: 'shoulder', shoulder_extension: 'shoulder', shoulder_abduction: 'shoulder', shoulder_adduction: 'shoulder'
 }); // every other arm action -> 'hand'
 const EFFECTOR_CHANNELS = Object.freeze([
   [/shoulder|upper[\s_-]?arm|proximal|arm[\s_-]?reach/i, 'shoulder'], [/elbow/i, 'elbow'],
@@ -1244,7 +1318,10 @@ export function bindBodyMap(map) {
       return {
         id: aid, label: typeof a.label === 'string' ? a.label : aid, armActionId: arm, joints,
         agonists: names(a.agonists, `region ${id} action ${aid} agonists`),
-        antagonists: names(a.antagonists, `region ${id} action ${aid} antagonists`)
+        antagonists: names(a.antagonists, `region ${id} action ${aid} antagonists`),
+        // (BODYMAP, data for how an activation runs: this movement's end is a stop for the contraction, which must not
+        // overshoot past it; "Swing thigh in" ends with the legs side by side)
+        ...(a.jerkStop === true ? { jerkStop: true } : {})
       };
     });
     const armActionIds = [...new Set(actions.map(a => a.armActionId).filter(x => x !== null))];
@@ -1270,7 +1347,7 @@ export function bindBodyMap(map) {
       const key = bodyActionKey(r.id, a.id);
       bodyActions.push([key, deepFreeze({
         key, regionId: r.id, actionId: a.id, label: a.label, joints: { ...a.joints },
-        agonists: [...a.agonists], antagonists: [...a.antagonists]
+        agonists: [...a.agonists], antagonists: [...a.antagonists], ...(a.jerkStop === true ? { jerkStop: true } : {})
       })]);
     }
   }
@@ -1602,16 +1679,20 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * (R558, Message 48). { type: 'limbPose', joints, regionId?, actionId? }
  * sets held own-limb joints at once (they stay, like a latch) and lights that area.
  *
- * Latch (R558, JOINT_LATCH). A deliberate activation (a look onto a new area, a click, a muscle tap; not the restart
- * of the same area by a small look movement) moves its joints and they STAY there: nothing returns by itself.
- * Stage rule: if the action opposes where one of its joints is latched (its end angle is at the start angle or on the
- * other side of it), it brings that joint back to its start angle and does nothing else this time; otherwise its
- * joints go to their end angles (absolute degrees in the rig's convention, inside bodyJointLimits). A body joint jerks
- * to its goal with the JOINT_LATCH spring. A joint that no action can bring back is momentary: it follows its pulse
- * (none in the shipped map since R558, which gave every face display joint an opposing action). Game-arm actions latch the same way through ARM_OPPOSITES (the arm pose drive
- * follows the latch with armPoseTau; the display stays the one-second pulse); relax_release lets go of every latched
- * hand action; a look or click on a forearm-turn area sets rotationState (and lets go of a dance-held palm turn). latchView(state) lists what is latched and which opposing
- * actions bring it back (the faint hints).
+ * Contract, then return (20 November 2026, the owner's Message 206; JOINT_LATCH). A deliberate activation (a look that
+ * rests on a new area for latchS, a click, a muscle tap; not the restart of the same area by a small look movement)
+ * makes its part CONTRACT: for JOINT_LATCH.driveS its joints are driven to the movement's end angles (absolute degrees
+ * in the rig's convention, inside bodyJointLimits) by the jerk spring, and its area, its muscles and its display level
+ * are lit for exactly that time. Then the part RETURNS, unlit, on the soft relaxOmega spring to where it was just before
+ * (bodyGoal: the start posture, or where the player put it with the keys, a drag, a Space carry or the limb turn; a
+ * 'limbPose' event or the turn sets it), and stays. Nothing is held by the brain: there is no stage rule, no opposing
+ * hint and no "already there". A movement whose end lies short of where the part already is (a bend asked of a joint
+ * the player bent further) does not pull it back: it kicks it toward its end instead. A further press during the
+ * contraction or the return drives the part again. Game-arm actions do the same on the arm's pose drive (0 neutral, 1
+ * the movement's end; ARM_OPPOSITES: the opposite of a running contraction goes straight into its return; a relax press
+ * sends every hand movement into its return); a forearm-turn area turns the forearm for the contraction and it turns
+ * back to where it was (rotationState / the turn's held angle). motionView(state) lists what is contracting and what is
+ * on its way back.
  *
  * Instructions/pause. The intro overlay is visible for introSeconds from the start (not paused). Esc toggles the
  * overlay (show + pause / hide + resume); a pointer-lock loss shows it and pauses; an Esc within escLockDedupeSeconds of
@@ -1620,15 +1701,15 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * timers run on.
  *
  * Reset body ({ type: 'reset' } or resetBody(state)) clears activatedRegions, cancels the running pulse, snaps the body
- * drives/displays to 0 and every body joint to its start angle (latches cleared), snaps arm drives/displays to 0 and
- * clears the arm latches, clears the open/relax windows, sets rotationState to defaultRotation (value snapped), the game arm's dance swivel to 0, ends any limb turn and ends any grab. It keeps the brain
+ * drives/displays to 0 and every body joint to its start angle (contractions dropped), snaps arm drives/displays to 0 and
+ * drops the arm's contractions, clears the open/relax windows, sets rotationState to defaultRotation (value snapped), the game arm's dance swivel to 0, ends any limb turn and ends any grab. It keeps the brain
  * placement and orbit (round-2 fix R1: the brain stays where it was released; ns-app resetBrainView resets the view),
  * the clock, the pulse/suppression counters, WASD levels and the instructions/pause state.
  *
  * Returns { options, binding, state, step, stepGated, seed, seedGaze, drives, poseDrives, displayActivity,
  * displayDrives, muscleDisplayDrives, reachOutputs, resetBody, orbitStep, regionActivity, activatedRegions,
  * bodyJointTargets, activeBodyActions, bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView,
- * snapshot, latchView }. `state` is plain JSON data; no function mutates its input. `dt` is actual elapsed wall time.
+ * snapshot, motionView }. `state` is plain JSON data; no function mutates its input. `dt` is actual elapsed wall time.
  */
 export function createActivity({
   pulseSeconds = 1, riseTau = 0.12, decayTau = 0.25, spaceOpenSeconds = 0.6,
@@ -1688,15 +1769,26 @@ export function createActivity({
   const rotValue = st => (st === 'supinated' ? 1 : 0);
   const channelFor = st => (st === 'supinated' ? 'supination' : 'pronation');
 
-  // ---- R558 latch tables (see JOINT_LATCH and the Latch paragraph above) --------------------------
+  // ---- contraction tables (see JOINT_LATCH and the "Contract, then return" paragraph above) ------
   if (bodyRest !== null && !isPlainObject(bodyRest)) fail('activity_option', 'bodyRest must be an object of jointId -> degrees (the start posture), or null');
   if (!(isPlainObject(jointSpring) && isFiniteNumber(jointSpring.omega) && jointSpring.omega > 0 && isFiniteNumber(jointSpring.zeta) && jointSpring.zeta > 0
-    && (jointSpring.restitution === undefined || (isFiniteNumber(jointSpring.restitution) && jointSpring.restitution >= 0 && jointSpring.restitution < 1)))) {
-    fail('activity_option', 'jointSpring must be { omega > 0 (rad/s), zeta > 0, restitution? in [0, 1) }');
+    && (jointSpring.restitution === undefined || (isFiniteNumber(jointSpring.restitution) && jointSpring.restitution >= 0 && jointSpring.restitution < 1))
+    && (jointSpring.driveS === undefined || (isFiniteNumber(jointSpring.driveS) && jointSpring.driveS > 0)))) {
+    fail('activity_option', 'jointSpring must be { omega > 0 (rad/s), zeta > 0, restitution? in [0, 1), driveS? > 0 (s) }');
   }
   if (!(isFiniteNumber(armPoseTau) && armPoseTau > 0)) fail('activity_option', 'armPoseTau must be a positive number of seconds');
   const springOmega = jointSpring.omega, springZeta = jointSpring.zeta, springBounce = jointSpring.restitution === undefined ? 0 : jointSpring.restitution;
-  const relaxOmega = Number.isFinite(jointSpring.relaxOmega) && jointSpring.relaxOmega > 0 ? jointSpring.relaxOmega : jointSpring.omega;
+  // Message 206: the return (soft, critically damped), the contraction's length and the fade of its light.
+  const relaxOmega = Number.isFinite(jointSpring.relaxOmega) && jointSpring.relaxOmega > 0 ? jointSpring.relaxOmega : JOINT_LATCH.relaxOmega;
+  const contractS = isFiniteNumber(jointSpring.driveS) ? jointSpring.driveS : JOINT_LATCH.driveS;
+  const lightFadeS = isFiniteNumber(jointSpring.lightFadeS) && jointSpring.lightFadeS >= 0 && jointSpring.lightFadeS < contractS ? jointSpring.lightFadeS : Math.min(JOINT_LATCH.lightFadeS, contractS / 2);
+  const kickShare = isFiniteNumber(jointSpring.kick) && jointSpring.kick > 0 ? jointSpring.kick : 0;
+  // (the stop bounce: the speed into a stop that throws the part back A degrees off it is A * omega / (restitution *
+  // reach), reach being how far a unit speed away from the goal carries this spring: exp(-zeta / sqrt(1 - zeta^2) *
+  // atan(sqrt(1 - zeta^2) / zeta)) / omega; 0.70 / omega at zeta 0.26)
+  const stopShare = isFiniteNumber(jointSpring.stopBounceShare) && jointSpring.stopBounceShare > 0 ? jointSpring.stopBounceShare : 0;
+  const stopMaxDeg = isFiniteNumber(jointSpring.stopBounceMaxDeg) && jointSpring.stopBounceMaxDeg > 0 ? jointSpring.stopBounceMaxDeg : 0;
+  const springReach = springZeta < 1 ? Math.exp(-springZeta / Math.sqrt(1 - springZeta * springZeta) * Math.atan2(Math.sqrt(1 - springZeta * springZeta), springZeta)) : Math.exp(-1);
   const limitJoint = (j, v) => (limitsBody && hasOwn(limitsBody, j) ? clamp(v, limitsBody[j][0], limitsBody[j][1]) : v);
   // Start angle of every joint (the start posture; 0 where none is given), inside the limits.
   const REST = {};
@@ -1714,32 +1806,9 @@ export function createActivity({
     for (const [j, deg] of Object.entries(binding.bodyActions.get(k).joints)) e[j] = limitJoint(j, deg) + 0;
     ENDS.set(k, Object.freeze(e));
   }
-  /** Side of its start angle an angle of joint j lies on: -1, 0 (at the start angle) or +1. */
-  const sideOf = (j, deg) => (Math.abs(deg - REST[j]) <= JOINT_LATCH.restEpsDeg ? 0 : deg > REST[j] ? 1 : -1);
-  // A joint LATCHES when every action that takes it away from the start angle has an opposing action (one ending at
-  // the start angle or on its other side), so the player can always bring it back. A joint without one stays
-  // MOMENTARY: it follows its pulse and comes back by itself (since R558 every map joint has an opposing action, the
-  // face display joints included, so none is momentary in the shipped map).
-  const LATCHING = {};
-  for (const j of JOINT_IDS) {
-    const sides = [];
-    for (const k of BODY_KEYS) if (hasOwn(ENDS.get(k), j)) sides.push(sideOf(j, ENDS.get(k)[j]));
-    const away = sides.filter(x => x !== 0);
-    LATCHING[j] = away.length > 0 && away.every(x => sides.some(y => y !== x));
-    // R558 (Space dance): a joint the dance turns stays where the dance leaves it (the latch rule) until an opposing
-    // action, another dance or Reset body moves it.
-    if (DANCE_BODY_JOINTS.includes(j)) LATCHING[j] = true;
-  }
-  Object.freeze(LATCHING);
-  // 18 Nov (S3, JOINT_LATCH.nearRestDeg / nearRestShare): how far from its start angle a latched goal may be and still
-  // count as at the start for the stage rule (opposedJoints).
-  const NEAR_REST = {};
-  for (const j of JOINT_IDS) {
-    let span = 0;
-    for (const k of BODY_KEYS) if (hasOwn(ENDS.get(k), j)) span = Math.max(span, Math.abs(ENDS.get(k)[j] - REST[j]));
-    NEAR_REST[j] = Math.max(JOINT_LATCH.restEpsDeg, Math.min(JOINT_LATCH.nearRestDeg, JOINT_LATCH.nearRestShare * span));
-  }
-  Object.freeze(NEAR_REST);
+  // (20 November 2026, Message 206: the latch's tables are gone: LATCHING (which joints held), NEAR_REST (the stage
+  // rule's margin). Every joint returns to its place after a contraction; the turn's joints too, to where the turn left
+  // them.)
   for (const j of DANCE_BODY_JOINTS) if (!JOINT_IDS.includes(j)) fail('activity_option', `the body map binding lacks the dance joint ${j}`);
   // 18 November 2026, late (the whole arm turns over in the limb switch, ns-dance ARM_TURN): the game arm starts with its
   // upper arm at the end of the side its palm starts on (outward with the palm up: the underside), in the explicit
@@ -1795,16 +1864,18 @@ export function createActivity({
       markPending: null,                      // R3-fix M5: { area, regionId, since } a look that marks after markS
       latchPending: null,                     // R558: { area, hit, since } a look that moves its joints after latchS
       lookTaken: null,                        // R558: { regionId, n } the area whose movement a look's rest took last; n counts them
-      progress: null,                         // 18 Nov (M3): { key, targets: { jointId: deg } } a held number key's movement
+      pulseMove: false,                       // Message 206: the running pulse is a contraction's light (JOINT_LATCH driveS long)
+      moveSeq: 0,                             // Message 206: count of contractions started (clicks, looks that rested, taps)
+      lastMove: null,                         // Message 206: { regionId, actionId, armAction, bodyKey, rotation } of the latest one
       bodyDrive: zeroMap(BODY_KEYS),          // body POSE drive (smoothed, eases)
       bodyDisplay: zeroMap(BODY_KEYS),        // body DISPLAY envelope (crisp; for muscle colour)
       bodyJointTargets: restMap(),            // jointId -> absolute degrees (derived: the joint positions, bodyPos)
-      bodyGoal: restMap(),                    // jointId -> degrees: where the joint is latched (start angle = not latched)
-      bodyPos: restMap(),                     // jointId -> degrees: where the joint is now (jerks to its goal)
+      bodyGoal: restMap(),                    // jointId -> degrees: the joint's PLACE, where it returns after a contraction (the start
+                                              // posture, or where a 'limbPose' event or the limb turn put it)
+      bodyPos: restMap(),                     // jointId -> degrees: where the joint is now
       bodyVel: zeroMap(JOINT_IDS),            // jointId -> degrees/s
-      bodyJerk: {},                           // jointId -> [goal, ease back (degrees), drive seconds left]: JOINT_LATCH driveS / relax
-      armLatch: zeroMap(ACTION_IDS),          // game-arm actionId -> 0 | 1: latched on (see ARM_OPPOSITES)
-      armJerk: {},                            // game-arm actionId -> [ease back share, drive seconds left, drive speed /s]: JOINT_LATCH on the left arm
+      bodyJerk: {},                           // jointId -> [end angle, contraction seconds left (0 = on the way back), stop side] (Message 206)
+      armJerk: {},                            // game-arm actionId -> [contraction seconds left (0 = on the way back), drive speed /s]
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
       rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
       armHumeral: armHumeralStart(), // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn. 18 November 2026, late: explicit from the start (the underside end)
@@ -1886,15 +1957,15 @@ export function createActivity({
       && (s.markPending === undefined || s.markPending === null || (isPlainObject(s.markPending) && typeof s.markPending.area === 'string' && regionOrNull(s.markPending.regionId) && nonNegative(s.markPending.since)))
       && (s.latchPending === undefined || s.latchPending === null || (isPlainObject(s.latchPending) && typeof s.latchPending.area === 'string' && isPlainObject(s.latchPending.hit) && nonNegative(s.latchPending.since)))
       && (s.lookTaken === undefined || s.lookTaken === null || (isPlainObject(s.lookTaken) && regionOrNull(s.lookTaken.regionId) && nonNegative(s.lookTaken.n)))
-      && (s.progress === undefined || s.progress === null || (isPlainObject(s.progress) && BODY_KEYS.includes(s.progress.key) && isPlainObject(s.progress.targets)
-        && Object.entries(s.progress.targets).every(([j, v]) => JOINT_IDS.includes(j) && isFiniteNumber(v))))
+      && (s.pulseMove === undefined || typeof s.pulseMove === 'boolean')
+      && (s.moveSeq === undefined || safeCount(s.moveSeq))
+      && (s.lastMove === undefined || s.lastMove === null || isHit(s.lastMove))
       && unitMap(s.bodyDrive, BODY_KEYS) && unitMap(s.bodyDisplay, BODY_KEYS)
       && finiteMap(s.bodyJointTargets, JOINT_IDS)
       && (s.bodyGoal === undefined || finiteMap(s.bodyGoal, JOINT_IDS))
       && (s.bodyPos === undefined || finiteMap(s.bodyPos, JOINT_IDS))
       && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
       && (s.bodyJerk === undefined || jerkMapOk(s.bodyJerk))
-      && (s.armLatch === undefined || unitMap(s.armLatch, ACTION_IDS))
       && (s.armJerk === undefined || armJerkOk(s.armJerk))
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
@@ -1958,17 +2029,18 @@ export function createActivity({
       markPending: s.markPending ? { ...s.markPending } : null,
       latchPending: s.latchPending ? { ...s.latchPending, hit: { ...s.latchPending.hit } } : null,
       lookTaken: s.lookTaken ? { regionId: s.lookTaken.regionId, n: s.lookTaken.n } : null,
-      progress: s.progress ? { key: s.progress.key, targets: { ...s.progress.targets } } : null,
+      pulseMove: s.pulseMove === true,
+      moveSeq: safeCount(s.moveSeq) ? s.moveSeq : 0,
+      lastMove: s.lastMove ? { ...s.lastMove } : null,
       bodyDrive: pick(s.bodyDrive, BODY_KEYS),
       bodyDisplay: pick(s.bodyDisplay, BODY_KEYS),
       bodyJointTargets: pick(s.bodyJointTargets, JOINT_IDS),
-      // R558 latch: a state from before the latch has none of these; it starts at the start posture, nothing latched.
+      // A state from before the joint springs has none of these; it starts at the start posture.
       bodyGoal: s.bodyGoal === undefined ? restMap() : pick(s.bodyGoal, JOINT_IDS),
       bodyPos: s.bodyPos === undefined ? restMap() : pick(s.bodyPos, JOINT_IDS),
       bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
-      bodyJerk: copyJerkMap(s.bodyJerk),
-      armLatch: s.armLatch === undefined ? zeroMap(ACTION_IDS) : pick(s.armLatch, ACTION_IDS),
-      armJerk: copyJerkMap(s.armJerk), // (a state from before the arm's jerk has none: every latch is then simply held)
+      bodyJerk: copyJerkMap(s.bodyJerk, 3),
+      armJerk: copyJerkMap(s.armJerk, 2), // (a state without notes: nothing is contracting)
       rotationState: s.rotationState,
       rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null },
       // R558 (Space dance): a state from before the dance starts with none (start angles, no history).
@@ -2004,145 +2076,122 @@ export function createActivity({
     return T;
   }
 
-  /** R558 latch: what the game arm's POSE follows at `at` seconds into the step: the latched actions, the Space grip
-   * (graspHold: the hand is closed while Space holds or keeps a grasp, and the grip wins the fingers over any latched
-   * finger pose until it lets go), the opening window after the grip lets go and a running relax pulse. A one-second
-   * look/click pulse alone lights its area (commandTargets) but does not hold a pose; the latch does. */
+  /** What the game arm's POSE drive returns to when no contraction drives it (its PLACE, Message 206): the Space grip
+   * (graspHold: the hand is closed while Space holds or keeps a grasp, and the grip wins the fingers over any finger
+   * contraction), the opening window after the grip lets go and a running relax pulse; 0 (the hand's neutral pose)
+   * otherwise. A contraction (armJerk) drives its own action to 1 for its time and then returns to this. */
   function poseTargets(s, at) {
     const T = zeroMap(ACTION_IDS);
-    // (20 November 2026, JOINT_LATCH on the left arm: a pressed movement is driven to its end for driveS, then held
-    // `relax` of the way back; its note in armJerk says which; a latch without a note is held at its end)
-    for (const id of ACTION_IDS) if (s.armLatch[id] > 0) { const n = s.armJerk ? s.armJerk[id] : undefined; T[id] = n !== undefined && !(n[1] > 0) ? 1 - n[0] : 1; }
     if (at < s.openRemaining) T.open_hand = 1;
     if (at < s.relaxRemaining || (s.pulseAction === 'relax_release' && at < s.pulseRemaining && !(armOnly && s.pulseLook))) T.relax_release = 1;
     if (s.graspHold) { for (const id of SPACE_COMPETING) T[id] = 0; T.grasp_close = 1; }
     return T;
   }
 
-  /** How many joints of body action `ends` are latched on the OTHER side of their start angle (goalOf: jointId ->
-   * degrees); `into`, when given, collects them. A deliberate activation brings these back and does nothing else
-   * (latchBodyAction); 0 = it goes to its ends. One place for the rule, so the information card's "first press
-   * brings it back" (latchView back) cannot drift from it. */
-  function opposedJoints(ends, goalOf, into = null) {
-    let n = 0;
-    for (const j of Object.keys(ends)) {
-      if (!LATCHING[j]) continue;
-      // S3: a goal that cannot be told from the start angle counts as at the start (NEAR_REST)
-      const at = Math.abs(goalOf[j] - REST[j]) <= NEAR_REST[j] ? 0 : sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
-      if (at !== 0 && side !== 0 && side !== at) { n += 1; if (into) into.push(j); }
-    }
-    return n;
-  }
-
-  /** Stage rule of a deliberate BODY activation: an action that opposes where one of its joints is latched (its end
-   * for that joint lies on the other side of the start angle) brings that joint back to its start angle (and does
-   * nothing else this time); otherwise its joints go to their end angles and stay. A joint the action merely wants at
-   * its start angle ("Purse the lips" wants the upper lip down) is not an opposition: it goes there with the rest of
-   * the action, in the same activation. Momentary joints are not touched (they follow the pulse in integrate). */
-  function latchBodyAction(s, key) {
+  /** 20 November 2026 (the owner, Message 206: "when you tap any area of the brain, you activate any area, it will
+   * contract, then return to its previous place"): the CONTRACTION of body action `key`. Each joint it names gets a
+   * note [end angle, contractS]: integrate drives the joint to that angle with the jerk spring for contractS, then
+   * springs it softly back to its place (bodyGoal) and drops the note there. The place itself is not touched, so the
+   * part returns to where it was just before (the start posture, or where the keys, a drag, a Space carry or the turn
+   * left it), never to the start posture when it was elsewhere.
+   *  - A joint whose place already lies beyond the movement's end, on the movement's own side of the start angle (a
+   *    bend asked of a knee the player bent further), is driven to its place, not pulled back: the movement never works
+   *    against itself.
+   *  - kick (JOINT_LATCH): a joint already at, or near, that angle (a further press during the contraction, or a
+   *    movement with little travel) is thrown toward it, so it slams into its end stop and still shows (not under
+   *    reduced motion, whose spring has no kick).
+   *  - the end is a stop for the contraction (the note's third number: the side it may not be passed from), so the
+   *    jerk never throws the part past the movement's end (into another part); it rebounds off it.
+   *  - stop bounce (JOINT_LATCH stopBounceShare / stopBounceMaxDeg): a movement that ends at the joint's own stop where
+   *    the part already is (the jaw's clench with the jaw closed) strikes that stop: thrown into it, the part rebounds
+   *    a visible way off it and is drawn back.
+   *  - JOINT_CONFLICTS: the other plane of the right shoulder goes to its start angle for the same time, so the label
+   *    stays true at the peak; it returns to its place with the rest.
+   * A joint the action wants at its start angle ("Purse the lips" wants the upper lip down) goes there and back with
+   * the rest. Returns true when the action names a joint. */
+  function contractBody(s, key) {
     const ends = ENDS.get(key);
-    if (!ends) return;
-    const back = [];
-    if (opposedJoints(ends, s.bodyGoal, back) > 0) { for (const j of back) s.bodyGoal[j] = REST[j]; return; }
+    if (!ends) return false;
+    if (!s.bodyJerk) s.bodyJerk = {};
+    const J = jointSpring, minSwing = Number.isFinite(J.minSwingDeg) ? J.minSwingDeg : 0;
+    const nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0, rangeShare = Number.isFinite(J.minSwingRangeShare) ? J.minSwingRangeShare : 1;
+    let any = false;
+    const eps = JOINT_LATCH.restEpsDeg;
+    // (the stop bounce only for a movement that would otherwise show nothing at all: every joint it names wants its start
+    // angle and is there. "Purse the lips" also wants the upper lip at its start angle: that lip does not twitch.)
+    const still = Object.keys(ends).every(j => Math.abs(ends[j] - REST[j]) <= eps && Math.abs(ends[j] - (Number.isFinite(s.bodyPos[j]) ? s.bodyPos[j] : REST[j])) <= eps);
     for (const j of Object.keys(ends)) {
-      if (!LATCHING[j]) continue;
-      // A weaker action on the side a joint is already latched on never eases it off (a part closure does not open a
-      // fist): the joint keeps the further of the two end angles.
-      const side = sideOf(j, ends[j]);
-      if (side !== 0 && sideOf(j, s.bodyGoal[j]) === side && Math.abs(s.bodyGoal[j] - REST[j]) >= Math.abs(ends[j] - REST[j])) continue;
-      s.bodyGoal[j] = ends[j];
-      // R558 (JOINT_CONFLICTS): the later of two held movements of one shoulder wins its direction
-      if (side !== 0 && hasOwn(JOINT_CONFLICTS, j)) for (const k of JOINT_CONFLICTS[j]) if (hasOwn(s.bodyGoal, k) && !hasOwn(ends, k)) s.bodyGoal[k] = REST[k];
-    }
-    // 19 November 2026 (JOINT_LATCH driveS / relax / kick): every press drives the action's joints hard to their end
-    // angles, where they are held for driveS and then ease back a little; a press that finds a joint already near its
-    // end (a further click, or a movement with little travel) kicks it toward the end, so it slams in again. Not
-    // under reduced motion, and not on a state without positions (latchTargetsOf's copy).
-    const J = jointSpring, relax = Number.isFinite(J.relax) ? J.relax : 0, kick = Number.isFinite(J.kick) ? J.kick : 0;
-    if ((relax > 0 || kick > 0) && s.bodyPos && s.bodyVel) {
-      const minSwing = Number.isFinite(J.minSwingDeg) ? J.minSwingDeg : 0, driveS = Number.isFinite(J.driveS) ? J.driveS : 0;
-      const maxShare = Number.isFinite(J.relaxMaxShare) ? J.relaxMaxShare : 1, nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0;
-      if (!s.bodyJerk) s.bodyJerk = {};
-      for (const j of Object.keys(ends)) {
-        if (!LATCHING[j] || s.bodyGoal[j] !== ends[j] || !Number.isFinite(s.bodyPos[j])) continue;
-        const goal = ends[j], travel = goal - REST[j], left = goal - s.bodyPos[j];
-        const dir = Math.abs(travel) > JOINT_LATCH.restEpsDeg ? Math.sign(travel) : Math.abs(left) > JOINT_LATCH.restEpsDeg ? Math.sign(left) : 0;
-        if (dir === 0) continue; // the action only wants this joint at its start angle
+      any = true;
+      const end = ends[j], place = Number.isFinite(s.bodyGoal[j]) ? s.bodyGoal[j] : REST[j], pos = Number.isFinite(s.bodyPos[j]) ? s.bodyPos[j] : place;
+      // the movement's own direction: away from the start angle; for an action that wants the start angle, toward it
+      const way = end - REST[j];
+      const dirRest = Math.abs(way) > JOINT_LATCH.restEpsDeg ? Math.sign(way) : 0;
+      const target = dirRest !== 0 && (place - end) * dirRest > 0 ? place : end;
+      const left = target - pos;
+      // the joint's own stop the movement ends at, when the part is already there: -1 (the lower) / +1 (the upper) / 0
+      const lim = limitsBody && hasOwn(limitsBody, j) ? limitsBody[j] : null;
+      const atStop = still && lim ? (Math.abs(end - lim[0]) <= eps ? -1 : Math.abs(end - lim[1]) <= eps ? 1 : 0) : 0;
+      const dir = dirRest !== 0 ? dirRest : Math.abs(left) > eps ? Math.sign(left) : atStop;
+      s.bodyJerk[j] = [target + 0, contractS + 0, dir];
+      if (kickShare > 0 && dir !== 0 && Number.isFinite(s.bodyVel[j])) {
         // (a small joint is not given a swing larger than most of its own range: a lip would rattle between its ends)
-        const range = limitsBody && hasOwn(limitsBody, j) ? Math.abs(limitsBody[j][1] - limitsBody[j][0]) : Infinity;
-        const swing = Math.max(Math.abs(travel), Math.min(minSwing, JOINT_LATCH.minSwingRangeShare * range));
-        if (kick > 0 && Math.abs(left) < nearShare * swing) s.bodyVel[j] = dir * kick * swing * springOmega + 0;
-        s.bodyJerk[j] = [goal, dir * Math.min(relax * swing, maxShare * Math.abs(travel)), driveS];
+        const range = lim ? Math.abs(lim[1] - lim[0]) : Infinity;
+        if (atStop !== 0) {
+          const A = Math.min(stopMaxDeg, stopShare * range);
+          if (A > 0 && springBounce > 0) s.bodyVel[j] = dir * A * springOmega / (springBounce * springReach) + 0;
+        } else {
+          const swing = Math.max(Math.abs(target - place), Math.min(minSwing, rangeShare * range));
+          if (Math.abs(left) < nearShare * swing) s.bodyVel[j] = dir * kickShare * swing * springOmega + 0;
+        }
+      }
+      // R558 (JOINT_CONFLICTS): the later of two movements of one shoulder wins its direction
+      if (dirRest !== 0 && hasOwn(JOINT_CONFLICTS, j)) {
+        for (const k of JOINT_CONFLICTS[j]) {
+          if (!hasOwn(s.bodyGoal, k) || hasOwn(ends, k)) continue;
+          const d = REST[k] - (Number.isFinite(s.bodyPos[k]) ? s.bodyPos[k] : REST[k]);
+          s.bodyJerk[k] = [REST[k] + 0, contractS + 0, Math.abs(d) > eps ? Math.sign(d) : 0];
+        }
       }
     }
+    return any;
   }
 
-  /** 18 Nov (M3, MOVE_HOLD): the joint goals a press of body action `key` would set now (latchBodyAction on a copy). */
-  function latchTargetsOf(s, key) {
-    const fake = { bodyGoal: { ...s.bodyGoal } };
-    latchBodyAction(fake, key);
-    const t = {};
-    for (const j of Object.keys(fake.bodyGoal)) if (fake.bodyGoal[j] !== s.bodyGoal[j]) t[j] = fake.bodyGoal[j];
-    return t;
-  }
-  /** 18 Nov (M3): end a held key's movement: `complete` (a tap) sets the whole movement; otherwise the part stops where
-   * it is now (goal = position, no speed left). */
-  function finishProgress(s, complete) {
-    const P = s.progress;
-    s.progress = null;
-    if (!P) return;
-    for (const [j, v] of Object.entries(P.targets)) {
-      if (complete) s.bodyGoal[j] = v;
-      else { const q = limitJoint(j, s.bodyPos[j]) + 0; s.bodyGoal[j] = q; s.bodyPos[j] = q; s.bodyVel[j] = 0; }
-    }
-  }
-
-  /** Stage rule of a deliberate GAME-ARM activation (ARM_OPPOSITES): the opposing action of a latched one lets it go
-   * (back to the neutral pose); otherwise the action latches on. relax_release lets go of every hand action. */
-  function latchArmAction(s, id) {
-    if (id === 'relax_release') { for (const h of HAND_LATCH_IDS) { s.armLatch[h] = 0; if (s.armJerk) delete s.armJerk[h]; } return; }
-    if (DISPLAY_ONLY_ARM_IDS.includes(id)) return; // R558: moves nothing on the game arm, so nothing is held
-    const opp = armOpposedLatch(id, s.armLatch);
-    if (opp !== null) { s.armLatch[opp] = 0; if (s.armJerk) delete s.armJerk[opp]; return; } // the way back: as before (armPoseTau)
-    s.armLatch[id] = 1;
-    jerkArm(s, id);
-  }
-
-  /** 20 November 2026 (the owner, of every part: "They move and then return. But they don't have to return fully, just
-   * partially ... They jerk one way and then they partially return back"; the left arm's own rig had only eased into a
-   * latched movement and stayed): a press of a latched game-arm movement, the first one or a further one, drives its
-   * pose drive to the movement's end with the body's JOINT_LATCH spring, holds it there for driveS and then eases it
-   * back the body's share of the way (relax, at most relaxMaxShare), where it waits; a press that finds the drive near
-   * the end (within nearShare: a further click during the hold) kicks it in, as the body's kick. Nothing under reduced
-   * motion (that spring has no relax or kick: the movement eases to its end and stays, as before), nothing on a state
-   * without drives. While the Space grip holds the fingers the note waits (integrate), so a movement latched on always
-   * has its note when the jerk is on: ns-guide armActionMoves reads that as "a press moves it again". A display rule of
-   * this game, nothing measured. */
-  function jerkArm(s, id) {
-    const J = jointSpring, relax = Number.isFinite(J.relax) ? J.relax : 0, kick = Number.isFinite(J.kick) ? J.kick : 0;
-    if (!(relax > 0 || kick > 0) || !s.drive || !Number.isFinite(s.drive[id])) return;
+  /** 20 November 2026 (Message 206): the CONTRACTION of game-arm action `id`: its pose drive is driven to 1 (the
+   * movement's end) with the jerk spring for contractS, then springs softly back to its place (poseTargets: 0, or the
+   * grip's) and the note is dropped there. A press that finds the drive near 1 kicks it into the end (the body's kick,
+   * its whole travel being one unit). A contraction of the opposite action that is still under way goes straight into
+   * its return (ARM_OPPOSITES). relax_release sends every hand movement under way into its return and is itself the
+   * relax pulse it always was (poseTargets). The two sideways wrist bends move nothing on the game arm. Returns true
+   * when something on the arm is driven. */
+  function contractArm(s, id) {
     if (!s.armJerk) s.armJerk = {};
-    const share = clamp(Math.min(relax, Number.isFinite(J.relaxMaxShare) ? J.relaxMaxShare : 1), 0, 1);
-    const nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0, driveS = Number.isFinite(J.driveS) ? Math.max(0, J.driveS) : 0;
-    const prev = s.armJerk[id];
-    // (the movement's whole travel is one drive unit, so its swing is 1: the body's kick x swing x omega)
-    const speed = kick > 0 && 1 - s.drive[id] < nearShare ? kick * springOmega : prev ? prev[2] : 0;
-    s.armJerk[id] = [share + 0, driveS + 0, speed + 0];
+    if (id === 'relax_release') { for (const h of HAND_ACTION_IDS) if (s.armJerk[h]) s.armJerk[h][0] = 0; return true; }
+    if (DISPLAY_ONLY_ARM_IDS.includes(id) || !s.drive || !Number.isFinite(s.drive[id])) return false;
+    const opp = hasOwn(ARM_OPPOSITES, id) ? ARM_OPPOSITES[id] : null;
+    if (opp && s.armJerk[opp]) s.armJerk[opp][0] = 0;
+    const nearShare = Number.isFinite(jointSpring.nearShare) ? jointSpring.nearShare : 0, prev = s.armJerk[id];
+    const speed = kickShare > 0 && 1 - s.drive[id] < nearShare ? kickShare * springOmega : prev ? prev[1] : 0;
+    s.armJerk[id] = [contractS + 0, speed + 0];
+    return true;
   }
 
-  /** Smoothstep fade of a timed command with `remaining` seconds left: 1 before the fade window, exactly 0 at 0. */
-  function fadeCeiling(remaining) {
-    if (remaining >= displayFadeSeconds) return 1;
+  /** Smoothstep fade of a timed command with `remaining` seconds left: 1 before the fade window (fadeS seconds),
+   * exactly 0 at 0. */
+  function fadeCeiling(remaining, fadeS = displayFadeSeconds) {
+    if (remaining >= fadeS) return 1;
     if (remaining <= SNAP) return 0; // the deadline (float residue of summed frame times counts as reached)
-    const x = remaining / displayFadeSeconds;
+    const x = remaining / fadeS;
     return x * x * (3 - 2 * x);
   }
+  /** The fade window of the running pulse: a contraction's light (pulseMove) fades over JOINT_LATCH.lightFadeS, so it is
+   * full for most of the contraction and exactly 0 when the return begins (Message 206); any other pulse as before. */
+  const pulseFade = s => (s.pulseMove === true ? lightFadeS : displayFadeSeconds);
 
   /** Display ceiling of action `id` at offset b1 for the commands active from offset b0 (1 when none is timed). */
   function displayCeiling(s, id, b0, b1) {
     if (id === 'grasp_close' && s.graspHold) return 1; // a grip still held has no deadline
     let c = -1;
-    if (s.pulseAction === id && b0 < s.pulseRemaining) c = Math.max(c, fadeCeiling(s.pulseRemaining - b1));
+    if (s.pulseAction === id && b0 < s.pulseRemaining) c = Math.max(c, fadeCeiling(s.pulseRemaining - b1, pulseFade(s)));
     if (id === 'open_hand' && b0 < s.openRemaining) c = Math.max(c, fadeCeiling(s.openRemaining - b1));
     if (id === 'relax_release' && b0 < s.relaxRemaining) c = Math.max(c, fadeCeiling(s.relaxRemaining - b1));
     return c < 0 ? 1 : c;
@@ -2176,17 +2225,38 @@ export function createActivity({
     s.pulseBody = null;
     s.pulseRotation = null;
     s.pulseRemaining = 0;
+    s.pulseMove = false;
   }
 
-  /** Start (or replace) the single pulse slot for `hit`, unless the held fist suppresses it. Returns true if started. */
-  /** R558 latch: commit a deliberate activation's movement (stage rules above). A forearm-turn area sets the turn. */
-  function commitLatch(s, hit) {
-    if (hit.bodyKey !== null && hit.bodyKey !== undefined) latchBodyAction(s, hit.bodyKey);
-    if (hit.armAction !== null && hit.armAction !== undefined) latchArmAction(s, hit.armAction);
-    if (hit.rotation !== null && hit.rotation !== undefined) {
-      s.rotationState = hit.rotation === 'supination' ? 'supinated' : 'pronated';
-      s.rotation = { ...s.rotation, hold: null }; // R558: the forearm goes to that end (a dance's held angle is let go)
+  /** True when `hit` (an area under the crosshair, a tapped muscle's area) has a movement: a body action, a game-arm
+   * action or a forearm turn. Areas without one (the in-between areas, an area named only for its muscle) light only. */
+  const hitMoves = hit => Boolean(hit) && ((hit.bodyKey !== null && hit.bodyKey !== undefined) || (hit.armAction !== null && hit.armAction !== undefined)
+    || (hit.rotation !== null && hit.rotation !== undefined));
+
+  /** 20 November 2026 (Message 206): commit a deliberate activation's movement: its CONTRACTION (contractBody,
+   * contractArm; a forearm-turn area turns the forearm for the contraction and it turns back, integrate). The area's
+   * pulse, when it is this activation's, becomes the contraction's light: exactly contractS long, with the short fade,
+   * so the area, its muscles, the beam and the display are dark when the return begins. moveSeq / lastMove count it. */
+  function commitMove(s, hit) {
+    if (!hitMoves(hit)) return;
+    if (hit.bodyKey !== null && hit.bodyKey !== undefined) contractBody(s, hit.bodyKey);
+    if (hit.armAction !== null && hit.armAction !== undefined) contractArm(s, hit.armAction);
+    if (s.pulseRemaining > 0 && s.pulseRegion === hit.regionId && s.pulseBody === hit.bodyKey && s.pulseAction === hit.armAction && s.pulseRotation === hit.rotation) {
+      s.pulseRemaining = contractS;
+      s.pulseMove = true;
     }
+    s.moveSeq = (safeCount(s.moveSeq) ? s.moveSeq : 0) + 1;
+    s.lastMove = { regionId: hit.regionId, actionId: hit.actionId, armAction: hit.armAction, bodyKey: hit.bodyKey, rotation: hit.rotation };
+  }
+
+  /** Message 206: a look that left its area (or was silenced) before latchS moved nothing, so the glow its pulse
+   * started ends too (an area with a movement is lit only while it contracts). An area without a movement keeps its
+   * glow, as before. */
+  function dropPendingLook(s) {
+    const p = s.latchPending;
+    s.latchPending = null;
+    if (!p || !p.hit || !hitMoves(p.hit) || s.pulseMove === true || s.pulseLook !== true || !(s.pulseRemaining > 0)) return;
+    if (s.pulseRegion === p.hit.regionId && s.pulseBody === p.hit.bodyKey && s.pulseAction === p.hit.armAction && s.pulseRotation === p.hit.rotation) cancelPulse(s);
   }
 
   /** R558 (Messages 55 and 56): note that the REST of a look took this area's movement. The shell reads it so the
@@ -2196,7 +2266,7 @@ export function createActivity({
     s.lookTaken = { regionId: typeof hit.regionId === 'string' ? hit.regionId : null, n: (s.lookTaken && Number.isFinite(s.lookTaken.n) ? s.lookTaken.n : 0) + 1 };
   }
 
-  function startPulse(s, hit, source, at, collect, area = null, fromLook = false, progressive = false) {
+  function startPulse(s, hit, source, at, collect, area = null, fromLook = false) {
     // R558 (Message 48): while the Space grip holds the hand closed, an action that needs the same fingers does not
     // start (its area would light while nothing moved). Returns false; the count is kept for the shell.
     if (s.graspHold && hit.armAction !== null && SPACE_COMPETING.includes(hit.armAction)) {
@@ -2204,13 +2274,13 @@ export function createActivity({
       s.lastSuppressed = { actionId: hit.armAction, source, t: s.t };
       return false;
     }
-    if (s.progress && source === 'click') finishProgress(s, false); // 18 Nov (M3): a new press stops a held one where it is
     s.pulseAction = hit.armAction;
     s.pulseRegion = hit.regionId;
     s.pulseBody = hit.bodyKey;
     s.pulseRotation = hit.rotation;
     s.pulseRemaining = pulseSeconds;
-    s.pulseSeq += 1;          // each start is a distinct pulse (no latch)
+    s.pulseMove = false;      // (Message 206: commitMove makes it the contraction's light)
+    s.pulseSeq += 1;          // each start is a distinct pulse
     s.lastTriggerAt = s.t;
     s.lastTriggerSource = source;
     // A look-movement restart of a clicked area stays a click pulse (it is the same deliberate choice).
@@ -2218,19 +2288,16 @@ export function createActivity({
     // 18 Nov (S4): a look's pulse (a look-movement restart keeps what the pulse was; a held limb's restart is no look).
     const look = source === 'gaze' || source === 'dwell';
     s.pulseLook = look || (source === 'moved' && fromLook === true && s.pulseLook === true);
-    // R558 latch: a deliberate activation (not the restart of the same area by a small look movement) moves its
-    // joints to stay, or brings a latched joint back (stage rules above). A click (or a look that already dwelt to
+    // A deliberate activation (not the restart of the same area by a small look movement, not a held limb's restart)
+    // makes its part contract (commitMove; Message 206: and then return). A click (or a look that already dwelt to
     // replace a click) commits at once; a look onto a new area commits once the gaze has stayed there latchS.
     // A look-movement restart ('moved', the same area) keeps a pending look: its dwell is still running.
     // 18 Nov (S4, LOOK_ARMS): a look commits nothing; its rest only arms the area (lookTaken, in step).
+    // (Message 206: a number key's progressive press is an ordinary press now: MOVE_HOLD.)
     if (source !== 'moved') {
       s.latchPending = null;
       if (source === 'gaze' && latchS > 0 && typeof area === 'string') s.latchPending = { area, hit: { ...hit }, since: s.t };
-      else if (progressive && source === 'click' && hit.bodyKey !== null && hit.bodyKey !== undefined) {
-        // 18 Nov (M3, MOVE_HOLD): a held number key: the goals run toward the press's targets (integrate)
-        const t = latchTargetsOf(s, hit.bodyKey);
-        s.progress = Object.keys(t).length ? { key: hit.bodyKey, targets: t } : null;
-      } else if (!(look && armOnly)) commitLatch(s, hit);
+      else if (!(look && armOnly)) commitMove(s, hit);
       else if (source === 'gaze') tookByLook(s, hit); // no rest time asked: armed at once
     }
     // Persistent marks count deliberate activations: a click at once, a look only once the gaze has stayed on the area
@@ -2303,7 +2370,7 @@ export function createActivity({
       fail('activity_event', 'gaze yaw and pitch must both be finite radians when given');
     }
     const g = resolveGaze(ev);
-    if (s.latchPending && g.area !== s.latchPending.area) s.latchPending = null; // R558: the look left before latchS
+    if (s.latchPending && g.area !== s.latchPending.area) dropPendingLook(s); // R558: the look left before latchS (Message 206: its glow ends)
     if (hasDir) { s.gazeYaw = ev.yaw; s.gazePitch = ev.pitch; }
     if (s.brainGrab.active && hasDir) s.brainPlacement = grabPlacement(s.brainGrab, ev.yaw, ev.pitch, grabLimitRad);
     // Silent: explicit seed (first frame, re-frame), the frame after an orbit/grab release/resume/reset, while paused,
@@ -2344,7 +2411,10 @@ export function createActivity({
         moved = ev.moved === true; // legacy per-frame boolean from the caller
       }
       if (moved) {
-        startPulse(s, g.hit, 'moved', at, collect, null, true);
+        // 20 November 2026 (Message 206): a small look movement within an area with a movement starts nothing: its light
+        // is its contraction, and a further contraction is a click. (It used to light the area for another second while
+        // the part was held.) An area without a movement, and the look that only arms (LOOK_ARMS on), restart as before.
+        if (armOnly || !hitMoves(g.hit)) startPulse(s, g.hit, 'moved', at, collect, null, true);
         setAnchor(s);
       }
     }
@@ -2389,7 +2459,8 @@ export function createActivity({
    *           rotationSeq counts these (the guide's flipPalm goal).
    *   'hold'  the double tap is still held (ns-controls SPACE_GESTURE.tapMaxMs after its press): the turn goes on,
    *           slowly (ns-dance startTurnHold), while spaceHeld is true.
-   *   'stop'  let go after a hold, or a safety release: every limb stays where it is (stopDance; the latch rule).
+   *   'stop'  let go after a hold, or a safety release: every limb stays where it is (stopDance: the player's own turn,
+   *           which Message 206 keeps).
    * While paused a step or a hold starts nothing; a stop always applies.
    */
   function applyTurn(s, ev) {
@@ -2433,11 +2504,11 @@ export function createActivity({
    * left hand of the game arm closes while Space holds or keeps a grasp and opens when the grasp lets go. The shell
    * sends it whenever the Space gesture's grasp (ns-controls SPACE_GESTURE: held or kept) starts or ends, whatever the
    * crosshair is on, so the grasp is always seen on your own hand and on the hand part of the strip.
-   *   on true   graspHold: the pose closes the hand (grasp_close wins the fingers over any latched finger pose, which
-   *             returns afterwards), the hand area and the finger benders light for as long as the grip lasts. A
-   *             running pulse of an action that competes for the fingers ends. Ignored while paused.
+   *   on true   graspHold: the pose closes the hand (grasp_close wins the fingers: a finger contraction under way
+   *             ends), the hand area and the finger benders light for as long as the grip lasts. A running pulse of
+   *             an action that competes for the fingers ends. Ignored while paused.
    *   on false  the grip lets go: the hand opens for spaceOpenSeconds (open_hand: a game rule, a real hand can also
-   *             let go by relaxing), unless a latched grasp_close keeps it closed. Always applies.
+   *             let go by relaxing). Always applies. (Message 206: no movement of the brain's holds the hand closed.)
    */
   function applyGrip(s, ev) {
     if (typeof ev.on !== 'boolean') fail('activity_event', 'grip event needs a boolean on');
@@ -2450,7 +2521,7 @@ export function createActivity({
     } else if (s.graspHold) {
       s.graspHold = false;
       s.relaxRemaining = 0;
-      if (!(s.armLatch.grasp_close > 0)) s.openRemaining = spaceOpenSeconds;
+      s.openRemaining = spaceOpenSeconds;
       if (s.pulseAction !== null && DIGIT_FLEXING.includes(s.pulseAction)) cancelPulse(s);
     }
   }
@@ -2478,6 +2549,7 @@ export function createActivity({
     for (const j of DANCE_BODY_JOINTS) {
       const q = limitJoint(j, a[j]) + 0;
       s.bodyPos[j] = q; s.bodyGoal[j] = q; s.bodyVel[j] = 0;
+      if (s.bodyJerk) delete s.bodyJerk[j]; // (the turn owns these joints while it runs: Message 206 keeps the turn)
     }
   }
 
@@ -2549,15 +2621,13 @@ export function createActivity({
     s.pendingGaze = null;
     s.markPending = null;
     s.latchPending = null;
-    s.progress = null; // 18 Nov (M3)
     cancelPulse(s);
     for (const k of BODY_KEYS) { s.bodyDrive[k] = 0; s.bodyDisplay[k] = 0; }
-    // R558 latch: Reset is the other way back: every joint at its start angle at once, nothing latched.
+    // Every joint at its start angle at once (the places the player gave the limbs too), no contraction under way.
     s.bodyGoal = restMap();
     s.bodyPos = restMap();
     s.bodyVel = zeroMap(JOINT_IDS);
     s.bodyJerk = {};
-    s.armLatch = zeroMap(ACTION_IDS);
     s.armJerk = {};
     for (const r of REGION_IDS) s.regionDisplay[r] = 0;
     for (const id of ACTION_IDS) {
@@ -2610,19 +2680,14 @@ export function createActivity({
         const hit = ev.regionOnly === true || r.actions.length === 0
           ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
           : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
-        if (hit !== null) startPulse(s, hit, 'click', at, collect, null, false, ev.progressive === true);
+        // (Message 206: a progressive press, a number key held, is an ordinary press: MOVE_HOLD)
+        if (hit !== null) startPulse(s, hit, 'click', at, collect);
         return;
       }
-      case 'muscleRelease': {
-        // 18 Nov (M3, MOVE_HOLD): the number key of a progressive press came up: { regionId, actionId, tap }. A tap
-        // completes the movement; a hold leaves the part where it is. Nothing happens unless that movement is running.
-        if (!s.progress) return;
-        const r = binding.regions.get(ev.regionId);
-        if (!r || r.actions.length === 0) return;
-        const hit = resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
-        if (hit && hit.bodyKey === s.progress.key) finishProgress(s, ev.tap === true);
+      case 'muscleRelease':
+        // 18 Nov (M3, MOVE_HOLD): the number key of a progressive press came up. 20 November 2026 (Message 206): the part
+        // contracts and returns whatever the key does, so this changes nothing (accepted for older callers).
         return;
-      }
       case 'space':
         applySpace(s, ev);
         return;
@@ -2638,10 +2703,12 @@ export function createActivity({
       case 'limbPose': {
         // R558 (user Messages 2, 12 and 40): one of your own limbs, held with Space and moved, or turned by a drag. The app
         // solves its joints inside their anatomical ranges and hands them here: { joints: { jointId: degrees },
-        // regionId?, actionId? }. They are set at once (goal and position: the limb follows the hand that holds it, no
-        // jerk) and STAY there, like a latched activation, until the opposing action or Reset body. regionId / actionId
-        // (a motor-map area and, optionally, its action) light that area and its muscles with the ordinary one-second
-        // pulse, restarted while the limb keeps moving; such a restart commits no latch of its own ('moved').
+        // regionId?, actionId? }. They are set at once (place and position: the limb follows the hand that holds it, no
+        // jerk) and STAY there: this is the player placing the limb, not the brain (Message 206 keeps it), so a later
+        // contraction returns to this place. A contraction of these joints still under way ends here (the hand that
+        // holds the limb wins it). regionId / actionId (a motor-map area and, optionally, its action) light that area
+        // and its muscles with the ordinary one-second pulse, restarted while the limb keeps moving; such a restart
+        // contracts nothing ('moved').
         if (s.paused) return;
         if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPose needs joints { jointId: degrees }');
         for (const [j, deg] of Object.entries(ev.joints)) {
@@ -2649,6 +2716,7 @@ export function createActivity({
           if (!isFiniteNumber(deg)) fail('activity_event', `limbPose joint ${j} needs finite degrees`);
           const v = limitJoint(j, deg) + 0;
           s.bodyGoal[j] = v; s.bodyPos[j] = v; s.bodyVel[j] = 0;
+          if (s.bodyJerk) delete s.bodyJerk[j];
         }
         if (ev.regionId !== undefined && ev.regionId !== null) {
           const r = binding.regions.get(ev.regionId);
@@ -2734,13 +2802,13 @@ export function createActivity({
    * down and advance the clock. */
   function integrate(s, h) {
     if (!(h > 0)) return;
-    // 18 Nov (M3): while a held number key drives its movement, its area and muscles stay lit
-    if (s.progress && s.pulseBody === s.progress.key && s.pulseRemaining < pulseSeconds) s.pulseRemaining = pulseSeconds;
-    const cuts = [s.pulseRemaining, s.openRemaining, s.relaxRemaining, s.rotation.remaining]
-      .filter(b => b > 0 && b < h)
-      .sort((a, b) => a - b);
+    const cuts = [s.pulseRemaining, s.openRemaining, s.relaxRemaining, s.rotation.remaining];
+    // (Message 206: where a contraction ends inside h, its return starts exactly there)
+    for (const k in s.bodyJerk) cuts.push(s.bodyJerk[k][1]);
+    for (const k in s.armJerk) cuts.push(s.armJerk[k][0]);
+    const cutsIn = cuts.filter(b => b > 0 && b < h).sort((a, b) => a - b);
     const bounds = [0];
-    for (const c of cuts) if (c > bounds[bounds.length - 1]) bounds.push(c);
+    for (const c of cutsIn) if (c > bounds[bounds.length - 1]) bounds.push(c);
     bounds.push(h);
     for (let i = 0; i + 1 < bounds.length; i++) {
       const b0 = bounds[i], b1 = bounds[i + 1];
@@ -2749,37 +2817,32 @@ export function createActivity({
       const T = commandTargets(s, b0);
       const P = poseTargets(s, b0);
       for (const id of ACTION_IDS) {
-        // R558 latch: the POSE drive jerks to the latched pose targets (armPoseTau both ways) and stays; the DISPLAY
-        // below keeps following the timed commands (a pulse lights its area for a second).
-        // 20 November 2026 (jerkArm): a pressed movement's drive follows the body's spring instead: driven to the end
-        // (1) and thrown back off it with `restitution` of its speed, held for driveS, then eased back its share with
-        // the critically damped relaxOmega. The note belongs to its latch: a let-go or Reset ends it, and the drive then
-        // eases as before. While the Space grip holds those fingers the grip wins them as before (the drive eases with
-        // armPoseTau) and the note waits, without speed: when the grip lets go they ease back to where they were held.
+        // The POSE drive eases to its place (poseTargets: the grip, the opening, a relax pulse; armPoseTau both ways);
+        // the DISPLAY below follows the timed commands.
+        // 20 November 2026 (Message 206, contractArm): a contraction drives its action's drive to the end (1) with the
+        // body's jerk spring for contractS (thrown back off the end with `restitution` of its speed), then springs it
+        // softly back to its place (relaxOmega, critically damped) and the note is dropped there. While the Space grip
+        // holds those fingers the grip wins them and the contraction ends.
         let jn = s.armJerk[id];
-        if (jn !== undefined && !(s.armLatch[id] > 0)) { delete s.armJerk[id]; jn = undefined; }
-        if (jn !== undefined && s.graspHold && (id === 'grasp_close' || SPACE_COMPETING.includes(id))) {
-          if (jn[1] > 0) jn[1] = Math.max(0, jn[1] - seg) + 0;
-          jn[2] = 0;
-          s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
-        } else if (jn !== undefined) {
-          let goal = 1, om = springOmega, ze = springZeta;
-          if (jn[1] > 0) jn[1] = Math.max(0, jn[1] - seg) + 0;
-          else { goal = 1 - jn[0]; om = relaxOmega; ze = 1; }
-          if (!(s.drive[id] === goal && jn[2] === 0)) {
+        if (jn !== undefined && s.graspHold && (id === 'grasp_close' || SPACE_COMPETING.includes(id))) { delete s.armJerk[id]; jn = undefined; }
+        if (jn !== undefined) {
+          const driving = jn[0] > 0, goal = driving ? 1 : P[id];
+          if (!(s.drive[id] === goal && jn[1] === 0)) {
             // (stepped in hundredths of the movement, so the spring's snap, JOINT_LATCH.snapDeg, is 0.02 of a hundredth)
-            const [p, v] = stepJointSpring(s.drive[id] * 100, jn[2] * 100, goal * 100, seg, om, ze);
+            const [p, v] = stepJointSpring(s.drive[id] * 100, jn[1] * 100, goal * 100, seg, driving ? springOmega : relaxOmega, driving ? springZeta : 1);
             const q = clamp(p, 0, 100);
             s.drive[id] = q / 100 + 0;
-            jn[2] = (q === p ? v : springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) / 100 + 0;
+            jn[1] = (q === p ? v : springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) / 100 + 0;
           }
+          if (driving) jn[0] = countdown(jn[0], seg) + 0;
+          else if (s.drive[id] === goal && jn[1] === 0) delete s.armJerk[id];
         } else s.drive[id] = approach(s.drive[id], P[id], seg, armPoseTau, armPoseTau);
         const lvl = approach(s.display[id], T[id], seg, displayRiseTau, displayDecayTau);
         s.display[id] = Math.min(lvl, displayCeiling(s, id, b0, b1));
       }
       for (const id of KEY_DISPLAY_IDS) s.keyDisplay[id] = envelope(s.keyDisplay[id], keyTarget(s, id, b0), seg, keyCeiling(s, id, b0, b1));
       const pulseOn = b0 < s.pulseRemaining;
-      const pc = pulseOn ? fadeCeiling(s.pulseRemaining - b1) : 1;
+      const pc = pulseOn ? fadeCeiling(s.pulseRemaining - b1, pulseFade(s)) : 1;
       // 18 Nov (S4, LOOK_ARMS): a look's pulse lights its key at full, its muscles at the hint level, and moves nothing.
       const armed = armOnly && s.pulseLook === true;
       for (const r of REGION_IDS) {
@@ -2791,38 +2854,27 @@ export function createActivity({
         s.bodyDrive[k] = approach(s.bodyDrive[k], on && !armed ? 1 : 0, seg, riseTau, decayTau);
         s.bodyDisplay[k] = envelope(s.bodyDisplay[k], on ? (armed ? armLevel : 1) : 0, seg, on ? pc : 1);
       }
-      // R558 latch: every body joint jerks to its goal (the JOINT_LATCH spring, exact per segment) and stays there.
-      // A momentary joint's goal is its action's end angle only while that action's pulse runs. A joint stopped by
-      // its anatomical limit rebounds off it with `restitution` of its speed (0: it stops dead there), so nothing
-      // ever passes a limit.
-      // 18 Nov (M3, MOVE_HOLD): a held number key's goals run toward their targets at rateDegS
-      if (s.progress) {
-        const T = s.progress.targets, stepDeg = MOVE_HOLD.rateDegS * seg;
-        let left = 0;
-        for (const j of Object.keys(T)) {
-          const g = s.bodyGoal[j], d = T[j] - g;
-          if (Math.abs(d) <= stepDeg) s.bodyGoal[j] = T[j]; else { s.bodyGoal[j] = g + Math.sign(d) * stepDeg; left++; }
-        }
-        if (!left) s.progress = null;
-      }
-      const momentary = pulseOn && !armed && s.pulseBody !== null ? (ENDS.get(s.pulseBody) || null) : null;
+      // 20 November 2026 (Message 206): every body joint is at, or springs back to, its PLACE (bodyGoal) on the soft
+      // critically damped relaxOmega spring; a joint with a contraction note is driven to the note's end angle by the
+      // jerk spring (JOINT_LATCH omega / zeta, exact per segment) while the note's time runs, then returns to its place
+      // the same soft way, and the note is dropped when it is there. A joint stopped by its anatomical limit rebounds
+      // off it with `restitution` of its speed (0: it stops dead there), so nothing ever passes a limit.
       for (const j of JOINT_IDS) {
-        const held = LATCHING[j] ? s.bodyGoal[j] : momentary !== null && hasOwn(momentary, j) ? momentary[j] : REST[j];
-        // 19 November 2026 (JOINT_LATCH driveS / relax): a pressed joint is driven at its end angle for driveS, then
-        // eases back a little and waits there. The note belongs to one goal: anything else that moves the goal (the
-        // way back, a drag, a held key, Reset) ends it.
-        let goal = held, om = springOmega, ze = springZeta;
-        const jk = s.bodyJerk ? s.bodyJerk[j] : undefined;
-        if (jk) {
-          if (!LATCHING[j] || jk[0] !== held) delete s.bodyJerk[j];
-          else if (jk[2] > 0) jk[2] = Math.max(0, jk[2] - seg);
-          else { goal = held - jk[1]; om = relaxOmega; ze = 1; }
+        const place = s.bodyGoal[j], jk = s.bodyJerk[j], driving = jk !== undefined && jk[1] > 0;
+        const goal = driving ? jk[0] : place;
+        if (!(s.bodyPos[j] === goal && s.bodyVel[j] === 0)) {
+          const was = s.bodyPos[j];
+          const [p, v] = stepJointSpring(was, s.bodyVel[j], goal, seg, driving ? springOmega : relaxOmega, driving ? springZeta : 1);
+          let q = p, w = v;
+          // the movement's end is a stop for its contraction: crossing it the part rebounds off it, as off a limit
+          if (driving && jk[2] !== 0 && (was - goal) * jk[2] <= 0 && (p - goal) * jk[2] > 0) { q = goal; w = springBounce > 0 && Math.sign(v) === jk[2] ? -springBounce * v : 0; }
+          const ql = limitJoint(j, q);
+          if (ql !== q) { w = springBounce > 0 && Math.sign(w) === Math.sign(q - ql) ? -springBounce * w : 0; q = ql; }
+          s.bodyPos[j] = q + 0;
+          s.bodyVel[j] = w + 0;
         }
-        if (s.bodyPos[j] === goal && s.bodyVel[j] === 0) continue;
-        const [p, v] = stepJointSpring(s.bodyPos[j], s.bodyVel[j], goal, seg, om, ze);
-        const q = limitJoint(j, p);
-        s.bodyPos[j] = q + 0;
-        s.bodyVel[j] = q === p ? v : (springBounce > 0 && Math.sign(v) === Math.sign(p - q) ? -springBounce * v : 0) + 0;
+        if (driving) jk[1] = countdown(jk[1], seg) + 0;
+        else if (jk !== undefined && s.bodyPos[j] === place && s.bodyVel[j] === 0) delete s.bodyJerk[j];
       }
       const rotOn = s.rotation.channel !== null && b0 < s.rotation.remaining;
       const rc = rotOn ? fadeCeiling(s.rotation.remaining - b1) : 1;
@@ -2833,7 +2885,9 @@ export function createActivity({
         const ceil = key || pul ? Math.max(key ? rc : 0, pul ? pc : 0) : 1;
         s.rotationDisplay[c] = envelope(s.rotationDisplay[c], key ? 1 : pul ? (armed ? armLevel : 1) : 0, seg, ceil);
       }
-      const goal = pulseOn && !armed && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
+      // (Message 206: a forearm-turn area turns the forearm for its contraction, pulseMove, and it turns back to where it
+      // was: the turn's held angle or rotationState, which a press no longer changes)
+      const goal = pulseOn && !armed && s.pulseMove === true && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
         : isFiniteNumber(s.rotation.hold) ? s.rotation.hold : rotValue(s.rotationState);
       // R3-arm: critically damped ease (smooth start, ~0.30 s settle with the default poseTau); see stepRotationEase.
       const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
@@ -2851,14 +2905,13 @@ export function createActivity({
       s.activatedRegions[rid] = (s.activatedRegions[rid] || 0) + 1;
       s.markPending = null;
     }
-    // R558 (latch): a look's movement once the gaze has stayed on that area for latchS (GAZE_DWELL). Nothing moves
-    // behind the pause page or while the brain is held: a pending look is dropped then.
-    if (s.latchPending && (s.paused || s.brainGrab.active)) s.latchPending = null;
-    if (s.progress && s.paused) finishProgress(s, false); // 18 Nov (M3): behind the pause page a held key stops
+    // R558: a look's movement once the gaze has stayed on that area for latchS (GAZE_DWELL). Nothing moves behind the
+    // pause page or while the brain is held: a pending look is dropped then (Message 206: and its glow ends).
+    if (s.latchPending && (s.paused || s.brainGrab.active)) dropPendingLook(s);
     if (s.latchPending && s.gazeArea === s.latchPending.area && s.t + h - s.latchPending.since >= latchS - SNAP) {
       const hit = s.latchPending.hit;
       s.latchPending = null;
-      if (!armOnly) commitLatch(s, hit); // 18 Nov (S4, LOOK_ARMS): the rest arms the area; a press moves it
+      if (!armOnly) commitMove(s, hit); // 18 Nov (S4, LOOK_ARMS): the rest arms the area; a press moves it
       tookByLook(s, hit);
     }
     s.openRemaining = countdown(s.openRemaining, h);
@@ -2900,8 +2953,8 @@ export function createActivity({
     if (!(s.pulseRemaining > 0)) cancelPulse(s);
     const I = s.instructions;
     if (I.visible && I.autoHideAt !== null && s.t + SNAP >= I.autoHideAt) hideInstructions(s);
-    s.targets = poseTargets(s, 0);          // what the arm pose is following now (latches, held fist, opening)
-    s.bodyJointTargets = pick(s.bodyPos, JOINT_IDS); // absolute joint angles: the latched positions (R558)
+    s.targets = poseTargets(s, 0);          // the arm pose's place now (held fist, opening; a contraction drives past it)
+    s.bodyJointTargets = pick(s.bodyPos, JOINT_IDS); // absolute joint angles: where every joint is now
     s.regionActivity = computeRegionActivity(s);
     return s;
   }
@@ -3077,90 +3130,25 @@ export function createActivity({
   }
 
   /**
-   * R558 latch, for the display: what is held away from the start pose and what brings it back.
-   *   joints  [{ jointId, goalDeg, restDeg, posDeg }]   body joints latched away from their start angle
-   *   arm     [actionId]                                 latched game-arm actions
-   *   rotated true when the forearm turn is not the default one
-   *   still   [bodyActionKey]                            body actions a deliberate activation would not move now (the
-   *           latchBodyAction rule: no joint of theirs to bring back, and each latching joint already at its end or
-   *           further on that side). The information card's "already there" (R558, Messages 55 and 56).
-   *   back    [bodyActionKey]                            body actions a deliberate activation would only bring BACK now:
-   *           one of their joints is latched on the other side of its start angle, so this activation returns it there
-   *           and the next one does the movement (latchBodyAction, opposedJoints). The card's "first press brings it back".
-   *           (The game arm's own answer is armOpposedLatch, asked with the arm's latches.)
-   *   hints   [{ key, regionId, actionId, armActionId, label, level, muscles, bodySide, isLeftArm, forJoint, forAction }]
-   *           the OPPOSING actions: activating one brings that joint (or arm action) back. `muscles` are the opposing
-   *           action's movers (the map's agonist names), `level` is JOINT_LATCH.hintLevel. One entry per action.
-   *   label   the honest scope line
-   * A reminder of the game's own rule (agonist and antagonist actions), not a recording or a nerve path.
+   * 20 November 2026 (the owner, Message 206: "no permanent movements"): what is moving because of the brain right now,
+   * plain data for the display and for checks. (It replaces latchView: nothing is held, so there is nothing to bring
+   * back, no "already there" and no opposing hint.)
+   *   contracting  [jointId]    body joints being driven to a movement's end (their contraction's time runs)
+   *   returning    [jointId]    body joints on their way back to their place (no activity is shown for these)
+   *   arm          { contracting: [actionId], returning: [actionId] }   the same for the game arm's movements
+   *   lit          the area whose contraction is lit now (regionId), or null
+   *   label        the honest scope line
    */
-  function latchView(state) {
+  function motionView(state) {
     checkState(state);
-    const goalOf = state.bodyGoal === undefined ? REST : state.bodyGoal;
-    const posOf = state.bodyPos === undefined ? REST : state.bodyPos;
-    const latchOf = state.armLatch === undefined ? {} : state.armLatch;
-    const joints = [], hints = [], seen = new Set();
-    const add = h => { if (!seen.has(h.key)) { seen.add(h.key); hints.push(h); } };
-    for (const j of JOINT_IDS) {
-      if (!LATCHING[j]) continue;
-      const at = sideOf(j, goalOf[j]);
-      if (at === 0) continue;
-      joints.push({ jointId: j, goalDeg: goalOf[j], restDeg: REST[j], posDeg: posOf[j] });
-      for (const k of BODY_KEYS) {
-        const ends = ENDS.get(k);
-        if (!hasOwn(ends, j) || sideOf(j, ends[j]) === at) continue;
-        const a = binding.bodyActions.get(k);
-        const r = binding.regions.get(a.regionId);
-        add({
-          key: k, regionId: a.regionId, actionId: a.actionId, armActionId: null, label: a.label, level: JOINT_LATCH.hintLevel,
-          muscles: [...a.agonists], bodySide: r.bodySide, isLeftArm: false, forJoint: j, forAction: null
-        });
-      }
-    }
-    const armHint = (armActionId, forAction) => {
-      for (const rid of binding.leftArmRegionIds) {
-        const r = binding.regions.get(rid);
-        const a = r.actions.find(x => x.armActionId === armActionId);
-        if (!a) continue;
-        add({
-          key: `${rid}/${a.id}`, regionId: rid, actionId: a.id, armActionId, label: a.label, level: JOINT_LATCH.hintLevel,
-          muscles: [...a.agonists], bodySide: r.bodySide, isLeftArm: true, forJoint: null, forAction
-        });
-      }
-    };
-    const still = [], back = [];
-    // 20 November 2026 (section 159's open point): with the jerk on (JOINT_LATCH relax / kick, not under reduced motion),
-    // a press on a movement held AT its end kicks the joint in again (latchBodyAction), so it moves: it is not "already
-    // there". Only a joint held FURTHER than this movement's end (by a stronger movement) is left alone by it.
-    const jerks = Boolean(state.bodyPos && state.bodyVel) && ((Number.isFinite(jointSpring.relax) && jointSpring.relax > 0) || (Number.isFinite(jointSpring.kick) && jointSpring.kick > 0));
-    for (const k of BODY_KEYS) {
-      const ends = ENDS.get(k);
-      if (opposedJoints(ends, goalOf) > 0) back.push(k);
-      let latching = 0, moves = false;
-      for (const j of Object.keys(ends)) {
-        if (!LATCHING[j]) continue;
-        latching += 1;
-        const at = sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
-        if (at !== 0 && side !== at) { moves = true; break; } // held on the other side: the action brings it back
-        if (jerks && side !== 0 && Math.abs(goalOf[j] - ends[j]) <= JOINT_LATCH.restEpsDeg && Math.abs(ends[j] - REST[j]) > JOINT_LATCH.restEpsDeg) { moves = true; break; } // (a press kicks it in again)
-        if (side !== 0 && at === side && Math.abs(goalOf[j] - REST[j]) >= Math.abs(ends[j] - REST[j])) continue; // at its end, or further
-        if (Math.abs(goalOf[j] - ends[j]) > JOINT_LATCH.restEpsDeg) { moves = true; break; }
-      }
-      if (latching > 0 && !moves) still.push(k);
-    }
-    const arm = [];
-    for (const id of ACTION_IDS) {
-      if (!(latchOf[id] > 0)) continue;
-      arm.push(id);
-      if (hasOwn(ARM_OPPOSITES, id)) armHint(ARM_OPPOSITES[id], id);
-    }
-    // R558 (Space dance): a palm turn the dance left part way also counts as held (toward the other end).
-    const heldTurn = state.rotation && isFiniteNumber(state.rotation.hold) && Math.abs(state.rotation.hold - rotValue(defaultRotation)) > 1e-3;
-    const rotated = state.rotationState !== defaultRotation || heldTurn;
-    if (rotated) armHint(defaultRotation === 'supinated' ? 'supination' : 'pronation', defaultRotation === 'supinated' ? 'pronation' : 'supination');
+    const contracting = [], returning = [], arm = { contracting: [], returning: [] };
+    const bj = state.bodyJerk || {}, aj = state.armJerk || {};
+    for (const j of JOINT_IDS) if (bj[j]) (bj[j][1] > 0 ? contracting : returning).push(j);
+    for (const id of ACTION_IDS) if (aj[id]) (aj[id][0] > 0 ? arm.contracting : arm.returning).push(id);
     return {
-      joints, arm, rotated, hints, still, back,
-      label: 'held by the game until the opposing action or Reset (a rule of this simulation; not a recording)'
+      contracting, returning, arm,
+      lit: state.pulseMove === true && state.pulseRemaining > 0 ? state.pulseRegion : null,
+      label: 'a movement switched on from the brain contracts, then returns to where it was (a rule of this simulation; not a recording)'
     };
   }
 
@@ -3277,7 +3265,7 @@ export function createActivity({
   function rotationOutputs(state) {
     checkState(state);
     const d = pick(state.rotationDisplay, ROTATION_ACTION_IDS);
-    const target = state.pulseRotation !== null && state.pulseRemaining > 0
+    const target = state.pulseRotation !== null && state.pulseRemaining > 0 && state.pulseMove === true
       ? (state.pulseRotation === 'supination' ? 1 : 0) : rotValue(state.rotationState);
     const muscles = {};
     for (const c of ROTATION_ACTION_IDS) for (const m of ROTATION_MUSCLES[c].agonists) muscles[m] = Math.max(muscles[m] || 0, d[c]);
@@ -3402,7 +3390,7 @@ export function createActivity({
       instructionsView: instructionsView(state),
       activeBodyActions: activeBodyActions(state),
       glowLinks: glowLinks(state),
-      latchView: latchView(state),
+      motionView: motionView(state),
       danceView: danceView(state)
     });
   }
@@ -3414,8 +3402,8 @@ export function createActivity({
     bodyMuscleDisplay, rotationOutputs, brainView, wasdChannels, instructionsView, snapshot,
     // R5-input
     glowLinks,
-    // R558 latch
-    latchView,
+    // Message 206: contract, then return
+    motionView,
     // R558 Space dance
     danceView
   });

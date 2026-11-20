@@ -142,7 +142,8 @@
  *    part). regionDisplayStyle gives each area a calm tint of it at rest and, while active, its glow colour as emission
  *    plus a matching fresnel rim (applyRegionStyle). The shared activity ramp no longer colours areas or muscles.
  *  - MUSCLES glow in the colour of the area that drives them (assignMuscleAreas from the glow links: the stronger drive
- *    wins), shaded toward that colour, with a fresnel rim and a soft additive halo shell (MUSCLE_HALO); one call shades
+ *    wins), shaded toward that colour, with a fresnel rim (and once a soft additive halo shell, MUSCLE_HALO: off since
+ *    20 November 2026, it made lit muscles read as translucent); one call shades
  *    your body, its in-place head copy and the mirror body, so all three match. Muscles lit only by an opposing-action
  *    hint stay faint (AREA_LOOK.hintGain, no halo).
  *  - LINES (GLOW_LINK.mode 'held', R558 Messages 48 and 56): one line per lit area, in the area's colour, held for as
@@ -221,6 +222,7 @@ import { hemisphereSideOf, partedPositions, partedOnBrain, partedBridging } from
 import { smoothNormalField, boneEndWeights } from './ns-detail.mjs';
 // 20 November 2026 (the owner, Messages 195 / 196): the raw look, one matte light on everything (ns-raw-look RAW_LOOK).
 import { RAW_LOOK, patchRawShaders } from './ns-raw-look.mjs';
+import { FACE_MOVE, FACE_SHAPE_KEYS, buildFaceMoves, applyFaceMoves, faceWeightsKey, faceMuscleOf } from './ns-face-move.mjs'; // 20 November 2026 (FACE): face movements you can see
 // R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
 // not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
 const STACK_FILL_CAP_MM = Math.max(...Object.values(BODY_STACK_RULE.fill.mm)) + 0.01;
@@ -1538,7 +1540,22 @@ export const EYE_COLLAR = Object.freeze({
   // strip along the top of each shoulder) and the two lowest neck vertebrae (cut slivers). Measured once from the drawn
   // rest vertices in the breastbone's baked frame (collarCuts). What the box still cuts is 2 to 5 % of four muscles and
   // of the first thoracic vertebra: their tops, at the back. From outside (the head in place) everything is drawn.
-  hide: Object.freeze({ shareFrom: 0.2 }) });
+  hide: Object.freeze({ shareFrom: 0.2 }),
+  // 20 November 2026, evening (the owner: "ensure, especially with the right arm, that muscles do not become transparent
+  // under certain angles, because in previous versions, if you hold the arm up in certain angles, muscles will disappear
+  // and turn transparent"). cut false: the box no longer CUTS anything; the clean end at the collar is made by `hide`
+  // alone. Cause found: the box's clipping planes were on every material of your own body (the muscles of a class share
+  // one material, so all of them), so whatever came into the column over the collar was cut away in the eye view: your
+  // right hand held up over the head vanished but for two finger tips, the deltoid by the neck was cut open with a look
+  // down, and the trunk muscles a raised arm carries along (the pectoralis, latissimus, the collar bone and the shoulder
+  // blade) went the same way; the outline's ID pass and the glass cut only the trunk and the head, so the cut arm kept
+  // its ink lines and glass: muscles that "disappear and turn transparent". The left arm is the game arm (its own
+  // materials, never cut): hence "especially with the right arm". A rule by part or outline group does not do: several
+  // of the arm's own muscles (the deltoid's front, the rotator cuff) and the pectoralis ride on the trunk's segments. What
+  // the box cut besides (the top few per cent of the trapezius's transverse part, rhomboid minor, serratus posterior
+  // superior, the first ribs and the top thoracic vertebrae, at the root of the neck) is now drawn whole, ending at its
+  // own attachments; seen on pictures at looks all round. true brings the old cut back (as it was, limbs included).
+  cut: false });
 export const BODY_ORDER = Object.freeze({ torsoDepth: 7, torso: 8, faceDepth: 1, face: 2, arm: 10 });
 
 /** Marker dot size, highlight scale and lift toward superior (source mm, before the giant display scale): ns-brain
@@ -3513,7 +3530,13 @@ export const ARM_FALLBACK_AREA = 'rh_forearm';
  * body (ownMm) and on the mirror body (mirrorMm, wider because it is drawn farther away); power: alpha = (power x
  * |N.V| of the shell, clamped to 1)^2, 0 at the shell's outer edge and full near the muscle's outline; the halo colour
  * gain (x the area glow colour x the glow strength). */
-export const MUSCLE_HALO = Object.freeze({ ownMm: 3, mirrorMm: 12, power: 2.5, gain: 0.7, mirrorGain: 0.6 });
+// 20 November 2026, evening (the owner, Message 198: muscles must not "turn transparent"): on false: no halo shell. A
+// lit muscle shows its glow on itself, solid: its own colour, light and rim (shadeMuscle). The shell is an additive copy
+// of the muscle pushed out along its normals, drawn wherever its back faces lie in front of something; on the mirror
+// body (12 mm) held near, the shells of the neck muscles that the look's head turn lights (HEAD_GLOW) lay over the
+// muscles beside and under them and over each other, and the side of the neck read as a translucent magenta strap
+// (a small version of the same on your own lit muscles, 3 mm). The code stays for the switch.
+export const MUSCLE_HALO = Object.freeze({ on: false, ownMm: 3, mirrorMm: 12, power: 2.5, gain: 0.7, mirrorGain: 0.6 });
 
 /** Far-right information overlay (R14) layout mirror of the CSS (.ns-infopanel): column width min(colPx, colVw vw),
  * the bottom panel height in portrait (portraitVh), and how many caveats / citations are listed. */
@@ -5800,9 +5823,10 @@ export function createScene({
   const body = [];
   const bodyById = new Map();
   let neckShade = null; // NECK_SHADE
-  // EYE_COLLAR: the five planes of the box (world space, set each frame from the host bone), the cap and its state
+  // EYE_COLLAR: the five planes of the box (world space, set each frame from the host bone; only with EYE_COLLAR.cut), the
+  // cap and its state
   const collar = { planes: null, rest: null, cap: null, capRest: null, seg: -1, local: null, world: null, inv: null, on: false, materials: 0, sweepAt: 0,
-    cuts: null, hide: null, hidden: null }; // (20 November 2026: EYE_COLLAR.hide: the meshes the box cuts, those it hides, whether they are hidden)
+    cuts: null, hide: null, hideIds: null, hidden: null }; // (20 November 2026: EYE_COLLAR.hide: the meshes the box cuts, those it hides (and their ids), whether they are hidden)
   /** EYE_COLLAR: give every own-body material the box's planes (once each; the sweep is repeated now and then because
    * muscles change to their class material after they are made). Mirror-body materials are separate and untouched. */
   function collarMaterials() {
@@ -5815,15 +5839,21 @@ export function createScene({
     }
   }
   /** EYE_COLLAR: whether a point of your own body (world metres) is one the eye view does not show: inside the box
-   * (not drawn) or inside the cap (covered by it). False while the box is parked. */
+   * (not drawn, while the box cuts: EYE_COLLAR.cut) or inside the cap (covered by it, while it is drawn). False while
+   * the box is parked. (20 November 2026, evening: the cap's volume counted as covering even with the cap not drawn,
+   * so the top of the breastbone and the inner ends of the collar bones, which show, took no aim and hid nothing.) */
   function collarHides(x, y, z) {
-    if (!collar.on || !collar.inv) return false;
+    const cut = EYE_COLLAR.cut !== false, capOn = EYE_COLLAR.cap.on !== false;
+    if (!collar.on || !collar.inv || (!cut && !capOn)) return false;
     const e = collar.inv.elements, B = EYE_COLLAR.box, C = EYE_COLLAR.cap;
     const px = e[0] * x + e[4] * y + e[8] * z + e[12], py = e[1] * x + e[5] * y + e[9] * z + e[13], pz = e[2] * x + e[6] * y + e[10] * z + e[14];
-    if (pz > B.zFromMm && px > B.xMm[0] && px < B.xMm[1] && py > B.yMm[0] && py < B.yMm[1]) return true;
+    if (cut && pz > B.zFromMm && px > B.xMm[0] && px < B.xMm[1] && py > B.yMm[0] && py < B.yMm[1]) return true;
+    if (!capOn) return false;
     const ux = (px - C.centreMm[0]) / C.radiiMm[0], uy = (py - C.centreMm[1]) / C.radiiMm[1], uz = (pz - C.centreMm[2]) / C.radiiMm[2];
     return ux * ux + uy * uy + uz * uz < 1;
   }
+  /** EYE_COLLAR.hide: whether body record `id` is one the eye view does not draw now (a mesh mostly in the box). */
+  const collarHidden = id => collar.hidden === true && collar.hideIds !== null && collar.hideIds.has(id);
   /** EYE_COLLAR: the own-body meshes the box cuts, measured once from their drawn rest vertices in the breastbone's
    * baked frame: [{ b, share (of the vertices inside the box), n }]. */
   function collarCuts() {
@@ -5844,9 +5874,10 @@ export function createScene({
     collar.cuts = out;
     return out;
   }
-  /** EYE_COLLAR: place the box and the cap for the frame about to be drawn. on: the eye view (the head not in place). */
+  /** EYE_COLLAR: place the box and the cap for the frame about to be drawn, and hide or show what it hides. on: the eye
+   * view (the head not in place). */
   function applyCollar(on) {
-    if (!collar.planes) return;
+    if (!collar.local) return;
     // the breastbone's own frame as drawn now (source mm -> drawn mm in the body's frame): the posed segment, or the
     // baked start posture before the first pose arrives
     const S = on ? (bodySkinSegs && collar.seg >= 0 ? bodySkinSegs[collar.seg] : bodySkinBaked ? bodySkinBaked.get('sternum') : null) : null;
@@ -5856,7 +5887,7 @@ export function createScene({
     if (collar.hidden !== on) {
       const cuts = collarCuts();
       if (cuts) {
-        if (!collar.hide) collar.hide = cuts.filter(c => c.share >= EYE_COLLAR.hide.shareFrom).map(c => c.b);
+        if (!collar.hide) { collar.hide = cuts.filter(c => c.share >= EYE_COLLAR.hide.shareFrom).map(c => c.b); collar.hideIds = new Set(collar.hide.map(b => b.id)); }
         for (const b of collar.hide) b.mesh.visible = !on;
         collar.hidden = on;
       }
@@ -5867,13 +5898,15 @@ export function createScene({
       collar.cap.matrix.multiplyMatrices(collar.local, collar.capRest); collar.cap.matrixWorldNeedsUpdate = true;
       collar.world.multiplyMatrices(bodyGroup.matrixWorld, collar.local);
       collar.inv.copy(collar.world).invert();
-      for (let i = 0; i < collar.planes.length; i++) collar.planes[i].copy(collar.rest[i]).applyMatrix4(collar.world);
-      if (++collar.sweepAt >= 45) { collar.sweepAt = 0; collarMaterials(); }
-    } else if (collar.on) {
+      if (collar.planes) {
+        for (let i = 0; i < collar.planes.length; i++) collar.planes[i].copy(collar.rest[i]).applyMatrix4(collar.world);
+        if (++collar.sweepAt >= 45) { collar.sweepAt = 0; collarMaterials(); }
+      }
+    } else if (collar.on && collar.planes) {
       // parked: no point lies on the cut side of the level plane, so nothing is clipped
       for (let i = 0; i < collar.planes.length; i++) collar.planes[i].set(collar.planes[i].normal.set(0, 1, 0), 1e9);
     }
-    if (collar.on !== on && typeof outline.invalidate === 'function') outline.invalidate(); // (the ID picture is cut by the same box)
+    if (collar.on !== on && typeof outline.invalidate === 'function') outline.invalidate(); // (the ID picture leaves out what is hidden, and is cut by the same box when it cuts)
     collar.on = on;
     if (collar.cap) collar.cap.visible = on && EYE_COLLAR.cap.on !== false;
   }
@@ -5955,7 +5988,54 @@ export function createScene({
     poses: organs.poses, swell: Math.round(organs.beat.value[3] * 1e4) / 1e4, reducedMotion,
     // EYE_COLLAR.hide (the neck's end in the eye view): the meshes not drawn there, the others the box still cuts (share
     // of their vertices inside it), and whether the hidden ones are hidden now
-    neck: { hidden: (collar.hide || []).map(b => b.id), cut: (collar.cuts || []).filter(c => c.share < EYE_COLLAR.hide.shareFrom).map(c => `${c.b.id} ${Math.round(c.share * 100)}%`), on: collar.hidden === true } });
+    neck: { hidden: (collar.hide || []).map(b => b.id), cut: (collar.cuts || []).filter(c => c.share < EYE_COLLAR.hide.shareFrom).map(c => `${c.b.id} ${Math.round(c.share * 100)}%`), on: collar.hidden === true,
+      // (20 November 2026, evening) whether the box cuts at all (EYE_COLLAR.cut; `cut` above then lists what it cuts, else
+      // what lies partly in it and is drawn whole), how many materials carry its planes, and, QA only
+      // (globalThis.__nsLimbDraw = true), what of your own body the picture drops: limbDrawState
+      cuts: Boolean(collar.planes), clipped: collar.materials, draw: globalThis.__nsLimbDraw === true ? limbDrawState() : undefined } });
+  /** QA only (20 November 2026, evening; the owner: muscles must not "disappear and turn transparent" when the arm is held
+   * up): per part of your own body (rightArm, leftLeg, rightLeg by their part or outline group, else trunk; the left arm
+   * is the game arm, drawn apart and never cut) the meshes, how many are shown, how many of their posed vertices lie in
+   * the collar box while it is on (inBox: what the old cut took away; inBoxSeen: those in the picture), how many of
+   * those the box cuts now (cut; those in the picture: cutSeen), and the meshes Three's culling drops although a posed
+   * vertex of theirs is in the picture (culled; the mirror body's too). Every second vertex; the muscles skinned on the
+   * graphics card are posed on the processor for it (bodyGpuCpu). A few tens of ms: never on a game frame. */
+  function limbDrawState() {
+    camera.updateMatrixWorld(true); bodyGroup.updateMatrixWorld(true);
+    const fr = new THREE.Frustum(), M = new THREE.Matrix4(), v = new THREE.Vector3(), out = {};
+    M.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(M);
+    const boxOn = collar.on && collar.inv, e = boxOn ? collar.inv.elements : null, B = EYE_COLLAR.box;
+    const inBox = (x, y, z) => {
+      const px = e[0] * x + e[4] * y + e[8] * z + e[12], py = e[1] * x + e[5] * y + e[9] * z + e[13], pz = e[2] * x + e[6] * y + e[10] * z + e[14];
+      return pz > B.zFromMm && px > B.xMm[0] && px < B.xMm[1] && py > B.yMm[0] && py < B.yMm[1];
+    };
+    for (const b of body) {
+      if (b.face) continue;
+      const lp = limbPartOfOutlineGroup(typeof outline.groupOf === 'function' ? outline.groupOf(b.mesh) : 0);
+      const part = b.anatomicalPart === 'rightArm' ? 'rightArm' : b.anatomicalPart === 'legs' ? (b.side < 0 ? 'leftLeg' : 'rightLeg') : lp ? lp.limb : 'trunk';
+      const o = out[part] || (out[part] = { meshes: 0, shown: 0, inBox: 0, inBoxSeen: 0, cut: 0, cutSeen: 0, culled: [] });
+      o.meshes++;
+      const rec = bodySkin.get(b.id);
+      if (rec && rec.gpu) bodyGpuCpu(rec);
+      const geo = b.mesh.userData.nsFullGeometry || b.mesh.geometry, P = geo.attributes.position.array;
+      for (const [m, who] of [[b.mesh, 'own'], [b.mirror, 'mirror']]) {
+        if (!m || !m.visible || !(who === 'mirror' ? mirrorRoot.visible : bodyGroup.visible)) continue;
+        if (who === 'own') o.shown++;
+        m.updateMatrixWorld(true);
+        const clipped = who === 'own' && Array.isArray(m.material && m.material.clippingPlanes) && m.material.clippingPlanes.length > 0;
+        const kept = !m.frustumCulled || fr.intersectsObject(m);
+        let seen = false;
+        for (let i = 0; i < P.length; i += 6) {
+          v.set(P[i], P[i + 1], P[i + 2]).applyMatrix4(m.matrixWorld);
+          const s = fr.containsPoint(v);
+          if (s) seen = true;
+          if (who === 'own' && boxOn && inBox(v.x, v.y, v.z)) { o.inBox++; if (s) o.inBoxSeen++; if (clipped) { o.cut++; if (s) o.cutSeen++; } }
+        }
+        if (seen && !kept) o.culled.push(`${who}:${b.id}`);
+      }
+    }
+    return out;
+  }
   const bodyBoneMaterial = keep(new THREE.MeshStandardMaterial({ color: BONE_COLOUR, roughness: MATERIAL.boneRoughness, metalness: 0 }));
   // Torso see-through window (BODY_SEE_THROUGH): one vec4 uniform shared by the torso/neck materials drawn in place.
   // R3-scene: SMOOTH torso translucency (BODY_TRANSLUCENT) instead of the dithered window: transparent materials (alpha 1
@@ -8370,7 +8450,8 @@ export function createScene({
     mirrorArmGroup.matrixWorldNeedsUpdate = true;
     if (yaw !== lookYaw || pitch !== lookPitch) overlayDirty = true;
     lookYaw = yaw; lookPitch = pitch;
-    if (!camPose) { if (firstPose) { firstPose.yaw = yaw; firstPose.pitch = pitch; } camera.rotation.set(pitch, yaw, 0, 'YXZ'); camera.updateMatrixWorld(true); }
+    // (20 November 2026, NECK_VIEW: a first-person camera turned away from the body's look keeps its own look and roll)
+    if (!camPose && !(firstPose && firstPose.turned)) { if (firstPose) { firstPose.yaw = yaw; firstPose.pitch = pitch; } camera.rotation.set(pitch, yaw, 0, 'YXZ'); camera.updateMatrixWorld(true); }
   }
 
   /** R5-scene (D18, R22): the render camera from an ns-camera cameraPose (R5-camera) result, or null for first person.
@@ -8448,9 +8529,14 @@ export function createScene({
     if (first) {
       if (pose !== null && pose !== undefined && Object.prototype.hasOwnProperty.call(pose, 'position')) {
         if (!pose.position || pose.position.length !== 3 || !Array.from(pose.position).every(Number.isFinite) || !Number.isFinite(pose.yaw) || !Number.isFinite(pose.pitch)) fail('scene_input', 'first-person pose needs finite world position/radians');
-        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, ...lensOf(pose) };
-        const eyeLook = pose.bodyLook && Number.isFinite(pose.bodyLook.yaw) && Number.isFinite(pose.bodyLook.pitch) ? pose.bodyLook : firstPose;
+        // 20 November 2026 (ns-app NECK_VIEW, ns-camera turnEyeView): the camera may look elsewhere than the body's look
+        // (a neck movement carries the view for a moment) and may be rolled about its line of sight (pose.roll, radians).
+        // The eye rig (the left arm) takes the body's look first, then the camera its own: setView would otherwise put
+        // the camera back on the body's look.
+        const eyeLook = pose.bodyLook && Number.isFinite(pose.bodyLook.yaw) && Number.isFinite(pose.bodyLook.pitch) ? pose.bodyLook : pose;
         if (lookYaw !== eyeLook.yaw || lookPitch !== eyeLook.pitch) setView(eyeLook.yaw, eyeLook.pitch);
+        const roll = Number.isFinite(pose.roll) ? pose.roll : 0;
+        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, roll, turned: roll !== 0 || pose.yaw !== eyeLook.yaw || pose.pitch !== eyeLook.pitch, ...lensOf(pose) };
         // R378 opt-in: physical arm-parent frame is separate from the engineering rendering camera.
         const parentPosition = pose.armParentPosition === undefined ? firstPose.position : pose.armParentPosition;
         if (!parentPosition || parentPosition.length !== 3 || !Array.from(parentPosition).every(Number.isFinite)) fail('scene_input', 'arm parent position needs finite world metres');
@@ -8501,7 +8587,7 @@ export function createScene({
     } else {
       const p = firstPose ? firstPose.position : [0, 0, 0];
       camera.position.set(p[0], p[1], p[2]);
-      camera.rotation.set(firstPose ? firstPose.pitch : lookPitch, firstPose ? firstPose.yaw : lookYaw, 0, 'YXZ');
+      camera.rotation.set(firstPose ? firstPose.pitch : lookPitch, firstPose ? firstPose.yaw : lookYaw, firstPose && firstPose.roll ? firstPose.roll : 0, 'YXZ');
     }
     camera.updateMatrixWorld(true);
     const fovNow = activeLensFov();
@@ -9279,7 +9365,7 @@ export function createScene({
     if (u && pg > 0) { const r = PART_GLOW.rim * pg; u.value.set(Math.max(u.value.x, PC[0] * r), Math.max(u.value.y, PC[1] * r), Math.max(u.value.z, PC[2] * r), Math.min(u.value.w, PART_GLOW.rimPower)); }
     const ud = mat.userData;
     if (ud && ud.nsHaloHost) {
-      if (k > 0 && !hint) {
+      if (k > 0 && !hint && MUSCLE_HALO.on !== false) {
         const h = muscleHalo(mat);
         if (h) { areaGlowInto(areaId, t, ud.nsHaloGain, muscleRim); h.material.uniforms.nsHaloColor.value.set(muscleRim[0], muscleRim[1], muscleRim[2]); if (!h.visible) { h.visible = true; haloState.shown++; } }
       } else if (ud.nsHalo && ud.nsHalo.visible) { ud.nsHalo.visible = false; haloState.shown--; }
@@ -10058,7 +10144,7 @@ export function createScene({
         const p = m.positions;
         for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k++) { if (p[i + k] < faceLo[k]) faceLo[k] = p[i + k]; if (p[i + k] > faceHi[k]) faceHi[k] = p[i + k]; }
       }
-      const rec = { id, mesh, part: face ? 'face' : part, anatomicalPart: part, kind, material, face, lastDrive: kind === 'muscle' ? MUSCLE_REST_DRIVE : null };
+      const rec = { id, mesh, part: face ? 'face' : part, anatomicalPart: part, kind, material, face, lastDrive: kind === 'muscle' ? MUSCLE_REST_DRIVE : null, eyePart };
       // R5-scene (D17): body side from the rest centre (source +x = subject LEFT): -1 left, +1 right, 0 midline.
       {
         const c = geo.boundingSphere ? geo.boundingSphere.center : null;
@@ -10118,18 +10204,21 @@ export function createScene({
     // 18 November 2026, late (EYE_NECK): the soft shadow where your own neck meets the skull that is not drawn; it rides
     // on the top neck vertebra's in-place twin, so it is drawn only when the neck is; from outside, where the head is
     // drawn in place, it is hidden (applyCamera).
-    // 19 November 2026 (EYE_COLLAR): the box's planes and the cap, on the breastbone's top.
-    if (!collar.planes) {
+    // 19 November 2026 (EYE_COLLAR): the box's planes and the cap, on the breastbone's top. (20 November 2026, evening:
+    // the planes only while the box cuts, EYE_COLLAR.cut; the box's frame and the cap always.)
+    if (!collar.local) {
       const B = EYE_COLLAR.box, C = EYE_COLLAR.cap;
       if (typeof THREE.Plane === 'function' && typeof THREE.Matrix4 === 'function') {
-        const P = (nx, ny, nz, c) => new THREE.Plane(new THREE.Vector3(nx, ny, nz), c);
-        // a point is cut when it is on the negative side of ALL five (clipIntersection): inside the box
-        collar.rest = [P(0, 0, -1, B.zFromMm), P(1, 0, 0, -B.xMm[1]), P(-1, 0, 0, B.xMm[0]), P(0, 1, 0, -B.yMm[1]), P(0, -1, 0, B.yMm[0])];
-        collar.planes = collar.rest.map(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e9));
         collar.local = new THREE.Matrix4(); collar.world = new THREE.Matrix4(); collar.inv = new THREE.Matrix4();
-        renderer.localClippingEnabled = true;
-        // (the outline's ID picture leaves out what the box leaves out of the picture: no loose lines over the open neck)
-        if (typeof outline.setClip === 'function') outline.setClip(collar.planes);
+        if (EYE_COLLAR.cut !== false) {
+          const P = (nx, ny, nz, c) => new THREE.Plane(new THREE.Vector3(nx, ny, nz), c);
+          // a point is cut when it is on the negative side of ALL five (clipIntersection): inside the box
+          collar.rest = [P(0, 0, -1, B.zFromMm), P(1, 0, 0, -B.xMm[1]), P(-1, 0, 0, B.xMm[0]), P(0, 1, 0, -B.yMm[1]), P(0, -1, 0, B.yMm[0])];
+          collar.planes = collar.rest.map(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e9));
+          renderer.localClippingEnabled = true;
+          // (the outline's ID picture leaves out what the box leaves out of the picture: no loose lines over the open neck)
+          if (typeof outline.setClip === 'function') outline.setClip(collar.planes);
+        }
         const cap = new THREE.Mesh(keep(new THREE.SphereGeometry(1, 40, 24)), rawPatch(keep(new THREE.MeshStandardMaterial({ color: C.color, roughness: C.roughness, metalness: 0 })), 'cap'));
         cap.name = 'collar cap (display, not anatomy)';
         cap.position.set(C.centreMm[0], C.centreMm[1], C.centreMm[2]); cap.scale.set(C.radiiMm[0], C.radiiMm[1], C.radiiMm[2]); cap.updateMatrix(); cap.matrixAutoUpdate = false;
@@ -10263,6 +10352,7 @@ export function createScene({
     const sk = bodySkin.get(L.id);
     if (sk && sk.gpu && bodyGpu.on) { bodyGpuLift(sk); if (sk.skinned) bodyGpuCpu(sk); } // 18 November 2026: the graphics card's skin starts from the new lift (and the processor copy follows, as before)
     else if (sk && sk.skinned) skinOne(sk);
+    else { const fr = faceMove.recs.get(L.id); if (fr && fr.drawn) faceDraw(fr); } // 20 November 2026 (FACE): a moved face keeps its movement on the new lift
     return true;
   }
   function setBodyLift(liftedById = null, amount = 1) {
@@ -10439,6 +10529,126 @@ export function createScene({
     muscleLook.digitTendonBody = n;
     return n;
   }
+  /* 20 November 2026 (the owner, Message 204: "make sure there's clear movement for each brain activation area. And you
+   * can clearly identify what type of movement it is for each area"; package FACE). The face areas' movements used to
+   * change only the face muscles' colour. Now they move the face muscles' vertices (ns-face-move: the brows go up, the
+   * eyelids close over the eyeballs, the mouth corners go up and back, the lips purse ...). setFaceMoves() works every
+   * shape out once from the drawn face muscles (call it after setBody, the lift and the skin records); setFaceShape(w)
+   * draws the face for the shapes' strengths (ns-face-move faceShapeWeights of the face's display joints, so the face
+   * follows each activation's contraction and return like every other joint). The face muscles' buffers are shared by
+   * your own head (drawn from outside), its in-place twin and the mirror body, so all of them move. A muscle drawn as one
+   * rigid piece gets its moved positions and normals written into its buffer (on the graphics card's identity skin they
+   * are copied once a frame, bodyGpuAliasSync); one skinned between the skull and the jaw takes the movement through
+   * skinBase. Nothing is written while the face is still; with every strength at 0 each buffer holds its resting
+   * contents again exactly. */
+  const faceMove = { rig: null, w: null, key: '', recs: new Map(), note: null, writes: 0, ms: 0, entries: 0, buildMs: null };
+  function setFaceMoves() {
+    faceMove.rig = null; faceMove.recs.clear(); faceMove.key = ''; faceMove.w = null; faceMove.note = null; faceMove.entries = 0;
+    if (!FACE_MOVE.on) { faceMove.note = 'switched off (FACE_MOVE.on)'; return null; }
+    const meshes = new Map(), eyes = {};
+    for (const b of body) {
+      const geo = b.mesh.userData.nsFullGeometry || b.mesh.geometry, pos = geo && geo.attributes ? geo.attributes.position : null;
+      if (!pos) continue;
+      if (b.kind === 'bone' && b.eyePart === 'sclera') { // the eyeballs' centres (the lids slide over them)
+        const P = pos.array, c = [0, 0, 0], n = P.length / 3;
+        for (let i = 0; i < P.length; i += 3) { c[0] += P[i] / n; c[1] += P[i + 1] / n; c[2] += P[i + 2] / n; }
+        eyes[c[0] > 0 ? 'l' : 'r'] = c; // (source +x is the subject's left)
+        continue;
+      }
+      if (b.kind !== 'muscle' || !faceMuscleOf(b.id) || !geo.index || !geo.attributes.normal) continue;
+      const L = bodyLift.get(b.id) || null, sk = bodySkin.get(b.id) || null;
+      meshes.set(b.id, { positions: L ? L.rest : sk ? sk.rest : pos.array, indices: geo.index.array });
+      faceMove.recs.set(b.id, { id: b.id, b, geo, pos, nor: geo.attributes.normal, L, sk,
+        baseP: !L && !sk ? new Float32Array(pos.array) : null, baseN: !L && !sk ? new Float32Array(geo.attributes.normal.array) : null, tmpP: null, tmpN: null, drawn: false });
+    }
+    let rig = null;
+    const t0 = nowMs();
+    try { rig = buildFaceMoves(meshes, { eyes }); } catch (err) { faceMove.note = String(err && err.message || err); }
+    faceMove.buildMs = Math.round(nowMs() - t0);
+    if (!rig || !rig.ok) { faceMove.recs.clear(); faceMove.note = faceMove.note || (rig && rig.note) || 'no face moves'; return null; }
+    for (const [id, fr] of faceMove.recs) {
+      const m = rig.meshes.get(id);
+      if (!m) { faceMove.recs.delete(id); continue; }
+      // the bounding sphere (shared by every twin) grows once to hold the largest movement, so culling stays right
+      let max = 0;
+      for (const sh of m.shapes.values()) { faceMove.entries += sh.idx.length; for (let j = 0; j < sh.d.length; j += 3) max = Math.max(max, Math.hypot(sh.d[j], sh.d[j + 1], sh.d[j + 2])); }
+      if (!fr.geo.boundingSphere && typeof fr.geo.computeBoundingSphere === 'function') fr.geo.computeBoundingSphere();
+      if (fr.geo.boundingSphere && !fr.sk) fr.geo.boundingSphere.radius += max;
+    }
+    faceMove.rig = rig;
+    faceMove.w = null;
+    return { meshes: faceMove.recs.size, entries: faceMove.entries, maxMm: rig.maxMm };
+  }
+  /** Draw one face muscle for the current strengths (faceMove.w, null = at rest). */
+  function faceDraw(fr) {
+    const sk = fr.sk;
+    if (sk) {
+      if (sk.gpu && bodyGpu.on) { sk.liftFor = NaN; bodyGpuLift(sk); if (sk.skinned) bodyGpuCpu(sk); return; }
+      sk.cacheAt = NaN;
+      if (sk.skinned) { skinOne(sk); return; }
+      skinBase(sk, fr.pos.array, fr.nor.array);
+    } else {
+      let bp = fr.baseP, bn = fr.baseN;
+      const L = fr.L;
+      if (L) {
+        const a = L.applied || 0;
+        if (a <= 0) { bp = L.rest; bn = L.restN; } else if (a >= 1) { bp = L.full; bn = L.fullN; }
+        else {
+          bp = fr.tmpP || (fr.tmpP = new Float32Array(L.rest.length)); bn = fr.tmpN || (fr.tmpN = new Float32Array(L.restN.length));
+          // (the lift's own blend, as applyBodyLift writes it)
+          const b = 1 - a, r = L.rest, f = L.full, rn = L.restN, fn = L.fullN;
+          for (let i = 0; i < bp.length; i++) bp[i] = r[i] + a * (f[i] - r[i]);
+          for (let i = 0; i < bn.length; i += 3) {
+            const x = b * rn[i] + a * fn[i], y = b * rn[i + 1] + a * fn[i + 1], z = b * rn[i + 2] + a * fn[i + 2], l = Math.hypot(x, y, z);
+            if (l > 1e-6) { bn[i] = x / l; bn[i + 1] = y / l; bn[i + 2] = z / l; } else { bn[i] = rn[i]; bn[i + 1] = rn[i + 1]; bn[i + 2] = rn[i + 2]; }
+          }
+        }
+      }
+      if (faceMove.w) applyFaceMoves(faceMove.rig, fr.id, faceMove.w, bp, fr.pos.array, bn, fr.nor.array);
+      else { fr.pos.array.set(bp); fr.nor.array.set(bn); }
+    }
+    fr.pos.needsUpdate = true; fr.nor.needsUpdate = true;
+    pickBufferWritten(fr.pos.array);
+    lodTouch(fr.geo);
+  }
+  /** The face for the shapes' strengths (ns-face-move faceShapeWeights: { shape key: 0..1 }); a strength under 1/256 is
+   * nothing. Writes only when the strengths changed, and only the muscles a shape moves now or moved before. Returns
+   * the number of muscles drawn. */
+  function setFaceShape(weights) {
+    if (!faceMove.rig) return 0;
+    const key = faceWeightsKey(weights);
+    if (key === faceMove.key) return 0;
+    const t0 = nowMs();
+    faceMove.key = key;
+    if (key) {
+      const w = faceMove.wKeep || (faceMove.wKeep = {});
+      for (const k of FACE_SHAPE_KEYS) w[k] = weights[k] > 1 / 512 ? weights[k] : 0;
+      faceMove.w = w;
+    } else faceMove.w = null;
+    let n = 0;
+    for (const fr of faceMove.recs.values()) {
+      let on = false;
+      if (faceMove.w) for (const k of faceMove.rig.meshes.get(fr.id).keys) if (faceMove.w[k] > 0) { on = true; break; }
+      if (!on && !fr.drawn) continue;
+      faceDraw(fr);
+      fr.drawn = on; n++;
+    }
+    faceMove.writes += n;
+    faceMove.ms = Math.round((nowMs() - t0) * 100) / 100;
+    return n;
+  }
+  /** Plain state of the face movements (inspect). */
+  // (restOff: the largest difference, mm, between a still muscle drawn rigid and its resting buffer: 0 = exactly at rest)
+  const faceMoveState = () => {
+    let restOff = 0;
+    for (const fr of faceMove.recs.values()) {
+      if (fr.drawn || fr.sk) continue;
+      const a = fr.L ? fr.L.applied || 0 : 0, base = fr.L ? (a <= 0 ? fr.L.rest : a >= 1 ? fr.L.full : null) : fr.baseP, P = fr.pos.array;
+      if (base) for (let i = 0; i < P.length; i++) { const d = Math.abs(P[i] - base[i]); if (d > restOff) restOff = d; }
+    }
+    return { on: Boolean(faceMove.rig), note: faceMove.note, meshes: faceMove.recs.size, entries: faceMove.entries, buildMs: faceMove.buildMs, key: faceMove.key,
+      drawn: [...faceMove.recs.values()].filter(fr => fr.drawn).length, writes: faceMove.writes, lastMs: faceMove.ms, restOff, maxMm: faceMove.rig ? { ...faceMove.rig.maxMm } : null };
+  };
   function setBodySkin(records, bakedSegments) {
     if (!(records instanceof Map) || !(bakedSegments instanceof Map)) fail('scene_input', 'setBodySkin needs Map records and the baked segment matrices');
     let registered = 0, missing = 0;
@@ -10486,13 +10696,18 @@ export function createScene({
   /** The unskinned drawn geometry of one record (rest, or the lift blend at its current amount) into out arrays. */
   function skinBase(rec, P, N) {
     const L = rec.lift;
-    if (!L) { P.set(rec.rest); N.set(rec.restN); return; }
-    const a = L.applied || 0, b = 1 - a, r = L.rest, f = L.full, rn = L.restN, fn = L.fullN;
-    for (let i = 0; i < P.length; i++) P[i] = r[i] + a * (f[i] - r[i]);
-    for (let i = 0; i < N.length; i += 3) {
-      const x = b * rn[i] + a * fn[i], y = b * rn[i + 1] + a * fn[i + 1], z = b * rn[i + 2] + a * fn[i + 2], l = Math.hypot(x, y, z) || 1;
-      N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+    if (!L) { P.set(rec.rest); N.set(rec.restN); }
+    else {
+      const a = L.applied || 0, b = 1 - a, r = L.rest, f = L.full, rn = L.restN, fn = L.fullN;
+      for (let i = 0; i < P.length; i++) P[i] = r[i] + a * (f[i] - r[i]);
+      for (let i = 0; i < N.length; i += 3) {
+        const x = b * rn[i] + a * fn[i], y = b * rn[i + 1] + a * fn[i + 1], z = b * rn[i + 2] + a * fn[i + 2], l = Math.hypot(x, y, z) || 1;
+        N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+      }
     }
+    // 20 November 2026 (FACE): a face muscle skinned between the skull and the jaw takes its face movement here, so the
+    // graphics card's skin (bodyGpuLift) and the processor's (skinCache) both start from the moved face
+    if (faceMove.w && faceMove.recs.has(rec.id)) applyFaceMoves(faceMove.rig, rec.id, faceMove.w, P, P, N, N);
   }
   const skinMeshInv = new Float64Array(16), skinRefInv = new Float64Array(16), skinRelTmp = new Float64Array(16);
   let skinBakedInv = null; // skinBakedInv[segment index]: drawn rest -> source (inverse of the bake's segment matrix)
@@ -12367,7 +12582,9 @@ export function createScene({
           for (let j = 0; j < Lw.length; j += 4) {
             const t = hitT(dd, Lw[j], Lw[j + 1], Lw[j + 2], Lw[j + 3], a);
             if (!(t < maxM)) continue;
-            if (shareRule && e.tag && e.tag.part === 'body' && firstPersonShareAt(o[0] + t * d[0], o[1] + t * d[1], o[2] + t * d[2], ownPartIds.legs.has(e.tag.id)) < FIRST_PERSON_BODY.pickFrom) continue;
+            // (20 November 2026, evening: a mesh the eye view does not draw at all, EYE_COLLAR.hide, hides nothing; the box
+            // no longer cuts, so this is no longer caught by collarHides inside firstPersonShareAt)
+            if (shareRule && e.tag && e.tag.part === 'body' && (collarHidden(e.tag.id) || firstPersonShareAt(o[0] + t * d[0], o[1] + t * d[1], o[2] + t * d[2], ownPartIds.legs.has(e.tag.id)) < FIRST_PERSON_BODY.pickFrom)) continue;
             return true;
           }
         }
@@ -15419,6 +15636,7 @@ export function createScene({
     setBodyLayers,
     setBodyLift,
     setBodySkin, setDigitTendonSources, updateBodySkin, bodySkinPending, setBodySwell,
+    setFaceMoves, setFaceShape, faceMoveState, // 20 November 2026 (FACE): face movements you can see (ns-face-move)
     setArmLayers,
     setOutlineSegments, // R558 (Message 20)
     // 18 November 2026 (SEE, ns-see): the limbs locked away ([9] by ghost code; their ghosts are filled and taken by the
@@ -15431,6 +15649,38 @@ export function createScene({
     get lastRenderMs() { return Number.isFinite(lastRenderCpuMs) ? lastRenderCpuMs : 0; },
     get lastOutlineMs() { return lastOutlineMs; },
     get regionMode() { return regionMode; },
+    /** 20 November 2026 (BODYMAP, checks only: how far a movement carries a part across the picture): the centre of
+     * every bone's box in the world as drawn now (metres; `head` marks the head and face bones), for your body (the left
+     * arm's bones as `arm:<segment>:<n>`) and for the mirror body, and the camera's view-projection matrix and the
+     * picture's size, so a caller can put a bone's old and new place on screen with the SAME camera (a look that turns
+     * the view between two calls is then not counted as movement): { w, h, vp: [16], own: { id: [x, y, z, head,
+     * drawn] }, mirror: { ... } }. Worked out only when asked (inspect({ bonePx: true })); nothing runs per frame. */
+    bonePx() {
+      if (!(cssW > 0 && cssH > 0)) return null;
+      camera.updateMatrixWorld(true);
+      const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      const v = new THREE.Vector3(), out = { w: cssW, h: cssH, vp: Array.from(vp.elements), own: {}, mirror: {} };
+      const r4 = x => Math.round(x * 1e4) / 1e4;
+      const put = (m, into, id, head, drawn) => {
+        const geo = m && (m.userData.nsFullGeometry || m.geometry);
+        if (!geo || !geo.attributes || !geo.attributes.position) return;
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        geo.boundingBox.getCenter(v); v.applyMatrix4(m.matrixWorld);
+        into[id] = [r4(v.x), r4(v.y), r4(v.z), head ? 1 : 0, drawn ? 1 : 0];
+      };
+      for (const rec of body) {
+        if (rec.kind !== 'bone') continue;
+        const own = rec.mesh && !rec.face ? rec.mesh : rec.inPlace || rec.mesh;
+        if (own) put(own, out.own, rec.id, rec.face, own.visible);
+        if (rec.mirror) put(rec.mirror, out.mirror, rec.id, rec.face, mirrorRoot.visible && rec.mirror.visible);
+      }
+      bones.forEach((rec, i) => {
+        const id = `arm:${rec.segment}:${i}`;
+        if (rec.mesh) put(rec.mesh, out.own, id, false, armGroup.visible && rec.mesh.visible);
+        if (rec.mirror) put(rec.mirror, out.mirror, id, false, mirrorRoot.visible && rec.mirror.visible);
+      });
+      return out;
+    },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */
     sceneState() {
       return {
@@ -15470,7 +15720,7 @@ export function createScene({
         info: info ? { shown: !info.panel.hidden } : null,
         body: { meshes: body.length, face: body.filter(b => b.face).length, facePacket: facePacketMeshes, layers: bodyLayerInfo ? { ...bodyLayerInfo } : null, lift: bodyLiftInfo ? { ...bodyLiftInfo } : null, frame: bodyFrameSource, eyeBp: eyeBp.slice(), bodyYaw },
         organs: organsState(), // 20 November 2026 (ORGANS)
-        face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible }
+        face: { mode: faceMode, amount: faceAmount, visible: faceGroup.visible, moves: faceMoveState() }
       };
     }
   };

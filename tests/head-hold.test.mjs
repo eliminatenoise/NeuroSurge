@@ -2,11 +2,15 @@
  * game has to be easier to use; a learning tool). A held trunk bend (the trunk area: bend forward / lean back) moves the
  * trunk under the head and the neck takes up the difference, so the view keeps its direction and stays on the area. A
  * held neck movement still moves the head and the view with it, and the status card then says so.
- * Pure parts are checked here: ns-app headPoseForLook (the head's direction, the neck and the trunk for a look and held
- * offsets), headLookRange (the look range that goes with them), headGoalTaken and headBackKey (when the card's line is
- * due and which number key it names, with the activity's own list of bring-back movements: ns-actions latchView().back),
- * and that the three lines exist (ns-text). No scene, model, browser or native fixture. These cases establish angles and
- * list contents only, never pixels, timing or biology; the angle limits are the game's own simplified ranges.
+ * Pure parts are checked here: ns-app headPoseForLook (the head's direction, the neck and the trunk for a look and
+ * offsets: a trunk or neck movement under way), headLookRange (the look range that goes with them). No scene, model,
+ * browser or native fixture. These cases establish angles and list contents only, never pixels, timing or biology; the
+ * angle limits are the game's own simplified ranges.
+ * 20 November 2026 (the owner, Message 206: "no permanent movements ... it will contract, then return to its previous
+ * place"): headGoalTaken and headBackKey (the status card's line that a HELD neck movement had turned the head, and the
+ * number key that brought it back, from ns-actions latchView().back) and their three lines in ns-text are gone with
+ * the latch. Their cases are restated below: a neck movement now contracts and returns by itself, so there is no held
+ * head, no bring-back key and no such line.
  * Run: node tests/head-hold.test.mjs (no arguments).
  */
 import assert from 'node:assert/strict';
@@ -17,7 +21,7 @@ const app = await import(target.href);
 const { BODY_MOTOR_MAP } = await import(new URL('../scene/src/ns-bodymap.mjs', import.meta.url).href);
 const { createActivity } = await import(new URL('../scene/src/ns-actions.mjs', import.meta.url).href);
 const NT = await import(new URL('../scene/src/ns-text.mjs', import.meta.url).href);
-const { HEAD_LOOK, headPoseForLook, headLookRange, headBendLimit, headGoalTaken, headBackKey, infoMoves, infoOverlayModel } = app;
+const { HEAD_LOOK, headPoseForLook, headLookRange, headBendLimit, infoMoves, infoOverlayModel } = app;
 const results = [];
 function check(name, fn) {
   try { fn(); results.push({ name, passed: true }); }
@@ -131,117 +135,54 @@ check('a held neck movement moves the head, and the view stays on the look', () 
   near(both.bendDeg, -25, 1e-9, 'trunk with both held');
 });
 
-check('the card\'s line is due only when a neck movement was taken that moves the view', () => {
-  const zero = { neck_rot: 0, neck_flex: 0, trunk_flex: 0 };
-  assert.equal(headGoalTaken(null, { ...zero, neck_flex: -60 }), null, 'no earlier frame');
-  assert.equal(headGoalTaken(zero, null), null);
-  assert.equal(headGoalTaken(zero, { ...zero }), null, 'nothing changed');
-  assert.equal(headGoalTaken(zero, { ...zero, neck_flex: -60 }), 'neck_flex', 'tilt head back');
-  assert.equal(headGoalTaken(zero, { ...zero, neck_rot: 80 }), 'neck_rot', 'turn head');
-  assert.equal(headGoalTaken({ ...zero, neck_flex: -60 }, { ...zero, neck_flex: -60 }), null, 'still held');
-  assert.equal(headGoalTaken({ ...zero, neck_flex: -60 }, { ...zero }), null, 'brought back to the start');
-  assert.equal(headGoalTaken({ ...zero, neck_flex: -60 }, { ...zero, neck_flex: -60, neck_rot: -80 }), 'neck_rot', 'a second neck movement');
-  assert.equal(headGoalTaken(zero, { ...zero, trunk_flex: 80 }), null, 'a trunk bend does not move the view');
-  assert.equal(headGoalTaken({ ...zero, trunk_flex: -25 }, { ...zero, trunk_flex: 80 }), null);
-});
-
-// Which number key the line names, with the activity's own answer to "would this only bring the part back now?"
-// (latchView().back) after real activations of the neck areas.
-const keyCase = { ran: false, why: '' };
+// 20 November 2026 (Message 206): real activations of the neck and trunk areas, followed until they have returned.
+const neckCase = { ran: false, why: '' };
 try {
   const A = createActivity();
   let s = A.step(A.state, [], 2.5); // past the start instructions
-  const press = (regionId, actionId) => { s = A.step(s, [{ type: 'muscle', regionId, actionId, regionOnly: false, at: 0 }], 0.05); s = A.step(s, [], 1.6); };
-  const rowsOf = id => { const v = A.latchView(s); return infoMoves(region(id), { still: v.still, back: v.back }); };
-  const goalOf = () => { const g = { neck_rot: 0, neck_flex: 0, trunk_flex: 0 }; for (const j of A.latchView(s).joints) if (j.jointId in g) g[j.jointId] = j.goalDeg - (Number.isFinite(j.restDeg) ? j.restDeg : 0); return g; };
-  const rh = region('rh_neck'), lh = region('lh_neck');
-  const nOf = (r, id) => r.actions.findIndex(a => a.id === id) + 1;
-  keyCase.start = { goal: goalOf(), key: headBackKey(rowsOf('rh_neck'), rh, 'neck_flex') };
-  const g0 = goalOf();
-  press('rh_neck', 'rh_neck_extend');
-  const g1 = goalOf();
-  keyCase.extend = { taken: headGoalTaken(g0, g1), goal: g1.neck_flex, key: headBackKey(rowsOf('rh_neck'), rh, 'neck_flex'), want: nOf(rh, 'rh_neck_flex'),
-    turnKey: headBackKey(rowsOf('rh_neck'), rh, 'neck_rot'), otherHalfKey: headBackKey(rowsOf('lh_neck'), lh, 'neck_flex'), otherWant: nOf(lh, 'lh_neck_flex') };
-  press('rh_neck', 'rh_neck_turn_left');
-  const g2 = goalOf();
-  keyCase.turn = { taken: headGoalTaken(g1, g2), goal: g2.neck_rot, sameCardKey: headBackKey(rowsOf('rh_neck'), rh, 'neck_rot'),
-    flexKey: headBackKey(rowsOf('rh_neck'), rh, 'neck_flex'), otherHalfKey: headBackKey(rowsOf('lh_neck'), lh, 'neck_rot'), otherWant: nOf(lh, 'lh_neck_turn_right') };
-  press('rh_neck', 'rh_neck_flex'); // the named key: the first press brings the head back
-  const g3 = goalOf();
-  keyCase.back = { taken: headGoalTaken(g2, g3), goal: g3.neck_flex, key: headBackKey(rowsOf('rh_neck'), rh, 'neck_flex') };
-  press('rh_trunk', 'rh_trunk_flex');
-  const g4 = goalOf();
-  keyCase.trunk = { taken: headGoalTaken(g3, g4), goal: g4.trunk_flex };
-  keyCase.ran = true;
-} catch (error) { keyCase.why = String(error); }
+  const H = 1 / 60;
+  const press = (regionId, actionId, joint) => {
+    const from = s.bodyPos[joint]; let far = 0;
+    s = A.step(s, [{ type: 'muscle', regionId, actionId, regionOnly: false, at: 0 }], H);
+    for (let i = 0; i < 150; i++) { s = A.step(s, [], H); if (Math.abs(s.bodyPos[joint] - from) > Math.abs(far)) far = s.bodyPos[joint] - from; }
+    return { far, end: s.bodyPos[joint], goal: s.bodyGoal[joint] };
+  };
+  neckCase.extend = press('rh_neck', 'rh_neck_extend', 'neck_flex');
+  neckCase.turn = press('rh_neck', 'rh_neck_turn_left', 'neck_rot');
+  neckCase.trunk = press('rh_trunk', 'rh_trunk_flex', 'trunk_flex');
+  neckCase.rows = infoMoves(region('rh_neck'), {});
+  neckCase.ran = true;
+} catch (error) { neckCase.why = String(error); }
 
-check('the line names the key that brings the head back, and only a key that does', () => {
-  assert.ok(keyCase.ran, `the activity ran (${keyCase.why})`);
-  assert.equal(keyCase.start.key, 0, 'nothing is held at the start');
-  // Tilt head back: the same card's "Bend head forward" brings it back, on either half's neck area.
-  assert.equal(keyCase.extend.taken, 'neck_flex');
-  assert.ok(keyCase.extend.goal < 0, 'the neck is held back');
-  assert.ok(keyCase.extend.want >= 1);
-  assert.equal(keyCase.extend.key, keyCase.extend.want);
-  assert.equal(keyCase.extend.turnKey, 0, 'no key of this card undoes a head turn');
-  assert.equal(keyCase.extend.otherHalfKey, keyCase.extend.otherWant);
-  // Turn head to the left, with the tilt still held: its opposite is on the other half's neck area, not on this card.
-  assert.equal(keyCase.turn.taken, 'neck_rot');
-  assert.ok(keyCase.turn.goal > 0, 'the neck is held to the left');
-  assert.equal(keyCase.turn.sameCardKey, 0, 'the card of the turn has no key that turns it back');
-  assert.equal(keyCase.turn.flexKey, keyCase.extend.want, 'the tilt keeps its own key');
-  assert.ok(keyCase.turn.otherWant >= 1);
-  assert.equal(keyCase.turn.otherHalfKey, keyCase.turn.otherWant, 'the other half\'s card has the key');
-  // The named key: the neck is back at its start, no new line, and no key is named any more.
-  assert.equal(keyCase.back.taken, null);
-  near(keyCase.back.goal, 0, 1e-9, 'neck bend goal');
-  assert.equal(keyCase.back.key, 0);
-  // A trunk bend is not a neck movement.
-  assert.equal(keyCase.trunk.taken, null);
-  assert.ok(keyCase.trunk.goal > 0, 'the trunk is held forward');
+check('a neck or trunk movement from the strip contracts and returns: nothing is held, so nothing has to be brought back', () => {
+  assert.ok(neckCase.ran, `the activity ran (${neckCase.why})`);
+  assert.ok(neckCase.extend.far < -40, `tilt head back tips the head back (${neckCase.extend.far})`);
+  assert.equal(neckCase.extend.end, 0, 'and it returns to the start');
+  assert.equal(neckCase.extend.goal, 0, 'its place never changed');
+  assert.ok(neckCase.turn.far > 40, `turn head to the left turns it (${neckCase.turn.far})`);
+  assert.equal(neckCase.turn.end, 0, 'and it turns back by itself (no key on the other half is needed)');
+  assert.ok(neckCase.trunk.far > 20, `the trunk bends forward (${neckCase.trunk.far})`);
+  assert.equal(neckCase.trunk.end, 0, 'and comes back');
+  assert.ok(neckCase.rows.every(m => m.back === undefined && m.atEnd === false), 'no row of the neck card is a bring-back or "already there"');
 });
 
-check('headBackKey refuses what it cannot answer', () => {
-  const rh = region('rh_neck');
-  const rows = infoMoves(rh, { back: [`rh_neck/rh_neck_flex`] });
-  assert.equal(headBackKey(rows, rh, 'neck_flex'), rh.actions.findIndex(a => a.id === 'rh_neck_flex') + 1);
-  assert.equal(headBackKey(rows, rh, 'trunk_flex'), 0, 'the neck card has no trunk movement');
-  assert.equal(headBackKey(rows, region('rh_trunk'), 'neck_flex'), 0, 'rows and area do not belong together');
-  assert.equal(headBackKey(null, rh, 'neck_flex'), 0);
-  assert.equal(headBackKey(rows, null, 'neck_flex'), 0);
-  assert.equal(headBackKey(rows, rh, null), 0);
-  assert.equal(headBackKey(infoMoves(rh, {}), rh, 'neck_flex'), 0, 'no row is marked');
-});
-
-check('the kept card, with the look off the area, keeps the bring-back mark, so the line can name its key', () => {
-  // A neck movement throws the view off the neck area: the card is then the kept one (viewed 'last'), or the one of the
-  // area still glowing (source 'live'). Both have to carry the mark the card on the area itself has.
-  const id = 'rh_neck', rh = region(id);
-  const back = [`${id}/rh_neck_flex`], still = [`${id}/rh_neck_extend`];
+check('the held-head line and its bring-back key are gone with the latch', () => {
+  assert.equal(app.headGoalTaken, undefined);
+  assert.equal(app.headBackKey, undefined);
+  for (const k of ['headMovedKey', 'headTurned', 'headMoved']) assert.equal(NT.HUD[k], undefined, k);
+  // the kept card of the neck area (the look thrown off it) still lists its movements, none of them marked
+  const id = 'rh_neck';
   const on = { target: 'region', regionId: id, actionId: null, regionActionId: 'rh_neck_extend', hemisphere: 'right', isLeftArm: false, u: null };
-  const OFF = { target: 'none', regionId: null, actionId: null };
-  const onArea = infoOverlayModel({ gaze: on, bodyMap: BODY_MOTOR_MAP, regionActivity: {}, still, back });
-  const want = rh.actions.findIndex(a => a.id === 'rh_neck_flex') + 1;
-  assert.equal(headBackKey(onArea.moves, rh, 'neck_flex'), want, 'on the area');
-  const kept = infoOverlayModel({ gaze: OFF, bodyMap: BODY_MOTOR_MAP, regionActivity: {}, last: onArea, still, back });
+  const onArea = infoOverlayModel({ gaze: on, bodyMap: BODY_MOTOR_MAP, regionActivity: {} });
+  const kept = infoOverlayModel({ gaze: { target: 'none', regionId: null, actionId: null }, bodyMap: BODY_MOTOR_MAP, regionActivity: {}, last: onArea });
   assert.equal(kept.viewed, 'last');
   assert.equal(kept.movesRegionId, id);
-  assert.equal(headBackKey(kept.moves, rh, 'neck_flex'), want, 'kept card');
-  assert.equal(kept.moves.find(m => m.id === 'rh_neck_extend').atEnd, true);
-  const glowing = infoOverlayModel({ gaze: OFF, bodyMap: BODY_MOTOR_MAP, regionActivity: { [id]: 0.8 }, last: onArea, pulse: { regionId: id, actionId: 'rh_neck_extend' }, still, back });
-  assert.equal(glowing.source, 'live');
-  assert.equal(headBackKey(glowing.moves, rh, 'neck_flex'), want, 'card of the area still glowing');
-});
-
-check('the three lines exist and the key line names its key', () => {
-  assert.equal(typeof NT.HUD.headMovedKey, 'function');
-  assert.ok(NT.HUD.headMovedKey(2).includes('Press 2'));
-  for (const k of ['headTurned', 'headMoved']) assert.ok(typeof NT.HUD[k] === 'string' && NT.HUD[k].length > 20, k);
+  assert.ok(kept.moves.length > 0 && kept.moves.every(m => !m.atEnd && m.back === undefined));
 });
 
 const failed = results.filter(r => !r.passed);
 process.stdout.write(JSON.stringify({
   suite: 'head-hold', module: target.href, cases: results.length, failed: failed.length, results,
-  scope: 'pure head, neck and trunk angles for a look with held offsets, the look range, and when and how the status card names the way back; no pixels, timing or biology'
+  scope: 'pure head, neck and trunk angles for a look with offsets, the look range, and (Message 206) that a neck or trunk movement returns by itself with no bring-back line; no pixels, timing or biology'
 }, null, 2) + '\n');
 if (failed.length) process.exitCode = 1;

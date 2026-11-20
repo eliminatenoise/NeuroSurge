@@ -279,7 +279,7 @@ const STEP_TABLE = [
     'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
     'Greens: belly and back. Pinks: face and neck.')] },
   { head: 'Switch areas on.', parts: [part('Rest your look on a motor area to move its body part. Click to repeat the movement. ' +
-    'Its simulated glow lasts about a second. Click a muscle on either body to switch on its motor area. ' +
+    'Its simulated glow lasts as long as the part contracts. Click a muscle on either body to switch on its motor area. ' +
     'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
     'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
     'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
@@ -288,11 +288,14 @@ const STEP_TABLE = [
       'one area for each press, so you can visit every area in turn: from the face areas at one side, up over the ' +
       'top of the brain where the leg areas are, and down the other side. The look lands on the next area you can ' +
       'see on that side.'),
-    // R558 (Message 6): held movements and the opposite-area hint.
-    part('A movement stays where it went: the body part does not drift back by itself. To bring it back, switch on ' +
-      'the opposite area (it glows faintly, and so do the muscles that pull the other way), or press Reset body. ' +
-      'Holding a movement until the opposite one is a rule of this game, not something measured.')],
-  intro: [part('Rest your look on a motor area and its movement happens at once. Click to do it again. The arrow keys step to the next area. A movement stays until you switch on the opposite one (its area glows faintly) or press Reset body.')] },
+    // 20 November 2026 (the owner, Message 206: "no permanent movements ... it will contract, then return to its previous
+    // place. But in returning to its previous place, you won't see corresponding activity and muscle activation"). It
+    // replaces Message 6's held movements and the opposite-area hint.
+    part('Every movement from the brain contracts, then returns: the part is driven hard to the end of the movement, ' +
+      'then goes back to where it was, unlit, and stays there. Where it was is where you put it with the keys, a drag ' +
+      'or Space, or where it started. Nothing is held by the brain, so there is nothing to bring back. ' +
+      'Contracting and returning is a rule of this game, not something measured.')],
+  intro: [part('Rest your look on a motor area and its movement happens at once: the part contracts, then returns to where it was. Click to do it again. The arrow keys step to the next area.')] },
   { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
     'You can also take hold of things: aim your crosshair or free pointer at the brain, the mirror body or one of your own limbs and hold Space. While Space is held, ' +
     'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
@@ -360,7 +363,7 @@ const CONTROL_TABLE = [
   ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
   // 19 November 2026 (the owner: "go back to activation simply by cursor highlight"; "activates heavily relaxes slightly
   // and repeats that process with each further click").
-  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once, hard, and then eases back a little. Click to do it again. A click never closes a hand: only Space grips.'],
+  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once: the part contracts hard, then returns to where it was. Click to do it again. A click never closes a hand: only Space grips.'],
   // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
   // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
   ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice and the whole limb lights up. Your view turns only if its hand or foot is outside the picture.'],
@@ -690,18 +693,10 @@ export const HUD = deepFreeze({
   areaEnd: 'No more motor areas that way from here. Press the other arrow key, or turn the brain to bring more areas into view.',
   areaUnreachable: 'Could not aim at another area from here. Turn the brain or try the other arrow key.',
   areaWhileHolding: 'Let go of what you hold first, then press the arrow key.',
-  /** R558 (Messages 6, 55 and 56): what a number key (n) just did when it was not the movement itself. moveStill: the
-   * part was already there. moveBack: the part was held on the other side of its start, so this press brought it back
-   * (the game's stage rule); the same number again does the movement. Shown for a few seconds. */
+  /** R558 (Messages 6, 55 and 56): what a number key (n) just did when it was not the movement itself. moveStill: it
+   * moved nothing. Shown for a few seconds. (20 November 2026, Message 206: moveBack, "brought the part back", and the
+   * head-moved lines, which said how to bring a held head back, are gone with the latch.) */
   moveStill: n => `Key ${n}: that movement is already there, so nothing moved. Try another number on the card.`,
-  moveBack: n => `Key ${n} brought the part back to where it started. Press ${n} again for the movement itself.`,
-  /** R558 (Messages 1, 55 and 56): a neck movement was just taken, so the head moved and the view with it, off the area
-   * that was looked at. Shown for a few seconds. headMovedKey: key n on the card is the opposite movement (marked
-   * "first press brings it back"). headTurned: a head turn, whose opposite is on the other half's neck area (a choice
-   * of this game). headMoved: any other case (the card is hidden or shows another area). */
-  headMovedKey: n => `Your head moved, so your view moved with it. Press ${n} to bring your head back.`,
-  headTurned: 'Your head turned, so your view turned with it. In this game the neck area on the other half of the brain turns it back; so does Reset body on the Esc page.',
-  headMoved: 'Your head moved, so your view moved with it. The opposite neck movement brings it back; so does Reset body on the Esc page.',
   contextLost: SHELL.contextLost,
   placeholderAttribution: 'Stand-in shapes only, no real body parts. The full game uses: ',
   placeholderMuscles: 'Stand-in mode has no 3D muscles. So the made-up (simulated) muscle signals are only listed.',
@@ -912,13 +907,12 @@ export const INFO = deepFreeze({
   /** R3-fix (SL-2): appended to a forearm-turn card's movement row when the palm already faces that way. */
   alreadyDown: ' (your palm is already down, so nothing moves now)',
   alreadyUp: ' (your palm is already up, so nothing moves now)',
-  /** R558 (latch): every joint of this movement is already at its end (held there, or the start posture). */
+  /** R558: this movement moves nothing now (a left-arm movement: an elbow already straight; 20 November 2026, Message
+   * 206: a body movement always moves). (bringsBack, "the first time only brings it back", is gone with the latch.) */
   alreadyThere: ' (already there, so nothing moves now)',
-  /** R558 (Messages 6, 55 and 56): the part is held on the other side of its start, so this movement first brings it back. */
-  bringsBack: ' (the part is held the other way, so the first time only brings it back)',
   /** R558 (Messages 55 and 56): the numbered list of an area's movements on the card (ns-app infoMoves). A number key
-   * does the movement beside it; `atEnd` marks a movement whose joints are already at its end. */
-  moves: { heading: 'Movements: press a number', atEnd: 'already there', current: 'shown now', back: 'first press brings it back' }
+   * does the movement beside it; `atEnd` marks a movement that would move nothing now. */
+  moves: { heading: 'Movements: press a number', atEnd: 'already there', current: 'shown now' }
 });
 
 /** "Simulated signal 0.80 of 1 (no units)". R558 (Messages 44 and 55): one short line; the colour key and More detail
@@ -1046,13 +1040,13 @@ export function areaTag(region, leftArm = false) {
  *   note (plain), caveats, sources, technical: { explanation, note } (the unchanged technical wording) } }.
  */
 export function plainInfoCard({ region = null, action = null, leftArm = false, activity = null, activations = 0,
-  citations = [], caveats = [], rotationState = null, atEnd = false, back = false } = {}) {
+  citations = [], caveats = [], rotationState = null, atEnd = false } = {}) {
   if (!region) return null;
   const integration = region.kind === 'integration';
   const rows = [];
   // R3-fix (review SL-2): a forearm-turn area whose palm is already turned that way moves nothing; say so plainly.
   const already = action && ((action.armActionId === 'pronation' && rotationState === 'pronated') || (action.armActionId === 'supination' && rotationState === 'supinated'));
-  if (action) rows.push([INFO.rows.movement, `${str(action.plainLabel) || str(action.label)}${already ? (rotationState === 'pronated' ? INFO.alreadyDown : INFO.alreadyUp) : atEnd === true ? INFO.alreadyThere : back === true ? INFO.bringsBack : ''}`]);
+  if (action) rows.push([INFO.rows.movement, `${str(action.plainLabel) || str(action.label)}${already ? (rotationState === 'pronated' ? INFO.alreadyDown : INFO.alreadyUp) : atEnd === true ? INFO.alreadyThere : ''}`]);
   else rows.push([INFO.rows.movement, str(region.plainMoves) || INFO.noMovement]);
   const pm = action && action.plainMuscles ? action.plainMuscles : null;
   if (pm && pm.pull) rows.push([INFO.rows.agonists, pm.pull]);
@@ -1650,7 +1644,7 @@ export const GUIDE = deepFreeze({
     // 19 November 2026 (the tutorial, ns-guide TUTORIAL_GOAL_IDS): the steps the older guide did not have. A look only
     // arms an area; a click or its number presses it; a number key held runs the movement for as long as it is held.
     lookStrip: 'Look at a coloured area on the brain: the part it names moves at once, on your body and on the mirror body.',
-    pressArea: 'Click the area. The part jerks again, harder: each click repeats it.',
+    pressArea: 'Click the area. The part contracts again and comes back: each click repeats it.',
     holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
     dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it.',
     // 19 November 2026 (the owner's limb keys): the step that teaches the choice of the limb
@@ -1689,7 +1683,7 @@ export const GUIDE = deepFreeze({
     mirror: 'Click a green arrow by the mirror body',
     // 19 November (the tutorial): one short line per step, each ONE action
     lookStrip: 'Look at a colour on the brain: a part moves',
-    pressArea: 'Click it: it jerks again, harder',
+    pressArea: 'Click it: it moves again',
     holdPart: 'Hold down 1 or 2. Let go to stop',
     dragLimb: 'Press on an arm or leg and drag it',
     chooseLimb: 'Press 2, 3 or 4: choose another limb',

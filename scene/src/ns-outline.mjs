@@ -279,7 +279,10 @@ export const OUTLINE_ID_VS = ID_VS;
  * carry Three's clipping-plane chunks: the scene gives the pass the box that ends your own body at the collar in the
  * eye view (ns-scene-three EYE_COLLAR; setClip below), so the pieces of neck and shoulder muscle the picture does not
  * draw are not in the ID picture either. Until now they were, and their outlines were inked over the open neck as
- * loose dark lines. Without planes the chunks compile to nothing. */
+ * loose dark lines. Without planes the chunks compile to nothing.
+ * 20 November 2026, evening: the box no longer cuts anything (ns-scene-three EYE_COLLAR.cut false: it cut your own raised
+ * right arm away while this pass kept its lines), so the scene hands no planes here; what it hides it hides whole, and a
+ * hidden mesh is not in the ID picture either. setClip stays for EYE_COLLAR.cut true. */
 /* 18 November 2026 (performance): the ID pass of a mesh skinned on the graphics card (the left game arm's muscles,
  * ns-scene-three armSkinPrepare): Three's own skin chunks on the rest positions (attribute nsSkinRest), the code as a
  * uniform (one proxy draw per mesh; the batch's copy of the vertices would have to be skinned on the processor). */

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward, limbKeyMove, limbKeyFollow } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
+const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward, limbKeyMove, limbKeyFollow, keyMoveCut } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
 const { FREE_HAND, freeHandAngles, freeHandInRange, freeHandPole } = await import(path.join(repo, 'scene/src/ns-arm.mjs'));
 const G = await import(path.join(repo, 'scene/src/ns-grasp.mjs'));
 const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
@@ -239,59 +239,90 @@ test('each leg and the right arm cover a great distance, and the solve works wit
 // 20 November 2026, afternoon (a hunt: after A had swung the right arm across the chest, one 0.12 s tap of S threw the
 // hand 21 cm, mostly sideways). A frame of the keys takes the solve's answer only as far as the keys' own way goes
 // (keyMost) and not when it leaves that way by more than keyOffDeg (ns-app limbKeyFollow, used in stepLimbHold).
-test('a frame of the keys: never further than the keys go, and never off their way', () => {
+// 20 November 2026, evening (LIMBFREE; the owner, Message 207: "there are ranges of motions where the limbs get stuck.
+// The limb should never get stuck"): restated. A move more than keyOffDeg off the keys' way used to wait in every case;
+// where the joints cannot keep to the line at all (an arm straight up beside the head, a straight leg lifted high and
+// out) that left a limb with no key that moved it. Now a move up to keyFarDeg off is taken too, slowly (its part
+// across the way at most keyLatFar x the way); only one that goes nowhere the keys' way, or backwards, waits.
+test('a frame of the keys: never further than the keys go, never thrown sideways, and only a move that goes nowhere the keys\' way waits', () => {
   const V = LIMB_KEYS.view, from = [0.1, 0.2, 0.3], way = [0, 0, -0.01];
   assert.ok(V.keyMost >= 1 && V.keyMost <= 1.5 && V.keyOffDeg > 45 && V.keyOffDeg < 75);
+  assert.ok(V.keyFarDeg > V.keyOffDeg && V.keyFarDeg < 90, 'a move going nowhere the keys\' way, or back, still waits');
+  assert.ok(V.keyLatFar > 0 && V.keyLatFar <= V.keyMost * Math.sin(V.keyOffDeg * DEG), 'far off the line the end moves sideways no faster than it may inside keyOffDeg');
   assert.deepEqual(limbKeyFollow(from, [0.1, 0.2, 0.291], way), { take: true, share: 1 }, 'the keys\' own way, a little short: taken');
   const fast = limbKeyFollow(from, [0.1, 0.2, 0.26], way);
   assert.ok(fast.take && near(fast.share, V.keyMost * 0.01 / 0.04, 1e-12), 'four times as far: cut back to keyMost');
   const off = Math.tan((V.keyOffDeg - 5) * DEG) * 0.01;
   assert.equal(limbKeyFollow(from, [0.1 + off, 0.2, 0.29], way).take, true, 'a little inside keyOffDeg: taken');
-  assert.equal(limbKeyFollow(from, [0.1 + Math.tan((V.keyOffDeg + 5) * DEG) * 0.01, 0.2, 0.29], way).take, false, 'past keyOffDeg: the limb waits');
+  // between keyOffDeg and keyFarDeg: taken, its sideways part cut to keyLatFar x the way
+  for (const deg of [V.keyOffDeg + 5, (V.keyOffDeg + V.keyFarDeg) / 2, V.keyFarDeg - 1]) {
+    const m = [Math.sin(deg * DEG) * 0.012, 0, -Math.cos(deg * DEG) * 0.012], f = limbKeyFollow(from, from.map((v, k) => v + m[k]), way);
+    assert.ok(f.take, `${deg} degrees off: taken`);
+    const lat = Math.abs(m[0]) * f.share, total = 0.012 * f.share;
+    assert.ok(lat <= V.keyLatFar * 0.01 + 1e-12 && total <= V.keyMost * 0.01 + 1e-12, `${deg} degrees off: sideways ${(lat * 1000).toFixed(2)} mm, all ${(total * 1000).toFixed(2)} mm for a 10 mm way`);
+    assert.ok(-m[2] * f.share > 0, 'and it still goes some way the keys\' way');
+  }
+  assert.equal(limbKeyFollow(from, [0.1 + Math.tan((V.keyFarDeg + 2) * DEG) * 0.01, 0.2, 0.29], way).take, false, 'past keyFarDeg: the limb waits');
   assert.equal(limbKeyFollow(from, [0.15, 0.2, 0.3], way).take, false, 'straight sideways: waits');
   assert.equal(limbKeyFollow(from, [0.1, 0.2, 0.31], way).take, false, 'backwards: waits');
   assert.deepEqual(limbKeyFollow(from, from, way), { take: true, share: 1 }, 'no move');
+  assert.deepEqual(limbKeyFollow(from, [0.1004, 0.2, 0.3], way), { take: true, share: 1 }, 'a move under a twentieth of the way, whatever its direction (joints passing through angles the drawn pose does not show)');
   assert.deepEqual(limbKeyFollow(from, [0.2, 0.2, 0.3], [0, 0, 0]), { take: true, share: 1 }, 'no way (no time passed)');
+  // keyMoveCut is the same cut, used again on the end's move as drawn
+  assert.equal(keyMoveCut([0.05, 0, 0], way), 0);
+  assert.ok(near(keyMoveCut([0, 0, -0.04], way), V.keyMost * 0.01 / 0.04, 1e-12));
 });
 
 // The same rule on the game's own body, as stepLimbHold runs it: S held, the place kept on the keys' line within leadM
-// of the end, one solve a frame, the answer taken as limbKeyFollow says.
+// of the end, one solve a frame, the answer taken as limbKeyFollow says (and cut again with keyMoveCut on the drawn end).
+// A frame that waits puts the place back on the end (20 November 2026, evening: as stepLimbHold now does).
 function driveKeys(limb, q0, ax, az, frames) {
   const V = LIMB_KEYS.view, sp = V.speedMps * 1000 / 60, lead = V.leadM * 1000, right = [-1, 0, 0], c = G.LIMB_CHAIN[limb], memo = {};
   const sub = (a, b) => a.map((v, k) => v - b[k]), nrm = a => Math.hypot(...a), dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0;
+  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0, widest = 0;
   const e0 = end.slice();
   for (let f = 0; f < frames; f++) {
     const root = G.limbPoint(rig, asDrawn(q), limb, 'root');
     const T = limbKeyMove(u && ax === 0 ? root.map((v, k) => v + u[k] * len) : end, root, right, ax, az, sp);
-    const gap = nrm(sub(T, end));
+    const gap = nrm(sub(T, end)), way = sub(limbKeyMove(end, root, right, ax, az, sp), end);
     let r = G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T, limits, opts: lastErr < 12 && gap < 60 ? G.LIMB_HOLD_FOLLOW : G.LIMB_HOLD_TRACK, project, memo });
-    const fol = limbKeyFollow(end, r.endMm, sub(limbKeyMove(end, root, right, ax, az, sp), end));
-    if (r.folded && r.errorMm > lead + 2) { waited++; continue; }
-    if (!fol.take) { waited++; continue; }
-    if (fol.share < 1) {
-      // (as stepLimbHold: the share cut once more where the end's move is still over keyMost)
-      const most = LIMB_KEYS.view.keyMost * sp;
+    const fol = limbKeyFollow(end, r.endMm, way);
+    let wait = (r.folded && r.errorMm > lead + 2) || !fol.take;
+    if (!wait && fol.share < 1) {
+      // (as stepLimbHold: the share cut once more where the end's move as drawn is still over what keyMoveCut allows)
       let share = fol.share, joints = {}, endMm = r.endMm;
       for (let pass = 0; pass < 3; pass++) {
         const qs = { ...q }; for (const id of c.joints) qs[id] = q[id] + (r.joints[id] - q[id]) * share;
         const p = project(qs); joints = {}; for (const id of c.joints) joints[id] = p[id];
         endMm = G.limbPoint(rig, asDrawn({ ...q, ...joints }), limb, 'end');
-        const moved = nrm(sub(endMm, end));
-        if (!(moved > most * 1.001)) break;
-        share *= most / moved;
+        const k = keyMoveCut(sub(endMm, end), way);
+        if (!(k > 0)) { wait = true; break; }
+        if (!(k < 0.999)) break;
+        share *= k;
       }
       r = { ...r, joints, endMm };
     }
-    fastest = Math.max(fastest, nrm(sub(r.endMm, end)) / sp);
+    if (wait) {
+      waited++;
+      const e = sub(end, root), U = ax === 0 && u ? u : e.map(x => x / nrm(e));
+      len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(e))); u = U; lastErr = 0;
+      continue;
+    }
+    const mv = sub(r.endMm, end), m = nrm(mv), wl = nrm(way), pr = wl > 0 ? dot(mv, way) / wl : 0;
+    fastest = Math.max(fastest, m / sp);
+    if (wl > 0 && m > 0.05 * wl && pr < m * Math.cos(V.keyOffDeg * DEG)) widest = Math.max(widest, Math.sqrt(Math.max(0, m * m - pr * pr)) / sp);
     q = { ...q, ...r.joints }; end = r.endMm; lastErr = nrm(sub(T, end));
     const e = sub(end, root), U = ax === 0 && u ? u : (() => { const v = sub(T, root), n = nrm(v); return v.map(x => x / n); })();
     len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(sub(T, root)))); u = U;
   }
-  return { q, end, travel: nrm(sub(end, e0)), fastest, waited };
+  return { q, end, travel: nrm(sub(end, e0)), fastest, waited, widest };
 }
 
-test('S on the right arm across the chest waits instead of throwing the hand sideways; from the start it still folds the arm', () => {
+// 20 November 2026, evening (LIMBFREE; the owner: "The limb should never get stuck"): restated. Across the chest the
+// joints cannot bring the hand in along its line (the upper arm's own turn is not theirs to change), and S used to
+// wait there (it moved the hand under 3 mm). Now S curls the hand in as the joints allow: slowly, never faster than the
+// keys, its sideways part never more than keyLatFar x the keys' way a frame.
+test('S on the right arm across the chest curls the hand in slowly instead of throwing it sideways (or waiting); from the start it still folds the arm', () => {
   // the hunt's pose: raised 43, across 31, the elbow nearly straight
   const crossed = project({ ...start, r_shoulder_flex: 43, r_shoulder_abd: -31, r_elbow_flex: 12 });
   const e0 = G.limbPoint(rig, asDrawn(crossed), 'rightArm', 'end');
@@ -300,9 +331,11 @@ test('S on the right arm across the chest waits instead of throwing the hand sid
   const raw = G.solveLimb({ rig, segmentsFor: asDrawn, targets: crossed, limb: 'rightArm', targetMm: e0.map((v, k) => v + toRoot[k] / n * 20), limits, opts: G.LIMB_HOLD_TRACK, project });
   const rawMove = Math.hypot(...raw.endMm.map((v, k) => v - e0[k]));
   assert.ok(rawMove > 2.5 * 10, `the solve alone moves the hand ${rawMove.toFixed(0)} mm for a 10 mm frame of the keys`);
-  const s = driveKeys('rightArm', crossed, 0, -1, 8);
-  assert.ok(s.travel < 3, `across the chest S moves the hand ${s.travel.toFixed(1)} mm`);
-  assert.equal(s.waited, 8);
+  const s = driveKeys('rightArm', crossed, 0, -1, 30);
+  const rIn = Math.hypot(...s.end.map((v, k) => v - root[k]));
+  assert.ok(rIn < n - 30, `across the chest S brings the hand ${(n - rIn).toFixed(0)} mm nearer the shoulder in half a second`);
+  assert.ok(s.fastest <= LIMB_KEYS.view.keyMost + 0.02, `never faster than the keys: ${s.fastest.toFixed(2)} x`);
+  assert.ok(s.widest <= LIMB_KEYS.view.keyLatFar + 0.02, `sideways at most ${s.widest.toFixed(2)} x the keys' way a frame`);
   // from the start posture S still brings the hand all the way in, never faster than keyMost x the keys
   const f = driveKeys('rightArm', start, 0, -1, 50);
   assert.ok(f.travel > 380, `from the start S brings the hand ${f.travel.toFixed(0)} mm in`);
@@ -311,6 +344,83 @@ test('S on the right arm across the chest waits instead of throwing the hand sid
   // and D still swings the crossed arm back out the whole way
   const d = driveKeys('rightArm', crossed, 1, 0, 50);
   assert.ok(d.travel > 400, `D swings it ${d.travel.toFixed(0)} mm`);
+});
+
+// ---- 20 November 2026, evening (LIMBFREE; the owner, Message 207: "there are ranges of motions where the limbs get
+// stuck. The limb should never get stuck") -------------------------------------------------------------------------------
+const KEYS4 = [['W', 0, 1], ['S', 0, -1], ['A', -1, 0], ['D', 1, 0]];
+const moves = (limb, q, frames = 6) => Object.fromEntries(KEYS4.map(([k, ax, az]) => [k, driveKeys(limb, q, ax, az, frames).travel]));
+test('no pose of a leg or the right arm is a trap: from every pose on a grid through their ranges at least two keys move the end', () => {
+  // (the grid inside the ranges the keys' solve works in, the combined-range rule applied; a corner of the range, a
+  // joint at its end on two axes, leaves two keys; one key or none was a trap: 3 such poses of the right arm and 5 of
+  // each leg on a finer grid before this change, among them the arm straight up beside the head and a straight leg
+  // lifted high and out to the side)
+  const grids = {
+    rightArm: [['r_shoulder_flex', [-60, 0, 60, 120, 150, 180]], ['r_shoulder_abd', [-45, 0, 45, 135, 180]], ['r_elbow_flex', [0, 60, 145]]],
+    rightLeg: [['hip_flex_R', [-30, 30, 90, 110]], ['hip_abd_R', [-30, 0, 45]], ['knee_ext_R', [-120, -60, 0]]],
+    leftLeg: [['hip_flex_L', [-30, 30, 90, 110]], ['hip_abd_L', [-30, 0, 45]], ['knee_ext_L', [-120, -60, 0]]]
+  };
+  const inLim = (id, v) => Math.max(limits[id][0], Math.min(limits[id][1], v));
+  for (const [limb, [[a, av], [b, bv], [c, cv]]] of Object.entries(grids)) {
+    const seen = new Set();
+    for (const x of av) for (const y of bv) for (const z of cv) {
+      const q = project({ ...start, [a]: inLim(a, x), [b]: inLim(b, y), [c]: inLim(c, z) }), key = [a, b, c].map(id => q[id].toFixed(1)).join(',');
+      if (seen.has(key)) continue; seen.add(key);
+      const m = moves(limb, q), works = Object.values(m).filter(t => t >= 3).length;
+      assert.ok(works >= 2, `${limb} at ${key}: only ${works} key(s) move it ${JSON.stringify(Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v)])))}`);
+    }
+  }
+});
+
+test('the traps found in play: the arm straight up beside the head, a leg lifted to the top of its sideways range', () => {
+  // the right arm raised straight up by the look (forward 150, no sideways lift: across the head is not allowed):
+  // S used to wait (its line cannot be kept) and A could not move it; now S draws the hand in
+  const up = project({ ...start, r_shoulder_flex: 150, r_shoulder_abd: 0, r_elbow_flex: 5 });
+  const mu = moves('rightArm', up, 12);
+  assert.ok(mu.S > 10 && mu.D > 50, `raised arm: S ${mu.S.toFixed(0)} mm, D ${mu.D.toFixed(0)} mm`);
+  // a straight right leg lifted 100 and out to its sideways end: A brings it back in (the thighs' parting used to stop
+  // the drawn leg a few degrees before the end, and the solve's probe of that joint came out zero)
+  const hi = project({ ...start, hip_flex_R: 100, hip_abd_R: 45, knee_ext_R: 0 });
+  const mh = moves('rightLeg', hi, 12);
+  assert.ok(mh.A > 40 && mh.S > 10, `lifted leg: A ${mh.A.toFixed(0)} mm, S ${mh.S.toFixed(0)} mm`);
+  // a leg stretched back and out to the combined-range end (sideways 30 at -30): A brings it in
+  const back = project({ ...start, hip_flex_R: -30, hip_abd_R: 45, knee_ext_R: 0 });
+  assert.ok(near(back.hip_abd_R, 30, 1e-9));
+  assert.ok(moves('rightLeg', back, 12).A > 40, 'stretched back: A moves it');
+});
+
+test('the drawn sideways lift of a raised thigh rises with the angle all the way to its end (no stretch where nothing moves)', () => {
+  for (const turn of [25, -65]) for (const flex of [70, 100, 120]) {
+    let prev = -Infinity;
+    for (let abd = 30; abd <= 45 + 1e-9; abd += 0.5) {
+      const A = project({ ...start, leg_turn_R: turn, hip_flex_R: flex, hip_abd_R: abd }), drawn = abd + body.legTurnState(rig, A).R.abdExtra;
+      assert.ok(drawn <= 45 + 1e-9, 'never past the hip\'s end');
+      assert.ok(drawn > prev + 0.05, `turn ${turn}, thigh ${flex}: the drawn lift at ${abd} (${drawn.toFixed(2)}) is above the one before (${prev.toFixed(2)})`);
+      prev = drawn;
+    }
+  }
+});
+
+test('the limb solve feels a joint that is at the end the drawn pose takes: its probe goes the other way', () => {
+  // the right hip lifted sideways to its combined-range end with the thigh back: a probe further out moves nothing
+  const q = project({ ...start, hip_flex_R: -30, hip_abd_R: 30 });
+  const e = G.limbPoint(rig, asDrawn(q), 'rightLeg', 'end'), e1 = G.limbPoint(rig, asDrawn({ ...q, hip_abd_R: 30.5 }), 'rightLeg', 'end');
+  assert.ok(Math.hypot(...e1.map((v, k) => v - e[k])) < 1e-6, 'the pose does not take more sideways lift there');
+  // a target toward the middle (+x is the body's left), with the thigh's forward angle held where it is so that only
+  // the sideways joint can answer: the solve brings the leg in (its probe used to go outward, find nothing, and leave
+  // that joint out of every step)
+  const pinned = { ...limits, hip_flex_R: [-30, -30] };
+  const r = G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb: 'rightLeg', targetMm: [e[0] + 15, e[1], e[2]], limits: pinned, opts: G.LIMB_HOLD_TRACK, project });
+  assert.ok(r.joints.hip_abd_R < 29.6, `the sideways lift came down to ${r.joints.hip_abd_R.toFixed(1)}`);
+  // a thigh lifted to its end (the straight knee holds it at 101 degrees; past that the drawn knee would bend): the
+  // probe past the end showed the drawn knee's bend, a move the step can never make, and the solve pushed the thigh on
+  // up instead of down. Now it brings the foot back to where it started (the rejoin's reach solve, LIMB_HOLD_REACH).
+  const lifted = project({ ...start, hip_flex_L: 110, hip_abd_L: -5 }), home = G.limbPoint(rig, asDrawn(start), 'leftLeg', 'end');
+  assert.ok(lifted.hip_flex_L > 100 && lifted.hip_flex_L < 102, `the thigh stops at ${lifted.hip_flex_L.toFixed(1)}`);
+  const back = G.solveLimb({ rig, segmentsFor: asDrawn, targets: lifted, limb: 'leftLeg', targetMm: home, limits, opts: G.LIMB_HOLD_REACH, project });
+  assert.ok(back.errorMm < 20 && back.joints.hip_flex_L < 10, `from the lifted end the foot comes back within ${back.errorMm.toFixed(0)} mm (thigh ${back.joints.hip_flex_L.toFixed(0)})`);
+  const moved = Math.hypot(...r.endMm.map((v, k) => v - e[k]));
+  assert.ok(moved > 3 && r.endMm[0] > e[0], `the ankle moved ${moved.toFixed(1)} mm toward the middle`);
 });
 
 // ---- a visible answer for every control (19 November 2026) -----------------------------------------------------------

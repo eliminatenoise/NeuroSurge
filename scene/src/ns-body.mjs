@@ -129,7 +129,7 @@ const lim = (lo, hi) => Object.freeze([lo, hi]);
  *     spread 20 at the index MCP).
  * They are not measured on this reference body or on the player. The facial ids are display amplitudes (-20..20, or
  * 0..20 where the opposite movement returns to rest), not joint rotations: the face-muscle packet colours the muscles,
- * and no face mesh changes shape (see faceDisplayLevels). hyoid_elev is a display amplitude 0..20 that lifts the hyoid
+ * and since 20 November 2026 the scene moves them by these levels (ns-face-move; see faceDisplayLevels). hyoid_elev is a display amplitude 0..20 that lifts the hyoid
  * bone up to 15 mm (HYOID_LIFT), the usual adult hyoid excursion in a swallow.
  */
 export const BODY_JOINT_LIMITS = Object.freeze({
@@ -2062,8 +2062,8 @@ export function clampBodyJointTargets(targets = {}) {
 }
 
 /** Facial display levels -1..1 (target / 20, clamped; R558: negative = the opposite face movement, e.g. a frown for
- * brow_raise). They move no mesh: the face-muscle packet only colours its muscles, so the scene should show them only
- * as labelled, simulated display values. */
+ * brow_raise). They move no joint of the rig; the face-muscle packet colours its muscles by them, and since 20 November
+ * 2026 the scene also moves those muscles (ns-face-move faceShapeWeights: an exaggerated display, not measured). */
 export function faceDisplayLevels(targets = {}) {
   const { applied } = clampBodyJointTargets(targets);
   return Object.fromEntries(FACE_DISPLAY_IDS.map(id => [id, applied[id] / FACE_FULL_DEG]));
@@ -2169,6 +2169,13 @@ export const JOINT_COUPLINGS = Object.freeze({
 /** The legs' turn as drawn (LEG_TURN, JOINT_COUPLINGS): per side { foot, shank, kneeSide, hipRot, abdExtra, headingOut }
  * in degrees. hipRot is the thigh's whole turn (hip_rot plus the turn's thigh share plus the high-flexion coupling),
  * kept inside the hip's range under the combined-range rule; abdExtra the thighs' parting plus the coupling. */
+/* 20 November 2026, evening (LIMBFREE; the owner: "The limb should never get stuck"): the thighs' parting used to be cut
+ * off where it met the hip's sideways limit (min(spread, limit - lift)), so over the last few degrees of a lifted
+ * thigh's sideways range the drawn leg did not move at all while the angle changed. The keys' joint solve, which feels
+ * its way by small changes, found no way back from there (A could not bring a raised leg in again). The parting now
+ * gives way smoothly toward the limit (spreadIn): at most `raw`, never past the limit, and the drawn lift still rises
+ * with the angle all the way. Same sizes away from the limit. */
+const spreadIn = (raw, room) => (raw > 0 && room > 0 ? raw * smooth01(room / (2 * raw)) : 0);
 export function legTurnState(rig, A) {
   const out = {}, cp = JOINT_COUPLINGS;
   for (const S of ['L', 'R']) {
@@ -2176,7 +2183,7 @@ export function legTurnState(rig, A) {
     const high = smooth01((A[`hip_flex_${S}`] - cp.hipFrom) / (cp.hipTo - cp.hipFrom));
     const hipRot = clamp(own + t.thigh + cp.hipOutDeg * high, Math.min(r[0], own), Math.max(r[1], own));
     const shank = t.shank - cp.kneeUnlockDeg * smooth01(kneeFlex / cp.kneeUnlockOverDeg);
-    out[S] = { foot: t.foot, shank, kneeSide: LEG_TURN.kneeSidePerShankTurn * t.shank, hipRot, abdExtra: Math.min(cp.hipSpreadDeg * high, Math.max(0, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`])),
+    out[S] = { foot: t.foot, shank, kneeSide: LEG_TURN.kneeSidePerShankTurn * t.shank, hipRot, spread: cp.hipSpreadDeg * high, abdExtra: spreadIn(cp.hipSpreadDeg * high, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`]),
       headingOut: LEG_TURN.restToeOutDeg + hipRot + shank + t.foot };
   }
   if (out.L.headingOut < 0 || out.R.headingOut < 0) {
@@ -2184,7 +2191,7 @@ export function legTurnState(rig, A) {
     if (g) {
       const part = legTurnPartDeg(g, { headingOutL: out.L.headingOut, headingOutR: out.R.headingOut, abdL: A.hip_abd_L + out.L.abdExtra, abdR: A.hip_abd_R + out.R.abdExtra,
         kneeFlexL: -A.knee_ext_L, kneeFlexR: -A.knee_ext_R, hipFlexL: A.hip_flex_L, hipFlexR: A.hip_flex_R });
-      if (part > 0) for (const S of ['L', 'R']) out[S].abdExtra = Math.min(out[S].abdExtra + part, Math.max(out[S].abdExtra, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`]));
+      if (part > 0) for (const S of ['L', 'R']) out[S].abdExtra = spreadIn(out[S].spread + part, BODY_JOINT_LIMITS[`hip_abd_${S}`][1] - A[`hip_abd_${S}`]);
     }
   }
   return out;
@@ -5048,6 +5055,43 @@ export function openRectusSheath(meshesById, rule = RECTUS_SHEATH_OPENING) {
     report.push({ id: r.sheath, name: r.sheathName, over: r.rectus, triangles: ix.length / 3, notDrawn: dropped, ...(keepMid === null ? {} : { midlineKept: midline }) });
   }
   return { meshesById: out, report };
+}
+
+/**
+ * 20 November 2026 (the owner, Message 200: "Let's ensure that the human neck looks natural. Right now it looks like
+ * there's a scarf around the neck."). The scarf was the PLATYSMA, the thin sheet that runs in the skin of the neck from
+ * the lower jaw over the collar bones onto the upper chest. In the source model it is one smooth sheet; in the game's
+ * reclined start posture the neck is bent forward 40 of its 50 degrees (BODY_POSTURES.open), the chin comes down
+ * toward the chest and the front of the neck is a third of its height: the sheet, carried by the jaw at its top and by
+ * the chest at its foot, folds into a crumpled band along the jaw and a thicker one round the root of the neck, over
+ * the sternocleidomastoids and the strap muscles, in a lighter tone than the muscles round it. Seen on both bodies and
+ * from outside, at every look; with the neck straight (a check only) it is a smooth sheet again. A sheet squashed to a
+ * third of its height has to fold whatever its skin weights, and a cut-out middle would be a torn sheet (Message 183).
+ * Like an anatomical ecorche, which takes the platysma off with the skin, the bodies are now drawn WITHOUT it
+ * (drawn: false): the neck shows the two sternocleidomastoids running down to the breastbone and the strap muscles
+ * between them. The platysma stays in the rig, the posture bake, the skin records and the movement map (it is still
+ * named with the mouth's corner and lower lip, whose other muscles light up); only no triangle of it is handed to the
+ * scene, which skips a mesh without triangles (no record, no mirror twin, no pick, no beam end). A display choice, told
+ * honestly; no licensed mesh file is changed.
+ */
+export const NECK_SHEET = Object.freeze({ drawn: false,
+  rows: Object.freeze([Object.freeze({ id: 'zf-platysma-r', name: 'right platysma' }), Object.freeze({ id: 'zf-platysma-l', name: 'left platysma' })]),
+  basis: 'display choice: the platysma (a sheet in the skin of the neck) is not drawn; the bowed start posture folds it into a band round the neck' });
+/** NECK_SHEET: the meshes handed to the scene, with the platysma's triangles left out when it is not drawn (pure; the
+ * input map and its meshes are not changed). Returns { meshesById (a new Map, or the input when nothing changes),
+ * leftOut: [ids] }. */
+export function leaveOutNeckSheet(meshesById, rule = NECK_SHEET) {
+  if (!(meshesById instanceof Map) || !rule || rule.drawn !== false) return { meshesById, leftOut: [] };
+  let out = null;
+  const leftOut = [];
+  for (const r of rule.rows) {
+    const m = meshesById.get(r.id);
+    if (!m || !m.indices || !m.indices.length) continue;
+    if (!out) out = new Map(meshesById);
+    out.set(r.id, { ...m, indices: new Uint32Array(0), faceCount: 0, displayCut: rule.basis });
+    leftOut.push(r.id);
+  }
+  return { meshesById: out || meshesById, leftOut };
 }
 
 /**
