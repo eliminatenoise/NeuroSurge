@@ -107,7 +107,12 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => document.activeElement.id),'ns-canvas');
   await page.keyboard.press('f');
-  await page.getByRole('textbox',{name:'Move the body'}).waitFor();
+  const field = page.getByRole('textbox',{name:'Move the body'});
+  await field.fill('Replay a forward jump');
+  await field.press('Enter');
+  await panel.locator('[data-motion-info]').filter({hasText:'13_11'}).waitFor();
+  assert.equal(await picker.inputValue(),'13_11');
+  assert.equal(await field.isVisible(),false);
   await page.keyboard.press('Escape');
   const choose = id => page.evaluate(clipId => document.dispatchEvent(
     new CustomEvent('ns-open-spatial-replay',{detail:{clipId}})),id);

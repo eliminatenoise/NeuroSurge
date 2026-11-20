@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "local-2026-11-20-body-59-wrist-models",
+  "version": "local-2026-11-20-body-59-whole-body-motion",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
@@ -69,5 +69,18 @@
   },
   "opening_brain_compass": "In the opening landscape view, the brain’s upward orbit arrow starts inside the picture. The world anchors follow the existing carry placement after a move. Controls turn the simulated brain without moving the camera.",
   "outside_compasses": "When E settles, the green and grey 3D orbit tips keep separate pick areas. Obstructed tips also clear the projected motor strip in the tested entry views. Looking around or moving an object can later bring world controls into alignment.",
-  "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body."
+  "opening_mirror_compass": "In the opening landscape eye view, a green upper tip that would fall above the screen finds a clear spot near the top of the mirror body. The other three green controls stay on their usual frame. The green vertical arrows tilt the simulated mirror body.",
+  "recorded_whole_body": {
+    "source": "Carnegie Mellon Graphics Lab Motion Capture Database",
+    "trials": [
+      "02_06",
+      "13_11",
+      "132_23"
+    ],
+    "positions_per_frame": 41,
+    "lab_units": "mm",
+    "source_rate_hz": 120,
+    "display_rate_hz": 30,
+    "shorthand_scope": "F opens named recorded actions using an explicit replay request."
+  }
 }

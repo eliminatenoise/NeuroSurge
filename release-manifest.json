@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "local-2026-11-20-body-59-limb-camera",
+  "version": "local-2026-11-20-body-59-whole-body-motion",
   "experimental": true,
-  "source": "NeuroSurge draft PR 2 at 2c278dff35630aa5740e632bc04a1e2cc5ea6a5a with opt-in projected arm and knee camera controls. The recorded wrist, model comparisons and simulated pathways remain available.",
+  "source": "NeuroSurge draft PR 2 at 2c278dff35630aa5740e632bc04a1e2cc5ea6a5a; four projected camera controls and three CMU whole-body recordings opened from M or by an F replay command.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -22,18 +22,18 @@
     },
     {
       "path": "ACTIVITY-MAP.md",
-      "bytes": 12198,
-      "sha256": "82f1ab083e5fdbcb310e50f3100b586b71f9c9d992f0037ecdae8020ff522c23"
+      "bytes": 14033,
+      "sha256": "5cf4bc8999c7dddbe98151828c5bdcc30ef82170c8c44f082f5c049193e45355"
     },
     {
       "path": "ASSET-ATTRIBUTION-INDEX.md",
-      "bytes": 73060,
-      "sha256": "880466e4414ae7f164bdf6d07f377fc872e35f750badd676899fd9c6ba5dea9e"
+      "bytes": 73517,
+      "sha256": "b548387cdf0380ee1d5a43f0b4a7a315499076df97163aecd762e6f60d217b50"
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 38642,
-      "sha256": "b2bdf2977e60dd6b4ed88c390de96e15faaa163de8bb7f361c665d36506f09d2"
+      "bytes": 39215,
+      "sha256": "5cb17ced64ce6858109be1ff7b9b7f0398eb510ee61641e7cfc41d2042955927"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,8 +52,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 14860,
-      "sha256": "adb97aca44754c966209902e9b9fda957b4ec9d987070e78b8846a79cb2ad072"
+      "bytes": 14996,
+      "sha256": "7edabb903e67cc6093c59eea6c550ce16295266d1f63990796fff57d107c0c43"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,23 +62,43 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 51671,
-      "sha256": "5ca78885efed9f1ab03b0a8bde3efacf502e1a8719015952b8eedf26c1b99485"
+      "bytes": 52044,
+      "sha256": "0272a053477612db272a3c95941b1870d40f17005e6b1ce04f3840fcc19b3ab0"
     },
     {
       "path": "README.md",
-      "bytes": 24360,
-      "sha256": "7f4879921604fd2b91529f4642a523af680e1f63c1e2fdced00cd0cd2558392d"
+      "bytes": 24476,
+      "sha256": "9be7c35ca5a3bc522527f9ac124691947327a5ecb37ade7b3f2bf46e1953216d"
     },
     {
       "path": "START.html",
-      "bytes": 4086,
-      "sha256": "2427e57a784faf66084c29e8a2c6b34974c2a88cea983a53d0caee06f976e408"
+      "bytes": 4091,
+      "sha256": "c577c3a4c9ce4ddca92f32dc72294aa3972b0114f5d55826b5521f97f34bacbf"
+    },
+    {
+      "path": "assets/spatial-motion/02_06.json",
+      "bytes": 463001,
+      "sha256": "58452784df287e2b78b05097fad6c1c9f743ddc55178da588d6089d0cb5cbe95"
+    },
+    {
+      "path": "assets/spatial-motion/132_23.json",
+      "bytes": 168612,
+      "sha256": "803ad7ed3c27062a356c109a23ff17ad4674c028756132377fc3b90998593a25"
+    },
+    {
+      "path": "assets/spatial-motion/13_11.json",
+      "bytes": 91067,
+      "sha256": "b06969245d25e3d76521223cf3994133c2416a62472ed6638478d0db3f45ecd8"
+    },
+    {
+      "path": "assets/spatial-motion/manifest.json",
+      "bytes": 1764,
+      "sha256": "ef9c18098f7a2a46402538022915e733df948252a2a84745bda05a6adc473b3d"
     },
     {
       "path": "index.html",
-      "bytes": 1049,
-      "sha256": "f36e6596381eaf3a96f6b54da3b3bcd05539a73926c135abdac9ab6793248e37"
+      "bytes": 1054,
+      "sha256": "34457080d3106bb24b2dde8ccc4dbfb2dadfe2b818cc9ce2f9d1d78dcec92407"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3827,8 +3847,8 @@
     },
     {
       "path": "scene/example/activity-map.css",
-      "bytes": 6256,
-      "sha256": "c8db79b1b202e6edbeeb83957343c16348fb16a48379f53af31d81ad8ca3364a"
+      "bytes": 8035,
+      "sha256": "531f7057dd247a99c35b0f9f31366dd175ffbae0ab75ae356c1f0e278b9682ce"
     },
     {
       "path": "scene/example/assembly.css",
@@ -3947,8 +3967,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 12564,
-      "sha256": "8ff929377a1e3dd743f6bafa14c608fd49fc643287238e8ee9886efcff265fa4"
+      "bytes": 12977,
+      "sha256": "0a11a78f51992e90c5a0b8105fa5afb2961d6d79c7fd03a1115b53842d0d9273"
     },
     {
       "path": "scene/example/quiet.css",
@@ -3962,8 +3982,8 @@
     },
     {
       "path": "scene/src/activity/map.mjs",
-      "bytes": 11882,
-      "sha256": "efd0fc6666d0d163f86bcc0adcef6ea9709960c2da8dfd551ab841bdd2057927"
+      "bytes": 12963,
+      "sha256": "2a103c78ceb1058ec8ffb8a0344cb8094dd25e3b846f037516097fb159740ba5"
     },
     {
       "path": "scene/src/activity/paired-input.mjs",
@@ -4029,6 +4049,26 @@
       "path": "scene/src/activity/replay.mjs",
       "bytes": 3658,
       "sha256": "77a012fcb6f36487b1f21b327264ee2511374c9d6cc05891d100152af9a90e8b"
+    },
+    {
+      "path": "scene/src/activity/spatial-panel.mjs",
+      "bytes": 7483,
+      "sha256": "f2a4714dd5518b59f36238cdbd0a6522bd7f88a5bb84d4ec0d1fdcd3c7922469"
+    },
+    {
+      "path": "scene/src/activity/spatial-recording.mjs",
+      "bytes": 6475,
+      "sha256": "f91dd027bc89863a7496b572ecca668092e3a911083a82bae87c512a79acb700"
+    },
+    {
+      "path": "scene/src/activity/spatial-template.mjs",
+      "bytes": 3225,
+      "sha256": "02ef0b3bde2d1f539194d360b199dcf3c0dd7b0264d42f8ec21046648f52e7e1"
+    },
+    {
+      "path": "scene/src/activity/spatial-view.mjs",
+      "bytes": 2660,
+      "sha256": "c49597147addee2ed5cb3973af4092c8e97ecc77f5505ce13d1a337f1dac6015"
     },
     {
       "path": "scene/src/activity/temporal-r1.js",
@@ -4137,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-action-chat.mjs",
-      "bytes": 6306,
-      "sha256": "48bad2687687537d751950413eb2f8aee5b4dfb190b36c9d14fe54b20b0b9a0a"
+      "bytes": 7208,
+      "sha256": "c03c5802c34a6a94d17c2c4d27819798fdd0fafd67cca6f299e40e8da62f9a94"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -4442,8 +4482,8 @@
     },
     {
       "path": "tests/action-chat.test.mjs",
-      "bytes": 1257,
-      "sha256": "ce7e81d2e4a67384187875d65c4269c0da2e75a4ac1c853f570e0a2369c17921"
+      "bytes": 1765,
+      "sha256": "78d4085a9ec8ef639b08b7e808691685e795512f6bb1f5b597b55ddee836bb28"
     },
     {
       "path": "tests/activity-effect.test.mjs",
@@ -4599,6 +4639,11 @@
       "path": "tests/browser-space-aim.mjs",
       "bytes": 7348,
       "sha256": "1b0ed7be630586fb97791c5616ad4eecc70f66ea644863b047ac1c74e43c6f74"
+    },
+    {
+      "path": "tests/browser-spatial-replay.mjs",
+      "bytes": 7630,
+      "sha256": "6da3007e9cc5c876370060e5ae33c8242ee17df5133eaf5843cb905553a50bd7"
     },
     {
       "path": "tests/browser-startup.mjs",
@@ -4869,6 +4914,11 @@
       "path": "tests/space-gesture.test.mjs",
       "bytes": 11209,
       "sha256": "e2da75f97f45d2c44875930a1d419a15c5fcb3b116921fc7e19585197cdad12e"
+    },
+    {
+      "path": "tests/spatial-replay.test.mjs",
+      "bytes": 3861,
+      "sha256": "3125724be7aa770b46d7b4acb5ebb7751af275b75fc2d76bff788586de1ebefb"
     },
     {
       "path": "tests/spine.test.mjs",
