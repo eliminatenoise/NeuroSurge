@@ -34,6 +34,20 @@ export function resolveAction(phrase, bodyMap) {
   return null;
 }
 
+// These commands open named recordings from the CMU catalogue. They share the
+// input box with avatar commands and go to the recording viewer's own clock.
+const recordings = new Map([
+  ['bend, scoop and lift', '02_06'], ['bend scoop and lift', '02_06'], ['scoop and lift', '02_06'],
+  ['forward jump', '13_11'], ['jump forward', '13_11'],
+  ['left-foot hop', '132_23'], ['left foot hop', '132_23'], ['hop on left foot', '132_23']
+]);
+
+export function resolveReplay(phrase) {
+  if (typeof phrase !== 'string' || phrase.length > 160) return null;
+  const match = /^replay (?:a |the )?(.+)$/.exec(normalize(phrase));
+  return match ? recordings.get(match[1]) || null : null;
+}
+
 export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume, getBodyMap }) {
   const win = dialog.ownerDocument.defaultView;
   const field = dialog.querySelector('input');
@@ -93,6 +107,12 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
 
   function submit(event) {
     event.preventDefault();
+    const clipId = resolveReplay(field.value);
+    if (clipId) {
+      dismiss();
+      dialog.ownerDocument.dispatchEvent(new win.CustomEvent('ns-open-spatial-replay', {bubbles:true, detail:{clipId}}));
+      return;
+    }
     const action = resolveAction(field.value, getBodyMap());
     if (!action) {
       message.textContent = 'Try one movement with a side, such as “Bend my right knee”.';
