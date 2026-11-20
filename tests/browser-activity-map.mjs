@@ -104,8 +104,15 @@ try {
   await gameButton.click();
   const region = dialog.getByLabel('Body region');
   await region.selectOption('rh_shoulder');
+  assert.equal(await dialog.locator('[data-move]').isDisabled(),false);
+  assert.deepEqual(await dialog.locator('[data-action] option').evaluateAll(opts=>opts.map(o=>o.value)),[
+    'shoulder_flexion','shoulder_extension','shoulder_abduction','shoulder_adduction'
+  ]);
+  await dialog.locator('[data-action]').selectOption('shoulder_flexion');
+  assert.match(await dialog.locator('[data-muscles]').innerText(), /Raise left arm forward/);
+  await region.selectOption('rh_tongue');
   assert.equal(await dialog.locator('[data-move]').isDisabled(),true);
-  assert.match(await dialog.locator('[data-muscles]').innerText(), /W\/A\/S\/D/);
+  assert.match(await dialog.locator('[data-muscles]').innerText(), /tongue/i);
   await region.selectOption('lh_jaw');
   assert.match(await dialog.locator('[data-motor]').innerText(), /brainstem → cranial/);
   await region.selectOption('rh_knee');

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "draft-2026-11-20-body-61-language-and-hand",
+  "version": "draft-2026-11-20-body-61-position-forecasts",
   "experimental": true,
-  "source": "Body update 61 (b92902515d705470801e034651d82c2b37dc3f4f) plus the measured-movement and camera integration from draft 28467f44d15969540102569680daeba25318e70e.",
+  "source": "Body Update 61 from b929025 and the accepted 508f3f6 camera merge. The draft also includes the real 72-unit W-track model from 0f3b3ab and public instructor-word wrist model from d32fd9f.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -22,8 +22,8 @@
     },
     {
       "path": "ACTIVITY-MAP.md",
-      "bytes": 14799,
-      "sha256": "a26bed9e8b943f27c8c40d728e382f952bc1a2fe78f8428d39cf6d6a887c1eba"
+      "bytes": 16364,
+      "sha256": "726bb97fb5bd9984b50961be30bb2af483028883118c32e5f112f1deeeb2ab8b"
     },
     {
       "path": "ASSET-ATTRIBUTION-INDEX.md",
@@ -32,8 +32,8 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 39761,
-      "sha256": "24c9e32cfa343cef60f33fd6f5264b3aed763f8946942f22ef81587456855bbf"
+      "bytes": 40355,
+      "sha256": "e1f5154862b0795c23f84eaca343bfdb1536ffc833d6f355e5e23532e04c7c7a"
     },
     {
       "path": "DESIGN-DECISIONS.md",
@@ -52,8 +52,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 15523,
-      "sha256": "3e2f7bb1ae24a50efbe90fae34a1bcebe5ec80eecb587e3a1456aa6b542ce14c"
+      "bytes": 15645,
+      "sha256": "d34ba0f9395e74ea3798b78b197198e0ea8f16e35067cb075489928dfddc8c42"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,18 +62,18 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 54536,
-      "sha256": "73ccb4ded8d50817052dbb676ca3ba4550b5ce1a8d94ed10d9bc3f2a4366fed1"
+      "bytes": 55251,
+      "sha256": "e8a6ae62f04b38d85a9e268e9fcac09450e3f3a89b699b712bcfa94e41b802e0"
     },
     {
       "path": "README.md",
-      "bytes": 25149,
-      "sha256": "ff929db9e91d4baa86501e52fecfd388d50536392176c0926c395fc3572ad269"
+      "bytes": 25565,
+      "sha256": "ff83e7cdadb713f39a1b32d30226dcc9173974a03c2dcc5a63d1676beb4beab5"
     },
     {
       "path": "START.html",
-      "bytes": 4091,
-      "sha256": "0c6d7fa930d29049e4ba89d6dfb21de2ce60e337ca9c1b920a5ab3472ed7c131"
+      "bytes": 4092,
+      "sha256": "923e674976657d8012a770e3360ed5294d08fd1b281936d128c5bcf5f1a3f206"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -82,8 +82,8 @@
     },
     {
       "path": "assets/hand-search/asset-index.json",
-      "bytes": 344,
-      "sha256": "2aaf48fa3f5163f233e13ffd1b8387b81e39c005381fd51122120d851fee4784"
+      "bytes": 437,
+      "sha256": "686818e6910a52796c0a6f0d01e18e0bc9955b43a7f34e27b1e71b0cded80e07"
     },
     {
       "path": "assets/hand-search/catalogue.json",
@@ -111,6 +111,11 @@
       "sha256": "1973671d8c9221afe24d311cc2df9f3eec6f4f7826e1af913cd0cef0dccbb261"
     },
     {
+      "path": "assets/hand-search/wrist-forecast-fit.json",
+      "bytes": 3309,
+      "sha256": "2cc76edab06641ef8bf1fb2b2a359d1c0914c438a6749f9fffe2034debb3662d"
+    },
+    {
       "path": "assets/spatial-motion/02_06.json",
       "bytes": 463001,
       "sha256": "58452784df287e2b78b05097fad6c1c9f743ddc55178da588d6089d0cb5cbe95"
@@ -132,8 +137,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 1054,
-      "sha256": "d8de036b9dd73934500a08a3c91e0234778d790951d00e22a539d61cdc60eaf8"
+      "bytes": 1055,
+      "sha256": "68c2bf9bee0b2387da271c6f0114152fa1eb4af16cc3502fd2b14e3ccdbda1ef"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3882,8 +3887,8 @@
     },
     {
       "path": "scene/example/activity-map.css",
-      "bytes": 8035,
-      "sha256": "531f7057dd247a99c35b0f9f31366dd175ffbae0ab75ae356c1f0e278b9682ce"
+      "bytes": 8810,
+      "sha256": "5cce63ed7c4042a7f598c00bd14edfa2f68c5a20da7ae5c3c92d5139eafd62a7"
     },
     {
       "path": "scene/example/assembly.css",
@@ -4002,8 +4007,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 13507,
-      "sha256": "3777654a325c557c140b0656c8675fc604faafb488e56402295ee1f040834e2f"
+      "bytes": 15196,
+      "sha256": "1919da9eb9aecf22a8a24114319efbf8e913a5372e5aaa4590ea97920ac679c3"
     },
     {
       "path": "scene/example/quiet.css",
@@ -4017,8 +4022,8 @@
     },
     {
       "path": "scene/src/activity/map.mjs",
-      "bytes": 13954,
-      "sha256": "27e1d0c2883c752e9d881be79f6de5c44ff3ba5aff55e8510fc144f75c6e0567"
+      "bytes": 15744,
+      "sha256": "bd5ff9a931831b2a37cfe1bf0339b2dc6b10aefb485e285fe1e3ae40041b770d"
     },
     {
       "path": "scene/src/activity/paired-input.mjs",
@@ -4081,6 +4086,11 @@
       "sha256": "564638ed6c3ad41422960b03b0af7036d723c26d7be855123ed790ee34493dc2"
     },
     {
+      "path": "scene/src/activity/read-packet.js",
+      "bytes": 592,
+      "sha256": "b30038401fb44744ca8ea122e24b46f9e81a8c4d0b704cca66a732b5727e7ab9"
+    },
+    {
       "path": "scene/src/activity/replay.mjs",
       "bytes": 3658,
       "sha256": "77a012fcb6f36487b1f21b327264ee2511374c9d6cc05891d100152af9a90e8b"
@@ -4109,6 +4119,36 @@
       "path": "scene/src/activity/temporal-r1.js",
       "bytes": 327074,
       "sha256": "8d5d08586ee2979138c5b86ad504725bf73422baf3228fc26631958bb8c46aff"
+    },
+    {
+      "path": "scene/src/activity/wtrack/NOTICE.md",
+      "bytes": 7416,
+      "sha256": "05912ae5fc63c6708dade8128f83dffbbee498ea644073008f2936743372f4b1"
+    },
+    {
+      "path": "scene/src/activity/wtrack/packet.json",
+      "bytes": 80150,
+      "sha256": "6a683b82dea7260977c3464f7468943d21915633daf4ec81c7ee1a9926965d21"
+    },
+    {
+      "path": "scene/src/activity/wtrack/plane.js",
+      "bytes": 3211,
+      "sha256": "6ad485e573d3ac7174f28706513ebb7fffcd2399a23e9104e80e31e49d211e1c"
+    },
+    {
+      "path": "scene/src/activity/wtrack/ridge.js",
+      "bytes": 1678,
+      "sha256": "b5943c61beea254985e7c88d4343230a38203e03c95b278d3d20f0303687e75c"
+    },
+    {
+      "path": "scene/src/activity/wtrack/style.css",
+      "bytes": 2914,
+      "sha256": "81340c0657566a208fe47e963f13c702f1f5d47d6aec8bbd84437dcb9522a100"
+    },
+    {
+      "path": "scene/src/activity/wtrack/view.js",
+      "bytes": 10469,
+      "sha256": "44d8c9eb8fba02911c83432ec4ffa21f29afa91b37bcebd3f4b0aba48da18314"
     },
     {
       "path": "scene/src/camera.mjs",
@@ -4242,13 +4282,18 @@
     },
     {
       "path": "scene/src/hand-search/hand-search.css",
-      "bytes": 2339,
-      "sha256": "53c868a3d33b94f46a51b983a08ce1dc053e6309c0b9800bde22e38ac5bbc927"
+      "bytes": 3030,
+      "sha256": "08996682e6a19570598129e7dafc208aaf60feab35fe2c352bf6d7bbda35a761"
     },
     {
       "path": "scene/src/hand-search/hand-search.mjs",
-      "bytes": 12286,
-      "sha256": "d38a339ae6fdd56c7437ce51d8e12d993bb7cb638ab3cf15fe4a55e96bb3f1fe"
+      "bytes": 14211,
+      "sha256": "39fe312858a96087c8980d549d2cba04326fb71ed7a84fb89cf19b931b49c65a"
+    },
+    {
+      "path": "scene/src/hand-search/wrist-future.mjs",
+      "bytes": 8272,
+      "sha256": "4beb6221472d9a786a81cdbd17e1f215976d83ebb5e9c1cafed7bc2543d4f25e"
     },
     {
       "path": "scene/src/ns-action-chat.mjs",
@@ -4662,8 +4707,8 @@
     },
     {
       "path": "tests/browser-activity-map.mjs",
-      "bytes": 10153,
-      "sha256": "371e966e60303b46e88ec61c9d0d43c2bdab94d30579a496d2dd7881d1ba22f7"
+      "bytes": 10630,
+      "sha256": "742a03ff7ba1b2c7923d8e82cad6c412f193da36245d411556b31618c66e3baa"
     },
     {
       "path": "tests/browser-arm-collar.mjs",
@@ -4729,6 +4774,11 @@
       "path": "tests/browser-punch-in.mjs",
       "bytes": 13360,
       "sha256": "0ba883d778dfc05cb28f67e76e162ae185a22b73a84207d99aeeb8061a568b23"
+    },
+    {
+      "path": "tests/browser-rat-activity.mjs",
+      "bytes": 7318,
+      "sha256": "c194e387479c45e5e82d41286b13cbf76c816b197e5e4d3cfed079608ac31d41"
     },
     {
       "path": "tests/browser-space-aim.mjs",
@@ -4917,8 +4967,8 @@
     },
     {
       "path": "tests/motion.test.mjs",
-      "bytes": 13984,
-      "sha256": "b0ed2ce669e0a141b13b5a65a56f45f87aaf59aa85e71fe17df7276786b6edc7"
+      "bytes": 15343,
+      "sha256": "f85738993f3e050569ca5dbc38b1b6b85e28aeb5ab83f7976bc94b9d6a50a4db"
     },
     {
       "path": "tests/move-key.test.mjs",
@@ -5064,6 +5114,11 @@
       "path": "tests/wheel-stays.test.mjs",
       "bytes": 2874,
       "sha256": "3d9891aeb798bd0101c3de469de6b880a45a5aa93f7a0ae7e267d8e2cea1db3a"
+    },
+    {
+      "path": "tests/wrist-future.test.mjs",
+      "bytes": 1676,
+      "sha256": "45bb5f8e41c69089ffeec5f3af2099850c343522bfbc6438113cddf78ea924f0"
     },
     {
       "path": "tools/build-assembly-parts.mjs",

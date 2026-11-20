@@ -1,6 +1,6 @@
 {
   "name": "NeuroSurge",
-  "version": "draft-2026-11-20-body-61-language-and-hand",
+  "version": "draft-2026-11-20-body-61-position-forecasts",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
   "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
@@ -91,5 +91,15 @@
       "M then Hand search"
     ],
     "model_source": "fde458e21b4885e4bddd7614ed2c326374c87253"
+  },
+  "recorded_rat_forecast": {
+    "source": "Shin and Jadhav, Single Day W-Track Learning, v0.240511.0307",
+    "view": "M → Rat brain activity",
+    "scope": "Three time-selected training trips in the same rat run. Two fitted ridge calculations use five earlier positions, with or without counts in four time bins from 41 prefrontal and 31 CA1 units.",
+    "model_commit": "0f3b3ab02e812a3f242c139c682fde57caa0df5e"
+  },
+  "one_second_wrist_forecast": {
+    "scope": "Public coefficients with invented or user-entered four-position histories, six prior-word indicators, a separate optional subsequent measurement and aggregate study results.",
+    "study_commit": "d32fd9f57c706fb52ad11c6a10239166e5b25088"
   }
 }
