@@ -1,8 +1,8 @@
 import { SCALP, FOREARM, SCALP_TRACES, FOREARM_TRACES, TRACES, EEG_LIMIT_UV, cueSeconds,
-  loadClip, loadForecast, scalpColour, wristPoint, tracePath } from './replay.mjs';
+  loadClip, scalpColour, wristPoint, tracePath } from './replay.mjs';
 
 const SVG = 'http://www.w3.org/2000/svg';
-const angle = n => n.toFixed(1) + '°';
+import { bindWristForecast } from './forecast-panel.mjs';
 
 function append(parent, tag, text) {
   const el = parent.ownerDocument.createElement(tag);
@@ -114,11 +114,11 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const doc = dialog.ownerDocument, win = doc.defaultView;
   const q = selector => dialog.querySelector(selector);
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
-  const play = q('[data-play]'), model = q('[data-model]'), target = q('[data-target]');
+  const play = q('[data-play]');
   const regions = q('[data-region]'), actions = q('[data-action]');
   const scalpChoice = q('[data-scalp-select]'), forearmChoice = q('[data-emg-select]');
   let updateInstruments;
-  let clip, clipRequest, plots = [], forecast, modelRequested = false, index = 0;
+  let clip, clipRequest, plots = [], index = 0;
   let frame = 0, startTime = 0, startIndex = 0, disposed = false;
   let choices = [];
   const events = new AbortController();
@@ -161,45 +161,9 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     frame = win.requestAnimationFrame(advance);
   }
 
-  function fillForecast(sync = false) {
-    if (!forecast) return;
-    const row = forecast[Number(target.value)];
-    const tbody = q('[data-forecast-table]');
-    tbody.replaceChildren();
-    const both = row.forecasts.combined.meanDegrees;
-    const rows = [
-      ['Encoder · measured', row.measuredDegrees],
-      ['Hold last angle', row.anchorDegrees],
-      ['Wrist history · forecast', row.forecasts.motion.meanDegrees],
-      ['Wrist + EEG · forecast', both],
-      ['Wrist + EEG error (forecast − measured)', both.map((v, a) => v - row.measuredDegrees[a])]
-    ];
-    for (const [name, values] of rows) {
-      const tr = append(tbody, 'tr');
-      append(tr, 'th', name).scope = 'row';
-      for (const value of values) append(tr, 'td', angle(value));
-    }
-    if (sync) {
-      stop();
-      showSample(clip.cueSourceRow - clip.firstSourceRow + Math.round(row.timeSeconds * clip.sourceSampleRateHz));
-    }
-  }
-
-  async function ensureForecast() {
-    if (!model.open || !clip || modelRequested) return;
-    modelRequested = true;
-    q('[data-model-status]').textContent = 'Running the wrist forecast on this device…';
-    try {
-      forecast = await loadForecast(clip);
-      if (disposed) return;
-      for (const [i, row] of forecast.entries()) target.add(new Option('+' + row.timeSeconds.toFixed(2) + ' s', String(i)));
-      q('[data-model-status]').textContent = '';
-      q('[data-comparison]').hidden = false;
-      fillForecast(model.open && !recording.hidden && dialog.open);
-    } catch {
-      if (!disposed) q('[data-model-status]').textContent = 'Forecast unavailable. The recording can still be played.';
-    }
-  }
+  const forecastPanel = bindWristForecast(q('[data-model]'), on, () => {
+    return !disposed && dialog.open && !recording.hidden;
+  }, i => { stop(); showSample(i); });
 
   async function showRecording() {
     if (clipRequest) return;
@@ -221,7 +185,7 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
       q('[data-replay]').hidden = false;
       q('[data-clip-status]').textContent = '';
       showSample(clip.cueSourceRow - clip.firstSourceRow);
-      await ensureForecast();
+      forecastPanel.setClip(clip);
     } catch {
       if (!disposed) q('[data-clip-status]').textContent = 'Recording unavailable or its checksum changed. Game pathways still work.';
     }
@@ -297,8 +261,6 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   for (const button of dialog.querySelectorAll('[data-tab]')) on(button, 'click', () => setTab(button.dataset.tab));
   on(play, 'click', togglePlay);
   on(seek, 'input', () => { showSample(Number(seek.value)); stop(); });
-  on(model, 'toggle', ensureForecast);
-  on(target, 'change', () => fillForecast(true));
   on(regions, 'change', updateActions);
   on(actions, 'change', updateRoute);
   on(q('[data-move]'), 'click', () => close({ type:'muscle', regionId:regions.value, actionId:actions.value }));

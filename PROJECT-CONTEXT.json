@@ -1,9 +1,9 @@
 {
   "name": "NeuroSurge",
-  "version": "local-2026-11-20-body-59-sensor-map",
+  "version": "local-2026-11-20-body-59-wrist-models",
   "status": "local experimental preview for the game lead",
   "model_name": "NeuroTranslate 0.0",
-  "model_scope": "The activity map runs the published wrist pointing temporal R1 forecasts on one offline development trial. Manual game movements and camera pose control have separate inputs.",
+  "model_scope": "The activity map runs the earlier temporal wrist model and three trained wrist transformers on an excluded public example. Six target times align with measured wrist angles and forearm and scalp voltages. Manual game movements and camera pose control have separate inputs.",
   "keyboard_focus": "Focused page controls receive their native keys. Tab and Shift+Tab keep navigation in the Esc instructions. Esc resumes play and returns focus to the game view.",
   "keyboard_area_selection": "Arrow keys follow the motor strip. If an orbit arrow overlaps the selected area, the movement list stays with the area. A number key uses the list, Shift-click presses the area, and an ordinary click uses the orbit arrow.",
   "compass_visibility": "The arrows fade when they cross the projected motor strip. They keep their 3D shape and their click targets. This reduces obstruction in the tested views. Some arrows still cross the strip.",

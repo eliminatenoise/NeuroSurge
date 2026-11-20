@@ -440,3 +440,5 @@ neural-to-muscle decoder.
 ## Recorded wrist activity map
 
 The eight scalp EEG and eight forearm EMG contact excerpts, their four same-site differences, the encoder angles and associated forecast-input features in `inputs/activity/wrist-pointing.json` derive from the CC BY 4.0 *EEG-EMG-WristMotion Dataset*, v3, by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. The accompanying model runner is the project-authored NeuroTranslation wrist temporal R1 release under CC0. The attribution, precise source, transformations and licence links are in [Activity map](ACTIVITY-MAP.md).
+
+The wrist transformers, example windows and Python reference calculations use the EEG-EMG-WristMotion Dataset v3, deposited by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz under CC BY 4.0. The game repacks the three published fits into browser-readable files and computes predictions locally. Original code is dedicated under CC0. [Model source and rights](scene/src/activity/paired/NOTICE.md) · [Recording credit and changes](ACTIVITY-MAP.md#data-and-rights)

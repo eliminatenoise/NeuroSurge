@@ -85,13 +85,16 @@
       <div class="activity-traces" data-traces aria-label="Aligned recorded signals"></div>
       <div class="activity-times" aria-hidden="true"><span>−0.50 s</span><span>+2.50 s</span></div>
       <p class="activity-note">L and R in the EMG labels identify the two contacts over one right-forearm muscle site. Choose either contact or their signed difference. The dotted line in the traces marks the go cue. Movement artifacts and signals from nearby muscles can contribute to the voltages.</p>
-      <details data-model><summary>Compare a 250 ms forecast with the encoder</summary>
-        <p>The wrist model uses the preceding half-second of recordings. Each forecast stops 250 ms short of its target. Each input choice averages its three independently seeded fits.</p>
-        <p data-model-status role="status"></p>
+      <details data-model><summary>How far will the wrist move in a quarter of a second?</summary>
+        <p>Choose a moment after the go cue. Each model sees the previous half-second of readings, ending a quarter-second before your chosen moment. The wrist sensor shows where the wrist actually went.</p>
         <div data-comparison hidden>
-          <label>Forecast target <select data-target></select></label>
-          <table><caption>Angles at the selected target, in degrees</caption><thead><tr><th scope="col">Source</th><th scope="col">Extension</th><th scope="col">Radial deviation</th></tr></thead><tbody data-forecast-table></tbody></table>
-          <p class="activity-note">The hold forecast repeats the last encoder reading. The fitted forecasts use cue time with wrist history, then with scalp EEG added. This single development trial illustrates their errors. It cannot establish accuracy on other people or tasks.</p>
+          <div class="activity-choices"><label>Forecast target <select data-target></select></label>
+          <label><span id="ns-wrist-family-label">Model</span> <select data-family aria-labelledby="ns-wrist-family-label"><option value="paired">Wrist transformer</option><option value="temporal">Earlier wrist model</option></select></label></div>
+          <p class="activity-note" data-cutoff></p>
+          <p data-model-status role="status"></p>
+          <table><caption>Right wrist angles in degrees</caption><thead><tr><th scope="col">Reading or forecast</th><th scope="col">Extension</th><th scope="col">Radial deviation</th></tr></thead><tbody data-forecast-table></tbody></table>
+          <p class="activity-note">Extension measures how far the hand bends back. Radial deviation measures how far it bends toward the thumb. “Hold last angle” predicts the wrist will stay where it was at the last reading.</p>
+          <p class="activity-note" data-family-note></p>
         </div>
       </details>
     </div>

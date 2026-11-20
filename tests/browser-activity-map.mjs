@@ -1,5 +1,6 @@
 // Run from a source checkout with Chromium and Playwright. No device is opened.
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -81,6 +82,20 @@ try {
   assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth));
   assert.equal(await dialog.getByLabel('Forearm trace').inputValue(), 'forearmM4LminusM4R_uV');
   await page.setViewportSize({width:1360,height:900});
+  const oracle = JSON.parse(await readFile(new URL('./fixtures/paired-wrist.json', import.meta.url)));
+  const cells = dialog.locator('[data-forecast-table] tr');
+  for (const [index, row] of oracle.rows.entries()) {
+    await dialog.getByLabel('Forecast target').selectOption(String(index));
+    await cells.nth(4).waitFor();
+    assert.equal(Number(await seek.inputValue()), 256 + row.target_offset_after_cue_ticks);
+    const expected = [row.measured_deg, row.anchor_deg, ...['motion','emg','full'].map(key => row.predictions[key].angle_deg)];
+    for (const [i, angles] of expected.entries()) {
+      assert.deepEqual(await cells.nth(i).locator('td').allTextContents(), angles.map(v => v.toFixed(1) + '°'));
+    }
+  }
+  await dialog.getByLabel('Forecast target').selectOption('1');
+  await dialog.getByLabel('Model', {exact:true}).selectOption('temporal');
+  await cells.nth(4).waitFor();
   const forecastRows = await dialog.locator('[data-forecast-table] tr').allTextContents();
   assert.match(forecastRows[0], /measured-16.1°/);
   assert.match(forecastRows[3], /forecast-26.1°/);
@@ -114,6 +129,24 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(),0);
 
+  // A corrupt model download leaves the recording and earlier model usable.
+  await page.route('**/activity/paired/weights/full.bin', route =>
+    route.fulfill({contentType:'application/octet-stream', body:Buffer.alloc(82208)}));
+  await page.reload();
+  await ready();
+  await page.getByRole('button',{name:'M · Activity map'}).click();
+  await dialog.locator('[data-replay]').waitFor();
+  await dialog.locator('[data-model] summary').click();
+  await page.getByText('This model could not run.', {exact:false}).waitFor();
+  assert.equal(await cells.count(), 2);
+  await dialog.getByLabel('Model', {exact:true}).selectOption('temporal');
+  await cells.nth(4).waitFor();
+  await page.unroute('**/activity/paired/weights/full.bin');
+  await dialog.getByLabel('Model', {exact:true}).selectOption('paired');
+  await cells.nth(4).waitFor();
+  assert.match(await cells.nth(4).textContent(), /Wrist \+ forearm \+ scalp/);
+  await page.keyboard.press('Escape');
+
   // Missing fixture remains visibly missing. The game and a different pathway
   // still work and the overlay does not quietly substitute synthetic voltage.
   await page.route('**/inputs/activity/wrist-pointing.json', route => route.fulfill({status:404,body:''}));
@@ -132,7 +165,7 @@ try {
   await ready();
   assert.equal(await page.evaluate(() => window.mediaRequests),0);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({forecastRows,knees:{before,after},missingClip:true,narrowScreen:true,mediaRequests:0,errors}));
+  console.log(JSON.stringify({pairedTargets:oracle.rows.length,pairedForecasts:oracle.rows.length*3,corruptModelRecovered:true,forecastRows,knees:{before,after},missingClip:true,narrowScreen:true,mediaRequests:0,errors}));
 } finally {
   await browser?.close();
   await new Promise(r => server.close(r));

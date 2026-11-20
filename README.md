@@ -1,6 +1,6 @@
 # NeuroSurge
 
-**Activity map, local experimental edition.** Run `node serve-local.mjs`, open the loopback address, then press **M**. Follow a recorded wrist movement across eight scalp electrodes, four right-forearm electrode pairs and two encoder angles, and run a 250 ms wrist-angle forecast beside the encoder readings. Choose **Game pathways** to move a different part of the avatar. [Data, reproduction and game-lead handoff](ACTIVITY-MAP.md)
+**Activity map, local experimental edition.** Run `node serve-local.mjs`, open the loopback address, then press **M**. Follow a recorded wrist movement across eight scalp electrodes, four right-forearm electrode pairs and two encoder angles, and see where two kinds of trained model predict the wrist will be a quarter-second later. Compare forecasts from wrist movement alone with forecasts that also use forearm and scalp recordings. Choose **Game pathways** to move a different part of the avatar. [Data, reproduction and game-lead handoff](ACTIVITY-MAP.md)
 
 **Local movement preview.** Run `node serve-local.mjs` in this folder and open the address it prints. Press F and type “Bend my right elbow”, or choose **Use voice** for on-device dictation where supported. Press C and allow the camera to try moving the avatar’s right arm with yours. These controls use the game’s movement map and a camera pose estimator. See the [player guide](PLAYER-GUIDE.md). The public links below open the separately published edition.
 
