@@ -6,16 +6,20 @@ const choices = {
   rightLeg: {name: 'Right knee', frame: 'Turn partway sideways. Show shoulders, hips, your right knee and ankle. Bend in the picture plane.', motion: 'Right knee'}
 };
 
+// Preserve the player's view calibration across a momentary low-confidence frame.
+// No missing frame supplies a pose. A longer gap requires a new visible bend.
+const BRIEF_KNEE_GAP_MS = 600;
 export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
   let current = null, panel, video, status, button, select, disposed = false;
   let limb = 'rightArm', selection = 0;
   const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
   const clearPose = () => emit(null);
   const knee = () => limb === 'leftLeg' || limb === 'rightLeg';
-  const framing = () => choices[limb].frame + (knee() ? ' First show a clear bend.' : '');
+  const framing = () => choices[limb].frame + (knee() && !current?.kneeReady ? ' First show a clear bend.' : '');
   function resetTracking(session) {
     session.kneeBends = 0;
     session.kneeReady = false;
+    session.missingSince = null;
     clearPose();
   }
   function choose(value) {
@@ -126,7 +130,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       show('Camera unavailable. This browser lacks the local pose tracker’s video or worker support.', false);
       return;
     }
-    const session = {lastVideoTime: -1, kneeReady: false, kneeBends: 0};
+    const session = {lastVideoTime: -1, kneeReady: false, kneeBends: 0, missingSince: null};
     current = session;
     show('Allow video to move the selected limb. Video stays on this device.', true);
     try {
@@ -164,7 +168,14 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
           // A selection can change (and change back) while inference is in flight.
           if (data.selection === selection) {
             let result = track.muted ? null : data.result;
-            if (!result) resetTracking(session);
+            const now = performance.now();
+            if (session.missingSince !== null && now - session.missingSince >= BRIEF_KNEE_GAP_MS) session.kneeReady = false;
+            if (result) session.missingSince = null;
+            else {
+              session.missingSince ??= now;
+              session.kneeBends = 0;
+              clearPose();
+            }
             if (result && knee() && !session.kneeReady) {
               // A straight-looking projection alone cannot establish a usable view.
               const bend = -result.joints[limb === 'leftLeg' ? 'knee_ext_L' : 'knee_ext_R'];
@@ -173,7 +184,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
               if (!session.kneeReady) result = null;
             }
             if (result) emit(result, limb);
-            clearTimeout(session.watchdog);
+            if (data.result) clearTimeout(session.watchdog);
             show(result ? choices[limb].motion + ' tracking.' : framing(), true);
             if (data.result) session.watchdog = setTimeout(() => {
               if (current === session) { resetTracking(session); show(framing(), true); }

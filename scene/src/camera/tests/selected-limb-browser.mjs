@@ -144,7 +144,7 @@ try {
   const beforeMask = await page.evaluate(() => window.readPose().rightKnee);
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(200);
-    assert.match(await panel.innerText(), /First show a clear bend/);
+    assert.match(await panel.innerText(), /Show shoulders, hips, your right knee and ankle/);
     assert.ok(Math.abs((await page.evaluate(() => window.readPose())).rightKnee - beforeMask) < 3);
   }
   await frame(null);

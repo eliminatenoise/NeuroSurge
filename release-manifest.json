@@ -4037,13 +4037,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 9728,
-      "sha256": "cef69137c4ac53f52eaa58d3fcc1ba8da7ff68e0628cfe9d7e22c0705b3c9fa8"
+      "bytes": 10327,
+      "sha256": "e3bf9855ba48a5aef68a90b3526b48e013dcb4e9c00426da8a35962b3fbf29d7"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 7999,
-      "sha256": "f9174362fded8b5084f32ca5024fe271b349b0507e82215149668a2c7551591a"
+      "bytes": 8063,
+      "sha256": "f832bf3d3bdb85365bd4cfaff9d7f3e0d3d4cb55acd8c075a976229c0be58593"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
@@ -4097,8 +4097,8 @@
     },
     {
       "path": "scene/src/camera/tests/selected-limb-browser.mjs",
-      "bytes": 8372,
-      "sha256": "8800dce73c4e012792ab4c6d0650471eee86414da3a327b04a7a2becd2ccaad7"
+      "bytes": 8396,
+      "sha256": "50149d8d6b9fb2b2b83194d813adf2477fa3a6add4dab816374b3db256792943"
     },
     {
       "path": "scene/src/camera/vendor/LICENSE",
