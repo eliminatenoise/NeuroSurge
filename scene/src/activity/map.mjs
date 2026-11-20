@@ -116,6 +116,8 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
   const spatial = q('#ns-act-spatial'), play = q('[data-play]');
   const hand = q('#ns-act-hand');
+  const rat = q('#ns-act-rat'), ratForecast = q('#ns-rat-forecast');
+  let ratLoad, ratStyle, ratMounted = false;
   let spatialPanel, spatialLoad, handPanel, handLoad, tabVersion = 0;
   const regions = q('[data-region]'), actions = q('[data-action]');
   const scalpChoice = q('[data-scalp-select]'), forearmChoice = q('[data-emg-select]');
@@ -234,6 +236,49 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     }
   }
 
+  function loadRatStyle() {
+    ratStyle = doc.createElement('link');
+    ratStyle.rel = 'stylesheet';
+    ratStyle.href = new URL('./wtrack/style.css', import.meta.url);
+    return new Promise((resolve, reject) => {
+      ratStyle.onload = resolve;
+      ratStyle.onerror = reject;
+      doc.head.append(ratStyle);
+    });
+  }
+
+  async function openRat(version) {
+    if (ratMounted) return;
+    try {
+      ratLoad ??= Promise.all([import('./wtrack/view.js'), loadRatStyle()]);
+      const [viewer] = await ratLoad;
+      if (disposed || !dialog.open || version !== tabVersion) return;
+      ratMounted = true;
+      const ready = viewer.mountWTrack(ratForecast);
+      // Keep the shared inspector intact. Its source link opens the game's
+      // local disclosure, so reading the method preserves the active trip.
+      const notice = ratForecast.querySelector('[data-wt=notice]');
+      const sources = q('#ns-rat-sources');
+      notice.href = '#' + sources.id;
+      on(notice, 'click', event => {
+        event.preventDefault();
+        sources.open = true;
+        sources.querySelector('summary').focus();
+      });
+      for (const link of ratForecast.querySelectorAll('a[href^="https:"]')) {
+        link.target = '_blank';
+        link.rel = 'noopener';
+      }
+      await ready;
+    } catch {
+      ratLoad = null;
+      ratStyle?.remove();
+      ratMounted = false;
+      if (!disposed && version === tabVersion) ratForecast.querySelector('[role=status]').textContent =
+        'The rat viewer could not open. Select Rat brain activity again to retry.';
+    }
+  }
+
   async function openHand(query, version) {
     try {
       handLoad ??= import('../hand-search/hand-search.mjs');
@@ -254,10 +299,12 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     stop();
     recording.hidden = mode !== 'recording';
     game.hidden = mode !== 'game';
+    rat.hidden = mode !== 'rat';
     spatial.hidden = mode !== 'spatial';
     hand.hidden = mode !== 'hand';
     for (const b of dialog.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', String(b.dataset.tab === mode));
     if (!recording.hidden) showRecording();
+    if (!rat.hidden) openRat(tabVersion);
     if (!spatial.hidden) openSpatial(selection,tabVersion);
     if (!hand.hidden) openHand(selection,tabVersion);
   }
@@ -316,5 +363,5 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   on(q('[data-move]'), 'click', () => close({ type:'muscle', regionId:regions.value, actionId:actions.value }));
   on(doc, 'visibilitychange', () => { if (doc.hidden) stop(); });
   on(win, 'blur', stop);
-  return () => { disposed = true; close(null, false); spatialPanel?.dispose(); handPanel?.dispose(); events.abort(); };
+  return () => { disposed = true; close(null, false); spatialPanel?.dispose(); handPanel?.dispose(); ratStyle?.remove(); events.abort(); };
 }

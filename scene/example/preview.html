@@ -49,6 +49,7 @@
   <header class="activity-head"><h1 id="ns-activity-title">Activity map</h1><button type="button" data-close autofocus>Back to game</button></header>
   <div class="activity-switch" role="group" aria-label="Map view">
     <button type="button" data-tab="recording" aria-pressed="true" aria-controls="ns-act-recording">Recorded wrist</button>
+    <button type="button" data-tab="rat" aria-pressed="false" aria-controls="ns-act-rat">Rat brain activity</button>
     <button type="button" data-tab="spatial" aria-pressed="false" aria-controls="ns-act-spatial">Whole-body motion</button>
     <button type="button" data-tab="hand" aria-pressed="false" aria-controls="ns-act-hand">Hand search</button>
     <button type="button" data-tab="game" aria-pressed="false" aria-controls="ns-act-game">Game pathways</button>
@@ -117,6 +118,17 @@
       <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt selects one trial, subtracts each forearm contact pair, and converts device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </details>
   </section>
+  <section id="ns-act-rat" aria-labelledby="ns-rat-title" hidden>
+    <h2 id="ns-rat-title">Rat brain activity on a W-shaped track</h2>
+    <p>These recordings come from rat JS14. The human hand and wrist recordings elsewhere in the map come from separate experiments.</p>
+    <div id="ns-rat-forecast"><p role="status">Opening the rat recording…</p></div>
+    <details id="ns-rat-sources">
+      <summary>Recording, model and data licence</summary>
+      <p>Justin Shin and Shantanu Jadhav recorded JS14 in <i>Single Day W-Track Learning</i> (2024). These examples come from session 01, running period 3 (epoch 5). The electrodes recorded spikes from 41 prefrontal and 31 hippocampal CA1 units. The camera supplied the rat’s position along the track.</p>
+      <p>The Interoceptomics guide selected three training windows and packaged the measured positions, spike counts and fitted weights. The game uses that same packet and calculates both forecasts on this device. The data and fitted values carry CC BY 4.0. The viewer code carries CC0.</p>
+      <p><a href="https://doi.org/10.48324/dandi.000978/0.240511.0307" target="_blank" rel="noopener">Versioned dataset</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · <a href="../src/activity/wtrack/NOTICE.md" download>Download the method and source notes</a> · <a href="https://eliminatenoise.github.io/Interoceptomics/stages/#0.2" target="_blank" rel="noopener">Replay the earlier trip in the experiment guide</a></p>
+    </details>
+  </section>
   <section id="ns-act-spatial" aria-label="Recorded whole-body movement" hidden>
     <p role="status" data-motion-status>Opening the motion viewer…</p>
   </section>
@@ -128,7 +140,7 @@
     <div class="activity-route"><strong>Motor · efferent</strong><p data-motor></p></div>
     <div class="activity-route sensory"><strong>Sensory · afferent</strong><p data-sensory></p></div>
     <p data-muscles></p><button type="button" data-move>Try this movement in the game</button>
-    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C follows one arm or knee as it moves across the camera picture. The recording and forecast cover a single wrist task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
+    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C follows one arm or knee as it moves across the camera picture. The wrist recording and its forecasts cover one pointing task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
   </section>
 </dialog>
 <!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->

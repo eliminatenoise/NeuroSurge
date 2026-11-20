@@ -2,6 +2,12 @@
 
 Run `node serve-local.mjs`, follow its loopback address and press **M**. The map opens with the game paused. **Recorded wrist** plays one right-wrist pointing movement. **Game pathways** uses the current game's motor map and sends the chosen movement back through its ordinary avatar controller. Esc returns focus to the canvas. The code requests no camera, microphone or network account. C opens a separate camera control for either arm or knee.
 
+## Rat brain activity
+
+Open **M → Rat brain activity**. Choose a training trip and mark either forecast on the track. Reveal the next camera reading to see how far each prediction missed. Scroll the two coloured tables to inspect the spikes for each of 41 prefrontal and 31 hippocampal units over four quarter-seconds. The experiment recorded the rat’s location in the plane of the track. The human recordings elsewhere in the map come from separate experiments.
+
+Each example shows one window used in fitting. Across nine later trips of this rat in the same run, the model using positions alone missed by 2.010 cm on average. Adding spikes increased the miss to 2.237 cm. Each trip counted equally. [Recording, study and data licence](scene/src/activity/wtrack/NOTICE.md)
+
 ## Find a recorded hand action
 
 Press **F**, type “press the button” and choose **Find hand recording**. **M → Hand search** opens the same view. The models compare your words with five intervals from one printer task. Select a time to inspect the 26 tracked joints. Unknown words, tied ranks and missing hand measurements are shown explicitly. The timing comparison uses the description, duration, progress through the recording and tracking coverage; it does not use hand coordinates. Keeping typed searches separate from avatar movement lets you compare the guesses before deciding what to play. [Evidence and source data](https://github.com/eliminatenoise/NeuroTranslation/tree/fde458e21b4885e4bddd7614ed2c326374c87253/benchmarks/hand-language-retrieval)

@@ -437,6 +437,10 @@ neural-to-muscle decoder.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
 - Development tests, test harnesses and acquisition evidence are not part of the player distribution.
 
+## Rat brain activity
+
+The separate **Rat brain activity** view uses Justin Shin and Shantanu Jadhav’s *Single Day W-Track Learning* (2024). The excerpts, spike counts, example inputs, fitted weights and data-derived forecasts carry CC BY 4.0. NeuroSurge embeds the Interoceptomics viewer and its unchanged recording and weights. The game adds a tab, source links and a colour theme. [Recording, changes and methods](scene/src/activity/wtrack/NOTICE.md) · [Versioned dataset](https://doi.org/10.48324/dandi.000978/0.240511.0307) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
 ## Recorded wrist activity map
 
 The eight scalp EEG and eight forearm EMG contact excerpts, their four same-site differences, the encoder angles and associated forecast-input features in `inputs/activity/wrist-pointing.json` derive from the CC BY 4.0 *EEG-EMG-WristMotion Dataset*, v3, by Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. The accompanying model runner is the project-authored NeuroTranslation wrist temporal R1 release under CC0. The attribution, precise source, transformations and licence links are in [Activity map](ACTIVITY-MAP.md).

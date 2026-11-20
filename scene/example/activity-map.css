@@ -91,3 +91,30 @@ body:has(.activity-map[open]) #ns-shell-root { visibility:hidden }
 .spatial-orbit input { width:5rem; min-width:1rem; flex:1 }
 .spatial-panel input { accent-color:#abdecf }
 .spatial-panel output { font-variant-numeric:tabular-nums }
+
+/* The plots and spike colour scale keep the colours used in the study guide. */
+#ns-rat-forecast {
+  --ink:#e5edf4;
+  --muted:#bdcad5;
+  --line:#425563;
+  border-top:1px solid var(--line);
+  padding-top:.2rem;
+}
+#ns-rat-forecast h3 { font-size:1.14rem; margin:.7rem 0 .25rem }
+#ns-rat-forecast .wt-maps figcaption { color:#19352b }
+#ns-rat-forecast .wt-area {
+  --ink:#19352b;
+  --line:#c0cdc6;
+  color:#19352b;
+  color-scheme:light;
+}
+#ns-rat-forecast .wt-area table { margin:0 }
+#ns-rat-forecast .wt-selected { background:#223c3c }
+#ns-rat-forecast .wt-key span {
+  display:inline-block;
+  min-width:1.1rem;
+  text-align:center;
+  background:#eaf0e9;
+  border-radius:.15rem;
+}
+#ns-rat-forecast [data-wt=reveal] { color:#132c25; background:#bce9dd; border-color:#bce9dd }
