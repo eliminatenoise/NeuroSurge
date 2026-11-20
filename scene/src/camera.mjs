@@ -1,7 +1,32 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
-export function createCameraCapture({ onArmPose, host = document.body }) {
-  let current = null, panel, video, status, button, disposed = false;
-  const clearPose = () => onArmPose({joints: null});
+const choices = {
+  rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow'},
+  leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow'},
+  leftLeg: {name: 'Left knee', frame: 'Turn partway sideways. Show shoulders, hips, your left knee and ankle. Bend in the picture plane.', motion: 'Left knee'},
+  rightLeg: {name: 'Right knee', frame: 'Turn partway sideways. Show shoulders, hips, your right knee and ankle. Bend in the picture plane.', motion: 'Right knee'}
+};
+
+export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
+  let current = null, panel, video, status, button, select, disposed = false;
+  let limb = 'rightArm', selection = 0;
+  const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
+  const clearPose = () => emit(null);
+  const knee = () => limb === 'leftLeg' || limb === 'rightLeg';
+  const framing = () => choices[limb].frame + (knee() ? ' First show a clear bend.' : '');
+  function resetTracking(session) {
+    session.kneeBends = 0;
+    session.kneeReady = false;
+    clearPose();
+  }
+  function choose(value) {
+    if (!Object.hasOwn(choices, value) || value === limb || !current) return;
+    limb = value;
+    selection++;
+    select.value = value;
+    clearTimeout(current.watchdog);
+    resetTracking(current);
+    show(framing(), true);
+  }
 
   function show(message, active) {
     if (!panel) {
@@ -24,14 +49,26 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
       button = document.createElement('button');
       button.type = 'button';
       button.style.marginTop = '6px';
-      button.addEventListener('click', () => current ? stop() : panel.hidden = true);
-      panel.append(video, status, button);
+      button.addEventListener('click', () => {
+        if (current) stop();
+        else panel.hidden = true;
+        returnFocus();
+      });
+      const label = document.createElement('label');
+      label.append('Follow ');
+      select = document.createElement('select');
+      for (const [value, choice] of Object.entries(choices)) select.add(new Option(choice.name, value));
+      select.value = limb;
+      select.addEventListener('change', () => { choose(select.value); returnFocus(); });
+      label.append(select);
+      panel.append(label, video, status, button);
       host.appendChild(panel);
     }
     panel.hidden = false;
     video.hidden = !video.srcObject;
     if (status.textContent !== message) status.textContent = message;
     button.textContent = active ? 'Stop camera' : 'Dismiss';
+    select.disabled = !active;
   }
 
   function stop(message = 'Camera off.') {
@@ -68,7 +105,7 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
       });
       if (current !== session) return frame.close();
       try {
-        session.worker.postMessage({type: 'frame', frame, timestamp: performance.now()}, [frame]);
+        session.worker.postMessage({type: 'frame', frame, timestamp: performance.now(), limb, selection}, [frame]);
         session.workerDeadline = setTimeout(() => failed(session, 'Camera off. The local pose tracker stopped responding.'), 15000);
       } catch (error) {
         frame.close();
@@ -89,9 +126,9 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
       show('Camera unavailable. This browser lacks the local pose tracker’s video or worker support.', false);
       return;
     }
-    const session = {lastVideoTime: -1};
+    const session = {lastVideoTime: -1, kneeReady: false, kneeBends: 0};
     current = session;
-    show('Allow the camera to move your avatar’s right arm. Video stays on this device.', true);
+    show('Allow video to move the selected limb. Video stays on this device.', true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({video: {
         width: {ideal: 640}, height: {ideal: 480}, frameRate: {ideal: 15, max: 30}, facingMode: {ideal: 'user'}
@@ -105,7 +142,7 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
       if (!track || track.readyState === 'ended') throw new DOMException('No camera track', 'NotFoundError');
       track.addEventListener('ended', () => failed(session, 'Camera off. The camera was disconnected.'), {once: true});
       track.addEventListener('mute', () => {
-        if (current === session) { clearPose(); show('Camera on. Waiting for video.', true); }
+        if (current === session) { selection++; resetTracking(session); show('Camera on. Waiting for video.', true); }
       });
       video.srcObject = stream;
       show('Camera on. Loading the local pose tracker…', true);
@@ -121,17 +158,27 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
         clearTimeout(session.workerDeadline);
         if (data.type === 'error') return trackerFailed();
         if (data.type === 'ready') {
-          show('Camera on. Face the camera with both shoulders and your right wrist in view.', true);
+          show(framing(), true);
           sendFrame(session);
         } else if (data.type === 'pose') {
-          const joints = track.muted ? null : data.joints;
-          onArmPose({joints});
-          clearTimeout(session.watchdog);
-          show(joints ? 'Camera on. Your right arm controls the avatar’s right shoulder and elbow.' :
-            'Camera on. Face the camera with both shoulders and your right wrist in view.', true);
-          if (joints) session.watchdog = setTimeout(() => {
-            if (current === session) { clearPose(); show('Camera on. Waiting for a fresh right-arm pose.', true); }
-          }, 1200);
+          // A selection can change (and change back) while inference is in flight.
+          if (data.selection === selection) {
+            let result = track.muted ? null : data.result;
+            if (!result) resetTracking(session);
+            if (result && knee() && !session.kneeReady) {
+              // A straight-looking projection alone cannot establish a usable view.
+              const bend = -result.joints[limb === 'leftLeg' ? 'knee_ext_L' : 'knee_ext_R'];
+              session.kneeBends = bend >= 45 ? session.kneeBends + 1 : 0;
+              session.kneeReady = session.kneeBends >= 2;
+              if (!session.kneeReady) result = null;
+            }
+            if (result) emit(result, limb);
+            clearTimeout(session.watchdog);
+            show(result ? choices[limb].motion + ' tracking.' : framing(), true);
+            if (data.result) session.watchdog = setTimeout(() => {
+              if (current === session) { resetTracking(session); show(framing(), true); }
+            }, 1200);
+          }
           session.timer = setTimeout(() => sendFrame(session), 90);
         }
       };
@@ -153,7 +200,7 @@ export function createCameraCapture({ onArmPose, host = document.body }) {
   document.addEventListener('visibilitychange', hide);
   return {
     toggle() { return current ? stop() : start(); },
-    stop, get active() { return !!current; },
+    stop, choose, get active() { return !!current; },
     dispose() {
       disposed = true;
       leave();

@@ -24,7 +24,7 @@
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."
           aria-describedby="ns-game-keys"></canvas>
-  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of the right arm. Press M for the activity map. Press Escape for controls and settings.</p>
+  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of one arm or knee. Press M for the activity map. Press Escape for controls and settings.</p>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
@@ -123,7 +123,7 @@
     <div class="activity-route"><strong>Motor · efferent</strong><p data-motor></p></div>
     <div class="activity-route sensory"><strong>Sensory · afferent</strong><p data-sensory></p></div>
     <p data-muscles></p><button type="button" data-move>Try this movement in the game</button>
-    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C estimates right shoulder and elbow angles from a camera. The recording and forecast cover a single wrist task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
+    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C follows one arm or knee as it moves across the camera picture. The recording and forecast cover a single wrist task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
   </section>
 </dialog>
 <!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->

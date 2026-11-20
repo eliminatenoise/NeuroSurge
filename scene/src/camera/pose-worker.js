@@ -1,11 +1,12 @@
 // Classic worker because the official WASM loader uses importScripts.
 let detector;
-let rightArmJoints;
+let poseForLimb, createLegEvidence, legVisible;
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
       const { FilesetResolver, PoseLandmarker } = await import('./vendor/vision_bundle.mjs');
-      ({ rightArmJoints } = await import('./right-arm.mjs'));
+      ({ poseForLimb } = await import('./limb-pose.mjs'));
+      ({ createLegEvidence } = await import('./leg-evidence.mjs'));
       const asset = path => new URL(path, self.location.href).href;
       const fileset = await FilesetResolver.forVisionTasks(asset('vendor/wasm'));
       detector = await PoseLandmarker.createFromOptions(fileset, {
@@ -15,11 +16,16 @@ self.onmessage = async ({ data }) => {
       });
       self.postMessage({type: 'ready'});
     } else if (data.type === 'frame') {
-      const {frame, timestamp} = data;
+      const {frame, timestamp, limb, selection} = data;
       try {
         const pose = detector.detectForVideo(frame, timestamp);
-        const joints = rightArmJoints(pose.landmarks[0], frame.width, frame.height);
-        self.postMessage({type: 'pose', joints});
+        const points = pose.landmarks[0];
+        let result = poseForLimb(points, frame.width, frame.height, limb);
+        if (result && (limb === 'leftLeg' || limb === 'rightLeg')) {
+          legVisible ??= createLegEvidence();
+          if (!legVisible(frame, points, limb)) result = null;
+        }
+        self.postMessage({type: 'pose', result, selection});
       } finally {
         frame.close();
       }

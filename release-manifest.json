@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "local-2026-11-20-body-59-wrist-models",
+  "version": "local-2026-11-20-body-59-limb-camera",
   "experimental": true,
-  "source": "NeuroSurge draft PR 2 at 981434f03f54b9259d9c69eac6fd8215fdeaf143 with locally computed three-model wrist forecasts from NeuroTranslation at 117ffa001fb10086854ae4ec4d365c7c2121786f. The sensor-map recording, earlier model and simulated game pathways remain available.",
+  "source": "NeuroSurge draft PR 2 at 2c278dff35630aa5740e632bc04a1e2cc5ea6a5a with opt-in projected arm and knee camera controls. The recorded wrist, model comparisons and simulated pathways remain available.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -22,8 +22,8 @@
     },
     {
       "path": "ACTIVITY-MAP.md",
-      "bytes": 12197,
-      "sha256": "6440601887edd9b293e940ebaec58ef55b25d97bab7598b13c501d2929b2bb6b"
+      "bytes": 12198,
+      "sha256": "82f1ab083e5fdbcb310e50f3100b586b71f9c9d992f0037ecdae8020ff522c23"
     },
     {
       "path": "ASSET-ATTRIBUTION-INDEX.md",
@@ -52,13 +52,13 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 14395,
-      "sha256": "807e39172895d5ef1a5282c7757504a287a2c06773b106992a12fee659cdb539"
+      "bytes": 14860,
+      "sha256": "adb97aca44754c966209902e9b9fda957b4ec9d987070e78b8846a79cb2ad072"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65912,
-      "sha256": "00e902bb9014d91739411d8cbbee14254dc45b15cf556c6e1b6a3fb176f37cc0"
+      "bytes": 66221,
+      "sha256": "66d9df0aa5e67d35d04d19ca346abac5981c1334c563f81594ab7c67ebe8fdd6"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -67,8 +67,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 24326,
-      "sha256": "63849281ad99960a8685e7a9ae7a6b58c8bd4ecdad60cbf833752a3e2f544232"
+      "bytes": 24360,
+      "sha256": "7f4879921604fd2b91529f4642a523af680e1f63c1e2fdced00cd0cd2558392d"
     },
     {
       "path": "START.html",
@@ -3947,8 +3947,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 12556,
-      "sha256": "c372f2ec985a282ee19b6ec3457fd8ed6c78e1d5df3ee7765e29173b2c98127a"
+      "bytes": 12564,
+      "sha256": "8ff929377a1e3dd743f6bafa14c608fd49fc643287238e8ee9886efcff265fa4"
     },
     {
       "path": "scene/example/quiet.css",
@@ -4037,13 +4037,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 7441,
-      "sha256": "375477c3d3c1ea738eac12aa188b5925572ee80331c8c1ed44c12f5c20acee41"
+      "bytes": 9728,
+      "sha256": "cef69137c4ac53f52eaa58d3fcc1ba8da7ff68e0628cfe9d7e22c0705b3c9fa8"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 4601,
-      "sha256": "8958aab33dad52e9700725112bb54e2ecdd8e9e45ebae9be8cc61cc6d6f24edd"
+      "bytes": 7999,
+      "sha256": "f9174362fded8b5084f32ca5024fe271b349b0507e82215149668a2c7551591a"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
@@ -4051,14 +4051,24 @@
       "sha256": "18d40925e8d1a03af8817b2e63e716cbb6900caae1619bc8ccf9772e572de2a5"
     },
     {
+      "path": "scene/src/camera/leg-evidence.mjs",
+      "bytes": 2520,
+      "sha256": "6b9d9d38a395e5cdf72d0df4d712077938d1bc8e76fddbbbef3afe12199a0a0d"
+    },
+    {
+      "path": "scene/src/camera/limb-pose.mjs",
+      "bytes": 3554,
+      "sha256": "f85fc6c0b8eb12b22d87d5639495b7d903559883953cb6bb7141133b87722e54"
+    },
+    {
       "path": "scene/src/camera/pose-worker.js",
-      "bytes": 1336,
-      "sha256": "b7f5f88ea2d0e03b3af48182008275b5666f7d7490521dc09589c912dcf8caeb"
+      "bytes": 1677,
+      "sha256": "43295fa5dc73ac7cc8ad48f1e5d180a5d04c90e1b5b82c1cc9cd054f4c7be3c5"
     },
     {
       "path": "scene/src/camera/right-arm.mjs",
-      "bytes": 1791,
-      "sha256": "22449ae768ed2df13e5a33f373982e2b5fab08e41338359049a923b9657095d7"
+      "bytes": 257,
+      "sha256": "cda294796198034355a5707a70e00dd809a4b21deffc46ff6e977c2c2415460f"
     },
     {
       "path": "scene/src/camera/tests/arm-down.jpg",
@@ -4082,8 +4092,13 @@
     },
     {
       "path": "scene/src/camera/tests/rig.test.mjs",
-      "bytes": 1319,
-      "sha256": "d96261dd84a3f3e654c97b67c3c878f00d88892ed84cd9c5f7b219c5da644ecc"
+      "bytes": 3241,
+      "sha256": "27a5052c180166b2b54bf17fb76a63951a5d3c31374d107eac18769b58997200"
+    },
+    {
+      "path": "scene/src/camera/tests/selected-limb-browser.mjs",
+      "bytes": 8372,
+      "sha256": "8800dce73c4e012792ab4c6d0650471eee86414da3a327b04a7a2becd2ccaad7"
     },
     {
       "path": "scene/src/camera/vendor/LICENSE",
@@ -4132,13 +4147,13 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 923762,
-      "sha256": "50a75edb1da0ea01c018848e534a1b4ffd088af347cfc78c85899c4ec2026ec4"
+      "bytes": 924935,
+      "sha256": "071f20268df54e0148b81be07ffa381394fc0e64edd379d46f170f545c024669"
     },
     {
       "path": "scene/src/ns-arm.mjs",
-      "bytes": 163691,
-      "sha256": "97ea334080529c6ab0bc802ad04ab1276fc38c1aa6ea2f9835676429ca8002a0"
+      "bytes": 163914,
+      "sha256": "91fa7a80550494a1b776fb1ff4fd8bc1d049778f3eadd2a3961496c74fa23640"
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",

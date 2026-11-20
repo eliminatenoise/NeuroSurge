@@ -1,6 +1,6 @@
 # Movement recordings and game pathways
 
-Run `node serve-local.mjs`, follow its loopback address and press **M**. The map opens with the game paused. **Recorded wrist** plays one right-wrist pointing movement. **Game pathways** uses the current game's motor map and sends the chosen movement back through its ordinary avatar controller. Esc returns focus to the canvas. The code requests no camera, microphone or network account. C opens the separate opt-in camera controls.
+Run `node serve-local.mjs`, follow its loopback address and press **M**. The map opens with the game paused. **Recorded wrist** plays one right-wrist pointing movement. **Game pathways** uses the current game's motor map and sends the chosen movement back through its ordinary avatar controller. Esc returns focus to the canvas. The code requests no camera, microphone or network account. C opens a separate camera control for either arm or knee.
 
 ## Watch a whole body move through the lab
 
