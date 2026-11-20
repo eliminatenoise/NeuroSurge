@@ -114,7 +114,8 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const doc = dialog.ownerDocument, win = doc.defaultView;
   const q = selector => dialog.querySelector(selector);
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
-  const play = q('[data-play]');
+  const spatial = q('#ns-act-spatial'), play = q('[data-play]');
+  let spatialPanel, spatialLoad, tabVersion = 0;
   const regions = q('[data-region]'), actions = q('[data-action]');
   const scalpChoice = q('[data-scalp-select]'), forearmChoice = q('[data-emg-select]');
   let updateInstruments;
@@ -218,26 +219,46 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     updateActions();
   }
 
-  function setTab(mode) {
+  async function openSpatial(clipId, version) {
+    try {
+      spatialLoad ??= import('./spatial-panel.mjs');
+      const module = await spatialLoad;
+      if (disposed || !dialog.open || version !== tabVersion) return;
+      spatialPanel ??= module.mountSpatialReplay(spatial);
+      await spatialPanel.show(clipId);
+    } catch {
+      spatialLoad = null;
+      if (!disposed && version === tabVersion)
+        spatial.querySelector('[data-motion-status]').textContent = 'The motion viewer could not open. Reopen this view to try again.';
+    }
+  }
+
+  function setTab(mode, clipId) {
+    tabVersion++;
+    spatialPanel?.hide();
     stop();
     recording.hidden = mode !== 'recording';
     game.hidden = mode !== 'game';
+    spatial.hidden = mode !== 'spatial';
     for (const b of dialog.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', String(b.dataset.tab === mode));
     if (!recording.hidden) showRecording();
+    if (!spatial.hidden) openSpatial(clipId,tabVersion);
   }
 
-  function open() {
+  function open(mode = 'recording', clipId) {
     if (dialog.open || !canOpen()) return;
     populateRegions();
     pause();
     dialog.showModal();
-    setTab('recording');
+    setTab(mode,clipId);
     q('[data-close]').focus();
   }
 
   function close(action = null, returnFocus = true) {
     if (!dialog.open) return;
     stop();
+    tabVersion++;
+    spatialPanel?.hide();
     dialog.close();
     if (returnFocus) {
       resume(action);
@@ -245,7 +266,13 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     }
   }
 
-  on(trigger, 'click', open);
+  on(trigger, 'click', () => open());
+  on(doc, 'ns-open-spatial-replay', e => {
+    const id = e.detail?.clipId;
+    if (typeof id !== 'string') return;
+    if (dialog.open) setTab('spatial',id);
+    else open('spatial',id);
+  });
   on(win, 'keydown', e => {
     if (e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return;
     if (dialog.open && e.key === 'Escape') {
@@ -266,5 +293,5 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   on(q('[data-move]'), 'click', () => close({ type:'muscle', regionId:regions.value, actionId:actions.value }));
   on(doc, 'visibilitychange', () => { if (doc.hidden) stop(); });
   on(win, 'blur', stop);
-  return () => { disposed = true; close(null, false); events.abort(); };
+  return () => { disposed = true; close(null, false); spatialPanel?.dispose(); events.abort(); };
 }

@@ -1,6 +1,14 @@
-# Wrist recording and game pathways
+# Movement recordings and game pathways
 
-Run `node serve-local.mjs`, follow its loopback address and press **M**. The map opens with the game paused. **Recorded wrist** plays one right-wrist pointing movement. **Game pathways** uses the current game's motor map and sends the chosen movement back through its ordinary avatar controller. Esc returns focus to the canvas. The code requests no camera, microphone or network account. C remains a separate opt-in right-shoulder and elbow control.
+Run `node serve-local.mjs`, follow its loopback address and press **M**. The map opens with the game paused. **Recorded wrist** plays one right-wrist pointing movement. **Game pathways** uses the current game's motor map and sends the chosen movement back through its ordinary avatar controller. Esc returns focus to the canvas. The code requests no camera, microphone or network account. C opens the separate opt-in camera controls.
+
+## Watch a whole body move through the lab
+
+Open **Whole-body motion** in the M map. Choose an arm lift (02_06), a forward jump (13_11) or a hop on the left foot (132_23). Press **Play movement**, or move the time slider one frame at a time with the arrow keys. **Turn** and **Tilt** rotate the view. You can also drag the picture. **Recenter view** restores the starting angle and the fixed lab camera.
+
+The floor grid is half a metre across each square. Blue markers are on the person's left, amber markers on their right. Light grey marks the remaining locations. **Connect nearby markers** draws guides across the visible positions. **Follow the waist** moves the camera horizontally with a tracked waist marker, so you can follow the person across the room and still see how high they jump. Under **Read a marker’s position**, choose a marker to see its original lab X, Y and Z in millimetres. Its coordinates stay the same as you turn the view. Missing samples leave gaps. The horizontal camera holds its last position if its waist marker goes missing.
+
+Each recording contains 41 named marker paths. The replay samples every fourth frame of the original 120 Hz capture, giving 30 displayed frames per second. The clock starts at the first displayed frame of each trial. Coordinates have been rounded to 0.1 mm. The archive includes processed positions, and the hop has a zero quality value at every selected source point. The hop file omits screen-axis labels. The head and heel heights indicate that Z points up. The file precision gives no estimate of tracking accuracy. The capture contains no simultaneous brain, nerve or muscle signals. The wrist recording belongs to a separate experiment. [CMU capture methods](http://mocap.cs.cmu.edu/info.php) · [Original recordings and data terms](http://mocap.cs.cmu.edu/faqs.php)
 
 ## What moved?
 

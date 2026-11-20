@@ -46,6 +46,7 @@
   <header class="activity-head"><h1 id="ns-activity-title">Activity map</h1><button type="button" data-close autofocus>Back to game</button></header>
   <div class="activity-switch" role="group" aria-label="Map view">
     <button type="button" data-tab="recording" aria-pressed="true" aria-controls="ns-act-recording">Recorded wrist</button>
+    <button type="button" data-tab="spatial" aria-pressed="false" aria-controls="ns-act-spatial">Whole-body motion</button>
     <button type="button" data-tab="game" aria-pressed="false" aria-controls="ns-act-game">Game pathways</button>
   </div>
   <section id="ns-act-recording" aria-label="Recorded right wrist">
@@ -111,6 +112,9 @@
       <p>The EEG cap used AFz as ground. The study reports an elbow reference for EMG. The acquisition used a 0.1–200 Hz band-pass and a 60 Hz notch. The display uses the stored voltages with no additional filtering. The recording gives no individual scalp coordinates or trial-specific noise estimate. Muscle force, spinal activity and nerve firing were unmeasured.</p>
       <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt selects one trial, subtracts each forearm contact pair, and converts device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </details>
+  </section>
+  <section id="ns-act-spatial" aria-label="Recorded whole-body movement" hidden>
+    <p role="status" data-motion-status>Opening the motion viewer…</p>
   </section>
   <section id="ns-act-game" aria-label="Simulated game pathways" hidden>
     <h2>Trace a virtual movement</h2>
