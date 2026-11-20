@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 480690,
-      "sha256": "a96e4d2b16552ef915574343c8884f574ee178d700dcdabead04a429d4858e75"
+      "bytes": 480877,
+      "sha256": "cced54da441b9fbeeab9102653688c2791564abaa2138857011d42c1a96395a1"
     },
     {
       "path": "LAUNCHERS.md",
@@ -3816,31 +3816,6 @@
       "sha256": "feced62f0eca34eccd61b7b4649f955b0d56a962ae68ddadabecf6c6ba50b58c"
     },
     {
-      "path": "scene/example/configured-r281.css",
-      "bytes": 19072,
-      "sha256": "7454b68adef997a34adb7cfc664893bb2ddcb72cb129af8492d73aecf86694c6"
-    },
-    {
-      "path": "scene/example/configured-r281.html",
-      "bytes": 1312,
-      "sha256": "33a3fcc959a5607af72a2d3b5053854b0ff743d93d3f452d761e85c5cff2104a"
-    },
-    {
-      "path": "scene/example/configured-r281.mjs",
-      "bytes": 12930,
-      "sha256": "956d2b8babb9483adcaa769fbfc9addb06237f32e3cf56ced9789e0a25f6b725"
-    },
-    {
-      "path": "scene/example/display-b-r388.html",
-      "bytes": 1308,
-      "sha256": "35c748396cc5f32cbf8ba7980d612a6e6565ad9adf7c0abc033c203601f2470e"
-    },
-    {
-      "path": "scene/example/display-b-r388.mjs",
-      "bytes": 27760,
-      "sha256": "38e98def26a0058fb86ff59bd2f6b1b23d828009ae63a9ee4eddabdc4abd91c8"
-    },
-    {
       "path": "scene/example/early-load.mjs",
       "bytes": 5897,
       "sha256": "1b3187a760d07028999a2b40d8c1eb0bda9032feec4830c2a40898b5684aa7f0"
@@ -3851,51 +3826,6 @@
       "sha256": "5f12bd4f07fb70b7227d490533d3d344b561c5be1ea4b3e83cee662fa2bc1809"
     },
     {
-      "path": "scene/example/framing-b-r356.html",
-      "bytes": 1308,
-      "sha256": "73cce744433c06d62df5bcd16956d0566e671ddf619f04dc18c7873e180ad9c9"
-    },
-    {
-      "path": "scene/example/framing-b-r356.mjs",
-      "bytes": 27697,
-      "sha256": "b424174fc8615e0c3bfc49026b418fa0b74df5f1f0f4e88e2a9f3e989eb0b445"
-    },
-    {
-      "path": "scene/example/framing-c-r356.html",
-      "bytes": 1308,
-      "sha256": "78b85750dfa2d6de1caed74fbe23fe1df0cf18191d372a5f05165dccf3b7cf36"
-    },
-    {
-      "path": "scene/example/framing-c-r356.mjs",
-      "bytes": 27786,
-      "sha256": "1ad5f16fc828bf1be3bd8ad482eae0c56e69dcbde743e336c89c0a07dad453dc"
-    },
-    {
-      "path": "scene/example/framing-d-r356.html",
-      "bytes": 1308,
-      "sha256": "c42317c2aee3fe38d6d76387158d7b21268943db063b38b9897bc076f3051802"
-    },
-    {
-      "path": "scene/example/framing-d-r356.mjs",
-      "bytes": 27906,
-      "sha256": "3ff8e12e820b6452a19afdbea6ed5b8de0099ac66edd83fd61fad3b1d32af0a4"
-    },
-    {
-      "path": "scene/example/framing-r287.css",
-      "bytes": 19072,
-      "sha256": "7454b68adef997a34adb7cfc664893bb2ddcb72cb129af8492d73aecf86694c6"
-    },
-    {
-      "path": "scene/example/framing-r287.html",
-      "bytes": 1306,
-      "sha256": "3e4a30931b479dd4a6f9db60cd7af9549720f9354ee37788780dd53237ae675c"
-    },
-    {
-      "path": "scene/example/framing-r287.mjs",
-      "bytes": 19260,
-      "sha256": "7a079f2092d75902ccc5f80552e42df3663bd42761d24fcfc0c8ebe1c3fde2cd"
-    },
-    {
       "path": "scene/example/index.html",
       "bytes": 366,
       "sha256": "7c3ed1074b08d3e11680074b8050f302de454e4d7db7d5896b1fff77e38a86e4"
@@ -3904,16 +3834,6 @@
       "path": "scene/example/loading-r302.css",
       "bytes": 19053,
       "sha256": "b6ae03bd9f845182d73570360e337bf3da00f67a658adf971fb95f35dca23060"
-    },
-    {
-      "path": "scene/example/loading-r302.html",
-      "bytes": 1306,
-      "sha256": "ef88acf942592110dafeebbbcf0a98fde1fa04631ee0332801a2872a3b7a1f37"
-    },
-    {
-      "path": "scene/example/loading-r302.mjs",
-      "bytes": 27602,
-      "sha256": "8e5d0d58db6716a96d09fe37ad66624ea76aa695547227f5d8d38c4600faee5d"
     },
     {
       "path": "scene/example/neurosurge.css",

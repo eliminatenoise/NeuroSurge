@@ -229,7 +229,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 **Decision.** This replaces decision 14's camera. The preview page now loads its own launcher, `scene/example/eye-view-r558.mjs`, whose camera sits at the atlas-derived eye point, with no backed-off camera and no whole-arm display rule. `OWN_BODY_SOLID` in the renderer switches off every see-through effect on your own body: the window at the crosshair, the look-down translucency, the window over the brain outline and the first-person plane rule. The body is opaque; the glass brain blends over it where the brain is nearer.
 
-**Limit.** Meshes within 0.12 m of the eye (the head and face) are not drawn around the camera in first person, because the camera is inside them. They are on the mirror body and on your own body in the view from behind (E). The earlier launcher, `display-b-r388`, is unchanged on its own page.
+**Limit.** Meshes within 0.12 m of the eye (the head and face) are not drawn around the camera in first person, because the camera is inside them. They are on the mirror body and on your own body in the view from behind (E). At the time, the earlier launcher, [`display-b-r388`](https://github.com/eliminatenoise/NeuroSurge/blob/b92902515d705470801e034651d82c2b37dc3f4f/scene/example/display-b-r388.html), stayed unchanged on its own page. Its playable page has since been retired.
 
 ## 21. Field of view: 120, then 90 degrees
 
