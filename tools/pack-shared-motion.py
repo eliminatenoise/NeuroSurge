@@ -7,10 +7,12 @@ import re
 import sys
 
 ASSETS = Path(__file__).resolve().parents[1] / "scene/src/activity/shared-motion"
-CHECKPOINT = "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179"
-RUNTIME = "06728d0d083240f9f653087d2131fc0cbac51a33b11a393e6a6921f3e14a4518"
-# Filled from the upstream viewer release. Updating it requires checking both forecasts again.
-VIEWER = "1c8eaed7b3f1a595fd202b968993da9eee66845938063746bbb369b054e8e258"
+CHECKPOINTS = (
+    "9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179",
+    "8636991f783c781142ab811096b0f1769db0a6bcf9386810a3ad7b25fae4e2a6",
+)
+RUNTIME = "889dc52d36058497925836162d612373320afe865b7b1735bda09dd7781f490a"
+VIEWER = "ae01be6cb100a0ea6032bf1c9b3f077911539cb6c8136fc9dd4caae55dc03b48"
 
 def pack():
     source = (ASSETS / "index.html").read_bytes()
@@ -18,10 +20,15 @@ def pack():
         sys.exit("Viewer checksum differs from the release pin.")
     html = source.decode("utf-8")
     scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
-    if len(scripts) != 2 or CHECKPOINT not in html or hashlib.sha256(scripts[0].encode()).hexdigest() != RUNTIME:
+    if (len(scripts) != 2 or any(pin not in html for pin in CHECKPOINTS)
+            or hashlib.sha256(scripts[0].encode()).hexdigest() != RUNTIME):
         sys.exit("Unexpected viewer layout, checkpoint or runtime.")
     for script, name in zip(scripts, ("shared-motion.js", "panel.js"), strict=True):
         raw = script.encode("utf-8")
+        if name == "panel.js":
+            # Async weight verification can still be pending at the frame load event.
+            # The host needs to distinguish this from a missing or rejected UI script.
+            raw += b'\ndocument.currentScript.dataset.started = "true";\n'
         (ASSETS / name).write_bytes(raw)
         integrity = base64.b64encode(hashlib.sha256(raw).digest()).decode("ascii")
         html = html.replace("<script>" + script + "</script>",

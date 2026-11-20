@@ -40,9 +40,9 @@ export function mountSharedMotion(section, close) {
       event.stopImmediatePropagation();
       load();
     }, true);
-    // Resource errors on the last script can leave the upstream selector disabled.
-    // The runtime's own failure path also exposes this button after its async check.
-    if (view.getElementById('bench').tBodies[0].rows.length === 0) {
+    // A rejected UI script cannot display its own retry control. A healthy
+    // script registers its listeners before asynchronously checking weights.
+    if (!view.querySelector('script[src$="/panel.js"][data-started="true"]')) {
       view.getElementById('status').textContent = 'The viewer could not load its local scripts.';
       view.getElementById('retry').hidden = false;
     }
