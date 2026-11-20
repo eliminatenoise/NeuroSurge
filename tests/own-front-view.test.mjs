@@ -74,6 +74,65 @@ test('only the camera moves: the eye stays the arm\'s parent point, and the cros
   for (let k = 0; k < 3; k++) assert.ok(Math.abs(m.position[k] - f.position[k]) < 1e-6, 'no jump when E is pressed');
 });
 
+// 20 November 2026, afternoon (a hunt: a raised arm beside the head and a turn of the look the other way put the camera,
+// half a metre behind the eye, inside the arm). EYE_CLEAR moves the camera off your own limbs (rods), across the line
+// of sight only, out of the rod by clearM, without a jump.
+test('the eye view\'s camera keeps clear of your own limbs, across the line of sight, and nothing jumps', () => {
+  const O = NC.EYE_CLEAR, E = [0, 0, 0], g = [0, 0, -1], P = [0.3, 0.35, 0.4];
+  const segD = (p, r) => { const ab = r.b.map((v, i) => v - r.a[i]), t = Math.max(0, Math.min(1, ab.reduce((s, v, i) => s + v * (p[i] - r.a[i]), 0) / ab.reduce((s, v) => s + v * v, 0))); return Math.hypot(...p.map((v, i) => v - (r.a[i] + ab[i] * t))); };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  assert.ok(O.on && O.clearM > 0.04 && O.clearM < 0.15);
+  // nothing near: the camera stays where it is (the very same array)
+  const far = { a: [1, 0, 0], b: [1, 1, 0], r: 0.05 };
+  assert.equal(NC.eyeClearOfRods(P, E, g, [far]), P);
+  assert.equal(NC.eyeClearOfRods(P, E, g, []), P);
+  // a forearm running up through the camera's place (and a little toward the eye): out of it by clearM, across the
+  // line of sight (no zoom)
+  const arm = { a: [0.32, 0.1, 0.45], b: [0.27, 0.6, 0.38], r: 0.04 };
+  const Q = NC.eyeClearOfRods(P, E, g, [arm]), mv = Q.map((v, i) => v - P[i]);
+  assert.ok(segD(Q, arm) >= arm.r + O.clearM - 1e-6, `clear of the rod by ${segD(Q, arm).toFixed(3)}`);
+  assert.ok(Math.abs(dot(mv, g)) < 1e-12, 'not along the line of sight');
+  // an arm that sweeps right across the camera's place (2 cm beside it) takes the camera round it, not through it:
+  // every step of the camera is a few times the arm's at most, and the camera is clear of the arm all the way (the
+  // hunt's case: the look up and to the left, the right forearm raised up and out beside the head)
+  const unit = v => v.map(x => x / Math.hypot(...v)), gUp = unit([-0.62, 0.78, 0.01]), fore = unit([0.51, 0.79, 0.36]);
+  const sweep = (gg, dir, miss) => {
+    let last = null, most = 0, flips = 0;
+    for (let k = 0; k <= 400; k++) {
+      const x = 0.6 - k * 0.001, c0 = [x, 0.35 - dir[1] * 0.4, 0.4 + miss - dir[2] * 0.4], rod = { a: c0, b: c0.map((v, i) => v + dir[i] * 0.8), r: 0.05 };
+      const C = NC.eyeClearOfRods(P, E, gg, [rod]);
+      assert.ok(segD(C, rod) >= rod.r + O.clearM - 1e-6, `clear at ${x.toFixed(3)}`);
+      if (last) { const st = Math.hypot(C[0] - last[0], C[1] - last[1], C[2] - last[2]); most = Math.max(most, st); if (st > 0.05) flips++; }
+      last = C;
+    }
+    return { most, flips };
+  };
+  const hunt = sweep(gUp, fore, 0.02);
+  assert.ok(hunt.most < 0.01, `largest camera step ${(hunt.most * 1000).toFixed(1)} mm for 1 mm of the arm's`);
+  // (an arm straight across the line of sight cannot be gone round across it: there the camera changes sides once, in
+  // one step; ns-app eases that into a quick slide)
+  const across = sweep(unit([0.3, 0, -0.95]), [0, 1, 0], 0.03);
+  assert.ok(across.flips <= 1, `${across.flips} changes of side`);
+  // an arm that comes nearer pushes the camera along before it: from nothing at clearM, in small steps, never a jump
+  let prev = null, firstMove = null;
+  for (let k = 0; k <= 200; k++) {
+    const x = 0.6 - k * 0.0015, rod = { a: [x, 0.0, 0.4], b: [x, 0.8, 0.4], r: 0.05 }; // (upright, moving toward the camera from its right)
+    const C = NC.eyeClearOfRods(P, E, g, [rod]);
+    if (firstMove === null && Math.hypot(C[0] - P[0], C[1] - P[1], C[2] - P[2]) > 1e-9) firstMove = x - P[0];
+    if (prev) assert.ok(Math.hypot(C[0] - prev[0], C[1] - prev[1], C[2] - prev[2]) <= 0.0015 + 1e-5, `no jump at ${x.toFixed(4)}`);
+    if (x - P[0] > rod.r + O.clearM - 0.03) prev = C; else break; // (until it would reach the camera's place)
+  }
+  assert.ok(firstMove !== null && Math.abs(firstMove - (0.05 + O.clearM)) < 0.002, `it starts moving only when the rod is clearM off (${firstMove})`);
+  // a rod along the line of sight: still moved across it, and clear
+  const along = { a: [0.31, 0.35, 0.6], b: [0.31, 0.35, 0.1], r: 0.04 }, A2 = NC.eyeClearOfRods(P, E, g, [along]);
+  assert.ok(segD(A2, along) >= along.r + O.clearM - 1e-6 && Math.abs(A2[2] - P[2]) < 1e-12);
+  // never further than mostM
+  const fat = { a: [0.3, 0, 0.4], b: [0.3, 1, 0.4], r: 1 }, F = NC.eyeClearOfRods(P, E, g, [fat]);
+  assert.ok(Math.hypot(F[0] - P[0], F[1] - P[1], F[2] - P[2]) <= O.mostM + 1e-12);
+  // and the input is not changed
+  assert.deepEqual(P, [0.3, 0.35, 0.4]);
+});
+
 /** A slab lying on a tube of the rule's own shape: an inner (deep) sheet at the tube's surface and an outer sheet
  * `thick` mm further out, over angles -0.9..-0.1 rad (the right half of the chest) and heights 1150..1300 mm. */
 function slab(thick) {

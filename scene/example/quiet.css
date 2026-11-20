@@ -293,8 +293,17 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
 @media (max-width: 700px) { .ns-prompt { font-size: 14px; left: 8px; top: 8px; } }
 
 /* 19 November 2026 (EASE, audit S24): at the full reading level the bottom-left cards stood on the one-line
-   "Simulated activity" note. Both cards stand 20 px higher there; the note keeps its place. */
-.ns-app[data-ns-read="more"] .ns-hud .ns-panel-info, .ns-app[data-ns-read="more"] .ns-hud .ns-panel-legend { transform: translateY(-20px); }
+   "Simulated activity" note. Both cards stand 20 px higher there; the note keeps its place.
+   20 November 2026 (package HUD): that lift is now the HUD's own placement (ns-scene-three cornerStackFit), not a CSS
+   transform. A transformed card is the containing block of the floating "Try this" chip inside it (position: fixed), so
+   the chip's window place was measured from the card's corner and it landed on the information panel or under the
+   window's bottom edge (hunt H2-4); and a key lifted after the HUD had clamped it under the limits line lay on that
+   line. Nothing that holds the chip may have a transform, filter or perspective (tests/hud-layout.test.mjs).
+   A card the stack cannot hold whole stands at its greatest height (inline max-height) and fades out at its foot. */
+.ns-hud .ns-panel[data-ns-capped="true"] { overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+/* (a mask is painted over the card's whole group, the floating chip too, wherever the chip stands: no fade then) */
+.ns-hud .ns-panel[data-ns-capped="true"]:has(.ns-guide-float) { -webkit-mask-image: none; mask-image: none; }
 
 /* 19 November 2026 (the owner: "The number overview is very confusing"): no numbered list of movements on the card;
    the look does the movement and the card says what the area does. */
@@ -311,4 +320,41 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
 @media (max-width: 440px) {
   .ns-limbs { gap: 4px; }
   .ns-limbs-chip { flex-direction: column; gap: 2px; padding: 3px 5px; }
+}
+/* 20 November 2026 (package HUD): in a wide window under 960 px the short card in the corner is under 180 px wide, and its
+   key hint ("R more", top right) stood on the title ("Tongue" at 800 by 600 and 640 by 480). There the hint has its own
+   line at the top of the card and the title the card's whole width. */
+@media (min-aspect-ratio: 1/1) and (max-width: 960px) {
+  .ns-app[data-ns-read="read"] .ns-infopanel .ns-infopanel-keyhint { position: static; order: -1; justify-content: flex-end; margin: -4px -4px 6px 0; }
+  .ns-app[data-ns-read="read"] .ns-infopanel .ns-infopanel-title { margin-right: 0; }
+}
+/* 20 November 2026 (package HUD): a wide but small window (640 by 480) has no room for one-line buttons between the two
+   bottom corner cards (each 18.75 % of the width): the information card lay on "4 Right arm". There each button has two
+   lines, as in a phone-sized window, and the row is about 265 px wide instead of 406. */
+@media (min-aspect-ratio: 1/1) and (max-width: 680px) {
+  .ns-limbs { gap: 4px; }
+  .ns-limbs-chip { flex-direction: column; gap: 2px; padding: 3px 5px; }
+}
+/* 20 November 2026 (hunt 4): in an upright window the information card runs across the bottom of the window, and the
+   limb buttons and the "Simulated activity" line lay over its last lines (600 by 900: the KEY and STRIP PART lines).
+   There the card now stands above the limb buttons, moved up whole: they stand 34 px up and are 42 px tall, taller
+   with a coarse pointer or below 440 px, where each button has two lines. (Wide windows keep the card in the corner
+   beside the buttons.) A card too long for the band fades out at its foot, as the full card does, instead of ending
+   in half a line. */
+.ns-app { --ns-limbs-reserve: 84px; }
+@media (pointer: coarse), (max-width: 440px) { .ns-app { --ns-limbs-reserve: 102px; } }
+@media (max-aspect-ratio: 999/1000) {
+  .ns-app:has(.ns-limbs) .ns-infopanel { transform: translateY(calc(var(--ns-gap, 12px) - var(--ns-limbs-reserve)));
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
+  /* 20 November 2026 (hunt H2-6): the SHORT card is as tall as its words (title, sentence, muscles), standing on the
+     limb buttons, with at most the band above them. It used to span a fixed box from the band's legend row (no legend
+     at this level) down to the bottom, lifted whole: at 390 by 844 its muscle lines were cut off at the box's foot. */
+  .ns-app:has(.ns-limbs)[data-ns-read="read"] .ns-infopanel { top: auto; bottom: calc(var(--ns-limbs-reserve) + 4px); transform: none;
+    max-height: calc(var(--ns-info-portrait-vh) - var(--ns-limbs-reserve) + 8px) !important; }
+  /* 20 November 2026 (hunt H2-5): at the full level the colour key runs the width of the band like the card (shorter:
+     576 px wide it is 163 px tall, not 223) and docks at the band's top; the card starts under the key's measured height
+     (ns-scene-three portraitLegendDock writes --ns-portrait-legend-reserve), so the two never overlap. Where the band
+     is too short for both, the key is lifted just enough (--ns-legend-lift, at most as far as the card is lifted). */
+  .ns-hud .ns-panel-legend { width: calc(100% - 2 * var(--ns-gap, 12px)); }
+  .ns-hud .ns-panel-legend[data-ns-docked="band"] { margin-top: calc(-1 * var(--ns-legend-lift, 0px)); }
 }

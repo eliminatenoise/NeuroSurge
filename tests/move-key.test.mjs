@@ -17,7 +17,7 @@ const mod = await import(target.href);
 const { createControls, MOVE_CODES, moveKeyNumber, UI_QUEUE_LIMIT } = mod;
 const app = await import(new URL('../scene/src/ns-app.mjs', import.meta.url).href);
 const { BODY_MOTOR_MAP } = await import(new URL('../scene/src/ns-bodymap.mjs', import.meta.url).href);
-const { createActivity, armOpposedLatch } = await import(new URL('../scene/src/ns-actions.mjs', import.meta.url).href);
+const { createActivity, armOpposedLatch, JOINT_LATCH } = await import(new URL('../scene/src/ns-actions.mjs', import.meta.url).href);
 const NT = await import(new URL('../scene/src/ns-text.mjs', import.meta.url).href);
 const { infoMoves, infoActionBack, infoRegionAction, infoChosenStep, INFO_MOVES_MAX, KEYBOARD_PICTURE_ROWS } = app;
 const results = [];
@@ -32,7 +32,10 @@ const region = id => BODY_MOTOR_MAP.regions.find(r => r.id === id);
 // (every joint starts at 0 degrees). A number key sends the same 'muscle' event as below.
 const stillCase = { ran: false, why: '', checks: [] };
 try {
-  const A = createActivity();
+  // (20 November 2026: "already there" holds only where a press does not jerk the part again, as under reduced motion:
+  // with the jerk on, every press of a held movement kicks it in again (JOINT_LATCH kick), so it is never "already
+  // there"; that is checked at the end with the ordinary activity.)
+  const A = createActivity({ jointSpring: JOINT_LATCH.reducedMotion });
   let s = A.step(A.state, [], 2.5); // past the start instructions
   const still = () => A.latchView(s).still;
   const backNow = () => A.latchView(s).back;
@@ -88,6 +91,18 @@ try {
   stillCase.handMoves = infoMoves(region('rh_hand'), { leftArm: true, armState: s, still: still(), back: backNow() }).map(m => [m.id, m.atEnd, m.back]);
   press('rh_hand', 'open_hand');
   stillCase.armAfter = { open: armOpposedLatch('open_hand', s.armLatch), held: Object.keys(s.armLatch).filter(k => s.armLatch[k] > 0) };
+  // With the jerk on (the ordinary activity), a held bend is not "already there": a further press kicks it in again.
+  {
+    const J = createActivity();
+    let sj = J.step(J.state, [], 2.5);
+    const kneeFlex = { type: 'muscle', regionId: 'rh_knee', actionId: 'rh_knee_flex', regionOnly: false, at: 0 };
+    sj = J.step(sj, [kneeFlex], 0.05); sj = J.step(sj, [], 1.6);
+    const lv = J.latchView(sj), before = sj.bodyPos.knee_ext_L;
+    stillCase.checks.push(['with the jerk on, a held bend is neither "already there" nor a bring-back', !lv.still.includes('rh_knee/rh_knee_flex') && !lv.back.includes('rh_knee/rh_knee_flex')]);
+    let peak = 0; sj = J.step(sj, [kneeFlex], 0.05);
+    for (let i = 0; i < 10; i++) { sj = J.step(sj, [], 0.02); peak = Math.max(peak, Math.abs(sj.bodyPos.knee_ext_L - before)); }
+    stillCase.checks.push(['and a further press does move the knee', peak > 5]);
+  }
   stillCase.ran = true;
 } catch (error) { stillCase.why = String(error); }
 
@@ -202,7 +217,7 @@ check('a movement chosen by number stays on the card until the look moves or ano
   }
 });
 
-check('the activity itself says which movements would move nothing: the start posture, a bend, and back', async () => {
+check('the activity itself says which movements would move nothing: the start posture, a bend, and back', () => {
   // Filled in below (createActivity is asynchronous to load); see stillCase.
   assert.ok(stillCase.ran, `the activity check did not run: ${stillCase.why}`);
   for (const [name, ok] of stillCase.checks) assert.ok(ok, name);

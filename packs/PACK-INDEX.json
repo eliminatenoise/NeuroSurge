@@ -27,8 +27,8 @@
  },
  "rig": {
   "file": "BODY-RIG.json",
-  "bytes": 223984,
-  "sha256": "e47094874c984c92eb69269cb896d49dc1d1ac96a04620c0c1a898fec2beef09",
+  "bytes": 224018,
+  "sha256": "d7243feaca333a174acadf9593ea4c7de93866ba126bd332f3df675a6ab3bd82",
   "note": "The body rig (joint pivots and axes, which bone each muscle rides), estimated by tools/page-body.mjs from the SOURCE meshes exactly as the page prepares them; the game builds its rig from the coarser meshes with these pivots and muscle rows and checks the result against this file (ns-body bodyRigFromFile, bodyRigMatchesFile)."
  },
  "packs": [

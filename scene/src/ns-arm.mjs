@@ -60,6 +60,7 @@ import {
   FIST_POSE_DEG, REST_HAND_POSE_DEG, DIGITS, PRONATION_RANGE_DEG, PRONATION_STATES
 } from './ns-rig.mjs';
 import { activityColor, activityShade, hexToLinear } from './ns-colors.mjs';
+import { BODY_SHAPE } from './ns-body-shape.mjs'; // 20 November 2026: the longer arm (FREE_HAND.startBodyM)
 import { shoulderTurnRange } from './ns-dance.mjs';
 
 const fail = (code, message) => { throw new Error(`ns:${code}: ${message}`); };
@@ -2128,8 +2129,16 @@ export function fitHand(rig, boxes, request, viewport, options = {}) {
  *   wrist        the wrist's small share of a reach (as WASD_WRIST_SYNERGY: bent back a little at full reach, bent
  *                forward a little with the hand pulled in), from the shoulder-to-hand distance.
  */
+/* 20 November 2026 (the owner: "Let's make the limbs longer"): the arm is drawn longer (ns-body-shape BODY_SHAPE: upper
+ * arm, forearm and hand each by their own factor; this rig is built from the reshaped packet), so the start place is
+ * moved out along its own line by the arm's gain from the shoulder to the hand's middle (the source arm's 270, 253 and
+ * about 60 mm), and the elbow starts as softly bent as before (at the old place the longer arm bent 53 degrees). It is
+ * also turned 4 degrees down about the chest's side to side axis and 3 in toward the body ([-0.245, -0.341, -0.373]
+ * before), as the right arm of the start posture is (ns-body BODY_POSTURES.open r_shoulder_flex 37 -> 33, r_shoulder_abd
+ * 8 -> 5): the longer arms' hands had risen into the motor strip. */
+const ARM_SHAPE_GAIN = (() => { const L = BODY_SHAPE.limbs; if (!L || !L.on) return 1; const a = L.arm; return (a.upper * 270 + a.fore * 253 + a.end * 60) / 583; })();
 export const FREE_HAND = Object.freeze({
-  startBodyM: Object.freeze([-0.245, -0.341, -0.373]),
+  startBodyM: Object.freeze([-0.225, -0.379, -0.348].map(v => v * ARM_SHAPE_GAIN)),
   speedMps: 0.6, leadM: 0.02,
   freeBelowDeg: 35, acrossDeg: 135,
   behind: Object.freeze([[35, -120], [60, -90], [90, -40], [180, 0]].map(p => Object.freeze(p))),

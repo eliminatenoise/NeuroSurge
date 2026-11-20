@@ -92,7 +92,13 @@ try {
   assert.match(checks.pauseLimbControls, /W S\s+move it forward or back/);
   assert.match(checks.pauseLimbControls, /A D\s+move it left or right/);
   assert.match(checks.pauseLimbControls, /Click limb\s+choose it/);
-  assert.match(checks.pauseLimbControls, /In the eye view, 1 to 4 turn your view to the limb.*look up to raise it, down to lower it/s);
+  // 20 November 2026: restated for the current rule (ns-app LIMB_KEYS.view, keepInFrameTurn; DESIGN-DECISIONS sections
+  // 144 and 167). The owner, 19 November: "Perhaps the problem with the zoom in, zoom out fixes we look up and down is
+  // the 3/4 height rule. Disregard that rule." 1 to 4 no longer turn the view to the limb, so the page no longer says
+  // they do; the view turns only when the limb's hand or foot would leave the picture (the full instructions say so,
+  // checked below). The look carries the chosen limb in the eye view only.
+  assert.match(checks.pauseLimbControls, /In the eye view the chosen limb goes with your view: look up to raise it, down to lower it/);
+  assert.doesNotMatch(checks.pauseLimbControls, /turn your view to the limb/);
   assert.doesNotMatch(await menu.innerText(), /a movement, by its number|look away ends/i);
   await screenshot('pause-limb-controls');
   await shell.locator('.ns-shell-heading').click();
@@ -110,7 +116,18 @@ try {
   assert.ok(await instructions.isVisible());
   checks.fullLimbControls = await instructions.locator('li').filter({ hasText: 'Press 1, 2, 3 or 4' }).innerText();
   assert.match(checks.fullLimbControls, /left arm, left leg, right leg or right arm/);
+  // 20 November 2026 (see above): the full words say when the view turns now, and that the look carries the limb in the
+  // eye view; and a look no longer turns the chest or bends the trunk (ns-app LOOK_BENDS_TRUNK).
+  assert.match(checks.fullLimbControls, /In the eye view the chosen limb goes with your view/);
+  assert.match(checks.fullLimbControls, /Your view turns only when the hand or foot would leave the picture/);
+  assert.doesNotMatch(checks.fullLimbControls, /your view turns to it/i);
   const fullInstructions = await instructions.innerText();
+  assert.match(fullInstructions, /the head and neck turn, and past their reach the eyes turn further/);
+  assert.doesNotMatch(fullInstructions, /trunk bends/);
+  const fullControls = await shell.locator('.ns-shell-help').innerText();
+  assert.match(fullControls, /past their reach your eyes turn further/);
+  assert.match(fullControls, /in the eye view the chosen limb goes with your view/);
+  assert.doesNotMatch(fullControls, /trunk bends/);
   assert.match(fullInstructions, /Rest your look on a motor area to move its body part. Click to repeat the movement./);
   assert.doesNotMatch(fullInstructions, /press a number (?:key|to choose)|press the numbers/i);
   await shell.getByRole('button', { name: 'Show the short instructions' }).click();

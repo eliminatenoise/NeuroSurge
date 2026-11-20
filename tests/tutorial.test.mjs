@@ -13,7 +13,8 @@ import { fakeDoc, all, hasClass } from './fake-doc.mjs';
 const F = { thirdPerson: true };
 const fresh = () => NG.createGuide({ now: 0, features: F, tutorial: true });
 const EVENTS = {
-  lookStrip: [{ type: 'look', regionId: 'rh_elbow' }],
+  // 20 November 2026: the look's own switch-on of an area that moves something (no longer the bare look at an area)
+  lookStrip: [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'gaze' }],
   pressArea: [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'click' }],
   chooseLimb: [{ type: 'limbChoice', n: 3 }],
   dragLimb: [{ type: 'limbDrag', deg: 30 }],
@@ -90,6 +91,22 @@ test('strict: an action of a later step does not jump the tutorial ahead; a nudg
   assert.equal(NG.currentGoal(g), 'dragLimb', 'a nudge is not a drag');
   g = NG.guideStep(g, [{ type: 'limbDrag', deg: NG.GUIDE_OPTIONS.limbDragMinDeg }], 7);
   assert.equal(NG.currentGoal(g), 'dragBrain');
+});
+
+test('20 November 2026 (browser hunt): the first step waits for a look that really switches an area on and moves a part', () => {
+  let g = fresh();
+  // the crosshair crossing areas while Space holds the brain (looks are silent then: no switch-on, nothing moves)
+  g = NG.guideStep(g, [{ type: 'look', regionId: 'rh_shoulder' }, { type: 'look', regionId: 'rh_tongue' }], 1);
+  assert.equal(NG.currentGoal(g), 'lookStrip', 'the crosshair on an area is not a switch-on');
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'lh_scan_superior', isLeftArm: false, kind: 'integration', moves: false, source: 'gaze' }], 2);
+  assert.equal(NG.currentGoal(g), 'lookStrip', 'an area that moves nothing does not show "a part moves"');
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'rh_elbow', isLeftArm: true, kind: 'effector', moves: false, awaitMove: true, source: 'gaze' }], 3);
+  assert.equal(NG.currentGoal(g), 'lookStrip', 'a left-arm movement already held moves nothing');
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'click' }], 4);
+  assert.equal(NG.currentGoal(g), 'lookStrip', 'a click is not the look');
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'rh_elbow', isLeftArm: true, kind: 'effector', moves: true, awaitMove: true, source: 'dwell' }], 5);
+  assert.equal(NG.currentGoal(g), 'pressArea', 'the look that rested on a left-arm area switched it on');
+  assert.equal(NG.goalsDone(g), 1, 'and the same switch-on presses nothing');
 });
 
 test('Enter skips the step that shows; the Esc page hides it, shows it and starts it again', () => {

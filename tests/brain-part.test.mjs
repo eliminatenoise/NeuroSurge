@@ -156,3 +156,100 @@ test('on the atlas brain: the gap between the two motor strips grows from 2 mm t
     assert.ok(Math.abs((b.hemispheres[h].hi - b.hemispheres[h].lo) - (a.hemispheres[h].hi - a.hemispheres[h].lo)) < 1e-3, 'and is as long as it was');
   }
 });
+
+// 20 November 2026 (review of updates 49 to 56): the brain's vessels (switched off in the plain game, PLAIN_GAME.vessels,
+// but kept to be switched on again) follow the parted halves.
+const { partedOnBrain, partedBridging } = await import('../scene/src/ns-brain-part.mjs');
+const { validateArteryManifest, brainEnvelope, buildCerebralVeins, VEIN_COURSES } = await import('../scene/src/ns-vessels.mjs');
+const { solidGrid } = await import('../scene/src/ns-collide.mjs');
+function arteryMeshes() {
+  const pkt = 'packets/bodyparts3d-cerebral-arteries-r1/';
+  const entries = validateArteryManifest(JSON.parse(readFileSync(new URL(`${pkt}CEREBRAL-ARTERIES-MESH-MANIFEST.json`, root), 'utf8')));
+  return entries.map(e => ({ ...e, ...readObj(`${pkt}${e.path}`), sideNum: e.side === 'left' ? 1 : e.side === 'right' ? -1 : 0 }));
+}
+// the share of a set of points that lies in the sealed inside of a brain (ns-collide solidGrid, 2 mm cells) / outside it
+function inOut(solid, lists) {
+  const { lo, cell, n, state } = solid; let inside = 0, outside = 0, all = 0;
+  for (const P of lists) for (let i = 0; i < P.length; i += 3) {
+    const x = Math.floor((P[i] - lo[0]) / cell), y = Math.floor((P[i + 1] - lo[1]) / cell), z = Math.floor((P[i + 2] - lo[2]) / cell);
+    const s = x < 0 || y < 0 || z < 0 || x >= n[0] || y >= n[1] || z >= n[2] ? 2 : state[x + n[0] * y + n[0] * n[1] * z];
+    all++; if (s === 0) inside++; else if (s === 2) outside++;
+  }
+  return { inside: inside / all, outside: outside / all };
+}
+
+test('the cerebral arteries move with the brain under them: in their sulci again, none hanging in the gap, none torn', () => {
+  const atlas = atlasBrain().map(m => ({ ...m, side: hemisphereSideOf(m) }));
+  const parted = atlas.map(m => ({ ...m, positions: partedPositions(m.positions, m.side) }));
+  const arteries = arteryMeshes();
+  const moved = partedOnBrain(arteries.map(a => ({ positions: a.positions, indices: a.indices, side: a.sideNum })), atlas);
+  const solidA = solidGrid(atlas, { cellMm: 2 }), solidP = solidGrid(parted, { cellMm: 2 });
+  const pick = (re, list) => arteries.flatMap((a, i) => (re.test(a.territory) && a.side !== 'midline' ? [list[i]] : []));
+  const mcaA = inOut(solidA, pick(/mca/, arteries.map(a => a.positions))), mcaWas = inOut(solidP, pick(/mca/, arteries.map(a => a.positions))), mca = inOut(solidP, pick(/mca/, moved));
+  const acaA = inOut(solidA, pick(/aca/, arteries.map(a => a.positions))), acaWas = inOut(solidP, pick(/aca/, arteries.map(a => a.positions))), aca = inOut(solidP, pick(/aca/, moved));
+  // (left as they were, about 36 % of the middle cerebral branches lay sealed inside their moved half and 88 % of the
+  // anterior cerebral ones outside the brain, in the gap)
+  assert.ok(mcaWas.inside > 0.3 && acaWas.outside > 0.8, JSON.stringify({ mcaWas, acaWas }));
+  assert.ok(Math.abs(mca.inside - mcaA.inside) < 0.01, `middle cerebral: inside ${(100 * mca.inside).toFixed(1)} %, the atlas ${(100 * mcaA.inside).toFixed(1)} %`);
+  assert.ok(Math.abs(aca.outside - acaA.outside) < 0.03, `anterior cerebral: outside ${(100 * aca.outside).toFixed(1)} %, the atlas ${(100 * acaA.outside).toFixed(1)} %`);
+  arteries.forEach((a, i) => {
+    const P = a.positions, Q = moved[i];
+    if (a.side === 'midline') { assert.equal(Q, P, `${a.name} stays`); return; }
+    let lo = Infinity, hi = -Infinity, stretch = 0;
+    for (let k = 0; k < P.length; k += 3) { const d = (Q[k] - P[k]) * a.sideNum; lo = Math.min(lo, d); hi = Math.max(hi, d); assert.ok(Q[k + 1] === P[k + 1] && Q[k + 2] === P[k + 2]); }
+    assert.ok(lo >= -1e-4 && hi <= HEMI_GAP.eachMm + 1e-4, `${a.name} moves away from the midline, never more than its half`);
+    // the pericallosal and the middle cerebral branches over the strip (in front of the gap's back) take the whole step
+    if (/pericallosal|central sulcus|precentral sulcus/.test(a.name)) assert.ok(lo > HEMI_GAP.eachMm * 0.95 || a.bounds_max[1] > HEMI_GAP.back.fullToYMm, `${a.name}: ${lo.toFixed(2)} mm`);
+    for (let t = 0; t < a.indices.length; t += 3) for (const [u, v] of [[a.indices[t], a.indices[t + 1]], [a.indices[t + 1], a.indices[t + 2]]]) {
+      const d0 = Math.hypot(P[3 * u] - P[3 * v], P[3 * u + 1] - P[3 * v + 1], P[3 * u + 2] - P[3 * v + 2]), d1 = Math.hypot(Q[3 * u] - Q[3 * v], Q[3 * u + 1] - Q[3 * v + 1], Q[3 * u + 2] - Q[3 * v + 2]);
+      stretch = Math.max(stretch, d1 - d0);
+    }
+    assert.ok(stretch < 1.6, `${a.name}: no edge stretched by more than 1.6 mm (${stretch.toFixed(2)})`);
+  });
+  // the circle of Willis under the brain, where the atlas has the tree in separate meshes: two vessels that meet (points
+  // within 1 mm) still meet, whether both move or one stays (the anterior communicating and the basilar artery)
+  const meets = (n1, n2) => {
+    const i = arteries.findIndex(a => a.name === n1), j = arteries.findIndex(a => a.name === n2), A = arteries[i].positions, B = arteries[j].positions;
+    let worst = -Infinity;
+    for (let p = 0; p < A.length; p += 3) for (let q = 0; q < B.length; q += 3) {
+      const d0 = Math.hypot(A[p] - B[q], A[p + 1] - B[q + 1], A[p + 2] - B[q + 2]);
+      if (d0 <= 1) worst = Math.max(worst, Math.hypot(moved[i][p] - moved[j][q], moved[i][p + 1] - moved[j][q + 1], moved[i][p + 2] - moved[j][q + 2]) - d0);
+    }
+    return worst;
+  };
+  for (const [n1, n2] of [['right anterior cerebral artery', 'anterior communicating artery'], ['left anterior cerebral artery', 'anterior communicating artery'],
+    ['sphenoid part of right middle cerebral artery', 'right anterior cerebral artery'], ['precommunicating part of left posterior cerebral artery', 'basilar artery'],
+    ['precommunicating part of right posterior cerebral artery', 'right posterior communicating artery'], ['postcommunicating part of left posterior cerebral artery', 'left lateral occipital artery']]) {
+    const g = meets(n1, n2);
+    assert.ok(g > -Infinity && g < 0.5, `${n1} and ${n2} still meet: a gap of at most ${g.toFixed(2)} mm opened`);
+  }
+  assert.deepEqual(partedOnBrain([{ positions: arteries[0].positions, side: 1 }], atlas, { eachMm: 0 }), [arteries[0].positions]);
+});
+
+test('the hand-laid veins: laid on the atlas brain, parted by their side; the sagittal sinus stays over the gap at its top edge', () => {
+  // the rule itself: the whole step bridgeMm off the midline, none on it, smooth and growing between; none at the back
+  const p = Float32Array.from([30, -80, 1600, -30, -80, 1600, 0, -80, 1630, 1, -80, 1630, 2, -80, 1630, 30, 8, 1600]);
+  const q = partedBridging(p);
+  assert.deepEqual([q[0], q[3], q[6], q[15]], [30 + HEMI_GAP.eachMm, -30 - HEMI_GAP.eachMm, 0, 30]);
+  assert.ok(q[9] > 1 && q[9] < 2 + HEMI_GAP.eachMm && Math.abs(q[12] - (2 + HEMI_GAP.eachMm)) < 1e-6);
+  assert.notEqual(q, p); assert.equal(p[0], 30);
+  // on the atlas brain (as setBrainVessels lays them): the envelope over the midline is the brain's top, not its middle
+  const atlas = atlasBrain().map(m => ({ ...m, side: hemisphereSideOf(m) }));
+  const parted = atlas.map(m => partedPositions(m.positions, m.side));
+  const E = brainEnvelope(atlas.map(m => m.positions)), Ep = brainEnvelope(parted);
+  const up = (env, y, z) => { const c = env.centre, d = [0, y - c[1], z - c[2]], l = Math.hypot(...d); let k = Math.floor(Math.acos(0) / Math.PI * env.nLat) * env.nLon + Math.min(env.nLon - 1, Math.floor((Math.atan2(d[2], d[1]) + Math.PI) / (2 * Math.PI) * env.nLon)); return { r: env.r[k], l }; };
+  assert.ok(up(E, -80, 1632).r > 75 && up(Ep, -80, 1632).r < 20, `straight up over the gap: ${up(E, -80, 1632).r.toFixed(1)} mm on the atlas brain, ${up(Ep, -80, 1632).r.toFixed(1)} on the parted one`);
+  const mid = buildCerebralVeins(E, { courses: VEIN_COURSES.filter(c => c.side === 'mid') });
+  let zLo = Infinity;
+  for (let i = 0; i < mid.sinus.positions.length; i += 3) if (mid.sinus.positions[i + 1] > -100 && mid.sinus.positions[i + 1] < -60) zLo = Math.min(zLo, mid.sinus.positions[i + 2]);
+  // the halves' top edges over the open gap (atlas z of their highest points there) and the sinus over them
+  let top = -Infinity;
+  for (const m of atlas) if (m.side) for (let i = 0; i < m.positions.length; i += 3) if (m.positions[i + 1] > -100 && m.positions[i + 1] < -60) top = Math.max(top, m.positions[i + 2]);
+  assert.ok(zLo > top - 6, `over the open gap the sinus lies no lower than ${zLo.toFixed(1)}, the halves' top ${top.toFixed(1)} (on the parted brain's envelope it lay 55 to 70 mm down in the gap)`);
+  // the veins of a half move with it: a vein point well off the midline, in front of the gap's back, takes the whole step
+  const sides = buildCerebralVeins(E, { courses: VEIN_COURSES.filter(c => c.side !== 'mid') });
+  const vp = sides.veins.positions, vq = partedBridging(vp);
+  let n = 0;
+  for (let i = 0; i < vp.length; i += 3) if (Math.abs(vp[i]) > 2 && vp[i + 1] < HEMI_GAP.back.fullToYMm) { assert.ok(Math.abs(vq[i] - vp[i] - Math.sign(vp[i]) * HEMI_GAP.eachMm) < 1e-4); n++; }
+  assert.ok(n > 1000);
+});

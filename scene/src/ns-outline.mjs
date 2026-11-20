@@ -801,6 +801,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   let on = enabled !== false && ok;
   let occOn = false;
   let afterId = null; // 18 November 2026 (SEE): setAfterId(fn), the hidden-limb pass (ns-see createGhostPass)
+  let clipPlanes = null; // setClip's planes, handed to afterId (ctx.clip) so the hidden-things pass cuts the same (20 November 2026)
   let bufW = 0, bufH = 0, pr = 1, ss = 1, level = 0, ssW = 0, ssH = 0;
   const maxTexture = renderer.capabilities && Number.isFinite(renderer.capabilities.maxTextureSize) ? renderer.capabilities.maxTextureSize : 4096;
   const camKey = new Float64Array(32);
@@ -1173,7 +1174,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       stats.draws = info ? info.calls : 0;
       if (skinShown > 0) { renderer.autoClear = false; renderer.render(skinScene, camera); renderer.autoClear = true; stats.draws += skinShown; } // 18 November 2026
       // 18 November 2026 (SEE, ns-see): the hidden-limb pass reads this frame's ID picture (only when it was redrawn).
-      if (afterId) { try { afterId({ renderer, idScene, batch, skinBatch: sb.batch, skinBatchUniforms: skinBatchMat.uniforms, skinScene: skinShown > 0 ? skinScene : null, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
+      if (afterId) { try { afterId({ renderer, idScene, batch, skinBatch: sb.batch, skinBatchUniforms: skinBatchMat.uniforms, skinScene: skinShown > 0 ? skinScene : null, target, depthTexture, adjTex, size: [ssW, ssH], ss, pr, bufW, bufH, camera, pxPerCmAt1m: inkUni.uTaper.value.x, clip: clipPlanes }); } catch (e) { afterId = null; console.warn('ns-outline: the hidden-limb pass was switched off:', e); } }
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
         renderer.setRenderTarget(stripTarget);
@@ -1220,7 +1221,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * cut side of every plane is dropped), or null: the ID pass leaves out what the main picture leaves out
    * (ns-scene-three EYE_COLLAR). The planes are the scene's own objects; it moves them, and asks for a redraw. */
   function setClip(planes) {
-    for (const m of [idMat, skinIdMat, skinBatchMat]) { m.clippingPlanes = planes && planes.length ? planes : null; m.clipIntersection = true; m.needsUpdate = true; }
+    clipPlanes = planes && planes.length ? planes : null;
+    for (const m of [idMat, skinIdMat, skinBatchMat]) { m.clippingPlanes = clipPlanes; m.clipIntersection = true; m.needsUpdate = true; }
     invalidate();
   }
   function setEnabled(v) {

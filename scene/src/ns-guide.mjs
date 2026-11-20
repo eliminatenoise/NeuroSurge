@@ -77,7 +77,11 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
  * 19 November 2026 (EASE; the owner: "there should be a playable tutorial to learn how to use the game, as it's not very
  * clear at all, and to master the controls quickly"). The TUTORIAL is this same guide with its own short list, played
  * in the game itself: nine steps, each asking for ONE action and moving on the moment the player does it.
- *   lookStrip    look at a motor area of the strip                         event { type: 'look', regionId }
+ *   lookStrip    look at a motor area of the strip: the look switches it   'activate' by a look (source 'gaze' or 'dwell')
+ *                on and a part moves                                       of an area that moves something (20 November
+ *                                                                          2026: no longer the bare 'look' at an area,
+ *                                                                          which a look while Space holds the brain gave
+ *                                                                          although looks are silent then)
  *   pressArea    click it: the part jerks again, harder                    'activate' by a click that moves something
  *   chooseLimb   2, 3 or 4 (or a double click): another limb is chosen       { type: 'limbChoice', n } (n 2 to 4: 1, the left
  *                                                                          arm, is the one the game starts on)
@@ -222,15 +226,19 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         const pressed = ev.source !== 'gaze' && ev.source !== 'dwell';
         // (A look now switches an area on by itself, so the left arm's own 'armMoved' no longer proves a click: a
         // click on a left-arm area that moves something finishes pressArea here, whether or not the arm has started.)
+        // 20 November 2026 (browser hunt): the tutorial's first step ("Look at a colour on the brain: a part moves") is
+        // done by the look's own switch-on of an area that moves something, not by the crosshair merely crossing an
+        // area: while Space holds the brain the looks are silent (nothing moves), and the step used to complete then.
+        if (!pressed && ev.kind !== 'integration' && ev.moves !== false && (ev.isLeftArm === true || ev.isLeftArm === false)) mark('lookStrip');
         if (ev.isLeftArm === true) { if (ev.moves !== false) { if (ev.awaitMove !== true) mark('leftArmArea'); if (pressed) mark('pressArea'); } }
         else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) { mark('otherPart'); if (pressed) mark('pressArea'); }
         if (armGlow) w().glowPending = { at: t, regionId: typeof ev.regionId === 'string' ? ev.regionId : null };
         break;
       }
       case 'armMoved': mark('leftArmArea'); break;
-      // 19 November (the tutorial): the look is on a motor area; a number key was held and came up; R was pressed; the
-      // step that shows was skipped.
-      case 'look': if (typeof ev.regionId === 'string' && ev.regionId) mark('lookStrip'); break;
+      // 19 November (the tutorial): a number key was held and came up; R was pressed; the step that shows was skipped.
+      // (20 November 2026: { type: 'look' }, the crosshair on a motor area, no longer completes lookStrip: the look's
+      // own switch-on does, as an 'activate' above. The event is ignored, as any unknown one.)
       case 'moveHold': if (isNum(ev.heldS) && ev.heldS >= (isNum(o.holdMinS) ? o.holdMinS : GUIDE_OPTIONS.holdMinS)) mark('holdPart'); break;
       case 'limbDrag': if (isNum(ev.deg) && ev.deg >= (isNum(o.limbDragMinDeg) ? o.limbDragMinDeg : GUIDE_OPTIONS.limbDragMinDeg)) mark('dragLimb'); break;
       // (another limb chosen: 2, 3 or 4, a double click, a click on the limb; choosing 1 again, the limb the game starts on, is not it)

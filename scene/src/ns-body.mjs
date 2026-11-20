@@ -71,6 +71,8 @@ import { BODY_ARM_SOURCE_DOMAIN, BODY_KEEP_FRAME_KIND } from './ns-body-arm-brid
 
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification } from './ns-regional-layers.mjs';
 import { SEGMENTS as RIG_SEGMENTS, FOREARM_TWIST_CHAIN, FOREARM_TWIST_LEVELS, TWIST_SKIN, TWIST_TABLE_STEPS } from './ns-rig.mjs';
+import { BODY_SHAPE, limbLengthField, trunkShapeField } from './ns-body-shape.mjs';
+export { BODY_SHAPE };
 
 /** Agreed non-left-arm joint ids (shared interface 2). R558 (Messages 14, 15 and 2: as many activation points as
  * possible, left-right symmetry, full ranges of motion) adds the right hand's own digit joints (each finger and the
@@ -284,7 +286,12 @@ const GIRDLE_BASES = Object.freeze(['r_gbase', 'l_gbase']);
  * the zone the blend is an exact slide along the shaft. Display mechanics on one reference body, not measured tendon
  * excursion.
  */
-export const QUAD_WRAP = Object.freeze({ zoneMm: 200, heightsMm: Object.freeze([15, 30, 45, 60]), easeMm: 12 });
+// fadeMm (20 November 2026, with the longer thigh of ns-body-shape): just above the zone the plain weights of a
+// vertex may still give the kneecap or the shin a few per cent (on the longer thigh the kneecap is a vertex's second
+// nearest bone there more often than the pelvis); that share now grows from nothing at the top of the zone over fadeMm,
+// so the wrap's weights (the thigh alone at the top) and the plain ones meet without a step. Before, a step of 3 per
+// cent at the top of the zone stretched one edge of rectus femoris four times at a fully bent knee.
+export const QUAD_WRAP = Object.freeze({ zoneMm: 200, heightsMm: Object.freeze([15, 30, 45, 60]), easeMm: 12, fadeMm: 40 });
 /**
  * 18 November 2026 (the owner, 12 November: "the shoulder literally detaches ... and the socket rips open"; a check on
  * 18 November: needles and a bare joint at the right shoulder). The muscles that run from the trunk and the shoulder
@@ -1424,7 +1431,14 @@ function quadWrapWeights(rig, side, p, ia, ib, wa, idx) {
   const hs = [0, ...QUAD_WRAP.heightsMm, QUAD_WRAP.zoneMm], P = pf.point, up = wr.up, shank = SEG_INDEX.get(`${side}_shank`);
   for (let v = 0, n = p.length / 3; v < n; v++) {
     const h = (p[3 * v] - P[0]) * up[0] + (p[3 * v + 1] - P[1]) * up[1] + (p[3 * v + 2] - P[2]) * up[2];
-    if (h >= QUAD_WRAP.zoneMm) continue;
+    if (h >= QUAD_WRAP.zoneMm) {
+      if (h < QUAD_WRAP.zoneMm + QUAD_WRAP.fadeMm) {
+        const f = sstep((h - QUAD_WRAP.zoneMm) / QUAD_WRAP.fadeMm);
+        if (ia[v] === chain[0] || ia[v] === shank) wa[v] *= f;
+        else if (ib[v] === chain[0] || ib[v] === shank) wa[v] = 1 - (1 - wa[v]) * f;
+      }
+      continue;
+    }
     if (h <= 0) {
       const x = p[3 * v], y = p[3 * v + 1], z = p[3 * v + 2];
       const dp = nnNearestD2(idx[`${side}_patella`], x, y, z), ds = idx[`${side}_shank`] ? nnNearestD2(idx[`${side}_shank`], x, y, z) : Infinity;
@@ -3016,14 +3030,18 @@ export function hipRotationClearRange(rig, targets = {}, options = {}) {
       if (maxOff(pl, ql) > o.linearMm || maxOff(pr, qr) > o.linearMm) turn = null;
     }
   }
+  const near0 = pointSetsNear(l0, r0, o.boneGapMm), gap0 = near0 === Infinity ? null : near0;
+  const need = gap0 === null ? o.boneGapMm : Math.min(o.boneGapMm, gap0);
+  // 20 November 2026 (BODYSHAPE: with the longer legs the feet stand 0.1 mm apart at 5 degrees of adduction): the quick
+  // rotation may be off by up to linearMm, so where the gap to keep is not several times that, every turn is posed in
+  // full (the quick answer was 26 degrees inward where the full one is 40)
+  if (turn && need < 4 * o.linearMm) turn = null;
   const pointsAt = deg => {
     if (deg === 0) return [l0, r0];
     const a = appliedAt(deg);
     if (!turn || !othersSame(a)) return pointsOf(a);
     return quickAt(a);
   };
-  const near0 = pointSetsNear(l0, r0, o.boneGapMm), gap0 = near0 === Infinity ? null : near0;
-  const need = gap0 === null ? o.boneGapMm : Math.min(o.boneGapMm, gap0);
   const clearAt = deg => { const [l, r] = pointsAt(deg); return pointSetsApart(l, r, need); };
   const furthest = (sign, maxDeg) => {
     let ok = 0;
@@ -3738,7 +3756,16 @@ export const BODY_POSTURES = deepFreezeRig({
   // probably a little too wide at the moment, the ankles"): the feet still clear each other on the overside.
   // 18 November 2026, late (the whole arm turns over in the limb switch, ns-dance ARM_TURN): the right upper arm starts
   // at the underside end of its own turn (r_shoulder_rot 35 outward), with the palm up.
-  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, leg_turn_L: 25, leg_turn_R: 25, r_shoulder_flex: 37, r_shoulder_abd: 8, r_elbow_flex: 8, r_pronation: 0, r_shoulder_rot: 35 },
+  // 20 November 2026 (the owner: "Let's make the limbs longer"; ns-body-shape BODY_SHAPE): the arms are drawn about 1.19
+  // times as long, and at 37 degrees their hands rose into the motor strip in the start picture (your fingertips over the
+  // face areas, the mirror body's hands over the leg and trunk areas, whose labels then had no place). The upper arm
+  // now starts 33 degrees forward of the trunk and 5 out (37 and 8 before): the hands lie a little lower and nearer the
+  // thighs, still stretched out along the body toward the knees, and the mirror body's hands come in beside its waist,
+  // clear of the strip (ns-arm FREE_HAND.startBodyM is turned the same way for the left arm). Tried: 27 forward (the
+  // hands clear of the strip, but the mirror body's hands then lay against its own side arrows, and turning the mirror
+  // body and back re-planned its up arrow a pixel aside: tests/browser-mirror-compass.mjs failed); 30 the same; 33 with
+  // 8 out (the mirror body's hands on the edge of the arm areas: the start check's limit exactly).
+  open: { pelvic_tilt: 55, neck_flex: 40, trunk_flex: -5, hip_abd_L: 7, hip_abd_R: 7, knee_ext_L: -6, knee_ext_R: -6, leg_turn_L: 25, leg_turn_R: 25, r_shoulder_flex: 33, r_shoulder_abd: 5, r_elbow_flex: 8, r_pronation: 0, r_shoulder_rot: 35 },
   seated: {
     hip_flex_L: 95, hip_flex_R: 95, knee_ext_L: -45, knee_ext_R: -45, ankle_dorsi_L: -15, ankle_dorsi_R: -15,
     r_shoulder_flex: 15, r_shoulder_abd: 15, r_elbow_flex: 85, r_pronation: 115, r_wrist_flex: 10, r_grasp: 20
@@ -5813,8 +5840,9 @@ function bulkMembership(e) {
   return null;
 }
 
-/** BODY_BULK on the full body's rest meshes (see the comment above BODY_BULK). */
-export function bulkBody(entries, meshesById, rule = BODY_BULK) {
+/** BODY_BULK on the full body's rest meshes (see the comment above BODY_BULK); then, last, BODY_SHAPE (shapeBody:
+ * longer limbs, the trunk's front; 20 November 2026). shape null leaves the shape out (the bulk alone, for its tests). */
+export function bulkBody(entries, meshesById, rule = BODY_BULK, shape = BODY_SHAPE) {
   if (!(meshesById instanceof Map)) return { meshesById, report: null };
   const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
   const list = entryList(entries), groups = new Map();
@@ -5918,8 +5946,167 @@ export function bulkBody(entries, meshesById, rule = BODY_BULK) {
   }
   report.pads = { meshes: padEntries.length, vertices: padEntries.reduce((t, e) => t + e.vertices, 0) };
   report.factors = bulkFactors(rule);
+  let allEntries = padEntries.length ? [...raw, ...padEntries] : entries, shaped = out;
+  if (shape) { const s = shapeBody(allEntries, out, shape); shaped = s.meshesById; allEntries = s.entries; report.shape = s.report; }
   report.ms = Math.round(((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) * 10) / 10;
-  return { meshesById: out, entries: padEntries.length ? [...raw, ...padEntries] : entries, report };
+  // unshaped: the same meshes before the shape (same vertex order), for what is pinned to source places (the body's
+  // vessels, ns-vessels bindBodyVessels: bound to these and drawn on the reshaped ones, they follow the longer limbs)
+  return { meshesById: shaped, entries: allEntries, report, unshaped: out };
+}
+
+/**
+ * BODY_SHAPE (ns-body-shape: longer limbs, a flatter chest, a lower torso that comes forward; 20 November 2026) on the
+ * full body's rest meshes, after the trained build and before the rig (so the rig's joints are found on the reshaped
+ * bones and everything built from the rig follows). The limbs: every mesh of a limb (bulkMembership: its bones, and the
+ * muscles with a candidate segment on it) is moved by the limb's lengthening field (limbLengthField). A muscle that
+ * also has candidate segments off the limb (it starts on the trunk or a girdle) is moved per vertex only as far as the
+ * vertex lies on the limb's bones: weight sstep((dTrunk - dLimb) / band + 1/2), dLimb / dTrunk = its distance to the
+ * nearest point of the limb's bones / of the muscle's other candidate bones (voxel-downsampled to cellMm), so the part of
+ * latissimus dorsi on the ribs and the rotator cuff on the shoulder blade stay where they are while their ends on the
+ * limb go with it. A muscle that also crosses the limb's middle joint moves whole (shapeCrossing): its origin lies
+ * beside the root joint, where the lengthening is still nil. (The body's own left-arm muscles take the right arm's bones,
+ * mirrored, as the trained build does: the left arm's bones are in the left arm's packet.) Then the trunk rule
+ * (trunkShapeField) on every mesh. Returns { meshesById (a new Map; moved meshes get new position arrays), report }.
+ */
+/** BODY_SHAPE's limb for a manifest entry, as shapeBody moves it (pure; for the loading picture's table,
+ * tools/build-assembly-parts.mjs): 'r_arm' | 'l_arm' | 'r_leg' | 'l_leg', with '*' added for a muscle that also lies
+ * on the trunk or a girdle (moved only where it lies on the limb), or '' (not moved with a limb). An entry of the left
+ * game arm's packet without a rig hint (groups left_upper_limb_bone / _muscle) is 'l_arm': the arm from the shoulder down,
+ * moved whole (bulkArmAssets). The packet's eight shoulder-girdle entries are body entries in the game, with the rig hints
+ * ns-assets validateShoulderGirdleManifest gives them: hand those in, and they are tagged as shapeBody moves them (the
+ * shoulder blade and the collar bone not at all, the cuff and teres major weighted; 21 November 2026, review B3: tagged
+ * 'l_arm' by their groups, the loading picture pulled the left shoulder blade down with the arm). */
+export function bodyShapeLimbOf(entry) {
+  const e = normalizeEntry(entry);
+  if (!e) return '';
+  const groups = Array.isArray(entry.groups) ? entry.groups : [];
+  if (!entry.rig_hint && groups.some(g => /^left_upper_limb_(bone|muscle)$/.test(g))) return 'l_arm';
+  const g = bulkMembership(e);
+  if (!g || !/^[rl]_(arm|leg)$/.test(g)) return '';
+  if (e.kind !== 'muscle') return g;
+  return shapeCrossing(muscleCandidates(e), g) ? `${g}*` : g;
+}
+/* THE ENTRIES' OWN NUMBERS. buildBodyRig takes the segments' centroids (and some boxes) from the manifest entries, not
+ * from the meshes; so each moved mesh's entry gets a new centroid, bounds_min and bounds_max, moved by the same rules
+ * as a point there (its box from its eight corners and its centroid). For those numbers a muscle that crosses onto a
+ * limb is weighted by its distance from the limb's axes (the loading picture's `reachMm`), not by its nearest bones:
+ * the page draws coarser meshes than the tool that writes the rig file (packs/BODY-RIG.json) and both must get the same
+ * entries to the last bit (ns-body bodyRigMatchesFile), and the axes are the same for both. */
+const SHAPE_CELL_MM = 4;
+/** Whether a limb muscle (candidates c, limb g) is weighted by its nearer bones in shapeBody: it has a candidate segment
+ * off the limb (it starts on the trunk or a girdle) and does NOT also cross the limb's middle joint. A muscle that
+ * crosses the elbow or the knee as well (the biceps, the triceps' long head, the hamstrings, rectus femoris, sartorius,
+ * gracilis) runs along the limb's bones from an origin beside the root joint, where the lengthening is still nil, so it
+ * moves with the limb in full (21 November 2026, review B1: the inner face of the triceps' long head lies beside the
+ * shoulder blade's lower border and was held back by it). Pure. */
+function shapeCrossing(c, g) {
+  if (!c) return false;
+  const onLimb = s => (g.endsWith('_arm') ? BULK_ARM_SEGS : BULK_LEG_SEGS).test(s) && s[0] === g[0];
+  if (!c.segments.some(s => !onLimb(s))) return false;
+  const far = g.endsWith('_arm') ? /^[rl]_(forearm|radius|hand|thumb_(mc|pp|dp)|(index|middle|ring|little)_(pp|mp|dp))$/ : /^[rl]_(shank|foot|toes|hallux)$/;
+  return !c.segments.some(s => far.test(s) && s[0] === g[0]);
+}
+export function shapeBody(entries, meshesById, rule = BODY_SHAPE) {
+  if (!(meshesById instanceof Map) || !rule) return { meshesById, entries, report: null };
+  const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  const list = entryList(entries), out = new Map(meshesById), report = { limbs: {}, trunk: null, entries: 0, ms: 0 };
+  const pointMove = new Map(); // id -> (x, y, z) -> [x, y, z]: the limb rule as for the entry's numbers
+  const L = rule.limbs;
+  if (L && L.on) {
+    const limbOfSeg = s => (BULK_ARM_SEGS.test(s) ? `${s[0]}_arm` : BULK_LEG_SEGS.test(s) ? `${s[0]}_leg` : null);
+    const bones = [];
+    for (const e of list) {
+      if (e.kind !== 'bone') continue;
+      const s = boneSegmentFor(e), m = meshesById.get(e.id);
+      if (s && m && m.positions) bones.push({ g: limbOfSeg(s), seg: s, p: m.positions });
+    }
+    const D = [0, 0, 0];
+    // The trunk side of a crossing muscle: the bones of its own candidate segments that are not on the limb, as the
+    // rig's skin weights take them (21 November 2026, review B1: with every trunk bone, the inner faces of the biceps'
+    // short head and the triceps' long head, which hang beside the ribs near the elbow, were nearer the ribs than the
+    // upper arm bone and stayed behind, up to 43 mm, tearing both muscles; neither has a rib among its bones). One
+    // index per set of segments (a few sets in all), made when a muscle first needs it.
+    const segPoints = new Map(), trunkIdx = new Map();
+    for (const b of bones) if (!b.g) { if (!segPoints.has(b.seg)) segPoints.set(b.seg, []); segPoints.get(b.seg).push(b.p); }
+    const trunkCloud = segs => {
+      const own = segs.filter(x => segPoints.has(x)).sort(), key = own.join(',');
+      if (!trunkIdx.has(key)) trunkIdx.set(key, own.length ? nnIndex(downsample(concatPositions(own.flatMap(x => segPoints.get(x))), SHAPE_CELL_MM)) : null);
+      return trunkIdx.get(key);
+    };
+    for (const g of ['r_arm', 'l_arm', 'r_leg', 'l_leg']) {
+      const members = list.filter(e => bulkMembership(e) === g && meshesById.get(e.id) && meshesById.get(e.id).positions);
+      if (!members.length) continue;
+      const kind = g.slice(2), chain = bulkLimbChain(kind, g[0]);
+      if (!chain) continue;
+      const field = limbLengthField(kind, chain.pts, L), S = L[kind];
+      let limbIdx = null; // the limb's bones, made when a crossing muscle first needs them
+      const limbCloud = () => {
+        if (limbIdx) return limbIdx;
+        let own = bones.filter(b => b.g === g).map(b => b.p);
+        if (!own.length && kind === 'arm') own = bones.filter(b => b.g === `${g[0] === 'l' ? 'r' : 'l'}_arm`).map(b => { const q = new Float32Array(b.p); for (let i = 0; i < q.length; i += 3) q[i] = -q[i]; return q; });
+        return (limbIdx = nnIndex(downsample(concatPositions(own), SHAPE_CELL_MM)));
+      };
+      let maxMm = 0, n = 0, crossingN = 0;
+      for (const e of members) {
+        const m = meshesById.get(e.id), p = m.positions, q = new Float32Array(p.length);
+        const c = e.kind === 'muscle' ? muscleCandidates(e) : null;
+        const crossing = shapeCrossing(c, g);
+        if (crossing) crossingN++;
+        const trunkI = crossing ? trunkCloud(c.segments.filter(s => limbOfSeg(s) !== g)) : null;
+        let moved = false;
+        for (let i = 0; i + 2 < p.length; i += 3) {
+          const x = p[i], y = p[i + 1], z = p[i + 2];
+          field.at(x, y, z, D);
+          let w = 1;
+          if (trunkI && (D[0] !== 0 || D[1] !== 0 || D[2] !== 0)) {
+            // (the weight is 1 once the trunk's bones are band / 2 further than the limb's: only a nearer trunk point is
+            // looked for, so most searches end early)
+            const dl = Math.sqrt(nnNearestD2(limbCloud(), x, y, z)), cap = (dl + S.band / 2) ** 2, dt2 = nnNearestD2(trunkI, x, y, z, cap);
+            w = dt2 >= cap ? 1 : sstep((Math.sqrt(dt2) - dl) / S.band + 0.5);
+          }
+          q[i] = x + w * D[0]; q[i + 1] = y + w * D[1]; q[i + 2] = z + w * D[2];
+          const mm = w * Math.hypot(D[0], D[1], D[2]);
+          if (mm > 0) moved = true;
+          if (mm > maxMm) maxMm = mm;
+        }
+        if (moved) { out.set(e.id, { ...m, positions: q, ...(m.bounds ? { bounds: boundsOf(q) } : {}), displayShape: rule.basis }); n++; }
+        // (every member, moved or not: which entries change must not depend on the meshes' detail)
+        pointMove.set(e.id, (x, y, z) => { const d = field.at(x, y, z, [0, 0, 0]), w = crossing ? field.reach(x, y, z) : 1; return [x + w * d[0], y + w * d[1], z + w * d[2]]; });
+      }
+      const r1 = v => Math.round(v * 10) / 10;
+      report.limbs[g] = { meshes: n, crossing: crossingN, maxMovedMm: r1(maxMm), lengthsMm: { before: field.lengths.before.map(r1), after: field.lengths.after.map(r1) } };
+    }
+  }
+  const T = rule.trunk, tf = T && T.on ? trunkShapeField(T) : null;
+  if (tf) {
+    let maxMm = 0, n = 0;
+    for (const [id, m] of out) {
+      if (!m || !m.positions) continue;
+      const r = tf.apply(m.positions, null, m.bounds && m.bounds.min ? m.bounds : boundsOf(m.positions));
+      if (r.maxMm > 0) { out.set(id, { ...m, positions: r.q, ...(m.bounds ? { bounds: boundsOf(r.q) } : {}), displayShape: rule.basis }); n++; if (r.maxMm > maxMm) maxMm = r.maxMm; }
+    }
+    report.trunk = { meshes: n, maxMovedMm: Math.round(maxMm * 10) / 10 };
+  }
+  // the entries' own numbers (see above)
+  const raw = Array.isArray(entries) ? entries : entries && Array.isArray(entries.assets) ? entries.assets : [];
+  const isVec = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+  const movePoint = (f, p) => { let q = f ? f(p[0], p[1], p[2]) : [p[0], p[1], p[2]]; if (tf) q = [q[0], q[1] + tf.at(q[0], q[1], q[2]), q[2]]; return q; };
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const rawOut = raw.map(e => {
+    const id = e && (e.element_id || e.id);
+    if (!id || (!pointMove.has(id) && !tf)) return e;
+    const f = pointMove.get(id) || null, c = isVec(e.centroid) ? movePoint(f, e.centroid) : null;
+    if (!isVec(e.bounds_min) || !isVec(e.bounds_max)) { if (!c || same(c, e.centroid)) return e; report.entries++; return { ...e, centroid: c }; }
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    const pts = [...(c ? [e.centroid] : [])];
+    for (let k = 0; k < 8; k++) pts.push([k & 1 ? e.bounds_max[0] : e.bounds_min[0], k & 2 ? e.bounds_max[1] : e.bounds_min[1], k & 4 ? e.bounds_max[2] : e.bounds_min[2]]);
+    for (const p of pts) { const q = movePoint(f, p); for (let a = 0; a < 3; a++) { if (q[a] < lo[a]) lo[a] = q[a]; if (q[a] > hi[a]) hi[a] = q[a]; } }
+    if ((!c || same(c, e.centroid)) && same(lo, e.bounds_min) && same(hi, e.bounds_max)) return e;
+    report.entries++;
+    return { ...e, ...(c ? { centroid: c } : {}), bounds_min: lo, bounds_max: hi };
+  });
+  report.ms = Math.round(((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) * 10) / 10;
+  return { meshesById: out, entries: Array.isArray(entries) ? rawOut : entries && Array.isArray(entries.assets) ? { ...entries, assets: rawOut } : entries, report };
 }
 /** 'right index finger pad' from 'distal phalanx of right index finger' (the digit pads' plain names). */
 /**
@@ -6130,7 +6317,7 @@ export function bulkFactors(rule = BODY_BULK) {
  * and the deltoid's MUSCLE_THICKEN rows. roleOf(id) -> { kind: 'bone' | 'muscle', segment } (ns-assets SEGMENT_OF).
  * Returns { arm: a new Map with new records for the changed meshes (indices kept), report }.
  */
-export function bulkArmAssets(armMap, roleOf, rule = BODY_BULK) {
+export function bulkArmAssets(armMap, roleOf, rule = BODY_BULK, shape = BODY_SHAPE) {
   if (!(armMap instanceof Map) || typeof roleOf !== 'function') return { arm: armMap, report: null };
   const chain = bulkLimbChain('arm', 'l');
   if (!chain) return { arm: armMap, report: null };
@@ -6169,7 +6356,35 @@ export function bulkArmAssets(armMap, roleOf, rule = BODY_BULK) {
     for (const q of parts) { P.set(q.positions, o); for (let k = 0; k < q.indices.length; k++) I[oi + k] = q.indices[k] + o / 3; o += q.positions.length; oi += q.indices.length; }
     return { id: `pad-l-${name.replace(/[^a-z0-9]+/gi, '-')}`, name, segment: parts[0].segment, positions: P, indices: I };
   });
-  return { arm: out, pads, report: { meshes: out.size, maxMovedMm: Math.round(maxMm * 10) / 10, pads: pads.length, factors: bulkFactors(rule) } };
+  // 20 November 2026: BODY_SHAPE last, as on the body (shapeBody): the left arm made longer by the same field as the
+  // body's left-side muscles (the right arm's chain mirrored), then the trunk rule (it reaches only the arm's root). The
+  // packet holds the arm from the shoulder down and no muscle that lies on the trunk, so every vertex takes the whole
+  // move (no nearer-bone weight is needed). The pads go with their digits.
+  let shapeReport = null;
+  if (shape && ((shape.limbs && shape.limbs.on) || (shape.trunk && shape.trunk.on))) {
+    const lf = shape.limbs && shape.limbs.on ? limbLengthField('arm', chain.pts, shape.limbs) : null, tf = shape.trunk && shape.trunk.on ? trunkShapeField(shape.trunk) : null;
+    const D = [0, 0, 0];
+    let mx = 0;
+    const move = p => {
+      const q = new Float32Array(p.length);
+      for (let i = 0; i + 2 < p.length; i += 3) {
+        let x = p[i], y = p[i + 1], z = p[i + 2];
+        if (lf) { lf.at(x, y, z, D); x += D[0]; y += D[1]; z += D[2]; }
+        if (tf) y += tf.at(x, y, z);
+        q[i] = x; q[i + 1] = y; q[i + 2] = z;
+        const mm = Math.hypot(x - p[i], y - p[i + 1], z - p[i + 2]); if (mm > mx) mx = mm;
+      }
+      return q;
+    };
+    for (const [id, rec] of out) {
+      if (!roleOf(id) || !rec || !rec.mesh || !rec.mesh.positions) continue;
+      const q = move(rec.mesh.positions);
+      out.set(id, Object.freeze({ ...rec, mesh: Object.freeze({ ...rec.mesh, positions: q, ...(rec.mesh.bounds ? { bounds: boundsOf(q) } : {}) }) }));
+    }
+    for (const pad of pads) pad.positions = move(pad.positions);
+    shapeReport = { maxMovedMm: Math.round(mx * 10) / 10, lengthsMm: lf ? { before: lf.lengths.before.map(v => Math.round(v * 10) / 10), after: lf.lengths.after.map(v => Math.round(v * 10) / 10) } : null };
+  }
+  return { arm: out, pads, report: { meshes: out.size, maxMovedMm: Math.round(maxMm * 10) / 10, pads: pads.length, factors: bulkFactors(rule), shape: shapeReport } };
 }
 
 /** R558 (builder AN): the plain sided name of a missing-muscles packet id ('right gracilis', 'left latissimus dorsi'),

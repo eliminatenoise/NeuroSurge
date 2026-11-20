@@ -2196,11 +2196,14 @@ hanging down. It now rolls about the line from the eye to its centre (`mirrorTra
 roll lays it across the picture.
 
 **What the crosshair is on is found again after a roll.** The area under a still crosshair was kept from before the
-roll, so the line at the bottom and a click named the old area. The roll is now part of what the gaze's cache is keyed on.
+roll, so the line at the bottom and a click named the old area. The roll is now part of what the gaze's cache is keyed on. The area a roll brings under the crosshair is recorded silently, as after an orbit step, so rolling the brain switches
+nothing on (measured: no pulse during two rolled circles).
 
 **The circle's take-back returns the item to where the drag began.** Before the drag counted as a circle it turned the
 item; that turn is taken back, but it took back what had been asked, not what the limits had let through, so a brain at
-its tilt limit was left tilted the other way. It now returns to the turn and tilt the drag started from. A frame that
+its tilt limit was left tilted the other way. It now returns to the turn and tilt the drag started from, or, when a
+sharp corner in the same press started the circle's count again, to where it was at that corner (a straight drag made
+before the corner was meant). A frame that
 is refused and done again (the game's recovery) now also puts the circle's state and the roll back first.
 
 **The limb keys.** While W or S was held, the look no longer carried the chosen limb: the keys' line put it back each
@@ -2219,16 +2222,241 @@ compares the two at leg turns of -65 to 25 degrees.
 
 **The white finger and toe tendons are found on the muscles' own source positions.** The rule of section 154 measured
 on the start posture's baked positions, where the wrist and ankle are not where the rule's thresholds expect. It now
-reads each muscle's source positions (its skinning record) and runs again when that record is made.
+reads each muscle's source positions. A second review found that this first fix reached none of the body's muscles
+(only the right hand's, the right forearm's and the neck's keep a skinning record, and the rule ran before the record was
+stored), so the body's source meshes are now handed to the scene once the body is installed (`setDigitTendonSources`):
+33 muscles of your body, and so of the mirror body, which shares their geometry, now have white tendons along the fingers
+and toes, against none before (the left game arm's 13 as before). Seen in close pictures of both bodies' hands.
 
 **Also:** pulling the held mirror body into you with S no longer stops the game at the near-plane check; the held body
 passes through you (`MIRROR_PASS_THROUGH`). The loading picture's eyeballs and nerves were drawn once at their final
 place before flying in; they are hidden until their flight begins.
 
+**A held movement is no longer "already there".** Section 159 left this open: once a body movement was held, its line
+on the long card said it was already there and a press would move nothing, although every further press kicks the
+part in again and it comes half way back. With the jerk on, a movement held at its end now counts as one a press moves
+(`latchView` in `ns-actions.mjs`); only a joint held further than this movement's end, by a stronger movement, is left
+alone by it. Under reduced motion, where a press does not jerk, the old rule stands. The test that checked the old rule
+(`tests/move-key.test.mjs`) was asynchronous and never awaited, so it passed whatever the code did; it now runs, on the
+reduced-motion activity, with two new checks on the ordinary one.
+
 Not done or not right:
 - The circle's take-back still ignores a turn asked by another drag sample in the same frame before the circle counted
   (rare: two samples in one frame).
 - A roll is not undone by the arrows; Esc, Reset brain view takes it back.
+
+## 161. From outside: the look stops with the camera, every arrow can be aimed at, the brain's arrows keep off the mirror body (20 November)
+
+Faults found by a bug hunt in the browser on the build of 20 November; none of these changes asks the owner anything new.
+
+**The look stops where the outside camera stops** (`followReach` in `ns-camera.mjs`, used in `ns-app.mjs`). The outside camera follows the look only so far: its pitch stops 5 degrees above level and its turn 130 degrees to either side (`followMaxPitchDeg`, `followYawMinDeg`, `followYawMaxDeg`; with the 14 degrees of `followPitchBiasDeg` that is a look from 66 degrees down to 19 degrees up). The look itself ran on, unseen, to the eye view's own ends (88 degrees up, 170 round), so on the way back the mouse did nothing for up to a few hundred pixels, and E opened the eye view wherever the hidden look had got to: from 80 degrees up, a black picture. From outside the look is now kept inside the range the camera follows. The picture moves at once on the way back, and E opens the eye view facing where the camera faced (from the top stop, 19 degrees up, with the brain at the foot of the picture; from the turn's end, 130 degrees round). E then E with no look between still returns exactly to the eye view's look, also from a look the outside range does not have; while you are outside, the drawn head then stands at the range's end.
+
+**Every arrow can be put under the crosshair from outside** (`outsideCompassAnchors` in `ns-scene-three.mjs`). The outside camera always looks through one point over your body, so an arrow can be put under the crosshair from one camera only: the one on the line from the arrow back through that point. Section 149 checked the arrows in the settled view alone. From the camera that put the brain's up arrow under the crosshair, just under the top stop, the mirror body's up arrow lay on the same line: the two chevrons were drawn on each other and the green one took every press. The check now also looks from each arrow's own camera: there no other arrow's hit area may cover the crosshair, and an arrow the camera cannot bring under the crosshair at all moves. When a brain arrow and a mirror-body arrow lie on each other, the brain's moves; the mirror body's small arrows keep to its edges. At 1600 by 900 the brain's up arrow now stands about 110 px left of the middle of the brain's top side (100 px at 1280 by 720). At 800 by 600 the green up arrow, which the camera could not bring under the crosshair, now stands just above the mirror body's head. Swept over the whole outside look at 1600 by 900, 1280 by 720, 800 by 1200, 800 by 600 and 600 by 900, all eight arrows came under the crosshair, never two at once; a click on the grey up arrow from the top stop turns the brain.
+
+**The brain's arrows keep off the mirror body from outside**, as the eye view's plan already keeps them. In an upright window the brain's bottom arrow lay across the mirror body's chest and took the presses meant for it. It now stands at the brain's lower left (800 by 1200, 600 by 900, and after a wide window is made upright).
+
+**Small windows.** In an upright window the information card now stands above the limb buttons and the “Simulated activity” line, which lay over its last lines (600 by 900 and 800 by 1200), and a card too long for its band fades out at its foot, as the full card does. An arrow's caption is placed by its measured width (in an 800-wide window “… the side on your right” ran 31 px past the edge) and, where no place is free, where it covers least, no longer across its own arrow.
+
+**Words.** The controls page said E shows your body “from behind your right shoulder” and that you must let go of what Space holds first. The camera has stood straight behind your head since section 118, and E lets go by itself; the page now says so.
+
+Checked: the unit tests (a new one: inside the reach every look moves the outside camera, past its ends none does); `?case=boot`; the brain-compass, mirror-compass, brain-eyes and startup browser tests; the outside-compass test started from the game page instead of START.html at 1600 by 900, 1280 by 720, 800 by 1200 and with a resize to 800 by 1200; the hunt's own scenarios again; the frame table at 60.0 / 59.0 / 60.1 / 60.0. Pictures looked at from outside at all five window sizes, at the top stop, and of the cards held and at the full reading level.
+
+Not done or not right:
+- From outside, the brain's up arrow now stands off the middle of its side at 16:9, on the same side as its bottom arrow (section 157 put that one to the left too): the brain's compass looks lopsided from outside.
+- From the moved arrow's own camera the grey and green chevrons still touch; only the crosshair's spot is kept clear. Keeping the drawn chevrons apart from every arrow's camera pushed the brain's up arrow 170 px off its side, and was dropped.
+- E back after turning far round outside leaves you looking 130 degrees round, at your own hand against the dark room.
+- The check takes the boom's length as it is when the view settles. The boom grows where something is in the way, so where it does, the camera the check imagines is a little off.
+- In a landscape window narrower than about 690 px (640 by 480) the card in the corner still meets the limb buttons, and the card is taller than the window. Not changed.
+- `README.md` and `PREVIEW-NOTES.html` still say E shows you from behind your right shoulder.
+- The outside check takes 7 to 11 ms, once, each time the outside view settles or the window changes size; about 1.5 ms of it is new, the rest was there.
+
+## 162. The crosshair takes a hidden limb only where its glass is what is drawn there (20 November)
+
+A code review of the hidden-things pass (section 147) found five faults. Each was shown first (a check on the module,
+or a scenario in the browser) and checked again after the fix.
+
+**Aiming follows the picture.** Only one hidden thing is drawn at a spot: the nearest one behind what is seen there.
+With the legs crossed, the pelvis behind the left shank is drawn there, not the right thigh behind the pelvis; with the
+mirror body behind the brain, the part of it nearest behind the brain is drawn, not a forearm hanging behind its trunk.
+In both cases the crosshair took the locked-away limb that the picture did not show at that spot. It now takes a
+locked-away limb's glass only where that glass is the one drawn (`seeDrawnEntry` in `ns-see.mjs`: the graphics card's
+rule on the crosshair's ray; `seeTakesGhost`); elsewhere it keeps what is seen, and Shift still reaches the hidden limb.
+A body behind the brain still counts as hardly seen (its glass is the strong figure of section 147), so where one of
+its limbs lies behind a part of its own body outside the brain, that limb's strongly filled glass is drawn there and
+takes the crosshair, as any locked-away limb's does.
+
+**Also:** a trunk that became mostly hidden on the last frame that moved stayed hollow (an outline only) until something
+moved; it is now filled at once (the pass draws its lines again when a fill rises from nothing). The bodies' glass is
+cut by the same box at the collar as the outline's picture in the eye view (`ctx.clip` from `ns-outline.mjs`), so the
+neck pieces left out of the picture cannot come back as glass outlines. The pass keeps one grid of tiles, for the
+window's present shape, instead of one for every shape the window has had (three buffers on the graphics card each).
+
+Not done or not right:
+- The neck pieces as glass outlines were not seen in play (since section 158 only the tops of four muscles and of the
+  first thoracic vertebra are still cut, at the back); the fault was shown on the module, the fix is the outline's own
+  cut.
+- The two aiming faults were shown on the module with the review's rays; a sweep of the crosshair over the mirror body
+  behind the brain found no spot where one of its limbs lies behind its trunk in that pose.
+
+## 163. No beam from an area out of the picture; the tutorial's first step waits for a real switch-on; the brain's vessels follow the parted halves (20 November)
+
+Three faults found by the review and the browser hunt of updates 49 to 56.
+
+**No beam from a key that is not in the picture.** Since section 131 the left hand's grip area keeps its colour on the hand but sends no beam while Space carries the brain or the mirror body (it stood across the picture, a wall of light once the brain was near). A press of Space on nothing still drew it: with the brain carried behind you and let go, a cyan beam a quarter of the screen wide ran from the bottom corner of the picture to the mirror body's left hand. The helper's first fix took the beam away for every Space grip; the lead kept the beam (with the brain in its place the same press draws eight beams from the hand area into your left hand and eight into the mirror body's, which is what the press is meant to show) and instead draws no beam whose key on the strip is behind the eye or more than 15 % of the picture's half size outside its edge (`LIGHT_BEAM.keyInView`, `beamKeySeen` in `ns-links.mjs`, used by `emitAreaBeams` in `ns-scene-three.mjs`). A beam is then always seen to start at its area.
+
+**The tutorial's first step waits for a look that switches an area on** (`lookStrip` in `ns-guide.mjs`). “Look at a colour on the brain: a part moves” was done by the crosshair merely being on an area, so carrying the brain under the crosshair with Space finished it, although looks are silent while Space holds and nothing moved (the next line then said “Click it: it jerks again”). Now the step is done by the look's own switch-on of an area that moves something (an `activate` event from the look, not a click; the left shoulder area, which moves nothing of its own, does not count). The app no longer sends the bare `look` event.
+
+**The brain's vessels follow the parted halves** (`partedOnBrain` and `partedBridging` in `ns-brain-part.mjs`, used by `setBrainVessels` in `ns-scene-three.mjs`). The vessels are still switched off (`PLAIN_GAME.vessels`); this only makes them right if they are switched on again. Since section 151 the halves are drawn apart, but the arteries stayed where the atlas has them (measured: 36 % of the middle cerebral branches lay sealed inside their moved half, 88 % of the anterior cerebral ones outside the brain, in the gap) and the veins were draped on an envelope that sank 55 to 70 mm into the gap at the midline. Now both are laid on the atlas brain and moved with it: each point of an artery by the brain under it (its own half, or the parts of the middle that stay, by their nearness, smoothed over the whole tree so that vessels that meet still meet: gaps of at most 0.3 mm, against 6 mm when each artery mesh moves by its side alone); each vein by its side, its last 2 mm bridging the gap to the superior sagittal sinus, which stays over the middle of the gap at the height of the halves' top edges. The middle cerebral branches lie in their sulci again (4 % sealed inside, as on the atlas brain), and are seen on the cortex in the pictures, where before they were hidden inside the halves. Building the vessels takes about 0.25 s longer, once.
+
+Not done or not right:
+- Seen from above, the sagittal sinus still runs down the middle of the gap, as it did before (deeper). With the vessels on it would hide part of what section 155 shows through the gap. Splitting it into two halves along the gap's edges would keep the gap clear.
+- The loading picture parts each artery by its own side (it gets one part at a time and has no brain to measure against), so the arteries under the brain fly in up to 6 mm from where the game then draws them.
+- A look that switches on a left-arm area finishes the first step at the switch-on, before the arm has moved (it moves once the look has rested 0.07 s).
+
+## 164. Longer limbs, a flatter chest, a belly that comes forward; the two bodies level (20 November)
+
+The user (19 November): “Let's make the limbs longer. And make the two bodies more level, your body and the mirror body.” And: “for you keep making a mistake with the chest and front of the torso being the abs and stomach and so forth. The chest should not be significantly in front. In fact, we want essentially the bottom of the torso to come out more and be more obvious and more visible. Not for the chest to take the whole torso as it is now. So a smaller and much flatter chest essentially, and a more observable bottom torso.” From the notes of 17 and 18 November: “limbs that do not look small in the start picture”.
+
+**Why the limbs looked short and the chest big.** Measured on the body as the page prepares it: the source model has ordinary proportions (thigh 0.246 of its 1710 mm height, shin 0.238, forearm 0.148, against the usual 0.245, 0.246 and 0.146); only the upper arm is short (0.158 against 0.186). The start picture looks at the body from behind and above your own head, down the trunk along its own axis (about 5 degrees off it) and along the shins: at 1600 by 900 a shin is drawn at 21 px for every 100 mm of its length, the thigh at 46, the arms at 55, and the hip and the shoulder are only 51 px apart up the picture. So whatever stands out at the top of the trunk hides what lies beyond it: in an offline count of the start picture the chest and the shoulders took 40 % of the body's pixels, the arms 30, the legs 24 and the belly wall under 1 %.
+
+**Longer limbs** (`ns-body-shape.mjs`, `BODY_SHAPE.limbs`). Upper arm 1.22 times as long (about 0.19 of the height), forearm and shin 1.15, thigh 1.1, hands and feet 1.08. It is a change to the body itself, made once on the rest meshes after the trained build and before the rig (`shapeBody` at the end of `bulkBody`, and in `bulkArmAssets` for the left game arm), so the rig's joints are found on the longer bones and everything built from them follows: skinning, the limb solve and the limb keys (a leg now reaches 0.92 m, was 0.82; an arm 0.62 to 0.67, was 0.53 to 0.57), the touch-free hip range, the contact balls, the balls a held hand is kept out of (they follow the trunk rule too: a hand pulled to the chest rests on it), picking, the mirror body, the left arm's own rig and the loading picture (which draws its bones and muscles with the same rules; a review found it had never received the limbs' rule, fixed). Each long segment gains its length along its shaft only; the joint at each end is carried whole, so no joint changes shape. A muscle that runs from the trunk onto a limb and ends there (latissimus dorsi, the chest muscle, the rotator cuff, teres major, the buttock muscles) is moved only as far as it lies on the limb's bones rather than on its own trunk bones, so its part on the trunk stays where it is; one that also crosses the elbow or the knee (the biceps, the triceps' long head, the hamstrings, rectus femoris) moves whole, since its origin lies beside the root joint where the lengthening is nil. (A review found the first rule tearing the biceps' short head and the triceps' long head, whose inner faces hang beside the ribs and the shoulder blade near the elbow; fixed.) The manifest entries' centroids and boxes are moved too (the rig takes segment centres from them), by a rule that gives the page and the tool that writes `packs/BODY-RIG.json` the same numbers; the page still checks its rig against that file and takes it. The finger and toe tendons' places move with the limbs (`DIGIT_TENDONS_DRAWN`).
+
+**A flatter chest and a belly that comes forward** (`BODY_SHAPE.trunk`). Everything in front of a line just in front of the spine is moved toward it at the chest (by 0.4 of how far in front it lies; the breastbone comes back by up to 47 mm, the chest muscle, the ribs' fronts and the organs with it) and away from it at the belly (by 0.2), faded out toward the collar, the pubis and the sides. It is the same smooth rule for bones, muscles and the organs, and it never changes which of two points is further forward, so nothing separates from what it lies on and the organs stay inside the ribs (the heart is drawn about 0.3 thinner front to back). In the start picture's count the belly wall now takes 3.6 % of the body's pixels instead of 0.8, the chest and shoulders 35 % instead of 40; the belly shows as a band between your thighs and your chest.
+
+**The arms' start.** With the longer arms the start posture's hands rose into the motor strip (your fingertips over the face areas, the mirror body's hands over the arm and leg areas, whose labels then had no place). The arms now start 33 degrees forward of the trunk and 5 out (37 and 8 before), the left arm's start place turned the same way and moved out by the arm's gain so its elbow is as softly bent as before.
+
+**The two bodies are level.** The mirror body is the literal reflection of your posed body in an upright plane (section 136): every part of it is at exactly the height of the same part of yours (hips, ankles, shoulders and eyes measured in the room), neither is tilted, and its toes are 10 cm from yours (the plane moved out with your longer legs, so its toes stay there). What reads as uneven is the view: you see your own body end on, from its head, and the mirror body from its feet almost face on, so it reads as a figure standing on your toes. Nothing was changed for this; tilting or lowering the mirror body would end the literal reflection the user asked for (“toe to toe … and they're level”), and a lower camera would change the start picture.
+
+These are display choices, illustrations of a body drawn for the game, not measurements of real bodies. Checked: the start picture at 1600 by 900 and 1280 by 720, the view from outside, each limb chosen with keys 1 to 4 and moved with W, A, S and D, the hands and feet close up, the loading picture; `?case=boot`, the four browser tests, the unit tests (new: `tests/body-shape.test.mjs`) and the frame table (60.1, 59.4, 60.0, 60.0 against the lead's 60.0, 59.4, 59.8, 59.7). Shaping costs about 85 ms of the load in the page.
+
+Not done or not right:
+- In the start picture the limbs are drawn only a little longer: the thigh 207 px instead of 193 at 1600 by 900, the shin 92 instead of 87, the upper arm 152 instead of 148, the forearm 134 instead of 136 (the longer arms lie further off and a little lower, along the line of sight). The limbs' new length shows from outside, on the mirror body, and when a limb is moved (each reaches about a sixth further).
+- The belly is still only a band in the start picture: the camera looks down the trunk's axis, and a larger share of belly needs another view or posture, not a body change.
+- The heart is flattened with the chest (its source numbers in `ns-organs.mjs` are unchanged).
+- The loading picture weights a muscle from the trunk by its distance from the limb's axes (it has no bones to ask), so the left teres major moves 11 mm there and not in the game; the picture still shows the atlas's own build, without the trained build.
+- The body's vessels stay switched off; switched on they now follow the longer limbs (bound to the meshes before the shape).
+- Tests changed with the body (each says why in place): a muscle edge at the knee and the elbow, the anconeus's count of fixed vertices, the external oblique's shave (now 25 mm, was 17), the organs checked in the source body's numbers, the bulk test without the shape.
+
+**After the review of this section.** With the longer forearm, pulling the right arm in from the start pose (4, S) lays
+the forearm along the right thigh, and the limbs' push (`LIMB_PUSH`) moves the leg aside by a few degrees, as the owner
+asked limbs to do (Message 174; a pushed limb stays until you move it back). The push applied the leg's joints the way
+the chosen limb's are applied, which also lit the leg's motor area and put "Right hip" on the card although only the arm
+was moved. A pushed limb now moves without lighting its area or taking the card (`applyLimbJoints` with light false);
+the card shows the arm's own joint ("Right elbow"). Two small faults the review's mesh sweep found remain: two triangles
+of the latissimus dorsi beside each armpit are folded (22 before the fixes above), and the source mesh's coarse shape
+there is seen only in close views.
+
+## 165. Labels, tips and cards no longer cover each other, at any window size or reading level (20 November)
+
+Faults found by the second browser hunt of 20 November (H2-3 to H2-8), and the rest of what a check of eleven window sizes (1600 by 900 down to 390 by 844, wide and upright) at each reading level, with the tutorial running and finished, found of the same kind. A scripted check lists every pair of overlays that overlap; on the lead build it found 20 kinds of overlap (or of running off the window) between the cards, the labels, the chip, the prompt, the limits line and the limb buttons, and after these changes none.
+
+**The brain's labels keep clear of the tutorial's prompt and of the tip beside the crosshair** (`readHudRects` in `ns-scene-three.mjs`). At 800 by 600 the prompt card lay on “Left leg” and “Left arm”; on the trunk, hip and right-arm areas the tip lay on “Right arm”. Both are now obstacles for the labels (not for the arrows, which keep their places while the tip comes and goes). The tip's box stays an obstacle 0.4 s after the tip goes (`TIP_ZONE`), so the labels near it do not come and go with every gap between two areas: over a slow sweep across the strip they show and hide about as often as before. The labels also keep off the limits line as drawn (two lines in a narrow window). A label that must show (the arm labels) and has no clear place now lies on the picture rather than on a card's words, and where only words are left it is not shown (`LABEL_WORDS_WEIGHT`, the `words` rule in `declutterLabels`); under the tip it stays faded, as before.
+
+**The “Try this” chip stays where it is placed.** At the full reading level the bottom-left cards were lifted 20 px by a transform, which made the status card the frame of the chip inside it: the chip landed on the information card, over your body or under the window's edge. The lift is now part of the HUD's own placement (`cornerStackFit`), and nothing that holds the chip has a transform.
+
+**The left forearm turn's tip names its movement** (`tipActionId` in `ns-app.mjs`): “Turn left palm down” or “Turn left palm up”, as every other area's tip does. Its two movements are not game-arm actions, so the look carried no movement id; the tip now takes the one the activity chose for where the look rests.
+
+**Upright windows.** The short card is as tall as its words and stands on the limb buttons (at 390 by 844 its muscle lines were cut off at its foot). At the full level the colour key runs the width of the band and docks at its top; the information card starts under the key's measured height (`portraitLegendDock`). The key is lifted over the limb buttons only as far as a card of at least 100 px needs (none at 700 by 900, 19 px at 600 by 900, 90 px at 390 by 844, where the card keeps 88 px). Before, the key lay on the card in body views and, in brain views, floated over the brain, its labels and its arrows. The status card at the top is no longer lifted onto the limits line.
+
+**Small wide windows.** The status card and the colour key stand on the “Simulated activity” line, the key directly above the card, and each has a greatest height (the card 55 % of the room, the key the rest); a card cut there fades at its foot. At 1024 by 600, 800 by 600 and 640 by 480 the key lay on the limits line and on the status card. Below 680 px wide (640 by 480) the limb buttons take two lines, so they fit between the two corner cards; the information card lay on “4 Right arm”. Below 960 px wide the short card's key hint (“R more”) has its own line at the card's top; on the narrow card it stood on the title.
+
+Checked: the unit tests (new: `tests/hud-layout.test.mjs`); `?case=boot`; the brain-compass, mirror-compass, brain-eyes and startup browser tests; the hunt's own scenarios again; the overlap check at 1600 by 900, 1280 by 720, 1280 by 600, 1024 by 600, 800 by 600, 640 by 480, 700 by 900, 800 by 1200, 600 by 900, 420 by 820 and 390 by 844, each at the three reading levels with the tutorial running and finished, looking at the start, at a motor area, down, left, right and up; an arrow-key walk over the strip (the tip covers no label at 1600 by 900, 1280 by 720 and 1024 by 600; on the lead 0, 12 and 4 times in 48 areas); the frame table.
+
+Not done or not right:
+- The compass arrows are not part of this layout. During the tutorial the prompt card covers the mirror body's top arrow at 800 by 600 and the top edge of the brain's left arrow at 1024 by 600, 800 by 600 and 640 by 480. At the start look at 1024 by 600 and 1280 by 600 the “Right leg” label lies on the mirror body's top arrow: section 157 keeps the leg labels before an arrow. At the full level in windows 390 and 420 px wide the lifted colour key covers the mirror body's three lower arrows. At 600 and 700 px wide the brain's top arrow touches the foot of the status card, whose top no longer sits on the limits line (in upright windows the brain's arrows are drawn about 12 degrees above the view they were planned in). Arrows under a card after the look has moved are the picture moving under the card.
+- In small windows the capped cards lose their last lines. At 640 by 480 the status card shows the guide line and part of “Looking at”, and the colour key shows its first rows. At 1024 by 600 and 800 by 600 the key's credit line is cut; the credits stay behind “notes and credits”.
+- At the full level in an upright window the information card is small (88 to 100 px tall at 390 to 700 px wide). With More detail open it scrolls; the brain-glass card at the start loses its last line.
+- At 390 and 420 px wide at the full level, the orientation word “Left half” touches the mirror body's top arrow, as it did before.
+
+## 166. The camera steps aside from a raised arm; the limb keys never throw a hand; a slow circle rolls; a straight turn before a circle stays (20 November)
+
+Four faults found by the second half of the browser hunt of 20 November. Each was reproduced on this build first and
+checked again after the fix with the hunt's own scenario.
+
+**The eye view's camera no longer ends up inside your own raised arm.** With the right arm chosen, a look up carries
+the hand up beside and behind the head (the line of sight from the camera, which stands half a metre behind and above
+the eye, passes over the arm's reach, and the arm points up at it), and a turn of the look to the other side then swung
+the camera round the head into that arm: the picture went black, then filled with the arm's muscles cut open by the
+near plane, the bones at point-blank range (the same with the left arm and a turn to the right). The camera is now kept
+clear of your own four limbs, each taken as two rods (shoulder to elbow, elbow to a hand's length past the wrist; hip to
+knee, knee to ankle): where it would come within 7 cm of a rod it is moved straight away from the rod, but only across
+the line of sight (`EYE_CLEAR`, `eyeClearOfRods` in `ns-camera.mjs`; `clearEyeCamera` in `ns-app.mjs`). It is never
+moved along the line of sight, so nothing in the picture grows or shrinks and a look up or down does not change its
+distance (Messages 187 and 189); the move starts from nothing, and a camera place that passes an arm is taken round it,
+eased (it follows within about a tenth of a second). In the hunt's scenario the camera stays 6 cm or more from the forearm's line
+at every frame of a slow turn, with no step larger than 8 mm a frame (the turn itself moves it 4 to 5 mm a frame); the
+hand is seen whole at the edge of the picture. The chosen limb's hold works from the camera before this move, otherwise
+a hand kept in its place in the picture would follow the camera aside. In ordinary looks (20 looks with each limb
+chosen, down, level and a little up, left and right) the camera is never moved.
+
+**The limb keys never throw a hand or a foot.** After A had swung the right arm across in front of the chest, one short
+tap of S moved the hand 21 cm, mostly sideways, at about 1.6 m/s. The cause was not the keys' line: from that pose the
+joints cannot bring the hand in along it. The arm may cross the chest only as far as it is raised (section 139), and the
+upper arm's own turn is not one of the joints the keys move, so bending the elbow swings the hand sideways and the
+shoulder may not swing it back; a search over every allowed raise, crossing and bend found that staying put is the
+nearest the hand can come to any place 2 to 20 cm in along the line. The solve's answer was taken whatever it did. Now,
+on a frame on which the keys alone move a leg or the right arm (the look not carrying it), the end goes at most 1.25
+times as far as the keys go that frame (the joints' change is cut back), and a move more than 60 degrees off the keys'
+own way (in or out along the limb's line for W and S, round the shoulder or hip for A and D) is not taken: the limb waits,
+as it does at the body and at a fully bent joint (`keyMost`, `keyOffDeg` in `LIMB_KEYS.view`; `limbKeyFollow` in
+`ns-app.mjs`). From the start pose every key on both legs and the right arm goes as far as before (S folds the right arm
+44 cm in, as before); across the chest S now leaves the hand where it is.
+
+**A slow circle rolls the brain or the mirror body too.** A press-and-drag circle drawn in about two seconds or more
+turned the thing left and right like a straight drag and never rolled it. The drag arrives once a frame in whole
+pixels, so the short samples of a slow circle pointed every which way and the circle never looked steady. The drag's
+direction is now taken from where the pointer was 24 pixels of travel ago to where it is, and its turning is counted in
+pieces of 16 pixels of path (`CIRCLE_ROLL` `chordPx`, `chunkPx`; `circleRollStep`). Checked on the pure rule with
+circles of 30 to 400 pixels' radius drawn in 20 to 800 frames a turn (also with a trembling hand): every one counts and
+rolls the same amount; in the browser the hunt's slow circle now rolls the brain 108 degrees and leaves its turn and tilt
+at 0.
+
+**A turn made by a straight drag stays when the same press goes on into a circle.** When a circle counted, everything
+since the press began (or since a sharp corner) was taken back, so a deliberate straight turn before a pause or a smooth
+start snapped back by up to 45 degrees. The circle is now the latest stretch of the drag that turned 300 degrees the same
+way, widened back over the pieces just before it that still turned its way; only what that stretch turned is taken back
+(the game keeps the turn and tilt at the start of every piece; `circleMarks`). In the browser a 45-degree straight turn
+stays at 45 degrees after a pause and a circle, after a smooth start and after a sharp corner.
+
+Not done or not right:
+- In a pose where the keys' way cannot be followed (the right arm across the chest), S now does nothing. The hand could
+  only come in along its line if the upper arm turned about its own length, which belongs to the underside / overside
+  turn and is left alone.
+- Where an arm lies straight across the line of sight and the camera's place passes right through it, the camera cannot
+  be taken round it across the line of sight: it changes sides in one quick slide (about 0.15 s), for a few frames close
+  to the arm. Not seen in the hunt's scenario.
+- A sharp corner in a drag now counts as turning (the direction is measured over 24 pixels), so a circle that follows a
+  corner in its own sense counts sooner, and a drawn triangle can count as a circle (a square already did). Going back on
+  yourself still starts the count again.
+- The direction measured over 24 pixels trails the pointer a little: a small circle (30 pixels across) counts after
+  about 350 degrees of the pointer's turn instead of 300. A circle that starts out of a smooth curve may leave up to
+  about 16 pixels of its own first turn not taken back.
+
+## 167. The Esc page says what the look and the limb keys do now; four browser tests follow the current rule (20 November)
+
+Four of the other maintainer's browser tests had failed since Body update 49 and were not run. Three
+(`browser-keyboard-aim`, `browser-limb-controls`, `browser-limb-touch`) waited for the view to turn to every newly
+chosen limb, the rule the user withdrew on 19 November: “Perhaps the problem with the zoom in, zoom out fixes we look
+up and down is the 3/4 height rule. Disregard that rule” (section 144). At the start look all four wrists and ankles
+are inside the picture's band, so choosing a limb there turns nothing, and the tests waited forever. The game was right.
+The tests now check the current rule: after a choice the limb's wrist or ankle is inside the band (`LIMB_KEYS.view`
+`band` and `bandUp`), with no turn when it was inside already. To keep the turn itself tested, `keyboard-aim` and
+`limb-controls` first look up until the end is out of the band; the view then turns down until it is back inside, also
+under reduced motion, the pointer still takes the look back during a turn, and Reset body during a turn puts
+everything back. `limb-controls` also no longer expects the view to move when the left arm's keys move the hand a few
+centimetres after a reset. It did under the three-quarter-height rule; the hand now stays inside the band.
+
+The fourth, `browser-player-focus`, expected the Esc page to say “In the eye view, 1 to 4 turn your view to the limb”.
+Update 50 rightly took the turn out of that sentence, but “In the eye view” went with it, and the page then said the
+chosen limb goes with your view in every view. From behind (E) the look moves no limb. The words are back in the Move
+group's note, the full instructions and the Look row of the controls. The full instructions and the mouse row also
+still said a look past the head's reach turns the chest and bends the trunk. A look has not done that since
+`LOOK_BENDS_TRUNK` was switched off: the eyes turn further. Those words are corrected and shorter. The test checks
+the new words.
+
+Not done: the rest of the full instructions was not checked word by word against the game. One line seen in passing
+still calls the beam from a switched-on area a “soft line”. `README.md` (its opening paragraph) and
+`PREVIEW-NOTES.html` still say that the chest turns and the trunk bends with a look.
 
 ## What is left, and whose it is
 

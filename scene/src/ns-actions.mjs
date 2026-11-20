@@ -3129,6 +3129,10 @@ export function createActivity({
       }
     };
     const still = [], back = [];
+    // 20 November 2026 (section 159's open point): with the jerk on (JOINT_LATCH relax / kick, not under reduced motion),
+    // a press on a movement held AT its end kicks the joint in again (latchBodyAction), so it moves: it is not "already
+    // there". Only a joint held FURTHER than this movement's end (by a stronger movement) is left alone by it.
+    const jerks = Boolean(state.bodyPos && state.bodyVel) && ((Number.isFinite(jointSpring.relax) && jointSpring.relax > 0) || (Number.isFinite(jointSpring.kick) && jointSpring.kick > 0));
     for (const k of BODY_KEYS) {
       const ends = ENDS.get(k);
       if (opposedJoints(ends, goalOf) > 0) back.push(k);
@@ -3138,6 +3142,7 @@ export function createActivity({
         latching += 1;
         const at = sideOf(j, goalOf[j]), side = sideOf(j, ends[j]);
         if (at !== 0 && side !== at) { moves = true; break; } // held on the other side: the action brings it back
+        if (jerks && side !== 0 && Math.abs(goalOf[j] - ends[j]) <= JOINT_LATCH.restEpsDeg && Math.abs(ends[j] - REST[j]) > JOINT_LATCH.restEpsDeg) { moves = true; break; } // (a press kicks it in again)
         if (side !== 0 && at === side && Math.abs(goalOf[j] - REST[j]) >= Math.abs(ends[j] - REST[j])) continue; // at its end, or further
         if (Math.abs(goalOf[j] - ends[j]) > JOINT_LATCH.restEpsDeg) { moves = true; break; }
       }

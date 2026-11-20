@@ -155,8 +155,21 @@ export const LIGHT_BEAM = freeze({
   // of the first build, a thinner veil, and little of it over the key and the muscle themselves)
   alpha: 0.12, coreAlpha: 0.1, coreWidth: 0.12, rimAlpha: 0.04, white: 0.45, capLevel: 0.12, veil: 0.3,
   rays: freeze({ amp: 0.2, lanes: freeze([freeze([2.6, 0.07, 0.3]), freeze([4.3, -0.05, 2.1]), freeze([1.4, 0.03, 4.4])]) }),
-  pulseAmp: 0.42, pulseWidth: 0.09, pulseBoth: true, minHalfM: 0.003, tight: 0.85, overBrain: 0.7, hoverAlpha: 0.75, ownAlpha: 0.8, manyPower: 0.8, manyFrom: 0.1, manyTo: 0.7, manyRise: 2
+  pulseAmp: 0.42, pulseWidth: 0.09, pulseBoth: true, minHalfM: 0.003, tight: 0.85, overBrain: 0.7, hoverAlpha: 0.75, ownAlpha: 0.8, manyPower: 0.8, manyFrom: 0.1, manyTo: 0.7, manyRise: 2,
+  // 20 November 2026 (browser hunt: with the brain carried behind you, Space drew the hand area's beam from the corner
+  // of the picture, a quarter of the screen wide): a beam is drawn only while the middle of its key on the strip is in
+  // front of the eye and within keyInView of the picture's half size from its middle (1 = the picture's edge). A
+  // display choice: a beam must be seen to start at its area.
+  keyInView: 1.15
 });
+
+/** LIGHT_BEAM.keyInView: whether a beam's key, at normalised picture place (x, y) (-1..1 across and up; behind: the
+ * point is behind the eye), is in the picture enough to draw the beam. Pure. */
+export function beamKeySeen(x, y, behind, o = LIGHT_BEAM) {
+  if (behind || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const k = Number.isFinite(o.keyInView) ? o.keyInView : Infinity;
+  return Math.abs(x) <= k && Math.abs(y) <= k;
+}
 
 const sstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 

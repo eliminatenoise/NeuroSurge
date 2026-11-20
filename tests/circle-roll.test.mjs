@@ -11,34 +11,84 @@ const circleSamples = (loops, cw, r = 90, per = 36) => {
   for (let k = 1; k <= loops * per; k++) { const a = (cw ? 1 : -1) * 2 * Math.PI * k / per, x = r * Math.cos(a), y = r * Math.sin(a); out.push([x - px, y - py]); px = x; py = y; }
   return out;
 };
-const run = samples => { let st = null, roll = 0, rollingAt = -1; samples.forEach(([dx, dy], i) => { const r = circleRollStep(st, dx, dy); st = r.state; roll += r.rollDeg; if (r.rolling && rollingAt < 0) rollingAt = i; }); return { roll, rollingAt, st }; };
+const run = samples => { let st = null, roll = 0, rollingAt = -1, from = -1; const firstOf = new Map(); samples.forEach(([dx, dy], i) => { const r = circleRollStep(st, dx, dy); st = r.state; roll += r.rollDeg; if (!r.rolling && r.chunk >= 0 && !firstOf.has(r.chunk)) firstOf.set(r.chunk, i); if (r.started) { rollingAt = i; from = firstOf.get(r.state.from); } }); return { roll, rollingAt, st, fromSample: from }; };
+// a circle as the browser reports it: whole-pixel moves, one sample per frame (`per` frames for a whole turn)
+const pixelCircle = (loops, cw, r, per, x0 = 0, y0 = 0, a0 = 0) => {
+  const out = []; let px = Math.round(x0 + r * Math.cos(a0)), py = Math.round(y0 + r * Math.sin(a0));
+  for (let k = 1; k <= Math.round(loops * per); k++) {
+    const a = a0 + (cw ? 1 : -1) * 2 * Math.PI * k / per, x = Math.round(x0 + r * Math.cos(a)), y = Math.round(y0 + r * Math.sin(a));
+    out.push([x - px, y - py]); px = x; py = y;
+  }
+  return out;
+};
 
 test('a clockwise circle rolls clockwise (+), an anticlockwise one anticlockwise (-), by gain of the turn after the start', () => {
   const cw = run(circleSamples(2, true)), ccw = run(circleSamples(2, false));
   assert.ok(cw.rollingAt > 0 && ccw.rollingAt > 0, 'both count as circles');
   assert.ok(cw.roll > 0 && ccw.roll < 0);
-  // two whole loops: 72 samples of 10 degrees each, the first only setting the direction (710 degrees of turn); the
-  // turn up to the circle's start only counts it
-  assert.ok(Math.abs(cw.roll - (710 - cw.st.turned) * CIRCLE_ROLL.gain) < 1e-6, `${cw.roll}`);
+  assert.ok(Math.abs(cw.roll + ccw.roll) < 1e-6, 'the same amount either way');
+  // two whole loops (720 degrees of the pointer's direction): the turn up to the circle's start (at least startDeg) only
+  // counts it, and the direction is taken over a chord, which trails the pointer a little
+  assert.ok(cw.roll > (720 - CIRCLE_ROLL.startDeg - 90) * CIRCLE_ROLL.gain && cw.roll < (720 - CIRCLE_ROLL.startDeg) * CIRCLE_ROLL.gain, `${cw.roll}`);
   assert.ok(cw.rollingAt >= Math.floor(CIRCLE_ROLL.startDeg / 10) - 1, 'not before startDeg of turn');
+  assert.ok(Math.abs(cw.st.turned) >= CIRCLE_ROLL.startDeg && cw.st.path >= CIRCLE_ROLL.minPathPx);
 });
 
 test('straight drags, a zigzag and a small wiggle never count as a circle', () => {
   assert.equal(run(Array.from({ length: 80 }, () => [6, 0])).rollingAt, -1, 'straight');
-  assert.equal(run(Array.from({ length: 80 }, (_, i) => [5, i % 2 ? 8 : -8])).rollingAt, -1, 'zigzag (each turn past maxTurnDeg starts the count again)');
+  assert.equal(run(Array.from({ length: 300 }, (_, i) => [i % 3 ? 1 : 0, i % 7 ? 0 : 1])).rollingAt, -1, 'straight, slowly, in whole pixels');
+  assert.equal(run(Array.from({ length: 80 }, (_, i) => [5, i % 2 ? 8 : -8])).rollingAt, -1, 'zigzag (its turns cancel)');
+  assert.equal(run(Array.from({ length: 12 }, (_, i) => Array.from({ length: 8 }, () => [i % 2 ? -6 : 6, 0])).flat()).rollingAt, -1, 'back and forth (each turn back starts the count again)');
   assert.equal(run(circleSamples(2, true, 8)).rollingAt, -1, 'a circle a few pixels across is too short a path');
   // an S curve: turns one way then the other, never startDeg the same way
   const s = [...circleSamples(0.5, true), ...circleSamples(0.5, false), ...circleSamples(0.5, true)];
   assert.equal(run(s).rollingAt, -1, 'an S');
 });
 
-test('tiny samples are joined until they make a step', () => {
-  let st = null;
-  for (let i = 0; i < 5; i++) st = circleRollStep(st, 0.5, 0).state;
-  assert.ok(Math.abs(st.carry[0] - 2.5) < 1e-12 && st.heading === null);
-  st = circleRollStep(st, 0.5, 0).state;
-  assert.deepEqual(st.carry, [0, 0]);
-  assert.equal(st.heading, 0);
+// 20 November 2026, afternoon (hunt): a circle drawn slowly never counted, because frame samples of whole pixels point
+// every which way. The direction is now taken over a chord of chordPx and the turning counted in pieces of chunkPx.
+test('a slow circle counts like a fast one, whatever its size and the frame rate', () => {
+  for (const r of [30, 60, 100, 250, 400]) for (const per of [20, 60, 105, 200, 400, 800]) {
+    const cw = run(pixelCircle(1.5, true, r, per)), ccw = run(pixelCircle(1.5, false, r, per));
+    assert.ok(cw.rollingAt > 0 && ccw.rollingAt > 0, `r ${r}, ${per} frames a turn: counted`);
+    // half of the turn after the start (about 540 - 300 to 400 degrees)
+    assert.ok(cw.roll > 60 && cw.roll < 125 && ccw.roll < -60 && ccw.roll > -125, `r ${r}, ${per} frames a turn: roll ${cw.roll.toFixed(1)} / ${ccw.roll.toFixed(1)}`);
+  }
+  // the hunt's case: a 100 px circle at 3.3 px a frame (it neither rolled nor counted before)
+  assert.ok(run(pixelCircle(1.5, true, 100, 190)).roll > 90);
+});
+
+test('the direction is taken only once the pointer is a chord away from an earlier place; the state is never changed', () => {
+  let r = { state: null };
+  for (let i = 0; i < CIRCLE_ROLL.chordPx - 1; i++) r = circleRollStep(r.state, 1, 0);
+  assert.equal(r.state.heading, null);
+  assert.equal(r.chunk, 0, 'the drag before it has a direction belongs to the first piece');
+  r = circleRollStep(r.state, 1, 0);
+  assert.equal(r.state.heading, 0);
+  const before = JSON.stringify(r.state);
+  circleRollStep(r.state, 3, 4); circleRollStep(r.state, -9, 0);
+  assert.equal(JSON.stringify(r.state), before, 'pure');
+  assert.equal(circleRollStep(r.state, 0, 0).state.heading, 0, 'no movement: nothing changes');
+});
+
+// 20 November 2026, afternoon (hunt): a straight turn made earlier in the same press was taken back when a circle
+// counted, unless a sharp corner came between. Only the circle's own stretch is taken back: its first piece starts
+// where the circle starts (within one piece), after a pause or a smooth start as after a corner.
+test('the circle found is the stretch that turned, not the straight drag before it', () => {
+  const straight = Array.from({ length: 15 }, () => [10, 0]); // 150 px right (the press turns the item left / right)
+  // after a pause (no samples), a clockwise circle that starts going straight down (its centre to the left)
+  const paused = run([...straight, ...pixelCircle(1.4, true, 80, 120, 150 - 80, 0, 0)]);
+  // curving smoothly on from the straight drag (a circle whose top is where the drag ends; it starts going right)
+  const smooth = run([...straight, ...pixelCircle(1.4, true, 80, 120, 150, 80, -Math.PI / 2)]);
+  // a sharp corner first (as section 160 handled)
+  const corner = run([...straight, [-4, 7], ...pixelCircle(1.4, true, 80, 120, 146 - 80, 7, 0)]);
+  for (const [name, c] of [['paused', paused], ['smooth', smooth], ['corner', corner]]) {
+    assert.ok(c.rollingAt > 15, `${name}: counted`);
+    assert.ok(c.fromSample >= 15 - Math.ceil(CIRCLE_ROLL.chunkPx / 10), `${name}: the circle starts at sample ${c.fromSample}, the straight drag ends at 15`);
+    assert.ok(c.fromSample <= 15 + 4, `${name}: and not long after the circle began (${c.fromSample})`);
+  }
+  // a circle on its own: it starts with the drag (its first piece is the drag's first)
+  assert.equal(run(pixelCircle(1.4, true, 80, 120)).fromSample, 0);
 });
 
 test('the mirror body keeps its roll through the arrows\' steps, in -180 .. 180', () => {

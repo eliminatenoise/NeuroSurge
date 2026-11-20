@@ -111,6 +111,7 @@ import * as NsGrasp from './ns-grasp.mjs';
 import * as NsContact from './ns-contact.mjs'; // 18 November 2026 (package CONTACT): limbs push limbs
 import { seeHiddenEntry, seeTakesGhost, seeLimbOfGroup } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs
 import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performance): frame time by part, inspect().perf
+import { trunkShapeField } from './ns-body-shape.mjs'; // 21 November 2026: TRUNK_KEEP_OUT follows the flatter chest
 
 /** 19 November 2026 (the owner: "Performance and reliability should be our number one priority. even if that means
  * extreme simplicity and streamlining"; "Perhaps game is way too big at the moment"). What the plain game leaves out:
@@ -201,20 +202,53 @@ export const LIMB_KEYS = Object.freeze({ on: true, order: Object.freeze(['leftAr
   // the shoulder or hip with its bend unchanged (limbKeyMove). Until now ('level') the keys moved the end level over
   // the ground, away from and toward the VIEW and across it, whatever way the limb pointed. The limb's own turn
   // (internal / external) is never among the hold's joints, with either rule.
+  // 20 November 2026, afternoon (a hunt: after A had swung the right arm across the chest, one short tap of S threw the
+  // hand 21 cm, mostly sideways, at about 1.6 m/s). From there the joints cannot bring the hand in along its line (the
+  // arm crosses the chest only as far as it is raised, and the upper arm's own turn is not one of the hold's joints:
+  // bending the elbow swings the hand sideways and the shoulder may not swing it back), and the solve's answer was taken
+  // whatever it did. Now, on a frame the keys alone move the limb (the look not carrying it): keyMost, the end goes at
+  // most that many times the keys' own way this frame (the solve's joint change is cut back to it); keyOffDeg, a move
+  // more than that many degrees off the keys' way (from where the end is: in or out along the limb's line for W / S,
+  // round the root for A / D) is not taken, and the limb waits, as it does at the body and at a fully bent joint.
   view: Object.freeze({ on: true, frameUp: null, bandUp: 0.6, turnS: 0.16, doneDeg: 0.4, maxS: 1.2, keys: 'limb',
-    hold: true, lookCarries: true, followS: 0.12, band: 0.55, speedMps: 0.6, leadM: 0.02, levelM: 0.12, waitMm: 40, waitShare: 0.5 }) });
+    hold: true, lookCarries: true, followS: 0.12, band: 0.55, speedMps: 0.6, leadM: 0.02, levelM: 0.12, waitMm: 40, waitShare: 0.5,
+    keyMost: 1.25, keyOffDeg: 60 }) });
+/** LIMB_KEYS.view keyMost / keyOffDeg: what a frame of the keys takes of the solve's answer. from: the limb's end now;
+ * to: where the solve puts it; way: the keys' own move from `from` this frame (limbKeyMove(from, ...) - from; all world
+ * m). Returns { take: false } for a move more than offDeg off the way (the limb waits), else { take: true, share }:
+ * the share of the solve's joint change to apply (1, or less so that the end goes at most `most` x the way). A move
+ * under 0.1 mm, or no way, is taken as it is. Pure. */
+export function limbKeyFollow(from, to, way, most = LIMB_KEYS.view.keyMost, offDeg = LIMB_KEYS.view.keyOffDeg) {
+  const m = [to[0] - from[0], to[1] - from[1], to[2] - from[2]], ml = Math.hypot(m[0], m[1], m[2]);
+  const wl = way ? Math.hypot(way[0], way[1], way[2]) : 0;
+  if (!(ml > 1e-4) || !(wl > 1e-6)) return { take: true, share: 1 };
+  if ((m[0] * way[0] + m[1] * way[1] + m[2] * way[2]) / (ml * wl) < Math.cos(offDeg * DEG)) return { take: false, share: 0 };
+  return { take: true, share: ml > most * wl ? (most * wl) / ml : 1 };
+}
 /** 19 November 2026 (LIMB_KEYS.view.hold): balls that fill the trunk, neck and head of the drawn body, for the one test
  * that keeps a hand's middle out of them (ns-app handKeepOut). Each: the segment that carries it, its middle in that
  * segment's rest frame (BodyParts3D mm: +x the body's left, +y back, +z up) and its radius (m). Laid along the middle
  * of the chest, belly and pelvis with one more to each side of the chest; sized a little inside the drawn surface, so
  * a hand can still lie ON the chest. A display rule, not an anatomical model. */
-export const TRUNK_KEEP_OUT = Object.freeze([
+/* 21 November 2026 (review B2 / B6): the body's rest meshes are reshaped (ns-body-shape: the chest's front comes back
+ * by up to 47 mm, the belly's goes forward), and these balls were laid out on the source body, so a hand pulled to the
+ * chest stopped 4 to 7 cm in front of it. Each ball now moves along y as the trunk rule moves the front-most point of
+ * the ball (its middle minus its radius, straight ahead): its front keeps its place against the drawn chest or belly,
+ * its size is unchanged (TRUNK_KEEP_OUT_SOURCE holds the source places). */
+export const TRUNK_KEEP_OUT_SOURCE = Object.freeze([
   { seg: 'skull', at: [0, -120, 1532], r: 0.1 }, { seg: 'cervical', at: [0, -90, 1428], r: 0.06 },
   { seg: 't3', at: [0, -110, 1330], r: 0.105 }, { seg: 't3', at: [75, -100, 1320], r: 0.085 }, { seg: 't3', at: [-75, -100, 1320], r: 0.085 },
   { seg: 't6', at: [0, -115, 1250], r: 0.115 }, { seg: 't6', at: [80, -100, 1245], r: 0.095 }, { seg: 't6', at: [-80, -100, 1245], r: 0.095 },
   { seg: 't9', at: [0, -115, 1170], r: 0.115 }, { seg: 't9', at: [80, -95, 1165], r: 0.095 }, { seg: 't9', at: [-80, -95, 1165], r: 0.095 },
   { seg: 't12', at: [0, -105, 1090], r: 0.115 }, { seg: 'l2', at: [0, -100, 1010], r: 0.11 }, { seg: 'pelvis', at: [0, -80, 930], r: 0.125 }
 ].map(b => Object.freeze({ ...b, at: Object.freeze(b.at) })));
+export const TRUNK_KEEP_OUT = (() => {
+  const tf = trunkShapeField();
+  return Object.freeze(TRUNK_KEEP_OUT_SOURCE.map(b => {
+    const dy = tf.at(b.at[0], b.at[1] - 1000 * b.r, b.at[2]);
+    return Object.freeze({ ...b, at: Object.freeze([b.at[0], Math.round((b.at[1] + dy) * 10) / 10, b.at[2]]) });
+  }));
+})();
 /** The column a hand's middle is kept out of in the eye view (ns-app handKeepOut): ns-scene-three EYE_COLLAR's box, the
  * part of your own body that view does not draw, with a hand's half width added all round (breastbone frame, mm). */
 export const HEAD_COLUMN = Object.freeze({ xMm: Object.freeze([-215, 215]), yMm: Object.freeze([-325, 135]), zFromMm: 1330 });
@@ -1746,34 +1780,79 @@ export function brainTransformFor(view, frame = null, brainModule = NsBrain, rol
  * and left and right, instead of orbiting ... we can turn it clockwise or anti-clockwise, any object basically, any
  * item"). A press-and-drag on the brain or the mirror body that goes round in a circle turns the thing clockwise or
  * anticlockwise as you see it (a roll about the line from your eye), instead of turning it left and right and tilting
- * it. The drag's direction is followed sample by sample (samples shorter than minStepPx are joined to the next); the
+ * it. The drag's direction is followed sample by sample (since the afternoon of 20 November over a chord: below); the
  * drag counts as a circle once it has turned startDeg the same way (the turns one way at least `steady` of all its
  * turning) over at least minPathPx of path, and from then on, until the press ends, every further turn of its
  * direction rolls the thing by `gain` of that turn (a whole circle of the pointer = 360 x gain degrees) and the drag
  * no longer turns it left, right, up or down. A turn of more than maxTurnDeg between two samples is a change of mind,
  * not a circle, and starts the count again. The two-finger turn on a trackpad is not something a web page is told
  * about (except in Safari), so it is not used. Display choices. */
-export const CIRCLE_ROLL = Object.freeze({ on: true, minStepPx: 3, startDeg: 300, steady: 0.75, minPathPx: 140, gain: 0.5, maxTurnDeg: 100 });
+/* 20 November 2026, afternoon (a hunt found two faults). (1) A SLOW circle never counted: the drag arrives once a frame
+ * in whole pixels, so a circle drawn at 3 px a frame gave samples whose directions jumped by tens of degrees, the
+ * turns one way never reached `steady` of all the turning, and the circle turned the brain like a straight drag. The
+ * drag's direction is now the line from where the pointer was chordPx ago to where it is (one heading a sample, but
+ * measured over a chord, so a whole pixel moves it by about a degree), and the turning is counted in pieces of at
+ * least chunkPx of path. How fast the circle is drawn and how often frames come no longer matter. (2) Everything since
+ * the press began was taken back when a circle counted, so a straight turn made in the same press before the circle
+ * (after a pause, or curving smoothly into it) snapped back. The circle is now the latest stretch of the drag that
+ * turned startDeg the same way (steadily, over minPathPx), widened back over the pieces just before it that still turned
+ * its way (leadShare of its mean turn a piece): only what that stretch turned is taken back, from the start of its first
+ * piece (`from`, the piece's number; ns-app keeps the orbit at the start of every piece). A turn of more
+ * than maxTurnDeg from one sample to the next (going back on itself) still starts the count again. keepChunks bounds
+ * the pieces kept (a circle of about 500 px across fits). */
+export const CIRCLE_ROLL = Object.freeze({ on: true, chordPx: 24, chunkPx: 16, startDeg: 300, steady: 0.75, minPathPx: 140, gain: 0.5, maxTurnDeg: 100, leadShare: 0.4, keepChunks: 160, keepTrail: 64 });
 /** CIRCLE_ROLL: one drag sample (dx, dy: CSS px, y down) for the gesture state `st` (null at a drag's start). Returns
- * { state, rollDeg (degrees to roll now, positive clockwise on screen), rolling }. Pure. */
+ * { state, rollDeg (degrees to roll now, positive clockwise on screen), rolling, chunk (the number of the piece this
+ * sample's movement belongs to: 0, 1, ...; the first piece also holds the drag before it had a direction), started (true on the sample the circle counts;
+ * state.from is then the number of the circle's first piece) }. state.turned / absTurned / path describe the circle
+ * found (0 before). Pure: never changes `st`. */
 export function circleRollStep(st, dx, dy, o = CIRCLE_ROLL) {
-  const s = st ? { ...st } : { heading: null, turned: 0, absTurned: 0, path: 0, rolling: false, carry: [0, 0] };
-  let rollDeg = 0;
-  const x = (Number(dx) || 0) + s.carry[0], y = (Number(dy) || 0) + s.carry[1], len = Math.hypot(x, y);
-  if (!(len >= o.minStepPx)) { s.carry = [x, y]; return { state: s, rollDeg, rolling: s.rolling }; }
-  s.carry = [0, 0];
-  const h = Math.atan2(y, x) / DEG;
-  if (s.heading !== null) {
-    const dh = ((h - s.heading) % 360 + 540) % 360 - 180;
-    if (Math.abs(dh) > o.maxTurnDeg) { if (!s.rolling) { s.turned = 0; s.absTurned = 0; s.path = 0; } }
-    else if (s.rolling) rollDeg = dh * o.gain;
-    else {
-      s.turned += dh; s.absTurned += Math.abs(dh); s.path += len;
-      if (Math.abs(s.turned) >= o.startDeg && s.path >= o.minPathPx && Math.abs(s.turned) >= o.steady * s.absTurned) s.rolling = true;
+  const s = st ? { ...st } : { x: 0, y: 0, trail: [0, 0], heading: null, pend: 0, pendLen: 0, chunks: [], open: 0, rolling: false, from: -1, turned: 0, absTurned: 0, path: 0 };
+  const ddx = Number(dx) || 0, ddy = Number(dy) || 0, chunk = s.open; // (the samples before the drag has a direction belong to its first piece)
+  let rollDeg = 0, started = false;
+  if (ddx === 0 && ddy === 0) return { state: s, rollDeg, rolling: s.rolling, chunk, started };
+  s.x += ddx; s.y += ddy;
+  const len = Math.hypot(ddx, ddy);
+  // the chord: the newest earlier place at least chordPx away (places before it are no longer needed)
+  const tr = s.trail;
+  let j = -1;
+  for (let i = tr.length - 2; i >= 0; i -= 2) if (Math.hypot(s.x - tr[i], s.y - tr[i + 1]) >= o.chordPx) { j = i; break; }
+  const h = j >= 0 ? Math.atan2(s.y - tr[j + 1], s.x - tr[j]) / DEG : null;
+  const kept = j >= 0 ? tr.slice(j) : tr.slice();
+  kept.push(s.x, s.y);
+  s.trail = kept.length > 2 * o.keepTrail ? kept.slice(kept.length - 2 * o.keepTrail) : kept;
+  if (!s.rolling) s.pendLen += len;
+  if (h === null) return { state: s, rollDeg, rolling: s.rolling, chunk, started };
+  if (s.heading === null) { s.heading = h; s.pend = 0; s.pendLen = 0; return { state: s, rollDeg, rolling: s.rolling, chunk, started }; }
+  const dh = ((h - s.heading) % 360 + 540) % 360 - 180;
+  s.heading = h;
+  if (s.rolling) {
+    if (Math.abs(dh) <= o.maxTurnDeg) rollDeg = dh * o.gain;
+    return { state: s, rollDeg, rolling: true, chunk, started };
+  }
+  if (Math.abs(dh) > o.maxTurnDeg) { s.chunks = []; s.pend = 0; s.pendLen = 0; s.open += 1; return { state: s, rollDeg, rolling: false, chunk, started }; } // (a change of mind: count again, from a new piece)
+  s.pend += dh;
+  if (s.pendLen >= o.chunkPx) {
+    const c = s.chunks.concat([s.pend, s.pendLen, s.open]);
+    s.chunks = c.length > 3 * o.keepChunks ? c.slice(c.length - 3 * o.keepChunks) : c;
+    s.open += 1; s.pend = 0; s.pendLen = 0;
+    // the latest stretch of pieces that turned startDeg the same way, steadily, over minPathPx
+    let sum = 0, abs = 0, path = 0;
+    for (let i = s.chunks.length - 3; i >= 0; i -= 3) {
+      sum += s.chunks[i]; abs += Math.abs(s.chunks[i]); path += s.chunks[i + 1];
+      if (Math.abs(sum) >= o.startDeg && path >= o.minPathPx && Math.abs(sum) >= o.steady * abs) {
+        s.rolling = true; started = true; s.turned = sum; s.absTurned = abs; s.path = path;
+        // (the circle began where its turning began: the pieces just before the stretch that still turned its way, by at
+        // least leadShare of the stretch's mean turn a piece, are its start too; a straight drag before it is not)
+        const mean = Math.abs(sum) / ((s.chunks.length - i) / 3), sg = Math.sign(sum);
+        let k = i;
+        for (let m = i - 3; m >= 0 && s.chunks[m] * sg >= o.leadShare * mean; m -= 3) k = m;
+        s.from = s.chunks[k + 2];
+        break;
+      }
     }
   }
-  s.heading = h;
-  return { state: s, rollDeg, rolling: s.rolling };
+  return { state: s, rollDeg, rolling: s.rolling, chunk, started };
 }
 
 /** FALLBACK pronation/supination (used only while ns-actions has no rotationState): two Space presses within
@@ -1920,6 +1999,20 @@ export function infoMoves(region, { currentId = null, leftArm = false, still = n
       back: !atEnd && infoActionBack(a, { leftArm, regionId: region.id, back, armState })
     };
   });
+}
+
+/**
+ * The movement the tip by the crosshair names for the motor area under it (pure): the classifier's pick inside the area
+ * (gaze.regionActionId), else the game-arm action (gaze.actionId), else the movement the activity picked by where the
+ * look rests on the area (`gazeArea`, '<areaId>/<movementId>'), or null.
+ * 20 November 2026 (hunt H2-7): the left forearm turn's two movements (palm down / up) are not game-arm actions, so its
+ * gaze carries no action id at all and its tip named no movement, unlike every other area.
+ */
+export function tipActionId(gaze, areaId, gazeArea = null) {
+  if (gaze && typeof gaze.regionActionId === 'string' && gaze.regionActionId) return gaze.regionActionId;
+  if (gaze && typeof gaze.actionId === 'string' && gaze.actionId) return gaze.actionId;
+  const pre = typeof areaId === 'string' && areaId ? `${areaId}/` : null;
+  return pre && typeof gazeArea === 'string' && gazeArea.startsWith(pre) && gazeArea.length > pre.length ? gazeArea.slice(pre.length) : null;
 }
 
 /** Plain-language pathway line for a body-map region (round-2 fixes SCI-3, SCI-5, F6): built from the region's own
@@ -2969,7 +3062,9 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     // or off the crosshair): what is under the crosshair is recorded, but nothing switches on or latches by itself.
     const lookSame = !state.gaze || (state.gaze.yaw === gl.yaw && state.gaze.pitch === gl.pitch);
     const overrideChanged = rawCached && Boolean(state.gaze) && (state.gaze.target !== gaze.target || state.gaze.regionId !== gaze.regionId || state.gaze.actionId !== gaze.actionId);
-    const silentGaze = (inputs && inputs.silentGaze === true) || (reframed && lookSame) || orbitDirs.length > 0 || overrideChanged;
+    // (20 Nov review: a circle's roll, like an orbit step, brings another area under a still crosshair: recorded silently)
+    const rolled = Boolean(state.gaze) && Number.isFinite(state.gaze.rollDeg) && state.gaze.rollDeg !== brainRollDeg;
+    const silentGaze = (inputs && inputs.silentGaze === true) || (reframed && lookSame) || orbitDirs.length > 0 || overrideChanged || rolled;
     // Look given to the activity: ABSOLUTE when it owns the grab (it computes the carry from it and records the gaze
     // silently while dragging); RELATIVE to the fallback offset otherwise (constant while the grabbed brain follows the
     // look, so a drag restarts nothing).
@@ -3285,7 +3380,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       viewport: { ...viewport, brainCentreNdc: centre, pxKey },
       placement,
       gaze: {
-        yaw: gl.yaw, pitch: gl.pitch, relYaw, relPitch, viewKey, kind: gaze.kind, target: gaze.target, regionId: gaze.regionId, hemisphere: gaze.hemisphere,
+        yaw: gl.yaw, pitch: gl.pitch, relYaw, relPitch, viewKey, rollDeg: brainRollDeg, kind: gaze.kind, target: gaze.target, regionId: gaze.regionId, hemisphere: gaze.hemisphere,
         isLeftArm: gaze.isLeftArm, actionId: gaze.actionId, regionActionId: gaze.regionActionId || null,
         mapActionId: gaze.regionActionId || null, u: gaze.u, point: gaze.point, ...(gaze.coveredBy ? { coveredBy: gaze.coveredBy } : {})
       },
@@ -3891,7 +3986,7 @@ export function controlTargets(layers, opts = {}) {
   const seen = seenIn(list);
   // 18 November 2026 (SEE): the limb hidden behind the body part seen, and whether its drawn ghost is what is aimed at.
   const hidden = seen && seen.item !== 'brain' ? seeHiddenEntry(list) : null;
-  const ghost = hidden && opts && seeTakesGhost(opts.ghost, hidden) ? hidden : null;
+  const ghost = hidden && opts && seeTakesGhost(opts.ghost, hidden, list) ? hidden : null; // (20 November 2026: only where that ghost is the one drawn)
   const lookArea = opts && typeof opts.lookArea === 'boolean' ? opts.lookArea : null;
   const areaEntry = list.find(l => l.item === 'brain' && l.kind === 'area') || null;
   // The brain entry that stands for the area the look names: the area mesh hit, else (classifier says area) the first
@@ -5609,7 +5704,19 @@ export function start(params = {}) {
   const PUNCH_IN = Object.freeze({ on: true, amount: 0.04, holdS: 0.3, inS: 0.045, outS: 0.11 });
   let punchNow = 0;
   let pausedPunchSeq = null;
-  let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg, undone, from }, or null
+  let circleRoll = null; // CIRCLE_ROLL: the current drag's circle gesture { target, st, rolledDeg, undone, from, chunk }, or null
+  // (20 Nov, afternoon) the dragged item's orbit at the start of each of the gesture's pieces (circleRollStep `chunk`),
+  // kept in a ring of CIRCLE_ROLL.keepChunks places (no allocation while dragging); a place is good only for its piece.
+  const circleMarks = { seq: new Int32Array(CIRCLE_ROLL.keepChunks).fill(-1), yaw: new Float64Array(CIRCLE_ROLL.keepChunks), pitch: new Float64Array(CIRCLE_ROLL.keepChunks) };
+  const markCircleChunk = (seq, orbit) => {
+    const i = seq % CIRCLE_ROLL.keepChunks;
+    if (!orbit) { circleMarks.seq[i] = -1; return; }
+    circleMarks.seq[i] = seq; circleMarks.yaw[i] = orbit.yaw; circleMarks.pitch[i] = orbit.pitch;
+  };
+  const circleChunkOrbit = seq => {
+    const i = Number.isInteger(seq) && seq >= 0 ? seq % CIRCLE_ROLL.keepChunks : -1;
+    return i >= 0 && circleMarks.seq[i] === seq ? { yaw: circleMarks.yaw[i], pitch: circleMarks.pitch[i] } : null;
+  };
   // (CIRCLE_ROLL helpers, 20 Nov review) the dragged item's orbit now, its roll now, and the steps that take its orbit
   // back to `from` (the turn really applied, so a turn the limits clamped is not over-undone).
   const dragOrbitNow = target => {
@@ -5785,6 +5892,11 @@ export function start(params = {}) {
   let controlTargetsShown = null;
   const orbitQueue = [];
   let viewAfterRelease = 0; // 19 November: frames an E press may still wait for the Space hold it ended to be over
+  // 20 November 2026 (hunt 5): outside (E) the look stays where the outside camera can follow it (ns-camera followReach);
+  // outsideEntry keeps the eye view's look from before E and the look it was held to, so E E with no look between
+  // still returns exactly.
+  const outsideReach = NC.followReach();
+  let outsideEntry = null;
   let viewRequests = 0; // E presses waiting for the frame loop; also owned by synchronous pause/lifecycle cancellation
   // R558 (Messages 55 and 56): number-key presses (1 to 9) waiting for the frame loop, oldest first. Each asks for the
   // movement with that number in the list the information card shows (infoModel.moves); owned and cancelled like E.
@@ -5937,6 +6049,9 @@ export function start(params = {}) {
   // R5-integrate-core (D18): the camera state (ns-camera drive B), this frame's pose, the body frame it follows and the
   // pose last handed to the scene.
   let cam = NC.createCameraState(), camPose = null, camBodyToWorld = null, camSceneKey = null;
+  // (20 November 2026, afternoon: NC.EYE_CLEAR) the eased move of the eye view's camera off your own limbs (world m)
+  const EYE_CLEAR_EASE_S = 0.08, EYE_CLEAR_NONE = Object.freeze([0, 0, 0]);
+  let eyeClearOff = EYE_CLEAR_NONE, camPoseBase = null;
   let referenceGraph = null, graphControls = graphControlOptions, referenceEye = null;
   // R5-integrate-core (D16): the 3D compass-arrow interaction (ns-controls stepArrowInput) and the hover last shown.
   let arrowInput = initialArrowInput(), arrowHoverKey = null, arrowEvents = [];
@@ -6774,7 +6889,9 @@ export function start(params = {}) {
         if (!x || !(x.meshesById instanceof Map) || !mods.body || typeof mods.body.bulkBody !== 'function') return x;
         if (bulkCache.has(x)) return bulkCache.get(x);
         let y = x;
-        try { const o = mods.body.bulkBody(x.entries, x.meshesById); bodyBulked = o.report; y = { ...x, entries: o.entries || x.entries, meshesById: o.meshesById }; } catch (err) { bodyBulked = { error: errorText(err) }; }
+        // (unshapedMeshesById: the meshes before ns-body-shape, kept only while the body's vessels are on, which are bound to
+        // them so that they follow the longer limbs; 21 November 2026, review B8)
+        try { const o = mods.body.bulkBody(x.entries, x.meshesById); bodyBulked = o.report; y = { ...x, entries: o.entries || x.entries, meshesById: o.meshesById, unshapedMeshesById: PLAIN_GAME.vessels && o.unshaped instanceof Map ? o.unshaped : null }; } catch (err) { bodyBulked = { error: errorText(err) }; }
         bulkCache.set(x, y);
         return y;
       };
@@ -6880,6 +6997,7 @@ export function start(params = {}) {
           installBody(body.entries, drawMeshes, bodyToWorld, bodyRig);
           installBodyLift();
           installHandSkin(body.meshesById);
+          if (sceneFn('setDigitTendonSources')) { try { callScene('setDigitTendonSources', body.meshesById); } catch (err) { handSkinNote = errorText(err); } } // DIGIT_TENDONS from the source meshes (20 Nov review)
         } catch (err) {
           bodyRig = null;
           bodyNote = `Full body not shown: ${errorText(err)}`;
@@ -7240,6 +7358,7 @@ export function start(params = {}) {
           await barFrame();
           if (stopped || failed) return;
           installHandSkin(inputsB.meshesById);
+          if (sceneFn('setDigitTendonSources')) { try { callScene('setDigitTendonSources', inputsB.meshesById); } catch (err) { handSkinNote = errorText(err); } } // DIGIT_TENDONS from the source meshes (20 Nov review)
           if (PLAIN_GAME.selfContact) installSelfContact(inputsB.meshesById); // 18 November 2026 (package CONTACT)
           if (PLAIN_GAME.swell) startBodySwell(inputsB.meshesById); // package BULK: the contraction swell, baked in slices after the body is shown
           loadStep('skin', 'done'); loadStep('first');
@@ -7253,7 +7372,7 @@ export function start(params = {}) {
             (async () => {
               const list = await loadBodyVessels({ fetchText, sha256Hex });
               const meshes = [];
-              for (const e of src.entries) { const m = e && e.region !== 'head_face' ? src.meshesById.get(e.element_id) : null; if (m && m.positions && m.indices) meshes.push({ id: e.element_id, positions: m.positions, indices: m.indices }); }
+              for (const e of src.entries) { const m = e && e.region !== 'head_face' ? (src.unshapedMeshesById || src.meshesById).get(e.element_id) : null; if (m && m.positions && m.indices) meshes.push({ id: e.element_id, positions: m.positions, indices: m.indices }); }
               const keep = list.filter(v => !BODY_VESSEL_SKIP.test(v.name));
               await yieldToPaint(); if (stopped || failed || bodyRig !== rig) return;
               const arteries = bindBodyVessels(keep.filter(v => v.kind === 'artery'), meshes);
@@ -7591,7 +7710,7 @@ export function start(params = {}) {
       }
       /** Apply a held / turned limb's joints to the activity at once (they stay, like a latch) and light the area of the
        * joint that moved most. Returns true when something changed. */
-      function applyLimbJoints(joints, out) {
+      function applyLimbJoints(joints, out, light = true) {
         const cur = simState && simState.activity && simState.activity.bodyJointTargets;
         if (!cur || typeof sim.activity.step !== 'function') return false;
         let best = null;
@@ -7600,7 +7719,9 @@ export function start(params = {}) {
           if (Math.abs(d) > 1e-6 && (!best || Math.abs(d) > Math.abs(best.d))) best = { id, d };
         }
         if (!best) return false;
-        const area = areaFor(best.id, Math.sign(best.d));
+        // (light false: a limb only pushed aside by the chosen one moves without lighting its own area or taking the card;
+        // 20 November 2026, review of the longer arm: the right forearm pushed the thigh and the card said "Right hip")
+        const area = light ? areaFor(best.id, Math.sign(best.d)) : null;
         const ev = { type: 'limbPose', joints, ...(area ? { regionId: area.regionId, actionId: area.actionId } : {}) };
         simState = { ...simState, activity: sim.activity.step(simState.activity, [ev], 0) };
         if (out) out.bodyJointTargets = simState.activity.bodyJointTargets;
@@ -7777,6 +7898,14 @@ export function start(params = {}) {
       const holdFov = () => (simState && simState.viewport && Number.isFinite(simState.viewport.fovYDeg) ? simState.viewport.fovYDeg : FOV_Y_DEG);
       const holdAspect = () => (appliedSize && appliedSize.height > 0 ? appliedSize.width / appliedSize.height : 16 / 9);
       const firstPersonNow = () => Boolean(cam && cam.view === 'first' && cam.progress === 0);
+      /** The camera the chosen limb's hold works from: the frame's camera before NC.EYE_CLEAR moved it off your limbs. */
+      const holdCamPose = () => camPoseBase || camPose;
+      /** The unit direction to the body's right in the world (the body's +x is its left), or null. */
+      const bodyRightWorld = () => {
+        if (!camBodyToWorld) return null;
+        const o0 = worldOf(camBodyToWorld, [0, 0, 0]), o1 = worldOf(camBodyToWorld, [-1000, 0, 0]), rt = [o1[0] - o0[0], o1[1] - o0[1], o1[2] - o0[2]], rn = Math.hypot(rt[0], rt[1], rt[2]);
+        return rn > 1e-6 ? [rt[0] / rn, rt[1] / rn, rt[2] / rn] : null;
+      };
       /** Nothing is carried or moved by the hold while Space holds the brain or the mirror body or a press-and-drag is
        * under way (the keys then move the held thing; the drag turns what was pressed). */
       const holdBusy = () => Boolean((simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active)
@@ -7928,7 +8057,7 @@ export function start(params = {}) {
        * `band` sideways and `bandUp` up and down (eased; at once under reduced motion). With a set height, frameUp, the
        * look eases so that the end stands that far up the picture, as it used to. */
       function followLimbView(frameW, dt) {
-        const f = viewFrameOf(camPose, frameW, holdFov(), holdAspect()), t = Math.tan(holdFov() * DEG / 2), a = holdAspect();
+        const cp = holdCamPose(), f = viewFrameOf(cp, frameW, holdFov(), holdAspect()), t = Math.tan(holdFov() * DEG / 2), a = holdAspect();
         const setUp = Number.isFinite(HOLD.frameUp);
         let dPitch = 0, dYaw = 0;
         if (f.depth > 0.03 && Number.isFinite(f.y)) {
@@ -7937,7 +8066,7 @@ export function start(params = {}) {
             if (Math.abs(f.x) > HOLD.band) dYaw = -Math.sign(f.x) * (Math.atan(Math.abs(f.x) * t * a) - Math.atan(HOLD.band * t * a));
           } else ({ dYaw, dPitch } = keepInFrameTurn(f, holdFov(), a, HOLD.band, HOLD.bandUp));
         } else {
-          const want = lookFramingPoint(camPose.position, frameW, holdFov(), setUp ? HOLD.frameUp : 0.5); // behind the view: turn to it
+          const want = lookFramingPoint(cp.position, frameW, holdFov(), setUp ? HOLD.frameUp : 0.5); // behind the view: turn to it
           if (!want) return;
           dYaw = want.yaw - cs.yaw; dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw)); dPitch = want.pitch - cs.pitch;
         }
@@ -7945,7 +8074,7 @@ export function start(params = {}) {
         const k = prefersReducedMotion() ? 1 : 1 - Math.exp(-Math.max(0, dt) / HOLD.followS);
         try { cs = controlsApi.setLook(cs, { yaw: cs.yaw + dYaw * k, pitch: cs.pitch + dPitch * k }); } catch { return; }
         // (the limb's place stays where it is in the room: its place in the picture is taken again for the turned view)
-        holdReframe(poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }) || camPose);
+        holdReframe(poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }) || holdCamPose());
       }
       /** One frame of the hold, after the simulation step. usedTarget: the place the step was asked for (the left arm);
        * axes: the keys as the step used them. */
@@ -7964,7 +8093,7 @@ export function start(params = {}) {
         if (!limbHold || limbHold.limb !== limb || dragged || others) {
           limbHold = { limb, world: pts.end.slice(), x: 0, y: 0, dist: 0, ok: false, lookMs: null, joints: null, far: true,
             rho: Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) };
-          holdReframe(camPose, pts.root);
+          holdReframe(holdCamPose(), pts.root);
         }
         const h = limbHold;
         // (whether the look carries the end this frame: asked before anything of the hold is changed, as holdTarget asked)
@@ -7976,7 +8105,7 @@ export function start(params = {}) {
           T = Array.isArray(usedTarget) ? usedTarget.slice() : h.world.slice();
           if (keyed && out.fit && out.fit.clamped && out.fit.clamped.inner) T = h.world.slice();
         } else if (c) {
-          T = holdTarget(camPose, dt, { x: ax, z: az }) || h.world.slice();
+          T = holdTarget(holdCamPose(), dt, { x: ax, z: az }) || h.world.slice();
           // While the drawn pose is held back at contact (guardBodyPose), the place asked stays near the drawn end.
           if (contact.bodyBlocked || contact.selfBlocked) {
             const off = T.map((v, i) => v - pts.end[i]), n = Math.hypot(off[0], off[1], off[2]);
@@ -7996,8 +8125,39 @@ export function start(params = {}) {
             // when the activity's angles are the drawn ones)
             const close = Number.isFinite(h.lastErrMm) && h.lastErrMm < 12 && gap < 0.06;
             const drawnStart = c.joints.every(id => !Number.isFinite(J && J[id]) || Math.abs(start[id] - J[id]) < 1e-9) && h.joints && c.joints.every(id => Math.abs((J && Number.isFinite(J[id]) ? J[id] : 0) - h.joints[id]) < 1e-9);
-            const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb, targetMm: wantMm, limits: NsGrasp.holdLimits(limbLimits(), limb, bodyPosed), opts: close ? NsGrasp.LIMB_HOLD_FOLLOW : !keyed && ((h.waitFrames || 0) > 2 || h.lastErrMm > 40) ? NsGrasp.LIMB_HOLD_WAIT : NsGrasp.LIMB_HOLD_TRACK,
-              project: typeof mods.body.clampBodyJointTargets === 'function' ? t => mods.body.clampBodyJointTargets(t).applied : null, memo: holdMemo, startSegments: drawnStart ? segsNow() : null });
+            const project = typeof mods.body.clampBodyJointTargets === 'function' ? t => mods.body.clampBodyJointTargets(t).applied : null;
+            let r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb, targetMm: wantMm, limits: NsGrasp.holdLimits(limbLimits(), limb, bodyPosed), opts: close ? NsGrasp.LIMB_HOLD_FOLLOW : !keyed && ((h.waitFrames || 0) > 2 || h.lastErrMm > 40) ? NsGrasp.LIMB_HOLD_WAIT : NsGrasp.LIMB_HOLD_TRACK,
+              project, memo: holdMemo, startSegments: drawnStart ? segsNow() : null });
+            // (20 Nov, afternoon: LIMB_KEYS.view keyMost / keyOffDeg) on a frame of the keys alone the solve's answer is taken
+            // only as far as the keys' own way goes, and not at all when it would take the end off that way
+            let offWay = false;
+            if (keyed && !carried && HOLD.keys === 'limb') {
+              const sp = HOLD.speedMps * (dt > 0 ? Math.min(dt, MAX_FRAME_DT) : 0), rt = bodyRightWorld();
+              if (sp > 0 && rt) {
+                const way = limbKeyMove(pts.end, pts.root, rt, ax, az, sp);
+                for (let i = 0; i < 3; i++) way[i] -= pts.end[i];
+                const fol = limbKeyFollow(pts.end, worldOf(camBodyToWorld, r.endMm), way);
+                if (!fol.take) offWay = true;
+                else if (fol.share < 1) {
+                  // (the joints' change cut back by the share does not cut the end's move by exactly that share: the
+                  // end's move is measured and the share cut once more where it is still over keyMost; review of the
+                  // merged longer arm, 20 November)
+                  const most = LIMB_KEYS.view.keyMost * Math.hypot(way[0], way[1], way[2]);
+                  let share = fol.share, joints = {}, endMm = r.endMm;
+                  for (let pass = 0; pass < 3; pass++) {
+                    const q = { ...start };
+                    for (const id of c.joints) q[id] = start[id] + (r.joints[id] - start[id]) * share;
+                    const qp = project ? project(q) : q;
+                    joints = {}; for (const id of c.joints) joints[id] = qp[id];
+                    endMm = NsGrasp.limbPoint(bodyRig, asDrawn({ ...start, ...joints }), limb, 'end');
+                    const ew = worldOf(camBodyToWorld, endMm), moved = Math.hypot(ew[0] - pts.end[0], ew[1] - pts.end[1], ew[2] - pts.end[2]);
+                    if (!(moved > most * 1.001)) break;
+                    share *= most / moved;
+                  }
+                  r = { ...r, joints, endMm, errorMm: Math.hypot(wantMm[0] - endMm[0], wantMm[1] - endMm[1], wantMm[2] - endMm[2]), slowed: share };
+                }
+              }
+            }
             h.lastErrMm = r.errorMm;
             // A place nearer the hip or shoulder than the fully bent limb can bring its end: nothing moves (the folded limb
             // would otherwise swing round its root, a heel pulled in going on under the hip), and a key stops there.
@@ -8011,15 +8171,15 @@ export function start(params = {}) {
               const aa = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
               beyond = !(aa > 1e-10 && (ne[0] - pts.end[0]) * a[0] + (ne[1] - pts.end[1]) * a[1] + (ne[2] - pts.end[2]) * a[2] >= HOLD.waitShare * aa);
             }
-            const changed = inner || beyond ? false : applyLimbJoints(r.joints, out);
+            const changed = inner || beyond || offWay ? false : applyLimbJoints(r.joints, out);
             h.waitFrames = changed ? 0 : (h.waitFrames || 0) + 1; // (frames in a row on which the limb could not follow)
             if (changed) { holdMoved = limb; if (limb !== 'rightArm') holdLegUntilMs = clockMs() + 250; }
             // (the tutorial's W A S D step counts a leg or the right arm moved by the keys as it counts the left hand)
             if (changed && keyed) { if (ax !== 0) guideAsyncEvents.push({ type: 'move', axis: 'x' }); if (az !== 0) guideAsyncEvents.push({ type: 'move', axis: 'z' }); }
             // (a place the limb cannot reach is remembered, so a still view does not ask the solve again every frame)
             h.stuck = changed ? null : T.slice();
-            holdInfo = { limb, errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints, inner, beyond };
-            if (inner) { if (keyed) T = h.world.slice(); }
+            holdInfo = { limb, errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints, inner, beyond, offWay, slowed: r.slowed || null };
+            if (inner || offWay) { if (keyed) T = h.world.slice(); }
             else if (!beyond) pts.end = worldOf(camBodyToWorld, r.endMm);
           }
           const Jn = out && out.bodyJointTargets;
@@ -8067,7 +8227,7 @@ export function start(params = {}) {
         // (a key, the hold taken up afresh, a turn of the view that was not the pointer's) takes the place again.
         // (a frame on which the look did not change at all keeps it too)
         if ((carried || (cs.yaw === h.lookYaw && cs.pitch === h.lookPitch)) && !keyed && !held) { h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch; }
-        else holdReframe(camPose, pts.root);
+        else holdReframe(holdCamPose(), pts.root);
         if (keyed && firstPersonNow() && !limbView) followLimbView(pts.frame, dt);
       }
       /** LIMB_PUSH: a limb's two rods in the world: { root, bend, end, tip (the lower rod's far end: a hand's length past
@@ -8088,6 +8248,33 @@ export function start(params = {}) {
         let tip = end;
         if (arm) { const v = [end[0] - bend[0], end[1] - bend[1], end[2] - bend[2]], n = Math.hypot(v[0], v[1], v[2]) || 1, k = LIMB_PUSH.handBeyondM / n; tip = [end[0] + v[0] * k, end[1] + v[1] * k, end[2] + v[2] * k]; }
         return { root, bend, end, tip, r: R };
+      }
+      /** 20 November 2026, afternoon (NC.EYE_CLEAR; a hunt: with a raised arm beside the head, a turn of the look to the
+       * other side swung the camera into it). The eye view's camera is moved across the line of sight off your own four
+       * limbs (each as two rods, as LIMB_PUSH has them), never along it (no zoom). The move is eased (EYE_CLEAR_EASE_S;
+       * at once under reduced motion), so where the camera's place goes right through an arm and the move changes sides
+       * it slides; it fades out with the change of view to outside. The gaze ray starts at the moved camera. */
+      function clearEyeCamera(pose, dt) {
+        let want = null;
+        if (NC.EYE_CLEAR && NC.EYE_CLEAR.on && pose && pose.firstPerson && Array.isArray(pose.armParentPosition) && camBodyToWorld && current.out) {
+          const rods = [];
+          for (const limb of LIMB_KEYS.order) {
+            const R = limbRods(limb, current.out);
+            if (R) rods.push({ a: R.root, b: R.bend, r: R.r[0] }, { a: R.bend, b: R.tip, r: R.r[1] });
+          }
+          const P = NC.eyeClearOfRods(pose.position, pose.armParentPosition, pose.direction, rods);
+          if (P !== pose.position) want = [P[0] - pose.position[0], P[1] - pose.position[1], P[2] - pose.position[2]];
+        }
+        const o = eyeClearOff, goal = want || [0, 0, 0];
+        const k = prefersReducedMotion() || !(dt > 0) ? 1 : 1 - Math.exp(-Math.min(dt, MAX_FRAME_DT) / EYE_CLEAR_EASE_S);
+        const n = [o[0] + (goal[0] - o[0]) * k, o[1] + (goal[1] - o[1]) * k, o[2] + (goal[2] - o[2]) * k];
+        eyeClearOff = Math.hypot(n[0], n[1], n[2]) < 1e-5 && !want ? EYE_CLEAR_NONE : n;
+        if (eyeClearOff === EYE_CLEAR_NONE || !pose) return pose;
+        const share = pose.firstPerson ? 1 : Math.max(0, 1 - (Number.isFinite(pose.blend) ? pose.blend : 1));
+        if (!(share > 0)) return pose;
+        const off = eyeClearOff, p = pose.position, pos = Object.freeze([p[0] + off[0] * share, p[1] + off[1] * share, p[2] + off[2] * share]);
+        return Object.freeze({ ...pose, position: pos, gazeRay: Object.freeze({ origin: pos.slice(), dir: pose.gazeRay ? pose.gazeRay.dir : pose.direction }),
+          eyeClearM: Math.round(Math.hypot(off[0], off[1], off[2]) * share * 1000) / 1000 });
       }
       /** LIMB_PUSH: one frame. The chosen limb, when it moved this frame, pushes the other three out of its way. */
       function stepLimbPush(out) {
@@ -8134,7 +8321,7 @@ export function start(params = {}) {
             try {
               const r = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb: other, targetMm: wantMm, limits: limbLimits(), opts: NsGrasp.LIMB_HOLD_FOLLOW,
                 project: typeof mods.body.clampBodyJointTargets === 'function' ? t => mods.body.clampBodyJointTargets(t).applied : null, memo });
-              gave = !r.folded && applyLimbJoints(r.joints, out);
+              gave = !r.folded && applyLimbJoints(r.joints, out, false);
             } catch { gave = false; }
           }
           // (what could not be pushed away is remembered as overlap that is there: it is not asked for again every frame)
@@ -9107,13 +9294,14 @@ export function start(params = {}) {
         for (const limb of LIMB_KEYS.order) {
           const pts = limbEnds(limb);
           if (!pts) { ends[limb] = null; continue; }
-          const f = camPose ? viewFrameOf(camPose, pts.frame, holdFov(), holdAspect()) : null;
-          ends[limb] = { end: r3(pts.end), frame: r3(pts.frame), root: r3(pts.root), reachM: Math.round(Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) * 1000) / 1000,
+          const f = camPose ? viewFrameOf(camPose, pts.frame, holdFov(), holdAspect()) : null, rods = limbRods(limb, current.out);
+          ends[limb] = { end: r3(pts.end), frame: r3(pts.frame), root: r3(pts.root), bend: rods ? r3(rods.bend) : null, reachM: Math.round(Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) * 1000) / 1000,
             inPicture: f && f.depth > 0 ? { x: Math.round(f.x * 1000) / 1000, up: Math.round((f.y + 1) / 2 * 1000) / 1000 } : null };
         }
         const hd = simState && simState.hand && Array.isArray(simState.hand.rel) ? simState.hand : null, fit = current.out && current.out.fit;
         return { chosen: limbChoice, limb: chosenLimb(), turning: Boolean(limbView), firstPerson: firstPersonNow(), ends,
-          hold: limbHold ? { limb: limbHold.limb, world: r3(limbHold.world), x: limbHold.x, y: limbHold.y, dist: limbHold.dist, ok: limbHold.ok, stuck: Boolean(limbHold.stuck) } : null,
+          hold: limbHold ? { limb: limbHold.limb, world: r3(limbHold.world), x: limbHold.x, y: limbHold.y, dist: limbHold.dist, ok: limbHold.ok, stuck: Boolean(limbHold.stuck),
+            keyU: r3(limbHold.keyU || null), keyLen: Math.round((limbHold.keyLen || 0) * 1000) / 1000 } : null,
           lastSolve: holdInfo, blocked: contact.bodyBlocked ? (contact.last || true) : null,
           push: { pushes: limbPush.pushes, last: limbPush.last, pairs: [...limbPush.pen].map(([k, v]) => [k, Math.round(v * 1000)]) },
           leftHand: hd ? { besideShoulderM: r3(hd.rel), elbowDeg: fit && fit.solution ? Math.round(fit.solution.elbowFlexRad / DEG * 10) / 10 : null,
@@ -9238,6 +9426,13 @@ export function start(params = {}) {
             // R558 (followHead): one look in both views, so the pitch range does not change with E either.
             cs = controlsApi.setPitchLimits(cs, !wholeArmOption && cam.view === 'third' && NC.THIRD_PERSON.followHead !== true ? { minDeg: NC.THIRD_PERSON.minPitchDeg, maxDeg: NC.THIRD_PERSON.maxPitchDeg } : null);
             cs = controlsApi.setLook(cs, r.controlsLook);
+            // 20 November 2026 (hunt 5): back from outside with the look where the outside view held it, the eye view's
+            // look from before E comes back (the look below keeps it inside the outside camera's reach meanwhile)
+            if (cam.view === 'third') outsideEntry = { from: { yaw: cs.yaw, pitch: cs.pitch }, to: null };
+            else {
+              if (outsideEntry && outsideEntry.to && cs.yaw === outsideEntry.to.yaw && cs.pitch === outsideEntry.to.pitch) cs = controlsApi.setLook(cs, outsideEntry.from);
+              outsideEntry = null;
+            }
           }
         }
         viewRequests = 0;
@@ -9411,9 +9606,14 @@ export function start(params = {}) {
           // The controls' own pitch range becomes this range (a held offset may need the look past +-80: the camera
           // itself never passes HEAD_LOOK maxDownDeg / maxUpDeg); the yaw is kept in range here (the controls never
           // clamp yaw).
-          cs = controlsApi.setPitchLimits(cs, { minDeg: Math.max(-179, r.pitchMinDeg), maxDeg: Math.min(179, r.pitchMaxDeg), relative: true });
-          const y = clamp(cs.yaw, r.yawMinDeg * DEG, r.yawMaxDeg * DEG);
+          // 20 November 2026 (hunt 5): outside, also inside what the outside camera can follow (ns-camera followReach):
+          // where the camera stops, the look stops.
+          const o = outsideReach && cam.view === 'third' && !wholeArmOption ? outsideReach.look : null;
+          const pMin = o ? Math.max(r.pitchMinDeg, o.pitchMinDeg) : r.pitchMinDeg, pMax = o ? Math.min(r.pitchMaxDeg, o.pitchMaxDeg) : r.pitchMaxDeg;
+          cs = controlsApi.setPitchLimits(cs, { minDeg: Math.max(-179, Math.min(pMin, pMax)), maxDeg: Math.min(179, pMax), relative: true });
+          const y = clamp(cs.yaw, (o ? Math.max(r.yawMinDeg, o.yawMinDeg) : r.yawMinDeg) * DEG, (o ? Math.min(r.yawMaxDeg, o.yawMaxDeg) : r.yawMaxDeg) * DEG);
           if (y !== cs.yaw) cs = controlsApi.setLook(cs, { yaw: y, pitch: cs.pitch });
+          if (o && outsideEntry && !outsideEntry.to) outsideEntry.to = { yaw: cs.yaw, pitch: cs.pitch };
           // R558 (Messages 55 and 56): a neck movement just taken turns the head and the view with it (Message 1), off
           // the area that was looked at: the status card says so for a while. Back at the start, the line goes.
           const neckJoint = headGoalTaken(neckGoalPrev, headOffs.goal);
@@ -9571,6 +9771,11 @@ export function start(params = {}) {
             throw err;
           } };
         camPose = wholeArmOption ? captureWholeArm(cameraPoseForFrame) : cameraPoseForFrame();
+        // 20 November 2026, afternoon (NC.EYE_CLEAR): the eye view's camera keeps clear of your own limbs
+        // (the chosen limb's hold works from the camera as the look puts it, before this move: holdCamPose. Taken from the
+        // moved camera, a hand kept in its place in the picture went with the camera, and the camera then had to move on)
+        camPoseBase = null;
+        if (!wholeArmOption) { camPoseBase = camPose; camPose = clearEyeCamera(camPose, live ? timing.dt : 0); }
         // The body, the shoulder and the hand always use the FIRST-PERSON look (ns-camera bodyLook); the crosshair ray and
         // the brain's grab carry use the camera's own look (gazeRay / gazeLook).
         const look = camPose.firstPerson ? lookIn : camPose.bodyLook;
@@ -9611,15 +9816,19 @@ export function start(params = {}) {
           if (CIRCLE_ROLL.on) {
             // (the orbit at the drag's start is kept: the take-back returns to it, so a turn the limits clamped is not
             // over-undone; 20 Nov review)
-            if (!circleRoll || circleRoll.target !== dragTurn.target) circleRoll = { target: dragTurn.target, st: null, rolledDeg: 0, undone: false, from: dragOrbitNow(dragTurn.target) };
+            if (!circleRoll || circleRoll.target !== dragTurn.target) { circleRoll = { target: dragTurn.target, st: null, rolledDeg: 0, undone: false, from: dragOrbitNow(dragTurn.target), chunk: -1 }; circleMarks.seq.fill(-1); }
             const r = circleRollStep(circleRoll.st, dragTurn.dx, dragTurn.dy);
+            // (20 Nov, afternoon: the orbit at the start of each piece the gesture counts the drag's turning in, before this
+            // sample turns it; the take-back returns to the start of the circle's own first piece, so a straight turn made
+            // earlier in the same press stays, after a pause or a smooth start as after a sharp corner)
+            if (!r.rolling && r.chunk >= 0 && r.chunk !== circleRoll.chunk) { circleRoll.chunk = r.chunk; markCircleChunk(r.chunk, dragOrbitNow(dragTurn.target)); }
             circleRoll.st = r.state;
             if (r.rolling) {
               if (!circleRoll.undone) {
                 // (the circle turned the thing left, right, up and down while it was being drawn, before it counted as a
                 // circle: that turn is taken back now, once, through the same steps, so the circle only rolls it)
                 circleRoll.undone = true;
-                for (const q of dragOrbitBack(dragTurn.target, circleRoll.from)) { if (dragTurn.target === 'brain') orbitDirs.push(q); else if (dragTurn.target === 'mirror') applyMirrorRequest(q); }
+                for (const q of dragOrbitBack(dragTurn.target, circleChunkOrbit(r.state.from) || circleRoll.from)) { if (dragTurn.target === 'brain') orbitDirs.push(q); else if (dragTurn.target === 'mirror') applyMirrorRequest(q); }
               }
               if (r.rollDeg) {
                 circleRoll.rolledDeg += r.rollDeg;
@@ -9726,7 +9935,7 @@ export function start(params = {}) {
         const holdAxes = live ? frameAxes : { x: 0, z: 0 };
         // (not while Space holds something or a drag is under way: the hand then keeps its own place, which a drag on the
         // left arm moves directly)
-        const holdHand = live && LIMB_KEYS.on && HOLD.hold && chosenLimb() === 'leftArm' && limbHold && limbHold.limb === 'leftArm' && !holdBusy() ? holdTarget(camPose, timing.dt, holdAxes) : null;
+        const holdHand = live && LIMB_KEYS.on && HOLD.hold && chosenLimb() === 'leftArm' && limbHold && limbHold.limb === 'leftArm' && !holdBusy() ? holdTarget(holdCamPose(), timing.dt, holdAxes) : null;
         const stepInputs = {
           objectPick, yaw: look.yaw, pitch: look.pitch, axes: wholeArmOption ? wholeArmCommandAxes : frameAxes, events: timing.events, aspect,
           // R558: while something is held with Space (the brain, the mirror body or an own limb other than the left arm, which
@@ -9766,10 +9975,10 @@ export function start(params = {}) {
         return { timing, look, ctlLook, head, wholeArmDisplayPlan, actualCameraFit, mirrorGuideEvents, stepInputs, prevSim, step, holdAxes };
         };
         // R558 recovery driver. Everything an attempt may touch before the step is restored from this snapshot.
-        const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice(),
+        const snap = { cs, cam, simState, mirrorView, arrowInput, arrowHoverKey, seedNext, camPose, orbitQueue: orbitQueue.slice(), eyeClear: eyeClearOff,
           circleRoll: circleRoll ? { ...circleRoll } : null, brainRoll: sim && typeof sim.brainRoll === 'function' ? sim.brainRoll() : 0 };
         const restoreAttempt = () => {
-          cs = snap.cs; cam = snap.cam; simState = snap.simState; arrowInput = snap.arrowInput; seedNext = snap.seedNext; camPose = snap.camPose;
+          cs = snap.cs; cam = snap.cam; simState = snap.simState; arrowInput = snap.arrowInput; seedNext = snap.seedNext; camPose = snap.camPose; eyeClearOff = snap.eyeClear;
           // (20 Nov review: the circle's state and the brain's roll go back too, so a retry takes the circle back again)
           circleRoll = snap.circleRoll ? { ...snap.circleRoll } : null;
           if (sim && typeof sim.brainRoll === 'function' && sim.brainRoll() !== snap.brainRoll) sim.rollBrain(snap.brainRoll - sim.brainRoll());
@@ -9996,9 +10205,9 @@ export function start(params = {}) {
         const guideEvs = NG.guideEventsFromFrame({ prev: prevSim, next: simState, out, inputs: stepInputs, bodyMap });
         guideEvs.push(...mirrorGuideEvents.map(e => ({ ...e, t: simState.t })));
         guideEvs.push(...moveGuideEvents.map(e => ({ ...e, t: simState.t })));
-        // 19 November (the tutorial): the look is on a motor area (asked only while that is the step shown); R and
-        // Enter, pressed since the last frame.
-        if (out.gaze && out.gaze.target === 'region' && typeof out.gaze.regionId === 'string' && guide.tutorial === true && NG.currentGoal(guide) === 'lookStrip') guideEvs.push({ type: 'look', regionId: out.gaze.regionId, t: simState.t });
+        // 19 November (the tutorial): R and Enter, pressed since the last frame. (20 November 2026: the crosshair on a
+        // motor area is no longer sent as a 'look': the tutorial's first step waits for the look's own switch-on, an
+        // 'activate' of guideEventsFromFrame, which a look while Space holds the brain never gives.)
         if (guideAsyncEvents.length) guideEvs.push(...guideAsyncEvents.splice(0).map(e => ({ ...e, t: simState.t })));
         if (cam.view !== guideView) { guideView = cam.view; guideEvs.push({ type: 'view', mode: cam.view, t: simState.t }); }
         if (tipTeachNow(tipPresses)) {
@@ -10453,6 +10662,10 @@ export function start(params = {}) {
           // 19 November 2026 (the light beams): while Space carries the brain or the mirror body, the grip's own area
           // keeps its colour on the hand but sends no beam: it stood across the picture for the whole carry, a wall of
           // light once the brain was near.
+          // (20 November 2026, browser hunt: Space on nothing with the brain carried behind you drew this beam from the
+          // bottom corner of the picture, a quarter of the screen wide. The grip's beam stays, since it shows what the
+          // hand area drives; the scene draws no beam whose key is behind you or well outside the picture:
+          // LIGHT_BEAM.keyInView in ns-links.mjs.)
           if (simState.objectCarry && simState.objectCarry.held === true && links.some(l => GRIP_HELD_IDS.includes(l.regionId))) links = links.map(l => (GRIP_HELD_IDS.includes(l.regionId) ? { ...l, line: false } : l));
           // R558 (Message 2 + 6): the opposing actions' faint hints light their muscles too (ns-app hint rows); passed as
           // `hint` links so those muscles take their area's colour (no line is drawn for a hint).
@@ -10724,7 +10937,7 @@ export function start(params = {}) {
               // 19 November 2026 (the owner: "go back to activation simply by cursor highlight. The number overview is very
               // confusing and creates feedback delay"): the tip names the area and the ONE movement the look does there (no
               // numbered list); number keys still do the area's other movements for whoever knows them.
-              const tipAction = typeof out.gaze.regionActionId === 'string' ? out.gaze.regionActionId : out.gaze.actionId;
+              const tipAction = tipActionId(out.gaze, area.id, act ? act.gazeArea : null);
               const tipNow = Array.isArray(areaMoves) ? areaMoves.find(m => m && m.id === tipAction) || areaMoves.find(m => m && m.current) || null : null;
               const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : NUMBER_LISTS ? '' : tipNow && typeof tipNow.label === 'string' ? tipNow.label : '';
               tipModel = quietTipModel({ area, actionId: tipAction, moves: NUMBER_LISTS ? areaMoves : [], color: areaCss || '', hint, teach: NUMBER_LISTS && !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });

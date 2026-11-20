@@ -40,6 +40,8 @@
  * your body and the mirror body. Pure: no Three.js, no DOM. The scene (ns-scene-three) makes the meshes and materials.
  */
 
+import { BODY_SHAPE, trunkShapeField } from './ns-body-shape.mjs';
+
 const freeze = Object.freeze;
 const TAU = 2 * Math.PI;
 
@@ -404,8 +406,12 @@ function addLung(M, o, side, keep) {
  * the vessels and the windpipe in one mesh; ranges: each part's [first, end) triangles), triangles, parts: { lungs,
  * vessels, heart } (triangles), host }.
  * Positions in source mm (see the head of this file). An illustration: nothing here is measured.
+ * 20 November 2026 (the owner: "a smaller and much flatter chest"): the organs pass through the same trunk rule as the
+ * body's meshes (ns-body-shape trunkShapeField, `shape`; null leaves it out), so the flatter rib cage still holds them:
+ * the rule moves every point at the same height and side by the same share of its depth in front of the spine, and
+ * never changes which of two points is further forward. The numbers in ORGANS are those of the source body.
  */
-export function buildOrgans(o = ORGANS) {
+export function buildOrgans(o = ORGANS, shape = BODY_SHAPE.trunk) {
   const heart = buildHeart(o);
   const M = meshOf(), V = o.vessels, C = o.colors;
   const tubeLines = {}, ranges = {};
@@ -425,6 +431,13 @@ export function buildOrgans(o = ORGANS) {
   addLung(M, o, 1, keep); mark('leftLung', from); from = M.idx.length / 3;
   addLung(M, o, -1, keep); mark('rightLung', from);
   const positions = Float32Array.from(M.pos), indices = positions.length / 3 > 65535 ? Uint32Array.from(M.idx) : Uint16Array.from(M.idx);
+  if (shape && shape.on) {
+    const f = trunkShapeField(shape);
+    f.apply(positions, positions);
+    f.apply(heart.positions, heart.positions);
+    heart.normals = organNormals(heart.positions, heart.indices);
+    heart.centre = [heart.centre[0], heart.centre[1] + f.at(heart.centre[0], heart.centre[1], heart.centre[2]), heart.centre[2]];
+  }
   const tissue = { positions, normals: organNormals(positions, indices), colors: Float32Array.from(M.col), indices, triangles: indices.length / 3, ranges };
   return {
     heart, tissue, host: o.host, triangles: heart.triangles + tissue.triangles,

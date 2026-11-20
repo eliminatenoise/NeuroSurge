@@ -106,7 +106,9 @@ test('on the game body: the far ends of the limbs and the joints keep their plac
   const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
   const { body, inputs } = await loadBody(repo);
   delete process.env.NS_SOURCE_BULK;
-  const o = body.bulkBody(inputs.entries, inputs.meshesById);
+  // (the bulk alone: since 20 November 2026 bulkBody ends with the body's shape, longer limbs and the trunk's front,
+  // ns-body shapeBody, which moves the limbs' far ends on purpose; tests/body-shape.test.mjs checks that)
+  const o = body.bulkBody(inputs.entries, inputs.meshesById, body.BODY_BULK, null);
   const moved = (id, pred = () => true) => { const a = inputs.meshesById.get(id).positions, b = o.meshesById.get(id).positions; let mx = 0; for (let i = 0; i < a.length; i += 3) if (pred(a[i], a[i + 1], a[i + 2])) mx = Math.max(mx, Math.hypot(b[i] - a[i], b[i + 1] - a[i + 1], b[i + 2] - a[i + 2])); return mx; };
   const J = B.REFERENCE_JOINTS, near = (pt, r) => (x, y, z) => Math.hypot(x - pt[0], y - pt[1], z - pt[2]) < r;
   // the bones at the shoulder and the hip are untouched; at the elbow and the knee less than a millimetre

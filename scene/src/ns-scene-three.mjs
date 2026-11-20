@@ -177,7 +177,7 @@ import {
   shudderGlsl, powerUpEnvelope, powerUpBlink
 } from './ns-colors.mjs';
 // 18 November (MAP): the links between an area and its body part (looked at, switched on, named from a muscle).
-import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight, LIGHT_BEAM, beamAcross, beamAlong, beamHalfWidth, extentAlong, beamShare, beamShareAt } from './ns-links.mjs';
+import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight, LIGHT_BEAM, beamAcross, beamAlong, beamHalfWidth, extentAlong, beamShare, beamShareAt, beamKeySeen } from './ns-links.mjs';
 
 import * as NsText from './ns-text.mjs';
 // R5-scene: the fluorescent glow variant of the shared ramp (R5-access; feature-detected: glowColor / glowIntensity / GLOW).
@@ -185,7 +185,7 @@ import * as NsColors from './ns-colors.mjs';
 // R5-scene: the 3D compass arrows (R5-arrows) and the mirror body's placement, transform and orbit (R5-mirror).
 import * as NsArrows from './ns-arrows3d.mjs';
 import * as NsMirror from './ns-mirror.mjs';
-import { eyeDolly } from './ns-camera.mjs'; // 18 November 2026, late (package FLAT): the arrows' reference view is the eye view's camera
+import { eyeDolly, followReach } from './ns-camera.mjs'; // 18 November 2026, late (package FLAT): the arrows' reference view is the eye view's camera; 20 November (hunt 6): the outside camera's reach
 import * as RayBvh from './ns-raybvh.mjs';
 import * as NsCollide from './ns-collide.mjs';
 import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
@@ -213,8 +213,10 @@ import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a mov
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
-import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, anconeusDeepBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget } from './ns-body.mjs';
-import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, brainEnvelope as vesselEnvelope, buildCerebralVeins, pointField as vesselPointField, stripGive as vesselStripGive, vesselVertexGlsl, vesselFragmentGlsl, evalBodyVessels, bodyTubeIndex, writeBodyTubes } from './ns-vessels.mjs'; // 18 November (package VESSELS)
+import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, anconeusDeepBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget, BODY_SHAPE, bulkLimbChain } from './ns-body.mjs';
+import { limbLengthField } from './ns-body-shape.mjs'; // 20 November 2026 (BODYSHAPE): the digit tendons' places on the longer limbs
+import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, VEIN_COURSES, brainEnvelope as vesselEnvelope, buildCerebralVeins, pointField as vesselPointField, stripGive as vesselStripGive, vesselVertexGlsl, vesselFragmentGlsl, evalBodyVessels, bodyTubeIndex, writeBodyTubes } from './ns-vessels.mjs'; // 18 November (package VESSELS)
+import { hemisphereSideOf, partedPositions, partedOnBrain, partedBridging } from './ns-brain-part.mjs'; // 20 November 2026: the vessels follow the parted halves
 // 18 November 2026 (package DETAIL): smoother shading normals of the decimated body meshes (ns-detail smoothNormalField).
 import { smoothNormalField, boneEndWeights } from './ns-detail.mjs';
 // R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
@@ -1904,6 +1906,8 @@ const DEG = Math.PI / 180;
 const clamp01 = x => (x > 1 ? 1 : x > 0 ? x : 0);
 const fin01 = v => (Number.isFinite(v) ? clamp01(v) : 0);
 const clampTo = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+// 20 November 2026 (hunt 6): how far the outside camera turns (ns-camera followReach), for the outside compass
+const OUTSIDE_REACH = followReach();
 const smooth = (e0, e1, x) => { const t = (x - e0) / (e1 - e0); const c = t < 0 ? 0 : t > 1 ? 1 : t; return c * c * (3 - 2 * c); };
 
 /** The shared ns-colors ramp evaluated into `out` (linear RGB) without allocating; equals activityColor(v). */
@@ -3037,7 +3041,9 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
             if (sd.sign > 0 ? b.x0 + cross < Math.max(mx0, mx1) : b.x1 - cross > Math.min(mx0, mx1)) { ok = false; break; }
           }
           let own = 0;
-          for (const o of obstacles) if (o) own += overlap(b, o);
+          // 20 November 2026 (package HUD): an obstacle may weigh more (`weight`: the HUD's cards and lines of words), so
+          // a required label with no clear place lies on the picture rather than on words.
+          for (const o of obstacles) if (o) own += overlap(b, o) * (Number.isFinite(o.weight) ? o.weight : 1);
           for (const p of placed) own += overlap(b, p);
           for (const q of boxes) own += overlap(b, q.b);
           bad += own;
@@ -3051,6 +3057,9 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
     }
     let forced = false;
     if (!pick && required && bestBad) { pick = bestBad.boxes; forced = true; }
+    // 20 November 2026 (package HUD: "nothing that matters may cover anything else"): a forced label is not laid over
+    // the HUD's words (an obstacle flagged `words`); it is left out instead.
+    if (forced && pick.some(q => obstacles.some(o => o && o.words && overlap(q.b, o) > 0))) pick = null;
     if (!pick) { for (const i of live) hide(i); continue; }
     for (const q of pick) {
       const it = items[q.i];
@@ -3133,6 +3142,9 @@ export const REGION_LABEL_PRIORITY = Object.freeze({ leftArm: 100, arm: 60, leg:
  * LABEL_LAYOUT.ringSteps). The trunk's areas are two thin bands; a "Belly and back" label two rings away lay on the arm
  * areas and named the wrong colour. */
 export const LABEL_NEAR = Object.freeze({ trunk: 1 });
+/** 20 November 2026 (package HUD): how much more a region label's overlap with the HUD's words (cards, tip, prompt, limits
+ * line) counts than its overlap with the picture, when a required label has no clear place (declutterLabels). */
+export const LABEL_WORDS_WEIGHT = 8;
 /** Plain on-brain label { main, sub } for a label group { key, hemisphere } (pure; null for groups without a label). */
 export function regionLabelDisplay(group) {
   if (!group) return null;
@@ -3476,6 +3488,31 @@ export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, port
 /** R3-integrator: in portrait the top of the bottom band holds the legend (right) and the drag-to-look toast (left); the
  * information panel below them is capped to the band minus this height (CSS mirror --ns-portrait-legend-reserve). */
 export const INFO_PANEL_PORTRAIT_LEGEND_PX = 172; // R3-fix (SL-3): room for the legend's map qualifier in portrait
+/** 20 November 2026 (hunt H2-5): in portrait the legend (shown at the full reading level) docks at the top of the bottom
+ * band whenever it leaves the information card at least `cardMinPx` under it, not only when it is at most
+ * INFO_PANEL_PORTRAIT_LEGEND_PX tall (the full key reached 198-223 px in a narrow window and then floated over the brain
+ * and its labels). The card then starts `gapPx` under the legend's own height instead of under a fixed 172 / 116 px
+ * (the legend in body views is 152-157 px: it lay on the card). */
+export const PORTRAIT_LEGEND_DOCK = Object.freeze({ cardMinPx: 100, cardLeastPx: 72, gapPx: 8 });
+/**
+ * Where the portrait legend docks (pure; CSS px), or null when the band cannot hold it over a card of cardLeastPx.
+ * bandY0 / bandY1: the bottom band (infoPanelRect portrait); legendH: the legend's height; limbsReservePx: the room the
+ * limb buttons take at the bottom (CSS --ns-limbs-reserve; 0 without them). The information card is lifted over the
+ * limb buttons by limbsReservePx - gapPx (quiet.css), so its foot is at bandY1 + gapPx - limbsReservePx. The legend
+ * stays at the band's top (bandY0) unless the card would get less than cardMinPx; then it is lifted just enough, never
+ * more than the card's own lift (the brain's and the mirror body's lower arrows are planned just above the band).
+ * Returns { liftPx, reservePx, cardPx }: reservePx is the card's start under the band's top before the card's own lift
+ * (the CSS --ns-portrait-legend-reserve), so the card's top lands gapPx under the legend; cardPx is the card's room.
+ */
+export function portraitLegendDock({ bandY0, bandY1, legendH, limbsReservePx = 0, gapPx = 12, rules = PORTRAIT_LEGEND_DOCK } = {}) {
+  if (![bandY0, bandY1, legendH].every(Number.isFinite) || !(legendH > 0) || !(bandY1 > bandY0)) return null;
+  const cardLift = limbsReservePx > 0 ? limbsReservePx - gapPx : 0;
+  const cardFoot = bandY1 - cardLift, h = Math.ceil(legendH);
+  const liftPx = Math.min(Math.max(0, Math.ceil(bandY0 + h + rules.gapPx + rules.cardMinPx - cardFoot)), Math.max(0, Math.floor(cardLift)));
+  const cardPx = cardFoot - (bandY0 - liftPx + h + rules.gapPx);
+  if (cardPx < rules.cardLeastPx) return null;
+  return { liftPx, reservePx: h + rules.gapPx + cardLift - liftPx, cardPx: Math.round(cardPx) };
+}
 
 /** Panel rectangle (CSS px) the info overlay occupies for a viewport: the short bottom-right corner card (landscape,
  * layout 'corner'; R558) or a bottom band (portrait). Other HUD elements and the orbit arrows avoid it. The card
@@ -4485,6 +4522,27 @@ export const DIGIT_TENDONS = Object.freeze({
   // tendon below the knuckles (the third metacarpal's head ends at z 721)
   hand: Object.freeze({ match: /\b(lumbricals|interossei) of (left |right )?hand\b/, fullZ: 712, noneZ: 735 })
 });
+/** 20 November 2026 (the owner: "Let's make the limbs longer"; ns-body-shape BODY_SHAPE). The places above are the
+ * source atlas's; the body is drawn with longer limbs and its rest positions (the "source" positions the rule reads)
+ * are the reshaped ones. digitTendonPlaces moves each place the way the limbs were made longer (ns-body-shape
+ * limbLengthField on the right limbs' reference chains, at the point of the forearm, shin, hand or foot line at that
+ * height), so the rule still starts at the wrist, the ankle, the knuckles and the ball of the foot of the drawn body.
+ * DIGIT_TENDONS_DRAWN is what the game uses. Pure. */
+export function digitTendonPlaces(o = DIGIT_TENDONS, shape = BODY_SHAPE) {
+  const arm = bulkLimbChain('arm', 'r'), leg = bulkLimbChain('leg', 'r');
+  if (!shape || !shape.limbs || !shape.limbs.on || !arm || !leg) return o;
+  const fa = limbLengthField('arm', arm.pts, shape.limbs), fl = limbLengthField('leg', leg.pts, shape.limbs), D = [0, 0, 0];
+  // the point of line A -> B where coordinate k is v (carried on past either end), moved by field f: its coordinate k
+  const moved = (f, A, B, k, v) => { const t = (v - A[k]) / (B[k] - A[k]), p = [0, 1, 2].map(i => A[i] + t * (B[i] - A[i])); f.at(p[0], p[1], p[2], D); return v + D[k]; };
+  const [, E, W, M] = arm.pts, [, K, A, T] = leg.pts;
+  return Object.freeze({
+    arm: Object.freeze({ ...o.arm, fullZ: moved(fa, E, W, 2, o.arm.fullZ), noneZ: moved(fa, E, W, 2, o.arm.noneZ) }),
+    leg: Object.freeze({ ...o.leg, fullZ: moved(fl, K, A, 2, o.leg.fullZ), noneZ: moved(fl, K, A, 2, o.leg.noneZ) }),
+    foot: Object.freeze({ ...o.foot, fullY: moved(fl, A, T, 1, o.foot.fullY), noneY: moved(fl, A, T, 1, o.foot.noneY) }),
+    hand: Object.freeze({ ...o.hand, fullZ: moved(fa, W, M, 2, o.hand.fullZ), noneZ: moved(fa, W, M, 2, o.hand.noneZ) })
+  });
+}
+export const DIGIT_TENDONS_DRAWN = digitTendonPlaces();
 /** DIGIT_TENDONS: which rule a muscle's name takes ('arm', 'leg', 'foot', 'hand') or null. Pure. */
 export function digitTendonKind(name, o = DIGIT_TENDONS) {
   if (o.hand && o.hand.match.test(String(name || '').toLowerCase())) return 'hand';
@@ -4498,7 +4556,7 @@ export function digitTendonKind(name, o = DIGIT_TENDONS) {
 }
 /** DIGIT_TENDONS: raises the tendon weights `w` (in place) of a muscle of kind `kind` from its rest positions (atlas
  * mm). Returns how many vertices it raised. Pure. */
-export function digitTendonWeights(kind, rest, w, o = DIGIT_TENDONS) {
+export function digitTendonWeights(kind, rest, w, o = DIGIT_TENDONS_DRAWN) {
   const r = kind && o[kind];
   if (!r || !rest || !w) return 0;
   const n = Math.min(w.length, Math.floor(rest.length / 3));
@@ -6423,11 +6481,14 @@ export function createScene({
   const muscleSourceNameOf = id => (typeof id === 'string' ? regionalLayerQualification(id).sourceName || bodyPacketMuscleName(id) : null);
   /** DIGIT_TENDONS for muscle `id` into tendon attribute `a`: from the body skin record's source positions when there is
    * one, else from `fallback` (the left game arm's rest positions are its source positions). Returns whether it ran. */
-  function digitTendonsFor(id, a, fallback = null) {
+  function digitTendonsFor(id, a, fallback = null, given = null) {
     const dk = digitTendonKind(muscleSourceNameOf(id));
     if (!dk || !a) return false;
-    // (a muscle of your own body or the mirror body waits for its skin record; the game arm's muscles are not in bodyById)
-    const rec = bodySkin.get(id), src = rec && rec.src && rec.src.length === a.array.length * 3 ? rec.src : (bodyById.has(id) ? null : fallback);
+    // (a muscle of your own body or the mirror body takes its SOURCE positions: `given` (setDigitTendonSources, from the
+    // body's source meshes) or its skin record; never the baked start posture. The game arm's muscles are not in
+    // bodyById and use the fallback, their own rest positions in the atlas frame.)
+    const rec = bodySkin.get(id), src = given && given.length === a.array.length * 3 ? given
+      : rec && rec.src && rec.src.length === a.array.length * 3 ? rec.src : (bodyById.has(id) ? null : fallback);
     if (!src || src.length !== a.array.length * 3) return false;
     if (digitTendonWeights(dk, src, a.array) > 0) { muscleLook.digitTendons = (muscleLook.digitTendons || 0) + 1; a.needsUpdate = true; }
     return true;
@@ -7375,9 +7436,9 @@ export function createScene({
 
   // ---- 18 November (package VESSELS): the vessels of the brain (ns-vessels) ------------------------------------------
   // setBrainVessels({ arteries }) after setBrain: the BodyParts3D cerebral arteries (already checked by the app's loader:
-  // [{ id, name, territory, positions, indices }], source mm, the brain's own frame) as ONE opaque mesh, and the hand-laid
-  // veins and sinuses (ns-vessels buildCerebralVeins, draped on this brain's envelope) as two more; all three ride the
-  // living brain's vertex rule (liveCompile), the arteries swell with the beat. Drawn (alpha 1) after the motor areas and
+  // [{ id, name, territory, side, positions, indices }], ATLAS source mm, moved here with the parted halves) as ONE
+  // opaque mesh, and the hand-laid veins and sinuses (ns-vessels buildCerebralVeins, draped on this brain's envelope)
+  // as two more; all three ride the living brain's vertex rule (liveCompile), the arteries swell with the beat. Drawn (alpha 1) after the motor areas and
   // before the brain surface's depth pre-pass: the surface then hides what lies in a sulcus, what lies on the surface
   // shows, and nothing is drawn over a visible key (STRIP_CUT). Not picked, not outlined; the aim never sees them. Near
   // the motor strip the veins also narrow and sink (ns-vessels STRIP_GIVE).
@@ -7407,14 +7468,29 @@ export function createScene({
     const still = obj => { obj.matrixAutoUpdate = false; obj.updateMatrix(); return obj; };
     const stripPos = segmentation && Array.isArray(segmentation.strips) ? segmentation.strips.map(s => s.positions) : [];
     const near = stripPos.length ? vesselPointField(stripPos) : null;
+    // 20 November 2026 (review of updates 49 to 56): the brain is drawn with its halves apart (ns-brain-part; the app
+    // parts the loaded meshes once), but the arteries come in atlas mm and the veins were draped on the PARTED brain's
+    // envelope, which sinks into the gap at the midline. Both are now laid on the ATLAS brain (each drawn piece moved
+    // back by its half's step: only x moves, by an amount that depends on y alone, so the way back is exact) and then
+    // moved with the halves: the arteries by the brain under them (partedOnBrain), the veins by their side, bridging the
+    // gap to the superior sagittal sinus, which stays over its middle at the height of the halves' top edges
+    // (partedBridging). The arteries' give over the strip is then measured on the drawn (parted) strip, the veins' on
+    // the atlas strip they are laid on.
+    const atlasPiece = (P, side) => ({ side, positions: partedPositions(P, -side) });
+    const atlasStrips = (segmentation && Array.isArray(segmentation.strips) ? segmentation.strips : [])
+      .map(s => atlasPiece(s.positions, s.hemisphere === 'left' ? 1 : s.hemisphere === 'right' ? -1 : hemisphereSideOf({ positions: s.positions })));
+    const atlasBrain = [...glass.map(m => { const P = m.geometry.attributes.position.array; return atlasPiece(P, hemisphereSideOf({ name: m.name, positions: P })); }), ...atlasStrips];
+    const arterySide = a => (a.side === 'left' ? 1 : a.side === 'right' ? -1 : a.side === 'midline' ? 0 : hemisphereSideOf({ name: a.name, positions: a.positions }));
+    const arteryPositions = arteries.length ? partedOnBrain(arteries.map(a => ({ positions: a.positions, indices: a.indices, side: arterySide(a) })), atlasBrain) : [];
     // arteries: one geometry (normals per source mesh, then joined), per-vertex give over the strip
     let nv = 0, ni = 0;
     for (const a of arteries) { nv += a.positions.length / 3; ni += a.indices.length; }
     if (nv) {
       const P = new Float32Array(3 * nv), I = new Uint32Array(ni), N = new Float32Array(3 * nv);
       let v0 = 0, i0 = 0;
-      for (const a of arteries) {
-        const g = indexedGeometry(a.positions instanceof Float32Array ? a.positions : Float32Array.from(a.positions), a.indices instanceof Uint32Array ? a.indices : Uint32Array.from(a.indices));
+      for (const [ai, a] of arteries.entries()) {
+        const ap = arteryPositions[ai];
+        const g = indexedGeometry(ap instanceof Float32Array ? ap : Float32Array.from(ap), a.indices instanceof Uint32Array ? a.indices : Uint32Array.from(a.indices));
         g.computeVertexNormals();
         P.set(g.attributes.position.array, 3 * v0); N.set(g.attributes.normal.array, 3 * v0);
         for (let k = 0; k < a.indices.length; k++) I[i0 + k] = a.indices[k] + v0;
@@ -7431,11 +7507,22 @@ export function createScene({
       brainGroup.add(mesh);
       brainVessels.arteries = arteries.length; brainVessels.arteryTriangles = ni / 3;
     }
-    // veins and sinuses: laid on this brain's envelope (glass pieces and the strip meshes)
+    // veins and sinuses: laid on the atlas brain's envelope (glass pieces and the strip meshes), then parted (above)
     try {
-      const E = vesselEnvelope([...glass.map(m => m.geometry.attributes.position.array), ...stripPos]);
-      const give = near ? (x, y, z) => { const d = near(x, y, z); return d >= STRIP_GIVE.nearMm ? 0 : d <= STRIP_GIVE.fullMm ? 1 : 1 - (d - STRIP_GIVE.fullMm) / (STRIP_GIVE.nearMm - STRIP_GIVE.fullMm); } : null;
-      const V = buildCerebralVeins(E, { give });
+      const E = vesselEnvelope(atlasBrain.map(p => p.positions));
+      const nearAtlas = atlasStrips.length ? vesselPointField(atlasStrips.map(s => s.positions)) : null;
+      const give = nearAtlas ? (x, y, z) => { const d = nearAtlas(x, y, z); return d >= STRIP_GIVE.nearMm ? 0 : d <= STRIP_GIVE.fullMm ? 1 : 1 - (d - STRIP_GIVE.fullMm) / (STRIP_GIVE.nearMm - STRIP_GIVE.fullMm); } : null;
+      const sides = buildCerebralVeins(E, { courses: VEIN_COURSES.filter(c => c.side !== 'mid'), give });
+      const mid = buildCerebralVeins(E, { courses: VEIN_COURSES.filter(c => c.side === 'mid'), give });
+      const join = (a, b) => {
+        const n0 = a.positions.length / 3, indices = new Uint32Array(a.indices.length + b.indices.length);
+        indices.set(a.indices); for (let k = 0; k < b.indices.length; k++) indices[a.indices.length + k] = b.indices[k] + n0;
+        const cat = (u, v) => { const o = new Float32Array(u.length + v.length); o.set(u); o.set(v, u.length); return o; };
+        return { positions: cat(a.positions, b.positions), normals: cat(a.normals, b.normals), indices };
+      };
+      const V = { veins: join({ ...sides.veins, positions: partedBridging(sides.veins.positions) }, mid.veins),
+        sinus: join(mid.sinus, { ...sides.sinus, positions: partedBridging(sides.sinus.positions) }),
+        names: [...mid.names, ...sides.names], counts: { triangles: mid.counts.triangles + sides.counts.triangles } };
       for (const [part, colour, key] of [[V.veins, VEIN_LOOK.colour, 'ns-vessel-vein'], [V.sinus, VEIN_LOOK.sinus, 'ns-vessel-sinus']]) {
         if (!part.indices.length) continue;
         const geo = indexedGeometry(part.positions, part.indices);
@@ -8285,7 +8372,11 @@ export function createScene({
         fail('scene_input', 'setCameraPose needs an ns-camera pose { position: [x, y, z], yaw, pitch } (finite) or null');
       }
       camPose = { position: [p[0], p[1], p[2]], yaw: pose.yaw, pitch: pose.pitch, blend: Number.isFinite(pose.blend) ? pose.blend : 1,
-        fov: Number.isFinite(pose.viewFovYDeg) && pose.viewFovYDeg > 0 && pose.viewFovYDeg < 179 ? pose.viewFovYDeg : null }; // 18 November 2026: the outside view's own angle (ns-camera followFovYDeg)
+        fov: Number.isFinite(pose.viewFovYDeg) && pose.viewFovYDeg > 0 && pose.viewFovYDeg < 179 ? pose.viewFovYDeg : null, // 18 November 2026: the outside view's own angle (ns-camera followFovYDeg)
+        // 20 November 2026 (hunt 6): the point the outside camera always looks through and its distance from it, so the
+        // compass can tell which camera puts a tip under the crosshair (outsideCompassAnchors)
+        centre: pose.orbitCentre && pose.orbitCentre.length === 3 && Array.prototype.every.call(pose.orbitCentre, Number.isFinite) ? [pose.orbitCentre[0], pose.orbitCentre[1], pose.orbitCentre[2]] : null,
+        boomM: pose.boom && Number.isFinite(pose.boom.distance) && pose.boom.distance > 0 ? pose.boom.distance : null };
       Object.assign(camPose, lensOf(pose));
       const far0 = Math.hypot(p[0], p[1], p[2]) >= 0.35 ? 1 : 0;
       camMul.headInPlace = Number.isFinite(pose.headInPlace) ? fin01(pose.headInPlace) : far0;
@@ -10226,6 +10317,24 @@ export function createScene({
     o[3] = 0; o[7] = 0; o[11] = 0; o[15] = 1; return o;
   };
   const mul16 = (a, b, o) => { for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[4 * c + r] = a[r] * b[4 * c] + a[4 + r] * b[4 * c + 1] + a[8 + r] * b[4 * c + 2] + a[12 + r] * b[4 * c + 3]; return o; };
+  /** DIGIT_TENDONS for your own body and the mirror body (which shares its geometry): the rule reads each muscle's
+   * SOURCE positions, which only the right hand's, the right forearm's and the neck's muscles keep in a skin record;
+   * the caller hands the body's source meshes here once the body is installed (20 November 2026, review: the rule
+   * otherwise reached none of the body's muscles). meshesById: Map or object id -> { positions } or a position array.
+   * Returns the number of muscles whose tendons were whitened. */
+  function setDigitTendonSources(meshesById) {
+    const get = meshesById instanceof Map ? id => meshesById.get(id) : meshesById && typeof meshesById === 'object' ? id => meshesById[id] : () => null;
+    let n = 0;
+    for (const [id, b] of bodyById) {
+      if (!b || b.kind !== 'muscle' || !b.mesh || !digitTendonKind(muscleSourceNameOf(id))) continue;
+      const m = get(id), src = m && m.positions !== undefined ? m.positions : m;
+      if (!src || typeof src.length !== 'number') continue;
+      const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry, ta = full && !softTissueGeos.has(full) ? tendonAttr(full) : null;
+      if (ta && digitTendonsFor(id, ta, null, src)) n++;
+    }
+    muscleLook.digitTendonBody = n;
+    return n;
+  }
   function setBodySkin(records, bakedSegments) {
     if (!(records instanceof Map) || !(bakedSegments instanceof Map)) fail('scene_input', 'setBodySkin needs Map records and the baked segment matrices');
     let registered = 0, missing = 0;
@@ -10247,8 +10356,7 @@ export function createScene({
         anconeusDeepDelta: r.anconeusDeepDelta || null, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
         rest: lift ? lift.rest : new Float32Array(pos.array), restN: lift ? null : new Float32Array(nor.array), skinned: false };
       if (!lift) pos.array = new Float32Array(rec.rest); // one drawn buffer per muscle (attribute object kept; see the lift)
-      // (DIGIT_TENDONS from the source positions, now that the record has them; digitTendonsFor)
-      { const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry, ta = full && !softTissueGeos.has(full) ? tendonAttr(full) : null; if (ta) digitTendonsFor(id, ta); }
+      // (DIGIT_TENDONS for the body's muscles: setDigitTendonSources, from the source meshes, after the skin records)
       // The fingers and the hand move up to about a hand length against the mesh's rigid frame: grow the shared bounding
       // sphere once so culling stays right at every pose.
       if (!geo.boundingSphere && typeof geo.computeBoundingSphere === 'function') geo.computeBoundingSphere();
@@ -11268,6 +11376,11 @@ export function createScene({
    * ignored, except the information panel's; the orientation labels are ignored while ns-app hands their boxes over
    * (setOrientationRects). Without MutationObserver (Node tests) the old HUD_READ_EVERY poll is kept. */
   const HUD_READ_EVERY = 12;
+  /** 20 November 2026 (hunt H2-8): the tip beside the crosshair stays the region labels' obstacle holdMs after it goes
+   * (readHudRectsNow). Measured over a slow sweep across the strip at 1280x720: labels shown / hidden 54-62 times in
+   * 260 steps (lead 50-58); a bigger steady zone (220 x 64 px) made it 78. */
+  const TIP_ZONE = Object.freeze({ holdMs: 400 });
+  let tipZone = null, tipZoneUntil = 0, tipZoneHeld = false;
   let hudRectCache = [], hudReadIn = 0, hudReadFor = '';
   let hudDirty = true, hudReads = 0, hudMo = null, hudRo = null;
   const hudRoSeen = new WeakSet();
@@ -11380,6 +11493,33 @@ export function createScene({
         const r = e.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, orient: true });
       }
+      // 20 November 2026 (hunts H2-3, H2-8): the quiet layer's tutorial prompt (top left) and the tip beside the
+      // crosshair (ns-quiet.mjs) are obstacles for the region labels only (flagged `quiet`; the arrows keep their places
+      // while the tip comes and goes). At 800x600 the prompt lay on "Left leg" and "Left arm"; on the trunk, hip and
+      // right-arm areas the tip lay on "Right arm".
+      // The tip's box stays an obstacle TIP_ZONE.holdMs after the tip goes, so a look crossing the strip does not make the
+      // labels near it come and go with every gap between two areas.
+      const shownQ = e => Boolean(e) && !e.hidden && !(e.parentNode && e.parentNode.hidden);
+      const promptEl = parent.querySelector('.ns-quiet > .ns-prompt'), tipEl = parent.querySelector('.ns-quiet > .ns-tip');
+      if (shownQ(promptEl)) {
+        const r = promptEl.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true });
+      }
+      const tNow = nowMs();
+      const tr = shownQ(tipEl) ? tipEl.getBoundingClientRect() : null;
+      if (tr && tr.width > 0 && tr.height > 0) {
+        tipZone = { x0: tr.left - o.left, y0: tr.top - o.top, x1: tr.right - o.left, y1: tr.bottom - o.top, quiet: true };
+        tipZoneUntil = tNow + TIP_ZONE.holdMs; tipZoneHeld = false;
+        hudRectCache.push(tipZone);
+      } else if (tipZone && tNow < tipZoneUntil) { hudRectCache.push(tipZone); tipZoneHeld = true; }
+      else { tipZone = null; tipZoneHeld = false; }
+      // 20 November 2026 (package HUD): the limits line at the top as drawn (two lines in a narrow window, where the
+      // labels' fixed 26 px top let "Left arm" lie on its second line); labels only, like the quiet layer.
+      for (const e of parent.querySelectorAll('.ns-hud > .ns-essential')) {
+        if (e.hidden) continue;
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true });
+      }
       // R3-scene: the far-right information panel (when showing; flagged `info`, the arrow plan reserves its whole
       // column instead) and the capture / drag-to-look toast are obstacles for the arrows and labels too.
       if (info && !info.panel.hidden && typeof info.panel.getBoundingClientRect === 'function') {
@@ -11401,6 +11541,11 @@ export function createScene({
         }
       }
     } catch { hudRectCache = []; }
+    // 20 November 2026 (package HUD): every one of these holds words; for the region labels they weigh more than the
+    // picture (declutterLabels `weight`), and a label is never forced onto them (`words`).
+    // (The tip is the one exception to `words`: it comes and goes with the look, and a required label it pushes out of
+    // every clear place stays faded under it instead of blinking out and back while the look crosses the strip.)
+    for (const r of hudRectCache) { r.words = r !== tipZone; r.weight = LABEL_WORDS_WEIGHT; }
     return hudRectCache;
   }
   /* ---- R5-scene (D16): 3D compass arrows: plan (ns-arrows3d), screen boxes, picks ---------------------------------- */
@@ -11453,7 +11598,7 @@ export function createScene({
     const out = [], rects = readHudRects() || [];
     arrowPanelObsKey = rects.filter(r => r.info).map(r => `${r.x0},${r.y0},${r.x1},${r.y1}`).join(';');
     for (const r of rects) {
-      if (r.info || r.orient || r.chip) continue;
+      if (r.info || r.orient || r.chip || r.quiet) continue;
       if (r.toast) continue;
       if (r.home) { out.push({ ...r.home }); if (r.alt) out.push({ ...r.alt }); } else out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 });
     }
@@ -12234,7 +12379,7 @@ export function createScene({
     const carried = mirror.worldCentre || Math.abs(arrowRef.yaw - referenceAngles.yaw) > 1e-6
       || Math.abs(arrowRef.pitch - referenceAngles.pitch) > 1e-6;
     if (!camPose || camPose.blend < 1 || carried) { outsideCompass = null; return null; }
-    if (!outsideCompass) outsideCompass = { view: { yaw: cam.yaw, pitch: cam.pitch, position: cam.position.slice() } };
+    if (!outsideCompass) outsideCompass = { view: { yaw: cam.yaw, pitch: cam.pitch, position: cam.position.slice() }, centre: camPose.centre, boomM: camPose.boomM };
     const fovYDeg = planLensFov();
     const key = `${cssW}x${cssH}|${fovYDeg}|${compassBrainSourceRevision}|${brain.planningTarget?.centreWorldM}|${Boolean(brain.plan)},${Boolean(mirrorSet.plan)}`;
     // A resize can deliver the two normal frames on successive ticks. Admit those revisions until the
@@ -12248,6 +12393,7 @@ export function createScene({
     }
     outsideCompass.revision = revision;
     outsideCompass.orbit = orbit;
+    const fitT0 = nowMs();
     const ref = { ...outsideCompass.view, width: cssW, height: cssH, fovYDeg };
     const motor = motorRestGrid(ref);
     const slide = mirrorSlideVec();
@@ -12269,16 +12415,64 @@ export function createScene({
     const overlaps = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
     const clear = box => box.x0 >= margin && box.y0 >= margin && box.x1 <= cssW - margin && box.y1 <= cssH - margin
       && !occupied.some(rect => overlaps(box, rect)) && !motor?.hits(box);
-    // Reserve valid tips before a moved tip claims a neighbouring control's original place.
-    for (const tip of tips) {
-      if (clear(tip.box)) { occupied.push(tip.box); tip.fixed = true; }
-    }
     const mirrorPoints = mirrorRoot.visible ? mirrorSamplesWorld() : null;
     const mirrorBox = mirrorPoints && NsArrows.screenBoxOf(NsArrows.projectPointsPx(mirrorPoints, null, ref).xy);
+    // 20 November 2026 (hunt 9): the brain's tips also keep off the mirror body as it is seen from here, as the eye
+    // view's plan keeps them off its box (mPad). In an upright window the brain's bottom tip lay across the mirror body's
+    // chest, hid it and took the presses meant for it.
+    const mirrorKeep = mirrorBox && [mirrorBox.x0, mirrorBox.y0, mirrorBox.x1, mirrorBox.y1].every(Number.isFinite)
+      ? { x0: mirrorBox.x0 - margin, y0: mirrorBox.y0 - margin, x1: mirrorBox.x1 + margin, y1: mirrorBox.y1 + margin } : null;
+    const clearFor = (tip, box) => clear(box) && !(tip.set === brain && mirrorKeep && overlaps(box, mirrorKeep));
+    // 20 November 2026 (hunt 6): the outside camera always looks through one point (camPose.centre), so the crosshair
+    // can be put on a tip from one camera only: the one on the line from the tip back through that point, at the boom's
+    // length, held inside the camera's reach (ns-camera followReach). Seen from that camera no other tip may lie on the
+    // tip, and seen from any other tip's camera the tip may not lie on that one. The settled view alone did not show it:
+    // with the camera just under its top stop the grey up tip lay exactly under the green one, which took every press.
+    const reach = OUTSIDE_REACH && OUTSIDE_REACH.camera, C = outsideCompass.centre, boomM = outsideCompass.boomM;
+    // (each aiming view is worked out once and kept as a projection: a fit tries some hundreds of places)
+    const aimCam = reach && C && boomM ? a => {
+      const v = [a[0] - C[0], a[1] - C[1], a[2] - C[2]];
+      if (!(Math.hypot(v[0], v[1], v[2]) > 1e-6)) return null;
+      const yaw = clampTo(Math.atan2(-v[0], -v[2]), reach.yawMinDeg * DEG, reach.yawMaxDeg * DEG);
+      const pitch = clampTo(Math.atan2(v[1], Math.hypot(v[0], v[2])), reach.pitchMinDeg * DEG, reach.pitchMaxDeg * DEG);
+      const cp = Math.cos(pitch), d = [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
+      const f = NsArrows.cameraFrame({ width: cssW, height: cssH, fovYDeg, yaw, pitch, position: [C[0] - boomM * d[0], C[1] - boomM * d[1], C[2] - boomM * d[2]] });
+      const R = f.R, P = f.pos, kx = f.tanH * f.aspect, ky = f.tanH;
+      return q => {
+        const x = q[0] - P[0], y = q[1] - P[1], z = q[2] - P[2], depth = -(R[0][2] * x + R[1][2] * y + R[2][2] * z);
+        return depth > 0 ? [((R[0][0] * x + R[1][0] * y + R[2][0] * z) / (depth * kx) + 1) * 0.5 * f.W, (1 - (R[0][1] * x + R[1][1] * y + R[2][1] * z) / (depth * ky)) * 0.5 * f.H] : null;
+      };
+    } : null;
+    const aimBox = (t, a, view) => { const q = view(a); return q ? { x0: q[0] - t.hx, y0: q[1] - t.hy, x1: q[0] + t.hx, y1: q[1] + t.hy } : null; };
+    // In a tip's own aiming view the crosshair (the middle of the picture, give or take a few pixels) must fall on that
+    // tip's hit area and on no other's; and in another tip's aiming view it must not fall on this one. A tip whose hit
+    // area the crosshair cannot reach at all (its camera would have to pass the reach) counts as crowded by itself.
+    // (Only the crosshair's spot is kept clear: asking for the drawn tips to stay apart in every aiming view as well
+    // pushed the brain's top tip 170 px off the middle of its side at 1600 x 900.)
+    const cx = cssW / 2, cy = cssH / 2, m = 6;
+    const onCross = b => Boolean(b) && b.x0 < cx + m && b.x1 > cx - m && b.y0 < cy + m && b.y1 > cy - m;
+    const crowded = (t, a, others) => {
+      if (!aimCam) return null;
+      const v = aimCam(a), own = v && aimBox(t, a, v);
+      if (!v) return null;
+      if (!(own && own.x0 <= cx - m && own.x1 >= cx + m && own.y0 <= cy - m && own.y1 >= cy + m)) return t;
+      for (const o of others) {
+        if (o === t) continue;
+        if (onCross(aimBox(o, o.anchor, v))) return o;
+        if (o.aim === undefined) o.aim = aimCam(o.anchor);
+        if (o.aim && onCross(aimBox(t, a, o.aim))) return o;
+      }
+      return null;
+    };
+    for (const tip of tips) { tip.hx = (tip.box.x1 - tip.box.x0) / 2; tip.hy = (tip.box.y1 - tip.box.y0) / 2; }
+    // Reserve valid tips before a moved tip claims a neighbouring control's original place.
+    for (const tip of tips) {
+      if (clearFor(tip, tip.box)) { occupied.push(tip.box); tip.fixed = true; }
+    }
     const oppositeDir = { forward: 'back', back: 'forward', left: 'right', right: 'left' };
     const anchors = { brain: { ...brain.plan?.anchors }, mirror: { ...mirrorSet.plan?.anchors } };
-    for (const tip of tips) {
-      if (tip.fixed) continue;
+    const placed = [];
+    function place(tip) {
       const { pos, box, anchor, set, dir } = tip;
       const opposite = tips.find(t => t.set === set && t.dir === oppositeDir[dir]);
       const [sx, sy] = NsArrows.COMPASS_SCREEN[dir];
@@ -12286,12 +12480,16 @@ export function createScene({
       // Start the search at the corresponding edge of the displayed body.
       const x0 = set === mirrorSet && mirrorBox ? (mirrorBox.x0 + mirrorBox.x1 + sx * (mirrorBox.x1 - mirrorBox.x0)) / 2 : pos.x;
       const y0 = set === mirrorSet && mirrorBox ? (mirrorBox.y0 + mirrorBox.y1 + sy * (mirrorBox.y1 - mirrorBox.y0)) / 2 : pos.y;
+      const at = NsArrows.frameAnchorFn(ref, anchor);
       let best = null, cost = Infinity;
       function consider(dx, dy) {
         const x = x0 + dx, y = y0 + dy, distance = Math.hypot(dx, dy);
         if (distance >= cost || opposite && sx * (x - opposite.pos.x) + sy * (y - opposite.pos.y) < 0) return;
         const moved = { x0: box.x0 + x - pos.x, x1: box.x1 + x - pos.x, y0: box.y0 + y - pos.y, y1: box.y1 + y - pos.y };
-        if (clear(moved)) { best = { x, y, box: moved }; cost = distance; }
+        if (!clearFor(tip, moved)) return;
+        const point = at ? at(x, y) : null;
+        if (point && crowded(tip, point, placed)) return;
+        best = { x, y, box: moved, point }; cost = distance;
       }
       // Search successive square perimeters, stopping once no further point could be nearer.
       const step = RESCUE_TIP.stepPx;
@@ -12302,11 +12500,29 @@ export function createScene({
           if (Math.abs(v) < r) { consider(-r, v); consider(r, v); }
         }
       }
-      if (!best) { occupied.push(box); continue; }
-      const point = NsArrows.frameAnchorFn(ref, anchor)(best.x, best.y);
-      anchors[set.target][dir] = set === mirrorSet && slide ? point.map((v, axis) => v - slide[axis]) : point;
+      placed.push(tip);
+      if (!best || !best.point) { occupied.push(box); return; }
+      tip.anchor = best.point; tip.aim = undefined; tip.movedPx = Math.round(Math.hypot(best.x - pos.x, best.y - pos.y));
+      anchors[set.target][dir] = set === mirrorSet && slide ? best.point.map((v, axis) => v - slide[axis]) : best.point;
       occupied.push(best.box);
     }
+    // The mirror body's tips are settled first, then the brain's: of two tips that lie on each other in their aiming
+    // views the brain's moves (its sides have room; the mirror body's small tips keep to its edges). Without the
+    // camera's centre the order is the earlier one.
+    const groups = aimCam ? [tips.filter(t => t.set === mirrorSet), tips.filter(t => t.set !== mirrorSet)] : [tips];
+    for (const group of groups) {
+      for (const tip of group) {
+        if (!tip.fixed) continue;
+        const by = crowded(tip, tip.anchor, placed);
+        if (!by) { placed.push(tip); continue; }
+        tip.fixed = false; tip.crowdedBy = by === tip ? 'out of reach' : `${by.set.target}:${by.dir}`;
+        occupied.splice(occupied.indexOf(tip.box), 1);
+      }
+      for (const tip of group) if (!tip.fixed) place(tip);
+    }
+    // what was checked and moved, for QA (inspect({ arrowTrace: true }).arrowTrace.value.outside)
+    outsideCompass.report = { aimed: Boolean(aimCam), ms: Math.round((nowMs() - fitT0) * 100) / 100, tips: tips.map(t => ({ tip: `${t.set.target}:${t.dir}`, kept: t.fixed, movedPx: t.movedPx ?? 0,
+      crowdedBy: t.crowdedBy || null, crowdedNow: aimCam ? (b => (b === t ? 'out of reach' : b ? `${b.set.target}:${b.dir}` : null))(crowded(t, t.anchor, tips)) : null })) };
     outsideCompass.key = key;
     outsideCompass.anchors = anchors;
     outsideCompass.slide = slide;
@@ -12431,7 +12647,10 @@ export function createScene({
       const want = Boolean(box) && (hovered ? !keyboardAreaTip : target === 'brain' && guideGoalAttr === 'orbit');
       if (!want) { if (T.shown) { T.shown = false; T.el.hidden = true; } continue; }
       const e = NsArrows.COMPASS_SCREEN[d], gap = R5_SCENE.arrowCaptionPx;
-      const w = Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
+      // 20 November 2026 (hunt 7): the caption's own width, measured once each time it comes up (it does not wrap; the
+      // estimate capped at 260 px let the 295 px "... the side on your right" run 31 px past an 800 px window's edge).
+      if (!T.shown) { T.el.hidden = false; T.shown = true; const m = T.el.offsetWidth; T.w = m > 0 ? m : null; }
+      const w = T.w || Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
       // just past the arrow's outer end, along its compass direction
       const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
       // R558 (Message 7): never on top of ANY shown tip (the two sets' tips can be near each other), its own first.
@@ -12448,11 +12667,23 @@ export function createScene({
       const spots = [[e[0] > 0 ? box.x1 + gap : e[0] < 0 ? box.x0 - gap - w : cx, e[1] > 0 ? box.y1 + gap : e[1] < 0 ? box.y0 - gap - h : cy],
         [cx, e[1] > 0 ? box.y0 - gap - h : box.y1 + gap], [cx, box.y0 - gap - h], [box.x1 + gap, cy], [box.x0 - gap - w, cy]]
         .map(([sx, sy]) => [clampTo(sx, 4, xMax), clampTo(sy, topPx, yMax)]);
-      let [x, y] = spots.find(([sx, sy]) => !hitsBox(sx, sy)) || spots[0];
+      // 20 November 2026 (hunt 7): with no free spot, the one that covers least (its own arrow counts four times), not
+      // always the first: pushed in from the window's edge, the first one lay right across the arrow it names.
+      let [x, y] = spots.find(([sx, sy]) => !hitsBox(sx, sy)) || (() => {
+        let best = spots[0], least = Infinity;
+        for (const s of spots) {
+          let c = 0;
+          for (const b2 of tipBoxes) {
+            const ox = Math.min(s[0] + w, b2.x1 + 2) - Math.max(s[0], b2.x0 - 2), oy = Math.min(s[1] + h, b2.y1 + 2) - Math.max(s[1], b2.y0 - 2);
+            if (ox > 0 && oy > 0) c += ox * oy * (b2 === box ? 4 : 1);
+          }
+          if (c < least) { least = c; best = s; }
+        }
+        return best;
+      })();
       const l = px(x), t = px(y);
       if (T.left !== l) { T.el.style.left = l; T.left = l; }
       if (T.top !== t) { T.el.style.top = t; T.top = t; }
-      if (!T.shown) { T.shown = true; T.el.hidden = false; }
     }
   }
   /** QA / tests: { source, error, silhouette, hover, brain / mirror: { shown, sizes, frontDepthM, dirs: { dir: { x, y
@@ -12477,6 +12708,8 @@ export function createScene({
     };
     return { source: 'ns-arrows3d', error: arrowRigError, silhouette: Boolean(arrowSets.brain.rig && arrowSets.brain.rig.arrows.forward.xray), hover: arrowHover ? { ...arrowHover } : null,
       brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
+      // 20 November 2026 (hunts 6 and 9): the outside view's compass check (outsideCompassAnchors), or null in the eye view
+      outside: outsideCompass && outsideCompass.report ? outsideCompass.report : null,
       // R558 (hunt 2, FRAME_VIS): what the visibility rule decided last and what it cost
       visibility: { brain: { hidden: arrowSets.brain.frameHidden, occluded: [...arrowSets.brain.occluded], ...(arrowSets.brain.vis || {}) },
         mirror: { hidden: arrowSets.mirror.frameHidden, occluded: [...arrowSets.mirror.occluded], ...(arrowSets.mirror.vis || {}) },
@@ -12532,6 +12765,8 @@ export function createScene({
         eulerXYZRadians: [camera.rotation.x, camera.rotation.y, camera.rotation.z], eulerOrder: camera.rotation.order,
         matrixWorld: Array.from(camera.matrixWorld.elements), matrixWorldNeedsUpdate: camera.matrixWorldNeedsUpdate },
       brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
+      // 20 November 2026 (hunts 6 and 9): the outside compass check as last made (retained data; null in the eye view)
+      outside: outsideCompass && outsideCompass.report ? outsideCompass.report : null,
       // R558 (hunt 2, FRAME_VIS): the last visibility decision (retained data only; nothing is recomputed here)
       visibility: { brain: { shown: arrowSets.brain.shown, hidden: arrowSets.brain.frameHidden, occluded: [...arrowSets.brain.occluded], ...(arrowSets.brain.vis ? copyCompassEvidence(arrowSets.brain.vis) : {}) },
         mirror: { shown: arrowSets.mirror.shown, hidden: arrowSets.mirror.frameHidden, occluded: [...arrowSets.mirror.occluded], ...(arrowSets.mirror.vis ? copyCompassEvidence(arrowSets.mirror.vis) : {}) },
@@ -13753,6 +13988,11 @@ export function createScene({
       if (!key) continue;
       const nk = beamKeyWorld(key);
       if (!nk) continue;
+      // (LIGHT_BEAM.keyInView: no beam whose key is behind the eye or well outside the picture)
+      pv.set(beamA[0], beamA[1], beamA[2]).applyMatrix4(camera.matrixWorldInverse);
+      const keyBehind = !(pv.z < -camera.near);
+      if (!keyBehind) pv.applyMatrix4(camera.projectionMatrix);
+      if (!beamKeySeen(pv.x, pv.y, keyBehind)) { glowState.keyHidden = (glowState.keyHidden || 0) + 1; continue; }
       // the muscles of this link, heaviest drive first
       beamTargets.length = 0;
       for (const bid in link.body) { const b = bodyById.get(bid); if (b && b.kind === 'muscle') beamTargets.push({ w: link.body[bid], b, m: null }); }
@@ -14054,14 +14294,14 @@ export function createScene({
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
       cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials, muscleShare: muscleShareState(Boolean(opts && opts.audit === true)),
-      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null } : null,
+      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null, keyHidden: glowState.keyHidden || 0 } : null,
       // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
       powerUp: { shader: powerUp.applied, materials: powerUp.materials, starts: powerUp.starts, settledStarts: powerUp.settledStarts, recharges: powerUp.recharges, clockS: Math.round(powerUpClock.value.x * 1000) / 1000, lastStartS: powerUp.lastStart === null ? null : Math.round(powerUp.lastStart * 1000) / 1000, lastStartArea: powerUp.lastStartArea, reduced: powerUpClock.value.y > 0.5 },
       // R558 (Message 18): the muscle look (patch state, tendon meshes written, tone assignment summary).
       // R558 (Messages 25 to 30): the comic look (patch state, materials, meshes with an ink frame, ink on) and the
       // phalanges drawn from their rounded display copy.
       comic: { shader: comic.applied, materials: comic.materials, hatchMeshes: comic.hatchMeshes, inkOn: comic.inkOn, boneTips: boneTips.meshes, hdr: hdr.state() },
-      muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, digitTendons: muscleLook.digitTendons || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
+      muscleLook: { shader: muscleLook.applied, materials: muscleLook.materials, tendonMeshes: muscleLook.tendonMeshes || 0, digitTendons: muscleLook.digitTendons || 0, digitTendonBody: muscleLook.digitTendonBody || 0, tendonMs: Math.round(muscleLook.tendonMs || 0),
         toneKeys: muscleTones.keys, toneContacts: muscleTones.contacts, toneWorst: muscleTones.worst, toneMs: muscleTones.ms === undefined ? null : muscleTones.ms } };
   }
 
@@ -14108,6 +14348,7 @@ export function createScene({
   function layoutOverlay() {
     if (!overlay || !(cssW > 0 && cssH > 0)) return;
     drainHudRecords();
+    if (tipZoneHeld && nowMs() >= tipZoneUntil) { tipZoneHeld = false; hudDirty = true; hudReadIn = 0; } // (the gone tip's hold ended)
     if (hudMo ? !overlayDirty && !hudDirty : !overlayDirty && hudReadIn > 0) { if (!hudMo) hudReadIn--; return; }
     overlayDirty = false;
     const reserve = infoPanelRect({ width: cssW, height: cssH });
@@ -15066,7 +15307,7 @@ export function createScene({
     // R558: setBodyLift draws the stack on the body (own and mirror).
     setBodyLayers,
     setBodyLift,
-    setBodySkin, updateBodySkin, bodySkinPending, setBodySwell,
+    setBodySkin, setDigitTendonSources, updateBodySkin, bodySkinPending, setBodySwell,
     setArmLayers,
     setOutlineSegments, // R558 (Message 20)
     // 18 November 2026 (SEE, ns-see): the limbs locked away ([9] by ghost code; their ghosts are filled and taken by the
@@ -15204,6 +15445,28 @@ export const STATUS_CARD_HOME = true;
 // names what you look at) or the brand words (the model-name line stays), so it ends above the left hand at three
 // quarters up (390x844: hand top about y 180). The plan keeps room for one or two transient lines: 185 -> 150 px.
 export const STATUS_CARD_PLAN = Object.freeze({ columnVh: 0.37, portraitVh: 0.11, portraitMinPx: 140, narrowMaxPx: 600, narrowMinPx: 150 });
+/** 20 November 2026 (package HUD): the bottom-left stack of a wide window (shown at the full reading level): the status
+ * card stands footPx above the floor (over the one-line "Simulated activity" note; this was a 20 px CSS lift), the colour
+ * key directly above it. statusShare: the most of the stack's height the status card may take; minPx: the least height
+ * either keeps. */
+export const CORNER_STACK = Object.freeze({ footPx: 20, statusShare: 0.55, minPx: 48 });
+/**
+ * Where the corner stack's two cards go (pure; CSS px): { statusY, legendY, statusMax, legendMax }. height: the view's
+ * height; topPx: the highest a card may reach (under the limits line); gapPx: the HUD gap; statusH / legendH: the
+ * cards' measured heights (already capped ones are fine: the caps depend on the view only, and the key's on the status
+ * card's height, never the other way, so they settle at once). A card taller than its greatest height is cut there and
+ * fades at its foot (CSS data-ns-capped), so neither runs into the limits line or onto the other.
+ */
+export function cornerStackFit({ height, topPx, gapPx = 12, statusH, legendH, rules = CORNER_STACK } = {}) {
+  const floor = height - gapPx - rules.footPx;
+  const room = Math.max(0, floor - topPx);
+  const statusMax = Math.max(rules.minPx, Math.floor(room * rules.statusShare));
+  const hs = Math.min(Number.isFinite(statusH) && statusH > 0 ? statusH : 0, statusMax);
+  const legendMax = Math.max(rules.minPx, Math.floor(room - gapPx - hs));
+  const hl = Math.min(Number.isFinite(legendH) && legendH > 0 ? legendH : 0, legendMax);
+  const statusY = Math.max(topPx, floor - hs);
+  return { statusY, legendY: Math.max(topPx, statusY - gapPx - hl), statusMax, legendMax };
+}
 export function statusCardPlanPx(width, height, portrait = width / height < 1, o = STATUS_CARD_PLAN) {
   const minPx = Number.isFinite(o.narrowMaxPx) && width <= o.narrowMaxPx ? o.narrowMinPx : o.portraitMinPx;
   return portrait ? Math.max(minPx, Math.round(o.portraitVh * height)) : Math.round(o.columnVh * height);
@@ -15613,6 +15876,53 @@ export function createHud(hudRoot) {
     });
   }
 
+  /** 20 November 2026 (hunt H2-5): the portrait legend's dock (portraitLegendDock, or null when not docked): marks the
+   * legend (data-ns-docked="band"; CSS lifts it by --ns-legend-lift) and gives the information card its start under the
+   * legend (--ns-portrait-legend-reserve and -body). All on the app root, which holds both the HUD and the card; removed
+   * again when not docked, so the style sheet's own values apply. Written only when they change. */
+  let legendDockKey = '';
+  function setLegendDock(dock) {
+    const key = dock ? `${dock.liftPx}|${dock.reservePx}` : '';
+    if (key === legendDockKey) return;
+    legendDockKey = key;
+    try {
+      if (typeof legend.setAttribute === 'function') { if (dock) legend.setAttribute('data-ns-docked', 'band'); else legend.removeAttribute('data-ns-docked'); }
+      const app = hudRoot.parentNode;
+      if (app && app.style && typeof app.style.setProperty === 'function') {
+        const vars = [['--ns-portrait-legend-reserve', dock && dock.reservePx], ['--ns-portrait-legend-reserve-body', dock && dock.reservePx], ['--ns-legend-lift', dock && dock.liftPx]];
+        for (const [k, v] of vars) { if (dock) app.style.setProperty(k, `${v}px`); else app.style.removeProperty(k); }
+      }
+    } catch { /* a DOM double without these: the style sheet's values apply */ }
+  }
+  /** 20 November 2026 (package HUD): a card's greatest height (CSS px; 0 = none) as an inline max-height; while the card
+   * stands at it (its measured height), data-ns-capped makes it cut and fade at its foot (quiet.css). */
+  const capLast = new WeakMap();
+  function setPanelCap(el, maxPx, measuredPx) {
+    if (!el || !el.style) return;
+    const v = maxPx > 0 ? `${Math.round(maxPx)}px` : '';
+    const at = maxPx > 0 && Number.isFinite(measuredPx) && measuredPx >= maxPx - 1;
+    const key = `${v}|${at ? 1 : 0}`;
+    if (capLast.get(el) === key) return;
+    capLast.set(el, key);
+    if (el.style.maxHeight !== v) el.style.maxHeight = v;
+    if (typeof el.setAttribute === 'function') { if (at) el.setAttribute('data-ns-capped', 'true'); else el.removeAttribute('data-ns-capped'); }
+  }
+  /** The room the limb buttons take at the bottom (quiet.css --ns-limbs-reserve, CSS px) while they are shown; 0
+   * without them. The style is read once per view size, once the buttons exist. */
+  let limbsReserveFor = '', limbsReserveV = 0;
+  function limbsReservePx(W, H) {
+    const k = `${W}x${H}`;
+    if (k === limbsReserveFor) return limbsReserveV;
+    try {
+      const app = hudRoot.parentNode, view = doc.defaultView;
+      if (!(app && typeof app.querySelector === 'function' && app.querySelector('.ns-limbs'))) return 0; // (not yet / not used)
+      limbsReserveFor = k; limbsReserveV = 0;
+      const v = view && typeof view.getComputedStyle === 'function' ? parseFloat(view.getComputedStyle(app).getPropertyValue('--ns-limbs-reserve')) : NaN;
+      if (Number.isFinite(v) && v > 0) limbsReserveV = v;
+    } catch { limbsReserveV = 0; }
+    return limbsReserveV;
+  }
+
   function setPanelPos(el, x, y) {
     const sx = Math.round(x) + 'px', sy = Math.round(y) + 'px';
     if (el.style.left !== sx) el.style.left = sx;
@@ -15630,7 +15940,7 @@ export function createHud(hudRoot) {
     const reserved = reserveInfo ? infoPanelRect({ width: W, height: H }, top) : null;
     if (reserved) placed.push({ x0: reserved.x0 / W, y0: reserved.y0 / H, x1: reserved.x1 / W, y1: reserved.y1 / H });
     // Polish: the legend's fixed slot under the information column is reserved before the status card is placed.
-    let legendSlot = null;
+    let legendSlot = null, legendDock = null, cornerStack = null;
     if (reserved && reserved.layout === 'column' && legend.style) {
       const d = defaults[1], size = panelSizes && panelSizes[1];
       const w = size ? size[0] : d.x1 - d.x0, h = size ? size[1] : d.y1 - d.y0;
@@ -15644,16 +15954,27 @@ export function createHud(hudRoot) {
     } else if (reserved && reserved.layout === 'corner' && legend.style && panelSizes && panelSizes[0] && panelSizes[1]) {
       // R558: the colour key folds away with "More detail" in landscape (CSS); when shown it sits on the left edge,
       // directly above the status card. It is an on-demand overlay there, so it reserves nothing.
-      legendSlot = { x: g, y: Math.max(top, H - g - panelSizes[0][1] - g - panelSizes[1][1]) };
+      // 20 November 2026 (package HUD): the two stand on the "Simulated activity" line (CORNER_STACK.footPx; it was a
+      // 20 px CSS lift, which pushed a key clamped under the limits line onto it) and each has a greatest height, so the
+      // stack never reaches the limits line and the key never lies on the status card (1024x600, 800x600, 640x480).
+      cornerStack = cornerStackFit({ height: H, topPx: top, gapPx: g, statusH: panelSizes[0][1], legendH: panelSizes[1][1] });
+      legendSlot = { x: g, y: cornerStack.legendY };
     } else if (reserved && reserved.layout === 'portrait' && legend.style && panelSizes && panelSizes[1]) {
       // R3-integrator (R3-player item 10): in portrait the legend docks at the top right of the reserved bottom band,
       // above the information panel (which CSS caps to the rest of the band), so it never covers the brain or the hand.
       const [w, h] = panelSizes[1];
-      if (w <= reserved.x1 - reserved.x0 + 1 && h <= INFO_PANEL_PORTRAIT_LEGEND_PX) {
+      // 20 November 2026 (hunt H2-5): docked whenever the card keeps PORTRAIT_LEGEND_DOCK.cardMinPx under it; lifted
+      // (as the card itself is, over the limb buttons) only as far as that needs, at most by the card's own lift.
+      const dock = portraitLegendDock({ bandY0: reserved.y0, bandY1: reserved.y1, legendH: h, limbsReservePx: limbsReservePx(W, H), gapPx: g });
+      if (w <= reserved.x1 - reserved.x0 + 1 && dock) {
         legendSlot = { x: Math.max(g, reserved.x1 - w), y: reserved.y0 };
-        placed.push({ x0: legendSlot.x / W, y0: legendSlot.y / H, x1: (legendSlot.x + w) / W, y1: (legendSlot.y + h) / H });
+        placed.push({ x0: legendSlot.x / W, y0: (legendSlot.y - dock.liftPx) / H, x1: (legendSlot.x + w) / W, y1: (legendSlot.y - dock.liftPx + h) / H });
+        legendDock = dock;
       }
     }
+    setLegendDock(legendDock);
+    setPanelCap(info, cornerStack ? cornerStack.statusMax : 0, panelSizes && panelSizes[0] ? panelSizes[0][1] : 0);
+    setPanelCap(legend, cornerStack ? cornerStack.legendMax : 0, panelSizes && panelSizes[1] ? panelSizes[1][1] : 0);
     let limited = false;
     panelEls.forEach((el, i) => {
       if (!el.style) { limited = true; return; }
@@ -15700,7 +16021,9 @@ export function createHud(hudRoot) {
         }
         panelPick[i] = { x: use.x, y: use.y };
         placed.push(use.box);
-        setPanelPos(el, use.x, use.y);
+        // 20 November 2026 (package HUD): in the corner layout the card is drawn standing on the "Simulated activity"
+        // line (cornerStackFit); its home box (above) is unchanged.
+        setPanelPos(el, use.x, !portrait && cornerStack ? cornerStack.statusY : use.y);
         return;
       }
       if (panelPick[i]) candidates.push(at(clampFraction(panelPick[i].x, left, right), clampFraction(panelPick[i].y, top, bottom)));

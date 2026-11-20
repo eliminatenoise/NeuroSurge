@@ -148,7 +148,8 @@ test('a press on a held left-arm movement counts as moving it (the tutorial\'s "
   const ev = NG.guideEventsFromFrame({ prev, next, out: { marks: r.marks }, bodyMap: BODY_MOTOR_MAP }).filter(e => e.type === 'activate');
   assert.ok(ev.length === 1 && ev[0].isLeftArm === true && ev[0].moves === true && ev[0].source === 'click', JSON.stringify(ev));
   let g = NG.createGuide({ now: 0, features: { thirdPerson: true }, tutorial: true });
-  g = NG.guideStep(g, [{ type: 'look', regionId: 'rh_elbow' }], 0.5);
+  // (20 November 2026: the first step is the look's own switch-on, no longer the bare look at an area)
+  g = NG.guideStep(g, [{ type: 'activate', regionId: 'rh_elbow', isLeftArm: true, kind: 'effector', moves: true, awaitMove: true, source: 'gaze' }], 0.5);
   assert.equal(NG.currentGoal(g), 'pressArea');
   g = NG.guideStep(g, ev, 1);
   assert.notEqual(NG.currentGoal(g), 'pressArea', 'the click on the left elbow finished "Click it: it jerks again"');

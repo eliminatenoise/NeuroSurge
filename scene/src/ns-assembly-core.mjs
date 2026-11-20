@@ -18,6 +18,39 @@ import { ROOM, createRoomBackdrop, roomGain, roomBeatStep } from './ns-room.mjs'
 import { ASSEMBLY_ORDER, ASSEMBLY_TIERS, assemblyDepth, createAssemblyRelease } from './ns-assembly-order.mjs';
 import { HEMI_GAP, hemisphereSideOf, partedPositions } from './ns-brain-part.mjs';
 import { buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
+import { BODY_SHAPE, limbLengthField, trunkShapeField } from './ns-body-shape.mjs';
+
+/** 20 November 2026 (the owner: "Let's make the limbs longer", "a smaller and much flatter chest essentially, and a more
+ * observable bottom torso"). The game draws its body with longer limbs and a flatter chest (ns-body-shape BODY_SHAPE, on
+ * the rest meshes); the picture draws the atlas's bones and muscles the same way, so the body that comes together is
+ * the body the game then shows: a part of a limb (the table's `limb` and `chain`, ns-assembly assemblyPartsTable) is
+ * made longer by its limb's field, and every bone and muscle goes through the trunk rule. A muscle that also lies on the
+ * trunk (limb ending in '*') is weighted by its distance from the limb's axes (the game asks its nearest bones, which
+ * this picture does not have). The picture still shows the atlas's own build, without the game's trained build. Pure:
+ * a new array (the parsed one may be shared). */
+const SHAPE_LIMB_FIELDS = new Map();
+let shapeTrunkField = null;
+export function assemblyShapedPositions(p, place, shape = BODY_SHAPE) {
+  const limbOn = Boolean(shape && shape.limbs && shape.limbs.on && place && place.limb && Array.isArray(place.chain));
+  const trunkOn = Boolean(shape && shape.trunk && shape.trunk.on);
+  if (!p || (!limbOn && !trunkOn)) return p;
+  let f = null, crossing = false;
+  if (limbOn) {
+    const key = String(place.limb).replace('*', '');
+    f = shape === BODY_SHAPE ? SHAPE_LIMB_FIELDS.get(key) : null;
+    if (!f) { f = limbLengthField(key.slice(2), place.chain, shape.limbs); if (shape === BODY_SHAPE) SHAPE_LIMB_FIELDS.set(key, f); }
+    crossing = String(place.limb).endsWith('*');
+  }
+  const tf = trunkOn ? (shape === BODY_SHAPE ? (shapeTrunkField || (shapeTrunkField = trunkShapeField(shape.trunk))) : trunkShapeField(shape.trunk)) : null;
+  const q = new Float32Array(p.length), D = [0, 0, 0];
+  for (let i = 0; i + 2 < p.length; i += 3) {
+    let x = p[i], y = p[i + 1], z = p[i + 2];
+    if (f) { f.at(x, y, z, D); const w = crossing ? f.reach(x, y, z) : 1; x += w * D[0]; y += w * D[1]; z += w * D[2]; }
+    if (tf) y += tf.at(x, y, z);
+    q[i] = x; q[i + 1] = y; q[i + 2] = z;
+  }
+  return q;
+}
 
 /** 20 November 2026 (the owner, 19 November: "this also means on the loading page, you'll also see the eyes come
  * together and connect to the brain"). Once the brain's strip has lit (or could not be lit), the two eyeballs and their
@@ -289,6 +322,8 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   function add(kind, parsed, place = null) {
     if (disposed || !parsed) return;
     const k = Object.prototype.hasOwnProperty.call(ASSEMBLY_KINDS, kind) ? kind : 'muscle';
+    // (a bone or muscle of the body: drawn in the game's shape, assemblyShapedPositions)
+    if ((k === 'bone' || k === 'muscle') && !(place && place.track === 'brain')) parsed = { ...parsed, positions: assemblyShapedPositions(parsed.positions, place) };
     const { normals, centre } = meshNormalsAndCentre(parsed.positions, parsed.indices);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(parsed.positions, 3));
@@ -296,8 +331,10 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
     g.setIndex(new THREE.BufferAttribute(parsed.indices, 1));
     let d = place && place.track && Number.isInteger(place.tier) ? place : null;
     if (!d) d = assemblyDepth({ kind: k, name: place && place.name, groups: place && place.groups, layer: place && place.layer, centre });
-    // (a part of a cerebral half is drawn HEMI_GAP.eachMm away from the midline, as the game draws it: ASSEMBLY_EYES)
-    if (d && d.track === 'brain' && (k === 'brain' || k === 'strip')) {
+    // (a part of a cerebral half is drawn HEMI_GAP.eachMm away from the midline, as the game draws it: ASSEMBLY_EYES;
+    // 20 November 2026: a cerebral artery too, by its own side, when the game fetches them: one part at a time, so not
+    // by the brain under it as the game does (ns-brain-part partedOnBrain); the arteries under the brain differ a little)
+    if (d && d.track === 'brain' && (k === 'brain' || k === 'strip' || k === 'vessel')) {
       const side = hemisphereSideOf({ name: place && place.name, positions: parsed.positions });
       if (side) {
         const parted = partedPositions(parsed.positions, side, HEMI_GAP.eachMm);

@@ -30,7 +30,8 @@
  * handed in by the launcher (useMuscleLayer) for manifests the table does not cover.
  */
 import { assemblyDepth, ASSEMBLY_TIERS } from './ns-assembly-order.mjs';
-import { ASSEMBLY_PARTS } from './ns-assembly-parts.mjs';
+import * as AssemblyParts from './ns-assembly-parts.mjs';
+const { ASSEMBLY_PARTS } = AssemblyParts, ASSEMBLY_LIMB_CHAINS = AssemblyParts.ASSEMBLY_LIMB_CHAINS || null; // (a table written before the chains: none)
 import { packKeyOfUrl } from './ns-pack.mjs';
 
 /** Files the game loads before it is ready (arm and brain 142, body 294, face 54, head 10, more muscles 111): only the
@@ -113,10 +114,12 @@ export const ASSEMBLY_PART_MANIFESTS = Object.freeze(['inputs/MESH-MANIFEST.json
 const FRAC_DIGITS = 4;
 const roundFrac = f => (Number.isFinite(f) ? Math.round(f * 10 ** FRAC_DIGITS) / 10 ** FRAC_DIGITS : f);
 
-/** A manifest's parts as rows of the table (pure): [[packet, [file id, kind, tier, frac, name?]], ...], in manifest
+/** A manifest's parts as rows of the table (pure): [[packet, [file id, kind, tier, frac, name?, limb?]], ...], in manifest
  * order. The packet is the entry's source_packet (else the manifest's packet); the file id is the file's name without
- * .obj (the game's files are named by element id); name is given for a part of the brain only (it says which half). */
-export function assemblyPartsRowsOfManifest(manifest, muscleLayer) {
+ * .obj (the game's files are named by element id); name is given for a part of the brain only (it says which half);
+ * limb (20 November 2026) for a part of the body that the game draws longer with a limb (limbOf(entry): ns-body
+ * bodyShapeLimbOf; the name is then ''). */
+export function assemblyPartsRowsOfManifest(manifest, muscleLayer, limbOf = null) {
   const out = [];
   if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.assets)) return out;
   for (const e of manifest.assets) {
@@ -125,6 +128,7 @@ export function assemblyPartsRowsOfManifest(manifest, muscleLayer) {
     if (!p || !p.track || !file || !packet) continue;
     const row = [file, p.kind, p.tier, roundFrac(p.frac)];
     if (p.track === 'brain') row.push(p.name);
+    else if (typeof limbOf === 'function') { const limb = String(limbOf(e) || ''); if (limb) row.push('', limb); }
     out.push([packet, row]);
   }
   return out;
@@ -132,17 +136,20 @@ export function assemblyPartsRowsOfManifest(manifest, muscleLayer) {
 
 /** The table (ns-assembly-parts: packet -> rows) as file key (`<packet>/meshes/<file>.obj`, the pack's key) -> the part
  * as assemblyPartOf gives it ({ id, kind, name, groups, layer, track, tier, frac }; groups and layer are not kept,
- * they only matter for a part without a tier). Pure. */
-export function assemblyPartsTable(table = ASSEMBLY_PARTS) {
+ * they only matter for a part without a tier), and for a part of a limb (20 November 2026) limb ('r_arm' ... with '*'
+ * for a muscle that also lies on the trunk) and chain (that limb's reference chain), with which ns-assembly-core draws
+ * it as long as the game does (ns-body-shape). Pure. */
+export function assemblyPartsTable(table = ASSEMBLY_PARTS, chains = ASSEMBLY_LIMB_CHAINS) {
   const out = new Map();
   if (!table || typeof table !== 'object') return out;
   for (const [packet, rows] of Object.entries(table)) {
     if (!Array.isArray(rows)) continue;
     for (const r of rows) {
       if (!Array.isArray(r) || typeof r[0] !== 'string') continue;
-      const [id, kind, tier, frac, name = ''] = r, track = kind === 'brain' || kind === 'strip' || kind === 'vessel' ? 'brain' : 'body';
+      const [id, kind, tier, frac, name = '', limb = ''] = r, track = kind === 'brain' || kind === 'strip' || kind === 'vessel' ? 'brain' : 'body';
       if (!Number.isInteger(tier) || !ASSEMBLY_TIERS[track] || tier < 0 || tier >= ASSEMBLY_TIERS[track].length) continue;
-      out.set(`${packet}/meshes/${id}.obj`, Object.freeze({ id, kind, name: String(name), groups: [], layer: 'unclassified', track, tier, frac: Number(frac) }));
+      const chain = limb && chains ? chains[String(limb).replace('*', '')] || null : null;
+      out.set(`${packet}/meshes/${id}.obj`, Object.freeze({ id, kind, name: String(name), groups: [], layer: 'unclassified', track, tier, frac: Number(frac), ...(chain ? { limb: String(limb), chain } : {}) }));
     }
   }
   return out;
@@ -284,7 +291,10 @@ export function startAssembly({ host, win = globalThis.window, doc = globalThis.
   /** Where a file goes: from the table by its key, else from a manifest by its id, else null (placed by its vertices). */
   const placeOf = (key, url) => {
     const id = idOfUrl(url), known = table.get(key) || (id ? kinds.get(id) : null);
-    return { kind: known ? known.kind : assemblyKindOfUrl(url), place: known ? { id: known.id || id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer } : null };
+    // (limb and chain: a part of a limb is drawn as long as the game draws it, ns-assembly-core assemblyShapedPositions;
+    // 21 November 2026, review B5: they were left out here, so the picture never made a limb longer)
+    return { kind: known ? known.kind : assemblyKindOfUrl(url), place: known ? { id: known.id || id, track: known.track, tier: known.tier, frac: known.frac, name: known.name, groups: known.groups, layer: known.layer,
+      ...(known.limb && known.chain ? { limb: known.limb, chain: known.chain } : {}) } : null };
   };
   /** Hand one mesh (positions and triangles; copies are made here) to the picture; batch: collect instead of posting. */
   const handMesh = (url, mesh, batch = null) => {

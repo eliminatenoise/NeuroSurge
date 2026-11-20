@@ -5,6 +5,17 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createHandler, HOST } from '../serve-local.mjs';
+import { LIMB_KEYS } from '../scene/src/ns-app.mjs';
+
+// 20 November 2026: the view and a newly chosen limb, restated for the current rule (ns-app LIMB_KEYS.view and
+// keepInFrameTurn; DESIGN-DECISIONS section 144). Written on 19 November for the earlier rule, under which key 4 turned
+// the view to the right arm. The owner withdrew that the same evening: "Perhaps the problem with the zoom in, zoom out
+// fixes we look up and down is the 3/4 height rule. Disregard that rule." Now, after a limb is chosen, its wrist or
+// ankle is inside the picture's band (`band` of the half width, `bandUp` of the half height), and the view turns only
+// if it was outside: at the start look the right hand is inside, so 4 there leaves the view where it is.
+const { band: limbBand, bandUp: limbBandUp } = LIMB_KEYS.view;
+const BAND_SLACK = 0.03; // the turn stops within doneDeg (0.4 degrees) of the band's edge: about 0.014 of the half height
+const inLimbBand = (end, slack = 0) => Boolean(end) && Math.abs(end.x) <= limbBand + slack && Math.abs(2 * end.up - 1) <= limbBandUp + slack;
 
 const { chromium } = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -51,6 +62,8 @@ try {
       frames: s.frames, healthy: s.phase === 'running' && s.features.bodyRig && !s.placeholder && !s.qa,
       reduced: motion, camera: s.camera.pose, reach: s.state.reach.depth,
       leftEnd: s.limbs.ends.leftArm.end,
+      // each wrist in the picture (x: -1 .. 1 across, up: 0 .. 1 from the bottom) and the view's turn to a limb
+      leftInPicture: s.limbs.ends.leftArm.inPicture, rightInPicture: s.limbs.ends.rightArm.inPicture, turning: s.limbs.turning,
       right: joints.map(joint => s.bodyJointTargets[joint]), key: s.controls.keys.KeyW,
       renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null
     };
@@ -119,22 +132,45 @@ try {
   const leftAtStart = await moveLeftArm(start);
   await resetBody();
 
+  const beforeRight = await inspect();
+  const rightWasInBand = inLimbBand(beforeRight.rightInPicture);
   await page.keyboard.press('4');
-  await page.waitForFunction(pose => {
-    const camera = window.__nsQA.inspect().camera.pose;
-    return camera.yaw < pose.yaw - 0.25 && camera.pitch < pose.pitch - 0.14;
-  }, start.camera, poll);
+  await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'rightArm', null, poll);
+  if (!rightWasInBand) {
+    await page.waitForFunction(pose => {
+      const camera = window.__nsQA.inspect().camera.pose;
+      return Math.hypot(camera.yaw - pose.yaw, camera.pitch - pose.pitch) > 0.03;
+    }, beforeRight.camera, poll);
+  }
+  await page.waitForTimeout(950); // one framing turn takes at most 900 ms
+  await page.waitForFunction(() => !window.__nsQA.inspect().limbs.turning, null, poll);
   assert.match(await choice.innerText(), /^4\s*Right arm$/);
   const right = await inspect();
+  if (rightWasInBand) {
+    assert.deepEqual([right.camera.yaw, right.camera.pitch], [beforeRight.camera.yaw, beforeRight.camera.pitch],
+      'the right hand was inside the picture\'s band, so 4 leaves the view where it was');
+  }
+  assert.ok(inLimbBand(right.rightInPicture, BAND_SLACK), `the right hand is inside the picture's band: ${JSON.stringify(right.rightInPicture)}`);
   const rightMoved = await moveRightArm(right);
 
-  // Rechoose the right arm after a manual look away, then reset during the turn.
+  // Choose the right arm again after a manual look away, then reset during the turn. (20 November 2026: the look carries
+  // the chosen limb, its hand keeping its place in the picture, so with the right arm chosen during the look away its
+  // hand stays in the band and choosing it again turns nothing. The left arm is chosen for the look away instead, and
+  // the look goes higher than the 70 px of 19 November, which left the right hand only just under the band; the right
+  // hand is now well out of it, and 4 starts a real turn.)
+  await page.keyboard.press('1');
+  await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'leftArm', null, poll);
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, poll);
-  await page.mouse.move(viewport.width / 2 + 90, viewport.height / 2 - 70);
+  await page.mouse.move(viewport.width / 2 + 90, viewport.height / 2 - 130);
   await page.waitForFunction(yaw => Math.abs(window.__nsQA.inspect().camera.pose.yaw - yaw) > 0.15, right.camera.yaw, poll);
+  await advance((await inspect()).frames);
+  const lookedAway = await inspect();
+  assert.ok(!inLimbBand(lookedAway.rightInPicture), `the look away leaves the right hand outside the band: ${JSON.stringify(lookedAway.rightInPicture)}`);
   await page.keyboard.press('4');
   await advance((await inspect()).frames, 1);
+  const turning = await inspect();
+  if (reducedMotion !== 'reduce') assert.equal(turning.turning, true, 'the view is turning to the right hand when the body is reset');
   await resetBody();
   const reset = await inspect();
   assert.equal(reset.healthy && reset.camera.firstPerson, true);
@@ -146,7 +182,12 @@ try {
   assert.deepEqual(reset.leftEnd, start.leftEnd);
   const leftAfterReset = await moveLeftArm(reset);
   assert.equal(leftAfterReset.camera.firstPerson, true);
-  assert.notDeepEqual([leftAfterReset.camera.yaw, leftAfterReset.camera.pitch], [reset.camera.yaw, reset.camera.pitch]);
+  // 20 November 2026: restated for the current rule (above). Under the rule of 19 November afternoon the view followed
+  // the wrist to hold it three quarters of the way up the picture, so S and W turned it. Now the view follows a keyed
+  // hand only when it would leave the picture's band; the short S and W here keep the left wrist inside it, so the view
+  // stays where Reset body put it.
+  assert.ok(inLimbBand(leftAfterReset.leftInPicture, BAND_SLACK), `the left wrist is inside the picture's band: ${JSON.stringify(leftAfterReset.leftInPicture)}`);
+  assert.deepEqual([leftAfterReset.camera.yaw, leftAfterReset.camera.pitch], [reset.camera.yaw, reset.camera.pitch]);
 
   if (raw) {
     assert.ok(assets.refusedPackIndexes > 0 && assets.rawMeshes > 0);
@@ -158,7 +199,7 @@ try {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({
     chromium: browser.version(), raw, reducedMotion, assets, errors,
-    start, leftAtStart, right, rightMoved, reset, leftAfterReset
+    start, leftAtStart, right, rightMoved, lookedAway, turning, reset, leftAfterReset
   }));
 } finally {
   if (browser) await browser.close();

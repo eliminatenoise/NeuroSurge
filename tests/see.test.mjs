@@ -4,7 +4,7 @@
  * still takes what the player aims at, and that the new ghosts take nothing from it. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SEE, SEE_LIMBS, SEE_THINGS, seeLimbOfGroup, seeLimbKey, seeThingOfGroup, seeBodyOfThing, seeAreaCode, seeShows, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeLockedAway, seeFillTargets, seeGlassColours, SEE_JOIN_MASKS } from '../scene/src/ns-see.mjs';
+import { SEE, SEE_LIMBS, SEE_THINGS, seeLimbOfGroup, seeLimbKey, seeThingOfGroup, seeBodyOfThing, seeAreaCode, seeShows, seeGhostEligible, seeHiddenEntry, seeTakesGhost, seeDrawnEntry, seeLockedAway, seeFillTargets, seeGlassColours, SEE_JOIN_MASKS } from '../scene/src/ns-see.mjs';
 import { OUTLINE_GROUPS as G, OUTLINE_MIRROR_OFFSET as M, OUTLINE_ADJACENT } from '../scene/src/ns-outline.mjs';
 import { controlTargets } from '../scene/src/ns-app.mjs';
 
@@ -155,6 +155,72 @@ test('the crosshair takes a ghost only when its limb is locked away (drawn fille
   assert.equal(seeTakesGhost(lockedOf(5), hand), false, 'the mirror body\'s left arm is another code');
   assert.equal(seeTakesGhost(null, hand), false);
   assert.equal(seeTakesGhost(lockedOf(1), null), false);
+});
+
+// 20 November 2026 (code review): the crosshair took a locked-away limb at a pixel where the graphics card draws another
+// thing's ghost (only the nearest hidden thing is drawn per pixel). seeDrawnEntry is that rule on the ray.
+test('the ghost drawn on a ray: the nearest thing behind the front that the drawing rule shows (as the graphics card)', () => {
+  const B = SEE_THINGS;
+  // legs crossed: the left shank in front of the pelvis, the right thigh behind both: the pelvis is drawn there
+  const shank = own(G.lShank, 0.60, 'left shank'), pelvis = own(G.trunk, 0.66, 'pelvis'), thigh = own(G.rThigh, 0.75, 'right thigh');
+  assert.equal(seeDrawnEntry([shank, pelvis, thigh]), pelvis);
+  assert.equal(seeDrawnEntry([shank, pelvis, thigh], SEE, { trunk: false, across: true, brain: true }), thigh, 'with the trunk rule off the pelvis is passed and the thigh drawn');
+  // a joined root is passed (the arm under the body: thigh, pelvis joined to it, forearm)
+  const fore = own(G.lFore, 0.9);
+  assert.equal(seeDrawnEntry([own(G.rThigh, 0.7), own(G.trunk, 0.8), fore]), fore);
+  // the same thing again is passed, a touching part (within the gap) too
+  const hand = own(G.lHand, 0.85);
+  assert.equal(seeDrawnEntry([own(G.rFore, 0.8), own(G.rFore, 0.82), hand]), hand);
+  assert.equal(seeDrawnEntry([own(G.rFore, 0.8), own(G.lHand, 0.805)]), null);
+  // across the bodies: the mirror body between your forearm and your hidden hand is what is drawn
+  const mtrunk = mir(G.trunk + M, 0.83);
+  assert.equal(seeDrawnEntry([own(G.rFore, 0.8), mtrunk, hand]), mtrunk);
+  // the brain behind a body part, before a hidden limb further back: the brain is drawn
+  const g6 = glass(0.83);
+  assert.equal(seeDrawnEntry([own(G.rFore, 0.8), g6, hand]), g6);
+  assert.equal(seeDrawnEntry([own(G.rFore, 0.8), g6, hand], SEE, { trunk: true, across: true, brain: false }), hand, 'with the brain rule off the brain is not in the pass');
+  // the brain in front: the ghost is the body part nearest behind it (past the gap)
+  const mt = mir(G.trunk + M, 1.6), mf = mir(G.lFore + M, 1.75);
+  assert.equal(seeDrawnEntry([glass(1.0), mt, mf]), mt);
+  assert.equal(seeDrawnEntry([glass(1.0), mir(G.trunk + M, 1.005), mf]), mf, 'a part touching the glass is within the gap');
+  // an eyeball behind the brain's surface; nothing for the brain's 'outline' entry (no surface)
+  const eye = { item: 'brain', kind: 'glass', distance: 1.3, point: [0, 0, 0], regionId: null, part: 'eyeball' };
+  assert.equal(seeDrawnEntry([glass(1.0), eye]), eye);
+  assert.equal(seeDrawnEntry([{ item: 'brain', kind: 'outline', distance: 0.5, point: [0, 0, 0], regionId: null }, shank, pelvis]), pelvis);
+  assert.equal(seeShows({ thing: B.brain }, { thing: B.eyes }), true);
+  assert.equal(seeDrawnEntry([]), null);
+  assert.equal(seeDrawnEntry(null), null);
+});
+
+test('the crosshair takes a locked-away ghost only where it is the ghost drawn there', () => {
+  const legs = lockedOf(4);
+  const shank = own(G.lShank, 0.60, 'left shank'), pelvis = own(G.trunk, 0.66, 'pelvis'), thigh = own(G.rThigh, 0.75, 'right thigh');
+  const L = [shank, pelvis, thigh];
+  assert.equal(seeHiddenEntry(L), thigh, 'the right thigh is still the hidden limb on the ray (Shift reaches it)');
+  assert.equal(seeTakesGhost(legs, thigh, L), false, 'the pelvis is drawn there, not the thigh');
+  assert.equal(seeTakesGhost(legs, thigh), true, 'without the ray: as before');
+  const t = controlTargets(L, { ghost: legs });
+  assert.equal(t.front, shank, 'the crosshair takes the shank seen there');
+  assert.equal(t.ghost, null);
+  assert.equal(t.behind, thigh, 'Shift reaches the locked-away thigh');
+  // the right forearm over the belly, the left arm under the body and locked away
+  const u = controlTargets([own(G.rFore, 0.5, 'right forearm'), own(G.trunk, 0.58, 'belly'), own(G.lFore, 0.7, 'left forearm')], { ghost: lockedOf(1) });
+  assert.equal(u.front.rec.name, 'right forearm');
+  assert.equal(u.ghost, null);
+  // the mirror body behind the brain (every mirror limb locked away): where its forearm hangs behind its trunk, the
+  // trunk's ghost is drawn, and the crosshair takes the trunk; Shift reaches the forearm
+  const mt = mir(G.trunk + M, 1.6), mf = mir(G.lFore + M, 1.75);
+  const v = controlTargets([glass(1.0), mt, mf], { ghost: lockedOf(5, 6, 7, 8) });
+  assert.equal(v.front, mt);
+  assert.equal(v.ghost, null);
+  assert.equal(v.behind, mf);
+  // where the hidden limb's ghost IS drawn, the crosshair still takes it
+  const fore = own(G.rFore, 0.8, 'right forearm'), hand = own(G.lHand, 0.86, 'left hand');
+  const w = controlTargets([fore, hand, glass(6)], { ghost: lockedOf(1) });
+  assert.equal(w.front, hand);
+  assert.equal(w.ghost, hand);
+  const x = controlTargets([own(G.rThigh, 0.7), own(G.trunk, 0.8), own(G.lFore, 0.9, 'left forearm')], { ghost: lockedOf(1) });
+  assert.equal(x.ghost && x.ghost.rec.name, 'left forearm', 'through a joined root, as before');
 });
 
 test('a limb is locked away while it is hidden and hardly seen anywhere, with no flicker near the threshold', () => {

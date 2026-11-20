@@ -5,6 +5,17 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHandler, HOST } from '../serve-local.mjs';
+import { LIMB_KEYS } from '../scene/src/ns-app.mjs';
+
+// 20 November 2026: the view and a newly chosen limb, restated for the current rule (ns-app LIMB_KEYS.view and
+// keepInFrameTurn; DESIGN-DECISIONS section 144). Written on 19 November for the earlier rule, under which tapping a limb
+// turned the view to it. The owner withdrew that the same evening: "Perhaps the problem with the zoom in, zoom out
+// fixes we look up and down is the 3/4 height rule. Disregard that rule." Now, after a limb is chosen, its wrist or
+// ankle is inside the picture's band (`band` of the half width, `bandUp` of the half height), and the view turns only
+// if it was outside.
+const { band: limbBand, bandUp: limbBandUp } = LIMB_KEYS.view;
+const BAND_SLACK = 0.03; // the turn stops within doneDeg (0.4 degrees) of the band's edge: about 0.014 of the half height
+const inLimbBand = (end, slack = 0) => Boolean(end) && Math.abs(end.x) <= limbBand + slack && Math.abs(2 * end.up - 1) <= limbBandUp + slack;
 
 const { chromium } = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -51,6 +62,8 @@ try {
       healthy: s.phase === 'running' && s.features.bodyRig && !s.qa && !s.placeholder,
       shell: s.shell.mode,
       look: [s.camera.pose.yaw, s.camera.pose.pitch],
+      // the right wrist in the picture (x: -1 .. 1 across, up: 0 .. 1 from the bottom) and the view's turn to a limb
+      rightInPicture: s.limbs.ends.rightArm.inPicture, turning: s.limbs.turning,
       focus: document.activeElement.id || document.activeElement.getAttribute('aria-label'),
       locked: document.pointerLockElement?.id ?? null,
       space: Boolean(s.controls.keys.Space),
@@ -93,13 +106,20 @@ try {
   assert.equal(initial.healthy && initial.coarse, true);
   assert.equal(initial.locked, null);
 
+  const rightWasInBand = inLimbBand(initial.rightInPicture);
   await limb('Right arm').tap();
   await waitChoice('Right arm');
-  await page.waitForFunction(([yaw, pitch]) => {
-    const camera = window.__nsQA.inspect().camera.pose;
-    return Math.abs(camera.yaw - yaw) > 0.15 && Math.abs(camera.pitch - pitch) > 0.14;
-  }, initial.look);
+  if (!rightWasInBand) {
+    await page.waitForFunction(([yaw, pitch]) => {
+      const camera = window.__nsQA.inspect().camera.pose;
+      return Math.hypot(camera.yaw - yaw, camera.pitch - pitch) > 0.03;
+    }, initial.look);
+  }
+  await page.waitForTimeout(950); // one framing turn takes at most 900 ms
+  await page.waitForFunction(() => !window.__nsQA.inspect().limbs.turning);
   const touched = await read();
+  if (rightWasInBand) assert.deepEqual(touched.look, initial.look, 'the right hand was inside the picture\'s band, so the tap leaves the view where it was');
+  assert.ok(inLimbBand(touched.rightInPicture, BAND_SLACK), `the right hand is inside the picture's band: ${JSON.stringify(touched.rightInPicture)}`);
   assert.equal(touched.locked, null, 'the limb tap does not go through to pointer lock');
   assert.equal(touched.focus, 'ns-canvas');
   await screenshot('portrait');

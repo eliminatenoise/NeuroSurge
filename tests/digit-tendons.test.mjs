@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { DIGIT_TENDONS, digitTendonKind, digitTendonWeights } = await import(path.join(repo, 'scene/src/ns-scene-three.mjs'));
+const { DIGIT_TENDONS, DIGIT_TENDONS_DRAWN, digitTendonKind, digitTendonWeights } = await import(path.join(repo, 'scene/src/ns-scene-three.mjs'));
+const { REFERENCE_JOINTS } = await import(path.join(repo, 'scene/src/ns-body.mjs'));
 const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
 const { inputs, rig } = await loadBody(repo);
 const nameOf = e => e.embedded_source_name || e.name || e.requested_structure || '';
@@ -27,9 +28,18 @@ test('the names: the long finger and toe muscles, the short toe muscles and the 
 });
 
 test('the rule\'s places agree with the body rig\'s joints', () => {
-  assert.ok(Math.abs(rig.pivots.r_wrist.point[2] - 800) < 5 && DIGIT_TENDONS.arm.fullZ > 800 && DIGIT_TENDONS.arm.noneZ > DIGIT_TENDONS.arm.fullZ);
-  assert.ok(DIGIT_TENDONS.leg.fullZ > rig.pivots.r_ankle.point[2] && DIGIT_TENDONS.leg.noneZ > DIGIT_TENDONS.leg.fullZ);
-  assert.ok(Math.abs(rig.pivots.r_mtp.point[1] - (-165)) < 5 && DIGIT_TENDONS.foot.fullY < DIGIT_TENDONS.foot.noneY);
+  // the rule's own numbers are the source atlas's (its wrist at z 800, its toes' joints at y -165) ...
+  const J = REFERENCE_JOINTS;
+  assert.ok(Math.abs(J.r_wrist.point[2] - 800) < 5 && DIGIT_TENDONS.arm.fullZ > 800 && DIGIT_TENDONS.arm.noneZ > DIGIT_TENDONS.arm.fullZ);
+  assert.ok(DIGIT_TENDONS.leg.fullZ > J.r_ankle.point[2] && DIGIT_TENDONS.leg.noneZ > DIGIT_TENDONS.leg.fullZ);
+  assert.ok(Math.abs(J.r_mtp.point[1] - (-165)) < 5 && DIGIT_TENDONS.foot.fullY < DIGIT_TENDONS.foot.noneY);
+  // ... and since 20 November 2026 (the owner: "Let's make the limbs longer"; ns-body-shape) the body is drawn with longer
+  // limbs, so the game uses the same places moved with the limbs (DIGIT_TENDONS_DRAWN): just above the drawn wrist and
+  // ankle, across the drawn ball of the foot
+  const D = DIGIT_TENDONS_DRAWN, w = rig.pivots.r_wrist.point[2], a = rig.pivots.r_ankle.point[2], m = rig.pivots.r_mtp.point[1];
+  assert.ok(D.arm.fullZ > w && D.arm.fullZ < w + 25 && D.arm.noneZ > D.arm.fullZ, `arm ${D.arm.fullZ} over the wrist at ${w}`);
+  assert.ok(D.leg.fullZ > a && D.leg.noneZ > D.leg.fullZ, `leg ${D.leg.fullZ} over the ankle at ${a}`);
+  assert.ok(D.foot.fullY < m && m < D.foot.noneY, `foot ${D.foot.fullY} .. ${D.foot.noneY} across the toes' joints at ${m}`);
 });
 
 for (const [re, kind] of [[/^Right flexor digitorum profundus$/, 'arm'], [/^Right extensor digitorum longus$/, 'leg'], [/^Right flexor digitorum brevis$/, 'foot']]) {

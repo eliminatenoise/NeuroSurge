@@ -117,6 +117,23 @@ test('a pack\'s meshes are drawn as it arrives (one message, copies), placed by 
   a.finish({ immediate: true });
 });
 
+test('a part of a limb reaches the picture with its limb and chain, and is drawn as long as the game draws it (review B5)', async () => {
+  const { assemblyShapedPositions } = await import('../scene/src/ns-assembly-core.mjs');
+  const f = fixture();
+  const a = startAssembly({ host: f.host, doc: f.doc, win: f.win });
+  const w = f.workers[0], key = 'pov-demo-assets/meshes/FJ1467M.obj', t = TABLE.get(key);
+  assert.ok(t && t.limb === 'l_arm' && Array.isArray(t.chain), 'the table gives the left arm its limb and chain');
+  const base = w.messages.length;
+  a.notePack([{ key, mesh: mesh() }]);
+  const place = w.messages.slice(base).find(m => m.type === 'meshes').list[0].place;
+  assert.equal(place.limb, 'l_arm');
+  assert.deepEqual(place.chain, t.chain);
+  // the left wrist (the chain's third point) comes down with the longer arm in the picture
+  const wrist = Float32Array.from(t.chain[2]), moved = assemblyShapedPositions(wrist, place);
+  assert.ok(wrist[2] - moved[2] > 60, `the wrist came down ${(wrist[2] - moved[2]).toFixed(0)} mm`);
+  a.finish({ immediate: true });
+});
+
 test('under reduced motion the packs count on the still bar once each, and nothing is drawn', () => {
   const f = fixture({ reducedMotion: true });
   const a = startAssembly({ host: f.host, doc: f.doc, win: f.win });

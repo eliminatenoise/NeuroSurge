@@ -220,17 +220,20 @@ export const BRAND = deepFreeze({
  * instead of Reset brain view also turning the mirror body back). */
 const part = (text, need = null) => ({ text, need });
 const STEP_TABLE = [
+  // 20 November 2026: a look turns the head and neck and then the eyes; it no longer turns the chest or bends the trunk
+  // (ns-app LOOK_BENDS_TRUNK false since 19 November, headPoseForLook). The words had kept the older rule.
   { head: 'Look around.', parts: [part('You see through the eyes of a body that lies back in one place, as on a sofa. It has no skin, just ' +
-    'bones and muscles. Move the mouse or trackpad to turn its head and look around: the eyes always look straight ahead, ' +
-    'so the head and neck turn, and past their reach the chest turns and the trunk bends.')],
+    'bones and muscles. Move the mouse or trackpad to turn its head and look around: the head and neck turn, and past ' +
+    'their reach the eyes turn further.')],
   intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
   // 19 November 2026 (the view holds the chosen limb, ns-app LIMB_KEYS.view; the head stays "Your left arm." because
   // that is the limb the game starts on)
   { head: 'Your left arm.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
     'your left arm, left leg, right leg or right arm (or double click to step to the next one; you can also click or tap ' +
     'its name at the bottom of the game while the pointer is free). The limb lights up. ' +
-    'The chosen limb goes with your view: its wrist or ankle keeps its place in the picture, so looking up raises the ' +
-    'arm at the shoulder or the leg at the hip, and looking down lowers it, as far as the joints go. W reaches its ' +
+    // (20 November 2026: in the eye view only; from behind, E, the look carries no limb: ns-app holdCarries)
+    'In the eye view the chosen limb goes with your view: its wrist or ankle keeps its place in the picture, so looking ' +
+    'up raises the arm at the shoulder or the leg at the hip, and looking down lowers it, as far as the joints go. W reaches its ' +
     'hand or foot straight out from the shoulder or hip and S draws it straight back in. A and D swing the whole limb ' +
     'to your left or right without changing its bend. Your view turns only when the hand or foot would leave the picture.'),
     // R558 (Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
@@ -254,7 +257,7 @@ const STEP_TABLE = [
       'So the areas on your left, in the brain’s right half, move your left arm and leg, and the areas on your right ' +
       'move your right arm and leg.'),
     // R5-text (D17): the brain-to-muscle glow, with its honesty in brackets (the Esc limits say it in full).
-    part('For a moment a soft line in the same colour joins a newly switched-on area to its muscles (a picture, not a ' +
+    part('A cone of light in the same colour joins a switched-on area to the muscles it moves (a picture, not a ' +
       'nerve).', 'glow')],
   intro: [part('The coloured band across the brain is the motor strip (a simplified map). The brain faces you (its eyeballs ' +
     'are at the bottom), so its right half is on your left. Each half of the brain mainly moves the opposite side of your ' +
@@ -341,7 +344,9 @@ const STEP_TABLE = [
   intro: [part('The mirror body copies you, like a real mirror. Click its muscles. Hold Space on it to carry it, or drag it round.')] }
 ];
 const CONTROL_TABLE = [
-  ['Mouse / trackpad', 'turn your head and neck to look around (past their reach your chest turns and your trunk bends; your left hand stays in view)'],
+  // 20 November 2026: the eyes take a look past the head's reach; the trunk no longer bends with it (LOOK_BENDS_TRUNK).
+  // The chosen limb's hand or foot keeping its place is the Look row's.
+  ['Mouse / trackpad', 'turn your head and neck to look around (past their reach your eyes turn further)'],
   ['A / D', 'move the chosen limb\'s hand or foot left/right (the left arm at the start; keys 1 to 4 choose); while Space holds something, move that instead'],
   ['W / S', 'W moves the chosen limb\'s hand or foot forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
@@ -357,7 +362,8 @@ const CONTROL_TABLE = [
   // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
   ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice and the whole limb lights up. Your view turns only if its hand or foot is outside the picture.'],
   ['Double click', 'steps the choice on to the next limb: 1, 2, 3, 4, then back 3, 2, 1. Keep the second click held and it goes on stepping slowly. The second click presses nothing else.'],
-  ['Look', 'the chosen limb goes with your view: its wrist or ankle keeps its place in the picture. Look up and the arm rises at the shoulder or the leg at the hip; look down and it lowers; look to a side and it swings that way. Where its joints end it waits for your view to come back.'],
+  // (20 November 2026: in the eye view only; from behind, E, the look carries no limb: ns-app holdCarries)
+  ['Look', 'in the eye view the chosen limb goes with your view: its wrist or ankle keeps its place in the picture. Look up and the arm rises at the shoulder or the leg at the hip; look down and it lowers; look to a side and it swings that way. Where its joints end it waits for your view to come back.'],
   // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
@@ -368,7 +374,9 @@ const CONTROL_TABLE = [
   // R5-text (D16): no "curved" (the user's R20).
   ['Orbit arrows', 'click an arrow tip by the brain to turn the brain a little about its own centre. Hold it to keep turning. The arrows stay in place.'],
   ['Mirror body arrows', 'the green arrow tips round the mirror body: the side ones turn it round; the top and bottom ones tilt it, so you see it from above or below. Click for a small step, hold to keep going.', 'mirror'],
-  ['E', 'see your body from behind your right shoulder (third person). Press E again to go back to your own eyes. Let go of what Space holds first.', 'thirdPerson'],
+  // 20 November 2026: the outside camera has stood straight behind your head since 19 November (ns-camera
+  // THIRD_PERSON.followYawDeg 0), and E lets go of a held thing by itself (ns-app viewAfterRelease).
+  ['E', 'see your body from straight behind your head (third person). Press E again to go back to your own eyes. E lets go of anything Space holds.', 'thirdPerson'],
   // R558 (Message 48): R ("read information") replaces the I key. It steps the information: the side cards (the start),
   // then More detail and the colour key as well, then everything hidden, then the side cards again.
   ['R', 'read information: one short card is on at the start. Press R for the full cards and the colour key, R again to hide all of it, R again to bring the short card back.'],
@@ -501,9 +509,11 @@ export const SHELL = deepFreeze({
       ['3 / 4', 'choose right leg / right arm'],
       ['Click limb', 'choose it'],
       ['W S', 'move it forward or back'], ['A D', 'move it left or right']],
-      // 19 November 2026 (ns-app LIMB_KEYS.view: the view holds the chosen limb)
-      note: 'Double click steps to the next limb. The chosen limb goes with your view: look up to raise it, down to ' +
-        'lower it. W and S move its hand or foot straight out and back in; A and D swing the limb left and right.' },
+      // 19 November 2026 (ns-app LIMB_KEYS.view: the view holds the chosen limb). 20 November 2026: "In the eye view"
+      // is back (it went with the withdrawn turn to a chosen limb, Body update 50); from behind, E, the look carries no
+      // limb (ns-app holdCarries).
+      note: 'Double click steps to the next limb. In the eye view the chosen limb goes with your view: look up to raise ' +
+        'it, down to lower it. W and S move its hand or foot straight out and back in; A and D swing the limb left and right.' },
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hold to grasp, tap to toggle'],
       ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
       ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },
@@ -1311,7 +1321,7 @@ export function muscleTapBoneLine(name, where) { return `That is a bone (${name}
  * armNote match ns-camera VIEW_TEXT, so ns-camera can take them over one to one. */
 export const VIEW = deepFreeze({
   key: 'E',
-  controlsRow: ['E', 'see your body from behind your right shoulder (third person). Press E again to go back to your own eyes. Let go of what Space holds first.'],
+  controlsRow: ['E', 'see your body from straight behind your head (third person). Press E again to go back to your own eyes. E lets go of anything Space holds.'],
   thirdPersonBadge: HUD.thirdPerson,
   firstPersonNotice: HUD.firstPerson,
   // R558 (ns-camera THIRD_PERSON.followHead): the mouse turns the head in both views; only the camera moves.

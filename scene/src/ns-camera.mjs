@@ -228,6 +228,63 @@ function eyeFlatLens(offset, g, o) {
 /** How far back (m) the camera stands (eyeDolly's backM). */
 export function eyeDollyBackM(look, o = EYE_DOLLY) { return eyeDolly(look, o).backM; }
 
+/* 20 November 2026, afternoon (a hunt: with the right arm chosen, a look up carries the hand up beside and behind the
+ * head, and a turn of the look to the other side then swings the camera, which stands EYE_DOLLY's half metre behind
+ * and above the eye, round into that arm: the picture filled with the arm's inside, its muscles cut open by the near
+ * plane). EYE_CLEAR: the eye view's camera keeps clear of your own limbs, given to it as rods (a segment with a
+ * radius: shoulder to elbow, elbow to hand; hip to knee, knee to ankle). Where the camera's place comes within clearM of
+ * a rod, it is moved ACROSS the line of sight, never along it: nothing in the picture grows or shrinks, and a look up or
+ * down does not change the camera's distance (the owner: no zoom when the look moves up and down). It goes straight
+ * away from the rod's nearest point (taken across the line of sight), so an arm that comes nearer pushes the camera
+ * along before it, starting from nothing at clearM, and a camera place that goes past or through an arm is taken
+ * round it: nothing jumps. ns-app eases the move as well. mostM caps it. Display choices. */
+export const EYE_CLEAR = Object.freeze({ on: true, clearM: 0.07, mostM: 0.3, passes: 2 });
+/** EYE_CLEAR: the camera place P (world m) kept clear of `rods` ([{ a, b, r }]: segment ends and radius, world m), for
+ * the eye E and the unit line of sight g. Returns P itself when nothing is near. Pure. */
+export function eyeClearOfRods(P, E, g, rods, o = EYE_CLEAR) {
+  if (!o || !o.on || !Array.isArray(rods) || !rods.length) return P;
+  const cross = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const across = v => { const k = dot(v, g); return [v[0] - g[0] * k, v[1] - g[1] * k, v[2] - g[2] * k]; };
+  let p = P;
+  for (let pass = 0; pass < o.passes; pass++) {
+    let moved = false;
+    for (const rod of rods) {
+      if (!rod || !isVec3(rod.a) || !isVec3(rod.b) || !isNum(rod.r)) continue;
+      const ab = sub(rod.b, rod.a), L2 = dot(ab, ab), c = Math.max(0, rod.r) + o.clearM;
+      if (!(L2 > 1e-12)) continue;
+      const distAt = q => { const t = clamp(dot(sub(q, rod.a), ab) / L2, 0, 1); return len([q[0] - rod.a[0] - ab[0] * t, q[1] - rod.a[1] - ab[1] * t, q[2] - rod.a[2] - ab[2] * t]); };
+      const t = clamp(dot(sub(p, rod.a), ab) / L2, 0, 1), Q = [rod.a[0] + ab[0] * t, rod.a[1] + ab[1] * t, rod.a[2] + ab[2] * t];
+      const d = sub(p, Q), dl = len(d);
+      if (dl >= c) continue;
+      // the way out: straight away from the rod (from its nearest point), taken across the line of sight. That way turns
+      // smoothly round the rod as the camera's place goes past it, so the camera goes round the arm, never through it.
+      // Only very near the rod's middle, or with the camera straight in front of or behind it along the line of sight,
+      // is that way not defined; there the way across the rod and the line of sight, on the eye's side, is blended in.
+      const dx = across(d), dxl = len(dx);
+      const a = [ab[0] / Math.sqrt(L2), ab[1] / Math.sqrt(L2), ab[2] / Math.sqrt(L2)];
+      let m1 = cross(a, g); const m1l = len(m1);
+      if (m1l > 1e-9) { m1 = [m1[0] / m1l, m1[1] / m1l, m1[2] / m1l]; if (dot(m1, sub(E, Q)) < 0) m1 = [-m1[0], -m1[1], -m1[2]]; }
+      else { const te = across(sub(E, Q)), tel = len(te); m1 = tel > 1e-9 ? [te[0] / tel, te[1] / tel, te[2] / tel] : [0, 0, 0]; }
+      const w = clamp(dxl / (0.25 * c), 0, 1), ws = w * w * (3 - 2 * w);
+      let m = dxl > 1e-12 ? [dx[0] / dxl * ws + m1[0] * (1 - ws), dx[1] / dxl * ws + m1[1] * (1 - ws), dx[2] / dxl * ws + m1[2] * (1 - ws)] : m1;
+      const ml = len(m);
+      if (!(ml > 1e-9)) continue;
+      m = [m[0] / ml, m[1] / ml, m[2] / ml];
+      // how far along that way: to where the camera is clearM off the rod (bisection; at most mostM)
+      const at = s => [p[0] + m[0] * s, p[1] + m[1] * s, p[2] + m[2] * s];
+      let lo = 0, hi = o.mostM;
+      if (distAt(at(hi)) < c) lo = hi;
+      else for (let k = 0; k < 18; k++) { const mid = (lo + hi) / 2; if (distAt(at(mid)) < c) lo = mid; else hi = mid; }
+      const step = lo === o.mostM ? lo : hi;
+      if (!(step > 0)) continue;
+      p = at(step); moved = true;
+    }
+    if (!moved) break;
+  }
+  const off = sub(p, P), ol = len(off);
+  return ol > o.mostM ? [P[0] + off[0] * o.mostM / ol, P[1] + off[1] * o.mostM / ol, P[2] + off[2] * o.mostM / ol] : p;
+}
+
 /**
  * Third-person rig (display choices, chosen from viewed screenshots: round5/R5-camera-NOTES.md):
  *  - centreFromEyeMm: the orbit centre, from the eye, in BodyParts3D axes (+y posterior, +z superior): 6 cm back (over
@@ -681,6 +738,30 @@ export function stepCamera(state, dtS, { reducedMotion = false, easeS = THIRD_PE
   return Object.freeze({ ...s, progress: p, arrived, tpLook: arrived && target === 0 ? null : s.tpLook });
 }
 
+/**
+ * 20 November 2026 (hunt 5): how far the followBody camera can go (degrees), and the looks that take it there. In
+ * cameraPose the look is held inside followMinPitchDeg..maxPitchDeg, the boom stands followYawDeg round from it and
+ * followPitchBiasDeg lower, its yaw is held inside followYawMinDeg..followYawMaxDeg and its pitch at most
+ * followMaxPitchDeg, then inside followMinPitchDeg..maxPitchDeg again. Past those looks the camera stood still while the
+ * look ran on unseen (up to the eye view's own +-88 / +-170 degrees): the mouse then did nothing for a while on the way
+ * back, and E opened the eye view on wherever the hidden look had got to (the black room above the brain). The app keeps
+ * the look inside `look` while the view is outside.
+ * Returns { camera: { yawMinDeg, yawMaxDeg, pitchMinDeg, pitchMaxDeg }, look: { ...the same } }, or null for a rig
+ * without followHead and followBody (its pitch range is the controls' own, setPitchLimits).
+ */
+export function followReach(rig = THIRD_PERSON) {
+  const r = { ...THIRD_PERSON, ...(rig || {}) };
+  if (r.followHead !== true || r.followBody !== true) return null;
+  const yawOff = isNum(r.followYawDeg) ? r.followYawDeg : 0, bias = isNum(r.followPitchBiasDeg) ? r.followPitchBiasDeg : 0;
+  const top = Math.min(isNum(r.followMaxPitchDeg) ? r.followMaxPitchDeg : r.maxPitchDeg, r.maxPitchDeg);
+  const camera = { yawMinDeg: isNum(r.followYawMinDeg) ? r.followYawMinDeg : -Infinity, yawMaxDeg: isNum(r.followYawMaxDeg) ? r.followYawMaxDeg : Infinity,
+    pitchMinDeg: Math.min(r.followMinPitchDeg, top), pitchMaxDeg: top };
+  const look = { yawMinDeg: camera.yawMinDeg - yawOff, yawMaxDeg: camera.yawMaxDeg - yawOff,
+    pitchMinDeg: Math.max(r.followMinPitchDeg, camera.pitchMinDeg - bias), pitchMaxDeg: Math.min(r.maxPitchDeg, camera.pitchMaxDeg - bias) };
+  if (look.pitchMinDeg > look.pitchMaxDeg) look.pitchMinDeg = look.pitchMaxDeg = (look.pitchMinDeg + look.pitchMaxDeg) / 2;
+  return Object.freeze({ camera: Object.freeze(camera), look: Object.freeze(look) });
+}
+
 /** Drive B: the controls' look kept inside the current view's limits: third person clamps the pitch (so the mouse has
  * no dead zone at the limit); first person is unchanged (ns-controls' own +/- 80 deg). */
 export function constrainLook(state, look, { minPitchDeg = THIRD_PERSON.minPitchDeg, maxPitchDeg = THIRD_PERSON.maxPitchDeg, followHead = THIRD_PERSON.followHead } = {}) {
@@ -937,7 +1018,9 @@ export function cameraSnapshot(state, pose = null) {
       silentGaze: pose.silentGaze, headInPlace: r6(pose.headInPlace), faceGhost: r6(pose.faceGhost), overBrainSeeThrough: r6(pose.overBrainSeeThrough),
       farExtraM: r6(pose.farExtraM), boom: pose.boom ? { distance: r6(pose.boom.distance), pushed: r6(pose.boom.pushed), blocked: pose.boom.blocked } : null,
       // QA / e2e aiming in third person: aimLook(point, { orbitCentre, yaw }) (the crosshair ray passes this point).
-      orbitCentre: Array.isArray(pose.orbitCentre) ? pose.orbitCentre.map(r6) : null
+      orbitCentre: Array.isArray(pose.orbitCentre) ? pose.orbitCentre.map(r6) : null,
+      // (20 November 2026: EYE_CLEAR) the eye, and how far the camera was moved off your own limbs (m)
+      eye: Array.isArray(pose.armParentPosition) ? pose.armParentPosition.map(r6) : null, eyeClearM: isNum(pose.eyeClearM) ? pose.eyeClearM : 0
     } : null
   };
 }

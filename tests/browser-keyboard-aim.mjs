@@ -7,6 +7,18 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createHandler, HOST } from '../serve-local.mjs';
+import { LIMB_KEYS } from '../scene/src/ns-app.mjs';
+
+// 20 November 2026: the view and a newly chosen limb, restated for the current rule (ns-app LIMB_KEYS.view and
+// keepInFrameTurn; DESIGN-DECISIONS section 144). This test was written on 19 November for the earlier rule, under which
+// choosing a limb turned the view to it and brought its wrist or ankle to the middle of the picture. The owner withdrew
+// that the same evening: "Perhaps the problem with the zoom in, zoom out fixes we look up and down is the 3/4 height
+// rule. Disregard that rule." Now, after a limb is chosen, its wrist or ankle (its frame point) is inside the picture's
+// band, `band` of the half width and `bandUp` of the half height, and the view turns only if it was outside: at the
+// start look all four are inside, so choosing a limb there turns nothing.
+const { band: limbBand, bandUp: limbBandUp } = LIMB_KEYS.view;
+const BAND_SLACK = 0.03; // the turn stops within doneDeg (0.4 degrees) of the band's edge: about 0.014 of the half height
+const inLimbBand = (end, slack = 0) => Boolean(end) && Math.abs(end.x) <= limbBand + slack && Math.abs(2 * end.up - 1) <= limbBandUp + slack;
 
 const { chromium } = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -66,6 +78,8 @@ try {
       mirrorHover: compasses.mirror.hovered,
       overlapTip: mirrorForward.retainedDraw, overlapClick: mirrorForward.clickPx,
       clearTip: brainForward,
+      // each limb's wrist or ankle in the picture (x: -1 .. 1 across, up: 0 .. 1 from the bottom) and the view's turn
+      limbs: { turning: s.limbs.turning, ends: Object.fromEntries(Object.entries(s.limbs.ends).map(([limb, e]) => [limb, e && e.inPicture])) },
       renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null,
     };
   });
@@ -239,34 +253,81 @@ try {
     assert.equal(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), reduced);
     await selected('1', 'Left arm').waitFor();
     const framed = [];
+    // One choice; `before` was read just before the key. With the pointer free, the pointer is then put on the limb's
+    // own wrist or ankle and must find that limb (20 November 2026: it was put at the middle of the picture, 0.6 of the
+    // way up, where the earlier rule's turn brought the end).
+    async function chooseAndFrame(key, name, limb, before, pointerFree) {
+      const wasInBand = inLimbBand(before.limbs.ends[limb]);
+      await page.keyboard.press(key);
+      await selected(key, name).waitFor({ timeout: 5_000 });
+      let early = null;
+      if (!wasInBand) {
+        await page.waitForFunction(look => {
+          const c = window.__nsQA.inspect().controls;
+          return Math.hypot(c.yaw - look.yaw, c.pitch - look.pitch) > 0.03;
+        }, before.look, { polling: 20 });
+        early = await inspect();
+      }
+      await page.waitForTimeout(950); // One framing turn takes at most 900 ms.
+      // (20 November 2026: the turn now ends when the end is within doneDeg of the band, or after LIMB_KEYS.view.maxS)
+      await page.waitForFunction(() => !window.__nsQA.inspect().limbs.turning, null, { polling: 20, timeout: 5_000 });
+      let settled = await nextFrames((await inspect()).frames);
+      const end = settled.limbs.ends[limb];
+      if (wasInBand) {
+        assert.deepEqual([settled.look.yaw, settled.look.pitch], [before.look.yaw, before.look.pitch],
+          `${name}: its wrist or ankle was inside the picture's band, so choosing it leaves the view where it was`);
+      }
+      assert.ok(inLimbBand(end, BAND_SLACK), `${name}: its wrist or ankle is inside the picture's band: ${JSON.stringify(end)}`);
+      if (pointerFree) {
+        await page.mouse.move((1 + end.x) / 2 * width, (1 - end.up) * height);
+        settled = await nextFrames(settled.frames);
+        assert.equal(settled.input.at, 'pointer');
+        assert.match(settled.input.front, new RegExp(`^own:(?:bone|muscle):${limb}$`));
+      }
+      assert.equal(settled.camera.firstPerson, true);
+      assert.equal(settled.trigger.seq, before.trigger.seq);
+      if (early) {
+        const correction = Math.hypot(settled.look.yaw - early.look.yaw, settled.look.pitch - early.look.pitch);
+        if (reduced) assert.ok(correction < 0.05, 'reduced motion must make the main turn immediately');
+      }
+      framed.push({ key, turned: !wasInBand, before: before.look, early: early?.look ?? null, settled: settled.look, end, hit: settled.input.front });
+      return settled;
+    }
     for (const [key, name, limb] of [
       ['2', 'Left leg', 'leftLeg'], ['3', 'Right leg', 'rightLeg'], ['4', 'Right arm', 'rightArm'], ['1', 'Left arm', 'leftArm']
     ]) {
       const before = await inspect();
-      await page.keyboard.press(key);
-      await selected(key, name).waitFor({ timeout: 5_000 });
-      await page.waitForFunction(look => {
-        const c = window.__nsQA.inspect().controls;
-        return Math.hypot(c.yaw - look.yaw, c.pitch - look.pitch) > 0.03;
-      }, before.look, { polling: 20 });
-      const early = await inspect();
-      await page.waitForTimeout(950); // One framing turn takes at most 900 ms.
-      await page.mouse.move(width / 2, height * 0.4);
-      const settled = await nextFrames((await inspect()).frames);
-      assert.equal(settled.camera.firstPerson, true);
-      assert.equal(settled.input.at, 'pointer');
-      assert.match(settled.input.front, new RegExp(`^own:(?:bone|muscle):${limb}$`));
-      assert.equal(settled.trigger.seq, initial.trigger.seq);
-      const correction = Math.hypot(settled.look.yaw - early.look.yaw, settled.look.pitch - early.look.pitch);
-      if (reduced) assert.ok(correction < 0.05, 'reduced motion must make the main turn immediately');
-      framed.push({ key, before: before.look, early: early.look, settled: settled.look, hit: settled.input.front });
+      assert.equal(before.trigger.seq, initial.trigger.seq);
+      await chooseAndFrame(key, name, limb, before, true);
     }
+    // A choice whose wrist or ankle is outside the band turns the view, just far enough. Look up (the pointer captured)
+    // until both ankles have left the picture's band, then choose the right leg.
     await page.mouse.click(width / 2, height / 2);
     await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+    const pointer = { x: width / 2, y: height / 2 };
+    async function lookBy(dx, dy, steps = 10) {
+      const from = await inspect();
+      for (let i = 0; i < steps; i++) {
+        pointer.x += dx / steps; pointer.y += dy / steps;
+        await page.mouse.move(pointer.x, pointer.y);
+      }
+      await page.waitForFunction(time => window.__nsQA.inspect().controls.lookMs !== time, from.look.time, { polling: 20 });
+      return nextFrames((await inspect()).frames, 8);
+    }
+    const away = await lookBy(0, -250);
+    assert.ok(!inLimbBand(away.limbs.ends.rightLeg), `looking up takes the right ankle out of the band: ${JSON.stringify(away.limbs.ends.rightLeg)}`);
+    const reframed = await chooseAndFrame('3', 'Right leg', 'rightLeg', away, false);
+    assert.ok(reframed.look.pitch < away.look.pitch, 'the view turned down toward the right ankle');
+    // The pointer takes the look back at any moment: look up again so that the left ankle (the right leg, now chosen,
+    // goes with the look) is outside the band, choose the left leg, and move the pointer while the view turns to it.
+    const awayAgain = await lookBy(0, -250);
+    assert.ok(!inLimbBand(awayAgain.limbs.ends.leftLeg), `looking up takes the left ankle out of the band: ${JSON.stringify(awayAgain.limbs.ends.leftLeg)}`);
     await page.keyboard.press('2');
     await selected('2', 'Left leg').waitFor({ timeout: 5_000 });
     const automatic = await inspect();
-    await page.mouse.move(width / 2 + 100, height / 2 - 45);
+    if (!reduced) assert.equal(automatic.limbs.turning, true, 'the view is turning toward the left ankle when the pointer moves');
+    pointer.x += 100; pointer.y -= 45;
+    await page.mouse.move(pointer.x, pointer.y);
     await page.waitForFunction(time => window.__nsQA.inspect().controls.lookMs !== time, automatic.look.time, { polling: 20 });
     const manual = await inspect();
     assert.notEqual(manual.look.yaw, automatic.look.yaw);

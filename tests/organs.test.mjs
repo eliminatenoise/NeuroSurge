@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import * as NO from '../scene/src/ns-organs.mjs';
 import { EYE_COLLAR } from '../scene/src/ns-scene-three.mjs';
 import { loadPageBody } from '../tools/page-body.mjs';
+import { trunkShapeField } from '../scene/src/ns-body-shape.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const built = NO.buildOrgans();
@@ -44,7 +45,11 @@ test('two meshes of a few thousand triangles, every number finite, every part cl
     assert.ok([...m.positions, ...m.normals, ...m.colors].every(Number.isFinite));
     assert.ok(Math.max(...m.indices) < m.positions.length / 3);
   }
-  assert.ok(volume(built.heart) > 300e3 && volume(built.heart) < 700e3, 'a heart of 0.3 to 0.7 litres');
+  // (20 November 2026, the owner: "a smaller and much flatter chest": the organs go through the trunk rule with the rib
+  // cage, ns-body-shape, and the heart, the most forward of them, is drawn about 0.3 thinner front to back: 0.42 l in
+  // the numbers of ORGANS, 0.3 drawn; the lungs 2.4 and 2.1)
+  assert.ok(volume(built.heart) > 250e3 && volume(built.heart) < 700e3, 'a heart of 0.25 to 0.7 litres');
+  assert.ok(volume(NO.buildOrgans(NO.ORGANS, null).heart) > 300e3, 'in the source body\'s numbers a heart of more than 0.3 litres');
   for (const [name, [a, b]] of Object.entries(built.tissue.ranges)) assert.ok(volume(built.tissue, a, b) > 0, `${name} faces out`);
   const lungs = volume(built.tissue, ...built.tissue.ranges.leftLung) + volume(built.tissue, ...built.tissue.ranges.rightLung);
   assert.ok(lungs > 1.5e6 && lungs < 4e6, `lungs ${Math.round(lungs / 1000)} cm3`);
@@ -84,20 +89,26 @@ test('clear organ colours: a dark red heart, pink-grey lungs lighter than it, a 
 
 test('every organ is inside the rib cage of the page body, under the eye view\'s collar cut', async () => {
   const src = await loadPageBody(root);
+  // (20 November 2026, ns-body-shape: the page body's chest is drawn flatter and the organs go through the same trunk rule,
+  // which never changes which of two points at one height and side is further forward. The check is made in the source
+  // body's numbers: the organs as ORGANS has them, the ribs moved back by the rule undone. Measured on the flattened
+  // ribs themselves, sectors round one fixed axis no longer follow the flatter cage's wall: lung points at its front
+  // corners read up to 13 mm "beyond" it.)
+  const tf = trunkShapeField(), builtSrc = NO.buildOrgans(NO.ORGANS, null);
   // the cage's inner wall per 20 mm of height and 15 degrees round the axis (x 0, y -100): the 5th percentile distance of
   // its bones there (ribs, costal cartilages, breastbone; the spine's sector, 30 to 150 degrees, is left out)
   const pts = [];
   for (const [id, info] of Object.entries(src.rig.meshSegment)) {
     if (info.kind !== 'bone' || !/^([rl]_rib\d+|[rl]_cc\d+|sternum)$/.test(info.segment)) continue;
     const p = src.meshesById.get(id).positions;
-    for (let i = 0; i < p.length; i += 3) pts.push([p[i], p[i + 1], p[i + 2]]);
+    for (let i = 0; i < p.length; i += 3) pts.push([p[i], tf.sourceY(p[i], p[i + 1], p[i + 2]), p[i + 2]]);
   }
   const cell = (x, y, z) => { const a = Math.atan2(y + 100, x) * 180 / Math.PI; return { k: `${Math.floor(z / 20)}|${Math.floor(((a + 360) % 360) / 15)}`, a, r: Math.hypot(x, y + 100) }; };
   const walls = new Map();
   for (const [x, y, z] of pts) { const c = cell(x, y, z); if (!walls.has(c.k)) walls.set(c.k, []); walls.get(c.k).push(c.r); }
   const wall = new Map([...walls].filter(([, r]) => r.length >= 12).map(([k, r]) => [k, r.sort((a, b) => a - b)[Math.floor(0.05 * r.length)]]));
   let checked = 0, out = 0, worst = 0;
-  for (const m of [built.heart, built.tissue]) {
+  for (const m of [builtSrc.heart, builtSrc.tissue]) {
     const p = m.positions;
     for (let i = 0; i < p.length; i += 3) {
       const x = p[i], y = p[i + 1], z = p[i + 2];

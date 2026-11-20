@@ -52,10 +52,15 @@
  * body behind the brain is then one glass figure. The brain's surface gets none (it is behind almost everything; a
  * fill would tint every body in front of it). A group of motor areas and an eyeball get a faint one.
  *
- * WHICH PART THE CROSSHAIR TAKES (unchanged by the widening; ns-app controlTargets): the strongly filled ghost of a
- * LOCKED-AWAY LIMB, where a part of its own body covers it (seeHiddenEntry, seeTakesGhost); everywhere else the thing
- * in front, and Shift reaches behind it (a hidden limb of the same body first, else the other item on the ray). No
- * trunk, brain, area or eyeball ghost takes the crosshair, and a motor area the look names is always the default.
+ * WHICH PART THE CROSSHAIR TAKES (ns-app controlTargets): the strongly filled ghost of a LOCKED-AWAY LIMB, where a
+ * part of its own body covers it (seeHiddenEntry, seeTakesGhost) AND that ghost is the one drawn there (seeDrawnEntry,
+ * 20 November 2026: one hidden thing is drawn per pixel, so where a trunk, the other body or the brain is drawn between
+ * the part in front and the hidden limb, or the brain is in front, the crosshair keeps what is seen); everywhere else
+ * the thing in front, and Shift reaches behind it (a hidden limb of the same body first, else the other item on the
+ * ray). No trunk, brain, area or eyeball ghost takes the crosshair, and a motor area the look names is always the
+ * default. A body behind the brain counts as hardly seen in the census (its ghost is the strong glass figure), so its
+ * limbs are locked away: where one of them lies behind a part of its own body outside the brain, its strongly filled
+ * ghost is drawn there and takes the crosshair, as any locked-away limb's does.
  *
  * COST. On the frames where the outline pass redraws its ID picture (the camera or a body moved): one more draw of the
  * outline's batch (geometry only) into a target of the ID picture's size; one small screen pass over it (the thing in
@@ -218,12 +223,42 @@ export function seeHiddenEntry(layers, o = SEE) {
   }
   return null;
 }
+/** THE GHOST DRAWN ON A RAY (pure; 20 November 2026, from a code review): the entry of `layers` (controlLayersAt,
+ * nearest first) whose ghost the graphics card draws at that pixel, or null. As there (nsFrontAt, GHOST_FS, BEHIND_FS,
+ * PART_FS): what is in FRONT is the nearer of the first body entry and the first entry of the brain's own picture (its
+ * surface, a motor area, an eyeball or a nerve: kind 'glass' or 'area'; not 'outline', which is no surface; none while
+ * the brain's rule is off), and the ghost is the NEAREST entry behind the front, past the gap, that the drawing rule
+ * shows against it (seeShows). One hidden thing per pixel: a trunk, the other body or the brain lying between the part
+ * in front and a hidden limb is what is drawn there (legs crossed: the pelvis behind the shank, not the other thigh
+ * behind the pelvis), and with the brain in front the ghost is the body part nearest behind it. */
+export function seeDrawnEntry(layers, o = SEE, rules = o.rules) {
+  if (!Array.isArray(layers)) return null;
+  const R = rules || SEE.rules;
+  const thingOf = l => {
+    if (!l || !Number.isFinite(l.distance)) return null;
+    if ((l.item === 'own' || l.item === 'mirror') && l.rec && Number.isInteger(l.rec.group) && l.rec.group > 0) return { group: l.rec.group };
+    if (R.brain && l.item === 'brain' && (l.kind === 'glass' || l.kind === 'area')) return { thing: l.kind === 'area' ? T.area : l.part === 'eyeball' || l.part === 'nerve' ? T.eyes : T.brain };
+    return null;
+  };
+  let front = null, ft = null;
+  for (const l of layers) {
+    const t = thingOf(l);
+    if (!t) continue;
+    if (!front) { front = l; ft = t; continue; }
+    if (l.distance < front.distance + o.gapM + o.gapRel * front.distance) continue;
+    if (seeShows(ft, t, R)) return l;
+  }
+  return null;
+}
 /** Whether the crosshair takes the hidden entry (pure): its limb is locked away (`locked`: [9] booleans by ghost code,
- * the scene's census answer, as seeLockedAway gives it; its ghost is drawn filled). */
-export function seeTakesGhost(locked, hidden) {
+ * the scene's census answer, as seeLockedAway gives it; its ghost is drawn filled) and, given the ray's `layers`, its
+ * ghost is the one drawn at that pixel (seeDrawnEntry; 20 November 2026: the crosshair took a locked-away thigh through
+ * a pelvis whose ghost was drawn there, and a limb of a body behind the brain whose trunk's ghost was drawn there). */
+export function seeTakesGhost(locked, hidden, layers = null) {
   if (!Array.isArray(locked) || !hidden || !hidden.rec) return false;
   const c = seeLimbOfGroup(hidden.rec.group);
-  return c > 0 && locked[c] === true;
+  if (!(c > 0 && locked[c] === true)) return false;
+  return !Array.isArray(layers) || seeDrawnEntry(layers) === hidden;
 }
 /** The ghost look (linear RGB): { line, fill }, the same for every ghost (SEE.glass). Pure. */
 export function seeGlassColours(o = SEE) {
@@ -357,12 +392,17 @@ int nsFrontAt( ivec2 p ) {
 /* GHOST GEOMETRY PASS: the outline batch again (same instances), into a target of the ID target's size with its own depth.
  * Each fragment reads what is in FRONT at its sample (the nearer of the body part in the ID picture and the brain in its
  * picture): only a ghost against that front (seeShows) lying behind it by the gap is kept; the nearest such fragment
- * wins the depth test. It writes r = its thing, b = its distance. */
+ * wins the depth test. It writes r = its thing, b = its distance.
+ * 20 November 2026 (from a code review): it carries the ID pass's clipping too (ns-outline setClip: the box that ends
+ * your own body at the collar in the eye view; the planes come with the ID pass, afterId's ctx.clip), cut the same way:
+ * only your own trunk and head. Before, the pieces of neck muscle the picture leaves out were drawn here, and with a
+ * hand, the other body or the brain in front of them they became light-blue outlines of muscle drawn nowhere. */
 const GHOST_FS = `
 precision highp float;
 precision highp int;
 flat varying vec3 vNsId;
 uniform vec3 uRules; // x: the trunk behind its own limbs, y: across the two bodies (z: the brain, which is its picture)
+#include <clipping_planes_pars_fragment>
 ${FRONT_GLSL}
 void main() {
 	float gb = floor( vNsId.g * 255.0 + 0.5 );
@@ -372,6 +412,11 @@ void main() {
 	if ( dbl ) gb -= 64.0;
 	if ( ! dbl && gl_FrontFacing == flip ) discard;
 	int g = int( vNsId.r * 255.0 + 0.5 );
+	#if NUM_CLIPPING_PLANES > 0
+	if ( g == ${G.trunk} || g == ${G.head} ) {
+		#include <clipping_planes_fragment>
+	}
+	#endif
 	int tg = nsThingOf( g );
 	ivec2 p = ivec2( gl_FragCoord.xy );
 	int gf = nsGroupOf( texelFetch( tId, p, 0 ) );
@@ -813,7 +858,8 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
   const R = { ...SEE.rules };
   const geoUni = { tId: { value: null }, tDepth: { value: null }, tBrain: { value: brainTarget ? brainTarget.texture : null }, uBrain: { value: [SEE.brainStep, 0] }, uView: { value: view },
     uGap: { value: new THREE.Vector2(SEE.gapM, SEE.gapRel) }, uRules: { value: new THREE.Vector3(R.trunk ? 1 : 0, R.across ? 1 : 0, R.brain ? 1 : 0) } };
-  const geoOf = (vertexShader, uniforms, fragmentShader = GHOST_FS) => new THREE.ShaderMaterial({ uniforms: { ...geoUni, ...uniforms }, vertexShader, fragmentShader, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
+  // (the bodies' materials clip like the ID pass's: `clipping`, planes from afterId's ctx.clip)
+  const geoOf = (vertexShader, uniforms, fragmentShader = GHOST_FS) => new THREE.ShaderMaterial({ uniforms: { ...geoUni, ...uniforms }, vertexShader, fragmentShader, clipping: fragmentShader === GHOST_FS, side: THREE.DoubleSide, depthTest: true, depthWrite: true, blending: THREE.NoBlending, toneMapped: false, fog: false });
   const geoMat = geoOf(OUTLINE_ID_VS, {});
   // 19 November 2026 (performance): the muscles skinned on the graphics card are in the ID pass as a skinned batch (the
   // body's) and as skinned proxies (the left game arm's); they are drawn here with the same vertex shaders.
@@ -854,22 +900,25 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
   const screenMesh = (mat, name) => { const m = new THREE.Mesh(quad, mat); m.name = name; m.frustumCulled = false; m.matrixAutoUpdate = false; m.raycast = () => {}; return m; };
   const still = (s, name) => { s.name = name; s.matrixWorldAutoUpdate = false; return s; };
   const sceneOf = (mat, name) => { const s = still(new THREE.Scene(), name); s.add(screenMesh(mat, name)); return s; };
-  // the grid of tiles for a census of cw x ch cells (kept per size; it changes only with the window's shape)
-  const tileGeos = new Map();
+  // the grid of tiles for a census of cw x ch cells: ONE kept, for the size in use (it changes only with the window's
+  // shape). 20 November 2026 (from a code review): each size used to be kept until the pass was disposed, so a session
+  // of window resizes piled up dead vertex and index buffers on the graphics card; the grid of the size left is now
+  // released when the next is made (the caller puts the new one on both meshes before anything is drawn).
+  let tileGeo = null, tileKey = '';
   const tilesFor = (cw, ch) => {
     const key = `${cw}x${ch}`;
-    let g = tileGeos.get(key);
-    if (g) return g;
+    if (tileGeo && key === tileKey) return tileGeo;
     const n = cw * ch, pos = new Float32Array(12 * n), cell = new Float32Array(8 * n), idx = new Uint32Array(6 * n);
     for (let j = 0, k = 0; j < ch; j++) for (let i = 0; i < cw; i++, k++) {
       for (let v = 0; v < 4; v++) { pos[12 * k + 3 * v] = i + (v & 1); pos[12 * k + 3 * v + 1] = j + (v >> 1); cell[8 * k + 2 * v] = i; cell[8 * k + 2 * v + 1] = j; }
       idx.set([4 * k, 4 * k + 1, 4 * k + 2, 4 * k + 2, 4 * k + 1, 4 * k + 3], 6 * k);
     }
-    g = new THREE.BufferGeometry();
+    const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('nsCell', new THREE.BufferAttribute(cell, 2));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
-    tileGeos.set(key, g);
+    if (tileGeo) tileGeo.dispose();
+    tileGeo = g; tileKey = key;
     return g;
   };
   const inkScene = sceneOf(inkMat, 'ns-see ghost ink pass'), inkMesh = inkScene.children[0], censusScene = sceneOf(censusMat, 'ns-see census pass');
@@ -890,6 +939,11 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
   const gl = typeof renderer.getContext === 'function' ? renderer.getContext() : null;
   const queries = Boolean(gl && typeof gl.createQuery === 'function' && gl.ANY_SAMPLES_PASSED_CONSERVATIVE !== undefined);
   let pendingQuery = null, bodyGhost = true, inkStale = false;
+  // 20 November 2026 (from a code review): the things whose fill was 0 when the line pass last ran (INK_FS leaves out the
+  // inside of such a ghost); when one's fill rises with nothing moving, the ink is drawn again (frame())
+  const inkZero = new Array(T.count).fill(true);
+  // the ID pass's clip planes now on the bodies' ghost materials (afterId)
+  let clipPlanes = null;
   // The census: read back after each screen pass while something is covered.
   // (`locked`: the limbs AND the two trunks that are hidden and hardly seen, [11]; the first [9] are the limbs the crosshair takes)
   const LAST = T.mirrorTrunk;
@@ -972,6 +1026,7 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     inkUni.uLine.value.set(SEE.lineCss * ctx.pr * ctx.ss, SEE.focusCss * ctx.pr * ctx.ss, ctx.pxPerCmAt1m * ctx.pr * ctx.ss, OUTLINE.taperFullPxCm);
     inkUni.uKey.value = SEE.keyCss * ctx.pr * ctx.ss;
     inkUni.uFocus.value = focus; focusDrawn = focus;
+    for (let c = 1; c < T.count; c++) inkZero[c] = !(fillA[c] > 0);
     inkMesh.material = focus > 0 ? inkFocusMat : inkMat;
     if (inkTarget.width !== ctx.bufW || inkTarget.height !== ctx.bufH) inkTarget.setSize(ctx.bufW, ctx.bufH);
     const cw = SEE.censusCells, ch = Math.max(1, Math.round(cw * ctx.bufH / Math.max(1, ctx.bufW)));
@@ -1010,6 +1065,9 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
       if (Boolean(q.trunk) !== R.trunk || Boolean(q.across) !== R.across || Boolean(q.brain) !== R.brain) { R.trunk = Boolean(q.trunk); R.across = Boolean(q.across); R.brain = Boolean(q.brain); geoUni.uRules.value.set(R.trunk ? 1 : 0, R.across ? 1 : 0, R.brain ? 1 : 0); } }
     const [w, h] = ctx.size;
     if (ghostTarget.width !== w || ghostTarget.height !== h) ghostTarget.setSize(w, h);
+    // the ID pass's clip box (ns-outline setClip; GHOST_FS): the same planes on the bodies' draw here
+    { const c = Array.isArray(ctx.clip) && ctx.clip.length ? ctx.clip : null;
+      if (c !== clipPlanes) { clipPlanes = c; for (const m of [geoMat, geoSkinBatchMat, geoSkinIdMat]) { m.clippingPlanes = c; m.clipIntersection = true; m.needsUpdate = true; } } }
     const cam = ctx.camera;
     view.set(1, cam.near, cam.far, cam.isOrthographicCamera ? 0 : 1);
     geoUni.tId.value = ctx.target.texture; geoUni.tDepth.value = ctx.depthTexture;
@@ -1091,6 +1149,10 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
     }
     compMat.uniforms.uAll.value = focusDrawn > 0 || compMat.uniforms.uCodes.value > 1 ? 1 : 0; // every tile: the focus line; the QA pictures
     if (globalThis.__nsSeeDebug === true) { compMat.uniforms.uAlpha.value.set(1, 1); for (let c = 1; c < T.count; c++) fillA[c] = 0.9; } // QA only: drawn strongly
+    // A fill that rises from 0 after the ink ran (the census answer comes a frame or two after it: a trunk that became
+    // mostly hidden on the last frame that moved): the ink left that ghost's inside out, so it is drawn again now
+    // (20 November 2026, from a code review: the trunk stayed hollow until something moved).
+    if (!inkStale) for (let c = 1; c < T.count; c++) if (inkZero[c] && fillA[c] > 0) { inkStale = true; break; }
     composite.visible = on && drawn && outline.composite.visible === true && (covered || focus > 0);
     if (!composite.visible || !last) return;
     if (focus !== focusDrawn || inkStale) {
@@ -1124,14 +1186,14 @@ export function createGhostPass({ THREE, renderer, outline, enabled = true, redu
       fill: fillA.map(v => Math.round(v * 1000) / 1000), rules: { ...R },
       brain: { set: Boolean(brain.group), shown: brain.shown, surface: Boolean(brain.surface), areas: Boolean(brain.areas), parts: brain.parts.length, pictures: stats.brainFrames },
       gpu: gpu.n ? { samples: gpu.n, meanMs: Math.round(gpu.sumMs / gpu.n * 100) / 100, maxMs: Math.round(gpu.maxMs * 100) / 100 } : null,
-      target: ghostTarget ? [ghostTarget.width, ghostTarget.height] : null };
+      target: ghostTarget ? [ghostTarget.width, ghostTarget.height] : null, tiles: tileKey, clipped: Boolean(clipPlanes) };
   }
   function dispose() {
     outline.setAfterId(null);
     if (pendingQuery) { try { gl.deleteQuery(pendingQuery); } catch { /* lost context */ } pendingQuery = null; }
     for (const t of [ghostTarget, brainTarget, inkTarget, censusTarget]) if (t) t.dispose();
     for (const m of [geoMat, geoSkinBatchMat, geoSkinIdMat, picSurfaceMat, picAreaMat, picPartMat, partGhostMat, behindMat, inkMat, inkFocusMat, censusMat, compMat]) m.dispose();
-    quad.dispose(); for (const g of tileGeos.values()) g.dispose();
+    quad.dispose(); if (tileGeo) tileGeo.dispose(); tileGeo = null; tileKey = '';
   }
   return { composite, afterBrain: SEE.rules.brain === true, frame, locked: () => (on && composite.visible ? locked.slice(0, 9) : null), setFocus, setEnabled, setBrain, touchBrain, brainMaterials, state, dispose, get enabled() { return on; } };
 }

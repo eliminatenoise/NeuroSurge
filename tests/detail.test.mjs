@@ -35,6 +35,9 @@ test('the Body Worlds stack of the start posture stays inside the scene\'s caps 
 test('the relief of the external oblique is shaved toward the body in the reclined start posture, not along the room\'s depth', () => {
   for (const id of ['FJ1452', 'FJ1452M']) {
     const meta = layers.byId[id];
-    assert.ok(meta && meta.reliefShavedMm > 0 && meta.reliefShavedMm < 20, `${id}: shaved ${meta && meta.reliefShavedMm} mm`);
+    // (20 November 2026, the owner: "the bottom of the torso to come out more": the trunk rule of ns-body-shape draws the
+    // belly further forward and the chest flatter, which deepens the sheet's relief up and down the trunk; the shave was
+    // 17 mm on the source body and is 25 now. The fault this guards against shaved 97 mm.)
+    assert.ok(meta && meta.reliefShavedMm > 0 && meta.reliefShavedMm < 30, `${id}: shaved ${meta && meta.reliefShavedMm} mm`);
   }
 });
