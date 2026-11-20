@@ -115,7 +115,7 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
   const q = selector => dialog.querySelector(selector);
   const recording = q('#ns-act-recording'), game = q('#ns-act-game'), seek = q('[data-seek]');
   const spatial = q('#ns-act-spatial'), play = q('[data-play]');
-  const hand = q('#ns-act-hand');
+  const hand = q('#ns-act-hand'), shared = q('#ns-act-shared');
   const rat = q('#ns-act-rat'), ratForecast = q('#ns-rat-forecast');
   let ratLoad, ratStyle, ratMounted = false;
   let spatialPanel, spatialLoad, handPanel, handLoad, tabVersion = 0;
@@ -292,6 +292,19 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     }
   }
 
+  async function openShared(version) {
+    if (shared.querySelector('iframe')) return;
+    const status = shared.querySelector('[role=status]');
+    status.textContent = 'Opening the shared model…';
+    try {
+      const {mountSharedMotion} = await import('./shared-motion-panel.mjs');
+      if (!disposed && dialog.open && version === tabVersion) mountSharedMotion(shared, () => close());
+    } catch {
+      if (!disposed && version === tabVersion) status.textContent =
+        'The shared model could not open. Select Shared model again to retry.';
+    }
+  }
+
   function setTab(mode, selection) {
     tabVersion++;
     spatialPanel?.hide();
@@ -302,11 +315,13 @@ export function bindActivityMap({dialog, trigger, canvas, canOpen, pause, resume
     rat.hidden = mode !== 'rat';
     spatial.hidden = mode !== 'spatial';
     hand.hidden = mode !== 'hand';
+    shared.hidden = mode !== 'shared';
     for (const b of dialog.querySelectorAll('[data-tab]')) b.setAttribute('aria-pressed', String(b.dataset.tab === mode));
     if (!recording.hidden) showRecording();
     if (!rat.hidden) openRat(tabVersion);
     if (!spatial.hidden) openSpatial(selection,tabVersion);
     if (!hand.hidden) openHand(selection,tabVersion);
+    if (!shared.hidden) openShared(tabVersion);
   }
 
   function open(mode = 'recording', selection) {

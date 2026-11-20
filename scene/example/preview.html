@@ -52,6 +52,7 @@
     <button type="button" data-tab="rat" aria-pressed="false" aria-controls="ns-act-rat">Rat brain activity</button>
     <button type="button" data-tab="spatial" aria-pressed="false" aria-controls="ns-act-spatial">Whole-body motion</button>
     <button type="button" data-tab="hand" aria-pressed="false" aria-controls="ns-act-hand">Hand search</button>
+    <button type="button" data-tab="shared" aria-pressed="false" aria-controls="ns-act-shared">Shared model</button>
     <button type="button" data-tab="game" aria-pressed="false" aria-controls="ns-act-game">Game pathways</button>
   </div>
   <section id="ns-act-recording" aria-label="Recorded right wrist">
@@ -133,6 +134,9 @@
     <p role="status" data-motion-status>Opening the motion viewer…</p>
   </section>
   <section id="ns-act-hand" aria-label="Search recorded hand movements" hidden><p role="status">Opening hand search…</p></section>
+  <section id="ns-act-shared" aria-label="Shared movement Transformer" hidden>
+    <p role="status" class="activity-status"></p>
+  </section>
   <section id="ns-act-game" aria-label="Simulated game pathways" hidden>
     <h2>Trace a virtual movement</h2>
     <p>Choose a motor-strip region and a movement from the playable body. The arrows show anatomical direction schematically. Signal strength, travel time and sensory activity along these routes were unmeasured.</p>

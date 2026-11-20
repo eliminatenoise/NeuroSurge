@@ -1,0 +1,13 @@
+# Credit and reuse
+
+The NeuroTranslate shared movement checkpoint was trained on optical measurements from two sources. Xin Wang and colleagues released HoloAssist hand poses under CDLA-Permissive 2.0. Justin Shin and Shantanu Jadhav released *Single Day W-Track Learning*, version 0.240511.0307, under CC BY 4.0. See the accompanying data credits for the full author lists, source identities and changes. [Data credits](DATA-CREDITS.md) · [CDLA-Permissive 2.0](CDLA-Permissive-2.0.txt) · [W-track dataset](https://doi.org/10.48324/dandi.000978/0.240511.0307)
+
+The model authors release the jointly fitted weights under CC BY 4.0. Credit NeuroTranslate and both data sources with redistributed weights, include the licence link and indicate changes. In this edition the original tensor values were taken from the frozen NumPy archive and packed as little-endian float32 bytes inside a JavaScript file. The model was trained once for the selected checkpoint. Its weights have the original precision. [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+The browser code, API notes and two invented examples in this directory carry the same CC0 1.0 dedication as the original prediction code and artificial examples. The dedication applies to original code and documentation. The embedded weights and upstream measurements carry their respective terms above. [CC0 1.0](CC0-1.0.txt)
+
+## NeuroSurge distribution
+
+The intact offline NeuroTranslate viewer is [index.html](index.html), SHA-256 `1c8eaed7b3f1a595fd202b968993da9eee66845938063746bbb369b054e8e258`. It contains the 5,234 released float32 parameters from the primary jointly trained checkpoint `9a3649cb8f2119984e7f9f0b96a07bdc95e1833c7068f0e9caef2680f22e3179`, both fitted comparison models, the two examples, study results and licence texts. The comparison weights and numerical results carry CC BY 4.0. [Original viewer, source and build instructions](https://github.com/eliminatenoise/NeuroTranslation/tree/0ff78bbbd6723e49a72eeb29d93e8765079a2d40/docs/shared-motion) · [Frozen study and checkpoint](https://github.com/eliminatenoise/NeuroTranslation/tree/1cc81b20a14b81aebfb1f47d13d75b8d79c6e6ce/models/shared-motion)
+
+For **M → Shared model**, the packager moves the viewer’s two executable script bodies, byte for byte, into local JavaScript files. The game embeds the resulting document on demand. Its save link points back to the complete offline original, and the citation links open separately. The embedded document keeps its network connection restriction and uses the game’s same-origin script rule. Run `python -B tools/pack-shared-motion.py` in the game checkout to reproduce the adaptation from the pinned original. [Packager](../../../../tools/pack-shared-motion.py)

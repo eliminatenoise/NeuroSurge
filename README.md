@@ -4,6 +4,8 @@
 
 In **M → Rat brain activity**, see where rat JS14 went on a W-shaped track. Compare a forecast based on its recent positions with one that also uses spikes from 72 units in two brain regions. Reveal the next camera reading to check both. [Recording and source credit](scene/src/activity/wtrack/NOTICE.md)
 
+In **M → Shared model**, one trained Transformer uses earlier movement to predict the straight-line distance between two wrist or rat positions about a quarter second apart. Compare the predicted distance with the camera measurement on a training trip, then try an invented wrist movement. Training on the two recordings together did not establish a transfer benefit. [Save the offline viewer](scene/src/activity/shared-motion/index.html)
+
 **Local movement preview.** Run `node serve-local.mjs` in this folder and open the address it prints. Press F and type “Bend my right elbow”, or choose **Use voice** for on-device dictation where supported. Press C, allow video and choose an arm or knee. Move it where the camera can see the bend and the avatar follows. These controls use the game’s movement map and a camera pose estimator. See the [player guide](PLAYER-GUIDE.md). The public links below open the separately published edition.
 
 [Play the experimental browser preview](https://eliminatenoise.github.io/NeuroSurge/). [Download a Windows, macOS or Linux launcher](https://eliminatenoise.github.io/NeuroSurge/START.html).
