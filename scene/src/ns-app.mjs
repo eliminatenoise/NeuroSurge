@@ -9879,8 +9879,10 @@ export function start(params = {}) {
         // 18 Nov (M3): a number key came up: a short press completes its movement, a longer one leaves the part there.
         const cameraPoseSample = live ? pendingCameraPose : null;
         pendingCameraPose = null;
-        if (cameraPoseSample?.joints) {
-          timing = { ...timing, events: [...timing.events, { type: 'limbPose', joints: cameraPoseSample.joints, at: timing.dt }] };
+        if (cameraPoseSample?.joints || (live && trackedLeftArm)) {
+          const placement = { type: 'limbPose', joints: cameraPoseSample?.joints || {}, at: timing.dt,
+            trackedLeftUpperArm: Boolean(live && trackedLeftArm) };
+          timing = { ...timing, events: [...timing.events, placement] };
         }
         if (live && upsThisFrame.length) {
           const rel = [];

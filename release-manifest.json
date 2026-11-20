@@ -4257,13 +4257,13 @@
     },
     {
       "path": "scene/src/ns-actions.mjs",
-      "bytes": 224615,
-      "sha256": "d7debab6081a873fe9b4ce003e428e2ee729ed8595366ed871fbc43931443e01"
+      "bytes": 225152,
+      "sha256": "82a1b5c156c33c70da6a9022142fcb96e488fc8bfa6b8232d9ec385681472d67"
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 946869,
-      "sha256": "af6747f16bf1865a083bc875b57a1d4dc61fffd0621c6490585659f9ac8cc8cd"
+      "bytes": 947009,
+      "sha256": "a9fc2b6586fdfbe4d78388141f2f38e1f4f21e1db15b09dc2f0d9bae8e5eb6a1"
     },
     {
       "path": "scene/src/ns-arm.mjs",
