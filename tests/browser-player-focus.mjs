@@ -89,8 +89,11 @@ try {
   checks.pauseLimbControls = await menu.locator('.ns-menu-move').innerText();
   assert.match(checks.pauseLimbControls, /1 \/ 2\s+choose left arm \/ left leg/);
   assert.match(checks.pauseLimbControls, /3 \/ 4\s+choose right leg \/ right arm/);
-  assert.match(checks.pauseLimbControls, /W S\s+move it forward or back/);
-  assert.match(checks.pauseLimbControls, /A D\s+move it left or right/);
+  // 21 November 2026 (hunt H22; the owner, Message 186: W and S move the limb "in a straight line from between proximal
+  // and distal joints", A and D are "moving between medial and lateral"; DESIGN-DECISIONS sections 145 and 186): the
+  // rows say what the keys do for a limb that points up or aside too, as the note under them already did.
+  assert.match(checks.pauseLimbControls, /W S\s+reach it out or draw it in/);
+  assert.match(checks.pauseLimbControls, /A D\s+swing it left or right/);
   assert.match(checks.pauseLimbControls, /Click limb\s+choose it/);
   // 20 November 2026: restated for the current rule (ns-app LIMB_KEYS.view, keepInFrameTurn; DESIGN-DECISIONS sections
   // 144 and 167). The owner, 19 November: "Perhaps the problem with the zoom in, zoom out fixes we look up and down is

@@ -108,8 +108,8 @@ export const EXTRA_ARM_ACTIONS = deepFreeze({
   little_extension: { label: 'Extend little finger', roles: roles(['ED', 'EDM'], ['FDS', 'FDP']) },
   thumb_opposition: { label: 'Turn thumb across the palm (opposition)', roles: roles(['OP', 'FPB'], ['EPL']) },
   thumb_reposition: { label: 'Move thumb out from the palm', roles: roles(['EPB', 'EPL'], ['OP', 'FPB']) },
-  wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation; display only on the game arm)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
-  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation; display only on the game arm)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) },
+  wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
+  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) },
   // (BODYMAP: the shoulder's muscles have no movement-map key; they are lit by name, ns-bodymap's agonist lists, which
   // are the reach keys' own lists, REACH_MUSCLES)
   shoulder_flexion: { label: 'Raise arm forward (shoulder flexion)', roles: roles([]) },
@@ -146,6 +146,10 @@ for (const d of DIGITS) {
   // Digit 3 (middle) is the abduction reference and is always 0.
   limits[`${d}_mcp_abd`] = d === 'middle' ? range(0, 0) : range(-5, 20);
 }
+// 21 November 2026 (browser hunt of update 62, H8): the wrist's sideways bend (ns-rig wrist_dev; + toward the thumb,
+// radial deviation; - toward the little finger, ulnar deviation), to 20 / 30 degrees: the commonly cited adult active
+// ranges (AAOS: radial deviation 0-20, ulnar deviation 0-30; cited from memory, not re-verified here). Display rig only.
+limits.wrist_dev = range(-30, 20);
 
 /**
  * Pose joint range limits (degrees). Semantic signs: positive = anatomical flexion, positive
@@ -154,13 +158,13 @@ for (const d of DIGITS) {
  */
 export const JOINT_LIMITS = Object.freeze(limits);
 
-/** The 20 pose joint names, in a fixed order. */
+/** The 21 pose joint names, in a fixed order (wrist_dev, the wrist's sideways bend, since 21 November 2026). */
 export const JOINT_NAMES = Object.freeze(Object.keys(JOINT_LIMITS));
 
 // R3-arm: the relaxed-hand "cascade" (ns-rig REST_HAND_POSE_DEG: each finger a little more bent than the one beside
 // it, index to little; thumb slightly turned toward the index; wrist 0). Round 2 used 15/20/10 on every finger, almost
 // the mesh's own straight rest on this rig.
-const rest = { wrist_flex: 0 };
+const rest = { wrist_flex: 0, wrist_dev: 0 };
 for (const j of ['thumb_cmc_opp', 'thumb_mcp_flex', 'thumb_ip_flex']) rest[j] = REST_HAND_POSE_DEG[j];
 for (const d of DIGITS) {
   rest[`${d}_mcp_flex`] = REST_HAND_POSE_DEG[`${d}_mcp_flex`];
@@ -169,7 +173,7 @@ for (const d of DIGITS) {
   rest[`${d}_mcp_abd`] = 0;
 }
 // Non-enumerable self alias so both `REST_POSE.wrist_flex` and `REST_POSE.joints.wrist_flex` work;
-// Object.keys / JSON / spreading see only the 20 joint angles.
+// Object.keys / JSON / spreading see only the 21 joint angles.
 Object.defineProperty(rest, 'joints', { value: rest, enumerable: false });
 
 /** Natural relaxed rest pose (ns-rig REST_HAND_POSE_DEG): a flat, frozen map of joint name -> degrees. */
@@ -217,7 +221,7 @@ export const ELBOW_ACTION_DEG = 90;
 // relax_release targets the declared passive rest on the HAND joints only. The movement map says the
 // wrist/elbow must "maintain supported pose without new forced motion", so the wrist is not driven
 // by release. The middle-finger abduction reference is never driven by any action.
-const RELAX_JOINTS = JOINT_NAMES.filter(j => j !== 'wrist_flex' && j !== 'middle_mcp_abd');
+const RELAX_JOINTS = JOINT_NAMES.filter(j => j !== 'wrist_flex' && j !== 'wrist_dev' && j !== 'middle_mcp_abd');
 
 /**
  * Full-drive targets per action: { joints: {joint: deg}, elbowFlexDeg: signed elbow-angle change (deg, + = flexion),
@@ -264,9 +268,10 @@ export const ACTION_TARGETS = Object.freeze({
   little_extension: actionTarget(digitFlex(['little'], -10, 0, 0)),
   thumb_opposition: actionTarget({ thumb_cmc_opp: 40 }),
   thumb_reposition: actionTarget({ thumb_cmc_opp: 0 }),
-  // The game arm's hand fit has one wrist axis (flexion / extension): the sideways bends colour their muscles only.
-  wrist_radial_deviation: actionTarget({}),
-  wrist_ulnar_deviation: actionTarget({}),
+  // 21 November 2026 (H8): the sideways bends turn the hand at the wrist, to the joint's ends (wrist_dev); they used to
+  // colour their muscles only (the game arm had one wrist axis).
+  wrist_radial_deviation: actionTarget({ wrist_dev: 20 }),
+  wrist_ulnar_deviation: actionTarget({ wrist_dev: -30 }),
   // BODYMAP: the whole arm swung at the shoulder (SHOULDER_ACTION_DEG; no hand joint).
   shoulder_flexion: actionTarget({}, { shoulderLiftDeg: SHOULDER_ACTION_DEG.lift }),
   shoulder_extension: actionTarget({}, { shoulderLiftDeg: -SHOULDER_ACTION_DEG.drop }),
@@ -777,11 +782,13 @@ export const ARM_OPPOSITES = Object.freeze({
   thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition',
   // BODYMAP: the left shoulder's swings
   shoulder_flexion: 'shoulder_extension', shoulder_extension: 'shoulder_flexion',
-  shoulder_abduction: 'shoulder_adduction', shoulder_adduction: 'shoulder_abduction'
-  // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm (it has no sideways wrist joint): they light only.
+  shoulder_abduction: 'shoulder_adduction', shoulder_adduction: 'shoulder_abduction',
+  // 21 November 2026 (H8): the wrist's sideways bends move the hand now (ns-rig wrist_dev)
+  wrist_radial_deviation: 'wrist_ulnar_deviation', wrist_ulnar_deviation: 'wrist_radial_deviation'
 });
-/** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they light and move nothing. */
-const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+/** R558: game-arm actions that move nothing: they light and move nothing. Empty since 21 November 2026 (H8): the two
+ * sideways wrist bends were the only ones, and the game arm's wrist now bends sideways (ns-rig wrist_dev). */
+const DISPLAY_ONLY_ARM_IDS = Object.freeze([]);
 /** The hand's own movements (a relax press sends every one of them under way into its return). */
 const HAND_ACTION_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension',
@@ -2163,7 +2170,7 @@ export function createActivity({
    * grip's) and the note is dropped there. A press that finds the drive near 1 kicks it into the end (the body's kick,
    * its whole travel being one unit). A contraction of the opposite action that is still under way goes straight into
    * its return (ARM_OPPOSITES). relax_release sends every hand movement under way into its return and is itself the
-   * relax pulse it always was (poseTargets). The two sideways wrist bends move nothing on the game arm. Returns true
+   * relax pulse it always was (poseTargets). Returns true
    * when something on the arm is driven. */
   function contractArm(s, id) {
     if (!s.armJerk) s.armJerk = {};

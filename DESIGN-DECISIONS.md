@@ -1792,7 +1792,7 @@ These are display choices judged on pictures. The eyeballs say nothing about vis
 The user: “when we move our head around, the eyes also move ... The eyes attached to the brain, of course. And they move in accordance to our head direction. Even if that isn't necessarily accurate.” “can we also please have the whole brain light up slightly, faintly, with whatever color area is being picked?” “Currently, I can't see the models being built on the loading page, which they should be there, and the controls switch off halfway through. And the controls should stay visible the entire time while loading.” “the wrist/ankle being 3/4 up the height of the frame.”
 
 - **The brain's eyeballs turn with your look** (`updateBrainEyes`, `BRAIN_EYE_TURN` in `ns-scene-three.mjs`). Each eyeball is now its own mesh about its own centre. It turns by 0.7 of the look's turn from where the look started, at most 38 degrees either way, meant as a mirror would: look down and they look down (seen in pictures); look left and they should look to the left of the screen (the sign is set by reasoning: no picture confirmed it, because a look far enough to show it carries the eyeballs out of the frame). Written only when the look has changed. A picture of which way you are looking; not eye anatomy.
-- **The whole brain takes the picked colour, faintly** (`BRAIN_PICK_TINT`). While an area is looked at or switched on the cortex gets 6 % of that area's glow colour added, a little more on its lit side, eased in and out over about a fifth of a second. One uniform in the cortex shader; no new pass.
+- **The whole brain takes the picked colour, faintly** (`BRAIN_PICK_TINT`). While an area is looked at or switched on the cortex gets 6 % of that area's glow colour added, a little more on its lit side, eased in and out over about a fifth of a second. One uniform in the cortex shader; no new pass. (Since section 187 a gain on the cortex's own colour: the added light turned the matte cortex lilac or grey-blue.)
 - **The loading picture is back on** (`LOADING_PICTURE` true in the launcher). On a fast line it is short. It does not yet show the eyeballs joining the brain, which the user also asked for.
 - **The controls card stays for the whole load.** It no longer fades after five seconds whatever happens: it stays until the game is ready, then fades 1.5 s later, or later still so that it has been up for at least five seconds in all.
 - **The chosen limb's end stands three quarters of the way up the frame** when the view turns to it (`LIMB_KEYS.view.frameUp` 0.75; 0.6 this morning). The view still turns once and does not yet hold the limb there while the keys move it.
@@ -2549,9 +2549,11 @@ Not right, or not done:
   darker for each deeper storey, not in the game's group tones or steps.
 - The map colouring leaves some touching pairs on the same step where three or four muscles all touch (about 90 of the
   contacts, nearly all where a deep muscle lies under an outer one, but also the rectus femoris against the sartorius
-  near the hip); and the darkest steps go nearly black on the shaded side.
+  near the hip); and the darkest steps go nearly black on the shaded side (since section 187 a shade floor keeps them
+  dark red).
 - A muscle held in a posture glows faintly in its area's colour (the activity, not the used mark): on the darkest
-  tones an orange glow reads tan, as it does on the comic look's salmon.
+  tones an orange glow reads tan, as it does on the comic look's salmon. (The control mark's yellow did the same to a whole gripping forearm: it
+  glows in the muscle's own hue since section 187.)
 - The inner parts seen through the brain's gap keep their own darkening toward their outline (section 155).
 
 ## 169. Five small faults from a review of update 58 (20 November)
@@ -2952,7 +2954,8 @@ Not right, or not done:
 - Touching muscles still drawn nearly equal: 36 contacts, the heaviest the internal oblique against the transversus
   (mostly hidden under it) and the lateral gastrocnemius against the soleus; three steps cannot part every cluster
   where four or more muscles touch.
-- The optic nerves have no outline of their own; the brain's line is not drawn where an eyeball lies just beyond it.
+- The optic nerves have no outline of their own; the brain's line is not drawn where an eyeball lies just beyond it
+  (since section 187 it is, and an eyeball's line no longer shows through the brain).
 - The cost was measured with a timer on the graphics card, not as frame rate (above); the three screen composites are
   not in it.
 
@@ -3323,6 +3326,464 @@ From a review of updates 60 and 61 (each fault confirmed by two skeptics, each s
   crosshair and the mirror body's measures saw the face at rest (up to 11 mm off); now they see it as drawn.
 - With the eyes no longer glass (section 172), the processor and the graphics card disagreed about which hidden thing is
   drawn where an eyeball lies between a body part and the brain's surface; the crosshair now takes what is drawn there.
+
+## 183. The right elbow bends fully without folding its muscles; S draws a hand across the chest in to the shoulder; the right wrist has a control (21 November)
+
+The user: "Any limited range of motion that's unnatural needs to be fixed ... We want full range of motion on all axes";
+"there's problems with some limbs, such as the right arm having a full range of motion, especially when you go left all the
+way and it's unable to cross the body, the torso"; earlier: "You probably overdid it with the internal or medial rotation
+with the arms", "arm movement range of motion can be limited when looking up whilst in internal rotation". The list of
+what was not done: "the right elbow at its full bend still folds its muscles; with the right arm across the chest, S leaves
+the hand where it is".
+
+**What each control reaches** (a browser script, 1600 by 900, each probe from a fresh start: the look carried far up,
+down, across and out, the keys held for seconds singly and in turn, the limb turn; the upper arm's direction read in the
+chest's own axes; the joint angles from the game). Before (the lead build) and after, where they differ. Ordinary adult
+ranges for comparison are textbook figures (AAOS), not measured on anyone.
+- Right arm: raised forward or out to the side to 176 degrees of elevation (look up; D and look up); brought across the
+  body at shoulder height to 64 degrees past straight ahead, the hand 34 to 35 cm past the midline (the look; A at lower
+  raises); elbow 0 to 145 (W, S); forearm turn the whole 160 (limb turn). Short of ordinary: the arm behind the trunk's line
+  with the arm low, 34 degrees (look down; ordinary 60; no key moves an arm back), behind the side line at shoulder height
+  17 (ordinary about 40); the upper arm's own turn -15 to 35 before (only the limb turn moves it; ordinary 70 in, 90 out),
+  -55 to 35 now (the keys, across the body; below). The wrist: no control placed it before; now a drag on the hand (below).
+  A press-and-drag on the upper arm moves the shoulder's raise and the upper arm's turn through their whole joint ranges
+  (section 125), including the 60 degrees back.
+- Left arm (its own rig): raised forward and out to 180, behind the trunk's line to over 60, across to 68 past straight
+  ahead (hand 32 cm past the midline), behind the side line at shoulder height over 80, elbow 0 to 145, forearm turn the
+  whole 160. Short: the upper arm's own turn -15 to 35 (the limb turn only; no drag turns it); the wrist has no control.
+  Nothing on the left arm was changed.
+
+**The right elbow at its full bend** (looked at in close pictures offline, posed with the game's rig and skin records, and
+on the mirror body brought near). Three faults, each with its own rule (`ELBOW_SKIN` in `ns-body.mjs`, used alike by the
+start-posture bake, `skinBodyPositions` and the scene's processor skin):
+- The far ends of the forearm's muscles kept a share of the upper arm's frame (the weights fall off slowly with the
+  distance to each bone: 6 cm down the forearm the long finger and wrist flexors followed the upper arm by 15 to 30 %; the
+  triceps 3 cm above the elbow followed the forearm by 35 %). At a deep bend such a vertex was pulled 2 to 4 cm toward the
+  other bone, so the forearm's flexors folded back into the crease and through the biceps. A vertex shared across the
+  elbow now hands its share to its own side's bone between 2 and 5 cm from the elbow; nearer the joint the weights are
+  as before (attachments on the epicondyles and the olecranon keep their bone).
+- The linear blend of two frames bent 145 degrees apart pulls a vertex shared half and half most of the way to the
+  joint's axis: the back of the elbow came to a pinched point of crumpled triangles. Shared vertices now turn about the
+  elbow's axis by their share of the bend, for half of the difference (all of it swelled the back of the elbow into a ball).
+- From 50 degrees of bend (full from 100) a vertex on the inner side that has crossed the plane halving the bend, from
+  the forearm's side or the upper arm's, is put back on its own side, smoothly; vertices shared about evenly are moved
+  less, so nothing tears. The forearm and the biceps then meet along that plane.
+Measured within 15 cm of the elbow at the game's own full bend (shoulder 24 forward, 18 across, elbow 145): triangles turned
+over 2477 to 1766, vertices across the halving plane on the inner side 5043 to 3944; for the long finger flexor,
+brachioradialis and brachialis the deepest vertex of one side across that plane 13, 31 and 13 mm to 0 (a test keeps this).
+The five muscles across the elbow that were skinned on the graphics card (brachialis and the triceps' heads) are now
+skinned on the processor, as the forearm's muscles already were, so the rules reach them.
+
+**S with the arm across the chest.** The arm may cross the chest only as far as it is raised, and the upper arm's own turn
+was not one of the joints the keys' solve moves, so bending the elbow swung the forearm out sideways (the hand ended
+56 degrees off its line, offline; in the browser the forearm lay out to the right). Now the keys' solve may also turn the
+upper arm about its length (`LIMB_CHAIN.rightArm.spin` in `ns-grasp.mjs`), and only there: round a bent elbow (from 20 to
+70 degrees of bend), with the hand's place in across the body from the elbow, and only for a step that pushes the
+shoulder's raise or sideways swing past what the range or the combined-range rule gives. Everywhere else W and S turn
+nothing (the user, Message 186: "they're not rotating internally or externally while moving"); from the start position S
+still folds the arm with the upper arm's turn untouched. Across the chest S now brings the hand in to 14 cm of the
+shoulder, 12 degrees off its line (offline), turning the upper arm inward to between -35 and -55 (in the browser,
+held or tapped; a person turns the upper arm inward to bring the hand to the other shoulder). **How the turn is shared with the limb turn:** the double tap of Space still sets the
+upper arm's turn to its two ends (35 out, 15 in); the keys turn it on from wherever it is when the hand has to reach in
+across the body, and the next limb turn starts from wherever the keys left it.
+
+**The right wrist.** A press on the right hand and a drag now bends the wrist: up toward the palm (to 80), down back (to
+70), left and right sideways (radial 20, ulnar 30). The hand is told from the forearm by the part pressed, or, where a
+forearm muscle's tendon lies over the hand, by the pressed point lying beyond the wrist. A press on the forearm still
+bends the elbow and turns the forearm. The Esc page says so in one sentence. Before, the wrist moved only with a motor
+area, whose movement returns (section 177), and the same press on the hand bent the elbow.
+
+**Checked.** 487 unit tests (new: the elbow's skin rules on three muscles; S across the chest with and without the turn;
+S from the start turns nothing; a straight arm swung across is never turned). `?case=boot` ok. All 13 browser tests but
+`browser-outside-compass` pass. Frame table 60.1 / 60.2 / 60.0 / 60.0 and 60.0 / 60.3 / 59.6 / 60.0 against the lead's
+60.1 / 60.0 / 59.5 / 60.0 in turn; during the limb turn the skin's time per frame is 1.8 ms against 1.4.
+
+**Not done, or not right.**
+- In the browser the mirror body's folded elbow still shows a ragged edge on its inner, near side, where the forearm's
+  flexors start on the humerus (the picture improves only a little); offline the elbow's tip and crease are clearly
+  cleaner. Triangles still turn over in the crease (1766 in the count above); a real fix needs better weights or a
+  smoothing of the posed surface, both tried and rejected here (sharper weights tore edges; smoothing broke on the
+  atlas's unwelded seams).
+- With the keys and the look the right arm still goes only 34 degrees behind the trunk's line (60 ordinary) and 17 behind
+  the side line at shoulder height: the look cannot aim behind the shoulder and no key swings the arm back. The upper
+  arm's drag reaches the whole 60.
+- The upper arm's outward turn past 35 degrees is reached only by a drag on the right upper arm; the left arm's upper arm
+  turns only with the limb turn (50 of the ordinary 160 degrees), and the left wrist still has no control.
+- The limb turn's inward end stays 15 degrees (the user found more inward turn overdone, Message 160).
+
+## 184. Switching movements on: only what you look at or click, and the movement you started (21 November)
+
+The user: "when you tap any area of the brain, you activate any area, it will contract, then return to its previous
+place. But in returning to its previous place, you won't see corresponding activity and muscle activation. It will just
+return." (Message 206) and "make sure there's clear movement for each brain activation area. And you can clearly
+identify what type of movement it is for each area." (204). A browser hunt of Body update 62, each fault reproduced by
+a second player, found eight places where switching movements on did not keep to that (H1 to H8). Each was reproduced
+on this branch first with the hunt's own scenario, fixed, and shown fixed with the same scenario.
+
+**While a movement carries the view, the look stays on the area that started it** (H1, H7; `CARRIED_LOOK`,
+`carriedLookStep` and stepFrame's `heldGaze` in `ns-app.mjs`). A neck or trunk movement from the brain moves the view:
+the eye rides on the head as the trunk bends and turns, and the eye view swings with a neck movement (section 171). The
+crosshair then slid over things the player never aimed at. During "Bend head forward" it lay on the brain's lower arrow,
+and a second click turned the whole brain 15 degrees for good (every later look then landed one area off). During "Lean
+back" it slid onto the trunk area's other spot, so the tip said "Bend to the right" while the card listed the lean-back
+muscles, and three clicks 0.5 s apart started three different movements (lean back, bend to the right, turn the right
+arm outward). Now, from the first frame of such a movement until it has returned and the view is the pointer's again,
+and as long as the player leaves the look where it was:
+- the look keeps naming the area and spot that started the movement: the tip and the card name the movement running;
+- a click repeats that movement, and taps no muscle and takes no limb that the moving view brought under the crosshair;
+- an arrow tip of the brain or the mirror body under the crosshair takes no hover and no press (also for the rest of a
+  neck swing after the player has moved the look).
+A look movement of the player's own, or an arrow key's step, ends the hold for the rest of that movement: the look is
+the player's again, as before. Nothing new switches on during the hold.
+
+**The neck's view dips once, without a flicker** (H1; `neckViewStep`'s `peak` and `smoothS`). "Bend head forward" has
+only 10 degrees of room in the bowed start posture, so its jerk took the neck to its end in one frame, the end's stop
+threw it back almost to the start, and it slammed in again: the view, which followed the neck exactly, went to its whole
+15-degree dip for one frame, back up for about 100 ms, and down again. While the neck contracts the view now keeps the
+furthest the neck has gone, and it eases onto its offset over 0.05 s: measured in the browser, 0, -7, -11, -13, -14, -15
+degrees over the first frames, held through the contraction, then back with the return. The drawn head still shows the
+jerk.
+
+**Choosing a limb switches nothing on** (H2; `gameLookSeq` / `lookByGame`). Key 2 or 3 or a double click turns the view
+just far enough to bring the chosen limb's end into the picture (section 144). Looking at the strip, that turn slid the
+crosshair down it, and the area it came to rest on switched on as if looked at: key 2 on "Left ankle" made the trunk lean
+back, the double click bent the left elbow. A frame on which the game turned the view by itself (to a newly chosen limb,
+or after a limb the keys move) while the player left the look alone now records what is under the crosshair silently,
+as a change of view does. In the browser: the turn still ends on "Left elbow", and nothing is lit and nothing moves.
+
+**An arrow key's step lights only its area** (H3; `feedHeadMove`'s `byGame`). The step turns the look about 4.6 degrees
+in one frame, and the glow of the player's own movement (section 82) read that as a fast turn of the head and a fast
+swing of the left arm: a neck area went nearly white and the mirror body's left shoulder blue for 0.05 to 0.2 s at every
+press (0.2 to 0.55 on every step of a 13-step walk). A step, and a turn the game makes by itself, now feed no glow of
+their own. On the same walk the other areas now stay at the look's own resting neck level (at most 0.06). A real look
+movement of the mouse still lights the head and the shoulder as before.
+
+**No beam after a contraction** (H4). The look's soft link to the muscles of the area it rests on was made on 18
+November, when a look only armed an area (`LOOK_ARMS`). Since a look switches the area on, that link took over the moment
+the contraction's own light ended, because the look still rested there: the same cone of light to the same muscles,
+about as visible as the contraction's, through the whole return and for as long as the look stayed. With the look
+switching areas on, an area's link is now its contraction's alone (`LOOK_ARMS.on` gates the soft link); the reverse link
+from a muscle under the crosshair stays. In the browser: links and beams 0 from the first frame of the return and at
+rest 6 s later, for the throat and the left forearm's turn.
+
+**No long frame as a trunk movement ends** (H5; `treeRaycast` in `ns-scene-three.mjs`). A trunk movement rewrites the
+processor copies of many body muscles; 150 ms after the last rewrite the next crosshair pick rebuilt the box tree of
+every rewritten mesh at once, before even testing whether the ray came near it (88 % of a 100 to 117 ms frame). A mesh
+whose tree exists but is out of date is now picked on its live vertices with the same exact test used while it is being
+rewritten, and its tree is rebuilt a few per frame (`stepPickTrees`). Measured with a frame timer only, both trunk areas,
+three clicks each, this branch and the lead in turns on a busy machine: worst frame 33.4 to 50 ms here, 100 to 116.8 ms
+on the lead; the count of 33 ms frames per click is the same (5 to 8).
+
+**The first arrow key goes its own way** (H6; `areaStepStartId`). With the look on no area, the walk started from the
+area nearest the crosshair whichever key was pressed; from the start view that was the throat area at the lower left, so
+the right arrow turned the view to the left. It now starts from the nearest area on the key's side of the crosshair
+(the nearest of all only when none lies on that side): from the start view the right key goes to the lower-right throat
+area, the left key to the lower-left one. Two of the other maintainer's browser tests stepped with the right key to
+reach the lower-left area; they are restated with dated notes (`browser-keyboard-aim`, `browser-punch-in`).
+
+**The left wrist bends sideways** (H8; `wrist_dev` in `ns-rig.mjs`). The "Bend left wrist toward the thumb" and "...
+toward the little finger" spots lit their area and muscles and moved nothing (section 177 listed it): the game arm's
+hand had one wrist axis. It now has the second: the hand turns at the wrist about the axis across the palm, after the
+flexion, to the commonly cited ends of 20 degrees toward the thumb and 30 toward the little finger (as the right wrist,
+Messages 14 and 15), contracts and returns like every other movement, and the mirror body's hand follows. The words on
+the card, the tip and the map say so; the "already there" dimming of these two spots and three unit tests that pinned
+"moves nothing" are restated.
+
+**Checked.** 491 unit tests (new: `tests/switch-on.test.mjs`: the neck view's dip on the slam-rebound-slam the hunt
+recorded, the hold's rules, the first arrow's side, the wrist's sideways bend on the placeholder rig and in the activity).
+`?case=boot` ok. All 13 browser tests but `browser-outside-compass` pass. Frame table, this branch and the lead in turns
+on a shared machine: 59.8 / 59.4 / 59.4 / 59.9 and 60.1 / 59.4 / 58.1 / 59.8 against the lead's 60.0 / 59.4 / 60.1 /
+60.0 (the lead's other runs in the same hour 52-60 in the moving cases). These are rules of this game's display; nothing
+in them is measured.
+
+**Not done, or not right.**
+- While the look is held, the tip by the crosshair names the movement running although the crosshair drawn in the
+  swung or carried picture is over something else for that moment; that is the choice made here (the tip names what a
+  click does).
+- After choosing a limb the crosshair rests, unlit, on whatever area the turn ended on; a small look movement inside that
+  area starts nothing (section 177's rule): the player looks off and back, or clicks.
+- From the start view the right key now lands on the lower-right throat area, which is the right end of the walk: a
+  second right press goes on to the lower in-between area and then stops; the walk runs left from there.
+- The left wrist's sideways bend is not part of the arm's hand-fit envelope (`ENVELOPE_GRID`, which keeps the hand in
+  the picture); it was not checked whether the hand can leave the picture during the 0.4 s contraction at looks where
+  the hand already sits at the picture's edge. Seen in the browser only at the start look, where it bends and comes back.
+- A trunk area clicked while its movement is under way repeats the movement, also when the player meant to click the
+  other spot the crosshair was drawn on; moving the look first gives the old behaviour.
+
+## 185. The limb keys never whip or spin the view; no pair of keys and no brush with your chest leaves a limb stuck; a push stops when the pusher stops (21 November)
+
+The user: "The limb should never get stuck" (Message 207); "Let's get rid of all zoom and punch-in effects" (197); the
+view shifts "so that those [limbs] ... stay within the frame" (167) without the three-quarter height (190); a limb that
+collides "will push them out of the way rather than going through them" (174). Five faults from the browser hunt of
+update 62 (H9 to H12, H24), each reproduced on this branch first with the hunt's own scenario.
+
+**The view's follow while the keys move a limb** (`followTurnStep`, `keepOutBy`; `LIMB_KEYS.view` `followFrom`,
+`followMinGain`, `followMaxDegS`, `keepBox`, `keepFree`). The follow worked out its turn as if the camera turned where it
+stands. The eye view's camera stands half a metre behind the eye and turns about the eye (section 140's stand-off), so for
+a hand near your own head a turn moves it in the picture by a quarter of what was asked, or the wrong way. Below the eye
+the eased follow kept asking: with the right arm drawn in and swung out, D alone took the look from 25 to 70 degrees down
+and the camera 44 cm up over your head, the brain gone (H9). Behind the eye a turn toward the hand pushed it further out:
+with the right arm raised overhead and the look to the left, D spun the view 120 degrees round to face behind you, an
+empty dark room (H24). With the hand left out of the picture by a look straight up, one W swung the view 80 degrees in a
+third of a second and the camera 58 cm (H9). Now:
+- only a wrist or ankle that is in the picture (or just past its edge, `followFrom` 1.1 of the half width and height, in
+  front of the camera) is kept there. One the player's own look has left outside is not fetched: the view stays where the
+  player put it, as the player guide says ("it turns only when the hand or foot would leave the picture");
+- each turn is measured from where the camera really stands: a trial look on each axis, the frame's own camera turned to it
+  and moved as the stand-off moves (`NC.eyeDolly`). An axis on which the end moves less than `followMinGain` (0.35) of the
+  turn, or the wrong way, does not turn at all (the end may then reach the edge of the picture or leave it);
+- the follow turns at most `followMaxDegS` (75) degrees a second, eased as before;
+- a turn of the follow never takes the brain's middle or the mirror body's middle out of `keepBox` (0.85) of the picture's
+  half width and height, nor further out than it is; an item already well out (`keepFree`) binds nothing. Where the end and
+  these cannot all be kept, the brain and the mirror body win.
+- the frame after a follow turn records the area under the crosshair silently, as a neck movement's swing does: an
+  automatic turn is not the player's look. (In the one case tried, the follow sweeping the crosshair 40 degrees across the
+  strip, nothing was switched on in the lead build either.)
+The look still carries the chosen limb, the camera still steps aside from a raised arm (section 166), and nothing zooms.
+
+**Two keys at once at one key's end** (H10). With the right arm at the end of its D swing, S + D moved the hand 0 to 4 mm
+in 2 s although S alone drew it in at once; the same with S + A at the A end. The pair asks for the sum of the two keys'
+ways; the swing being at its end, the joints can only go the reach's way, and that move is more than `keyFarDeg` off the
+sum, so the frame waited (`offWay`) on every frame. Now a pair that waits tries each key's own way, the reach (W / S)
+first, then the swing (A / D), each with the same cut as a single key (`keyTake` inside `stepLimbHold`; the reach or swing
+taken is in `qa().limbs.lastSolve.dbg.pair`).
+
+**A hand against your chest** (H11; in about one run in sixteen of the hunt's steps). The right arm folded and swung
+across the chest by A could end with its hand 3 mm inside the trunk's keep-out. W's step out along the limb's line went a
+little deeper (the line grazes the chest) and was refused on every frame; the place then stayed where the swing had left
+it, 22 mm off the hand, the keys' line latched onto it, and W, S and A moved nothing (only D did). Now a refused step that
+grazes the body slides over its surface (`keepOutSlide`: the step taken out to the keep-out's surface, as the look's carry
+already was, when what is left still goes the step's way within `keyOffDeg`); a step straight into the body still moves
+nothing (the hand stops at the body); and a refused frame puts the place on the hand itself, so the keys' line starts
+from where the hand is.
+
+**A push that goes on after the pusher has stopped** (H12; `stepLimbPush`, `pushApproach`, `pushGivesWay`;
+`LIMB_PUSH` `approachM`, `giveOffDeg`, `giveShare`). The left leg held D against the bent right leg at the end of its range;
+for the 1.3 s the key stayed down after the left leg had stopped, the right leg rose from 70 to 110 degrees at the hip,
+its foot 37 cm, knee to chest. Three faults: the mover counted as moving when its end moved 0.4 mm, and a key held at a
+range end jitters it by about a millimetre a frame; after a push the overlap left was stored as the overlap less the step
+whether or not the push had removed any of it, so the same overlap read as grown on the next frame and was pushed again;
+and the pushed leg, already at its sideways end, gave way upward. Now only the mover's own approach is pushed away (its
+point of contact must come at least `approachM`, 1 mm, nearer the other limb that frame, and no more than that is pushed),
+and a pushed limb gives way only along the push (its end within `giveOffDeg`, 50 degrees, of the push and at least
+`giveShare`, 0.3, of it); otherwise it is passed through, as a limb that cannot give way at all already was.
+
+**Measured** (1600 by 900, the hunt's scenarios on this branch; before = this branch before the change):
+- H9, the look straight up and W: before, the look swung from 88 up to 14 up and 81 to the right, 49 degrees in 200 ms,
+  the camera 586 mm; after, the view does not move (the hand moves 10 mm out of the picture, as it was).
+- H9, S, A, D, then W + A from the start: before, D took the look from -25.5 to -69.6 degrees, W + A swung it to 113 to the
+  right; after, the look stays at -25.5 (the pitch's measured share 0.14 to 0.19: 'weak'), the hand ends 8 % up from the
+  picture's bottom after D, and W + A takes it out of the top right; the brain and the mirror body stay.
+- H24: before, yaw 59 to 184 and pitch to -76, a dark room; after, the view stays at 61 / -31, the brain at the right edge.
+- The follow where it should act: the right arm's D from the start turns the view 27 degrees right (the brain's middle at
+  0.51 of the half width); after a look up, D turns it until the brain's middle reaches 0.84 and stops there.
+- The left arm drawn in and swung across (D, W, S, A): before (the lead build) the look went to -56 degrees; after, -25.5.
+- H10: S + D from the D end 3 mm before, 491 mm in 2 s after; S + A from the A end 0 mm before, 571 mm after.
+- H11: an offline copy of the hold's key rules on the game's own body (S 3 s, A 2 to 3.4 s, then each key 1.2 s, at 60, 50
+  and 40 frames a second) left W, S and A dead in 28 of 42 runs before and none after; there W slides out over the chest
+  on its first frames and moves 482 to 489 mm. In the browser the stuck runs are rare (the hunt: 4 of 64): in 12 runs of
+  the hunt's scenario on the lead build none stuck today; in 18 on this branch none stuck, and in 6 of them W slid over
+  the chest on one or two frames and then moved 484 to 490 mm.
+- H12: after, the right leg goes from 71 / 26 to 74 / 31 (hip flexion / sideways) while the left leg comes on, and does not
+  move again once it stops; a right leg at its sideways end (45) is passed through, where before it was pushed 6 degrees
+  further up. The steps that build the hunt's pose also changed: before, the right leg's A had already pushed the left
+  leg to its sideways end and back to -30 degrees at the hip by the same fault.
+- Section 178's sweeps, re-run: the eight trap poses 8 of 8 free; the look carrying each limb 420 px in eight directions
+  and back 32 of 32; random play of each limb with two seeds, 679 steps, none stuck and none with fewer than two keys
+  that move it.
+- Frame rates while the keys move the right arm and the view follows: this branch 56 / 60 / 60, the lead 54 / 56 / 59.
+  A first version that built the whole camera for each trial look ran at 40 / 48 / 49.
+
+**Checked.** 495 unit tests (new: `tests/limb-follow.test.mjs` on a camera built like the eye view's: no fetch of a hand
+out of the picture, a turn just far enough and never faster than `followMaxDegS`, no chase below or behind the eye, the
+keep rule; `tests/limb-pair-push.test.mjs`: the pair at the D end on the game's own body, the slide, the push's approach
+and give-way rules). `?case=boot` ok. All 13 browser tests but `browser-outside-compass` pass. Frame table 60.0 / 58.6 /
+60.2 / 59.9 and 60.0 / 59.2 / 60.1 / 60.0 against the lead's 60.1 / 58.0 / 56.1 / 57.8 between them (other browsers were
+running on the machine). Under reduced motion the follow skips its ease but keeps its speed limit, so a large catch-up
+is never one jump.
+
+**Not done, or not right.**
+- A hand that the follow cannot keep (near your head, where a turn hardly moves it) may now sit at the edge of the picture
+  or leave it while the keys move it; before, the view chased it. Bringing it back is the player's look.
+- A hand the player's look has left outside the picture is not brought back by the keys (the hunt's H24 asked that the
+  hand stay in the picture; there it was already outside, behind the camera).
+- The turn to a newly chosen limb (`stepLimbView`, 1 to 4 and the double click) still works out its turn as a camera that
+  turns in place; it is the activation package's ground this round (H2). `followTurnStep` could serve it too.
+- H9's side effect, the left shoulder's area and muscles shown blue while only the right arm moves, was not traced: it shows
+  as the view turns (also on the lead build, with no movement switched on) and looks like the crosshair's own mark.
+- With the right arm in the hunt's pose across the chest, W may still wait 0.1 to 0.2 s before it moves (the arm's own end
+  check, a millimetre deeper); A there still moves nothing (it would push the hand into the chest), D and W do.
+- At a range end with a key held a leg still creeps a few degrees in its other joint (the left leg 3 degrees of hip flexion
+  in 1.4 s at its inward end): the keys' rule takes a move under a twentieth of the keys' way whatever its direction.
+
+## 186. Words, labels, cards and the tutorial: each says what is there, where it is drawn (21 November)
+
+Faults from the browser hunt of Body update 62 (H13, H15 to H23), each reproduced by a second agent, reproduced again on
+this branch first, and shown fixed with the same scenario and pictures. Nothing here changes a control.
+
+**The strip's labels keep off the limb buttons** (H13, H23). With the look 16 to 20 degrees up the strip lies at the foot
+of the picture, and its labels were placed under the "1 Left arm ... 4 Right arm" bar: cut through by its edge, or lost
+behind its chips. The bar (a child of the HUD beside the cards, not a card) was never among the things the labels keep
+clear of; now it is, as drawn (`readHudRectsNow`; for the labels only, so the arrows keep their places). Swept from the
+start look to 27 degrees up at 1600 by 900 and 1280 by 720: no label touches the bar; at 18 degrees up "Left leg" and
+"Right leg" stand just above it beside their blocks.
+
+**A label names the area it sits on** (H17). At 800 by 600 "Left leg" and "Right leg" lay squarely on the blue and orange
+arm areas, 22 px from the arm areas' anchors and 113 px from their own; after a resize the two "Belly and back" did the
+same. Two causes. The arm labels' boxes were reckoned with their second line ("brain's right half"), which the short and
+the off reading levels do not draw: 124 by 38 px for a label drawn 96 by 26, too wide for the room between the brain's
+arrow and the mirror body, so they went out onto the face areas and the leg labels took the places left on the arm areas.
+Their boxes now follow the reading level (the app root's `data-ns-read`), and the two-line box is as wide as drawn (it was
+18 px too wide). And a label is no longer placed where another part's anchor is clearly nearer than its own: nearer than
+three quarters of the way to its own (`LABEL_LAYOUT.ownArea`, `ownAreaRatio` 0.75, in `declutterLabels`; the twin on the
+other half is the `side` rule's). The faults measured 0.19 (the leg labels above), 0.26 ("Belly and back"), 0.43 ("Right
+arm" on the yellow leg block looking 15 degrees up at 1600 by 900) and 0.56 (the arm labels on the face areas); a leg
+label just beside its own small block, a little nearer the big arm area's anchor (0.94), stays. The required left-arm
+label goes there only when nothing else is left, faded. At 800 by 600 the arm labels now sit on their own areas at every
+reading level; with the tutorial's line at the top the leg labels have no place by their blocks and are not shown (at the
+full level, where that line gives way to the cards, they stand above their blocks). Counted over eight window sizes, the
+three reading levels, the tutorial running and finished and six looks each (2 304 label places, `s-labstat.mjs` in the
+package's work folder), lead and here: labels shown 708 and 646; clearly nearer another part's anchor (the rule above) 174
+and 4 (the four: the required arm pair, faded, in one view, 390 by 844 looking down at the full level); nearer at all 212
+and 73; faded 67 and 92 (a required arm-label pair with no clean place on its own areas is now drawn faded there, where the
+lead drew it plainly on a neighbour's area).
+
+**The left / right / back words are drawn where they were placed** (H19). Since the brain was turned half round (section
+136) each word extends away from the brain the other way (`ORIENTATION_ALIGN`: "Brain's right half" to the left of its
+anchor, "Back" upward), but the style sheet still drew them the old way round, so every word was drawn mirrored about its
+anchor, beside the box that had been found clear: across the brain's turn arrows at 1600 by 900 and 1280 by 720, on the
+colour key at 800 by 600, under the arm labels from outside. The HUD now sets each word's offset from the same table.
+Drawn where they are tested, three more faults showed, now fixed: with the brain's front or back out of sight there was no
+midline, and a side word with no free place on its own side slid across the middle onto the other one (a line halfway
+between the two side anchors stands in); the words were never tested against each other; and in a small wide window the
+colour key and the status card, which stand where section 165's stack puts them, were not among the places the words keep
+off. Rested on 81 looks round each half's face areas at 800 by 600 with the full reading level: on the lead 40 looks put a
+word on a card, the key or the other word; now none. There the side words are not shown (no free place on their own side);
+"↑ Back" shows where it is clear.
+
+**The brain's up arrow stays on its top side** (H15). Let go of the mirror body after lifting it over the brain, and the
+arrows are planned again with it there: the brain's up arrow went 146 px down its centre line into the gap between the
+halves, beside the crosshair and just above the mirror body's down arrow. That depth was allowed for the brain's BOTTOM
+arrow, which goes up the strip's hollow (section 59); the top arrow now keeps the ordinary limit (`BRAIN_TIP_RULES`
+`inwardMaxFracBy`), and with no place on its centre line it moves along the top side past the mirror body, to where it
+stood before the carry. The arrows at the start look and from outside are unchanged (compared tip by tip with the lead at
+eight window sizes and three outside views).
+
+**Space on one of your limbs** (H16). Space there chooses the limb; nothing holds it. The grip card said "Nothing is held:
+put the crosshair on the brain, the mirror body or one of your limbs, then press Space", which the player had just done.
+It now says "Your right leg is chosen: W A S D and your look move it."
+
+**The tutorial's first step on an area that moves nothing** (H18). At 800 by 600 the first area a look up reached was the
+right half's Tongue, which has no movement in this body yet; the line stayed at "1/9 Look at a colour on the brain: a part
+moves", the strict tutorial counted nothing that followed, and nothing said why. After an area that moved nothing (the
+Tongue, a black in-between area, a turn the forearm has already made) the line says "Nothing moved: look at another
+colour" until an area that moves is switched on. (A few words more, shown only then.)
+
+**Under the Esc page** (H20, H21). The tutorial's line was hidden only by the game's own frame, which does not run while the
+game is paused, so it stayed, cut by the Esc card's edge; it now hides when the game stops playing. In a wide window the
+card ran to 16 px from the bottom and the "Simulated activity · experimental preview · notes and credits" line, which stands
+above everything, lay across its Space key at 800 by 600; the card now ends above that line in every window shape.
+
+**W, S, A and D in words** (H22). Message 186 and section 145: W and S move the hand or foot straight out along the limb and
+back in, A and D swing the limb. The Esc page's Move rows said "move it forward or back" and "move it left or right", and the
+full Controls rows "forward", "left/right" and "back/closer"; for a limb that points up or aside W does not move the hand
+forward. They now say "reach it out or draw it in" and "swing it left or right", as the note under them did; the same in the
+start page's short rows, the hint lines, the tutorial's W / S lines and the key card's titles ("Reach out", "Draw the hand
+in"). Root's `browser-player-focus` test is restated for the Move rows.
+
+Checked: the unit tests (new: `tests/hud-words.test.mjs`); `?case=boot`; the 13 browser tests (all but the outside
+compass, which needs the publish tree); the hunt's own scenarios on this branch before and after; the label sweep looking up
+at two window sizes; the overlay audit of section 165 (eight window sizes, three reading levels, the tutorial running and
+finished, six looks each) on the lead and on this branch: overlaps 99 and 77, those with an orientation word 21 and 0, with
+a strip label 14 and 6 (the six: a label touching a compass arrow, which the labels' layout gives way to, section 165); the
+frame table, four runs each alternating with the lead on a shared, busy machine: no case slower beyond the runs' own spread
+(this branch 47.8 to 60.1 frames a second, the lead 48.3 to 60.3).
+
+Not done or not right:
+- At 800 by 600 with the tutorial's line showing, the leg labels and "Belly and back" are not shown at the start look:
+  there is no place by their blocks that is clear of the line, the mirror body and the arm labels.
+- In the face views at 800 by 600 and from outside after R then E at 600 by 900, the side words ("Brain's right half",
+  "Right half") are not shown: no clear place on their own side. Before they were shown, on the cards or each other.
+- A label's area is judged by the label anchors, one point per part and half, with an allowance (0.75); a label beside the
+  edge of a big area can still be left out though it would be right, and one within the allowance can sit on the edge of a
+  neighbour. Fewer labels show (646 against 708 in the count above) and more required arm labels are faded (92 against 67):
+  looking 15 degrees up at 1600 by 900 both arm labels are faded on their own areas (the lead: one faded, "Right arm" plain
+  on the yellow leg block).
+- The Tongue still moves nothing (the area has no movement in this body); only the tutorial says so. The key card's
+  movement rows for W and S still describe the start pose ("The arm lifts forward (shoulder flexion)").
+- `PLAYER-GUIDE.md` already says W reaches out and S draws in, but the Controls list of `PREVIEW-NOTES.html` still says
+  "W/S move the left hand forward and back; A/D move it left and right" (the lead writes that page).
+
+## 187. Five faults of the look: the brain's eyeballs in a roll, the pick tint, a rod in the right fist, a lit forearm, a black forearm (21 November)
+
+A browser hunt of Body update 62 found these, each reproduced by a second agent (H14, H25 to H28); each was shown again on
+this branch, fixed, and shown fixed with the same scenario. The owner's matte look, the group tones and the outlines
+stay.
+
+**The eyeballs stay on the brain while it rolls (H14).** During a quick circle roll an eyeball sank into the brain, and its
+dark outline ring was drawn across the brain's surface. Two causes. The eyeballs' vertices were kept about each eye's
+own centre (so it can turn with your look), but the living brain moves every vertex of the brain by a rule of its rest
+position in the brain's own millimetres (`nsLiveMove`, the wobble and beat of section 89): an eyeball's vertices read as
+points next to the atlas's origin, about 1.5 m from the brain, so the wobble of a quick roll threw them tens of
+millimetres off the brain while the brain and the nerves moved a few (and every beat moved them about 4 mm). The
+vertices are now in the brain's millimetres like every brain mesh, and the turn with your look is a matrix about the eye's
+centre (`eyeTurnMatrix`); in the roll the moving and the held pictures agree. The second cause: the outline's picture of
+the brain and its eyes (section 176) held no depth between the brain's surface and the eyes, so the line round an eyeball
+behind the brain was drawn across it, in still views too. That picture now carries how near each is
+(`patchCoverageNear`, 8 bits over the brain's size, about a millimetre a step): an eye's line is drawn only where the eye
+is in front. Where an eyeball goes behind the brain, the brain's own line now crosses it (176 listed it as not drawn).
+
+**The pick tint is faint (H25).** Message 177's whole-brain light in the picked area's colour (`BRAIN_PICK_TINT`, section
+137) added 6 % of the area's saturated glow colour to the cortex. On the matte brain, pale and mostly in shade, that
+turned the cortex lilac on a violet area and grey-blue on a cyan one: its hue (OKLCH) moved up to 20 degrees where the
+brain faced the light and 15 to 150 in deep shade. It is now a gain on the cortex's own colour (`BRAIN_PICK_LOOK`, `brainPickGainInto` in
+`ns-brain-ink.mjs`), the same in light and shade: a little lighter (it lights up), a faint cast toward the area's own hue,
+and never greyer than 0.85 of the cortex's own colour. The change is a fifth or less of the old one in shade, and the hue
+moves at most 12 degrees anywhere. Across a muscle of your own body (the reverse link) a patch of the brain went from 104, 77, 77 to
+116, 81, 99 before and goes to 113, 82, 86 now; on the cyan thumb area the brain stays pink.
+
+**No rod out of the right fist (H26).** The thin grey rod at the curled right hand's thumb was the extensor indicis: its
+tendon runs into the index finger's extensor expansion over the middle and distal phalanges, but its skin candidates
+ended at the proximal phalanx (its hint), so in a fist that part stood straight out of the knuckle, up to 54 mm off the
+finger. The extensor indicis and the extensor digiti minimi now take their finger's middle and distal phalanges as
+candidates (`EXPANSION_RE` in `ns-body.mjs`; the little finger's extensor does not reach past its first phalanx, so only
+the index changes); the rig file is rebuilt. In a fist its tendon now lies on the finger like the extensor digitorum beside
+it.
+
+**A lit limb stays rose red (H27).** During a Space grip (and while a limb key moves a limb) the control mark of section
+139 (`PART_GLOW`) added the mark's warm yellow as light and as a broad rim; on the darkest rose tones, the forearm's
+flexors, that read as a flat tan or khaki, another material. In the raw look a marked muscle now glows in its own hue:
+the light added is its own colour at full brightness with 15 % of the mark's yellow, and the rim keeps more of the
+yellow, narrower (`PART_GLOW_RAW`). A gripping forearm measured 116, 75, 59 (hue 17) and now 115, 38, 42 (hue 357)
+against 90, 18, 28 at rest: lit rose muscle, with the hand areas' own cyan and yellow on the finger benders as before.
+The comic look keeps the old mark.
+
+**No black forearm in shadow (H28).** Section 168 listed it: the raw light's deepest shade, a quarter of the colour (0.15
+on a back face), left the darkest rose tones at 10 to 27 red, darker than the room. A muscle's shade is now kept, with a
+soft knee, from taking its colour under a small brightness (`RAW_LOOK.muscleFloor`, about 53, 13, 14 on the darkest
+tone, twice the room's light); the colour is only scaled, so the hue stays, and what faces the light is not changed. The
+lighter tones are hardly touched (the reference rose at the ambient shade 45 to 51 red). The raised right forearm's
+darkest points went from 27, 4, 5 to 53, 13, 14. Muscles only: the brain, the bones, the strip's black abyss and the
+room have no floor.
+
+**Checked.** 498 unit tests (eleven new, `tests/look-fixes-r26.test.mjs`). `?case=boot` ok. The 13 browser tests other than
+`browser-outside-compass` pass; `browser-punch-in` failed twice in ten runs on this branch, both while the machine's load
+was 27 to 29 (its movement had ended when the test read it), and passed the other eight; the lead passed six of six, three
+of them at that load. The eyes' fix was also looked at with the OpenGL back end. Frame table (frames a second, still /
+looking round / up and down / the limb turn, runs taken in turn with the lead's on a busy machine): this branch 60.0 /
+58.5 / 59.1 / 55.9, 60.0 / 58.9 / 60.0 / 59.9, 60.0 / 58.8 / 60.2 / 59.9, 60.1 / 59.2 / 60.1 / 60.0; the lead 60.1 / 59.5 /
+60.2 / 60.0, 60.0 / 59.2 / 57.8 / 44.4, 60.1 / 59.1 / 60.1 / 59.9, 60.0 / 59.6 / 35.5 / 43.0. The time the script spends
+drawing a still frame measured 2.9 to 5.1 ms here against 2.9 to 3.3 on the lead: a small cost cannot be told from the
+noise of the other browsers running at the time.
+
+**Not done, or not right.**
+- The pick tint is faint by design: side by side it shows, at a glance it may not. If it should show more, raise
+  `BRAIN_PICK_LOOK.lift` (the lighting up) before the cast.
+- In the deepest shade every dark muscle group now meets at the same dark red, so the groups differ there by little.
+- The eyeball's own turn with your look also turns the small move the brain's wobble gives it (a few millimetres at
+  most, at the eyes' largest turn); not seen.
+- The extensor indicis' entry in the fallback blends for meshes not yet loaded (`REFERENCE_MUSCLE_BLENDS`) is the old
+  one; nothing uses it while the source meshes are there.
 
 ## What is left, and whose it is
 

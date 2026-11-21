@@ -463,8 +463,9 @@ const sided = (side, ...names) => names.map(n => `${side} ${n}`);
 
 /** R558: why each hemisphere shifts the jaw toward its own side. */
 const JAW_SHIFT_NOTE = 'Game choice: the pterygoids of one side push the chin toward the other side, and each hemisphere drives the opposite pterygoids more strongly (a crossed bias, as for the masseter), so each hemisphere shifts the chin toward its own side.';
-/** R558: the left wrist's sideways bends light and colour only (the game arm's hand fit has one wrist axis). */
-const LEFT_WRIST_SIDE_NOTE = 'The game arm keeps its hand where you look with one wrist axis (bending toward the palm or back), so this sideways bend lights the area and colours its muscles but does not move the left hand. The right wrist does bend sideways.';
+/** R558: the left wrist's sideways bends. 21 November 2026 (browser hunt of update 62, H8): they used to light and colour
+ * only (the game arm's hand fit had one wrist axis); the game arm's wrist bends sideways now (ns-rig wrist_dev). */
+const LEFT_WRIST_SIDE_NOTE = 'The left hand bends sideways at the wrist (radial 20 / ulnar 30 degrees, AAOS, as for the right wrist), then comes back.';
 
 const LEG_PATHWAY = c => `Its corticospinal fibres cross in the medulla and reach the lumbosacral motor neurons of the ${c.S} leg.`;
 
@@ -737,13 +738,13 @@ const CONTENT = {
       leftArm('wrist_flexion', 'Flex left wrist', ['FCR', 'FCU'], ['ECRL', 'ECRB', 'ECU'], ['FDS', 'FDP']),
       leftArm('wrist_extension', 'Extend left wrist', ['ECRL', 'ECRB', 'ECU'], ['FCR', 'FCU'], ['ED']),
       // R558 (Messages 14 / 15): the right wrist bends sideways (radial 20 / ulnar 30, AAOS), so the left wrist area has
-      // the same two spots. The game arm's hand fit has one wrist axis, so on the left these light and colour only.
+      // the same two spots. (21 November 2026, H8: the game arm's wrist bends sideways too now, ns-rig wrist_dev.)
       leftArm('wrist_radial_deviation', 'Bend left wrist toward the thumb (radial deviation)', ['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU'], [],
         null, null, LEFT_WRIST_SIDE_NOTE),
       leftArm('wrist_ulnar_deviation', 'Bend left wrist toward the little finger (ulnar deviation)', ['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB'], [],
         null, null, LEFT_WRIST_SIDE_NOTE)
     ],
-    explanation: 'Wrist area for the LEFT hand in the right hemisphere, between the forearm-rotation and hand areas. Crossed corticospinal fibres reach the cervical motor neurons of the wrist flexors and extensors. In the game, looking here pulses the existing left wrist flexion (flexor carpi radialis and ulnaris) or extension (the three wrist extensors); the sideways bends toward the thumb (radial deviation) or the little finger (ulnar deviation) colour their muscles but do not move the game arm, whose hand fit has one wrist axis. Wrist representation overlaps the fingers and appears on both sides of the hand zone (Meier 2008; Gordon 2023), but this one-dimensional strip shows only the dorsal part, and forearm-muscle maps have task-specific peaks (Masse-Alarie 2017).',
+    explanation: 'Wrist area for the LEFT hand in the right hemisphere, between the forearm-rotation and hand areas. Crossed corticospinal fibres reach the cervical motor neurons of the wrist flexors and extensors. In the game, looking here pulses the existing left wrist flexion (flexor carpi radialis and ulnaris) or extension (the three wrist extensors); the sideways bends toward the thumb (radial deviation) or the little finger (ulnar deviation) bend the left hand sideways at the wrist. Wrist representation overlaps the fingers and appears on both sides of the hand zone (Meier 2008; Gordon 2023), but this one-dimensional strip shows only the dorsal part, and forearm-muscle maps have task-specific peaks (Masse-Alarie 2017).',
     citationKeys: ['MEIER2008', 'MASSE2017', 'GORDON2023', 'LOYOLA', 'UAMS_UPPER']
   } : {
     label: 'Right wrist', shortLabel: 'R wrist', effector: 'wrist (right arm)', bodySide: 'right', medialSurface: false,
@@ -1701,8 +1702,7 @@ const PLAIN_DETAIL = {
       `the forearm-turning area and the hand area. ${ARM_PATH_PLAIN('the wrist muscles', ', wrist flexors and extensors')} ` +
       'In the game, looking here gives a short burst (pulse) of the left wrist bending toward the palm (flexion: flexor ' +
       'carpi radialis and ulnaris) or bending back (extension: the three wrist extensors). The sideways bends toward the ' +
-      'thumb (radial deviation) or the little finger (ulnar deviation) colour their muscles, but the game arm does not ' +
-      'move: its hand fit has only one wrist axis. In the brain, the wrist area ' +
+      'thumb (radial deviation) or the little finger (ulnar deviation) bend the hand to that side. In the brain, the wrist area ' +
       'overlaps the fingers and shows up on both sides of the hand zone (wrist representation; Meier 2008; Gordon 2023). ' +
       'But this strip runs in only one direction (one-dimensional), so it shows only the upper part (dorsal part). Maps of ' +
       'the forearm muscles also peak in different places for different tasks (task-specific peaks; Masse-Alarie 2017).'
@@ -1982,9 +1982,9 @@ const PLAIN_DETAIL = {
 const JAW_SHIFT_PLAIN = 'This is a game choice. The deep chewing muscles of one side push the chin toward the other side ' +
   '(pterygoids), and each half of the brain drives the other side’s muscles more strongly (a crossed bias, as for the ' +
   'masseter). So each half shifts the chin toward its own side.';
-const LEFT_WRIST_SIDE_PLAIN = 'The game arm keeps your hand where you look, and its wrist bends only one way (toward the palm ' +
-  'or back; one wrist axis). So this sideways bend lights the area and colours its muscles, but your left hand does not ' +
-  'move. Your right wrist does bend sideways.';
+// 21 November 2026 (browser hunt of update 62, H8): the game arm's wrist bends sideways now (ns-rig wrist_dev).
+const LEFT_WRIST_SIDE_PLAIN = 'The hand bends sideways at the wrist, pulled by the muscles on that side of the forearm (a ' +
+  'flexor and an extensor together), then comes back.';
 const NECK_CHOICE_PLAIN = 'This is a game choice: each half of the brain turns the head toward the other side (each ' +
   'hemisphere, opposite side). Which half really drives head turning is not known (unresolved).';
 /** Action plain notes (restating `note`), keyed like PLAIN_ACTION. */

@@ -823,7 +823,7 @@ function wristReachPhi(base, F) {
 function poseContext(rig, joints) {
   const base = rigBase(rig);
   const J = normalizeJoints(joints);
-  const key = `${J.wrist_flex}|${J.forearm_pronation}`;
+  const key = `${J.wrist_flex}|${J.forearm_pronation}|${J.wrist_dev}`; // (21 November 2026, H8: the wrist's sideways bend moves the hand too)
   let core = base.ctxCache.get(key);
   if (!core) {
     const Rw = forearmHandMatrix(rig, J);

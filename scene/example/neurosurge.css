@@ -467,6 +467,8 @@ html, body {
   padding: 1px 7px;
   border-radius: 999px;
 }
+/* (21 November 2026: the HUD sets each label's translate inline from ORIENTATION_ALIGN, which follows the brain's half
+   turn; these four are the unturned brain's, kept for pages without it.) */
 .ns-orient-right { transform: translate(0, -50%); }
 .ns-orient-left { transform: translate(-100%, -50%); }
 .ns-orient-anterior { transform: translate(-50%, -100%); }

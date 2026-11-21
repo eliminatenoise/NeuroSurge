@@ -351,8 +351,10 @@ const CONTROL_TABLE = [
   // 20 November 2026: the eyes take a look past the head's reach; the trunk no longer bends with it (LOOK_BENDS_TRUNK).
   // The chosen limb's hand or foot keeping its place is the Look row's.
   ['Mouse / trackpad', 'turn your head and neck to look around (past their reach your eyes turn further)'],
-  ['A / D', 'move the chosen limb\'s hand or foot left/right (the left arm at the start; keys 1 to 4 choose); while Space holds something, move that instead'],
-  ['W / S', 'W moves the chosen limb\'s hand or foot forward, or a held item farther away; S brings it back/closer. Combine with A/D for diagonals.'],
+  // 21 November 2026 (hunt H22; Message 186, section 145): W and S move the hand or foot along the limb's own line, A
+  // and D swing the whole limb; "forward" and "left/right" were wrong for a limb that points up or aside.
+  ['A / D', 'swing the chosen limb to your left or right without changing its bend (the left arm at the start; keys 1 to 4 choose); while Space holds something, move that sideways instead'],
+  ['W / S', 'W reaches the chosen limb\'s hand or foot straight out from its shoulder or hip, or moves a held item farther away; S draws it straight back in, or brings the item nearer. Combine with A/D to do both.'],
   // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
   // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
   // 20 November 2026, evening (the owner, Message 204: "Let's just make spacebar grasping for all of the limbs at once"):
@@ -374,7 +376,7 @@ const CONTROL_TABLE = [
   ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
   // R558 (genuine note R31).
   ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it'],
-  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag sideways to turn it about its length, up to bend it and down to straighten it, as far as you drag (inside its range); that limb becomes the chosen one and lights while you drag.'],
+  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag sideways to turn it about its length, up to bend it and down to straighten it, as far as you drag (inside its range); on your right hand the same drag bends the wrist, up and down or sideways. That limb becomes the chosen one and lights while you drag.'],
   // R558 (Messages 33 and 34): one reach-behind gesture for every control (ns-controls REACH_CODES).
   ['Shift + press', 'hold Shift as you click, press Space or press and drag: the press acts on the other thing on the same line of sight (the body part in front of a motor area, the brain behind the mirror body, what is behind an arrow tip). Without Shift a press acts on what the “Looking at” card names: a motor area even behind a body, otherwise what you see (the brain’s glass is clear).'],
   // R5-text (D16): no "curved" (the user's R20).
@@ -392,8 +394,9 @@ const CONTROL_TABLE = [
  * the Esc page opens with these short words too; its "Show the full instructions" button swaps in CONTROL_TABLE's. */
 const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
-  'A / D': 'hand and held item left/right',
-  'W / S': 'W farther, S closer; combine with A/D',
+  // (21 November 2026, hunt H22: along the limb's line and a swing, as the full rows say)
+  'A / D': 'swing the limb (or a held item) left or right',
+  'W / S': 'W reaches out, S draws in; combine with A/D',
   'Hold Space': 'hands and feet grip; hold the brain or mirror body, look to carry it',
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
@@ -514,7 +517,8 @@ export const SHELL = deepFreeze({
       ['1 / 2', 'choose left arm / left leg'],
       ['3 / 4', 'choose right leg / right arm'],
       ['Click limb', 'choose it'],
-      ['W S', 'move it forward or back'], ['A D', 'move it left or right']],
+      // (21 November 2026, hunt H22: the rows say what the note under them says; W does not move a raised arm forward)
+      ['W S', 'reach it out or draw it in'], ['A D', 'swing it left or right']],
       // 19 November 2026 (ns-app LIMB_KEYS.view: the view holds the chosen limb). 20 November 2026: "In the eye view"
       // is back (it went with the withdrawn turn to a chosen limb, Body update 50); from behind, E, the look carries no
       // limb (ns-app holdCarries).
@@ -635,10 +639,10 @@ export const HUD = deepFreeze({
   // R4-text: "a rough map" (Flesch 68.8 -> 72.3, 118 characters); the pinned opening and the four core honesty items
   // are unchanged.
   limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
-  hint: 'Move to look. W/S reach forward or back; A/D move left or right. Hold Space on the brain, the mirror body or one of ' +
+  hint: 'Move to look. W/S reach out or draw in; A/D swing left or right. Hold Space on the brain, the mirror body or one of ' +
     'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); a carried thing goes through you and through anything. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area to see its movements. Click it or press a number to move its body part. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
     'Esc frees it.',
-  hintShell: 'Look to aim. 1 to 4 choose a limb; it goes with your view. A/D move its hand or foot left or right, W/S forward or back. Tap Space twice: all four limbs turn ' +
+  hintShell: 'Look to aim. 1 to 4 choose a limb; it goes with your view. W/S reach its hand or foot straight out or draw it in, A/D swing it left or right. Tap Space twice: all four limbs turn ' +
     'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movement; click to do it again. Hold Space on ' +
     'the brain or the mirror body. Move the pointer or press W/A/S/D to carry it. Let go to leave it there (or tap Space to take hold, and tap again to let go). Shift + a press reaches the other thing in line. Esc: controls and reset.',
   markers: 'Dots are rough control spots, not exact points in the brain. The coloured areas overlap.',
@@ -1104,9 +1108,10 @@ export const REACH_INFO = deepFreeze({
   simulated: 'Simulated: textbook muscle roles shown at a made-up level. Nothing is measured.',
   known: '',
   dir: {
-    forward: { key: 'W', title: 'Reach forward', movement: 'The arm lifts forward (shoulder flexion); the elbow straightens',
+    // (21 November 2026, hunt H22: W reaches along the arm's own line, which points up when you look up: "Reach out")
+    forward: { key: 'W', title: 'Reach out', movement: 'The hand reaches out along the arm\'s line: the elbow straightens and the shoulder follows',
       muscles: 'front of the deltoid, coracobrachialis, upper pectoralis major; triceps at the elbow', elbow: true },
-    back: { key: 'S', title: 'Pull the hand back', movement: 'The arm draws back (shoulder extension); the elbow bends',
+    back: { key: 'S', title: 'Draw the hand in', movement: 'The hand draws in along the arm\'s line: the elbow bends and the shoulder follows',
       muscles: 'back of the deltoid, latissimus dorsi, teres major; biceps and brachialis at the elbow', elbow: true },
     left: { key: 'A', title: 'Swing the arm out', movement: 'The arm swings out to the left, away from the chest (horizontal abduction)',
       muscles: 'back and middle of the deltoid, infraspinatus, teres minor', elbow: false },
@@ -1183,22 +1188,30 @@ export const GRASP_INFO = deepFreeze({
   leadHeld: 'Let go of Space to release it.',
   leadKept: 'Tap Space again to let go.',
   leadNothingHeld: 'Nothing is held: put the crosshair on the brain, the mirror body or one of your limbs, then press Space.',
-  leadNothingKept: 'Tap Space again to open the hands.'
+  leadNothingKept: 'Tap Space again to open the hands.',
+  // 21 November 2026 (hunt H16): Space on one of your own limbs chooses that limb (ns-app LIMB_KEYS.view.hold): nothing
+  // holds it, the keys and your look move it. The card said "Nothing is held: put the crosshair on ... one of your
+  // limbs, then press Space", which the player had just done.
+  chosen: { leftArm: 'Your left arm', rightArm: 'Your right arm', leftLeg: 'Your left leg', rightLeg: 'Your right leg' },
+  leadChosen: 'is chosen: W A S D and your look move it.'
 });
 
 /** PURE: the information card for the grip of a Space grasp. grip = { phase: 'close' | 'open', holding: 'brain' |
- * 'mirror' | a limb id (ns-grasp LIMB_IDS) | null, kept: the hold was taken with a tap }. Null for no grip.
+ * 'mirror' | a limb id (ns-grasp LIMB_IDS) | null, chosen: the limb id this press of Space chose (nothing held) | null,
+ * kept: the hold was taken with a tap }. Null for no grip.
  * Returns the plainInfoCard shape (as reachInfoCard), with key for the renderer's change test. */
 export function graspInfoCard(grip) {
   if (!grip || (grip.phase !== 'close' && grip.phase !== 'open')) return null;
   const closing = grip.phase === 'close', kept = grip.kept === true;
   const part = closing ? GRASP_INFO.close : GRASP_INFO.open;
   const what = typeof grip.holding === 'string' && Object.prototype.hasOwnProperty.call(GRASP_INFO.holding, grip.holding) ? GRASP_INFO.holding[grip.holding] : null;
+  const chose = !what && typeof grip.chosen === 'string' && Object.prototype.hasOwnProperty.call(GRASP_INFO.chosen, grip.chosen) ? GRASP_INFO.chosen[grip.chosen] : null;
   const lead = !closing ? ''
     : what ? `Holding ${what}. ${kept ? GRASP_INFO.leadKept : GRASP_INFO.leadHeld}`
-      : kept ? GRASP_INFO.leadNothingKept : GRASP_INFO.leadNothingHeld;
+      : chose ? `${chose} ${GRASP_INFO.leadChosen}${kept ? ` ${GRASP_INFO.leadNothingKept}` : ''}`
+        : kept ? GRASP_INFO.leadNothingKept : GRASP_INFO.leadNothingHeld;
   return {
-    key: `${grip.phase}|${what ? grip.holding : '-'}|${closing && kept ? 'kept' : 'held'}`,
+    key: `${grip.phase}|${what ? grip.holding : chose ? `chose:${grip.chosen}` : '-'}|${closing && kept ? 'kept' : 'held'}`,
     title: part.title,
     tag: GRASP_INFO.tag,
     lead,
@@ -1652,10 +1665,14 @@ export const GUIDE = deepFreeze({
     readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
   },
   partial: {
-    moveHandNeedX: 'Good! Now try A or D to move it left or right.',
-    moveHandNeedZ: 'Good! Now try W or S to move it forward or back.',
+    // (21 November 2026, hunt H22: W and S move along the limb, A and D swing it)
+    moveHandNeedX: 'Good! Now try A or D to swing it left or right.',
+    moveHandNeedZ: 'Good! Now try W or S to reach it out or draw it in.',
     // R558: shown while a number-key goal is current, after a number whose movement was already at its end.
     numberKeyStill: 'That movement is already there. Press another number from the card.',
+    // 21 November 2026 (hunt H18): shown while the tutorial's first step is current, after the look switched on an area
+    // that moved nothing (the Tongue has no movement in this body yet; the black in-between areas move nothing).
+    lookStripStill: 'Nothing moved there. Look at another coloured area: a part moves.',
     // R558: shown while the watchBody goal is current, after a number moved a part with the look still on the brain.
     watchBodyLookDown: 'It moved! Now look down at the body and press another number. The card keeps the list.',
     // R5-text: shown while the thirdPerson goal is current and the view from behind is on.
@@ -1693,9 +1710,10 @@ export const GUIDE = deepFreeze({
     // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
     skip: 'Enter: skip',
     byText: {
-      'Good! Now try A or D to move it left or right.': 'Now A or D',
-      'Good! Now try W or S to move it forward or back.': 'Now W or S',
+      'Good! Now try A or D to swing it left or right.': 'Now A or D',
+      'Good! Now try W or S to reach it out or draw it in.': 'Now W or S',
       'That movement is already there. Press another number from the card.': 'Already there: press another number',
+      'Nothing moved there. Look at another coloured area: a part moves.': 'Nothing moved: look at another colour',
       'It moved! Now look down at the body and press another number. The card keeps the list.': 'Now look down and press a number',
       'This is your back! Move the mouse to look around. Press E to go back.': 'Press E to go back',
       'The brain is in the way. Press and drag the mirror body to turn it (hold Shift as you press when a brain area is in front of it).': 'Hold Shift to reach past the brain',

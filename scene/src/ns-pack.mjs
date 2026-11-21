@@ -26,7 +26,7 @@
 export const PACK_FORMAT = 'ns-mesh-pack-1';
 /** The SHA-256 of packs/PACK-INDEX.json as committed (tools/build-mesh-packs.mjs writes this line; tests/pack.test.mjs
  * checks it). The index is refused, and the game reads the source files instead, when its bytes do not match. */
-export const PACK_INDEX_SHA256 = 'ef9ec97dac7b2c6dd83e88d7a53df76b02b11333931c0846a116b3fc60d85fde';
+export const PACK_INDEX_SHA256 = '2de73c341a2a417a079c24f7af63e00dba14e657893c155e0b12052cbf620d64';
 export const PACK_DEFAULTS = Object.freeze({ indexUrl: '../../packs/PACK-INDEX.json', base: '../../packs/' });
 export const PACK_INDEX_FORMAT = 'ns-mesh-pack-index-1';
 const MAGIC = [0x4e, 0x53, 0x50, 0x4b, 0x31, 0x0a]; // "NSPK1\n"

@@ -196,7 +196,7 @@ import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, out
 import { createGhostPass, seeAreaCode } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front; 19 November: everything hidden
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
-import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, BRAIN_FLESH_LOOK, cortexFleshGlsl, CORTEX_FLESH_HEAD } from './ns-brain-ink.mjs';
+import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals, reliefDepth, reliefShare, stripCover, patchAreaInkShaders, areaInkUniformValues, glassInkGlsl, glassInkUniformValues, GLASS_INK_HEAD, BRAIN_FLESH, BRAIN_FLESH_LOOK, cortexFleshGlsl, CORTEX_FLESH_HEAD, brainPickGainInto } from './ns-brain-ink.mjs';
 
 // 18 November (the living brain): the beat, the blooms round switched-on areas and the wobble when it is handled.
 import { BRAIN_LIVE, createBrainLive, stepBeat, stepBlooms, stepWobble, bloomOn, bloomOff, bloomPulse, bloomCentreOf, writeLiveUniforms, beatCentre, patchLiveVertex, liveFragmentHead } from './ns-brain-live.mjs';
@@ -214,7 +214,8 @@ import { tipMoveWords } from './ns-quiet.mjs'; // 19 November 2026 (EASE): a mov
 import { CONTACT_FX, createContactFx } from './ns-contact-fx.mjs'; // 18 November 2026 (package CONTACT)
 import { REGIONAL_LAYER_PROVENANCE, regionalLayerQualification, regionalLayerMetadata } from './ns-regional-layers.mjs';
 // R558: the one rule that says which catalogue records are lifted in the Body Worlds stack, and by which share.
-import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, anconeusDeepBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget, BODY_SHAPE, bulkLimbChain } from './ns-body.mjs';
+import { bodyStackLevel, BODY_STACK_RULE, bodyMuscleLayer, bodyPacketMuscleName, rForearmTwistTable, rForearmTwistMap, anconeusBendBlend, anconeusDeepBendBlend, BODY_SEGMENTS as BODY_SEGMENT_LIST, MUSCLE_SWELL, muscleSwellTarget, BODY_SHAPE, bulkLimbChain,
+  ELBOW_SKIN, ELBOW_FORE_SEGMENT, elbowBendOf, elbowSpinOffset, elbowPlaneOf, elbowCreaseClamp } from './ns-body.mjs';
 import { limbLengthField } from './ns-body-shape.mjs'; // 20 November 2026 (BODYSHAPE): the digit tendons' places on the longer limbs
 import { ARTERY_LOOK, VEIN_LOOK, STRIP_GIVE, BODY_VESSEL_LOOK, VEIN_COURSES, brainEnvelope as vesselEnvelope, buildCerebralVeins, pointField as vesselPointField, stripGive as vesselStripGive, vesselVertexGlsl, vesselFragmentGlsl, evalBodyVessels, bodyTubeIndex, writeBodyTubes } from './ns-vessels.mjs'; // 18 November (package VESSELS)
 import { hemisphereSideOf, partedPositions, partedOnBrain, partedBridging } from './ns-brain-part.mjs'; // 20 November 2026: the vessels follow the parted halves
@@ -3024,7 +3025,15 @@ export function placeOrbitArrows(hull, {
  * distance as before. With whole rings (a label's half width sideways, its height up or down) a label that touched
  * the mirror body's head by a few pixels had to jump a whole half width away, onto the next label's place, and the
  * labels after it went further still (in an upright window "Left leg" ended up on the arm areas). */
-export const LABEL_LAYOUT = Object.freeze({ maxShown: 8, maxShownCompact: 6, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15, ringFrac: 0.5 });
+/* 21 November 2026 (hunt H17): ownArea: a label is never placed where another label group's anchor (another part's area)
+ * is clearly nearer than its own, nearer than ownAreaRatio of the way to its own anchor; a required label is placed there
+ * only when nothing else is left (wrongAreaCost, then faded). At 800 by 600 "Left leg" lay 22 px from the left arm's
+ * anchor and 113 px from its own (0.19), squarely on the blue arm area, and the player read the blue area as "Left
+ * leg"; after a resize "Belly and back" lay on the arm areas (0.26); the arm labels on the face areas (0.56); looking up
+ * 15 degrees at 1600 by 900, "Right arm" on the yellow leg block (0.43). Beside the edge of its own small block a label
+ * can be a little nearer a big neighbour's anchor (a leg label above its block with the look to the left: 0.94): kept. */
+export const LABEL_LAYOUT = Object.freeze({ maxShown: 8, maxShownCompact: 6, gapPx: 4, marginPx: 6, ringSteps: 2, requiredRingSteps: 5, requiredMaxRings: 2, sideCrossFrac: 0.15, ringFrac: 0.5,
+  ownArea: true, ownAreaRatio: 0.75, wrongAreaCost: 1e7 });
 
 /**
  * Label declutter (pure). items: [{ id, x, y (anchor, CSS px), w, h, priority (higher first), required }]; a label whose
@@ -3060,6 +3069,19 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
   }
   const req = u => (u.some(i => items[i].required) ? 1 : 0), pri = u => u.reduce((a, i) => Math.max(a, items[i].priority || 0), -Infinity);
   units.sort((a, b) => req(b) - req(a) || pri(b) - pri(a) || a[0] - b[0]);
+  // 21 November 2026 (hunt H17, rules.ownArea): every label group's anchor (shown or not: its area is there either way);
+  // a label's place may not be clearly nearer another group's anchor than its own (rules.ownAreaRatio). A twin's anchor is
+  // left out (the twin is the same part on the other half, which the `side` rule keeps apart).
+  const ownArea = rules.ownArea === true, ownRatio = Number.isFinite(rules.ownAreaRatio) && rules.ownAreaRatio > 0 ? rules.ownAreaRatio : 1;
+  const anchorsAt = ownArea ? items.map((it, i) => ({ i, x: it.x, y: it.y, pair: typeof it.pair === 'string' && it.pair !== '' ? it.pair : null }))
+    .filter(a => Number.isFinite(a.x) && Number.isFinite(a.y)) : [];
+  const onOtherArea = (idx, x, y) => {
+    const it = items[idx], pk = typeof it.pair === 'string' && it.pair !== '' ? it.pair : null;
+    const dOwn = Math.hypot(x - it.x, y - it.y);
+    if (!(dOwn > 0.5)) return false;
+    for (const a of anchorsAt) if (a.i !== idx && !(pk && a.pair === pk) && Math.hypot(x - a.x, y - a.y) < ownRatio * dOwn - 0.5) return true;
+    return false;
+  };
   const placed = [];
   let shown = 0;
   // R3-polish (INTEGRATION 7.1): one label per wording among different units; twins may share their words ("Face and
@@ -3124,6 +3146,9 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
             if (sd.sign > 0 ? b.x0 + cross < Math.max(mx0, mx1) : b.x1 - cross > Math.min(mx0, mx1)) { ok = false; break; }
           }
           let own = 0;
+          // (21 November 2026, hunt H17: on another part's area a label names the wrong colour: not a place for it; a
+          // required label only as the very last resort)
+          if (ownArea && onOtherArea(live[n], x, y)) { if (!required) { ok = false; break; } own += Number.isFinite(rules.wrongAreaCost) ? rules.wrongAreaCost : 1e7; }
           // 20 November 2026 (package HUD): an obstacle may weigh more (`weight`: the HUD's cards and lines of words), so
           // a required label with no clear place lies on the picture rather than on words.
           for (const o of obstacles) if (o) own += overlap(b, o) * (Number.isFinite(o.weight) ? o.weight : 1);
@@ -3168,9 +3193,11 @@ export function declutterLabels(items, { width, height, topPx = 0, obstacles = [
 /** 19 November 2026: the depth offset that keeps the thin face muscles in front of the skull they lie on. */
 export const FACE_MUSCLE_OFFSET = Object.freeze({ factor: -2, units: -12 });
 /** 19 November 2026 (the owner: "have the whole brain light up slightly, faintly, with whatever color area is being
- * picked"): level: the light added to the whole cortex, as a share of the picked area's glow colour, when an area is
- * looked at or switched on; easeS: how quickly it comes and goes. Faint by design: the keys stay the bright things. */
-export const BRAIN_PICK_TINT = Object.freeze({ level: 0.06, easeS: 0.18 });
+ * picked"): while an area is looked at or switched on the whole cortex lights up faintly in its colour; easeS: how
+ * quickly it comes and goes. Faint by design: the keys stay the bright things. (21 November 2026: how much, and how,
+ * is ns-brain-ink BRAIN_PICK_LOOK / brainPickGainInto: a gain on the cortex's own colour; `level` 0.06 was the share of
+ * the area's glow colour ADDED, which turned the matte cortex lilac or grey-blue, a browser hunt's H25.) */
+export const BRAIN_PICK_TINT = Object.freeze({ easeS: 0.18 });
 /** 19 November 2026: how the brain's eyeballs follow the player's look (updateBrainEyes): the share of the look's turn
  * they take, the most they turn either way (degrees), and the signs that make them turn the way the look goes as seen
  * on the screen (the brain is turned to face the player, so its own left is the screen's right). Display choices. */
@@ -3192,6 +3219,21 @@ export const LIMB_FLASH = Object.freeze({ colour: Object.freeze([1, 0.86, 0.42])
  * many steps, so the muscles are shaded again only when it has visibly changed. A mark of the game's controls; it says
  * nothing about activity (an active muscle keeps its own area's colour under it). */
 export const PART_GLOW = Object.freeze({ glow: 0.12, rim: 0.55, rimPower: 2.2, steps: 12 });
+/** 21 November 2026 (a browser hunt, H27: during a Space grip the forearms turned a flat tan or khaki instead of their
+ * rose red). In the raw look the mark's warm yellow ADDED to a muscle (PART_GLOW.glow as light, PART_GLOW.rim as a
+ * broad rim) made the darkest tones (the forearm's flexors, nearly no green or blue of their own) brown-tan: a different
+ * material, not a lit muscle. In the raw look a marked muscle now glows in its OWN hue: the light added is its resting
+ * colour brought to full brightness (its largest channel 1) with `markShare` of the mark's yellow in it, so the limb
+ * reads as its own rose red lit up; the rim keeps more of the mark's colour (`rimShare`), narrower (`rimPower`), so the
+ * edge still says "this is the limb the control moves". Display choices; the comic look keeps PART_GLOW as it was. */
+export const PART_GLOW_RAW = Object.freeze({ markShare: 0.15, rimShare: 0.6, rimPower: 3.2 });
+/** The light a marked muscle takes (PART_GLOW_RAW): `share` of the mark's colour `mark` in the muscle's own colour
+ * `own` (linear rgb) brought to full brightness. Writes out[0..2]. Pure. */
+export function partGlowColourInto(out, own, mark, share) {
+  const m = Math.max(own[0], own[1], own[2], 1e-6);
+  for (let i = 0; i < 3; i++) out[i] = (own[i] / m) * (1 - share) + mark[i] * share;
+  return out;
+}
 /** The limb and the part of it (upper / lower / end) an outline group belongs to, or null (trunk, head). Pure. */
 export function limbPartOfOutlineGroup(g) {
   const G = OUTLINE_GROUPS;
@@ -3863,8 +3905,12 @@ export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, 
  * side is where the mirror body's top tip is. The brain's bottom tip therefore goes UP the hollow of the motor strip's U
  * to the lowest place where its click area covers no motor area (inwardMaxFrac 1.6: it may pass the frame's middle;
  * measured 196 px up at 1920x1080, 170 px at 1600x900), and the pair does not move sideways off the brain's midline
- * instead (perpCost 12: a sideways move costs 24 per px, the way up 5 per px). */
-export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, perpCost: 12 }) });
+ * instead (perpCost 12: a sideways move costs 24 per px, the way up 5 per px).
+ * 21 November 2026 (hunt H15): the TOP tip keeps the default cap (inwardMaxFracBy.forward, FRAME_PAIR.inwardMaxFrac
+ * 0.5). With the mirror body lifted over the brain's top and let go, the top tip went 146 px down the same way, into the
+ * gap between the halves next to the crosshair, just above the mirror body's down tip; now, with no place on its centre
+ * line, it moves along the top side past the mirror body (rescueTips), and the brain's up arrow stays on its top side. */
+export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, inwardMaxFracBy: Object.freeze({ forward: NsArrows.FRAME_PAIR.inwardMaxFrac }), perpCost: 12 }) });
 /** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
  * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
  * tip sat on your head). The tips are drawn on top of everything, so they are now drawn, and answer clicks, only where
@@ -5317,15 +5363,17 @@ export function createScene({
     return true;
   };
   // The outline pass's own picture of the strip (the strip's ink silhouette) follows the wobble and the blooms.
+  // (21 November 2026: after the outline's own patch of these materials, the nearness of patchCoverageNear)
+  const liveAfter = (m, u) => { const own = m.onBeforeCompile; m.onBeforeCompile = (shader, r) => { if (typeof own === 'function') own.call(m, shader, r); liveCompile(shader, u); }; };
   if (outline.stripMaterial) {
     const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
-    outline.stripMaterial.onBeforeCompile = shader => { liveCompile(shader, u); };
+    liveAfter(outline.stripMaterial, u);
     outline.stripMaterial.customProgramCacheKey = () => 'ns-live-outline-strip';
   }
   // 20 November 2026 (Message 207): and its picture of the brain and its eyes (the brain's own outline)
   for (const m of outline.brainMaterials || []) {
     const u = { ...liveUniforms, nsLive: { value: liveNoBeat } };
-    m.onBeforeCompile = shader => { liveCompile(shader, u); };
+    liveAfter(m, u);
     m.customProgramCacheKey = () => 'ns-live-outline-brain';
   }
   // 19 November 2026 (SEE): the hidden-things pass's own picture of the brain follows the wobble and the blooms the same
@@ -5345,7 +5393,7 @@ export function createScene({
   // R4-scene: the shell's rim uniforms are kept, so the held-brain cue (HELD_CUE) can change them per frame.
   const shellRimUniforms = { nsRimOpacity: { value: MATERIAL.glassRimOpacity }, nsRimPower: { value: MATERIAL.glassRimPower }, nsRimGroove: { value: GLASS_READ.rimGroove } };
   // 19 November 2026: the whole cortex's faint light in the picked area's colour (linear colour x level; updateGlow)
-  const brainPickTint = { value: new THREE.Vector3(0, 0, 0) };
+  const brainPickTint = { value: new THREE.Vector3(0, 0, 0) }, brainPickWant = [0, 0, 0]; // (a gain less 1: brainPickGainInto)
   // 20 November 2026 (GAP, ns-brain-gap): the cut that opens each half next to the gap, shared by the shell and its
   // depth pre-pass (cutMm, fromY, toY, on).
   const brainGapUniform = { value: new THREE.Vector4(...brainGapUniformValue()) };
@@ -5577,6 +5625,20 @@ export function createScene({
     if (pickStale.size > 0) {
       const live = geometry && geometry.attributes && geometry.attributes.position;
       if (live && pickStale.has(live.array)) return rawRaycast.call(this, raycasterIn, intersects);
+    }
+    // 21 November 2026 (browser hunt of update 62, H5: every trunk movement made one frame take 100 to 117 ms as its
+    // return ended): a trunk movement rewrites the processor copies of many body muscles; 150 ms after the last rewrite
+    // the stale mark is cleared, and the next crosshair pick rebuilt the box tree of EVERY rewritten mesh it was asked
+    // about, all in that one frame (88 % of it in buildTriangleBvh), before even testing whether the ray came near the
+    // mesh. A mesh whose tree exists but is out of date is now tested with Three's own exact test on its live vertices
+    // (rawRaycast, as while it was being rewritten), and its tree is rebuilt by stepPickTrees within its budget per frame.
+    // A mesh that never had a tree builds it here as before (once, at the first pick after loading).
+    if (material && !Array.isArray(material)) {
+      const pos = geometry && geometry.attributes && geometry.attributes.position, had = pickTrees.get(geometry);
+      if (had && pos && pos.array && (had.positions !== pos.array || had.index !== (geometry.index ? geometry.index.array : null) || had.stamp !== (pickStamp.get(pos.array) || 0))) {
+        pickStats.deferred = (pickStats.deferred || 0) + 1;
+        return rawRaycast.call(this, raycasterIn, intersects);
+      }
     }
     const rec = material && !Array.isArray(material) ? pickTreeOf(geometry) : null;
     if (!rec) return THREE.Mesh.prototype.raycast.call(this, raycasterIn, intersects);
@@ -6262,6 +6324,9 @@ export function createScene({
   const labelBoxes = [];
   const labelItems = []; // R3-scene declutterLabels items (same order as labelEls)
   const labelObstacles = [];
+  // 21 November 2026 (hunt H17): whether the labels' boxes are sized with their second line (null: not sized yet), and
+  // the app root whose data-ns-read says whether that line is shown (labelSubLineShown).
+  let labelSubSized = null, labelAppRoot;
   /** R3-scene: label sizes (larger, D3/task 4) as a small injected stylesheet with selectors one class stronger than
    * neurosurge.css (.ns-region-label.ns-r3), so the CSS owner can move or override them (see R3-scene-NOTES.md). */
   function injectSceneStyle() {
@@ -6454,8 +6519,9 @@ export function createScene({
     if (BODY_STYLE !== 'raw' || !m || (m.userData && m.userData.nsRaw)) return m;
     rawLook.materials++; rawLook.kinds[kind] = (rawLook.kinds[kind] || 0) + 1;
     if (m.userData) m.userData.nsRaw = true;
-    return composePatch(m, 'ns-raw', shader => {
-      const p = patchRawShaders(shader.vertexShader, shader.fragmentShader);
+    const floor = kind === 'muscle' ? RAW_LOOK.muscleFloor : 0; // (21 November 2026: the muscles' shade floor, H28)
+    return composePatch(m, floor ? 'ns-raw-floor' : 'ns-raw', shader => {
+      const p = patchRawShaders(shader.vertexShader, shader.fragmentShader, RAW_LOOK, { floor });
       rawLook.applied = p !== null && rawLook.applied !== false;
       if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
       if (p && p.hdrBoost) { shader.uniforms.nsHdrBoost = comicUniforms.nsHdrBoost; rawLook.hdrBoost = (rawLook.hdrBoost || 0) + 1; } // the power-up flash's HDR boost (set in render)
@@ -7479,21 +7545,41 @@ export function createScene({
     };
     make(buildNerves(), BRAIN_EYES.nerveRoughness, 'nerve', 'optic nerves, chiasm and tracts (illustration)');
     // 19 November 2026 (the owner: "when we move our head around, the eyes also move ... The eyes attached to the brain
-    // ... whatever direction our head points in, the mirror eyes move also"): each eyeball is its own mesh about its own
-    // centre, so it can turn with the player's look (updateBrainEyes). The two halves of buildEyeballs' buffers are the
-    // two eyes (left first), each with the same number of vertices and triangles.
+    // ... whatever direction our head points in, the mirror eyes move also"): each eyeball is its own mesh turning about
+    // its own centre, so it can turn with the player's look (updateBrainEyes). The two halves of buildEyeballs' buffers
+    // are the two eyes (left first), each with the same number of vertices and triangles.
+    // 21 November 2026 (a browser hunt, H14: during a quick circle roll an eyeball sank into the brain and its outline
+    // ring showed through the brain): the vertices stay in the brain's own millimetres, like every brain mesh, and the
+    // turn is a matrix about the centre (eyeTurnMatrix). The living brain's vertex rule moves a vertex by a function of
+    // its rest position in those millimetres (ns-brain-live nsLiveMove: the wobble's turn about the brain's centre, the
+    // beat's swell); with the vertices about the eye's own centre it read them as points next to the atlas's origin,
+    // about 1.5 m from the brain, so a quick roll threw the eyeballs tens of millimetres off the brain (and every beat
+    // about 4 mm) while the brain and the nerves moved a few. The eyeball's turn now also turns that small move (at most
+    // a few millimetres, at the eyes' largest turn): not seen.
     const E = buildEyeballs(), nv = E.positions.length / 6, ni = E.indices.length / 2;
     [E.centres.left, E.centres.right].forEach((c, k) => {
-      const pos = new Float32Array(3 * nv), idx = new Uint16Array(ni);
-      for (let i = 0; i < nv; i++) for (let a = 0; a < 3; a++) pos[3 * i + a] = E.positions[3 * (k * nv + i) + a] - c[a];
+      const pos = E.positions.slice(3 * k * nv, 3 * (k + 1) * nv), idx = new Uint16Array(ni);
       for (let i = 0; i < ni; i++) idx[i] = E.indices[k * ni + i] - k * nv;
       make({ positions: pos, indices: idx, normals: E.normals.slice(3 * k * nv, 3 * (k + 1) * nv), colors: E.colors.slice(3 * k * nv, 3 * (k + 1) * nv), triangles: ni / 3 },
         BRAIN_EYES.eyeRoughness, 'eyeball', `${k === 0 ? 'left' : 'right'} eyeball (illustration)`);
       const mesh = brainEyes.meshes[brainEyes.meshes.length - 1];
-      mesh.position.set(c[0], c[1], c[2]); mesh.updateMatrix();
+      mesh.userData.nsEyeCentre = [c[0], c[1], c[2]];
+      eyeTurnMatrix(mesh, 0, 0);
       brainEyes.balls.push(mesh);
     });
     brainEyes.on = true;
+  }
+  /** An eyeball's matrix: its turn (pitch tp about the brain's side axis, then yaw ty about its up axis, Euler 'ZXY' as
+   * before) about its own centre (userData.nsEyeCentre, the brain's mm). */
+  const eyeTurnEuler = new THREE.Euler(0, 0, 0, 'ZXY'), eyeTurnShift = new THREE.Vector3();
+  function eyeTurnMatrix(mesh, tp, ty) {
+    const c = mesh.userData.nsEyeCentre;
+    eyeTurnEuler.set(tp, 0, ty, 'ZXY');
+    mesh.rotation.copy(eyeTurnEuler);
+    mesh.matrix.makeRotationFromEuler(eyeTurnEuler);
+    eyeTurnShift.set(c[0], c[1], c[2]).applyMatrix4(mesh.matrix); // R c
+    mesh.matrix.setPosition(c[0] - eyeTurnShift.x, c[1] - eyeTurnShift.y, c[2] - eyeTurnShift.z); // c - R c
+    mesh.matrixWorldNeedsUpdate = true;
   }
   /** The brain's eyeballs turn with the player's look: by BRAIN_EYE_TURN.gain of the look's turn from where it started,
    * at most maxDeg either way, about the brain's own up axis (left and right) and its side axis (up and down). A
@@ -7509,7 +7595,7 @@ export function createScene({
     const ty = Math.max(-lim, Math.min(lim, T.gain * dy)) * T.yawSign, tp = Math.max(-lim, Math.min(lim, T.gain * (pitch - brainEyes.look0.pitch))) * T.pitchSign;
     if (Math.abs(ty - brainEyes.ty) < 0.003 && Math.abs(tp - brainEyes.tp) < 0.003) return;
     brainEyes.ty = ty; brainEyes.tp = tp;
-    for (const m of brainEyes.balls) { m.rotation.set(tp, 0, ty, 'ZXY'); m.updateMatrix(); }
+    for (const m of brainEyes.balls) eyeTurnMatrix(m, tp, ty);
   }
 
   function setBrain({ glass: glassListIn = [], focus, markers: markerList = [], segmentation: seg = null } = {}) {
@@ -8178,14 +8264,26 @@ export function createScene({
         labelEls.push({ el: e, group: g, display: disp, shownNow: false, last: { left: '', top: '', shown: false, hover: false, faded: false } });
         // Estimated label box (no layout reads): R3_LABEL_FONT sizes, bold sans-serif ~0.6 em per character + padding.
         const F = R3_LABEL_FONT;
-        const w = strong ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.55) + 2 * F.padXPx : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
-        const h = strong ? F.leftArmPx * 1.25 + F.subPx * 1.25 + 2 * F.padYPx : F.otherPx * 1.3 + 2 * F.padYPx;
+        // 21 November 2026 (hunt H17): the arm labels' boxes as drawn (measured at the full reading level: "Left arm /
+        // brain's right half" 106 x 40, "Right arm / brain's left half" 106 x 40; the estimate was 124 x 38, the second
+        // line's 0.55 em a character being wide of its 0.44), with the pill's 1.5 px border; and the box without that
+        // second line, which the short and the off reading levels hide (quiet.css; drawn 96 x 26 and 106 x 26, the box
+        // was still 124 x 38): at 800 by 600 the arm labels then found no place between the brain's arrow and the mirror
+        // body and went out onto the face areas, and the leg labels down onto the arm areas.
+        const w = strong ? Math.max(disp.main.length * F.leftArmPx * 0.62, disp.sub.length * F.subPx * 0.48) + 2 * F.padXPx + 3 : disp.main.length * F.otherPx * 0.6 + 2 * F.padXPx;
+        // (the two-line height stays as it was, 38 for 40 drawn: with 41 "Belly and back" lost its place just above the
+        // arm labels at 1600 by 900, where the drawn pills keep 3 px apart)
+        const h = strong ? F.leftArmPx * 1.25 + (disp.sub ? F.subPx * 1.25 : 0) + 2 * F.padYPx : F.otherPx * 1.3 + 2 * F.padYPx;
+        const wMain = disp.sub ? disp.main.length * F.leftArmPx * 0.62 + 2 * F.padXPx + 3 : w;
+        const hMain = disp.sub ? F.leftArmPx * 1.25 + 2 * F.padYPx + 3 : h;
         labelBoxes.push({ x: 0, y: 0, w: Math.ceil(w), h: Math.ceil(h), skip: true });
         // (20 November 2026, LAYOUT: "Belly and back" names two thin bands between the leg and the arm areas; moved a
         // whole ring sideways it sat on the arm areas, so it stays within one ring of them or is not shown: LABEL_NEAR)
         labelItems.push({ id: `${g.hemisphere}:${g.key}`, x: NaN, y: NaN, w: Math.ceil(w), h: Math.ceil(h), priority: REGION_LABEL_PRIORITY[g.key] || 0, required: g.isLeftArm, text: disp.main, pair: g.pair || null, mirror: 0,
+          sizes: { sub: [Math.ceil(w), Math.ceil(h)], main: [Math.ceil(wMain), Math.ceil(hMain)] },
           ...(Number.isFinite(LABEL_NEAR[g.key]) ? { maxRings: LABEL_NEAR[g.key] } : {}) });
       }
+      labelSubSized = null; // (the new labels are sized for the reading level at the next layout)
     }
   }
 
@@ -9349,7 +9447,7 @@ export function createScene({
    * The lit tissue albedo keeps the shared darkening rule (activityShadeInto), so a resting muscle looks as before
    * (the resting 0.08 drive is below the glow onset: no emission at all). areaId null = no area claims it (a neutral
    * warm glow). The SAME call shades your body, its in-place head copy and the mirror body, so all three match. */
-  const muscleRim = [0, 0, 0];
+  const muscleRim = [0, 0, 0], partGlowFill = [0, 0, 0], partGlowEdge = [0, 0, 0];
   function shadeMuscle(mat, t, areaId = null, hint = false) {
     // A muscle lit only by an opposing-action hint (Message 6) stays faint: AREA_LOOK.hintGain of the emission and rim,
     // no halo, and its RESTING red-brown surface (darkening it under a faint blue emission read as a grey, discoloured
@@ -9406,7 +9504,10 @@ export function createScene({
     }
     mat.color.setRGB(muscleShade.albedo[0], muscleShade.albedo[1], muscleShade.albedo[2]);
     // 19 November 2026 (PART_GLOW): a muscle of a marked limb takes the mark's light on top of its own
-    const pg = mat.userData && mat.userData.nsPartGlow > 0 ? mat.userData.nsPartGlow : 0, PC = LIMB_FLASH.colour, pgE = PART_GLOW.glow * pg;
+    const pg = mat.userData && mat.userData.nsPartGlow > 0 ? mat.userData.nsPartGlow : 0, pgE = PART_GLOW.glow * pg;
+    // (21 November 2026, PART_GLOW_RAW: in the raw look a marked muscle glows in its own hue, its rim in the mark's)
+    const raw = BODY_STYLE === 'raw', PC = raw && pg > 0 ? partGlowColourInto(partGlowFill, base, LIMB_FLASH.colour, PART_GLOW_RAW.markShare) : LIMB_FLASH.colour;
+    const PR = raw && pg > 0 ? partGlowColourInto(partGlowEdge, base, LIMB_FLASH.colour, PART_GLOW_RAW.rimShare) : LIMB_FLASH.colour;
     mat.emissive.setRGB(muscleShade.emission[0] + PC[0] * pgE, muscleShade.emission[1] + PC[1] * pgE, muscleShade.emission[2] + PC[2] * pgE);
     const u = mat.userData && mat.userData.nsGlowRim;
     if (u && hint) {
@@ -9414,7 +9515,10 @@ export function createScene({
       if (g && k > 0) u.value.set((g[0] + (1 - g[0]) * H.rimWhite) * H.rimGain, (g[1] + (1 - g[1]) * H.rimWhite) * H.rimGain, (g[2] + (1 - g[2]) * H.rimWhite) * H.rimGain, H.rimPower);
       else u.value.set(0, 0, 0, H.rimPower);
     } else if (u) { areaGlowInto(areaId, t, AREA_LOOK.muscleRimGain * hk, muscleRim); u.value.set(muscleRim[0], muscleRim[1], muscleRim[2], Number.isFinite(AREA_LOOK.muscleRimPower) ? AREA_LOOK.muscleRimPower : GLOW_K.rimPower); }
-    if (u && pg > 0) { const r = PART_GLOW.rim * pg; u.value.set(Math.max(u.value.x, PC[0] * r), Math.max(u.value.y, PC[1] * r), Math.max(u.value.z, PC[2] * r), Math.min(u.value.w, PART_GLOW.rimPower)); }
+    if (u && pg > 0) {
+      const r = PART_GLOW.rim * pg, areaRim = u.value.x + u.value.y + u.value.z > 0; // (raw: an area's own rim keeps its width)
+      u.value.set(Math.max(u.value.x, PR[0] * r), Math.max(u.value.y, PR[1] * r), Math.max(u.value.z, PR[2] * r), raw ? (areaRim ? u.value.w : PART_GLOW_RAW.rimPower) : Math.min(u.value.w, PART_GLOW.rimPower));
+    }
     const ud = mat.userData;
     if (ud && ud.nsHaloHost) {
       if (k > 0 && !hint && MUSCLE_HALO.on !== false) {
@@ -10556,7 +10660,7 @@ export function createScene({
    * right hand or wrist is away from the start posture and the pose changed). Display choice on licensed anatomy. */
   const bodySkin = new Map(), bodySkinGeos = new Map();
   let bodySkinOn = false, bodySkinSegs = null, bodySkinBaked = null, bodySkinWrites = 0;
-  let anconeusMix = 0, anconeusDeepMix = 0;
+  let anconeusMix = 0, anconeusDeepMix = 0, skinElbowDeg = 0; // (skinElbowDeg: the drawn right elbow bend, ELBOW_SKIN)
   const rigidInv16 = (m, o) => { // inverse of a rigid (rotation + translation) column-major 4x4
     o[0] = m[0]; o[1] = m[4]; o[2] = m[8]; o[4] = m[1]; o[5] = m[5]; o[6] = m[9]; o[8] = m[2]; o[9] = m[6]; o[10] = m[10];
     o[12] = -(o[0] * m[12] + o[4] * m[13] + o[8] * m[14]); o[13] = -(o[1] * m[12] + o[5] * m[13] + o[9] * m[14]); o[14] = -(o[2] * m[12] + o[6] * m[13] + o[10] * m[14]);
@@ -10737,7 +10841,7 @@ export function createScene({
       const lift = bodyLift.get(id) || null;
       // R558 (ns-body R_FOREARM_TWIST): a right forearm muscle's twisted ulna influence carries tf and the twist frame.
       if (r.tf && (!(r.tf instanceof Float32Array) || r.tf.length !== n || !r.twist || !r.twist.axis || !r.twist.point)) fail('scene_input', 'forearm twist record does not match the drawn mesh');
-      const rec = { id, b, geo, pos, nor, src: r.src, i0: r.i0, i1: r.i1, w0: r.w0, w1: r.w1, anconeusDelta: r.anconeusDelta || null,
+      const rec = { id, b, geo, pos, nor, src: r.src, i0: r.i0, i1: r.i1, w0: r.w0, w1: r.w1, anconeusDelta: r.anconeusDelta || null, elbowRig: r.elbowRig || null,
         anconeusDeepDelta: r.anconeusDeepDelta || null, lift, tf: r.tf || null, twist: r.tf ? r.twist : null,
         rest: lift ? lift.rest : new Float32Array(pos.array), restN: lift ? null : new Float32Array(nor.array), skinned: false };
       if (!lift) pos.array = new Float32Array(rec.rest); // one drawn buffer per muscle (attribute object kept; see the lift)
@@ -10848,7 +10952,7 @@ export function createScene({
     }
     return (rec.tp = { slots, w, NS, K });
   }
-  function skinTwisted(rec, M, p, nArr) {
+  function skinTwisted(rec, M, p, nArr) { // (the weights are the record's own, in its plan)
     const tp = twistPlanOf(rec), T = twistNow(rec), NS = tp.NS, K1 = tp.K + 1;
     const CC = rec.CC && rec.CC.length === 16 * (NS + K1) ? rec.CC : (rec.CC = new Float64Array(16 * (NS + K1)));
     for (const i of rec.used) CC.set(mul16(M, bodySkinSegs[i], skinTwB), 16 * i);
@@ -10872,6 +10976,31 @@ export function createScene({
       const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
       nArr[k] = nx / l; nArr[k + 1] = ny / l; nArr[k + 2] = nz / l;
     }
+  }
+  /* 21 November 2026 (ns-body ELBOW_SKIN, the right elbow at a deep bend): after the blend, a muscle across the right
+   * elbow turns each vertex shared across it about the elbow's axis by its share of the bend (spin, carried by the upper
+   * arm's side's map in this mesh's frame), then the two sides of the bend are kept apart at the plane halving it (clamp).
+   * The same rules as the bake and skinBodyPositions; the pose is this frame's segments (bodySkinSegs). */
+  const SKIN_RU = BODY_SEGMENT_LIST.indexOf('r_upperarm'), skinElbowOff = [0, 0, 0];
+  function skinElbowPass(rec, M, p, nArr, w0, w1) {
+    const er = rec.elbowRig, S = bodySkinSegs, U = S && S[SKIN_RU], F = S && S[SKIN_RF];
+    if (!er || !U || !F) return;
+    const theta = elbowBendOf(er, U, F), i0 = rec.i0, i1 = rec.i1, qa = rec.qa, qb = rec.qb, EF = ELBOW_FORE_SEGMENT, off = skinElbowOff;
+    const share = rec.elbowShare && rec.elbowShare.length === i0.length ? rec.elbowShare : (rec.elbowShare = new Float32Array(i0.length));
+    const CC = rec.tf ? rec.CC : null, C = rec.C;
+    for (let v = 0, k = 0; v < i0.length; v++, k += 3) {
+      const fa = EF[i0[v]], fb = EF[i1[v]], wa = w0[v], wb = w1[v];
+      share[v] = (fa ? wa : 0) + (fb ? wb : 0);
+      if (fa === fb || !(wa > 0) || !(wb > 0) || !theta) continue;
+      const ui = fa ? i1[v] : i0[v], Q = fa ? qb : qa;
+      elbowSpinOffset(er, theta, share[v], Q[k], Q[k + 1], Q[k + 2], off);
+      const A = CC || C[ui], o = CC ? 16 * ui : 0;
+      if (!A) continue;
+      p[k] += A[o] * off[0] + A[o + 4] * off[1] + A[o + 8] * off[2];
+      p[k + 1] += A[o + 1] * off[0] + A[o + 5] * off[1] + A[o + 9] * off[2];
+      p[k + 2] += A[o + 2] * off[0] + A[o + 6] * off[1] + A[o + 10] * off[2];
+    }
+    elbowCreaseClamp(p, nArr, v => share[v], elbowPlaneOf(er, U, F, M), skinElbowDeg);
   }
   function skinOne(rec) {
     const p = rec.pos.array, nArr = rec.nor.array;
@@ -10897,7 +11026,7 @@ export function createScene({
           w1[v] = rec.w1[v] - shift;
         }
       }
-      if (rec.tf) skinTwisted(rec, M, p, nArr);
+      if (rec.tf) skinTwisted(rec, M, p, nArr, w0, w1);
       else for (let v = 0, k = 0; k < n3; v++, k += 3) {
         const A = C[i0[v]], B = C[i1[v]], wa = w0[v], wb = w1[v];
         const ax = qa[k], ay = qa[k + 1], az = qa[k + 2], bx = qb[k], by = qb[k + 1], bz = qb[k + 2];
@@ -10911,6 +11040,7 @@ export function createScene({
         const l = Math.sqrt(qx * qx + qy * qy + qz * qz) || 1;
         nArr[k] = qx / l; nArr[k + 1] = qy / l; nArr[k + 2] = qz / l;
       }
+      if (rec.elbowRig && ELBOW_SKIN.on) skinElbowPass(rec, M, p, nArr, w0, w1);
       rec.skinned = true;
       if (rec.anconeusDelta) { rec.anconeusMixDrawn = mix; rec.anconeusDeepDrawn = isDeep; }
       if (rec.sw) swellApply(rec, p, nArr); // package BULK: the belly's swell and the lift of what lies over it
@@ -10965,6 +11095,7 @@ export function createScene({
       bodySkinOn = true;
       anconeusMix = anconeusBendBlend(elbowFlexDeg);
       anconeusDeepMix = anconeusDeepBendBlend(elbowFlexDeg);
+      skinElbowDeg = Number.isFinite(elbowFlexDeg) ? elbowFlexDeg : 0;
       if (swell.on) swellStep(); // package BULK (MUSCLE_SWELL): ease each muscle's swell toward its activity and shortening
       // 18 November 2026 (performance): the records skinned on the graphics card take the pose table, not this loop
       if (bodyGpu.installed && !bodyGpu.on && !bodyGpu.lod) { bodyGpu.on = true; bodyGpuShow(true); }
@@ -11135,7 +11266,8 @@ export function createScene({
       const full = b.mesh.userData.nsFullGeometry || b.mesh.geometry;
       const rec = bodySkin.get(b.id);
       // 19 November 2026: a muscle whose weights change with the elbow's bend (anconeusDelta) keeps the processor's skin
-      const gpu = Boolean(rec && !rec.tf && !rec.anconeusDelta && rec.geo === full);
+      // 21 November 2026 (ns-body ELBOW_SKIN): so does every muscle across the right elbow (its spin and clamp run there)
+      const gpu = Boolean(rec && !rec.tf && !rec.anconeusDelta && !(rec.elbowRig && ELBOW_SKIN.on) && rec.geo === full);
       let attrs;
       if (gpu) {
         const n = rec.src.length / 3, SI = new Float32Array(4 * n), SW = new Float32Array(4 * n), SD = new Float32Array(4 * n), SP = new Float32Array(2 * n);
@@ -11913,6 +12045,16 @@ export function createScene({
         if (e.hidden) continue;
         const r = e.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true });
+      }
+      // 21 November 2026 (hunts H13 / H23): the limb buttons ("1 Left arm ... 4 Right arm", ns-app drawLimbHud: a child of
+      // the HUD root beside .ns-hud, not a .ns-panel) as drawn; labels only, like the quiet layer. With the look 16 to 20
+      // degrees up the strip lies at the foot of the picture and its labels were placed under the bar, cut through by
+      // its edge or hidden behind its chips.
+      for (const e of parent.querySelectorAll('.ns-limbs')) {
+        if (e.hidden) continue;
+        roWatch(e);
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true, limbs: true });
       }
       // R3-scene: the far-right information panel (when showing; flagged `info`, the arrow plan reserves its whole
       // column instead) and the capture / drag-to-look toast are obstacles for the arrows and labels too.
@@ -14678,10 +14820,10 @@ export function createScene({
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
     // 19 November 2026 (BRAIN_PICK_TINT): the whole brain takes a faint light of the picked area's colour, eased.
     {
-      const rcT = topRegion ? areaRecord(topRegion) : null, want = rcT ? BRAIN_PICK_TINT.level * Math.min(1, topLevel / 0.6) : 0;
+      const rcT = topRegion ? areaRecord(topRegion) : null, want = rcT ? Math.min(1, topLevel / 0.6) : 0;
       const k = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, dtMs) / (BRAIN_PICK_TINT.easeS * 1000)), v = brainPickTint.value;
-      const c = rcT ? rcT.glowLinear : null;
-      v.set(v.x + ((c ? c[0] * want : 0) - v.x) * k, v.y + ((c ? c[1] * want : 0) - v.y) * k, v.z + ((c ? c[2] * want : 0) - v.z) * k);
+      const c = brainPickGainInto(brainPickWant, rcT ? rcT.glowLinear : null, want);
+      v.set(v.x + (c[0] - v.x) * k, v.y + (c[1] - v.y) * k, v.z + (c[2] - v.z) * k);
     }
     glowState.cpuMs = nowMs() - t0;
   }
@@ -14744,9 +14886,29 @@ export function createScene({
     return nx * (S.eye.x - a[0]) + ny * (S.eye.y - a[1]) + nz * (S.eye.z - a[2]) < 0;
   }
 
+  /** 21 November 2026 (hunt H17): whether the region labels' second line ("brain's right half") is drawn: quiet.css
+   * hides it at the short and the off reading levels (data-ns-read 'read' / 'off' on the app root). One attribute read. */
+  function labelSubLineShown() {
+    if (labelAppRoot === undefined) labelAppRoot = overlay && typeof overlay.closest === 'function' ? overlay.closest('.ns-app') : null;
+    const r = labelAppRoot && typeof labelAppRoot.getAttribute === 'function' ? labelAppRoot.getAttribute('data-ns-read') : null;
+    return !(r === 'read' || r === 'off');
+  }
   function layoutOverlay() {
     if (!overlay || !(cssW > 0 && cssH > 0)) return;
     drainHudRecords();
+    // (21 November 2026, hunt H17: the labels' boxes follow the reading level; a change lays them out again)
+    if (labelItems.length) {
+      const sub = labelSubLineShown();
+      if (sub !== labelSubSized) {
+        labelSubSized = sub; overlayDirty = true;
+        for (let i = 0; i < labelItems.length; i++) {
+          const it = labelItems[i], s = it.sizes ? (sub ? it.sizes.sub : it.sizes.main) : null;
+          if (!s) continue;
+          it.w = s[0]; it.h = s[1];
+          if (labelBoxes[i]) { labelBoxes[i].w = s[0]; labelBoxes[i].h = s[1]; }
+        }
+      }
+    }
     if (tipZoneHeld && nowMs() >= tipZoneUntil) { tipZoneHeld = false; hudDirty = true; hudReadIn = 0; } // (the gone tip's hold ended)
     if (hudMo ? !overlayDirty && !hudDirty : !overlayDirty && hudReadIn > 0) { if (!hudMo) hudReadIn--; return; }
     overlayDirty = false;
@@ -16184,6 +16346,11 @@ export function createHud(hudRoot) {
   for (const k of ORIENTATION_KEYS) {
     orient[k] = make('div', `ns-orient ns-orient-${k}`, root);
     orient[k].hidden = true;
+    // 21 November 2026 (hunt H19): the label is drawn on the box placeOrientation tests (ORIENTATION_ALIGN). The
+    // stylesheet's .ns-orient-right / -left / -anterior / -posterior translates were never turned with the brain
+    // (spinDeg 180), so each label was drawn mirrored about its anchor, beside the box that had been found clear: on the
+    // colour key, on the area labels and across the brain's turn arrows.
+    { const a = ORIENTATION_ALIGN[k]; if (a && orient[k].style) orient[k].style.transform = `translate(${-a[0] * 100 || 0}%, ${-a[1] * 100 || 0}%)`; }
     orientSize[k] = null;
     orientText[k] = { long: '', short: '', shortWanted: false };
     orientPick[k] = k;
@@ -16472,6 +16639,17 @@ export function createHud(hudRoot) {
       setPanelPos(el, use.x, use.y);
     });
     panelRects = placed;
+    // 21 November 2026 (hunt H19): in the corner layout (small wide windows) the colour key and the status card stand
+    // where cornerStackFit puts them, which `placed` does not hold (the key reserves nothing from the cards, and the
+    // card's box there is its planned home). The orientation labels and the crosshair caption keep clear of both as
+    // drawn: at 800 by 600 "Brain's left half" lay on the key's lines and "Back (posterior)" on its title.
+    if (cornerStack && panelSizes) {
+      const drawn = [];
+      const s0 = panelSizes[0], s1 = panelSizes[1];
+      if (s0 && s0[0] > 0 && s0[1] > 0) drawn.push({ x0: g / W, y0: cornerStack.statusY / H, x1: (g + s0[0]) / W, y1: (cornerStack.statusY + Math.min(s0[1], cornerStack.statusMax)) / H });
+      if (legendSlot && s1 && s1[0] > 0 && s1[1] > 0) drawn.push({ x0: legendSlot.x / W, y0: legendSlot.y / H, x1: (legendSlot.x + s1[0]) / W, y1: (legendSlot.y + Math.min(s1[1], cornerStack.legendMax)) / H });
+      if (drawn.length) panelRects = placed.concat(drawn);
+    }
     reservedRect = reserved;
     const status = limited ? 'limited' : 'clear-estimate';
     if (status !== placementStatus) { root.setAttribute('data-ns-hud-placement', status); placementStatus = status; }
@@ -16549,6 +16727,12 @@ export function createHud(hudRoot) {
         const lx = l && Number.isFinite(l.x) && Number.isFinite(l.y) ? l.x - xAt(l) : null, rx = r && Number.isFinite(r.x) && Number.isFinite(r.y) ? r.x - xAt(r) : null;
         const leftKey = lx !== null ? (lx < 0 ? 'left' : 'right') : rx !== null ? (rx > 0 ? 'left' : 'right') : 'left';
         midline = { x0: a.x, y0: a.y, dxdy, leftKey };
+      } else if (l && r && l.front !== false && r.front !== false && [l.x, l.y, r.x, r.y].every(Number.isFinite) && Math.abs(l.x - r.x) > 1e-4) {
+        // 21 November 2026 (hunt H19): with the front or the back out of sight (a look at the face areas at 800 by 600,
+        // the view from outside in an upright window) there was no midline, and a side label with no clear place near
+        // its own side slid toward the middle and on past it, onto the other side's label ("Brain's left half" drawn
+        // left of "Brain's right half", then on top of it). The line halfway between the two side anchors stands in.
+        midline = { x0: (l.x + r.x) / 2, y0: (l.y + r.y) / 2, dxdy: 0, leftKey: l.x < r.x ? 'left' : 'right' };
       }
     }
     // R558 (issue hunt 1, item 10): the candidate index (0 = the anchor, then the slides along the side, then the
@@ -16626,8 +16810,11 @@ export function createHud(hudRoot) {
         }
         return !(typeof brainCovers === 'function' && brainCovers(pl.box));
       };
+      // (21 November 2026, hunt H19: nor on another orientation label placed in this call; drawn where they are tested
+      // now, two of them could take one place)
+      const onOtherOrient = pl => W > 0 && H > 0 && placedOrient.some(q => q.key !== k && q.key !== 'hover' && pl.box.x0 * W < q.x1 && pl.box.x1 * W > q.x0 && pl.box.y0 * H < q.y1 && pl.box.y1 * H > q.y0);
       const free = pl => !pl.box || (!hitsAvoid(pl.box, avoid) && !boxesOverlap(pl.box, band) && !(panelRects || []).some(r => boxesOverlap(pl.box, r)) &&
-        !(hoverBox && boxesOverlap(pl.box, hoverBox)) && !labelRects.some(r => boxesOverlap(pl.box, r)) && sideOk(pl));
+        !(hoverBox && boxesOverlap(pl.box, hoverBox)) && !labelRects.some(r => boxesOverlap(pl.box, r)) && !onOtherOrient(pl) && sideOk(pl));
       const placed = cands.map(c => ({ key: c.key, ...placeOf(c.p) }));
       if (side && sidePairIndex !== null) {
         const i = placed.findIndex(c => candIndex(c.key) === sidePairIndex);
@@ -16669,7 +16856,8 @@ export function createHud(hudRoot) {
       // R558 (Message 31): no level place for this second side label: the first one moves to this one's height instead
       // when one of ITS places is clear there; with neither, the two stay where they are (rare; both still shown).
       if (side && chosen && firstSide && Math.abs(use.y - sidePairY) * H > 0.5) {
-        const re = firstSide.cands.map(c => ({ key: c.key, ...firstSide.placeOf({ x: c.p.x, y: use.y }) })).find(firstSide.free);
+        const re = firstSide.cands.map(c => ({ key: c.key, ...firstSide.placeOf({ x: c.p.x, y: use.y }) }))
+          .find(c => firstSide.free(c) && !(c.box && use.box && boxesOverlap(c.box, use.box))); // (21 Nov: nor onto this label)
         if (re) { firstSide.commit(re, true); sidePairY = re.y; }
       }
       orientPick[k] = use.key;

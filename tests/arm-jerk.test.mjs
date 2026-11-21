@@ -143,13 +143,14 @@ test('a press on a left-arm movement always counts as moving it (the tutorial\'s
   const { BODY_MOTOR_MAP } = await import('../scene/src/ns-bodymap.mjs');
   const { infoActionAtEnd } = await import('../scene/src/ns-app.mjs');
   // the rule itself: every movement moves (nothing is held); a straighten of an elbow already straight moves nothing,
-  // unless a bend is under way; the sideways wrist bends move nothing on the game arm (it has no such joint)
+  // unless a bend is under way. (21 November 2026, hunt H8: the sideways wrist bends move the game arm's hand now,
+  // ns-rig wrist_dev; until then they moved nothing and counted as moving nothing.)
   assert.equal(NG.armActionMoves('elbow_flexion', { armJerk: {} }), true);
   assert.equal(NG.armActionMoves('elbow_flexion', { armJerk: { elbow_flexion: [0.2, 0] } }), true);
   assert.equal(NG.armActionMoves('elbow_extension', { armJerk: {}, elbowRad: 0.01 }), false);
   assert.equal(NG.armActionMoves('elbow_extension', { armJerk: { elbow_flexion: [0.1, 0] }, elbowRad: 0.01 }), true);
   assert.equal(NG.armActionMoves('elbow_extension', { armJerk: {}, elbowRad: 0.5 }), true);
-  assert.equal(NG.armActionMoves('wrist_radial_deviation', {}), false);
+  assert.equal(NG.armActionMoves('wrist_radial_deviation', {}), true);
   // in play: the look contracts the elbow bend; then a click there is a press that moves the arm
   const { A, s } = started();
   const after = run(A, s, 150, 'elbow_flexion', () => look('rh_elbow', 'elbow_flexion')).s;

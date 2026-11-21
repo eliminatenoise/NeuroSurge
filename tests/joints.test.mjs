@@ -473,3 +473,58 @@ test('the right anconeus keeps its attachment weights and eases into the deep be
     assert.ok(Math.abs(body.anconeusDeepBendBlend(boundary + e) - body.anconeusDeepBendBlend(boundary - e)) < 1e-7);
   }
 });
+
+// 21 November 2026 (ELBOW; the published list of what is not done: "the right elbow at its full bend still folds its
+// muscles"): ns-body ELBOW_SKIN, shared by the bake, skinBodyPositions and the scene's processor skin.
+test('the right elbow\'s skin at a deep bend: shares cut away from the joint, shared vertices turned about its axis, the two sides kept apart', () => {
+  const E = body.ELBOW_SKIN, er = body.elbowRigOf(rig);
+  assert.ok(E.on && er && E.tailMm[0] < E.tailMm[1] && E.spin > 0 && E.spin < 1 && E.clamp.fromDeg < E.clamp.toDeg);
+  // the spin's offset is nothing at either end of a share and with no bend
+  const o = [0, 0, 0], x = er.point.map((v, k) => v + [15, -25, 10][k]);
+  for (const [th, s] of [[2.5, 0], [2.5, 1], [0, 0.5]]) { body.elbowSpinOffset(er, th, s, ...x, o); assert.ok(Math.hypot(...o) < 1e-9, `no offset at bend ${th}, share ${s}`); }
+  body.elbowSpinOffset(er, 2.5, 0.5, ...x, o);
+  assert.ok(Math.hypot(...o) > 1, 'a vertex shared half and half at a deep bend is moved');
+  // the bend read off the segments is the drawn elbow's own
+  const seg145 = body.poseBodySegments(rig, { ...rest, r_elbow_flex: 145 }, {});
+  assert.ok(Math.abs(Math.abs(body.elbowBendOf(er, seg145.r_upperarm, seg145.r_forearm)) * 180 / Math.PI - 145) < 1, 'the bend of 145 degrees');
+  // on three muscles across the elbow (the long finger flexor, brachioradialis, brachialis), bent 145 palm up:
+  const segs = new Map(Object.entries(seg145)), F = body.ELBOW_FORE_SEGMENT;
+  const plane = body.elbowPlaneOf(er, seg145.r_upperarm, seg145.r_forearm);
+  for (const name of ['right flexor digitorum superficialis', 'right brachioradialis', 'right brachialis']) {
+    const mu = rig.muscles.find(m => m.name === name), mesh = inputs.meshesById.get(mu.id), w = body.bodySkinWeights(rig, mu.id, mesh);
+    assert.ok(w.elbowRig, `${name} is skinned across the elbow`);
+    // the far tails: no vertex 6 cm or more down the forearm (or up the upper arm) shares its two sides any more
+    const p = mesh.positions, af = body.elbowRigOf(rig), dirF = (() => { const d = af.wrist.map((v, k) => v - af.point[k]), l = Math.hypot(...d); return d.map(v => v / l); })();
+    let farShared = 0;
+    for (let v = 0; v < w.i0.length; v++) {
+      if (F[w.i0[v]] === F[w.i1[v]]) continue;
+      const t = (p[3 * v] - af.point[0]) * dirF[0] + (p[3 * v + 1] - af.point[1]) * dirF[1] + (p[3 * v + 2] - af.point[2]) * dirF[2];
+      const s = (F[w.i0[v]] ? w.w0[v] : 0) + (F[w.i1[v]] ? w.w1[v] : 0);
+      if (t > E.tailMm[1] + 10 && s < 0.999) farShared++;
+    }
+    assert.equal(farShared, 0, `${name}: no vertex far down the forearm keeps a share of the upper arm`);
+    // drawn with the rules and without them (the same weights, the plain linear blend): how deep a vertex that belongs
+    // clearly to one side lies across the plane halving the bend, on the inner side of the elbow
+    const plain = { ...w, elbowRig: null };
+    const across = pos => {
+      let deep = 0;
+      for (let v = 0; v < w.i0.length; v++) {
+        const s = (F[w.i0[v]] ? w.w0[v] : 0) + (F[w.i1[v]] ? w.w1[v] : 0);
+        if (Math.abs(2 * s - 1) < E.clamp.pure[1]) continue;
+        const q = [pos[3 * v] - plane.e[0], pos[3 * v + 1] - plane.e[1], pos[3 * v + 2] - plane.e[2]];
+        if (q[0] * plane.bis[0] + q[1] * plane.bis[1] + q[2] * plane.bis[2] < E.clamp.innerMm[1]) continue;
+        const d = (s >= 0.5 ? -1 : 1) * (q[0] * plane.n[0] + q[1] * plane.n[1] + q[2] * plane.n[2]);
+        if (d > deep) deep = d;
+      }
+      return deep;
+    };
+    const drawn = body.skinBodyPositions(segs, w, mesh.positions, null, { elbowFlexDeg: 145 });
+    const before = body.skinBodyPositions(segs, plain, mesh.positions, null, { elbowFlexDeg: 145 });
+    // (measured 21 November 2026: 0 mm with the rules; without them 13, 31 and 13 mm)
+    assert.ok(across(before) > 8, `${name}: without the rules a vertex lies ${across(before).toFixed(1)} mm across (the fault)`);
+    assert.ok(across(drawn) < 0.5, `${name}: nothing of one side lies across the plane on the inside of the bend (${across(drawn).toFixed(2)} mm; ${across(before).toFixed(1)} mm without the rules)`);
+    // and at the start posture's bend (under fromDeg) the clamp moves nothing
+    const segs8 = new Map(Object.entries(body.poseBodySegments(rig, rest, {})));
+    assert.equal(body.elbowCreaseClamp(Float32Array.from(body.skinBodyPositions(segs8, plain, mesh.positions)), null, () => 1, body.elbowPlaneOf(er, segs8.get('r_upperarm'), segs8.get('r_forearm')), rest.r_elbow_flex), 0);
+  }
+});

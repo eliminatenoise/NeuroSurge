@@ -29,10 +29,24 @@ export const LIMB_IDS = Object.freeze(['rightArm', 'leftArm', 'rightLeg', 'leftL
  * the motor area lit when no body-map action moves that joint. upperDial: a press on the right UPPER arm turns the
  * upper arm (r_shoulder_rot) instead of the forearm.
  */
+/* 21 November 2026 (ELBOW; the published list of what is not done: "with the right arm across the chest, S leaves the
+ * hand where it is"; the owner: "We want full range of motion on all axes"). spin: the joint the KEYS' solve may also
+ * turn, the upper arm's own turn about its length (solveLimb's `spin` option). With the right arm brought across the
+ * chest the shoulder's raise and sideways swing are at the combined-range rule's end, and bending the elbow alone swings
+ * the hand out sideways (the forearm folds in the plane the upper arm's turn gives it), so S could not draw the hand in
+ * along its line: the joints that would have to do it (turning the upper arm inward, as a person does to bring the hand
+ * to the other shoulder) were not the solve's. Now they are, at `weight` (the step prefers the other two shoulder joints
+ * by 1 / weight^2 and turns the upper arm when they cannot do it: only with the arm brought across the front of the body
+ * (across: the hand's place more than medialMm toward the body's other side of the ELBOW, along the breastbone's own
+ * left-right axis: the forearm has to reach in across the body) and round a bent elbow (bendFrom .. bendTo), never otherwise, since W and S are not to
+ * turn the limb (the owner, Message 186)). The limb turn (the double tap of Space) still sets this
+ * joint to its own two ends; the keys turn it on from there as the hand's place needs, and the next limb turn starts
+ * from wherever the keys left it. The look's carry and every other solve leave it alone. */
 export const LIMB_CHAIN = Object.freeze({
   rightArm: Object.freeze({ joints: Object.freeze(['r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex']), root: 'r_glenohumeral', rootSeg: 'r_upperarm',
     bend: 'r_elbow_flex', bendSign: 1, bendPivot: 'r_elbow', endSeg: 'r_hand', endCentreOf: 'r_hand', framePivot: 'r_wrist', side: 'right',
-    dial: Object.freeze({ joint: 'r_pronation', sign: -1, area: 'lh_forearm' }), upperDial: Object.freeze({ joint: 'r_shoulder_rot', sign: 1, area: 'lh_shoulder' }) }),
+    dial: Object.freeze({ joint: 'r_pronation', sign: -1, area: 'lh_forearm' }), upperDial: Object.freeze({ joint: 'r_shoulder_rot', sign: 1, area: 'lh_shoulder' }),
+    spin: Object.freeze({ joint: 'r_shoulder_rot', weight: 0.35, bendFrom: 20, bendTo: 70, across: Object.freeze({ medialMm: 20, seg: 'sternum', toMedial: Object.freeze([1, 0, 0]) }) }) }),
   rightLeg: Object.freeze({ joints: Object.freeze(['hip_flex_R', 'hip_abd_R', 'knee_ext_R']), root: 'r_hip', rootSeg: 'r_thigh',
     bend: 'knee_ext_R', bendSign: -1, bendPivot: 'r_knee', endSeg: 'r_shank', endPivot: 'r_ankle', side: 'right',
     dial: Object.freeze({ joint: 'hip_rot_R', sign: 1, area: 'lh_hip' }) }),
@@ -197,10 +211,13 @@ export function lookAwayDeg(a, b) {
  * together; with the arm straight forward and the end lifted it folded the elbow a little every frame until the hand
  * was at the face, so the bend is now left to the distance alone.) Returns { joints: { id: deg } (the limb's three joints), endMm (where the end now is), errorMm, iterations }.
  */
-export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, opts = LIMB_GRASP, project = null, memo = null, startSegments = null }) {
-  const c = LIMB_CHAIN[limb];
-  if (!c) throw new Error(`ns:grasp: unknown solved limb ${JSON.stringify(limb)}`);
+export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, opts = LIMB_GRASP, project = null, memo = null, startSegments = null, spin = false }) {
+  const c0 = LIMB_CHAIN[limb];
+  if (!c0) throw new Error(`ns:grasp: unknown solved limb ${JSON.stringify(limb)}`);
   if (!targetMm || targetMm.length !== 3 || !targetMm.every(Number.isFinite)) throw new Error('ns:grasp: targetMm must be finite mm');
+  // (21 November 2026, LIMB_CHAIN spin: the keys' solve of the right arm turns the upper arm too, weighted)
+  const sp = spin && c0.spin && !c0.joints.includes(c0.spin.joint) ? c0.spin : null;
+  const c = sp ? { ...c0, joints: [...c0.joints, sp.joint] } : c0;
   const lim = id => (limits && limits[id] ? limits[id] : [-180, 180]);
   let q = { ...targets };
   for (const id of c.joints) q[id] = clamp(Number.isFinite(q[id]) ? q[id] : 0, lim(id)[0], lim(id)[1]);
@@ -246,8 +263,8 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
     // memo (19 November 2026; a caller that solves the same limb frame after frame): the two columns found last are used
     // again while the limb's joints are within opts.reuseDeg of where they were found and the last step made with them
     // still closed in on the target. Each column costs one pose of the whole body, so this halves a tracking solve.
-    const reuse = memo && memo.limb === limb && memo.J && !memo.stale && Number.isFinite(opts.reuseDeg)
-      && c.joints.every(id => Math.abs(q[id] - memo.at[id]) <= opts.reuseDeg);
+    const reuse = memo && memo.limb === limb && memo.J && !memo.stale && Number.isFinite(opts.reuseDeg) && memo.J.length === rootJoints.length
+      && c.joints.every(id => Number.isFinite(memo.at[id]) && Math.abs(q[id] - memo.at[id]) <= opts.reuseDeg);
     const J = reuse ? memo.J : rootJoints.map(id => {
       // 20 November 2026 (LIMBFREE; the owner: "The limb should never get stuck"): a probe that the combined-range rule
       // cuts back (project) went into a range the pose does not take: its column came out zero, or worse, it showed a
@@ -270,7 +287,35 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
       return sub(p, end).map(v => v / h);
     });
     if (memo && !reuse) { memo.limb = limb; memo.J = J; memo.at = {}; for (const id of c.joints) memo.at[id] = q[id]; memo.stale = false; memo.made = (memo.made || 0) + 1; }
-    const dq = dlsStep(J, e, lambda);
+    // (spin: the upper arm's turn costs 1 / weight^2 of the others: its column is scaled down and its step with it; and a
+    // shoulder joint the step pushes past what its range or the combined-range rule gives is left out of a second step,
+    // so the turn takes over where the raise and the sideways swing are at their end)
+    // (the turn moves the hand only round a bent elbow: its weight grows from nothing at bendFrom to all at bendTo
+    // degrees of bend, so with the arm straight the keys never turn the upper arm for the hand's few millimetres)
+    const spinW = sp ? sp.weight * (u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u)))((c.bendSign * q[c.bend] - sp.bendFrom) / (sp.bendTo - sp.bendFrom)) : 0;
+    // (and only where the shoulder's other two joints cannot do the step: the owner, Message 186, "they're not rotating
+    // internally or externally while moving ... We only introduce some rotation if we're combining key functions". The
+    // first step leaves the turn out; only a step that pushes the raise or the sideways swing past their range is made
+    // again with the turn in their place.)
+    const wOf = (id, on) => (sp && id === sp.joint ? (on ? spinW : 0) : 1);
+    const solveStep = (cols, on) => dlsStep(cols.map((col, i) => col.map(v => v * wOf(rootJoints[i], on))), e, lambda).map((v, i) => v * wOf(rootJoints[i], on));
+    let dq = solveStep(J, false);
+    // (memo.spinAcross: once the keys found the hand across the body, the turn stays allowed as the hand comes in toward
+    // the shoulder and so leaves the across side, until the caller clears it)
+    const acrossNow = !sp || !sp.across || (memo && memo.spinAcross === true) || (() => {
+      const S = seg[sp.across.seg], m = sp.across.toMedial, root = limbPoint(rig, seg, limb, 'bend');
+      if (!S) return false;
+      const d = [S[0] * m[0] + S[4] * m[1] + S[8] * m[2], S[1] * m[0] + S[5] * m[1] + S[9] * m[2], S[2] * m[0] + S[6] * m[1] + S[10] * m[2]];
+      return (targetMm[0] - root[0]) * d[0] + (targetMm[1] - root[1]) * d[1] + (targetMm[2] - root[2]) * d[2] > sp.across.medialMm;
+    })();
+    if (sp && acrossNow && memo) memo.spinAcross = true;
+    if (sp && spinW > 0 && acrossNow) {
+      const qq = { ...q };
+      rootJoints.forEach((id, i) => { qq[id] = clamp(q[id] + clamp(dq[i], -opts.stepCapDeg, opts.stepCapDeg), lim(id)[0], lim(id)[1]); });
+      const pp = typeof project === 'function' ? project(qq) || qq : qq;
+      const blocked = rootJoints.map((id, i) => id !== sp.joint && Math.abs(dq[i]) > 1e-6 && Math.abs((Number.isFinite(pp[id]) ? pp[id] : qq[id]) - q[id]) < 0.5 * Math.min(Math.abs(dq[i]), opts.stepCapDeg));
+      if (blocked.some(Boolean)) { const d2 = solveStep(J.map((col, i) => (blocked[i] ? col.map(() => 0) : col)), true); dq = d2.map((v, i) => (blocked[i] ? 0 : v)); }
+    }
     let moved = false;
     const before = rootJoints.map(id => q[id]);
     rootJoints.forEach((id, i) => { q[id] = clamp(q[id] + clamp(dq[i], -opts.stepCapDeg, opts.stepCapDeg), lim(id)[0], lim(id)[1]); });

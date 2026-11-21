@@ -57,11 +57,16 @@ export const BONE_SEGMENTS = Object.freeze(SEGMENTS.filter(s => !/^forearm_tw[12
 export const SKIN_CANDIDATES = Object.freeze(SEGMENTS.slice(0, 18));
 
 /** Pose joint names (degrees). Positive = anatomical flexion; abduction positive away from digit 3;
- * opposition positive toward the palm. middle_mcp_abd is the reference digit and is normally 0. */
+ * opposition positive toward the palm. middle_mcp_abd is the reference digit and is normally 0.
+ * 21 November 2026 (browser hunt of update 62, H8: "Bend left wrist toward the thumb" lit its area and moved nothing,
+ * against the owner's Message 204, "make sure there's clear movement for each brain activation area"): wrist_dev, the
+ * wrist's sideways bend, positive = radial deviation (the hand bends toward the thumb side), negative = ulnar deviation
+ * (toward the little finger). It turns the hand about the same wrist pivot as wrist_flex, about the axis across the
+ * palm (rig.axes.wrist_dev, built from the hand's long axis and its radial direction), after the flexion. */
 export const POSE_JOINTS = Object.freeze([
   'wrist_flex', 'thumb_cmc_opp', 'thumb_mcp_flex', 'thumb_ip_flex',
   ...DIGITS.flatMap(d => [`${d}_mcp_flex`, `${d}_pip_flex`, `${d}_dip_flex`, `${d}_mcp_abd`]),
-  'forearm_pronation'
+  'forearm_pronation', 'wrist_dev'
 ]);
 
 /**
@@ -228,7 +233,7 @@ const HEAD_PIVOT_NOTE =
 /** Pivot used by each pose joint. */
 const JOINT_PIVOT = Object.freeze(Object.fromEntries([
   ['forearm_pronation', 'radialHead'],
-  ['wrist_flex', 'wrist'], ['thumb_cmc_opp', 'thumb_cmc'], ['thumb_mcp_flex', 'thumb_mcp'], ['thumb_ip_flex', 'thumb_ip'],
+  ['wrist_flex', 'wrist'], ['wrist_dev', 'wrist'], ['thumb_cmc_opp', 'thumb_cmc'], ['thumb_mcp_flex', 'thumb_mcp'], ['thumb_ip_flex', 'thumb_ip'],
   ...DIGITS.flatMap(d => [
     [`${d}_mcp_flex`, `${d}_mcp`], [`${d}_mcp_abd`, `${d}_mcp`], [`${d}_pip_flex`, `${d}_pip`], [`${d}_dip_flex`, `${d}_dip`]
   ])
@@ -625,6 +630,8 @@ export function deriveRig(boneMeshes, {
   const axes = {
     elbow: axisToward(dirs.forearm, anteriorDir, 'elbow axis'),
     wrist_flex: axisToward(dirs.hand, palmarDir, 'wrist axis'),
+    // (21 November 2026, H8: the sideways bend; a positive turn moves the hand toward its radial, thumb side)
+    wrist_dev: axisToward(dirs.hand, radial, 'wrist deviation axis'),
     thumb_cmc_opp: thumbOppAxis,
     thumb_mcp_flex: axisToward(dirs.thumb_pp, thumbFlexDir, 'thumb MCP axis'),
     thumb_ip_flex: axisToward(dirs.thumb_dp, thumbFlexDir, 'thumb IP axis'),
@@ -635,6 +642,7 @@ export function deriveRig(boneMeshes, {
   const semantics = [
     { joint: 'elbow', segment: 'forearm', toward: anteriorDir, meaning: 'flexion moves the forearm anteriorly' },
     { joint: 'wrist_flex', segment: 'hand', toward: palmarDir, meaning: 'flexion moves the hand palmarward' },
+    { joint: 'wrist_dev', segment: 'hand', toward: radial, meaning: 'radial deviation (positive) moves the hand toward the thumb side; ulnar deviation (negative) toward the little finger (display construction)' },
     {
       joint: 'thumb_cmc_opp', segment: 'thumb_mc', toward: thumbOppDir,
       meaning: 'opposition moves the thumb metacarpal palmar and ulnar and turns the thumb pad toward the palm (display construction)'
@@ -880,10 +888,17 @@ export function jointMatrix(rig, joint, degrees) {
   return rotationAboutPivot(rig.axes[joint], (degrees - rig.restAngles[joint]) * DEG, rig.pivots[JOINT_PIVOT[joint]]);
 }
 
-/** Wrist rotation about its pivot (rest mm -> rest mm) for a pose. */
+/** Wrist rotation about its pivot (rest mm -> rest mm) for a pose: the flexion, then (21 November 2026, H8) the
+ * sideways bend, wrist_dev (the identity at 0). */
 export function wristMatrix(rig, joints) {
   checkRig(rig);
-  return jointRotation(rig, normalizeJoints(joints), 'wrist_flex');
+  return wristRotation(rig, normalizeJoints(joints));
+}
+/** The flexion and the sideways bend of the wrist as one rotation (rest mm -> rest mm). An older rig without the
+ * sideways axis turns by the flexion alone. */
+function wristRotation(rig, J) {
+  const flex = jointRotation(rig, J, 'wrist_flex');
+  return J.wrist_dev !== 0 && rig.axes.wrist_dev ? multiply(flex, jointRotation(rig, J, 'wrist_dev')) : flex;
 }
 
 /** Forearm pronation turn (rest mm -> rest mm) of the radius about the forearm rotation axis for a pose
@@ -898,7 +913,7 @@ export function pronationMatrix(rig, joints) {
 export function forearmHandMatrix(rig, joints) {
   checkRig(rig);
   const J = normalizeJoints(joints);
-  return multiply(jointRotation(rig, J, 'forearm_pronation'), jointRotation(rig, J, 'wrist_flex'));
+  return multiply(jointRotation(rig, J, 'forearm_pronation'), wristRotation(rig, J));
 }
 
 /** Matrices (rest mm -> rest mm) of the hand and every digit segment relative to the hand segment.
@@ -949,7 +964,7 @@ export function forwardKinematics(rig, { shoulderMatrix, elbowFlexRad = 0, joint
   const turn = (J.forearm_pronation - rig.restAngles.forearm_pronation) * DEG;
   const proAt = f => rotationAboutPivot(rig.axes.forearm_pronation, f * turn, rig.pivots.radialHead);
   const fore = multiply(ulna, proAt(1));
-  const hand = multiply(fore, jointRotation(rig, J, 'wrist_flex'));
+  const hand = multiply(fore, wristRotation(rig, J));
   const local = handLocalMatrices(rig, J);
   const out = new Map();
   for (const s of SEGMENTS) {

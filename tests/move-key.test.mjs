@@ -148,11 +148,12 @@ check('the list marks the movement the card explains; a body movement is never "
   assert.deepEqual(moves.filter(m => m.atEnd), [], 'every body movement moves on a press');
   // (the old `still` list of the latch is no longer read: passing one marks nothing)
   assert.deepEqual(infoMoves(knee, { still: ['rh_knee/rh_knee_flex'] }).filter(m => m.atEnd), []);
-  // a left-arm movement is "already there" only where the game arm cannot move: the elbow straight, a sideways wrist bend
+  // a left-arm movement is "already there" only where the game arm cannot move: the elbow straight (21 November 2026,
+  // hunt H8: the sideways wrist bends move the game arm's hand now, ns-rig wrist_dev, so they are never "already there")
   const elbow = region('rh_elbow'), wrist = region('rh_wrist');
   assert.deepEqual(infoMoves(elbow, { leftArm: true, armState: { armJerk: {}, elbowRad: 0.01 } }).filter(m => m.atEnd).map(m => m.id), ['elbow_extension']);
   assert.deepEqual(infoMoves(elbow, { leftArm: true, armState: { armJerk: {}, elbowRad: 0.6 } }).filter(m => m.atEnd), []);
-  assert.deepEqual(infoMoves(wrist, { leftArm: true, armState: { armJerk: {} } }).filter(m => m.atEnd).map(m => m.id).sort(), ['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+  assert.deepEqual(infoMoves(wrist, { leftArm: true, armState: { armJerk: {} } }).filter(m => m.atEnd).map(m => m.id).sort(), []);
 });
 
 check('the card explains: a running movement of the area, else the one chosen by number, else the one looked at', () => {

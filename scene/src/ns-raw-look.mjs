@@ -28,6 +28,14 @@
  *    gradient": the darkest light is near black, RGB about 4, 4, 5, and the floor's pool of light (roomPool) a little
  *    stronger than the old one, so the picture still falls off from about 15 under the bodies to black at the edges.)
  *  - bone: the tool's ivory, RGB [232, 224, 205].
+ *  - muscleFloor (21 November 2026, a browser hunt, H28: "a raised right forearm in shadow goes almost black against
+ *    the room"; section 168 listed it: "the darkest steps go nearly black on the shaded side"): the deepest shade of
+ *    the darkest rose tones (a quarter of their colour, 0.15 on a back face) measured 10 to 25 red, darker than the
+ *    room. A muscle's shade is now kept, with a soft knee, from going under this LINEAR luminance (about RGB 53, 13, 14
+ *    on the darkest tone: plainly dark red muscle, about twice the luminance of the room's 13 to 21 grey; 0.0065, about
+ *    42, 9, 10, was tried first and measured level with the room under the raised arm); its colour is only scaled, so
+ *    the hue stays, and never above the colour itself. The lighter tones are little touched (rose at the ambient shade
+ *    45 -> 51 red); what is lit is not touched at all. Muscles only (the strip's black abyss and the room stay black).
  *  - ink (20 November 2026, the owner, Message 207: "And everything should get clear outlines."): ONE rule for every
  *    outline in this look: the bodies' silhouettes and the lines where one limb or body lies over another (the game arm
  *    and the organs too; ns-outline through ns-scene-three RAW_OUTLINE), the motor strip's contour, the brain's outline
@@ -47,7 +55,7 @@ export const RAW_LOOK = Object.freeze({
   ambient: 0.25, direct: 0.75, back: 0.6, gamma: 2.2,
   flat: false,
   room: Object.freeze([0.0011, 0.0011, 0.0015]), roomPool: Object.freeze([0.0045, 0.0048, 0.0056]),
-  bone: 0xe8e0cd,
+  bone: 0xe8e0cd, muscleFloor: 0.01,
   ink: Object.freeze({ colour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]), hex: 0x0b0809, css: 1.4, alpha: 0.95, innerCss: 0.9, innerAlpha: 0.6, farShare: 0.6 })
 });
 
@@ -90,13 +98,17 @@ export function rawShadeGlsl(name = 'nsRawK', normalExpr = 'normal', viewPosExpr
  *    above nsHdrBoost.y) brighten the emission by nsHdrBoost.x x the excess, so the cores bloom (without it the flash
  *    was about 1.8 times dimmer in the raw look). The uniform nsHdrBoost is declared here; the scene binds it
  *    (hdrBoost: true in the result).
+ * - opts.floor (21 November 2026, RAW_LOOK.muscleFloor; muscles only): the shade is kept from taking the colour's
+ *   luminance under this linear value: shade' = a soft maximum of the shade and min(1, floor / the colour's luminance)
+ *   (knee half the floor wide), at most 1 (the full light).
  * Returns { vertexShader, fragmentShader, hdrBoost } or null when a hook is missing (the material then keeps its own
  * light). */
 export const RAW_HOOKS = Object.freeze({
   ao: '#include <aomap_fragment>', normal: '#include <normal_fragment_begin>',
   lights: Object.freeze(['#include <lights_fragment_begin>', '#include <lights_fragment_maps>', '#include <lights_fragment_end>'])
 });
-export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK) {
+export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK, opts = {}) {
+  const floor = opts && Number.isFinite(opts.floor) && opts.floor > 0 ? opts.floor : 0;
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   // (vViewPosition, needed only for flat normals, is declared in the lights' own pars chunk of the lambert and phong
   // shaders, so it is not in their text before the includes are resolved)
@@ -107,7 +119,11 @@ export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK) {
   for (const h of RAW_HOOKS.lights) fs = fs.split(h).join('');
   fs = fs.replace(RAW_HOOKS.ao, `${RAW_HOOKS.ao}
 	{
-		${rawShadeGlsl('nsRawK', 'normal', 'vViewPosition', o)}
+		${rawShadeGlsl('nsRawK', 'normal', 'vViewPosition', o)}${floor ? `
+		{ // the shade floor (opts.floor): never under that luminance, a soft maximum
+			float nsKf = min( 1.0, ${f(floor)} / max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ) ), nsKw = 0.5 * nsKf;
+			nsRawK = min( 0.5 * ( nsRawK + nsKf + sqrt( ( nsRawK - nsKf ) * ( nsRawK - nsKf ) + nsKw * nsKw ) ), 1.0 );
+		}` : ''}
 		reflectedLight.directDiffuse = diffuseColor.rgb * nsRawK;
 		reflectedLight.indirectDiffuse = vec3( 0.0 );
 		reflectedLight.directSpecular = vec3( 0.0 );

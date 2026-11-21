@@ -10,6 +10,10 @@
 }
 .preview-note a { color: #b8e5ff; }
 .preview-note:hover, .preview-note:focus-within { opacity: 1; }
+/* 21 November 2026 (hunt H20): the line stands above every page, so the start and Esc pages' card ends above it in a
+   wide window too (preview.css already does so in an upright one, with more room). At 800 by 600 the card ran to 16 px
+   from the bottom and the line lay across its Space key. */
+@media (min-aspect-ratio: 1/1) { .ns-shell:not([hidden]) { padding-bottom: 28px; } }
 
 /* Cards off: also the long limits line, the left / right words and the second line of the brain's part names. */
 .ns-app[data-ns-read="off"] .ns-essential,

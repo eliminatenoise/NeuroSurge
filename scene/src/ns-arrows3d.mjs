@@ -519,9 +519,14 @@ export function frameArrowSpots(rect, { halfAlongPx, halfAcrossPx, bounds = null
     // inwardMaxFrac of the way from its base to the frame's middle
     // (R558, Messages 55 / 56: above 1 a tip may pass the frame's middle, e.g. the brain's bottom tip going up the hollow
     // of the motor strip's U; the pair's two tips then still keep their hit boxes apart, see `apart`)
-    const fr = isNum(R.inwardMaxFrac) ? clamp(R.inwardMaxFrac, 0, 1.9) : 1;
+    // 21 November 2026 (hunt H15): inwardMaxFracBy { dir: frac } caps one tip of the pair on its own (the brain's TOP
+    // tip keeps the default: only its bottom tip goes up the strip's hollow; with the mirror body lifted over the brain's
+    // top the top tip went 146 px down into the gap between the halves, beside the crosshair, above the mirror body's
+    // down tip). A tip with no place inside its cap is then moved along its side (ns-scene-three rescueTips).
+    const frOf = dir => { const v = R.inwardMaxFracBy && isNum(R.inwardMaxFracBy[dir]) ? R.inwardMaxFracBy[dir] : R.inwardMaxFrac; return isNum(v) ? clamp(v, 0, 1.9) : 1; };
+    const fr = Math.max(frOf(dA), frOf(dB));
     const mMin = { [dA]: Math.min(0, Math.max(isNum(needA) ? needA : -half, -half) - base[dA]), [dB]: Math.min(0, Math.max(isNum(needB) ? needB : -half, -half) - base[dB]) };
-    const mMax = { [dA]: fr * Math.max(0, half - base[dA]), [dB]: fr * Math.max(0, half - base[dB]) };
+    const mMax = { [dA]: frOf(dA) * Math.max(0, half - base[dA]), [dB]: frOf(dB) * Math.max(0, half - base[dB]) };
     // the shared place across the pointing axis: the frame's centre line, clamped into the bounds once for both
     const pMid = sideP ? my : mx;
     const p0 = b ? (pHi - pLo >= 2 * hP ? clamp(pMid, pLo + hP, pHi - hP) : (pLo + pHi) / 2) : pMid;

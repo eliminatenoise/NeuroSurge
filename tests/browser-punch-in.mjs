@@ -143,7 +143,10 @@ try {
   await page.mouse.click(800, 450);
   await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
   await waitForPulseEnd();
-  await sampleView('eye', 'ArrowRight');
+  // 21 November 2026 (browser hunt of update 62, H6; restated): from the start look (on no area) the first arrow key
+  // goes to the nearest area on its own side of the crosshair; the throat area at the lower-LEFT end of the strip, which
+  // the RIGHT key used to reach (the nearest area of all, whichever key), is now the left key's.
+  await sampleView('eye', 'ArrowLeft');
   await page.keyboard.press('e');
   await page.waitForFunction(() => {
     const pose = window.__nsQA.inspect().camera.pose;

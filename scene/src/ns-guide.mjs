@@ -177,7 +177,8 @@ export function createGuide({ now = 0, hidden = false, done = [], features = nul
     v: 1, hidden: hidden === true, paused: false, goals: list, done: d,
     axes: { x: d.moveHand, z: d.moveHand }, fistAt: null, flashUntil: null,
     finishedAt: all ? nowOf(now) - GUIDE_OPTIONS.finishS : null, startedAt: nowOf(now),
-    view: 'first', thirdAt: null, glowPending: null, mirrorBlocked: false, mirrorMoved: false, numberStill: false, watchOnBrain: false
+    view: 'first', thirdAt: null, glowPending: null, mirrorBlocked: false, mirrorMoved: false, numberStill: false, watchOnBrain: false,
+    lookStill: false // (21 November 2026, hunt H18: the area the first step last switched on moved nothing)
   };
 }
 
@@ -232,6 +233,13 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         // 20 November 2026 (browser hunt): the tutorial's first step ("Look at a colour on the brain: a part moves") is
         // done by the look's own switch-on of an area that moves something, not by the crosshair merely crossing an
         // area: while Space holds the brain the looks are silent (nothing moves), and the step used to complete then.
+        // 21 November 2026 (hunt H18): an area switched on while this step shows that moved nothing (the Tongue, an
+        // in-between area, a turn the forearm has already made) asks for another colour; one that moved clears it. At
+        // 800 by 600 the first area a look up reached was the right Tongue, and the line stayed at 1/9 saying nothing.
+        if (cur() === 'lookStrip' && (ev.isLeftArm === true || ev.isLeftArm === false)) {
+          const still = ev.kind === 'integration' || ev.moves === false;
+          if (((s || state).lookStill === true) !== still) w().lookStill = still;
+        }
         if (!pressed && ev.kind !== 'integration' && ev.moves !== false && (ev.isLeftArm === true || ev.isLeftArm === false)) mark('lookStrip');
         if (ev.isLeftArm === true) { if (ev.moves !== false) { if (ev.awaitMove !== true) mark('leftArmArea'); if (pressed) mark('pressArea'); } }
         else if (ev.isLeftArm === false && ev.kind !== 'integration' && ev.moves !== false) { mark('otherPart'); if (pressed) mark('pressArea'); }
@@ -363,6 +371,8 @@ export function guideView(state, now = 0, opts = GUIDE_OPTIONS) {
   }
   let text = GUIDE.goals[id];
   if (id === 'moveHand' && s.axes.x !== s.axes.z) text = s.axes.z ? GUIDE.partial.moveHandNeedX : GUIDE.partial.moveHandNeedZ;
+  // 21 November 2026 (hunt H18): the area just switched on moved nothing: ask for another colour.
+  if (id === 'lookStrip' && s.lookStill === true) text = GUIDE.partial.lookStripStill;
   // R558: a number moved the part while the look was still on the brain: ask for a look down at the body.
   if (id === 'watchBody' && s.watchOnBrain === true) text = GUIDE.partial.watchBodyLookDown;
   // R558: the number just pressed moved nothing (that movement was already at its end): ask for another number.
@@ -469,10 +479,11 @@ export const ARM_STRAIGHT_ELBOW_RAD = 2 * Math.PI / 180;
  * it (ARM_ACTIONS_MOVE_NOTHING). arm: { elbowRad, armJerk } of the activity state BEFORE the pulse; missing fields count
  * as "moves". 20 November 2026 (Message 206): every press contracts and returns, so nothing else is "already there"
  * (it was: a movement latched on with no jerk to repeat, armLatch). */
-/** 19 November 2026 (EASE, audit S14): the game arm has no sideways wrist joint, so these two movements of the left
- * wrist move nothing (ns-actions DISPLAY_ONLY_ARM_IDS, kept equal by hand); the tip and the card dim them like a
- * movement already at its end. A stopgap until the game arm's wrist bends sideways. */
-export const ARM_ACTIONS_MOVE_NOTHING = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+/** 19 November 2026 (EASE, audit S14): game-arm movements that move nothing (ns-actions DISPLAY_ONLY_ARM_IDS, kept equal
+ * by hand); the tip and the card dim them like a movement already at its end. Empty since 21 November 2026 (browser hunt
+ * of update 62, H8): the left wrist's two sideways bends were the only ones, and the game arm's wrist now bends
+ * sideways (ns-rig wrist_dev). */
+export const ARM_ACTIONS_MOVE_NOTHING = Object.freeze([]);
 export function armActionMoves(armActionId, arm = null) {
   if (typeof armActionId === 'string' && ARM_ACTIONS_MOVE_NOTHING.includes(armActionId)) return false;
   if (typeof armActionId !== 'string' || !arm || typeof arm !== 'object') return true;

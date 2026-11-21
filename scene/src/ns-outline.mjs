@@ -420,7 +420,38 @@ float viewDist( float d ) {
 }
 int groupOf( vec4 c ) { return int( c.r * 255.0 + 0.5 ); }
 int meshOf( vec4 c ) { return int( c.g * 255.0 + 0.5 ) * 256 + int( c.b * 255.0 + 0.5 ); } // 14 bits (flags removed)
+// 21 November 2026 (patchCoverageNear): a coverage sample shows an eye where the nearest eye is in front of the nearest
+// brain surface or strip (b and a are their nearness, 0 = none)
+bool eyeShown( vec4 c ) { return c.b > c.a; }
 `;
+/** 21 November 2026 (a browser hunt, H14: the dark ring of an eyeball behind the brain was drawn across the brain's
+ * surface): the coverage picture tells whether an eye is in front of the brain. No coverage draw writes depth (they
+ * are tested against the bodies' depth, which the edge and ink passes read afterwards), so each draw writes its
+ * NEARNESS instead: nsCovRange (x: the view distance where nearness is 0, y: 1 / the distance over which it goes to 1,
+ * set from the brain's bounding sphere) maps the fragment's view distance to 1/255 .. 1 (0 stays "none"); nsCov says
+ * what a draw writes: (r, g, b x nearness, a x nearness). The strip and the brain's surface write their nearness into a,
+ * the eyes theirs into b; combined by MAX, an eye is seen where b > a (eyeShown). At 8 bits a step is about a hundredth
+ * of the brain's size (about 1 mm). Patches a MeshBasicMaterial's shaders (r170); null when a hook is missing. Pure. */
+export const COVERAGE_NEAR_HOOKS = Object.freeze({ vertex: '#include <project_vertex>', fragment: '#include <dithering_fragment>' });
+export function patchCoverageNear(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || vertexShader.includes('vNsCovZ')) return null;
+  const H = COVERAGE_NEAR_HOOKS;
+  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.fragment)) return null;
+  return {
+    vertexShader: 'varying float vNsCovZ;\n' + vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsCovZ = - mvPosition.z;`),
+    fragmentShader: 'varying float vNsCovZ;\nuniform vec4 nsCov;\nuniform vec2 nsCovRange;\n' + fragmentShader.replace(H.fragment, `${H.fragment}
+	{
+		float nsN = ( 1.0 + 254.0 * clamp( ( nsCovRange.x - vNsCovZ ) * nsCovRange.y, 0.0, 1.0 ) ) / 255.0;
+		gl_FragColor = vec4( nsCov.x, nsCov.y, nsCov.z * nsN, nsCov.w * nsN );
+	}`)
+  };
+}
+/** The coverage range (patchCoverageNear) for a brain of bounding radius r whose centre is at view distance d: nearness
+ * runs over d + k r (0) to d - k r (1). Returns [far, 1 / length]. k 1.6 takes in the eyes in front of the brain. Pure. */
+export function coverageNearRange(d, r, k = 1.6) {
+  const far = d + k * r, len = Math.max(2 * k * r, 1e-6);
+  return [far, 1 / len];
+}
 /* EDGE PASS (supersampled): the class of the boundary next to this sample, drawn on the nearer side (4 strong, 3
  * silhouette, 2 inner step, 1 parting; 0 none; + 8 = a bold line round a slim piece; + 16 = the brain's outline, + 32
  * the outline of its eyes and nerves, 20 November 2026). Output: (class + flags, mesh high (+ 128 = the strip's
@@ -459,7 +490,7 @@ void main() {
 	bool stripEdge = false, brainEdge = false, eyeEdge = false;
 	if ( uStripOn > 0.5 ) {
 		vec4 cv = texelFetch( tStrip, p, 0 );
-		bool sC = cv.r > 0.5, bC = cv.g > 0.5, eC = cv.b > 0.5;
+		bool sC = cv.r > 0.5, bC = cv.g > 0.5, eC = eyeShown( cv );
 		if ( sC || bC || eC ) {
 			for ( int i = 0; i < 8; i ++ ) {
 				ivec2 o = i == 0 ? ivec2( 1, 0 ) : i == 1 ? ivec2( - 1, 0 ) : i == 2 ? ivec2( 0, 1 ) : i == 3 ? ivec2( 0, - 1 ) :
@@ -469,8 +500,8 @@ void main() {
 				int gq = groupOf( texelFetch( tId, q, 0 ) );
 				bool open = gq == 0 || g != 0;
 				if ( sC && cq.r < 0.5 && gq == 0 ) stripEdge = true;
-				if ( bC && cq.g < 0.5 && cq.b < 0.5 && open ) brainEdge = true;
-				if ( eC && cq.b < 0.5 && open ) eyeEdge = true;
+				if ( bC && cq.g < 0.5 && ! eyeShown( cq ) && open ) brainEdge = true;
+				if ( eC && ! eyeShown( cq ) && open ) eyeEdge = true;
 			}
 		}
 	}
@@ -614,7 +645,7 @@ void main() {
 		if ( uStrip.z > 0.5 ) {
 			vec4 cv = texelFetch( tStrip, min( ps[ i ], uSize - 1 ), 0 );
 			if ( cv.r > 0.5 ) { st[ i ] = true; strip ++; }
-			if ( uBrain.y > 0.0 ) { bc[ i ] = cv.g > 0.5; ec[ i ] = cv.b > 0.5; if ( bc[ i ] || ec[ i ] ) cov ++; }
+			if ( uBrain.y > 0.0 ) { bc[ i ] = cv.g > 0.5; ec[ i ] = eyeShown( cv ); if ( bc[ i ] || ec[ i ] ) cov ++; }
 		}
 		vec4 c = texelFetch( tId, min( ps[ i ], uSize - 1 ), 0 );
 		gs[ i ] = groupOf( c ); ms[ i ] = meshOf( c );
@@ -843,11 +874,26 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   stripScene.matrixWorldAutoUpdate = false;
   // 20 November 2026 (Message 207): the coverage picture holds three things, one per channel, combined by MAX (none
   // writes depth): r the strip, g the brain's surface, b its eyes and nerves.
-  const covMat = colour => new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false,
-    blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
-  const stripMat = covMat(0xff0000);
+  // 21 November 2026 (a browser hunt, H14): b and a carry NEARNESS (patchCoverageNear): b the nearest eye there, a the
+  // nearest brain surface or strip, so an eye counts only where it is in front of the brain (eyeShown); the outline of
+  // an eyeball behind the brain was drawn across the brain's surface.
+  const covNearRange = { value: new THREE.Vector2(0, 0) };
+  const covMat = (colour, write) => {
+    const m = new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
+    const u = { value: new THREE.Vector4(write[0], write[1], write[2], write[3]) };
+    // the scene may chain its own vertex rule onto this (the living brain): it calls this first or after, either works
+    m.onBeforeCompile = shader => {
+      const p = patchCoverageNear(shader.vertexShader, shader.fragmentShader);
+      if (!p) return;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      shader.uniforms.nsCov = u; shader.uniforms.nsCovRange = covNearRange;
+    };
+    return m;
+  };
+  const stripMat = covMat(0xff0000, [1, 0, 0, 1]);
   const strip = { mesh: null, source: null, m: new Float64Array(16).fill(NaN), shown: false };
-  const brainMat = covMat(0x00ff00), brainPartMat = covMat(0x0000ff);
+  const brainMat = covMat(0x00ff00, [0, 1, 0, 1]), brainPartMat = covMat(0x0000ff, [0, 0, 1, 0]);
   const brain = { group: null, surface: null, parts: [], shown: false, key: new Float64Array(0) };
 
   const reg = [];            // { src, group, mirror, serial, iid, gid, show, flip, dbl, m: Float64Array(16) }
@@ -1313,6 +1359,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       const tq = gpuBegin();
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
+        setCoverageRange(camera);
         renderer.setRenderTarget(stripTarget);
         renderer.clear(true, false, false);
         renderer.autoClear = false;
@@ -1335,6 +1382,18 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     brainComposite.visible = brain.shown;
     stats.ms = now() - t0;
     return true;
+  }
+  /** 21 November 2026 (patchCoverageNear): the nearness range of the coverage picture, from the bounding sphere of the
+   * brain's surface (else the strip's) as drawn now. */
+  const covCentre = new THREE.Vector3();
+  function setCoverageRange(camera) {
+    const src = brain.surface ? brain.surface.src : strip.mesh ? strip.mesh : null, g = src && src.geometry;
+    if (!g) return;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const w = brain.surface ? brain.group.matrixWorld : strip.mesh.matrixWorld;
+    covCentre.copy(g.boundingSphere.center).applyMatrix4(w).applyMatrix4(camera.matrixWorldInverse);
+    const r = coverageNearRange(-covCentre.z, g.boundingSphere.radius * w.getMaxScaleOnAxis());
+    covNearRange.value.set(r[0], r[1]);
   }
   /** The motor strip for its silhouette ink: one geometry in the local frame of `source` (an Object3D whose world matrix
    * and visibility it follows: the brain group). null removes it. */

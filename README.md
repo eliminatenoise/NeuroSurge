@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 63: fixes from a browser hunt: only what you look at or click switches a movement on, the limb keys never whip the view or leave a limb stuck, the words and cards say what is there, and five faults of the look are gone; the right elbow bends more cleanly, S draws the hand across the chest, a hand drag bends the right wrist, and the left wrist bends sideways.
+
 Body update 62: fixes from a review: the neck stays dark during a trunk movement, a trunk bend stopped at the brain comes back, the left arm comes back after a far shoulder swing, limbs glide back to the look, and a still view costs the graphics card far less.
 
 Body update 61: the motor strip as separate coloured blocks over a black abyss, a darker room, every strip movement within reach of the look (the toes too), and a clear outline on everything.
