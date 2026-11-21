@@ -273,7 +273,7 @@ const STEP_TABLE = [
       'This is the simple textbook order; real areas overlap.'),
     part('Each body part has one colour family. Blues are for your left arm (in the brain’s right half), ' +
     'oranges for your right arm, purples for your left leg, yellows for your right leg, greens for your belly and ' +
-    'back, and pinks for your face and neck. Grey in-between areas move nothing. Neighbouring areas are lighter and ' +
+    'back, and pinks for your face and neck. Black in-between areas move nothing. Neighbouring areas are lighter and ' +
     'darker shades of their colour.')],
   intro: [part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder ' +
     'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
@@ -539,7 +539,7 @@ export const SHELL = deepFreeze({
   // two lines under the picture say the same in full. Every key named here is a key the game really handles.
   keyboard: {
     title: 'Where the keys are',
-    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A. The space bar is the long key at the bottom: it takes hold of things and turns your limbs. Esc is at the top left. The number keys 1 to 9 are the row above W: each does the movement with that number in the list on the information card. The left and right arrow keys are at the bottom right: each steps your look to the next motor area on that side.',
+    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A. The space bar is the long key at the bottom: it takes hold of the brain or the mirror body, chooses a limb and turns your limbs. Esc is at the top left. The number keys are the row above W: 1 to 4 choose the limb that W, A, S and D move. The left and right arrow keys are at the bottom right: each steps your look to the next motor area on that side.',
     keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyR: 'read', ShiftLeft: 'other in line', ArrowLeft: 'area', ArrowRight: 'area' },
     names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyR: 'R', Space: 'Space', ShiftLeft: 'Shift',
       Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
@@ -551,7 +551,8 @@ export const SHELL = deepFreeze({
     // R558 (Message 55): two short notes. The key captions already say what E, R, Esc, the arrows and the number
     // row do; the full words are in the Controls list.
     lineMove: 'W, A, S, D move the hand or foot of the limb you chose (1 to 4), or the thing Space holds. The chosen limb goes with your view. Hold Shift as you click, press Space or drag to reach the other thing in line with the crosshair.',
-    lineSpace: 'Space takes hold of the brain, the mirror body or a limb: hold it, or tap once (tap again to let go). While it holds, both hands close and the toes curl. Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
+    // (21 November 2026, late: Space on one of your limbs chooses it, ns-app LIMB_KEYS.view.hold; the line said it takes hold of a limb)
+    lineSpace: 'Space takes hold of the brain or the mirror body: hold it, or tap once (tap again to let go). On one of your limbs it chooses that limb. While Space is down, or keeps a hold after a tap, both hands close and the toes curl. Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
     padTitle: 'Trackpad or mouse',
     padMove: 'Move: turn your head to look around.',
     padClick: 'Click a motor area: its body part moves. Click a muscle: its motor area switches on.',
@@ -639,8 +640,14 @@ export const HUD = deepFreeze({
   // R4-text: "a rough map" (Flesch 68.8 -> 72.3, 118 characters); the pinned opening and the four core honesty items
   // are unchanged.
   limitsShort: 'Signals made up (simulated, unitless) · a rough map · game controls (virtual inputs), not real stimulation or decoding',
-  hint: 'Move to look. W/S reach out or draw in; A/D swing left or right. Hold Space on the brain, the mirror body or one of ' +
-    'your limbs to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); a carried thing goes through you and through anything. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area to see its movements. Click it or press a number to move its body part. The simulated signal glows for about a second. Click the scene to capture the mouse; ' +
+  // (21 November 2026, late: Space on a limb chooses it; a look does the area's movement and the part goes back; the
+  // numbers 1 to 4 choose a limb. The line still said Space carries a limb and a number moves a body part.)
+  // (22 November 2026: nothing on screen shows this line or hintShell below. ns-app hudStatic puts one of them in the
+  // HUD's hint slot, hintShell when the game shell is on, which it always is in the preview, and the style sheet hides
+  // that slot inside the HUD: neurosurge.css `.ns-hud .ns-slot-hint { display: none; }`. Kept, true, for a page without
+  // that style.)
+  hint: 'Move to look. 1 to 4 choose a limb; W/S reach its hand or foot out or draw it in; A/D swing it left or right. Hold Space on the brain or the mirror body ' +
+    'to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); a carried thing goes through you and through anything. Space on one of your limbs chooses that limb. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area: its movement happens at once, then the part goes back. Click to do it again. Click the scene to capture the mouse; ' +
     'Esc frees it.',
   hintShell: 'Look to aim. 1 to 4 choose a limb; it goes with your view. W/S reach its hand or foot straight out or draw it in, A/D swing it left or right. Tap Space twice: all four limbs turn ' +
     'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movement; click to do it again. Hold Space on ' +
@@ -909,8 +916,9 @@ export const INFO = deepFreeze({
   allMuscles: 'All muscle names',
   steadying: 'Muscles that steady the joint',
   /** R3-fix (SL-2): appended to a forearm-turn card's movement row when the palm already faces that way. */
-  alreadyDown: ' (your palm is already down, so nothing moves now)',
-  alreadyUp: ' (your palm is already up, so nothing moves now)',
+  // (21 November 2026, section 189: the forearm now twitches against its stop there, so "nothing moves now" was untrue)
+  alreadyDown: ' (your palm is already down, so it does not turn further)',
+  alreadyUp: ' (your palm is already up, so it does not turn further)',
   /** R558: this movement moves nothing now (a left-arm movement: an elbow already straight; 20 November 2026, Message
    * 206: a body movement always moves). (bringsBack, "the first time only brings it back", is gone with the latch.) */
   alreadyThere: ' (already there, so nothing moves now)',
@@ -1659,7 +1667,9 @@ export const GUIDE = deepFreeze({
     lookStrip: 'Look at a coloured area on the brain: the part it names moves at once, on your body and on the mirror body.',
     pressArea: 'Click the area. The part contracts again and comes back: each click repeats it.',
     holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
-    dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it.',
+    // (21 November 2026, evening, FIX63, review of update 63, U6: since the right wrist has its drag, section 183, a drag
+    // on the right hand bends the wrist, also sideways; the line said every drag sideways turns the limb)
+    dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it. On your right hand the drag bends the wrist.',
     // 19 November 2026 (the owner's limb keys): the step that teaches the choice of the limb
     chooseLimb: 'Press 2, 3 or 4 to choose another limb, or double click to step to the next one. It lights up and then goes with your view. 1 is your left arm.',
     readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
@@ -1744,11 +1754,18 @@ const HELD_TARGET_WORDS = Object.freeze({
 export const BRAIN_PARTS = deepFreeze({ eyeball: 'Eyeball', nerve: 'Optic nerve',
   whiteMatter: 'White matter', lateralVentricle: 'Lateral ventricle', thirdVentricle: 'Third ventricle', fourthVentricle: 'Fourth ventricle',
   aqueduct: 'Cerebral aqueduct', internalCapsule: 'Internal capsule', hippocampus: 'Hippocampus', pineal: 'Pineal body', habenula: 'Habenula' });
+/* 21 November 2026, evening (FIX63; a review of Body update 63, U4): with a free pointer over one of your own limbs the
+ * tip said "Space holds your right hand". Since 19 November Space there chooses the limb and nothing holds it (ns-app
+ * LIMB_KEYS.view.hold; the grip card has said so since hunt H16). spaceAim's third argument, limbsChosen, is that rule:
+ * with it a limb's line is "Space chooses your right arm"; without it, the line as it was. */
+const CHOSEN_LIMB_WORDS = Object.freeze({ rightArm: 'your right arm', leftArm: 'your left arm', rightLeg: 'your right leg', leftLeg: 'your left leg' });
 export const TIP = deepFreeze({
   teach: 'Click, or press a number',
-  spaceAim(target, behind) {
+  spaceAim(target, behind, limbsChosen = false) {
+    const key = behind ? 'Shift + Space' : 'Space';
+    if (limbsChosen === true && Object.hasOwn(CHOSEN_LIMB_WORDS, target)) return `${key} chooses ${CHOSEN_LIMB_WORDS[target]}`;
     const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;
-    return name ? `${behind ? 'Shift + Space' : 'Space'} holds ${name}` : '';
+    return name ? `${key} holds ${name}` : '';
   },
   holding(target, kept) {
     const name = Object.hasOwn(HELD_TARGET_WORDS, target) ? HELD_TARGET_WORDS[target] : null;

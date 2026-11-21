@@ -1203,12 +1203,16 @@ export function reachInterval(rig, { xNdc, joints = {}, aspect, fovYDeg } = {}, 
 /* ------------------------------------------------------------------ pose envelope */
 
 /** Joint ranges (deg) covered by the pose envelope; equal to ns-actions JOINT_LIMITS (middle_mcp_abd is locked at 0)
- * plus the forearm pronation display range (ns-rig PRONATION_RANGE_DEG). */
+ * plus the forearm pronation display range (ns-rig PRONATION_RANGE_DEG).
+ * 21 November 2026 (SEEMOVE, section 189; with ns-actions JOINT_LIMITS): the thumb's tip joint straightens to 20 past
+ * straight (it was 5) and the thumb's turn goes 15 out from the palm (0), for "Straighten left thumb" and "Move left
+ * thumb out from the palm"; ENVELOPE_GRID below has the new levels. (A finger's knuckle to 30 past straight was tried
+ * and dropped: ns-actions ACTION_TARGETS index_extension.) */
 export const POSE_RANGES = Object.freeze({
   wrist_flex: Object.freeze([-60, 70]),
   mcp_flex: Object.freeze([-10, 90]), pip_flex: Object.freeze([0, 105]), dip_flex: Object.freeze([0, 75]),
   mcp_abd: Object.freeze([-5, 20]),
-  thumb_cmc_opp: Object.freeze([0, 40]), thumb_mcp_flex: Object.freeze([-10, 55]), thumb_ip_flex: Object.freeze([-5, 70]),
+  thumb_cmc_opp: Object.freeze([-15, 40]), thumb_mcp_flex: Object.freeze([-10, 55]), thumb_ip_flex: Object.freeze([-20, 70]),
   forearm_pronation: PRONATION_RANGE_DEG
 });
 export const WRIST_RANGE_DEG = POSE_RANGES.wrist_flex;
@@ -1218,7 +1222,8 @@ export const WRIST_RANGE_DEG = POSE_RANGES.wrist_flex;
  * digit's own joints and the arm solution only on the wrist and the pronation angle, so the envelope is the union, per
  * (wrist, pronation) level, of every digit's corners over the full product of its own joint levels: it covers mixed
  * poses (e.g. MCP 90 with PIP 0), the Space fist (ns-rig FIST_POSE_DEG), every action target (ns-actions ACTION_TARGETS,
- * R558: wrist 70 / -60, open -10/0/0, spread 20/15/20, one finger 90/105/75, thumb MCP 50 / -10, thumb CMC 40 / 0), both double-tap rotation states
+ * R558: wrist 70 / -60, open -10/0/0, spread 20/15/20, one finger 90/105/75, thumb MCP 50 / -10, thumb CMC 40 / 0;
+ * 21 November 2026, SEEMOVE: thumb tip -20, thumb CMC -15), both double-tap rotation states
  * (+-80) and every blend between them, since every value lies on or between these levels. Levels are no more than 20 deg
  * apart so a corner between two levels stays within ~1.5 mm of the sampled set (covered by RANGE_SLACK_NDC); the
  * per-frame fit always checks the exact current pose.
@@ -1229,9 +1234,9 @@ export const ENVELOPE_GRID = Object.freeze({
   pip_flex: Object.freeze([0, 20, 35, 50, 70, 90, 105]),
   dip_flex: Object.freeze([0, 10, 25, 45, 60, 65, 75]),
   mcp_abd: Object.freeze([-5, 0, 10, 15, 20]),
-  thumb_cmc_opp: Object.freeze([0, 5, 20, 30, 40]),
+  thumb_cmc_opp: Object.freeze([-15, 0, 5, 20, 30, 40]),
   thumb_mcp_flex: Object.freeze([-10, 5, 10, 25, 30, 40, 50, 55]),
-  thumb_ip_flex: Object.freeze([-5, 0, 10, 25, 45, 65, 70]),
+  thumb_ip_flex: Object.freeze([-20, -5, 0, 10, 25, 45, 65, 70]),
   forearm_pronation: Object.freeze([-80, -60, -40, -20, 0, 20, 40, 60, 80])
 });
 const DIGIT_NAMES = DIGITS;

@@ -1102,8 +1102,8 @@ const CONTENT = {
     label: 'Tongue', shortLabel: 'Tongue', effector: 'tongue protrusion', bodySide: 'midline', medialSurface: false,
     displayGroup: 'face', pathway: 'corticobulbar', laterality: 'bilateral_contralateral_bias',
     actions: [],
-    noActionReason: 'Tongue movement is not ready in this loaded rig. Selecting this region can light and mark the brain area. A suitable tongue model and checked motion are still needed.',
-    explanation: `Representative tongue area of the ${c.H} hemisphere within the mouth zone (Gordon 2023). A human magnetic brain-stimulation study reported evoked tongue-muscle electrical responses on both sides, with lower thresholds on the opposite side (Muellbacher 2001; abstract-level evidence). These responses do not specify normal tongue motion or a precise movement command here. This loaded rig has no qualified tongue movement or tongue-muscle display. Selecting the region can light and mark the brain area; tongue function remains unfinished. Swallowing has its own area just after this one; the larynx is not modelled.`,
+    noActionReason: 'Tongue movement is not ready in this loaded rig. Selecting this region marks the brain area. A suitable tongue model and checked motion are still needed.',
+    explanation: `Representative tongue area of the ${c.H} hemisphere within the mouth zone (Gordon 2023). A human magnetic brain-stimulation study reported evoked tongue-muscle electrical responses on both sides, with lower thresholds on the opposite side (Muellbacher 2001; abstract-level evidence). These responses do not specify normal tongue motion or a precise movement command here. This loaded rig has no qualified tongue movement or tongue-muscle display. Selecting the region marks the brain area; tongue function remains unfinished. Swallowing has its own area just after this one; the larynx is not modelled.`,
     citationKeys: ['GORDON2023', 'MUELLBACHER2001', 'PENFIELD1937', 'UAMS_HEADNECK']
   }),
   throat: c => ({
@@ -1223,7 +1223,8 @@ const FACE_MOVES_PLAIN = 'Nothing you can see: the game only keeps a number.';
 // R5-text: with the face-muscle packet loaded. 20 November 2026 (FACE): the face moves now, so the plain rows no longer
 // start with "Nothing" (ns-guide: a face area's switch-on counts as a movement you can see).
 const FACE_COLOUR_PLAIN = 'The game moves the face more than a real face would, so you can see it on the mirror body.';
-const SCAN_MOVES_PLAIN = 'Nothing: it only lights up and gets marked.';
+// (22 November 2026, section 191: the in-between areas never light up white now; their edge glows, brighter under the look)
+const SCAN_MOVES_PLAIN = 'Nothing: its edge glows brighter while you look at it, and it gets marked.';
 const SCAN_CAVEAT_PLAIN = 'Any real job here, such as planning or posture, is not simulated.';
 const LOOK_RIGHT = ' (it starts beside your right thigh)'; // 18 Nov (SMALL, S19): the reclined start posture
 
@@ -1426,7 +1427,8 @@ const PLAIN_REGION = {
   tongue: c => ({
     plainLabel: 'Tongue',
     plainLead: `This marked area in ${half(c)} represents tongue movement.`,
-    plainMoves: 'No tongue movement or muscle colour change. This area can still light up and keep an activation mark.',
+    // (22 November 2026, section 191: an area with no movement no longer lights up; it glows under the look like any area)
+    plainMoves: 'No tongue movement or muscle colour change. It glows while you look at it and keeps a mark once tried.',
     plainCaveat: 'Tongue movement still needs to be built and checked in this 3D body.'
   }),
   throat: c => ({
@@ -1631,7 +1633,7 @@ const PLAIN_DETAIL = {
       `foot and hand zones of ${BRAIN_HALF(c)}, mixed in with them (interleaved; Gordon 2023). It is strongly linked to ` +
       'the other in-between areas and to a network that helps control actions (cingulo-opercular action-control ' +
       'network). It was most active when people tightened their belly (abdominal contraction) and while they planned an ' +
-      'action, not when they moved one body part. In the game, looking here lights up and marks the area, but on ' +
+      'action, not when they moved one body part. In the game, looking here makes its edge glow brighter and marks the area, but on ' +
       'purpose it moves nothing. Any real job here would be getting the whole body ready or holding a posture (whole-body ' +
       'postural or preparatory control), and that is not simulated.',
     noAction: `${SCAN_WEAK} They are linked to planning actions, posture and holding the trunk steady (axial control). ` +
@@ -1858,7 +1860,7 @@ const PLAIN_DETAIL = {
       `hand and mouth zones of ${BRAIN_HALF(c, 'Gordon 2023')}. It is linked to the other in-between areas and to a ` +
       'network that helps control actions (cingulo-opercular network). It is also linked a bit more to the part of the ' +
       'brain for seeing (visual cortex). That may help the hands and eyes work together (hand-eye coordination). In the game, ' +
-      'looking here lights up and marks the area, but it moves nothing. Gordon’s new look at old brain stimulation data ' +
+      'looking here makes its edge glow brighter and marks the area, but it moves nothing. Gordon’s new look at old brain stimulation data ' +
       'found that this area never caused a movement in anyone (re-analysis of cortical stimulation). Raising the eyebrows ' +
       'also switched on the in-between areas (eyebrow raising co-activated the inter-effector regions).',
     noAction: 'A new look at old brain stimulation data found that this middle in-between area never caused a movement ' +
@@ -1950,10 +1952,10 @@ const PLAIN_DETAIL = {
       'sides. Less stimulation was needed for a response on the opposite side (Muellbacher 2001; abstract only). ' +
       'These are evoked electrical responses, not a measurement of normal tongue motion or a command for this game. ' +
       'Tongue movement and tongue-muscle colour changes are not ready in this loaded 3D body. Selecting this region ' +
-      'can light the brain area and leave an activation mark. Tongue function remains unfinished. Swallowing has its own ' +
+      'leaves an activation mark on the brain area. Tongue function remains unfinished. Swallowing has its own ' +
       'area just after this one; the voice box (larynx) is not modelled.',
-    noAction: 'A suitable tongue model and checked motion are still needed in this 3D body. Selecting this region can ' +
-      'light and mark the brain area, without a tongue movement or tongue-muscle colour change.'
+    noAction: 'A suitable tongue model and checked motion are still needed in this 3D body. Selecting this region ' +
+      'marks the brain area, without a tongue movement or tongue-muscle colour change.'
   }),
   throat: c => ({
     detail: `This is the swallowing area of ${BRAIN_HALF(c)}. It sits at the outer end of the strip, after the tongue, ` +
@@ -1972,7 +1974,7 @@ const PLAIN_DETAIL = {
       `the three (most ventral), past the mouth zone of ${BRAIN_HALF(c, 'Gordon 2023, seed 6 of the dorsal-to-ventral line')}. ` +
       'Gordon lists swallowing among the moves the in-between areas like best (most preferred at inter-effector ' +
       'centres). But a vowel-sound task for the voice box stayed inside the mouth zone (laryngeal vowel task). In the ' +
-      'game, looking here lights up and marks the area, but it moves nothing. Swallowing has its own area just before ' +
+      'game, looking here makes its edge glow brighter and marks the area, but it moves nothing. Swallowing has its own area just before ' +
       'this one, and breathing and the voice box (larynx) are not simulated.',
     noAction: `${SCAN_WEAK} Swallowing has its own area just before this one, and the 3D body has no voice box (the ` +
       'larynx is not in the rig), so the game moves nothing here.'

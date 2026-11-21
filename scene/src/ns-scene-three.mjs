@@ -200,11 +200,14 @@ import { BRAIN_KEYS, BRAIN_INK, foldDepth, foldGrid, foldShade, envelopeNormals,
 
 // 18 November (the living brain): the beat, the blooms round switched-on areas and the wobble when it is handled.
 import { BRAIN_LIVE, createBrainLive, stepBeat, stepBlooms, stepWobble, bloomOn, bloomOff, bloomPulse, bloomCentreOf, writeLiveUniforms, beatCentre, patchLiveVertex, liveFragmentHead } from './ns-brain-live.mjs';
+import { AREA_HALO, AREA_LIT, LOOK_GLOW, ABYSS_EDGE, shownActivity, haloParts, pickTintWant, keyPressed, clickedArea, clickGlow, areaFlares, blockSamplePoints, haloShape, haloFitWidths, createHalo, haloSet, stepHalo, writeHaloUniforms, areaHaloState, areaHaloRecords, abyssEdgeLinear, haloFragmentHead, patchAreaHaloShaders } from './ns-area-halo.mjs';
+/** ns-area-halo ABYSS_EDGE.colour in linear light: the one cool pale colour of the black blocks' edge glow and halo. */
+const ABYSS_EDGE_LINEAR = Object.freeze(abyssEdgeLinear());
 import { brainBeatClock } from './ns-assembly-core.mjs';
 // 18 November (the painted, wet look of the bodies): the tone curve, the fibre bundles and the wet highlight.
 import { fleshFibreGlsl, fleshLightGlsl, fleshRestoreGlsl, FLESH_FIBRE_FN_GLSL, FLESH_DEPTH_LIFT_GLSL, FLESH_DEPTH_LIFT_PARS_GLSL, BODY_DEPTH_PREFERENCE, depthPreferenceAttr, depthPreferenceFootprint, fibreFrame } from './ns-flesh.mjs';
 // 18 November (the room): a dark operating theatre out of focus in place of the black void.
-import { ROOM, createRoom } from './ns-room.mjs';
+import { ROOM, createRoom, roomClearHex } from './ns-room.mjs';
 // 19 November 2026: the two eyeballs and their nerves at the brain's front (an illustration of the brain's facing).
 import { BRAIN_EYES, buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
 // 20 November 2026: the organs in the opened chest (illustrations placed by proportion, not traced anatomy).
@@ -223,6 +226,7 @@ import { hemisphereSideOf, partedPositions, partedOnBrain, partedBridging } from
 import { smoothNormalField, boneEndWeights } from './ns-detail.mjs';
 // 20 November 2026 (the owner, Messages 195 / 196): the raw look, one matte light on everything (ns-raw-look RAW_LOOK).
 import { RAW_LOOK, patchRawShaders } from './ns-raw-look.mjs';
+import { seenContactMap, seenLightMap } from './ns-muscle-seen.mjs'; // 21 November 2026 (section 188): the muscles seen side by side, and the light seen on each
 import { FACE_MOVE, FACE_SHAPE_KEYS, buildFaceMoves, applyFaceMoves, faceWeightsKey, faceMuscleOf } from './ns-face-move.mjs'; // 20 November 2026 (FACE): face movements you can see
 // R558 round 3 (the display fill): the largest displacement the stack display may give a vertex of a muscle it does
 // not lift (the fill alone), and of a lifted muscle (its gap plus the fill). Anything larger is refused (scene_input).
@@ -1356,7 +1360,7 @@ export function patchGlassReadShaders(vertexShader, fragmentShader, { flesh = Bo
     // R558 BB (style guide): the glass's own contours inked, a light rim inside them, a crisp key-light highlight
     // (ns-brain-ink glassInkGlsl; uniforms nsGInk, nsGInk2, nsGHi, nsGHi2, nsInkG).
     fragmentShader: 'uniform float nsRimOpacity;\nuniform float nsRimPower;\nuniform float nsRimGroove;\nuniform vec4 nsRead;\nuniform float nsClear;\nuniform vec3 nsPickTint;\nvarying float vNsSulc;\nvarying float vNsNear;\n' +
-      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + (flesh ? liveFragmentHead() : '') + GLASS_VARYINGS +
+      'uniform vec4 nsGInk;\nuniform vec4 nsGInk2;\nuniform vec4 nsGHi;\nuniform vec4 nsGHi2;\nuniform vec4 nsGCel;\nuniform vec4 nsGCel2;\nuniform vec3 nsInkG;\nvarying vec3 vNsObj;\n' + GLASS_INK_HEAD + CORTEX_FLESH_HEAD + (flesh ? liveFragmentHead() + (AREA_HALO.on ? haloFragmentHead() : '') : '') + GLASS_VARYINGS +
       // 17 November: the shell is shaded as living cortex (ns-brain-ink cortexFleshGlsl) instead of inked glass; `flesh`
       // false gives the glass back (glassInkGlsl), for the engineering pages.
       fragmentShader.slice(0, f) + (G ? 'if ( nsGapIn( vNsObj, vNsGap ) > 0.5 ) discard;\n' : '') + glassReadGlsl(null) + '\n' +
@@ -2414,12 +2418,17 @@ export function regionDisplayStyle(region, { activity = 0, activatedCount = 0, h
     const pg = posture && Number.isFinite(render.postureGlow) ? render.postureGlow : 1; // a held posture glows calmly
     // (the lit key keeps its own hue far above display white: ns-colors areaNeonInto)
     const k = areaNeonInto(region.id, a, AREA_LOOK.areaGain * pg, o.emission) * pg;
-    areaNeonInto(region.id, a, AREA_LOOK.areaRimGain * pg, o.rim);
+    // (21 November 2026, ns-area-halo AREA_LIT: the lit block's fresnel rim in its own colour, not white: the white
+    // core sits in a rim of the colour that is on)
+    areaNeonInto(region.id, a, AREA_LOOK.areaRimGain * pg, o.rim, AREA_LIT.on ? AREA_RIM_LOOK : AREA_LOOK);
     // 17 November (keys): a resting key is a calm, unlit key (restValue of its colour), so the lit one has room to be
     // brighter AND still its own colour.
     // 19 November 2026 (VISITED): an area switched on earlier rests dimmer (areaValue of its colour, areaLift of its
     // self-light), so the areas not tried yet are the bright ones; a lit area is as bright as ever.
-    const seen = activated ? NsColors.VISITED : null, sv = seen ? seen.areaValue + (1 - seen.areaValue) * k : 1;
+    // 21 November 2026 (ns-area-halo LOOK_GLOW; the owner: "Right now, there's essentially no glow"): under the look an
+    // area shows its full colour and self-light whether it was tried before or not: a visited area under the look
+    // emitted about what an untried area shows at rest, on 30 % of its colour. The dimming comes back when the look leaves.
+    const seen = activated && !(hovered && LOOK_GLOW.unvisit) ? NsColors.VISITED : null, sv = seen ? seen.areaValue + (1 - seen.areaValue) * k : 1;
     const d = (1 - AREA_LOOK.areaDarken * k) * (Number.isFinite(AREA_LOOK.restValue) ? AREA_LOOK.restValue : 1) * sv;
     for (let i = 0; i < 3; i++) o.albedo[i] = o.tint[i] * d;
     // R558 (Message 22): the faint resting self-light of the area's own tint (AREA_LOOK.restLift), gone once it glows.
@@ -2469,6 +2478,8 @@ export function boundaryEdges(indices, vertexCount) {
 // strip a black abyss": false again. The inter-effector areas are drawn in their own near-black, matte, so the coloured
 // areas stand out; and with REGION_SLICE every area is a block with a gap of the same black round it.)
 export const SCAN_AS_BRAIN = false;
+/** 21 November 2026 (ns-area-halo AREA_LIT): the look of a lit area's fresnel rim: its own neon colour, no white. */
+const AREA_RIM_LOOK = Object.freeze({ ...AREA_LOOK, areaWhite: 0 });
 const SCAN_BRAIN_LINEAR = Object.freeze(BRAIN_FLESH_LOOK.crown.map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)));
 /** Whether a body-map region is one of the strip's inter-effector (SCAN) areas. Pure. */
 export function isScanArea(region) {
@@ -3197,7 +3208,7 @@ export const FACE_MUSCLE_OFFSET = Object.freeze({ factor: -2, units: -12 });
  * quickly it comes and goes. Faint by design: the keys stay the bright things. (21 November 2026: how much, and how,
  * is ns-brain-ink BRAIN_PICK_LOOK / brainPickGainInto: a gain on the cortex's own colour; `level` 0.06 was the share of
  * the area's glow colour ADDED, which turned the matte cortex lilac or grey-blue, a browser hunt's H25.) */
-export const BRAIN_PICK_TINT = Object.freeze({ easeS: 0.18 });
+export const BRAIN_PICK_TINT = Object.freeze({ easeS: 0.18, look: 1 });
 /** 19 November 2026: how the brain's eyeballs follow the player's look (updateBrainEyes): the share of the look's turn
  * they take, the most they turn either way (degrees), and the signs that make them turn the way the look goes as seen
  * on the screen (the brain is turned to face the player, so its own left is the screen's right). Display choices. */
@@ -5095,7 +5106,9 @@ export function createScene({
   const scene = new THREE.Scene();
   { // R558 (Message 22; Message 24 put space black back: MATERIAL.backgroundGradient null): a gradient texture if one is set, else the flat colour
     const bg = clinicalBackground(THREE, canvas && canvas.ownerDocument);
-    scene.background = bg ? keep(bg) : new THREE.Color(BODY_STYLE === 'raw' ? 0x040405 : MATERIAL.background); // 20 November 2026: the raw look's near-black (Message 206: an abyss)
+    // 20 November 2026: the raw look's near-black (Message 206: an abyss); 21 November (Message 208): the abyss's own black (ns-room ROOM.abyss.black) while it is on
+    const abyssHex = roomClearHex();
+    scene.background = bg ? keep(bg) : new THREE.Color(BODY_STYLE === 'raw' ? (abyssHex === null ? 0x040405 : abyssHex) : MATERIAL.background);
   }
   // 18 November ("something should be done about the endless black space"): the room (ns-room), a dark operating
   // theatre out of focus, drawn behind everything. The flat colour above stays as the clear colour under it.
@@ -5324,6 +5337,29 @@ export function createScene({
     nsLive: { value: liveValues.live }, nsLiveC: { value: new Float32Array([0, 0, 0, 1 / BRAIN_LIVE.wobble.radiusMm]) }, nsLiveO: { value: new Float32Array(4) }, nsLiveQ: { value: liveValues.q },
     nsLiveA: { value: liveValues.a }, nsLiveB: { value: liveValues.b }, nsLiveBc: { value: liveValues.bc }, nsLiveR: { value: liveValues.ring }, nsLiveRc: { value: liveValues.ringc }
   };
+  // ---- 21 November 2026 (ns-area-halo): the halo of a lit or looked-at block, without the bloom pass ----------------
+  // One state and one set of uniforms for the cortex and every area material; updateRegions says which areas glow,
+  // render() eases the look's part and writes the uniforms only when something changed.
+  const areaHalo = createHalo({ reducedMotion });
+  const haloValues = { p: new Float32Array(20 * areaHalo.slots), c: new Float32Array(4 * areaHalo.slots), n: new Float32Array(4) };
+  const haloUniforms = { nsHaloP: { value: haloValues.p }, nsHaloC: { value: haloValues.c }, nsHaloN: { value: haloValues.n } };
+  // (QA: one record, kept and changed in place, so the app's reading of the glow state each frame allocates nothing)
+  const haloStats = { on: AREA_HALO.on, applied: null, materials: 0, rim: null, edge: null, shapes: 0, bands: 0, mmPerRun: null, ms: null, blocks: null, drawn: 0, slots: areaHaloRecords(areaHalo.slots), pickTint: [0, 0, 0] };
+  const haloPartsScratch = { lit: 0, look: 0 }, pickWantScratch = { id: null, share: 0 }, haloInScratch = { glow: 0, looked: false, held: false, posture: false, scan: false, click: 0 };
+  const areaHaloPatch = m => {
+    haloStats.materials++;
+    const own = { value: new THREE.Vector4(0, 0, 0, 0) }, set = { value: new THREE.Vector4(-1, 0, 0, 0) };
+    m.userData.nsAreaHalo = { own, set };
+    return composePatch(m, 'ns-area-halo-r28', shader => {
+      const p = patchAreaHaloShaders(shader.vertexShader, shader.fragmentShader);
+      haloStats.applied = p !== null && haloStats.applied !== false;
+      if (!p) return;
+      haloStats.rim = p.rim && haloStats.rim !== false; haloStats.edge = p.edge && haloStats.edge !== false;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      Object.assign(shader.uniforms, haloUniforms);
+      shader.uniforms.nsHaloOwn = own; shader.uniforms.nsHaloSet = set;
+    });
+  };
   // The hand area of a Space grip while it holds (ns-app tells it: setBrainLiveHeld): a grip is not a movement switched
   // on from the brain, so its area shows only a faint flush (no swell, no ring) for as long as it is lit.
   let liveHeldId = null;
@@ -5419,6 +5455,7 @@ export function createScene({
       // 18 November: the glass moves with the living brain; the surface also leans where a bloom swells it
       if (liveCompile(shader) && read) shader.vertexShader = '#define NS_LIVE_TILT\n' + shader.vertexShader;
       else if (read) Object.assign(shader.uniforms, liveUniforms); // the surface's colour reads the blooms either way
+      if (read) Object.assign(shader.uniforms, haloUniforms); // 21 November 2026 (ns-area-halo): and the halos
     };
     m.customProgramCacheKey = () => `${cacheKey}-live`;
     return m;
@@ -5778,6 +5815,7 @@ export function createScene({
     nsGapCol: { value: new THREE.Vector3(REGION_SLICE.colour[0], REGION_SLICE.colour[1], REGION_SLICE.colour[2]) }
   };
   const borderHoverColor = new THREE.Color(REGION_RENDER.hoverLine), borderMarkColor = new THREE.Color(REGION_RENDER.activatedLine);
+  const borderEdgeColor = new THREE.Color(ABYSS_EDGE_LINEAR[0], ABYSS_EDGE_LINEAR[1], ABYSS_EDGE_LINEAR[2]); // 22 November 2026 (linear, as the frame uses it)
   const borderLeftArmColor = new THREE.Color(REGION_RENDER.territoryLine);
   /** The owner rows (one per hemisphere x surface rule, the picker's own lists), their texture and the smooth strip
    * normals; null (with regionBorder.reason) when the segmentation does not expose its owner lists. */
@@ -6521,7 +6559,7 @@ export function createScene({
     if (m.userData) m.userData.nsRaw = true;
     const floor = kind === 'muscle' ? RAW_LOOK.muscleFloor : 0; // (21 November 2026: the muscles' shade floor, H28)
     return composePatch(m, floor ? 'ns-raw-floor' : 'ns-raw', shader => {
-      const p = patchRawShaders(shader.vertexShader, shader.fragmentShader, RAW_LOOK, { floor });
+      const p = patchRawShaders(shader.vertexShader, shader.fragmentShader, RAW_LOOK, { floor, keep: RAW_LOOK.muscleFloorKeep, ref: RAW_LOOK.muscleFloorRef });
       rawLook.applied = p !== null && rawLook.applied !== false;
       if (p) { shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader; }
       if (p && p.hdrBoost) { shader.uniforms.nsHdrBoost = comicUniforms.nsHdrBoost; rawLook.hdrBoost = (rawLook.hdrBoost || 0) + 1; } // the power-up flash's HDR boost (set in render)
@@ -6762,8 +6800,10 @@ export function createScene({
     // 20 November 2026 (the owner: "more clear contrast and differentiation between muscle groups"): in the raw look a
     // muscle draws its GROUP's tone (ns-colors MUSCLE_GROUPS / MUSCLE_GROUP_TONES) with a small step of its own.
     // (Message 202: and its own lightness step among the muscles it touches, muscleTones.steps)
+    // (section 188: and its warm step, muscleTones.steps.warm)
     if (BODY_STYLE === 'raw') return NsColors.muscleGroupBaseInto(NsColors.muscleGroupOf(muscleSourceNameOf(id)), key, typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(id) : bodyStackLevel(id), out,
-      undefined, undefined, muscleTones.steps && muscleTones.steps.has(key) ? muscleTones.steps.get(key) : null);
+      undefined, undefined, muscleTones.steps && muscleTones.steps.has(key) ? muscleTones.steps.get(key) : null, undefined,
+      muscleTones.steps && muscleTones.steps.warm && muscleTones.steps.warm.has(key) ? muscleTones.steps.warm.get(key) : 0);
     const t = muscleTones.byKey && muscleTones.byKey.has(key) ? muscleTones.byKey.get(key) : muscleToneFallback(key);
     // R558: the storey shade follows the full 226-muscle classification (ns-body bodyMuscleLayer: catalogue + the merged
     // supplement tables), not only the muscles the stack lifts, so every deeper muscle reads a little darker.
@@ -8048,7 +8088,16 @@ export function createScene({
       powerUpPatch(material, 'area'); // R558 (Message 22): the power-up charge, in step with its muscles
       if (border) areaInkPatch(material); // R558 BB (Messages 24, 29): cel bands, folds, contour and hatching in ink
       composePatch(material, 'ns-live-r18', shader => { liveCompile(shader); }); // 18 November: the keys move with the living brain
-      const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], fillMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity, hintKey: '' };
+      // 21 November 2026 (ns-area-halo): the lit block's rim in its own colour, the other areas' halos on this block and
+      // a black block's edge glow; after every other patch of the area's light
+      if (AREA_HALO.on || AREA_LIT.on || ABYSS_EDGE.on) {
+        areaHaloPatch(material);
+        const hu = material.userData.nsAreaHalo, ar = areaRecord(r.id), gl = ar ? ar.glowLinear : null;
+        if (gl) hu.own.value.set(gl[0], gl[1], gl[2], 0);
+        hu.set.value.set(regions.length, 0, !SCAN_AS_BRAIN && isScanArea(r) ? 1 : 0, 0);
+      }
+      const rec = { region: r, id: r.id, index: regions.length, material, meshes: [], depthMeshes: [], fillMeshes: [], outline: null, key: '', activity: 0, activated: 0, hovered: false, opacity: regionStyle.restOpacity, hintKey: '',
+        scan: isScanArea(r), flares: areaFlares(r, isScanArea(r)), clickAt: -1e4, halo: null, haloLit: 0, haloLook: 0 };
       const edgeLists = [];
       for (const pi of r.partIndices || []) {
         const part = seg.parts[pi];
@@ -8163,6 +8212,35 @@ export function createScene({
     }
     leftArmRim.ms = Math.round(nowMs() - t0Rim);
     leftArmRim.borderSegments = leftBorder ? leftBorder.length / 6 : 0;
+    // 21 November 2026 (ns-area-halo): every block's shape for its halo (a band over the crown and down the banks), once.
+    // The points are the strip's triangles sampled by the same owner runs the area shader draws with; without them
+    // (no in-pass borders) the area's own sample vertices.
+    if (AREA_HALO.on) {
+      const t0h = nowMs();
+      let byOwner = null;
+      if (border) {
+        const hp = [];
+        for (const part of seg.parts || []) {
+          if (!part || !(part.faceCount > 0) || !part.positions || !part.indices) continue;
+          const row = border.rowFor(part), n = part.positions.length / 3, S = part.s && part.s.length === n ? part.s : part.u;
+          if (!Number.isInteger(row) || !S || S.length !== n) continue;
+          const D = border.relief && border.relief.get(part.meshId), src = part.sourceIndex;
+          let depth = null;
+          if (D && src && src.length === n) { depth = new Float32Array(n); for (let v = 0; v < n; v++) depth[v] = D[src[v]]; }
+          hp.push({ positions: part.positions, indices: part.indices, s: S, depth, row });
+        }
+        byOwner = blockSamplePoints(hp, border.rows);
+      }
+      haloStats.shapes = 0; haloStats.bands = 0;
+      for (const rec of regions) {
+        const e = byOwner ? byOwner.get(rec.region) : null;
+        rec.halo = e && e.pts.length >= 27 ? haloShape(e.pts, e.depth, e.s) : rec.markPts ? haloShape(rec.markPts) : null;
+        if (rec.halo) { haloStats.shapes++; if (rec.halo.kind === 'band') haloStats.bands++; }
+      }
+      haloStats.mmPerRun = haloFitWidths(regions.map(rec => rec.halo));
+      haloStats.ms = Math.round(nowMs() - t0h);
+      haloStats.blocks = regions.map(rec => (rec.halo ? { id: rec.id, kind: rec.halo.kind, widthMm: Math.round(rec.halo.width * 100) / 100, reachMm: Math.round(rec.halo.reach * 100) / 100, lengthMm: Math.round(rec.halo.length * 10) / 10 } : { id: rec.id, kind: null })); // (QA, made once)
+    }
     if (border) buildRegionFills(seg, border, still);
     // R558 BB (Message 24): the whole strip as ONE geometry in the brain group's frame for the outline pass's strip
     // silhouette (seen from above: the central and precentral sulci that bound it), drawn after the areas.
@@ -8306,11 +8384,17 @@ export function createScene({
     rec.opacity = s.opacity;
     const ku = rec.material.userData && rec.material.userData.nsKey; // 17 November: the key's hover and glow (BRAIN_KEYS)
     if (ku) { ku.value.x = hovered ? 1 : 0; ku.value.w = posture ? 0 : s.glow; }
+    // 21 November 2026 (ns-area-halo): how strongly the block is lit (its rim in its own colour) and whether the look is on it
+    const hu = rec.material.userData && rec.material.userData.nsAreaHalo;
+    if (hu) { hu.own.value.w = posture ? 0 : s.glow; hu.set.value.y = hovered ? 1 : 0; }
     // R558 (REGION_BORDER): the hovered area is outlined from the inside in the hover colour, a switched-on one in gold.
     const bu = rec.material.userData && rec.material.userData.nsBorder;
     if (bu) {
-      const c = hovered ? borderHoverColor : n >= 1 ? borderMarkColor : null;
-      if (c) bu.nsHi.value.set(c.r, c.g, c.b, hovered ? REGION_BORDER.hoverPx : REGION_BORDER.activatedPx);
+      // (22 November 2026, ns-area-halo ABYSS_EDGE.framePx: a black block's frame under the look is in its edge glow's
+      // colour and narrower, so it reads as the brightened edge light, not a hard white outline)
+      const edgeFrame = hovered && rec.scan && ABYSS_EDGE.on;
+      const c = edgeFrame ? borderEdgeColor : hovered ? borderHoverColor : n >= 1 ? borderMarkColor : null;
+      if (c) bu.nsHi.value.set(c.r, c.g, c.b, edgeFrame ? ABYSS_EDGE.framePx : hovered ? REGION_BORDER.hoverPx : REGION_BORDER.activatedPx);
       else bu.nsHi.value.set(0, 0, 0, 0);
     }
     if (rec.outline) {
@@ -9716,7 +9800,9 @@ export function createScene({
    * activatedRegions { regionId: count } (persistent marks until Reset body), gaze { target, regionId } (the hovered
    * region gets the outline). Material state is written only for regions whose quantised state changed. Returns the
    * number of regions restyled. Legacy mode: only the arm-ghost gaze flag is used. */
-  function updateRegions({ regionActivity = null, activatedRegions = null, gaze = null } = {}) {
+  // (22 November 2026, section 191: marks = this step's activation marks, ns-actions stepGated, so a key is pressed for
+  // a click and never for the look's count, and a click on an area that does not flare gives its soft click glow)
+  function updateRegions({ regionActivity = null, activatedRegions = null, gaze = null, marks = null } = {}) {
     const onRegion = Boolean(gaze && (gaze.target === 'region' || gaze.kind === 'region') && gaze.regionId);
     gazeOnRegion = onRegion;
     const nextHover = onRegion ? gaze.regionId : null;
@@ -9724,9 +9810,27 @@ export function createScene({
     hoveredRegionId = nextHover;
     let changed = 0, anyOn = false;
     for (const rec of regions) {
-      const a = regionActivity ? regionActivity[rec.id] : 0;
+      // 21 November 2026 (ns-area-halo areaFlares): a black block moves nothing, so it is never drawn switched on (no
+      // white fill, no one-second flash, no relight at each small look movement); the look gives it its soft glow.
+      const a = shownActivity(regionActivity ? regionActivity[rec.id] : 0, rec.region, rec.scan);
       const n = activatedRegions ? activatedRegions[rec.id] : 0;
       if (applyRegionStyle(rec, Number.isFinite(a) ? a : 0, Number.isFinite(n) ? n : 0, rec.id === hoveredRegionId, false, powerUpSettled.has(rec.id))) changed++;
+      // 22 November 2026 (ns-area-halo keyPressed, CLICK_GLOW): was this area clicked in this step (null: no marks handed)
+      const clicked = Array.isArray(marks) ? marks.length > 0 && clickedArea(marks, rec.id) : null;
+      if (clicked && !rec.flares) rec.clickAt = powerUpNow();
+      // 21 November 2026 (ns-area-halo AREA_HALO): the block's halo: the look's part while the look rests on it, the
+      // lit part with its glow (not for a held posture's calm light); written only when one of them changed.
+      if (rec.halo) {
+        const hi = haloInScratch; // (one kept record: nothing is allocated per area per frame)
+        hi.glow = Math.round(glowIntensity(a) * 50) / 50; hi.looked = rec.id === hoveredRegionId; hi.held = liveHeld(rec.id); hi.posture = powerUpSettled.has(rec.id); hi.scan = rec.scan;
+        hi.click = rec.flares ? 0 : Math.round(clickGlow(powerUpNow() - rec.clickAt, reducedMotion) * 50) / 50;
+        const hp = haloParts(hi, haloPartsScratch);
+        if (hp.lit !== rec.haloLit || hp.look !== rec.haloLook) {
+          rec.haloLit = hp.lit; rec.haloLook = hp.look;
+          const ar = rec.scan ? null : areaRecord(rec.id), gl = ar ? ar.glowLinear : ABYSS_EDGE_LINEAR; // (a black block: its edge glow's light blue)
+          haloSet(areaHalo, rec.id, rec.halo, gl[0], gl[1], gl[2], hp.lit, hp.look, rec.index);
+        }
+      }
       // R558 (Message 22): the area's power-up starts when it begins to glow (its muscles join the same start).
       const cu = rec.material.userData && rec.material.userData.nsCharge;
       if (cu) {
@@ -9742,7 +9846,9 @@ export function createScene({
         } else if (on && Number.isFinite(rec.puCount) && count > rec.puCount) powerUpRecharge(rec.id, cu); // a second click while it glows
         cu.value.w = on && !powerUpSettled.has(rec.id) ? glowIntensity(Number.isFinite(a) ? a : 0) : 0; // 18 November (MAP): the key's shudder
         // 17 November (BRAIN_KEYS): every new activation count (a click, a number key, a held look) presses the key down.
-        if (Number.isFinite(rec.puCount) && count > rec.puCount) { const ku = rec.material.userData.nsKey; if (ku) { ku.value.y = powerUpNow(); areaInk.presses = (areaInk.presses || 0) + 1; } }
+        // (22 November 2026, ns-area-halo keyPressed: not a count that comes just after the area's light ended, a look's
+        // own: it pressed the key between the lit block and the look's glow, a dark dip at the end of every activation)
+        if (Number.isFinite(rec.puCount) && keyPressed(count > rec.puCount, on, powerUpNow() - powerUpArea(rec.id).offAt, clicked)) { const ku = rec.material.userData.nsKey; if (ku) { ku.value.y = powerUpNow(); areaInk.presses = (areaInk.presses || 0) + 1; } }
         rec.puCount = count;
         if (on && !powerUpSettled.has(rec.id)) anyOn = true;
       }
@@ -9768,8 +9874,10 @@ export function createScene({
         const key = `${level}|${lift}`;
         if (key !== rec.liveKey) {
           rec.liveKey = key;
-          const e = rec.material.emissive;
-          for (const b of rec.liveBlooms) { if (level > 0 || lift !== 0) bloomOn(brainLive, b.id, b.c[0], b.c[1], b.c[2], e.r, e.g, e.b, level, lift); else bloomOff(brainLive, b.id); }
+          // (21 November 2026: the bloom and its ring in the area's own glow colour; it took the area's emission, which
+          // is white while the area is lit)
+          const ar = areaRecord(rec.id), e = ar ? ar.glowLinear : null, er = e ? e[0] : rec.material.emissive.r, eg = e ? e[1] : rec.material.emissive.g, eb = e ? e[2] : rec.material.emissive.b;
+          for (const b of rec.liveBlooms) { if (level > 0 || lift !== 0) bloomOn(brainLive, b.id, b.c[0], b.c[1], b.c[2], er, eg, eb, level, lift); else bloomOff(brainLive, b.id); }
         }
         if (rec.livePulse && glow > 0) { rec.livePulse = false; for (const b of rec.liveBlooms) bloomPulse(brainLive, b.id); }
       }
@@ -10199,7 +10307,9 @@ export function createScene({
         groupOfKey.set(keys[i], NsColors.muscleGroupOf(muscleSourceNameOf(b.id)));
         layerOfKey.set(keys[i], typeof bodyMuscleLayer === 'function' ? bodyMuscleLayer(b.id) : bodyStackLevel(b.id));
       });
-      muscleTones.steps = NsColors.assignMuscleSteps(keys, contacts, k => groupOfKey.get(k) || 'other', g => NsColors.muscleGroupTone(g).oklch[0], undefined, k => layerOfKey.get(k));
+      // (section 188: and the pairs the game's pictures show side by side, ns-muscle-seen)
+      muscleTones.steps = NsColors.assignMuscleSteps(keys, contacts, k => groupOfKey.get(k) || 'other', g => NsColors.muscleGroupTone(g).oklch[0], undefined, k => layerOfKey.get(k), null, seenContactMap(), seenLightMap());
+      muscleTones.input = { keys, contacts, groupOfKey, layerOfKey }; // (QA only: shadeProbe hands it out)
       muscleTones.stepWorst = muscleTones.steps.worst;
     }
     let worst = Infinity, worstPair = null;
@@ -10699,7 +10809,7 @@ export function createScene({
    * contents again exactly. */
   const faceMove = { rig: null, w: null, key: '', recs: new Map(), note: null, writes: 0, ms: 0, entries: 0, buildMs: null };
   function setFaceMoves() {
-    faceMove.rig = null; faceMove.recs.clear(); faceMove.key = ''; faceMove.w = null; faceMove.note = null; faceMove.entries = 0;
+    faceMove.rig = null; faceMove.recs.clear(); faceMove.key = ''; faceMove.w = null; faceMove.note = null; faceMove.entries = 0; faceMove.tops = null;
     if (!FACE_MOVE.on) { faceMove.note = 'switched off (FACE_MOVE.on)'; return null; }
     const meshes = new Map(), eyes = {};
     for (const b of body) {
@@ -14819,11 +14929,19 @@ export function createScene({
     const flag = glowOwn.n + glowMirror.n + beamOwn.n + beamMirror.n > 0 ? 'on' : 'off';
     if (flag !== glowFlag) { glowFlag = flag; try { if (doc && doc.documentElement && doc.documentElement.dataset) doc.documentElement.dataset.nsGlow = flag; } catch { /* a flag only */ } }
     // 19 November 2026 (BRAIN_PICK_TINT): the whole brain takes a faint light of the picked area's colour, eased.
+    // 21 November 2026 (the owner, Message 177: "whatever color area is being picked"): the tint follows the LOOK: the
+    // area the look rests on gives it for as long as the look stays (BRAIN_PICK_TINT.look), a lit area during its
+    // contraction as before. It followed only the strongest link that draws a line, and since the look's own link
+    // went (section 184) that was the 0.4 s of a contraction, hardly eased in before it eased out.
     {
-      const rcT = topRegion ? areaRecord(topRegion) : null, want = rcT ? Math.min(1, topLevel / 0.6) : 0;
+      const pw = pickTintWant(topRegion, topLevel, hoveredRegionId, BRAIN_PICK_TINT.look, pickWantScratch), pickId = pw.id;
+      const pickRec = pickId ? regionById.get(pickId) : null, rcT = pickId ? areaRecord(pickId) : null;
+      const glowT = pickRec && pickRec.scan ? null : rcT ? rcT.glowLinear : null; // (a black block has no colour of the body's code: it tints nothing)
+      const want = glowT ? pw.share : 0;
       const k = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, dtMs) / (BRAIN_PICK_TINT.easeS * 1000)), v = brainPickTint.value;
-      const c = brainPickGainInto(brainPickWant, rcT ? rcT.glowLinear : null, want);
+      const c = brainPickGainInto(brainPickWant, glowT, want);
       v.set(v.x + (c[0] - v.x) * k, v.y + (c[1] - v.y) * k, v.z + (c[2] - v.z) * k);
+      haloStats.pickTint[0] = v.x; haloStats.pickTint[1] = v.y; haloStats.pickTint[2] = v.z;
     }
     glowState.cpuMs = nowMs() - t0;
   }
@@ -14832,7 +14950,10 @@ export function createScene({
     return { source: GLOW_SOURCE, links: glowState.links.length, active: [...glowState.eased].map(([id, e]) => ({ key: id, regionId: e.link.regionId, level: Math.round(e.level * 1000) / 1000 })),
       ribbons: glowState.ribbons, mirrorRibbons: glowState.mirrorRibbons, rimMuscles: glowState.rimMuscles, rimAreas: glowState.rimAreas, overBrainSamples: glowState.overSamples || 0, flag: glowFlag || 'off',
       cpuMs: Math.round(glowState.cpuMs * 1000) / 1000, rimShader: glowRim.applied, rimMaterials: glowRim.materials, muscleShare: muscleShareState(Boolean(opts && opts.audit === true)),
-      halos: { built: haloState.built, shown: haloState.shown }, lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null, keyHidden: glowState.keyHidden || 0 } : null,
+      halos: { built: haloState.built, shown: haloState.shown },
+      // 21 November 2026 (ns-area-halo): the areas' halos now, the patch's state, the pick tint as written (one kept record)
+      areaHalo: haloStats,
+      lineMode: GLOW_LINK.mode, beams: LIGHT_BEAM.on ? { own: beamOwn.n, mirror: beamMirror.n, last: glowState.beamLast || null, keyHidden: glowState.keyHidden || 0 } : null,
       // (20 November 2026, evening) the control marks asked for now (PART_GLOW: { 'limb:part': level }), for checks
       partGlows: { ...partGlow.want },
       // R558 (Message 22): the power-up charge (patch state, materials, starts taken, clock).
@@ -15499,6 +15620,8 @@ export function createScene({
       keyFocus.amount = f;
       areaInkUniforms.nsKeyDim.value.x = f;
     }
+    // 21 November 2026 (ns-area-halo): the halos (the look's part eases; the uniforms are written only on a change)
+    if (areaHalo.n > 0 || areaHalo.dirty) { if (stepHalo(areaHalo, dtMs / 1000)) { writeHaloUniforms(areaHalo, haloValues); haloStats.drawn = haloValues.n[0]; areaHaloState(areaHalo, haloStats.slots); } }
     if (strip) strip.uniforms.nsTime.value = (now / 1000) % 1000;
     // Arm ghost window (auto): while the crosshair is on a control region (legacy marker or region mode).
     const target = OWN_BODY_SOLID ? 0 : armGhostState.mode === 'auto' ? (typeof highlighted === 'string' || gazeOnRegion ? 1 : 0) : armGhostState.mode;
@@ -15662,10 +15785,50 @@ export function createScene({
     if (renderer.info && renderer.info.render) { mainPassInfo.calls = renderer.info.render.calls; mainPassInfo.triangles = renderer.info.render.triangles; }
     renderFaceLayer();
     if (hdrOn) hdr.end();
+    if (globalThis.__nsShadeProbe === true) shadeProbe(); // QA only (section 188): this frame's pixels and muscle codes
     const end = nowMs();
     lastRenderCpuMs = end - now;
     // R558 (quality controller, rule a): this live frame's main-thread work, from the frame's start (ns-app) to here.
     lastBusyMs = !notLive && opts && Number.isFinite(opts.frameStartMs) ? end - opts.frameStartMs : NaN;
+  }
+
+  /* 21 November 2026 (QA only, section 188; globalThis.__nsShadeProbe = true for one frame): the frame as drawn on the
+   * canvas (RGBA bytes, bottom row first) and the outline pass's ID picture of the same frame, with what each code is
+   * (whose muscle or bone, its group, tone step and resting colour), in globalThis.__nsShadeProbeOut, so a check can
+   * read the colours on both sides of every visible contact between two muscles. Nothing runs without the flag. */
+  function shadeProbe() {
+    globalThis.__nsShadeProbe = false;
+    const gl = renderer.getContext(), size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const pack = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING); // (a pending asynchronous read may hold it)
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    const pic = outline.qaIdPicture ? outline.qaIdPicture() : null;
+    renderer.setRenderTarget(null);
+    const rgba = new Uint8Array(size.x * size.y * 4);
+    gl.readPixels(0, 0, size.x, size.y, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pack);
+    if (!pic) { globalThis.__nsShadeProbeOut = { error: 'no ID picture' }; return; }
+    const who = new Map();
+    const put = (o, w, id, kind) => { if (o) who.set(o, { who: w, id, kind }); };
+    for (const b of body) { put(b.mesh, 'own', b.id, b.kind); put(b.mirror, 'mirror', b.id, b.kind); put(b.inPlace, 'inPlace', b.id, b.kind); }
+    for (const m of muscles) { put(m.mesh, 'arm', m.id, 'muscle'); put(m.mirror, 'armMirror', m.id, 'muscle'); }
+    for (const b of bones) { put(b.mesh, 'arm', b.sourceElementId, 'bone'); put(b.mirror, 'armMirror', b.sourceElementId, 'bone'); }
+    const meshes = {};
+    for (const [serial, mesh] of pic.meshes) {
+      const w = who.get(mesh) || { who: 'other', id: null, kind: 'other' };
+      const rec = { who: w.who, id: w.id, kind: w.kind, name: String(mesh.name || '') };
+      if (w.kind === 'muscle' && w.id) {
+        const key = muscleToneKeyOf(w.id), src = muscleSourceNameOf(w.id);
+        rec.source = src; rec.key = key; rec.group = NsColors.muscleGroupOf(src);
+        rec.step = muscleTones.steps && muscleTones.steps.has(key) ? muscleTones.steps.get(key) : null;
+        rec.warm = muscleTones.steps && muscleTones.steps.warm && muscleTones.steps.warm.has(key) ? muscleTones.steps.warm.get(key) : null;
+        rec.base = muscleBaseOf(w.id);
+      }
+      meshes[serial] = rec;
+    }
+    globalThis.__nsShadeProbeOut = { W: size.x, H: size.y, rgba, id: { w: pic.w, h: pic.h, ss: pic.ss, data: pic.data }, meshes,
+      restContacts: muscleTones.steps && muscleTones.steps.gaps ? muscleTones.steps.gaps : null,
+      toneInput: muscleTones.input ? { keys: [...new Set(muscleTones.input.keys)], contacts: [...muscleTones.input.contacts].map(([k, m]) => [k, [...m]]),
+        groups: [...muscleTones.input.groupOfKey], layers: [...muscleTones.input.layerOfKey] } : null };
   }
 
   /* 19 November 2026 (performance; QA only, globalThis.__nsCensus = true for one frame): the main pass's draws and
@@ -15912,6 +16075,32 @@ export function createScene({
         if (rec.mesh) put(rec.mesh, out.own, id, false, armGroup.visible && rec.mesh.visible);
         if (rec.mirror) put(rec.mirror, out.mirror, id, false, mirrorRoot.visible && rec.mirror.visible);
       });
+      // 21 November 2026 (SEEMOVE, checks only): each face shape's most-moved vertex at rest and at full strength, in the
+      // world, on your head drawn from outside and on the mirror body (the face moves vertices, not bones). The face
+      // packet shares the head's frame, so the eyeball's pose places it. out.face: { shape: { mm, own: [rest, full],
+      // mirror: [rest, full] } }; a caller scales full - rest by the shape's strength (linear, ns-face-move).
+      if (faceMove.rig) {
+        if (!faceMove.tops) {
+          faceMove.tops = new Map();
+          for (const [id, m] of faceMove.rig.meshes) {
+            const fr = faceMove.recs.get(id), P = fr ? (fr.L ? fr.L.rest : fr.sk ? fr.sk.rest : fr.baseP) : null;
+            if (!P) continue;
+            for (const [key, sh] of m.shapes) for (let j = 0; j < sh.idx.length; j++) {
+              const mm = Math.hypot(sh.d[3 * j], sh.d[3 * j + 1], sh.d[3 * j + 2]), t = faceMove.tops.get(key);
+              if (!t || mm > t.mm) { const k = 3 * sh.idx[j]; faceMove.tops.set(key, { mm, p: [P[k], P[k + 1], P[k + 2]], d: [sh.d[3 * j], sh.d[3 * j + 1], sh.d[3 * j + 2]] }); }
+            }
+          }
+        }
+        const eye = body.find(b => b.kind === 'bone' && b.eyePart === 'sclera');
+        if (eye) {
+          out.face = {};
+          const at = (m, p) => { v.set(p[0], p[1], p[2]).applyMatrix4(m.matrixWorld); return [r4(v.x), r4(v.y), r4(v.z)]; };
+          for (const [key, t] of faceMove.tops) {
+            const q = [t.p[0] + t.d[0], t.p[1] + t.d[1], t.p[2] + t.d[2]], own = eye.inPlace || eye.mesh;
+            out.face[key] = { mm: Math.round(t.mm * 100) / 100, own: [at(own, t.p), at(own, q)], mirror: eye.mirror ? [at(eye.mirror, t.p), at(eye.mirror, q)] : null };
+          }
+        }
+      }
       return out;
     },
     /** Plain-JSON state of the U2b-scene features (QA / tests). */

@@ -42,11 +42,50 @@ export const LIMB_IDS = Object.freeze(['rightArm', 'leftArm', 'rightLeg', 'leftL
  * turn the limb (the owner, Message 186)). The limb turn (the double tap of Space) still sets this
  * joint to its own two ends; the keys turn it on from there as the hand's place needs, and the next limb turn starts
  * from wherever the keys left it. The look's carry and every other solve leave it alone. */
+/* 21 November 2026, evening (FIX63; a review of Body update 63, finding C1: "the 'across the body' test also fires for an
+ * ordinary hanging or backward right arm, so S turns the upper arm about 45 to 50 degrees inward there"; the owner,
+ * Message 186: W and S "are not rotating internally or externally while moving"). The across test asked only that the
+ * hand's place lie medialMm toward the body's other side of the ELBOW. A hanging elbow sits 5 to 11 cm to the OUTSIDE of
+ * the shoulder that S draws the hand toward, so the test held there too, and (the low arm having no sideways swing left
+ * under the combined-range rule) S turned the upper arm from 35 to between -16 and 2 degrees; with the arm out to the
+ * side S turned it up to 10 degrees either way and A, round a bent elbow, up to 20 outward. across.elbowMm: the turn's leave is now given
+ * only with the upper arm itself brought across, the elbow at least this far toward the body's other side of the
+ * SHOULDER along the same axis (80 mm, a quarter of the upper arm's length: the upper arm about 14 degrees inward).
+ * Offline on the game's body (90 frames of each key from 150 poses the body takes): every wrongly turned pose had its
+ * elbow 57 to 327 mm to the outside of the shoulder when the leave was given; the arms across the chest (raise 40 to
+ * 90, across 20 to 45) had it 110 to 251 mm to the inside, and turn as before. Two low arms just inside (raise 20 and 30,
+ * across 15: the elbow 25 to 32 mm inside when the leave was given, the hand in front of its own side of the chest) were
+ * turned 67 degrees before and are not now. The test is made when the leave is given, not while it lasts: as S draws
+ * the hand in, the elbow itself goes back out past the shoulder (206 to -53 mm). elbowMm null: the test as it was. */
+/* 21 November 2026, late (a check of the above found two residues, both shown offline on the game's body).
+ *   handMm    the leave ENDS, and none is given, once the hand's place is no longer on the body's other side of the
+ *             shoulder (0: level with it or outside). The leave lasted until the look next carried the limb, so the
+ *             keys alone could take it out to the side: across the chest 43 / -31, S 1.5 s, W, D, then S again turned
+ *             the upper arm from -49.0 to -56.1 with the elbow 29 cm OUTSIDE the shoulder (4 of 24 such runs, 2 to 7
+ *             degrees). While S draws a hand in from across the chest its place stays inside (it moves on the line to
+ *             the shoulder), so those runs end as before.
+ *   again     an upper arm that the keys have turned, and that nothing else has turned since, is given the leave again
+ *             without the elbow's test, as long as the hand's place is still inside (the solve keeps in its memo the
+ *             turn's value before and after the last frame that turned it, `spinTurn`; the next frame's value must lie
+ *             between the two: the app may take only a share of a frame's answer, and the limb turn, a drag or a reset
+ *             put the joint elsewhere and end the record). The app takes the leave away whenever the look carries the
+ *             limb; at raise 70 / across 30, after half a second of S and a small look movement, the elbow was 79 mm
+ *             inside (under elbowMm), no leave was given again, and S ended with the hand 28 degrees off its line and
+ *             the turn stuck at -19, where the uninterrupted run ends 9 degrees off at -44. (A first version gave the
+ *             leave again to any upper arm turned inward of 12 degrees: the limb turn's own overside end is -15, so
+ *             after a double tap of Space the low arms that elbowMm refuses would have been turned again.)
+ *   againElbowMm  the renewed leave still asks the elbow to be this far inside (60 mm, against elbowMm's 80 for a
+ *             first leave). A second check found the record outlives the look's carry (the app solves the carried arm
+ *             with no spin, so the turn and the record stay): S across the chest, then the look carried the arm down
+ *             to a low pose, then S turned the upper arm 3 to 20 degrees more in 65 of 96 such poses, with elbows from
+ *             97 mm outside to 55 mm inside the shoulder; the same poses with no record were left alone. The residue
+ *             this rule exists for had the elbow 79 mm inside. null: no elbow test for the renewed leave.
+ * Null for either: that rule is off. */
 export const LIMB_CHAIN = Object.freeze({
   rightArm: Object.freeze({ joints: Object.freeze(['r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex']), root: 'r_glenohumeral', rootSeg: 'r_upperarm',
     bend: 'r_elbow_flex', bendSign: 1, bendPivot: 'r_elbow', endSeg: 'r_hand', endCentreOf: 'r_hand', framePivot: 'r_wrist', side: 'right',
     dial: Object.freeze({ joint: 'r_pronation', sign: -1, area: 'lh_forearm' }), upperDial: Object.freeze({ joint: 'r_shoulder_rot', sign: 1, area: 'lh_shoulder' }),
-    spin: Object.freeze({ joint: 'r_shoulder_rot', weight: 0.35, bendFrom: 20, bendTo: 70, across: Object.freeze({ medialMm: 20, seg: 'sternum', toMedial: Object.freeze([1, 0, 0]) }) }) }),
+    spin: Object.freeze({ joint: 'r_shoulder_rot', weight: 0.35, bendFrom: 20, bendTo: 70, across: Object.freeze({ medialMm: 20, elbowMm: 80, handMm: 0, again: true, againElbowMm: 60, seg: 'sternum', toMedial: Object.freeze([1, 0, 0]) }) }) }),
   rightLeg: Object.freeze({ joints: Object.freeze(['hip_flex_R', 'hip_abd_R', 'knee_ext_R']), root: 'r_hip', rootSeg: 'r_thigh',
     bend: 'knee_ext_R', bendSign: -1, bendPivot: 'r_knee', endSeg: 'r_shank', endPivot: 'r_ankle', side: 'right',
     dial: Object.freeze({ joint: 'hip_rot_R', sign: 1, area: 'lh_hip' }) }),
@@ -229,6 +268,11 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
   // startSegments (19 November 2026): the posed segments of `targets` when the caller has them already (one pose of the
   // whole body saved); used only while the start angles are untouched by the limits and the rule above.
   const q0 = c.joints.map(id => q[id]);
+  // (21 November 2026, late, LIMB_CHAIN across.again: is the upper arm's turn still where the keys' last turn left it?
+  // memo.spinTurn = [value before, value after] of the last frame of the keys that turned it)
+  const spinStart = sp ? q[sp.joint] : null;
+  const spinMine = Boolean(sp && memo && Array.isArray(memo.spinTurn) && spinStart >= Math.min(memo.spinTurn[0], memo.spinTurn[1]) - 0.5 && spinStart <= Math.max(memo.spinTurn[0], memo.spinTurn[1]) + 0.5);
+  if (sp && memo && memo.spinTurn && !spinMine) memo.spinTurn = null;
   fit();
   let seg = startSegments && c.joints.every((id, i) => q[id] === q0[i] && q[id] === targets[id]) ? startSegments : segmentsFor(q);
   // folded: the target is nearer the root than the limb can bring its end with the bend at its end (the caller may
@@ -302,11 +346,23 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
     let dq = solveStep(J, false);
     // (memo.spinAcross: once the keys found the hand across the body, the turn stays allowed as the hand comes in toward
     // the shoulder and so leaves the across side, until the caller clears it)
-    const acrossNow = !sp || !sp.across || (memo && memo.spinAcross === true) || (() => {
-      const S = seg[sp.across.seg], m = sp.across.toMedial, root = limbPoint(rig, seg, limb, 'bend');
-      if (!S) return false;
+    // (21 November 2026, evening, FIX63, LIMB_CHAIN across.elbowMm: and only with the upper arm itself brought across,
+    // the elbow toward the body's other side of the shoulder; a hanging arm's elbow is outside it. Late: handMm, the
+    // leave ends once the hand's place is level with the shoulder or outside it; again, an upper arm the keys have
+    // turned, and nothing else since, is given the leave again without the elbow's test)
+    const acrossNow = !sp || !sp.across || (() => {
+      const A = sp.across, S = seg[A.seg], m = A.toMedial, latched = Boolean(memo && memo.spinAcross === true);
+      if (!S) return latched;
       const d = [S[0] * m[0] + S[4] * m[1] + S[8] * m[2], S[1] * m[0] + S[5] * m[1] + S[9] * m[2], S[2] * m[0] + S[6] * m[1] + S[10] * m[2]];
-      return (targetMm[0] - root[0]) * d[0] + (targetMm[1] - root[1]) * d[1] + (targetMm[2] - root[2]) * d[2] > sp.across.medialMm;
+      const medial = (p, ref) => (p[0] - ref[0]) * d[0] + (p[1] - ref[1]) * d[1] + (p[2] - ref[2]) * d[2]; // (mm that p lies toward the body's other side of ref)
+      const shoulder = limbPoint(rig, seg, limb, 'root');
+      if (Number.isFinite(A.handMm) && !(medial(targetMm, shoulder) > A.handMm)) { if (latched) memo.spinAcross = false; return false; }
+      if (latched) return true;
+      const elbow = limbPoint(rig, seg, limb, 'bend'), elbowIn = medial(elbow, shoulder);
+      // (again: a turn the keys made gives the leave again with a looser elbow test, againElbowMm, not none)
+      if (A.again === true && spinMine && !(Number.isFinite(A.againElbowMm) && !(elbowIn > A.againElbowMm))) return true;
+      if (Number.isFinite(A.elbowMm) && !(elbowIn > A.elbowMm)) return false;
+      return medial(targetMm, elbow) > A.medialMm;
     })();
     if (sp && acrossNow && memo) memo.spinAcross = true;
     if (sp && spinW > 0 && acrossNow) {
@@ -327,6 +383,8 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
     // (columns used again that no longer close in: found afresh at the next step)
     if (memo && reuse && opts.keepColumns !== true && len(sub(targetMm, end)) > 0.7 * err) memo.stale = true;
   }
+  // (across.again: this frame turned the upper arm, or left alone a turn that is still the keys' own)
+  if (sp && memo) { if (q[sp.joint] !== spinStart) memo.spinTurn = [spinStart, q[sp.joint]]; else if (spinMine) memo.spinTurn = [spinStart, spinStart]; }
   const joints = {};
   for (const id of c.joints) joints[id] = q[id];
   return { joints, endMm: end, errorMm: len(sub(targetMm, end)), iterations: it, folded };

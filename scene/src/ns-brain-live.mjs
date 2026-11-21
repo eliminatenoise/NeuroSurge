@@ -82,7 +82,14 @@ export const BRAIN_LIVE = Object.freeze({
   bloom: Object.freeze({ slots: 6, swellMm: 1.6, dipMm: 0.8, lookLevel: 0.35, holdLevel: 0.2, radiusMm: 17, radius0: 0.4, growS: 0.6, inS: 0.16, outS: 0.8,
     flush: 0.6, flushTint: Object.freeze([1.22, 0.7, 0.74]), spill: 0.4, spillGain: 1.3, glow: 0.12, grazeLo: 0.12, grazeHi: 0.45, grazeKeep: 0.35,
     ring: 0.5, ringAt: 1.2, ringW: 0.28, tilt: 2.5,
-    pulseS: 0.8, pulseFrom: 0.3, pulseTo: 2.4, pulseW: 0.2, pulse: 0.75, pulseGlow: 0.3 }),
+    // 21 November 2026 (ns-area-halo; the owner: "there's essentially no glow, and it's too much before as well"): the
+    // ring of a movement being switched on now has the area's own colour (it took the area's emission, near white
+    // while lit), and in that colour the old ring was a wide wave over 41 mm of cortex that ran on for 0.4 s after the
+    // contraction had ended. It ends with the contraction (pulseS 0.8 -> 0.45; at 0.4 s it is at 4 % of its strength:
+    // nothing is lit on the way back), runs half as far (pulseTo 2.4 -> 1.3, 22 mm), takes a third of the tissue's
+    // colour (pulse 0.75 -> 0.25; at 0.4 it was still a pale-blue band right across the cortex beside a lit elbow area)
+    // and carries no light above white (pulseGlow 0.3 -> 0: that showed only where the bloom pass runs).
+    pulseS: 0.45, pulseFrom: 0.3, pulseTo: 1.3, pulseW: 0.2, pulse: 0.25, pulseGlow: 0 }),
   wobble: Object.freeze({ hz: 3.0, zeta: 0.36, smoothS: 0.05, gain: 0.4, maxMm: 4.2, speedMm: 900,
     dragS: 0.14, dragMm: 3, dragSpeedMm: 25, dragSmoothS: 0.07,
     turnGain: 0.4, maxRad: 0.05, speedRad: 6, turnDragS: 0.1, dragRad: 0.035, dragSpeedRad: 1.25,

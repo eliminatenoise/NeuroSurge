@@ -690,7 +690,13 @@ export const AREA_LOOK = freeze({
   // and its neighbours)
   // (20 November 2026, evening, the owner, Message 203: "And let's make the activation area as bright as possible": the
   // lit key's light pure white (areaWhite 0.8 -> 1) at more than twice the strength (areaGain 1.3 -> 3), its rim too)
-  areaDarken: 0.7, areaGain: 3, areaNeon: 2.4, areaWhite: 1, areaRimGain: 2,
+  // (21 November 2026, ns-area-halo; the owner: "there's essentially no glow, and it's too much before as well": areaGain
+  // 3 -> 1.6. On the screen the lit block's middle is white either way (anything at or above 1 is cut at white), so
+  // this changes nothing where the bloom pass does not run. Where it runs, light above white is what it spreads: at 3
+  // (and 7.5 at the flash's peak) that was a white halo over the neighbours, on the full picture quality only. The
+  // halo is now drawn in the area's own colour by the materials at every quality level (ns-area-halo), and the bloom
+  // adds only a little softness to the white core.)
+  areaDarken: 0.7, areaGain: 1.6, areaNeon: 2.4, areaWhite: 1, areaRimGain: 2,
   muscleGain: 0.42, muscleAlbedo: 0.5, muscleRimGain: 1.35, muscleRimPower: 3.5, coreWhite: 0.12, hintGain: 0.3
 });
 
@@ -1236,113 +1242,281 @@ export const MUSCLE_GROUP_LOOK = freeze({ vary: 0.07, steps: 5 });
 // (stepH: with each step the hue turns that many degrees too, toward rose for a darker step and toward warm red for a
 // lighter one, so two neighbours differ a little in colour as well as in lightness; the tones' hue 22-24 stays within
 // 16-32.)
-export const MUSCLE_STEP = freeze({ stepL: 0.08, stepH: 4, steps: freeze([-1, 0, 1]), sameGoal: 0.08, otherGoal: 0.15, minContact: 4, refinePasses: 16, minL: 0.35, maxL: 0.82,
-  seen: freeze({ outer: 1, intermediate: 0.6, deep: 0.2 }) });
+// 21 November 2026 (section 188; the owner, Messages 195 and 202, again: "more clear contrast and differentiation", "muscles
+// next to each other can be obviously told apart"). Measured on the screen (the colours drawn a few pixels inside each
+// side of every visible contact, OKLab distance; tests/browser-muscle-shades.mjs), three lightness steps left 1 to 13
+// contacts per view drawn nearly equal (under 0.03) and 7 to 44 weak (under 0.06), nearly all inside one group where four
+// or five muscles lie side by side (the forearm's flexors, the triceps' heads, the pectoral's parts and the serratus,
+// the quadriceps, the calf, the foot), and the darkest group's lower step was cut short by the clamp at minL. So each
+// muscle now also takes a step on a SECOND axis, `warm`, at the same lightness: +1 a fuller rose (chroma x (1 +
+// high[0]), hue + high[1]), -1 a quieter one (chroma x (1 + low[0]), hue + low[1]; on a tone darker than lowFrom,
+// lowDark: it loses less chroma and turns more toward crimson, because a quieter dark red reads brown). It stays in the
+// one rose-red family (hue 10 to 28, chroma 0.08 to 0.19; a turn toward orange or pink, and a lower chroma on the dark
+// tones, were drawn and rejected) and never brings a muscle toward another group's colour: the groups differ by lightness
+// and the warm step leaves it as it is. Touching muscles of ONE group must now be sameGoal apart in the whole colour (the
+// OKLab distance of the colours drawn, drawnMuscleLab); touching muscles of two groups otherGoal apart in lightness (a
+// warm step never stands in for a group's border) and otherE in the whole colour. warm.cost, warm.costLow: a small cost
+// per warm step (more for the quieter one), so a muscle with no conflict keeps its group's own colour. minL 0.35 -> 0.33:
+// the darkest tone's lower step is no longer cut short. seenWeight: the pairs the game's pictures show side by side
+// (ns-muscle-seen) count as contacts with their seen length x this. The shade floor keeps the colours' ratios, so the
+// steps survive in the shade too (ns-raw-look RAW_LOOK.muscleFloorKeep).
+// The same day, second part (a second measurement of the above: 29 of 2 444 contacts in seventeen views were still drawn
+// nearly equal and 231 weak). The cause was the light: between the two sides of a contact the one light differs by a
+// factor of 1.6 at the median (measured: the shade factor on each side of every contact), and a lightness step of 0.08
+// is cancelled by a factor of about 1.45, so where the muscle with the lighter step is the less lit one the step is
+// gone (flexor carpi radialis against flexor digitorum superficialis: 0.015 to 0.022 along 33 to 93 px in six views).
+// `light` { goal, weight }: the table of seen pairs (ns-muscle-seen) now also carries the light the pictures show on the
+// two sides of each pair, and a seen pair is also scored by the distance of its two colours AS DRAWN under each of those
+// lights (colour x shade factor): the mean squared shortfall from light.goal, x light.weight. So a lightness step goes
+// the way the light goes, and where the light falls both ways (a left and a right muscle share one colour) the pair
+// takes a warm step instead. goal 0.09, weight 8 (the counts on the screen are in DESIGN-DECISIONS section 188). Held out (the lights taken from half of the views, the
+// contacts counted in the other half, predicted from the recorded light): no more nearly equal contacts than without
+// the lights and a quarter fewer weak ones; null switches it off (the steps of before).
+// light.even (0: off): a pair with lights can also be scored for the SAME light on both sides (its plain distance
+// against light.goal, x even). The reason: a pair the seventeen views always show under very different light may keep
+// nearly one colour and rely on the light alone. In a look outside those views (down and to the left, your right
+// forearm at the right of the picture) its flexor carpi ulnaris and flexor digitorum superficialis, there in nearly
+// the same light, are 0.027 apart along 175 px. With even 2, drawn and measured: that contact 0.047, and the two looks
+// outside the table 8 nearly equal of 299 instead of 11 (the first part 7; 5 or 6 of each are the abdominal wall's
+// sheets showing through); but in the seventeen views 21 nearly equal instead of 18, in shade 15 instead of 6, and the
+// largest muscles took the fuller step (the chest and the thighs crimson: the body redder than the group tones). Left
+// off; the better mend is more views in the table (those two looks among them).
+// warm.cost 1e-4 -> 0.03, warm.costLow 0.01 -> 0.03: with the fuller step nearly free 71 of 164 muscles took it and the
+// body read redder than the group tones of section 168 (drawn and looked at: the chest crimson); with the quieter step
+// cheap the largest muscles took it (the sternocostal chest a dusky wine-rose). Now every warm step costs the same, a
+// muscle takes one only where a long contact needs it, and two thirds of the muscles keep their group's own colour.
+// The cost is paid in separation (counted on the recorded lights, the lights from half of the views and the contacts
+// of the other half, four splits summed, about 9 800 contacts: costs 1e-4 and 0.01 with the lights 54 nearly equal and
+// 604 weak, 115 muscles on a warm step; 0.01 and 0.01: 66 and 680, 82 muscles; 0.03 and 0.03: 84 and 732, 55 muscles;
+// without the lights 145 and 1 024): lower the two costs for more separation and a redder, duskier body.
+// 22 November 2026 (a check of the above, confirmed by a second reviewer, and the owner's colour rule: rose red, no
+// pink, grey or brown; Message 22: "clinical", not "bloody"). The quieter step made the big pale muscles a pale PINK
+// (the rectus abdominis 246, 175, 172 where update 63 had 216, 120, 124; the tibialis anterior, the gracilis, the short
+// head of the biceps) and the dark ones a dusty MAUVE that went grey-brown in shade (the clavicular and abdominal
+// pectoral, the palmaris longus 139, 75, 78; the pronator quadratus 105, 48, 55), and the fuller step drove the dark
+// tones to the screen's limit, a blood crimson with the green channel at 0 to 8 (the flexor carpi radialis 141, 7, 30,
+// the sternocleidomastoid 175, 8, 45). Now:
+//  - lowLight [-0.2, 0] from lowLightFrom 0.64 (the lightness drawn), lowLightHue 22: a light colour's quieter step
+//    loses less chroma and does not turn toward crimson, and its hue is never under 22 degrees, the rose's (a pale red
+//    that loses chroma and cools reads pink): the rectus abdominis' kind of colour 246, 175, 172 -> about 252, 172, 161,
+//    a pale salmon; the short head of the biceps' 198, 131, 136 -> about 207, 127, 121.
+//  - lowDark [-0.25, -8] -> [-0.12, -6], and lowFrom 0.5 -> 0.56 on the lightness drawn (lowFromDrawn), no longer the
+//    group tone's: a dark colour's quieter step is a wine red: on the darkest tone 113, 52, 60 -> 119, 47, 55, one step
+//    lighter 139, 75, 78 -> 145, 70, 72; the rose tones' darker step 152, 81, 87 (mauve) -> 162, 73, 85.
+//  - gamut 0.85: a fuller step stays under 0.85 of the most chroma the screen shows at its lightness and hue (the green
+//    channel about 16 to 40 on the dark tones instead of 0 to 8: the flexor carpi radialis' kind 141, 7, 30 -> 134, 28,
+//    37, the sternocleidomastoid's 175, 8, 45 -> 166, 37, 53); the group's own chroma is never lowered by it, so on the
+//    darkest tone's lower step, where the screen has no room, a fuller step is the group's own colour.
+//  - lowBand (null: off): the quieter step only inside a band of lightness; built and counted, not used (it costs more
+//    separation than the gentler steps above for the same colours).
+// sameGoal 0.1 -> 0.12: with the milder steps the darkest group's five forearm flexors had too few colours, and the
+// start view drew your right pronator teres against the flexor digitorum superficialis at 0.019 along 20 px (both the
+// darkest tone's lower step); with 0.12 they part (predicted 0.065 at the least). This pair flips with small changes
+// (0.11 and 0.13 leave it), so it is a fragile mend.
+// The cost, counted on the recorded light of the seventeen views and of two looks outside them (about 10 700 contact
+// instances from four sets of probes): nearly equal 65 -> 82 and weak about 680 -> 830 predicted (section 188 has what
+// the screen measured). Variants counted the same way, all dropped: warm.low [-0.2, -4] and maxL 0.78 (the pale pink
+// stays, the steps at the top of the range vanish); no quieter step at all (no pink or mauve, but the dark tones keep
+// the crimson; with the gamut limit too, 161 nearly equal); warm.high [0.3, 0] (more nearly equal, and with the gamut
+// limit it changes nothing on the dark tones); a quieter light step turning 4 or 5 degrees toward salmon (the light
+// steps of the rose tones turn tan, hue 31 to 33: hence a floor on the hue rather than a turn).
+// Tried and dropped, each counted on the recorded lights: a term for the distance two colours keep when the light makes
+// their lightness equal (their chroma over lightness; no fewer nearly equal contacts, more weak ones); a quieter step
+// that costs more the more of a muscle is seen (more nearly equal contacts on held-out views); no quieter step on the
+// dark tones (the same).
+export const MUSCLE_STEP = freeze({ stepL: 0.08, stepH: 4, steps: freeze([-1, 0, 1]), sameGoal: 0.12, otherGoal: 0.15, otherE: 0.1, minContact: 4, refinePasses: 16, minL: 0.33, maxL: 0.82,
+  seen: freeze({ outer: 1, intermediate: 0.6, deep: 0.2 }),
+  warm: freeze({ steps: freeze([-1, 0, 1]), low: freeze([-0.3, -4]), lowDark: freeze([-0.12, -6]), lowFrom: 0.56, lowFromDrawn: true, lowLight: freeze([-0.2, 0]), lowLightFrom: 0.64, lowLightHue: 22, lowBand: null,
+    high: freeze([0.4, 0]), cost: 0.03, costLow: 0.03 }), seenWeight: 1, gamut: 0.85,
+  light: freeze({ goal: 0.09, weight: 8, even: 0 }) });
 /** The OKLab lightness of a LINEAR RGB colour. Pure. */
 export function linearOkL(rgb) {
+  return linearOkLab(rgb)[0];
+}
+/** The OKLab [L, a, b] of a LINEAR RGB colour. Pure. */
+export function linearOkLab(rgb) {
   const [r, g, b] = rgb;
   const l = Math.cbrt(Math.max(0, 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b));
   const m = Math.cbrt(Math.max(0, 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b));
   const s = Math.cbrt(Math.max(0, 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b));
-  return 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
 }
-/** The OKLab lightness a muscle is DRAWN with at rest in the raw look: of muscleGroupBaseInto's colour for its group,
- * storey and step (the clamp to [minL, maxL], the gamut and the storey shade included). Pure. */
-export function drawnMuscleLightness(group, level, step, so = MUSCLE_STEP) {
-  return linearOkL(muscleGroupBaseInto(group, 'k', level, [0, 0, 0], undefined, undefined, Number.isFinite(step) ? step : 0, so));
+/** The OKLab colour [L, a, b] a muscle is DRAWN with at rest in the raw look, facing the light: of muscleGroupBaseInto's
+ * colour for its group, storey, lightness step and warm step (the clamp to [minL, maxL], the gamut and the storey shade
+ * included). Pure. */
+export function drawnMuscleLab(group, level, step, warm = 0, so = MUSCLE_STEP) {
+  return linearOkLab(muscleGroupBaseInto(group, 'k', level, [0, 0, 0], undefined, undefined, Number.isFinite(step) ? step : 0, so, Number.isFinite(warm) ? warm : 0));
+}
+/** The OKLab lightness a muscle is DRAWN with at rest in the raw look (drawnMuscleLab's L). Pure. */
+export function drawnMuscleLightness(group, level, step, so = MUSCLE_STEP, warm = 0) {
+  return drawnMuscleLab(group, level, step, warm, so)[0];
 }
 /** Steps for the muscles (pure, deterministic). keys: side-free muscle keys; contacts: Map key -> Map(neighbour key ->
  * shared cells); groupOf(key): the key's group; toneL(group): the group tone's OKLCH lightness (now only which keys take
- * part: a key whose toneL is not a number is left out). layerOf(key): its storey. Returns Map key -> step (one of
- * o.steps), and on the map .worst { same, other, short, heaviestShort, contacts, nearlyEqual }: the smallest lightness gap left between two touching muscles
- * (contacts of at least minContact cells) of the same group and of different groups.
- * 20 November 2026 (a review of Body update 59): the lightness the optimiser compares is the lightness DRAWN
- * (drawnMuscleLightness: muscleGroupBaseInto's clamp, gamut and storey shade), not the model tone L + step x stepL:
- * with the model, 89 of the 456 contacts it counted as told apart were drawn nearly equal (brachialis against the long
- * head of biceps 0.003, adductor magnus against longus 0.003). `lightOf(key, step)` may replace it (tests). Each refine
- * pass also tries moving both ends of a touching pair together (a single move can be stuck). On the game's body (522
- * counted contacts): touching muscles drawn nearly equal (gap under 0.03) 44 -> 36, contacts short of their goal
- * 215 -> 201 (most of them 0.05 to 0.08 apart: the clamp at maxL and the storey shade), the two pairs above 0.046.
- * .gaps lists every counted contact [key, key, weight, drawn gap]. */
-export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STEP, layerOf = null, lightOf = null) {
-  const list = [...new Set(keys)].map(String);
-  const G = new Map(list.map(k => [k, groupOf(k)])), L0 = new Map(list.filter(k => Number.isFinite(toneL(G.get(k)))).map(k => [k, toneL(G.get(k))]));
+ * part: a key whose toneL is not a number is left out). layerOf(key): its storey. Returns Map key -> lightness step (one of
+ * o.steps), with .warm, Map key -> warm step (one of o.warm.steps), and on the map .worst { same, other, short,
+ * heaviestShort, contacts, nearlyEqual }: the smallest distance left between two touching muscles (contacts of at least
+ * minContact cells) of the same group (the whole colour, OKLab) and of different groups (lightness).
+ * 20 November 2026 (a review of Body update 59): the colours compared are those DRAWN (drawnMuscleLab:
+ * muscleGroupBaseInto's clamp, gamut and storey shade), not the model tone L + step x stepL. `lightOf(key, step)` may
+ * replace the lightness (tests; the warm axis is then left out). Each refine pass also tries moving both ends of a
+ * touching pair together (a single move can be stuck).
+ * 21 November 2026 (section 188): each muscle takes a pair (lightness step, warm step); a contact inside one group is
+ * scored by the OKLab distance of the two colours drawn (goal sameGoal), a contact between two groups by their lightness
+ * gap (goal otherGoal), and a warm step costs warm.cost (a muscle with no conflict keeps its group's colour). `seen`
+ * (Map key -> Map(neighbour key -> samples), ns-muscle-seen seenContactMap): the pairs the game's pictures show side by
+ * side, counted as contacts too (weight samples x seenWeight; the larger of that and the touching weight).
+ * .gaps lists every counted contact [key, key, weight, drawn distance] (OKLab inside a group, lightness between two).
+ * `light` (Map key -> Map(neighbour key -> [[shade factor on the key, on the neighbour], ...]), ns-muscle-seen
+ * seenLightMap; second part of section 188): the light the pictures show on the two sides of a seen pair; with o.light
+ * the pair is also scored by its two colours as drawn under each of those lights (see MUSCLE_STEP). Left out with
+ * lightOf. */
+export function assignMuscleSteps(keys, contacts, groupOf, toneL, o = MUSCLE_STEP, layerOf = null, lightOf = null, seen = null, light = null) {
+  const all = [...new Set(keys)].map(String);
+  const G = new Map(all.map(k => [k, groupOf(k)]));
+  const list = all.filter(k => Number.isFinite(toneL(G.get(k))));
+  const inList = new Set(list);
   const layer = k => (typeof layerOf === 'function' ? layerOf(k) : null);
-  const seen = k => { const l = layer(k); return o.seen && Number.isFinite(o.seen[l]) ? o.seen[l] : 1; };
-  const nbCache = new Map();
-  const nb = k => {
-    let r = nbCache.get(k);
-    if (!r) { r = [...((contacts && contacts.get(k)) || new Map())].filter(([n, w]) => n !== k && w >= o.minContact && L0.has(n)).map(([n, w]) => [n, w * Math.min(seen(k), seen(n))]); nbCache.set(k, r); }
-    return r;
+  const storey = k => { const l = layer(k); return o.seen && Number.isFinite(o.seen[l]) ? o.seen[l] : 1; };
+  // the neighbours of each key: [neighbour, weight, same group]
+  const nbOf = k => {
+    const m = new Map();
+    for (const [n, w] of ((contacts && contacts.get(k)) || new Map())) if (n !== k && w >= o.minContact && inList.has(n)) m.set(n, w * Math.min(storey(k), storey(n)));
+    // (section 188: the pairs the game's pictures show side by side, ns-muscle-seen; not reduced by the storey, they are seen)
+    for (const [n, w] of ((seen && seen.get(k)) || new Map())) if (n !== k && inList.has(n)) m.set(n, Math.max(m.get(n) || 0, w * (Number.isFinite(o.seenWeight) ? o.seenWeight : 1)));
+    return [...m].map(([n, w]) => [n, w, G.get(n) === G.get(k)]);
   };
-  const deg = new Map(list.map(k => [k, nb(k).reduce((s, [, w]) => s + w, 0)]));
+  const nbs = new Map(list.map(k => [k, nbOf(k)]));
+  const deg = new Map(list.map(k => [k, nbs.get(k).reduce((s, [, w]) => s + w, 0)]));
   list.sort((a, b) => deg.get(b) - deg.get(a) || (a < b ? -1 : a > b ? 1 : 0));
-  const step = new Map();
-  const lCache = new Map();
-  const Lof = (k, st) => {
-    const ck = `${k}\u0000${st}`;
-    let v = lCache.get(ck);
-    if (v === undefined) { v = typeof lightOf === 'function' ? lightOf(k, st) : drawnMuscleLightness(G.get(k), layer(k), st, o); lCache.set(ck, v); }
-    return v;
+  // indices: key i, candidate c = (lightness step, warm step); without a warm axis (or with lightOf) the lightness steps alone
+  const N = list.length, index = new Map(list.map((k, i) => [k, i]));
+  const warmSteps = o.warm && Array.isArray(o.warm.steps) && typeof lightOf !== 'function' ? o.warm.steps : [0];
+  const cands = [];
+  for (const st of o.steps) for (const w of warmSteps) cands.push([st, w]);
+  const NC = cands.length, wCost = o.warm && Number.isFinite(o.warm.cost) ? o.warm.cost : 0;
+  const lab = new Float64Array(N * NC * 3);
+  list.forEach((k, i) => cands.forEach(([st, w], c) => {
+    const v = typeof lightOf === 'function' ? [lightOf(k, st), 0, 0] : drawnMuscleLab(G.get(k), layer(k), st, w, o);
+    lab[(i * NC + c) * 3] = v[0]; lab[(i * NC + c) * 3 + 1] = v[1]; lab[(i * NC + c) * 3 + 2] = v[2];
+  }));
+  const pick = new Int32Array(N).fill(-1);
+  // a contact inside one group: the OKLab distance of the two colours (goal sameGoal); between two groups: the lightness
+  // gap (goal otherGoal)
+  const dist = (i, ci, j, cj, same) => {
+    const a = (i * NC + ci) * 3, b = (j * NC + cj) * 3;
+    return same ? Math.hypot(lab[a] - lab[b], lab[a + 1] - lab[b + 1], lab[a + 2] - lab[b + 2]) : Math.abs(lab[a] - lab[b]);
   };
-  const costOf = (k, st) => {
-    let c = 0;
-    for (const [n, w] of nb(k)) {
-      if (!step.has(n)) continue;
-      const goal = G.get(n) === G.get(k) ? o.sameGoal : o.otherGoal;
-      c += Math.sqrt(w) * Math.max(0, goal - Math.abs(Lof(k, st) - Lof(n, step.get(n)))) ** 2;
+  // (21 November 2026, section 188, second part: the light the pictures show on the two sides of a seen pair, `light`.
+  // For each sample [ka, kb] the two colours are compared as they are drawn there: colour x shade factor, which in OKLab
+  // is the colour's vector x the cube root of the factor. The pair's term is the mean, over its samples, of the squared
+  // shortfall of that distance from o.light.goal, x o.light.weight.)
+  const sGoal = light && o.light && o.light.goal > 0 && typeof lightOf !== 'function' ? o.light.goal : 0, sW = sGoal ? (Number.isFinite(o.light.weight) ? o.light.weight : 1) : 0;
+  const pEven = sGoal && Number.isFinite(o.light.even) ? o.light.even : 0;
+  const lightOn = (i, j) => { // samples [cbrt ka, cbrt kb, ...] for the pair (key i, key j), or null
+    if (!sGoal) return null;
+    const m = light.get(list[i]), r = m ? m.get(list[j]) : null;
+    if (!Array.isArray(r) || !r.length) return null;
+    const u = new Float64Array(r.length * 2);
+    for (let q = 0; q < r.length; q++) { u[q * 2] = Math.cbrt(Math.max(1e-4, r[q][0])); u[q * 2 + 1] = Math.cbrt(Math.max(1e-4, r[q][1])); }
+    return u;
+  };
+  const term = (i, ci, j, cj, sw, same, u) => {
+    let t = Math.max(0, (same ? o.sameGoal : o.otherGoal) - dist(i, ci, j, cj, same)) ** 2
+      + (!same && o.otherE > 0 ? Math.max(0, o.otherE - dist(i, ci, j, cj, true)) ** 2 : 0);
+    if (u && pEven > 0) t += pEven * Math.max(0, sGoal - dist(i, ci, j, cj, true)) ** 2; // (light.even: the same light on both sides)
+    if (u) {
+      const a = (i * NC + ci) * 3, b = (j * NC + cj) * 3;
+      let e = 0;
+      for (let q = 0; q < u.length; q += 2) e += Math.max(0, sGoal - Math.hypot(u[q] * lab[a] - u[q + 1] * lab[b], u[q] * lab[a + 1] - u[q + 1] * lab[b + 1], u[q] * lab[a + 2] - u[q + 1] * lab[b + 2])) ** 2;
+      t += sW * e / (u.length / 2);
     }
+    return sw * t;
+  };
+  // (the same day: every contact's term for each pair of candidates is worked out once, a table of NC x NC numbers, so
+  // the search below only adds table entries: the terms are as before, to the last digit, and the light samples cost
+  // nothing in the loops. A table is laid out for the pair (smaller index, larger index); `flip` reads it from the
+  // other end. Measured in Node on the game's 164 muscles: 166 to 287 ms before, 35 to 100 ms now, the same steps.)
+  const tables = new Map();
+  const tableOf = (i, j, sw, same) => {
+    const a = Math.min(i, j), b = Math.max(i, j), key = a * N + b;
+    let e = tables.get(key);
+    if (!e || e.sw !== sw) {
+      const t = new Float64Array(NC * NC), u = lightOn(a, b);
+      for (let ca = 0; ca < NC; ca++) for (let cb = 0; cb < NC; cb++) t[ca * NC + cb] = term(a, ca, b, cb, sw, same, u);
+      e = { sw, t, lit: Boolean(u) };
+      if (!tables.has(key)) tables.set(key, e);
+    }
+    return e;
+  };
+  // per key: [neighbour index, table, flip, sqrt(weight), same group, has light samples]
+  const nbI = list.map((k, i) => nbs.get(k).map(([n, w, same]) => { const j = index.get(n), sw = Math.sqrt(w), e = tableOf(i, j, sw, same); return [j, e.t, i > j, sw, same, e.lit]; }));
+  const wLow = o.warm && Number.isFinite(o.warm.costLow) ? o.warm.costLow : wCost;
+  const costOf = (i, ci) => {
+    let c = (cands[ci][1] < 0 ? wLow : wCost) * Math.abs(cands[ci][1]);
+    const nb = nbI[i];
+    for (let q = 0; q < nb.length; q++) { const e = nb[q], pj = pick[e[0]]; if (pj >= 0) c += e[2] ? e[1][pj * NC + ci] : e[1][ci * NC + pj]; }
     return c;
   };
-  for (const k of list) {
+  for (let i = 0; i < N; i++) {
     let best = 0, bestCost = Infinity;
-    const rot = toneHash(`step:${k}`) % o.steps.length;
-    for (let r = 0; r < o.steps.length; r++) {
-      const st = o.steps[(rot + r) % o.steps.length], c = costOf(k, st);
-      if (c < bestCost - 1e-12) { bestCost = c; best = st; }
+    const rot = toneHash(`step:${list[i]}`) % NC;
+    for (let r = 0; r < NC; r++) {
+      const ci = (rot + r) % NC, c = costOf(i, ci);
+      if (c < bestCost - 1e-12) { bestCost = c; best = ci; }
     }
-    step.set(k, best);
+    pick[i] = best;
   }
   // (pairs: the touching pairs, heaviest first; a move of one muscle alone can be stuck where moving both ends of a
-  // contact together is better, so each pass tries those too)
+  // contact together is better, so each pass tries those too: only the pairs still short of their goal)
   const pairs = [];
-  for (const k of list) for (const [n, w] of nb(k)) if (k < n) pairs.push([k, n, w]);
-  pairs.sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+  for (let i = 0; i < N; i++) for (const [j, t, , sw, same, lit] of nbI[i]) if (i < j) pairs.push([i, j, sw, same, t, lit]);
+  pairs.sort((a, b) => b[2] - a[2] || a[0] - b[0] || a[1] - b[1]);
   for (let pass = 0; pass < o.refinePasses; pass++) {
     let changed = 0;
-    for (const k of list) {
-      const cur = step.get(k); let best = cur, bestCost = costOf(k, cur);
-      for (const st of o.steps) { if (st === cur) continue; const c = costOf(k, st); if (c < bestCost - 1e-9) { bestCost = c; best = st; } }
-      if (best !== cur) { step.set(k, best); changed++; }
+    for (let i = 0; i < N; i++) {
+      const cur = pick[i]; let best = cur, bestCost = costOf(i, cur);
+      for (let ci = 0; ci < NC; ci++) { if (ci === cur) continue; const c = costOf(i, ci); if (c < bestCost - 1e-9) { bestCost = c; best = ci; } }
+      if (best !== cur) { pick[i] = best; changed++; }
     }
-    for (const [k, n] of pairs) {
-      const ck = step.get(k), cn = step.get(n);
-      const base = costOf(k, ck) + costOf(n, cn);
-      let best = null, bestCost = base - 1e-9;
-      for (const a of o.steps) for (const b of o.steps) {
-        if (a === ck && b === cn) continue;
-        step.set(k, a); step.set(n, b);
-        const c = costOf(k, a) + costOf(n, b);
-        step.set(k, ck); step.set(n, cn);
-        if (c < bestCost) { bestCost = c; best = [a, b]; }
+    for (const [i, j, , same, t, lit] of pairs) {
+      const ci = pick[i], cj = pick[j];
+      // (a pair with light samples is tried while any of its terms is short; the others as before, by their goal alone)
+      if (lit ? t[ci * NC + cj] === 0 : dist(i, ci, j, cj, same) >= (same ? o.sameGoal : o.otherGoal)) continue;
+      // (the pair's own term is in both muscles' costs: counted once, so every accepted move lowers the total)
+      const base = costOf(i, ci) + costOf(j, cj) - t[ci * NC + cj];
+      let best = -1, bestB = -1, bestCost = base - 1e-9;
+      for (let a = 0; a < NC; a++) for (let b = 0; b < NC; b++) {
+        if (a === ci && b === cj) continue;
+        pick[i] = a; pick[j] = b;
+        const c = costOf(i, a) + costOf(j, b) - t[a * NC + b];
+        if (c < bestCost) { bestCost = c; best = a; bestB = b; }
       }
-      if (best) { step.set(k, best[0]); step.set(n, best[1]); changed++; }
+      pick[i] = ci; pick[j] = cj;
+      if (best >= 0) { pick[i] = best; pick[j] = bestB; changed++; }
     }
     if (!changed) break;
   }
+  const step = new Map(), warm = new Map();
+  for (let i = 0; i < N; i++) { step.set(list[i], cands[pick[i]][0]); warm.set(list[i], cands[pick[i]][1]); }
   let same = Infinity, other = Infinity, contactsN = 0, nearlyEqual = 0;
   const short = [], near = [], gaps = [];
-  for (const k of list) for (const [n, w] of nb(k)) {
-    if (n < k) continue;
-    const d = Math.abs(Lof(k, step.get(k)) - Lof(n, step.get(n))), sg = G.get(n) === G.get(k);
-    contactsN++; gaps.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]); if (d < 0.03) { nearlyEqual++; near.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]); }
+  for (let i = 0; i < N; i++) for (const [j, , , sw, sg] of nbI[i]) {
+    if (list[j] < list[i]) continue;
+    const d = dist(i, pick[i], j, pick[j], sg), w = Math.round(sw * sw), k = list[i], n = list[j];
+    contactsN++; gaps.push([k, n, w, Math.round(d * 1000) / 1000]); if (d < 0.03) { nearlyEqual++; near.push([k, n, w, Math.round(d * 1000) / 1000]); }
     if (sg) same = Math.min(same, d); else other = Math.min(other, d);
-    if (d < (sg ? o.sameGoal : o.otherGoal) - 1e-9) short.push([k, n, Math.round(w), Math.round(d * 1000) / 1000]);
+    if (d < (sg ? o.sameGoal : o.otherGoal) - 1e-9) short.push([k, n, w, Math.round(d * 1000) / 1000]);
   }
   short.sort((a, b) => b[2] - a[2]);
-  step.gaps = gaps; // every counted contact: [key, key, weight, drawn lightness gap]
+  step.warm = warm;
+  step.gaps = gaps; // every counted contact: [key, key, weight, drawn distance]
   step.worst = { same: Number.isFinite(same) ? Math.round(same * 1000) / 1000 : null, other: Number.isFinite(other) ? Math.round(other * 1000) / 1000 : null,
-    short: short.length, heaviestShort: short.slice(0, 12), contacts: contactsN, nearlyEqual, heaviestNearlyEqual: near.sort((a, b) => b[2] - a[2]).slice(0, 12) };
+    short: short.length, heaviestShort: short.slice(0, 12), contacts: contactsN, nearlyEqual, heaviestNearlyEqual: near.sort((a, b) => b[2] - a[2]).slice(0, 12),
+    warm: [...warm.values()].reduce((s, v) => s + (v !== 0 ? 1 : 0), 0),
+    // (the table of seen pairs names muscles by their side-free keys: a key the body does not have is left out, and
+    // counted here, so a renamed or removed muscle does not make the table fall away unseen)
+    seenUnknown: seen ? [...seen.keys()].filter(k => !inList.has(k)).length : 0 };
   return step;
 }
 /** The group of a muscle from its catalogue name (null or unknown: 'other'). Pure. */
@@ -1358,14 +1532,37 @@ export function muscleGroupTone(group) {
   return MUSCLE_GROUP_TONES[g ? g.tone : 'reference'];
 }
 /** Resting base colour (LINEAR RGB) of a muscle in the raw look: its group's tone, its own small step of lightness
- * (from `key`, its side-free tone key) and its storey shade (as muscleBaseInto). `out` reused. Pure. */
-export function muscleGroupBaseInto(group, key, level, out = [0, 0, 0], o = MUSCLE_GROUP_LOOK, look = MUSCLE_LOOK, step = null, so = MUSCLE_STEP) {
+ * (from `key`, its side-free tone key) and its storey shade (as muscleBaseInto). `out` reused. Pure. With `step` (and
+ * `warm`, section 188) the steps assignMuscleSteps gave it. */
+export function muscleGroupBaseInto(group, key, level, out = [0, 0, 0], o = MUSCLE_GROUP_LOOK, look = MUSCLE_LOOK, step = null, so = MUSCLE_STEP, warm = 0) {
   const tone = muscleGroupTone(group);
   let t = tone.linear, v = 1;
   if (Number.isFinite(step)) {
-    // (Message 202: the muscle's own lightness step among its touching neighbours, assignMuscleSteps)
-    const [L, C, h] = tone.oklch;
-    t = okLchToLinear(Math.min(so.maxL, Math.max(so.minL, L + step * so.stepL)), C, h + step * (so.stepH || 0));
+    // (Message 202: the muscle's own lightness step among its touching neighbours, assignMuscleSteps; section 188: and its
+    // warm step, a turn of hue and chroma at the same lightness)
+    const [L, C, h] = tone.oklch, w = Number.isFinite(warm) && so.warm ? warm : 0;
+    // [chroma x, hue turn in degrees] for one step; on a dark tone the quieter step turns toward crimson more and loses
+    // less chroma (warm.lowDark under warm.lowFrom: a dark red that loses its chroma reads brown)
+    const Ls = Math.min(so.maxL, Math.max(so.minL, L + step * so.stepL));
+    // (so.warm.lowBand [from, to]: the quieter step only where the colour drawn is of a middle lightness; a pale colour
+    // with less chroma reads pink and a dark one mauve or brown, so there it is the group's own colour)
+    const band = so.warm.lowBand, quiet = w < 0 && !(Array.isArray(band) && (Ls < band[0] || Ls > band[1]));
+    // (so.warm.lowLight, lowLightFrom: on a colour drawn lighter than lowLightFrom the quieter step loses less chroma and
+    // does not turn toward crimson: a pale red that loses its chroma reads pink)
+    // (22 November 2026: lowFrom is compared with the lightness DRAWN, the step included, no longer the group tone's: a
+    // middle tone's darker step with the plain quieter step read mauve too)
+    const dark = quiet && so.warm.lowDark && Number.isFinite(so.warm.lowFrom) && (so.warm.lowFromDrawn ? Ls : L) < so.warm.lowFrom;
+    const light = quiet && !dark && so.warm.lowLight && Number.isFinite(so.warm.lowLightFrom) && Ls > so.warm.lowLightFrom;
+    const sh = quiet ? (dark ? so.warm.lowDark : light ? so.warm.lowLight : so.warm.low) : w > 0 ? so.warm.high : null;
+    let hs = h + step * (so.stepH || 0) + (sh ? Math.abs(w) * sh[1] : 0);
+    // (and is never cooler than lowLightHue: the darker step's own turn toward crimson, with less chroma, is pink too)
+    if (light && Number.isFinite(so.warm.lowLightHue)) hs = Math.max(hs, so.warm.lowLightHue);
+    let Cs = C * (sh ? 1 + Math.abs(w) * sh[0] : 1);
+    // (so.gamut: a fuller step stays under that share of the most chroma the screen shows at this lightness and hue, so
+    // no channel is driven to its end, the blood crimson of a dark red at the screen's limit; the group's own chroma is
+    // never lowered by it)
+    if (w > 0 && Number.isFinite(so.gamut) && so.gamut > 0) Cs = Math.max(Math.min(C, Cs), Math.min(Cs, so.gamut * oklchMaxChroma(Ls, hs)));
+    t = okLchToLinear(Ls, Cs, hs);
   } else {
     const hh = toneHash(`group:${String(key)}`);
     v = o.steps > 1 ? 1 + o.vary * (2 * (hh % o.steps) / (o.steps - 1) - 1) : 1;

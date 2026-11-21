@@ -14,7 +14,7 @@
  * front of the body and looks at it like a mirror, with +z up.
  */
 
-import { ROOM, createRoomBackdrop, roomGain, roomBeatStep } from './ns-room.mjs';
+import { ROOM, createRoomBackdrop, roomGain, roomBeatStep, isAbyss } from './ns-room.mjs';
 import { ASSEMBLY_ORDER, ASSEMBLY_TIERS, assemblyDepth, createAssemblyRelease } from './ns-assembly-order.mjs';
 import { HEMI_GAP, hemisphereSideOf, partedPositions } from './ns-brain-part.mjs';
 import { buildEyeballs, buildNerves } from './ns-brain-eyes.mjs';
@@ -130,7 +130,16 @@ export const ASSEMBLY = Object.freeze({
   // it (the field of view and the downward look the game starts with; the launcher passes its own numbers, these are
   // the same ones for a caller that passes none), so the backdrop does not jump when the game takes over.
   // (18 November 2026, late: the game's first view is now 54 degrees, 52 down: the launcher's numbers, package FLAT)
-  room: Object.freeze({ fovYDeg: 54, pitchDeg: -25.5, eye: Object.freeze([0, 0.11, -0.04]), mirrorZ: -2.06 })
+  room: Object.freeze({ fovYDeg: 54, pitchDeg: -25.5, eye: Object.freeze([0, 0.11, -0.04]), mirrorZ: -2.06 }),
+  // 21 November 2026 (the owner, Message 208: "Background should still be more of an abyss."; ns-room ROOM.abyss): there
+  // is no room behind the parts any more. The backdrop is the game's abyss, seen by THIS picture's own viewer: the same
+  // black, with the same faintly lit dark round this picture's own brain and two bodies (their middles are the layout's
+  // above; their sizes for the glow, as balls: brainMm about the drawn brain's half width, bodyMm half a body's
+  // height). So the dark is lit where the things are, here as in the game, and the black away from them is the same
+  // black when the game takes over. (The game's first picture has the brain much larger and nearer, so more of its dark
+  // is lit: at the hand-over the picture's far corners go from about RGB 2 to about 5.) Used while ROOM.abyss.on; `room`
+  // above is for the room.
+  abyss: Object.freeze({ brainMm: 520, bodyMm: 880 })
 });
 
 /** Reads the vertices and faces of a Wavefront OBJ from its bytes (ASCII). Returns { positions: Float32Array,
@@ -245,9 +254,18 @@ export function createAssemblyView({ THREE, canvas, width, height, pixelRatio = 
   // The room behind the parts, as the game's first picture shows it (see ASSEMBLY.room).
   const roomRule = { ...(o.room || ASSEMBLY.room), ...(room && Number.isFinite(room.fovYDeg) && Number.isFinite(room.pitchDeg) ? { fovYDeg: room.fovYDeg, pitchDeg: room.pitchDeg } : {}) };
   const roomView = { fovYDeg: roomRule.fovYDeg, aspect: 1, yawDeg: 0, pitchDeg: roomRule.pitchDeg, eye: roomRule.eye };
-  const backdrop = createRoomBackdrop({ THREE, fixed: true });
+  // (21 November 2026: the abyss is seen by this picture's own camera; the room by the game's first view, fixed)
+  const abyss = isAbyss(ROOM);
+  const backdrop = createRoomBackdrop({ THREE, fixed: !abyss });
   let roomBeat = 0;
-  {
+  if (abyss) {
+    // the lit dark round this picture's own brain, mirror body and own body (ASSEMBLY.abyss), in its own millimetres
+    const U = backdrop.uniforms, g = o.abyss || ASSEMBLY.abyss, b = o.bodyCentre;
+    const put = (i, x, y, z, r) => { U.uRoomAura.value[i].set(x, y, z, 1); U.uRoomAuraN.value[i].set(1 / r, 0, 0, 0, 1 / r, 0, 0, 0, 1 / r); U.uRoomSize.value.setComponent(i, r); };
+    put(0, o.brainAt[0], o.brainAt[1], o.brainAt[2], g.brainMm);
+    put(1, b[0], b[1], b[2], g.bodyMm);
+    put(2, -b[0], b[1] - o.selfAheadMm, b[2], g.bodyMm); // your own body: turned half round and set selfAheadMm in front
+  } else {
     // the floor shadows where the game's first picture has them: under the brain, the mirror body and your own body
     const sh = backdrop.uniforms.uRoomShade.value, bx = ROOM.centre[0], bz = ROOM.centre[1];
     sh[0].set(bx, bz, ROOM.shade.brain[0], ROOM.shade.brain[1]); sh[1].set(0, roomRule.mirrorZ, ROOM.shade.mirror[0], ROOM.shade.mirror[1]); sh[2].set(ROOM.bodyAt[0], ROOM.bodyAt[2], ROOM.shade.body[0], ROOM.shade.body[1]);

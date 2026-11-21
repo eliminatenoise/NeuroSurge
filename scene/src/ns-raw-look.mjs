@@ -36,6 +36,19 @@
  *    42, 9, 10, was tried first and measured level with the room under the raised arm); its colour is only scaled, so
  *    the hue stays, and never above the colour itself. The lighter tones are little touched (rose at the ambient shade
  *    45 -> 51 red); what is lit is not touched at all. Muscles only (the strip's black abyss and the room stay black).
+ *  - muscleFloorKeep, muscleFloorRef (21 November 2026, section 188; the owner, Message 202: "muscles next to each other
+ *    can be obviously told apart"): with the floor on the luminance every dark muscle met at the same dark red in the
+ *    deepest shade (section 187 listed it; measured on the screen, the raised right forearm's flexors in shadow differed
+ *    by 0.007 to 0.013 in OKLab). The floor now keeps the colours' ratios (keep 1): one floor on the SHADE,
+ *    muscleFloor / muscleFloorRef (ref = the darkest group tone's luminance, so that tone keeps exactly section 187's
+ *    floor, about RGB 53, 13, 14), and every muscle keeps its own step in the deepest shade. The cost (22 November 2026,
+ *    a check: the line before said "a little lighter", which was wrong): the shade never goes under about 0.16 of the
+ *    colour, so the deepest shade of every colour lighter than the darkest tone is lifted, about twice in the screen's
+ *    numbers: where the surface turns fully away from the light the reference rose 51, 19, 18 -> 87, 37, 35, the pale
+ *    tone 59, 31, 30 -> 110, 63, 61 and the tendon white 53, 54, 55 -> 101, 103, 104 (2.9, 3.6 and 3.7 times the
+ *    light; on a back face more). The darkest tone's LOWER step goes the other way, 58, 6, 14 -> 41, 3, 7 (half the
+ *    light). The lit side and the room are not changed. Kept: a lower ref lifts every muscle further and flattens the
+ *    shading of all of them (ref 0.031: rose 121, 54, 51); keep 0.75 would be a middle way (computed, not drawn).
  *  - ink (20 November 2026, the owner, Message 207: "And everything should get clear outlines."): ONE rule for every
  *    outline in this look: the bodies' silhouettes and the lines where one limb or body lies over another (the game arm
  *    and the organs too; ns-outline through ns-scene-three RAW_OUTLINE), the motor strip's contour, the brain's outline
@@ -55,7 +68,7 @@ export const RAW_LOOK = Object.freeze({
   ambient: 0.25, direct: 0.75, back: 0.6, gamma: 2.2,
   flat: false,
   room: Object.freeze([0.0011, 0.0011, 0.0015]), roomPool: Object.freeze([0.0045, 0.0048, 0.0056]),
-  bone: 0xe8e0cd, muscleFloor: 0.01,
+  bone: 0xe8e0cd, muscleFloor: 0.01, muscleFloorKeep: 1, muscleFloorRef: 0.0621,
   ink: Object.freeze({ colour: Object.freeze([0x0b / 255, 0x08 / 255, 0x09 / 255]), hex: 0x0b0809, css: 1.4, alpha: 0.95, innerCss: 0.9, innerAlpha: 0.6, farShare: 0.6 })
 });
 
@@ -101,6 +114,11 @@ export function rawShadeGlsl(name = 'nsRawK', normalExpr = 'normal', viewPosExpr
  * - opts.floor (21 November 2026, RAW_LOOK.muscleFloor; muscles only): the shade is kept from taking the colour's
  *   luminance under this linear value: shade' = a soft maximum of the shade and min(1, floor / the colour's luminance)
  *   (knee half the floor wide), at most 1 (the full light).
+ * - opts.keep, opts.ref (21 November 2026, section 188; RAW_LOOK.muscleFloorKeep, muscleFloorRef): the floor's share of
+ *   the colours' own ratios. The floor on the shade is floor / ref^keep x the colour's luminance^(keep - 1): keep 0 is the
+ *   plain floor above (every dark colour meets at the same luminance), keep 1 one floor on the SHADE for every colour,
+ *   floor / ref (a colour of luminance ref keeps exactly the plain floor), so two muscles side by side keep the ratio of
+ *   their colours in the deepest shade too. With keep 1 the floor is a constant: no division in the shader.
  * Returns { vertexShader, fragmentShader, hdrBoost } or null when a hook is missing (the material then keeps its own
  * light). */
 export const RAW_HOOKS = Object.freeze({
@@ -109,6 +127,7 @@ export const RAW_HOOKS = Object.freeze({
 });
 export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK, opts = {}) {
   const floor = opts && Number.isFinite(opts.floor) && opts.floor > 0 ? opts.floor : 0;
+  const keep = opts && Number.isFinite(opts.keep) ? Math.min(1, Math.max(0, opts.keep)) : 0, ref = opts && Number.isFinite(opts.ref) && opts.ref > 0 ? opts.ref : 1;
   if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string') return null;
   // (vViewPosition, needed only for flat normals, is declared in the lights' own pars chunk of the lambert and phong
   // shaders, so it is not in their text before the includes are resolved)
@@ -120,8 +139,10 @@ export function patchRawShaders(vertexShader, fragmentShader, o = RAW_LOOK, opts
   fs = fs.replace(RAW_HOOKS.ao, `${RAW_HOOKS.ao}
 	{
 		${rawShadeGlsl('nsRawK', 'normal', 'vViewPosition', o)}${floor ? `
-		{ // the shade floor (opts.floor): never under that luminance, a soft maximum
-			float nsKf = min( 1.0, ${f(floor)} / max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ) ), nsKw = 0.5 * nsKf;
+		{ // the shade floor (opts.floor): never under that luminance (opts.keep: keeping a share of the colours' ratios), a soft maximum
+			${keep >= 1 ? `float nsKf = ${f(Math.min(1, floor / ref))}, nsKw = 0.5 * nsKf;`
+    : keep > 0 ? `float nsKf = min( 1.0, ${f(floor / Math.pow(ref, keep))} * pow( max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ), ${f(keep - 1)} ) ), nsKw = 0.5 * nsKf;`
+    : `float nsKf = min( 1.0, ${f(floor)} / max( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ) ), nsKw = 0.5 * nsKf;`}
 			nsRawK = min( 0.5 * ( nsRawK + nsKf + sqrt( ( nsRawK - nsKf ) * ( nsRawK - nsKf ) + nsKw * nsKw ) ), 1.0 );
 		}` : ''}
 		reflectedLight.directDiffuse = diffuseColor.rgb * nsRawK;

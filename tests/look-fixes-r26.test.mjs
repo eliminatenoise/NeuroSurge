@@ -19,7 +19,8 @@ import { BRAIN_LIVE, createBrainLive, liveMove } from '../scene/src/ns-brain-liv
 import { buildEyeballs } from '../scene/src/ns-brain-eyes.mjs';
 import { patchCoverageNear, coverageNearRange, COVERAGE_NEAR_HOOKS } from '../scene/src/ns-outline.mjs';
 import { BRAIN_FLESH_LOOK, BRAIN_PICK_LOOK, brainPickGainInto, cortexFleshGlsl } from '../scene/src/ns-brain-ink.mjs';
-import { AREA_COLORS, areaGlowColor, srgbToLinear, MUSCLE_GROUP_TONES } from '../scene/src/ns-colors.mjs';
+import { AREA_COLORS, areaGlowColor, srgbToLinear, MUSCLE_GROUP_TONES, MUSCLE_GROUPS, MUSCLE_STEP, MUSCLE_LOOK, muscleGroupBaseInto, linearOkLab } from '../scene/src/ns-colors.mjs';
+import { ROOM } from '../scene/src/ns-room.mjs';
 import { PART_GLOW, PART_GLOW_RAW, LIMB_FLASH, partGlowColourInto } from '../scene/src/ns-scene-three.mjs';
 import { RAW_LOOK, patchRawShaders } from '../scene/src/ns-raw-look.mjs';
 import * as THREE from '../vendor/three.module.js';
@@ -143,7 +144,13 @@ test('H27: a muscle marked by a control glows in its own hue in the raw look; th
 /* ---- H28: no muscle goes black on its shaded side ------------------------------------------------------------- */
 
 const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-const floored = (k, base, floor) => { const kf = Math.min(1, floor / Math.max(lum(base), 1e-4)), w = 0.5 * kf; return Math.min(0.5 * (k + kf + Math.sqrt((k - kf) ** 2 + w * w)), 1); }; // the shader's rule
+// the shader's rule. 21 November 2026 (section 188): the game keeps the colours' ratios at the floor (RAW_LOOK
+// muscleFloorKeep 1: one floor on the shade, muscleFloor / muscleFloorRef, for every muscle); keep 0 is section 187's floor
+// on the luminance, still an option of patchRawShaders.
+const floored = (k, base, floor, keep = RAW_LOOK.muscleFloorKeep, ref = RAW_LOOK.muscleFloorRef) => {
+  const kf = Math.min(1, keep > 0 ? floor / Math.pow(ref, keep) * Math.pow(Math.max(lum(base), 1e-4), keep - 1) : floor / Math.max(lum(base), 1e-4)), w = 0.5 * kf;
+  return Math.min(0.5 * (k + kf + Math.sqrt((k - kf) ** 2 + w * w)), 1);
+};
 
 test('H28: the muscles\' raw light has a shade floor; nothing else has one', () => {
   const S = THREE.ShaderLib.standard, fs = '#define STANDARD\n' + S.fragmentShader;
@@ -152,24 +159,58 @@ test('H28: the muscles\' raw light has a shade floor; nothing else has one', () 
   assert.ok(!plain.fragmentShader.includes('nsKf'), 'the brain, the bones, the strip and the room: no floor (the abyss stays black)');
   assert.match(muscle.fragmentShader, /float nsKf = min\( 1\.0, 0\.01 \/ max\( dot\( diffuseColor\.rgb, vec3\( 0\.2126, 0\.7152, 0\.0722 \) \), 1e-4 \) \)/);
   assert.ok(muscle.fragmentShader.indexOf('nsKf') < muscle.fragmentShader.indexOf('reflectedLight.directDiffuse = diffuseColor.rgb * nsRawK'), 'before the light is used');
+  // (section 188: the game's muscles keep their colours' ratios at the floor: one floor on the shade, a constant)
+  const game = patchRawShaders(S.vertexShader, fs, RAW_LOOK, { floor: RAW_LOOK.muscleFloor, keep: RAW_LOOK.muscleFloorKeep, ref: RAW_LOOK.muscleFloorRef });
+  assert.equal(RAW_LOOK.muscleFloorKeep, 1);
+  const m = game.fragmentShader.match(/float nsKf = ([0-9.]+), nsKw = 0\.5 \* nsKf;/);
+  assert.ok(m && Math.abs(Number(m[1]) - RAW_LOOK.muscleFloor / RAW_LOOK.muscleFloorRef) < 1e-9, 'the floor is muscleFloor / muscleFloorRef on the shade');
 });
 
-test('H28: the darkest tones stay red muscle above the room in the deepest shade; the lit side and the lighter tones are kept', () => {
-  const room = lum([13, 14, 16].map(v => srgbToLinear(v / 255)));
-  for (const [name, tone] of Object.entries(MUSCLE_GROUP_TONES)) {
-    const base = tone.linear;
-    for (const shade of [RAW_LOOK.ambient, RAW_LOOK.ambient * RAW_LOOK.back]) { // facing away from the light; a back face
-      const k = floored(Math.pow(shade, RAW_LOOK.gamma), base, RAW_LOOK.muscleFloor);
-      assert.ok(lum(base) * k > 1.8 * room, `${name} at shade ${shade}: above the room's light (${(lum(base) * k / room).toFixed(1)} x)`);
-      assert.ok(k <= 1, 'never above its own colour');
+test('H28 and section 188: every muscle colour the game draws stays dark red above the abyss in its deepest shade; the lit side is kept; a light colour\'s deepest shade is lifted only so far', () => {
+  // 22 November 2026 (a check of section 188): the colours tested are those DRAWN (each group, storey, lightness step
+  // and warm step: muscleGroupBaseInto with MUSCLE_STEP, the darkest at minL), and the background is section 190's
+  // abyss (ns-room ROOM.abyss: its black and the faint glow beside a body, the body's glow at its outline), not the room
+  // that is no longer drawn. (Before section 190 is merged on a branch, its numbers as they landed.)
+  const abyss = ROOM.abyss && ROOM.abyss.black ? ROOM.abyss : { black: [0.0005, 0.0005, 0.0006], glow: { colour: [0.86, 0.93, 1], mirror: [0.0025, 1, 0], body: [0.0025, 1, 0, 1.4, 2.1] } };
+  const glow = Math.max(abyss.glow.mirror[0], abyss.glow.body[0]) * Math.exp(-1);
+  const beside = lum(abyss.black.map((v, i) => v + abyss.glow.colour[i] * glow));
+  const away = Math.pow(RAW_LOOK.ambient, RAW_LOOK.gamma), backFace = Math.pow(RAW_LOOK.ambient * RAW_LOOK.back, RAW_LOOK.gamma);
+  let darkest = Infinity, darkestOf = '';
+  for (const g of MUSCLE_GROUPS) for (const level of ['outer', 'intermediate', 'deep']) for (const st of MUSCLE_STEP.steps) for (const w of MUSCLE_STEP.warm.steps) {
+    const base = muscleGroupBaseInto(g.id, 'k', level, [0, 0, 0], undefined, undefined, st, MUSCLE_STEP, w), name = `${g.id} ${level} ${st}/${w}`;
+    for (const shade of [away, backFace]) {
+      const k = floored(shade, base, RAW_LOOK.muscleFloor);
+      assert.ok(k <= 1, `${name}: never above its own colour`);
+      // the bound on the lift: the deepest shade stays at most 0.18 of the colour (the floor's 0.16 and its soft knee)
+      assert.ok(k <= 0.18, `${name}: its deepest shade is ${k.toFixed(3)} of its colour`);
+      const y = lum(base) * k;
+      if (y < darkest) { darkest = y; darkestOf = name; }
     }
-    const lit = floored(1, base, RAW_LOOK.muscleFloor);
-    assert.ok(Math.abs(lit - 1) < 1e-3, `${name}: facing the light, its colour (${lit.toFixed(4)})`);
+    // red, not pink, grey, mauve or brown, lit and in shade alike (a colour scaled by the light keeps its OKLab chroma over
+    // lightness and its hue): hue 10 to 30 degrees; chroma at least 0.115 of the lightness (a pale red with less reads
+    // pink, and grey-brown in shade), on a dark colour at least 0.19 (a dark red with less reads mauve). Section 188's
+    // first part had the pale 1/-1 at 0.102 and the dark 1/-1 at 0.175.
+    const ok = linearOkLab(base), C = Math.hypot(ok[1], ok[2]), h = Math.atan2(ok[2], ok[1]) * 180 / Math.PI;
+    assert.ok(h >= 10 && h <= 30, `${name}: hue ${h.toFixed(1)}`);
+    assert.ok(C >= (ok[0] < 0.52 ? 0.19 : 0.115) * ok[0], `${name}: chroma ${C.toFixed(3)} at lightness ${ok[0].toFixed(3)}`);
+    assert.ok(Math.abs(floored(1, base, RAW_LOOK.muscleFloor) - 1) < 1e-3, `${name}: facing the light, its colour`);
+    // and the lift against section 187's floor (on the luminance) where the surface turns away from the light: at most
+    // four times the light (the pale tone's light steps about 3.6, the tendon white 3.7: about twice in the screen's numbers)
+    assert.ok(floored(away, base, RAW_LOOK.muscleFloor) / floored(away, base, RAW_LOOK.muscleFloor, 0) < 4, `${name}: lifted ${(floored(away, base, RAW_LOOK.muscleFloor) / floored(away, base, RAW_LOOK.muscleFloor, 0)).toFixed(2)} x`);
   }
-  const rose = MUSCLE_GROUP_TONES.rose.linear, k0 = Math.pow(RAW_LOOK.ambient, RAW_LOOK.gamma);
-  assert.ok(floored(k0, rose, RAW_LOOK.muscleFloor) / k0 < 1.35, 'the reference rose in shade is little lifted');
+  assert.ok(darkest > 2.5 * beside, `the darkest muscle in its deepest shade (${darkestOf}) is ${(darkest / beside).toFixed(1)} x the light of the abyss beside a body`);
+  const tendon = MUSCLE_LOOK.tendon;
+  assert.ok(floored(away, tendon, RAW_LOOK.muscleFloor) / floored(away, tendon, RAW_LOOK.muscleFloor, 0) < 4, 'the tendon white too');
+  // 21 November 2026 (section 188, Message 202: "muscles next to each other can be obviously told apart"): with the floor on
+  // the luminance every dark muscle met at the same dark red in the deepest shade. Now the darkest tone keeps exactly
+  // section 187's floor and every other colour keeps its ratio to it.
   const dk = MUSCLE_GROUP_TONES.darkest.linear;
-  assert.ok(lum(dk) * k0 < room, 'without it the darkest tone in shade was darker than the room');
+  assert.ok(Math.abs(RAW_LOOK.muscleFloorRef - lum(dk)) < 2e-4, 'the reference is the darkest tone (muscleFloorRef stays 0.0621)');
+  assert.ok(Math.abs(floored(away, dk, RAW_LOOK.muscleFloor) - floored(away, dk, RAW_LOOK.muscleFloor, 0)) < 1e-3, 'the darkest tone keeps section 187\'s floor');
+  for (const [name, tone] of Object.entries(MUSCLE_GROUP_TONES)) {
+    const a = lum(tone.linear) * floored(away, tone.linear, RAW_LOOK.muscleFloor), b = lum(dk) * floored(away, dk, RAW_LOOK.muscleFloor);
+    assert.ok(Math.abs(a / b - lum(tone.linear) / lum(dk)) < 1e-6, `${name}: its ratio to the darkest tone is kept in the deepest shade`);
+  }
 });
 
 /* ---- H26: no tendon sticks out of the fist -------------------------------------------------------------------- */

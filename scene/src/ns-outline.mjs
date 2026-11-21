@@ -1336,6 +1336,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     const pxcm = (bufH / pr) / (2 * Math.tan((fov * Math.PI) / 360)) / 100;
     if (inkUni.uTaper.value.x !== pxcm) { inkUni.uTaper.value.x = pxcm; changed = true; }
     if (edgeUni.uSlim.value.x !== pxcm * pr * ss) { edgeUni.uSlim.value.x = pxcm * pr * ss; changed = true; } // supersampled samples per centimetre at 1 m
+    if (globalThis.__nsShadeProbe === true) force = true; // QA only (qaIdPicture): this frame's ID picture is drawn
     if (changed || force || (!inkOff && !composite.visible)) {
       const prevTarget = renderer.getRenderTarget(), prevAlpha = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
       renderer.getClearColor(saveColour);
@@ -1485,6 +1486,17 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       buffer: [bufW, bufH], supersample: ss, idTarget: [ssW, ssH], widthPx: Math.round(outlineWidthPx(pr) * 1000) / 1000,
       strip: Boolean(strip.mesh), stripShown: strip.shown, brain: Boolean(brain.group), brainShown: brain.shown, brainAlpha: inkUni.uBrain.value.y, gpu: { sumMs: Math.round(gpuT.sum * 1000) / 1000, n: gpuT.n, lastMs: gpuT.last === null ? null : Math.round(gpuT.last * 1000) / 1000, timer: gpuT.ext === undefined ? null : Boolean(gpuT.ext) }, skinnedProxies: skinShown, skinBatch: { members: sb.members, rebuilds: sb.rebuilds } };
   }
+  /** 21 November 2026 (QA only; section 188, measuring the colours of touching muscles as drawn): the ID picture as it
+   * stands (read back from the graphics card: slow, never called by the game) and each drawn code's source mesh.
+   * Returns { w, h, ss, data (RGBA bytes, bottom row first), meshes: Map serial -> mesh } or null. */
+  function qaIdPicture() {
+    if (!target || !ssW || !ssH) return null;
+    const data = new Uint8Array(ssW * ssH * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, ssW, ssH, data);
+    const meshes = new Map();
+    for (const r of reg) meshes.set(r.serial, r.src);
+    return { w: ssW, h: ssH, ss, data, meshes };
+  }
   function dispose() {
     if (batch) { batch.dispose(); batch = null; }
     skinIdMat.dispose(); // 18 November 2026: the skinned proxies share their sources' geometry (not disposed here)
@@ -1502,5 +1514,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * body), 0 when not registered. */
   function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
   function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
-  return { composite, stripComposite, brainComposite, stripMaterial: stripMat, brainMaterials: [brainMat, brainPartMat], setBrain, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
+  return { composite, stripComposite, brainComposite, stripMaterial: stripMat, brainMaterials: [brainMat, brainPartMat], setBrain, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, qaIdPicture, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
 }

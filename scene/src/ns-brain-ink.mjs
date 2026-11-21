@@ -57,6 +57,7 @@
  */
 
 import { BRAIN_LIVE, liveBloomGlsl } from './ns-brain-live.mjs';
+import { AREA_HALO, haloTissueGlsl } from './ns-area-halo.mjs';
 import { RAW_LOOK, rawLightDir, rawShadeGlsl } from './ns-raw-look.mjs';
 
 /** Display choices (see the BB and BB2 reports for what was tried).
@@ -371,7 +372,11 @@ export const BRAIN_KEYS = Object.freeze({
   pressS: 0.2, pressHoldS: 0.07, pressDark: 0.45, pressCss: 4, pressShare: 0.3,
   // 18 November (MAP): the lit key's frame in its own colour (frameWhite 0.3 -> 0.1): the white-hot frame turned the
   // whole lit key white under the bloom; the neon glow is saturated now.
-  frameCss: 2.2, frameShare: 0.12, frameGain: 2.0, frameWhite: 0.1, pulse: 0.22, pulseHz: 1.1,
+  // 21 November 2026 (ns-area-halo AREA_LIT; the owner: "Right now, there's essentially no glow"): frameGain 2.0 -> 0.
+  // The lit block's light along its borders is now the area's own colour at the screen's full brightness (AREA_LIT's
+  // rim); the frame's extra 2 x of it went past white per channel, where the screen cuts each channel off, so an azure
+  // key's frame showed cyan-white and an orange key's yellow, and with the bloom pass it was a second white halo.
+  frameCss: 2.2, frameShare: 0.12, frameGain: 0, frameWhite: 0.1, pulse: 0.22, pulseHz: 1.1,
   ringHz: 0.9, ringW: 0.16, ringGain: 1.1, ringSpan: 1.5, ringReliefMm: 9,
   focusDim: 0.5, focusInS: 0.12, focusOutS: 0.45
 });
@@ -802,9 +807,15 @@ export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 
  * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
  * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. hooks.albedo: GLSL run once the tissue's
  * colour nsAlb is made and before it is lit (20 November 2026: ns-brain-gap's inner parts and cut faces). Pure. */
-export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, hooks = {}) {
+export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, hooks = {}, halo = AREA_HALO) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
   const B = live.bloom, P = live.beat;
+  // 21 November 2026 (ns-area-halo AREA_HALO; the owner: "Right now, there's essentially no glow"): the light of a lit
+  // or looked-at block on the tissue round it is the halo's now (the block's own shape and colour, gone when the
+  // contraction ends). The bloom keeps its swell, its dimple, its rosy flush and its ring; its own spill of the key's
+  // hue (a disc that faded over 0.8 s) and its light above white (seen only where the bloom pass runs) give way to it.
+  const haloOn = Boolean(halo && halo.on !== false);
+  const spill = haloOn ? 0 : B.spill, bloomGlow = haloOn ? 0 : B.glow;
   const R = o.raw || null, RL = R ? rawLightDir(RAW_LOOK) : null;
   // 20 November 2026 (BRAIN_FLESH_RAW): the raw look's light in place of the key light, wrap, fill, fold shade and scatter
   const lightGlsl = R ? `vec3 nsLk = vec3( ${RL.map(f).join(', ')} );
@@ -866,13 +877,15 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, 
 	float nsLvZ = smoothstep( ${f(B.grazeLo)}, ${f(B.grazeHi)}, nsFacing );
 	float nsLvM = max( nsLvC.r, max( nsLvC.g, nsLvC.b ) );
 	float nsLvY = dot( min( nsCol, vec3( 1.0 ) ), vec3( 0.2126, 0.7152, 0.0722 ) );
-	nsCol = mix( nsCol, ( nsLvC / max( nsLvM, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY ), ${f(B.spill)} * min( nsLvM, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
+	nsCol = mix( nsCol, ( nsLvC / max( nsLvM, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY ), ${f(spill)} * min( nsLvM, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
 	// the ring of a movement being switched on runs over the tissue in the key's colour
 	float nsLvPm = max( nsLvP.r, max( nsLvP.g, nsLvP.b ) );
 	nsCol = mix( nsCol, ( nsLvP / max( nsLvPm, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY + 0.1 ), ${f(B.pulse)} * min( nsLvPm, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
 	// ... and right next to the key (and on the ring) a little of it is above white (the scene's bloom turns that into
 	// a soft halo); none where the surface is seen edge-on
-	outgoingLight = min( nsCol, vec3( 1.0 ) ) + ( nsLvK * ( ${f(B.glow)} * nsLvA ) + nsLvP * ${f(B.pulseGlow)} ) * nsLvZ;
+	// 21 November 2026 (AREA_HALO): the pool of light of a lit or looked-at block, in its own colour, under white
+	${haloOn ? haloTissueGlsl('vNsObj', 'nsCol', 'nsFacing', halo) : ''}
+	outgoingLight = min( nsCol, vec3( 1.0 ) ) + ( nsLvK * ( ${f(bloomGlow)} * nsLvA ) + nsLvP * ${f(B.pulseGlow)} ) * nsLvZ;
 	diffuseColor.a = mix( ${f(o.alpha)}, ${f(o.rimAlpha)}, pow( max( 1.0 - nsFacing, 0.0 ), 4.0 ) ) * nsClr;
 }
 `;

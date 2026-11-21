@@ -30,6 +30,9 @@ function run(A, s0, n, id, ev, regionId = 'rh_elbow') {
 }
 const J = JOINT_LATCH;
 const contractFrames = Math.round(J.driveS / H);
+// 21 November 2026 (SEEMOVE, section 189): after the lit contraction the part stays at the movement's end for holdS,
+// unlit, and only then returns (ns-actions JOINT_LATCH holdS)
+const holdFrames = Math.round((J.holdS || 0) / H);
 
 test('a look that rests on a left-arm area drives the movement hard to its end, then it returns all the way and stays', () => {
   const { A, s } = started();
@@ -47,8 +50,13 @@ test('a look that rests on a left-arm area drives the movement hard to its end, 
   assert.ok(firstTop >= 2, `it gathers speed over several frames (end reached at frame ${firstTop})`);
   assert.ok(b.d.slice(firstTop).some(v => v < 0.95), 'it rebounds off the end (the body\'s restitution)');
   assert.ok(Math.max(...b.lit) > 0.9, 'the area is lit during the contraction');
+  // (21 November 2026, SEEMOVE) it stays at its end through the hold, with nothing lit once the contraction's light is out
+  const hold = run(A, b.s, holdFrames, 'elbow_flexion');
+  assert.ok(hold.d.every(v => v > 0.9 && v <= 1), `held at the end (${Math.min(1, ...hold.d)})`);
+  assert.ok(hold.lit.slice(2).every(v => v === 0) && hold.shown.slice(2).every(v => v === 0), 'unlit during the hold');
+  assert.ok(Array.isArray(hold.s.armJerk.elbow_flexion), 'the movement is still under way');
   // then it returns, the whole way, with nothing lit, and stays
-  const c = run(A, b.s, 150, 'elbow_flexion');
+  const c = run(A, hold.s, 150, 'elbow_flexion');
   assert.equal(c.s.drive.elbow_flexion, 0, `back at neutral (${c.s.drive.elbow_flexion})`);
   assert.deepEqual(c.s.armJerk, {}, 'the contraction is over');
   const returning = c.d.findIndex(v => v < 0.999);
@@ -75,7 +83,7 @@ test('each further press contracts it again, also while it is on its way back, a
   }
   assert.deepEqual(tops, [1, 1, 1]);
   // a press while it returns: no jump, it is driven to its end again from where it is
-  const half = run(A, run(A, A.stepGated(st, [press('rh_elbow', 'elbow_flexion')], H).state, contractFrames + 8, 'elbow_flexion').s, 0, 'elbow_flexion').s;
+  const half = run(A, run(A, A.stepGated(st, [press('rh_elbow', 'elbow_flexion')], H).state, contractFrames + holdFrames + 8, 'elbow_flexion').s, 0, 'elbow_flexion').s;
   assert.ok(half.drive.elbow_flexion > 0.05 && half.drive.elbow_flexion < 0.999 && half.armJerk.elbow_flexion[0] === 0, `on its way back (${half.drive.elbow_flexion})`);
   const p = A.stepGated(half, [press('rh_elbow', 'elbow_flexion')], H).state;
   assert.ok(p.armJerk.elbow_flexion[0] > 0, 'contracting again');
