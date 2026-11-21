@@ -388,6 +388,8 @@ const CONTROL_TABLE = [
   // R558 (Message 48): R ("read information") replaces the I key. It steps the information: the side cards (the start),
   // then More detail and the colour key as well, then everything hidden, then the side cards again.
   ['R', 'read information: one short card is on at the start. Press R for the full cards and the colour key, R again to hide all of it, R again to bring the short card back.'],
+  // 21 November 2026 (EMAP, section 192): the map key (ns-controls EMAP_CODE).
+  ['M', 'the electrical map: the picture goes dim, the brain shows a live scan with storms of activity, and the nerve routes show as fine lines of light. The scan and the storms are made up by the game and drawn like a brain scan: not a recording. Switch an area on to see its command run down to the muscles and the report run back up. Press M again to go back.'],
   ['Esc', 'pause and show this page: how to play, Reset body and settings']
 ];
 /** R5-text: the short control words for the 2 s start page (introControls), by control key. R558 (Messages 55 and 56):
@@ -413,6 +415,7 @@ const INTRO_CONTROL_WORDS = {
   'Mirror body arrows': 'turn or tilt the mirror body',
   E: 'see your back (third person)',
   R: 'read information: more detail, hide, show',
+  M: 'electrical map: see the signals travel',
   Esc: 'pause, help, Reset body, settings'
 };
 const LIMIT_TABLE = [
@@ -528,8 +531,9 @@ export const SHELL = deepFreeze({
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hands and feet grip; tap toggles'],
       ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
       ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },
-    { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'Esc'], rows: [['E', 'switch eye and outside views'],
-      ['R', 'information: short, more, off'], ['Esc', 'pause for controls and settings']] }
+    // (21 November 2026, EMAP: M, the electrical map)
+    { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'M', 'Esc'], rows: [['E', 'switch eye and outside views'],
+      ['R', 'information: short, more, off'], ['M', 'electrical map: on, off'], ['Esc', 'pause for controls and settings']] }
   ],
   sensitivity: 'Look speed',
   invertY: 'Flip up and down (invert Y)',
@@ -539,9 +543,9 @@ export const SHELL = deepFreeze({
   // two lines under the picture say the same in full. Every key named here is a key the game really handles.
   keyboard: {
     title: 'Where the keys are',
-    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A. The space bar is the long key at the bottom: it takes hold of the brain or the mirror body, chooses a limb and turns your limbs. Esc is at the top left. The number keys are the row above W: 1 to 4 choose the limb that W, A, S and D move. The left and right arrow keys are at the bottom right: each steps your look to the next motor area on that side.',
-    keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyR: 'read', ShiftLeft: 'other in line', ArrowLeft: 'area', ArrowRight: 'area' },
-    names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyR: 'R', Space: 'Space', ShiftLeft: 'Shift',
+    label: 'A picture of the keys the game uses. W, A, S and D sit together on the left of the keyboard: W is above S, with A and D beside S. E is just right of W, and R is just right of E. Shift is the wide key at the left end of the row below A, and M is the seventh letter key right of it in that row. The space bar is the long key at the bottom: it takes hold of the brain or the mirror body, chooses a limb and turns your limbs. Esc is at the top left. The number keys are the row above W: 1 to 4 choose the limb that W, A, S and D move. The left and right arrow keys are at the bottom right: each steps your look to the next motor area on that side.',
+    keys: { Escape: 'pause', KeyW: 'forward', KeyA: 'left', KeyS: 'back', KeyD: 'right', KeyE: 'view', KeyR: 'read', KeyM: 'map', ShiftLeft: 'other in line', ArrowLeft: 'area', ArrowRight: 'area' },
+    names: { Escape: 'Esc', KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyR: 'R', KeyM: 'M', Space: 'Space', ShiftLeft: 'Shift',
       Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5', Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
       ArrowLeft: '←', ArrowRight: '→' },
     // R558 (Messages 55 and 56): written once at the end of the number row (ns-app KEYBOARD_PICTURE_ROWS note).
@@ -578,7 +582,8 @@ export const SHELL = deepFreeze({
   limits: limitLines(ALL_FEATURES),
   // The information key (R) works in captured play, so the toast names it.
   // 17 November 2026 (far less text): three short parts; the Esc page has the rest.
-  captureHint: 'Click to look around · Esc: controls',
+  // (21 November 2026, EMAP: the map key is named beside Esc)
+  captureHint: 'Click to look around · M: electrical map · Esc: controls',
   lockRefused: 'The browser did not lock the mouse. After Esc it waits about a second. Click the scene to try again, or ' +
     'hold a button and drag to look. Clicks still switch areas on · Esc: how to play',
   lookOff: 'Mouse lock does not work here. W/A/S/D, Space and clicks still work · Esc: how to play',
@@ -1452,6 +1457,71 @@ export function mirrorInfoCard({ part = 'other', activity = null, turned = false
 /** The brain-to-muscle glow (D17, user R21). Panel lines say plainly that it is a picture of the game's link, not a
  * nerve, and name the real route for that body part (body: spinal cord; head and face: the base of the brain; neck:
  * both). */
+// 21 November 2026 (EMAP, section 192; the owner: "let's try an electrical mapping view, like you see in functional
+// neuroscience, connectomic live maps, dynamic maps"; 20 November: "we can actually see electrical storms and electrical
+// activity and neural activity and networks and pathways ... from brain to body and body to brain"). The words of the
+// electrical map (the M key; ns-emap). Little text, one chunk: a title and three short lines on the short card (the
+// command going down, the report coming up, one line of honesty); under More detail the route of the area under the
+// look in plain words (the area's own sentences about its fibres where its text has them: emapRouteLines) and what
+// kind of picture this is. Honesty in the four words the game uses: the signal is simulated, the routes are schematic
+// (typical, simplified, drawn by hand, not traced from a scan), nothing was recorded or measured, and the travel is
+// slowed (emapSlowLine states by how much, from the map's own display speed).
+// Later the same day, after a picture of the "more" level: More detail was 26 lines of small type (about 1070
+// characters: four sentences of route, four about the picture) and lay on the game's own information panel. The owner:
+// "Way too much text now". It is now at most nine short lines in a low card above that panel (quiet.css): either the
+// route of the area under the look (one sentence of the area's own, without its bracketed terms, which the
+// information panel beside it gives in full; how the signal goes on; the report; "typical, simplified"), or, before
+// any area was looked at, what kind of picture this is (the bridge, typical paths, simulated and how much slower).
+export const EMAP = deepFreeze({
+  title: 'Electrical map',
+  keyHint: 'Press M to hide',
+  down: 'Command: brain to muscle',
+  up: 'Report: muscle back to brain',
+  // 22 November 2026 (part 3, the live scan): the scan's colour bar, and the honesty line for a picture that is now a
+  // live scan with storms (it was "A drawn picture, slowed down. Not a recording."; that it is slowed is said under
+  // More detail)
+  scan: 'Activity: calm to stormy',
+  honest: 'Made-up activity, drawn like a live brain scan. Not a recording.',
+  more: {
+    lookAt: 'Look at a coloured area for its route.',
+    cross: 'Its fibres run down through the middle of the brain and cross to the other side low in the brainstem (medulla).',
+    both: 'Its fibres run down through the middle of the brain. Low in the brainstem most cross to the other side, and some stay.',
+    head: 'Its fibres run down through the middle of the brain to the cells of a head nerve in the brainstem, on one side or on both.',
+    out: 'Then the signal runs down the spinal cord and out along a nerve to the muscles.',
+    outHead: 'Then the signal runs out along a nerve of the head or upper neck to the muscles.',
+    none: 'This in-between area sends nothing down to the body in the game. Its lines show brain regions it is linked with.',
+    back: 'Paler beads: the body’s report, back up to the feeling strip behind the block.',
+    routeNote: 'A typical route, simplified.',
+    bridge: 'The big brain is the mirror body’s own brain, drawn large. The line down to that body’s neck joins one and the same place.',
+    typical: 'The paths are typical and simplified, as anatomy books teach them. They are not traced from a scan.',
+    standIn: 'The named nerves could not be loaded: each body part has one plain run of nerve instead.'
+  }
+});
+
+/** "About N times": a whole number from a display factor (never below 2: the map is always slower than real). */
+const emapTimes = x => String(Math.max(2, Math.round(Number.isFinite(x) ? x : 2)));
+/** The legend's line about the signal and its speed, from the map's own factors (ns-emap model.slow: real speed over
+ * display speed, for the command and for the report; real: about 50 metres a second in large nerve fibres, a typical
+ * textbook value, stated in DESIGN-DECISIONS section 192). */
+export function emapSlowLine(command, report) {
+  return `The signal is made up by the game (simulated). The command is drawn about ${emapTimes(command)} times slower than in a real nerve, the report about ${emapTimes(report)} times slower.`;
+}
+/** The route of the area under the look, in plain words, for the map's More detail: at most four short lines. First
+ * the area's own sentence about its fibres where its text has one (ns-bodymap plainDetail), without its bracketed
+ * terms (the information panel beside the legend gives them in full), else one plain sentence from its pathway and
+ * laterality fields; then how the signal goes on (down the cord, or straight out along a nerve of the head or the upper
+ * neck: some throat muscles are served by the first neck nerves), the report, and
+ * that the route is typical. No area: one line that says where to look. */
+export function emapRouteLines(region) {
+  const T = EMAP.more;
+  if (!region || typeof region !== 'object') return [T.lookAt];
+  if (region.kind === 'integration' || region.pathway === 'integration') return [T.none];
+  const p = String(region.pathway || ''), headOnly = /corticobulbar/.test(p) && !/corticospinal/.test(p);
+  const own = (String(region.plainDetail || '').match(/[^.!?]+[.!?]+/g) || []).map(x => x.trim()).filter(x => /\bfibres?\b/i.test(x) && x.length < 260)
+    .map(x => x.replace(/\s*\([^()]*\)/g, '').replace(/\s+([;,.])/g, '$1').trim()).filter(x => x.length > 20)[0];
+  return [own || (headOnly ? T.head : /^contralateral/.test(String(region.laterality || '')) ? T.cross : T.both), headOnly ? T.outHead : T.out, T.back, T.routeNote];
+}
+
 export const GLOW = deepFreeze({
   body: 'The glow shows which muscles this brain area drives in the game. Real signals travel from the brain down the ' +
     'spinal cord and along nerves to the muscles.',

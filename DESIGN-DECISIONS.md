@@ -4708,6 +4708,864 @@ at the low level.
 - `PREVIEW-NOTES.html` has no entry for this change: its entries are numbered by published update.
 - Muscles on the full quality level still flash white with the bloom pass at switch-on (not touched here).
 
+## 192. The electrical map: M shows the nervous system as lines of light, and the signals are seen to travel, brain to body and body to brain (21 November)
+
+The owner, 21 November: "Let's continue working on the neurosurge game. And let's try an electrical mapping view, like
+you see in functional neuroscience, connectomic live maps, dynamic maps." And on 20 November: "we want a view of brain
+activity, a very specific view of brain activity, like a connectomic activity map, or something like that, or a
+functional neuroscience map where we can actually see activity, color-coded, etc. And that's probably what we want to
+update the neuroscience game with, rather than just a simple motor strip, so we can actually see electrical storms and
+electrical activity and neural activity and networks and pathways, etc., etc., throughout the entire body, from brain to
+body and body to brain. And then we can tie that to muscle contraction."
+
+**What the player gets.** Press M: the picture goes dim and the nervous system appears over it as fine lines of light:
+fibres fanning from every block of the motor strip down through the brain to the brainstem, a cord down the mirror
+body's spine and down your own, nerves into the limbs, the trunk and the face. At rest the wiring glows faintly and a
+few slow sparks drift along it. Switch an area on as always, with a look or a click: a bright front in the area's own
+colour runs from its block down its own route, crossing sides where the real fibres cross, out along the nerve to the
+muscles of that movement, each of which gets a soft mark of light as the front arrives; paler beads then run back up on
+their own line beside it to the sensory strip just behind the block, where a soft patch glows and fades; fainter pulses
+run from the block to the brain regions it is linked with. Move a limb with the keys, grip with Space or turn the limbs
+and the same routes carry traffic both ways. Press M again: the ordinary view is back as it was.
+
+**A view of its own, on M** (`EMAP_CODE`, `toggleEmap` and the `onEmap` option in `ns-controls.mjs`; `setEmap` /
+`toggleEmap` / `emapFrame` in `ns-app.mjs`). The key is wired like R, a page command: one `{ type: 'emap' }` request
+per press, taken from the browser, never on auto-repeat or with Alt, Ctrl or Meta, only while playing. The state is
+`data-ns-emap="on|off"` on the app root; off at the start of every session; it stays through a pause and through the
+outside view (E); Reset body clears the lit routes and leaves the map as the player set it. It changes no camera, no
+control and no movement, and with the map off the ordinary picture is not changed in any way: nothing of the map is
+drawn and its part of a frame does not run. The map is a separate picture with its own light rules: traces, travelling
+beads and the report on the way back are allowed here, although the ordinary view shows nothing on a movement's way
+back (Message 206, section 177). M is on every list of keys: the Shift rationale in `ns-controls.mjs`, the Esc page's
+rows and its "Views and reading" group, the keyboard picture (`KEYBOARD_PICTURE_ROWS`: right of N), the capture line ("Click to look around · M: electrical map · Esc: controls"),
+`PLAYER-GUIDE.md` and `PREVIEW-NOTES.html`.
+
+**The dark ground** (`EMAP.dim` 0.68, `EMAP.easeS` 0.3 in `ns-emap.mjs`). One clip-space quad drawn after everything
+of the ordinary picture (order 200; the 3D arrows are at 100) multiplies the finished picture by 0.32, eased in and
+out over 0.3 s, so the bodies and the brain stay as a dim setting. No existing material is touched, there is no new
+render target and no dependence on the bloom pass.
+
+**One geometry, one shader, drawn twice** (`ns-emap-three.mjs`: `createEmapView`, `emapShaders`, `EMAP_LOOK`). Every
+wire is a ribbon of two vertices per node and every mark a small quad, all in one static geometry (1427 lines, 566
+marks and 49 278 vertices with the wiring data of section 193). A vertex carries its rest place in the atlas's
+millimetres, what it rides, and its coordinate along the route; the graphics card poses it from a small texture of
+world matrices (the "palette", 253 rows: the big brain, then the 104 segments of the body rig and the 22 of the left
+game arm for the mirror body, then the same for your own body; written when the dark ground is about to be drawn, and
+sent to the graphics card only when a matrix changed, so a still view with the map on sends nothing but the clock),
+and lights it from two more small textures (which lit area has which wire; each lit area's colour, level and start
+time) and a clock. The lines are drawn once in front of what is there at full strength and once where something stands
+in front of them, weaker (`EMAP.light.hidden` 0.4 for the resting wiring, `hiddenLit` 0.68 for a lit route, which must
+still read inside the brain), so the whole wiring is seen and the picture keeps its depth. The light is screened onto
+the picture and clamped at display white: the map looks the same at picture quality High and Low, with and without
+the bloom. The lines are not registered with the outline pass and are never picked. A line's half width is its width
+in the world at its distance, kept between 0.55 and 1.7 CSS pixels; it fades out nearer than 0.42 m to the eye; in the
+eye view the wires of your own head and neck, which are not drawn there, are not drawn either.
+
+**The routes** (`buildEmap` in `ns-emap.mjs`; `EMAP_STATIONS`, `EMAP_NUCLEI`, `EMAP_BRAIN_MESH`). Typical, simplified,
+laid by hand; nothing is traced from a scan.
+- In the big brain: from each movement's own part of the block (the area's key points, `rec.keys`) a twig to a hub
+  7 mm under the block, then one fibre per area through the internal capsule of the same half, the midbrain, the pons
+  and the medulla, each placed as a share of that mesh's own box, the leg's fibres behind the face's in the capsule and
+  outside them in the brainstem. An area whose way out is the cord gets a tail that crosses to the other side low in
+  the medulla, and a second, uncrossed tail where a muscle of its own side needs one (drawn weaker by the area's
+  `laterality` field: `EMAP.sameSide`); an area of the face, jaw, tongue or throat gets a tail to the place of each
+  head nerve it needs in the brainstem, on that nerve's side; the in-between areas get no fibre down at all, only
+  links. Which ways out an area gets comes from the muscles the game itself lights for its movements.
+- A drawn bridge joins each way out of the big brain to the same place of the mirror body (the top of its cord's
+  strand, or the first point of a head nerve): the big brain is that body's own brain, drawn large and outside it, and
+  the legend's detail says so. The sixteen bridges leave the big brain as ONE bundle through a point under the
+  medulla and part only near the mirror body's head: drawn each on its own straight way they fanned across the
+  picture like a kite once the brain was turned (seen in a picture). Each rests at 0.25 of the idle light
+  (`EMAP.idle.bridge`; 0.6 and 0.45 made the bundle the brightest thing of the resting picture).
+- In each body: the cord as two strands in the canal, 2.6 mm either side of the canal's centre line as section 193's
+  data gives it (`cordCourse`, `caudaCourse`), down to the cord's tip; the roots from the strand at their levels along
+  the data's own root courses (`rootCourse`: the low ones run down inside the column first, each leaves through its
+  own opening); every nerve and branch of the data on both sides; one twig per muscle from the data's course point for
+  that muscle to its point in the belly. Posed places come from the pose's own segment matrices
+  (`poseBodyDetailed().segments`, rest to drawn). Nothing is re-skinned.
+- Where a line passes from one bone to the next it changes what it rides within 24 mm either side of the joint between
+  them (`EMAP.jointMm`; over more where the line passes far from the joint), where both bones put it at the same
+  place. The first build blended all along the stretch between two course points, which bent the lit lines into
+  zigzags on bent limbs (seen in the first Space-grip picture). Where the joint lies beside or beyond that stretch the
+  change was at first squeezed against the stretch's end, into one node step: with W held the lit nerves of your own
+  raised arm were stair steps at the shoulder (seen in a picture; measured in Node with the arm's bones turned 80
+  degrees about the shoulder: one 9 mm step of the plexus became 39 mm with a 91 degree turn, one of the nerve to the
+  latissimus 104 mm). The change now keeps its width, up to the whole stretch (`jointBlend`; the same case: 25 mm and
+  57 degrees, and 44 mm).
+- The left arm is the game arm's rig: the left side's course points on the upper arm, forearm, radius, hand and digits
+  ride that rig's segments, on your own arm and on the mirror body's.
+- Back up: per area and way out one fibre from that way out up the back of the brainstem, across where the way down
+  crossed, past a point inside the capsule's inner face (the atlas has no thalamus) to the point of the postcentral
+  gyrus nearest to 11 mm behind the block.
+- Links: from the block along the wiring data's links of its precentral gyrus (to the sensory strip behind it, the
+  same block of the other half over the middle, the frontal gyri in front, the cerebellum's other half by the capsule
+  and the pons); links between other regions are drawn as the resting network.
+
+**The nerve data is section 193's** (`ns-wiring-data.mjs`, merged into this work). The courses, the level of each
+nerve and the nerve of each muscle are that module's: 89 nerves and branches a side, six head nerves a side that
+leave the brainstem, the canal, the roots, 292 muscle rows and the brain's 53 links. The map takes it as one object (`NERVE_TRUNKS`,
+`nerveForMuscle`, `MUSCLE_NERVE_BY_ID`, `mirrorTrunk`, `CORD_LEVELS`, `cordLevelAt`, `cordCourse`, `rootCourse`,
+`BRAIN_LINKS`, `rootWay`) and `ns-app.mjs` fetches the module at the first M press, not with the page (187 kB that
+the game needs for the map only). In the data's final shape every nerve id says its side (`r_…`; `mirrorTrunk` gives the left
+twin as a record of its own, `l_…`, whose points on the left arm name the game arm's segment as `armSeg`), and
+`nerveForMuscle` answers with the nerve of the muscle's own side; the builder takes both that shape and the
+stand-in's. With it the model has 178 nerves and branches, and all 337 muscles (the 292 of the body rig and the 45 of
+the left game arm) hang on their data nerve, with no warning. Each root of a nerve of the cord ends at the point
+where the data says it joins its nerve (`rootWay`; at first every root ran to the nerve's first point, which drew the
+lower roots of a plexus climbing up to it), and the nerve's time coordinate is its middle root's at that root's own
+join point; the accessory nerve's roots leave the cord's side inside the canal, so it is drawn as a nerve of the
+cord. A
+muscle whose name the data did not know would take the nearest nerve of its own side (a head nerve only for a muscle
+of the head). A plain stand-in in the same shapes stays as the fallback when the module cannot be loaded
+(`ns-emap-standin.mjs`, `makeStandinWiring`: one run per body part along the rig's joint centres; the legend then
+says so); the model's tests run with both.
+
+**Colour says which area** (`EMAP.colours`). A lit route is in its area's own glow colour (`ns-colors`
+`areaGlowColor`, scaled to full brightness and 22 % toward white, `whiteLit`: the violets and blues would not read on
+the dark ground); the resting wiring is one cool grey-blue; the report keeps the hue, 62 % toward white (`paleUp`),
+with smaller, closer beads, and runs on its own lane beside the command's line (the command on the right of its
+direction of travel, like traffic), so the two directions are told apart without colour. The front's head and the
+strongest light go toward white.
+
+**What moves, and when** (`emapStep`, `emapLightAt` and the shader built from the same constants). Every node has one
+time coordinate: the display time at which a front that entered the cord at 0 reaches it. A volley is then a start
+time, a start coordinate, a level and a colour, and each lit wire how far the route uses it and when the report
+enters it; fronts, beads, marks and pulses are worked out per pixel from those.
+- Speed. Real large nerve fibres conduct at some tens of metres a second: the clinical values for human limb nerves
+  are about 50 to 60 m/s in the arm and 40 to 50 m/s in the leg, and the fastest fibre class of the textbooks is
+  quoted at 70 to 120 m/s (standard teaching values, written from memory here, not looked up again). `EMAP.realMmS`
+  takes 50 m/s. The command's front runs at one display speed, at least `speedMmS` 12.5 m/s and raised by the build so
+  the farthest muscle of any movement is reached within `arriveMaxS` 0.16 s of the start (the game starts the movement
+  at once; its timing is not changed). The farthest is a short flexor of the left big toe at 2.22 m of route, so the
+  speed is 13.9 m/s: 3.6 times slower than real. The report runs at 0.3 of that (`upShare`): the farthest is back at
+  the strip half a second after its muscle lit; 12 times slower than real. The legend states
+  both in round numbers, worked out from the model (`emapSlowLine`). The bridge counts as 150 mm (`bridgeMm`).
+- A volley. The front leaves the block at the activation; behind it the route keeps a steady light (`light.hold`
+  0.42) with soft beads flowing down (1.0 a second past a point, long tails, `EMAP.bead`); when the movement's own
+  light ends the route fades over 0.8 s (`fadeS`). A muscle's mark comes up as the front arrives (`EMAP.dot`). The
+  report starts at each muscle when its front arrives and flows up (1.2 beads a second, paler, smaller); its patch on
+  the sensory strip glows when it arrives. Pulses run out along the block's links in 0.7 s and are gone within a
+  second (`EMAP.link`).
+- The player's own movements (links whose source is keys, Space or the limb turn, the limb turn's and the
+  head-following links): the same routes at their level, traffic both ways while they last. A look or a click sends a
+  new front each time, also while the last one is still fading; a held movement whose light comes and goes with its
+  speed rejoins the light that is there without a new front (no flicker of fronts). The crosshair on a muscle shows
+  that muscle's route as a steady faint hint.
+- Rest: at most six sparks (`EMAP.spark`), one starting about every 0.7 s, each on a line chosen at random, rising
+  and fading over 1.5 to 2.8 s while it drifts a little.
+- Focus: while a route is lit the resting wiring is drawn 60 % weaker (`EMAP_LOOK.focusDim`, in over 0.12 s, back over
+  0.5 s), so the lit route is the brightest thing in the picture (the game's own rule for its keys, section 83).
+- Calm: nothing goes bright, dark and bright faster than three times a second (beads at 1.5 and 2.2 a second on a
+  steady light that never drops to dark between them); the brightest things are small. Under
+  `prefers-reduced-motion`: lit routes without travel and without beads, steady, and no sparks.
+
+**Words** (`EMAP`, `emapRouteLines`, `emapSlowLine` in `ns-text.mjs`; `ns-emap-card.mjs`; `.ns-emap-*` in
+`quiet.css`). One small card at the top right, away from the other cards, only while the map is on, following the R
+key's levels. Short card: the title, "Command: brain to muscle", "Report: muscle back to brain", each with its mark,
+and "A drawn picture, slowed down. Not a recording." More detail: the route of the area under the look (the area's
+own sentence about its fibres from `plainDetail` where it has one, without its bracketed terms, else one plain
+sentence from its pathway and laterality; how the signal goes on, down the cord or straight out along a nerve of the
+head or upper neck; the report; "A typical route, simplified."), and, until an area has been looked at since M was
+pressed, what kind of picture this is instead (the big brain is the mirror body's own; the paths typical and
+simplified, not traced from a scan; the signal made up by the game, and by how much the travel is slowed). The last
+area's route stays while the look is elsewhere, so no text comes and goes as the crosshair crosses a gap. Hidden
+level: nothing.
+The first More detail was 26 lines of small type under the short card (about 1070 letters; the card 590 px tall) and
+lay ON the game's own information panel, which at that level stands at the bottom right and is up to 66 % of the
+window high: two texts on top of each other (seen in a picture). The owner's standing note is "Way too much text
+now". At "more" the legend is now one low, wide card above that panel (532 px wide, More detail a column to the left
+of the short card, which keeps the right edge; never taller than the room above the panel), and its words are at most
+nine short lines (at most 311 letters for an area's route, 406 for the general words). The bracketed anatomical terms
+of an area's sentence are left to the information panel beside it, which gives the area's text in full.
+
+**Cost** (`EMAP_BUILD` in `ns-app.mjs`; `buildEmapSteps`). Off: nothing is drawn and nothing runs in a frame.
+Nothing of the map is fetched or built before the first M press (`EMAP_BUILD.onPress`): neither its nerve data (a
+module of about 200 kB) nor, since 22 November, its own modules (`ns-emap-three` with `ns-emap` and `ns-emap-storm`,
+`ns-emap-standin`, `ns-emap-card`, about 188 kB: a checker found every player loading them at the start); a player
+who never presses M loads none of it, and the page's count of scripts at the start (`PAGE_SCRIPTS`) is as without the
+map. At the first press the data is fetched and
+the model is built 7 ms a frame (or a quarter of a slow frame's own time), 89 to 145 ms of work in all in the
+browser, in 3 to 9 slices; the map eases in when it is done. The first way stays behind the switch: the data fetched
+and the model built in idle time (2 ms a frame, from 150 frames into play), so the first press found it ready; it was
+dropped the same day because every player then loaded the data. On: per frame the processor steps the state machine (no allocation:
+300 000 frames in the unit test without a garbage collection) and multiplies about 250 matrices; the palette is sent
+to the graphics card only when a matrix changed; nothing is written per vertex. The graphics card draws three more
+draw calls. A failure anywhere in the map (the build, a frame, the palette, which is written inside the game's own
+draw) switches the map off for the session and keeps the reason in `inspect().emap.error`: the game goes on.
+
+### Part 3: the map becomes a live brain scan with electrical storms (22 November)
+
+The owner, 22 November about 01:25, about the map as it was (a dark veil, faint grey wiring, one lit route per
+movement): "I mean like a live brain scan map where you have electrical wire, electrical storm activity going
+everywhere." What is above stays (the key, the veil, the routes, the report, the legend, the load at the first press);
+the scan and the storms are added and are now the map's main picture. Everything in them is made up for the game.
+
+**The brain as a live scan** (`emapScanShaders`, `scanSurfaces` in `ns-emap-three.mjs`; `EMAP_STORM`, `SCAN_STOPS`
+in the new `ns-emap-storm.mjs`). The brain's surface (the glass in one piece, its geometry shared, not copied, and the
+motor areas merged once into one geometry) is drawn a second time over the dimmed picture, pushed out 1.8 mm along
+its normals (`EMAP_LOOK.scanInflateMm`: the living brain swells up to 1.6 mm round a key, and the copy must stay in
+front of it), coloured on a scan scale: deep violet where nothing happens, through blue, cyan, green, yellow and
+orange, to near white only at the hottest cores (`scanRamp`; above a heat of 0.7 the shown heat rises at half the
+rate, `scanTone`, so near white needs a heat of 1.3: one storm's core alone stays orange, near white is where a
+storm, its hops and a lit area meet). It is screened onto the picture, at most 0.74 strong (`scanAmount`), weaker
+where the surface turns away (the square of how much it faces the eye) and in the grooves (the glass's own groove
+depth), so the brain's shape and folds stay readable. The heat at a point is one sum, worked out per pixel by the
+graphics card from a few small arrays the processor fills once a frame: 12 resting sources on the surface that swell,
+drift 16 mm and fade over 36 mm, each with periods of 5 to 15 s (`EMAP_STORM.base`), the live storms (the sums stop at
+their count), and the activations. A depth
+pass of the same copy comes first and the colour pass tests for the same depth, so only the nearest layer is
+coloured. Four draw calls.
+What was seen and changed on the way: where pieces of the brain meet, their pushed-out copies overlapped and the colour
+was laid on twice (a bright seam along every gyrus: the depth pass); without shading the scan was a flat blue
+silhouette (the facing and groove terms); close up with an area lit, the heats summed to near white over most of the
+brain, a white-out (storms 0.7 to 1 with a 20 mm core and a 0.6 wave at first, now 0.55 to 0.85, 18 mm and 0.45, the
+tone knee and the 0.74 cap); many storms were on the brain's far side, unseen (a storm now starts on the point of its
+region nearest the eye of six drawn at random, a point near the midline counting as farther: seen face-on through
+the gap between the halves a storm there was a bright block behind the mirror body).
+
+**Wires everywhere, with traffic** (`EMAP.scan`, `buildEmapSteps` in `ns-emap.mjs`). Every link of the nerve data
+(53) is drawn as a bundle of six fine fibres, each from its own point of the two regions' surfaces, so the bundle fans
+at its ends and is tight in its middle, through the link's stations and, where its fibres change sides, through the
+data's two meshes of the crossing (`crossesAt`; over the middle for the great bridge between the halves);
+neighbouring surface regions of one half are joined by two short fibres each (86 pairs), sunk a little toward the
+half's middle. 492 fibres in all, generated by these rules and stated as drawn, not traced; they rest at 0.35 and
+0.3. The areas' own links now rest at 0.3 instead of 0. On every wire of both bodies and the brain small
+pulses run at all times (`EMAP_STORM.traffic`): 0.6 to 1.1 pulses a second pass any point, 22 mm apart in the brain,
+60 mm on the bodies and 34 mm on the bundles (which therefore run fastest), each wire with its own rate and phase, in
+the scan's colours (cyan where it is calm, toward yellow near a storm). Worked out per pixel from the wire's own
+numbers and the clock: no object per pulse; on the mirror body's wiring at 0.35 and on your own at 0.6
+(`EMAP_LOOK.trafficMirror`, `trafficOwn`: the mirror body's dense, small wiring screened to a white figure at full
+traffic). The network's fibres inside the brain, behind its surface, are drawn at 0.5 (`EMAP_LOOK.netHidden`; the
+other hidden lines at 0.4; 0.7 at first drew the fibres behind the mirror body over it as a tangle).
+
+**Storms** (`createStorms`, `stormAt`, `stepStorms`). Every one to three seconds a storm starts on a region (a third
+of them on the area the look rests on, the others on the side of the brain the player sees): a hot core swells over
+0.3 s and calms over 1 to 2 s, and a wave rolls out over the surface at 50 mm/s for 70 mm. Its links fire: on two
+of its links a front runs along the fibres at 160 mm/s, and when it arrives the region at the other end flares,
+weaker (0.55), and fires on once more (0.3). About a third of the storms also send a volley down the mirror body's
+cord. Up to 16 storms (with their hops) are alive at once. The fronts and the volley are lit in the scan's hot
+colours, and the wires near a storm take its heat's colour.
+
+**Tied to the muscles** (`stormActs`; the existing routes). When a movement switches on, a storm starts on its block
+and fires its links, the block is the hottest spot of the scan while it is lit (0.75 of its level, with the storm's
+core), the regions it is linked with warm to 0.3 of its level, the route carries its volley down the cord to the muscles as before, each contracting muscle glows
+as a soft spot in the scan's colours (`EMAP_LOOK.muscleScale` 1.6, up to 24 px), and the feeling strip behind the
+block warms when the report comes back.
+
+**Calm.** Each curve of light rises and falls smoothly: a storm's light rises once and falls once; the wave's ring is
+32 mm wide, so a point under it brightens and darkens once in about 0.64 s; a front's head passes a point in about
+0.15 s and leaves it at the storm's steady light; the traffic passes a point at most 1.1 times a second. Under
+reduced motion the scan stands still (the resting sources at their places, no storms, no traffic): a steady heat map,
+the routes steady as before.
+
+**Words.** The short card gains the scan's colour bar, "Activity: calm to stormy", and its honesty line is now "Made-up
+activity, drawn like a live brain scan. Not a recording." (it was "A drawn picture, slowed down. Not a recording.";
+that the travel is slowed, and by how much, is said under More detail).
+
+### After an independent check, for update 65 (22 November)
+
+A checker and a reviewer found three major faults; the lead decided how to mend them. These replace the numbers of
+part 3 above where they differ.
+- **The strip's blocks vanished under the scan**, the game's main targets. The motor areas are no longer in the scan's
+  copy (it was the glass and the areas merged; now the glass only, and of the glass only its outer pieces:
+  `scanSurfaces`, 62 198 triangles). A second draw of the blocks after the dark ground in their own materials broke
+  every block into dark triangles and stripes; a second checker found why: it drew each area's own meshes
+  (`regionMeshes`), but each area's patch leaves out the parts its FILL meshes draw (`rec.fillMeshes`), which were not
+  drawn again. That draw is gone. Instead nothing of the map is drawn over a pixel of a visible block: the dark ground
+  and both passes of the scan read the stencil mark the strip's own depth pass already writes (ns-scene-three
+  `STRIP_CUT`; stencil test "not equal", write mask 0, as the brain's surface and the vessels do), with no draw added.
+  The blocks keep their full colour, halo, edge glow and the game's own activation light over the dimmed picture;
+  where the mirror body stands in front of a block, the strip writes no mark there and the body stays dimmed. Without a
+  stencil buffer the test passes and the map is drawn as before. The deep pieces of the glass (white
+  matter, ventricles, the small middle parts) are out of the copy too: pushed out 1.8 mm they came through the cortex
+  in triangle-sized patches.
+- **A flat yellow bar in the gap between the halves.** The scan's heat above its floor fades to nothing toward the
+  midline, from 22 to 6 mm off it (`EMAP_STORM.midFadeMm`, in the scan's vertex shader, and in `scanHeatAt`); the copy
+  keeps the brain's own cut next to the gap (`ns-brain-gap`: not coloured and no depth where the glass is cut open);
+  a storm never starts on a point nearer the midline than 25 mm while its region has another (`pointOf`). Measured
+  in the page every half second: the share of yellow pixels in a box 80 px wide round the gap, at most 0.0013 over
+  30 s at rest and 0.0027 over 10 s of the Space grip (the checker's pictures had the bar over most of that box).
+- **The fibres buried the mirror body's torso.** Three fibres a link instead of six (`EMAP.scan.fibres`), resting at
+  0.2 instead of 0.35 and 0.3 (`idle.bundle`, `idle.local`), and a link with no station of its own bends through a
+  middle point sunk toward its own half's middle by 0.3 of its length (`scan.bundleSink`) instead of running straight
+  through the brain's centre; 333 network fibres. Where something stands in front of them the network's fibres are
+  drawn at 0.15 instead of 0.5 (`EMAP_LOOK.netHidden`) and the big brain's other lines at 0.18 instead of 0.4
+  (`brainHidden`: the mirror body stands in front of the brain's middle, where every area's fibres and links meet);
+  the areas' links rest at 0.15 instead of 0.3. The mirror body's outline reads at the start view and from outside.
+- **A throw in the frame step** left the dark ground and a frozen map for the session: the step is guarded, and a
+  failure switches the map off and hides every mesh of it, as a failure in the palette does.
+- **Lanes and traffic in one pixel came to four a second.** Beads at 1.0 a second down and 1.2 up instead of 1.5 and
+  2.2 (`EMAP.bead`); the lead asked for 1.2 and 1.4, which still summed to four in the test of the summed lanes.
+- **Large stacked discs on contracting muscles**: up to 14 px instead of 24, 1.1 times the mark instead of 1.6.
+- **Every player loaded the map's code at the start**: its modules are fetched at the first press of M beside its
+  data (`PAGE_SCRIPTS` stays as without the map).
+- **Objects made every frame**: none any more in the storms' step, the activations or the view's call.
+- **Words**: the legend's head says "Press M to hide" (it said "M: off" while the map was on); the Esc page's M row
+  says the scan and its storms are made up and drawn like a brain scan, not a recording; M is off the five-second
+  controls card again (the owner's own four chunks).
+
+A second checker then went through that round (the yellow bar gone, the mirror body readable, the merge whole, the
+lazy load safe) and found more; the third pass, also 22 November:
+- **The blocks too dim** with the map on: the stencil above (and the cause of the broken second draw).
+- **The strip's outer rim shimmered at rest** (at low quality 94 pixels rose and fell four or more times a second at a
+  32-level step, the worst ten times): the scan's depth pass was an opaque material, so it was drawn before the
+  strip's own transparent depth pass, and its still copy raced the beating strip for the depth at the rim. It is
+  transparent now (drawn after the strip's), and both scan passes read the strip's stencil mark.
+- **The mirror body's own wiring was a white web** with a bright cord down its middle: at rest it is drawn at 0.6
+  (`EMAP_LOOK.idleMirror`; lit routes unchanged), and the big brain's lines behind things at 0.1 instead of 0.18.
+- **The midline fade took heat off the leg and foot areas' own activation** (a toes area kept 42 to 52 % of it): only
+  the resting sources and the storms fade; the activation is added after the fade.
+- **The test of the summed lanes checked a lucky case.** It now runs along a nerve at three places and at six levels
+  of the cord's two strands for four pairs of areas (both knees; the left half's hand with the right half's toes, and
+  the other way; both hands), with the traffic weighted as drawn. It found four a second, so: beads 1.0 a second both
+  ways (`EMAP.bead.upHz` 1.2 to 1.0), the beads' phase taken from the map's clock and the place only (not from each
+  volley's own start), so every lit wire at one place beats together and the cord's two strands in one pixel beat as
+  one; and on a lit route the resting pulses give way to its own beads.
+
+**Checked.**
+- Unit tests in Node (`tests/emap.test.mjs`, 26 tests; with the stand-in and with the nerve data): the model builds
+  with no warning; each of the 142 movements has a complete route to each of its muscles, in order (1137 routes with
+  the data); crossing follows `laterality` and the muscle's side; a head nerve never passes the cord, and the throat
+  area's strap muscles go by the cord (C1 to C3) while its other muscles go by head nerves; a twig may leave its
+  nerve at the nerve's first point (56 of the 1137 routes: the coracobrachialis, the quadratus lumborum); the
+  in-between areas send nothing down; the farthest muscle is reached within 0.16 s; a volley's front, marks, report
+  and fade come at their times; the report never lights the command's lane; calm (beads at most three a second, no
+  dark between them, no negative light); reduced motion is steady; at most six sparks; the step makes no garbage
+  (300 000 frames, no collection); the build in small steps gives the same model; M is one request per press, never
+  on repeat or with Alt, and moves nothing; M is on every list of keys; the words are short and claim nothing; the
+  card replaces its lines; the shader text has no `pow` and guards every lookup; the joint rule. The whole suite:
+  569 of 569 pass on the final code (one run before it failed one timer test of the pack loader, 905 ms against a
+  limit of 870, which passed alone).
+- The browser test `tests/browser-emap.mjs` (real keys and mouse, 1600 x 900): nothing of the map is fetched or built
+  240 frames into play; at the first M press the nerve data is asked for once and the model is built with no warning;
+  the camera, the look and the joints do not change; the game's picture, read small, differs by 36.4 of 255 on
+  average with the map on and by 0.06 after M off; a look at an area sends a volley whose route passes the bridge
+  and arrives in time; at "more" the legend shows the area's route, does not lie on the information panel and
+  nothing of it is cut; at the hidden level there is no legend and the map stays; the map stays through the outside
+  view and a pause. Passed. `startup` and `keyboard-aim`: both passed. The start check printed `"ok":true`.
+- Frame rate before part 3, alone on the processor, frames a second for still / look / updown / limbturn (the lead's
+  table, twice each, in turns): the game's own ground (18930) 60.2 / 35.9 / 48.3 / 55.5 and 60.0 / 40.3 / 43.6 / 52.7; this work with the
+  map off 60.1 / 39.6 / 45.0 / 52.3 and 60.0 / 39.8 / 50.1 / 55.4 (the same: off, the map costs nothing); with the map
+  on 60.0 / 37.1 / 43.1 / 49.9 and 60.0 / 41.0 / 46.7 / 46.9 (a still view stays at 60 and idle; in the limb turn,
+  with 12 routes lit, about 5 frames a second fewer than with the map off).
+- The map's own processor time in a frame (`inspect().emap.meanMs`): the step 0.03 to 0.06 ms, the palette 0.02 to
+  0.35 ms. The first M press: the map was built 0.69 s after it and fully shown after 1.06 s.
+- The third pass, on the final code: the map's test files with `chunking` and `wiring-data`, 60 of 60; the start check
+  `"ok":true`; the browser tests `emap`, `startup` and `keyboard-aim` passed. The rim measured frame by frame at low
+  quality, at rest, the look still, 3.5 s (`s-shimmer`; a crop of the brain's middle): pixels that rose and fell four
+  or more times in a second, map on 107 at a 16-level step and 23 at a 32-level step (the worst 9 a second), map off
+  100 and 33 (the worst 17); the worst pixels lie on the mirror body's edge in both, which the map does not draw. Not
+  the 0 the lead asked for: the ordinary view's own shimmer is as large. The frame table at High, twice each in turns:
+  18930 59.8 / 38.5 / 38.6 / 49.7 and 60.0 / 41.0 / 44.7 / 54.0; map off 58.3 / 36.3 / 50.3 / 47.6 and 60.0 / 33.6 /
+  44.5 / 51.7; map on 58.8 / 37.4 / 44.0 / 37.1 and 60.0 / 38.3 / 28.5 / 47.3 (the look as fast as with the map off,
+  so the storm slots and the hidden network were left as they are; single up-and-down and limb-turn runs read low).
+  Pictures at real speed, High and low: rest (the blocks in full colour, the mirror body readable) and a lit block
+  (the left hand's area: its own glow, the storm round it).
+- After the independent check, on the final code: the map's test files (`tests/emap.test.mjs`, `tests/emap-storm.test.mjs`,
+  `tests/emap-view.test.mjs`) with `tests/chunking.test.mjs` and `tests/wiring-data.test.mjs`: 60 of 60 pass. New: the
+  view built with three.js in Node (its meshes, the scan on the glass only, nothing shown while off, a throw in the
+  step hiding every mesh and staying hidden, nothing left after dispose); the summed lanes (down, up and traffic at a
+  nerve's point while a knee area is held, and at one level of the cord's two strands while both knees' areas are:
+  three a second at most); the midline (within 6 mm of it the scan stays at its floor through 30 s of storms; 20 and
+  more storms over a minute, none started near the midline). The start check printed `"ok":true`; the browser tests
+  `emap`, `startup` and `keyboard-aim` passed. The frame table at High, still / look / updown / limbturn, twice each
+  in turns: 18930 60.0 / 40.0 / 43.8 / 52.8 and 59.7 / 38.7 / 42.5 / 51.1; this work with the map off 60.0 / 40.0 /
+  42.1 / 46.5 and 60.1 / 41.5 / 39.2 / 50.7; with the map on 58.8 / 35.5 / 51.0 / 53.8 and 60.0 / 37.2 / 43.0 / 49.0
+  (the look 10 to 11 % below the map-off runs, the other parts within the noise). Pictures at real speed (opened):
+  map off and on at the start view, a storm (a burst of 2.5 s), the Space grip, a movement by look (the left hand's
+  area) and by click (the left knee's), the outside view.
+- Part 3 in Node (`tests/emap-storm.test.mjs`, 11 tests): the network (every link a bundle between two regions, the
+  neighbouring surface regions joined, each fibre's vertices carrying its regions and its place along it); the brain
+  boxes' surface points; the colour scale (violet at rest, near white only at the top, never more than 0.74 laid on,
+  the tone knee); storms over two minutes (one every one to three seconds, a quarter to a half of them where the look
+  rests, hops, several at once, cord volleys in a sixth to a half); a hop flares when its front arrives, weaker, and
+  the front is dark ahead and lit behind from either end; the owner's rule on the curves: through a minute of storms
+  no point of 60 on the brain brightens and darkens more than three times in any second, the traffic passes a point
+  at most twice in a second, a fibre's point under a storm every two seconds at most three; the resting sources'
+  periods; reduced motion: no storms and a scan that does not change at all over ten seconds; a lit area the hottest
+  spot (0.9 or more), its linked region warmer than a far point by 0.2 or more; the shader texts.
+- Part 3 in the browser, alone on the processor: the scan drawn with 101 672 triangles of the brain's copy, 44
+  regions, 141 links and 492 fibres; the browser test passed on the final code (picture change 35.9 of 255 with the
+  map on, 0.97 after M off); the start check printed `"ok":true`.
+- Part 3's cost. With every storm summed at every pixel and a `discard` in the scan's shader (which turned off the
+  early depth test, so the sum ran for every hidden layer of the brain's pieces) a frame with the map on took about
+  77 ms: 13.1 / 8.7 / 11.1 / 9.0 frames a second at High, 49.1 / 15.3 / 19.9 / 15.0 at Low. Without the discard, the
+  sums stopping at the live storms, then the heat summed at the copy's vertices, the final code, twice each in turns
+  (still / look / updown / limbturn): the game's own ground (18930) 60.0 / 37.5 / 44.0 / 49.7 and 59.4 / 38.1 / 42.7 /
+  51.7; this work with the map off at High 60.1 / 33.5 / 45.6 / 51.0 and 35.2 / 18.6 / 24.7 / 22.5 (the machine was
+  disturbed during that run: the Low run right after it read low too); with the map on at High 58.0 / 30.5 / 37.9 /
+  54.4 and 57.2 / 36.9 / 41.0 / 35.8; with the map off at Low 51.4 / 37.5 / 47.1 / 47.2 and 32.3 / 26.9 / 37.0 / 34.7;
+  with the map on at Low 60.0 / 39.5 / 45.0 / 55.3 and 60.0 / 39.4 / 57.6 / 57.8.
+- Part 3 seen in pictures at real speed (opened and judged): the rest and two-second bursts at High (a storm rolls over
+  a half in about a second, yellow to orange with a small near-white core, the network everywhere, the folds of the
+  brain readable under the colour), the brain close while looking at a hand area (the area the hottest spot,
+  yellow-orange, no white-out; the hand's muscles glowing), Low (the same look), reduced motion (two pictures a second
+  apart identical to the pixel at 2 % tolerance), W held, the outside view.
+- Seen in pictures (opened and judged): the resting map at picture quality High and Low (the same look); a hand
+  area's route a third of a second after the look (its colour from the block through the brain, the bridge and the
+  mirror body, and up your own left arm with marks on the forearm's muscles); the front on your own arm in a burst
+  of frames; an eyelid area and the throat area (to the mirror body's face and neck); W held; the Space grip (four
+  routes in four colours down all four limbs: the clearest picture of the view); reduced motion (the route steady, no
+  beads, no sparks); the mirror body turned by a drag (its wiring turns with it); the outside view; the "more" level
+  at 1600 x 900 and at 1366 x 768 and the hidden level; M off (the ordinary picture as it was).
+
+**Not done, or not right.**
+- The network's lines in front of the blocks still cross them (the lines are drawn after the stencil's test, at full
+  strength). The blocks' edges are a little jagged at low quality (the stencil follows the canvas's own pixels).
+- With one half hot and the other calm, the midline fade makes a straight edge between the halves along the gap.
+- The network in the middle of the picture, behind the mirror body, is still the busiest part; the mirror body's
+  outline reads, its own nerves on it, but less cleanly than with the map off.
+- Part 3's cost: with the map on, the look part of the frame table read 10 to 11 % below the map-off runs in the last
+  pair of runs (35.5 and 37.2 against 40.0 and 41.5 frames a second); a still view loses about one frame a second; the
+  other parts were within the noise of a machine whose own runs vary by more than that. Where the time goes was not
+  measured.
+- Part 3 (the live scan) was looked at in four runs of pictures at real speed after the last changes of its look
+  (high, low, reduced motion; the start view and the brain close, looking at a hand area), not played by a person, and
+  not at all on narrow or upright windows. Whether it reads as "electrical storm activity going everywhere" is the
+  owner's call: at rest the brain is mostly deep blue with one or two storms rolling over it at a time, and the dense
+  network in the middle of the picture is the busiest part.
+- The network's fibres in front of and behind the mirror body still cross it as a fine tangle (behind it at 0.5 of
+  their light); the mirror body is harder to read with the map on than without.
+- The scan is a copy of the brain's surface pushed out 1.8 mm. It does not follow the living brain's wobble while the
+  brain is carried (up to 4.2 mm): during a carry the colour can slip a little off the surface or be cut by it. At the
+  silhouette the copy stands 1.8 mm outside the brain, a thin rim of colour. Its depth pass also hides lines lying
+  within 1.8 mm of the surface behind it (they are drawn at the hidden lines' strength).
+- The storms start where the processor chooses (a region near the side the eye sees), not where the game's simulated
+  activity is: at rest they are decoration of the made-up kind the legend states, not a picture of the simulation.
+  The resting sources and the network's fibres are generated by rules (stated in EMAP.scan and EMAP_STORM), not drawn
+  from data.
+- A storm's front runs from the region's end of every fibre of a fired link, also on links whose real fibres run one
+  way only; the cord volley runs down the mirror body's cord and bridge only, not on into the roots and nerves.
+- Each root now ends where the data says it joins its nerve, but the nerve's light still starts at the nerve's first
+  point: the part of a plexus above a lower root's join lights with the rest, not from the join on.
+- The three-times-a-second rule is tested on single curves (one point of the scan, one wire). Where several wires
+  cross in one pixel their pulses add; that sum was not measured.
+- The scan's heat is summed at the vertices of the brain's copy (101 672 triangles) and laid between them, not at each
+  pixel: the JS sum the tests check (scanHeatAt) is exact at a vertex only.
+- No person has played the map; nothing here says how it feels in the hand. Until 22:55 every picture was taken while
+  seven helpers shared one processor (a frame took 0.3 to 2.3 s): the bursts that show the front travelling were taken
+  then, with the page's clock slowed to the frame time. The later pictures were taken alone on the processor, in real
+  time, and only ONE run of pictures was taken after the nerve data's final state and the last changes of this
+  section; the bursts of a face area, the trunk area and an in-between block, and the mirror body turned, are from
+  before them.
+- At your own shoulder with the arm raised (W, the first key a player presses) the lit nerves are a tangle, not a
+  route: the plexus, four nerves and their straight twigs cross in a small space seen from above, the twigs as bright
+  as the nerves. Part of it is the binding: a line rides rigid bones and changes bone inside ONE stretch between two
+  course points, so with the arm turned 80 degrees a 9 mm step of the plexus is still 25 mm with a 57 degree turn
+  (the nerve to the latissimus: 44 mm), and with a knee bent 70 degrees 66 of 4670 node turns of that leg's wires are
+  sharper than 75 degrees, most of them in twigs. The cure is a change of bone spread over several stretches, with
+  the twigs and the child nerves following their nerve's blend; not done. On the inner side of a deep bend a line can
+  also pass through bone or a short way outside the muscles.
+- With the map on, frames are slower where much moves and much is lit: in the limb turn with 12 routes lit, 49.9 and
+  46.9 frames a second against 52.3 and 55.4 with the map off (about 2 ms more a frame, most of it in drawing); in
+  the up-and-down look 43.1 and 46.7 against 45.0 and 50.1. A still view is not changed. Where the time goes was not
+  measured further (the two passes over the 49 278 vertices, or the palette sent each frame while a limb moves).
+- The front is fast by rule: 0.16 s to the farthest muscle, so it crosses the big brain within two frames. What reads
+  as travel is the front along a limb of your own body, the beads behind it and the report's slower way back.
+- On the mirror body at its start size a nerve is about a pixel wide. Its route lights and its marks show, but the
+  beads there cannot be told apart; they read on your own body and in the big brain.
+- Two lit areas that share a wire (one side's strand of the cord, a plexus) show ONE of them on it: the newer takes
+  the wire, since colours are never blended. The older route then has a stretch in the other's colour, and if the
+  newer one ends first that stretch is dark until the older one ends too.
+- The brain's lines do not follow the living brain's small motions (the beat, the wobble while it is carried, the
+  blooms round a key): they stand still while the tissue moves a little under them. With the outer muscles lifted
+  (the Body Worlds setting) the twigs and marks end where the muscles lie unlifted.
+- The report is a drawn convention, not anatomy of its own: it uses the command's nerves and roots (the data has no
+  sensory nerves), a typical way up the back of the brainstem, a point where the atlas has no thalamus, and the
+  nearest point of the postcentral gyrus behind the block. It starts when the front arrives.
+- The game's own lights of an activation (the white block, the cone of light, the muscles' colour) are still there
+  under the dimmed picture, so an activation is drawn twice: dimly by the game and brightly by the map.
+- The real conduction speed (50 m/s) is a textbook value written from memory, not looked up for this work.
+- The first M press is not instant any more: the map's modules and its data are fetched and the model built then, and
+  the map is fully shown about 0.9 to 1.3 s after the press (a second checker: built after 0.88 s and shown after
+  1.2 s at High; 1.3 s at low with three presses while it loaded; before the modules were fetched lazily, 0.69 s). During those frames each frame carries up
+  to 7 ms of building; the frame rate in that third of a second was not measured. The way that had the map ready
+  before the first press is behind `EMAP_BUILD.onPress`.
+- More detail shows what kind of picture this is (the bridge, typical paths, simulated, how much slower) only until
+  the first area has been looked at after M; to read it again the player must switch the map off and on. In a window
+  lower than about 760 px the last line of More detail can be cut at the card's foot; in narrow or upright windows
+  (under 901 px wide, or taller than wide) the first layout is still in force (More detail under the short card, cut
+  at 30 % of the height) and was never looked at. At "more" the wide card covers the top right of the picture and
+  can lie on an orientation label of the brain (one was seen under its edge).
+- If a body pose comes without segment matrices (the path without the hand skin), only the brain's wiring is drawn.
+- Not tried: a lost and restored graphics context while the map is on; a software renderer; a browser other than
+  Chromium; a touch screen; a screen reader on the legend.
+
+## 193. The data of the drawn nerves: which nerve serves each muscle, from which level, along which course; and the brain's typical links (21 November)
+
+The owner, 20 November: "we want a view of brain activity ... so we can actually see electrical storms and electrical
+activity and neural activity and networks and pathways, etc., etc., throughout the entire body, from brain to body and
+body to brain. And then we can tie that to muscle contraction." 21 November: "let's try an electrical mapping view, like
+you see in functional neuroscience, connectomic live maps, dynamic maps." (Neither message has a number in the notes.)
+
+The atlas the game draws has muscles, bones and a brain, but no spinal cord and no nerves (section 192 draws the map).
+This section is the DATA those drawn routes come from: one pure module, `scene/src/ns-wiring-data.mjs` (no imports, no
+three.js, no page), its generator `tools/build-wiring-courses.mjs` with `tools/wiring-geometry.mjs`, and
+`tests/wiring-data.test.mjs`. It draws nothing and no page loads it yet on this branch.
+
+**One readable row per muscle (`MUSCLE_ROWS`, 152 rows).** Each row: the muscle's name (and the other spellings the
+game's meshes use), its nerve, its spinal or cranial levels, the main one, why that one, its sources, a note, and other
+nerves that share the muscle (`also`: the deep finger bender's ulnar half, the back belly of digastric, the hamstring
+part of adductor magnus ...). A muscle with two nerves is drawn from the first. The main level (`main`) follows the
+table of the Medical Research Council's booklet where it prints a root in bold (36 rows, `by: 'M'`); the level the
+ISNCSCI examination tests that movement for where the booklet marks two roots or none (8 rows, `'K'`: the hip benders
+L2, the knee straighteners L3, the calf S1); the bold root of the brachial plexus table for three shoulder muscles
+(`'W'`); the only level there is for the 31 muscles of the cranial nerves and of C1 (`'S'`); and for the other 74 rows
+(`'C'`) a choice whose reason is in the row's note, because the sources read mark no main root: the middle of the listed
+levels in most, a neighbour's bold root in some. The page's own example is kept: biceps brachii, musculocutaneous
+nerve, C5 C6, main C6 (the booklet prints neither in bold; ISNCSCI tests elbow bending as C5; the row says both).
+`MUSCLE_NERVE` holds the result for each of the rig's 287 muscle names, `MUSCLE_NERVE_BY_ID` for each of its 292 muscle
+meshes (two meshes are both named "right digastric": by id the front belly has the nerve to mylohyoid, the back belly
+the facial nerve). `nerveForMuscle(name)` resolves a rig name, an alias, a movement's muscle name, a mesh id or a
+game-arm catalogue key (`BIC`), on either side; the name rule is the game's own (`ns-bodymap` `muscleNameMatches`: the
+same words, or only extra "part words"), copied so the module stays free of game state, without "hand" and "foot" as
+part words (the hand's and the foot's little-finger and little-toe muscles share names and have different nerves).
+
+**The nerves (`NERVE_TRUNKS`, 89, right side).** The cranial nerves that move muscles: III (the rig has the lid lifter;
+it has no muscle that turns the eyeball, so IV and VI are left out), V3 with its nerve to mylohyoid, VII with its
+posterior auricular branch and its five face branches, IX, X and XII, and XI, the accessory nerve, whose fibres begin
+in the top of the cord (C1 to C5): its roots leave the cord's side inside the canal and its strand climbs beside the
+cord into the skull through the great opening and out by the jugular opening (`rootsLeave: 'cord'`); the cervical
+plexus with the ansa cervicalis, the phrenic nerve and the C1 fibres that ride with the hypoglossal nerve; short
+muscular branches of the cervical nerves; the brachial plexus with the dorsal scapular, long thoracic, suprascapular,
+two pectoral, two subscapular, thoracodorsal, axillary, musculocutaneous, radial (and its deep branch), median (its
+forearm branch and its twig to the thumb's ball) and ulnar (and its deep branch) nerves; the eleven intercostal nerves
+and the subcostal nerve; the back branch of every spinal nerve from C2 to L5; the lumbar plexus with the
+iliohypogastric, femoral and obturator nerves; the sacral plexus with both gluteal nerves, the nerves to obturator
+internus and to quadratus femoris, the sciatic nerve, the tibial nerve with both plantar nerves, and the common, deep
+and superficial fibular nerves. Each has its anatomical name, a plain name ("the main nerve of the front of the
+thigh"), its levels, its parent, where it starts (`origin`: the cord, or the midbrain, pons or medulla), its sources,
+the rule its course was laid by, and the course: 2 to 13 points `{ seg, p }` from the cord or the brainstem outward
+(485 points in all). A branch's first point IS a point of its parent's course (`from` is its index). A plexus is drawn
+as ONE bundle; each of its roots joins it at its own point (`rootJoin`, below). Six nerves serve no muscle of this rig
+and are wiring only, which their notes say: IX, X, XII, the phrenic nerve (no diaphragm), the lateral plantar nerve,
+and the bundles themselves.
+
+**The frame is the rig's rest frame, which is NOT the atlas's untouched frame.** The page prepares the body before the
+rig is built (the bulkier build of section 97, the longer limbs of section 164): the right wrist's pivot is at z =
+705.6 mm in `packs/BODY-RIG.json`, the atlas's own capitate bone at about 790. Vertebrae, skull and pelvis are unmoved;
+the limbs are. Every point here is in the rig's rest frame (`WIRING_FRAME`), which is what the rig's segment matrices
+take in, and `seg` is the rig segment the point rides. **After any change of the body's rest shape the courses are
+stale and `node tools/build-wiring-courses.mjs` must be run again**; the generated block records six pivots of the rig
+it was laid over, and the test fails when they no longer match.
+
+**How a course is laid.** By a stated rule on things the atlas has, never freehand: the rig's joint pivots; the bones'
+and muscles' own shapes (the middle of a cross-section at a height, a bone's knob, a muscle's belly); the limb arteries'
+centre lines of `packets/bodyparts3d-body-vessels-r1`, carried from the atlas's frame to the rest frame by the
+displacement of the eight nearest atlas vertices, as the game rivets its vessels (the median nerve with the brachial
+artery, the ulnar nerve with the ulnar artery in the forearm, the tibial nerve behind the popliteal and with the
+posterior tibial artery, the deep fibular nerve with the anterior tibial artery, the femoral nerve on the outer side
+of the femoral artery at the groin); and rules from the bones for the rest (the radial nerve behind the humerus at
+mid-arm and in front of the elbow's outer knob; the ulnar nerve 7 mm behind the inner knob; the sciatic nerve between
+the sitting bone and the great knob of the thigh bone, then 62 % of the way from the thigh bone to the hamstrings; the
+common fibular nerve round the neck of the fibula; an intercostal nerve 8 mm under its rib, the lower six running on
+between the two inner flat muscles into rectus abdominis, T10 at the navel's level). The cranial nerves start on the
+brain atlas's own brainstem: that atlas is in the same frame as the skull (medulla z 1464 to 1506, pons 1502 to 1531,
+midbrain 1528 to 1546; the joint between skull and neck at 1478), so its coordinates say where the brainstem sits in
+this skull. Their openings in the skull (the jugular opening, the oval opening, the hypoglossal canal, the inner ear
+opening) are NOT measured from the skull meshes: they are placed by millimetres from landmarks that are (the styloid
+and mastoid processes from the muscles that hang from them, the jaw's joint, the occipital condyle), which is the
+weakest part of the courses.
+
+**Every point is checked on the real meshes.** "Inside the body" is measured, since the body has no skin to test
+against: 14 rays (the six axes and the eight diagonals) are marched from the point through a 4 mm occupancy grid of
+every surface of the prepared body; all 55 joint pivots score 13 or 14 of 14, points in the open air beside a limb 2 to
+7, the gap between the thighs 10. A point passes at 12 or more, or at 10 with a surface within 4 mm. Of the 372 points
+laid (41 more are shared branch points), 352 score 14, 17 score 13, two 12 and one 11; 11 points failed at first and
+were moved 2.5 to 9 mm toward the nearest part of the body (four of them the femoral nerve under the groin, where the
+atlas's artery lies in an open hollow between the thigh muscles), 6 of those had started inside a long bone and were
+stepped out of it; none is outside now. Only POINTS are checked, not the straight lines between them.
+
+**The cord.** `VERTEBRAL_PIVOTS` gives one coordinate down the spine: 0 at the rig's `atlanto_occipital` pivot, 7 at
+`cervicothoracic`, then one per joint to 24 at `lumbosacral` (the rig has no pivot between the cervical vertebrae).
+`CORD_SEGMENT_V` places each of the cord's 29 segments (C1 to S4) on it by the taught rule that the cord is shorter than
+the column: the cord's tip at the joint between L1 and L2 (20), the five lumbar segments behind the tenth to twelfth
+thoracic vertebrae, the sacral ones behind L1, T6 behind T5, C8 behind C7; between those anchors an even
+spread. `ROOT_EXIT_V`: C1 between skull and atlas, C2 to C7 above their own vertebra, C8 under C7, thoracic and lumbar
+nerves under their own vertebra, S1 to S4 spaced down the front of the sacrum. `cordLevelAt(level)` returns
+`{ fromPivot, toPivot, t }` as the contract asks, and also the point itself. The canal was measured, not offset by a
+guess: rays from front to back through each vertebra mesh find the back wall of the vertebral body and the front of the
+arch, and the canal's centre is midway (for the atlas, which has no body, 64 % of the way back, behind the dens).
+Finding: the rig's vertebral pivots, being midpoints of whole-vertebra centroids, already lie INSIDE the canal, 0.7 to
+4.5 mm from its measured centre (12.6 mm at the skull joint, where the pivot is on the atlas's facets). The canal's
+half-width came out at 7.4 to 13 mm (17.8 in the atlas). A root exit is the canal's centre moved sideways by that
+half-width (at most 13) plus 4 mm, and where that spot is inside bone, the nearest free spot in a small search (11
+exits moved 2 to 3 mm): all lie 13 to 18 mm from the midline. `cordCourse()`, `caudaCourse()` (the "horse's tail"
+below the tip) and `rootCourse(level, side)` (down the canal from the segment to the exit: 30 mm for T6, over 170 mm
+for S2) give ready polylines.
+
+**Where a nerve ends in its muscle.** A third of the way along the muscle from its end nearer the START of its nerve
+(its fleshy upper end, not its tendon), in the middle of its cross-section there; where that middle is outside the
+muscle's own surface (a curved sheet; 49 of 292), the nearest piece of the muscle itself. Muscles served level by
+level (the deep back muscles, the flat belly muscles) and five broad sheets whose nerve runs along them (trapezius,
+sternocleidomastoid, latissimus dorsi, serratus anterior, platysma) take the piece nearest the nerve's course (48).
+The twig leaves the nerve at its course point nearest the muscle (`at`); a cranial nerve gives no twig inside the
+skull (`twigFrom`). The longest twig is 105 mm (vastus lateralis), the median 18 mm. Two first tries were wrong and are
+gone: "the end nearer the nearest course point" put the finger straighteners' points in the hand (their meshes include
+the tendons), and letting the point ride the mesh's own rig segment made the belly of tibialis posterior swing with the
+foot (its mesh hangs mostly from the foot): the point now rides the bone its belly lies on.
+
+**The left side is the mirror of the right, and every id says its side.** `NERVE_TRUNKS` holds the right side under
+ids `r_...` (`r_femoral`); `mirrorTrunk('r_femoral')` is the left twin, a record of the same shape with the id
+`l_femoral`, its parent `l_...`, and every course point mirrored (`mirrorPoint`: x to -x; the segment `r_...` to
+`l_...`). `nerveForMuscle` answers with the nerve of the muscle's own side (`l_musculocutaneous` for "left biceps
+brachii"), and `trunkById` gives either side's record. The body rig has no left forearm or hand (the left arm is the
+game arm, its own rig), so a mirrored arm point also says `rig: 'arm'` and the game arm's own name for its segment
+(`armSeg`: `l_forearm` is its `ulna`, `l_radius` its `forearm`, `l_hand` its `hand`, the finger bones alike,
+`l_upperarm` its `upperarm`). `nervePathForMuscle(id)` gives the whole drawn way to one muscle mesh on its own side:
+its main root's exit (or the brainstem), the nerve up to the twig, the muscle's point; for a mesh of the left game arm
+that the body rig does not hold (`FJ1478M`), its right twin's way mirrored. These shapes are the ones the map's model
+of section 192 was written against (ids and segments that swap `r_` and `l_`): built with this module in place of its
+stand-in, that model takes all 178 trunks and finds every one of its 337 muscles' nerves in the data, with no warning.
+
+**The brain's links (`BRAIN_LINKS`, 53).** Between meshes the brain atlas has, the motor and sensory strips first: to
+each other; from the superior, middle and inferior frontal gyri to the motor strip; from the sensory strip to the
+superior parietal lobule and the supramarginal gyrus; the three parts of the superior longitudinal bundle; the strips
+and the supplementary motor areas of the two halves through the corpus callosum; the motor strip down through the
+internal capsule, midbrain and pons to the medulla; to the opposite half of the cerebellum by way of the pons, and
+back; the corticobulbar route from the motor strip to the motor nuclei of the cranial nerves in the pons and medulla
+(one link on its own side and one crossing: most of those nuclei are driven from both halves, the lower face only from
+the opposite one); the report of touch up from the medulla to the opposite sensory strip, and the report of pain and
+temperature (already crossed in the cord) up the same way. Then the arcuate bundle, the cingulum, the uncinate bundle,
+the inferior longitudinal and inferior fronto-occipital bundles, the occipito-parietal fibres, the fornix, and four
+more links between the same lobes of the two halves. Each has `from`, `to`, `name`, `plain`, `crosses`, sometimes
+`via`, and its sources. Where the fibres change sides is DATA, so a view can draw the crossing: `crossing` = `{ in,
+when, share, name, plain }` and `crossesAt` = the two halves of the region they cross in. The motor route says `when:
+'at the end'` in the medulla (the pyramidal decussation, below the last mesh, as the fibres go on down the cord), the
+touch route `'on the way'` inside the medulla, pain and temperature `'before the start'` in the cord, the routes to and
+from the cerebellum in the pons and the midbrain. The right half's links do not speak of speech (it is made on the left
+in most people): "the lower frontal area in front of the mouth part of the motor strip". The atlas has no corpus
+callosum, thalamus, superior temporal gyrus, temporal pole or orbital gyri: a link between the halves says `drawnAs:
+'arc'`, and a bundle whose true end has no mesh is tied to the nearest mesh and says so in `note` (the arcuate bundle
+to the middle temporal gyrus, the uncinate bundle to the inferior temporal gyrus).
+
+**Sources (`WIRING_SOURCES`; facts only, in the game's words; nothing copied).** Read on 21 November: the Medical
+Research Council's *Aids to the examination of the peripheral nervous system* (1976), table "Nerve and main root
+supply of muscles" (pages 60 and 61, read as pictures of the pages so the bold roots could be seen); OpenStax *Anatomy
+and Physiology 2e*, sections 13.2, 13.4, 14.2, 14.3; the ISNCSCI worksheet's key muscles; Wikipedia: the list of
+skeletal muscles (nerve column), brachial, lumbar and sacral plexus, spinal cord, six nerve articles and nine tract
+articles. Every row, nerve and link names its source keys. Not reachable on the day: the 1918 Gray's Anatomy
+(bartleby is retired, another host refused) and the NCBI Bookshelf (StatPearls); so the levels of the deep back
+muscles, which the list gives only as "posterior branch of spinal nerve", rest on the spans those muscles are taught
+to have, and are the least certain rows.
+
+**Words.** `WIRING_NOTE` holds plain sentences a view can show: typical adult routes as taught; simplified, laid by
+rule over this one atlas body, not traced from a scan, not measured in anyone, real bodies vary; the "main" level of a
+muscle is this game's pick where books give several; the brain's links are tied to the nearest part the brain model
+has, which has no thalamus. The map of section 192 has its own words on screen (in `ns-text.mjs`); the first pass of
+this package had put a sentence of its own there, which nothing used, and it was taken out again.
+
+**Checked** (on the first pass; the second pass, below, added four tests). `tests/wiring-data.test.mjs`, 11 tests in
+half a second: the page's examples; every one of the rig's 292 muscles by id, name and alias, every muscle name of the
+142 movements, the 25 catalogue keys and the 51 left-arm and 54 face mesh names resolve to a nerve; rows are well
+formed and sourced (17 of the booklet's bold roots are pinned); every nerve's parents lead without a loop to the cord
+or the brainstem, every level is known, a branch starts on its parent; every course point and muscle point rides a real
+rig segment and lies within that segment's reach of its skeleton as the rig file gives it; the taught places of some
+twenty nerves hold against the rig's own joints (the radial nerve behind the humerus, the ulnar nerve behind the
+elbow's inner side, the median nerve in front of the elbow, the sciatic nerve behind the thigh bone, the tibial nerve
+behind the inner ankle, the five face branches in their order ...); cranial nerves start on their part of the brainstem
+inside the skull, keep more than 6 mm from the cord and give no twig inside the skull; the cord's segments are in
+order, each at or above its exit, with roots that get longer downward; the left side mirrors the right and every
+mirrored segment exists; every link names brain meshes that exist with the atlas's own names; every source key exists
+and is used; no private strings. A twelfth test runs the tool with `--check`: the body is prepared exactly as the page
+prepares it, every course is laid and measured again on the real meshes, and the committed block must equal the fresh
+build (about 7 s on a free processor; `NS_WIRING_FAST=1` skips it). Each of four deliberate faults (biceps given to the
+radial nerve, the rig's wrist pivot recorded 20 mm off, a face muscle given a spinal level, a link to a brain mesh that
+does not exist) fails a test. The whole unit suite: 529 tests (517 before this package), none failing; in the one run
+of the whole suite the twelfth test was still switched off, and it passes on its own. The start check prints
+`"ok":true`; the browser tests `startup` and `keyboard-aim` pass (their first runs, with the shared processor at a load
+of 14 to 23, ran into their own 60-second waits, as `startup` did in the unchanged checkout at the same minute). The
+frame table, still / look / up-down / limb turn in frames a second, this branch then the unchanged one, in turns: 59.4,
+32.4, 41.2, 42.0 (the processor still busy); 60.1, 33.1, 48.5, 50.6; 59.1, 36.2, 48.6, 55.2; 60.0, 37.1, 49.0, 45.4: no
+difference beyond the spread between runs, as expected, since the package puts no code into the page (a module nothing
+imports yet). (These runs were made on the first pass; the second pass, below, changed only this module, its tool and
+its test.)
+
+**The second pass, after two independent checks (22 November).** One checker read every row against anatomy sources,
+the other the code, the tests and the courses' geometry. Neither found a wrong nerve. What they found, and what was
+done:
+- **Two points rode the wrong bone** (the generator had given them the segment of the nearest bone): the nerve to
+  latissimus dorsi's point in the back wall of the armpit rode the humerus, and the obturator nerve's points in the
+  thigh rode the pelvis. They now ride `r_girdle` and `r_thigh`. A **pose test** was added (`poseStretch` and
+  `WIRING_POSES` in `tools/wiring-geometry.mjs`, used by the test): twelve turns of one joint each (the shoulder
+  forward and sideways, the elbow, the forearm both ways, the wrist both ways, the hip bent and spread, the knee, the
+  ankle up and down), each turning the segments that hang from that joint about the rig's own pivot and axis. Every
+  straight piece of a nerve or of a twig whose ends ride segments on the two sides of that joint is measured. The
+  largest stretch is now **34 mm** (the bundle in the armpit and the musculocutaneous nerve's first piece, arm raised
+  sideways 60 degrees). Before it was 83 mm (the twig to adductor brevis, hip bent 60 degrees) and 70 mm (the nerve to
+  latissimus). The test fails above 40 mm.
+- **Every root used to join its bundle at the bundle's first point**, so the lower roots of the lumbar, sacral and
+  neck bundles ran 15 to 97 mm upward and back down. Each root now joins at its own point: `rootJoin` in the generated
+  block (and on each trunk that starts at the cord), the course point the root reaches most directly from its opening
+  without climbing more than a few millimetres. The largest climb is now **7.9 mm**. `trunkRootLines`, the new
+  `rootWay(id, level)` (the whole root from its cord segment, down the canal, out through its opening, to the join
+  point) and `nervePathForMuscle` use it. The map's builder must attach each root wire there; until now it attached
+  every root at the first point.
+- **The median nerve's forearm points** rode the radius above the ulna; they now ride the ulna (`r_forearm`) down the
+  forearm and the radius only just above the wrist, so a turned forearm takes them the right way.
+- **Pieces through bone.** The generator now samples every straight piece, every millimetre, against EVERY bone (a
+  ray-parity test through each bone's own triangles), not only its points against six long bones. Where a piece runs
+  through bone it adds one point beside it, the smallest step aside (2 to 24 mm) that clears it and stays inside the
+  body: **54 such detours**. The winding places got a point of their own: the common fibular nerve round the neck of
+  the fibula, the tibial nerve round behind the inner ankle knob with its artery, the deep fibular nerve in front of
+  the tibia. The five face branches and the posterior auricular branch, which lie under the skin, are now laid on the
+  outer surface every 28 mm or less (`surfaceRun`; the atlas has no skin, so they lie just on the outermost muscle or
+  bone: 31 points). Points laid on purpose in the skull's own passages (the facial canal, the jugular and oval
+  openings, the hypoglossal canal, the slit into the eye socket) are marked and left alone.
+  - **In bone:** 188 of 13,737 mm (1.4 %). Of that, 128 mm is in pieces that end in one of those passages; the rest is
+    four face and scalp pieces with about 5 mm each. Before: 837 of 13,433 mm (6.2 %; the checker measured 890 mm).
+  - **Points inside a bone:** 1, down from 21.
+  - **Points moved** to pass the checks: 23, by 1 to 9 mm (16 had started inside a bone). None is outside the body.
+- **Code.**
+  - `WIRING_GENERATED` is frozen (a write to it had moved the cord).
+  - Unknown keys, `'constructor'` and `'__proto__'` among them, give null or an empty list everywhere.
+  - Each end of a name shared by two meshes carries its own nerve (the two bellies of "right digastric": its `at` had
+    pointed into the wrong nerve).
+  - "transverse" or "abdominal" alone names no muscle.
+  - The block's comment says its points are CC BY 4.0, and CC BY-SA 4.0 where laid on or in Z-Anatomy muscles.
+- **Tests.**
+  - **The three faults** the checker found to pass the fast tests are now caught:
+    - a point moved off the limb, by a new test against the limb's outline measured on its meshes (`outline` in the
+      block: 24 stations along each limb's axis, 24 sectors round it). Not to every side, as the third checker found:
+      it allowed the largest radius of three sectors plus 4 mm, so a point moved 60 mm off the shin passed. Corrected
+      in the third pass, below;
+    - a point on the wrong segment, by the pose test (a shin point on the thigh stretches its twig 45 mm at the knee);
+    - a wrong nerve for a well-known muscle, by a pinned list of 42 textbook rows (both sides).
+  - **Not caught by a fast test:** a point moved 60 mm but still inside the calf. Only the rebuild test catches that,
+    as "DIFFERS". (Still true after the third pass: the outline test catches moves off the limb, not within it.)
+  - The tests went from 12 to 16.
+- **Anatomy.**
+  - **Sternocostal part of pectoralis major:** now drawn from the lateral pectoral nerve, which carries its main level
+    C7, with the medial one second.
+  - **Accessory nerve:** its fields and course start in the cord, as above.
+  - **Nerve to mylohyoid:** named as a branch of the inferior alveolar nerve.
+  - **Wordings:** "a nerve of the lowest part of the belly wall" for the iliohypogastric nerve; "outer side" for the
+    lateral plantar nerve.
+  - **Rows taught both ways:** the other commonly taught value is now in each such row's note (16 rows).
+  - **Fibularis longus and brevis:** main level now S1. The charts of what each level moves give turning the sole
+    outward to S1; the booklet marks neither.
+  - **Flexor digitorum profundus:** marked a choice.
+  - **Honesty sentences:** the two added to `WIRING_NOTE` (the main level is this game's pick; the brain's links are
+    tied to the nearest part, no thalamus).
+  - **Brain links:** the two textbook routes and the crossings as data, as above.
+  - **Text slip:** the comment and this section now put the sacral segments behind L1, as the numbers do.
+
+**The third pass, after a third check (22 November).** The checker measured the courses in poses and found what the
+rest pose hides. What was found, and what was done:
+- **The forearm turned.** The anterior interosseous nerve's first point rode the ulna and its second the radius, so
+  with the forearm turned 80 degrees 45 to 70 mm of its first piece lay inside the radius; the twigs to pronator teres
+  passed 15 to 19 mm through bone at 150 degrees. The pose test now also turns the forearm to 160 degrees (the game's
+  own start), bends the elbow to 140 and the hip to 100, opens the jaw 30 degrees and bends and turns the neck: 19
+  poses. A new check (`poseBone`) measures, in each pose, how much of every straight piece passes through the six long
+  bones (capsules round each bone's axis, the shaft's radius, the ends trimmed by a tenth) beyond what it does at rest.
+  - All the anterior interosseous nerve's points now ride the ulna, a third of the way across the membrane from it.
+    Leaving the median nerve where it is taught to (just below pronator teres), its first piece was still crossed by
+    the radius in every choice of segments tried (27 to 47 mm). It is now drawn **leaving the median nerve near the
+    middle of the forearm, lower than taught**, and its rule says so.
+  - **Muscle points move as the game moves the muscle.** The game moves each vertex of a muscle with the two nearest
+    of the segments in its rig blend (`ns-body`). A muscle's point now rides the nearest bone among those segments.
+    Pronator teres, brachioradialis and the long radial wrist extensor get the piece of the muscle nearest their nerve
+    as their point (the median nerve passes between the two heads of pronator teres; the radial nerve runs between
+    brachioradialis and brachialis), not a belly point a third down that lay against the radius. Tried and dropped:
+    keeping each forearm twig on its nerve's bone, and each twig of 12 mm or less on its nerve's segment. That kept the
+    twigs out of bone, but left 16 muscle points 27 to 75 mm off the muscle the game draws, in the game's start pose
+    or with the neck turned or the jaw open.
+  - **The largest extra length in a long bone** is now **19 mm** (the twig to extensor carpi ulnaris, which runs from a
+    nerve on the radius to a point on the ulna, at 160 degrees). The twigs to pronator teres pass 13 mm, the ulnar nerve
+    above the wrist 15 mm. The test fails above 20 mm. Left out of that bound: the ends of the ranges (elbow 140, knee
+    120, hip 100), where the forearm folds onto the arm and flesh gives way where rigid points cannot. The median
+    nerve's piece across the elbow passes 28 mm into the humerus's capsule at 140 degrees.
+  - **The largest stretch** is 39 mm (the twig to omohyoid, neck turned 45 degrees; bound 40). At the ends of the
+    ranges, where the bound is 60 mm, it is 53 mm: the sciatic nerve behind the hip bent 100 degrees. Its point behind
+    the hip now rides the pelvis. On the thigh, the piece from the pelvis's notch to it passed 15 to 20 mm through the
+    hip bone with the hip bent.
+- **The outline test.** It now uses the limb's own bin only: the point's station (32 along the axis) and its 10-degree
+  sector (36 round it), with a 3 mm margin, and an empty bin allows nothing. Each bin holds the farthest the limb's
+  mesh surfaces lie from the axis, every triangle sampled every 3 mm (the vertices alone left thin bins empty). Beyond
+  a limb's ends it also takes in the next segment's meshes, and it takes in the meshes of muscles whose points ride the
+  limb: the hamstrings' meshes ride the shank in the rig. One point is named as lying in a hollow of the meshes, with
+  its bin bridged from two sectors to either side: the tibial nerve behind the knee, between the hamstring tendons. The
+  test checks that the bin really is a hollow.
+  - **What it catches.** Each of the 105 limb course points was moved 20, 40 and 60 mm to each of eight sides, square
+    to the axis: 2,520 moves. All 1,245 that take a point more than 5 mm past the limb's surface in its own bin fail.
+  - **What it misses.** The other 1,275 moves stay inside the limb, across it or along it, and pass. That needs the
+    meshes. The checker's own case is one of them: the tibial nerve's mid-calf point moved 60 mm outward still lies
+    inside the calf, whose back is 84 mm behind the shin's axis there. Moved 4 mm past the calf's surface, it fails.
+- **Detours and kinks.** A detour point may now turn the nerve at most 60 degrees, and a piece gets one detour. The
+  exception is a place a recipe marks as hooking round a bone: the nerve to obturator internus round the spine of the
+  ischium (99 degrees). The largest other detour turn is 59 degrees, and the 136-degree hairpin in the C7 back branch
+  is gone. Four pieces that no point within 60 degrees clears are left in bone: the posterior auricular branch 21 mm,
+  the C3 and C4 back branches 13 mm each, T2's 17 mm. The bends within the recipes were looked at too, and five were
+  smoothed:
+  - the posterior auricular branch ends at the back of the scalp muscle, without turning back 147 degrees;
+  - the lower-jaw and neck branches lost a point laid on the angle of the jaw that swung them in and out;
+  - the neck branch's sheet points sit on the neck's side;
+  - the suprascapular nerve has one point in supraspinatus, not an inner one and then an outer one.
+  9 bends over 90 degrees remain within the 316 bends of the courses: the suprascapular nerve round the blade's spine,
+  the T7 intercostal nerve's end, the deep ulnar branch round the hook of the hamate, the subcostal nerve, the
+  obturator internus hook, the deep fibular nerve onto the foot, the accessory nerve through the jugular opening, the
+  facial nerve's bend in its canal, and the superior gluteal nerve. Most are real bends.
+- **The left side.** Every point and piece is now checked against the mirrored left side's own bones as well, and root
+  openings are placed clear of bone on both sides (C1, C7, C8 and T6 moved 3 to 4 mm). The bundle of the brachial
+  plexus was lowered 3 mm, so the C8 root still climbs only 7.6 mm. In bone:
+  - right: 222 of 13,614 mm (1.6 %; 113 mm of it in the skull's passages);
+  - left, mirrored onto its own bones (not the game arm): 199 of 11,210 mm (1.8 %);
+  - the same pieces on the right: 222 of 11,210 mm (2.0 %).
+  The right side's share is up from 1.4 %: the turn bound leaves the four pieces above in bone.
+- **Smaller fixes.**
+  - **Platysma:** its point rides the neck. On the jaw, it swung 41 mm when the jaw opened.
+  - **Temporal branch:** laid every 8 mm, 1.5 mm out. Its points lie 1.6 to 2.9 mm off the nearest mesh, and the middles of its pieces up to 2.9 mm. One piece, at the upper edge of the cheekbone's arch, is 5 mm off at its middle.
+  - **Quadratus lumborum:** its way ran back up the lumbar bundle. A muscle's way now runs only outward: the root
+    joins at its own point, or at the point where the muscle's branch leaves if that lies above it. A twig on the
+    bundle itself leaves no higher than its root's join point. A test walks every muscle's whole way.
+  - **S3 and S4:** their joins were the far points because the join rule charges 3 mm for every millimetre a root
+    would climb past 3 mm. A point beside the S3 opening and one on the bundle's lower edge, in front of the S4
+    opening, now take them: 19 and 31 mm, before 75 and 79.
+- **Anatomy.**
+  - **Trapezius:** main level now C4. The charts of what each level moves give shrugging the shoulder to C4. Other
+    tables give C3, and the row's note says so.
+  - **Sternocleidomastoid and trapezius:** their notes now justify the level by where the accessory nerve's cells
+    lie (about C1 to C3 for sternocleidomastoid, C2 to C5 for trapezius), as their way is drawn. Before, they cited
+    the cervical plexus.
+  - **The crossing corticobulbar link** now ends at the opposite half of the pons, where the face's nerve centre lies,
+    not at the medulla.
+  - **Link 7:** its right-half wording is shorter.
+  - **Reading dates:** the three sources read on the second pass say 22 November.
+
+**Not done, or not right.**
+- Nothing here has been SEEN in the game: no view draws it on this branch. The pictures looked at are from a plotter
+  of this work (bones as dots, courses as lines), front and side, which shows gross errors only.
+- 74 of 152 main roots are choices, not readings; 16 rows are "taught both ways" and say so with the other value. The
+  rows least certain: the deep back muscles' levels (11 rows: no open table gives them per part).
+- A plexus is one bundle: the brachial plexus's trunks, divisions and cords, the median nerve's two roots and the
+  sciatic nerve's two halves in the thigh are not drawn apart. Branch points are where the rule put them, not measured.
+- The cranial nerves' openings in the skull are placed by offsets from landmarks, not found in the skull meshes; the
+  intracranial stretches run through bone as drawn (128 mm, in pieces that end in one of those passages).
+- Every point rides ONE rigid segment. The belly wall, the neck and the shoulder are skinned between several bones, so
+  when the trunk bends or the shoulder moves, a drawn nerve there will slide against the muscles beside it.
+- The left arm's nerves are the right arm's mirrored, not laid on the game arm's own meshes. Measured once, by hand
+  (not in a test): on the left game arm as the page prepares it (`bulkArmAssets`), all 56 mirrored arm course points lie
+  within 11 mm of one of its vertices (median 2.9 mm), and the mirrored elbow and wrist pivots within 3.5 mm.
+- The map of section 192 has to follow two changes of the third pass. The crossing corticobulbar link now ends at
+  the opposite pons, not the medulla. The way to a muscle (`nervePathForMuscle`) may start at a lower join point than
+  before: it never runs back up a bundle. Its twigs' `at` changed for 92 muscles, and 23 muscle points ride another
+  segment, as the game moves their muscle. The courses' point indices changed too (the anterior interosseous nerve now
+  leaves the median nerve at its point 5). A view that stores indices must take them from the data, not from this
+  text.
+- The map of section 192 has to follow three changes of the second pass: draw each root to its join point
+  (`rootJoin`, `rootWay`), not to the bundle's first point; draw the accessory nerve's roots from the cord's side
+  inside the canal (`rootsLeave: 'cord'`), not through the openings between the vertebrae; and use `crossing` and
+  `crossesAt` to draw where the brain's routes change sides. A copy of the map's own 26 tests (its branch at `e826d11`,
+  read only) run with this second-pass data passes 25. The one that fails counts seven head nerves a side, but the
+  accessory nerve now starts at the cord, so there are six.
+- Left out: cranial nerves IV and VI and the eye-turning branches of III (no such muscles in the rig), the pudendal
+  nerve, S5 and the coccygeal segment, the sympathetic chain, all skin nerves, the sensory side as its own routes (the
+  report up is the view's, along the same nerves).
+- The module is about 200 kB (the generated block 94 kB, of which the limbs' outline 22 kB; the tables and their notes
+  most of the rest). It is loaded by
+  nothing here; a view that imports it adds one script to the page's count (`PAGE_SCRIPTS`) and should load it on
+  first use, not at the start.
+
 ## 194. The faults a review and a play-through found in Body update 63 (21 November, evening)
 
 The user: W and S "are not rotating internally or externally while moving" (Message 186); "in returning to its previous
@@ -4965,8 +5823,10 @@ keys' solve of the right arm one more point of the posed arm.
 - An area that moves nothing (the black blocks, the tongue) shows no light of its own on a click, only the key's press and a soft glow round it: this package's rule (the brief's and the lead's), not asked of the owner (191).
 - The glow of the strip was looked at frame by frame mostly with the page's clock slowed, on a machine drawing a few frames a second; at real speed in two runs; never on the owner's display (191).
 - At the start view the face, jaw and throat movements travel under 6 pixels on the mirror body's face, and fourteen other small movements under 12; "Bend head forward" has 10 degrees of room in the bowed start posture; from your own eyes a straightened finger of the left hand drops out of sight (189).
+- The nerve data for the electrical map is typical and simplified: 74 of its 152 main roots are choices where the sources read mark none, a plexus is one bundle, the cranial nerves' openings in the skull are placed by offsets, and 1.4 % of the drawn length still lies in bone (most of it in the skull's own passages); nothing of it has been seen drawn in the game on its own branch (193).
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
+- The electrical map (the owner's notes of 20, 21 and 22 November: "a live brain scan map where you have electrical wire, electrical storm activity going everywhere"). It is there on M, as a live scan with storms, and no person has played it. The strip's blocks show under the dark ground, not over it as the lead asked (a second draw broke them into dark triangles); an activated block is not the brightest spot. The lit nerves at your own raised shoulder are a tangle, and lines kink at strongly bent joints; the beads cannot be told apart on the small mirror body; two lit areas that share a wire show one colour; the report's way up is a drawn convention; the first M press takes about 0.7 s (192).
 - Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).

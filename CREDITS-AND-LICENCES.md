@@ -24,6 +24,7 @@ anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under thei
 | Simplified copies of the meshes above, which are what the game draws (19 November; adaptations made by NeuroSurge contributors, see section 1a) | `packs/arm-brain.nspack`, `packs/fullbody.nspack`, `packs/head.nspack`, `packs/missing-muscles.nspack` (its 93 BodyParts3D files) | CC BY 4.0 (adaptations, as their sources) | The Database Center for Life Science (DBCLS); simplification by NeuroSurge contributors |
 | The same for the Z-Anatomy meshes (19 November; adaptations, see section 1a) | `packs/face-muscles.nspack`, `packs/missing-muscles.nspack` (its 18 Z-Anatomy files) | CC BY-SA 4.0 (share-alike; an adaptation of a CC BY-SA 4.0 work stays CC BY-SA 4.0) | Z-Anatomy (built on BodyParts3D, DBCLS); simplification by NeuroSurge contributors |
 | Body rig data derived from the BodyParts3D and Z-Anatomy meshes (19 November; joint pivots, axes and which bone each muscle follows; no mesh geometry) | `packs/BODY-RIG.json` | CC BY 4.0 and, for the rows of Z-Anatomy muscles, CC BY-SA 4.0 (derived data, as its sources) | DBCLS; Z-Anatomy; derivation by NeuroSurge contributors |
+| Nerve-route points derived from the BodyParts3D and Z-Anatomy meshes and the vessel centre lines (21 November; the points of typical nerve courses, of the vertebral canal and one point in each muscle; no mesh geometry) | the generated block `WIRING_GENERATED` of `scene/src/ns-wiring-data.mjs` | CC BY 4.0 and, for the points laid on or in Z-Anatomy muscles, CC BY-SA 4.0 (derived data, as its sources); the rest of that module (tables, rules, code) is project code, CC0 1.0 | DBCLS; Z-Anatomy; derivation by NeuroSurge contributors |
 
 This is the round-5 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
 every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
@@ -429,6 +430,15 @@ of the motor cortex. These sources are cited, not bundled. Their citation manife
 `2e4bd3c0e2947310065cd56aadf62d14734d9ead67e4ba44c5e69a614f6d62b1`) is held with the project's functional-map
 records. The map is a representative, source-informed educational simulation. It is not a measured or learned
 neural-to-muscle decoder.
+
+The nerve data of the electrical map (`scene/src/ns-wiring-data.mjs`, 21 November 2026) states typical anatomy as it is
+taught: which nerve serves each muscle and from which level, the usual course of each nerve, where the segments of the
+spinal cord lie, and the best-known links between regions of the brain. Only facts were taken, in the game's own
+words; no text, table or figure was copied. The sources are cited in the module (`WIRING_SOURCES`), not bundled: the
+Medical Research Council's *Aids to the examination of the peripheral nervous system* (Memorandum No. 45, 1976);
+OpenStax *Anatomy and Physiology 2e* (CC BY 4.0); the ISNCSCI worksheet of the American Spinal Injury Association and
+the International Spinal Cord Society; and Wikipedia articles (CC BY-SA 4.0) read on 21 November 2026. The drawn routes
+are typical and simplified, laid by rule over this atlas. They are not traced from a scan.
 
 ## 6. Not included
 

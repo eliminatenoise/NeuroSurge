@@ -79,7 +79,7 @@ import {
   ARM_BAND, BAND_FRAME, stripParam, splitBand, placeMarkers, placementForBand, orientationAnchorsForBand,
   gazeRayInSource, classifyGaze, colormap
 } from './ns-brain.mjs';
-import { createScene, createHud, armAvoidShapes, CAMERA, infoPanelRect, ORBIT_HOLD, QUALITY_LEVELS, statusCardPlanPx, STATUS_CARD_PLAN, guideFloatSpot, glowLinksForScene } from './ns-scene-three.mjs';
+import { createScene, createHud, armAvoidShapes, CAMERA, infoPanelRect, ORBIT_HOLD, QUALITY_LEVELS, statusCardPlanPx, STATUS_CARD_PLAN, guideFloatSpot, glowLinksForScene, STRIP_CUT } from './ns-scene-three.mjs';
 // Namespace imports for exports the parallel round-2 owners are adding (a missing name is undefined, never a link
 // error): ns-actions resetBody / orbitStep, ns-brain brainViewTransform / BRAIN_VIEW_TILT_DEG.
 import * as NsActions from './ns-actions.mjs';
@@ -113,6 +113,9 @@ import { seeHiddenEntry, seeTakesGhost, seeLimbOfGroup } from './ns-see.mjs'; //
 import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performance): frame time by part, inspect().perf
 import { trunkShapeField } from './ns-body-shape.mjs'; // 21 November 2026: TRUNK_KEEP_OUT follows the flatter chest
 import * as FaceMove from './ns-face-move.mjs'; // 20 November 2026 (FACE): face movements you can see
+// 21 November 2026 (EMAP, section 192): the electrical map. Its modules (ns-emap-three with ns-emap and ns-emap-storm,
+// ns-emap-standin, ns-emap-card) and its nerve data are fetched at the first press of M, not with the page (22 November,
+// after a checker: every player loaded about 188 kB of map code at the start): see emapFrame.
 
 /** 19 November 2026 (the owner: "Performance and reliability should be our number one priority. even if that means
  * extreme simplicity and streamlining"; "Perhaps game is way too big at the moment"). What the plain game leaves out:
@@ -4786,11 +4789,22 @@ export function shellToastText(s, { dragLook = true } = {}) {
   return dragLook ? SHELL_TEXT.captureHint : SHELL_TEXT.lookOff;
 }
 
+/** 21 November 2026 (EMAP, section 192): when and how fast the electrical map's model is built (ns-emap buildEmapSteps;
+ * 90 to 145 ms of work in all in the browser). onPress: nothing of the map is fetched or built before the first M
+ * press (the nerve data is a module of about 155 kB that only the map needs: a player who never presses M never
+ * loads it); the model is then built pressMs a frame, or pressShare of the last frame's own time when that is more
+ * (a computer that draws a frame in a second would otherwise need a minute; a share of a frame that is slow already
+ * is not felt), and the map eases in when it is done, about a third of a second after the press at 60 frames a
+ * second. The first way stays behind the switch (onPress false): the data fetched and the model built in idle time,
+ * idleMs a frame (or idleShare of the frame) from afterFrames frames into play, so the first press found it ready;
+ * dropped the same day because every player then loaded the data. */
+export const EMAP_BUILD = Object.freeze({ onPress: true, afterFrames: 150, idleMs: 2, pressMs: 7, idleShare: 0.04, pressShare: 0.25 });
+
 /** R558 (genuine note R28): rows of the keyboard picture, top to bottom. A KeyboardEvent code ('KeyW', 'Space',
  * 'Escape') is a key the game uses: it is drawn lit, with its name and a short word. A single lower-case letter is a
  * neighbouring key drawn faint and blank, only so the lit keys sit where they do on a real keyboard (W above S, E right
  * of W, R right of E, Shift at the left end of the row below A). Every lit key is handled by ns-controls
- * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, UI_CODES, REACH_CODES, MOVE_CODES, AREA_CODES); no key is shown that the game does not
+ * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, EMAP_CODE, UI_CODES, REACH_CODES, MOVE_CODES, AREA_CODES); no key is shown that the game does not
  * use. A row's `note` names a text (SHELL.keyboard) written once at the end of the row instead of a word on each key. */
 export const KEYBOARD_PICTURE_ROWS = Object.freeze([
   // The words of the number row are written beside Esc, in the free space right above that row (at the end of the
@@ -4802,7 +4816,8 @@ export const KEYBOARD_PICTURE_ROWS = Object.freeze([
   // R558 (Message 40): F is no longer used (Space grasps), so it is drawn as a faint blank neighbour like G.
   Object.freeze({ row: 'a', keys: Object.freeze(['KeyA', 'KeyS', 'KeyD', 'f', 'g', 'h', 'j', 'k']) }),
   // R558 (Messages 33 and 34): Shift + a press reaches the item behind (ns-controls REACH_CODES; either Shift works).
-  Object.freeze({ row: 'z', keys: Object.freeze(['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n']) }),
+  // (21 November 2026, EMAP: M, the electrical map, sits right of N in this row; ns-controls EMAP_CODE)
+  Object.freeze({ row: 'z', keys: Object.freeze(['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n', 'KeyM']) }),
   // R558 (Messages 55 and 56): the left and right arrow keys step the look along the motor strip (AREA_CODES). They
   // sit right of the space bar, as the arrow keys do on a keyboard.
   Object.freeze({ row: 'space', keys: Object.freeze(['Space', ...AREA_CODES]) })
@@ -6820,6 +6835,16 @@ export function start(params = {}) {
    * any error the hand stays rigid (as before) and handSkinNote says why (inspect().features.handSkin). */
   let bodyRigFrom = null;
   let handSkinReady = false, handSkinNote = null, skinSegmentsLast = null, skinPosedThisFrame = false;
+  // 21 November 2026 (EMAP, section 192; the owner: "let's try an electrical mapping view, like you see in functional
+  // neuroscience, connectomic live maps, dynamic maps"). The M key shows the nervous system as lines of light over the
+  // dimmed picture (ns-emap: the model; ns-emap-three: the drawing). emapOn: the player's choice, off at the start of
+  // every session and kept through a pause and the E view; emapView: made at the first M press, its model built a few
+  // milliseconds a frame (EMAP_BUILD), so nothing is added to the load and nothing is fetched for a player who never
+  // presses M; with the map off nothing of it runs in a frame. emapSegments: the body pose's segment matrices (the drawn nerves ride them);
+  // emapLinks: the links handed to the scene this frame; emapBrain: the loaded brain meshes (for the routes' stations).
+  let emapOn = false, emapView = null, emapNote = null, emapSegments = null, emapLinks = null, emapBrain = null, emapBodyMap = null, emapReduced = null, emapFrames = 0, emapCard = null, emapCardArea = undefined, emapLastMs = NaN, emapWiring = undefined, emapWiringNote = null;
+  const emapArgs = { nowMs: 0, links: null, sources: null, areas: null, marks: null, segments: null, headInPlace: 0, reduced: false, lookArea: null };
+  let emapMods = null; // (the map's modules, once fetched)
   let skinElbowFlexLast = 0;
   function installHandSkin(sourceMeshes) {
     handSkinReady = false;
@@ -7161,6 +7186,84 @@ export function start(params = {}) {
     guideAsyncEvents.push({ type: 'read' }); // the tutorial's last step
     return setInfoRead(now === 'read' ? 'more' : now === 'more' ? 'off' : 'read');
   }
+  /** 21 November 2026 (EMAP, section 192): the M key. The map is a view of its own over the same game: it changes no
+   * camera, no control and no movement. Its state is on the app root as data-ns-emap ("on" | "off": the legend's CSS). */
+  function setEmap(on) {
+    const was = emapOn;
+    emapOn = Boolean(on) && !emapNote;
+    if (emapOn && !was) emapCardArea = undefined; // (the legend starts each time with what kind of picture this is)
+    const root = infoRoot();
+    if (root) root.setAttribute('data-ns-emap', emapOn ? 'on' : 'off');
+    if (emapView) emapView.setOn(emapOn);
+    renderRequested = true;
+    return emapOn;
+  }
+  function toggleEmap() { return setEmap(!emapOn); }
+  /** The map's part of a frame (called once a frame from the glow part, and only when it has something to do: the
+   * model still to build, or the map on or easing out). Any failure switches the map off for the session and is kept
+   * as a note (inspect().emap.error): the game goes on without it. */
+  function emapFrame(now, out) {
+    try {
+      if (!emapView) {
+        // made at the first M press (EMAP_BUILD.onPress; or, with that switch off, once the game has drawn for a moment)
+        if (!(emapOn || (!EMAP_BUILD.onPress && emapFrames >= EMAP_BUILD.afterFrames)) || !scene || !scene.objects || !bodyRig || !emapBrain || !emapBodyMap) return;
+        if (!(scene.objects.regions && scene.objects.regions.length && scene.objects.body && scene.objects.body.length)) return;
+        // The nerve data (ns-wiring-data, section 193: which nerve serves each muscle, the nerves' courses, the cord, the
+        // brain's links) is a large table the game needs for the map only: it is fetched here, at the map's first use,
+        // not with the page. Until it has arrived nothing is built; if it cannot be loaded, the plain stand-in is used
+        // (inspect().emap.standIn says which).
+        if (emapWiring === undefined) {
+          emapWiring = null;
+          import('./ns-wiring-data.mjs').then(m => { emapWiring = m && m.NERVE_TRUNKS && Object.keys(m.NERVE_TRUNKS).length ? m : false; if (!emapWiring) emapWiringNote = 'the wiring data module has no nerves'; },
+            err => { emapWiring = false; emapWiringNote = errorText(err); });
+          // the map's own modules, beside the data (a failure to load them switches the map off with a note)
+          Promise.all([import('./ns-emap-three.mjs'), import('./ns-emap-standin.mjs'), import('./ns-emap-card.mjs')])
+            .then(([three, standin, card]) => { emapMods = { createEmapView: three.createEmapView, emapInputsFromScene: three.emapInputsFromScene, makeStandinWiring: standin.makeStandinWiring, createEmapCard: card.createEmapCard }; },
+              err => { emapNote = errorText(err); setEmap(false); });
+        }
+        if (emapWiring === null || !emapMods) return;
+        const { createEmapView, emapInputsFromScene, makeStandinWiring, createEmapCard } = emapMods;
+        emapView = createEmapView({ THREE, objects: scene.objects, stripRef: STRIP_CUT && Number.isFinite(STRIP_CUT.ref) ? STRIP_CUT.ref : 1 }); // (the strip's stencil mark: the map is not drawn over a visible block)
+        const input = emapInputsFromScene({ objects: scene.objects, bodyRig, brainAssets: emapBrain, armSegments: SEGMENTS });
+        const armNames = input.muscles.filter(m => m.rig === 'arm').map(m => [m.id, String(m.name).toLowerCase()]);
+        emapView.prepare({ ...input, bodyMap: emapBodyMap, rig: bodyRig, wiring: emapWiring || makeStandinWiring(bodyRig),
+          // the muscles the game lights for a movement: the body's meshes as the glow links name them, the left arm's by name
+          resolveMuscles: (r, act) => {
+            const ids = Object.keys(actionBodyDrives(act.id));
+            if (r.isLeftArm) for (const n of [...(act.agonists || []), ...(act.stabilizers || []), ...(act.antagonists || [])]) { const q = String(n).toLowerCase(); for (const [id, nm] of armNames) if (nm.includes(q)) ids.push(id); }
+            return ids;
+          } });
+        try { const mq = typeof view.matchMedia === 'function' ? view.matchMedia('(prefers-reduced-motion: reduce)') : null; emapReduced = mq; } catch { emapReduced = null; }
+        try { emapCard = createEmapCard({ doc, root: hudRoot, text: NT.EMAP }); } catch { emapCard = null; } // the legend (shown by CSS while the map is on)
+        emapView.setOn(emapOn);
+        return;
+      }
+      const frameMs = Number.isFinite(emapLastMs) ? Math.max(0, Math.min(2000, now - emapLastMs)) : 0;
+      emapLastMs = now;
+      if (!emapView.built) { emapView.work(emapOn ? Math.max(EMAP_BUILD.pressMs, EMAP_BUILD.pressShare * frameMs) : Math.max(EMAP_BUILD.idleMs, EMAP_BUILD.idleShare * frameMs)); if (!emapView.built) { const e = emapView.state().error; if (e) throw new Error(e); return; } emapView.setOn(emapOn); }
+      if (!(emapOn || emapView.amount > 0)) return;
+      // (one object, refilled: nothing is allocated for the map in a frame)
+      const A = emapArgs;
+      A.nowMs = now; A.links = emapLinks; A.sources = glowData ? glowData.links : null; A.areas = glowData ? glowData.areas : null; A.marks = out ? out.marks : null; A.segments = emapSegments;
+      A.headInPlace = camPose && Number.isFinite(camPose.headInPlace) ? camPose.headInPlace : 0; A.reduced = Boolean(emapReduced && emapReduced.matches);
+      { const g = out && out.gaze; A.lookArea = g && g.target === 'region' && typeof g.regionId === 'string' ? g.regionId : null; } // (part 3: storms start there now and then)
+      emapView.frame(A);
+      // the legend's words (More detail): the route of the area under the look and, until an area has been looked at
+      // since the map was switched on, what kind of picture this is. Written only when the area changes; the last
+      // area's route stays while the look is elsewhere (no text that comes and goes as the crosshair crosses a gap).
+      if (emapCard && emapOn) {
+        const g = out && out.gaze, id = g && g.target === 'region' && typeof g.regionId === 'string' ? g.regionId : emapCardArea === undefined ? null : emapCardArea;
+        if (id !== emapCardArea) {
+          emapCardArea = id;
+          const r = id ? regionById(emapBodyMap, id) : null, m = emapView.model, T = NT.EMAP.more;
+          emapCard.setRoute(r ? NT.plainTitle(r) : '', NT.emapRouteLines(r));
+          emapCard.setNotes(r ? null : [T.bridge, T.typical, NT.emapSlowLine(m.slow.command, m.slow.report), m.standIn ? T.standIn : null]);
+          emapCard.setColour(r && mods.colors && typeof mods.colors.areaGlowCss === 'function' ? mods.colors.areaGlowCss(id) : null);
+        }
+      }
+    } catch (err) { emapNote = errorText(err); try { if (emapView) emapView.setOn(false); } catch { /* gone */ } setEmap(false); }
+  }
+
   /** R4-fix (review RP10): an opened More detail is scrolled into the panel's view (in portrait it opened below the
    * screen edge; at 16:9 only about two lines showed). The panel scrolls while More detail is open (CSS). */
   function revealInfoDetail(d) {
@@ -7177,6 +7280,7 @@ export function start(params = {}) {
     if (!sim || !simState) return false;
     cancelPendingGameplay('reset-body'); // nothing pressed before the reset acts after it (it also ends an F hold)
     simState = sim.resetBody(simState);
+    if (emapView) { try { emapView.reset(); } catch { /* the map goes on from dark */ } } // 21 November 2026 (EMAP): no route stays lit across a reset (the map itself stays as the player set it)
     limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too (19 November: a limb taken by a click is let go as well)
     limbHold = null; // (the hold takes the chosen limb up again at its start place)
     neckView = null; carriedHold = null; carryArrival = null; // NECK_VIEW: the neck goes back at once; that is no movement for the view to swing with
@@ -7497,6 +7601,7 @@ export function start(params = {}) {
       // 19 November 2026: the two halves of the brain are drawn apart (ns-brain-part HEMI_GAP), here, once, before anything
       // is built from the brain's meshes, so what is drawn, picked, labelled and framed is one and the same brain.
       if (!isPlaceholder && inputs.assets && inputs.assets.brain instanceof Map) inputs.assets = { ...inputs.assets, brain: partedBrainAssets(inputs.assets.brain) };
+      emapBrain = !isPlaceholder && inputs.assets && inputs.assets.brain instanceof Map ? inputs.assets.brain : null; // 21 November 2026 (EMAP): the routes' stations
       setStatus('Getting the arm and brain ready…');
       loadStep('brain');
       await yieldToPaint();
@@ -7504,6 +7609,7 @@ export function start(params = {}) {
       if (stopped) return { ok: false, error: 'stopped' };
 
       const bodyMap = bodyMapOf(mods.bodyMap);
+      emapBodyMap = bodyMap; // 21 November 2026 (EMAP)
       const data = prepareSceneData({ binding: inputs.binding, assets: inputs.assets, placeholder: isPlaceholder, armTwist: wholeArmOption ? 'chain' : 'continuous' });
       armContactPivots = !isPlaceholder && data && data.rig && data.rig.pivots ? data.rig.pivots : null; // 18 November 2026 (package CONTACT)
       // Region mode only when the scene can also DRAW the brain transform (what is drawn is what is picked).
@@ -7760,6 +7866,8 @@ export function start(params = {}) {
         dragStart: (s, target, o) => (shellIsPlaying(shellState) && typeof base.dragStart === 'function' ? base.dragStart(s, target, o) : s),
         // The information key (ns-controls DETAIL_CODE, R) only while playing.
         toggleDetail: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleDetail === 'function' ? base.toggleDetail(s, t) : s),
+        // 21 November 2026 (EMAP): the map key (ns-controls EMAP_CODE, M) only while playing.
+        toggleEmap: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleEmap === 'function' ? base.toggleEmap(s, t) : s),
         // R5-integrate-core (D18): the view key (E) only while playing; the camera decides in the frame loop (ns-camera).
         toggleView: (s, t) => (shellIsPlaying(shellState) && typeof base.toggleView === 'function' ? base.toggleView(s, t) : s),
         // R558 (Messages 55 and 56): the number keys (ns-controls MOVE_CODES) only while playing; the frame loop decides.
@@ -7779,7 +7887,7 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onEmap: () => toggleEmap(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31; lead decision for Messages 2 and 12): what a new press would drag, at the pointer (free mouse) or at
         // the crosshair (x, y null: captured). The same pick as the Space grasp (itemAt: what is seen of your own limbs, the
         // brain and the mirror body; an arrow under the point is an arrow press), and while Space holds an item (held, or
@@ -11623,6 +11731,7 @@ export function start(params = {}) {
             const skinHand = Boolean(rest);
             if (handSkinReady) {
               const det = mods.body.poseBodyDetailed(bodyRig, T, po);
+              emapSegments = det.segments; // 21 November 2026 (EMAP): the drawn nerves ride the pose's own segment matrices
               callScene('updateBody', det.matrices, drives);
               frameTimer.mark('pose');
               try {
@@ -11707,9 +11816,13 @@ export function start(params = {}) {
           const rl = crossSeen && crossRoute ? reverseLink(crossSeen, crossRoute) : null;
           if (rl) mapLinks.push(rl);
           const extraLinks = danceLinks.length || headLinks.length || reachLinks.length || mapLinks.length ? [...danceLinks, ...headLinks, ...reachLinks, ...mapLinks] : null;
-          callScene('setGlowLinks', extraLinks ? [...links, ...extraLinks] : links);
+          emapLinks = extraLinks ? [...links, ...extraLinks] : links;
+          callScene('setGlowLinks', emapLinks);
           glowWired = true;
-        } else { glowWired = false; glowData = null; if (sceneFn('setGlowLinks')) callScene('setGlowLinks', headGlowLinks(headGlow)); }
+        } else { glowWired = false; glowData = null; emapLinks = null; if (sceneFn('setGlowLinks')) callScene('setGlowLinks', headGlowLinks(headGlow)); }
+        // 21 November 2026 (EMAP, section 192): the electrical map's part of the frame. Nothing while it is off and built.
+        if (live && emapFrames++ === 0) setEmap(emapOn); // (the root carries data-ns-emap from the first frame of play)
+        if (emapOn || (emapView ? !emapView.built || emapView.amount > 0 : !EMAP_BUILD.onPress)) { if (!emapNote) emapFrame(now, out); }
         frameTimer.mark('glow');
         refreshGuideFeatures();
         // R558 (hunt 3 check): the sim re-applies the legacy glassHit override to its cached RAW gaze every frame, so in
@@ -11878,7 +11991,13 @@ export function start(params = {}) {
             const labelsPx = [...(obs && Array.isArray(obs.labelsPx) ? obs.labelsPx : []), ...(guideOrientPx || [])];
             if (guideChipGoal !== guideNow.goalId) { guideChipGoal = guideNow.goalId; guideChipLast = null; }
             // R5-integrate-core: and off the HUD cards themselves (the legend card's credit line was covered at 1280x720).
-            if (!guideCardsPx || frames - guideCardsAt >= GUIDE_COVER.rectEveryFrames) { try { guideCardsPx = typeof hud.cardRectsPx === 'function' ? hud.cardRectsPx() : []; } catch { guideCardsPx = []; } guideCardsAt = frames; }
+            if (!guideCardsPx || frames - guideCardsAt >= GUIDE_COVER.rectEveryFrames) {
+              try { guideCardsPx = typeof hud.cardRectsPx === 'function' ? hud.cardRectsPx() : []; } catch { guideCardsPx = []; }
+              // 21 November 2026 (EMAP): and off the electrical map's legend while the map is on (its own card, not one of
+              // the HUD's: at the "more" level in a 1366 x 768 window the chip stood on it).
+              try { const r = emapOn && emapCard && emapCard.el && typeof emapCard.el.getBoundingClientRect === 'function' ? emapCard.el.getBoundingClientRect() : null; if (r && r.width > 0 && r.height > 0) guideCardsPx.push({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom }); } catch { /* the chip keeps its place */ }
+              guideCardsAt = frames;
+            }
             const cardsPx = guideCardsPx || [];
             // R558 (issue hunt 2): and off your own body and the mirror body (their screen boxes, scene bodyScreenBoxes),
             // and only in the top band of the view (GUIDE_TOP_BAND): looking down it wandered to the middle, over your legs.
@@ -12122,6 +12241,8 @@ export function start(params = {}) {
     if (unbind) { unbind(); unbind = null; }
     for (const [obj, type, fn, opts] of pageListeners.splice(0)) obj.removeEventListener(type, fn, opts);
     exitLock();
+    if (emapView) { try { emapView.dispose(); } catch { /* gone with the scene */ } emapView = null; }
+    if (emapCard) { emapCard.dispose(); emapCard = null; }
     if (scene) scene.dispose();
     hud.dispose();
     if (shell) { shell.dispose(); shell = null; }
@@ -12355,6 +12476,9 @@ export function start(params = {}) {
       data: sceneDataSummary(current.data, { meshes: Boolean(options && options.meshes === true) }),
       scene: sceneInfo,
       bodyWorlds: (() => { try { return bodyWorldsBrief(); } catch (err) { return { error: errorText(err) }; } })(),
+      // 21 November 2026 (EMAP, section 192): the electrical map: { on, built, lines, activeRoutes, lastVolley: { area,
+      // movement, stations, arrivalS }, sparks, ... } (ns-emap-three state())
+      emap: (() => { try { return emapView ? { ...emapView.state(), on: emapOn, error: emapNote || emapView.state().error, wiringNote: emapWiringNote } : { on: emapOn, built: false, lines: 0, activeRoutes: 0, lastVolley: null, sparks: 0, error: emapNote }; } catch (err) { return { on: emapOn, built: false, error: errorText(err) }; } })(),
       features: features()
     });
   }

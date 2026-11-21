@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-22-body-update-64",
+  "version": "experimental-2026-11-22-body-update-65",
   "experimental": true,
-  "source": "Body update 64: a glow on every computer in each area's own colour, black in-between areas with a soft blue edge glow, a deep black abyss behind everything, touching muscles told apart in light and shade, every strip movement moving the way it is named, and the faults found in update 63 fixed",
+  "source": "Body update 65: the electrical map on M, a made-up live brain-scan picture with wires everywhere, electrical storms and the route of each movement from brain to muscle and back, drawn from typical nerve anatomy",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -27,13 +27,13 @@
     },
     {
       "path": "CREDITS-AND-LICENCES.md",
-      "bytes": 37599,
-      "sha256": "56abf7bdf3b66fa63a56796844eac8a1bfcaeb3d11bcc49cf9d90ba79fd0641b"
+      "bytes": 39048,
+      "sha256": "b7bf3df7a5b549a70afdf01a1d368ec0076709a5d5acf27442902fde3917227e"
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 652001,
-      "sha256": "4cc63ce79d7590dba2b44a0109590e460ce174961629963d448e4ce4ccac64ae"
+      "bytes": 739861,
+      "sha256": "e8428f0d3b97f5c48f5b8e13da92a1c27e1ca5fccf673b9d6e75d3e41eb79329"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 14555,
-      "sha256": "456ae6fe628fbb282398de2e518249f0139fcb4459f9c63f22d1b7cf48920da3"
+      "bytes": 16572,
+      "sha256": "44a40808f81b48060798bf7099c2d3717fd8e7c33ac208d1c7f660aa04888879"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 65056,
-      "sha256": "acaf947ddeb7bb4ed813e93780efc18e173766c47cace2e9f6a45b68d1fc67fd"
+      "bytes": 65741,
+      "sha256": "3bea4afe4834d490eb390e87246c5ad5108fe454cc2a4c703e3798caf1e1b644"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 56884,
-      "sha256": "800d8c71e522fff3808289c62540d9b60631da52f5388c33279daaca1cc4f16d"
+      "bytes": 57990,
+      "sha256": "e91aeefedc81efda03387f3a9e09f5465c793f85a88c1c39b6acf84ba7ffeaa9"
     },
     {
       "path": "README.md",
-      "bytes": 24622,
-      "sha256": "ca367347fedfdd34d6f753d04ffaa54e60b45e0f87e3df34664cb3eb45b52470"
+      "bytes": 25012,
+      "sha256": "894b3cecf570c7a79ef1115742366278b48d0325f309becb002a501efb145aa7"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "cf4214805b93eb5abad280af535865e49a6fec9816896ac7d8e5c6f28e34f0d8"
+      "sha256": "3a238b181c191340aa1ca43ce361135a699d369f14942e2c2712fe78404bcab9"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "7a33722d0a816b117c7573b949bc1acced89f248f78f6b7b73f4d578a4d3ad6a"
+      "sha256": "09cd2d9e9964d87e36c04e47dcfbb891cb2a688f221e88493e5ee484e69182e6"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3817,8 +3817,8 @@
     },
     {
       "path": "scene/example/early-load.mjs",
-      "bytes": 6016,
-      "sha256": "37c84440b0829783a1ed4de41f757c7e3f54b8a54ee8a5f7c472f35223fa4098"
+      "bytes": 6120,
+      "sha256": "d2eab78c0e866b836ce7efaf2fccb0479294fb18017ec5782ad6067b5ca7a17a"
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
@@ -3852,8 +3852,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 31561,
-      "sha256": "a0f4a5f30867d5baa8ee8df890192a9335fa508e9981ec33826adb19e576e891"
+      "bytes": 36922,
+      "sha256": "d2131de7d52ae04859b1cb65df00cdeb4867b13563980c6746d0715dd9167092"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3862,8 +3862,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1011013,
-      "sha256": "653d4e6e946fce5553db818600fe8dc878f9c63f62b3a7ebfd9d1cf82d0b8de4"
+      "bytes": 1023252,
+      "sha256": "391ba79740745bdb85b8fed15d9b77d389020a149d97849f6d813cc0deae94a0"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -3992,8 +3992,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 98732,
-      "sha256": "712aa16ce0a1b015c14a06281cadd8aa261e320dfff20b00922d85ce5e271887"
+      "bytes": 101169,
+      "sha256": "c941206dab2c9f96d738aa05372a7c4d06a9770846cad2ad72ad3c58a79a1338"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4004,6 +4004,31 @@
       "path": "scene/src/ns-detail.mjs",
       "bytes": 14123,
       "sha256": "a47e338de088afa53d5ace5d87536f7e2bcff72f56cd2f7970c07673bd3b76ce"
+    },
+    {
+      "path": "scene/src/ns-emap-card.mjs",
+      "bytes": 4177,
+      "sha256": "3ce0c98e3e0a111752f0b257feb4abd5a6c17286e0f961a665957831d02049b9"
+    },
+    {
+      "path": "scene/src/ns-emap-standin.mjs",
+      "bytes": 16633,
+      "sha256": "ec8802a0557d57fb55ed5469142e02753a83ad3773d5b562456bce77f0d79e5b"
+    },
+    {
+      "path": "scene/src/ns-emap-storm.mjs",
+      "bytes": 23434,
+      "sha256": "17a490bc5796571fe23aa22f8af08d8a83b6cd32db09edccc6d79e5154ceb188"
+    },
+    {
+      "path": "scene/src/ns-emap-three.mjs",
+      "bytes": 54345,
+      "sha256": "48d2e9c76bf4142382d3c1f3c46b0e388ad31e97e98f10adf5fe9be9cb09b2fb"
+    },
+    {
+      "path": "scene/src/ns-emap.mjs",
+      "bytes": 98373,
+      "sha256": "f50ecd32be1abb9bd1e0e1b7247c336ae60d23b1c099a9ea6ac188677e27eea5"
     },
     {
       "path": "scene/src/ns-face-move.mjs",
@@ -4152,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 150163,
-      "sha256": "1fb96bd30417449b7040e15cc50ff4ef4d9a4af4ad538c0fc876ecac14fe3989"
+      "bytes": 156574,
+      "sha256": "5396fc1a3c2672ffa7aca299da84bd0730fe401ae42369de47903222a52787d7"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4164,6 +4189,11 @@
       "path": "scene/src/ns-whole-arm-display.mjs",
       "bytes": 50080,
       "sha256": "4480f48a588e367c90633abd576d7aa9f3fd761aaffee5067a5868130071f2d1"
+    },
+    {
+      "path": "scene/src/ns-wiring-data.mjs",
+      "bytes": 200454,
+      "sha256": "223f3ff7896970be01e42221ed018b1ac1ccc889ba7d5ea15f82edcfa5cd06cb"
     },
     {
       "path": "serve-local.mjs",
@@ -4286,6 +4316,11 @@
       "sha256": "a51adbd31de820edb43b04aaeeb03bb49bb70c4bc0d24fee3c39ae101e44ed57"
     },
     {
+      "path": "tests/browser-emap.mjs",
+      "bytes": 13568,
+      "sha256": "48197a5f0ba08933b6495d16112b15c31c3decc161916ba15e66c08281b8208c"
+    },
+    {
       "path": "tests/browser-keyboard-aim.mjs",
       "bytes": 27761,
       "sha256": "9a953f5f7a62febae5c75fec501c1a77aad50030dfe73edd1b1150c3d994f8df"
@@ -4357,8 +4392,8 @@
     },
     {
       "path": "tests/chunking.test.mjs",
-      "bytes": 7257,
-      "sha256": "5f72ae5db87242e7d3e493360aa0e6a015ac9836c889d14219349791e8227fc3"
+      "bytes": 7353,
+      "sha256": "039f2b3f0d74d5292ab844d49e5d986a954cad3a28368baaf4363bf7114fd5c7"
     },
     {
       "path": "tests/circle-roll.test.mjs",
@@ -4389,6 +4424,21 @@
       "path": "tests/digit-tendons.test.mjs",
       "bytes": 4751,
       "sha256": "f7a4a4c7b65e574bb03c5ba5bb8e4b2b4d8a05fb1cb705f580c258977c97cfd8"
+    },
+    {
+      "path": "tests/emap-storm.test.mjs",
+      "bytes": 15491,
+      "sha256": "5575ff99ada06e5efe805636375ac0a2202cd3357ccba764815e758567c35490"
+    },
+    {
+      "path": "tests/emap-view.test.mjs",
+      "bytes": 11391,
+      "sha256": "ffc4b9ec1c55917fef71b6fe3978bfedef8ee3af49fc868ab24f9f3761d3c404"
+    },
+    {
+      "path": "tests/emap.test.mjs",
+      "bytes": 44610,
+      "sha256": "1585fc1cb5fb249e0d633743e79a63eb5f8aa186e7794a141e67af2457e69c67"
     },
     {
       "path": "tests/eye-gaze.test.mjs",
@@ -4696,6 +4746,11 @@
       "sha256": "3d9891aeb798bd0101c3de469de6b880a45a5aa93f7a0ae7e267d8e2cea1db3a"
     },
     {
+      "path": "tests/wiring-data.test.mjs",
+      "bytes": 72153,
+      "sha256": "5ea6d0163c3683cc4ac58a300a013a25aca118aba0e3397396d1a18fa2c5b90a"
+    },
+    {
       "path": "tools/build-assembly-parts.mjs",
       "bytes": 5258,
       "sha256": "6fec0d6a422f134d7727beb6529d082df49b83d0e625ed32282444e622e4ba39"
@@ -4704,6 +4759,11 @@
       "path": "tools/build-mesh-packs.mjs",
       "bytes": 19103,
       "sha256": "de379572c2e33a7b2ac479d2856be7921e64781cabc7737554f9087999e95924"
+    },
+    {
+      "path": "tools/build-wiring-courses.mjs",
+      "bytes": 86461,
+      "sha256": "331ab247eb9166f4315d0ebf4b17c596e19b8e34c3728de54ffb061bd19656ac"
     },
     {
       "path": "tools/load-body.mjs",
@@ -4724,6 +4784,11 @@
       "path": "tools/simplify-mesh.mjs",
       "bytes": 24042,
       "sha256": "a594f68a54c8802918db6d7743878b290ab4bfd4e4d1aabe720d50638b25d777"
+    },
+    {
+      "path": "tools/wiring-geometry.mjs",
+      "bytes": 30305,
+      "sha256": "5be727c6ea0b334e06ef34e7c489a3e07d4cbe5b271c2c73fe004cda92359d46"
     },
     {
       "path": "vendor/LICENSE",

@@ -91,7 +91,7 @@ test('the Esc page is a few titled groups: look and press, move, hold and carry,
   const keysOf = g => all(g, e => e.tagName === 'KBD').map(e => e.textContent);
   assert.deepEqual(keysOf(groups[1]), ['W', 'A', 'S', 'D'], 'the pyramid is its own group');
   assert.deepEqual(keysOf(groups[2]), ['Space']);
-  assert.deepEqual(keysOf(groups[3]), ['E', 'R', 'Esc']);
+  assert.deepEqual(keysOf(groups[3]), ['E', 'R', 'M', 'Esc']); // (21 November 2026: M, the electrical map, on the Esc page; not on the five-second card)
   const words = all(menu, e => e.tagName === 'DD' || e.tagName === 'DT' || e.tagName === 'P').map(e => e.textContent).join(' ');
   assert.doesNotMatch(words, /1 to 9|row below/i, 'no sentence about a row of nine number keys');
   assert.equal(buildShellMenu(doc, card, null), null);

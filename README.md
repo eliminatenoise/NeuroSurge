@@ -4,6 +4,8 @@
 
 Rest your look on a motor area and the body part it names moves at once. Click to do it again. Click a muscle and its motor area lights up in the same colour. In NeuroSurge, you look out of a skinless body, carry and turn the brain, and watch its effects on a mirror body that moves with you. Rendering, controls and simulation run on your computer. Static hosting supplies the files.
 
+Body update 65: press M for the electrical map, a made-up live brain-scan picture: the brain glows as a moving colour-coded scan, wires run everywhere through both bodies with small pulses, electrical storms roll across the brain, and each movement sends a volley from its strip area down to the muscles and a report back up. It is drawn from typical nerve anatomy and is not a recording.
+
 Body update 64: the glow is there on every computer: an area you look at glows softly in its own colour, an area that switches on is white-hot in the middle with its own colour round it, and the black in-between areas have a soft blue edge glow and never turn white; the background is a deep black abyss with no room; touching muscles are told apart in light and in shade; every movement of the strip moves the way it is named and rests a moment at its end; and the faults found in update 63 are fixed.
 
 Body update 63: fixes from a browser hunt: only what you look at or click switches a movement on, the limb keys never whip the view or leave a limb stuck, the words and cards say what is there, and five faults of the look are gone; the right elbow bends more cleanly, S draws the hand across the chest, a hand drag bends the right wrist, and the left wrist bends sideways.

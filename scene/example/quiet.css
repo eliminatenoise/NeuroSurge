@@ -362,3 +362,66 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   .ns-hud .ns-panel-legend { width: calc(100% - 2 * var(--ns-gap, 12px)); }
   .ns-hud .ns-panel-legend[data-ns-docked="band"] { margin-top: calc(-1 * var(--ns-legend-lift, 0px)); }
 }
+
+/* ==== 21 November 2026 (EMAP, section 192): the electrical map's legend (ns-emap-card.mjs). One small chunk at the top
+   right, away from the other cards, only while the map is on (the M key: data-ns-emap="on" on the app root). It follows
+   the reading levels of the R key: the short card at the start, More detail under it at "more", nothing at "off".
+   Its two marks say the same as the picture without needing colour: the command is one line with one large bead, the
+   report a paler line beside it with two small beads. */
+.ns-emap-card {
+  display: none; position: absolute; right: 16px; top: 108px; width: min(300px, calc(100vw - 32px)); box-sizing: border-box;
+  padding: 12px 14px 12px; border-radius: 14px; pointer-events: none;
+  background: var(--ns-chunk-bg, rgba(6, 10, 15, 0.86)); border: 1.5px solid var(--ns-chunk-rim, rgba(200, 222, 240, 0.5)); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  color: #f2f7fb; font: 13.5px/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; --ns-emap-color: #7fd8ff;
+}
+.ns-app[data-ns-emap="on"] .ns-emap-card { display: block; }
+.ns-app[data-ns-read="off"] .ns-emap-card, .ns-app[data-ns-phase="loading"] .ns-emap-card { display: none; }
+.ns-emap-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.ns-emap-title { font-size: 17px; font-weight: 800; color: #fff; }
+.ns-emap-key { color: #cfdbe6; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+.ns-emap-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ns-emap-row { display: flex; align-items: center; gap: 10px; }
+.ns-emap-mark { flex: none; width: 46px; height: 12px; border-radius: 6px; }
+.ns-emap-down .ns-emap-mark {
+  background:
+    radial-gradient(circle at 70% 50%, #fff 0 2px, var(--ns-emap-color) 3px, transparent 6px),
+    linear-gradient(var(--ns-emap-color), var(--ns-emap-color)) center / 100% 2.5px no-repeat;
+}
+.ns-emap-up .ns-emap-mark {
+  background:
+    radial-gradient(circle at 26% 50%, #fff 0 1px, color-mix(in oklab, var(--ns-emap-color) 45%, #fff) 2px, transparent 4px),
+    radial-gradient(circle at 62% 50%, #fff 0 1px, color-mix(in oklab, var(--ns-emap-color) 45%, #fff) 2px, transparent 4px),
+    linear-gradient(color-mix(in oklab, var(--ns-emap-color) 40%, #fff), color-mix(in oklab, var(--ns-emap-color) 40%, #fff)) center / 100% 1.5px no-repeat;
+  opacity: 0.85;
+}
+.ns-emap-scan .ns-emap-mark { /* 22 November 2026 (part 3): the live scan's colour scale (ns-emap-storm SCAN_STOPS) */
+  height: 9px; border-radius: 5px; background: linear-gradient(90deg, rgb(41, 15, 107), rgb(20, 51, 217) 22%, rgb(0, 184, 230) 42%, rgb(46, 224, 92) 58%, rgb(245, 230, 46) 72%, rgb(255, 122, 20) 86%, rgb(255, 237, 209));
+}
+.ns-emap-honest { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid rgba(200, 222, 240, 0.25); color: #ffe9a8; font-weight: 700; }
+.ns-emap-more { display: none; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(200, 222, 240, 0.25); max-height: min(46vh, 430px); overflow: hidden; }
+.ns-app[data-ns-read="more"] .ns-emap-more { display: block; }
+.ns-emap-area { margin: 0 0 4px; font-weight: 800; color: #fff; }
+.ns-emap-route, .ns-emap-notes { margin: 0; padding: 0 0 0 16px; display: grid; gap: 4px; font-size: 12.5px; line-height: 1.38; }
+.ns-emap-notes { margin-top: 8px; color: #cfdbe6; }
+.ns-emap-notes:empty { display: none; }
+/* 21 November 2026 (EMAP), after a picture of the "more" level: More detail hung under the short card (590 px tall
+   with the card) and lay ON the game's own information panel, which at this level stands at the bottom right and is up
+   to 66 % of the window high (neurosurge.css --ns-info-col-maxvh): two panels of text on top of each other. At "more"
+   the legend is now one low, wide card above that panel: the short card keeps the right edge, More detail is a column
+   to its left, and the card is never taller than the room above the panel (what does not fit is cut at the foot; the
+   words are kept to nine short lines for it: ns-text EMAP.more). Not on narrow or upright windows (the rule below). */
+@media (min-width: 901px) and (min-aspect-ratio: 1001/1000) {
+  .ns-app[data-ns-emap="on"][data-ns-read="more"]:not([data-ns-phase="loading"]) .ns-emap-card {
+    display: grid; grid-template-columns: minmax(0, 1fr) 228px; grid-template-rows: auto auto 1fr; column-gap: 14px;
+    top: 26px; width: min(532px, calc(100vw - 32px)); max-height: calc(100vh - var(--ns-info-col-maxvh, 66vh) - 58px); overflow: hidden;
+  }
+  .ns-app[data-ns-read="more"] .ns-emap-card > :not(.ns-emap-more) { grid-column: 2; }
+  .ns-app[data-ns-read="more"] .ns-emap-more { grid-column: 1; grid-row: 1 / span 3; margin: 0; padding: 0 14px 0 0; border-top: 0; border-right: 1px solid rgba(200, 222, 240, 0.25); max-height: none; box-sizing: border-box; }
+  .ns-app[data-ns-read="more"] :is(.ns-emap-route, .ns-emap-notes) { list-style: none; padding: 0; font-size: 11.5px; line-height: 1.33; }
+  .ns-app[data-ns-read="more"] .ns-emap-area { font-size: 12.5px; }
+}
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  .ns-emap-card { top: 64px; right: 8px; width: min(230px, calc(100vw - 16px)); padding: 9px 10px; font-size: 12px; }
+  .ns-emap-title { font-size: 14px; }
+  .ns-app[data-ns-read="more"] .ns-emap-more { max-height: 30vh; }
+}
