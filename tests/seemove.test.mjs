@@ -596,7 +596,7 @@ test('your own trunk moving the view never leaves the held limb off its place: t
 });
 
 test('letting go of Space or of the left hand during a trunk movement leaves nothing thrown or moved: the hand goes back at rejoinMps, the left hand let go stays held until the trunk is at rest, an arm chosen then waits for it (HOLD_BODY)', async () => {
-  const { HOLD_BODY, holdRejoinStep, holdTakeUpWaits, MAX_FRAME_DT } = await import('../scene/src/ns-app.mjs');
+  const { HOLD_BODY, holdRejoinStep, holdTakeUpWaits, holdKeptDrop, holdTrunkAway, holdArmBack, MAX_FRAME_DT } = await import('../scene/src/ns-app.mjs');
   // D4 of the round-4 check: Space let go during "Bend trunk forward" handed the hand's old place back in one frame
   // (107.6 mm). Now each frame goes at most rejoinMps x dt, and the hand ends exactly at its place.
   assert.ok(HOLD_BODY.rejoinMps > 0 && HOLD_BODY.rejoinMps / 60 < 0.02, 'under 20 mm a frame at 60 frames a second');
@@ -624,12 +624,110 @@ test('letting go of Space or of the left hand during a trunk movement leaves not
     assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false, fresh: false }), false, `${limb} already held: kept`);
   }
   for (const limb of ['leftLeg', 'rightLeg']) assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false }), false, `${limb}: its hip does not ride on the trunk`);
+  // K1 of the round-5 check: the kept left hand was let go as soon as the trunk was at rest, also while Space still held
+  // something, and stayed 276 mm raised. The rule now (every row of it):
+  const rows = [
+    [{ chosen: true }, true, 'the left arm chosen again: its hold is taken back'],
+    [{ trunkAtRest: false }, false, 'the trunk not at rest: kept'],
+    [{ trunkAtRest: true }, true, 'at rest, nothing held, back at its place: let go'],
+    [{ trunkAtRest: true, busy: true }, false, 'Space (or a drag) still held at rest: kept (K1)'],
+    [{ trunkAtRest: true, rejoining: true }, false, 'at rest, Space let go, on its way back: kept until it is there'],
+    [{ trunkAtRest: false, busy: true, rejoining: true }, false, 'during the movement with Space: kept']
+  ];
+  for (const [f, want, why] of rows) assert.equal(holdKeptDrop(f), want, why);
+  // K3: the right arm let go during a trunk movement kept the angles the hold had worked out for the bent trunk (257 mm
+  // off for good). Its joints' places now go back in step with the trunk's return, exactly to those before it at rest.
+  assert.equal(holdTrunkAway({ trunk_flex: 3, trunk_rot: 4 }), 5);
+  assert.equal(holdTrunkAway({ neck_flex: 30 }), 0, 'the neck is not the trunk');
+  const to = { r_shoulder_flex: 33, r_shoulder_abd: 5, r_elbow_flex: 14 }, from = { r_shoulder_flex: 70, r_shoulder_abd: 15, r_elbow_flex: 60 };
+  let st = { from: { ...from }, to: { ...to }, last: { ...from }, share: 1, away0: 35 }, place = { ...from }, prev = from;
+  for (const away of [35, 30, 20, 25, 10, 4, 0]) {
+    const b = holdArmBack(st, { place, away, atRest: away === 0, dt: 1 / 60 });
+    assert.ok(b.state.share <= st.share, 'the share never grows again (the swing past rest does not take the arm back)');
+    for (const id of Object.keys(to)) assert.ok(Math.abs(b.joints[id] - to[id]) <= Math.abs(prev[id] - to[id]) + 1e-9, `${id} only goes back`);
+    st = b.state; place = { ...place, ...b.joints }; prev = b.joints;
+  }
+  // (at rest what is left goes at most armBackDegS, a few frames here)
+  let frames = 0;
+  for (let b; frames < 30; frames++) { b = holdArmBack(st, { place, atRest: true, dt: 1 / 60 }); st = b.state; place = { ...place, ...b.joints }; prev = b.joints; if (b.done) break; }
+  assert.ok(frames < 10, `${frames} frames after rest`);
+  assert.deepEqual(prev, to, 'then exactly the places from before the movement');
+  assert.deepEqual(holdArmBack({ from, to, last: { ...from }, share: 1, away0: 35 }, { place: from, away: 35 }).joints, from, 'when let go: where the hold left it (no jump)');
+  // keys (or a movement's end) moved a joint: it goes on from where it is, no jump, and is back at rest
+  { const s0 = { from: { ...from }, to: { ...to }, last: { ...from }, share: 1, away0: 35 };
+    const b1 = holdArmBack(s0, { place: { ...from, r_elbow_flex: 75 }, away: 20 });
+    assert.ok(Math.abs(b1.joints.r_elbow_flex - 75) < 1e-9, 'the step meets the joint where the keys put it');
+    const b2 = holdArmBack(b1.state, { place: { ...from, ...b1.joints }, away: 0, atRest: true, dt: 1 / 60 });
+    assert.ok(b2.joints.r_elbow_flex < 75 && b2.joints.r_elbow_flex > 75 - 90 / 60 - 1e-9, 'what is left at rest goes at most armBackDegS');
+    assert.equal(b2.done, false, 'not done until it is there'); }
+  // R9, R10 (round-6 check) and X6, X8 (round-7 check), with the game's own activity: the arm let go during a trunk
+  // movement, its places set as places only ('limbPlace', as stepArmBack does)
+  const ids = ['r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex', 'r_shoulder_rot'];
+  const pressEv = (r, id) => ({ type: 'muscle', regionId: r, actionId: id, regionOnly: false, at: 0 });
+  const { DANCE_BODY_JOINTS } = await import('../scene/src/ns-actions.mjs');
+  /** Runs one sequence: elbow pressed at frame elbowAt[], the arm let go at letGo with the hold's places a little off, the
+   * trunk's way back over `ret` frames from frame retFrom, a limb turn at turnAt; withBack false = the same, no way back. */
+  function run({ elbowAt = [], letGo = 24, retFrom = 24, ret = 90, turnAt = -1, withBack = true, frames = 300 } = {}) {
+    const { A, s: s0 } = started();
+    let s = s0;
+    const placeAt = {}; for (const id of ids) placeAt[id] = s.bodyGoal[id];
+    let rb = null, done = false, maxElbow = 0, maxElbowAfterLetGo = 0, maxLateStep = 0, prevE = s.bodyPos.r_elbow_flex;
+    for (let f = 0; f < frames; f++) {
+      const ev = [];
+      if (elbowAt.includes(f)) ev.push(pressEv('lh_elbow', 'lh_r_elbow_flex'));
+      if (f === turnAt) ev.push({ type: 'turn', phase: 'step' });
+      s = A.stepGated(s, ev, H).state;
+      if (f === letGo) {
+        s = A.step(s, [{ type: 'limbPose', joints: { r_shoulder_flex: placeAt.r_shoulder_flex + 12 } }], 0);
+        if (withBack) { const from = {}; for (const id of ids) from[id] = s.bodyGoal[id]; rb = { from, to: { ...placeAt }, last: { ...from }, share: 1, away0: 35 }; }
+      }
+      if (rb && !done) {
+        const away = f < retFrom ? 35 : Math.max(0, 35 * (1 - (f - retFrom) / ret));
+        const b = holdArmBack(rb, { place: s.bodyGoal, turning: Boolean(s.dance && s.dance.active), turnJoints: DANCE_BODY_JOINTS, away, atRest: away === 0, dt: H });
+        rb = b.state; done = b.done;
+        if (Object.keys(b.joints).length) s = A.step(s, [{ type: 'limbPlace', joints: b.joints }], 0);
+      }
+      maxElbow = Math.max(maxElbow, s.bodyPos.r_elbow_flex);
+      if (f > letGo + 1) maxElbowAfterLetGo = Math.max(maxElbowAfterLetGo, s.bodyPos.r_elbow_flex);
+      if (f > 60) maxLateStep = Math.max(maxLateStep, Math.abs(s.bodyPos.r_elbow_flex - prevE));
+      prevE = s.bodyPos.r_elbow_flex;
+    }
+    return { s, placeAt, done, maxElbow, maxElbowAfterLetGo, maxLateStep };
+  }
+  { // R9 + R10: the elbow movement under way when let go, and pressed again while the arm goes back: it bends to its end
+    // each time (a place set as a place does not end it) and every joint ends at its place
+    const r = run({ elbowAt: [0, 54] });
+    assert.ok(r.maxElbow > 140, `the elbow's movement bends it (${r.maxElbow.toFixed(1)})`);
+    assert.ok(r.maxElbowAfterLetGo > 140, `and pressed again while the arm goes back, it bends it again (${r.maxElbowAfterLetGo.toFixed(1)})`);
+    for (const id of ids) assert.ok(Math.abs(r.s.bodyPos[id] - r.placeAt[id]) < 0.05, `${id} ends at its place (${r.s.bodyPos[id].toFixed(2)} against ${r.placeAt[id]})`);
+    assert.ok(r.done, 'and the way back ends'); }
+  { // X6: a movement that ends while the trunk is still on its way back: no throw (round 7 stepped the elbow up to 52
+    // degrees in one frame there); its steps are those of a return, as with no way back at all
+    const r = run({ elbowAt: [30], retFrom: 60, ret: 120 }), c = run({ elbowAt: [30], retFrom: 60, ret: 120, withBack: false });
+    assert.ok(r.maxElbowAfterLetGo > 140, `the movement bends the elbow (${r.maxElbowAfterLetGo.toFixed(1)})`);
+    assert.ok(r.maxLateStep <= c.maxLateStep + 2, `the elbow's largest late step ${r.maxLateStep.toFixed(1)} against ${c.maxLateStep.toFixed(1)} with no way back`);
+    assert.ok(r.maxLateStep < 10, `${r.maxLateStep.toFixed(1)} degrees a frame`);
+    for (const id of ids) assert.ok(Math.abs(r.s.bodyPos[id] - r.placeAt[id]) < 0.05, `${id} at its place`); }
+  { // X8: a limb turn (Space double tap) during the way back: the right upper arm stays where the turn put it, as with
+    // no way back (round 7 took it back to its old place); the other joints still go back
+    const r = run({ turnAt: 30 }), c = run({ turnAt: 30, withBack: false });
+    assert.ok(Math.abs(c.s.bodyPos.r_shoulder_rot - r.placeAt.r_shoulder_rot) > 10, 'the turn turns the upper arm');
+    assert.ok(Math.abs(r.s.bodyPos.r_shoulder_rot - c.s.bodyPos.r_shoulder_rot) < 0.05, `r_shoulder_rot ${r.s.bodyPos.r_shoulder_rot.toFixed(1)} as the turn left it (${c.s.bodyPos.r_shoulder_rot.toFixed(1)})`);
+    for (const id of ['r_shoulder_flex', 'r_shoulder_abd', 'r_elbow_flex']) assert.ok(Math.abs(r.s.bodyPos[id] - r.placeAt[id]) < 0.05, `${id} at its place`);
+    assert.ok(r.done); }
   // the wiring (the browser checks run it): the left hand let go while the trunk is not at rest stays held (leftKept)
   // and takes that hold back when chosen again; Space sets the way back; the goal stays the hand's place
   const src = (await import('node:fs')).readFileSync(new URL('../scene/src/ns-app.mjs', import.meta.url), 'utf8');
   assert.ok(src.includes("if (HOLD_BODY.on && limbHold && limbHold.limb === 'leftArm' && limb !== 'leftArm' && !holdTrunkAtRest()) leftKept = limbHold;"), 'chooseLimb keeps the left hand');
-  assert.ok(src.includes('if (leftKept && (holdTrunkAtRest() || chosenLimb() === \'leftArm\')) leftKept = null;'), 'kept until the trunk is at rest');
+  assert.ok(src.includes("if (leftKept && holdKeptDrop({ chosen: chosenLimb() === 'leftArm', trunkAtRest: holdTrunkAtRest(), busy: holdBusy(), rejoining: leftRejoin })) leftKept = null;"), 'kept by holdKeptDrop');
+  assert.ok(src.includes('stepArmBack(out, timing.dt); // (HOLD_BODY: the right arm let go during a trunk movement)'), 'the right arm goes back');
+  assert.ok(src.includes('const G0 = simState && simState.activity && simState.activity.bodyGoal, RA = NsGrasp.LIMB_CHAIN.rightArm;'), 'its places, not where a movement has it (R9)');
+  assert.ok(src.includes("[{ type: 'limbPlace', joints: b.joints }]"), 'places only: a movement under way goes on (R10, X6)');
+  assert.ok(src.includes('turnJoints: NsActions.DANCE_BODY_JOINTS'), 'the limb turn keeps its joints (X8)');
+  assert.ok(src.includes("trunkAtRest: holdTrunkAtRest() && !(limb === 'rightArm' && rightBack) });"), 'the right arm chosen again waits for its way back (X2)');
   assert.ok(src.includes('holdBusy() && (leftHeld || leftKept)) leftRejoin = true;'), 'Space: the way back');
   assert.ok(src.includes('T = Array.isArray(holdLeftGoal) ? holdLeftGoal.slice() :'), 'the goal stays the place');
-  assert.ok(src.includes('if (HOLD_BODY.on && holdTakeUpWaits({ limb, fresh: !limbHold || limbHold.limb !== limb, dragged, trunkAtRest: holdTrunkAtRest() })) { limbHold = null; return; }'), 'an arm waits');
+  assert.ok(src.includes("if (waits && (limb !== 'rightArm' || !keyed)) { limbHold = null; return; }"), 'an arm waits; the keys move the right arm for the frame');
+  assert.ok(src.includes('rho: Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]), oneFrame: waits };'), 'a hold for the frame only');
+  assert.ok(src.includes('if (limbHold && limbHold.oneFrame) limbHold = null;'), 'and let go after it');
 });

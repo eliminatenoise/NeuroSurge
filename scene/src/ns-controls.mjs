@@ -183,8 +183,12 @@ export function moveKeyNumber(code) {
  * body-map order: a walk along the motor homunculus. UI keys like the movement keys; a held key repeats, but no faster
  * than AREA_KEY_REPEAT_MS, so each area on the way is seen. The app does the step (and only while playing). */
 export const AREA_CODES = Object.freeze(['ArrowLeft', 'ArrowRight']);
-/** The shortest time (ms) between two steps of a held area key. Display choice: about five areas a second. */
-export const AREA_KEY_REPEAT_MS = 180;
+/** The shortest time (ms) between two steps of a held area key. Display choice: about five areas a second.
+ * 22 November 2026 (LOOK2 second pass; the owner, Message 133: no flicker): 180 -> 270, about 3.7 steps a second with a
+ * usual 33 ms key repeat (one step every 297 ms). Each step moves the whole view by one block, and at 5 steps a second
+ * the view's own jump made pixels rise and fall 4 or more times a second (a check: hiding the look's glow during the
+ * walk changed nothing); below 4 steps a second no pixel can. */
+export const AREA_KEY_REPEAT_MS = 270;
 /** -1 (toward the screen's left) or +1 (right) for an area key, else 0. */
 export function areaKeyDir(code) {
   return code === 'ArrowLeft' ? -1 : code === 'ArrowRight' ? 1 : 0;
@@ -659,9 +663,15 @@ export function createControls({
   /** R558 (Messages 55 and 56): an area key (AREA_CODES): queue { type: 'area', dir } on the UI queue, a REQUEST to move
    * the look one motor area along the strip toward the screen's left (dir -1) or right (+1). The app finds that area
    * and turns the look; the look itself is not changed here. Holds nothing down; never touches the game queue. */
-  function areaKey(state, dir, timeMs) {
+  function areaKey(state, dir, timeMs, { held = false } = {}) {
     if (dir !== -1 && dir !== 1) return state;
-    return pushUi(state, { type: 'area', dir }, timeMs);
+    // (22 November 2026, LOOK2, ns-look-calm AREA_WALK_QUIET: `held` marks a step of the key's auto-repeat)
+    return pushUi(state, held === true ? { type: 'area', dir, held: true } : { type: 'area', dir }, timeMs);
+  }
+  /** 22 November 2026 (LOOK2, ns-look-calm AREA_WALK_QUIET): a held area key came up: queue { type: 'areaUp' } on the UI
+   * queue. The app switches on the area the held walk stopped on. Holds nothing down; never touches the game queue. */
+  function areaKeyUp(state, timeMs) {
+    return pushUi(state, { type: 'areaUp' }, timeMs);
   }
 
   /** R5-input: set the look { yaw, pitch } (radians) the camera hands over on a view switch (ns-camera toggleView's
@@ -799,6 +809,7 @@ export function createControls({
     moveKey,
     moveKeyUp,
     areaKey,
+    areaKeyUp,
     setLook,
     setPitchLimits,
     pitchLimits,
@@ -1321,7 +1332,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
         if (Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
       }
       const before = getState();
-      const after = controls.areaKey(before, areaDir, at);
+      const after = controls.areaKey(before, areaDir, at, { held: e.repeat === true });
       if (after === before) return;
       e.preventDefault();
       heldAreaKeys.add(code);
@@ -1352,7 +1363,11 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   });
   on(view, 'keyup', e => {
     const code = e.code;
-    if (heldAreaKeys.delete(code)) return;
+    if (heldAreaKeys.delete(code)) {
+      // 22 November 2026 (LOOK2, AREA_WALK_QUIET): the release ends a held walk (the block it stopped on switches on)
+      if (typeof controls.areaKeyUp === 'function') apply(s => controls.areaKeyUp(s, eventTime(e)));
+      return;
+    }
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (isReachCode(code)) { if (typeof controls.setReach === 'function') apply(s => controls.setReach(s, false)); return; }
     // 18 Nov (SMALL, M3): a movement key's release (a held key's movement stops there)

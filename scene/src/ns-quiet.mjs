@@ -181,6 +181,10 @@ export function createQuietUi({ doc, root }) {
   promptSkip.setAttribute('aria-hidden', 'true');
   promptSkip.hidden = true;
   let tipKey = null, promptText = '', countText = '', skipText = '', placeKey = '', shown = true;
+  // 22 November 2026 (LOOK2 second pass; a check's profile: reading the tip's offsetWidth / offsetHeight on every frame
+  // while it avoids your hand forced a style and layout pass each frame, about 0.8 ms): the tip's size is measured once
+  // per content (tipKey) and per window size, and kept
+  let tipSize = null;
   function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null, avoid = null } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
@@ -224,7 +228,12 @@ export function createQuietUi({ doc, root }) {
       // away from the mirror body, which stands between the strip's two halves (it used to cover it). (Since the brain
       // was turned half a turn the left half of the picture is the brain's right half; the caller says which.)
       // (22 November 2026: and off your own left hand's box, tipSides)
-      const tipW = avoid && Number.isFinite(tip.offsetWidth) ? tip.offsetWidth : 0, tipH = avoid && Number.isFinite(tip.offsetHeight) ? tip.offsetHeight : 0;
+      let tipW = 0, tipH = 0;
+      if (avoid) {
+        const sk = `${tipKey}|${Math.round(width)}x${Math.round(height)}`;
+        if (!tipSize || tipSize.key !== sk) { const w0 = tip.offsetWidth, h0 = tip.offsetHeight; tipSize = { key: sk, w: Number.isFinite(w0) ? w0 : 0, h: Number.isFinite(h0) ? h0 : 0 }; }
+        tipW = tipSize.w; tipH = tipSize.h;
+      }
       const { right, low } = tipSides({ x, y, width, height, side, tipW, tipH, avoid });
       const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}`;
       if (pk !== placeKey) {
@@ -242,6 +251,6 @@ export function createQuietUi({ doc, root }) {
   }
   /** The tip goes away until the next update (the game was left for the Esc page: no frame, so no update, comes while
    * it shows, and the tip of the moment stayed drawn under the page). */
-  function hideTip() { tipKey = null; placeKey = ''; tip.hidden = true; }
+  function hideTip() { tipKey = null; placeKey = ''; tipSize = null; tip.hidden = true; }
   return { update, hideTip, dispose() { try { layer.remove(); } catch { /* gone */ } } };
 }

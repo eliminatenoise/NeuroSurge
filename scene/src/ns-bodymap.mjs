@@ -783,12 +783,12 @@ const CONTENT = {
       // extension and not cortical silence (Motawar 2012), and "Open" already brings a closed hand back first (the
       // latch rule). The game arm's relax_release itself stays (the grip's own release uses it).
       leftArm('open_hand', 'Open left hand', ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['FDS', 'FDP', 'FPB', 'FPL'], ['LUM', 'DI', 'PI'],
-        null, null, 'Opening on release is a game convention; natural release can be passive.'),
+        null, null, 'Letting go of Space does not open the hand: it goes back to rest (natural release can be passive).'),
       leftArm('spread_fingers', 'Spread left fingers', ['DI', 'ADM'], ['PI'], ['ED', 'LUM']),
       // R558 (Messages 14 / 15 / 6): the anatomical opposite of spreading (palmar interossei), as on the right hand.
       leftArm('fingers_together', 'Bring left fingers together', ['PI'], ['DI', 'ADM'], [])
     ],
-    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so releasing Space into an open hand is a game convention.',
+    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so letting go of Space only lets the hand go back to rest.',
     citationKeys: ['HUBER2020', 'MOTAWAR2012', 'ARBUCKLE2020', 'VANDUINEN2008', 'LEMON2008', 'YOUSRY1997', 'DEO2026', 'UAMS_UPPER']
   }),
   little: () => ({
@@ -1185,7 +1185,7 @@ const REGION_CAVEATS = {
   wrist: c => (c.H === 'right'
     ? 'The wrist area overlaps the fingers; the game arm cannot bend its wrist sideways, so those spots only colour.'
     : 'The wrist area overlaps the fingers; this strip shows it as one simplified region.'),
-  hand: () => 'Grasp areas overlap and differ between people; opening the hand on release is a game convention.',
+  hand: () => 'Grasp areas overlap and differ between people; letting go of Space lets the hand go back to rest.',
   index: () => 'Bending and straightening one finger use overlapping activity; the colour covers every finger.',
   thumb: () => 'Placed by mirroring right-thumb studies, so the spot is representative.',
   little: () => 'Placed by mirroring right-hand studies; single-finger patterns overlap, and the colour covers every finger.',

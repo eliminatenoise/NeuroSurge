@@ -178,7 +178,8 @@ export function createGuide({ now = 0, hidden = false, done = [], features = nul
     axes: { x: d.moveHand, z: d.moveHand }, fistAt: null, flashUntil: null,
     finishedAt: all ? nowOf(now) - GUIDE_OPTIONS.finishS : null, startedAt: nowOf(now),
     view: 'first', thirdAt: null, glowPending: null, mirrorBlocked: false, mirrorMoved: false, numberStill: false, watchOnBrain: false,
-    lookStill: false // (21 November 2026, hunt H18: the area the first step last switched on moved nothing)
+    lookStill: false, // (21 November 2026, hunt H18: the area the first step last switched on moved nothing)
+    pressStill: false // (22 November 2026, WORDS2, hunt H26: the area the look last switched on while "click it" shows moves nothing)
   };
 }
 
@@ -239,6 +240,14 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
         if (cur() === 'lookStrip' && (ev.isLeftArm === true || ev.isLeftArm === false)) {
           const still = ev.kind === 'integration' || ev.moves === false;
           if (((s || state).lookStill === true) !== still) w().lookStill = still;
+        }
+        // 22 November 2026 (WORDS2, hunt H26): the same for the second step ("Click it: it moves again"): while it shows, an
+        // area switched on (by the look or a click) that moves nothing asks for a coloured area that moves a part, since a
+        // click there moves nothing and does not count; an area that moves clears it. The line had kept saying "Click it:
+        // it moves again" on a black in-between area and on the Tongue.
+        if (cur() === 'pressArea' && (ev.isLeftArm === true || ev.isLeftArm === false)) {
+          const still = ev.kind === 'integration' || ev.moves === false;
+          if (((s || state).pressStill === true) !== still) w().pressStill = still;
         }
         if (!pressed && ev.kind !== 'integration' && ev.moves !== false && (ev.isLeftArm === true || ev.isLeftArm === false)) mark('lookStrip');
         if (ev.isLeftArm === true) { if (ev.moves !== false) { if (ev.awaitMove !== true) mark('leftArmArea'); if (pressed) mark('pressArea'); } }
@@ -373,6 +382,8 @@ export function guideView(state, now = 0, opts = GUIDE_OPTIONS) {
   if (id === 'moveHand' && s.axes.x !== s.axes.z) text = s.axes.z ? GUIDE.partial.moveHandNeedX : GUIDE.partial.moveHandNeedZ;
   // 21 November 2026 (hunt H18): the area just switched on moved nothing: ask for another colour.
   if (id === 'lookStrip' && s.lookStill === true) text = GUIDE.partial.lookStripStill;
+  // 22 November 2026 (WORDS2, hunt H26): the area the look rests on moves nothing: ask for one that moves.
+  if (id === 'pressArea' && s.pressStill === true && GUIDE.partial.pressAreaStill) text = GUIDE.partial.pressAreaStill;
   // R558: a number moved the part while the look was still on the brain: ask for a look down at the body.
   if (id === 'watchBody' && s.watchOnBrain === true) text = GUIDE.partial.watchBodyLookDown;
   // R558: the number just pressed moved nothing (that movement was already at its end): ask for another number.

@@ -148,6 +148,38 @@ export const CARRY_KEYS = Object.freeze({ ratePerS: 0.7, easeS: 0.1, minDistM: 0
  * constant (ns-app guardMirror / guardBrain). false: the rules of before (Message 12: things stop where they touch).
  */
 export const CARRY_THROUGH = true;
+/**
+ * 22 November 2026 (browser hunt of update 64, H9: a brain carried behind you with S and let go was in neither view, and
+ * nothing said how to get it back; the lost-brain line knew only the look's carry and sat on a card the default reading
+ * level hides). CARRY_THROUGH stays (the owner asked for carrying through yourself), so the game says it instead: the
+ * brain counts as BEHIND you when its centre lies behind the eye's start place along the start's straight-ahead
+ * direction (level, x and z only) by more than behindM, and the look is not turned toward it (the cosine between the
+ * look's level direction and the brain's is below facingCos: turned round, the brain is in view again and the line
+ * goes). Display choices.
+ */
+export const BRAIN_BEHIND = Object.freeze({ behindM: 0, facingCos: 0 });
+/** PURE: is the brain behind you (BRAIN_BEHIND)? centre: the brain's centre, eye: the eye's start place (world m);
+ * startYaw / lookYaw: the start look's and the look's turn (rad; yaw 0 looks along -z). False for missing input. */
+export function brainBehind({ centre, eye, startYaw = 0, lookYaw = 0, rules = BRAIN_BEHIND } = {}) {
+  if (!centre || !eye || centre.length !== 3 || eye.length !== 3) return false;
+  const vx = centre[0] - eye[0], vz = centre[2] - eye[2];
+  if (![vx, vz, startYaw, lookYaw].every(Number.isFinite)) return false;
+  const ahead = -vx * Math.sin(startYaw) - vz * Math.cos(startYaw);
+  if (!(ahead < -rules.behindM)) return false;
+  const n = Math.hypot(vx, vz);
+  const facing = n > 1e-6 ? (-vx * Math.sin(lookYaw) - vz * Math.cos(lookYaw)) / n : 1;
+  return facing < rules.facingCos;
+}
+/** PURE (22 November 2026, H9, second pass after a check): which lost-brain words the tip by the crosshair says, if any.
+ * behind: brainBehind; away: the old lost-brain line's case (the look carried the brain far from where you look);
+ * seenShare: the share of the brain's sample points in the picture (the scene's overlayObstacles brainSeenShare; null =
+ * not known). Words only while none of the brain is in the picture (seenShare exactly 0): 'behind', else 'away', else
+ * null. The first pass said "behind you" with the look turned 86 degrees and the strip filling a third of the picture,
+ * and "out of sight" (by the old line's 0.7 rad) while half the brain was on screen. */
+export function brainLostWords({ behind = false, away = false, seenShare = null } = {}) {
+  if (seenShare !== 0) return null;
+  return behind ? 'behind' : away ? 'away' : null;
+}
 export function initialObjectCarry() {
   return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], keyVel: [0, 0], mirror: null, diagnostic: null };
 }

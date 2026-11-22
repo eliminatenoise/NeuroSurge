@@ -1362,6 +1362,21 @@ export function reachMuscleShow(levels, xSign, minLevel = 0.02) {
 }
 
 const KEY_DISPLAY_IDS = Object.freeze(['grasp_close', 'open_hand', 'relax_release']);
+/**
+ * 22 November 2026 (browser hunt of update 64, H5; the owner, Message 206: "in returning to its previous place, you
+ * won't see corresponding activity and muscle activation. It will just return"; section 174: the four limbs close and
+ * open together). What letting go of the Space grip does to the game arm's LEFT hand:
+ *  openOnRelease  false: the hand goes back to its place (the pose drive's grip share eases to 0 at armPoseTau, about
+ *                 0.1 s), unlit, the same way as the right hand and the toes (ns-app GRIP_BOTH), and no "open hand"
+ *                 movement is switched on. true: the rule of 18 November (Message 48): the release switched on open_hand
+ *                 for spaceOpenSeconds (0.6 s): the hand opened past neutral, its finger straighteners and the strip's
+ *                 Left hand area lit for 0.6 s and, with that area in view, a light beam ran from it to both bodies for
+ *                 about half a second after every carry (measured on update 64: the beam from about 0.08 s to 0.55 s
+ *                 after the release, the right hand and the toes dark from about 0.14 s). Only the left hand had it,
+ *                 because only the game arm has a timed open_hand action.
+ * Kept behind the switch, not deleted. A display choice of this game, not a claim about real hands.
+ */
+export const GRIP_RELEASE = Object.freeze({ openOnRelease: false });
 const HEMISPHERES = Object.freeze(['right', 'left', 'both']);
 const BODY_SIDES = Object.freeze(['left', 'right', 'midline']);
 const ARM_ACTION_CHANNEL = Object.freeze({
@@ -1814,7 +1829,9 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * gaze is recorded silently) and release leaves the brain where it is. { type: 'grip', on }: the left hand closes while
  * Space holds or keeps a grasp (graspHold; the hand area and the finger benders light) and opens when it lets go
  * (R558, Message 48). { type: 'limbPose', joints, regionId?, actionId? }
- * sets held own-limb joints at once (they stay, like a latch) and lights that area. { type: 'contractStop', joints }
+ * sets held own-limb joints at once (they stay, like a latch) and lights that area. { type: 'limbPlace', joints } (22
+ * November 2026, SEEMOVE) moves the PLACE of those joints only: each springs there on its soft relaxOmega spring, unlit,
+ * and a contraction of it still under way goes on and returns to the new place. { type: 'contractStop', joints }
  * stops a contraction still under way at those angles for the rest of its time (then it returns as usual; a joint not
  * contracting is left alone; 20 November 2026, night: the trunk's contact stop in ns-app).
  *
@@ -1859,8 +1876,11 @@ export function createActivity({
   defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg, initialBrainPlacement = null,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
   resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL,
-  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau, lookArms = LOOK_ARMS
+  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau, lookArms = LOOK_ARMS,
+  gripRelease = GRIP_RELEASE
 } = {}) {
+  // 22 November 2026 (H5, GRIP_RELEASE): the release opens the hand (a timed open_hand) only with openOnRelease on
+  const openOnRelease = Boolean(gripRelease && gripRelease.openOnRelease === true);
   // 18 November 2026 (S4): a look arms, a click / number key presses (LOOK_ARMS).
   const armOnly = !(lookArms && lookArms.on === false);
   const armLevel = lookArms && isFiniteNumber(lookArms.muscleLevel) ? clamp(lookArms.muscleLevel, 0, 1) : LOOK_ARMS.muscleLevel;
@@ -2690,8 +2710,9 @@ export function createActivity({
    *   on true   graspHold: the pose closes the hand (grasp_close wins the fingers: a finger contraction under way
    *             ends), the hand area and the finger benders light for as long as the grip lasts. A running pulse of
    *             an action that competes for the fingers ends. Ignored while paused.
-   *   on false  the grip lets go: the hand opens for spaceOpenSeconds (open_hand: a game rule, a real hand can also
-   *             let go by relaxing). Always applies. (Message 206: no movement of the brain's holds the hand closed.)
+   *   on false  the grip lets go: the hand goes back to its place, unlit (22 November 2026, H5, GRIP_RELEASE); with
+   *             openOnRelease on, the old rule: it opens for spaceOpenSeconds (open_hand: a game rule, a real hand can
+   *             also let go by relaxing). Always applies. (Message 206: no movement of the brain's holds the hand closed.)
    */
   function applyGrip(s, ev) {
     if (typeof ev.on !== 'boolean') fail('activity_event', 'grip event needs a boolean on');
@@ -2704,7 +2725,7 @@ export function createActivity({
     } else if (s.graspHold) {
       s.graspHold = false;
       s.relaxRemaining = 0;
-      s.openRemaining = spaceOpenSeconds;
+      s.openRemaining = openOnRelease ? spaceOpenSeconds : 0;
       if (s.pulseAction !== null && DIGIT_FLEXING.includes(s.pulseAction)) cancelPulse(s);
     }
   }
@@ -2883,6 +2904,19 @@ export function createActivity({
       case 'grip':
         applyGrip(s, ev);
         return;
+      case 'limbPlace': {
+        // 22 November 2026 (SEEMOVE, ns-app HOLD_BODY: the right arm let go during a trunk movement goes back to its places):
+        // the joints' places only (bodyGoal). A joint springs to its place like any return; a contraction of it still under
+        // way is not ended (a limbPose would end it), it returns to the new place. Nothing is lit, nothing else changes.
+        if (s.paused) return;
+        if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPlace needs joints { jointId: degrees }');
+        for (const [j, deg] of Object.entries(ev.joints)) {
+          if (!JOINT_IDS.includes(j)) fail('activity_event', `limbPlace joint ${JSON.stringify(j)} is not a body joint`);
+          if (!isFiniteNumber(deg)) fail('activity_event', `limbPlace joint ${j} needs finite degrees`);
+          s.bodyGoal[j] = limitJoint(j, deg) + 0;
+        }
+        return;
+      }
       case 'limbPose': {
         // R558 (user Messages 2, 12 and 40): one of your own limbs, held with Space and moved, or turned by a drag. The app
         // solves its joints inside their anatomical ranges and hands them here: { joints: { jointId: degrees },

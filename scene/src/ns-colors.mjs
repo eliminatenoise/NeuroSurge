@@ -1685,8 +1685,26 @@ export function muscleFibreScale(id, look = FACE_MUSCLE_LOOK) { return isFaceMus
 // steady glow over reducedRampS.
 // powerUpEnvelope is the CPU record of the rule; powerUpGlsl emits the identical function for the shaders. (The names
 // keep "powerUp" so the shader interface is unchanged.) Timings are UI choices, not physiology.
+// 22 November 2026 (LOOK2, hunt of update 64 H17: "A block switched on by an arrow-key step goes dark for one frame
+// before it lights ... and the muscle it lights shows a grey-mauve frame"; the owner, Message 133, no blinking):
+//  - areaStrikeFloor 0.6 (was none, 0): the strike multiplies ALL of an area's light, the look's glow and its white
+//    frame included, and on the frame where the glow turns on its age is only the processor time between the start and
+//    the clock (1 to 3 ms: gain 0.02 to 0.07; under reduced motion the 0.3 s ramp started from 0 too). The block that
+//    was lit by the look a frame before went dull grey for one frame (2 to 4 under reduced motion), then white. On an
+//    area the strike now starts from the light the block already shows: at least areaStrikeFloor of the settled glow
+//    (its white core is then at 0.96 of display white, its rim at 0.7) and up from there; the reduced ramp the same.
+//    A muscle has no light before it lights and keeps the strike from nothing. (Second pass, after a check: only a
+//    block that shows the look's light as its own light starts, the one under the look, starts at the floor; a block
+//    switched on from elsewhere (a muscle click, a number key) has no light of the look to carry and starts from
+//    nothing as before, also under reduced motion: ns-scene-three sets the area's nsPuFloor at each new start. A new
+//    start of a block that still glows (a second click) starts at the floor too.)
+//  - strikeAlbedo 0.2 -> 1: a muscle's surface took 20 % of its area's colour on that first frame (the rose red and an
+//    azure mixed to a dull grey-mauve, 112, 79, 93 measured on the mirror pectoral) and came to the colour over the
+//    45 ms strike; it now takes its area's colour at once and only its light rises (reduced motion: the slow ramp, as
+//    before). Not chosen: dating the start one frame back (the first frame would then show the flash's peak at once,
+//    and the reduced ramp would still start from nothing).
 export const POWER_UP = freeze({
-  strikeS: 0.045, strikeAlbedo: 0.2,
+  strikeS: 0.045, strikeAlbedo: 1, areaStrikeFloor: 0.6,
   flashTau: 0.14, flashGain: 1.5, flashWhite: 0.36, haloBurst: 0.6,
   reducedRampS: 0.3,
   /** An area (and its muscles) that lights again within rearmS seconds of going dark carries on its steady glow
@@ -1724,12 +1742,15 @@ export function powerUpFlash(ageS, { calm = false, reduced = false } = {}, p = P
  * area's band) is not used: the whole muscle / area lights at once; the argument stays so the callers and the shaders
  * keep one interface. calm: an opposing-action hint (always the settled glow); reduced: prefers-reduced-motion (a calm
  * ramp). Pure. */
-export function powerUpEnvelope(ageS, u = 0.5, { calm = false, reduced = false } = {}, p = POWER_UP) {
+export function powerUpEnvelope(ageS, u = 0.5, { calm = false, reduced = false, floor = 0 } = {}, p = POWER_UP) {
   if (calm) return { gain: 1, white: 0, sat: 1, albedo: 1, flash: 0 };
   const a = Number.isFinite(ageS) ? Math.max(0, ageS) : 1e3;
-  if (reduced) { const r = smoothstep(0, p.reducedRampS, a); return { gain: r, white: 0, sat: 1, albedo: r, flash: 0 }; }
+  // 22 November 2026 (LOOK2, POWER_UP.areaStrikeFloor): `floor` (0..1) is where the light starts (an area: the light it
+  // already shows); the strike and the reduced ramp rise from there, never from below it.
+  const f = Number.isFinite(floor) ? Math.min(1, Math.max(0, floor)) : 0;
+  if (reduced) { const r = smoothstep(0, p.reducedRampS, a); return { gain: f + (1 - f) * r, white: 0, sat: 1, albedo: r, flash: 0 }; }
   const flash = powerUpFlash(a, {}, p);
-  const on = a < p.strikeS ? a / p.strikeS : 1;
+  const on = a < p.strikeS ? f + (1 - f) * a / p.strikeS : 1;
   // 18 November (MAP): the neon blink (powerUpBlink) scales the light; the surface colour stays (albedo).
   return { gain: on * (1 + p.flashGain * flash) * powerUpBlink(a), white: p.flashWhite * flash, sat: 1, albedo: p.strikeAlbedo + (1 - p.strikeAlbedo) * on, flash };
 }
@@ -1797,18 +1818,23 @@ export function shudderGlsl(name = 'nsShudder', o = SHUDDER) {
 }
 /** GLSL of the neon flash: `vec4 <name>( float age, float u, float calm, float reduced )` -> (gain, white, sat, albedo),
  * the same rule as powerUpEnvelope, and `float <name>Flash( float age, float calm, float reduced )` (powerUpFlash). */
-export function powerUpGlsl(name = 'nsPowerUp', p = POWER_UP) {
+export function powerUpGlsl(name = 'nsPowerUp', p = POWER_UP, { floor = 0 } = {}) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('ns:colors_glsl: name must be a GLSL identifier');
   const f = glslFloat;
+  // 22 November 2026 (LOOK2): the light's starting floor (POWER_UP.areaStrikeFloor on an area), as powerUpEnvelope: a
+  // number, or (second pass) the name of a float uniform set per area as its light starts
+  const flU = typeof floor === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(floor) ? floor : null;
+  const fl = flU ? 0 : Number.isFinite(floor) ? Math.min(1, Math.max(0, floor)) : 0;
+  const from = (x) => (flU ? `${flU} + ( 1.0 - ${flU} ) * ${x}` : `${f(fl)} + ${f(1 - fl)} * ${x}`);
   return [
     powerUpBlinkGlsl(`${name}Blink`), // 18 November (MAP): the neon blink
     `float ${name}Flash( float age, float calm, float reduced ) { if ( calm > 0.5 || reduced > 0.5 ) return 0.0; float a = max( age, 0.0 ); return a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : exp( -( a - ${f(p.strikeS)} ) / ${f(p.flashTau)} ); }`,
     `vec4 ${name}( float age, float u, float calm, float reduced ) {`,
     '  if ( calm > 0.5 ) return vec4( 1.0, 0.0, 1.0, 1.0 );',
     '  float a = max( age, 0.0 );',
-    `  if ( reduced > 0.5 ) { float r = smoothstep( 0.0, ${f(p.reducedRampS)}, a ); return vec4( r, 0.0, 1.0, r ); }`,
+    `  if ( reduced > 0.5 ) { float r = smoothstep( 0.0, ${f(p.reducedRampS)}, a ); return vec4( ${from('r')}, 0.0, 1.0, r ); }`,
     `  float flash = ${name}Flash( a, 0.0, 0.0 );`,
-    `  float on = a < ${f(p.strikeS)} ? a / ${f(p.strikeS)} : 1.0;`,
+    `  float on = a < ${f(p.strikeS)} ? ${from(`a / ${f(p.strikeS)}`)} : 1.0;`,
     `  return vec4( on * ( 1.0 + ${f(p.flashGain)} * flash ) * ${name}Blink( a ), ${f(p.flashWhite)} * flash, 1.0, ${f(p.strikeAlbedo)} + ${f(1 - p.strikeAlbedo)} * on );`,
     '}'
   ].join('\n');

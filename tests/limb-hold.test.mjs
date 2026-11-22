@@ -15,6 +15,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward, limbKeyMove, limbKeyFollow, keyMoveCut } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
 const { FREE_HAND, freeHandAngles, freeHandInRange, freeHandPole } = await import(path.join(repo, 'scene/src/ns-arm.mjs'));
 const G = await import(path.join(repo, 'scene/src/ns-grasp.mjs'));
+const PACE = await import(path.join(repo, 'scene/src/ns-limb-pace.mjs'));
 const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
 const { body, rig, baked } = await loadBody(repo);
 const DEG = Math.PI / 180;
@@ -276,34 +277,51 @@ test('a frame of the keys: never further than the keys go, never thrown sideways
 // The same rule on the game's own body, as stepLimbHold runs it: S held, the place kept on the keys' line within leadM
 // of the end, one solve a frame, the answer taken as limbKeyFollow says (and cut again with keyMoveCut on the drawn end).
 // A frame that waits puts the place back on the end (20 November 2026, evening: as stepLimbHold now does).
+// (22 November 2026, LIMBS2: and the elbow's or knee's pace, ns-limb-pace LIMB_PACE, cut in the same loop, as stepLimbHold)
 function driveKeys(limb, q0, ax, az, frames, spin = false, memo = {}) {
-  const V = LIMB_KEYS.view, sp = V.speedMps * 1000 / 60, lead = V.leadM * 1000, right = [-1, 0, 0], c = G.LIMB_CHAIN[limb];
+  const V = LIMB_KEYS.view, sp = V.speedMps * 1000 / 60, lead = V.leadM * 1000, right = [-1, 0, 0], c = G.LIMB_CHAIN[limb], pace = PACE.paceFor(limb);
   const sub = (a, b) => a.map((v, k) => v - b[k]), nrm = a => Math.hypot(...a), dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0, widest = 0;
+  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0, widest = 0, swings = 0;
   const e0 = end.slice();
   for (let f = 0; f < frames; f++) {
-    const root = G.limbPoint(rig, asDrawn(q), limb, 'root');
-    const T = limbKeyMove(u && ax === 0 ? root.map((v, k) => v + u[k] * len) : end, root, right, ax, az, sp);
-    const gap = nrm(sub(T, end)), way = sub(limbKeyMove(end, root, right, ax, az, sp), end);
-    let r = G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T, limits, opts: lastErr < 12 && gap < 60 ? G.LIMB_HOLD_FOLLOW : G.LIMB_HOLD_TRACK, project, memo, spin });
-    const fol = limbKeyFollow(end, r.endMm, way);
-    let wait = (r.folded && r.errorMm > lead + 2) || !fol.take;
-    if (!wait && fol.share < 1) {
+    const root = G.limbPoint(rig, asDrawn(q), limb, 'root'), bend = G.limbPoint(rig, asDrawn(q), limb, 'bend');
+    // (22 November 2026, LIMBS2 second pass: A or D alone on a folded limb swing it by its upper segment, ns-limb-pace
+    // limbSwingMove, with the turn of the line for a frame where that waits, as stepLimbHold; mm here, the module's m)
+    const pts = { root: root.map(x => x / 1000), bend: bend.map(x => x / 1000), end: end.map(x => x / 1000) };
+    const swingOf = p => { const w = ax !== 0 && az === 0 && PACE.limbFolded(pts, pace) ? PACE.limbSwingMove(pts, p.map(x => x / 1000), right, ax, sp / 1000, pace) : null; return w ? w.map(x => x * 1000) : null; };
+    const classic = p => limbKeyMove(p, root, right, ax, az, sp);
+    const swEnd = swingOf(end);
+    let T = swEnd ? swingOf(end) : classic(u && ax === 0 ? root.map((v, k) => v + u[k] * len) : end);
+    let way = sub(swEnd || classic(end), end);
+    const paceOf = (e1, b1) => PACE.limbPaceShare({ root, bend, end }, { root, bend: b1, end: e1 }, sp, pace); // (mm throughout; against the keys' step)
+    const take = (r, w) => {
+      const fol = limbKeyFollow(end, r.endMm, w), p0 = fol.take ? paceOf(r.endMm, r.bendMm) : 1;
+      if ((r.folded && r.errorMm > lead + 2) || !fol.take) return null;
+      if (!(fol.share < 1 || p0 < 1)) return r;
       // (as stepLimbHold: the share cut once more where the end's move as drawn is still over what keyMoveCut allows)
-      let share = fol.share, joints = {}, endMm = r.endMm;
-      for (let pass = 0; pass < 3; pass++) {
+      let share = Math.min(fol.share, p0), joints = {}, endMm = r.endMm;
+      for (let pass = 0; pass < 4; pass++) {
         const ids = Object.keys(r.joints); // (with spin: the upper arm's turn too, as stepLimbHold)
         const qs = { ...q }; for (const id of ids) qs[id] = q[id] + (r.joints[id] - q[id]) * share;
         const p = project(qs); joints = {}; for (const id of ids) joints[id] = p[id];
-        endMm = G.limbPoint(rig, asDrawn({ ...q, ...joints }), limb, 'end');
-        const k = keyMoveCut(sub(endMm, end), way);
-        if (!(k > 0)) { wait = true; break; }
+        const sg = asDrawn({ ...q, ...joints });
+        endMm = G.limbPoint(rig, sg, limb, 'end');
+        const kEnd = keyMoveCut(sub(endMm, end), w);
+        if (!(kEnd > 0)) return null;
+        const k = Math.min(kEnd, paceOf(endMm, G.limbPoint(rig, sg, limb, 'bend')));
         if (!(k < 0.999)) break;
         share *= k;
       }
-      r = { ...r, joints, endMm };
+      return { ...r, joints, endMm };
+    };
+    const gap = nrm(sub(T, end));
+    let r = take(G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T, limits, opts: lastErr < 12 && gap < 60 ? G.LIMB_HOLD_FOLLOW : G.LIMB_HOLD_TRACK, project, memo, spin }), way);
+    if (r && swEnd) swings++;
+    if (!r && swEnd) {
+      const w1 = sub(classic(end), end), wl = nrm(w1);
+      if (wl > 1e-6) { const T1 = end.map((v, i) => v + w1[i] * lead / wl); r = take(G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T1, limits, opts: G.LIMB_HOLD_TRACK, project, memo: null, spin }), w1); if (r) { T = T1; way = w1; } }
     }
-    if (wait) {
+    if (!r) {
       waited++;
       const e = sub(end, root), U = ax === 0 && u ? u : e.map(x => x / nrm(e));
       len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(e))); u = U; lastErr = 0;
@@ -316,7 +334,7 @@ function driveKeys(limb, q0, ax, az, frames, spin = false, memo = {}) {
     const e = sub(end, root), U = ax === 0 && u ? u : (() => { const v = sub(T, root), n = nrm(v); return v.map(x => x / n); })();
     len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(sub(T, root)))); u = U;
   }
-  return { q, end, travel: nrm(sub(end, e0)), fastest, waited, widest };
+  return { q, end, travel: nrm(sub(end, e0)), fastest, waited, widest, swings };
 }
 
 // 20 November 2026, evening (LIMBFREE; the owner: "The limb should never get stuck"): restated. Across the chest the

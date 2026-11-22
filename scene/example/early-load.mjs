@@ -23,10 +23,11 @@ import { showControlsCard } from '../src/ns-controls-card.mjs';
  * loading picture's table of parts, ns-assembly-parts.mjs, on 20 November; 57 with the raw look's ns-raw-look.mjs; 58 with
  * the face movements' ns-face-move.mjs; 60 with the muscles seen side by side, ns-muscle-seen.mjs, and the areas' halo,
  * ns-area-halo.mjs, both 21 November; the electrical map's modules are not counted: they are fetched at the first
- * press of M, 22 November): the bar's
+ * press of M, 22 November; 61 with the calm walk and the focus ring's ns-look-calm.mjs, and 62 with the limbs' pace,
+ * ns-limb-pace.mjs, both 22 November): the bar's
  * 'page' step is the share of them that has arrived, so it shows the scripts really coming in and stands still when
  * they stop. Only the bar depends on it; a wrong count makes that step end a little early or jump a little. */
-const PAGE_SCRIPTS = 60;
+const PAGE_SCRIPTS = 62;
 const mode = new URLSearchParams(window.location.search).get('case') || 'boot';
 const listeners = new Set();
 let last = null;

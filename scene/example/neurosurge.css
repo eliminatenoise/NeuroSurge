@@ -250,7 +250,9 @@ html, body {
 .ns-legend-item-leftarm .ns-legend-swatch { background: rgba(64, 109, 133, 0.95); border: 2px solid var(--ns-leftarm); }
 .ns-legend-item-other .ns-legend-swatch { background: rgba(172, 122, 120, 0.95); border: 1px solid var(--ns-other); } /* R558: the tissue-pink areas (was grey 105, 103, 97) */
 /* R4-polish: the switched-on swatch shows the lighter, warmer fill of a switched-on area inside its gold edge. */
-.ns-legend-item-activated .ns-legend-swatch { background: rgba(150, 138, 112, 0.95); border: 2px solid var(--ns-activated); }
+/* 22 November 2026 (LOOK2, section 198): a used area has no gold edge any more, only its darker shade (ns-colors
+   VISITED): the swatch is a darker tone with a faint edge (was rgba(150, 138, 112, 0.95) in a 2 px gold edge). */
+.ns-legend-item-activated .ns-legend-swatch { background: rgba(92, 84, 70, 0.95); border: 2px solid rgba(255, 255, 255, 0.18); }
 .ns-legend-item-dot .ns-legend-swatch { width: 8px; height: 8px; margin: 0 2.5px; border-radius: 1px; transform: rotate(45deg); background: #a8eefc; }
 .ns-legend-item-leftarm .ns-legend-text,
 .ns-legend-item-leftarm .ns-legend-short { color: var(--ns-leftarm); font-weight: 600; }
@@ -676,8 +678,26 @@ html, body {
 .ns-infopanel:has(.ns-infopanel-detail[open]) {
   pointer-events: auto;
   overflow-y: auto;
-  -webkit-mask-image: none;
-  mask-image: none;
+  /* 22 November 2026 (WORDS2, second pass; a check of section 197: the open card's foot line was cut through its
+     letters at every size): the open card fades at its foot like every other capped card, and its bottom padding is
+     the fade's height and a little more, so at the end of the scroll the last line stands clear of the fade. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  padding-bottom: 18px;
+}
+/* 22 November 2026 (WORDS2, hunt H12): while More detail is open the card scrolls, and the area's title stays at its
+   top, so a card scrolled to More detail (ns-app infoRevealScroll) or by the wheel still names its area. The title's
+   band reaches the card's inner edges (the negative margins equal the card's side padding) and is opaque, so no
+   scrolled line shows beside or through it. A sticky box stops at the card's padding, not its edge, so it stands
+   at -10 px (the card's top padding) to cover the scrolled lines there too; its top padding (6 px) less its top margin
+   (-3 px) is the 3 px margin it had, so at the card's top it stands where it did. */
+.ns-infopanel:has(.ns-infopanel-detail[open]) .ns-infopanel-title {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  margin: -3px -12px 1px -13px;
+  padding: 6px 12px 3px 13px;
+  background: #0b1019;
 }
 /* R3-polish (body views, R3-player items 3/10, INTEGRATION 7.4): while the brain is out of view (looking down at the
    torso and legs, far right at the right arm, up at the face) the panel shrinks to a short card: title, part, signal

@@ -248,7 +248,7 @@ export function lookAwayDeg(a, b) {
  * counted from the inner angle the limb has now; see the bend step below), so a straight elbow or knee bends when the end is pulled in and straightens when it is pushed out; then a few damped
  * least-squares steps over the two root joints point the limb at the target. (A first version solved all three joints
  * together; with the arm straight forward and the end lifted it folded the elbow a little every frame until the hand
- * was at the face, so the bend is now left to the distance alone.) Returns { joints: { id: deg } (the limb's three joints), endMm (where the end now is), errorMm, iterations }.
+ * was at the face, so the bend is now left to the distance alone.) Returns { joints: { id: deg } (the limb's three joints), endMm (where the end now is), bendMm (where the elbow or knee now is), errorMm, iterations }.
  */
 export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, opts = LIMB_GRASP, project = null, memo = null, startSegments = null, spin = false }) {
   const c0 = LIMB_CHAIN[limb];
@@ -387,7 +387,9 @@ export function solveLimb({ rig, segmentsFor, targets, limb, targetMm, limits, o
   if (sp && memo) { if (q[sp.joint] !== spinStart) memo.spinTurn = [spinStart, q[sp.joint]]; else if (spinMine) memo.spinTurn = [spinStart, spinStart]; }
   const joints = {};
   for (const id of c.joints) joints[id] = q[id];
-  return { joints, endMm: end, errorMm: len(sub(targetMm, end)), iterations: it, folded };
+  // (22 November 2026, LIMBS2: bendMm, where the elbow or knee is in the answer, for the keys' pace of the bend point,
+  // ns-limb-pace LIMB_PACE; the segments of the answer are at hand, so it costs no pose)
+  return { joints, endMm: end, bendMm: limbPoint(rig, seg, limb, 'bend'), errorMm: len(sub(targetMm, end)), iterations: it, folded };
 }
 
 /**

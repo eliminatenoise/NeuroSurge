@@ -178,7 +178,7 @@ import {
   shudderGlsl, powerUpEnvelope, powerUpBlink
 } from './ns-colors.mjs';
 // 18 November (MAP): the links between an area and its body part (looked at, switched on, named from a muscle).
-import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight, LIGHT_BEAM, beamAcross, beamAlong, beamHalfWidth, extentAlong, beamShare, beamShareAt, beamKeySeen } from './ns-links.mjs';
+import { LINKS, linkPulsePhase, midlineCrossing, crossKnotWeight, LIGHT_BEAM, beamAcross, beamAlong, beamHalfWidth, extentAlong, beamShare, beamShareAt, beamKeySeen, beamHalfCapM } from './ns-links.mjs';
 
 import * as NsText from './ns-text.mjs';
 // R5-scene: the fluorescent glow variant of the shared ramp (R5-access; feature-detected: glowColor / glowIntensity / GLOW).
@@ -349,7 +349,14 @@ export const HDR_BLOOM = Object.freeze({
   threshold: 1.1, knee: 0.3, strength: 0.45, upGain: 0.7, levels: 5, crossFrom: 2.0, crossK: 0.25,
   // (offFromLevel 3 -> 1, 19 November 2026: the bloom goes with the x-ray pass at the first cheaper level, before any
   // resolution does: QUALITY_LEVELS has the measurement)
-  muscleBoost: 0.6, muscleFrom: 1.15, offFromLevel: 1, msaaSamples: 4, ditherLsb: 0.6, safeMax: 64
+  // (muscleBoost 0.6 -> 0, 22 November 2026, LOOK2; hunt of update 64 H25: "At quality high the lit muscles flash
+  // white-hot instead of showing their area's colour"; Message 2, "the same corresponding color/shade across all 3
+  // items"; section 191 gave the areas their own colour, never a white-out. The boost multiplied a muscle's whole flash
+  // by up to 1.81 on all three channels, so an azure muscle's weak red channel, already raised by the flash's whitening,
+  // reached display white with the other two: a white blob for 50 to 100 ms at every switch-on, on the full level only
+  // (the reproducer's no-boost pages looked like the cheaper levels, pale azure; no-bloom pages were still white). Now
+  // a lit muscle peaks in its area's colour at every level and the bloom only softens what lies above white.)
+  muscleBoost: 0, muscleFrom: 1.15, offFromLevel: 1, msaaSamples: 4, ditherLsb: 0.6, safeMax: 64
 });
 
 /** The HDR target, the bloom chain and the composite (THREE injected). Returns { begin(), end(), setSize(w, h),
@@ -653,10 +660,19 @@ export function probeRendererName(doc) {
     return typeof name === 'string' && name ? name : null;
   } catch { return null; }
 }
-/** MSAA on or off: antialias true / false is kept; 'auto' = off for a software renderer or Quality Low. Pure. */
-export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererName = null } = {}) {
+/** MSAA on or off: antialias true / false is kept; 'auto' = off for a software renderer (and, with
+ * MSAA_AT_LOW.on false, for Quality Low). Pure. */
+// 22 November 2026 (LOOK2; hunt of update 64 H24 and the map checkers' "old fault of update 64": at Low the brain's
+// outline and the arrows sparkled with single pale and dark pixels as the look moved, and the mirror body's edge in
+// front of a strip block flickered up to 14 to 17 times a second with the look still). Quality Low was the only level
+// drawn with no multisampling at all: the canvas's MSAA was off, and Low has no HDR target (whose own MSAA every other
+// full-level picture gets). An edge pixel was then all one surface or all the other, and a sub-pixel movement (the
+// heartbeat's swell, the breathing, a look step) flipped it. MSAA_AT_LOW.on: Low keeps the canvas's MSAA, as every
+// automatic level already does; it still draws 0.6 of the pixels, no bloom and no x-ray pass. false = off at Low.
+export const MSAA_AT_LOW = Object.freeze({ on: true });
+export function antialiasFor({ antialias = 'auto', quality = 'auto', rendererName = null } = {}, o = MSAA_AT_LOW) {
   if (antialias === true || antialias === false) return antialias;
-  return !(quality === 'low' || isSoftwareRenderer(rendererName));
+  return !((quality === 'low' && !(o && o.on === true)) || isSoftwareRenderer(rendererName));
 }
 /** Quality levels, best first (D8 order: render scale first, then cheaper passes, then fewer triangles).
  *  - scale: multiplies the pixel ratio (the device ratio capped at maxPixelRatio) of the drawing buffer; the browser
@@ -2112,7 +2128,13 @@ export const REGION_BORDER = Object.freeze({
   /** Hovered / switched-on area: outlined from the inside (hover colour / the gold mark colour), half-width CSS px. */
   // 17 November (keys): the hovered key's frame is wider and brighter (1.8 -> 2.8 px, glow 0.55 -> 1); the gold mark
   // of an area switched on earlier is thinner (1.4 -> 1 px), so it cannot be taken for the area that is on now.
-  hoverPx: 2.8, activatedPx: 1.0, highlightGlow: 1.0,
+  // 22 November 2026 (LOOK2; hunt of update 64 H21: "Every block you have tried gets a gold double outline, so a used
+  // strip is covered in gold lines"; Message 144, the strip "so liney"): activatedPx 1.0 -> 0, no gold frame on a
+  // tried block. The black gap that is every block's outline (REGION_SLICE) is painted over the frame's middle, so only
+  // its antialiased fringe showed, on both blocks of a shared border: gold, black, gold along every border of a used
+  // strip (a broader solid gold band at Low). A tried block keeps its quieter mark, the darker shade (ns-colors
+  // VISITED, section 126), lifted while the look is on it (section 191). 1.0 brings the frame back.
+  hoverPx: 2.8, activatedPx: 0, highlightGlow: 1.0,
   /** Antialiasing ramp of every line (CSS px), never under aaMinDevicePx drawing-buffer pixels (at the 0.5 / 0.4 quality
    * scales a 0.6 CSS px ramp is under a third of a buffer pixel and the lines alias into stair steps). */
   aaPx: 0.6, aaMinDevicePx: 0.75,
@@ -2222,6 +2244,9 @@ export function smoothSurfaceNormals(positions, indices) {
   return out;
 }
 
+// 22 November 2026 (LOOK2, ns-brain CREST_PER_POINT): the strip's bend applied per point (its GLSL, made once)
+const CREST_ON = NsBrain.CREST_PER_POINT && NsBrain.CREST_PER_POINT.on === true;
+const CREST_GLSL = CREST_ON ? NsBrain.crestStripGlsl('nsCrest') : '';
 const BORDER_VERTEX_HOOK = '#include <begin_vertex>';
 const BORDER_EARLY_HOOK = '#include <clipping_planes_fragment>';
 const BORDER_COLOR_HOOK = '#include <color_fragment>';
@@ -2241,10 +2266,13 @@ export function patchRegionBorderShaders(vertexShader, fragmentShader) {
     // 1 / pr^2 as wide, 4x at the 0.5 quality scale and a quarter at pr 2). Euclidean gradient, so a line is as wide at
     // every angle (fwidth's |dx| + |dy| thinned diagonal lines by up to 1 / sqrt 2).
     '\tfloat nsPr = max( nsLineW.w, 0.25 );',
-    '\tfloat nsFw = max( length( vec2( dFdx( vNsS ), dFdy( vNsS ) ) ), 1e-7 ) * nsPr;',
+    // 22 November 2026 (LOOK2, ns-brain CREST_PER_POINT): the strip coordinate bent per point from the interpolated
+    // along-gyrus v (the leg blocks' borders followed the triangles), else the interpolated s as before
+    CREST_ON ? '\tfloat nsSq = nsCrestS( vNsV );' : '\tfloat nsSq = vNsS;',
+    '\tfloat nsFw = max( length( vec2( dFdx( nsSq ), dFdy( nsSq ) ) ), 1e-7 ) * nsPr;',
     // antialiasing ramp: the CSS-pixel ramp, never under aaMinDevicePx drawing-buffer pixels (no stair steps at low scales)
     `\tfloat nsAA = max( nsBorderAA.x, ${glslFloat(REGION_BORDER.aaMinDevicePx)} / nsPr );`,
-    '\tfloat nsSv = clamp( vNsS, 0.0, 1.0 );',
+    '\tfloat nsSv = clamp( nsSq, 0.0, 1.0 );',
     '\tint nsRowI = int( vNsRow.x + 0.5 );',
     '\tint nsTi = clamp( int( floor( nsSv * nsOwnInfo.x ) ), 0, int( nsOwnInfo.x ) - 1 );',
     '\tvec4 nsTa = texelFetch( nsOwnTex, ivec2( nsTi, 2 * nsRowI ), 0 );',
@@ -2284,10 +2312,12 @@ export function patchRegionBorderShaders(vertexShader, fragmentShader) {
   ].join('\n');
   const head = 'uniform sampler2D nsOwnTex;\nuniform vec2 nsOwnInfo;\nuniform float nsRegionId;\nuniform vec4 nsSeam;\nuniform vec4 nsTerr;\nuniform float nsTerrGlow;\nuniform vec4 nsSlice;\nuniform vec3 nsGapCol;\n' +
     'uniform vec4 nsLineW;\nuniform vec4 nsHi;\nuniform vec4 nsHint;\nuniform vec3 nsHintColor;\nuniform vec4 nsBorderAA;\nvarying float vNsS;\nvarying vec2 vNsRow;\nvarying float vNsCav;\n' +
+    (CREST_ON ? `varying float vNsV;\n${CREST_GLSL}\n` : '') +
     'float nsCov( float d, float w, float aa ) { return 1.0 - smoothstep( w - aa, w + aa, d ); }\n';
   return {
     vertexShader: 'attribute float nsS;\nattribute vec2 nsRow;\nattribute float nsCav;\nvarying float vNsS;\nvarying vec2 vNsRow;\nvarying float vNsCav;\n' +
-      vertexShader.replace(BORDER_VERTEX_HOOK, `${BORDER_VERTEX_HOOK}\nvNsS = nsS;\nvNsRow = nsRow;\nvNsCav = nsCav;`),
+      (CREST_ON ? `varying float vNsV;\n${CREST_GLSL}\n` : '') +
+      vertexShader.replace(BORDER_VERTEX_HOOK, `${BORDER_VERTEX_HOOK}\nvNsS = nsS;\nvNsRow = nsRow;\nvNsCav = nsCav;${CREST_ON ? '\nvNsV = nsCrestV( nsS );' : ''}`),
     fragmentShader: head + fragmentShader
       .replace(BORDER_EARLY_HOOK, `${BORDER_EARLY_HOOK}\n${early}`)
       .replace(BORDER_COLOR_HOOK, `${BORDER_COLOR_HOOK}\n${color}`)
@@ -3641,6 +3671,21 @@ export const MUSCLE_HALO = Object.freeze({ on: false, ownMm: 3, mirrorMm: 12, po
 // R558 (motor strip fills the view): in landscape the panel is a short card in the bottom-right corner (cornerVw wide,
 // cornerShortVh tall; CSS mirrors --ns-info-corner-vw / --ns-info-short-maxvh), one of the two corners the motor areas
 // leave free at the start; "More detail" (key R) opens the full card upward (at most colMaxVh of the height).
+/** 22 November 2026 (WORDS2, second pass; a check of section 197: at 800 by 600 the glass card at the start look cut
+ * the honesty line "The coloured areas are a simplified map" at its foot, and a card without More detail cannot
+ * scroll). A card without More detail that is taller than its box drops its "Keep in mind" lines from the end, whole,
+ * until the last one shown ends above the fading foot (footPx: the panel's 16 px fade). Measured only when the card's
+ * words, the reading level, the window or the body view change, never on a frame that only moves a number. on false =
+ * the card is clipped and fades at its foot as before. */
+export const INFO_FIT = Object.freeze({ on: true, footPx: 16 });
+/** PURE (INFO_FIT): how many "Keep in mind" lines to drop from the end. bottoms: each line's bottom (CSS px, in order);
+ * limit: the lowest bottom a whole line may have; overflows: the card is taller than its box (otherwise none). */
+export function caveatsToDrop(bottoms, limit, overflows = true) {
+  if (!overflows || !Array.isArray(bottoms) || !Number.isFinite(limit)) return 0;
+  let n = 0;
+  for (let i = bottoms.length - 1; i >= 0 && !(bottoms[i] <= limit); i--) n++;
+  return n;
+}
 export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4, cornerVw: 18.75, cornerShortVh: 48 });
 /** R3-integrator: in portrait the top of the bottom band holds the legend (right) and the drag-to-look toast (left); the
  * information panel below them is capped to the band minus this height (CSS mirror --ns-portrait-legend-reserve). */
@@ -3909,6 +3954,18 @@ export function mirrorDetailCell(pxPerMm, current = null, o = MIRROR_DETAIL) {
   const coarser = pick(1 - o.hysteresis);
   return coarser > current ? coarser : current;
 }
+/**
+ * 22 November 2026 (browser hunt of update 64, H8: Reset brain view pressed while looking up left the green tilt arrow
+ * above the screen and moved the brain's arrows to the other side, until a reset done at the start look). keepStart
+ * true: a reset of the mirror body (moved or turned, back to rest) takes back the measure of the start: the body box
+ * measured from the first posed body and the eye and foremost point its plane was set from. Before (false) the body
+ * was measured again as posed at that moment: your left arm hangs on the eye and follows the look, so with the look
+ * raised the measured body grew from 0.73 m to 1.15 m tall, its centre went 0.21 m up and 0.11 m back, the turn centre
+ * was 0.24 m off and the arrows planned round that box lost the top tip (above the screen) and moved the brain's.
+ * The drawn body was within 2 to 3 cm of right (the plane is set in front of the farthest point your body can reach,
+ * whatever its pose). The measure is still taken afresh when the body itself is set again (setBody). Display choice.
+ */
+export const MIRROR_RESET = Object.freeze({ keepStart: true });
 /** The compass arrows (top = forward, bottom = back, left, right): ns-arrows3d COMPASS_DIRS. */
 export const ARROW_DIRS = NsArrows.COMPASS_DIRS;
 /** R5-bigbrain (R25 / R26; round5/R5-bigbrain-NOTES.md): motorSamples = at most this many motor-area sample points
@@ -3933,6 +3990,50 @@ export const R5_BIGBRAIN = Object.freeze({ motorSamples: 12000, avoidCellPx: 4, 
  * 0.5). With the mirror body lifted over the brain's top and let go, the top tip went 146 px down the same way, into the
  * gap between the halves next to the crosshair, just above the mirror body's down tip; now, with no place on its centre
  * line, it moves along the top side past the mirror body (rescueTips), and the brain's up arrow stays on its top side. */
+/**
+ * 22 November 2026 (browser hunt of update 64, H6 and H7; the owner: performance first, nothing that makes the game
+ * stutter). What letting go of a carried item plans again (updateArrows), all display and timing choices:
+ *  keepUnmoved   true: the item that was NOT carried keeps its tips. Letting go of the brain used to plan the mirror
+ *                body's frame again as well (its key held the brain's plan serial), so the green tips jumped (measured:
+ *                the top one 94 px sideways, the side ones 52 px up) although the mirror body had not moved, and that
+ *                second plan was half of the hang at the release. Now the brain's new tips keep off the mirror body's
+ *                tips where they are (as boxes to avoid), and the mirror body's frame is planned again only for its own
+ *                reasons (a carry of it, a reset, the window). The same the other way: letting go of the mirror body
+ *                leaves the brain's tips where they are unless the mirror body (padded) or its top tip's room now lies on
+ *                one of them. A reset or a new window plans both as before, so a reset puts every tip back as at the
+ *                start. false: the rule of before.
+ *  liveCrosshair true: no tip of a frame planned now lies under the crosshair of the view the player is in now. The
+ *                brain's frame after a carry is planned along the brain's placement direction, about 12 degrees above
+ *                the look, so the box kept free round the crosshair was kept free in a view the player was not in, and
+ *                the brain's back tip landed on the real crosshair (a click just after letting go turned the brain).
+ *                The real crosshair's box is mapped into the plan's view (ns-arrows3d viewPointInPlan) and avoided too,
+ *                by the brain's frame at any release and by the mirror body's at a brain release (second pass: not at
+ *                the mirror body's own release, whose frame is planned in the start view as before; the wider box
+ *                below kept browser-keyboard-aim from carrying the mirror body until a tip lay under the crosshair).
+ *  keepClearOfMotor (second pass, a check of this package: after ordinary sideways carries of 120 to 170 px the kept
+ *                mirror tips lay over the brain's motor areas at its new place, 3 of 5 times, and took the click there,
+ *                against Messages 55 / 56) true: a mirror tip kept at a brain release must lie on none of the brain's
+ *                motor areas at the brain's new place (ns-arrows3d keptTipsClear against motorRestGrid of the mirror
+ *                body's own plan camera); else the mirror body's frame is planned again, as before keepUnmoved.
+ *  liveCrossPx   (second pass) the half size of that crosshair box at least (CSS px): with the plan's own 8 px the brain's
+ *                back tip came out 38 px above the crosshair after a carry, so a small look up put it there again.
+ *  restGrids     how many cameras' motor-area grids are kept (motorRestGrid; 1 before).
+ *  spreadFrames  (second pass, H6 measured again: the release frame still 18 to 50 ms, 14 ms of it the plan) the frames
+ *                the released item's arrows stay hidden after the release, as while it was held, counted in drawn frames
+ *                (ns-arrows3d releasePlanStage): the release frame and the one after it do no arrow work (that one
+ *                already skins the hand opening: 4 to 5 ms; with the grids on it, it was the longest frame of the
+ *                release, 50 ms with the profiler on), the next builds the motor-area grid the plan needs and decides
+ *                whether the mirror body's tips may stay, the one after plans. About 50 ms with the arrows hidden at
+ *                60 frames a second. 0: everything on the first frame after the release, as before.
+ *  hudReadLag    (second pass) the HUD cards' boxes are read one frame after the information card changed size, not in
+ *                the same frame (readHudRects, fitInfoCard): read at once, the read forced the page to be laid out
+ *                again inside the frame (3 to 4 ms at a release, when the grip's card goes).
+ *  startPlans    (H8) how many plans made before anything was first held are kept by their key: a later plan with the
+ *                same key (a reset brings both back to their start places in the same window) takes the start's plan
+ *                back instead of planning again from wherever the look is (0: always plan again, as before).
+ */
+export const ARROW_REPLAN = Object.freeze({ keepUnmoved: true, keepClearOfMotor: true, liveCrosshair: true, liveCrossPx: 32, restGrids: 4, startPlans: 8,
+  spreadFrames: 3, hudReadLag: true });
 export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, inwardMaxFracBy: Object.freeze({ forward: NsArrows.FRAME_PAIR.inwardMaxFrac }), perpCost: 12 }) });
 /** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
  * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
@@ -4300,7 +4401,9 @@ export function patchPowerUpShaders(vertexShader, fragmentShader, kind = 'muscle
     '\t\ttotalEmissiveRadiance = mix( vec3( nsPuL ), totalEmissiveRadiance, nsPu.z ) * nsPu.x;\n' +
     `\t\ttotalEmissiveRadiance = mix( totalEmissiveRadiance, vec3( max( totalEmissiveRadiance.r, max( totalEmissiveRadiance.g, totalEmissiveRadiance.b ) ) ), clamp( nsPu.y${muscle ? '' : ` * ${POWER_UP.areaWhiteScale.toFixed(4)}`}, 0.0, 1.0 ) );\n` +
     `\t}\n${H.light}`;
-  const head = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\n' + (muscle ? 'uniform vec3 nsChargeRest;\nuniform vec2 nsSweep;\n' : '') + powerUpGlsl('nsPowerUp') + '\n';
+  // (22 November 2026, LOOK2, POWER_UP.areaStrikeFloor: an area's light starts from what the block already shows: the
+  // uniform nsPuFloor, set per area at each new start, 0 for a block not under the look; second pass)
+  const head = 'uniform vec4 nsClock;\nuniform vec4 nsCharge;\n' + (muscle ? 'uniform vec3 nsChargeRest;\nuniform vec2 nsSweep;\n' : 'uniform float nsPuFloor;\n') + powerUpGlsl('nsPowerUp', POWER_UP, { floor: muscle ? 0 : 'nsPuFloor' }) + '\n';
   return { vertexShader: patchShudderVertex(vertexShader, muscle), fragmentShader: head + fragmentShader.replace(H.color, color).replace(H.light, light) };
 }
 
@@ -5926,6 +6029,7 @@ export function createScene({
   let gazeOnRegion = false;
   let brainTransformSet = false;
   let brainSamples = null; // Float32Array of source-mm sample points (projected bounds for the orbit arrows)
+  let brainSeenShare = null; // (22 November 2026, H9) the share of them in the picture at the last overlay layout
   let brainSupport = null; // R3-scene: supportPoints of every brain vertex (the silhouette hull basis)
   let brainDepthBounds = null; // R22 all glass+strip SOURCE positions, conservative AABB cached only on normal load
   let brainSolid = null, brainSolidMs = 0, brainSolidError = null; // R558 (Message 12): ns-collide solidGrid of the brain meshes (source mm)
@@ -6350,11 +6454,23 @@ export function createScene({
    * (it is in the hand; its arrows turn or tilt it once it is let go) and no frame is planned again; the first frame
    * after it is let go plans both frames for the new place, as before. The other item's arrows stay where they were. */
   let arrowHeld = null;
+  // (22 November 2026, ARROW_REPLAN.liveCrosshair: the item just let go, until the next updateArrows plans for its new place)
+  let arrowReleased = null, arrowReleaseAt = 0, arrowsCarried = false, renderSerial = 0;
+  let releaseKeepsM = null; // (second pass, keepClearOfMotor: at this release the mirror body's tips may stay; null = not decided)
   function setHeldItem(target) {
     const t = target === 'brain' || target === 'mirror' ? target : null;
     if (t === arrowHeld) return false;
+    if (arrowHeld && !t) { arrowReleased = arrowHeld; arrowReleaseAt = renderSerial; releaseKeepsM = null; }
+    if (t) { arrowsCarried = true; arrowReleased = null; } // (ARROW_REPLAN.startPlans: the plans of the start are kept until the first hold)
     arrowHeld = t; overlayDirty = true;
     return true;
+  }
+  /** (22 November 2026, ARROW_REPLAN.spreadFrames) where the release of the item let go stands: 'none', 'hold' and
+   * 'prepare' (its arrows still hidden, as while held) or 'plan'; and the item whose arrows are hidden now. */
+  function arrowRelease() {
+    if (arrowHeld || arrowReleased === null) return { stage: 'none', age: -1, held: arrowHeld };
+    const age = renderSerial - arrowReleaseAt, stage = NsArrows.releasePlanStage(age, ARROW_REPLAN.spreadFrames);
+    return { stage, age, held: stage === 'hold' || stage === 'prepare' ? arrowReleased : null };
   }
   let arrowsShown = false, arrowLayout = null, hoverDir = null;
   // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
@@ -6704,6 +6820,7 @@ export function createScene({
     const u = { value: new THREE.Vector4(-1e4, 0, 0, 0) };
     m.userData.nsCharge = u;
     if (kind === 'muscle') m.userData.nsChargeRest = { value: new THREE.Vector3(0, 0, 0) };
+    else m.userData.nsPuFloor = { value: 0 }; // 22 November 2026 (LOOK2 second pass: the strike's floor, per area)
     powerUp.materials++;
     return composePatch(m, `ns-power-up-r558-${kind}`, shader => {
       const p = patchPowerUpShaders(shader.vertexShader, shader.fragmentShader, kind);
@@ -6712,6 +6829,7 @@ export function createScene({
       shader.fragmentShader = p.fragmentShader;
       shader.uniforms.nsClock = powerUpClock; shader.uniforms.nsCharge = u;
       if (kind === 'muscle') { shader.uniforms.nsChargeRest = m.userData.nsChargeRest; shader.uniforms.nsSweep = m.userData.nsSweep || noSweep; }
+      else shader.uniforms.nsPuFloor = m.userData.nsPuFloor;
     });
   };
   /** The shared charge record of area `id` (null id: the neutral glow of a muscle no area claims). members: the charge
@@ -7048,7 +7166,10 @@ export function createScene({
     external: null, worldCentre: null, transform: null, serial: 0, planeSerial: 0, measured: null, lod: false, twins: 0, error: null,
     correction: null, pipelineMatrix: null, reachForemostM: null, // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
     reachSphere: null, // R558 (Message 45): your left hand's reach, { centre (world m), radiusM }: a turned mirror body stands back for its image
-    viewAwayM: 0 // R558 (Message 52): the outside view's slide (ns-mirror MIRROR_OUTSIDE), set from the camera pose
+    viewAwayM: 0, // R558 (Message 52): the outside view's slide (ns-mirror MIRROR_OUTSIDE), set from the camera pose
+    // 22 November 2026 (H8, MIRROR_RESET): the start's measure { body, eye, drawnForemostM, foremostPoint } and a reset
+    // waiting for the next frame
+    start: null, resetPending: false
   };
   // ---- R5-scene (D18): the render camera. First person: the camera is the eye. Third person: setCameraPose. ----------
   let camPose = null, firstPose = null;
@@ -9848,14 +9969,18 @@ export function createScene({
       if (cu) {
         const on = glowIntensity(Number.isFinite(a) ? a : 0) > 0;
         const count = Number.isFinite(n) ? n : 0;
+        // (22 November 2026, LOOK2 second pass, POWER_UP.areaStrikeFloor: at a NEW start the strike starts from the
+        // look's light when the block is under the look, from nothing when it is not; a new start of a block that
+        // still glows, from the floor)
+        const fu = rec.material.userData.nsPuFloor;
         if (on !== (rec.puOn === true)) {
           rec.puOn = on;
           const c = powerUpArea(rec.id);
-          if (on) cu.value.x = powerUpJoin(rec.id);
+          if (on) { const s0 = powerUp.starts; cu.value.x = powerUpJoin(rec.id); if (fu && powerUp.starts !== s0) fu.value = rec.hovered === true ? POWER_UP.areaStrikeFloor : 0; }
           else c.offAt = powerUpNow();
           c.on = on;
           cu.value.z = on ? 1 : 0;
-        } else if (on && Number.isFinite(rec.puCount) && count > rec.puCount) powerUpRecharge(rec.id, cu); // a second click while it glows
+        } else if (on && Number.isFinite(rec.puCount) && count > rec.puCount) { if (powerUpRecharge(rec.id, cu) && fu) fu.value = POWER_UP.areaStrikeFloor; } // a second click while it glows
         cu.value.w = on && !powerUpSettled.has(rec.id) ? glowIntensity(Number.isFinite(a) ? a : 0) : 0; // 18 November (MAP): the key's shudder
         // 17 November (BRAIN_KEYS): every new activation count (a click, a number key, a held look) presses the key down.
         // (22 November 2026, ns-area-halo keyPressed: not a count that comes just after the area's light ended, a look's
@@ -10151,10 +10276,38 @@ export function createScene({
 
   /** Far-right information overlay (R14) for an ns-app infoOverlayModel. Rewrites text only when the content changes;
    * null hides the panel. Returns true when something was written. */
+  /** 22 November 2026 (WORDS2, second pass, INFO_FIT): drop whole "Keep in mind" lines a card without More detail cannot
+   * show (in an animation frame, after the card's new words are laid out; a line shown again and dropped again in the
+   * same frame is never painted). */
+  function fitCaveats() {
+    info.fitRaf = 0;
+    const items = info.caveats.children;
+    for (let i = 0; i < items.length; i++) if (items[i].hidden) items[i].hidden = false;
+    if (!INFO_FIT.on || info.panel.hidden || info.more.open || info.caveats.hidden || !items.length) return;
+    const view = info.panel.ownerDocument && info.panel.ownerDocument.defaultView;
+    if (!view || typeof info.panel.getBoundingClientRect !== 'function' || view.getComputedStyle(info.caveats).display === 'none') return;
+    const pr = info.panel.getBoundingClientRect(), bottoms = [];
+    for (let i = 0; i < items.length; i++) bottoms.push(items[i].getBoundingClientRect().bottom);
+    const n = caveatsToDrop(bottoms, pr.bottom - INFO_FIT.footPx, info.panel.scrollHeight > info.panel.clientHeight + 1);
+    for (let i = items.length - n; i < items.length; i++) items[i].hidden = true;
+  }
+  function scheduleFitCaveats() {
+    if (!INFO_FIT.on || info.fitRaf) return;
+    const view = info.panel.ownerDocument && info.panel.ownerDocument.defaultView;
+    if (view && typeof view.requestAnimationFrame === 'function') info.fitRaf = view.requestAnimationFrame(fitCaveats);
+  }
   function setInfo(model) {
     if (!info) return false;
     const c = infoPanelContent(model);
-    if (!c) { if (!info.panel.hidden) { info.panel.hidden = true; hudReadIn = 0; hudDirty = true; } info.last = null; overlayDirty = true; return true; }
+    if (!c) { if (!info.panel.hidden) { info.panel.hidden = true; hudReadIn = 0; hudDirty = true; hudSwapAt = renderSerial; } info.last = null; overlayDirty = true; return true; }
+    // (WORDS2, second pass: what decides how much of the card fits besides its words: the reading level, the window, the
+    // body view and More detail)
+    if (INFO_FIT.on) {
+      const root = typeof info.panel.closest === 'function' ? info.panel.closest('.ns-app') : null;
+      const view = info.panel.ownerDocument && info.panel.ownerDocument.defaultView;
+      const fitKey = `${root && root.getAttribute ? `${root.getAttribute('data-ns-read')}|${root.getAttribute('data-ns-unfold')}` : ''}|${brainInViewAttr}|${view ? `${view.innerWidth}x${view.innerHeight}` : ''}|${info.more.open}`;
+      if (fitKey !== info.fitKey) { info.fitKey = fitKey; scheduleFitCaveats(); }
+    }
     const sig = JSON.stringify(c);
     if (sig === info.last) return false;
     info.last = sig;
@@ -10258,8 +10411,16 @@ export function createScene({
         // R558 (the R key): in the "more" state the player asked for More detail, so it stays open from area to area.
         const root = typeof info.panel.closest === 'function' ? info.panel.closest('.ns-app') : null;
         const open = Boolean(root && typeof root.getAttribute === 'function' && root.getAttribute('data-ns-read') === 'more');
+        // 22 November 2026 (WORDS2, second pass): a new subject while More detail stays open is scrolled as when More
+        // detail opens (ns-app revealInfoDetail, on this event), so the new area's tag and sentence are not left out of
+        // sight at the old scroll. (Opening fires the details element's own "toggle", which ns-app already follows.)
+        const stays = open && info.more.open === true && info.moreKey !== null;
         if (info.more.open !== open) { info.more.open = open; grew = true; }
         info.moreKey = c.key;
+        if (stays && typeof info.more.dispatchEvent === 'function') {
+          const view = info.panel.ownerDocument && info.panel.ownerDocument.defaultView;
+          try { if (view && typeof view.Event === 'function') info.more.dispatchEvent(new view.Event('ns-info-subject', { bubbles: true })); } catch { /* no reveal */ }
+        }
       }
       hide(info.more, false);
     } else {
@@ -10269,7 +10430,7 @@ export function createScene({
     }
     if (info.panel.hidden) { info.panel.hidden = false; hudReadIn = 0; grew = true; } // R3-scene: re-measure the obstacles now
     // R4-scene: the panel's size may change with its text: re-read the obstacles in this same frame
-    if (grew) { info.grewN = (info.grewN | 0) + 1; overlayDirty = true; hudDirty = true; }
+    if (grew) { info.grewN = (info.grewN | 0) + 1; overlayDirty = true; hudDirty = true; hudSwapAt = renderSerial; scheduleFitCaveats(); } // (hudReadLag)
     return true;
   }
 
@@ -10541,6 +10702,7 @@ export function createScene({
     mirrorBodyGroup.matrix.fromArray(bodyFrame);
     mirrorBodyGroup.matrixWorldNeedsUpdate = true;
     mirror.ready = false; // R5-scene (D19): measured at the next render (computeMirrorBody)
+    mirror.start = null; mirror.resetPending = false; // (22 November 2026, H8: a new body is measured afresh)
     if (lodApplied) setLod(QUALITY_LEVELS[qState.level].lod, lodApplied); // R4-scene: a body set while a LOD level is on
     applyMirrorLod();
     const face = body.filter(b => b.face).length;
@@ -11784,7 +11946,7 @@ export function createScene({
     // view; look-independent), so the guide chip can sit centred just below it.
     const bp = arrowSets.brain.plan && arrowSets.brain.plan.spots && arrowSets.brain.plan.spots.forward;
     const brainTopPlanPx = arrowSets.brain.shown && bp && bp.box ? { ...bp.box } : null;
-    return { brainInView: brainInViewAttr === 'true', arrows: arrowsOut, infoBottom, toasts, labelsPx, brainTopPlanPx };
+    return { brainInView: brainInViewAttr === 'true', brainSeenShare, arrows: arrowsOut, infoBottom, toasts, labelsPx, brainTopPlanPx };
   }
   /** R558 (issue hunt 2: the "Try this" chip covered your shin, forearm; "Front (anterior)" was printed across the mirror
    * body's belly): the on-screen boxes (CSS px, clipped to the view) of your own body and of the mirror body, for the
@@ -11989,7 +12151,7 @@ export function createScene({
   function projectBrainBounds() {
     if (!brainSamples || !(cssW > 0 && cssH > 0)) return false;
     const mw = brainGroup.matrixWorld, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, seen = 0;
     const s = brainSamples;
     for (let i = 0; i < s.length; i += 3) {
       pv.set(s[i], s[i + 1], s[i + 2]).applyMatrix4(mw).applyMatrix4(vi);
@@ -11997,7 +12159,11 @@ export function createScene({
       pv.applyMatrix4(pm);
       const x = (pv.x + 1) * 0.5 * cssW, y = (1 - pv.y) * 0.5 * cssH;
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x >= 0 && x <= cssW && y >= 0 && y <= cssH) seen++;
     }
+    // (22 November 2026, browser hunt of update 64, H9, second pass: the share of the brain's sample points that are in the
+    // picture, 0 = none of the brain is in view; ns-app's lost-brain tip shows only then)
+    brainSeenShare = s.length ? seen / (s.length / 3) : null;
     if (!(x1 >= x0)) return false;
     brainBoundsPx.x0 = x0; brainBoundsPx.y0 = y0; brainBoundsPx.x1 = x1; brainBoundsPx.y1 = y1;
     // Fix F2: the projected brain centre (centroid of the sample points), when it is in front of the camera.
@@ -12069,15 +12235,24 @@ export function createScene({
    * bottom-centre CSS box). The arrow PLAN always keeps clear of it, so the arrows do not move when the pointer is
    * captured or released (the toast comes and goes) and are never under it. */
   let toastSeen = null;
+  // (22 November 2026, second pass, ARROW_REPLAN.hudReadLag) the frame (renderSerial) the information card last changed
+  // size in, and the frame of the last read: a read asked for in the frame of the change, or in the pick before the next
+  // drawing, keeps last frame's boxes; the next frame reads, after the browser has laid the page out by itself. At most
+  // one frame late in a row (a card changing on every frame is still read every other frame).
+  let hudSwapAt = -10, hudLagStart = -1;
   function readHudRects() {
     const key = `${cssW}x${cssH}`;
+    if (hudMo && hudDirty && ARROW_REPLAN.hudReadLag && key === hudReadFor && hudSwapAt >= renderSerial - 1) {
+      if (hudLagStart < 0) hudLagStart = renderSerial;
+      if (renderSerial - hudLagStart <= 1) { hudLagged++; return hudRectCache; }
+    }
     if (hudMo) { if (key === hudReadFor && !hudDirty) return hudRectCache; }
     else if (key === hudReadFor && hudReadIn-- > 0) return hudRectCache;
-    hudReadFor = key; hudReadIn = HUD_READ_EVERY; hudDirty = false; hudReads++;
+    hudReadFor = key; hudReadIn = HUD_READ_EVERY; hudDirty = false; hudReads++; hudLagStart = -1;
     const tRead = nowMs();
     try { return readHudRectsNow(key); } finally { hudReadMs += nowMs() - tRead; }
   }
-  let hudReadMs = 0;
+  let hudReadMs = 0, hudLagged = 0;
   /** R558 (Messages 44 and 48, text that is easy to read): the short card shows each of its parts whole or leaves it
    * out; nothing is cut through. The short card has a greatest height (INFO_PANEL.cornerShortVh). On a card with many
    * lines the lead sentence used to give way pixel by pixel and ended as a sliver of a line, and in a small window the
@@ -12277,13 +12452,20 @@ export function createScene({
    * push, the outside view's slide and a tilt's clearance, a pure shift: transform centre minus carryCentre), or null
    * when it is not shown. The frame is planned again only for a new place (planFrames' key), so an arrow tap never moves
    * the tips (the user: arrows "stay in place after tapping on them"). */
+  // (22 November 2026, browser hunt of update 64, H6: one plan asks for this box from up to four cameras; the body's
+  // world points without the moves along the ground are worked out once per placement, mirror.serial)
+  let mirrorBoxWorld = null;
   function mirrorBoxPx(look) {
     if (!mirrorRoot.visible || !mirror.transform) return null;
-    const W = mirrorSamplesWorld();
-    if (!W) return null;
-    const T = mirror.transform, cc = T.carryCentre || T.centre;
-    const px = T.centre[0] - cc[0], py = T.centre[1] - cc[1], pz = T.centre[2] - cc[2];
-    if (px || py || pz) for (let i = 0; i < W.length; i += 3) { W[i] -= px; W[i + 1] -= py; W[i + 2] -= pz; }
+    let W = mirrorBoxWorld && mirrorBoxWorld.serial === mirror.serial && mirrorBoxWorld.samples === mirror.samples ? mirrorBoxWorld.W : null;
+    if (!W) {
+      W = mirrorSamplesWorld();
+      if (!W) return null;
+      const T = mirror.transform, cc = T.carryCentre || T.centre;
+      const px = T.centre[0] - cc[0], py = T.centre[1] - cc[1], pz = T.centre[2] - cc[2];
+      if (px || py || pz) for (let i = 0; i < W.length; i += 3) { W[i] -= px; W[i + 1] -= py; W[i + 2] -= pz; }
+      mirrorBoxWorld = { serial: mirror.serial, samples: mirror.samples, W };
+    }
     const { xy, behind } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() });
     return behind > 0 ? null : NsArrows.screenBoxOf(xy);
   }
@@ -12338,16 +12520,24 @@ export function createScene({
    * ns-brain restMatrix) seen from a plan's reference camera: tipBlocker tests a tip's click area against it, so at the
    * start a click on a motor area never lands on an arrow. Kept for the last camera asked (the brain's and the mirror
    * body's plans usually share it). null before the region meshes and the rest matrix exist. */
-  let motorRestGridMemo = null;
+  // 22 November 2026 (browser hunt of update 64, H6): the last few cameras' grids are kept (ARROW_REPLAN.restGrids), not
+  // only the last one: the brain's plan (from the look the brain was carried along) and the mirror body's (from the
+  // start look) ask for different cameras, so one memo built the grid twice on every plan after a carry.
+  const motorRestGridMemo = [];
   function motorRestGrid(refCam) {
     const P = motorSamplePoints(), e = brainRestElements;
     if (!P || !e || !(refCam.width > 0 && refCam.height > 0)) return null;
     const key = `${refCam.width}x${refCam.height}|${refCam.fovYDeg}|${refCam.yaw},${refCam.pitch}|${refCam.position.join(',')}|${Array.prototype.join.call(e, ',')}|${compassBrainSourceRevision}`;
-    if (!motorRestGridMemo || motorRestGridMemo.key !== key) {
-      motorRestGridMemo = { key, grid: NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(e), refCam).xy,
-        { width: refCam.width, height: refCam.height, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 0, indices: motorIndices }) };
+    let at = motorRestGridMemo.findIndex(m => m.key === key);
+    if (at < 0) {
+      const t0 = nowMs();
+      motorRestGridMemo.unshift({ key, grid: NsArrows.occupancyGrid(NsArrows.projectPointsPx(P, Array.from(e), refCam).xy,
+        { width: refCam.width, height: refCam.height, cellPx: R5_BIGBRAIN.avoidCellPx, dilate: 0, indices: motorIndices }) });
+      arrowStats.restGrids = (arrowStats.restGrids || 0) + 1; arrowStats.restGridMs = Math.round((nowMs() - t0) * 100) / 100;
+      motorRestGridMemo.length = Math.min(motorRestGridMemo.length, Math.max(1, ARROW_REPLAN.restGrids));
+      at = 0;
     }
-    return motorRestGridMemo.grid;
+    return motorRestGridMemo[at].grid;
   }
   /** R558 (Messages 55 / 56): the box the mirror body's 9:16 arrow frame is built from, seen from a reference camera
    * (see updateArrows): its on-screen box padded by a tip and cut to the usable view U. { box, keep } or null. */
@@ -12501,6 +12691,68 @@ export function createScene({
    * source, the mirror body's scale and measured sample. Turning a target, tapping an arrow or looking around changes
    * none of these, so the tips stay where they are. (A frame made while the mirror body is turned, e.g. after a window
    * resize, is fitted to the body as it then stands.) */
+  // 22 November 2026 (browser hunt of update 64, H8; ARROW_REPLAN.startPlans): the plans made before anything was first
+  // held, by key, with what the arrow readback reports of them. A later plan with the same key (a reset brings the brain
+  // and the mirror body back to their start places in the same window) takes the start's plan back: planned again, the
+  // tips came out elsewhere when the look was raised at the reset (your left arm follows the look, and the sight lines
+  // that keep tips off your own body test it where it is then: the brain's side tips 40 px lower).
+  const PLAN_FIELDS = Object.freeze(['plan', 'planningCamera', 'planningCameraKey', 'planningTarget', 'planningTargetKey', 'planningEvidence', 'planningOutcome', 'planningError', 'frameRecord', 'nominalHeads', 'rescued']);
+  function keepStartPlan(set, key) {
+    if (arrowsCarried || !set.plan || !(ARROW_REPLAN.startPlans > 0)) return;
+    if (!set.startPlans) set.startPlans = new Map();
+    set.startPlans.set(key, Object.fromEntries(PLAN_FIELDS.map(f => [f, set[f]])));
+    while (set.startPlans.size > ARROW_REPLAN.startPlans) set.startPlans.delete(set.startPlans.keys().next().value);
+  }
+  function useStartPlan(set, key) {
+    const snap = ARROW_REPLAN.startPlans > 0 && set.startPlans ? set.startPlans.get(key) : null;
+    if (!snap) return false;
+    for (const f of PLAN_FIELDS) set[f] = snap[f];
+    arrowStats.startPlans = (arrowStats.startPlans || 0) + 1;
+    return true;
+  }
+  /** (22 November 2026, second pass, ARROW_REPLAN.keepClearOfMotor) may the mirror body's tips stay where they are after
+   * the brain was let go? Each tip's click box (anchorBoxesPx) in the view in use is tested against the motor areas'
+   * vertices as they are drawn now (motorCoversRect, the test the soft "over a motor area" look uses: cheap, its
+   * projection is kept per camera and brain place), through ns-arrows3d keptTipsClear. A tip outside the picture is
+   * tested in the mirror body's own plan view instead (motorRestGrid there), so a tip the player cannot see now does
+   * not stay on an area either. */
+  // the plans' reference cameras, worked out the way updateArrows always did (the brain's: its placement direction, or
+  // the opening look in a landscape window at the start; the mirror body's: the start look while its centre is well
+  // inside that view, else the look straight at it), for the release's 'prepare' frame too
+  function arrowRefAt(look) {
+    const eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
+    if (!referenceOriginSet) return Array.from(eye);
+    const o = eyeDolly(look).offset; return [eye[0] + o[0], eye[1] + o[1], eye[2] + o[2]];
+  }
+  function brainPlanCamFor() {
+    const planFov = planLensFov();
+    const defaultLandscape = cssW >= cssH && Math.abs(arrowRef.yaw - referenceAngles.yaw) < 1e-6 && Math.abs(arrowRef.pitch - referenceAngles.pitch) < 1e-6;
+    const brainLook = defaultLandscape ? referenceLook : arrowRef;
+    return { brainLook, refCam: { width: cssW, height: cssH, fovYDeg: planFov, yaw: brainLook.yaw, pitch: brainLook.pitch, position: arrowRefAt(brainLook) } };
+  }
+  function mirrorPlanCamFor(c) {
+    const planFov = planLensFov(), eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
+    const openingPortrait = cssW < cssH && !camPose && !mirror.worldCentre;
+    const start = openingPortrait ? { yaw: referenceLook.yaw, pitch: referenceLook.pitch } : { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
+    let look = start;
+    const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: arrowRefAt(start) });
+    if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
+      const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
+      look = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
+    }
+    return { start, look, refCam: { width: cssW, height: cssH, fovYDeg: planFov, yaw: look.yaw, pitch: look.pitch, position: arrowRefAt(look) } };
+  }
+  function releaseKeepsMirror(cam, mCentre) {
+    const M = arrowSets.mirror;
+    if (!M.plan || !M.plan.anchors) return true;
+    const sizePx = M.plan.sizes.sizePx, boxes = NsArrows.anchorBoxesPx(M.plan.anchors, { cam, sizePx });
+    const inView = b => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= cssW && b.y1 <= cssH;
+    arrowStats.keepCheck = { boxes: boxes.map(b => [Math.round(b.x0), Math.round(b.y0), Math.round(b.x1), Math.round(b.y1)]), view: boxes.map(b => motorCoversRect(b, 0)) };
+    if (!NsArrows.keptTipsClear(boxes, { grid: { hits: b => (motorCoversRect(b, 0) ? 1 : 0) } })) return false;
+    if (boxes.length === ARROW_DIRS.filter(d => M.plan.anchors[d]).length && boxes.every(inView)) return true;
+    const mCam = mCentre ? mirrorPlanCamFor(mCentre).refCam : null;
+    return !mCam || NsArrows.keptTipsClear(NsArrows.anchorBoxesPx(M.plan.anchors, { cam: mCam, sizePx }), { grid: motorRestGrid(mCam), padPx: 1 });
+  }
   function updateArrows() {
     if (!(cssW > 0 && cssH > 0)) return;
     const B = arrowSets.brain, M = arrowSets.mirror, cam = arrowCam();
@@ -12520,6 +12772,55 @@ export function createScene({
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (mirrorSamplesSeen !== mirror.samples) { mirrorSamplesSeen = mirror.samples; mirrorSamplesRev++; }
     const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
+    // 22 November 2026 (H6, H7; ARROW_REPLAN.keepUnmoved): the mirror body's own plan key (its view and place, not the
+    // brain's plan), worked out first: when the mirror body's frame is NOT planned again on this frame, the brain's tips
+    // keep off its tips where they are.
+    const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
+    const mOpeningLandscape = cssW >= cssH && !camPose && !mirror.worldCentre;
+    const mOpeningPortrait = cssW < cssH && !camPose && !mirror.worldCentre;
+    const mCentreNow = showM ? mirror.transform.carryCentre || mirror.transform.centre : null;
+    const mOwnKey = showM ? `${view}|${mCentreNow[0]},${mCentreNow[1]},${mCentreNow[2]}|${mirror.transform.scale}|${mOpeningLandscape}|${mOpeningPortrait}` : '';
+    // (the brain's FIRST plan still makes the mirror body's frame again, after it, as before: on a machine where the
+    // mirror body is ready before the brain the start places stay those of the brain-first order)
+    const mKeyNow = () => (ARROW_REPLAN.keepUnmoved ? `${mOwnKey}|${B.plan ? 'brain' : 'no-brain'}` : `${mOwnKey}|${B.serial || 0}`);
+    // (22 November 2026, second pass, ARROW_REPLAN.spreadFrames) the release of an item is planned two frames after it:
+    // until then its arrows stay hidden, as while it was held (heldNow), and the frame before the plan builds the grids
+    const rel = arrowRelease(), heldNow = rel.held, releasing = rel.stage === 'plan';
+    // the reference cameras of the two plans (the brain's: its placement direction, or the opening look in a landscape
+    // window at the start; the mirror body's: the start look while its centre is well inside that view)
+    const brainPlanCam = brainPlanCamFor, mirrorPlanCam = mirrorPlanCamFor;
+    // ARROW_REPLAN.keepUnmoved: the mirror body keeps its tips when its own key is the same, and (keepClearOfMotor, a
+    // check of the first pass) only while none of them lies on a motor area of the brain at the brain's place now:
+    // decided on the 'prepare' frame (releaseKeepsMirror), where also the grids the plan will need are built (the
+    // brain's always, the mirror body's only when its frame is to be planned again)
+    let mKeeps = ARROW_REPLAN.keepUnmoved && showM && Boolean(B.plan) && Boolean(M.plan && M.plan.anchors) && mKeyNow() === M.key && M.samplesRef === mirror.samples;
+    let mForce = false, bFromStart = false;
+    if ((rel.stage === 'prepare' || releasing) && releaseKeepsM === null) {
+      releaseKeepsM = !(mKeeps && showB && ARROW_REPLAN.keepClearOfMotor) || releaseKeepsMirror(cam, mCentreNow);
+      arrowStats.keepDecided = { stage: rel.stage, age: rel.age, candidate: mKeeps, keeps: releaseKeepsM, serial: renderSerial };
+    }
+    if (rel.stage === 'prepare' && showB) {
+      // (the grid of the frame that will be planned: the brain's at a brain release; the mirror body's at its own release
+      // or when its tips may not stay)
+      if (arrowReleased === 'brain') motorRestGrid(brainPlanCam().refCam);
+      if (showM && (arrowReleased === 'mirror' || releaseKeepsM === false)) motorRestGrid(mirrorPlanCam(mCentreNow).refCam);
+    }
+    if (mKeeps && releasing && releaseKeepsM === false) { mKeeps = false; mForce = true; }
+    // (ARROW_REPLAN.liveCrosshair) the crosshair box of the view in use, mapped into a plan's reference view, for the
+    // plans made as an item is let go (a reset or a new window plans as before, so a reset puts every tip back as at the
+    // start whatever the look)
+    // (second pass: not for the mirror body's own frame at the mirror body's own release: that frame is planned in the
+    // start view, as before this package, and browser-keyboard-aim carries the mirror body until a tip IS under the
+    // crosshair, on purpose; the H7 fault was the brain's frame, planned along the brain's carry)
+    const liveCrossFor = (refCam, centreW, target = 'brain') => {
+      if (!ARROW_REPLAN.liveCrosshair || !crossBox || !releasing || (target === 'mirror' && arrowReleased === 'mirror')) return null;
+      let p = null;
+      try { p = NsArrows.viewPointInPlan(refCam, centreW, cam, cssW / 2, cssH / 2); } catch { p = null; }
+      if (!p) return null;
+      const h = Math.max((crossBox.x1 - crossBox.x0) / 2, ARROW_REPLAN.liveCrossPx || 0);
+      if (Math.abs(p.x - cssW / 2) < 0.5 && Math.abs(p.y - cssH / 2) < 0.5 && h <= (crossBox.x1 - crossBox.x0) / 2) return null; // (the plan's own crosshair box covers it)
+      return { x0: p.x - h, y0: p.y - h, x1: p.x + h, y1: p.y + h, crosshair: true };
+    };
     if (showB) {
       const e = brainGroup.matrixWorld.elements, centre = farEyeView.pw || [e[12], e[13], e[14]], r = brainRestElements;
       // In landscape, the narrower opening lens could put the brain's upper tip above the player's picture even
@@ -12528,14 +12829,16 @@ export function createScene({
       const defaultLandscape = cssW >= cssH && Math.abs(arrowRef.yaw - referenceAngles.yaw) < 1e-6
         && Math.abs(arrowRef.pitch - referenceAngles.pitch) < 1e-6;
       const brainLook = defaultLandscape
-        ? referenceLook : arrowRef;
+        ? referenceLook : arrowRef; // (the same as brainPlanCam, which the plan below and the release's 'prepare' use)
       // R558 (hunt 2): the mirror body's place is part of the key: the brain's tips keep off the mirror body's box.
       const key = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${brainLook.yaw},${brainLook.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|${mirrorPlace}|own${body.length}`;
+      // (22 November 2026, ARROW_REPLAN.keepUnmoved: the same key without the mirror body's place)
+      const bOwn = `${view}|${compassBrainSourceRevision}|${centre[0]},${centre[1]},${centre[2]}|${brainLook.yaw},${brainLook.pitch}|${r ? Array.prototype.join.call(r, ',') : 'no-rest'}|own${body.length}`;
       // (a turned brain whose transform carries no rest matrix keeps its frame: a frame is never fitted to a turned brain)
       // R558 (performance): nor is a frame planned again while an item is held (setHeldItem): once it is let go
-      if (key !== B.key && (r || !B.frames) && (!arrowHeld || !B.key)) {
+      if (key !== B.key && (r || !B.frames) && (!heldNow || !B.key)) {
         B.key = key;
-        const refCam = { width: cssW, height: cssH, fovYDeg: planFov, yaw: brainLook.yaw, pitch: brainLook.pitch, position: refAt(brainLook) };
+        const refCam = brainPlanCam().refCam;
         const bSize = NsArrows.arrowTipSizePx(cam, 'brain');
         // R558 (issue hunt 2, portrait: the brain's bottom tip lay across the mirror body's chest): the brain's tips keep off
         // the mirror body's box (padded by a mirror tip, so the mirror's own tips keep their room) and off places your own
@@ -12559,7 +12862,22 @@ export function createScene({
             mTop = { x0: mx - hc, y0: ty - ha, x1: mx + hc, y1: ty + ha };
           }
         }
+        // 22 November 2026 (ARROW_REPLAN.keepUnmoved): letting go of the mirror body moved only the mirror body, so the
+        // brain keeps its tips unless the mirror body (padded) or its top tip's room now lies on one of them (then the
+        // frame is planned again as before). A reset or a new window always plans again.
+        let keptB = false;
+        if (releasing && ARROW_REPLAN.keepUnmoved && B.plan && B.plan.anchors && B.ownKey === bOwn) {
+          keptB = NsArrows.keptTipsClear(NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }), { avoid: [mPad, mTop] });
+        }
+        B.ownKey = bOwn;
+        if (!keptB) {
+        bFromStart = useStartPlan(B, key);
+        if (!bFromStart) {
         const bAvoid = (crossBox ? [crossBox] : []).concat(mTop ? [mTop] : []);
+        // (22 November 2026, ARROW_REPLAN: the mirror body's tips where they stay, and the crosshair the player sees)
+        if (mKeeps) for (const b of NsArrows.anchorBoxesPx(M.plan.anchors, { cam: refCam, sizePx: M.plan.sizes.sizePx })) bAvoid.push(b);
+        const bLive = liveCrossFor(refCam, Array.from(centre));
+        if (bLive) bAvoid.push(bLive);
         const bBlocked = tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad, grid: motorRestGrid(refCam) });
         B.plan = planFrame(B, { box: motorRestBoxPx(refCam), aspect: NsArrows.FRAME_ASPECT.brain, bounds: U, cam: refCam, centre: Array.from(centre), sizePx: bSize,
           avoid: bAvoid.length ? bAvoid : null, keepOut, rules: BRAIN_TIP_RULES, blocked: bBlocked },
@@ -12567,41 +12885,46 @@ export function createScene({
         if (B.plan) rescueTips(B, B.plan, { cam: refCam, centre: Array.from(centre), sizePx: bSize, blocked: bBlocked, bounds: U, avoid: bAvoid, // 18 November 2026, late
           looseBlocked: tipBlocker({ cam: refCam, centre: Array.from(centre), sizePx: bSize, box: mPad, grid: motorRestGrid(refCam), ownBody: false }) });
         if (B.plan) B.plan.visAnchors = frameVisAnchors(B.plan, refCam, Array.from(centre)); // check fix: the frame FRAME_VIS samples
+        keepStartPlan(B, key);
+        }
         B.frames = B.plan ? B.plan.frames : null;
         B.serial = (B.serial || 0) + 1;
         B.rig.setFrames(B.frames);
         arrowSerial++;
+        }
       }
     }
-    B.shown = showB && Boolean(B.frames) && !B.frameHidden && arrowHeld !== 'brain';
+    B.shown = showB && Boolean(B.frames) && !B.frameHidden && heldNow !== 'brain';
     if (B.rig && B.rig.group.visible !== B.shown) B.rig.group.visible = B.shown;
-    const showM = Boolean(M.rig) && mirrorRoot.visible && mirror.transform !== null && mirror.samples !== null && Boolean(mirror.body);
     if (showM) {
       // R558 (Message 19 check): planned on the body's place WITHOUT its moves along the ground (carryCentre), and the
       // key leaves the orbit out, so an arrow tap (a turn or a tilt) neither re-plans nor moves the tips; a carry or a
       // reset does.
-      const c = mirror.transform.carryCentre || mirror.transform.centre;
-      const openingLandscape = cssW >= cssH && !camPose && !mirror.worldCentre;
+      const c = mCentreNow;
+      const openingLandscape = mOpeningLandscape;
       // 20 November 2026 (package LAYOUT): in an upright window the mirror body's tips are planned in the view the player
       // starts in (the opening look, 25.5 degrees down), not in the brain's placement direction (13 degrees down). Planned
       // there, they came out about 170 px off in the picture the player gets: the left and right tips lay over the face
       // areas of the strip and were drawn faint (the motor-colour rule only sees the real view). In a landscape window
       // the older plan stays, with its own correction of the up tip (fitOpeningMirrorUp, DESIGN-DECISIONS section 146).
-      const openingPortrait = cssW < cssH && !camPose && !mirror.worldCentre;
-      const key = `${view}|${c[0]},${c[1]},${c[2]}|${mirror.transform.scale}|${B.serial || 0}|${openingLandscape}|${openingPortrait}`;
-      if ((key !== M.key || M.samplesRef !== mirror.samples) && (!arrowHeld || !M.key)) { // (not while an item is held: setHeldItem)
+      const openingPortrait = mOpeningPortrait;
+      // (22 November 2026, ARROW_REPLAN.keepUnmoved: no longer the brain's plan serial; mKeyNow)
+      const key = mKeyNow();
+      // (second pass: a reset that took the brain's start plan back takes the mirror body's back too, when the mirror
+      // body's frame was planned again at a release since; keepClearOfMotor forces the plan, mForce)
+      const snapM = bFromStart && M.startPlans ? M.startPlans.get(key) : null;
+      const mBack = Boolean(snapM && snapM.plan !== M.plan);
+      if ((key !== M.key || M.samplesRef !== mirror.samples || mForce || mBack) && (!heldNow || !M.key)) { // (not while an item is held: setHeldItem)
         M.key = key; M.samplesRef = mirror.samples;
-        const start = openingPortrait ? { yaw: referenceLook.yaw, pitch: referenceLook.pitch } : { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
-        let look = start;
-        const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: refAt(start) });
-        if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
-          const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
-          look = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
-        }
-        const refCam = { width: cssW, height: cssH, fovYDeg: planFov, yaw: look.yaw, pitch: look.pitch, position: refAt(look) };
+        // (a frame planned again because a kept tip lay on a motor area is planned afresh, not taken back from the start:
+        // the start's tips are the ones that lie there)
+        if (mForce || !useStartPlan(M, key)) {
+        const { start, look, refCam } = mirrorPlanCam(c);
         // the brain's tips come first: mirror tips that would overlap one move, as a pair, to the nearest clear place
         // (ns-arrows3d frameArrowSpots)
         const avoid = (B.plan && B.plan.anchors ? NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }) : []).concat(crossBox ? [crossBox] : []);
+        const mLive = liveCrossFor(refCam, Array.from(c), 'mirror'); // (22 November 2026, ARROW_REPLAN.liveCrosshair)
+        if (mLive) avoid.push(mLive);
         // R558 (issue hunt 2, portrait: the panels cover the mirror body's lower half, and the frame fitted to the
         // whole body then cut at the panels ringed only its head): the frame is built from the part of its on-screen box
         // inside the usable view (the space between the panels), padded by a tip so the tips sit just outside the body;
@@ -12621,6 +12944,8 @@ export function createScene({
           fitOpeningMirrorUp(M, B.plan, openingCam, U, keepOut.concat(crossBox ? [crossBox] : []), showB);
         }
         if (M.plan) M.plan.visAnchors = frameVisAnchors(M.plan, refCam, Array.from(c)); // check fix: the frame FRAME_VIS samples
+        keepStartPlan(M, key);
+        }
         M.frames = M.plan ? M.plan.frames : null;
         M.serial = (M.serial || 0) + 1;
         M.rig.setFrames(M.frames);
@@ -12628,8 +12953,10 @@ export function createScene({
         arrowSerial++;
       }
     }
-    M.shown = showM && Boolean(M.frames) && !M.frameHidden && arrowHeld !== 'mirror';
+    M.shown = showM && Boolean(M.frames) && !M.frameHidden && heldNow !== 'mirror';
     if (M.rig && M.rig.group.visible !== M.shown) M.rig.group.visible = M.shown;
+    // (the release is over once its plan stage has run: both frames are planned, or kept, on that one call)
+    if (releasing) { arrowReleased = null; releaseKeepsM = null; overlayDirty = true; }
     // R558 (Message 7): the planned anchors are fixed world points; each tip FACES the camera in use and keeps its
     // planned size on screen (ns-arrows3d facingArrowFrames: its depth axis along its own sight line, so the tilted solid
     // looks the same everywhere in the wide view). A tip fixed in the world and seen from the side, e.g. when the player
@@ -13231,8 +13558,9 @@ export function createScene({
     let test = null;
     const covered = (x, y, m) => { if (!test) test = ownSightTester(); return test(x, y, m); };
     let changed = false;
+    const heldVis = arrowRelease().held; // (22 November 2026: and for spreadFrames after it is let go)
     for (const set of [arrowSets.brain, arrowSets.mirror]) {
-      if (set.target === arrowHeld) continue; // R558 (performance): a held item's arrows are not drawn (setHeldItem)
+      if (set.target === heldVis) continue; // R558 (performance): a held item's arrows are not drawn (setHeldItem)
       const A = set.plan && set.plan.anchors;
       const targetOn = set.target === 'brain' ? brainGroup.visible && brainTransformSet : mirrorRoot.visible && mirror.transform !== null;
       let hide = false;
@@ -13585,6 +13913,17 @@ export function createScene({
    * (setMirrorPlane); it does not depend on the brain. */
   function computeMirrorBody() {
     if (!body.length) return false;
+    // 22 November 2026 (browser hunt of update 64, H8; MIRROR_RESET): a reset of the mirror body takes back the measure
+    // of the start (the body box and the eye the plane was set from) instead of measuring the body as it is posed now
+    if (mirror.resetPending && MIRROR_RESET.keepStart && mirror.start) {
+      mirror.resetPending = false;
+      mirror.body = mirror.start.body;
+      mirror.samples = mirror.body.sample;
+      mirror.ready = true;
+      setMirrorPlane(mirror.start);
+      return true;
+    }
+    mirror.resetPending = false;
     bodyGroup.updateMatrixWorld(true);
     const bw = bodyGroup.matrixWorld, pts = [];
     const take = (mesh, matrix) => mirrorMeshCorners(mesh, matrix, (x, y, z) => pts.push(x, y, z));
@@ -13604,7 +13943,7 @@ export function createScene({
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     mirror.samples = mirror.body.sample;
     mirror.ready = true;
-    setMirrorPlane();
+    setMirrorPlane(null, true);
     return true;
   }
   /** R558: the drawn meshes of one body ('own': your body and arm; 'mirror': their twins) with the matrix from their
@@ -13673,14 +14012,18 @@ export function createScene({
    * MIRROR_REFLECTION.clearanceM in front of the foremost drawn point measured from the eye. The plane then stays fixed
    * in the world (like a mirror on a stand) until the next reset; the orbit (turn / push) and the carry start again
    * from it. */
-  function setMirrorPlane() {
+  function setMirrorPlane(from = null, recordStart = false) {
     if (!mirror.body) return false;
     try {
-      const eye = [eyeRig.position.x, eyeRig.position.y, eyeRig.position.z];
+      // (22 November 2026, H8, MIRROR_RESET: `from` = the start's measure: its eye and its foremost drawn point, instead
+      // of the eye and the body as they are now; recordStart: a fresh measure of the body becomes the start's)
+      const eye = from ? from.eye.slice() : [eyeRig.position.x, eyeRig.position.y, eyeRig.position.z];
       const f = mirror.body.forward;
       const t0 = nowMs();
       // Only the foremost point sets the plane: read just the meshes whose box comes within 5 cm of it.
-      const ex = drawnBodyExtremes('own', eye, [f[0], 0, f[2]], 0.05, { fore: true, low: false, high: false });
+      const ex = from ? { foremostM: from.drawnForemostM, foremostPoint: from.foremostPoint, meshesRead: 0, vertices: 0 }
+        : drawnBodyExtremes('own', eye, [f[0], 0, f[2]], 0.05, { fore: true, low: false, high: false });
+      if (recordStart) mirror.start = { body: mirror.body, eye: eye.slice(), drawnForemostM: ex.foremostM, foremostPoint: ex.foremostPoint };
       // R558 (Message 12: your body and the mirror body never touch): the plane stands in front of the farthest point your
       // body can ever REACH with every joint in range (setMirrorReach, measured by the app: the legs with the toes pointed,
       // the hands), not only of the start pose, so no reachable pose ever meets its own reflection.
@@ -13769,7 +14112,7 @@ export function createScene({
       if (typeof v.visible === 'boolean') mirror.enabled = v.visible;
     } else fail('scene_input', 'setMirrorView needs an ns-mirror state / transform, an orbit object or null');
     // A reset (moved -> rest): measure the posed body again and set the plane from it at the next frame.
-    if (!wasAtRest && mirrorAtRest() && mirror.ready) mirror.ready = false;
+    if (!wasAtRest && mirrorAtRest() && mirror.ready) { mirror.ready = false; mirror.resetPending = true; } // (H8: MIRROR_RESET)
     applyMirror();
     return { serial: mirror.serial, ready: mirror.ready };
   }
@@ -14355,7 +14698,7 @@ export function createScene({
     const Pl = mirror.placement && mirror.placement.plane;
     const nearer = mirror.reachForemostM !== null && Pl && Number.isFinite(Pl.foremostM) && Pl.foremostM < mirror.reachForemostM - 1e-6;
     const noSphere = Boolean(mirror.reachSphere && mirror.placement && !mirror.placement.reach);
-    if ((nearer || noSphere) && Pl && mirrorAtRest()) setMirrorPlane();
+    if ((nearer || noSphere) && Pl && mirrorAtRest()) setMirrorPlane(MIRROR_RESET.keepStart && mirror.start ? mirror.start : null);
     return mirror.placement && mirror.placement.plane ? { distanceM: mirror.placement.plane.distanceM, foremostM: mirror.placement.plane.foremostM } : null;
   }
   /** R558 (Message 12): the mirror body's matrices: drawn (what is shown), pipeline (the placement, turn and carry before
@@ -14615,11 +14958,15 @@ export function createScene({
     for (let i = 0; i <= nS; i++) beamS[i] = i <= capN ? sA * i / capN : i >= nS - capN ? sB + (1 - sB) * (i - (nS - capN)) / capN : sA + (sB - sA) * (i - capN) / (nS - 2 * capN);
     const AC = LIGHT_BEAM.across, nA = AC.length, o = buf.n * beamVerts;
     const hull = glowHull, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
+    // 22 November 2026 (LOOK2, LIGHT_BEAM.maxHalfPx): metres per CSS pixel at 1 m, and the view's forward axis
+    const cw = camera.matrixWorld.elements, fx = -cw[8], fy = -cw[9], fz = -cw[10];
+    const mPerPx1 = cssH > 0 && camera.isPerspectiveCamera ? 2 * Math.tan(camera.fov * Math.PI / 360) / cssH : NaN;
     for (let i = 0; i <= nS; i++) {
       const s = beamS[i], t = t0 + s * Lt;
       const f = s <= sA ? 0 : s >= sB ? 1 : (s - sA) / Math.max(1e-9, sB - sA);
-      const off = aMid + (bMid - aMid) * f, hw = beamHalfWidth(s, sA, sB, hwA, hwB);
+      const off = aMid + (bMid - aMid) * f;
       const px0 = A[0] + dx * t + sx * off, py0 = A[1] + dy * t + sy * off, pz0 = A[2] + dz * t + sz * off;
+      const hw = beamHalfCapM(beamHalfWidth(s, sA, sB, hwA, hwB), (px0 - cx) * fx + (py0 - cy) * fy + (pz0 - cz) * fz, mPerPx1);
       const d = Math.hypot(px0 - cx, py0 - cy, pz0 - cz);
       let along = d < GLOW_LINK.nearClipM ? 0 : beamAlong(s, sA, sB, phase) * k * beamShareAt(share, f);
       if (along > 0 && hull) {
@@ -14673,6 +15020,8 @@ export function createScene({
       if (beamTargets.length > LIGHT_BEAM.maxPerArea) beamTargets.length = LIGHT_BEAM.maxPerArea;
       const share = beamShare(beamTargets.length), lv = link.level;
       const aBase = env * (link.hover ? LIGHT_BEAM.hoverAlpha / Math.max(1e-6, LINKS.hoverAlpha) : 1);
+      let ownN = 0; // 22 November 2026 (LOOK2, LIGHT_BEAM.ownPerLink): cones to your own body for this link
+      const ownMax = LIGHT_BEAM.ownPerLink > 0 ? LIGHT_BEAM.ownPerLink : Infinity;
       for (const tg of beamTargets) {
         reached++;
         // the mirror body
@@ -14681,12 +15030,13 @@ export function createScene({
           if (n) emitBeam(beamMirror, nk, n, beamB, lv, phase, aBase * GLOW_LINK.mirrorAlpha, regionId, tS, share);
         }
         // your own body: only a muscle the view draws, in the picture and not right at the eye
-        if (GLOW_LINK.own === true || (GLOW_LINK.own === 'no-mirror' && !mirrorOn)) {
+        if ((GLOW_LINK.own === true || (GLOW_LINK.own === 'no-mirror' && !mirrorOn)) && ownN < ownMax) {
           const n = tg.m ? beamArmWorld(tg.m, false, beamB) : beamBodyWorld(tg.b, bodyGroup, beamB);
           if (!n) continue;
           if (tg.b && (!tg.b.mesh.visible || !(tg.b.face ? camState.headInPlace : firstPersonShareAt(beamB[0], beamB[1], beamB[2], tg.b.anatomicalPart === 'legs') >= FIRST_PERSON_BODY.pickFrom))) continue; // (20 November 2026: a mesh the eye view does not draw, EYE_COLLAR.hide, gets no beam)
           if (Math.hypot(beamB[0] - camera.position.x, beamB[1] - camera.position.y, beamB[2] - camera.position.z) < GLOW_LINK.minTargetM || !inPicture(beamB)) continue;
-          emitBeam(beamOwn, nk, n, beamB, lv, phase, aBase * LIGHT_BEAM.ownAlpha, regionId, tS, share);
+          // (one cone carries one cone's light: the share is for cones that leave the key together)
+          if (emitBeam(beamOwn, nk, n, beamB, lv, phase, aBase * LIGHT_BEAM.ownAlpha, regionId, tS, ownMax === 1 ? 1 : share)) ownN++;
         }
       }
     }
@@ -15062,7 +15412,7 @@ export function createScene({
     // Polish: expose whether the brain is in view, so the HUD colour key can shrink while the player looks at the body
     // (far right / down / up) and the legend stops covering the right arm or the legs.
     const inView = inViewNow ? 'true' : 'false';
-    if (brainInViewAttr !== inView) { overlay.setAttribute('data-ns-brain-in-view', inView); brainInViewAttr = inView; }
+    if (brainInViewAttr !== inView) { overlay.setAttribute('data-ns-brain-in-view', inView); brainInViewAttr = inView; if (info) scheduleFitCaveats(); } // (WORDS2: the card's parts change with it)
     layoutArrowTips(reserveRight, reserveBottom, topPx);
     // R4-fix (review F2): small switched-on areas get a gold ring at their centre (SMALL_MARK); placed before the labels,
     // which keep clear of the rings.
@@ -15251,6 +15601,7 @@ export function createScene({
   /** Renderer size (CSS size kept by the stylesheet), camera aspect and projection. One drawing-buffer allocation
    * (setDrawingBufferSize) when available. */
   function resize({ width, height, pixelRatio = 1, fovYDeg: fov } = {}) {
+    if (info) scheduleFitCaveats(); // (WORDS2, second pass: the card's box changes with the window)
     if (!(width > 0 && height > 0)) return false;
     const pr = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
     applyBuffer(width, height, pr);
@@ -15602,6 +15953,7 @@ export function createScene({
    * previous live render). */
   function render(opts) {
     if (lost || disposed) return;
+    renderSerial++; // (22 November 2026, ARROW_REPLAN.spreadFrames / hudReadLag: frames counted by drawing)
     const now = nowMs();
     powerUpClock.value.x = (now - powerUpEpoch) / 1000; // R558 (Message 22): the power-up clock (one uniform write)
     powerUpClock.value.z = cssH > 0 ? 1 / cssH : 0; // 18 November (MAP): CSS px -> view size, for the shudder
@@ -16004,6 +16356,9 @@ export function createScene({
     regionHintState,
     brainOrientationAnchors,
     setInfo,
+    // 22 November 2026 (WORDS2, second pass): ns-app asks for the card's fit again when the reading level changes (R),
+    // which changes which of its parts show without new words (INFO_FIT).
+    refitInfo: () => { if (info) scheduleFitCaveats(); },
     setBody,
     setBodyFrame,
     updateBody,
@@ -16144,7 +16499,7 @@ export function createScene({
         // copies made for the picks and the mirror envelope, sparse copies for the glow links' ends)
         armSkin: { on: armGpu.on, ok: armGpu.ok, note: armGpu.note, tables: armGpu.tables, cpuPoses: armGpu.cpuPoses, subsetPoses: armGpu.subsetPoses, meshes: armGpu.marked.length },
         held: { target: heldCue.target, amount: Math.round(heldCue.amount * 1000) / 1000 },
-        hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, msTotal: Math.round(hudReadMs * 100) / 100 },
+        hudRects: { mode: hudMo ? 'observers' : 'poll', reads: hudReads, lagged: hudLagged, msTotal: Math.round(hudReadMs * 100) / 100 },
         leftArmRim: { ...leftArmRim }, regionBorder: { ...regionBorder }, areaInk: { ...areaInk }, glassFold: (({ token, ...gf }) => gf)(glassFold),
         cameraRange: { near: camera.near, far: camera.far, brainNearM: cameraRange.brainNearM, brainFarM: cameraRange.brainFarM, mirrorFarM: cameraRange.mirrorFarM, brainDistanceScale: brainDistK },
         armShapes: labelAvoid ? { rects: labelAvoid.rects.map(r => [r.x0, r.y0, r.x1, r.y1].map(v => Math.round(v * 1e4) / 1e4)), ellipses: labelAvoid.ellipses.map(e => [e.cx, e.cy, e.rx, e.ry].map(v => Math.round(v * 1e4) / 1e4)) } : null,
@@ -16247,7 +16602,41 @@ export const STATUS_CARD_PLAN = Object.freeze({ columnVh: 0.37, portraitVh: 0.11
  * card stands footPx above the floor (over the one-line "Simulated activity" note; this was a 20 px CSS lift), the colour
  * key directly above it. statusShare: the most of the stack's height the status card may take; minPx: the least height
  * either keeps. */
-export const CORNER_STACK = Object.freeze({ footPx: 20, statusShare: 0.55, minPx: 48 });
+export const CORNER_STACK = Object.freeze({ footPx: 20, statusShare: 0.55, minPx: 48, statusFirst: true });
+/* 22 November 2026 (WORDS2, hunt H11: at 800 by 600 with the full cards and the tutorial, "the bottom-left card is cut
+ * mid-sentence and the model-name honesty line ends at 'NeuroTranslate 0.0 is'"; the colour key was cut at its foot as
+ * well). The status card had at most statusShare (55 %) of the stack and was cut at its foot, where its brand and
+ * model-name line stands (neurosurge.css order 20), whenever its lines were taller: the "Try this" line in the card
+ * made it 359 px against a cap of 297 at 800 by 600, the end-of-strip note 311. statusFirst (true): the status card has
+ * the whole stack before the colour key takes anything, so at the supported window sizes it is never cut; the key takes
+ * what is left and drops whole parts to fit (LEGEND_FIT), never a line in the middle. A window too small for even the
+ * status card still caps it, and its model-name line then stays at its foot, whole (quiet.css). statusFirst false = the
+ * share rule. */
+/** 22 November 2026 (WORDS2, hunt H11): the colour key of the corner stack, in the height cornerStackFit leaves it:
+ * level 0 whole; 1 without its credits line (the line of anatomy credits; "Sources and rights", the HUD's one control,
+ * stays, and the credits are also behind "notes and credits" at the bottom of the game); 2 also without the two key
+ * items (switched on, arm spots) and the rough-map note (the limits line at the top says "a rough map"); 3 not shown.
+ * While "Sources and rights" is open or has the keyboard focus the key stays whole (level 0: the player asked for it;
+ * the cap then fades it at its foot, as before). marginPx: the space each dropped part takes beyond its own box
+ * (the credits line: none, it is a block of its own in the HUD, quiet.css; neurosurge.css .ns-hud .ns-legend-key
+ * margin 5 and 3, the note's margin-top 2); slackPx: kept spare, so an estimate a few pixels short never leaves the key
+ * a line too tall; settleCalls: see setLegendLevel. on false = the key is capped and fades at its foot, as before. */
+export const LEGEND_FIT = Object.freeze({ on: true, marginPx: Object.freeze([0, 10]), slackPx: 4, settleCalls: 12 });
+/** PURE (LEGEND_FIT): the colour key's level for a greatest height maxPx, its whole height fullPx and the heights of
+ * the parts each level drops (dropPx[0]: the rights row; dropPx[1]: the key items and the note, together): 0, 1, 2, or
+ * dropPx.length + 1 for not shown. Unknown heights: 0 (whole, as before). */
+export function legendFitLevel({ maxPx, fullPx, dropPx = [], rules = LEGEND_FIT } = {}) {
+  if (!rules || rules.on !== true || !(Number.isFinite(fullPx) && fullPx > 0) || !Number.isFinite(maxPx)) return 0;
+  const parts = Array.isArray(dropPx) ? dropPx : [];
+  const room = maxPx - (Number.isFinite(rules.slackPx) ? rules.slackPx : 0);
+  let h = fullPx;
+  for (let k = 0; k < parts.length; k++) {
+    if (h <= room) return k;
+    const m = rules.marginPx && Number.isFinite(rules.marginPx[k]) ? rules.marginPx[k] : 0;
+    h -= (Number.isFinite(parts[k]) && parts[k] > 0 ? parts[k] : 0) + m;
+  }
+  return h <= room ? parts.length : parts.length + 1;
+}
 /**
  * Where the corner stack's two cards go (pure; CSS px): { statusY, legendY, statusMax, legendMax }. height: the view's
  * height; topPx: the highest a card may reach (under the limits line); gapPx: the HUD gap; statusH / legendH: the
@@ -16258,9 +16647,10 @@ export const CORNER_STACK = Object.freeze({ footPx: 20, statusShare: 0.55, minPx
 export function cornerStackFit({ height, topPx, gapPx = 12, statusH, legendH, rules = CORNER_STACK } = {}) {
   const floor = height - gapPx - rules.footPx;
   const room = Math.max(0, floor - topPx);
-  const statusMax = Math.max(rules.minPx, Math.floor(room * rules.statusShare));
+  const first = rules.statusFirst === true; // (22 November 2026, WORDS2, hunt H11: the status card first, whole)
+  const statusMax = Math.max(rules.minPx, Math.floor(first ? room : room * rules.statusShare));
   const hs = Math.min(Number.isFinite(statusH) && statusH > 0 ? statusH : 0, statusMax);
-  const legendMax = Math.max(rules.minPx, Math.floor(room - gapPx - hs));
+  const legendMax = Math.max(first ? 0 : rules.minPx, Math.floor(room - gapPx - hs));
   const hl = Math.min(Number.isFinite(legendH) && legendH > 0 ? legendH : 0, legendMax);
   const statusY = Math.max(topPx, floor - hs);
   return { statusY, legendY: Math.max(topPx, statusY - gapPx - hl), statusMax, legendMax };
@@ -16664,10 +17054,29 @@ export function createHud(hudRoot) {
           observed.set(e.target, [w, h]);
         }
       });
-      for (const el of [info, legend, essential, hover, ...ORIENTATION_KEYS.map(k => orient[k])]) ro.observe(el);
+      for (const el of [info, legend, essential, hover, slots.rights, legendKey, regionNote, ...ORIENTATION_KEYS.map(k => orient[k])]) ro.observe(el);
     } catch { ro = null; }
   }
   const sizeOf = el => { const v = observed.get(el); return v && v[0] > 0 && v[1] > 0 ? v : null; };
+  /** 22 November 2026 (WORDS2, hunt H11): the colour key's parts that LEGEND_FIT drops, at their last seen heights (a
+   * part measures 0 while it is not shown), and the level the key is drawn at (data-ns-fit, quiet.css). */
+  const partSeen = new Map();
+  const partH = el => { const v = sizeOf(el); if (v) partSeen.set(el, v[1]); return partSeen.get(el) || 0; };
+  // (second pass, after a check of section 197: the credits line itself is measured, a block of its own in the HUD
+  // (quiet.css), not the rights row less the row with only "Sources and rights": while "Sources and rights" was open the
+  // row's open height was taken for the whole row, and after it was closed the credits line stayed dropped for good at
+  // 1600 by 900. Nothing is taken while it is open or focused, and the stored heights go on a window change or a toggle.)
+  // After a change of level, or when "Sources and rights" lets go of the key, the key's measured height is stale until
+  // the observer reports again; the level is not chosen from it (for LEGEND_FIT.settleCalls calls at most).
+  let legendLevel = 0, levelStaleH = NaN, levelStaleCalls = 0, keptWas = false;
+  const markLegendStale = measuredH => { levelStaleH = measuredH; levelStaleCalls = LEGEND_FIT.settleCalls; };
+  function setLegendLevel(level, measuredH = NaN) {
+    if (level === legendLevel) return;
+    legendLevel = level;
+    markLegendStale(measuredH);
+    if (typeof legend.setAttribute === 'function') { if (level > 0) legend.setAttribute('data-ns-fit', String(level)); else legend.removeAttribute('data-ns-fit'); }
+  }
+  if (typeof details.addEventListener === 'function') details.addEventListener('toggle', () => { partSeen.clear(); markLegendStale(NaN); });
   const orientLast = {};
   for (const k of ORIENTATION_KEYS) orientLast[k] = { placement: '', left: '', top: '' };
   function measurePanels(W, H) {
@@ -16762,6 +17171,24 @@ export function createHud(hudRoot) {
       // stack never reaches the limits line and the key never lies on the status card (1024x600, 800x600, 640x480).
       cornerStack = cornerStackFit({ height: H, topPx: top, gapPx: g, statusH: panelSizes[0][1], legendH: panelSizes[1][1] });
       legendSlot = { x: g, y: cornerStack.legendY };
+      // 22 November 2026 (WORDS2, hunt H11): the key drops whole parts to fit the height left to it (its whole height is
+      // what it measures now plus the parts its present level leaves out). The cap below stays as a last resort.
+      if (LEGEND_FIT.on) {
+        const active = doc.activeElement;
+        const keep = details.open === true || Boolean(active && typeof rightsRow.contains === 'function' && rightsRow.contains(active));
+        const seen = el => (keep ? partSeen.get(el) || 0 : partH(el));
+        const d0 = seen(slots.rights), d1 = seen(legendKey) + seen(regionNote), m = LEGEND_FIT.marginPx;
+        const full = panelSizes[1][1] + (legendLevel >= 1 ? d0 + m[0] : 0) + (legendLevel >= 2 ? d1 + m[1] : 0);
+        if (keptWas && !keep) markLegendStale(panelSizes[1][1]);
+        keptWas = keep;
+        const stale = !keep && levelStaleCalls > 0 && (panelSizes[1][1] === levelStaleH || !Number.isFinite(levelStaleH));
+        if (levelStaleCalls > 0) levelStaleCalls = stale ? levelStaleCalls - 1 : 0;
+        // (a stack with less room than CORNER_STACK.minPx for the key: not shown, even while kept; only in windows
+        // smaller than the supported ones)
+        if (cornerStack.legendMax < CORNER_STACK.minPx) setLegendLevel(3, panelSizes[1][1]);
+        else if (keep) setLegendLevel(0, panelSizes[1][1]);
+        else if (!stale) setLegendLevel(legendFitLevel({ maxPx: cornerStack.legendMax, fullPx: full, dropPx: [d0, d1] }), panelSizes[1][1]);
+      }
     } else if (reserved && reserved.layout === 'portrait' && legend.style && panelSizes && panelSizes[1]) {
       // R3-integrator (R3-player item 10): in portrait the legend docks at the top right of the reserved bottom band,
       // above the information panel (which CSS caps to the rest of the band), so it never covers the brain or the hand.
@@ -16776,8 +17203,9 @@ export function createHud(hudRoot) {
       }
     }
     setLegendDock(legendDock);
+    if (reserved && reserved.layout !== 'corner') setLegendLevel(0, panelSizes && panelSizes[1] ? panelSizes[1][1] : NaN); // (WORDS2: the key is whole outside the corner stack)
     setPanelCap(info, cornerStack ? cornerStack.statusMax : 0, panelSizes && panelSizes[0] ? panelSizes[0][1] : 0);
-    setPanelCap(legend, cornerStack ? cornerStack.legendMax : 0, panelSizes && panelSizes[1] ? panelSizes[1][1] : 0);
+    setPanelCap(legend, cornerStack ? Math.max(1, cornerStack.legendMax) : 0, panelSizes && panelSizes[1] ? panelSizes[1][1] : 0); // (WORDS2, second pass: a cap of 0 would mean none)
     let limited = false;
     panelEls.forEach((el, i) => {
       if (!el.style) { limited = true; return; }
@@ -16869,7 +17297,7 @@ export function createHud(hudRoot) {
     const W = size && size.width > 0 ? size.width : 0, H = size && size.height > 0 ? size.height : 0;
     const shortWanted = W > 0 && H > 0 && W / H < HUD_LAYOUT.label.shortBelowAspect;
     const sizeKey = `${W}x${H}`;
-    if (sizeKey !== sizedFor) { sizedFor = sizeKey; measureCountdown = 0; panelSizes = null; panelPick = [null, null]; essentialHeight = 0; for (const k of ORIENTATION_KEYS) orientSize[k] = null; } // HUD resize only
+    if (sizeKey !== sizedFor) { sizedFor = sizeKey; measureCountdown = 0; panelSizes = null; panelPick = [null, null]; essentialHeight = 0; for (const k of ORIENTATION_KEYS) orientSize[k] = null; partSeen.clear(); levelStaleCalls = 0; } // HUD resize only (WORDS2: and the key's stored part heights)
     if (ro) {
       const a = sizeOf(info), b = sizeOf(legend), e = sizeOf(essential);
       panelSizes = a && b ? [a, b] : null;

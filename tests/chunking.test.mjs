@@ -76,7 +76,8 @@ test('the Esc page is a few titled groups: look and press, move, hold and carry,
   assert.deepEqual(SHELL.menu.map(g => g.title), ['Look and press', 'Move', 'Hold and carry', 'Views and reading']);
   for (const g of SHELL.menu) {
     assert.ok(g.rows.length >= 2 && g.rows.length <= 5, `${g.title}: a few rows, not a list`);
-    for (const [what, does] of g.rows) { assert.ok(what.length <= 10, `${g.title}: "${what}" is a key or one gesture`); assert.ok(does.length <= 32, `${g.title}: "${does}" is a few words`); }
+    // (22 November 2026, WORDS2, second pass: "Drag, arrow tips" is one row for two ways of the same thing: 16 characters)
+    for (const [what, does] of g.rows) { assert.ok(what.length <= 16, `${g.title}: "${what}" is a key or one gesture`); assert.ok(does.length <= 32, `${g.title}: "${does}" is a few words`); }
   }
   const doc = fakeDoc(), card = doc.createElement('div');
   const menu = buildShellMenu(doc, card, SHELL.menu);

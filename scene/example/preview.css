@@ -7,4 +7,6 @@
    of the Esc page): while the start or Esc page shows, its card ends above the note (the card scrolls inside). */
 @media (max-aspect-ratio: 999/1000){.ns-shell:not([hidden]){padding-bottom:76px}}
 
-.ns-canvas:focus-visible { outline: 2px solid #7cc4ff; outline-offset: -4px; }
+/* 22 November 2026 (LOOK2, ns-look-calm FOCUS_RING): the canvas's ring only while the pointer has not been used last
+   (a keyboard player); a mouse player sees no frame round the game in play. */
+html:not([data-ns-input="pointer"]) .ns-canvas:focus-visible { outline: 2px solid #7cc4ff; outline-offset: -4px; }

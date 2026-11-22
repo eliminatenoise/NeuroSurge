@@ -75,6 +75,10 @@
 .ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-notes,
 .ns-shell[data-mode="paused"][data-words="short"] .ns-kbd-pad ul { display: none; }
 .ns-shell[data-mode="paused"][data-words="short"] .ns-shell-heading { margin-top: 6px; }
+/* 22 November 2026 (WORDS2, hunt H13): the "Reload the page for the sharpest edges" note is not help text: it shows
+   only after a quality change that needs a reload (ns-app applyQuality), so the short page shows it too. It wears the
+   help class for its look, and the rule above hid it with the help texts. Its hidden attribute still hides it. */
+.ns-shell[data-mode="paused"][data-words="short"] .ns-shell-qualityreload:not([hidden]) { display: block; }
 
 /* 18 November (MAP): the brain's group labels wear their CHUNK's colour (ns-scene-three regionLabelChunkCss sets
    --ns-chunk), the same on both halves: a light see-through pill with a rim and a dot of the colour, and the words in a
@@ -308,6 +312,21 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
 /* (a mask is painted over the card's whole group, the floating chip too, wherever the chip stands: no fade then) */
 .ns-hud .ns-panel[data-ns-capped="true"]:has(.ns-guide-float) { -webkit-mask-image: none; mask-image: none; }
+/* 22 November 2026 (WORDS2, hunt H11): the status card has the whole stack first (ns-scene-three CORNER_STACK
+   statusFirst), so at the supported window sizes it is not capped. In a window too small even for it, its brand and
+   model-name line (the honesty line, the card's foot: neurosurge.css order 20) stays at the foot, whole, over the lines
+   it covers: no fade there. The colour key drops whole parts to fit what is left (LEGEND_FIT, data-ns-fit): 1 its
+   credits line ("Sources and rights" stays; the credits are also behind "notes and credits"), 2 also the two key items
+   and the rough-map note, 3 the key is not shown. */
+.ns-hud .ns-panel-info[data-ns-capped="true"] { -webkit-mask-image: none; mask-image: none; }
+.ns-hud .ns-panel-info[data-ns-capped="true"] .ns-slot-title { position: sticky; bottom: 0; z-index: 1; background: #0b1019; }
+/* (second pass: the credits line is a block of its own, so the key's fit measures it; "Sources and rights" follows on
+   its own line) */
+.ns-hud .ns-slot-rights { display: block; }
+.ns-hud .ns-panel-legend[data-ns-fit] .ns-slot-rights,
+.ns-hud .ns-panel-legend[data-ns-fit="2"] :is(.ns-legend-key, .ns-slot-regionNote),
+.ns-hud .ns-panel-legend[data-ns-fit="3"] :is(.ns-legend-key, .ns-slot-regionNote) { display: none; }
+.ns-hud .ns-panel-legend[data-ns-fit="3"] { visibility: hidden; }
 
 /* 19 November 2026 (the owner: "The number overview is very confusing"): no numbered list of movements on the card;
    the look does the movement and the card says what the area does. */

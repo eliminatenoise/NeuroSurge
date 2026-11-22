@@ -1638,6 +1638,53 @@ export function crestStripS(v, turn = MEDIAL_TURN) {
 }
 
 /**
+ * 22 November 2026 (LOOK2; hunt of update 64 H20: "The leg blocks and the upper black block at the top of the strip have
+ * jagged, stair-stepped borders"). crestStripS is strongly bent below crestTop (infinitely steep at crestV), and it
+ * was applied per VERTEX: the strip coordinate went to the screen as a per-vertex value interpolated in straight lines
+ * over triangles of about 2.4 mm (12 to 27 px at the start view), so every border in the leg stretch ran straight
+ * inside a triangle and turned at its edges: steps the size of a triangle, at any pixel density (16 to 26 degrees a mm
+ * on the crown, against 8 to 15 for the same bend per point). CREST_PER_POINT: the renderer (ns-scene-three
+ * patchRegionBorderShaders) and the picker (classifyRegionGaze) take the vertices' coordinate back to the smooth
+ * along-gyrus v (crestStripV, the exact inverse), interpolate THAT, and bend it at each point (crestStripS), so the
+ * borders follow v's own smooth level lines. The vertices' values, the segmentation and the owner runs are unchanged
+ * (crestStripS(crestStripV(s)) = s), so every block keeps its place and its area; at and above crestTop both are the
+ * identity, and the medial wall's s (all 0) stays 0. on: false = the straight interpolation, as before.
+ */
+export const CREST_PER_POINT = freezeR2({ on: true });
+/** The exact inverse of crestStripS (pure): the along-gyrus v whose strip coordinate is s. Below the turn's sTop (a
+ * value crestStripS never gives on the strip) and from crestTop on: s - sTop / s itself, so the pair stays continuous
+ * and exact. */
+export function crestStripV(s, turn = MEDIAL_TURN) {
+  const { crestFloor: f0, crestTop: f1 } = CREST_COMPRESS;
+  if (!(s < f1)) return s;
+  const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0, s0 = t ? t.sTop : f0;
+  const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
+  if (s < s0) return s - s0; // (no strip value lies here; crestStripS of a negative v gives it back: see crestBendFull)
+  if (t && s < f0) return f0 > s0 ? x0 * (s - s0) / (f0 - s0) : x0;
+  return x0 + (f1 - x0) * Math.pow(Math.max(0, s - f0) / (f1 - f0), 1 / g0);
+}
+/** crestStripS continued below v 0 as s = sTop + v (so crestStripV's values below sTop come back exactly). Pure. */
+export function crestBendFull(v, turn = MEDIAL_TURN) {
+  const t = turn && turn.on === true ? turn : null, s0 = t ? t.sTop : CREST_COMPRESS.crestFloor;
+  return v < 0 ? s0 + v : crestStripS(v, turn);
+}
+/** GLSL twins of crestStripV and crestBendFull: `float <name>V( float s )` and `float <name>S( float v )`, with the same
+ * constants (pow only of values held at or above 0). Pure. */
+export function crestStripGlsl(name = 'nsCrest', turn = MEDIAL_TURN) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('ns:brain_glsl: name must be a GLSL identifier');
+  const f = x => { const v = Number(x); return Number.isInteger(v) ? v.toFixed(1) : String(v); };
+  const { crestFloor: f0, crestTop: f1 } = CREST_COMPRESS;
+  const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0, s0 = t ? t.sTop : f0;
+  const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
+  const lin = t ? (f0 > s0 ? `if ( s < ${f(f0)} ) return ${f(x0)} * ( s - ${f(s0)} ) / ${f(f0 - s0)};` : `if ( s < ${f(f0)} ) return ${f(x0)};`) : '';
+  const linS = t ? `if ( v < ${f(x0)} ) return ${f(s0)} + ${f(f0 - s0)} * ( v / ${f(x0)} );` : '';
+  return [
+    `float ${name}V( float s ) { if ( s >= ${f(f1)} ) return s; if ( s < ${f(s0)} ) return s - ${f(s0)}; ${lin} return ${f(x0)} + ${f(f1 - x0)} * pow( max( s - ${f(f0)}, 0.0 ) / ${f(f1 - f0)}, ${f(1 / g0)} ); }`,
+    `float ${name}S( float v ) { if ( v >= ${f(f1)} ) return v; if ( v < 0.0 ) return ${f(s0)} + v; ${linS} return ${f(f0)} + ${f(f1 - f0)} * pow( max( v - ${f(x0)}, 0.0 ) / ${f(f1 - x0)}, ${f(g0)} ); }`
+  ].join('\n');
+}
+
+/**
  * Along-gyrus coordinate per vertex (see ALONG_GYRUS). positions / indices: one closed strip mesh (source mm).
  * medialVertex(i): true for vertices pinned to v = 0 (the medial-wall edge); the vertices within tipMm of the lowest z
  * are pinned to v = 1 (a vertex in both sets stays 0). Coincident vertices are welded first (the OBJ parser splits them
@@ -2361,9 +2408,18 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
     const S = bestS, I = S.indices, k = best.tri;
     const ia = I[3 * k], ib = I[3 * k + 1], ic = I[3 * k + 2];
     const wa = 1 - best.b1 - best.b2;
-    let u = wa * S.u[ia] + best.b1 * S.u[ib] + best.b2 * S.u[ic];
-    const uLo = Math.min(S.u[ia], S.u[ib], S.u[ic]), uHi = Math.max(S.u[ia], S.u[ib], S.u[ic]);
-    u = u < uLo ? uLo : u > uHi ? uHi : u;
+    let u;
+    if (CREST_PER_POINT.on === true) {
+      // 22 November 2026 (LOOK2, CREST_PER_POINT): as the renderer draws it, v interpolated and bent at the point
+      const va = crestStripV(S.u[ia]), vb = crestStripV(S.u[ib]), vc = crestStripV(S.u[ic]);
+      let v = wa * va + best.b1 * vb + best.b2 * vc;
+      const vLo = Math.min(va, vb, vc), vHi = Math.max(va, vb, vc);
+      u = crestBendFull(v < vLo ? vLo : v > vHi ? vHi : v);
+    } else {
+      u = wa * S.u[ia] + best.b1 * S.u[ib] + best.b2 * S.u[ic];
+      const uLo = Math.min(S.u[ia], S.u[ib], S.u[ic]), uHi = Math.max(S.u[ia], S.u[ib], S.u[ic]);
+      u = u < uLo ? uLo : u > uHi ? uHi : u;
+    }
     const point = add(o, scale(d, best.t));
     const surface = S.triSurface[k] ? 'medial' : 'convexity';
     const owners = seg._owners[S.hemisphere];

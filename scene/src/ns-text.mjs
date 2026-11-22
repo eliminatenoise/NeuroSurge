@@ -167,6 +167,10 @@ export const HONESTY = deepFreeze({
       '(latissimus dorsi, the long back muscles, rectus abdominis, the inner belly muscles, gracilis, the adductors, ' +
       'the deep hip muscles, the fibularis muscles and others) come from a second licensed set. A few small deep ' +
       'muscles are still not drawn.',
+    // 22 November 2026 (WORDS2, second pass): the honesty of the lift in two sentences, for the Esc page's limits; the
+    // list of the second licensed set's muscles is on the notes page.
+    short: 'The outer muscles are lifted out a little and every muscle is drawn a little fuller, like in a Body Worlds ' +
+      'exhibit, so you can see the deeper ones. In a real body the outer muscles lie right on top of the deeper ones.',
     more: 'Superficial muscles are displaced outward from the long axis of their limb segment or of the trunk (up to ' +
       '20 mm on the thigh, 16 mm on the trunk), and a middle layer by half as much (display only), so that deep ' +
       'muscles show in the gaps; in the body they lie directly on the deep layer. The parts of a lifted muscle that ' +
@@ -219,197 +223,129 @@ export const BRAND = deepFreeze({
  * compassArrows (the 3D arrows, D16), faceMuscles (D20), mirrorResetButton (a separate "Reset mirror body" button
  * instead of Reset brain view also turning the mirror body back). */
 const part = (text, need = null) => ({ text, need });
+// 22 November 2026 (WORDS2, hunt H15; the owner: "Way too much text now"; "Things should be chunked together and those
+// chunks should be spaced away from each other"): the full instructions ("Show the full instructions" on the Esc page)
+// were about 3,400 words: these steps 1,500, the controls 890, the limits 620, and the steps said most controls a second
+// time in other words. Now each step says what a thing IS in two to four short sentences, and each control is said ONCE,
+// in the Controls list below. The step "Move other body parts." also said that Space on your own limb lets you carry it,
+// and six sentences later that Space there chooses the limb (ns-app LIMB_KEYS.view.hold: it chooses, nothing holds it).
+// Heads: "Your left arm." is "Your limbs." (the step is about all four), "The glass brain." is "The brain." (drawn solid
+// since 17 November), "Move other body parts." is "Hold and carry.". The short `intro` words (the start page) are as
+// they were. The older words are in DESIGN-DECISIONS section 167 and the history of this file.
 const STEP_TABLE = [
   // 20 November 2026: a look turns the head and neck and then the eyes; it no longer turns the chest or bends the trunk
-  // (ns-app LOOK_BENDS_TRUNK false since 19 November, headPoseForLook). The words had kept the older rule.
+  // (ns-app LOOK_BENDS_TRUNK false since 19 November, headPoseForLook).
   { head: 'Look around.', parts: [part('You see through the eyes of a body that lies back in one place, as on a sofa. It has no skin, just ' +
-    'bones and muscles. Move the mouse or trackpad to turn its head and look around: the head and neck turn, and past ' +
-    'their reach the eyes turn further.')],
+    'bones and muscles. Move the mouse or trackpad to look around: the head and neck turn, and past their reach the eyes turn further.')],
   intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
-  // 19 November 2026 (the view holds the chosen limb, ns-app LIMB_KEYS.view; the head stays "Your left arm." because
-  // that is the limb the game starts on)
-  { head: 'Your left arm.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
-    'your left arm, left leg, right leg or right arm (or double click to step to the next one; you can also click or tap ' +
-    'its name at the bottom of the game while the pointer is free). The limb lights up. ' +
-    // (20 November 2026: in the eye view only; from behind, E, the look carries no limb: ns-app holdCarries)
-    'In the eye view the chosen limb goes with your view: its wrist or ankle keeps its place in the picture, so looking ' +
-    'up raises the arm at the shoulder or the leg at the hip, and looking down lowers it, as far as the joints go. W reaches its ' +
-    'hand or foot straight out from the shoulder or hip and S draws it straight back in. A and D swing the whole limb ' +
-    'to your left or right without changing its bend. Your view turns only when the hand or foot would leave the picture.'),
-    // R558 (Message 40: "double tapping causes rotation, and double tapping and holding continues that rotation, but
-    // slowly"; it replaces the Space dance of Message 2).
-    part('Tap Space twice and all four limbs turn once: both forearms turn the palms up or down, both upper arms and ' +
-      'both hips turn inward or outward. Each limb goes its own way: it carries on in the direction it last turned. Tap ' +
-      'twice and hold, and they keep turning, slowly. Let go and every limb stays where it is.')],
+  // 19 November 2026 (the view holds the chosen limb, ns-app LIMB_KEYS.view; in the eye view only: holdCarries)
+  { head: 'Your limbs.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
+    'your left arm, left leg, right leg or right arm. In the eye view the chosen limb goes with your view, and W, A, S and D ' +
+    'move its hand or foot. Your view turns only when the hand or foot would leave the picture.')],
   intro: [part('Keys 1 to 4 choose a limb; in the eye view it goes with your view, and W, A, S and D move its hand or foot. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
-  { head: 'The glass brain.', parts: [
-    // R558 (user Message 2): every motor area has its own colour, and its muscles glow in the same colour.
-    part('A giant glass brain floats in front of you. Its motor areas are the parts that send movement ' +
-      'signals to muscles. Each area has its own colour. When it switches on, it glows brightly in that colour, and so ' +
-      'do the muscles it moves, on your body and on the mirror body. Brighter means stronger.'),
-    // R558 (Message 56: a learning tool for motor neuroanatomy): what the band is and which side each half moves, in
-    // the words of HONESTY.crown and HONESTY.leftArmRightHalf (the Esc limits say both in full).
-    // 19 November 2026 (the brain turned half a turn): THE place that says which way the brain faces and that the
-    // crossing is unchanged. The brain's front is at the bottom, so its right half is on your left, over your left side.
-    part('The coloured band across the brain is the motor strip, drawn as a simplified map. You see the brain from ' +
-      'above, turned to face you: its front, where the two eyeballs hang, is at the bottom, so the brain’s right half is ' +
-      'on your left. The crossing is the usual one: each half of the brain mainly moves the opposite side of your body. ' +
-      'So the areas on your left, in the brain’s right half, move your left arm and leg, and the areas on your right ' +
-      'move your right arm and leg.'),
-    // R5-text (D17): the brain-to-muscle glow, with its honesty in brackets (the Esc limits say it in full).
-    part('A cone of light in the same colour joins a switched-on area to the muscles it moves (a picture, not a ' +
-      'nerve).', 'glow')],
+  // R558 (Messages 2 and 56; 19 November 2026, the brain turned half a turn): what the band is, which way the brain faces
+  // and that each half mainly moves the other side (HONESTY.crown and HONESTY.leftArmRightHalf say both in full).
+  { head: 'The brain.', parts: [
+    part('A giant brain floats in front of you. Its coloured band is the motor strip: a simplified map of the areas that ' +
+      'send movement signals to muscles. You see it from above, turned to face you: its front is at the bottom, so the ' +
+      'brain’s right half is on your left. Each half mainly moves the other side of your body. When an area switches on, ' +
+      'it and the muscles it moves glow in its colour, on your body and on the mirror body.'),
+    part('A cone of light in that colour joins them (a picture, not a nerve).', 'glow')],
   intro: [part('The coloured band across the brain is the motor strip (a simplified map). The brain faces you (its eyeballs ' +
     'are at the bottom), so its right half is on your left. Each half of the brain mainly moves the opposite side of your ' +
     'body: the areas on your left move your left side. Each motor area has its own colour: switched on, it and its muscles glow in that colour.'),
     part('A cone of light in that colour joins them (a picture, not a nerve).', 'glow')] },
-  // R558 (Message 56): the order of the body along the strip comes first (ns-bodymap order 0 to 26: toes, ankle, knee,
-  // hip, trunk, shoulder, elbow, forearm, wrist, hand, little finger to thumb, neck, forehead to jaw, tongue, throat),
-  // then the colour families. The order is the game's simplified map (HONESTY.notExact, HONESTY.overlapVary).
+  // R558 (Message 56): the order of the body along the strip (ns-bodymap order), then the colour families.
   { head: 'A map of the body.', parts: [
-    part('The body is laid out in order along the strip. From the top middle of the brain down each side: the leg ' +
-      '(toes, ankle, knee, hip), the trunk, the arm (shoulder, elbow, forearm, wrist, hand, then the fingers from ' +
-      'little finger to thumb), the neck, the face (from the forehead down to the jaw), then the tongue and the throat. ' +
-      'This is the simple textbook order; real areas overlap.'),
-    part('Each body part has one colour family. Blues are for your left arm (in the brain’s right half), ' +
-    'oranges for your right arm, purples for your left leg, yellows for your right leg, greens for your belly and ' +
-    'back, and pinks for your face and neck. Black in-between areas move nothing. Neighbouring areas are lighter and ' +
-    'darker shades of their colour.')],
+    part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder to ' +
+      'thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
+      'Greens: belly and back. Pinks: face and neck. Black in-between areas move nothing. This is the simple textbook ' +
+      'order; real areas overlap.')],
   intro: [part('Along the strip, from the top middle of the brain down each side: leg (toes to hip), trunk, arm (shoulder ' +
     'to thumb), neck, face, tongue and throat. Blues: left arm. Oranges: right arm. Purples: left leg. Yellows: right leg. ' +
     'Greens: belly and back. Pinks: face and neck.')] },
+  // 20 November 2026 (the owner, Message 206: "no permanent movements ... it will contract, then return to its previous
+  // place"); the look switches an area on, a click repeats it.
   { head: 'Switch areas on.', parts: [part('Rest your look on a motor area to move its body part. Click to repeat the movement. ' +
-    'Its simulated glow lasts as long as the part contracts. Click a muscle on either body to switch on its motor area. ' +
-    'Looking at empty space does nothing. Areas you have used stay a bit more solid, with a gold edge, until you ' +
-    'press Reset body. Your look reaches an area behind your own body or the mirror body too (the card says what is in ' +
-    'front of it), and a click switches it on. To tap the muscle in front instead, hold Shift as you click.'),
-    // R558 (Messages 55 and 56): the area keys (ns-controls AREA_CODES; ns-app areaStep).
-    part('The motor areas are small and lie side by side. The left and right arrow keys step your look along them, ' +
-      'one area for each press, so you can visit every area in turn: from the face areas at one side, up over the ' +
-      'top of the brain where the leg areas are, and down the other side. The look lands on the next area you can ' +
-      'see on that side.'),
-    // 20 November 2026 (the owner, Message 206: "no permanent movements ... it will contract, then return to its previous
-    // place. But in returning to its previous place, you won't see corresponding activity and muscle activation"). It
-    // replaces Message 6's held movements and the opposite-area hint.
-    part('Every movement from the brain contracts, then returns: the part is driven hard to the end of the movement, ' +
-      'then goes back to where it was, unlit, and stays there. Where it was is where you put it with the keys, a drag ' +
-      'or Space, or where it started. Nothing is held by the brain, so there is nothing to bring back. ' +
-      'Contracting and returning is a rule of this game, not something measured.')],
+    'The part contracts, then goes back to where it was, unlit: a rule of this game, not something measured. Click a ' +
+    'muscle on either body to switch on its motor area.')],
   intro: [part('Rest your look on a motor area and its movement happens at once: the part contracts, then returns to where it was. Click to do it again. The arrow keys step to the next area.')] },
-  { head: 'Move other body parts.', parts: [part('Use the brain to choose a movement. ' +
-    'You can also take hold of things: aim your crosshair or free pointer at the brain, the mirror body or one of your own limbs and hold Space. While Space is held, ' +
-    'turn your view with the pointer to carry it. W/S move it farther or nearer, and A/D move it sideways. Let go of Space to leave it there. ' +
-    'Or tap Space once: that takes hold too and keeps holding after the tap; tap Space again to let go. ' +
-    'While Space holds, both your hands close and the toes of both feet curl; a click never closes a hand. ' +
-    'While Space holds something, the crosshair passing over the brain switches nothing on. ' +
-    'Space on one of your limbs chooses that limb. A limb moves only as far as its joints allow, and the brain area that moves it lights up. Press on a limb and drag: sideways turns it, up and down bends and straightens it. ' +
-    'The limb you are moving pushes your other limbs out of its way; a pushed limb stays where it was pushed until you choose it and move it back. ' +
-    'The brain and the mirror body can be carried anywhere: up to you, into you and through you, and through each other.'),
-    // R558 (Messages 33 and 34): every control acts on what you see; Shift reaches the item behind it.
-    part('Space, a click and a drag act on what the “Looking at” card names. A motor area counts even with your body or the ' +
-      'mirror body in front of it: a click switches it on, Space holds the brain. Elsewhere it is what you see at the crosshair; ' +
-      'the brain’s glass is clear, so a limb or the mirror body seen through it is what you take, not the glass. To reach ' +
-      'the other thing on the same line of sight (the body part in front of an area, the brain behind the mirror body, ' +
-      'whatever is behind an arrow tip), hold Shift as you press: Shift + Space, Shift + click or Shift + drag. The line under ' +
-      '“Looking at” says what each press will take.')],
+  // 20 November 2026 (Message 204): Space grips with all four limbs; 19 November (LIMB_KEYS.view.hold): Space on your own
+  // limb chooses it; ns-app LIMB_PUSH and LIMB_BLOCK (sections 174, 185, 194, 195): the moved limb pushes the others and
+  // stops against one that cannot give way (hunt H3); ns-reference-graph CARRY_THROUGH: a carried thing goes through anything.
+  { head: 'Hold and carry.', parts: [part('Space takes hold of the brain or the mirror body; turn your view to carry it. ' +
+    'A carried thing goes through you and through anything. Space on one of your own limbs only chooses that limb. ' +
+    'Press on a limb and drag to turn or bend it. The limb you move pushes your other limbs aside and stops against ' +
+    'one that cannot give way; it can sink in a few centimetres first.')],
   intro: [part('Other body parts respond through the brain. Hold or tap Space to take hold. Move the pointer or press W/A/S/D to carry what you hold. Hold Shift as you press to reach the other thing in line.')] },
-  // R5-text (D16, user R20 "I don't want them to be curved"): the round-4 "curved arrow" wording is gone in both forms.
+  // R5-text (D16, user R20 "I don't want them to be curved"): no "curved" arrows.
   { head: 'Turn the brain.', parts: [
-    part('Press on the brain and drag to turn it. Four solid arrow tips also sit round the motor strip, one at ' +
-      'the middle of each side: click one to turn the brain a little about its own centre, or hold it to keep turning. The arrows stay ' +
-      'where they are, and the brain turns in place: it does not move away. From straight above you cannot see the lowest face areas ' +
-      '(the tongue): turn the brain to one side to bring them round.', 'compassArrows'),
-    part('Click an arrow next to the brain to turn the brain a little about its own centre. Hold the arrow to keep turning. The ' +
-      'brain turns in place.', '!compassArrows')],
+    part('Press on the brain and drag to turn it, or click or hold one of the four grey arrow tips round the motor ' +
+      'strip. The brain turns in place. Turn it to one side to see the lowest face areas (the tongue).', 'compassArrows'),
+    part('Click or hold an arrow by the brain to turn the brain in place.', '!compassArrows')],
   intro: [part('Press on the brain and drag to turn it, or click or hold one of its four arrow tips.', 'compassArrows'),
     part('Click or hold an arrow by the brain to turn the brain in place.', '!compassArrows')] },
   { head: 'See your body.', parts: [
-    part('You lie back as on a sofa. Look down to see your trunk, your ' +
-      'legs and your feet; both arms are in front of you. Your face and back are on the mirror body: ' +
-      'it copies yours. Press E to see all of yourself from behind.'),
+    part('Look down to see your trunk, your legs and your feet. Your face and back are on the mirror body: it copies yours.'),
     // R5-text (D15, user R19).
     part('The outer muscles are lifted out a little, like in a Body Worlds exhibit, so you can see the deeper ones.', 'bodyWorlds'),
-    part('The “What is happening” panel explains each area you look at or click.')],
+    part('The “What is happening” card explains each area you look at or click.')],
   intro: [part('Your right arm reaches forward at the lower right. Look down for your legs and feet. Your face and back are on the mirror body.'),
     part('The outer muscles are lifted a little to show the deeper ones.', 'bodyWorlds')] },
   // R5-text (D18, user R22).
   { head: 'See your back.', need: 'thirdPerson', parts: [part('Press E to see your body from behind (third person). ' +
     'Press E again to go back to your own eyes.')],
   intro: [part('Press E to see your back (third person). Press E again to go back.')] },
-  // R558 (user: "a 1:1 perpendicular perfect reflection"; "touching the same ground"): the mirror body sits in front
-  // of you like your image in a real mirror, on the same ground (legs forward, as you sit). Its arrows and a drag turn
-  // it round or tilt it (user Message 45: all four arrows orbit).
+  // R558 (user: "a 1:1 perpendicular perfect reflection"; Message 45: all four arrows orbit).
   { head: 'The mirror body.', need: 'mirror', parts: [part('In front of you sits a mirror image of your body, as in a ' +
-    'real mirror. It copies everything your body does. Click its muscles. To carry it, hold Space ' +
-    'while aiming at its head or trunk. Move the pointer up to lift it, or down to lower it. Press on it and drag, ' +
-    'or use its arrows, to turn it round or tilt it. Seen through the brain’s clear glass it is still the mirror ' +
-    'body you take (hold Shift as you press to take the brain instead). Where it stands in front of a motor area, a ' +
-    'press acts on that area and Space holds the brain: hold Shift as you press to take the mirror body.')],
+    'real mirror. It copies everything your body does. Click its muscles, hold Space on it to carry it, or drag it or ' +
+    'use its green arrow tips to turn or tilt it.')],
   intro: [part('The mirror body copies you, like a real mirror. Click its muscles. Hold Space on it to carry it, or drag it round.')] }
 ];
+// 22 November 2026 (WORDS2, hunt H15): every control once, in a few words. Merged: the "Look" row into "Mouse /
+// trackpad", "Double-tap and hold" into "Double-tap Space". The words below are checked against ns-app and ns-controls
+// as they are on this date: LIMB_KEYS (1 to 4, the double click, the view carrying the limb in the eye view), the
+// limb's keys along its line (section 145, hunt H22), the press and drag on a limb and the right wrist (section 183),
+// SPACE_GRIP (Message 204), LIMB_KEYS.view.hold, CARRY_THROUGH, REACH_CODES (Shift), the arrows, E (viewAfterRelease),
+// R (toggleInfoDetail: read, more, off), M (EMAP, section 192) and Esc (pausedNote: Esc again keeps the pointer free).
 const CONTROL_TABLE = [
-  // 20 November 2026: the eyes take a look past the head's reach; the trunk no longer bends with it (LOOK_BENDS_TRUNK).
-  // The chosen limb's hand or foot keeping its place is the Look row's.
-  ['Mouse / trackpad', 'turn your head and neck to look around (past their reach your eyes turn further)'],
-  // 21 November 2026 (hunt H22; Message 186, section 145): W and S move the hand or foot along the limb's own line, A
-  // and D swing the whole limb; "forward" and "left/right" were wrong for a limb that points up or aside.
-  ['A / D', 'swing the chosen limb to your left or right without changing its bend (the left arm at the start; keys 1 to 4 choose); while Space holds something, move that sideways instead'],
-  ['W / S', 'W reaches the chosen limb\'s hand or foot straight out from its shoulder or hip, or moves a held item farther away; S draws it straight back in, or brings the item nearer. Combine with A/D to do both.'],
-  // R558 (user Message 40): Space is the hand key: hold or tap = grasp, double tap = turn, double tap and hold = keep
-  // turning slowly (ns-controls SPACE_GESTURE). The F key is gone.
-  // 20 November 2026, evening (the owner, Message 204: "Let's just make spacebar grasping for all of the limbs at once"):
-  // Space closes both hands and curls the toes of both feet; a click closes nothing (ns-app SPACE_GRIP).
-  ['Hold Space', 'aim at the brain or the mirror body. Turn your view with the pointer to carry it. W moves it farther, S nearer, and A/D sideways. Let go of Space to leave it there. Nothing stops a carried thing: it goes through you and through anything. Space on one of your limbs chooses that limb. While Space is down, both hands close and the toes of both feet curl.'],
-  ['Tap Space', 'takes hold the same way and keeps holding after the tap; tap Space again to let go'],
-  ['Double-tap Space', 'all four limbs turn once: the forearms turn the palms (pronation ↔ supination), the upper arms and hips turn inward ↔ outward (internal ↔ external rotation). Each limb carries on the way it last turned. Whatever you held is let go first.'],
-  ['Double-tap and hold', 'the limbs keep turning, slowly, while you hold Space. Let go: every limb stays where it is.'],
-  // 19 November 2026 (the owner: "go back to activation simply by cursor highlight"; "activates heavily relaxes slightly
-  // and repeats that process with each further click").
-  ['Look / Click', 'rest your look on a motor area: the movement under your look happens at once: the part contracts hard, then returns to where it was. Click to do it again. A click never closes a hand: only Space grips.'],
-  // R558 (Messages 55 and 56): ns-controls MOVE_CODES; the list is on the information card (ns-app infoMoves).
-  // 19 November 2026 (the owner's limb keys; ns-app LIMB_KEYS): the numbers choose the limb the keys move.
-  ['1 to 4', 'choose the limb that W, A, S and D move: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The numbers at the bottom of the screen show the choice and the whole limb lights up. Your view turns only if its hand or foot is outside the picture.'],
-  ['Double click', 'steps the choice on to the next limb: 1, 2, 3, 4, then back 3, 2, 1. Keep the second click held and it goes on stepping slowly. The second click presses nothing else.'],
-  // (20 November 2026: in the eye view only; from behind, E, the look carries no limb: ns-app holdCarries)
-  ['Look', 'in the eye view the chosen limb goes with your view: its wrist or ankle keeps its place in the picture. Look up and the arm rises at the shoulder or the leg at the hip; look down and it lowers; look to a side and it swings that way. Where its joints end it waits for your view to come back.'],
-  // R558 (Messages 55 and 56): ns-controls AREA_CODES; ns-app areaStep finds the look.
-  ['← / →', 'the left and right arrow keys step your look to the next motor area on that side, one area for each press (hold the key to keep stepping). Use them where the areas are too small to pick with the mouse. Not while you hold something.'],
-  // R558 (genuine note R31).
-  ['Click a muscle', 'on your body or on the mirror body: switches on the brain area that moves it'],
-  ['Press and drag', 'on the brain or the mirror body: turn it by as much as you drag, sideways or up and down. On one of your limbs: drag sideways to turn it about its length, up to bend it and down to straighten it, as far as you drag (inside its range); on your right hand the same drag bends the wrist, up and down or sideways. That limb becomes the chosen one and lights while you drag.'],
-  // R558 (Messages 33 and 34): one reach-behind gesture for every control (ns-controls REACH_CODES).
-  ['Shift + press', 'hold Shift as you click, press Space or press and drag: the press acts on the other thing on the same line of sight (the body part in front of a motor area, the brain behind the mirror body, what is behind an arrow tip). Without Shift a press acts on what the “Looking at” card names: a motor area even behind a body, otherwise what you see (the brain’s glass is clear).'],
-  // R5-text (D16): no "curved" (the user's R20).
-  ['Orbit arrows', 'click an arrow tip by the brain to turn the brain a little about its own centre. Hold it to keep turning. The arrows stay in place.'],
-  ['Mirror body arrows', 'the green arrow tips round the mirror body: the side ones turn it round; the top and bottom ones tilt it, so you see it from above or below. Click for a small step, hold to keep going.', 'mirror'],
-  // 20 November 2026: the outside camera has stood straight behind your head since 19 November (ns-camera
-  // THIRD_PERSON.followYawDeg 0), and E lets go of a held thing by itself (ns-app viewAfterRelease).
-  ['E', 'see your body from straight behind your head (third person). Press E again to go back to your own eyes. E lets go of anything Space holds.', 'thirdPerson'],
-  // R558 (Message 48): R ("read information") replaces the I key. It steps the information: the side cards (the start),
-  // then More detail and the colour key as well, then everything hidden, then the side cards again.
-  ['R', 'read information: one short card is on at the start. Press R for the full cards and the colour key, R again to hide all of it, R again to bring the short card back.'],
+  ['Mouse / trackpad', 'look around: your head and neck turn, and past their reach your eyes turn further; in the eye view the chosen limb goes with your view (look up to raise it, down to lower it)'],
+  ['1 to 4', 'choose a limb: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The chosen limb lights up.'],
+  ['Double click', 'choose the next limb; keep the second click held to keep stepping'],
+  ['W / S', 'W reaches the chosen limb\'s hand or foot straight out from its shoulder or hip; S draws it straight back in'],
+  ['A / D', 'swing the chosen limb to your left or right without changing its bend'],
+  ['Look / Click', 'rest your look on a motor area: its part contracts, then returns. Click to do it again. A click never closes a hand.'],
+  ['Click a muscle', 'on your body or the mirror body: switches on the brain area that moves it'],
+  ['← / →', 'step your look to the next motor area on that side (hold the key to keep stepping)'],
+  ['Press and drag', 'on the brain or the mirror body: turn it. On a limb: sideways turns it, up bends and down straightens it (on your right hand it bends the wrist). That limb becomes the chosen one.'],
+  ['Hold Space', 'on the brain or the mirror body: take hold. Turn your view to carry it; W and S move it farther or nearer, A and D sideways. Let go to leave it there. On one of your limbs Space only chooses it. While Space is down, both hands close and the toes curl.'],
+  ['Tap Space', 'take hold and keep holding; tap again to let go'],
+  ['Double-tap Space', 'all four limbs turn once: the arms turn over (palms up or down) and the legs turn the feet outward or inward. Tap twice and hold: they keep turning, slowly.'],
+  ['Shift + press', 'hold Shift as you click, press Space or drag to reach the other thing on the same line of sight (the body part in front of an area, or what is behind)'],
+  ['Orbit arrows', 'the grey arrow tips by the brain: click to turn the brain a little, hold to keep turning'],
+  ['Mirror body arrows', 'the green arrow tips: the side ones turn the mirror body round, the top and bottom ones tilt it. Click for a step, hold to keep going.', 'mirror'],
+  ['E', 'see your body from behind (third person); E again: back to your own eyes. E lets go of what Space holds.', 'thirdPerson'],
+  ['R', 'read information: the full cards and the colour key, then nothing, then the short card again'],
   // 21 November 2026 (EMAP, section 192): the map key (ns-controls EMAP_CODE).
-  ['M', 'the electrical map: the picture goes dim, the brain shows a live scan with storms of activity, and the nerve routes show as fine lines of light. The scan and the storms are made up by the game and drawn like a brain scan: not a recording. Switch an area on to see its command run down to the muscles and the report run back up. Press M again to go back.'],
-  ['Esc', 'pause and show this page: how to play, Reset body and settings']
+  ['M', 'the electrical map: the brain as a live scan with storms of activity, and the nerves as lines of light. It is made up by the game and drawn like a brain scan: not a recording. M again: back.'],
+  ['Esc', 'pause: this page, Reset body, Reset brain view and settings. Esc again plays on with a free mouse pointer.']
 ];
 /** R5-text: the short control words for the 2 s start page (introControls), by control key. R558 (Messages 55 and 56):
  * the Esc page opens with these short words too; its "Show the full instructions" button swaps in CONTROL_TABLE's. */
 const INTRO_CONTROL_WORDS = {
   'Mouse / trackpad': 'turn your head to look around',
+  '1 to 4': 'choose the limb W A S D move',
+  'Double click': 'the next limb; hold to keep stepping',
+  'W / S': 'W reaches out, S draws in; combine with A/D',
   // (21 November 2026, hunt H22: along the limb's line and a swing, as the full rows say)
   'A / D': 'swing the limb (or a held item) left or right',
-  'W / S': 'W reaches out, S draws in; combine with A/D',
+  'Look / Click': 'look at an area: the part moves. Click: again.',
+  'Click a muscle': 'switch on its brain area',
+  '← / →': 'arrow keys: step your look to the next motor area',
+  'Press and drag': 'turn the brain or mirror body; turn or bend a limb',
   'Hold Space': 'hands and feet grip; hold the brain or mirror body, look to carry it',
   'Tap Space': 'take hold and keep holding; tap again to let go',
   'Double-tap Space': 'all four limbs turn once',
-  'Double-tap and hold': 'the limbs keep turning, slowly',
-  'Look / Click': 'look at an area: the part moves. Click: again.',
-  '1 to 4': 'choose the limb W A S D move',
-  'Double click': 'the next limb; hold to keep stepping',
-  Look: 'in the eye view the chosen limb goes with your view',
-  '← / →': 'arrow keys: step your look to the next motor area',
-  'Click a muscle': 'switch on its brain area',
-  'Press and drag': 'turn the brain or mirror body; turn or bend a limb',
   'Shift + press': 'with a click, Space or a drag: reach the other thing in line',
   'Orbit arrows': 'turn the brain in place',
   'Mirror body arrows': 'turn or tilt the mirror body',
@@ -418,19 +354,20 @@ const INTRO_CONTROL_WORDS = {
   M: 'electrical map: see the signals travel',
   Esc: 'pause, help, Reset body, settings'
 };
+// 22 November 2026 (WORDS2, second pass; a check of section 197: the list held atlas detail that is not honesty): the
+// honesty core only, 617 -> about 300 words. Gone from this list: the left-arm crossing (step "The brain." says it),
+// the strip's crown (premotor and primary motor cortex: on the notes page and in the cards), the face note (step "See
+// your body." says it), the skull and scalp offsets and the second set's muscle list (the notes page has both), and
+// the muscle-click line (the "simplified map ... not exact points for each muscle" line says it, and the line shown
+// after a tap says "That area drives a group of muscles, not this one alone", muscleTapLine).
 const LIMIT_TABLE = [
   [`${HONESTY.simulated.plain} ${HONESTY.unitless.plain}`],
   [HONESTY.virtualInputs.plain],
   [HONESTY.emg.plain],
   [HONESTY.glow.plain, 'glow'],
-  [HONESTY.muscleTap.plain],
-  [HONESTY.overlapVary.plain],
   [HONESTY.notExact.plain],
-  [HONESTY.leftArmRightHalf.plain],
-  [HONESTY.crown.plain],
-  [HONESTY.bodyWorlds.plain, 'bodyWorlds'],
-  [HONESTY.face.plain],
-  [HONESTY.skull.plain],
+  [HONESTY.overlapVary.plain],
+  [HONESTY.bodyWorlds.short, 'bodyWorlds'],
   [HONESTY.mirror.plain, 'mirror'],
   [HONESTY.notDecoder.plain]
 ];
@@ -474,7 +411,7 @@ export const SHELL = deepFreeze({
   resetBrain: 'Reset brain view',
   playUnlocked: 'Resume without locking the mouse',
   reload: 'Reload page',
-  bodyReset: 'Body reset: your pose, the palm turn and the gold marks are cleared, and your head faces straight ahead again. The brain stays where you left it.',
+  bodyReset: 'Body reset: your pose, the palm turn and the marks on used areas are cleared, and your head faces straight ahead again. The brain stays where you left it.',
   // R558: shown once if the game had to put things back by itself because the view could not be drawn.
   displayRescue: 'The game could not draw that view, so it put your body, the brain and the mirror body back where they started.',
   // Input epochs (public main): more actions were waiting than the game keeps (64) after frames that could not be drawn,
@@ -484,7 +421,7 @@ export const SHELL = deepFreeze({
   // R5-text (D19): Reset brain view also turns the mirror body back to face you (ns-mirror resetMirror). With the
   // separate button (feature mirrorResetButton) shellText uses RESET_HELP.separate instead.
   // R558 (Message 55): two short sentences; how to read More detail is the R row of the controls.
-  resetHelp: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+  resetHelp: 'Reset body puts your whole body back the way it started and clears the marks on used areas. ' +
     'Reset brain view puts the brain back where it started, and the mirror body back where a mirror shows you.',
   brainReset: 'Brain view reset: the brain is back in its first place and angle. The mirror body is back where a mirror shows you.',
   // R5-text (D19, optional): a separate "Reset mirror body" button and its notice.
@@ -513,9 +450,14 @@ export const SHELL = deepFreeze({
   // FEW titled groups with wide gutters, not one long list: each group is one picture of its keys (ns-app
   // buildShellMenu: pad = the trackpad, wasd = the pyramid, space, keys = the key caps named) and at most five short
   // rows, [what you do, what it does]. Settings is the last group.
+  // 22 November 2026 (WORDS2, hunt H14): the short page named no way to turn the brain without holding it, no limb drag,
+  // no arrows and no free pointer; its one drag row ("turn a held brain or mirror") read as if a hold were needed (a
+  // press and drag turns the brain or the mirror body without Space, ns-app drag; the arrow tips turn them; Esc twice
+  // plays on with the pointer free, SHELL.pausedNote). Added: "Drag, arrow tips" here, the limb drag in the Move
+  // group's note (its repeat of the W S and A D rows is gone), Esc twice in Views and reading; the held-drag row is gone.
   menu: [
     { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look; your chosen limb follows'], ['Click', 'press the area you look at'],
-      ['← →', 'aim at the next motor area']] },
+      ['← →', 'aim at the next motor area'], ['Drag, arrow tips', 'turn the brain or mirror body']] }, // (second pass: one row)
     { id: 'move', title: 'Move', picture: 'wasd', rows: [
       ['1 / 2', 'choose left arm / left leg'],
       ['3 / 4', 'choose right leg / right arm'],
@@ -526,14 +468,15 @@ export const SHELL = deepFreeze({
       // is back (it went with the withdrawn turn to a chosen limb, Body update 50); from behind, E, the look carries no
       // limb (ns-app holdCarries).
       note: 'Double click steps to the next limb. In the eye view the chosen limb goes with your view: look up to raise ' +
-        'it, down to lower it. W and S move its hand or foot straight out and back in; A and D swing the limb left and right.' },
+        'it, down to lower it. Press on a limb and drag to turn or bend it.' },
     // (20 November 2026, evening, Message 204: Space grips with all four limbs at once; a click grips nothing)
     { id: 'hold', title: 'Hold and carry', picture: 'space', rows: [['Space', 'hands and feet grip; tap toggles'],
-      ['W A S D', 'carry the held item'], ['Drag', 'turn a held brain or mirror'],
+      ['W A S D', 'carry the held item'],
       ['Tap twice', 'Space turns your limbs'], ['Shift', 'reach behind as you press']] },
     // (21 November 2026, EMAP: M, the electrical map)
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'M', 'Esc'], rows: [['E', 'switch eye and outside views'],
-      ['R', 'information: short, more, off'], ['M', 'electrical map: on, off'], ['Esc', 'pause for controls and settings']] }
+      ['R', 'information: short, more, off'], ['M', 'electrical map: on, off'], ['Esc', 'pause for controls and settings'],
+      ['Esc twice', 'play with a free mouse pointer']] }
   ],
   sensitivity: 'Look speed',
   invertY: 'Flip up and down (invert Y)',
@@ -593,9 +536,9 @@ export const SHELL = deepFreeze({
 
 /** The reset help line and the Reset brain view notice for each mirror-reset choice (R5-text, D19). */
 export const RESET_HELP = deepFreeze({
-  noMirror: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+  noMirror: 'Reset body puts your whole body back the way it started and clears the marks on used areas. ' +
     'Reset brain view puts the brain back where it started.',
-  separate: 'Reset body puts your whole body back the way it started and clears the gold marks. ' +
+  separate: 'Reset body puts your whole body back the way it started and clears the marks on used areas. ' +
     'Reset brain view puts the brain back where it started. Reset mirror body puts the mirror body back where a mirror shows you.',
   brainResetNoMirror: 'Brain view reset: the brain is back in its first place and angle.'
 });
@@ -753,7 +696,9 @@ export const HUD = deepFreeze({
   /** R558 (hunt 2; Message 18 "differentiate each ... muscle node"): the crosshair on a muscle of the mirror body or of
    * your own body names that muscle and says what a click (and Space) does there (gazeMuscleLine). */
   gazeMuscleClick: 'click: its brain area switches on',
-  gazeMuscleHold: 'hold Space to hold this limb',
+  // (22 November 2026, WORDS2, hunt H10: never shown, crossPick.holdable is always false in ns-app; kept true: Space on
+  // your own limb chooses it, LIMB_KEYS.view.hold. It said "hold Space to hold this limb".)
+  gazeMuscleHold: 'Space chooses this limb',
   gazeBone: 'a bone',
   gazeOwnPrefix: 'Looking at (your body): ',
   /** R558 (hunt 2): the crosshair on an arrow tip names what a click on it does (the tip's own caption). */
@@ -767,16 +712,22 @@ export const HUD = deepFreeze({
    * IN FRONT of what you see; inFront: the other item is the body part IN FRONT of the motor area the look names; area:
    * the plain name of a motor area behind ('' = none). R558 (Messages 44 and 55): short words, e.g. "Space holds the
    * mirror body · Shift: the brain behind it", "Space holds the brain · Shift: your right arm in front of it" (a press
-   * and drag takes the same thing; the controls list says so). */
-  controlTargets: ({ front = null, behind = null, ahead = false, inFront = false, area = '', reach = false } = {}) => {
+   * and drag takes the same thing; the controls list says so).
+   * 22 November 2026 (WORDS2, hunt H10): limbsChosen is ns-app's LIMB_KEYS.view.hold, the rule TIP.spaceAim already
+   * follows (section 194): Space on one of your own limbs CHOOSES it and nothing holds it, so with it a limb's line is
+   * "Space chooses your right leg" and Shift held says a press "goes to" a limb rather than "takes" it. The line said
+   * "Space holds your right leg" while the right card beside it said "Your right leg is chosen". Without it, as before. */
+  controlTargets: ({ front = null, behind = null, ahead = false, inFront = false, area = '', reach = false, limbsChosen = false } = {}) => {
     const NAME = { brain: 'the brain', area: 'the brain', mirror: 'the mirror body', rightArm: 'your right arm', leftArm: 'your left arm', rightLeg: 'your right leg', leftLeg: 'your left leg', trunk: 'your trunk' };
+    const LIMB = { rightArm: true, leftArm: true, rightLeg: true, leftLeg: true };
     const a = str(area).trim();
     const low = a ? `${a.charAt(0).toLowerCase()}${a.slice(1)}` : '';
     const far = behind === 'area' && a ? (/\barea\b/i.test(a) ? `the ${low}` : `the ${low} area`) : behind === 'area' ? 'a brain area' : NAME[behind] || '';
     const where = front === 'arrow' ? 'behind the arrow tip' : inFront ? 'in front of it' : ahead ? '(its clear glass in front)' : 'behind it';
+    const chosen = limbsChosen === true;
     // Your trunk, neck or head cannot be held or turned: Shift there only taps (a click).
-    if (reach) return behind === 'trunk' ? `Shift held: a click taps ${far} ${where} (nothing to hold there)` : far ? `Shift held: click, Space or drag takes ${far} ${where}` : 'Shift held: nothing behind to reach here';
-    const own = front === 'trunk' ? 'Space: nothing to hold here' : front && front !== 'arrow' ? `Space holds ${NAME[front]}` : '';
+    if (reach) return behind === 'trunk' ? `Shift held: a click taps ${far} ${where} (nothing to hold there)` : far ? `Shift held: click, Space or drag ${chosen && LIMB[behind] ? 'goes to' : 'takes'} ${far} ${where}` : 'Shift held: nothing behind to reach here';
+    const own = front === 'trunk' ? 'Space: nothing to hold here' : front && front !== 'arrow' ? `Space ${chosen && LIMB[front] ? 'chooses' : 'holds'} ${NAME[front]}` : '';
     return [own, behind === 'trunk' ? `Shift + click: ${far} ${where}` : far ? `Shift: ${far} ${where}` : ''].filter(Boolean).join(' · ');
   }
 });
@@ -879,10 +830,11 @@ export const INFO = deepFreeze({
   // R3-polish: the first card a new player sees (the start look is on the glass) now also says what to do next.
   glassBody: 'Not a motor area: nothing switches on. Aim at a coloured area, or hold Space here to carry the brain.',
   // R558 (hunt 3): the crosshair is on the brain (a motor area or its glass) behind your body or the mirror body (the
-  // card no longer says "no motor area here ... carry the brain"). A click taps the muscle in front (muscleTap); Space holds
-  // your limb there, or carries the brain when the mirror body is the one in front (itemAt).
+  // card no longer says "no motor area here ... carry the brain"). A click taps the muscle in front (muscleTap); Space
+  // chooses your limb there (22 November 2026, WORDS2, hunt H10: it said "hold Space to hold a limb", but Space on your own
+  // limb only chooses it, ns-app LIMB_KEYS.view.hold), or carries the mirror body when that is the one in front (itemAt).
   coveredOwnTitle: 'Your body is in front here',
-  coveredOwnBody: 'Your body is in front of the brain. Click a muscle to switch on its area; hold Space to hold a limb.',
+  coveredOwnBody: 'Your body is in front of the brain. Click a muscle to switch on its area. Space on an arm or a leg chooses that limb.',
   coveredMirrorTitle: 'The mirror body is in front here',
   coveredMirrorBody: 'The mirror body is in front of the brain. Click a muscle to switch on its area; Space carries the mirror body (Shift + Space the brain).',
   leftArmTag: 'Left-arm motor area (brain’s right half)',
@@ -898,7 +850,9 @@ export const INFO = deepFreeze({
   simulated: 'Simulated: a made-up level from 0 to 1 (unitless). Nothing is recorded, sent in (stimulated) or read out (decoded).',
   known: 'Known: each half of the brain mainly moves the other side of the body. Real maps overlap and vary.',
   crownNote: HONESTY.crown.plain,
-  caveats: [HONESTY.overlapVary.plain, HONESTY.notExact.plain, HONESTY.emg.plain,
+  // (22 November 2026, WORDS2, second pass: the short "simplified map" line first; at 800 by 600 the long overlap line
+  // before it pushed it to the card's foot, where it was cut. ns-scene-three fitCaveats drops whole lines from the end.)
+  caveats: [HONESTY.notExact.plain, HONESTY.overlapVary.plain, HONESTY.emg.plain,
     HONESTY.notDecoder.plain],
   lastViewed: 'Last area you looked at',
   // R4-polish (R4-player 1.9): one line, so the card's More detail stays inside the panel.
@@ -1200,7 +1154,8 @@ export const GRASP_INFO = deepFreeze({
   holding: { brain: 'the brain', mirror: 'the mirror body', rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot' },
   leadHeld: 'Let go of Space to release it.',
   leadKept: 'Tap Space again to let go.',
-  leadNothingHeld: 'Nothing is held: put the crosshair on the brain, the mirror body or one of your limbs, then press Space.',
+  // (22 November 2026, WORDS2, hunt H10: "or one of your limbs" is gone: Space there chooses the limb, leadChosen below)
+  leadNothingHeld: 'Nothing is held: put the crosshair on the brain or the mirror body, then press Space.',
   leadNothingKept: 'Tap Space again to open the hands.',
   // 21 November 2026 (hunt H16): Space on one of your own limbs chooses that limb (ns-app LIMB_KEYS.view.hold): nothing
   // holds it, the keys and your look move it. The card said "Nothing is held: put the crosshair on ... one of your
@@ -1308,7 +1263,7 @@ export const LEGEND = deepFreeze({
   ],
   familiesLabel: 'Colour families (light and dark shades for neighbouring areas)',
   key: [
-    ['activated', 'Gold edge: switched on (until Reset body)', 'Switched on'],
+    ['activated', 'A shade darker: used before (until Reset body)', 'Used before'],
     ['dot', 'Dots: left-arm control spots', 'Arm spots']
   ],
   // R3-fix (review SL-3): the movement map's pinned qualifier (MOVEMENT-MAP cortical_display_contract
@@ -1753,6 +1708,10 @@ export const GUIDE = deepFreeze({
     // 21 November 2026 (hunt H18): shown while the tutorial's first step is current, after the look switched on an area
     // that moved nothing (the Tongue has no movement in this body yet; the black in-between areas move nothing).
     lookStripStill: 'Nothing moved there. Look at another coloured area: a part moves.',
+    // 22 November 2026 (WORDS2, hunt H26): shown while the tutorial's second step ("Click it: it moves again") is current
+    // and the look last switched on an area that moves nothing (a black in-between area, the Tongue): a click there
+    // moves nothing either, and the step does not count it (ns-guide pressStill).
+    pressAreaStill: 'Nothing moves there. Look at a coloured area that moves a part, then click it.',
     // R558: shown while the watchBody goal is current, after a number moved a part with the look still on the brain.
     watchBodyLookDown: 'It moved! Now look down at the body and press another number. The card keeps the list.',
     // R5-text: shown while the thirdPerson goal is current and the view from behind is on.
@@ -1794,6 +1753,7 @@ export const GUIDE = deepFreeze({
       'Good! Now try W or S to reach it out or draw it in.': 'Now W or S',
       'That movement is already there. Press another number from the card.': 'Already there: press another number',
       'Nothing moved there. Look at another coloured area: a part moves.': 'Nothing moved: look at another colour',
+      'Nothing moves there. Look at a coloured area that moves a part, then click it.': 'Nothing moves there: look at a colour',
       'It moved! Now look down at the body and press another number. The card keeps the list.': 'Now look down and press a number',
       'This is your back! Move the mouse to look around. Press E to go back.': 'Press E to go back',
       'The brain is in the way. Press and drag the mirror body to turn it (hold Shift as you press when a brain area is in front of it).': 'Hold Shift to reach past the brain',
@@ -1845,6 +1805,13 @@ export const TIP = deepFreeze({
    * the tip by the crosshair while a clicked limb is controlled ({ title, hint }, drawn like the Space hold's tip).
    * Letting go needs no words: looking away does it. */
   limbTaken: limb => ({ title: ({ rightArm: 'Right arm', rightLeg: 'Right leg', leftLeg: 'Left leg' })[limb] || 'Limb', hint: 'W A S D and your look move it' }),
+  /** 22 November 2026 (browser hunt of update 64, H9): the tip by the crosshair while the brain is behind you (carried
+   * there and let go; ns-reference-graph brainBehind) and nothing else is under the crosshair: where it is and the two
+   * ways back. */
+  brainBehind: { title: 'The brain is behind you', hint: 'Turn round, or press Esc, then Reset brain view.' },
+  // (and when the look has carried it out of sight: the full cards' lost-brain line, HUD.brainAwayHint; second pass: both
+  // tips only while none of the brain is in the picture, ns-reference-graph brainLostWords)
+  brainAway: { title: 'The brain is out of sight', hint: 'Look round, or press Esc, then Reset brain view.' },
 });
 
 /** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";
