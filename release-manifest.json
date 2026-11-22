@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-22-body-update-68",
+  "version": "experimental-2026-11-22-body-update-69",
   "experimental": true,
-  "source": "Body update 68: a limb pushed by a trunk movement always goes back, limbs no longer sink into each other on a slow frame, letting go of the brain is smoother, the last small faults of the tips, cards and map fixed, and a beating brain at every picture quality",
+  "source": "Body update 69: your left arm stopped by your other limbs, A across the chest at the keys' pace, what you do to a limb during a trunk movement ends where it would without it, smoother letting go, labels and cards that fit small windows, smoother leg borders",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 881699,
-      "sha256": "46f0d72e6f8770f508ddf742dc58ded1fae7e6c8ae6fd28200b8ddf62db18e4e"
+      "bytes": 913827,
+      "sha256": "72a50b332a6411441548ebc4bb9e31c5dcc8a2f308e97c114671692a5627af74"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,33 +47,33 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 18149,
-      "sha256": "d5d8798d432f92dfe8828c1717393eabf57cbffb3953b5150fd9459a1076eee9"
+      "bytes": 18413,
+      "sha256": "5fcb21224d394bce69981f94e9f34c25b5b682f6083081a9242d75eee8e2d27d"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 71084,
-      "sha256": "1ef49a0b3f4f71afe49ec24fba2a7de7fb68c9a2b03005501e20c7686d121e6f"
+      "bytes": 71301,
+      "sha256": "df05061e3a8d75ca0a2c1a514c585adb687ca8afb87033c5d9d8b035eac5a295"
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 60720,
-      "sha256": "e03a59ac95983cfb1f5c23fcb535d788ef71ac55d18d9743ca2875528bed355b"
+      "bytes": 61586,
+      "sha256": "8853d72957560e1cb78078ecf82bd2c970889f1cb2d3bc13a41a5301e9e5b340"
     },
     {
       "path": "README.md",
-      "bytes": 25905,
-      "sha256": "79f3d96d423a9050495fbdb9d4bb59b7590da4765f8e6182f4079da4e3cc47a8"
+      "bytes": 26218,
+      "sha256": "38b1810534d98989dae568e8fa3e20a1a26d6387a328b0621a36bd27913d297f"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "5c4da94e8f9c5eb374fb82054d0f85f57d9ffa14f48cae56652c885a476e66d4"
+      "sha256": "f834fd58380ac4cbffa848b74139701a993d7c490517637c32d575526f52fbdf"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "bf08ed8d15ea843099aa5950cf2218258e77826e0b67047c0848098bc031a35c"
+      "sha256": "e44ab51db83295326615c228e2fc99d9fccde89010e1d7c24929f19178242939"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3862,8 +3862,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1093825,
-      "sha256": "2f1c18787b39567325ba6d2d71dd6e97b4f7433a84debf4c5ab14be34cc60387"
+      "bytes": 1110868,
+      "sha256": "2fead83061401853654d8a4b9f5547b4b69739c60ea579b25d3275a269efce48"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -3877,8 +3877,8 @@
     },
     {
       "path": "scene/src/ns-arrows3d.mjs",
-      "bytes": 91396,
-      "sha256": "190e93790d5e1803f24d5b6bbaeb8c28ea27cf3559ca74344e75762a65276b29"
+      "bytes": 94771,
+      "sha256": "39a0b123b2f01e7c87235564c384c54882673f02aabbadb36c826e1a9c939193"
     },
     {
       "path": "scene/src/ns-assembly-core.mjs",
@@ -3957,8 +3957,8 @@
     },
     {
       "path": "scene/src/ns-brain.mjs",
-      "bytes": 273681,
-      "sha256": "42d7c7d89285ac9ab53093bcb5fcd991cc56d4edbae56e618ffc6c7dcc01ef95"
+      "bytes": 284013,
+      "sha256": "1a9e6aa43da443e9f27fcc05000d5d0b41d7b5aab81e008da86587e7f234e997"
     },
     {
       "path": "scene/src/ns-camera.mjs",
@@ -4057,8 +4057,8 @@
     },
     {
       "path": "scene/src/ns-limb-pace.mjs",
-      "bytes": 28148,
-      "sha256": "f07027744ab357349a7a60ac506eee8af7b0adcf71f460a1cbbca36c779492c0"
+      "bytes": 49041,
+      "sha256": "907f8f1fec5656c1cd146ca5f5ff57e9f16e94510231915dad8f795d9a06a4d7"
     },
     {
       "path": "scene/src/ns-links.mjs",
@@ -4177,8 +4177,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1347294,
-      "sha256": "49b4a7be8b4d6a731e5e105e99718e15cd2262d26134b1496718a651e841f0b9"
+      "bytes": 1367011,
+      "sha256": "b5840fc9159f9df7007714e37016c994cd115a7448ab156ea6207444a77729ba"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4571,6 +4571,11 @@
       "sha256": "deabdaa8926bc81b1816908bae926eac1a736e7f2fece96eff4d98ef9a00de36"
     },
     {
+      "path": "tests/limbs4.test.mjs",
+      "bytes": 13267,
+      "sha256": "e32721301970e865ca98d50b0e7af627be9a1d3b4944517eeeced6424dbcc0f5"
+    },
+    {
       "path": "tests/load-guard.test.mjs",
       "bytes": 7049,
       "sha256": "2a51eed2f55d53728d4037e8f22d8065cd425ec49bb6880d62a4bd3a0955acd6"
@@ -4769,6 +4774,11 @@
       "path": "tests/ui3.test.mjs",
       "bytes": 14030,
       "sha256": "3c0032fe8bbc29a19bac8a7ae5910c084bdf37b5dbc15f5e45ff0fe33685405f"
+    },
+    {
+      "path": "tests/ui4.test.mjs",
+      "bytes": 30696,
+      "sha256": "f500887e4bb177d16fc4475181b5dd4fa2e60b99678372555efcccadd21716e8"
     },
     {
       "path": "tests/vessels.test.mjs",

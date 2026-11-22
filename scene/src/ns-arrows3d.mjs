@@ -859,16 +859,43 @@ export function releasePlanStage(age, spread = 0) {
  *  plan-mirror    the mirror body's frame.
  * The brain's frame comes first, as it always did (the mirror body's tips keep off the brain's). */
 export const RELEASE_STEPS = freeze(['prepare', 'tester-brain', 'plan-brain', 'tester-mirror', 'plan-mirror']);
+/** 22 November 2026 (UI4; the combined check of update 68, finding 3: letting go still made frames of 40 to 47 ms: the
+ * mirror body's cover took 13.5 ms and its plan 10.7 ms, each on one frame, and the first release of a run spent 17.9 ms
+ * on 'prepare'; measured again on update 68, 1600 x 900 at High, eight releases: 'prepare' 13.7 ms on the first (a
+ * profile: two motor-area grids, the mirror body's keep test and the brain's plan view), 'tester-mirror' 6.6 to 7.8
+ * (two covers: the mirror body's plan view and the opening view), 'plan-mirror' 7.6 (the planner's search, then its
+ * rescue pass, 4.6 of 9.2 ms with the profiler on, then the opening fit)). The same work in smaller pieces:
+ *  prepare         whether the mirror body's tips may stay (the keep test, with its grid when one is needed);
+ *  grids           the motor-area grid of the frame that will be planned (the brain's, or the mirror body's);
+ *  tester-brain    as before;
+ *  plan-brain      the planner's search for the brain's frame;
+ *  fit-brain       its rescue pass (a tip left on your body moved along its side) and the brain's tips shown;
+ *  tester-mirror   the cover of your own body seen from the mirror body's plan view;
+ *  tester-opening  the opening view's grid and cover (only in a landscape window at the start look, for its fit);
+ *  plan-mirror     the planner's search for the mirror body's frame;
+ *  fit-mirror      its rescue pass, the opening fit of its up tip, and the mirror body's tips shown.
+ * A step with nothing to do costs nothing, and the scene takes the next step in the same drawn frame while the work of
+ * that frame is still small (releaseCursorAt mergeMs), so a cheap step does not make the arrows come back later. */
+export const RELEASE_STEPS_FINE = freeze(['prepare', 'grids', 'tester-brain', 'plan-brain', 'fit-brain', 'tester-mirror', 'tester-opening', 'plan-mirror', 'fit-mirror']);
+/** (UI4) on: the scene goes through RELEASE_STEPS_FINE (false: RELEASE_STEPS, as in section 200); mergeMs: a further
+ * step is taken in the same drawn frame while the release's work in that frame is under this (ms); maxMerges: at most
+ * this many further steps in one frame. Display / timing choices. */
+export const RELEASE_FINE = freeze({ on: true, mergeMs: 1.5, maxMerges: 3 });
 /** PURE (RELEASE_STEPS): the step of a release at `cursor` (0: still holding; 1: the first working frame; one more per
  * drawn frame). released: 'brain' | 'mirror'; mirrorPlan: the mirror body's frame is planned too (always at its own
- * release). Returns { step ('hold', a RELEASE_STEPS name, or 'done' after the last), last (this step ends the release),
- * hidden: { brain, mirror } (whose arrows stay hidden on this frame: the released item's until its plan, and the mirror
- * body's, once it is known that it is planned again, until its plan; a plan step shows its set on its own frame) }. */
-export function releaseStep(cursor, { released = 'brain', mirrorPlan = false } = {}) {
-  const steps = mirrorPlan || released === 'mirror' ? RELEASE_STEPS : RELEASE_STEPS.slice(0, 3);
+ * release); steps: the step list (RELEASE_STEPS, or RELEASE_STEPS_FINE: its brain part ends before 'tester-mirror').
+ * Returns { step ('hold', a step name, or 'done' after the last), last (this step ends the release), hidden: { brain,
+ * mirror } (whose arrows stay hidden on this frame: the released item's until its set is shown, and the mirror body's,
+ * once it is known that it is planned again, until its set is shown; the step that shows a set ('plan-brain' /
+ * 'plan-mirror', or 'fit-brain' / 'fit-mirror' in the fine list) shows it on its own frame) }. */
+export function releaseStep(cursor, { released = 'brain', mirrorPlan = false, steps: all = RELEASE_STEPS } = {}) {
+  const list = Array.isArray(all) && all.length ? all : RELEASE_STEPS;
+  const brainEnd = list.indexOf('tester-mirror') >= 0 ? list.indexOf('tester-mirror') : list.length;
+  const steps = mirrorPlan || released === 'mirror' ? list : list.slice(0, brainEnd);
   const k = Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : steps.length + 1;
   const step = k === 0 ? 'hold' : k <= steps.length ? steps[k - 1] : 'done';
-  const planB = steps.indexOf('plan-brain') + 1, planM = steps.indexOf('plan-mirror') + 1;
+  const showAt = (fit, plan) => (steps.indexOf(fit) >= 0 ? steps.indexOf(fit) : steps.indexOf(plan)) + 1;
+  const planB = showAt('fit-brain', 'plan-brain'), planM = showAt('fit-mirror', 'plan-mirror');
   const hidden = {
     brain: released === 'brain' && k < planB,
     mirror: planM > 0 && k < planM && (released === 'mirror' || k >= 1)
@@ -879,11 +906,16 @@ export function releaseStep(cursor, { released = 'brain', mirrorPlan = false } =
  * one step on for the first call in each drawn frame once more than `hold` frames have been drawn since the release
  * (`releaseAt`); a second call in the same frame (a pick, the overlay) keeps the step. The first step also waits while
  * the bodies still move (`still` false: the hand going back to rest after the grip, whose skin and outline already make
- * those frames longer), but no longer than `holdMax` frames. Returns { cursor, at }. */
-export function releaseCursorAt({ cursor = 0, at = -1, serial = 0, releaseAt = 0, hold = 2, still = true, holdMax = Infinity } = {}) {
+ * those frames longer), but no longer than `holdMax` frames.
+ * (UI4, RELEASE_FINE) A later call in the same frame takes one more step while the release's work in this frame,
+ * `spentMs`, is under `mergeMs` (a step that found nothing to do), at most `maxMerges` more; `merges` counts them.
+ * Returns { cursor, at, merges }. */
+export function releaseCursorAt({ cursor = 0, at = -1, serial = 0, releaseAt = 0, hold = 2, still = true, holdMax = Infinity,
+  spentMs = Infinity, mergeMs = 0, merges = 0, maxMerges = 0 } = {}) {
   const age = serial - releaseAt;
-  if (age > hold && at !== serial && (cursor > 0 || still || age > holdMax)) return { cursor: cursor + 1, at: serial };
-  return { cursor, at };
+  if (age > hold && at !== serial && (cursor > 0 || still || age > holdMax)) return mergeMs > 0 ? { cursor: cursor + 1, at: serial, merges: 0 } : { cursor: cursor + 1, at: serial };
+  if (age > hold && at === serial && cursor > 0 && mergeMs > 0 && spentMs < mergeMs && merges < maxMerges) return { cursor: cursor + 1, at: serial, merges: merges + 1 };
+  return mergeMs > 0 ? { cursor, at, merges } : { cursor, at };
 }
 
 /** R558 (performance, P3): frameArrowAnchors for one spot at a time from one camera and centre, worked out once: the
